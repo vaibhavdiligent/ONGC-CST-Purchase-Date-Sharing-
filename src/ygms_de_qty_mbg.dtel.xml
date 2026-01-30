@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DTEL" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DD04V>
+    <ROLLNAME>YGMS_DE_QTY_MBG</ROLLNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DOMNAME>YGMS_QTY_MBG</DOMNAME>
+    <HEADLEN>15</HEADLEN>
+    <SCRLEN1>10</SCRLEN1>
+    <SCRLEN2>15</SCRLEN2>
+    <SCRLEN3>20</SCRLEN3>
+    <DDTEXT>Quantity in MMBTU</DDTEXT>
+    <REPTEXT>Qty MMBTU</REPTEXT>
+    <SCRTEXT_S>Qty MBG</SCRTEXT_S>
+    <SCRTEXT_M>Qty in MMBTU</SCRTEXT_M>
+    <SCRTEXT_L>Quantity in MMBTU</SCRTEXT_L>
+   </DD04V>
+  </asx:values>
+ </asx:abap>
+</abapGit>
