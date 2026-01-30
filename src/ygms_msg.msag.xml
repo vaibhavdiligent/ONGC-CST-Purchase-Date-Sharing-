@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_MSAG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <T100A>
+    <ARBGB>YGMS_MSG</ARBGB>
+    <MASTERLANG>E</MASTERLANG>
+    <STEXT>YGMS CST Purchase Data Sharing Messages</STEXT>
+   </T100A>
+   <T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>001</MSGNR>
+     <TEXT>Data loaded successfully: &amp;1 records</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>002</MSGNR>
+     <TEXT>No data found for selection criteria</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>003</MSGNR>
+     <TEXT>Error reading file: &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>004</MSGNR>
+     <TEXT>Invalid date range: From date &amp;1 is after To date &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>005</MSGNR>
+     <TEXT>Location &amp;1 not found in mapping table</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>006</MSGNR>
+     <TEXT>Material &amp;1 not found for location &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>007</MSGNR>
+     <TEXT>Authorization check failed for &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>008</MSGNR>
+     <TEXT>Validation successful for &amp;1 records</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>009</MSGNR>
+     <TEXT>&amp;1 quantity does not match &amp;2 quantity</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>010</MSGNR>
+     <TEXT>Data saved successfully with GAIL ID: &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>011</MSGNR>
+     <TEXT>Error saving data: &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>012</MSGNR>
+     <TEXT>Email sent successfully to &amp;1 recipients</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>013</MSGNR>
+     <TEXT>Email sent successfully to &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>014</MSGNR>
+     <TEXT>Error sending email: &amp;1</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>015</MSGNR>
+     <TEXT>&amp;1 has been &amp;2</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>016</MSGNR>
+     <TEXT>Processing completed: &amp;1 success, &amp;2 errors</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>017</MSGNR>
+     <TEXT>Allocation completed for &amp;1 states</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>018</MSGNR>
+     <TEXT>State &amp;1 excluded from allocation</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>019</MSGNR>
+     <TEXT>PDF generated successfully</TEXT>
+    </T100>
+    <T100>
+     <SPRSL>E</SPRSL>
+     <ARBGB>YGMS_MSG</ARBGB>
+     <MSGNR>020</MSGNR>
+     <TEXT>Excel file processed: &amp;1 rows read</TEXT>
+    </T100>
+   </T100>
+  </asx:values>
+ </asx:abap>
+</abapGit>
