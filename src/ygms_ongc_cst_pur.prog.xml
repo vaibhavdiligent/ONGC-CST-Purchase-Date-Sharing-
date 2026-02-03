@@ -14,26 +14,26 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>ONGC CST Purchase Data Upload Program</ENTRY>
-     <LENGTH>38</LENGTH>
+     <ENTRY>ONGC CST Purchase Data Upload (Excel)</ENTRY>
+     <LENGTH>40</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
-     <ENTRY>File Selection</ENTRY>
-     <LENGTH>14</LENGTH>
+     <ENTRY>Excel File</ENTRY>
+     <LENGTH>10</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>002</KEY>
-     <ENTRY>File Options</ENTRY>
-     <LENGTH>12</LENGTH>
+     <ENTRY>Excel Options</ENTRY>
+     <LENGTH>13</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>003</KEY>
-     <ENTRY>Processing Options</ENTRY>
-     <LENGTH>18</LENGTH>
+     <ENTRY>Processing</ENTRY>
+     <LENGTH>10</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

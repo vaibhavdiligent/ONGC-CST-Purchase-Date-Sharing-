@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
-*& Description: ONGC CST Purchase Data Upload Program
-*& Version: 2.0 - Fixed field names and text elements
+*& Description: ONGC CST Purchase Data Upload Program (Excel)
+*& Version: 3.0 - Excel upload support
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 
@@ -15,10 +15,6 @@ TYPES: BEGIN OF ty_upload_data,
          qty_scm       TYPE ygms_de_qty_scm,
        END OF ty_upload_data.
 
-TYPES: BEGIN OF ty_file_raw,
-         line TYPE string,
-       END OF ty_file_raw.
-
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -28,7 +24,7 @@ SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   PARAMETERS: p_header AS CHECKBOX DEFAULT 'X'.
-  PARAMETERS: p_sep    TYPE c LENGTH 1 DEFAULT ';'.
+  PARAMETERS: p_sheet  TYPE i DEFAULT 1.
 SELECTION-SCREEN END OF BLOCK b2.
 
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
@@ -39,8 +35,8 @@ SELECTION-SCREEN END OF BLOCK b3.
 *----------------------------------------------------------------------*
 * Global Data
 *----------------------------------------------------------------------*
-DATA: gt_raw_data    TYPE TABLE OF ty_file_raw,
-      gt_upload_data TYPE TABLE OF ty_upload_data,
+DATA: gt_upload_data TYPE TABLE OF ty_upload_data,
+      gt_excel_data  TYPE TABLE OF alsmex_tabline,
       gv_file        TYPE string,
       gv_records     TYPE i,
       gv_errors      TYPE i.
@@ -49,8 +45,7 @@ DATA: gt_raw_data    TYPE TABLE OF ty_file_raw,
 * Initialization
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  " Text symbols TEXT-001, TEXT-002, TEXT-003 should be maintained
-  " via SE38 -> Goto -> Text Elements -> Selection Texts
+  " Text symbols should be maintained via SE38 -> Text Elements
 
 *----------------------------------------------------------------------*
 * At Selection Screen - F4 Help for File
@@ -62,11 +57,11 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
 * Start of Selection
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
-  " Read file
-  PERFORM read_file.
+  " Read Excel file
+  PERFORM read_excel_file.
 
-  " Parse data
-  PERFORM parse_data.
+  " Parse Excel data
+  PERFORM parse_excel_data.
 
   " Validate data
   PERFORM validate_data.
@@ -89,9 +84,9 @@ FORM f4_file_browse.
 
   cl_gui_frontend_services=>file_open_dialog(
     EXPORTING
-      window_title            = 'Select Upload File'
-      file_filter             = 'CSV Files (*.csv)|*.csv|Text Files (*.txt)|*.txt|All Files (*.*)|*.*'
-      default_extension       = 'csv'
+      window_title            = 'Select Excel File'
+      file_filter             = 'Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|All Files (*.*)|*.*'
+      default_extension       = 'xlsx'
     CHANGING
       file_table              = lt_filetable
       rc                      = lv_rc
@@ -113,109 +108,98 @@ FORM f4_file_browse.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form READ_FILE
+*& Form READ_EXCEL_FILE
 *&---------------------------------------------------------------------*
-FORM read_file.
-  DATA: lt_data TYPE TABLE OF string.
+FORM read_excel_file.
+  DATA: lv_start_row TYPE i VALUE 1,
+        lv_start_col TYPE i VALUE 1,
+        lv_end_row   TYPE i VALUE 9999,
+        lv_end_col   TYPE i VALUE 4.
 
-  gv_file = p_file.
+  " Skip header row if checkbox is selected
+  IF p_header = abap_true.
+    lv_start_row = 2.
+  ENDIF.
 
-  cl_gui_frontend_services=>gui_upload(
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
     EXPORTING
-      filename                = gv_file
-      filetype                = 'ASC'
-    CHANGING
-      data_tab                = lt_data
+      filename                = p_file
+      i_begin_col             = lv_start_col
+      i_begin_row             = lv_start_row
+      i_end_col               = lv_end_col
+      i_end_row               = lv_end_row
+    TABLES
+      intern                  = gt_excel_data
     EXCEPTIONS
-      file_open_error         = 1
-      file_read_error         = 2
-      no_batch                = 3
-      gui_refuse_filetransfer = 4
-      invalid_type            = 5
-      no_authority            = 6
-      unknown_error           = 7
-      bad_data_format         = 8
-      header_not_allowed      = 9
-      separator_not_allowed   = 10
-      header_too_long         = 11
-      unknown_dp_error        = 12
-      access_denied           = 13
-      dp_out_of_memory        = 14
-      disk_full               = 15
-      dp_timeout              = 16
-      not_supported_by_gui    = 17
-      error_no_gui            = 18
-      OTHERS                  = 19
-  ).
+      inconsistent_parameters = 1
+      upload_ole              = 2
+      OTHERS                  = 3.
 
   IF sy-subrc <> 0.
-    MESSAGE e001(ygms_msg) WITH 'Error reading file' gv_file.
+    MESSAGE e001(ygms_msg) WITH 'Error reading Excel file' p_file.
   ENDIF.
 
-  " Convert to raw data structure
-  LOOP AT lt_data INTO DATA(lv_line).
-    APPEND VALUE ty_file_raw( line = lv_line ) TO gt_raw_data.
+  " Count unique rows
+  DATA(lt_rows) = VALUE rseloption( ).
+  LOOP AT gt_excel_data INTO DATA(ls_excel).
+    COLLECT VALUE rsdsselopt( sign = 'I' option = 'EQ' low = CONV #( ls_excel-row ) ) INTO lt_rows.
   ENDLOOP.
+  gv_records = lines( lt_rows ).
 
-  " Remove header if specified
-  IF p_header = abap_true AND lines( gt_raw_data ) > 0.
-    DELETE gt_raw_data INDEX 1.
-  ENDIF.
-
-  gv_records = lines( gt_raw_data ).
-  MESSAGE s000(ygms_msg) WITH gv_records 'records read from file'.
+  MESSAGE s000(ygms_msg) WITH gv_records 'rows read from Excel file'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form PARSE_DATA
+*& Form PARSE_EXCEL_DATA
 *&---------------------------------------------------------------------*
-FORM parse_data.
-  DATA: lt_fields TYPE TABLE OF string,
-        ls_upload TYPE ty_upload_data,
-        lv_date   TYPE string.
+FORM parse_excel_data.
+  DATA: ls_upload    TYPE ty_upload_data,
+        lv_curr_row  TYPE i,
+        lv_prev_row  TYPE i,
+        lv_date_str  TYPE string.
 
-  LOOP AT gt_raw_data INTO DATA(ls_raw).
-    CLEAR: lt_fields, ls_upload.
+  SORT gt_excel_data BY row col.
 
-    " Split line by separator
-    SPLIT ls_raw-line AT p_sep INTO TABLE lt_fields.
-
-    " Check minimum fields
-    IF lines( lt_fields ) < 4.
-      gv_errors = gv_errors + 1.
-      CONTINUE.
+  LOOP AT gt_excel_data INTO DATA(ls_excel).
+    " Check if new row
+    IF ls_excel-row <> lv_prev_row.
+      " Save previous row if exists
+      IF lv_prev_row > 0 AND ls_upload IS NOT INITIAL.
+        APPEND ls_upload TO gt_upload_data.
+      ENDIF.
+      CLEAR ls_upload.
+      lv_prev_row = ls_excel-row.
     ENDIF.
 
-    " Parse fields
+    " Parse based on column
     TRY.
-        " Gas Day (convert from DD-MM-YYYY or DD.MM.YYYY to internal format)
-        READ TABLE lt_fields INTO lv_date INDEX 1.
-        PERFORM convert_date USING lv_date CHANGING ls_upload-gas_day.
-
-        " Location ID
-        READ TABLE lt_fields INTO ls_upload-location_id INDEX 2.
-        CONDENSE ls_upload-location_id.
-
-        " Material
-        READ TABLE lt_fields INTO ls_upload-material INDEX 3.
-        CONDENSE ls_upload-material.
-
-        " Quantity in SCM
-        DATA(lv_qty) = VALUE string( ).
-        READ TABLE lt_fields INTO lv_qty INDEX 4.
-        CONDENSE lv_qty.
-        REPLACE ALL OCCURRENCES OF ',' IN lv_qty WITH '.'.
-        ls_upload-qty_scm = lv_qty.
-
-        APPEND ls_upload TO gt_upload_data.
-
+        CASE ls_excel-col.
+          WHEN 1.  " Gas Day
+            lv_date_str = ls_excel-value.
+            PERFORM convert_date USING lv_date_str CHANGING ls_upload-gas_day.
+          WHEN 2.  " Location ID
+            ls_upload-location_id = ls_excel-value.
+            CONDENSE ls_upload-location_id.
+          WHEN 3.  " Material
+            ls_upload-material = ls_excel-value.
+            CONDENSE ls_upload-material.
+          WHEN 4.  " Quantity in SCM
+            DATA(lv_qty) = ls_excel-value.
+            REPLACE ALL OCCURRENCES OF ',' IN lv_qty WITH '.'.
+            ls_upload-qty_scm = lv_qty.
+        ENDCASE.
       CATCH cx_root.
         gv_errors = gv_errors + 1.
     ENDTRY.
   ENDLOOP.
 
+  " Append last row
+  IF ls_upload IS NOT INITIAL.
+    APPEND ls_upload TO gt_upload_data.
+  ENDIF.
+
   IF gv_errors > 0.
-    MESSAGE w000(ygms_msg) WITH gv_errors 'records had parsing errors'.
+    MESSAGE w000(ygms_msg) WITH gv_errors 'cells had parsing errors'.
   ENDIF.
 ENDFORM.
 
@@ -224,17 +208,38 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM convert_date USING pv_date_str TYPE string
                   CHANGING pv_date TYPE datum.
-  DATA: lv_day   TYPE string,
-        lv_month TYPE string,
-        lv_year  TYPE string,
-        lv_date_str TYPE string,
-        lt_parts TYPE TABLE OF string.
+  DATA: lv_day      TYPE string,
+        lv_month    TYPE string,
+        lv_year     TYPE string,
+        lv_date_out TYPE string,
+        lt_parts    TYPE TABLE OF string.
+
+  " Check if already in internal format (YYYYMMDD or number)
+  IF strlen( pv_date_str ) = 8 AND pv_date_str CO '0123456789'.
+    pv_date = pv_date_str.
+    RETURN.
+  ENDIF.
+
+  " Check for Excel serial date number
+  IF pv_date_str CO '0123456789'.
+    DATA(lv_serial) = CONV i( pv_date_str ).
+    IF lv_serial > 0.
+      " Excel date serial: days since 1899-12-30
+      pv_date = '18991230'.
+      pv_date = pv_date + lv_serial.
+      RETURN.
+    ENDIF.
+  ENDIF.
 
   " Try DD-MM-YYYY format
   SPLIT pv_date_str AT '-' INTO TABLE lt_parts.
   IF lines( lt_parts ) <> 3.
     " Try DD.MM.YYYY format
     SPLIT pv_date_str AT '.' INTO TABLE lt_parts.
+  ENDIF.
+  IF lines( lt_parts ) <> 3.
+    " Try DD/MM/YYYY format
+    SPLIT pv_date_str AT '/' INTO TABLE lt_parts.
   ENDIF.
 
   IF lines( lt_parts ) = 3.
@@ -253,8 +258,8 @@ FORM convert_date USING pv_date_str TYPE string
     ENDIF.
 
     " Convert to YYYYMMDD
-    CONCATENATE lv_year lv_month lv_day INTO lv_date_str.
-    pv_date = lv_date_str.
+    CONCATENATE lv_year lv_month lv_day INTO lv_date_out.
+    pv_date = lv_date_out.
   ENDIF.
 ENDFORM.
 
@@ -306,8 +311,8 @@ FORM save_data.
         ls_purchase TYPE ygms_cst_pur,
         lv_gail_id  TYPE ygms_de_gail_id.
 
-  " Generate a simple GAIL ID for this upload batch
-  lv_gail_id = |UPLOAD-{ sy-datum }-{ sy-uzeit }|.
+  " Generate a GAIL ID for this upload batch
+  CONCATENATE 'UPLOAD-' sy-datum '-' sy-uzeit INTO lv_gail_id.
 
   LOOP AT gt_upload_data INTO DATA(ls_data).
     CLEAR ls_purchase.
