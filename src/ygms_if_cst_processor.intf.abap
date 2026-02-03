@@ -1,3 +1,4 @@
+*& Version: 2.0 - Fixed type references (ygms_de_loc_id)
 INTERFACE ygms_if_cst_processor
   PUBLIC.
 

@@ -1,6 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_CST_PURCHASE_MAIN
 *& Description: ONGC CST Purchase Data Sharing - Main Program
+*& Version: 2.0 - Fixed text elements and date calculation
 *&---------------------------------------------------------------------*
 REPORT ygms_cst_purchase_main.
 

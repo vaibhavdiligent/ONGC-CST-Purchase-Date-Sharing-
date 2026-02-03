@@ -1,6 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
 *& Description: ONGC CST Purchase Data Upload Program
+*& Version: 2.0 - Fixed field names and text elements
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 
