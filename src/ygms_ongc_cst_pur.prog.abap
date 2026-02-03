@@ -329,7 +329,8 @@ FORM save_data.
     MODIFY ygms_cst_pur FROM TABLE lt_purchase.
     IF sy-subrc = 0.
       COMMIT WORK AND WAIT.
-      MESSAGE s000(ygms_msg) WITH lines( lt_purchase ) 'records saved successfully'.
+      DATA(lv_count) = lines( lt_purchase ).
+      MESSAGE s000(ygms_msg) WITH lv_count 'records saved successfully'.
     ELSE.
       ROLLBACK WORK.
       MESSAGE e001(ygms_msg) WITH 'Error saving data to database'.
