@@ -11,10 +11,10 @@
     <SCRLEN2>15</SCRLEN2>
     <SCRLEN3>20</SCRLEN3>
     <DDTEXT>Data Source Indicator</DDTEXT>
-    <REPTEXT>Data Source</REPTEXT>
+    <REPTEXT>Data Src</REPTEXT>
     <SCRTEXT_S>Data Src</SCRTEXT_S>
     <SCRTEXT_M>Data Source</SCRTEXT_M>
-    <SCRTEXT_L>Data Source Indicator</SCRTEXT_L>
+    <SCRTEXT_L>Data Source Ind</SCRTEXT_L>
    </DD04V>
   </asx:values>
  </asx:abap>

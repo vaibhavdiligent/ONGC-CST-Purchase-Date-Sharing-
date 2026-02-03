@@ -14,7 +14,7 @@
     <REPTEXT>GCV</REPTEXT>
     <SCRTEXT_S>GCV</SCRTEXT_S>
     <SCRTEXT_M>Gross CV</SCRTEXT_M>
-    <SCRTEXT_L>Gross Calorific Value</SCRTEXT_L>
+    <SCRTEXT_L>Gross Calorific Val</SCRTEXT_L>
    </DD04V>
   </asx:values>
  </asx:abap>

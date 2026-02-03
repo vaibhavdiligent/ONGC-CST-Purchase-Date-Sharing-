@@ -14,7 +14,7 @@
     <REPTEXT>Percent</REPTEXT>
     <SCRTEXT_S>Pct</SCRTEXT_S>
     <SCRTEXT_M>Percentage</SCRTEXT_M>
-    <SCRTEXT_L>Percentage Value</SCRTEXT_L>
+    <SCRTEXT_L>Percentage Val</SCRTEXT_L>
    </DD04V>
   </asx:values>
  </asx:abap>

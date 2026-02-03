@@ -6,15 +6,15 @@
     <ROLLNAME>YGMS_DE_STATE_CD</ROLLNAME>
     <DDLANGUAGE>E</DDLANGUAGE>
     <DOMNAME>YGMS_STATE_CD</DOMNAME>
-    <HEADLEN>02</HEADLEN>
+    <HEADLEN>05</HEADLEN>
     <SCRLEN1>05</SCRLEN1>
     <SCRLEN2>10</SCRLEN2>
     <SCRLEN3>15</SCRLEN3>
-    <DDTEXT>State Code (2-digit)</DDTEXT>
+    <DDTEXT>State Code</DDTEXT>
     <REPTEXT>St Cd</REPTEXT>
     <SCRTEXT_S>St Cd</SCRTEXT_S>
     <SCRTEXT_M>State Code</SCRTEXT_M>
-    <SCRTEXT_L>State Code (2-digit)</SCRTEXT_L>
+    <SCRTEXT_L>State Code</SCRTEXT_L>
    </DD04V>
   </asx:values>
  </asx:abap>

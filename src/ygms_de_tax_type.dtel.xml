@@ -14,7 +14,7 @@
     <REPTEXT>Tax</REPTEXT>
     <SCRTEXT_S>Tax</SCRTEXT_S>
     <SCRTEXT_M>Tax Type</SCRTEXT_M>
-    <SCRTEXT_L>Tax Type (CST/GST)</SCRTEXT_L>
+    <SCRTEXT_L>Tax Type CST/GST</SCRTEXT_L>
    </DD04V>
   </asx:values>
  </asx:abap>
