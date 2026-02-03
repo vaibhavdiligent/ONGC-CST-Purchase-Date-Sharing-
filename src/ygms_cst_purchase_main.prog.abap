@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_CST_PURCHASE_MAIN
-*& Description: ONGC CST Purchase Data - Gas Receipt Display
-*& Version: 3.0 - Rewritten with new logic for editable ALV
+*& Description: ONGC CST Purchase Data - Gas Receipt Processing
+*& Version: 3.1 - Removed ALV output
 *&---------------------------------------------------------------------*
 REPORT ygms_cst_purchase_main.
 
@@ -41,27 +41,8 @@ SELECTION-SCREEN END OF BLOCK b1.
 *----------------------------------------------------------------------*
 DATA: gt_gas_receipt TYPE TABLE OF ty_gas_receipt,
       gt_loc_ctp_map TYPE TABLE OF ty_loc_ctp_map,
-      go_grid        TYPE REF TO cl_gui_alv_grid,
-      go_container   TYPE REF TO cl_gui_custom_container,
       gv_date_from   TYPE datum,
       gv_date_to     TYPE datum.
-
-*----------------------------------------------------------------------*
-* Class Definition for ALV Event Handler
-*----------------------------------------------------------------------*
-CLASS lcl_event_handler DEFINITION.
-  PUBLIC SECTION.
-    METHODS: on_data_changed FOR EVENT data_changed OF cl_gui_alv_grid
-               IMPORTING er_data_changed.
-ENDCLASS.
-
-CLASS lcl_event_handler IMPLEMENTATION.
-  METHOD on_data_changed.
-    " Handle data changes if needed
-  ENDMETHOD.
-ENDCLASS.
-
-DATA: go_handler TYPE REF TO lcl_event_handler.
 
 *----------------------------------------------------------------------*
 * Initialization
@@ -100,9 +81,6 @@ START-OF-SELECTION.
 
   " Step 4: Map Material names
   PERFORM map_material_names.
-
-  " Step 5: Display editable ALV
-  PERFORM display_editable_alv.
 
 *&---------------------------------------------------------------------*
 *& Form FETCH_LOCATION_CTP_MAPPINGS
@@ -248,101 +226,4 @@ FORM map_material_names.
       <fs_receipt>-material = ls_mat-gail_material.
     ENDIF.
   ENDLOOP.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*& Form DISPLAY_EDITABLE_ALV
-*&---------------------------------------------------------------------*
-FORM display_editable_alv.
-  DATA: lt_fieldcat  TYPE lvc_t_fcat,
-        ls_fieldcat  TYPE lvc_s_fcat,
-        ls_layout    TYPE lvc_s_layo,
-        lt_exclude   TYPE ui_functions.
-
-  " Build field catalog
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GAS_DAY'.
-  ls_fieldcat-coltext   = 'Gas Day'.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'CTP_ID'.
-  ls_fieldcat-coltext   = 'CTP ID'.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'LOCATION_ID'.
-  ls_fieldcat-coltext   = 'Location ID'.
-  ls_fieldcat-outputlen = 12.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
-  ls_fieldcat-coltext   = 'ONGC Material'.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'MATERIAL'.
-  ls_fieldcat-coltext   = 'Material'.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'QTY_SCM'.
-  ls_fieldcat-coltext   = 'Qty in SCM'.
-  ls_fieldcat-outputlen = 12.
-  ls_fieldcat-do_sum    = 'X'.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GCV'.
-  ls_fieldcat-coltext   = 'GCV'.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'NCV'.
-  ls_fieldcat-coltext   = 'NCV'.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'QTY_MBG'.
-  ls_fieldcat-coltext   = 'Qty in MBG'.
-  ls_fieldcat-outputlen = 12.
-  ls_fieldcat-do_sum    = 'X'.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'ONGC_ID'.
-  ls_fieldcat-coltext   = 'ONGC ID (9 char max.)'.
-  ls_fieldcat-outputlen = 15.
-  ls_fieldcat-edit      = 'X'.
-  ls_fieldcat-intlen    = 9.
-  APPEND ls_fieldcat TO lt_fieldcat.
-
-  " Set layout
-  ls_layout-zebra      = 'X'.
-  ls_layout-cwidth_opt = 'X'.
-  ls_layout-sel_mode   = 'A'.
-
-  " Display using REUSE_ALV_GRID_DISPLAY
-  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
-    EXPORTING
-      i_callback_program = sy-repid
-      is_layout_lvc      = ls_layout
-      it_fieldcat_lvc    = lt_fieldcat
-      i_save             = 'A'
-    TABLES
-      t_outtab           = gt_gas_receipt
-    EXCEPTIONS
-      program_error      = 1
-      OTHERS             = 2.
-
-  IF sy-subrc <> 0.
-    MESSAGE e001(ygms_msg) WITH 'Error displaying ALV'.
-  ENDIF.
 ENDFORM.
