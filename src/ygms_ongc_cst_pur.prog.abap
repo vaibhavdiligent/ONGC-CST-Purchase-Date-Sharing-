@@ -9,9 +9,9 @@ REPORT ygms_ongc_cst_pur.
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_upload_data,
          gas_day       TYPE datum,
-         location_id   TYPE ygms_loc_id,
-         material      TYPE ygms_gail_mat,
-         qty_scm       TYPE ygms_qty_scm,
+         location_id   TYPE ygms_de_loc_id,
+         material      TYPE ygms_de_gail_mat,
+         qty_scm       TYPE ygms_de_qty_scm,
        END OF ty_upload_data.
 
 TYPES: BEGIN OF ty_file_raw,
