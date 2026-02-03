@@ -92,20 +92,17 @@ FORM fetch_location_ctp_mappings.
   " Fetch mappings where:
   " - From input date >= valid_from
   " - To input date <= valid_to
-  " - Deletion indicator is not set
   IF s_loc[] IS NOT INITIAL.
     SELECT * FROM yrga_cst_loc_map
       INTO TABLE lt_loc_map
       WHERE gail_loc_id IN s_loc
         AND valid_from <= gv_date_from
-        AND valid_to   >= gv_date_to
-        AND deleted    = abap_false.
+        AND valid_to   >= gv_date_to.
   ELSE.
     SELECT * FROM yrga_cst_loc_map
       INTO TABLE lt_loc_map
       WHERE valid_from <= gv_date_from
-        AND valid_to   >= gv_date_to
-        AND deleted    = abap_false.
+        AND valid_to   >= gv_date_to.
   ENDIF.
 
   IF lt_loc_map IS INITIAL.
