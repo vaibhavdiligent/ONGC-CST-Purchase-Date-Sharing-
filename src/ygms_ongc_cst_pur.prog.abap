@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
 *& Description: ONGC CST Purchase Data Upload Program (Excel)
-*& Version: 3.0 - Excel upload support
+*& Version: 4.0 - Simplified Excel upload
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 
@@ -22,30 +22,13 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   PARAMETERS: p_file TYPE rlgrap-filename OBLIGATORY.
 SELECTION-SCREEN END OF BLOCK b1.
 
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-  PARAMETERS: p_header AS CHECKBOX DEFAULT 'X'.
-  PARAMETERS: p_sheet  TYPE i DEFAULT 1.
-SELECTION-SCREEN END OF BLOCK b2.
-
-SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
-  PARAMETERS: p_disp RADIOBUTTON GROUP rb1 DEFAULT 'X',
-              p_save RADIOBUTTON GROUP rb1.
-SELECTION-SCREEN END OF BLOCK b3.
-
 *----------------------------------------------------------------------*
 * Global Data
 *----------------------------------------------------------------------*
 DATA: gt_upload_data TYPE TABLE OF ty_upload_data,
       gt_excel_data  TYPE TABLE OF alsmex_tabline,
-      gv_file        TYPE string,
       gv_records     TYPE i,
       gv_errors      TYPE i.
-
-*----------------------------------------------------------------------*
-* Initialization
-*----------------------------------------------------------------------*
-INITIALIZATION.
-  " Text symbols should be maintained via SE38 -> Text Elements
 
 *----------------------------------------------------------------------*
 * At Selection Screen - F4 Help for File
@@ -66,13 +49,11 @@ START-OF-SELECTION.
   " Validate data
   PERFORM validate_data.
 
-  " Process based on option
-  IF p_disp = abap_true.
-    PERFORM display_alv.
-  ELSE.
-    PERFORM save_data.
-    PERFORM display_alv.
-  ENDIF.
+  " Save data
+  PERFORM save_data.
+
+  " Display ALV
+  PERFORM display_alv.
 
 *&---------------------------------------------------------------------*
 *& Form F4_FILE_BROWSE
@@ -111,15 +92,10 @@ ENDFORM.
 *& Form READ_EXCEL_FILE
 *&---------------------------------------------------------------------*
 FORM read_excel_file.
-  DATA: lv_start_row TYPE i VALUE 1,
+  DATA: lv_start_row TYPE i VALUE 2,
         lv_start_col TYPE i VALUE 1,
         lv_end_row   TYPE i VALUE 9999,
         lv_end_col   TYPE i VALUE 4.
-
-  " Skip header row if checkbox is selected
-  IF p_header = abap_true.
-    lv_start_row = 2.
-  ENDIF.
 
   CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
     EXPORTING
@@ -140,9 +116,9 @@ FORM read_excel_file.
   ENDIF.
 
   " Count unique rows
-  DATA(lt_rows) = VALUE rseloption( ).
+  DATA: lt_rows TYPE STANDARD TABLE OF i.
   LOOP AT gt_excel_data INTO DATA(ls_excel).
-    COLLECT VALUE rsdsselopt( sign = 'I' option = 'EQ' low = CONV #( ls_excel-row ) ) INTO lt_rows.
+    COLLECT ls_excel-row INTO lt_rows.
   ENDLOOP.
   gv_records = lines( lt_rows ).
 
@@ -154,7 +130,6 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM parse_excel_data.
   DATA: ls_upload    TYPE ty_upload_data,
-        lv_curr_row  TYPE i,
         lv_prev_row  TYPE i,
         lv_date_str  TYPE string.
 
@@ -214,7 +189,7 @@ FORM convert_date USING pv_date_str TYPE string
         lv_date_out TYPE string,
         lt_parts    TYPE TABLE OF string.
 
-  " Check if already in internal format (YYYYMMDD or number)
+  " Check if already in internal format (YYYYMMDD)
   IF strlen( pv_date_str ) = 8 AND pv_date_str CO '0123456789'.
     pv_date = pv_date_str.
     RETURN.

@@ -20,20 +20,8 @@
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
-     <ENTRY>Excel File</ENTRY>
-     <LENGTH>10</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
-     <KEY>002</KEY>
-     <ENTRY>Excel Options</ENTRY>
-     <LENGTH>13</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
-     <KEY>003</KEY>
-     <ENTRY>Processing</ENTRY>
-     <LENGTH>10</LENGTH>
+     <ENTRY>Excel File Upload</ENTRY>
+     <LENGTH>17</LENGTH>
     </item>
    </TPOOL>
   </asx:values>
