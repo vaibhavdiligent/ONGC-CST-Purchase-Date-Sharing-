@@ -29,7 +29,8 @@ SELECTION-SCREEN END OF BLOCK b2.
 DATA: go_controller  TYPE REF TO ygms_cl_cst_controller,
       gt_allocation  TYPE ygms_tt_allocation,
       gt_messages    TYPE bapiret2_t,
-      gv_gail_id     TYPE ygms_de_gail_id.
+      gv_gail_id     TYPE ygms_de_gail_id,
+      gt_excl_states TYPE ygms_tt_state_excl.
 
 *----------------------------------------------------------------------*
 * Initialization
@@ -60,11 +61,17 @@ START-OF-SELECTION.
     iv_date_to     = s_date-high
   ).
 
+  " Convert select-option range to simple table
+  CLEAR gt_excl_states.
+  LOOP AT s_exst INTO DATA(ls_exst).
+    APPEND ls_exst-low TO gt_excl_states.
+  ENDLOOP.
+
   TRY.
       " Execute allocation
       go_controller->execute_allocation(
         EXPORTING
-          it_excluded_states = s_exst[]
+          it_excluded_states = gt_excl_states
         IMPORTING
           et_allocation      = gt_allocation
           et_messages        = gt_messages
