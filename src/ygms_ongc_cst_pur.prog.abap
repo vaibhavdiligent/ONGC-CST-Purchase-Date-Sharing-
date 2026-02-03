@@ -116,11 +116,13 @@ FORM read_excel_file.
   ENDIF.
 
   " Count unique rows
-  DATA: lt_rows TYPE STANDARD TABLE OF i.
+  DATA: lv_max_row TYPE i.
   LOOP AT gt_excel_data INTO DATA(ls_excel).
-    COLLECT ls_excel-row INTO lt_rows.
+    IF ls_excel-row > lv_max_row.
+      lv_max_row = ls_excel-row.
+    ENDIF.
   ENDLOOP.
-  gv_records = lines( lt_rows ).
+  gv_records = lv_max_row - 1.  " Subtract 1 for header row
 
   MESSAGE s000(ygms_msg) WITH gv_records 'rows read from Excel file'.
 ENDFORM.
