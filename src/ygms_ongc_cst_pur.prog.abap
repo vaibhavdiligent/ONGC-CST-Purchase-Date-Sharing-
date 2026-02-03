@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
 *& Description: ONGC CST Purchase Data Upload Program (Excel)
-*& Version: 5.1 - Fixed column names and SQL syntax
+*& Version: 5.2 - Added GCV/NCV fetch from YRXA_CMDATA
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 
@@ -152,13 +152,17 @@ FORM process_upload.
   PERFORM map_material_to_ongc.
   CHECK gv_errors = 0.
 
-  " Step 5: Check existing B2B data
+  " Step 5: Fetch GCV/NCV from YRXA_CMDATA
+  PERFORM fetch_gcv_ncv.
+  CHECK gv_errors = 0.
+
+  " Step 6: Check existing B2B data
   PERFORM check_existing_b2b_data.
 
-  " Step 6: Save data
+  " Step 7: Save data
   PERFORM save_data.
 
-  " Step 7: Display results
+  " Step 8: Display results
   PERFORM display_alv.
 ENDFORM.
 
@@ -507,6 +511,86 @@ FORM map_material_to_ongc.
 
   IF lv_error = abap_true.
     MESSAGE e001(ygms_msg) WITH 'Material mapping errors found. Upload aborted.'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form FETCH_GCV_NCV
+*&---------------------------------------------------------------------*
+FORM fetch_gcv_ncv.
+  DATA: lv_error    TYPE abap_bool,
+        lv_gcv      TYPE ygms_de_gcv,
+        lv_ncv      TYPE ygms_de_ncv,
+        lv_err_cnt  TYPE i.
+
+  DATA: BEGIN OF ls_loc_day,
+          location_id TYPE ygms_de_loc_id,
+          gas_day     TYPE datum,
+        END OF ls_loc_day,
+        lt_loc_day LIKE TABLE OF ls_loc_day.
+
+  DATA: BEGIN OF ls_cmdata,
+          location_id TYPE ygms_de_loc_id,
+          gas_day     TYPE datum,
+          gcv         TYPE ygms_de_gcv,
+          ncv         TYPE ygms_de_ncv,
+        END OF ls_cmdata,
+        lt_cmdata LIKE TABLE OF ls_cmdata.
+
+  " Get unique Location ID - Gas Day combinations
+  LOOP AT gt_upload_data INTO DATA(ls_data).
+    ls_loc_day-location_id = ls_data-location_id.
+    ls_loc_day-gas_day     = ls_data-gas_day.
+    COLLECT ls_loc_day INTO lt_loc_day.
+  ENDLOOP.
+
+  " Fetch GCV/NCV from YRXA_CMDATA
+  IF lt_loc_day IS NOT INITIAL.
+    SELECT location_id gas_day gcv ncv
+      FROM yrxa_cmdata
+      INTO TABLE lt_cmdata
+      FOR ALL ENTRIES IN lt_loc_day
+      WHERE location_id = lt_loc_day-location_id
+        AND gas_day     = lt_loc_day-gas_day.
+  ENDIF.
+
+  " Update GCV/NCV in upload data and validate
+  LOOP AT gt_upload_data ASSIGNING FIELD-SYMBOL(<fs_upload>).
+    CLEAR: lv_gcv, lv_ncv.
+
+    READ TABLE lt_cmdata INTO ls_cmdata
+      WITH KEY location_id = <fs_upload>-location_id
+               gas_day     = <fs_upload>-gas_day.
+
+    IF sy-subrc = 0.
+      lv_gcv = ls_cmdata-gcv.
+      lv_ncv = ls_cmdata-ncv.
+    ENDIF.
+
+    " Validate GCV
+    IF lv_gcv IS INITIAL OR lv_gcv <= 0.
+      MESSAGE e001(ygms_msg) WITH 'GCV not available for' <fs_upload>-location_id <fs_upload>-gas_day.
+      lv_error = abap_true.
+      lv_err_cnt = lv_err_cnt + 1.
+      CONTINUE.
+    ENDIF.
+
+    " Validate NCV
+    IF lv_ncv IS INITIAL OR lv_ncv <= 0.
+      MESSAGE e001(ygms_msg) WITH 'NCV not available for' <fs_upload>-location_id <fs_upload>-gas_day.
+      lv_error = abap_true.
+      lv_err_cnt = lv_err_cnt + 1.
+      CONTINUE.
+    ENDIF.
+
+    " Update GCV/NCV
+    <fs_upload>-gcv = lv_gcv.
+    <fs_upload>-ncv = lv_ncv.
+  ENDLOOP.
+
+  IF lv_error = abap_true.
+    gv_errors = gv_errors + lv_err_cnt.
+    MESSAGE e001(ygms_msg) WITH 'GCV/NCV errors found. Upload aborted.'.
   ENDIF.
 ENDFORM.
 
