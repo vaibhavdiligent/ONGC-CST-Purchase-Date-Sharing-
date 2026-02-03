@@ -20,8 +20,20 @@
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
-     <ENTRY>Excel File Upload</ENTRY>
-     <LENGTH>17</LENGTH>
+     <ENTRY>Mode Selection</ENTRY>
+     <LENGTH>14</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>002</KEY>
+     <ENTRY>Upload Settings</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>003</KEY>
+     <ENTRY>View Settings</ENTRY>
+     <LENGTH>13</LENGTH>
     </item>
    </TPOOL>
   </asx:values>
