@@ -227,6 +227,7 @@ FORM convert_date USING pv_date_str TYPE string
   DATA: lv_day   TYPE string,
         lv_month TYPE string,
         lv_year  TYPE string,
+        lv_date_str TYPE string,
         lt_parts TYPE TABLE OF string.
 
   " Try DD-MM-YYYY format
@@ -245,14 +246,15 @@ FORM convert_date USING pv_date_str TYPE string
 
     " Pad with zeros if needed
     IF strlen( lv_day ) = 1.
-      lv_day = '0' && lv_day.
+      CONCATENATE '0' lv_day INTO lv_day.
     ENDIF.
     IF strlen( lv_month ) = 1.
-      lv_month = '0' && lv_month.
+      CONCATENATE '0' lv_month INTO lv_month.
     ENDIF.
 
     " Convert to YYYYMMDD
-    pv_date = lv_year && lv_month && lv_day.
+    CONCATENATE lv_year lv_month lv_day INTO lv_date_str.
+    pv_date = lv_date_str.
   ENDIF.
 ENDFORM.
 

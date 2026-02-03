@@ -8,10 +8,12 @@ REPORT ygms_cst_purchase_main.
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
+DATA: gv_state_cd TYPE ygms_de_state_cd.
+
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   PARAMETERS:     p_loc    TYPE ygms_de_loc_id OBLIGATORY.
   SELECT-OPTIONS: s_date   FOR sy-datum OBLIGATORY.
-  SELECT-OPTIONS: s_exst   FOR sy-langu NO INTERVALS.
+  SELECT-OPTIONS: s_exst   FOR gv_state_cd NO INTERVALS.
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
