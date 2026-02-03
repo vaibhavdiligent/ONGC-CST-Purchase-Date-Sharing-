@@ -433,8 +433,7 @@ FORM map_location_to_ctp.
       FOR ALL ENTRIES IN lt_locations
       WHERE gail_loc_id = lt_locations-table_line
         AND valid_from <= gv_fn_start
-        AND valid_to   >= gv_fn_end
-        AND deleted    = abap_false.
+        AND valid_to   >= gv_fn_end.
   ENDIF.
 
   " Map each record
@@ -491,8 +490,7 @@ FORM map_material_to_ongc.
       WHERE location_id    = lt_loc_mat-location_id
         AND gail_material  = lt_loc_mat-material
         AND valid_from    <= gv_fn_start
-        AND valid_to      >= gv_fn_end
-        AND deleted        = abap_false.
+        AND valid_to      >= gv_fn_end.
   ENDIF.
 
   " Map materials
