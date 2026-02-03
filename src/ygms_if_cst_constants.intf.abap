@@ -4,8 +4,8 @@ INTERFACE ygms_if_cst_constants
   "! <p class="shorttext synchronized" lang="en">Tax Types</p>
   CONSTANTS:
     BEGIN OF gc_tax_type,
-      cst TYPE ygms_tax_type VALUE 'CST',
-      gst TYPE ygms_tax_type VALUE 'GST',
+      cst TYPE ygms_de_tax_type VALUE 'CST',
+      gst TYPE ygms_de_tax_type VALUE 'GST',
     END OF gc_tax_type.
 
   "! <p class="shorttext synchronized" lang="en">Operations</p>
@@ -37,12 +37,12 @@ INTERFACE ygms_if_cst_constants
   "! <p class="shorttext synchronized" lang="en">Table Names</p>
   CONSTANTS:
     BEGIN OF gc_tables,
-      loc_map   TYPE tabname VALUE 'YGMS_CST_LOC_MAP',
-      mat_map   TYPE tabname VALUE 'YGMS_CST_MAT_MAP',
-      b2b_1     TYPE tabname VALUE 'YGMS_CST_B2B_1',
+      loc_map   TYPE tabname VALUE 'YRGA_CST_LOC_MAP',
+      mat_map   TYPE tabname VALUE 'YRGA_CST_MAT_MAP',
+      b2b_1     TYPE tabname VALUE 'YRGA_CST_B2B_1',
       purchase  TYPE tabname VALUE 'YGMS_CST_PUR',
-      fnt_data  TYPE tabname VALUE 'YGMS_CST_FNT_DATA',
-      audit_log TYPE tabname VALUE 'YGMS_CST_AUDIT_LOG',
+      fnt_data  TYPE tabname VALUE 'YGMS_CST_FNT',
+      audit_log TYPE tabname VALUE 'YGMS_CST_ALOG',
     END OF gc_tables.
 
   "! <p class="shorttext synchronized" lang="en">Authorization Objects</p>

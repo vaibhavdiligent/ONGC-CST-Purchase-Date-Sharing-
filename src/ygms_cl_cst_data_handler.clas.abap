@@ -29,7 +29,7 @@ CLASS ygms_cl_cst_data_handler DEFINITION
       IMPORTING
         iv_location_id     TYPE ygms_de_loc_id
       RETURNING
-        VALUE(rs_location) TYPE ygms_cst_loc_map.
+        VALUE(rs_location) TYPE yrga_cst_loc_map.
 
 ENDCLASS.
 
@@ -37,17 +37,21 @@ ENDCLASS.
 CLASS ygms_cl_cst_data_handler IMPLEMENTATION.
 
   METHOD get_b2b_data.
-    SELECT * FROM ygms_cst_b2b_1
-      WHERE location_id = @iv_location_id
-        AND gas_day BETWEEN @iv_date_from AND @iv_date_to
+    " Get B2B data by joining with location mapping to find CTP_ID
+    SELECT b~* FROM yrga_cst_b2b_1 AS b
+      INNER JOIN yrga_cst_loc_map AS l
+        ON b~ctp_id = l~ongc_ctp_id
+      WHERE l~gail_loc_id = @iv_location_id
+        AND b~gas_day BETWEEN @iv_date_from AND @iv_date_to
+        AND l~deleted = @abap_false
       INTO TABLE @rt_data.
   ENDMETHOD.
 
 
   METHOD get_material_mapping.
-    SELECT * FROM ygms_cst_mat_map
+    SELECT * FROM yrga_cst_mat_map
       WHERE location_id = @iv_location_id
-        AND active = @abap_true
+        AND deleted = @abap_false
       INTO TABLE @rt_mapping.
   ENDMETHOD.
 
@@ -63,8 +67,9 @@ CLASS ygms_cl_cst_data_handler IMPLEMENTATION.
 
 
   METHOD get_location_mapping.
-    SELECT SINGLE * FROM ygms_cst_loc_map
-      WHERE location_id = @iv_location_id
+    SELECT SINGLE * FROM yrga_cst_loc_map
+      WHERE gail_loc_id = @iv_location_id
+        AND deleted = @abap_false
       INTO @rs_location.
   ENDMETHOD.
 
