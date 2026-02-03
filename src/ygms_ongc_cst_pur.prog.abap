@@ -48,9 +48,8 @@ DATA: gt_raw_data    TYPE TABLE OF ty_file_raw,
 * Initialization
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  TEXT-001 = 'File Selection'.
-  TEXT-002 = 'File Options'.
-  TEXT-003 = 'Processing Options'.
+  " Text symbols TEXT-001, TEXT-002, TEXT-003 should be maintained
+  " via SE38 -> Goto -> Text Elements -> Selection Texts
 
 *----------------------------------------------------------------------*
 * At Selection Screen - F4 Help for File
@@ -301,19 +300,24 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM save_data.
   DATA: lt_purchase TYPE TABLE OF ygms_cst_pur,
-        ls_purchase TYPE ygms_cst_pur.
+        ls_purchase TYPE ygms_cst_pur,
+        lv_gail_id  TYPE ygms_de_gail_id.
+
+  " Generate a simple GAIL ID for this upload batch
+  lv_gail_id = |UPLOAD-{ sy-datum }-{ sy-uzeit }|.
 
   LOOP AT gt_upload_data INTO DATA(ls_data).
     CLEAR ls_purchase.
 
     ls_purchase-mandt       = sy-mandt.
+    ls_purchase-gail_id     = lv_gail_id.
     ls_purchase-gas_day     = ls_data-gas_day.
     ls_purchase-location_id = ls_data-location_id.
-    ls_purchase-gail_mat    = ls_data-material.
+    ls_purchase-material    = ls_data-material.
     ls_purchase-qty_scm     = ls_data-qty_scm.
-    ls_purchase-created_by  = sy-uname.
-    ls_purchase-created_on  = sy-datum.
-    ls_purchase-created_at  = sy-uzeit.
+    ls_purchase-ernam       = sy-uname.
+    ls_purchase-erdat       = sy-datum.
+    ls_purchase-erzet       = sy-uzeit.
 
     APPEND ls_purchase TO lt_purchase.
   ENDLOOP.

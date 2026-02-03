@@ -32,13 +32,14 @@ DATA: go_controller  TYPE REF TO ygms_cl_cst_controller,
 * Initialization
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  TEXT-001 = 'Selection Criteria'.
-  TEXT-002 = 'Processing Options'.
-
   " Set default date range (current month)
+  DATA: lv_first_day TYPE datum.
+  lv_first_day = sy-datum.
+  lv_first_day+6(2) = '01'.
+
   s_date-sign   = 'I'.
   s_date-option = 'BT'.
-  s_date-low    = sy-datum - sy-datum+6(2) + 1.
+  s_date-low    = lv_first_day.
   s_date-high   = sy-datum.
   APPEND s_date.
 

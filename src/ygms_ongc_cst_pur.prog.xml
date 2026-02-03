@@ -17,6 +17,24 @@
      <ENTRY>ONGC CST Purchase Data Upload Program</ENTRY>
      <LENGTH>38</LENGTH>
     </item>
+    <item>
+     <ID>I</ID>
+     <KEY>001</KEY>
+     <ENTRY>File Selection</ENTRY>
+     <LENGTH>14</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>002</KEY>
+     <ENTRY>File Options</ENTRY>
+     <LENGTH>12</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>003</KEY>
+     <ENTRY>Processing Options</ENTRY>
+     <LENGTH>18</LENGTH>
+    </item>
    </TPOOL>
   </asx:values>
  </asx:abap>
