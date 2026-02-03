@@ -17,7 +17,7 @@ CLASS ygms_cl_cst_data_handler DEFINITION
       IMPORTING
         iv_location_id   TYPE ygms_de_loc_id
       RETURNING
-        VALUE(rt_mapping) TYPE STANDARD TABLE.
+        VALUE(rt_mapping) TYPE STANDARD TABLE OF yrga_cst_mat_map WITH DEFAULT KEY.
 
     "! <p class="shorttext synchronized" lang="en">Save purchase data</p>
     METHODS save_purchase_data
