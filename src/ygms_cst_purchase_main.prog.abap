@@ -26,6 +26,20 @@ TYPES: BEGIN OF ty_loc_ctp_map,
          ongc_ctp_id TYPE ygms_de_ongc_ctp,
        END OF ty_loc_ctp_map.
 
+* Validation ALV structure
+TYPES: BEGIN OF ty_validation,
+         location_id       TYPE ygms_de_loc_id,      " Location ID
+         material          TYPE ygms_de_gail_mat,    " Material
+         allocated_scm     TYPE p DECIMALS 3,        " Allocated Sm³
+         allocated_mbg     TYPE p DECIMALS 3,        " Allocated MBG
+         ctp_id            TYPE ygms_de_ongc_ctp,    " CTP ID
+         ongc_material     TYPE ygms_de_ongc_mat,    " ONGC Material
+         supply_scm        TYPE p DECIMALS 3,        " Supply Sm³
+         supply_mbg        TYPE p DECIMALS 3,        " Supply MBG
+         diff_pur_sup_scm  TYPE p DECIMALS 3,        " Diff. Pur vs Supply Sm³
+         diff_pur_sup_mbg  TYPE p DECIMALS 3,        " Diff. Pur vs Supply MBG
+       END OF ty_validation.
+
 * ALV Display structure - matches image layout
 TYPES: BEGIN OF ty_alv_display,
          exclude     TYPE c LENGTH 1,       " Checkbox for exclude
@@ -111,6 +125,10 @@ DATA: gt_gas_receipt TYPE TABLE OF ty_gas_receipt,
 * ALV Display table
 DATA: gt_alv_display TYPE TABLE OF ty_alv_display,
       gs_alv_display TYPE ty_alv_display.
+
+* Validation ALV table
+DATA: gt_validation TYPE TABLE OF ty_validation,
+      gs_validation TYPE ty_validation.
 
 * ALV Grid objects
 DATA: go_container TYPE REF TO cl_gui_custom_container,
@@ -1000,28 +1018,171 @@ ENDFORM.
 *& Form HANDLE_VALIDATE
 *&---------------------------------------------------------------------*
 FORM handle_validate.
-  DATA: lv_errors TYPE i VALUE 0.
+  " Build validation data and display in separate ALV
+  PERFORM build_validation_data.
+  PERFORM display_validation_alv.
+ENDFORM.
 
-  LOOP AT gt_alv_display INTO gs_alv_display.
-    " Validate totals match sum of days
-    DATA(lv_sum) = gs_alv_display-day01 + gs_alv_display-day02 +
-                   gs_alv_display-day03 + gs_alv_display-day04 +
-                   gs_alv_display-day05 + gs_alv_display-day06 +
-                   gs_alv_display-day07 + gs_alv_display-day08 +
-                   gs_alv_display-day09 + gs_alv_display-day10 +
-                   gs_alv_display-day11 + gs_alv_display-day12 +
-                   gs_alv_display-day13 + gs_alv_display-day14 +
-                   gs_alv_display-day15 + gs_alv_display-day16.
+*&---------------------------------------------------------------------*
+*& Form BUILD_VALIDATION_DATA
+*&---------------------------------------------------------------------*
+FORM build_validation_data.
+  DATA: ls_validation TYPE ty_validation.
 
-    IF lv_sum <> gs_alv_display-total_scm.
-      lv_errors = lv_errors + 1.
-    ENDIF.
+  CLEAR gt_validation.
+
+  " Get unique Location ID + Material combinations from ALV display
+  DATA: BEGIN OF ls_key,
+          location_id TYPE ygms_de_loc_id,
+          material    TYPE ygms_de_gail_mat,
+        END OF ls_key,
+        lt_keys LIKE TABLE OF ls_key.
+
+  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+    ls_key-location_id = gs_alv_display-location_id.
+    ls_key-material    = gs_alv_display-material.
+    COLLECT ls_key INTO lt_keys.
   ENDLOOP.
 
-  IF lv_errors > 0.
-    MESSAGE e000(ygms_msg) WITH lv_errors 'validation errors found'.
-  ELSE.
-    MESSAGE s000(ygms_msg) WITH 'Validation successful'.
+  " Build validation records
+  LOOP AT lt_keys INTO ls_key.
+    CLEAR ls_validation.
+    ls_validation-location_id = ls_key-location_id.
+    ls_validation-material    = ls_key-material.
+
+    " Sum allocated quantities from ALV display
+    LOOP AT gt_alv_display INTO gs_alv_display
+      WHERE location_id = ls_key-location_id
+        AND material    = ls_key-material
+        AND exclude     IS INITIAL.
+      ls_validation-allocated_scm = ls_validation-allocated_scm + gs_alv_display-total_scm.
+      ls_validation-allocated_mbg = ls_validation-allocated_mbg + gs_alv_display-total_mbg.
+    ENDLOOP.
+
+    " Get CTP ID and ONGC Material from gas receipt
+    READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
+      WITH KEY location_id = ls_key-location_id
+               material    = ls_key-material.
+    IF sy-subrc = 0.
+      ls_validation-ctp_id        = ls_receipt-ctp_id.
+      ls_validation-ongc_material = ls_receipt-ongc_material.
+    ENDIF.
+
+    " Sum supply quantities from gas receipt
+    LOOP AT gt_gas_receipt INTO ls_receipt
+      WHERE location_id = ls_key-location_id
+        AND material    = ls_key-material.
+      ls_validation-supply_scm = ls_validation-supply_scm + ls_receipt-qty_scm.
+      ls_validation-supply_mbg = ls_validation-supply_mbg + ls_receipt-qty_mbg.
+    ENDLOOP.
+
+    " Calculate differences
+    ls_validation-diff_pur_sup_scm = ls_validation-allocated_scm - ls_validation-supply_scm.
+    ls_validation-diff_pur_sup_mbg = ls_validation-allocated_mbg - ls_validation-supply_mbg.
+
+    APPEND ls_validation TO gt_validation.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_VALIDATION_ALV
+*&---------------------------------------------------------------------*
+FORM display_validation_alv.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv,
+        ls_layout   TYPE slis_layout_alv.
+
+  " Build field catalog
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'LOCATION_ID'.
+  ls_fieldcat-seltext_l = 'Location ID'.
+  ls_fieldcat-col_pos   = 1.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'MATERIAL'.
+  ls_fieldcat-seltext_l = 'Material'.
+  ls_fieldcat-col_pos   = 2.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ALLOCATED_SCM'.
+  ls_fieldcat-seltext_l = 'Allocated Sm³'.
+  ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ALLOCATED_MBG'.
+  ls_fieldcat-seltext_l = 'Allocated MBG'.
+  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'CTP_ID'.
+  ls_fieldcat-seltext_l = 'CTP ID'.
+  ls_fieldcat-col_pos   = 5.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
+  ls_fieldcat-seltext_l = 'ONGC Material'.
+  ls_fieldcat-col_pos   = 6.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'SUPPLY_SCM'.
+  ls_fieldcat-seltext_l = 'Supply Sm³'.
+  ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'SUPPLY_MBG'.
+  ls_fieldcat-seltext_l = 'Supply MBG'.
+  ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'DIFF_PUR_SUP_SCM'.
+  ls_fieldcat-seltext_l = 'Diff. Pur vs Supply Sm³'.
+  ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'DIFF_PUR_SUP_MBG'.
+  ls_fieldcat-seltext_l = 'Diff. Pur vs Supply MBG'.
+  ls_fieldcat-col_pos   = 10.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+  " Set layout
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra             = abap_true.
+
+  " Display validation ALV in popup
+  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+    EXPORTING
+      i_title               = 'Validation Results'
+      i_zebra               = abap_true
+      i_screen_start_column = 5
+      i_screen_start_line   = 5
+      i_screen_end_column   = 150
+      i_screen_end_line     = 25
+      i_tabname             = 'GT_VALIDATION'
+      it_fieldcat           = lt_fieldcat
+    TABLES
+      t_outtab              = gt_validation
+    EXCEPTIONS
+      program_error         = 1
+      OTHERS                = 2.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
 ENDFORM.
 
