@@ -762,18 +762,11 @@ FORM handle_allocate.
             qty_mbg_diff   TYPE ygms_de_qty_mbg,
             qty_allocated  TYPE ygms_de_qty_mbg,
             qty_access     TYPE ygms_de_qty_mbg,
-
           END OF ty_sales.
 
   TYPES : BEGIN OF ty_asales,
-          regio type regio,
-*            matnr          TYPE matnr,
-                      qty_mbg        TYPE ygms_de_qty_mbg,
-*            qty_mbg_supply TYPE ygms_de_qty_mbg,
-*            qty_mbg_diff   TYPE ygms_de_qty_mbg,
-*            qty_allocated  TYPE ygms_de_qty_mbg,
-*            qty_access     TYPE ygms_de_qty_mbg,
-
+            regio   TYPE regio,
+            qty_mbg TYPE ygms_de_qty_mbg,
           END OF ty_asales.
 
   DATA l_left TYPE ygms_de_qty_mbg.
