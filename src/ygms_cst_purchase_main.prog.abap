@@ -35,6 +35,8 @@ TYPES: BEGIN OF ty_alv_display,
          material    TYPE ygms_de_gail_mat, " Material
          total_mbg   TYPE p DECIMALS 3,     " Total, MBG
          total_scm   TYPE p DECIMALS 3,     " Total, Sm3
+            gcv           TYPE ygms_de_gcv,
+         ncv           TYPE ygms_de_ncv,
          day01       TYPE p DECIMALS 3,     " Day 1 quantity
          day02       TYPE p DECIMALS 3,     " Day 2 quantity
          day03       TYPE p DECIMALS 3,     " Day 3 quantity
@@ -129,9 +131,9 @@ DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
 CLASS lcl_event_handler DEFINITION.
   PUBLIC SECTION.
     METHODS: handle_toolbar FOR EVENT toolbar OF cl_gui_alv_grid
-               IMPORTING e_object e_interactive,
-             handle_user_command FOR EVENT user_command OF cl_gui_alv_grid
-               IMPORTING e_ucomm.
+      IMPORTING e_object e_interactive,
+      handle_user_command FOR EVENT user_command OF cl_gui_alv_grid
+        IMPORTING e_ucomm.
 ENDCLASS.
 
 CLASS lcl_event_handler IMPLEMENTATION.
@@ -194,7 +196,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
 
   METHOD handle_user_command.
     CASE e_ucomm.
-      WHEN 'ALLOCATE'.
+      WHEN 'ALLOCATION'.
         PERFORM handle_allocate.
       WHEN 'VALIDATE'.
         PERFORM handle_validate.
@@ -341,7 +343,7 @@ FORM fetch_b2b_data.
       EXPORTING
         i_trqty = i_trqty
         i_truom = 'SM3'
-        i_tguom = 'MMG'
+        i_tguom = 'MBG'
         lv_gcv  = lv_gcv
         lv_ncv  = lv_ncv
       CHANGING
@@ -429,7 +431,7 @@ FORM fetch_data_yrxr098.
         WITH p_ex = 'X'
         AND RETURN.
 
-  IMPORT gt_fieldcat_slis FROM MEMORY ID 'FC'.
+  IMPORT gt_fieldcat = gt_fieldcat_slis  FROM MEMORY ID 'FC'.
   IMPORT it_final FROM MEMORY ID 'FI'.
 
   LOOP AT it_final INTO DATA(wa_final).
@@ -456,72 +458,101 @@ FORM build_alv_display_table.
         lv_day_num    TYPE i,
         lv_day_field  TYPE string.
 
-  " Get state descriptions
-  SELECT * FROM t005u INTO TABLE lt_state_info
-    WHERE spras = sy-langu
-      AND land1 = 'IN'.
 
-  " Get unique combinations of Location ID + Material
-  DATA: BEGIN OF ls_key,
-          location_id TYPE ygms_de_loc_id,
-          material    TYPE ygms_de_gail_mat,
-        END OF ls_key,
-        lt_keys LIKE TABLE OF ls_key.
 
-  LOOP AT gt_gas_receipt INTO DATA(ls_receipt).
-    ls_key-location_id = ls_receipt-location_id.
-    ls_key-material    = ls_receipt-material.
-    COLLECT ls_key INTO lt_keys.
-  ENDLOOP.
+ data it_final_temp TYPE TABLE OF ty_final1.
 
-  " Build ALV display table
-  LOOP AT lt_keys INTO ls_key.
-    CLEAR ls_alv.
-    ls_alv-location_id = ls_key-location_id.
-    ls_alv-material    = ls_key-material.
+ move it_final_main[] to it_final_temp[].
+  sort it_final_temp by matnr.
+  delete ADJACENT DUPLICATES FROM it_final_temp COMPARING matnr.
+ loop at it_final_temp into data(wa_final_temp).
+   READ TABLE it_final_main TRANSPORTING NO FIELDS with key
+   regio = 'GJ' matnr = wa_final_temp-matnr.
+   if sy-subrc <> 0.
+clear wa_final_main.
+wa_final_main-matnr = wa_final_temp-matnr.
+wa_final_main-regio = 'GJ'.
+wa_final_main-regio_desc = 'Gujrat'.
+wa_final_main-empst = wa_final_temp-empst.
+append wa_final_main to it_final_main.
+   endif.
+ ENDLOOP.
 
-    " Get state info from it_final_main if available
-    READ TABLE it_final_main INTO wa_final_main INDEX 1.
-    IF sy-subrc = 0.
-      ls_alv-state_code = wa_final_main-regio.
-      ls_alv-state      = wa_final_main-regio_desc.
-    ENDIF.
 
-    " Sum quantities by day
-    LOOP AT gt_gas_receipt INTO ls_receipt
-      WHERE location_id = ls_key-location_id
-        AND material    = ls_key-material.
-
-      " Calculate day number from gas_day
-      lv_day_num = ls_receipt-gas_day+6(2).
-
-      " Add to total
-      ls_alv-total_mbg = ls_alv-total_mbg + ls_receipt-qty_mbg.
-      ls_alv-total_scm = ls_alv-total_scm + ls_receipt-qty_scm.
-
-      " Assign to day field
-      CASE lv_day_num.
-        WHEN 1.  ls_alv-day01 = ls_alv-day01 + ls_receipt-qty_scm.
-        WHEN 2.  ls_alv-day02 = ls_alv-day02 + ls_receipt-qty_scm.
-        WHEN 3.  ls_alv-day03 = ls_alv-day03 + ls_receipt-qty_scm.
-        WHEN 4.  ls_alv-day04 = ls_alv-day04 + ls_receipt-qty_scm.
-        WHEN 5.  ls_alv-day05 = ls_alv-day05 + ls_receipt-qty_scm.
-        WHEN 6.  ls_alv-day06 = ls_alv-day06 + ls_receipt-qty_scm.
-        WHEN 7.  ls_alv-day07 = ls_alv-day07 + ls_receipt-qty_scm.
-        WHEN 8.  ls_alv-day08 = ls_alv-day08 + ls_receipt-qty_scm.
-        WHEN 9.  ls_alv-day09 = ls_alv-day09 + ls_receipt-qty_scm.
-        WHEN 10. ls_alv-day10 = ls_alv-day10 + ls_receipt-qty_scm.
-        WHEN 11. ls_alv-day11 = ls_alv-day11 + ls_receipt-qty_scm.
-        WHEN 12. ls_alv-day12 = ls_alv-day12 + ls_receipt-qty_scm.
-        WHEN 13. ls_alv-day13 = ls_alv-day13 + ls_receipt-qty_scm.
-        WHEN 14. ls_alv-day14 = ls_alv-day14 + ls_receipt-qty_scm.
-        WHEN 15. ls_alv-day15 = ls_alv-day15 + ls_receipt-qty_scm.
-        WHEN 16. ls_alv-day16 = ls_alv-day16 + ls_receipt-qty_scm.
-      ENDCASE.
-    ENDLOOP.
-
+  LOOP AT it_final_main INTO wa_final_main.
+    ls_alv-state_code = wa_final_main-regio.
+    ls_alv-state      = wa_final_main-regio_desc.
+    ls_alv-material   = wa_final_main-matnr.
+    ls_alv-location_id = wa_final_main-empst.
     APPEND ls_alv TO gt_alv_display.
   ENDLOOP.
+
+*  " Get state descriptions
+*  SELECT * FROM t005u INTO TABLE lt_state_info
+*    WHERE spras = sy-langu
+*      AND land1 = 'IN'.
+*
+*  " Get unique combinations of Location ID + Material
+*  DATA: BEGIN OF ls_key,
+*          location_id TYPE ygms_de_loc_id,
+*          material    TYPE ygms_de_gail_mat,
+*        END OF ls_key,
+*        lt_keys LIKE TABLE OF ls_key.
+*
+*  LOOP AT gt_gas_receipt INTO DATA(ls_receipt).
+*    ls_key-location_id = ls_receipt-location_id.
+*    ls_key-material    = ls_receipt-material.
+*    COLLECT ls_key INTO lt_keys.
+*  ENDLOOP.
+*
+*  " Build ALV display table
+*  LOOP AT lt_keys INTO ls_key.
+*    CLEAR ls_alv.
+*    ls_alv-location_id = ls_key-location_id.
+*    ls_alv-material    = ls_key-material.
+*
+*    " Get state info from it_final_main if available
+*    READ TABLE it_final_main INTO wa_final_main INDEX 1.
+*    IF sy-subrc = 0.
+*      ls_alv-state_code = wa_final_main-regio.
+*      ls_alv-state      = wa_final_main-regio_desc.
+*    ENDIF.
+*
+*    " Sum quantities by day
+*    LOOP AT gt_gas_receipt INTO ls_receipt
+*      WHERE location_id = ls_key-location_id
+*        AND material    = ls_key-material.
+*
+*      " Calculate day number from gas_day
+*      lv_day_num = ls_receipt-gas_day+6(2).
+*
+*      " Add to total
+*      ls_alv-total_mbg = ls_alv-total_mbg + ls_receipt-qty_mbg.
+*      ls_alv-total_scm = ls_alv-total_scm + ls_receipt-qty_scm.
+*
+*      " Assign to day field
+*      CASE lv_day_num.
+*        WHEN 1.  ls_alv-day01 = ls_alv-day01 + ls_receipt-qty_scm.
+*        WHEN 2.  ls_alv-day02 = ls_alv-day02 + ls_receipt-qty_scm.
+*        WHEN 3.  ls_alv-day03 = ls_alv-day03 + ls_receipt-qty_scm.
+*        WHEN 4.  ls_alv-day04 = ls_alv-day04 + ls_receipt-qty_scm.
+*        WHEN 5.  ls_alv-day05 = ls_alv-day05 + ls_receipt-qty_scm.
+*        WHEN 6.  ls_alv-day06 = ls_alv-day06 + ls_receipt-qty_scm.
+*        WHEN 7.  ls_alv-day07 = ls_alv-day07 + ls_receipt-qty_scm.
+*        WHEN 8.  ls_alv-day08 = ls_alv-day08 + ls_receipt-qty_scm.
+*        WHEN 9.  ls_alv-day09 = ls_alv-day09 + ls_receipt-qty_scm.
+*        WHEN 10. ls_alv-day10 = ls_alv-day10 + ls_receipt-qty_scm.
+*        WHEN 11. ls_alv-day11 = ls_alv-day11 + ls_receipt-qty_scm.
+*        WHEN 12. ls_alv-day12 = ls_alv-day12 + ls_receipt-qty_scm.
+*        WHEN 13. ls_alv-day13 = ls_alv-day13 + ls_receipt-qty_scm.
+*        WHEN 14. ls_alv-day14 = ls_alv-day14 + ls_receipt-qty_scm.
+*        WHEN 15. ls_alv-day15 = ls_alv-day15 + ls_receipt-qty_scm.
+*        WHEN 16. ls_alv-day16 = ls_alv-day16 + ls_receipt-qty_scm.
+*      ENDCASE.
+*    ENDLOOP.
+*
+*    APPEND ls_alv TO gt_alv_display.
+*  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -581,9 +612,25 @@ FORM display_editable_alv.
   ls_fieldcat-do_sum    = abap_true.
   APPEND ls_fieldcat TO gt_fieldcat.
 
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-coltext   = 'Average GCV'.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO gt_fieldcat.
+
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-coltext   = 'Average NCV'.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO gt_fieldcat.
+
+
   " Add day columns with date headers
   lv_date = gv_date_from.
-  DO 16 TIMES.
+  DO 15 TIMES.
     lv_day = sy-index.
     CLEAR ls_fieldcat.
 
@@ -603,7 +650,7 @@ FORM display_editable_alv.
       WHEN 13. ls_fieldcat-fieldname = 'DAY13'.
       WHEN 14. ls_fieldcat-fieldname = 'DAY14'.
       WHEN 15. ls_fieldcat-fieldname = 'DAY15'.
-      WHEN 16. ls_fieldcat-fieldname = 'DAY16'.
+*      WHEN 16. ls_fieldcat-fieldname = 'DAY16'.
     ENDCASE.
 
     " Format date as DD-MM-YYYY
@@ -667,7 +714,7 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
   lr_grid->check_changed_data( ).
 
   CASE r_ucomm.
-    WHEN 'ALLOCATE'.
+    WHEN 'ALLOCATION'.
       PERFORM handle_allocate.
     WHEN 'VALIDATE'.
       PERFORM handle_validate.
@@ -689,6 +736,263 @@ ENDFORM.
 *& Form HANDLE_ALLOCATE
 *&---------------------------------------------------------------------*
 FORM handle_allocate.
+
+  TYPES : BEGIN OF ty_sales,
+            matnr          TYPE matnr,
+            qty_mbg        TYPE ygms_de_qty_mbg,
+            qty_mbg_supply TYPE ygms_de_qty_mbg,
+            qty_mbg_diff   TYPE ygms_de_qty_mbg,
+            qty_allocated  TYPE ygms_de_qty_mbg,
+            qty_access     TYPE ygms_de_qty_mbg,
+
+          END OF ty_sales.
+
+  TYPES : BEGIN OF ty_asales,
+          regio type regio,
+*            matnr          TYPE matnr,
+                      qty_mbg        TYPE ygms_de_qty_mbg,
+*            qty_mbg_supply TYPE ygms_de_qty_mbg,
+*            qty_mbg_diff   TYPE ygms_de_qty_mbg,
+*            qty_allocated  TYPE ygms_de_qty_mbg,
+*            qty_access     TYPE ygms_de_qty_mbg,
+
+          END OF ty_asales.
+
+  DATA l_left TYPE ygms_de_qty_mbg.
+
+  TYPES : BEGIN OF ty_state,
+            state_code    TYPE regio,            " State Code (BH, OD, UP, GJ)
+            state         TYPE bezei20,          " State Name
+            matnr         TYPE matnr,
+            qty_mbg       TYPE ygms_de_qty_mbg,
+            qty_mbg_diff  TYPE ygms_de_qty_mbg,
+            qty_allocated TYPE ygms_de_qty_mbg,
+            percentage    TYPE YGMS_ONGC_PERCENTAGE,"p02_agprm,
+          END OF  ty_state.
+
+
+  DATA : it_sales  TYPE TABLE OF ty_sales,
+         wa_sales  TYPE ty_sales,
+         it_state  TYPE TABLE OF ty_state,
+         wa_state  TYPE ty_state,
+         it_state1 TYPE TABLE OF ty_state,
+         it_asales type table of ty_asales,
+         wa_asales type ty_asales.
+*           it_supply TYPE table of ty_sales,
+*           wa_supply type ty_sales.
+
+
+loop at it_final_main into wa_final_main .
+*      wa_asales-matnr = wa_final_main-matnr.
+      wa_asales-qty_mbg = wa_final_main-matnr1.
+      wa_asales-regio = wa_final_main-regio.
+      COLLECT wa_asales INTO it_asales.
+      CLEAR wa_asales.
+ENDLOOP.
+
+sort it_asales by qty_mbg DESCENDING.
+
+
+  LOOP AT it_final_main INTO wa_final_main ."where regio <> 'GJ'.
+    IF wa_final_main-regio <> 'GJ'.
+      wa_sales-matnr = wa_final_main-matnr.
+      wa_sales-qty_mbg = wa_final_main-matnr1.
+      COLLECT wa_sales INTO it_sales.
+      CLEAR wa_sales.
+    ENDIF.
+    CLEAR wa_state.
+    wa_state-state_code = wa_final_main-regio.
+    wa_state-state = wa_final_main-regio_desc.
+    wa_state-qty_mbg = wa_final_main-matnr1.
+    wa_state-matnr = wa_final_main-matnr.
+    COLLECT wa_state  INTO it_state.
+  ENDLOOP.
+
+  LOOP AT gt_gas_receipt INTO DATA(wa_gas_receipt).
+    wa_sales-matnr = wa_gas_receipt-material.
+    wa_sales-qty_mbg_supply = wa_gas_receipt-qty_mbg.
+    COLLECT wa_sales INTO it_sales.
+    CLEAR wa_sales.
+  ENDLOOP.
+
+  LOOP AT it_sales ASSIGNING FIELD-SYMBOL(<fs_sales>).
+    <fs_sales>-qty_mbg_diff = <fs_sales>-qty_mbg_supply - <fs_sales>-qty_mbg.
+
+  ENDLOOP.
+  SORT it_sales BY qty_mbg_diff DESCENDING.
+*  SORT it_state BY state ASCENDING.
+  sort it_asales by qty_mbg DESCENDING.
+
+CLEAR l_left.
+
+*loop at it_sales into wa_sales.
+*   READ TABLE it_state ASSIGNING FIELD-SYMBOL(<fs_state>) WITH KEY state_code = 'GJ' matnr = wa_sales-matnr.
+*   if sy-subrc <> 0.
+*     clear wa_state.
+*              wa_state-state_code = 'GJ'.
+*         wa_state-matnr = wa_sales-matnr.
+**         wa_state-qty_allocated = l_left.
+*         append wa_state to it_state.
+*   endif.
+*ENDLOOP.
+
+*BREAK-POINT.
+data l_exit type flag.
+
+loop at it_sales ASSIGNING <fs_sales> .
+  clear l_exit.
+l_left = <fs_sales>-qty_mbg_diff.
+if l_left < 0.
+loop at it_asales into wa_asales .
+
+loop at  it_state ASSIGNING FIELD-SYMBOL(<fs_state>) WHERE
+matnr = <fs_sales>-matnr and state_code = wa_asales-regio.
+if sy-subrc = 0.
+if <fs_state>-qty_mbg > abs( l_left ).
+<fs_state>-qty_allocated = <fs_state>-qty_mbg + l_left.
+l_exit = 'X'.
+exit.
+else.
+l_left = l_left + <fs_state>-qty_mbg.
+clear <fs_state>-qty_allocated .
+endif.
+ENDIF.
+endloop.
+
+if l_exit = 'X'.
+  exit.
+  endif.
+
+ENDLOOP.
+else.
+       READ TABLE it_state ASSIGNING <fs_state> WITH KEY state_code = 'GJ' matnr = <fs_sales>-matnr.
+      IF sy-subrc = 0.
+*        <fs_sales>-qty_allocated = l_left + <fs_sales>-qty_allocated .
+        <fs_state>-qty_allocated = l_left + <fs_state>-qty_allocated.
+        CLEAR l_left.
+*        else.
+*         wa_sales-state_cdoe = 'GJ'.
+*         wa_sales-material = <fs_sales>-amtnr.
+*         wa_sales-qty_allocated = l_left.
+*         append wa_sales to it_sales.
+      ENDIF.
+
+endif.
+
+clear l_left.
+ENDLOOP.
+
+*  LOOP AT it_sales ASSIGNING <fs_sales>.
+*    CLEAR l_left .
+*    l_left =   <fs_sales>-qty_mbg_diff.
+*    IF l_left < 0.
+*   loop at it_asales into wa_asales where matnr = <fs_sales>-matnr.
+*      if WA_asales-qty_mbg > abs( l_left ).
+*       LOOP AT it_state ASSIGNING FIELD-SYMBOL(<fs_state>) WHERE state_code = wa_asales-regio AND matnr = <fs_sales>-matnr.
+*        <fs_sales>-qty_allocated = wa_asales-qty_mbg - l_left.
+*        exit.
+*        ENDLOOP.
+*        else.
+*
+*      endif.
+*   ENDLOOP.
+*    ENDIF.
+*      LOOP AT it_state ASSIGNING FIELD-SYMBOL(<fs_state>) WHERE state_code <> 'GJ' AND matnr = <fs_sales>-matnr.
+*        IF <fs_state>-qty_mbg > abs( l_left ).
+*          <fs_sales>-qty_allocated = l_left * -1.
+*          <fs_sales>-qty_access = <fs_sales>-qty_mbg - <fs_sales>-qty_allocated .
+*          <fs_state>-qty_allocated = <fs_sales>-qty_allocated.
+*          CLEAR l_left.
+*          EXIT.
+*        ELSE.
+*          <fs_sales>-qty_allocated = ( l_left * -1 ) - <fs_sales>-qty_mbg.
+*          l_left = l_left +  <fs_sales>-qty_allocated .
+*          <fs_state>-qty_allocated = <fs_sales>-qty_allocated.
+*          IF l_left > 0 .
+*            <fs_sales>-qty_allocated = <fs_sales>-qty_allocated - l_left.
+*            <fs_state>-qty_allocated = <fs_sales>-qty_allocated.
+*            CLEAR l_left.
+*          ENDIF.
+*        ENDIF.
+**<fs_sales>-qty_allocated = <fs_state>-qty_mbg + l_left.
+**l_left =  <fs_sales>-qty_allocated + l_left.
+**if l_left >= 0.
+**  exit.
+**  endif.
+*      ENDLOOP.
+*    ELSE.
+*      READ TABLE it_state ASSIGNING <fs_state> WITH KEY state_code = 'GJ' matnr = <fs_sales>-matnr.
+*      IF sy-subrc = 0.
+*        <fs_sales>-qty_allocated = l_left + <fs_sales>-qty_allocated .
+*        <fs_state>-qty_allocated = l_left.
+*        CLEAR l_left.
+*      ENDIF.
+*    ENDIF.
+**endif.
+*  ENDLOOP.
+
+loop at it_state ASSIGNING <fs_state> where qty_allocated is INITIAL.
+<fs_state>-qty_allocated = <fs_state>-qty_mbg.
+ENDLOOP.
+
+
+  MOVE it_state[] TO it_state1[].
+  SORT it_state1 BY matnr.
+  DELETE ADJACENT DUPLICATES FROM it_state1 COMPARING matnr.
+
+  LOOP AT it_state1 INTO DATA(wa_state1).
+    CLEAR l_left.
+    LOOP AT it_state INTO wa_state WHERE matnr = wa_state1-matnr.
+      l_left = l_left + wa_state-qty_allocated.
+    ENDLOOP.
+
+    LOOP AT it_state ASSIGNING  <fs_state> WHERE matnr = wa_state1-matnr.
+      <fs_state>-percentage = ( <fs_state>-qty_allocated / l_left ) * 100.
+    ENDLOOP.
+
+  ENDLOOP.
+data l_day type char10.
+data l_index(2) type n.
+data l_date type sy-datum.
+data l_ncv type ygms_de_gcv.
+data l_gcv type ygms_de_gcv.
+
+loop at it_state into wa_state where percentage is not INITIAL.
+*if wa_state-percentage is INITIAL.
+*  wa_state-percentage = 1.
+*  endif.
+
+LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>) where state_code = wa_state-state_code AND
+  material = wa_state-matnr.
+  clear l_index.
+  clear : l_ncv,l_gcv.
+  l_date = s_date-low.
+  do 15 times.
+    l_index = l_index + 1.
+        clear l_day.
+    CONCATENATE 'DAY' l_index into l_day.
+  ASSIGN COMPONENT l_day of STRUCTURE <fs_alv> to FIELD-SYMBOL(<fs_day>).
+if sy-subrc = 0.
+ READ TABLE GT_GAS_RECEIPT into wa_gas_receipt with KEY
+ gas_day = l_date
+ material = wa_state-matnr.
+ if sy-subrc = 0.
+  <fs_day> = ( wa_gas_receipt-qty_mbg * wa_state-percentage ) / 100.
+  <fs_alv>-total_mbg = <fs_alv>-total_mbg + <fs_day>.
+  data(l_day_sm3) = ( wa_gas_receipt-qty_scm * wa_state-percentage ) / 100.
+  <fs_alv>-total_scm = <fs_alv>-total_scm + l_day_sm3.
+  l_gcv =  ( l_day_sm3 * wa_gas_receipt-gcv ) + l_gcv.
+  l_ncv = ( l_day_sm3 * wa_gas_receipt-ncv ) + l_ncv.
+  endif.
+ENDIF.
+l_date = l_date + 1.
+ENDDO.
+<fs_alv>-gcv = l_gcv / <fs_alv>-total_scm.
+<fs_alv>-ncv = l_ncv / <fs_alv>-total_scm.
+clear l_day_sm3.
+endloop.
+ENDLOOP.
+
   MESSAGE s000(ygms_msg) WITH 'Allocate function triggered'.
 ENDFORM.
 
