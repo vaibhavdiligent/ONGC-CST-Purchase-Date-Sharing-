@@ -1061,31 +1061,6 @@ ENDFORM.
 *& Form SAVE_DATA_TO_DB
 *&---------------------------------------------------------------------*
 FORM save_data_to_db.
-  " Local type definition for YRGA_CST_PUR table structure
-  TYPES: BEGIN OF ty_cst_pur,
-           gas_day      TYPE datum,
-           location     TYPE ygms_de_loc_id,
-           material     TYPE ygms_de_gail_mat,
-           state_code   TYPE regio,
-           state        TYPE bezei20,
-           ctp          TYPE ygms_de_ongc_ctp,
-           ongc_mater   TYPE ygms_de_ongc_mat,
-           time_stamp   TYPE c LENGTH 14,
-           qty_in_mbg   TYPE p LENGTH 13 DECIMALS 3,
-           gcv          TYPE ygms_de_gcv,
-           ncv          TYPE ygms_de_ncv,
-           qty_in_scm   TYPE p LENGTH 13 DECIMALS 3,
-           ongc_id      TYPE c LENGTH 9,
-           gail_id      TYPE c LENGTH 14,
-           exclude      TYPE c LENGTH 1,
-           created_by   TYPE sy-uname,
-           created_date TYPE sy-datum,
-           created_time TYPE sy-uzeit,
-           sent_e       TYPE c LENGTH 1,
-           sent_on      TYPE sy-datum,
-           sent_at      TYPE sy-uzeit,
-         END OF ty_cst_pur.
-
   TYPES: BEGIN OF ty_gail_id_map,
            location_id TYPE ygms_de_loc_id,
            material    TYPE ygms_de_gail_mat,
@@ -1093,8 +1068,8 @@ FORM save_data_to_db.
            gail_id     TYPE c LENGTH 14,
          END OF ty_gail_id_map.
 
-  DATA: lt_cst_pur      TYPE TABLE OF ty_cst_pur,
-        ls_cst_pur      TYPE ty_cst_pur,
+  DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
+        ls_cst_pur      TYPE yrga_cst_pur,
         lv_timestamp    TYPE timestampl,
         lv_ts_char      TYPE c LENGTH 14,
         lv_date         TYPE datum,
