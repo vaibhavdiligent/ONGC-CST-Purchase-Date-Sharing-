@@ -508,7 +508,7 @@ FORM display_editable_alv.
     REPLACE ALL OCCURRENCES OF '/' IN lv_date_str WITH '-'.
     ls_fieldcat-coltext   = lv_date_str.
     ls_fieldcat-outputlen = 12.
-    ls_fieldcat-edit      = abap_true.
+    ls_fieldcat-edit      = abap_false.  " Not editable initially, enabled via Edit button
     ls_fieldcat-do_sum    = abap_true.
     APPEND ls_fieldcat TO gt_fieldcat.
     lv_date = lv_date + 1.
@@ -859,7 +859,31 @@ ENDFORM.
 *& Form HANDLE_EDIT
 *&---------------------------------------------------------------------*
 FORM handle_edit.
-  MESSAGE s000(ygms_msg) WITH 'Edit mode enabled'.
+  DATA: lr_grid TYPE REF TO cl_gui_alv_grid,
+        lt_fcat TYPE lvc_t_fcat,
+        ls_fcat TYPE lvc_s_fcat.
+
+  " Get ALV grid reference
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
+
+  " Get current field catalog
+  lr_grid->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat ).
+
+  " Enable editing for day columns
+  LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>)
+    WHERE fieldname CP 'DAY*'.
+    <fs_fcat>-edit = abap_true.
+  ENDLOOP.
+
+  " Set updated field catalog
+  lr_grid->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat ).
+
+  " Refresh the ALV
+  lr_grid->refresh_table_display( ).
+
+  MESSAGE s000(ygms_msg) WITH 'Edit mode enabled - Day columns are now editable'.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SAVE
