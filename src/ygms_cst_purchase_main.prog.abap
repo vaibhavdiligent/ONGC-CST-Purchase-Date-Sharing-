@@ -128,7 +128,8 @@ DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
       wa_final_main    TYPE ty_final1.
 * Flags for Save button visibility and state
 DATA: gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
-      gv_save_enabled TYPE abap_bool VALUE abap_false.  " Save enabled flag (diff <= 1)
+      gv_save_enabled TYPE abap_bool VALUE abap_false,  " Save enabled flag (diff <= 1)
+      gv_data_saved   TYPE abap_bool VALUE abap_false.  " Data saved flag - disable editing after save
 *----------------------------------------------------------------------*
 * Class Definition for ALV Event Handler
 *----------------------------------------------------------------------*
@@ -530,15 +531,33 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   DATA: lr_grid  TYPE REF TO cl_gui_alv_grid,
-        ls_extab TYPE slis_extab.
+        ls_extab TYPE slis_extab,
+        lt_excl  TYPE slis_t_extab.
 
-  " Exclude SAVE button if validation not done or save not enabled
-  IF gv_validated = abap_false OR gv_save_enabled = abap_false.
+  " Copy incoming exclusion table
+  lt_excl = rt_extab.
+
+  " Exclude SAVE button if validation not done or save not enabled or data already saved
+  IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
+    CLEAR ls_extab.
     ls_extab-fcode = 'SAVE'.
-    APPEND ls_extab TO rt_extab.
+    APPEND ls_extab TO lt_excl.
   ENDIF.
 
-  SET PF-STATUS 'ZALV_STATUS' EXCLUDING rt_extab.
+  " Also exclude EDIT button if data already saved
+  IF gv_data_saved = abap_true.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'EDIT'.
+    APPEND ls_extab TO lt_excl.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'ALLOCATION'.
+    APPEND ls_extab TO lt_excl.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'RESET'.
+    APPEND ls_extab TO lt_excl.
+  ENDIF.
+
+  SET PF-STATUS 'ZALV_STATUS' EXCLUDING lt_excl.
 
   " Get ALV grid reference and register data_changed event
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -735,7 +754,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM handle_validate.
   DATA: lv_diff_ok  TYPE abap_bool,
-        lv_message  TYPE string.
+        lv_answer   TYPE c LENGTH 1.
 
   PERFORM build_validation_data.
 
@@ -755,22 +774,55 @@ FORM handle_validate.
   " Display validation ALV popup
   PERFORM display_validation_alv.
 
-  " Show popup message based on save status
+  " Show popup message based on save status using POPUP_TO_INFORM
   IF gv_save_enabled = abap_false.
-    lv_message = 'Validation FAILED: Difference > 1 MBG found. Save button is DISABLED.'.
-    MESSAGE lv_message TYPE 'I' DISPLAY LIKE 'E'.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Validation FAILED'
+        txt1  = 'Difference > 1 MBG found in validation data.'
+        txt2  = 'Please adjust the day values and re-validate.'
+        txt3  = 'Save button will remain DISABLED.'
+        txt4  = ''.
   ELSE.
-    lv_message = 'Validation PASSED: All differences within limit. Save button is now ENABLED.'.
-    MESSAGE lv_message TYPE 'I'.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Validation PASSED'
+        txt1  = 'All differences are within acceptable limit (≤ 1 MBG).'
+        txt2  = 'Save button is now ENABLED.'
+        txt3  = 'You can proceed to save the data.'
+        txt4  = ''.
   ENDIF.
 
   " Refresh the PF-STATUS to update Save button visibility
+  PERFORM refresh_pf_status.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form REFRESH_PF_STATUS
+*&---------------------------------------------------------------------*
+FORM refresh_pf_status.
   DATA: lt_extab TYPE slis_t_extab,
         ls_extab TYPE slis_extab.
-  IF gv_validated = abap_false OR gv_save_enabled = abap_false.
+
+  " Exclude SAVE button if validation not done or save not enabled or data already saved
+  IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
+    CLEAR ls_extab.
     ls_extab-fcode = 'SAVE'.
     APPEND ls_extab TO lt_extab.
   ENDIF.
+
+  " Also exclude EDIT, ALLOCATION, RESET buttons if data already saved
+  IF gv_data_saved = abap_true.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'EDIT'.
+    APPEND ls_extab TO lt_extab.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'ALLOCATION'.
+    APPEND ls_extab TO lt_extab.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'RESET'.
+    APPEND ls_extab TO lt_extab.
+  ENDIF.
+
   SET PF-STATUS 'ZALV_STATUS' EXCLUDING lt_extab.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -964,7 +1016,221 @@ ENDFORM.
 *& Form HANDLE_SAVE
 *&---------------------------------------------------------------------*
 FORM handle_save.
-  MESSAGE s000(ygms_msg) WITH 'Data saved successfully'.
+  DATA: lv_answer TYPE c LENGTH 1.
+
+  " Confirm with user before saving
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'Confirm Save'
+      text_question         = 'Do you want to save the data to database?'
+      text_button_1         = 'Yes'
+      icon_button_1         = 'ICON_OKAY'
+      text_button_2         = 'No'
+      icon_button_2         = 'ICON_CANCEL'
+      default_button        = '2'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = lv_answer.
+
+  IF lv_answer = '1'.  " User clicked Yes
+    " Save data to database
+    PERFORM save_data_to_db.
+
+    " Set data saved flag
+    gv_data_saved = abap_true.
+
+    " Disable all fields in ALV
+    PERFORM disable_all_fields.
+
+    " Refresh PF-STATUS to hide Save, Edit, Allocation, Reset buttons
+    PERFORM refresh_pf_status.
+
+    " Show success message
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Save Successful'
+        txt1  = 'Data has been saved successfully to the database.'
+        txt2  = 'All fields are now in display mode.'
+        txt3  = ''
+        txt4  = ''.
+  ELSE.
+    " User clicked No - just return without saving
+    MESSAGE s000(ygms_msg) WITH 'Save operation cancelled by user'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SAVE_DATA_TO_DB
+*&---------------------------------------------------------------------*
+FORM save_data_to_db.
+  DATA: lt_cst_pur    TYPE TABLE OF yrga_cst_pur,
+        ls_cst_pur    TYPE yrga_cst_pur,
+        lv_timestamp  TYPE timestampl,
+        lv_ts_char    TYPE c LENGTH 14,
+        lv_date       TYPE datum,
+        lv_day_index  TYPE i,
+        lv_day_field  TYPE string,
+        lv_day_qty    TYPE p DECIMALS 3,
+        lv_gail_id    TYPE c LENGTH 15,
+        lv_counter    TYPE i.
+
+  " Get current timestamp
+  GET TIME STAMP FIELD lv_timestamp.
+  lv_ts_char = lv_timestamp.
+
+  " Generate GAIL_ID prefix based on current date
+  DATA: lv_gail_prefix TYPE c LENGTH 10,
+        lv_seq_num     TYPE n LENGTH 5.
+
+  CONCATENATE 'GA' sy-datum+2(2) sy-datum+4(2) 'F' INTO lv_gail_prefix.
+  lv_seq_num = 1.
+
+  " Loop through ALV display data and create records for each day
+  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+    " Initialize date to start date
+    lv_date = gv_date_from.
+
+    " Loop through 15 days
+    DO 15 TIMES.
+      lv_day_index = sy-index.
+
+      " Get the day quantity from the corresponding field
+      CASE lv_day_index.
+        WHEN 1.  lv_day_qty = gs_alv_display-day01.
+        WHEN 2.  lv_day_qty = gs_alv_display-day02.
+        WHEN 3.  lv_day_qty = gs_alv_display-day03.
+        WHEN 4.  lv_day_qty = gs_alv_display-day04.
+        WHEN 5.  lv_day_qty = gs_alv_display-day05.
+        WHEN 6.  lv_day_qty = gs_alv_display-day06.
+        WHEN 7.  lv_day_qty = gs_alv_display-day07.
+        WHEN 8.  lv_day_qty = gs_alv_display-day08.
+        WHEN 9.  lv_day_qty = gs_alv_display-day09.
+        WHEN 10. lv_day_qty = gs_alv_display-day10.
+        WHEN 11. lv_day_qty = gs_alv_display-day11.
+        WHEN 12. lv_day_qty = gs_alv_display-day12.
+        WHEN 13. lv_day_qty = gs_alv_display-day13.
+        WHEN 14. lv_day_qty = gs_alv_display-day14.
+        WHEN 15. lv_day_qty = gs_alv_display-day15.
+      ENDCASE.
+
+      " Only save if there is quantity for this day
+      IF lv_day_qty > 0.
+        CLEAR ls_cst_pur.
+
+        " Populate the record
+        ls_cst_pur-gas_day      = lv_date.
+        ls_cst_pur-location     = gs_alv_display-location_id.
+        ls_cst_pur-material     = gs_alv_display-material.
+        ls_cst_pur-state_code   = gs_alv_display-state_code.
+        ls_cst_pur-state        = gs_alv_display-state.
+
+        " Get CTP and ONGC material from gas receipt
+        READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
+          WITH KEY location_id = gs_alv_display-location_id
+                   material    = gs_alv_display-material
+                   gas_day     = lv_date.
+        IF sy-subrc = 0.
+          ls_cst_pur-ctp         = ls_receipt-ctp_id.
+          ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
+          ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+        ELSE.
+          " Try to get from any record with same location and material
+          READ TABLE gt_gas_receipt INTO ls_receipt
+            WITH KEY location_id = gs_alv_display-location_id
+                     material    = gs_alv_display-material.
+          IF sy-subrc = 0.
+            ls_cst_pur-ctp         = ls_receipt-ctp_id.
+            ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
+            ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+          ENDIF.
+        ENDIF.
+
+        ls_cst_pur-time_stamp   = lv_ts_char.
+        ls_cst_pur-qty_in_mbg   = lv_day_qty.
+        ls_cst_pur-gcv          = gs_alv_display-gcv.
+        ls_cst_pur-ncv          = gs_alv_display-ncv.
+
+        " Calculate SCM for this day's quantity
+        DATA: c_tgqty TYPE msego2-adqnt,
+              i_trqty TYPE msego2-adqnt,
+              lv_gcv  TYPE oib_par_fltp,
+              lv_ncv  TYPE oib_par_fltp.
+        IF gs_alv_display-gcv > 0.
+          CLEAR c_tgqty.
+          i_trqty = lv_day_qty.
+          lv_gcv  = gs_alv_display-gcv.
+          lv_ncv  = gs_alv_display-ncv.
+          CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+            EXPORTING
+              i_trqty = i_trqty
+              i_truom = 'MBG'
+              i_tguom = 'SM3'
+              lv_gcv  = lv_gcv
+              lv_ncv  = lv_ncv
+            CHANGING
+              c_tgqty = c_tgqty.
+          ls_cst_pur-qty_in_scm = c_tgqty.
+        ENDIF.
+
+        " Generate GAIL_ID
+        CONCATENATE lv_gail_prefix lv_seq_num INTO ls_cst_pur-gail_id.
+        lv_seq_num = lv_seq_num + 1.
+
+        ls_cst_pur-exclude      = gs_alv_display-exclude.
+        ls_cst_pur-created_by   = sy-uname.
+        ls_cst_pur-created_date = sy-datum.
+        ls_cst_pur-created_time = sy-uzeit.
+
+        " Append to internal table
+        APPEND ls_cst_pur TO lt_cst_pur.
+      ENDIF.
+
+      " Move to next day
+      lv_date = lv_date + 1.
+    ENDDO.
+  ENDLOOP.
+
+  " Insert all records into database
+  IF lt_cst_pur IS NOT INITIAL.
+    MODIFY yrga_cst_pur FROM TABLE lt_cst_pur.
+    IF sy-subrc = 0.
+      COMMIT WORK AND WAIT.
+      lv_counter = lines( lt_cst_pur ).
+      MESSAGE s000(ygms_msg) WITH lv_counter 'records saved to YRGA_CST_PUR'.
+    ELSE.
+      ROLLBACK WORK.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to database'.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISABLE_ALL_FIELDS
+*&---------------------------------------------------------------------*
+FORM disable_all_fields.
+  DATA: lr_grid TYPE REF TO cl_gui_alv_grid,
+        lt_fcat TYPE lvc_t_fcat.
+
+  " Get ALV grid reference
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
+
+  IF lr_grid IS NOT BOUND.
+    RETURN.
+  ENDIF.
+
+  " Get current field catalog
+  lr_grid->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat ).
+
+  " Disable editing for all fields
+  LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>).
+    <fs_fcat>-edit = abap_false.
+  ENDLOOP.
+
+  " Set updated field catalog
+  lr_grid->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat ).
+
+  " Refresh the ALV
+  lr_grid->refresh_table_display( ).
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_RESET
