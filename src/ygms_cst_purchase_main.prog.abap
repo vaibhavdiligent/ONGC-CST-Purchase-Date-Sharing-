@@ -1062,30 +1062,84 @@ ENDFORM.
 *& Form SAVE_DATA_TO_DB
 *&---------------------------------------------------------------------*
 FORM save_data_to_db.
-  DATA: lt_cst_pur    TYPE TABLE OF yrga_cst_pur,
-        ls_cst_pur    TYPE yrga_cst_pur,
-        lv_timestamp  TYPE timestampl,
-        lv_ts_char    TYPE c LENGTH 14,
-        lv_date       TYPE datum,
-        lv_day_index  TYPE i,
-        lv_day_field  TYPE string,
-        lv_day_qty    TYPE p DECIMALS 3,
-        lv_gail_id    TYPE c LENGTH 15,
-        lv_counter    TYPE i.
+  TYPES: BEGIN OF ty_gail_id_map,
+           location_id TYPE ygms_de_loc_id,
+           material    TYPE ygms_de_gail_mat,
+           state_code  TYPE regio,
+           gail_id     TYPE c LENGTH 14,
+         END OF ty_gail_id_map.
+
+  DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
+        ls_cst_pur      TYPE yrga_cst_pur,
+        lv_timestamp    TYPE timestampl,
+        lv_ts_char      TYPE c LENGTH 14,
+        lv_date         TYPE datum,
+        lv_day_index    TYPE i,
+        lv_day_field    TYPE string,
+        lv_day_qty      TYPE p DECIMALS 3,
+        lv_counter      TYPE i,
+        lt_gail_id_map  TYPE TABLE OF ty_gail_id_map,
+        ls_gail_id_map  TYPE ty_gail_id_map,
+        lv_gail_prefix  TYPE c LENGTH 8,
+        lv_fortnight    TYPE c LENGTH 2,
+        lv_seq_number   TYPE n LENGTH 6,
+        lv_return_code  TYPE inri-returncode.
 
   " Get current timestamp
   GET TIME STAMP FIELD lv_timestamp.
   lv_ts_char = lv_timestamp.
 
-  " Generate GAIL_ID prefix based on current date
-  DATA: lv_gail_prefix TYPE c LENGTH 10,
-        lv_seq_num     TYPE n LENGTH 5.
+  " Generate GAIL_ID prefix: GA + YYMM + F1/F2
+  " GA = fixed prefix
+  " YYMM = year (2 digits) + month (2 digits) from gv_date_from
+  " F1 = first fortnight (day 1-15), F2 = second fortnight (day 16-31)
+  DATA(lv_day) = gv_date_from+6(2).
+  IF lv_day <= 15.
+    lv_fortnight = 'F1'.
+  ELSE.
+    lv_fortnight = 'F2'.
+  ENDIF.
 
-  CONCATENATE 'GA' sy-datum+2(2) sy-datum+4(2) 'F' INTO lv_gail_prefix.
-  lv_seq_num = 1.
+  " Build prefix: GA + YY + MM + F1/F2 (e.g., GA2510F1)
+  CONCATENATE 'GA' gv_date_from+2(2) gv_date_from+4(2) lv_fortnight INTO lv_gail_prefix.
 
-  " Loop through ALV display data and create records for each day
+  " First pass: Generate unique GAIL_IDs for each Location-Material-State combination
   LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+    " Check if GAIL_ID already generated for this combination
+    READ TABLE lt_gail_id_map INTO ls_gail_id_map
+      WITH KEY location_id = gs_alv_display-location_id
+               material    = gs_alv_display-material
+               state_code  = gs_alv_display-state_code.
+    IF sy-subrc <> 0.
+      " Get next number from number range
+      CALL FUNCTION 'NUMBER_GET_NEXT'
+        EXPORTING
+          nr_range_nr = '01'
+          object      = 'ZCST'
+        IMPORTING
+          number      = lv_seq_number
+          returncode  = lv_return_code.
+
+      IF lv_return_code IS INITIAL OR lv_return_code = '1'.
+        " Build GAIL_ID: prefix (8 chars) + sequence number (6 digits) = 14 chars
+        CLEAR ls_gail_id_map.
+        ls_gail_id_map-location_id = gs_alv_display-location_id.
+        ls_gail_id_map-material    = gs_alv_display-material.
+        ls_gail_id_map-state_code  = gs_alv_display-state_code.
+        CONCATENATE lv_gail_prefix lv_seq_number INTO ls_gail_id_map-gail_id.
+        APPEND ls_gail_id_map TO lt_gail_id_map.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  " Second pass: Create records for each day with the assigned GAIL_ID
+  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+    " Get the GAIL_ID for this Location-Material-State combination
+    READ TABLE lt_gail_id_map INTO ls_gail_id_map
+      WITH KEY location_id = gs_alv_display-location_id
+               material    = gs_alv_display-material
+               state_code  = gs_alv_display-state_code.
+
     " Initialize date to start date
     lv_date = gv_date_from.
 
@@ -1171,9 +1225,8 @@ FORM save_data_to_db.
           ls_cst_pur-qty_in_scm = c_tgqty.
         ENDIF.
 
-        " Generate GAIL_ID
-        CONCATENATE lv_gail_prefix lv_seq_num INTO ls_cst_pur-gail_id.
-        lv_seq_num = lv_seq_num + 1.
+        " Assign GAIL_ID from the mapping (same for all days of same Location-Material-State)
+        ls_cst_pur-gail_id = ls_gail_id_map-gail_id.
 
         ls_cst_pur-exclude      = gs_alv_display-exclude.
         ls_cst_pur-created_by   = sy-uname.
