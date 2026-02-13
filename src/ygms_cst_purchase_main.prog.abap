@@ -180,12 +180,6 @@ CLASS lcl_event_handler IMPLEMENTATION.
     ls_toolbar-text      = 'Send'.
     ls_toolbar-quickinfo = 'Send data'.
     APPEND ls_toolbar TO e_object->mt_toolbar.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'RECALCULATE'.
-    ls_toolbar-icon      = icon_sum.
-    ls_toolbar-text      = 'Recalculate'.
-    ls_toolbar-quickinfo = 'Recalculate totals'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
   ENDMETHOD.
   METHOD handle_user_command.
     CASE e_ucomm.
@@ -201,12 +195,10 @@ CLASS lcl_event_handler IMPLEMENTATION.
         PERFORM handle_reset.
       WHEN 'SEND'.
         PERFORM handle_send.
-      WHEN 'RECALCULATE'.
-        PERFORM recalculate_totals.
     ENDCASE.
   ENDMETHOD.
   METHOD handle_data_changed.
-    " Recalculation now triggered only via Recalculate button
+    PERFORM recalculate_totals.
   ENDMETHOD.
 ENDCLASS.
 DATA: go_event_handler TYPE REF TO lcl_event_handler.
@@ -599,8 +591,6 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
       PERFORM handle_reset.
     WHEN 'SEND'.
       PERFORM handle_send.
-    WHEN 'RECALCULATE'.
-      PERFORM recalculate_totals.
   ENDCASE.
   rs_selfield-refresh = abap_true.
 ENDFORM.
