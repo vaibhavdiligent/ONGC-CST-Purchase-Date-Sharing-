@@ -940,11 +940,14 @@ ENDFORM.
 *& Form RECALCULATE_TOTALS
 *&---------------------------------------------------------------------*
 FORM recalculate_totals.
-  DATA: lr_grid  TYPE REF TO cl_gui_alv_grid,
-        c_tgqty  TYPE msego2-adqnt,
-        i_trqty  TYPE msego2-adqnt,
-        lv_gcv   TYPE oib_par_fltp,
-        lv_ncv   TYPE oib_par_fltp.
+  DATA: lr_grid     TYPE REF TO cl_gui_alv_grid,
+        l_date      TYPE sy-datum,
+        l_index(2)  TYPE n,
+        l_day       TYPE char10,
+        l_day_scm   TYPE p DECIMALS 6,
+        l_gcv_sum   TYPE p DECIMALS 6,
+        l_ncv_sum   TYPE p DECIMALS 6,
+        l_percentage TYPE p DECIMALS 6.
 
   " Get current data from ALV
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -962,22 +965,39 @@ FORM recalculate_totals.
                          <fs_alv>-day10 + <fs_alv>-day11 + <fs_alv>-day12 +
                          <fs_alv>-day13 + <fs_alv>-day14 + <fs_alv>-day15.
 
-    " Recalculate TOTAL_SCM using conversion function (MBG to SM3)
-    IF <fs_alv>-gcv > 0 AND <fs_alv>-total_mbg > 0.
-      CLEAR c_tgqty.
-      i_trqty = <fs_alv>-total_mbg.
-      lv_gcv  = <fs_alv>-gcv.
-      lv_ncv  = <fs_alv>-ncv.
-      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-        EXPORTING
-          i_trqty = i_trqty
-          i_truom = 'MBG'
-          i_tguom = 'SM3'
-          lv_gcv  = lv_gcv
-          lv_ncv  = lv_ncv
-        CHANGING
-          c_tgqty = c_tgqty.
-      <fs_alv>-total_scm = c_tgqty.
+    " Calculate TOTAL_SCM, GCV, NCV using same logic as HANDLE_ALLOCATE
+    CLEAR: <fs_alv>-total_scm, l_gcv_sum, l_ncv_sum.
+    l_date = gv_date_from.
+    l_index = 0.
+
+    DO 15 TIMES.
+      l_index = l_index + 1.
+      CLEAR l_day.
+      CONCATENATE 'DAY' l_index INTO l_day.
+      ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv> TO FIELD-SYMBOL(<fs_day>).
+      IF sy-subrc = 0 AND <fs_day> > 0.
+        " Find gas receipt for this day and material
+        READ TABLE gt_gas_receipt INTO DATA(wa_gas_receipt) WITH KEY
+          gas_day  = l_date
+          material = <fs_alv>-material.
+        IF sy-subrc = 0 AND wa_gas_receipt-qty_mbg > 0.
+          " Calculate percentage based on edited MBG vs original MBG
+          l_percentage = ( <fs_day> / wa_gas_receipt-qty_mbg ) * 100.
+          " Calculate SM3 using percentage (same as HANDLE_ALLOCATE)
+          l_day_scm = ( wa_gas_receipt-qty_scm * l_percentage ) / 100.
+          <fs_alv>-total_scm = <fs_alv>-total_scm + l_day_scm.
+          " Accumulate weighted GCV and NCV
+          l_gcv_sum = l_gcv_sum + ( l_day_scm * wa_gas_receipt-gcv ).
+          l_ncv_sum = l_ncv_sum + ( l_day_scm * wa_gas_receipt-ncv ).
+        ENDIF.
+      ENDIF.
+      l_date = l_date + 1.
+    ENDDO.
+
+    " Calculate average GCV and NCV (same as HANDLE_ALLOCATE)
+    IF <fs_alv>-total_scm > 0.
+      <fs_alv>-gcv = l_gcv_sum / <fs_alv>-total_scm.
+      <fs_alv>-ncv = l_ncv_sum / <fs_alv>-total_scm.
     ENDIF.
   ENDLOOP.
 
