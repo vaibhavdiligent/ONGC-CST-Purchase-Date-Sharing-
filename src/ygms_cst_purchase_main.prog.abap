@@ -126,6 +126,9 @@ DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
       it_final         TYPE TABLE OF ty_final,
       it_final_main    TYPE TABLE OF ty_final1,
       wa_final_main    TYPE ty_final1.
+* Flags for Save button visibility and state
+DATA: gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
+      gv_save_enabled TYPE abap_bool VALUE abap_false.  " Save enabled flag (diff <= 1)
 *----------------------------------------------------------------------*
 * Class Definition for ALV Event Handler
 *----------------------------------------------------------------------*
@@ -162,12 +165,18 @@ CLASS lcl_event_handler IMPLEMENTATION.
     ls_toolbar-text      = 'Edit'.
     ls_toolbar-quickinfo = 'Edit data'.
     APPEND ls_toolbar TO e_object->mt_toolbar.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'SAVE'.
-    ls_toolbar-icon      = icon_system_save.
-    ls_toolbar-text      = 'Save'.
-    ls_toolbar-quickinfo = 'Save data'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
+    " Save button - only visible after validation, disabled if diff > 1
+    IF gv_validated = abap_true.
+      CLEAR ls_toolbar.
+      ls_toolbar-function  = 'SAVE'.
+      ls_toolbar-icon      = icon_system_save.
+      ls_toolbar-text      = 'Save'.
+      ls_toolbar-quickinfo = 'Save data'.
+      IF gv_save_enabled = abap_false.
+        ls_toolbar-disabled = abap_true.
+      ENDIF.
+      APPEND ls_toolbar TO e_object->mt_toolbar.
+    ENDIF.
     CLEAR ls_toolbar.
     ls_toolbar-function  = 'RESET'.
     ls_toolbar-icon      = icon_refresh.
@@ -762,8 +771,42 @@ ENDFORM.
 *& Form HANDLE_VALIDATE
 *&---------------------------------------------------------------------*
 FORM handle_validate.
+  DATA: lr_grid     TYPE REF TO cl_gui_alv_grid,
+        lv_diff_ok  TYPE abap_bool.
+
   PERFORM build_validation_data.
+
+  " Check if any DIFF_PUR_SUP_MBG > 1
+  lv_diff_ok = abap_true.
+  LOOP AT gt_validation INTO gs_validation.
+    IF abs( gs_validation-diff_pur_sup_mbg ) > 1.
+      lv_diff_ok = abap_false.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+
+  " Set flags
+  gv_validated = abap_true.
+  gv_save_enabled = lv_diff_ok.
+
+  " Refresh toolbar to show Save button
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
+
+  IF lr_grid IS BOUND.
+    lr_grid->set_toolbar_interactive( ).
+  ENDIF.
+
+  " Display validation ALV popup
   PERFORM display_validation_alv.
+
+  " Show message based on save status
+  IF gv_save_enabled = abap_false.
+    MESSAGE s000(ygms_msg) WITH 'Validation failed: Diff > 1. Save disabled.'.
+  ELSE.
+    MESSAGE s000(ygms_msg) WITH 'Validation passed. Save enabled.'.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_VALIDATION_DATA
