@@ -1266,19 +1266,17 @@ FORM save_data_to_db.
     ENDDO.
   ENDLOOP.
 
-  " Insert all records into database
+  " Save records to database table
   IF lt_cst_pur IS NOT INITIAL.
-    " Insert each record individually
-    LOOP AT lt_cst_pur INTO ls_cst_pur.
-      INSERT INTO yrga_cst_pur VALUES ls_cst_pur.
-      IF sy-subrc <> 0.
-        " If insert fails, try update
-        UPDATE yrga_cst_pur FROM ls_cst_pur.
-      ENDIF.
-    ENDLOOP.
-    COMMIT WORK AND WAIT.
-    lv_counter = lines( lt_cst_pur ).
-    MESSAGE s000(ygms_msg) WITH lv_counter 'records saved to YRGA_CST_PUR'.
+    MODIFY yrga_cst_pur FROM TABLE lt_cst_pur.
+    IF sy-subrc = 0.
+      COMMIT WORK AND WAIT.
+      lv_counter = lines( lt_cst_pur ).
+      MESSAGE s000(ygms_msg) WITH lv_counter 'records saved to YRGA_CST_PUR'.
+    ELSE.
+      ROLLBACK WORK.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to database'.
+    ENDIF.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
