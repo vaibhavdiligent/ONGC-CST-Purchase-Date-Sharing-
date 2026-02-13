@@ -763,6 +763,15 @@ FORM handle_validate.
     lv_message = 'Validation PASSED: All differences within limit. Save button is now ENABLED.'.
     MESSAGE lv_message TYPE 'I'.
   ENDIF.
+
+  " Refresh the PF-STATUS to update Save button visibility
+  DATA: lt_extab TYPE slis_t_extab,
+        ls_extab TYPE slis_extab.
+  IF gv_validated = abap_false OR gv_save_enabled = abap_false.
+    ls_extab-fcode = 'SAVE'.
+    APPEND ls_extab TO lt_extab.
+  ENDIF.
+  SET PF-STATUS 'ZALV_STATUS' EXCLUDING lt_extab.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_VALIDATION_DATA
