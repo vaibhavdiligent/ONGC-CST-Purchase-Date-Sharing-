@@ -1018,21 +1018,16 @@ ENDFORM.
 FORM handle_save.
   DATA: lv_answer TYPE c LENGTH 1.
 
-  " Confirm with user before saving
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
+  " Confirm with user before saving using POPUP_TO_CONFIRM_STEP
+  CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
     EXPORTING
-      titlebar              = 'Confirm Save'
-      text_question         = 'Do you want to save the data to database?'
-      text_button_1         = 'Yes'
-      icon_button_1         = 'ICON_OKAY'
-      text_button_2         = 'No'
-      icon_button_2         = 'ICON_CANCEL'
-      default_button        = '2'
-      display_cancel_button = ' '
+      textline1   = 'Do you want to save the data to database?'
+      titel       = 'Confirm Save'
+      cancel_display = ' '
     IMPORTING
-      answer                = lv_answer.
+      answer      = lv_answer.
 
-  IF lv_answer = '1'.  " User clicked Yes
+  IF lv_answer = 'J'.  " User clicked Yes (J = Ja/Yes)
     " Save data to database
     PERFORM save_data_to_db.
 
