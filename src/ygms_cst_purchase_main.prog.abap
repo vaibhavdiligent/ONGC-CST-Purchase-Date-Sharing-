@@ -198,6 +198,18 @@ CLASS lcl_event_handler IMPLEMENTATION.
     ENDCASE.
   ENDMETHOD.
   METHOD handle_data_changed.
+    DATA: ls_mod_cell TYPE lvc_s_modi.
+    " First apply the changed values to gt_alv_display
+    LOOP AT er_data_changed->mt_mod_cells INTO ls_mod_cell.
+      READ TABLE gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_row>) INDEX ls_mod_cell-row_id.
+      IF sy-subrc = 0.
+        ASSIGN COMPONENT ls_mod_cell-fieldname OF STRUCTURE <fs_row> TO FIELD-SYMBOL(<fs_field>).
+        IF sy-subrc = 0.
+          <fs_field> = ls_mod_cell-value.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    " Now recalculate totals
     PERFORM recalculate_totals.
   ENDMETHOD.
 ENDCLASS.
