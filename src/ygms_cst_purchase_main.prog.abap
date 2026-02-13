@@ -940,10 +940,15 @@ ENDFORM.
 *& Form RECALCULATE_TOTALS
 *&---------------------------------------------------------------------*
 FORM recalculate_totals.
-  DATA: c_tgqty TYPE msego2-adqnt,
+  DATA: lr_grid TYPE REF TO cl_gui_alv_grid,
+        c_tgqty TYPE msego2-adqnt,
         i_trqty TYPE msego2-adqnt,
         lv_gcv  TYPE oib_par_fltp,
         lv_ncv  TYPE oib_par_fltp.
+
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
 
   " Recalculate totals for each row (only TOTAL_MBG and TOTAL_SCM - GCV/NCV unchanged)
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>).
@@ -975,4 +980,9 @@ FORM recalculate_totals.
     ENDIF.
     " GCV and NCV remain unchanged (already set during allocation)
   ENDLOOP.
+
+  " Refresh ALV display
+  IF lr_grid IS BOUND.
+    lr_grid->refresh_table_display( ).
+  ENDIF.
 ENDFORM.
