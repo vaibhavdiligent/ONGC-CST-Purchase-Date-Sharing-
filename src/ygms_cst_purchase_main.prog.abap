@@ -524,7 +524,7 @@ FORM display_editable_alv.
   gs_layout-cwidth_opt = abap_true.
   gs_layout-zebra      = abap_true.
   gs_layout-sel_mode   = 'A'.
-  gs_layout-edit       = abap_true.
+  gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
       i_callback_program       = sy-repid
