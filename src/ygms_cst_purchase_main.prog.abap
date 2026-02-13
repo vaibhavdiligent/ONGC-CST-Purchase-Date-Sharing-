@@ -134,7 +134,9 @@ CLASS lcl_event_handler DEFINITION.
     METHODS: handle_toolbar FOR EVENT toolbar OF cl_gui_alv_grid
       IMPORTING e_object e_interactive,
       handle_user_command FOR EVENT user_command OF cl_gui_alv_grid
-        IMPORTING e_ucomm.
+        IMPORTING e_ucomm,
+      handle_data_changed FOR EVENT data_changed OF cl_gui_alv_grid
+        IMPORTING er_data_changed.
 ENDCLASS.
 CLASS lcl_event_handler IMPLEMENTATION.
   METHOD handle_toolbar.
@@ -194,6 +196,9 @@ CLASS lcl_event_handler IMPLEMENTATION.
       WHEN 'SEND'.
         PERFORM handle_send.
     ENDCASE.
+  ENDMETHOD.
+  METHOD handle_data_changed.
+    PERFORM recalculate_totals.
   ENDMETHOD.
 ENDCLASS.
 DATA: go_event_handler TYPE REF TO lcl_event_handler.
@@ -547,7 +552,21 @@ ENDFORM.
 *& Form SET_PF_STATUS
 *&---------------------------------------------------------------------*
 FORM set_pf_status USING rt_extab TYPE slis_t_extab.
+  DATA: lr_grid TYPE REF TO cl_gui_alv_grid.
+
   SET PF-STATUS 'ZALV_STATUS'.
+
+  " Get ALV grid reference and register data_changed event
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
+
+  IF lr_grid IS BOUND AND go_event_handler IS NOT BOUND.
+    CREATE OBJECT go_event_handler.
+    SET HANDLER go_event_handler->handle_data_changed FOR lr_grid.
+    " Register for edit events
+    lr_grid->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form USER_COMMAND
@@ -916,4 +935,35 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM handle_send.
   MESSAGE s000(ygms_msg) WITH 'Send function triggered'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form RECALCULATE_TOTALS
+*&---------------------------------------------------------------------*
+FORM recalculate_totals.
+  DATA: lr_grid TYPE REF TO cl_gui_alv_grid.
+
+  " Get current data from ALV
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid.
+
+  lr_grid->check_changed_data( ).
+
+  " Recalculate totals for each row
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>).
+    " Sum all day columns for TOTAL_MBG
+    <fs_alv>-total_mbg = <fs_alv>-day01 + <fs_alv>-day02 + <fs_alv>-day03 +
+                         <fs_alv>-day04 + <fs_alv>-day05 + <fs_alv>-day06 +
+                         <fs_alv>-day07 + <fs_alv>-day08 + <fs_alv>-day09 +
+                         <fs_alv>-day10 + <fs_alv>-day11 + <fs_alv>-day12 +
+                         <fs_alv>-day13 + <fs_alv>-day14 + <fs_alv>-day15.
+
+    " Recalculate TOTAL_SCM using GCV (MBG to SCM conversion)
+    IF <fs_alv>-gcv > 0.
+      <fs_alv>-total_scm = <fs_alv>-total_mbg * 1000 / <fs_alv>-gcv.
+    ENDIF.
+  ENDLOOP.
+
+  " Refresh ALV display
+  lr_grid->refresh_table_display( ).
 ENDFORM.
