@@ -878,6 +878,7 @@ FORM display_validation_alv.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
       i_title               = 'Validation Results'
+      i_selection           = ' '
       i_zebra               = abap_true
       i_screen_start_column = 5
       i_screen_start_line   = 5
@@ -899,9 +900,12 @@ ENDFORM.
 *& Form HANDLE_EDIT
 *&---------------------------------------------------------------------*
 FORM handle_edit.
-  DATA: lr_grid TYPE REF TO cl_gui_alv_grid,
-        lt_fcat TYPE lvc_t_fcat,
-        ls_fcat TYPE lvc_s_fcat.
+  DATA: lr_grid        TYPE REF TO cl_gui_alv_grid,
+        lt_fcat        TYPE lvc_t_fcat,
+        ls_fcat        TYPE lvc_s_fcat,
+        lv_day_edit    TYPE abap_bool,
+        lv_new_day_edit TYPE abap_bool,
+        lv_new_excl_edit TYPE abap_bool.
 
   " Get ALV grid reference
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -911,12 +915,27 @@ FORM handle_edit.
   " Get current field catalog
   lr_grid->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat ).
 
-  " Enable editing for day columns and disable EXCLUDE checkbox
+  " Check current edit state of DAY01 field
+  READ TABLE lt_fcat INTO ls_fcat WITH KEY fieldname = 'DAY01'.
+  IF sy-subrc = 0.
+    lv_day_edit = ls_fcat-edit.
+  ENDIF.
+
+  " Toggle: if DAY is editable, disable it and enable EXCLUDE; otherwise vice versa
+  IF lv_day_edit = abap_true.
+    lv_new_day_edit = abap_false.
+    lv_new_excl_edit = abap_true.
+  ELSE.
+    lv_new_day_edit = abap_true.
+    lv_new_excl_edit = abap_false.
+  ENDIF.
+
+  " Apply toggle to field catalog
   LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>).
     IF <fs_fcat>-fieldname CP 'DAY*'.
-      <fs_fcat>-edit = abap_true.
+      <fs_fcat>-edit = lv_new_day_edit.
     ELSEIF <fs_fcat>-fieldname = 'EXCLUDE'.
-      <fs_fcat>-edit = abap_false.
+      <fs_fcat>-edit = lv_new_excl_edit.
     ENDIF.
   ENDLOOP.
 
@@ -926,7 +945,12 @@ FORM handle_edit.
   " Refresh the ALV
   lr_grid->refresh_table_display( ).
 
-  MESSAGE s000(ygms_msg) WITH 'Edit mode enabled - Day columns are now editable'.
+  " Display appropriate message based on new state
+  IF lv_new_day_edit = abap_true.
+    MESSAGE s000(ygms_msg) WITH 'Edit mode enabled - Day columns are now editable'.
+  ELSE.
+    MESSAGE s000(ygms_msg) WITH 'Edit mode disabled - Exclude checkbox is now editable'.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SAVE
