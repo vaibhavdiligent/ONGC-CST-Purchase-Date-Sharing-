@@ -880,10 +880,13 @@ FORM handle_edit.
   " Get current field catalog
   lr_grid->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat ).
 
-  " Enable editing for day columns
-  LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>)
-    WHERE fieldname CP 'DAY*'.
-    <fs_fcat>-edit = abap_true.
+  " Enable editing for day columns and disable EXCLUDE checkbox
+  LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>).
+    IF <fs_fcat>-fieldname CP 'DAY*'.
+      <fs_fcat>-edit = abap_true.
+    ELSEIF <fs_fcat>-fieldname = 'EXCLUDE'.
+      <fs_fcat>-edit = abap_false.
+    ENDIF.
   ENDLOOP.
 
   " Set updated field catalog
