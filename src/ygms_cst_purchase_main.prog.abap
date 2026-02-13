@@ -516,6 +516,7 @@ FORM display_editable_alv.
     REPLACE ALL OCCURRENCES OF '/' IN lv_date_str WITH '-'.
     ls_fieldcat-coltext   = lv_date_str.
     ls_fieldcat-outputlen = 12.
+    ls_fieldcat-decimals  = 3.           " Match type definition (TYPE p DECIMALS 3)
     ls_fieldcat-edit      = abap_false.  " Not editable initially, enabled via Edit button
     ls_fieldcat-do_sum    = abap_true.
     APPEND ls_fieldcat TO gt_fieldcat.
