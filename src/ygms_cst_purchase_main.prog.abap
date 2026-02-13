@@ -143,52 +143,8 @@ CLASS lcl_event_handler DEFINITION.
 ENDCLASS.
 CLASS lcl_event_handler IMPLEMENTATION.
   METHOD handle_toolbar.
-    DATA: ls_toolbar TYPE stb_button.
-    CLEAR ls_toolbar.
-    ls_toolbar-butn_type = 3.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'ALLOCATE'.
-    ls_toolbar-icon      = icon_calculation.
-    ls_toolbar-text      = 'Allocate'.
-    ls_toolbar-quickinfo = 'Allocate quantities'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'VALIDATE'.
-    ls_toolbar-icon      = icon_check.
-    ls_toolbar-text      = 'Validate'.
-    ls_toolbar-quickinfo = 'Validate data'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'EDIT'.
-    ls_toolbar-icon      = icon_change.
-    ls_toolbar-text      = 'Edit'.
-    ls_toolbar-quickinfo = 'Edit data'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
-    " Save button - only visible after validation, disabled if diff > 1
-    IF gv_validated = abap_true.
-      CLEAR ls_toolbar.
-      ls_toolbar-function  = 'SAVE'.
-      ls_toolbar-icon      = icon_system_save.
-      ls_toolbar-text      = 'Save'.
-      ls_toolbar-quickinfo = 'Save data'.
-      IF gv_save_enabled = abap_false.
-        ls_toolbar-disabled = abap_true.
-      ENDIF.
-      APPEND ls_toolbar TO e_object->mt_toolbar.
-    ENDIF.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'RESET'.
-    ls_toolbar-icon      = icon_refresh.
-    ls_toolbar-text      = 'Reset'.
-    ls_toolbar-quickinfo = 'Reset data'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
-    CLEAR ls_toolbar.
-    ls_toolbar-function  = 'SEND'.
-    ls_toolbar-icon      = icon_mail.
-    ls_toolbar-text      = 'Send'.
-    ls_toolbar-quickinfo = 'Send data'.
-    APPEND ls_toolbar TO e_object->mt_toolbar.
+    " Toolbar buttons are handled via PF-STATUS 'ZALV_STATUS'
+    " This method is kept for potential future ALV grid toolbar customization
   ENDMETHOD.
   METHOD handle_user_command.
     CASE e_ucomm.
@@ -573,9 +529,16 @@ ENDFORM.
 *& Form SET_PF_STATUS
 *&---------------------------------------------------------------------*
 FORM set_pf_status USING rt_extab TYPE slis_t_extab.
-  DATA: lr_grid TYPE REF TO cl_gui_alv_grid.
+  DATA: lr_grid  TYPE REF TO cl_gui_alv_grid,
+        ls_extab TYPE slis_extab.
 
-  SET PF-STATUS 'ZALV_STATUS'.
+  " Exclude SAVE button if validation not done or save not enabled
+  IF gv_validated = abap_false OR gv_save_enabled = abap_false.
+    ls_extab-fcode = 'SAVE'.
+    APPEND ls_extab TO rt_extab.
+  ENDIF.
+
+  SET PF-STATUS 'ZALV_STATUS' EXCLUDING rt_extab.
 
   " Get ALV grid reference and register data_changed event
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -771,8 +734,8 @@ ENDFORM.
 *& Form HANDLE_VALIDATE
 *&---------------------------------------------------------------------*
 FORM handle_validate.
-  DATA: lr_grid     TYPE REF TO cl_gui_alv_grid,
-        lv_diff_ok  TYPE abap_bool.
+  DATA: lv_diff_ok  TYPE abap_bool,
+        lv_message  TYPE string.
 
   PERFORM build_validation_data.
 
@@ -789,23 +752,16 @@ FORM handle_validate.
   gv_validated = abap_true.
   gv_save_enabled = lv_diff_ok.
 
-  " Refresh toolbar to show Save button
-  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
-    IMPORTING
-      e_grid = lr_grid.
-
-  IF lr_grid IS BOUND.
-    lr_grid->set_toolbar_interactive( ).
-  ENDIF.
-
   " Display validation ALV popup
   PERFORM display_validation_alv.
 
-  " Show message based on save status
+  " Show popup message based on save status
   IF gv_save_enabled = abap_false.
-    MESSAGE s000(ygms_msg) WITH 'Validation failed: Diff > 1. Save disabled.'.
+    lv_message = 'Validation FAILED: Difference > 1 MBG found. Save button is DISABLED.'.
+    MESSAGE lv_message TYPE 'I' DISPLAY LIKE 'E'.
   ELSE.
-    MESSAGE s000(ygms_msg) WITH 'Validation passed. Save enabled.'.
+    lv_message = 'Validation PASSED: All differences within limit. Save button is now ENABLED.'.
+    MESSAGE lv_message TYPE 'I'.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
