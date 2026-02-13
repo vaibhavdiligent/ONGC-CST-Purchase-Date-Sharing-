@@ -581,6 +581,10 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
     IMPORTING
       e_grid = lr_grid.
   lr_grid->check_changed_data( ).
+
+  " Debug: Show which function code was triggered (can be removed later)
+  MESSAGE s000(ygms_msg) WITH 'Function code:' r_ucomm.
+
   CASE r_ucomm.
     WHEN 'ALLOCATION'.
       PERFORM handle_allocate.
