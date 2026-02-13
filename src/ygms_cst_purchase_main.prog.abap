@@ -940,7 +940,11 @@ ENDFORM.
 *& Form RECALCULATE_TOTALS
 *&---------------------------------------------------------------------*
 FORM recalculate_totals.
-  DATA: lr_grid TYPE REF TO cl_gui_alv_grid.
+  DATA: lr_grid  TYPE REF TO cl_gui_alv_grid,
+        c_tgqty  TYPE msego2-adqnt,
+        i_trqty  TYPE msego2-adqnt,
+        lv_gcv   TYPE oib_par_fltp,
+        lv_ncv   TYPE oib_par_fltp.
 
   " Get current data from ALV
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -958,9 +962,22 @@ FORM recalculate_totals.
                          <fs_alv>-day10 + <fs_alv>-day11 + <fs_alv>-day12 +
                          <fs_alv>-day13 + <fs_alv>-day14 + <fs_alv>-day15.
 
-    " Recalculate TOTAL_SCM using GCV (MBG to SCM conversion)
-    IF <fs_alv>-gcv > 0.
-      <fs_alv>-total_scm = <fs_alv>-total_mbg * 1000 / <fs_alv>-gcv.
+    " Recalculate TOTAL_SCM using conversion function (MBG to SM3)
+    IF <fs_alv>-gcv > 0 AND <fs_alv>-total_mbg > 0.
+      CLEAR c_tgqty.
+      i_trqty = <fs_alv>-total_mbg.
+      lv_gcv  = <fs_alv>-gcv.
+      lv_ncv  = <fs_alv>-ncv.
+      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+        EXPORTING
+          i_trqty = i_trqty
+          i_truom = 'MBG'
+          i_tguom = 'SM3'
+          lv_gcv  = lv_gcv
+          lv_ncv  = lv_ncv
+        CHANGING
+          c_tgqty = c_tgqty.
+      <fs_alv>-total_scm = c_tgqty.
     ENDIF.
   ENDLOOP.
 
