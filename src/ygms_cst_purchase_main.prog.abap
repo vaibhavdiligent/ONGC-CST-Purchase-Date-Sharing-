@@ -443,45 +443,53 @@ FORM display_editable_alv.
   ls_fieldcat-fieldname = 'STATE_CODE'.
   ls_fieldcat-coltext   = 'State Code'.
   ls_fieldcat-outputlen = 10.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'STATE'.
   ls_fieldcat-coltext   = 'State'.
   ls_fieldcat-outputlen = 15.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'LOCATION_ID'.
   ls_fieldcat-coltext   = 'Location ID'.
   ls_fieldcat-outputlen = 12.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'MATERIAL'.
   ls_fieldcat-coltext   = 'Material'.
   ls_fieldcat-outputlen = 18.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_MBG'.
   ls_fieldcat-coltext   = 'Total, MBG'.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_SCM'.
   ls_fieldcat-coltext   = 'Total, Sm3'.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
   ls_fieldcat-coltext   = 'Average GCV'.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
   ls_fieldcat-coltext   = 'Average NCV'.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   lv_date = gv_date_from.
   DO 15 TIMES.
