@@ -940,13 +940,14 @@ ENDFORM.
 *& Form RECALCULATE_TOTALS
 *&---------------------------------------------------------------------*
 FORM recalculate_totals.
-  DATA: lr_grid     TYPE REF TO cl_gui_alv_grid,
-        l_date      TYPE sy-datum,
-        l_index(2)  TYPE n,
-        l_day       TYPE char10,
-        l_day_scm   TYPE p DECIMALS 6,
-        l_gcv_sum   TYPE p DECIMALS 6,
-        l_ncv_sum   TYPE p DECIMALS 6,
+  DATA: lr_grid      TYPE REF TO cl_gui_alv_grid,
+        l_date       TYPE sy-datum,
+        l_index(2)   TYPE n,
+        l_day        TYPE char10,
+        l_day_mbg    TYPE p DECIMALS 3,  " Local variable to read day value (not modify)
+        l_day_scm    TYPE p DECIMALS 6,
+        l_gcv_sum    TYPE p DECIMALS 6,
+        l_ncv_sum    TYPE p DECIMALS 6,
         l_percentage TYPE p DECIMALS 6.
 
   " Get current data from ALV
@@ -956,9 +957,9 @@ FORM recalculate_totals.
 
   lr_grid->check_changed_data( ).
 
-  " Recalculate totals for each row
+  " Recalculate totals for each row (only TOTAL_MBG, TOTAL_SCM, GCV, NCV - NOT day values)
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>).
-    " Sum all day columns for TOTAL_MBG
+    " Sum all day columns for TOTAL_MBG (reading day values, not modifying)
     <fs_alv>-total_mbg = <fs_alv>-day01 + <fs_alv>-day02 + <fs_alv>-day03 +
                          <fs_alv>-day04 + <fs_alv>-day05 + <fs_alv>-day06 +
                          <fs_alv>-day07 + <fs_alv>-day08 + <fs_alv>-day09 +
@@ -972,17 +973,21 @@ FORM recalculate_totals.
 
     DO 15 TIMES.
       l_index = l_index + 1.
-      CLEAR l_day.
+      CLEAR: l_day, l_day_mbg.
       CONCATENATE 'DAY' l_index INTO l_day.
+      " Read day value into local variable (not modifying the day field)
       ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv> TO FIELD-SYMBOL(<fs_day>).
-      IF sy-subrc = 0 AND <fs_day> > 0.
+      IF sy-subrc = 0.
+        l_day_mbg = <fs_day>.  " Copy to local variable
+      ENDIF.
+      IF l_day_mbg > 0.
         " Find gas receipt for this day and material
         READ TABLE gt_gas_receipt INTO DATA(wa_gas_receipt) WITH KEY
           gas_day  = l_date
           material = <fs_alv>-material.
         IF sy-subrc = 0 AND wa_gas_receipt-qty_mbg > 0.
           " Calculate percentage based on edited MBG vs original MBG
-          l_percentage = ( <fs_day> / wa_gas_receipt-qty_mbg ) * 100.
+          l_percentage = ( l_day_mbg / wa_gas_receipt-qty_mbg ) * 100.
           " Calculate SM3 using percentage (same as HANDLE_ALLOCATE)
           l_day_scm = ( wa_gas_receipt-qty_scm * l_percentage ) / 100.
           <fs_alv>-total_scm = <fs_alv>-total_scm + l_day_scm.
