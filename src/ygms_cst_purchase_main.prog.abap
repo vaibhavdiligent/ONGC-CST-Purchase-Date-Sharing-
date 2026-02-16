@@ -130,9 +130,81 @@ START-OF-SELECTION.
 
       ENDCASE.
 
-    CATCH ygms_cx_cst_error INTO DATA(lx_error).
-      MESSAGE lx_error TYPE 'E'.
-  ENDTRY.
+      " Only save if there is quantity for this day
+      IF lv_day_qty > 0.
+        CLEAR ls_cst_pur.
+
+        " Populate the record
+        ls_cst_pur-gas_day      = lv_date.
+        ls_cst_pur-location     = gs_alv_display-location_id.
+        ls_cst_pur-material     = gs_alv_display-material.
+        ls_cst_pur-state_code   = gs_alv_display-state_code.
+        ls_cst_pur-state        = gs_alv_display-state.
+
+        " Get CTP and ONGC material from gas receipt
+        READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
+          WITH KEY location_id = gs_alv_display-location_id
+                   material    = gs_alv_display-material
+                   gas_day     = lv_date.
+        IF sy-subrc = 0.
+          ls_cst_pur-ctp         = ls_receipt-ctp_id.
+          ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
+          ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+        ELSE.
+          " Try to get from any record with same location and material
+          READ TABLE gt_gas_receipt INTO ls_receipt
+            WITH KEY location_id = gs_alv_display-location_id
+                     material    = gs_alv_display-material.
+          IF sy-subrc = 0.
+            ls_cst_pur-ctp         = ls_receipt-ctp_id.
+            ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
+            ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+          ENDIF.
+        ENDIF.
+
+        ls_cst_pur-time_stamp   = lv_ts_char.
+        ls_cst_pur-qty_in_mbg   = lv_day_qty.
+        ls_cst_pur-gcv          = gs_alv_display-gcv.
+        ls_cst_pur-ncv          = gs_alv_display-ncv.
+
+        " Calculate SCM for this day's quantity
+        DATA: c_tgqty TYPE msego2-adqnt,
+              i_trqty TYPE msego2-adqnt,
+              lv_gcv  TYPE oib_par_fltp,
+              lv_ncv  TYPE oib_par_fltp.
+        IF gs_alv_display-gcv > 0.
+          CLEAR c_tgqty.
+          i_trqty = lv_day_qty.
+          lv_gcv  = gs_alv_display-gcv.
+          lv_ncv  = gs_alv_display-ncv.
+          CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+            EXPORTING
+              i_trqty = i_trqty
+              i_truom = 'MBG'
+              i_tguom = 'SM3'
+              lv_gcv  = lv_gcv
+              lv_ncv  = lv_ncv
+            CHANGING
+              c_tgqty = c_tgqty.
+          ls_cst_pur-qty_in_scm = c_tgqty.
+        ENDIF.
+
+        " Assign GAIL_ID from the mapping (same for all days of same Location-Material-State)
+        ls_cst_pur-gail_id = ls_gail_id_map-gail_id.
+
+        ls_cst_pur-exclude      = gs_alv_display-exclude.
+        ls_cst_pur-created_by   = sy-uname.
+        ls_cst_pur-created_date = sy-datum.
+        ls_cst_pur-created_time = sy-uzeit.
+
+        " Append to internal table
+        APPEND ls_cst_pur TO lt_cst_pur.
+      ENDIF.
+
+      " Move to next day
+      lv_date = lv_date + 1.
+    ENDDO.
+  ENDLOOP.
 
 *----------------------------------------------------------------------*
 * Forms

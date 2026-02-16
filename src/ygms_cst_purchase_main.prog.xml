@@ -14,19 +14,13 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>ONGC CST Purchase Data Sharing - Main Program</ENTRY>
-     <LENGTH>49</LENGTH>
+     <ENTRY>ONGC CST Purchase Data - Gas Receipt Display</ENTRY>
+     <LENGTH>45</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
      <ENTRY>Selection Criteria</ENTRY>
-     <LENGTH>18</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
-     <KEY>002</KEY>
-     <ENTRY>Processing Options</ENTRY>
      <LENGTH>18</LENGTH>
     </item>
    </TPOOL>
