@@ -1,174 +1,195 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_CST_PURCHASE_MAIN
-*& Description: ONGC CST Purchase Data Sharing - Main Program
-*& Version: 2.0 - Fixed text elements and date calculation
 *&---------------------------------------------------------------------*
-REPORT ygms_cst_purchase_main.
-
-*----------------------------------------------------------------------*
-* Selection Screen
-*----------------------------------------------------------------------*
-DATA: gv_state_cd TYPE ygms_de_state_cd.
-
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  PARAMETERS:     p_loc    TYPE ygms_de_loc_id OBLIGATORY.
-  SELECT-OPTIONS: s_date   FOR sy-datum OBLIGATORY.
-  SELECT-OPTIONS: s_exst   FOR gv_state_cd NO INTERVALS.
-SELECTION-SCREEN END OF BLOCK b1.
-
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-  PARAMETERS: p_disp RADIOBUTTON GROUP rb1 DEFAULT 'X',
-              p_save RADIOBUTTON GROUP rb1,
-              p_send RADIOBUTTON GROUP rb1.
-  PARAMETERS: p_email TYPE ad_smtpadr.
-SELECTION-SCREEN END OF BLOCK b2.
+*& Description: ONGC CST Purchase Data Sharing - Main Program
+*& Author:      [To be filled]
+*& Date:        [Creation date]
+*& Module:      FI/SD
+*& WRICEF ID:   R-GAIL-CST-001
+*&---------------------------------------------------------------------*
+*& Change History:
+*& Date        Author      Description
+*& ----------  ----------  --------------------------------------------
+*& DD.MM.YYYY  [Name]      Initial development (TSD v1.2)
+*&---------------------------------------------------------------------*
+REPORT ygms_cst_purchase_main MESSAGE-ID ygms_msg.
 
 *----------------------------------------------------------------------*
 * Global Data
 *----------------------------------------------------------------------*
 DATA: go_controller  TYPE REF TO ygms_cl_cst_controller,
-      gt_allocation  TYPE ygms_tt_allocation,
-      gt_messages    TYPE bapiret2_t,
-      gv_gail_id     TYPE ygms_de_gail_id,
-      gt_excl_states TYPE ygms_tt_state_excl.
+      go_alv_handler TYPE REF TO ygms_cl_cst_alv_handler.
+
+*----------------------------------------------------------------------*
+* Selection Screen
+*----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-b01.
+  PARAMETERS:
+    rb_upld  RADIOBUTTON GROUP mode DEFAULT 'X' USER-COMMAND mode,
+    rb_alloc RADIOBUTTON GROUP mode,
+    rb_view  RADIOBUTTON GROUP mode,
+    rb_send  RADIOBUTTON GROUP mode,
+    rb_dwnld RADIOBUTTON GROUP mode,
+    rb_nom   RADIOBUTTON GROUP mode.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-b02.
+  PARAMETERS:
+    p_loc    TYPE ygms_loc_id OBLIGATORY,
+    p_frdat  TYPE datum,
+    p_todat  TYPE datum.
+  SELECT-OPTIONS:
+    s_mat    FOR ygms_cst_pur-material.
+  PARAMETERS:
+    p_file   TYPE string LOWER CASE MODIF ID upl.
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-b03.
+  SELECT-OPTIONS:
+    s_exst   FOR ygms_cst_pur-state_code NO INTERVALS.
+SELECTION-SCREEN END OF BLOCK b3.
+
+*----------------------------------------------------------------------*
+* At Selection Screen
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_loc.
+  PERFORM f4_location.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  PERFORM f4_file.
+
+AT SELECTION-SCREEN OUTPUT.
+  PERFORM modify_screen.
 
 *----------------------------------------------------------------------*
 * Initialization
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  " Set default date range (current month)
-  DATA: lv_first_day TYPE datum.
-  lv_first_day = sy-datum.
-  lv_first_day+6(2) = '01'.
-
-  s_date-sign   = 'I'.
-  s_date-option = 'BT'.
-  s_date-low    = lv_first_day.
-  s_date-high   = sy-datum.
-  APPEND s_date.
+  " Set default dates to current fortnight
+  DATA(lv_day) = sy-datum+6(2).
+  IF lv_day <= 15.
+    p_frdat = sy-datum(6) && '01'.
+    p_todat = sy-datum(6) && '15'.
+  ELSE.
+    p_frdat = sy-datum(6) && '16'.
+    " Calculate end of month
+    DATA(lv_next_month) = sy-datum.
+    lv_next_month+6(2) = '01'.
+    lv_next_month = lv_next_month + 32.
+    lv_next_month+6(2) = '01'.
+    p_todat = lv_next_month - 1.
+  ENDIF.
 
 *----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
-  " Create controller instance
-  CREATE OBJECT go_controller.
-
-  " Set selection parameters
-  go_controller->set_selection(
+  " Initialize controller
+  go_controller = NEW ygms_cl_cst_controller(
     iv_location_id = p_loc
-    iv_date_from   = s_date-low
-    iv_date_to     = s_date-high
+    iv_from_date   = p_frdat
+    iv_to_date     = p_todat
   ).
 
-  " Convert select-option range to simple table
-  CLEAR gt_excl_states.
-  LOOP AT s_exst INTO DATA(ls_exst).
-    APPEND ls_exst-low TO gt_excl_states.
-  ENDLOOP.
-
   TRY.
-      " Execute allocation
-      go_controller->execute_allocation(
-        EXPORTING
-          it_excluded_states = gt_excl_states
-        IMPORTING
-          et_allocation      = gt_allocation
-          et_messages        = gt_messages
-      ).
+      DATA: lt_messages   TYPE bapiret2_t,
+            lt_allocation TYPE ygms_tt_allocation.
 
-      " Process based on selected option
       CASE abap_true.
-        WHEN p_disp.
-          " Display only - show ALV
-          PERFORM display_alv.
+        WHEN rb_upld.
+          " Upload mode
+          go_controller->process_upload(
+            EXPORTING iv_file_path = p_file
+            IMPORTING et_messages  = lt_messages
+          ).
+          PERFORM display_messages USING lt_messages.
 
-        WHEN p_save.
-          " Save data
-          go_controller->save_data(
-            EXPORTING
-              it_data     = gt_allocation
-            IMPORTING
-              ev_gail_id  = gv_gail_id
-              et_messages = gt_messages
+        WHEN rb_alloc.
+          " Allocation mode
+          go_controller->execute_allocation(
+            EXPORTING it_excluded_states = s_exst[]
+            IMPORTING et_allocation      = lt_allocation
+                      et_messages        = lt_messages
           ).
-          PERFORM display_alv.
 
-        WHEN p_send.
-          " Save and send
-          go_controller->save_data(
-            EXPORTING
-              it_data     = gt_allocation
-            IMPORTING
-              ev_gail_id  = gv_gail_id
-              et_messages = gt_messages
-          ).
-          go_controller->send_data(
-            EXPORTING
-              iv_email_address = p_email
-            IMPORTING
-              et_messages      = gt_messages
-          ).
-          PERFORM display_alv.
+          " Display ALV for editing
+          go_alv_handler = NEW ygms_cl_cst_alv_handler( ).
+          go_alv_handler->display_allocation( lt_allocation ).
+
+        WHEN rb_view.
+          " View mode - Display existing data in ALV
+
+        WHEN rb_send.
+          " Send mode - Send data via email
+
+        WHEN rb_dwnld.
+          " Download mode - Download data to Excel
+
+        WHEN rb_nom.
+          " Nomination mode - Display purchase nominations
+
       ENDCASE.
 
     CATCH ygms_cx_cst_error INTO DATA(lx_error).
       MESSAGE lx_error TYPE 'E'.
   ENDTRY.
 
-*&---------------------------------------------------------------------*
-*& Form DISPLAY_ALV
-*&---------------------------------------------------------------------*
-FORM display_alv.
-  DATA: lo_alv       TYPE REF TO cl_salv_table,
-        lo_functions TYPE REF TO cl_salv_functions_list,
-        lo_columns   TYPE REF TO cl_salv_columns_table,
-        lo_column    TYPE REF TO cl_salv_column.
+*----------------------------------------------------------------------*
+* Forms
+*----------------------------------------------------------------------*
+FORM f4_location.
+  DATA: lt_return TYPE STANDARD TABLE OF ddshretval.
 
-  TRY.
-      cl_salv_table=>factory(
-        IMPORTING
-          r_salv_table = lo_alv
-        CHANGING
-          t_table      = gt_allocation
-      ).
+  CALL FUNCTION 'F4IF_FIELD_VALUE_REQUEST'
+    EXPORTING
+      tabname    = 'YGMS_CST_LOC_MAP'
+      fieldname  = 'LOCATION_ID'
+    TABLES
+      return_tab = lt_return.
 
-      " Enable all functions
-      lo_functions = lo_alv->get_functions( ).
-      lo_functions->set_all( abap_true ).
+  READ TABLE lt_return INTO DATA(ls_return) INDEX 1.
+  IF sy-subrc = 0.
+    p_loc = ls_return-fieldval.
+  ENDIF.
+ENDFORM.
 
-      " Set column texts
-      lo_columns = lo_alv->get_columns( ).
-      lo_columns->set_optimize( abap_true ).
+FORM f4_file.
+  DATA: lt_file TYPE filetable,
+        lv_rc   TYPE i.
 
-      TRY.
-          lo_column = lo_columns->get_column( 'GAS_DAY' ).
-          lo_column->set_short_text( 'Gas Day' ).
-          lo_column->set_medium_text( 'Gas Day' ).
-          lo_column->set_long_text( 'Gas Day' ).
-        CATCH cx_salv_not_found.
-      ENDTRY.
+  cl_gui_frontend_services=>file_open_dialog(
+    EXPORTING
+      file_filter = '*.xlsx;*.xls'
+    CHANGING
+      file_table  = lt_file
+      rc          = lv_rc
+  ).
 
-      TRY.
-          lo_column = lo_columns->get_column( 'ALLOC_QTY_MBG' ).
-          lo_column->set_short_text( 'Alloc MBG' ).
-          lo_column->set_medium_text( 'Allocated MMBTU' ).
-          lo_column->set_long_text( 'Allocated Quantity (MMBTU)' ).
-        CATCH cx_salv_not_found.
-      ENDTRY.
+  READ TABLE lt_file INTO DATA(ls_file) INDEX 1.
+  IF sy-subrc = 0.
+    p_file = ls_file-filename.
+  ENDIF.
+ENDFORM.
 
-      TRY.
-          lo_column = lo_columns->get_column( 'ALLOC_QTY_SCM' ).
-          lo_column->set_short_text( 'Alloc SCM' ).
-          lo_column->set_medium_text( 'Allocated SCM' ).
-          lo_column->set_long_text( 'Allocated Quantity (SCM)' ).
-        CATCH cx_salv_not_found.
-      ENDTRY.
+FORM modify_screen.
+  LOOP AT SCREEN.
+    " Show file path only for upload mode
+    IF screen-group1 = 'UPL' AND rb_upld <> abap_true.
+      screen-active = 0.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
 
-      " Display
-      lo_alv->display( ).
-
-    CATCH cx_salv_msg INTO DATA(lx_salv).
-      MESSAGE lx_salv TYPE 'E'.
-  ENDTRY.
+FORM display_messages USING it_messages TYPE bapiret2_t.
+  LOOP AT it_messages INTO DATA(ls_message).
+    CASE ls_message-type.
+      WHEN 'E'.
+        WRITE: / icon_led_red AS ICON, ls_message-message.
+      WHEN 'W'.
+        WRITE: / icon_led_yellow AS ICON, ls_message-message.
+      WHEN 'S' OR 'I'.
+        WRITE: / icon_led_green AS ICON, ls_message-message.
+    ENDCASE.
+  ENDLOOP.
 ENDFORM.
