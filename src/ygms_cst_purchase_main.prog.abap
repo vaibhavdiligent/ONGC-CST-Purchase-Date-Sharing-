@@ -261,7 +261,7 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    MESSAGE s000(ygms_msg) WITH 'No B2B data found for the selected criteria'.
+    MESSAGE s000(ygms_msg) WITH 'No B2B data found for the selected period!'.
     RETURN.
   ENDIF.
   LOOP AT lt_b2b_data INTO DATA(ls_b2b).
@@ -454,7 +454,7 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 3.
+  ls_fieldcat-decimals  = 6.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_SCM'.
@@ -464,7 +464,7 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 3.
+  ls_fieldcat-decimals  = 6.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
@@ -473,7 +473,7 @@ FORM display_editable_alv.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 3.
+  ls_fieldcat-decimals  = 6.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
@@ -482,7 +482,7 @@ FORM display_editable_alv.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 3.
+  ls_fieldcat-decimals  = 6.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
@@ -512,8 +512,8 @@ FORM display_editable_alv.
     ls_fieldcat-coltext   = lv_date_str.
     ls_fieldcat-outputlen = 12.
     ls_fieldcat-inttype   = 'P'.
-    ls_fieldcat-decimals  = 3.             " Must match decimals_o to avoid divide-by-1000 on edit
-    ls_fieldcat-decimals_o  = 3.           " Output decimals displayed to user
+    ls_fieldcat-decimals  = 6.             " Must match internal p DECIMALS 6 to avoid divide on edit
+    ls_fieldcat-decimals_o  = 3.           " Output decimals displayed to user (3 places)
     ls_fieldcat-edit      = abap_false.  " Not editable initially, enabled via Edit button
     ls_fieldcat-do_sum    = abap_true.
     APPEND ls_fieldcat TO gt_fieldcat.
@@ -726,6 +726,16 @@ FORM handle_allocate.
   DATA l_ncv TYPE YGMS_DE_QTY_MBG_CAL."ygms_de_gcv.
   DATA l_gcv TYPE YGMS_DE_QTY_MBG_CAL."ygms_de_gcv.
   DATA l_day_sm3 TYPE p DECIMALS 6.
+  " 2.1b: Clear ALV day data before allocation to prevent additive quantities on repeated clicks
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
+    CLEAR: <fs_clear>-total_mbg, <fs_clear>-total_scm,
+           <fs_clear>-gcv, <fs_clear>-ncv,
+           <fs_clear>-day01, <fs_clear>-day02, <fs_clear>-day03,
+           <fs_clear>-day04, <fs_clear>-day05, <fs_clear>-day06,
+           <fs_clear>-day07, <fs_clear>-day08, <fs_clear>-day09,
+           <fs_clear>-day10, <fs_clear>-day11, <fs_clear>-day12,
+           <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15.
+  ENDLOOP.
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>) WHERE state_code = wa_state-state_code AND
       material = wa_state-matnr.
@@ -757,6 +767,22 @@ FORM handle_allocate.
       CLEAR l_day_sm3.
     ENDLOOP.
   ENDLOOP.
+  " 2.1a/2.3e: Disable checkboxes after allocation
+  DATA: lr_grid_alloc TYPE REF TO cl_gui_alv_grid,
+        lt_fcat_alloc TYPE lvc_t_fcat.
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid_alloc.
+  IF lr_grid_alloc IS BOUND.
+    lr_grid_alloc->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat_alloc ).
+    LOOP AT lt_fcat_alloc ASSIGNING FIELD-SYMBOL(<fs_fcat_alloc>).
+      IF <fs_fcat_alloc>-fieldname = 'EXCLUDE'.
+        <fs_fcat_alloc>-edit = abap_false.
+      ENDIF.
+    ENDLOOP.
+    lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
+    lr_grid_alloc->refresh_table_display( ).
+  ENDIF.
   MESSAGE s000(ygms_msg) WITH 'Allocate function triggered'.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -766,10 +792,10 @@ FORM handle_validate.
   DATA: lv_diff_ok  TYPE abap_bool,
         lv_answer   TYPE c LENGTH 1.
   PERFORM build_validation_data.
-  " Check if any DIFF_PUR_SUP_MBG > 1
+  " Check if any DIFF_PUR_SUP_MBG > 0.009
   lv_diff_ok = abap_true.
   LOOP AT gt_validation INTO gs_validation.
-    IF abs( gs_validation-diff_pur_sup_mbg ) > 1.
+    IF abs( gs_validation-diff_pur_sup_mbg ) > '0.009'.
       lv_diff_ok = abap_false.
       EXIT.
     ENDIF.
@@ -784,7 +810,7 @@ FORM handle_validate.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Validation FAILED'
-        txt1  = 'Difference > 1 MBG found in validation data.'
+        txt1  = 'Difference > 0.009 MBG found in validation data.'
         txt2  = 'Please adjust the day values and re-validate.'
         txt3  = 'Save button will remain DISABLED.'
         txt4  = ''.
@@ -792,7 +818,7 @@ FORM handle_validate.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Validation PASSED'
-        txt1  = 'All differences are within acceptable limit (≤ 1 MBG).'
+        txt1  = 'All differences are within acceptable limit (<= 0.009 MBG).'
         txt2  = 'Save button is now ENABLED.'
         txt3  = 'You can proceed to save the data.'
         txt4  = ''.
@@ -893,12 +919,14 @@ FORM display_validation_alv.
   ls_fieldcat-seltext_l = 'Allocated Sm³'.
   ls_fieldcat-col_pos   = 3.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ALLOCATED_MBG'.
   ls_fieldcat-seltext_l = 'Allocated MBG'.
   ls_fieldcat-col_pos   = 4.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'CTP_ID'.
@@ -969,8 +997,7 @@ FORM handle_edit.
         lt_fcat        TYPE lvc_t_fcat,
         ls_fcat        TYPE lvc_s_fcat,
         lv_day_edit    TYPE abap_bool,
-        lv_new_day_edit TYPE abap_bool,
-        lv_new_excl_edit TYPE abap_bool.
+        lv_new_day_edit TYPE abap_bool.
   " Get ALV grid reference
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
     IMPORTING
@@ -982,31 +1009,30 @@ FORM handle_edit.
   IF sy-subrc = 0.
     lv_day_edit = ls_fcat-edit.
   ENDIF.
-  " Toggle: if DAY is editable, disable it and enable EXCLUDE; otherwise vice versa
+  " Toggle only DAY columns (2.3c: Checkboxes are NOT toggled by Edit button)
   IF lv_day_edit = abap_true.
     lv_new_day_edit = abap_false.
-    lv_new_excl_edit = abap_true.
   ELSE.
     lv_new_day_edit = abap_true.
-    lv_new_excl_edit = abap_false.
   ENDIF.
-  " Apply toggle to field catalog
+  " Apply toggle to DAY field catalog only
   LOOP AT lt_fcat ASSIGNING FIELD-SYMBOL(<fs_fcat>).
     IF <fs_fcat>-fieldname CP 'DAY*'.
       <fs_fcat>-edit = lv_new_day_edit.
-    ELSEIF <fs_fcat>-fieldname = 'EXCLUDE'.
-      <fs_fcat>-edit = lv_new_excl_edit.
     ENDIF.
   ENDLOOP.
   " Set updated field catalog
   lr_grid->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat ).
   " Refresh the ALV
   lr_grid->refresh_table_display( ).
-  " Display appropriate message based on new state
+  " 2.3a: Revoke validation status and hide Save button when entering edit mode
   IF lv_new_day_edit = abap_true.
+    gv_validated = abap_false.
+    gv_save_enabled = abap_false.
+    PERFORM refresh_pf_status.
     MESSAGE s000(ygms_msg) WITH 'Edit mode enabled - Day columns are now editable'.
   ELSE.
-    MESSAGE s000(ygms_msg) WITH 'Edit mode disabled - Exclude checkbox is now editable'.
+    MESSAGE s000(ygms_msg) WITH 'Edit mode disabled - Day columns are now read-only'.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -1066,8 +1092,8 @@ FORM save_data_to_db.
          END OF ty_error_log.
   DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
         ls_cst_pur      TYPE yrga_cst_pur,
-        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_d,
-        ls_cst_fnt      TYPE yrga_cst_fnt_d,
+        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_data,
+        ls_cst_fnt      TYPE yrga_cst_fnt_data,
         lv_timestamp    TYPE timestampl,
         lv_ts_char      TYPE c LENGTH 14,
         lv_date         TYPE datum,
@@ -1096,9 +1122,13 @@ FORM save_data_to_db.
   DATA: lt_gail_ids     TYPE TABLE OF yrga_cst_pur-gail_id,
         lv_gail_count   TYPE i,
         lv_gail_id_str  TYPE string.
-  " Get current timestamp
+  " Get current timestamp - format as YYYYMMDDHHmmSS (14 chars)
+  DATA: lv_ts_date TYPE sy-datum,
+        lv_ts_time TYPE sy-uzeit.
   GET TIME STAMP FIELD lv_timestamp.
-  lv_ts_char = lv_timestamp.
+  CONVERT TIME STAMP lv_timestamp TIME ZONE sy-zonlo
+    INTO DATE lv_ts_date TIME lv_ts_time.
+  CONCATENATE lv_ts_date lv_ts_time INTO lv_ts_char.
   " Generate GAIL_ID prefix: GA + YYMM + F1/F2
   DATA(lv_day) = gv_date_from+6(2).
   IF lv_day <= 15.
@@ -1168,7 +1198,8 @@ FORM save_data_to_db.
         ls_cst_pur-material     = gs_alv_display-material.
         ls_cst_pur-state_code   = gs_alv_display-state_code.
         ls_cst_pur-state        = gs_alv_display-state.
-        " Get CTP and ONGC material from gas receipt
+        " Get CTP, ONGC material, and GCV/NCV from gas receipt (supply table)
+        " 2.4a: GCV/NCV values from supply table per Gas Day + Location ID
         READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
           WITH KEY location_id = gs_alv_display-location_id
                    material    = gs_alv_display-material
@@ -1177,6 +1208,8 @@ FORM save_data_to_db.
           ls_cst_pur-ctp         = ls_receipt-ctp_id.
           ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
           ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+          ls_cst_pur-gcv         = ls_receipt-gcv.
+          ls_cst_pur-ncv         = ls_receipt-ncv.
         ELSE.
           READ TABLE gt_gas_receipt INTO ls_receipt
             WITH KEY location_id = gs_alv_display-location_id
@@ -1185,22 +1218,22 @@ FORM save_data_to_db.
             ls_cst_pur-ctp         = ls_receipt-ctp_id.
             ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
             ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+            ls_cst_pur-gcv         = ls_receipt-gcv.
+            ls_cst_pur-ncv         = ls_receipt-ncv.
           ENDIF.
         ENDIF.
         ls_cst_pur-time_stamp   = lv_ts_char.
         ls_cst_pur-qty_in_mbg   = lv_day_qty.
-        ls_cst_pur-gcv          = gs_alv_display-gcv.
-        ls_cst_pur-ncv          = gs_alv_display-ncv.
-        " Calculate SCM for this day's quantity
+        " Calculate SCM for this day's quantity using supply GCV/NCV
         DATA: c_tgqty TYPE msego2-adqnt,
               i_trqty TYPE msego2-adqnt,
               lv_gcv  TYPE oib_par_fltp,
               lv_ncv  TYPE oib_par_fltp.
-        IF gs_alv_display-gcv > 0.
+        IF ls_cst_pur-gcv > 0.
           CLEAR c_tgqty.
           i_trqty = lv_day_qty.
-          lv_gcv  = gs_alv_display-gcv.
-          lv_ncv  = gs_alv_display-ncv.
+          lv_gcv  = ls_cst_pur-gcv.
+          lv_ncv  = ls_cst_pur-ncv.
           CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
             EXPORTING
               i_trqty = i_trqty
@@ -1222,7 +1255,7 @@ FORM save_data_to_db.
       lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
-  " Third pass: Create fortnightly aggregated records for YRGA_CST_FNT_D
+  " Third pass: Create fortnightly aggregated records for YRGA_CST_FNT_DATA
   " Calculate weighted average GCV/NCV: Σ(Volume × GCV/NCV) / Total Volume
   LOOP AT lt_gail_id_map INTO ls_gail_id_map.
     CLEAR: lv_total_vol, lv_sum_vol_gcv, lv_sum_vol_ncv, lv_total_mbg, lv_total_scm.
@@ -1310,7 +1343,7 @@ FORM save_data_to_db.
   " Delete existing data for same Location ID and Fortnight (step f)
   DELETE FROM yrga_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
-  DELETE FROM yrga_cst_fnt_d
+  DELETE FROM yrga_cst_fnt_data
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to.
   " Save records to both database tables
@@ -1323,10 +1356,10 @@ FORM save_data_to_db.
     ENDIF.
   ENDIF.
   IF lt_cst_fnt IS NOT INITIAL.
-    MODIFY yrga_cst_fnt_d FROM TABLE lt_cst_fnt.
+    MODIFY yrga_cst_fnt_data FROM TABLE lt_cst_fnt.
     IF sy-subrc <> 0.
       ROLLBACK WORK.
-      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_FNT_D'.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_FNT_DATA'.
       RETURN.
     ENDIF.
   ENDIF.
@@ -1420,6 +1453,30 @@ ENDFORM.
 FORM handle_reset.
   CLEAR gt_alv_display.
   PERFORM build_alv_display_table.
+  " 2.3d: Enable checkboxes whenever reset button is clicked
+  DATA: lr_grid_reset TYPE REF TO cl_gui_alv_grid,
+        lt_fcat_reset TYPE lvc_t_fcat.
+  CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+    IMPORTING
+      e_grid = lr_grid_reset.
+  IF lr_grid_reset IS BOUND.
+    lr_grid_reset->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat_reset ).
+    LOOP AT lt_fcat_reset ASSIGNING FIELD-SYMBOL(<fs_fcat_reset>).
+      IF <fs_fcat_reset>-fieldname = 'EXCLUDE'.
+        <fs_fcat_reset>-edit = abap_true.
+      ENDIF.
+      " Also disable DAY column editing on reset
+      IF <fs_fcat_reset>-fieldname CP 'DAY*'.
+        <fs_fcat_reset>-edit = abap_false.
+      ENDIF.
+    ENDLOOP.
+    lr_grid_reset->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_reset ).
+    lr_grid_reset->refresh_table_display( ).
+  ENDIF.
+  " Reset validation status
+  gv_validated = abap_false.
+  gv_save_enabled = abap_false.
+  PERFORM refresh_pf_status.
   MESSAGE s000(ygms_msg) WITH 'Data reset to original values'.
 ENDFORM.
 *&---------------------------------------------------------------------*
