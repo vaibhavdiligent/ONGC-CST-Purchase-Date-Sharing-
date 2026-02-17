@@ -43,26 +43,26 @@ TYPES: BEGIN OF ty_alv_display,
          state       TYPE bezei20,
          location_id TYPE ygms_de_loc_id,
          material    TYPE ygms_de_gail_mat,
-         total_mbg   TYPE p DECIMALS 3,
-         total_scm   TYPE p DECIMALS 3,
-         gcv         TYPE ygms_de_gcv,
-         ncv         TYPE ygms_de_ncv,
-         day01       TYPE p DECIMALS 3,
-         day02       TYPE p DECIMALS 3,
-         day03       TYPE p DECIMALS 3,
-         day04       TYPE p DECIMALS 3,
-         day05       TYPE p DECIMALS 3,
-         day06       TYPE p DECIMALS 3,
-         day07       TYPE p DECIMALS 3,
-         day08       TYPE p DECIMALS 3,
-         day09       TYPE p DECIMALS 3,
-         day10       TYPE p DECIMALS 3,
-         day11       TYPE p DECIMALS 3,
-         day12       TYPE p DECIMALS 3,
-         day13       TYPE p DECIMALS 3,
-         day14       TYPE p DECIMALS 3,
-         day15       TYPE p DECIMALS 3,
-         day16       TYPE p DECIMALS 3,
+         total_mbg   TYPE p DECIMALS 6,
+         total_scm   TYPE p DECIMALS 6,
+         gcv         TYPE p decimals 6,"ygms_de_gcv,
+         ncv         TYPE p decimals 6,"ygms_de_ncv,
+         day01       TYPE p DECIMALS 6,
+         day02       TYPE p DECIMALS 6,
+         day03       TYPE p DECIMALS 6,
+         day04       TYPE p DECIMALS 6,
+         day05       TYPE p DECIMALS 6,
+         day06       TYPE p DECIMALS 6,
+         day07       TYPE p DECIMALS 6,
+         day08       TYPE p DECIMALS 6,
+         day09       TYPE p DECIMALS 6,
+         day10       TYPE p DECIMALS 6,
+         day11       TYPE p DECIMALS 6,
+         day12       TYPE p DECIMALS 6,
+         day13       TYPE p DECIMALS 6,
+         day14       TYPE p DECIMALS 6,
+         day15       TYPE p DECIMALS 6,
+         day16       TYPE p DECIMALS 6,
        END OF ty_alv_display.
 TYPES: BEGIN OF ty_final,
          vstel      TYPE vbap-vstel,
@@ -452,6 +452,7 @@ FORM display_editable_alv.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-edit      = abap_false.
+   ls_fieldcat-decimals_o  = 3.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_SCM'.
@@ -459,18 +460,21 @@ FORM display_editable_alv.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-edit      = abap_false.
+   ls_fieldcat-decimals_o  = 3.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
   ls_fieldcat-coltext   = 'Average GCV'.
   ls_fieldcat-outputlen = 12.
 *  ls_fieldcat-do_sum    = abap_true.
+   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
   ls_fieldcat-coltext   = 'Average NCV'.
   ls_fieldcat-outputlen = 12.
+   ls_fieldcat-decimals_o  = 3.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
@@ -499,7 +503,7 @@ FORM display_editable_alv.
     REPLACE ALL OCCURRENCES OF '/' IN lv_date_str WITH '-'.
     ls_fieldcat-coltext   = lv_date_str.
     ls_fieldcat-outputlen = 12.
-    ls_fieldcat-decimals  = 3.           " Match type definition (TYPE p DECIMALS 3)
+    ls_fieldcat-decimals_o  = 3.           " Match type definition (TYPE p DECIMALS 3)
     ls_fieldcat-edit      = abap_false.  " Not editable initially, enabled via Edit button
     ls_fieldcat-do_sum    = abap_true.
     APPEND ls_fieldcat TO gt_fieldcat.
@@ -609,7 +613,7 @@ FORM handle_allocate.
             regio   TYPE regio,
             qty_mbg TYPE ygms_de_qty_mbg_cal,
           END OF ty_asales.
-  DATA l_left TYPE ygms_de_qty_mbg.
+  DATA l_left TYPE ygms_de_qty_mbg_cal.
   TYPES : BEGIN OF ty_state,
             state_code    TYPE regio,
             state         TYPE bezei20,
@@ -901,24 +905,28 @@ FORM display_validation_alv.
   ls_fieldcat-seltext_l = 'Supply Sm³'.
   ls_fieldcat-col_pos   = 7.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'SUPPLY_MBG'.
   ls_fieldcat-seltext_l = 'Supply MBG'.
   ls_fieldcat-col_pos   = 8.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DIFF_PUR_SUP_SCM'.
   ls_fieldcat-seltext_l = 'Diff. Pur vs Supply Sm³'.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DIFF_PUR_SUP_MBG'.
   ls_fieldcat-seltext_l = 'Diff. Pur vs Supply MBG'.
   ls_fieldcat-col_pos   = 10.
   ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
