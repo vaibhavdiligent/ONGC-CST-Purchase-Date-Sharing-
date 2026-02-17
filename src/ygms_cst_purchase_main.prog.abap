@@ -454,7 +454,7 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 6.
+  ls_fieldcat-decimals  = 3.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_SCM'.
@@ -464,7 +464,7 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 6.
+  ls_fieldcat-decimals  = 3.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
@@ -473,7 +473,7 @@ FORM display_editable_alv.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 6.
+  ls_fieldcat-decimals  = 3.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
@@ -482,7 +482,7 @@ FORM display_editable_alv.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
-  ls_fieldcat-decimals  = 6.
+  ls_fieldcat-decimals  = 3.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
@@ -512,7 +512,7 @@ FORM display_editable_alv.
     ls_fieldcat-coltext   = lv_date_str.
     ls_fieldcat-outputlen = 12.
     ls_fieldcat-inttype   = 'P'.
-    ls_fieldcat-decimals  = 6.             " Internal decimals (match TYPE p DECIMALS 6)
+    ls_fieldcat-decimals  = 3.             " Must match decimals_o to avoid divide-by-1000 on edit
     ls_fieldcat-decimals_o  = 3.           " Output decimals displayed to user
     ls_fieldcat-edit      = abap_false.  " Not editable initially, enabled via Edit button
     ls_fieldcat-do_sum    = abap_true.
