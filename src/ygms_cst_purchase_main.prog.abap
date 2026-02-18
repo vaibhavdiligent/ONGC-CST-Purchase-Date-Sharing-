@@ -563,9 +563,6 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     CLEAR ls_extab.
     ls_extab-fcode = 'SAVE'.
     APPEND ls_extab TO lt_excl.
-    CLEAR ls_extab.
-    ls_extab-fcode = 'SEND'.
-    APPEND ls_extab TO lt_excl.
   ELSE.
     " After allocation: exclude SAVE if validation not done or not enabled or data already saved
     IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
@@ -573,6 +570,12 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
       ls_extab-fcode = 'SAVE'.
       APPEND ls_extab TO lt_excl.
     ENDIF.
+  ENDIF.
+  " SEND only visible after data is saved
+  IF gv_data_saved = abap_false.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'SEND'.
+    APPEND ls_extab TO lt_excl.
   ENDIF.
   " After data saved: disable EDIT, ALLOCATION, RESET
   IF gv_data_saved = abap_true.
@@ -869,9 +872,6 @@ FORM refresh_pf_status.
     CLEAR ls_extab.
     ls_extab-fcode = 'SAVE'.
     APPEND ls_extab TO lt_extab.
-    CLEAR ls_extab.
-    ls_extab-fcode = 'SEND'.
-    APPEND ls_extab TO lt_extab.
   ELSE.
     " After allocation: exclude SAVE if validation not done or not enabled or data already saved
     IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
@@ -879,6 +879,12 @@ FORM refresh_pf_status.
       ls_extab-fcode = 'SAVE'.
       APPEND ls_extab TO lt_extab.
     ENDIF.
+  ENDIF.
+  " SEND only visible after data is saved
+  IF gv_data_saved = abap_false.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'SEND'.
+    APPEND ls_extab TO lt_extab.
   ENDIF.
   " After data saved: disable EDIT, ALLOCATION, RESET
   IF gv_data_saved = abap_true.
