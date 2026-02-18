@@ -434,6 +434,7 @@ FORM map_location_to_ctp.
       WHERE gail_loc_id = lt_locations-table_line
         AND valid_from <= gv_fn_start
         AND valid_to   >= gv_fn_end.
+*        AND deleted    = abap_false.
   ENDIF.
 
   " Map each record
@@ -491,6 +492,7 @@ FORM map_material_to_ongc.
         AND gail_material  = lt_loc_mat-material
         AND valid_from    <= gv_fn_start
         AND valid_to      >= gv_fn_end.
+*        AND deleted        = abap_false.
   ENDIF.
 
   " Map materials
@@ -544,12 +546,12 @@ FORM fetch_gcv_ncv.
 
   " Fetch GCV/NCV from YRXA_CMDATA
   IF lt_loc_day IS NOT INITIAL.
-    SELECT location_id gas_day gcv ncv
+    SELECT YYBUS_LOCATION yydate YYAVG_GCV YYAVG_NCV
       FROM yrxa_cmdata
       INTO TABLE lt_cmdata
       FOR ALL ENTRIES IN lt_loc_day
-      WHERE location_id = lt_loc_day-location_id
-        AND gas_day     = lt_loc_day-gas_day.
+      WHERE YYBUS_LOCATION = lt_loc_day-location_id
+        AND yydate     = lt_loc_day-gas_day.
   ENDIF.
 
   " Update GCV/NCV in upload data and validate
