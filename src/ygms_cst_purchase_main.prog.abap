@@ -126,8 +126,9 @@ DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
       it_final         TYPE TABLE OF ty_final,
       it_final_main    TYPE TABLE OF ty_final1,
       wa_final_main    TYPE ty_final1.
-* Flags for Save button visibility and state
-DATA: gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
+* Flags for button visibility and state
+DATA: gv_allocated    TYPE abap_bool VALUE abap_false,  " Allocation done flag
+      gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
       gv_save_enabled TYPE abap_bool VALUE abap_false,  " Save enabled flag (diff <= 1)
       gv_data_saved   TYPE abap_bool VALUE abap_false.  " Data saved flag - disable editing after save
 *----------------------------------------------------------------------*
@@ -551,13 +552,29 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
         lt_excl  TYPE slis_t_extab.
   " Copy incoming exclusion table
   lt_excl = rt_extab.
-  " Exclude SAVE button if validation not done or save not enabled or data already saved
-  IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
+  " Before allocation: only show ALLOCATION and RESET
+  IF gv_allocated = abap_false.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'VALIDATE'.
+    APPEND ls_extab TO lt_excl.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'EDIT'.
+    APPEND ls_extab TO lt_excl.
     CLEAR ls_extab.
     ls_extab-fcode = 'SAVE'.
     APPEND ls_extab TO lt_excl.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'SEND'.
+    APPEND ls_extab TO lt_excl.
+  ELSE.
+    " After allocation: exclude SAVE if validation not done or not enabled or data already saved
+    IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
+      CLEAR ls_extab.
+      ls_extab-fcode = 'SAVE'.
+      APPEND ls_extab TO lt_excl.
+    ENDIF.
   ENDIF.
-  " Also exclude EDIT button if data already saved
+  " After data saved: disable EDIT, ALLOCATION, RESET
   IF gv_data_saved = abap_true.
     CLEAR ls_extab.
     ls_extab-fcode = 'EDIT'.
@@ -786,6 +803,9 @@ FORM handle_allocate.
     lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
+  " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
+  gv_allocated = abap_true.
+  PERFORM refresh_pf_status.
   MESSAGE s000(ygms_msg) WITH 'Allocate function triggered'.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -835,13 +855,29 @@ ENDFORM.
 FORM refresh_pf_status.
   DATA: lt_extab TYPE slis_t_extab,
         ls_extab TYPE slis_extab.
-  " Exclude SAVE button if validation not done or save not enabled or data already saved
-  IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
+  " Before allocation: only show ALLOCATION and RESET
+  IF gv_allocated = abap_false.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'VALIDATE'.
+    APPEND ls_extab TO lt_extab.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'EDIT'.
+    APPEND ls_extab TO lt_extab.
     CLEAR ls_extab.
     ls_extab-fcode = 'SAVE'.
     APPEND ls_extab TO lt_extab.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'SEND'.
+    APPEND ls_extab TO lt_extab.
+  ELSE.
+    " After allocation: exclude SAVE if validation not done or not enabled or data already saved
+    IF gv_validated = abap_false OR gv_save_enabled = abap_false OR gv_data_saved = abap_true.
+      CLEAR ls_extab.
+      ls_extab-fcode = 'SAVE'.
+      APPEND ls_extab TO lt_extab.
+    ENDIF.
   ENDIF.
-  " Also exclude EDIT, ALLOCATION, RESET buttons if data already saved
+  " After data saved: disable EDIT, ALLOCATION, RESET
   IF gv_data_saved = abap_true.
     CLEAR ls_extab.
     ls_extab-fcode = 'EDIT'.
@@ -1476,7 +1512,8 @@ FORM handle_reset.
     lr_grid_reset->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_reset ).
     lr_grid_reset->refresh_table_display( ).
   ENDIF.
-  " Reset validation status
+  " Reset allocation and validation status
+  gv_allocated = abap_false.
   gv_validated = abap_false.
   gv_save_enabled = abap_false.
   PERFORM refresh_pf_status.
