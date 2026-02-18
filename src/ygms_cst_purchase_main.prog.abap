@@ -830,6 +830,7 @@ FORM handle_validate.
   PERFORM display_validation_alv.
   " Show popup message based on save status using POPUP_TO_INFORM
   IF gv_save_enabled = abap_false.
+    " Validation failed: keep screen edit state as-is (no change to field editability)
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Validation FAILED'
@@ -838,6 +839,8 @@ FORM handle_validate.
         txt3  = 'Save button will remain DISABLED.'
         txt4  = ''.
   ELSE.
+    " Validation passed: disable all fields on screen
+    PERFORM disable_all_fields.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Validation PASSED'
