@@ -102,7 +102,7 @@ TYPES: BEGIN OF ty_final1,
 *----------------------------------------------------------------------*
 DATA: gv_loc_id TYPE ygms_de_loc_id.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  SELECT-OPTIONS: s_loc  FOR gv_loc_id,
+  SELECT-OPTIONS: s_loc  FOR gv_loc_id OBLIGATORY,
                   s_date FOR sy-datum OBLIGATORY.
 SELECTION-SCREEN END OF BLOCK b1.
 *----------------------------------------------------------------------*
@@ -219,11 +219,11 @@ FORM fetch_location_ctp_mappings.
       WHERE gail_loc_id IN s_loc
         AND valid_from <= gv_date_from
         AND valid_to   >= gv_date_to.
-  ELSE.
-    SELECT * FROM yrga_cst_loc_map
-      INTO TABLE lt_loc_map
-      WHERE valid_from <= gv_date_from
-        AND valid_to   >= gv_date_to.
+*  ELSE.
+*    SELECT * FROM yrga_cst_loc_map
+*      INTO TABLE lt_loc_map
+*      WHERE valid_from <= gv_date_from
+*        AND valid_to   >= gv_date_to.
   ENDIF.
   IF lt_loc_map IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No valid Location-CTP mappings found for date range'.
@@ -261,7 +261,9 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    MESSAGE s000(ygms_msg) WITH 'No B2B data found for the selected period!'.
+    CONCATENATE 'No receipt data available for' S_LOC-LOW 'for the entered period'
+          INTO DATA(L_ERROR) SEPARATED BY SPACE.
+    MESSAGE s000(ygms_msg) WITH L_ERROR.
     RETURN.
   ENDIF.
   LOOP AT lt_b2b_data INTO DATA(ls_b2b).
@@ -755,6 +757,7 @@ FORM handle_allocate.
             <fs_day> = ( wa_gas_receipt-qty_mbg * wa_state-percentage ) / 100.
             <fs_alv>-total_mbg = <fs_alv>-total_mbg + <fs_day>.
             l_day_sm3 = ( wa_gas_receipt-qty_scm * wa_state-percentage ) / 100.
+            <fs_day> = l_day_sm3.
             <fs_alv>-total_scm = <fs_alv>-total_scm + l_day_sm3.
             l_gcv = ( l_day_sm3 * wa_gas_receipt-gcv ) + l_gcv.
             l_ncv = ( l_day_sm3 * wa_gas_receipt-ncv ) + l_ncv.
@@ -1092,8 +1095,8 @@ FORM save_data_to_db.
          END OF ty_error_log.
   DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
         ls_cst_pur      TYPE yrga_cst_pur,
-        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_data,
-        ls_cst_fnt      TYPE yrga_cst_fnt_data,
+        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_d,
+        ls_cst_fnt      TYPE yrga_cst_fnt_d,
         lv_timestamp    TYPE timestampl,
         lv_ts_char      TYPE c LENGTH 14,
         lv_date         TYPE datum,
@@ -1223,7 +1226,7 @@ FORM save_data_to_db.
           ENDIF.
         ENDIF.
         ls_cst_pur-time_stamp   = lv_ts_char.
-        ls_cst_pur-qty_in_mbg   = lv_day_qty.
+        ls_cst_pur-qty_in_scm   = lv_day_qty.
         " Calculate SCM for this day's quantity using supply GCV/NCV
         DATA: c_tgqty TYPE msego2-adqnt,
               i_trqty TYPE msego2-adqnt,
@@ -1237,13 +1240,13 @@ FORM save_data_to_db.
           CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
             EXPORTING
               i_trqty = i_trqty
-              i_truom = 'MBG'
-              i_tguom = 'SM3'
+              i_truom = 'SM3'
+              i_tguom = 'MBG'
               lv_gcv  = lv_gcv
               lv_ncv  = lv_ncv
             CHANGING
               c_tgqty = c_tgqty.
-          ls_cst_pur-qty_in_scm = c_tgqty.
+          ls_cst_pur-qty_in_mbg = c_tgqty.
         ENDIF.
         ls_cst_pur-gail_id      = ls_gail_id_map-gail_id.
         ls_cst_pur-exclude      = gs_alv_display-exclude.
@@ -1343,7 +1346,7 @@ FORM save_data_to_db.
   " Delete existing data for same Location ID and Fortnight (step f)
   DELETE FROM yrga_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
-  DELETE FROM yrga_cst_fnt_data
+  DELETE FROM yrga_cst_fnt_d
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to.
   " Save records to both database tables
@@ -1356,7 +1359,7 @@ FORM save_data_to_db.
     ENDIF.
   ENDIF.
   IF lt_cst_fnt IS NOT INITIAL.
-    MODIFY yrga_cst_fnt_data FROM TABLE lt_cst_fnt.
+    MODIFY yrga_cst_fnt_d FROM TABLE lt_cst_fnt.
     IF sy-subrc <> 0.
       ROLLBACK WORK.
       MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_FNT_DATA'.
@@ -1500,7 +1503,7 @@ FORM recalculate_totals.
   " Recalculate totals for each row (only TOTAL_MBG and TOTAL_SCM - GCV/NCV unchanged)
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>).
     " Sum all day columns for TOTAL_MBG
-    <fs_alv>-total_mbg = <fs_alv>-day01 + <fs_alv>-day02 + <fs_alv>-day03 +
+    <fs_alv>-total_scm = <fs_alv>-day01 + <fs_alv>-day02 + <fs_alv>-day03 +
                          <fs_alv>-day04 + <fs_alv>-day05 + <fs_alv>-day06 +
                          <fs_alv>-day07 + <fs_alv>-day08 + <fs_alv>-day09 +
                          <fs_alv>-day10 + <fs_alv>-day11 + <fs_alv>-day12 +
@@ -1508,19 +1511,19 @@ FORM recalculate_totals.
     " Convert TOTAL_MBG to TOTAL_SCM using existing GCV/NCV values (no gt_gas_receipt)
     IF <fs_alv>-gcv > 0 AND <fs_alv>-total_mbg > 0.
       CLEAR c_tgqty.
-      i_trqty = <fs_alv>-total_mbg.
+      i_trqty = <fs_alv>-total_scm.
       lv_gcv  = <fs_alv>-gcv.
       lv_ncv  = <fs_alv>-ncv.
       CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
         EXPORTING
           i_trqty = i_trqty
-          i_truom = 'MBG'
-          i_tguom = 'SM3'
+          i_truom = 'SM3'
+          i_tguom = 'MBG'
           lv_gcv  = lv_gcv
           lv_ncv  = lv_ncv
         CHANGING
           c_tgqty = c_tgqty.
-      <fs_alv>-total_scm = c_tgqty.
+      <fs_alv>-total_mbg = c_tgqty.
     ELSE.
       <fs_alv>-total_scm = 0.
     ENDIF.
