@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
 *& Description: ONGC CST Purchase Data Upload Program (Excel)
-*& Version: 5.3 - Popup error logs, upsert B2B, YRGA_CST_PUR check
+*& Version: 5.4 - Aligned with new YRGA_CST_B2B_1 structure (TIME_STAMP key)
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 
@@ -184,7 +184,7 @@ FORM process_upload.
   PERFORM check_delete_purchase_data.
   CHECK gt_upload_data IS NOT INITIAL.
 
-  " Step 7: Save data (upsert - does not delete previous B2B records)
+  " Step 7: Save data (insert with timestamp key)
   PERFORM save_data.
 
   " Step 8: Display results
@@ -852,36 +852,41 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form SAVE_DATA
-*& Saves upload data to YRGA_CST_B2B_1 using MODIFY (upsert).
-*& Does NOT delete previously uploaded records.
+*& Saves upload data to YRGA_CST_B2B_1 using INSERT.
+*& TIME_STAMP is part of the key, so each run creates new records.
 *&---------------------------------------------------------------------*
 FORM save_data.
-  DATA: lt_b2b     TYPE TABLE OF yrga_cst_b2b_1,
-        ls_b2b     TYPE yrga_cst_b2b_1,
-        lv_count   TYPE i.
+  DATA: lt_b2b        TYPE TABLE OF yrga_cst_b2b_1,
+        ls_b2b        TYPE yrga_cst_b2b_1,
+        lv_count      TYPE i,
+        lv_timestamp  TYPE timestamp.
 
   CHECK gt_upload_data IS NOT INITIAL.
+
+  " Get current UTC timestamp once for the entire batch
+  GET TIME STAMP FIELD lv_timestamp.
 
   LOOP AT gt_upload_data INTO DATA(ls_data).
     CLEAR ls_b2b.
 
     ls_b2b-mandt         = sy-mandt.
+    ls_b2b-time_stamp    = lv_timestamp.
     ls_b2b-gas_day       = ls_data-gas_day.
     ls_b2b-ctp_id        = ls_data-ctp_id.
     ls_b2b-ongc_material = ls_data-ongc_material.
+    ls_b2b-received_on   = sy-datum.
+    ls_b2b-received_at   = sy-uzeit.
     ls_b2b-qty_scm       = ls_data-qty_scm.
     ls_b2b-gcv           = ls_data-gcv.
     ls_b2b-ncv           = ls_data-ncv.
-    ls_b2b-received_on   = sy-datum.
-    ls_b2b-received_at   = sy-uzeit.
-    ls_b2b-data_source   = 'EXCEL'.
+    ls_b2b-data_source   = '01'.
     ls_b2b-created_by    = sy-uname.
 
     APPEND ls_b2b TO lt_b2b.
   ENDLOOP.
 
   IF lt_b2b IS NOT INITIAL.
-    MODIFY yrga_cst_b2b_1 FROM TABLE lt_b2b.
+    INSERT yrga_cst_b2b_1 FROM TABLE lt_b2b.
     IF sy-subrc = 0.
       COMMIT WORK AND WAIT.
       lv_count = lines( lt_b2b ).
