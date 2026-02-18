@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
 *& Description: ONGC CST Purchase Data Upload Program (Excel)
-*& Version: 5.2 - Added GCV/NCV fetch from YRXA_CMDATA
+*& Version: 5.3 - Popup error logs, upsert B2B, YRGA_CST_PUR check
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 
@@ -35,6 +35,27 @@ TYPES: BEGIN OF ty_view_data,
          ncv           TYPE ygms_de_ncv,
        END OF ty_view_data.
 
+TYPES: BEGIN OF ty_loc_error,
+         location_id TYPE ygms_de_loc_id,
+         ctp_id      TYPE ygms_de_ongc_ctp,
+         error_type  TYPE c LENGTH 1,
+         message     TYPE char80,
+       END OF ty_loc_error.
+
+TYPES: BEGIN OF ty_mat_error,
+         location_id   TYPE ygms_de_loc_id,
+         material      TYPE ygms_de_gail_mat,
+         ongc_material TYPE ygms_de_ongc_mat,
+         error_type    TYPE c LENGTH 1,
+         message       TYPE char80,
+       END OF ty_mat_error.
+
+TYPES: BEGIN OF ty_gcv_error,
+         location_id TYPE ygms_de_loc_id,
+         gas_day     TYPE datum,
+         message     TYPE char80,
+       END OF ty_gcv_error.
+
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -60,6 +81,9 @@ DATA: gt_excel_data  TYPE TABLE OF ty_excel_data,
       gt_upload_data TYPE TABLE OF ty_upload_data,
       gt_view_data   TYPE TABLE OF ty_view_data,
       gt_alsmex_data TYPE TABLE OF alsmex_tabline,
+      gt_loc_errors  TYPE TABLE OF ty_loc_error,
+      gt_mat_errors  TYPE TABLE OF ty_mat_error,
+      gt_gcv_errors  TYPE TABLE OF ty_gcv_error,
       gv_fn_start    TYPE datum,
       gv_fn_end      TYPE datum,
       gv_records     TYPE i,
@@ -144,22 +168,23 @@ FORM process_upload.
   PERFORM validate_fortnight.
   CHECK gv_fn_start IS NOT INITIAL.
 
-  " Step 3: Map Location ID to CTP ID
+  " Step 3: Map Location ID to CTP ID (popup errors)
   PERFORM map_location_to_ctp.
   CHECK gv_errors = 0.
 
-  " Step 4: Map Material to ONGC Material
+  " Step 4: Map Material to ONGC Material (popup errors)
   PERFORM map_material_to_ongc.
   CHECK gv_errors = 0.
 
-  " Step 5: Fetch GCV/NCV from YRXA_CMDATA
+  " Step 5: Fetch GCV/NCV from YRXA_CMDATA (popup errors)
   PERFORM fetch_gcv_ncv.
   CHECK gv_errors = 0.
 
-  " Step 6: Check existing B2B data
-  PERFORM check_existing_b2b_data.
+  " Step 6: Check and delete existing purchase data from YRGA_CST_PUR/YRGA_CST_FNT_D
+  PERFORM check_delete_purchase_data.
+  CHECK gt_upload_data IS NOT INITIAL.
 
-  " Step 7: Save data
+  " Step 7: Save data (upsert - does not delete previous B2B records)
   PERFORM save_data.
 
   " Step 8: Display results
@@ -414,19 +439,27 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form MAP_LOCATION_TO_CTP
+*& Maps Location IDs to CTP IDs via YRGA_CST_LOC_MAP.
+*& Shows popup with error log if mappings are missing or multiple.
 *&---------------------------------------------------------------------*
 FORM map_location_to_ctp.
-  DATA: lt_loc_map   TYPE TABLE OF yrga_cst_loc_map,
-        lt_locations TYPE TABLE OF ygms_de_loc_id,
-        ls_upload    TYPE ty_upload_data,
-        lv_error     TYPE abap_bool.
+  DATA: lt_loc_map     TYPE TABLE OF yrga_cst_loc_map,
+        lt_locations   TYPE TABLE OF ygms_de_loc_id,
+        ls_upload      TYPE ty_upload_data,
+        ls_loc_error   TYPE ty_loc_error,
+        lv_not_found   TYPE abap_bool,
+        lv_multi_found TYPE abap_bool,
+        lv_answer      TYPE c,
+        lv_count       TYPE i.
+
+  CLEAR: gt_loc_errors, gv_errors.
 
   " Get unique location IDs
   LOOP AT gt_excel_data INTO DATA(ls_excel).
     COLLECT ls_excel-location_id INTO lt_locations.
   ENDLOOP.
 
-  " Fetch location mappings using FOR ALL ENTRIES
+  " Fetch location mappings where fortnight falls within validity period
   IF lt_locations IS NOT INITIAL.
     SELECT * FROM yrga_cst_loc_map
       INTO TABLE lt_loc_map
@@ -437,7 +470,80 @@ FORM map_location_to_ctp.
 *        AND deleted    = abap_false.
   ENDIF.
 
-  " Map each record
+  " Check for missing mappings and multiple mappings per Location ID
+  LOOP AT lt_locations INTO DATA(lv_loc_id).
+    CLEAR lv_count.
+    LOOP AT lt_loc_map TRANSPORTING NO FIELDS
+      WHERE gail_loc_id = lv_loc_id.
+      lv_count = lv_count + 1.
+    ENDLOOP.
+
+    IF lv_count = 0.
+      " No mapping found for this Location ID
+      CLEAR ls_loc_error.
+      ls_loc_error-location_id = lv_loc_id.
+      ls_loc_error-error_type  = 'N'.
+      ls_loc_error-message     = 'No mapping found'.
+      APPEND ls_loc_error TO gt_loc_errors.
+      lv_not_found = abap_true.
+
+    ELSEIF lv_count > 1.
+      " Multiple mappings found - log each Location ID-CTP ID combination
+      LOOP AT lt_loc_map INTO DATA(ls_loc_multi)
+        WHERE gail_loc_id = lv_loc_id.
+        CLEAR ls_loc_error.
+        ls_loc_error-location_id = lv_loc_id.
+        ls_loc_error-ctp_id      = ls_loc_multi-ongc_ctp_id.
+        ls_loc_error-error_type  = 'M'.
+        ls_loc_error-message     = 'Multiple mappings found'.
+        APPEND ls_loc_error TO gt_loc_errors.
+      ENDLOOP.
+      lv_multi_found = abap_true.
+    ENDIF.
+  ENDLOOP.
+
+  " Show popup for missing Location ID mappings
+  IF lv_not_found = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'No mapping found for a few Location IDs.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer = '1'.
+      PERFORM display_loc_error_popup USING 'N'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+
+  " Show popup for multiple Location ID mappings
+  IF lv_multi_found = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'Multiple mappings found for a few Location IDs.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer = '1'.
+      PERFORM display_loc_error_popup USING 'M'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+
+  " If errors found, do not proceed with mapping
+  CHECK gv_errors = 0.
+
+  " Map each record (only when all Location IDs have exactly one mapping)
   LOOP AT gt_excel_data INTO ls_excel.
     CLEAR ls_upload.
     ls_upload-gas_day     = ls_excel-gas_day.
@@ -449,27 +555,24 @@ FORM map_location_to_ctp.
       WITH KEY gail_loc_id = ls_excel-location_id.
     IF sy-subrc = 0.
       ls_upload-ctp_id = ls_loc-ongc_ctp_id.
-    ELSE.
-      MESSAGE e001(ygms_msg) WITH 'No CTP mapping for Location:' ls_excel-location_id.
-      lv_error = abap_true.
-      gv_errors = gv_errors + 1.
-      CONTINUE.
     ENDIF.
 
     APPEND ls_upload TO gt_upload_data.
   ENDLOOP.
-
-  IF lv_error = abap_true.
-    MESSAGE e001(ygms_msg) WITH 'Location mapping errors found. Upload aborted.'.
-  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form MAP_MATERIAL_TO_ONGC
+*& Maps GAIL Material to ONGC Material via YRGA_CST_MAT_MAP.
+*& Shows popup with error log if mappings are missing or multiple.
 *&---------------------------------------------------------------------*
 FORM map_material_to_ongc.
-  DATA: lt_mat_map TYPE TABLE OF yrga_cst_mat_map,
-        lv_error   TYPE abap_bool.
+  DATA: lt_mat_map     TYPE TABLE OF yrga_cst_mat_map,
+        ls_mat_error   TYPE ty_mat_error,
+        lv_not_found   TYPE abap_bool,
+        lv_multi_found TYPE abap_bool,
+        lv_answer      TYPE c,
+        lv_count       TYPE i.
 
   DATA: BEGIN OF ls_loc_mat,
           location_id TYPE ygms_de_loc_id,
@@ -477,13 +580,16 @@ FORM map_material_to_ongc.
         END OF ls_loc_mat,
         lt_loc_mat LIKE TABLE OF ls_loc_mat.
 
+  CLEAR gt_mat_errors.
+
+  " Get unique Location ID - Material combinations
   LOOP AT gt_upload_data INTO DATA(ls_data).
     ls_loc_mat-location_id = ls_data-location_id.
     ls_loc_mat-material    = ls_data-material.
     COLLECT ls_loc_mat INTO lt_loc_mat.
   ENDLOOP.
 
-  " Fetch material mappings
+  " Fetch material mappings where fortnight falls within validity period
   IF lt_loc_mat IS NOT INITIAL.
     SELECT * FROM yrga_cst_mat_map
       INTO TABLE lt_mat_map
@@ -495,33 +601,105 @@ FORM map_material_to_ongc.
 *        AND deleted        = abap_false.
   ENDIF.
 
-  " Map materials
+  " Check for missing mappings and multiple mappings per combination
+  LOOP AT lt_loc_mat INTO ls_loc_mat.
+    CLEAR lv_count.
+    LOOP AT lt_mat_map TRANSPORTING NO FIELDS
+      WHERE location_id   = ls_loc_mat-location_id
+        AND gail_material = ls_loc_mat-material.
+      lv_count = lv_count + 1.
+    ENDLOOP.
+
+    IF lv_count = 0.
+      " No mapping found
+      CLEAR ls_mat_error.
+      ls_mat_error-location_id = ls_loc_mat-location_id.
+      ls_mat_error-material    = ls_loc_mat-material.
+      ls_mat_error-error_type  = 'N'.
+      ls_mat_error-message     = 'No material mapping found'.
+      APPEND ls_mat_error TO gt_mat_errors.
+      lv_not_found = abap_true.
+
+    ELSEIF lv_count > 1.
+      " Multiple mappings found - log each combination
+      LOOP AT lt_mat_map INTO DATA(ls_mat_multi)
+        WHERE location_id   = ls_loc_mat-location_id
+          AND gail_material = ls_loc_mat-material.
+        CLEAR ls_mat_error.
+        ls_mat_error-location_id   = ls_loc_mat-location_id.
+        ls_mat_error-material      = ls_loc_mat-material.
+        ls_mat_error-ongc_material = ls_mat_multi-ongc_material.
+        ls_mat_error-error_type    = 'M'.
+        ls_mat_error-message       = 'Multiple material mappings found'.
+        APPEND ls_mat_error TO gt_mat_errors.
+      ENDLOOP.
+      lv_multi_found = abap_true.
+    ENDIF.
+  ENDLOOP.
+
+  " Show popup for missing material mappings
+  IF lv_not_found = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'No material mapping found for a few Location ID-Material combinations.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer = '1'.
+      PERFORM display_mat_error_popup USING 'N'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+
+  " Show popup for multiple material mappings
+  IF lv_multi_found = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'Multiple material mappings found for a few Location ID-Material combinations.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer = '1'.
+      PERFORM display_mat_error_popup USING 'M'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+
+  " If errors found, do not proceed
+  CHECK gv_errors = 0.
+
+  " Map materials (only when all combinations have exactly one mapping)
   LOOP AT gt_upload_data ASSIGNING FIELD-SYMBOL(<fs_upload>).
     READ TABLE lt_mat_map INTO DATA(ls_mat)
       WITH KEY location_id   = <fs_upload>-location_id
                gail_material = <fs_upload>-material.
     IF sy-subrc = 0.
       <fs_upload>-ongc_material = ls_mat-ongc_material.
-    ELSE.
-      MESSAGE e001(ygms_msg) WITH 'No ONGC Material mapping for:' <fs_upload>-material.
-      lv_error = abap_true.
-      gv_errors = gv_errors + 1.
     ENDIF.
   ENDLOOP.
-
-  IF lv_error = abap_true.
-    MESSAGE e001(ygms_msg) WITH 'Material mapping errors found. Upload aborted.'.
-  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form FETCH_GCV_NCV
+*& Fetches GCV/NCV from YRXA_CMDATA. Shows popup with error log
+*& for Location ID-Gas Day combinations where GCV/NCV is not found.
 *&---------------------------------------------------------------------*
 FORM fetch_gcv_ncv.
-  DATA: lv_error    TYPE abap_bool,
-        lv_gcv      TYPE ygms_de_gcv,
+  DATA: lv_gcv      TYPE ygms_de_gcv,
         lv_ncv      TYPE ygms_de_ncv,
-        lv_err_cnt  TYPE i.
+        ls_gcv_err  TYPE ty_gcv_error,
+        lv_answer   TYPE c,
+        lv_has_err  TYPE abap_bool.
 
   DATA: BEGIN OF ls_loc_day,
           location_id TYPE ygms_de_loc_id,
@@ -536,6 +714,8 @@ FORM fetch_gcv_ncv.
           ncv         TYPE ygms_de_ncv,
         END OF ls_cmdata,
         lt_cmdata LIKE TABLE OF ls_cmdata.
+
+  CLEAR gt_gcv_errors.
 
   " Get unique Location ID - Gas Day combinations
   LOOP AT gt_upload_data INTO DATA(ls_data).
@@ -554,119 +734,126 @@ FORM fetch_gcv_ncv.
         AND yydate     = lt_loc_day-gas_day.
   ENDIF.
 
-  " Update GCV/NCV in upload data and validate
-  LOOP AT gt_upload_data ASSIGNING FIELD-SYMBOL(<fs_upload>).
+  " Validate and collect errors for missing GCV/NCV
+  LOOP AT lt_loc_day INTO ls_loc_day.
     CLEAR: lv_gcv, lv_ncv.
 
     READ TABLE lt_cmdata INTO ls_cmdata
-      WITH KEY location_id = <fs_upload>-location_id
-               gas_day     = <fs_upload>-gas_day.
+      WITH KEY location_id = ls_loc_day-location_id
+               gas_day     = ls_loc_day-gas_day.
 
     IF sy-subrc = 0.
       lv_gcv = ls_cmdata-gcv.
       lv_ncv = ls_cmdata-ncv.
     ENDIF.
 
-    " Validate GCV
-    IF lv_gcv IS INITIAL OR lv_gcv <= 0.
-      MESSAGE e001(ygms_msg) WITH 'GCV not available for' <fs_upload>-location_id <fs_upload>-gas_day.
-      lv_error = abap_true.
-      lv_err_cnt = lv_err_cnt + 1.
-      CONTINUE.
+    IF lv_gcv IS INITIAL OR lv_gcv <= 0
+      OR lv_ncv IS INITIAL OR lv_ncv <= 0.
+      CLEAR ls_gcv_err.
+      ls_gcv_err-location_id = ls_loc_day-location_id.
+      ls_gcv_err-gas_day     = ls_loc_day-gas_day.
+      IF lv_gcv IS INITIAL OR lv_gcv <= 0.
+        ls_gcv_err-message = 'GCV not available'.
+      ELSE.
+        ls_gcv_err-message = 'NCV not available'.
+      ENDIF.
+      APPEND ls_gcv_err TO gt_gcv_errors.
+      lv_has_err = abap_true.
     ENDIF.
-
-    " Validate NCV
-    IF lv_ncv IS INITIAL OR lv_ncv <= 0.
-      MESSAGE e001(ygms_msg) WITH 'NCV not available for' <fs_upload>-location_id <fs_upload>-gas_day.
-      lv_error = abap_true.
-      lv_err_cnt = lv_err_cnt + 1.
-      CONTINUE.
-    ENDIF.
-
-    " Update GCV/NCV
-    <fs_upload>-gcv = lv_gcv.
-    <fs_upload>-ncv = lv_ncv.
   ENDLOOP.
 
-  IF lv_error = abap_true.
-    gv_errors = gv_errors + lv_err_cnt.
-    MESSAGE e001(ygms_msg) WITH 'GCV/NCV errors found. Upload aborted.'.
+  " Show popup if GCV/NCV errors found
+  IF lv_has_err = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'GCV/NCV data not found for a few Location ID-Gas Day combinations.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer = '1'.
+      PERFORM display_gcv_error_popup.
+    ENDIF.
+    gv_errors = gv_errors + lines( gt_gcv_errors ).
+    RETURN.
   ENDIF.
+
+  " Update GCV/NCV in upload data (only if no errors)
+  LOOP AT gt_upload_data ASSIGNING FIELD-SYMBOL(<fs_upload>).
+    READ TABLE lt_cmdata INTO ls_cmdata
+      WITH KEY location_id = <fs_upload>-location_id
+               gas_day     = <fs_upload>-gas_day.
+
+    IF sy-subrc = 0.
+      <fs_upload>-gcv = ls_cmdata-gcv.
+      <fs_upload>-ncv = ls_cmdata-ncv.
+    ENDIF.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form CHECK_EXISTING_B2B_DATA
+*& Form CHECK_DELETE_PURCHASE_DATA
+*& Checks if purchase data for the fortnight exists in YRGA_CST_PUR.
+*& If found and data source is not B2B, deletes from YRGA_CST_PUR
+*& and YRGA_CST_FNT_D before uploading fresh supply data.
 *&---------------------------------------------------------------------*
-FORM check_existing_b2b_data.
-  DATA: lv_count   TYPE i,
-        lv_answer  TYPE c,
-        lt_ctp_ids TYPE TABLE OF ygms_de_ongc_ctp.
+FORM check_delete_purchase_data.
+  DATA: lv_count  TYPE i,
+        lv_answer TYPE c.
 
-  " Get unique CTP IDs
-  LOOP AT gt_upload_data INTO DATA(ls_data).
-    COLLECT ls_data-ctp_id INTO lt_ctp_ids.
-  ENDLOOP.
-
-  " Check if B2B data exists for this fortnight
-  IF lt_ctp_ids IS NOT INITIAL.
-    SELECT COUNT(*)
-      FROM yrga_cst_b2b_1
-      INTO lv_count
-      FOR ALL ENTRIES IN lt_ctp_ids
-      WHERE ctp_id  = lt_ctp_ids-table_line
-        AND gas_day BETWEEN gv_fn_start AND gv_fn_end.
+  " Skip deletion if data is being received through B2B
+  IF gv_b2b_mode = abap_true.
+    RETURN.
   ENDIF.
+
+  " Check if purchase data exists in YRGA_CST_PUR for this fortnight
+  SELECT COUNT(*)
+    FROM yrga_cst_pur
+    INTO lv_count
+    WHERE gas_day BETWEEN gv_fn_start AND gv_fn_end.
 
   IF lv_count > 0.
-    IF gv_b2b_mode = abap_false.
-      " Interactive mode - ask for confirmation
-      CALL FUNCTION 'POPUP_TO_CONFIRM'
-        EXPORTING
-          titlebar              = 'Warning'
-          text_question         = 'B2B data exists for this fortnight. Delete and proceed?'
-          text_button_1         = 'Yes'
-          text_button_2         = 'No'
-          default_button        = '2'
-          display_cancel_button = ''
-        IMPORTING
-          answer                = lv_answer.
+    " Ask for confirmation before deleting purchase data
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Information'
+        text_question         = 'Purchase data exists for this fortnight in YRGA_CST_PUR. It will be deleted before uploading. Proceed?'
+        text_button_1         = 'Yes'
+        text_button_2         = 'No'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
 
-      IF lv_answer <> '1'.
-        MESSAGE s000(ygms_msg) WITH 'Upload cancelled by user.'.
-        CLEAR gt_upload_data.
-        RETURN.
-      ENDIF.
+    IF lv_answer <> '1'.
+      MESSAGE s000(ygms_msg) WITH 'Upload cancelled by user.'.
+      CLEAR gt_upload_data.
+      RETURN.
     ENDIF.
 
-    " Delete existing data
-    PERFORM delete_existing_b2b_data.
+    " Delete from YRGA_CST_PUR for this fortnight
+    DELETE FROM yrga_cst_pur
+      WHERE gas_day BETWEEN gv_fn_start AND gv_fn_end.
+
+    " Delete from YRGA_CST_FNT_D for this fortnight
+    DELETE FROM yrga_cst_fnt_d
+      WHERE from_date = gv_fn_start
+        AND to_date   = gv_fn_end.
+
+    COMMIT WORK AND WAIT.
+
+    MESSAGE s000(ygms_msg) WITH 'Existing purchase data deleted from YRGA_CST_PUR and YRGA_CST_FNT_D.'.
   ENDIF.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*& Form DELETE_EXISTING_B2B_DATA
-*&---------------------------------------------------------------------*
-FORM delete_existing_b2b_data.
-  DATA: lt_ctp_ids TYPE TABLE OF ygms_de_ongc_ctp.
-
-  LOOP AT gt_upload_data INTO DATA(ls_data).
-    COLLECT ls_data-ctp_id INTO lt_ctp_ids.
-  ENDLOOP.
-
-  " Delete from YRGA_CST_B2B_1 for each CTP ID
-  LOOP AT lt_ctp_ids INTO DATA(lv_ctp).
-    DELETE FROM yrga_cst_b2b_1
-      WHERE ctp_id  = lv_ctp
-        AND gas_day BETWEEN gv_fn_start AND gv_fn_end.
-  ENDLOOP.
-
-  COMMIT WORK AND WAIT.
-
-  MESSAGE s000(ygms_msg) WITH 'Existing B2B data deleted.'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form SAVE_DATA
+*& Saves upload data to YRGA_CST_B2B_1 using MODIFY (upsert).
+*& Does NOT delete previously uploaded records.
 *&---------------------------------------------------------------------*
 FORM save_data.
   DATA: lt_b2b     TYPE TABLE OF yrga_cst_b2b_1,
@@ -851,5 +1038,210 @@ FORM display_view_alv.
 
     CATCH cx_salv_msg INTO DATA(lx_salv).
       MESSAGE lx_salv TYPE 'E'.
+  ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_LOC_ERROR_POPUP
+*& Displays Location ID mapping errors in ALV popup.
+*& Filters by error_type: 'N' = Not found, 'M' = Multiple.
+*&---------------------------------------------------------------------*
+FORM display_loc_error_popup USING pv_error_type TYPE c.
+  DATA: lo_alv     TYPE REF TO cl_salv_table,
+        lo_columns TYPE REF TO cl_salv_columns_table,
+        lo_column  TYPE REF TO cl_salv_column,
+        lt_display TYPE TABLE OF ty_loc_error.
+
+  " Filter errors by type
+  LOOP AT gt_loc_errors INTO DATA(ls_err) WHERE error_type = pv_error_type.
+    APPEND ls_err TO lt_display.
+  ENDLOOP.
+
+  CHECK lt_display IS NOT INITIAL.
+
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = lt_display
+      ).
+
+      lo_alv->set_screen_popup(
+        start_column = 10
+        end_column   = 110
+        start_line   = 5
+        end_line     = 25
+      ).
+
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( abap_true ).
+
+      TRY.
+          lo_column = lo_columns->get_column( 'LOCATION_ID' ).
+          lo_column->set_short_text( 'Location' ).
+          lo_column->set_medium_text( 'Location ID' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'CTP_ID' ).
+          lo_column->set_short_text( 'CTP ID' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'MESSAGE' ).
+          lo_column->set_short_text( 'Message' ).
+          lo_column->set_medium_text( 'Error Message' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      " Hide the error_type column
+      TRY.
+          lo_column = lo_columns->get_column( 'ERROR_TYPE' ).
+          lo_column->set_visible( abap_false ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      lo_alv->display( ).
+
+    CATCH cx_salv_msg INTO DATA(lx_salv).
+      MESSAGE lx_salv TYPE 'I'.
+  ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_MAT_ERROR_POPUP
+*& Displays Material mapping errors in ALV popup.
+*& Filters by error_type: 'N' = Not found, 'M' = Multiple.
+*&---------------------------------------------------------------------*
+FORM display_mat_error_popup USING pv_error_type TYPE c.
+  DATA: lo_alv     TYPE REF TO cl_salv_table,
+        lo_columns TYPE REF TO cl_salv_columns_table,
+        lo_column  TYPE REF TO cl_salv_column,
+        lt_display TYPE TABLE OF ty_mat_error.
+
+  " Filter errors by type
+  LOOP AT gt_mat_errors INTO DATA(ls_err) WHERE error_type = pv_error_type.
+    APPEND ls_err TO lt_display.
+  ENDLOOP.
+
+  CHECK lt_display IS NOT INITIAL.
+
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = lt_display
+      ).
+
+      lo_alv->set_screen_popup(
+        start_column = 10
+        end_column   = 120
+        start_line   = 5
+        end_line     = 25
+      ).
+
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( abap_true ).
+
+      TRY.
+          lo_column = lo_columns->get_column( 'LOCATION_ID' ).
+          lo_column->set_short_text( 'Location' ).
+          lo_column->set_medium_text( 'Location ID' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'MATERIAL' ).
+          lo_column->set_short_text( 'GAIL Mat' ).
+          lo_column->set_medium_text( 'GAIL Material' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'ONGC_MATERIAL' ).
+          lo_column->set_short_text( 'ONGC Mat' ).
+          lo_column->set_medium_text( 'ONGC Material' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'MESSAGE' ).
+          lo_column->set_short_text( 'Message' ).
+          lo_column->set_medium_text( 'Error Message' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      " Hide the error_type column
+      TRY.
+          lo_column = lo_columns->get_column( 'ERROR_TYPE' ).
+          lo_column->set_visible( abap_false ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      lo_alv->display( ).
+
+    CATCH cx_salv_msg INTO DATA(lx_salv).
+      MESSAGE lx_salv TYPE 'I'.
+  ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_GCV_ERROR_POPUP
+*& Displays GCV/NCV errors in ALV popup showing Location ID-Gas Day
+*& combinations for which GCV/NCV data could not be found.
+*&---------------------------------------------------------------------*
+FORM display_gcv_error_popup.
+  DATA: lo_alv     TYPE REF TO cl_salv_table,
+        lo_columns TYPE REF TO cl_salv_columns_table,
+        lo_column  TYPE REF TO cl_salv_column.
+
+  CHECK gt_gcv_errors IS NOT INITIAL.
+
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_gcv_errors
+      ).
+
+      lo_alv->set_screen_popup(
+        start_column = 10
+        end_column   = 100
+        start_line   = 5
+        end_line     = 25
+      ).
+
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( abap_true ).
+
+      TRY.
+          lo_column = lo_columns->get_column( 'LOCATION_ID' ).
+          lo_column->set_short_text( 'Location' ).
+          lo_column->set_medium_text( 'Location ID' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'GAS_DAY' ).
+          lo_column->set_short_text( 'Gas Day' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      TRY.
+          lo_column = lo_columns->get_column( 'MESSAGE' ).
+          lo_column->set_short_text( 'Message' ).
+          lo_column->set_medium_text( 'Error Message' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+
+      lo_alv->display( ).
+
+    CATCH cx_salv_msg INTO DATA(lx_salv).
+      MESSAGE lx_salv TYPE 'I'.
   ENDTRY.
 ENDFORM.
