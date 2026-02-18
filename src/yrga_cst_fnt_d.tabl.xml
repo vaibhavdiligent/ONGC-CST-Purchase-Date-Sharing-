@@ -167,6 +167,10 @@
      <ROLLNAME>SYUNAME</ROLLNAME>
      <ADMINFIELD>0</ADMINFIELD>
      <DDTEXT>Created By</DDTEXT>
+     <REPTEXT>Created By</REPTEXT>
+     <SCRTEXT_S>Created By</SCRTEXT_S>
+     <SCRTEXT_M>Created By</SCRTEXT_M>
+     <SCRTEXT_L>Created By</SCRTEXT_L>
     </DD03P>
     <DD03P>
      <TABNAME>YRGA_CST_FNT_D</TABNAME>
@@ -174,7 +178,11 @@
      <POSITION>0018</POSITION>
      <ROLLNAME>SYDATUM</ROLLNAME>
      <ADMINFIELD>0</ADMINFIELD>
-     <DDTEXT>Created Date</DDTEXT>
+     <DDTEXT>Created On</DDTEXT>
+     <REPTEXT>Created On</REPTEXT>
+     <SCRTEXT_S>Created On</SCRTEXT_S>
+     <SCRTEXT_M>Created On</SCRTEXT_M>
+     <SCRTEXT_L>Created On</SCRTEXT_L>
     </DD03P>
     <DD03P>
      <TABNAME>YRGA_CST_FNT_D</TABNAME>
@@ -182,7 +190,11 @@
      <POSITION>0019</POSITION>
      <ROLLNAME>SYUZEIT</ROLLNAME>
      <ADMINFIELD>0</ADMINFIELD>
-     <DDTEXT>Created Time</DDTEXT>
+     <DDTEXT>Created At</DDTEXT>
+     <REPTEXT>Created At</REPTEXT>
+     <SCRTEXT_S>Created At</SCRTEXT_S>
+     <SCRTEXT_M>Created At</SCRTEXT_M>
+     <SCRTEXT_L>Created At</SCRTEXT_L>
     </DD03P>
     <DD03P>
      <TABNAME>YRGA_CST_FNT_D</TABNAME>
