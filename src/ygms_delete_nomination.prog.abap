@@ -117,29 +117,77 @@ FORM validate_input.
         lv_start_month(6) TYPE n,
         lv_end_month(6)   TYPE n,
         lv_last_day    TYPE sy-datum,
-        lv_error       TYPE abap_bool.
+        lv_error       TYPE abap_bool,
+        lv_docnr       TYPE vbak-vbeln,
+        lv_msg         TYPE char200,
+        lv_pblnr       TYPE oifspbl-pblnr,
+        lv_pbltyp      TYPE oifspbl-pbltyp.
+
+  FIELD-SYMBOLS: <ls_docnr> LIKE LINE OF s_docnr,
+                 <ls_idate> LIKE LINE OF s_idate,
+                 <ls_locid> LIKE LINE OF s_locid.
 
   CLEAR: gt_errors, lv_error.
 
+* Validation 1: User must enter either Contract ID or Location ID or both
   IF s_docnr[] IS INITIAL AND s_locid[] IS INITIAL.
     gs_error-msgty = 'E'.
-    gs_error-msgtx = 'Please enter either Contract ID or both.'(m05).
+    gs_error-msgtx = 'Please enter either Contract ID or Location ID or both'(m05).
     APPEND gs_error TO gt_errors.
     lv_error = abap_true.
   ENDIF.
 
+* Validation 2: Check each Contract ID against VBAK
   IF s_docnr[] IS NOT INITIAL.
-    SELECT vbeln FROM vbak
-      INTO TABLE gt_vbak
-      WHERE vbeln IN s_docnr.
-    IF sy-subrc NE 0.
-      gs_error-msgty = 'E'.
-      gs_error-msgtx = 'None of the Contract IDs exist'(m01).
-      APPEND gs_error TO gt_errors.
-      lv_error = abap_true.
-    ENDIF.
+    LOOP AT s_docnr ASSIGNING <ls_docnr>.
+      CLEAR lv_docnr.
+      SELECT SINGLE vbeln FROM vbak
+        INTO lv_docnr
+        WHERE vbeln = <ls_docnr>-low.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        CONCATENATE 'Contract ID' <ls_docnr>-low 'does not exist'
+          INTO lv_msg SEPARATED BY space.
+        gs_error-msgtx = lv_msg.
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
 
+* Validation 3: Date format validation
+  LOOP AT s_idate ASSIGNING <ls_idate>.
+    IF <ls_idate>-low IS NOT INITIAL.
+      CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+        EXPORTING
+          date                      = <ls_idate>-low
+        EXCEPTIONS
+          plausibility_check_failed = 1
+          OTHERS                    = 2.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        gs_error-msgtx = 'Enter the date in format 31.12.9999'(m02).
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDIF.
+    IF <ls_idate>-high IS NOT INITIAL.
+      CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+        EXPORTING
+          date                      = <ls_idate>-high
+        EXCEPTIONS
+          plausibility_check_failed = 1
+          OTHERS                    = 2.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        gs_error-msgtx = 'Enter the date in format 31.12.9999'(m02).
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+* Validation 4: Date range must belong to the same FN
   IF s_idate-high IS NOT INITIAL.
     lv_start_day   = s_idate-low+6(2).
     lv_end_day     = s_idate-high+6(2).
@@ -178,17 +226,32 @@ FORM validate_input.
     ENDIF.
   ENDIF.
 
+* Validation 5: Check Location IDs - existence and sale location type
   IF s_locid[] IS NOT INITIAL.
-    SELECT pblnr FROM oifspbl
-      INTO TABLE gt_oifspbl
-      WHERE pblnr IN s_locid
-        AND pbltyp = 'YRDE'.
-    IF sy-subrc NE 0.
-      gs_error-msgty = 'E'.
-      gs_error-msgtx = 'Enter valid sale location IDs'(m04).
-      APPEND gs_error TO gt_errors.
-      lv_error = abap_true.
-    ENDIF.
+    LOOP AT s_locid ASSIGNING <ls_locid>.
+      CLEAR: lv_pblnr, lv_pbltyp.
+      SELECT SINGLE pblnr pbltyp FROM oifspbl
+        INTO (lv_pblnr, lv_pbltyp)
+        WHERE pblnr = <ls_locid>-low.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        CONCATENATE 'Location ID' <ls_locid>-low 'does not exist'
+          INTO lv_msg SEPARATED BY space.
+        gs_error-msgtx = lv_msg.
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ELSE.
+        IF lv_pbltyp NE 'YRDE'.
+          gs_error-msgty = 'E'.
+          CONCATENATE 'Location ID' <ls_locid>-low
+            'does not pertain to Sale Location'
+            INTO lv_msg SEPARATED BY space.
+          gs_error-msgtx = lv_msg.
+          APPEND gs_error TO gt_errors.
+          lv_error = abap_true.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
 
   IF lv_error = abap_true.
@@ -200,8 +263,57 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_ERROR_SCREEN
 *&---------------------------------------------------------------------*
+*& Displays ALL collected errors in a popup so the user can review
+*& every issue, then go back to the selection screen to correct them.
+*&---------------------------------------------------------------------*
 FORM display_error_screen.
 
+  DATA: lt_err_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_err_fieldcat TYPE slis_fieldcat_alv,
+        ls_err_layout   TYPE slis_layout_alv.
+
+  CLEAR ls_err_fieldcat.
+  ls_err_fieldcat-col_pos   = 1.
+  ls_err_fieldcat-fieldname = 'MSGTY'.
+  ls_err_fieldcat-seltext_l = 'Type'.
+  ls_err_fieldcat-seltext_m = 'Type'.
+  ls_err_fieldcat-seltext_s = 'Type'.
+  ls_err_fieldcat-outputlen = 4.
+  ls_err_fieldcat-tabname   = 'GT_ERRORS'.
+  APPEND ls_err_fieldcat TO lt_err_fieldcat.
+
+  CLEAR ls_err_fieldcat.
+  ls_err_fieldcat-col_pos   = 2.
+  ls_err_fieldcat-fieldname = 'MSGTX'.
+  ls_err_fieldcat-seltext_l = 'Error Message'.
+  ls_err_fieldcat-seltext_m = 'Error Message'.
+  ls_err_fieldcat-seltext_s = 'Message'.
+  ls_err_fieldcat-outputlen = 100.
+  ls_err_fieldcat-tabname   = 'GT_ERRORS'.
+  APPEND ls_err_fieldcat TO lt_err_fieldcat.
+
+  ls_err_layout-zebra             = 'X'.
+  ls_err_layout-colwidth_optimize = 'X'.
+  ls_err_layout-window_titlebar   = 'Validation Errors - Please correct and retry'(e02).
+
+  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+    EXPORTING
+      i_title               = 'Validation Errors'(e03)
+      i_zebra               = 'X'
+      i_screen_start_column = 10
+      i_screen_start_line   = 5
+      i_screen_end_column   = 120
+      i_screen_end_line     = 20
+      i_tabname             = 'GT_ERRORS'
+      it_fieldcat           = lt_err_fieldcat
+      i_checkbox_fieldname  = space
+    TABLES
+      t_outtab              = gt_errors
+    EXCEPTIONS
+      program_error         = 1
+      OTHERS                = 2.
+
+* After popup closes, raise error to return user to selection screen
   READ TABLE gt_errors INTO gs_error INDEX 1.
   MESSAGE gs_error-msgtx TYPE 'E'.
 
