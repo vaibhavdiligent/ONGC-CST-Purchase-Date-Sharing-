@@ -686,8 +686,16 @@ FORM handle_allocate.
          it_state1 TYPE TABLE OF ty_state,
          it_asales TYPE TABLE OF ty_asales,
          wa_asales TYPE ty_asales.
-  " Collect sales data per location + state
+  " Collect sales data per location + state (skip excluded states)
   LOOP AT it_final_main INTO wa_final_main.
+    " Skip if this state is excluded in the main ALV table
+    READ TABLE gt_alv_display TRANSPORTING NO FIELDS
+      WITH KEY location_id = wa_final_main-empst
+               state_code  = wa_final_main-regio
+               exclude     = 'X'.
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
     wa_asales-empst   = wa_final_main-empst.
     wa_asales-qty_mbg = wa_final_main-matnr1.
     wa_asales-regio   = wa_final_main-regio.
@@ -695,8 +703,16 @@ FORM handle_allocate.
     CLEAR wa_asales.
   ENDLOOP.
   SORT it_asales BY empst qty_mbg DESCENDING.
-  " Collect sales and state data per location + material
+  " Collect sales and state data per location + material (skip excluded states)
   LOOP AT it_final_main INTO wa_final_main.
+    " Skip if this state is excluded in the main ALV table
+    READ TABLE gt_alv_display TRANSPORTING NO FIELDS
+      WITH KEY location_id = wa_final_main-empst
+               state_code  = wa_final_main-regio
+               exclude     = 'X'.
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
     IF wa_final_main-regio <> 'GJ'.
       wa_sales-empst = wa_final_main-empst.
       wa_sales-matnr = wa_final_main-matnr.
