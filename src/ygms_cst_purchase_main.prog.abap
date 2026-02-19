@@ -262,10 +262,21 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    CONCATENATE 'No receipt data available for' S_LOC-LOW 'for the entered period'
-          INTO DATA(L_ERROR) SEPARATED BY SPACE.
-    MESSAGE s000(ygms_msg) WITH L_ERROR.
+    CONCATENATE 'No receipt data available for' s_loc-low 'for the entered period'
+          INTO DATA(l_error) SEPARATED BY space.
+    MESSAGE s000(ygms_msg) WITH l_error.
     RETURN.
+  ENDIF.
+  IF lt_b2b_data[] IS NOT INITIAL.
+    SORT lt_b2b_data BY time_stamp DESCENDING.
+*    DELETE ADJACENT DUPLICATES FROM lt_b2b_data COMPARING
+    READ TABLE lt_b2b_data  into data(wa_tab) index 1.
+    if sy-subrc = 0.
+      delete lt_b2b_data  where time_stamp <> wa_tab-time_stamp.
+    endif.
+*    gas_day
+*  ctp_id
+*  ongc_material.
   ENDIF.
   LOOP AT lt_b2b_data INTO DATA(ls_b2b).
     DATA(ls_receipt) = VALUE ty_gas_receipt(
@@ -1294,7 +1305,7 @@ FORM save_data_to_db.
           ls_cst_pur-qty_in_mbg = c_tgqty.
         ENDIF.
         ls_cst_pur-gail_id      = ls_gail_id_map-gail_id.
-        ls_cst_pur-exclude      = gs_alv_display-exclude.
+*        ls_cst_pur-exclude      = gs_alv_display-exclude.
         ls_cst_pur-created_by   = sy-uname.
         ls_cst_pur-created_date = sy-datum.
         ls_cst_pur-created_time = sy-uzeit.
