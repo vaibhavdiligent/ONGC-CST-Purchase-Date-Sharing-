@@ -3790,29 +3790,29 @@ FORM   get_data_other .
 *   Read lease amount from YRHA_LEASE_PAYP1 where Status_P1 = Paid
 *   Total Amount (Excess Rent) is the lease amount
 *   CL = Company Lease, XL = Ref Lease
-    DATA: lv_lease_amt TYPE p DECIMALS 2.
-    CLEAR lv_lease_amt.
-
-    SELECT SUM( excess_rent ) INTO lv_lease_amt
-      FROM yrha_lease_payp1
-      WHERE pernr = itab_final_d-yy_pernr
-        AND status_p1 = 'PAID'.
-
-    IF lv_lease_amt > 0.
-      itab_final_d-yy_betrg = lv_lease_amt.
-      IF itab_final_d-yy_start_period <> itab_final_d-yy_fpbeg OR
-         itab_final_d-yy_end_period <> itab_final_d-yy_fpend.
-        itab_final_d-yy_betrg =
-           ( itab_final_d-yy_betrg / itab_final_h-yy_py_prd_days ) *
-             itab_final_h-yy_prd_days.
-      ENDIF.
-      itab_final_d-yy_lgtxt = 'LEASE'.
-      itab_final_d-yy_ben_type = 3.
-      itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
-      IF itab_final_d-yy_betrg <> 0.
-        APPEND itab_final_d.
-      ENDIF.
-    ENDIF.
+*    DATA: lv_lease_amt TYPE p DECIMALS 2.
+*    CLEAR lv_lease_amt.
+*
+*    SELECT SUM( excess_rent ) INTO lv_lease_amt
+*      FROM yrha_lease_payp1
+*      WHERE pernr = itab_final_d-yy_pernr
+*        AND status_p1 = 'PAID'.
+*
+*    IF lv_lease_amt > 0.
+*      itab_final_d-yy_betrg = lv_lease_amt.
+*      IF itab_final_d-yy_start_period <> itab_final_d-yy_fpbeg OR
+*         itab_final_d-yy_end_period <> itab_final_d-yy_fpend.
+*        itab_final_d-yy_betrg =
+*           ( itab_final_d-yy_betrg / itab_final_h-yy_py_prd_days ) *
+*             itab_final_h-yy_prd_days.
+*      ENDIF.
+*      itab_final_d-yy_lgtxt = 'LEASE'.
+*      itab_final_d-yy_ben_type = 3.
+*      itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
+*      IF itab_final_d-yy_betrg <> 0.
+*        APPEND itab_final_d.
+*      ENDIF.
+*    ENDIF.
 
 *    " Company Owned Accomodation ITAB_P0001-PERSK
 *    LOOP AT itab_p0581 WHERE pernr = itab_final_d-yy_pernr AND begda LE wa_period-endda AND endda GE wa_period-begda AND accom = '9'.
@@ -4182,23 +4182,23 @@ FORM get_offcycle_data .
       itab_final_d-yy_btrtl = itab_final_h-yy_btrtl.
 ***BROKERAGE CHARGE REIMBURSEMENT - Read from YRHA_ACCNO_HDR
 *     Pass PERNR to YRHA_ACCNO_HDR, filter approved entries, pick YY_BROKER_AMT
-      DATA: lv_broker_amt TYPE p DECIMALS 2.
-      CLEAR lv_broker_amt.
-
-      SELECT SUM( yy_broker_amt ) INTO lv_broker_amt
-        FROM yrha_accno_hdr
-        WHERE yy_pernr = itab_final_h-yy_pernr
-          AND yy_status = 'APP'.
-
-      IF lv_broker_amt > 0.
-        itab_final_d-yy_lgart = '4030'.
-        itab_final_d-yy_lgtxt = 'BROKERAGE CHARGE REIMBURSEMENT'.
-        itab_final_d-yy_betrg = lv_broker_amt.
-        itab_final_d-yy_ben_type = 3.
-        itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
-        APPEND itab_final_d.
-        CLEAR: itab_final_d-yy_betrg.
-      ENDIF.
+*      DATA: lv_broker_amt TYPE p DECIMALS 2.
+*      CLEAR lv_broker_amt.
+*
+*      SELECT SUM( yy_broker_amt ) INTO lv_broker_amt
+*        FROM yrha_accno_hdr
+*        WHERE yy_pernr = itab_final_h-yy_pernr
+*          AND yy_status = 'APP'.
+*
+*      IF lv_broker_amt > 0.
+*        itab_final_d-yy_lgart = '4030'.
+*        itab_final_d-yy_lgtxt = 'BROKERAGE CHARGE REIMBURSEMENT'.
+*        itab_final_d-yy_betrg = lv_broker_amt.
+*        itab_final_d-yy_ben_type = 3.
+*        itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
+*        APPEND itab_final_d.
+*        CLEAR: itab_final_d-yy_betrg.
+*      ENDIF.
 
 *      CLEAR itab_final_d-yy_sno.
 *      CLEAR itab_final_d-yy_betrg.
