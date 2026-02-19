@@ -683,6 +683,9 @@ FORM delete_nominations.
         ls_return       TYPE bapiret2,
         lv_has_error    TYPE abap_bool.
 
+  DATA: lv_nomtyp       TYPE oijnomh-nomtyp,
+        lv_live_count   TYPE i.
+
   DATA: lt_nomtk_processed TYPE SORTED TABLE OF oijnomi-nomtk
                            WITH UNIQUE KEY table_line.
 
@@ -841,6 +844,30 @@ CALL FUNCTION 'OIJ_NOM_MAINTAIN'
 *         IMPORTING
 *           RETURN        = RETURN
                   .
+
+*       Delete OIJNOMH header based on NOMTYP
+        CLEAR lv_nomtyp.
+        SELECT SINGLE nomtyp FROM oijnomh
+          INTO lv_nomtyp
+          WHERE nomtk = gs_output-nomtk.
+
+        IF lv_nomtyp = 'GITA'.
+*         GITA: always delete the header
+          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+
+        ELSEIF lv_nomtyp = 'GISA'.
+*         GISA: delete header only if no other live items remain
+          CLEAR lv_live_count.
+          SELECT COUNT(*) FROM oijnomi
+            INTO lv_live_count
+            WHERE nomtk = gs_output-nomtk
+              AND delind NE 'X'.
+          IF lv_live_count = 0.
+            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+          ENDIF.
+        ENDIF.
       ELSE.
 *DATA WAIT   TYPE BAPITA-WAIT.
 *DATA RETURN TYPE BAPIRET2.
