@@ -174,6 +174,13 @@ CLASS lcl_event_handler IMPLEMENTATION.
         IF sy-subrc = 0.
           <fs_field> = ls_mod_cell-value.
         ENDIF.
+        " When Exclude checkbox changes, apply to all rows of the same state
+        IF ls_mod_cell-fieldname = 'EXCLUDE'.
+          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_state_row>)
+            WHERE state_code = <fs_row>-state_code.
+            <fs_state_row>-exclude = <fs_row>-exclude.
+          ENDLOOP.
+        ENDIF.
       ENDIF.
     ENDLOOP.
     " Now recalculate totals
@@ -262,10 +269,21 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    CONCATENATE 'No receipt data available for' S_LOC-LOW 'for the entered period'
-          INTO DATA(L_ERROR) SEPARATED BY SPACE.
-    MESSAGE s000(ygms_msg) WITH L_ERROR.
+    CONCATENATE 'No receipt data available for' s_loc-low 'for the entered period'
+          INTO DATA(l_error) SEPARATED BY space.
+    MESSAGE s000(ygms_msg) WITH l_error.
     RETURN.
+  ENDIF.
+  IF lt_b2b_data[] IS NOT INITIAL.
+    SORT lt_b2b_data BY time_stamp DESCENDING.
+*    DELETE ADJACENT DUPLICATES FROM lt_b2b_data COMPARING
+    READ TABLE lt_b2b_data  into data(wa_tab) index 1.
+    if sy-subrc = 0.
+      delete lt_b2b_data  where time_stamp <> wa_tab-time_stamp.
+    endif.
+*    gas_day
+*  ctp_id
+*  ongc_material.
   ENDIF.
   LOOP AT lt_b2b_data INTO DATA(ls_b2b).
     DATA(ls_receipt) = VALUE ty_gas_receipt(
@@ -760,7 +778,7 @@ FORM handle_allocate.
   ENDLOOP.
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>) WHERE state_code = wa_state-state_code AND
-      material = wa_state-matnr.
+      material = wa_state-matnr AND exclude IS INITIAL.
       CLEAR l_index.
       CLEAR: l_ncv, l_gcv,l_day_sm3.
       l_date = s_date-low.
@@ -1140,8 +1158,8 @@ FORM save_data_to_db.
          END OF ty_error_log.
   DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
         ls_cst_pur      TYPE yrga_cst_pur,
-        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_d,
-        ls_cst_fnt      TYPE yrga_cst_fnt_d,
+        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_data,
+        ls_cst_fnt      TYPE yrga_cst_fnt_data,
         lv_timestamp    TYPE timestampl,
         lv_ts_char      TYPE c LENGTH 14,
         lv_date         TYPE datum,
@@ -1294,7 +1312,7 @@ FORM save_data_to_db.
           ls_cst_pur-qty_in_mbg = c_tgqty.
         ENDIF.
         ls_cst_pur-gail_id      = ls_gail_id_map-gail_id.
-        ls_cst_pur-exclude      = gs_alv_display-exclude.
+*        ls_cst_pur-exclude      = gs_alv_display-exclude.
         ls_cst_pur-created_by   = sy-uname.
         ls_cst_pur-created_date = sy-datum.
         ls_cst_pur-created_time = sy-uzeit.
@@ -1391,7 +1409,7 @@ FORM save_data_to_db.
   " Delete existing data for same Location ID and Fortnight (step f)
   DELETE FROM yrga_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
-  DELETE FROM yrga_cst_fnt_d
+  DELETE FROM yrga_cst_fnt_data
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to.
   " Save records to both database tables
@@ -1404,7 +1422,7 @@ FORM save_data_to_db.
     ENDIF.
   ENDIF.
   IF lt_cst_fnt IS NOT INITIAL.
-    MODIFY yrga_cst_fnt_d FROM TABLE lt_cst_fnt.
+    MODIFY yrga_cst_fnt_data FROM TABLE lt_cst_fnt.
     IF sy-subrc <> 0.
       ROLLBACK WORK.
       MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_FNT_DATA'.
