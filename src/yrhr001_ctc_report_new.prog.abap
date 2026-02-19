@@ -837,7 +837,7 @@ END-OF-SELECTION.
 *                                                           lgart = '4016' OR
 *                                                           lgart = '4060' OR
                                                           ( lgart = '4035' OR
-                                                           lgart = '4095' OR lgart = '4064' ) " 4064 wage type added for driver wages logic enhancement
+                                                           lgart = '4095' OR lgart = '4064' OR lgart = '4215' ) " 4064 wage type added for driver wages logic enhancement, 4215 for Telephone Call Charges
 *                                                     AND endda = '99991231'.
                                                      AND begda LE @l_to_end AND endda GE @l_to_end.
 ***EOC by Abhinesh Sinha & Bibhu Ranjan Sahoo on 06.05.2020, Charm No #4000001849
@@ -3787,27 +3787,31 @@ FORM   get_data_other .
     itab_final_d-yy_werks = itab_final_h-yy_werks.
     itab_final_d-yy_btrtl = itab_final_h-yy_btrtl.
     itab_final_d-yy_lgart = '9008'.
-    IF itab_p0581[] IS NOT INITIAL.
-      LOOP AT itab_p0581 WHERE pernr = itab_final_d-yy_pernr AND
-                               accom = '5'.
-        IF itab_p0581-begda <= itab_final_h-yy_start_period AND
-           itab_p0581-endda >= itab_final_d-yy_end_period.
+*   Read lease amount from YRHA_LEASE_PAYP1 where Status_P1 = Paid
+*   Total Amount (Excess Rent) is the lease amount
+*   CL = Company Lease, XL = Ref Lease
+    DATA: lv_lease_amt TYPE p DECIMALS 2.
+    CLEAR lv_lease_amt.
 
-          itab_final_d-yy_betrg = itab_p0581-rtamt.
-          IF itab_final_d-yy_start_period <> itab_final_d-yy_fpbeg OR
-             itab_final_d-yy_end_period <> itab_final_d-yy_fpend.
-            itab_final_d-yy_betrg =
-               ( itab_final_d-yy_betrg / itab_final_h-yy_py_prd_days ) *
-                 itab_final_h-yy_prd_days.
-          ENDIF.
-          itab_final_d-yy_lgtxt = 'LEASE'.
-          itab_final_d-yy_ben_type = 3.
-          itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
-          IF itab_final_d-yy_betrg <> 0.
-            APPEND itab_final_d.
-          ENDIF.
-        ENDIF.
-      ENDLOOP.
+    SELECT SUM( excess_rent ) INTO lv_lease_amt
+      FROM yrha_lease_payp1
+      WHERE pernr = itab_final_d-yy_pernr
+        AND status_p1 = 'PAID'.
+
+    IF lv_lease_amt > 0.
+      itab_final_d-yy_betrg = lv_lease_amt.
+      IF itab_final_d-yy_start_period <> itab_final_d-yy_fpbeg OR
+         itab_final_d-yy_end_period <> itab_final_d-yy_fpend.
+        itab_final_d-yy_betrg =
+           ( itab_final_d-yy_betrg / itab_final_h-yy_py_prd_days ) *
+             itab_final_h-yy_prd_days.
+      ENDIF.
+      itab_final_d-yy_lgtxt = 'LEASE'.
+      itab_final_d-yy_ben_type = 3.
+      itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
+      IF itab_final_d-yy_betrg <> 0.
+        APPEND itab_final_d.
+      ENDIF.
     ENDIF.
 
 *    " Company Owned Accomodation ITAB_P0001-PERSK
@@ -4176,25 +4180,25 @@ FORM get_offcycle_data .
       itab_final_d-yy_fpend = itab_final_h-yy_fpend.
       itab_final_d-yy_werks = itab_final_h-yy_werks.
       itab_final_d-yy_btrtl = itab_final_h-yy_btrtl.
-***BROKERAGE CHARGE REIMBURSEMENT
-      LOOP AT itab_p0267 WHERE pernr = itab_final_h-yy_pernr AND
-                     subty = '4030'.
-        IF itab_p0267-begda >= itab_final_h-yy_start_period AND
-        itab_p0267-begda <= itab_final_h-yy_end_period.
-          itab_final_d-yy_lgart = itab_p0267-subty.
-          CLEAR itab_t512t.
-          READ TABLE itab_t512t WITH KEY lgart = itab_p0267-subty.
-          itab_final_d-yy_lgtxt = itab_t512t-lgtxt.
+***BROKERAGE CHARGE REIMBURSEMENT - Read from YRHA_ACCNO_HDR
+*     Pass PERNR to YRHA_ACCNO_HDR, filter approved entries, pick YY_BROKER_AMT
+      DATA: lv_broker_amt TYPE p DECIMALS 2.
+      CLEAR lv_broker_amt.
 
-          itab_final_d-yy_betrg = itab_p0267-betrg.
-          IF itab_final_d-yy_betrg > 0.
-            itab_final_d-yy_ben_type = 3.
-            itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
-            APPEND itab_final_d.
-            CLEAR: itab_final_d-yy_betrg.
-          ENDIF.
-        ENDIF.
-      ENDLOOP.
+      SELECT SUM( yy_broker_amt ) INTO lv_broker_amt
+        FROM yrha_accno_hdr
+        WHERE yy_pernr = itab_final_h-yy_pernr
+          AND yy_status = 'APP'.
+
+      IF lv_broker_amt > 0.
+        itab_final_d-yy_lgart = '4030'.
+        itab_final_d-yy_lgtxt = 'BROKERAGE CHARGE REIMBURSEMENT'.
+        itab_final_d-yy_betrg = lv_broker_amt.
+        itab_final_d-yy_ben_type = 3.
+        itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
+        APPEND itab_final_d.
+        CLEAR: itab_final_d-yy_betrg.
+      ENDIF.
 
 *      CLEAR itab_final_d-yy_sno.
 *      CLEAR itab_final_d-yy_betrg.
@@ -8548,6 +8552,20 @@ FORM get_reimbursement_data.
           itab_final_d-yy_ben_type = 3.
           itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
           CLEAR: lv_amunt3.
+        ENDIF.
+
+*       Telephone Call Charges - Wage Type 4215
+        IF <lfs_t7ina9>-lgart = '4215'.
+          DATA(lv_amunt4) = <lfs_t7ina9>-amunt.
+          lv_amunt4 = lv_amunt4 / 12.
+
+          itab_final_d-yy_lgart = <lfs_t7ina9>-lgart.
+          itab_final_d-yy_betrg = lv_amunt4.
+
+          itab_final_d-yy_lgtxt = 'TELEPHONE CALL CHARGES'.
+          itab_final_d-yy_ben_type = 3.
+          itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
+          CLEAR: lv_amunt4.
         ENDIF.
 
         IF itab_final_d-yy_betrg IS NOT INITIAL.
