@@ -1158,8 +1158,8 @@ FORM save_data_to_db.
          END OF ty_error_log.
   DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
         ls_cst_pur      TYPE yrga_cst_pur,
-        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_d,
-        ls_cst_fnt      TYPE yrga_cst_fnt_d,
+        lt_cst_fnt      TYPE TABLE OF yrga_cst_fnt_data,
+        ls_cst_fnt      TYPE yrga_cst_fnt_data,
         lv_timestamp    TYPE timestampl,
         lv_ts_char      TYPE c LENGTH 14,
         lv_date         TYPE datum,
@@ -1409,7 +1409,7 @@ FORM save_data_to_db.
   " Delete existing data for same Location ID and Fortnight (step f)
   DELETE FROM yrga_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
-  DELETE FROM yrga_cst_fnt_d
+  DELETE FROM yrga_cst_fnt_data
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to.
   " Save records to both database tables
@@ -1422,7 +1422,7 @@ FORM save_data_to_db.
     ENDIF.
   ENDIF.
   IF lt_cst_fnt IS NOT INITIAL.
-    MODIFY yrga_cst_fnt_d FROM TABLE lt_cst_fnt.
+    MODIFY yrga_cst_fnt_data FROM TABLE lt_cst_fnt.
     IF sy-subrc <> 0.
       ROLLBACK WORK.
       MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_FNT_DATA'.
