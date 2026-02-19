@@ -174,6 +174,13 @@ CLASS lcl_event_handler IMPLEMENTATION.
         IF sy-subrc = 0.
           <fs_field> = ls_mod_cell-value.
         ENDIF.
+        " When Exclude checkbox changes, apply to all rows of the same state
+        IF ls_mod_cell-fieldname = 'EXCLUDE'.
+          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_state_row>)
+            WHERE state_code = <fs_row>-state_code.
+            <fs_state_row>-exclude = <fs_row>-exclude.
+          ENDLOOP.
+        ENDIF.
       ENDIF.
     ENDLOOP.
     " Now recalculate totals
