@@ -778,7 +778,7 @@ FORM handle_allocate.
   ENDLOOP.
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>) WHERE state_code = wa_state-state_code AND
-      material = wa_state-matnr.
+      material = wa_state-matnr AND exclude IS INITIAL.
       CLEAR l_index.
       CLEAR: l_ncv, l_gcv,l_day_sm3.
       l_date = s_date-low.
