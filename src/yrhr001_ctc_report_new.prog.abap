@@ -938,7 +938,7 @@ END-OF-SELECTION.
   SORT itab_final_d BY yy_pernr yy_lgart yy_fpbeg DESCENDING..
   itab_final_d1[] = itab_final_d[].
   DELETE ADJACENT DUPLICATES FROM itab_final_d1[] COMPARING yy_pernr yy_lgart.
-  SELECT * FROM yrhr_ctc_sc INTO TABLE lt_perc WHERE begda <= sy-datum AND endda >= sy-datum .
+  SELECT * FROM yrhr_ctc_sc INTO TABLE lt_perc WHERE begda <= l_to_end AND endda >= l_to_end .
   IF  sy-subrc = 0.
     lv_flag = 'X'.
   ENDIF.
@@ -2660,7 +2660,7 @@ FORM add_selection_data .
 
         itab_final_d-yy_lgart = '9107'.
         itab_final_d-yy_betrg = p_elec.
-        itab_final_d-yy_lgtxt = 'ELECTRICITY CHARGES'.
+        itab_final_d-yy_lgtxt = 'Electricity charges reimbursement'.
         itab_final_d-yy_ben_type = 3.
         itab_final_d-yy_ben_typ_txt = 'PERQUISITES'.
         IF itab_final_d-yy_betrg <> 0.
@@ -2809,6 +2809,75 @@ FORM add_selection_data .
       IF itab_final_d-yy_betrg <> 0.
         APPEND itab_final_d.
       ENDIF.
+
+      "SOC: Also read non-driver types (Electricity, Entertainment) from YRHA_CTC_DRIVER table
+      "When only Driver wage is provided in selection screen, other types should still come from table
+      LOOP AT p0001 INTO ls_p0001
+        WHERE ( persk = 'E8' OR persk = 'E9')
+          AND begda <= l_to_end
+          AND endda >= l_to_end.
+
+        lv_overlap_from = ls_p0001-begda.
+        IF lv_overlap_from < l_from_beg.
+          lv_overlap_from = l_from_beg.
+        ENDIF.
+        lv_overlap_to = ls_p0001-endda.
+        IF lv_overlap_to > l_to_end.
+          lv_overlap_to = l_to_end.
+        ENDIF.
+
+        SELECT * INTO TABLE @DATA(lt_wages_oth) FROM yrha_ctc_driver
+          WHERE grade = @ls_p0001-persk
+            AND begda <= @lv_overlap_to
+            AND endda >= @lv_overlap_from.
+        IF sy-subrc <> 0.
+          CONTINUE.
+        ENDIF.
+
+        LOOP AT lt_wages_oth INTO DATA(ls_wage_oth).
+          "Skip driver wages type - already added from selection screen above
+          IF ls_wage_oth-type CS 'DRI' OR ls_wage_oth-type CS 'DRIVER'.
+            CONTINUE.
+          ENDIF.
+
+          CLEAR lv_total_amt.
+          lv_monthly_amt = ls_wage_oth-value.
+          lv_months =
+            ( lv_overlap_to+0(4) * 12 + lv_overlap_to+4(2) ) -
+            ( lv_overlap_from+0(4) * 12 + lv_overlap_from+4(2) ) + 1.
+          lv_total_amt = lv_monthly_amt * lv_months.
+
+          IF lv_total_amt > 0.
+            CLEAR: itab_final_d-yy_sno,
+                   itab_final_d-yy_lgart,
+                   itab_final_d-yy_betrg,
+                   itab_final_d-yy_lgtxt,
+                   itab_final_d-yy_start_period,
+                   itab_final_d-yy_end_period,
+                   itab_final_d-yy_fpper,
+                   itab_final_d-yy_fpbeg,
+                   itab_final_d-yy_fpend,
+                   itab_final_d-yy_werks,
+                   itab_final_d-yy_btrtl.
+            itab_final_d-yy_start_period = itab_final_h-yy_start_period.
+            itab_final_d-yy_end_period   = itab_final_h-yy_end_period.
+            itab_final_d-yy_fpper        = itab_final_h-yy_fpper.
+            itab_final_d-yy_fpbeg        = itab_final_h-yy_fpbeg.
+            itab_final_d-yy_fpend        = itab_final_h-yy_fpend.
+            itab_final_d-yy_werks        = itab_final_h-yy_werks.
+            itab_final_d-yy_btrtl        = itab_final_h-yy_btrtl.
+
+            DATA(l_tabix_oth) = sy-tabix.
+            itab_final_d-yy_lgart        = 9020 + l_tabix_oth - 1.
+            itab_final_d-yy_betrg        = lv_total_amt.
+            itab_final_d-yy_lgtxt        = ls_wage_oth-type.
+            itab_final_d-yy_ben_type     = 3.
+            itab_final_d-yy_ben_typ_txt  = 'PERQUISITES'.
+            APPEND itab_final_d.
+          ENDIF.
+        ENDLOOP.
+      ENDLOOP.
+      "EOC: Non-driver types from YRHA_CTC_DRIVER
 
       "Driver wages not provided in selection screen, calculating based on grade and entitlement
     ELSE.
@@ -3601,7 +3670,9 @@ FORM   get_data_other .
     ENDLOOP.
 
 *****************************************************************
-*************changes for pd_food-Show in ALV -Priya Tiwari***************************
+*************Insurance Overhead - Component 24***************************
+*   Calculation on same lines as Leave Salary Contribution
+*   Pick percentage from YRHR_CTC_SC by passing end date
     CLEAR itab_final_d-yy_sno.
     CLEAR itab_final_d-yy_lgart.
     CLEAR itab_final_d-yy_betrg.
@@ -3622,23 +3693,23 @@ FORM   get_data_other .
     itab_final_d-yy_werks = itab_final_h-yy_werks.
     itab_final_d-yy_btrtl = itab_final_h-yy_btrtl.
 
-    LOOP AT itab_ptrv_shdr  INTO DATA(wa_ptrv_shdr).
-*     IF wa_ptrv_srec-exp_type = 'AAHA' .
-*        itab_final_d-yy_lgart = wa_ptrv_shdr-exp_type.
-*    IF itab_final_d-yy_start_period <> itab_final_d-yy_fpbeg OR
-*       itab_final_d-yy_end_period <> itab_final_d-yy_fpend.
-      itab_final_d-yy_betrg =  wa_ptrv_shdr-pd_food.
-
-*    ENDIF.
-      itab_final_d-yy_lgart = 'DA'.
-      itab_final_d-yy_lgtxt = 'Food per deims'.
-      itab_final_d-yy_ben_type = 7.
-      itab_final_d-yy_ben_typ_txt = 'Transfer/Travel Benefits'.
-      IF itab_final_d-yy_betrg <> 0.
-        APPEND itab_final_d.
+    itab_final_d-yy_lgart = '9024'.
+    IF lv_flag = 'X'.
+      READ TABLE lt_perc INTO ls_perc INDEX 1.
+      itab_final_d-yy_betrg = ( w_basic_rate + w_da_rate + w_pp_rate ) * ls_perc-percentage / 100.
+      IF itab_final_d-yy_start_period <> itab_final_d-yy_fpbeg OR
+         itab_final_d-yy_end_period <> itab_final_d-yy_fpend.
+        itab_final_d-yy_betrg =
+               ( itab_final_d-yy_betrg / itab_final_h-yy_py_prd_days ) *
+                 itab_final_h-yy_prd_days.
       ENDIF.
-
-    ENDLOOP.
+    ENDIF.
+    itab_final_d-yy_lgtxt = 'INSURANCE OVERHEAD'.
+    itab_final_d-yy_ben_type = 5.
+    itab_final_d-yy_ben_typ_txt = 'SOCIAL SECURITY/INSURANCE'.
+    IF itab_final_d-yy_betrg <> 0.
+      APPEND itab_final_d.
+    ENDIF.
 
 
 
@@ -6988,7 +7059,7 @@ FORM get_entertainment_data .
   itab_final_d-yy_lgart = '9026'.
   CLEAR itab_t512t.
   READ TABLE itab_t512t WITH KEY lgart = '4046'.  "Telephone reimb.
-  itab_final_d-yy_lgtxt = itab_t512t-lgtxt.
+  itab_final_d-yy_lgtxt = 'Entertainment exp (Residence)'.
 
   LOOP AT itab_p0267 WHERE pernr = itab_final_h-yy_pernr AND
                            subty = '4046'.
