@@ -175,10 +175,11 @@ CLASS lcl_event_handler IMPLEMENTATION.
         IF sy-subrc = 0.
           <fs_field> = ls_mod_cell-value.
         ENDIF.
-        " When Exclude checkbox changes, apply to all rows of the same state
+        " When Exclude checkbox changes, apply to all rows of the same state within that location
         IF ls_mod_cell-fieldname = 'EXCLUDE'.
           LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_state_row>)
-            WHERE state_code = <fs_row>-state_code.
+            WHERE location_id = <fs_row>-location_id
+              AND state_code  = <fs_row>-state_code.
             <fs_state_row>-exclude = <fs_row>-exclude.
           ENDLOOP.
         ENDIF.
@@ -654,6 +655,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM handle_allocate.
   TYPES : BEGIN OF ty_sales,
+            empst          TYPE empst,
             matnr          TYPE matnr,
             qty_mbg        TYPE ygms_de_qty_mbg_cal,
             qty_mbg_supply TYPE ygms_de_qty_mbg_cal,
@@ -662,11 +664,13 @@ FORM handle_allocate.
             qty_access     TYPE ygms_de_qty_mbg_cal,
           END OF ty_sales.
   TYPES : BEGIN OF ty_asales,
+            empst   TYPE empst,
             regio   TYPE regio,
             qty_mbg TYPE ygms_de_qty_mbg_cal,
           END OF ty_asales.
   DATA l_left TYPE ygms_de_qty_mbg_cal.
   TYPES : BEGIN OF ty_state,
+            empst         TYPE empst,
             state_code    TYPE regio,
             state         TYPE bezei20,
             matnr         TYPE matnr,
@@ -682,46 +686,56 @@ FORM handle_allocate.
          it_state1 TYPE TABLE OF ty_state,
          it_asales TYPE TABLE OF ty_asales,
          wa_asales TYPE ty_asales.
+  " Collect sales data per location + state
   LOOP AT it_final_main INTO wa_final_main.
+    wa_asales-empst   = wa_final_main-empst.
     wa_asales-qty_mbg = wa_final_main-matnr1.
-    wa_asales-regio = wa_final_main-regio.
+    wa_asales-regio   = wa_final_main-regio.
     COLLECT wa_asales INTO it_asales.
     CLEAR wa_asales.
   ENDLOOP.
-  SORT it_asales BY qty_mbg DESCENDING.
+  SORT it_asales BY empst qty_mbg DESCENDING.
+  " Collect sales and state data per location + material
   LOOP AT it_final_main INTO wa_final_main.
     IF wa_final_main-regio <> 'GJ'.
+      wa_sales-empst = wa_final_main-empst.
       wa_sales-matnr = wa_final_main-matnr.
       wa_sales-qty_mbg = wa_final_main-matnr1.
       COLLECT wa_sales INTO it_sales.
       CLEAR wa_sales.
     ENDIF.
     CLEAR wa_state.
+    wa_state-empst      = wa_final_main-empst.
     wa_state-state_code = wa_final_main-regio.
-    wa_state-state = wa_final_main-regio_desc.
-    wa_state-qty_mbg = wa_final_main-matnr1.
-    wa_state-matnr = wa_final_main-matnr.
+    wa_state-state      = wa_final_main-regio_desc.
+    wa_state-qty_mbg    = wa_final_main-matnr1.
+    wa_state-matnr      = wa_final_main-matnr.
     COLLECT wa_state INTO it_state.
   ENDLOOP.
+  " Collect supply data per location + material
   LOOP AT gt_gas_receipt INTO DATA(wa_gas_receipt).
-    wa_sales-matnr = wa_gas_receipt-material.
+    wa_sales-empst          = wa_gas_receipt-location_id.
+    wa_sales-matnr          = wa_gas_receipt-material.
     wa_sales-qty_mbg_supply = wa_gas_receipt-qty_mbg.
     COLLECT wa_sales INTO it_sales.
     CLEAR wa_sales.
   ENDLOOP.
+  " Calculate diff per location + material
   LOOP AT it_sales ASSIGNING FIELD-SYMBOL(<fs_sales>).
     <fs_sales>-qty_mbg_diff = <fs_sales>-qty_mbg_supply - <fs_sales>-qty_mbg.
   ENDLOOP.
-  SORT it_sales BY qty_mbg_diff DESCENDING.
-  SORT it_asales BY qty_mbg DESCENDING.
+  SORT it_sales BY empst qty_mbg_diff DESCENDING.
+  SORT it_asales BY empst qty_mbg DESCENDING.
   CLEAR l_left.
   DATA l_exit TYPE flag.
+  " Allocate per location + material
   LOOP AT it_sales ASSIGNING <fs_sales>.
     CLEAR l_exit.
     l_left = <fs_sales>-qty_mbg_diff.
     IF l_left < 0.
-      LOOP AT it_asales INTO wa_asales.
+      LOOP AT it_asales INTO wa_asales WHERE empst = <fs_sales>-empst.
         LOOP AT it_state ASSIGNING FIELD-SYMBOL(<fs_state>) WHERE
+          empst = <fs_sales>-empst AND
           matnr = <fs_sales>-matnr AND state_code = wa_asales-regio.
           IF sy-subrc = 0.
             IF <fs_state>-qty_mbg > abs( l_left ).
@@ -739,7 +753,8 @@ FORM handle_allocate.
         ENDIF.
       ENDLOOP.
     ELSE.
-      READ TABLE it_state ASSIGNING <fs_state> WITH KEY state_code = 'GJ' matnr = <fs_sales>-matnr.
+      READ TABLE it_state ASSIGNING <fs_state>
+        WITH KEY empst = <fs_sales>-empst state_code = 'GJ' matnr = <fs_sales>-matnr.
       IF sy-subrc = 0.
         <fs_state>-qty_allocated = l_left + <fs_state>-qty_allocated.
         CLEAR l_left.
@@ -750,15 +765,16 @@ FORM handle_allocate.
   LOOP AT it_state ASSIGNING <fs_state> WHERE qty_allocated IS INITIAL.
     <fs_state>-qty_allocated = <fs_state>-qty_mbg.
   ENDLOOP.
+  " Calculate percentage per location + material
   MOVE it_state[] TO it_state1[].
-  SORT it_state1 BY matnr.
-  DELETE ADJACENT DUPLICATES FROM it_state1 COMPARING matnr.
+  SORT it_state1 BY empst matnr.
+  DELETE ADJACENT DUPLICATES FROM it_state1 COMPARING empst matnr.
   LOOP AT it_state1 INTO DATA(wa_state1).
     CLEAR l_left.
-    LOOP AT it_state INTO wa_state WHERE matnr = wa_state1-matnr.
+    LOOP AT it_state INTO wa_state WHERE empst = wa_state1-empst AND matnr = wa_state1-matnr.
       l_left = l_left + wa_state-qty_allocated.
     ENDLOOP.
-    LOOP AT it_state ASSIGNING <fs_state> WHERE matnr = wa_state1-matnr.
+    LOOP AT it_state ASSIGNING <fs_state> WHERE empst = wa_state1-empst AND matnr = wa_state1-matnr.
       <fs_state>-percentage = ( <fs_state>-qty_allocated / l_left ) * 100.
     ENDLOOP.
   ENDLOOP.
@@ -778,9 +794,13 @@ FORM handle_allocate.
            <fs_clear>-day10, <fs_clear>-day11, <fs_clear>-day12,
            <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15.
   ENDLOOP.
+  " Apply allocation per location + state + material
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
-    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>) WHERE state_code = wa_state-state_code AND
-      material = wa_state-matnr AND exclude IS INITIAL.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>)
+      WHERE location_id = wa_state-empst
+        AND state_code  = wa_state-state_code
+        AND material    = wa_state-matnr
+        AND exclude     IS INITIAL.
       CLEAR l_index.
       CLEAR: l_ncv, l_gcv,l_day_sm3.
       l_date = s_date-low.
@@ -791,8 +811,9 @@ FORM handle_allocate.
         ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv> TO FIELD-SYMBOL(<fs_day>).
         IF sy-subrc = 0.
           READ TABLE gt_gas_receipt INTO wa_gas_receipt WITH KEY
-            gas_day = l_date
-            material = wa_state-matnr.
+            location_id = wa_state-empst
+            gas_day     = l_date
+            material    = wa_state-matnr.
           IF sy-subrc = 0.
             <fs_day> = ( wa_gas_receipt-qty_mbg * wa_state-percentage ) / 100.
             <fs_alv>-total_mbg = <fs_alv>-total_mbg + <fs_day>.
