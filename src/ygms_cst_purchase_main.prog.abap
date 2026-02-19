@@ -63,6 +63,7 @@ TYPES: BEGIN OF ty_alv_display,
          day14       TYPE p DECIMALS 6,
          day15       TYPE p DECIMALS 6,
          day16       TYPE p DECIMALS 6,
+         celltab     TYPE lvc_t_styl,
        END OF ty_alv_display.
 TYPES: BEGIN OF ty_final,
          vstel      TYPE vbap-vstel,
@@ -544,6 +545,7 @@ FORM display_editable_alv.
   gs_layout-zebra      = abap_true.
   gs_layout-sel_mode   = 'A'.
   gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
+  gs_layout-stylefname = 'CELLTAB'.  " Cell style field for row-level edit control
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
       i_callback_program       = sy-repid
@@ -1063,7 +1065,8 @@ FORM handle_edit.
         lt_fcat        TYPE lvc_t_fcat,
         ls_fcat        TYPE lvc_s_fcat,
         lv_day_edit    TYPE abap_bool,
-        lv_new_day_edit TYPE abap_bool.
+        lv_new_day_edit TYPE abap_bool,
+        ls_style       TYPE lvc_s_styl.
   " Get ALV grid reference
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
     IMPORTING
@@ -1089,6 +1092,35 @@ FORM handle_edit.
   ENDLOOP.
   " Set updated field catalog
   lr_grid->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat ).
+  " Set cell styles: disable DAY columns for excluded rows
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_edit_row>).
+    CLEAR <fs_edit_row>-celltab.
+    IF lv_new_day_edit = abap_true AND <fs_edit_row>-exclude = 'X'.
+      " Disable all DAY columns for excluded rows
+      DO 15 TIMES.
+        CLEAR ls_style.
+        CASE sy-index.
+          WHEN 1.  ls_style-fieldname = 'DAY01'.
+          WHEN 2.  ls_style-fieldname = 'DAY02'.
+          WHEN 3.  ls_style-fieldname = 'DAY03'.
+          WHEN 4.  ls_style-fieldname = 'DAY04'.
+          WHEN 5.  ls_style-fieldname = 'DAY05'.
+          WHEN 6.  ls_style-fieldname = 'DAY06'.
+          WHEN 7.  ls_style-fieldname = 'DAY07'.
+          WHEN 8.  ls_style-fieldname = 'DAY08'.
+          WHEN 9.  ls_style-fieldname = 'DAY09'.
+          WHEN 10. ls_style-fieldname = 'DAY10'.
+          WHEN 11. ls_style-fieldname = 'DAY11'.
+          WHEN 12. ls_style-fieldname = 'DAY12'.
+          WHEN 13. ls_style-fieldname = 'DAY13'.
+          WHEN 14. ls_style-fieldname = 'DAY14'.
+          WHEN 15. ls_style-fieldname = 'DAY15'.
+        ENDCASE.
+        ls_style-style = cl_gui_alv_grid=>mc_style_disabled.
+        INSERT ls_style INTO TABLE <fs_edit_row>-celltab.
+      ENDDO.
+    ENDIF.
+  ENDLOOP.
   " Refresh the ALV
   lr_grid->refresh_table_display( ).
   " 2.3a: Revoke validation status and hide Save button when entering edit mode
