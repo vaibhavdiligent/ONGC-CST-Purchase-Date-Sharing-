@@ -31,6 +31,7 @@ TYPES: BEGIN OF ty_output,
          ga_allocated_qty TYPE oijnomi-ga_allocated_qty,
          actqty           TYPE oijnomi-actualqty,
          tkt_status       TYPE char20,
+         nomtyp           TYPE oijnomh-nomtyp,
          sityp            TYPE oijnomi-sityp,
          delind           TYPE oijnomi-delind,
        END OF ty_output.
@@ -387,7 +388,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_output_line USING ps_nom TYPE oijnomi.
 
-  DATA: ls_out TYPE ty_output.
+  DATA: ls_out    TYPE ty_output,
+        lv_nomtyp TYPE oijnomh-nomtyp.
   CLEAR ls_out.
 
 *  ls_out-sel              = space.
@@ -404,6 +406,13 @@ FORM build_output_line USING ps_nom TYPE oijnomi.
   ls_out-actqty           = ps_nom-actualqty.
   ls_out-sityp            = ps_nom-sityp.
   ls_out-delind           = ps_nom-delind.
+
+* Get Nomination Type from header table
+  CLEAR lv_nomtyp.
+  SELECT SINGLE nomtyp FROM oijnomh
+    INTO lv_nomtyp
+    WHERE nomtk = ps_nom-nomtk.
+  ls_out-nomtyp = lv_nomtyp.
 
   PERFORM determine_gail_flag USING    ps_nom-locid
                               CHANGING ls_out-gail_flag.
@@ -553,6 +562,7 @@ FORM build_fieldcat.
   add_field 11  'GA_ALLOCATED_QTY'   'Allocated Qty'      'Alloc Qty'    15  ' '.
   add_field 12  'ACTQTY'             'Actual Qty'         'Act Qty'      15  ' '.
   add_field 13  'TKT_STATUS'         'Ticket Status'      'Tkt Stat'     20  ' '.
+  add_field 14  'NOMTYP'             'Nomination Type'    'Nom Type'     10  ' '.
 
 ENDFORM.
 
