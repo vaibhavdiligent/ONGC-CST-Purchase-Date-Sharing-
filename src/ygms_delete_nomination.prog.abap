@@ -62,7 +62,7 @@ DATA: gv_pipeline  TYPE char10,
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   SELECT-OPTIONS: s_docnr FOR oijnomi-docnr NO INTERVALS,
-                  s_idate FOR oijnomi-idate  NO INTERVALS OBLIGATORY,
+                  s_idate FOR oijnomi-idate  NO-EXTENSION OBLIGATORY,
                   s_locid FOR oijnomi-locid NO INTERVALS.
 SELECTION-SCREEN END OF BLOCK b01.
 *----------------------------------------------------------------------*
@@ -71,21 +71,21 @@ SELECTION-SCREEN END OF BLOCK b01.
 INITIALIZATION.
   gv_repid = sy-repid.
 *----------------------------------------------------------------------*
-* AT SELECTION-SCREEN
-*----------------------------------------------------------------------*
-AT SELECTION-SCREEN.
-  PERFORM validate_input.
-*----------------------------------------------------------------------*
 * START-OF-SELECTION
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
-  PERFORM fetch_nominations.
-  PERFORM build_output.
+  PERFORM validate_input.
+  IF gv_valid = abap_true.
+    PERFORM fetch_nominations.
+    PERFORM build_output.
+  ENDIF.
 *----------------------------------------------------------------------*
 * END-OF-SELECTION
 *----------------------------------------------------------------------*
 END-OF-SELECTION.
-  IF gt_output IS NOT INITIAL.
+  IF gv_valid = abap_false.
+    PERFORM display_error_alv.
+  ELSEIF gt_output IS NOT INITIAL.
     PERFORM build_fieldcat.
     PERFORM display_alv.
   ELSE.
@@ -233,16 +233,19 @@ FORM validate_input.
     ENDLOOP.
   ENDIF.
   IF lv_error = abap_true.
-    PERFORM display_error_screen.
+    gv_valid = abap_false.
+  ELSE.
+    gv_valid = abap_true.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
-*& Form DISPLAY_ERROR_SCREEN
+*& Form DISPLAY_ERROR_ALV
 *&---------------------------------------------------------------------*
-*& Displays ALL collected errors in a popup so the user can review
-*& every issue, then go back to the selection screen to correct them.
+*& Displays ALL collected errors in a full-screen ALV grid.
+*& User can press Back (F3) to return to the selection screen
+*& with all fields unlocked for correction.
 *&---------------------------------------------------------------------*
-FORM display_error_screen.
+FORM display_error_alv.
   DATA: lt_err_fieldcat TYPE slis_t_fieldcat_alv,
         ls_err_fieldcat TYPE slis_fieldcat_alv,
         ls_err_layout   TYPE slis_layout_alv.
@@ -266,26 +269,19 @@ FORM display_error_screen.
   APPEND ls_err_fieldcat TO lt_err_fieldcat.
   ls_err_layout-zebra             = 'X'.
   ls_err_layout-colwidth_optimize = 'X'.
-  ls_err_layout-window_titlebar   = 'Validation Errors - Please correct and retry'(e02).
-  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+  ls_err_layout-window_titlebar   = 'Validation Errors - Please correct and press Back to retry'(e02).
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
-      i_title               = 'Validation Errors'(e03)
-      i_zebra               = 'X'
-      i_screen_start_column = 10
-      i_screen_start_line   = 5
-      i_screen_end_column   = 120
-      i_screen_end_line     = 20
-      i_tabname             = 'GT_ERRORS'
-      it_fieldcat           = lt_err_fieldcat
-      i_checkbox_fieldname  = space
+      i_callback_program = gv_repid
+      is_layout          = ls_err_layout
+      it_fieldcat        = lt_err_fieldcat
+      i_default          = 'X'
+      i_save             = ' '
     TABLES
-      t_outtab              = gt_errors
+      t_outtab           = gt_errors
     EXCEPTIONS
-      program_error         = 1
-      OTHERS                = 2.
-* After popup closes, raise error to return user to selection screen
-  READ TABLE gt_errors INTO gs_error INDEX 1.
-  MESSAGE gs_error-msgtx TYPE 'E'.
+      program_error      = 1
+      OTHERS             = 2.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form FETCH_NOMINATIONS
@@ -483,19 +479,19 @@ FORM build_fieldcat.
   END-OF-DEFINITION.
 * NO SEL field in fieldcat - box_fieldname handles it
   add_field  1  'GAIL_FLAG'          'PIEPELINE'     'PIPE'         10  ' '.
-  add_field  2  'NOMTK'              'Nomination Key'     'Nom Key'      20  'X'.
-  add_field  3  'NOMIT'              'Nomination Item'    'Nom Item'      6  'X'.
-  add_field  4  'PARTNR'             'Location Partner'   'Partner'      10  ' '.
-  add_field  5  'LOCID'              'Location ID'        'Loc ID'       15  ' '.
-  add_field  6  'IDATE'              'Gas Day'            'Gas Day'      10  ' '.
-  add_field  7  'S_MATNR_I'          'Material'           'Material'     18  ' '.
-  add_field  8  'MENGE'              'Nomination Qty'     'Nom Qty'      15  ' '.
-  add_field  9  'UNIT_I'             'Nomination UoM'     'UoM'           6  ' '.
-  add_field 10  'DOCNR'              'Contract ID'        'Contract'     10  ' '.
-  add_field 11  'GA_ALLOCATED_QTY'   'Allocated Qty'      'Alloc Qty'    15  ' '.
-  add_field 12  'ACTQTY'             'Actual Qty'         'Act Qty'      15  ' '.
-  add_field 13  'TKT_STATUS'         'Ticket Status'      'Tkt Stat'     20  ' '.
-  add_field 14  'NOMTYP'             'Nomination Type'    'Nom Type'     10  ' '.
+  add_field  2  'NOMTYP'             'Nomination Type'    'Nom Type'     10  ' '.
+  add_field  3  'NOMTK'              'Nomination Key'     'Nom Key'      20  'X'.
+  add_field  4  'NOMIT'              'Nomination Item'    'Nom Item'      6  'X'.
+  add_field  5  'PARTNR'             'Location Partner'   'Partner'      10  ' '.
+  add_field  6  'LOCID'              'Location ID'        'Loc ID'       15  ' '.
+  add_field  7  'IDATE'              'Gas Day'            'Gas Day'      10  ' '.
+  add_field  8  'S_MATNR_I'          'Material'           'Material'     18  ' '.
+  add_field  9  'MENGE'              'Nomination Qty'     'Nom Qty'      15  ' '.
+  add_field 10  'UNIT_I'             'Nomination UoM'     'UoM'           6  ' '.
+  add_field 11  'DOCNR'              'Contract ID'        'Contract'     10  ' '.
+  add_field 12  'GA_ALLOCATED_QTY'   'Allocated Qty'      'Alloc Qty'    15  ' '.
+  add_field 13  'ACTQTY'             'Actual Qty'         'Act Qty'      15  ' '.
+  add_field 14  'TKT_STATUS'         'Ticket Status'      'Tkt Stat'     20  ' '.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_ALV
@@ -759,6 +755,20 @@ FORM delete_nominations.
 *           RETURN        = RETURN
           .
 *       Delete OIJNOMH header based on NOMTYP
+        IF lv_nomtyp = 'GITA'.
+          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+        ELSEIF lv_nomtyp = 'GISA'.
+          CLEAR lv_live_count.
+          SELECT COUNT(*) FROM oijnomi
+            INTO lv_live_count
+            WHERE nomtk = gs_output-nomtk
+              AND delind NE 'X'.
+          IF lv_live_count = 0.
+            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+          ENDIF.
+        ENDIF.
       ELSE.
 *DATA WAIT   TYPE BAPITA-WAIT.
 *DATA RETURN TYPE BAPIRET2.
