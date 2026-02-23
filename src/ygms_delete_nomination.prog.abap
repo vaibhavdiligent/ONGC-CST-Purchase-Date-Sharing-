@@ -414,6 +414,10 @@ FORM determine_tkt_status USING    ps_nom       TYPE oijnomi
   DATA et_nominations TYPE yrxt_nom.
   CLEAR pv_status.
   lv_prefix = ps_nom-locid+0(1).
+* If location starts with 'V', do not display ticket status
+  IF lv_prefix = 'V'.
+    RETURN.
+  ENDIF.
   IF pv_gail_flag = 'GAIL'.
     IF lv_prefix = 'C'.
       CALL FUNCTION 'YRX_CHK_NG_TKT_STATUS'
@@ -650,7 +654,7 @@ FORM delete_nominations.
 *      INTO lv_nomtyp
 *      WHERE nomtk = gs_output-nomtk.
     IF lv_nomtyp = 'GITA'.
-      ls_nom_header-updkz = 'X'.
+      ls_nom_header-updkz = 'U'.
       ls_nom_header-delind = 'X'.
 *         GITA: always delete the header
 *          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
@@ -664,7 +668,7 @@ FORM delete_nominations.
         AND nomit = gs_output-nomit
           AND delind NE 'X'.
       IF lv_live_count = 0.
-        ls_nom_header-updkz = 'X'.
+        ls_nom_header-updkz = 'U'.
         ls_nom_header-delind = 'X'.
 *            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
 *            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
