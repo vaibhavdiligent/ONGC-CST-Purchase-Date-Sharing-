@@ -71,21 +71,21 @@ SELECTION-SCREEN END OF BLOCK b01.
 INITIALIZATION.
   gv_repid = sy-repid.
 *----------------------------------------------------------------------*
-* AT SELECTION-SCREEN
-*----------------------------------------------------------------------*
-AT SELECTION-SCREEN.
-  PERFORM validate_input.
-*----------------------------------------------------------------------*
 * START-OF-SELECTION
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
-  PERFORM fetch_nominations.
-  PERFORM build_output.
+  PERFORM validate_input.
+  IF gv_valid = abap_true.
+    PERFORM fetch_nominations.
+    PERFORM build_output.
+  ENDIF.
 *----------------------------------------------------------------------*
 * END-OF-SELECTION
 *----------------------------------------------------------------------*
 END-OF-SELECTION.
-  IF gt_output IS NOT INITIAL.
+  IF gv_valid = abap_false.
+    PERFORM display_error_alv.
+  ELSEIF gt_output IS NOT INITIAL.
     PERFORM build_fieldcat.
     PERFORM display_alv.
   ELSE.
@@ -233,16 +233,19 @@ FORM validate_input.
     ENDLOOP.
   ENDIF.
   IF lv_error = abap_true.
-    PERFORM display_error_screen.
+    gv_valid = abap_false.
+  ELSE.
+    gv_valid = abap_true.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
-*& Form DISPLAY_ERROR_SCREEN
+*& Form DISPLAY_ERROR_ALV
 *&---------------------------------------------------------------------*
-*& Displays ALL collected errors in a popup so the user can review
-*& every issue, then go back to the selection screen to correct them.
+*& Displays ALL collected errors in a full-screen ALV grid.
+*& User can press Back (F3) to return to the selection screen
+*& with all fields unlocked for correction.
 *&---------------------------------------------------------------------*
-FORM display_error_screen.
+FORM display_error_alv.
   DATA: lt_err_fieldcat TYPE slis_t_fieldcat_alv,
         ls_err_fieldcat TYPE slis_fieldcat_alv,
         ls_err_layout   TYPE slis_layout_alv.
@@ -266,26 +269,19 @@ FORM display_error_screen.
   APPEND ls_err_fieldcat TO lt_err_fieldcat.
   ls_err_layout-zebra             = 'X'.
   ls_err_layout-colwidth_optimize = 'X'.
-  ls_err_layout-window_titlebar   = 'Validation Errors - Please correct and retry'(e02).
-  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+  ls_err_layout-window_titlebar   = 'Validation Errors - Please correct and press Back to retry'(e02).
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
-      i_title               = 'Validation Errors'(e03)
-      i_zebra               = 'X'
-      i_screen_start_column = 10
-      i_screen_start_line   = 5
-      i_screen_end_column   = 120
-      i_screen_end_line     = 20
-      i_tabname             = 'GT_ERRORS'
-      it_fieldcat           = lt_err_fieldcat
-      i_checkbox_fieldname  = space
+      i_callback_program = gv_repid
+      is_layout          = ls_err_layout
+      it_fieldcat        = lt_err_fieldcat
+      i_default          = 'X'
+      i_save             = ' '
     TABLES
-      t_outtab              = gt_errors
+      t_outtab           = gt_errors
     EXCEPTIONS
-      program_error         = 1
-      OTHERS                = 2.
-* After popup closes, raise error to return user to selection screen
-  READ TABLE gt_errors INTO gs_error INDEX 1.
-  MESSAGE gs_error-msgtx TYPE 'E'.
+      program_error      = 1
+      OTHERS             = 2.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form FETCH_NOMINATIONS
