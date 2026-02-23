@@ -62,7 +62,7 @@ DATA: gv_pipeline  TYPE char10,
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   SELECT-OPTIONS: s_docnr FOR oijnomi-docnr NO INTERVALS,
-                  s_idate FOR oijnomi-idate  NO INTERVALS OBLIGATORY,
+                  s_idate FOR oijnomi-idate  NO-EXTENSION OBLIGATORY,
                   s_locid FOR oijnomi-locid NO INTERVALS.
 SELECTION-SCREEN END OF BLOCK b01.
 *----------------------------------------------------------------------*
