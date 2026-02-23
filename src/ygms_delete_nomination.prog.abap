@@ -479,19 +479,19 @@ FORM build_fieldcat.
   END-OF-DEFINITION.
 * NO SEL field in fieldcat - box_fieldname handles it
   add_field  1  'GAIL_FLAG'          'PIEPELINE'     'PIPE'         10  ' '.
-  add_field  2  'NOMTK'              'Nomination Key'     'Nom Key'      20  'X'.
-  add_field  3  'NOMIT'              'Nomination Item'    'Nom Item'      6  'X'.
-  add_field  4  'PARTNR'             'Location Partner'   'Partner'      10  ' '.
-  add_field  5  'LOCID'              'Location ID'        'Loc ID'       15  ' '.
-  add_field  6  'IDATE'              'Gas Day'            'Gas Day'      10  ' '.
-  add_field  7  'S_MATNR_I'          'Material'           'Material'     18  ' '.
-  add_field  8  'MENGE'              'Nomination Qty'     'Nom Qty'      15  ' '.
-  add_field  9  'UNIT_I'             'Nomination UoM'     'UoM'           6  ' '.
-  add_field 10  'DOCNR'              'Contract ID'        'Contract'     10  ' '.
-  add_field 11  'GA_ALLOCATED_QTY'   'Allocated Qty'      'Alloc Qty'    15  ' '.
-  add_field 12  'ACTQTY'             'Actual Qty'         'Act Qty'      15  ' '.
-  add_field 13  'TKT_STATUS'         'Ticket Status'      'Tkt Stat'     20  ' '.
-  add_field 14  'NOMTYP'             'Nomination Type'    'Nom Type'     10  ' '.
+  add_field  2  'NOMTYP'             'Nomination Type'    'Nom Type'     10  ' '.
+  add_field  3  'NOMTK'              'Nomination Key'     'Nom Key'      20  'X'.
+  add_field  4  'NOMIT'              'Nomination Item'    'Nom Item'      6  'X'.
+  add_field  5  'PARTNR'             'Location Partner'   'Partner'      10  ' '.
+  add_field  6  'LOCID'              'Location ID'        'Loc ID'       15  ' '.
+  add_field  7  'IDATE'              'Gas Day'            'Gas Day'      10  ' '.
+  add_field  8  'S_MATNR_I'          'Material'           'Material'     18  ' '.
+  add_field  9  'MENGE'              'Nomination Qty'     'Nom Qty'      15  ' '.
+  add_field 10  'UNIT_I'             'Nomination UoM'     'UoM'           6  ' '.
+  add_field 11  'DOCNR'              'Contract ID'        'Contract'     10  ' '.
+  add_field 12  'GA_ALLOCATED_QTY'   'Allocated Qty'      'Alloc Qty'    15  ' '.
+  add_field 13  'ACTQTY'             'Actual Qty'         'Act Qty'      15  ' '.
+  add_field 14  'TKT_STATUS'         'Ticket Status'      'Tkt Stat'     20  ' '.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_ALV
@@ -755,6 +755,20 @@ FORM delete_nominations.
 *           RETURN        = RETURN
           .
 *       Delete OIJNOMH header based on NOMTYP
+        IF lv_nomtyp = 'GITA'.
+          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+        ELSEIF lv_nomtyp = 'GISA'.
+          CLEAR lv_live_count.
+          SELECT COUNT(*) FROM oijnomi
+            INTO lv_live_count
+            WHERE nomtk = gs_output-nomtk
+              AND delind NE 'X'.
+          IF lv_live_count = 0.
+            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+          ENDIF.
+        ENDIF.
       ELSE.
 *DATA WAIT   TYPE BAPITA-WAIT.
 *DATA RETURN TYPE BAPIRET2.
