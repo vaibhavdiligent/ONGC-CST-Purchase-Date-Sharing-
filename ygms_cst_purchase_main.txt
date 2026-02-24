@@ -1289,11 +1289,11 @@ FORM save_data_to_db.
   DATA: lt_gail_ids     TYPE TABLE OF yrga_cst_pur-gail_id,
         lv_gail_count   TYPE i,
         lv_gail_id_str  TYPE string.
-  " Get current timestamp - format as YYYYMMDDHHmmSS (14 chars)
+  " Get current timestamp in UTC - format as YYYYMMDDHHmmSS (14 chars)
   DATA: lv_ts_date TYPE sy-datum,
         lv_ts_time TYPE sy-uzeit.
   GET TIME STAMP FIELD lv_timestamp.
-  CONVERT TIME STAMP lv_timestamp TIME ZONE sy-zonlo
+  CONVERT TIME STAMP lv_timestamp TIME ZONE 'UTC'
     INTO DATE lv_ts_date TIME lv_ts_time.
   CONCATENATE lv_ts_date lv_ts_time INTO lv_ts_char.
   " Generate GAIL_ID prefix: GA + YYMM + F1/F2
