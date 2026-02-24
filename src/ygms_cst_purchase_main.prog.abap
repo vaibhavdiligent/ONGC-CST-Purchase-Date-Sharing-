@@ -4,6 +4,7 @@
 *& Version: 4.0 - Editable ALV with buttons
 *&---------------------------------------------------------------------*
 REPORT ygms_cst_purchase_main.
+TABLES : yrga_cst_pur.
 *----------------------------------------------------------------------*
 * Type Definitions
 *----------------------------------------------------------------------*
@@ -104,7 +105,10 @@ TYPES: BEGIN OF ty_final1,
 DATA: gv_loc_id TYPE ygms_de_loc_id.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_loc  FOR gv_loc_id OBLIGATORY,
-                  s_date FOR sy-datum OBLIGATORY.
+                  s_date FOR sy-datum OBLIGATORY,
+                  s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
+  PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
+              p_view  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
 *----------------------------------------------------------------------*
 * Global Data
@@ -127,6 +131,7 @@ DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
       it_final         TYPE TABLE OF ty_final,
       it_final_main    TYPE TABLE OF ty_final1,
       wa_final_main    TYPE ty_final1.
+DATA gt_cst_b2b_1 TYPE TABLE OF yrga_cst_b2b_1.
 * Flags for button visibility and state
 DATA: gv_allocated    TYPE abap_bool VALUE abap_false,  " Allocation done flag
       gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
@@ -216,7 +221,11 @@ START-OF-SELECTION.
   PERFORM map_location_ids.
   PERFORM map_material_names.
   PERFORM fetch_data_yrxr098.
-  PERFORM build_alv_display_table.
+  IF p_view IS INITIAL.
+    PERFORM build_alv_display_table.
+  ELSE.
+    PERFORM build_alv_display_table_view.
+  ENDIF.
   PERFORM display_editable_alv.
 *&---------------------------------------------------------------------*
 *& Form FETCH_LOCATION_CTP_MAPPINGS
@@ -277,15 +286,8 @@ FORM fetch_b2b_data.
     RETURN.
   ENDIF.
   IF lt_b2b_data[] IS NOT INITIAL.
-    SORT lt_b2b_data BY time_stamp DESCENDING.
-*    DELETE ADJACENT DUPLICATES FROM lt_b2b_data COMPARING
-    READ TABLE lt_b2b_data  into data(wa_tab) index 1.
-    if sy-subrc = 0.
-      delete lt_b2b_data  where time_stamp <> wa_tab-time_stamp.
-    endif.
-*    gas_day
-*  ctp_id
-*  ongc_material.
+    SORT lt_b2b_data BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_b2b_data COMPARING ctp_id gas_day ongc_material.
   ENDIF.
   LOOP AT lt_b2b_data INTO DATA(ls_b2b).
     DATA(ls_receipt) = VALUE ty_gas_receipt(
@@ -314,6 +316,7 @@ FORM fetch_b2b_data.
   ENDLOOP.
   DATA(lv_count) = lines( gt_gas_receipt ).
   MESSAGE s000(ygms_msg) WITH lv_count 'B2B records fetched'.
+  MOVE lt_b2b_data[] TO gt_cst_b2b_1[].
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form MAP_LOCATION_IDS
@@ -372,6 +375,8 @@ FORM map_material_names.
     SORT gt_gas_receipt BY material.
     DELETE gt_gas_receipt WHERE material NOT IN r_matnr.
   ENDIF.
+  SORT gt_gas_receipt BY material.
+  DELETE gt_gas_receipt WHERE material NOT IN s_matnr.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form FETCH_DATA_YRXR098
@@ -396,6 +401,8 @@ FORM fetch_data_yrxr098.
       APPEND wa_final_main TO it_final_main.
     ENDLOOP.
   ENDLOOP.
+  SORT it_final_main BY matnr.
+  DELETE it_final_main WHERE matnr NOT IN s_matnr.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_ALV_DISPLAY_TABLE
@@ -427,6 +434,30 @@ FORM build_alv_display_table.
     ls_alv-material   = wa_final_main-matnr.
     ls_alv-location_id = wa_final_main-empst.
     APPEND ls_alv TO gt_alv_display.
+  ENDLOOP.
+  DATA it_gas_receipt TYPE TABLE OF ty_gas_receipt.
+  MOVE gt_gas_receipt[] TO it_gas_receipt[].
+  SORT it_gas_receipt BY location_id material.
+  DELETE ADJACENT DUPLICATES FROM it_gas_receipt COMPARING location_id material.
+  LOOP AT it_gas_receipt INTO DATA(wa_gas_temp).
+    READ TABLE gt_alv_display TRANSPORTING NO FIELDS
+      WITH KEY location_id = wa_gas_temp-location_id
+               material    = wa_gas_temp-material
+               state_code  = 'GJ'.
+    IF sy-subrc <> 0.
+      CLEAR ls_alv.
+      ls_alv-state_code  = 'GJ'.
+      ls_alv-state       = 'Gujrat'.
+      ls_alv-material    = wa_gas_temp-material.
+      ls_alv-location_id = wa_gas_temp-location_id.
+      APPEND ls_alv TO gt_alv_display.
+      CLEAR wa_final_main.
+      wa_final_main-empst      = wa_gas_temp-location_id.
+      wa_final_main-regio      = 'GJ'.
+      wa_final_main-regio_desc = 'Gujrat'.
+      wa_final_main-matnr      = wa_gas_temp-material.
+      APPEND wa_final_main TO it_final_main.
+    ENDIF.
   ENDLOOP.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -547,6 +578,7 @@ FORM display_editable_alv.
   gs_layout-sel_mode   = 'A'.
   gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
   gs_layout-stylefname = 'CELLTAB'.  " Cell style field for row-level edit control
+  SORT gt_alv_display BY state location_id material.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
       i_callback_program       = sy-repid
@@ -1263,7 +1295,7 @@ FORM save_data_to_db.
   GET TIME STAMP FIELD lv_timestamp.
   CONVERT TIME STAMP lv_timestamp TIME ZONE sy-zonlo
     INTO DATE lv_ts_date TIME lv_ts_time.
-  CONCATENATE lv_ts_date lv_ts_time INTO lv_ts_char.
+  lv_ts_char = lv_timestamp.
   " Generate GAIL_ID prefix: GA + YYMM + F1/F2
   DATA(lv_day) = gv_date_from+6(2).
   IF lv_day <= 15.
@@ -1301,7 +1333,7 @@ FORM save_data_to_db.
     ENDIF.
   ENDLOOP.
   " Second pass: Create daily records for YRGA_CST_PUR
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  LOOP AT gt_alv_display INTO gs_alv_display ."WHERE exclude IS INITIAL.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id = gs_alv_display-location_id
                material    = gs_alv_display-material
@@ -1381,7 +1413,7 @@ FORM save_data_to_db.
           ls_cst_pur-qty_in_mbg = c_tgqty.
         ENDIF.
         ls_cst_pur-gail_id      = ls_gail_id_map-gail_id.
-*        ls_cst_pur-exclude      = gs_alv_display-exclude.
+        ls_cst_pur-exclude      = gs_alv_display-exclude.
         ls_cst_pur-created_by   = sy-uname.
         ls_cst_pur-created_date = sy-datum.
         ls_cst_pur-created_time = sy-uzeit.
@@ -1665,5 +1697,65 @@ FORM recalculate_totals.
   " Refresh ALV display
   IF lr_grid IS BOUND.
     lr_grid->refresh_table_display( ).
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form build_alv_display_table_view
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& --> p1        text
+*& <-- p2        text
+*&---------------------------------------------------------------------*
+FORM build_alv_display_table_view .
+  DATA it_cst_pur_temp TYPE TABLE OF yrga_cst_pur.
+  DATA ls_alv TYPE ty_alv_display.
+  DATA l_day TYPE char10.
+  DATA l_index(2) TYPE n.
+  DATA l_ncv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
+  DATA l_gcv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
+  DATA l_day_sm3 TYPE p DECIMALS 6.
+  SELECT * INTO TABLE @DATA(it_yrga_cst_pur)
+    FROM yrga_cst_pur
+    WHERE gas_day IN @s_date
+      AND location IN @s_loc.
+  IF sy-subrc = 0.
+    SORT it_yrga_cst_pur BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM it_yrga_cst_pur COMPARING gas_day location material state_code.
+    MOVE it_yrga_cst_pur[] TO it_cst_pur_temp[].
+    SORT it_cst_pur_temp BY location material state_code.
+    DELETE ADJACENT DUPLICATES FROM it_cst_pur_temp COMPARING location material state_code.
+    SORT it_yrga_cst_pur BY gas_day location material state_code.
+    LOOP AT it_cst_pur_temp INTO DATA(wa_csr_pur_temp).
+      LOOP AT it_yrga_cst_pur INTO DATA(wa_yrga_cst_pur)
+        WHERE location   = wa_csr_pur_temp-location
+          AND material   = wa_csr_pur_temp-material
+          AND state_code = wa_csr_pur_temp-state_code.
+        ls_alv-state_code  = wa_yrga_cst_pur-state_code.
+        ls_alv-state       = wa_yrga_cst_pur-state.
+        ls_alv-material    = wa_yrga_cst_pur-material.
+        ls_alv-location_id = wa_yrga_cst_pur-location.
+        ls_alv-exclude     = wa_yrga_cst_pur-exclude.
+        CLEAR l_index.
+        DO 15 TIMES .
+          l_index = l_index + 1.
+          CLEAR l_day.
+          CONCATENATE 'DAY' l_index INTO l_day.
+          ASSIGN COMPONENT l_day OF STRUCTURE ls_alv TO FIELD-SYMBOL(<fs_day>).
+          IF sy-subrc = 0.
+            <fs_day> = wa_yrga_cst_pur-qty_in_scm.
+            ls_alv-total_mbg = ls_alv-total_mbg + wa_yrga_cst_pur-qty_in_mbg.
+            ls_alv-total_scm = ls_alv-total_scm + <fs_day>.
+            l_gcv = ( <fs_day> * wa_yrga_cst_pur-gcv ) + l_gcv.
+            l_ncv = ( <fs_day> * wa_yrga_cst_pur-ncv ) + l_ncv.
+          ENDIF.
+        ENDDO.
+      ENDLOOP.
+      ls_alv-gcv = l_gcv / ls_alv-total_scm.
+      ls_alv-ncv = l_ncv / ls_alv-total_scm.
+      APPEND ls_alv TO gt_alv_display.
+    ENDLOOP.
+    CLEAR: ls_alv.
+    CLEAR : l_gcv, l_ncv.
   ENDIF.
 ENDFORM.
