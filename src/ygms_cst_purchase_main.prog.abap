@@ -1295,7 +1295,7 @@ FORM save_data_to_db.
   GET TIME STAMP FIELD lv_timestamp.
   CONVERT TIME STAMP lv_timestamp TIME ZONE sy-zonlo
     INTO DATE lv_ts_date TIME lv_ts_time.
-  lv_ts_char = lv_timestamp.
+  CONCATENATE lv_ts_date lv_ts_time INTO lv_ts_char.
   " Generate GAIL_ID prefix: GA + YYMM + F1/F2
   DATA(lv_day) = gv_date_from+6(2).
   IF lv_day <= 15.
@@ -1358,67 +1358,65 @@ FORM save_data_to_db.
         WHEN 14. lv_day_qty = gs_alv_display-day14.
         WHEN 15. lv_day_qty = gs_alv_display-day15.
       ENDCASE.
-      IF lv_day_qty > 0.
-        CLEAR ls_cst_pur.
-        ls_cst_pur-gas_day      = lv_date.
-        ls_cst_pur-location     = gs_alv_display-location_id.
-        ls_cst_pur-material     = gs_alv_display-material.
-        ls_cst_pur-state_code   = gs_alv_display-state_code.
-        ls_cst_pur-state        = gs_alv_display-state.
-        " Get CTP, ONGC material, and GCV/NCV from gas receipt (supply table)
-        " 2.4a: GCV/NCV values from supply table per Gas Day + Location ID
-        READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
+      CLEAR ls_cst_pur.
+      ls_cst_pur-gas_day      = lv_date.
+      ls_cst_pur-location     = gs_alv_display-location_id.
+      ls_cst_pur-material     = gs_alv_display-material.
+      ls_cst_pur-state_code   = gs_alv_display-state_code.
+      ls_cst_pur-state        = gs_alv_display-state.
+      " Get CTP, ONGC material, and GCV/NCV from gas receipt (supply table)
+      " 2.4a: GCV/NCV values from supply table per Gas Day + Location ID
+      READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
+        WITH KEY location_id = gs_alv_display-location_id
+                 material    = gs_alv_display-material
+                 gas_day     = lv_date.
+      IF sy-subrc = 0.
+        ls_cst_pur-ctp         = ls_receipt-ctp_id.
+        ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
+        ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
+        ls_cst_pur-gcv         = ls_receipt-gcv.
+        ls_cst_pur-ncv         = ls_receipt-ncv.
+      ELSE.
+        READ TABLE gt_gas_receipt INTO ls_receipt
           WITH KEY location_id = gs_alv_display-location_id
-                   material    = gs_alv_display-material
-                   gas_day     = lv_date.
+                   material    = gs_alv_display-material.
         IF sy-subrc = 0.
           ls_cst_pur-ctp         = ls_receipt-ctp_id.
           ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
           ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
           ls_cst_pur-gcv         = ls_receipt-gcv.
           ls_cst_pur-ncv         = ls_receipt-ncv.
-        ELSE.
-          READ TABLE gt_gas_receipt INTO ls_receipt
-            WITH KEY location_id = gs_alv_display-location_id
-                     material    = gs_alv_display-material.
-          IF sy-subrc = 0.
-            ls_cst_pur-ctp         = ls_receipt-ctp_id.
-            ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
-            ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
-            ls_cst_pur-gcv         = ls_receipt-gcv.
-            ls_cst_pur-ncv         = ls_receipt-ncv.
-          ENDIF.
         ENDIF.
-        ls_cst_pur-time_stamp   = lv_ts_char.
-        ls_cst_pur-qty_in_scm   = lv_day_qty.
-        " Calculate SCM for this day's quantity using supply GCV/NCV
-        DATA: c_tgqty TYPE msego2-adqnt,
-              i_trqty TYPE msego2-adqnt,
-              lv_gcv  TYPE oib_par_fltp,
-              lv_ncv  TYPE oib_par_fltp.
-        IF ls_cst_pur-gcv > 0.
-          CLEAR c_tgqty.
-          i_trqty = lv_day_qty.
-          lv_gcv  = ls_cst_pur-gcv.
-          lv_ncv  = ls_cst_pur-ncv.
-          CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-            EXPORTING
-              i_trqty = i_trqty
-              i_truom = 'SM3'
-              i_tguom = 'MBG'
-              lv_gcv  = lv_gcv
-              lv_ncv  = lv_ncv
-            CHANGING
-              c_tgqty = c_tgqty.
-          ls_cst_pur-qty_in_mbg = c_tgqty.
-        ENDIF.
-        ls_cst_pur-gail_id      = ls_gail_id_map-gail_id.
-        ls_cst_pur-exclude      = gs_alv_display-exclude.
-        ls_cst_pur-created_by   = sy-uname.
-        ls_cst_pur-created_date = sy-datum.
-        ls_cst_pur-created_time = sy-uzeit.
-        APPEND ls_cst_pur TO lt_cst_pur.
       ENDIF.
+      ls_cst_pur-time_stamp   = lv_ts_char.
+      ls_cst_pur-qty_in_scm   = lv_day_qty.
+      " Calculate MBG for this day's quantity using supply GCV/NCV
+      DATA: c_tgqty TYPE msego2-adqnt,
+            i_trqty TYPE msego2-adqnt,
+            lv_gcv  TYPE oib_par_fltp,
+            lv_ncv  TYPE oib_par_fltp.
+      IF ls_cst_pur-gcv > 0 AND lv_day_qty > 0.
+        CLEAR c_tgqty.
+        i_trqty = lv_day_qty.
+        lv_gcv  = ls_cst_pur-gcv.
+        lv_ncv  = ls_cst_pur-ncv.
+        CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+          EXPORTING
+            i_trqty = i_trqty
+            i_truom = 'SM3'
+            i_tguom = 'MBG'
+            lv_gcv  = lv_gcv
+            lv_ncv  = lv_ncv
+          CHANGING
+            c_tgqty = c_tgqty.
+        ls_cst_pur-qty_in_mbg = c_tgqty.
+      ENDIF.
+      ls_cst_pur-gail_id      = ls_gail_id_map-gail_id.
+      ls_cst_pur-exclude      = gs_alv_display-exclude.
+      ls_cst_pur-created_by   = sy-uname.
+      ls_cst_pur-created_date = sy-datum.
+      ls_cst_pur-created_time = sy-uzeit.
+      APPEND ls_cst_pur TO lt_cst_pur.
       lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
@@ -1439,13 +1437,33 @@ FORM save_data_to_db.
       lv_sum_vol_gcv = lv_sum_vol_gcv + ( ls_cst_pur-qty_in_scm * ls_cst_pur-gcv ).
       lv_sum_vol_ncv = lv_sum_vol_ncv + ( ls_cst_pur-qty_in_scm * ls_cst_pur-ncv ).
       lv_total_vol   = lv_total_vol + ls_cst_pur-qty_in_scm.
-      " Get CTP and ONGC material (from first record)
-      IF ls_cst_fnt-ctp IS INITIAL.
+      " Get CTP and ONGC material (from first record with values)
+      IF ls_cst_fnt-ctp IS INITIAL AND ls_cst_pur-ctp IS NOT INITIAL.
         ls_cst_fnt-ctp        = ls_cst_pur-ctp.
         ls_cst_fnt-ongc_mater = ls_cst_pur-ongc_mater.
         ls_cst_fnt-state      = ls_cst_pur-state.
       ENDIF.
     ENDLOOP.
+    " Fallback: if CTP still not set, get from gas receipt directly
+    IF ls_cst_fnt-ctp IS INITIAL.
+      READ TABLE gt_gas_receipt INTO DATA(ls_fnt_receipt)
+        WITH KEY location_id = ls_gail_id_map-location_id
+                 material    = ls_gail_id_map-material.
+      IF sy-subrc = 0.
+        ls_cst_fnt-ctp        = ls_fnt_receipt-ctp_id.
+        ls_cst_fnt-ongc_mater = ls_fnt_receipt-ongc_material.
+      ENDIF.
+    ENDIF.
+    " Get state description from ALV display if not yet set
+    IF ls_cst_fnt-state IS INITIAL.
+      READ TABLE gt_alv_display INTO gs_alv_display
+        WITH KEY location_id = ls_gail_id_map-location_id
+                 material    = ls_gail_id_map-material
+                 state_code  = ls_gail_id_map-state_code.
+      IF sy-subrc = 0.
+        ls_cst_fnt-state = gs_alv_display-state.
+      ENDIF.
+    ENDIF.
     " Calculate weighted average GCV/NCV
     IF lv_total_vol > 0.
       lv_avg_gcv = lv_sum_vol_gcv / lv_total_vol.
