@@ -428,7 +428,8 @@ FORM determine_tkt_status USING    ps_nom       TYPE oijnomi
           indicator      = lv_indicator
         TABLES
           et_nominations = et_nominations.
-      IF sy-subrc = 0 AND lv_indicator = 'C'.
+      IF sy-subrc = 0 AND ( lv_indicator = 'C' ).
+*        or  lv_indicator = '4' ).
         pv_status = 'ticket present'.
       ENDIF.
     ELSEIF lv_prefix = 'V'.
@@ -452,7 +453,7 @@ FORM determine_tkt_status USING    ps_nom       TYPE oijnomi
       EXPORTING
         i_kunnr         = ps_nom-partnr
         i_date          = ps_nom-idate
-        ticket_complete = 'X'
+        ticket_complete = ' '
       IMPORTING
         indicator       = lv_indicator.
     IF sy-subrc = 0 AND lv_indicator = 'A'.
@@ -632,7 +633,16 @@ FORM delete_nominations.
     FROM oijnomh
     FOR ALL ENTRIES IN @gt_output
     WHERE
-    nomtk = @gt_output-nomtk.
+    nomtk = @gt_output-nomtk
+    and
+    delind <> 'X'.
+    select * into TABLE @data(it_oijnomi)
+      from oijnomi
+          FOR ALL ENTRIES IN @gt_output
+    WHERE
+    nomtk = @gt_output-nomtk
+      and
+      delind <> 'X'.
 * Process selected nominations
   LOOP AT gt_output INTO gs_output." WHERE sel = 'X'.
     READ TABLE it_oijnomh INTO DATA(l_oijnomh)
@@ -649,7 +659,7 @@ FORM delete_nominations.
 *    ls_nom_header-nomtk = gs_output-nomtk.
     MOVE-CORRESPONDING l_oijnomh TO ls_nom_header.
     CLEAR lv_nomtyp.
-    lv_nomtyp = l_oijnomh-nomtyp.
+    lv_nomtyp = gs_output-nomtyp.
 *    SELECT SINGLE nomtyp FROM oijnomh
 *      INTO lv_nomtyp
 *      WHERE nomtk = gs_output-nomtk.
@@ -662,36 +672,64 @@ FORM delete_nominations.
     ELSEIF lv_nomtyp = 'GISA'.
 *         GISA: delete header only if no other live items remain
       CLEAR lv_live_count.
-      SELECT COUNT(*) FROM oijnomi
-        INTO lv_live_count
-        WHERE nomtk = gs_output-nomtk
-        AND nomit = gs_output-nomit
-          AND delind NE 'X'.
+      SELECT * INTO TABLE @DATA(LT_OIJNOMI_TEMP)
+        FROM OIJNOMI
+        WHERE
+        NOMTK = @L_OIJNOMH-NOMTK
+        AND
+        DELIND <> 'X'.
+        IF SY-SUBRC = 0.
+          DESCRIBE TABLE LT_OIJNOMI_TEMP LINES lv_live_count.
+          LOOP AT GT_OUTPUT INTO DATA(LS_OUTPUT_TEMP) WHERE
+            NOMTK = GS_OUTPUT-NOMTK.
+          READ TABLE LT_OIJNOMI_TEMP TRANSPORTING NO FIELDS
+          WITH KEY NOMTK = LS_OUTPUT_TEMP-NOMTK
+          NOMIT = LS_OUTPUT_TEMP-NOMIT.
+          IF SY-SUBRC = 0.
+            LV_LIVE_COUNT = LV_LIVE_COUNT - 1.
+          ENDIF.
+          ENDLOOP.
+*          READ TABLE GT_OUTPUT TRANSPORTING NO FIELDS
+*          WITH KEY
+*      SELECT COUNT(*) FROM oijnomi
+*        INTO lv_live_count
+*        FOR ALL ENTRIES IN gt_output
+*        WHERE nomtk = gt_output-nomtk
+**        AND nomit <> gt_output-nomit
+*          AND delind NE 'X'.
       IF lv_live_count = 0.
         ls_nom_header-updkz = 'U'.
         ls_nom_header-delind = 'X'.
 *            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
 *            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
       ENDIF.
+      ENDIF.
     ENDIF.
     LOOP AT gt_output INTO DATA(ls_item)
       WHERE nomtk = gs_output-nomtk." AND sel = 'X'.
       CLEAR ls_nom_item.
-      ls_nom_item-nomtk  = ls_item-nomtk.
-      ls_nom_item-nomit  = ls_item-nomit.
-      ls_nom_item-locid  = ls_item-locid.
-      ls_nom_item-idate  = ls_item-idate.
-      ls_nom_item-docnr  = ls_item-docnr.
-      ls_nom_item-partnr = ls_item-partnr.
-      ls_nom_item-sityp  = ls_item-sityp.
+      read TABLE it_oijnomi into data(wa_oijnomi)
+      with key
+      nomtk = ls_item-nomtk
+      nomit = ls_item-nomit.
+      if sy-subrc = 0.
+        MOVE-CORRESPONDING wa_oijnomi to ls_nom_item.
+*      ls_nom_item-nomtk  = ls_item-nomtk.
+*      ls_nom_item-nomit  = ls_item-nomit.
+*      ls_nom_item-locid  = ls_item-locid.
+*      ls_nom_item-idate  = ls_item-idate.
+*      ls_nom_item-docnr  = ls_item-docnr.
+*      ls_nom_item-partnr = ls_item-partnr.
+*      ls_nom_item-sityp  = ls_item-sityp.
       ls_nom_item-delind = 'X'.
       ls_nom_item-updkz = 'U'.
       APPEND ls_nom_item TO lt_nom_items.
-      CLEAR ls_nom_item_x.
-      ls_nom_item_x-nomtk  = ls_item-nomtk.
-      ls_nom_item_x-nomit  = ls_item-nomit.
-      ls_nom_item_x-delind = 'X'.
-      APPEND ls_nom_item_x TO lt_nom_items_x.
+*      CLEAR ls_nom_item_x.
+*      ls_nom_item_x-nomtk  = ls_item-nomtk.
+*      ls_nom_item_x-nomit  = ls_item-nomit.
+*      ls_nom_item_x-delind = 'X'.
+*      APPEND ls_nom_item_x TO lt_nom_items_x.
+        endif.
     ENDLOOP.
     CALL FUNCTION 'OIJ_NOM_MAINTAIN'
       EXPORTING
@@ -759,20 +797,20 @@ FORM delete_nominations.
 *           RETURN        = RETURN
           .
 *       Delete OIJNOMH header based on NOMTYP
-        IF lv_nomtyp = 'GITA'.
-          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
-          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
-        ELSEIF lv_nomtyp = 'GISA'.
-          CLEAR lv_live_count.
-          SELECT COUNT(*) FROM oijnomi
-            INTO lv_live_count
-            WHERE nomtk = gs_output-nomtk
-              AND delind NE 'X'.
-          IF lv_live_count = 0.
-            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
-            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
-          ENDIF.
-        ENDIF.
+*        IF lv_nomtyp = 'GITA'.
+*          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+*          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+*        ELSEIF lv_nomtyp = 'GISA'.
+*          CLEAR lv_live_count.
+*          SELECT COUNT(*) FROM oijnomi
+*            INTO lv_live_count
+*            WHERE nomtk = gs_output-nomtk
+*              AND delind NE 'X'.
+*          IF lv_live_count = 0.
+*            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
+*            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+*          ENDIF.
+*        ENDIF.
       ELSE.
 *DATA WAIT   TYPE BAPITA-WAIT.
 *DATA RETURN TYPE BAPIRET2.
