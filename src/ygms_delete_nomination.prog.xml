@@ -19,9 +19,39 @@
     </item>
     <item>
      <ID>I</ID>
+     <KEY>B00</KEY>
+     <ENTRY>Selection Type</ENTRY>
+     <LENGTH>14</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
      <KEY>B01</KEY>
-     <ENTRY>Selection Criteria</ENTRY>
-     <LENGTH>18</LENGTH>
+     <ENTRY>Contractual Nomination Deletion</ENTRY>
+     <LENGTH>32</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>B02</KEY>
+     <ENTRY>OD2 Nomination Deletion</ENTRY>
+     <LENGTH>23</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>M10</KEY>
+     <ENTRY>Non-GAIL Customer is not valid</ENTRY>
+     <LENGTH>30</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>M11</KEY>
+     <ENTRY>GAIL Location is not valid</ENTRY>
+     <LENGTH>26</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>M12</KEY>
+     <ENTRY>Location belongs to Non-GAIL pipeline</ENTRY>
+     <LENGTH>37</LENGTH>
     </item>
    </TPOOL>
   </asx:values>
