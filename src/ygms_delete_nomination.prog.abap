@@ -69,7 +69,8 @@ SELECTION-SCREEN END OF BLOCK b00.
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   SELECT-OPTIONS: s_docnr FOR oijnomi-docnr NO INTERVALS MODIF ID RB1,
                   s_idate FOR oijnomi-idate  NO-EXTENSION OBLIGATORY MODIF ID RB1,
-                  s_locid FOR oijnomi-locid NO INTERVALS MODIF ID RB1.
+                  s_locid FOR oijnomi-locid NO INTERVALS MODIF ID RB1,
+                  s_kunid FOR gv_kunnr       NO INTERVALS MODIF ID RB1.
 SELECTION-SCREEN END OF BLOCK b01.
 
 SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
@@ -160,16 +161,36 @@ FORM validate_input.
         lv_msg            TYPE char200,
         lv_pblnr          TYPE oifspbl-pblnr,
         lv_pbltyp         TYPE oifspbl-pbltyp.
+  DATA: lv_locid_tmp TYPE oijnomi-locid.
   FIELD-SYMBOLS: <ls_docnr> LIKE LINE OF s_docnr,
                  <ls_idate> LIKE LINE OF s_idate,
-                 <ls_locid> LIKE LINE OF s_locid.
+                 <ls_locid> LIKE LINE OF s_locid,
+                 <ls_kunid> LIKE LINE OF s_kunid.
   CLEAR: gt_errors, lv_error.
-* Validation 1: User must enter either Contract ID or Location ID or both
-  IF s_docnr[] IS INITIAL AND s_locid[] IS INITIAL.
+* Validation 1: User must enter either Contract ID or Location ID or Customer ID
+  IF s_docnr[] IS INITIAL AND s_locid[] IS INITIAL AND s_kunid[] IS INITIAL.
     gs_error-msgty = 'E'.
-    gs_error-msgtx = 'Please enter either Contract ID or Location ID or both'(m05).
+    gs_error-msgtx = 'Please enter atleast Contract ID/ Location ID/ Customer ID'(m05).
     APPEND gs_error TO gt_errors.
     lv_error = abap_true.
+  ENDIF.
+* Validation: Check Customer IDs against OIJRRA
+  IF s_kunid[] IS NOT INITIAL.
+    LOOP AT s_kunid ASSIGNING <ls_kunid>.
+      CLEAR lv_locid_tmp.
+      SELECT SINGLE locid FROM oijrra
+        INTO lv_locid_tmp
+        WHERE kunnr = <ls_kunid>-low
+          AND delind NE 'X'.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        CONCATENATE 'Customer' <ls_kunid>-low 'is not TSW Partner'
+          INTO lv_msg SEPARATED BY space.
+        gs_error-msgtx = lv_msg.
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
 * Validation 2: Check each Contract ID against VBAK
   IF s_docnr[] IS NOT INITIAL.
@@ -537,6 +558,7 @@ FORM fetch_nominations.
     INTO TABLE gt_oijnomi
     WHERE docnr IN s_docnr
       AND locid IN s_locid
+      AND partnr IN s_kunid
       AND idate IN s_idate
       AND delind NE 'X'.
   IF sy-subrc NE 0.
@@ -975,9 +997,11 @@ FORM delete_nominations.
   DATA: lv_answer    TYPE char1,
         lv_count     TYPE i,
         lv_fail      TYPE i,
+        lv_skip      TYPE i,
         lv_sel_count TYPE i,
         lv_count_c   TYPE char10,
         lv_fail_c    TYPE char10,
+        lv_skip_c    TYPE char10,
         lv_msg       TYPE char200.
   DATA: ls_nom_header   TYPE roijnomhio,
         ls_nom_header_x TYPE oijnomh,
@@ -987,11 +1011,13 @@ FORM delete_nominations.
         ls_nom_item_x   TYPE oijnomi,
         lt_return       TYPE STANDARD TABLE OF bapiret2,
         ls_return       TYPE bapiret2,
-        lv_has_error    TYPE abap_bool.
+        lv_has_error    TYPE abap_bool,
+        lv_has_ticket   TYPE abap_bool.
   DATA: lv_nomtyp     TYPE oijnomh-nomtyp,
         lv_live_count TYPE i.
   DATA: lt_nomtk_processed TYPE SORTED TABLE OF oijnomi-nomtk
                            WITH UNIQUE KEY table_line.
+  DATA: lv_tkt_skipped TYPE abap_bool.
 * Count selected rows
   LOOP AT gt_output INTO gs_output ."WHERE sel = 'X'.
     lv_sel_count = lv_sel_count + 1.
@@ -1021,6 +1047,8 @@ FORM delete_nominations.
   CHECK lv_answer = '1'.
   lv_count = 0.
   lv_fail  = 0.
+  lv_skip  = 0.
+  lv_tkt_skipped = abap_false.
   SELECT  * INTO TABLE @DATA(it_oijnomh)
     FROM oijnomh
     FOR ALL ENTRIES IN @gt_output
@@ -1052,15 +1080,47 @@ FORM delete_nominations.
     MOVE-CORRESPONDING l_oijnomh TO ls_nom_header.
     CLEAR lv_nomtyp.
     lv_nomtyp = gs_output-nomtyp.
-*    SELECT SINGLE nomtyp FROM oijnomh
-*      INTO lv_nomtyp
-*      WHERE nomtk = gs_output-nomtk.
+*   Check ticket status before deletion
+    CLEAR lv_has_ticket.
+    IF lv_nomtyp = 'GISA'.
+*     GISA: if any item of this NOMTK has ticket present, skip entire NOMTK
+      LOOP AT gt_output INTO DATA(ls_tkt_chk)
+        WHERE nomtk = gs_output-nomtk.
+        IF ls_tkt_chk-tkt_status = 'ticket present'.
+          lv_has_ticket = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_has_ticket = abap_true.
+        LOOP AT gt_output TRANSPORTING NO FIELDS
+          WHERE nomtk = gs_output-nomtk.
+          lv_skip = lv_skip + 1.
+        ENDLOOP.
+        lv_tkt_skipped = abap_true.
+        CONTINUE.
+      ENDIF.
+    ELSEIF lv_nomtyp = 'GITA'.
+*     GITA: if any item has ticket present, skip this NOMTK
+*     and also skip the related ZO/K nominations with same NOMTK
+      LOOP AT gt_output INTO DATA(ls_tkt_chk2)
+        WHERE nomtk = gs_output-nomtk.
+        IF ls_tkt_chk2-tkt_status = 'ticket present'.
+          lv_has_ticket = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_has_ticket = abap_true.
+        LOOP AT gt_output TRANSPORTING NO FIELDS
+          WHERE nomtk = gs_output-nomtk.
+          lv_skip = lv_skip + 1.
+        ENDLOOP.
+        lv_tkt_skipped = abap_true.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
     IF lv_nomtyp = 'GITA'.
       ls_nom_header-updkz = 'U'.
       ls_nom_header-delind = 'X'.
-*         GITA: always delete the header
-*          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
-*          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
     ELSEIF lv_nomtyp = 'GISA'.
 *         GISA: delete header only if no other live items remain
       CLEAR lv_live_count.
@@ -1081,19 +1141,9 @@ FORM delete_nominations.
             LV_LIVE_COUNT = LV_LIVE_COUNT - 1.
           ENDIF.
           ENDLOOP.
-*          READ TABLE GT_OUTPUT TRANSPORTING NO FIELDS
-*          WITH KEY
-*      SELECT COUNT(*) FROM oijnomi
-*        INTO lv_live_count
-*        FOR ALL ENTRIES IN gt_output
-*        WHERE nomtk = gt_output-nomtk
-**        AND nomit <> gt_output-nomit
-*          AND delind NE 'X'.
       IF lv_live_count = 0.
         ls_nom_header-updkz = 'U'.
         ls_nom_header-delind = 'X'.
-*            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
-*            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
       ENDIF.
       ENDIF.
     ENDIF.
@@ -1106,21 +1156,9 @@ FORM delete_nominations.
       nomit = ls_item-nomit.
       if sy-subrc = 0.
         MOVE-CORRESPONDING wa_oijnomi to ls_nom_item.
-*      ls_nom_item-nomtk  = ls_item-nomtk.
-*      ls_nom_item-nomit  = ls_item-nomit.
-*      ls_nom_item-locid  = ls_item-locid.
-*      ls_nom_item-idate  = ls_item-idate.
-*      ls_nom_item-docnr  = ls_item-docnr.
-*      ls_nom_item-partnr = ls_item-partnr.
-*      ls_nom_item-sityp  = ls_item-sityp.
       ls_nom_item-delind = 'X'.
       ls_nom_item-updkz = 'U'.
       APPEND ls_nom_item TO lt_nom_items.
-*      CLEAR ls_nom_item_x.
-*      ls_nom_item_x-nomtk  = ls_item-nomtk.
-*      ls_nom_item_x-nomit  = ls_item-nomit.
-*      ls_nom_item_x-delind = 'X'.
-*      APPEND ls_nom_item_x TO lt_nom_items_x.
         endif.
     ENDLOOP.
     CALL FUNCTION 'OIJ_NOM_MAINTAIN'
@@ -1214,15 +1252,21 @@ FORM delete_nominations.
       CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
     ENDIF.
   ENDLOOP.
+* Show info message if any nominations were skipped due to ticket
+  IF lv_tkt_skipped = abap_true.
+    MESSAGE 'Some nominations are not deleted as Ticket is present against location/customer'(m13)
+      TYPE 'S' DISPLAY LIKE 'W'.
+  ENDIF.
 * Results
   IF lv_count > 0.
     lv_count_c = lv_count.
     CONDENSE lv_count_c.
-    IF lv_fail > 0.
-      lv_fail_c = lv_fail.
-      CONDENSE lv_fail_c.
-      CONCATENATE lv_count_c 'nomination(s) deleted successfully.'
-                  lv_fail_c 'nomination(s) failed.'
+    IF lv_fail > 0 OR lv_skip > 0.
+      lv_fail_c = lv_fail. CONDENSE lv_fail_c.
+      lv_skip_c = lv_skip. CONDENSE lv_skip_c.
+      CONCATENATE lv_count_c 'nomination(s) deleted.'
+                  lv_fail_c 'failed.'
+                  lv_skip_c 'skipped (ticket present).'
         INTO lv_msg SEPARATED BY space.
       MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
     ELSE.
@@ -1230,6 +1274,12 @@ FORM delete_nominations.
         INTO lv_msg SEPARATED BY space.
       MESSAGE lv_msg TYPE 'S'.
     ENDIF.
+  ELSEIF lv_skip > 0.
+    lv_skip_c = lv_skip. CONDENSE lv_skip_c.
+    CONCATENATE 'No nominations deleted.' lv_skip_c
+      'nomination(s) skipped due to ticket present.'
+      INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
   ELSEIF lv_fail > 0.
     lv_fail_c = lv_fail.
     CONDENSE lv_fail_c.
