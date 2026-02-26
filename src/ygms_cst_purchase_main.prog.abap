@@ -137,6 +137,8 @@ DATA: gv_allocated    TYPE abap_bool VALUE abap_false,  " Allocation done flag
       gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
       gv_save_enabled TYPE abap_bool VALUE abap_false,  " Save enabled flag (diff <= 1)
       gv_data_saved   TYPE abap_bool VALUE abap_false.  " Data saved flag - disable editing after save
+* Global table for new receipt data (used by View Details in validation popup)
+DATA: gt_new_receipt_data TYPE TABLE OF yrga_cst_b2b_1.
 *----------------------------------------------------------------------*
 * Class Definition for ALV Event Handler
 *----------------------------------------------------------------------*
@@ -156,7 +158,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
   ENDMETHOD.
   METHOD handle_user_command.
     CASE e_ucomm.
-      WHEN 'ALLOCATION'.
+      WHEN 'ALLOCATION' OR 'REALLOCATE'.
         PERFORM handle_allocate.
       WHEN 'VALIDATE'.
         PERFORM handle_validate.
@@ -473,7 +475,9 @@ FORM display_editable_alv.
   ls_fieldcat-fieldname = 'EXCLUDE'.
   ls_fieldcat-coltext   = 'Exclude'.
   ls_fieldcat-checkbox  = abap_true.
-  ls_fieldcat-edit      = abap_true.
+  IF p_view IS INITIAL.
+    ls_fieldcat-edit      = abap_true.
+  ENDIF.
   ls_fieldcat-outputlen = 7.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
@@ -605,7 +609,18 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
         lt_excl  TYPE slis_t_extab.
   " Copy incoming exclusion table
   lt_excl = rt_extab.
-  " Before allocation: only show ALLOCATION and RESET
+  " Point 6: In view mode, show Reallocate instead of Allocate
+  " Note: 'REALLOCATE' function code must be defined in PF-STATUS ZALV_STATUS
+  IF p_view IS NOT INITIAL.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'ALLOCATION'.
+    APPEND ls_extab TO lt_excl.
+  ELSE.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'REALLOCATE'.
+    APPEND ls_extab TO lt_excl.
+  ENDIF.
+  " Before allocation: only show ALLOCATION/REALLOCATE and RESET
   IF gv_allocated = abap_false.
     CLEAR ls_extab.
     ls_extab-fcode = 'VALIDATE'.
@@ -630,13 +645,16 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     ls_extab-fcode = 'SEND'.
     APPEND ls_extab TO lt_excl.
   ENDIF.
-  " After data saved: disable EDIT, ALLOCATION, RESET
+  " After data saved: disable EDIT, ALLOCATION/REALLOCATE, RESET
   IF gv_data_saved = abap_true.
     CLEAR ls_extab.
     ls_extab-fcode = 'EDIT'.
     APPEND ls_extab TO lt_excl.
     CLEAR ls_extab.
     ls_extab-fcode = 'ALLOCATION'.
+    APPEND ls_extab TO lt_excl.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'REALLOCATE'.
     APPEND ls_extab TO lt_excl.
     CLEAR ls_extab.
     ls_extab-fcode = 'RESET'.
@@ -667,7 +685,7 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
   " Debug: Show which function code was triggered (can be removed later)
   MESSAGE s000(ygms_msg) WITH 'Function code:' r_ucomm.
   CASE r_ucomm.
-    WHEN 'ALLOCATION'.
+    WHEN 'ALLOCATION' OR 'REALLOCATE'.
       PERFORM handle_allocate.
     WHEN 'VALIDATE'.
       PERFORM handle_validate.
@@ -898,7 +916,14 @@ FORM handle_allocate.
   " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
   gv_allocated = abap_true.
   PERFORM refresh_pf_status.
-  MESSAGE s000(ygms_msg) WITH 'Allocate function triggered'.
+  " Point 7: Show popup after allocation is done
+  CALL FUNCTION 'POPUP_TO_INFORM'
+    EXPORTING
+      titel = 'Allocation Complete'
+      txt1  = 'Allocation carried out.'
+      txt2  = 'Please validate the data.'
+      txt3  = ''
+      txt4  = ''.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_VALIDATE
@@ -906,6 +931,44 @@ ENDFORM.
 FORM handle_validate.
   DATA: lv_diff_ok  TYPE abap_bool,
         lv_answer   TYPE c LENGTH 1.
+  DATA l_error TYPE flag.
+  " Check for new receipt data from ONGC (timestamp comparison)
+  SELECT * INTO TABLE @DATA(lt_cst)
+    FROM yrga_cst_b2b_1
+    FOR ALL ENTRIES IN @gt_cst_b2b_1
+    WHERE gas_day = @gt_cst_b2b_1-gas_day
+      AND ctp_id = @gt_cst_b2b_1-ctp_id
+      AND ongc_material = @gt_cst_b2b_1-ongc_material.
+  IF sy-subrc = 0.
+    CLEAR gt_new_receipt_data.
+    LOOP AT lt_cst INTO DATA(ls_cst).
+      READ TABLE gt_cst_b2b_1 INTO DATA(ls_cst_g) WITH KEY
+        gas_day = ls_cst-gas_day
+        ctp_id = ls_cst-ctp_id
+        ongc_material = ls_cst-ongc_material.
+      IF sy-subrc = 0.
+        IF ls_cst_g-time_stamp <> ls_cst-time_stamp.
+          l_error = 'X'.
+          APPEND ls_cst TO gt_new_receipt_data.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+  IF l_error = 'X'.
+    " Point 5: Show popup with View Details option for new receipt data
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Validation unsuccessful as new receipt data has been received from ONGC.'
+        textline2      = 'Please run allocation again. Click Yes to view new data details.'
+        titel          = 'Validation Unsuccessful'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_answer.
+    IF lv_answer = 'J'.  " User clicked Yes = View Details
+      PERFORM display_new_receipt_data.
+    ENDIF.
+    EXIT.
+  ENDIF.
   PERFORM build_validation_data.
   " Check if any DIFF_PUR_SUP_MBG > 0.009
   lv_diff_ok = abap_true.
@@ -950,7 +1013,17 @@ ENDFORM.
 FORM refresh_pf_status.
   DATA: lt_extab TYPE slis_t_extab,
         ls_extab TYPE slis_extab.
-  " Before allocation: only show ALLOCATION and RESET
+  " Point 6: In view mode, show Reallocate instead of Allocate
+  IF p_view IS NOT INITIAL.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'ALLOCATION'.
+    APPEND ls_extab TO lt_extab.
+  ELSE.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'REALLOCATE'.
+    APPEND ls_extab TO lt_extab.
+  ENDIF.
+  " Before allocation: only show ALLOCATION/REALLOCATE and RESET
   IF gv_allocated = abap_false.
     CLEAR ls_extab.
     ls_extab-fcode = 'VALIDATE'.
@@ -975,13 +1048,16 @@ FORM refresh_pf_status.
     ls_extab-fcode = 'SEND'.
     APPEND ls_extab TO lt_extab.
   ENDIF.
-  " After data saved: disable EDIT, ALLOCATION, RESET
+  " After data saved: disable EDIT, ALLOCATION/REALLOCATE, RESET
   IF gv_data_saved = abap_true.
     CLEAR ls_extab.
     ls_extab-fcode = 'EDIT'.
     APPEND ls_extab TO lt_extab.
     CLEAR ls_extab.
     ls_extab-fcode = 'ALLOCATION'.
+    APPEND ls_extab TO lt_extab.
+    CLEAR ls_extab.
+    ls_extab-fcode = 'REALLOCATE'.
     APPEND ls_extab TO lt_extab.
     CLEAR ls_extab.
     ls_extab-fcode = 'RESET'.
@@ -1745,17 +1821,16 @@ FORM build_alv_display_table_view .
     DELETE ADJACENT DUPLICATES FROM it_cst_pur_temp COMPARING location material state_code.
     SORT it_yrga_cst_pur BY gas_day location material state_code.
     LOOP AT it_cst_pur_temp INTO DATA(wa_csr_pur_temp).
+        ls_alv-state_code  = wa_csr_pur_temp-state_code.
+        ls_alv-state       = wa_csr_pur_temp-state.
+        ls_alv-material    = wa_csr_pur_temp-material.
+        ls_alv-location_id = wa_csr_pur_temp-location.
+        ls_alv-exclude     = wa_csr_pur_temp-exclude.
+        CLEAR l_index.
       LOOP AT it_yrga_cst_pur INTO DATA(wa_yrga_cst_pur)
         WHERE location   = wa_csr_pur_temp-location
           AND material   = wa_csr_pur_temp-material
           AND state_code = wa_csr_pur_temp-state_code.
-        ls_alv-state_code  = wa_yrga_cst_pur-state_code.
-        ls_alv-state       = wa_yrga_cst_pur-state.
-        ls_alv-material    = wa_yrga_cst_pur-material.
-        ls_alv-location_id = wa_yrga_cst_pur-location.
-        ls_alv-exclude     = wa_yrga_cst_pur-exclude.
-        CLEAR l_index.
-        DO 15 TIMES .
           l_index = l_index + 1.
           CLEAR l_day.
           CONCATENATE 'DAY' l_index INTO l_day.
@@ -1767,13 +1842,84 @@ FORM build_alv_display_table_view .
             l_gcv = ( <fs_day> * wa_yrga_cst_pur-gcv ) + l_gcv.
             l_ncv = ( <fs_day> * wa_yrga_cst_pur-ncv ) + l_ncv.
           ENDIF.
-        ENDDO.
       ENDLOOP.
       ls_alv-gcv = l_gcv / ls_alv-total_scm.
       ls_alv-ncv = l_ncv / ls_alv-total_scm.
       APPEND ls_alv TO gt_alv_display.
+      CLEAR: ls_alv, l_gcv, l_ncv.
     ENDLOOP.
     CLEAR: ls_alv.
-    CLEAR : l_gcv, l_ncv.
+    CLEAR: l_gcv, l_ncv.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_NEW_RECEIPT_DATA
+*& Point 5: Display new receipt data details in ALV popup
+*&---------------------------------------------------------------------*
+FORM display_new_receipt_data.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAS_DAY'.
+  ls_fieldcat-seltext_l = 'Gas Day'.
+  ls_fieldcat-col_pos   = 1.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'CTP_ID'.
+  ls_fieldcat-seltext_l = 'CTP ID'.
+  ls_fieldcat-col_pos   = 2.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
+  ls_fieldcat-seltext_l = 'ONGC Material'.
+  ls_fieldcat-col_pos   = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_SCM'.
+  ls_fieldcat-seltext_l = 'Qty SCM'.
+  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-decimals_out = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-seltext_l = 'GCV'.
+  ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-decimals_out = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-seltext_l = 'NCV'.
+  ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-decimals_out = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_ID'.
+  ls_fieldcat-seltext_l = 'ONGC ID'.
+  ls_fieldcat-col_pos   = 7.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'TIME_STAMP'.
+  ls_fieldcat-seltext_l = 'Time Stamp'.
+  ls_fieldcat-col_pos   = 8.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+    EXPORTING
+      i_title               = 'New Receipt Data from ONGC'
+      i_selection           = ' '
+      i_zebra               = abap_true
+      i_screen_start_column = 5
+      i_screen_start_line   = 5
+      i_screen_end_column   = 150
+      i_screen_end_line     = 25
+      i_tabname             = 'GT_NEW_RECEIPT_DATA'
+      it_fieldcat           = lt_fieldcat
+    TABLES
+      t_outtab              = gt_new_receipt_data
+    EXCEPTIONS
+      program_error         = 1
+      OTHERS                = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+      WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
 ENDFORM.
