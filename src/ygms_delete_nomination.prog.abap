@@ -56,15 +56,57 @@ DATA: gs_oijnomi  TYPE oijnomi,
 DATA: gv_pipeline  TYPE char10,
       gv_indicator TYPE char1,
       gv_repid     TYPE sy-repid,
-      gv_valid     TYPE abap_bool.
+      gv_valid     TYPE abap_bool,
+      gv_kunnr     TYPE kunnr.
 *----------------------------------------------------------------------*
 * SELECTION SCREEN
 *----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b00 WITH FRAME TITLE TEXT-b00.
+  PARAMETERS: p_rb1 RADIOBUTTON GROUP rb1 DEFAULT 'X' USER-COMMAND rb,
+              p_rb2 RADIOBUTTON GROUP rb1.
+SELECTION-SCREEN END OF BLOCK b00.
+
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
-  SELECT-OPTIONS: s_docnr FOR oijnomi-docnr NO INTERVALS,
-                  s_idate FOR oijnomi-idate  NO-EXTENSION OBLIGATORY,
-                  s_locid FOR oijnomi-locid NO INTERVALS.
+  SELECT-OPTIONS: s_docnr FOR oijnomi-docnr NO INTERVALS MODIF ID RB1,
+                  s_idate FOR oijnomi-idate  NO-EXTENSION OBLIGATORY MODIF ID RB1,
+                  s_locid FOR oijnomi-locid NO INTERVALS MODIF ID RB1,
+                  s_kunid FOR gv_kunnr       NO INTERVALS MODIF ID RB1.
 SELECTION-SCREEN END OF BLOCK b01.
+
+SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
+  PARAMETERS: p_ngail AS CHECKBOX MODIF ID RB2 USER-COMMAND ng.
+  SELECT-OPTIONS: s_loc2  FOR oijnomi-locid  NO INTERVALS MODIF ID GAI,
+                  s_cust  FOR gv_kunnr       NO INTERVALS MODIF ID CUS,
+                  s_idat2 FOR oijnomi-idate  NO-EXTENSION OBLIGATORY MODIF ID RB2.
+SELECTION-SCREEN END OF BLOCK b02.
+*----------------------------------------------------------------------*
+* AT SELECTION-SCREEN OUTPUT
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF p_rb1 = 'X'.
+      IF screen-group1 = 'RB2' OR screen-group1 = 'GAI' OR screen-group1 = 'CUS'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+    ELSEIF p_rb2 = 'X'.
+      IF screen-group1 = 'RB1'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+      IF p_ngail = 'X'.
+        IF screen-group1 = 'GAI'.
+          screen-active = 0.
+          MODIFY SCREEN.
+        ENDIF.
+      ELSE.
+        IF screen-group1 = 'CUS'.
+          screen-active = 0.
+          MODIFY SCREEN.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
 *----------------------------------------------------------------------*
 * INITIALIZATION
 *----------------------------------------------------------------------*
@@ -74,10 +116,18 @@ INITIALIZATION.
 * START-OF-SELECTION
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
-  PERFORM validate_input.
-  IF gv_valid = abap_true.
-    PERFORM fetch_nominations.
-    PERFORM build_output.
+  IF p_rb1 = 'X'.
+    PERFORM validate_input.
+    IF gv_valid = abap_true.
+      PERFORM fetch_nominations.
+      PERFORM build_output.
+    ENDIF.
+  ELSEIF p_rb2 = 'X'.
+    PERFORM validate_input_rb2.
+    IF gv_valid = abap_true.
+      PERFORM fetch_nominations_rb2.
+      PERFORM build_output_rb2.
+    ENDIF.
   ENDIF.
 *----------------------------------------------------------------------*
 * END-OF-SELECTION
@@ -98,6 +148,8 @@ END-OF-SELECTION.
 *&---------------------------------------------------------------------*
 *& Form VALIDATE_INPUT
 *&---------------------------------------------------------------------*
+*& Validation for Radio Button 1: Contractual Nomination Deletion
+*&---------------------------------------------------------------------*
 FORM validate_input.
   DATA: lv_start_day      TYPE numc2,
         lv_end_day        TYPE numc2,
@@ -109,16 +161,36 @@ FORM validate_input.
         lv_msg            TYPE char200,
         lv_pblnr          TYPE oifspbl-pblnr,
         lv_pbltyp         TYPE oifspbl-pbltyp.
+  DATA: lv_locid_tmp TYPE oijnomi-locid.
   FIELD-SYMBOLS: <ls_docnr> LIKE LINE OF s_docnr,
                  <ls_idate> LIKE LINE OF s_idate,
-                 <ls_locid> LIKE LINE OF s_locid.
+                 <ls_locid> LIKE LINE OF s_locid,
+                 <ls_kunid> LIKE LINE OF s_kunid.
   CLEAR: gt_errors, lv_error.
-* Validation 1: User must enter either Contract ID or Location ID or both
-  IF s_docnr[] IS INITIAL AND s_locid[] IS INITIAL.
+* Validation 1: User must enter either Contract ID or Location ID or Customer ID
+  IF s_docnr[] IS INITIAL AND s_locid[] IS INITIAL AND s_kunid[] IS INITIAL.
     gs_error-msgty = 'E'.
-    gs_error-msgtx = 'Please enter either Contract ID or Location ID or both'(m05).
+    gs_error-msgtx = 'Please enter atleast Contract ID/ Location ID/ Customer ID'(m05).
     APPEND gs_error TO gt_errors.
     lv_error = abap_true.
+  ENDIF.
+* Validation: Check Customer IDs against OIJRRA
+  IF s_kunid[] IS NOT INITIAL.
+    LOOP AT s_kunid ASSIGNING <ls_kunid>.
+      CLEAR lv_locid_tmp.
+      SELECT SINGLE locid FROM oijrra
+        INTO lv_locid_tmp
+        WHERE kunnr = <ls_kunid>-low
+          AND delind NE 'X'.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        CONCATENATE 'Customer' <ls_kunid>-low 'is not TSW Partner'
+          INTO lv_msg SEPARATED BY space.
+        gs_error-msgtx = lv_msg.
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
 * Validation 2: Check each Contract ID against VBAK
   IF s_docnr[] IS NOT INITIAL.
@@ -239,6 +311,197 @@ FORM validate_input.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form VALIDATE_INPUT_RB2
+*&---------------------------------------------------------------------*
+*& Validation for Radio Button 2: OD2 Nomination Deletion
+*&---------------------------------------------------------------------*
+FORM validate_input_rb2.
+  DATA: lv_start_day      TYPE numc2,
+        lv_end_day        TYPE numc2,
+        lv_start_month(6) TYPE n,
+        lv_end_month(6)   TYPE n,
+        lv_last_day       TYPE sy-datum,
+        lv_error          TYPE abap_bool,
+        lv_msg            TYPE char200,
+        lv_pblnr          TYPE oifspbl-pblnr,
+        lv_pbltyp         TYPE oifspbl-pbltyp,
+        lv_locid          TYPE oijnomi-locid,
+        lv_pipeline       TYPE char64.
+  DATA et_nominations TYPE yrxt_nom.
+  FIELD-SYMBOLS: <ls_idate> LIKE LINE OF s_idat2,
+                 <ls_loc2>  LIKE LINE OF s_loc2,
+                 <ls_cust>  LIKE LINE OF s_cust.
+  CLEAR: gt_errors, lv_error.
+* Mandatory checks
+  IF p_ngail = ' ' AND s_loc2[] IS INITIAL.
+    gs_error-msgty = 'E'.
+    gs_error-msgtx = 'GAIL Location is mandatory'(m10).
+    APPEND gs_error TO gt_errors.
+    lv_error = abap_true.
+  ENDIF.
+  IF p_ngail = 'X' AND s_cust[] IS INITIAL.
+    gs_error-msgty = 'E'.
+    gs_error-msgtx = 'Non-GAIL Customer is mandatory'(m11).
+    APPEND gs_error TO gt_errors.
+    lv_error = abap_true.
+  ENDIF.
+* Non-GAIL Customer validation
+  IF p_ngail = 'X' AND s_cust[] IS NOT INITIAL.
+    LOOP AT s_cust ASSIGNING <ls_cust>.
+      CLEAR lv_locid.
+      SELECT SINGLE locid FROM oijrra
+        INTO lv_locid
+        WHERE kunnr = <ls_cust>-low
+          AND delind NE 'X'.
+      IF sy-subrc NE 0.
+        CONCATENATE 'Customer' <ls_cust>-low 'is not TSW Partner'
+          INTO lv_msg SEPARATED BY space.
+        gs_error-msgty = 'E'.
+        gs_error-msgtx = lv_msg.
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ELSE.
+        CLEAR lv_pipeline.
+        CALL FUNCTION 'YRX_CHK_NG_TKT_STATUS'
+          EXPORTING
+            gas_day        = s_idat2-low
+            locid          = lv_locid
+          IMPORTING
+            pipeline       = lv_pipeline
+          TABLES
+            et_nominations = et_nominations.
+        IF lv_pipeline NOT CS 'NON-GAIL' AND lv_pipeline NOT CS 'NON_GAIL'.
+          CONCATENATE 'Customer' <ls_cust>-low
+            'doesn''t pertain to Non-GAIL Location'
+            INTO lv_msg SEPARATED BY space.
+          gs_error-msgty = 'E'.
+          gs_error-msgtx = lv_msg.
+          APPEND gs_error TO gt_errors.
+          lv_error = abap_true.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+* Date format validation
+  LOOP AT s_idat2 ASSIGNING <ls_idate>.
+    IF <ls_idate>-low IS NOT INITIAL.
+      CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+        EXPORTING
+          date                      = <ls_idate>-low
+        EXCEPTIONS
+          plausibility_check_failed = 1
+          OTHERS                    = 2.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        gs_error-msgtx = 'Enter the date in format 31.12.9999'(m02).
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDIF.
+    IF <ls_idate>-high IS NOT INITIAL.
+      CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+        EXPORTING
+          date                      = <ls_idate>-high
+        EXCEPTIONS
+          plausibility_check_failed = 1
+          OTHERS                    = 2.
+      IF sy-subrc NE 0.
+        gs_error-msgty = 'E'.
+        gs_error-msgtx = 'Enter the date in format 31.12.9999'(m02).
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+* FN validation - date range must belong to the same FN
+  IF s_idat2-high IS NOT INITIAL.
+    lv_start_day   = s_idat2-low+6(2).
+    lv_end_day     = s_idat2-high+6(2).
+    lv_start_month = s_idat2-low(6).
+    lv_end_month   = s_idat2-high(6).
+    IF lv_start_month NE lv_end_month.
+      gs_error-msgty = 'E'.
+      gs_error-msgtx = 'The date range should belong to the same FN'(m03).
+      APPEND gs_error TO gt_errors.
+      lv_error = abap_true.
+    ELSE.
+      IF lv_start_day >= '01' AND lv_start_day <= '15'.
+        IF lv_end_day > '15'.
+          gs_error-msgty = 'E'.
+          gs_error-msgtx = 'The date range should belong to the same FN'(m03).
+          APPEND gs_error TO gt_errors.
+          lv_error = abap_true.
+        ENDIF.
+      ELSEIF lv_start_day >= '16'.
+        CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
+          EXPORTING
+            day_in            = s_idat2-low
+          IMPORTING
+            last_day_of_month = lv_last_day
+          EXCEPTIONS
+            day_in_no_date    = 1
+            OTHERS            = 2.
+        IF sy-subrc = 0 AND s_idat2-high > lv_last_day.
+          gs_error-msgty = 'E'.
+          gs_error-msgtx = 'The date range should belong to the same FN'(m03).
+          APPEND gs_error TO gt_errors.
+          lv_error = abap_true.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+* GAIL Location validation
+  IF p_ngail = ' ' AND s_loc2[] IS NOT INITIAL.
+    LOOP AT s_loc2 ASSIGNING <ls_loc2>.
+      CLEAR: lv_pblnr, lv_pbltyp.
+      SELECT SINGLE pblnr pbltyp FROM oifspbl
+        INTO (lv_pblnr, lv_pbltyp)
+        WHERE pblnr = <ls_loc2>-low.
+      IF sy-subrc NE 0.
+        CONCATENATE 'Location ID' <ls_loc2>-low 'does not exist'
+          INTO lv_msg SEPARATED BY space.
+        gs_error-msgty = 'E'.
+        gs_error-msgtx = lv_msg.
+        APPEND gs_error TO gt_errors.
+        lv_error = abap_true.
+      ELSE.
+        IF lv_pbltyp NE 'YRDE'.
+          CONCATENATE 'Location ID' <ls_loc2>-low
+            'does not pertain to Sale Location'
+            INTO lv_msg SEPARATED BY space.
+          gs_error-msgty = 'E'.
+          gs_error-msgtx = lv_msg.
+          APPEND gs_error TO gt_errors.
+          lv_error = abap_true.
+        ELSE.
+          CLEAR lv_pipeline.
+          CALL FUNCTION 'YRX_CHK_NG_TKT_STATUS'
+            EXPORTING
+              gas_day        = s_idat2-low
+              locid          = <ls_loc2>-low
+            IMPORTING
+              pipeline       = lv_pipeline
+            TABLES
+              et_nominations = et_nominations.
+          IF lv_pipeline CS 'NON-GAIL' OR lv_pipeline CS 'NON_GAIL'.
+            CONCATENATE 'Location' <ls_loc2>-low 'is Non-GAIL'
+              INTO lv_msg SEPARATED BY space.
+            gs_error-msgty = 'E'.
+            gs_error-msgtx = lv_msg.
+            APPEND gs_error TO gt_errors.
+            lv_error = abap_true.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+  IF lv_error = abap_true.
+    gv_valid = abap_false.
+  ELSE.
+    gv_valid = abap_true.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form DISPLAY_ERROR_ALV
 *&---------------------------------------------------------------------*
 *& Displays ALL collected errors in a full-screen ALV grid.
@@ -286,6 +549,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form FETCH_NOMINATIONS
 *&---------------------------------------------------------------------*
+*& Fetch for Radio Button 1: Contractual Nomination Deletion
+*&---------------------------------------------------------------------*
 FORM fetch_nominations.
   DATA: lt_nomtk TYPE RANGE OF oijnomi-nomtk,
         ls_nomtk LIKE LINE OF lt_nomtk.
@@ -293,6 +558,7 @@ FORM fetch_nominations.
     INTO TABLE gt_oijnomi
     WHERE docnr IN s_docnr
       AND locid IN s_locid
+      AND partnr IN s_kunid
       AND idate IN s_idate
       AND delind NE 'X'.
   IF sy-subrc NE 0.
@@ -316,7 +582,38 @@ FORM fetch_nominations.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form FETCH_NOMINATIONS_RB2
+*&---------------------------------------------------------------------*
+*& Fetch for Radio Button 2: OD2 Nomination Deletion
+*& SITYP/DOCIND: ZA/G, ZU/S, ZJ/G
+*&---------------------------------------------------------------------*
+FORM fetch_nominations_rb2.
+  IF p_ngail = 'X'.
+*   Non-GAIL Customer: pass Customer ID in PARTNR
+    SELECT * FROM oijnomi
+      INTO TABLE gt_oijnomi
+      WHERE partnr IN s_cust
+        AND idate IN s_idat2
+        AND delind NE 'X'
+        AND ( ( sityp = 'ZA' AND docind = 'G' )
+           OR ( sityp = 'ZU' AND docind = 'S' )
+           OR ( sityp = 'ZJ' AND docind = 'G' ) ).
+  ELSE.
+*   GAIL Location: pass Location ID in LOCID
+    SELECT * FROM oijnomi
+      INTO TABLE gt_oijnomi
+      WHERE locid IN s_loc2
+        AND idate IN s_idat2
+        AND delind NE 'X'
+        AND ( ( sityp = 'ZA' AND docind = 'G' )
+           OR ( sityp = 'ZU' AND docind = 'S' )
+           OR ( sityp = 'ZJ' AND docind = 'G' ) ).
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form BUILD_OUTPUT
+*&---------------------------------------------------------------------*
+*& Build output for Radio Button 1
 *&---------------------------------------------------------------------*
 FORM build_output.
   CLEAR gt_output.
@@ -335,7 +632,20 @@ FORM build_output.
   ENDLOOP.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form BUILD_OUTPUT_RB2
+*&---------------------------------------------------------------------*
+*& Build output for Radio Button 2
+*&---------------------------------------------------------------------*
+FORM build_output_rb2.
+  CLEAR gt_output.
+  LOOP AT gt_oijnomi INTO gs_oijnomi.
+    PERFORM build_output_line_rb2 USING gs_oijnomi.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form BUILD_OUTPUT_LINE
+*&---------------------------------------------------------------------*
+*& Build single output line for Radio Button 1
 *&---------------------------------------------------------------------*
 FORM build_output_line USING ps_nom TYPE oijnomi.
   DATA: ls_out    TYPE ty_output,
@@ -369,7 +679,43 @@ FORM build_output_line USING ps_nom TYPE oijnomi.
   APPEND ls_out TO gt_output.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form BUILD_OUTPUT_LINE_RB2
+*&---------------------------------------------------------------------*
+*& Build single output line for Radio Button 2
+*&---------------------------------------------------------------------*
+FORM build_output_line_rb2 USING ps_nom TYPE oijnomi.
+  DATA: ls_out    TYPE ty_output,
+        lv_nomtyp TYPE oijnomh-nomtyp.
+  CLEAR ls_out.
+  ls_out-nomtk            = ps_nom-nomtk.
+  ls_out-nomit            = ps_nom-nomit.
+  ls_out-partnr           = ps_nom-partnr.
+  ls_out-locid            = ps_nom-locid.
+  ls_out-idate            = ps_nom-idate.
+  ls_out-s_matnr_i        = ps_nom-s_matnr_i.
+  ls_out-menge            = ps_nom-menge.
+  ls_out-unit_i           = ps_nom-unit_i.
+  ls_out-docnr            = ps_nom-docnr.
+  ls_out-ga_allocated_qty = ps_nom-ga_allocated_qty.
+  ls_out-actqty           = ps_nom-actualqty.
+  ls_out-sityp            = ps_nom-sityp.
+  ls_out-delind           = ps_nom-delind.
+* Get Nomination Type from header table
+  CLEAR lv_nomtyp.
+  SELECT SINGLE nomtyp FROM oijnomh
+    INTO lv_nomtyp
+    WHERE nomtk = ps_nom-nomtk.
+  ls_out-nomtyp = lv_nomtyp.
+  PERFORM determine_gail_flag_rb2 USING    ps_nom-locid
+                                  CHANGING ls_out-gail_flag.
+  PERFORM determine_tkt_status_rb2 USING    ps_nom
+                                   CHANGING ls_out-tkt_status.
+  APPEND ls_out TO gt_output.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form DETERMINE_GAIL_FLAG
+*&---------------------------------------------------------------------*
+*& GAIL flag for Radio Button 1 (uses s_idate)
 *&---------------------------------------------------------------------*
 FORM determine_gail_flag USING    pv_locid TYPE oijnomi-locid
                          CHANGING pv_flag  TYPE char10.
@@ -403,7 +749,46 @@ FORM determine_gail_flag USING    pv_locid TYPE oijnomi-locid
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form DETERMINE_GAIL_FLAG_RB2
+*&---------------------------------------------------------------------*
+*& GAIL flag for Radio Button 2 (uses s_idat2)
+*&---------------------------------------------------------------------*
+FORM determine_gail_flag_rb2 USING    pv_locid TYPE oijnomi-locid
+                             CHANGING pv_flag  TYPE char10.
+  DATA: lv_pipeline TYPE char64.
+  DATA et_nominations TYPE yrxt_nom.
+  CLEAR pv_flag.
+  DATA : lv_loc_c  TYPE oijnomi-locid,
+         lv_prefix TYPE char1.
+  lv_prefix = pv_locid+0(1).
+  IF lv_prefix = 'V'.
+    CONCATENATE 'C' pv_locid+1 INTO lv_loc_c.
+  ELSE.
+    lv_loc_c = pv_locid.
+  ENDIF.
+  CALL FUNCTION 'YRX_CHK_NG_TKT_STATUS'
+    EXPORTING
+      gas_day        = s_idat2-low
+      locid          = lv_loc_c
+    IMPORTING
+      pipeline       = lv_pipeline
+    TABLES
+      et_nominations = et_nominations.
+  IF sy-subrc = 0.
+    IF lv_pipeline CS 'NON-GAIL' OR lv_pipeline CS 'NON_GAIL'.
+      pv_flag = 'Non-GAIL'.
+    ELSE.
+      pv_flag = 'GAIL'.
+    ENDIF.
+  ELSE.
+    pv_flag = 'GAIL'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form DETERMINE_TKT_STATUS
+*&---------------------------------------------------------------------*
+*& Ticket status for Radio Button 1 (YRX_CHK_NG_TKT_STATUS /
+*& YRX_CHK_CUST_COMP_TKT_STATUS)
 *&---------------------------------------------------------------------*
 FORM determine_tkt_status USING    ps_nom       TYPE oijnomi
                                    pv_gail_flag TYPE char10
@@ -458,6 +843,34 @@ FORM determine_tkt_status USING    ps_nom       TYPE oijnomi
         indicator       = lv_indicator.
     IF sy-subrc = 0 AND lv_indicator = 'A'.
       pv_status = 'ticket present'.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DETERMINE_TKT_STATUS_RB2
+*&---------------------------------------------------------------------*
+*& Ticket status for Radio Button 2 (OIJ_EL_TICKET_I)
+*& Get latest ticket by ERDAT/ERZEIT for NOMTK/NOMIT.
+*& If TICKET_PURPOSE=1, STATUS=C, SUBSTATUS=6, TKTSUBRC NE 1A
+*& then ticket is present.
+*&---------------------------------------------------------------------*
+FORM determine_tkt_status_rb2 USING    ps_nom   TYPE oijnomi
+                              CHANGING pv_status TYPE char20.
+  CLEAR pv_status.
+  SELECT * FROM oij_el_ticket_i
+    INTO TABLE @DATA(lt_tickets)
+    WHERE nomtk = @ps_nom-nomtk
+      AND nomit = @ps_nom-nomit.
+  IF sy-subrc = 0.
+    SORT lt_tickets BY erdat DESCENDING erzeit DESCENDING.
+    READ TABLE lt_tickets INTO DATA(ls_ticket) INDEX 1.
+    IF sy-subrc = 0.
+      IF ls_ticket-ticket_purpose = '1'
+        AND ls_ticket-status = 'C'
+        AND ls_ticket-substatus = '6'
+        AND ls_ticket-tktsubrc NE '1A'.
+        pv_status = 'ticket present'.
+      ENDIF.
     ENDIF.
   ENDIF.
 ENDFORM.
@@ -536,16 +949,15 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_USER_COMMAND
 *&---------------------------------------------------------------------*
-*& box_fieldname = 'SEL' ensures the SLIS framework automatically
-*& marks SEL = 'X' for selected rows and SEL = '' for deselected
-*& rows BEFORE this callback is triggered.
-*& No check_changed_data or GET_GLOBALS_FROM_SLSCREEN needed.
-*&---------------------------------------------------------------------*
 FORM handle_user_command USING pv_ucomm    TYPE sy-ucomm
                                ps_selfield TYPE slis_selfield.
   CASE pv_ucomm.
     WHEN 'ZDEL' OR '&DEL'.
-      PERFORM delete_nominations.
+      IF p_rb1 = 'X'.
+        PERFORM delete_nominations.
+      ELSE.
+        PERFORM delete_nominations_rb2.
+      ENDIF.
       ps_selfield-refresh    = 'X'.
       ps_selfield-col_stable = 'X'.
       ps_selfield-row_stable = 'X'.
@@ -579,13 +991,17 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DELETE_NOMINATIONS
 *&---------------------------------------------------------------------*
+*& Deletion for Radio Button 1: Contractual Nomination Deletion
+*&---------------------------------------------------------------------*
 FORM delete_nominations.
   DATA: lv_answer    TYPE char1,
         lv_count     TYPE i,
         lv_fail      TYPE i,
+        lv_skip      TYPE i,
         lv_sel_count TYPE i,
         lv_count_c   TYPE char10,
         lv_fail_c    TYPE char10,
+        lv_skip_c    TYPE char10,
         lv_msg       TYPE char200.
   DATA: ls_nom_header   TYPE roijnomhio,
         ls_nom_header_x TYPE oijnomh,
@@ -595,11 +1011,13 @@ FORM delete_nominations.
         ls_nom_item_x   TYPE oijnomi,
         lt_return       TYPE STANDARD TABLE OF bapiret2,
         ls_return       TYPE bapiret2,
-        lv_has_error    TYPE abap_bool.
+        lv_has_error    TYPE abap_bool,
+        lv_has_ticket   TYPE abap_bool.
   DATA: lv_nomtyp     TYPE oijnomh-nomtyp,
         lv_live_count TYPE i.
   DATA: lt_nomtk_processed TYPE SORTED TABLE OF oijnomi-nomtk
                            WITH UNIQUE KEY table_line.
+  DATA: lv_tkt_skipped TYPE abap_bool.
 * Count selected rows
   LOOP AT gt_output INTO gs_output ."WHERE sel = 'X'.
     lv_sel_count = lv_sel_count + 1.
@@ -629,6 +1047,8 @@ FORM delete_nominations.
   CHECK lv_answer = '1'.
   lv_count = 0.
   lv_fail  = 0.
+  lv_skip  = 0.
+  lv_tkt_skipped = abap_false.
   SELECT  * INTO TABLE @DATA(it_oijnomh)
     FROM oijnomh
     FOR ALL ENTRIES IN @gt_output
@@ -660,15 +1080,47 @@ FORM delete_nominations.
     MOVE-CORRESPONDING l_oijnomh TO ls_nom_header.
     CLEAR lv_nomtyp.
     lv_nomtyp = gs_output-nomtyp.
-*    SELECT SINGLE nomtyp FROM oijnomh
-*      INTO lv_nomtyp
-*      WHERE nomtk = gs_output-nomtk.
+*   Check ticket status before deletion
+    CLEAR lv_has_ticket.
+    IF lv_nomtyp = 'GISA'.
+*     GISA: if any item of this NOMTK has ticket present, skip entire NOMTK
+      LOOP AT gt_output INTO DATA(ls_tkt_chk)
+        WHERE nomtk = gs_output-nomtk.
+        IF ls_tkt_chk-tkt_status = 'ticket present'.
+          lv_has_ticket = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_has_ticket = abap_true.
+        LOOP AT gt_output TRANSPORTING NO FIELDS
+          WHERE nomtk = gs_output-nomtk.
+          lv_skip = lv_skip + 1.
+        ENDLOOP.
+        lv_tkt_skipped = abap_true.
+        CONTINUE.
+      ENDIF.
+    ELSEIF lv_nomtyp = 'GITA'.
+*     GITA: if any item has ticket present, skip this NOMTK
+*     and also skip the related ZO/K nominations with same NOMTK
+      LOOP AT gt_output INTO DATA(ls_tkt_chk2)
+        WHERE nomtk = gs_output-nomtk.
+        IF ls_tkt_chk2-tkt_status = 'ticket present'.
+          lv_has_ticket = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_has_ticket = abap_true.
+        LOOP AT gt_output TRANSPORTING NO FIELDS
+          WHERE nomtk = gs_output-nomtk.
+          lv_skip = lv_skip + 1.
+        ENDLOOP.
+        lv_tkt_skipped = abap_true.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
     IF lv_nomtyp = 'GITA'.
       ls_nom_header-updkz = 'U'.
       ls_nom_header-delind = 'X'.
-*         GITA: always delete the header
-*          DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
-*          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
     ELSEIF lv_nomtyp = 'GISA'.
 *         GISA: delete header only if no other live items remain
       CLEAR lv_live_count.
@@ -689,19 +1141,9 @@ FORM delete_nominations.
             LV_LIVE_COUNT = LV_LIVE_COUNT - 1.
           ENDIF.
           ENDLOOP.
-*          READ TABLE GT_OUTPUT TRANSPORTING NO FIELDS
-*          WITH KEY
-*      SELECT COUNT(*) FROM oijnomi
-*        INTO lv_live_count
-*        FOR ALL ENTRIES IN gt_output
-*        WHERE nomtk = gt_output-nomtk
-**        AND nomit <> gt_output-nomit
-*          AND delind NE 'X'.
       IF lv_live_count = 0.
         ls_nom_header-updkz = 'U'.
         ls_nom_header-delind = 'X'.
-*            DELETE FROM oijnomh WHERE nomtk = gs_output-nomtk.
-*            CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
       ENDIF.
       ENDIF.
     ENDIF.
@@ -714,21 +1156,9 @@ FORM delete_nominations.
       nomit = ls_item-nomit.
       if sy-subrc = 0.
         MOVE-CORRESPONDING wa_oijnomi to ls_nom_item.
-*      ls_nom_item-nomtk  = ls_item-nomtk.
-*      ls_nom_item-nomit  = ls_item-nomit.
-*      ls_nom_item-locid  = ls_item-locid.
-*      ls_nom_item-idate  = ls_item-idate.
-*      ls_nom_item-docnr  = ls_item-docnr.
-*      ls_nom_item-partnr = ls_item-partnr.
-*      ls_nom_item-sityp  = ls_item-sityp.
       ls_nom_item-delind = 'X'.
       ls_nom_item-updkz = 'U'.
       APPEND ls_nom_item TO lt_nom_items.
-*      CLEAR ls_nom_item_x.
-*      ls_nom_item_x-nomtk  = ls_item-nomtk.
-*      ls_nom_item_x-nomit  = ls_item-nomit.
-*      ls_nom_item_x-delind = 'X'.
-*      APPEND ls_nom_item_x TO lt_nom_items_x.
         endif.
     ENDLOOP.
     CALL FUNCTION 'OIJ_NOM_MAINTAIN'
@@ -822,15 +1252,21 @@ FORM delete_nominations.
       CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
     ENDIF.
   ENDLOOP.
+* Show info message if any nominations were skipped due to ticket
+  IF lv_tkt_skipped = abap_true.
+    MESSAGE 'Some nominations are not deleted as Ticket is present against location/customer'(m13)
+      TYPE 'S' DISPLAY LIKE 'W'.
+  ENDIF.
 * Results
   IF lv_count > 0.
     lv_count_c = lv_count.
     CONDENSE lv_count_c.
-    IF lv_fail > 0.
-      lv_fail_c = lv_fail.
-      CONDENSE lv_fail_c.
-      CONCATENATE lv_count_c 'nomination(s) deleted successfully.'
-                  lv_fail_c 'nomination(s) failed.'
+    IF lv_fail > 0 OR lv_skip > 0.
+      lv_fail_c = lv_fail. CONDENSE lv_fail_c.
+      lv_skip_c = lv_skip. CONDENSE lv_skip_c.
+      CONCATENATE lv_count_c 'nomination(s) deleted.'
+                  lv_fail_c 'failed.'
+                  lv_skip_c 'skipped (ticket present).'
         INTO lv_msg SEPARATED BY space.
       MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
     ELSE.
@@ -838,11 +1274,185 @@ FORM delete_nominations.
         INTO lv_msg SEPARATED BY space.
       MESSAGE lv_msg TYPE 'S'.
     ENDIF.
+  ELSEIF lv_skip > 0.
+    lv_skip_c = lv_skip. CONDENSE lv_skip_c.
+    CONCATENATE 'No nominations deleted.' lv_skip_c
+      'nomination(s) skipped due to ticket present.'
+      INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
   ELSEIF lv_fail > 0.
     lv_fail_c = lv_fail.
     CONDENSE lv_fail_c.
     CONCATENATE 'Deletion failed for' lv_fail_c
       'nomination(s). Check if nominations are locked or already deleted.'
+      INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'E'.
+  ELSE.
+    MESSAGE 'No nominations were processed for deletion.'(m08) TYPE 'S' DISPLAY LIKE 'E'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DELETE_NOMINATIONS_RB2
+*&---------------------------------------------------------------------*
+*& Deletion for Radio Button 2: OD2 Nomination Deletion
+*& Delete from OIJNOMI and OIJNOMH only if no ticket is present
+*& against any line of the NOMTK.
+*&---------------------------------------------------------------------*
+FORM delete_nominations_rb2.
+  DATA: lv_answer     TYPE char1,
+        lv_count      TYPE i,
+        lv_fail       TYPE i,
+        lv_skip       TYPE i,
+        lv_sel_count  TYPE i,
+        lv_count_c    TYPE char10,
+        lv_fail_c     TYPE char10,
+        lv_skip_c     TYPE char10,
+        lv_msg        TYPE char200.
+  DATA: ls_nom_header TYPE roijnomhio,
+        lt_nom_items  TYPE roijnomiio_t,
+        ls_nom_item   TYPE roijnomiio,
+        lt_return     TYPE STANDARD TABLE OF bapiret2,
+        ls_return     TYPE bapiret2,
+        lv_has_error  TYPE abap_bool,
+        lv_has_ticket TYPE abap_bool.
+  DATA: lt_nomtk_processed TYPE SORTED TABLE OF oijnomi-nomtk
+                           WITH UNIQUE KEY table_line.
+* Count rows
+  lv_sel_count = lines( gt_output ).
+  IF lv_sel_count = 0.
+    MESSAGE 'No nominations to delete' TYPE 'S' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+* Confirmation - RB2 specific message
+  DATA: lv_question TYPE char200.
+  lv_question = 'All nominations listed will be deleted. Do you wish to proceed?'(m12).
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'Confirm Deletion'(t01)
+      text_question         = lv_question
+      text_button_1         = 'Yes'(t02)
+      icon_button_1         = 'ICON_CHECKED'
+      text_button_2         = 'No'(t03)
+      icon_button_2         = 'ICON_CANCEL'
+      default_button        = '2'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = lv_answer.
+  CHECK lv_answer = '1'.
+  lv_count = 0.
+  lv_fail  = 0.
+  lv_skip  = 0.
+* Bulk fetch headers and items
+  SELECT * INTO TABLE @DATA(it_oijnomh)
+    FROM oijnomh
+    FOR ALL ENTRIES IN @gt_output
+    WHERE nomtk = @gt_output-nomtk
+      AND delind <> 'X'.
+  SELECT * INTO TABLE @DATA(it_oijnomi)
+    FROM oijnomi
+    FOR ALL ENTRIES IN @gt_output
+    WHERE nomtk = @gt_output-nomtk
+      AND delind <> 'X'.
+* Process by NOMTK
+  LOOP AT gt_output INTO gs_output.
+    READ TABLE lt_nomtk_processed TRANSPORTING NO FIELDS
+      WITH TABLE KEY table_line = gs_output-nomtk.
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
+    INSERT gs_output-nomtk INTO TABLE lt_nomtk_processed.
+*   Check if any item of this NOMTK has a ticket
+    CLEAR lv_has_ticket.
+    LOOP AT gt_output INTO DATA(ls_chk)
+      WHERE nomtk = gs_output-nomtk.
+      IF ls_chk-tkt_status = 'ticket present'.
+        lv_has_ticket = abap_true.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+    IF lv_has_ticket = abap_true.
+*     Skip this NOMTK - ticket present
+      LOOP AT gt_output TRANSPORTING NO FIELDS
+        WHERE nomtk = gs_output-nomtk.
+        lv_skip = lv_skip + 1.
+      ENDLOOP.
+      CONTINUE.
+    ENDIF.
+*   No ticket - proceed with deletion
+    READ TABLE it_oijnomh INTO DATA(l_oijnomh)
+      WITH KEY nomtk = gs_output-nomtk.
+    IF sy-subrc NE 0.
+      CONTINUE.
+    ENDIF.
+    CLEAR: ls_nom_header, lt_nom_items, lt_return, lv_has_error.
+    MOVE-CORRESPONDING l_oijnomh TO ls_nom_header.
+    ls_nom_header-updkz  = 'U'.
+    ls_nom_header-delind = 'X'.
+    LOOP AT gt_output INTO DATA(ls_item)
+      WHERE nomtk = gs_output-nomtk.
+      CLEAR ls_nom_item.
+      READ TABLE it_oijnomi INTO DATA(wa_oijnomi)
+        WITH KEY nomtk = ls_item-nomtk
+                 nomit = ls_item-nomit.
+      IF sy-subrc = 0.
+        MOVE-CORRESPONDING wa_oijnomi TO ls_nom_item.
+        ls_nom_item-delind = 'X'.
+        ls_nom_item-updkz  = 'U'.
+        APPEND ls_nom_item TO lt_nom_items.
+      ENDIF.
+    ENDLOOP.
+    CALL FUNCTION 'OIJ_NOM_MAINTAIN'
+      EXPORTING
+        is_nom_header         = ls_nom_header
+        it_nom_item           = lt_nom_items
+      IMPORTING
+        et_return             = lt_return
+      EXCEPTIONS
+        nomination_locked     = 1
+        status_update_failure = 2.
+    IF sy-subrc = 0.
+      LOOP AT lt_return INTO ls_return WHERE type = 'E' OR type = 'A'.
+        lv_has_error = abap_true.
+        EXIT.
+      ENDLOOP.
+      IF lv_has_error = abap_false.
+        lv_count = lv_count + lines( lt_nom_items ).
+        DELETE gt_output WHERE nomtk = gs_output-nomtk.
+        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'.
+      ELSE.
+        CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+        lv_fail = lv_fail + lines( lt_nom_items ).
+      ENDIF.
+    ELSE.
+      lv_fail = lv_fail + lines( lt_nom_items ).
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    ENDIF.
+  ENDLOOP.
+* Results
+  IF lv_count > 0.
+    lv_count_c = lv_count. CONDENSE lv_count_c.
+    IF lv_fail > 0 OR lv_skip > 0.
+      lv_fail_c = lv_fail. CONDENSE lv_fail_c.
+      lv_skip_c = lv_skip. CONDENSE lv_skip_c.
+      CONCATENATE lv_count_c 'nomination(s) deleted.'
+                  lv_fail_c 'failed.'
+                  lv_skip_c 'skipped (ticket present).'
+        INTO lv_msg SEPARATED BY space.
+      MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
+    ELSE.
+      CONCATENATE lv_count_c 'nomination(s) deleted successfully.'
+        INTO lv_msg SEPARATED BY space.
+      MESSAGE lv_msg TYPE 'S'.
+    ENDIF.
+  ELSEIF lv_skip > 0.
+    lv_skip_c = lv_skip. CONDENSE lv_skip_c.
+    CONCATENATE 'No nominations deleted.' lv_skip_c
+      'nomination(s) skipped due to ticket present.'
+      INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
+  ELSEIF lv_fail > 0.
+    lv_fail_c = lv_fail. CONDENSE lv_fail_c.
+    CONCATENATE 'Deletion failed for' lv_fail_c 'nomination(s).'
       INTO lv_msg SEPARATED BY space.
     MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'E'.
   ELSE.
