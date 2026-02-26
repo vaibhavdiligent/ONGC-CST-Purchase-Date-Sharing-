@@ -1963,7 +1963,7 @@ FORM handle_send_email.
   " Field 2: Send as PDF checkbox
   CLEAR ls_field.
   ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'VALUE'.
+  ls_field-fieldname = 'COMP_CODE'.
   ls_field-fieldtext = 'Send as PDF (X = Yes)'.
   ls_field-value     = 'X'.
   APPEND ls_field TO lt_fields.
@@ -1971,7 +1971,7 @@ FORM handle_send_email.
   " Field 3: Send as Excel checkbox
   CLEAR ls_field.
   ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'VALUE'.
+  ls_field-fieldname = 'COMP_MAN'.
   ls_field-fieldtext = 'Send as Excel (X = Yes)'.
   ls_field-value     = 'X'.
   APPEND ls_field TO lt_fields.
