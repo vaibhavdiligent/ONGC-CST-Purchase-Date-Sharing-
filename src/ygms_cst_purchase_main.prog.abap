@@ -2210,35 +2210,113 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_PDF_ATTACHMENT
-*& Build PDF content from send data
-*& Note: For production use, replace with Smartform/Adobe Form output
+*& Build valid PDF content from send data using CONVERT_OTF
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE solix_tab
                                   cv_size    TYPE sood-objlen.
-  DATA: lv_content TYPE string,
-        lv_line    TYPE string,
-        lv_xstring TYPE xstring,
-        ls_pur     TYPE yrga_cst_pur.
+  DATA: ls_pur     TYPE yrga_cst_pur,
+        lv_xstring TYPE xstring.
   DATA: lv_gas_day TYPE c LENGTH 10,
         lv_gcv     TYPE c LENGTH 15,
         lv_ncv     TYPE c LENGTH 15,
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
 
-  DATA(lv_tab) = cl_abap_char_utilities=>horizontal_tab.
-  DATA(lv_crlf) = cl_abap_char_utilities=>cr_lf.
+  DATA: lt_otf       TYPE TABLE OF itcoo,
+        ls_otf       TYPE itcoo,
+        lt_lines     TYPE TABLE OF tline,
+        lv_pdf_size  TYPE i,
+        lv_rc        TYPE i.
+
+  DATA: lv_date_from_str TYPE c LENGTH 10,
+        lv_date_to_str   TYPE c LENGTH 10.
+
+  WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+
+  " Build OTF data for PDF conversion
+  " OTF header
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = '//'.
+  ls_otf-tdprintpar = 'DESSION,XDFAULT'.
+  APPEND ls_otf TO lt_otf.
+
+  " Start page (A4 landscape for wide table)
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'OP'.
+  ls_otf-tdprintpar = 'LAND00000000002100002970000000000'.
+  APPEND ls_otf TO lt_otf.
+
+  " Title line
+  DATA lv_title TYPE string.
+  CONCATENATE 'CST Purchase Data -' s_loc-low '-'
+    lv_date_from_str 'to' lv_date_to_str
+    INTO lv_title SEPARATED BY space.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'MT'.
+  ls_otf-tdprintpar = '07200120COURIER  120012001200'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'UL'.
+  ls_otf-tdprintpar = '0001'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = lv_title.
+  APPEND ls_otf TO lt_otf.
+
+  " Blank line after title
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'MT'.
+  ls_otf-tdprintpar = '07200220COURIER  080008000800'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'UL'.
+  ls_otf-tdprintpar = '0001'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = ' '.
+  APPEND ls_otf TO lt_otf.
 
   " Header row
-  CONCATENATE 'Gas Day' lv_tab 'Location' lv_tab 'Material' lv_tab
-    'State Code' lv_tab 'State' lv_tab 'CTP ID' lv_tab
-    'ONGC Material' lv_tab 'ONGC ID' lv_tab 'GCV' lv_tab
-    'NCV' lv_tab 'Qty SCM' lv_tab 'Qty MBG' lv_tab
-    'GAIL ID' lv_tab 'Tax Type' lv_crlf
-    INTO lv_content.
+  DATA lv_header TYPE string.
+  CONCATENATE 'Gas Day   '
+              'Location  '
+              'Material  '
+              'StCode '
+              'State     '
+              'CTP ID    '
+              'ONGC Mater'
+              'ONGC ID   '
+              'GCV       '
+              'NCV       '
+              'Qty SCM   '
+              'Qty MBG   '
+              'GAIL ID   '
+              'Tax Type  '
+    INTO lv_header.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'MT'.
+  ls_otf-tdprintpar = '07200320COURIER  070007000700'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'UL'.
+  ls_otf-tdprintpar = '0001'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = lv_header.
+  APPEND ls_otf TO lt_otf.
 
   " Data rows
+  DATA: lv_row_cnt TYPE i VALUE 4,
+        lv_row_str TYPE c LENGTH 4,
+        lv_mt_par  TYPE c LENGTH 30,
+        lv_data    TYPE string.
   LOOP AT pt_data INTO ls_pur.
+    lv_row_cnt = lv_row_cnt + 1.
+    lv_row_str = lv_row_cnt.
+    CONDENSE lv_row_str NO-GAPS.
+
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
@@ -2246,25 +2324,78 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
 
-    CONCATENATE lv_gas_day lv_tab ls_pur-location lv_tab
-      ls_pur-material lv_tab ls_pur-state_code lv_tab
-      ls_pur-state lv_tab ls_pur-ctp lv_tab
-      ls_pur-ongc_mater lv_tab ls_pur-ongc_id lv_tab
-      lv_gcv lv_tab lv_ncv lv_tab lv_qty_scm lv_tab
-      lv_qty_mbg lv_tab ls_pur-gail_id lv_tab
-      ls_pur-tax_type lv_crlf
-      INTO lv_line.
+    CONCATENATE lv_gas_day ' '
+                ls_pur-location ' '
+                ls_pur-material ' '
+                ls_pur-state_code ' '
+                ls_pur-state ' '
+                ls_pur-ctp ' '
+                ls_pur-ongc_mater ' '
+                ls_pur-ongc_id ' '
+                lv_gcv ' '
+                lv_ncv ' '
+                lv_qty_scm ' '
+                lv_qty_mbg ' '
+                ls_pur-gail_id ' '
+                ls_pur-tax_type
+      INTO lv_data.
 
-    CONCATENATE lv_content lv_line INTO lv_content.
+    CONCATENATE '0720' lv_row_str '20' INTO lv_mt_par.
+    CONCATENATE lv_mt_par 'COURIER  070007000700' INTO lv_mt_par.
+    CLEAR ls_otf.
+    ls_otf-tdprintcom = 'MT'.
+    ls_otf-tdprintpar = lv_mt_par.
+    APPEND ls_otf TO lt_otf.
+    CLEAR ls_otf.
+    ls_otf-tdprintcom = 'UL'.
+    ls_otf-tdprintpar = '0001'.
+    APPEND ls_otf TO lt_otf.
+    CLEAR ls_otf.
+    ls_otf-tdprintcom = lv_data.
+    APPEND ls_otf TO lt_otf.
   ENDLOOP.
 
-  " Convert string to xstring (binary)
-  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_content IMPORTING buffer = lv_xstring ).
+  " End page
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'EP'.
+  APPEND ls_otf TO lt_otf.
 
-  " Convert xstring to solix_tab
+  " End document
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'ED'.
+  APPEND ls_otf TO lt_otf.
+
+  " Convert OTF to PDF
+  CALL FUNCTION 'CONVERT_OTF'
+    EXPORTING
+      format                = 'PDF'
+    IMPORTING
+      bin_filesize          = lv_pdf_size
+    TABLES
+      otf                   = lt_otf
+      lines                 = lt_lines
+    EXCEPTIONS
+      err_max_linewidth     = 1
+      err_format            = 2
+      err_conv_not_possible = 3
+      err_bad_otf           = 4
+      OTHERS                = 5.
+
+  IF sy-subrc <> 0.
+    MESSAGE s000(ygms_msg) WITH 'PDF generation failed'.
+    RETURN.
+  ENDIF.
+
+  " Convert lines table to xstring then to solix_tab
+  DATA: ls_line TYPE tline.
+  CLEAR lv_xstring.
+  LOOP AT lt_lines INTO ls_line.
+    CONCATENATE lv_xstring ls_line-tdformat ls_line-tdline
+      INTO lv_xstring IN BYTE MODE.
+  ENDLOOP.
+
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
-  cv_size = xstrlen( lv_xstring ).
+  cv_size = lv_pdf_size.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
