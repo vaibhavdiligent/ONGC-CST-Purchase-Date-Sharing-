@@ -126,6 +126,32 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
               p_view  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
+
+*----------------------------------------------------------------------*
+* Custom Popup Selection Screen for Email (Screen 2000)
+*----------------------------------------------------------------------*
+DATA: gv_email1    TYPE c LENGTH 120,
+      gv_email2    TYPE c LENGTH 120,
+      gv_email3    TYPE c LENGTH 120,
+      gv_email4    TYPE c LENGTH 120,
+      gv_email5    TYPE c LENGTH 120,
+      gv_send_pdf  TYPE c LENGTH 1 VALUE 'X',
+      gv_send_xls  TYPE c LENGTH 1 VALUE 'X'.
+
+SELECTION-SCREEN BEGIN OF SCREEN 2000 TITLE TEXT-e00.
+  SELECTION-SCREEN BEGIN OF BLOCK b_email WITH FRAME TITLE TEXT-e01.
+    PARAMETERS: p_eml1 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml2 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml3 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml4 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml5 TYPE c LENGTH 120 LOWER CASE MODIF ID eml.
+  SELECTION-SCREEN END OF BLOCK b_email.
+  SELECTION-SCREEN BEGIN OF BLOCK b_fmt WITH FRAME TITLE TEXT-e02.
+    PARAMETERS: p_pdf  AS CHECKBOX DEFAULT 'X' MODIF ID fmt,
+                p_xls  AS CHECKBOX DEFAULT 'X' MODIF ID fmt.
+  SELECTION-SCREEN END OF BLOCK b_fmt.
+SELECTION-SCREEN END OF SCREEN 2000.
+
 *----------------------------------------------------------------------*
 * Global Data
 *----------------------------------------------------------------------*
@@ -1944,60 +1970,26 @@ FORM handle_send_email.
   DATA: lt_send_data   TYPE TABLE OF yrga_cst_pur,
         lt_emails      TYPE TABLE OF string,
         lv_send_pdf    TYPE c LENGTH 1,
-        lv_send_excel  TYPE c LENGTH 1.
+        lv_send_excel  TYPE c LENGTH 1,
+        lv_email_line  TYPE string.
 
-  " Get email addresses and format options from user
-  DATA: lt_fields     TYPE TABLE OF sval,
-        ls_field      TYPE sval,
-        lv_returncode TYPE c LENGTH 1.
+  " Clear popup fields before display
+  CLEAR: p_eml1, p_eml2, p_eml3, p_eml4, p_eml5.
+  p_pdf = 'X'.
+  p_xls = 'X'.
 
-  " Field 1: Email addresses (semicolon-separated)
-  CLEAR ls_field.
-  ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'VALUE'.
-  ls_field-fieldtext = 'Email Addresses (semicolon-separated)'.
-  ls_field-field_obl = 'X'.
-  ls_field-value     = ''.
-  APPEND ls_field TO lt_fields.
+  " Show custom popup selection screen 2000
+  CALL SELECTION-SCREEN 2000 STARTING AT 5 5
+                              ENDING AT 95 14.
 
-  " Field 2: Send as PDF checkbox
-  CLEAR ls_field.
-  ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'COMP_CODE'.
-  ls_field-fieldtext = 'Send as PDF (X = Yes)'.
-  ls_field-value     = 'X'.
-  APPEND ls_field TO lt_fields.
-
-  " Field 3: Send as Excel checkbox
-  CLEAR ls_field.
-  ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'COMP_MAN'.
-  ls_field-fieldtext = 'Send as Excel (X = Yes)'.
-  ls_field-value     = 'X'.
-  APPEND ls_field TO lt_fields.
-
-  CALL FUNCTION 'POPUP_GET_VALUES'
-    EXPORTING
-      popup_title  = 'Email Settings'
-      start_column = 5
-      start_row    = 5
-    IMPORTING
-      returncode   = lv_returncode
-    TABLES
-      fields       = lt_fields.
-
-  IF lv_returncode = 'A'.  " User cancelled
+  IF sy-subrc <> 0.  " User pressed Cancel / Back
     MESSAGE s000(ygms_msg) WITH 'Email send cancelled'.
     RETURN.
   ENDIF.
 
-  " Parse user inputs
-  READ TABLE lt_fields INTO ls_field INDEX 1.
-  DATA(lv_email_str) = ls_field-value.
-  READ TABLE lt_fields INTO ls_field INDEX 2.
-  lv_send_pdf = ls_field-value.
-  READ TABLE lt_fields INTO ls_field INDEX 3.
-  lv_send_excel = ls_field-value.
+  " Read format options
+  lv_send_pdf   = p_pdf.
+  lv_send_excel = p_xls.
 
   " Validate at least one format selected
   IF lv_send_pdf IS INITIAL AND lv_send_excel IS INITIAL.
@@ -2005,9 +1997,32 @@ FORM handle_send_email.
     RETURN.
   ENDIF.
 
-  " Split email addresses by semicolon
-  SPLIT lv_email_str AT ';' INTO TABLE lt_emails.
-  DELETE lt_emails WHERE table_line IS INITIAL.
+  " Collect all non-empty email addresses into internal table
+  IF p_eml1 IS NOT INITIAL.
+    lv_email_line = p_eml1.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml2 IS NOT INITIAL.
+    lv_email_line = p_eml2.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml3 IS NOT INITIAL.
+    lv_email_line = p_eml3.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml4 IS NOT INITIAL.
+    lv_email_line = p_eml4.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml5 IS NOT INITIAL.
+    lv_email_line = p_eml5.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
 
   IF lt_emails IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'Please enter at least one email address'.

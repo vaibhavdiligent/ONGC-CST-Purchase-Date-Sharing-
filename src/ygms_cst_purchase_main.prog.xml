@@ -23,6 +23,66 @@
      <ENTRY>Selection Criteria</ENTRY>
      <LENGTH>18</LENGTH>
     </item>
+    <item>
+     <ID>I</ID>
+     <KEY>E00</KEY>
+     <ENTRY>Send Email</ENTRY>
+     <LENGTH>10</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>E01</KEY>
+     <ENTRY>Email Addresses (one per line)</ENTRY>
+     <LENGTH>31</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>E02</KEY>
+     <ENTRY>Attachment Format</ENTRY>
+     <LENGTH>17</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EML1</KEY>
+     <ENTRY>        Email 1</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EML2</KEY>
+     <ENTRY>        Email 2</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EML3</KEY>
+     <ENTRY>        Email 3</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EML4</KEY>
+     <ENTRY>        Email 4</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EML5</KEY>
+     <ENTRY>        Email 5</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_PDF</KEY>
+     <ENTRY>        Send as PDF</ENTRY>
+     <LENGTH>19</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_XLS</KEY>
+     <ENTRY>        Send as Excel</ENTRY>
+     <LENGTH>21</LENGTH>
+    </item>
    </TPOOL>
   </asx:values>
  </asx:abap>
