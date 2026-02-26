@@ -126,6 +126,32 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
               p_view  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
+
+*----------------------------------------------------------------------*
+* Custom Popup Selection Screen for Email (Screen 2000)
+*----------------------------------------------------------------------*
+DATA: gv_email1    TYPE c LENGTH 120,
+      gv_email2    TYPE c LENGTH 120,
+      gv_email3    TYPE c LENGTH 120,
+      gv_email4    TYPE c LENGTH 120,
+      gv_email5    TYPE c LENGTH 120,
+      gv_send_pdf  TYPE c LENGTH 1 VALUE 'X',
+      gv_send_xls  TYPE c LENGTH 1 VALUE 'X'.
+
+SELECTION-SCREEN BEGIN OF SCREEN 2000 TITLE TEXT-e00.
+  SELECTION-SCREEN BEGIN OF BLOCK b_email WITH FRAME TITLE TEXT-e01.
+    PARAMETERS: p_eml1 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml2 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml3 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml4 TYPE c LENGTH 120 LOWER CASE MODIF ID eml,
+                p_eml5 TYPE c LENGTH 120 LOWER CASE MODIF ID eml.
+  SELECTION-SCREEN END OF BLOCK b_email.
+  SELECTION-SCREEN BEGIN OF BLOCK b_fmt WITH FRAME TITLE TEXT-e02.
+    PARAMETERS: p_pdf  AS CHECKBOX DEFAULT 'X' MODIF ID fmt,
+                p_xls  AS CHECKBOX DEFAULT 'X' MODIF ID fmt.
+  SELECTION-SCREEN END OF BLOCK b_fmt.
+SELECTION-SCREEN END OF SCREEN 2000.
+
 *----------------------------------------------------------------------*
 * Global Data
 *----------------------------------------------------------------------*
@@ -1944,60 +1970,26 @@ FORM handle_send_email.
   DATA: lt_send_data   TYPE TABLE OF yrga_cst_pur,
         lt_emails      TYPE TABLE OF string,
         lv_send_pdf    TYPE c LENGTH 1,
-        lv_send_excel  TYPE c LENGTH 1.
+        lv_send_excel  TYPE c LENGTH 1,
+        lv_email_line  TYPE string.
 
-  " Get email addresses and format options from user
-  DATA: lt_fields     TYPE TABLE OF sval,
-        ls_field      TYPE sval,
-        lv_returncode TYPE c LENGTH 1.
+  " Clear popup fields before display
+  CLEAR: p_eml1, p_eml2, p_eml3, p_eml4, p_eml5.
+  p_pdf = 'X'.
+  p_xls = 'X'.
 
-  " Field 1: Email addresses (semicolon-separated)
-  CLEAR ls_field.
-  ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'VALUE'.
-  ls_field-fieldtext = 'Email Addresses (semicolon-separated)'.
-  ls_field-field_obl = 'X'.
-  ls_field-value     = ''.
-  APPEND ls_field TO lt_fields.
+  " Show custom popup selection screen 2000
+  CALL SELECTION-SCREEN 2000 STARTING AT 5 5
+                              ENDING AT 95 14.
 
-  " Field 2: Send as PDF checkbox
-  CLEAR ls_field.
-  ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'COMP_CODE'.
-  ls_field-fieldtext = 'Send as PDF (X = Yes)'.
-  ls_field-value     = 'X'.
-  APPEND ls_field TO lt_fields.
-
-  " Field 3: Send as Excel checkbox
-  CLEAR ls_field.
-  ls_field-tabname   = 'SVAL'.
-  ls_field-fieldname = 'COMP_MAN'.
-  ls_field-fieldtext = 'Send as Excel (X = Yes)'.
-  ls_field-value     = 'X'.
-  APPEND ls_field TO lt_fields.
-
-  CALL FUNCTION 'POPUP_GET_VALUES'
-    EXPORTING
-      popup_title  = 'Email Settings'
-      start_column = 5
-      start_row    = 5
-    IMPORTING
-      returncode   = lv_returncode
-    TABLES
-      fields       = lt_fields.
-
-  IF lv_returncode = 'A'.  " User cancelled
+  IF sy-subrc <> 0.  " User pressed Cancel / Back
     MESSAGE s000(ygms_msg) WITH 'Email send cancelled'.
     RETURN.
   ENDIF.
 
-  " Parse user inputs
-  READ TABLE lt_fields INTO ls_field INDEX 1.
-  DATA(lv_email_str) = ls_field-value.
-  READ TABLE lt_fields INTO ls_field INDEX 2.
-  lv_send_pdf = ls_field-value.
-  READ TABLE lt_fields INTO ls_field INDEX 3.
-  lv_send_excel = ls_field-value.
+  " Read format options
+  lv_send_pdf   = p_pdf.
+  lv_send_excel = p_xls.
 
   " Validate at least one format selected
   IF lv_send_pdf IS INITIAL AND lv_send_excel IS INITIAL.
@@ -2005,9 +1997,32 @@ FORM handle_send_email.
     RETURN.
   ENDIF.
 
-  " Split email addresses by semicolon
-  SPLIT lv_email_str AT ';' INTO TABLE lt_emails.
-  DELETE lt_emails WHERE table_line IS INITIAL.
+  " Collect all non-empty email addresses into internal table
+  IF p_eml1 IS NOT INITIAL.
+    lv_email_line = p_eml1.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml2 IS NOT INITIAL.
+    lv_email_line = p_eml2.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml3 IS NOT INITIAL.
+    lv_email_line = p_eml3.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml4 IS NOT INITIAL.
+    lv_email_line = p_eml4.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
+  IF p_eml5 IS NOT INITIAL.
+    lv_email_line = p_eml5.
+    CONDENSE lv_email_line.
+    APPEND lv_email_line TO lt_emails.
+  ENDIF.
 
   IF lt_emails IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'Please enter at least one email address'.
@@ -2195,35 +2210,113 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_PDF_ATTACHMENT
-*& Build PDF content from send data
-*& Note: For production use, replace with Smartform/Adobe Form output
+*& Build valid PDF content from send data using CONVERT_OTF
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE solix_tab
                                   cv_size    TYPE sood-objlen.
-  DATA: lv_content TYPE string,
-        lv_line    TYPE string,
-        lv_xstring TYPE xstring,
-        ls_pur     TYPE yrga_cst_pur.
+  DATA: ls_pur     TYPE yrga_cst_pur,
+        lv_xstring TYPE xstring.
   DATA: lv_gas_day TYPE c LENGTH 10,
         lv_gcv     TYPE c LENGTH 15,
         lv_ncv     TYPE c LENGTH 15,
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
 
-  DATA(lv_tab) = cl_abap_char_utilities=>horizontal_tab.
-  DATA(lv_crlf) = cl_abap_char_utilities=>cr_lf.
+  DATA: lt_otf       TYPE TABLE OF itcoo,
+        ls_otf       TYPE itcoo,
+        lt_lines     TYPE TABLE OF tline,
+        lv_pdf_size  TYPE i,
+        lv_rc        TYPE i.
+
+  DATA: lv_date_from_str TYPE c LENGTH 10,
+        lv_date_to_str   TYPE c LENGTH 10.
+
+  WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+
+  " Build OTF data for PDF conversion
+  " OTF header
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = '//'.
+  ls_otf-tdprintpar = 'DESSION,XDFAULT'.
+  APPEND ls_otf TO lt_otf.
+
+  " Start page (A4 landscape for wide table)
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'OP'.
+  ls_otf-tdprintpar = 'LAND00000000002100002970000000000'.
+  APPEND ls_otf TO lt_otf.
+
+  " Title line
+  DATA lv_title TYPE string.
+  CONCATENATE 'CST Purchase Data -' s_loc-low '-'
+    lv_date_from_str 'to' lv_date_to_str
+    INTO lv_title SEPARATED BY space.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'MT'.
+  ls_otf-tdprintpar = '07200120COURIER  120012001200'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'UL'.
+  ls_otf-tdprintpar = '0001'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = lv_title.
+  APPEND ls_otf TO lt_otf.
+
+  " Blank line after title
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'MT'.
+  ls_otf-tdprintpar = '07200220COURIER  080008000800'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'UL'.
+  ls_otf-tdprintpar = '0001'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = ' '.
+  APPEND ls_otf TO lt_otf.
 
   " Header row
-  CONCATENATE 'Gas Day' lv_tab 'Location' lv_tab 'Material' lv_tab
-    'State Code' lv_tab 'State' lv_tab 'CTP ID' lv_tab
-    'ONGC Material' lv_tab 'ONGC ID' lv_tab 'GCV' lv_tab
-    'NCV' lv_tab 'Qty SCM' lv_tab 'Qty MBG' lv_tab
-    'GAIL ID' lv_tab 'Tax Type' lv_crlf
-    INTO lv_content.
+  DATA lv_header TYPE string.
+  CONCATENATE 'Gas Day   '
+              'Location  '
+              'Material  '
+              'StCode '
+              'State     '
+              'CTP ID    '
+              'ONGC Mater'
+              'ONGC ID   '
+              'GCV       '
+              'NCV       '
+              'Qty SCM   '
+              'Qty MBG   '
+              'GAIL ID   '
+              'Tax Type  '
+    INTO lv_header.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'MT'.
+  ls_otf-tdprintpar = '07200320COURIER  070007000700'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'UL'.
+  ls_otf-tdprintpar = '0001'.
+  APPEND ls_otf TO lt_otf.
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = lv_header.
+  APPEND ls_otf TO lt_otf.
 
   " Data rows
+  DATA: lv_row_cnt TYPE i VALUE 4,
+        lv_row_str TYPE c LENGTH 4,
+        lv_mt_par  TYPE c LENGTH 30,
+        lv_data    TYPE string.
   LOOP AT pt_data INTO ls_pur.
+    lv_row_cnt = lv_row_cnt + 1.
+    lv_row_str = lv_row_cnt.
+    CONDENSE lv_row_str NO-GAPS.
+
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
@@ -2231,25 +2324,72 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
 
-    CONCATENATE lv_gas_day lv_tab ls_pur-location lv_tab
-      ls_pur-material lv_tab ls_pur-state_code lv_tab
-      ls_pur-state lv_tab ls_pur-ctp lv_tab
-      ls_pur-ongc_mater lv_tab ls_pur-ongc_id lv_tab
-      lv_gcv lv_tab lv_ncv lv_tab lv_qty_scm lv_tab
-      lv_qty_mbg lv_tab ls_pur-gail_id lv_tab
-      ls_pur-tax_type lv_crlf
-      INTO lv_line.
+    CONCATENATE lv_gas_day ' '
+                ls_pur-location ' '
+                ls_pur-material ' '
+                ls_pur-state_code ' '
+                ls_pur-state ' '
+                ls_pur-ctp ' '
+                ls_pur-ongc_mater ' '
+                ls_pur-ongc_id ' '
+                lv_gcv ' '
+                lv_ncv ' '
+                lv_qty_scm ' '
+                lv_qty_mbg ' '
+                ls_pur-gail_id ' '
+                ls_pur-tax_type
+      INTO lv_data.
 
-    CONCATENATE lv_content lv_line INTO lv_content.
+    CONCATENATE '0720' lv_row_str '20' INTO lv_mt_par.
+    CONCATENATE lv_mt_par 'COURIER  070007000700' INTO lv_mt_par.
+    CLEAR ls_otf.
+    ls_otf-tdprintcom = 'MT'.
+    ls_otf-tdprintpar = lv_mt_par.
+    APPEND ls_otf TO lt_otf.
+    CLEAR ls_otf.
+    ls_otf-tdprintcom = 'UL'.
+    ls_otf-tdprintpar = '0001'.
+    APPEND ls_otf TO lt_otf.
+    CLEAR ls_otf.
+    ls_otf-tdprintcom = lv_data.
+    APPEND ls_otf TO lt_otf.
   ENDLOOP.
 
-  " Convert string to xstring (binary)
-  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_content IMPORTING buffer = lv_xstring ).
+  " End page
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'EP'.
+  APPEND ls_otf TO lt_otf.
 
-  " Convert xstring to solix_tab
+  " End document
+  CLEAR ls_otf.
+  ls_otf-tdprintcom = 'ED'.
+  APPEND ls_otf TO lt_otf.
+
+  " Convert OTF to PDF - bin_file returns PDF directly as xstring
+  CALL FUNCTION 'CONVERT_OTF'
+    EXPORTING
+      format                = 'PDF'
+    IMPORTING
+      bin_filesize          = lv_pdf_size
+      bin_file              = lv_xstring
+    TABLES
+      otf                   = lt_otf
+      lines                 = lt_lines
+    EXCEPTIONS
+      err_max_linewidth     = 1
+      err_format            = 2
+      err_conv_not_possible = 3
+      err_bad_otf           = 4
+      OTHERS                = 5.
+
+  IF sy-subrc <> 0.
+    MESSAGE s000(ygms_msg) WITH 'PDF generation failed'.
+    RETURN.
+  ENDIF.
+
+  " Convert xstring directly to solix_tab
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
-  cv_size = xstrlen( lv_xstring ).
+  cv_size = lv_pdf_size.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
