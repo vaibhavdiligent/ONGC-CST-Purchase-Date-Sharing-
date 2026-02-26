@@ -2365,12 +2365,13 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   ls_otf-tdprintcom = 'ED'.
   APPEND ls_otf TO lt_otf.
 
-  " Convert OTF to PDF
+  " Convert OTF to PDF - bin_file returns PDF directly as xstring
   CALL FUNCTION 'CONVERT_OTF'
     EXPORTING
       format                = 'PDF'
     IMPORTING
       bin_filesize          = lv_pdf_size
+      bin_file              = lv_xstring
     TABLES
       otf                   = lt_otf
       lines                 = lt_lines
@@ -2386,14 +2387,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     RETURN.
   ENDIF.
 
-  " Convert lines table to xstring then to solix_tab
-  DATA: ls_line TYPE tline.
-  CLEAR lv_xstring.
-  LOOP AT lt_lines INTO ls_line.
-    CONCATENATE lv_xstring ls_line-tdformat ls_line-tdline
-      INTO lv_xstring IN BYTE MODE.
-  ENDLOOP.
-
+  " Convert xstring directly to solix_tab
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
   cv_size = lv_pdf_size.
 ENDFORM.
