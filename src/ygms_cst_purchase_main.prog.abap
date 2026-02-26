@@ -1743,9 +1743,460 @@ FORM handle_reset.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND
+*& Point 1: Send Allocation Data
 *&---------------------------------------------------------------------*
 FORM handle_send.
-  MESSAGE s000(ygms_msg) WITH 'Send function triggered'.
+  DATA: lv_valid TYPE abap_bool.
+
+  " Step 1.2: Data validation before initiating data transfer
+  " Check if any new receipt data has been received from ONGC
+  PERFORM validate_before_send CHANGING lv_valid.
+  IF lv_valid = abap_false.
+    RETURN.
+  ENDIF.
+
+  " Step 1.1: Show send mode selection popup (Email or B2B)
+  PERFORM show_send_mode_popup.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form VALIDATE_BEFORE_SEND
+*& 1.2: Check if new receipt data from ONGC before sending
+*&---------------------------------------------------------------------*
+FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
+  DATA: lt_b2b_receipt TYPE TABLE OF yrga_cst_b2b_1,
+        lt_cst_pur     TYPE TABLE OF yrga_cst_pur,
+        lv_answer      TYPE c LENGTH 1,
+        lv_new_found   TYPE abap_bool.
+
+  cv_valid = abap_true.
+
+  " 1.2.1: Fetch latest receipt data from YRGA_CST_B2B_1 for user inputs
+  " Use YRGA_CST_LOC_MAP to convert Location ID to ONGC CTP ID
+  DATA: lt_ctp_ids TYPE TABLE OF ygms_de_ongc_ctp.
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_map).
+    COLLECT ls_map-ongc_ctp_id INTO lt_ctp_ids.
+  ENDLOOP.
+
+  IF lt_ctp_ids IS NOT INITIAL.
+    SELECT * FROM yrga_cst_b2b_1
+      INTO TABLE lt_b2b_receipt
+      FOR ALL ENTRIES IN lt_ctp_ids
+      WHERE ctp_id  = lt_ctp_ids-table_line
+        AND gas_day BETWEEN gv_date_from AND gv_date_to
+        AND qty_scm > 0.
+  ENDIF.
+
+  IF lt_b2b_receipt IS INITIAL.
+    RETURN.  " No receipt data at all, proceed with send
+  ENDIF.
+
+  " Keep only latest records (dedup by timestamp)
+  SORT lt_b2b_receipt BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_b2b_receipt COMPARING ctp_id gas_day ongc_material.
+
+  " 1.2.2: Fetch saved data from YRGA_CST_PUR by passing user inputs
+  SELECT * FROM yrga_cst_pur
+    INTO TABLE lt_cst_pur
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc.
+
+  " 1.2.3: Pick all ONGC IDs appearing in receipt data and check if they
+  " appear in the saved data. Even if one ONGC ID is not found, block send.
+  CLEAR gt_new_receipt_data.
+  lv_new_found = abap_false.
+
+  LOOP AT lt_b2b_receipt INTO DATA(ls_b2b).
+    READ TABLE lt_cst_pur TRANSPORTING NO FIELDS
+      WITH KEY ongc_id = ls_b2b-ongc_id.
+    IF sy-subrc <> 0.
+      " ONGC ID not found in saved data - new receipt data received
+      lv_new_found = abap_true.
+      APPEND ls_b2b TO gt_new_receipt_data.
+    ENDIF.
+  ENDLOOP.
+
+  IF lv_new_found = abap_true.
+    cv_valid = abap_false.
+    " Show popup: Cannot send data as new receipt data from ONGC has been received
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Cannot send data as new receipt data from ONGC has been received.'
+        textline2      = 'Please run allocation again. Click Yes to view details.'
+        titel          = 'Cannot Send Data'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_answer.
+    IF lv_answer = 'J'.  " Yes = View Details
+      " Show complete record associated with new ONGC ID in separate screen
+      PERFORM display_new_receipt_data.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SHOW_SEND_MODE_POPUP
+*& 1.1: Select mode of data transfer (Email or B2B)
+*&---------------------------------------------------------------------*
+FORM show_send_mode_popup.
+  DATA: lv_answer TYPE c LENGTH 1.
+
+  CALL FUNCTION 'POPUP_TO_DECIDE'
+    EXPORTING
+      defaultoption = '1'
+      textline1     = 'Please select the mode of data transfer:'
+      textline2     = ''
+      text_option1  = 'Through Email'
+      text_option2  = 'Through B2B'
+      titel         = 'Send Allocation Data'
+    IMPORTING
+      answer        = lv_answer.
+
+  CASE lv_answer.
+    WHEN '1'.
+      " 1.1.1: Through Email
+      PERFORM handle_send_email.
+    WHEN '2'.
+      " 1.1.2: Through B2B
+      PERFORM handle_send_b2b.
+    WHEN OTHERS.
+      MESSAGE s000(ygms_msg) WITH 'Send operation cancelled'.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form HANDLE_SEND_EMAIL
+*& 1.1.1: Send data through Email with PDF/Excel attachments
+*&---------------------------------------------------------------------*
+FORM handle_send_email.
+  DATA: lt_send_data   TYPE TABLE OF yrga_cst_pur,
+        lt_emails      TYPE TABLE OF string,
+        lv_send_pdf    TYPE c LENGTH 1,
+        lv_send_excel  TYPE c LENGTH 1.
+
+  " Get email addresses and format options from user
+  DATA: lt_fields     TYPE TABLE OF sval,
+        ls_field      TYPE sval,
+        lv_returncode TYPE c LENGTH 1.
+
+  " Field 1: Email addresses (semicolon-separated)
+  CLEAR ls_field.
+  ls_field-tabname   = 'SVAL'.
+  ls_field-fieldname = 'VALUE'.
+  ls_field-fieldtext = 'Email Addresses (semicolon-separated)'.
+  ls_field-field_obl = 'X'.
+  ls_field-value     = ''.
+  APPEND ls_field TO lt_fields.
+
+  " Field 2: Send as PDF checkbox
+  CLEAR ls_field.
+  ls_field-tabname   = 'SVAL'.
+  ls_field-fieldname = 'VALUE'.
+  ls_field-fieldtext = 'Send as PDF (X = Yes)'.
+  ls_field-value     = 'X'.
+  APPEND ls_field TO lt_fields.
+
+  " Field 3: Send as Excel checkbox
+  CLEAR ls_field.
+  ls_field-tabname   = 'SVAL'.
+  ls_field-fieldname = 'VALUE'.
+  ls_field-fieldtext = 'Send as Excel (X = Yes)'.
+  ls_field-value     = 'X'.
+  APPEND ls_field TO lt_fields.
+
+  CALL FUNCTION 'POPUP_GET_VALUES'
+    EXPORTING
+      popup_title  = 'Email Settings'
+      start_column = 5
+      start_row    = 5
+    IMPORTING
+      returncode   = lv_returncode
+    TABLES
+      fields       = lt_fields.
+
+  IF lv_returncode = 'A'.  " User cancelled
+    MESSAGE s000(ygms_msg) WITH 'Email send cancelled'.
+    RETURN.
+  ENDIF.
+
+  " Parse user inputs
+  READ TABLE lt_fields INTO ls_field INDEX 1.
+  DATA(lv_email_str) = ls_field-value.
+  READ TABLE lt_fields INTO ls_field INDEX 2.
+  lv_send_pdf = ls_field-value.
+  READ TABLE lt_fields INTO ls_field INDEX 3.
+  lv_send_excel = ls_field-value.
+
+  " Validate at least one format selected
+  IF lv_send_pdf IS INITIAL AND lv_send_excel IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'Please select at least one format (PDF or Excel)'.
+    RETURN.
+  ENDIF.
+
+  " Split email addresses by semicolon
+  SPLIT lv_email_str AT ';' INTO TABLE lt_emails.
+  DELETE lt_emails WHERE table_line IS INITIAL.
+
+  IF lt_emails IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'Please enter at least one email address'.
+    RETURN.
+  ENDIF.
+
+  " Fetch data from YRGA_CST_PUR where EXCLUDED flag is not X
+  SELECT * FROM yrga_cst_pur
+    INTO TABLE lt_send_data
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude <> 'X'.
+
+  IF lt_send_data IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
+    RETURN.
+  ENDIF.
+
+  " Send email with PDF and/or Excel attachments
+  PERFORM send_email USING lt_emails lt_send_data lv_send_pdf lv_send_excel.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SEND_EMAIL
+*& Send email with PDF and/or Excel attachments using CL_BCS
+*&---------------------------------------------------------------------*
+FORM send_email USING pt_emails   TYPE string_table
+                      pt_data     TYPE STANDARD TABLE
+                      pv_send_pdf TYPE c
+                      pv_send_xls TYPE c.
+  DATA: lo_send_request TYPE REF TO cl_bcs,
+        lo_document     TYPE REF TO cl_document_bcs,
+        lo_recipient    TYPE REF TO if_recipient_bcs,
+        lo_sender       TYPE REF TO cl_sapuser_bcs,
+        lt_body         TYPE bcsy_text,
+        ls_body         TYPE soli,
+        lv_subject      TYPE so_obj_des,
+        lt_att_hex      TYPE solix_tab,
+        lv_att_subject  TYPE sood-objdes,
+        lv_att_size     TYPE sood-objlen,
+        lv_sent_all     TYPE os_boolean,
+        lx_bcs          TYPE REF TO cx_bcs.
+
+  DATA: lv_date_from_str TYPE c LENGTH 10,
+        lv_date_to_str   TYPE c LENGTH 10.
+
+  WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+
+  TRY.
+      " Create persistent send request
+      lo_send_request = cl_bcs=>create_persistent( ).
+
+      " Build email body
+      CONCATENATE 'CST Purchase Data for Location' s_loc-low
+        'Period:' lv_date_from_str 'to' lv_date_to_str
+        INTO ls_body-line SEPARATED BY space.
+      APPEND ls_body TO lt_body.
+      CLEAR ls_body.
+      ls_body-line = 'Please find the allocation data attached.'.
+      APPEND ls_body TO lt_body.
+
+      " Create email document (body)
+      CONCATENATE 'CST Purchase Data -' s_loc-low '-'
+        lv_date_from_str 'to' lv_date_to_str
+        INTO lv_subject SEPARATED BY space.
+      lo_document = cl_document_bcs=>create_document(
+        i_type    = 'RAW'
+        i_text    = lt_body
+        i_subject = lv_subject ).
+
+      " Add Excel attachment if selected
+      IF pv_send_xls = 'X'.
+        CLEAR: lt_att_hex, lv_att_size.
+        PERFORM build_excel_attachment USING pt_data
+                                      CHANGING lt_att_hex lv_att_size.
+        CONCATENATE 'CST_Purchase_' s_loc-low '_' gv_date_from '_' gv_date_to
+          INTO lv_att_subject.
+        lo_document->add_attachment(
+          i_attachment_type    = 'XLS'
+          i_attachment_subject = lv_att_subject
+          i_attachment_size    = lv_att_size
+          i_att_content_hex    = lt_att_hex ).
+      ENDIF.
+
+      " Add PDF attachment if selected
+      IF pv_send_pdf = 'X'.
+        CLEAR: lt_att_hex, lv_att_size.
+        PERFORM build_pdf_attachment USING pt_data
+                                    CHANGING lt_att_hex lv_att_size.
+        CONCATENATE 'CST_Purchase_' s_loc-low '_' gv_date_from '_' gv_date_to
+          INTO lv_att_subject.
+        lo_document->add_attachment(
+          i_attachment_type    = 'PDF'
+          i_attachment_subject = lv_att_subject
+          i_attachment_size    = lv_att_size
+          i_att_content_hex    = lt_att_hex ).
+      ENDIF.
+
+      " Set document to send request
+      lo_send_request->set_document( lo_document ).
+
+      " Add all recipients
+      LOOP AT pt_emails INTO DATA(lv_email).
+        CONDENSE lv_email.
+        lo_recipient = cl_cam_address_bcs=>create_internet_address( lv_email ).
+        lo_send_request->add_recipient( lo_recipient ).
+      ENDLOOP.
+
+      " Set sender as current user
+      lo_sender = cl_sapuser_bcs=>create( sy-uname ).
+      lo_send_request->set_sender( lo_sender ).
+
+      " Send immediately
+      lo_send_request->set_send_immediately( abap_true ).
+      lv_sent_all = lo_send_request->send( ).
+
+      IF lv_sent_all = abap_true.
+        COMMIT WORK.
+        MESSAGE s000(ygms_msg) WITH 'Email sent successfully'.
+      ELSE.
+        MESSAGE s000(ygms_msg) WITH 'Error sending email'.
+      ENDIF.
+
+    CATCH cx_bcs INTO lx_bcs.
+      DATA(lv_error_text) = lx_bcs->get_text( ).
+      MESSAGE s000(ygms_msg) WITH 'Email error:' lv_error_text.
+  ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form BUILD_EXCEL_ATTACHMENT
+*& Build Excel (tab-delimited) content from send data
+*&---------------------------------------------------------------------*
+FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
+                           CHANGING ct_content TYPE solix_tab
+                                    cv_size    TYPE sood-objlen.
+  DATA: lv_content TYPE string,
+        lv_line    TYPE string,
+        lv_xstring TYPE xstring,
+        ls_pur     TYPE yrga_cst_pur.
+  DATA: lv_gas_day TYPE c LENGTH 10,
+        lv_gcv     TYPE c LENGTH 15,
+        lv_ncv     TYPE c LENGTH 15,
+        lv_qty_scm TYPE c LENGTH 15,
+        lv_qty_mbg TYPE c LENGTH 15.
+
+  DATA(lv_tab) = cl_abap_char_utilities=>horizontal_tab.
+  DATA(lv_crlf) = cl_abap_char_utilities=>cr_lf.
+
+  " Header row
+  CONCATENATE 'Gas Day' lv_tab 'Location' lv_tab 'Material' lv_tab
+    'State Code' lv_tab 'State' lv_tab 'CTP ID' lv_tab
+    'ONGC Material' lv_tab 'ONGC ID' lv_tab 'GCV' lv_tab
+    'NCV' lv_tab 'Qty SCM' lv_tab 'Qty MBG' lv_tab
+    'GAIL ID' lv_tab 'Tax Type' lv_crlf
+    INTO lv_content.
+
+  " Data rows
+  LOOP AT pt_data INTO ls_pur.
+    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+
+    CONCATENATE lv_gas_day lv_tab ls_pur-location lv_tab
+      ls_pur-material lv_tab ls_pur-state_code lv_tab
+      ls_pur-state lv_tab ls_pur-ctp lv_tab
+      ls_pur-ongc_mater lv_tab ls_pur-ongc_id lv_tab
+      lv_gcv lv_tab lv_ncv lv_tab lv_qty_scm lv_tab
+      lv_qty_mbg lv_tab ls_pur-gail_id lv_tab
+      ls_pur-tax_type lv_crlf
+      INTO lv_line.
+
+    CONCATENATE lv_content lv_line INTO lv_content.
+  ENDLOOP.
+
+  " Convert string to xstring (binary)
+  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+  lo_conv->convert( EXPORTING data = lv_content IMPORTING buffer = lv_xstring ).
+
+  " Convert xstring to solix_tab
+  ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
+  cv_size = xstrlen( lv_xstring ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form BUILD_PDF_ATTACHMENT
+*& Build PDF content from send data
+*& Note: For production use, replace with Smartform/Adobe Form output
+*&---------------------------------------------------------------------*
+FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
+                         CHANGING ct_content TYPE solix_tab
+                                  cv_size    TYPE sood-objlen.
+  DATA: lv_content TYPE string,
+        lv_line    TYPE string,
+        lv_xstring TYPE xstring,
+        ls_pur     TYPE yrga_cst_pur.
+  DATA: lv_gas_day TYPE c LENGTH 10,
+        lv_gcv     TYPE c LENGTH 15,
+        lv_ncv     TYPE c LENGTH 15,
+        lv_qty_scm TYPE c LENGTH 15,
+        lv_qty_mbg TYPE c LENGTH 15.
+
+  DATA(lv_tab) = cl_abap_char_utilities=>horizontal_tab.
+  DATA(lv_crlf) = cl_abap_char_utilities=>cr_lf.
+
+  " Header row
+  CONCATENATE 'Gas Day' lv_tab 'Location' lv_tab 'Material' lv_tab
+    'State Code' lv_tab 'State' lv_tab 'CTP ID' lv_tab
+    'ONGC Material' lv_tab 'ONGC ID' lv_tab 'GCV' lv_tab
+    'NCV' lv_tab 'Qty SCM' lv_tab 'Qty MBG' lv_tab
+    'GAIL ID' lv_tab 'Tax Type' lv_crlf
+    INTO lv_content.
+
+  " Data rows
+  LOOP AT pt_data INTO ls_pur.
+    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+
+    CONCATENATE lv_gas_day lv_tab ls_pur-location lv_tab
+      ls_pur-material lv_tab ls_pur-state_code lv_tab
+      ls_pur-state lv_tab ls_pur-ctp lv_tab
+      ls_pur-ongc_mater lv_tab ls_pur-ongc_id lv_tab
+      lv_gcv lv_tab lv_ncv lv_tab lv_qty_scm lv_tab
+      lv_qty_mbg lv_tab ls_pur-gail_id lv_tab
+      ls_pur-tax_type lv_crlf
+      INTO lv_line.
+
+    CONCATENATE lv_content lv_line INTO lv_content.
+  ENDLOOP.
+
+  " Convert string to xstring (binary)
+  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+  lo_conv->convert( EXPORTING data = lv_content IMPORTING buffer = lv_xstring ).
+
+  " Convert xstring to solix_tab
+  ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
+  cv_size = xstrlen( lv_xstring ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form HANDLE_SEND_B2B
+*& 1.1.2: Send data through B2B PI connectivity
+*&---------------------------------------------------------------------*
+FORM handle_send_b2b.
+  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur.
+
+  " Fetch data from YRGA_CST_PUR where EXCLUDED flag is not X
+  SELECT * FROM yrga_cst_pur
+    INTO TABLE lt_send_data
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude <> 'X'.
+
+  IF lt_send_data IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
+    RETURN.
+  ENDIF.
+
+  " B2B PI connectivity - to be implemented when B2B connection is established
+  MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form RECALCULATE_TOTALS
