@@ -2064,17 +2064,13 @@ FORM send_email USING pt_emails   TYPE string_table
         lv_att_size     TYPE sood-objlen,
         lv_sent_all     TYPE os_boolean,
         lx_bcs          TYPE REF TO cx_bcs.
-
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
-
   TRY.
       " Create persistent send request
       lo_send_request = cl_bcs=>create_persistent( ).
-
       " Build email body
       CONCATENATE 'CST Purchase Data for Location' s_loc-low
         'Period:' lv_date_from_str 'to' lv_date_to_str
@@ -2083,7 +2079,6 @@ FORM send_email USING pt_emails   TYPE string_table
       CLEAR ls_body.
       ls_body-line = 'Please find the allocation data attached.'.
       APPEND ls_body TO lt_body.
-
       " Create email document (body)
       CONCATENATE 'CST Purchase Data -' s_loc-low '-'
         lv_date_from_str 'to' lv_date_to_str
@@ -2092,7 +2087,6 @@ FORM send_email USING pt_emails   TYPE string_table
         i_type    = 'RAW'
         i_text    = lt_body
         i_subject = lv_subject ).
-
       " Add Excel attachment if selected
       IF pv_send_xls = 'X'.
         CLEAR: lt_att_hex, lv_att_size.
@@ -2106,8 +2100,7 @@ FORM send_email USING pt_emails   TYPE string_table
           i_attachment_size    = lv_att_size
           i_att_content_hex    = lt_att_hex ).
       ENDIF.
-
-      " Add PDF/HTML attachment if selected
+      " Add PDF attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_hex, lv_att_size.
         PERFORM build_pdf_attachment USING pt_data
@@ -2120,32 +2113,28 @@ FORM send_email USING pt_emails   TYPE string_table
           i_attachment_size    = lv_att_size
           i_att_content_hex    = lt_att_hex ).
       ENDIF.
-
       " Set document to send request
       lo_send_request->set_document( lo_document ).
-
+data l_mail type adr6-smtp_addr.
       " Add all recipients
       LOOP AT pt_emails INTO DATA(lv_email).
         CONDENSE lv_email.
-        lo_recipient = cl_cam_address_bcs=>create_internet_address( lv_email ).
+        l_mail = lv_email.
+        lo_recipient = cl_cam_address_bcs=>create_internet_address( l_mail ).
         lo_send_request->add_recipient( lo_recipient ).
       ENDLOOP.
-
       " Set sender as current user
       lo_sender = cl_sapuser_bcs=>create( sy-uname ).
       lo_send_request->set_sender( lo_sender ).
-
       " Send immediately
       lo_send_request->set_send_immediately( abap_true ).
       lv_sent_all = lo_send_request->send( ).
-
       IF lv_sent_all = abap_true.
         COMMIT WORK.
         MESSAGE s000(ygms_msg) WITH 'Email sent successfully'.
       ELSE.
         MESSAGE s000(ygms_msg) WITH 'Error sending email'.
       ENDIF.
-
     CATCH cx_bcs INTO lx_bcs.
       DATA(lv_error_text) = lx_bcs->get_text( ).
       MESSAGE s000(ygms_msg) WITH 'Email error:' lv_error_text.
@@ -2176,7 +2165,7 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     'State Code' lv_tab 'State' lv_tab 'CTP ID' lv_tab
     'ONGC Material' lv_tab 'ONGC ID' lv_tab 'GCV' lv_tab
     'NCV' lv_tab 'Qty SCM' lv_tab 'Qty MBG' lv_tab
-    'GAIL ID' lv_tab 'Tax Type' lv_crlf
+    'GAIL ID' lv_tab  lv_crlf
     INTO lv_content.
 
   " Data rows
@@ -2194,7 +2183,8 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
       ls_pur-ongc_mater lv_tab ls_pur-ongc_id lv_tab
       lv_gcv lv_tab lv_ncv lv_tab lv_qty_scm lv_tab
       lv_qty_mbg lv_tab ls_pur-gail_id lv_tab
-      ls_pur-tax_type lv_crlf
+*      ls_pur-tax_type
+      lv_crlf
       INTO lv_line.
 
     CONCATENATE lv_content lv_line INTO lv_content.
@@ -2210,114 +2200,120 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_PDF_ATTACHMENT
-*& Build HTML table content for reliable email attachment rendering
+*& Build HTML table with inline styles for SAP email compatibility
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE solix_tab
                                   cv_size    TYPE sood-objlen.
-
   DATA: ls_pur     TYPE yrga_cst_pur,
         lv_xstring TYPE xstring.
-
   DATA: lv_gas_day TYPE c LENGTH 10,
         lv_gcv     TYPE c LENGTH 15,
         lv_ncv     TYPE c LENGTH 15,
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
-
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-
-  DATA: lv_html TYPE string.
-
+  DATA: lv_html TYPE string,
+        lv_row  TYPE i.
+  CONSTANTS:
+    lc_th TYPE string VALUE 'style="background-color:#1a5276;color:white;padding:6px 8px;text-align:left;border:1px solid #999;font-size:11px;"',
+    lc_td TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;"',
+    lc_tn TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;text-align:right;"',
+    lc_e  TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;"',
+    lc_en TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;text-align:right;"'.
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
-
-  " Build HTML document with styled table
+  " HTML header
   CONCATENATE
-    '<html><head><meta charset="utf-8">'
-    '<style>'
-    'body{font-family:Arial,sans-serif;margin:20px;}'
-    'h2{color:#333;}'
-    'table{border-collapse:collapse;width:100%;font-size:11px;}'
-    'th{background-color:#1a5276;color:white;padding:6px 8px;'
-    'text-align:left;border:1px solid #999;}'
-    'td{padding:4px 8px;border:1px solid #ccc;}'
-    'tr:nth-child(even){background-color:#f2f2f2;}'
-    'tr:hover{background-color:#d6eaf8;}'
-    '.num{text-align:right;}'
-    '</style></head><body>'
+    '<html><head><meta charset="utf-8"></head>'
+    '<body style="font-family:Arial,sans-serif;margin:20px;">'
     INTO lv_html.
-
   " Title
   CONCATENATE lv_html
-    '<h2>CST Purchase Data - ' s_loc-low
+    '<h2 style="color:#333;">CST Purchase Data - ' s_loc-low
     ' - ' lv_date_from_str ' to ' lv_date_to_str '</h2>'
     INTO lv_html.
-
-  " Table header
+  " Table header with inline styles
   CONCATENATE lv_html
-    '<table>'
+    '<table style="border-collapse:collapse;width:100%;">'
     '<tr>'
-    '<th>Gas Day</th>'
-    '<th>Location</th>'
-    '<th>Material</th>'
-    '<th>State Code</th>'
-    '<th>State</th>'
-    '<th>CTP ID</th>'
-    '<th>ONGC Material</th>'
-    '<th>ONGC ID</th>'
-    '<th>GCV</th>'
-    '<th>NCV</th>'
-    '<th>Qty SCM</th>'
-    '<th>Qty MBG</th>'
-    '<th>GAIL ID</th>'
-    '<th>Tax Type</th>'
+    '<th ' lc_th '>Gas Day</th>'
+    '<th ' lc_th '>Location</th>'
+    '<th ' lc_th '>Material</th>'
+    '<th ' lc_th '>State Code</th>'
+    '<th ' lc_th '>State</th>'
+    '<th ' lc_th '>CTP ID</th>'
+    '<th ' lc_th '>ONGC Material</th>'
+    '<th ' lc_th '>ONGC ID</th>'
+    '<th ' lc_th '>GCV</th>'
+    '<th ' lc_th '>NCV</th>'
+    '<th ' lc_th '>Qty SCM</th>'
+    '<th ' lc_th '>Qty MBG</th>'
+    '<th ' lc_th '>GAIL ID</th>'
+*    '<th ' lc_th '>Tax Type</th>'
     '</tr>'
     INTO lv_html.
-
-  " Data rows
+  " Data rows with inline styles
+  lv_row = 0.
   LOOP AT pt_data INTO ls_pur.
+    lv_row = lv_row + 1.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
     WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-
-    CONCATENATE lv_html
-      '<tr>'
-      '<td>' lv_gas_day '</td>'
-      '<td>' ls_pur-location '</td>'
-      '<td>' ls_pur-material '</td>'
-      '<td>' ls_pur-state_code '</td>'
-      '<td>' ls_pur-state '</td>'
-      '<td>' ls_pur-ctp '</td>'
-      '<td>' ls_pur-ongc_mater '</td>'
-      '<td>' ls_pur-ongc_id '</td>'
-      INTO lv_html.
-
-    CONCATENATE lv_html
-      '<td class="num">' lv_gcv '</td>'
-      '<td class="num">' lv_ncv '</td>'
-      '<td class="num">' lv_qty_scm '</td>'
-      '<td class="num">' lv_qty_mbg '</td>'
-      '<td>' ls_pur-gail_id '</td>'
-      '<td>' ls_pur-tax_type '</td>'
-      '</tr>'
-      INTO lv_html.
+    " Check even/odd for alternating row color
+    IF lv_row MOD 2 = 0.
+      " Even row - grey background
+      CONCATENATE lv_html
+        '<tr>'
+        '<td ' lc_e '>' lv_gas_day '</td>'
+        '<td ' lc_e '>' ls_pur-location '</td>'
+        '<td ' lc_e '>' ls_pur-material '</td>'
+        '<td ' lc_e '>' ls_pur-state_code '</td>'
+        '<td ' lc_e '>' ls_pur-state '</td>'
+        '<td ' lc_e '>' ls_pur-ctp '</td>'
+        '<td ' lc_e '>' ls_pur-ongc_mater '</td>'
+        '<td ' lc_e '>' ls_pur-ongc_id '</td>'
+        '<td ' lc_en '>' lv_gcv '</td>'
+        '<td ' lc_en '>' lv_ncv '</td>'
+        '<td ' lc_en '>' lv_qty_scm '</td>'
+        '<td ' lc_en '>' lv_qty_mbg '</td>'
+        '<td ' lc_e '>' ls_pur-gail_id '</td>'
+*        '<td ' lc_e '>' ls_pur-tax_type '</td>'
+        '</tr>'
+        INTO lv_html.
+    ELSE.
+      " Odd row - white background
+      CONCATENATE lv_html
+        '<tr>'
+        '<td ' lc_td '>' lv_gas_day '</td>'
+        '<td ' lc_td '>' ls_pur-location '</td>'
+        '<td ' lc_td '>' ls_pur-material '</td>'
+        '<td ' lc_td '>' ls_pur-state_code '</td>'
+        '<td ' lc_td '>' ls_pur-state '</td>'
+        '<td ' lc_td '>' ls_pur-ctp '</td>'
+        '<td ' lc_td '>' ls_pur-ongc_mater '</td>'
+        '<td ' lc_td '>' ls_pur-ongc_id '</td>'
+        '<td ' lc_tn '>' lv_gcv '</td>'
+        '<td ' lc_tn '>' lv_ncv '</td>'
+        '<td ' lc_tn '>' lv_qty_scm '</td>'
+        '<td ' lc_tn '>' lv_qty_mbg '</td>'
+        '<td ' lc_td '>' ls_pur-gail_id '</td>'
+*        '<td ' lc_td '>' ls_pur-tax_type '</td>'
+        '</tr>'
+        INTO lv_html.
+    ENDIF.
   ENDLOOP.
-
   " Close table and HTML
   CONCATENATE lv_html '</table></body></html>' INTO lv_html.
-
   " Convert HTML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
   lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
-
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
   cv_size = xstrlen( lv_xstring ).
-
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
