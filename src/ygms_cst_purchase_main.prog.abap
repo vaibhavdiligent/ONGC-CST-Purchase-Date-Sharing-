@@ -2107,7 +2107,7 @@ FORM send_email USING pt_emails   TYPE string_table
           i_att_content_hex    = lt_att_hex ).
       ENDIF.
 
-      " Add PDF attachment if selected
+      " Add PDF/HTML attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_hex, lv_att_size.
         PERFORM build_pdf_attachment USING pt_data
@@ -2115,7 +2115,7 @@ FORM send_email USING pt_emails   TYPE string_table
         CONCATENATE 'CST_Purchase_' s_loc-low '_' gv_date_from '_' gv_date_to
           INTO lv_att_subject.
         lo_document->add_attachment(
-          i_attachment_type    = 'PDF'
+          i_attachment_type    = 'HTM'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
           i_att_content_hex    = lt_att_hex ).
@@ -2210,7 +2210,7 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_PDF_ATTACHMENT
-*& Build PDF by constructing raw PDF binary (no OTF/SmartForm needed)
+*& Build HTML table content for reliable email attachment rendering
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE solix_tab
@@ -2228,107 +2228,56 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
 
-  DATA: lv_pdf    TYPE string,
-        lv_stream TYPE string,
-        lv_line   TYPE string,
-        lv_ypos   TYPE i,
-        lv_len    TYPE i,
-        lv_slen   TYPE string,
-        lv_row    TYPE string,
-        lv_data   TYPE string.
-
-  DATA: lv_obj1_off TYPE i,
-        lv_obj2_off TYPE i,
-        lv_obj3_off TYPE i,
-        lv_obj4_off TYPE i,
-        lv_obj5_off TYPE i,
-        lv_xref_pos TYPE i.
-
-  DATA: lv_off1 TYPE string,
-        lv_off2 TYPE string,
-        lv_off3 TYPE string,
-        lv_off4 TYPE string,
-        lv_off5 TYPE string,
-        lv_xref_str TYPE string.
-
-  DATA(lv_crlf) = cl_abap_char_utilities=>cr_lf.
+  DATA: lv_html TYPE string.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
 
-  " -----------------------------------------------------------
-  " Build page stream content (PDF text drawing commands)
-  " PDF coordinates: origin at bottom-left, A4 Landscape = 842x595
-  " -----------------------------------------------------------
-  CLEAR lv_stream.
+  " Build HTML document with styled table
+  CONCATENATE
+    '<html><head><meta charset="utf-8">'
+    '<style>'
+    'body{font-family:Arial,sans-serif;margin:20px;}'
+    'h2{color:#333;}'
+    'table{border-collapse:collapse;width:100%;font-size:11px;}'
+    'th{background-color:#1a5276;color:white;padding:6px 8px;'
+    'text-align:left;border:1px solid #999;}'
+    'td{padding:4px 8px;border:1px solid #ccc;}'
+    'tr:nth-child(even){background-color:#f2f2f2;}'
+    'tr:hover{background-color:#d6eaf8;}'
+    '.num{text-align:right;}'
+    '</style></head><body>'
+    INTO lv_html.
 
   " Title
-  DATA lv_title TYPE string.
-  CONCATENATE 'CST Purchase Data -' s_loc-low '-'
-    lv_date_from_str 'to' lv_date_to_str
-    INTO lv_title SEPARATED BY space.
+  CONCATENATE lv_html
+    '<h2>CST Purchase Data - ' s_loc-low
+    ' - ' lv_date_from_str ' to ' lv_date_to_str '</h2>'
+    INTO lv_html.
 
-  lv_ypos = 560.
-  lv_row = lv_ypos.
-  CONDENSE lv_row NO-GAPS.
-  CONCATENATE lv_stream
-    'BT' lv_crlf
-    '/F1 12 Tf' lv_crlf
-    '30 ' lv_row ' Td' lv_crlf
-    '(' lv_title ') Tj' lv_crlf
-    'ET' lv_crlf
-    INTO lv_stream.
-
-  " Column header row
-  lv_ypos = lv_ypos - 25.
-  DATA lv_hdr TYPE string.
-  CONCATENATE
-    'Gas Day   '
-    'Location  '
-    'Material  '
-    'StCd '
-    'State     '
-    'CTP ID    '
-    'ONGC Mat  '
-    'ONGC ID   '
-    'GCV       '
-    'NCV       '
-    'Qty SCM   '
-    'Qty MBG   '
-    'GAIL ID   '
-    'TaxType'
-    INTO lv_hdr.
-
-  lv_row = lv_ypos.
-  CONDENSE lv_row NO-GAPS.
-  CONCATENATE lv_stream
-    'BT' lv_crlf
-    '/F1 7 Tf' lv_crlf
-    '30 ' lv_row ' Td' lv_crlf
-    '(' lv_hdr ') Tj' lv_crlf
-    'ET' lv_crlf
-    INTO lv_stream.
-
-  " Separator line
-  lv_ypos = lv_ypos - 10.
-  lv_row = lv_ypos.
-  CONDENSE lv_row NO-GAPS.
-  CONCATENATE lv_stream
-    'BT' lv_crlf
-    '/F1 7 Tf' lv_crlf
-    '30 ' lv_row ' Td' lv_crlf
-    '(-----------------------------------------------------------------------------------------------------) Tj' lv_crlf
-    'ET' lv_crlf
-    INTO lv_stream.
+  " Table header
+  CONCATENATE lv_html
+    '<table>'
+    '<tr>'
+    '<th>Gas Day</th>'
+    '<th>Location</th>'
+    '<th>Material</th>'
+    '<th>State Code</th>'
+    '<th>State</th>'
+    '<th>CTP ID</th>'
+    '<th>ONGC Material</th>'
+    '<th>ONGC ID</th>'
+    '<th>GCV</th>'
+    '<th>NCV</th>'
+    '<th>Qty SCM</th>'
+    '<th>Qty MBG</th>'
+    '<th>GAIL ID</th>'
+    '<th>Tax Type</th>'
+    '</tr>'
+    INTO lv_html.
 
   " Data rows
   LOOP AT pt_data INTO ls_pur.
-    lv_ypos = lv_ypos - 10.
-
-    IF lv_ypos < 30.
-      EXIT. " Page limit reached
-    ENDIF.
-
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
@@ -2336,134 +2285,35 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
 
-    CONCATENATE lv_gas_day '  '
-                ls_pur-location '  '
-                ls_pur-material '  '
-                ls_pur-state_code ' '
-                ls_pur-state '  '
-                ls_pur-ctp '  '
-                ls_pur-ongc_mater '  '
-                ls_pur-ongc_id '  '
-                lv_gcv '  '
-                lv_ncv '  '
-                lv_qty_scm '  '
-                lv_qty_mbg '  '
-                ls_pur-gail_id '  '
-                ls_pur-tax_type
-      INTO lv_data.
+    CONCATENATE lv_html
+      '<tr>'
+      '<td>' lv_gas_day '</td>'
+      '<td>' ls_pur-location '</td>'
+      '<td>' ls_pur-material '</td>'
+      '<td>' ls_pur-state_code '</td>'
+      '<td>' ls_pur-state '</td>'
+      '<td>' ls_pur-ctp '</td>'
+      '<td>' ls_pur-ongc_mater '</td>'
+      '<td>' ls_pur-ongc_id '</td>'
+      INTO lv_html.
 
-    lv_row = lv_ypos.
-    CONDENSE lv_row NO-GAPS.
-    CONCATENATE lv_stream
-      'BT' lv_crlf
-      '/F1 7 Tf' lv_crlf
-      '30 ' lv_row ' Td' lv_crlf
-      '(' lv_data ') Tj' lv_crlf
-      'ET' lv_crlf
-      INTO lv_stream.
+    CONCATENATE lv_html
+      '<td class="num">' lv_gcv '</td>'
+      '<td class="num">' lv_ncv '</td>'
+      '<td class="num">' lv_qty_scm '</td>'
+      '<td class="num">' lv_qty_mbg '</td>'
+      '<td>' ls_pur-gail_id '</td>'
+      '<td>' ls_pur-tax_type '</td>'
+      '</tr>'
+      INTO lv_html.
   ENDLOOP.
 
-  " -----------------------------------------------------------
-  " Assemble the full PDF document
-  " -----------------------------------------------------------
-  lv_len = strlen( lv_stream ).
-  lv_slen = lv_len.
-  CONDENSE lv_slen NO-GAPS.
+  " Close table and HTML
+  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
 
-  CLEAR lv_pdf.
-
-  " PDF Header
-  CONCATENATE '%PDF-1.4' lv_crlf INTO lv_pdf.
-
-  " Object 1 - Catalog
-  lv_obj1_off = strlen( lv_pdf ).
-  CONCATENATE lv_pdf
-    '1 0 obj' lv_crlf
-    '<< /Type /Catalog /Pages 2 0 R >>' lv_crlf
-    'endobj' lv_crlf
-    INTO lv_pdf.
-
-  " Object 2 - Pages
-  lv_obj2_off = strlen( lv_pdf ).
-  CONCATENATE lv_pdf
-    '2 0 obj' lv_crlf
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>' lv_crlf
-    'endobj' lv_crlf
-    INTO lv_pdf.
-
-  " Object 3 - Page (A4 Landscape 842x595)
-  lv_obj3_off = strlen( lv_pdf ).
-  CONCATENATE lv_pdf
-    '3 0 obj' lv_crlf
-    '<< /Type /Page /Parent 2 0 R'
-    ' /MediaBox [0 0 842 595]'
-    ' /Contents 4 0 R'
-    ' /Resources << /Font << /F1 5 0 R >> >> >>' lv_crlf
-    'endobj' lv_crlf
-    INTO lv_pdf.
-
-  " Object 4 - Stream (page content)
-  lv_obj4_off = strlen( lv_pdf ).
-  CONCATENATE lv_pdf
-    '4 0 obj' lv_crlf
-    '<< /Length ' lv_slen ' >>' lv_crlf
-    'stream' lv_crlf
-    lv_stream
-    'endstream' lv_crlf
-    'endobj' lv_crlf
-    INTO lv_pdf.
-
-  " Object 5 - Font (Courier monospace for table alignment)
-  lv_obj5_off = strlen( lv_pdf ).
-  CONCATENATE lv_pdf
-    '5 0 obj' lv_crlf
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>' lv_crlf
-    'endobj' lv_crlf
-    INTO lv_pdf.
-
-  " Cross-reference table
-  lv_xref_pos = strlen( lv_pdf ).
-
-  lv_off1 = lv_obj1_off. CONDENSE lv_off1 NO-GAPS.
-  lv_off2 = lv_obj2_off. CONDENSE lv_off2 NO-GAPS.
-  lv_off3 = lv_obj3_off. CONDENSE lv_off3 NO-GAPS.
-  lv_off4 = lv_obj4_off. CONDENSE lv_off4 NO-GAPS.
-  lv_off5 = lv_obj5_off. CONDENSE lv_off5 NO-GAPS.
-
-  WHILE strlen( lv_off1 ) < 10. CONCATENATE '0' lv_off1 INTO lv_off1. ENDWHILE.
-  WHILE strlen( lv_off2 ) < 10. CONCATENATE '0' lv_off2 INTO lv_off2. ENDWHILE.
-  WHILE strlen( lv_off3 ) < 10. CONCATENATE '0' lv_off3 INTO lv_off3. ENDWHILE.
-  WHILE strlen( lv_off4 ) < 10. CONCATENATE '0' lv_off4 INTO lv_off4. ENDWHILE.
-  WHILE strlen( lv_off5 ) < 10. CONCATENATE '0' lv_off5 INTO lv_off5. ENDWHILE.
-
-  CONCATENATE lv_pdf
-    'xref' lv_crlf
-    '0 6' lv_crlf
-    '0000000000 65535 f ' lv_crlf
-    lv_off1 ' 00000 n ' lv_crlf
-    lv_off2 ' 00000 n ' lv_crlf
-    lv_off3 ' 00000 n ' lv_crlf
-    lv_off4 ' 00000 n ' lv_crlf
-    lv_off5 ' 00000 n ' lv_crlf
-    INTO lv_pdf.
-
-  " Trailer
-  lv_xref_str = lv_xref_pos.
-  CONDENSE lv_xref_str NO-GAPS.
-
-  CONCATENATE lv_pdf
-    'trailer' lv_crlf
-    '<< /Size 6 /Root 1 0 R >>' lv_crlf
-    'startxref' lv_crlf
-    lv_xref_str lv_crlf
-    '%%EOF' lv_crlf
-    INTO lv_pdf.
-
-  " -----------------------------------------------------------
-  " Convert PDF string to xstring then to solix_tab
-  " -----------------------------------------------------------
+  " Convert HTML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_pdf IMPORTING buffer = lv_xstring ).
+  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
 
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
   cv_size = xstrlen( lv_xstring ).
