@@ -2069,6 +2069,7 @@ FORM send_email USING pt_emails   TYPE string_table
         ls_body         TYPE soli,
         lv_subject      TYPE so_obj_des,
         lt_att_hex      TYPE solix_tab,
+        lt_att_text     TYPE soli_tab,
         lv_att_subject  TYPE sood-objdes,
         lv_att_size     TYPE sood-objlen,
         lv_sent_all     TYPE os_boolean,
@@ -2130,16 +2131,16 @@ FORM send_email USING pt_emails   TYPE string_table
       ENDIF.
       " Add Daily PDF attachment if selected
       IF pv_send_pdf = 'X'.
-        CLEAR: lt_att_hex, lv_att_size.
+        CLEAR: lt_att_text, lv_att_size.
         PERFORM build_pdf_attachment USING pt_data
-                                    CHANGING lt_att_hex lv_att_size.
+                                    CHANGING lt_att_text lv_att_size.
         CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
-          i_att_content_hex    = lt_att_hex ).
+          i_att_content_text   = lt_att_text ).
       ENDIF.
       " --- Fortnightly attachments ---
       " Add Fortnightly Excel attachment if selected
@@ -2157,16 +2158,16 @@ FORM send_email USING pt_emails   TYPE string_table
       ENDIF.
       " Add Fortnightly PDF attachment if selected
       IF pv_send_pdf = 'X'.
-        CLEAR: lt_att_hex, lv_att_size.
+        CLEAR: lt_att_text, lv_att_size.
         PERFORM build_fnt_pdf_attachment USING pt_fnt_data
-                                        CHANGING lt_att_hex lv_att_size.
+                                        CHANGING lt_att_text lv_att_size.
         CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
-          i_att_content_hex    = lt_att_hex ).
+          i_att_content_text   = lt_att_text ).
       ENDIF.
       " Set document to send request
       lo_send_request->set_document( lo_document ).
@@ -2267,7 +2268,7 @@ ENDFORM.
 *& Build PDF attachment from daily data using spool-to-PDF conversion
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
-                         CHANGING ct_content TYPE solix_tab
+                         CHANGING ct_content TYPE soli_tab
                                   cv_size    TYPE sood-objlen.
   DATA: ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
@@ -2476,7 +2477,7 @@ ENDFORM.
 *& Build fortnightly PDF attachment using spool-to-PDF conversion
 *&---------------------------------------------------------------------*
 FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
-                              CHANGING ct_content TYPE solix_tab
+                              CHANGING ct_content TYPE soli_tab
                                        cv_size    TYPE sood-objlen.
   DATA: ls_fnt     TYPE yrga_cst_fn_data.
   DATA: lv_date_from     TYPE c LENGTH 10,
