@@ -2029,7 +2029,7 @@ FORM handle_send_email.
     RETURN.
   ENDIF.
 
-  " Fetch data from YRGA_CST_PUR where EXCLUDED flag is not X
+  " Fetch daily data from YRGA_CST_PUR where EXCLUDED flag is not X
   SELECT * FROM yrga_cst_pur
     INTO TABLE lt_send_data
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
@@ -2041,8 +2041,16 @@ FORM handle_send_email.
     RETURN.
   ENDIF.
 
-  " Send email with PDF and/or Excel attachments
-  PERFORM send_email USING lt_emails lt_send_data lv_send_pdf lv_send_excel.
+  " Fetch fortnightly data from YRGA_CST_FN_DATA
+  DATA lt_fnt_data TYPE TABLE OF yrga_cst_fn_data.
+  SELECT * FROM yrga_cst_fn_data
+    INTO TABLE lt_fnt_data
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc.
+
+  " Send email with PDF and/or Excel attachments (daily + fortnightly)
+  PERFORM send_email USING lt_emails lt_send_data lt_fnt_data lv_send_pdf lv_send_excel.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form SEND_EMAIL
@@ -2050,6 +2058,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM send_email USING pt_emails   TYPE string_table
                       pt_data     TYPE STANDARD TABLE
+                      pt_fnt_data TYPE STANDARD TABLE
                       pv_send_pdf TYPE c
                       pv_send_xls TYPE c.
   DATA: lo_send_request TYPE REF TO cl_bcs,
@@ -2066,33 +2075,52 @@ FORM send_email USING pt_emails   TYPE string_table
         lx_bcs          TYPE REF TO cx_bcs.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
+  DATA: l_mail TYPE adr6-smtp_addr.
+  DATA: lv_ctp_list TYPE string,
+        ls_pur      TYPE yrga_cst_pur.
+  " Build unique CTP ID list
+  DATA: lt_ctp TYPE TABLE OF ygms_de_ongc_ctp,
+        lv_ctp TYPE ygms_de_ongc_ctp.
+  LOOP AT pt_data INTO ls_pur.
+    READ TABLE lt_ctp WITH KEY table_line = ls_pur-ctp TRANSPORTING NO FIELDS.
+    IF sy-subrc <> 0.
+      APPEND ls_pur-ctp TO lt_ctp.
+    ENDIF.
+  ENDLOOP.
+  " Build CTP list string (comma-separated)
+  LOOP AT lt_ctp INTO lv_ctp.
+    IF lv_ctp_list IS INITIAL.
+      lv_ctp_list = lv_ctp.
+    ELSE.
+      CONCATENATE lv_ctp_list ',' lv_ctp INTO lv_ctp_list SEPARATED BY space.
+    ENDIF.
+  ENDLOOP.
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
   TRY.
       " Create persistent send request
       lo_send_request = cl_bcs=>create_persistent( ).
-      " Build email body
-      CONCATENATE 'CST Purchase Data for Location' s_loc-low
-        'Period:' lv_date_from_str 'to' lv_date_to_str
-        INTO ls_body-line SEPARATED BY space.
-      APPEND ls_body TO lt_body.
-      CLEAR ls_body.
-      ls_body-line = 'Please find the allocation data attached.'.
-      APPEND ls_body TO lt_body.
-      " Create email document (body)
-      CONCATENATE 'CST Purchase Data -' s_loc-low '-'
+      " Build email subject: State wise CST purchase <from> to <to>
+      CONCATENATE 'State wise CST purchase'
         lv_date_from_str 'to' lv_date_to_str
         INTO lv_subject SEPARATED BY space.
+      " Build email body
+      CONCATENATE 'Please find attached daily and fortnightly state wise CST purchase data for CTP IDs'
+        lv_ctp_list 'for the period' lv_date_from_str 'to' lv_date_to_str '.'
+        INTO ls_body-line SEPARATED BY space.
+      APPEND ls_body TO lt_body.
+      " Create email document (body)
       lo_document = cl_document_bcs=>create_document(
         i_type    = 'RAW'
         i_text    = lt_body
         i_subject = lv_subject ).
-      " Add Excel attachment if selected
+      " --- Daily attachments ---
+      " Add Daily Excel attachment if selected
       IF pv_send_xls = 'X'.
         CLEAR: lt_att_hex, lv_att_size.
         PERFORM build_excel_attachment USING pt_data
                                       CHANGING lt_att_hex lv_att_size.
-        CONCATENATE 'CST_Purchase_' s_loc-low '_' gv_date_from '_' gv_date_to
+        CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'XLS'
@@ -2100,12 +2128,39 @@ FORM send_email USING pt_emails   TYPE string_table
           i_attachment_size    = lv_att_size
           i_att_content_hex    = lt_att_hex ).
       ENDIF.
-      " Add PDF attachment if selected
+      " Add Daily PDF attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_hex, lv_att_size.
         PERFORM build_pdf_attachment USING pt_data
                                     CHANGING lt_att_hex lv_att_size.
-        CONCATENATE 'CST_Purchase_' s_loc-low '_' gv_date_from '_' gv_date_to
+        CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
+          INTO lv_att_subject.
+        lo_document->add_attachment(
+          i_attachment_type    = 'HTM'
+          i_attachment_subject = lv_att_subject
+          i_attachment_size    = lv_att_size
+          i_att_content_hex    = lt_att_hex ).
+      ENDIF.
+      " --- Fortnightly attachments ---
+      " Add Fortnightly Excel attachment if selected
+      IF pv_send_xls = 'X'.
+        CLEAR: lt_att_hex, lv_att_size.
+        PERFORM build_fnt_excel_attachment USING pt_fnt_data
+                                          CHANGING lt_att_hex lv_att_size.
+        CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
+          INTO lv_att_subject.
+        lo_document->add_attachment(
+          i_attachment_type    = 'XLS'
+          i_attachment_subject = lv_att_subject
+          i_attachment_size    = lv_att_size
+          i_att_content_hex    = lt_att_hex ).
+      ENDIF.
+      " Add Fortnightly PDF attachment if selected
+      IF pv_send_pdf = 'X'.
+        CLEAR: lt_att_hex, lv_att_size.
+        PERFORM build_fnt_pdf_attachment USING pt_fnt_data
+                                        CHANGING lt_att_hex lv_att_size.
+        CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'HTM'
@@ -2115,7 +2170,6 @@ FORM send_email USING pt_emails   TYPE string_table
       ENDIF.
       " Set document to send request
       lo_send_request->set_document( lo_document ).
-data l_mail type adr6-smtp_addr.
       " Add all recipients
       LOOP AT pt_emails INTO DATA(lv_email).
         CONDENSE lv_email.
@@ -2147,8 +2201,7 @@ ENDFORM.
 FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
                            CHANGING ct_content TYPE solix_tab
                                     cv_size    TYPE sood-objlen.
-  DATA: lv_content TYPE string,
-        lv_line    TYPE string,
+  DATA: lv_html    TYPE string,
         lv_xstring TYPE xstring,
         ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
@@ -2156,18 +2209,28 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_ncv     TYPE c LENGTH 15,
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
-
-  DATA(lv_tab) = cl_abap_char_utilities=>horizontal_tab.
-  DATA(lv_crlf) = cl_abap_char_utilities=>cr_lf.
-
-  " Header row
-  CONCATENATE 'Gas Day' lv_tab 'Location' lv_tab 'Material' lv_tab
-    'State Code' lv_tab 'State' lv_tab 'CTP ID' lv_tab
-    'ONGC Material' lv_tab 'ONGC ID' lv_tab 'GCV' lv_tab
-    'NCV' lv_tab 'Qty SCM' lv_tab 'Qty MBG' lv_tab
-    'GAIL ID' lv_tab  lv_crlf
-    INTO lv_content.
-
+  CONSTANTS:
+    lc_th TYPE string VALUE 'style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
+    lc_td TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
+    lc_tn TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
+  " HTML header for Excel
+  lv_html = '<html><head><meta charset="utf-8"></head><body>'.
+  CONCATENATE lv_html
+    '<table style="border-collapse:collapse;">'
+    '<tr>'
+    '<th ' lc_th '>Gas Day</th>'
+    '<th ' lc_th '>CTP ID</th>'
+    '<th ' lc_th '>ONGC Material</th>'
+    '<th ' lc_th '>State Code</th>'
+    '<th ' lc_th '>State</th>'
+    '<th ' lc_th '>Qty SCM</th>'
+    '<th ' lc_th '>GCV</th>'
+    '<th ' lc_th '>NCV</th>'
+    '<th ' lc_th '>Qty MBG</th>'
+    '<th ' lc_th '>ONGC ID</th>'
+    '<th ' lc_th '>GAIL ID</th>'
+    '</tr>'
+    INTO lv_html.
   " Data rows
   LOOP AT pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
@@ -2175,26 +2238,27 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
     WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-
-    CONCATENATE lv_gas_day lv_tab ls_pur-location lv_tab
-      ls_pur-material lv_tab ls_pur-state_code lv_tab
-      ls_pur-state lv_tab ls_pur-ctp lv_tab
-      ls_pur-ongc_mater lv_tab ls_pur-ongc_id lv_tab
-      lv_gcv lv_tab lv_ncv lv_tab lv_qty_scm lv_tab
-      lv_qty_mbg lv_tab ls_pur-gail_id lv_tab
-*      ls_pur-tax_type
-      lv_crlf
-      INTO lv_line.
-
-    CONCATENATE lv_content lv_line INTO lv_content.
+    CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+    CONCATENATE lv_html
+      '<tr>'
+      '<td ' lc_td '>' lv_gas_day '</td>'
+      '<td ' lc_td '>' ls_pur-ctp '</td>'
+      '<td ' lc_td '>' ls_pur-ongc_mater '</td>'
+      '<td ' lc_td '>' ls_pur-state_code '</td>'
+      '<td ' lc_td '>' ls_pur-state '</td>'
+      '<td ' lc_tn '>' lv_qty_scm '</td>'
+      '<td ' lc_tn '>' lv_gcv '</td>'
+      '<td ' lc_tn '>' lv_ncv '</td>'
+      '<td ' lc_tn '>' lv_qty_mbg '</td>'
+      '<td ' lc_td '>' ls_pur-ongc_id '</td>'
+      '<td ' lc_td '>' ls_pur-gail_id '</td>'
+      '</tr>'
+      INTO lv_html.
   ENDLOOP.
-
-  " Convert string to xstring (binary)
+  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
+  " Convert HTML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_content IMPORTING buffer = lv_xstring ).
-
-  " Convert xstring to solix_tab
+  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
   cv_size = xstrlen( lv_xstring ).
 ENDFORM.
@@ -2217,41 +2281,38 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   DATA: lv_html TYPE string,
         lv_row  TYPE i.
   CONSTANTS:
-    lc_th TYPE string VALUE 'style="background-color:#1a5276;color:white;padding:6px 8px;text-align:left;border:1px solid #999;font-size:11px;"',
-    lc_td TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;"',
-    lc_tn TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;text-align:right;"',
-    lc_e  TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;"',
-    lc_en TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;text-align:right;"'.
+    lc_th TYPE string VALUE 'style="background-color:#1a5276;color:white;padding:6px 8px;text-align:left;border:1px solid #999;font-size:11px;font-family:Times New Roman;"',
+    lc_td TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;font-family:Times New Roman;"',
+    lc_tn TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;text-align:right;font-family:Times New Roman;"',
+    lc_e  TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;font-family:Times New Roman;"',
+    lc_en TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;text-align:right;font-family:Times New Roman;"'.
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
   " HTML header
   CONCATENATE
     '<html><head><meta charset="utf-8"></head>'
-    '<body style="font-family:Arial,sans-serif;margin:20px;">'
+    '<body style="font-family:Times New Roman;margin:20px;">'
     INTO lv_html.
   " Title
   CONCATENATE lv_html
-    '<h2 style="color:#333;">CST Purchase Data - ' s_loc-low
-    ' - ' lv_date_from_str ' to ' lv_date_to_str '</h2>'
+    '<h2 style="color:#333;">Daily CST Purchase Data - '
+    lv_date_from_str ' to ' lv_date_to_str '</h2>'
     INTO lv_html.
-  " Table header with inline styles
+  " Table header with inline styles - new column order (no Location/Material)
   CONCATENATE lv_html
     '<table style="border-collapse:collapse;width:100%;">'
     '<tr>'
     '<th ' lc_th '>Gas Day</th>'
-    '<th ' lc_th '>Location</th>'
-    '<th ' lc_th '>Material</th>'
-    '<th ' lc_th '>State Code</th>'
-    '<th ' lc_th '>State</th>'
     '<th ' lc_th '>CTP ID</th>'
     '<th ' lc_th '>ONGC Material</th>'
-    '<th ' lc_th '>ONGC ID</th>'
+    '<th ' lc_th '>State Code</th>'
+    '<th ' lc_th '>State</th>'
+    '<th ' lc_th '>Qty SCM</th>'
     '<th ' lc_th '>GCV</th>'
     '<th ' lc_th '>NCV</th>'
-    '<th ' lc_th '>Qty SCM</th>'
     '<th ' lc_th '>Qty MBG</th>'
+    '<th ' lc_th '>ONGC ID</th>'
     '<th ' lc_th '>GAIL ID</th>'
-*    '<th ' lc_th '>Tax Type</th>'
     '</tr>'
     INTO lv_html.
   " Data rows with inline styles
@@ -2264,50 +2325,216 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    " Check even/odd for alternating row color
     IF lv_row MOD 2 = 0.
-      " Even row - grey background
       CONCATENATE lv_html
         '<tr>'
         '<td ' lc_e '>' lv_gas_day '</td>'
-        '<td ' lc_e '>' ls_pur-location '</td>'
-        '<td ' lc_e '>' ls_pur-material '</td>'
-        '<td ' lc_e '>' ls_pur-state_code '</td>'
-        '<td ' lc_e '>' ls_pur-state '</td>'
         '<td ' lc_e '>' ls_pur-ctp '</td>'
         '<td ' lc_e '>' ls_pur-ongc_mater '</td>'
-        '<td ' lc_e '>' ls_pur-ongc_id '</td>'
+        '<td ' lc_e '>' ls_pur-state_code '</td>'
+        '<td ' lc_e '>' ls_pur-state '</td>'
+        '<td ' lc_en '>' lv_qty_scm '</td>'
         '<td ' lc_en '>' lv_gcv '</td>'
         '<td ' lc_en '>' lv_ncv '</td>'
-        '<td ' lc_en '>' lv_qty_scm '</td>'
         '<td ' lc_en '>' lv_qty_mbg '</td>'
+        '<td ' lc_e '>' ls_pur-ongc_id '</td>'
         '<td ' lc_e '>' ls_pur-gail_id '</td>'
-*        '<td ' lc_e '>' ls_pur-tax_type '</td>'
         '</tr>'
         INTO lv_html.
     ELSE.
-      " Odd row - white background
       CONCATENATE lv_html
         '<tr>'
         '<td ' lc_td '>' lv_gas_day '</td>'
-        '<td ' lc_td '>' ls_pur-location '</td>'
-        '<td ' lc_td '>' ls_pur-material '</td>'
-        '<td ' lc_td '>' ls_pur-state_code '</td>'
-        '<td ' lc_td '>' ls_pur-state '</td>'
         '<td ' lc_td '>' ls_pur-ctp '</td>'
         '<td ' lc_td '>' ls_pur-ongc_mater '</td>'
-        '<td ' lc_td '>' ls_pur-ongc_id '</td>'
+        '<td ' lc_td '>' ls_pur-state_code '</td>'
+        '<td ' lc_td '>' ls_pur-state '</td>'
+        '<td ' lc_tn '>' lv_qty_scm '</td>'
         '<td ' lc_tn '>' lv_gcv '</td>'
         '<td ' lc_tn '>' lv_ncv '</td>'
-        '<td ' lc_tn '>' lv_qty_scm '</td>'
         '<td ' lc_tn '>' lv_qty_mbg '</td>'
+        '<td ' lc_td '>' ls_pur-ongc_id '</td>'
         '<td ' lc_td '>' ls_pur-gail_id '</td>'
-*        '<td ' lc_td '>' ls_pur-tax_type '</td>'
         '</tr>'
         INTO lv_html.
     ENDIF.
   ENDLOOP.
-  " Close table and HTML
+  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
+  " Convert HTML string to xstring then to solix_tab
+  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
+  ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
+  cv_size = xstrlen( lv_xstring ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form BUILD_FNT_EXCEL_ATTACHMENT
+*& Build fortnightly Excel (HTML table) attachment - no Location/Material
+*&---------------------------------------------------------------------*
+FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
+                               CHANGING ct_content TYPE solix_tab
+                                        cv_size    TYPE sood-objlen.
+  DATA: lv_html    TYPE string,
+        lv_xstring TYPE xstring,
+        ls_fnt     TYPE yrga_cst_fn_data.
+  DATA: lv_date_from TYPE c LENGTH 10,
+        lv_date_to   TYPE c LENGTH 10,
+        lv_gcv       TYPE c LENGTH 15,
+        lv_ncv       TYPE c LENGTH 15,
+        lv_qty_scm   TYPE c LENGTH 15,
+        lv_qty_mbg   TYPE c LENGTH 15.
+  CONSTANTS:
+    lc_th TYPE string VALUE 'style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
+    lc_td TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
+    lc_tn TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
+  " HTML header for Excel
+  lv_html = '<html><head><meta charset="utf-8"></head><body>'.
+  CONCATENATE lv_html
+    '<table style="border-collapse:collapse;">'
+    '<tr>'
+    '<th ' lc_th '>From</th>'
+    '<th ' lc_th '>To</th>'
+    '<th ' lc_th '>CTP ID</th>'
+    '<th ' lc_th '>ONGC Material</th>'
+    '<th ' lc_th '>State Code</th>'
+    '<th ' lc_th '>State</th>'
+    '<th ' lc_th '>Qty in SCM</th>'
+    '<th ' lc_th '>GCV</th>'
+    '<th ' lc_th '>NCV</th>'
+    '<th ' lc_th '>Qty in MBG</th>'
+    '<th ' lc_th '>GAIL ID</th>'
+    '</tr>'
+    INTO lv_html.
+  " Data rows
+  LOOP AT pt_data INTO ls_fnt.
+    WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
+    WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
+    WRITE ls_fnt-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_fnt-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_fnt-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_date_from, lv_date_to, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+    CONCATENATE lv_html
+      '<tr>'
+      '<td ' lc_td '>' lv_date_from '</td>'
+      '<td ' lc_td '>' lv_date_to '</td>'
+      '<td ' lc_td '>' ls_fnt-ctp '</td>'
+      '<td ' lc_td '>' ls_fnt-ongc_mater '</td>'
+      '<td ' lc_td '>' ls_fnt-state_code '</td>'
+      '<td ' lc_td '>' ls_fnt-state '</td>'
+      '<td ' lc_tn '>' lv_qty_scm '</td>'
+      '<td ' lc_tn '>' lv_gcv '</td>'
+      '<td ' lc_tn '>' lv_ncv '</td>'
+      '<td ' lc_tn '>' lv_qty_mbg '</td>'
+      '<td ' lc_td '>' ls_fnt-gail_id '</td>'
+      '</tr>'
+      INTO lv_html.
+  ENDLOOP.
+  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
+  " Convert HTML string to xstring then to solix_tab
+  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
+  ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
+  cv_size = xstrlen( lv_xstring ).
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form BUILD_FNT_PDF_ATTACHMENT
+*& Build fortnightly HTML/PDF attachment - no Location/Material
+*&---------------------------------------------------------------------*
+FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
+                              CHANGING ct_content TYPE solix_tab
+                                       cv_size    TYPE sood-objlen.
+  DATA: lv_html    TYPE string,
+        lv_xstring TYPE xstring,
+        ls_fnt     TYPE yrga_cst_fn_data,
+        lv_row     TYPE i.
+  DATA: lv_date_from     TYPE c LENGTH 10,
+        lv_date_to       TYPE c LENGTH 10,
+        lv_gcv           TYPE c LENGTH 15,
+        lv_ncv           TYPE c LENGTH 15,
+        lv_qty_scm       TYPE c LENGTH 15,
+        lv_qty_mbg       TYPE c LENGTH 15.
+  DATA: lv_date_from_str TYPE c LENGTH 10,
+        lv_date_to_str   TYPE c LENGTH 10.
+  CONSTANTS:
+    lc_th TYPE string VALUE 'style="background-color:#1a5276;color:white;padding:6px 8px;text-align:left;border:1px solid #999;font-size:11px;font-family:Times New Roman;"',
+    lc_td TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;font-family:Times New Roman;"',
+    lc_tn TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;text-align:right;font-family:Times New Roman;"',
+    lc_e  TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;font-family:Times New Roman;"',
+    lc_en TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;text-align:right;font-family:Times New Roman;"'.
+  WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+  " HTML header
+  CONCATENATE
+    '<html><head><meta charset="utf-8"></head>'
+    '<body style="font-family:Times New Roman;margin:20px;">'
+    INTO lv_html.
+  " Title
+  CONCATENATE lv_html
+    '<h2 style="color:#333;">Fortnightly CST Purchase Data - '
+    lv_date_from_str ' to ' lv_date_to_str '</h2>'
+    INTO lv_html.
+  " Table header
+  CONCATENATE lv_html
+    '<table style="border-collapse:collapse;width:100%;">'
+    '<tr>'
+    '<th ' lc_th '>From</th>'
+    '<th ' lc_th '>To</th>'
+    '<th ' lc_th '>CTP ID</th>'
+    '<th ' lc_th '>ONGC Material</th>'
+    '<th ' lc_th '>State Code</th>'
+    '<th ' lc_th '>State</th>'
+    '<th ' lc_th '>Qty in SCM</th>'
+    '<th ' lc_th '>GCV</th>'
+    '<th ' lc_th '>NCV</th>'
+    '<th ' lc_th '>Qty in MBG</th>'
+    '<th ' lc_th '>GAIL ID</th>'
+    '</tr>'
+    INTO lv_html.
+  " Data rows
+  lv_row = 0.
+  LOOP AT pt_data INTO ls_fnt.
+    lv_row = lv_row + 1.
+    WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
+    WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
+    WRITE ls_fnt-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_fnt-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_fnt-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_date_from, lv_date_to, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+    IF lv_row MOD 2 = 0.
+      CONCATENATE lv_html
+        '<tr>'
+        '<td ' lc_e '>' lv_date_from '</td>'
+        '<td ' lc_e '>' lv_date_to '</td>'
+        '<td ' lc_e '>' ls_fnt-ctp '</td>'
+        '<td ' lc_e '>' ls_fnt-ongc_mater '</td>'
+        '<td ' lc_e '>' ls_fnt-state_code '</td>'
+        '<td ' lc_e '>' ls_fnt-state '</td>'
+        '<td ' lc_en '>' lv_qty_scm '</td>'
+        '<td ' lc_en '>' lv_gcv '</td>'
+        '<td ' lc_en '>' lv_ncv '</td>'
+        '<td ' lc_en '>' lv_qty_mbg '</td>'
+        '<td ' lc_e '>' ls_fnt-gail_id '</td>'
+        '</tr>'
+        INTO lv_html.
+    ELSE.
+      CONCATENATE lv_html
+        '<tr>'
+        '<td ' lc_td '>' lv_date_from '</td>'
+        '<td ' lc_td '>' lv_date_to '</td>'
+        '<td ' lc_td '>' ls_fnt-ctp '</td>'
+        '<td ' lc_td '>' ls_fnt-ongc_mater '</td>'
+        '<td ' lc_td '>' ls_fnt-state_code '</td>'
+        '<td ' lc_td '>' ls_fnt-state '</td>'
+        '<td ' lc_tn '>' lv_qty_scm '</td>'
+        '<td ' lc_tn '>' lv_gcv '</td>'
+        '<td ' lc_tn '>' lv_ncv '</td>'
+        '<td ' lc_tn '>' lv_qty_mbg '</td>'
+        '<td ' lc_td '>' ls_fnt-gail_id '</td>'
+        '</tr>'
+        INTO lv_html.
+    ENDIF.
+  ENDLOOP.
   CONCATENATE lv_html '</table></body></html>' INTO lv_html.
   " Convert HTML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
@@ -2342,10 +2569,12 @@ ENDFORM.
 *& 1.2.4: Display data preview with toggle (daily/fortnightly) + Send button
 *&---------------------------------------------------------------------*
 FORM display_send_preview.
-  " Type for daily send data
+  " Type for daily send data (includes GAIL Location/Material for preview only)
   TYPES: BEGIN OF ty_send_daily,
            gas_day       TYPE datum,
            ctp_id        TYPE ygms_de_ongc_ctp,
+           gail_loc_id   TYPE ygms_de_loc_id,
+           gail_material TYPE ygms_de_gail_mat,
            ongc_material TYPE ygms_de_ongc_mat,
            state_code    TYPE regio,
            state         TYPE bezei20,
@@ -2356,41 +2585,28 @@ FORM display_send_preview.
            ongc_id       TYPE ygms_de_ongc_id,
            gail_id       TYPE c LENGTH 14,
          END OF ty_send_daily.
-  " Type for fortnightly send data
+  " Type for fortnightly send data (flat, per YRGA_CST_FN_DATA structure)
   TYPES: BEGIN OF ty_send_fnt,
-           state_code  TYPE regio,
-           state       TYPE bezei20,
-           location_id TYPE ygms_de_loc_id,
-           material    TYPE ygms_de_gail_mat,
-           ctp_id      TYPE ygms_de_ongc_ctp,
-           ongc_mater  TYPE ygms_de_ongc_mat,
-           total_mbg   TYPE p DECIMALS 6,
-           total_scm   TYPE p DECIMALS 6,
-           day01       TYPE p DECIMALS 6,
-           day02       TYPE p DECIMALS 6,
-           day03       TYPE p DECIMALS 6,
-           day04       TYPE p DECIMALS 6,
-           day05       TYPE p DECIMALS 6,
-           day06       TYPE p DECIMALS 6,
-           day07       TYPE p DECIMALS 6,
-           day08       TYPE p DECIMALS 6,
-           day09       TYPE p DECIMALS 6,
-           day10       TYPE p DECIMALS 6,
-           day11       TYPE p DECIMALS 6,
-           day12       TYPE p DECIMALS 6,
-           day13       TYPE p DECIMALS 6,
-           day14       TYPE p DECIMALS 6,
-           day15       TYPE p DECIMALS 6,
-           avg_gcv     TYPE p DECIMALS 6,
-           avg_ncv     TYPE p DECIMALS 6,
+           date_from     TYPE datum,
+           date_to       TYPE datum,
+           ctp_id        TYPE ygms_de_ongc_ctp,
+           ongc_mater    TYPE ygms_de_ongc_mat,
+           gail_loc_id   TYPE ygms_de_loc_id,
+           gail_material TYPE ygms_de_gail_mat,
+           state_code    TYPE regio,
+           state         TYPE bezei20,
+           qty_in_scm    TYPE p DECIMALS 6,
+           gcv           TYPE p DECIMALS 6,
+           ncv           TYPE p DECIMALS 6,
+           qty_in_mbg    TYPE p DECIMALS 6,
+           gail_id       TYPE c LENGTH 14,
          END OF ty_send_fnt.
 
   DATA: lt_daily_data TYPE TABLE OF ty_send_daily,
         lt_fnt_data   TYPE TABLE OF ty_send_fnt,
         lt_cst_pur    TYPE TABLE OF yrga_cst_pur,
         lt_cst_fnt    TYPE TABLE OF yrga_cst_fn_data,
-        lv_answer     TYPE c LENGTH 1,
-        lv_toggle     TYPE c LENGTH 1 VALUE '1'.  " 1=Daily, 2=Fortnightly
+        lv_answer     TYPE c LENGTH 1.
 
   " Fetch daily data from YRGA_CST_PUR where EXCLUDED flag is not X
   SELECT * FROM yrga_cst_pur
@@ -2404,11 +2620,13 @@ FORM display_send_preview.
     RETURN.
   ENDIF.
 
-  " Build daily send data
+  " Build daily send data (with GAIL Location/Material for preview)
   LOOP AT lt_cst_pur INTO DATA(ls_pur).
     DATA(ls_daily) = VALUE ty_send_daily(
       gas_day       = ls_pur-gas_day
       ctp_id        = ls_pur-ctp
+      gail_loc_id   = ls_pur-location
+      gail_material = ls_pur-material
       ongc_material = ls_pur-ongc_mater
       state_code    = ls_pur-state_code
       state         = ls_pur-state
@@ -2422,71 +2640,76 @@ FORM display_send_preview.
     APPEND ls_daily TO lt_daily_data.
   ENDLOOP.
 
-  " Build fortnightly send data from ALV display (non-excluded rows)
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  " Fetch fortnightly data from YRGA_CST_FN_DATA
+  SELECT * FROM yrga_cst_fn_data
+    INTO TABLE lt_cst_fnt
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc.
+
+  " Build fortnightly preview data
+  LOOP AT lt_cst_fnt INTO DATA(ls_fnt_db).
     DATA ls_fnt TYPE ty_send_fnt.
     CLEAR ls_fnt.
-    ls_fnt-state_code  = gs_alv_display-state_code.
-    ls_fnt-state       = gs_alv_display-state.
-    ls_fnt-location_id = gs_alv_display-location_id.
-    ls_fnt-material    = gs_alv_display-material.
-    " Get CTP ID and ONGC material from gas receipt
-    READ TABLE gt_gas_receipt INTO DATA(ls_rcpt)
-      WITH KEY location_id = gs_alv_display-location_id
-               material    = gs_alv_display-material.
-    IF sy-subrc = 0.
-      ls_fnt-ctp_id     = ls_rcpt-ctp_id.
-      ls_fnt-ongc_mater = ls_rcpt-ongc_material.
-    ENDIF.
-    ls_fnt-total_mbg = gs_alv_display-total_mbg.
-    ls_fnt-total_scm = gs_alv_display-total_scm.
-    ls_fnt-day01     = gs_alv_display-day01.
-    ls_fnt-day02     = gs_alv_display-day02.
-    ls_fnt-day03     = gs_alv_display-day03.
-    ls_fnt-day04     = gs_alv_display-day04.
-    ls_fnt-day05     = gs_alv_display-day05.
-    ls_fnt-day06     = gs_alv_display-day06.
-    ls_fnt-day07     = gs_alv_display-day07.
-    ls_fnt-day08     = gs_alv_display-day08.
-    ls_fnt-day09     = gs_alv_display-day09.
-    ls_fnt-day10     = gs_alv_display-day10.
-    ls_fnt-day11     = gs_alv_display-day11.
-    ls_fnt-day12     = gs_alv_display-day12.
-    ls_fnt-day13     = gs_alv_display-day13.
-    ls_fnt-day14     = gs_alv_display-day14.
-    ls_fnt-day15     = gs_alv_display-day15.
-    ls_fnt-avg_gcv   = gs_alv_display-gcv.
-    ls_fnt-avg_ncv   = gs_alv_display-ncv.
+    ls_fnt-date_from     = ls_fnt_db-date_from.
+    ls_fnt-date_to       = ls_fnt_db-date_to.
+    ls_fnt-ctp_id        = ls_fnt_db-ctp.
+    ls_fnt-ongc_mater    = ls_fnt_db-ongc_mater.
+    ls_fnt-gail_loc_id   = ls_fnt_db-location.
+    ls_fnt-gail_material = ls_fnt_db-material.
+    ls_fnt-state_code    = ls_fnt_db-state_code.
+    ls_fnt-state         = ls_fnt_db-state.
+    ls_fnt-qty_in_scm    = ls_fnt_db-qty_in_scm.
+    ls_fnt-gcv           = ls_fnt_db-gcv.
+    ls_fnt-ncv           = ls_fnt_db-ncv.
+    ls_fnt-qty_in_mbg    = ls_fnt_db-qty_in_mbg.
+    ls_fnt-gail_id       = ls_fnt_db-gail_id.
     APPEND ls_fnt TO lt_fnt_data.
   ENDLOOP.
 
-  " Show toggle popup: Daily or Fortnightly view first
+  " Show preview popup with Daily Data / Fortnightly Data / Cancel
+  " Note: POPUP_TO_DECIDE supports max 2 option buttons + Cancel,
+  " so Proceed/Cancel is handled via a separate confirmation popup.
   DO.
     CALL FUNCTION 'POPUP_TO_DECIDE'
       EXPORTING
-        defaultoption = lv_toggle
-        textline1     = 'Select data view to preview before sending:'
-        textline2     = 'After preview, click option again to toggle or Cancel to send.'
-        text_option1  = 'View Daily Data'
-        text_option2  = 'View Fortnightly Data'
+        defaultoption = '1'
+        textline1     = 'Click the relevant buttons to view daily or fortnightly data.'
+        textline2     = 'Click on Proceed button to send the data to ONGC.'
+        text_option1  = 'Daily Data'
+        text_option2  = 'Fortnightly Data'
         titel         = 'Send Data Preview'
+        cancel_display = 'X'
       IMPORTING
         answer        = lv_answer.
 
     CASE lv_answer.
       WHEN '1'.
-        " Display daily data preview
         PERFORM display_daily_preview USING lt_daily_data.
-        lv_toggle = '2'.  " Next toggle shows fortnightly
       WHEN '2'.
-        " Display fortnightly data preview
         PERFORM display_fnt_preview USING lt_fnt_data.
-        lv_toggle = '1'.  " Next toggle shows daily
       WHEN OTHERS.
-        " User closed/cancelled - proceed to send mode selection
+        " User closed preview popup - show Proceed/Cancel confirmation
         EXIT.
     ENDCASE.
   ENDDO.
+
+  " Show Proceed / Cancel confirmation popup with custom button labels
+  DATA lv_confirm TYPE c LENGTH 1.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'Send Data to ONGC'
+      text_question         = 'Do you want to send the data to ONGC?'
+      text_button_1         = 'Proceed'
+      text_button_2         = 'Cancel'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = lv_confirm.
+
+  IF lv_confirm <> '1'.
+    MESSAGE s000(ygms_msg) WITH 'Send operation cancelled'.
+    RETURN.
+  ENDIF.
 
   " Now show send mode selection (Email or B2B)
   PERFORM show_send_mode_popup.
@@ -2510,55 +2733,66 @@ FORM display_daily_preview USING pt_daily TYPE STANDARD TABLE.
   ls_fieldcat-col_pos   = 2.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_LOC_ID'.
+  ls_fieldcat-seltext_l = 'GAIL Location ID'.
+  ls_fieldcat-col_pos   = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_MATERIAL'.
+  ls_fieldcat-seltext_l = 'GAIL Material'.
+  ls_fieldcat-col_pos   = 4.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
   ls_fieldcat-seltext_l = 'ONGC Material'.
-  ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-col_pos   = 5.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'STATE_CODE'.
   ls_fieldcat-seltext_l = 'State Code'.
-  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-col_pos   = 6.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'STATE'.
   ls_fieldcat-seltext_l = 'State'.
-  ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-col_pos   = 7.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'QTY_IN_SCM'.
   ls_fieldcat-seltext_l = 'Qty in SCM'.
-  ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-col_pos   = 8.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
   ls_fieldcat-seltext_l = 'GCV'.
-  ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-col_pos   = 9.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
   ls_fieldcat-seltext_l = 'NCV'.
-  ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-col_pos   = 10.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'QTY_IN_MBG'.
   ls_fieldcat-seltext_l = 'Qty in MBG'.
-  ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-col_pos   = 11.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_ID'.
   ls_fieldcat-seltext_l = 'ONGC ID'.
-  ls_fieldcat-col_pos   = 10.
+  ls_fieldcat-col_pos   = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GAIL_ID'.
   ls_fieldcat-seltext_l = 'GAIL ID'.
-  ls_fieldcat-col_pos   = 11.
+  ls_fieldcat-col_pos   = 13.
+  ls_fieldcat-outputlen = 16.
   APPEND ls_fieldcat TO lt_fieldcat.
 
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
@@ -2584,18 +2818,16 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM display_fnt_preview USING pt_fnt TYPE STANDARD TABLE.
   DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
-        ls_fieldcat TYPE slis_fieldcat_alv,
-        lv_date     TYPE datum,
-        lv_date_str TYPE c LENGTH 10.
+        ls_fieldcat TYPE slis_fieldcat_alv.
 
   CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'STATE_CODE'.
-  ls_fieldcat-seltext_l = 'State Code'.
+  ls_fieldcat-fieldname = 'DATE_FROM'.
+  ls_fieldcat-seltext_l = 'From'.
   ls_fieldcat-col_pos   = 1.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'STATE'.
-  ls_fieldcat-seltext_l = 'State'.
+  ls_fieldcat-fieldname = 'DATE_TO'.
+  ls_fieldcat-seltext_l = 'To'.
   ls_fieldcat-col_pos   = 2.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
@@ -2609,65 +2841,56 @@ FORM display_fnt_preview USING pt_fnt TYPE STANDARD TABLE.
   ls_fieldcat-col_pos   = 4.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'TOTAL_MBG'.
-  ls_fieldcat-seltext_l = 'Total MBG'.
+  ls_fieldcat-fieldname = 'GAIL_LOC_ID'.
+  ls_fieldcat-seltext_l = 'GAIL Location ID'.
   ls_fieldcat-col_pos   = 5.
-  ls_fieldcat-do_sum    = abap_true.
-  ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'TOTAL_SCM'.
-  ls_fieldcat-seltext_l = 'Total Sm3'.
+  ls_fieldcat-fieldname = 'GAIL_MATERIAL'.
+  ls_fieldcat-seltext_l = 'GAIL Material'.
   ls_fieldcat-col_pos   = 6.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE_CODE'.
+  ls_fieldcat-seltext_l = 'State Code'.
+  ls_fieldcat-col_pos   = 7.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE'.
+  ls_fieldcat-seltext_l = 'State'.
+  ls_fieldcat-col_pos   = 8.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+  ls_fieldcat-seltext_l = 'Qty in SCM'.
+  ls_fieldcat-col_pos   = 9.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
-
-  " Day columns with date headers
-  lv_date = gv_date_from.
-  DATA lv_col TYPE i VALUE 7.
-  DO 15 TIMES.
-    CLEAR ls_fieldcat.
-    CASE sy-index.
-      WHEN 1.  ls_fieldcat-fieldname = 'DAY01'.
-      WHEN 2.  ls_fieldcat-fieldname = 'DAY02'.
-      WHEN 3.  ls_fieldcat-fieldname = 'DAY03'.
-      WHEN 4.  ls_fieldcat-fieldname = 'DAY04'.
-      WHEN 5.  ls_fieldcat-fieldname = 'DAY05'.
-      WHEN 6.  ls_fieldcat-fieldname = 'DAY06'.
-      WHEN 7.  ls_fieldcat-fieldname = 'DAY07'.
-      WHEN 8.  ls_fieldcat-fieldname = 'DAY08'.
-      WHEN 9.  ls_fieldcat-fieldname = 'DAY09'.
-      WHEN 10. ls_fieldcat-fieldname = 'DAY10'.
-      WHEN 11. ls_fieldcat-fieldname = 'DAY11'.
-      WHEN 12. ls_fieldcat-fieldname = 'DAY12'.
-      WHEN 13. ls_fieldcat-fieldname = 'DAY13'.
-      WHEN 14. ls_fieldcat-fieldname = 'DAY14'.
-      WHEN 15. ls_fieldcat-fieldname = 'DAY15'.
-    ENDCASE.
-    WRITE lv_date TO lv_date_str DD/MM/YYYY.
-    REPLACE ALL OCCURRENCES OF '/' IN lv_date_str WITH '-'.
-    ls_fieldcat-seltext_l = lv_date_str.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-do_sum    = abap_true.
-    ls_fieldcat-decimals_out = 3.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_date = lv_date + 1.
-    lv_col = lv_col + 1.
-  ENDDO.
-
   CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'AVG_GCV'.
-  ls_fieldcat-seltext_l = 'Average GCV'.
-  ls_fieldcat-col_pos   = lv_col.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-seltext_l = 'GCV'.
+  ls_fieldcat-col_pos   = 10.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
-  lv_col = lv_col + 1.
   CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'AVG_NCV'.
-  ls_fieldcat-seltext_l = 'Average NCV'.
-  ls_fieldcat-col_pos   = lv_col.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-seltext_l = 'NCV'.
+  ls_fieldcat-col_pos   = 11.
   ls_fieldcat-decimals_out = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+  ls_fieldcat-seltext_l = 'Qty in MBG'.
+  ls_fieldcat-col_pos   = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-decimals_out = 3.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_ID'.
+  ls_fieldcat-seltext_l = 'GAIL ID'.
+  ls_fieldcat-col_pos   = 13.
+  ls_fieldcat-outputlen = 16.
   APPEND ls_fieldcat TO lt_fieldcat.
 
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
