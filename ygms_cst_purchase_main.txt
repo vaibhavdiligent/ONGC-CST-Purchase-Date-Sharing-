@@ -2136,7 +2136,7 @@ FORM send_email USING pt_emails   TYPE string_table
         CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
-          i_attachment_type    = 'HTM'
+          i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
           i_att_content_hex    = lt_att_hex ).
@@ -2163,7 +2163,7 @@ FORM send_email USING pt_emails   TYPE string_table
         CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
-          i_attachment_type    = 'HTM'
+          i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
           i_att_content_hex    = lt_att_hex ).
@@ -2210,25 +2210,25 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
   CONSTANTS:
-    lc_th TYPE string VALUE 'style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
-    lc_td TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
-    lc_tn TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
+    lc_th TYPE string VALUE ' style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
+    lc_td TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
+    lc_tn TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
   " HTML header for Excel
   lv_html = '<html><head><meta charset="utf-8"></head><body>'.
   CONCATENATE lv_html
     '<table style="border-collapse:collapse;">'
     '<tr>'
-    '<th ' lc_th '>Gas Day</th>'
-    '<th ' lc_th '>CTP ID</th>'
-    '<th ' lc_th '>ONGC Material</th>'
-    '<th ' lc_th '>State Code</th>'
-    '<th ' lc_th '>State</th>'
-    '<th ' lc_th '>Qty SCM</th>'
-    '<th ' lc_th '>GCV</th>'
-    '<th ' lc_th '>NCV</th>'
-    '<th ' lc_th '>Qty MBG</th>'
-    '<th ' lc_th '>ONGC ID</th>'
-    '<th ' lc_th '>GAIL ID</th>'
+    '<th' lc_th '>Gas Day</th>'
+    '<th' lc_th '>CTP ID</th>'
+    '<th' lc_th '>ONGC Material</th>'
+    '<th' lc_th '>State Code</th>'
+    '<th' lc_th '>State</th>'
+    '<th' lc_th '>Qty SCM</th>'
+    '<th' lc_th '>GCV</th>'
+    '<th' lc_th '>NCV</th>'
+    '<th' lc_th '>Qty MBG</th>'
+    '<th' lc_th '>ONGC ID</th>'
+    '<th' lc_th '>GAIL ID</th>'
     '</tr>'
     INTO lv_html.
   " Data rows
@@ -2241,17 +2241,17 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
     CONCATENATE lv_html
       '<tr>'
-      '<td ' lc_td '>' lv_gas_day '</td>'
-      '<td ' lc_td '>' ls_pur-ctp '</td>'
-      '<td ' lc_td '>' ls_pur-ongc_mater '</td>'
-      '<td ' lc_td '>' ls_pur-state_code '</td>'
-      '<td ' lc_td '>' ls_pur-state '</td>'
-      '<td ' lc_tn '>' lv_qty_scm '</td>'
-      '<td ' lc_tn '>' lv_gcv '</td>'
-      '<td ' lc_tn '>' lv_ncv '</td>'
-      '<td ' lc_tn '>' lv_qty_mbg '</td>'
-      '<td ' lc_td '>' ls_pur-ongc_id '</td>'
-      '<td ' lc_td '>' ls_pur-gail_id '</td>'
+      '<td' lc_td '>' lv_gas_day '</td>'
+      '<td' lc_td '>' ls_pur-ctp '</td>'
+      '<td' lc_td '>' ls_pur-ongc_mater '</td>'
+      '<td' lc_td '>' ls_pur-state_code '</td>'
+      '<td' lc_td '>' ls_pur-state '</td>'
+      '<td' lc_tn '>' lv_qty_scm '</td>'
+      '<td' lc_tn '>' lv_gcv '</td>'
+      '<td' lc_tn '>' lv_ncv '</td>'
+      '<td' lc_tn '>' lv_qty_mbg '</td>'
+      '<td' lc_td '>' ls_pur-ongc_id '</td>'
+      '<td' lc_td '>' ls_pur-gail_id '</td>'
       '</tr>'
       INTO lv_html.
   ENDLOOP.
@@ -2264,13 +2264,12 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_PDF_ATTACHMENT
-*& Build HTML table with inline styles for SAP email compatibility
+*& Build PDF attachment from daily data using spool-to-PDF conversion
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE solix_tab
                                   cv_size    TYPE sood-objlen.
-  DATA: ls_pur     TYPE yrga_cst_pur,
-        lv_xstring TYPE xstring.
+  DATA: ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
         lv_gcv     TYPE c LENGTH 15,
         lv_ncv     TYPE c LENGTH 15,
@@ -2278,93 +2277,129 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_qty_mbg TYPE c LENGTH 15.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-  DATA: lv_html TYPE string,
-        lv_row  TYPE i.
-  CONSTANTS:
-    lc_th TYPE string VALUE 'style="background-color:#1a5276;color:white;padding:6px 8px;text-align:left;border:1px solid #999;font-size:11px;font-family:Times New Roman;"',
-    lc_td TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;font-family:Times New Roman;"',
-    lc_tn TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;text-align:right;font-family:Times New Roman;"',
-    lc_e  TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;font-family:Times New Roman;"',
-    lc_en TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;text-align:right;font-family:Times New Roman;"'.
+  DATA: ls_params  TYPE pri_params,
+        lv_valid   TYPE c,
+        lv_spool   TYPE rspoid,
+        lt_pdf     TYPE TABLE OF tline,
+        lv_pdf_len TYPE i,
+        lv_xstring TYPE xstring.
+
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
-  " HTML header
-  CONCATENATE
-    '<html><head><meta charset="utf-8"></head>'
-    '<body style="font-family:Times New Roman;margin:20px;">'
-    INTO lv_html.
-  " Title
-  CONCATENATE lv_html
-    '<h2 style="color:#333;">Daily CST Purchase Data - '
-    lv_date_from_str ' to ' lv_date_to_str '</h2>'
-    INTO lv_html.
-  " Table header with inline styles - new column order (no Location/Material)
-  CONCATENATE lv_html
-    '<table style="border-collapse:collapse;width:100%;">'
-    '<tr>'
-    '<th ' lc_th '>Gas Day</th>'
-    '<th ' lc_th '>CTP ID</th>'
-    '<th ' lc_th '>ONGC Material</th>'
-    '<th ' lc_th '>State Code</th>'
-    '<th ' lc_th '>State</th>'
-    '<th ' lc_th '>Qty SCM</th>'
-    '<th ' lc_th '>GCV</th>'
-    '<th ' lc_th '>NCV</th>'
-    '<th ' lc_th '>Qty MBG</th>'
-    '<th ' lc_th '>ONGC ID</th>'
-    '<th ' lc_th '>GAIL ID</th>'
-    '</tr>'
-    INTO lv_html.
-  " Data rows with inline styles
-  lv_row = 0.
+
+  " Get print parameters for spool creation
+  CALL FUNCTION 'GET_PRINT_PARAMETERS'
+    EXPORTING
+      no_dialog    = 'X'
+      immediately  = ' '
+      release      = ' '
+      new_list_id  = 'X'
+      line_size    = 200
+      line_count   = 65
+    IMPORTING
+      out_parameters = ls_params
+      valid          = lv_valid
+    EXCEPTIONS
+      OTHERS         = 1.
+
+  IF lv_valid <> 'X'.
+    RETURN.
+  ENDIF.
+
+  " Create spool with formatted table output
+  NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
+
+  WRITE: / 'Daily CST Purchase Data -',
+           lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /1(180).
+  FORMAT INTENSIFIED ON.
+  WRITE: /1(10) 'Gas Day',
+          12(12) 'CTP ID',
+          25(15) 'ONGC Material',
+          41(8)  'State Cd',
+          50(20) 'State',
+          71(15) 'Qty SCM',
+          87(12) 'GCV',
+          100(12) 'NCV',
+          113(15) 'Qty MBG',
+          129(20) 'ONGC ID',
+          150(14) 'GAIL ID'.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /1(180).
+
   LOOP AT pt_data INTO ls_pur.
-    lv_row = lv_row + 1.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
-    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    IF lv_row MOD 2 = 0.
-      CONCATENATE lv_html
-        '<tr>'
-        '<td ' lc_e '>' lv_gas_day '</td>'
-        '<td ' lc_e '>' ls_pur-ctp '</td>'
-        '<td ' lc_e '>' ls_pur-ongc_mater '</td>'
-        '<td ' lc_e '>' ls_pur-state_code '</td>'
-        '<td ' lc_e '>' ls_pur-state '</td>'
-        '<td ' lc_en '>' lv_qty_scm '</td>'
-        '<td ' lc_en '>' lv_gcv '</td>'
-        '<td ' lc_en '>' lv_ncv '</td>'
-        '<td ' lc_en '>' lv_qty_mbg '</td>'
-        '<td ' lc_e '>' ls_pur-ongc_id '</td>'
-        '<td ' lc_e '>' ls_pur-gail_id '</td>'
-        '</tr>'
-        INTO lv_html.
-    ELSE.
-      CONCATENATE lv_html
-        '<tr>'
-        '<td ' lc_td '>' lv_gas_day '</td>'
-        '<td ' lc_td '>' ls_pur-ctp '</td>'
-        '<td ' lc_td '>' ls_pur-ongc_mater '</td>'
-        '<td ' lc_td '>' ls_pur-state_code '</td>'
-        '<td ' lc_td '>' ls_pur-state '</td>'
-        '<td ' lc_tn '>' lv_qty_scm '</td>'
-        '<td ' lc_tn '>' lv_gcv '</td>'
-        '<td ' lc_tn '>' lv_ncv '</td>'
-        '<td ' lc_tn '>' lv_qty_mbg '</td>'
-        '<td ' lc_td '>' ls_pur-ongc_id '</td>'
-        '<td ' lc_td '>' ls_pur-gail_id '</td>'
-        '</tr>'
-        INTO lv_html.
-    ENDIF.
+    CONDENSE: lv_gas_day, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
+    WRITE: /1(10) lv_gas_day,
+            12(12) ls_pur-ctp,
+            25(15) ls_pur-ongc_mater,
+            41(8)  ls_pur-state_code,
+            50(20) ls_pur-state,
+            71(15) lv_qty_scm,
+            87(12) lv_gcv,
+            100(12) lv_ncv,
+            113(15) lv_qty_mbg,
+            129(20) ls_pur-ongc_id,
+            150(14) ls_pur-gail_id.
   ENDLOOP.
-  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
-  " Convert HTML string to xstring then to solix_tab
-  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
-  ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
-  cv_size = xstrlen( lv_xstring ).
+
+  ULINE AT /1(180).
+  NEW-PAGE PRINT OFF.
+
+  " Get the spool request ID (most recent for current user)
+  SELECT rqident FROM tsp01 UP TO 1 ROWS
+    INTO lv_spool
+    WHERE rqowner  = sy-uname
+      AND rqclient = sy-mandt
+    ORDER BY rqident DESCENDING.
+  ENDSELECT.
+
+  IF sy-subrc <> 0 OR lv_spool IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " Convert spool to PDF
+  CALL FUNCTION 'CONVERT_ABAPSPOOLJOB_2_PDF'
+    EXPORTING
+      src_spoolid   = lv_spool
+      no_dialog     = 'X'
+    IMPORTING
+      pdf_bytecount = lv_pdf_len
+    TABLES
+      pdf           = lt_pdf
+    EXCEPTIONS
+      OTHERS        = 1.
+
+  IF sy-subrc <> 0.
+    CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
+      EXPORTING spoolid = lv_spool
+      EXCEPTIONS OTHERS = 1.
+    RETURN.
+  ENDIF.
+
+  " Convert tline table (134 bytes/line) to solix (255 bytes/line)
+  CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
+    EXPORTING
+      line_width_src = 134
+      line_width_dst = 255
+      transfer_bin   = 'X'
+    TABLES
+      content_in  = lt_pdf
+      content_out = ct_content
+    EXCEPTIONS
+      OTHERS = 1.
+
+  cv_size = lv_pdf_len.
+
+  " Clean up spool request
+  CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
+    EXPORTING spoolid = lv_spool
+    EXCEPTIONS OTHERS = 1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_EXCEL_ATTACHMENT
@@ -2383,25 +2418,25 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_qty_scm   TYPE c LENGTH 15,
         lv_qty_mbg   TYPE c LENGTH 15.
   CONSTANTS:
-    lc_th TYPE string VALUE 'style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
-    lc_td TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
-    lc_tn TYPE string VALUE 'style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
+    lc_th TYPE string VALUE ' style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
+    lc_td TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
+    lc_tn TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
   " HTML header for Excel
   lv_html = '<html><head><meta charset="utf-8"></head><body>'.
   CONCATENATE lv_html
     '<table style="border-collapse:collapse;">'
     '<tr>'
-    '<th ' lc_th '>From</th>'
-    '<th ' lc_th '>To</th>'
-    '<th ' lc_th '>CTP ID</th>'
-    '<th ' lc_th '>ONGC Material</th>'
-    '<th ' lc_th '>State Code</th>'
-    '<th ' lc_th '>State</th>'
-    '<th ' lc_th '>Qty in SCM</th>'
-    '<th ' lc_th '>GCV</th>'
-    '<th ' lc_th '>NCV</th>'
-    '<th ' lc_th '>Qty in MBG</th>'
-    '<th ' lc_th '>GAIL ID</th>'
+    '<th' lc_th '>From</th>'
+    '<th' lc_th '>To</th>'
+    '<th' lc_th '>CTP ID</th>'
+    '<th' lc_th '>ONGC Material</th>'
+    '<th' lc_th '>State Code</th>'
+    '<th' lc_th '>State</th>'
+    '<th' lc_th '>Qty in SCM</th>'
+    '<th' lc_th '>GCV</th>'
+    '<th' lc_th '>NCV</th>'
+    '<th' lc_th '>Qty in MBG</th>'
+    '<th' lc_th '>GAIL ID</th>'
     '</tr>'
     INTO lv_html.
   " Data rows
@@ -2415,17 +2450,17 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
     CONDENSE: lv_date_from, lv_date_to, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
     CONCATENATE lv_html
       '<tr>'
-      '<td ' lc_td '>' lv_date_from '</td>'
-      '<td ' lc_td '>' lv_date_to '</td>'
-      '<td ' lc_td '>' ls_fnt-ctp '</td>'
-      '<td ' lc_td '>' ls_fnt-ongc_mater '</td>'
-      '<td ' lc_td '>' ls_fnt-state_code '</td>'
-      '<td ' lc_td '>' ls_fnt-state '</td>'
-      '<td ' lc_tn '>' lv_qty_scm '</td>'
-      '<td ' lc_tn '>' lv_gcv '</td>'
-      '<td ' lc_tn '>' lv_ncv '</td>'
-      '<td ' lc_tn '>' lv_qty_mbg '</td>'
-      '<td ' lc_td '>' ls_fnt-gail_id '</td>'
+      '<td' lc_td '>' lv_date_from '</td>'
+      '<td' lc_td '>' lv_date_to '</td>'
+      '<td' lc_td '>' ls_fnt-ctp '</td>'
+      '<td' lc_td '>' ls_fnt-ongc_mater '</td>'
+      '<td' lc_td '>' ls_fnt-state_code '</td>'
+      '<td' lc_td '>' ls_fnt-state '</td>'
+      '<td' lc_tn '>' lv_qty_scm '</td>'
+      '<td' lc_tn '>' lv_gcv '</td>'
+      '<td' lc_tn '>' lv_ncv '</td>'
+      '<td' lc_tn '>' lv_qty_mbg '</td>'
+      '<td' lc_td '>' ls_fnt-gail_id '</td>'
       '</tr>'
       INTO lv_html.
   ENDLOOP.
@@ -2438,15 +2473,12 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_PDF_ATTACHMENT
-*& Build fortnightly HTML/PDF attachment - no Location/Material
+*& Build fortnightly PDF attachment using spool-to-PDF conversion
 *&---------------------------------------------------------------------*
 FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                               CHANGING ct_content TYPE solix_tab
                                        cv_size    TYPE sood-objlen.
-  DATA: lv_html    TYPE string,
-        lv_xstring TYPE xstring,
-        ls_fnt     TYPE yrga_cst_fn_data,
-        lv_row     TYPE i.
+  DATA: ls_fnt     TYPE yrga_cst_fn_data.
   DATA: lv_date_from     TYPE c LENGTH 10,
         lv_date_to       TYPE c LENGTH 10,
         lv_gcv           TYPE c LENGTH 15,
@@ -2455,92 +2487,130 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_qty_mbg       TYPE c LENGTH 15.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-  CONSTANTS:
-    lc_th TYPE string VALUE 'style="background-color:#1a5276;color:white;padding:6px 8px;text-align:left;border:1px solid #999;font-size:11px;font-family:Times New Roman;"',
-    lc_td TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;font-family:Times New Roman;"',
-    lc_tn TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;text-align:right;font-family:Times New Roman;"',
-    lc_e  TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;font-family:Times New Roman;"',
-    lc_en TYPE string VALUE 'style="padding:4px 8px;border:1px solid #ccc;font-size:11px;background-color:#f2f2f2;text-align:right;font-family:Times New Roman;"'.
+  DATA: ls_params  TYPE pri_params,
+        lv_valid   TYPE c,
+        lv_spool   TYPE rspoid,
+        lt_pdf     TYPE TABLE OF tline,
+        lv_pdf_len TYPE i,
+        lv_xstring TYPE xstring.
+
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
-  " HTML header
-  CONCATENATE
-    '<html><head><meta charset="utf-8"></head>'
-    '<body style="font-family:Times New Roman;margin:20px;">'
-    INTO lv_html.
-  " Title
-  CONCATENATE lv_html
-    '<h2 style="color:#333;">Fortnightly CST Purchase Data - '
-    lv_date_from_str ' to ' lv_date_to_str '</h2>'
-    INTO lv_html.
-  " Table header
-  CONCATENATE lv_html
-    '<table style="border-collapse:collapse;width:100%;">'
-    '<tr>'
-    '<th ' lc_th '>From</th>'
-    '<th ' lc_th '>To</th>'
-    '<th ' lc_th '>CTP ID</th>'
-    '<th ' lc_th '>ONGC Material</th>'
-    '<th ' lc_th '>State Code</th>'
-    '<th ' lc_th '>State</th>'
-    '<th ' lc_th '>Qty in SCM</th>'
-    '<th ' lc_th '>GCV</th>'
-    '<th ' lc_th '>NCV</th>'
-    '<th ' lc_th '>Qty in MBG</th>'
-    '<th ' lc_th '>GAIL ID</th>'
-    '</tr>'
-    INTO lv_html.
-  " Data rows
-  lv_row = 0.
+
+  " Get print parameters for spool creation
+  CALL FUNCTION 'GET_PRINT_PARAMETERS'
+    EXPORTING
+      no_dialog    = 'X'
+      immediately  = ' '
+      release      = ' '
+      new_list_id  = 'X'
+      line_size    = 200
+      line_count   = 65
+    IMPORTING
+      out_parameters = ls_params
+      valid          = lv_valid
+    EXCEPTIONS
+      OTHERS         = 1.
+
+  IF lv_valid <> 'X'.
+    RETURN.
+  ENDIF.
+
+  " Create spool with formatted table output
+  NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
+
+  WRITE: / 'Fortnightly CST Purchase Data -',
+           lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /1(170).
+  FORMAT INTENSIFIED ON.
+  WRITE: /1(10) 'From',
+          12(10) 'To',
+          23(12) 'CTP ID',
+          36(15) 'ONGC Material',
+          52(8)  'State Cd',
+          61(20) 'State',
+          82(15) 'Qty in SCM',
+          98(12) 'GCV',
+          111(12) 'NCV',
+          124(15) 'Qty in MBG',
+          140(14) 'GAIL ID'.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /1(170).
+
   LOOP AT pt_data INTO ls_fnt.
-    lv_row = lv_row + 1.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
     WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
+    WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_fnt-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_fnt-ncv TO lv_ncv DECIMALS 3.
-    WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_fnt-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_date_from, lv_date_to, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    IF lv_row MOD 2 = 0.
-      CONCATENATE lv_html
-        '<tr>'
-        '<td ' lc_e '>' lv_date_from '</td>'
-        '<td ' lc_e '>' lv_date_to '</td>'
-        '<td ' lc_e '>' ls_fnt-ctp '</td>'
-        '<td ' lc_e '>' ls_fnt-ongc_mater '</td>'
-        '<td ' lc_e '>' ls_fnt-state_code '</td>'
-        '<td ' lc_e '>' ls_fnt-state '</td>'
-        '<td ' lc_en '>' lv_qty_scm '</td>'
-        '<td ' lc_en '>' lv_gcv '</td>'
-        '<td ' lc_en '>' lv_ncv '</td>'
-        '<td ' lc_en '>' lv_qty_mbg '</td>'
-        '<td ' lc_e '>' ls_fnt-gail_id '</td>'
-        '</tr>'
-        INTO lv_html.
-    ELSE.
-      CONCATENATE lv_html
-        '<tr>'
-        '<td ' lc_td '>' lv_date_from '</td>'
-        '<td ' lc_td '>' lv_date_to '</td>'
-        '<td ' lc_td '>' ls_fnt-ctp '</td>'
-        '<td ' lc_td '>' ls_fnt-ongc_mater '</td>'
-        '<td ' lc_td '>' ls_fnt-state_code '</td>'
-        '<td ' lc_td '>' ls_fnt-state '</td>'
-        '<td ' lc_tn '>' lv_qty_scm '</td>'
-        '<td ' lc_tn '>' lv_gcv '</td>'
-        '<td ' lc_tn '>' lv_ncv '</td>'
-        '<td ' lc_tn '>' lv_qty_mbg '</td>'
-        '<td ' lc_td '>' ls_fnt-gail_id '</td>'
-        '</tr>'
-        INTO lv_html.
-    ENDIF.
+    CONDENSE: lv_date_from, lv_date_to, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
+    WRITE: /1(10) lv_date_from,
+            12(10) lv_date_to,
+            23(12) ls_fnt-ctp,
+            36(15) ls_fnt-ongc_mater,
+            52(8)  ls_fnt-state_code,
+            61(20) ls_fnt-state,
+            82(15) lv_qty_scm,
+            98(12) lv_gcv,
+            111(12) lv_ncv,
+            124(15) lv_qty_mbg,
+            140(14) ls_fnt-gail_id.
   ENDLOOP.
-  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
-  " Convert HTML string to xstring then to solix_tab
-  DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
-  ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
-  cv_size = xstrlen( lv_xstring ).
+
+  ULINE AT /1(170).
+  NEW-PAGE PRINT OFF.
+
+  " Get the spool request ID (most recent for current user)
+  SELECT rqident FROM tsp01 UP TO 1 ROWS
+    INTO lv_spool
+    WHERE rqowner  = sy-uname
+      AND rqclient = sy-mandt
+    ORDER BY rqident DESCENDING.
+  ENDSELECT.
+
+  IF sy-subrc <> 0 OR lv_spool IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " Convert spool to PDF
+  CALL FUNCTION 'CONVERT_ABAPSPOOLJOB_2_PDF'
+    EXPORTING
+      src_spoolid   = lv_spool
+      no_dialog     = 'X'
+    IMPORTING
+      pdf_bytecount = lv_pdf_len
+    TABLES
+      pdf           = lt_pdf
+    EXCEPTIONS
+      OTHERS        = 1.
+
+  IF sy-subrc <> 0.
+    CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
+      EXPORTING spoolid = lv_spool
+      EXCEPTIONS OTHERS = 1.
+    RETURN.
+  ENDIF.
+
+  " Convert tline table (134 bytes/line) to solix (255 bytes/line)
+  CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
+    EXPORTING
+      line_width_src = 134
+      line_width_dst = 255
+      transfer_bin   = 'X'
+    TABLES
+      content_in  = lt_pdf
+      content_out = ct_content
+    EXCEPTIONS
+      OTHERS = 1.
+
+  cv_size = lv_pdf_len.
+
+  " Clean up spool request
+  CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
+    EXPORTING spoolid = lv_spool
+    EXCEPTIONS OTHERS = 1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
