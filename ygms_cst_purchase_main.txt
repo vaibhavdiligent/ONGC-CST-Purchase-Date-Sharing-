@@ -2377,9 +2377,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS        = 1.
 
   IF sy-subrc <> 0.
-    CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-      EXPORTING spoolid = lv_spool
-      EXCEPTIONS OTHERS = 1.
     RETURN.
   ENDIF.
 
@@ -2396,11 +2393,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
-
-  " Clean up spool request
-  CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-    EXPORTING spoolid = lv_spool
-    EXCEPTIONS OTHERS = 1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_EXCEL_ATTACHMENT
@@ -2588,9 +2580,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS        = 1.
 
   IF sy-subrc <> 0.
-    CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-      EXPORTING spoolid = lv_spool
-      EXCEPTIONS OTHERS = 1.
     RETURN.
   ENDIF.
 
@@ -2607,11 +2596,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
-
-  " Clean up spool request
-  CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-    EXPORTING spoolid = lv_spool
-    EXCEPTIONS OTHERS = 1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
