@@ -2096,14 +2096,21 @@ FORM send_email USING pt_emails   TYPE string_table
       CONCATENATE lv_ctp_list ',' lv_ctp INTO lv_ctp_list SEPARATED BY space.
     ENDIF.
   ENDLOOP.
+  DATA: lv_date_from_dot TYPE c LENGTH 10,
+        lv_date_to_dot   TYPE c LENGTH 10.
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+  " Build dot-separated dates (DD.MM.YYYY) for subject
+  lv_date_from_dot = lv_date_from_str.
+  REPLACE ALL OCCURRENCES OF '/' IN lv_date_from_dot WITH '.'.
+  lv_date_to_dot = lv_date_to_str.
+  REPLACE ALL OCCURRENCES OF '/' IN lv_date_to_dot WITH '.'.
   TRY.
       " Create persistent send request
       lo_send_request = cl_bcs=>create_persistent( ).
-      " Build email subject: State wise CST purchase <from> to <to>
+      " Build email subject: State wise CST purchase DD.MM.YYYY to DD.MM.YYYY.
       CONCATENATE 'State wise CST purchase'
-        lv_date_from_str 'to' lv_date_to_str
+        lv_date_from_dot 'to' lv_date_to_dot '.'
         INTO lv_subject SEPARATED BY space.
       " Build email body
       CONCATENATE 'Please find attached daily and fortnightly state wise CST purchase data for CTP IDs'
@@ -2197,12 +2204,12 @@ FORM send_email USING pt_emails   TYPE string_table
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_EXCEL_ATTACHMENT
-*& Build Excel (tab-delimited) content from send data
+*& Build daily Excel attachment using XML Spreadsheet 2003 format
 *&---------------------------------------------------------------------*
 FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
                            CHANGING ct_content TYPE solix_tab
                                     cv_size    TYPE sood-objlen.
-  DATA: lv_html    TYPE string,
+  DATA: lv_xml     TYPE string,
         lv_xstring TYPE xstring,
         ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
@@ -2211,27 +2218,63 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
   CONSTANTS:
-    lc_th TYPE string VALUE ' style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
-    lc_td TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
-    lc_tn TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
-  " HTML header for Excel
-  lv_html = '<html><head><meta charset="utf-8"></head><body>'.
-  CONCATENATE lv_html
-    '<table style="border-collapse:collapse;">'
-    '<tr>'
-    '<th' lc_th '>Gas Day</th>'
-    '<th' lc_th '>CTP ID</th>'
-    '<th' lc_th '>ONGC Material</th>'
-    '<th' lc_th '>State Code</th>'
-    '<th' lc_th '>State</th>'
-    '<th' lc_th '>Qty SCM</th>'
-    '<th' lc_th '>GCV</th>'
-    '<th' lc_th '>NCV</th>'
-    '<th' lc_th '>Qty MBG</th>'
-    '<th' lc_th '>ONGC ID</th>'
-    '<th' lc_th '>GAIL ID</th>'
-    '</tr>'
-    INTO lv_html.
+    lc_xml_hdr TYPE string VALUE
+      '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>',
+    lc_wb_open TYPE string VALUE
+      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+      && ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
+      && ' xmlns:x="urn:schemas-microsoft-com:office:excel">',
+    lc_styles TYPE string VALUE
+      '<Styles>'
+      && '<Style ss:ID="hdr"><Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="11"/>'
+      && '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'
+      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      && '<Style ss:ID="dat"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      && '<Style ss:ID="num"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+      && '<NumberFormat ss:Format="0.000"/><Alignment ss:Horizontal="Right"/>'
+      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      && '</Styles>'.
+  " Build XML Spreadsheet
+  CONCATENATE lc_xml_hdr lc_wb_open lc_styles
+    '<Worksheet ss:Name="Daily Data"><Table>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    INTO lv_xml.
+  " Header row
+  CONCATENATE lv_xml
+    '<Row ss:StyleID="hdr">'
+    '<Cell><Data ss:Type="String">Gas Day</Data></Cell>'
+    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
+    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
+    '<Cell><Data ss:Type="String">State</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty SCM</Data></Cell>'
+    '<Cell><Data ss:Type="String">GCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">NCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty MBG</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
+    '</Row>'
+    INTO lv_xml.
   " Data rows
   LOOP AT pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
@@ -2240,26 +2283,26 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    CONCATENATE lv_html
-      '<tr>'
-      '<td' lc_td '>' lv_gas_day '</td>'
-      '<td' lc_td '>' ls_pur-ctp '</td>'
-      '<td' lc_td '>' ls_pur-ongc_mater '</td>'
-      '<td' lc_td '>' ls_pur-state_code '</td>'
-      '<td' lc_td '>' ls_pur-state '</td>'
-      '<td' lc_tn '>' lv_qty_scm '</td>'
-      '<td' lc_tn '>' lv_gcv '</td>'
-      '<td' lc_tn '>' lv_ncv '</td>'
-      '<td' lc_tn '>' lv_qty_mbg '</td>'
-      '<td' lc_td '>' ls_pur-ongc_id '</td>'
-      '<td' lc_td '>' ls_pur-gail_id '</td>'
-      '</tr>'
-      INTO lv_html.
+    CONCATENATE lv_xml
+      '<Row ss:StyleID="dat">'
+      '<Cell><Data ss:Type="String">' lv_gas_day '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ctp '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ongc_mater '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-state_code '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-state '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ongc_id '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-gail_id '</Data></Cell>'
+      '</Row>'
+      INTO lv_xml.
   ENDLOOP.
-  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
-  " Convert HTML string to xstring then to solix_tab
+  CONCATENATE lv_xml '</Table></Worksheet></Workbook>' INTO lv_xml.
+  " Convert XML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
+  lo_conv->convert( EXPORTING data = lv_xml IMPORTING buffer = lv_xstring ).
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
   cv_size = xstrlen( lv_xstring ).
 ENDFORM.
@@ -2396,12 +2439,12 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_EXCEL_ATTACHMENT
-*& Build fortnightly Excel (HTML table) attachment - no Location/Material
+*& Build fortnightly Excel attachment using XML Spreadsheet 2003 format
 *&---------------------------------------------------------------------*
 FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
                                CHANGING ct_content TYPE solix_tab
                                         cv_size    TYPE sood-objlen.
-  DATA: lv_html    TYPE string,
+  DATA: lv_xml     TYPE string,
         lv_xstring TYPE xstring,
         ls_fnt     TYPE yrga_cst_fn_data.
   DATA: lv_date_from TYPE c LENGTH 10,
@@ -2411,27 +2454,63 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_qty_scm   TYPE c LENGTH 15,
         lv_qty_mbg   TYPE c LENGTH 15.
   CONSTANTS:
-    lc_th TYPE string VALUE ' style="font-family:Times New Roman;font-weight:bold;border:1px solid #000;padding:4px 8px;text-align:center;"',
-    lc_td TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;"',
-    lc_tn TYPE string VALUE ' style="font-family:Times New Roman;border:1px solid #000;padding:4px 8px;text-align:right;"'.
-  " HTML header for Excel
-  lv_html = '<html><head><meta charset="utf-8"></head><body>'.
-  CONCATENATE lv_html
-    '<table style="border-collapse:collapse;">'
-    '<tr>'
-    '<th' lc_th '>From</th>'
-    '<th' lc_th '>To</th>'
-    '<th' lc_th '>CTP ID</th>'
-    '<th' lc_th '>ONGC Material</th>'
-    '<th' lc_th '>State Code</th>'
-    '<th' lc_th '>State</th>'
-    '<th' lc_th '>Qty in SCM</th>'
-    '<th' lc_th '>GCV</th>'
-    '<th' lc_th '>NCV</th>'
-    '<th' lc_th '>Qty in MBG</th>'
-    '<th' lc_th '>GAIL ID</th>'
-    '</tr>'
-    INTO lv_html.
+    lc_xml_hdr TYPE string VALUE
+      '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>',
+    lc_wb_open TYPE string VALUE
+      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+      && ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
+      && ' xmlns:x="urn:schemas-microsoft-com:office:excel">',
+    lc_styles TYPE string VALUE
+      '<Styles>'
+      && '<Style ss:ID="hdr"><Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="11"/>'
+      && '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'
+      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      && '<Style ss:ID="dat"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      && '<Style ss:ID="num"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+      && '<NumberFormat ss:Format="0.000"/><Alignment ss:Horizontal="Right"/>'
+      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+      && '</Styles>'.
+  " Build XML Spreadsheet
+  CONCATENATE lc_xml_hdr lc_wb_open lc_styles
+    '<Worksheet ss:Name="Fortnightly Data"><Table>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    INTO lv_xml.
+  " Header row
+  CONCATENATE lv_xml
+    '<Row ss:StyleID="hdr">'
+    '<Cell><Data ss:Type="String">From</Data></Cell>'
+    '<Cell><Data ss:Type="String">To</Data></Cell>'
+    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
+    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
+    '<Cell><Data ss:Type="String">State</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty in SCM</Data></Cell>'
+    '<Cell><Data ss:Type="String">GCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">NCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty in MBG</Data></Cell>'
+    '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
+    '</Row>'
+    INTO lv_xml.
   " Data rows
   LOOP AT pt_data INTO ls_fnt.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
@@ -2441,26 +2520,26 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_fnt-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_date_from, lv_date_to, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    CONCATENATE lv_html
-      '<tr>'
-      '<td' lc_td '>' lv_date_from '</td>'
-      '<td' lc_td '>' lv_date_to '</td>'
-      '<td' lc_td '>' ls_fnt-ctp '</td>'
-      '<td' lc_td '>' ls_fnt-ongc_mater '</td>'
-      '<td' lc_td '>' ls_fnt-state_code '</td>'
-      '<td' lc_td '>' ls_fnt-state '</td>'
-      '<td' lc_tn '>' lv_qty_scm '</td>'
-      '<td' lc_tn '>' lv_gcv '</td>'
-      '<td' lc_tn '>' lv_ncv '</td>'
-      '<td' lc_tn '>' lv_qty_mbg '</td>'
-      '<td' lc_td '>' ls_fnt-gail_id '</td>'
-      '</tr>'
-      INTO lv_html.
+    CONCATENATE lv_xml
+      '<Row ss:StyleID="dat">'
+      '<Cell><Data ss:Type="String">' lv_date_from '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' lv_date_to '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_fnt-ctp '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_fnt-ongc_mater '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_fnt-state_code '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_fnt-state '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_fnt-gail_id '</Data></Cell>'
+      '</Row>'
+      INTO lv_xml.
   ENDLOOP.
-  CONCATENATE lv_html '</table></body></html>' INTO lv_html.
-  " Convert HTML string to xstring then to solix_tab
+  CONCATENATE lv_xml '</Table></Worksheet></Workbook>' INTO lv_xml.
+  " Convert XML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-  lo_conv->convert( EXPORTING data = lv_html IMPORTING buffer = lv_xstring ).
+  lo_conv->convert( EXPORTING data = lv_xml IMPORTING buffer = lv_xstring ).
   ct_content = cl_bcs_convert=>xstring_to_solix( lv_xstring ).
   cv_size = xstrlen( lv_xstring ).
 ENDFORM.
@@ -2850,7 +2929,7 @@ FORM display_daily_preview USING pt_daily TYPE STANDARD TABLE.
   ls_fieldcat-fieldname = 'GAIL_ID'.
   ls_fieldcat-seltext_l = 'GAIL ID'.
   ls_fieldcat-col_pos   = 13.
-  ls_fieldcat-outputlen = 16.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
 
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
@@ -2948,7 +3027,7 @@ FORM display_fnt_preview USING pt_fnt TYPE STANDARD TABLE.
   ls_fieldcat-fieldname = 'GAIL_ID'.
   ls_fieldcat-seltext_l = 'GAIL ID'.
   ls_fieldcat-col_pos   = 13.
-  ls_fieldcat-outputlen = 16.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
 
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
