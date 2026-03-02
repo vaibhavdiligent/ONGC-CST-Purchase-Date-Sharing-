@@ -2088,12 +2088,13 @@ FORM send_email USING pt_emails   TYPE string_table
       APPEND ls_pur-ctp TO lt_ctp.
     ENDIF.
   ENDLOOP.
-  " Build CTP list string (comma-separated)
+  " Build CTP list string (comma-separated, no space before comma)
   LOOP AT lt_ctp INTO lv_ctp.
     IF lv_ctp_list IS INITIAL.
       lv_ctp_list = lv_ctp.
     ELSE.
-      CONCATENATE lv_ctp_list ',' lv_ctp INTO lv_ctp_list SEPARATED BY space.
+      CONCATENATE lv_ctp_list ',' INTO lv_ctp_list.
+      CONCATENATE lv_ctp_list lv_ctp INTO lv_ctp_list SEPARATED BY space.
     ENDIF.
   ENDLOOP.
   DATA: lv_date_from_dot TYPE c LENGTH 10,
@@ -2110,12 +2111,14 @@ FORM send_email USING pt_emails   TYPE string_table
       lo_send_request = cl_bcs=>create_persistent( ).
       " Build email subject: State wise CST purchase DD.MM.YYYY to DD.MM.YYYY.
       CONCATENATE 'State wise CST purchase'
-        lv_date_from_dot 'to' lv_date_to_dot '.'
+        lv_date_from_dot 'to' lv_date_to_dot
         INTO lv_subject SEPARATED BY space.
+      CONCATENATE lv_subject '.' INTO lv_subject.
       " Build email body
       CONCATENATE 'Please find attached daily and fortnightly state wise CST purchase data for CTP IDs'
-        lv_ctp_list 'for the period' lv_date_from_str 'to' lv_date_to_str '.'
+        lv_ctp_list 'for the period' lv_date_from_str 'to' lv_date_to_str
         INTO ls_body-line SEPARATED BY space.
+      CONCATENATE ls_body-line '.' INTO ls_body-line.
       APPEND ls_body TO lt_body.
       " Create email document (body)
       lo_document = cl_document_bcs=>create_document(
@@ -2128,8 +2131,8 @@ FORM send_email USING pt_emails   TYPE string_table
         CLEAR: lt_att_hex, lv_att_size.
         PERFORM build_excel_attachment USING pt_data
                                       CHANGING lt_att_hex lv_att_size.
-        CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
-          INTO lv_att_subject.
+        CONCATENATE 'Daily CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
+        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'XLS'
           i_attachment_subject = lv_att_subject
@@ -2141,8 +2144,8 @@ FORM send_email USING pt_emails   TYPE string_table
         CLEAR: lt_att_text, lv_att_size.
         PERFORM build_pdf_attachment USING pt_data
                                     CHANGING lt_att_text lv_att_size.
-        CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
-          INTO lv_att_subject.
+        CONCATENATE 'Daily CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
+        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
@@ -2155,8 +2158,8 @@ FORM send_email USING pt_emails   TYPE string_table
         CLEAR: lt_att_hex, lv_att_size.
         PERFORM build_fnt_excel_attachment USING pt_fnt_data
                                           CHANGING lt_att_hex lv_att_size.
-        CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
-          INTO lv_att_subject.
+        CONCATENATE 'Fortnightly CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
+        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'XLS'
           i_attachment_subject = lv_att_subject
@@ -2168,8 +2171,8 @@ FORM send_email USING pt_emails   TYPE string_table
         CLEAR: lt_att_text, lv_att_size.
         PERFORM build_fnt_pdf_attachment USING pt_fnt_data
                                         CHANGING lt_att_text lv_att_size.
-        CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
-          INTO lv_att_subject.
+        CONCATENATE 'Fortnightly CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
+        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
@@ -2217,6 +2220,31 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_ncv     TYPE c LENGTH 15,
         lv_qty_scm TYPE c LENGTH 15,
         lv_qty_mbg TYPE c LENGTH 15.
+  " Summary sheet types
+  TYPES: BEGIN OF ty_summary_key,
+           ctp        TYPE ygms_de_ongc_ctp,
+           ongc_mater TYPE ygms_de_ongc_mater,
+           state_code TYPE yrga_cst_pur-state_code,
+           state      TYPE yrga_cst_pur-state,
+         END OF ty_summary_key.
+  TYPES: BEGIN OF ty_summary,
+           ctp        TYPE ygms_de_ongc_ctp,
+           ongc_mater TYPE ygms_de_ongc_mater,
+           state_code TYPE yrga_cst_pur-state_code,
+           state      TYPE yrga_cst_pur-state,
+           total_mbg  TYPE yrga_cst_pur-qty_in_mbg,
+           total_scm  TYPE yrga_cst_pur-qty_in_scm,
+           sum_gcv    TYPE yrga_cst_pur-gcv,
+           sum_ncv    TYPE yrga_cst_pur-ncv,
+           cnt        TYPE i,
+         END OF ty_summary.
+  DATA: lt_summary TYPE SORTED TABLE OF ty_summary WITH UNIQUE KEY ctp ongc_mater state_code,
+        ls_summary TYPE ty_summary.
+  DATA: lt_days    TYPE SORTED TABLE OF sy-datum WITH UNIQUE KEY table_line,
+        lt_day_qty TYPE HASHED TABLE OF yrga_cst_pur WITH UNIQUE KEY ctp ongc_mater state_code gas_day.
+  DATA: lv_day_str TYPE c LENGTH 10,
+        lv_val     TYPE c LENGTH 15,
+        lv_avg     TYPE c LENGTH 15.
   CONSTANTS:
     lc_xml_hdr TYPE string VALUE
       '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>',
@@ -2244,7 +2272,32 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
       && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
       && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
       && '</Styles>'.
-  " Build XML Spreadsheet
+  " ---- Build summary data (aggregate by CTP/Material/State) ----
+  LOOP AT pt_data INTO ls_pur.
+    COLLECT: ls_pur-gas_day INTO lt_days.
+    READ TABLE lt_summary WITH KEY ctp = ls_pur-ctp ongc_mater = ls_pur-ongc_mater
+      state_code = ls_pur-state_code ASSIGNING FIELD-SYMBOL(<fs_sum>).
+    IF sy-subrc = 0.
+      <fs_sum>-total_mbg = <fs_sum>-total_mbg + ls_pur-qty_in_mbg.
+      <fs_sum>-total_scm = <fs_sum>-total_scm + ls_pur-qty_in_scm.
+      <fs_sum>-sum_gcv   = <fs_sum>-sum_gcv + ls_pur-gcv.
+      <fs_sum>-sum_ncv   = <fs_sum>-sum_ncv + ls_pur-ncv.
+      <fs_sum>-cnt       = <fs_sum>-cnt + 1.
+    ELSE.
+      ls_summary-ctp        = ls_pur-ctp.
+      ls_summary-ongc_mater = ls_pur-ongc_mater.
+      ls_summary-state_code = ls_pur-state_code.
+      ls_summary-state      = ls_pur-state.
+      ls_summary-total_mbg  = ls_pur-qty_in_mbg.
+      ls_summary-total_scm  = ls_pur-qty_in_scm.
+      ls_summary-sum_gcv    = ls_pur-gcv.
+      ls_summary-sum_ncv    = ls_pur-ncv.
+      ls_summary-cnt        = 1.
+      INSERT ls_summary INTO TABLE lt_summary.
+    ENDIF.
+    INSERT ls_pur INTO TABLE lt_day_qty.
+  ENDLOOP.
+  " ---- Sheet 1: Daily Data ----
   CONCATENATE lc_xml_hdr lc_wb_open lc_styles
     '<Worksheet ss:Name="Daily Data"><Table>'
     '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
@@ -2299,6 +2352,85 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
       '</Row>'
       INTO lv_xml.
   ENDLOOP.
+  CONCATENATE lv_xml '</Table></Worksheet>' INTO lv_xml.
+  " ---- Sheet 2: Summary ----
+  CONCATENATE lv_xml
+    '<Worksheet ss:Name="Summary"><Table>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="70"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="70"/>'
+    INTO lv_xml.
+  " Add column widths for each day
+  LOOP AT lt_days INTO DATA(lv_day_date).
+    CONCATENATE lv_xml '<Column ss:AutoFitWidth="1" ss:Width="80"/>' INTO lv_xml.
+  ENDLOOP.
+  " Summary header row
+  CONCATENATE lv_xml
+    '<Row ss:StyleID="hdr">'
+    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
+    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
+    '<Cell><Data ss:Type="String">State</Data></Cell>'
+    '<Cell><Data ss:Type="String">Total MBG</Data></Cell>'
+    '<Cell><Data ss:Type="String">Total Sm3</Data></Cell>'
+    '<Cell><Data ss:Type="String">Avg. GCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">Avg. NCV</Data></Cell>'
+    INTO lv_xml.
+  " One header column per gas day (formatted as DD.MM.YYYY)
+  LOOP AT lt_days INTO lv_day_date.
+    WRITE lv_day_date TO lv_day_str DD/MM/YYYY.
+    CONDENSE lv_day_str.
+    REPLACE ALL OCCURRENCES OF '/' IN lv_day_str WITH '.'.
+    CONCATENATE lv_xml '<Cell><Data ss:Type="String">' lv_day_str '</Data></Cell>' INTO lv_xml.
+  ENDLOOP.
+  CONCATENATE lv_xml '</Row>' INTO lv_xml.
+  " Summary data rows
+  LOOP AT lt_summary INTO ls_summary.
+    WRITE ls_summary-total_mbg TO lv_qty_mbg DECIMALS 3.
+    WRITE ls_summary-total_scm TO lv_qty_scm DECIMALS 3.
+    CONDENSE: lv_qty_mbg, lv_qty_scm.
+    " Average GCV/NCV
+    IF ls_summary-cnt > 0.
+      DATA(lv_avg_gcv) = ls_summary-sum_gcv / ls_summary-cnt.
+      DATA(lv_avg_ncv) = ls_summary-sum_ncv / ls_summary-cnt.
+    ELSE.
+      lv_avg_gcv = 0.
+      lv_avg_ncv = 0.
+    ENDIF.
+    WRITE lv_avg_gcv TO lv_gcv DECIMALS 3.
+    WRITE lv_avg_ncv TO lv_ncv DECIMALS 3.
+    CONDENSE: lv_gcv, lv_ncv.
+    CONCATENATE lv_xml
+      '<Row ss:StyleID="dat">'
+      '<Cell><Data ss:Type="String">' ls_summary-ctp '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_summary-ongc_mater '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_summary-state_code '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_summary-state '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
+      INTO lv_xml.
+    " Per-day Qty in SCM values
+    LOOP AT lt_days INTO lv_day_date.
+      READ TABLE lt_day_qty WITH KEY ctp = ls_summary-ctp ongc_mater = ls_summary-ongc_mater
+        state_code = ls_summary-state_code gas_day = lv_day_date INTO ls_pur.
+      IF sy-subrc = 0.
+        WRITE ls_pur-qty_in_scm TO lv_val DECIMALS 3.
+        CONDENSE lv_val.
+      ELSE.
+        lv_val = '0.000'.
+      ENDIF.
+      CONCATENATE lv_xml '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_val '</Data></Cell>'
+        INTO lv_xml.
+    ENDLOOP.
+    CONCATENATE lv_xml '</Row>' INTO lv_xml.
+  ENDLOOP.
   CONCATENATE lv_xml '</Table></Worksheet></Workbook>' INTO lv_xml.
   " Convert XML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
@@ -2327,9 +2459,55 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lt_pdf     TYPE TABLE OF tline,
         lv_pdf_len TYPE i,
         lv_xstring TYPE xstring.
+  DATA: lv_date_str TYPE c LENGTH 10,
+        lv_time_str TYPE c LENGTH 8,
+        lv_page     TYPE i VALUE 1,
+        lv_page_str TYPE c LENGTH 5.
+  " Summary aggregation types
+  TYPES: BEGIN OF ty_pdf_sum,
+           ctp        TYPE ygms_de_ongc_ctp,
+           ongc_mater TYPE ygms_de_ongc_mater,
+           state_code TYPE yrga_cst_pur-state_code,
+           state      TYPE yrga_cst_pur-state,
+           total_mbg  TYPE yrga_cst_pur-qty_in_mbg,
+           total_scm  TYPE yrga_cst_pur-qty_in_scm,
+           sum_gcv    TYPE yrga_cst_pur-gcv,
+           sum_ncv    TYPE yrga_cst_pur-ncv,
+           cnt        TYPE i,
+         END OF ty_pdf_sum.
+  DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp ongc_mater state_code,
+        ls_pdf_sum TYPE ty_pdf_sum.
+  DATA: lv_avg_str TYPE c LENGTH 15.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+  " Download date/time
+  WRITE sy-datum TO lv_date_str DD/MM/YYYY.
+  WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
+
+  " Build summary aggregation
+  LOOP AT pt_data INTO ls_pur.
+    READ TABLE lt_pdf_sum WITH KEY ctp = ls_pur-ctp ongc_mater = ls_pur-ongc_mater
+      state_code = ls_pur-state_code ASSIGNING FIELD-SYMBOL(<fs_psum>).
+    IF sy-subrc = 0.
+      <fs_psum>-total_mbg = <fs_psum>-total_mbg + ls_pur-qty_in_mbg.
+      <fs_psum>-total_scm = <fs_psum>-total_scm + ls_pur-qty_in_scm.
+      <fs_psum>-sum_gcv   = <fs_psum>-sum_gcv + ls_pur-gcv.
+      <fs_psum>-sum_ncv   = <fs_psum>-sum_ncv + ls_pur-ncv.
+      <fs_psum>-cnt       = <fs_psum>-cnt + 1.
+    ELSE.
+      ls_pdf_sum-ctp        = ls_pur-ctp.
+      ls_pdf_sum-ongc_mater = ls_pur-ongc_mater.
+      ls_pdf_sum-state_code = ls_pur-state_code.
+      ls_pdf_sum-state      = ls_pur-state.
+      ls_pdf_sum-total_mbg  = ls_pur-qty_in_mbg.
+      ls_pdf_sum-total_scm  = ls_pur-qty_in_scm.
+      ls_pdf_sum-sum_gcv    = ls_pur-gcv.
+      ls_pdf_sum-sum_ncv    = ls_pur-ncv.
+      ls_pdf_sum-cnt        = 1.
+      INSERT ls_pdf_sum INTO TABLE lt_pdf_sum.
+    ENDIF.
+  ENDLOOP.
 
   " Get print parameters for spool creation
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
@@ -2353,24 +2531,77 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Create spool with formatted table output
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  WRITE: / 'Daily CST Purchase Data -',
+  " ---- Page 1: Summary ----
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
+  WRITE: /75 'CST Purchase Data', AT 185 lv_page_str.
+  WRITE: /5 'Daily CST Purchase Data - Summary -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
-  ULINE AT /1(180).
+  ULINE AT /5(175).
   FORMAT INTENSIFIED ON.
-  WRITE: /1(10) 'Gas Day',
-          12(12) 'CTP ID',
-          25(15) 'ONGC Material',
-          41(8)  'State Cd',
-          50(20) 'State',
-          71(15) 'Qty SCM',
-          87(12) 'GCV',
-          100(12) 'NCV',
-          113(15) 'Qty MBG',
-          129(20) 'ONGC ID',
-          150(14) 'GAIL ID'.
+  WRITE: /5(12) 'CTP ID',
+          18(15) 'ONGC Material',
+          34(8)  'State Cd',
+          43(20) 'State',
+          64(15) 'Total MBG',
+          80(15) 'Total Sm3',
+          96(12) 'Avg. GCV',
+          109(12) 'Avg. NCV'.
   FORMAT INTENSIFIED OFF.
-  ULINE AT /1(180).
+  ULINE AT /5(175).
+
+  LOOP AT lt_pdf_sum INTO ls_pdf_sum.
+    WRITE ls_pdf_sum-total_mbg TO lv_qty_mbg DECIMALS 3.
+    WRITE ls_pdf_sum-total_scm TO lv_qty_scm DECIMALS 3.
+    CONDENSE: lv_qty_mbg, lv_qty_scm.
+    IF ls_pdf_sum-cnt > 0.
+      DATA(lv_a_gcv) = ls_pdf_sum-sum_gcv / ls_pdf_sum-cnt.
+      DATA(lv_a_ncv) = ls_pdf_sum-sum_ncv / ls_pdf_sum-cnt.
+    ELSE.
+      lv_a_gcv = 0.
+      lv_a_ncv = 0.
+    ENDIF.
+    WRITE lv_a_gcv TO lv_gcv DECIMALS 3.
+    WRITE lv_a_ncv TO lv_ncv DECIMALS 3.
+    CONDENSE: lv_gcv, lv_ncv.
+    WRITE: /5(12) ls_pdf_sum-ctp,
+            18(15) ls_pdf_sum-ongc_mater,
+            34(8)  ls_pdf_sum-state_code,
+            43(20) ls_pdf_sum-state,
+            64(15) lv_qty_mbg,
+            80(15) lv_qty_scm,
+            96(12) lv_gcv,
+            109(12) lv_ncv.
+    ULINE AT /5(175).
+  ENDLOOP.
+
+  " ---- Page 2+: Daily Detail ----
+  lv_page = lv_page + 1.
+  NEW-PAGE.
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
+  WRITE: /75 'CST Purchase Data', AT 185 lv_page_str.
+  WRITE: /5 'Daily CST Purchase Data -',
+           lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /5(180).
+  FORMAT INTENSIFIED ON.
+  WRITE: /5(10) 'Gas Day',
+          16(12) 'CTP ID',
+          29(15) 'ONGC Material',
+          45(8)  'State Cd',
+          54(20) 'State',
+          75(15) 'Qty SCM',
+          91(12) 'GCV',
+          104(12) 'NCV',
+          117(15) 'Qty MBG',
+          133(20) 'ONGC ID',
+          154(14) 'GAIL ID'.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /5(180).
 
   LOOP AT pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
@@ -2379,20 +2610,20 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
     WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_gas_day, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
-    WRITE: /1(10) lv_gas_day,
-            12(12) ls_pur-ctp,
-            25(15) ls_pur-ongc_mater,
-            41(8)  ls_pur-state_code,
-            50(20) ls_pur-state,
-            71(15) lv_qty_scm,
-            87(12) lv_gcv,
-            100(12) lv_ncv,
-            113(15) lv_qty_mbg,
-            129(20) ls_pur-ongc_id,
-            150(14) ls_pur-gail_id.
+    WRITE: /5(10) lv_gas_day,
+            16(12) ls_pur-ctp,
+            29(15) ls_pur-ongc_mater,
+            45(8)  ls_pur-state_code,
+            54(20) ls_pur-state,
+            75(15) lv_qty_scm,
+            91(12) lv_gcv,
+            104(12) lv_ncv,
+            117(15) lv_qty_mbg,
+            133(20) ls_pur-ongc_id,
+            154(14) ls_pur-gail_id.
+    ULINE AT /5(180).
   ENDLOOP.
 
-  ULINE AT /1(180).
   NEW-PAGE PRINT OFF.
 
   " Get the spool request ID (most recent for current user)
@@ -2565,9 +2796,14 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lt_pdf     TYPE TABLE OF tline,
         lv_pdf_len TYPE i,
         lv_xstring TYPE xstring.
+  DATA: lv_date_str TYPE c LENGTH 10,
+        lv_time_str TYPE c LENGTH 8.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+  " Download date/time
+  WRITE sy-datum TO lv_date_str DD/MM/YYYY.
+  WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
 
   " Get print parameters for spool creation
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
@@ -2591,24 +2827,26 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Create spool with formatted table output
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  WRITE: / 'Fortnightly CST Purchase Data -',
+  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
+  WRITE: /75 'CST Purchase Data', AT 185 '1'.
+  WRITE: /5 'Fortnightly CST Purchase Data -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
-  ULINE AT /1(170).
+  ULINE AT /5(170).
   FORMAT INTENSIFIED ON.
-  WRITE: /1(10) 'From',
-          12(10) 'To',
-          23(12) 'CTP ID',
-          36(15) 'ONGC Material',
-          52(8)  'State Cd',
-          61(20) 'State',
-          82(15) 'Qty in SCM',
-          98(12) 'GCV',
-          111(12) 'NCV',
-          124(15) 'Qty in MBG',
-          140(14) 'GAIL ID'.
+  WRITE: /5(10) 'From',
+          16(10) 'To',
+          27(12) 'CTP ID',
+          40(15) 'ONGC Material',
+          56(8)  'State Cd',
+          65(20) 'State',
+          86(15) 'Qty in SCM',
+          102(12) 'GCV',
+          115(12) 'NCV',
+          128(15) 'Qty in MBG',
+          144(14) 'GAIL ID'.
   FORMAT INTENSIFIED OFF.
-  ULINE AT /1(170).
+  ULINE AT /5(170).
 
   LOOP AT pt_data INTO ls_fnt.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
@@ -2618,20 +2856,20 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_fnt-ncv TO lv_ncv DECIMALS 3.
     WRITE ls_fnt-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
     CONDENSE: lv_date_from, lv_date_to, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
-    WRITE: /1(10) lv_date_from,
-            12(10) lv_date_to,
-            23(12) ls_fnt-ctp,
-            36(15) ls_fnt-ongc_mater,
-            52(8)  ls_fnt-state_code,
-            61(20) ls_fnt-state,
-            82(15) lv_qty_scm,
-            98(12) lv_gcv,
-            111(12) lv_ncv,
-            124(15) lv_qty_mbg,
-            140(14) ls_fnt-gail_id.
+    WRITE: /5(10) lv_date_from,
+            16(10) lv_date_to,
+            27(12) ls_fnt-ctp,
+            40(15) ls_fnt-ongc_mater,
+            56(8)  ls_fnt-state_code,
+            65(20) ls_fnt-state,
+            86(15) lv_qty_scm,
+            102(12) lv_gcv,
+            115(12) lv_ncv,
+            128(15) lv_qty_mbg,
+            144(14) ls_fnt-gail_id.
+    ULINE AT /5(170).
   ENDLOOP.
 
-  ULINE AT /1(170).
   NEW-PAGE PRINT OFF.
 
   " Get the spool request ID (most recent for current user)
