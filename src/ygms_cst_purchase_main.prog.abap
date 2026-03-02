@@ -2245,33 +2245,34 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
   DATA: lv_day_str TYPE c LENGTH 10,
         lv_val     TYPE c LENGTH 15,
         lv_avg     TYPE c LENGTH 15.
-  CONSTANTS:
-    lc_xml_hdr TYPE string VALUE
-      '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>',
-    lc_wb_open TYPE string VALUE
-      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
-      && ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
-      && ' xmlns:x="urn:schemas-microsoft-com:office:excel">',
-    lc_styles TYPE string VALUE
-      '<Styles>'
-      && '<Style ss:ID="hdr"><Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="11"/>'
-      && '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'
-      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
-      && '<Style ss:ID="dat"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
-      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
-      && '<Style ss:ID="num"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
-      && '<NumberFormat ss:Format="0.000"/><Alignment ss:Horizontal="Right"/>'
-      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
-      && '</Styles>'.
+  DATA: lc_xml_hdr TYPE string,
+        lc_wb_open TYPE string,
+        lc_styles  TYPE string.
+  lc_xml_hdr = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'.
+  CONCATENATE '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+    ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
+    ' xmlns:x="urn:schemas-microsoft-com:office:excel">'
+    INTO lc_wb_open.
+  CONCATENATE '<Styles>'
+    '<Style ss:ID="hdr"><Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="11"/>'
+    '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'
+    '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+    '<Style ss:ID="dat"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+    '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+    '<Style ss:ID="num"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+    '<NumberFormat ss:Format="0.000"/><Alignment ss:Horizontal="Right"/>'
+    '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+    '</Styles>'
+    INTO lc_styles.
   " ---- Build summary data (aggregate by CTP/Material/State) ----
   LOOP AT pt_data INTO ls_pur.
     COLLECT: ls_pur-gas_day INTO lt_days.
@@ -2684,33 +2685,34 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
         lv_ncv       TYPE c LENGTH 15,
         lv_qty_scm   TYPE c LENGTH 15,
         lv_qty_mbg   TYPE c LENGTH 15.
-  CONSTANTS:
-    lc_xml_hdr TYPE string VALUE
-      '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>',
-    lc_wb_open TYPE string VALUE
-      '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
-      && ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
-      && ' xmlns:x="urn:schemas-microsoft-com:office:excel">',
-    lc_styles TYPE string VALUE
-      '<Styles>'
-      && '<Style ss:ID="hdr"><Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="11"/>'
-      && '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'
-      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
-      && '<Style ss:ID="dat"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
-      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
-      && '<Style ss:ID="num"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
-      && '<NumberFormat ss:Format="0.000"/><Alignment ss:Horizontal="Right"/>'
-      && '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
-      && '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
-      && '</Styles>'.
+  DATA: lc_xml_hdr TYPE string,
+        lc_wb_open TYPE string,
+        lc_styles  TYPE string.
+  lc_xml_hdr = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'.
+  CONCATENATE '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"'
+    ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"'
+    ' xmlns:x="urn:schemas-microsoft-com:office:excel">'
+    INTO lc_wb_open.
+  CONCATENATE '<Styles>'
+    '<Style ss:ID="hdr"><Font ss:Bold="1" ss:FontName="Times New Roman" ss:Size="11"/>'
+    '<Alignment ss:Horizontal="Center" ss:Vertical="Center"/>'
+    '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+    '<Style ss:ID="dat"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+    '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+    '<Style ss:ID="num"><Font ss:FontName="Times New Roman" ss:Size="11"/>'
+    '<NumberFormat ss:Format="0.000"/><Alignment ss:Horizontal="Right"/>'
+    '<Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>'
+    '<Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders></Style>'
+    '</Styles>'
+    INTO lc_styles.
   " Build XML Spreadsheet
   CONCATENATE lc_xml_hdr lc_wb_open lc_styles
     '<Worksheet ss:Name="Fortnightly Data"><Table>'
