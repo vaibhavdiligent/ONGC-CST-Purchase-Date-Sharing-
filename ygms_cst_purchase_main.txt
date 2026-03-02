@@ -2069,6 +2069,7 @@ FORM send_email USING pt_emails   TYPE string_table
         ls_body         TYPE soli,
         lv_subject      TYPE so_obj_des,
         lt_att_hex      TYPE solix_tab,
+        lt_att_text     TYPE soli_tab,
         lv_att_subject  TYPE sood-objdes,
         lv_att_size     TYPE sood-objlen,
         lv_sent_all     TYPE os_boolean,
@@ -2130,16 +2131,16 @@ FORM send_email USING pt_emails   TYPE string_table
       ENDIF.
       " Add Daily PDF attachment if selected
       IF pv_send_pdf = 'X'.
-        CLEAR: lt_att_hex, lv_att_size.
+        CLEAR: lt_att_text, lv_att_size.
         PERFORM build_pdf_attachment USING pt_data
-                                    CHANGING lt_att_hex lv_att_size.
+                                    CHANGING lt_att_text lv_att_size.
         CONCATENATE 'Daily CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
-          i_att_content_hex    = lt_att_hex ).
+          i_att_content_text   = lt_att_text ).
       ENDIF.
       " --- Fortnightly attachments ---
       " Add Fortnightly Excel attachment if selected
@@ -2157,16 +2158,16 @@ FORM send_email USING pt_emails   TYPE string_table
       ENDIF.
       " Add Fortnightly PDF attachment if selected
       IF pv_send_pdf = 'X'.
-        CLEAR: lt_att_hex, lv_att_size.
+        CLEAR: lt_att_text, lv_att_size.
         PERFORM build_fnt_pdf_attachment USING pt_fnt_data
-                                        CHANGING lt_att_hex lv_att_size.
+                                        CHANGING lt_att_text lv_att_size.
         CONCATENATE 'Fortnightly CST Purchase ' lv_date_from_str '-' lv_date_to_str
           INTO lv_att_subject.
         lo_document->add_attachment(
           i_attachment_type    = 'PDF'
           i_attachment_subject = lv_att_subject
           i_attachment_size    = lv_att_size
-          i_att_content_hex    = lt_att_hex ).
+          i_att_content_text   = lt_att_text ).
       ENDIF.
       " Set document to send request
       lo_send_request->set_document( lo_document ).
@@ -2267,7 +2268,7 @@ ENDFORM.
 *& Build PDF attachment from daily data using spool-to-PDF conversion
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
-                         CHANGING ct_content TYPE solix_tab
+                         CHANGING ct_content TYPE soli_tab
                                   cv_size    TYPE sood-objlen.
   DATA: ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
@@ -2376,9 +2377,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS        = 1.
 
   IF sy-subrc <> 0.
-    CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-      EXPORTING spoolid = lv_spool
-      EXCEPTIONS OTHERS = 1.
     RETURN.
   ENDIF.
 
@@ -2395,11 +2393,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
-
-  " Clean up spool request
-  CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-    EXPORTING spoolid = lv_spool
-    EXCEPTIONS OTHERS = 1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_EXCEL_ATTACHMENT
@@ -2476,7 +2469,7 @@ ENDFORM.
 *& Build fortnightly PDF attachment using spool-to-PDF conversion
 *&---------------------------------------------------------------------*
 FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
-                              CHANGING ct_content TYPE solix_tab
+                              CHANGING ct_content TYPE soli_tab
                                        cv_size    TYPE sood-objlen.
   DATA: ls_fnt     TYPE yrga_cst_fn_data.
   DATA: lv_date_from     TYPE c LENGTH 10,
@@ -2587,9 +2580,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS        = 1.
 
   IF sy-subrc <> 0.
-    CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-      EXPORTING spoolid = lv_spool
-      EXCEPTIONS OTHERS = 1.
     RETURN.
   ENDIF.
 
@@ -2606,11 +2596,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
-
-  " Clean up spool request
-  CALL FUNCTION 'RSPO_R_RDELETE_SPOOLREQ'
-    EXPORTING spoolid = lv_spool
-    EXCEPTIONS OTHERS = 1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
@@ -2737,51 +2722,54 @@ FORM display_send_preview.
     APPEND ls_fnt TO lt_fnt_data.
   ENDLOOP.
 
-  " Show preview popup with Daily Data / Fortnightly Data / Cancel
-  " Note: POPUP_TO_DECIDE supports max 2 option buttons + Cancel,
-  " so Proceed/Cancel is handled via a separate confirmation popup.
+  " Main popup: View Data or Send to ONGC
   DO.
     CALL FUNCTION 'POPUP_TO_DECIDE'
       EXPORTING
         defaultoption = '1'
-        textline1     = 'Click the relevant buttons to view daily or fortnightly data.'
-        textline2     = 'Click on Proceed button to send the data to ONGC.'
-        text_option1  = 'Daily Data'
-        text_option2  = 'Fortnightly Data'
-        titel         = 'Send Data Preview'
+        textline1     = 'Click to view Fortnightly / Daily data or'
+        textline2     = 'Click to proceed to send data to ONGC.'
+        text_option1  = 'View Data'
+        text_option2  = 'Send Data to ONGC'
+        titel         = 'CST Purchase Data'
         cancel_display = 'X'
       IMPORTING
         answer        = lv_answer.
 
     CASE lv_answer.
       WHEN '1'.
-        PERFORM display_daily_preview USING lt_daily_data.
+        " Sub-popup: Choose Daily or Fortnightly data to view
+        DATA lv_view_answer TYPE c LENGTH 1.
+        CALL FUNCTION 'POPUP_TO_DECIDE'
+          EXPORTING
+            defaultoption = '1'
+            textline1     = 'Select which data to view.'
+            textline2     = ' '
+            text_option1  = 'Daily Data'
+            text_option2  = 'Fortnightly Data'
+            titel         = 'View Data'
+            cancel_display = 'X'
+          IMPORTING
+            answer        = lv_view_answer.
+        CASE lv_view_answer.
+          WHEN '1'.
+            PERFORM display_daily_preview USING lt_daily_data.
+          WHEN '2'.
+            PERFORM display_fnt_preview USING lt_fnt_data.
+          WHEN OTHERS.
+            " Cancel - go back to main popup
+        ENDCASE.
       WHEN '2'.
-        PERFORM display_fnt_preview USING lt_fnt_data.
-      WHEN OTHERS.
-        " User closed preview popup - show Proceed/Cancel confirmation
+        " Proceed to send - go directly to Email/B2B selection
         EXIT.
+      WHEN OTHERS.
+        " Cancel - exit entirely
+        MESSAGE s000(ygms_msg) WITH 'Send operation cancelled'.
+        RETURN.
     ENDCASE.
   ENDDO.
 
-  " Show Proceed / Cancel confirmation popup with custom button labels
-  DATA lv_confirm TYPE c LENGTH 1.
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
-    EXPORTING
-      titlebar              = 'Send Data to ONGC'
-      text_question         = 'Do you want to send the data to ONGC?'
-      text_button_1         = 'Proceed'
-      text_button_2         = 'Cancel'
-      display_cancel_button = ' '
-    IMPORTING
-      answer                = lv_confirm.
-
-  IF lv_confirm <> '1'.
-    MESSAGE s000(ygms_msg) WITH 'Send operation cancelled'.
-    RETURN.
-  ENDIF.
-
-  " Now show send mode selection (Email or B2B)
+  " Show send mode selection (Email or B2B)
   PERFORM show_send_mode_popup.
 ENDFORM.
 *&---------------------------------------------------------------------*
