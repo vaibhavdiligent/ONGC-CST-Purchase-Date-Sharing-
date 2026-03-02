@@ -2722,51 +2722,54 @@ FORM display_send_preview.
     APPEND ls_fnt TO lt_fnt_data.
   ENDLOOP.
 
-  " Show preview popup with Daily Data / Fortnightly Data / Cancel
-  " Note: POPUP_TO_DECIDE supports max 2 option buttons + Cancel,
-  " so Proceed/Cancel is handled via a separate confirmation popup.
+  " Main popup: View Data or Send to ONGC
   DO.
     CALL FUNCTION 'POPUP_TO_DECIDE'
       EXPORTING
         defaultoption = '1'
-        textline1     = 'Click the relevant buttons to view daily or fortnightly data.'
-        textline2     = 'Click on Proceed button to send the data to ONGC.'
-        text_option1  = 'Daily Data'
-        text_option2  = 'Fortnightly Data'
-        titel         = 'Send Data Preview'
+        textline1     = 'Click to view Fortnightly / Daily data or'
+        textline2     = 'Click to proceed to send data to ONGC.'
+        text_option1  = 'View Data'
+        text_option2  = 'Send Data to ONGC'
+        titel         = 'CST Purchase Data'
         cancel_display = 'X'
       IMPORTING
         answer        = lv_answer.
 
     CASE lv_answer.
       WHEN '1'.
-        PERFORM display_daily_preview USING lt_daily_data.
+        " Sub-popup: Choose Daily or Fortnightly data to view
+        DATA lv_view_answer TYPE c LENGTH 1.
+        CALL FUNCTION 'POPUP_TO_DECIDE'
+          EXPORTING
+            defaultoption = '1'
+            textline1     = 'Select which data to view.'
+            textline2     = ' '
+            text_option1  = 'Daily Data'
+            text_option2  = 'Fortnightly Data'
+            titel         = 'View Data'
+            cancel_display = 'X'
+          IMPORTING
+            answer        = lv_view_answer.
+        CASE lv_view_answer.
+          WHEN '1'.
+            PERFORM display_daily_preview USING lt_daily_data.
+          WHEN '2'.
+            PERFORM display_fnt_preview USING lt_fnt_data.
+          WHEN OTHERS.
+            " Cancel - go back to main popup
+        ENDCASE.
       WHEN '2'.
-        PERFORM display_fnt_preview USING lt_fnt_data.
-      WHEN OTHERS.
-        " User closed preview popup - show Proceed/Cancel confirmation
+        " Proceed to send - go directly to Email/B2B selection
         EXIT.
+      WHEN OTHERS.
+        " Cancel - exit entirely
+        MESSAGE s000(ygms_msg) WITH 'Send operation cancelled'.
+        RETURN.
     ENDCASE.
   ENDDO.
 
-  " Show Proceed / Cancel confirmation popup with custom button labels
-  DATA lv_confirm TYPE c LENGTH 1.
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
-    EXPORTING
-      titlebar              = 'Send Data to ONGC'
-      text_question         = 'Do you want to send the data to ONGC?'
-      text_button_1         = 'Proceed'
-      text_button_2         = 'Cancel'
-      display_cancel_button = ' '
-    IMPORTING
-      answer                = lv_confirm.
-
-  IF lv_confirm <> '1'.
-    MESSAGE s000(ygms_msg) WITH 'Send operation cancelled'.
-    RETURN.
-  ENDIF.
-
-  " Now show send mode selection (Email or B2B)
+  " Show send mode selection (Email or B2B)
   PERFORM show_send_mode_popup.
 ENDFORM.
 *&---------------------------------------------------------------------*
