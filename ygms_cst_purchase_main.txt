@@ -115,6 +115,65 @@ TYPES: BEGIN OF ty_vali_b2b,
          time          TYPE sy-uzeit,
          date          TYPE sy-datum,
        END OF ty_vali_b2b.
+TYPES: BEGIN OF ty_data_daily,
+         gas_day       TYPE string,
+         ctp           TYPE string,
+         ongc_material TYPE string,
+         state_code    TYPE string,
+         state         TYPE string,
+         qty_in_scm    TYPE string,
+         gcv           TYPE string,
+         ncv           TYPE string,
+         qty_in_mbg    TYPE string,
+         ongc_id       TYPE string,
+         gail_id       TYPE string,
+       END OF ty_data_daily.
+DATA:     wa_final_daily TYPE ty_data_daily.
+DATA: BEGIN OF ty_final_daily,
+        record TYPE TABLE OF ty_data_daily,
+      END OF ty_final_daily.
+TYPES: BEGIN OF ty_data_fn,
+         date_from     TYPE string,
+         date_to       TYPE string,
+         ctp           TYPE string,
+         ongc_material TYPE string,
+         state_code    TYPE string,
+         state         TYPE string,
+         qty_in_scm    TYPE string,
+         gcv           TYPE string,
+         ncv           TYPE string,
+         qty_in_mbg    TYPE string,
+         gail_id       TYPE string,
+       END OF ty_data_fn.
+DATA:     wa_final_fn TYPE ty_data_fn.
+DATA: BEGIN OF ty_final_fn,
+        record TYPE TABLE OF ty_data_fn,
+      END OF ty_final_fn.
+DATA: lv_api_dt TYPE yha_api_dtls.
+DATA: lt_send_data TYPE TABLE OF yrga_cst_pur.
+DATA: lt_send_data_fn TYPE TABLE OF yrga_cst_fn_data.
+TYPES: BEGIN OF ty_out ,
+         code    TYPE char20,
+         message TYPE char100,
+       END OF ty_out .
+  DATA: lv_json_download TYPE string .
+  DATA: lv_token_url     TYPE string,
+        lv_api_get       TYPE string,
+        lv_api_url       TYPE string,
+        lv_client_id     TYPE string,
+        lv_client_secret TYPE string,
+        lv_proxy_host    TYPE string,
+        lv_proxy_service TYPE string,
+        lv_access_token  TYPE string,
+        lv_response      TYPE string,
+        log_data         TYPE string,
+        itab             TYPE TABLE OF ty_out WITH HEADER LINE.
+  DATA: html           TYPE string,
+        lv_http_client TYPE REF TO if_http_client,
+        code           TYPE i,
+        reason         TYPE string.
+  DATA:
+    lo_http_client   TYPE REF TO if_http_client.
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -131,13 +190,13 @@ SELECTION-SCREEN END OF BLOCK b1.
 *----------------------------------------------------------------------*
 * Custom Popup Selection Screen for Email (Screen 2000)
 *----------------------------------------------------------------------*
-DATA: gv_email1    TYPE c LENGTH 120,
-      gv_email2    TYPE c LENGTH 120,
-      gv_email3    TYPE c LENGTH 120,
-      gv_email4    TYPE c LENGTH 120,
-      gv_email5    TYPE c LENGTH 120,
-      gv_send_pdf  TYPE c LENGTH 1 VALUE 'X',
-      gv_send_xls  TYPE c LENGTH 1 VALUE 'X'.
+DATA: gv_email1   TYPE c LENGTH 120,
+      gv_email2   TYPE c LENGTH 120,
+      gv_email3   TYPE c LENGTH 120,
+      gv_email4   TYPE c LENGTH 120,
+      gv_email5   TYPE c LENGTH 120,
+      gv_send_pdf TYPE c LENGTH 1 VALUE 'X',
+      gv_send_xls TYPE c LENGTH 1 VALUE 'X'.
 
 SELECTION-SCREEN BEGIN OF SCREEN 2000 TITLE TEXT-e00.
   SELECTION-SCREEN BEGIN OF BLOCK b_email WITH FRAME TITLE TEXT-e01.
@@ -1934,7 +1993,8 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
     IF sy-subrc <> 0.
       " ONGC ID not found in saved data - new receipt data received
       lv_new_found = abap_true.
-      APPEND ls_b2b TO gt_new_receipt_data.
+      MOVE-CORRESPONDING ls_b2b TO gs_new_receipt_data.
+      APPEND gs_new_receipt_data TO gt_new_receipt_data.
     ENDIF.
   ENDLOOP.
 
@@ -1989,11 +2049,11 @@ ENDFORM.
 *& 1.1.1: Send data through Email with PDF/Excel attachments
 *&---------------------------------------------------------------------*
 FORM handle_send_email.
-  DATA: lt_send_data   TYPE TABLE OF yrga_cst_pur,
-        lt_emails      TYPE TABLE OF string,
-        lv_send_pdf    TYPE c LENGTH 1,
-        lv_send_excel  TYPE c LENGTH 1,
-        lv_email_line  TYPE string.
+  DATA: lt_send_data  TYPE TABLE OF yrga_cst_pur,
+        lt_emails     TYPE TABLE OF string,
+        lv_send_pdf   TYPE c LENGTH 1,
+        lv_send_excel TYPE c LENGTH 1,
+        lv_email_line TYPE string.
 
   " Clear popup fields before display
   CLEAR: p_eml1, p_eml2, p_eml3, p_eml4, p_eml5.
@@ -2943,22 +3003,173 @@ ENDFORM.
 *& 1.1.2: Send data through B2B PI connectivity
 *&---------------------------------------------------------------------*
 FORM handle_send_b2b.
-  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur.
-
   " Fetch data from YRGA_CST_PUR where EXCLUDED flag is not X
   SELECT * FROM yrga_cst_pur
     INTO TABLE lt_send_data
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
       AND exclude <> 'X'.
-
-  IF lt_send_data IS INITIAL.
+  SELECT * FROM yrga_cst_fn_data
+  INTO TABLE lt_send_data_fn
+  WHERE date_from = gv_date_from AND date_to = gv_date_to
+    AND location IN s_loc.
+  IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
+  ELSE.
+    IF lt_send_data[] IS NOT INITIAL.
+      CLEAR: lv_json_download.
+      LOOP AT lt_send_data INTO DATA(w_fin).
+        wa_final_daily-ctp = w_fin-ctp.
+        wa_final_daily-gail_id = w_fin-gail_id.
+        wa_final_daily-gas_day = w_fin-gas_day.
+        wa_final_daily-gcv = w_fin-gcv.
+        wa_final_daily-ncv = w_fin-ncv.
+        wa_final_daily-ongc_id = w_fin-ongc_id.
+        wa_final_daily-ongc_material = w_fin-ongc_mater.
+        wa_final_daily-qty_in_mbg = w_fin-qty_in_mbg .
+        wa_final_daily-qty_in_scm = w_fin-qty_in_scm .
+        wa_final_daily-state = w_fin-state .
+        wa_final_daily-state_code = w_fin-state_code .
+        APPEND wa_final_daily TO ty_final_daily-record.
+        CLEAR:  wa_final_daily, w_fin.
+      ENDLOOP.
+      lv_json_download = /ui2/cl_json=>serialize(
+     data = ty_final_daily
+     compress = abap_true
+     pretty_name = /ui2/cl_json=>pretty_mode-none ).
+      SELECT SINGLE * FROM yha_api_dtls INTO @lv_api_dt WHERE sysid = @sy-sysid AND yy_api_type = 'ONGC_B2B_DAILY'.
+      PERFORM call_api.
+    ENDIF.
+    IF lt_send_data_fn[] IS NOT INITIAL.
+      CLEAR: lv_json_download.
+      LOOP AT lt_send_data_fn INTO DATA(w_fin_fn).
+        wa_final_fn-ctp = w_fin_fn-ctp.
+        wa_final_fn-gail_id = w_fin_fn-gail_id.
+        wa_final_fn-date_from = w_fin_fn-date_from.
+        wa_final_fn-date_to = w_fin_fn-date_to.
+        wa_final_fn-gcv = w_fin_fn-gcv.
+        wa_final_fn-ncv = w_fin_fn-ncv.
+        wa_final_fn-ongc_material = w_fin_fn-ongc_mater.
+        wa_final_fn-qty_in_mbg = w_fin_fn-qty_in_mbg .
+        wa_final_fn-qty_in_scm = w_fin_fn-qty_in_scm .
+        wa_final_fn-state = w_fin_fn-state .
+        wa_final_fn-state_code = w_fin_fn-state_code .
+        APPEND wa_final_fn TO ty_final_fn-record.
+        CLEAR:  wa_final_fn, w_fin.
+      ENDLOOP.
+      lv_json_download = /ui2/cl_json=>serialize(
+     data = ty_final_fn
+     compress = abap_true
+     pretty_name = /ui2/cl_json=>pretty_mode-none ).
+      SELECT SINGLE * FROM yha_api_dtls INTO @lv_api_dt WHERE sysid = @sy-sysid AND yy_api_type = 'ONGC_B2B_FN'.
+      PERFORM call_api.
+    ENDIF.
   ENDIF.
-
   " B2B PI connectivity - to be implemented when B2B connection is established
-  MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
+  " MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
+ENDFORM.
+FORM call_api.
+****  Added by Aishwarya/ Abhisheik for ONGC b2b API 03.03.2026
+  IF sy-subrc = 0.
+    lv_token_url     = lv_api_dt-yy_token_url.
+    lv_api_get     = lv_api_dt-yy_api_url.
+    lv_client_id     = lv_api_dt-yy_client_id.
+    lv_client_secret = lv_api_dt-yy_client_secret.
+    lv_proxy_host    = 'proxy'.
+    lv_proxy_service = '3128'.
+  ENDIF.
+  CALL METHOD cl_http_client=>create_by_url
+    EXPORTING
+      url                = lv_token_url
+      proxy_host         = lv_proxy_host
+      proxy_service      = lv_proxy_service
+    IMPORTING
+      client             = lo_http_client
+    EXCEPTIONS
+      argument_not_found = 1
+      plugin_not_active  = 2
+      internal_error     = 3
+      OTHERS             = 4.
+  IF sy-subrc <> 0.
+    WRITE: / 'Error creating HTTP client for token request'.
+    RETURN.
+  ENDIF.
+  lo_http_client->propertytype_logon_popup = lo_http_client->co_disabled.
+  lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+  lo_http_client->request->set_cdata( |grant_type=client_credentials&client_id={ lv_client_id }&client_secret={ lv_client_secret }| ).
+  CALL METHOD lo_http_client->send
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4.
+  IF sy-subrc <> 0.
+    WRITE: / 'Error sending token request'.
+    RETURN.
+  ENDIF.
+* Receive token response
+  CALL METHOD lo_http_client->receive
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4.
+  IF sy-subrc <> 0.
+    WRITE: / 'Error receiving token response'.
+    RETURN.
+  ENDIF.
+  lv_response = lo_http_client->response->get_cdata( ).
+  lo_http_client->close( ).
+***    * Extract access token from response (assuming JSON response)
+  DATA: lt_json       TYPE TABLE OF string,
+        lv_token_json TYPE string.
+  SPLIT lv_response AT ',' INTO TABLE lt_json.
+  LOOP AT lt_json INTO lv_token_json.
+    IF lv_token_json CS '"access_token"'.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_token_json WITH ''.
+      REPLACE ALL OCCURRENCES OF 'access_token:' IN lv_token_json WITH ''.
+      lv_access_token = lv_token_json.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+  IF lv_access_token IS NOT INITIAL.
+    DATA: "lv_http_client TYPE REF TO if_http_client,
+           "lv_response    TYPE string,
+           lt_headers     TYPE tihttpnvp.
+    " Create HTTP client for the Vendor data request
+    CALL METHOD cl_http_client=>create_by_url
+      EXPORTING
+        url           = lv_api_get
+        proxy_host    = lv_proxy_host
+        proxy_service = lv_proxy_service
+      IMPORTING
+        client        = lv_http_client.
+    lv_http_client->request->set_method( 'POST' ).
+    lv_http_client->request->set_header_field( name = 'Authorization' value = |Bearer { lv_access_token }| ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+    lv_http_client->request->set_header_field( name = 'Accept'  value = 'application/json' ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+*  lv_http_client->request->set_cdata( |grant_type=client_credentials&client_id={ lv_client_id }&client_secret={ lv_client_secret }| ).
+    lv_http_client->request->set_cdata( lv_json_download ).
+    lv_http_client->send( EXCEPTIONS http_communication_failure = 1
+       http_invalid_state = 2 ).
+    lv_http_client->receive( EXCEPTIONS
+            http_communication_failure = 1
+            http_invalid_state = 2
+            http_processing_failed = 3 ).
+    lv_http_client->response->get_status(
+    IMPORTING
+      code = code
+      reason = reason ).
+    lv_response = lv_http_client->response->get_cdata( ).
+    log_data =   lv_response.
+    /ui2/cl_json=>deserialize(
+   EXPORTING json = log_data
+    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+   CHANGING data = itab ).
+    lv_http_client->close( ).
+  ELSE.
+    WRITE:/ 'NO DATA TO DOWNLOAD.'.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_SEND_PREVIEW
