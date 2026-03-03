@@ -115,6 +115,97 @@ TYPES: BEGIN OF ty_vali_b2b,
          time          TYPE sy-uzeit,
          date          TYPE sy-datum,
        END OF ty_vali_b2b.
+TYPES: BEGIN OF ty_data_daily,
+         gas_day       TYPE string,
+         ctp           TYPE string,
+         ongc_material TYPE string,
+         state_code    TYPE string,
+         state         TYPE string,
+         qty_in_scm    TYPE string,
+         gcv           TYPE string,
+         ncv           TYPE string,
+         qty_in_mbg    TYPE string,
+         ongc_id       TYPE string,
+         gail_id       TYPE string,
+       END OF ty_data_daily.
+* Saved Data ALV structures (for View -> Saved Data sub-option)
+TYPES: BEGIN OF ty_saved_daily,
+         gas_day    TYPE datum,
+         ctp        TYPE ygms_de_ongc_ctp,
+         ongc_mater TYPE ygms_de_ongc_mat,
+         state_code TYPE regio,
+         state      TYPE bezei20,
+         qty_in_scm TYPE ygms_de_qty_mbg_cal,
+         gcv        TYPE ygms_de_gcv,
+         ncv        TYPE ygms_de_ncv,
+         qty_in_mbg TYPE ygms_de_qty_mbg_cal,
+         ongc_id    TYPE c LENGTH 9,
+         gail_id    TYPE c LENGTH 20,
+         location   TYPE ygms_de_loc_id,
+         material   TYPE ygms_de_gail_mat,
+         exclude    TYPE c LENGTH 1,
+       END OF ty_saved_daily.
+TYPES: BEGIN OF ty_saved_fnt,
+         date_from  TYPE datum,
+         date_to    TYPE datum,
+         ctp        TYPE ygms_de_ongc_ctp,
+         ongc_mater TYPE ygms_de_ongc_mat,
+         state_code TYPE regio,
+         state      TYPE bezei20,
+         qty_in_scm TYPE ygms_de_qty_mbg_cal,
+         gcv        TYPE ygms_de_gcv,
+         ncv        TYPE ygms_de_ncv,
+         qty_in_mbg TYPE ygms_de_qty_mbg_cal,
+         gail_id    TYPE c LENGTH 20,
+         location   TYPE ygms_de_loc_id,
+         material   TYPE ygms_de_gail_mat,
+       END OF ty_saved_fnt.
+DATA:     wa_final_daily TYPE ty_data_daily.
+DATA: BEGIN OF ty_final_daily,
+        record TYPE TABLE OF ty_data_daily,
+      END OF ty_final_daily.
+TYPES: BEGIN OF ty_data_fn,
+         date_from     TYPE string,
+         date_to       TYPE string,
+         ctp           TYPE string,
+         ongc_material TYPE string,
+         state_code    TYPE string,
+         state         TYPE string,
+         qty_in_scm    TYPE string,
+         gcv           TYPE string,
+         ncv           TYPE string,
+         qty_in_mbg    TYPE string,
+         gail_id       TYPE string,
+       END OF ty_data_fn.
+DATA:     wa_final_fn TYPE ty_data_fn.
+DATA: BEGIN OF ty_final_fn,
+        record TYPE TABLE OF ty_data_fn,
+      END OF ty_final_fn.
+DATA: lv_api_dt TYPE yha_api_dtls.
+DATA: lt_send_data TYPE TABLE OF yrga_cst_pur.
+DATA: lt_send_data_fn TYPE TABLE OF yrga_cst_fn_data.
+TYPES: BEGIN OF ty_out ,
+         code    TYPE char20,
+         message TYPE char100,
+       END OF ty_out .
+  DATA: lv_json_download TYPE string .
+  DATA: lv_token_url     TYPE string,
+        lv_api_get       TYPE string,
+        lv_api_url       TYPE string,
+        lv_client_id     TYPE string,
+        lv_client_secret TYPE string,
+        lv_proxy_host    TYPE string,
+        lv_proxy_service TYPE string,
+        lv_access_token  TYPE string,
+        lv_response      TYPE string,
+        log_data         TYPE string,
+        itab             TYPE TABLE OF ty_out WITH HEADER LINE.
+  DATA: html           TYPE string,
+        lv_http_client TYPE REF TO if_http_client,
+        code           TYPE i,
+        reason         TYPE string.
+  DATA:
+    lo_http_client   TYPE REF TO if_http_client.
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -124,9 +215,14 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
                   s_date FOR sy-datum OBLIGATORY,
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
   PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
-              p_view  TYPE char1 RADIOBUTTON GROUP r1.
+              p_view  TYPE char1 RADIOBUTTON GROUP r1,
+              p_send  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
-
+* Sub-options for View mode
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_valloc TYPE char1 RADIOBUTTON GROUP r2 DEFAULT 'X' MODIF ID viw,
+              p_vsave  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw.
+SELECTION-SCREEN END OF BLOCK b2.
 *----------------------------------------------------------------------*
 * Custom Popup Selection Screen for Email (Screen 2000)
 *----------------------------------------------------------------------*
@@ -182,6 +278,10 @@ DATA: gv_allocated    TYPE abap_bool VALUE abap_false,  " Allocation done flag
 * Global table for new receipt data (used by View Details in validation popup)
 DATA: gt_new_receipt_data TYPE TABLE OF ty_vali_b2b.
 DATA gs_new_receipt_data TYPE ty_vali_b2b.
+* Saved Data view tables and mode flag
+DATA: gt_saved_daily TYPE TABLE OF ty_saved_daily,
+      gt_saved_fnt   TYPE TABLE OF ty_saved_fnt,
+      gv_saved_view  TYPE c LENGTH 1 VALUE 'D'.  " D=Daily, F=Fortnightly
 *----------------------------------------------------------------------*
 * Class Definition for ALV Event Handler
 *----------------------------------------------------------------------*
@@ -279,6 +379,20 @@ INITIALIZATION.
   s_date-high   = sy-datum.
   APPEND s_date.
 *----------------------------------------------------------------------*
+* Selection Screen Output - Show/Hide View sub-options
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF screen-group1 = 'VIW'.
+      IF p_view IS NOT INITIAL.
+        screen-active = 1.
+      ELSE.
+        screen-active = 0.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+*----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
@@ -287,17 +401,27 @@ START-OF-SELECTION.
   gv_date_to   = ls_date-high.
   PERFORM fetch_location_ctp_mappings.
   CHECK gt_loc_ctp_map IS NOT INITIAL.
-  PERFORM fetch_b2b_data.
-  CHECK gt_gas_receipt IS NOT INITIAL.
-  PERFORM map_location_ids.
-  PERFORM map_material_names.
-  PERFORM fetch_data_yrxr098.
-  IF p_view IS INITIAL.
-    PERFORM build_alv_display_table.
+  IF p_send IS NOT INITIAL.
+    " Direct Send mode - bypass ALV, go straight to send flow
+    PERFORM handle_send_direct.
+  ELSEIF p_view IS NOT INITIAL AND p_vsave IS NOT INITIAL.
+    " View -> Saved Data: display data from YRGA_CST_PUR / YRGA_CST_FN_DATA
+    PERFORM fetch_saved_data.
+    PERFORM display_saved_data_alv.
   ELSE.
-    PERFORM build_alv_display_table_view.
+    PERFORM fetch_b2b_data.
+    CHECK gt_gas_receipt IS NOT INITIAL.
+    PERFORM map_location_ids.
+    PERFORM map_material_names.
+    PERFORM fetch_data_yrxr098.
+    IF p_view IS INITIAL.
+      PERFORM build_alv_display_table.
+    ELSE.
+      " View -> Allocation Details: same as existing view logic
+      PERFORM build_alv_display_table_view.
+    ENDIF.
+    PERFORM display_editable_alv.
   ENDIF.
-  PERFORM display_editable_alv.
 *&---------------------------------------------------------------------*
 *& Form FETCH_LOCATION_CTP_MAPPINGS
 *&---------------------------------------------------------------------*
@@ -1842,6 +1966,20 @@ FORM handle_reset.
   MESSAGE s000(ygms_msg) WITH 'Data reset to original values'.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form HANDLE_SEND_DIRECT
+*& Direct send from selection screen - same flow as ALV Send button
+*&---------------------------------------------------------------------*
+FORM handle_send_direct.
+  DATA: lv_valid TYPE abap_bool.
+  " Validate before send (check for new ONGC receipt data)
+  PERFORM validate_before_send CHANGING lv_valid.
+  IF lv_valid = abap_false.
+    RETURN.
+  ENDIF.
+  " Show data preview with daily/fortnightly toggle, then send mode popup
+  PERFORM display_send_preview.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form HANDLE_SEND
 *& Point 1: Send Allocation Data
 *&---------------------------------------------------------------------*
@@ -2196,22 +2334,6 @@ FORM send_email USING pt_emails   TYPE string_table
       lv_sent_all = lo_send_request->send( ).
       IF lv_sent_all = abap_true.
         COMMIT WORK.
-        " Update sent tracking fields in source tables (email = 2)
-        UPDATE yrga_cst_pur SET sent_e  = '2'
-                                sent_by = sy-uname
-                                sent_on = sy-datum
-                                sent_at = sy-uzeit
-          WHERE gas_day BETWEEN gv_date_from AND gv_date_to
-            AND location IN s_loc
-            AND exclude <> 'X'.
-        UPDATE yrga_cst_fn_data SET sent_e  = '2'
-                                    sent_by = sy-uname
-                                    sent_on = sy-datum
-                                    sent_at = sy-uzeit
-          WHERE date_from = gv_date_from
-            AND date_to   = gv_date_to
-            AND location  IN s_loc.
-        COMMIT WORK AND WAIT.
         MESSAGE s000(ygms_msg) WITH 'Email sent successfully'.
       ELSE.
         MESSAGE s000(ygms_msg) WITH 'Error sending email'.
@@ -2220,6 +2342,22 @@ FORM send_email USING pt_emails   TYPE string_table
       DATA(lv_error_text) = lx_bcs->get_text( ).
       MESSAGE s000(ygms_msg) WITH 'Email error:' lv_error_text.
   ENDTRY.
+  " Update sent tracking fields in source tables (email = 2)
+UPDATE yrga_cst_pur SET sent_e  = '2'
+                        sent_by = sy-uname
+                        sent_on = sy-datum
+                        sent_at = sy-uzeit
+  WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+    AND location IN s_loc
+    AND exclude <> 'X'.
+UPDATE yrga_cst_fn_data SET sent_e  = '2'
+                            sent_by = sy-uname
+                            sent_on = sy-datum
+                            sent_at = sy-uzeit
+  WHERE date_from = gv_date_from
+    AND date_to   = gv_date_to
+    AND location  IN s_loc.
+COMMIT WORK AND WAIT.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_EXCEL_ATTACHMENT
@@ -2937,144 +3075,175 @@ ENDFORM.
 *& 1.1.2: Send data through B2B PI connectivity
 *&---------------------------------------------------------------------*
 FORM handle_send_b2b.
-  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur,
-        lt_send_fnt  TYPE TABLE OF yrga_cst_fnt_data.
-
-  " Fetch daily data from YRGA_CST_PUR where EXCLUDED flag is not X
+  " Fetch data from YRGA_CST_PUR where EXCLUDED flag is not X
   SELECT * FROM yrga_cst_pur
     INTO TABLE lt_send_data
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
       AND exclude <> 'X'.
-
-  IF lt_send_data IS INITIAL.
+  SELECT * FROM yrga_cst_fn_data
+  INTO TABLE lt_send_data_fn
+  WHERE date_from = gv_date_from AND date_to = gv_date_to
+    AND location IN s_loc.
+  IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
+  ELSE.
+    IF lt_send_data[] IS NOT INITIAL.
+      CLEAR: lv_json_download.
+      LOOP AT lt_send_data INTO DATA(w_fin).
+        wa_final_daily-ctp = w_fin-ctp.
+        wa_final_daily-gail_id = w_fin-gail_id.
+        wa_final_daily-gas_day = w_fin-gas_day.
+        wa_final_daily-gcv = w_fin-gcv.
+        wa_final_daily-ncv = w_fin-ncv.
+        wa_final_daily-ongc_id = w_fin-ongc_id.
+        wa_final_daily-ongc_material = w_fin-ongc_mater.
+        wa_final_daily-qty_in_mbg = w_fin-qty_in_mbg .
+        wa_final_daily-qty_in_scm = w_fin-qty_in_scm .
+        wa_final_daily-state = w_fin-state .
+        wa_final_daily-state_code = w_fin-state_code .
+        APPEND wa_final_daily TO ty_final_daily-record.
+        CLEAR:  wa_final_daily, w_fin.
+      ENDLOOP.
+      lv_json_download = /ui2/cl_json=>serialize(
+     data = ty_final_daily
+     compress = abap_true
+     pretty_name = /ui2/cl_json=>pretty_mode-none ).
+      SELECT SINGLE * FROM yha_api_dtls INTO @lv_api_dt WHERE sysid = @sy-sysid AND yy_api_type = 'ONGC_B2B_DAILY'.
+      PERFORM call_api.
+    ENDIF.
+    IF lt_send_data_fn[] IS NOT INITIAL.
+      CLEAR: lv_json_download.
+      LOOP AT lt_send_data_fn INTO DATA(w_fin_fn).
+        wa_final_fn-ctp = w_fin_fn-ctp.
+        wa_final_fn-gail_id = w_fin_fn-gail_id.
+        wa_final_fn-date_from = w_fin_fn-date_from.
+        wa_final_fn-date_to = w_fin_fn-date_to.
+        wa_final_fn-gcv = w_fin_fn-gcv.
+        wa_final_fn-ncv = w_fin_fn-ncv.
+        wa_final_fn-ongc_material = w_fin_fn-ongc_mater.
+        wa_final_fn-qty_in_mbg = w_fin_fn-qty_in_mbg .
+        wa_final_fn-qty_in_scm = w_fin_fn-qty_in_scm .
+        wa_final_fn-state = w_fin_fn-state .
+        wa_final_fn-state_code = w_fin_fn-state_code .
+        APPEND wa_final_fn TO ty_final_fn-record.
+        CLEAR:  wa_final_fn, w_fin.
+      ENDLOOP.
+      lv_json_download = /ui2/cl_json=>serialize(
+     data = ty_final_fn
+     compress = abap_true
+     pretty_name = /ui2/cl_json=>pretty_mode-none ).
+      SELECT SINGLE * FROM yha_api_dtls INTO @lv_api_dt WHERE sysid = @sy-sysid AND yy_api_type = 'ONGC_B2B_FN'.
+      PERFORM call_api.
+    ENDIF.
   ENDIF.
-
-  " Fetch fortnightly data from YRGA_CST_FNT_DATA
-  SELECT * FROM yrga_cst_fn_data
-    INTO TABLE lt_send_fnt
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc.
-
+    " After successful API call, save sent data to B2B tables
+  PERFORM save_b2b_sent_data USING lt_send_data lt_send_data_fn.
   " B2B PI connectivity - to be implemented when B2B connection is established
-  " TODO: Replace with actual B2B API call (PERFORM call_b2b_api)
-  MESSAGE s000(ygms_msg) WITH 'B2B data sent successfully (API placeholder)'.
-
-  " After successful API call, save sent data to B2B tables
-  PERFORM save_b2b_sent_data USING lt_send_data lt_send_fnt.
+  " MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form SAVE_B2B_SENT_DATA
-*& Save sent data to YRGA_CST_B2B_2 (daily) and YRGA_CST_B2B_3 (fortnightly)
-*& Called after successful B2B API call
-*&---------------------------------------------------------------------*
-FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
-                              pt_fnt   TYPE STANDARD TABLE.
-  DATA: lt_b2b_2    TYPE TABLE OF yrga_cst_b2b_2,
-        ls_b2b_2    TYPE yrga_cst_b2b_2,
-        lt_b2b_3    TYPE TABLE OF yrga_cst_b2b_3,
-        ls_b2b_3    TYPE yrga_cst_b2b_3,
-        ls_pur      TYPE yrga_cst_pur,
-        ls_fnt      TYPE yrga_cst_fnt_data,
-        lv_count_d  TYPE i,
-        lv_count_f  TYPE i,
-        lv_tstamp   TYPE timestamp.
-
-  " Build daily B2B records from YRGA_CST_PUR data
-  LOOP AT pt_daily INTO ls_pur.
-    CLEAR ls_b2b_2.
-    ls_b2b_2-gas_day       = ls_pur-gas_day.
-    ls_b2b_2-ctp_id        = ls_pur-ctp.
-    ls_b2b_2-ongc_material = ls_pur-ongc_mater.
-    GET TIME STAMP FIELD lv_tstamp.
-    ls_b2b_2-time_stamp    = lv_tstamp.
-    ls_b2b_2-state_code    = ls_pur-state_code.
-    ls_b2b_2-state         = ls_pur-state.
-    ls_b2b_2-qty_scm       = ls_pur-qty_in_scm.
-    ls_b2b_2-gcv           = ls_pur-gcv.
-    ls_b2b_2-ncv           = ls_pur-ncv.
-    ls_b2b_2-qty_in_mbg    = ls_pur-qty_in_mbg.
-    ls_b2b_2-ongc_id       = ls_pur-ongc_id.
-    ls_b2b_2-sent_by       = sy-uname.
-    ls_b2b_2-sent_on       = sy-datum.
-    ls_b2b_2-sent_at       = sy-uzeit.
-    APPEND ls_b2b_2 TO lt_b2b_2.
-  ENDLOOP.
-
-  " Build fortnightly B2B records from YRGA_CST_FNT_DATA
-  LOOP AT pt_fnt INTO ls_fnt.
-    CLEAR ls_b2b_3.
-    ls_b2b_3-date_from      = ls_fnt-date_from.
-    ls_b2b_3-date_to        = ls_fnt-date_to.
-    ls_b2b_3-ctp            = ls_fnt-ctp.
-    ls_b2b_3-ongc_material  = ls_fnt-ongc_mater.
-    ls_b2b_3-time_stamp     = ls_fnt-time_stamp.
-    ls_b2b_3-state_code     = ls_fnt-state_code.
-    ls_b2b_3-state          = ls_fnt-state.
-    ls_b2b_3-qty_in_mbg     = ls_fnt-qty_in_mbg.
-    ls_b2b_3-gcv            = ls_fnt-gcv.
-    ls_b2b_3-ncv            = ls_fnt-ncv.
-    ls_b2b_3-qty_in_scm     = ls_fnt-qty_in_scm.
-    ls_b2b_3-gail_id        = ls_fnt-gail_id.
-    ls_b2b_3-sent_by        = sy-uname.
-    ls_b2b_3-sent_on        = sy-datum.
-    ls_b2b_3-sent_at        = sy-uzeit.
-    APPEND ls_b2b_3 TO lt_b2b_3.
-  ENDLOOP.
-
-  " Delete existing B2B data for the same period before inserting
-  DELETE FROM yrga_cst_b2b_2
-    WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
-  DELETE FROM yrga_cst_b2b_3
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to.
-
-  " Save daily B2B records to YRGA_CST_B2B_2
-  IF lt_b2b_2 IS NOT INITIAL.
-    MODIFY yrga_cst_b2b_2 FROM TABLE lt_b2b_2.
-    IF sy-subrc <> 0.
-      ROLLBACK WORK.
-      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_B2B_2'.
-      RETURN.
-    ENDIF.
+FORM call_api.
+****  Added by Aishwarya/ Abhisheik for ONGC b2b API 03.03.2026
+  IF sy-subrc = 0.
+    lv_token_url     = lv_api_dt-yy_token_url.
+    lv_api_get     = lv_api_dt-yy_api_url.
+    lv_client_id     = lv_api_dt-yy_client_id.
+    lv_client_secret = lv_api_dt-yy_client_secret.
+    lv_proxy_host    = 'proxy'.
+    lv_proxy_service = '3128'.
   ENDIF.
-
-  " Save fortnightly B2B records to YRGA_CST_B2B_3
-  IF lt_b2b_3 IS NOT INITIAL.
-    MODIFY yrga_cst_b2b_3 FROM TABLE lt_b2b_3.
-    IF sy-subrc <> 0.
-      ROLLBACK WORK.
-      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_B2B_3'.
-      RETURN.
-    ENDIF.
+  CALL METHOD cl_http_client=>create_by_url
+    EXPORTING
+      url                = lv_token_url
+      proxy_host         = lv_proxy_host
+      proxy_service      = lv_proxy_service
+    IMPORTING
+      client             = lo_http_client
+    EXCEPTIONS
+      argument_not_found = 1
+      plugin_not_active  = 2
+      internal_error     = 3
+      OTHERS             = 4.
+  IF sy-subrc <> 0.
+    WRITE: / 'Error creating HTTP client for token request'.
+    RETURN.
   ENDIF.
-
-  " Commit if both saves successful
-  COMMIT WORK AND WAIT.
-
-  " Update sent tracking fields in source tables (B2B API = 1)
-  UPDATE yrga_cst_pur SET sent_e  = '1'
-                          sent_by = sy-uname
-                          sent_on = sy-datum
-                          sent_at = sy-uzeit
-    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
-      AND location IN s_loc
-      AND exclude <> 'X'.
-  UPDATE yrga_cst_fn_data SET sent_e  = '1'
-                              sent_by = sy-uname
-                              sent_on = sy-datum
-                              sent_at = sy-uzeit
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc.
-  COMMIT WORK AND WAIT.
-
-  lv_count_d = lines( lt_b2b_2 ).
-  lv_count_f = lines( lt_b2b_3 ).
-  MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
+  lo_http_client->propertytype_logon_popup = lo_http_client->co_disabled.
+  lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+  lo_http_client->request->set_cdata( |grant_type=client_credentials&client_id={ lv_client_id }&client_secret={ lv_client_secret }| ).
+  CALL METHOD lo_http_client->send
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4.
+  IF sy-subrc <> 0.
+    WRITE: / 'Error sending token request'.
+    RETURN.
+  ENDIF.
+* Receive token response
+  CALL METHOD lo_http_client->receive
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4.
+  IF sy-subrc <> 0.
+    WRITE: / 'Error receiving token response'.
+    RETURN.
+  ENDIF.
+  lv_response = lo_http_client->response->get_cdata( ).
+  lo_http_client->close( ).
+***    * Extract access token from response (assuming JSON response)
+  DATA: lt_json       TYPE TABLE OF string,
+        lv_token_json TYPE string.
+  SPLIT lv_response AT ',' INTO TABLE lt_json.
+  LOOP AT lt_json INTO lv_token_json.
+    IF lv_token_json CS '"access_token"'.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_token_json WITH ''.
+      REPLACE ALL OCCURRENCES OF 'access_token:' IN lv_token_json WITH ''.
+      lv_access_token = lv_token_json.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+  IF lv_access_token IS NOT INITIAL.
+    DATA: "lv_http_client TYPE REF TO if_http_client,
+           "lv_response    TYPE string,
+           lt_headers     TYPE tihttpnvp.
+    " Create HTTP client for the Vendor data request
+    CALL METHOD cl_http_client=>create_by_url
+      EXPORTING
+        url           = lv_api_get
+        proxy_host    = lv_proxy_host
+        proxy_service = lv_proxy_service
+      IMPORTING
+        client        = lv_http_client.
+    lv_http_client->request->set_method( 'POST' ).
+    lv_http_client->request->set_header_field( name = 'Authorization' value = |Bearer { lv_access_token }| ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+    lv_http_client->request->set_header_field( name = 'Accept'  value = 'application/json' ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+*  lv_http_client->request->set_cdata( |grant_type=client_credentials&client_id={ lv_client_id }&client_secret={ lv_client_secret }| ).
+    lv_http_client->request->set_cdata( lv_json_download ).
+    lv_http_client->send( EXCEPTIONS http_communication_failure = 1
+       http_invalid_state = 2 ).
+    lv_http_client->receive( EXCEPTIONS
+            http_communication_failure = 1
+            http_invalid_state = 2
+            http_processing_failed = 3 ).
+    lv_http_client->response->get_status(
+    IMPORTING
+      code = code
+      reason = reason ).
+    lv_response = lv_http_client->response->get_cdata( ).
+    log_data =   lv_response.
+    /ui2/cl_json=>deserialize(
+   EXPORTING json = log_data
+    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+   CHANGING data = itab ).
+    lv_http_client->close( ).
+  ELSE.
+    WRITE:/ 'NO DATA TO DOWNLOAD.'.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_SEND_PREVIEW
@@ -3635,4 +3804,440 @@ FORM display_new_receipt_data.
     MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
       WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form FETCH_SAVED_DATA
+*& Fetch saved daily data from YRGA_CST_PUR and fortnightly from
+*& YRGA_CST_FN_DATA for the selected date range and locations
+*&---------------------------------------------------------------------*
+FORM fetch_saved_data.
+  DATA: ls_daily TYPE ty_saved_daily,
+        ls_fnt   TYPE ty_saved_fnt.
+  CLEAR: gt_saved_daily, gt_saved_fnt.
+  " Fetch daily data from YRGA_CST_PUR
+  SELECT * INTO TABLE @DATA(lt_cst_pur)
+    FROM yrga_cst_pur
+    WHERE gas_day IN @s_date
+      AND location IN @s_loc.
+  IF sy-subrc = 0.
+    SORT lt_cst_pur BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material state_code.
+    SORT lt_cst_pur BY gas_day location material state_code.
+    LOOP AT lt_cst_pur INTO DATA(wa_pur).
+      CLEAR ls_daily.
+      ls_daily-gas_day    = wa_pur-gas_day.
+      ls_daily-ctp        = wa_pur-ctp.
+      ls_daily-ongc_mater = wa_pur-ongc_mater.
+      ls_daily-state_code = wa_pur-state_code.
+      ls_daily-state      = wa_pur-state.
+      ls_daily-qty_in_scm = wa_pur-qty_in_scm.
+      ls_daily-gcv        = wa_pur-gcv.
+      ls_daily-ncv        = wa_pur-ncv.
+      ls_daily-qty_in_mbg = wa_pur-qty_in_mbg.
+      ls_daily-ongc_id    = wa_pur-ongc_id.
+      ls_daily-gail_id    = wa_pur-gail_id.
+      ls_daily-location   = wa_pur-location.
+      ls_daily-material   = wa_pur-material.
+      ls_daily-exclude    = wa_pur-exclude.
+      APPEND ls_daily TO gt_saved_daily.
+    ENDLOOP.
+  ENDIF.
+  " Fetch fortnightly data from YRGA_CST_FN_DATA
+  SELECT * INTO TABLE @DATA(lt_cst_fnt)
+    FROM yrga_cst_fn_data
+    WHERE date_from IN @s_date
+      AND location IN @s_loc.
+  IF sy-subrc = 0.
+    SORT lt_cst_fnt BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material state_code.
+    SORT lt_cst_fnt BY date_from location material state_code.
+    LOOP AT lt_cst_fnt INTO DATA(wa_fnt).
+      CLEAR ls_fnt.
+      ls_fnt-date_from  = wa_fnt-date_from.
+      ls_fnt-date_to    = wa_fnt-date_to.
+      ls_fnt-ctp        = wa_fnt-ctp.
+      ls_fnt-ongc_mater = wa_fnt-ongc_mater.
+      ls_fnt-state_code = wa_fnt-state_code.
+      ls_fnt-state      = wa_fnt-state.
+      ls_fnt-qty_in_scm = wa_fnt-qty_in_scm.
+      ls_fnt-gcv        = wa_fnt-gcv.
+      ls_fnt-ncv        = wa_fnt-ncv.
+      ls_fnt-qty_in_mbg = wa_fnt-qty_in_mbg.
+      ls_fnt-gail_id    = wa_fnt-gail_id.
+      ls_fnt-location   = wa_fnt-location.
+      ls_fnt-material   = wa_fnt-material.
+      APPEND ls_fnt TO gt_saved_fnt.
+    ENDLOOP.
+  ENDIF.
+  IF gt_saved_daily IS INITIAL AND gt_saved_fnt IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'No saved data found for the selected criteria.' DISPLAY LIKE 'W'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_SAVED_DATA_ALV
+*& Display saved data in ALV with Daily/Fortnightly toggle buttons.
+*& Uses a loop so toggling exits the current ALV and re-displays.
+*&---------------------------------------------------------------------*
+FORM display_saved_data_alv.
+  gv_saved_view = 'D'.  " Start with Daily Data view
+  DO.
+    IF gv_saved_view = 'D'.
+      PERFORM display_saved_daily_alv.
+    ELSE.
+      PERFORM display_saved_fnt_alv.
+    ENDIF.
+    " If user pressed Back (not a toggle), exit the loop
+    IF sy-ucomm <> 'DAILY_DATA' AND sy-ucomm <> 'FNT_DATA'.
+      EXIT.
+    ENDIF.
+  ENDDO.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_SAVED_DAILY_ALV
+*& Display daily saved data from YRGA_CST_PUR in ALV
+*&---------------------------------------------------------------------*
+FORM display_saved_daily_alv.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv,
+        ls_layout   TYPE slis_layout_alv.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAS_DAY'.
+  ls_fieldcat-seltext_l = 'Gas Day'.
+  ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'CTP'.
+  ls_fieldcat-seltext_l = 'CTP ID'.
+  ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATER'.
+  ls_fieldcat-seltext_l = 'ONGC Material'.
+  ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE_CODE'.
+  ls_fieldcat-seltext_l = 'State Code'.
+  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE'.
+  ls_fieldcat-seltext_l = 'State'.
+  ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+  ls_fieldcat-seltext_l = 'Qty SCM'.
+  ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-seltext_l = 'GCV'.
+  ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-seltext_l = 'NCV'.
+  ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+  ls_fieldcat-seltext_l = 'Qty MBG'.
+  ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_ID'.
+  ls_fieldcat-seltext_l = 'ONGC ID'.
+  ls_fieldcat-col_pos   = 10.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_ID'.
+  ls_fieldcat-seltext_l = 'GAIL ID'.
+  ls_fieldcat-col_pos   = 11.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'LOCATION'.
+  ls_fieldcat-seltext_l = 'Location'.
+  ls_fieldcat-col_pos   = 12.
+  ls_fieldcat-outputlen = 12.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'MATERIAL'.
+  ls_fieldcat-seltext_l = 'Material'.
+  ls_fieldcat-col_pos   = 13.
+  ls_fieldcat-outputlen = 18.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'EXCLUDE'.
+  ls_fieldcat-seltext_l = 'Exclude'.
+  ls_fieldcat-col_pos   = 14.
+  ls_fieldcat-outputlen = 7.
+  ls_fieldcat-checkbox  = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra             = abap_true.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'SET_PF_STATUS_SAVED'
+      i_callback_user_command  = 'USER_COMMAND_SAVED'
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fieldcat
+    TABLES
+      t_outtab                 = gt_saved_daily
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_SAVED_FNT_ALV
+*& Display fortnightly saved data from YRGA_CST_FN_DATA in ALV
+*&---------------------------------------------------------------------*
+FORM display_saved_fnt_alv.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv,
+        ls_layout   TYPE slis_layout_alv.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'DATE_FROM'.
+  ls_fieldcat-seltext_l = 'From'.
+  ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'DATE_TO'.
+  ls_fieldcat-seltext_l = 'To'.
+  ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'CTP'.
+  ls_fieldcat-seltext_l = 'CTP ID'.
+  ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATER'.
+  ls_fieldcat-seltext_l = 'ONGC Material'.
+  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE_CODE'.
+  ls_fieldcat-seltext_l = 'State Code'.
+  ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE'.
+  ls_fieldcat-seltext_l = 'State'.
+  ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+  ls_fieldcat-seltext_l = 'Qty in SCM'.
+  ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-seltext_l = 'GCV'.
+  ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-seltext_l = 'NCV'.
+  ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+  ls_fieldcat-seltext_l = 'Qty in MBG'.
+  ls_fieldcat-col_pos   = 10.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_ID'.
+  ls_fieldcat-seltext_l = 'GAIL ID'.
+  ls_fieldcat-col_pos   = 11.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'LOCATION'.
+  ls_fieldcat-seltext_l = 'Location'.
+  ls_fieldcat-col_pos   = 12.
+  ls_fieldcat-outputlen = 12.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'MATERIAL'.
+  ls_fieldcat-seltext_l = 'Material'.
+  ls_fieldcat-col_pos   = 13.
+  ls_fieldcat-outputlen = 18.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra             = abap_true.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'SET_PF_STATUS_SAVED'
+      i_callback_user_command  = 'USER_COMMAND_SAVED'
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fieldcat
+    TABLES
+      t_outtab                 = gt_saved_fnt
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_PF_STATUS_SAVED
+*& PF-Status for Saved Data ALV - shows Daily Data / Fortnightly toggle
+*&---------------------------------------------------------------------*
+FORM set_pf_status_saved USING rt_extab TYPE slis_t_extab.
+  DATA: lt_excl  TYPE slis_t_extab,
+        ls_extab TYPE slis_extab.
+  lt_excl = rt_extab.
+  " Hide all standard workflow buttons not relevant in saved data view
+  ls_extab-fcode = 'ALLOCATION'.  APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'REALLOCATE'.  APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'VALIDATE'.    APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'EDIT'.        APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'SAVE'.        APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'SEND'.        APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'RESET'.       APPEND ls_extab TO lt_excl.
+  SET PF-STATUS 'ZSAVED_STATUS' EXCLUDING lt_excl.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form USER_COMMAND_SAVED
+*& Handle toggle between Daily Data and Fortnightly Data views
+*&---------------------------------------------------------------------*
+FORM user_command_saved USING r_ucomm     TYPE sy-ucomm
+                              rs_selfield TYPE slis_selfield.
+  CASE r_ucomm.
+    WHEN 'DAILY_DATA'.
+      IF gv_saved_view <> 'D'.
+        gv_saved_view = 'D'.
+        rs_selfield-exit = abap_true.
+      ENDIF.
+    WHEN 'FNT_DATA'.
+      IF gv_saved_view <> 'F'.
+        gv_saved_view = 'F'.
+        rs_selfield-exit = abap_true.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
+                              pt_fnt   TYPE STANDARD TABLE.
+  DATA: lt_b2b_2    TYPE TABLE OF yrga_cst_b2b_2,
+        ls_b2b_2    TYPE yrga_cst_b2b_2,
+        lt_b2b_3    TYPE TABLE OF yrga_cst_b2b_3,
+        ls_b2b_3    TYPE yrga_cst_b2b_3,
+        ls_pur      TYPE yrga_cst_pur,
+        ls_fnt      TYPE yrga_cst_fn_data,
+        lv_count_d  TYPE i,
+        lv_count_f  TYPE i,
+        lv_tstamp   TYPE timestamp.            " <-- NEW variable
+  " Build daily B2B records from YRGA_CST_PUR data
+  LOOP AT pt_daily INTO ls_pur.
+    CLEAR ls_b2b_2.
+    ls_b2b_2-gas_day       = ls_pur-gas_day.
+    ls_b2b_2-ctp_id        = ls_pur-ctp.        " <-- was ctp
+    ls_b2b_2-ongc_material = ls_pur-ongc_mater.  " <-- was ongc_mater
+    GET TIME STAMP FIELD lv_tstamp.              " <-- NEW (DEC 15 timestamp)
+    ls_b2b_2-time_stamp    = lv_tstamp.          " <-- was ls_pur-time_stamp
+    ls_b2b_2-state_code    = ls_pur-state_code.
+    ls_b2b_2-state         = ls_pur-state.
+    ls_b2b_2-qty_scm       = ls_pur-qty_in_scm.  " <-- was qty_in_scm
+    ls_b2b_2-gcv           = ls_pur-gcv.
+    ls_b2b_2-ncv           = ls_pur-ncv.
+    ls_b2b_2-qty_in_mbg    = ls_pur-qty_in_mbg.
+    ls_b2b_2-ongc_id       = ls_pur-ongc_id.
+    ls_b2b_2-sent_by       = sy-uname.
+    ls_b2b_2-sent_on       = sy-datum.
+    ls_b2b_2-sent_at       = sy-uzeit.
+    " REMOVED: ls_b2b_2-location, ls_b2b_2-material, ls_b2b_2-gail_id
+    APPEND ls_b2b_2 TO lt_b2b_2.
+  ENDLOOP.
+  " Build fortnightly B2B records from YRGA_CST_FNT_DATA
+  LOOP AT pt_fnt INTO ls_fnt.
+    CLEAR ls_b2b_3.
+    ls_b2b_3-date_from      = ls_fnt-date_from.
+    ls_b2b_3-date_to        = ls_fnt-date_to.
+    ls_b2b_3-ctp            = ls_fnt-ctp.
+    ls_b2b_3-ongc_material  = ls_fnt-ongc_mater.  " <-- was ongc_mater
+    ls_b2b_3-time_stamp     = ls_fnt-time_stamp.
+    ls_b2b_3-state_code     = ls_fnt-state_code.
+    ls_b2b_3-state          = ls_fnt-state.
+    ls_b2b_3-qty_in_mbg     = ls_fnt-qty_in_mbg.
+    ls_b2b_3-gcv            = ls_fnt-gcv.
+    ls_b2b_3-ncv            = ls_fnt-ncv.
+    ls_b2b_3-qty_in_scm     = ls_fnt-qty_in_scm.
+    ls_b2b_3-gail_id        = ls_fnt-gail_id.
+    ls_b2b_3-sent_by        = sy-uname.
+    ls_b2b_3-sent_on        = sy-datum.
+    ls_b2b_3-sent_at        = sy-uzeit.
+    " REMOVED: ls_b2b_3-location, ls_b2b_3-material
+    APPEND ls_b2b_3 TO lt_b2b_3.
+  ENDLOOP.
+  " Delete existing B2B data for the same period before inserting
+*  DELETE FROM yrga_cst_b2b_2
+*    WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
+*  DELETE FROM yrga_cst_b2b_3
+*    WHERE date_from = gv_date_from
+*      AND date_to   = gv_date_to.
+  " Save daily B2B records to YRGA_CST_B2B_2
+  IF lt_b2b_2 IS NOT INITIAL.
+    MODIFY yrga_cst_b2b_2 FROM TABLE lt_b2b_2.
+    IF sy-subrc <> 0.
+      ROLLBACK WORK.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_B2B_2'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+  " Save fortnightly B2B records to YRGA_CST_B2B_3
+  IF lt_b2b_3 IS NOT INITIAL.
+    MODIFY yrga_cst_b2b_3 FROM TABLE lt_b2b_3.
+    IF sy-subrc <> 0.
+      ROLLBACK WORK.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_B2B_3'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+" Update sent tracking fields in source tables (B2B API = 1)
+UPDATE yrga_cst_pur SET sent_e  = '1'
+                        sent_by = sy-uname
+                        sent_on = sy-datum
+                        sent_at = sy-uzeit
+  WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+    AND location IN s_loc
+    AND exclude <> 'X'.
+UPDATE yrga_cst_fn_data SET sent_e  = '1'
+                            sent_by = sy-uname
+                            sent_on = sy-datum
+                            sent_at = sy-uzeit
+  WHERE date_from = gv_date_from
+    AND date_to   = gv_date_to
+    AND location  IN s_loc.
+COMMIT WORK AND WAIT.
+  " Commit if both saves successful
+  COMMIT WORK AND WAIT.
+  lv_count_d = lines( lt_b2b_2 ).
+  lv_count_f = lines( lt_b2b_3 ).
+  MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
 ENDFORM.
