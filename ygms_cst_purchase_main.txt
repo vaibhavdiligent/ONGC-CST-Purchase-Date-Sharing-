@@ -124,7 +124,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
                   s_date FOR sy-datum OBLIGATORY,
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
   PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
-              p_view  TYPE char1 RADIOBUTTON GROUP r1.
+              p_view  TYPE char1 RADIOBUTTON GROUP r1,
+              p_send  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
 
 *----------------------------------------------------------------------*
@@ -287,17 +288,22 @@ START-OF-SELECTION.
   gv_date_to   = ls_date-high.
   PERFORM fetch_location_ctp_mappings.
   CHECK gt_loc_ctp_map IS NOT INITIAL.
-  PERFORM fetch_b2b_data.
-  CHECK gt_gas_receipt IS NOT INITIAL.
-  PERFORM map_location_ids.
-  PERFORM map_material_names.
-  PERFORM fetch_data_yrxr098.
-  IF p_view IS INITIAL.
-    PERFORM build_alv_display_table.
+  IF p_send IS NOT INITIAL.
+    " Direct Send mode - bypass ALV, go straight to send flow
+    PERFORM handle_send_direct.
   ELSE.
-    PERFORM build_alv_display_table_view.
+    PERFORM fetch_b2b_data.
+    CHECK gt_gas_receipt IS NOT INITIAL.
+    PERFORM map_location_ids.
+    PERFORM map_material_names.
+    PERFORM fetch_data_yrxr098.
+    IF p_view IS INITIAL.
+      PERFORM build_alv_display_table.
+    ELSE.
+      PERFORM build_alv_display_table_view.
+    ENDIF.
+    PERFORM display_editable_alv.
   ENDIF.
-  PERFORM display_editable_alv.
 *&---------------------------------------------------------------------*
 *& Form FETCH_LOCATION_CTP_MAPPINGS
 *&---------------------------------------------------------------------*
@@ -1840,6 +1846,22 @@ FORM handle_reset.
   gv_save_enabled = abap_false.
   PERFORM refresh_pf_status.
   MESSAGE s000(ygms_msg) WITH 'Data reset to original values'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form HANDLE_SEND_DIRECT
+*& Direct send from selection screen - same flow as ALV Send button
+*&---------------------------------------------------------------------*
+FORM handle_send_direct.
+  DATA: lv_valid TYPE abap_bool.
+
+  " Validate before send (check for new ONGC receipt data)
+  PERFORM validate_before_send CHANGING lv_valid.
+  IF lv_valid = abap_false.
+    RETURN.
+  ENDIF.
+
+  " Show data preview with daily/fortnightly toggle, then send mode popup
+  PERFORM display_send_preview.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND
