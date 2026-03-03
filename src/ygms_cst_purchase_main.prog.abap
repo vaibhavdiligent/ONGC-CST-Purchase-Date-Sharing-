@@ -2196,6 +2196,22 @@ FORM send_email USING pt_emails   TYPE string_table
       lv_sent_all = lo_send_request->send( ).
       IF lv_sent_all = abap_true.
         COMMIT WORK.
+        " Update sent tracking fields in source tables (email = 2)
+        UPDATE yrga_cst_pur SET sent_e  = '2'
+                                sent_by = sy-uname
+                                sent_on = sy-datum
+                                sent_at = sy-uzeit
+          WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+            AND location IN s_loc
+            AND exclude <> 'X'.
+        UPDATE yrga_cst_fn_data SET sent_e  = '2'
+                                    sent_by = sy-uname
+                                    sent_on = sy-datum
+                                    sent_at = sy-uzeit
+          WHERE date_from = gv_date_from
+            AND date_to   = gv_date_to
+            AND location  IN s_loc.
+        COMMIT WORK AND WAIT.
         MESSAGE s000(ygms_msg) WITH 'Email sent successfully'.
       ELSE.
         MESSAGE s000(ygms_msg) WITH 'Error sending email'.
@@ -3038,6 +3054,24 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
 
   " Commit if both saves successful
   COMMIT WORK AND WAIT.
+
+  " Update sent tracking fields in source tables (B2B API = 1)
+  UPDATE yrga_cst_pur SET sent_e  = '1'
+                          sent_by = sy-uname
+                          sent_on = sy-datum
+                          sent_at = sy-uzeit
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude <> 'X'.
+  UPDATE yrga_cst_fn_data SET sent_e  = '1'
+                              sent_by = sy-uname
+                              sent_on = sy-datum
+                              sent_at = sy-uzeit
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc.
+  COMMIT WORK AND WAIT.
+
   lv_count_d = lines( lt_b2b_2 ).
   lv_count_f = lines( lt_b2b_3 ).
   MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
