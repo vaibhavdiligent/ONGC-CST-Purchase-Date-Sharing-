@@ -221,7 +221,8 @@ SELECTION-SCREEN END OF BLOCK b1.
 * Sub-options for View mode
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   PARAMETERS: p_valloc TYPE char1 RADIOBUTTON GROUP r2 DEFAULT 'X' MODIF ID viw,
-              p_vsave  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw.
+              p_vsave  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw,
+              p_vsent  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw.
 SELECTION-SCREEN END OF BLOCK b2.
 *----------------------------------------------------------------------*
 * Custom Popup Selection Screen for Email (Screen 2000)
@@ -407,6 +408,10 @@ START-OF-SELECTION.
   ELSEIF p_view IS NOT INITIAL AND p_vsave IS NOT INITIAL.
     " View -> Saved Data: display data from YRGA_CST_PUR / YRGA_CST_FN_DATA
     PERFORM fetch_saved_data.
+    PERFORM display_saved_data_alv.
+  ELSEIF p_view IS NOT INITIAL AND p_vsent IS NOT INITIAL.
+    " View -> Sent Data: check YRGA_CST_FN_DATA (sent), fallback to B2B tables
+    PERFORM fetch_sent_data.
     PERFORM display_saved_data_alv.
   ELSE.
     PERFORM fetch_b2b_data.
@@ -3871,6 +3876,128 @@ FORM fetch_saved_data.
   ENDIF.
   IF gt_saved_daily IS INITIAL AND gt_saved_fnt IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No saved data found for the selected criteria.' DISPLAY LIKE 'W'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form FETCH_SENT_DATA
+*& First check YRGA_CST_FN_DATA / YRGA_CST_PUR where sent_e is filled.
+*& If found, show that data. Otherwise fall back to YRGA_CST_B2B_2/3.
+*&---------------------------------------------------------------------*
+FORM fetch_sent_data.
+  DATA: ls_daily TYPE ty_saved_daily,
+        ls_fnt   TYPE ty_saved_fnt.
+  DATA: lv_found TYPE abap_bool VALUE abap_false.
+  CLEAR: gt_saved_daily, gt_saved_fnt.
+  " --- 1. Check YRGA_CST_FN_DATA for sent records ---
+  SELECT * INTO TABLE @DATA(lt_fnt_sent)
+    FROM yrga_cst_fn_data
+    WHERE date_from IN @s_date
+      AND location  IN @s_loc
+      AND sent_e    IS NOT INITIAL.
+  IF sy-subrc = 0 AND lt_fnt_sent IS NOT INITIAL.
+    lv_found = abap_true.
+    SORT lt_fnt_sent BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_fnt_sent COMPARING date_from date_to location material state_code.
+    SORT lt_fnt_sent BY date_from location material state_code.
+    LOOP AT lt_fnt_sent INTO DATA(wa_fnt_s).
+      CLEAR ls_fnt.
+      ls_fnt-date_from  = wa_fnt_s-date_from.
+      ls_fnt-date_to    = wa_fnt_s-date_to.
+      ls_fnt-ctp        = wa_fnt_s-ctp.
+      ls_fnt-ongc_mater = wa_fnt_s-ongc_mater.
+      ls_fnt-state_code = wa_fnt_s-state_code.
+      ls_fnt-state      = wa_fnt_s-state.
+      ls_fnt-qty_in_scm = wa_fnt_s-qty_in_scm.
+      ls_fnt-gcv        = wa_fnt_s-gcv.
+      ls_fnt-ncv        = wa_fnt_s-ncv.
+      ls_fnt-qty_in_mbg = wa_fnt_s-qty_in_mbg.
+      ls_fnt-gail_id    = wa_fnt_s-gail_id.
+      ls_fnt-location   = wa_fnt_s-location.
+      ls_fnt-material   = wa_fnt_s-material.
+      APPEND ls_fnt TO gt_saved_fnt.
+    ENDLOOP.
+    " Also fetch daily sent data from YRGA_CST_PUR
+    SELECT * INTO TABLE @DATA(lt_pur_sent)
+      FROM yrga_cst_pur
+      WHERE gas_day  IN @s_date
+        AND location IN @s_loc
+        AND sent_e   IS NOT INITIAL.
+    IF sy-subrc = 0.
+      SORT lt_pur_sent BY created_date DESCENDING created_time DESCENDING.
+      DELETE ADJACENT DUPLICATES FROM lt_pur_sent COMPARING gas_day location material state_code.
+      SORT lt_pur_sent BY gas_day location material state_code.
+      LOOP AT lt_pur_sent INTO DATA(wa_pur_s).
+        CLEAR ls_daily.
+        ls_daily-gas_day    = wa_pur_s-gas_day.
+        ls_daily-ctp        = wa_pur_s-ctp.
+        ls_daily-ongc_mater = wa_pur_s-ongc_mater.
+        ls_daily-state_code = wa_pur_s-state_code.
+        ls_daily-state      = wa_pur_s-state.
+        ls_daily-qty_in_scm = wa_pur_s-qty_in_scm.
+        ls_daily-gcv        = wa_pur_s-gcv.
+        ls_daily-ncv        = wa_pur_s-ncv.
+        ls_daily-qty_in_mbg = wa_pur_s-qty_in_mbg.
+        ls_daily-ongc_id    = wa_pur_s-ongc_id.
+        ls_daily-gail_id    = wa_pur_s-gail_id.
+        ls_daily-location   = wa_pur_s-location.
+        ls_daily-material   = wa_pur_s-material.
+        ls_daily-exclude    = wa_pur_s-exclude.
+        APPEND ls_daily TO gt_saved_daily.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+  " --- 2. Fallback: fetch from YRGA_CST_B2B_2 / B2B_3 ---
+  IF lv_found = abap_false.
+    " Fetch latest daily records from YRGA_CST_B2B_2
+    SELECT * INTO TABLE @DATA(lt_b2b_2)
+      FROM yrga_cst_b2b_2
+      WHERE gas_day IN @s_date.
+    IF sy-subrc = 0.
+      SORT lt_b2b_2 BY time_stamp DESCENDING.
+      DELETE ADJACENT DUPLICATES FROM lt_b2b_2 COMPARING gas_day ctp_id ongc_material state_code.
+      SORT lt_b2b_2 BY gas_day ctp_id ongc_material state_code.
+      LOOP AT lt_b2b_2 INTO DATA(wa_b2b_2).
+        CLEAR ls_daily.
+        ls_daily-gas_day    = wa_b2b_2-gas_day.
+        ls_daily-ctp        = wa_b2b_2-ctp_id.
+        ls_daily-ongc_mater = wa_b2b_2-ongc_material.
+        ls_daily-state_code = wa_b2b_2-state_code.
+        ls_daily-state      = wa_b2b_2-state.
+        ls_daily-qty_in_scm = wa_b2b_2-qty_scm.
+        ls_daily-gcv        = wa_b2b_2-gcv.
+        ls_daily-ncv        = wa_b2b_2-ncv.
+        ls_daily-qty_in_mbg = wa_b2b_2-qty_in_mbg.
+        ls_daily-ongc_id    = wa_b2b_2-ongc_id.
+        APPEND ls_daily TO gt_saved_daily.
+      ENDLOOP.
+    ENDIF.
+    " Fetch latest fortnightly records from YRGA_CST_B2B_3
+    SELECT * INTO TABLE @DATA(lt_b2b_3)
+      FROM yrga_cst_b2b_3
+      WHERE date_from IN @s_date.
+    IF sy-subrc = 0.
+      SORT lt_b2b_3 BY time_stamp DESCENDING.
+      DELETE ADJACENT DUPLICATES FROM lt_b2b_3 COMPARING date_from date_to ctp ongc_material state_code.
+      SORT lt_b2b_3 BY date_from ctp ongc_material state_code.
+      LOOP AT lt_b2b_3 INTO DATA(wa_b2b_3).
+        CLEAR ls_fnt.
+        ls_fnt-date_from  = wa_b2b_3-date_from.
+        ls_fnt-date_to    = wa_b2b_3-date_to.
+        ls_fnt-ctp        = wa_b2b_3-ctp.
+        ls_fnt-ongc_mater = wa_b2b_3-ongc_material.
+        ls_fnt-state_code = wa_b2b_3-state_code.
+        ls_fnt-state      = wa_b2b_3-state.
+        ls_fnt-qty_in_scm = wa_b2b_3-qty_in_scm.
+        ls_fnt-gcv        = wa_b2b_3-gcv.
+        ls_fnt-ncv        = wa_b2b_3-ncv.
+        ls_fnt-qty_in_mbg = wa_b2b_3-qty_in_mbg.
+        ls_fnt-gail_id    = wa_b2b_3-gail_id.
+        APPEND ls_fnt TO gt_saved_fnt.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+  IF gt_saved_daily IS INITIAL AND gt_saved_fnt IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'No sent data found for the selected criteria.' DISPLAY LIKE 'W'.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
