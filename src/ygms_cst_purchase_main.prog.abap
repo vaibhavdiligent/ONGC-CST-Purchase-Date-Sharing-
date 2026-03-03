@@ -2964,51 +2964,48 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
         ls_pur      TYPE yrga_cst_pur,
         ls_fnt      TYPE yrga_cst_fnt_data,
         lv_count_d  TYPE i,
-        lv_count_f  TYPE i.
+        lv_count_f  TYPE i,
+        lv_tstamp   TYPE timestamp.
 
   " Build daily B2B records from YRGA_CST_PUR data
   LOOP AT pt_daily INTO ls_pur.
     CLEAR ls_b2b_2.
-    ls_b2b_2-gas_day    = ls_pur-gas_day.
-    ls_b2b_2-location   = ls_pur-location.
-    ls_b2b_2-material   = ls_pur-material.
-    ls_b2b_2-state_code = ls_pur-state_code.
-    ls_b2b_2-state      = ls_pur-state.
-    ls_b2b_2-ctp        = ls_pur-ctp.
-    ls_b2b_2-ongc_mater = ls_pur-ongc_mater.
-    ls_b2b_2-time_stamp = ls_pur-time_stamp.
-    ls_b2b_2-qty_in_mbg = ls_pur-qty_in_mbg.
-    ls_b2b_2-gcv        = ls_pur-gcv.
-    ls_b2b_2-ncv        = ls_pur-ncv.
-    ls_b2b_2-qty_in_scm = ls_pur-qty_in_scm.
-    ls_b2b_2-ongc_id    = ls_pur-ongc_id.
-    ls_b2b_2-gail_id    = ls_pur-gail_id.
-    ls_b2b_2-sent_by    = sy-uname.
-    ls_b2b_2-sent_on    = sy-datum.
-    ls_b2b_2-sent_at    = sy-uzeit.
+    ls_b2b_2-gas_day       = ls_pur-gas_day.
+    ls_b2b_2-ctp_id        = ls_pur-ctp.
+    ls_b2b_2-ongc_material = ls_pur-ongc_mater.
+    GET TIME STAMP FIELD lv_tstamp.
+    ls_b2b_2-time_stamp    = lv_tstamp.
+    ls_b2b_2-state_code    = ls_pur-state_code.
+    ls_b2b_2-state         = ls_pur-state.
+    ls_b2b_2-qty_scm       = ls_pur-qty_in_scm.
+    ls_b2b_2-gcv           = ls_pur-gcv.
+    ls_b2b_2-ncv           = ls_pur-ncv.
+    ls_b2b_2-qty_in_mbg    = ls_pur-qty_in_mbg.
+    ls_b2b_2-ongc_id       = ls_pur-ongc_id.
+    ls_b2b_2-sent_by       = sy-uname.
+    ls_b2b_2-sent_on       = sy-datum.
+    ls_b2b_2-sent_at       = sy-uzeit.
     APPEND ls_b2b_2 TO lt_b2b_2.
   ENDLOOP.
 
   " Build fortnightly B2B records from YRGA_CST_FNT_DATA
   LOOP AT pt_fnt INTO ls_fnt.
     CLEAR ls_b2b_3.
-    ls_b2b_3-date_from  = ls_fnt-date_from.
-    ls_b2b_3-date_to    = ls_fnt-date_to.
-    ls_b2b_3-location   = ls_fnt-location.
-    ls_b2b_3-material   = ls_fnt-material.
-    ls_b2b_3-state_code = ls_fnt-state_code.
-    ls_b2b_3-state      = ls_fnt-state.
-    ls_b2b_3-ctp        = ls_fnt-ctp.
-    ls_b2b_3-ongc_mater = ls_fnt-ongc_mater.
-    ls_b2b_3-time_stamp = ls_fnt-time_stamp.
-    ls_b2b_3-qty_in_mbg = ls_fnt-qty_in_mbg.
-    ls_b2b_3-gcv        = ls_fnt-gcv.
-    ls_b2b_3-ncv        = ls_fnt-ncv.
-    ls_b2b_3-qty_in_scm = ls_fnt-qty_in_scm.
-    ls_b2b_3-gail_id    = ls_fnt-gail_id.
-    ls_b2b_3-sent_by    = sy-uname.
-    ls_b2b_3-sent_on    = sy-datum.
-    ls_b2b_3-sent_at    = sy-uzeit.
+    ls_b2b_3-date_from      = ls_fnt-date_from.
+    ls_b2b_3-date_to        = ls_fnt-date_to.
+    ls_b2b_3-ctp            = ls_fnt-ctp.
+    ls_b2b_3-ongc_material  = ls_fnt-ongc_mater.
+    ls_b2b_3-time_stamp     = ls_fnt-time_stamp.
+    ls_b2b_3-state_code     = ls_fnt-state_code.
+    ls_b2b_3-state          = ls_fnt-state.
+    ls_b2b_3-qty_in_mbg     = ls_fnt-qty_in_mbg.
+    ls_b2b_3-gcv            = ls_fnt-gcv.
+    ls_b2b_3-ncv            = ls_fnt-ncv.
+    ls_b2b_3-qty_in_scm     = ls_fnt-qty_in_scm.
+    ls_b2b_3-gail_id        = ls_fnt-gail_id.
+    ls_b2b_3-sent_by        = sy-uname.
+    ls_b2b_3-sent_on        = sy-datum.
+    ls_b2b_3-sent_at        = sy-uzeit.
     APPEND ls_b2b_3 TO lt_b2b_3.
   ENDLOOP.
 
