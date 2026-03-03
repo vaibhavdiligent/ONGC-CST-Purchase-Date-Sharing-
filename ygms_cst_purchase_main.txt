@@ -128,6 +128,38 @@ TYPES: BEGIN OF ty_data_daily,
          ongc_id       TYPE string,
          gail_id       TYPE string,
        END OF ty_data_daily.
+* Saved Data ALV structures (for View -> Saved Data sub-option)
+TYPES: BEGIN OF ty_saved_daily,
+         gas_day    TYPE datum,
+         ctp        TYPE ygms_de_ongc_ctp,
+         ongc_mater TYPE ygms_de_ongc_mat,
+         state_code TYPE regio,
+         state      TYPE bezei20,
+         qty_in_scm TYPE ygms_de_qty_mbg_cal,
+         gcv        TYPE ygms_de_gcv,
+         ncv        TYPE ygms_de_ncv,
+         qty_in_mbg TYPE ygms_de_qty_mbg_cal,
+         ongc_id    TYPE c LENGTH 9,
+         gail_id    TYPE c LENGTH 20,
+         location   TYPE ygms_de_loc_id,
+         material   TYPE ygms_de_gail_mat,
+         exclude    TYPE c LENGTH 1,
+       END OF ty_saved_daily.
+TYPES: BEGIN OF ty_saved_fnt,
+         date_from  TYPE datum,
+         date_to    TYPE datum,
+         ctp        TYPE ygms_de_ongc_ctp,
+         ongc_mater TYPE ygms_de_ongc_mat,
+         state_code TYPE regio,
+         state      TYPE bezei20,
+         qty_in_scm TYPE ygms_de_qty_mbg_cal,
+         gcv        TYPE ygms_de_gcv,
+         ncv        TYPE ygms_de_ncv,
+         qty_in_mbg TYPE ygms_de_qty_mbg_cal,
+         gail_id    TYPE c LENGTH 20,
+         location   TYPE ygms_de_loc_id,
+         material   TYPE ygms_de_gail_mat,
+       END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
         record TYPE TABLE OF ty_data_daily,
@@ -186,6 +218,11 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
               p_view  TYPE char1 RADIOBUTTON GROUP r1,
               p_send  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
+* Sub-options for View mode
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_valloc TYPE char1 RADIOBUTTON GROUP r2 DEFAULT 'X' MODIF ID viw,
+              p_vsave  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw.
+SELECTION-SCREEN END OF BLOCK b2.
 *----------------------------------------------------------------------*
 * Custom Popup Selection Screen for Email (Screen 2000)
 *----------------------------------------------------------------------*
@@ -239,6 +276,10 @@ DATA: gv_allocated    TYPE abap_bool VALUE abap_false,  " Allocation done flag
 * Global table for new receipt data (used by View Details in validation popup)
 DATA: gt_new_receipt_data TYPE TABLE OF ty_vali_b2b.
 DATA gs_new_receipt_data TYPE ty_vali_b2b.
+* Saved Data view tables and mode flag
+DATA: gt_saved_daily TYPE TABLE OF ty_saved_daily,
+      gt_saved_fnt   TYPE TABLE OF ty_saved_fnt,
+      gv_saved_view  TYPE c LENGTH 1 VALUE 'D'.  " D=Daily, F=Fortnightly
 *----------------------------------------------------------------------*
 * Class Definition for ALV Event Handler
 *----------------------------------------------------------------------*
@@ -336,6 +377,20 @@ INITIALIZATION.
   s_date-high   = sy-datum.
   APPEND s_date.
 *----------------------------------------------------------------------*
+* Selection Screen Output - Show/Hide View sub-options
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF screen-group1 = 'VIW'.
+      IF p_view IS NOT INITIAL.
+        screen-active = 1.
+      ELSE.
+        screen-active = 0.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+*----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
@@ -347,6 +402,10 @@ START-OF-SELECTION.
   IF p_send IS NOT INITIAL.
     " Direct Send mode - bypass ALV, go straight to send flow
     PERFORM handle_send_direct.
+  ELSEIF p_view IS NOT INITIAL AND p_vsave IS NOT INITIAL.
+    " View -> Saved Data: display data from YRGA_CST_PUR / YRGA_CST_FN_DATA
+    PERFORM fetch_saved_data.
+    PERFORM display_saved_data_alv.
   ELSE.
     PERFORM fetch_b2b_data.
     CHECK gt_gas_receipt IS NOT INITIAL.
@@ -356,6 +415,7 @@ START-OF-SELECTION.
     IF p_view IS INITIAL.
       PERFORM build_alv_display_table.
     ELSE.
+      " View -> Allocation Details: same as existing view logic
       PERFORM build_alv_display_table_view.
     ENDIF.
     PERFORM display_editable_alv.
@@ -2351,64 +2411,8 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     ENDIF.
     INSERT ls_pur INTO TABLE lt_day_qty.
   ENDLOOP.
-  " ---- Sheet 1: Daily Data ----
+  " ---- Sheet 1: Summary ----
   CONCATENATE lc_xml_hdr lc_wb_open lc_styles
-    '<Worksheet ss:Name="Daily Data"><Table>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
-    INTO lv_xml.
-  " Header row
-  CONCATENATE lv_xml
-    '<Row ss:StyleID="hdr">'
-    '<Cell><Data ss:Type="String">Gas Day</Data></Cell>'
-    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
-    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
-    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
-    '<Cell><Data ss:Type="String">State</Data></Cell>'
-    '<Cell><Data ss:Type="String">Qty SCM</Data></Cell>'
-    '<Cell><Data ss:Type="String">GCV</Data></Cell>'
-    '<Cell><Data ss:Type="String">NCV</Data></Cell>'
-    '<Cell><Data ss:Type="String">Qty MBG</Data></Cell>'
-    '<Cell><Data ss:Type="String">ONGC ID</Data></Cell>'
-    '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
-    '</Row>'
-    INTO lv_xml.
-  " Data rows
-  LOOP AT pt_data INTO ls_pur.
-    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
-    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
-    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
-    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
-    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    CONCATENATE lv_xml
-      '<Row ss:StyleID="dat">'
-      '<Cell><Data ss:Type="String">' lv_gas_day '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-ctp '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-ongc_mater '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-state_code '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-state '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-ongc_id '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-gail_id '</Data></Cell>'
-      '</Row>'
-      INTO lv_xml.
-  ENDLOOP.
-  CONCATENATE lv_xml '</Table></Worksheet>' INTO lv_xml.
-  " ---- Sheet 2: Summary ----
-  CONCATENATE lv_xml
     '<Worksheet ss:Name="Summary"><Table>'
     '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
     '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
@@ -2484,6 +2488,62 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
         INTO lv_xml.
     ENDLOOP.
     CONCATENATE lv_xml '</Row>' INTO lv_xml.
+  ENDLOOP.
+  CONCATENATE lv_xml '</Table></Worksheet>' INTO lv_xml.
+  " ---- Sheet 2: Daily Data ----
+  CONCATENATE lv_xml
+    '<Worksheet ss:Name="Daily Data"><Table>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    INTO lv_xml.
+  " Header row
+  CONCATENATE lv_xml
+    '<Row ss:StyleID="hdr">'
+    '<Cell><Data ss:Type="String">Gas Day</Data></Cell>'
+    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
+    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
+    '<Cell><Data ss:Type="String">State</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty SCM</Data></Cell>'
+    '<Cell><Data ss:Type="String">GCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">NCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty MBG</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
+    '</Row>'
+    INTO lv_xml.
+  " Data rows
+  LOOP AT pt_data INTO ls_pur.
+    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+    CONCATENATE lv_xml
+      '<Row ss:StyleID="dat">'
+      '<Cell><Data ss:Type="String">' lv_gas_day '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ctp '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ongc_mater '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-state_code '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-state '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ongc_id '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-gail_id '</Data></Cell>'
+      '</Row>'
+      INTO lv_xml.
   ENDLOOP.
   CONCATENATE lv_xml '</Table></Worksheet></Workbook>' INTO lv_xml.
   " Convert XML string to xstring then to solix_tab
@@ -3659,4 +3719,341 @@ FORM display_new_receipt_data.
     MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
       WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form FETCH_SAVED_DATA
+*& Fetch saved daily data from YRGA_CST_PUR and fortnightly from
+*& YRGA_CST_FN_DATA for the selected date range and locations
+*&---------------------------------------------------------------------*
+FORM fetch_saved_data.
+  DATA: ls_daily TYPE ty_saved_daily,
+        ls_fnt   TYPE ty_saved_fnt.
+  CLEAR: gt_saved_daily, gt_saved_fnt.
+  " Fetch daily data from YRGA_CST_PUR
+  SELECT * INTO TABLE @DATA(lt_cst_pur)
+    FROM yrga_cst_pur
+    WHERE gas_day IN @s_date
+      AND location IN @s_loc.
+  IF sy-subrc = 0.
+    SORT lt_cst_pur BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material state_code.
+    SORT lt_cst_pur BY gas_day location material state_code.
+    LOOP AT lt_cst_pur INTO DATA(wa_pur).
+      CLEAR ls_daily.
+      ls_daily-gas_day    = wa_pur-gas_day.
+      ls_daily-ctp        = wa_pur-ctp.
+      ls_daily-ongc_mater = wa_pur-ongc_mater.
+      ls_daily-state_code = wa_pur-state_code.
+      ls_daily-state      = wa_pur-state.
+      ls_daily-qty_in_scm = wa_pur-qty_in_scm.
+      ls_daily-gcv        = wa_pur-gcv.
+      ls_daily-ncv        = wa_pur-ncv.
+      ls_daily-qty_in_mbg = wa_pur-qty_in_mbg.
+      ls_daily-ongc_id    = wa_pur-ongc_id.
+      ls_daily-gail_id    = wa_pur-gail_id.
+      ls_daily-location   = wa_pur-location.
+      ls_daily-material   = wa_pur-material.
+      ls_daily-exclude    = wa_pur-exclude.
+      APPEND ls_daily TO gt_saved_daily.
+    ENDLOOP.
+  ENDIF.
+  " Fetch fortnightly data from YRGA_CST_FN_DATA
+  SELECT * INTO TABLE @DATA(lt_cst_fnt)
+    FROM yrga_cst_fn_data
+    WHERE date_from IN @s_date
+      AND location IN @s_loc.
+  IF sy-subrc = 0.
+    SORT lt_cst_fnt BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material state_code.
+    SORT lt_cst_fnt BY date_from location material state_code.
+    LOOP AT lt_cst_fnt INTO DATA(wa_fnt).
+      CLEAR ls_fnt.
+      ls_fnt-date_from  = wa_fnt-date_from.
+      ls_fnt-date_to    = wa_fnt-date_to.
+      ls_fnt-ctp        = wa_fnt-ctp.
+      ls_fnt-ongc_mater = wa_fnt-ongc_mater.
+      ls_fnt-state_code = wa_fnt-state_code.
+      ls_fnt-state      = wa_fnt-state.
+      ls_fnt-qty_in_scm = wa_fnt-qty_in_scm.
+      ls_fnt-gcv        = wa_fnt-gcv.
+      ls_fnt-ncv        = wa_fnt-ncv.
+      ls_fnt-qty_in_mbg = wa_fnt-qty_in_mbg.
+      ls_fnt-gail_id    = wa_fnt-gail_id.
+      ls_fnt-location   = wa_fnt-location.
+      ls_fnt-material   = wa_fnt-material.
+      APPEND ls_fnt TO gt_saved_fnt.
+    ENDLOOP.
+  ENDIF.
+  IF gt_saved_daily IS INITIAL AND gt_saved_fnt IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'No saved data found for the selected criteria.' DISPLAY LIKE 'W'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_SAVED_DATA_ALV
+*& Display saved data in ALV with Daily/Fortnightly toggle buttons.
+*& Uses a loop so toggling exits the current ALV and re-displays.
+*&---------------------------------------------------------------------*
+FORM display_saved_data_alv.
+  gv_saved_view = 'D'.  " Start with Daily Data view
+  DO.
+    IF gv_saved_view = 'D'.
+      PERFORM display_saved_daily_alv.
+    ELSE.
+      PERFORM display_saved_fnt_alv.
+    ENDIF.
+    " If user pressed Back (not a toggle), exit the loop
+    IF sy-ucomm <> 'DAILY_DATA' AND sy-ucomm <> 'FNT_DATA'.
+      EXIT.
+    ENDIF.
+  ENDDO.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_SAVED_DAILY_ALV
+*& Display daily saved data from YRGA_CST_PUR in ALV
+*&---------------------------------------------------------------------*
+FORM display_saved_daily_alv.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv,
+        ls_layout   TYPE slis_layout_alv.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAS_DAY'.
+  ls_fieldcat-seltext_l = 'Gas Day'.
+  ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'CTP'.
+  ls_fieldcat-seltext_l = 'CTP ID'.
+  ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATER'.
+  ls_fieldcat-seltext_l = 'ONGC Material'.
+  ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE_CODE'.
+  ls_fieldcat-seltext_l = 'State Code'.
+  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE'.
+  ls_fieldcat-seltext_l = 'State'.
+  ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+  ls_fieldcat-seltext_l = 'Qty SCM'.
+  ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-seltext_l = 'GCV'.
+  ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-seltext_l = 'NCV'.
+  ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+  ls_fieldcat-seltext_l = 'Qty MBG'.
+  ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_ID'.
+  ls_fieldcat-seltext_l = 'ONGC ID'.
+  ls_fieldcat-col_pos   = 10.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_ID'.
+  ls_fieldcat-seltext_l = 'GAIL ID'.
+  ls_fieldcat-col_pos   = 11.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'LOCATION'.
+  ls_fieldcat-seltext_l = 'Location'.
+  ls_fieldcat-col_pos   = 12.
+  ls_fieldcat-outputlen = 12.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'MATERIAL'.
+  ls_fieldcat-seltext_l = 'Material'.
+  ls_fieldcat-col_pos   = 13.
+  ls_fieldcat-outputlen = 18.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'EXCLUDE'.
+  ls_fieldcat-seltext_l = 'Exclude'.
+  ls_fieldcat-col_pos   = 14.
+  ls_fieldcat-outputlen = 7.
+  ls_fieldcat-checkbox  = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra             = abap_true.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'SET_PF_STATUS_SAVED'
+      i_callback_user_command  = 'USER_COMMAND_SAVED'
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fieldcat
+    TABLES
+      t_outtab                 = gt_saved_daily
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_SAVED_FNT_ALV
+*& Display fortnightly saved data from YRGA_CST_FN_DATA in ALV
+*&---------------------------------------------------------------------*
+FORM display_saved_fnt_alv.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv,
+        ls_layout   TYPE slis_layout_alv.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'DATE_FROM'.
+  ls_fieldcat-seltext_l = 'From'.
+  ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'DATE_TO'.
+  ls_fieldcat-seltext_l = 'To'.
+  ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'CTP'.
+  ls_fieldcat-seltext_l = 'CTP ID'.
+  ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATER'.
+  ls_fieldcat-seltext_l = 'ONGC Material'.
+  ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE_CODE'.
+  ls_fieldcat-seltext_l = 'State Code'.
+  ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATE'.
+  ls_fieldcat-seltext_l = 'State'.
+  ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+  ls_fieldcat-seltext_l = 'Qty in SCM'.
+  ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GCV'.
+  ls_fieldcat-seltext_l = 'GCV'.
+  ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'NCV'.
+  ls_fieldcat-seltext_l = 'NCV'.
+  ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-outputlen = 10.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+  ls_fieldcat-seltext_l = 'Qty in MBG'.
+  ls_fieldcat-col_pos   = 10.
+  ls_fieldcat-outputlen = 12.
+  ls_fieldcat-do_sum    = abap_true.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'GAIL_ID'.
+  ls_fieldcat-seltext_l = 'GAIL ID'.
+  ls_fieldcat-col_pos   = 11.
+  ls_fieldcat-outputlen = 15.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'LOCATION'.
+  ls_fieldcat-seltext_l = 'Location'.
+  ls_fieldcat-col_pos   = 12.
+  ls_fieldcat-outputlen = 12.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'MATERIAL'.
+  ls_fieldcat-seltext_l = 'Material'.
+  ls_fieldcat-col_pos   = 13.
+  ls_fieldcat-outputlen = 18.
+  APPEND ls_fieldcat TO lt_fieldcat.
+  ls_layout-colwidth_optimize = abap_true.
+  ls_layout-zebra             = abap_true.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'SET_PF_STATUS_SAVED'
+      i_callback_user_command  = 'USER_COMMAND_SAVED'
+      is_layout                = ls_layout
+      it_fieldcat              = lt_fieldcat
+    TABLES
+      t_outtab                 = gt_saved_fnt
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_PF_STATUS_SAVED
+*& PF-Status for Saved Data ALV - shows Daily Data / Fortnightly toggle
+*&---------------------------------------------------------------------*
+FORM set_pf_status_saved USING rt_extab TYPE slis_t_extab.
+  DATA: lt_excl  TYPE slis_t_extab,
+        ls_extab TYPE slis_extab.
+  lt_excl = rt_extab.
+  " Hide all standard workflow buttons not relevant in saved data view
+  ls_extab-fcode = 'ALLOCATION'.  APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'REALLOCATE'.  APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'VALIDATE'.    APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'EDIT'.        APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'SAVE'.        APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'SEND'.        APPEND ls_extab TO lt_excl.
+  ls_extab-fcode = 'RESET'.       APPEND ls_extab TO lt_excl.
+  SET PF-STATUS 'ZSAVED_STATUS' EXCLUDING lt_excl.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form USER_COMMAND_SAVED
+*& Handle toggle between Daily Data and Fortnightly Data views
+*&---------------------------------------------------------------------*
+FORM user_command_saved USING r_ucomm     TYPE sy-ucomm
+                              rs_selfield TYPE slis_selfield.
+  CASE r_ucomm.
+    WHEN 'DAILY_DATA'.
+      IF gv_saved_view <> 'D'.
+        gv_saved_view = 'D'.
+        rs_selfield-exit = abap_true.
+      ENDIF.
+    WHEN 'FNT_DATA'.
+      IF gv_saved_view <> 'F'.
+        gv_saved_view = 'F'.
+        rs_selfield-exit = abap_true.
+      ENDIF.
+  ENDCASE.
 ENDFORM.
