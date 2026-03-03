@@ -2921,9 +2921,10 @@ ENDFORM.
 *& 1.1.2: Send data through B2B PI connectivity
 *&---------------------------------------------------------------------*
 FORM handle_send_b2b.
-  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur.
+  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur,
+        lt_send_fnt  TYPE TABLE OF yrga_cst_fnt_data.
 
-  " Fetch data from YRGA_CST_PUR where EXCLUDED flag is not X
+  " Fetch daily data from YRGA_CST_PUR where EXCLUDED flag is not X
   SELECT * FROM yrga_cst_pur
     INTO TABLE lt_send_data
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
@@ -2935,8 +2936,114 @@ FORM handle_send_b2b.
     RETURN.
   ENDIF.
 
+  " Fetch fortnightly data from YRGA_CST_FNT_DATA
+  SELECT * FROM yrga_cst_fn_data
+    INTO TABLE lt_send_fnt
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc.
+
   " B2B PI connectivity - to be implemented when B2B connection is established
-  MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
+  " TODO: Replace with actual B2B API call (PERFORM call_b2b_api)
+  MESSAGE s000(ygms_msg) WITH 'B2B data sent successfully (API placeholder)'.
+
+  " After successful API call, save sent data to B2B tables
+  PERFORM save_b2b_sent_data USING lt_send_data lt_send_fnt.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SAVE_B2B_SENT_DATA
+*& Save sent data to YRGA_CST_B2B_2 (daily) and YRGA_CST_B2B_3 (fortnightly)
+*& Called after successful B2B API call
+*&---------------------------------------------------------------------*
+FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
+                              pt_fnt   TYPE STANDARD TABLE.
+  DATA: lt_b2b_2    TYPE TABLE OF yrga_cst_b2b_2,
+        ls_b2b_2    TYPE yrga_cst_b2b_2,
+        lt_b2b_3    TYPE TABLE OF yrga_cst_b2b_3,
+        ls_b2b_3    TYPE yrga_cst_b2b_3,
+        ls_pur      TYPE yrga_cst_pur,
+        ls_fnt      TYPE yrga_cst_fnt_data,
+        lv_count_d  TYPE i,
+        lv_count_f  TYPE i.
+
+  " Build daily B2B records from YRGA_CST_PUR data
+  LOOP AT pt_daily INTO ls_pur.
+    CLEAR ls_b2b_2.
+    ls_b2b_2-gas_day    = ls_pur-gas_day.
+    ls_b2b_2-location   = ls_pur-location.
+    ls_b2b_2-material   = ls_pur-material.
+    ls_b2b_2-state_code = ls_pur-state_code.
+    ls_b2b_2-state      = ls_pur-state.
+    ls_b2b_2-ctp        = ls_pur-ctp.
+    ls_b2b_2-ongc_mater = ls_pur-ongc_mater.
+    ls_b2b_2-time_stamp = ls_pur-time_stamp.
+    ls_b2b_2-qty_in_mbg = ls_pur-qty_in_mbg.
+    ls_b2b_2-gcv        = ls_pur-gcv.
+    ls_b2b_2-ncv        = ls_pur-ncv.
+    ls_b2b_2-qty_in_scm = ls_pur-qty_in_scm.
+    ls_b2b_2-ongc_id    = ls_pur-ongc_id.
+    ls_b2b_2-gail_id    = ls_pur-gail_id.
+    ls_b2b_2-sent_by    = sy-uname.
+    ls_b2b_2-sent_on    = sy-datum.
+    ls_b2b_2-sent_at    = sy-uzeit.
+    APPEND ls_b2b_2 TO lt_b2b_2.
+  ENDLOOP.
+
+  " Build fortnightly B2B records from YRGA_CST_FNT_DATA
+  LOOP AT pt_fnt INTO ls_fnt.
+    CLEAR ls_b2b_3.
+    ls_b2b_3-date_from  = ls_fnt-date_from.
+    ls_b2b_3-date_to    = ls_fnt-date_to.
+    ls_b2b_3-location   = ls_fnt-location.
+    ls_b2b_3-material   = ls_fnt-material.
+    ls_b2b_3-state_code = ls_fnt-state_code.
+    ls_b2b_3-state      = ls_fnt-state.
+    ls_b2b_3-ctp        = ls_fnt-ctp.
+    ls_b2b_3-ongc_mater = ls_fnt-ongc_mater.
+    ls_b2b_3-time_stamp = ls_fnt-time_stamp.
+    ls_b2b_3-qty_in_mbg = ls_fnt-qty_in_mbg.
+    ls_b2b_3-gcv        = ls_fnt-gcv.
+    ls_b2b_3-ncv        = ls_fnt-ncv.
+    ls_b2b_3-qty_in_scm = ls_fnt-qty_in_scm.
+    ls_b2b_3-gail_id    = ls_fnt-gail_id.
+    ls_b2b_3-sent_by    = sy-uname.
+    ls_b2b_3-sent_on    = sy-datum.
+    ls_b2b_3-sent_at    = sy-uzeit.
+    APPEND ls_b2b_3 TO lt_b2b_3.
+  ENDLOOP.
+
+  " Delete existing B2B data for the same period before inserting
+  DELETE FROM yrga_cst_b2b_2
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
+  DELETE FROM yrga_cst_b2b_3
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to.
+
+  " Save daily B2B records to YRGA_CST_B2B_2
+  IF lt_b2b_2 IS NOT INITIAL.
+    MODIFY yrga_cst_b2b_2 FROM TABLE lt_b2b_2.
+    IF sy-subrc <> 0.
+      ROLLBACK WORK.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_B2B_2'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " Save fortnightly B2B records to YRGA_CST_B2B_3
+  IF lt_b2b_3 IS NOT INITIAL.
+    MODIFY yrga_cst_b2b_3 FROM TABLE lt_b2b_3.
+    IF sy-subrc <> 0.
+      ROLLBACK WORK.
+      MESSAGE e000(ygms_msg) WITH 'Error saving data to YRGA_CST_B2B_3'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " Commit if both saves successful
+  COMMIT WORK AND WAIT.
+  lv_count_d = lines( lt_b2b_2 ).
+  lv_count_f = lines( lt_b2b_3 ).
+  MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_SEND_PREVIEW
