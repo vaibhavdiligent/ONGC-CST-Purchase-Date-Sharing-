@@ -226,7 +226,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_loc  FOR gv_loc_id OBLIGATORY,
                   s_date FOR sy-datum OBLIGATORY,
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
-  PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1 USER-COMMAND uc1,
+  PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
               p_view  TYPE char1 RADIOBUTTON GROUP r1,
               p_send  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
