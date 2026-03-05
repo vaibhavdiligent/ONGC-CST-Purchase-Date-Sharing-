@@ -144,6 +144,12 @@ TYPES: BEGIN OF ty_saved_daily,
          location   TYPE ygms_de_loc_id,
          material   TYPE ygms_de_gail_mat,
          exclude    TYPE c LENGTH 1,
+         created_by TYPE ernam,
+         created_date TYPE datum,
+         created_time TYPE sy-uzeit,
+         sent_by    TYPE ernam,
+         sent_on    TYPE datum,
+         sent_at    TYPE sy-uzeit,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from  TYPE datum,
@@ -159,6 +165,12 @@ TYPES: BEGIN OF ty_saved_fnt,
          gail_id    TYPE c LENGTH 20,
          location   TYPE ygms_de_loc_id,
          material   TYPE ygms_de_gail_mat,
+         created_by TYPE ernam,
+         created_date TYPE datum,
+         created_time TYPE sy-uzeit,
+         sent_by    TYPE ernam,
+         sent_on    TYPE datum,
+         sent_at    TYPE sy-uzeit,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -393,6 +405,11 @@ AT SELECTION-SCREEN OUTPUT.
       MODIFY SCREEN.
     ENDIF.
   ENDLOOP.
+*----------------------------------------------------------------------*
+* Force screen refresh when radio button group r1 changes
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON RADIOBUTTON GROUP r1.
+  " Triggers AT SELECTION-SCREEN OUTPUT to show/hide View sub-options
 *----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
@@ -3841,9 +3858,12 @@ FORM fetch_saved_data.
       ls_daily-qty_in_mbg = wa_pur-qty_in_mbg.
       ls_daily-ongc_id    = wa_pur-ongc_id.
       ls_daily-gail_id    = wa_pur-gail_id.
-      ls_daily-location   = wa_pur-location.
-      ls_daily-material   = wa_pur-material.
-      ls_daily-exclude    = wa_pur-exclude.
+      ls_daily-location     = wa_pur-location.
+      ls_daily-material     = wa_pur-material.
+      ls_daily-exclude      = wa_pur-exclude.
+      ls_daily-created_by   = wa_pur-created_by.
+      ls_daily-created_date = wa_pur-created_date.
+      ls_daily-created_time = wa_pur-created_time.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
   ENDIF.
@@ -3868,9 +3888,12 @@ FORM fetch_saved_data.
       ls_fnt-gcv        = wa_fnt-gcv.
       ls_fnt-ncv        = wa_fnt-ncv.
       ls_fnt-qty_in_mbg = wa_fnt-qty_in_mbg.
-      ls_fnt-gail_id    = wa_fnt-gail_id.
-      ls_fnt-location   = wa_fnt-location.
-      ls_fnt-material   = wa_fnt-material.
+      ls_fnt-gail_id      = wa_fnt-gail_id.
+      ls_fnt-location     = wa_fnt-location.
+      ls_fnt-material     = wa_fnt-material.
+      ls_fnt-created_by   = wa_fnt-created_by.
+      ls_fnt-created_date = wa_fnt-created_date.
+      ls_fnt-created_time = wa_fnt-created_time.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
   ENDIF.
@@ -3914,6 +3937,9 @@ FORM fetch_sent_data.
       ls_fnt-gail_id    = wa_fnt_s-gail_id.
       ls_fnt-location   = wa_fnt_s-location.
       ls_fnt-material   = wa_fnt_s-material.
+      ls_fnt-sent_by    = wa_fnt_s-sent_by.
+      ls_fnt-sent_on    = wa_fnt_s-sent_on.
+      ls_fnt-sent_at    = wa_fnt_s-sent_at.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
     " Also fetch daily sent data from YRGA_CST_PUR
@@ -3942,6 +3968,9 @@ FORM fetch_sent_data.
         ls_daily-location   = wa_pur_s-location.
         ls_daily-material   = wa_pur_s-material.
         ls_daily-exclude    = wa_pur_s-exclude.
+        ls_daily-sent_by    = wa_pur_s-sent_by.
+        ls_daily-sent_on    = wa_pur_s-sent_on.
+        ls_daily-sent_at    = wa_pur_s-sent_at.
         APPEND ls_daily TO gt_saved_daily.
       ENDLOOP.
     ENDIF.
@@ -4026,94 +4055,206 @@ ENDFORM.
 FORM display_saved_daily_alv.
   DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
         ls_fieldcat TYPE slis_fieldcat_alv,
-        ls_layout   TYPE slis_layout_alv.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GAS_DAY'.
-  ls_fieldcat-seltext_l = 'Gas Day'.
-  ls_fieldcat-col_pos   = 1.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'CTP'.
-  ls_fieldcat-seltext_l = 'CTP ID'.
-  ls_fieldcat-col_pos   = 2.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'ONGC_MATER'.
-  ls_fieldcat-seltext_l = 'ONGC Material'.
-  ls_fieldcat-col_pos   = 3.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'STATE_CODE'.
-  ls_fieldcat-seltext_l = 'State Code'.
-  ls_fieldcat-col_pos   = 4.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'STATE'.
-  ls_fieldcat-seltext_l = 'State'.
-  ls_fieldcat-col_pos   = 5.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
-  ls_fieldcat-seltext_l = 'Qty SCM'.
-  ls_fieldcat-col_pos   = 6.
-  ls_fieldcat-outputlen = 12.
-  ls_fieldcat-do_sum    = abap_true.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GCV'.
-  ls_fieldcat-seltext_l = 'GCV'.
-  ls_fieldcat-col_pos   = 7.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'NCV'.
-  ls_fieldcat-seltext_l = 'NCV'.
-  ls_fieldcat-col_pos   = 8.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
-  ls_fieldcat-seltext_l = 'Qty MBG'.
-  ls_fieldcat-col_pos   = 9.
-  ls_fieldcat-outputlen = 12.
-  ls_fieldcat-do_sum    = abap_true.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'ONGC_ID'.
-  ls_fieldcat-seltext_l = 'ONGC ID'.
-  ls_fieldcat-col_pos   = 10.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GAIL_ID'.
-  ls_fieldcat-seltext_l = 'GAIL ID'.
-  ls_fieldcat-col_pos   = 11.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'LOCATION'.
-  ls_fieldcat-seltext_l = 'Location'.
-  ls_fieldcat-col_pos   = 12.
-  ls_fieldcat-outputlen = 12.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'MATERIAL'.
-  ls_fieldcat-seltext_l = 'Material'.
-  ls_fieldcat-col_pos   = 13.
-  ls_fieldcat-outputlen = 18.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'EXCLUDE'.
-  ls_fieldcat-seltext_l = 'Exclude'.
-  ls_fieldcat-col_pos   = 14.
-  ls_fieldcat-outputlen = 7.
-  ls_fieldcat-checkbox  = abap_true.
-  APPEND ls_fieldcat TO lt_fieldcat.
+        ls_layout   TYPE slis_layout_alv,
+        lv_col      TYPE i VALUE 0.
+  IF p_vsent IS NOT INITIAL.
+    " View Sent Data: show columns matching YRGA_CST_PUR minus location/material/exclude
+    " plus Sent By, Sent On, Sent Time
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GAS_DAY'.
+    ls_fieldcat-seltext_l = 'Gas Day'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CTP'.
+    ls_fieldcat-seltext_l = 'CTP ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'ONGC_MATER'.
+    ls_fieldcat-seltext_l = 'ONGC Material'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE_CODE'.
+    ls_fieldcat-seltext_l = 'State Code'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE'.
+    ls_fieldcat-seltext_l = 'State'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+    ls_fieldcat-seltext_l = 'Qty SCM'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GCV'.
+    ls_fieldcat-seltext_l = 'GCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'NCV'.
+    ls_fieldcat-seltext_l = 'NCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+    ls_fieldcat-seltext_l = 'Qty MBG'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'ONGC_ID'.
+    ls_fieldcat-seltext_l = 'ONGC ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GAIL_ID'.
+    ls_fieldcat-seltext_l = 'GAIL ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_BY'.
+    ls_fieldcat-seltext_l = 'Sent By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_ON'.
+    ls_fieldcat-seltext_l = 'Sent On'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_AT'.
+    ls_fieldcat-seltext_l = 'Sent Time'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+  ELSE.
+    " View Saved Data: show all YRGA_CST_PUR columns except timestamp
+    " Layout matches YRGA_CST_PUR table field order
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GAS_DAY'.
+    ls_fieldcat-seltext_l = 'Gas Day'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CTP'.
+    ls_fieldcat-seltext_l = 'CTP ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'ONGC_MATER'.
+    ls_fieldcat-seltext_l = 'ONGC Material'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE_CODE'.
+    ls_fieldcat-seltext_l = 'State Code'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE'.
+    ls_fieldcat-seltext_l = 'State'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+    ls_fieldcat-seltext_l = 'Qty SCM'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GCV'.
+    ls_fieldcat-seltext_l = 'GCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'NCV'.
+    ls_fieldcat-seltext_l = 'NCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+    ls_fieldcat-seltext_l = 'Qty MBG'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'ONGC_ID'.
+    ls_fieldcat-seltext_l = 'ONGC ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GAIL_ID'.
+    ls_fieldcat-seltext_l = 'GAIL ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'LOCATION'.
+    ls_fieldcat-seltext_l = 'Location'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'MATERIAL'.
+    ls_fieldcat-seltext_l = 'Material'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 18.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'EXCLUDE'.
+    ls_fieldcat-seltext_l = 'Exclude'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 7.
+    ls_fieldcat-checkbox  = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CREATED_BY'.
+    ls_fieldcat-seltext_l = 'Created By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CREATED_DATE'.
+    ls_fieldcat-seltext_l = 'Created Date'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CREATED_TIME'.
+    ls_fieldcat-seltext_l = 'Created Time'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+  ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
@@ -4136,87 +4277,199 @@ ENDFORM.
 FORM display_saved_fnt_alv.
   DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
         ls_fieldcat TYPE slis_fieldcat_alv,
-        ls_layout   TYPE slis_layout_alv.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'DATE_FROM'.
-  ls_fieldcat-seltext_l = 'From'.
-  ls_fieldcat-col_pos   = 1.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'DATE_TO'.
-  ls_fieldcat-seltext_l = 'To'.
-  ls_fieldcat-col_pos   = 2.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'CTP'.
-  ls_fieldcat-seltext_l = 'CTP ID'.
-  ls_fieldcat-col_pos   = 3.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'ONGC_MATER'.
-  ls_fieldcat-seltext_l = 'ONGC Material'.
-  ls_fieldcat-col_pos   = 4.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'STATE_CODE'.
-  ls_fieldcat-seltext_l = 'State Code'.
-  ls_fieldcat-col_pos   = 5.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'STATE'.
-  ls_fieldcat-seltext_l = 'State'.
-  ls_fieldcat-col_pos   = 6.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'QTY_IN_SCM'.
-  ls_fieldcat-seltext_l = 'Qty in SCM'.
-  ls_fieldcat-col_pos   = 7.
-  ls_fieldcat-outputlen = 12.
-  ls_fieldcat-do_sum    = abap_true.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GCV'.
-  ls_fieldcat-seltext_l = 'GCV'.
-  ls_fieldcat-col_pos   = 8.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'NCV'.
-  ls_fieldcat-seltext_l = 'NCV'.
-  ls_fieldcat-col_pos   = 9.
-  ls_fieldcat-outputlen = 10.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'QTY_IN_MBG'.
-  ls_fieldcat-seltext_l = 'Qty in MBG'.
-  ls_fieldcat-col_pos   = 10.
-  ls_fieldcat-outputlen = 12.
-  ls_fieldcat-do_sum    = abap_true.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'GAIL_ID'.
-  ls_fieldcat-seltext_l = 'GAIL ID'.
-  ls_fieldcat-col_pos   = 11.
-  ls_fieldcat-outputlen = 15.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'LOCATION'.
-  ls_fieldcat-seltext_l = 'Location'.
-  ls_fieldcat-col_pos   = 12.
-  ls_fieldcat-outputlen = 12.
-  APPEND ls_fieldcat TO lt_fieldcat.
-  CLEAR ls_fieldcat.
-  ls_fieldcat-fieldname = 'MATERIAL'.
-  ls_fieldcat-seltext_l = 'Material'.
-  ls_fieldcat-col_pos   = 13.
-  ls_fieldcat-outputlen = 18.
-  APPEND ls_fieldcat TO lt_fieldcat.
+        ls_layout   TYPE slis_layout_alv,
+        lv_col      TYPE i VALUE 0.
+  IF p_vsent IS NOT INITIAL.
+    " View Sent Data: show columns minus location/material
+    " plus Sent By, Sent On, Sent Time
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DATE_FROM'.
+    ls_fieldcat-seltext_l = 'From'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DATE_TO'.
+    ls_fieldcat-seltext_l = 'To'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CTP'.
+    ls_fieldcat-seltext_l = 'CTP ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'ONGC_MATER'.
+    ls_fieldcat-seltext_l = 'ONGC Material'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE_CODE'.
+    ls_fieldcat-seltext_l = 'State Code'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE'.
+    ls_fieldcat-seltext_l = 'State'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+    ls_fieldcat-seltext_l = 'Qty in SCM'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GCV'.
+    ls_fieldcat-seltext_l = 'GCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'NCV'.
+    ls_fieldcat-seltext_l = 'NCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+    ls_fieldcat-seltext_l = 'Qty in MBG'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GAIL_ID'.
+    ls_fieldcat-seltext_l = 'GAIL ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_BY'.
+    ls_fieldcat-seltext_l = 'Sent By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_ON'.
+    ls_fieldcat-seltext_l = 'Sent On'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_AT'.
+    ls_fieldcat-seltext_l = 'Sent Time'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+  ELSE.
+    " View Saved Data: show all YRGA_CST_FN_DATA columns except timestamp
+    " Layout matches YRGA_CST_FN_DATA table field order
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DATE_FROM'.
+    ls_fieldcat-seltext_l = 'From'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DATE_TO'.
+    ls_fieldcat-seltext_l = 'To'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CTP'.
+    ls_fieldcat-seltext_l = 'CTP ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'ONGC_MATER'.
+    ls_fieldcat-seltext_l = 'ONGC Material'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE_CODE'.
+    ls_fieldcat-seltext_l = 'State Code'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'STATE'.
+    ls_fieldcat-seltext_l = 'State'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_SCM'.
+    ls_fieldcat-seltext_l = 'Qty in SCM'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GCV'.
+    ls_fieldcat-seltext_l = 'GCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'NCV'.
+    ls_fieldcat-seltext_l = 'NCV'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'QTY_IN_MBG'.
+    ls_fieldcat-seltext_l = 'Qty in MBG'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    ls_fieldcat-do_sum    = abap_true.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'GAIL_ID'.
+    ls_fieldcat-seltext_l = 'GAIL ID'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 15.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'LOCATION'.
+    ls_fieldcat-seltext_l = 'Location'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'MATERIAL'.
+    ls_fieldcat-seltext_l = 'Material'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 18.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CREATED_BY'.
+    ls_fieldcat-seltext_l = 'Created By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CREATED_DATE'.
+    ls_fieldcat-seltext_l = 'Created Date'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'CREATED_TIME'.
+    ls_fieldcat-seltext_l = 'Created Time'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+  ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
