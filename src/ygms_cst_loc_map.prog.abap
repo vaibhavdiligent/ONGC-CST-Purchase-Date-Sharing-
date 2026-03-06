@@ -85,10 +85,10 @@ AT SELECTION-SCREEN OUTPUT.
         screen-input = 0.
         MODIFY SCREEN.
       ENDIF.
-*     Make CTP ID and Location ID mandatory indicators
+*     Show required indicator without enforcement
       IF screen-name = 'P_CTP_ID' OR screen-name = 'P_LOC_ID'
          OR screen-name = 'P_VFROM'.
-        screen-required = 1.
+        screen-required = 2.
         MODIFY SCREEN.
       ENDIF.
     ELSE.
@@ -191,19 +191,49 @@ FORM create_mapping.
     RETURN.
   ENDIF.
 
-* 8.1.2 Check if mapping already exists (DELIND ≠ X)
-  SELECT SINGLE ongc_ctp_id FROM yrga_cst_loc_map
-    INTO ls_existing-ongc_ctp_id
+* 8.1.2 Check if mapping already exists
+  DATA: lv_deleted TYPE yrga_cst_loc_map-deleted.
+  SELECT SINGLE deleted FROM yrga_cst_loc_map
+    INTO lv_deleted
     WHERE ongc_ctp_id = p_ctp_id
-      AND gail_loc_id = p_loc_id
-      AND deleted NE 'X'.
+      AND gail_loc_id = p_loc_id.
   IF sy-subrc = 0.
-    CALL FUNCTION 'POPUP_TO_INFORM'
-      EXPORTING
-        titel = 'Error'
-        txt1  = 'This mapping already exists.'
-        txt2  = space.
-    RETURN.
+    IF lv_deleted NE 'X'.
+*     Active mapping exists - error
+      CALL FUNCTION 'POPUP_TO_INFORM'
+        EXPORTING
+          titel = 'Error'
+          txt1  = 'This mapping already exists.'
+          txt2  = space.
+      RETURN.
+    ELSE.
+*     Deleted mapping exists - reactivate it
+      UPDATE yrga_cst_loc_map
+        SET valid_from    = p_vfrom
+            valid_to      = p_vto
+            deleted       = space
+            changed_by    = sy-uname
+            changed_on    = sy-datum
+            changed_time  = sy-uzeit
+        WHERE ongc_ctp_id = p_ctp_id
+          AND gail_loc_id = p_loc_id.
+      IF sy-subrc = 0.
+        COMMIT WORK.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'Success'
+            txt1  = 'Location mapping created successfully.'
+            txt2  = space.
+      ELSE.
+        ROLLBACK WORK.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'Error'
+            txt1  = 'Error creating the mapping record. Please try again.'
+            txt2  = space.
+      ENDIF.
+      RETURN.
+    ENDIF.
   ENDIF.
 
 * 8.1.3 Fetch all records for ONGC CTP ID where DELIND ≠ X
@@ -285,8 +315,7 @@ FORM create_mapping.
             changed_on   = sy-datum
             changed_time = sy-uzeit
         WHERE ongc_ctp_id = ls_existing-ongc_ctp_id
-          AND gail_loc_id = ls_existing-gail_loc_id
-          AND valid_from  = ls_existing-valid_from.
+          AND gail_loc_id = ls_existing-gail_loc_id.
     ENDIF.
   ENDLOOP.
 
@@ -815,8 +844,7 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
                 changed_on   = sy-datum
                 changed_time = sy-uzeit
             WHERE ongc_ctp_id = <ls_map>-ongc_ctp_id
-              AND gail_loc_id = <ls_map>-gail_loc_id
-              AND valid_from  = <ls_map>-valid_from.
+              AND gail_loc_id = <ls_map>-gail_loc_id.
           IF sy-subrc = 0.
             <ls_map>-deleted      = 'X'.
             <ls_map>-changed_by   = sy-uname.
