@@ -26,14 +26,14 @@
     <item>
      <ID>I</ID>
      <KEY>B01</KEY>
-     <ENTRY>Contractual Nomination Deletion</ENTRY>
-     <LENGTH>32</LENGTH>
+     <ENTRY>Contractual Nomination Delete</ENTRY>
+     <LENGTH>30</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>B02</KEY>
-     <ENTRY>OD2 Nomination Deletion</ENTRY>
-     <LENGTH>23</LENGTH>
+     <ENTRY>OD2 Nomination Delete</ENTRY>
+     <LENGTH>21</LENGTH>
     </item>
     <item>
      <ID>I</ID>
@@ -52,6 +52,12 @@
      <KEY>M12</KEY>
      <ENTRY>Location belongs to Non-GAIL pipeline</ENTRY>
      <LENGTH>37</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>M14</KEY>
+     <ENTRY>Gas Days cannot be blank</ENTRY>
+     <LENGTH>24</LENGTH>
     </item>
     <item>
      <ID>I</ID>

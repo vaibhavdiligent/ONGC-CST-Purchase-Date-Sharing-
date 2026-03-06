@@ -68,7 +68,7 @@ SELECTION-SCREEN END OF BLOCK b00.
 
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   SELECT-OPTIONS: s_docnr FOR oijnomi-docnr NO INTERVALS MODIF ID RB1,
-                  s_idate FOR oijnomi-idate  NO-EXTENSION OBLIGATORY MODIF ID RB1,
+                  s_idate FOR oijnomi-idate  NO-EXTENSION MODIF ID RB1,
                   s_locid FOR oijnomi-locid NO INTERVALS MODIF ID RB1,
                   s_kunid FOR gv_kunnr       NO INTERVALS MODIF ID RB1.
 SELECTION-SCREEN END OF BLOCK b01.
@@ -77,7 +77,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
   PARAMETERS: p_ngail AS CHECKBOX MODIF ID RB2 USER-COMMAND ng.
   SELECT-OPTIONS: s_loc2  FOR oijnomi-locid  NO INTERVALS MODIF ID GAI,
                   s_cust  FOR gv_kunnr       NO INTERVALS MODIF ID CUS,
-                  s_idat2 FOR oijnomi-idate  NO-EXTENSION OBLIGATORY MODIF ID RB2.
+                  s_idat2 FOR oijnomi-idate  NO-EXTENSION MODIF ID RB2.
 SELECTION-SCREEN END OF BLOCK b02.
 *----------------------------------------------------------------------*
 * AT SELECTION-SCREEN OUTPUT
@@ -167,6 +167,13 @@ FORM validate_input.
                  <ls_locid> LIKE LINE OF s_locid,
                  <ls_kunid> LIKE LINE OF s_kunid.
   CLEAR: gt_errors, lv_error.
+* Validation 0: Gas Days cannot be blank
+  IF s_idate-low IS INITIAL.
+    gs_error-msgty = 'E'.
+    gs_error-msgtx = 'Gas Days cannot be blank'(m14).
+    APPEND gs_error TO gt_errors.
+    lv_error = abap_true.
+  ENDIF.
 * Validation 1: User must enter either Contract ID or Location ID or Customer ID
   IF s_docnr[] IS INITIAL AND s_locid[] IS INITIAL AND s_kunid[] IS INITIAL.
     gs_error-msgty = 'E'.
@@ -332,6 +339,13 @@ FORM validate_input_rb2.
                  <ls_loc2>  LIKE LINE OF s_loc2,
                  <ls_cust>  LIKE LINE OF s_cust.
   CLEAR: gt_errors, lv_error.
+* Validation: Gas Days cannot be blank
+  IF s_idat2-low IS INITIAL.
+    gs_error-msgty = 'E'.
+    gs_error-msgtx = 'Gas Days cannot be blank'(m14).
+    APPEND gs_error TO gt_errors.
+    lv_error = abap_true.
+  ENDIF.
 * Mandatory checks
   IF p_ngail = ' ' AND s_loc2[] IS INITIAL.
     gs_error-msgty = 'E'.
@@ -1290,7 +1304,7 @@ FORM delete_nominations.
     CONCATENATE 'No nominations deleted.' lv_skip_c
       'nomination(s) skipped due to ticket present.'
       INTO lv_msg SEPARATED BY space.
-    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
+    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'E'.
   ELSEIF lv_fail > 0.
     lv_fail_c = lv_fail.
     CONDENSE lv_fail_c.
@@ -1471,7 +1485,7 @@ FORM delete_nominations_rb2.
     CONCATENATE 'No nominations deleted.' lv_skip_c
       'nomination(s) skipped due to ticket present.'
       INTO lv_msg SEPARATED BY space.
-    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'W'.
+    MESSAGE lv_msg TYPE 'S' DISPLAY LIKE 'E'.
   ELSEIF lv_fail > 0.
     lv_fail_c = lv_fail. CONDENSE lv_fail_c.
     CONCATENATE 'Deletion failed for' lv_fail_c 'nomination(s).'
