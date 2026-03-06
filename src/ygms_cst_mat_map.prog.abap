@@ -51,8 +51,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   PARAMETERS: p_locid  TYPE yrga_cst_mat_map-location_id,
               p_ongcmt TYPE yrga_cst_mat_map-ongc_material,
               p_gailmt TYPE yrga_cst_mat_map-gail_material,
-              p_vfrom  TYPE datum,
-              p_vto    TYPE datum DEFAULT '99991231'.
+              p_vfrom  TYPE datum MODIF ID dat,
+              p_vto    TYPE datum DEFAULT '99991231' MODIF ID dat.
 SELECTION-SCREEN END OF BLOCK b01.
 
 *----------------------------------------------------------------------*
@@ -79,7 +79,8 @@ AT SELECTION-SCREEN OUTPUT.
         screen-required = 0.
         MODIFY SCREEN.
       ENDIF.
-      IF screen-name = 'P_VFROM' OR screen-name = 'P_VTO'.
+      " Hide date fields including their labels using MODIF ID group
+      IF screen-group1 = 'DAT'.
         screen-active = 0.
         MODIFY SCREEN.
       ENDIF.
