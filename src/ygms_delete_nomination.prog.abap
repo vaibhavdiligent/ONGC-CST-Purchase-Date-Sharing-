@@ -370,7 +370,7 @@ FORM validate_input_rb2.
             pipeline       = lv_pipeline
           TABLES
             et_nominations = et_nominations.
-        IF lv_pipeline NOT CS 'NON-GAIL' AND lv_pipeline NOT CS 'NON_GAIL'.
+        IF lv_pipeline CS 'NON-GAIL' AND lv_pipeline NS 'NON_GAIL'.
           CONCATENATE 'Customer' <ls_cust>-low
             'doesn''t pertain to Non-GAIL Location'
             INTO lv_msg SEPARATED BY space.
@@ -1161,6 +1161,17 @@ FORM delete_nominations.
       APPEND ls_nom_item TO lt_nom_items.
         endif.
     ENDLOOP.
+    CALL FUNCTION 'OIJ_NOM_DEFAULTING'
+     EXPORTING
+       IS_NOM_HEADER            = lS_NOM_HEADER
+       IT_NOM_ITEM              = lT_NOM_items
+     IMPORTING
+       ES_NOM_HEADER            = lS_NOM_HEADER
+       ET_NOM_ITEM              = lT_NOM_ITEMs
+     EXCEPTIONS
+       DEFAULTING_ERROR         = 1
+       NO_RECORDS_PASSED        = 2
+              .
     CALL FUNCTION 'OIJ_NOM_MAINTAIN'
       EXPORTING
         is_nom_header         = ls_nom_header
@@ -1401,6 +1412,17 @@ FORM delete_nominations_rb2.
         APPEND ls_nom_item TO lt_nom_items.
       ENDIF.
     ENDLOOP.
+     CALL FUNCTION 'OIJ_NOM_DEFAULTING'
+     EXPORTING
+       IS_NOM_HEADER            = lS_NOM_HEADER
+       IT_NOM_ITEM              = lT_NOM_items
+     IMPORTING
+       ES_NOM_HEADER            = lS_NOM_HEADER
+       ET_NOM_ITEM              = lT_NOM_ITEMs
+     EXCEPTIONS
+       DEFAULTING_ERROR         = 1
+       NO_RECORDS_PASSED        = 2
+              .
     CALL FUNCTION 'OIJ_NOM_MAINTAIN'
       EXPORTING
         is_nom_header         = ls_nom_header
