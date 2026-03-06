@@ -65,7 +65,6 @@ AT SELECTION-SCREEN OUTPUT.
       IF screen-name = 'P_LOCID' OR screen-name = 'P_ONGCMT' OR
          screen-name = 'P_GAILMT' OR screen-name = 'P_VFROM'.
         screen-input = 1.
-        screen-required = 1.
         MODIFY SCREEN.
       ENDIF.
       IF screen-name = 'P_VTO'.
