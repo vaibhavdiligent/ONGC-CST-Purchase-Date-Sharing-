@@ -91,6 +91,9 @@ AT SELECTION-SCREEN OUTPUT.
 * At Selection Screen - Input validations
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
+  " Skip mandatory validation when user is switching radio buttons
+  CHECK sy-ucomm <> 'MODE'.
+
   IF p_create = 'X'.
     " Mandatory checks for Create mode
     IF p_locid IS INITIAL.
@@ -106,7 +109,8 @@ AT SELECTION-SCREEN.
       MESSAGE 'Valid From date is mandatory.' TYPE 'E'.
     ENDIF.
     " Validate Valid From is start of a fortnight (1st or 16th)
-    IF p_vfrom+6(2) <> '01' AND p_vfrom+6(2) <> '16'.
+    IF p_vfrom IS NOT INITIAL AND
+       p_vfrom+6(2) <> '01' AND p_vfrom+6(2) <> '16'.
       MESSAGE 'Valid From can only be the start date of a fortnight (1st or 16th).' TYPE 'E'.
     ENDIF.
   ENDIF.
@@ -188,12 +192,13 @@ FORM create_mapping.
     RETURN.
   ENDIF.
 
-  " 9.1.5 - Check if exact mapping already exists
+  " 9.1.5 - Check if active mapping already exists for same primary keys
   SELECT SINGLE * FROM yrga_cst_mat_map
     INTO ls_existing
     WHERE location_id   = p_locid
       AND ongc_material = p_ongcmt
       AND gail_material = p_gailmt
+      AND valid_from    = p_vfrom
       AND deleted       <> 'X'.
   IF sy-subrc = 0.
     MESSAGE 'This mapping already exists.' TYPE 'I'.
@@ -260,11 +265,16 @@ FORM create_mapping.
     IF ( lv_s_from > ls_existing-valid_from AND lv_s_from <= ls_existing-valid_to )
        AND ( lv_s_to >= ls_existing-valid_to ).
       " Update existing record's Valid To to one day before S_FROM
-      ls_existing-valid_to    = lv_s_from - 1.
-      ls_existing-changed_by  = sy-uname.
-      ls_existing-changed_on  = sy-datum.
-      ls_existing-changed_time = sy-uzeit.
-      UPDATE yrga_cst_mat_map FROM ls_existing.
+      DATA(lv_new_valid_to) = lv_s_from - 1.
+      UPDATE yrga_cst_mat_map
+        SET valid_to      = lv_new_valid_to
+            changed_by    = sy-uname
+            changed_on    = sy-datum
+            changed_time  = sy-uzeit
+        WHERE location_id   = ls_existing-location_id
+          AND ongc_material = ls_existing-ongc_material
+          AND gail_material = ls_existing-gail_material
+          AND valid_from    = ls_existing-valid_from.
     ENDIF.
 
   ENDLOOP.
@@ -293,7 +303,7 @@ FORM insert_new_mapping.
   ls_new-created_time  = sy-uzeit.
   ls_new-deleted       = ' '.
 
-  INSERT yrga_cst_mat_map FROM ls_new.
+  MODIFY yrga_cst_mat_map FROM ls_new.
   IF sy-subrc <> 0.
     MESSAGE 'Error creating material mapping.' TYPE 'E'.
   ENDIF.
@@ -543,6 +553,7 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
                 changed_on   = sy-datum
                 changed_time = sy-uzeit
             WHERE location_id   = ls_map-location_id
+              AND ongc_material = ls_map-ongc_material
               AND gail_material = ls_map-gail_material
               AND valid_from    = ls_map-valid_from.
         ENDLOOP.
