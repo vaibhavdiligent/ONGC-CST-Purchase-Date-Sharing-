@@ -138,12 +138,9 @@ FORM create_mapping.
         lv_matnr   TYPE mara-matnr,
         lv_mstde   TYPE mara-mstde,
         lv_uomgr   TYPE marc-uomgr,
-        lt_existing TYPE STANDARD TABLE OF yrga_cst_mat_map,
         ls_existing TYPE yrga_cst_mat_map,
-        ls_new      TYPE yrga_cst_mat_map,
         lv_s_from   TYPE datum,
         lv_s_to     TYPE datum,
-        lv_failed   TYPE c LENGTH 1,
         lv_msg      TYPE string,
         lv_answer   TYPE c LENGTH 1.
 
@@ -192,94 +189,31 @@ FORM create_mapping.
     RETURN.
   ENDIF.
 
-  " 9.1.5 - Check if active mapping already exists for same primary keys
+  " 9.1.5 - Check if active mapping already exists for same primary keys (Location ID + ONGC Material)
   SELECT SINGLE * FROM yrga_cst_mat_map
     INTO ls_existing
     WHERE location_id   = p_locid
       AND ongc_material = p_ongcmt
-      AND gail_material = p_gailmt
-      AND valid_from    = p_vfrom
       AND deleted       <> 'X'.
   IF sy-subrc = 0.
-    MESSAGE 'This mapping already exists.' TYPE 'I'.
-    RETURN.
+    " Existing active mapping found - confirm overwrite
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Mapping Exists'
+        text_question         = 'An active mapping already exists for this Location ID and ONGC Material. Do you want to overwrite it?'
+        text_button_1         = 'Yes'
+        text_button_2         = 'No'
+        default_button        = '2'
+        display_cancel_button = ' '
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer <> '1'.
+      RETURN.
+    ENDIF.
   ENDIF.
 
-  " 9.1.6 - Fetch all records for Location + ONGC Material where not deleted
-  SELECT * FROM yrga_cst_mat_map
-    INTO TABLE lt_existing
-    WHERE location_id   = p_locid
-      AND ongc_material = p_ongcmt
-      AND deleted       <> 'X'.
-
-  IF lt_existing IS INITIAL.
-    " 9.1.7 - No existing records, create directly
-    PERFORM insert_new_mapping.
-    MESSAGE 'Material mapping created successfully.' TYPE 'S'.
-    RETURN.
-  ENDIF.
-
-  " 9.1.8 - Validate against existing records
-  lv_failed = ' '.
-  LOOP AT lt_existing INTO ls_existing.
-
-    " 9.1.8.b - New period falls within existing period
-    IF ( lv_s_from > ls_existing-valid_from AND lv_s_from < ls_existing-valid_to )
-       AND ( lv_s_to < ls_existing-valid_to ).
-      MESSAGE 'The entered validity period falls between the validity period of an existing mapping. Please delete the existing mapping.' TYPE 'I'.
-      lv_failed = 'X'.
-      EXIT.
-    ENDIF.
-
-    " 9.1.8.c - New period shifts existing start date forward
-    IF ( lv_s_from <= ls_existing-valid_from )
-       AND ( lv_s_to >= ls_existing-valid_from AND lv_s_to < ls_existing-valid_to ).
-      MESSAGE 'The entered validity period will shift the validity start date of an existing mapping forward. Please delete the existing mapping.' TYPE 'I'.
-      lv_failed = 'X'.
-      EXIT.
-    ENDIF.
-
-    " 9.1.8.d - New period completely covers existing period
-    IF ( lv_s_from <= ls_existing-valid_from )
-       AND ( lv_s_to >= ls_existing-valid_to ).
-      MESSAGE 'The entered validity completely covers the validity of an existing mapping. Please delete the existing mapping.' TYPE 'I'.
-      lv_failed = 'X'.
-      EXIT.
-    ENDIF.
-
-  ENDLOOP.
-
-  IF lv_failed = 'X'.
-    RETURN.
-  ENDIF.
-
-  " 9.1.9 - Adjust existing records and create new mapping
-  LOOP AT lt_existing INTO ls_existing.
-
-    " 9.1.9.b - No overlap, skip
-    IF lv_s_from > ls_existing-valid_to OR lv_s_to < ls_existing-valid_from.
-      CONTINUE.
-    ENDIF.
-
-    " 9.1.9.c - New period starts within existing and extends beyond
-    IF ( lv_s_from > ls_existing-valid_from AND lv_s_from <= ls_existing-valid_to )
-       AND ( lv_s_to >= ls_existing-valid_to ).
-      " Update existing record's Valid To to one day before S_FROM
-      DATA(lv_new_valid_to) = lv_s_from - 1.
-      UPDATE yrga_cst_mat_map
-        SET valid_to      = lv_new_valid_to
-            changed_by    = sy-uname
-            changed_on    = sy-datum
-            changed_time  = sy-uzeit
-        WHERE location_id   = ls_existing-location_id
-          AND ongc_material = ls_existing-ongc_material
-          AND gail_material = ls_existing-gail_material
-          AND valid_from    = ls_existing-valid_from.
-    ENDIF.
-
-  ENDLOOP.
-
-  " 9.1.10 - Create the new mapping
+  " 9.1.6 - Create / Overwrite the mapping (MODIFY upserts on primary key)
   PERFORM insert_new_mapping.
   MESSAGE 'Material mapping created successfully.' TYPE 'S'.
 
@@ -553,9 +487,7 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
                 changed_on   = sy-datum
                 changed_time = sy-uzeit
             WHERE location_id   = ls_map-location_id
-              AND ongc_material = ls_map-ongc_material
-              AND gail_material = ls_map-gail_material
-              AND valid_from    = ls_map-valid_from.
+              AND ongc_material = ls_map-ongc_material.
         ENDLOOP.
 
         IF sy-subrc = 0.
