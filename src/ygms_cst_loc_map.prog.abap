@@ -85,12 +85,6 @@ AT SELECTION-SCREEN OUTPUT.
         screen-input = 0.
         MODIFY SCREEN.
       ENDIF.
-*     Show required indicator without enforcement
-      IF screen-name = 'P_CTP_ID' OR screen-name = 'P_LOC_ID'
-         OR screen-name = 'P_VFROM'.
-        screen-required = 2.
-        MODIFY SCREEN.
-      ENDIF.
     ELSE.
 *     Show View/Delete block, hide Create block
       IF screen-group1 = 'CRE'.
