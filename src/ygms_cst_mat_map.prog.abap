@@ -201,27 +201,28 @@ FORM create_mapping.
       AND ongc_material = p_ongcmt
       AND deleted       <> 'X'.
 
-  " 9.1.5a - Check if new validity period is covered by any existing record
-  "           Error if existing VALID_FROM <= new VALID_FROM and existing VALID_TO >= new VALID_TO
-  lv_overlap = ' '.
+  " 9.1.5a - Check for overlap: Error only when an existing record starts ON or AFTER
+  "           the new VALID_FROM (i.e. user is trying to backdate or create a duplicate).
+  "           If existing VALID_FROM >= new VALID_FROM, the new record cannot be created.
   LOOP AT lt_existing INTO ls_existing.
-    IF ls_existing-valid_from <= lv_s_from AND ls_existing-valid_to >= lv_s_to.
-      " New validity is completely covered by an existing record
+    IF ls_existing-valid_from >= lv_s_from.
       WRITE ls_existing-valid_from TO lv_vfrom_txt DD/MM/YYYY.
       WRITE ls_existing-valid_to   TO lv_vto_txt   DD/MM/YYYY.
-      CONCATENATE 'New validity period is already covered by existing mapping ('
-                  ls_existing-gail_material ' Valid: ' lv_vfrom_txt ' to ' lv_vto_txt ').'
+      CONCATENATE 'Overlap: existing mapping ' ls_existing-gail_material
+                  ' (Valid: ' lv_vfrom_txt ' to ' lv_vto_txt
+                  ') starts on or after new Valid From. Cannot create.'
                   INTO lv_msg.
       MESSAGE lv_msg TYPE 'I'.
       RETURN.
     ENDIF.
   ENDLOOP.
 
-  " 9.1.5b - Cut short previous record's VALID_TO to new VALID_FROM - 1 day
-  "           for records where VALID_TO extends into or beyond the new VALID_FROM
+  " 9.1.5b - Cut short previous record's VALID_TO to new VALID_FROM - 1 day.
+  "           Applies when existing record started before new VALID_FROM
+  "           but its VALID_TO extends into or beyond the new VALID_FROM.
   lv_prev_vto = lv_s_from - 1.
   LOOP AT lt_existing INTO ls_existing.
-    IF ls_existing-valid_to >= lv_s_from AND ls_existing-valid_from < lv_s_from.
+    IF ls_existing-valid_from < lv_s_from AND ls_existing-valid_to >= lv_s_from.
       UPDATE yrga_cst_mat_map
         SET valid_to     = lv_prev_vto
             changed_by   = sy-uname
