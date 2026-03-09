@@ -134,15 +134,20 @@ START-OF-SELECTION.
 *&---------------------------------------------------------------------*
 FORM create_mapping.
 
-  DATA: lv_pblnr   TYPE oifspbl-pblnr,
-        lv_matnr   TYPE mara-matnr,
-        lv_mstde   TYPE mara-mstde,
-        lv_uomgr   TYPE marc-uomgr,
-        ls_existing TYPE yrga_cst_mat_map,
-        lv_s_from   TYPE datum,
-        lv_s_to     TYPE datum,
-        lv_msg      TYPE string,
-        lv_answer   TYPE c LENGTH 1.
+  DATA: lv_pblnr    TYPE oifspbl-pblnr,
+        lv_matnr    TYPE mara-matnr,
+        lv_mstde    TYPE mara-mstde,
+        lv_uomgr    TYPE marc-uomgr,
+        ls_existing  TYPE yrga_cst_mat_map,
+        lt_existing  TYPE STANDARD TABLE OF yrga_cst_mat_map,
+        lv_s_from    TYPE datum,
+        lv_s_to      TYPE datum,
+        lv_msg       TYPE string,
+        lv_answer    TYPE c LENGTH 1,
+        lv_prev_vto  TYPE datum,
+        lv_overlap   TYPE c LENGTH 1,
+        lv_vfrom_txt TYPE c LENGTH 10,
+        lv_vto_txt   TYPE c LENGTH 10.
 
   lv_s_from = p_vfrom.
   lv_s_to   = p_vto.
@@ -189,31 +194,47 @@ FORM create_mapping.
     RETURN.
   ENDIF.
 
-  " 9.1.5 - Check if active mapping already exists for same primary keys (Location ID + ONGC Material)
-  SELECT SINGLE * FROM yrga_cst_mat_map
-    INTO ls_existing
+  " 9.1.5 - Fetch all active records for same Location ID + ONGC Material
+  SELECT * FROM yrga_cst_mat_map
+    INTO TABLE lt_existing
     WHERE location_id   = p_locid
       AND ongc_material = p_ongcmt
       AND deleted       <> 'X'.
-  IF sy-subrc = 0.
-    " Existing active mapping found - confirm overwrite
-    CALL FUNCTION 'POPUP_TO_CONFIRM'
-      EXPORTING
-        titlebar              = 'Mapping Exists'
-        text_question         = 'An active mapping already exists for this Location ID and ONGC Material. Do you want to overwrite it?'
-        text_button_1         = 'Yes'
-        text_button_2         = 'No'
-        default_button        = '2'
-        display_cancel_button = ' '
-      IMPORTING
-        answer                = lv_answer.
 
-    IF lv_answer <> '1'.
+  " 9.1.5a - Check for overlap: Error only when an existing record starts ON or AFTER
+  "           the new VALID_FROM (i.e. user is trying to backdate or create a duplicate).
+  "           If existing VALID_FROM >= new VALID_FROM, the new record cannot be created.
+  LOOP AT lt_existing INTO ls_existing.
+    IF ls_existing-valid_from >= lv_s_from.
+      WRITE ls_existing-valid_from TO lv_vfrom_txt DD/MM/YYYY.
+      WRITE ls_existing-valid_to   TO lv_vto_txt   DD/MM/YYYY.
+      CONCATENATE 'Overlap: existing mapping ' ls_existing-gail_material
+                  ' (Valid: ' lv_vfrom_txt ' to ' lv_vto_txt
+                  ') starts on or after new Valid From. Cannot create.'
+                  INTO lv_msg.
+      MESSAGE lv_msg TYPE 'I'.
       RETURN.
     ENDIF.
-  ENDIF.
+  ENDLOOP.
 
-  " 9.1.6 - Create / Overwrite the mapping (MODIFY upserts on primary key)
+  " 9.1.5b - Cut short previous record's VALID_TO to new VALID_FROM - 1 day.
+  "           Applies when existing record started before new VALID_FROM
+  "           but its VALID_TO extends into or beyond the new VALID_FROM.
+  lv_prev_vto = lv_s_from - 1.
+  LOOP AT lt_existing INTO ls_existing.
+    IF ls_existing-valid_from < lv_s_from AND ls_existing-valid_to >= lv_s_from.
+      UPDATE yrga_cst_mat_map
+        SET valid_to     = lv_prev_vto
+            changed_by   = sy-uname
+            changed_on   = sy-datum
+            changed_time = sy-uzeit
+        WHERE location_id   = ls_existing-location_id
+          AND ongc_material = ls_existing-ongc_material
+          AND gail_material = ls_existing-gail_material.
+    ENDIF.
+  ENDLOOP.
+
+  " 9.1.6 - Create the new mapping
   PERFORM insert_new_mapping.
   MESSAGE 'Material mapping created successfully.' TYPE 'S'.
 
