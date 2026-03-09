@@ -487,7 +487,8 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
                 changed_on   = sy-datum
                 changed_time = sy-uzeit
             WHERE location_id   = ls_map-location_id
-              AND ongc_material = ls_map-ongc_material.
+              AND ongc_material = ls_map-ongc_material
+              AND gail_material = ls_map-gail_material.
         ENDLOOP.
 
         IF sy-subrc = 0.
