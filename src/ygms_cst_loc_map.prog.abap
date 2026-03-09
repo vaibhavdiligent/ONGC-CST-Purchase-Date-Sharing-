@@ -186,7 +186,9 @@ FORM create_mapping.
   ENDIF.
 
 * 8.1.2 Check if mapping already exists
-  DATA: lv_deleted TYPE yrga_cst_loc_map-deleted.
+  DATA: lv_deleted    TYPE yrga_cst_loc_map-deleted,
+        lv_reactivate TYPE char1.
+  CLEAR lv_reactivate.
   SELECT SINGLE deleted FROM yrga_cst_loc_map
     INTO lv_deleted
     WHERE ongc_ctp_id = p_ctp_id
@@ -201,44 +203,25 @@ FORM create_mapping.
           txt2  = space.
       RETURN.
     ELSE.
-*     Deleted mapping exists - reactivate it
-      UPDATE yrga_cst_loc_map
-        SET valid_from    = p_vfrom
-            valid_to      = p_vto
-            deleted       = space
-            changed_by    = sy-uname
-            changed_on    = sy-datum
-            changed_time  = sy-uzeit
-        WHERE ongc_ctp_id = p_ctp_id
-          AND gail_loc_id = p_loc_id.
-      IF sy-subrc = 0.
-        COMMIT WORK.
-        CALL FUNCTION 'POPUP_TO_INFORM'
-          EXPORTING
-            titel = 'Success'
-            txt1  = 'Location mapping created successfully.'
-            txt2  = space.
-      ELSE.
-        ROLLBACK WORK.
-        CALL FUNCTION 'POPUP_TO_INFORM'
-          EXPORTING
-            titel = 'Error'
-            txt1  = 'Error creating the mapping record. Please try again.'
-            txt2  = space.
-      ENDIF.
-      RETURN.
+*     Deleted mapping exists - mark for reactivation (don't return yet)
+      lv_reactivate = 'X'.
     ENDIF.
   ENDIF.
 
-* 8.1.3 Fetch all records for ONGC CTP ID where DELIND ≠ X
+* 8.1.3 Fetch all active records for ONGC CTP ID (exclude the record being reactivated)
   SELECT * FROM yrga_cst_loc_map
     INTO TABLE lt_existing
     WHERE ongc_ctp_id = p_ctp_id
+      AND gail_loc_id NE p_loc_id
       AND deleted NE 'X'.
 
-* 8.1.4 If no records found, create directly
+* 8.1.4 If no other active records, create/reactivate directly
   IF lt_existing IS INITIAL.
-    PERFORM insert_mapping_record.
+    IF lv_reactivate = 'X'.
+      PERFORM reactivate_mapping_record.
+    ELSE.
+      PERFORM insert_mapping_record.
+    ENDIF.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Success'
@@ -313,8 +296,12 @@ FORM create_mapping.
     ENDIF.
   ENDLOOP.
 
-* 8.1.7 Create the new mapping record
-  PERFORM insert_mapping_record.
+* 8.1.7 Create or reactivate the mapping record
+  IF lv_reactivate = 'X'.
+    PERFORM reactivate_mapping_record.
+  ELSE.
+    PERFORM insert_mapping_record.
+  ENDIF.
   CALL FUNCTION 'POPUP_TO_INFORM'
     EXPORTING
       titel = 'Success'
@@ -338,6 +325,32 @@ FORM insert_mapping_record.
   ls_new-created_time = sy-uzeit.
   ls_new-deleted      = space.
   INSERT yrga_cst_loc_map FROM ls_new.
+  IF sy-subrc = 0.
+    COMMIT WORK.
+  ELSE.
+    ROLLBACK WORK.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Error'
+        txt1  = 'Error creating the mapping record. Please try again.'
+        txt2  = space.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form REACTIVATE_MAPPING_RECORD
+*&---------------------------------------------------------------------*
+*& Reactivate a previously deleted record in YRGA_CST_LOC_MAP
+*&---------------------------------------------------------------------*
+FORM reactivate_mapping_record.
+  UPDATE yrga_cst_loc_map
+    SET valid_from    = p_vfrom
+        valid_to      = p_vto
+        deleted       = space
+        changed_by    = sy-uname
+        changed_on    = sy-datum
+        changed_time  = sy-uzeit
+    WHERE ongc_ctp_id = p_ctp_id
+      AND gail_loc_id = p_loc_id.
   IF sy-subrc = 0.
     COMMIT WORK.
   ELSE.
