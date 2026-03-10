@@ -147,9 +147,11 @@ TYPES: BEGIN OF ty_saved_daily,
          created_by TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
+         sent_e     TYPE c LENGTH 1,
          sent_by    TYPE ernam,
          sent_on    TYPE datum,
          sent_at    TYPE sy-uzeit,
+         deleted    TYPE c LENGTH 1,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from  TYPE datum,
@@ -168,9 +170,11 @@ TYPES: BEGIN OF ty_saved_fnt,
          created_by TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
+         sent_e     TYPE c LENGTH 1,
          sent_by    TYPE ernam,
          sent_on    TYPE datum,
          sent_at    TYPE sy-uzeit,
+         deleted    TYPE c LENGTH 1,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -427,7 +431,7 @@ START-OF-SELECTION.
     PERFORM fetch_saved_data.
     PERFORM display_saved_data_alv.
   ELSEIF p_view IS NOT INITIAL AND p_vsent IS NOT INITIAL.
-    " View -> Sent Data: check YRGA_CST_FN_DATA (sent), fallback to B2B tables
+    " View -> Sent B2B Data: fetch from YRGA_CST_B2B_2 / YRGA_CST_B2B_3
     PERFORM fetch_sent_data.
     PERFORM display_saved_data_alv.
   ELSE.
@@ -3868,6 +3872,11 @@ FORM fetch_saved_data.
       ls_daily-created_by   = wa_pur-created_by.
       ls_daily-created_date = wa_pur-created_date.
       ls_daily-created_time = wa_pur-created_time.
+      ls_daily-sent_e       = wa_pur-sent_e.
+      ls_daily-sent_by      = wa_pur-sent_by.
+      ls_daily-sent_on      = wa_pur-sent_on.
+      ls_daily-sent_at      = wa_pur-sent_at.
+      ls_daily-deleted      = wa_pur-deleted.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
 * else.
@@ -3908,6 +3917,11 @@ FORM fetch_saved_data.
       ls_daily-created_by   = wa_pur-created_by.
       ls_daily-created_date = wa_pur-created_date.
       ls_daily-created_time = wa_pur-created_time.
+      ls_daily-sent_e       = wa_pur-sent_e.
+      ls_daily-sent_by      = wa_pur-sent_by.
+      ls_daily-sent_on      = wa_pur-sent_on.
+      ls_daily-sent_at      = wa_pur-sent_at.
+      ls_daily-deleted      = wa_pur-deleted.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
 *    endif.
@@ -3940,6 +3954,11 @@ FORM fetch_saved_data.
       ls_fnt-created_by   = wa_fnt-created_by.
       ls_fnt-created_date = wa_fnt-created_date.
       ls_fnt-created_time = wa_fnt-created_time.
+      ls_fnt-sent_e       = wa_fnt-sent_e.
+      ls_fnt-sent_by      = wa_fnt-sent_by.
+      ls_fnt-sent_on      = wa_fnt-sent_on.
+      ls_fnt-sent_at      = wa_fnt-sent_at.
+      ls_fnt-deleted      = wa_fnt-deleted.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
     if lv_answer = 'J'.
@@ -3969,6 +3988,11 @@ FORM fetch_saved_data.
       ls_fnt-created_by   = wa_fnt-created_by.
       ls_fnt-created_date = wa_fnt-created_date.
       ls_fnt-created_time = wa_fnt-created_time.
+      ls_fnt-sent_e       = wa_fnt-sent_e.
+      ls_fnt-sent_by      = wa_fnt-sent_by.
+      ls_fnt-sent_on      = wa_fnt-sent_on.
+      ls_fnt-sent_at      = wa_fnt-sent_at.
+      ls_fnt-deleted      = wa_fnt-deleted.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
     endif.
@@ -3986,126 +4010,54 @@ ENDFORM.
 FORM fetch_sent_data.
   DATA: ls_daily TYPE ty_saved_daily,
         ls_fnt   TYPE ty_saved_fnt.
-  DATA: lv_found TYPE abap_bool VALUE abap_false.
   CLEAR: gt_saved_daily, gt_saved_fnt.
-  " --- 1. Check YRGA_CST_FN_DATA for sent records ---
-  SELECT *
-    FROM yrga_cst_fn_data
-    WHERE date_from IN @s_date
-      AND location  IN @s_loc
-      AND sent_e    IS NOT INITIAL "AND deleted = ' '
-    INTO TABLE @DATA(lt_fnt_sent).
-  IF sy-subrc = 0 AND lt_fnt_sent IS NOT INITIAL.
-    lv_found = abap_true.
-    SORT lt_fnt_sent BY created_date DESCENDING created_time DESCENDING.
-*    DELETE ADJACENT DUPLICATES FROM lt_fnt_sent COMPARING date_from date_to location material state_code.
-    SORT lt_fnt_sent BY date_from location material state_code.
-    LOOP AT lt_fnt_sent INTO DATA(wa_fnt_s).
+  " Fetch daily records from YRGA_CST_B2B_2
+  SELECT * INTO TABLE @DATA(lt_b2b_2)
+    FROM yrga_cst_b2b_2
+    WHERE gas_day IN @s_date.
+  IF sy-subrc = 0.
+    SORT lt_b2b_2 BY time_stamp DESCENDING.
+    SORT lt_b2b_2 BY gas_day ctp_id ongc_material state_code.
+    LOOP AT lt_b2b_2 INTO DATA(wa_b2b_2).
+      CLEAR ls_daily.
+      ls_daily-gas_day    = wa_b2b_2-gas_day.
+      ls_daily-ctp        = wa_b2b_2-ctp_id.
+      ls_daily-ongc_mater = wa_b2b_2-ongc_material.
+      ls_daily-state_code = wa_b2b_2-state_code.
+      ls_daily-state      = wa_b2b_2-state.
+      ls_daily-qty_in_scm = wa_b2b_2-qty_scm.
+      ls_daily-gcv        = wa_b2b_2-gcv.
+      ls_daily-ncv        = wa_b2b_2-ncv.
+      ls_daily-qty_in_mbg = wa_b2b_2-qty_in_mbg.
+      ls_daily-ongc_id    = wa_b2b_2-ongc_id.
+      APPEND ls_daily TO gt_saved_daily.
+    ENDLOOP.
+  ENDIF.
+  " Fetch fortnightly records from YRGA_CST_B2B_3
+  SELECT * INTO TABLE @DATA(lt_b2b_3)
+    FROM yrga_cst_b2b_3
+    WHERE date_from IN @s_date.
+  IF sy-subrc = 0.
+    SORT lt_b2b_3 BY time_stamp DESCENDING.
+    SORT lt_b2b_3 BY date_from ctp ongc_material state_code.
+    LOOP AT lt_b2b_3 INTO DATA(wa_b2b_3).
       CLEAR ls_fnt.
-      ls_fnt-date_from  = wa_fnt_s-date_from.
-      ls_fnt-date_to    = wa_fnt_s-date_to.
-      ls_fnt-ctp        = wa_fnt_s-ctp.
-      ls_fnt-ongc_mater = wa_fnt_s-ongc_mater.
-      ls_fnt-state_code = wa_fnt_s-state_code.
-      ls_fnt-state      = wa_fnt_s-state.
-      ls_fnt-qty_in_scm = wa_fnt_s-qty_in_scm.
-      ls_fnt-gcv        = wa_fnt_s-gcv.
-      ls_fnt-ncv        = wa_fnt_s-ncv.
-      ls_fnt-qty_in_mbg = wa_fnt_s-qty_in_mbg.
-      ls_fnt-gail_id    = wa_fnt_s-gail_id.
-      ls_fnt-location   = wa_fnt_s-location.
-      ls_fnt-material   = wa_fnt_s-material.
-      ls_fnt-sent_by    = wa_fnt_s-sent_by.
-      ls_fnt-sent_on    = wa_fnt_s-sent_on.
-      ls_fnt-sent_at    = wa_fnt_s-sent_at.
+      ls_fnt-date_from  = wa_b2b_3-date_from.
+      ls_fnt-date_to    = wa_b2b_3-date_to.
+      ls_fnt-ctp        = wa_b2b_3-ctp.
+      ls_fnt-ongc_mater = wa_b2b_3-ongc_material.
+      ls_fnt-state_code = wa_b2b_3-state_code.
+      ls_fnt-state      = wa_b2b_3-state.
+      ls_fnt-qty_in_scm = wa_b2b_3-qty_in_scm.
+      ls_fnt-gcv        = wa_b2b_3-gcv.
+      ls_fnt-ncv        = wa_b2b_3-ncv.
+      ls_fnt-qty_in_mbg = wa_b2b_3-qty_in_mbg.
+      ls_fnt-gail_id    = wa_b2b_3-gail_id.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
-    " Also fetch daily sent data from YRGA_CST_PUR
-    SELECT *
-      FROM yrga_cst_pur
-      WHERE gas_day  IN @s_date
-        AND location IN @s_loc
-        AND sent_e   IS NOT INITIAL" AND deleted = ' '
-      INTO TABLE @DATA(lt_pur_sent).
-    IF sy-subrc = 0.
-      SORT lt_pur_sent BY created_date DESCENDING created_time DESCENDING.
-*      DELETE ADJACENT DUPLICATES FROM lt_pur_sent COMPARING gas_day location material state_code.
-      SORT lt_pur_sent BY gas_day location material state_code.
-      LOOP AT lt_pur_sent INTO DATA(wa_pur_s).
-        CLEAR ls_daily.
-        ls_daily-gas_day    = wa_pur_s-gas_day.
-        ls_daily-ctp        = wa_pur_s-ctp.
-        ls_daily-ongc_mater = wa_pur_s-ongc_mater.
-        ls_daily-state_code = wa_pur_s-state_code.
-        ls_daily-state      = wa_pur_s-state.
-        ls_daily-qty_in_scm = wa_pur_s-qty_in_scm.
-        ls_daily-gcv        = wa_pur_s-gcv.
-        ls_daily-ncv        = wa_pur_s-ncv.
-        ls_daily-qty_in_mbg = wa_pur_s-qty_in_mbg.
-        ls_daily-ongc_id    = wa_pur_s-ongc_id.
-        ls_daily-gail_id    = wa_pur_s-gail_id.
-        ls_daily-location   = wa_pur_s-location.
-        ls_daily-material   = wa_pur_s-material.
-        ls_daily-exclude    = wa_pur_s-exclude.
-        ls_daily-sent_by    = wa_pur_s-sent_by.
-        ls_daily-sent_on    = wa_pur_s-sent_on.
-        ls_daily-sent_at    = wa_pur_s-sent_at.
-        APPEND ls_daily TO gt_saved_daily.
-      ENDLOOP.
-    ENDIF.
-  ENDIF.
-  " --- 2. Fallback: fetch from YRGA_CST_B2B_2 / B2B_3 ---
-  IF lv_found = abap_false.
-    " Fetch latest daily records from YRGA_CST_B2B_2
-    SELECT * INTO TABLE @DATA(lt_b2b_2)
-      FROM yrga_cst_b2b_2
-      WHERE gas_day IN @s_date.
-    IF sy-subrc = 0.
-      SORT lt_b2b_2 BY time_stamp DESCENDING.
-      DELETE ADJACENT DUPLICATES FROM lt_b2b_2 COMPARING gas_day ctp_id ongc_material state_code.
-      SORT lt_b2b_2 BY gas_day ctp_id ongc_material state_code.
-      LOOP AT lt_b2b_2 INTO DATA(wa_b2b_2).
-        CLEAR ls_daily.
-        ls_daily-gas_day    = wa_b2b_2-gas_day.
-        ls_daily-ctp        = wa_b2b_2-ctp_id.
-        ls_daily-ongc_mater = wa_b2b_2-ongc_material.
-        ls_daily-state_code = wa_b2b_2-state_code.
-        ls_daily-state      = wa_b2b_2-state.
-        ls_daily-qty_in_scm = wa_b2b_2-qty_scm.
-        ls_daily-gcv        = wa_b2b_2-gcv.
-        ls_daily-ncv        = wa_b2b_2-ncv.
-        ls_daily-qty_in_mbg = wa_b2b_2-qty_in_mbg.
-        ls_daily-ongc_id    = wa_b2b_2-ongc_id.
-        APPEND ls_daily TO gt_saved_daily.
-      ENDLOOP.
-    ENDIF.
-    " Fetch latest fortnightly records from YRGA_CST_B2B_3
-    SELECT * INTO TABLE @DATA(lt_b2b_3)
-      FROM yrga_cst_b2b_3
-      WHERE date_from IN @s_date.
-    IF sy-subrc = 0.
-      SORT lt_b2b_3 BY time_stamp DESCENDING.
-      DELETE ADJACENT DUPLICATES FROM lt_b2b_3 COMPARING date_from date_to ctp ongc_material state_code.
-      SORT lt_b2b_3 BY date_from ctp ongc_material state_code.
-      LOOP AT lt_b2b_3 INTO DATA(wa_b2b_3).
-        CLEAR ls_fnt.
-        ls_fnt-date_from  = wa_b2b_3-date_from.
-        ls_fnt-date_to    = wa_b2b_3-date_to.
-        ls_fnt-ctp        = wa_b2b_3-ctp.
-        ls_fnt-ongc_mater = wa_b2b_3-ongc_material.
-        ls_fnt-state_code = wa_b2b_3-state_code.
-        ls_fnt-state      = wa_b2b_3-state.
-        ls_fnt-qty_in_scm = wa_b2b_3-qty_in_scm.
-        ls_fnt-gcv        = wa_b2b_3-gcv.
-        ls_fnt-ncv        = wa_b2b_3-ncv.
-        ls_fnt-qty_in_mbg = wa_b2b_3-qty_in_mbg.
-        ls_fnt-gail_id    = wa_b2b_3-gail_id.
-        APPEND ls_fnt TO gt_saved_fnt.
-      ENDLOOP.
-    ENDIF.
   ENDIF.
   IF gt_saved_daily IS INITIAL AND gt_saved_fnt IS INITIAL.
-    MESSAGE s000(ygms_msg) WITH 'No sent data found for the selected criteria.' DISPLAY LIKE 'W'.
+    MESSAGE s000(ygms_msg) WITH 'No sent B2B data found for the selected criteria.' DISPLAY LIKE 'W'.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -4333,6 +4285,36 @@ FORM display_saved_daily_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_E'.
+    ls_fieldcat-seltext_l = 'Sent Flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 5.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_BY'.
+    ls_fieldcat-seltext_l = 'Sent By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_ON'.
+    ls_fieldcat-seltext_l = 'Sent On'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_AT'.
+    ls_fieldcat-seltext_l = 'Sent At'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion Flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 5.
+    APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
@@ -4547,6 +4529,36 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-seltext_l = 'Created Time'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_E'.
+    ls_fieldcat-seltext_l = 'Sent Flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 5.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_BY'.
+    ls_fieldcat-seltext_l = 'Sent By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_ON'.
+    ls_fieldcat-seltext_l = 'Sent On'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'SENT_AT'.
+    ls_fieldcat-seltext_l = 'Sent At'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion Flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 5.
     APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
