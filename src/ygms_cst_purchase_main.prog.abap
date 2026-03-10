@@ -226,7 +226,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_loc  FOR gv_loc_id OBLIGATORY,
                   s_date FOR sy-datum OBLIGATORY,
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
-  PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1,
+  PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1 USER-COMMAND uc1,
               p_view  TYPE char1 RADIOBUTTON GROUP r1,
               p_send  TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
@@ -1818,7 +1818,8 @@ FORM save_data_to_db.
       WHERE location    = ls_gail_id_map-location_id
         AND material    = ls_gail_id_map-material
         AND state_code  = ls_gail_id_map-state_code
-        AND gas_day    BETWEEN gv_date_from AND gv_date_to.
+        AND gas_day    BETWEEN gv_date_from AND gv_date_to
+      AND deleted = ' '.
     lv_gail_count = lines( lt_gail_ids ).
     IF lv_gail_count > 1.
       " Multiple GAIL IDs found - log error
@@ -1848,9 +1849,11 @@ FORM save_data_to_db.
     RETURN.
   ENDIF.
   " Delete existing data for same Location ID and Fortnight (step f)
-  DELETE FROM yrga_cst_pur
+  UPDATE yrga_cst_pur SET deleted = 'X'
+*  DELETE FROM yrga_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
-  DELETE FROM yrga_cst_fn_data
+  UPDATE yrga_cst_fn_data SET deleted = 'X'
+*  DELETE FROM yrga_cst_fn_data
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to.
   " Save records to both database tables
@@ -2059,7 +2062,7 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
   SELECT * FROM yrga_cst_pur
     INTO TABLE lt_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
-      AND location IN s_loc.
+      AND location IN s_loc AND deleted = ' '.
 
   " 1.2.3: Pick all ONGC IDs appearing in receipt data and check if they
   " appear in the saved data. Even if one ONGC ID is not found, block send.
@@ -2194,7 +2197,7 @@ FORM handle_send_email.
     INTO TABLE lt_send_data
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
-      AND exclude <> 'X'.
+      AND exclude <> 'X' AND deleted = ' '.
 
   IF lt_send_data IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
@@ -2207,7 +2210,7 @@ FORM handle_send_email.
     INTO TABLE lt_fnt_data
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to
-      AND location  IN s_loc.
+      AND location  IN s_loc AND deleted = ' '.
 
   " Send email with PDF and/or Excel attachments (daily + fortnightly)
   PERFORM send_email USING lt_emails lt_send_data lt_fnt_data lv_send_pdf lv_send_excel.
@@ -3102,11 +3105,11 @@ FORM handle_send_b2b.
     INTO TABLE lt_send_data
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
-      AND exclude <> 'X'.
+      AND exclude <> 'X' AND deleted = ' '.
   SELECT * FROM yrga_cst_fn_data
   INTO TABLE lt_send_data_fn
   WHERE date_from = gv_date_from AND date_to = gv_date_to
-    AND location IN s_loc.
+    AND location IN s_loc AND deleted = ' '.
   IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
@@ -3316,7 +3319,7 @@ FORM display_send_preview.
     INTO TABLE lt_cst_pur
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
-      AND exclude <> 'X'.
+      AND exclude <> 'X' AND deleted = ' '.
 
   IF lt_cst_pur IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
@@ -3348,7 +3351,7 @@ FORM display_send_preview.
     INTO TABLE lt_cst_fnt
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to
-      AND location  IN s_loc.
+      AND location  IN s_loc AND deleted = ' '.
 
   " Build fortnightly preview data
   LOOP AT lt_cst_fnt INTO DATA(ls_fnt_db).
@@ -3681,7 +3684,7 @@ FORM build_alv_display_table_view .
   SELECT * INTO TABLE @DATA(it_yrga_cst_pur)
     FROM yrga_cst_pur
     WHERE gas_day IN @s_date
-      AND location IN @s_loc.
+      AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
     SORT it_yrga_cst_pur BY created_date DESCENDING created_time DESCENDING.
     DELETE ADJACENT DUPLICATES FROM it_yrga_cst_pur COMPARING gas_day location material state_code.
@@ -3835,12 +3838,13 @@ ENDFORM.
 FORM fetch_saved_data.
   DATA: ls_daily TYPE ty_saved_daily,
         ls_fnt   TYPE ty_saved_fnt.
+  data lv_answer type c .
   CLEAR: gt_saved_daily, gt_saved_fnt.
   " Fetch daily data from YRGA_CST_PUR
   SELECT * INTO TABLE @DATA(lt_cst_pur)
     FROM yrga_cst_pur
     WHERE gas_day IN @s_date
-      AND location IN @s_loc.
+      AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
     SORT lt_cst_pur BY created_date DESCENDING created_time DESCENDING.
     DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material state_code.
@@ -3866,12 +3870,54 @@ FORM fetch_saved_data.
       ls_daily-created_time = wa_pur-created_time.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
+* else.
+    endif.
+     SELECT * INTO TABLE @lt_cst_pur
+    FROM yrga_cst_pur
+    WHERE gas_day IN @s_date
+      AND location IN @s_loc AND deleted = 'X'.
+  IF sy-subrc = 0.
+        CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Deleted Data found '
+        textline2      = 'for the queried period. Do you want to view the deleted data also ?'
+        titel          = 'Deleted Data Found'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_answer.
+    if lv_answer = 'J'.
+    SORT lt_cst_pur BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material state_code.
+    SORT lt_cst_pur BY gas_day location material state_code.
+    LOOP AT lt_cst_pur INTO wa_pur.
+      CLEAR ls_daily.
+      ls_daily-gas_day    = wa_pur-gas_day.
+      ls_daily-ctp        = wa_pur-ctp.
+      ls_daily-ongc_mater = wa_pur-ongc_mater.
+      ls_daily-state_code = wa_pur-state_code.
+      ls_daily-state      = wa_pur-state.
+      ls_daily-qty_in_scm = wa_pur-qty_in_scm.
+      ls_daily-gcv        = wa_pur-gcv.
+      ls_daily-ncv        = wa_pur-ncv.
+      ls_daily-qty_in_mbg = wa_pur-qty_in_mbg.
+      ls_daily-ongc_id    = wa_pur-ongc_id.
+      ls_daily-gail_id    = wa_pur-gail_id.
+      ls_daily-location     = wa_pur-location.
+      ls_daily-material     = wa_pur-material.
+      ls_daily-exclude      = wa_pur-exclude.
+      ls_daily-created_by   = wa_pur-created_by.
+      ls_daily-created_date = wa_pur-created_date.
+      ls_daily-created_time = wa_pur-created_time.
+      APPEND ls_daily TO gt_saved_daily.
+    ENDLOOP.
+*    endif.
+    endif.
   ENDIF.
   " Fetch fortnightly data from YRGA_CST_FN_DATA
   SELECT * INTO TABLE @DATA(lt_cst_fnt)
     FROM yrga_cst_fn_data
     WHERE date_from IN @s_date
-      AND location IN @s_loc.
+      AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
     SORT lt_cst_fnt BY created_date DESCENDING created_time DESCENDING.
     DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material state_code.
@@ -3896,6 +3942,37 @@ FORM fetch_saved_data.
       ls_fnt-created_time = wa_fnt-created_time.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
+    if lv_answer = 'J'.
+     SELECT * INTO TABLE @lt_cst_fnt
+    FROM yrga_cst_fn_data
+    WHERE date_from IN @s_date
+      AND location IN @s_loc AND deleted = 'X'.
+  IF sy-subrc = 0.
+    SORT lt_cst_fnt BY created_date DESCENDING created_time DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material state_code.
+    SORT lt_cst_fnt BY date_from location material state_code.
+    LOOP AT lt_cst_fnt INTO wa_fnt.
+      CLEAR ls_fnt.
+      ls_fnt-date_from  = wa_fnt-date_from.
+      ls_fnt-date_to    = wa_fnt-date_to.
+      ls_fnt-ctp        = wa_fnt-ctp.
+      ls_fnt-ongc_mater = wa_fnt-ongc_mater.
+      ls_fnt-state_code = wa_fnt-state_code.
+      ls_fnt-state      = wa_fnt-state.
+      ls_fnt-qty_in_scm = wa_fnt-qty_in_scm.
+      ls_fnt-gcv        = wa_fnt-gcv.
+      ls_fnt-ncv        = wa_fnt-ncv.
+      ls_fnt-qty_in_mbg = wa_fnt-qty_in_mbg.
+      ls_fnt-gail_id      = wa_fnt-gail_id.
+      ls_fnt-location     = wa_fnt-location.
+      ls_fnt-material     = wa_fnt-material.
+      ls_fnt-created_by   = wa_fnt-created_by.
+      ls_fnt-created_date = wa_fnt-created_date.
+      ls_fnt-created_time = wa_fnt-created_time.
+      APPEND ls_fnt TO gt_saved_fnt.
+    ENDLOOP.
+    endif.
+    endif.
   ENDIF.
   IF gt_saved_daily IS INITIAL AND gt_saved_fnt IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No saved data found for the selected criteria.' DISPLAY LIKE 'W'.
@@ -3912,15 +3989,16 @@ FORM fetch_sent_data.
   DATA: lv_found TYPE abap_bool VALUE abap_false.
   CLEAR: gt_saved_daily, gt_saved_fnt.
   " --- 1. Check YRGA_CST_FN_DATA for sent records ---
-  SELECT * INTO TABLE @DATA(lt_fnt_sent)
+  SELECT *
     FROM yrga_cst_fn_data
     WHERE date_from IN @s_date
       AND location  IN @s_loc
-      AND sent_e    IS NOT INITIAL.
+      AND sent_e    IS NOT INITIAL "AND deleted = ' '
+    INTO TABLE @DATA(lt_fnt_sent).
   IF sy-subrc = 0 AND lt_fnt_sent IS NOT INITIAL.
     lv_found = abap_true.
     SORT lt_fnt_sent BY created_date DESCENDING created_time DESCENDING.
-    DELETE ADJACENT DUPLICATES FROM lt_fnt_sent COMPARING date_from date_to location material state_code.
+*    DELETE ADJACENT DUPLICATES FROM lt_fnt_sent COMPARING date_from date_to location material state_code.
     SORT lt_fnt_sent BY date_from location material state_code.
     LOOP AT lt_fnt_sent INTO DATA(wa_fnt_s).
       CLEAR ls_fnt.
@@ -3943,14 +4021,15 @@ FORM fetch_sent_data.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
     " Also fetch daily sent data from YRGA_CST_PUR
-    SELECT * INTO TABLE @DATA(lt_pur_sent)
+    SELECT *
       FROM yrga_cst_pur
       WHERE gas_day  IN @s_date
         AND location IN @s_loc
-        AND sent_e   IS NOT INITIAL.
+        AND sent_e   IS NOT INITIAL" AND deleted = ' '
+      INTO TABLE @DATA(lt_pur_sent).
     IF sy-subrc = 0.
       SORT lt_pur_sent BY created_date DESCENDING created_time DESCENDING.
-      DELETE ADJACENT DUPLICATES FROM lt_pur_sent COMPARING gas_day location material state_code.
+*      DELETE ADJACENT DUPLICATES FROM lt_pur_sent COMPARING gas_day location material state_code.
       SORT lt_pur_sent BY gas_day location material state_code.
       LOOP AT lt_pur_sent INTO DATA(wa_pur_s).
         CLEAR ls_daily.
@@ -4524,22 +4603,24 @@ FORM user_command_saved USING r_ucomm     TYPE sy-ucomm
 ENDFORM.
 FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
                               pt_fnt   TYPE STANDARD TABLE.
-  DATA: lt_b2b_2    TYPE TABLE OF yrga_cst_b2b_2,
-        ls_b2b_2    TYPE yrga_cst_b2b_2,
-        lt_b2b_3    TYPE TABLE OF yrga_cst_b2b_3,
-        ls_b2b_3    TYPE yrga_cst_b2b_3,
-        ls_pur      TYPE yrga_cst_pur,
-        ls_fnt      TYPE yrga_cst_fn_data,
-        lv_count_d  TYPE i,
-        lv_count_f  TYPE i,
-        lv_tstamp   TYPE timestamp.            " <-- NEW variable
+  DATA: lt_b2b_2   TYPE TABLE OF yrga_cst_b2b_2,
+        ls_b2b_2   TYPE yrga_cst_b2b_2,
+        lt_b2b_3   TYPE TABLE OF yrga_cst_b2b_3,
+        ls_b2b_3   TYPE yrga_cst_b2b_3,
+        ls_pur     TYPE yrga_cst_pur,
+        ls_fnt     TYPE yrga_cst_fn_data,
+        lv_count_d TYPE i,
+        lv_count_f TYPE i,
+        lv_tstamp  TYPE timestamp.            " <-- NEW variable
+  DATA l_date TYPE sy-datum.
+  DATA l_time TYPE sy-uzeit.
   " Build daily B2B records from YRGA_CST_PUR data
+  GET TIME STAMP FIELD lv_tstamp.              " <-- NEW (DEC 15 timestamp)
   LOOP AT pt_daily INTO ls_pur.
     CLEAR ls_b2b_2.
     ls_b2b_2-gas_day       = ls_pur-gas_day.
     ls_b2b_2-ctp_id        = ls_pur-ctp.        " <-- was ctp
     ls_b2b_2-ongc_material = ls_pur-ongc_mater.  " <-- was ongc_mater
-    GET TIME STAMP FIELD lv_tstamp.              " <-- NEW (DEC 15 timestamp)
     ls_b2b_2-time_stamp    = lv_tstamp.          " <-- was ls_pur-time_stamp
     ls_b2b_2-state_code    = ls_pur-state_code.
     ls_b2b_2-state         = ls_pur-state.
@@ -4551,6 +4632,7 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
     ls_b2b_2-sent_by       = sy-uname.
     ls_b2b_2-sent_on       = sy-datum.
     ls_b2b_2-sent_at       = sy-uzeit.
+    ls_b2b_2-gail_id = ls_pur-gail_id.
     " REMOVED: ls_b2b_2-location, ls_b2b_2-material, ls_b2b_2-gail_id
     APPEND ls_b2b_2 TO lt_b2b_2.
   ENDLOOP.
@@ -4561,7 +4643,7 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
     ls_b2b_3-date_to        = ls_fnt-date_to.
     ls_b2b_3-ctp            = ls_fnt-ctp.
     ls_b2b_3-ongc_material  = ls_fnt-ongc_mater.  " <-- was ongc_mater
-    ls_b2b_3-time_stamp     = ls_fnt-time_stamp.
+    ls_b2b_3-time_stamp     = lv_tstamp..
     ls_b2b_3-state_code     = ls_fnt-state_code.
     ls_b2b_3-state          = ls_fnt-state.
     ls_b2b_3-qty_in_mbg     = ls_fnt-qty_in_mbg.
@@ -4599,22 +4681,24 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
       RETURN.
     ENDIF.
   ENDIF.
-" Update sent tracking fields in source tables (B2B API = 1)
-UPDATE yrga_cst_pur SET sent_e  = '1'
-                        sent_by = sy-uname
-                        sent_on = sy-datum
-                        sent_at = sy-uzeit
-  WHERE gas_day BETWEEN gv_date_from AND gv_date_to
-    AND location IN s_loc
-    AND exclude <> 'X'.
-UPDATE yrga_cst_fn_data SET sent_e  = '1'
-                            sent_by = sy-uname
-                            sent_on = sy-datum
-                            sent_at = sy-uzeit
-  WHERE date_from = gv_date_from
-    AND date_to   = gv_date_to
-    AND location  IN s_loc.
-COMMIT WORK AND WAIT.
+  " Update sent tracking fields in source tables (B2B API = 1)
+  CONVERT TIME STAMP lv_tstamp TIME ZONE 'IST'
+   INTO DATE l_date TIME l_time.
+  UPDATE yrga_cst_pur SET sent_e  = '1'
+                          sent_by = sy-uname
+                          sent_on = l_date
+                          sent_at = l_time
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude <> 'X'.
+  UPDATE yrga_cst_fn_data SET sent_e  = '1'
+                              sent_by = sy-uname
+                              sent_on = l_date
+                              sent_at = l_time
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc.
+  COMMIT WORK AND WAIT.
   " Commit if both saves successful
   COMMIT WORK AND WAIT.
   lv_count_d = lines( lt_b2b_2 ).
