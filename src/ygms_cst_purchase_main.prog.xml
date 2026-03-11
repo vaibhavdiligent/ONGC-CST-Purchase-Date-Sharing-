@@ -85,6 +85,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_VSENT</KEY>
+     <ENTRY>        Sent B2B Data</ENTRY>
+     <LENGTH>21</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>P_XLS</KEY>
      <ENTRY>        Send as Excel</ENTRY>
      <LENGTH>21</LENGTH>
