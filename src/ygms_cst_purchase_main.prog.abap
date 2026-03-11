@@ -230,7 +230,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
   PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1 USER-COMMAND uc1,
               p_view  TYPE char1 RADIOBUTTON GROUP r1,
-              p_send  TYPE char1 RADIOBUTTON GROUP r1.
+              p_send  TYPE char1 RADIOBUTTON GROUP r1,
+              p_downld TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
 * Sub-options for View mode
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
@@ -238,6 +239,11 @@ SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
               p_vsave  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw,
               p_vsent  TYPE char1 RADIOBUTTON GROUP r2 MODIF ID viw.
 SELECTION-SCREEN END OF BLOCK b2.
+* Sub-options for Download mode
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
+  PARAMETERS: p_dxls TYPE char1 RADIOBUTTON GROUP r3 DEFAULT 'X' MODIF ID dwn,
+              p_dpdf TYPE char1 RADIOBUTTON GROUP r3 MODIF ID dwn.
+SELECTION-SCREEN END OF BLOCK b3.
 *----------------------------------------------------------------------*
 * Custom Popup Selection Screen for Email (Screen 2000)
 *----------------------------------------------------------------------*
@@ -431,6 +437,14 @@ AT SELECTION-SCREEN OUTPUT.
       ENDIF.
       MODIFY SCREEN.
     ENDIF.
+    IF screen-group1 = 'DWN'.
+      IF p_downld IS NOT INITIAL.
+        screen-active = 1.
+      ELSE.
+        screen-active = 0.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
   ENDLOOP.
 *----------------------------------------------------------------------*
 * Force screen refresh when radio button group r1 changes
@@ -449,6 +463,9 @@ START-OF-SELECTION.
   IF p_send IS NOT INITIAL.
     " Direct Send mode - bypass ALV, go straight to send flow
     PERFORM handle_send_direct.
+  ELSEIF p_downld IS NOT INITIAL.
+    " Download mode - download files to local computer
+    PERFORM handle_download.
   ELSEIF p_view IS NOT INITIAL AND p_vsave IS NOT INITIAL.
     " View -> Saved Data: display data from YRGA_CST_PUR / YRGA_CST_FN_DATA
     PERFORM fetch_saved_data.
@@ -2055,6 +2072,204 @@ FORM handle_send_direct.
   ENDIF.
   " Show data preview with daily/fortnightly toggle, then send mode popup
   PERFORM display_send_preview.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form HANDLE_DOWNLOAD
+*& Download saved data as Excel or PDF to local computer
+*&---------------------------------------------------------------------*
+FORM handle_download.
+  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur,
+        lt_fnt_data  TYPE TABLE OF yrga_cst_fn_data.
+  DATA: lv_date_from_str TYPE c LENGTH 10,
+        lv_date_to_str   TYPE c LENGTH 10.
+  DATA: lv_filename      TYPE string,
+        lv_fullpath      TYPE string,
+        lv_path          TYPE string,
+        lv_user_action   TYPE i.
+
+  WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+
+  " Fetch daily data from YRGA_CST_PUR where EXCLUDED flag is not X
+  SELECT * FROM yrga_cst_pur
+    INTO TABLE lt_send_data
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude <> 'X' AND deleted = ' '.
+
+  IF lt_send_data IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'No saved data found for the selected period' DISPLAY LIKE 'W'.
+    RETURN.
+  ENDIF.
+
+  " Fetch fortnightly data from YRGA_CST_FN_DATA
+  SELECT * FROM yrga_cst_fn_data
+    INTO TABLE lt_fnt_data
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc AND deleted = ' '.
+
+  IF p_dxls IS NOT INITIAL.
+    " --- Download as Excel ---
+    " Build daily Excel content
+    DATA: lt_daily_xls TYPE solix_tab,
+          lv_daily_sz  TYPE sood-objlen.
+    PERFORM build_excel_attachment USING lt_send_data
+                                  CHANGING lt_daily_xls lv_daily_sz.
+
+    " Prompt user for daily file save location
+    DATA lv_def_daily TYPE string.
+    CONCATENATE 'Daily_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_def_daily.
+    REPLACE ALL OCCURRENCES OF '/' IN lv_def_daily WITH '-'.
+    CALL METHOD cl_gui_frontend_services=>file_save_dialog
+      EXPORTING
+        default_file_name = lv_def_daily
+        default_extension = 'xls'
+        file_filter       = 'Excel Files (*.xls)|*.xls|All Files (*.*)|*.*'
+      CHANGING
+        filename          = lv_filename
+        path              = lv_path
+        fullpath          = lv_fullpath
+        user_action       = lv_user_action.
+
+    IF lv_user_action = cl_gui_frontend_services=>action_ok.
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = lv_daily_sz
+          filename     = lv_fullpath
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = lt_daily_xls.
+      MESSAGE s000(ygms_msg) WITH 'Daily Excel downloaded successfully'.
+    ENDIF.
+
+    " Build fortnightly Excel content
+    IF lt_fnt_data IS NOT INITIAL.
+      DATA: lt_fnt_xls TYPE solix_tab,
+            lv_fnt_sz  TYPE sood-objlen.
+      PERFORM build_fnt_excel_attachment USING lt_fnt_data
+                                        CHANGING lt_fnt_xls lv_fnt_sz.
+
+      DATA lv_def_fnt TYPE string.
+      CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_def_fnt.
+      REPLACE ALL OCCURRENCES OF '/' IN lv_def_fnt WITH '-'.
+      CLEAR: lv_filename, lv_fullpath, lv_path.
+      CALL METHOD cl_gui_frontend_services=>file_save_dialog
+        EXPORTING
+          default_file_name = lv_def_fnt
+          default_extension = 'xls'
+          file_filter       = 'Excel Files (*.xls)|*.xls|All Files (*.*)|*.*'
+        CHANGING
+          filename          = lv_filename
+          path              = lv_path
+          fullpath          = lv_fullpath
+          user_action       = lv_user_action.
+
+      IF lv_user_action = cl_gui_frontend_services=>action_ok.
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = lv_fnt_sz
+            filename     = lv_fullpath
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = lt_fnt_xls.
+        MESSAGE s000(ygms_msg) WITH 'Fortnightly Excel downloaded successfully'.
+      ENDIF.
+    ENDIF.
+
+  ELSEIF p_dpdf IS NOT INITIAL.
+    " --- Download as PDF ---
+    " Build daily PDF content (spool-based: returns tline-like data in soli_tab)
+    DATA: lt_daily_pdf    TYPE soli_tab,
+          lv_daily_pdf_sz TYPE sood-objlen.
+    PERFORM build_pdf_attachment USING lt_send_data
+                                CHANGING lt_daily_pdf lv_daily_pdf_sz.
+
+    " Convert soli_tab (255-byte text lines) to solix_tab (binary) for download
+    DATA: lt_daily_pdf_bin TYPE solix_tab.
+    CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
+      EXPORTING
+        line_width_src = 255
+        line_width_dst = 255
+        transfer_bin   = 'X'
+      TABLES
+        content_in     = lt_daily_pdf
+        content_out    = lt_daily_pdf_bin
+      EXCEPTIONS
+        OTHERS         = 1.
+
+    DATA lv_def_daily_pdf TYPE string.
+    CONCATENATE 'Daily_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_daily_pdf.
+    REPLACE ALL OCCURRENCES OF '/' IN lv_def_daily_pdf WITH '-'.
+    CLEAR: lv_filename, lv_fullpath, lv_path.
+    CALL METHOD cl_gui_frontend_services=>file_save_dialog
+      EXPORTING
+        default_file_name = lv_def_daily_pdf
+        default_extension = 'pdf'
+        file_filter       = 'PDF Files (*.pdf)|*.pdf|All Files (*.*)|*.*'
+      CHANGING
+        filename          = lv_filename
+        path              = lv_path
+        fullpath          = lv_fullpath
+        user_action       = lv_user_action.
+
+    IF lv_user_action = cl_gui_frontend_services=>action_ok.
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = lv_daily_pdf_sz
+          filename     = lv_fullpath
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = lt_daily_pdf_bin.
+      MESSAGE s000(ygms_msg) WITH 'Daily PDF downloaded successfully'.
+    ENDIF.
+
+    " Build fortnightly PDF content
+    IF lt_fnt_data IS NOT INITIAL.
+      DATA: lt_fnt_pdf    TYPE soli_tab,
+            lv_fnt_pdf_sz TYPE sood-objlen.
+      PERFORM build_fnt_pdf_attachment USING lt_fnt_data
+                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz.
+
+      DATA: lt_fnt_pdf_bin TYPE solix_tab.
+      CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
+        EXPORTING
+          line_width_src = 255
+          line_width_dst = 255
+          transfer_bin   = 'X'
+        TABLES
+          content_in     = lt_fnt_pdf
+          content_out    = lt_fnt_pdf_bin
+        EXCEPTIONS
+          OTHERS         = 1.
+
+      DATA lv_def_fnt_pdf TYPE string.
+      CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_fnt_pdf.
+      REPLACE ALL OCCURRENCES OF '/' IN lv_def_fnt_pdf WITH '-'.
+      CLEAR: lv_filename, lv_fullpath, lv_path.
+      CALL METHOD cl_gui_frontend_services=>file_save_dialog
+        EXPORTING
+          default_file_name = lv_def_fnt_pdf
+          default_extension = 'pdf'
+          file_filter       = 'PDF Files (*.pdf)|*.pdf|All Files (*.*)|*.*'
+        CHANGING
+          filename          = lv_filename
+          path              = lv_path
+          fullpath          = lv_fullpath
+          user_action       = lv_user_action.
+
+      IF lv_user_action = cl_gui_frontend_services=>action_ok.
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = lv_fnt_pdf_sz
+            filename     = lv_fullpath
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = lt_fnt_pdf_bin.
+        MESSAGE s000(ygms_msg) WITH 'Fortnightly PDF downloaded successfully'.
+      ENDIF.
+    ENDIF.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND
