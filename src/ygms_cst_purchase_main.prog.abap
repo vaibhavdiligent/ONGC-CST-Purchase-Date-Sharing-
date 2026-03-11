@@ -2112,10 +2112,12 @@ FORM handle_download.
   IF p_dxls IS NOT INITIAL.
     " --- Download as Excel ---
     " Build daily Excel content
-    DATA: lt_daily_xls TYPE solix_tab,
-          lv_daily_sz  TYPE sood-objlen.
+    DATA: lt_daily_xls    TYPE solix_tab,
+          lv_daily_sz_raw TYPE sood-objlen,
+          lv_daily_sz     TYPE i.
     PERFORM build_excel_attachment USING lt_send_data
-                                  CHANGING lt_daily_xls lv_daily_sz.
+                                  CHANGING lt_daily_xls lv_daily_sz_raw.
+    lv_daily_sz = lv_daily_sz_raw.
 
     " Prompt user for daily file save location
     DATA lv_def_daily TYPE string.
@@ -2145,10 +2147,12 @@ FORM handle_download.
 
     " Build fortnightly Excel content
     IF lt_fnt_data IS NOT INITIAL.
-      DATA: lt_fnt_xls TYPE solix_tab,
-            lv_fnt_sz  TYPE sood-objlen.
+      DATA: lt_fnt_xls    TYPE solix_tab,
+            lv_fnt_sz_raw TYPE sood-objlen,
+            lv_fnt_sz     TYPE i.
       PERFORM build_fnt_excel_attachment USING lt_fnt_data
-                                        CHANGING lt_fnt_xls lv_fnt_sz.
+                                        CHANGING lt_fnt_xls lv_fnt_sz_raw.
+      lv_fnt_sz = lv_fnt_sz_raw.
 
       DATA lv_def_fnt TYPE string.
       CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_def_fnt.
@@ -2180,10 +2184,12 @@ FORM handle_download.
   ELSEIF p_dpdf IS NOT INITIAL.
     " --- Download as PDF ---
     " Build daily PDF content (spool-based: returns tline-like data in soli_tab)
-    DATA: lt_daily_pdf    TYPE soli_tab,
-          lv_daily_pdf_sz TYPE sood-objlen.
+    DATA: lt_daily_pdf        TYPE soli_tab,
+          lv_daily_pdf_sz_raw TYPE sood-objlen,
+          lv_daily_pdf_sz     TYPE i.
     PERFORM build_pdf_attachment USING lt_send_data
-                                CHANGING lt_daily_pdf lv_daily_pdf_sz.
+                                CHANGING lt_daily_pdf lv_daily_pdf_sz_raw.
+    lv_daily_pdf_sz = lv_daily_pdf_sz_raw.
 
     " Convert soli_tab (255-byte text lines) to solix_tab (binary) for download
     DATA: lt_daily_pdf_bin TYPE solix_tab.
@@ -2226,10 +2232,12 @@ FORM handle_download.
 
     " Build fortnightly PDF content
     IF lt_fnt_data IS NOT INITIAL.
-      DATA: lt_fnt_pdf    TYPE soli_tab,
-            lv_fnt_pdf_sz TYPE sood-objlen.
+      DATA: lt_fnt_pdf        TYPE soli_tab,
+            lv_fnt_pdf_sz_raw TYPE sood-objlen,
+            lv_fnt_pdf_sz     TYPE i.
       PERFORM build_fnt_pdf_attachment USING lt_fnt_data
-                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz.
+                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz_raw.
+      lv_fnt_pdf_sz = lv_fnt_pdf_sz_raw.
 
       DATA: lt_fnt_pdf_bin TYPE solix_tab.
       CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
