@@ -323,6 +323,22 @@ CLASS lcl_event_handler IMPLEMENTATION.
             lv_day_edit     TYPE abap_bool,
             lv_new_day_edit TYPE abap_bool,
             ls_style        TYPE lvc_s_styl.
+      " Save exclude flags before refresh
+      TYPES: BEGIN OF lty_exclude_save,
+               location_id TYPE ygms_de_loc_id,
+               state_code  TYPE regio,
+               material    TYPE ygms_de_gail_mat,
+               exclude     TYPE c LENGTH 1,
+             END OF lty_exclude_save.
+      DATA: lt_excl_save TYPE TABLE OF lty_exclude_save,
+            ls_excl_save TYPE lty_exclude_save.
+      LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
+        ls_excl_save-location_id = gs_alv_display-location_id.
+        ls_excl_save-state_code  = gs_alv_display-state_code.
+        ls_excl_save-material    = gs_alv_display-material.
+        ls_excl_save-exclude     = gs_alv_display-exclude.
+        APPEND ls_excl_save TO lt_excl_save.
+      ENDLOOP.
       " Get ALV grid reference
       CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
         IMPORTING
@@ -340,6 +356,15 @@ CLASS lcl_event_handler IMPLEMENTATION.
       PERFORM map_material_names.
       PERFORM fetch_data_yrxr098.
       PERFORM build_alv_display_table.
+      " Restore exclude flags after rebuild
+      LOOP AT lt_excl_save INTO ls_excl_save.
+        LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore_cls>)
+          WHERE location_id = ls_excl_save-location_id
+            AND state_code  = ls_excl_save-state_code
+            AND material    = ls_excl_save-material.
+          <fs_restore_cls>-exclude = ls_excl_save-exclude.
+        ENDLOOP.
+      ENDLOOP.
       PERFORM handle_allocate.
       IF lv_day_edit = 'X'.
         PERFORM handle_edit.
@@ -909,6 +934,22 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
             lv_day_edit     TYPE abap_bool,
             lv_new_day_edit TYPE abap_bool,
             ls_style        TYPE lvc_s_styl.
+      " Save exclude flags before refresh
+      TYPES: BEGIN OF ty_exclude_save,
+               location_id TYPE ygms_de_loc_id,
+               state_code  TYPE regio,
+               material    TYPE ygms_de_gail_mat,
+               exclude     TYPE c LENGTH 1,
+             END OF ty_exclude_save.
+      DATA: lt_exclude_save TYPE TABLE OF ty_exclude_save,
+            ls_exclude_save TYPE ty_exclude_save.
+      LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
+        ls_exclude_save-location_id = gs_alv_display-location_id.
+        ls_exclude_save-state_code  = gs_alv_display-state_code.
+        ls_exclude_save-material    = gs_alv_display-material.
+        ls_exclude_save-exclude     = gs_alv_display-exclude.
+        APPEND ls_exclude_save TO lt_exclude_save.
+      ENDLOOP.
       " Get ALV grid reference
       CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
         IMPORTING
@@ -926,6 +967,15 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
       PERFORM map_material_names.
       PERFORM fetch_data_yrxr098.
       PERFORM build_alv_display_table.
+      " Restore exclude flags after rebuild
+      LOOP AT lt_exclude_save INTO ls_exclude_save.
+        LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore>)
+          WHERE location_id = ls_exclude_save-location_id
+            AND state_code  = ls_exclude_save-state_code
+            AND material    = ls_exclude_save-material.
+          <fs_restore>-exclude = ls_exclude_save-exclude.
+        ENDLOOP.
+      ENDLOOP.
       PERFORM handle_allocate.
       IF lv_day_edit = 'X'.
         PERFORM handle_edit.
