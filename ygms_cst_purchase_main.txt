@@ -2183,26 +2183,15 @@ FORM handle_download.
 
   ELSEIF p_dpdf IS NOT INITIAL.
     " --- Download as PDF ---
-    " Build daily PDF content (spool-based: returns tline-like data in soli_tab)
+    " Build daily PDF content (spool-based)
     DATA: lt_daily_pdf        TYPE soli_tab,
           lv_daily_pdf_sz_raw TYPE sood-objlen,
           lv_daily_pdf_sz     TYPE i.
+    DATA: lt_daily_pdf_raw TYPE TABLE OF tline,
+          lv_daily_pdf_len TYPE i.
     PERFORM build_pdf_attachment USING lt_send_data
-                                CHANGING lt_daily_pdf lv_daily_pdf_sz_raw.
-    lv_daily_pdf_sz = lv_daily_pdf_sz_raw.
-
-    " Convert soli_tab (255-byte text lines) to solix_tab (binary) for download
-    DATA: lt_daily_pdf_bin TYPE solix_tab.
-    CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
-      EXPORTING
-        line_width_src = 255
-        line_width_dst = 255
-        transfer_bin   = 'X'
-      TABLES
-        content_in     = lt_daily_pdf
-        content_out    = lt_daily_pdf_bin
-      EXCEPTIONS
-        OTHERS         = 1.
+                                CHANGING lt_daily_pdf lv_daily_pdf_sz_raw
+                                         lt_daily_pdf_raw lv_daily_pdf_len.
 
     DATA lv_def_daily_pdf TYPE string.
     CONCATENATE 'Daily_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_daily_pdf.
@@ -2220,13 +2209,14 @@ FORM handle_download.
         user_action       = lv_user_action.
 
     IF lv_user_action = cl_gui_frontend_services=>action_ok.
+      " Use raw tline table directly — avoids Unicode dump with solix_tab
       CALL METHOD cl_gui_frontend_services=>gui_download
         EXPORTING
-          bin_filesize = lv_daily_pdf_sz
+          bin_filesize = lv_daily_pdf_len
           filename     = lv_fullpath
           filetype     = 'BIN'
         CHANGING
-          data_tab     = lt_daily_pdf_bin.
+          data_tab     = lt_daily_pdf_raw.
       MESSAGE s000(ygms_msg) WITH 'Daily PDF downloaded successfully'.
     ENDIF.
 
@@ -2235,21 +2225,11 @@ FORM handle_download.
       DATA: lt_fnt_pdf        TYPE soli_tab,
             lv_fnt_pdf_sz_raw TYPE sood-objlen,
             lv_fnt_pdf_sz     TYPE i.
+      DATA: lt_fnt_pdf_raw TYPE TABLE OF tline,
+            lv_fnt_pdf_len TYPE i.
       PERFORM build_fnt_pdf_attachment USING lt_fnt_data
-                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz_raw.
-      lv_fnt_pdf_sz = lv_fnt_pdf_sz_raw.
-
-      DATA: lt_fnt_pdf_bin TYPE solix_tab.
-      CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
-        EXPORTING
-          line_width_src = 255
-          line_width_dst = 255
-          transfer_bin   = 'X'
-        TABLES
-          content_in     = lt_fnt_pdf
-          content_out    = lt_fnt_pdf_bin
-        EXCEPTIONS
-          OTHERS         = 1.
+                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz_raw
+                                               lt_fnt_pdf_raw lv_fnt_pdf_len.
 
       DATA lv_def_fnt_pdf TYPE string.
       CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_fnt_pdf.
@@ -2267,13 +2247,14 @@ FORM handle_download.
           user_action       = lv_user_action.
 
       IF lv_user_action = cl_gui_frontend_services=>action_ok.
+        " Use raw tline table directly — avoids Unicode dump with solix_tab
         CALL METHOD cl_gui_frontend_services=>gui_download
           EXPORTING
-            bin_filesize = lv_fnt_pdf_sz
+            bin_filesize = lv_fnt_pdf_len
             filename     = lv_fullpath
             filetype     = 'BIN'
           CHANGING
-            data_tab     = lt_fnt_pdf_bin.
+            data_tab     = lt_fnt_pdf_raw.
         MESSAGE s000(ygms_msg) WITH 'Fortnightly PDF downloaded successfully'.
       ENDIF.
     ENDIF.
@@ -2580,8 +2561,11 @@ FORM send_email USING pt_emails   TYPE string_table
       " Add Daily PDF attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_text, lv_att_size.
+        DATA: lt_dummy_tline TYPE TABLE OF tline,
+              lv_dummy_len   TYPE i.
         PERFORM build_pdf_attachment USING pt_data
-                                    CHANGING lt_att_text lv_att_size.
+                                    CHANGING lt_att_text lv_att_size
+                                             lt_dummy_tline lv_dummy_len.
         CONCATENATE 'Daily CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
         CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
@@ -2607,8 +2591,10 @@ FORM send_email USING pt_emails   TYPE string_table
       " Add Fortnightly PDF attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_text, lv_att_size.
+        CLEAR: lt_dummy_tline, lv_dummy_len.
         PERFORM build_fnt_pdf_attachment USING pt_fnt_data
-                                        CHANGING lt_att_text lv_att_size.
+                                        CHANGING lt_att_text lv_att_size
+                                                 lt_dummy_tline lv_dummy_len.
         CONCATENATE 'Fortnightly CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
         CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
@@ -2899,7 +2885,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE soli_tab
-                                  cv_size    TYPE sood-objlen.
+                                  cv_size    TYPE sood-objlen
+                                  ct_pdf_raw TYPE STANDARD TABLE
+                                  cv_pdf_len TYPE i.
   DATA: ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
         lv_gcv     TYPE c LENGTH 15,
@@ -3109,7 +3097,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     RETURN.
   ENDIF.
 
-  " Convert tline table (134 bytes/line) to solix (255 bytes/line)
+  " Convert tline table (134 bytes/line) to soli (255 bytes/line) for email
   CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
     EXPORTING
       line_width_src = 134
@@ -3122,6 +3110,10 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
+
+  " Also return raw tline table for binary download (avoids Unicode dump)
+  ct_pdf_raw[] = lt_pdf[].
+  cv_pdf_len   = lv_pdf_len.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_EXCEL_ATTACHMENT
@@ -3236,7 +3228,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                               CHANGING ct_content TYPE soli_tab
-                                       cv_size    TYPE sood-objlen.
+                                       cv_size    TYPE sood-objlen
+                                       ct_pdf_raw TYPE STANDARD TABLE
+                                       cv_pdf_len TYPE i.
   DATA: ls_fnt     TYPE yrga_cst_fn_data.
   DATA: lv_date_from     TYPE c LENGTH 10,
         lv_date_to       TYPE c LENGTH 10,
@@ -3356,7 +3350,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     RETURN.
   ENDIF.
 
-  " Convert tline table (134 bytes/line) to solix (255 bytes/line)
+  " Convert tline table (134 bytes/line) to soli (255 bytes/line) for email
   CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
     EXPORTING
       line_width_src = 134
@@ -3369,6 +3363,10 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
+
+  " Also return raw tline table for binary download (avoids Unicode dump)
+  ct_pdf_raw[] = lt_pdf[].
+  cv_pdf_len   = lv_pdf_len.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
