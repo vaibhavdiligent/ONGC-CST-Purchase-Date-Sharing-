@@ -3,11 +3,8 @@
 *& Description: Material Mapping Master Data - Create, View, Delete
 *&---------------------------------------------------------------------*
 REPORT ygms_cst_mat_map.
-
 TYPE-POOLS: slis, icon.
-
 TABLES: yrga_cst_mat_map, oifspbl, mara, marc.
-
 *----------------------------------------------------------------------*
 * Types
 *----------------------------------------------------------------------*
@@ -26,7 +23,6 @@ TYPES: BEGIN OF ty_mat_map,
          changed_on    TYPE yrga_cst_mat_map-changed_on,
          changed_time  TYPE yrga_cst_mat_map-changed_time,
        END OF ty_mat_map.
-
 *----------------------------------------------------------------------*
 * Data Declarations
 *----------------------------------------------------------------------*
@@ -37,7 +33,6 @@ DATA: gt_mat_map   TYPE STANDARD TABLE OF ty_mat_map,
       gs_layout    TYPE slis_layout_alv,
       gv_repid     TYPE sy-repid,
       gv_valid     TYPE c LENGTH 1.
-
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -46,7 +41,6 @@ SELECTION-SCREEN BEGIN OF BLOCK b00 WITH FRAME TITLE TEXT-b00.
               p_view   RADIOBUTTON GROUP rb1,
               p_delete RADIOBUTTON GROUP rb1.
 SELECTION-SCREEN END OF BLOCK b00.
-
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   PARAMETERS: p_locid  TYPE yrga_cst_mat_map-location_id,
               p_ongcmt TYPE yrga_cst_mat_map-ongc_material,
@@ -54,7 +48,6 @@ SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
               p_vfrom  TYPE datum MODIF ID dat,
               p_vto    TYPE datum DEFAULT '99991231' MODIF ID dat.
 SELECTION-SCREEN END OF BLOCK b01.
-
 *----------------------------------------------------------------------*
 * At Selection Screen Output - Dynamic screen control
 *----------------------------------------------------------------------*
@@ -86,14 +79,12 @@ AT SELECTION-SCREEN OUTPUT.
       ENDIF.
     ENDIF.
   ENDLOOP.
-
 *----------------------------------------------------------------------*
 * At Selection Screen - Input validations
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
   " Skip mandatory validation when user is switching radio buttons
   CHECK sy-ucomm <> 'MODE'.
-
   IF p_create = 'X'.
     " Mandatory checks for Create mode
     IF p_locid IS INITIAL.
@@ -114,13 +105,11 @@ AT SELECTION-SCREEN.
       MESSAGE 'Valid From can only be the start date of a fortnight (1st or 16th).' TYPE 'E'.
     ENDIF.
   ENDIF.
-
 *----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
   gv_repid = sy-repid.
-
   IF p_create = 'X'.
     PERFORM create_mapping.
   ELSEIF p_view = 'X'.
@@ -128,31 +117,25 @@ START-OF-SELECTION.
   ELSEIF p_delete = 'X'.
     PERFORM delete_mapping.
   ENDIF.
-
 *&---------------------------------------------------------------------*
 *& Form CREATE_MAPPING
 *&---------------------------------------------------------------------*
 FORM create_mapping.
-
-  DATA: lv_pblnr    TYPE oifspbl-pblnr,
-        lv_matnr    TYPE mara-matnr,
-        lv_mstde    TYPE mara-mstde,
-        lv_uomgr    TYPE marc-uomgr,
+  DATA: lv_pblnr     TYPE oifspbl-pblnr,
+        lv_matnr     TYPE mara-matnr,
+        lv_mstde     TYPE mara-mstde,
+        lv_uomgr     TYPE marc-uomgr,
         ls_existing  TYPE yrga_cst_mat_map,
+        ls_dup       TYPE yrga_cst_mat_map,
         lt_existing  TYPE STANDARD TABLE OF yrga_cst_mat_map,
         lv_s_from    TYPE datum,
         lv_s_to      TYPE datum,
         lv_msg       TYPE string,
-        lv_answer    TYPE c LENGTH 1,
         lv_prev_vto  TYPE datum,
-        lv_overlap   TYPE c LENGTH 1,
-        lv_vfrom_txt TYPE c LENGTH 10,
-        lv_vto_txt   TYPE c LENGTH 10.
-
+        lv_failed    TYPE c LENGTH 1.
   lv_s_from = p_vfrom.
   lv_s_to   = p_vto.
-
-  " 9.1.1 - Validate GAIL Location ID against OIFSPBL
+  " 1.1.1 - Validate GAIL Location ID against OIFSPBL
   SELECT SINGLE pblnr FROM oifspbl
     INTO lv_pblnr
     WHERE pblnr = p_locid
@@ -162,28 +145,24 @@ FORM create_mapping.
     MESSAGE lv_msg TYPE 'I'.
     RETURN.
   ENDIF.
-
-  " 9.1.2 - Validate GAIL Material Name begins with GMS
+  " 1.1.2 - Validate GAIL Material Name begins with GMS
   IF p_gailmt(3) <> 'GMS'.
     MESSAGE 'Please enter a valid GMS material.' TYPE 'I'.
     RETURN.
   ENDIF.
-
-  " 9.1.3 - Check material block status in MARA
+  " 1.1.3 - Check material block status in MARA
   SELECT SINGLE matnr mstde FROM mara
     INTO (lv_matnr, lv_mstde)
     WHERE matnr = p_gailmt
       AND mstae = 'Z1'.
   IF sy-subrc = 0.
-    " Material found with block status Z1
     IF lv_s_to >= lv_mstde.
       CONCATENATE 'Material ' p_gailmt ' has been blocked with effect from ' lv_mstde '.' INTO lv_msg.
       MESSAGE lv_msg TYPE 'I'.
       RETURN.
     ENDIF.
   ENDIF.
-
-  " 9.1.4 - Check UoM group in MARC
+  " 1.1.4 - Check UoM group in MARC
   SELECT SINGLE uomgr FROM marc
     INTO lv_uomgr
     WHERE matnr = p_gailmt
@@ -193,36 +172,68 @@ FORM create_mapping.
     MESSAGE lv_msg TYPE 'I'.
     RETURN.
   ENDIF.
-
-  " 9.1.5 - Fetch all active records for same Location ID + ONGC Material
+  " 1.1.5 - Check exact duplicate (Location ID + ONGC Material + GAIL Material, DELIND <> X)
+  SELECT SINGLE * FROM yrga_cst_mat_map
+    INTO ls_dup
+    WHERE location_id   = p_locid
+      AND ongc_material = p_ongcmt
+      AND gail_material = p_gailmt
+      AND deleted       <> 'X'.
+  IF sy-subrc = 0.
+    MESSAGE 'This mapping already exists.' TYPE 'I'.
+    RETURN.
+  ENDIF.
+  " 1.1.6 - Fetch all active records for same Location ID + ONGC Material
   SELECT * FROM yrga_cst_mat_map
     INTO TABLE lt_existing
     WHERE location_id   = p_locid
       AND ongc_material = p_ongcmt
       AND deleted       <> 'X'.
-
-  " 9.1.5a - Check for overlap: Error only when an existing record starts ON or AFTER
-  "           the new VALID_FROM (i.e. user is trying to backdate or create a duplicate).
-  "           If existing VALID_FROM >= new VALID_FROM, the new record cannot be created.
+  " 1.1.7 - If no records found, create directly
+  IF lt_existing IS INITIAL.
+    PERFORM insert_new_mapping.
+    MESSAGE 'Material mapping created successfully.' TYPE 'S'.
+    RETURN.
+  ENDIF.
+  " 1.1.8 - Validation pass: check all existing records for overlap errors
+  lv_failed = ' '.
   LOOP AT lt_existing INTO ls_existing.
-    IF ls_existing-valid_from >= lv_s_from.
-      WRITE ls_existing-valid_from TO lv_vfrom_txt DD/MM/YYYY.
-      WRITE ls_existing-valid_to   TO lv_vto_txt   DD/MM/YYYY.
-      CONCATENATE 'Overlap: existing mapping ' ls_existing-gail_material
-                  ' (Valid: ' lv_vfrom_txt ' to ' lv_vto_txt
-                  ') starts on or after new Valid From. Cannot create.'
-                  INTO lv_msg.
-      MESSAGE lv_msg TYPE 'I'.
-      RETURN.
+    " 1.1.8.b - New period falls entirely within existing period
+    IF ( lv_s_from > ls_existing-valid_from AND lv_s_from < ls_existing-valid_to )
+       AND ( lv_s_to < ls_existing-valid_to ).
+      MESSAGE 'The entered validity period falls between the validity period of an existing mapping. Please delete the existing mapping.' TYPE 'I'.
+      lv_failed = 'X'.
+      EXIT.
+    ENDIF.
+    " 1.1.8.c - New period shifts existing start date forward
+    IF ( lv_s_from <= ls_existing-valid_from )
+       AND ( lv_s_to >= ls_existing-valid_from AND lv_s_to < ls_existing-valid_to ).
+      MESSAGE 'The entered validity period will shift the validity start date of an existing mapping forward. Please delete the existing mapping.' TYPE 'I'.
+      lv_failed = 'X'.
+      EXIT.
+    ENDIF.
+    " 1.1.8.d - New period completely covers existing period
+    IF ( lv_s_from <= ls_existing-valid_from )
+       AND ( lv_s_to >= ls_existing-valid_to ).
+      MESSAGE 'The entered validity completely covers the validity of an existing mapping. Please delete the existing mapping.' TYPE 'I'.
+      lv_failed = 'X'.
+      EXIT.
     ENDIF.
   ENDLOOP.
-
-  " 9.1.5b - Cut short previous record's VALID_TO to new VALID_FROM - 1 day.
-  "           Applies when existing record started before new VALID_FROM
-  "           but its VALID_TO extends into or beyond the new VALID_FROM.
-  lv_prev_vto = lv_s_from - 1.
+  " 1.1.8.e - If validation failed, exit
+  IF lv_failed = 'X'.
+    RETURN.
+  ENDIF.
+  " 1.1.9 - Update pass: cut short overlapping existing records
   LOOP AT lt_existing INTO ls_existing.
-    IF ls_existing-valid_from < lv_s_from AND ls_existing-valid_to >= lv_s_from.
+    " 1.1.9.b - No overlap at all, skip
+    IF lv_s_from > ls_existing-valid_to OR lv_s_to < ls_existing-valid_from.
+      CONTINUE.
+    ENDIF.
+    " 1.1.9.c - New period starts within existing and extends beyond it
+    IF ( lv_s_from > ls_existing-valid_from AND lv_s_from <= ls_existing-valid_to )
+       AND ( lv_s_to >= ls_existing-valid_to ).
+      lv_prev_vto = lv_s_from - 1.
       UPDATE yrga_cst_mat_map
         SET valid_to     = lv_prev_vto
             changed_by   = sy-uname
@@ -233,20 +244,15 @@ FORM create_mapping.
           AND gail_material = ls_existing-gail_material.
     ENDIF.
   ENDLOOP.
-
-  " 9.1.6 - Create the new mapping
+  " 1.1.10 - Create the new mapping
   PERFORM insert_new_mapping.
   MESSAGE 'Material mapping created successfully.' TYPE 'S'.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form INSERT_NEW_MAPPING
 *&---------------------------------------------------------------------*
 FORM insert_new_mapping.
-
   DATA: ls_new TYPE yrga_cst_mat_map.
-
   ls_new-mandt         = sy-mandt.
   ls_new-location_id   = p_locid.
   ls_new-gail_material = p_gailmt.
@@ -257,26 +263,21 @@ FORM insert_new_mapping.
   ls_new-created_on    = sy-datum.
   ls_new-created_time  = sy-uzeit.
   ls_new-deleted       = ' '.
-
   MODIFY yrga_cst_mat_map FROM ls_new.
   IF sy-subrc <> 0.
     MESSAGE 'Error creating material mapping.' TYPE 'E'.
   ENDIF.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form VIEW_MAPPING
 *&---------------------------------------------------------------------*
 FORM view_mapping.
-
   DATA: lt_result  TYPE STANDARD TABLE OF ty_mat_map,
         ls_result  TYPE ty_mat_map,
         lt_db      TYPE STANDARD TABLE OF yrga_cst_mat_map,
         ls_db      TYPE yrga_cst_mat_map,
         lv_pblnr   TYPE oifspbl-pblnr,
         lv_msg     TYPE string.
-
   " 9.2.1 - Validate Location ID if entered
   IF p_locid IS NOT INITIAL.
     SELECT SINGLE pblnr FROM oifspbl
@@ -289,7 +290,6 @@ FORM view_mapping.
       RETURN.
     ENDIF.
   ENDIF.
-
   " 9.2.2 - Validate GAIL Material Name if entered
   IF p_gailmt IS NOT INITIAL.
     IF p_gailmt(3) <> 'GMS'.
@@ -297,23 +297,20 @@ FORM view_mapping.
       RETURN.
     ENDIF.
   ENDIF.
-
   " 9.2.3 / 9.2.4 - Fetch mappings based on inputs
   IF p_locid IS INITIAL AND p_ongcmt IS INITIAL AND p_gailmt IS INITIAL.
     SELECT * FROM yrga_cst_mat_map INTO TABLE lt_db.
   ELSE.
     SELECT * FROM yrga_cst_mat_map
-      INTO TABLE lt_db
-      WHERE ( location_id   = p_locid   OR p_locid   IS INITIAL )
-        AND ( ongc_material = p_ongcmt  OR p_ongcmt  IS INITIAL )
-        AND ( gail_material = p_gailmt  OR p_gailmt  IS INITIAL ).
+       WHERE ( location_id   = @p_locid   OR @p_locid   IS INITIAL )
+        AND ( ongc_material = @p_ongcmt  OR @p_ongcmt  IS INITIAL )
+        AND ( gail_material = @p_gailmt  OR @p_gailmt  IS INITIAL )
+           INTO TABLE @lt_db.
   ENDIF.
-
   IF lt_db IS INITIAL.
     MESSAGE 'No material mappings found.' TYPE 'I'.
     RETURN.
   ENDIF.
-
   " Move to ALV display structure
   LOOP AT lt_db INTO ls_db.
     CLEAR ls_result.
@@ -331,13 +328,10 @@ FORM view_mapping.
     ls_result-changed_time  = ls_db-changed_time.
     APPEND ls_result TO lt_result.
   ENDLOOP.
-
   " Display ALV
   PERFORM build_fieldcatalog_view.
-
   gs_layout-colwidth_optimize = 'X'.
   gs_layout-zebra             = 'X'.
-
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program = gv_repid
@@ -352,21 +346,17 @@ FORM view_mapping.
   IF sy-subrc <> 0.
     MESSAGE 'Error displaying ALV.' TYPE 'E'.
   ENDIF.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form DELETE_MAPPING
 *&---------------------------------------------------------------------*
 FORM delete_mapping.
-
   DATA: lt_result  TYPE STANDARD TABLE OF ty_mat_map,
         ls_result  TYPE ty_mat_map,
         lt_db      TYPE STANDARD TABLE OF yrga_cst_mat_map,
         ls_db      TYPE yrga_cst_mat_map,
         lv_pblnr   TYPE oifspbl-pblnr,
         lv_msg     TYPE string.
-
   " 9.3.1 - Validate Location ID if entered
   IF p_locid IS NOT INITIAL.
     SELECT SINGLE pblnr FROM oifspbl
@@ -379,7 +369,6 @@ FORM delete_mapping.
       RETURN.
     ENDIF.
   ENDIF.
-
   " 9.3.2 - Validate GAIL Material Name if entered
   IF p_gailmt IS NOT INITIAL.
     IF p_gailmt(3) <> 'GMS'.
@@ -387,7 +376,6 @@ FORM delete_mapping.
       RETURN.
     ENDIF.
   ENDIF.
-
   " 9.3.3 - Fetch mappings where DELETED <> X
   IF p_locid IS INITIAL AND p_ongcmt IS INITIAL AND p_gailmt IS INITIAL.
     SELECT * FROM yrga_cst_mat_map
@@ -395,18 +383,16 @@ FORM delete_mapping.
       WHERE deleted <> 'X'.
   ELSE.
     SELECT * FROM yrga_cst_mat_map
-      INTO TABLE lt_db
-      WHERE ( location_id   = p_locid   OR p_locid   IS INITIAL )
-        AND ( ongc_material = p_ongcmt  OR p_ongcmt  IS INITIAL )
-        AND ( gail_material = p_gailmt  OR p_gailmt  IS INITIAL )
-        AND deleted <> 'X'.
+        WHERE ( location_id   = @p_locid   OR @p_locid   IS INITIAL )
+        AND ( ongc_material = @p_ongcmt  OR @p_ongcmt  IS INITIAL )
+        AND ( gail_material = @p_gailmt  OR @p_gailmt  IS INITIAL )
+        AND deleted <> 'X'
+           INTO TABLE @lt_db.
   ENDIF.
-
   IF lt_db IS INITIAL.
     MESSAGE 'No active material mappings found.' TYPE 'I'.
     RETURN.
   ENDIF.
-
   " Move to ALV display structure with checkbox
   LOOP AT lt_db INTO ls_db.
     CLEAR ls_result.
@@ -425,16 +411,12 @@ FORM delete_mapping.
     ls_result-changed_time  = ls_db-changed_time.
     APPEND ls_result TO lt_result.
   ENDLOOP.
-
   gt_mat_map = lt_result.
-
   " Display ALV with checkbox and delete button
   PERFORM build_fieldcatalog_delete.
-
   gs_layout-colwidth_optimize = 'X'.
   gs_layout-zebra             = 'X'.
   gs_layout-box_fieldname     = 'SEL'.
-
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = gv_repid
@@ -451,41 +433,33 @@ FORM delete_mapping.
   IF sy-subrc <> 0.
     MESSAGE 'Error displaying ALV.' TYPE 'E'.
   ENDIF.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form SET_PF_STATUS
 *&---------------------------------------------------------------------*
 FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   SET PF-STATUS 'ZDELETE'.
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form USER_COMMAND_DELETE
 *&---------------------------------------------------------------------*
 FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
                                rs_selfield TYPE slis_selfield.
-
   DATA: ls_map    TYPE ty_mat_map,
         ls_db     TYPE yrga_cst_mat_map,
         lv_answer TYPE c LENGTH 1,
         lv_count  TYPE i.
-
   CASE r_ucomm.
     WHEN 'DELETE' OR '&IC1'.
-
       " Count selected records
       lv_count = 0.
       LOOP AT gt_mat_map INTO ls_map WHERE sel = 'X'.
         lv_count = lv_count + 1.
       ENDLOOP.
-
       IF lv_count = 0.
         MESSAGE 'Please select at least one record to delete.' TYPE 'I'.
         RETURN.
       ENDIF.
-
       " 9.3.5 - Confirmation popup
       CALL FUNCTION 'POPUP_TO_CONFIRM'
         EXPORTING
@@ -497,7 +471,6 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
           display_cancel_button = ' '
         IMPORTING
           answer                = lv_answer.
-
       IF lv_answer = '1'.
         " Set deletion flag on selected records
         LOOP AT gt_mat_map INTO ls_map WHERE sel = 'X'.
@@ -511,25 +484,19 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
               AND ongc_material = ls_map-ongc_material
               AND gail_material = ls_map-gail_material.
         ENDLOOP.
-
         IF sy-subrc = 0.
           MESSAGE 'Selected mappings have been deleted successfully.' TYPE 'S'.
         ENDIF.
-
         " Refresh the display
         rs_selfield-refresh = 'X'.
       ENDIF.
   ENDCASE.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form BUILD_FIELDCATALOG_VIEW
 *&---------------------------------------------------------------------*
 FORM build_fieldcatalog_view.
-
   CLEAR gt_fieldcat.
-
   PERFORM add_field USING 'LOCATION_ID'   'YRGA_CST_MAT_MAP' 'LOCATION_ID'   'Location ID'.
   PERFORM add_field USING 'ONGC_MATERIAL' 'YRGA_CST_MAT_MAP' 'ONGC_MATERIAL' 'ONGC Material'.
   PERFORM add_field USING 'GAIL_MATERIAL' 'YRGA_CST_MAT_MAP' 'GAIL_MATERIAL' 'GAIL Material'.
@@ -542,16 +509,12 @@ FORM build_fieldcatalog_view.
   PERFORM add_field USING 'CHANGED_BY'    'YRGA_CST_MAT_MAP' 'CHANGED_BY'    'Changed By'.
   PERFORM add_field USING 'CHANGED_ON'    'YRGA_CST_MAT_MAP' 'CHANGED_ON'    'Changed On'.
   PERFORM add_field USING 'CHANGED_TIME'  'YRGA_CST_MAT_MAP' 'CHANGED_TIME'  'Changed Time'.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form BUILD_FIELDCATALOG_DELETE
 *&---------------------------------------------------------------------*
 FORM build_fieldcatalog_delete.
-
   CLEAR gt_fieldcat.
-
   PERFORM add_field USING 'LOCATION_ID'   'YRGA_CST_MAT_MAP' 'LOCATION_ID'   'Location ID'.
   PERFORM add_field USING 'ONGC_MATERIAL' 'YRGA_CST_MAT_MAP' 'ONGC_MATERIAL' 'ONGC Material'.
   PERFORM add_field USING 'GAIL_MATERIAL' 'YRGA_CST_MAT_MAP' 'GAIL_MATERIAL' 'GAIL Material'.
@@ -563,9 +526,7 @@ FORM build_fieldcatalog_delete.
   PERFORM add_field USING 'CHANGED_BY'    'YRGA_CST_MAT_MAP' 'CHANGED_BY'    'Changed By'.
   PERFORM add_field USING 'CHANGED_ON'    'YRGA_CST_MAT_MAP' 'CHANGED_ON'    'Changed On'.
   PERFORM add_field USING 'CHANGED_TIME'  'YRGA_CST_MAT_MAP' 'CHANGED_TIME'  'Changed Time'.
-
 ENDFORM.
-
 *&---------------------------------------------------------------------*
 *& Form ADD_FIELD
 *&---------------------------------------------------------------------*
@@ -573,12 +534,10 @@ FORM add_field USING pv_fieldname TYPE slis_fieldcat_alv-fieldname
                      pv_ref_tab   TYPE slis_fieldcat_alv-ref_tabname
                      pv_ref_field TYPE slis_fieldcat_alv-ref_fieldname
                      pv_seltext   TYPE slis_fieldcat_alv-seltext_m.
-
   CLEAR gs_fieldcat.
   gs_fieldcat-fieldname     = pv_fieldname.
   gs_fieldcat-ref_tabname   = pv_ref_tab.
   gs_fieldcat-ref_fieldname = pv_ref_field.
   gs_fieldcat-seltext_m     = pv_seltext.
   APPEND gs_fieldcat TO gt_fieldcat.
-
 ENDFORM.
