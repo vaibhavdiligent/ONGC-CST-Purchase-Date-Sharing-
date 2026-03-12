@@ -5051,7 +5051,7 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
     ENDIF.
   ENDIF.
   " Update sent tracking fields in source tables (B2B API = 1)
-  CONVERT TIME STAMP lv_tstamp TIME ZONE 'IST'
+  CONVERT TIME STAMP lv_tstamp TIME ZONE sy-zonlo
    INTO DATE l_date TIME l_time.
   UPDATE yrga_cst_pur SET sent_e  = '1'
                           sent_by = sy-uname
