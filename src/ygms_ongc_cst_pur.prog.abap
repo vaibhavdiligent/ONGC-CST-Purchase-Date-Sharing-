@@ -206,12 +206,12 @@ FORM process_view.
     DATA: lt_loc_map TYPE TABLE OF yrga_cst_loc_map.
     SELECT * FROM yrga_cst_loc_map
       INTO TABLE lt_loc_map
-      WHERE location_id IN s_loc.
+      WHERE gail_loc_id IN s_loc.
     IF lt_loc_map IS NOT INITIAL.
       ls_ctp_sel-sign   = 'I'.
       ls_ctp_sel-option = 'EQ'.
       LOOP AT lt_loc_map INTO DATA(ls_loc_map).
-        ls_ctp_sel-low = ls_loc_map-ctp_id.
+        ls_ctp_sel-low = ls_loc_map-ongc_ctp_id.
         APPEND ls_ctp_sel TO lt_ctp_sel.
       ENDLOOP.
     ELSE.
