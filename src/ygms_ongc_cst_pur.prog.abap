@@ -55,6 +55,13 @@ TYPES: BEGIN OF ty_gcv_error,
          message     TYPE char80,
        END OF ty_gcv_error.
 *----------------------------------------------------------------------*
+* Selection Screen Reference Variables
+*----------------------------------------------------------------------*
+DATA: gv_ctp_ref  TYPE ygms_de_ongc_ctp,
+      gv_omat_ref TYPE ygms_de_ongc_mat,
+      gv_loc_ref  TYPE ygms_de_loc_id,
+      gv_gmat_ref TYPE ygms_de_gail_mat.
+*----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
@@ -65,9 +72,11 @@ SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   PARAMETERS: p_file TYPE rlgrap-filename MODIF ID upl.
 SELECTION-SCREEN END OF BLOCK b2.
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
-  PARAMETERS:     p_ctp    TYPE ygms_de_ongc_ctp MODIF ID viw.
-  SELECT-OPTIONS: s_gasday FOR sy-datum MODIF ID viw.
-  PARAMETERS:     p_mat    TYPE ygms_de_ongc_mat MODIF ID viw.
+  SELECT-OPTIONS: s_ctp    FOR gv_ctp_ref  NO INTERVALS MODIF ID viw,
+                  s_gasday FOR sy-datum MODIF ID viw,
+                  s_omat   FOR gv_omat_ref NO INTERVALS MODIF ID viw,
+                  s_loc    FOR gv_loc_ref  NO INTERVALS MODIF ID viw,
+                  s_gmat   FOR gv_gmat_ref NO INTERVALS MODIF ID viw.
 SELECTION-SCREEN END OF BLOCK b3.
 *----------------------------------------------------------------------*
 * Global Data
@@ -100,6 +109,15 @@ AT SELECTION-SCREEN OUTPUT.
     ENDIF.
     MODIFY SCREEN.
   ENDLOOP.
+*----------------------------------------------------------------------*
+* At Selection Screen - Validation
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+  IF p_view = abap_true.
+    IF s_gasday[] IS INITIAL.
+      MESSAGE e000(ygms_msg) WITH 'Gas Day is mandatory for View mode'.
+    ENDIF.
+  ENDIF.
 *----------------------------------------------------------------------*
 * At Selection Screen - F4 Help for File
 *----------------------------------------------------------------------*
@@ -175,52 +193,66 @@ ENDFORM.
 *& Form PROCESS_VIEW
 *&---------------------------------------------------------------------*
 FORM process_view.
-  " Select from YRGA_CST_B2B_1 with available columns
-  IF p_ctp IS NOT INITIAL AND s_gasday[] IS NOT INITIAL AND p_mat IS NOT INITIAL.
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE ctp_id = p_ctp
-        AND gas_day IN s_gasday
-        AND ongc_material = p_mat.
-  ELSEIF p_ctp IS NOT INITIAL AND s_gasday[] IS NOT INITIAL.
-*    gas_day ctp_id ongc_material qty_scm gcv ncv
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE ctp_id = p_ctp
-        AND gas_day IN s_gasday.
-  ELSEIF p_ctp IS NOT INITIAL AND p_mat IS NOT INITIAL.
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE ctp_id = p_ctp
-        AND ongc_material = p_mat.
-  ELSEIF s_gasday[] IS NOT INITIAL AND p_mat IS NOT INITIAL.
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE gas_day IN s_gasday
-        AND ongc_material = p_mat.
-  ELSEIF p_ctp IS NOT INITIAL.
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE ctp_id = p_ctp.
-  ELSEIF s_gasday[] IS NOT INITIAL.
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE gas_day IN s_gasday.
-  ELSEIF p_mat IS NOT INITIAL.
-    SELECT gas_day ctp_id ongc_material RECEIVED_ON RECEIVED_at ongc_id qty_scm gcv ncv DATA_SOURCE created_by
-      FROM yrga_cst_b2b_1
-      INTO TABLE gt_view_data
-      WHERE ongc_material = p_mat.
-  ELSE.
-    MESSAGE s000(ygms_msg) WITH 'Please enter at least one selection criterion'.
-    RETURN.
+  DATA: lt_ctp_sel  LIKE s_ctp[],
+        lt_omat_sel LIKE s_omat[],
+        ls_ctp_sel  LIKE LINE OF s_ctp,
+        ls_omat_sel LIKE LINE OF s_omat.
+
+  " Start with directly provided CTP IDs
+  lt_ctp_sel[] = s_ctp[].
+
+  " Convert Location ID → ONGC CTP ID via mapping table
+  IF s_loc[] IS NOT INITIAL.
+    DATA: lt_loc_map TYPE TABLE OF yrga_cst_loc_map.
+    SELECT * FROM yrga_cst_loc_map
+      INTO TABLE lt_loc_map
+      WHERE location_id IN s_loc.
+    IF lt_loc_map IS NOT INITIAL.
+      ls_ctp_sel-sign   = 'I'.
+      ls_ctp_sel-option = 'EQ'.
+      LOOP AT lt_loc_map INTO DATA(ls_loc_map).
+        ls_ctp_sel-low = ls_loc_map-ctp_id.
+        APPEND ls_ctp_sel TO lt_ctp_sel.
+      ENDLOOP.
+    ELSE.
+      MESSAGE s000(ygms_msg) WITH 'No CTP mapping found for given Location IDs'.
+      RETURN.
+    ENDIF.
   ENDIF.
+
+  " Start with directly provided ONGC Materials
+  lt_omat_sel[] = s_omat[].
+
+  " Convert GAIL Material → ONGC Material via mapping table
+  IF s_gmat[] IS NOT INITIAL.
+    DATA: lt_mat_map TYPE TABLE OF yrga_cst_mat_map.
+    SELECT * FROM yrga_cst_mat_map
+      INTO TABLE lt_mat_map
+      WHERE gail_material IN s_gmat.
+    IF lt_mat_map IS NOT INITIAL.
+      ls_omat_sel-sign   = 'I'.
+      ls_omat_sel-option = 'EQ'.
+      LOOP AT lt_mat_map INTO DATA(ls_mat_map).
+        ls_omat_sel-low = ls_mat_map-ongc_material.
+        APPEND ls_omat_sel TO lt_omat_sel.
+      ENDLOOP.
+    ELSE.
+      MESSAGE s000(ygms_msg) WITH 'No ONGC Material mapping found for given GAIL Materials'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " Select from YRGA_CST_B2B_1 using consolidated selection criteria
+  " Gas Day is mandatory (validated at selection screen)
+  SELECT gas_day ctp_id ongc_material
+         received_on received_at ongc_id
+         qty_scm gcv ncv data_source created_by
+    FROM yrga_cst_b2b_1
+    INTO TABLE gt_view_data
+    WHERE gas_day IN s_gasday
+      AND ctp_id IN lt_ctp_sel
+      AND ongc_material IN lt_omat_sel.
+
   IF gt_view_data IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No data found for selection criteria'.
     RETURN.
