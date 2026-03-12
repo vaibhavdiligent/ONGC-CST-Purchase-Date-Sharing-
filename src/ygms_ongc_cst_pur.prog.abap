@@ -33,7 +33,6 @@ TYPES: BEGIN OF ty_view_data,
          qty_scm       TYPE ygms_de_qty_scm,
          gcv           TYPE ygms_de_gcv,
          ncv           TYPE ygms_de_ncv,
-         DATA_SOURCE type YGMS_DE_DATA_SRC,
          data_source_text TYPE char10,
          CREATED_BY type ERNAM,
        END OF ty_view_data.
@@ -246,31 +245,49 @@ FORM process_view.
 
   " Select from YRGA_CST_B2B_1 using consolidated selection criteria
   " Gas Day is mandatory (validated at selection screen)
+  TYPES: BEGIN OF ty_db_data,
+           gas_day       TYPE datum,
+           ctp_id        TYPE ygms_de_ongc_ctp,
+           ongc_material TYPE ygms_de_ongc_mat,
+           received_on   TYPE ygms_de_recieved_on,
+           received_at   TYPE ygms_de_recieved_at,
+           ongc_id       TYPE ygms_de_ongc_id,
+           qty_scm       TYPE ygms_de_qty_scm,
+           gcv           TYPE ygms_de_gcv,
+           ncv           TYPE ygms_de_ncv,
+           data_source   TYPE ygms_de_data_src,
+           created_by    TYPE ernam,
+         END OF ty_db_data.
+  DATA: lt_db TYPE TABLE OF ty_db_data,
+        ls_view TYPE ty_view_data.
+
   SELECT gas_day ctp_id ongc_material
          received_on received_at ongc_id
          qty_scm gcv ncv data_source created_by
     FROM yrga_cst_b2b_1
-    INTO TABLE gt_view_data
+    INTO TABLE lt_db
     WHERE gas_day IN s_gasday
       AND ctp_id IN lt_ctp_sel
       AND ongc_material IN lt_omat_sel.
 
-  IF gt_view_data IS INITIAL.
+  IF lt_db IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No data found for selection criteria'.
     RETURN.
   ENDIF.
 
-  " Convert data source indicator to text
-  FIELD-SYMBOLS: <ls_view> TYPE ty_view_data.
-  LOOP AT gt_view_data ASSIGNING <ls_view>.
-    CASE <ls_view>-data_source.
+  " Map DB data to view data and convert data source to text
+  LOOP AT lt_db INTO DATA(ls_db).
+    CLEAR ls_view.
+    MOVE-CORRESPONDING ls_db TO ls_view.
+    CASE ls_db-data_source.
       WHEN '01'.
-        <ls_view>-data_source_text = 'B2B PI'.
+        ls_view-data_source_text = 'B2B PI'.
       WHEN '02'.
-        <ls_view>-data_source_text = 'Excel'.
+        ls_view-data_source_text = 'Excel'.
       WHEN OTHERS.
-        <ls_view>-data_source_text = <ls_view>-data_source.
+        ls_view-data_source_text = ls_db-data_source.
     ENDCASE.
+    APPEND ls_view TO gt_view_data.
   ENDLOOP.
 
   PERFORM display_view_alv.
@@ -1015,11 +1032,6 @@ FORM display_view_alv.
       TRY.
           lo_column = lo_columns->get_column( 'NCV' ).
           lo_column->set_short_text( 'NCV' ).
-        CATCH cx_salv_not_found.
-      ENDTRY.
-      TRY.
-          lo_column = lo_columns->get_column( 'DATA_SOURCE' ).
-          lo_column->set_visible( abap_false ).
         CATCH cx_salv_not_found.
       ENDTRY.
       TRY.
