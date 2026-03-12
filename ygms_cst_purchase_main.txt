@@ -2923,6 +2923,11 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp ongc_mater state_code,
         ls_pdf_sum TYPE ty_pdf_sum.
   DATA: lv_avg_str TYPE c LENGTH 15.
+  DATA: lt_days    TYPE SORTED TABLE OF sy-datum WITH UNIQUE KEY table_line,
+        lt_day_qty TYPE HASHED TABLE OF yrga_cst_pur WITH UNIQUE KEY ctp ongc_mater state_code gas_day.
+  DATA: lv_day_str TYPE c LENGTH 10,
+        lv_val     TYPE c LENGTH 15,
+        lv_col_pos TYPE i.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
@@ -2930,8 +2935,10 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   WRITE sy-datum TO lv_date_str DD/MM/YYYY.
   WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
 
-  " Build summary aggregation
+  " Build summary aggregation + collect days (same as Excel)
   LOOP AT pt_data INTO ls_pur.
+    COLLECT: ls_pur-gas_day INTO lt_days.
+    INSERT ls_pur INTO TABLE lt_day_qty.
     READ TABLE lt_pdf_sum WITH KEY ctp = ls_pur-ctp ongc_mater = ls_pur-ongc_mater
       state_code = ls_pur-state_code ASSIGNING FIELD-SYMBOL(<fs_psum>).
     IF sy-subrc = 0.
@@ -2961,7 +2968,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       immediately  = ' '
       release      = ' '
       new_list_id  = 'X'
-      line_size    = 200
+      line_size    = 400
       line_count   = 65
     IMPORTING
       out_parameters = ls_params
@@ -2994,8 +3001,16 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           80(15) 'Total Sm3',
           96(12) 'Avg. GCV',
           109(12) 'Avg. NCV'.
+  " Per-day column headers (same as Excel)
+  lv_col_pos = 122.
+  LOOP AT lt_days INTO DATA(lv_hdr_day).
+    WRITE lv_hdr_day TO lv_day_str DD/MM/YYYY.
+    CONDENSE lv_day_str.
+    WRITE AT lv_col_pos(12) lv_day_str.
+    lv_col_pos = lv_col_pos + 13.
+  ENDLOOP.
   FORMAT INTENSIFIED OFF.
-  ULINE AT /5(175).
+  ULINE AT /5(lv_col_pos).
 
   LOOP AT lt_pdf_sum INTO ls_pdf_sum.
     WRITE ls_pdf_sum-total_mbg TO lv_qty_mbg DECIMALS 3.
@@ -3019,7 +3034,23 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
             80(15) lv_qty_scm,
             96(12) lv_gcv,
             109(12) lv_ncv.
-    ULINE AT /5(175).
+    " Per-day Qty in SCM values (same as Excel)
+    lv_col_pos = 122.
+    LOOP AT lt_days INTO DATA(lv_row_day).
+      READ TABLE lt_day_qty WITH KEY ctp = ls_pdf_sum-ctp
+        ongc_mater = ls_pdf_sum-ongc_mater
+        state_code = ls_pdf_sum-state_code
+        gas_day = lv_row_day INTO ls_pur.
+      IF sy-subrc = 0.
+        WRITE ls_pur-qty_in_scm TO lv_val DECIMALS 3.
+        CONDENSE lv_val.
+      ELSE.
+        lv_val = '0.000'.
+      ENDIF.
+      WRITE AT lv_col_pos(12) lv_val.
+      lv_col_pos = lv_col_pos + 13.
+    ENDLOOP.
+    ULINE AT /5(lv_col_pos).
   ENDLOOP.
 
   " ---- Page 2+: Daily Detail ----
