@@ -46,8 +46,8 @@ TYPES: BEGIN OF ty_alv_display,
          material    TYPE ygms_de_gail_mat,
          total_mbg   TYPE p DECIMALS 6,
          total_scm   TYPE p DECIMALS 6,
-         gcv         TYPE p decimals 6,"ygms_de_gcv,
-         ncv         TYPE p decimals 6,"ygms_de_ncv,
+         gcv         TYPE p DECIMALS 6, "ygms_de_gcv,
+         ncv         TYPE p DECIMALS 6, "ygms_de_ncv,
          day01       TYPE p DECIMALS 6,
          day02       TYPE p DECIMALS 6,
          day03       TYPE p DECIMALS 6,
@@ -147,10 +147,11 @@ TYPES: BEGIN OF ty_saved_daily,
          created_by   TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
-         sent_e       TYPE ygms_sent_v,
+         sent_e       TYPE c LENGTH 12,
          sent_by      TYPE ernam,
          sent_on      TYPE datum,
          sent_at      TYPE sy-uzeit,
+         deleted      TYPE flag,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from  TYPE datum,
@@ -169,10 +170,11 @@ TYPES: BEGIN OF ty_saved_fnt,
          created_by TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
-         sent_e       TYPE ygms_sent_v,
+         sent_e       TYPE c LENGTH 12,
          sent_by      TYPE ernam,
          sent_on      TYPE datum,
          sent_at      TYPE sy-uzeit,
+         deleted      TYPE flag,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -202,24 +204,24 @@ TYPES: BEGIN OF ty_out ,
          code    TYPE char20,
          message TYPE char100,
        END OF ty_out .
-  DATA: lv_json_download TYPE string .
-  DATA: lv_token_url     TYPE string,
-        lv_api_get       TYPE string,
-        lv_api_url       TYPE string,
-        lv_client_id     TYPE string,
-        lv_client_secret TYPE string,
-        lv_proxy_host    TYPE string,
-        lv_proxy_service TYPE string,
-        lv_access_token  TYPE string,
-        lv_response      TYPE string,
-        log_data         TYPE string,
-        itab             TYPE TABLE OF ty_out WITH HEADER LINE.
-  DATA: html           TYPE string,
-        lv_http_client TYPE REF TO if_http_client,
-        code           TYPE i,
-        reason         TYPE string.
-  DATA:
-    lo_http_client   TYPE REF TO if_http_client.
+DATA: lv_json_download TYPE string .
+DATA: lv_token_url     TYPE string,
+      lv_api_get       TYPE string,
+      lv_api_url       TYPE string,
+      lv_client_id     TYPE string,
+      lv_client_secret TYPE string,
+      lv_proxy_host    TYPE string,
+      lv_proxy_service TYPE string,
+      lv_access_token  TYPE string,
+      lv_response      TYPE string,
+      log_data         TYPE string,
+      itab             TYPE TABLE OF ty_out WITH HEADER LINE.
+DATA: html           TYPE string,
+      lv_http_client TYPE REF TO if_http_client,
+      code           TYPE i,
+      reason         TYPE string.
+DATA:
+  lo_http_client   TYPE REF TO if_http_client.
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -2112,10 +2114,12 @@ FORM handle_download.
   IF p_dxls IS NOT INITIAL.
     " --- Download as Excel ---
     " Build daily Excel content
-    DATA: lt_daily_xls TYPE solix_tab,
-          lv_daily_sz  TYPE sood-objlen.
+    DATA: lt_daily_xls    TYPE solix_tab,
+          lv_daily_sz_raw TYPE sood-objlen,
+          lv_daily_sz     TYPE i.
     PERFORM build_excel_attachment USING lt_send_data
-                                  CHANGING lt_daily_xls lv_daily_sz.
+                                  CHANGING lt_daily_xls lv_daily_sz_raw.
+    lv_daily_sz = lv_daily_sz_raw.
 
     " Prompt user for daily file save location
     DATA lv_def_daily TYPE string.
@@ -2145,10 +2149,12 @@ FORM handle_download.
 
     " Build fortnightly Excel content
     IF lt_fnt_data IS NOT INITIAL.
-      DATA: lt_fnt_xls TYPE solix_tab,
-            lv_fnt_sz  TYPE sood-objlen.
+      DATA: lt_fnt_xls    TYPE solix_tab,
+            lv_fnt_sz_raw TYPE sood-objlen,
+            lv_fnt_sz     TYPE i.
       PERFORM build_fnt_excel_attachment USING lt_fnt_data
-                                        CHANGING lt_fnt_xls lv_fnt_sz.
+                                        CHANGING lt_fnt_xls lv_fnt_sz_raw.
+      lv_fnt_sz = lv_fnt_sz_raw.
 
       DATA lv_def_fnt TYPE string.
       CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_def_fnt.
@@ -2179,24 +2185,15 @@ FORM handle_download.
 
   ELSEIF p_dpdf IS NOT INITIAL.
     " --- Download as PDF ---
-    " Build daily PDF content (spool-based: returns tline-like data in soli_tab)
-    DATA: lt_daily_pdf    TYPE soli_tab,
-          lv_daily_pdf_sz TYPE sood-objlen.
+    " Build daily PDF content (spool-based)
+    DATA: lt_daily_pdf        TYPE soli_tab,
+          lv_daily_pdf_sz_raw TYPE sood-objlen,
+          lv_daily_pdf_sz     TYPE i.
+    DATA: lt_daily_pdf_raw TYPE TABLE OF tline,
+          lv_daily_pdf_len TYPE i.
     PERFORM build_pdf_attachment USING lt_send_data
-                                CHANGING lt_daily_pdf lv_daily_pdf_sz.
-
-    " Convert soli_tab (255-byte text lines) to solix_tab (binary) for download
-    DATA: lt_daily_pdf_bin TYPE solix_tab.
-    CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
-      EXPORTING
-        line_width_src = 255
-        line_width_dst = 255
-        transfer_bin   = 'X'
-      TABLES
-        content_in     = lt_daily_pdf
-        content_out    = lt_daily_pdf_bin
-      EXCEPTIONS
-        OTHERS         = 1.
+                                CHANGING lt_daily_pdf lv_daily_pdf_sz_raw
+                                         lt_daily_pdf_raw lv_daily_pdf_len.
 
     DATA lv_def_daily_pdf TYPE string.
     CONCATENATE 'Daily_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_daily_pdf.
@@ -2214,34 +2211,27 @@ FORM handle_download.
         user_action       = lv_user_action.
 
     IF lv_user_action = cl_gui_frontend_services=>action_ok.
+      " Use raw tline table directly — avoids Unicode dump with solix_tab
       CALL METHOD cl_gui_frontend_services=>gui_download
         EXPORTING
-          bin_filesize = lv_daily_pdf_sz
+          bin_filesize = lv_daily_pdf_len
           filename     = lv_fullpath
           filetype     = 'BIN'
         CHANGING
-          data_tab     = lt_daily_pdf_bin.
+          data_tab     = lt_daily_pdf_raw.
       MESSAGE s000(ygms_msg) WITH 'Daily PDF downloaded successfully'.
     ENDIF.
 
     " Build fortnightly PDF content
     IF lt_fnt_data IS NOT INITIAL.
-      DATA: lt_fnt_pdf    TYPE soli_tab,
-            lv_fnt_pdf_sz TYPE sood-objlen.
+      DATA: lt_fnt_pdf        TYPE soli_tab,
+            lv_fnt_pdf_sz_raw TYPE sood-objlen,
+            lv_fnt_pdf_sz     TYPE i.
+      DATA: lt_fnt_pdf_raw TYPE TABLE OF tline,
+            lv_fnt_pdf_len TYPE i.
       PERFORM build_fnt_pdf_attachment USING lt_fnt_data
-                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz.
-
-      DATA: lt_fnt_pdf_bin TYPE solix_tab.
-      CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
-        EXPORTING
-          line_width_src = 255
-          line_width_dst = 255
-          transfer_bin   = 'X'
-        TABLES
-          content_in     = lt_fnt_pdf
-          content_out    = lt_fnt_pdf_bin
-        EXCEPTIONS
-          OTHERS         = 1.
+                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz_raw
+                                               lt_fnt_pdf_raw lv_fnt_pdf_len.
 
       DATA lv_def_fnt_pdf TYPE string.
       CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_fnt_pdf.
@@ -2259,13 +2249,14 @@ FORM handle_download.
           user_action       = lv_user_action.
 
       IF lv_user_action = cl_gui_frontend_services=>action_ok.
+        " Use raw tline table directly — avoids Unicode dump with solix_tab
         CALL METHOD cl_gui_frontend_services=>gui_download
           EXPORTING
-            bin_filesize = lv_fnt_pdf_sz
+            bin_filesize = lv_fnt_pdf_len
             filename     = lv_fullpath
             filetype     = 'BIN'
           CHANGING
-            data_tab     = lt_fnt_pdf_bin.
+            data_tab     = lt_fnt_pdf_raw.
         MESSAGE s000(ygms_msg) WITH 'Fortnightly PDF downloaded successfully'.
       ENDIF.
     ENDIF.
@@ -2572,8 +2563,11 @@ FORM send_email USING pt_emails   TYPE string_table
       " Add Daily PDF attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_text, lv_att_size.
+        DATA: lt_dummy_tline TYPE TABLE OF tline,
+              lv_dummy_len   TYPE i.
         PERFORM build_pdf_attachment USING pt_data
-                                    CHANGING lt_att_text lv_att_size.
+                                    CHANGING lt_att_text lv_att_size
+                                             lt_dummy_tline lv_dummy_len.
         CONCATENATE 'Daily CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
         CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
@@ -2599,8 +2593,10 @@ FORM send_email USING pt_emails   TYPE string_table
       " Add Fortnightly PDF attachment if selected
       IF pv_send_pdf = 'X'.
         CLEAR: lt_att_text, lv_att_size.
+        CLEAR: lt_dummy_tline, lv_dummy_len.
         PERFORM build_fnt_pdf_attachment USING pt_fnt_data
-                                        CHANGING lt_att_text lv_att_size.
+                                        CHANGING lt_att_text lv_att_size
+                                                 lt_dummy_tline lv_dummy_len.
         CONCATENATE 'Fortnightly CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
         CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
         lo_document->add_attachment(
@@ -2744,64 +2740,8 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     ENDIF.
     INSERT ls_pur INTO TABLE lt_day_qty.
   ENDLOOP.
-  " ---- Sheet 1: Daily Data ----
+  " ---- Sheet 1: Summary (first sheet) ----
   CONCATENATE lc_xml_hdr lc_wb_open lc_styles
-    '<Worksheet ss:Name="Daily Data"><Table>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
-    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
-    INTO lv_xml.
-  " Header row
-  CONCATENATE lv_xml
-    '<Row ss:StyleID="hdr">'
-    '<Cell><Data ss:Type="String">Gas Day</Data></Cell>'
-    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
-    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
-    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
-    '<Cell><Data ss:Type="String">State</Data></Cell>'
-    '<Cell><Data ss:Type="String">Qty SCM</Data></Cell>'
-    '<Cell><Data ss:Type="String">GCV</Data></Cell>'
-    '<Cell><Data ss:Type="String">NCV</Data></Cell>'
-    '<Cell><Data ss:Type="String">Qty MBG</Data></Cell>'
-    '<Cell><Data ss:Type="String">ONGC ID</Data></Cell>'
-    '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
-    '</Row>'
-    INTO lv_xml.
-  " Data rows
-  LOOP AT pt_data INTO ls_pur.
-    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
-    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
-    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
-    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
-    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
-    CONCATENATE lv_xml
-      '<Row ss:StyleID="dat">'
-      '<Cell><Data ss:Type="String">' lv_gas_day '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-ctp '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-ongc_mater '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-state_code '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-state '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
-      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-ongc_id '</Data></Cell>'
-      '<Cell><Data ss:Type="String">' ls_pur-gail_id '</Data></Cell>'
-      '</Row>'
-      INTO lv_xml.
-  ENDLOOP.
-  CONCATENATE lv_xml '</Table></Worksheet>' INTO lv_xml.
-  " ---- Sheet 2: Summary ----
-  CONCATENATE lv_xml
     '<Worksheet ss:Name="Summary"><Table>'
     '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
     '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
@@ -2878,6 +2818,62 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     ENDLOOP.
     CONCATENATE lv_xml '</Row>' INTO lv_xml.
   ENDLOOP.
+  CONCATENATE lv_xml '</Table></Worksheet>' INTO lv_xml.
+  " ---- Sheet 2: Daily Data ----
+  CONCATENATE lv_xml
+    '<Worksheet ss:Name="Daily Data"><Table>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="75"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="120"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="65"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="80"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    '<Column ss:AutoFitWidth="1" ss:Width="100"/>'
+    INTO lv_xml.
+  " Header row
+  CONCATENATE lv_xml
+    '<Row ss:StyleID="hdr">'
+    '<Cell><Data ss:Type="String">Gas Day</Data></Cell>'
+    '<Cell><Data ss:Type="String">CTP ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC Material</Data></Cell>'
+    '<Cell><Data ss:Type="String">State Code</Data></Cell>'
+    '<Cell><Data ss:Type="String">State</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty SCM</Data></Cell>'
+    '<Cell><Data ss:Type="String">GCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">NCV</Data></Cell>'
+    '<Cell><Data ss:Type="String">Qty MBG</Data></Cell>'
+    '<Cell><Data ss:Type="String">ONGC ID</Data></Cell>'
+    '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
+    '</Row>'
+    INTO lv_xml.
+  " Data rows
+  LOOP AT pt_data INTO ls_pur.
+    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_gas_day, lv_gcv, lv_ncv, lv_qty_scm, lv_qty_mbg.
+    CONCATENATE lv_xml
+      '<Row ss:StyleID="dat">'
+      '<Cell><Data ss:Type="String">' lv_gas_day '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ctp '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ongc_mater '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-state_code '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-state '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_scm '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_gcv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_ncv '</Data></Cell>'
+      '<Cell ss:StyleID="num"><Data ss:Type="Number">' lv_qty_mbg '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-ongc_id '</Data></Cell>'
+      '<Cell><Data ss:Type="String">' ls_pur-gail_id '</Data></Cell>'
+      '</Row>'
+      INTO lv_xml.
+  ENDLOOP.
   CONCATENATE lv_xml '</Table></Worksheet></Workbook>' INTO lv_xml.
   " Convert XML string to xstring then to solix_tab
   DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
@@ -2891,7 +2887,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                          CHANGING ct_content TYPE soli_tab
-                                  cv_size    TYPE sood-objlen.
+                                  cv_size    TYPE sood-objlen
+                                  ct_pdf_raw TYPE STANDARD TABLE
+                                  cv_pdf_len TYPE i.
   DATA: ls_pur     TYPE yrga_cst_pur.
   DATA: lv_gas_day TYPE c LENGTH 10,
         lv_gcv     TYPE c LENGTH 15,
@@ -3101,7 +3099,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     RETURN.
   ENDIF.
 
-  " Convert tline table (134 bytes/line) to solix (255 bytes/line)
+  " Convert tline table (134 bytes/line) to soli (255 bytes/line) for email
   CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
     EXPORTING
       line_width_src = 134
@@ -3114,6 +3112,10 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
+
+  " Also return raw tline table for binary download (avoids Unicode dump)
+  ct_pdf_raw[] = lt_pdf[].
+  cv_pdf_len   = lv_pdf_len.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FNT_EXCEL_ATTACHMENT
@@ -3228,7 +3230,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                               CHANGING ct_content TYPE soli_tab
-                                       cv_size    TYPE sood-objlen.
+                                       cv_size    TYPE sood-objlen
+                                       ct_pdf_raw TYPE STANDARD TABLE
+                                       cv_pdf_len TYPE i.
   DATA: ls_fnt     TYPE yrga_cst_fn_data.
   DATA: lv_date_from     TYPE c LENGTH 10,
         lv_date_to       TYPE c LENGTH 10,
@@ -3348,7 +3352,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     RETURN.
   ENDIF.
 
-  " Convert tline table (134 bytes/line) to solix (255 bytes/line)
+  " Convert tline table (134 bytes/line) to soli (255 bytes/line) for email
   CALL FUNCTION 'SX_TABLE_LINE_WIDTH_CHANGE'
     EXPORTING
       line_width_src = 134
@@ -3361,6 +3365,10 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       OTHERS = 1.
 
   cv_size = lv_pdf_len.
+
+  " Also return raw tline table for binary download (avoids Unicode dump)
+  ct_pdf_raw[] = lt_pdf[].
+  cv_pdf_len   = lv_pdf_len.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND_B2B
@@ -4138,7 +4146,12 @@ FORM fetch_saved_data.
       ls_daily-sent_by = wa_pur-sent_by.
       ls_daily-sent_on = wa_pur-sent_on.
       ls_daily-sent_at = wa_pur-sent_at.
-      ls_daily-sent_e = wa_pur-sent_e.
+      CASE wa_pur-sent_e.
+        WHEN '1'. ls_daily-sent_e = '1 - B2B PI'.
+        WHEN '2'. ls_daily-sent_e = '2 - Email'.
+        WHEN OTHERS. ls_daily-sent_e = wa_pur-sent_e.
+      ENDCASE.
+      ls_daily-deleted = wa_pur-deleted.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
 * else.
@@ -4182,7 +4195,12 @@ FORM fetch_saved_data.
         ls_daily-sent_by = wa_pur-sent_by.
         ls_daily-sent_on = wa_pur-sent_on.
         ls_daily-sent_at = wa_pur-sent_at.
-        ls_daily-sent_e = wa_pur-sent_e.
+        CASE wa_pur-sent_e.
+          WHEN '1'. ls_daily-sent_e = '1 - B2B PI'.
+          WHEN '2'. ls_daily-sent_e = '2 - Email'.
+          WHEN OTHERS. ls_daily-sent_e = wa_pur-sent_e.
+        ENDCASE.
+        ls_daily-deleted = wa_pur-deleted.
         APPEND ls_daily TO gt_saved_daily.
       ENDLOOP.
 *    endif.
@@ -4218,7 +4236,12 @@ FORM fetch_saved_data.
       ls_fnt-sent_by = wa_fnt-sent_by.
       ls_fnt-sent_on = wa_fnt-sent_on.
       ls_fnt-sent_at = wa_fnt-sent_at.
-      ls_fnt-sent_e = wa_fnt-sent_e.
+      CASE wa_fnt-sent_e.
+        WHEN '1'. ls_fnt-sent_e = '1 - B2B PI'.
+        WHEN '2'. ls_fnt-sent_e = '2 - Email'.
+        WHEN OTHERS. ls_fnt-sent_e = wa_fnt-sent_e.
+      ENDCASE.
+      ls_fnt-deleted = wa_fnt-deleted.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
     IF lv_answer = 'J'.
@@ -4251,7 +4274,12 @@ FORM fetch_saved_data.
           ls_fnt-sent_by = wa_fnt-sent_by.
           ls_fnt-sent_on = wa_fnt-sent_on.
           ls_fnt-sent_at = wa_fnt-sent_at.
-          ls_fnt-sent_e = wa_fnt-sent_e.
+          CASE wa_fnt-sent_e.
+            WHEN '1'. ls_fnt-sent_e = '1 - B2B PI'.
+            WHEN '2'. ls_fnt-sent_e = '2 - Email'.
+            WHEN OTHERS. ls_fnt-sent_e = wa_fnt-sent_e.
+          ENDCASE.
+          ls_fnt-deleted = wa_fnt-deleted.
           APPEND ls_fnt TO gt_saved_fnt.
         ENDLOOP.
       ENDIF.
@@ -4509,6 +4537,12 @@ FORM display_saved_daily_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
   ELSE.
     " View Saved Data: show all YRGA_CST_PUR columns except timestamp
     " Layout matches YRGA_CST_PUR table field order
@@ -4639,6 +4673,12 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
     ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
+    ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
@@ -4752,6 +4792,12 @@ FORM display_saved_fnt_alv.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_AT'.
     ls_fieldcat-seltext_l = 'Sent Time'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
@@ -4878,6 +4924,12 @@ FORM display_saved_fnt_alv.
         lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
@@ -5015,7 +5067,7 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
     ENDIF.
   ENDIF.
   " Update sent tracking fields in source tables (B2B API = 1)
-  CONVERT TIME STAMP lv_tstamp TIME ZONE 'IST'
+  CONVERT TIME STAMP lv_tstamp TIME ZONE sy-zonlo
    INTO DATE l_date TIME l_time.
   UPDATE yrga_cst_pur SET sent_e  = '1'
                           sent_by = sy-uname
