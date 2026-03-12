@@ -14,8 +14,8 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>YGMS CST Location Mapping Master Data</ENTRY>
-     <LENGTH>37</LENGTH>
+     <ENTRY>ONGC CST Purchase Location Mapping</ENTRY>
+     <LENGTH>34</LENGTH>
     </item>
     <item>
      <ID>I</ID>
@@ -34,6 +34,24 @@
      <KEY>B02</KEY>
      <ENTRY>View / Delete Location Mapping</ENTRY>
      <LENGTH>31</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_CREATE</KEY>
+     <ENTRY>        Create</ENTRY>
+     <LENGTH>14</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_VIEW</KEY>
+     <ENTRY>        View</ENTRY>
+     <LENGTH>12</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_DELETE</KEY>
+     <ENTRY>        Delete</ENTRY>
+     <LENGTH>14</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

@@ -737,7 +737,7 @@ ENDFORM.
 FORM display_delete_alv.
   gs_layout-zebra             = 'X'.
   gs_layout-colwidth_optimize = 'X'.
-  gs_layout-window_titlebar   = 'Location Mapping - Select records and press Enter to delete'.
+  gs_layout-window_titlebar   = 'Location Mapping - Select records to delete'.
   gs_layout-box_fieldname     = 'SEL'.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
@@ -747,11 +747,24 @@ FORM display_delete_alv.
       i_default                = 'X'
       i_save                   = 'A'
       i_callback_user_command  = 'USER_COMMAND_DELETE'
+      i_callback_pf_status_set = 'SET_PF_STATUS_DELETE'
     TABLES
       t_outtab                 = gt_loc_map
     EXCEPTIONS
       program_error            = 1
       OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_PF_STATUS_DELETE
+*&---------------------------------------------------------------------*
+*& Set PF-STATUS with custom Delete button for delete ALV
+*&---------------------------------------------------------------------*
+FORM set_pf_status_delete USING rt_extab TYPE slis_t_extab.
+* Custom PF-STATUS with Delete button
+* Create in SE41: Program YGMS_CST_LOC_MAP, Status DELETE_STATUS
+* Copy from SAPLKKBL status STANDARD_FULLSCREEN
+* Add pushbutton in application toolbar: FCode = DELETE, Icon = ICON_DELETE, Text = Delete
+  SET PF-STATUS 'DELETE_STATUS' EXCLUDING rt_extab.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form USER_COMMAND_DELETE
@@ -765,7 +778,7 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
         lv_msg      TYPE char200.
   FIELD-SYMBOLS: <ls_map> TYPE ty_loc_map.
   CASE r_ucomm.
-    WHEN '&IC1' OR '&DATA_SAVE'.
+    WHEN 'DELETE' OR '&IC1' OR '&DATA_SAVE'.
 *     Count selected records
       lv_count = 0.
       LOOP AT gt_loc_map ASSIGNING <ls_map> WHERE sel = 'X'.
