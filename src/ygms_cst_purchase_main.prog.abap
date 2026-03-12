@@ -147,7 +147,7 @@ TYPES: BEGIN OF ty_saved_daily,
          created_by   TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
-         sent_e       TYPE ygms_sent_v,
+         sent_e       TYPE c LENGTH 12,
          sent_by      TYPE ernam,
          sent_on      TYPE datum,
          sent_at      TYPE sy-uzeit,
@@ -170,7 +170,7 @@ TYPES: BEGIN OF ty_saved_fnt,
          created_by TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
-         sent_e       TYPE ygms_sent_v,
+         sent_e       TYPE c LENGTH 12,
          sent_by      TYPE ernam,
          sent_on      TYPE datum,
          sent_at      TYPE sy-uzeit,
@@ -4146,7 +4146,11 @@ FORM fetch_saved_data.
       ls_daily-sent_by = wa_pur-sent_by.
       ls_daily-sent_on = wa_pur-sent_on.
       ls_daily-sent_at = wa_pur-sent_at.
-      ls_daily-sent_e = wa_pur-sent_e.
+      CASE wa_pur-sent_e.
+        WHEN '1'. ls_daily-sent_e = '1 - B2B PI'.
+        WHEN '2'. ls_daily-sent_e = '2 - Email'.
+        WHEN OTHERS. ls_daily-sent_e = wa_pur-sent_e.
+      ENDCASE.
       ls_daily-deleted = wa_pur-deleted.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
@@ -4191,7 +4195,11 @@ FORM fetch_saved_data.
         ls_daily-sent_by = wa_pur-sent_by.
         ls_daily-sent_on = wa_pur-sent_on.
         ls_daily-sent_at = wa_pur-sent_at.
-        ls_daily-sent_e = wa_pur-sent_e.
+        CASE wa_pur-sent_e.
+          WHEN '1'. ls_daily-sent_e = '1 - B2B PI'.
+          WHEN '2'. ls_daily-sent_e = '2 - Email'.
+          WHEN OTHERS. ls_daily-sent_e = wa_pur-sent_e.
+        ENDCASE.
         ls_daily-deleted = wa_pur-deleted.
         APPEND ls_daily TO gt_saved_daily.
       ENDLOOP.
@@ -4228,7 +4236,11 @@ FORM fetch_saved_data.
       ls_fnt-sent_by = wa_fnt-sent_by.
       ls_fnt-sent_on = wa_fnt-sent_on.
       ls_fnt-sent_at = wa_fnt-sent_at.
-      ls_fnt-sent_e = wa_fnt-sent_e.
+      CASE wa_fnt-sent_e.
+        WHEN '1'. ls_fnt-sent_e = '1 - B2B PI'.
+        WHEN '2'. ls_fnt-sent_e = '2 - Email'.
+        WHEN OTHERS. ls_fnt-sent_e = wa_fnt-sent_e.
+      ENDCASE.
       ls_fnt-deleted = wa_fnt-deleted.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
@@ -4262,7 +4274,11 @@ FORM fetch_saved_data.
           ls_fnt-sent_by = wa_fnt-sent_by.
           ls_fnt-sent_on = wa_fnt-sent_on.
           ls_fnt-sent_at = wa_fnt-sent_at.
-          ls_fnt-sent_e = wa_fnt-sent_e.
+          CASE wa_fnt-sent_e.
+            WHEN '1'. ls_fnt-sent_e = '1 - B2B PI'.
+            WHEN '2'. ls_fnt-sent_e = '2 - Email'.
+            WHEN OTHERS. ls_fnt-sent_e = wa_fnt-sent_e.
+          ENDCASE.
           ls_fnt-deleted = wa_fnt-deleted.
           APPEND ls_fnt TO gt_saved_fnt.
         ENDLOOP.
@@ -4657,7 +4673,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
+    ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'DELETED'.
@@ -4909,7 +4925,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
+    ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'DELETED'.
