@@ -30,7 +30,6 @@ TYPES: BEGIN OF ty_loc_map,
          changed_on  TYPE yrga_cst_loc_map-changed_on,
          changed_time TYPE yrga_cst_loc_map-changed_time,
        END OF ty_loc_map.
-
 TYPES: BEGIN OF ty_error,
          msgty TYPE symsgty,
          msgtx TYPE char200,
@@ -57,14 +56,12 @@ SELECTION-SCREEN BEGIN OF BLOCK b00 WITH FRAME TITLE TEXT-b00.
               p_view   RADIOBUTTON GROUP rb1,
               p_delete RADIOBUTTON GROUP rb1.
 SELECTION-SCREEN END OF BLOCK b00.
-
 SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
   PARAMETERS: p_ctp_id TYPE yrga_cst_loc_map-ongc_ctp_id MODIF ID CRE,
               p_loc_id TYPE yrga_cst_loc_map-gail_loc_id MODIF ID CRE,
               p_vfrom  TYPE yrga_cst_loc_map-valid_from   MODIF ID CRE,
               p_vto    TYPE yrga_cst_loc_map-valid_to     MODIF ID CRE.
 SELECTION-SCREEN END OF BLOCK b01.
-
 SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
   PARAMETERS: p_ctp_v  TYPE yrga_cst_loc_map-ongc_ctp_id MODIF ID VDL,
               p_loc_v  TYPE yrga_cst_loc_map-gail_loc_id MODIF ID VDL.
@@ -127,7 +124,6 @@ FORM create_mapping.
         lv_s_to       TYPE datum,
         lv_prev_day   TYPE datum,
         lv_answer     TYPE char1.
-
 * Mandatory field checks
   IF p_ctp_id IS INITIAL.
     CALL FUNCTION 'POPUP_TO_INFORM'
@@ -153,7 +149,6 @@ FORM create_mapping.
         txt2  = space.
     RETURN.
   ENDIF.
-
 * Validate Valid From is start of a fortnight (1st or 16th)
   lv_valid_day = p_vfrom+6(2).
   IF lv_valid_day NE '01' AND lv_valid_day NE '16'.
@@ -164,10 +159,8 @@ FORM create_mapping.
         txt2  = space.
     RETURN.
   ENDIF.
-
   lv_s_from = p_vfrom.
   lv_s_to   = p_vto.
-
 * 8.1.1 Validate GAIL Location ID against OIFSPBL
   CLEAR lv_pblnr.
   SELECT SINGLE pblnr FROM oifspbl
@@ -184,9 +177,10 @@ FORM create_mapping.
         txt2  = space.
     RETURN.
   ENDIF.
-
 * 8.1.2 Check if mapping already exists
-  DATA: lv_deleted TYPE yrga_cst_loc_map-deleted.
+  DATA: lv_deleted    TYPE yrga_cst_loc_map-deleted,
+        lv_reactivate TYPE char1.
+  CLEAR lv_reactivate.
   SELECT SINGLE deleted FROM yrga_cst_loc_map
     INTO lv_deleted
     WHERE ongc_ctp_id = p_ctp_id
@@ -201,44 +195,23 @@ FORM create_mapping.
           txt2  = space.
       RETURN.
     ELSE.
-*     Deleted mapping exists - reactivate it
-      UPDATE yrga_cst_loc_map
-        SET valid_from    = p_vfrom
-            valid_to      = p_vto
-            deleted       = space
-            changed_by    = sy-uname
-            changed_on    = sy-datum
-            changed_time  = sy-uzeit
-        WHERE ongc_ctp_id = p_ctp_id
-          AND gail_loc_id = p_loc_id.
-      IF sy-subrc = 0.
-        COMMIT WORK.
-        CALL FUNCTION 'POPUP_TO_INFORM'
-          EXPORTING
-            titel = 'Success'
-            txt1  = 'Location mapping created successfully.'
-            txt2  = space.
-      ELSE.
-        ROLLBACK WORK.
-        CALL FUNCTION 'POPUP_TO_INFORM'
-          EXPORTING
-            titel = 'Error'
-            txt1  = 'Error creating the mapping record. Please try again.'
-            txt2  = space.
-      ENDIF.
-      RETURN.
+*     Deleted mapping exists - mark for reactivation (don't return yet)
+      lv_reactivate = 'X'.
     ENDIF.
   ENDIF.
-
-* 8.1.3 Fetch all records for ONGC CTP ID where DELIND ≠ X
+* 8.1.3 Fetch all active records for ONGC CTP ID (exclude the record being reactivated)
   SELECT * FROM yrga_cst_loc_map
     INTO TABLE lt_existing
     WHERE ongc_ctp_id = p_ctp_id
+      AND gail_loc_id NE p_loc_id
       AND deleted NE 'X'.
-
-* 8.1.4 If no records found, create directly
+* 8.1.4 If no other active records, create/reactivate directly
   IF lt_existing IS INITIAL.
-    PERFORM insert_mapping_record.
+    IF lv_reactivate = 'X'.
+      PERFORM reactivate_mapping_record.
+    ELSE.
+      PERFORM insert_mapping_record.
+    ENDIF.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Success'
@@ -246,7 +219,6 @@ FORM create_mapping.
         txt2  = space.
     RETURN.
   ENDIF.
-
 * 8.1.5 Validate against existing records
   lv_validation = 'P'. "P = Passed
   LOOP AT lt_existing INTO ls_existing.
@@ -261,7 +233,6 @@ FORM create_mapping.
       lv_validation = 'F'. "F = Failed
       EXIT.
     ENDIF.
-
 *   8.1.5.c: S_FROM before existing start AND S_TO overlaps existing start
     IF ( lv_s_from <= ls_existing-valid_from )
        AND ( lv_s_to >= ls_existing-valid_from AND lv_s_to < ls_existing-valid_to ).
@@ -273,7 +244,6 @@ FORM create_mapping.
       lv_validation = 'F'.
       EXIT.
     ENDIF.
-
 *   8.1.5.d: S_FROM before existing start AND S_TO after existing end
     IF ( lv_s_from <= ls_existing-valid_from )
        AND ( lv_s_to >= ls_existing-valid_to ).
@@ -286,19 +256,16 @@ FORM create_mapping.
       EXIT.
     ENDIF.
   ENDLOOP.
-
 * 8.1.5.e: If validation failed, exit
   IF lv_validation = 'F'.
     RETURN.
   ENDIF.
-
 * 8.1.6 Adjust overlapping existing records
   LOOP AT lt_existing INTO ls_existing.
 *   8.1.6.b: No overlap - skip
     IF lv_s_from > ls_existing-valid_to OR lv_s_to < ls_existing-valid_from.
       CONTINUE.
     ENDIF.
-
 *   8.1.6.c: S_FROM inside existing range (tail overlap) - truncate existing
     IF ( lv_s_from > ls_existing-valid_from AND lv_s_from <= ls_existing-valid_to )
        AND ( lv_s_to >= ls_existing-valid_to ).
@@ -312,9 +279,12 @@ FORM create_mapping.
           AND gail_loc_id = ls_existing-gail_loc_id.
     ENDIF.
   ENDLOOP.
-
-* 8.1.7 Create the new mapping record
-  PERFORM insert_mapping_record.
+* 8.1.7 Create or reactivate the mapping record
+  IF lv_reactivate = 'X'.
+    PERFORM reactivate_mapping_record.
+  ELSE.
+    PERFORM insert_mapping_record.
+  ENDIF.
   CALL FUNCTION 'POPUP_TO_INFORM'
     EXPORTING
       titel = 'Success'
@@ -350,6 +320,32 @@ FORM insert_mapping_record.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form REACTIVATE_MAPPING_RECORD
+*&---------------------------------------------------------------------*
+*& Reactivate a previously deleted record in YRGA_CST_LOC_MAP
+*&---------------------------------------------------------------------*
+FORM reactivate_mapping_record.
+  UPDATE yrga_cst_loc_map
+    SET valid_from    = p_vfrom
+        valid_to      = p_vto
+        deleted       = space
+        changed_by    = sy-uname
+        changed_on    = sy-datum
+        changed_time  = sy-uzeit
+    WHERE ongc_ctp_id = p_ctp_id
+      AND gail_loc_id = p_loc_id.
+  IF sy-subrc = 0.
+    COMMIT WORK.
+  ELSE.
+    ROLLBACK WORK.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Error'
+        txt1  = 'Error creating the mapping record. Please try again.'
+        txt2  = space.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form VIEW_MAPPING
 *&---------------------------------------------------------------------*
 *& View location mapping records
@@ -357,7 +353,6 @@ ENDFORM.
 FORM view_mapping.
   DATA: lv_pblnr TYPE oifspbl-pblnr,
         lv_msg   TYPE char200.
-
 * 8.2.1 Validate GAIL Location ID if provided
   IF p_loc_v IS NOT INITIAL.
     CLEAR lv_pblnr.
@@ -376,7 +371,6 @@ FORM view_mapping.
       RETURN.
     ENDIF.
   ENDIF.
-
 * 8.2.2 / 8.2.3 Fetch mappings based on input
   CLEAR gt_loc_map.
   IF p_ctp_v IS NOT INITIAL AND p_loc_v IS NOT INITIAL.
@@ -409,7 +403,6 @@ FORM view_mapping.
       FROM yrga_cst_loc_map
       INTO CORRESPONDING FIELDS OF TABLE gt_loc_map.
   ENDIF.
-
   IF gt_loc_map IS INITIAL.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
@@ -418,7 +411,6 @@ FORM view_mapping.
         txt2  = space.
     RETURN.
   ENDIF.
-
   PERFORM build_fieldcat_view.
   PERFORM display_view_alv.
 ENDFORM.
@@ -430,7 +422,6 @@ ENDFORM.
 FORM delete_mapping.
   DATA: lv_pblnr TYPE oifspbl-pblnr,
         lv_msg   TYPE char200.
-
 * 8.3.1 Validate GAIL Location ID if provided
   IF p_loc_v IS NOT INITIAL.
     CLEAR lv_pblnr.
@@ -449,7 +440,6 @@ FORM delete_mapping.
       RETURN.
     ENDIF.
   ENDIF.
-
 * 8.3.2 Fetch mappings where DELIND ≠ X
   CLEAR gt_loc_map.
   IF p_ctp_v IS NOT INITIAL AND p_loc_v IS NOT INITIAL.
@@ -485,7 +475,6 @@ FORM delete_mapping.
       INTO CORRESPONDING FIELDS OF TABLE gt_loc_map
       WHERE deleted NE 'X'.
   ENDIF.
-
   IF gt_loc_map IS INITIAL.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
@@ -494,7 +483,6 @@ FORM delete_mapping.
         txt2  = space.
     RETURN.
   ENDIF.
-
   PERFORM build_fieldcat_delete.
   PERFORM display_delete_alv.
 ENDFORM.
@@ -507,7 +495,6 @@ FORM build_fieldcat_view.
   DATA: lv_col TYPE i.
   CLEAR gt_fieldcat.
   lv_col = 0.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -517,7 +504,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'CTP ID'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -527,7 +513,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Loc ID'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -537,7 +522,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'From'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -547,7 +531,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'To'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -557,7 +540,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Cr. By'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -567,7 +549,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Cr. On'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -577,7 +558,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Cr. At'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -587,7 +567,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Del'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -597,7 +576,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Ch. By'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -607,7 +585,6 @@ FORM build_fieldcat_view.
   gs_fieldcat-seltext_s = 'Ch. On'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -627,7 +604,6 @@ FORM build_fieldcat_delete.
   DATA: lv_col TYPE i.
   CLEAR gt_fieldcat.
   lv_col = 0.
-
 * 8.3.3 Checkbox for selection
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
@@ -640,7 +616,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-edit      = 'X'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -650,7 +625,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'CTP ID'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -660,7 +634,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'Loc ID'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -670,7 +643,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'From'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -680,7 +652,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'To'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -690,7 +661,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'Cr. By'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -700,7 +670,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'Cr. On'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -710,7 +679,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'Cr. At'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -720,7 +688,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'Ch. By'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -730,7 +697,6 @@ FORM build_fieldcat_delete.
   gs_fieldcat-seltext_s = 'Ch. On'.
   gs_fieldcat-tabname   = 'GT_LOC_MAP'.
   APPEND gs_fieldcat TO gt_fieldcat.
-
   lv_col = lv_col + 1.
   CLEAR gs_fieldcat.
   gs_fieldcat-col_pos   = lv_col.
@@ -771,7 +737,7 @@ ENDFORM.
 FORM display_delete_alv.
   gs_layout-zebra             = 'X'.
   gs_layout-colwidth_optimize = 'X'.
-  gs_layout-window_titlebar   = 'Location Mapping - Select records and press Enter to delete'.
+  gs_layout-window_titlebar   = 'Location Mapping - Select records to delete'.
   gs_layout-box_fieldname     = 'SEL'.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
@@ -781,11 +747,24 @@ FORM display_delete_alv.
       i_default                = 'X'
       i_save                   = 'A'
       i_callback_user_command  = 'USER_COMMAND_DELETE'
+      i_callback_pf_status_set = 'SET_PF_STATUS_DELETE'
     TABLES
       t_outtab                 = gt_loc_map
     EXCEPTIONS
       program_error            = 1
       OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_PF_STATUS_DELETE
+*&---------------------------------------------------------------------*
+*& Set PF-STATUS with custom Delete button for delete ALV
+*&---------------------------------------------------------------------*
+FORM set_pf_status_delete USING rt_extab TYPE slis_t_extab.
+* Custom PF-STATUS with Delete button
+* Create in SE41: Program YGMS_CST_LOC_MAP, Status DELETE_STATUS
+* Copy from SAPLKKBL status STANDARD_FULLSCREEN
+* Add pushbutton in application toolbar: FCode = DELETE, Icon = ICON_DELETE, Text = Delete
+  SET PF-STATUS 'DELETE_STATUS' EXCLUDING rt_extab.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form USER_COMMAND_DELETE
@@ -798,15 +777,13 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
         lv_count    TYPE i,
         lv_msg      TYPE char200.
   FIELD-SYMBOLS: <ls_map> TYPE ty_loc_map.
-
   CASE r_ucomm.
-    WHEN '&IC1' OR '&DATA_SAVE'.
+    WHEN 'DELETE' OR '&IC1' OR '&DATA_SAVE'.
 *     Count selected records
       lv_count = 0.
       LOOP AT gt_loc_map ASSIGNING <ls_map> WHERE sel = 'X'.
         lv_count = lv_count + 1.
       ENDLOOP.
-
       IF lv_count = 0.
         CALL FUNCTION 'POPUP_TO_INFORM'
           EXPORTING
@@ -815,7 +792,6 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
             txt2  = space.
         RETURN.
       ENDIF.
-
 *     8.3.4 Confirmation pop-up
       CALL FUNCTION 'POPUP_TO_CONFIRM'
         EXPORTING
@@ -828,7 +804,6 @@ FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
           default_button = '2'
         IMPORTING
           answer         = lv_answer.
-
       IF lv_answer = '1'.
 *       8.3.4 / 8.3.5 Set deletion flag and update changed fields
         LOOP AT gt_loc_map ASSIGNING <ls_map> WHERE sel = 'X'.
