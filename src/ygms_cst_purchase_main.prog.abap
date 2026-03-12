@@ -46,8 +46,8 @@ TYPES: BEGIN OF ty_alv_display,
          material    TYPE ygms_de_gail_mat,
          total_mbg   TYPE p DECIMALS 6,
          total_scm   TYPE p DECIMALS 6,
-         gcv         TYPE p decimals 6,"ygms_de_gcv,
-         ncv         TYPE p decimals 6,"ygms_de_ncv,
+         gcv         TYPE p DECIMALS 6, "ygms_de_gcv,
+         ncv         TYPE p DECIMALS 6, "ygms_de_ncv,
          day01       TYPE p DECIMALS 6,
          day02       TYPE p DECIMALS 6,
          day03       TYPE p DECIMALS 6,
@@ -151,6 +151,7 @@ TYPES: BEGIN OF ty_saved_daily,
          sent_by      TYPE ernam,
          sent_on      TYPE datum,
          sent_at      TYPE sy-uzeit,
+         deleted      TYPE flag,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from  TYPE datum,
@@ -173,6 +174,7 @@ TYPES: BEGIN OF ty_saved_fnt,
          sent_by      TYPE ernam,
          sent_on      TYPE datum,
          sent_at      TYPE sy-uzeit,
+         deleted      TYPE flag,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -202,24 +204,24 @@ TYPES: BEGIN OF ty_out ,
          code    TYPE char20,
          message TYPE char100,
        END OF ty_out .
-  DATA: lv_json_download TYPE string .
-  DATA: lv_token_url     TYPE string,
-        lv_api_get       TYPE string,
-        lv_api_url       TYPE string,
-        lv_client_id     TYPE string,
-        lv_client_secret TYPE string,
-        lv_proxy_host    TYPE string,
-        lv_proxy_service TYPE string,
-        lv_access_token  TYPE string,
-        lv_response      TYPE string,
-        log_data         TYPE string,
-        itab             TYPE TABLE OF ty_out WITH HEADER LINE.
-  DATA: html           TYPE string,
-        lv_http_client TYPE REF TO if_http_client,
-        code           TYPE i,
-        reason         TYPE string.
-  DATA:
-    lo_http_client   TYPE REF TO if_http_client.
+DATA: lv_json_download TYPE string .
+DATA: lv_token_url     TYPE string,
+      lv_api_get       TYPE string,
+      lv_api_url       TYPE string,
+      lv_client_id     TYPE string,
+      lv_client_secret TYPE string,
+      lv_proxy_host    TYPE string,
+      lv_proxy_service TYPE string,
+      lv_access_token  TYPE string,
+      lv_response      TYPE string,
+      log_data         TYPE string,
+      itab             TYPE TABLE OF ty_out WITH HEADER LINE.
+DATA: html           TYPE string,
+      lv_http_client TYPE REF TO if_http_client,
+      code           TYPE i,
+      reason         TYPE string.
+DATA:
+  lo_http_client   TYPE REF TO if_http_client.
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
@@ -4145,6 +4147,7 @@ FORM fetch_saved_data.
       ls_daily-sent_on = wa_pur-sent_on.
       ls_daily-sent_at = wa_pur-sent_at.
       ls_daily-sent_e = wa_pur-sent_e.
+      ls_daily-deleted = wa_pur-deleted.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
 * else.
@@ -4189,6 +4192,7 @@ FORM fetch_saved_data.
         ls_daily-sent_on = wa_pur-sent_on.
         ls_daily-sent_at = wa_pur-sent_at.
         ls_daily-sent_e = wa_pur-sent_e.
+        ls_daily-deleted = wa_pur-deleted.
         APPEND ls_daily TO gt_saved_daily.
       ENDLOOP.
 *    endif.
@@ -4225,6 +4229,7 @@ FORM fetch_saved_data.
       ls_fnt-sent_on = wa_fnt-sent_on.
       ls_fnt-sent_at = wa_fnt-sent_at.
       ls_fnt-sent_e = wa_fnt-sent_e.
+      ls_fnt-deleted = wa_fnt-deleted.
       APPEND ls_fnt TO gt_saved_fnt.
     ENDLOOP.
     IF lv_answer = 'J'.
@@ -4258,6 +4263,7 @@ FORM fetch_saved_data.
           ls_fnt-sent_on = wa_fnt-sent_on.
           ls_fnt-sent_at = wa_fnt-sent_at.
           ls_fnt-sent_e = wa_fnt-sent_e.
+          ls_fnt-deleted = wa_fnt-deleted.
           APPEND ls_fnt TO gt_saved_fnt.
         ENDLOOP.
       ENDIF.
@@ -4515,6 +4521,12 @@ FORM display_saved_daily_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
   ELSE.
     " View Saved Data: show all YRGA_CST_PUR columns except timestamp
     " Layout matches YRGA_CST_PUR table field order
@@ -4647,6 +4659,12 @@ FORM display_saved_daily_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
@@ -4758,6 +4776,12 @@ FORM display_saved_fnt_alv.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_AT'.
     ls_fieldcat-seltext_l = 'Sent Time'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
@@ -4884,6 +4908,12 @@ FORM display_saved_fnt_alv.
         lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deletion flag'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
