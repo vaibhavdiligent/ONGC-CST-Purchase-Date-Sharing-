@@ -113,6 +113,7 @@ AT SELECTION-SCREEN OUTPUT.
 * At Selection Screen - Validation
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
+  CHECK sy-ucomm = 'ONLI'.
   IF p_view = abap_true.
     IF s_gasday[] IS INITIAL.
       MESSAGE e000(ygms_msg) WITH 'Gas Day is mandatory for View mode'.
