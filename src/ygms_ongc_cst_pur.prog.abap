@@ -34,6 +34,7 @@ TYPES: BEGIN OF ty_view_data,
          gcv           TYPE ygms_de_gcv,
          ncv           TYPE ygms_de_ncv,
          DATA_SOURCE type YGMS_DE_DATA_SRC,
+         data_source_text TYPE char10,
          CREATED_BY type ERNAM,
        END OF ty_view_data.
 TYPES: BEGIN OF ty_loc_error,
@@ -258,6 +259,20 @@ FORM process_view.
     MESSAGE s000(ygms_msg) WITH 'No data found for selection criteria'.
     RETURN.
   ENDIF.
+
+  " Convert data source indicator to text
+  FIELD-SYMBOLS: <ls_view> TYPE ty_view_data.
+  LOOP AT gt_view_data ASSIGNING <ls_view>.
+    CASE <ls_view>-data_source.
+      WHEN '01'.
+        <ls_view>-data_source_text = 'B2B PI'.
+      WHEN '02'.
+        <ls_view>-data_source_text = 'Excel'.
+      WHEN OTHERS.
+        <ls_view>-data_source_text = <ls_view>-data_source.
+    ENDCASE.
+  ENDLOOP.
+
   PERFORM display_view_alv.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -1004,7 +1019,13 @@ FORM display_view_alv.
       ENDTRY.
       TRY.
           lo_column = lo_columns->get_column( 'DATA_SOURCE' ).
-          lo_column->set_short_text( 'Indicator' ).
+          lo_column->set_visible( abap_false ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'DATA_SOURCE_TEXT' ).
+          lo_column->set_short_text( 'Data Src' ).
+          lo_column->set_medium_text( 'Data Source' ).
         CATCH cx_salv_not_found.
       ENDTRY.
       TRY.
