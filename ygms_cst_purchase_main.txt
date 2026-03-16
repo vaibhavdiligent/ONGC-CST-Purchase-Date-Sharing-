@@ -329,22 +329,6 @@ CLASS lcl_event_handler IMPLEMENTATION.
               lv_day_edit     TYPE abap_bool,
               lv_new_day_edit TYPE abap_bool,
               ls_style        TYPE lvc_s_styl.
-        " Save exclude flags before refresh
-        TYPES: BEGIN OF lty_exclude_save,
-                 location_id TYPE ygms_de_loc_id,
-                 state_code  TYPE regio,
-                 material    TYPE ygms_de_gail_mat,
-                 exclude     TYPE c LENGTH 1,
-               END OF lty_exclude_save.
-        DATA: lt_excl_save TYPE TABLE OF lty_exclude_save,
-              ls_excl_save TYPE lty_exclude_save.
-        LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
-          ls_excl_save-location_id = gs_alv_display-location_id.
-          ls_excl_save-state_code  = gs_alv_display-state_code.
-          ls_excl_save-material    = gs_alv_display-material.
-          ls_excl_save-exclude     = gs_alv_display-exclude.
-          APPEND ls_excl_save TO lt_excl_save.
-        ENDLOOP.
         " Get ALV grid reference
         CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
           IMPORTING
@@ -362,15 +346,8 @@ CLASS lcl_event_handler IMPLEMENTATION.
         PERFORM map_material_names.
         PERFORM fetch_data_yrxr098.
         PERFORM build_alv_display_table.
-        " Restore exclude flags after rebuild
-        LOOP AT lt_excl_save INTO ls_excl_save.
-          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore_cls>)
-            WHERE location_id = ls_excl_save-location_id
-              AND state_code  = ls_excl_save-state_code
-              AND material    = ls_excl_save-material.
-            <fs_restore_cls>-exclude = ls_excl_save-exclude.
-          ENDLOOP.
-        ENDLOOP.
+        " Apply exclusion from YRGA_CST_EXCLUDE master (replaces manual save/restore)
+        PERFORM apply_exclusion_from_master.
         PERFORM handle_allocate.
         IF lv_day_edit = 'X'.
           PERFORM handle_edit.
@@ -397,14 +374,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
         IF sy-subrc = 0.
           <fs_field> = ls_mod_cell-value.
         ENDIF.
-        " When Exclude checkbox changes, apply to all rows of the same state within that location
-        IF ls_mod_cell-fieldname = 'EXCLUDE'.
-          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_state_row>)
-            WHERE "location_id = <fs_row>-location_id
-              state_code  = <fs_row>-state_code.
-            <fs_state_row>-exclude = <fs_row>-exclude.
-          ENDLOOP.
-        ENDIF.
+        " Exclude checkbox is now read-only - controlled by YRGA_CST_EXCLUDE master table
       ENDIF.
     ENDLOOP.
     " Now recalculate totals
@@ -477,11 +447,22 @@ START-OF-SELECTION.
   ELSE.
     PERFORM fetch_b2b_data.
     CHECK gt_gas_receipt IS NOT INITIAL.
+    " Validate calorific values before proceeding (Feature 2)
+    IF p_view IS INITIAL.
+      DATA: lv_cv_valid TYPE abap_bool.
+      PERFORM validate_cv_data CHANGING lv_cv_valid.
+      IF lv_cv_valid = abap_false.
+        MESSAGE s000(ygms_msg) WITH 'CV validation failed. Program cannot proceed.'.
+        RETURN.
+      ENDIF.
+    ENDIF.
     PERFORM map_location_ids.
     PERFORM map_material_names.
     PERFORM fetch_data_yrxr098.
     IF p_view IS INITIAL.
       PERFORM build_alv_display_table.
+      " Apply exclusion logic from YRGA_CST_EXCLUDE master (Feature 1)
+      PERFORM apply_exclusion_from_master.
     ELSE.
       " View -> Allocation Details: same as existing view logic
       PERFORM build_alv_display_table_view.
@@ -740,9 +721,7 @@ FORM display_editable_alv.
   ls_fieldcat-fieldname = 'EXCLUDE'.
   ls_fieldcat-coltext   = 'Exclude'.
   ls_fieldcat-checkbox  = abap_true.
-  IF p_view IS INITIAL.
-    ls_fieldcat-edit      = abap_true.
-  ENDIF.
+  ls_fieldcat-edit      = abap_false.  " Always disabled - controlled by YRGA_CST_EXCLUDE master
   ls_fieldcat-outputlen = 7.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
@@ -957,22 +936,6 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
             lv_day_edit     TYPE abap_bool,
             lv_new_day_edit TYPE abap_bool,
             ls_style        TYPE lvc_s_styl.
-      " Save exclude flags before refresh
-      TYPES: BEGIN OF ty_exclude_save,
-               location_id TYPE ygms_de_loc_id,
-               state_code  TYPE regio,
-               material    TYPE ygms_de_gail_mat,
-               exclude     TYPE c LENGTH 1,
-             END OF ty_exclude_save.
-      DATA: lt_exclude_save TYPE TABLE OF ty_exclude_save,
-            ls_exclude_save TYPE ty_exclude_save.
-      LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
-        ls_exclude_save-location_id = gs_alv_display-location_id.
-        ls_exclude_save-state_code  = gs_alv_display-state_code.
-        ls_exclude_save-material    = gs_alv_display-material.
-        ls_exclude_save-exclude     = gs_alv_display-exclude.
-        APPEND ls_exclude_save TO lt_exclude_save.
-      ENDLOOP.
       " Get ALV grid reference
       CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
         IMPORTING
@@ -990,15 +953,8 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
       PERFORM map_material_names.
       PERFORM fetch_data_yrxr098.
       PERFORM build_alv_display_table.
-      " Restore exclude flags after rebuild
-      LOOP AT lt_exclude_save INTO ls_exclude_save.
-        LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore>)
-          WHERE location_id = ls_exclude_save-location_id
-            AND state_code  = ls_exclude_save-state_code
-            AND material    = ls_exclude_save-material.
-          <fs_restore>-exclude = ls_exclude_save-exclude.
-        ENDLOOP.
-      ENDLOOP.
+      " Apply exclusion from YRGA_CST_EXCLUDE master (replaces manual save/restore)
+      PERFORM apply_exclusion_from_master.
       PERFORM handle_allocate.
       IF lv_day_edit = 'X'.
         PERFORM handle_edit.
@@ -2044,7 +2000,9 @@ ENDFORM.
 FORM handle_reset.
   CLEAR gt_alv_display.
   PERFORM build_alv_display_table.
-  " 2.3d: Enable checkboxes whenever reset button is clicked
+  " Re-apply exclusion from master table (reset should NOT clear exclude flags)
+  PERFORM apply_exclusion_from_master.
+  " Keep exclude checkbox disabled, disable DAY columns on reset
   DATA: lr_grid_reset TYPE REF TO cl_gui_alv_grid,
         lt_fcat_reset TYPE lvc_t_fcat.
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -2054,7 +2012,7 @@ FORM handle_reset.
     lr_grid_reset->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat_reset ).
     LOOP AT lt_fcat_reset ASSIGNING FIELD-SYMBOL(<fs_fcat_reset>).
       IF <fs_fcat_reset>-fieldname = 'EXCLUDE'.
-        <fs_fcat_reset>-edit = abap_true.
+        <fs_fcat_reset>-edit = abap_false.  " Always disabled
       ENDIF.
       " Also disable DAY column editing on reset
       IF <fs_fcat_reset>-fieldname CP 'DAY*'.
@@ -5058,4 +5016,218 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
   lv_count_d = lines( lt_b2b_2 ).
   lv_count_f = lines( lt_b2b_3 ).
   MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form APPLY_EXCLUSION_FROM_MASTER
+*& Reads YRGA_CST_EXCLUDE master table and auto-sets exclude flag
+*& on matching State Code-Location ID-Material rows in gt_alv_display.
+*& Exclude checkboxes are always disabled (read-only).
+*&---------------------------------------------------------------------*
+FORM apply_exclusion_from_master.
+  TYPES: BEGIN OF lty_excl_master,
+           state_code TYPE regio,
+           location   TYPE ygms_de_loc_id,
+           material   TYPE ygms_de_gail_mat,
+           time_stamp TYPE char14,
+           valid_from TYPE datum,
+           valid_to   TYPE datum,
+           deleted    TYPE ygms_deleted,
+         END OF lty_excl_master.
+  DATA: lt_excl_master TYPE TABLE OF lty_excl_master,
+        ls_excl_master TYPE lty_excl_master.
+  " 10.4.1: Fetch records from YRGA_CST_EXCLUDE where date range overlaps
+  "         and record is not deleted (DELIND ≠ X)
+  SELECT state_code location material time_stamp valid_from valid_to deleted
+    FROM yrga_cst_exclude
+    INTO TABLE lt_excl_master
+    WHERE location IN s_loc
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    <> 'X'.
+  IF lt_excl_master IS INITIAL.
+    RETURN.
+  ENDIF.
+  " 10.4.2: Keep only the latest record for each State Code-Location-Material
+  "         combination based on timestamp
+  SORT lt_excl_master BY state_code location material time_stamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_excl_master
+    COMPARING state_code location material.
+  " 10.4.3/10.4.4: Auto-click exclude checkbox for matching rows in ALV
+  LOOP AT lt_excl_master INTO ls_excl_master.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_excl_row>)
+      WHERE state_code  = ls_excl_master-state_code
+        AND location_id = ls_excl_master-location
+        AND material    = ls_excl_master-material.
+      <fs_excl_row>-exclude = 'X'.
+    ENDLOOP.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form VALIDATE_CV_DATA
+*& Validates calorific values between YRXA_CMDATA and GT_GAS_RECEIPT.
+*& Shows mismatch popup if GCV/NCV values differ. Program does not
+*& proceed until validation is cleared.
+*& Returns: cv_valid = abap_true if validation passed, abap_false if not
+*&---------------------------------------------------------------------*
+FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
+  " Local type matching YRXA_CMDATA actual field names:
+  "   YYDATE         (DATS)   - Gas Day
+  "   YYBUS_LOCATION (CHAR 10) - Location ID
+  "   YYAVG_GCV      (FLTP 16) - Average GCV
+  "   YYAVG_NCV      (FLTP 16) - Average NCV
+  "   YYTIMESTAMP    (DEC 15)  - UTC Timestamp
+  TYPES: BEGIN OF lty_cmdata,
+           yydate         TYPE dats,
+           yybus_location TYPE oij_locid,
+           yyavg_gcv      TYPE yyavg_gcv,
+           yyavg_ncv      TYPE yyavg_ncv,
+           yytimestamp    TYPE timestamp,
+         END OF lty_cmdata.
+  TYPES: BEGIN OF lty_cv_mismatch,
+           gas_day       TYPE datum,
+           location_id   TYPE ygms_de_loc_id,
+           ctp_id        TYPE ygms_de_ongc_ctp,
+           source        TYPE char30,
+           gcv_meas      TYPE ygms_de_gcv,
+           ncv_meas      TYPE ygms_de_ncv,
+           gcv_receipt   TYPE ygms_de_gcv,
+           ncv_receipt   TYPE ygms_de_ncv,
+         END OF lty_cv_mismatch.
+  DATA: lt_cmdata    TYPE TABLE OF lty_cmdata,
+        ls_cmdata    TYPE lty_cmdata,
+        lt_mismatch  TYPE TABLE OF lty_cv_mismatch,
+        ls_mismatch  TYPE lty_cv_mismatch,
+        lv_answer    TYPE c LENGTH 1.
+  cv_valid = abap_true.
+  " 2.1: Pass dates and location ID from user inputs to YRXA_CMDATA
+  SELECT yydate yybus_location yyavg_gcv yyavg_ncv yytimestamp
+    FROM yrxa_cmdata
+    INTO TABLE lt_cmdata
+    WHERE yybus_location IN s_loc
+      AND yydate BETWEEN gv_date_from AND gv_date_to.
+  IF lt_cmdata IS INITIAL.
+    " No measurement data found - allow program to proceed
+    RETURN.
+  ENDIF.
+  " 2.2: Keep only the latest records for each Gas Day-Location ID combination
+  SORT lt_cmdata BY yydate yybus_location yytimestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_cmdata COMPARING yydate yybus_location.
+  " 2.3: Compare GCV and NCV with GT_GAS_RECEIPT for each Gas Day-Location ID
+  LOOP AT lt_cmdata INTO ls_cmdata.
+    READ TABLE gt_gas_receipt INTO DATA(ls_gas_rcpt)
+      WITH KEY gas_day     = ls_cmdata-yydate
+               location_id = ls_cmdata-yybus_location.
+    IF sy-subrc = 0.
+      IF ls_cmdata-yyavg_gcv <> ls_gas_rcpt-gcv OR ls_cmdata-yyavg_ncv <> ls_gas_rcpt-ncv.
+        CLEAR ls_mismatch.
+        ls_mismatch-gas_day     = ls_cmdata-yydate.
+        ls_mismatch-location_id = ls_cmdata-yybus_location.
+        ls_mismatch-ctp_id      = ls_gas_rcpt-ctp_id.
+        ls_mismatch-gcv_meas    = ls_cmdata-yyavg_gcv.
+        ls_mismatch-ncv_meas    = ls_cmdata-yyavg_ncv.
+        ls_mismatch-gcv_receipt = ls_gas_rcpt-gcv.
+        ls_mismatch-ncv_receipt = ls_gas_rcpt-ncv.
+        APPEND ls_mismatch TO lt_mismatch.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+  IF lt_mismatch IS INITIAL.
+    " All CV values match - proceed
+    RETURN.
+  ENDIF.
+  " Mismatch found - show popup
+  cv_valid = abap_false.
+  CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+    EXPORTING
+      textline1      = 'Mismatch found in calorific values'
+      textline2      = 'Click Yes to view details, No to cancel'
+      titel          = 'CV Validation Failed'
+      cancel_display = ' '
+    IMPORTING
+      answer         = lv_answer.
+  IF lv_answer = 'J'.  " Yes - show details
+    " Build detail ALV showing mismatches from both sources
+    DATA: lt_detail_fcat TYPE slis_t_fieldcat_alv,
+          ls_detail_fcat TYPE slis_fieldcat_alv.
+    TYPES: BEGIN OF lty_cv_detail,
+             source      TYPE char30,
+             gas_day     TYPE datum,
+             location_id TYPE ygms_de_loc_id,
+             ctp_id      TYPE ygms_de_ongc_ctp,
+             gcv         TYPE ygms_de_gcv,
+             ncv         TYPE ygms_de_ncv,
+           END OF lty_cv_detail.
+    DATA: lt_cv_detail TYPE TABLE OF lty_cv_detail,
+          ls_cv_detail TYPE lty_cv_detail.
+    " 2.4a: Add measurement table records
+    LOOP AT lt_mismatch INTO ls_mismatch.
+      CLEAR ls_cv_detail.
+      ls_cv_detail-source      = 'Measurement Table'.       " YRXA_CMDATA
+      ls_cv_detail-gas_day     = ls_mismatch-gas_day.
+      ls_cv_detail-location_id = ls_mismatch-location_id.
+      ls_cv_detail-gcv         = ls_mismatch-gcv_meas.
+      ls_cv_detail-ncv         = ls_mismatch-ncv_meas.
+      APPEND ls_cv_detail TO lt_cv_detail.
+    ENDLOOP.
+    " 2.4b: Add receipt data table records
+    LOOP AT lt_mismatch INTO ls_mismatch.
+      CLEAR ls_cv_detail.
+      ls_cv_detail-source      = 'Receipt Data Table'.      " GT_GAS_RECEIPT
+      ls_cv_detail-gas_day     = ls_mismatch-gas_day.
+      ls_cv_detail-location_id = ls_mismatch-location_id.
+      ls_cv_detail-ctp_id      = ls_mismatch-ctp_id.
+      ls_cv_detail-gcv         = ls_mismatch-gcv_receipt.
+      ls_cv_detail-ncv         = ls_mismatch-ncv_receipt.
+      APPEND ls_cv_detail TO lt_cv_detail.
+    ENDLOOP.
+    " Build field catalog for detail ALV
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'SOURCE'.
+    ls_detail_fcat-seltext_l = 'Data Source'.
+    ls_detail_fcat-outputlen = 25.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'GAS_DAY'.
+    ls_detail_fcat-seltext_l = 'Gas Day'.
+    ls_detail_fcat-outputlen = 12.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'LOCATION_ID'.
+    ls_detail_fcat-seltext_l = 'Location ID'.
+    ls_detail_fcat-outputlen = 12.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'CTP_ID'.
+    ls_detail_fcat-seltext_l = 'CTP ID'.
+    ls_detail_fcat-outputlen = 12.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'GCV'.
+    ls_detail_fcat-seltext_l = 'GCV'.
+    ls_detail_fcat-outputlen = 12.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'NCV'.
+    ls_detail_fcat-seltext_l = 'NCV'.
+    ls_detail_fcat-outputlen = 12.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    " Display detail ALV as popup
+    DATA: ls_detail_layout TYPE slis_layout_alv.
+    ls_detail_layout-zebra = 'X'.
+    ls_detail_layout-colwidth_optimize = 'X'.
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        i_callback_program = sy-repid
+        is_layout          = ls_detail_layout
+        it_fieldcat        = lt_detail_fcat
+        i_screen_start_column = 10
+        i_screen_start_line   = 5
+        i_screen_end_column   = 120
+        i_screen_end_line     = 25
+      TABLES
+        t_outtab           = lt_cv_detail
+      EXCEPTIONS
+        program_error = 1
+        OTHERS        = 2.
+  ENDIF.
 ENDFORM.
