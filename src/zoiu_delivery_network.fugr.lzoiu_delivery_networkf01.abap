@@ -544,7 +544,7 @@ FORM check_for_duplicate.
               dn_no       = roiu_pr_dn-dn_no
               force_db    = 'X'
 *         IMPORTING
-*              E_OIU_PR_DN =
+*              E_ZOIU_PR_DN =
          EXCEPTIONS
               none_found = 1
               OTHERS      = 2.

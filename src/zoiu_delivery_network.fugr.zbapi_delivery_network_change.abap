@@ -13,11 +13,11 @@ FUNCTION ZBAPI_DELIVERY_NETWORK_CHANGE.
 *"     RETURN STRUCTURE  BAPIRET2
 *"----------------------------------------------------------------------
 
-  DATA: BEGIN OF ORIG_OIU_PR_DN OCCURS 1.
+  DATA: BEGIN OF ORIG_ZOIU_PR_DN OCCURS 1.
           INCLUDE STRUCTURE ROIU_PR_DN.
-  DATA: END OF ORIG_OIU_PR_DN.
+  DATA: END OF ORIG_ZOIU_PR_DN.
 
-  DATA: CHANGE_OIU_PR_DN LIKE ORIG_OIU_PR_DN.
+  DATA: CHANGE_ZOIU_PR_DN LIKE ORIG_ZOIU_PR_DN.
 * Clear message table and set bapi flag
   REFRESH G_RETURN_TB.
 * CLEAR ALL WORKING STORAGE.
@@ -29,30 +29,30 @@ FUNCTION ZBAPI_DELIVERY_NETWORK_CHANGE.
 * Authority check
   perform check_bapi_authorization using 'O3U_DN2'.
 
-  MOVE-CORRESPONDING BAPIOIUDNHEADER  TO CHANGE_OIU_PR_DN.
-  MOVE-CORRESPONDING BAPIOIUDN1DETAIL TO CHANGE_OIU_PR_DN.
-  CHANGE_OIU_PR_DN-BUKRS = BAPIOIUDN1DETAIL-COMP_CODE.
-  CHANGE_OIU_PR_DN-VNAME = BAPIOIUDN1DETAIL-VENTURE.
+  MOVE-CORRESPONDING BAPIOIUDNHEADER  TO CHANGE_ZOIU_PR_DN.
+  MOVE-CORRESPONDING BAPIOIUDN1DETAIL TO CHANGE_ZOIU_PR_DN.
+  CHANGE_ZOIU_PR_DN-BUKRS = BAPIOIUDN1DETAIL-COMP_CODE.
+  CHANGE_ZOIU_PR_DN-VNAME = BAPIOIUDN1DETAIL-VENTURE.
 
 * changes all field to uppercase except for description
   PERFORM TRANSLATE_TEXTS.
 * Get the delivery network detail information
-  PERFORM GET_REF_DELIVERY_NETWORK USING CHANGE_OIU_PR_DN-DN_NO
+  PERFORM GET_REF_DELIVERY_NETWORK USING CHANGE_ZOIU_PR_DN-DN_NO
                                          TEXT-002
-                                         CHANGE_OIU_PR_DN-DN_NO
+                                         CHANGE_ZOIU_PR_DN-DN_NO
                                          SPACE
                                          SPACE.
 * If the delivery network does not exist
   CHECK_BAPI_STOP.
 * Move the old values from the structure into temporary internal table
-  MOVE-CORRESPONDING ROIU_PR_DN TO ORIG_OIU_PR_DN.
+  MOVE-CORRESPONDING ROIU_PR_DN TO ORIG_ZOIU_PR_DN.
 * Move the new values into the old structure for edits and validations
-  CHANGE_OIU_PR_DN-DN_NO   = ROIU_PR_DN-DN_NO.
-  CHANGE_OIU_PR_DN-TYPE_CD = ROIU_PR_DN-TYPE_CD.
-  CHANGE_OIU_PR_DN-DN_GRP  = ROIU_PR_DN-DN_GRP.
-  MOVE-CORRESPONDING CHANGE_OIU_PR_DN TO ROIU_PR_DN.
+  CHANGE_ZOIU_PR_DN-DN_NO   = ROIU_PR_DN-DN_NO.
+  CHANGE_ZOIU_PR_DN-TYPE_CD = ROIU_PR_DN-TYPE_CD.
+  CHANGE_ZOIU_PR_DN-DN_GRP  = ROIU_PR_DN-DN_GRP.
+  MOVE-CORRESPONDING CHANGE_ZOIU_PR_DN TO ROIU_PR_DN.
 
-  IF ORIG_OIU_PR_DN NE CHANGE_OIU_PR_DN.
+  IF ORIG_ZOIU_PR_DN NE CHANGE_ZOIU_PR_DN.
 *    validate the fields required
     PERFORM BAPI_EDIT_CHECKS_CHANGE.
 *    If edits and validations have an error pass messages to user
@@ -60,9 +60,9 @@ FUNCTION ZBAPI_DELIVERY_NETWORK_CHANGE.
 *    Lock the record from changes
     PERFORM LOCK_DELIVERY_NUMBER.
 *    Enqueue of DN Standard Hierarchy              " Start SOGK013053 EY
-    IF ORIG_OIU_PR_DN-dn_set <> CHANGE_OIU_PR_DN-dn_set.
-      PERFORM enqueue_setid USING ORIG_OIU_PR_DN-dn_set
-                                  CHANGE_OIU_PR_DN-dn_set.
+    IF ORIG_ZOIU_PR_DN-dn_set <> CHANGE_ZOIU_PR_DN-dn_set.
+      PERFORM enqueue_setid USING ORIG_ZOIU_PR_DN-dn_set
+                                  CHANGE_ZOIU_PR_DN-dn_set.
     ENDIF.
     CHECK_BAPI_STOP.                               " End   SOGK013053 EY
 *    Prepare all the fields for the save.
@@ -72,7 +72,7 @@ FUNCTION ZBAPI_DELIVERY_NETWORK_CHANGE.
     Perform F_UPDATE_HIERARCHY.                     "SOGK027671 VV
     CHECK_BAPI_STOP.
 *    Call the function to update the change document
-    PERFORM CHANGE_DOCUMENT USING ORIG_OIU_PR_DN
+    PERFORM CHANGE_DOCUMENT USING ORIG_ZOIU_PR_DN
                                   ROIU_PR_DN.
 *    Error message of the change document failed.
     CHECK_BAPI_STOP.

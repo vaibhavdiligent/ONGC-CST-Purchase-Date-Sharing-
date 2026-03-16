@@ -68,8 +68,8 @@ DATA:        W_FCODE       LIKE   SY-UCOMM,
              W_DDTEXT       LIKE DD07V-DDTEXT,
              W_GEO_REQUIRED_FG   TYPE C,
              W_SEC_REQUIRED_FG   TYPE C,
-             W_CNTRY             LIKE OIU_PR_DN-CNTRY_CD,
-             W_PRIMARY           LIKE OIU_PR_DN-PRI_GEO_LOC,
+             W_CNTRY             LIKE ZOIU_PR_DN-CNTRY_CD,
+             W_PRIMARY           LIKE ZOIU_PR_DN-PRI_GEO_LOC,
              OK_CODE             LIKE SY-UCOMM,
              W_NO_IDOC           TYPE C,
              W_PROGRAM           LIKE SY-CPROG,
@@ -134,12 +134,12 @@ CONSTANTS:   C_OFF_FG      TYPE  C          VALUE 0,     "Screen Off Flag
              C_LONG          LIKE SY-UCOMM VALUE 'LONG',
              C_LONGTXT(7)    TYPE C        VALUE 'LONGTXT',
              C_LTXT          LIKE THEAD-TDID VALUE 'LTXT',
-             C_DN_TAB_NAME(9) TYPE C       VALUE 'OIU_PR_DN',
+             C_DN_TAB_NAME(9) TYPE C       VALUE 'ZOIU_PR_DN',
              C_DN_TYPECD_DOM  LIKE DD07V-DOMNAME VALUE 'OIU_DN_TYP_CD',
              C_ZERO            TYPE C     VALUE '0',
              C_LT_THOUSAND(3)  TYPE C     VALUE '999',
              C_CANCEL          TYPE C     VALUE 'A',
-             C_TYPE_CD         LIKE OIU_PR_DN-TYPE_CD VALUE 'N',
+             C_TYPE_CD         LIKE ZOIU_PR_DN-TYPE_CD VALUE 'N',
              C_FCODE_DND1      LIKE SY-UCOMM    VALUE 'DND1',
              C_FCODE_DND2      LIKE SY-UCOMM    VALUE 'DND2',
              C_FCODE_DND3      LIKE SY-UCOMM    VALUE 'DND3',
@@ -227,7 +227,7 @@ LOAD-OF-PROGRAM.
 * check to see if integration is on or not
   IF NOT wa_oiu_cm_edit-status IS INITIAL.
 * integration is turned on
-    g_tabname = 'OIU_PR_DN'.
+    g_tabname = 'ZOIU_PR_DN'.
   ELSE.
 * integration is turned off
     g_tabname = 'OIU_PR_DN_10'.
