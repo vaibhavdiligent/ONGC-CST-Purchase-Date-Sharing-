@@ -5070,12 +5070,18 @@ ENDFORM.
 *& Returns: cv_valid = abap_true if validation passed, abap_false if not
 *&---------------------------------------------------------------------*
 FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
+  " Local type matching YRXA_CMDATA actual field names:
+  "   YYDATE         (DATS)   - Gas Day
+  "   YYBUS_LOCATION (CHAR 10) - Location ID
+  "   YYAVG_GCV      (FLTP 16) - Average GCV
+  "   YYAVG_NCV      (FLTP 16) - Average NCV
+  "   YYTIMESTAMP    (DEC 15)  - UTC Timestamp
   TYPES: BEGIN OF lty_cmdata,
-           gas_day    TYPE datum,
-           location   TYPE ygms_de_loc_id,
-           gcv        TYPE ygms_de_gcv,
-           ncv        TYPE ygms_de_ncv,
-           time_stamp TYPE timestamp,
+           yydate         TYPE dats,
+           yybus_location TYPE oij_locid,
+           yyavg_gcv      TYPE yyavg_gcv,
+           yyavg_ncv      TYPE yyavg_ncv,
+           yytimestamp    TYPE timestamp,
          END OF lty_cmdata.
   TYPES: BEGIN OF lty_cv_mismatch,
            gas_day       TYPE datum,
@@ -5094,31 +5100,31 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
         lv_answer    TYPE c LENGTH 1.
   cv_valid = abap_true.
   " 2.1: Pass dates and location ID from user inputs to YRXA_CMDATA
-  SELECT gas_day location gcv ncv time_stamp
+  SELECT yydate yybus_location yyavg_gcv yyavg_ncv yytimestamp
     FROM yrxa_cmdata
     INTO TABLE lt_cmdata
-    WHERE location IN s_loc
-      AND gas_day BETWEEN gv_date_from AND gv_date_to.
+    WHERE yybus_location IN s_loc
+      AND yydate BETWEEN gv_date_from AND gv_date_to.
   IF lt_cmdata IS INITIAL.
     " No measurement data found - allow program to proceed
     RETURN.
   ENDIF.
   " 2.2: Keep only the latest records for each Gas Day-Location ID combination
-  SORT lt_cmdata BY gas_day location time_stamp DESCENDING.
-  DELETE ADJACENT DUPLICATES FROM lt_cmdata COMPARING gas_day location.
+  SORT lt_cmdata BY yydate yybus_location yytimestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_cmdata COMPARING yydate yybus_location.
   " 2.3: Compare GCV and NCV with GT_GAS_RECEIPT for each Gas Day-Location ID
   LOOP AT lt_cmdata INTO ls_cmdata.
     READ TABLE gt_gas_receipt INTO DATA(ls_gas_rcpt)
-      WITH KEY gas_day     = ls_cmdata-gas_day
-               location_id = ls_cmdata-location.
+      WITH KEY gas_day     = ls_cmdata-yydate
+               location_id = ls_cmdata-yybus_location.
     IF sy-subrc = 0.
-      IF ls_cmdata-gcv <> ls_gas_rcpt-gcv OR ls_cmdata-ncv <> ls_gas_rcpt-ncv.
+      IF ls_cmdata-yyavg_gcv <> ls_gas_rcpt-gcv OR ls_cmdata-yyavg_ncv <> ls_gas_rcpt-ncv.
         CLEAR ls_mismatch.
-        ls_mismatch-gas_day     = ls_cmdata-gas_day.
-        ls_mismatch-location_id = ls_cmdata-location.
+        ls_mismatch-gas_day     = ls_cmdata-yydate.
+        ls_mismatch-location_id = ls_cmdata-yybus_location.
         ls_mismatch-ctp_id      = ls_gas_rcpt-ctp_id.
-        ls_mismatch-gcv_meas    = ls_cmdata-gcv.
-        ls_mismatch-ncv_meas    = ls_cmdata-ncv.
+        ls_mismatch-gcv_meas    = ls_cmdata-yyavg_gcv.
+        ls_mismatch-ncv_meas    = ls_cmdata-yyavg_ncv.
         ls_mismatch-gcv_receipt = ls_gas_rcpt-gcv.
         ls_mismatch-ncv_receipt = ls_gas_rcpt-ncv.
         APPEND ls_mismatch TO lt_mismatch.
