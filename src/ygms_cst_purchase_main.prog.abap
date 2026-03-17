@@ -5037,10 +5037,11 @@ FORM apply_exclusion_from_master.
         ls_excl_master TYPE lty_excl_master.
   " 10.4.1: Fetch records from YRGA_CST_EXCLUDE where date range overlaps
   "         and record is not deleted (DELIND ≠ X)
+  "         Also fetch wildcard '*' entries for location
   SELECT state_code location material time_stamp valid_from valid_to deleted
     FROM yrga_cst_exclude
     INTO TABLE lt_excl_master
-    WHERE location IN s_loc
+    WHERE ( location IN s_loc OR location = '*' )
       AND valid_from <= gv_date_from
       AND valid_to   >= gv_date_to
       AND deleted    <> 'X'.
@@ -5053,11 +5054,24 @@ FORM apply_exclusion_from_master.
   DELETE ADJACENT DUPLICATES FROM lt_excl_master
     COMPARING state_code location material.
   " 10.4.3/10.4.4: Auto-click exclude checkbox for matching rows in ALV
+  "         Support '*' wildcard: if a field is '*', match all values
   LOOP AT lt_excl_master INTO ls_excl_master.
-    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_excl_row>)
-      WHERE state_code  = ls_excl_master-state_code
-        AND location_id = ls_excl_master-location
-        AND material    = ls_excl_master-material.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_excl_row>).
+      " Check state_code: match if wildcard '*' or exact match
+      IF ls_excl_master-state_code <> '*' AND
+         ls_excl_master-state_code <> <fs_excl_row>-state_code.
+        CONTINUE.
+      ENDIF.
+      " Check location: match if wildcard '*' or exact match
+      IF ls_excl_master-location <> '*' AND
+         ls_excl_master-location <> <fs_excl_row>-location_id.
+        CONTINUE.
+      ENDIF.
+      " Check material: match if wildcard '*' or exact match
+      IF ls_excl_master-material <> '*' AND
+         ls_excl_master-material <> <fs_excl_row>-material.
+        CONTINUE.
+      ENDIF.
       <fs_excl_row>-exclude = 'X'.
     ENDLOOP.
   ENDLOOP.
