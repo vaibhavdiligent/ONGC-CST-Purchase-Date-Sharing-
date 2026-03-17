@@ -339,11 +339,19 @@ ENDFORM.
 *& 1.1 - Create a new exclusion entry
 *&---------------------------------------------------------------------*
 FORM create_exclusion.
-  DATA: lv_valid     TYPE abap_bool,
-        lt_existing  TYPE STANDARD TABLE OF yrga_cst_exclude,
-        ls_existing  TYPE yrga_cst_exclude,
-        ls_new       TYPE yrga_cst_exclude,
-        lv_timestamp TYPE char14.
+  DATA: lv_valid        TYPE abap_bool,
+        lt_all_existing TYPE STANDARD TABLE OF yrga_cst_exclude,
+        ls_existing     TYPE yrga_cst_exclude,
+        lt_to_delete    TYPE STANDARD TABLE OF yrga_cst_exclude,
+        ls_new          TYPE yrga_cst_exclude,
+        lv_timestamp    TYPE char14,
+        lv_new_covers   TYPE abap_bool,
+        lv_old_covers   TYPE abap_bool,
+        lv_exact_match  TYPE abap_bool,
+        lv_del_count    TYPE i,
+        lv_answer       TYPE char1,
+        lv_msg          TYPE char200,
+        lv_msg2         TYPE char200.
 * 1.1.1 / 9.1.1 - Validate location
   PERFORM validate_location USING p_loc CHANGING lv_valid.
   IF lv_valid = abap_false.
@@ -354,16 +362,73 @@ FORM create_exclusion.
   IF lv_valid = abap_false.
     RETURN.
   ENDIF.
-* 1.1.3 - Fetch existing entries where DELETED is not X
+* Fetch ALL existing non-deleted entries for same state code
   SELECT * FROM yrga_cst_exclude
-    INTO TABLE lt_existing
+    INTO TABLE lt_all_existing
     WHERE state_code = p_state
-      AND location   = p_loc
-      AND material   = p_mat
       AND deleted   <> 'X'.
-* 1.1.4 - If entries exist, mark them as deleted first
-  IF lt_existing IS NOT INITIAL.
-    LOOP AT lt_existing INTO ls_existing.
+* Check wildcard overlap with each existing entry
+  lv_exact_match = abap_false.
+  CLEAR lt_to_delete.
+  LOOP AT lt_all_existing INTO ls_existing.
+*   Check if new entry covers existing (new is same or more generic)
+    CLEAR lv_new_covers.
+    IF ( p_loc = '*' OR p_loc = ls_existing-location ) AND
+       ( p_mat = '*' OR p_mat = ls_existing-material ).
+      lv_new_covers = abap_true.
+    ENDIF.
+*   Check if existing entry covers new (existing is same or more generic)
+    CLEAR lv_old_covers.
+    IF ( ls_existing-location = '*' OR ls_existing-location = p_loc ) AND
+       ( ls_existing-material = '*' OR ls_existing-material = p_mat ).
+      lv_old_covers = abap_true.
+    ENDIF.
+*   Exact match - both cover each other (e.g. *-* vs *-*, or DAHEJ-GMS vs DAHEJ-GMS)
+    IF lv_new_covers = abap_true AND lv_old_covers = abap_true.
+      lv_exact_match = abap_true.
+      EXIT.
+    ENDIF.
+*   New is strictly more generic → mark existing for deletion
+    IF lv_new_covers = abap_true.
+      APPEND ls_existing TO lt_to_delete.
+    ENDIF.
+*   Existing is strictly more generic → mark existing for deletion (narrowing scope)
+    IF lv_old_covers = abap_true.
+      APPEND ls_existing TO lt_to_delete.
+    ENDIF.
+  ENDLOOP.
+* Error if exact duplicate found
+  IF lv_exact_match = abap_true.
+    CONCATENATE 'An entry with the same or equivalent combination already exists for state'
+      p_state '.' INTO lv_msg SEPARATED BY space.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Error'
+        txt1  = lv_msg
+        txt2  = space.
+    RETURN.
+  ENDIF.
+* If overlapping entries found, confirm with user before replacing
+  DESCRIBE TABLE lt_to_delete LINES lv_del_count.
+  IF lv_del_count > 0.
+    WRITE lv_del_count TO lv_msg LEFT-JUSTIFIED.
+    CONCATENATE lv_msg 'existing overlapping entry(ies) will be replaced. Continue?'
+      INTO lv_msg SEPARATED BY space.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Confirm Replace'
+        text_question         = lv_msg
+        text_button_1         = 'Yes'
+        text_button_2         = 'No'
+        default_button        = '2'
+        display_cancel_button = ' '
+      IMPORTING
+        answer                = lv_answer.
+    IF lv_answer <> '1'.
+      RETURN.
+    ENDIF.
+*   Mark overlapping entries as deleted
+    LOOP AT lt_to_delete INTO ls_existing.
       UPDATE yrga_cst_exclude
         SET deleted      = 'X'
             changed_by   = sy-uname
@@ -393,10 +458,17 @@ FORM create_exclusion.
   INSERT yrga_cst_exclude FROM ls_new.
   IF sy-subrc = 0.
     COMMIT WORK.
+    IF lv_del_count > 0.
+      WRITE lv_del_count TO lv_msg2 LEFT-JUSTIFIED.
+      CONCATENATE 'Exclusion entry created successfully.' lv_msg2
+        'overlapping entry(ies) replaced.' INTO lv_msg SEPARATED BY space.
+    ELSE.
+      lv_msg = 'Exclusion entry created successfully.'.
+    ENDIF.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Success'
-        txt1  = 'Exclusion entry created successfully.'
+        txt1  = lv_msg
         txt2  = space.
   ELSE.
     ROLLBACK WORK.
