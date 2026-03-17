@@ -447,7 +447,9 @@ START-OF-SELECTION.
   ELSE.
     PERFORM fetch_b2b_data.
     CHECK gt_gas_receipt IS NOT INITIAL.
-    " Validate calorific values before proceeding (Feature 2)
+    PERFORM map_location_ids.
+    PERFORM map_material_names.
+    " Validate calorific values after mapping so GT_GAS_RECEIPT has location_id populated
     IF p_view IS INITIAL.
       DATA: lv_cv_valid TYPE abap_bool.
       PERFORM validate_cv_data CHANGING lv_cv_valid.
@@ -456,8 +458,6 @@ START-OF-SELECTION.
         RETURN.
       ENDIF.
     ENDIF.
-    PERFORM map_location_ids.
-    PERFORM map_material_names.
     PERFORM fetch_data_yrxr098.
     IF p_view IS INITIAL.
       PERFORM build_alv_display_table.
