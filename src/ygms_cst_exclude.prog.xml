@@ -32,8 +32,8 @@
     <item>
      <ID>I</ID>
      <KEY>B02</KEY>
-     <ENTRY>Edit / View Exclusion Entry</ENTRY>
-     <LENGTH>27</LENGTH>
+     <ENTRY>Edit Validity / Delete / View Exclusion Entry</ENTRY>
+     <LENGTH>47</LENGTH>
     </item>
     <item>
      <ID>S</ID>
@@ -44,8 +44,14 @@
     <item>
      <ID>S</ID>
      <KEY>P_EDIT</KEY>
-     <ENTRY>        Edit</ENTRY>
-     <LENGTH>12</LENGTH>
+     <ENTRY>        Edit Validity</ENTRY>
+     <LENGTH>21</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_DEL</KEY>
+     <ENTRY>        Delete</ENTRY>
+     <LENGTH>14</LENGTH>
     </item>
     <item>
      <ID>S</ID>

@@ -48,6 +48,7 @@ DATA: gt_exclude   TYPE STANDARD TABLE OF ty_exclude,
 SELECTION-SCREEN BEGIN OF BLOCK b00 WITH FRAME TITLE TEXT-b00.
   PARAMETERS: p_create RADIOBUTTON GROUP rb1 DEFAULT 'X' USER-COMMAND mode,
               p_edit   RADIOBUTTON GROUP rb1,
+              p_del    RADIOBUTTON GROUP rb1,
               p_view   RADIOBUTTON GROUP rb1.
 SELECTION-SCREEN END OF BLOCK b00.
 * Block B01 - Create Exclusion Entry
@@ -59,7 +60,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
               p_vfrom  TYPE yrga_cst_exclude-valid_from MODIF ID CRE,
               p_vto    TYPE yrga_cst_exclude-valid_to MODIF ID CRE.
 SELECTION-SCREEN END OF BLOCK b01.
-* Block B02 - Edit / View Exclusion Entry
+* Block B02 - Edit Validity / Delete / View Exclusion Entry
 SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
   PARAMETERS: p_state2 TYPE regio MODIF ID EVW,
               p_loc2   TYPE yrga_cst_exclude-location MODIF ID EVW,
@@ -82,7 +83,7 @@ AT SELECTION-SCREEN OUTPUT.
         MODIFY SCREEN.
       ENDIF.
     ELSE.
-*     Edit/View mode: show Edit/View block, hide Create block
+*     Edit Validity/Delete/View mode: show Edit/View block, hide Create block
       IF screen-group1 = 'CRE' OR screen-group1 = 'SNM'.
         screen-active = 0.
         MODIFY SCREEN.
@@ -141,8 +142,8 @@ AT SELECTION-SCREEN.
     IF p_vto IS NOT INITIAL.
       PERFORM validate_fortnight_end USING p_vto.
     ENDIF.
-  ELSEIF p_edit = 'X' OR p_view = 'X'.
-*   Mandatory field check for Edit/View mode
+  ELSEIF p_edit = 'X' OR p_del = 'X' OR p_view = 'X'.
+*   Mandatory field check for Edit Validity/Delete/View mode
     IF p_state2 IS INITIAL.
       MESSAGE 'State Code is mandatory.' TYPE 'E'.
     ENDIF.
@@ -160,6 +161,8 @@ START-OF-SELECTION.
     PERFORM create_exclusion.
   ELSEIF p_edit = 'X'.
     PERFORM edit_exclusion.
+  ELSEIF p_del = 'X'.
+    PERFORM delete_exclusion.
   ELSEIF p_view = 'X'.
     PERFORM view_exclusion.
   ENDIF.
@@ -168,36 +171,54 @@ START-OF-SELECTION.
 *&---------------------------------------------------------------------*
 *& Provide F4 help for state code using T005U
 *&---------------------------------------------------------------------*
-FORM f4_help_state USING pv_field TYPE string.
-  DATA: lt_return TYPE STANDARD TABLE OF ddshretval,
-        ls_return TYPE ddshretval,
-        lt_t005u  TYPE STANDARD TABLE OF t005u,
-        ls_t005u  TYPE t005u.
-  DATA: lt_dynpfields TYPE STANDARD TABLE OF dynpread,
-        ls_dynpfield  TYPE dynpread.
-* Fetch Indian state codes from T005U
-  SELECT * FROM t005u
-    INTO TABLE lt_t005u
+FORM f4_help_state USING pv_field TYPE dynfnam.
+  DATA: lt_return   TYPE STANDARD TABLE OF ddshretval,
+        ls_return   TYPE ddshretval,
+        lt_dynpread TYPE STANDARD TABLE OF dynpread,
+        ls_dynpread TYPE dynpread.
+  DATA: BEGIN OF ls_state,
+          bland TYPE t005u-bland,
+          bezei TYPE t005u-bezei,
+        END OF ls_state.
+  DATA: lt_states LIKE STANDARD TABLE OF ls_state.
+* Fetch Indian state codes from T005U (only BLAND and BEZEI)
+  SELECT bland bezei FROM t005u
+    INTO TABLE lt_states
     WHERE spras = sy-langu
       AND land1 = 'IN'.
-  IF lt_t005u IS INITIAL.
+  IF lt_states IS INITIAL.
     MESSAGE 'No state codes found.' TYPE 'I'.
     RETURN.
   ENDIF.
   CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
     EXPORTING
       retfield        = 'BLAND'
-      dynpprog        = sy-repid
-      dynpnr          = sy-dynnr
-      dynprofield     = pv_field
+      window_title    = 'Select State Code'
       value_org       = 'S'
     TABLES
-      value_tab       = lt_t005u
+      value_tab       = lt_states
       return_tab      = lt_return
     EXCEPTIONS
       parameter_error = 1
       no_values_found = 2
       OTHERS          = 3.
+  IF sy-subrc = 0.
+    READ TABLE lt_return INTO ls_return INDEX 1.
+    IF sy-subrc = 0 AND ls_return-fieldval IS NOT INITIAL.
+*     Set the selected value on the dynpro field manually
+      ls_dynpread-fieldname = pv_field.
+      ls_dynpread-fieldvalue = ls_return-fieldval.
+      APPEND ls_dynpread TO lt_dynpread.
+      CALL FUNCTION 'DYNP_VALUES_UPDATE'
+        EXPORTING
+          dyname     = sy-repid
+          dynumb     = sy-dynnr
+        TABLES
+          dynpfields = lt_dynpread
+        EXCEPTIONS
+          OTHERS     = 1.
+    ENDIF.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form GET_STATE_NAME
@@ -563,7 +584,7 @@ FORM edit_exclusion.
   PERFORM build_fieldcat_edit.
   gs_layout-zebra             = 'X'.
   gs_layout-colwidth_optimize = 'X'.
-  gs_layout-window_titlebar   = 'Edit Exclusion Entry'.
+  gs_layout-window_titlebar   = 'Edit Validity of Exclusion Entry'.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = gv_repid
@@ -801,8 +822,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_FIELDCAT_EDIT
 *&---------------------------------------------------------------------*
-*& Build field catalog for Edit ALV with editable fields
-*& 1.2.4 - Location, Material, Valid From, Valid To are editable
+*& Build field catalog for Edit Validity ALV
+*& Only Valid From and Valid To are editable
 *&---------------------------------------------------------------------*
 FORM build_fieldcat_edit.
   DATA: lv_col TYPE i.
@@ -836,7 +857,6 @@ FORM build_fieldcat_edit.
   gs_fieldcat-seltext_l = 'Supply Location'.
   gs_fieldcat-seltext_m = 'Location'.
   gs_fieldcat-seltext_s = 'Loc'.
-  gs_fieldcat-edit      = 'X'.
   gs_fieldcat-tabname   = 'GT_EXCLUDE'.
   APPEND gs_fieldcat TO gt_fieldcat.
 
@@ -847,7 +867,6 @@ FORM build_fieldcat_edit.
   gs_fieldcat-seltext_l = 'Material'.
   gs_fieldcat-seltext_m = 'Material'.
   gs_fieldcat-seltext_s = 'Mat'.
-  gs_fieldcat-edit      = 'X'.
   gs_fieldcat-tabname   = 'GT_EXCLUDE'.
   APPEND gs_fieldcat TO gt_fieldcat.
 
@@ -954,18 +973,18 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form USER_COMMAND_EDIT
 *&---------------------------------------------------------------------*
-*& 1.2.5 - Handle Update user command for Edit ALV
+*& Handle Update user command for Edit Validity ALV
 *&---------------------------------------------------------------------*
 FORM user_command_edit USING r_ucomm     LIKE sy-ucomm
                              rs_selfield TYPE slis_selfield.
-  DATA: lv_valid      TYPE abap_bool,
-        lv_answer     TYPE char1,
+  DATA: lv_answer     TYPE char1,
         lv_timestamp  TYPE char14,
         lv_day        TYPE numc2,
         lv_last_day   TYPE datum,
         ls_new        TYPE yrga_cst_exclude,
         lv_msg        TYPE char200,
-        lv_error      TYPE abap_bool.
+        lv_error      TYPE abap_bool,
+        lv_changed    TYPE i.
   FIELD-SYMBOLS: <ls_excl> TYPE ty_exclude.
   CASE r_ucomm.
     WHEN 'UPDATE' OR '&DATA_SAVE'.
@@ -973,7 +992,7 @@ FORM user_command_edit USING r_ucomm     LIKE sy-ucomm
       CALL FUNCTION 'POPUP_TO_CONFIRM'
         EXPORTING
           titlebar              = 'Confirm Update'
-          text_question         = 'Are you sure you want to update the exclusion entries?'
+          text_question         = 'Are you sure you want to update the validity dates?'
           text_button_1         = 'Yes'
           text_button_2         = 'No'
           default_button        = '2'
@@ -986,17 +1005,7 @@ FORM user_command_edit USING r_ucomm     LIKE sy-ucomm
 *     Validate all edited records before updating
       lv_error = abap_false.
       LOOP AT gt_exclude ASSIGNING <ls_excl>.
-*       Mandatory checks
-        IF <ls_excl>-location IS INITIAL.
-          MESSAGE 'Supply Location is mandatory for all entries.' TYPE 'I'.
-          lv_error = abap_true.
-          EXIT.
-        ENDIF.
-        IF <ls_excl>-material IS INITIAL.
-          MESSAGE 'Material is mandatory for all entries.' TYPE 'I'.
-          lv_error = abap_true.
-          EXIT.
-        ENDIF.
+*       Mandatory checks for validity
         IF <ls_excl>-valid_from IS INITIAL.
           MESSAGE 'Valid From is mandatory for all entries.' TYPE 'I'.
           lv_error = abap_true.
@@ -1034,30 +1043,14 @@ FORM user_command_edit USING r_ucomm     LIKE sy-ucomm
             EXIT.
           ENDIF.
         ENDIF.
-*       Validate location (skip wildcard)
-        IF <ls_excl>-location <> '*'.
-          PERFORM validate_location USING <ls_excl>-location CHANGING lv_valid.
-          IF lv_valid = abap_false.
-            lv_error = abap_true.
-            EXIT.
-          ENDIF.
-        ENDIF.
-*       Validate material (skip wildcard)
-        IF <ls_excl>-material <> '*'.
-          PERFORM validate_material USING <ls_excl>-material <ls_excl>-valid_to
-            CHANGING lv_valid.
-          IF lv_valid = abap_false.
-            lv_error = abap_true.
-            EXIT.
-          ENDIF.
-        ENDIF.
       ENDLOOP.
       IF lv_error = abap_true.
         RETURN.
       ENDIF.
-*     1.2.5 - Process each record: mark old as deleted, create new
+*     Process each record: mark old as deleted, create new with updated validity
+      lv_changed = 0.
       LOOP AT gt_exclude ASSIGNING <ls_excl>.
-*       Mark existing record as deleted using original state_code, location, material
+*       Mark existing record as deleted
         UPDATE yrga_cst_exclude
           SET deleted      = 'X'
               changed_by   = sy-uname
@@ -1067,7 +1060,7 @@ FORM user_command_edit USING r_ucomm     LIKE sy-ucomm
             AND location    = <ls_excl>-location
             AND material    = <ls_excl>-material
             AND deleted    <> 'X'.
-*       Create new entry with user-entered data
+*       Create new entry with updated validity dates
         CONCATENATE sy-datum sy-uzeit INTO lv_timestamp.
         CLEAR ls_new.
         ls_new-mandt        = sy-mandt.
@@ -1082,13 +1075,321 @@ FORM user_command_edit USING r_ucomm     LIKE sy-ucomm
         ls_new-created_time = sy-uzeit.
         ls_new-deleted      = space.
         INSERT yrga_cst_exclude FROM ls_new.
+        lv_changed = lv_changed + 1.
       ENDLOOP.
       COMMIT WORK.
+      WRITE lv_changed TO lv_msg LEFT-JUSTIFIED.
+      CONCATENATE lv_msg 'entry(ies) validity updated successfully.' INTO lv_msg SEPARATED BY space.
       CALL FUNCTION 'POPUP_TO_INFORM'
         EXPORTING
           titel = 'Success'
-          txt1  = 'Exclusion entries updated successfully.'
+          txt1  = lv_msg
           txt2  = space.
+      rs_selfield-refresh = 'X'.
+  ENDCASE.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DELETE_EXCLUSION
+*&---------------------------------------------------------------------*
+*& Delete exclusion entries - show ALV with checkboxes for selection
+*&---------------------------------------------------------------------*
+FORM delete_exclusion.
+  DATA: lv_valid   TYPE abap_bool,
+        lt_db      TYPE STANDARD TABLE OF yrga_cst_exclude,
+        ls_db      TYPE yrga_cst_exclude,
+        ls_result  TYPE ty_exclude,
+        lv_state   TYPE bezei20.
+* Validate location and material if entered
+  IF p_loc2 IS NOT INITIAL AND p_loc2 <> '*'.
+    PERFORM validate_location USING p_loc2 CHANGING lv_valid.
+    IF lv_valid = abap_false.
+      RETURN.
+    ENDIF.
+  ENDIF.
+  IF p_mat2 IS NOT INITIAL AND p_mat2 <> '*'.
+    DATA: lv_dummy_date TYPE datum VALUE '99991231'.
+    PERFORM validate_material USING p_mat2 lv_dummy_date CHANGING lv_valid.
+    IF lv_valid = abap_false.
+      RETURN.
+    ENDIF.
+  ENDIF.
+* Fetch non-deleted entries
+  IF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND location   = p_loc2
+        AND material   = p_mat2
+        AND deleted   <> 'X'.
+  ELSEIF p_loc2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND location   = p_loc2
+        AND deleted   <> 'X'.
+  ELSEIF p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND material   = p_mat2
+        AND deleted   <> 'X'.
+  ELSE.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND deleted   <> 'X'.
+  ENDIF.
+  IF lt_db IS INITIAL.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Information'
+        txt1  = 'No such mapping exists.'
+        txt2  = space.
+    RETURN.
+  ENDIF.
+* Get state name
+  PERFORM get_state_name USING p_state2 CHANGING lv_state.
+* Move to ALV display structure
+  CLEAR gt_exclude.
+  LOOP AT lt_db INTO ls_db.
+    CLEAR ls_result.
+    ls_result-sel          = space.
+    ls_result-state_code   = ls_db-state_code.
+    ls_result-state        = lv_state.
+    ls_result-location     = ls_db-location.
+    ls_result-material     = ls_db-material.
+    ls_result-valid_from   = ls_db-valid_from.
+    ls_result-valid_to     = ls_db-valid_to.
+    ls_result-created_by   = ls_db-created_by.
+    ls_result-created_on   = ls_db-created_on.
+    ls_result-created_time = ls_db-created_time.
+    ls_result-changed_by   = ls_db-changed_by.
+    ls_result-changed_on   = ls_db-changed_on.
+    ls_result-changed_time = ls_db-changed_time.
+    ls_result-deleted      = ls_db-deleted.
+    APPEND ls_result TO gt_exclude.
+  ENDLOOP.
+* Display ALV with checkboxes for delete selection
+  PERFORM build_fieldcat_delete.
+  gs_layout-zebra             = 'X'.
+  gs_layout-colwidth_optimize = 'X'.
+  gs_layout-window_titlebar   = 'Delete Exclusion Entry'.
+  gs_layout-box_fieldname     = 'SEL'.
+  gs_layout-box_tabname       = 'GT_EXCLUDE'.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = gv_repid
+      is_layout                = gs_layout
+      it_fieldcat              = gt_fieldcat
+      i_default                = 'X'
+      i_save                   = 'A'
+      i_callback_user_command  = 'USER_COMMAND_DELETE'
+      i_callback_pf_status_set = 'SET_PF_STATUS_DELETE'
+    TABLES
+      t_outtab                 = gt_exclude
+    EXCEPTIONS
+      program_error            = 1
+      OTHERS                   = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form BUILD_FIELDCAT_DELETE
+*&---------------------------------------------------------------------*
+*& Build field catalog for Delete ALV (read-only with checkbox)
+*&---------------------------------------------------------------------*
+FORM build_fieldcat_delete.
+  DATA: lv_col TYPE i.
+  CLEAR gt_fieldcat.
+  lv_col = 0.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'STATE_CODE'.
+  gs_fieldcat-seltext_l = 'State Code'.
+  gs_fieldcat-seltext_m = 'State Code'.
+  gs_fieldcat-seltext_s = 'State'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'STATE'.
+  gs_fieldcat-seltext_l = 'State'.
+  gs_fieldcat-seltext_m = 'State'.
+  gs_fieldcat-seltext_s = 'State'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'LOCATION'.
+  gs_fieldcat-seltext_l = 'Supply Location'.
+  gs_fieldcat-seltext_m = 'Location'.
+  gs_fieldcat-seltext_s = 'Loc'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'MATERIAL'.
+  gs_fieldcat-seltext_l = 'Material'.
+  gs_fieldcat-seltext_m = 'Material'.
+  gs_fieldcat-seltext_s = 'Mat'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'VALID_FROM'.
+  gs_fieldcat-seltext_l = 'Valid From'.
+  gs_fieldcat-seltext_m = 'Valid From'.
+  gs_fieldcat-seltext_s = 'From'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'VALID_TO'.
+  gs_fieldcat-seltext_l = 'Valid To'.
+  gs_fieldcat-seltext_m = 'Valid To'.
+  gs_fieldcat-seltext_s = 'To'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'CREATED_BY'.
+  gs_fieldcat-seltext_l = 'Created By'.
+  gs_fieldcat-seltext_m = 'Created By'.
+  gs_fieldcat-seltext_s = 'Cr. By'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'CREATED_ON'.
+  gs_fieldcat-seltext_l = 'Created On'.
+  gs_fieldcat-seltext_m = 'Created On'.
+  gs_fieldcat-seltext_s = 'Cr. On'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'CREATED_TIME'.
+  gs_fieldcat-seltext_l = 'Created At'.
+  gs_fieldcat-seltext_m = 'Created At'.
+  gs_fieldcat-seltext_s = 'Cr. At'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'CHANGED_BY'.
+  gs_fieldcat-seltext_l = 'Changed By'.
+  gs_fieldcat-seltext_m = 'Changed By'.
+  gs_fieldcat-seltext_s = 'Ch. By'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'CHANGED_ON'.
+  gs_fieldcat-seltext_l = 'Changed On'.
+  gs_fieldcat-seltext_m = 'Changed On'.
+  gs_fieldcat-seltext_s = 'Ch. On'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  lv_col = lv_col + 1.
+  CLEAR gs_fieldcat.
+  gs_fieldcat-col_pos   = lv_col.
+  gs_fieldcat-fieldname = 'CHANGED_TIME'.
+  gs_fieldcat-seltext_l = 'Changed At'.
+  gs_fieldcat-seltext_m = 'Changed At'.
+  gs_fieldcat-seltext_s = 'Ch. At'.
+  gs_fieldcat-tabname   = 'GT_EXCLUDE'.
+  APPEND gs_fieldcat TO gt_fieldcat.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_PF_STATUS_DELETE
+*&---------------------------------------------------------------------*
+*& Set PF-STATUS with Delete button for Delete ALV
+*&---------------------------------------------------------------------*
+FORM set_pf_status_delete USING rt_extab TYPE slis_t_extab.
+  SET PF-STATUS 'DELETE_STATUS' EXCLUDING rt_extab.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form USER_COMMAND_DELETE
+*&---------------------------------------------------------------------*
+*& Handle Delete user command - mark selected entries as deleted
+*&---------------------------------------------------------------------*
+FORM user_command_delete USING r_ucomm     LIKE sy-ucomm
+                               rs_selfield TYPE slis_selfield.
+  DATA: lv_answer   TYPE char1,
+        lv_count    TYPE i,
+        lv_msg      TYPE char200.
+  FIELD-SYMBOLS: <ls_excl> TYPE ty_exclude.
+  CASE r_ucomm.
+    WHEN 'DELETE' OR '&DATA_SAVE'.
+*     Count selected entries
+      lv_count = 0.
+      LOOP AT gt_exclude ASSIGNING <ls_excl> WHERE sel = 'X'.
+        lv_count = lv_count + 1.
+      ENDLOOP.
+      IF lv_count = 0.
+        MESSAGE 'Please select at least one entry to delete.' TYPE 'I'.
+        RETURN.
+      ENDIF.
+*     Confirmation popup
+      WRITE lv_count TO lv_msg LEFT-JUSTIFIED.
+      CONCATENATE 'Are you sure you want to delete' lv_msg 'selected entry(ies)?'
+        INTO lv_msg SEPARATED BY space.
+      CALL FUNCTION 'POPUP_TO_CONFIRM'
+        EXPORTING
+          titlebar              = 'Confirm Delete'
+          text_question         = lv_msg
+          text_button_1         = 'Yes'
+          text_button_2         = 'No'
+          default_button        = '2'
+          display_cancel_button = ' '
+        IMPORTING
+          answer                = lv_answer.
+      IF lv_answer <> '1'.
+        RETURN.
+      ENDIF.
+*     Mark selected entries as deleted
+      LOOP AT gt_exclude ASSIGNING <ls_excl> WHERE sel = 'X'.
+        UPDATE yrga_cst_exclude
+          SET deleted      = 'X'
+              changed_by   = sy-uname
+              changed_on   = sy-datum
+              changed_time = sy-uzeit
+          WHERE state_code  = <ls_excl>-state_code
+            AND location    = <ls_excl>-location
+            AND material    = <ls_excl>-material
+            AND deleted    <> 'X'.
+      ENDLOOP.
+      COMMIT WORK.
+      WRITE lv_count TO lv_msg LEFT-JUSTIFIED.
+      CONCATENATE lv_msg 'entry(ies) deleted successfully.' INTO lv_msg SEPARATED BY space.
+      CALL FUNCTION 'POPUP_TO_INFORM'
+        EXPORTING
+          titel = 'Success'
+          txt1  = lv_msg
+          txt2  = space.
+*     Remove deleted entries from ALV display
+      DELETE gt_exclude WHERE sel = 'X'.
       rs_selfield-refresh = 'X'.
   ENDCASE.
 ENDFORM.
