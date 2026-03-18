@@ -584,6 +584,7 @@ FORM edit_exclusion.
   PERFORM build_fieldcat_edit.
   gs_layout-zebra             = 'X'.
   gs_layout-colwidth_optimize = 'X'.
+  gs_layout-edit              = 'X'.
   gs_layout-window_titlebar   = 'Edit Validity of Exclusion Entry'.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
