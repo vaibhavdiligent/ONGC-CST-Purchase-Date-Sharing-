@@ -5112,6 +5112,7 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
         lt_mismatch  TYPE TABLE OF lty_cv_mismatch,
         ls_mismatch  TYPE lty_cv_mismatch,
         lv_answer    TYPE c LENGTH 1.
+  CONSTANTS: lc_cv_tolerance TYPE f VALUE '0.01'.  " Tolerance for FLTP vs packed decimal comparison
   cv_valid = abap_true.
   " 2.1: Pass dates and location ID from user inputs to YRXA_CMDATA
   SELECT yydate yybus_location yyavg_gcv yyavg_ncv yytimestamp
@@ -5132,7 +5133,8 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
       WITH KEY gas_day     = ls_cmdata-yydate
                location_id = ls_cmdata-yybus_location.
     IF sy-subrc = 0.
-      IF ls_cmdata-yyavg_gcv <> ls_gas_rcpt-gcv OR ls_cmdata-yyavg_ncv <> ls_gas_rcpt-ncv.
+      IF abs( ls_cmdata-yyavg_gcv - ls_gas_rcpt-gcv ) > lc_cv_tolerance
+        OR abs( ls_cmdata-yyavg_ncv - ls_gas_rcpt-ncv ) > lc_cv_tolerance.
         CLEAR ls_mismatch.
         ls_mismatch-gas_day     = ls_cmdata-yydate.
         ls_mismatch-location_id = ls_cmdata-yybus_location.
