@@ -457,6 +457,8 @@ START-OF-SELECTION.
         MESSAGE s000(ygms_msg) WITH 'CV validation failed. Program cannot proceed.'.
         RETURN.
       ENDIF.
+      " Volume matching: Receipt volume vs Measurement volume (YYCUM_VOL)
+      PERFORM validate_volume_data.
     ENDIF.
     PERFORM fetch_data_yrxr098.
     IF p_view IS INITIAL.
@@ -5250,5 +5252,201 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
       EXCEPTIONS
         program_error = 1
         OTHERS        = 2.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form VALIDATE_VOLUME_DATA
+*& Matches receipt volumes (YRGA_CST_B2B_1) against measurement volumes
+*& (YYCUM_VOL from YRXA_CMDATA) for each CTP ID and Gas Day.
+*& Shows mismatch popup if volumes differ; on clicking Details, shows
+*& Gas Day, CTP ID, Receipt Vol., Location ID, Measurement Vol.
+*&---------------------------------------------------------------------*
+FORM validate_volume_data.
+  " Local types
+  TYPES: BEGIN OF lty_b2b_vol,
+           gas_day       TYPE datum,
+           ctp_id        TYPE ygms_de_ongc_ctp,
+           ongc_material TYPE ygms_de_ongc_mat,
+           qty_scm       TYPE ygms_de_qty_scm,
+           time_stamp    TYPE timestamp,
+         END OF lty_b2b_vol.
+  TYPES: BEGIN OF lty_receipt_total,
+           gas_day  TYPE datum,
+           ctp_id   TYPE ygms_de_ongc_ctp,
+           qty_scm  TYPE p DECIMALS 3,
+         END OF lty_receipt_total.
+  TYPES: BEGIN OF lty_cmdata_vol,
+           yydate         TYPE dats,
+           yybus_location TYPE oij_locid,
+           yycum_vol      TYPE yycum_vol,
+           yytimestamp    TYPE timestamp,
+         END OF lty_cmdata_vol.
+  TYPES: BEGIN OF lty_vol_mismatch,
+           gas_day      TYPE datum,
+           ctp_id       TYPE ygms_de_ongc_ctp,
+           receipt_vol  TYPE p DECIMALS 3,
+           location_id  TYPE ygms_de_loc_id,
+           meas_vol     TYPE p DECIMALS 3,
+         END OF lty_vol_mismatch.
+
+  DATA: lt_b2b_raw      TYPE TABLE OF lty_b2b_vol,
+        lt_receipt_total TYPE TABLE OF lty_receipt_total,
+        ls_receipt_total TYPE lty_receipt_total,
+        lt_cmdata_vol    TYPE TABLE OF lty_cmdata_vol,
+        lt_vol_mismatch  TYPE TABLE OF lty_vol_mismatch,
+        ls_vol_mismatch  TYPE lty_vol_mismatch,
+        lt_ctp_ids       TYPE TABLE OF ygms_de_ongc_ctp,
+        lv_answer        TYPE c LENGTH 1.
+
+  " Step 1: Collect all CTP IDs from location mapping
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_map_v).
+    COLLECT ls_map_v-ongc_ctp_id INTO lt_ctp_ids.
+  ENDLOOP.
+  IF lt_ctp_ids IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " Step 1a: Fetch B2B data for all CTP IDs and gas days
+  SELECT gas_day ctp_id ongc_material qty_scm time_stamp
+    FROM yrga_cst_b2b_1
+    INTO TABLE lt_b2b_raw
+    FOR ALL ENTRIES IN lt_ctp_ids
+    WHERE ctp_id  = lt_ctp_ids-table_line
+      AND gas_day BETWEEN gv_date_from AND gv_date_to
+      AND qty_scm > 0.
+  IF lt_b2b_raw IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " Step 1b: Keep latest data for each CTP ID - Gas Day - ONGC Material
+  SORT lt_b2b_raw BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_b2b_raw COMPARING ctp_id gas_day ongc_material.
+
+  " Step 1c: Sum volume (Sm3) of all materials per CTP ID - Gas Day
+  LOOP AT lt_b2b_raw INTO DATA(ls_b2b_v).
+    ls_receipt_total-gas_day = ls_b2b_v-gas_day.
+    ls_receipt_total-ctp_id  = ls_b2b_v-ctp_id.
+    ls_receipt_total-qty_scm = ls_b2b_v-qty_scm.
+    COLLECT ls_receipt_total INTO lt_receipt_total.
+    CLEAR ls_receipt_total.
+  ENDLOOP.
+
+  " Round receipt totals to 3 decimal places
+  LOOP AT lt_receipt_total ASSIGNING FIELD-SYMBOL(<fs_rcpt_total>).
+    <fs_rcpt_total>-qty_scm = round( val = <fs_rcpt_total>-qty_scm dec = 3 ).
+  ENDLOOP.
+
+  " Step 2: For each CTP ID, find the Location ID from mapping
+  " Then fetch YYCUM_VOL from YRXA_CMDATA for that Location ID and Gas Day
+  DATA: lt_loc_ids TYPE TABLE OF ygms_de_loc_id.
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_map_v2).
+    COLLECT ls_map_v2-gail_loc_id INTO lt_loc_ids.
+  ENDLOOP.
+
+  IF lt_loc_ids IS NOT INITIAL.
+    SELECT yydate yybus_location yycum_vol yytimestamp
+      FROM yrxa_cmdata
+      INTO TABLE lt_cmdata_vol
+      FOR ALL ENTRIES IN lt_loc_ids
+      WHERE yybus_location = lt_loc_ids-table_line
+        AND yydate BETWEEN gv_date_from AND gv_date_to.
+  ENDIF.
+
+  IF lt_cmdata_vol IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " Keep latest record for each Gas Day - Location ID
+  SORT lt_cmdata_vol BY yydate yybus_location yytimestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_cmdata_vol COMPARING yydate yybus_location.
+
+  " Step 3: Match volumes for each CTP ID - Gas Day
+  LOOP AT lt_receipt_total INTO ls_receipt_total.
+    " Find Location ID for this CTP ID
+    READ TABLE gt_loc_ctp_map INTO DATA(ls_map_v3)
+      WITH KEY ongc_ctp_id = ls_receipt_total-ctp_id.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+    " Find measurement volume from YRXA_CMDATA
+    READ TABLE lt_cmdata_vol INTO DATA(ls_cm_v)
+      WITH KEY yydate         = ls_receipt_total-gas_day
+               yybus_location = ls_map_v3-gail_loc_id.
+    IF sy-subrc = 0.
+      DATA(lv_meas_vol) = round( val = ls_cm_v-yycum_vol dec = 3 ).
+      " Compare receipt volume with measurement volume
+      IF ls_receipt_total-qty_scm <> lv_meas_vol.
+        CLEAR ls_vol_mismatch.
+        ls_vol_mismatch-gas_day     = ls_receipt_total-gas_day.
+        ls_vol_mismatch-ctp_id      = ls_receipt_total-ctp_id.
+        ls_vol_mismatch-receipt_vol = ls_receipt_total-qty_scm.
+        ls_vol_mismatch-location_id = ls_map_v3-gail_loc_id.
+        ls_vol_mismatch-meas_vol    = lv_meas_vol.
+        APPEND ls_vol_mismatch TO lt_vol_mismatch.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  " Step 5: If mismatch found, show popup
+  IF lt_vol_mismatch IS NOT INITIAL.
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Mismatch in volumes detected'
+        textline2      = 'Click Yes to view details, No to continue'
+        titel          = 'Volume Mismatch'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_answer.
+    IF lv_answer = 'J'.  " Yes = Details
+      " Build field catalog for mismatch detail ALV
+      DATA: lt_vol_fcat TYPE slis_t_fieldcat_alv,
+            ls_vol_fcat TYPE slis_fieldcat_alv.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'GAS_DAY'.
+      ls_vol_fcat-seltext_l = 'Gas Day'.
+      ls_vol_fcat-outputlen = 12.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'CTP_ID'.
+      ls_vol_fcat-seltext_l = 'CTP ID'.
+      ls_vol_fcat-outputlen = 15.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'RECEIPT_VOL'.
+      ls_vol_fcat-seltext_l = 'Receipt Vol. (Sm3)'.
+      ls_vol_fcat-seltext_m = 'Receipt Vol.'.
+      ls_vol_fcat-outputlen = 18.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'LOCATION_ID'.
+      ls_vol_fcat-seltext_l = 'Location ID'.
+      ls_vol_fcat-outputlen = 12.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'MEAS_VOL'.
+      ls_vol_fcat-seltext_l = 'Measurement Vol. (Sm3)'.
+      ls_vol_fcat-seltext_m = 'Meas. Vol.'.
+      ls_vol_fcat-outputlen = 18.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      " Display mismatch detail ALV as popup
+      DATA: ls_vol_layout TYPE slis_layout_alv.
+      ls_vol_layout-zebra = 'X'.
+      ls_vol_layout-colwidth_optimize = 'X'.
+      SORT lt_vol_mismatch BY gas_day ctp_id.
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+          i_callback_program    = sy-repid
+          is_layout             = ls_vol_layout
+          it_fieldcat           = lt_vol_fcat
+          i_screen_start_column = 10
+          i_screen_start_line   = 5
+          i_screen_end_column   = 120
+          i_screen_end_line     = 25
+        TABLES
+          t_outtab              = lt_vol_mismatch
+        EXCEPTIONS
+          program_error = 1
+          OTHERS        = 2.
+    ENDIF.
   ENDIF.
 ENDFORM.
