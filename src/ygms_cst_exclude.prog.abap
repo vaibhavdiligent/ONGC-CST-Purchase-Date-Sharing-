@@ -168,7 +168,7 @@ START-OF-SELECTION.
 *&---------------------------------------------------------------------*
 *& Provide F4 help for state code using T005U
 *&---------------------------------------------------------------------*
-FORM f4_help_state USING pv_field TYPE string.
+FORM f4_help_state USING pv_field TYPE dynfnam.
   TYPES: BEGIN OF ty_state_f4,
            bland TYPE t005u-bland,
            bezei TYPE t005u-bezei,
