@@ -169,36 +169,53 @@ START-OF-SELECTION.
 *& Provide F4 help for state code using T005U
 *&---------------------------------------------------------------------*
 FORM f4_help_state USING pv_field TYPE dynfnam.
-  TYPES: BEGIN OF ty_state_f4,
-           bland TYPE t005u-bland,
-           bezei TYPE t005u-bezei,
-         END OF ty_state_f4.
   DATA: lt_return   TYPE STANDARD TABLE OF ddshretval,
         ls_return   TYPE ddshretval,
-        lt_state_f4 TYPE STANDARD TABLE OF ty_state_f4.
+        lt_dynpread TYPE STANDARD TABLE OF dynpread,
+        ls_dynpread TYPE dynpread.
+  DATA: BEGIN OF ls_state,
+          bland TYPE t005u-bland,
+          bezei TYPE t005u-bezei,
+        END OF ls_state.
+  DATA: lt_states LIKE STANDARD TABLE OF ls_state.
 * Fetch Indian state codes from T005U (only BLAND and BEZEI)
   SELECT bland bezei FROM t005u
-    INTO TABLE lt_state_f4
+    INTO TABLE lt_states
     WHERE spras = sy-langu
       AND land1 = 'IN'.
-  IF lt_state_f4 IS INITIAL.
+  IF lt_states IS INITIAL.
     MESSAGE 'No state codes found.' TYPE 'I'.
     RETURN.
   ENDIF.
   CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
     EXPORTING
       retfield        = 'BLAND'
-      dynpprog        = sy-repid
-      dynpnr          = sy-dynnr
-      dynprofield     = pv_field
+      window_title    = 'Select State Code'
       value_org       = 'S'
     TABLES
-      value_tab       = lt_state_f4
+      value_tab       = lt_states
       return_tab      = lt_return
     EXCEPTIONS
       parameter_error = 1
       no_values_found = 2
       OTHERS          = 3.
+  IF sy-subrc = 0.
+    READ TABLE lt_return INTO ls_return INDEX 1.
+    IF sy-subrc = 0 AND ls_return-fieldval IS NOT INITIAL.
+*     Set the selected value on the dynpro field manually
+      ls_dynpread-fieldname = pv_field.
+      ls_dynpread-fieldvalue = ls_return-fieldval.
+      APPEND ls_dynpread TO lt_dynpread.
+      CALL FUNCTION 'DYNP_VALUES_UPDATE'
+        EXPORTING
+          dyname     = sy-repid
+          dynumb     = sy-dynnr
+        TABLES
+          dynpfields = lt_dynpread
+        EXCEPTIONS
+          OTHERS     = 1.
+    ENDIF.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form GET_STATE_NAME
