@@ -879,6 +879,9 @@ FORM build_fieldcat_edit.
   gs_fieldcat-seltext_m = 'Valid From'.
   gs_fieldcat-seltext_s = 'From'.
   gs_fieldcat-edit      = 'X'.
+  gs_fieldcat-outputlen = 10.
+  gs_fieldcat-inttype   = 'D'.
+  gs_fieldcat-datatype  = 'DATS'.
   gs_fieldcat-tabname   = 'GT_EXCLUDE'.
   APPEND gs_fieldcat TO gt_fieldcat.
 
@@ -890,6 +893,9 @@ FORM build_fieldcat_edit.
   gs_fieldcat-seltext_m = 'Valid To'.
   gs_fieldcat-seltext_s = 'To'.
   gs_fieldcat-edit      = 'X'.
+  gs_fieldcat-outputlen = 10.
+  gs_fieldcat-inttype   = 'D'.
+  gs_fieldcat-datatype  = 'DATS'.
   gs_fieldcat-tabname   = 'GT_EXCLUDE'.
   APPEND gs_fieldcat TO gt_fieldcat.
 
