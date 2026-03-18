@@ -5164,42 +5164,29 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
     DATA: lt_detail_fcat TYPE slis_t_fieldcat_alv,
           ls_detail_fcat TYPE slis_fieldcat_alv.
     TYPES: BEGIN OF lty_cv_detail,
-             source      TYPE char30,
              gas_day     TYPE datum,
              location_id TYPE ygms_de_loc_id,
              ctp_id      TYPE ygms_de_ongc_ctp,
-             gcv         TYPE ygms_de_gcv,
-             ncv         TYPE ygms_de_ncv,
+             gcv_meas    TYPE ygms_de_gcv,
+             ncv_meas    TYPE ygms_de_ncv,
+             gcv_receipt TYPE ygms_de_gcv,
+             ncv_receipt TYPE ygms_de_ncv,
            END OF lty_cv_detail.
     DATA: lt_cv_detail TYPE TABLE OF lty_cv_detail,
           ls_cv_detail TYPE lty_cv_detail.
-    " 2.4a: Add measurement table records
+    " 2.4: Build detail table - one row per mismatch with both sources side by side
     LOOP AT lt_mismatch INTO ls_mismatch.
       CLEAR ls_cv_detail.
-      ls_cv_detail-source      = 'Measurement Table'.       " YRXA_CMDATA
-      ls_cv_detail-gas_day     = ls_mismatch-gas_day.
-      ls_cv_detail-location_id = ls_mismatch-location_id.
-      ls_cv_detail-gcv         = ls_mismatch-gcv_meas.
-      ls_cv_detail-ncv         = ls_mismatch-ncv_meas.
-      APPEND ls_cv_detail TO lt_cv_detail.
-    ENDLOOP.
-    " 2.4b: Add receipt data table records
-    LOOP AT lt_mismatch INTO ls_mismatch.
-      CLEAR ls_cv_detail.
-      ls_cv_detail-source      = 'Receipt Data Table'.      " GT_GAS_RECEIPT
       ls_cv_detail-gas_day     = ls_mismatch-gas_day.
       ls_cv_detail-location_id = ls_mismatch-location_id.
       ls_cv_detail-ctp_id      = ls_mismatch-ctp_id.
-      ls_cv_detail-gcv         = ls_mismatch-gcv_receipt.
-      ls_cv_detail-ncv         = ls_mismatch-ncv_receipt.
+      ls_cv_detail-gcv_meas    = ls_mismatch-gcv_meas.
+      ls_cv_detail-ncv_meas    = ls_mismatch-ncv_meas.
+      ls_cv_detail-gcv_receipt = ls_mismatch-gcv_receipt.
+      ls_cv_detail-ncv_receipt = ls_mismatch-ncv_receipt.
       APPEND ls_cv_detail TO lt_cv_detail.
     ENDLOOP.
     " Build field catalog for detail ALV
-    CLEAR ls_detail_fcat.
-    ls_detail_fcat-fieldname = 'SOURCE'.
-    ls_detail_fcat-seltext_l = 'Data Source'.
-    ls_detail_fcat-outputlen = 25.
-    APPEND ls_detail_fcat TO lt_detail_fcat.
     CLEAR ls_detail_fcat.
     ls_detail_fcat-fieldname = 'GAS_DAY'.
     ls_detail_fcat-seltext_l = 'Gas Day'.
@@ -5216,14 +5203,32 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
     ls_detail_fcat-outputlen = 12.
     APPEND ls_detail_fcat TO lt_detail_fcat.
     CLEAR ls_detail_fcat.
-    ls_detail_fcat-fieldname = 'GCV'.
-    ls_detail_fcat-seltext_l = 'GCV'.
-    ls_detail_fcat-outputlen = 12.
+    ls_detail_fcat-fieldname = 'GCV_MEAS'.
+    ls_detail_fcat-seltext_l = 'Measurement Table GCV'.
+    ls_detail_fcat-seltext_m = 'Meas. Table GCV'.
+    ls_detail_fcat-seltext_s = 'Meas GCV'.
+    ls_detail_fcat-outputlen = 16.
     APPEND ls_detail_fcat TO lt_detail_fcat.
     CLEAR ls_detail_fcat.
-    ls_detail_fcat-fieldname = 'NCV'.
-    ls_detail_fcat-seltext_l = 'NCV'.
-    ls_detail_fcat-outputlen = 12.
+    ls_detail_fcat-fieldname = 'NCV_MEAS'.
+    ls_detail_fcat-seltext_l = 'Measurement Table NCV'.
+    ls_detail_fcat-seltext_m = 'Meas. Table NCV'.
+    ls_detail_fcat-seltext_s = 'Meas NCV'.
+    ls_detail_fcat-outputlen = 16.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'GCV_RECEIPT'.
+    ls_detail_fcat-seltext_l = 'Receipt Table GCV'.
+    ls_detail_fcat-seltext_m = 'Receipt Tbl GCV'.
+    ls_detail_fcat-seltext_s = 'Rcpt GCV'.
+    ls_detail_fcat-outputlen = 16.
+    APPEND ls_detail_fcat TO lt_detail_fcat.
+    CLEAR ls_detail_fcat.
+    ls_detail_fcat-fieldname = 'NCV_RECEIPT'.
+    ls_detail_fcat-seltext_l = 'Receipt Table NCV'.
+    ls_detail_fcat-seltext_m = 'Receipt Tbl NCV'.
+    ls_detail_fcat-seltext_s = 'Rcpt NCV'.
+    ls_detail_fcat-outputlen = 16.
     APPEND ls_detail_fcat TO lt_detail_fcat.
     " Display detail ALV as popup
     DATA: ls_detail_layout TYPE slis_layout_alv.
@@ -5236,7 +5241,7 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
         it_fieldcat        = lt_detail_fcat
         i_screen_start_column = 10
         i_screen_start_line   = 5
-        i_screen_end_column   = 120
+        i_screen_end_column   = 150
         i_screen_end_line     = 25
       TABLES
         t_outtab           = lt_cv_detail
