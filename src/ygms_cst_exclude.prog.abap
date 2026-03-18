@@ -169,18 +169,19 @@ START-OF-SELECTION.
 *& Provide F4 help for state code using T005U
 *&---------------------------------------------------------------------*
 FORM f4_help_state USING pv_field TYPE string.
-  DATA: lt_return TYPE STANDARD TABLE OF ddshretval,
-        ls_return TYPE ddshretval,
-        lt_t005u  TYPE STANDARD TABLE OF t005u,
-        ls_t005u  TYPE t005u.
-  DATA: lt_dynpfields TYPE STANDARD TABLE OF dynpread,
-        ls_dynpfield  TYPE dynpread.
-* Fetch Indian state codes from T005U
-  SELECT * FROM t005u
-    INTO TABLE lt_t005u
+  TYPES: BEGIN OF ty_state_f4,
+           bland TYPE t005u-bland,
+           bezei TYPE t005u-bezei,
+         END OF ty_state_f4.
+  DATA: lt_return   TYPE STANDARD TABLE OF ddshretval,
+        ls_return   TYPE ddshretval,
+        lt_state_f4 TYPE STANDARD TABLE OF ty_state_f4.
+* Fetch Indian state codes from T005U (only BLAND and BEZEI)
+  SELECT bland bezei FROM t005u
+    INTO TABLE lt_state_f4
     WHERE spras = sy-langu
       AND land1 = 'IN'.
-  IF lt_t005u IS INITIAL.
+  IF lt_state_f4 IS INITIAL.
     MESSAGE 'No state codes found.' TYPE 'I'.
     RETURN.
   ENDIF.
@@ -192,7 +193,7 @@ FORM f4_help_state USING pv_field TYPE string.
       dynprofield     = pv_field
       value_org       = 'S'
     TABLES
-      value_tab       = lt_t005u
+      value_tab       = lt_state_f4
       return_tab      = lt_return
     EXCEPTIONS
       parameter_error = 1
