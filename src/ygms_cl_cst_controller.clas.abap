@@ -193,25 +193,32 @@ CLASS ygms_cl_cst_controller IMPLEMENTATION.
       it_excluded_states = it_excluded_states
     ).
 
-    " Validate allocation
+    " Validate allocation - if volume matching fails, stop the process
     IF mo_validator->validate_totals(
          it_b2b_data    = lt_b2b_data
          it_allocation  = et_allocation ) = abap_false.
+      CLEAR et_allocation.
       add_message(
-        iv_type   = 'W'
+        iv_type   = 'E'
         iv_id     = 'YGMS_MSG'
         iv_number = '009'
         iv_v1     = 'Allocation'
         iv_v2     = 'Supply'
       ).
-    ELSE.
-      add_message(
-        iv_type   = 'S'
-        iv_id     = 'YGMS_MSG'
-        iv_number = '017'
-        iv_v1     = CONV #( lines( et_allocation ) )
-      ).
+      et_messages = mt_messages.
+      RAISE EXCEPTION TYPE ygms_cx_cst_validation
+        EXPORTING
+          textid    = ygms_cx_cst_validation=>allocation_mismatch
+          mv_param1 = 'Allocation'
+          mv_param2 = 'Supply'.
     ENDIF.
+
+    add_message(
+      iv_type   = 'S'
+      iv_id     = 'YGMS_MSG'
+      iv_number = '017'
+      iv_v1     = CONV #( lines( et_allocation ) )
+    ).
 
     et_messages = mt_messages.
   ENDMETHOD.
