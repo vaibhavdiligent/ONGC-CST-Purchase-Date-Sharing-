@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_PROG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <PROGDIR>
+    <NAME>ZRADVVDO2</NAME>
+    <SUBC>1</SUBC>
+    <APPL>S</APPL>
+    <RLOAD>E</RLOAD>
+    <FIXPT>X</FIXPT>
+    <UCCHECK>X</UCCHECK>
+   </PROGDIR>
+   <TPOOL>
+    <item>
+     <ID>R</ID>
+     <ENTRY>Version Display/Comparison of Domains</ENTRY>
+     <LENGTH>44</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S01</KEY>
+     <ENTRY>General Attributes</ENTRY>
+     <LENGTH>26</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S02</KEY>
+     <ENTRY>Fixed Values:</ENTRY>
+     <LENGTH>21</LENGTH>
+    </item>
+   </TPOOL>
+   <TEXTS>
+    <item>
+     <ID>S</ID>
+     <KEY>AGGNAME</KEY>
+     <ENTRY>Aggregate Name:</ENTRY>
+     <LENGTH>23</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>AGGTYPE</KEY>
+     <ENTRY>Aggregate Type (V,M,E,I):</ENTRY>
+     <LENGTH>33</LENGTH>
+    </item>
+   </TEXTS>
+  </asx:values>
+ </asx:abap>
+</abapGit>
