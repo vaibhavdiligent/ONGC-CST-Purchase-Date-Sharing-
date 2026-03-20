@@ -2407,9 +2407,18 @@ START-OF-SELECTION.
 
 
           SORT it_display1 BY vbeln ASCENDING.
-          PERFORM alv_build_fieldcat1.
-          PERFORM build_layout.
-          PERFORM display_alv1.
+*SOC Background auto-posting - skip ALV and auto-post when p_post = 'X'
+          IF p_post = 'X'.
+            DATA: ls_auto_selfield TYPE slis_selfield.
+            PERFORM user_command USING 'SUBMIT' ls_auto_selfield.
+          ELSE.
+*EOC Background auto-posting
+            PERFORM alv_build_fieldcat1.
+            PERFORM build_layout.
+            PERFORM display_alv1.
+*SOC Background auto-posting
+          ENDIF.
+*EOC Background auto-posting
 
         ENDIF.
         IF it_display1[] IS NOT INITIAL AND

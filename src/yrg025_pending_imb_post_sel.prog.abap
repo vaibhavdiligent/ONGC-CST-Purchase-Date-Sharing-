@@ -132,6 +132,9 @@ PARAMETERS ch1 AS CHECKBOX.
 *SOC BY Gaurav/Pratibha ON 07.02.2026 Auto posting of fortnightly imbalance TR:DVRK9A1POQ
 parameters: p_auto as checkbox.
 *EOC BY Gaurav/Pratibha ON 07.02.2026 Auto posting of fortnightly imbalance TR:DVRK9A1POQ
+*SOC Background auto-posting
+PARAMETERS: p_bkgnd AS CHECKBOX.  "Background
+*EOC Background auto-posting
 SELECTION-SCREEN END OF BLOCK b1.
 
 

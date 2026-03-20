@@ -49,6 +49,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_BKGND</KEY>
+     <ENTRY>        Background</ENTRY>
+     <LENGTH>18</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>S_DATE</KEY>
      <ENTRY>        Gas Days</ENTRY>
      <LENGTH>16</LENGTH>

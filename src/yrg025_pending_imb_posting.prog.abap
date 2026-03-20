@@ -17,6 +17,11 @@ START-OF-SELECTION.
     PERFORM:customers_with_imbalance.
   ENDIF.
 *EOC BY Gaurav/Pratibha ON 07.02.2026 Auto posting of fortnightly imbalance TR:DVRK9A1POQ
+*SOC Background auto-posting
+  IF p_bkgnd EQ 'X'.
+    PERFORM:customers_with_imbalance.
+  ENDIF.
+*EOC Background auto-posting
   PERFORM:comment_build USING gt_list_top_of_page[].
   PERFORM:get_fieldcat.
   PERFORM:alv_display.
