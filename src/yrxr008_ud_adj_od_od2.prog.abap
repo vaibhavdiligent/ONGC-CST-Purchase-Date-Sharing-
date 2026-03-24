@@ -622,7 +622,7 @@ LOOP AT lt_trantypes INTO ls_trantype WHERE trantyp = ls_reltype-transaction_typ
 *     IF SY-SUBRC = 0.
 READ TABLE lt_vbap INTO ls_vbap WITH KEY vbeln = ls_trantype-vbeln .
 IF sy-subrc = 0.
-LOOP AT lt_mat_ud INTO ls_mat_ud WHERE matnr = ls_vbap-matnr ANDvbeln = ls_trantype-vbeln.
+LOOP AT lt_mat_ud INTO ls_mat_ud WHERE matnr = ls_vbap-matnr AND vbeln = ls_trantype-vbeln.
 ls_mat_ud_pro-rank = ls_rank-yy_rank.
 MOVE-CORRESPONDING ls_mat_ud TO ls_mat_ud_pro.
 APPEND ls_mat_ud_pro TO lt_mat_ud_pro.
@@ -642,7 +642,7 @@ LOOP AT lt_trantypes INTO ls_trantype WHERE trantyp = ls_reltype-transaction_typ
 *     IF SY-SUBRC = 0.
 READ TABLE lt_vbap INTO ls_vbap WITH KEY vbeln = ls_trantype-vbeln .
 IF sy-subrc = 0.
-LOOP AT lt_mat_ud INTO ls_mat_ud WHERE matnr = ls_vbap-matnr ANDvbeln = ls_vbap-vbeln.
+LOOP AT lt_mat_ud INTO ls_mat_ud WHERE matnr = ls_vbap-matnr AND vbeln = ls_vbap-vbeln.
 IF ls_mat_ud-csm3 <> 0.
 READ TABLE lt_cum_aod INTO ls_cum_aod WITH KEY locid = ls_mat_ud-locid.
 IF sy-subrc = 0.
@@ -676,7 +676,7 @@ ls_mat_ud1-csm3 = ls_mat_ud1-csm3 + lv_bal_aod .
 ENDIF.
 ****      EOC LOGIC TO REMOVE ROUNDING ERROR OF .001 CHARM 4000005003
 
-MODIFY lt_mat_ud FROM ls_mat_ud1 INDEX sy-tabix TR ANSPORTING csm3 .
+MODIFY lt_mat_ud FROM ls_mat_ud1 INDEX sy-tabix TRANSPORTING csm3 .
 ENDIF.
 ENDLOOP.
 ls_cum_aod-cum_aod = lv_aod.
