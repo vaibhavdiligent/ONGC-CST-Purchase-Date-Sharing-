@@ -680,7 +680,7 @@ MODIFY lt_mat_ud FROM ls_mat_ud1 INDEX sy-tabix TRANSPORTING csm3 .
 ENDIF.
 ENDLOOP.
 ls_cum_aod-cum_aod = lv_aod.
-READ TABLE lt_mat_ud INTO ls_mat_ud WITH KEY matnr = ls_vbap-matnr.
+READ TABLE lt_mat_ud INTO ls_mat_ud WITH KEY matnr = ls_vbap-matnr vbeln = ls_vbap-vbeln.
 
 ENDIF.
 DELETE lt_mat_ud_pro WHERE rank = ls_rank-yy_rank.
