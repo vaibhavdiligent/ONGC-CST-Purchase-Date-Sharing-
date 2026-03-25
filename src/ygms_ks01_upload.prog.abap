@@ -18,13 +18,14 @@ TYPES: BEGIN OF ty_excel_data,
          ktext TYPE csks-ktext,     " Name
          ltext TYPE csks-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
-         abtei TYPE csks-abtei,     " Department
          kosar TYPE csks-kosar,     " Cost Center Category
          khinr TYPE csks-khinr,     " Hierarchy Area
          bukrs TYPE csks-bukrs,     " Company Code
          gsber TYPE csks-gsber,     " Business Area
          prctr TYPE csks-prctr,     " Profit Center
          waers TYPE csks-waers,     " Currency
+         land1 TYPE csks-land1,     " Country
+         regio TYPE csks-regio,     " Region
        END OF ty_excel_data.
 
 TYPES: BEGIN OF ty_result,
@@ -182,7 +183,7 @@ FORM upload_xls.
       filename                = p_file
       i_begin_col             = 1
       i_begin_row             = 2
-      i_end_col               = 14
+      i_end_col               = 15
       i_end_row               = 9999
     TABLES
       intern                  = gt_raw
@@ -288,7 +289,7 @@ FORM upload_xlsx.
       CONTINUE.
     ENDIF.
 
-    DO 14 TIMES.
+    DO 15 TIMES.
       lv_col = sy-index.
       ASSIGN COMPONENT lv_col OF STRUCTURE <fs_row> TO <fv_value>.
       IF sy-subrc = 0 AND <fv_value> IS NOT INITIAL.
@@ -330,13 +331,14 @@ FORM convert_excel_to_data.
       WHEN 5.  gs_excel-ktext = gs_raw-value.
       WHEN 6.  gs_excel-ltext = gs_raw-value.
       WHEN 7.  gs_excel-verak = gs_raw-value.
-      WHEN 8.  gs_excel-abtei = gs_raw-value.
-      WHEN 9.  gs_excel-kosar = gs_raw-value.
-      WHEN 10. gs_excel-khinr = gs_raw-value.
-      WHEN 11. gs_excel-bukrs = gs_raw-value.
-      WHEN 12. gs_excel-gsber = gs_raw-value.
-      WHEN 13. gs_excel-prctr = gs_raw-value.
-      WHEN 14. gs_excel-waers = gs_raw-value.
+      WHEN 8.  gs_excel-kosar = gs_raw-value.
+      WHEN 9.  gs_excel-khinr = gs_raw-value.
+      WHEN 10. gs_excel-bukrs = gs_raw-value.
+      WHEN 11. gs_excel-gsber = gs_raw-value.
+      WHEN 12. gs_excel-prctr = gs_raw-value.
+      WHEN 13. gs_excel-waers = gs_raw-value.
+      WHEN 14. gs_excel-land1 = gs_raw-value.
+      WHEN 15. gs_excel-regio = gs_raw-value.
     ENDCASE.
   ENDLOOP.
 
@@ -579,13 +581,14 @@ FORM build_bdc_ks01 USING ps_data TYPE ty_excel_data.
   PERFORM bdc_field  USING 'CSKS-KTEXT'  ps_data-ktext.
   PERFORM bdc_field  USING 'CSKS-LTEXT'  ps_data-ltext.
   PERFORM bdc_field  USING 'CSKS-VERAK'  ps_data-verak.
-  PERFORM bdc_field  USING 'CSKS-ABTEI'  ps_data-abtei.
   PERFORM bdc_field  USING 'CSKS-KOSAR'  ps_data-kosar.
   PERFORM bdc_field  USING 'CSKS-KHINR'  ps_data-khinr.
   PERFORM bdc_field  USING 'CSKS-BUKRS'  ps_data-bukrs.
   PERFORM bdc_field  USING 'CSKS-GSBER'  ps_data-gsber.
   PERFORM bdc_field  USING 'CSKS-PRCTR'  ps_data-prctr.
   PERFORM bdc_field  USING 'CSKS-WAERS'  ps_data-waers.
+  PERFORM bdc_field  USING 'CSKS-LAND1'  ps_data-land1.
+  PERFORM bdc_field  USING 'CSKS-REGIO'  ps_data-regio.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

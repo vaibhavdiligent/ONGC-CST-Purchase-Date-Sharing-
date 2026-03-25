@@ -2,10 +2,10 @@
 
 ## Files
 
-| Template | Program | Purpose |
-|----------|---------|---------|
-| `KS01_Upload_Template.csv` | YGMS_KS01_UPLOAD | Mass Create Cost Centers |
-| `KS02_Change_Template.csv` | YGMS_KS02_UPLOAD | Mass Change Cost Centers |
+| Template | Program | Purpose | Columns |
+|----------|---------|---------|---------|
+| `KS01_Upload_Template.csv` | YGMS_KS01_UPLOAD | Mass Create Cost Centers | 15 |
+| `KS02_Change_Template.csv` | YGMS_KS02_UPLOAD | Mass Change Cost Centers | 6 |
 
 ## How to Use
 
@@ -16,30 +16,42 @@
 5. Select the file and run with **Test Run** checked first
 6. Uncheck Test Run to execute actual BDC
 
-## Column Layout (14 Columns)
+## KS01 - Create Cost Center (15 Columns)
 
-| Col | Field | SAP Field | KS01 Required | KS02 Required |
-|-----|-------|-----------|---------------|---------------|
-| A | Controlling Area | CSKS-KOKRS | Yes | Yes |
-| B | Cost Center | CSKS-KOSTL | Yes | Yes |
-| C | Valid From | CSKS-DATAB | Yes | Yes |
-| D | Valid To | CSKS-DATBI | Yes | No |
-| E | Name | CSKS-KTEXT | Yes | No |
-| F | Description | CSKS-LTEXT | No | No |
-| G | Person Responsible | CSKS-VERAK | No | No |
-| H | Department | CSKS-ABTEI | No | No |
-| I | Cost Center Category | CSKS-KOSAR | Yes | No |
-| J | Hierarchy Area | CSKS-KHINR | Yes | No |
-| K | Company Code | CSKS-BUKRS | Yes | No |
-| L | Business Area | CSKS-GSBER | No | No |
-| M | Profit Center | CSKS-PRCTR | No | No |
-| N | Currency | CSKS-WAERS | No | No |
+| Col | Field | SAP Field | Required |
+|-----|-------|-----------|----------|
+| A | Controlling Area | CSKS-KOKRS | Yes |
+| B | Cost Center | CSKS-KOSTL | Yes |
+| C | Valid From | CSKS-DATAB | Yes |
+| D | Valid To | CSKS-DATBI | Yes |
+| E | Name | CSKS-KTEXT | Yes |
+| F | Description | CSKS-LTEXT | No |
+| G | Person Responsible | CSKS-VERAK | No |
+| H | Cost Center Category | CSKS-KOSAR | Yes |
+| I | Hierarchy Area | CSKS-KHINR | Yes |
+| J | Company Code | CSKS-BUKRS | Yes |
+| K | Business Area | CSKS-GSBER | No |
+| L | Profit Center | CSKS-PRCTR | No |
+| M | Currency | CSKS-WAERS | No |
+| N | Country | CSKS-LAND1 | No |
+| O | Region | CSKS-REGIO | No |
 
-## KS02 Change Notes
+## KS02 - Change Cost Center (6 Columns)
+
+| Col | Field | SAP Field | Required |
+|-----|-------|-----------|----------|
+| A | Controlling Area | CSKS-KOKRS | Yes |
+| B | Cost Center | CSKS-KOSTL | Yes |
+| C | Name | CSKS-KTEXT | No |
+| D | Description | CSKS-LTEXT | No |
+| E | Person Responsible | CSKS-VERAK | No |
+| F | Department | CSKS-ABTEI | No |
+
+### KS02 Change Notes
 
 - Only fill the columns you want to **change**
 - Leave columns blank to keep existing values unchanged
-- Columns A (Controlling Area), B (Cost Center), C (Valid From) are always required to identify the record
+- Columns A (Controlling Area) and B (Cost Center) are always required to identify the record
 
 ## Date Format
 
