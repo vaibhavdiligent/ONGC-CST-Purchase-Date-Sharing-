@@ -496,8 +496,9 @@ FORM build_bdc_ks02 USING ps_data TYPE ty_excel_data.
 
   " Screen 0299 - Basic Data (only populate non-blank fields)
   PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
+  PERFORM bdc_field  USING 'BDC_SUBSCR'  ''.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
 
   IF ps_data-ktext IS NOT INITIAL.
     PERFORM bdc_field USING 'CSKSZ-KTEXT' ps_data-ktext.
