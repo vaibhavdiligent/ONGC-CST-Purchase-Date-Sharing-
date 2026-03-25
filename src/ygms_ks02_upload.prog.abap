@@ -13,26 +13,16 @@ TYPE-POOLS: slis.
 TYPES: BEGIN OF ty_excel_data,
          kokrs TYPE csks-kokrs,     " Controlling Area
          kostl TYPE csks-kostl,     " Cost Center
-         datab TYPE char10,         " Valid From (DD.MM.YYYY)
-         datbi TYPE char10,         " Valid To (DD.MM.YYYY)
          ktext TYPE csks-ktext,     " Name
          ltext TYPE csks-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
          abtei TYPE csks-abtei,     " Department
-         kosar TYPE csks-kosar,     " Cost Center Category
-         khinr TYPE csks-khinr,     " Hierarchy Area
-         bukrs TYPE csks-bukrs,     " Company Code
-         gsber TYPE csks-gsber,     " Business Area
-         prctr TYPE csks-prctr,     " Profit Center
-         waers TYPE csks-waers,     " Currency
        END OF ty_excel_data.
 
 TYPES: BEGIN OF ty_result,
          icon    TYPE icon_d,
          kokrs   TYPE csks-kokrs,
          kostl   TYPE csks-kostl,
-         datab   TYPE char10,
-         datbi   TYPE char10,
          ktext   TYPE csks-ktext,
          msgtyp  TYPE bdcmsgcoll-msgtyp,
          msgnr   TYPE bdcmsgcoll-msgnr,
@@ -182,7 +172,7 @@ FORM upload_xls.
       filename                = p_file
       i_begin_col             = 1
       i_begin_row             = 2
-      i_end_col               = 14
+      i_end_col               = 6
       i_end_row               = 9999
     TABLES
       intern                  = gt_raw
@@ -288,7 +278,7 @@ FORM upload_xlsx.
       CONTINUE.
     ENDIF.
 
-    DO 14 TIMES.
+    DO 6 TIMES.
       lv_col = sy-index.
       ASSIGN COMPONENT lv_col OF STRUCTURE <fs_row> TO <fv_value>.
       IF sy-subrc = 0 AND <fv_value> IS NOT INITIAL.
@@ -323,20 +313,12 @@ FORM convert_excel_to_data.
     lv_prev_row = gs_raw-row.
 
     CASE gs_raw-col.
-      WHEN 1.  gs_excel-kokrs = gs_raw-value.
-      WHEN 2.  gs_excel-kostl = gs_raw-value.
-      WHEN 3.  gs_excel-datab = gs_raw-value.
-      WHEN 4.  gs_excel-datbi = gs_raw-value.
-      WHEN 5.  gs_excel-ktext = gs_raw-value.
-      WHEN 6.  gs_excel-ltext = gs_raw-value.
-      WHEN 7.  gs_excel-verak = gs_raw-value.
-      WHEN 8.  gs_excel-abtei = gs_raw-value.
-      WHEN 9.  gs_excel-kosar = gs_raw-value.
-      WHEN 10. gs_excel-khinr = gs_raw-value.
-      WHEN 11. gs_excel-bukrs = gs_raw-value.
-      WHEN 12. gs_excel-gsber = gs_raw-value.
-      WHEN 13. gs_excel-prctr = gs_raw-value.
-      WHEN 14. gs_excel-waers = gs_raw-value.
+      WHEN 1. gs_excel-kokrs = gs_raw-value.
+      WHEN 2. gs_excel-kostl = gs_raw-value.
+      WHEN 3. gs_excel-ktext = gs_raw-value.
+      WHEN 4. gs_excel-ltext = gs_raw-value.
+      WHEN 5. gs_excel-verak = gs_raw-value.
+      WHEN 6. gs_excel-abtei = gs_raw-value.
     ENDCASE.
   ENDLOOP.
 
@@ -364,8 +346,6 @@ FORM validate_data.
 
     gs_result-kokrs = gs_excel-kokrs.
     gs_result-kostl = gs_excel-kostl.
-    gs_result-datab = gs_excel-datab.
-    gs_result-datbi = gs_excel-datbi.
     gs_result-ktext = gs_excel-ktext.
 
     " Check mandatory fields for KS02 (only key fields required)
@@ -382,15 +362,6 @@ FORM validate_data.
       gs_result-icon    = icon_led_red.
       gs_result-msgtyp  = 'E'.
       gs_result-message = 'Cost Center is mandatory'.
-      APPEND gs_result TO gt_result.
-      DELETE gt_excel INDEX lv_index.
-      CONTINUE.
-    ENDIF.
-
-    IF gs_excel-datab IS INITIAL.
-      gs_result-icon    = icon_led_red.
-      gs_result-msgtyp  = 'E'.
-      gs_result-message = 'Valid From date is mandatory'.
       APPEND gs_result TO gt_result.
       DELETE gt_excel INDEX lv_index.
       CONTINUE.
@@ -439,8 +410,6 @@ FORM process_bdc.
 
     gs_result-kokrs = gs_excel-kokrs.
     gs_result-kostl = gs_excel-kostl.
-    gs_result-datab = gs_excel-datab.
-    gs_result-datbi = gs_excel-datbi.
     gs_result-ktext = gs_excel-ktext.
 
     " Build BDC table
@@ -518,16 +487,12 @@ ENDFORM.
 FORM build_bdc_ks02 USING ps_data TYPE ty_excel_data.
   REFRESH bdcdata.
 
-  " Screen 0100 - Initial Screen
+  " Screen 0100 - Initial Screen (only key fields)
   PERFORM bdc_dynpro USING 'SAPMKMA0' '0100'.
   PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KOSTL'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
   PERFORM bdc_field  USING 'CSKS-KOKRS'  ps_data-kokrs.
   PERFORM bdc_field  USING 'CSKS-KOSTL'  ps_data-kostl.
-  PERFORM bdc_field  USING 'CSKS-DATAB'  ps_data-datab.
-  IF ps_data-datbi IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-DATBI' ps_data-datbi.
-  ENDIF.
 
   " Screen 0200 - Basic Data (only populate non-blank fields)
   PERFORM bdc_dynpro USING 'SAPMKMA0' '0200'.
@@ -545,24 +510,6 @@ FORM build_bdc_ks02 USING ps_data TYPE ty_excel_data.
   ENDIF.
   IF ps_data-abtei IS NOT INITIAL.
     PERFORM bdc_field USING 'CSKS-ABTEI' ps_data-abtei.
-  ENDIF.
-  IF ps_data-kosar IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-KOSAR' ps_data-kosar.
-  ENDIF.
-  IF ps_data-khinr IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-KHINR' ps_data-khinr.
-  ENDIF.
-  IF ps_data-bukrs IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-BUKRS' ps_data-bukrs.
-  ENDIF.
-  IF ps_data-gsber IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-GSBER' ps_data-gsber.
-  ENDIF.
-  IF ps_data-prctr IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-PRCTR' ps_data-prctr.
-  ENDIF.
-  IF ps_data-waers IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-WAERS' ps_data-waers.
   ENDIF.
 ENDFORM.
 
@@ -696,40 +643,28 @@ FORM display_alv.
   APPEND ls_fcat TO lt_fcat.
 
   CLEAR ls_fcat.
-  ls_fcat-fieldname = 'DATAB'.
-  ls_fcat-seltext_l = 'Valid From'.
-  ls_fcat-col_pos   = 4.
-  APPEND ls_fcat TO lt_fcat.
-
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'DATBI'.
-  ls_fcat-seltext_l = 'Valid To'.
-  ls_fcat-col_pos   = 5.
-  APPEND ls_fcat TO lt_fcat.
-
-  CLEAR ls_fcat.
   ls_fcat-fieldname = 'KTEXT'.
   ls_fcat-seltext_l = 'Name'.
-  ls_fcat-col_pos   = 6.
+  ls_fcat-col_pos   = 4.
   APPEND ls_fcat TO lt_fcat.
 
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'MSGTYP'.
   ls_fcat-seltext_l = 'Msg Type'.
-  ls_fcat-col_pos   = 7.
+  ls_fcat-col_pos   = 5.
   APPEND ls_fcat TO lt_fcat.
 
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'MSGNR'.
   ls_fcat-seltext_l = 'Msg No'.
-  ls_fcat-col_pos   = 8.
+  ls_fcat-col_pos   = 6.
   APPEND ls_fcat TO lt_fcat.
 
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'MESSAGE'.
   ls_fcat-seltext_l = 'Message'.
   ls_fcat-outputlen = 80.
-  ls_fcat-col_pos   = 9.
+  ls_fcat-col_pos   = 7.
   APPEND ls_fcat TO lt_fcat.
 
   " Title with counts

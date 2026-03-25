@@ -1,8 +1,8 @@
-Controlling Area,Cost Center,Valid From,Valid To,Name,Description,Person Responsible,Department,Cost Center Category,Hierarchy Area,Company Code,Business Area,Profit Center,Currency
-1000,0000010001,01.01.2026,,Gas Processing Unit,Gas Processing Unit - Revised,,,,,,,,
-1000,0000010002,01.01.2026,,,,S K Verma (New),Pipeline Ops,,,,,,
-1000,0000010003,01.04.2026,31.12.9999,QC Laboratory,Quality Control Lab - Updated,,,,,,,,
-1000,0000010004,01.04.2026,,,,,,,,,,PR014,
-1000,0000010005,01.01.2026,,IT Infrastructure,IT Infra and Cloud Services,V K Patel,,,,,,PR015,
-1000,0000010006,01.01.2026,,HR and Admin,HR and Administration Dept,M S Gupta,HR & Admin,,,,,,
-1000,0000010008,01.04.2026,,Booster Station,Booster and Compressor Station,,Operations,,,,,,
+Controlling Area,Cost Center,Name,Description,Person Responsible,Department
+1000,0000010001,Gas Processing Unit,Gas Processing Unit - Revised,,
+1000,0000010002,,,S K Verma (New),Pipeline Ops
+1000,0000010003,QC Laboratory,Quality Control Lab - Updated,,
+1000,0000010004,,,,Quality Assurance
+1000,0000010005,IT Infrastructure,IT Infra and Cloud Services,V K Patel,
+1000,0000010006,HR and Admin,HR and Administration Dept,M S Gupta,HR & Admin
+1000,0000010008,Booster Station,Booster and Compressor Station,,Operations
