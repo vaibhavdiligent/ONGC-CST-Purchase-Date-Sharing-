@@ -3,7 +3,7 @@
 *& Description: ONGC CST Purchase Data - Gas Receipt Processing
 *& Version: 4.0 - Editable ALV with buttons
 *&---------------------------------------------------------------------*
-REPORT ygms_cst_purchase_main.
+REPORT ygms_ongc_cst_pur.
 TABLES : yrga_cst_pur.
 *----------------------------------------------------------------------*
 * Type Definitions
