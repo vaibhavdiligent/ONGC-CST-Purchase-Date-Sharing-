@@ -487,29 +487,29 @@ ENDFORM.
 FORM build_bdc_ks02 USING ps_data TYPE ty_excel_data.
   REFRESH bdcdata.
 
-  " Screen 0100 - Initial Screen (only key fields)
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0100'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KOSTL'.
+  " Screen 0200 - Initial Screen (only key fields)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0200'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KOSTL'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
-  PERFORM bdc_field  USING 'CSKS-KOKRS'  ps_data-kokrs.
-  PERFORM bdc_field  USING 'CSKS-KOSTL'  ps_data-kostl.
+  PERFORM bdc_field  USING 'CSKSZ-KOKRS'  ps_data-kokrs.
+  PERFORM bdc_field  USING 'CSKSZ-KOSTL'  ps_data-kostl.
 
-  " Screen 0200 - Basic Data (only populate non-blank fields)
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0200'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KTEXT'.
+  " Screen 0299 - Basic Data (only populate non-blank fields)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
 
   IF ps_data-ktext IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-KTEXT' ps_data-ktext.
+    PERFORM bdc_field USING 'CSKSZ-KTEXT' ps_data-ktext.
   ENDIF.
   IF ps_data-ltext IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-LTEXT' ps_data-ltext.
+    PERFORM bdc_field USING 'CSKSZ-LTEXT' ps_data-ltext.
   ENDIF.
   IF ps_data-verak IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-VERAK' ps_data-verak.
+    PERFORM bdc_field USING 'CSKSZ-VERAK' ps_data-verak.
   ENDIF.
   IF ps_data-abtei IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-ABTEI' ps_data-abtei.
+    PERFORM bdc_field USING 'CSKSZ-ABTEI' ps_data-abtei.
   ENDIF.
 ENDFORM.
 

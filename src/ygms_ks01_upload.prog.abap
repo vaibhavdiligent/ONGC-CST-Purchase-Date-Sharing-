@@ -565,30 +565,30 @@ ENDFORM.
 FORM build_bdc_ks01 USING ps_data TYPE ty_excel_data.
   REFRESH bdcdata.
 
-  " Screen 0100 - Initial Screen
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0100'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KOSTL'.
+  " Screen 0200 - Initial Screen
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0200'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KOSTL'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
-  PERFORM bdc_field  USING 'CSKS-KOKRS'  ps_data-kokrs.
-  PERFORM bdc_field  USING 'CSKS-KOSTL'  ps_data-kostl.
-  PERFORM bdc_field  USING 'CSKS-DATAB'  ps_data-datab.
-  PERFORM bdc_field  USING 'CSKS-DATBI'  ps_data-datbi.
+  PERFORM bdc_field  USING 'CSKSZ-KOKRS'      ps_data-kokrs.
+  PERFORM bdc_field  USING 'CSKSZ-KOSTL'      ps_data-kostl.
+  PERFORM bdc_field  USING 'CSKSZ-DATAB_ANFO' ps_data-datab.
+  PERFORM bdc_field  USING 'CSKSZ-DATBI_ANFO' ps_data-datbi.
 
-  " Screen 0200 - Basic Data
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0200'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KTEXT'.
+  " Screen 0299 - Basic Data
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
-  PERFORM bdc_field  USING 'CSKS-KTEXT'  ps_data-ktext.
-  PERFORM bdc_field  USING 'CSKS-LTEXT'  ps_data-ltext.
-  PERFORM bdc_field  USING 'CSKS-VERAK'  ps_data-verak.
-  PERFORM bdc_field  USING 'CSKS-KOSAR'  ps_data-kosar.
-  PERFORM bdc_field  USING 'CSKS-KHINR'  ps_data-khinr.
-  PERFORM bdc_field  USING 'CSKS-BUKRS'  ps_data-bukrs.
-  PERFORM bdc_field  USING 'CSKS-GSBER'  ps_data-gsber.
-  PERFORM bdc_field  USING 'CSKS-PRCTR'  ps_data-prctr.
-  PERFORM bdc_field  USING 'CSKS-WAERS'  ps_data-waers.
-  PERFORM bdc_field  USING 'CSKS-LAND1'  ps_data-land1.
-  PERFORM bdc_field  USING 'CSKS-REGIO'  ps_data-regio.
+  PERFORM bdc_field  USING 'CSKSZ-KTEXT'  ps_data-ktext.
+  PERFORM bdc_field  USING 'CSKSZ-LTEXT'  ps_data-ltext.
+  PERFORM bdc_field  USING 'CSKSZ-VERAK'  ps_data-verak.
+  PERFORM bdc_field  USING 'CSKSZ-KOSAR'  ps_data-kosar.
+  PERFORM bdc_field  USING 'CSKSZ-KHINR'  ps_data-khinr.
+  PERFORM bdc_field  USING 'CSKSZ-BUKRS'  ps_data-bukrs.
+  PERFORM bdc_field  USING 'CSKSZ-GSBER'  ps_data-gsber.
+  PERFORM bdc_field  USING 'CSKSZ-PRCTR'  ps_data-prctr.
+  PERFORM bdc_field  USING 'CSKSZ-WAERS'  ps_data-waers.
+  PERFORM bdc_field  USING 'CSKSZ-LAND1'  ps_data-land1.
+  PERFORM bdc_field  USING 'CSKSZ-REGIO'  ps_data-regio.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
