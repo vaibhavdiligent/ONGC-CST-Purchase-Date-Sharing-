@@ -15,8 +15,8 @@ TYPES: BEGIN OF ty_excel_data,
          kostl TYPE csks-kostl,     " Cost Center
          datab TYPE char10,         " Valid From (DD.MM.YYYY)
          datbi TYPE char10,         " Valid To (DD.MM.YYYY)
-         ktext TYPE csks-ktext,     " Name
-         ltext TYPE csks-ltext,     " Description
+         ktext TYPE cskt-ktext,     " Name
+         ltext TYPE cskt-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
          kosar TYPE csks-kosar,     " Cost Center Category
          khinr TYPE csks-khinr,     " Hierarchy Area
@@ -33,7 +33,7 @@ TYPES: BEGIN OF ty_result,
          kostl   TYPE csks-kostl,
          datab   TYPE char10,
          datbi   TYPE char10,
-         ktext   TYPE csks-ktext,
+         ktext   TYPE cskt-ktext,
          msgtyp  TYPE bdcmsgcoll-msgtyp,
          msgnr   TYPE bdcmsgcoll-msgnr,
          message TYPE char220,

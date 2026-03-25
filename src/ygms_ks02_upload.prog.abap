@@ -13,8 +13,8 @@ TYPE-POOLS: slis.
 TYPES: BEGIN OF ty_excel_data,
          kokrs TYPE csks-kokrs,     " Controlling Area
          kostl TYPE csks-kostl,     " Cost Center
-         ktext TYPE csks-ktext,     " Name
-         ltext TYPE csks-ltext,     " Description
+         ktext TYPE cskt-ktext,     " Name
+         ltext TYPE cskt-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
          abtei TYPE csks-abtei,     " Department
        END OF ty_excel_data.
@@ -23,7 +23,7 @@ TYPES: BEGIN OF ty_result,
          icon    TYPE icon_d,
          kokrs   TYPE csks-kokrs,
          kostl   TYPE csks-kostl,
-         ktext   TYPE csks-ktext,
+         ktext   TYPE cskt-ktext,
          msgtyp  TYPE bdcmsgcoll-msgtyp,
          msgnr   TYPE bdcmsgcoll-msgnr,
          message TYPE char220,
