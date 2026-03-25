@@ -13,8 +13,8 @@ TYPE-POOLS: slis.
 TYPES: BEGIN OF ty_excel_data,
          kokrs TYPE csks-kokrs,     " Controlling Area
          kostl TYPE csks-kostl,     " Cost Center
-         ktext TYPE csks-ktext,     " Name
-         ltext TYPE csks-ltext,     " Description
+         ktext TYPE cskt-ktext,     " Name
+         ltext TYPE cskt-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
          abtei TYPE csks-abtei,     " Department
        END OF ty_excel_data.
@@ -23,7 +23,7 @@ TYPES: BEGIN OF ty_result,
          icon    TYPE icon_d,
          kokrs   TYPE csks-kokrs,
          kostl   TYPE csks-kostl,
-         ktext   TYPE csks-ktext,
+         ktext   TYPE cskt-ktext,
          msgtyp  TYPE bdcmsgcoll-msgtyp,
          msgnr   TYPE bdcmsgcoll-msgnr,
          message TYPE char220,
@@ -487,29 +487,30 @@ ENDFORM.
 FORM build_bdc_ks02 USING ps_data TYPE ty_excel_data.
   REFRESH bdcdata.
 
-  " Screen 0100 - Initial Screen (only key fields)
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0100'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KOSTL'.
+  " Screen 0200 - Initial Screen (only key fields)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0200'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KOSTL'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
-  PERFORM bdc_field  USING 'CSKS-KOKRS'  ps_data-kokrs.
-  PERFORM bdc_field  USING 'CSKS-KOSTL'  ps_data-kostl.
+  PERFORM bdc_field  USING 'CSKSZ-KOKRS'  ps_data-kokrs.
+  PERFORM bdc_field  USING 'CSKSZ-KOSTL'  ps_data-kostl.
 
-  " Screen 0200 - Basic Data (only populate non-blank fields)
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0200'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KTEXT'.
+  " Screen 0299 - Basic Data (only populate non-blank fields)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
+  PERFORM bdc_field  USING 'BDC_SUBSCR'  ''.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
 
   IF ps_data-ktext IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-KTEXT' ps_data-ktext.
+    PERFORM bdc_field USING 'CSKSZ-KTEXT' ps_data-ktext.
   ENDIF.
   IF ps_data-ltext IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-LTEXT' ps_data-ltext.
+    PERFORM bdc_field USING 'CSKSZ-LTEXT' ps_data-ltext.
   ENDIF.
   IF ps_data-verak IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-VERAK' ps_data-verak.
+    PERFORM bdc_field USING 'CSKSZ-VERAK' ps_data-verak.
   ENDIF.
   IF ps_data-abtei IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKS-ABTEI' ps_data-abtei.
+    PERFORM bdc_field USING 'CSKSZ-ABTEI' ps_data-abtei.
   ENDIF.
 ENDFORM.
 
@@ -539,8 +540,10 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
                          CHANGING ps_result TYPE ty_result.
-  DATA: lv_msg TYPE char220,
-        lv_err TYPE abap_bool VALUE abap_false.
+  DATA: lv_msg  TYPE char220,
+        lv_err  TYPE abap_bool VALUE abap_false,
+        lv_cnt  TYPE i,
+        lv_rc   TYPE char10.
 
   " Check for errors in message table
   LOOP AT messtab WHERE msgtyp = 'E' OR msgtyp = 'A'.
@@ -553,7 +556,7 @@ FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
     ps_result-icon = icon_led_red.
     gv_error = gv_error + 1.
 
-    " Get error message text
+    " Get error message text (try E/A type first)
     LOOP AT messtab WHERE msgtyp = 'E' OR msgtyp = 'A'.
       CALL FUNCTION 'FORMAT_MESSAGE'
         EXPORTING
@@ -574,6 +577,41 @@ FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
       ps_result-message = lv_msg.
       EXIT.
     ENDLOOP.
+
+    " If no E/A message found, try the last message in messtab
+    IF ps_result-message IS INITIAL.
+      lv_cnt = lines( messtab ).
+      IF lv_cnt > 0.
+        READ TABLE messtab INDEX lv_cnt.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = messtab-msgid
+            lang      = sy-langu
+            no        = messtab-msgnr
+            v1        = messtab-msgv1
+            v2        = messtab-msgv2
+            v3        = messtab-msgv3
+            v4        = messtab-msgv4
+          IMPORTING
+            msg       = lv_msg
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        ps_result-msgtyp  = messtab-msgtyp.
+        ps_result-msgnr   = messtab-msgnr.
+        ps_result-message = lv_msg.
+      ENDIF.
+    ENDIF.
+
+    " If still no message, show sy-subrc as fallback
+    IF ps_result-message IS INITIAL.
+      ps_result-msgtyp = 'E'.
+      lv_rc = pv_subrc.
+      CONDENSE lv_rc.
+      CONCATENATE 'BDC error - sy-subrc =' lv_rc
+                  '- Run SHDB recording on KS02 to verify screen fields'
+                  INTO ps_result-message SEPARATED BY space.
+    ENDIF.
   ELSE.
     " Success
     ps_result-icon = icon_led_green.

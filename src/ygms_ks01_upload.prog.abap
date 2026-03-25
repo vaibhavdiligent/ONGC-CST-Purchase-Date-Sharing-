@@ -15,15 +15,14 @@ TYPES: BEGIN OF ty_excel_data,
          kostl TYPE csks-kostl,     " Cost Center
          datab TYPE char10,         " Valid From (DD.MM.YYYY)
          datbi TYPE char10,         " Valid To (DD.MM.YYYY)
-         ktext TYPE csks-ktext,     " Name
-         ltext TYPE csks-ltext,     " Description
+         ktext TYPE cskt-ktext,     " Name
+         ltext TYPE cskt-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
          kosar TYPE csks-kosar,     " Cost Center Category
          khinr TYPE csks-khinr,     " Hierarchy Area
          bukrs TYPE csks-bukrs,     " Company Code
          gsber TYPE csks-gsber,     " Business Area
          prctr TYPE csks-prctr,     " Profit Center
-         waers TYPE csks-waers,     " Currency
          land1 TYPE csks-land1,     " Country
          regio TYPE csks-regio,     " Region
        END OF ty_excel_data.
@@ -34,7 +33,7 @@ TYPES: BEGIN OF ty_result,
          kostl   TYPE csks-kostl,
          datab   TYPE char10,
          datbi   TYPE char10,
-         ktext   TYPE csks-ktext,
+         ktext   TYPE cskt-ktext,
          msgtyp  TYPE bdcmsgcoll-msgtyp,
          msgnr   TYPE bdcmsgcoll-msgnr,
          message TYPE char220,
@@ -183,7 +182,7 @@ FORM upload_xls.
       filename                = p_file
       i_begin_col             = 1
       i_begin_row             = 2
-      i_end_col               = 15
+      i_end_col               = 14
       i_end_row               = 9999
     TABLES
       intern                  = gt_raw
@@ -289,7 +288,7 @@ FORM upload_xlsx.
       CONTINUE.
     ENDIF.
 
-    DO 15 TIMES.
+    DO 14 TIMES.
       lv_col = sy-index.
       ASSIGN COMPONENT lv_col OF STRUCTURE <fs_row> TO <fv_value>.
       IF sy-subrc = 0 AND <fv_value> IS NOT INITIAL.
@@ -336,9 +335,8 @@ FORM convert_excel_to_data.
       WHEN 10. gs_excel-bukrs = gs_raw-value.
       WHEN 11. gs_excel-gsber = gs_raw-value.
       WHEN 12. gs_excel-prctr = gs_raw-value.
-      WHEN 13. gs_excel-waers = gs_raw-value.
-      WHEN 14. gs_excel-land1 = gs_raw-value.
-      WHEN 15. gs_excel-regio = gs_raw-value.
+      WHEN 13. gs_excel-land1 = gs_raw-value.
+      WHEN 14. gs_excel-regio = gs_raw-value.
     ENDCASE.
   ENDLOOP.
 
@@ -565,30 +563,44 @@ ENDFORM.
 FORM build_bdc_ks01 USING ps_data TYPE ty_excel_data.
   REFRESH bdcdata.
 
-  " Screen 0100 - Initial Screen
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0100'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KOSTL'.
+  " Screen 0200 - Initial Screen
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0200'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KOSTL'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
-  PERFORM bdc_field  USING 'CSKS-KOKRS'  ps_data-kokrs.
-  PERFORM bdc_field  USING 'CSKS-KOSTL'  ps_data-kostl.
-  PERFORM bdc_field  USING 'CSKS-DATAB'  ps_data-datab.
-  PERFORM bdc_field  USING 'CSKS-DATBI'  ps_data-datbi.
+  PERFORM bdc_field  USING 'CSKSZ-KOKRS'      ps_data-kokrs.
+  PERFORM bdc_field  USING 'CSKSZ-KOSTL'      ps_data-kostl.
+  PERFORM bdc_field  USING 'CSKSZ-DATAB_ANFO' ps_data-datab.
+  PERFORM bdc_field  USING 'CSKSZ-DATBI_ANFO' ps_data-datbi.
 
-  " Screen 0200 - Basic Data
-  PERFORM bdc_dynpro USING 'SAPMKMA0' '0200'.
-  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKS-KTEXT'.
+  " Screen 0299 - Tab 1: Basic Data
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
+  PERFORM bdc_field  USING 'BDC_SUBSCR'  ''.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
+  PERFORM bdc_field  USING 'CSKSZ-KTEXT'  ps_data-ktext.
+  PERFORM bdc_field  USING 'CSKSZ-LTEXT'  ps_data-ltext.
+  PERFORM bdc_field  USING 'CSKSZ-VERAK'  ps_data-verak.
+  PERFORM bdc_field  USING 'CSKSZ-KOSAR'  ps_data-kosar.
+  PERFORM bdc_field  USING 'CSKSZ-KHINR'  ps_data-khinr.
+  PERFORM bdc_field  USING 'CSKSZ-BUKRS'  ps_data-bukrs.
+  PERFORM bdc_field  USING 'CSKSZ-PRCTR'  ps_data-prctr.
+  PERFORM bdc_field  USING 'CSKSZ-GSBER'  ps_data-gsber.
+
+  " Screen 0299 - Tab 2: Address
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
+  PERFORM bdc_field  USING 'BDC_SUBSCR'  ''.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-LAND1'.
+  PERFORM bdc_field  USING 'CSKSZ-LAND1'  ps_data-land1.
+  PERFORM bdc_field  USING 'CSKSZ-REGIO'  ps_data-regio.
+
+  " Screen 0299 - Save
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
   PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
-  PERFORM bdc_field  USING 'CSKS-KTEXT'  ps_data-ktext.
-  PERFORM bdc_field  USING 'CSKS-LTEXT'  ps_data-ltext.
-  PERFORM bdc_field  USING 'CSKS-VERAK'  ps_data-verak.
-  PERFORM bdc_field  USING 'CSKS-KOSAR'  ps_data-kosar.
-  PERFORM bdc_field  USING 'CSKS-KHINR'  ps_data-khinr.
-  PERFORM bdc_field  USING 'CSKS-BUKRS'  ps_data-bukrs.
-  PERFORM bdc_field  USING 'CSKS-GSBER'  ps_data-gsber.
-  PERFORM bdc_field  USING 'CSKS-PRCTR'  ps_data-prctr.
-  PERFORM bdc_field  USING 'CSKS-WAERS'  ps_data-waers.
-  PERFORM bdc_field  USING 'CSKS-LAND1'  ps_data-land1.
-  PERFORM bdc_field  USING 'CSKS-REGIO'  ps_data-regio.
+  PERFORM bdc_field  USING 'BDC_SUBSCR'  ''.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-LAND1'.
+  PERFORM bdc_field  USING 'CSKSZ-LAND1'  ps_data-land1.
+  PERFORM bdc_field  USING 'CSKSZ-REGIO'  ps_data-regio.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -617,8 +629,10 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
                          CHANGING ps_result TYPE ty_result.
-  DATA: lv_msg TYPE char220,
-        lv_err TYPE abap_bool VALUE abap_false.
+  DATA: lv_msg  TYPE char220,
+        lv_err  TYPE abap_bool VALUE abap_false,
+        lv_cnt  TYPE i,
+        lv_rc   TYPE char10.
 
   " Check for errors in message table
   LOOP AT messtab WHERE msgtyp = 'E' OR msgtyp = 'A'.
@@ -631,7 +645,7 @@ FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
     ps_result-icon = icon_led_red.
     gv_error = gv_error + 1.
 
-    " Get error message text
+    " Get error message text (try E/A type first)
     LOOP AT messtab WHERE msgtyp = 'E' OR msgtyp = 'A'.
       CALL FUNCTION 'FORMAT_MESSAGE'
         EXPORTING
@@ -652,6 +666,41 @@ FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
       ps_result-message = lv_msg.
       EXIT.
     ENDLOOP.
+
+    " If no E/A message found, try the last message in messtab
+    IF ps_result-message IS INITIAL.
+      lv_cnt = lines( messtab ).
+      IF lv_cnt > 0.
+        READ TABLE messtab INDEX lv_cnt.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = messtab-msgid
+            lang      = sy-langu
+            no        = messtab-msgnr
+            v1        = messtab-msgv1
+            v2        = messtab-msgv2
+            v3        = messtab-msgv3
+            v4        = messtab-msgv4
+          IMPORTING
+            msg       = lv_msg
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        ps_result-msgtyp  = messtab-msgtyp.
+        ps_result-msgnr   = messtab-msgnr.
+        ps_result-message = lv_msg.
+      ENDIF.
+    ENDIF.
+
+    " If still no message, show sy-subrc as fallback
+    IF ps_result-message IS INITIAL.
+      ps_result-msgtyp = 'E'.
+      lv_rc = pv_subrc.
+      CONDENSE lv_rc.
+      CONCATENATE 'BDC error - sy-subrc =' lv_rc
+                  '- Run SHDB recording on KS01 to verify screen fields'
+                  INTO ps_result-message SEPARATED BY space.
+    ENDIF.
   ELSE.
     " Success
     ps_result-icon = icon_led_green.
