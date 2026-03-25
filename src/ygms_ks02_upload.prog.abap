@@ -1,6 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_KS02_UPLOAD
 *& Description: Mass Change Cost Centers via BDC on Transaction KS02
+*& Supports both .xls and .xlsx Excel formats
 *&---------------------------------------------------------------------*
 REPORT ygms_ks02_upload.
 
@@ -125,6 +126,57 @@ ENDFORM.
 *& Form UPLOAD_EXCEL
 *&---------------------------------------------------------------------*
 FORM upload_excel.
+  DATA: lv_ext TYPE char10.
+
+  " Determine file extension
+  PERFORM get_file_extension USING p_file CHANGING lv_ext.
+
+  TRANSLATE lv_ext TO UPPER CASE.
+
+  IF lv_ext = 'XLSX'.
+    PERFORM upload_xlsx.
+  ELSEIF lv_ext = 'XLS'.
+    PERFORM upload_xls.
+  ELSE.
+    MESSAGE e001(00) WITH 'Unsupported file format. Use .xls or .xlsx'.
+  ENDIF.
+
+  IF gt_raw IS INITIAL.
+    MESSAGE e001(00) WITH 'No data found in Excel file'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form GET_FILE_EXTENSION
+*&---------------------------------------------------------------------*
+FORM get_file_extension USING pv_file TYPE rlgrap-filename
+                        CHANGING pv_ext TYPE char10.
+  DATA: lv_file TYPE string,
+        lv_len  TYPE i,
+        lv_pos  TYPE i.
+
+  lv_file = pv_file.
+  lv_len = strlen( lv_file ).
+
+  " Find last dot position
+  lv_pos = -1.
+  DO lv_len TIMES.
+    DATA(lv_idx) = sy-index - 1.
+    IF lv_file+lv_idx(1) = '.'.
+      lv_pos = lv_idx.
+    ENDIF.
+  ENDDO.
+
+  IF lv_pos >= 0.
+    lv_pos = lv_pos + 1.
+    pv_ext = lv_file+lv_pos.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form UPLOAD_XLS - Read .xls files via ALSM_EXCEL_TO_INTERNAL_TABLE
+*&---------------------------------------------------------------------*
+FORM upload_xls.
   CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
     EXPORTING
       filename                = p_file
@@ -140,12 +192,114 @@ FORM upload_excel.
       OTHERS                  = 3.
 
   IF sy-subrc <> 0.
-    MESSAGE e001(00) WITH 'Error reading Excel file'.
+    MESSAGE e001(00) WITH 'Error reading .xls file'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form UPLOAD_XLSX - Read .xlsx files via cl_fdt_xl_spreadsheet
+*&---------------------------------------------------------------------*
+FORM upload_xlsx.
+  DATA: lt_bin_data  TYPE solix_tab,
+        lv_file_size TYPE i,
+        lv_xstring   TYPE xstring,
+        lo_excel     TYPE REF TO cl_fdt_xl_spreadsheet,
+        lt_worksheets TYPE if_fdt_doc_spreadsheet=>t_worksheet_names,
+        lv_sheet     TYPE string,
+        lo_data      TYPE REF TO data.
+
+  FIELD-SYMBOLS: <ft_data>  TYPE STANDARD TABLE,
+                 <fs_row>   TYPE any,
+                 <fv_value> TYPE any.
+
+  " Upload file as binary
+  cl_gui_frontend_services=>gui_upload(
+    EXPORTING
+      filename   = CONV #( p_file )
+      filetype   = 'BIN'
+    IMPORTING
+      filelength = lv_file_size
+    CHANGING
+      data_tab   = lt_bin_data
+    EXCEPTIONS
+      OTHERS     = 1
+  ).
+
+  IF sy-subrc <> 0.
+    MESSAGE e001(00) WITH 'Error uploading .xlsx file'.
   ENDIF.
 
-  IF gt_raw IS INITIAL.
-    MESSAGE e001(00) WITH 'No data found in Excel file'.
+  " Convert binary to xstring
+  CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+    EXPORTING
+      input_length = lv_file_size
+    IMPORTING
+      buffer       = lv_xstring
+    TABLES
+      binary_tab   = lt_bin_data
+    EXCEPTIONS
+      failed       = 1
+      OTHERS       = 2.
+
+  IF sy-subrc <> 0.
+    MESSAGE e001(00) WITH 'Error converting file data'.
   ENDIF.
+
+  " Create spreadsheet instance
+  TRY.
+      CREATE OBJECT lo_excel
+        EXPORTING
+          document_name = 'KS02_UPLOAD'
+          xdocument     = lv_xstring.
+    CATCH cx_fdt_excel_core.
+      MESSAGE e001(00) WITH 'Error parsing .xlsx file'.
+  ENDTRY.
+
+  " Get first worksheet
+  lo_excel->if_fdt_doc_spreadsheet~get_worksheet_names(
+    IMPORTING
+      worksheet_names = lt_worksheets
+  ).
+
+  IF lt_worksheets IS INITIAL.
+    MESSAGE e001(00) WITH 'No worksheets found in .xlsx file'.
+  ENDIF.
+
+  READ TABLE lt_worksheets INTO lv_sheet INDEX 1.
+
+  " Get worksheet data as internal table
+  lo_data = lo_excel->if_fdt_doc_spreadsheet~get_itab_from_worksheet( lv_sheet ).
+
+  ASSIGN lo_data->* TO <ft_data>.
+
+  IF <ft_data> IS NOT ASSIGNED OR <ft_data> IS INITIAL.
+    MESSAGE e001(00) WITH 'No data found in worksheet'.
+  ENDIF.
+
+  " Convert xlsx data to ALSMEX format (skip header row 1)
+  DATA: lv_row TYPE i VALUE 0,
+        lv_col TYPE i.
+
+  LOOP AT <ft_data> ASSIGNING <fs_row>.
+    lv_row = lv_row + 1.
+
+    " Skip header row
+    IF lv_row = 1.
+      CONTINUE.
+    ENDIF.
+
+    DO 14 TIMES.
+      lv_col = sy-index.
+      ASSIGN COMPONENT lv_col OF STRUCTURE <fs_row> TO <fv_value>.
+      IF sy-subrc = 0 AND <fv_value> IS NOT INITIAL.
+        CLEAR gs_raw.
+        gs_raw-row   = lv_row.
+        gs_raw-col   = lv_col.
+        gs_raw-value = <fv_value>.
+        APPEND gs_raw TO gt_raw.
+      ENDIF.
+    ENDDO.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

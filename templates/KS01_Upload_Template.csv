@@ -1,0 +1,11 @@
+Controlling Area,Cost Center,Valid From,Valid To,Name,Description,Person Responsible,Department,Cost Center Category,Hierarchy Area,Company Code,Business Area,Profit Center,Currency
+1000,0000010001,01.01.2026,31.12.9999,Gas Processing Plant,Gas Processing Plant Operations,R K Sharma,Production,1,H1000,1000,1000,PR001,INR
+1000,0000010002,01.01.2026,31.12.9999,Pipeline Operations,Pipeline Maintenance and Operations,S K Verma,Operations,1,H1000,1000,1000,PR002,INR
+1000,0000010003,01.04.2026,31.12.9999,Quality Lab,Quality Control Laboratory,A Kumar,Quality,2,H2000,1000,2000,PR003,INR
+1000,0000010004,01.04.2026,31.12.9999,Safety Dept,Health Safety and Environment,P Singh,HSE,3,H2000,1000,2000,PR004,INR
+1000,0000010005,01.01.2026,31.12.9999,IT Services,Information Technology Services,V Patel,IT,1,H3000,1000,3000,PR005,INR
+1000,0000010006,01.01.2026,31.12.9999,HR Department,Human Resources Department,M Gupta,HR,3,H3000,1000,3000,PR006,INR
+1000,0000010007,01.04.2026,31.12.9999,Finance Dept,Finance and Accounts,D Joshi,Finance,3,H3000,1000,3000,PR007,INR
+1000,0000010008,01.04.2026,31.12.9999,Compressor Station,Compressor Station Operations,N Reddy,Operations,1,H1000,1000,1000,PR008,INR
+1000,0000010009,01.01.2026,31.12.9999,Metering Station,Gas Metering and Measurement,K Mishra,Metering,1,H1000,1000,1000,PR009,INR
+1000,0000010010,01.01.2026,31.12.9999,Procurement Dept,Procurement and Materials Mgmt,T Rao,Procurement,3,H3000,1000,3000,PR010,INR
