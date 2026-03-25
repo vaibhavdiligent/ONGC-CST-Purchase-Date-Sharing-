@@ -1,0 +1,6 @@
+Controlling Area,Cost Center,Valid From,Valid To,Name,Description,Person Responsible,Department,Cost Center Category,Hierarchy Area,Company Code,Business Area,Profit Center,Currency
+1000,0000010001,01.01.2026,,Production Dept Updated,,Suresh Verma,,,,,,,,
+1000,0000010002,01.01.2026,,,,Neha Singh,Quality Assurance,,,,,,
+1000,0000010003,01.04.2026,31.12.9999,Maintenance Revised,Revised Maintenance Services,,,,,,,,
+1000,0000010004,01.04.2026,,,,,,,,,,PR010,
+1000,0000010005,01.01.2026,,IT Infrastructure,IT Infra and Services,Vikram Joshi,,,,,,PR011,
