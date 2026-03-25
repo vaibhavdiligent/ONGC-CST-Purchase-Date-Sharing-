@@ -617,8 +617,10 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
                          CHANGING ps_result TYPE ty_result.
-  DATA: lv_msg TYPE char220,
-        lv_err TYPE abap_bool VALUE abap_false.
+  DATA: lv_msg  TYPE char220,
+        lv_err  TYPE abap_bool VALUE abap_false,
+        lv_cnt  TYPE i,
+        lv_rc   TYPE char10.
 
   " Check for errors in message table
   LOOP AT messtab WHERE msgtyp = 'E' OR msgtyp = 'A'.
@@ -631,7 +633,7 @@ FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
     ps_result-icon = icon_led_red.
     gv_error = gv_error + 1.
 
-    " Get error message text
+    " Get error message text (try E/A type first)
     LOOP AT messtab WHERE msgtyp = 'E' OR msgtyp = 'A'.
       CALL FUNCTION 'FORMAT_MESSAGE'
         EXPORTING
@@ -652,6 +654,41 @@ FORM format_bdc_messages USING pv_subrc TYPE sy-subrc
       ps_result-message = lv_msg.
       EXIT.
     ENDLOOP.
+
+    " If no E/A message found, try the last message in messtab
+    IF ps_result-message IS INITIAL.
+      lv_cnt = lines( messtab ).
+      IF lv_cnt > 0.
+        READ TABLE messtab INDEX lv_cnt.
+        CALL FUNCTION 'FORMAT_MESSAGE'
+          EXPORTING
+            id        = messtab-msgid
+            lang      = sy-langu
+            no        = messtab-msgnr
+            v1        = messtab-msgv1
+            v2        = messtab-msgv2
+            v3        = messtab-msgv3
+            v4        = messtab-msgv4
+          IMPORTING
+            msg       = lv_msg
+          EXCEPTIONS
+            not_found = 1
+            OTHERS    = 2.
+        ps_result-msgtyp  = messtab-msgtyp.
+        ps_result-msgnr   = messtab-msgnr.
+        ps_result-message = lv_msg.
+      ENDIF.
+    ENDIF.
+
+    " If still no message, show sy-subrc as fallback
+    IF ps_result-message IS INITIAL.
+      ps_result-msgtyp = 'E'.
+      lv_rc = pv_subrc.
+      CONDENSE lv_rc.
+      CONCATENATE 'BDC error - sy-subrc =' lv_rc
+                  '- Run SHDB recording on KS01 to verify screen fields'
+                  INTO ps_result-message SEPARATED BY space.
+    ENDIF.
   ELSE.
     " Success
     ps_result-icon = icon_led_green.
