@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_TRAN" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <TSTC>
+    <TCODE>YRGG015</TCODE>
+    <PGMNA>YGMS_CST_UPLOAD_ALLOC</PGMNA>
+    <DTEFPS>U</DTEFPS>
+    <CINFO>00000000000000000010000000000000</CINFO>
+   </TSTC>
+   <TSTCC>
+    <TCODE>YRGG015</TCODE>
+    <S_WEBGUI>1</S_WEBGUI>
+    <S_EASYWEB>0</S_EASYWEB>
+    <S_SERVICE>0</S_SERVICE>
+   </TSTCC>
+   <TSTCT>
+    <TCODE>YRGG015</TCODE>
+    <TTEXT>ONGC CST Upload and Allocation</TTEXT>
+   </TSTCT>
+  </asx:values>
+ </asx:abap>
+</abapGit>
