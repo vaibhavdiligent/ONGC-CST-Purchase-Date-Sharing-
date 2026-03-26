@@ -23,6 +23,8 @@ TYPES: BEGIN OF ty_excel_data,
          bukrs TYPE csks-bukrs,     " Company Code
          gsber TYPE csks-gsber,     " Business Area
          prctr TYPE csks-prctr,     " Profit Center
+         land1 TYPE csks-land1,     " Country
+         regio TYPE csks-regio,     " Region
        END OF ty_excel_data.
 
 TYPES: BEGIN OF ty_result,
@@ -180,7 +182,7 @@ FORM upload_xls.
       filename                = p_file
       i_begin_col             = 1
       i_begin_row             = 2
-      i_end_col               = 12
+      i_end_col               = 14
       i_end_row               = 9999
     TABLES
       intern                  = gt_raw
@@ -286,7 +288,7 @@ FORM upload_xlsx.
       CONTINUE.
     ENDIF.
 
-    DO 12 TIMES.
+    DO 14 TIMES.
       lv_col = sy-index.
       ASSIGN COMPONENT lv_col OF STRUCTURE <fs_row> TO <fv_value>.
       IF sy-subrc = 0 AND <fv_value> IS NOT INITIAL.
@@ -333,6 +335,8 @@ FORM convert_excel_to_data.
       WHEN 10. gs_excel-bukrs = gs_raw-value.
       WHEN 11. gs_excel-gsber = gs_raw-value.
       WHEN 12. gs_excel-prctr = gs_raw-value.
+      WHEN 13. gs_excel-land1 = gs_raw-value.
+      WHEN 14. gs_excel-regio = gs_raw-value.
     ENDCASE.
   ENDLOOP.
 
@@ -568,9 +572,9 @@ FORM build_bdc_ks01 USING ps_data TYPE ty_excel_data.
   PERFORM bdc_field  USING 'CSKSZ-DATAB_ANFO' ps_data-datab.
   PERFORM bdc_field  USING 'CSKSZ-DATBI_ANFO' ps_data-datbi.
 
-  " Screen 0299 - Basic Data and Save
+  " Screen 0299 #1 - Basic Data Tab (Enter)
   PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
-  PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
+  PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
   PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
   PERFORM bdc_field  USING 'CSKSZ-KTEXT'  ps_data-ktext.
   PERFORM bdc_field  USING 'CSKSZ-LTEXT'  ps_data-ltext.
@@ -578,8 +582,35 @@ FORM build_bdc_ks01 USING ps_data TYPE ty_excel_data.
   PERFORM bdc_field  USING 'CSKSZ-KOSAR'  ps_data-kosar.
   PERFORM bdc_field  USING 'CSKSZ-KHINR'  ps_data-khinr.
   PERFORM bdc_field  USING 'CSKSZ-BUKRS'  ps_data-bukrs.
-  PERFORM bdc_field  USING 'CSKSZ-PRCTR'  ps_data-prctr.
   PERFORM bdc_field  USING 'CSKSZ-GSBER'  ps_data-gsber.
+  PERFORM bdc_field  USING 'CSKSZ-PRCTR'  ps_data-prctr.
+
+  " Screen 0299 #2 - Basic Data Tab (navigate to Address tab)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-KTEXT'.
+  PERFORM bdc_field  USING 'CSKSZ-KTEXT'  ps_data-ktext.
+  PERFORM bdc_field  USING 'CSKSZ-LTEXT'  ps_data-ltext.
+  PERFORM bdc_field  USING 'CSKSZ-VERAK'  ps_data-verak.
+  PERFORM bdc_field  USING 'CSKSZ-KOSAR'  ps_data-kosar.
+  PERFORM bdc_field  USING 'CSKSZ-KHINR'  ps_data-khinr.
+  PERFORM bdc_field  USING 'CSKSZ-BUKRS'  ps_data-bukrs.
+  PERFORM bdc_field  USING 'CSKSZ-GSBER'  ps_data-gsber.
+  PERFORM bdc_field  USING 'CSKSZ-PRCTR'  ps_data-prctr.
+
+  " Screen 0299 #3 - Address Tab (Enter)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_OKCODE'  '/00'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-LAND1'.
+  PERFORM bdc_field  USING 'CSKSZ-LAND1'  ps_data-land1.
+  PERFORM bdc_field  USING 'CSKSZ-REGIO'  ps_data-regio.
+
+  " Screen 0299 #4 - Address Tab (Save)
+  PERFORM bdc_dynpro USING 'SAPLKMA1' '0299'.
+  PERFORM bdc_field  USING 'BDC_OKCODE'  '=SAVE'.
+  PERFORM bdc_field  USING 'BDC_CURSOR'  'CSKSZ-LAND1'.
+  PERFORM bdc_field  USING 'CSKSZ-LAND1'  ps_data-land1.
+  PERFORM bdc_field  USING 'CSKSZ-REGIO'  ps_data-regio.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

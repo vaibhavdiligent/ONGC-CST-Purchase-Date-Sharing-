@@ -1,11 +1,11 @@
-Controlling Area,Cost Center,Valid From,Valid To,Name,Description,Person Responsible,Cost Center Category,Hierarchy Area,Company Code,Business Area,Profit Center
-1000,0000010001,01.01.2026,31.12.9999,Gas Processing Plant,Gas Processing Plant Operations,R K Sharma,1,H1000,1000,1000,PR001
-1000,0000010002,01.01.2026,31.12.9999,Pipeline Operations,Pipeline Maintenance and Operations,S K Verma,1,H1000,1000,1000,PR002
-1000,0000010003,01.04.2026,31.12.9999,Quality Lab,Quality Control Laboratory,A Kumar,2,H2000,1000,2000,PR003
-1000,0000010004,01.04.2026,31.12.9999,Safety Dept,Health Safety and Environment,P Singh,3,H2000,1000,2000,PR004
-1000,0000010005,01.01.2026,31.12.9999,IT Services,Information Technology Services,V Patel,1,H3000,1000,3000,PR005
-1000,0000010006,01.01.2026,31.12.9999,HR Department,Human Resources Department,M Gupta,3,H3000,1000,3000,PR006
-1000,0000010007,01.04.2026,31.12.9999,Finance Dept,Finance and Accounts,D Joshi,3,H3000,1000,3000,PR007
-1000,0000010008,01.04.2026,31.12.9999,Compressor Station,Compressor Station Operations,N Reddy,1,H1000,1000,1000,PR008
-1000,0000010009,01.01.2026,31.12.9999,Metering Station,Gas Metering and Measurement,K Mishra,1,H1000,1000,1000,PR009
-1000,0000010010,01.01.2026,31.12.9999,Procurement Dept,Procurement and Materials Mgmt,T Rao,3,H3000,1000,3000,PR010
+Controlling Area,Cost Center,Valid From,Valid To,Name,Description,Person Responsible,Cost Center Category,Hierarchy Area,Company Code,Business Area,Profit Center,Country,Region
+1000,0000010001,01.01.2026,31.12.9999,Gas Processing Plant,Gas Processing Plant Operations,R K Sharma,1,H1000,1000,1000,PR001,IN,06
+1000,0000010002,01.01.2026,31.12.9999,Pipeline Operations,Pipeline Maintenance and Operations,S K Verma,1,H1000,1000,1000,PR002,IN,09
+1000,0000010003,01.04.2026,31.12.9999,Quality Lab,Quality Control Laboratory,A Kumar,2,H2000,1000,2000,PR003,IN,06
+1000,0000010004,01.04.2026,31.12.9999,Safety Dept,Health Safety and Environment,P Singh,3,H2000,1000,2000,PR004,IN,24
+1000,0000010005,01.01.2026,31.12.9999,IT Services,Information Technology Services,V Patel,1,H3000,1000,3000,PR005,IN,06
+1000,0000010006,01.01.2026,31.12.9999,HR Department,Human Resources Department,M Gupta,3,H3000,1000,3000,PR006,IN,09
+1000,0000010007,01.04.2026,31.12.9999,Finance Dept,Finance and Accounts,D Joshi,3,H3000,1000,3000,PR007,IN,24
+1000,0000010008,01.04.2026,31.12.9999,Compressor Station,Compressor Station Operations,N Reddy,1,H1000,1000,1000,PR008,IN,36
+1000,0000010009,01.01.2026,31.12.9999,Metering Station,Gas Metering and Measurement,K Mishra,1,H1000,1000,1000,PR009,IN,06
+1000,0000010010,01.01.2026,31.12.9999,Procurement Dept,Procurement and Materials Mgmt,T Rao,3,H3000,1000,3000,PR010,IN,09
