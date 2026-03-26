@@ -16,7 +16,11 @@ TYPES: BEGIN OF ty_excel_data,
          ktext TYPE cskt-ktext,     " Name
          ltext TYPE cskt-ltext,     " Description
          verak TYPE csks-verak,     " Person Responsible
-         abtei TYPE csks-abtei,     " Department
+         kosar TYPE csks-kosar,     " Cost Center Category
+         khinr TYPE csks-khinr,     " Hierarchy Area
+         bukrs TYPE csks-bukrs,     " Company Code
+         gsber TYPE csks-gsber,     " Business Area
+         prctr TYPE csks-prctr,     " Profit Center
        END OF ty_excel_data.
 
 TYPES: BEGIN OF ty_result,
@@ -172,7 +176,7 @@ FORM upload_xls.
       filename                = p_file
       i_begin_col             = 1
       i_begin_row             = 2
-      i_end_col               = 6
+      i_end_col               = 10
       i_end_row               = 9999
     TABLES
       intern                  = gt_raw
@@ -278,7 +282,7 @@ FORM upload_xlsx.
       CONTINUE.
     ENDIF.
 
-    DO 6 TIMES.
+    DO 10 TIMES.
       lv_col = sy-index.
       ASSIGN COMPONENT lv_col OF STRUCTURE <fs_row> TO <fv_value>.
       IF sy-subrc = 0 AND <fv_value> IS NOT INITIAL.
@@ -313,12 +317,16 @@ FORM convert_excel_to_data.
     lv_prev_row = gs_raw-row.
 
     CASE gs_raw-col.
-      WHEN 1. gs_excel-kokrs = gs_raw-value.
-      WHEN 2. gs_excel-kostl = gs_raw-value.
-      WHEN 3. gs_excel-ktext = gs_raw-value.
-      WHEN 4. gs_excel-ltext = gs_raw-value.
-      WHEN 5. gs_excel-verak = gs_raw-value.
-      WHEN 6. gs_excel-abtei = gs_raw-value.
+      WHEN 1.  gs_excel-kokrs = gs_raw-value.
+      WHEN 2.  gs_excel-kostl = gs_raw-value.
+      WHEN 3.  gs_excel-ktext = gs_raw-value.
+      WHEN 4.  gs_excel-ltext = gs_raw-value.
+      WHEN 5.  gs_excel-verak = gs_raw-value.
+      WHEN 6.  gs_excel-kosar = gs_raw-value.
+      WHEN 7.  gs_excel-khinr = gs_raw-value.
+      WHEN 8.  gs_excel-bukrs = gs_raw-value.
+      WHEN 9.  gs_excel-gsber = gs_raw-value.
+      WHEN 10. gs_excel-prctr = gs_raw-value.
     ENDCASE.
   ENDLOOP.
 
@@ -508,8 +516,20 @@ FORM build_bdc_ks02 USING ps_data TYPE ty_excel_data.
   IF ps_data-verak IS NOT INITIAL.
     PERFORM bdc_field USING 'CSKSZ-VERAK' ps_data-verak.
   ENDIF.
-  IF ps_data-abtei IS NOT INITIAL.
-    PERFORM bdc_field USING 'CSKSZ-ABTEI' ps_data-abtei.
+  IF ps_data-kosar IS NOT INITIAL.
+    PERFORM bdc_field USING 'CSKSZ-KOSAR' ps_data-kosar.
+  ENDIF.
+  IF ps_data-khinr IS NOT INITIAL.
+    PERFORM bdc_field USING 'CSKSZ-KHINR' ps_data-khinr.
+  ENDIF.
+  IF ps_data-bukrs IS NOT INITIAL.
+    PERFORM bdc_field USING 'CSKSZ-BUKRS' ps_data-bukrs.
+  ENDIF.
+  IF ps_data-gsber IS NOT INITIAL.
+    PERFORM bdc_field USING 'CSKSZ-GSBER' ps_data-gsber.
+  ENDIF.
+  IF ps_data-prctr IS NOT INITIAL.
+    PERFORM bdc_field USING 'CSKSZ-PRCTR' ps_data-prctr.
   ENDIF.
 ENDFORM.
 
