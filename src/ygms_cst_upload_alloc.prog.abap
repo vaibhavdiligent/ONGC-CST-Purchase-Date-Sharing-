@@ -27,9 +27,9 @@ SELECTION-SCREEN END OF BLOCK b2.
 * INITIALIZATION
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  btn1   = '@48@ Open Upload Program'.
-  btn2   = '@48@ Open Allocation Program'.
-  c_txt1 = 'Upload ONGC CST Purchase Data from Excel'.
+  btn1   = '@48@ Upload/View Receipt Data'.
+  btn2   = '@48@ Run Allocation'.
+  c_txt1 = 'Click here to upload/view receipt data'.
   c_txt2 = 'Allocate receipt quantities to states'.
 
 *----------------------------------------------------------------------*
