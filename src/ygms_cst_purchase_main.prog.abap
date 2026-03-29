@@ -675,52 +675,12 @@ FORM build_alv_display_table.
         ls_alv        TYPE ty_alv_display,
         lv_day_num    TYPE i,
         lv_day_field  TYPE string.
-  DATA it_final_temp TYPE TABLE OF ty_final1.
-  MOVE it_final_main[] TO it_final_temp[].
-  SORT it_final_temp BY matnr.
-  DELETE ADJACENT DUPLICATES FROM it_final_temp COMPARING matnr.
-  LOOP AT it_final_temp INTO DATA(wa_final_temp).
-    READ TABLE it_final_main TRANSPORTING NO FIELDS WITH KEY
-      regio = 'GJ' matnr = wa_final_temp-matnr.
-    IF sy-subrc <> 0.
-      CLEAR wa_final_main.
-      wa_final_main-matnr = wa_final_temp-matnr.
-      wa_final_main-regio = 'GJ'.
-      wa_final_main-regio_desc = 'Gujrat'.
-      wa_final_main-empst = wa_final_temp-empst.
-      APPEND wa_final_main TO it_final_main.
-    ENDIF.
-  ENDLOOP.
   LOOP AT it_final_main INTO wa_final_main.
     ls_alv-state_code = wa_final_main-regio.
     ls_alv-state      = wa_final_main-regio_desc.
     ls_alv-material   = wa_final_main-matnr.
     ls_alv-location_id = wa_final_main-empst.
     APPEND ls_alv TO gt_alv_display.
-  ENDLOOP.
-  DATA it_gas_receipt TYPE TABLE OF ty_gas_receipt.
-  MOVE gt_gas_receipt[] TO it_gas_receipt[].
-  SORT it_gas_receipt BY location_id material.
-  DELETE ADJACENT DUPLICATES FROM it_gas_receipt COMPARING location_id material.
-  LOOP AT it_gas_receipt INTO DATA(wa_gas_temp).
-    READ TABLE gt_alv_display TRANSPORTING NO FIELDS
-      WITH KEY location_id = wa_gas_temp-location_id
-               material    = wa_gas_temp-material
-               state_code  = 'GJ'.
-    IF sy-subrc <> 0.
-      CLEAR ls_alv.
-      ls_alv-state_code  = 'GJ'.
-      ls_alv-state       = 'Gujrat'.
-      ls_alv-material    = wa_gas_temp-material.
-      ls_alv-location_id = wa_gas_temp-location_id.
-      APPEND ls_alv TO gt_alv_display.
-      CLEAR wa_final_main.
-      wa_final_main-empst      = wa_gas_temp-location_id.
-      wa_final_main-regio      = 'GJ'.
-      wa_final_main-regio_desc = 'Gujrat'.
-      wa_final_main-matnr      = wa_gas_temp-material.
-      APPEND wa_final_main TO it_final_main.
-    ENDIF.
   ENDLOOP.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -1040,7 +1000,7 @@ FORM handle_allocate.
             qty_mbg       TYPE ygms_de_qty_mbg_cal,
             qty_mbg_diff  TYPE ygms_de_qty_mbg_cal,
             qty_allocated TYPE ygms_de_qty_mbg_cal,
-            percentage    TYPE ygms_ongc_percentage,
+            percentage    TYPE p DECIMALS 12,
           END OF ty_state.
   DATA : it_sales  TYPE TABLE OF ty_sales,
          wa_sales  TYPE ty_sales,
@@ -4044,36 +4004,6 @@ FORM build_alv_display_table_view .
     CLEAR: ls_alv.
     CLEAR: l_gcv, l_ncv.
   ENDIF.
-  DATA it_gas_receipt TYPE TABLE OF ty_gas_receipt.
-  MOVE gt_gas_receipt[] TO it_gas_receipt[].
-  SORT it_gas_receipt BY location_id material.
-  DELETE ADJACENT DUPLICATES FROM it_gas_receipt COMPARING location_id material.
-  LOOP AT it_gas_receipt INTO DATA(wa_gas_temp).
-    READ TABLE gt_alv_display TRANSPORTING NO FIELDS
-      WITH KEY location_id = wa_gas_temp-location_id
-               material    = wa_gas_temp-material
-               state_code  = 'GJ'.
-    IF sy-subrc <> 0.
-      CLEAR ls_alv.
-      ls_alv-state_code  = 'GJ'.
-      ls_alv-state       = 'Gujrat'.
-      ls_alv-material    = wa_gas_temp-material.
-      ls_alv-location_id = wa_gas_temp-location_id.
-      APPEND ls_alv TO gt_alv_display.
-    ENDIF.
-    READ TABLE it_final_main TRANSPORTING NO FIELDS
-    WITH KEY empst = wa_gas_temp-location_id
-             matnr   = wa_gas_temp-material
-             regio  = 'GJ'.
-    IF sy-subrc <> 0.
-      CLEAR wa_final_main.
-      wa_final_main-empst      = wa_gas_temp-location_id.
-      wa_final_main-regio      = 'GJ'.
-      wa_final_main-regio_desc = 'Gujrat'.
-      wa_final_main-matnr      = wa_gas_temp-material.
-      APPEND wa_final_main TO it_final_main.
-    ENDIF.
-  ENDLOOP.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_NEW_RECEIPT_DATA
