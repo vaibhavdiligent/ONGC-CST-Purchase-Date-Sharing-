@@ -1094,17 +1094,33 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table rows: entries where customer = master customer or master customer is blank
+*SOC Email Pending Postings - convert packed decimal to char for CONCATENATE
+    DATA: lv_cum_cal  TYPE char20,
+          lv_char_cal TYPE char20,
+          lv_neg_cal  TYPE char20,
+          lv_cum_so   TYPE char20,
+          lv_char_so  TYPE char20,
+          lv_neg_so   TYPE char20.
+*EOC Email Pending Postings
     LOOP AT lt_pending INTO ls_pending.
       IF ( ls_pending-m_mas_cust IS INITIAL AND ls_pending-customer = ls_email_cust-customer )
         OR ls_pending-m_mas_cust = ls_email_cust-customer.
-        CONCATENATE ls_pending-cont_id            '|'
-                    ls_pending-cum_bal_mbg_cal     '|'
-                    ls_pending-char_bal_mbg_cal    '|'
-                    ls_pending-neg_bal_mbg_cal     '|'
-                    ls_pending-cum_bal_mbg_cal_so  '|'
-                    ls_pending-char_bal_mbg_cal_so '|'
-                    ls_pending-neg_bal_mbg_cal_so  '|'
-                    ls_pending-sal_order           '|'
+*SOC Email Pending Postings - WRITE packed fields to char before CONCATENATE
+        WRITE ls_pending-cum_bal_mbg_cal     TO lv_cum_cal  LEFT-JUSTIFIED.
+        WRITE ls_pending-char_bal_mbg_cal    TO lv_char_cal LEFT-JUSTIFIED.
+        WRITE ls_pending-neg_bal_mbg_cal     TO lv_neg_cal  LEFT-JUSTIFIED.
+        WRITE ls_pending-cum_bal_mbg_cal_so  TO lv_cum_so   LEFT-JUSTIFIED.
+        WRITE ls_pending-char_bal_mbg_cal_so TO lv_char_so  LEFT-JUSTIFIED.
+        WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
+*EOC Email Pending Postings
+        CONCATENATE ls_pending-cont_id '|'
+                    lv_cum_cal         '|'
+                    lv_char_cal        '|'
+                    lv_neg_cal         '|'
+                    lv_cum_so          '|'
+                    lv_char_so         '|'
+                    lv_neg_so          '|'
+                    ls_pending-sal_order '|'
                     ls_pending-invoice
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
