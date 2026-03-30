@@ -1047,19 +1047,22 @@ FORM email_pending_postings.
       DELETE ADJACENT DUPLICATES FROM lt_ernam COMPARING ernam.
     ENDIF.
 
-    " Step 6: Find email IDs from PA0105 (refer YRGR095)
+    " Step 6: Find email IDs from USR21 -> ADR6 using SAP username (ernam/aenam)
     IF lt_ernam IS NOT INITIAL.
-      SELECT usrid_long AS usrid
-        FROM pa0105
-        INTO TABLE @DATA(lt_pa_email)
+      SELECT adr6~smtp_addr
+        FROM usr21 INNER JOIN adr6
+          ON usr21~addrnumber = adr6~addrnumber
+         AND usr21~persnumber = adr6~persnumber
+        INTO TABLE @DATA(lt_smtp)
         FOR ALL ENTRIES IN @lt_ernam
-        WHERE pernr = @lt_ernam-ernam
-          AND subty = '0010'
-          AND endda = '99991231'.
+        WHERE usr21~bname = @lt_ernam-ernam
+          AND adr6~flgdefault = 'X'.
 
-      LOOP AT lt_pa_email INTO DATA(ls_pa_email).
-        lv_email = ls_pa_email-usrid.
-        APPEND lv_email TO lt_email_ids.
+      LOOP AT lt_smtp INTO DATA(ls_smtp).
+        IF ls_smtp-smtp_addr IS NOT INITIAL.
+          lv_email = ls_smtp-smtp_addr.
+          APPEND lv_email TO lt_email_ids.
+        ENDIF.
       ENDLOOP.
       SORT lt_email_ids.
       DELETE ADJACENT DUPLICATES FROM lt_email_ids.
