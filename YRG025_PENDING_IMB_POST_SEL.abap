@@ -52,6 +52,12 @@ TYPES:BEGIN OF ty_final,
         cum_mst_imb      TYPE p DECIMALS 3,            "Cumulative Master Imb (Calculated)
         usage            TYPE char4,
         "*-> EOC CHARM ID :4000008814 TECHICAL : RAVINDER SINGH FUNCTIONAL : SHREYOSI DT:22.10.2024
+*SOC Email Pending Postings
+        diff_cum_imb     TYPE p DECIMALS 3,            "Diff (Cumulative Imb) = Calc - Posted
+        diff_neg_chg_imb TYPE p DECIMALS 3,            "Diff (Negative Chg Imb) = Calc - Posted
+        diff_pos_chg_imb TYPE p DECIMALS 3,            "Diff (Positive Chg Imb) = Calc - Posted
+        line_color(4)    TYPE c,                        "Row color for ALV
+*EOC Email Pending Postings
       END OF ty_final.
 
 DATA:it_final    TYPE STANDARD TABLE OF ty_final,
@@ -134,6 +140,9 @@ PARAMETERS ch1 AS CHECKBOX.
 *SOC BY Gaurav/Pratibha ON 07.02.2026 Auto posting of fortnightly imbalance TR:DVRK9A1POQ
 PARAMETERS: p_auto AS CHECKBOX.
 *EOC BY Gaurav/Pratibha ON 07.02.2026 Auto posting of fortnightly imbalance TR:DVRK9A1POQ
+*SOC Email Pending Postings - hidden, visible only to role ZO_CC_EHS.GMS_ROLE
+PARAMETERS: p_email AS CHECKBOX.
+*EOC Email Pending Postings
 SELECTION-SCREEN END OF BLOCK b1.
 
 
@@ -165,6 +174,19 @@ INITIALIZATION.
       ed_date  = s_date-high.
   APPEND s_date.
 
+
+AT SELECTION-SCREEN OUTPUT.
+*SOC Email Pending Postings - hide p_email for users without ZO_CC_EHS.GMS_ROLE
+  LOOP AT SCREEN.
+    IF screen-name = 'P_EMAIL'.
+      IF dnpi_flag NE 'X'.
+        screen-invisible = '1'.
+        screen-active    = '0'.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+*EOC Email Pending Postings
 
 AT SELECTION-SCREEN.
 
