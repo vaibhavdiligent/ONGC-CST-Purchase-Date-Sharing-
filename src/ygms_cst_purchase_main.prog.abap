@@ -787,7 +787,7 @@ FORM display_editable_alv.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
-  ls_fieldcat-coltext   = 'Average GCV'.
+  ls_fieldcat-coltext   = 'Wt. Avg. GCV'.
   ls_fieldcat-outputlen = 12.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_o  = 3.
@@ -797,7 +797,7 @@ FORM display_editable_alv.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
-  ls_fieldcat-coltext   = 'Average NCV'.
+  ls_fieldcat-coltext   = 'Wt. Avg. NCV'.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
@@ -849,6 +849,7 @@ FORM display_editable_alv.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_PF_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
+      i_grid_title             = 'ONGC CST Statewise Allocation'
       is_layout_lvc            = gs_layout
       it_fieldcat_lvc          = gt_fieldcat
     TABLES
@@ -1225,6 +1226,8 @@ FORM handle_allocate.
     lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
+  " Point 6c: Sort ALV in ascending order by Location ID, State Code, Material after allocation
+  SORT gt_alv_display BY location_id state_code material.
   " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
   gv_allocated = abap_true.
   PERFORM refresh_pf_status.
@@ -1438,11 +1441,13 @@ FORM display_validation_alv.
   ls_fieldcat-fieldname = 'LOCATION_ID'.
   ls_fieldcat-seltext_l = 'Location ID'.
   ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 18.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'MATERIAL'.
   ls_fieldcat-seltext_l = 'Material'.
   ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 30.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ALLOCATED_SCM'.
@@ -1462,36 +1467,38 @@ FORM display_validation_alv.
   ls_fieldcat-fieldname = 'CTP_ID'.
   ls_fieldcat-seltext_l = 'CTP ID'.
   ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-outputlen = 18.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
   ls_fieldcat-seltext_l = 'ONGC Material'.
   ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-outputlen = 22.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'SUPPLY_SCM'.
-  ls_fieldcat-seltext_l = 'Supply Sm³'.
+  ls_fieldcat-seltext_l = 'Receipt Sm3'.
   ls_fieldcat-col_pos   = 7.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'SUPPLY_MBG'.
-  ls_fieldcat-seltext_l = 'Supply MBG'.
+  ls_fieldcat-seltext_l = 'Receipt MBG'.
   ls_fieldcat-col_pos   = 8.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DIFF_PUR_SUP_SCM'.
-  ls_fieldcat-seltext_l = 'Diff. Pur vs Supply Sm³'.
+  ls_fieldcat-seltext_l = 'Diff. Alloc. Vs Rec. Sm3'.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DIFF_PUR_SUP_MBG'.
-  ls_fieldcat-seltext_l = 'Diff. Pur vs Supply MBG'.
+  ls_fieldcat-seltext_l = 'Diff. Alloc. Vs Rec. MBG'.
   ls_fieldcat-col_pos   = 10.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
@@ -2614,6 +2621,27 @@ FORM send_email USING pt_emails   TYPE string_table
         lo_recipient = cl_cam_address_bcs=>create_internet_address( l_mail ).
         lo_send_request->add_recipient( lo_recipient ).
       ENDLOOP.
+      " Point 7: Add sender's own email as CC (look up from PA0105)
+      DATA: lv_sender_pernr TYPE pa0105-pernr,
+            lv_sender_email TYPE pa0105-usrid.
+      SELECT SINGLE pernr FROM pa0105
+        INTO lv_sender_pernr
+        WHERE usrid  = sy-uname
+          AND subty  = '0001'
+          AND endda  = '99991231'.
+      IF sy-subrc = 0.
+        SELECT SINGLE usrid FROM pa0105
+          INTO lv_sender_email
+          WHERE pernr = lv_sender_pernr
+            AND subty = 'E-ML'
+            AND endda = '99991231'.
+        IF sy-subrc = 0 AND lv_sender_email IS NOT INITIAL.
+          DATA(lo_cc_recip) = cl_cam_address_bcs=>create_internet_address(
+                                CONV adr6-smtp_addr( lv_sender_email ) ).
+          lo_send_request->add_recipient( i_recipient = lo_cc_recip
+                                          i_copy      = abap_true ).
+        ENDIF.
+      ENDIF.
       " Set sender as current user
       lo_sender = cl_sapuser_bcs=>create( sy-uname ).
       lo_send_request->set_sender( lo_sender ).
@@ -2776,8 +2804,12 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     CONCATENATE lv_xml '<Cell><Data ss:Type="String">' lv_day_str '</Data></Cell>' INTO lv_xml.
   ENDLOOP.
   CONCATENATE lv_xml '</Row>' INTO lv_xml.
+  " Point 9: Sort summary by CTP ID - State Code - ONGC Material (ascending)
+  DATA lt_summary_sorted LIKE lt_summary.
+  lt_summary_sorted = lt_summary.
+  SORT lt_summary_sorted BY ctp state_code ongc_mater.
   " Summary data rows
-  LOOP AT lt_summary INTO ls_summary.
+  LOOP AT lt_summary_sorted INTO ls_summary.
     WRITE ls_summary-total_mbg TO lv_qty_mbg DECIMALS 3.
     WRITE ls_summary-total_scm TO lv_qty_scm DECIMALS 3.
     CONDENSE: lv_qty_mbg, lv_qty_scm.
@@ -2996,8 +3028,12 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           109(12) 'Avg. NCV'.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(175).
+  " Point 9: Sort summary by CTP ID - State Code - ONGC Material (ascending)
+  DATA lt_pdf_sum_sorted LIKE lt_pdf_sum.
+  lt_pdf_sum_sorted = lt_pdf_sum.
+  SORT lt_pdf_sum_sorted BY ctp state_code ongc_mater.
 
-  LOOP AT lt_pdf_sum INTO ls_pdf_sum.
+  LOOP AT lt_pdf_sum_sorted INTO ls_pdf_sum.
     WRITE ls_pdf_sum-total_mbg TO lv_qty_mbg DECIMALS 3.
     WRITE ls_pdf_sum-total_scm TO lv_qty_scm DECIMALS 3.
     CONDENSE: lv_qty_mbg, lv_qty_scm.
@@ -3192,8 +3228,12 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
     '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
     '</Row>'
     INTO lv_xml.
+  " Point 10: Sort fortnightly data by From Date - To Date - CTP ID - State Code - ONGC Material
+  DATA lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
+  lt_fnt_sorted = pt_data.
+  SORT lt_fnt_sorted BY date_from date_to ctp state_code ongc_mater.
   " Data rows
-  LOOP AT pt_data INTO ls_fnt.
+  LOOP AT lt_fnt_sorted INTO ls_fnt.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
     WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
     WRITE ls_fnt-gcv TO lv_gcv DECIMALS 3.
@@ -3299,8 +3339,12 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           144(14) 'GAIL ID'.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(170).
+  " Point 10: Sort fortnightly data by From Date - To Date - CTP ID - State Code - ONGC Material
+  DATA lt_fnt_pdf_sorted TYPE TABLE OF yrga_cst_fn_data.
+  lt_fnt_pdf_sorted = pt_data.
+  SORT lt_fnt_pdf_sorted BY date_from date_to ctp state_code ongc_mater.
 
-  LOOP AT pt_data INTO ls_fnt.
+  LOOP AT lt_fnt_pdf_sorted INTO ls_fnt.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
     WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
     WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
@@ -3440,6 +3484,8 @@ FORM handle_send_b2b.
   ENDIF.
     " After successful API call, save sent data to B2B tables
   PERFORM save_b2b_sent_data USING lt_send_data lt_send_data_fn.
+  " Point 8: Send B2B transmission confirmation email to sender
+  PERFORM send_b2b_confirmation_email.
   " B2B PI connectivity - to be implemented when B2B connection is established
   " MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
 ENDFORM.
@@ -5089,4 +5135,85 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
   lv_count_d = lines( lt_b2b_2 ).
   lv_count_f = lines( lt_b2b_3 ).
   MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SEND_B2B_CONFIRMATION_EMAIL
+*& Point 8: Send confirmation email to sender after successful B2B send
+*&---------------------------------------------------------------------*
+FORM send_b2b_confirmation_email.
+  DATA: lo_send_request TYPE REF TO cl_bcs,
+        lo_document     TYPE REF TO cl_document_bcs,
+        lo_recipient    TYPE REF TO if_recipient_bcs,
+        lo_sender       TYPE REF TO cl_sapuser_bcs,
+        lt_body         TYPE bcsy_text,
+        ls_body         TYPE soli,
+        lv_subject      TYPE so_obj_des,
+        lv_pernr        TYPE pa0105-pernr,
+        lv_email        TYPE pa0105-usrid,
+        lv_date_from_s  TYPE c LENGTH 10,
+        lv_date_to_s    TYPE c LENGTH 10,
+        lv_sent_date    TYPE c LENGTH 10,
+        lv_sent_time    TYPE c LENGTH 8,
+        lv_loc_list     TYPE string.
+  " Format dates
+  WRITE gv_date_from TO lv_date_from_s DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_s   DD/MM/YYYY.
+  WRITE sy-datum TO lv_sent_date DD/MM/YYYY.
+  WRITE sy-uzeit TO lv_sent_time USING EDIT MASK '__:__:__'.
+  " Resolve sender email from PA0105 (SUBTY 0001 = SAP user, E-ML = email)
+  SELECT SINGLE pernr FROM pa0105
+    INTO lv_pernr
+    WHERE usrid = sy-uname
+      AND subty = '0001'
+      AND endda = '99991231'.
+  CHECK sy-subrc = 0.
+  SELECT SINGLE usrid FROM pa0105
+    INTO lv_email
+    WHERE pernr = lv_pernr
+      AND subty = 'E-ML'
+      AND endda = '99991231'.
+  CHECK sy-subrc = 0 AND lv_email IS NOT INITIAL.
+  " Build Location IDs list from gt_loc_ctp_map
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_loc_b2b).
+    IF lv_loc_list IS INITIAL.
+      lv_loc_list = ls_loc_b2b-gail_loc_id.
+    ELSE.
+      CONCATENATE lv_loc_list ', ' ls_loc_b2b-gail_loc_id INTO lv_loc_list.
+    ENDIF.
+  ENDLOOP.
+  TRY.
+      lo_send_request = cl_bcs=>create_persistent( ).
+      " Subject: Transmission Confirmation – ONGC CST B2B Data for <From> to <To>
+      CONCATENATE 'Transmission Confirmation - ONGC CST B2B Data for'
+        lv_date_from_s 'to' lv_date_to_s
+        INTO lv_subject SEPARATED BY space.
+      " Body
+      CLEAR ls_body.
+      ls_body-line = 'Statewise allocation data for CST purchase has been sent to ONGC through B2B as per the following details:'.
+      APPEND ls_body TO lt_body.
+      CLEAR ls_body. APPEND ls_body TO lt_body.
+      CONCATENATE 'Fortnight: ' lv_date_from_s ' to ' lv_date_to_s INTO ls_body-line.
+      APPEND ls_body TO lt_body.
+      CONCATENATE 'Location IDs: ' lv_loc_list INTO ls_body-line.
+      APPEND ls_body TO lt_body.
+      CONCATENATE 'Sent On: ' lv_sent_date INTO ls_body-line.
+      APPEND ls_body TO lt_body.
+      CONCATENATE 'Sent At: ' lv_sent_time INTO ls_body-line.
+      APPEND ls_body TO lt_body.
+      lo_document = cl_document_bcs=>create_document(
+        i_type    = 'RAW'
+        i_text    = lt_body
+        i_subject = lv_subject ).
+      lo_send_request->set_document( lo_document ).
+      lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                       CONV adr6-smtp_addr( lv_email ) ).
+      lo_send_request->add_recipient( lo_recipient ).
+      lo_sender = cl_sapuser_bcs=>create( sy-uname ).
+      lo_send_request->set_sender( lo_sender ).
+      lo_send_request->set_send_immediately( abap_true ).
+      lo_send_request->send( ).
+      COMMIT WORK.
+    CATCH cx_bcs.
+      " Silently ignore errors for confirmation email
+  ENDTRY.
 ENDFORM.
