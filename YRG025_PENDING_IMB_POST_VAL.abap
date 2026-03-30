@@ -999,16 +999,13 @@ FORM email_pending_postings.
     CLEAR: lt_locid, lt_ernam, lt_email_ids.
 
     " Step 3: Find LOCIDs from OIJRRA (KUNNR=customer, DELIND NE 'X')
-    SELECT pblnr AS locid
+    " OIJRRA has LOCID field directly - no PBLNR field in this table
+    SELECT locid
       FROM oijrra
-      INTO TABLE @DATA(lt_oijrra_loc)
+      INTO TABLE @lt_locid
       WHERE kunnr  = @ls_email_cust-customer
-        AND delind NE 'X'.
-
-    LOOP AT lt_oijrra_loc INTO DATA(ls_oijrra).
-      ls_locid-locid = ls_oijrra-locid.
-      APPEND ls_locid TO lt_locid.
-    ENDLOOP.
+        AND delind NE 'X'
+        AND bloind NE 'X'.
 
     IF lt_locid IS NOT INITIAL.
       " Step 4: Find ERNAMs from OIJ_EL_TICKET_I
