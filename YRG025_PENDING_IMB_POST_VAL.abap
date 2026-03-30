@@ -1047,25 +1047,38 @@ FORM email_pending_postings.
       DELETE ADJACENT DUPLICATES FROM lt_ernam COMPARING ernam.
     ENDIF.
 
-    " Step 6: Find email IDs from USR21 -> ADR6 using SAP username (ernam/aenam)
+    " Step 6: Find email IDs from PA0105
+    " Step 6a: Get PERNR from SAP username (SUBTY 0001 = SAP system user)
     IF lt_ernam IS NOT INITIAL.
-      SELECT adr6~smtp_addr
-        FROM usr21 INNER JOIN adr6
-          ON usr21~addrnumber = adr6~addrnumber
-         AND usr21~persnumber = adr6~persnumber
-        INTO TABLE @DATA(lt_smtp)
+      SELECT pernr
+        FROM pa0105
+        INTO TABLE @DATA(lt_pernr)
         FOR ALL ENTRIES IN @lt_ernam
-        WHERE usr21~bname = @lt_ernam-ernam
-          AND adr6~flgdefault = 'X'.
+        WHERE usrid = @lt_ernam-ernam
+          AND subty = '0001'
+          AND begda LE @sy-datum
+          AND endda GE @sy-datum.
 
-      LOOP AT lt_smtp INTO DATA(ls_smtp).
-        IF ls_smtp-smtp_addr IS NOT INITIAL.
-          lv_email = ls_smtp-smtp_addr.
-          APPEND lv_email TO lt_email_ids.
-        ENDIF.
-      ENDLOOP.
-      SORT lt_email_ids.
-      DELETE ADJACENT DUPLICATES FROM lt_email_ids.
+      " Step 6b: Get email address from PA0105 (SUBTY 0010 = E-Mail)
+      IF lt_pernr IS NOT INITIAL.
+        SELECT usrid_long
+          FROM pa0105
+          INTO TABLE @DATA(lt_pa_email)
+          FOR ALL ENTRIES IN @lt_pernr
+          WHERE pernr = @lt_pernr-pernr
+            AND subty = '0010'
+            AND begda LE @sy-datum
+            AND endda GE @sy-datum.
+
+        LOOP AT lt_pa_email INTO DATA(ls_pa_email).
+          IF ls_pa_email-usrid_long IS NOT INITIAL.
+            lv_email = ls_pa_email-usrid_long.
+            APPEND lv_email TO lt_email_ids.
+          ENDIF.
+        ENDLOOP.
+        SORT lt_email_ids.
+        DELETE ADJACENT DUPLICATES FROM lt_email_ids.
+      ENDIF.
     ENDIF.
 
     IF lt_email_ids IS INITIAL.
