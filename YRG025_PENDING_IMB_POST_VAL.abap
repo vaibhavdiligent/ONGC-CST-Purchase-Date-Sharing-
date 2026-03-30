@@ -1016,7 +1016,7 @@ FORM email_pending_postings.
         FOR ALL ENTRIES IN @lt_locid
         WHERE locid     = @lt_locid-locid
           AND budat     IN @s_date
-          AND purpose   = '1'
+          AND ticket_purpose = '1'
           AND status    = 'C'
           AND substatus = '6'
           AND tktsubrc  NE '1A'.
