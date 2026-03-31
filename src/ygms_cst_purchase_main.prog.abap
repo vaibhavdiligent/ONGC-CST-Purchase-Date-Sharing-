@@ -1,4 +1,4 @@
-*&---------------------------------------------------------------------*
+﻿*&---------------------------------------------------------------------*
 *& Report YGMS_CST_PURCHASE_MAIN
 *& Description: ONGC CST Purchase Data - Gas Receipt Processing
 *& Version: 4.0 - Editable ALV with buttons
@@ -26,16 +26,16 @@ TYPES: BEGIN OF ty_loc_ctp_map,
        END OF ty_loc_ctp_map.
 * Validation ALV structure
 TYPES: BEGIN OF ty_validation,
-         location_id       TYPE ygms_de_loc_id,
-         material          TYPE ygms_de_gail_mat,
-         allocated_scm     TYPE p DECIMALS 6,
-         allocated_mbg     TYPE p DECIMALS 6,
-         ctp_id            TYPE ygms_de_ongc_ctp,
-         ongc_material     TYPE ygms_de_ongc_mat,
-         supply_scm        TYPE p DECIMALS 6,
-         supply_mbg        TYPE p DECIMALS 6,
-         diff_pur_sup_scm  TYPE p DECIMALS 6,
-         diff_pur_sup_mbg  TYPE p DECIMALS 6,
+         location_id      TYPE ygms_de_loc_id,
+         material         TYPE ygms_de_gail_mat,
+         allocated_scm    TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
+         allocated_mbg    TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
+         ctp_id           TYPE ygms_de_ongc_ctp,
+         ongc_material    TYPE ygms_de_ongc_mat,
+         supply_scm       TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
+         supply_mbg       TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
+         diff_pur_sup_scm TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
+         diff_pur_sup_mbg TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
        END OF ty_validation.
 * ALV Display structure
 TYPES: BEGIN OF ty_alv_display,
@@ -130,15 +130,15 @@ TYPES: BEGIN OF ty_data_daily,
        END OF ty_data_daily.
 * Saved Data ALV structures (for View -> Saved Data sub-option)
 TYPES: BEGIN OF ty_saved_daily,
-         gas_day    TYPE datum,
-         ctp        TYPE ygms_de_ongc_ctp,
-         ongc_mater TYPE ygms_de_ongc_mat,
-         state_code TYPE regio,
-         state      TYPE bezei20,
-         qty_in_scm TYPE ygms_de_qty_mbg_cal,
-         gcv        TYPE ygms_de_gcv,
-         ncv        TYPE ygms_de_ncv,
-         qty_in_mbg TYPE ygms_de_qty_mbg_cal,
+         gas_day      TYPE datum,
+         ctp          TYPE ygms_de_ongc_ctp,
+         ongc_mater   TYPE ygms_de_ongc_mat,
+         state_code   TYPE regio,
+         state        TYPE bezei20,
+         qty_in_scm   TYPE ygms_de_qty_mbg_cal,
+         gcv          TYPE ygms_de_gcv,
+         ncv          TYPE ygms_de_ncv,
+         qty_in_mbg   TYPE ygms_de_qty_mbg_cal,
          ongc_id      TYPE c LENGTH 20,
          gail_id      TYPE c LENGTH 20,
          location     TYPE ygms_de_loc_id,
@@ -154,20 +154,20 @@ TYPES: BEGIN OF ty_saved_daily,
          deleted      TYPE flag,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
-         date_from  TYPE datum,
-         date_to    TYPE datum,
-         ctp        TYPE ygms_de_ongc_ctp,
-         ongc_mater TYPE ygms_de_ongc_mat,
-         state_code TYPE regio,
-         state      TYPE bezei20,
-         qty_in_scm TYPE ygms_de_qty_mbg_cal,
-         gcv        TYPE ygms_de_gcv,
-         ncv        TYPE ygms_de_ncv,
-         qty_in_mbg TYPE ygms_de_qty_mbg_cal,
-         gail_id    TYPE c LENGTH 20,
-         location   TYPE ygms_de_loc_id,
-         material   TYPE ygms_de_gail_mat,
-         created_by TYPE ernam,
+         date_from    TYPE datum,
+         date_to      TYPE datum,
+         ctp          TYPE ygms_de_ongc_ctp,
+         ongc_mater   TYPE ygms_de_ongc_mat,
+         state_code   TYPE regio,
+         state        TYPE bezei20,
+         qty_in_scm   TYPE ygms_de_qty_mbg_cal,
+         gcv          TYPE ygms_de_gcv,
+         ncv          TYPE ygms_de_ncv,
+         qty_in_mbg   TYPE ygms_de_qty_mbg_cal,
+         gail_id      TYPE c LENGTH 20,
+         location     TYPE ygms_de_loc_id,
+         material     TYPE ygms_de_gail_mat,
+         created_by   TYPE ernam,
          created_date TYPE datum,
          created_time TYPE sy-uzeit,
          sent_e       TYPE c LENGTH 12,
@@ -220,6 +220,7 @@ DATA: html           TYPE string,
       lv_http_client TYPE REF TO if_http_client,
       code           TYPE i,
       reason         TYPE string.
+data g_error_api type flag.
 DATA:
   lo_http_client   TYPE REF TO if_http_client.
 *----------------------------------------------------------------------*
@@ -230,9 +231,9 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_loc  FOR gv_loc_id OBLIGATORY,
                   s_date FOR sy-datum OBLIGATORY,
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
-  PARAMETERS: p_alloc TYPE char1 RADIOBUTTON GROUP r1 USER-COMMAND uc1,
-              p_view  TYPE char1 RADIOBUTTON GROUP r1,
-              p_send  TYPE char1 RADIOBUTTON GROUP r1,
+  PARAMETERS: p_alloc  TYPE char1 RADIOBUTTON GROUP r1 USER-COMMAND uc1,
+              p_view   TYPE char1 RADIOBUTTON GROUP r1,
+              p_send   TYPE char1 RADIOBUTTON GROUP r1,
               p_downld TYPE char1 RADIOBUTTON GROUP r1.
 SELECTION-SCREEN END OF BLOCK b1.
 * Sub-options for View mode
@@ -249,13 +250,13 @@ SELECTION-SCREEN END OF BLOCK b3.
 *----------------------------------------------------------------------*
 * Custom Popup Selection Screen for Email (Screen 2000)
 *----------------------------------------------------------------------*
-DATA: gv_email1    TYPE c LENGTH 120,
-      gv_email2    TYPE c LENGTH 120,
-      gv_email3    TYPE c LENGTH 120,
-      gv_email4    TYPE c LENGTH 120,
-      gv_email5    TYPE c LENGTH 120,
-      gv_send_pdf  TYPE c LENGTH 1 VALUE 'X',
-      gv_send_xls  TYPE c LENGTH 1 VALUE 'X'.
+DATA: gv_email1   TYPE c LENGTH 120,
+      gv_email2   TYPE c LENGTH 120,
+      gv_email3   TYPE c LENGTH 120,
+      gv_email4   TYPE c LENGTH 120,
+      gv_email5   TYPE c LENGTH 120,
+      gv_send_pdf TYPE c LENGTH 1 VALUE 'X',
+      gv_send_xls TYPE c LENGTH 1 VALUE 'X'.
 
 SELECTION-SCREEN BEGIN OF SCREEN 2000 TITLE TEXT-e00.
   SELECTION-SCREEN BEGIN OF BLOCK b_email WITH FRAME TITLE TEXT-e01.
@@ -266,8 +267,8 @@ SELECTION-SCREEN BEGIN OF SCREEN 2000 TITLE TEXT-e00.
                 p_eml5 TYPE c LENGTH 120 LOWER CASE MODIF ID eml.
   SELECTION-SCREEN END OF BLOCK b_email.
   SELECTION-SCREEN BEGIN OF BLOCK b_fmt WITH FRAME TITLE TEXT-e02.
-    PARAMETERS: p_pdf  AS CHECKBOX DEFAULT 'X' MODIF ID fmt,
-                p_xls  AS CHECKBOX DEFAULT 'X' MODIF ID fmt.
+    PARAMETERS: p_pdf AS CHECKBOX DEFAULT 'X' MODIF ID fmt,
+                p_xls AS CHECKBOX DEFAULT 'X' MODIF ID fmt.
   SELECTION-SCREEN END OF BLOCK b_fmt.
 SELECTION-SCREEN END OF SCREEN 2000.
 
@@ -325,58 +326,58 @@ CLASS lcl_event_handler IMPLEMENTATION.
   METHOD handle_user_command.
     CASE e_ucomm.
       WHEN 'ALLOCATION' OR 'REALLOCATE'.
-      DATA: lr_grid1        TYPE REF TO cl_gui_alv_grid,
-            lt_fcat         TYPE lvc_t_fcat,
-            ls_fcat         TYPE lvc_s_fcat,
-            lv_day_edit     TYPE abap_bool,
-            lv_new_day_edit TYPE abap_bool,
-            ls_style        TYPE lvc_s_styl.
-      " Save exclude flags before refresh
-      TYPES: BEGIN OF lty_exclude_save,
-               location_id TYPE ygms_de_loc_id,
-               state_code  TYPE regio,
-               material    TYPE ygms_de_gail_mat,
-               exclude     TYPE c LENGTH 1,
-             END OF lty_exclude_save.
-      DATA: lt_excl_save TYPE TABLE OF lty_exclude_save,
-            ls_excl_save TYPE lty_exclude_save.
-      LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
-        ls_excl_save-location_id = gs_alv_display-location_id.
-        ls_excl_save-state_code  = gs_alv_display-state_code.
-        ls_excl_save-material    = gs_alv_display-material.
-        ls_excl_save-exclude     = gs_alv_display-exclude.
-        APPEND ls_excl_save TO lt_excl_save.
-      ENDLOOP.
-      " Get ALV grid reference
-      CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
-        IMPORTING
-          e_grid = lr_grid1.
-      " Get current field catalog
-      lr_grid1->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat ).
-      " Check current edit state of DAY01 field
-      READ TABLE lt_fcat INTO ls_fcat WITH KEY fieldname = 'DAY01'.
-      IF sy-subrc = 0.
-        lv_day_edit = ls_fcat-edit.
-      ENDIF.
-      REFRESH : gt_cst_b2b_1 , gt_gas_receipt , gt_alv_display ,it_final_main.
-      PERFORM fetch_b2b_data.
-      PERFORM map_location_ids.
-      PERFORM map_material_names.
-      PERFORM fetch_data_yrxr098.
-      PERFORM build_alv_display_table.
-      " Restore exclude flags after rebuild
-      LOOP AT lt_excl_save INTO ls_excl_save.
-        LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore_cls>)
-          WHERE location_id = ls_excl_save-location_id
-            AND state_code  = ls_excl_save-state_code
-            AND material    = ls_excl_save-material.
-          <fs_restore_cls>-exclude = ls_excl_save-exclude.
+        DATA: lr_grid1        TYPE REF TO cl_gui_alv_grid,
+              lt_fcat         TYPE lvc_t_fcat,
+              ls_fcat         TYPE lvc_s_fcat,
+              lv_day_edit     TYPE abap_bool,
+              lv_new_day_edit TYPE abap_bool,
+              ls_style        TYPE lvc_s_styl.
+        " Save exclude flags before refresh
+        TYPES: BEGIN OF lty_exclude_save,
+                 location_id TYPE ygms_de_loc_id,
+                 state_code  TYPE regio,
+                 material    TYPE ygms_de_gail_mat,
+                 exclude     TYPE c LENGTH 1,
+               END OF lty_exclude_save.
+        DATA: lt_excl_save TYPE TABLE OF lty_exclude_save,
+              ls_excl_save TYPE lty_exclude_save.
+        LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
+          ls_excl_save-location_id = gs_alv_display-location_id.
+          ls_excl_save-state_code  = gs_alv_display-state_code.
+          ls_excl_save-material    = gs_alv_display-material.
+          ls_excl_save-exclude     = gs_alv_display-exclude.
+          APPEND ls_excl_save TO lt_excl_save.
         ENDLOOP.
-      ENDLOOP.
-      PERFORM handle_allocate.
-      IF lv_day_edit = 'X'.
-        PERFORM handle_edit.
-      ENDIF.
+        " Get ALV grid reference
+        CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+          IMPORTING
+            e_grid = lr_grid1.
+        " Get current field catalog
+        lr_grid1->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat ).
+        " Check current edit state of DAY01 field
+        READ TABLE lt_fcat INTO ls_fcat WITH KEY fieldname = 'DAY01'.
+        IF sy-subrc = 0.
+          lv_day_edit = ls_fcat-edit.
+        ENDIF.
+        REFRESH : gt_cst_b2b_1 , gt_gas_receipt , gt_alv_display ,it_final_main.
+        PERFORM fetch_b2b_data.
+        PERFORM map_location_ids.
+        PERFORM map_material_names.
+        PERFORM fetch_data_yrxr098.
+        PERFORM build_alv_display_table.
+        " Restore exclude flags after rebuild
+        LOOP AT lt_excl_save INTO ls_excl_save.
+          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore_cls>)
+            WHERE location_id = ls_excl_save-location_id
+              AND state_code  = ls_excl_save-state_code
+              AND material    = ls_excl_save-material.
+            <fs_restore_cls>-exclude = ls_excl_save-exclude.
+          ENDLOOP.
+        ENDLOOP.
+        PERFORM handle_allocate.
+        IF lv_day_edit = 'X'.
+          PERFORM handle_edit.
+        ENDIF.
       WHEN 'VALIDATE'.
         PERFORM handle_validate.
       WHEN 'EDIT'.
@@ -481,6 +482,15 @@ START-OF-SELECTION.
     CHECK gt_gas_receipt IS NOT INITIAL.
     PERFORM map_location_ids.
     PERFORM map_material_names.
+      " Validate calorific values after mapping so GT_GAS_RECEIPT has location_id populated
+    IF p_view IS INITIAL.
+      DATA: lv_cv_valid TYPE abap_bool.
+      PERFORM validate_cv_data CHANGING lv_cv_valid.
+      IF lv_cv_valid = abap_false.
+        MESSAGE s000(ygms_msg) WITH 'CV validation failed. Program cannot proceed.'.
+        RETURN.
+      ENDIF.
+    ENDIF.
     PERFORM fetch_data_yrxr098.
     IF p_view IS INITIAL.
       PERFORM build_alv_display_table.
@@ -731,7 +741,10 @@ FORM display_editable_alv.
         lv_day      TYPE i,
         lv_fname    TYPE lvc_fname,
         lv_date     TYPE datum,
-        lv_date_str TYPE c LENGTH 10.
+        lv_date_str TYPE c LENGTH 10,
+        lv_num_days TYPE i.
+  " Compute number of days dynamically to support fortnights with 13-16 days
+  lv_num_days = gv_date_to - gv_date_from + 1.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'EXCLUDE'.
   ls_fieldcat-coltext   = 'Exclude'.
@@ -787,7 +800,7 @@ FORM display_editable_alv.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
-  ls_fieldcat-coltext   = 'Average GCV'.
+  ls_fieldcat-coltext   = 'Wt. Avg. GCV'.
   ls_fieldcat-outputlen = 12.
 *  ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_o  = 3.
@@ -797,7 +810,7 @@ FORM display_editable_alv.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
-  ls_fieldcat-coltext   = 'Average NCV'.
+  ls_fieldcat-coltext   = 'Wt. Avg. NCV'.
   ls_fieldcat-outputlen = 12.
   ls_fieldcat-decimals_o  = 3.
   ls_fieldcat-inttype   = 'P'.
@@ -806,7 +819,7 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   lv_date = gv_date_from.
-  DO 15 TIMES.
+  DO lv_num_days TIMES.
     lv_day = sy-index.
     CLEAR ls_fieldcat.
     CASE lv_day.
@@ -825,6 +838,7 @@ FORM display_editable_alv.
       WHEN 13. ls_fieldcat-fieldname = 'DAY13'.
       WHEN 14. ls_fieldcat-fieldname = 'DAY14'.
       WHEN 15. ls_fieldcat-fieldname = 'DAY15'.
+      WHEN 16. ls_fieldcat-fieldname = 'DAY16'.
     ENDCASE.
     WRITE lv_date TO lv_date_str DD/MM/YYYY.
     REPLACE ALL OCCURRENCES OF '/' IN lv_date_str WITH '-'.
@@ -843,6 +857,7 @@ FORM display_editable_alv.
   gs_layout-sel_mode   = 'A'.
   gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
   gs_layout-stylefname = 'CELLTAB'.  " Cell style field for row-level edit control
+  gs_layout-grid_title = 'ONGC CST Statewise Allocation'.
   SORT gt_alv_display BY state location_id material.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
@@ -1159,8 +1174,8 @@ FORM handle_allocate.
   DATA l_day TYPE char10.
   DATA l_index(2) TYPE n.
   DATA l_date TYPE sy-datum.
-  DATA l_ncv TYPE YGMS_DE_QTY_MBG_CAL."ygms_de_gcv.
-  DATA l_gcv TYPE YGMS_DE_QTY_MBG_CAL."ygms_de_gcv.
+  DATA l_ncv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
+  DATA l_gcv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
   DATA l_day_sm3 TYPE p DECIMALS 6.
   " 2.1b: Clear ALV day data before allocation to prevent additive quantities on repeated clicks
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
@@ -1170,7 +1185,8 @@ FORM handle_allocate.
            <fs_clear>-day04, <fs_clear>-day05, <fs_clear>-day06,
            <fs_clear>-day07, <fs_clear>-day08, <fs_clear>-day09,
            <fs_clear>-day10, <fs_clear>-day11, <fs_clear>-day12,
-           <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15.
+           <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15,
+           <fs_clear>-day16.
   ENDLOOP.
   " Apply allocation per location + state + material
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
@@ -1182,7 +1198,9 @@ FORM handle_allocate.
       CLEAR l_index.
       CLEAR: l_ncv, l_gcv,l_day_sm3.
       l_date = s_date-low.
-      DO 15 TIMES.
+      DATA lv_alloc_days TYPE i.
+      lv_alloc_days = gv_date_to - gv_date_from + 1.
+      DO lv_alloc_days TIMES.
         l_index = l_index + 1.
         CLEAR l_day.
         CONCATENATE 'DAY' l_index INTO l_day.
@@ -1223,6 +1241,7 @@ FORM handle_allocate.
       ENDIF.
     ENDLOOP.
     lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
+    SORT gt_alv_display BY location_id state_code material ASCENDING.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
   " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
@@ -1241,8 +1260,8 @@ ENDFORM.
 *& Form HANDLE_VALIDATE
 *&---------------------------------------------------------------------*
 FORM handle_validate.
-  DATA: lv_diff_ok  TYPE abap_bool,
-        lv_answer   TYPE c LENGTH 1.
+  DATA: lv_diff_ok TYPE abap_bool,
+        lv_answer  TYPE c LENGTH 1.
   DATA l_error TYPE flag.
   " Check for new receipt data from ONGC (timestamp comparison)
   SELECT * INTO TABLE @DATA(lt_cst)
@@ -1287,6 +1306,7 @@ FORM handle_validate.
     EXIT.
   ENDIF.
   PERFORM build_validation_data.
+  DELETE gt_validation WHERE ctp_id IS INITIAL.
   " Check if any DIFF_PUR_SUP_MBG > 0.009
   lv_diff_ok = abap_true.
   LOOP AT gt_validation INTO gs_validation.
@@ -1438,11 +1458,13 @@ FORM display_validation_alv.
   ls_fieldcat-fieldname = 'LOCATION_ID'.
   ls_fieldcat-seltext_l = 'Location ID'.
   ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 15.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'MATERIAL'.
-  ls_fieldcat-seltext_l = 'Material'.
+  ls_fieldcat-seltext_l = 'GAIL Material'.
   ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 30.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ALLOCATED_SCM'.
@@ -1462,36 +1484,40 @@ FORM display_validation_alv.
   ls_fieldcat-fieldname = 'CTP_ID'.
   ls_fieldcat-seltext_l = 'CTP ID'.
   ls_fieldcat-col_pos   = 5.
+  ls_fieldcat-outputlen = 15.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
   ls_fieldcat-seltext_l = 'ONGC Material'.
   ls_fieldcat-col_pos   = 6.
+  ls_fieldcat-outputlen = 25.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'SUPPLY_SCM'.
-  ls_fieldcat-seltext_l = 'Supply Sm³'.
+  ls_fieldcat-seltext_l = 'Receipt Sm³'.
   ls_fieldcat-col_pos   = 7.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
+  ls_fieldcat-outputlen = 25.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'SUPPLY_MBG'.
-  ls_fieldcat-seltext_l = 'Supply MBG'.
+  ls_fieldcat-seltext_l = 'Receipt MBG'.
   ls_fieldcat-col_pos   = 8.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
+  ls_fieldcat-outputlen = 25.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DIFF_PUR_SUP_SCM'.
-  ls_fieldcat-seltext_l = 'Diff. Pur vs Supply Sm³'.
+  ls_fieldcat-seltext_l = 'Diff. Alloc. Vs Rec. Sm³'.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DIFF_PUR_SUP_MBG'.
-  ls_fieldcat-seltext_l = 'Diff. Pur vs Supply MBG'.
+  ls_fieldcat-seltext_l = 'Diff. Alloc. Vs Rec. MBG'.
   ls_fieldcat-col_pos   = 10.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
@@ -1523,12 +1549,12 @@ ENDFORM.
 *& Form HANDLE_EDIT
 *&---------------------------------------------------------------------*
 FORM handle_edit.
-  DATA: lr_grid        TYPE REF TO cl_gui_alv_grid,
-        lt_fcat        TYPE lvc_t_fcat,
-        ls_fcat        TYPE lvc_s_fcat,
-        lv_day_edit    TYPE abap_bool,
+  DATA: lr_grid         TYPE REF TO cl_gui_alv_grid,
+        lt_fcat         TYPE lvc_t_fcat,
+        ls_fcat         TYPE lvc_s_fcat,
+        lv_day_edit     TYPE abap_bool,
         lv_new_day_edit TYPE abap_bool,
-        ls_style       TYPE lvc_s_styl.
+        ls_style        TYPE lvc_s_styl.
   " Get ALV grid reference
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
     IMPORTING
@@ -1559,7 +1585,9 @@ FORM handle_edit.
     CLEAR <fs_edit_row>-celltab.
     IF lv_new_day_edit = abap_true AND <fs_edit_row>-exclude = 'X'.
       " Disable all DAY columns for excluded rows
-      DO 15 TIMES.
+      DATA lv_edit_days TYPE i.
+      lv_edit_days = gv_date_to - gv_date_from + 1.
+      DO lv_edit_days TIMES.
         CLEAR ls_style.
         CASE sy-index.
           WHEN 1.  ls_style-fieldname = 'DAY01'.
@@ -1577,6 +1605,7 @@ FORM handle_edit.
           WHEN 13. ls_style-fieldname = 'DAY13'.
           WHEN 14. ls_style-fieldname = 'DAY14'.
           WHEN 15. ls_style-fieldname = 'DAY15'.
+          WHEN 16. ls_style-fieldname = 'DAY16'.
         ENDCASE.
         ls_style-style = cl_gui_alv_grid=>mc_style_disabled.
         INSERT ls_style INTO TABLE <fs_edit_row>-celltab.
@@ -1603,11 +1632,11 @@ FORM handle_save.
   " Confirm with user before saving using POPUP_TO_CONFIRM_STEP
   CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
     EXPORTING
-      textline1   = 'Do you want to save the data to database?'
-      titel       = 'Confirm Save'
+      textline1      = 'Do you want to save the data to database?'
+      titel          = 'Confirm Save'
       cancel_display = ' '
     IMPORTING
-      answer      = lv_answer.
+      answer         = lv_answer.
   IF lv_answer = 'J'.  " User clicked Yes (J = Ja/Yes)
     " Save data to database
     PERFORM save_data_to_db.
@@ -1650,38 +1679,38 @@ FORM save_data_to_db.
            state_code  TYPE regio,
            gail_ids    TYPE string,
          END OF ty_error_log.
-  DATA: lt_cst_pur      TYPE TABLE OF yrga_cst_pur,
-        ls_cst_pur      TYPE yrga_cst_pur,
-        lt_cst_fnt      TYPE TABLE OF yrga_cst_fn_data,
-        ls_cst_fnt      TYPE yrga_cst_fn_data,
-        lv_timestamp    TYPE timestampl,
-        lv_ts_char      TYPE c LENGTH 14,
-        lv_date         TYPE datum,
-        lv_day_index    TYPE i,
-        lv_day_qty      TYPE p DECIMALS 3,
-        lv_counter      TYPE i,
-        lv_fnt_counter  TYPE i,
-        lt_gail_id_map  TYPE TABLE OF ty_gail_id_map,
-        ls_gail_id_map  TYPE ty_gail_id_map,
-        lv_gail_prefix  TYPE c LENGTH 8,
-        lv_fortnight    TYPE c LENGTH 2,
-        lv_seq_number   TYPE n LENGTH 6,
-        lv_return_code  TYPE inri-returncode,
-        lt_error_log    TYPE TABLE OF ty_error_log,
-        ls_error_log    TYPE ty_error_log,
-        lv_error_found  TYPE abap_bool.
+  DATA: lt_cst_pur     TYPE TABLE OF yrga_cst_pur,
+        ls_cst_pur     TYPE yrga_cst_pur,
+        lt_cst_fnt     TYPE TABLE OF yrga_cst_fn_data,
+        ls_cst_fnt     TYPE yrga_cst_fn_data,
+        lv_timestamp   TYPE timestampl,
+        lv_ts_char     TYPE c LENGTH 14,
+        lv_date        TYPE datum,
+        lv_day_index   TYPE i,
+        lv_day_qty     TYPE p DECIMALS 3,
+        lv_counter     TYPE i,
+        lv_fnt_counter TYPE i,
+        lt_gail_id_map TYPE TABLE OF ty_gail_id_map,
+        ls_gail_id_map TYPE ty_gail_id_map,
+        lv_gail_prefix TYPE c LENGTH 8,
+        lv_fortnight   TYPE c LENGTH 2,
+        lv_seq_number  TYPE n LENGTH 6,
+        lv_return_code TYPE inri-returncode,
+        lt_error_log   TYPE TABLE OF ty_error_log,
+        ls_error_log   TYPE ty_error_log,
+        lv_error_found TYPE abap_bool.
   " Variables for weighted average calculation
-  DATA: lv_total_vol    TYPE p DECIMALS 3,
-        lv_sum_vol_gcv  TYPE p DECIMALS 6,
-        lv_sum_vol_ncv  TYPE p DECIMALS 6,
-        lv_avg_gcv      TYPE ygms_de_gcv,
-        lv_avg_ncv      TYPE ygms_de_ncv,
-        lv_total_mbg    TYPE p DECIMALS 3,
-        lv_total_scm    TYPE p DECIMALS 3.
+  DATA: lv_total_vol   TYPE YGMS_DE_QTY_MBG_CAL,"p DECIMALS 3,
+        lv_sum_vol_gcv TYPE YGMS_DE_QTY_MBG_CAL,"p DECIMALS 6,
+        lv_sum_vol_ncv TYPE YGMS_DE_QTY_MBG_CAL,"p DECIMALS 6,
+        lv_avg_gcv     TYPE ygms_de_gcv,
+        lv_avg_ncv     TYPE ygms_de_ncv,
+        lv_total_mbg   TYPE YGMS_DE_QTY_MBG_CAL,"p DECIMALS 3,
+        lv_total_scm   TYPE YGMS_DE_QTY_MBG_CAL."p DECIMALS 3.
   " Variables for GAIL ID validation
-  DATA: lt_gail_ids     TYPE TABLE OF yrga_cst_pur-gail_id,
-        lv_gail_count   TYPE i,
-        lv_gail_id_str  TYPE string.
+  DATA: lt_gail_ids    TYPE TABLE OF yrga_cst_pur-gail_id,
+        lv_gail_count  TYPE i,
+        lv_gail_id_str TYPE string.
   " Get current timestamp in UTC - format as YYYYMMDDHHmmSS (14 chars)
   DATA: lv_ts_date TYPE sy-datum,
         lv_ts_time TYPE sy-uzeit.
@@ -1732,7 +1761,9 @@ FORM save_data_to_db.
                material    = gs_alv_display-material
                state_code  = gs_alv_display-state_code.
     lv_date = gv_date_from.
-    DO 15 TIMES.
+    DATA lv_save_days TYPE i.
+    lv_save_days = gv_date_to - gv_date_from + 1.
+    DO lv_save_days TIMES.
       lv_day_index = sy-index.
       CASE lv_day_index.
         WHEN 1.  lv_day_qty = gs_alv_display-day01.
@@ -1750,6 +1781,7 @@ FORM save_data_to_db.
         WHEN 13. lv_day_qty = gs_alv_display-day13.
         WHEN 14. lv_day_qty = gs_alv_display-day14.
         WHEN 15. lv_day_qty = gs_alv_display-day15.
+        WHEN 16. lv_day_qty = gs_alv_display-day16.
       ENDCASE.
       CLEAR ls_cst_pur.
       ls_cst_pur-gas_day      = lv_date.
@@ -1809,7 +1841,9 @@ FORM save_data_to_db.
       ls_cst_pur-created_by   = sy-uname.
       ls_cst_pur-created_date = sy-datum.
       ls_cst_pur-created_time = sy-uzeit.
-      APPEND ls_cst_pur TO lt_cst_pur.
+      IF ls_cst_pur-ctp IS NOT INITIAL.
+        APPEND ls_cst_pur TO lt_cst_pur.
+      ENDIF.
       lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
@@ -1877,7 +1911,9 @@ FORM save_data_to_db.
     ls_cst_fnt-created_by   = sy-uname.
     ls_cst_fnt-created_date = sy-datum.
     ls_cst_fnt-created_time = sy-uzeit.
-    APPEND ls_cst_fnt TO lt_cst_fnt.
+    IF ls_cst_fnt-ctp IS NOT INITIAL.
+      APPEND ls_cst_fnt TO lt_cst_fnt.
+    ENDIF.
   ENDLOOP.
   " Check for duplicate GAIL IDs (validation step c)
   " For each Location-Material-State, check if GAIL ID already exists in YRGA_CST_PUR
@@ -1921,12 +1957,20 @@ FORM save_data_to_db.
   ENDIF.
   " Delete existing data for same Location ID and Fortnight (step f)
   UPDATE yrga_cst_pur SET deleted = 'X'
+  deleted_by = sy-uname
+deleted_on = sy-datum
+delete_at = sy-uzeit
+deleted_reson = '1'
 *  DELETE FROM yrga_cst_pur
-    WHERE gas_day BETWEEN gv_date_from AND gv_date_to.
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to and deleted = ' '.
   UPDATE yrga_cst_fn_data SET deleted = 'X'
+  deleted_by = sy-uname
+deleted_on = sy-datum
+delete_at = sy-uzeit
+deleted_reson = '1'
 *  DELETE FROM yrga_cst_fn_data
     WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to.
+      AND date_to   = gv_date_to and deleted = ' '.
   " Save records to both database tables
   IF lt_cst_pur IS NOT INITIAL.
     MODIFY yrga_cst_pur FROM TABLE lt_cst_pur.
@@ -2084,10 +2128,10 @@ FORM handle_download.
         lt_fnt_data  TYPE TABLE OF yrga_cst_fn_data.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-  DATA: lv_filename      TYPE string,
-        lv_fullpath      TYPE string,
-        lv_path          TYPE string,
-        lv_user_action   TYPE i.
+  DATA: lv_filename    TYPE string,
+        lv_fullpath    TYPE string,
+        lv_path        TYPE string,
+        lv_user_action TYPE i.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
@@ -2333,7 +2377,8 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
     IF sy-subrc <> 0.
       " ONGC ID not found in saved data - new receipt data received
       lv_new_found = abap_true.
-      APPEND ls_b2b TO gt_new_receipt_data.
+      MOVE-CORRESPONDING ls_b2b TO gs_new_receipt_data.
+      APPEND gs_new_receipt_data TO gt_new_receipt_data.
     ENDIF.
   ENDLOOP.
 
@@ -2388,11 +2433,11 @@ ENDFORM.
 *& 1.1.1: Send data through Email with PDF/Excel attachments
 *&---------------------------------------------------------------------*
 FORM handle_send_email.
-  DATA: lt_send_data   TYPE TABLE OF yrga_cst_pur,
-        lt_emails      TYPE TABLE OF string,
-        lv_send_pdf    TYPE c LENGTH 1,
-        lv_send_excel  TYPE c LENGTH 1,
-        lv_email_line  TYPE string.
+  DATA: lt_send_data  TYPE TABLE OF yrga_cst_pur,
+        lt_emails     TYPE TABLE OF string,
+        lv_send_pdf   TYPE c LENGTH 1,
+        lv_send_excel TYPE c LENGTH 1,
+        lv_email_line TYPE string.
 
   " Clear popup fields before display
   CLEAR: p_eml1, p_eml2, p_eml3, p_eml4, p_eml5.
@@ -2617,6 +2662,20 @@ FORM send_email USING pt_emails   TYPE string_table
       " Set sender as current user
       lo_sender = cl_sapuser_bcs=>create( sy-uname ).
       lo_send_request->set_sender( lo_sender ).
+      " Add CC to the sending user - look up email from PA0105
+      DATA: lv_sender_email TYPE adr6-smtp_addr.
+      SELECT SINGLE usrid INTO @lv_sender_email
+        FROM pa0105
+        WHERE pernr = @sy-uname
+          AND subty = 'E-ML'
+          AND endda = '99991231'.
+      IF sy-subrc = 0 AND lv_sender_email IS NOT INITIAL.
+        l_mail = lv_sender_email.
+        DATA(lo_cc_recipient) = cl_cam_address_bcs=>create_internet_address( l_mail ).
+        lo_send_request->add_recipient(
+          i_recipient = lo_cc_recipient
+          i_copy      = abap_true ).
+      ENDIF.
       " Send immediately
       lo_send_request->set_send_immediately( abap_true ).
       lv_sent_all = lo_send_request->send( ).
@@ -2631,21 +2690,21 @@ FORM send_email USING pt_emails   TYPE string_table
       MESSAGE s000(ygms_msg) WITH 'Email error:' lv_error_text.
   ENDTRY.
   " Update sent tracking fields in source tables (email = 2)
-UPDATE yrga_cst_pur SET sent_e  = '2'
-                        sent_by = sy-uname
-                        sent_on = sy-datum
-                        sent_at = sy-uzeit
-  WHERE gas_day BETWEEN gv_date_from AND gv_date_to
-    AND location IN s_loc
-    AND exclude <> 'X'.
-UPDATE yrga_cst_fn_data SET sent_e  = '2'
-                            sent_by = sy-uname
-                            sent_on = sy-datum
-                            sent_at = sy-uzeit
-  WHERE date_from = gv_date_from
-    AND date_to   = gv_date_to
-    AND location  IN s_loc.
-COMMIT WORK AND WAIT.
+  UPDATE yrga_cst_pur SET sent_e  = '2'
+                          sent_by = sy-uname
+                          sent_on = sy-datum
+                          sent_at = sy-uzeit
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude <> 'X' and deleted = ' '.
+  UPDATE yrga_cst_fn_data SET sent_e  = '2'
+                              sent_by = sy-uname
+                              sent_on = sy-datum
+                              sent_at = sy-uzeit
+    WHERE date_from = gv_date_from
+      AND date_to   = gv_date_to
+      AND location  IN s_loc and deleted = ' '.
+  COMMIT WORK AND WAIT.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form BUILD_EXCEL_ATTACHMENT
@@ -2665,13 +2724,13 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
   " Summary sheet types
   TYPES: BEGIN OF ty_summary_key,
            ctp        TYPE ygms_de_ongc_ctp,
-           ongc_mater TYPE ygms_de_ongc_mater,
+           ongc_mater TYPE ygms_de_ongc_mat,
            state_code TYPE yrga_cst_pur-state_code,
            state      TYPE yrga_cst_pur-state,
          END OF ty_summary_key.
   TYPES: BEGIN OF ty_summary,
            ctp        TYPE ygms_de_ongc_ctp,
-           ongc_mater TYPE ygms_de_ongc_mater,
+           ongc_mater TYPE ygms_de_ongc_mat,
            state_code TYPE yrga_cst_pur-state_code,
            state      TYPE yrga_cst_pur-state,
            total_mbg  TYPE yrga_cst_pur-qty_in_mbg,
@@ -2680,7 +2739,7 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
            sum_ncv    TYPE yrga_cst_pur-ncv,
            cnt        TYPE i,
          END OF ty_summary.
-  DATA: lt_summary TYPE SORTED TABLE OF ty_summary WITH UNIQUE KEY ctp ongc_mater state_code,
+  DATA: lt_summary TYPE SORTED TABLE OF ty_summary WITH UNIQUE KEY ctp state_code ongc_mater,
         ls_summary TYPE ty_summary.
   DATA: lt_days    TYPE SORTED TABLE OF sy-datum WITH UNIQUE KEY table_line,
         lt_day_qty TYPE HASHED TABLE OF yrga_cst_pur WITH UNIQUE KEY ctp ongc_mater state_code gas_day.
@@ -2911,7 +2970,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Summary aggregation types
   TYPES: BEGIN OF ty_pdf_sum,
            ctp        TYPE ygms_de_ongc_ctp,
-           ongc_mater TYPE ygms_de_ongc_mater,
+           ongc_mater TYPE ygms_de_ongc_mat,
            state_code TYPE yrga_cst_pur-state_code,
            state      TYPE yrga_cst_pur-state,
            total_mbg  TYPE yrga_cst_pur-qty_in_mbg,
@@ -2920,7 +2979,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
            sum_ncv    TYPE yrga_cst_pur-ncv,
            cnt        TYPE i,
          END OF ty_pdf_sum.
-  DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp ongc_mater state_code,
+  DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp state_code ongc_mater,
         ls_pdf_sum TYPE ty_pdf_sum.
   DATA: lv_avg_str TYPE c LENGTH 15.
 
@@ -2957,12 +3016,12 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Get print parameters for spool creation
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
     EXPORTING
-      no_dialog    = 'X'
-      immediately  = ' '
-      release      = ' '
-      new_list_id  = 'X'
-      line_size    = 200
-      line_count   = 65
+      no_dialog      = 'X'
+      immediately    = ' '
+      release        = ' '
+      new_list_id    = 'X'
+      line_size      = 200
+      line_count     = 65
     IMPORTING
       out_parameters = ls_params
       valid          = lv_valid
@@ -3106,10 +3165,10 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       line_width_dst = 255
       transfer_bin   = 'X'
     TABLES
-      content_in  = lt_pdf
-      content_out = ct_content
+      content_in     = lt_pdf
+      content_out    = ct_content
     EXCEPTIONS
-      OTHERS = 1.
+      OTHERS         = 1.
 
   cv_size = lv_pdf_len.
 
@@ -3192,8 +3251,13 @@ FORM build_fnt_excel_attachment USING pt_data    TYPE STANDARD TABLE
     '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
     '</Row>'
     INTO lv_xml.
+  " Sort data: From Date - To Date - CTP ID - State Code - ONGC Material
+  " Use a typed local copy as pt_data is generic TYPE STANDARD TABLE
+  DATA lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
+  lt_fnt_sorted = pt_data.
+  SORT lt_fnt_sorted BY date_from date_to ctp state_code ongc_mater ASCENDING.
   " Data rows
-  LOOP AT pt_data INTO ls_fnt.
+  LOOP AT lt_fnt_sorted INTO ls_fnt.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
     WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
     WRITE ls_fnt-gcv TO lv_gcv DECIMALS 3.
@@ -3234,12 +3298,12 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                                        ct_pdf_raw TYPE STANDARD TABLE
                                        cv_pdf_len TYPE i.
   DATA: ls_fnt     TYPE yrga_cst_fn_data.
-  DATA: lv_date_from     TYPE c LENGTH 10,
-        lv_date_to       TYPE c LENGTH 10,
-        lv_gcv           TYPE c LENGTH 15,
-        lv_ncv           TYPE c LENGTH 15,
-        lv_qty_scm       TYPE c LENGTH 15,
-        lv_qty_mbg       TYPE c LENGTH 15.
+  DATA: lv_date_from TYPE c LENGTH 10,
+        lv_date_to   TYPE c LENGTH 10,
+        lv_gcv       TYPE c LENGTH 15,
+        lv_ncv       TYPE c LENGTH 15,
+        lv_qty_scm   TYPE c LENGTH 15,
+        lv_qty_mbg   TYPE c LENGTH 15.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
   DATA: ls_params  TYPE pri_params,
@@ -3260,12 +3324,12 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Get print parameters for spool creation
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
     EXPORTING
-      no_dialog    = 'X'
-      immediately  = ' '
-      release      = ' '
-      new_list_id  = 'X'
-      line_size    = 200
-      line_count   = 65
+      no_dialog      = 'X'
+      immediately    = ' '
+      release        = ' '
+      new_list_id    = 'X'
+      line_size      = 200
+      line_count     = 65
     IMPORTING
       out_parameters = ls_params
       valid          = lv_valid
@@ -3300,7 +3364,12 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(170).
 
-  LOOP AT pt_data INTO ls_fnt.
+  " Sort data: From Date - To Date - CTP ID - State Code - ONGC Material
+  " Use a typed local copy as pt_data is generic TYPE STANDARD TABLE
+  DATA lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
+  lt_fnt_sorted = pt_data.
+  SORT lt_fnt_sorted BY date_from date_to ctp state_code ongc_mater ASCENDING.
+  LOOP AT lt_fnt_sorted INTO ls_fnt.
     WRITE ls_fnt-date_from TO lv_date_from DD/MM/YYYY.
     WRITE ls_fnt-date_to   TO lv_date_to   DD/MM/YYYY.
     WRITE ls_fnt-qty_in_scm TO lv_qty_scm DECIMALS 3.
@@ -3359,10 +3428,10 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       line_width_dst = 255
       transfer_bin   = 'X'
     TABLES
-      content_in  = lt_pdf
-      content_out = ct_content
+      content_in     = lt_pdf
+      content_out    = ct_content
     EXCEPTIONS
-      OTHERS = 1.
+      OTHERS         = 1.
 
   cv_size = lv_pdf_len.
 
@@ -3407,12 +3476,13 @@ FORM handle_send_b2b.
         CLEAR:  wa_final_daily, w_fin.
       ENDLOOP.
       lv_json_download = /ui2/cl_json=>serialize(
-     data = ty_final_daily
-     compress = abap_true
-     pretty_name = /ui2/cl_json=>pretty_mode-none ).
+        data        = ty_final_daily
+        compress    = abap_true
+        pretty_name = /ui2/cl_json=>pretty_mode-none ).
       SELECT SINGLE * FROM yha_api_dtls INTO @lv_api_dt WHERE sysid = @sy-sysid AND yy_api_type = 'ONGC_B2B_DAILY'.
       PERFORM call_api.
     ENDIF.
+    if g_error_api is INITIAL.
     IF lt_send_data_fn[] IS NOT INITIAL.
       CLEAR: lv_json_download.
       LOOP AT lt_send_data_fn INTO DATA(w_fin_fn).
@@ -3431,19 +3501,123 @@ FORM handle_send_b2b.
         CLEAR:  wa_final_fn, w_fin.
       ENDLOOP.
       lv_json_download = /ui2/cl_json=>serialize(
-     data = ty_final_fn
-     compress = abap_true
-     pretty_name = /ui2/cl_json=>pretty_mode-none ).
+        data        = ty_final_fn
+        compress    = abap_true
+        pretty_name = /ui2/cl_json=>pretty_mode-none ).
       SELECT SINGLE * FROM yha_api_dtls INTO @lv_api_dt WHERE sysid = @sy-sysid AND yy_api_type = 'ONGC_B2B_FN'.
       PERFORM call_api.
     ENDIF.
   ENDIF.
-    " After successful API call, save sent data to B2B tables
+  if g_error_api is INITIAL.
+  " After successful API call, save sent data to B2B tables
   PERFORM save_b2b_sent_data USING lt_send_data lt_send_data_fn.
+  " Send confirmation email to the sending user
+  PERFORM send_b2b_confirmation_email USING lt_send_data.
   " B2B PI connectivity - to be implemented when B2B connection is established
   " MESSAGE s000(ygms_msg) WITH 'B2B connectivity not yet established. Please use Email.'.
+  endif.
+  endif.
 ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SEND_B2B_CONFIRMATION_EMAIL
+*& Send confirmation email to the user who triggered the B2B send
+*&---------------------------------------------------------------------*
+FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
+  DATA: lo_send_request TYPE REF TO cl_bcs,
+        lo_document     TYPE REF TO cl_document_bcs,
+        lo_recipient    TYPE REF TO if_recipient_bcs,
+        lo_sender       TYPE REF TO cl_sapuser_bcs,
+        lt_body         TYPE bcsy_text,
+        ls_body         TYPE soli,
+        lv_subject      TYPE so_obj_des,
+        lx_bcs          TYPE REF TO cx_bcs.
+  DATA: lv_user_email TYPE adr6-smtp_addr,
+        l_mail        TYPE adr6-smtp_addr.
+  DATA: lv_date_from_str TYPE c LENGTH 10,
+        lv_date_to_str   TYPE c LENGTH 10.
+  DATA: ls_pur      TYPE yrga_cst_pur,
+        lt_loc      TYPE TABLE OF ygms_de_loc_id,
+        lv_loc      TYPE ygms_de_loc_id,
+        lv_loc_list TYPE string.
+  DATA: lv_sent_on_str TYPE c LENGTH 10,
+        lv_sent_at_str TYPE c LENGTH 8.
+
+  " Look up sender email from PA0105
+  SELECT SINGLE usrid INTO @lv_user_email
+    FROM pa0105
+    WHERE pernr = @sy-uname
+      AND subty = 'E-ML'
+      AND endda = '99991231'.
+  IF sy-subrc <> 0 OR lv_user_email IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " Format date/time values
+  WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
+  WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
+  WRITE sy-datum TO lv_sent_on_str DD/MM/YYYY.
+  WRITE sy-uzeit TO lv_sent_at_str USING EDIT MASK '__:__:__'.
+
+  " Build unique location ID list from daily data
+  LOOP AT pt_daily INTO ls_pur.
+    READ TABLE lt_loc WITH KEY table_line = ls_pur-location TRANSPORTING NO FIELDS.
+    IF sy-subrc <> 0.
+      APPEND ls_pur-location TO lt_loc.
+    ENDIF.
+  ENDLOOP.
+  SORT lt_loc.
+  LOOP AT lt_loc INTO lv_loc.
+    IF lv_loc_list IS INITIAL.
+      lv_loc_list = lv_loc.
+    ELSE.
+      CONCATENATE lv_loc_list ', ' lv_loc INTO lv_loc_list.
+    ENDIF.
+  ENDLOOP.
+
+  " Build email subject
+  CONCATENATE 'Transmission Confirmation – ONGC CST B2B Data for'
+    lv_date_from_str 'to' lv_date_to_str
+    INTO lv_subject SEPARATED BY space.
+
+  " Build email body
+  ls_body-line = 'Statewise allocation data for CST purchase has been sent to ONGC through B2B as per the following details:'.
+  APPEND ls_body TO lt_body.
+  CLEAR ls_body.
+  APPEND ls_body TO lt_body.  " blank line
+  CONCATENATE 'Fortnight: ' lv_date_from_str ' to ' lv_date_to_str INTO ls_body-line.
+  APPEND ls_body TO lt_body.
+  CLEAR ls_body.
+  CONCATENATE 'Location IDs: ' lv_loc_list INTO ls_body-line.
+  APPEND ls_body TO lt_body.
+  CLEAR ls_body.
+  CONCATENATE 'Sent On: ' lv_sent_on_str INTO ls_body-line.
+  APPEND ls_body TO lt_body.
+  CLEAR ls_body.
+  CONCATENATE 'Sent At: ' lv_sent_at_str INTO ls_body-line.
+  APPEND ls_body TO lt_body.
+
+  TRY.
+      lo_send_request = cl_bcs=>create_persistent( ).
+      lo_document = cl_document_bcs=>create_document(
+        i_type    = 'RAW'
+        i_text    = lt_body
+        i_subject = lv_subject ).
+      lo_send_request->set_document( lo_document ).
+      l_mail = lv_user_email.
+      lo_recipient = cl_cam_address_bcs=>create_internet_address( l_mail ).
+      lo_send_request->add_recipient( lo_recipient ).
+      lo_sender = cl_sapuser_bcs=>create( sy-uname ).
+      lo_send_request->set_sender( lo_sender ).
+      lo_send_request->set_send_immediately( abap_true ).
+      lo_send_request->send( ).
+      COMMIT WORK.
+    CATCH cx_bcs INTO lx_bcs.
+      " Silently ignore email errors for confirmation mail
+  ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
 FORM call_api.
+  clear g_error_api.
 ****  Added by Aishwarya/ Abhisheik for ONGC b2b API 03.03.2026
   IF sy-subrc = 0.
     lv_token_url     = lv_api_dt-yy_token_url.
@@ -3467,6 +3641,7 @@ FORM call_api.
       OTHERS             = 4.
   IF sy-subrc <> 0.
     WRITE: / 'Error creating HTTP client for token request'.
+    g_error_api = 'X'.
     RETURN.
   ENDIF.
   lo_http_client->propertytype_logon_popup = lo_http_client->co_disabled.
@@ -3480,6 +3655,7 @@ FORM call_api.
       OTHERS                     = 4.
   IF sy-subrc <> 0.
     WRITE: / 'Error sending token request'.
+     g_error_api = 'X'.
     RETURN.
   ENDIF.
 * Receive token response
@@ -3491,6 +3667,7 @@ FORM call_api.
       OTHERS                     = 4.
   IF sy-subrc <> 0.
     WRITE: / 'Error receiving token response'.
+     g_error_api = 'X'.
     RETURN.
   ENDIF.
   lv_response = lo_http_client->response->get_cdata( ).
@@ -3521,25 +3698,26 @@ FORM call_api.
         client        = lv_http_client.
     lv_http_client->request->set_method( 'POST' ).
     lv_http_client->request->set_header_field( name = 'Authorization' value = |Bearer { lv_access_token }| ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
-    lv_http_client->request->set_header_field( name = 'Accept'  value = 'application/json' ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+    lv_http_client->request->set_header_field( name = 'Accept' value = 'application/json' ). "name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
 *  lv_http_client->request->set_cdata( |grant_type=client_credentials&client_id={ lv_client_id }&client_secret={ lv_client_secret }| ).
     lv_http_client->request->set_cdata( lv_json_download ).
     lv_http_client->send( EXCEPTIONS http_communication_failure = 1
-       http_invalid_state = 2 ).
-    lv_http_client->receive( EXCEPTIONS
-            http_communication_failure = 1
-            http_invalid_state = 2
-            http_processing_failed = 3 ).
+                                     http_invalid_state         = 2 ).
+    lv_http_client->receive( EXCEPTIONS http_communication_failure = 1
+                                        http_invalid_state         = 2
+                                        http_processing_failed     = 3 ).
     lv_http_client->response->get_status(
-    IMPORTING
-      code = code
-      reason = reason ).
+      IMPORTING
+        code   = code
+        reason = reason ).
     lv_response = lv_http_client->response->get_cdata( ).
     log_data =   lv_response.
     /ui2/cl_json=>deserialize(
-   EXPORTING json = log_data
-    pretty_name = /ui2/cl_json=>pretty_mode-camel_case
-   CHANGING data = itab ).
+      EXPORTING
+        json        = log_data
+        pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+      CHANGING
+        data        = itab ).
     lv_http_client->close( ).
   ELSE.
     WRITE:/ 'NO DATA TO DOWNLOAD.'.
@@ -3652,15 +3830,15 @@ FORM display_send_preview.
   DO.
     CALL FUNCTION 'POPUP_TO_DECIDE'
       EXPORTING
-        defaultoption = '1'
-        textline1     = 'Click to view Fortnightly / Daily data or'
-        textline2     = 'Click to proceed to send data to ONGC.'
-        text_option1  = 'View Data'
-        text_option2  = 'Send Data to ONGC'
-        titel         = 'CST Purchase Data'
+        defaultoption  = '1'
+        textline1      = 'Click to view Fortnightly / Daily data or'
+        textline2      = 'Click to proceed to send data to ONGC.'
+        text_option1   = 'View Data'
+        text_option2   = 'Send Data to ONGC'
+        titel          = 'CST Purchase Data'
         cancel_display = 'X'
       IMPORTING
-        answer        = lv_answer.
+        answer         = lv_answer.
 
     CASE lv_answer.
       WHEN '1'.
@@ -3668,15 +3846,15 @@ FORM display_send_preview.
         DATA lv_view_answer TYPE c LENGTH 1.
         CALL FUNCTION 'POPUP_TO_DECIDE'
           EXPORTING
-            defaultoption = '1'
-            textline1     = 'Select which data to view.'
-            textline2     = ' '
-            text_option1  = 'Daily Data'
-            text_option2  = 'Fortnightly Data'
-            titel         = 'View Data'
+            defaultoption  = '1'
+            textline1      = 'Select which data to view.'
+            textline2      = ' '
+            text_option1   = 'Daily Data'
+            text_option2   = 'Fortnightly Data'
+            titel          = 'View Data'
             cancel_display = 'X'
           IMPORTING
-            answer        = lv_view_answer.
+            answer         = lv_view_answer.
         CASE lv_view_answer.
           WHEN '1'.
             PERFORM display_daily_preview USING lt_daily_data.
@@ -3908,12 +4086,15 @@ FORM recalculate_totals.
       e_grid = lr_grid.
   " Recalculate totals for each row (only TOTAL_MBG and TOTAL_SCM - GCV/NCV unchanged)
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>).
-    " Sum all day columns for TOTAL_MBG
+    " Sum all day columns for TOTAL_SCM - DAY16 only included when fortnight has 16 days
     <fs_alv>-total_scm = <fs_alv>-day01 + <fs_alv>-day02 + <fs_alv>-day03 +
                          <fs_alv>-day04 + <fs_alv>-day05 + <fs_alv>-day06 +
                          <fs_alv>-day07 + <fs_alv>-day08 + <fs_alv>-day09 +
                          <fs_alv>-day10 + <fs_alv>-day11 + <fs_alv>-day12 +
                          <fs_alv>-day13 + <fs_alv>-day14 + <fs_alv>-day15.
+    IF gv_date_to - gv_date_from + 1 = 16.
+      <fs_alv>-total_scm = <fs_alv>-total_scm + <fs_alv>-day16.
+    ENDIF.
     " Convert TOTAL_MBG to TOTAL_SCM using existing GCV/NCV values (no gt_gas_receipt)
     IF <fs_alv>-gcv > 0 AND <fs_alv>-total_mbg > 0.
       CLEAR c_tgqty.
@@ -3968,27 +4149,27 @@ FORM build_alv_display_table_view .
     DELETE ADJACENT DUPLICATES FROM it_cst_pur_temp COMPARING location material state_code.
     SORT it_yrga_cst_pur BY gas_day location material state_code.
     LOOP AT it_cst_pur_temp INTO DATA(wa_csr_pur_temp).
-        ls_alv-state_code  = wa_csr_pur_temp-state_code.
-        ls_alv-state       = wa_csr_pur_temp-state.
-        ls_alv-material    = wa_csr_pur_temp-material.
-        ls_alv-location_id = wa_csr_pur_temp-location.
-        ls_alv-exclude     = wa_csr_pur_temp-exclude.
-        CLEAR l_index.
+      ls_alv-state_code  = wa_csr_pur_temp-state_code.
+      ls_alv-state       = wa_csr_pur_temp-state.
+      ls_alv-material    = wa_csr_pur_temp-material.
+      ls_alv-location_id = wa_csr_pur_temp-location.
+      ls_alv-exclude     = wa_csr_pur_temp-exclude.
+      CLEAR l_index.
       LOOP AT it_yrga_cst_pur INTO DATA(wa_yrga_cst_pur)
         WHERE location   = wa_csr_pur_temp-location
           AND material   = wa_csr_pur_temp-material
           AND state_code = wa_csr_pur_temp-state_code.
-          l_index = l_index + 1.
-          CLEAR l_day.
-          CONCATENATE 'DAY' l_index INTO l_day.
-          ASSIGN COMPONENT l_day OF STRUCTURE ls_alv TO FIELD-SYMBOL(<fs_day>).
-          IF sy-subrc = 0.
-            <fs_day> = wa_yrga_cst_pur-qty_in_scm.
-            ls_alv-total_mbg = ls_alv-total_mbg + wa_yrga_cst_pur-qty_in_mbg.
-            ls_alv-total_scm = ls_alv-total_scm + <fs_day>.
-            l_gcv = ( <fs_day> * wa_yrga_cst_pur-gcv ) + l_gcv.
-            l_ncv = ( <fs_day> * wa_yrga_cst_pur-ncv ) + l_ncv.
-          ENDIF.
+        l_index = l_index + 1.
+        CLEAR l_day.
+        CONCATENATE 'DAY' l_index INTO l_day.
+        ASSIGN COMPONENT l_day OF STRUCTURE ls_alv TO FIELD-SYMBOL(<fs_day>).
+        IF sy-subrc = 0.
+          <fs_day> = wa_yrga_cst_pur-qty_in_scm.
+          ls_alv-total_mbg = ls_alv-total_mbg + wa_yrga_cst_pur-qty_in_mbg.
+          ls_alv-total_scm = ls_alv-total_scm + <fs_day>.
+          l_gcv = ( <fs_day> * wa_yrga_cst_pur-gcv ) + l_gcv.
+          l_ncv = ( <fs_day> * wa_yrga_cst_pur-ncv ) + l_ncv.
+        ENDIF.
       ENDLOOP.
       ls_alv-gcv = l_gcv / ls_alv-total_scm.
       ls_alv-ncv = l_ncv / ls_alv-total_scm.
@@ -4651,7 +4832,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
-        lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
     ls_fieldcat-seltext_l = 'Sent By'.
     ls_fieldcat-col_pos   = lv_col.
@@ -4669,7 +4850,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
-        lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
     ls_fieldcat-col_pos   = lv_col.
@@ -4902,7 +5083,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
-        APPEND ls_fieldcat TO lt_fieldcat.
+    APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
     ls_fieldcat-seltext_l = 'Sent By'.
@@ -4921,7 +5102,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
-        lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_E'.
     ls_fieldcat-seltext_l = 'Sent Via'.
     ls_fieldcat-col_pos   = lv_col.
@@ -5075,18 +5256,366 @@ FORM save_b2b_sent_data USING pt_daily TYPE STANDARD TABLE
                           sent_at = l_time
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
-      AND exclude <> 'X'.
+      AND exclude <> 'X' and deleted = ' '.
   UPDATE yrga_cst_fn_data SET sent_e  = '1'
                               sent_by = sy-uname
                               sent_on = l_date
                               sent_at = l_time
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to
-      AND location  IN s_loc.
+      AND location  IN s_loc and deleted = ' '.
   COMMIT WORK AND WAIT.
   " Commit if both saves successful
   COMMIT WORK AND WAIT.
   lv_count_d = lines( lt_b2b_2 ).
   lv_count_f = lines( lt_b2b_3 ).
   MESSAGE s000(ygms_msg) WITH lv_count_d 'daily,' lv_count_f 'fortnightly B2B records saved'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form VALIDATE_CV_DATA
+*& Validates calorific values between YRXA_CMDATA and GT_GAS_RECEIPT.
+*& Also validates receipt volumes (YRGA_CST_B2B_1) against measurement
+*& volumes (YYCUM_VOL from YRXA_CMDATA) for each CTP ID and Gas Day.
+*& Shows mismatch popup if GCV/NCV values differ. Program does not
+*& proceed until CV validation is cleared. Volume mismatch also blocks
+*& the allocation process if mismatches are detected.
+*& Returns: cv_valid = abap_true if all validation passed, abap_false if not
+*&---------------------------------------------------------------------*
+FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
+  " Local type matching YRXA_CMDATA actual field names:
+  "   YYDATE         (DATS)   - Gas Day
+  "   YYBUS_LOCATION (CHAR 10) - Location ID
+  "   YYAVG_GCV      (FLTP 16) - Average GCV
+  "   YYAVG_NCV      (FLTP 16) - Average NCV
+  "   YYCUM_VOL      (FLTP 16) - Cumulative Volume (Sm3)
+  "   YYTIMESTAMP    (DEC 15)  - UTC Timestamp
+  TYPES: BEGIN OF lty_cmdata,
+           yydate         TYPE dats,
+           yybus_location TYPE oij_locid,
+           yyavg_gcv      TYPE yyavg_gcv,
+           yyavg_ncv      TYPE yyavg_ncv,
+           yycum_vol      TYPE yycum_vol,
+           yytimestamp    TYPE timestamp,
+         END OF lty_cmdata.
+  TYPES: BEGIN OF lty_cv_mismatch,
+           gas_day       TYPE datum,
+           location_id   TYPE ygms_de_loc_id,
+           ctp_id        TYPE ygms_de_ongc_ctp,
+           source        TYPE char30,
+           gcv_meas      TYPE ygms_de_gcv,
+           ncv_meas      TYPE ygms_de_ncv,
+           gcv_receipt   TYPE ygms_de_gcv,
+           ncv_receipt   TYPE ygms_de_ncv,
+         END OF lty_cv_mismatch.
+  " Volume matching types
+  TYPES: BEGIN OF lty_b2b_vol,
+           gas_day       TYPE datum,
+           ctp_id        TYPE ygms_de_ongc_ctp,
+           ongc_material TYPE ygms_de_ongc_mat,
+           qty_scm       TYPE ygms_de_qty_scm,
+           time_stamp    TYPE timestamp,
+         END OF lty_b2b_vol.
+  TYPES: BEGIN OF lty_receipt_total,
+           gas_day  TYPE datum,
+           ctp_id   TYPE ygms_de_ongc_ctp,
+           qty_scm  TYPE p DECIMALS 3,
+         END OF lty_receipt_total.
+  TYPES: BEGIN OF lty_vol_mismatch,
+           gas_day      TYPE datum,
+           ctp_id       TYPE ygms_de_ongc_ctp,
+           receipt_vol  TYPE p DECIMALS 3,
+           location_id  TYPE ygms_de_loc_id,
+           meas_vol     TYPE p DECIMALS 3,
+         END OF lty_vol_mismatch.
+  DATA: lt_cmdata    TYPE TABLE OF lty_cmdata,
+        ls_cmdata    TYPE lty_cmdata,
+        lt_mismatch  TYPE TABLE OF lty_cv_mismatch,
+        ls_mismatch  TYPE lty_cv_mismatch,
+        lv_answer    TYPE c LENGTH 1.
+  " Volume matching data
+  DATA: lt_b2b_raw      TYPE TABLE OF lty_b2b_vol,
+        lt_receipt_total TYPE TABLE OF lty_receipt_total,
+        ls_receipt_total TYPE lty_receipt_total,
+        lt_vol_mismatch  TYPE TABLE OF lty_vol_mismatch,
+        ls_vol_mismatch  TYPE lty_vol_mismatch,
+        lt_ctp_ids       TYPE TABLE OF ygms_de_ongc_ctp,
+        lv_vol_answer    TYPE c LENGTH 1.
+  CONSTANTS: lc_cv_tolerance TYPE f VALUE '0.01'.  " Tolerance for FLTP vs packed decimal comparison
+  cv_valid = abap_true.
+  " 2.1: Pass dates and location ID from user inputs to YRXA_CMDATA
+  "       Also fetch YYCUM_VOL for volume matching
+  SELECT yydate yybus_location yyavg_gcv yyavg_ncv yycum_vol yytimestamp
+    FROM yrxa_cmdata
+    INTO TABLE lt_cmdata
+    WHERE yybus_location IN s_loc
+      AND yydate BETWEEN gv_date_from AND gv_date_to.
+  IF lt_cmdata IS INITIAL.
+    " No measurement data found - allow program to proceed
+    RETURN.
+  ENDIF.
+  " 2.2: Keep only the latest records for each Gas Day-Location ID combination
+  SORT lt_cmdata BY yydate yybus_location yytimestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_cmdata COMPARING yydate yybus_location.
+  " 2.3: Compare GCV and NCV with GT_GAS_RECEIPT for each Gas Day-Location ID
+  LOOP AT lt_cmdata INTO ls_cmdata.
+    READ TABLE gt_gas_receipt INTO DATA(ls_gas_rcpt)
+      WITH KEY gas_day     = ls_cmdata-yydate
+               location_id = ls_cmdata-yybus_location.
+    IF sy-subrc = 0.
+      IF abs( ls_cmdata-yyavg_gcv - ls_gas_rcpt-gcv ) > lc_cv_tolerance
+        OR abs( ls_cmdata-yyavg_ncv - ls_gas_rcpt-ncv ) > lc_cv_tolerance.
+        CLEAR ls_mismatch.
+        ls_mismatch-gas_day     = ls_cmdata-yydate.
+        ls_mismatch-location_id = ls_cmdata-yybus_location.
+        ls_mismatch-ctp_id      = ls_gas_rcpt-ctp_id.
+        ls_mismatch-gcv_meas    = ls_cmdata-yyavg_gcv.
+        ls_mismatch-ncv_meas    = ls_cmdata-yyavg_ncv.
+        ls_mismatch-gcv_receipt = ls_gas_rcpt-gcv.
+        ls_mismatch-ncv_receipt = ls_gas_rcpt-ncv.
+        APPEND ls_mismatch TO lt_mismatch.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+  IF lt_mismatch IS NOT INITIAL.
+    " CV Mismatch found - show popup
+    cv_valid = abap_false.
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Mismatch found in calorific values'
+        textline2      = 'Click Yes to view details, No to cancel'
+        titel          = 'CV Validation Failed'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_answer.
+    IF lv_answer = 'J'.  " Yes - show details
+      " Build detail ALV showing mismatches from both sources
+      DATA: lt_detail_fcat TYPE slis_t_fieldcat_alv,
+            ls_detail_fcat TYPE slis_fieldcat_alv.
+      TYPES: BEGIN OF lty_cv_detail,
+               gas_day     TYPE datum,
+               location_id TYPE ygms_de_loc_id,
+               ctp_id      TYPE ygms_de_ongc_ctp,
+               gcv_meas    TYPE ygms_de_gcv,
+               ncv_meas    TYPE ygms_de_ncv,
+               gcv_receipt TYPE ygms_de_gcv,
+               ncv_receipt TYPE ygms_de_ncv,
+             END OF lty_cv_detail.
+      DATA: lt_cv_detail TYPE TABLE OF lty_cv_detail,
+            ls_cv_detail TYPE lty_cv_detail.
+      " 2.4: Build detail table - one row per mismatch with both sources side by side
+      LOOP AT lt_mismatch INTO ls_mismatch.
+        CLEAR ls_cv_detail.
+        ls_cv_detail-gas_day     = ls_mismatch-gas_day.
+        ls_cv_detail-location_id = ls_mismatch-location_id.
+        ls_cv_detail-ctp_id      = ls_mismatch-ctp_id.
+        ls_cv_detail-gcv_meas    = ls_mismatch-gcv_meas.
+        ls_cv_detail-ncv_meas    = ls_mismatch-ncv_meas.
+        ls_cv_detail-gcv_receipt = ls_mismatch-gcv_receipt.
+        ls_cv_detail-ncv_receipt = ls_mismatch-ncv_receipt.
+        APPEND ls_cv_detail TO lt_cv_detail.
+      ENDLOOP.
+      " Build field catalog for detail ALV
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'GAS_DAY'.
+      ls_detail_fcat-seltext_l = 'Gas Day'.
+      ls_detail_fcat-outputlen = 12.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'LOCATION_ID'.
+      ls_detail_fcat-seltext_l = 'Location ID'.
+      ls_detail_fcat-outputlen = 12.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'CTP_ID'.
+      ls_detail_fcat-seltext_l = 'CTP ID'.
+      ls_detail_fcat-outputlen = 12.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'GCV_MEAS'.
+      ls_detail_fcat-seltext_l = 'Measurement Table GCV'.
+      ls_detail_fcat-seltext_m = 'Meas. Table GCV'.
+      ls_detail_fcat-seltext_s = 'Meas GCV'.
+      ls_detail_fcat-outputlen = 16.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'NCV_MEAS'.
+      ls_detail_fcat-seltext_l = 'Measurement Table NCV'.
+      ls_detail_fcat-seltext_m = 'Meas. Table NCV'.
+      ls_detail_fcat-seltext_s = 'Meas NCV'.
+      ls_detail_fcat-outputlen = 16.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'GCV_RECEIPT'.
+      ls_detail_fcat-seltext_l = 'Receipt Table GCV'.
+      ls_detail_fcat-seltext_m = 'Receipt Tbl GCV'.
+      ls_detail_fcat-seltext_s = 'Rcpt GCV'.
+      ls_detail_fcat-outputlen = 16.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      CLEAR ls_detail_fcat.
+      ls_detail_fcat-fieldname = 'NCV_RECEIPT'.
+      ls_detail_fcat-seltext_l = 'Receipt Table NCV'.
+      ls_detail_fcat-seltext_m = 'Receipt Tbl NCV'.
+      ls_detail_fcat-seltext_s = 'Rcpt NCV'.
+      ls_detail_fcat-outputlen = 16.
+      APPEND ls_detail_fcat TO lt_detail_fcat.
+      " Display detail ALV as popup
+      DATA: ls_detail_layout TYPE slis_layout_alv.
+      ls_detail_layout-zebra = 'X'.
+      ls_detail_layout-colwidth_optimize = 'X'.
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+          i_callback_program = sy-repid
+          is_layout          = ls_detail_layout
+          it_fieldcat        = lt_detail_fcat
+          i_screen_start_column = 10
+          i_screen_start_line   = 5
+          i_screen_end_column   = 150
+          i_screen_end_line     = 25
+        TABLES
+          t_outtab           = lt_cv_detail
+        EXCEPTIONS
+          program_error = 1
+          OTHERS        = 2.
+    ENDIF.
+    " CV validation failed - exit form, do not proceed to volume matching
+    RETURN.
+  ENDIF.
+
+  "-----------------------------------------------------------------------
+  " Volume Matching: Receipt volume (YRGA_CST_B2B_1) vs Measurement
+  " volume (YYCUM_VOL from YRXA_CMDATA) for each CTP ID and Gas Day
+  "-----------------------------------------------------------------------
+
+  " V.1: Collect all CTP IDs from location mapping
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_map_v).
+    COLLECT ls_map_v-ongc_ctp_id INTO lt_ctp_ids.
+  ENDLOOP.
+  IF lt_ctp_ids IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " V.1a: Fetch B2B data for all CTP IDs and gas days
+  SELECT gas_day ctp_id ongc_material qty_scm time_stamp
+    FROM yrga_cst_b2b_1
+    INTO TABLE lt_b2b_raw
+    FOR ALL ENTRIES IN lt_ctp_ids
+    WHERE ctp_id  = lt_ctp_ids-table_line
+      AND gas_day BETWEEN gv_date_from AND gv_date_to
+      AND qty_scm > 0.
+  IF lt_b2b_raw IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " V.1b: Keep latest data for each CTP ID - Gas Day - ONGC Material
+  SORT lt_b2b_raw BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_b2b_raw COMPARING ctp_id gas_day ongc_material.
+
+  " V.1c: Sum volume (Sm3) of all materials per CTP ID - Gas Day
+  LOOP AT lt_b2b_raw INTO DATA(ls_b2b_v).
+    ls_receipt_total-gas_day = ls_b2b_v-gas_day.
+    ls_receipt_total-ctp_id  = ls_b2b_v-ctp_id.
+    ls_receipt_total-qty_scm = ls_b2b_v-qty_scm.
+    COLLECT ls_receipt_total INTO lt_receipt_total.
+    CLEAR ls_receipt_total.
+  ENDLOOP.
+
+  " Round receipt totals to 3 decimal places
+  LOOP AT lt_receipt_total ASSIGNING FIELD-SYMBOL(<fs_rcpt_total>).
+    <fs_rcpt_total>-qty_scm = round( val = <fs_rcpt_total>-qty_scm dec = 3 ).
+  ENDLOOP.
+
+  " V.2: Match volumes - use lt_cmdata already fetched above (has YYCUM_VOL)
+  " For each CTP ID - Gas Day, find Location ID and compare with YYCUM_VOL
+  LOOP AT lt_receipt_total INTO ls_receipt_total.
+    " Find Location ID for this CTP ID
+    READ TABLE gt_loc_ctp_map INTO DATA(ls_map_v3)
+      WITH KEY ongc_ctp_id = ls_receipt_total-ctp_id.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+    " Find measurement volume from lt_cmdata (already fetched and de-duped)
+    READ TABLE lt_cmdata INTO ls_cmdata
+      WITH KEY yydate         = ls_receipt_total-gas_day
+               yybus_location = ls_map_v3-gail_loc_id.
+    IF sy-subrc = 0.
+      DATA(lv_meas_vol) = round( val = ls_cmdata-yycum_vol dec = 3 ).
+      " Compare receipt volume with measurement volume
+      IF ls_receipt_total-qty_scm <> lv_meas_vol.
+        CLEAR ls_vol_mismatch.
+        ls_vol_mismatch-gas_day     = ls_receipt_total-gas_day.
+        ls_vol_mismatch-ctp_id      = ls_receipt_total-ctp_id.
+        ls_vol_mismatch-receipt_vol = ls_receipt_total-qty_scm.
+        ls_vol_mismatch-location_id = ls_map_v3-gail_loc_id.
+        ls_vol_mismatch-meas_vol    = lv_meas_vol.
+        APPEND ls_vol_mismatch TO lt_vol_mismatch.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  " V.3: If volume mismatch found, show popup and block allocation
+  IF lt_vol_mismatch IS NOT INITIAL.
+    cv_valid = abap_false.
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Volume mismatch detected. Allocation cannot proceed.'
+        textline2      = 'Click Yes to view details, No to go back'
+        titel          = 'Volume Mismatch - Allocation Blocked'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_vol_answer.
+    IF lv_vol_answer = 'J'.  " Yes = Details
+      " Build field catalog for mismatch detail ALV
+      DATA: lt_vol_fcat TYPE slis_t_fieldcat_alv,
+            ls_vol_fcat TYPE slis_fieldcat_alv.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'GAS_DAY'.
+      ls_vol_fcat-seltext_l = 'Gas Day'.
+      ls_vol_fcat-outputlen = 12.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'CTP_ID'.
+      ls_vol_fcat-seltext_l = 'CTP ID'.
+      ls_vol_fcat-outputlen = 15.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'RECEIPT_VOL'.
+      ls_vol_fcat-seltext_l = 'Receipt Vol. (Sm3)'.
+      ls_vol_fcat-seltext_m = 'Receipt Vol.'.
+      ls_vol_fcat-outputlen = 18.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'LOCATION_ID'.
+      ls_vol_fcat-seltext_l = 'Location ID'.
+      ls_vol_fcat-outputlen = 12.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      CLEAR ls_vol_fcat.
+      ls_vol_fcat-fieldname = 'MEAS_VOL'.
+      ls_vol_fcat-seltext_l = 'Measurement Vol. (Sm3)'.
+      ls_vol_fcat-seltext_m = 'Meas. Vol.'.
+      ls_vol_fcat-outputlen = 18.
+      APPEND ls_vol_fcat TO lt_vol_fcat.
+      " Display mismatch detail ALV as popup
+      DATA: ls_vol_layout TYPE slis_layout_alv.
+      ls_vol_layout-zebra = 'X'.
+      ls_vol_layout-colwidth_optimize = 'X'.
+      SORT lt_vol_mismatch BY gas_day ctp_id.
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+        EXPORTING
+          i_callback_program    = sy-repid
+          is_layout             = ls_vol_layout
+          it_fieldcat           = lt_vol_fcat
+          i_screen_start_column = 10
+          i_screen_start_line   = 5
+          i_screen_end_column   = 120
+          i_screen_end_line     = 25
+        TABLES
+          t_outtab              = lt_vol_mismatch
+        EXCEPTIONS
+          program_error = 1
+          OTHERS        = 2.
+    ENDIF.
+    " Volume mismatch blocks the allocation process - do not continue
+    RETURN.
+  ENDIF.
 ENDFORM.
