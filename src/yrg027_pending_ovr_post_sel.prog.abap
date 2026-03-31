@@ -29,25 +29,26 @@ DATA: dnpi_flag TYPE char1,
       w_uname   TYPE xubname.
 
 TYPES:BEGIN OF ty_final,
-        blocation        TYPE oijnomi-locid,          "Business Location
-        customer         TYPE oijnomi-partnr,          "customer
-        payer            TYPE char50,                  "payer
-        payer_name       TYPE char50,                  "payer name
-        cont_id          TYPE oijnomi-docnr,           "contract id,
-        m_cont_id        TYPE vbak-vbeln_grp,          "Master Contract
-        m_mas_cust       TYPE vbak-kunnr,              "Master Contract
-        oic_region       TYPE char50,                  "oic region,
-        trans_sys        TYPE char50,                  "Transport system
-        sal_office       TYPE char50,                  "Sales office
-        cum_bal_mbg_cal  TYPE p DECIMALS 3,            "Cumulative Imb in MBG (calculated)
-        char_bal_mbg_cal TYPE p DECIMALS 3,            "Chargeable Imb in MBG (calculated)
-        sal_order        TYPE vbrk-vbeln,              "sale order
-        invoice          TYPE vbrk-vbeln,              "invoice
-        cum_bal_mbg_cal_so  TYPE p DECIMALS 3,         "Cumulative Imb in MBG (posted in SO)
-        char_bal_mbg_cal_so TYPE p DECIMALS 3,         "Chargeable Imb in MBG (posted in SO)
-        rgmc_mail        TYPE char50,                  "Rgmc mail
-        oic_mail         TYPE char50,                  "oic mail
-        indicator        TYPE char1,                   "indicator.
+        blocation           TYPE oijnomi-locid,          "Business Location
+        customer            TYPE oijnomi-partnr,          "customer
+        payer               TYPE char50,                  "payer
+        payer_name          TYPE char50,                  "payer name
+        cont_id             TYPE oijnomi-docnr,           "contract id,
+        m_cont_id           TYPE vbak-vbeln_grp,          "Master Contract
+        m_mas_cust          TYPE vbak-kunnr,              "Master Contract
+        oic_region          TYPE char50,                  "oic region,
+        trans_sys           TYPE char50,                  "Transport system
+        sal_office          TYPE char50,                  "Sales office
+        cum_bal_mbg_cal     TYPE p DECIMALS 3,            "Cumulative Imb in MBG (calculated)
+        char_bal_mbg_cal    TYPE p DECIMALS 3,            "Chargeable Imb in MBG (calculated)
+        sal_order           TYPE vbrk-vbeln,              "sale order
+        invoice             TYPE vbrk-vbeln,              "invoice
+        cum_bal_mbg_cal_so  TYPE p DECIMALS 3,            "Cumulative Imb in MBG (posted in SO)
+        char_bal_mbg_cal_so TYPE p DECIMALS 3,            "Chargeable Imb in MBG (posted in SO)
+        diff_char_ovr       TYPE p DECIMALS 3,            "Diff Chargeable Ovr (Calculated - Posted)
+        rgmc_mail           TYPE char50,                  "Rgmc mail
+        oic_mail            TYPE char50,                  "oic mail
+        indicator           TYPE char1,                   "indicator.
       END OF ty_final.
 
 DATA:it_final    TYPE STANDARD TABLE OF ty_final,
@@ -113,8 +114,10 @@ DATA: it_display1 TYPE TABLE OF ty_display1,
       it_display2 TYPE TABLE OF ty_display1,
       wa_display1 TYPE ty_display1.
 
-
-
+" Email recipient type
+TYPES: BEGIN OF ty_email_recip,
+        smtp_addr TYPE adr6-smtp_addr,
+       END OF ty_email_recip.
 
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 SELECT-OPTIONS: s_date  FOR oijnomi-idate OBLIGATORY,
@@ -126,7 +129,7 @@ SELECT-OPTIONS: s_date  FOR oijnomi-idate OBLIGATORY,
                 s_payer FOR it_sl-payer.
 
 SELECTION-SCREEN SKIP.
-*PARAMETERS ch1 AS CHECKBOX.
+PARAMETERS: p_email AS CHECKBOX.   " Email Pending Postings (hidden - ZO_CC_EHS.GMS_ROLE only)
 SELECTION-SCREEN END OF BLOCK b1.
 
 
@@ -144,6 +147,26 @@ INITIALIZATION.
 
 * INITIALIZATION.
   PERFORM e03_eventtab_build USING gt_events[].
+
+AT SELECTION-SCREEN OUTPUT.
+* Hide the 'Email Pending Postings' checkbox from users without ZO_CC_EHS.GMS_ROLE
+  DATA: lv_email_auth TYPE xubname.
+  SELECT uname FROM agr_users INTO @lv_email_auth UP TO 1 ROWS
+    WHERE from_dat LE @sy-datum AND to_dat GE @sy-datum
+    AND   uname   =  @sy-uname
+    AND   agr_name = 'ZO_CC_EHS.GMS_ROLE'
+    ORDER BY PRIMARY KEY.
+  ENDSELECT.
+  LOOP AT SCREEN.
+    IF screen-name = 'P_EMAIL'.
+      IF lv_email_auth IS INITIAL.
+        screen-active = 0.   " Hide checkbox for unauthorised users
+      ELSE.
+        screen-active = 1.   " Show checkbox for authorised users
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
 
 AT SELECTION-SCREEN.
 

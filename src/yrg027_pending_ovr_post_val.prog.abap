@@ -308,6 +308,9 @@ FORM get_data .
       ENDIF.
     ENDIF.
 
+*   Calculate Diff (Chargeable Ovr) = Calculated - Posted
+    wa_final-diff_char_ovr = wa_final-char_bal_mbg_cal - wa_final-char_bal_mbg_cal_so.
+
     APPEND wa_final TO it_final.
     CLEAR: wa_final, ycum, adrc,adrc2, oij, yrvt,vbpa, wa_adrc1, oicr, wa_pa0105.
 
@@ -327,6 +330,8 @@ FORM get_data .
   ENDIF.
 * > "*EOC CHARM ID :4000009078 TECHICAL : RAVINDER SINGH FUNCTIONAL : SHREYOSI DT:02.01.2025
 
+* Filter entries where Diff (Chargeable Ovr) is zero - these are already fully posted
+  DELETE it_final WHERE diff_char_ovr EQ 0.
 
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -477,6 +482,16 @@ FORM get_fieldcat .
   wa_fcat-seltext_l = 'Chargeable Ovr in MBG (posted in SO)'.
   wa_fcat-outputlen = 25.
   APPEND wa_fcat TO it_fcat.
+
+* New column: Diff (Chargeable Ovr) = Calculated - Posted
+  CLEAR wa_fcat.
+  wa_fcat-col_pos   = sno + 1.
+  wa_fcat-fieldname = 'DIFF_CHAR_OVR'.
+  wa_fcat-tabname   = 'IT_FINAL'.
+  wa_fcat-seltext_l = 'Diff (Chargeable Ovr)'.
+  wa_fcat-outputlen = 25.
+  APPEND wa_fcat TO it_fcat.
+
   IF dnpi_flag = 'X'.
     CLEAR wa_fcat.
     wa_fcat-col_pos   = sno + 1.
@@ -616,5 +631,289 @@ FORM alv_display .
   IF sy-subrc <> 0.
 *   Implement suitable error handling here
   ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&       Form  SEND_EMAIL
+*&---------------------------------------------------------------------*
+* Send pending overrun posting emails per customer
+* - Recipients: ERNAMs from OIJ_EL_TICKET_I (tickets) or AENAMs from OIJNOMI
+* - Email ID resolved via PA0105 (SUBTY=0010, ENDDA=99991231)
+* - Source: GR102 (ref: YRGR091 pattern)
+* - Sender: gailpartcare@gail.co.in (same as YRGR091)
+*----------------------------------------------------------------------*
+FORM send_email.
+
+  DATA: lt_cust_email    TYPE STANDARD TABLE OF ty_cust.
+  DATA: lv_date_from(10) TYPE c.
+  DATA: lv_date_to(10)   TYPE c.
+  DATA: lv_date_range    TYPE string.
+  DATA: lv_w_date(10)    TYPE c.
+  DATA: lv_source        TYPE string.
+  DATA: lv_kunnr_disp    TYPE string.
+  DATA: lv_subject       TYPE so_obj_des.
+  DATA: lv_att_name      TYPE so_obj_des.
+  DATA: lt_body          TYPE bcsy_text.
+  DATA: lv_body_line     TYPE so_text255.
+  DATA: lv_csv_str       TYPE string.
+  DATA: lv_xstring       TYPE xstring.
+  DATA: lt_att_hex       TYPE solix_tab.
+  DATA: lv_sent_to_all   TYPE c.
+  DATA: lo_send_request  TYPE REF TO cl_bcs.
+  DATA: lo_document      TYPE REF TO cl_document_bcs.
+  DATA: lo_sender        TYPE REF TO if_sender_bcs.
+  DATA: lo_recipient     TYPE REF TO if_recipient_bcs.
+  DATA: lt_email_recip   TYPE STANDARD TABLE OF ty_email_recip.
+  DATA: wa_email_recip   TYPE ty_email_recip.
+
+  " Format date range for display
+  CONCATENATE s_date-low+6(2)  '.' s_date-low+4(2)  '.' s_date-low+0(4)  INTO lv_date_from.
+  CONCATENATE s_date-high+6(2) '.' s_date-high+4(2) '.' s_date-high+0(4) INTO lv_date_to.
+  CONCATENATE lv_date_from ' to ' lv_date_to INTO lv_date_range.
+
+  " Source line following YRGR091 pattern: SOURCE: GR102.UNAME.DATE.TIME
+  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO lv_w_date.
+  CONCATENATE 'SOURCE: GR102.' sy-uname '.' lv_w_date '.' sy-uzeit INTO lv_source.
+
+  " Collect unique customers from filtered final table (Diff NE 0)
+  LOOP AT it_final INTO DATA(wa_fe).
+    READ TABLE lt_cust_email WITH KEY kunnr = wa_fe-customer TRANSPORTING NO FIELDS.
+    IF sy-subrc NE 0.
+      APPEND VALUE #( kunnr = wa_fe-customer ) TO lt_cust_email.
+    ENDIF.
+  ENDLOOP.
+
+  IF lt_cust_email IS INITIAL.
+    MESSAGE 'No pending overrun entries found for email.' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  " Process each customer
+  LOOP AT lt_cust_email INTO DATA(wa_cust_em).
+
+    REFRESH: lt_email_recip, lt_body, lt_att_hex.
+    CLEAR: lv_csv_str.
+
+    " Step 1: Get LOCIDs for the customer from OIJRRA
+    SELECT DISTINCT locid FROM oijrra INTO TABLE @DATA(lt_locids)
+           WHERE kunnr  = @wa_cust_em-kunnr
+           AND   delind NE 'X'.
+
+    IF lt_locids IS INITIAL.
+      CONTINUE.
+    ENDIF.
+
+    " Step 2: Try to find recipients via OIJ_EL_TICKET_I tickets
+    SELECT ticket_key, ernam, locid
+           FROM oij_el_ticket_i
+           INTO TABLE @DATA(lt_tkt)
+           FOR ALL ENTRIES IN @lt_locids
+           WHERE locid     = @lt_locids-locid
+           AND   budat     IN @s_date
+           AND   purpose   = '1'
+           AND   status    = 'C'
+           AND   substatus = '6'
+           AND   tktsubrc  NE '1A'.
+
+    IF lt_tkt IS NOT INITIAL.
+      " Find email from ERNAM via PA0105 (ERNAM used as PERNR - ref YRGR095)
+      SELECT usrid_long FROM pa0105
+             INTO TABLE @DATA(lt_emails_tkt)
+             FOR ALL ENTRIES IN @lt_tkt
+             WHERE pernr  = @lt_tkt-ernam
+             AND   subty  = '0010'
+             AND   endda  = '99991231'.
+
+      LOOP AT lt_emails_tkt INTO DATA(wa_etkt).
+        IF wa_etkt-usrid_long IS NOT INITIAL.
+          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_etkt-usrid_long TRANSPORTING NO FIELDS.
+          IF sy-subrc NE 0.
+            APPEND VALUE #( smtp_addr = wa_etkt-usrid_long ) TO lt_email_recip.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+
+    ELSE.
+      " Step 3: No ticket found - get AENAMs from OIJNOMI
+      SELECT DISTINCT aenam FROM oijnomi
+             INTO TABLE @DATA(lt_aenam)
+             FOR ALL ENTRIES IN @lt_locids
+             WHERE locid  = @lt_locids-locid
+             AND   idate  IN @s_date
+             AND   delind NE 'X'.
+
+      IF lt_aenam IS NOT INITIAL.
+        " Find email from AENAM via PA0105 (AENAM used as PERNR - ref YRGR095)
+        SELECT usrid_long FROM pa0105
+               INTO TABLE @DATA(lt_emails_nom)
+               FOR ALL ENTRIES IN @lt_aenam
+               WHERE pernr = @lt_aenam-aenam
+               AND   subty = '0010'
+               AND   endda = '99991231'.
+
+        LOOP AT lt_emails_nom INTO DATA(wa_enom).
+          IF wa_enom-usrid_long IS NOT INITIAL.
+            READ TABLE lt_email_recip WITH KEY smtp_addr = wa_enom-usrid_long TRANSPORTING NO FIELDS.
+            IF sy-subrc NE 0.
+              APPEND VALUE #( smtp_addr = wa_enom-usrid_long ) TO lt_email_recip.
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+
+    IF lt_email_recip IS INITIAL.
+      CONTINUE.
+    ENDIF.
+
+    " Format customer number for display (strip leading zeros)
+    lv_kunnr_disp = wa_cust_em-kunnr.
+    SHIFT lv_kunnr_disp LEFT DELETING LEADING '0'.
+
+    " Build email subject
+    CONCATENATE 'Overrun Posting Pending for' lv_kunnr_disp
+                'for' lv_date_range
+                INTO lv_subject SEPARATED BY space.
+
+    " Build attachment name (same as subject, truncated to field length)
+    lv_att_name = lv_subject.
+
+    " Build email body
+    APPEND 'Dear Ma''am/ Sir,' TO lt_body.
+    APPEND '' TO lt_body.
+    CONCATENATE 'Please find below instances pertaining to the pending Overrun posting for'
+                lv_kunnr_disp 'for' lv_date_range
+                '. Please take necessary action in this regard.'
+                INTO lv_body_line SEPARATED BY space.
+    APPEND lv_body_line TO lt_body.
+    APPEND '' TO lt_body.
+
+    " Table header
+    APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
+    APPEND 'Contract ID     |Cumulative Ovr  |Chargeable Ovr  |Posted Ovr      |Sales Order     |Invoice' TO lt_body.
+    APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
+
+    " CSV header for attachment
+    lv_csv_str = 'Contract ID,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
+
+    " Table rows for this customer
+    LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr.
+      DATA: lv_cum_c(15)     TYPE c.
+      DATA: lv_char_c(15)    TYPE c.
+      DATA: lv_posted_c(15)  TYPE c.
+      DATA: lv_table_row     TYPE so_text255.
+
+      WRITE wa_row-cum_bal_mbg_cal    TO lv_cum_c    DECIMALS 3.
+      WRITE wa_row-char_bal_mbg_cal   TO lv_char_c   DECIMALS 3.
+      WRITE wa_row-char_bal_mbg_cal_so TO lv_posted_c DECIMALS 3.
+
+      CONDENSE: lv_cum_c, lv_char_c, lv_posted_c.
+
+      CONCATENATE wa_row-cont_id         '|'
+                  lv_cum_c               '|'
+                  lv_char_c              '|'
+                  lv_posted_c            '|'
+                  wa_row-sal_order       '|'
+                  wa_row-invoice
+                  INTO lv_table_row.
+      APPEND lv_table_row TO lt_body.
+
+      " CSV row for attachment
+      DATA: lv_csv_row TYPE string.
+      CONCATENATE lv_csv_str cl_abap_char_utilities=>newline
+                  wa_row-cont_id ',' lv_cum_c ',' lv_char_c ','
+                  lv_posted_c ',' wa_row-sal_order ',' wa_row-invoice
+                  INTO lv_csv_str.
+    ENDLOOP.
+
+    APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
+    APPEND '' TO lt_body.
+    APPEND 'For more details, please execute T-code YRG011N/ YRGR102 with the required input' TO lt_body.
+    APPEND '' TO lt_body.
+    APPEND lv_source TO lt_body.
+
+    " Convert CSV string to SOLIX for attachment
+    CALL FUNCTION 'SCMS_STRING_TO_XSTRING'
+      EXPORTING
+        text  = lv_csv_str
+      IMPORTING
+        buffer = lv_xstring
+      EXCEPTIONS
+        failed = 1
+        OTHERS = 2.
+
+    IF sy-subrc = 0.
+      CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+        EXPORTING
+          buffer     = lv_xstring
+        TABLES
+          binary_tab = lt_att_hex.
+    ENDIF.
+
+    " Send email via cl_bcs
+    TRY.
+        lo_send_request = cl_bcs=>create_persistent( ).
+      CATCH cx_send_req_bcs.
+        CONTINUE.
+    ENDTRY.
+
+    TRY.
+        lo_document = cl_document_bcs=>create_document(
+                        i_type    = 'RAW'
+                        i_text    = lt_body
+                        i_subject = lv_subject ).
+      CATCH cx_document_bcs.
+        CONTINUE.
+    ENDTRY.
+
+    " Add CSV attachment
+    IF lt_att_hex IS NOT INITIAL.
+      TRY.
+          lo_document->add_attachment(
+            EXPORTING
+              i_attachment_type    = 'CSV'
+              i_attachment_subject = lv_att_name
+              i_att_content_hex    = lt_att_hex ).
+        CATCH cx_document_bcs.
+          " Attachment failed - continue without it
+      ENDTRY.
+    ENDIF.
+
+    TRY.
+        lo_send_request->set_document( lo_document ).
+
+        " Sender: gailpartcare@gail.co.in (same as YRGR091)
+        lo_sender = cl_cam_address_bcs=>create_internet_address(
+                      i_address_string = 'gailpartcare@gail.co.in' ).
+        lo_send_request->set_sender(
+          EXPORTING i_sender = lo_sender ).
+
+        " Add all recipients
+        LOOP AT lt_email_recip INTO wa_email_recip.
+          lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                           wa_email_recip-smtp_addr ).
+          lo_send_request->add_recipient(
+            EXPORTING
+              i_recipient = lo_recipient
+              i_express   = 'X' ).
+        ENDLOOP.
+
+        lo_send_request->send(
+          EXPORTING
+            i_with_error_screen = 'X'
+          RECEIVING
+            result              = lv_sent_to_all ).
+        COMMIT WORK.
+
+      CATCH cx_address_bcs
+            cx_send_req_bcs
+            cx_bcs.
+        MESSAGE 'Error sending email for customer.' TYPE 'I'.
+    ENDTRY.
+
+  ENDLOOP.
+
+  MESSAGE 'Email processing complete.' TYPE 'I'.
 
 ENDFORM.

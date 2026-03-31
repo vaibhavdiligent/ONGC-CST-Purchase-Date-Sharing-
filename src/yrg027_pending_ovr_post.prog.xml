@@ -37,6 +37,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_EMAIL</KEY>
+     <ENTRY>        Email Pending Postings</ENTRY>
+     <LENGTH>29</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>S_DATE</KEY>
      <ENTRY>        Gas Days</ENTRY>
      <LENGTH>16</LENGTH>
