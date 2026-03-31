@@ -3329,6 +3329,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   DATA: lt_days      TYPE TABLE OF datum,
         lv_curr_day  TYPE datum,
         lv_day       TYPE datum,
+        lv_day_c     TYPE c LENGTH 8,
         lt_keys      TYPE TABLE OF yrga_cst_pur,
         ls_key       TYPE yrga_cst_pur,
         lv_col_pos   TYPE i,
@@ -3413,7 +3414,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           38(20) 'State'.
   lv_col_pos = 59.
   LOOP AT lt_days INTO lv_day.
-    lv_day_dd = lv_day+6(2).
+    lv_day_c = lv_day. lv_day_dd = lv_day_c+6(2).
     WRITE AT (lv_col_pos)(12) lv_day_dd.
     lv_col_pos = lv_col_pos + 12.
   ENDLOOP.
@@ -3462,7 +3463,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           38(20) 'State'.
   lv_col_pos = 59.
   LOOP AT lt_days INTO lv_day.
-    lv_day_dd = lv_day+6(2).
+    lv_day_c = lv_day. lv_day_dd = lv_day_c+6(2).
     WRITE AT (lv_col_pos)(12) lv_day_dd.
     lv_col_pos = lv_col_pos + 12.
   ENDLOOP.
