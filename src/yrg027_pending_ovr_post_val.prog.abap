@@ -717,11 +717,23 @@ FORM send_email.
            AND   tktsubrc  NE '1A'.
 
     IF lt_tkt IS NOT INITIAL.
+      " Convert ERNAM (CHAR12) to PERNR type (NUMC8) for PA0105 lookup
+      TYPES: BEGIN OF ty_pernr_tkt,
+               pernr TYPE pa0105-pernr,
+             END OF ty_pernr_tkt.
+      DATA: lt_pernr_tkt TYPE STANDARD TABLE OF ty_pernr_tkt.
+      CLEAR lt_pernr_tkt.
+      LOOP AT lt_tkt INTO DATA(wa_tkt_pn).
+        APPEND VALUE ty_pernr_tkt( pernr = wa_tkt_pn-ernam ) TO lt_pernr_tkt.
+      ENDLOOP.
+      SORT lt_pernr_tkt BY pernr.
+      DELETE ADJACENT DUPLICATES FROM lt_pernr_tkt COMPARING pernr.
+
       " Find email from ERNAM via PA0105 (ERNAM used as PERNR - ref YRGR095)
       SELECT usrid_long FROM pa0105
              INTO TABLE @DATA(lt_emails_tkt)
-             FOR ALL ENTRIES IN @lt_tkt
-             WHERE pernr  = @lt_tkt-ernam
+             FOR ALL ENTRIES IN @lt_pernr_tkt
+             WHERE pernr  = @lt_pernr_tkt-pernr
              AND   subty  = '0010'
              AND   endda  = '99991231'.
 
@@ -744,11 +756,23 @@ FORM send_email.
              AND   delind NE 'X'.
 
       IF lt_aenam IS NOT INITIAL.
+        " Convert AENAM (CHAR12) to PERNR type (NUMC8) for PA0105 lookup
+        TYPES: BEGIN OF ty_pernr_nom,
+                 pernr TYPE pa0105-pernr,
+               END OF ty_pernr_nom.
+        DATA: lt_pernr_nom TYPE STANDARD TABLE OF ty_pernr_nom.
+        CLEAR lt_pernr_nom.
+        LOOP AT lt_aenam INTO DATA(wa_aen_pn).
+          APPEND VALUE ty_pernr_nom( pernr = wa_aen_pn-aenam ) TO lt_pernr_nom.
+        ENDLOOP.
+        SORT lt_pernr_nom BY pernr.
+        DELETE ADJACENT DUPLICATES FROM lt_pernr_nom COMPARING pernr.
+
         " Find email from AENAM via PA0105 (AENAM used as PERNR - ref YRGR095)
         SELECT usrid_long FROM pa0105
                INTO TABLE @DATA(lt_emails_nom)
-               FOR ALL ENTRIES IN @lt_aenam
-               WHERE pernr = @lt_aenam-aenam
+               FOR ALL ENTRIES IN @lt_pernr_nom
+               WHERE pernr = @lt_pernr_nom-pernr
                AND   subty = '0010'
                AND   endda = '99991231'.
 
