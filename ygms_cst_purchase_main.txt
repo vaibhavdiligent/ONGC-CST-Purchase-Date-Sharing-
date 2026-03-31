@@ -2981,7 +2981,10 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
          END OF ty_pdf_sum.
   DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp state_code ongc_mater,
         ls_pdf_sum TYPE ty_pdf_sum.
-  DATA: lv_avg_str TYPE c LENGTH 15.
+  DATA: lv_avg_str     TYPE c LENGTH 15,
+        lt_daily_sorted TYPE TABLE OF yrga_cst_pur,
+        lv_a_gcv        TYPE p DECIMALS 6,
+        lv_a_ncv        TYPE p DECIMALS 6.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
@@ -3060,7 +3063,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   ULINE AT /5(180).
 
   " Sort by gas day, then CTP, state, material so records appear in date order
-  DATA lt_daily_sorted TYPE TABLE OF yrga_cst_pur.
   lt_daily_sorted = pt_data.
   SORT lt_daily_sorted BY gas_day ctp state_code ongc_mater ASCENDING.
 
@@ -3113,8 +3115,8 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_pdf_sum-total_scm TO lv_qty_scm DECIMALS 3.
     CONDENSE: lv_qty_mbg, lv_qty_scm.
     IF ls_pdf_sum-cnt > 0.
-      DATA(lv_a_gcv) = ls_pdf_sum-sum_gcv / ls_pdf_sum-cnt.
-      DATA(lv_a_ncv) = ls_pdf_sum-sum_ncv / ls_pdf_sum-cnt.
+      lv_a_gcv = ls_pdf_sum-sum_gcv / ls_pdf_sum-cnt.
+      lv_a_ncv = ls_pdf_sum-sum_ncv / ls_pdf_sum-cnt.
     ELSE.
       lv_a_gcv = 0.
       lv_a_ncv = 0.
@@ -3321,10 +3323,12 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_time_str TYPE c LENGTH 8,
         lv_page     TYPE i VALUE 1,
         lv_page_str TYPE c LENGTH 5.
-  " Daily data for date-wise detail section
-  DATA: lt_daily     TYPE TABLE OF yrga_cst_pur,
-        ls_daily     TYPE yrga_cst_pur,
-        lv_gas_day   TYPE c LENGTH 10.
+  " Daily data for date-wise pivot section
+  DATA: lt_daily   TYPE TABLE OF yrga_cst_pur,
+        ls_daily   TYPE yrga_cst_pur,
+        lv_gas_day TYPE c LENGTH 10.
+  " Fortnightly summary sorted copy
+  DATA: lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
   " For column-wise pivot — fixed structure with 16 day fields
   TYPES: BEGIN OF ty_pivot,
            ctp   TYPE c LENGTH 12,
@@ -3356,6 +3360,8 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         ls_hdr      TYPE ty_pivot,
         ls_piv_mbg  TYPE ty_pivot,
         ls_piv_scm  TYPE ty_pivot.
+  DATA: lv_a_gcv   TYPE p DECIMALS 6,
+        lv_a_ncv   TYPE p DECIMALS 6.
   FIELD-SYMBOLS: <fs_cell> TYPE c.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
@@ -3404,6 +3410,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   ls_hdr-state = 'State'.
   lv_day_idx = 1.
   LOOP AT lt_days INTO lv_day.
+    IF lv_day_idx > 16. EXIT. ENDIF.
     lv_day_c = lv_day. lv_day_dd = lv_day_c+6(2).
     WRITE lv_day_idx TO lv_idx_str RIGHT-JUSTIFIED.
     CONDENSE lv_idx_str.
@@ -3469,6 +3476,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     ls_piv_mbg-state = ls_key-state.
     lv_day_idx = 1.
     LOOP AT lt_days INTO lv_day.
+      IF lv_day_idx > 16. EXIT. ENDIF.
       READ TABLE lt_daily INTO ls_daily
         WITH KEY ctp        = ls_key-ctp
                  ongc_mater = ls_key-ongc_mater
@@ -3540,6 +3548,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     ls_piv_scm-state = ls_key-state.
     lv_day_idx = 1.
     LOOP AT lt_days INTO lv_day.
+      IF lv_day_idx > 16. EXIT. ENDIF.
       READ TABLE lt_daily INTO ls_daily
         WITH KEY ctp        = ls_key-ctp
                  ongc_mater = ls_key-ongc_mater
@@ -3604,8 +3613,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(170).
 
-  " Sort data: From Date - To Date - CTP ID - State Code - ONGC Material
-  DATA lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
+  " Sort fortnightly summary data
   lt_fnt_sorted = pt_data.
   SORT lt_fnt_sorted BY date_from date_to ctp state_code ongc_mater ASCENDING.
   LOOP AT lt_fnt_sorted INTO ls_fnt.
