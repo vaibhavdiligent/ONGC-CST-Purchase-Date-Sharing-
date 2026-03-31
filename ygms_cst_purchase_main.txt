@@ -3059,7 +3059,12 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(180).
 
-  LOOP AT pt_data INTO ls_pur.
+  " Sort by gas day, then CTP, state, material so records appear in date order
+  DATA lt_daily_sorted TYPE TABLE OF yrga_cst_pur.
+  lt_daily_sorted = pt_data.
+  SORT lt_daily_sorted BY gas_day ctp state_code ongc_mater ASCENDING.
+
+  LOOP AT lt_daily_sorted INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
