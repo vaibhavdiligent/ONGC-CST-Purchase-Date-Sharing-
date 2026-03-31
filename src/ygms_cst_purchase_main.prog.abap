@@ -3035,11 +3035,58 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Create spool with formatted table output
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  " ---- Page 1: Summary ----
+  " ---- Page 1+: Daily Detail (one row per gas day record) ----
   lv_page_str = lv_page.
   CONDENSE lv_page_str.
   WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'CST Purchase Data', AT 185 lv_page_str.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
+  WRITE: /5 'Daily CST Purchase Data -',
+           lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /5(180).
+  FORMAT INTENSIFIED ON.
+  WRITE: /5(10) 'Gas Day',
+          16(12) 'CTP ID',
+          29(15) 'ONGC Material',
+          45(8)  'State Cd',
+          54(20) 'State',
+          75(15) 'Qty SCM',
+          91(12) 'GCV',
+          104(12) 'NCV',
+          117(15) 'Qty MBG',
+          133(20) 'ONGC ID',
+          154(14) 'GAIL ID'.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /5(180).
+
+  LOOP AT pt_data INTO ls_pur.
+    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
+    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
+    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_gas_day, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
+    WRITE: /5(10) lv_gas_day,
+            16(12) ls_pur-ctp,
+            29(15) ls_pur-ongc_mater,
+            45(8)  ls_pur-state_code,
+            54(20) ls_pur-state,
+            75(15) lv_qty_scm,
+            91(12) lv_gcv,
+            104(12) lv_ncv,
+            117(15) lv_qty_mbg,
+            133(20) ls_pur-ongc_id,
+            154(14) ls_pur-gail_id.
+    ULINE AT /5(180).
+  ENDLOOP.
+
+  " ---- Summary Page (after daily detail) ----
+  lv_page = lv_page + 1.
+  NEW-PAGE.
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
   WRITE: /5 'Daily CST Purchase Data - Summary -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
@@ -3079,53 +3126,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
             96(12) lv_gcv,
             109(12) lv_ncv.
     ULINE AT /5(175).
-  ENDLOOP.
-
-  " ---- Page 2+: Daily Detail ----
-  lv_page = lv_page + 1.
-  NEW-PAGE.
-  lv_page_str = lv_page.
-  CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'CST Purchase Data', AT 185 lv_page_str.
-  WRITE: /5 'Daily CST Purchase Data -',
-           lv_date_from_str, 'to', lv_date_to_str.
-  SKIP 1.
-  ULINE AT /5(180).
-  FORMAT INTENSIFIED ON.
-  WRITE: /5(10) 'Gas Day',
-          16(12) 'CTP ID',
-          29(15) 'ONGC Material',
-          45(8)  'State Cd',
-          54(20) 'State',
-          75(15) 'Qty SCM',
-          91(12) 'GCV',
-          104(12) 'NCV',
-          117(15) 'Qty MBG',
-          133(20) 'ONGC ID',
-          154(14) 'GAIL ID'.
-  FORMAT INTENSIFIED OFF.
-  ULINE AT /5(180).
-
-  LOOP AT pt_data INTO ls_pur.
-    WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
-    WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
-    WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
-    WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
-    WRITE ls_pur-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_gas_day, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
-    WRITE: /5(10) lv_gas_day,
-            16(12) ls_pur-ctp,
-            29(15) ls_pur-ongc_mater,
-            45(8)  ls_pur-state_code,
-            54(20) ls_pur-state,
-            75(15) lv_qty_scm,
-            91(12) lv_gcv,
-            104(12) lv_ncv,
-            117(15) lv_qty_mbg,
-            133(20) ls_pur-ongc_id,
-            154(14) ls_pur-gail_id.
-    ULINE AT /5(180).
   ENDLOOP.
 
   NEW-PAGE PRINT OFF.
@@ -3344,7 +3344,7 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
   WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'CST Purchase Data', AT 185 '1'.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 '1'.
   WRITE: /5 'Fortnightly CST Purchase Data -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
@@ -3535,10 +3535,11 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
         l_mail        TYPE adr6-smtp_addr.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-  DATA: ls_pur      TYPE yrga_cst_pur,
-        lt_loc      TYPE TABLE OF ygms_de_loc_id,
-        lv_loc      TYPE ygms_de_loc_id,
-        lv_loc_list TYPE string.
+  DATA: ls_pur          TYPE yrga_cst_pur,
+        lt_loc          TYPE TABLE OF ygms_de_loc_id,
+        lv_loc          TYPE ygms_de_loc_id,
+        lv_loc_list     TYPE string,
+        lv_loc_trimmed  TYPE string.
   DATA: lv_sent_on_str TYPE c LENGTH 10,
         lv_sent_at_str TYPE c LENGTH 8.
 
@@ -3567,33 +3568,43 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
   ENDLOOP.
   SORT lt_loc.
   LOOP AT lt_loc INTO lv_loc.
+    lv_loc_trimmed = lv_loc.
+    CONDENSE lv_loc_trimmed.
     IF lv_loc_list IS INITIAL.
-      lv_loc_list = lv_loc.
+      lv_loc_list = lv_loc_trimmed.
     ELSE.
-      CONCATENATE lv_loc_list ', ' lv_loc INTO lv_loc_list.
+      lv_loc_list = |{ lv_loc_list }, { lv_loc_trimmed }|.
     ENDIF.
   ENDLOOP.
 
+  " Trim date/time strings before embedding in body lines
+  DATA: lv_dfrom TYPE string,
+        lv_dto   TYPE string,
+        lv_son   TYPE string,
+        lv_sat   TYPE string.
+  lv_dfrom = lv_date_from_str. CONDENSE lv_dfrom.
+  lv_dto   = lv_date_to_str.   CONDENSE lv_dto.
+  lv_son   = lv_sent_on_str.   CONDENSE lv_son.
+  lv_sat   = lv_sent_at_str.   CONDENSE lv_sat.
+
   " Build email subject
-  CONCATENATE 'Transmission Confirmation – ONGC CST B2B Data for'
-    lv_date_from_str 'to' lv_date_to_str
-    INTO lv_subject SEPARATED BY space.
+  lv_subject = |Transmission Confirmation - ONGC CST B2B Data for { lv_dfrom } to { lv_dto }|.
 
   " Build email body
   ls_body-line = 'Statewise allocation data for CST purchase has been sent to ONGC through B2B as per the following details:'.
   APPEND ls_body TO lt_body.
   CLEAR ls_body.
   APPEND ls_body TO lt_body.  " blank line
-  CONCATENATE 'Fortnight: ' lv_date_from_str ' to ' lv_date_to_str INTO ls_body-line.
+  ls_body-line = |Fortnight: { lv_dfrom } to { lv_dto }|.
   APPEND ls_body TO lt_body.
   CLEAR ls_body.
-  CONCATENATE 'Location IDs: ' lv_loc_list INTO ls_body-line.
+  ls_body-line = |Location IDs: { lv_loc_list }|.
   APPEND ls_body TO lt_body.
   CLEAR ls_body.
-  CONCATENATE 'Sent On: ' lv_sent_on_str INTO ls_body-line.
+  ls_body-line = |Sent On: { lv_son }|.
   APPEND ls_body TO lt_body.
   CLEAR ls_body.
-  CONCATENATE 'Sent At: ' lv_sent_at_str INTO ls_body-line.
+  ls_body-line = |Sent At: { lv_sat }|.
   APPEND ls_body TO lt_body.
 
   TRY.
