@@ -3576,7 +3576,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
             221(14) ls_piv_scm-d13, 235(14) ls_piv_scm-d14,
             249(14) ls_piv_scm-d15, 263(14) ls_piv_scm-d16.
     ULINE AT /5(275).
-    ULINE AT /5(245).
   ENDLOOP.
 
   " ---- Fortnightly Summary Page ----
