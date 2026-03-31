@@ -3318,13 +3318,28 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_pdf_len TYPE i,
         lv_xstring TYPE xstring.
   DATA: lv_date_str TYPE c LENGTH 10,
-        lv_time_str TYPE c LENGTH 8.
+        lv_time_str TYPE c LENGTH 8,
+        lv_page     TYPE i VALUE 1,
+        lv_page_str TYPE c LENGTH 5.
+  " Daily data for date-wise detail section
+  DATA: lt_daily     TYPE TABLE OF yrga_cst_pur,
+        ls_daily     TYPE yrga_cst_pur,
+        lv_gas_day   TYPE c LENGTH 10.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
   " Download date/time
   WRITE sy-datum TO lv_date_str DD/MM/YYYY.
   WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
+
+  " Fetch daily records for date-wise detail
+  SELECT * FROM yrga_cst_pur
+    INTO TABLE lt_daily
+    WHERE gas_day  BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND exclude  <> 'X'
+      AND deleted  =  ' '.
+  SORT lt_daily BY gas_day ctp state_code ongc_mater ASCENDING.
 
   " Get print parameters for spool creation
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
@@ -3348,8 +3363,58 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Create spool with formatted table output
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
+  " ---- Page 1+: Daily Detail (date-wise, one row per gas day) ----
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
   WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 '1'.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
+  WRITE: /5 'Daily CST Purchase Data -',
+           lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /5(180).
+  FORMAT INTENSIFIED ON.
+  WRITE: /5(10) 'Gas Day',
+          16(12) 'CTP ID',
+          29(15) 'ONGC Material',
+          45(8)  'State Cd',
+          54(20) 'State',
+          75(15) 'Qty SCM',
+          91(12) 'GCV',
+          104(12) 'NCV',
+          117(15) 'Qty MBG',
+          133(20) 'ONGC ID',
+          154(14) 'GAIL ID'.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /5(180).
+
+  LOOP AT lt_daily INTO ls_daily.
+    WRITE ls_daily-gas_day    TO lv_gas_day DD/MM/YYYY.
+    WRITE ls_daily-qty_in_scm TO lv_qty_scm DECIMALS 3.
+    WRITE ls_daily-gcv        TO lv_gcv     DECIMALS 3.
+    WRITE ls_daily-ncv        TO lv_ncv     DECIMALS 3.
+    WRITE ls_daily-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
+    CONDENSE: lv_gas_day, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
+    WRITE: /5(10) lv_gas_day,
+            16(12) ls_daily-ctp,
+            29(15) ls_daily-ongc_mater,
+            45(8)  ls_daily-state_code,
+            54(20) ls_daily-state,
+            75(15) lv_qty_scm,
+            91(12) lv_gcv,
+            104(12) lv_ncv,
+            117(15) lv_qty_mbg,
+            133(20) ls_daily-ongc_id,
+            154(14) ls_daily-gail_id.
+    ULINE AT /5(180).
+  ENDLOOP.
+
+  " ---- Fortnightly Summary Page ----
+  lv_page = lv_page + 1.
+  NEW-PAGE.
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
   WRITE: /5 'Fortnightly CST Purchase Data -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
@@ -3370,7 +3435,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   ULINE AT /5(170).
 
   " Sort data: From Date - To Date - CTP ID - State Code - ONGC Material
-  " Use a typed local copy as pt_data is generic TYPE STANDARD TABLE
   DATA lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
   lt_fnt_sorted = pt_data.
   SORT lt_fnt_sorted BY date_from date_to ctp state_code ongc_mater ASCENDING.
