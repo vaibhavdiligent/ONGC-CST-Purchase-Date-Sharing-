@@ -711,7 +711,7 @@ FORM send_email.
            FOR ALL ENTRIES IN @lt_locids
            WHERE locid     = @lt_locids-locid
            AND   budat     IN @s_date
-           AND   purpose   = '1'
+           AND   ticket_purpose = '1'
            AND   status    = 'C'
            AND   substatus = '6'
            AND   tktsubrc  NE '1A'.
