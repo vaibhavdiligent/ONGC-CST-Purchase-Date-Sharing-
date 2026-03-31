@@ -3325,6 +3325,17 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   DATA: lt_daily     TYPE TABLE OF yrga_cst_pur,
         ls_daily     TYPE yrga_cst_pur,
         lv_gas_day   TYPE c LENGTH 10.
+  " For column-wise pivot
+  DATA: lt_days      TYPE TABLE OF datum,
+        lv_curr_day  TYPE datum,
+        lv_day       TYPE datum,
+        lt_keys      TYPE TABLE OF yrga_cst_pur,
+        ls_key       TYPE yrga_cst_pur,
+        lv_col_pos   TYPE i,
+        lv_mbg_val   TYPE c LENGTH 12,
+        lv_scm_val   TYPE c LENGTH 12,
+        lv_day_dd    TYPE c LENGTH 2,
+        lv_num_days  TYPE i.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
@@ -3332,23 +3343,46 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   WRITE sy-datum TO lv_date_str DD/MM/YYYY.
   WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
 
-  " Fetch daily records for date-wise detail
+  " Fetch daily records
   SELECT * FROM yrga_cst_pur
     INTO TABLE lt_daily
     WHERE gas_day  BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
       AND exclude  <> 'X'
       AND deleted  =  ' '.
-  SORT lt_daily BY gas_day ctp state_code ongc_mater ASCENDING.
+  SORT lt_daily BY ctp ongc_mater state_code gas_day ASCENDING.
 
-  " Get print parameters for spool creation
+  " Build ordered list of days in the period
+  lv_curr_day = gv_date_from.
+  WHILE lv_curr_day <= gv_date_to.
+    APPEND lv_curr_day TO lt_days.
+    lv_curr_day = lv_curr_day + 1.
+  ENDWHILE.
+  DESCRIBE TABLE lt_days LINES lv_num_days.
+
+  " Collect unique CTP / Material / State combinations
+  LOOP AT lt_daily INTO ls_daily.
+    READ TABLE lt_keys WITH KEY ctp        = ls_daily-ctp
+                                ongc_mater = ls_daily-ongc_mater
+                                state_code = ls_daily-state_code
+                       TRANSPORTING NO FIELDS.
+    IF sy-subrc <> 0.
+      ls_key-ctp        = ls_daily-ctp.
+      ls_key-ongc_mater = ls_daily-ongc_mater.
+      ls_key-state_code = ls_daily-state_code.
+      ls_key-state      = ls_daily-state.
+      APPEND ls_key TO lt_keys.
+    ENDIF.
+  ENDLOOP.
+
+  " Get print parameters — wider line for column layout
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
     EXPORTING
       no_dialog      = 'X'
       immediately    = ' '
       release        = ' '
       new_list_id    = 'X'
-      line_size      = 200
+      line_size      = 250
       line_count     = 65
     IMPORTING
       out_parameters = ls_params
@@ -3363,49 +3397,100 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Create spool with formatted table output
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  " ---- Page 1+: Daily Detail (date-wise, one row per gas day) ----
+  " ---- Page 1: Column-wise Qty MBG (each date = one column) ----
   lv_page_str = lv_page.
   CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
-  WRITE: /5 'Daily CST Purchase Data -',
-           lv_date_from_str, 'to', lv_date_to_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 230 lv_time_str.
+  WRITE: /100 'ONGC CST Statewise Allocation', AT 235 lv_page_str.
+  WRITE: /5 'Daily Qty MBG -', lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
-  ULINE AT /5(180).
+  ULINE AT /5(245).
+  " Header row: fixed columns then one column per day (DD)
   FORMAT INTENSIFIED ON.
-  WRITE: /5(10) 'Gas Day',
-          16(12) 'CTP ID',
-          29(15) 'ONGC Material',
-          45(8)  'State Cd',
-          54(20) 'State',
-          75(15) 'Qty SCM',
-          91(12) 'GCV',
-          104(12) 'NCV',
-          117(15) 'Qty MBG',
-          133(20) 'ONGC ID',
-          154(14) 'GAIL ID'.
+  WRITE: /5(12)  'CTP ID',
+          18(12) 'ONGC Material',
+          31(6)  'St.Cd',
+          38(20) 'State'.
+  lv_col_pos = 59.
+  LOOP AT lt_days INTO lv_day.
+    lv_day_dd = lv_day+6(2).
+    WRITE AT (lv_col_pos)(12) lv_day_dd.
+    lv_col_pos = lv_col_pos + 12.
+  ENDLOOP.
   FORMAT INTENSIFIED OFF.
-  ULINE AT /5(180).
+  ULINE AT /5(245).
 
-  LOOP AT lt_daily INTO ls_daily.
-    WRITE ls_daily-gas_day    TO lv_gas_day DD/MM/YYYY.
-    WRITE ls_daily-qty_in_scm TO lv_qty_scm DECIMALS 3.
-    WRITE ls_daily-gcv        TO lv_gcv     DECIMALS 3.
-    WRITE ls_daily-ncv        TO lv_ncv     DECIMALS 3.
-    WRITE ls_daily-qty_in_mbg TO lv_qty_mbg DECIMALS 3.
-    CONDENSE: lv_gas_day, lv_qty_scm, lv_gcv, lv_ncv, lv_qty_mbg.
-    WRITE: /5(10) lv_gas_day,
-            16(12) ls_daily-ctp,
-            29(15) ls_daily-ongc_mater,
-            45(8)  ls_daily-state_code,
-            54(20) ls_daily-state,
-            75(15) lv_qty_scm,
-            91(12) lv_gcv,
-            104(12) lv_ncv,
-            117(15) lv_qty_mbg,
-            133(20) ls_daily-ongc_id,
-            154(14) ls_daily-gail_id.
-    ULINE AT /5(180).
+  " Data rows: one row per CTP / Material / State
+  LOOP AT lt_keys INTO ls_key.
+    WRITE: /5(12)  ls_key-ctp,
+            18(12) ls_key-ongc_mater,
+            31(6)  ls_key-state_code,
+            38(20) ls_key-state.
+    lv_col_pos = 59.
+    LOOP AT lt_days INTO lv_day.
+      READ TABLE lt_daily INTO ls_daily
+        WITH KEY ctp        = ls_key-ctp
+                 ongc_mater = ls_key-ongc_mater
+                 state_code = ls_key-state_code
+                 gas_day    = lv_day.
+      IF sy-subrc = 0.
+        WRITE ls_daily-qty_in_mbg TO lv_mbg_val DECIMALS 3.
+      ELSE.
+        lv_mbg_val = '0.000'.
+      ENDIF.
+      CONDENSE lv_mbg_val.
+      WRITE AT (lv_col_pos)(12) lv_mbg_val.
+      lv_col_pos = lv_col_pos + 12.
+    ENDLOOP.
+    ULINE AT /5(245).
+  ENDLOOP.
+
+  " ---- Page 2: Column-wise Qty SCM ----
+  lv_page = lv_page + 1.
+  NEW-PAGE.
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 230 lv_time_str.
+  WRITE: /100 'ONGC CST Statewise Allocation', AT 235 lv_page_str.
+  WRITE: /5 'Daily Qty SCM -', lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /5(245).
+  FORMAT INTENSIFIED ON.
+  WRITE: /5(12)  'CTP ID',
+          18(12) 'ONGC Material',
+          31(6)  'St.Cd',
+          38(20) 'State'.
+  lv_col_pos = 59.
+  LOOP AT lt_days INTO lv_day.
+    lv_day_dd = lv_day+6(2).
+    WRITE AT (lv_col_pos)(12) lv_day_dd.
+    lv_col_pos = lv_col_pos + 12.
+  ENDLOOP.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /5(245).
+
+  LOOP AT lt_keys INTO ls_key.
+    WRITE: /5(12)  ls_key-ctp,
+            18(12) ls_key-ongc_mater,
+            31(6)  ls_key-state_code,
+            38(20) ls_key-state.
+    lv_col_pos = 59.
+    LOOP AT lt_days INTO lv_day.
+      READ TABLE lt_daily INTO ls_daily
+        WITH KEY ctp        = ls_key-ctp
+                 ongc_mater = ls_key-ongc_mater
+                 state_code = ls_key-state_code
+                 gas_day    = lv_day.
+      IF sy-subrc = 0.
+        WRITE ls_daily-qty_in_scm TO lv_scm_val DECIMALS 3.
+      ELSE.
+        lv_scm_val = '0.000'.
+      ENDIF.
+      CONDENSE lv_scm_val.
+      WRITE AT (lv_col_pos)(12) lv_scm_val.
+      lv_col_pos = lv_col_pos + 12.
+    ENDLOOP.
+    ULINE AT /5(245).
   ENDLOOP.
 
   " ---- Fortnightly Summary Page ----
