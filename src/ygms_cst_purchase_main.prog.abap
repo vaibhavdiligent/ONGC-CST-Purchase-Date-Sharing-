@@ -1221,22 +1221,22 @@ FORM handle_allocate.
     lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
     SORT gt_alv_display BY location_id state_code material ASCENDING.
     " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
-    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_sales>).
-      IF <fs_sales>-exclude = 'X'.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_sales>).
+      IF <fs_alv_sales>-exclude = 'X'.
         " Excluded rows: display 0 for both sales columns
-        <fs_sales>-total_sales_mbg = 0.
+        <fs_alv_sales>-total_sales_mbg = 0.
       ELSE.
         READ TABLE it_final_main INTO DATA(ls_fin_row)
-          WITH KEY empst = <fs_sales>-location_id
-                   regio = <fs_sales>-state_code
-                   matnr = <fs_sales>-material.
+          WITH KEY empst = <fs_alv_sales>-location_id
+                   regio = <fs_alv_sales>-state_code
+                   matnr = <fs_alv_sales>-material.
         IF sy-subrc = 0.
-          <fs_sales>-total_sales_mbg = ls_fin_row-matnr1.
+          <fs_alv_sales>-total_sales_mbg = ls_fin_row-matnr1.
         ELSE.
-          <fs_sales>-total_sales_mbg = 0.
+          <fs_alv_sales>-total_sales_mbg = 0.
         ENDIF.
       ENDIF.
-      <fs_sales>-alloc_sales_mbg = <fs_sales>-total_mbg - <fs_sales>-total_sales_mbg.
+      <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
     ENDLOOP.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
