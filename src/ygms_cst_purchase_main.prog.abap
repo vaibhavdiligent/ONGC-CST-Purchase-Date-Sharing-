@@ -340,6 +340,22 @@ CLASS lcl_event_handler IMPLEMENTATION.
               lv_day_edit     TYPE abap_bool,
               lv_new_day_edit TYPE abap_bool,
               ls_style        TYPE lvc_s_styl.
+        " Save exclude flags before refresh
+        TYPES: BEGIN OF lty_exclude_save,
+                 location_id TYPE ygms_de_loc_id,
+                 state_code  TYPE regio,
+                 material    TYPE ygms_de_gail_mat,
+                 exclude     TYPE c LENGTH 1,
+               END OF lty_exclude_save.
+        DATA: lt_excl_save TYPE TABLE OF lty_exclude_save,
+              ls_excl_save TYPE lty_exclude_save.
+        LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
+          ls_excl_save-location_id = gs_alv_display-location_id.
+          ls_excl_save-state_code  = gs_alv_display-state_code.
+          ls_excl_save-material    = gs_alv_display-material.
+          ls_excl_save-exclude     = gs_alv_display-exclude.
+          APPEND ls_excl_save TO lt_excl_save.
+        ENDLOOP.
         " Get ALV grid reference
         CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
           IMPORTING
@@ -357,8 +373,15 @@ CLASS lcl_event_handler IMPLEMENTATION.
         PERFORM map_material_names.
         PERFORM fetch_data_yrxr098.
         PERFORM build_alv_display_table.
-        " Apply exclusion from YRGA_CST_EXCLUDE master (replaces manual save/restore)
-        PERFORM apply_exclusion_from_master.
+        " Restore exclude flags after rebuild
+        LOOP AT lt_excl_save INTO ls_excl_save.
+          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore_cls>)
+            WHERE location_id = ls_excl_save-location_id
+              AND state_code  = ls_excl_save-state_code
+              AND material    = ls_excl_save-material.
+            <fs_restore_cls>-exclude = ls_excl_save-exclude.
+          ENDLOOP.
+        ENDLOOP.
         PERFORM handle_allocate.
         IF lv_day_edit = 'X'.
           PERFORM handle_edit.
@@ -385,7 +408,14 @@ CLASS lcl_event_handler IMPLEMENTATION.
         IF sy-subrc = 0.
           <fs_field> = ls_mod_cell-value.
         ENDIF.
-        " Exclude checkbox is now read-only - controlled by YRGA_CST_EXCLUDE master table
+        " When Exclude checkbox changes, apply to all rows of the same state within that location
+        IF ls_mod_cell-fieldname = 'EXCLUDE'.
+          LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_state_row>)
+            WHERE location_id = <fs_row>-location_id
+              AND state_code  = <fs_row>-state_code.
+            <fs_state_row>-exclude = <fs_row>-exclude.
+          ENDLOOP.
+        ENDIF.
       ENDIF.
     ENDLOOP.
     " Now recalculate totals
@@ -472,8 +502,6 @@ START-OF-SELECTION.
     PERFORM fetch_data_yrxr098.
     IF p_view IS INITIAL.
       PERFORM build_alv_display_table.
-      " Apply exclusion logic from YRGA_CST_EXCLUDE master
-      PERFORM apply_exclusion_from_master.
     ELSE.
       " View -> Allocation Details: same as existing view logic
       PERFORM build_alv_display_table_view.
@@ -729,7 +757,9 @@ FORM display_editable_alv.
   ls_fieldcat-fieldname = 'EXCLUDE'.
   ls_fieldcat-coltext   = 'Exclude'.
   ls_fieldcat-checkbox  = abap_true.
-  ls_fieldcat-edit      = abap_false.  " Always disabled - controlled by YRGA_CST_EXCLUDE master
+  IF p_view IS INITIAL.
+    ls_fieldcat-edit      = abap_true.
+  ENDIF.
   ls_fieldcat-outputlen = 7.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
@@ -946,6 +976,22 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
             lv_day_edit     TYPE abap_bool,
             lv_new_day_edit TYPE abap_bool,
             ls_style        TYPE lvc_s_styl.
+      " Save exclude flags before refresh
+      TYPES: BEGIN OF ty_exclude_save,
+               location_id TYPE ygms_de_loc_id,
+               state_code  TYPE regio,
+               material    TYPE ygms_de_gail_mat,
+               exclude     TYPE c LENGTH 1,
+             END OF ty_exclude_save.
+      DATA: lt_exclude_save TYPE TABLE OF ty_exclude_save,
+            ls_exclude_save TYPE ty_exclude_save.
+      LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude = 'X'.
+        ls_exclude_save-location_id = gs_alv_display-location_id.
+        ls_exclude_save-state_code  = gs_alv_display-state_code.
+        ls_exclude_save-material    = gs_alv_display-material.
+        ls_exclude_save-exclude     = gs_alv_display-exclude.
+        APPEND ls_exclude_save TO lt_exclude_save.
+      ENDLOOP.
       " Get ALV grid reference
       CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
         IMPORTING
@@ -963,8 +1009,15 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
       PERFORM map_material_names.
       PERFORM fetch_data_yrxr098.
       PERFORM build_alv_display_table.
-      " Apply exclusion from YRGA_CST_EXCLUDE master (replaces manual save/restore)
-      PERFORM apply_exclusion_from_master.
+      " Restore exclude flags after rebuild
+      LOOP AT lt_exclude_save INTO ls_exclude_save.
+        LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_restore>)
+          WHERE location_id = ls_exclude_save-location_id
+            AND state_code  = ls_exclude_save-state_code
+            AND material    = ls_exclude_save-material.
+          <fs_restore>-exclude = ls_exclude_save-exclude.
+        ENDLOOP.
+      ENDLOOP.
       PERFORM handle_allocate.
       IF lv_day_edit = 'X'.
         PERFORM handle_edit.
@@ -1709,8 +1762,8 @@ FORM save_data_to_db.
       ENDIF.
     ENDIF.
   ENDLOOP.
-  " Second pass: Create daily records for YRGA_CST_PUR (skip excluded rows)
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  " Second pass: Create daily records for YRGA_CST_PUR
+  LOOP AT gt_alv_display INTO gs_alv_display ."WHERE exclude IS INITIAL.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id = gs_alv_display-location_id
                material    = gs_alv_display-material
@@ -1811,8 +1864,7 @@ FORM save_data_to_db.
     LOOP AT lt_cst_pur INTO ls_cst_pur
       WHERE location     = ls_gail_id_map-location_id
         AND material     = ls_gail_id_map-material
-        AND state_code   = ls_gail_id_map-state_code
-        AND exclude      IS INITIAL.
+        AND state_code   = ls_gail_id_map-state_code.
       " Accumulate totals
       lv_total_mbg = lv_total_mbg + ls_cst_pur-qty_in_mbg.
       lv_total_scm = lv_total_scm + ls_cst_pur-qty_in_scm.
@@ -2034,9 +2086,7 @@ ENDFORM.
 FORM handle_reset.
   CLEAR gt_alv_display.
   PERFORM build_alv_display_table.
-  " Re-apply exclusion from master table (reset should NOT clear exclude flags)
-  PERFORM apply_exclusion_from_master.
-  " Keep exclude checkbox disabled, disable DAY columns on reset
+  " 2.3d: Enable checkboxes whenever reset button is clicked
   DATA: lr_grid_reset TYPE REF TO cl_gui_alv_grid,
         lt_fcat_reset TYPE lvc_t_fcat.
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
@@ -2046,7 +2096,7 @@ FORM handle_reset.
     lr_grid_reset->get_frontend_fieldcatalog( IMPORTING et_fieldcatalog = lt_fcat_reset ).
     LOOP AT lt_fcat_reset ASSIGNING FIELD-SYMBOL(<fs_fcat_reset>).
       IF <fs_fcat_reset>-fieldname = 'EXCLUDE'.
-        <fs_fcat_reset>-edit = abap_false.  " Always disabled
+        <fs_fcat_reset>-edit = abap_true.
       ENDIF.
       " Also disable DAY column editing on reset
       IF <fs_fcat_reset>-fieldname CP 'DAY*'.
