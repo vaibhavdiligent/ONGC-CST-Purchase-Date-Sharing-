@@ -2998,8 +2998,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_val14    TYPE c LENGTH 14,
         ls_hdr      TYPE ty_pivot,
         ls_piv_mbg  TYPE ty_pivot,
-        lt_piv_rows TYPE TABLE OF ty_pivot,
-        lv_last_page TYPE i.
+        lt_piv_rows TYPE TABLE OF ty_pivot.
   FIELD-SYMBOLS: <fs_cell> TYPE c.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
@@ -3095,7 +3094,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           137(14) ls_hdr-d07.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(146).
-  lv_last_page = sy-pagno.   " remember page after writing header
 
   LOOP AT lt_keys INTO ls_key.
     CLEAR ls_piv_mbg.
@@ -3131,9 +3129,9 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       ENDIF.
       lv_day_idx = lv_day_idx + 1.
     ENDLOOP.
-    " Repeat column header if spool has overflowed to a new physical page
-    IF sy-pagno <> lv_last_page.
-      lv_last_page = sy-pagno.
+    " If near bottom of page, force new page and reprint column header BEFORE data row
+    IF sy-linno > 62.
+      NEW-PAGE.
       FORMAT INTENSIFIED ON.
       WRITE: /5(12) ls_hdr-ctp,  18(12) ls_hdr-mat,
               31(5) ls_hdr-stcd, 37(15) ls_hdr-state,
@@ -3174,12 +3172,11 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           165(14) ls_hdr-d16.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(174).
-  lv_last_page = sy-pagno.   " remember page after writing header
 
   LOOP AT lt_piv_rows INTO ls_piv_mbg.
-    " Repeat column header if spool has overflowed to a new physical page
-    IF sy-pagno <> lv_last_page.
-      lv_last_page = sy-pagno.
+    " If near bottom of page, force new page and reprint column header BEFORE data row
+    IF sy-linno > 62.
+      NEW-PAGE.
       FORMAT INTENSIFIED ON.
       WRITE: /5(12) ls_hdr-ctp,  18(12) ls_hdr-mat,
               31(5) ls_hdr-stcd, 37(15) ls_hdr-state,
@@ -3226,12 +3223,11 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           154(14) 'GAIL ID'.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(180).
-  lv_last_page = sy-pagno.   " remember page after writing header
 
   LOOP AT lt_daily_sorted INTO ls_pur.
-    " Repeat column header if spool has overflowed to a new physical page
-    IF sy-pagno <> lv_last_page.
-      lv_last_page = sy-pagno.
+    " If near bottom of page, force new page and reprint column header BEFORE data row
+    IF sy-linno > 62.
+      NEW-PAGE.
       FORMAT INTENSIFIED ON.
       WRITE: /5(10) 'Gas Day',
               16(12) 'CTP ID',
