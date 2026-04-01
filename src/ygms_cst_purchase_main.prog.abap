@@ -2997,7 +2997,8 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_read_rc  TYPE i,
         lv_val14    TYPE c LENGTH 14,
         ls_hdr      TYPE ty_pivot,
-        ls_piv_mbg  TYPE ty_pivot.
+        ls_piv_mbg  TYPE ty_pivot,
+        lt_piv_rows TYPE TABLE OF ty_pivot.
   FIELD-SYMBOLS: <fs_cell> TYPE c.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
@@ -3054,14 +3055,14 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     lv_day_idx = lv_day_idx + 1.
   ENDLOOP.
 
-  " Get print parameters — wide line to fit pivot columns
+  " Get print parameters — line_size 200 fits 7-9 day columns
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
     EXPORTING
       no_dialog      = 'X'
       immediately    = ' '
       release        = ' '
       new_list_id    = 'X'
-      line_size      = 280
+      line_size      = 200
       line_count     = 65
     IMPORTING
       out_parameters = ls_params
@@ -3076,27 +3077,23 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Create spool
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  " ---- Page 1: Column-wise Qty MBG pivot (dates as columns) ----
+  " ---- Page 1: MBG pivot days 1-7 ----
   lv_page_str = lv_page.
   CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
-  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
-  WRITE: /5 'Daily Qty MBG -', lv_date_from_str, 'to', lv_date_to_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 170 lv_time_str.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 175 lv_page_str.
+  WRITE: /5 'Daily Qty MBG (Days 1-7) -', lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
-  ULINE AT /5(275).
+  ULINE AT /5(146).
   FORMAT INTENSIFIED ON.
-  WRITE: /5(12) ls_hdr-ctp,   18(12) ls_hdr-mat,
-          31(5) ls_hdr-stcd,  37(15) ls_hdr-state,
-          53(14) ls_hdr-d01,  67(14) ls_hdr-d02,
-          81(14) ls_hdr-d03,  95(14) ls_hdr-d04,
+  WRITE: /5(12) ls_hdr-ctp,  18(12) ls_hdr-mat,
+          31(5) ls_hdr-stcd, 37(15) ls_hdr-state,
+          53(14) ls_hdr-d01, 67(14) ls_hdr-d02,
+          81(14) ls_hdr-d03, 95(14) ls_hdr-d04,
           109(14) ls_hdr-d05, 123(14) ls_hdr-d06,
-          137(14) ls_hdr-d07, 151(14) ls_hdr-d08,
-          165(14) ls_hdr-d09, 179(14) ls_hdr-d10,
-          193(14) ls_hdr-d11, 207(14) ls_hdr-d12,
-          221(14) ls_hdr-d13, 235(14) ls_hdr-d14,
-          249(14) ls_hdr-d15, 263(14) ls_hdr-d16.
+          137(14) ls_hdr-d07.
   FORMAT INTENSIFIED OFF.
-  ULINE AT /5(275).
+  ULINE AT /5(146).
 
   LOOP AT lt_keys INTO ls_key.
     CLEAR ls_piv_mbg.
@@ -3132,26 +3129,55 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       ENDIF.
       lv_day_idx = lv_day_idx + 1.
     ENDLOOP.
-    WRITE: /5(12) ls_piv_mbg-ctp,   18(12) ls_piv_mbg-mat,
-            31(5) ls_piv_mbg-stcd,  37(15) ls_piv_mbg-state,
-            53(14) ls_piv_mbg-d01,  67(14) ls_piv_mbg-d02,
-            81(14) ls_piv_mbg-d03,  95(14) ls_piv_mbg-d04,
+    WRITE: /5(12) ls_piv_mbg-ctp,  18(12) ls_piv_mbg-mat,
+            31(5) ls_piv_mbg-stcd, 37(15) ls_piv_mbg-state,
+            53(14) ls_piv_mbg-d01, 67(14) ls_piv_mbg-d02,
+            81(14) ls_piv_mbg-d03, 95(14) ls_piv_mbg-d04,
             109(14) ls_piv_mbg-d05, 123(14) ls_piv_mbg-d06,
-            137(14) ls_piv_mbg-d07, 151(14) ls_piv_mbg-d08,
-            165(14) ls_piv_mbg-d09, 179(14) ls_piv_mbg-d10,
-            193(14) ls_piv_mbg-d11, 207(14) ls_piv_mbg-d12,
-            221(14) ls_piv_mbg-d13, 235(14) ls_piv_mbg-d14,
-            249(14) ls_piv_mbg-d15, 263(14) ls_piv_mbg-d16.
-    ULINE AT /5(275).
+            137(14) ls_piv_mbg-d07.
+    ULINE AT /5(146).
+    APPEND ls_piv_mbg TO lt_piv_rows.
   ENDLOOP.
 
-  " ---- Page 2+: Daily Detail (one row per gas day record) ----
+  " ---- Page 2: MBG pivot days 8-16 ----
   lv_page = lv_page + 1.
   NEW-PAGE.
   lv_page_str = lv_page.
   CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
-  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 170 lv_time_str.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 175 lv_page_str.
+  WRITE: /5 'Daily Qty MBG (Days 8-16) -', lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /5(174).
+  FORMAT INTENSIFIED ON.
+  WRITE: /5(12) ls_hdr-ctp,  18(12) ls_hdr-mat,
+          31(5) ls_hdr-stcd, 37(15) ls_hdr-state,
+          53(14) ls_hdr-d08, 67(14) ls_hdr-d09,
+          81(14) ls_hdr-d10, 95(14) ls_hdr-d11,
+          109(14) ls_hdr-d12, 123(14) ls_hdr-d13,
+          137(14) ls_hdr-d14, 151(14) ls_hdr-d15,
+          165(14) ls_hdr-d16.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /5(174).
+
+  LOOP AT lt_piv_rows INTO ls_piv_mbg.
+    WRITE: /5(12) ls_piv_mbg-ctp,  18(12) ls_piv_mbg-mat,
+            31(5) ls_piv_mbg-stcd, 37(15) ls_piv_mbg-state,
+            53(14) ls_piv_mbg-d08, 67(14) ls_piv_mbg-d09,
+            81(14) ls_piv_mbg-d10, 95(14) ls_piv_mbg-d11,
+            109(14) ls_piv_mbg-d12, 123(14) ls_piv_mbg-d13,
+            137(14) ls_piv_mbg-d14, 151(14) ls_piv_mbg-d15,
+            165(14) ls_piv_mbg-d16.
+    ULINE AT /5(174).
+  ENDLOOP.
+
+  " ---- Page 3: Daily Detail (one row per gas day record) ----
+  lv_page = lv_page + 1.
+  NEW-PAGE.
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 170 lv_time_str.
+  WRITE: /75 'ONGC CST Statewise Allocation', AT 175 lv_page_str.
   WRITE: /5 'Daily CST Purchase Data -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
