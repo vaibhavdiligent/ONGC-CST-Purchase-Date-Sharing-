@@ -44,8 +44,10 @@ TYPES: BEGIN OF ty_alv_display,
          state       TYPE bezei20,
          location_id TYPE ygms_de_loc_id,
          material    TYPE ygms_de_gail_mat,
-         total_mbg   TYPE p DECIMALS 6,
-         total_scm   TYPE p DECIMALS 6,
+         total_mbg       TYPE p DECIMALS 6,
+         total_scm       TYPE p DECIMALS 6,
+         total_sales_mbg TYPE p DECIMALS 6,
+         alloc_sales_mbg TYPE p DECIMALS 6,
          gcv         TYPE p DECIMALS 6, "ygms_de_gcv,
          ncv         TYPE p DECIMALS 6, "ygms_de_ncv,
          day01       TYPE p DECIMALS 6,
@@ -64,6 +66,7 @@ TYPES: BEGIN OF ty_alv_display,
          day14       TYPE p DECIMALS 6,
          day15       TYPE p DECIMALS 6,
          day16       TYPE p DECIMALS 6,
+         row_color   TYPE c LENGTH 4,
          celltab     TYPE lvc_t_styl,
        END OF ty_alv_display.
 TYPES: BEGIN OF ty_final,
@@ -777,6 +780,26 @@ FORM display_editable_alv.
   ls_fieldcat-decimals  = 6.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'TOTAL_SALES_MBG'.
+  ls_fieldcat-coltext   = 'Total Sales, MBG'.
+  ls_fieldcat-outputlen = 15.
+  ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-edit      = abap_false.
+  ls_fieldcat-decimals_o  = 3.
+  ls_fieldcat-inttype   = 'P'.
+  ls_fieldcat-decimals  = 6.
+  APPEND ls_fieldcat TO gt_fieldcat.
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ALLOC_SALES_MBG'.
+  ls_fieldcat-coltext   = 'Alloc. - Sales, MBG'.
+  ls_fieldcat-outputlen = 18.
+  ls_fieldcat-do_sum    = abap_true.
+  ls_fieldcat-edit      = abap_false.
+  ls_fieldcat-decimals_o  = 3.
+  ls_fieldcat-inttype   = 'P'.
+  ls_fieldcat-decimals  = 6.
+  APPEND ls_fieldcat TO gt_fieldcat.
+  CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
   ls_fieldcat-coltext   = 'Wt. Avg. GCV'.
   ls_fieldcat-outputlen = 12.
@@ -835,6 +858,7 @@ FORM display_editable_alv.
   gs_layout-sel_mode   = 'A'.
   gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
   gs_layout-stylefname = 'CELLTAB'.  " Cell style field for row-level edit control
+  gs_layout-info_fname = 'ROW_COLOR'. " Row colour field: 'C600' = red for Alloc.-Sales <> 0
   gs_layout-grid_title = 'ONGC CST Statewise Allocation'.
   SORT gt_alv_display BY state location_id material.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
@@ -1135,6 +1159,8 @@ FORM handle_allocate.
   " 2.1b: Clear ALV day data before allocation to prevent additive quantities on repeated clicks
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
     CLEAR: <fs_clear>-total_mbg, <fs_clear>-total_scm,
+           <fs_clear>-total_sales_mbg, <fs_clear>-alloc_sales_mbg,
+           <fs_clear>-row_color,
            <fs_clear>-gcv, <fs_clear>-ncv,
            <fs_clear>-day01, <fs_clear>-day02, <fs_clear>-day03,
            <fs_clear>-day04, <fs_clear>-day05, <fs_clear>-day06,
@@ -1197,6 +1223,30 @@ FORM handle_allocate.
     ENDLOOP.
     lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
     SORT gt_alv_display BY location_id state_code material ASCENDING.
+    " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_sales>).
+      IF <fs_sales>-exclude = 'X'.
+        " Excluded rows: display 0 for both sales columns
+        <fs_sales>-total_sales_mbg = 0.
+      ELSE.
+        READ TABLE it_final_main INTO DATA(ls_fin_row)
+          WITH KEY empst = <fs_sales>-location_id
+                   regio = <fs_sales>-state_code
+                   matnr = <fs_sales>-material.
+        IF sy-subrc = 0.
+          <fs_sales>-total_sales_mbg = ls_fin_row-matnr1.
+        ELSE.
+          <fs_sales>-total_sales_mbg = 0.
+        ENDIF.
+      ENDIF.
+      <fs_sales>-alloc_sales_mbg = <fs_sales>-total_mbg - <fs_sales>-total_sales_mbg.
+      " Highlight row red where difference <> 0 (except Gujarat GJ - no red highlight)
+      IF <fs_sales>-alloc_sales_mbg <> 0 AND <fs_sales>-state_code <> 'GJ'.
+        <fs_sales>-row_color = 'C600'. " Red
+      ELSE.
+        CLEAR <fs_sales>-row_color.
+      ENDIF.
+    ENDLOOP.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
   " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
@@ -4229,6 +4279,13 @@ FORM recalculate_totals.
       <fs_alv>-total_mbg = c_tgqty.
     ELSE.
       <fs_alv>-total_scm = 0.
+    ENDIF.
+    " Recalculate Alloc. - Sales MBG and row colour after day edits
+    <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
+    IF <fs_alv>-alloc_sales_mbg <> 0 AND <fs_alv>-state_code <> 'GJ'.
+      <fs_alv>-row_color = 'C600'. " Red
+    ELSE.
+      CLEAR <fs_alv>-row_color.
     ENDIF.
     " GCV and NCV remain unchanged (already set during allocation)
   ENDLOOP.
