@@ -4271,13 +4271,8 @@ FORM recalculate_totals.
     ELSE.
       <fs_alv>-total_scm = 0.
     ENDIF.
-    " Recalculate Alloc. - Sales MBG and row colour after day edits
+    " Recalculate Alloc. - Sales MBG after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
-    IF <fs_alv>-alloc_sales_mbg <> 0 AND <fs_alv>-state_code <> 'GJ'.
-      <fs_alv>-row_color = 'C600'. " Red
-    ELSE.
-      CLEAR <fs_alv>-row_color.
-    ENDIF.
     " GCV and NCV remain unchanged (already set during allocation)
   ENDLOOP.
   " Refresh ALV display
