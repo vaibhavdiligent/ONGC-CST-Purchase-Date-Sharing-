@@ -66,7 +66,6 @@ TYPES: BEGIN OF ty_alv_display,
          day14       TYPE p DECIMALS 6,
          day15       TYPE p DECIMALS 6,
          day16       TYPE p DECIMALS 6,
-         row_color   TYPE c LENGTH 4,
          celltab     TYPE lvc_t_styl,
        END OF ty_alv_display.
 TYPES: BEGIN OF ty_final,
@@ -858,7 +857,6 @@ FORM display_editable_alv.
   gs_layout-sel_mode   = 'A'.
   gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
   gs_layout-stylefname = 'CELLTAB'.  " Cell style field for row-level edit control
-  gs_layout-info_fname = 'ROW_COLOR'. " Row colour field: 'C600' = red for Alloc.-Sales <> 0
   gs_layout-grid_title = 'ONGC CST Statewise Allocation'.
   SORT gt_alv_display BY state location_id material.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
@@ -1160,7 +1158,6 @@ FORM handle_allocate.
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
     CLEAR: <fs_clear>-total_mbg, <fs_clear>-total_scm,
            <fs_clear>-total_sales_mbg, <fs_clear>-alloc_sales_mbg,
-           <fs_clear>-row_color,
            <fs_clear>-gcv, <fs_clear>-ncv,
            <fs_clear>-day01, <fs_clear>-day02, <fs_clear>-day03,
            <fs_clear>-day04, <fs_clear>-day05, <fs_clear>-day06,
@@ -1240,12 +1237,6 @@ FORM handle_allocate.
         ENDIF.
       ENDIF.
       <fs_sales>-alloc_sales_mbg = <fs_sales>-total_mbg - <fs_sales>-total_sales_mbg.
-      " Highlight row red where difference <> 0 (except Gujarat GJ - no red highlight)
-      IF <fs_sales>-alloc_sales_mbg <> 0 AND <fs_sales>-state_code <> 'GJ'.
-        <fs_sales>-row_color = 'C600'. " Red
-      ELSE.
-        CLEAR <fs_sales>-row_color.
-      ENDIF.
     ENDLOOP.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
