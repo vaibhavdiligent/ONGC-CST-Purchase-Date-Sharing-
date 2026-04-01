@@ -2981,10 +2981,41 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
          END OF ty_pdf_sum.
   DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp state_code ongc_mater,
         ls_pdf_sum TYPE ty_pdf_sum.
-  DATA: lv_avg_str     TYPE c LENGTH 15,
+  DATA: lv_avg_str      TYPE c LENGTH 15,
         lt_daily_sorted TYPE TABLE OF yrga_cst_pur,
         lv_a_gcv        TYPE p DECIMALS 6,
         lv_a_ncv        TYPE p DECIMALS 6.
+  " Column-wise MBG pivot — fixed structure with 16 day fields
+  TYPES: BEGIN OF ty_pivot,
+           ctp   TYPE c LENGTH 12,
+           mat   TYPE c LENGTH 12,
+           stcd  TYPE c LENGTH 5,
+           state TYPE c LENGTH 15,
+           d01   TYPE c LENGTH 14, d02 TYPE c LENGTH 14,
+           d03   TYPE c LENGTH 14, d04 TYPE c LENGTH 14,
+           d05   TYPE c LENGTH 14, d06 TYPE c LENGTH 14,
+           d07   TYPE c LENGTH 14, d08 TYPE c LENGTH 14,
+           d09   TYPE c LENGTH 14, d10 TYPE c LENGTH 14,
+           d11   TYPE c LENGTH 14, d12 TYPE c LENGTH 14,
+           d13   TYPE c LENGTH 14, d14 TYPE c LENGTH 14,
+           d15   TYPE c LENGTH 14, d16 TYPE c LENGTH 14,
+         END OF ty_pivot.
+  DATA: lt_days     TYPE TABLE OF datum,
+        lv_curr_day TYPE datum,
+        lv_day      TYPE datum,
+        lv_day_c    TYPE c LENGTH 8,
+        lv_day_dd   TYPE c LENGTH 2,
+        lt_keys     TYPE TABLE OF yrga_cst_pur,
+        ls_key      TYPE yrga_cst_pur,
+        lv_num_days TYPE i,
+        lv_day_idx  TYPE i,
+        lv_idx_str  TYPE c LENGTH 2,
+        lv_comp_nm  TYPE c LENGTH 4,
+        lv_read_rc  TYPE i,
+        lv_val14    TYPE c LENGTH 14,
+        ls_hdr      TYPE ty_pivot,
+        ls_piv_mbg  TYPE ty_pivot.
+  FIELD-SYMBOLS: <fs_cell> TYPE c.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
@@ -2992,8 +3023,12 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   WRITE sy-datum TO lv_date_str DD/MM/YYYY.
   WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
 
+  " Sort daily data
+  lt_daily_sorted = pt_data.
+  SORT lt_daily_sorted BY gas_day ctp state_code ongc_mater ASCENDING.
+
   " Build summary aggregation
-  LOOP AT pt_data INTO ls_pur.
+  LOOP AT lt_daily_sorted INTO ls_pur.
     READ TABLE lt_pdf_sum WITH KEY ctp = ls_pur-ctp ongc_mater = ls_pur-ongc_mater
       state_code = ls_pur-state_code ASSIGNING FIELD-SYMBOL(<fs_psum>).
     IF sy-subrc = 0.
@@ -3016,14 +3051,58 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     ENDIF.
   ENDLOOP.
 
-  " Get print parameters for spool creation
+  " Build ordered list of days and unique CTP/Material/State keys for pivot
+  lv_curr_day = gv_date_from.
+  WHILE lv_curr_day <= gv_date_to.
+    APPEND lv_curr_day TO lt_days.
+    lv_curr_day = lv_curr_day + 1.
+  ENDWHILE.
+  DESCRIBE TABLE lt_days LINES lv_num_days.
+
+  LOOP AT lt_daily_sorted INTO ls_pur.
+    READ TABLE lt_keys WITH KEY ctp        = ls_pur-ctp
+                                ongc_mater = ls_pur-ongc_mater
+                                state_code = ls_pur-state_code
+                       TRANSPORTING NO FIELDS.
+    IF sy-subrc <> 0.
+      ls_key-ctp        = ls_pur-ctp.
+      ls_key-ongc_mater = ls_pur-ongc_mater.
+      ls_key-state_code = ls_pur-state_code.
+      ls_key-state      = ls_pur-state.
+      APPEND ls_key TO lt_keys.
+    ENDIF.
+  ENDLOOP.
+
+  " Build header pivot row (day-of-month as column headers)
+  CLEAR ls_hdr.
+  ls_hdr-ctp   = 'CTP ID'.
+  ls_hdr-mat   = 'ONGC Material'.
+  ls_hdr-stcd  = 'St.Cd'.
+  ls_hdr-state = 'State'.
+  lv_day_idx = 1.
+  LOOP AT lt_days INTO lv_day.
+    IF lv_day_idx > 16. EXIT. ENDIF.
+    lv_day_c = lv_day. lv_day_dd = lv_day_c+6(2).
+    WRITE lv_day_idx TO lv_idx_str RIGHT-JUSTIFIED.
+    CONDENSE lv_idx_str.
+    IF lv_day_idx < 10.
+      CONCATENATE 'D0' lv_idx_str INTO lv_comp_nm.
+    ELSE.
+      CONCATENATE 'D'  lv_idx_str INTO lv_comp_nm.
+    ENDIF.
+    ASSIGN COMPONENT lv_comp_nm OF STRUCTURE ls_hdr TO <fs_cell>.
+    IF sy-subrc = 0. <fs_cell> = lv_day_dd. ENDIF.
+    lv_day_idx = lv_day_idx + 1.
+  ENDLOOP.
+
+  " Get print parameters — wide line to fit pivot columns
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
     EXPORTING
       no_dialog      = 'X'
       immediately    = ' '
       release        = ' '
       new_list_id    = 'X'
-      line_size      = 200
+      line_size      = 280
       line_count     = 65
     IMPORTING
       out_parameters = ls_params
@@ -3035,14 +3114,85 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
     RETURN.
   ENDIF.
 
-  " Create spool with formatted table output
+  " Create spool
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  " ---- Page 1+: Daily Detail (one row per gas day record) ----
+  " ---- Page 1: Column-wise Qty MBG pivot (dates as columns) ----
   lv_page_str = lv_page.
   CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
+  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
+  WRITE: /5 'Daily Qty MBG -', lv_date_from_str, 'to', lv_date_to_str.
+  SKIP 1.
+  ULINE AT /5(275).
+  FORMAT INTENSIFIED ON.
+  WRITE: /5(12) ls_hdr-ctp,   18(12) ls_hdr-mat,
+          31(5) ls_hdr-stcd,  37(15) ls_hdr-state,
+          53(14) ls_hdr-d01,  67(14) ls_hdr-d02,
+          81(14) ls_hdr-d03,  95(14) ls_hdr-d04,
+          109(14) ls_hdr-d05, 123(14) ls_hdr-d06,
+          137(14) ls_hdr-d07, 151(14) ls_hdr-d08,
+          165(14) ls_hdr-d09, 179(14) ls_hdr-d10,
+          193(14) ls_hdr-d11, 207(14) ls_hdr-d12,
+          221(14) ls_hdr-d13, 235(14) ls_hdr-d14,
+          249(14) ls_hdr-d15, 263(14) ls_hdr-d16.
+  FORMAT INTENSIFIED OFF.
+  ULINE AT /5(275).
+
+  LOOP AT lt_keys INTO ls_key.
+    CLEAR ls_piv_mbg.
+    ls_piv_mbg-ctp   = ls_key-ctp.
+    ls_piv_mbg-mat   = ls_key-ongc_mater.
+    ls_piv_mbg-stcd  = ls_key-state_code.
+    ls_piv_mbg-state = ls_key-state.
+    lv_day_idx = 1.
+    LOOP AT lt_days INTO lv_day.
+      IF lv_day_idx > 16. EXIT. ENDIF.
+      READ TABLE lt_daily_sorted INTO ls_pur
+        WITH KEY ctp        = ls_key-ctp
+                 ongc_mater = ls_key-ongc_mater
+                 state_code = ls_key-state_code
+                 gas_day    = lv_day.
+      lv_read_rc = sy-subrc.
+      WRITE lv_day_idx TO lv_idx_str RIGHT-JUSTIFIED.
+      CONDENSE lv_idx_str.
+      IF lv_day_idx < 10.
+        CONCATENATE 'D0' lv_idx_str INTO lv_comp_nm.
+      ELSE.
+        CONCATENATE 'D'  lv_idx_str INTO lv_comp_nm.
+      ENDIF.
+      ASSIGN COMPONENT lv_comp_nm OF STRUCTURE ls_piv_mbg TO <fs_cell>.
+      IF sy-subrc = 0.
+        IF lv_read_rc = 0.
+          WRITE ls_pur-qty_in_mbg TO lv_val14 DECIMALS 3.
+          CONDENSE lv_val14.
+          <fs_cell> = lv_val14.
+        ELSE.
+          <fs_cell> = ''.
+        ENDIF.
+      ENDIF.
+      lv_day_idx = lv_day_idx + 1.
+    ENDLOOP.
+    WRITE: /5(12) ls_piv_mbg-ctp,   18(12) ls_piv_mbg-mat,
+            31(5) ls_piv_mbg-stcd,  37(15) ls_piv_mbg-state,
+            53(14) ls_piv_mbg-d01,  67(14) ls_piv_mbg-d02,
+            81(14) ls_piv_mbg-d03,  95(14) ls_piv_mbg-d04,
+            109(14) ls_piv_mbg-d05, 123(14) ls_piv_mbg-d06,
+            137(14) ls_piv_mbg-d07, 151(14) ls_piv_mbg-d08,
+            165(14) ls_piv_mbg-d09, 179(14) ls_piv_mbg-d10,
+            193(14) ls_piv_mbg-d11, 207(14) ls_piv_mbg-d12,
+            221(14) ls_piv_mbg-d13, 235(14) ls_piv_mbg-d14,
+            249(14) ls_piv_mbg-d15, 263(14) ls_piv_mbg-d16.
+    ULINE AT /5(275).
+  ENDLOOP.
+
+  " ---- Page 2+: Daily Detail (one row per gas day record) ----
+  lv_page = lv_page + 1.
+  NEW-PAGE.
+  lv_page_str = lv_page.
+  CONDENSE lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
+  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
   WRITE: /5 'Daily CST Purchase Data -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
@@ -3061,10 +3211,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           154(14) 'GAIL ID'.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(180).
-
-  " Sort by gas day, then CTP, state, material so records appear in date order
-  lt_daily_sorted = pt_data.
-  SORT lt_daily_sorted BY gas_day ctp state_code ongc_mater ASCENDING.
 
   LOOP AT lt_daily_sorted INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
@@ -3092,8 +3238,8 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   NEW-PAGE.
   lv_page_str = lv_page.
   CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
-  WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
+  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
+  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
   WRITE: /5 'Daily CST Purchase Data - Summary -',
            lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
@@ -3304,134 +3450,39 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
                                        cv_size    TYPE sood-objlen
                                        ct_pdf_raw TYPE STANDARD TABLE
                                        cv_pdf_len TYPE i.
-  DATA: ls_fnt     TYPE yrga_cst_fn_data.
-  DATA: lv_date_from TYPE c LENGTH 10,
-        lv_date_to   TYPE c LENGTH 10,
-        lv_gcv       TYPE c LENGTH 15,
-        lv_ncv       TYPE c LENGTH 15,
-        lv_qty_scm   TYPE c LENGTH 15,
-        lv_qty_mbg   TYPE c LENGTH 15.
+  DATA: ls_fnt        TYPE yrga_cst_fn_data.
+  DATA: lv_date_from  TYPE c LENGTH 10,
+        lv_date_to    TYPE c LENGTH 10,
+        lv_gcv        TYPE c LENGTH 15,
+        lv_ncv        TYPE c LENGTH 15,
+        lv_qty_scm    TYPE c LENGTH 15,
+        lv_qty_mbg    TYPE c LENGTH 15.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
-  DATA: ls_params  TYPE pri_params,
-        lv_valid   TYPE c,
-        lv_spool   TYPE rspoid,
-        lt_pdf     TYPE TABLE OF tline,
-        lv_pdf_len TYPE i,
-        lv_xstring TYPE xstring.
-  DATA: lv_date_str TYPE c LENGTH 10,
-        lv_time_str TYPE c LENGTH 8,
-        lv_page     TYPE i VALUE 1,
-        lv_page_str TYPE c LENGTH 5.
-  " Daily data for date-wise pivot section
-  DATA: lt_daily   TYPE TABLE OF yrga_cst_pur,
-        ls_daily   TYPE yrga_cst_pur,
-        lv_gas_day TYPE c LENGTH 10.
-  " Fortnightly summary sorted copy
+  DATA: ls_params     TYPE pri_params,
+        lv_valid      TYPE c,
+        lv_spool      TYPE rspoid,
+        lt_pdf        TYPE TABLE OF tline,
+        lv_pdf_len    TYPE i,
+        lv_xstring    TYPE xstring.
+  DATA: lv_date_str   TYPE c LENGTH 10,
+        lv_time_str   TYPE c LENGTH 8,
+        lv_page_str   TYPE c LENGTH 5.
   DATA: lt_fnt_sorted TYPE TABLE OF yrga_cst_fn_data.
-  " For column-wise pivot — fixed structure with 16 day fields
-  TYPES: BEGIN OF ty_pivot,
-           ctp   TYPE c LENGTH 12,
-           mat   TYPE c LENGTH 12,
-           stcd  TYPE c LENGTH 5,
-           state TYPE c LENGTH 15,
-           d01   TYPE c LENGTH 14, d02 TYPE c LENGTH 14,
-           d03   TYPE c LENGTH 14, d04 TYPE c LENGTH 14,
-           d05   TYPE c LENGTH 14, d06 TYPE c LENGTH 14,
-           d07   TYPE c LENGTH 14, d08 TYPE c LENGTH 14,
-           d09   TYPE c LENGTH 14, d10 TYPE c LENGTH 14,
-           d11   TYPE c LENGTH 14, d12 TYPE c LENGTH 14,
-           d13   TYPE c LENGTH 14, d14 TYPE c LENGTH 14,
-           d15   TYPE c LENGTH 14, d16 TYPE c LENGTH 14,
-         END OF ty_pivot.
-  DATA: lt_days     TYPE TABLE OF datum,
-        lv_curr_day TYPE datum,
-        lv_day      TYPE datum,
-        lv_day_c    TYPE c LENGTH 8,
-        lv_day_dd   TYPE c LENGTH 2,
-        lt_keys     TYPE TABLE OF yrga_cst_pur,
-        ls_key      TYPE yrga_cst_pur,
-        lv_num_days TYPE i,
-        lv_day_idx  TYPE i,
-        lv_idx_str  TYPE c LENGTH 2,
-        lv_comp_nm  TYPE c LENGTH 4,
-        lv_read_rc  TYPE i,
-        lv_val14    TYPE c LENGTH 14,
-        ls_hdr      TYPE ty_pivot,
-        ls_piv_mbg  TYPE ty_pivot,
-        ls_piv_scm  TYPE ty_pivot.
-  DATA: lv_a_gcv   TYPE p DECIMALS 6,
-        lv_a_ncv   TYPE p DECIMALS 6.
-  FIELD-SYMBOLS: <fs_cell> TYPE c.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
-  " Download date/time
   WRITE sy-datum TO lv_date_str DD/MM/YYYY.
   WRITE sy-uzeit TO lv_time_str USING EDIT MASK '__:__:__'.
 
-  " Fetch daily records
-  SELECT * FROM yrga_cst_pur
-    INTO TABLE lt_daily
-    WHERE gas_day  BETWEEN gv_date_from AND gv_date_to
-      AND location IN s_loc
-      AND exclude  <> 'X'
-      AND deleted  =  ' '.
-  SORT lt_daily BY ctp ongc_mater state_code gas_day ASCENDING.
-
-  " Build ordered list of days in the period
-  lv_curr_day = gv_date_from.
-  WHILE lv_curr_day <= gv_date_to.
-    APPEND lv_curr_day TO lt_days.
-    lv_curr_day = lv_curr_day + 1.
-  ENDWHILE.
-  DESCRIBE TABLE lt_days LINES lv_num_days.
-
-  " Collect unique CTP / Material / State combinations
-  LOOP AT lt_daily INTO ls_daily.
-    READ TABLE lt_keys WITH KEY ctp        = ls_daily-ctp
-                                ongc_mater = ls_daily-ongc_mater
-                                state_code = ls_daily-state_code
-                       TRANSPORTING NO FIELDS.
-    IF sy-subrc <> 0.
-      ls_key-ctp        = ls_daily-ctp.
-      ls_key-ongc_mater = ls_daily-ongc_mater.
-      ls_key-state_code = ls_daily-state_code.
-      ls_key-state      = ls_daily-state.
-      APPEND ls_key TO lt_keys.
-    ENDIF.
-  ENDLOOP.
-
-  " Build header pivot row (day DD values as column headers)
-  CLEAR ls_hdr.
-  ls_hdr-ctp   = 'CTP ID'.
-  ls_hdr-mat   = 'ONGC Material'.
-  ls_hdr-stcd  = 'St.Cd'.
-  ls_hdr-state = 'State'.
-  lv_day_idx = 1.
-  LOOP AT lt_days INTO lv_day.
-    IF lv_day_idx > 16. EXIT. ENDIF.
-    lv_day_c = lv_day. lv_day_dd = lv_day_c+6(2).
-    WRITE lv_day_idx TO lv_idx_str RIGHT-JUSTIFIED.
-    CONDENSE lv_idx_str.
-    IF lv_day_idx < 10.
-      CONCATENATE 'D0' lv_idx_str INTO lv_comp_nm.
-    ELSE.
-      CONCATENATE 'D'  lv_idx_str INTO lv_comp_nm.
-    ENDIF.
-    ASSIGN COMPONENT lv_comp_nm OF STRUCTURE ls_hdr TO <fs_cell>.
-    IF sy-subrc = 0. <fs_cell> = lv_day_dd. ENDIF.
-    lv_day_idx = lv_day_idx + 1.
-  ENDLOOP.
-
-  " Get print parameters — wider line for column layout
+  " Get print parameters
   CALL FUNCTION 'GET_PRINT_PARAMETERS'
     EXPORTING
       no_dialog      = 'X'
       immediately    = ' '
       release        = ' '
       new_list_id    = 'X'
-      line_size      = 280
+      line_size      = 200
       line_count     = 65
     IMPORTING
       out_parameters = ls_params
@@ -3445,153 +3496,8 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
 
   NEW-PAGE PRINT ON PARAMETERS ls_params NO DIALOG.
 
-  " ---- Page 1: Column-wise Qty MBG (each date = one column) ----
-  lv_page_str = lv_page.
-  CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
-  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
-  WRITE: /5 'Daily Qty MBG -', lv_date_from_str, 'to', lv_date_to_str.
-  SKIP 1.
-  ULINE AT /5(275).
-  FORMAT INTENSIFIED ON.
-  WRITE: /5(12) ls_hdr-ctp,   18(12) ls_hdr-mat,
-          31(5) ls_hdr-stcd,  37(15) ls_hdr-state,
-          53(14) ls_hdr-d01,  67(14) ls_hdr-d02,
-          81(14) ls_hdr-d03,  95(14) ls_hdr-d04,
-          109(14) ls_hdr-d05, 123(14) ls_hdr-d06,
-          137(14) ls_hdr-d07, 151(14) ls_hdr-d08,
-          165(14) ls_hdr-d09, 179(14) ls_hdr-d10,
-          193(14) ls_hdr-d11, 207(14) ls_hdr-d12,
-          221(14) ls_hdr-d13, 235(14) ls_hdr-d14,
-          249(14) ls_hdr-d15, 263(14) ls_hdr-d16.
-  FORMAT INTENSIFIED OFF.
-  ULINE AT /5(275).
-
-  " Build and write one MBG pivot row per CTP/Material/State
-  LOOP AT lt_keys INTO ls_key.
-    CLEAR ls_piv_mbg.
-    ls_piv_mbg-ctp   = ls_key-ctp.
-    ls_piv_mbg-mat   = ls_key-ongc_mater.
-    ls_piv_mbg-stcd  = ls_key-state_code.
-    ls_piv_mbg-state = ls_key-state.
-    lv_day_idx = 1.
-    LOOP AT lt_days INTO lv_day.
-      IF lv_day_idx > 16. EXIT. ENDIF.
-      READ TABLE lt_daily INTO ls_daily
-        WITH KEY ctp        = ls_key-ctp
-                 ongc_mater = ls_key-ongc_mater
-                 state_code = ls_key-state_code
-                 gas_day    = lv_day.
-      lv_read_rc = sy-subrc.
-      WRITE lv_day_idx TO lv_idx_str RIGHT-JUSTIFIED.
-      CONDENSE lv_idx_str.
-      IF lv_day_idx < 10.
-        CONCATENATE 'D0' lv_idx_str INTO lv_comp_nm.
-      ELSE.
-        CONCATENATE 'D'  lv_idx_str INTO lv_comp_nm.
-      ENDIF.
-      ASSIGN COMPONENT lv_comp_nm OF STRUCTURE ls_piv_mbg TO <fs_cell>.
-      IF sy-subrc = 0.
-        IF lv_read_rc = 0.
-          WRITE ls_daily-qty_in_mbg TO lv_val14 DECIMALS 3.
-          CONDENSE lv_val14.
-          <fs_cell> = lv_val14.
-        ELSE.
-          <fs_cell> = ''.
-        ENDIF.
-      ENDIF.
-      lv_day_idx = lv_day_idx + 1.
-    ENDLOOP.
-    WRITE: /5(12) ls_piv_mbg-ctp,   18(12) ls_piv_mbg-mat,
-            31(5) ls_piv_mbg-stcd,  37(15) ls_piv_mbg-state,
-            53(14) ls_piv_mbg-d01,  67(14) ls_piv_mbg-d02,
-            81(14) ls_piv_mbg-d03,  95(14) ls_piv_mbg-d04,
-            109(14) ls_piv_mbg-d05, 123(14) ls_piv_mbg-d06,
-            137(14) ls_piv_mbg-d07, 151(14) ls_piv_mbg-d08,
-            165(14) ls_piv_mbg-d09, 179(14) ls_piv_mbg-d10,
-            193(14) ls_piv_mbg-d11, 207(14) ls_piv_mbg-d12,
-            221(14) ls_piv_mbg-d13, 235(14) ls_piv_mbg-d14,
-            249(14) ls_piv_mbg-d15, 263(14) ls_piv_mbg-d16.
-    ULINE AT /5(275).
-  ENDLOOP.
-
-  " ---- Page 2: Column-wise Qty SCM ----
-  lv_page = lv_page + 1.
-  NEW-PAGE.
-  lv_page_str = lv_page.
-  CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
-  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
-  WRITE: /5 'Daily Qty SCM -', lv_date_from_str, 'to', lv_date_to_str.
-  SKIP 1.
-  ULINE AT /5(275).
-  FORMAT INTENSIFIED ON.
-  WRITE: /5(12) ls_hdr-ctp,   18(12) ls_hdr-mat,
-          31(5) ls_hdr-stcd,  37(15) ls_hdr-state,
-          53(14) ls_hdr-d01,  67(14) ls_hdr-d02,
-          81(14) ls_hdr-d03,  95(14) ls_hdr-d04,
-          109(14) ls_hdr-d05, 123(14) ls_hdr-d06,
-          137(14) ls_hdr-d07, 151(14) ls_hdr-d08,
-          165(14) ls_hdr-d09, 179(14) ls_hdr-d10,
-          193(14) ls_hdr-d11, 207(14) ls_hdr-d12,
-          221(14) ls_hdr-d13, 235(14) ls_hdr-d14,
-          249(14) ls_hdr-d15, 263(14) ls_hdr-d16.
-  FORMAT INTENSIFIED OFF.
-  ULINE AT /5(275).
-
-  " Build and write one SCM pivot row per CTP/Material/State
-  LOOP AT lt_keys INTO ls_key.
-    CLEAR ls_piv_scm.
-    ls_piv_scm-ctp   = ls_key-ctp.
-    ls_piv_scm-mat   = ls_key-ongc_mater.
-    ls_piv_scm-stcd  = ls_key-state_code.
-    ls_piv_scm-state = ls_key-state.
-    lv_day_idx = 1.
-    LOOP AT lt_days INTO lv_day.
-      IF lv_day_idx > 16. EXIT. ENDIF.
-      READ TABLE lt_daily INTO ls_daily
-        WITH KEY ctp        = ls_key-ctp
-                 ongc_mater = ls_key-ongc_mater
-                 state_code = ls_key-state_code
-                 gas_day    = lv_day.
-      lv_read_rc = sy-subrc.
-      WRITE lv_day_idx TO lv_idx_str RIGHT-JUSTIFIED.
-      CONDENSE lv_idx_str.
-      IF lv_day_idx < 10.
-        CONCATENATE 'D0' lv_idx_str INTO lv_comp_nm.
-      ELSE.
-        CONCATENATE 'D'  lv_idx_str INTO lv_comp_nm.
-      ENDIF.
-      ASSIGN COMPONENT lv_comp_nm OF STRUCTURE ls_piv_scm TO <fs_cell>.
-      IF sy-subrc = 0.
-        IF lv_read_rc = 0.
-          WRITE ls_daily-qty_in_scm TO lv_val14 DECIMALS 3.
-          CONDENSE lv_val14.
-          <fs_cell> = lv_val14.
-        ELSE.
-          <fs_cell> = ''.
-        ENDIF.
-      ENDIF.
-      lv_day_idx = lv_day_idx + 1.
-    ENDLOOP.
-    WRITE: /5(12) ls_piv_scm-ctp,   18(12) ls_piv_scm-mat,
-            31(5) ls_piv_scm-stcd,  37(15) ls_piv_scm-state,
-            53(14) ls_piv_scm-d01,  67(14) ls_piv_scm-d02,
-            81(14) ls_piv_scm-d03,  95(14) ls_piv_scm-d04,
-            109(14) ls_piv_scm-d05, 123(14) ls_piv_scm-d06,
-            137(14) ls_piv_scm-d07, 151(14) ls_piv_scm-d08,
-            165(14) ls_piv_scm-d09, 179(14) ls_piv_scm-d10,
-            193(14) ls_piv_scm-d11, 207(14) ls_piv_scm-d12,
-            221(14) ls_piv_scm-d13, 235(14) ls_piv_scm-d14,
-            249(14) ls_piv_scm-d15, 263(14) ls_piv_scm-d16.
-    ULINE AT /5(275).
-  ENDLOOP.
-
-  " ---- Fortnightly Summary Page ----
-  lv_page = lv_page + 1.
-  NEW-PAGE.
-  lv_page_str = lv_page.
-  CONDENSE lv_page_str.
+  " ---- Page 1: Fortnightly Summary ----
+  lv_page_str = '1'.
   WRITE: /5 'Downloaded', lv_date_str, AT 180 lv_time_str.
   WRITE: /75 'ONGC CST Statewise Allocation', AT 185 lv_page_str.
   WRITE: /5 'Fortnightly CST Purchase Data -',
@@ -3613,7 +3519,6 @@ FORM build_fnt_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(170).
 
-  " Sort fortnightly summary data
   lt_fnt_sorted = pt_data.
   SORT lt_fnt_sorted BY date_from date_to ctp state_code ongc_mater ASCENDING.
   LOOP AT lt_fnt_sorted INTO ls_fnt.
