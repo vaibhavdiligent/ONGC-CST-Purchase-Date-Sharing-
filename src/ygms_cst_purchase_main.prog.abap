@@ -3083,7 +3083,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   CONDENSE lv_page_str.
   WRITE: /5 'Downloaded', lv_date_str, AT 170 lv_time_str.
   WRITE: /75 'ONGC CST Statewise Allocation', AT 175 lv_page_str.
-  WRITE: /5 'Daily Qty MBG (Days 1-7) -', lv_date_from_str, 'to', lv_date_to_str.
+  WRITE: /5 'Allocation Summary -', lv_date_from_str, 'to', lv_date_to_str.
   SKIP 1.
   ULINE AT /5(146).
   FORMAT INTENSIFIED ON.
