@@ -1754,8 +1754,8 @@ FORM save_data_to_db.
       ENDIF.
     ENDIF.
   ENDLOOP.
-  " Second pass: Create daily records for YRGA_CST_PUR
-  LOOP AT gt_alv_display INTO gs_alv_display ."WHERE exclude IS INITIAL.
+  " Second pass: Create daily records for YRGA_CST_PUR (skip excluded rows)
+  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id = gs_alv_display-location_id
                material    = gs_alv_display-material
@@ -1856,7 +1856,8 @@ FORM save_data_to_db.
     LOOP AT lt_cst_pur INTO ls_cst_pur
       WHERE location     = ls_gail_id_map-location_id
         AND material     = ls_gail_id_map-material
-        AND state_code   = ls_gail_id_map-state_code.
+        AND state_code   = ls_gail_id_map-state_code
+        AND exclude      IS INITIAL.
       " Accumulate totals
       lv_total_mbg = lv_total_mbg + ls_cst_pur-qty_in_mbg.
       lv_total_scm = lv_total_scm + ls_cst_pur-qty_in_scm.
