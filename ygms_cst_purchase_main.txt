@@ -2967,24 +2967,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_time_str TYPE c LENGTH 8,
         lv_page     TYPE i VALUE 1,
         lv_page_str TYPE c LENGTH 5.
-  " Summary aggregation types
-  TYPES: BEGIN OF ty_pdf_sum,
-           ctp        TYPE ygms_de_ongc_ctp,
-           ongc_mater TYPE ygms_de_ongc_mat,
-           state_code TYPE yrga_cst_pur-state_code,
-           state      TYPE yrga_cst_pur-state,
-           total_mbg  TYPE yrga_cst_pur-qty_in_mbg,
-           total_scm  TYPE yrga_cst_pur-qty_in_scm,
-           sum_gcv    TYPE yrga_cst_pur-gcv,
-           sum_ncv    TYPE yrga_cst_pur-ncv,
-           cnt        TYPE i,
-         END OF ty_pdf_sum.
-  DATA: lt_pdf_sum TYPE SORTED TABLE OF ty_pdf_sum WITH UNIQUE KEY ctp state_code ongc_mater,
-        ls_pdf_sum TYPE ty_pdf_sum.
-  DATA: lv_avg_str      TYPE c LENGTH 15,
-        lt_daily_sorted TYPE TABLE OF yrga_cst_pur,
-        lv_a_gcv        TYPE p DECIMALS 6,
-        lv_a_ncv        TYPE p DECIMALS 6.
+  DATA: lt_daily_sorted TYPE TABLE OF yrga_cst_pur.
   " Column-wise MBG pivot — fixed structure with 16 day fields
   TYPES: BEGIN OF ty_pivot,
            ctp   TYPE c LENGTH 12,
@@ -3026,30 +3009,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
   " Sort daily data
   lt_daily_sorted = pt_data.
   SORT lt_daily_sorted BY gas_day ctp state_code ongc_mater ASCENDING.
-
-  " Build summary aggregation
-  LOOP AT lt_daily_sorted INTO ls_pur.
-    READ TABLE lt_pdf_sum WITH KEY ctp = ls_pur-ctp ongc_mater = ls_pur-ongc_mater
-      state_code = ls_pur-state_code ASSIGNING FIELD-SYMBOL(<fs_psum>).
-    IF sy-subrc = 0.
-      <fs_psum>-total_mbg = <fs_psum>-total_mbg + ls_pur-qty_in_mbg.
-      <fs_psum>-total_scm = <fs_psum>-total_scm + ls_pur-qty_in_scm.
-      <fs_psum>-sum_gcv   = <fs_psum>-sum_gcv + ls_pur-gcv.
-      <fs_psum>-sum_ncv   = <fs_psum>-sum_ncv + ls_pur-ncv.
-      <fs_psum>-cnt       = <fs_psum>-cnt + 1.
-    ELSE.
-      ls_pdf_sum-ctp        = ls_pur-ctp.
-      ls_pdf_sum-ongc_mater = ls_pur-ongc_mater.
-      ls_pdf_sum-state_code = ls_pur-state_code.
-      ls_pdf_sum-state      = ls_pur-state.
-      ls_pdf_sum-total_mbg  = ls_pur-qty_in_mbg.
-      ls_pdf_sum-total_scm  = ls_pur-qty_in_scm.
-      ls_pdf_sum-sum_gcv    = ls_pur-gcv.
-      ls_pdf_sum-sum_ncv    = ls_pur-ncv.
-      ls_pdf_sum-cnt        = 1.
-      INSERT ls_pdf_sum INTO TABLE lt_pdf_sum.
-    ENDIF.
-  ENDLOOP.
 
   " Build ordered list of days and unique CTP/Material/State keys for pivot
   lv_curr_day = gv_date_from.
@@ -3231,54 +3190,6 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
             133(20) ls_pur-ongc_id,
             154(14) ls_pur-gail_id.
     ULINE AT /5(180).
-  ENDLOOP.
-
-  " ---- Summary Page (after daily detail) ----
-  lv_page = lv_page + 1.
-  NEW-PAGE.
-  lv_page_str = lv_page.
-  CONDENSE lv_page_str.
-  WRITE: /5 'Downloaded', lv_date_str, AT 260 lv_time_str.
-  WRITE: /120 'ONGC CST Statewise Allocation', AT 265 lv_page_str.
-  WRITE: /5 'Daily CST Purchase Data - Summary -',
-           lv_date_from_str, 'to', lv_date_to_str.
-  SKIP 1.
-  ULINE AT /5(175).
-  FORMAT INTENSIFIED ON.
-  WRITE: /5(12) 'CTP ID',
-          18(15) 'ONGC Material',
-          34(8)  'State Cd',
-          43(20) 'State',
-          64(15) 'Total MBG',
-          80(15) 'Total Sm3',
-          96(12) 'Avg. GCV',
-          109(12) 'Avg. NCV'.
-  FORMAT INTENSIFIED OFF.
-  ULINE AT /5(175).
-
-  LOOP AT lt_pdf_sum INTO ls_pdf_sum.
-    WRITE ls_pdf_sum-total_mbg TO lv_qty_mbg DECIMALS 3.
-    WRITE ls_pdf_sum-total_scm TO lv_qty_scm DECIMALS 3.
-    CONDENSE: lv_qty_mbg, lv_qty_scm.
-    IF ls_pdf_sum-cnt > 0.
-      lv_a_gcv = ls_pdf_sum-sum_gcv / ls_pdf_sum-cnt.
-      lv_a_ncv = ls_pdf_sum-sum_ncv / ls_pdf_sum-cnt.
-    ELSE.
-      lv_a_gcv = 0.
-      lv_a_ncv = 0.
-    ENDIF.
-    WRITE lv_a_gcv TO lv_gcv DECIMALS 3.
-    WRITE lv_a_ncv TO lv_ncv DECIMALS 3.
-    CONDENSE: lv_gcv, lv_ncv.
-    WRITE: /5(12) ls_pdf_sum-ctp,
-            18(15) ls_pdf_sum-ongc_mater,
-            34(8)  ls_pdf_sum-state_code,
-            43(20) ls_pdf_sum-state,
-            64(15) lv_qty_mbg,
-            80(15) lv_qty_scm,
-            96(12) lv_gcv,
-            109(12) lv_ncv.
-    ULINE AT /5(175).
   ENDLOOP.
 
   NEW-PAGE PRINT OFF.
