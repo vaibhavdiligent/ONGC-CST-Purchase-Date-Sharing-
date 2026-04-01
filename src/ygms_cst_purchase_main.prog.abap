@@ -2998,7 +2998,8 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
         lv_val14    TYPE c LENGTH 14,
         ls_hdr      TYPE ty_pivot,
         ls_piv_mbg  TYPE ty_pivot,
-        lt_piv_rows TYPE TABLE OF ty_pivot.
+        lt_piv_rows TYPE TABLE OF ty_pivot,
+        lv_last_page TYPE i.
   FIELD-SYMBOLS: <fs_cell> TYPE c.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
@@ -3094,6 +3095,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           137(14) ls_hdr-d07.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(146).
+  lv_last_page = sy-pagno.   " remember page after writing header
 
   LOOP AT lt_keys INTO ls_key.
     CLEAR ls_piv_mbg.
@@ -3129,6 +3131,19 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       ENDIF.
       lv_day_idx = lv_day_idx + 1.
     ENDLOOP.
+    " Repeat column header if spool has overflowed to a new physical page
+    IF sy-pagno <> lv_last_page.
+      lv_last_page = sy-pagno.
+      FORMAT INTENSIFIED ON.
+      WRITE: /5(12) ls_hdr-ctp,  18(12) ls_hdr-mat,
+              31(5) ls_hdr-stcd, 37(15) ls_hdr-state,
+              53(14) ls_hdr-d01, 67(14) ls_hdr-d02,
+              81(14) ls_hdr-d03, 95(14) ls_hdr-d04,
+              109(14) ls_hdr-d05, 123(14) ls_hdr-d06,
+              137(14) ls_hdr-d07.
+      FORMAT INTENSIFIED OFF.
+      ULINE AT /5(146).
+    ENDIF.
     WRITE: /5(12) ls_piv_mbg-ctp,  18(12) ls_piv_mbg-mat,
             31(5) ls_piv_mbg-stcd, 37(15) ls_piv_mbg-state,
             53(14) ls_piv_mbg-d01, 67(14) ls_piv_mbg-d02,
@@ -3159,8 +3174,23 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           165(14) ls_hdr-d16.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(174).
+  lv_last_page = sy-pagno.   " remember page after writing header
 
   LOOP AT lt_piv_rows INTO ls_piv_mbg.
+    " Repeat column header if spool has overflowed to a new physical page
+    IF sy-pagno <> lv_last_page.
+      lv_last_page = sy-pagno.
+      FORMAT INTENSIFIED ON.
+      WRITE: /5(12) ls_hdr-ctp,  18(12) ls_hdr-mat,
+              31(5) ls_hdr-stcd, 37(15) ls_hdr-state,
+              53(14) ls_hdr-d08, 67(14) ls_hdr-d09,
+              81(14) ls_hdr-d10, 95(14) ls_hdr-d11,
+              109(14) ls_hdr-d12, 123(14) ls_hdr-d13,
+              137(14) ls_hdr-d14, 151(14) ls_hdr-d15,
+              165(14) ls_hdr-d16.
+      FORMAT INTENSIFIED OFF.
+      ULINE AT /5(174).
+    ENDIF.
     WRITE: /5(12) ls_piv_mbg-ctp,  18(12) ls_piv_mbg-mat,
             31(5) ls_piv_mbg-stcd, 37(15) ls_piv_mbg-state,
             53(14) ls_piv_mbg-d08, 67(14) ls_piv_mbg-d09,
@@ -3196,8 +3226,27 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
           154(14) 'GAIL ID'.
   FORMAT INTENSIFIED OFF.
   ULINE AT /5(180).
+  lv_last_page = sy-pagno.   " remember page after writing header
 
   LOOP AT lt_daily_sorted INTO ls_pur.
+    " Repeat column header if spool has overflowed to a new physical page
+    IF sy-pagno <> lv_last_page.
+      lv_last_page = sy-pagno.
+      FORMAT INTENSIFIED ON.
+      WRITE: /5(10) 'Gas Day',
+              16(12) 'CTP ID',
+              29(15) 'ONGC Material',
+              45(8)  'State Cd',
+              54(20) 'State',
+              75(15) 'Qty SCM',
+              91(12) 'GCV',
+              104(12) 'NCV',
+              117(15) 'Qty MBG',
+              133(20) 'ONGC ID',
+              154(14) 'GAIL ID'.
+      FORMAT INTENSIFIED OFF.
+      ULINE AT /5(180).
+    ENDIF.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-qty_in_scm TO lv_qty_scm DECIMALS 3.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
