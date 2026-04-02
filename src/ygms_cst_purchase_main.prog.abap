@@ -715,6 +715,25 @@ FORM build_alv_display_table.
       APPEND wa_final_main TO it_final_main.
     ENDIF.
   ENDLOOP.
+  " Remove ALV rows where location+material not in mapping table (yrga_cst_mat_map)
+  DATA lt_valid_map TYPE TABLE OF yrga_cst_mat_map.
+  IF gt_alv_display IS NOT INITIAL.
+    SELECT location_id gail_material
+      FROM yrga_cst_mat_map
+      INTO CORRESPONDING FIELDS OF TABLE lt_valid_map
+      WHERE location_id IN s_loc
+        AND valid_from <= gv_date_from
+        AND valid_to   >= gv_date_to.
+    SORT lt_valid_map BY location_id gail_material.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_filter>).
+      READ TABLE lt_valid_map TRANSPORTING NO FIELDS
+        WITH KEY location_id   = <fs_alv_filter>-location_id
+                 gail_material = <fs_alv_filter>-material.
+      IF sy-subrc <> 0.
+        DELETE gt_alv_display.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_EDITABLE_ALV
