@@ -1239,7 +1239,8 @@ FORM handle_allocate.
         ENDIF.
       ENDIF.
       <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
-      DATA(lv_rnd_alloc) = CONV p( ROUND( val = CONV decfloat34( <fs_alv_sales>-alloc_sales_mbg ) dec = 3 ) ).
+      DATA lv_rnd_alloc TYPE p DECIMALS 3.
+      lv_rnd_alloc = <fs_alv_sales>-alloc_sales_mbg.
       IF lv_rnd_alloc <> 0 AND <fs_alv_sales>-state_code <> 'GJ'.
         <fs_alv_sales>-row_color = 'C600'. " Red
       ELSE.
@@ -4281,7 +4282,8 @@ FORM recalculate_totals.
     ENDIF.
     " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
-    DATA(lv_rnd_alv) = CONV p( ROUND( val = CONV decfloat34( <fs_alv>-alloc_sales_mbg ) dec = 3 ) ).
+    DATA lv_rnd_alv TYPE p DECIMALS 3.
+    lv_rnd_alv = <fs_alv>-alloc_sales_mbg.
     IF lv_rnd_alv <> 0 AND <fs_alv>-state_code <> 'GJ'.
       <fs_alv>-row_color = 'C600'. " Red
     ELSE.
