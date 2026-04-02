@@ -48,6 +48,7 @@ TYPES: BEGIN OF ty_alv_display,
          total_scm       TYPE p DECIMALS 6,
          total_sales_mbg TYPE p DECIMALS 6,
          alloc_sales_mbg TYPE p DECIMALS 6,
+         row_color       TYPE c LENGTH 4,
          gcv         TYPE p DECIMALS 6, "ygms_de_gcv,
          ncv         TYPE p DECIMALS 6, "ygms_de_ncv,
          day01       TYPE p DECIMALS 6,
@@ -857,6 +858,7 @@ FORM display_editable_alv.
   gs_layout-sel_mode   = 'A'.
   gs_layout-edit       = abap_false.  " Disable grid-level editing, use field catalog for specific fields
   gs_layout-stylefname = 'CELLTAB'.  " Cell style field for row-level edit control
+  gs_layout-info_fname = 'ROW_COLOR'.
   gs_layout-grid_title = 'ONGC CST Statewise Allocation'.
   SORT gt_alv_display BY state location_id material.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
@@ -1157,7 +1159,7 @@ FORM handle_allocate.
   " 2.1b: Clear ALV day data before allocation to prevent additive quantities on repeated clicks
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
     CLEAR: <fs_clear>-total_mbg, <fs_clear>-total_scm,
-           <fs_clear>-total_sales_mbg, <fs_clear>-alloc_sales_mbg,
+           <fs_clear>-total_sales_mbg, <fs_clear>-alloc_sales_mbg, <fs_clear>-row_color,
            <fs_clear>-gcv, <fs_clear>-ncv,
            <fs_clear>-day01, <fs_clear>-day02, <fs_clear>-day03,
            <fs_clear>-day04, <fs_clear>-day05, <fs_clear>-day06,
@@ -1237,6 +1239,11 @@ FORM handle_allocate.
         ENDIF.
       ENDIF.
       <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
+      IF <fs_alv_sales>-alloc_sales_mbg <> 0 AND <fs_alv_sales>-state_code <> 'GJ'.
+        <fs_alv_sales>-row_color = 'C600'. " Red
+      ELSE.
+        CLEAR <fs_alv_sales>-row_color.
+      ENDIF.
     ENDLOOP.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
@@ -4271,8 +4278,13 @@ FORM recalculate_totals.
     ELSE.
       <fs_alv>-total_scm = 0.
     ENDIF.
-    " Recalculate Alloc. - Sales MBG after day edits
+    " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
+    IF <fs_alv>-alloc_sales_mbg <> 0 AND <fs_alv>-state_code <> 'GJ'.
+      <fs_alv>-row_color = 'C600'. " Red
+    ELSE.
+      CLEAR <fs_alv>-row_color.
+    ENDIF.
     " GCV and NCV remain unchanged (already set during allocation)
   ENDLOOP.
   " Refresh ALV display
