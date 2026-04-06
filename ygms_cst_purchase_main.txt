@@ -4266,8 +4266,8 @@ FORM recalculate_totals.
         i_trqty TYPE msego2-adqnt,
         lv_gcv  TYPE oib_par_fltp,
         lv_ncv  TYPE oib_par_fltp.
-  DATA: lv_sum_gcv TYPE p DECIMALS 6,
-        lv_sum_ncv TYPE p DECIMALS 6,
+  DATA: lv_sum_gcv TYPE f,
+        lv_sum_ncv TYPE f,
         lv_wt_date TYPE datum,
         lv_wt_idx(2) TYPE n,
         lv_wt_days TYPE i,
