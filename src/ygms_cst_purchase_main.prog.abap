@@ -4266,10 +4266,16 @@ FORM recalculate_totals.
         i_trqty TYPE msego2-adqnt,
         lv_gcv  TYPE oib_par_fltp,
         lv_ncv  TYPE oib_par_fltp.
+  DATA: lv_sum_gcv TYPE p DECIMALS 6,
+        lv_sum_ncv TYPE p DECIMALS 6,
+        lv_wt_date TYPE datum,
+        lv_wt_idx  TYPE i,
+        lv_wt_days TYPE i,
+        lv_day_fld TYPE string.
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
     IMPORTING
       e_grid = lr_grid.
-  " Recalculate totals for each row (only TOTAL_MBG and TOTAL_SCM - GCV/NCV unchanged)
+  " Recalculate totals for each row: TOTAL_SCM, TOTAL_MBG, Wt.Avg GCV/NCV, Alloc.-Sales MBG
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>).
     " Sum all day columns for TOTAL_SCM - DAY16 only included when fortnight has 16 days
     <fs_alv>-total_scm = <fs_alv>-day01 + <fs_alv>-day02 + <fs_alv>-day03 +
@@ -4279,6 +4285,30 @@ FORM recalculate_totals.
                          <fs_alv>-day13 + <fs_alv>-day14 + <fs_alv>-day15.
     IF gv_date_to - gv_date_from + 1 = 16.
       <fs_alv>-total_scm = <fs_alv>-total_scm + <fs_alv>-day16.
+    ENDIF.
+    " Recalculate weighted average GCV/NCV from gt_gas_receipt based on edited day volumes
+    CLEAR: lv_sum_gcv, lv_sum_ncv, lv_wt_idx.
+    lv_wt_date = gv_date_from.
+    lv_wt_days = gv_date_to - gv_date_from + 1.
+    DO lv_wt_days TIMES.
+      lv_wt_idx = lv_wt_idx + 1.
+      CONCATENATE 'DAY' lv_wt_idx INTO lv_day_fld.
+      ASSIGN COMPONENT lv_day_fld OF STRUCTURE <fs_alv> TO FIELD-SYMBOL(<fs_wt_day>).
+      IF sy-subrc = 0 AND <fs_wt_day> > 0.
+        READ TABLE gt_gas_receipt INTO DATA(wa_gcv_rcpt)
+          WITH KEY location_id = <fs_alv>-location_id
+                   gas_day     = lv_wt_date
+                   material    = <fs_alv>-material.
+        IF sy-subrc = 0.
+          lv_sum_gcv = lv_sum_gcv + ( <fs_wt_day> * wa_gcv_rcpt-gcv ).
+          lv_sum_ncv = lv_sum_ncv + ( <fs_wt_day> * wa_gcv_rcpt-ncv ).
+        ENDIF.
+      ENDIF.
+      lv_wt_date = lv_wt_date + 1.
+    ENDDO.
+    IF <fs_alv>-total_scm > 0.
+      <fs_alv>-gcv = lv_sum_gcv / <fs_alv>-total_scm.
+      <fs_alv>-ncv = lv_sum_ncv / <fs_alv>-total_scm.
     ENDIF.
     " Convert TOTAL_MBG to TOTAL_SCM using existing GCV/NCV values (no gt_gas_receipt)
     IF <fs_alv>-gcv > 0 AND <fs_alv>-total_mbg > 0.
@@ -4308,7 +4338,6 @@ FORM recalculate_totals.
     ELSE.
       CLEAR <fs_alv>-row_color.
     ENDIF.
-    " GCV and NCV remain unchanged (already set during allocation)
   ENDLOOP.
   " Refresh ALV display
   IF lr_grid IS BOUND.
