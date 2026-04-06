@@ -4309,9 +4309,11 @@ FORM recalculate_totals.
     IF <fs_alv>-total_scm > 0.
       <fs_alv>-gcv = lv_sum_gcv / <fs_alv>-total_scm.
       <fs_alv>-ncv = lv_sum_ncv / <fs_alv>-total_scm.
+    ELSE.
+      CLEAR: <fs_alv>-gcv, <fs_alv>-ncv, <fs_alv>-total_mbg.
     ENDIF.
-    " Convert TOTAL_MBG to TOTAL_SCM using existing GCV/NCV values (no gt_gas_receipt)
-    IF <fs_alv>-gcv > 0 AND <fs_alv>-total_mbg > 0.
+    " Convert TOTAL_SCM to TOTAL_MBG using recalculated GCV/NCV
+    IF <fs_alv>-gcv > 0 AND <fs_alv>-total_scm > 0.
       CLEAR c_tgqty.
       i_trqty = <fs_alv>-total_scm.
       lv_gcv  = <fs_alv>-gcv.
@@ -4327,7 +4329,7 @@ FORM recalculate_totals.
           c_tgqty = c_tgqty.
       <fs_alv>-total_mbg = c_tgqty.
     ELSE.
-      <fs_alv>-total_scm = 0.
+      CLEAR <fs_alv>-total_mbg.
     ENDIF.
     " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
