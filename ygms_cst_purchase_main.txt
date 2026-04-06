@@ -4269,7 +4269,7 @@ FORM recalculate_totals.
   DATA: lv_sum_gcv TYPE p DECIMALS 6,
         lv_sum_ncv TYPE p DECIMALS 6,
         lv_wt_date TYPE datum,
-        lv_wt_idx  TYPE i,
+        lv_wt_idx(2) TYPE n,
         lv_wt_days TYPE i,
         lv_day_fld TYPE string.
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
