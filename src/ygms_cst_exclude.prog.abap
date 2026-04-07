@@ -142,11 +142,6 @@ AT SELECTION-SCREEN.
     IF p_vto IS NOT INITIAL.
       PERFORM validate_fortnight_end USING p_vto.
     ENDIF.
-  ELSEIF p_edit = 'X' OR p_del = 'X' OR p_view = 'X'.
-*   Mandatory field check for Edit Validity/Delete/View mode
-    IF p_state2 IS INITIAL.
-      MESSAGE 'State Code is mandatory.' TYPE 'E'.
-    ENDIF.
   ENDIF.
 *----------------------------------------------------------------------*
 * INITIALIZATION
@@ -526,30 +521,50 @@ FORM edit_exclusion.
     ENDIF.
   ENDIF.
 * 1.2.3 - Fetch entries from YRGA_CST_EXCLUDE where DELETED <> X
-  IF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+  IF p_state2 IS NOT INITIAL AND p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
       WHERE state_code = p_state2
         AND location   = p_loc2
+        AND material   = p_mat2
+        AND deleted   <> 'X'.
+  ELSEIF p_state2 IS NOT INITIAL AND p_loc2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND location   = p_loc2
+        AND deleted   <> 'X'.
+  ELSEIF p_state2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND material   = p_mat2
+        AND deleted   <> 'X'.
+  ELSEIF p_state2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND deleted   <> 'X'.
+  ELSEIF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE location   = p_loc2
         AND material   = p_mat2
         AND deleted   <> 'X'.
   ELSEIF p_loc2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
-      WHERE state_code = p_state2
-        AND location   = p_loc2
+      WHERE location   = p_loc2
         AND deleted   <> 'X'.
   ELSEIF p_mat2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
-      WHERE state_code = p_state2
-        AND material   = p_mat2
+      WHERE material   = p_mat2
         AND deleted   <> 'X'.
   ELSE.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
-      WHERE state_code = p_state2
-        AND deleted   <> 'X'.
+      WHERE deleted   <> 'X'.
   ENDIF.
   IF lt_db IS INITIAL.
     CALL FUNCTION 'POPUP_TO_INFORM'
@@ -559,13 +574,13 @@ FORM edit_exclusion.
         txt2  = space.
     RETURN.
   ENDIF.
-* Get state name
-  PERFORM get_state_name USING p_state2 CHANGING lv_state.
 * Move to ALV display structure
   CLEAR gt_exclude.
   LOOP AT lt_db INTO ls_db.
     CLEAR ls_result.
     ls_result-state_code   = ls_db-state_code.
+*   Get state name per row
+    PERFORM get_state_name USING ls_db-state_code CHANGING lv_state.
     ls_result-state        = lv_state.
     ls_result-location     = ls_db-location.
     ls_result-material     = ls_db-material.
@@ -612,26 +627,42 @@ FORM view_exclusion.
         lt_result  TYPE STANDARD TABLE OF ty_exclude,
         lv_state   TYPE bezei20.
 * Fetch entries from YRGA_CST_EXCLUDE
-  IF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+  IF p_state2 IS NOT INITIAL AND p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
       WHERE state_code = p_state2
         AND location   = p_loc2
         AND material   = p_mat2.
-  ELSEIF p_loc2 IS NOT INITIAL.
+  ELSEIF p_state2 IS NOT INITIAL AND p_loc2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
       WHERE state_code = p_state2
         AND location   = p_loc2.
-  ELSEIF p_mat2 IS NOT INITIAL.
+  ELSEIF p_state2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
       WHERE state_code = p_state2
         AND material   = p_mat2.
-  ELSE.
+  ELSEIF p_state2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
       WHERE state_code = p_state2.
+  ELSEIF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE location   = p_loc2
+        AND material   = p_mat2.
+  ELSEIF p_loc2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE location   = p_loc2.
+  ELSEIF p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE material   = p_mat2.
+  ELSE.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db.
   ENDIF.
   IF lt_db IS INITIAL.
     CALL FUNCTION 'POPUP_TO_INFORM'
@@ -641,12 +672,12 @@ FORM view_exclusion.
         txt2  = space.
     RETURN.
   ENDIF.
-* Get state name
-  PERFORM get_state_name USING p_state2 CHANGING lv_state.
 * Move to ALV display structure (exclude timestamp as per requirement)
   LOOP AT lt_db INTO ls_db.
     CLEAR ls_result.
     ls_result-state_code   = ls_db-state_code.
+*   Get state name per row
+    PERFORM get_state_name USING ls_db-state_code CHANGING lv_state.
     ls_result-state        = lv_state.
     ls_result-location     = ls_db-location.
     ls_result-material     = ls_db-material.
@@ -1120,30 +1151,50 @@ FORM delete_exclusion.
     ENDIF.
   ENDIF.
 * Fetch non-deleted entries
-  IF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+  IF p_state2 IS NOT INITIAL AND p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
       WHERE state_code = p_state2
         AND location   = p_loc2
+        AND material   = p_mat2
+        AND deleted   <> 'X'.
+  ELSEIF p_state2 IS NOT INITIAL AND p_loc2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND location   = p_loc2
+        AND deleted   <> 'X'.
+  ELSEIF p_state2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND material   = p_mat2
+        AND deleted   <> 'X'.
+  ELSEIF p_state2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE state_code = p_state2
+        AND deleted   <> 'X'.
+  ELSEIF p_loc2 IS NOT INITIAL AND p_mat2 IS NOT INITIAL.
+    SELECT * FROM yrga_cst_exclude
+      INTO TABLE lt_db
+      WHERE location   = p_loc2
         AND material   = p_mat2
         AND deleted   <> 'X'.
   ELSEIF p_loc2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
-      WHERE state_code = p_state2
-        AND location   = p_loc2
+      WHERE location   = p_loc2
         AND deleted   <> 'X'.
   ELSEIF p_mat2 IS NOT INITIAL.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
-      WHERE state_code = p_state2
-        AND material   = p_mat2
+      WHERE material   = p_mat2
         AND deleted   <> 'X'.
   ELSE.
     SELECT * FROM yrga_cst_exclude
       INTO TABLE lt_db
-      WHERE state_code = p_state2
-        AND deleted   <> 'X'.
+      WHERE deleted   <> 'X'.
   ENDIF.
   IF lt_db IS INITIAL.
     CALL FUNCTION 'POPUP_TO_INFORM'
@@ -1153,14 +1204,14 @@ FORM delete_exclusion.
         txt2  = space.
     RETURN.
   ENDIF.
-* Get state name
-  PERFORM get_state_name USING p_state2 CHANGING lv_state.
 * Move to ALV display structure
   CLEAR gt_exclude.
   LOOP AT lt_db INTO ls_db.
     CLEAR ls_result.
     ls_result-sel          = space.
     ls_result-state_code   = ls_db-state_code.
+*   Get state name per row
+    PERFORM get_state_name USING ls_db-state_code CHANGING lv_state.
     ls_result-state        = lv_state.
     ls_result-location     = ls_db-location.
     ls_result-material     = ls_db-material.
