@@ -2633,9 +2633,9 @@ FORM send_email USING pt_emails   TYPE string_table
     WHEN 11. lv_mon_name = 'Nov'. WHEN 12. lv_mon_name = 'Dec'.
   ENDCASE.
   IF lv_day_num <= 15.
-    lv_ffn_str = 'FFN 1'.
+    lv_ffn_str = 'FFN'.
   ELSE.
-    lv_ffn_str = 'FFN 2'.
+    lv_ffn_str = 'SFN'.
   ENDIF.
   lv_hh = sy-uzeit+0(2). lv_mm = sy-uzeit+2(2). lv_ss = sy-uzeit+4(2).
   lv_src_time    = |{ lv_hh }:{ lv_mm }:{ lv_ss }|.
@@ -2652,15 +2652,13 @@ FORM send_email USING pt_emails   TYPE string_table
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p><font size="4"><b>प्रिय महोदया/महोदय</b></font></p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
-      ls_body-line = '<p><font size="4">कृपया संलग्न दस्तावेज़ में विषय अवधि के लिए सीटीपी आईडी '.
+      ls_body-line = '<p><font size="4">कृपया संलग्न दस्तावेज़ में विषय अवधि के लिए सीटीपी आईडी </font>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
-      ls_body-line = |{ lv_ctp_list } के लिए राज्यवार सीएसटी आधार पर दैनिक और पाक्षिक गैस खरीद डेटा देखें।</font></p>|.
+      ls_body-line = |{ lv_ctp_list }<font size="4"> के लिए राज्यवार सीएसटी आधार पर दैनिक और पाक्षिक गैस खरीद डेटा देखें।</font></p>|.
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p><b>Dear Madam/Sir</b></p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
-      ls_body-line = '<p>Please find attached daily and fortnightly state wise CST basis gas purchase data for CTP IDs '.
-      APPEND ls_body TO lt_body. CLEAR ls_body.
-      ls_body-line = |{ lv_ctp_list } for the period { lv_dfrom_sl } to { lv_dto_sl }.</p>|.
+      ls_body-line = |<p>Please find attached daily and fortnightly state wise CST basis gas purchase data for CTP IDs { lv_ctp_list } for the period { lv_dfrom_sl } to { lv_dto_sl }.</p>|.
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p><font size="4">आपसे अनुरोध है कि आप अपनी ओर से जांच करें और किसी भी विसंगति'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -2668,7 +2666,7 @@ FORM send_email USING pt_emails   TYPE string_table
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p>You are requested to check at your end and inform to concerned GAIL terminal, RGMC and NGMC in case of any discrepancy.</p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
-      ls_body-line = '<p><font size="4">सादर<br>गेल (इंडिया) लिमिटेड</font></p>'.
+      ls_body-line = '<p><font size="4">सादर<br><b>गेल (इंडिया) लिमिटेड</b></font></p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p>Warm Regards</p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -2676,11 +2674,11 @@ FORM send_email USING pt_emails   TYPE string_table
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<hr>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
-      ls_body-line = |<p>{ lv_source_info }</p>|.
-      APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p>*********************************************************************************************************</p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p>This is a system generated mail. Please do not reply.</p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = |<p>{ lv_source_info }</p>|.
       APPEND ls_body TO lt_body. CLEAR ls_body.
       ls_body-line = '<p>*********************************************************************************************************</p>'.
       APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -3864,7 +3862,7 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
   APPEND ls_body TO lt_body. CLEAR ls_body.
   ls_body-line = |Sent At: { lv_sat }</p>|.
   APPEND ls_body TO lt_body. CLEAR ls_body.
-  ls_body-line = '<p><font size="4">सादर<br>गेल (इंडिया) लिमिटेड</font></p>'.
+  ls_body-line = '<p><font size="4">सादर<br><b>गेल (इंडिया) लिमिटेड</b></font></p>'.
   APPEND ls_body TO lt_body. CLEAR ls_body.
   ls_body-line = '<p>Warm Regards</p>'.
   APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -3872,11 +3870,11 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
   APPEND ls_body TO lt_body. CLEAR ls_body.
   ls_body-line = '<hr>'.
   APPEND ls_body TO lt_body. CLEAR ls_body.
-  ls_body-line = |<p>{ lv_source_info_b2b }</p>|.
-  APPEND ls_body TO lt_body. CLEAR ls_body.
   ls_body-line = '<p>*********************************************************************************************************</p>'.
   APPEND ls_body TO lt_body. CLEAR ls_body.
   ls_body-line = '<p>This is a system generated mail. Please do not reply.</p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = |<p>{ lv_source_info_b2b }</p>|.
   APPEND ls_body TO lt_body. CLEAR ls_body.
   ls_body-line = '<p>*********************************************************************************************************</p>'.
   APPEND ls_body TO lt_body. CLEAR ls_body.
