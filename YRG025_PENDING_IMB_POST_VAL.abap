@@ -778,7 +778,6 @@ FORM email_pending_postings.
   TYPES: BEGIN OF ty_email_cust,
            customer   TYPE oijnomi-partnr,
            m_mas_cust TYPE vbak-kunnr,
-**PLACEHOLDER_MARKER**
          END OF ty_email_cust.
 
   TYPES: BEGIN OF ty_locid,
@@ -786,24 +785,45 @@ FORM email_pending_postings.
          END OF ty_locid.
 
   TYPES: BEGIN OF ty_ernam,
-           ernam TYPE pa0105-usrid,
+           ernam TYPE aenam,
          END OF ty_ernam.
 
-  DATA: lt_email_cust TYPE STANDARD TABLE OF ty_email_cust,
-        ls_email_cust TYPE ty_email_cust,
-        lt_pending    TYPE STANDARD TABLE OF ty_final,
-        ls_pending    TYPE ty_final,
-        lt_locid      TYPE STANDARD TABLE OF ty_locid,
-        ls_locid      TYPE ty_locid,
-        lt_ernam      TYPE STANDARD TABLE OF ty_ernam,
-        ls_ernam      TYPE ty_ernam,
-        lt_email_ids  TYPE STANDARD TABLE OF ad_smtpadr,
-        lv_email      TYPE ad_smtpadr,
-        lv_subject    TYPE so_obj_des,
-        lv_date_l     TYPE char10,
-        lv_date_h     TYPE char10,
-        lt_body       TYPE soli_tab,
-        ls_body       TYPE soli.
+  TYPES: BEGIN OF ty_cont_id,
+           cont_id TYPE char20,
+         END OF ty_cont_id.
+
+  DATA: lt_email_cust    TYPE STANDARD TABLE OF ty_email_cust,
+        ls_email_cust    TYPE ty_email_cust,
+        lt_pending       TYPE STANDARD TABLE OF ty_final,
+        ls_pending       TYPE ty_final,
+        lt_locid         TYPE STANDARD TABLE OF ty_locid,
+        lt_ernam         TYPE STANDARD TABLE OF ty_ernam,
+        ls_ernam         TYPE ty_ernam,
+        lt_email_ids     TYPE STANDARD TABLE OF ad_smtpadr,
+        lt_cc_email_ids  TYPE STANDARD TABLE OF ad_smtpadr,
+        lv_email         TYPE ad_smtpadr,
+        lv_subject       TYPE so_obj_des,
+        lv_date_l        TYPE char10,
+        lv_date_h        TYPE char10,
+        lv_customer_disp TYPE char20,
+        lt_body          TYPE soli_tab,
+        ls_body          TYPE soli,
+        lv_source        TYPE char80,
+        lv_date_src      TYPE char10,
+        lt_cont_ids      TYPE STANDARD TABLE OF ty_cont_id,
+        ls_cont_id       TYPE ty_cont_id,
+        lt_wf_ernam      TYPE STANDARD TABLE OF ty_ernam,
+        ls_wf_ernam      TYPE ty_ernam,
+        lv_prev_cont     TYPE char20,
+        lv_cum_cal       TYPE char20,
+        lv_char_cal      TYPE char20,
+        lv_neg_cal       TYPE char20,
+        lv_cum_so        TYPE char20,
+        lv_char_so       TYPE char20,
+        lv_neg_so        TYPE char20,
+        ls_doc_data      TYPE sodocchgi1,
+        lt_receivers     TYPE STANDARD TABLE OF somlreci1,
+        ls_receiver      TYPE somlreci1.
 
   " Step 1: Filter entries - Indicator = N or any Diff column NE 0
   LOOP AT it_final INTO ls_pending.
@@ -837,13 +857,24 @@ FORM email_pending_postings.
   SORT lt_email_cust BY customer.
   DELETE ADJACENT DUPLICATES FROM lt_email_cust COMPARING customer.
 
-  " Format input date range for subject / body
+  " Format date range for email body
   CONCATENATE s_date-low+6(2)  '.' s_date-low+4(2)  '.' s_date-low+0(4)  INTO lv_date_l.
   CONCATENATE s_date-high+6(2) '.' s_date-high+4(2) '.' s_date-high+0(4) INTO lv_date_h.
 
-  " Step 3-8: For each customer find recipients and send email
+  " Build source line: YRGR102.<user>.<date>.<time>
+  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO lv_date_src.
+  CONCATENATE 'YRGR102' sy-uname lv_date_src sy-timlo
+    INTO lv_source SEPARATED BY '.'.
+
   LOOP AT lt_email_cust INTO ls_email_cust.
-    CLEAR: lt_locid, lt_ernam, lt_email_ids.
+    CLEAR: lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
+           lt_cont_ids, lt_wf_ernam, lv_prev_cont.
+
+    " Remove leading zeros from customer for display
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING input  = ls_email_cust-customer
+      IMPORTING output = lv_customer_disp.
+    CONDENSE lv_customer_disp NO-GAPS.
 
     " Step 3: Find LOCIDs from OIJRRA (KUNNR = customer, DELIND NE X, BLOIND NE X)
     SELECT locid
@@ -931,38 +962,141 @@ FORM email_pending_postings.
       CONTINUE.
     ENDIF.
 
-    " Step 7: Build email subject and body
-    CLEAR lv_subject.
-    CONCATENATE 'Imbalance Posting Pending for' ls_email_cust-customer
-                'for' lv_date_l 'to' lv_date_h
+    " Step 7: Build CC recipient list
+    " 7a: Get CC pernrs from PA0034 (SUBTY 9001/9002/9003/9113/9114)
+    IF lt_pernr IS NOT INITIAL.
+      SELECT yy_pernr_rep
+        FROM pa0034
+        INTO TABLE @DATA(lt_pa0034_cc)
+        FOR ALL ENTRIES IN @lt_pernr
+        WHERE pernr = @lt_pernr-pernr
+          AND subty IN ('9001', '9002', '9003', '9113', '9114')
+          AND begda LE @sy-datum
+          AND endda GE @sy-datum.
+
+      " 7b: PA0001 for CC pernrs -> sort PERSK ASC -> keep first per pernr
+      IF lt_pa0034_cc IS NOT INITIAL.
+        SELECT pernr, persk
+          FROM pa0001
+          INTO TABLE @DATA(lt_pa0001_cc)
+          FOR ALL ENTRIES IN @lt_pa0034_cc
+          WHERE pernr = @lt_pa0034_cc-yy_pernr_rep
+            AND begda LE @sy-datum
+            AND endda GE @sy-datum.
+        SORT lt_pa0001_cc BY pernr ASCENDING persk ASCENDING.
+        DELETE ADJACENT DUPLICATES FROM lt_pa0001_cc COMPARING pernr.
+
+        IF lt_pa0001_cc IS NOT INITIAL.
+          SELECT usrid_long
+            FROM pa0105
+            INTO TABLE @DATA(lt_cc_pa_email)
+            FOR ALL ENTRIES IN @lt_pa0001_cc
+            WHERE pernr = @lt_pa0001_cc-pernr
+              AND subty = '0010'
+              AND begda LE @sy-datum
+              AND endda GE @sy-datum.
+
+          LOOP AT lt_cc_pa_email INTO DATA(ls_cc_pa_email).
+            IF ls_cc_pa_email-usrid_long IS NOT INITIAL.
+              lv_email = ls_cc_pa_email-usrid_long.
+              APPEND lv_email TO lt_cc_email_ids.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    " 7c: Get CHANGED_BY from YRVA_CON_WF_LOG (YY_LEVEL=1, latest per contract)
+    LOOP AT lt_pending INTO ls_pending.
+      IF ( ls_pending-m_mas_cust IS INITIAL AND ls_pending-customer = ls_email_cust-customer )
+        OR ls_pending-m_mas_cust = ls_email_cust-customer.
+        ls_cont_id-cont_id = ls_pending-cont_id.
+        APPEND ls_cont_id TO lt_cont_ids.
+        CLEAR ls_cont_id.
+      ENDIF.
+    ENDLOOP.
+    SORT lt_cont_ids BY cont_id.
+    DELETE ADJACENT DUPLICATES FROM lt_cont_ids COMPARING cont_id.
+
+    IF lt_cont_ids IS NOT INITIAL.
+      SELECT cont_id, changed_by, changed_on, changed_time
+        FROM yrva_con_wf_log
+        INTO TABLE @DATA(lt_wf_log)
+        FOR ALL ENTRIES IN @lt_cont_ids
+        WHERE cont_id  = @lt_cont_ids-cont_id
+          AND yy_level = '1'.
+
+      SORT lt_wf_log BY cont_id ASCENDING changed_on DESCENDING changed_time DESCENDING.
+
+      LOOP AT lt_wf_log INTO DATA(ls_wf_log).
+        IF ls_wf_log-cont_id NE lv_prev_cont.
+          ls_wf_ernam-ernam = ls_wf_log-changed_by.
+          APPEND ls_wf_ernam TO lt_wf_ernam.
+          lv_prev_cont = ls_wf_log-cont_id.
+        ENDIF.
+      ENDLOOP.
+
+      IF lt_wf_ernam IS NOT INITIAL.
+        SELECT pernr
+          FROM pa0105
+          INTO TABLE @DATA(lt_wf_pernr)
+          FOR ALL ENTRIES IN @lt_wf_ernam
+          WHERE usrid = @lt_wf_ernam-ernam
+            AND subty = '0001'
+            AND begda LE @sy-datum
+            AND endda GE @sy-datum.
+
+        IF lt_wf_pernr IS NOT INITIAL.
+          SELECT usrid_long
+            FROM pa0105
+            INTO TABLE @DATA(lt_wf_email)
+            FOR ALL ENTRIES IN @lt_wf_pernr
+            WHERE pernr = @lt_wf_pernr-pernr
+              AND subty = '0010'
+              AND begda LE @sy-datum
+              AND endda GE @sy-datum.
+
+          LOOP AT lt_wf_email INTO DATA(ls_wf_email).
+            IF ls_wf_email-usrid_long IS NOT INITIAL.
+              lv_email = ls_wf_email-usrid_long.
+              APPEND lv_email TO lt_cc_email_ids.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    " Deduplicate CC, remove any already in TO
+    SORT lt_cc_email_ids.
+    DELETE ADJACENT DUPLICATES FROM lt_cc_email_ids.
+    LOOP AT lt_email_ids INTO lv_email.
+      DELETE lt_cc_email_ids WHERE table_line = lv_email.
+    ENDLOOP.
+
+    " Step 8: Build email body
+    CLEAR: lt_body, lv_subject, ls_doc_data, lt_receivers.
+
+    " Subject: IMB Posting Pending for <customer without leading zeros>
+    CONCATENATE 'IMB Posting Pending for' lv_customer_disp
       INTO lv_subject SEPARATED BY space.
 
-    CLEAR lt_body.
     ls_body-line = 'Dear Ma''am/ Sir,'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = ' '.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     CONCATENATE 'Please find below instances pertaining to the pending Imbalance'
-                'posting for' ls_email_cust-customer 'for' lv_date_l 'to' lv_date_h
+                'posting for' lv_customer_disp 'for' lv_date_l 'to' lv_date_h
                 '. Please take necessary action in this regard.'
       INTO ls_body-line SEPARATED BY space.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = ' '.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
-    " Table header (9 columns as per spec)
+    " Table header - full column names
     ls_body-line = 'Contract ID|Calc Cumulative Imbalance|Calc Positive Chargeable Imbalance|Calc Negative Chargeable Imbalance|Posted Cumulative Imbalance|Posted Positive Chargeable Imbalance|Posted Negative Chargeable Imbalance|Sales Order|Invoice'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
-    " Table rows: entries where this customer is master customer,
-    " plus entries where customer = this customer with blank master customer.
-    DATA: lv_cum_cal   TYPE char20,
-          lv_char_cal  TYPE char20,
-          lv_neg_cal   TYPE char20,
-          lv_cum_so    TYPE char20,
-          lv_char_so   TYPE char20,
-          lv_neg_so    TYPE char20.
-
+    " Table data rows
     LOOP AT lt_pending INTO ls_pending.
       IF ( ls_pending-m_mas_cust IS INITIAL AND ls_pending-customer = ls_email_cust-customer )
         OR ls_pending-m_mas_cust = ls_email_cust-customer.
@@ -972,14 +1106,14 @@ FORM email_pending_postings.
         WRITE ls_pending-cum_bal_mbg_cal_so  TO lv_cum_so   LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal_so TO lv_char_so  LEFT-JUSTIFIED.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
-        CONCATENATE ls_pending-cont_id        '|'
-                    lv_cum_cal                '|'
-                    lv_char_cal               '|'
-                    lv_neg_cal                '|'
-                    lv_cum_so                 '|'
-                    lv_char_so                '|'
-                    lv_neg_so                 '|'
-                    ls_pending-sal_order      '|'
+        CONCATENATE ls_pending-cont_id '|'
+                    lv_cum_cal         '|'
+                    lv_char_cal        '|'
+                    lv_neg_cal         '|'
+                    lv_cum_so          '|'
+                    lv_char_so         '|'
+                    lv_neg_so          '|'
+                    ls_pending-sal_order '|'
                     ls_pending-invoice
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -990,20 +1124,43 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = 'For more details, please execute T-code YRG011N/ YRGR102 with the required input.'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'Regards,'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'BIS Admin'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '********************************************************************************'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'This is system generated mail, Please do not reply.'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '********************************************************************************'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    CONCATENATE 'Source:' lv_source INTO ls_body-line.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
 
-    " Step 8: Send email
-    DATA: ls_doc_data  TYPE sodocchgi1,
-          lt_receivers TYPE STANDARD TABLE OF somlreci1,
-          ls_receiver  TYPE somlreci1.
-
+    " Step 9: Send email
+    " Note: Sender 'GAIL PARTNER CARE GMS' requires execution under background user BKG_GMS
     ls_doc_data-obj_descr = lv_subject.
     ls_doc_data-obj_name  = 'IMB_PEND'.
 
+    " TO recipients (express = X)
     LOOP AT lt_email_ids INTO lv_email.
       CLEAR ls_receiver.
       ls_receiver-receiver = lv_email.
       ls_receiver-rec_type = 'U'.
       ls_receiver-express  = 'X'.
+      APPEND ls_receiver TO lt_receivers.
+    ENDLOOP.
+
+    " CC recipients (express = space)
+    LOOP AT lt_cc_email_ids INTO lv_email.
+      CLEAR ls_receiver.
+      ls_receiver-receiver = lv_email.
+      ls_receiver-rec_type = 'U'.
+      ls_receiver-express  = space.
       APPEND ls_receiver TO lt_receivers.
     ENDLOOP.
 
@@ -1025,8 +1182,9 @@ FORM email_pending_postings.
         enqueue_error              = 7
         OTHERS                     = 8.
 
-    CLEAR: ls_email_cust, lt_locid, lt_ernam, lt_email_ids, lt_body, lt_receivers,
-           ls_doc_data, lv_cum_cal, lv_char_cal, lv_neg_cal,
+    CLEAR: ls_email_cust, lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
+           lt_body, lt_receivers, ls_doc_data, lt_cont_ids, lt_wf_ernam,
+           lv_prev_cont, lv_cum_cal, lv_char_cal, lv_neg_cal,
            lv_cum_so, lv_char_so, lv_neg_so.
   ENDLOOP.
 
