@@ -1070,9 +1070,9 @@ FORM email_pending_postings.
     " Step 8: Build email body
     CLEAR: lt_body, lv_subject, ls_doc_data, lt_receivers.
 
-    " Subject: IMB Posting Pending for <customer without leading zeros>
-    CONCATENATE 'IMB Posting Pending for' lv_customer_disp
-      INTO lv_subject SEPARATED BY space.
+    " Subject: Pending IMB Posting_<customer>_<date_low> - <date_high>
+    CONCATENATE 'Pending IMB Posting_' lv_customer_disp '_' lv_date_l ' - ' lv_date_h
+      INTO lv_subject.
 
     ls_body-line = 'Dear Ma''am/ Sir,'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
