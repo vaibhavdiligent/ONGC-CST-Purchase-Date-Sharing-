@@ -789,8 +789,12 @@ FORM email_pending_postings.
          END OF ty_ernam.
 
   TYPES: BEGIN OF ty_cont_id,
-           cont_id TYPE char20,
+           cont_id TYPE vbeln,
          END OF ty_cont_id.
+
+  TYPES: BEGIN OF ty_wf_pernr,
+           pernr TYPE pa0105-pernr,
+         END OF ty_wf_pernr.
 
   DATA: lt_email_cust    TYPE STANDARD TABLE OF ty_email_cust,
         ls_email_cust    TYPE ty_email_cust,
@@ -812,9 +816,9 @@ FORM email_pending_postings.
         lv_date_src      TYPE char10,
         lt_cont_ids      TYPE STANDARD TABLE OF ty_cont_id,
         ls_cont_id       TYPE ty_cont_id,
-        lt_wf_ernam      TYPE STANDARD TABLE OF ty_ernam,
-        ls_wf_ernam      TYPE ty_ernam,
-        lv_prev_cont     TYPE char20,
+        lt_wf_pernr_cc   TYPE STANDARD TABLE OF ty_wf_pernr,
+        ls_wf_pernr_cc   TYPE ty_wf_pernr,
+        lv_prev_cont     TYPE vbeln,
         lv_cum_cal       TYPE char20,
         lv_char_cal      TYPE char20,
         lv_neg_cal       TYPE char20,
@@ -868,7 +872,7 @@ FORM email_pending_postings.
 
   LOOP AT lt_email_cust INTO ls_email_cust.
     CLEAR: lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
-           lt_cont_ids, lt_wf_ernam, lv_prev_cont.
+           lt_cont_ids, lt_wf_pernr_cc, lv_prev_cont.
 
     " Remove leading zeros from customer for display
     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
@@ -1007,6 +1011,7 @@ FORM email_pending_postings.
     ENDIF.
 
     " 7c: Get CHANGED_BY from YRVA_CON_WF_LOG (YY_LEVEL=1, latest per contract)
+    " CHANGED_BY is TYPE PERSNO (PERNR) - use directly for PA0105 email lookup
     LOOP AT lt_pending INTO ls_pending.
       IF ( ls_pending-m_mas_cust IS INITIAL AND ls_pending-customer = ls_email_cust-customer )
         OR ls_pending-m_mas_cust = ls_email_cust-customer.
@@ -1019,50 +1024,39 @@ FORM email_pending_postings.
     DELETE ADJACENT DUPLICATES FROM lt_cont_ids COMPARING cont_id.
 
     IF lt_cont_ids IS NOT INITIAL.
-      SELECT cont_id, changed_by, changed_on, changed_time
+      SELECT vbeln AS cont_id, changed_by, changed_on, changed_time
         FROM yrva_con_wf_log
         INTO TABLE @DATA(lt_wf_log)
         FOR ALL ENTRIES IN @lt_cont_ids
-        WHERE cont_id  = @lt_cont_ids-cont_id
-          AND yy_level = '1'.
+        WHERE vbeln    = @lt_cont_ids-cont_id
+          AND yy_level = 1.
 
       SORT lt_wf_log BY cont_id ASCENDING changed_on DESCENDING changed_time DESCENDING.
-
+      CLEAR lv_prev_cont.
       LOOP AT lt_wf_log INTO DATA(ls_wf_log).
         IF ls_wf_log-cont_id NE lv_prev_cont.
-          ls_wf_ernam-ernam = ls_wf_log-changed_by.
-          APPEND ls_wf_ernam TO lt_wf_ernam.
+          ls_wf_pernr_cc-pernr = ls_wf_log-changed_by.
+          APPEND ls_wf_pernr_cc TO lt_wf_pernr_cc.
           lv_prev_cont = ls_wf_log-cont_id.
         ENDIF.
       ENDLOOP.
 
-      IF lt_wf_ernam IS NOT INITIAL.
-        SELECT pernr
+      IF lt_wf_pernr_cc IS NOT INITIAL.
+        SELECT usrid_long
           FROM pa0105
-          INTO TABLE @DATA(lt_wf_pernr)
-          FOR ALL ENTRIES IN @lt_wf_ernam
-          WHERE usrid = @lt_wf_ernam-ernam
-            AND subty = '0001'
+          INTO TABLE @DATA(lt_wf_email)
+          FOR ALL ENTRIES IN @lt_wf_pernr_cc
+          WHERE pernr = @lt_wf_pernr_cc-pernr
+            AND subty = '0010'
             AND begda LE @sy-datum
             AND endda GE @sy-datum.
 
-        IF lt_wf_pernr IS NOT INITIAL.
-          SELECT usrid_long
-            FROM pa0105
-            INTO TABLE @DATA(lt_wf_email)
-            FOR ALL ENTRIES IN @lt_wf_pernr
-            WHERE pernr = @lt_wf_pernr-pernr
-              AND subty = '0010'
-              AND begda LE @sy-datum
-              AND endda GE @sy-datum.
-
-          LOOP AT lt_wf_email INTO DATA(ls_wf_email).
-            IF ls_wf_email-usrid_long IS NOT INITIAL.
-              lv_email = ls_wf_email-usrid_long.
-              APPEND lv_email TO lt_cc_email_ids.
-            ENDIF.
-          ENDLOOP.
-        ENDIF.
+        LOOP AT lt_wf_email INTO DATA(ls_wf_email).
+          IF ls_wf_email-usrid_long IS NOT INITIAL.
+            lv_email = ls_wf_email-usrid_long.
+            APPEND lv_email TO lt_cc_email_ids.
+          ENDIF.
+        ENDLOOP.
       ENDIF.
     ENDIF.
 
@@ -1183,7 +1177,7 @@ FORM email_pending_postings.
         OTHERS                     = 8.
 
     CLEAR: ls_email_cust, lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
-           lt_body, lt_receivers, ls_doc_data, lt_cont_ids, lt_wf_ernam,
+           lt_body, lt_receivers, ls_doc_data, lt_cont_ids, lt_wf_pernr_cc,
            lv_prev_cont, lv_cum_cal, lv_char_cal, lv_neg_cal,
            lv_cum_so, lv_char_so, lv_neg_so.
   ENDLOOP.
