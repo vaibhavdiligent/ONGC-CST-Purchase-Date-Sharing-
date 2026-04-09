@@ -785,7 +785,7 @@ FORM email_pending_postings.
          END OF ty_locid.
 
   TYPES: BEGIN OF ty_ernam,
-           ernam TYPE aenam,
+           ernam TYPE pa0105-usrid,
          END OF ty_ernam.
 
   TYPES: BEGIN OF ty_cont_id,
