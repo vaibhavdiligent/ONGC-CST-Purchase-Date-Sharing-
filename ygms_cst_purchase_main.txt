@@ -2574,7 +2574,7 @@ FORM send_email USING pt_emails   TYPE string_table
   DATA: l_mail TYPE adr6-smtp_addr.
   DATA: lv_ctp_list TYPE string,
         ls_pur      TYPE yrga_cst_pur.
-  " Build unique CTP ID list
+  " Build unique CTP ID list with GAIL Location IDs: CTP1 (LOC1), CTP2 (LOC2)
   DATA: lt_ctp TYPE TABLE OF ygms_de_ongc_ctp,
         lv_ctp TYPE ygms_de_ongc_ctp.
   LOOP AT pt_data INTO ls_pur.
@@ -2583,13 +2583,22 @@ FORM send_email USING pt_emails   TYPE string_table
       APPEND ls_pur-ctp TO lt_ctp.
     ENDIF.
   ENDLOOP.
-  " Build CTP list string (comma-separated, no space before comma)
+  SORT lt_ctp.
+  " Build CTP list string: CTP1 (LOC1), CTP2 (LOC2)
   LOOP AT lt_ctp INTO lv_ctp.
+    DATA(lv_ctp_trimmed) = CONV string( lv_ctp ).
+    CONDENSE lv_ctp_trimmed.
+    DATA(lv_loc_for_ctp) = CONV string( '' ).
+    READ TABLE gt_loc_ctp_map INTO DATA(ls_ctp_map) WITH KEY ongc_ctp_id = lv_ctp.
+    IF sy-subrc = 0.
+      lv_loc_for_ctp = ls_ctp_map-gail_loc_id.
+      CONDENSE lv_loc_for_ctp.
+    ENDIF.
+    DATA(lv_ctp_entry) = |{ lv_ctp_trimmed } ({ lv_loc_for_ctp })|.
     IF lv_ctp_list IS INITIAL.
-      lv_ctp_list = lv_ctp.
+      lv_ctp_list = lv_ctp_entry.
     ELSE.
-      CONCATENATE lv_ctp_list ',' INTO lv_ctp_list.
-      CONCATENATE lv_ctp_list lv_ctp INTO lv_ctp_list SEPARATED BY space.
+      lv_ctp_list = |{ lv_ctp_list }, { lv_ctp_entry }|.
     ENDIF.
   ENDLOOP.
   DATA: lv_date_from_dot TYPE c LENGTH 10,
@@ -2601,23 +2610,83 @@ FORM send_email USING pt_emails   TYPE string_table
   REPLACE ALL OCCURRENCES OF '/' IN lv_date_from_dot WITH '.'.
   lv_date_to_dot = lv_date_to_str.
   REPLACE ALL OCCURRENCES OF '/' IN lv_date_to_dot WITH '.'.
+  " Derive month name and fortnight number for subject
+  DATA: lv_month_num TYPE n LENGTH 2,
+        lv_year_num  TYPE n LENGTH 4,
+        lv_day_num   TYPE n LENGTH 2,
+        lv_mon_name  TYPE string,
+        lv_ffn_str   TYPE string.
+  DATA: lv_hh TYPE c LENGTH 2,
+        lv_mm TYPE c LENGTH 2,
+        lv_ss TYPE c LENGTH 2,
+        lv_src_time    TYPE string,
+        lv_source_info TYPE string.
+  lv_month_num = gv_date_from+4(2).
+  lv_year_num  = gv_date_from(4).
+  lv_day_num   = gv_date_from+6(2).
+  CASE lv_month_num.
+    WHEN 1.  lv_mon_name = 'Jan'. WHEN 2.  lv_mon_name = 'Feb'.
+    WHEN 3.  lv_mon_name = 'Mar'. WHEN 4.  lv_mon_name = 'Apr'.
+    WHEN 5.  lv_mon_name = 'May'. WHEN 6.  lv_mon_name = 'Jun'.
+    WHEN 7.  lv_mon_name = 'Jul'. WHEN 8.  lv_mon_name = 'Aug'.
+    WHEN 9.  lv_mon_name = 'Sep'. WHEN 10. lv_mon_name = 'Oct'.
+    WHEN 11. lv_mon_name = 'Nov'. WHEN 12. lv_mon_name = 'Dec'.
+  ENDCASE.
+  IF lv_day_num <= 15.
+    lv_ffn_str = 'FFN'.
+  ELSE.
+    lv_ffn_str = 'SFN'.
+  ENDIF.
+  lv_hh = sy-uzeit+0(2). lv_mm = sy-uzeit+2(2). lv_ss = sy-uzeit+4(2).
+  lv_src_time    = |{ lv_hh }:{ lv_mm }:{ lv_ss }|.
+  lv_source_info = |Source : { sy-tcode }.{ sy-sysid }.{ sy-datum }.{ lv_src_time }.{ sy-uname }|.
   TRY.
       " Create persistent send request
       lo_send_request = cl_bcs=>create_persistent( ).
-      " Build email subject: State wise CST purchase DD.MM.YYYY to DD.MM.YYYY.
-      CONCATENATE 'State wise CST purchase'
-        lv_date_from_dot 'to' lv_date_to_dot
-        INTO lv_subject SEPARATED BY space.
-      CONCATENATE lv_subject '.' INTO lv_subject.
-      " Build email body
-      CONCATENATE 'Please find attached daily and fortnightly state wise CST purchase data for CTP IDs'
-        lv_ctp_list 'for the period' lv_date_from_str 'to' lv_date_to_str
-        INTO ls_body-line SEPARATED BY space.
-      CONCATENATE ls_body-line '.' INTO ls_body-line.
-      APPEND ls_body TO lt_body.
+      " Build email subject
+      DATA(lv_dfrom_sl) = CONV string( lv_date_from_str ). CONDENSE lv_dfrom_sl.
+      DATA(lv_dto_sl)   = CONV string( lv_date_to_str ).   CONDENSE lv_dto_sl.
+      lv_subject = |State-wise ONGC CST NG purchase { lv_mon_name } { lv_year_num } { lv_ffn_str }|.
+      " Build HTML email body
+      ls_body-line = '<html><body style="font-family:Arial,sans-serif;font-size:11pt;">'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p><font size="4"><b>प्रिय महोदया/महोदय</b></font></p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p><font size="4">कृपया संलग्न दस्तावेज़ में विषय अवधि के लिए सीटीपी आईडी </font>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = |{ lv_ctp_list }<font size="4"> के लिए राज्यवार सीएसटी आधार पर दैनिक और पाक्षिक गैस खरीद डेटा देखें।</font></p>|.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p><b>Dear Madam/Sir</b></p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = |<p>Please find attached daily and fortnightly state wise CST basis gas purchase data for CTP IDs { lv_ctp_list } for the period { lv_dfrom_sl } to { lv_dto_sl }.</p>|.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p><font size="4">आपसे अनुरोध है कि आप अपनी ओर से जांच करें और किसी भी विसंगति'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = ' की स्थिति में संबंधित गेल टर्मिनल, आर.जी.एम.सी. और एन.जी.एम.सी को सूचित करें।</font></p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p>You are requested to check at your end and inform to concerned GAIL terminal, RGMC and NGMC in case of any discrepancy.</p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p><font size="4">सादर<br><b>गेल (इंडिया) लिमिटेड</b></font></p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p>Warm Regards</p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p><b>GAIL (INDIA) LIMITED</b></p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<hr>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p>*********************************************************************************************************</p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p>This is a system generated mail. Please do not reply.</p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = |<p>{ lv_source_info }</p>|.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '<p>*********************************************************************************************************</p>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+      ls_body-line = '</body></html>'.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
       " Create email document (body)
       lo_document = cl_document_bcs=>create_document(
-        i_type    = 'RAW'
+        i_type    = 'HTM'
         i_text    = lt_body
         i_subject = lv_subject ).
       " --- Daily attachments ---
@@ -3702,8 +3771,8 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
   DATA: ls_pur         TYPE yrga_cst_pur,
-        lt_loc         TYPE TABLE OF ygms_de_loc_id,
-        lv_loc         TYPE ygms_de_loc_id,
+        lt_ctp_b2b     TYPE TABLE OF ygms_de_ongc_ctp,
+        lv_ctp_b2b     TYPE ygms_de_ongc_ctp,
         lv_loc_list    TYPE string,
         lv_loc_trimmed TYPE string.
   DATA: lv_sent_on_str TYPE c LENGTH 10,
@@ -3725,21 +3794,28 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
   WRITE sy-datum TO lv_sent_on_str DD/MM/YYYY.
   WRITE sy-uzeit TO lv_sent_at_str USING EDIT MASK '__:__:__'.
 
-  " Build unique location ID list from daily data
+  " Build unique CTP ID list with GAIL Location IDs from daily data
   LOOP AT pt_daily INTO ls_pur.
-    READ TABLE lt_loc WITH KEY table_line = ls_pur-location TRANSPORTING NO FIELDS.
+    READ TABLE lt_ctp_b2b WITH KEY table_line = ls_pur-ctp TRANSPORTING NO FIELDS.
     IF sy-subrc <> 0.
-      APPEND ls_pur-location TO lt_loc.
+      APPEND ls_pur-ctp TO lt_ctp_b2b.
     ENDIF.
   ENDLOOP.
-  SORT lt_loc.
-  LOOP AT lt_loc INTO lv_loc.
-    lv_loc_trimmed = lv_loc.
-    CONDENSE lv_loc_trimmed.
+  SORT lt_ctp_b2b.
+  LOOP AT lt_ctp_b2b INTO lv_ctp_b2b.
+    DATA(lv_ctp_b2b_trim) = CONV string( lv_ctp_b2b ).
+    CONDENSE lv_ctp_b2b_trim.
+    DATA(lv_loc_b2b) = CONV string( '' ).
+    READ TABLE gt_loc_ctp_map INTO DATA(ls_map_b2b) WITH KEY ongc_ctp_id = lv_ctp_b2b.
+    IF sy-subrc = 0.
+      lv_loc_b2b = ls_map_b2b-gail_loc_id.
+      CONDENSE lv_loc_b2b.
+    ENDIF.
+    DATA(lv_entry_b2b) = |{ lv_ctp_b2b_trim } ({ lv_loc_b2b })|.
     IF lv_loc_list IS INITIAL.
-      lv_loc_list = lv_loc_trimmed.
+      lv_loc_list = lv_entry_b2b.
     ELSE.
-      lv_loc_list = |{ lv_loc_list }, { lv_loc_trimmed }|.
+      lv_loc_list = |{ lv_loc_list }, { lv_entry_b2b }|.
     ENDIF.
   ENDLOOP.
 
@@ -3752,31 +3828,63 @@ FORM send_b2b_confirmation_email USING pt_daily TYPE STANDARD TABLE.
   lv_dto   = lv_date_to_str.   CONDENSE lv_dto.
   lv_son   = lv_sent_on_str.   CONDENSE lv_son.
   lv_sat   = lv_sent_at_str.   CONDENSE lv_sat.
+  " Build source info line
+  DATA: lv_hh_b2b TYPE c LENGTH 2,
+        lv_mm_b2b TYPE c LENGTH 2,
+        lv_ss_b2b TYPE c LENGTH 2,
+        lv_src_time_b2b    TYPE string,
+        lv_source_info_b2b TYPE string.
+  lv_hh_b2b = sy-uzeit+0(2). lv_mm_b2b = sy-uzeit+2(2). lv_ss_b2b = sy-uzeit+4(2).
+  lv_src_time_b2b    = |{ lv_hh_b2b }:{ lv_mm_b2b }:{ lv_ss_b2b }|.
+  lv_source_info_b2b = |Source : { sy-tcode }.{ sy-sysid }.{ sy-datum }.{ lv_src_time_b2b }.{ sy-uname }|.
 
   " Build email subject
   lv_subject = |ONGC CST B2B Data for { lv_dfrom } to { lv_dto }|.
 
-  " Build email body
-  ls_body-line = 'Statewise allocation data for CST purchase has been sent to ONGC through B2B as per the following details:'.
-  APPEND ls_body TO lt_body.
-  CLEAR ls_body.
-  APPEND ls_body TO lt_body.  " blank line
-  ls_body-line = |Fortnight: { lv_dfrom } to { lv_dto }|.
-  APPEND ls_body TO lt_body.
-  CLEAR ls_body.
-  ls_body-line = |Location IDs: { lv_loc_list }|.
-  APPEND ls_body TO lt_body.
-  CLEAR ls_body.
-  ls_body-line = |Sent On: { lv_son }|.
-  APPEND ls_body TO lt_body.
-  CLEAR ls_body.
-  ls_body-line = |Sent At: { lv_sat }|.
-  APPEND ls_body TO lt_body.
+  " Build HTML email body
+  ls_body-line = '<html><body style="font-family:Arial,sans-serif;font-size:11pt;">'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p><font size="4"><b>प्रिय महोदया/महोदय</b></font></p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p><font size="4">सीएसटी आधार पर गैस खरीद के लिए राज्यवार आवंटन डेटा निम्नलिखित'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = ' विवरण के अनुसार बी2बी के माध्यम से ओएनजीसी को भेजा गया है:</font></p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p><b>Dear Madam/Sir</b></p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p>Statewise allocation data for gas purchase on CST basis has been sent to ONGC through B2B as per the following details:</p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = |<p>Fortnight: { lv_dfrom } to { lv_dto }<br>|.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = |Location IDs: { lv_loc_list }<br>|.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = |Sent On: { lv_son }<br>|.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = |Sent At: { lv_sat }</p>|.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p><font size="4">सादर<br><b>गेल (इंडिया) लिमिटेड</b></font></p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p>Warm Regards</p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p><b>GAIL (INDIA) LIMITED</b></p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<hr>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p>*********************************************************************************************************</p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p>This is a system generated mail. Please do not reply.</p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = |<p>{ lv_source_info_b2b }</p>|.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '<p>*********************************************************************************************************</p>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
+  ls_body-line = '</body></html>'.
+  APPEND ls_body TO lt_body. CLEAR ls_body.
 
   TRY.
       lo_send_request = cl_bcs=>create_persistent( ).
       lo_document = cl_document_bcs=>create_document(
-        i_type    = 'RAW'
+        i_type    = 'HTM'
         i_text    = lt_body
         i_subject = lv_subject ).
       lo_send_request->set_document( lo_document ).
