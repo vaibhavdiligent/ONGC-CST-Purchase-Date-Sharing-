@@ -439,20 +439,22 @@ FORM get_data .
   ENDIF.
 *-> "*EOC CHARM ID :4000009078 TECHICAL : RAVINDER SINGH FUNCTIONAL : SHREYOSI DT:02.01.2025
 
-*SOC Email Pending Postings - Calculate diff columns and set row color
-  LOOP AT it_final INTO wa_final.
-    wa_final-diff_cum_imb     = wa_final-cum_bal_mbg_cal  - wa_final-cum_bal_mbg_cal_so.
-    wa_final-diff_neg_chg_imb = wa_final-neg_bal_mbg_cal  - wa_final-neg_bal_mbg_cal_so.
-    wa_final-diff_pos_chg_imb = wa_final-char_bal_mbg_cal - wa_final-char_bal_mbg_cal_so.
-    IF wa_final-indicator = 'N'
-      OR wa_final-diff_cum_imb     NE 0
-      OR wa_final-diff_neg_chg_imb NE 0
-      OR wa_final-diff_pos_chg_imb NE 0.
-      wa_final-line_color = 'C610'.
-    ENDIF.
-    MODIFY it_final FROM wa_final.
-    CLEAR wa_final.
-  ENDLOOP.
+*SOC Email Pending Postings - Calculate diff columns and set row color when ch1 checked
+  IF ch1 EQ 'X'.
+    LOOP AT it_final INTO wa_final.
+      wa_final-diff_cum_imb     = wa_final-cum_bal_mbg_cal  - wa_final-cum_bal_mbg_cal_so.
+      wa_final-diff_neg_chg_imb = wa_final-neg_bal_mbg_cal  - wa_final-neg_bal_mbg_cal_so.
+      wa_final-diff_pos_chg_imb = wa_final-char_bal_mbg_cal - wa_final-char_bal_mbg_cal_so.
+      IF wa_final-indicator = 'N'
+        OR wa_final-diff_cum_imb     NE 0
+        OR wa_final-diff_neg_chg_imb NE 0
+        OR wa_final-diff_pos_chg_imb NE 0.
+        wa_final-line_color = 'C610'.
+      ENDIF.
+      MODIFY it_final FROM wa_final.
+      CLEAR wa_final.
+    ENDLOOP.
+  ENDIF.
 *EOC Email Pending Postings
 
 ENDFORM.
@@ -654,31 +656,6 @@ FORM get_fieldcat.
     wa_fcat-outputlen = 25.
     APPEND wa_fcat TO it_fcat.
 *-> EOC CHARM ID :4000008814 TECHICAL : RAVINDER SINGH FUNCTIONAL : SHREYOSI DT:22.10.2024
-*SOC Email Pending Postings - Diff columns visible when ch1 = 'X'
-    CLEAR wa_fcat.
-    wa_fcat-col_pos   = sno + 1.
-    wa_fcat-fieldname = 'DIFF_CUM_IMB'.
-    wa_fcat-tabname   = 'IT_FINAL'.
-    wa_fcat-seltext_l = 'Diff (Cumulative Imb)'.
-    wa_fcat-outputlen = 25.
-    APPEND wa_fcat TO it_fcat.
-
-    CLEAR wa_fcat.
-    wa_fcat-col_pos   = sno + 1.
-    wa_fcat-fieldname = 'DIFF_NEG_CHG_IMB'.
-    wa_fcat-tabname   = 'IT_FINAL'.
-    wa_fcat-seltext_l = 'Diff (Negative Chg Imb)'.
-    wa_fcat-outputlen = 25.
-    APPEND wa_fcat TO it_fcat.
-
-    CLEAR wa_fcat.
-    wa_fcat-col_pos   = sno + 1.
-    wa_fcat-fieldname = 'DIFF_POS_CHG_IMB'.
-    wa_fcat-tabname   = 'IT_FINAL'.
-    wa_fcat-seltext_l = 'Diff (Positive Chg Imb)'.
-    wa_fcat-outputlen = 25.
-    APPEND wa_fcat TO it_fcat.
-*EOC Email Pending Postings
   ENDIF.
   CLEAR wa_fcat.
   wa_fcat-col_pos   = sno + 1.
@@ -758,6 +735,33 @@ FORM get_fieldcat.
   wa_fcat-seltext_l = 'Indicator'.
   wa_fcat-outputlen = 15.
   APPEND wa_fcat TO it_fcat.
+*SOC Email Pending Postings - Diff columns at end, visible when ch1 = 'X'
+  IF ch1 EQ 'X'.
+    CLEAR wa_fcat.
+    wa_fcat-col_pos   = sno + 1.
+    wa_fcat-fieldname = 'DIFF_CUM_IMB'.
+    wa_fcat-tabname   = 'IT_FINAL'.
+    wa_fcat-seltext_l = 'Diff (Cumulative Imb)'.
+    wa_fcat-outputlen = 25.
+    APPEND wa_fcat TO it_fcat.
+
+    CLEAR wa_fcat.
+    wa_fcat-col_pos   = sno + 1.
+    wa_fcat-fieldname = 'DIFF_NEG_CHG_IMB'.
+    wa_fcat-tabname   = 'IT_FINAL'.
+    wa_fcat-seltext_l = 'Diff (Negative Chg Imb)'.
+    wa_fcat-outputlen = 25.
+    APPEND wa_fcat TO it_fcat.
+
+    CLEAR wa_fcat.
+    wa_fcat-col_pos   = sno + 1.
+    wa_fcat-fieldname = 'DIFF_POS_CHG_IMB'.
+    wa_fcat-tabname   = 'IT_FINAL'.
+    wa_fcat-seltext_l = 'Diff (Positive Chg Imb)'.
+    wa_fcat-outputlen = 25.
+    APPEND wa_fcat TO it_fcat.
+  ENDIF.
+*EOC Email Pending Postings
 *
 *  ENDIF.
 
@@ -774,6 +778,7 @@ FORM email_pending_postings.
   TYPES: BEGIN OF ty_email_cust,
            customer   TYPE oijnomi-partnr,
            m_mas_cust TYPE vbak-kunnr,
+**PLACEHOLDER_MARKER**
          END OF ty_email_cust.
 
   TYPES: BEGIN OF ty_locid,
@@ -781,7 +786,7 @@ FORM email_pending_postings.
          END OF ty_locid.
 
   TYPES: BEGIN OF ty_ernam,
-           ernam TYPE aenam,
+           ernam TYPE pa0105-usrid,
          END OF ty_ernam.
 
   DATA: lt_email_cust TYPE STANDARD TABLE OF ty_email_cust,
