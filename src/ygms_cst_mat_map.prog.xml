@@ -29,6 +29,24 @@
      <ENTRY>Material Mapping Details</ENTRY>
      <LENGTH>24</LENGTH>
     </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_NCST</KEY>
+     <ENTRY>        Non-CST</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_STAT</KEY>
+     <ENTRY>        Static Material</ENTRY>
+     <LENGTH>23</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_STATE</KEY>
+     <ENTRY>        Region Code</ENTRY>
+     <LENGTH>19</LENGTH>
+    </item>
    </TPOOL>
   </asx:values>
  </asx:abap>

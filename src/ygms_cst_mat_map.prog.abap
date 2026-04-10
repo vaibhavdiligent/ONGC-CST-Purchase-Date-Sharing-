@@ -15,6 +15,9 @@ TYPES: BEGIN OF ty_mat_map,
          gail_material TYPE yrga_cst_mat_map-gail_material,
          valid_from    TYPE yrga_cst_mat_map-valid_from,
          valid_to      TYPE yrga_cst_mat_map-valid_to,
+         ncst          TYPE yrga_cst_mat_map-ncst,
+         static        TYPE yrga_cst_mat_map-static,
+         state         TYPE yrga_cst_mat_map-state,
          deleted       TYPE yrga_cst_mat_map-deleted,
          created_by    TYPE yrga_cst_mat_map-created_by,
          created_on    TYPE yrga_cst_mat_map-created_on,
@@ -23,6 +26,10 @@ TYPES: BEGIN OF ty_mat_map,
          changed_on    TYPE yrga_cst_mat_map-changed_on,
          changed_time  TYPE yrga_cst_mat_map-changed_time,
        END OF ty_mat_map.
+TYPES: BEGIN OF ty_regio,
+         bland TYPE t005s-bland,
+         bezei TYPE t005s-bezei,
+       END OF ty_regio.
 *----------------------------------------------------------------------*
 * Data Declarations
 *----------------------------------------------------------------------*
@@ -46,7 +53,10 @@ SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
               p_ongcmt TYPE yrga_cst_mat_map-ongc_material,
               p_gailmt TYPE yrga_cst_mat_map-gail_material,
               p_vfrom  TYPE datum MODIF ID dat,
-              p_vto    TYPE datum DEFAULT '99991231' MODIF ID dat.
+              p_vto    TYPE datum DEFAULT '99991231' MODIF ID dat,
+              p_ncst   AS CHECKBOX MODIF ID crt,
+              p_stat   AS CHECKBOX USER-COMMAND stat MODIF ID crt,
+              p_state  TYPE yrga_cst_mat_map-state MODIF ID sta.
 SELECTION-SCREEN END OF BLOCK b01.
 *----------------------------------------------------------------------*
 * At Selection Screen Output - Dynamic screen control
@@ -64,6 +74,20 @@ AT SELECTION-SCREEN OUTPUT.
         screen-input = 0.
         MODIFY SCREEN.
       ENDIF.
+      " Show checkboxes in Create mode
+      IF screen-group1 = 'CRT'.
+        screen-active = 1.
+        MODIFY SCREEN.
+      ENDIF.
+      " Show/hide state field based on Static Material checkbox
+      IF screen-group1 = 'STA'.
+        IF p_stat = 'X'.
+          screen-active = 1.
+        ELSE.
+          screen-active = 0.
+        ENDIF.
+        MODIFY SCREEN.
+      ENDIF.
     ELSEIF p_view = 'X' OR p_delete = 'X'.
       " View/Delete mode: only location, ongc material, gail material; none mandatory
       IF screen-name = 'P_LOCID' OR screen-name = 'P_ONGCMT' OR
@@ -77,14 +101,41 @@ AT SELECTION-SCREEN OUTPUT.
         screen-active = 0.
         MODIFY SCREEN.
       ENDIF.
+      " Hide checkboxes in View/Delete mode
+      IF screen-group1 = 'CRT'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
+      " Hide state field in View/Delete mode
+      IF screen-group1 = 'STA'.
+        screen-active = 0.
+        MODIFY SCREEN.
+      ENDIF.
     ENDIF.
   ENDLOOP.
+*----------------------------------------------------------------------*
+* At Selection Screen - F4 help for Region Code
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_state.
+  DATA: lt_regio  TYPE STANDARD TABLE OF ty_regio,
+        lt_return TYPE STANDARD TABLE OF ddshretval.
+  SELECT bland bezei FROM t005s INTO TABLE lt_regio WHERE land1 = 'IN'.
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield    = 'BLAND'
+      dynpprog    = sy-repid
+      dynpnr      = sy-dynnr
+      dynprofield = 'P_STATE'
+      value_org   = 'S'
+    TABLES
+      value_tab   = lt_regio
+      return_tab  = lt_return.
 *----------------------------------------------------------------------*
 * At Selection Screen - Input validations
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
-  " Skip mandatory validation when user is switching radio buttons
-  CHECK sy-ucomm <> 'MODE'.
+  " Skip mandatory validation when user is switching radio buttons or toggling checkboxes
+  CHECK sy-ucomm <> 'MODE' AND sy-ucomm <> 'STAT'.
   IF p_create = 'X'.
     " Mandatory checks for Create mode
     IF p_locid IS INITIAL.
@@ -103,6 +154,10 @@ AT SELECTION-SCREEN.
     IF p_vfrom IS NOT INITIAL AND
        p_vfrom+6(2) <> '01' AND p_vfrom+6(2) <> '16'.
       MESSAGE 'Valid From can only be the start date of a fortnight (1st or 16th).' TYPE 'E'.
+    ENDIF.
+    " Mandatory check for Region Code when Static Material is ticked
+    IF p_stat = 'X' AND p_state IS INITIAL.
+      MESSAGE 'Region Code is mandatory when Static Material is selected.' TYPE 'E'.
     ENDIF.
   ENDIF.
 *----------------------------------------------------------------------*
@@ -263,6 +318,14 @@ FORM insert_new_mapping.
   ls_new-created_on    = sy-datum.
   ls_new-created_time  = sy-uzeit.
   ls_new-deleted       = ' '.
+  ls_new-ncst          = p_ncst.
+  IF p_stat = 'X'.
+    ls_new-static      = 'X'.
+    ls_new-state       = p_state.
+  ELSE.
+    ls_new-static      = ' '.
+    CLEAR ls_new-state.
+  ENDIF.
   MODIFY yrga_cst_mat_map FROM ls_new.
   IF sy-subrc <> 0.
     MESSAGE 'Error creating material mapping.' TYPE 'E'.
@@ -319,6 +382,9 @@ FORM view_mapping.
     ls_result-gail_material = ls_db-gail_material.
     ls_result-valid_from    = ls_db-valid_from.
     ls_result-valid_to      = ls_db-valid_to.
+    ls_result-ncst          = ls_db-ncst.
+    ls_result-static        = ls_db-static.
+    ls_result-state         = ls_db-state.
     ls_result-deleted       = ls_db-deleted.
     ls_result-created_by    = ls_db-created_by.
     ls_result-created_on    = ls_db-created_on.
@@ -402,6 +468,9 @@ FORM delete_mapping.
     ls_result-gail_material = ls_db-gail_material.
     ls_result-valid_from    = ls_db-valid_from.
     ls_result-valid_to      = ls_db-valid_to.
+    ls_result-ncst          = ls_db-ncst.
+    ls_result-static        = ls_db-static.
+    ls_result-state         = ls_db-state.
     ls_result-deleted       = ls_db-deleted.
     ls_result-created_by    = ls_db-created_by.
     ls_result-created_on    = ls_db-created_on.
@@ -502,6 +571,9 @@ FORM build_fieldcatalog_view.
   PERFORM add_field USING 'GAIL_MATERIAL' 'YRGA_CST_MAT_MAP' 'GAIL_MATERIAL' 'GAIL Material'.
   PERFORM add_field USING 'VALID_FROM'    'YRGA_CST_MAT_MAP' 'VALID_FROM'    'Valid From'.
   PERFORM add_field USING 'VALID_TO'      'YRGA_CST_MAT_MAP' 'VALID_TO'      'Valid To'.
+  PERFORM add_field USING 'NCST'          'YRGA_CST_MAT_MAP' 'NCST'          'Non-CST'.
+  PERFORM add_field USING 'STATIC'        'YRGA_CST_MAT_MAP' 'STATIC'        'Static Material'.
+  PERFORM add_field USING 'STATE'         'YRGA_CST_MAT_MAP' 'STATE'         'Region Code'.
   PERFORM add_field USING 'DELETED'       'YRGA_CST_MAT_MAP' 'DELETED'       'Deleted'.
   PERFORM add_field USING 'CREATED_BY'    'YRGA_CST_MAT_MAP' 'CREATED_BY'    'Created By'.
   PERFORM add_field USING 'CREATED_ON'    'YRGA_CST_MAT_MAP' 'CREATED_ON'    'Created On'.
@@ -520,6 +592,9 @@ FORM build_fieldcatalog_delete.
   PERFORM add_field USING 'GAIL_MATERIAL' 'YRGA_CST_MAT_MAP' 'GAIL_MATERIAL' 'GAIL Material'.
   PERFORM add_field USING 'VALID_FROM'    'YRGA_CST_MAT_MAP' 'VALID_FROM'    'Valid From'.
   PERFORM add_field USING 'VALID_TO'      'YRGA_CST_MAT_MAP' 'VALID_TO'      'Valid To'.
+  PERFORM add_field USING 'NCST'          'YRGA_CST_MAT_MAP' 'NCST'          'Non-CST'.
+  PERFORM add_field USING 'STATIC'        'YRGA_CST_MAT_MAP' 'STATIC'        'Static Material'.
+  PERFORM add_field USING 'STATE'         'YRGA_CST_MAT_MAP' 'STATE'         'Region Code'.
   PERFORM add_field USING 'CREATED_BY'    'YRGA_CST_MAT_MAP' 'CREATED_BY'    'Created By'.
   PERFORM add_field USING 'CREATED_ON'    'YRGA_CST_MAT_MAP' 'CREATED_ON'    'Created On'.
   PERFORM add_field USING 'CREATED_TIME'  'YRGA_CST_MAT_MAP' 'CREATED_TIME'  'Created Time'.
