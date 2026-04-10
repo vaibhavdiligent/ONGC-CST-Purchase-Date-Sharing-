@@ -27,8 +27,8 @@ TYPES: BEGIN OF ty_mat_map,
          changed_time  TYPE yrga_cst_mat_map-changed_time,
        END OF ty_mat_map.
 TYPES: BEGIN OF ty_regio,
-         bland TYPE t005s-bland,
-         bezei TYPE t005s-bezei,
+         bland TYPE regio,
+         bezei TYPE char50,
        END OF ty_regio.
 *----------------------------------------------------------------------*
 * Data Declarations
@@ -119,7 +119,7 @@ AT SELECTION-SCREEN OUTPUT.
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_state.
   DATA: lt_regio  TYPE STANDARD TABLE OF ty_regio,
         lt_return TYPE STANDARD TABLE OF ddshretval.
-  SELECT bland bezei FROM t005s INTO TABLE lt_regio WHERE land1 = 'IN'.
+  SELECT bland FROM t005s INTO CORRESPONDING FIELDS OF TABLE lt_regio WHERE land1 = 'IN'.
   CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
     EXPORTING
       retfield    = 'BLAND'
