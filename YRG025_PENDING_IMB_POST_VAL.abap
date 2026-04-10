@@ -796,6 +796,12 @@ FORM email_pending_postings.
            pernr TYPE pa0105-pernr,
          END OF ty_wf_pernr.
 
+  TYPES: BEGIN OF ty_cc_rep,
+           orig_pernr   TYPE pa0034-pernr,
+           yy_pernr_rep TYPE pa0034-yy_pernr_rep,
+           persk        TYPE pa0001-persk,
+         END OF ty_cc_rep.
+
   DATA: lt_email_cust    TYPE STANDARD TABLE OF ty_email_cust,
         ls_email_cust    TYPE ty_email_cust,
         lt_pending       TYPE STANDARD TABLE OF ty_final,
@@ -818,6 +824,8 @@ FORM email_pending_postings.
         ls_cont_id       TYPE ty_cont_id,
         lt_wf_pernr_cc   TYPE STANDARD TABLE OF ty_wf_pernr,
         ls_wf_pernr_cc   TYPE ty_wf_pernr,
+        lt_cc_rep        TYPE STANDARD TABLE OF ty_cc_rep,
+        ls_cc_rep        TYPE ty_cc_rep,
         lv_prev_cont     TYPE vbeln,
         lv_cum_cal       TYPE char20,
         lv_char_cal      TYPE char20,
@@ -872,7 +880,7 @@ FORM email_pending_postings.
 
   LOOP AT lt_email_cust INTO ls_email_cust.
     CLEAR: lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
-           lt_cont_ids, lt_wf_pernr_cc, lv_prev_cont.
+           lt_cont_ids, lt_wf_pernr_cc, lt_cc_rep, lv_prev_cont.
 
     " Remove leading zeros from customer for display
     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
@@ -967,9 +975,10 @@ FORM email_pending_postings.
     ENDIF.
 
     " Step 7: Build CC recipient list
-    " 7a: Get CC pernrs from PA0034 (SUBTY 9001/9002/9003/9113/9114)
+    " 7a: Get CC reps from PA0034 (SUBTY 9001/9002/9003/9113/9114)
+    "     Track orig_pernr + yy_pernr_rep to find lowest PERSK per orig pernr
     IF lt_pernr IS NOT INITIAL.
-      SELECT yy_pernr_rep
+      SELECT pernr AS orig_pernr, yy_pernr_rep
         FROM pa0034
         INTO TABLE @DATA(lt_pa0034_cc)
         FOR ALL ENTRIES IN @lt_pernr
@@ -978,24 +987,41 @@ FORM email_pending_postings.
           AND begda LE @sy-datum
           AND endda GE @sy-datum.
 
-      " 7b: PA0001 for CC pernrs -> sort PERSK ASC -> keep first per pernr
+      " 7b: PA0001 for each rep - filter PERSK E7/E8/E9 only
+      "     For each orig pernr keep rep with lowest PERSK (E7 < E8 < E9)
       IF lt_pa0034_cc IS NOT INITIAL.
         SELECT pernr, persk
           FROM pa0001
           INTO TABLE @DATA(lt_pa0001_cc)
           FOR ALL ENTRIES IN @lt_pa0034_cc
           WHERE pernr = @lt_pa0034_cc-yy_pernr_rep
+            AND persk IN ('E7', 'E8', 'E9')
             AND begda LE @sy-datum
             AND endda GE @sy-datum.
-        SORT lt_pa0001_cc BY pernr ASCENDING persk ASCENDING.
-        DELETE ADJACENT DUPLICATES FROM lt_pa0001_cc COMPARING pernr.
 
-        IF lt_pa0001_cc IS NOT INITIAL.
+        " Combine: orig_pernr + yy_pernr_rep + persk
+        LOOP AT lt_pa0034_cc INTO DATA(ls_pa0034_cc).
+          READ TABLE lt_pa0001_cc INTO DATA(ls_pa0001_cc)
+            WITH KEY pernr = ls_pa0034_cc-yy_pernr_rep.
+          IF sy-subrc = 0.
+            ls_cc_rep-orig_pernr   = ls_pa0034_cc-orig_pernr.
+            ls_cc_rep-yy_pernr_rep = ls_pa0034_cc-yy_pernr_rep.
+            ls_cc_rep-persk        = ls_pa0001_cc-persk.
+            APPEND ls_cc_rep TO lt_cc_rep.
+            CLEAR ls_cc_rep.
+          ENDIF.
+        ENDLOOP.
+
+        " Sort by orig_pernr ASC + persk ASC -> keep lowest PERSK (E7 first) per orig pernr
+        SORT lt_cc_rep BY orig_pernr ASCENDING persk ASCENDING.
+        DELETE ADJACENT DUPLICATES FROM lt_cc_rep COMPARING orig_pernr.
+
+        IF lt_cc_rep IS NOT INITIAL.
           SELECT usrid_long
             FROM pa0105
             INTO TABLE @DATA(lt_cc_pa_email)
-            FOR ALL ENTRIES IN @lt_pa0001_cc
-            WHERE pernr = @lt_pa0001_cc-pernr
+            FOR ALL ENTRIES IN @lt_cc_rep
+            WHERE pernr = @lt_cc_rep-yy_pernr_rep
               AND subty = '0010'
               AND begda LE @sy-datum
               AND endda GE @sy-datum.
@@ -1031,14 +1057,12 @@ FORM email_pending_postings.
         WHERE vbeln    = @lt_cont_ids-cont_id
           AND yy_level = 1.
 
+      " Keep only first (latest) entry per contract
       SORT lt_wf_log BY cont_id ASCENDING changed_on DESCENDING changed_time DESCENDING.
-      CLEAR lv_prev_cont.
+      DELETE ADJACENT DUPLICATES FROM lt_wf_log COMPARING cont_id.
       LOOP AT lt_wf_log INTO DATA(ls_wf_log).
-        IF ls_wf_log-cont_id NE lv_prev_cont.
-          ls_wf_pernr_cc-pernr = ls_wf_log-changed_by.
-          APPEND ls_wf_pernr_cc TO lt_wf_pernr_cc.
-          lv_prev_cont = ls_wf_log-cont_id.
-        ENDIF.
+        ls_wf_pernr_cc-pernr = ls_wf_log-changed_by.
+        APPEND ls_wf_pernr_cc TO lt_wf_pernr_cc.
       ENDLOOP.
 
       IF lt_wf_pernr_cc IS NOT INITIAL.
@@ -1177,7 +1201,7 @@ FORM email_pending_postings.
         OTHERS                     = 8.
 
     CLEAR: ls_email_cust, lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
-           lt_body, lt_receivers, ls_doc_data, lt_cont_ids, lt_wf_pernr_cc,
+           lt_body, lt_receivers, ls_doc_data, lt_cont_ids, lt_wf_pernr_cc, lt_cc_rep,
            lv_prev_cont, lv_cum_cal, lv_char_cal, lv_neg_cal,
            lv_cum_so, lv_char_so, lv_neg_so.
   ENDLOOP.
