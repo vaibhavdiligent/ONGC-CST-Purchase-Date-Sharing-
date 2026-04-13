@@ -160,7 +160,7 @@ INITIALIZATION.
     IMPORTING
       url = l_url.
   IF l_url IS NOT INITIAL.
-    MESSAGE 'Program Cannot be Excuted outside SAP GUI' TYPE 'E'.
+    MESSAGE 'Program Cannot be Executed outside SAP GUI' TYPE 'E'.
   ENDIF.
   CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.'
   sy-datum(4) INTO l_datum.
@@ -195,13 +195,17 @@ START-OF-SELECTION.
     FROM satc_ac_resulth
     WHERE run_series_name = p_id.
   IF sy-subrc <> 0.
-    MESSAGE 'Wrong ATC Varaint Selected' TYPE 'E'.
+    MESSAGE 'Wrong ATC Variant Selected' TYPE 'E'.
   ENDIF.
   SELECT SINGLE * INTO @DATA(l_e070)
     FROM e070
     WHERE trkorr = @lv_req.
   IF sy-subrc <> 0.
     MESSAGE 'Wrong Transport request selected' TYPE 'E'.
+  ENDIF.
+  " Point 4: Validate transport is Workbench type (K*), not Customizing (T*)
+  IF l_e070-trfunction = 'T' OR l_e070-trfunction = 'G' OR l_e070-trfunction = 'R'.
+    MESSAGE 'Please select a Workbench transport request, not a Customizing transport' TYPE 'E'.
   ENDIF.
   DATA(result_access) = NEW cl_satc_api_factory( )->create_result_access( i_result_id ).
   result_access->get_findings( IMPORTING e_findings           = DATA(findings)
@@ -296,9 +300,17 @@ START-OF-SELECTION.
   PERFORM zatc_process1.
   REFRESH it_output.
   CLEAR l_repid.
+  DATA lv_total_objects TYPE i.
+  DESCRIBE TABLE it_final_p LINES lv_total_objects.
   LOOP AT it_final_p INTO DATA(wa_final_p)
      WHERE ( sobjname(1) = 'Z' OR sobjname(1) = 'Y' ).
     l_repid = l_repid + 1.
+    " Point 3: Progress indicator so SAP GUI does not appear frozen
+    DATA(lv_pct) = CONV i( l_repid * 100 / lv_total_objects ).
+    CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
+      EXPORTING
+        percentage = lv_pct
+        text       = wa_final_p-sobjname.
     REFRESH repos_tab.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
@@ -1176,8 +1188,10 @@ START-OF-SELECTION.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
-          WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF'.
-            " SFPF: Adobe Form context includes write back same as PROG/FUGR
+          WHEN 'SFPF'.
+            " Adobe Form: deep multi-include scan via adobe_form_procee
+            PERFORM adobe_form_procee.
+          WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
             SELECT SINGLE * INTO @DATA(l_trdir)
               FROM trdir WHERE name = @wa_final_p-sobjname.
             wa_output-program_name = wa_final_p-objname.
@@ -1220,7 +1234,7 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syyntax error'.
+              wa_output-status = 'Syntax error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
@@ -1260,7 +1274,7 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syyntax error'.
+              wa_output-status = 'Syntax error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
@@ -1319,7 +1333,7 @@ START-OF-SELECTION.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
-          wa_output-status = 'Syyntax error'.
+          wa_output-status = 'Syntax error'.
         ENDIF.
         APPEND wa_output TO it_output.
         CLEAR wa_output.
@@ -2888,7 +2902,7 @@ FORM smartform_procee.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
-    wa_output-status = 'Syyntax error'.
+    wa_output-status = 'Syntax error'.
   ENDIF.
   APPEND wa_output TO it_output.
   CLEAR wa_output.
@@ -3049,7 +3063,7 @@ FORM adobe_form_procee.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
-    wa_output-status = 'Syyntax error'.
+    wa_output-status = 'Syntax error'.
   ENDIF.
   APPEND wa_output TO it_output.
   CLEAR wa_output.
