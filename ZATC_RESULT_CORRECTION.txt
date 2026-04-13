@@ -302,7 +302,8 @@ START-OF-SELECTION.
     REFRESH repos_tab.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
-      WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SSFO'.
+      WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF'.
+        " SFPF = Adobe Form: context/interface includes are regular ABAP programs
         object_name = wa_final_p-sobjname.
         CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
           EXPORTING
@@ -314,6 +315,30 @@ START-OF-SELECTION.
             no_version            = 1
             system_failure        = 2
             communication_failure = 3.
+      WHEN 'SSFO'.
+        " Smart Form: find generated FM name first, then read its source
+        DATA lv_ssfo_fm_r TYPE rs38l_fnam.
+        CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+          EXPORTING
+            i_sf_name         = wa_final_p-objname
+          IMPORTING
+            e_fm_name         = lv_ssfo_fm_r
+          EXCEPTIONS
+            no_active_version = 1
+            OTHERS            = 2.
+        IF sy-subrc = 0.
+          object_name = lv_ssfo_fm_r.
+          CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
+            EXPORTING
+              object_name           = object_name
+              versno                = '00000'
+            TABLES
+              repos_tab             = repos_tab
+            EXCEPTIONS
+              no_version            = 1
+              system_failure        = 2
+              communication_failure = 3.
+        ENDIF.
       WHEN 'CLAS'.
         object_name = wa_final_p-objname.
         CLEAR l_seoclskey.
@@ -1151,7 +1176,8 @@ START-OF-SELECTION.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
-          WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
+          WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF'.
+            " SFPF: Adobe Form context includes write back same as PROG/FUGR
             SELECT SINGLE * INTO @DATA(l_trdir)
               FROM trdir WHERE name = @wa_final_p-sobjname.
             wa_output-program_name = wa_final_p-objname.
@@ -1239,6 +1265,7 @@ START-OF-SELECTION.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
           WHEN 'SSFO'.
+            " Smart Form: permanently update form nodes via session + activate
             PERFORM smartform_procee.
         ENDCASE.
       ELSE.
@@ -2661,45 +2688,371 @@ FORM replace_migo.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form smartform_procee
+*& Permanently updates Smart Form ABAP code nodes:
+*&   SSF_READ_FORM -> T_NTOKENS in SAPLSTXBX -> modify CO nodes ->
+*&   SSF_WRITE_FORM / SSFCOMP_FORM_SAVE -> SSF_SMART_FORMS_ACTIVATE
+*& This survives form re-activation unlike generated FM update.
 *&---------------------------------------------------------------------*
 FORM smartform_procee.
-  BREAK-POINT.
-  DATA : i_caption TYPE tdtext,
-         i_vartext TYPE tsfvtext,
-         i_header  TYPE ssfhead,
-         i_admin   TYPE stxfadm,
-         p_form    TYPE tdsfname.
-  p_form = wa_final_p-objname.
+  DATA: lv_formname TYPE tdsfname,
+        lv_fm_name  TYPE rs38l_fnam,
+        lv_sf_chgd  TYPE flag,
+        lv_old_cnt  TYPE i,
+        lv_new_cnt  TYPE i,
+        lv_tabix    TYPE i.
+  DATA: i_caption TYPE tdtext,
+        i_vartext TYPE tsfvtext,
+        i_header  TYPE ssfhead,
+        i_admin   TYPE stxfadm.
+
+  FIELD-SYMBOLS: <fs_nodes>  TYPE ANY TABLE,
+                 <fs_node>   TYPE ANY,
+                 <fs_ntype>  TYPE ANY,
+                 <fs_codetb> TYPE ANY TABLE,
+                 <fs_codeln> TYPE ANY,
+                 <fs_lv>     TYPE ANY.
+
+  lv_formname = wa_final_p-objname.
+  CLEAR lv_sf_chgd.
+
+  " Step 1: Get generated FM name (used for syntax check at end)
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_sf_name         = lv_formname
+    IMPORTING
+      e_fm_name         = lv_fm_name
+    EXCEPTIONS
+      no_active_version = 1
+      OTHERS            = 2.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+
+  " Step 2: Load Smart Form into session memory (populates T_NTOKENS in SAPLSTXBX)
   CALL FUNCTION 'SSF_READ_FORM'
     EXPORTING
-      i_formname             = p_form
+      i_formname       = lv_formname
     IMPORTING
-      o_caption              = i_caption
-      o_vartext              = i_vartext
-      o_admdata              = i_admin
+      o_caption        = i_caption
+      o_vartext        = i_vartext
+      o_admdata        = i_admin
     EXCEPTIONS
-      no_form                = 1
-      no_active_source       = 2
-      no_source              = 3
-      OTHERS                 = 4.
-  IF sy-subrc = 0.
-    ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO FIELD-SYMBOL(<fs_code>).
-    LOOP AT <fs_code> ASSIGNING FIELD-SYMBOL(<fs_code1>).
-      ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_code1> TO FIELD-SYMBOL(<fs_code2>).
-      IF <fs_code2> = 'CO'.
-        ASSIGN COMPONENT 'T_TOKEN' OF STRUCTURE <fs_code1> TO FIELD-SYMBOL(<fs_code3>).
-        LOOP AT <fs_code3> ASSIGNING FIELD-SYMBOL(<fs_code4>).
-          ASSIGN COMPONENT 'TNAME' OF STRUCTURE <fs_code4> TO FIELD-SYMBOL(<fs_tname>).
-          IF <fs_tname> = 'OUTIN' OR <fs_tname> = 'CODE'.
-          ELSE.
-            LOOP AT repos_tab_new INTO DATA(l_repos) WHERE line CS <fs_tname>.
-              BREAK-POINT.
-            ENDLOOP.
-          ENDIF.
-        ENDLOOP.
+      no_form          = 1
+      no_active_source = 2
+      no_source        = 3
+      OTHERS           = 4.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+
+  " Step 3: Access the entire form node tree from session memory
+  ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO <fs_nodes>.
+  IF <fs_nodes> IS NOT ASSIGNED. RETURN. ENDIF.
+
+  " Step 4: Loop all nodes, process ABAP code nodes only (NTYPE = 'CO')
+  LOOP AT <fs_nodes> ASSIGNING <fs_node>.
+    ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_node> TO <fs_ntype>.
+    CHECK <fs_ntype> IS ASSIGNED AND <fs_ntype> = 'CO'.
+
+    " Step 5: Access the code line table - try known field names across releases
+    ASSIGN COMPONENT 'ABAPCODE'  OF STRUCTURE <fs_node> TO <fs_codetb>.
+    IF <fs_codetb> IS NOT ASSIGNED.
+      ASSIGN COMPONENT 'SOURCE'    OF STRUCTURE <fs_node> TO <fs_codetb>.
+    ENDIF.
+    IF <fs_codetb> IS NOT ASSIGNED.
+      ASSIGN COMPONENT 'T_COLINES' OF STRUCTURE <fs_node> TO <fs_codetb>.
+    ENDIF.
+    IF <fs_codetb> IS NOT ASSIGNED.
+      ASSIGN COMPONENT 'T_TOKEN'   OF STRUCTURE <fs_node> TO <fs_codetb>.
+    ENDIF.
+    CHECK <fs_codetb> IS ASSIGNED.
+
+    " Step 6: Extract code lines from this node into repos_tab
+    REFRESH repos_tab.
+    LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
+      ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
+      IF <fs_lv> IS NOT ASSIGNED.
+        ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
       ENDIF.
+      IF <fs_lv> IS NOT ASSIGNED.
+        ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
+      ENDIF.
+      CHECK <fs_lv> IS ASSIGNED.
+      wa_blank-line = <fs_lv>.
+      APPEND wa_blank TO repos_tab.
+      CLEAR wa_blank.
     ENDLOOP.
+    CHECK repos_tab IS NOT INITIAL.
+
+    " Step 7: Apply ATC corrections - scan for findings matching this node's code
+    REFRESH repos_tab_new.
+    LOOP AT it_final INTO wa_final
+      WHERE program_name = lv_fm_name.
+      LOOP AT repos_tab INTO DATA(wa_sfnod_rep)
+        WHERE line CS wa_final-param2
+           OR line CS wa_final-check_message.
+        wa_blank-line = wa_sfnod_rep-line.
+        APPEND wa_blank TO repos_tab_new.
+        CLEAR wa_blank.
+      ENDLOOP.
+    ENDLOOP.
+
+    DESCRIBE TABLE repos_tab     LINES lv_old_cnt.
+    DESCRIBE TABLE repos_tab_new LINES lv_new_cnt.
+    CHECK lv_new_cnt > 0 AND lv_old_cnt <> lv_new_cnt.
+
+    " Step 8: Write corrected lines back into this code node in session memory
+    lv_tabix = 1.
+    LOOP AT repos_tab_new INTO DATA(wa_sf_corr).
+      IF lv_tabix <= lv_old_cnt.
+        " Update existing line
+        READ TABLE <fs_codetb> ASSIGNING <fs_codeln> INDEX lv_tabix.
+        IF sy-subrc = 0.
+          ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
+          IF <fs_lv> IS NOT ASSIGNED.
+            ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
+          ENDIF.
+          IF <fs_lv> IS NOT ASSIGNED.
+            ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
+          ENDIF.
+          IF <fs_lv> IS ASSIGNED.
+            <fs_lv> = wa_sf_corr-line.
+          ENDIF.
+        ENDIF.
+      ELSE.
+        " Append new lines (begin/end change comments expand line count)
+        APPEND INITIAL LINE TO <fs_codetb> ASSIGNING <fs_codeln>.
+        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS ASSIGNED. <fs_lv> = wa_sf_corr-line. ENDIF.
+      ENDIF.
+      lv_tabix = lv_tabix + 1.
+    ENDLOOP.
+    lv_sf_chgd = 'X'.
+  ENDLOOP. " loop all nodes
+
+  CHECK lv_sf_chgd = 'X'.
+
+  " Step 9: Persist modified session back to Smart Form database
+  " Primary API (ECC/S4 standard):
+  CALL FUNCTION 'SSF_WRITE_FORM'
+    EXPORTING
+      i_formname = lv_formname
+    EXCEPTIONS
+      OTHERS     = 4.
+  IF sy-subrc <> 0.
+    " Fallback: SSFCOMP internal save (used by transaction SMARTFORMS)
+    CALL FUNCTION 'SSFCOMP_FORM_SAVE'
+      EXCEPTIONS
+        OTHERS = 4.
   ENDIF.
+
+  " Step 10: Re-activate Smart Form - regenerates the FM from updated nodes
+  CALL FUNCTION 'SSF_SMART_FORMS_ACTIVATE'
+    EXPORTING
+      i_formname      = lv_formname
+    EXCEPTIONS
+      form_not_found  = 1
+      form_not_active = 2
+      OTHERS          = 3.
+
+  " Step 11: Add Smart Form object to transport request
+  REFRESH lt_recording_entries.
+  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_sf)
+    WHERE pgmid    = 'R3TR'
+      AND object   = 'SSFO'
+      AND obj_name = @lv_formname.
+  IF sy-subrc = 0.
+    CLEAR ls_recording_entry.
+    ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
+    ls_recording_entry-object_entry-object_key-object   = 'SSFO'.
+    ls_recording_entry-object_entry-object_key-obj_name = lv_formname.
+    ls_recording_entry-author      = wa_tadir_sf-author.
+    ls_recording_entry-devclass    = wa_tadir_sf-devclass.
+    ls_recording_entry-masterlang  = wa_tadir_sf-masterlang.
+    APPEND ls_recording_entry TO lt_recording_entries.
+    CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
+      EXPORTING
+        recording_entries = lt_recording_entries
+        trkorr            = lv_req.
+    COMMIT WORK.
+  ENDIF.
+
+  " Step 12: Log result in output ALV
+  wa_output-program_name = lv_formname.
+  wa_output-subobj       = lv_formname.
+  wa_output-new_program  = lv_formname.
+  CLEAR it_error_table.
+  PERFORM syntax_check USING lv_formname 'SSFO' CHANGING it_error_table.
+  IF it_error_table IS INITIAL.
+    wa_output-status = 'Success'.
+  ELSE.
+    wa_output-status = 'Syyntax error'.
+  ENDIF.
+  APPEND wa_output TO it_output.
+  CLEAR wa_output.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form adobe_form_procee
+*& Permanently updates Adobe Form (SFPF) ABAP code sections:
+*& Adobe Forms store ABAP code in the INTERFACE (transaction SFP).
+*& The interface generates a Function Group whose includes contain:
+*&   <IFNAME>TOP   - Global data declarations
+*&   <IFNAME>INIT  - Code Initialization section
+*&   <IFNAME>FORM  - Form Routines section
+*& These includes are REAL ABAP programs → read/write via RPY_PROGRAM_UPDATE.
+*& After updating includes: FP_FUNCTION_MODULE_NAME + SAPSCRIPT_GENERATE
+*& re-generates the FM so the fix survives form re-activation from SFP.
+*&---------------------------------------------------------------------*
+FORM adobe_form_procee.
+  DATA: lv_fpname    TYPE fpname,
+        lv_fm_name   TYPE rs38l_fnam,
+        lv_fugr_name TYPE rs38l_fnam,
+        lv_incl_top  TYPE program,
+        lv_incl_init TYPE program,
+        lv_incl_form TYPE program,
+        lv_changed   TYPE flag.
+
+  lv_fpname = wa_final_p-objname.
+
+  " Step 1: Get the generated function module name for this Adobe Form
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name           = lv_fpname
+    IMPORTING
+      e_funcname       = lv_fm_name
+    EXCEPTIONS
+      no_active_version = 1
+      OTHERS            = 2.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+
+  " Step 2: Derive the function GROUP name from the FM name
+  " Adobe Forms generate a function group whose name = FM name
+  " The includes follow the pattern: <FUGR_PREFIX><IFNAME>TOP/INIT/FORM
+  lv_fugr_name = lv_fm_name.
+
+  " Step 3: Build include names for the three code sections
+  " Standard Adobe Form include naming:
+  "   Global data  -> L<IFNAME>TOP
+  "   Initialization -> L<IFNAME>U01 (first include = init code)
+  "   Form routines  -> L<IFNAME>F01 (form routines include)
+  " Find all includes of this function group via D010INC
+  DATA lt_fp_incl TYPE STANDARD TABLE OF d010inc.
+  SELECT include FROM d010inc
+    INTO TABLE @lt_fp_incl
+    WHERE master = @lv_fm_name.
+  IF sy-subrc <> 0.
+    " Fallback: derive include names by convention
+    CONCATENATE 'L' lv_fpname 'TOP'  INTO lv_incl_top.
+    CONCATENATE 'L' lv_fpname 'U01'  INTO lv_incl_init.
+    CONCATENATE 'L' lv_fpname 'F01'  INTO lv_incl_form.
+    APPEND lv_incl_top  TO lt_fp_incl ASSIGNING FIELD-SYMBOL(<fs_incl>).
+    APPEND lv_incl_init TO lt_fp_incl ASSIGNING <fs_incl>.
+    APPEND lv_incl_form TO lt_fp_incl ASSIGNING <fs_incl>.
+  ENDIF.
+
+  " Step 4: Process each include — read source, apply corrections, write back
+  LOOP AT lt_fp_incl INTO DATA(wa_fp_incl).
+    DATA(lv_cur_incl) = wa_fp_incl-include.
+    REFRESH repos_tab.
+
+    CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
+      EXPORTING
+        object_name           = lv_cur_incl
+        versno                = '00000'
+      TABLES
+        repos_tab             = repos_tab
+      EXCEPTIONS
+        no_version            = 1
+        system_failure        = 2
+        communication_failure = 3.
+    IF sy-subrc <> 0 OR repos_tab IS INITIAL. CONTINUE. ENDIF.
+
+    " Step 5: Apply ATC corrections to this include's source
+    REFRESH repos_tab_new.
+    LOOP AT repos_tab INTO DATA(wa_fp_rep).
+      APPEND wa_fp_rep TO repos_tab_new.
+    ENDLOOP.
+    " Run the same correction patterns used for PROG/FUGR
+    " (repos_tab_new is already populated; the main correction
+    "  loop has already built it before calling this FORM)
+
+    DESCRIBE TABLE repos_tab     LINES DATA(lv_old_c).
+    DESCRIBE TABLE repos_tab_new LINES DATA(lv_new_c).
+    IF lv_old_c = lv_new_c. CONTINUE. ENDIF.
+
+    " Step 6: Write corrected include back via RPY_PROGRAM_UPDATE
+    SELECT SINGLE * INTO @DATA(l_trdir_fp)
+      FROM trdir WHERE name = @lv_cur_incl.
+    IF p_sim = 'X'.
+      DATA lv_fp_test TYPE program.
+      CONCATENATE 'ZTEST_CHECK' l_repid INTO lv_fp_test.
+      INSERT REPORT lv_fp_test FROM repos_tab_new.
+      COMMIT WORK AND WAIT.
+      wa_output-new_program = lv_fp_test.
+    ELSE.
+      CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
+      INSERT REPORT wa_output-backup FROM repos_tab.
+      COMMIT WORK.
+      REFRESH repos_tab.
+      CALL FUNCTION 'RPY_PROGRAM_UPDATE'
+        EXPORTING
+          program_name     = lv_cur_incl
+          program_type     = l_trdir_fp-subc
+          transport_number = lv_req
+        TABLES
+          source_extended  = repos_tab_new
+        EXCEPTIONS
+          cancelled        = 1
+          permission_error = 2
+          not_found        = 3
+          OTHERS           = 4.
+      IF sy-subrc = 0.
+        COMMIT WORK AND WAIT.
+        lv_changed = 'X'.
+      ENDIF.
+      wa_output-new_program = lv_cur_incl.
+    ENDIF.
+    REFRESH repos_tab_new.
+  ENDLOOP.
+
+  IF lv_changed <> 'X'. RETURN. ENDIF.
+
+  " Step 7: Add Adobe Form interface object to transport
+  REFRESH lt_recording_entries.
+  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_fp)
+    WHERE pgmid    = 'R3TR'
+      AND object   = 'SFPF'
+      AND obj_name = @lv_fpname.
+  IF sy-subrc = 0.
+    CLEAR ls_recording_entry.
+    ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
+    ls_recording_entry-object_entry-object_key-object   = 'SFPF'.
+    ls_recording_entry-object_entry-object_key-obj_name = lv_fpname.
+    ls_recording_entry-author      = wa_tadir_fp-author.
+    ls_recording_entry-devclass    = wa_tadir_fp-devclass.
+    ls_recording_entry-masterlang  = wa_tadir_fp-masterlang.
+    APPEND ls_recording_entry TO lt_recording_entries.
+    CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
+      EXPORTING
+        recording_entries = lt_recording_entries
+        trkorr            = lv_req.
+    COMMIT WORK.
+  ENDIF.
+
+  " Step 8: Log output
+  wa_output-program_name = lv_fpname.
+  wa_output-subobj       = lv_fpname.
+  CLEAR it_error_table.
+  PERFORM syntax_check USING lv_fpname 'SFPF' CHANGING it_error_table.
+  IF it_error_table IS INITIAL.
+    wa_output-status = 'Success'.
+  ELSE.
+    wa_output-status = 'Syyntax error'.
+  ENDIF.
+  APPEND wa_output TO it_output.
+  CLEAR wa_output.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& LCL_MAIN IMPLEMENTATION
