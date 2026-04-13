@@ -1,44 +1,103 @@
 *&---------------------------------------------------------------------*
 *& Report ZBDC_FM_MAPPER
-*& BDC to Function Module Field Mapping Analyzer
+*& BDC / FM to Function Module or Class Method Mapping Analyzer
 *&
 *& Purpose:
-*&   Given a source program containing CALL TRANSACTION (BDC) code
-*&   and a replacement Function Module name, this program:
-*&   1. Scans the source program for BDC FNAM/FVAL pairs
-*&   2. Looks up rollnames (data elements) from DD03L for each BDC field
-*&   3. Gets the FM parameter structures from FUPARAREF + DD03L
-*&   4. Matches BDC fields to FM parameters via rollname
-*&   5. Displays mapping result and generated code in ALV
+*&   Analyzes source code and maps old BDC/FM calls to a replacement
+*&   Function Module OR Class Method using DD03L rollname matching.
+*&
+*& Modes:
+*&   Mode 1 - BDC  → Function Module  : RB_FM  selected
+*&   Mode 2 - BDC  → Class Method     : RB_CLS selected, P_TCODE filled
+*&   Mode 3 - FM Call → Class Method  : RB_CLS selected, P_OLDFM filled
 *&
 *& Usage:
-*&   P_PROG  = Source program containing BDC code (e.g. ZVENDOR_CREATE)
-*&   P_TCODE = Transaction being called via BDC (e.g. ME21)
-*&   P_FM    = Replacement Function Module (e.g. BAPI_PO_CREATE1)
+*&   P_PROG   = Source program to scan (e.g. ZVENDOR_CREATE)
+*&   P_TCODE  = BDC transaction (e.g. ME21)  — for BDC modes
+*&   P_OLDFM  = Old FM being called (e.g. OLD_FM) — for FM→Class mode
+*&   P_FM     = Replacement FM     (RB_FM mode)
+*&   P_CLASS  = Replacement Class  (RB_CLS mode, e.g. CL_MM_PO_FACTORY)
+*&   P_METH   = Replacement Method (RB_CLS mode, e.g. CREATE_PO)
+*&   P_STATIC = X = static method call (class=>method)
+*&              space = instance method call (obj->method)
 *&---------------------------------------------------------------------*
 REPORT zbdc_fm_mapper.
 
 *----------------------------------------------------------------------*
 * SELECTION SCREEN
 *----------------------------------------------------------------------*
-PARAMETERS: p_prog  TYPE program    OBLIGATORY,       " Source program
-            p_tcode TYPE tcode      OBLIGATORY,       " BDC transaction
-            p_fm    TYPE rs38l_fnam OBLIGATORY.       " Replacement FM
+PARAMETERS: p_prog   TYPE program    OBLIGATORY.       " Source program
+
+SELECTION-SCREEN SKIP 1.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+PARAMETERS: p_tcode  TYPE tcode,                       " BDC transaction
+            p_oldfm  TYPE rs38l_fnam.                  " Old FM (for FM→Class)
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN SKIP 1.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+PARAMETERS: rb_fm    RADIOBUTTON GROUP rg1 DEFAULT 'X'
+                     USER-COMMAND ucomm,               " Replace with FM
+            rb_cls   RADIOBUTTON GROUP rg1.            " Replace with Class Method
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECTION-SCREEN SKIP 1.
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
+PARAMETERS: p_fm     TYPE rs38l_fnam.                  " Replacement FM (RB_FM mode)
+SELECTION-SCREEN END OF BLOCK b3.
+
+SELECTION-SCREEN SKIP 1.
+SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
+PARAMETERS: p_class  TYPE seoclsname,                  " Replacement Class
+            p_meth   TYPE seocpdname,                  " Replacement Method
+            p_static TYPE flag AS CHECKBOX DEFAULT 'X'." X=static, space=instance
+SELECTION-SCREEN END OF BLOCK b4.
+
+*----------------------------------------------------------------------*
+* SELECTION SCREEN TEXTS
+*----------------------------------------------------------------------*
+INITIALIZATION.
+  TEXT-001 = 'Source (BDC Transaction or Old FM)'.
+  TEXT-002 = 'Replacement Type'.
+  TEXT-003 = 'Replace with Function Module'.
+  TEXT-004 = 'Replace with Class Method'.
 
 *----------------------------------------------------------------------*
 * TYPE DEFINITIONS
 *----------------------------------------------------------------------*
+" Class method parameter type
+TYPES: BEGIN OF ty_cls_param,
+         param_name TYPE seocpdname,     " Method parameter name
+         param_dir  TYPE char1,          " I=Import E=Export R=Return C=Change
+         type_name  TYPE char50,         " Type e.g. LIFNR / BAPIMEPOHEADER
+         typtype    TYPE char1,          " 1=type 2=obj ref 3=data ref
+         rollname   TYPE dd03l-rollname, " Data element for matching
+         is_struct  TYPE flag,           " X = structure type
+       END OF ty_cls_param.
+
+" Class method field-level type (for structures)
+TYPES: BEGIN OF ty_cls_field,
+         param_name TYPE seocpdname,
+         param_dir  TYPE char1,
+         type_name  TYPE char50,
+         fieldname  TYPE dd03l-fieldname,
+         rollname   TYPE dd03l-rollname,
+       END OF ty_cls_field.
+
 TYPES: BEGIN OF ty_bdc_map,
          fnam      TYPE char50,    " Full BDC field name e.g. EKKO-LIFNR
          fval_var  TYPE char100,   " Variable/value used for FVAL
          tabname   TYPE dd03l-tabname,   " Table part of FNAM
          fieldname TYPE dd03l-fieldname, " Field part of FNAM
          rollname  TYPE dd03l-rollname,  " Data element (bridge for matching)
-         fm_param  TYPE char50,    " Matched FM parameter name
-         fm_struct TYPE char50,    " Matched FM structure type name
+         fm_param  TYPE char50,          " Matched FM parameter name
+         fm_struct TYPE char50,          " Matched FM structure type name
          fm_field  TYPE dd03l-fieldname, " Matched field in FM structure
-         matched   TYPE flag,      " X = matched, space = no match
-         src_line  TYPE i,         " Source line number in program
+         cls_param TYPE seocpdname,      " Matched class method parameter
+         cls_field TYPE dd03l-fieldname, " Matched field in class param structure
+         cls_type  TYPE char50,          " Class parameter type name
+         matched   TYPE flag,            " X = matched, space = no match
+         src_line  TYPE i,               " Source line number in program
        END OF ty_bdc_map.
 
 TYPES: BEGIN OF ty_fm_dd,
@@ -58,6 +117,8 @@ TYPES: BEGIN OF ty_output,
          fm_param    TYPE char50,
          fm_struct   TYPE char50,
          fm_field    TYPE dd03l-fieldname,
+         cls_param   TYPE seocpdname,
+         cls_field   TYPE dd03l-fieldname,
          gen_code    TYPE char200,
          remark      TYPE char100,
        END OF ty_output.
@@ -79,6 +140,17 @@ DATA: lt_bdc_map     TYPE TABLE OF ty_bdc_map,
       lt_code        TYPE TABLE OF ty_code_preview,
       wa_code        TYPE ty_code_preview.
 
+" Class method data
+DATA: lt_cls_params  TYPE TABLE OF ty_cls_param,
+      wa_cls_param   TYPE ty_cls_param,
+      lt_cls_fields  TYPE TABLE OF ty_cls_field,
+      wa_cls_field   TYPE ty_cls_field.
+
+" FM call block (for FM→Class mode)
+DATA: lt_fm_params   TYPE TABLE OF ty_bdc_map, " reuse ty_bdc_map for FM params
+      lv_fm_start    TYPE i,
+      lv_fm_end      TYPE i.
+
 DATA: lt_source      TYPE TABLE OF abaptxt255,
       wa_source      TYPE abaptxt255.
 
@@ -92,6 +164,17 @@ DATA: lv_bdc_start   TYPE i,
 * START OF SELECTION
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
+
+  " Validate inputs
+  IF rb_fm = 'X' AND p_fm IS INITIAL.
+    MESSAGE 'Enter Replacement FM name' TYPE 'E'.
+  ENDIF.
+  IF rb_cls = 'X' AND ( p_class IS INITIAL OR p_meth IS INITIAL ).
+    MESSAGE 'Enter Replacement Class and Method name' TYPE 'E'.
+  ENDIF.
+  IF p_tcode IS INITIAL AND p_oldfm IS INITIAL.
+    MESSAGE 'Enter either BDC Transaction or Old FM name' TYPE 'E'.
+  ENDIF.
 
   " Step 1: Read source program
   CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
@@ -108,30 +191,41 @@ START-OF-SELECTION.
     MESSAGE |Program { p_prog } not found or has no source| TYPE 'E'.
   ENDIF.
 
-  " Step 2: Scan source for BDC block belonging to p_tcode
-  PERFORM find_bdc_block.
-
-  IF lt_bdc_map IS INITIAL.
-    MESSAGE |No BDC fields found for transaction { p_tcode } in { p_prog }| TYPE 'I'.
-    RETURN.
+  " Step 2: Scan source — BDC block or FM call block
+  IF p_tcode IS NOT INITIAL.
+    PERFORM find_bdc_block.
+    IF lt_bdc_map IS INITIAL.
+      MESSAGE |No BDC fields found for { p_tcode } in { p_prog }| TYPE 'I'.
+      RETURN.
+    ENDIF.
+  ELSE.
+    " FM call mode — scan for CALL FUNCTION 'p_oldfm'
+    PERFORM find_fm_call_block.
+    IF lt_bdc_map IS INITIAL.
+      MESSAGE |No CALL FUNCTION '{ p_oldfm }' found in { p_prog }| TYPE 'I'.
+      RETURN.
+    ENDIF.
   ENDIF.
 
-  " Step 3: Lookup DD03L rollnames for all BDC fields
+  " Step 3: Enrich with rollnames from DD03L
   PERFORM enrich_rollnames.
 
-  " Step 4: Get FM parameter structure fields with rollnames
-  PERFORM get_fm_fields.
+  " Step 4a: FM replacement mode
+  IF rb_fm = 'X'.
+    PERFORM get_fm_fields.
+    PERFORM match_fields.
+    PERFORM build_output.
+    PERFORM generate_code_preview.
 
-  " Step 5: Match BDC fields to FM parameters via rollname
-  PERFORM match_fields.
+  " Step 4b: Class method replacement mode
+  ELSEIF rb_cls = 'X'.
+    PERFORM get_class_method_params.
+    PERFORM match_to_class.
+    PERFORM build_output_class.
+    PERFORM generate_class_code_preview.
+  ENDIF.
 
-  " Step 6: Build output table
-  PERFORM build_output.
-
-  " Step 7: Generate replacement code preview
-  PERFORM generate_code_preview.
-
-  " Step 8: Display results
+  " Step 5: Display results
   PERFORM display_results.
 
 *----------------------------------------------------------------------*
@@ -229,6 +323,88 @@ FORM find_bdc_block.
 ENDFORM.
 
 *----------------------------------------------------------------------*
+*& Form find_fm_call_block
+*& Scan source for CALL FUNCTION 'p_oldfm' and extract parameters
+*& Reuses lt_bdc_map: fnam=param name, fval_var=variable passed
+*----------------------------------------------------------------------*
+FORM find_fm_call_block.
+  DATA: lv_in_fm    TYPE flag,
+        lv_section  TYPE char15.   " EXPORTING/IMPORTING/TABLES
+
+  LOOP AT lt_source INTO wa_source.
+    lv_lineno = sy-tabix.
+    DATA(lv_line_u) = wa_source-line.
+    TRANSLATE lv_line_u TO UPPER CASE.
+    CONDENSE lv_line_u.
+
+    " Detect CALL FUNCTION line for our target FM
+    IF lv_line_u CS 'CALL FUNCTION' AND lv_line_u CS p_oldfm.
+      lv_in_fm    = 'X'.
+      lv_fm_start = lv_lineno.
+      lv_section  = space.
+      CONTINUE.
+    ENDIF.
+
+    IF lv_in_fm = 'X'.
+      " Track section
+      IF lv_line_u CS 'EXPORTING'.  lv_section = 'EXPORTING'. CONTINUE. ENDIF.
+      IF lv_line_u CS 'IMPORTING'.  lv_section = 'IMPORTING'. CONTINUE. ENDIF.
+      IF lv_line_u CS 'CHANGING'.   lv_section = 'CHANGING'.  CONTINUE. ENDIF.
+      IF lv_line_u CS 'TABLES'.     lv_section = 'TABLES'.    CONTINUE. ENDIF.
+      IF lv_line_u CS 'EXCEPTIONS'. lv_section = 'EXCEPTION'. CONTINUE. ENDIF.
+
+      " End of CALL FUNCTION block
+      IF lv_line_u(1) = '.' OR ( lv_line_u CS '.' AND lv_line_u NOT CS '=' ).
+        lv_fm_end = lv_lineno.
+        lv_in_fm  = space.
+        EXIT.
+      ENDIF.
+
+      " Skip EXCEPTIONS section entries
+      IF lv_section = 'EXCEPTION'. CONTINUE. ENDIF.
+
+      " Extract  param_name = variable
+      DATA(lv_raw_fm) = wa_source-line.
+      CONDENSE lv_raw_fm.
+      IF lv_raw_fm CS '='.
+        DATA(lv_eq) = sy-fdpos.
+        DATA(lv_pname) = lv_raw_fm(lv_eq).
+        CONDENSE lv_pname.
+        DATA(lv_pval)  = lv_raw_fm+lv_eq.
+        SHIFT lv_pval LEFT BY 1 PLACES.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_pval WITH space.
+        CONDENSE lv_pval.
+
+        IF lv_pname IS NOT INITIAL AND lv_pval IS NOT INITIAL.
+          CLEAR wa_bdc_map.
+          wa_bdc_map-fnam     = lv_pname.   " old FM parameter name
+          wa_bdc_map-fval_var = lv_pval.    " variable passed
+          wa_bdc_map-src_line = lv_lineno.
+          " Get rollname for this FM parameter from FUPARAREF + DD03L
+          SELECT SINGLE structure INTO @DATA(lv_struct)
+            FROM fupararef
+            WHERE funcname  = @p_oldfm
+              AND parameter = @lv_pname.
+          IF sy-subrc = 0 AND lv_struct IS NOT INITIAL.
+            " structured param — store structure as tabname for DD03L lookup
+            wa_bdc_map-tabname   = lv_struct.
+            wa_bdc_map-fieldname = lv_pname.
+          ELSE.
+            " scalar param — get rollname directly
+            SELECT SINGLE type INTO @DATA(lv_ptype)
+              FROM fupararef
+              WHERE funcname  = @p_oldfm
+                AND parameter = @lv_pname.
+            wa_bdc_map-rollname = lv_ptype.
+          ENDIF.
+          APPEND wa_bdc_map TO lt_bdc_map.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
 *& Form enrich_rollnames
 *& Get rollname (data element) for each BDC field from DD03L
 *----------------------------------------------------------------------*
@@ -276,6 +452,99 @@ FORM get_fm_fields.
       wa_fm_dd-rollname  = wa_sf-rollname.
       APPEND wa_fm_dd TO lt_fm_dd.
     ENDLOOP.
+  ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form get_class_method_params
+*& Read class method parameters from SEOPAR + DD03L rollnames
+*& SEOPAR fields:
+*&   CLSNAME   = class name
+*&   CPDNAME   = method name
+*&   SCONAME   = parameter name
+*&   PARDECLTYP= I/E/R/C (Importing/Exporting/Returning/Changing)
+*&   TYPTYPE   = 1=type 2=obj ref 3=data ref
+*&   TYPE      = type name (rollname or structure)
+*----------------------------------------------------------------------*
+FORM get_class_method_params.
+  DATA lt_seopar TYPE TABLE OF seopar.
+
+  SELECT * INTO TABLE @lt_seopar
+    FROM seopar
+    WHERE clsname = @p_class
+      AND cpdname = @p_meth.
+
+  IF lt_seopar IS INITIAL.
+    MESSAGE |No parameters found for { p_class }->{ p_meth }| TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  LOOP AT lt_seopar INTO DATA(wa_seo).
+    CLEAR wa_cls_param.
+    wa_cls_param-param_name = wa_seo-sconame.
+    wa_cls_param-param_dir  = wa_seo-pardecltyp.
+    wa_cls_param-type_name  = wa_seo-type.
+    wa_cls_param-typtype    = wa_seo-typtype.
+
+    " Check if the type is a structure (exists in DD02L)
+    SELECT SINGLE tabname INTO @DATA(lv_tabchk)
+      FROM dd02l WHERE tabname = @wa_seo-type.
+    IF sy-subrc = 0.
+      " Structure type — expand all fields
+      wa_cls_param-is_struct = 'X'.
+      wa_cls_param-rollname  = space.
+      APPEND wa_cls_param TO lt_cls_params.
+
+      " Expand structure fields into lt_cls_fields
+      SELECT fieldname, rollname
+        INTO TABLE @DATA(lt_sf)
+        FROM dd03l
+        WHERE tabname  = @wa_seo-type
+          AND rollname IS NOT INITIAL
+          AND fieldname NOT LIKE '.%'.
+      LOOP AT lt_sf INTO DATA(wa_sf2).
+        CLEAR wa_cls_field.
+        wa_cls_field-param_name = wa_seo-sconame.
+        wa_cls_field-param_dir  = wa_seo-pardecltyp.
+        wa_cls_field-type_name  = wa_seo-type.
+        wa_cls_field-fieldname  = wa_sf2-fieldname.
+        wa_cls_field-rollname   = wa_sf2-rollname.
+        APPEND wa_cls_field TO lt_cls_fields.
+      ENDLOOP.
+    ELSE.
+      " Scalar type — rollname = type itself (it IS the data element)
+      wa_cls_param-is_struct = space.
+      wa_cls_param-rollname  = wa_seo-type.
+      APPEND wa_cls_param TO lt_cls_params.
+
+      " Also add as field entry for matching
+      CLEAR wa_cls_field.
+      wa_cls_field-param_name = wa_seo-sconame.
+      wa_cls_field-param_dir  = wa_seo-pardecltyp.
+      wa_cls_field-type_name  = wa_seo-type.
+      wa_cls_field-fieldname  = wa_seo-sconame.
+      wa_cls_field-rollname   = wa_seo-type.
+      APPEND wa_cls_field TO lt_cls_fields.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form match_to_class
+*& Match BDC/FM fields to class method parameters via rollname
+*----------------------------------------------------------------------*
+FORM match_to_class.
+  LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_c>).
+    IF <fs_c>-rollname IS INITIAL. CONTINUE. ENDIF.
+
+    READ TABLE lt_cls_fields INTO wa_cls_field
+      WITH KEY rollname = <fs_c>-rollname.
+    IF sy-subrc = 0.
+      <fs_c>-cls_param = wa_cls_field-param_name.
+      <fs_c>-cls_field = wa_cls_field-fieldname.
+      <fs_c>-cls_type  = wa_cls_field-type_name.
+      <fs_c>-matched   = 'X'.
+    ENDIF.
   ENDLOOP.
 ENDFORM.
 
@@ -341,6 +610,202 @@ FORM build_output.
 
   " Summary message
   MESSAGE |Mapping complete: { lv_match_cnt } of { lv_total_cnt } fields matched| TYPE 'I'.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form build_output_class
+*& Build ALV output for class method mapping
+*----------------------------------------------------------------------*
+FORM build_output_class.
+  DATA lv_match_cnt TYPE i.
+  DATA lv_total_cnt TYPE i.
+
+  LOOP AT lt_bdc_map INTO wa_bdc_map.
+    CLEAR wa_output.
+    lv_total_cnt = lv_total_cnt + 1.
+
+    wa_output-src_line  = wa_bdc_map-src_line.
+    wa_output-bdc_fnam  = wa_bdc_map-fnam.
+    wa_output-bdc_fval  = wa_bdc_map-fval_var.
+    wa_output-bdc_roll  = wa_bdc_map-rollname.
+
+    IF wa_bdc_map-matched = 'X'.
+      lv_match_cnt = lv_match_cnt + 1.
+      wa_output-status    = 'MATCHED'.
+      wa_output-cls_param = wa_bdc_map-cls_param.
+      wa_output-cls_field = wa_bdc_map-cls_field.
+
+      " Check if param is a structure
+      READ TABLE lt_cls_params INTO wa_cls_param
+        WITH KEY param_name = wa_bdc_map-cls_param
+                 is_struct  = 'X'.
+      IF sy-subrc = 0.
+        CONCATENATE 'ls_' wa_bdc_map-cls_param
+                    '-' wa_bdc_map-cls_field
+                    ' = ' wa_bdc_map-fval_var '.'
+          INTO wa_output-gen_code SEPARATED BY space.
+      ELSE.
+        CONCATENATE wa_bdc_map-cls_param
+                    ' = ' wa_bdc_map-fval_var '.'
+          INTO wa_output-gen_code SEPARATED BY space.
+      ENDIF.
+      wa_output-remark = wa_bdc_map-rollname.
+    ELSE.
+      wa_output-status = 'NO MATCH'.
+      IF wa_bdc_map-rollname IS INITIAL.
+        wa_output-remark = 'Rollname not found in DD03L'.
+      ELSE.
+        CONCATENATE 'Rollname' wa_bdc_map-rollname
+          'not in class method interface'
+          INTO wa_output-remark SEPARATED BY space.
+      ENDIF.
+      CONCATENATE '" TODO: map' wa_bdc_map-fnam
+        '(' wa_bdc_map-fval_var ')'
+        INTO wa_output-gen_code SEPARATED BY space.
+    ENDIF.
+    APPEND wa_output TO lt_output.
+  ENDLOOP.
+
+  MESSAGE |Class mapping: { lv_match_cnt } of { lv_total_cnt } fields matched| TYPE 'I'.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form generate_class_code_preview
+*& Generate replacement Class Method call code
+*----------------------------------------------------------------------*
+FORM generate_class_code_preview.
+  lv_code_ctr = 1.
+
+  DEFINE add_line.
+    wa_code-lineno = lv_code_ctr.
+    wa_code-code   = &1.
+    APPEND wa_code TO lt_code.
+    lv_code_ctr = lv_code_ctr + 1.
+  END-OF-DEFINITION.
+
+  " Header
+  IF p_tcode IS NOT INITIAL.
+    add_line: |" ** begin of change - BDC → Class Method replacement **|.
+    add_line: |" Replace CALL TRANSACTION '{ p_tcode }' with { p_class }=>{ p_meth }|.
+  ELSE.
+    add_line: |" ** begin of change - FM → Class Method replacement **|.
+    add_line: |" Replace CALL FUNCTION '{ p_oldfm }' with { p_class }=>{ p_meth }|.
+  ENDIF.
+  add_line: ''.
+
+  " Comment out original block
+  DATA lv_blk_start TYPE i.
+  DATA lv_blk_end   TYPE i.
+  IF p_tcode IS NOT INITIAL.
+    lv_blk_start = lv_bdc_start. lv_blk_end = lv_bdc_end.
+  ELSE.
+    lv_blk_start = lv_fm_start.  lv_blk_end = lv_fm_end.
+  ENDIF.
+  add_line: |" --- Original block (lines { lv_blk_start }-{ lv_blk_end }) commented out ---|.
+  LOOP AT lt_source INTO wa_source FROM lv_blk_start TO lv_blk_end.
+    wa_code-lineno = lv_code_ctr.
+    CONCATENATE '*' wa_source-line INTO wa_code-code.
+    APPEND wa_code TO lt_code.
+    lv_code_ctr = lv_code_ctr + 1.
+  ENDLOOP.
+  add_line: ''.
+
+  " DATA declarations for structured parameters
+  add_line: '" --- Data declarations ---'.
+  LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = 'X'.
+    DATA lv_cls_decl TYPE char200.
+    CONCATENATE 'DATA ls_' wa_cls_param-param_name
+      ' TYPE ' wa_cls_param-type_name '.'
+      INTO lv_cls_decl SEPARATED BY space.
+    add_line: lv_cls_decl.
+  ENDLOOP.
+  add_line: ''.
+
+  " Matched field assignments
+  add_line: '" --- Auto-mapped field assignments (via DD03L rollname) ---'.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    DATA lv_cls_assign TYPE char200.
+    DATA lv_cls_cmt    TYPE char200.
+    " Check if structured
+    READ TABLE lt_cls_params INTO wa_cls_param
+      WITH KEY param_name = wa_bdc_map-cls_param is_struct = 'X'.
+    IF sy-subrc = 0.
+      CONCATENATE 'ls_' wa_bdc_map-cls_param
+                  '-' wa_bdc_map-cls_field
+                  ' = ' wa_bdc_map-fval_var '.'
+        INTO lv_cls_assign SEPARATED BY space.
+    ELSE.
+      CONCATENATE wa_bdc_map-cls_param
+                  ' = ' wa_bdc_map-fval_var '.'
+        INTO lv_cls_assign SEPARATED BY space.
+    ENDIF.
+    CONCATENATE '" BDC/FM:' wa_bdc_map-fnam
+                '→ Param:' wa_bdc_map-cls_param
+                'Field:' wa_bdc_map-cls_field
+                '(' wa_bdc_map-rollname ')'
+      INTO lv_cls_cmt SEPARATED BY space.
+    add_line: lv_cls_cmt.
+    add_line: lv_cls_assign.
+  ENDLOOP.
+  add_line: ''.
+
+  " TODO for unmatched
+  DATA lv_todo_hdr TYPE flag.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = space.
+    IF lv_todo_hdr = space.
+      add_line: '" --- TODO: Could not auto-map these fields ---'.
+      lv_todo_hdr = 'X'.
+    ENDIF.
+    DATA lv_cls_todo TYPE char200.
+    CONCATENATE '" TODO: map' wa_bdc_map-fnam
+      '(val=' wa_bdc_map-fval_var
+      'roll=' wa_bdc_map-rollname ')'
+      INTO lv_cls_todo SEPARATED BY space.
+    add_line: lv_cls_todo.
+  ENDLOOP.
+  add_line: ''.
+
+  " Method call — static or instance
+  DATA lv_call_stmt TYPE char200.
+  IF p_static = 'X'.
+    CONCATENATE p_class '=>' p_meth '('
+      INTO lv_call_stmt.
+  ELSE.
+    CONCATENATE 'lo_obj->' p_meth '('
+      INTO lv_call_stmt.
+    add_line: |DATA lo_obj TYPE REF TO { p_class }.|.
+    add_line: |CREATE OBJECT lo_obj.|.
+  ENDIF.
+  add_line: lv_call_stmt.
+
+  " Parameters in call
+  LOOP AT lt_cls_params INTO wa_cls_param.
+    DATA lv_prm TYPE char200.
+    CASE wa_cls_param-param_dir.
+      WHEN 'I' OR 'C'.  " Importing / Changing
+        IF wa_cls_param-is_struct = 'X'.
+          CONCATENATE '  EXPORTING ' wa_cls_param-param_name
+            '= ls_' wa_cls_param-param_name
+            INTO lv_prm SEPARATED BY space.
+        ELSE.
+          CONCATENATE '  EXPORTING ' wa_cls_param-param_name
+            '= " TODO: fill value'
+            INTO lv_prm SEPARATED BY space.
+        ENDIF.
+      WHEN 'E'.  " Exporting
+        CONCATENATE '  IMPORTING ' wa_cls_param-param_name
+          '= lv_' wa_cls_param-param_name
+          INTO lv_prm SEPARATED BY space.
+      WHEN 'R'.  " Returning
+        CONCATENATE '  RECEIVING result = lv_result "'
+          wa_cls_param-type_name
+          INTO lv_prm SEPARATED BY space.
+    ENDCASE.
+    add_line: lv_prm.
+  ENDLOOP.
+  add_line: ').'.
+  add_line: ''.
+  add_line: '" ** end of change **'.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -504,12 +969,27 @@ FORM display_results.
       lo_cols->get_column( 'FM_PARAM'  )->set_long_text( 'FM Parameter' ).
       lo_cols->get_column( 'FM_STRUCT' )->set_long_text( 'FM Structure Type' ).
       lo_cols->get_column( 'FM_FIELD'  )->set_long_text( 'FM Field Name' ).
+      lo_cols->get_column( 'CLS_PARAM' )->set_long_text( 'Class Method Parameter' ).
+      lo_cols->get_column( 'CLS_FIELD' )->set_long_text( 'Class Param Field' ).
       lo_cols->get_column( 'GEN_CODE'  )->set_long_text( 'Generated Code Line' ).
       lo_cols->get_column( 'REMARK'    )->set_long_text( 'Remark' ).
 
-      " Color MATCHED rows green, NO MATCH rows red
+      " Hide columns not relevant to current mode
+      IF rb_fm = 'X'.
+        lo_cols->get_column( 'CLS_PARAM' )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'CLS_FIELD' )->set_visible( if_salv_c_bool_sap=>false ).
+      ELSE.
+        lo_cols->get_column( 'FM_PARAM'  )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'FM_STRUCT' )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'FM_FIELD'  )->set_visible( if_salv_c_bool_sap=>false ).
+      ENDIF.
+
       DATA(lo_disp) = lo_map->get_display_settings( ).
-      lo_disp->set_list_header( |BDC → FM Field Mapping: { p_tcode } → { p_fm }| ).
+      IF rb_fm = 'X'.
+        lo_disp->set_list_header( |BDC/FM → FM Mapping: → { p_fm }| ).
+      ELSE.
+        lo_disp->set_list_header( |BDC/FM → Class Method Mapping: { p_class }=>{ p_meth }| ).
+      ENDIF.
 
       lo_map->display( ).
     CATCH cx_salv_msg.
