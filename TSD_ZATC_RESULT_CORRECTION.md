@@ -7,7 +7,7 @@
 | Field            | Details                                      |
 |------------------|----------------------------------------------|
 | **Document No.** | TSD-ZATC-001                                 |
-| **Version**      | V1.0                                         |
+| **Version**      | V1.1                                         |
 | **Program Name** | ZATC_RESULT_CORRECTION                       |
 | **Program Type** | Executable Program (Report)                  |
 | **Package**      | Z-Custom Development                         |
@@ -180,15 +180,29 @@ END
 
 **Messages Handled:**
 
-| Message | Condition | Correction |
-|---------|-----------|------------|
-| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Note 2628704 (Amount) | `PERFORM amount_conv` - wrap field assignment with `CONV domname(...)` |
-| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Note 2438131 (Material) | `PERFORM material_conv` - wrap MATNR field with `CONV domname(...)` |
-| `SYNTACTICALLY INCOMPATIBLE CHANGE` | DTEL ref in config table | Replace old data element TYPE reference with new one |
-| `SYNTACTICALLY INCOMPATIBLE CHANGE` | TRAN, mapped to BP | `PERFORM replace_bp` - replace SET PARAM + CALL TRAN with CL_BUPA_DIALOG_JOEL |
-| `SYNTACTICALLY INCOMPATIBLE CHANGE` | TRAN, mapped to MIGO | `PERFORM replace_migo` - replace with MIGO_DIALOG function module call |
-| `FUNCTIONALITY NOT AVAILABLE` | LIKE reference | Convert LIKE to TYPE using DD03L rollname lookup |
-| `NON-STRATEGIC-FUNCTION` | Priority 2 or 3 | Add pragma `"#EC CI_USAGE_OK[note]` |
+| Message | Condition | Note(s) | Correction |
+|---------|-----------|---------|------------|
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Amount FLE - DEC fields | **2628704** | `PERFORM amount_conv` – wrap DEC field assignment with `CONV domname(...)` |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Amount FLE - CURR fields | **2628699** | `PERFORM amount_conv` – extended to handle CURR datatype |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Amount FLE - QUAN fields | **2628706** | `PERFORM amount_conv` – extended to handle QUAN datatype |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Material FLE - MATNR40/18 | **2438131** | `PERFORM material_conv` – wrap MATNR40/18 field with `CONV domname(...)` |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | Material FLE - MATNR base | **2438110** | `PERFORM material_conv` – extended to handle base MATNR domain |
+| `FUNCTIONALITY UNAVAILABLE` | Legal report → SAP DRC | **2480067** | `PERFORM drc_report_note` – insert migration banner comment to adopt DRC statutory report |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | DTEL ref in config table | Config-driven | Replace old data element TYPE reference with new one |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | TRAN, mapped to BP | Config-driven | `PERFORM replace_bp` – replace SET PARAM + CALL TRAN with CL_BUPA_DIALOG_JOEL |
+| `SYNTACTICALLY INCOMPATIBLE CHANGE` | TRAN, mapped to MIGO | Config-driven | `PERFORM replace_migo` – replace with MIGO_DIALOG function module call |
+| `FUNCTIONALITY NOT AVAILABLE` | LIKE reference | Config-driven | Convert LIKE to TYPE using DD03L rollname lookup |
+| `NON-STRATEGIC-FUNCTION` | Priority 2 or 3 | Generic | Add pragma `"#EC CI_USAGE_OK[note]` |
+
+#### Notes Classification — Simplified Objects
+
+| Note Group | Note Numbers | Field/Area | Handled By |
+|------------|-------------|-----------|------------|
+| AFLE (Amount Field Length Extension) | 2628704, 2628699, 2628706 | DEC / CURR / QUAN amount fields | `FORM amount_conv` |
+| MFLE (Material Field Length Extension) | 2438131, 2438110 | MATNR40 / MATNR18 / MATNR domains | `FORM material_conv` |
+| DRC (Document & Reporting Compliance) | 2480067 | Legacy statutory/legal reports | `FORM drc_report_note` |
+| FLE - Generic (other field extensions) | 2xxx range (140+ notes) | Various CURR/QUAN/DEC fields | CI_FLDEXT_OK pragma |
+| Simplified Objects - Generic | Various 2xxx/3xxx | Simplified APIs, BAPIs | CI_USAGE_OK pragma |
 
 ---
 
@@ -346,8 +360,9 @@ Stores additional correction mappings at message level.
 | `PROCESS_CHANGE_LOOP` | For `ON CHANGE OF` findings, extracts the change field, finds the enclosing LOOP, and inserts appropriate SORT statement. |
 | `ENDAT` | For `AT ... ENDAT` findings, extracts the AT field name, finds enclosing LOOP, and inserts `SORT <table> BY <field>.` |
 | `LOOP_EXIT` | For `LOOP AT ... EXIT` findings, finds the enclosing LOOP and inserts `SORT <table>.` before it (deduplication guard included). |
-| `AMOUNT_CONV` | Converts amount field assignments to use `CONV domname(...)` operator by analyzing function module parameters with DEC type fields. |
-| `MATERIAL_CONV` | Converts material number field assignments to use `CONV domname(...)` operator for MATNR40/MATNR18 domain fields. |
+| `AMOUNT_CONV` | Converts amount/currency/quantity field assignments to use `CONV domname(...)` operator. Handles **DEC** (note 2628704), **CURR** (note 2628699), and **QUAN** (note 2628706) datatypes by querying DD03L for the function module parameter structure fields. |
+| `MATERIAL_CONV` | Converts material number field assignments to use `CONV domname(...)` operator. Handles **MATNR40/MATNR18** domains (note 2438131) and base **MATNR** domain (note 2438110). |
+| `DRC_REPORT_NOTE` | Handles SAP note **2480067** — legacy ABAP legal/statutory reports replaced by SAP Document and Reporting Compliance (DRC) framework. Inserts begin/end change comments and a developer migration banner: `*** NOTE 2480067: Replace this usage with SAP DRC statutory report. ***` |
 | `REPLACE_BP` | Replaces old vendor/customer transaction calls (via SET PARAMETER + CALL TRANSACTION) with the new `CL_BUPA_DIALOG_JOEL` API. |
 | `REPLACE_MIGO` | Replaces direct MIGO transaction calls with `CALL FUNCTION 'MIGO_DIALOG'` including document number and year parameters. |
 | `SMARTFORM_PROCEE` | Stub handler for Smart Form corrections (partially implemented, contains BREAK-POINT for analysis). |
@@ -440,7 +455,7 @@ After processing, the program displays an ALV list with the following columns:
 | 2 | The program does not handle all possible SELECT syntax variations (e.g. nested SELECTs, dynamic WHERE clauses) |
 | 3 | For JOIN statements with more than 3 tables, field remapping may not be complete |
 | 4 | The status field shows `Syyntax error` (note typo — intentional in original code) |
-| 5 | The `FORM amount_conv` and `FORM material_conv` only handle cases where the variable is appended to a work area within a loop |
+| 5 | `FORM amount_conv` handles DEC/CURR/QUAN fields in function module parameter structures only; direct inline assignments in PROG/CLAS are handled by generic CI_FLDEXT_OK pragma. `FORM material_conv` handles MATNR40, MATNR18, and MATNR domain fields in function module parameters. |
 | 6 | Objects where `sobjname` does not start with Y or Z are skipped (custom namespace filter) |
 
 ---
@@ -471,6 +486,7 @@ Use `P_REM` parameter with a unique identifier string. If this string is found i
 | Version | Date | Author | Description |
 |---------|------|--------|-------------|
 | V1.0 | April 2026 | ONGC CST Team | Initial version — covers major S/4HANA ATC correction scenarios |
+| V1.1 | April 2026 | ONGC CST Team | Added handling for 4 missing SAP notes: 2628699 (AFLE-CURR), 2628706 (AFLE-QUAN), 2438110 (MFLE-MATNR base domain), 2480067 (DRC legal report replacement). Enhanced `amount_conv` for CURR/QUAN datatypes. Enhanced `material_conv` for MATNR domain. Added new `drc_report_note` FORM for DRC migration. |
 
 ---
 
