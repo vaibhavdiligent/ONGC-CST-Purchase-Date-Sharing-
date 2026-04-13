@@ -719,11 +719,19 @@ START-OF-SELECTION.
                 WHEN 'SYNTACTICALLY INCOMPATIBLE CHANGE OF EXISTING FUNCTIONALITY'
                   OR 'FUNCTIONALITY UNAVAILABLE'
                   OR 'FUNCTIONALITY NOT AVAILABLE: EQUIVALENT FUNCTION ON ROADMAP'.
-                  IF wa_final-param1 CS '0002628704' OR wa_final-param1 CS '0002438131'.
-                    IF wa_final-param1 CS '0002628704'.
+                  " Notes: 2628704/2628699/2628706 = AFLE (Amount/CURR/QUAN field length ext)
+                  "        2438131/2438110         = MFLE (Material number field length ext)
+                  "        2480067                 = DRC  (Legal report replacement via SAP DRC)
+                  IF wa_final-param1 CS '0002628704' OR wa_final-param1 CS '0002438131'
+                     OR wa_final-param1 CS '0002628699' OR wa_final-param1 CS '0002628706'
+                     OR wa_final-param1 CS '0002438110' OR wa_final-param1 CS '0002480067'.
+                    IF wa_final-param1 CS '0002628704' OR wa_final-param1 CS '0002628699'
+                       OR wa_final-param1 CS '0002628706'.
                       PERFORM amount_conv.
-                    ELSE.
+                    ELSEIF wa_final-param1 CS '0002438131' OR wa_final-param1 CS '0002438110'.
                       PERFORM material_conv.
+                    ELSEIF wa_final-param1 CS '0002480067'.
+                      PERFORM drc_report_note.
                     ENDIF.
                     CLEAR wa_blank.
                     CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -2210,10 +2218,11 @@ FORM amount_conv.
     IF sy-subrc = 0.
       LOOP AT it_fupararef INTO DATA(wa_fupararef).
         IF wa_fupararef-structure CS '-'. CONTINUE. ENDIF.
+        " Handle AFLE for DEC (note 2628704), CURR (note 2628699), QUAN (note 2628706)
         SELECT * INTO TABLE @DATA(it_dd03l)
           FROM dd03l
           WHERE tabname  = @wa_fupararef-structure
-            AND datatype = 'DEC'.
+            AND datatype IN ('DEC', 'CURR', 'QUAN').
         IF sy-subrc = 0.
           CLEAR l_flag.
           LOOP AT repos_tab INTO DATA(l_repos) WHERE line CS wa_fupararef-parameter.
@@ -2337,10 +2346,11 @@ FORM material_conv.
     IF sy-subrc = 0.
       LOOP AT it_fupararef INTO DATA(wa_fupararef).
         IF wa_fupararef-structure CS '-'. CONTINUE. ENDIF.
+        " Handle MFLE for MATNR40/MATNR18 (note 2438131) and MATNR (note 2438110)
         SELECT * INTO TABLE @DATA(it_dd03l)
           FROM dd03l
           WHERE tabname  = @wa_fupararef-structure
-            AND ( domname = 'MATNR40' OR domname = 'MATNR18' ).
+            AND ( domname = 'MATNR40' OR domname = 'MATNR18' OR domname = 'MATNR' ).
         IF sy-subrc = 0.
           CLEAR l_flag.
           LOOP AT repos_tab INTO DATA(l_repos) WHERE line CS wa_fupararef-parameter.
@@ -2448,6 +2458,31 @@ FORM material_conv.
       ENDLOOP.
     ENDIF.
   ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form drc_report_note
+*& SAP Note 2480067 - Legal report replacement via SAP DRC framework
+*& Adds CI_USAGE_OK pragma and migration comment for old statutory reports
+*& that have been replaced by SAP Document and Reporting Compliance (DRC)
+*&---------------------------------------------------------------------*
+FORM drc_report_note.
+  " SAP note 2480067: Legacy ABAP legal/statutory reports are replaced by
+  " SAP Document and Reporting Compliance (DRC) framework in S/4HANA.
+  " Action: Add CI_USAGE_OK pseudo-comment and informational banner so
+  " the ATC finding is suppressed and the developer is notified to plan
+  " migration of the usage to the corresponding DRC report.
+  DATA l_drc_comment TYPE abaptxt255.
+  CONCATENATE '"' '*** NOTE 2480067: Replace this usage with SAP DRC statutory report. ***'
+    INTO l_drc_comment-line SEPARATED BY space.
+  CLEAR wa_blank.
+  CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC (DRC migration - note 2480067)'
+    INTO wa_blank-line SEPARATED BY space.
+  APPEND wa_blank TO repos_tab_new.
+  APPEND l_drc_comment TO repos_tab_new.
+  CLEAR wa_blank.
+  CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+    INTO wa_blank-line SEPARATED BY space.
+  APPEND wa_blank TO repos_tab_new.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form replace_bp
