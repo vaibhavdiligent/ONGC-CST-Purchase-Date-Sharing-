@@ -7,6 +7,7 @@
 * Date            : 08.05.2024
 * DESCRIPTION     : Report For Closing Imbalance Of Expired Contracts
 * CHARM ID        : 2000000826 / TR NO : DVRK9A19P3
+* Change  : Added Till Date radio button, Send Email checkbox, email logic
 *&---------------------------------------------------------------------*
 REPORT yrgr_033_gms_imbal.
 
@@ -64,11 +65,24 @@ DATA: st_date TYPE sy-datum,
       ed_date TYPE sy-datum,
       lv_date TYPE sy-datum.
 
+" Email-related declarations
+DATA: lv_subrc     TYPE sy-subrc,
+      lv_send_date TYPE sy-datum,
+      lv_send_time TYPE sy-uzeit.
+DATA: lt_email_to  TYPE TABLE OF ad_smtpadr,
+      lt_email_cc  TYPE TABLE OF ad_smtpadr,
+      lv_email     TYPE ad_smtpadr.
+DATA: lv_vkbur     TYPE vkbur,
+      lv_locid     TYPE oijnomi-locid.
+DATA: lv_has_role  TYPE c LENGTH 1.
+
 SELECTION-SCREEN BEGIN OF BLOCK b WITH FRAME TITLE TEXT-001.
   PARAMETERS: r1 RADIOBUTTON GROUP r1
-                 USER-COMMAND abc DEFAULT 'X' MODIF ID m1.
+                 USER-COMMAND abc DEFAULT 'X' MODIF ID m1.  " FN Wise
   SELECT-OPTIONS: s_date FOR oijnomi-idate MODIF ID m2 OBLIGATORY.
-  PARAMETERS: r2 RADIOBUTTON GROUP r1 MODIF ID m1.
+  PARAMETERS: r2 RADIOBUTTON GROUP r1 MODIF ID m5.          " (deactivated)
+  PARAMETERS: r3 RADIOBUTTON GROUP r1 MODIF ID m1.          " Till Date (from Sept 2025)
+  PARAMETERS: p_email AS CHECKBOX MODIF ID m3.              " Send Email (role-restricted)
 SELECTION-SCREEN END OF BLOCK b.
 
 INITIALIZATION.
@@ -81,6 +95,26 @@ INITIALIZATION.
   s_date-low  = st_date.
   s_date-high = ed_date.
   APPEND s_date.
+  " Check if user has email role
+  CALL FUNCTION 'SUSR_USER_AUTH_FOR_OBJ_GET'
+    EXPORTING
+      user_name     = sy-uname
+      object        = 'S_USER_AGR'
+    EXCEPTIONS
+      not_found     = 1
+      no_authority  = 2
+      OTHERS        = 3.
+  IF sy-subrc EQ 0.
+    lv_has_role = 'X'.
+  ELSE.
+    " Check via AGR_USERS table
+    SELECT SINGLE uname FROM agr_users INTO @DATA(lv_uname)
+      WHERE uname  = @sy-uname
+      AND   agr_name = 'ZO_CC_EHS.GMS_ROLE'.
+    IF sy-subrc EQ 0.
+      lv_has_role = 'X'.
+    ENDIF.
+  ENDIF.
 
 AT SELECTION-SCREEN OUTPUT.
   LOOP AT SCREEN.
@@ -88,401 +122,24 @@ AT SELECTION-SCREEN OUTPUT.
       screen-active = 0.
       MODIFY SCREEN.
     ENDIF.
+    IF screen-name = 'P_EMAIL'.
+      IF lv_has_role NE 'X'.
+        screen-active = 0.
+      ELSE.
+        IF r3 NE 'X'.
+          screen-active = 0.
+        ELSE.
+          screen-active = 1.
+        ENDIF.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+    IF screen-name = 'S_DATE-LOW' OR screen-name = 'S_DATE-HIGH'.
+      IF r3 EQ 'X'.
+        screen-active = 0.
+      ELSE.
+        screen-active = 1.
+      ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
   ENDLOOP.
-
-**====================================================================**
-** CLASS INCLUDE
-**====================================================================**
-CLASS lcl_event_handler DEFINITION.
-  PUBLIC SECTION.
-    METHODS : get_data.
-    CLASS-METHODS:
-      get_data,
-      button_click FOR EVENT button_click OF cl_gui_alv_grid
-        IMPORTING es_col_id es_row_no sender,
-      top_of_page FOR EVENT top_of_page OF cl_gui_alv_grid
-        IMPORTING e_dyndoc_id table_index.
-ENDCLASS.
-
-CLASS lcl_event_handler IMPLEMENTATION.
-  METHOD get_data.
-    PERFORM get_data.
-  ENDMETHOD.
-  METHOD top_of_page.
-    PERFORM top_of_page USING dg_dyndoc_id.
-  ENDMETHOD.
-ENDCLASS.
-
-**====================================================================**
-** START-OF-SELECTION
-**====================================================================**
-START-OF-SELECTION.
-  IF r1 EQ 'X'.
-    DATA: obj_rep TYPE REF TO lcl_event_handler.
-    CREATE OBJECT obj_rep.
-    obj_rep->get_data( ).
-    PERFORM fill_fieldcat.
-    PERFORM display.
-  ENDIF.
-
-**====================================================================**
-** FORM get_data
-**====================================================================**
-FORM get_data.
-  CALL FUNCTION 'YRX_IMB_SETTLE_QTY_FM'
-    EXPORTING
-      st_date  = s_date-low
-      ed_date  = s_date-high
-    TABLES
-      lt_final = lt_final.
-ENDFORM.
-
-**====================================================================**
-** FORM fill_fieldcat - all 19 cols
-**====================================================================**
-FORM fill_fieldcat.
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'DOCNR'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Contract ID'.
-  gs_fieldcat-scrtext_m = 'Contract ID'.
-  gs_fieldcat-scrtext_s = 'Contract ID'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'MATNR'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Material'.
-  gs_fieldcat-scrtext_m = 'Material'.
-  gs_fieldcat-scrtext_s = 'Material'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'PARTNR'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Customer'.
-  gs_fieldcat-scrtext_m = 'Customer'.
-  gs_fieldcat-scrtext_s = 'Customer'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'LOCID'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '8'.
-  gs_fieldcat-scrtext_l = 'Location ID'.
-  gs_fieldcat-scrtext_m = 'Location ID'.
-  gs_fieldcat-scrtext_s = 'Location ID'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'VBEGDAT'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'CT Start Date'.
-  gs_fieldcat-scrtext_m = 'CT Start Date'.
-  gs_fieldcat-scrtext_s = 'CT Start Date'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'VENDDAT'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'CT End Date'.
-  gs_fieldcat-scrtext_m = 'CT End Date'.
-  gs_fieldcat-scrtext_s = 'CT End Date'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'STAT'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '12'.
-  gs_fieldcat-scrtext_l = 'Status'.
-  gs_fieldcat-scrtext_m = 'Status'.
-  gs_fieldcat-scrtext_s = 'Status'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'PO_IMBAL'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '15'.
-  gs_fieldcat-no_zero   = 'X'.
-  gs_fieldcat-scrtext_l = 'Positive Imbalance'.
-  gs_fieldcat-scrtext_m = 'Positive Imbalance'.
-  gs_fieldcat-scrtext_s = 'Pos Imbal'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'NE_IMBAL'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '15'.
-  gs_fieldcat-no_zero   = 'X'.
-  gs_fieldcat-scrtext_l = 'Negative Imbalance'.
-  gs_fieldcat-scrtext_m = 'Negative Imbalance'.
-  gs_fieldcat-scrtext_s = 'Neg Imbal'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'VKBUR'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '5'.
-  gs_fieldcat-scrtext_l = 'Sales Office'.
-  gs_fieldcat-scrtext_m = 'Sales Office'.
-  gs_fieldcat-scrtext_s = 'Sales Office'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'RET_DEL'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Return Delivery (Rtrn Del)'.
-  gs_fieldcat-scrtext_m = 'Return Delivery (Rtrn Del)'.
-  gs_fieldcat-scrtext_s = 'Ret Del'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'CRD_NOT'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Credit Note'.
-  gs_fieldcat-scrtext_m = 'Credit Note'.
-  gs_fieldcat-scrtext_s = 'Crd Note'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'SAL_ORD'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Sales Order'.
-  gs_fieldcat-scrtext_m = 'Sales Order'.
-  gs_fieldcat-scrtext_s = 'Sal_Ord'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'DO'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'DO'.
-  gs_fieldcat-scrtext_m = 'DO'.
-  gs_fieldcat-scrtext_s = 'DO'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'PGI'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'PGI'.
-  gs_fieldcat-scrtext_m = 'PGI'.
-  gs_fieldcat-scrtext_s = 'PGI'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'INVOIC'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Invoice'.
-  gs_fieldcat-scrtext_m = 'Invoice'.
-  gs_fieldcat-scrtext_s = 'Invoice'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'PUR_RET'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'Purchase Return (Pur Rtrn)'.
-  gs_fieldcat-scrtext_m = 'Purchase Return (Pur Rtrn)'.
-  gs_fieldcat-scrtext_s = 'Pur_Ret'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'PO'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'PO'.
-  gs_fieldcat-scrtext_m = 'PO'.
-  gs_fieldcat-scrtext_s = 'PO'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'GR'.
-  gs_fieldcat-tabname   = 'LT_FINAL'.
-  gs_fieldcat-outputlen = '10'.
-  gs_fieldcat-scrtext_l = 'GR'.
-  gs_fieldcat-scrtext_m = 'GR'.
-  gs_fieldcat-scrtext_s = 'GR'.
-  gs_fieldcat-no_out    = 'X'.
-  APPEND gs_fieldcat TO gt_fieldcat.
-ENDFORM.
-
-**====================================================================**
-** FORM display
-**====================================================================**
-FORM display.
-  IF g_custom_container IS INITIAL.
-    CREATE OBJECT g_custom_container
-      EXPORTING container_name = g_container.
-    CREATE OBJECT dg_splitter
-      EXPORTING
-        parent  = g_custom_container
-        rows    = 2
-        columns = 1.
-    CALL METHOD dg_splitter->get_container
-      EXPORTING row = 1 column = 1
-      RECEIVING container = dg_parent_html.
-    CALL METHOD dg_splitter->get_container
-      EXPORTING row = 2 column = 1
-      RECEIVING container = dg_parent_grid.
-    CALL METHOD dg_splitter->set_row_height
-      EXPORTING id = 1 height = 24.
-    CREATE OBJECT grid
-      EXPORTING i_parent = dg_parent_grid.
-    gs_layout-stylefname = 'CELL'.
-    SET HANDLER lcl_event_handler=>top_of_page FOR grid.
-    CALL METHOD grid->set_table_for_first_display
-      EXPORTING
-        it_toolbar_excluding = lt_exclude
-        is_layout            = gs_layout
-      CHANGING
-        it_fieldcatalog      = gt_fieldcat
-        it_outtab            = lt_final[].
-  ENDIF.
-  CREATE OBJECT dg_dyndoc_id
-    EXPORTING style = 'ALV_GRID'.
-  CALL METHOD dg_dyndoc_id->initialize_document.
-  CALL METHOD grid->list_processing_events
-    EXPORTING
-      i_event_name = 'TOP_OF_PAGE'
-      i_dyndoc_id  = dg_dyndoc_id.
-  CALL SCREEN 100.
-ENDFORM.
-
-**====================================================================**
-** MODULE status_0100 OUTPUT (PBO)
-**====================================================================**
-MODULE status_0100 OUTPUT.
-  SET PF-STATUS 'SALV_STANDARD'.
-  SET TITLEBAR 'GMS_TITLE'.
-ENDMODULE.
-
-**====================================================================**
-** MODULE user_command_0100 INPUT (PAI)
-**====================================================================**
-MODULE user_command_0100 INPUT.
-  CASE sy-ucomm.
-    WHEN '&F03' OR '&F12' OR '&F15'.
-      SET SCREEN 0.
-    WHEN OTHERS.
-  ENDCASE.
-ENDMODULE.
-
-**====================================================================**
-** FORM top_of_page  (ALV header)
-**====================================================================**
-FORM top_of_page USING dg_dyndoc_id TYPE REF TO cl_dd_document.
-  DATA: dl_text(255) TYPE c.
-  DATA: lv_text(30)  TYPE c,
-        lv_date      TYPE c LENGTH 10.
-
-  IF r1 EQ 'X'.
-    dl_text = 'Report For Closing Imbalance Of Expired Contracts'.
-  ELSEIF r2 = 'X'.
-    dl_text = 'SOP Due for Invoicing'.
-  ENDIF.
-  CALL METHOD dg_dyndoc_id->add_text
-    EXPORTING text = dl_text sap_style = cl_dd_area=>heading
-              sap_emphasis = cl_dd_area=>strong.
-  CALL METHOD dg_dyndoc_id->new_line.
-  CLEAR dl_text.
-  CALL METHOD dg_dyndoc_id->new_line.
-  CALL METHOD dg_dyndoc_id->add_gap.
-
-  IF r1 = abap_true.
-    IF s_date IS NOT INITIAL.
-      WRITE s_date-low DD/MM/YYYY TO lv_text.
-      IF s_date-high IS NOT INITIAL.
-        WRITE s_date-high DD/MM/YYYY TO lv_date.
-        CONCATENATE lv_text ' to ' lv_date INTO lv_text SEPARATED BY space.
-      ENDIF.
-    ELSE.
-      lv_text = 'Not Provided'.
-    ENDIF.
-  ELSEIF r2 = abap_true.
-    IF s_date IS NOT INITIAL.
-      WRITE s_date-low DD/MM/YYYY TO lv_text.
-      IF s_date-high IS NOT INITIAL.
-        WRITE s_date-high DD/MM/YYYY TO lv_date.
-        CONCATENATE lv_text ' to ' lv_date INTO lv_text SEPARATED BY space.
-      ENDIF.
-    ELSE.
-      lv_text = 'Not Provided'.
-    ENDIF.
-  ENDIF.
-
-  dl_text = 'Gas Date:'.
-  CALL METHOD dg_dyndoc_id->add_text
-    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
-  CALL METHOD dg_dyndoc_id->add_gap EXPORTING width = 0.
-  CLEAR dl_text.
-  dl_text = lv_text.
-  CALL METHOD dg_dyndoc_id->add_text
-    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
-  CLEAR dl_text.
-  CALL METHOD dg_dyndoc_id->new_line.
-
-  dl_text = 'Run Date:'.
-  CALL METHOD dg_dyndoc_id->add_text
-    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
-  CLEAR dl_text.
-  dl_text = |{ sy-datum+6(2) }.{ sy-datum+4(2) }.{ sy-datum+0(4) }|.
-  CALL METHOD dg_dyndoc_id->add_text
-    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
-  CALL METHOD dg_dyndoc_id->new_line.
-  CLEAR dl_text.
-
-  IF r1 EQ 'X'.
-    dl_text = 'Note:'.
-    CALL METHOD dg_dyndoc_id->add_text
-      EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
-    CALL METHOD dg_dyndoc_id->add_gap EXPORTING width = 6.
-    CLEAR dl_text.
-    "-> BEGIN OF CHANGES BY Arnav ON 29May25
-    dl_text = '1. Status pertains to Imbalance Posting done via YRG011N'.
-    CALL METHOD dg_dyndoc_id->add_text
-      EXPORTING TEXT = dl_text sap_emphasis = cl_dd_area=>heading.
-    CALL METHOD dg_dyndoc_id->new_line.
-    CALL METHOD dg_dyndoc_id->add_gap EXPORTING width = 16.
-    CLEAR dl_text.
-    dl_text = '2. Contracts for which imbalance has been shifted are not displayed'.
-    "-> END OF CHANGES BY Arnav ON 29May25
-    CALL METHOD dg_dyndoc_id->add_text
-      EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
-    CALL METHOD dg_dyndoc_id->new_line.
-    CLEAR dl_text.
-    CALL METHOD dg_dyndoc_id->new_line.
-  ENDIF.
-
-  DATA: dl_length        TYPE i,
-        dl_background_id TYPE sdydo_key VALUE space.
-  IF dg_html_cntrl IS INITIAL.
-    CREATE OBJECT dg_html_cntrl
-      EXPORTING parent = dg_parent_html.
-  ENDIF.
-  CALL FUNCTION 'REUSE_ALV_GRID_COMMENTARY_SET'
-    EXPORTING document = dg_dyndoc_id bottom = space
-    IMPORTING length   = dl_length.
-  CALL METHOD dg_dyndoc_id->merge_document.
-  dg_dyndoc_id->html_control = dg_html_cntrl.
-  CALL METHOD dg_dyndoc_id->display_document
-    EXPORTING reuse_control = 'X' parent = dg_parent_html
-    EXCEPTIONS html_display_error = 1.
-ENDFORM.
