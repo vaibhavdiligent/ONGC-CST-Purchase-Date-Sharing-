@@ -269,7 +269,7 @@ FORM send_email_posted.
 
     " TO: YSD_WF_AGENT YLEVEL=1 for this sales office
     SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_ep_to)
-      WHERE vbkur = @ls_ep_vkbur-vkbur AND ylevel = 1.
+      WHERE vkbur = @ls_ep_vkbur-vkbur AND ylevel = 1.
     LOOP AT lt_agt_ep_to INTO DATA(ls_agt_ep_to).
       IF ls_agt_ep_to-email IS NOT INITIAL.
         lv_ep_email = ls_agt_ep_to-email. APPEND lv_ep_email TO lt_to_email.
@@ -280,7 +280,7 @@ FORM send_email_posted.
 
     " CC: YSD_WF_AGENT YLEVEL=4 + fixed ngmc address
     SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_ep_cc)
-      WHERE vbkur = @ls_ep_vkbur-vkbur AND ylevel = 4.
+      WHERE vkbur = @ls_ep_vkbur-vkbur AND ylevel = 4.
     LOOP AT lt_agt_ep_cc INTO DATA(ls_agt_ep_cc).
       IF ls_agt_ep_cc-email IS NOT INITIAL.
         lv_ep_email = ls_agt_ep_cc-email. APPEND lv_ep_email TO lt_cc_email.
@@ -525,7 +525,7 @@ FORM send_email_not_posted.
 
     " CC: YSD_WF_AGENT YLEVEL=1 (sales office of this location) + fixed address
     SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_np)
-      WHERE vbkur = @lv_np_vkbur AND ylevel = 1.
+      WHERE vkbur = @lv_np_vkbur AND ylevel = 1.
     LOOP AT lt_agt_np INTO DATA(ls_agt_np).
       IF ls_agt_np-email IS NOT INITIAL.
         lv_np_email = ls_agt_np-email. APPEND lv_np_email TO lt_cc_email.
