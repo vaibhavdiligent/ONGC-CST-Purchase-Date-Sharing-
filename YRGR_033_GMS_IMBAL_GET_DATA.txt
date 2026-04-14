@@ -350,6 +350,7 @@ ENDFORM.
 **====================================================================**
 ** FORM send_email_not_posted - Email 2: Status=Not Posted, by LOCID
 **====================================================================**
+
 FORM send_email_not_posted.
   TYPES: BEGIN OF ty_np_locid, locid   TYPE oijnomi-locid, END OF ty_np_locid.
   TYPES: BEGIN OF ty_np_ernam, ernam   TYPE c LENGTH 12,   END OF ty_np_ernam.
@@ -586,3 +587,9 @@ FORM send_email_not_posted.
     CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
       EXPORTING document_data = ls_doc_data put_in_outbox = 'X' commit_work = 'X'
       TABLES    object_content = lt_body receivers = lt_receivers
+      EXCEPTIONS too_many_receivers = 1 document_not_sent = 2 document_type_not_exist = 3
+                 operation_no_authorization = 4 parameter_error = 5
+                 x_error = 6 enqueue_error = 7 OTHERS = 8.
+    CLEAR: lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr.
+  ENDLOOP.
+ENDFORM.
