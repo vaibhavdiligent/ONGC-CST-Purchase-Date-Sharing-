@@ -384,3 +384,105 @@ MODULE user_command_0100 INPUT.
     WHEN OTHERS.
   ENDCASE.
 ENDMODULE.
+
+**====================================================================**
+** FORM top_of_page  (ALV header)
+**====================================================================**
+FORM top_of_page USING dg_dyndoc_id TYPE REF TO cl_dd_document.
+  DATA: dl_text(255) TYPE c.
+  DATA: lv_text(30)  TYPE c,
+        lv_date      TYPE c LENGTH 10.
+
+  IF r1 EQ 'X'.
+    dl_text = 'Report For Closing Imbalance Of Expired Contracts'.
+  ELSEIF r2 = 'X'.
+    dl_text = 'SOP Due for Invoicing'.
+  ENDIF.
+  CALL METHOD dg_dyndoc_id->add_text
+    EXPORTING text = dl_text sap_style = cl_dd_area=>heading
+              sap_emphasis = cl_dd_area=>strong.
+  CALL METHOD dg_dyndoc_id->new_line.
+  CLEAR dl_text.
+  CALL METHOD dg_dyndoc_id->new_line.
+  CALL METHOD dg_dyndoc_id->add_gap.
+
+  IF r1 = abap_true.
+    IF s_date IS NOT INITIAL.
+      WRITE s_date-low DD/MM/YYYY TO lv_text.
+      IF s_date-high IS NOT INITIAL.
+        WRITE s_date-high DD/MM/YYYY TO lv_date.
+        CONCATENATE lv_text ' to ' lv_date INTO lv_text SEPARATED BY space.
+      ENDIF.
+    ELSE.
+      lv_text = 'Not Provided'.
+    ENDIF.
+  ELSEIF r2 = abap_true.
+    IF s_date IS NOT INITIAL.
+      WRITE s_date-low DD/MM/YYYY TO lv_text.
+      IF s_date-high IS NOT INITIAL.
+        WRITE s_date-high DD/MM/YYYY TO lv_date.
+        CONCATENATE lv_text ' to ' lv_date INTO lv_text SEPARATED BY space.
+      ENDIF.
+    ELSE.
+      lv_text = 'Not Provided'.
+    ENDIF.
+  ENDIF.
+
+  dl_text = 'Gas Date:'.
+  CALL METHOD dg_dyndoc_id->add_text
+    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
+  CALL METHOD dg_dyndoc_id->add_gap EXPORTING width = 0.
+  CLEAR dl_text.
+  dl_text = lv_text.
+  CALL METHOD dg_dyndoc_id->add_text
+    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
+  CLEAR dl_text.
+  CALL METHOD dg_dyndoc_id->new_line.
+
+  dl_text = 'Run Date:'.
+  CALL METHOD dg_dyndoc_id->add_text
+    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
+  CLEAR dl_text.
+  dl_text = |{ sy-datum+6(2) }.{ sy-datum+4(2) }.{ sy-datum+0(4) }|.
+  CALL METHOD dg_dyndoc_id->add_text
+    EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
+  CALL METHOD dg_dyndoc_id->new_line.
+  CLEAR dl_text.
+
+  IF r1 EQ 'X'.
+    dl_text = 'Note:'.
+    CALL METHOD dg_dyndoc_id->add_text
+      EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
+    CALL METHOD dg_dyndoc_id->add_gap EXPORTING width = 6.
+    CLEAR dl_text.
+    "-> BEGIN OF CHANGES BY Arnav ON 29May25
+    dl_text = '1. Status pertains to Imbalance Posting done via YRG011N'.
+    CALL METHOD dg_dyndoc_id->add_text
+      EXPORTING TEXT = dl_text sap_emphasis = cl_dd_area=>heading.
+    CALL METHOD dg_dyndoc_id->new_line.
+    CALL METHOD dg_dyndoc_id->add_gap EXPORTING width = 16.
+    CLEAR dl_text.
+    dl_text = '2. Contracts for which imbalance has been shifted are not displayed'.
+    "-> END OF CHANGES BY Arnav ON 29May25
+    CALL METHOD dg_dyndoc_id->add_text
+      EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
+    CALL METHOD dg_dyndoc_id->new_line.
+    CLEAR dl_text.
+    CALL METHOD dg_dyndoc_id->new_line.
+  ENDIF.
+
+  DATA: dl_length        TYPE i,
+        dl_background_id TYPE sdydo_key VALUE space.
+  IF dg_html_cntrl IS INITIAL.
+    CREATE OBJECT dg_html_cntrl
+      EXPORTING parent = dg_parent_html.
+  ENDIF.
+  CALL FUNCTION 'REUSE_ALV_GRID_COMMENTARY_SET'
+    EXPORTING document = dg_dyndoc_id bottom = space
+    IMPORTING length   = dl_length.
+  CALL METHOD dg_dyndoc_id->merge_document.
+  dg_dyndoc_id->html_control = dg_html_cntrl.
+  CALL METHOD dg_dyndoc_id->display_document
+    EXPORTING reuse_control = 'X' parent = dg_parent_html
+    EXCEPTIONS html_display_error = 1.
+ENDFORM.
