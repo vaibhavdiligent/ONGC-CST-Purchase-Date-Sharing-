@@ -1,32 +1,3 @@
-
-**====================================================================**
-** START-OF-SELECTION
-**====================================================================**
-START-OF-SELECTION.
-  IF r1 EQ 'X' OR r3 EQ 'X'.
-    IF r3 EQ 'X'.
-      lv_date = sy-datum - 3.
-      CALL FUNCTION 'YRX_PRVS_DATE_FM'
-        EXPORTING
-          s_date  = lv_date
-        IMPORTING
-          st_date = st_date
-          ed_date = ed_date.
-      REFRESH: s_date[].
-      s_date-low  = '20250901'.   " Fixed start: 01.09.2025
-      s_date-high = ed_date.      " End: previous FN end date (sy-datum - 3)
-      APPEND s_date.
-    ENDIF.
-    DATA: obj_rep TYPE REF TO lcl_event_handler.
-    CREATE OBJECT obj_rep.
-    obj_rep->get_data( ).
-    PERFORM fill_fieldcat.
-    PERFORM display.
-    IF r3 EQ 'X' AND p_email EQ 'X'.
-      PERFORM send_emails.
-    ENDIF.
-  ENDIF.
-
 **====================================================================**
 ** FORM get_data
 **====================================================================**
