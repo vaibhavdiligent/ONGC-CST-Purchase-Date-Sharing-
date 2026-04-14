@@ -138,7 +138,7 @@ FORM get_data.
 ENDFORM.
 
 **====================================================================**
-** FORM fill_fieldcat - cols 1-10 (visible)
+** FORM fill_fieldcat - all 19 cols
 **====================================================================**
 FORM fill_fieldcat.
   CLEAR gs_fieldcat.
@@ -233,7 +233,6 @@ FORM fill_fieldcat.
   gs_fieldcat-scrtext_s = 'Sales Office'.
   APPEND gs_fieldcat TO gt_fieldcat.
 
-** cols 11-19 (hidden - no_out = X)
   CLEAR gs_fieldcat.
   gs_fieldcat-fieldname = 'RET_DEL'.
   gs_fieldcat-tabname   = 'LT_FINAL'.
@@ -324,3 +323,64 @@ FORM fill_fieldcat.
   gs_fieldcat-no_out    = 'X'.
   APPEND gs_fieldcat TO gt_fieldcat.
 ENDFORM.
+
+**====================================================================**
+** FORM display
+**====================================================================**
+FORM display.
+  IF g_custom_container IS INITIAL.
+    CREATE OBJECT g_custom_container
+      EXPORTING container_name = g_container.
+    CREATE OBJECT dg_splitter
+      EXPORTING
+        parent  = g_custom_container
+        rows    = 2
+        columns = 1.
+    CALL METHOD dg_splitter->get_container
+      EXPORTING row = 1 column = 1
+      RECEIVING container = dg_parent_html.
+    CALL METHOD dg_splitter->get_container
+      EXPORTING row = 2 column = 1
+      RECEIVING container = dg_parent_grid.
+    CALL METHOD dg_splitter->set_row_height
+      EXPORTING id = 1 height = 24.
+    CREATE OBJECT grid
+      EXPORTING i_parent = dg_parent_grid.
+    gs_layout-stylefname = 'CELL'.
+    SET HANDLER lcl_event_handler=>top_of_page FOR grid.
+    CALL METHOD grid->set_table_for_first_display
+      EXPORTING
+        it_toolbar_excluding = lt_exclude
+        is_layout            = gs_layout
+      CHANGING
+        it_fieldcatalog      = gt_fieldcat
+        it_outtab            = lt_final[].
+  ENDIF.
+  CREATE OBJECT dg_dyndoc_id
+    EXPORTING style = 'ALV_GRID'.
+  CALL METHOD dg_dyndoc_id->initialize_document.
+  CALL METHOD grid->list_processing_events
+    EXPORTING
+      i_event_name = 'TOP_OF_PAGE'
+      i_dyndoc_id  = dg_dyndoc_id.
+  CALL SCREEN 100.
+ENDFORM.
+
+**====================================================================**
+** MODULE status_0100 OUTPUT (PBO)
+**====================================================================**
+MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'SALV_STANDARD'.
+  SET TITLEBAR 'GMS_TITLE'.
+ENDMODULE.
+
+**====================================================================**
+** MODULE user_command_0100 INPUT (PAI)
+**====================================================================**
+MODULE user_command_0100 INPUT.
+  CASE sy-ucomm.
+    WHEN '&F03' OR '&F12' OR '&F15'.
+      SET SCREEN 0.
+    WHEN OTHERS.
+  ENDCASE.
+ENDMODULE.
