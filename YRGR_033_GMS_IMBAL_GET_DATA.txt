@@ -353,7 +353,7 @@ ENDFORM.
 
 FORM send_email_not_posted.
   TYPES: BEGIN OF ty_np_locid, locid   TYPE oijnomi-locid, END OF ty_np_locid.
-  TYPES: BEGIN OF ty_np_ernam, ernam   TYPE c LENGTH 12,   END OF ty_np_ernam.
+  TYPES: BEGIN OF ty_np_ernam, ernam   TYPE pa0105-usrid,  END OF ty_np_ernam.
   TYPES: BEGIN OF ty_np_cont,  cont_id TYPE vbeln,         END OF ty_np_cont.
   TYPES: BEGIN OF ty_np_pernr, pernr   TYPE persno,        END OF ty_np_pernr.
   TYPES: BEGIN OF ty_np_ccrep,
