@@ -403,7 +403,7 @@ FORM send_email_not_posted.
       INTO TABLE @DATA(lt_ticket_en)
       WHERE locid     = @ls_np_locid-locid
         AND budat    IN @s_date
-        AND purpose   = '1'
+        AND ticket_purpose = '1'
         AND status    = 'C'
         AND substatus = '6'
         AND tktsubrc  NE '1A'.
