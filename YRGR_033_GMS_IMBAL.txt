@@ -104,3 +104,76 @@ AT SELECTION-SCREEN OUTPUT.
       MODIFY SCREEN.
     ENDIF.
   ENDLOOP.
+
+**====================================================================**
+** SECTION: CLASS INCLUDE - YRGR_033_GMS_IMBAL_CLASS                 **
+** (Event handler class definition and implementation)               **
+**====================================================================**
+
+CLASS lcl_event_handler DEFINITION.
+  PUBLIC SECTION.
+    METHODS : get_data.
+    CLASS-METHODS:
+      get_data,
+      button_click
+        FOR EVENT button_click OF cl_gui_alv_grid
+        IMPORTING
+          es_col_id
+          es_row_no
+          sender,
+      top_of_page
+        FOR EVENT top_of_page OF cl_gui_alv_grid
+        IMPORTING
+          e_dyndoc_id
+          table_index.
+*     double_click
+*       FOR EVENT double_click OF cl_gui_alv_grid
+*       IMPORTING
+*         e_row
+*         e_column
+*         es_row_no,
+*     hotspot_click
+*       FOR EVENT hotspot_click OF cl_gui_alv_grid
+*       IMPORTING
+*         e_column_id
+*         e_row_id
+*         es_row_no.
+ENDCLASS.
+
+CLASS lcl_event_handler IMPLEMENTATION.
+  METHOD get_data.
+    PERFORM get_data.
+  ENDMETHOD.
+
+* METHOD button_click.
+*   PERFORM button_click USING es_col_id
+*                              es_row_no.
+* ENDMETHOD.
+
+  METHOD top_of_page.
+    PERFORM top_of_page USING dg_dyndoc_id.
+  ENDMETHOD.
+
+* METHOD double_click.
+*   PERFORM double_click.
+* ENDMETHOD.
+
+* METHOD hotspot_click.
+*   PERFORM detailed_screen USING e_column_id
+*                                 e_row_id
+*                                 es_row_no.
+* ENDMETHOD.
+ENDCLASS.
+
+**====================================================================**
+** MAIN FLOW: START-OF-SELECTION                                     **
+**====================================================================**
+
+START-OF-SELECTION.
+  IF r1 EQ 'X'.
+    DATA: obj_rep TYPE REF TO lcl_event_handler.
+    CREATE OBJECT obj_rep.
+    obj_rep->get_data( ).
+    PERFORM fill_fieldcat.
+    PERFORM display.
+  ENDIF.
