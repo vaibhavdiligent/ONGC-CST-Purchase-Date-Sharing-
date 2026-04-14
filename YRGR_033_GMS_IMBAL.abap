@@ -22,6 +22,34 @@ INCLUDE yrgr_033_gms_imbal_top.
 INCLUDE yrgr_033_gms_imbal_class.
 INCLUDE yrgr_033_gms_imbal_get_data.
 
+INITIALIZATION.
+  lv_date = sy-datum - 4.
+  CALL FUNCTION 'YRX_PRVS_DATE_FM'
+    EXPORTING
+      s_date  = lv_date
+    IMPORTING
+      st_date = st_date
+      ed_date = ed_date.
+  REFRESH: s_date[].
+  s_date-low = st_date. s_date-high = ed_date. APPEND s_date.
+  SELECT SINGLE uname FROM agr_users INTO @DATA(lv_uname)
+    WHERE uname = @sy-uname AND agr_name = 'ZO_CC_EHS.GMS_ROLE'.
+  IF sy-subrc EQ 0. lv_has_role = 'X'. ENDIF.
+
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF screen-name = 'R2'. screen-active = 0. MODIFY SCREEN. ENDIF.
+    IF screen-name = 'P_EMAIL'.
+      IF lv_has_role NE 'X' OR r3 NE 'X'. screen-active = 0.
+      ELSE. screen-active = 1. ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+    IF screen-name = 'S_DATE-LOW' OR screen-name = 'S_DATE-HIGH'.
+      IF r3 EQ 'X'. screen-active = 0. ELSE. screen-active = 1. ENDIF.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+
 START-OF-SELECTION.
   IF r1 EQ 'X' OR r3 EQ 'X'.
     IF r3 EQ 'X'.
