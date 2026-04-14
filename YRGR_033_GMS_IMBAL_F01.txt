@@ -1,9 +1,17 @@
+
+**====================================================================**
+** START-OF-SELECTION
+**====================================================================**
 START-OF-SELECTION.
   IF r1 EQ 'X' OR r3 EQ 'X'.
     IF r3 EQ 'X'.
       lv_date = sy-datum - 3.
       CALL FUNCTION 'YRX_PRVS_DATE_FM'
-        EXPORTING s_date = lv_date IMPORTING st_date = st_date ed_date = ed_date.
+        EXPORTING
+          s_date  = lv_date
+        IMPORTING
+          st_date = st_date
+          ed_date = ed_date.
       REFRESH: s_date[].
       s_date-low  = '20250901'.   " Fixed start: 01.09.2025
       s_date-high = ed_date.      " End: previous FN end date (sy-datum - 3)
@@ -607,9 +615,3 @@ FORM send_email_not_posted.
     CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
       EXPORTING document_data = ls_doc_data put_in_outbox = 'X' commit_work = 'X'
       TABLES    object_content = lt_body receivers = lt_receivers
-      EXCEPTIONS too_many_receivers = 1 document_not_sent = 2 document_type_not_exist = 3
-                 operation_no_authorization = 4 parameter_error = 5
-                 x_error = 6 enqueue_error = 7 OTHERS = 8.
-    CLEAR: lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr.
-  ENDLOOP.
-ENDFORM.

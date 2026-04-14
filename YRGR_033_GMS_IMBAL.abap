@@ -61,7 +61,11 @@ SELECTION-SCREEN END OF BLOCK b.
 INITIALIZATION.
   lv_date = sy-datum - 4.
   CALL FUNCTION 'YRX_PRVS_DATE_FM'
-    EXPORTING s_date = lv_date IMPORTING st_date = st_date ed_date = ed_date.
+    EXPORTING
+      s_date  = lv_date
+    IMPORTING
+      st_date = st_date
+      ed_date = ed_date.
   REFRESH: s_date[].
   s_date-low = st_date. s_date-high = ed_date. APPEND s_date.
   SELECT SINGLE uname FROM agr_users INTO @DATA(lv_uname)
@@ -107,7 +111,11 @@ START-OF-SELECTION.
     IF r3 EQ 'X'.
       lv_date = sy-datum - 3.
       CALL FUNCTION 'YRX_PRVS_DATE_FM'
-        EXPORTING s_date = lv_date IMPORTING st_date = st_date ed_date = ed_date.
+        EXPORTING
+          s_date  = lv_date
+        IMPORTING
+          st_date = st_date
+          ed_date = ed_date.
       REFRESH: s_date[].
       s_date-low  = '20250901'.   " Fixed start: 01.09.2025
       s_date-high = ed_date.      " End: previous FN end date (sy-datum - 3)
