@@ -320,3 +320,400 @@ FORM top_of_page USING dg_dyndoc_id TYPE REF TO cl_dd_document.
     EXPORTING reuse_control = 'X' parent = dg_parent_html
     EXCEPTIONS html_display_error = 1.
 ENDFORM.
+
+**====================================================================**
+** FORM send_emails - orchestrates Posted and Not-Posted alert emails
+**====================================================================**
+FORM send_emails.
+  PERFORM send_email_posted.
+  PERFORM send_email_not_posted.
+ENDFORM.
+
+**====================================================================**
+** FORM send_email_posted - Email 1: Status=Posted, grouped by VKBUR
+**====================================================================**
+FORM send_email_posted.
+  TYPES: BEGIN OF ty_ep_vkbur, vkbur   TYPE vkbur,  END OF ty_ep_vkbur.
+  TYPES: BEGIN OF ty_ep_cont,  cont_id TYPE vbeln,  END OF ty_ep_cont.
+  TYPES: BEGIN OF ty_ep_pernr, pernr   TYPE persno, END OF ty_ep_pernr.
+  DATA: lt_ep_vkbur  TYPE TABLE OF ty_ep_vkbur,  ls_ep_vkbur  TYPE ty_ep_vkbur,
+        lt_ep_cont   TYPE TABLE OF ty_ep_cont,   ls_ep_cont   TYPE ty_ep_cont,
+        lt_ep_pernr  TYPE TABLE OF ty_ep_pernr,  ls_ep_pernr  TYPE ty_ep_pernr,
+        lt_to_email  TYPE TABLE OF ad_smtpadr,
+        lt_cc_email  TYPE TABLE OF ad_smtpadr,
+        lv_ep_email  TYPE ad_smtpadr,
+        lt_body      TYPE TABLE OF solisti1,     ls_body      TYPE solisti1,
+        lt_receivers TYPE TABLE OF somlreci1,    ls_receiver  TYPE somlreci1,
+        ls_doc_data  TYPE sodocchgi1,
+        lv_subject   TYPE c LENGTH 100,
+        lv_po_str    TYPE c LENGTH 20,
+        lv_ne_str    TYPE c LENGTH 20.
+
+  LOOP AT lt_final INTO ls_final WHERE stat = 'Posted'.
+    ls_ep_vkbur-vkbur = ls_final-vkbur.
+    APPEND ls_ep_vkbur TO lt_ep_vkbur. CLEAR ls_ep_vkbur.
+  ENDLOOP.
+  SORT lt_ep_vkbur BY vkbur. DELETE ADJACENT DUPLICATES FROM lt_ep_vkbur COMPARING vkbur.
+
+  LOOP AT lt_ep_vkbur INTO ls_ep_vkbur.
+    CLEAR: lt_to_email, lt_cc_email, lt_body, lt_receivers, ls_doc_data,
+           lt_ep_cont, lt_ep_pernr, lv_subject.
+
+    LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
+      ls_ep_cont-cont_id = ls_final-docnr.
+      APPEND ls_ep_cont TO lt_ep_cont.
+    ENDLOOP.
+    SORT lt_ep_cont BY cont_id. DELETE ADJACENT DUPLICATES FROM lt_ep_cont COMPARING cont_id.
+
+    " TO: latest CHANGED_BY from YRVA_CON_WF_LOG (YY_LEVEL=0) -> PA0105 email
+    IF lt_ep_cont IS NOT INITIAL.
+      SELECT vbeln, changed_by, changed_on, changed_time
+        FROM yrva_con_wf_log
+        INTO TABLE @DATA(lt_wf_ep)
+        FOR ALL ENTRIES IN @lt_ep_cont
+        WHERE vbeln = @lt_ep_cont-cont_id AND yy_level = 0.
+      SORT lt_wf_ep BY vbeln ASCENDING changed_on DESCENDING changed_time DESCENDING.
+      DELETE ADJACENT DUPLICATES FROM lt_wf_ep COMPARING vbeln.
+      LOOP AT lt_wf_ep INTO DATA(ls_wf_ep).
+        ls_ep_pernr-pernr = ls_wf_ep-changed_by.
+        APPEND ls_ep_pernr TO lt_ep_pernr.
+      ENDLOOP.
+      IF lt_ep_pernr IS NOT INITIAL.
+        SELECT usrid_long FROM pa0105
+          INTO TABLE @DATA(lt_pa_ep_to)
+          FOR ALL ENTRIES IN @lt_ep_pernr
+          WHERE pernr = @lt_ep_pernr-pernr AND subty = '0010' AND endda = '99991231'.
+        LOOP AT lt_pa_ep_to INTO DATA(ls_pa_ep_to).
+          IF ls_pa_ep_to-usrid_long IS NOT INITIAL.
+            lv_ep_email = ls_pa_ep_to-usrid_long.
+            APPEND lv_ep_email TO lt_to_email.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+
+    " TO: YSD_WF_AGENT YLEVEL=1 for this sales office
+    SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_ep_to)
+      WHERE vbkur = @ls_ep_vkbur-vkbur AND ylevel = 1.
+    LOOP AT lt_agt_ep_to INTO DATA(ls_agt_ep_to).
+      IF ls_agt_ep_to-email IS NOT INITIAL.
+        lv_ep_email = ls_agt_ep_to-email. APPEND lv_ep_email TO lt_to_email.
+      ENDIF.
+    ENDLOOP.
+    SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
+    IF lt_to_email IS INITIAL. CONTINUE. ENDIF.
+
+    " CC: YSD_WF_AGENT YLEVEL=4 + fixed ngmc address
+    SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_ep_cc)
+      WHERE vbkur = @ls_ep_vkbur-vkbur AND ylevel = 4.
+    LOOP AT lt_agt_ep_cc INTO DATA(ls_agt_ep_cc).
+      IF ls_agt_ep_cc-email IS NOT INITIAL.
+        lv_ep_email = ls_agt_ep_cc-email. APPEND lv_ep_email TO lt_cc_email.
+      ENDIF.
+    ENDLOOP.
+    lv_ep_email = 'ngmc@gail.co.in'. APPEND lv_ep_email TO lt_cc_email.
+    SORT lt_cc_email. DELETE ADJACENT DUPLICATES FROM lt_cc_email.
+    LOOP AT lt_to_email INTO lv_ep_email.
+      DELETE lt_cc_email WHERE table_line = lv_ep_email.
+    ENDLOOP.
+
+    " Build email body
+    CONCATENATE 'Expired Contracts with finite Imbalance_' ls_ep_vkbur-vkbur INTO lv_subject.
+    ls_body-line = 'Dear Ma''am/ Sir,'. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '.                 APPEND ls_body TO lt_body. CLEAR ls_body.
+    CONCATENATE 'Please find below instances of Finite Imbalances in Expired Contracts for '
+      ls_ep_vkbur-vkbur '. Please take necessary action in this regard.' INTO ls_body-line.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'Contract ID|Sales Office|Business Location|Customer|CT Start Date|CT End Date|Posted Imbalance|Posted Negative Imbalance'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
+      WRITE ls_final-po_imbal TO lv_po_str LEFT-JUSTIFIED.
+      WRITE ls_final-ne_imbal TO lv_ne_str LEFT-JUSTIFIED.
+      CONCATENATE ls_final-docnr '|' ls_final-vkbur  '|' ls_final-locid  '|'
+                  ls_final-partnr '|' ls_final-vbegdat '|' ls_final-venddat '|'
+                  lv_po_str '|' lv_ne_str INTO ls_body-line.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+    ENDLOOP.
+    ls_body-line = ' '. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'For more details, please execute T-code YRGR105 with the required input.'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '.                 APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'With warm regards,'. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'GAIL (INDIA) LTD.'. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '--------------------------------------------------------------------------------'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'This is a system generated mail. Please do not reply.'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '--------------------------------------------------------------------------------'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    CONCATENATE 'Source: YRGR105.' sy-uname '.' sy-datum '.' sy-uzeit INTO ls_body-line.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+
+    " Send via SAP Business Workplace
+    ls_doc_data-obj_descr = lv_subject. ls_doc_data-obj_name = 'IMB_EXPR'.
+    LOOP AT lt_to_email INTO lv_ep_email.
+      CLEAR ls_receiver. ls_receiver-receiver = lv_ep_email.
+      ls_receiver-rec_type = 'U'. ls_receiver-express = 'X'.
+      APPEND ls_receiver TO lt_receivers.
+    ENDLOOP.
+    LOOP AT lt_cc_email INTO lv_ep_email.
+      CLEAR ls_receiver. ls_receiver-receiver = lv_ep_email.
+      ls_receiver-rec_type = 'U'. ls_receiver-express = space.
+      APPEND ls_receiver TO lt_receivers.
+    ENDLOOP.
+    CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
+      EXPORTING document_data = ls_doc_data put_in_outbox = 'X' commit_work = 'X'
+      TABLES    object_content = lt_body receivers = lt_receivers
+      EXCEPTIONS too_many_receivers = 1 document_not_sent = 2 document_type_not_exist = 3
+                 operation_no_authorization = 4 parameter_error = 5
+                 x_error = 6 enqueue_error = 7 OTHERS = 8.
+    CLEAR: lt_ep_cont, lt_ep_pernr.
+  ENDLOOP.
+ENDFORM.
+
+**====================================================================**
+** FORM send_email_not_posted - Email 2: Status=Not Posted, by LOCID
+**====================================================================**
+FORM send_email_not_posted.
+  TYPES: BEGIN OF ty_np_locid, locid   TYPE oijnomi-locid, END OF ty_np_locid.
+  TYPES: BEGIN OF ty_np_ernam, ernam   TYPE c LENGTH 12,   END OF ty_np_ernam.
+  TYPES: BEGIN OF ty_np_cont,  cont_id TYPE vbeln,         END OF ty_np_cont.
+  TYPES: BEGIN OF ty_np_pernr, pernr   TYPE persno,        END OF ty_np_pernr.
+  TYPES: BEGIN OF ty_np_ccrep,
+           orig_pernr   TYPE persno,
+           yy_pernr_rep TYPE persno,
+           persk        TYPE persk,
+         END OF ty_np_ccrep.
+  DATA: lt_np_locid    TYPE TABLE OF ty_np_locid,  ls_np_locid    TYPE ty_np_locid,
+        lt_np_cont     TYPE TABLE OF ty_np_cont,   ls_np_cont     TYPE ty_np_cont,
+        lt_np_ernam    TYPE TABLE OF ty_np_ernam,  ls_np_ernam    TYPE ty_np_ernam,
+        lt_np_pernr    TYPE TABLE OF ty_np_pernr,  ls_np_pernr    TYPE ty_np_pernr,
+        lt_cc_rep      TYPE TABLE OF ty_np_ccrep,  ls_cc_rep      TYPE ty_np_ccrep,
+        lt_wf_np_pernr TYPE TABLE OF ty_np_pernr,  ls_wf_np_pernr TYPE ty_np_pernr,
+        lt_to_email    TYPE TABLE OF ad_smtpadr,
+        lt_cc_email    TYPE TABLE OF ad_smtpadr,
+        lv_np_email    TYPE ad_smtpadr,
+        lt_body        TYPE TABLE OF solisti1,     ls_body        TYPE solisti1,
+        lt_receivers   TYPE TABLE OF somlreci1,    ls_receiver    TYPE somlreci1,
+        ls_doc_data    TYPE sodocchgi1,
+        lv_subject     TYPE c LENGTH 100,
+        lv_po_str      TYPE c LENGTH 20,
+        lv_ne_str      TYPE c LENGTH 20,
+        lv_np_vkbur    TYPE vkbur,
+        lv_np_partnr   TYPE c LENGTH 10.
+
+  LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted'.
+    ls_np_locid-locid = ls_final-locid.
+    APPEND ls_np_locid TO lt_np_locid. CLEAR ls_np_locid.
+  ENDLOOP.
+  SORT lt_np_locid BY locid. DELETE ADJACENT DUPLICATES FROM lt_np_locid COMPARING locid.
+
+  LOOP AT lt_np_locid INTO ls_np_locid.
+    CLEAR: lt_to_email, lt_cc_email, lt_body, lt_receivers, ls_doc_data,
+           lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr,
+           lv_subject, lv_np_vkbur, lv_np_partnr.
+
+    LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted' AND locid = ls_np_locid-locid.
+      ls_np_cont-cont_id = ls_final-docnr.
+      APPEND ls_np_cont TO lt_np_cont.
+      lv_np_vkbur  = ls_final-vkbur.
+      lv_np_partnr = ls_final-partnr.
+    ENDLOOP.
+    SORT lt_np_cont BY cont_id. DELETE ADJACENT DUPLICATES FROM lt_np_cont COMPARING cont_id.
+
+    " TO: OIJ_EL_TICKET_I -> ERNAM (fallback: OIJNOMI -> AENAM)
+    SELECT DISTINCT ernam FROM oij_el_ticket_i
+      INTO TABLE @DATA(lt_ticket_en)
+      WHERE locid     = @ls_np_locid-locid
+        AND budat    IN @s_date
+        AND purpose   = '1'
+        AND status    = 'C'
+        AND substatus = '6'
+        AND tktsubrc  NE '1A'.
+    IF lt_ticket_en IS NOT INITIAL.
+      LOOP AT lt_ticket_en INTO DATA(ls_ticket_en).
+        ls_np_ernam-ernam = ls_ticket_en-ernam.
+        APPEND ls_np_ernam TO lt_np_ernam. CLEAR ls_np_ernam.
+      ENDLOOP.
+    ELSE.
+      SELECT DISTINCT aenam FROM oijnomi
+        INTO TABLE @DATA(lt_nomi_en)
+        WHERE locid  = @ls_np_locid-locid
+          AND idate IN @s_date
+          AND delind NE 'X'.
+      LOOP AT lt_nomi_en INTO DATA(ls_nomi_en).
+        ls_np_ernam-ernam = ls_nomi_en-aenam.
+        APPEND ls_np_ernam TO lt_np_ernam. CLEAR ls_np_ernam.
+      ENDLOOP.
+    ENDIF.
+    SORT lt_np_ernam BY ernam. DELETE ADJACENT DUPLICATES FROM lt_np_ernam COMPARING ernam.
+
+    " ERNAM/AENAM -> PERNR (via PA0105 USRID) -> email
+    IF lt_np_ernam IS NOT INITIAL.
+      SELECT pernr FROM pa0105
+        INTO TABLE @DATA(lt_uid_pernr)
+        FOR ALL ENTRIES IN @lt_np_ernam
+        WHERE usrid = @lt_np_ernam-ernam
+          AND subty = '0001'
+          AND begda LE @sy-datum AND endda GE @sy-datum.
+      IF lt_uid_pernr IS NOT INITIAL.
+        SELECT usrid_long FROM pa0105
+          INTO TABLE @DATA(lt_pa_np_to)
+          FOR ALL ENTRIES IN @lt_uid_pernr
+          WHERE pernr = @lt_uid_pernr-pernr AND subty = '0010' AND endda = '99991231'.
+        LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
+          IF ls_pa_np_to-usrid_long IS NOT INITIAL.
+            lv_np_email = ls_pa_np_to-usrid_long.
+            APPEND lv_np_email TO lt_to_email.
+          ENDIF.
+        ENDLOOP.
+        SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
+
+        " CC: PA0034 -> PA0001 (PERSK E7/E8/E9, lowest) -> PA0105
+        LOOP AT lt_uid_pernr INTO DATA(ls_uid_p).
+          ls_np_pernr-pernr = ls_uid_p-pernr.
+          APPEND ls_np_pernr TO lt_np_pernr.
+        ENDLOOP.
+        IF lt_np_pernr IS NOT INITIAL.
+          SELECT pernr AS orig_pernr, yy_pernr_rep FROM pa0034
+            INTO TABLE @DATA(lt_pa0034_np)
+            FOR ALL ENTRIES IN @lt_np_pernr
+            WHERE pernr  = @lt_np_pernr-pernr
+              AND subty IN ('9001', '9002', '9003', '9113', '9114')
+              AND begda LE @sy-datum AND endda GE @sy-datum.
+          IF lt_pa0034_np IS NOT INITIAL.
+            SELECT pernr, persk FROM pa0001
+              INTO TABLE @DATA(lt_pa0001_np)
+              FOR ALL ENTRIES IN @lt_pa0034_np
+              WHERE pernr  = @lt_pa0034_np-yy_pernr_rep
+                AND persk IN ('E7', 'E8', 'E9')
+                AND begda LE @sy-datum AND endda GE @sy-datum.
+            LOOP AT lt_pa0034_np INTO DATA(ls_pa0034_np).
+              READ TABLE lt_pa0001_np INTO DATA(ls_pa0001_np)
+                WITH KEY pernr = ls_pa0034_np-yy_pernr_rep.
+              IF sy-subrc = 0.
+                ls_cc_rep-orig_pernr   = ls_pa0034_np-orig_pernr.
+                ls_cc_rep-yy_pernr_rep = ls_pa0034_np-yy_pernr_rep.
+                ls_cc_rep-persk        = ls_pa0001_np-persk.
+                APPEND ls_cc_rep TO lt_cc_rep. CLEAR ls_cc_rep.
+              ENDIF.
+            ENDLOOP.
+            SORT lt_cc_rep BY orig_pernr ASCENDING persk ASCENDING.
+            DELETE ADJACENT DUPLICATES FROM lt_cc_rep COMPARING orig_pernr.
+            IF lt_cc_rep IS NOT INITIAL.
+              SELECT usrid_long FROM pa0105
+                INTO TABLE @DATA(lt_cc_rep_email)
+                FOR ALL ENTRIES IN @lt_cc_rep
+                WHERE pernr = @lt_cc_rep-yy_pernr_rep
+                  AND subty = '0010' AND endda = '99991231'.
+              LOOP AT lt_cc_rep_email INTO DATA(ls_cc_rep_em).
+                IF ls_cc_rep_em-usrid_long IS NOT INITIAL.
+                  lv_np_email = ls_cc_rep_em-usrid_long.
+                  APPEND lv_np_email TO lt_cc_email.
+                ENDIF.
+              ENDLOOP.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lt_to_email IS INITIAL. CONTINUE. ENDIF.
+
+    " CC: YRVA_CON_WF_LOG (YY_LEVEL=0, latest CHANGED_BY) -> PA0105
+    IF lt_np_cont IS NOT INITIAL.
+      SELECT vbeln, changed_by, changed_on, changed_time FROM yrva_con_wf_log
+        INTO TABLE @DATA(lt_wf_np)
+        FOR ALL ENTRIES IN @lt_np_cont
+        WHERE vbeln = @lt_np_cont-cont_id AND yy_level = 0.
+      SORT lt_wf_np BY vbeln ASCENDING changed_on DESCENDING changed_time DESCENDING.
+      DELETE ADJACENT DUPLICATES FROM lt_wf_np COMPARING vbeln.
+      LOOP AT lt_wf_np INTO DATA(ls_wf_np).
+        ls_wf_np_pernr-pernr = ls_wf_np-changed_by.
+        APPEND ls_wf_np_pernr TO lt_wf_np_pernr.
+      ENDLOOP.
+      IF lt_wf_np_pernr IS NOT INITIAL.
+        SELECT usrid_long FROM pa0105
+          INTO TABLE @DATA(lt_wf_np_email)
+          FOR ALL ENTRIES IN @lt_wf_np_pernr
+          WHERE pernr = @lt_wf_np_pernr-pernr AND subty = '0010' AND endda = '99991231'.
+        LOOP AT lt_wf_np_email INTO DATA(ls_wf_np_em).
+          IF ls_wf_np_em-usrid_long IS NOT INITIAL.
+            lv_np_email = ls_wf_np_em-usrid_long.
+            APPEND lv_np_email TO lt_cc_email.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+
+    " CC: YSD_WF_AGENT YLEVEL=1 (sales office of this location) + fixed address
+    SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_np)
+      WHERE vbkur = @lv_np_vkbur AND ylevel = 1.
+    LOOP AT lt_agt_np INTO DATA(ls_agt_np).
+      IF ls_agt_np-email IS NOT INITIAL.
+        lv_np_email = ls_agt_np-email. APPEND lv_np_email TO lt_cc_email.
+      ENDIF.
+    ENDLOOP.
+    lv_np_email = 'ngmc@gail.co.in'. APPEND lv_np_email TO lt_cc_email.
+    SORT lt_cc_email. DELETE ADJACENT DUPLICATES FROM lt_cc_email.
+    LOOP AT lt_to_email INTO lv_np_email.
+      DELETE lt_cc_email WHERE table_line = lv_np_email.
+    ENDLOOP.
+
+    " Build email body
+    CONCATENATE 'IMB Posting Pending for ' ls_np_locid-locid '_Expired Contracts'
+      INTO lv_subject.
+    ls_body-line = 'Dear Ma''am/ Sir,'. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '.                 APPEND ls_body TO lt_body. CLEAR ls_body.
+    CONCATENATE 'Please find below instances of missed Imbalances posting for Expired'
+      ' Contracts for ' lv_np_partnr '. Please take necessary action in this regard.'
+      INTO ls_body-line.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'Contract ID|Sales Office|Business Location|Customer|CT Start Date|CT End Date|Posted Imbalance|Posted Negative Imbalance'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted' AND locid = ls_np_locid-locid.
+      WRITE ls_final-po_imbal TO lv_po_str LEFT-JUSTIFIED.
+      WRITE ls_final-ne_imbal TO lv_ne_str LEFT-JUSTIFIED.
+      CONCATENATE ls_final-docnr '|' ls_final-vkbur  '|' ls_final-locid  '|'
+                  ls_final-partnr '|' ls_final-vbegdat '|' ls_final-venddat '|'
+                  lv_po_str '|' lv_ne_str INTO ls_body-line.
+      APPEND ls_body TO lt_body. CLEAR ls_body.
+    ENDLOOP.
+    ls_body-line = ' '. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'For more details, please execute T-code YRGR105/ YRGR102 with the required input.'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' '.                 APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'With warm regards,'. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'GAIL (INDIA) LTD.'. APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '--------------------------------------------------------------------------------'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'This is a system generated mail. Please do not reply.'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '--------------------------------------------------------------------------------'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    CONCATENATE 'Source: YRGR105.' sy-uname '.' sy-datum '.' sy-uzeit INTO ls_body-line.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+
+    " Send
+    ls_doc_data-obj_descr = lv_subject. ls_doc_data-obj_name = 'IMB_NPOST'.
+    LOOP AT lt_to_email INTO lv_np_email.
+      CLEAR ls_receiver. ls_receiver-receiver = lv_np_email.
+      ls_receiver-rec_type = 'U'. ls_receiver-express = 'X'.
+      APPEND ls_receiver TO lt_receivers.
+    ENDLOOP.
+    LOOP AT lt_cc_email INTO lv_np_email.
+      CLEAR ls_receiver. ls_receiver-receiver = lv_np_email.
+      ls_receiver-rec_type = 'U'. ls_receiver-express = space.
+      APPEND ls_receiver TO lt_receivers.
+    ENDLOOP.
+    CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
+      EXPORTING document_data = ls_doc_data put_in_outbox = 'X' commit_work = 'X'
+      TABLES    object_content = lt_body receivers = lt_receivers
+      EXCEPTIONS too_many_receivers = 1 document_not_sent = 2 document_type_not_exist = 3
+                 operation_no_authorization = 4 parameter_error = 5
+                 x_error = 6 enqueue_error = 7 OTHERS = 8.
+    CLEAR: lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr.
+  ENDLOOP.
+ENDFORM.
