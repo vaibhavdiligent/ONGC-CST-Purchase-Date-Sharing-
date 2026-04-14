@@ -1,7 +1,7 @@
 CLASS lcl_event_handler DEFINITION.
   PUBLIC SECTION.
-    METHODS : get_data.
-    CLASS-METHODS: get_data,
+    METHODS: get_data.
+    CLASS-METHODS:
       button_click FOR EVENT button_click OF cl_gui_alv_grid
         IMPORTING es_col_id es_row_no sender,
       top_of_page FOR EVENT top_of_page OF cl_gui_alv_grid
