@@ -2177,7 +2177,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form syntax_check
 *&---------------------------------------------------------------------*
-FORM syntax_check USING    program    TYPE clike
+FORM syntax_check USING    program    TYPE program
                            objecttype TYPE trobjtype
                   CHANGING error_table TYPE syn_error.
   DATA: lv_classname TYPE char32,
@@ -2711,6 +2711,7 @@ FORM smartform_procee.
   DATA: lv_formname TYPE tdsfname,
         lv_fm_name  TYPE rs38l_fnam,
         lv_sf_chgd  TYPE flag,
+        lv_prog     TYPE program,
         lv_old_cnt  TYPE i,
         lv_new_cnt  TYPE i,
         lv_tabix    TYPE i.
@@ -2898,7 +2899,8 @@ FORM smartform_procee.
   wa_output-subobj       = lv_formname.
   wa_output-new_program  = lv_formname.
   CLEAR it_error_table.
-  PERFORM syntax_check USING lv_formname 'SSFO' CHANGING it_error_table.
+  lv_prog = lv_formname.
+  PERFORM syntax_check USING lv_prog 'SSFO' CHANGING it_error_table.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
@@ -2922,6 +2924,7 @@ ENDFORM.
 FORM adobe_form_procee.
   DATA: lv_fpname    TYPE fpname,
         lv_fm_name   TYPE rs38l_fnam,
+        lv_prog      TYPE program,
         lv_fugr_name TYPE rs38l_fnam,
         lv_incl_top  TYPE program,
         lv_incl_init TYPE program,
@@ -3059,7 +3062,8 @@ FORM adobe_form_procee.
   wa_output-program_name = lv_fpname.
   wa_output-subobj       = lv_fpname.
   CLEAR it_error_table.
-  PERFORM syntax_check USING lv_fpname 'SFPF' CHANGING it_error_table.
+  lv_prog = lv_fpname.
+  PERFORM syntax_check USING lv_prog 'SFPF' CHANGING it_error_table.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
