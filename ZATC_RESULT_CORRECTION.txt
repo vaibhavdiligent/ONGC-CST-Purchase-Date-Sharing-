@@ -2177,7 +2177,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form syntax_check
 *&---------------------------------------------------------------------*
-FORM syntax_check USING    program    TYPE program
+FORM syntax_check USING    program    TYPE clike
                            objecttype TYPE trobjtype
                   CHANGING error_table TYPE syn_error.
   DATA: lv_classname TYPE char32,
