@@ -332,12 +332,13 @@ START-OF-SELECTION.
         DATA lv_ssfo_fm_r TYPE rs38l_fnam.
         CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
           EXPORTING
-            i_formname        = wa_final_p-objname
+            formname           = wa_final_p-objname
           IMPORTING
-            e_fm_name         = lv_ssfo_fm_r
+            fm_name            = lv_ssfo_fm_r
           EXCEPTIONS
-            no_active_version = 1
-            OTHERS            = 2.
+            no_form            = 1
+            no_function_module = 2
+            OTHERS             = 3.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
           CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
@@ -2733,12 +2734,13 @@ FORM smartform_procee.
   " Step 1: Get generated FM name (used for syntax check at end)
   CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
     EXPORTING
-      i_formname        = lv_formname
+      formname           = lv_formname
     IMPORTING
-      e_fm_name         = lv_fm_name
+      fm_name             = lv_fm_name
     EXCEPTIONS
-      no_active_version = 1
-      OTHERS            = 2.
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
   IF sy-subrc <> 0. RETURN. ENDIF.
 
   " Step 2: Load Smart Form into session memory (populates T_NTOKENS in SAPLSTXBX)
