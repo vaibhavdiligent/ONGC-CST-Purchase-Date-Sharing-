@@ -332,7 +332,7 @@ START-OF-SELECTION.
         DATA lv_ssfo_fm_r TYPE rs38l_fnam.
         CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
           EXPORTING
-            i_sf_name         = wa_final_p-objname
+            i_formname        = wa_final_p-objname
           IMPORTING
             e_fm_name         = lv_ssfo_fm_r
           EXCEPTIONS
@@ -2733,7 +2733,7 @@ FORM smartform_procee.
   " Step 1: Get generated FM name (used for syntax check at end)
   CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
     EXPORTING
-      i_sf_name         = lv_formname
+      i_formname        = lv_formname
     IMPORTING
       e_fm_name         = lv_fm_name
     EXCEPTIONS
