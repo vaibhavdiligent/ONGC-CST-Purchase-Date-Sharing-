@@ -2722,7 +2722,7 @@ FORM smartform_procee.
   FIELD-SYMBOLS: <fs_nodes>  TYPE ANY TABLE,
                  <fs_node>   TYPE ANY,
                  <fs_ntype>  TYPE ANY,
-                 <fs_codetb> TYPE ANY TABLE,
+                 <fs_codetb> TYPE STANDARD TABLE,
                  <fs_codeln> TYPE ANY,
                  <fs_lv>     TYPE ANY.
 
