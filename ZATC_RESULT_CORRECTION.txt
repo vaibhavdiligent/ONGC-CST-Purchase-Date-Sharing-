@@ -463,7 +463,7 @@ START-OF-SELECTION.
                 OR wa_final-message1 = 'DB OPERATION JOIN FOUND'.
                 CLEAR wa_zatc_process1.
                 SELECT SINGLE * INTO @DATA(l_ars_api_succssr1)
-                  FROM ars_api_succssr
+                  FROM ars_api_successor
                   WHERE object_key  = @wa_final-param1
                     AND object_type = 'TABL'.
                 IF sy-subrc = 0.
@@ -1049,7 +1049,7 @@ START-OF-SELECTION.
                     ENDIF.
                   ENDLOOP.
                 WHEN 'SELECT SINGLE IS POSSIBLY NOT UNIQUE'.
-                  LOOP AT repos_tab INTO DATA(wa_repos_tab_d) FROM l_tabix.
+                  LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
                     IF wa_repos_tab_d-line CS '"'.
                       DATA(l_fdpos) = sy-fdpos.
                       wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fdpos).
@@ -1462,7 +1462,7 @@ FORM change_table.
       CLEAR l_cl_dd_ddl_field_tracker.
       REFRESH it_fields_new_t.
       SELECT SINGLE * INTO @DATA(l_ars)
-        FROM ars_api_succssr
+        FROM ars_api_successor
         WHERE object_key = @<fs_table_q>-value AND object_type = 'TABL'.
       IF sy-subrc = 0.
         <fs_table_q>-new_table = l_ars-successor_tadir_obj_name.
@@ -1581,7 +1581,7 @@ FORM change_table.
     IF sy-subrc = 0. l_table = wa_table-value. ENDIF.
     l_from = l_from - 1.
     SELECT SINGLE * INTO @DATA(l_ars2)
-      FROM ars_api_succssr WHERE object_key = @l_table AND object_type = 'TABL'.
+      FROM ars_api_successor WHERE object_key = @l_table AND object_type = 'TABL'.
     IF sy-subrc = 0.
       CREATE OBJECT l_cl_dd_ddl_field_tracker EXPORTING iv_ddlname = l_ars2-successor_tadir_obj_name.
       TRY.
