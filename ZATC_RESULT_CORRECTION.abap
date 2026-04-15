@@ -330,14 +330,17 @@ START-OF-SELECTION.
       WHEN 'SSFO'.
         " Smart Form: find generated FM name first, then read its source
         DATA lv_ssfo_fm_r TYPE rs38l_fnam.
+        DATA lv_sf_form   TYPE tdsfname.
+        lv_sf_form = wa_final_p-objname.
         CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
           EXPORTING
-            i_sf_name         = wa_final_p-objname
+            formname           = lv_sf_form
           IMPORTING
-            e_fm_name         = lv_ssfo_fm_r
+            fm_name            = lv_ssfo_fm_r
           EXCEPTIONS
-            no_active_version = 1
-            OTHERS            = 2.
+            no_form            = 1
+            no_function_module = 2
+            OTHERS             = 3.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
           CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
@@ -1203,9 +1206,11 @@ START-OF-SELECTION.
               REFRESH repos_tab_new.
               COMMIT WORK AND WAIT.
             ELSE.
+              DATA lv_prog_name TYPE programm.
+              lv_prog_name = wa_final_p-sobjname.
               CALL FUNCTION 'RPY_PROGRAM_UPDATE'
                 EXPORTING
-                  program_name     = wa_final_p-sobjname
+                  program_name     = lv_prog_name
                   program_type     = l_trdir-subc
                   transport_number = lv_req
                 TABLES
@@ -2711,6 +2716,7 @@ FORM smartform_procee.
   DATA: lv_formname TYPE tdsfname,
         lv_fm_name  TYPE rs38l_fnam,
         lv_sf_chgd  TYPE flag,
+        lv_prog     TYPE program,
         lv_old_cnt  TYPE i,
         lv_new_cnt  TYPE i,
         lv_tabix    TYPE i.
@@ -2732,12 +2738,13 @@ FORM smartform_procee.
   " Step 1: Get generated FM name (used for syntax check at end)
   CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
     EXPORTING
-      i_sf_name         = lv_formname
+      formname           = lv_formname
     IMPORTING
-      e_fm_name         = lv_fm_name
+      fm_name             = lv_fm_name
     EXCEPTIONS
-      no_active_version = 1
-      OTHERS            = 2.
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
   IF sy-subrc <> 0. RETURN. ENDIF.
 
   " Step 2: Load Smart Form into session memory (populates T_NTOKENS in SAPLSTXBX)
@@ -2898,7 +2905,8 @@ FORM smartform_procee.
   wa_output-subobj       = lv_formname.
   wa_output-new_program  = lv_formname.
   CLEAR it_error_table.
-  PERFORM syntax_check USING lv_formname 'SSFO' CHANGING it_error_table.
+  lv_prog = lv_formname.
+  PERFORM syntax_check USING lv_prog 'SSFO' CHANGING it_error_table.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
@@ -2922,6 +2930,7 @@ ENDFORM.
 FORM adobe_form_procee.
   DATA: lv_fpname    TYPE fpname,
         lv_fm_name   TYPE rs38l_fnam,
+        lv_prog      TYPE program,
         lv_fugr_name TYPE rs38l_fnam,
         lv_incl_top  TYPE program,
         lv_incl_init TYPE program,
@@ -2937,8 +2946,11 @@ FORM adobe_form_procee.
     IMPORTING
       e_funcname       = lv_fm_name
     EXCEPTIONS
-      no_active_version = 1
-      OTHERS            = 2.
+      cancelled        = 1
+      usage_error      = 2
+      system_error     = 3
+      internal_error   = 4
+      OTHERS           = 5.
   IF sy-subrc <> 0. RETURN. ENDIF.
 
   " Step 2: Derive the function GROUP name from the FM name
@@ -2971,9 +2983,10 @@ FORM adobe_form_procee.
     DATA(lv_cur_incl) = wa_fp_incl-include.
     REFRESH repos_tab.
 
+    object_name = lv_cur_incl.
     CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
       EXPORTING
-        object_name           = lv_cur_incl
+        object_name           = object_name
         versno                = '00000'
       TABLES
         repos_tab             = repos_tab
@@ -3010,9 +3023,11 @@ FORM adobe_form_procee.
       INSERT REPORT wa_output-backup FROM repos_tab.
       COMMIT WORK.
       REFRESH repos_tab.
+      DATA lv_prog_name_fp TYPE programm.
+      lv_prog_name_fp = lv_cur_incl.
       CALL FUNCTION 'RPY_PROGRAM_UPDATE'
         EXPORTING
-          program_name     = lv_cur_incl
+          program_name     = lv_prog_name_fp
           program_type     = l_trdir_fp-subc
           transport_number = lv_req
         TABLES
@@ -3059,7 +3074,8 @@ FORM adobe_form_procee.
   wa_output-program_name = lv_fpname.
   wa_output-subobj       = lv_fpname.
   CLEAR it_error_table.
-  PERFORM syntax_check USING lv_fpname 'SFPF' CHANGING it_error_table.
+  lv_prog = lv_fpname.
+  PERFORM syntax_check USING lv_prog 'SFPF' CHANGING it_error_table.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
