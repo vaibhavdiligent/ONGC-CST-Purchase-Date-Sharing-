@@ -3036,6 +3036,15 @@ FORM smartform_procee.
         i_vartext       TYPE tsfvtext,
         i_admin         TYPE stxfadm.
 
+  DATA: lo_structdescr TYPE REF TO cl_abap_structdescr,
+        lo_tabledescr  TYPE REF TO cl_abap_tabledescr,
+        lo_lineddescr  TYPE REF TO cl_abap_structdescr,
+        lt_components  TYPE cl_abap_structdescr=>component_table,
+        ls_component   LIKE LINE OF lt_components,
+        lt_linecomp    TYPE cl_abap_structdescr=>component_table,
+        ls_linecomp    LIKE LINE OF lt_linecomp,
+        lv_linefield   TYPE abap_compname.
+
   FIELD-SYMBOLS: <fs_nodes>  TYPE ANY TABLE,
                  <fs_node>   TYPE ANY,
                  <fs_ntype>  TYPE ANY,
@@ -3130,29 +3139,72 @@ FORM smartform_procee.
       OTHERS           = 4.
   IF sy-subrc <> 0. RETURN. ENDIF.
 
-  " Step 3: Access node tree
-  ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO <fs_nodes>.
+  " Step 3: Access node tree. Prefer T_NODES (standard); fall back to T_NTOKENS.
+  ASSIGN ('(SAPLSTXBX)T_NODES') TO <fs_nodes>.
+  IF <fs_nodes> IS NOT ASSIGNED.
+    ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO <fs_nodes>.
+  ENDIF.
   IF <fs_nodes> IS NOT ASSIGNED. RETURN. ENDIF.
 
   CLEAR lv_form_changed.
 
-  " Step 4: For each CO node, apply each change via trimmed content match
+  " Step 4: For each CO node, apply each change via normalized content match.
+  "         Code table component + line field are discovered via RTTI so the
+  "         loop works regardless of the SAP release's node row layout.
   LOOP AT <fs_nodes> ASSIGNING <fs_node>.
     UNASSIGN: <fs_ntype>, <fs_codetb>, <fs_codeln>, <fs_lv>.
+    CLEAR lv_linefield.
+
     ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_node> TO <fs_ntype>.
     CHECK <fs_ntype> IS ASSIGNED AND <fs_ntype> = 'CO'.
 
-    ASSIGN COMPONENT 'ABAPCODE'  OF STRUCTURE <fs_node> TO <fs_codetb>.
-    IF <fs_codetb> IS NOT ASSIGNED.
-      ASSIGN COMPONENT 'SOURCE'    OF STRUCTURE <fs_node> TO <fs_codetb>.
-    ENDIF.
-    IF <fs_codetb> IS NOT ASSIGNED.
-      ASSIGN COMPONENT 'T_COLINES' OF STRUCTURE <fs_node> TO <fs_codetb>.
-    ENDIF.
-    IF <fs_codetb> IS NOT ASSIGNED.
-      ASSIGN COMPONENT 'T_TOKEN'   OF STRUCTURE <fs_node> TO <fs_codetb>.
-    ENDIF.
-    CHECK <fs_codetb> IS ASSIGNED.
+    " Discover the code table component on this node row
+    CLEAR lt_components.
+    TRY.
+        lo_structdescr ?= cl_abap_typedescr=>describe_by_data( <fs_node> ).
+        lt_components = lo_structdescr->get_components( ).
+      CATCH cx_root.
+    ENDTRY.
+
+    LOOP AT lt_components INTO ls_component.
+      CHECK ls_component-type->kind = cl_abap_typedescr=>kind_table.
+      UNASSIGN <fs_codetb>.
+      ASSIGN COMPONENT ls_component-name OF STRUCTURE <fs_node> TO <fs_codetb>.
+      CHECK <fs_codetb> IS ASSIGNED.
+
+      " Inspect line type to find a char-like field we can edit
+      CLEAR: lt_linecomp, ls_linecomp, lv_linefield.
+      TRY.
+          lo_tabledescr ?= ls_component-type.
+          lo_lineddescr ?= lo_tabledescr->get_table_line_type( ).
+          lt_linecomp = lo_lineddescr->get_components( ).
+        CATCH cx_root.
+          CONTINUE.
+      ENDTRY.
+
+      READ TABLE lt_linecomp INTO ls_linecomp WITH KEY name = 'LINE'.
+      IF sy-subrc = 0. lv_linefield = 'LINE'. ENDIF.
+      IF lv_linefield IS INITIAL.
+        READ TABLE lt_linecomp INTO ls_linecomp WITH KEY name = 'ABAPLINE'.
+        IF sy-subrc = 0. lv_linefield = 'ABAPLINE'. ENDIF.
+      ENDIF.
+      IF lv_linefield IS INITIAL.
+        READ TABLE lt_linecomp INTO ls_linecomp WITH KEY name = 'TNAME'.
+        IF sy-subrc = 0. lv_linefield = 'TNAME'. ENDIF.
+      ENDIF.
+      IF lv_linefield IS INITIAL.
+        LOOP AT lt_linecomp INTO ls_linecomp
+             WHERE type->kind = cl_abap_typedescr=>kind_elem.
+          lv_linefield = ls_linecomp-name.
+          EXIT.
+        ENDLOOP.
+      ENDIF.
+
+      IF lv_linefield IS NOT INITIAL. EXIT. ENDIF.
+      UNASSIGN <fs_codetb>.
+    ENDLOOP.
+
+    CHECK <fs_codetb> IS ASSIGNED AND lv_linefield IS NOT INITIAL.
 
     CLEAR lv_node_changed.
     LOOP AT lt_changes INTO ls_change.
@@ -3160,27 +3212,40 @@ FORM smartform_procee.
       CHECK sy-subrc = 0.
       lv_norm_first = wa_first_orig-line.
       CONDENSE lv_norm_first.
+      TRANSLATE lv_norm_first TO UPPER CASE.
       IF lv_norm_first IS INITIAL. CONTINUE. ENDIF.
 
-      " Locate first orig line in node by trimmed match
+      " Locate first orig line in node: trimmed+upper exact match
       lv_match_idx = 0.
       LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
         UNASSIGN <fs_lv>.
-        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
+        ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
         CHECK <fs_lv> IS ASSIGNED.
         lv_norm_nod = <fs_lv>.
         CONDENSE lv_norm_nod.
+        TRANSLATE lv_norm_nod TO UPPER CASE.
         IF lv_norm_nod = lv_norm_first.
           lv_match_idx = sy-tabix.
           EXIT.
         ENDIF.
       ENDLOOP.
+
+      " Fallback: substring match (handles cases where include splits/joins lines)
+      IF lv_match_idx = 0.
+        LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
+          UNASSIGN <fs_lv>.
+          ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
+          CHECK <fs_lv> IS ASSIGNED.
+          lv_norm_nod = <fs_lv>.
+          CONDENSE lv_norm_nod.
+          TRANSLATE lv_norm_nod TO UPPER CASE.
+          IF lv_norm_nod IS INITIAL. CONTINUE. ENDIF.
+          IF lv_norm_nod CS lv_norm_first OR lv_norm_first CS lv_norm_nod.
+            lv_match_idx = sy-tabix.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
       CHECK lv_match_idx > 0.
 
       " Verify subsequent orig lines match consecutively (multi-line change)
@@ -3192,17 +3257,14 @@ FORM smartform_procee.
         READ TABLE <fs_codetb> ASSIGNING <fs_codeln> INDEX lv_match_idx + lv_off.
         IF sy-subrc <> 0. lv_all_match = ' '. EXIT. ENDIF.
         UNASSIGN <fs_lv>.
-        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
+        ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
         IF <fs_lv> IS NOT ASSIGNED. lv_all_match = ' '. EXIT. ENDIF.
-        lv_norm_chk = wa_chk_orig-line. CONDENSE lv_norm_chk.
-        lv_norm_nod = <fs_lv>.         CONDENSE lv_norm_nod.
-        IF lv_norm_chk <> lv_norm_nod. lv_all_match = ' '. EXIT. ENDIF.
+        lv_norm_chk = wa_chk_orig-line. CONDENSE lv_norm_chk. TRANSLATE lv_norm_chk TO UPPER CASE.
+        lv_norm_nod = <fs_lv>.          CONDENSE lv_norm_nod.  TRANSLATE lv_norm_nod TO UPPER CASE.
+        IF lv_norm_chk <> lv_norm_nod AND
+           NOT ( lv_norm_nod CS lv_norm_chk OR lv_norm_chk CS lv_norm_nod ).
+          lv_all_match = ' '. EXIT.
+        ENDIF.
         lv_off = lv_off + 1.
       ENDWHILE.
       CHECK lv_all_match = 'X'.
@@ -3218,13 +3280,7 @@ FORM smartform_procee.
       LOOP AT ls_change-new_lines INTO DATA(wa_new).
         INSERT INITIAL LINE INTO <fs_codetb> INDEX lv_ins ASSIGNING <fs_codeln>.
         UNASSIGN <fs_lv>.
-        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
+        ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
         IF <fs_lv> IS ASSIGNED. <fs_lv> = wa_new-line. ENDIF.
         lv_ins = lv_ins + 1.
       ENDLOOP.
