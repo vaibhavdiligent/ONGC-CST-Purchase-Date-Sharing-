@@ -5721,7 +5721,7 @@ FORM apply_exclusion_from_master.
            state_code TYPE regio,
            location   TYPE ygms_de_loc_id,
            material   TYPE ygms_de_gail_mat,
-           time_stamp TYPE char14,
+           time_stamp TYPE timestamp,
            valid_from TYPE datum,
            valid_to   TYPE datum,
            deleted    TYPE ygms_deleted,
