@@ -328,57 +328,19 @@ START-OF-SELECTION.
             system_failure        = 2
             communication_failure = 3.
       WHEN 'SSFO'.
-        " Smart Form: find generated FM name first, then read its source
-        DATA lv_ssfo_fm_r TYPE rs38l_fnam.
-        DATA lv_sf_form   TYPE tdsfname.
-        lv_sf_form = wa_final_p-objname.
-        CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+        " Smart Form: ATC findings reference the generated include; read it directly.
+        " This avoids RPY_FUNCTIONMODULE_READ whose interface differs across releases.
+        object_name = wa_final_p-sobjname.
+        CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
           EXPORTING
-            formname           = lv_sf_form
-          IMPORTING
-            fm_name            = lv_ssfo_fm_r
+            object_name           = object_name
+            versno                = '00000'
+          TABLES
+            repos_tab             = repos_tab
           EXCEPTIONS
-            no_form            = 1
-            no_function_module = 2
-            OTHERS             = 3.
-        IF sy-subrc = 0.
-          object_name = lv_ssfo_fm_r.
-          " Use RPY_FUNCTIONMODULE_READ to get the specific FM source,
-          " not the whole function pool/group. All TABLES parameters are
-          " mandatory in the FM interface, so pass dummy targets for the
-          " ones we don't need.
-          DATA lt_fm_src        TYPE STANDARD TABLE OF rssource.
-          DATA lt_fm_import     TYPE STANDARD TABLE OF rsimp.
-          DATA lt_fm_changing   TYPE STANDARD TABLE OF rscha.
-          DATA lt_fm_export     TYPE STANDARD TABLE OF rsexp.
-          DATA lt_fm_tables     TYPE STANDARD TABLE OF rstbl.
-          DATA lt_fm_exceptions TYPE STANDARD TABLE OF rsexc.
-          DATA lt_fm_doc        TYPE STANDARD TABLE OF rsfdo.
-          DATA wa_fm_src        TYPE rssource.
-          DATA wa_rpt           TYPE abaptxt255.
-          CALL FUNCTION 'RPY_FUNCTIONMODULE_READ'
-            EXPORTING
-              functionname       = lv_ssfo_fm_r
-            TABLES
-              import_parameter   = lt_fm_import
-              changing_parameter = lt_fm_changing
-              export_parameter   = lt_fm_export
-              tables_parameter   = lt_fm_tables
-              exception_list     = lt_fm_exceptions
-              documentation      = lt_fm_doc
-              source             = lt_fm_src
-            EXCEPTIONS
-              error_message      = 1
-              function_not_found = 2
-              invalid_name       = 3
-              OTHERS             = 4.
-          IF sy-subrc = 0.
-            LOOP AT lt_fm_src INTO wa_fm_src.
-              wa_rpt-line = wa_fm_src-line.
-              APPEND wa_rpt TO repos_tab.
-            ENDLOOP.
-          ENDIF.
-        ENDIF.
+            no_version            = 1
+            system_failure        = 2
+            communication_failure = 3.
       WHEN 'CLAS'.
         object_name = wa_final_p-objname.
         CLEAR l_seoclskey.
@@ -2738,13 +2700,17 @@ ENDFORM.
 *& This survives form re-activation unlike generated FM update.
 *&---------------------------------------------------------------------*
 FORM smartform_procee.
-  DATA: lv_formname TYPE tdsfname,
-        lv_fm_name  TYPE rs38l_fnam,
-        lv_sf_chgd  TYPE flag,
-        lv_prog     TYPE program,
-        lv_old_cnt  TYPE i,
-        lv_new_cnt  TYPE i,
-        lv_tabix    TYPE i.
+  DATA: lv_formname     TYPE tdsfname,
+        lv_fm_name      TYPE rs38l_fnam,
+        lv_sf_chgd      TYPE flag,
+        lv_prog         TYPE program,
+        lv_old_cnt      TYPE i,
+        lv_tabix        TYPE i,
+        lt_include_orig TYPE STANDARD TABLE OF abaptxt255,
+        lt_include_corr TYPE STANDARD TABLE OF abaptxt255,
+        lv_inc_off      TYPE i,
+        lv_found_idx    TYPE i,
+        lv_changed      TYPE flag.
   DATA: i_caption TYPE tdtext,
         i_vartext TYPE tsfvtext,
         i_header  TYPE ssfhead,
@@ -2756,6 +2722,11 @@ FORM smartform_procee.
                  <fs_codetb> TYPE STANDARD TABLE,
                  <fs_codeln> TYPE ANY,
                  <fs_lv>     TYPE ANY.
+
+  " Step 0: Save corrected include source; node loop overwrites repos_tab/repos_tab_new
+  lt_include_orig = repos_tab.
+  lt_include_corr = repos_tab_new.
+  lv_inc_off = 1.
 
   lv_formname = wa_final_p-objname.
   CLEAR lv_sf_chgd.
@@ -2826,22 +2797,35 @@ FORM smartform_procee.
     ENDLOOP.
     CHECK repos_tab IS NOT INITIAL.
 
-    " Step 7: Apply ATC corrections - scan for findings matching this node's code
+    " Step 7: Map each node code line to its position in the include, apply correction
     REFRESH repos_tab_new.
-    LOOP AT it_final INTO wa_final
-      WHERE program_name = lv_fm_name.
-      LOOP AT repos_tab INTO DATA(wa_sfnod_rep)
-        WHERE line CS wa_final-param2
-           OR line CS wa_final-check_message.
-        wa_blank-line = wa_sfnod_rep-line.
-        APPEND wa_blank TO repos_tab_new.
-        CLEAR wa_blank.
+    CLEAR lv_changed.
+    LOOP AT repos_tab INTO DATA(wa_sfnod_src).
+      lv_found_idx = 0.
+      LOOP AT lt_include_orig INTO DATA(wa_inc_orig) FROM lv_inc_off.
+        IF wa_inc_orig-line = wa_sfnod_src-line.
+          lv_found_idx = sy-tabix.
+          lv_inc_off   = sy-tabix + 1.
+          EXIT.
+        ENDIF.
       ENDLOOP.
+      IF lv_found_idx > 0.
+        READ TABLE lt_include_corr INTO DATA(wa_inc_corr) INDEX lv_found_idx.
+        IF sy-subrc = 0 AND wa_inc_corr-line <> wa_sfnod_src-line.
+          wa_blank-line = wa_inc_corr-line.
+          lv_changed = 'X'.
+        ELSE.
+          wa_blank-line = wa_sfnod_src-line.
+        ENDIF.
+      ELSE.
+        wa_blank-line = wa_sfnod_src-line.
+      ENDIF.
+      APPEND wa_blank TO repos_tab_new.
+      CLEAR wa_blank.
     ENDLOOP.
 
-    DESCRIBE TABLE repos_tab     LINES lv_old_cnt.
-    DESCRIBE TABLE repos_tab_new LINES lv_new_cnt.
-    CHECK lv_new_cnt > 0 AND lv_old_cnt <> lv_new_cnt.
+    DESCRIBE TABLE repos_tab LINES lv_old_cnt.
+    CHECK lv_changed = 'X'.
 
     " Step 8: Write corrected lines back into this code node in session memory
     lv_tabix = 1.
