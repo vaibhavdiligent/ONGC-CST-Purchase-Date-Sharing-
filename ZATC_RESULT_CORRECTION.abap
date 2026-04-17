@@ -1271,8 +1271,62 @@ START-OF-SELECTION.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
           WHEN 'SSFO'.
-            " Smart Form: permanently update form nodes via session + activate
-            PERFORM smartform_procee.
+            " Smart Form: patch the generated include directly (same pattern as CLAS).
+            " Node-based mapping was unreliable because SAP reformats whitespace
+            " during form activation, so node source rarely matches include lines
+            " exactly. Writing the corrected include makes ATC-green immediately
+            " and is recorded against the SSFO object in the transport.
+            wa_output-program_name = wa_final_p-objname.
+            wa_output-subobj       = wa_final_p-sobjname.
+            IF p_sim = 'X'.
+              " Simulation: write the corrected source to a ZTEST_CHECK copy
+              CLEAR wa_final_p-sobjname.
+              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_final_p-sobjname.
+              INSERT REPORT wa_final_p-sobjname FROM repos_tab_new.
+              COMMIT WORK AND WAIT.
+            ELSE.
+              " Production: backup original, overwrite the generated include,
+              " and add the SSFO form to the transport request
+              CLEAR wa_output-backup.
+              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
+              INSERT REPORT wa_output-backup FROM repos_tab.
+              COMMIT WORK.
+              INSERT REPORT wa_final_p-sobjname FROM repos_tab_new.
+              COMMIT WORK.
+              SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_sf)
+                WHERE pgmid    = 'R3TR'
+                  AND object   = 'SSFO'
+                  AND obj_name = @wa_final_p-objname.
+              IF sy-subrc = 0.
+                REFRESH lt_recording_entries.
+                CLEAR ls_recording_entry.
+                ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
+                ls_recording_entry-object_entry-object_key-object   = 'SSFO'.
+                ls_recording_entry-object_entry-object_key-obj_name = wa_final_p-objname.
+                ls_recording_entry-author     = wa_tadir_sf-author.
+                ls_recording_entry-devclass   = wa_tadir_sf-devclass.
+                ls_recording_entry-masterlang = wa_tadir_sf-masterlang.
+                APPEND ls_recording_entry TO lt_recording_entries.
+                CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
+                  EXPORTING
+                    recording_entries = lt_recording_entries
+                    trkorr            = lv_req.
+                COMMIT WORK.
+              ENDIF.
+            ENDIF.
+            REFRESH repos_tab_new.
+            wa_output-new_program = wa_final_p-sobjname.
+            CLEAR it_error_table.
+            DATA lv_sf_prog TYPE program.
+            lv_sf_prog = wa_final_p-sobjname.
+            PERFORM syntax_check USING lv_sf_prog 'SSFO' CHANGING it_error_table.
+            IF it_error_table IS INITIAL.
+              wa_output-status = 'Success'.
+            ELSE.
+              wa_output-status = 'Syntax error'.
+            ENDIF.
+            APPEND wa_output TO it_output.
+            CLEAR wa_output.
         ENDCASE.
       ELSE.
         DATA l_enh_tool  TYPE REF TO if_enh_tool.
@@ -2691,238 +2745,6 @@ FORM replace_migo.
   ELSE.
     APPEND wa_repos_tab TO repos_tab_new.
   ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form smartform_procee
-*& Permanently updates Smart Form ABAP code nodes:
-*&   SSF_READ_FORM -> T_NTOKENS in SAPLSTXBX -> modify CO nodes ->
-*&   SSF_WRITE_FORM / SSFCOMP_FORM_SAVE -> SSF_SMART_FORMS_ACTIVATE
-*& This survives form re-activation unlike generated FM update.
-*&---------------------------------------------------------------------*
-FORM smartform_procee.
-  DATA: lv_formname     TYPE tdsfname,
-        lv_fm_name      TYPE rs38l_fnam,
-        lv_sf_chgd      TYPE flag,
-        lv_prog         TYPE program,
-        lv_old_cnt      TYPE i,
-        lv_tabix        TYPE i,
-        lt_include_orig TYPE STANDARD TABLE OF abaptxt255,
-        lt_include_corr TYPE STANDARD TABLE OF abaptxt255,
-        lv_inc_off      TYPE i,
-        lv_found_idx    TYPE i,
-        lv_changed      TYPE flag.
-  DATA: i_caption TYPE tdtext,
-        i_vartext TYPE tsfvtext,
-        i_header  TYPE ssfhead,
-        i_admin   TYPE stxfadm.
-
-  FIELD-SYMBOLS: <fs_nodes>  TYPE ANY TABLE,
-                 <fs_node>   TYPE ANY,
-                 <fs_ntype>  TYPE ANY,
-                 <fs_codetb> TYPE STANDARD TABLE,
-                 <fs_codeln> TYPE ANY,
-                 <fs_lv>     TYPE ANY.
-
-  " Step 0: Save corrected include source; node loop overwrites repos_tab/repos_tab_new
-  lt_include_orig = repos_tab.
-  lt_include_corr = repos_tab_new.
-  lv_inc_off = 1.
-
-  lv_formname = wa_final_p-objname.
-  CLEAR lv_sf_chgd.
-
-  " Step 1: Get generated FM name (used for syntax check at end)
-  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
-    EXPORTING
-      formname           = lv_formname
-    IMPORTING
-      fm_name             = lv_fm_name
-    EXCEPTIONS
-      no_form            = 1
-      no_function_module = 2
-      OTHERS             = 3.
-  IF sy-subrc <> 0. RETURN. ENDIF.
-
-  " Step 2: Load Smart Form into session memory (populates T_NTOKENS in SAPLSTXBX)
-  CALL FUNCTION 'SSF_READ_FORM'
-    EXPORTING
-      i_formname       = lv_formname
-    IMPORTING
-      o_caption        = i_caption
-      o_vartext        = i_vartext
-      o_admdata        = i_admin
-    EXCEPTIONS
-      no_form          = 1
-      no_active_source = 2
-      no_source        = 3
-      OTHERS           = 4.
-  IF sy-subrc <> 0. RETURN. ENDIF.
-
-  " Step 3: Access the entire form node tree from session memory
-  ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO <fs_nodes>.
-  IF <fs_nodes> IS NOT ASSIGNED. RETURN. ENDIF.
-
-  " Step 4: Loop all nodes, process ABAP code nodes only (NTYPE = 'CO')
-  LOOP AT <fs_nodes> ASSIGNING <fs_node>.
-    ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_node> TO <fs_ntype>.
-    CHECK <fs_ntype> IS ASSIGNED AND <fs_ntype> = 'CO'.
-
-    " Step 5: Access the code line table - try known field names across releases
-    ASSIGN COMPONENT 'ABAPCODE'  OF STRUCTURE <fs_node> TO <fs_codetb>.
-    IF <fs_codetb> IS NOT ASSIGNED.
-      ASSIGN COMPONENT 'SOURCE'    OF STRUCTURE <fs_node> TO <fs_codetb>.
-    ENDIF.
-    IF <fs_codetb> IS NOT ASSIGNED.
-      ASSIGN COMPONENT 'T_COLINES' OF STRUCTURE <fs_node> TO <fs_codetb>.
-    ENDIF.
-    IF <fs_codetb> IS NOT ASSIGNED.
-      ASSIGN COMPONENT 'T_TOKEN'   OF STRUCTURE <fs_node> TO <fs_codetb>.
-    ENDIF.
-    CHECK <fs_codetb> IS ASSIGNED.
-
-    " Step 6: Extract code lines from this node into repos_tab
-    REFRESH repos_tab.
-    LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
-      ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
-      IF <fs_lv> IS NOT ASSIGNED.
-        ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
-      ENDIF.
-      IF <fs_lv> IS NOT ASSIGNED.
-        ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
-      ENDIF.
-      CHECK <fs_lv> IS ASSIGNED.
-      wa_blank-line = <fs_lv>.
-      APPEND wa_blank TO repos_tab.
-      CLEAR wa_blank.
-    ENDLOOP.
-    CHECK repos_tab IS NOT INITIAL.
-
-    " Step 7: Map each node code line to its position in the include, apply correction
-    REFRESH repos_tab_new.
-    CLEAR lv_changed.
-    LOOP AT repos_tab INTO DATA(wa_sfnod_src).
-      lv_found_idx = 0.
-      LOOP AT lt_include_orig INTO DATA(wa_inc_orig) FROM lv_inc_off.
-        IF wa_inc_orig-line = wa_sfnod_src-line.
-          lv_found_idx = sy-tabix.
-          lv_inc_off   = sy-tabix + 1.
-          EXIT.
-        ENDIF.
-      ENDLOOP.
-      IF lv_found_idx > 0.
-        READ TABLE lt_include_corr INTO DATA(wa_inc_corr) INDEX lv_found_idx.
-        IF sy-subrc = 0 AND wa_inc_corr-line <> wa_sfnod_src-line.
-          wa_blank-line = wa_inc_corr-line.
-          lv_changed = 'X'.
-        ELSE.
-          wa_blank-line = wa_sfnod_src-line.
-        ENDIF.
-      ELSE.
-        wa_blank-line = wa_sfnod_src-line.
-      ENDIF.
-      APPEND wa_blank TO repos_tab_new.
-      CLEAR wa_blank.
-    ENDLOOP.
-
-    DESCRIBE TABLE repos_tab LINES lv_old_cnt.
-    CHECK lv_changed = 'X'.
-
-    " Step 8: Write corrected lines back into this code node in session memory
-    lv_tabix = 1.
-    LOOP AT repos_tab_new INTO DATA(wa_sf_corr).
-      IF lv_tabix <= lv_old_cnt.
-        " Update existing line
-        READ TABLE <fs_codetb> ASSIGNING <fs_codeln> INDEX lv_tabix.
-        IF sy-subrc = 0.
-          ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
-          IF <fs_lv> IS NOT ASSIGNED.
-            ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
-          ENDIF.
-          IF <fs_lv> IS NOT ASSIGNED.
-            ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
-          ENDIF.
-          IF <fs_lv> IS ASSIGNED.
-            <fs_lv> = wa_sf_corr-line.
-          ENDIF.
-        ENDIF.
-      ELSE.
-        " Append new lines (begin/end change comments expand line count)
-        APPEND INITIAL LINE TO <fs_codetb> ASSIGNING <fs_codeln>.
-        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
-        IF <fs_lv> IS NOT ASSIGNED.
-          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        ENDIF.
-        IF <fs_lv> IS ASSIGNED. <fs_lv> = wa_sf_corr-line. ENDIF.
-      ENDIF.
-      lv_tabix = lv_tabix + 1.
-    ENDLOOP.
-    lv_sf_chgd = 'X'.
-  ENDLOOP. " loop all nodes
-
-  CHECK lv_sf_chgd = 'X'.
-
-  " Step 9: Persist modified session back to Smart Form database
-  " Primary API (ECC/S4 standard):
-  CALL FUNCTION 'SSF_WRITE_FORM'
-    EXPORTING
-      i_formname = lv_formname
-    EXCEPTIONS
-      OTHERS     = 4.
-  IF sy-subrc <> 0.
-    " Fallback: SSFCOMP internal save (used by transaction SMARTFORMS)
-    CALL FUNCTION 'SSFCOMP_FORM_SAVE'
-      EXCEPTIONS
-        OTHERS = 4.
-  ENDIF.
-
-  " Step 10: Re-activate Smart Form - regenerates the FM from updated nodes
-  CALL FUNCTION 'SSF_SMART_FORMS_ACTIVATE'
-    EXPORTING
-      i_formname      = lv_formname
-    EXCEPTIONS
-      form_not_found  = 1
-      form_not_active = 2
-      OTHERS          = 3.
-
-  " Step 11: Add Smart Form object to transport request
-  REFRESH lt_recording_entries.
-  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_sf)
-    WHERE pgmid    = 'R3TR'
-      AND object   = 'SSFO'
-      AND obj_name = @lv_formname.
-  IF sy-subrc = 0.
-    CLEAR ls_recording_entry.
-    ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
-    ls_recording_entry-object_entry-object_key-object   = 'SSFO'.
-    ls_recording_entry-object_entry-object_key-obj_name = lv_formname.
-    ls_recording_entry-author      = wa_tadir_sf-author.
-    ls_recording_entry-devclass    = wa_tadir_sf-devclass.
-    ls_recording_entry-masterlang  = wa_tadir_sf-masterlang.
-    APPEND ls_recording_entry TO lt_recording_entries.
-    CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
-      EXPORTING
-        recording_entries = lt_recording_entries
-        trkorr            = lv_req.
-    COMMIT WORK.
-  ENDIF.
-
-  " Step 12: Log result in output ALV
-  wa_output-program_name = lv_formname.
-  wa_output-subobj       = lv_formname.
-  wa_output-new_program  = lv_formname.
-  CLEAR it_error_table.
-  lv_prog = lv_formname.
-  PERFORM syntax_check USING lv_prog 'SSFO' CHANGING it_error_table.
-  IF it_error_table IS INITIAL.
-    wa_output-status = 'Success'.
-  ELSE.
-    wa_output-status = 'Syntax error'.
-  ENDIF.
-  APPEND wa_output TO it_output.
-  CLEAR wa_output.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form adobe_form_procee
