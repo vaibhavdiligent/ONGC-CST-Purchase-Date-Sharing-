@@ -1271,62 +1271,13 @@ START-OF-SELECTION.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
           WHEN 'SSFO'.
-            " Smart Form: patch the generated include directly (same pattern as CLAS).
-            " Node-based mapping was unreliable because SAP reformats whitespace
-            " during form activation, so node source rarely matches include lines
-            " exactly. Writing the corrected include makes ATC-green immediately
-            " and is recorded against the SSFO object in the transport.
-            wa_output-program_name = wa_final_p-objname.
-            wa_output-subobj       = wa_final_p-sobjname.
-            IF p_sim = 'X'.
-              " Simulation: write the corrected source to a ZTEST_CHECK copy
-              CLEAR wa_final_p-sobjname.
-              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_final_p-sobjname.
-              INSERT REPORT wa_final_p-sobjname FROM repos_tab_new.
-              COMMIT WORK AND WAIT.
-            ELSE.
-              " Production: backup original, overwrite the generated include,
-              " and add the SSFO form to the transport request
-              CLEAR wa_output-backup.
-              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
-              INSERT REPORT wa_output-backup FROM repos_tab.
-              COMMIT WORK.
-              INSERT REPORT wa_final_p-sobjname FROM repos_tab_new.
-              COMMIT WORK.
-              SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_sf)
-                WHERE pgmid    = 'R3TR'
-                  AND object   = 'SSFO'
-                  AND obj_name = @wa_final_p-objname.
-              IF sy-subrc = 0.
-                REFRESH lt_recording_entries.
-                CLEAR ls_recording_entry.
-                ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
-                ls_recording_entry-object_entry-object_key-object   = 'SSFO'.
-                ls_recording_entry-object_entry-object_key-obj_name = wa_final_p-objname.
-                ls_recording_entry-author     = wa_tadir_sf-author.
-                ls_recording_entry-devclass   = wa_tadir_sf-devclass.
-                ls_recording_entry-masterlang = wa_tadir_sf-masterlang.
-                APPEND ls_recording_entry TO lt_recording_entries.
-                CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
-                  EXPORTING
-                    recording_entries = lt_recording_entries
-                    trkorr            = lv_req.
-                COMMIT WORK.
-              ENDIF.
-            ENDIF.
-            REFRESH repos_tab_new.
-            wa_output-new_program = wa_final_p-sobjname.
-            CLEAR it_error_table.
-            DATA lv_sf_prog TYPE program.
-            lv_sf_prog = wa_final_p-sobjname.
-            PERFORM syntax_check USING lv_sf_prog 'SSFO' CHANGING it_error_table.
-            IF it_error_table IS INITIAL.
-              wa_output-status = 'Success'.
-            ELSE.
-              wa_output-status = 'Syntax error'.
-            ENDIF.
-            APPEND wa_output TO it_output.
-            CLEAR wa_output.
+            " Smart Form: patch node source so the correction survives form
+            " re-activation. smartform_procee parses the change markers in
+            " repos_tab_new to build an orig->corrected map, then applies
+            " each change to the matching line in the form's CO nodes, saves
+            " the form, activates it (regenerates the include from corrected
+            " nodes), and records the SSFO object in the transport.
+            PERFORM smartform_procee.
         ENDCASE.
       ELSE.
         DATA l_enh_tool  TYPE REF TO if_enh_tool.
@@ -3039,4 +2990,302 @@ FORM bdc_field USING p_fnam TYPE any p_fval TYPE any.
   bdcdata-fnam = p_fnam.
   bdcdata-fval = p_fval.
   APPEND bdcdata.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form smartform_procee
+*& Propagate ATC corrections from the generated include back to the
+*& Smart Form's CO nodes so the fix survives form re-activation.
+*&   1. Parse the change markers (p_begin/p_end) in repos_tab_new to
+*&      build (orig_lines -> new_lines) pairs aligned with repos_tab.
+*&   2. SSF_READ_FORM loads the form into session; T_NTOKENS holds nodes.
+*&   3. For each 'CO' node, locate each change's orig block by trimmed
+*&      content match and replace with the new lines in place.
+*&   4. SSF_WRITE_FORM persists node changes; SSF_SMART_FORMS_ACTIVATE
+*&      regenerates the include from the corrected nodes.
+*&   5. Record SSFO object in the transport.
+*&---------------------------------------------------------------------*
+FORM smartform_procee.
+  TYPES: BEGIN OF ty_change,
+           orig_lines TYPE STANDARD TABLE OF abaptxt255 WITH EMPTY KEY,
+           new_lines  TYPE STANDARD TABLE OF abaptxt255 WITH EMPTY KEY,
+         END OF ty_change.
+  DATA: lt_include_orig TYPE STANDARD TABLE OF abaptxt255,
+        lt_include_corr TYPE STANDARD TABLE OF abaptxt255,
+        lt_changes      TYPE STANDARD TABLE OF ty_change,
+        ls_change       TYPE ty_change,
+        lv_formname     TYPE tdsfname,
+        lv_form_changed TYPE flag,
+        lv_node_changed TYPE flag,
+        lv_i            TYPE i,
+        lv_j            TYPE i,
+        lv_k            TYPE i,
+        lv_orig_cnt     TYPE i,
+        lv_corr_cnt     TYPE i,
+        lv_match_idx    TYPE i,
+        lv_resync_j     TYPE i,
+        lv_orig_sz      TYPE i,
+        lv_off          TYPE i,
+        lv_ins          TYPE i,
+        lv_del          TYPE i,
+        lv_all_match    TYPE flag,
+        lv_norm_first   TYPE string,
+        lv_norm_chk     TYPE string,
+        lv_norm_nod     TYPE string,
+        lv_resync_line  TYPE abaptxt255-line,
+        i_caption       TYPE tdtext,
+        i_vartext       TYPE tsfvtext,
+        i_admin         TYPE stxfadm.
+
+  FIELD-SYMBOLS: <fs_nodes>  TYPE ANY TABLE,
+                 <fs_node>   TYPE ANY,
+                 <fs_ntype>  TYPE ANY,
+                 <fs_codetb> TYPE STANDARD TABLE,
+                 <fs_codeln> TYPE ANY,
+                 <fs_lv>     TYPE ANY,
+                 <fs_c>      TYPE abaptxt255,
+                 <fs_o>      TYPE abaptxt255.
+
+  " Step 0: Capture corrected include source before anything else overwrites it
+  lt_include_orig = repos_tab.
+  lt_include_corr = repos_tab_new.
+  lv_orig_cnt = lines( lt_include_orig ).
+  lv_corr_cnt = lines( lt_include_corr ).
+
+  " Step 1: Walk corr and orig in parallel, parsing change blocks between
+  "         p_begin/p_end markers into (orig_lines, new_lines) pairs.
+  lv_i = 1.
+  lv_j = 1.
+  WHILE lv_j <= lv_corr_cnt.
+    READ TABLE lt_include_corr ASSIGNING <fs_c> INDEX lv_j.
+    IF <fs_c>-line CS p_begin.
+      " Begin marker: collect new_lines until matching p_end
+      CLEAR ls_change.
+      lv_k = lv_j + 1.
+      WHILE lv_k <= lv_corr_cnt.
+        READ TABLE lt_include_corr ASSIGNING <fs_c> INDEX lv_k.
+        IF <fs_c>-line CS p_end. EXIT. ENDIF.
+        APPEND <fs_c> TO ls_change-new_lines.
+        lv_k = lv_k + 1.
+      ENDWHILE.
+
+      " Find next unchanged line in corr (after p_end) to re-sync orig pointer
+      CLEAR lv_resync_line.
+      lv_resync_j = lv_k + 1.
+      WHILE lv_resync_j <= lv_corr_cnt.
+        READ TABLE lt_include_corr ASSIGNING <fs_c> INDEX lv_resync_j.
+        IF <fs_c>-line NS p_begin AND <fs_c>-line NS p_end.
+          lv_resync_line = <fs_c>-line.
+          EXIT.
+        ENDIF.
+        lv_resync_j = lv_resync_j + 1.
+      ENDWHILE.
+
+      " Walk orig from lv_i until we reach the resync line; those are orig_lines
+      IF lv_resync_line IS INITIAL.
+        WHILE lv_i <= lv_orig_cnt.
+          READ TABLE lt_include_orig ASSIGNING <fs_o> INDEX lv_i.
+          APPEND <fs_o> TO ls_change-orig_lines.
+          lv_i = lv_i + 1.
+        ENDWHILE.
+      ELSE.
+        WHILE lv_i <= lv_orig_cnt.
+          READ TABLE lt_include_orig ASSIGNING <fs_o> INDEX lv_i.
+          IF <fs_o>-line = lv_resync_line. EXIT. ENDIF.
+          APPEND <fs_o> TO ls_change-orig_lines.
+          lv_i = lv_i + 1.
+        ENDWHILE.
+      ENDIF.
+
+      IF ls_change-orig_lines IS NOT INITIAL AND ls_change-new_lines IS NOT INITIAL.
+        APPEND ls_change TO lt_changes.
+      ENDIF.
+      lv_j = lv_k + 1. " skip past p_end marker
+    ELSE.
+      " Unchanged line: advance orig pointer when it matches
+      IF lv_i <= lv_orig_cnt.
+        READ TABLE lt_include_orig ASSIGNING <fs_o> INDEX lv_i.
+        IF sy-subrc = 0 AND <fs_o>-line = <fs_c>-line.
+          lv_i = lv_i + 1.
+        ENDIF.
+      ENDIF.
+      lv_j = lv_j + 1.
+    ENDIF.
+  ENDWHILE.
+
+  IF lt_changes IS INITIAL. RETURN. ENDIF.
+
+  " Step 2: Load Smart Form into session memory
+  lv_formname = wa_final_p-objname.
+  CALL FUNCTION 'SSF_READ_FORM'
+    EXPORTING
+      i_formname       = lv_formname
+    IMPORTING
+      o_caption        = i_caption
+      o_vartext        = i_vartext
+      o_admdata        = i_admin
+    EXCEPTIONS
+      no_form          = 1
+      no_active_source = 2
+      no_source        = 3
+      OTHERS           = 4.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+
+  " Step 3: Access node tree
+  ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO <fs_nodes>.
+  IF <fs_nodes> IS NOT ASSIGNED. RETURN. ENDIF.
+
+  CLEAR lv_form_changed.
+
+  " Step 4: For each CO node, apply each change via trimmed content match
+  LOOP AT <fs_nodes> ASSIGNING <fs_node>.
+    UNASSIGN: <fs_ntype>, <fs_codetb>, <fs_codeln>, <fs_lv>.
+    ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_node> TO <fs_ntype>.
+    CHECK <fs_ntype> IS ASSIGNED AND <fs_ntype> = 'CO'.
+
+    ASSIGN COMPONENT 'ABAPCODE'  OF STRUCTURE <fs_node> TO <fs_codetb>.
+    IF <fs_codetb> IS NOT ASSIGNED.
+      ASSIGN COMPONENT 'SOURCE'    OF STRUCTURE <fs_node> TO <fs_codetb>.
+    ENDIF.
+    IF <fs_codetb> IS NOT ASSIGNED.
+      ASSIGN COMPONENT 'T_COLINES' OF STRUCTURE <fs_node> TO <fs_codetb>.
+    ENDIF.
+    IF <fs_codetb> IS NOT ASSIGNED.
+      ASSIGN COMPONENT 'T_TOKEN'   OF STRUCTURE <fs_node> TO <fs_codetb>.
+    ENDIF.
+    CHECK <fs_codetb> IS ASSIGNED.
+
+    CLEAR lv_node_changed.
+    LOOP AT lt_changes INTO ls_change.
+      READ TABLE ls_change-orig_lines INTO DATA(wa_first_orig) INDEX 1.
+      CHECK sy-subrc = 0.
+      lv_norm_first = wa_first_orig-line.
+      CONDENSE lv_norm_first.
+      IF lv_norm_first IS INITIAL. CONTINUE. ENDIF.
+
+      " Locate first orig line in node by trimmed match
+      lv_match_idx = 0.
+      LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
+        UNASSIGN <fs_lv>.
+        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        CHECK <fs_lv> IS ASSIGNED.
+        lv_norm_nod = <fs_lv>.
+        CONDENSE lv_norm_nod.
+        IF lv_norm_nod = lv_norm_first.
+          lv_match_idx = sy-tabix.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      CHECK lv_match_idx > 0.
+
+      " Verify subsequent orig lines match consecutively (multi-line change)
+      lv_orig_sz = lines( ls_change-orig_lines ).
+      lv_all_match = 'X'.
+      lv_off = 1.
+      WHILE lv_off < lv_orig_sz.
+        READ TABLE ls_change-orig_lines INTO DATA(wa_chk_orig) INDEX lv_off + 1.
+        READ TABLE <fs_codetb> ASSIGNING <fs_codeln> INDEX lv_match_idx + lv_off.
+        IF sy-subrc <> 0. lv_all_match = ' '. EXIT. ENDIF.
+        UNASSIGN <fs_lv>.
+        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS NOT ASSIGNED. lv_all_match = ' '. EXIT. ENDIF.
+        lv_norm_chk = wa_chk_orig-line. CONDENSE lv_norm_chk.
+        lv_norm_nod = <fs_lv>.         CONDENSE lv_norm_nod.
+        IF lv_norm_chk <> lv_norm_nod. lv_all_match = ' '. EXIT. ENDIF.
+        lv_off = lv_off + 1.
+      ENDWHILE.
+      CHECK lv_all_match = 'X'.
+
+      " Delete matched orig block, insert new lines at the same position
+      lv_del = 0.
+      WHILE lv_del < lv_orig_sz.
+        DELETE <fs_codetb> INDEX lv_match_idx.
+        lv_del = lv_del + 1.
+      ENDWHILE.
+
+      lv_ins = lv_match_idx.
+      LOOP AT ls_change-new_lines INTO DATA(wa_new).
+        INSERT INITIAL LINE INTO <fs_codetb> INDEX lv_ins ASSIGNING <fs_codeln>.
+        UNASSIGN <fs_lv>.
+        ASSIGN COMPONENT 'LINE'     OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'ABAPLINE' OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS NOT ASSIGNED.
+          ASSIGN COMPONENT 'TNAME'    OF STRUCTURE <fs_codeln> TO <fs_lv>.
+        ENDIF.
+        IF <fs_lv> IS ASSIGNED. <fs_lv> = wa_new-line. ENDIF.
+        lv_ins = lv_ins + 1.
+      ENDLOOP.
+
+      lv_node_changed = 'X'.
+    ENDLOOP.
+
+    IF lv_node_changed = 'X'. lv_form_changed = 'X'. ENDIF.
+  ENDLOOP.
+
+  CHECK lv_form_changed = 'X'.
+
+  " Step 5: Persist modified session back to Smart Form database
+  CALL FUNCTION 'SSF_WRITE_FORM'
+    EXPORTING
+      i_formname = lv_formname
+    EXCEPTIONS
+      OTHERS     = 4.
+  IF sy-subrc <> 0.
+    CALL FUNCTION 'SSFCOMP_FORM_SAVE'
+      EXCEPTIONS
+        OTHERS = 4.
+  ENDIF.
+
+  " Step 6: Re-activate the form so the generated include rebuilds from
+  "         the corrected nodes
+  CALL FUNCTION 'SSF_SMART_FORMS_ACTIVATE'
+    EXPORTING
+      i_formname      = lv_formname
+    EXCEPTIONS
+      form_not_found  = 1
+      form_not_active = 2
+      OTHERS          = 3.
+
+  " Step 7: Record the SSFO object in the transport request
+  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_sf)
+    WHERE pgmid    = 'R3TR'
+      AND object   = 'SSFO'
+      AND obj_name = @lv_formname.
+  IF sy-subrc = 0.
+    REFRESH lt_recording_entries.
+    CLEAR ls_recording_entry.
+    ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
+    ls_recording_entry-object_entry-object_key-object   = 'SSFO'.
+    ls_recording_entry-object_entry-object_key-obj_name = lv_formname.
+    ls_recording_entry-author     = wa_tadir_sf-author.
+    ls_recording_entry-devclass   = wa_tadir_sf-devclass.
+    ls_recording_entry-masterlang = wa_tadir_sf-masterlang.
+    APPEND ls_recording_entry TO lt_recording_entries.
+    CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
+      EXPORTING
+        recording_entries = lt_recording_entries
+        trkorr            = lv_req.
+    COMMIT WORK.
+  ENDIF.
+
+  " Step 8: Log output row
+  wa_output-program_name = lv_formname.
+  wa_output-subobj       = lv_formname.
+  wa_output-new_program  = lv_formname.
+  wa_output-status       = 'Success'.
+  APPEND wa_output TO it_output.
+  CLEAR wa_output.
 ENDFORM.
