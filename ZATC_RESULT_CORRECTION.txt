@@ -343,16 +343,9 @@ START-OF-SELECTION.
             OTHERS             = 3.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
-          CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-            EXPORTING
-              object_name           = object_name
-              versno                = '00000'
-            TABLES
-              repos_tab             = repos_tab
-            EXCEPTIONS
-              no_version            = 1
-              system_failure        = 2
-              communication_failure = 3.
+          " Generated Smart Form FMs have no VRSD version entries;
+          " read active source directly from REPOSRC via READ REPORT.
+          READ REPORT lv_ssfo_fm_r INTO repos_tab.
         ENDIF.
       WHEN 'CLAS'.
         object_name = wa_final_p-objname.
