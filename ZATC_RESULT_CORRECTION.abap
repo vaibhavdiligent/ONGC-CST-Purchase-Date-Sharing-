@@ -343,16 +343,25 @@ START-OF-SELECTION.
             OTHERS             = 3.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
-          CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
+          " Use RPY_FUNCTIONMODULE_READ to get the specific FM source,
+          " not the whole function pool/group.
+          DATA lt_fm_src TYPE STANDARD TABLE OF rssource.
+          DATA wa_fm_src TYPE rssource.
+          DATA wa_rpt    TYPE abaptxt255.
+          CALL FUNCTION 'RPY_FUNCTIONMODULE_READ'
             EXPORTING
-              object_name           = object_name
-              versno                = '00000'
+              functionname  = lv_ssfo_fm_r
             TABLES
-              repos_tab             = repos_tab
+              source_lines  = lt_fm_src
             EXCEPTIONS
-              no_version            = 1
-              system_failure        = 2
-              communication_failure = 3.
+              error_message = 1
+              OTHERS        = 2.
+          IF sy-subrc = 0.
+            LOOP AT lt_fm_src INTO wa_fm_src.
+              wa_rpt-line = wa_fm_src-line.
+              APPEND wa_rpt TO repos_tab.
+            ENDLOOP.
+          ENDIF.
         ENDIF.
       WHEN 'CLAS'.
         object_name = wa_final_p-objname.
