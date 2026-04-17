@@ -344,18 +344,34 @@ START-OF-SELECTION.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
           " Use RPY_FUNCTIONMODULE_READ to get the specific FM source,
-          " not the whole function pool/group.
-          DATA lt_fm_src TYPE STANDARD TABLE OF rssource.
-          DATA wa_fm_src TYPE rssource.
-          DATA wa_rpt    TYPE abaptxt255.
+          " not the whole function pool/group. All TABLES parameters are
+          " mandatory in the FM interface, so pass dummy targets for the
+          " ones we don't need.
+          DATA lt_fm_src        TYPE STANDARD TABLE OF rssource.
+          DATA lt_fm_import     TYPE STANDARD TABLE OF rsimp.
+          DATA lt_fm_changing   TYPE STANDARD TABLE OF rscha.
+          DATA lt_fm_export     TYPE STANDARD TABLE OF rsexp.
+          DATA lt_fm_tables     TYPE STANDARD TABLE OF rstbl.
+          DATA lt_fm_exceptions TYPE STANDARD TABLE OF rsexc.
+          DATA lt_fm_doc        TYPE STANDARD TABLE OF rsfdo.
+          DATA wa_fm_src        TYPE rssource.
+          DATA wa_rpt           TYPE abaptxt255.
           CALL FUNCTION 'RPY_FUNCTIONMODULE_READ'
             EXPORTING
-              functionname  = lv_ssfo_fm_r
+              functionname       = lv_ssfo_fm_r
             TABLES
-              source_lines  = lt_fm_src
+              import_parameter   = lt_fm_import
+              changing_parameter = lt_fm_changing
+              export_parameter   = lt_fm_export
+              tables_parameter   = lt_fm_tables
+              exception_list     = lt_fm_exceptions
+              documentation      = lt_fm_doc
+              source             = lt_fm_src
             EXCEPTIONS
-              error_message = 1
-              OTHERS        = 2.
+              error_message      = 1
+              function_not_found = 2
+              invalid_name       = 3
+              OTHERS             = 4.
           IF sy-subrc = 0.
             LOOP AT lt_fm_src INTO wa_fm_src.
               wa_rpt-line = wa_fm_src-line.
