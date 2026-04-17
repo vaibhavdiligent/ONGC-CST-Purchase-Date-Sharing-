@@ -343,14 +343,24 @@ START-OF-SELECTION.
             OTHERS             = 3.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
-          " Smart Form FMs live inside a function group include.
-          " TFDIR maps FM name → include program name in REPOSRC.
-          DATA lv_fm_include TYPE progname.
-          SELECT SINGLE pname FROM tfdir
-            WHERE funcname = @lv_ssfo_fm_r
-            INTO @lv_fm_include.
+          " Use RPY_FUNCTIONMODULE_READ to get the specific FM source,
+          " not the whole function pool/group.
+          DATA lt_fm_src TYPE STANDARD TABLE OF rssource.
+          DATA wa_fm_src TYPE rssource.
+          DATA wa_rpt    TYPE abaptxt255.
+          CALL FUNCTION 'RPY_FUNCTIONMODULE_READ'
+            EXPORTING
+              functionname  = lv_ssfo_fm_r
+            TABLES
+              source_lines  = lt_fm_src
+            EXCEPTIONS
+              error_message = 1
+              OTHERS        = 2.
           IF sy-subrc = 0.
-            READ REPORT lv_fm_include INTO repos_tab.
+            LOOP AT lt_fm_src INTO wa_fm_src.
+              wa_rpt-line = wa_fm_src-line.
+              APPEND wa_rpt TO repos_tab.
+            ENDLOOP.
           ENDIF.
         ENDIF.
       WHEN 'CLAS'.
