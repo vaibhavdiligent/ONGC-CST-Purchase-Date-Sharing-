@@ -343,9 +343,15 @@ START-OF-SELECTION.
             OTHERS             = 3.
         IF sy-subrc = 0.
           object_name = lv_ssfo_fm_r.
-          " Generated Smart Form FMs have no VRSD version entries;
-          " read active source directly from REPOSRC via READ REPORT.
-          READ REPORT lv_ssfo_fm_r INTO repos_tab.
+          " Smart Form FMs live inside a function group include.
+          " TFDIR maps FM name → include program name in REPOSRC.
+          DATA lv_fm_include TYPE progname.
+          SELECT SINGLE pname FROM tfdir
+            WHERE funcname = @lv_ssfo_fm_r
+            INTO @lv_fm_include.
+          IF sy-subrc = 0.
+            READ REPORT lv_fm_include INTO repos_tab.
+          ENDIF.
         ENDIF.
       WHEN 'CLAS'.
         object_name = wa_final_p-objname.
