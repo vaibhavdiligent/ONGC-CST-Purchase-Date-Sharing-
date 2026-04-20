@@ -3005,9 +3005,11 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_summary-total_scm TO lv_qty_scm DECIMALS 3.
     CONDENSE: lv_qty_mbg, lv_qty_scm.
     " Weighted average GCV/NCV = Sum(Volume * GCV) / Total Volume
+    DATA: lv_avg_gcv TYPE p DECIMALS 6,
+          lv_avg_ncv TYPE p DECIMALS 6.
     IF ls_summary-total_vol > 0.
-      DATA(lv_avg_gcv) = ls_summary-sum_vol_gcv / ls_summary-total_vol.
-      DATA(lv_avg_ncv) = ls_summary-sum_vol_ncv / ls_summary-total_vol.
+      lv_avg_gcv = ls_summary-sum_vol_gcv / ls_summary-total_vol.
+      lv_avg_ncv = ls_summary-sum_vol_ncv / ls_summary-total_vol.
     ELSE.
       lv_avg_gcv = 0.
       lv_avg_ncv = 0.
