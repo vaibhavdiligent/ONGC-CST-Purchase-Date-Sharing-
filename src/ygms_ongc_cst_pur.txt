@@ -57,6 +57,12 @@ TYPES: BEGIN OF ty_gcv_error,
          gas_day     TYPE datum,
          message     TYPE char80,
        END OF ty_gcv_error.
+TYPES: BEGIN OF ty_gail_val_error,
+         location_id TYPE ygms_de_loc_id,
+         material    TYPE ygms_de_gail_mat,
+         error_type  TYPE c LENGTH 1,
+         message     TYPE char80,
+       END OF ty_gail_val_error.
 *----------------------------------------------------------------------*
 * Selection Screen Reference Variables
 *----------------------------------------------------------------------*
@@ -91,6 +97,7 @@ DATA: gt_excel_data  TYPE TABLE OF ty_excel_data,
       gt_loc_errors  TYPE TABLE OF ty_loc_error,
       gt_mat_errors  TYPE TABLE OF ty_mat_error,
       gt_gcv_errors  TYPE TABLE OF ty_gcv_error,
+      gt_gail_val_errors TYPE TABLE OF ty_gail_val_error,
       gv_fn_start    TYPE datum,
       gv_fn_end      TYPE datum,
       gv_records     TYPE i,
@@ -174,6 +181,8 @@ FORM process_upload.
   CHECK gt_excel_data IS NOT INITIAL.
   PERFORM validate_fortnight.
   CHECK gv_fn_start IS NOT INITIAL.
+  PERFORM validate_gail_entries.
+  CHECK gv_errors = 0.
   PERFORM map_location_to_ctp.
   CHECK gv_errors = 0.
   PERFORM map_material_to_ongc.
@@ -414,6 +423,158 @@ FORM validate_fortnight.
   MESSAGE s000(ygms_msg) WITH 'Fortnight:' gv_fn_start 'to' gv_fn_end.
 ENDFORM.
 *&---------------------------------------------------------------------*
+*& Form VALIDATE_GAIL_ENTRIES
+*&---------------------------------------------------------------------*
+FORM validate_gail_entries.
+  DATA: lt_locations  TYPE TABLE OF ygms_de_loc_id,
+        lt_loc_check  TYPE TABLE OF yrga_cst_loc_map,
+        lt_mat_check  TYPE TABLE OF yrga_cst_mat_map,
+        ls_gail_err   TYPE ty_gail_val_error,
+        lv_loc_err    TYPE abap_bool,
+        lv_mat_err    TYPE abap_bool,
+        lv_answer     TYPE c.
+  DATA: BEGIN OF ls_loc_mat,
+          location_id TYPE ygms_de_loc_id,
+          material    TYPE ygms_de_gail_mat,
+        END OF ls_loc_mat,
+        lt_loc_mat LIKE TABLE OF ls_loc_mat.
+  CLEAR: gt_gail_val_errors, gv_errors.
+  LOOP AT gt_excel_data INTO DATA(ls_excel).
+    COLLECT ls_excel-location_id INTO lt_locations.
+    ls_loc_mat-location_id = ls_excel-location_id.
+    ls_loc_mat-material    = ls_excel-material.
+    COLLECT ls_loc_mat INTO lt_loc_mat.
+  ENDLOOP.
+  IF lt_locations IS NOT INITIAL.
+    SELECT * FROM yrga_cst_loc_map
+      INTO TABLE lt_loc_check
+      FOR ALL ENTRIES IN lt_locations
+      WHERE gail_loc_id = lt_locations-table_line
+        AND deleted     = ' '.
+  ENDIF.
+  LOOP AT lt_locations INTO DATA(lv_loc_id).
+    READ TABLE lt_loc_check TRANSPORTING NO FIELDS
+      WITH KEY gail_loc_id = lv_loc_id.
+    IF sy-subrc <> 0.
+      CLEAR ls_gail_err.
+      ls_gail_err-location_id = lv_loc_id.
+      ls_gail_err-error_type  = 'L'.
+      ls_gail_err-message     = 'GAIL Location ID not maintained in Location Mapping'.
+      APPEND ls_gail_err TO gt_gail_val_errors.
+      lv_loc_err = abap_true.
+    ENDIF.
+  ENDLOOP.
+  IF lt_loc_mat IS NOT INITIAL.
+    SELECT * FROM yrga_cst_mat_map
+      INTO TABLE lt_mat_check
+      FOR ALL ENTRIES IN lt_loc_mat
+      WHERE location_id   = lt_loc_mat-location_id
+        AND gail_material = lt_loc_mat-material
+        AND deleted       = ' '.
+  ENDIF.
+  LOOP AT lt_loc_mat INTO ls_loc_mat.
+    READ TABLE lt_mat_check TRANSPORTING NO FIELDS
+      WITH KEY location_id   = ls_loc_mat-location_id
+               gail_material = ls_loc_mat-material.
+    IF sy-subrc <> 0.
+      CLEAR ls_gail_err.
+      ls_gail_err-location_id = ls_loc_mat-location_id.
+      ls_gail_err-material    = ls_loc_mat-material.
+      ls_gail_err-error_type  = 'M'.
+      ls_gail_err-message     = 'GAIL Material not maintained in Material Mapping'.
+      APPEND ls_gail_err TO gt_gail_val_errors.
+      lv_mat_err = abap_true.
+    ENDIF.
+  ENDLOOP.
+  IF lv_loc_err = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'GAIL Location ID(s) not found in Location Mapping table.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+    IF lv_answer = '1'.
+      PERFORM display_gail_val_error_popup USING 'L'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+  IF lv_mat_err = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'GAIL Material(s) not found in Material Mapping table.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+    IF lv_answer = '1'.
+      PERFORM display_gail_val_error_popup USING 'M'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_GAIL_VAL_ERROR_POPUP
+*&---------------------------------------------------------------------*
+FORM display_gail_val_error_popup USING pv_error_type TYPE c.
+  DATA: lo_alv     TYPE REF TO cl_salv_table,
+        lo_columns TYPE REF TO cl_salv_columns_table,
+        lo_column  TYPE REF TO cl_salv_column,
+        lt_display TYPE TABLE OF ty_gail_val_error.
+  LOOP AT gt_gail_val_errors INTO DATA(ls_err) WHERE error_type = pv_error_type.
+    APPEND ls_err TO lt_display.
+  ENDLOOP.
+  CHECK lt_display IS NOT INITIAL.
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = lt_display
+      ).
+      lo_alv->set_screen_popup(
+        start_column = 10
+        end_column   = 120
+        start_line   = 5
+        end_line     = 25
+      ).
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( abap_true ).
+      TRY.
+          lo_column = lo_columns->get_column( 'LOCATION_ID' ).
+          lo_column->set_short_text( 'Location' ).
+          lo_column->set_medium_text( 'GAIL Location ID' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'MATERIAL' ).
+          lo_column->set_short_text( 'GAIL Mat' ).
+          lo_column->set_medium_text( 'GAIL Material' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'MESSAGE' ).
+          lo_column->set_short_text( 'Message' ).
+          lo_column->set_medium_text( 'Error Message' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'ERROR_TYPE' ).
+          lo_column->set_visible( abap_false ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      lo_alv->display( ).
+    CATCH cx_salv_msg INTO DATA(lx_salv).
+      MESSAGE lx_salv TYPE 'I'.
+  ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
 *& Form MAP_LOCATION_TO_CTP
 *&---------------------------------------------------------------------*
 FORM map_location_to_ctp.
@@ -435,7 +596,8 @@ FORM map_location_to_ctp.
       FOR ALL ENTRIES IN lt_locations
       WHERE gail_loc_id = lt_locations-table_line
         AND valid_from <= gv_fn_start
-        AND valid_to   >= gv_fn_end.
+        AND valid_to   >= gv_fn_end
+        AND deleted     = ' '.
   ENDIF.
   LOOP AT lt_locations INTO DATA(lv_loc_id).
     CLEAR lv_count.
@@ -540,7 +702,8 @@ FORM map_material_to_ongc.
       WHERE location_id    = lt_loc_mat-location_id
         AND gail_material  = lt_loc_mat-material
         AND valid_from    <= gv_fn_start
-        AND valid_to      >= gv_fn_end.
+        AND valid_to      >= gv_fn_end
+        AND deleted        = ' '.
   ENDIF.
   DATA lt_mat_map_temp TYPE TABLE OF yrga_cst_mat_map.
   MOVE lt_mat_map[] TO lt_mat_map_temp[].
