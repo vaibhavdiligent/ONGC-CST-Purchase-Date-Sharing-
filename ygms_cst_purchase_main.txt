@@ -4618,9 +4618,31 @@ FORM build_alv_display_table_view .
       APPEND wa_final_main TO it_final_main.
     ENDIF.
   ENDLOOP.
+  " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_view>).
+    IF <fs_alv_view>-exclude = 'X'.
+      <fs_alv_view>-total_sales_mbg = 0.
+    ELSE.
+      READ TABLE it_final_main INTO DATA(ls_fin_view)
+        WITH KEY empst = <fs_alv_view>-location_id
+                 regio = <fs_alv_view>-state_code
+                 matnr = <fs_alv_view>-material.
+      IF sy-subrc = 0.
+        <fs_alv_view>-total_sales_mbg = ls_fin_view-matnr1.
+      ELSE.
+        <fs_alv_view>-total_sales_mbg = 0.
+      ENDIF.
+    ENDIF.
+    <fs_alv_view>-alloc_sales_mbg = <fs_alv_view>-total_mbg - <fs_alv_view>-total_sales_mbg.
+    DATA lv_rnd_view TYPE p DECIMALS 3.
+    lv_rnd_view = <fs_alv_view>-alloc_sales_mbg.
+    IF lv_rnd_view <> 0 AND <fs_alv_view>-state_code <> 'GJ'.
+      <fs_alv_view>-row_color = 'C600'.
+    ELSE.
+      CLEAR <fs_alv_view>-row_color.
+    ENDIF.
+  ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form DISPLAY_NEW_RECEIPT_DATA
 *& Point 5: Display new receipt data details in ALV popup
 *&---------------------------------------------------------------------*
 FORM display_new_receipt_data.
