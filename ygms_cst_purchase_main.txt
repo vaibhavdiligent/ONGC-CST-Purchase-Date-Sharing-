@@ -160,7 +160,7 @@ TYPES: BEGIN OF ty_saved_daily,
          deleted_by    TYPE	ecmuserd,
          deleted_on    TYPE bb_liqdat,
          delete_at     TYPE /scwm/de_epd_deleted_time,
-         deleted_reson TYPE   ygms_del_reason,
+         deleted_reson TYPE c LENGTH 15,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from     TYPE datum,
@@ -187,7 +187,7 @@ TYPES: BEGIN OF ty_saved_fnt,
          deleted_by    TYPE	ecmuserd,
          deleted_on    TYPE bb_liqdat,
          delete_at     TYPE /scwm/de_epd_deleted_time,
-         deleted_reson TYPE   ygms_del_reason,
+         deleted_reson TYPE c LENGTH 15,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -4734,7 +4734,11 @@ FORM fetch_saved_data.
       ls_daily-deleted_by	= wa_pur-deleted_by.
       ls_daily-deleted_on	= wa_pur-deleted_on.
       ls_daily-delete_at  = wa_pur-delete_at.
-      ls_daily-deleted_reson  = wa_pur-deleted_reson.
+      CASE wa_pur-deleted_reson.
+        WHEN '1'. ls_daily-deleted_reson = '1 - Reallocation'.
+        WHEN '2'. ls_daily-deleted_reson = '2 - Receipt'.
+        WHEN OTHERS. ls_daily-deleted_reson = wa_pur-deleted_reson.
+      ENDCASE.
       CASE wa_pur-sent_e.
         WHEN '1'. ls_daily-sent_e = '1 - B2B PI'.
         WHEN '2'. ls_daily-sent_e = '2 - Email'.
@@ -4787,7 +4791,11 @@ FORM fetch_saved_data.
         ls_daily-deleted_by	= wa_pur-deleted_by.
         ls_daily-deleted_on	= wa_pur-deleted_on.
         ls_daily-delete_at  = wa_pur-delete_at.
-        ls_daily-deleted_reson  = wa_pur-deleted_reson.
+        CASE wa_pur-deleted_reson.
+          WHEN '1'. ls_daily-deleted_reson = '1 - Reallocation'.
+          WHEN '2'. ls_daily-deleted_reson = '2 - Receipt'.
+          WHEN OTHERS. ls_daily-deleted_reson = wa_pur-deleted_reson.
+        ENDCASE.
         CASE wa_pur-sent_e.
           WHEN '1'. ls_daily-sent_e = '1 - B2B PI'.
           WHEN '2'. ls_daily-sent_e = '2 - Email'.
@@ -4832,7 +4840,11 @@ FORM fetch_saved_data.
       ls_fnt-deleted_by	= wa_fnt-deleted_by.
       ls_fnt-deleted_on	= wa_fnt-deleted_on.
       ls_fnt-delete_at  = wa_fnt-delete_at.
-      ls_fnt-deleted_reson  = wa_fnt-deleted_reson.
+      CASE wa_fnt-deleted_reson.
+        WHEN '1'. ls_fnt-deleted_reson = '1 - Reallocation'.
+        WHEN '2'. ls_fnt-deleted_reson = '2 - Receipt'.
+        WHEN OTHERS. ls_fnt-deleted_reson = wa_fnt-deleted_reson.
+      ENDCASE.
       CASE wa_fnt-sent_e.
         WHEN '1'. ls_fnt-sent_e = '1 - B2B PI'.
         WHEN '2'. ls_fnt-sent_e = '2 - Email'.
@@ -4875,7 +4887,11 @@ FORM fetch_saved_data.
         ls_fnt-deleted_by	= wa_fnt-deleted_by.
         ls_fnt-deleted_on	= wa_fnt-deleted_on.
         ls_fnt-delete_at  = wa_fnt-delete_at.
-        ls_fnt-deleted_reson  = wa_fnt-deleted_reson.
+        CASE wa_fnt-deleted_reson.
+          WHEN '1'. ls_fnt-deleted_reson = '1 - Reallocation'.
+          WHEN '2'. ls_fnt-deleted_reson = '2 - Receipt'.
+          WHEN OTHERS. ls_fnt-deleted_reson = wa_fnt-deleted_reson.
+        ENDCASE.
         CASE wa_fnt-sent_e.
           WHEN '1'. ls_fnt-sent_e = '1 - B2B PI'.
           WHEN '2'. ls_fnt-sent_e = '2 - Email'.
@@ -5316,7 +5332,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'DELETED_RESON'.
     ls_fieldcat-seltext_l = 'Deletion Reason'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
+    ls_fieldcat-outputlen = 17.
     APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
@@ -5596,7 +5612,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'DELETED_RESON'.
     ls_fieldcat-seltext_l = 'Deletion Reason'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
+    ls_fieldcat-outputlen = 17.
     APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
