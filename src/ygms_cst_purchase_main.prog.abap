@@ -402,13 +402,24 @@ DATA: go_event_handler TYPE REF TO lcl_event_handler.
 * Initialization
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  DATA: lv_first_day TYPE datum.
-  lv_first_day = sy-datum.
-  lv_first_day+6(2) = '01'.
+  DATA: lv_first_day TYPE datum,
+        lv_last_day  TYPE datum.
+  IF sy-datum+6(2) > '15'.
+    lv_first_day = sy-datum.
+    lv_first_day+6(2) = '01'.
+    lv_last_day = sy-datum.
+    lv_last_day+6(2) = '15'.
+  ELSE.
+    lv_last_day = sy-datum.
+    lv_last_day+6(2) = '01'.
+    lv_last_day = lv_last_day - 1.
+    lv_first_day = lv_last_day.
+    lv_first_day+6(2) = '16'.
+  ENDIF.
   s_date-sign   = 'I'.
   s_date-option = 'BT'.
   s_date-low    = lv_first_day.
-  s_date-high   = sy-datum.
+  s_date-high   = lv_last_day.
   APPEND s_date.
 *----------------------------------------------------------------------*
 * Selection Screen Output - Show/Hide View sub-options
@@ -732,24 +743,34 @@ FORM build_alv_display_table.
         AND valid_to   >= gv_date_to
         AND deleted    = ' '.
     SORT lt_valid_map BY location_id gail_material.
-    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_filter>).
-      READ TABLE lt_valid_map INTO DATA(ls_vmap_chk)
-        WITH KEY location_id   = <fs_alv_filter>-location_id
-                 gail_material = <fs_alv_filter>-material.
-      IF sy-subrc <> 0 OR ls_vmap_chk-ncst = 'X'.
-        DELETE gt_alv_display.
+    DATA lt_alv_keep LIKE gt_alv_display.
+    DATA ls_alv_chk LIKE LINE OF gt_alv_display.
+    DATA ls_vmap_chk LIKE LINE OF lt_valid_map.
+    LOOP AT gt_alv_display INTO ls_alv_chk.
+      READ TABLE lt_valid_map INTO ls_vmap_chk
+        WITH KEY location_id   = ls_alv_chk-location_id
+                 gail_material = ls_alv_chk-material.
+      IF sy-subrc = 0 AND ls_vmap_chk-ncst <> 'X'.
+        APPEND ls_alv_chk TO lt_alv_keep.
       ENDIF.
     ENDLOOP.
+    gt_alv_display = lt_alv_keep.
     " Remove rows where total sales in YRXR098 is zero for this period
-    LOOP AT gt_alv_display ASSIGNING <fs_alv_filter> WHERE state_code <> 'GJ'.
+    CLEAR lt_alv_keep.
+    LOOP AT gt_alv_display INTO ls_alv_chk.
+      IF ls_alv_chk-state_code = 'GJ'.
+        APPEND ls_alv_chk TO lt_alv_keep.
+        CONTINUE.
+      ENDIF.
       READ TABLE it_final_main INTO DATA(ls_fin_chk)
-        WITH KEY empst = <fs_alv_filter>-location_id
-                 regio = <fs_alv_filter>-state_code
-                 matnr = <fs_alv_filter>-material.
-      IF sy-subrc <> 0 OR ls_fin_chk-matnr1 = 0.
-        DELETE gt_alv_display.
+        WITH KEY empst = ls_alv_chk-location_id
+                 regio = ls_alv_chk-state_code
+                 matnr = ls_alv_chk-material.
+      IF sy-subrc = 0 AND ls_fin_chk-matnr1 <> 0.
+        APPEND ls_alv_chk TO lt_alv_keep.
       ENDIF.
     ENDLOOP.
+    gt_alv_display = lt_alv_keep.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -1999,20 +2020,22 @@ FORM save_data_to_db.
   ENDIF.
   " Delete existing data for same Location ID and Fortnight (step f)
   UPDATE yrga_cst_pur SET deleted = 'X'
-  deleted_by = sy-uname
-deleted_on = sy-datum
-delete_at = sy-uzeit
-deleted_reson = '1'
-*  DELETE FROM yrga_cst_pur
-    WHERE gas_day BETWEEN gv_date_from AND gv_date_to AND deleted = ' '.
+    deleted_by = sy-uname
+    deleted_on = sy-datum
+    delete_at = sy-uzeit
+    deleted_reson = '1'
+    WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+      AND location IN s_loc
+      AND deleted = ' '.
   UPDATE yrga_cst_fn_data SET deleted = 'X'
-  deleted_by = sy-uname
-deleted_on = sy-datum
-delete_at = sy-uzeit
-deleted_reson = '1'
-*  DELETE FROM yrga_cst_fn_data
+    deleted_by = sy-uname
+    deleted_on = sy-datum
+    delete_at = sy-uzeit
+    deleted_reson = '1'
     WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to AND deleted = ' '.
+      AND date_to   = gv_date_to
+      AND location IN s_loc
+      AND deleted = ' '.
   " Save records to both database tables
   IF lt_cst_pur IS NOT INITIAL.
     MODIFY yrga_cst_pur FROM TABLE lt_cst_pur.
@@ -2870,15 +2893,15 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
            state      TYPE yrga_cst_pur-state,
          END OF ty_summary_key.
   TYPES: BEGIN OF ty_summary,
-           ctp        TYPE ygms_de_ongc_ctp,
-           ongc_mater TYPE ygms_de_ongc_mat,
-           state_code TYPE yrga_cst_pur-state_code,
-           state      TYPE yrga_cst_pur-state,
-           total_mbg  TYPE yrga_cst_pur-qty_in_mbg,
-           total_scm  TYPE yrga_cst_pur-qty_in_scm,
-           sum_gcv    TYPE yrga_cst_pur-gcv,
-           sum_ncv    TYPE yrga_cst_pur-ncv,
-           cnt        TYPE i,
+           ctp          TYPE ygms_de_ongc_ctp,
+           ongc_mater   TYPE ygms_de_ongc_mat,
+           state_code   TYPE yrga_cst_pur-state_code,
+           state        TYPE yrga_cst_pur-state,
+           total_mbg    TYPE yrga_cst_pur-qty_in_mbg,
+           total_scm    TYPE yrga_cst_pur-qty_in_scm,
+           sum_vol_gcv  TYPE p DECIMALS 6,
+           sum_vol_ncv  TYPE p DECIMALS 6,
+           total_vol    TYPE yrga_cst_pur-qty_in_scm,
          END OF ty_summary.
   DATA: lt_summary TYPE SORTED TABLE OF ty_summary WITH UNIQUE KEY ctp state_code ongc_mater,
         ls_summary TYPE ty_summary.
@@ -2921,21 +2944,21 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     READ TABLE lt_summary WITH KEY ctp = ls_pur-ctp ongc_mater = ls_pur-ongc_mater
       state_code = ls_pur-state_code ASSIGNING FIELD-SYMBOL(<fs_sum>).
     IF sy-subrc = 0.
-      <fs_sum>-total_mbg = <fs_sum>-total_mbg + ls_pur-qty_in_mbg.
-      <fs_sum>-total_scm = <fs_sum>-total_scm + ls_pur-qty_in_scm.
-      <fs_sum>-sum_gcv   = <fs_sum>-sum_gcv + ls_pur-gcv.
-      <fs_sum>-sum_ncv   = <fs_sum>-sum_ncv + ls_pur-ncv.
-      <fs_sum>-cnt       = <fs_sum>-cnt + 1.
+      <fs_sum>-total_mbg   = <fs_sum>-total_mbg + ls_pur-qty_in_mbg.
+      <fs_sum>-total_scm   = <fs_sum>-total_scm + ls_pur-qty_in_scm.
+      <fs_sum>-sum_vol_gcv = <fs_sum>-sum_vol_gcv + ( ls_pur-qty_in_scm * ls_pur-gcv ).
+      <fs_sum>-sum_vol_ncv = <fs_sum>-sum_vol_ncv + ( ls_pur-qty_in_scm * ls_pur-ncv ).
+      <fs_sum>-total_vol   = <fs_sum>-total_vol + ls_pur-qty_in_scm.
     ELSE.
-      ls_summary-ctp        = ls_pur-ctp.
-      ls_summary-ongc_mater = ls_pur-ongc_mater.
-      ls_summary-state_code = ls_pur-state_code.
-      ls_summary-state      = ls_pur-state.
-      ls_summary-total_mbg  = ls_pur-qty_in_mbg.
-      ls_summary-total_scm  = ls_pur-qty_in_scm.
-      ls_summary-sum_gcv    = ls_pur-gcv.
-      ls_summary-sum_ncv    = ls_pur-ncv.
-      ls_summary-cnt        = 1.
+      ls_summary-ctp          = ls_pur-ctp.
+      ls_summary-ongc_mater   = ls_pur-ongc_mater.
+      ls_summary-state_code   = ls_pur-state_code.
+      ls_summary-state        = ls_pur-state.
+      ls_summary-total_mbg    = ls_pur-qty_in_mbg.
+      ls_summary-total_scm    = ls_pur-qty_in_scm.
+      ls_summary-sum_vol_gcv  = ls_pur-qty_in_scm * ls_pur-gcv.
+      ls_summary-sum_vol_ncv  = ls_pur-qty_in_scm * ls_pur-ncv.
+      ls_summary-total_vol    = ls_pur-qty_in_scm.
       INSERT ls_summary INTO TABLE lt_summary.
     ENDIF.
     INSERT ls_pur INTO TABLE lt_day_qty.
@@ -2981,10 +3004,10 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     WRITE ls_summary-total_mbg TO lv_qty_mbg DECIMALS 3.
     WRITE ls_summary-total_scm TO lv_qty_scm DECIMALS 3.
     CONDENSE: lv_qty_mbg, lv_qty_scm.
-    " Average GCV/NCV
-    IF ls_summary-cnt > 0.
-      DATA(lv_avg_gcv) = ls_summary-sum_gcv / ls_summary-cnt.
-      DATA(lv_avg_ncv) = ls_summary-sum_ncv / ls_summary-cnt.
+    " Weighted average GCV/NCV = Sum(Volume * GCV) / Total Volume
+    IF ls_summary-total_vol > 0.
+      DATA(lv_avg_gcv) = ls_summary-sum_vol_gcv / ls_summary-total_vol.
+      DATA(lv_avg_ncv) = ls_summary-sum_vol_ncv / ls_summary-total_vol.
     ELSE.
       lv_avg_gcv = 0.
       lv_avg_ncv = 0.
@@ -3050,6 +3073,8 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
     '</Row>'
     INTO lv_xml.
+  " Sort daily data by date, CTP, material, and state
+  SORT pt_data BY gas_day ctp ongc_mater state_code.
   " Data rows
   LOOP AT pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
