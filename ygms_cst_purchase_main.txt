@@ -3073,8 +3073,12 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
     '<Cell><Data ss:Type="String">GAIL ID</Data></Cell>'
     '</Row>'
     INTO lv_xml.
-  " Sort daily data by date, CTP, material, and state
-  SORT pt_data BY gas_day ctp ongc_mater state_code.
+  " Sort daily data by date, CTP, material, and state (dynamic sort for generic table type)
+  DATA(lv_s1) = 'GAS_DAY'.
+  DATA(lv_s2) = 'CTP'.
+  DATA(lv_s3) = 'ONGC_MATER'.
+  DATA(lv_s4) = 'STATE_CODE'.
+  SORT pt_data BY (lv_s1) (lv_s2) (lv_s3) (lv_s4).
   " Data rows
   LOOP AT pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
