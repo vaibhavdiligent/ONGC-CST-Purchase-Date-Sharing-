@@ -129,6 +129,17 @@ START-OF-SELECTION.
 *&---------------------------------------------------------------------*
 FORM EXTRACT_DATA.
 
+* Local data declarations
+  DATA: wa_brd_loop TYPE zfivms_brd.
+***start of ONGC code
+* SBIN Exception Set variables  CR 30016236  CAB_RAMA
+  CONSTANTS: g_setclass LIKE setleaf-setclass VALUE '0000',
+             g_setname  LIKE setleaf-setname  VALUE 'ZFI_SBIN_EXCEPTION '.
+  DATA: ist_setleaf  LIKE setleaf OCCURS 0 WITH HEADER LINE,
+        L_SBI_OTH(1) TYPE C.
+***end of ONGC code
+
+* --- Employee bank records ---
   SELECT * FROM pa0009 INTO TABLE ist_pa0009
      WHERE begda <= p_date
        AND endda >= p_date.
@@ -141,28 +152,29 @@ FORM EXTRACT_DATA.
              AND endda >= p_date.
     IF sy-subrc = 0.
       IF l_bukrs = 'OVL'.
-         PERFORM GET_OVL_EMLPOYEE_DETAILS.
+        PERFORM GET_OVL_EMLPOYEE_DETAILS.
 ***start of ONGC code
       ELSEIF l_bukrs = 'OGL'.
-         CONTINUE.
+        CONTINUE.                              " skip OGL employees
 ***end of ONGC code
       ELSE.
-         PERFORM GET_ONGC_EMLPOYEE_DETAILS.
+        PERFORM GET_ONGC_EMLPOYEE_DETAILS.
       ENDIF.
     ENDIF.
     CLEAR wa_pa0009.
   ENDLOOP.
 
+* --- Vendor BRD records ---
   SELECT * FROM zfivms_brd INTO TABLE ist_zfivms_brd
      WHERE vmc_apdate = p_date
-       AND status IN ('RELEASE BY VMC', 'RELEASE BY CMC').
+       AND status IN ( 'RELEASE BY VMC' 'RELEASE BY CMC' ).
 
   SORT ist_zfivms_brd DESCENDING BY span.
   ist_zfivms_brd1[] = ist_zfivms_brd[].
 
 ***start of ONGC code
-* S/4 HANA: re-sort after table copy to guarantee order before DELETE ADJACENT DUPLICATES
-* TR RD1K9A0Q5P  2022/11/28
+* S/4 HANA: table copy no longer guarantees order; re-sort before
+* DELETE ADJACENT DUPLICATES  TR RD1K9A0Q5P  28.11.2022
   SORT ist_zfivms_brd1 DESCENDING BY span.
 ***end of ONGC code
 
@@ -171,8 +183,8 @@ FORM EXTRACT_DATA.
   LOOP AT ist_zfivms_brd1 INTO wa_zfivms_brd.
 
     SELECT SINGLE banks bankl bankn koinh INTO
-           (wa_zfivms_brd-banks, wa_zfivms_brd-bankl,
-            wa_zfivms_brd-bankn, wa_zfivms_brd-koinh)
+           ( wa_zfivms_brd-banks, wa_zfivms_brd-bankl,
+             wa_zfivms_brd-bankn, wa_zfivms_brd-koinh )
            FROM lfbk
            WHERE lifnr = wa_zfivms_brd-lifnr.
 
@@ -181,43 +193,39 @@ FORM EXTRACT_DATA.
     CONDENSE valid_input_as.
 
 ***start of ONGC code
-* SBIN Exception Set check  CR 30016236  CAB_RAMA
-    CONSTANTS: g_setclass LIKE setleaf-setclass VALUE '0000',
-               g_setname  LIKE setleaf-setname  VALUE 'ZFI_SBIN_EXCEPTION '.
-    DATA: ist_setleaf LIKE setleaf OCCURS 0 WITH HEADER LINE,
-          L_SBI_OTH(1) TYPE C.
-
+* Check SBIN exception set - bank prefixes in ZFI_SBIN_EXCEPTION are
+* treated as SBI even if not starting with 'SBIN'  CR 30016236  CAB_RAMA
     CLEAR   : ist_setleaf, L_SBI_OTH.
     REFRESH : ist_setleaf.
     SELECT * FROM setleaf
        INTO CORRESPONDING FIELDS OF TABLE ist_setleaf
        WHERE setclass = g_setclass
          AND setname  = g_setname.
-
     READ TABLE ist_setleaf WITH KEY setclass = g_setclass
                                     setname  = g_setname
                                     valfrom  = valid_input_as+0(4).
-    IF SY-SUBRC = 0.
+    IF sy-subrc = 0.
       L_SBI_OTH = 'X'.
     ENDIF.
 ***end of ONGC code
 
-    IF valid_input_as+0(4) <> 'SBIN'
+* NON SBI routing
+*   OVL:  IF valid_input_as+0(4) <> 'SBIN'.
 ***start of ONGC code
-       AND L_SBI_OTH = ''
+    IF valid_input_as+0(4) <> 'SBIN'  AND  L_SBI_OTH = ''.
 ***end of ONGC code
-    .
-       IF wa_zfivms_brd-span CA 'R'.
-          PERFORM GET_NONSBI_REGISTER_DETAILS.
-       ELSE.
-          PERFORM GET_NONSBI_DEREGISTER_DETAILS.
-       ENDIF.
+      IF wa_zfivms_brd-span CA 'R'.
+        PERFORM GET_NONSBI_REGISTER_DETAILS.
+      ELSE.
+        PERFORM GET_NONSBI_DEREGISTER_DETAILS.
+      ENDIF.
     ELSE.
-       IF wa_zfivms_brd-span CA 'R'.
-          PERFORM GET_SBI_REGISTER_DETAILS.
-       ELSE.
-          PERFORM GET_SBI_DEREGISTER_DETAILS.
-       ENDIF.
+* SBI routing
+      IF wa_zfivms_brd-span CA 'R'.
+        PERFORM GET_SBI_REGISTER_DETAILS.
+      ELSE.
+        PERFORM GET_SBI_DEREGISTER_DETAILS.
+      ENDIF.
     ENDIF.
 
     CLEAR wa_zfivms_brd.
