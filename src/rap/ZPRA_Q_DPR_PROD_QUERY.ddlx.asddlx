@@ -1,0 +1,107 @@
+@Metadata.layer: #CORE
+
+/*
+ * Metadata Extension for ZPRA_Q_DPR_PROD_QUERY
+ * Enables:
+ *  - Filter bar (selectionFields)
+ *  - Table columns (lineItem)
+ *  - Chart (UI.chart)
+ *  - Built-in "Export to Spreadsheet" (Excel) button in Fiori ALP
+ */
+annotate view ZPRA_Q_DPR_PROD_QUERY with
+{
+
+  /* ── Header info ─────────────────────────────────────────────────────── */
+  @UI.headerInfo: {
+    typeName:       'Production Record',
+    typeNamePlural: 'Production Records',
+    title:          { type: #STANDARD, value: 'ProductDescription' },
+    description:    { type: #STANDARD, value: 'AssetDescription'   }
+  }
+
+  /* ── Selection / Filter fields ────────────────────────────────────────── */
+  @UI.selectionField: [{ position: 10 }]
+  ProductionDate;
+
+  @UI.selectionField: [{ position: 20 }]
+  CalendarYear;
+
+  @UI.selectionField: [{ position: 30 }]
+  CalendarMonth;
+
+  @UI.selectionField: [{ position: 40 }]
+  Product;
+
+  @UI.selectionField: [{ position: 50 }]
+  Asset;
+
+  @UI.selectionField: [{ position: 60 }]
+  VolumeType;
+
+  /* ── Table columns (lineItem) — drives "Export to Spreadsheet" ─────────
+     The Fiori Elements Analytical List Page renders these as table columns
+     and automatically adds an "Export to Spreadsheet" (Excel) button.     */
+
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
+  ProductionDate;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
+  ProductDescription;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH, label: 'Asset' }]
+  AssetDescription;
+
+  @UI.lineItem: [{ position: 40, importance: #MEDIUM, label: 'Block' }]
+  Block;
+
+  @UI.lineItem: [{ position: 50, importance: #MEDIUM, label: 'Volume Type' }]
+  VolumeTypeDescription;
+
+  @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'JV Production (UoM1)' }]
+  ProdQty1;
+
+  @UI.lineItem: [{ position: 70, importance: #LOW, label: 'UoM' }]
+  ProdUom1;
+
+  @UI.lineItem: [{ position: 80, importance: #HIGH, label: 'OVL Share (UoM1)' }]
+  OvlShareQty1;
+
+  @UI.lineItem: [{ position: 90, importance: #MEDIUM, label: 'JV Production (UoM2)' }]
+  ProdQty2;
+
+  @UI.lineItem: [{ position: 100, importance: #MEDIUM, label: 'OVL Share (UoM2)' }]
+  OvlShareQty2;
+
+  @UI.lineItem: [{ position: 110, importance: #LOW, label: 'PI %' }]
+  ParticipatingInterest;
+
+  /* ── Chart definition ─────────────────────────────────────────────────── */
+  @UI.chart: [{
+    title:        'Daily Production by Product',
+    chartType:    #COLUMN,
+    dimensions:   ['ProductionDate', 'ProductDescription'],
+    measures:     ['ProdQty1', 'OvlShareQty1'],
+    measureAttributes: [
+      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
+      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductionDate',    role: #CATEGORY },
+      { dimension: 'ProductDescription', role: #SERIES   }
+    ]
+  }]
+  ProdQty1;
+
+  /* ── Data point (KPI card value) ─────────────────────────────────────── */
+  @UI.dataPoint: {
+    title:         'Total JV Production',
+    criticality:   #NEUTRAL
+  }
+  ProdQty1;
+
+  @UI.dataPoint: {
+    title:         'OVL Share',
+    criticality:   #POSITIVE
+  }
+  OvlShareQty1;
+}

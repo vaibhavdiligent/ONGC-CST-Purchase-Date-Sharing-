@@ -1,0 +1,33 @@
+managed implementation in class zbp_zpra_dpr_excel_dl unique;
+strict ( 2 );
+
+/*
+ * Behavior Definition for DPR Excel Download Actions.
+ *
+ * Two static actions are exposed:
+ *   downloadProduction  – exports daily production data to Excel
+ *   downloadTargets     – exports target vs actual data to Excel
+ *
+ * Both are unbound (static) actions callable via OData V4:
+ *   POST /DPRExcelDownload/downloadProduction
+ *   POST /DPRExcelDownload/downloadTargets
+ */
+
+define behavior for ZPRA_I_DPR_EXCEL_DL alias DPRExcelDownload
+  lock master
+  authorization master ( instance )
+  etag none
+{
+  /* Read-only: no CUD operations */
+  create; delete; update;
+
+  /* ── Static (unbound) actions ──────────────────────────────────────── */
+
+  static action downloadProduction
+    parameter ZPRA_A_DPR_PROD_PARAM
+    result   [1] ZPRA_A_DPR_EXCEL_RESULT;
+
+  static action downloadTargets
+    parameter ZPRA_A_DPR_TAR_PARAM
+    result   [1] ZPRA_A_DPR_EXCEL_RESULT;
+}
