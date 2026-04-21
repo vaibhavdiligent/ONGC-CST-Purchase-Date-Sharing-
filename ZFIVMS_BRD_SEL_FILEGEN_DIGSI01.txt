@@ -1,0 +1,31 @@
+*&---------------------------------------------------------------------*
+*& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSI01
+*& Selection Screen Include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
+*& No changes between OVL and ONGC versions.
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+
+PARAMETERS:
+  p_date   TYPE sy-datum OBLIGATORY DEFAULT sy-datum,
+  p_payctr TYPE zpayctr  OBLIGATORY.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
+
+PARAMETERS:
+  p_test   TYPE c AS CHECKBOX DEFAULT ' '.
+
+SELECTION-SCREEN END OF BLOCK b2.
+
+*&---------------------------------------------------------------------*
+*& AT SELECTION-SCREEN
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+
+  AUTHORITY-CHECK OBJECT 'ZFIBENREG'
+    FIELD 'ZPAY_CTR' ID 'ZPAY_CTR' FIELD p_payctr.
+  IF sy-subrc <> 0.
+    MESSAGE e001(zfi) WITH p_payctr.
+  ENDIF.

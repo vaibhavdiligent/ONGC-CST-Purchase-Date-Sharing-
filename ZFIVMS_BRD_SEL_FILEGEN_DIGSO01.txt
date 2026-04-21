@@ -1,0 +1,19 @@
+*&---------------------------------------------------------------------*
+*& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSO01
+*& Output Include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
+*& No changes between OVL and ONGC versions.
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*& Module STATUS_0100 OUTPUT
+*&---------------------------------------------------------------------*
+MODULE STATUS_0100 OUTPUT.
+  " No interactive screen - batch program
+ENDMODULE.
+
+*&---------------------------------------------------------------------*
+*& Module USER_COMMAND_0100 INPUT
+*&---------------------------------------------------------------------*
+MODULE USER_COMMAND_0100 INPUT.
+  " No interactive screen - batch program
+ENDMODULE.

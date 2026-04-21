@@ -1,0 +1,493 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
+*& TP : RD1K991769
+*&---------------------------------------------------------------------*
+***********************************************************************
+*CHANGE HISTORY
+*
+* Mod Date   CR No.      Changed by   Description                     *
+* 21.10.2016 30014976    CAB_RAMA     SPAN key embeds sy-datum        *
+* xx.xx.xxxx 30016236    CAB_RAMA     SBIN exception set added        *
+* 20.11.2018 6000000474  (trust)      ECPF payment center added       *
+* 22.05.2018 (gaurav)    gaurav       Email+SMS notification          *
+* 28.11.2022 TR RD1K9A0Q5P (support) S/4 HANA sort fix               *
+***********************************************************************
+
+REPORT ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN.
+
+*&---------------------------------------------------------------------*
+*& Includes
+*&---------------------------------------------------------------------*
+INCLUDE ZFIVMS_BRD_SEL_FILEGEN_DIGSI01.   " Selection screen
+INCLUDE ZFIVMS_BRD_SEL_FILEGEN_DIGSO01.   " Output
+INCLUDE ZFIVMS_BRD_SEL_FILEGEN_DIGSF01.   " Forms
+
+*&---------------------------------------------------------------------*
+*& Global Types
+*&---------------------------------------------------------------------*
+
+* Change 2: BEN_AC_NO expanded from 17 to 38 characters (OVL had 17)
+TYPES: BEGIN OF TY_NEW_FORMAT,   "length 194 + 8 separators +EoL
+   BEN_TYPE(1),           "Beneficiary Type * 1
+   BEN_ACT_TYPE(1),       "Beneficiary Action Type * 1
+   BEN_NAME(35),          "Beneficiary Name * 35
+   BEN_AC_NO(38),         "Beneficiary Account Number * 33//17 --> 38
+   BEN_CODE(24),
+   IFSC(11),
+   ADDR1(35),
+   ADDR2(35),
+   ADDR3(35),
+END OF TY_NEW_FORMAT.
+
+TYPES: BEGIN OF TY_record_new,
+   RECORD(500),
+END OF TY_record_new.
+
+*&---------------------------------------------------------------------*
+*& Global Data
+*&---------------------------------------------------------------------*
+
+DATA: IST_94427      TYPE STANDARD TABLE OF TY_NEW_FORMAT.   "cvp-mum
+DATA: IST_93128      TYPE STANDARD TABLE OF TY_NEW_FORMAT.   "cep-ddn
+DATA: IST_30523      TYPE STANDARD TABLE OF TY_NEW_FORMAT.   "ovl
+DATA: IST_94427_FILE TYPE STANDARD TABLE OF TY_record_new.   "cvp
+DATA: IST_93128_FILE TYPE STANDARD TABLE OF TY_record_new.   "ddn
+DATA: IST_30523_FILE TYPE STANDARD TABLE OF TY_record_new.   "ovl
+
+**** START CR 6000000474   ON 20.11.18
+DATA: IST_96726      TYPE STANDARD TABLE OF TY_NEW_FORMAT.   "ECPF
+DATA: IST_96726_FILE TYPE STANDARD TABLE OF TY_record_new.   "ECPF
+***END
+
+DATA: trans_string TYPE string.
+
+DATA: wa_94427    TYPE TY_NEW_FORMAT,
+      wa_93128    TYPE TY_NEW_FORMAT,
+      wa_30523    TYPE TY_NEW_FORMAT,
+      wa_96726    TYPE TY_NEW_FORMAT.
+
+DATA: wa_record_new TYPE TY_record_new.
+
+DATA: BEGIN OF wa_zfivms_brd,
+        span    TYPE zfivms_brd-span,
+        lifnr   TYPE zfivms_brd-lifnr,
+        name1   TYPE zfivms_brd-name1,
+        street  TYPE zfivms_brd-street,
+        str_suppl1 TYPE zfivms_brd-str_suppl1,
+        city1   TYPE zfivms_brd-city1,
+        banks   TYPE zfivms_brd-banks,
+        bankl   TYPE zfivms_brd-bankl,
+        bankn   TYPE zfivms_brd-bankn,
+        koinh   TYPE zfivms_brd-koinh,
+        reqno   TYPE zfivms_brd-reqno,
+        status  TYPE zfivms_brd-status,
+      END OF wa_zfivms_brd.
+
+DATA: ist_zfivms_brd  LIKE TABLE OF wa_zfivms_brd WITH HEADER LINE.
+DATA: ist_zfivms_brd1 LIKE TABLE OF wa_zfivms_brd WITH HEADER LINE.
+
+DATA: wa_pa0009  TYPE pa0009,
+      wa_pa0009t TYPE pa0009,
+      ist_pa0009 TYPE TABLE OF pa0009.
+
+DATA: l_bukrs TYPE bukrs,
+      l_tabix TYPE sy-tabix.
+
+DATA: valid_input_as TYPE string.
+
+DATA: wa_record  TYPE string,
+      ist_rdata_sbi_e    TYPE TABLE OF string,
+      ist_ddata_sbi_e    TYPE TABLE OF string,
+      ist_rdata_nonsbi_e TYPE TABLE OF string,
+      ist_ddata_nonsbi_e TYPE TABLE OF string.
+
+DATA: g_fsnam    TYPE string,
+      g_date_rd  TYPE string,
+      g_filename1 TYPE string.
+
+DATA: L_SENT_FILENAME TYPE string,
+      L_SENT_TIME     TYPE string,
+      L_VMC_APDATE    TYPE string,
+      CURR_DATE       TYPE string,
+      CorpFileName    TYPE string.
+
+*&---------------------------------------------------------------------*
+*& Start of Selection
+*&---------------------------------------------------------------------*
+START-OF-SELECTION.
+
+  PERFORM EXTRACT_DATA.
+  PERFORM GENERATE_NEW_FORMAT.
+  PERFORM PROCESS.
+
+*&---------------------------------------------------------------------*
+*& Form EXTRACT_DATA
+*&---------------------------------------------------------------------*
+FORM EXTRACT_DATA.
+
+  SELECT * FROM pa0009 INTO TABLE ist_pa0009
+     WHERE begda <= p_date
+       AND endda >= p_date.
+
+  " Loop over all bank records for the selected date
+  LOOP AT ist_pa0009 INTO wa_pa0009.
+    l_tabix = sy-tabix.
+    SELECT SINGLE bukrs INTO l_bukrs FROM pa0001
+           WHERE pernr = wa_pa0009-pernr
+             AND begda <= p_date
+             AND endda >= p_date.
+    IF sy-subrc = 0.
+      IF l_bukrs = 'OVL'.
+         PERFORM GET_OVL_EMLPOYEE_DETAILS.
+*     Change 4: Skip OGL employees entirely (neither OVL nor ONGC)
+      ELSEIF l_bukrs = 'OGL'.
+         CONTINUE.
+      ELSE.
+         PERFORM GET_ONGC_EMLPOYEE_DETAILS.
+      ENDIF.
+    ENDIF.
+    CLEAR wa_pa0009.
+  ENDLOOP.
+
+  " Read vendor BRD data
+  SELECT * FROM zfivms_brd INTO TABLE ist_zfivms_brd
+     WHERE vmc_apdate = p_date
+       AND status IN ('RELEASE BY VMC', 'RELEASE BY CMC').
+
+  SORT ist_zfivms_brd DESCENDING BY span.
+  ist_zfivms_brd1[] = ist_zfivms_brd[].
+
+*  Change 5: S/4 HANA - re-sort after table copy to guarantee order
+*  S/4 Start of Change -- Support  # TR RD1K9A0Q5P # 2022/11/28
+  SORT ist_zfivms_brd1 DESCENDING BY span.
+*  S/4 End of Change -- Support  # TR RD1K9A0Q5P # 2022/11/28
+
+  DELETE ADJACENT DUPLICATES FROM ist_zfivms_brd1 COMPARING span.
+
+  LOOP AT ist_zfivms_brd1 INTO wa_zfivms_brd.
+
+    SELECT SINGLE banks bankl bankn koinh INTO
+           (wa_zfivms_brd-banks, wa_zfivms_brd-bankl,
+            wa_zfivms_brd-bankn, wa_zfivms_brd-koinh)
+           FROM lfbk
+           WHERE lifnr = wa_zfivms_brd-lifnr.
+
+    valid_input_as = wa_zfivms_brd-banks.
+
+    CHECK valid_input_as IS NOT INITIAL.
+    CONDENSE valid_input_as.
+
+*   NON SBI
+*   Change 6: SBIN Exception Set check (CR 30016236 by CAB_RAMA)
+*{  Begin of Change CR : 30016236 by CAB_RAMA
+    CONSTANTS: g_setclass LIKE setleaf-setclass VALUE '0000',
+               g_setname  LIKE setleaf-setname  VALUE 'ZFI_SBIN_EXCEPTION '.
+    DATA: ist_setleaf LIKE setleaf OCCURS 0 WITH HEADER LINE,
+          L_SBI_OTH(1) TYPE C.
+
+    CLEAR   : ist_setleaf, L_SBI_OTH.
+    REFRESH : ist_setleaf.
+    SELECT * FROM setleaf
+       INTO CORRESPONDING FIELDS OF TABLE ist_setleaf
+       WHERE setclass = g_setclass
+         AND setname  = g_setname.
+
+    READ TABLE ist_setleaf WITH KEY setclass = g_setclass
+                                    setname  = g_setname
+                                    valfrom  = valid_input_as+0(4).
+    IF SY-SUBRC = 0.
+      L_SBI_OTH = 'X'.
+    ENDIF.
+*}  END OF CR 30016236
+
+    " Route SBI vs Non-SBI based on bank prefix AND exception set
+    IF valid_input_as+0(4) <> 'SBIN'  AND  L_SBI_OTH = ''.
+       " Non-SBI path
+       IF wa_zfivms_brd-span CA 'R'.
+          PERFORM GET_NONSBI_REGISTER_DETAILS.
+       ELSE.
+          PERFORM GET_NONSBI_DEREGISTER_DETAILS.
+       ENDIF.
+    ELSE.
+       " SBI path (including exception set members)
+       IF wa_zfivms_brd-span CA 'R'.
+          PERFORM GET_SBI_REGISTER_DETAILS.
+       ELSE.
+          PERFORM GET_SBI_DEREGISTER_DETAILS.
+       ENDIF.
+    ENDIF.
+
+    CLEAR wa_zfivms_brd.
+  ENDLOOP.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form GET_ONGC_EMLPOYEE_DETAILS
+*&---------------------------------------------------------------------*
+FORM GET_ONGC_EMLPOYEE_DETAILS.
+
+  DATA: wa_brd TYPE zfivms_brd.
+
+  " Change 7: SPAN key embeds sy-datum (CR 30014976 by CAB_RAMA, 21.10.2016)
+  "*/..Begin of Change CR :30014976 by CAB_RAMA
+
+  " Registration record
+  READ TABLE ist_pa0009 INTO wa_pa0009
+       WITH KEY pernr = wa_pa0009-pernr.
+
+  " Registration SPAN key
+  CONCATENATE 'EM' sy-datum '000R00' wa_pa0009-pernr INTO wa_brd-span.
+
+  " ... populate remaining fields (name, bank, address) ...
+  PERFORM POPULATE_ONGC_EMPLOYEE_BRD USING wa_pa0009 wa_brd 'R'.
+  APPEND wa_brd TO ist_zfivms_brd.
+  CLEAR wa_brd.
+
+  " Deregistration SPAN key
+  CONCATENATE 'EM' sy-datum '000D00' wa_pa0009-pernr INTO wa_brd-span.
+  PERFORM POPULATE_ONGC_EMPLOYEE_BRD USING wa_pa0009 wa_brd 'D'.
+  APPEND wa_brd TO ist_zfivms_brd.
+  CLEAR wa_brd.
+
+  "*/..End of Change CR :30014976 by CAB_RAMA
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form GET_OVL_EMLPOYEE_DETAILS
+*&---------------------------------------------------------------------*
+FORM GET_OVL_EMLPOYEE_DETAILS.
+
+  DATA: wa_brd TYPE zfivms_brd.
+
+  " Change 7: SPAN key embeds sy-datum (CR 30014976 by CAB_RAMA, 21.10.2016)
+  "*/..Begin of Change CR :30014976 by CAB_RAMA
+
+  " Registration SPAN key
+  CONCATENATE 'EM' sy-datum '000R00' wa_pa0009-pernr INTO wa_brd-span.
+  PERFORM POPULATE_OVL_EMPLOYEE_BRD USING wa_pa0009 wa_brd 'R'.
+  APPEND wa_brd TO ist_zfivms_brd.
+  CLEAR wa_brd.
+
+  " Deregistration SPAN key
+  CONCATENATE 'EM' sy-datum '000D00' wa_pa0009t-pernr INTO wa_brd-span.
+  PERFORM POPULATE_OVL_EMPLOYEE_BRD USING wa_pa0009t wa_brd 'D'.
+  APPEND wa_brd TO ist_zfivms_brd.
+  CLEAR wa_brd.
+
+  "*/..End of Change CR :30014976 by CAB_RAMA
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form POPULATE_ONGC_EMPLOYEE_BRD  (stub - populate bank/name fields)
+*&---------------------------------------------------------------------*
+FORM POPULATE_ONGC_EMPLOYEE_BRD  USING pa_pa0009 TYPE pa0009
+                                        pa_brd    TYPE zfivms_brd
+                                        pa_type   TYPE c.
+  " ... field mapping from pa0009/pa0001 into zfivms_brd ...
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form POPULATE_OVL_EMPLOYEE_BRD  (stub)
+*&---------------------------------------------------------------------*
+FORM POPULATE_OVL_EMPLOYEE_BRD  USING pa_pa0009 TYPE pa0009
+                                       pa_brd    TYPE zfivms_brd
+                                       pa_type   TYPE c.
+  " ... field mapping for OVL employees ...
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form GET_SBI_REGISTER_DETAILS / GET_SBI_DEREGISTER_DETAILS (stubs)
+*&---------------------------------------------------------------------*
+FORM GET_SBI_REGISTER_DETAILS.
+ENDFORM.
+FORM GET_SBI_DEREGISTER_DETAILS.
+ENDFORM.
+FORM GET_NONSBI_REGISTER_DETAILS.
+ENDFORM.
+FORM GET_NONSBI_DEREGISTER_DETAILS.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form GENERATE_NEW_FORMAT
+*&---------------------------------------------------------------------*
+FORM GENERATE_NEW_FORMAT.
+  REFRESH: IST_94427.   "cvp-mum
+  REFRESH: IST_93128.   "cep-ddn
+  REFRESH: IST_30523.   "ovl
+**** START CR 6000000474
+  REFRESH: IST_96726.   "ECPF
+*** END
+
+  PERFORM VENDOR_FILEGEN.
+  PERFORM EMPLOYEE_FILEGEN.
+
+  PERFORM MERGE_FILE.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form CLEAR_VAR
+*&---------------------------------------------------------------------*
+FORM CLEAR_VAR.
+  REFRESH: IST_94427_FILE.
+  REFRESH: IST_93128_FILE.
+  REFRESH: IST_30523_FILE.
+**** START CR 6000000474
+  REFRESH: IST_96726_FILE.
+*** END
+  CLEAR trans_string.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form VENDOR_FILEGEN
+*&---------------------------------------------------------------------*
+FORM VENDOR_FILEGEN.
+  " Processes ist_zfivms_brd1 for vendor beneficiaries
+  " Populates IST_94427 (CVP), IST_93128 (CEP), IST_30523 (OVL)
+  " ... implementation unchanged from OVL ...
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form EMPLOYEE_FILEGEN
+*&---------------------------------------------------------------------*
+*& Change 9: New ECPF branches added (CR 6000000474)
+*&---------------------------------------------------------------------*
+FORM EMPLOYEE_FILEGEN.
+
+  " ------- Determine file path from ZFI_PATH -------
+
+  " CVP path
+  SELECT SINGLE fsnam INTO g_fsnam FROM zfi_path
+         WHERE sysid = syst-sysid
+           AND zbukr = 'CVP'.
+  CONCATENATE g_fsnam '3P.' g_date_rd '.94427' '.txt' INTO g_filename1.
+
+  " CEP path
+  SELECT SINGLE fsnam INTO g_fsnam FROM zfi_path
+         WHERE sysid = syst-sysid
+           AND zbukr = 'CEP'.
+
+  " OVL path
+  SELECT SINGLE fsnam INTO g_fsnam FROM zfi_path
+         WHERE sysid = syst-sysid
+           AND zbukr = 'OVL'.
+
+**** START CR 6000000474 - ECPF path
+  SELECT SINGLE fsnam INTO g_fsnam FROM zfi_path
+         WHERE sysid = syst-sysid
+           AND zbukr = 'ECPF'.
+  CONCATENATE g_fsnam '3P.' g_date_rd '.96726' '.txt' INTO g_filename1.
+***END
+
+  " ------- SBI 3P registration -------
+  IF p_payctr = 'CVP'.
+     IF ist_rdata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING '3P' '94427' ist_rdata_sbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'CEP'.
+     IF ist_rdata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING '3P' '93128' ist_rdata_sbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'OVL'.
+     IF ist_rdata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING '3P' '30523' ist_rdata_sbi_e[].
+     ENDIF.
+  ENDIF.
+
+**** START CR 6000000474 - new ECPF 3P branch
+  IF p_payctr = 'ECPF'.
+     IF ist_rdata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING '3P' '96726' ist_rdata_sbi_e[].
+     ENDIF.
+  ENDIF.
+***END
+
+  " ------- SBI D3P deregistration -------
+  IF p_payctr = 'CVP'.
+     IF ist_ddata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'D3P' '94427' ist_ddata_sbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'CEP'.
+     IF ist_ddata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'D3P' '93128' ist_ddata_sbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'OVL'.
+     IF ist_ddata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'D3P' '30523' ist_ddata_sbi_e[].
+     ENDIF.
+  ENDIF.
+
+**** start CR 6000000474 - new ECPF D3P branch
+  IF p_payctr = 'ECPF'.
+     IF ist_ddata_sbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'D3P' '96726' ist_ddata_sbi_e[].
+     ENDIF.
+  ENDIF.
+***end
+
+  " ------- Non-SBI IBTP registration -------
+  IF p_payctr = 'CVP'.
+     IF ist_rdata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '94427' ist_rdata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'CEP'.
+     IF ist_rdata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '93128' ist_rdata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'OVL'.
+     IF ist_rdata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '30523' ist_rdata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+
+**** start CR 6000000474 - new ECPF IBTP branch
+  IF p_payctr = 'ECPF'.
+     IF ist_rdata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '96726' ist_rdata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+***end
+
+  " ------- Non-SBI DIBTP deregistration -------
+  IF p_payctr = 'CVP'.
+     IF ist_ddata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '94427' ist_ddata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'CEP'.
+     IF ist_ddata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '93128' ist_ddata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+
+  IF p_payctr = 'OVL'.
+     IF ist_ddata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '30523' ist_ddata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+
+**** start CR 6000000474 - new ECPF DIBTP branch
+  IF p_payctr = 'ECPF'.
+     IF ist_ddata_nonsbi_e[] IS NOT INITIAL.
+        PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '96726' ist_ddata_nonsbi_e[].
+     ENDIF.
+  ENDIF.
+***end
+
+ENDFORM.
