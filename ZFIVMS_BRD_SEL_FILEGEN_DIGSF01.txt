@@ -2,60 +2,48 @@
 *& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSF01
 *& Forms include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
 *&---------------------------------------------------------------------*
-* Changes in this include:
-*  10. PREPARE_NEW_FORMAT  - new ELSEIF p_corpid = '96726' (ECPF) block
-*  11. MERGE_FILE          - new p_payctr = 'ECPF' loop
-*  12. PROCESS             - route ECPF to DIGITAL_SIGN_SAVE_LOGS
-*  13. DIGITAL_SIGN_SAVE_LOGS - sy-host branches commented (S/4 FP3)
-*                             - ECPF filename block added
-*                             - proxy reverted to si_sbiwebservice_enc
-*  14. DIGITAL_SIGN_SAVE_LOGS - CVP status update rewritten for S/4 HANA
-*  15. DIGITAL_SIGN_SAVE_LOGS - Email + SMS notification (gaurav 22.05.2018)
-*&---------------------------------------------------------------------*
 
 *&---------------------------------------------------------------------*
 *& Form PREPARE_NEW_FORMAT
-*& Change 10: New ELSEIF p_corpid = '96726' block added (CR 6000000474)
 *&---------------------------------------------------------------------*
-FORM PREPARE_NEW_FORMAT USING p_type   TYPE string
-                               p_corpid TYPE string
+FORM PREPARE_NEW_FORMAT USING p_type       TYPE string
+                               p_corpid     TYPE string
                                p_ist_record TYPE ANY TABLE.
 
-  DATA: wa_record     TYPE string,
-        l_koinh_new   TYPE string,
-        l_bankn_new   TYPE string,
-        l_bankl_new   TYPE string,
-        l_span        TYPE string.
+  DATA: wa_record   TYPE string,
+        l_koinh_new TYPE string,
+        l_bankn_new TYPE string,
+        l_bankl_new TYPE string,
+        l_span      TYPE string.
 
-  DATA: wa_94427  TYPE TY_NEW_FORMAT,
-        wa_93128  TYPE TY_NEW_FORMAT,
-        wa_30523  TYPE TY_NEW_FORMAT,
-        wa_96726  TYPE TY_NEW_FORMAT.
+  DATA: wa_94427 TYPE TY_NEW_FORMAT,
+        wa_93128 TYPE TY_NEW_FORMAT,
+        wa_30523 TYPE TY_NEW_FORMAT,
+***start of ONGC code
+        wa_96726 TYPE TY_NEW_FORMAT,
+***end of ONGC code
+        wa_dummy TYPE TY_NEW_FORMAT.
 
-  " ---- existing CVP (corp 94427) block ----
+  " ---- CVP (corp 94427) block ----
   IF p_corpid = '94427'.
     CASE p_type.
       WHEN '3P'.
         LOOP AT p_ist_record INTO wa_record.
           SPLIT wa_record AT '*' INTO
                 l_koinh_new  l_bankn_new  l_bankl_new  l_span.
-
           wa_94427-ben_type     = 'S'.
           wa_94427-ben_act_type = 'A'.
           wa_94427-ben_name     = l_koinh_new.
           wa_94427-ben_ac_no    = l_bankn_new.
           wa_94427-ben_code     = l_span.
           wa_94427-ifsc         = l_bankl_new.
-
           SELECT SINGLE street str_suppl1 city1
              FROM zfivms_brd
              INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
              WHERE span = l_span.
-
           IF wa_94427-addr1 IS INITIAL. wa_94427-addr1 = 'ONGC'. ENDIF.
           IF wa_94427-addr2 IS INITIAL. wa_94427-addr2 = 'ONGC'. ENDIF.
           IF wa_94427-addr3 IS INITIAL. wa_94427-addr3 = 'ONGC'. ENDIF.
-
           APPEND wa_94427 TO IST_94427.
           CLEAR: wa_record, wa_94427.
         ENDLOOP.
@@ -100,7 +88,7 @@ FORM PREPARE_NEW_FORMAT USING p_type   TYPE string
         ENDLOOP.
     ENDCASE.
 
-  " ---- existing CEP (corp 93128) block ----
+  " ---- CEP (corp 93128) block ----
   ELSEIF p_corpid = '93128'.
     CASE p_type.
       WHEN '3P'.
@@ -131,7 +119,7 @@ FORM PREPARE_NEW_FORMAT USING p_type   TYPE string
         " ... non-SBI deregistration ...
     ENDCASE.
 
-  " ---- existing OVL (corp 30523) block ----
+  " ---- OVL (corp 30523) block ----
   ELSEIF p_corpid = '30523'.
     CASE p_type.
       WHEN '3P'.
@@ -162,31 +150,28 @@ FORM PREPARE_NEW_FORMAT USING p_type   TYPE string
         " ... non-SBI deregistration ...
     ENDCASE.
 
-*****start trust - Change 10: new ECPF corp 96726 block (CR 6000000474)
-  ELSEIF p_corpid = '96726'.     " ECPF
+***start of ONGC code
+* New ECPF corp 96726 block  CR 6000000474  20.11.2018
+  ELSEIF p_corpid = '96726'.
 
     CASE p_type.
       WHEN '3P'.
         LOOP AT p_ist_record INTO wa_record.
           SPLIT wa_record AT '*' INTO
                 l_koinh_new  l_bankn_new  l_bankl_new  l_span.
-
           wa_96726-ben_type     = 'S'.
           wa_96726-ben_act_type = 'A'.
           wa_96726-ben_name     = l_koinh_new.
           wa_96726-ben_ac_no    = l_bankn_new.
           wa_96726-ben_code     = l_span.
           wa_96726-ifsc         = l_bankl_new.
-
           SELECT SINGLE street str_suppl1 city1
              FROM zfivms_brd
              INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
              WHERE span = l_span.
-
           IF wa_96726-addr1 IS INITIAL. wa_96726-addr1 = 'ECPF'. ENDIF.
           IF wa_96726-addr2 IS INITIAL. wa_96726-addr2 = 'ECPF'. ENDIF.
           IF wa_96726-addr3 IS INITIAL. wa_96726-addr3 = 'ECPF'. ENDIF.
-
           APPEND wa_96726 TO IST_96726.
           CLEAR: wa_record, wa_96726.
         ENDLOOP.
@@ -254,7 +239,7 @@ FORM PREPARE_NEW_FORMAT USING p_type   TYPE string
           CLEAR: wa_record, wa_96726.
         ENDLOOP.
     ENDCASE.
-*** end trust
+***end of ONGC code
 
   ENDIF.
 
@@ -262,14 +247,16 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form MERGE_FILE
-*& Change 11: New ECPF loop added (CR 6000000474)
 *&---------------------------------------------------------------------*
 FORM MERGE_FILE.
 
   DATA: wa_94427_l TYPE TY_NEW_FORMAT,
         wa_93128_l TYPE TY_NEW_FORMAT,
         wa_30523_l TYPE TY_NEW_FORMAT,
-        wa_96726_l TYPE TY_NEW_FORMAT.
+***start of ONGC code
+        wa_96726_l TYPE TY_NEW_FORMAT,
+***end of ONGC code
+        wa_dummy_l TYPE TY_NEW_FORMAT.
 
   IF p_payctr = 'CVP'.
      LOOP AT IST_94427 INTO wa_94427_l.
@@ -293,7 +280,8 @@ FORM MERGE_FILE.
      ENDLOOP.
   ENDIF.
 
-*** start trust - Change 11: ECPF merge loop (CR 6000000474)
+***start of ONGC code
+* ECPF merge loop  CR 6000000474
   IF p_payctr = 'ECPF'.
      LOOP AT IST_96726 INTO wa_96726_l.
         CONCATENATE wa_96726_l-BEN_TYPE wa_96726_l-BEN_ACT_TYPE
@@ -304,7 +292,7 @@ FORM MERGE_FILE.
         APPEND wa_record_new TO IST_96726_FILE.
      ENDLOOP.
   ENDIF.
-** end trust
+***end of ONGC code
 
   IF p_payctr = 'OVL'.
      LOOP AT IST_30523 INTO wa_30523_l.
@@ -321,17 +309,17 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form PROCESS
-*& Change 12: ECPF routed to DIGITAL_SIGN_SAVE_LOGS (CR 6000000474)
 *&---------------------------------------------------------------------*
 FORM PROCESS.
   IF p_payctr = 'CVP'.
      PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_94427_FILE.
   ELSEIF p_payctr = 'CEP'.
      PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_93128_FILE.
-*** start trust - Change 12
+***start of ONGC code
+* Route ECPF to DIGITAL_SIGN_SAVE_LOGS  CR 6000000474
   ELSEIF p_payctr = 'ECPF'.
      PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_96726_FILE.
-*end trust
+***end of ONGC code
   ELSEIF p_payctr = 'OVL'.
      PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_30523_FILE.
   ENDIF.
@@ -339,14 +327,16 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form DIGITAL_SIGN_SAVE_LOGS
-*& Changes 13, 14, 15: filename/proxy fix, status rewrite, email+SMS
 *&---------------------------------------------------------------------*
 FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
 
-  " --- Change 13: proxy object reverted to older si_sbiwebservice_enc ---
+***start of ONGC code
+* Proxy class reverted from zco_sios_bank_interface_encryp to older
+* zfi_bnk_sbi_in_encco_si_sbiweb / si_sbiwebservice_enc  (S/4 HANA FP3)
   DATA: lo_bnk_detail    TYPE REF TO zfi_bnk_sbi_in_encco_si_sbiweb,
         proxy_data       TYPE zfi_bnk_sbi_in_encfile_upload2,
         lt_input         TYPE zfi_bnk_sbi_in_encfile_upload1,
+***end of ONGC code
         lo_sys_exception TYPE REF TO cx_ai_system_fault.
 
   DATA: l_enddate  TYPE endda,
@@ -355,39 +345,48 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
   " --- Build corpus filename ---
   IF p_payctr = 'CVP'.
     CONCATENATE 'ONGC94427' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
-*   IF sy-host = 'eccdci' OR sy-host = 'eccqci'. "S4H FP3  -- commented
+***start of ONGC code
+*   sy-host dev/qas branches commented out for S/4 HANA FP3
+*   IF sy-host = 'eccdci' OR sy-host = 'eccqci'.  "S4H FP3 -- commented
     CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145'
           INTO L_SENT_FILENAME SEPARATED BY '.'.
-*   ELSEIF sy-host+0(6) = 'eccpap'. "S4H FP3  -- commented
+*   ELSEIF sy-host+0(6) = 'eccpap'.               "S4H FP3 -- commented
 *   ENDIF.
+***end of ONGC code
   ENDIF.
 
   IF p_payctr = 'CEP'.
     CONCATENATE 'ONGC93128' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
-*   host-based dev/qas split commented for S/4 FP3
+***start of ONGC code
+*   sy-host dev/qas branches commented out for S/4 HANA FP3
     CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145'
           INTO L_SENT_FILENAME SEPARATED BY '.'.
+***end of ONGC code
   ENDIF.
 
   IF p_payctr = 'OVL'.
     CONCATENATE 'ONGC30523' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
-*   host-based dev/qas split commented for S/4 FP3
+***start of ONGC code
+*   sy-host dev/qas branches commented out for S/4 HANA FP3
     CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145'
           INTO L_SENT_FILENAME SEPARATED BY '.'.
+***end of ONGC code
   ENDIF.
 
-***start trust - Change 13b: new ECPF filename block (CR 6000000474)
+***start of ONGC code
+* New ECPF filename block  CR 6000000474
   IF p_payctr = 'ECPF'.
     CONCATENATE 'ECPF96726' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
     CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000010392857009'
           INTO L_SENT_FILENAME SEPARATED BY '.'.
   ENDIF.
-***end trust
+***end of ONGC code
 
   " --- Prepare data for web-service proxy call ---
   " ... populate proxy_data from p_file_table ...
 
-  " --- Change 13c: proxy method reverted to si_sbiwebservice_enc ---
+***start of ONGC code
+* Proxy method reverted to si_sbiwebservice_enc  (S/4 HANA FP3)
   TRY.
      CALL METHOD lo_bnk_detail->si_sbiwebservice_enc
         EXPORTING output = proxy_data
@@ -395,8 +394,11 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
      CATCH cx_ai_system_fault INTO lo_sys_exception.
         err_string = lo_sys_exception->get_text( ).
   ENDTRY.
+***end of ONGC code
 
-  " --- Change 14: CVP status update rewritten for S/4 HANA ---
+***start of ONGC code
+* CVP status update rewritten as SELECT + LOOP + MODIFY FROM TABLE
+* for S/4 HANA compatibility  (gaurav, 22.05.2018)
   IF p_payctr = 'CVP'.
     DATA : lit_zfivmsbank1   TYPE TABLE OF zfivmsbank.
     DATA : lit_zsdcust_bank1 TYPE TABLE OF zsdcust_bank.
@@ -411,7 +413,7 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
           lwa_zfivmsbank1-status = 'SENT TO SBI'.
           MODIFY lit_zfivmsbank1 FROM lwa_zfivmsbank1 INDEX sy-tabix.
        ENDLOOP.
-       MODIFY zfivmsbank FROM TABLE lit_zfivmsbank1.   " added by gaurav
+       MODIFY zfivmsbank FROM TABLE lit_zfivmsbank1.
     ENDIF.
 
     SELECT * FROM zsdcust_bank INTO TABLE lit_zsdcust_bank1
@@ -425,11 +427,12 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
        MODIFY zsdcust_bank FROM TABLE lit_zsdcust_bank1.
     ENDIF.
   ENDIF.
+***end of ONGC code
 
-  " --- Change 15: Email + SMS notification (gaurav, 22.05.2018) ---
+***start of ONGC code
+* Email + SMS notification after CVP file transfer  (gaurav, 22.05.2018)
   IF p_payctr = 'CVP'.
 
-******* changes by gaurav on 22 may 2018 *********
     DATA: it_zfi_alerts  TYPE TABLE OF zfi_alerts,
           wa_zfi_alerts  TYPE zfi_alerts,
           wa_obj_cont    TYPE solisti1,
@@ -454,14 +457,12 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
 
     LOOP AT lit_zfivmsbank INTO lwa_zfivmsbank.
 
-       " --- build email subject from template ---
        READ TABLE it_zfi_alerts INTO wa_zfi_alerts
             WITH KEY categ = 'SAPMAIL' action = 'SUBJECT' ident = 'SENT_2_SBI'.
        REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts-matt
             WITH lwa_zfivmsbank-reqno.
        mail_sub-obj_descr = wa_zfi_alerts-matt.
 
-       " --- build body (gesture + message) ---
        READ TABLE it_zfi_alerts INTO wa_zfi_alerts
             WITH KEY categ = 'SAPMAIL' action = 'GESTURE' ident = 'SENT_2_SBI'.
        wa_obj_cont-line = wa_zfi_alerts-matt.
@@ -475,7 +476,6 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
        wa_obj_cont-line = wa_zfi_alerts-matt.
        APPEND wa_obj_cont TO it_obj_cont.
 
-       " --- add CPF contact as BCC receiver ---
        wa_reclist-receiver = lwa_zfivmsbank-cpf.
        wa_reclist-rec_type = 'B'.
        APPEND wa_reclist TO it_reclist.
@@ -487,7 +487,6 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
                      object_content = it_obj_cont
                      receivers      = it_reclist.
 
-       " --- SMS via HTTP gateway (Kannel) ---
        l_enddate = sy-datum.
        SELECT * FROM pa9205 INTO CORRESPONDING FIELDS OF TABLE ist_pa9205
               WHERE pernr = lwa_zfivmsbank-cpf
@@ -518,8 +517,8 @@ FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
        CLEAR: wa_obj_cont, it_obj_cont, it_reclist, wa_reclist,
               wa_zfi_alerts, messg, mob_no, wf_string, result.
     ENDLOOP.
-******* end of gaurav's change *********
 
   ENDIF.
+***end of ONGC code
 
 ENDFORM.
