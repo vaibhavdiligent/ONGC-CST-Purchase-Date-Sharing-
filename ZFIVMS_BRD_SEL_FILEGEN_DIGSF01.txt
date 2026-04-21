@@ -1,0 +1,524 @@
+*&---------------------------------------------------------------------*
+*& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSF01
+*& Forms include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*& Form PREPARE_NEW_FORMAT
+*&---------------------------------------------------------------------*
+FORM PREPARE_NEW_FORMAT USING p_type       TYPE string
+                               p_corpid     TYPE string
+                               p_ist_record TYPE ANY TABLE.
+
+  DATA: wa_record   TYPE string,
+        l_koinh_new TYPE string,
+        l_bankn_new TYPE string,
+        l_bankl_new TYPE string,
+        l_span      TYPE string.
+
+  DATA: wa_94427 TYPE TY_NEW_FORMAT,
+        wa_93128 TYPE TY_NEW_FORMAT,
+        wa_30523 TYPE TY_NEW_FORMAT,
+***start of ONGC code
+        wa_96726 TYPE TY_NEW_FORMAT,
+***end of ONGC code
+        wa_dummy TYPE TY_NEW_FORMAT.
+
+  " ---- CVP (corp 94427) block ----
+  IF p_corpid = '94427'.
+    CASE p_type.
+      WHEN '3P'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_94427-ben_type     = 'S'.
+          wa_94427-ben_act_type = 'A'.
+          wa_94427-ben_name     = l_koinh_new.
+          wa_94427-ben_ac_no    = l_bankn_new.
+          wa_94427-ben_code     = l_span.
+          wa_94427-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
+             WHERE span = l_span.
+          IF wa_94427-addr1 IS INITIAL. wa_94427-addr1 = 'ONGC'. ENDIF.
+          IF wa_94427-addr2 IS INITIAL. wa_94427-addr2 = 'ONGC'. ENDIF.
+          IF wa_94427-addr3 IS INITIAL. wa_94427-addr3 = 'ONGC'. ENDIF.
+          APPEND wa_94427 TO IST_94427.
+          CLEAR: wa_record, wa_94427.
+        ENDLOOP.
+      WHEN 'D3P'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_94427-ben_type     = 'S'.
+          wa_94427-ben_act_type = 'D'.
+          wa_94427-ben_name     = l_koinh_new.
+          wa_94427-ben_ac_no    = l_bankn_new.
+          wa_94427-ben_code     = l_span.
+          wa_94427-ifsc         = l_bankl_new.
+          APPEND wa_94427 TO IST_94427.
+          CLEAR: wa_record, wa_94427.
+        ENDLOOP.
+      WHEN 'IBTP'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_94427-ben_type     = 'O'.
+          wa_94427-ben_act_type = 'A'.
+          wa_94427-ben_name     = l_koinh_new.
+          wa_94427-ben_ac_no    = l_bankn_new.
+          wa_94427-ben_code     = l_span.
+          wa_94427-ifsc         = l_bankl_new.
+          APPEND wa_94427 TO IST_94427.
+          CLEAR: wa_record, wa_94427.
+        ENDLOOP.
+      WHEN 'DIBTP'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_94427-ben_type     = 'O'.
+          wa_94427-ben_act_type = 'D'.
+          wa_94427-ben_name     = l_koinh_new.
+          wa_94427-ben_ac_no    = l_bankn_new.
+          wa_94427-ben_code     = l_span.
+          wa_94427-ifsc         = l_bankl_new.
+          APPEND wa_94427 TO IST_94427.
+          CLEAR: wa_record, wa_94427.
+        ENDLOOP.
+    ENDCASE.
+
+  " ---- CEP (corp 93128) block ----
+  ELSEIF p_corpid = '93128'.
+    CASE p_type.
+      WHEN '3P'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_93128-ben_type     = 'S'.
+          wa_93128-ben_act_type = 'A'.
+          wa_93128-ben_name     = l_koinh_new.
+          wa_93128-ben_ac_no    = l_bankn_new.
+          wa_93128-ben_code     = l_span.
+          wa_93128-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
+             WHERE span = l_span.
+          IF wa_93128-addr1 IS INITIAL. wa_93128-addr1 = 'ONGC'. ENDIF.
+          IF wa_93128-addr2 IS INITIAL. wa_93128-addr2 = 'ONGC'. ENDIF.
+          IF wa_93128-addr3 IS INITIAL. wa_93128-addr3 = 'ONGC'. ENDIF.
+          APPEND wa_93128 TO IST_93128.
+          CLEAR: wa_record, wa_93128.
+        ENDLOOP.
+      WHEN 'D3P'.
+        " ... same pattern, ben_act_type = 'D' ...
+      WHEN 'IBTP'.
+        " ... non-SBI registration ...
+      WHEN 'DIBTP'.
+        " ... non-SBI deregistration ...
+    ENDCASE.
+
+  " ---- OVL (corp 30523) block ----
+  ELSEIF p_corpid = '30523'.
+    CASE p_type.
+      WHEN '3P'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_30523-ben_type     = 'S'.
+          wa_30523-ben_act_type = 'A'.
+          wa_30523-ben_name     = l_koinh_new.
+          wa_30523-ben_ac_no    = l_bankn_new.
+          wa_30523-ben_code     = l_span.
+          wa_30523-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
+             WHERE span = l_span.
+          IF wa_30523-addr1 IS INITIAL. wa_30523-addr1 = 'ONGC'. ENDIF.
+          IF wa_30523-addr2 IS INITIAL. wa_30523-addr2 = 'ONGC'. ENDIF.
+          IF wa_30523-addr3 IS INITIAL. wa_30523-addr3 = 'ONGC'. ENDIF.
+          APPEND wa_30523 TO IST_30523.
+          CLEAR: wa_record, wa_30523.
+        ENDLOOP.
+      WHEN 'D3P'.
+        " ... same pattern ...
+      WHEN 'IBTP'.
+        " ... non-SBI ...
+      WHEN 'DIBTP'.
+        " ... non-SBI deregistration ...
+    ENDCASE.
+
+***start of ONGC code
+* New ECPF corp 96726 block  CR 6000000474  20.11.2018
+  ELSEIF p_corpid = '96726'.
+
+    CASE p_type.
+      WHEN '3P'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_96726-ben_type     = 'S'.
+          wa_96726-ben_act_type = 'A'.
+          wa_96726-ben_name     = l_koinh_new.
+          wa_96726-ben_ac_no    = l_bankn_new.
+          wa_96726-ben_code     = l_span.
+          wa_96726-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+             WHERE span = l_span.
+          IF wa_96726-addr1 IS INITIAL. wa_96726-addr1 = 'ECPF'. ENDIF.
+          IF wa_96726-addr2 IS INITIAL. wa_96726-addr2 = 'ECPF'. ENDIF.
+          IF wa_96726-addr3 IS INITIAL. wa_96726-addr3 = 'ECPF'. ENDIF.
+          APPEND wa_96726 TO IST_96726.
+          CLEAR: wa_record, wa_96726.
+        ENDLOOP.
+
+      WHEN 'D3P'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_96726-ben_type     = 'S'.
+          wa_96726-ben_act_type = 'D'.
+          wa_96726-ben_name     = l_koinh_new.
+          wa_96726-ben_ac_no    = l_bankn_new.
+          wa_96726-ben_code     = l_span.
+          wa_96726-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+             WHERE span = l_span.
+          IF wa_96726-addr1 IS INITIAL. wa_96726-addr1 = 'ECPF'. ENDIF.
+          IF wa_96726-addr2 IS INITIAL. wa_96726-addr2 = 'ECPF'. ENDIF.
+          IF wa_96726-addr3 IS INITIAL. wa_96726-addr3 = 'ECPF'. ENDIF.
+          APPEND wa_96726 TO IST_96726.
+          CLEAR: wa_record, wa_96726.
+        ENDLOOP.
+
+      WHEN 'IBTP'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_96726-ben_type     = 'O'.
+          wa_96726-ben_act_type = 'A'.
+          wa_96726-ben_name     = l_koinh_new.
+          wa_96726-ben_ac_no    = l_bankn_new.
+          wa_96726-ben_code     = l_span.
+          wa_96726-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+             WHERE span = l_span.
+          IF wa_96726-addr1 IS INITIAL. wa_96726-addr1 = 'ECPF'. ENDIF.
+          IF wa_96726-addr2 IS INITIAL. wa_96726-addr2 = 'ECPF'. ENDIF.
+          IF wa_96726-addr3 IS INITIAL. wa_96726-addr3 = 'ECPF'. ENDIF.
+          APPEND wa_96726 TO IST_96726.
+          CLEAR: wa_record, wa_96726.
+        ENDLOOP.
+
+      WHEN 'DIBTP'.
+        LOOP AT p_ist_record INTO wa_record.
+          SPLIT wa_record AT '*' INTO
+                l_koinh_new  l_bankn_new  l_bankl_new  l_span.
+          wa_96726-ben_type     = 'O'.
+          wa_96726-ben_act_type = 'D'.
+          wa_96726-ben_name     = l_koinh_new.
+          wa_96726-ben_ac_no    = l_bankn_new.
+          wa_96726-ben_code     = l_span.
+          wa_96726-ifsc         = l_bankl_new.
+          SELECT SINGLE street str_suppl1 city1
+             FROM zfivms_brd
+             INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+             WHERE span = l_span.
+          IF wa_96726-addr1 IS INITIAL. wa_96726-addr1 = 'ECPF'. ENDIF.
+          IF wa_96726-addr2 IS INITIAL. wa_96726-addr2 = 'ECPF'. ENDIF.
+          IF wa_96726-addr3 IS INITIAL. wa_96726-addr3 = 'ECPF'. ENDIF.
+          APPEND wa_96726 TO IST_96726.
+          CLEAR: wa_record, wa_96726.
+        ENDLOOP.
+    ENDCASE.
+***end of ONGC code
+
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form MERGE_FILE
+*&---------------------------------------------------------------------*
+FORM MERGE_FILE.
+
+  DATA: wa_94427_l TYPE TY_NEW_FORMAT,
+        wa_93128_l TYPE TY_NEW_FORMAT,
+        wa_30523_l TYPE TY_NEW_FORMAT,
+***start of ONGC code
+        wa_96726_l TYPE TY_NEW_FORMAT,
+***end of ONGC code
+        wa_dummy_l TYPE TY_NEW_FORMAT.
+
+  IF p_payctr = 'CVP'.
+     LOOP AT IST_94427 INTO wa_94427_l.
+        CONCATENATE wa_94427_l-BEN_TYPE wa_94427_l-BEN_ACT_TYPE
+                    wa_94427_l-BEN_NAME  wa_94427_l-BEN_AC_NO
+                    wa_94427_l-BEN_CODE  wa_94427_l-IFSC
+                    wa_94427_l-ADDR1 wa_94427_l-ADDR2 wa_94427_l-ADDR3
+                    INTO wa_record_new-record SEPARATED BY '|'.
+        APPEND wa_record_new TO IST_94427_FILE.
+     ENDLOOP.
+  ENDIF.
+
+  IF p_payctr = 'CEP'.
+     LOOP AT IST_93128 INTO wa_93128_l.
+        CONCATENATE wa_93128_l-BEN_TYPE wa_93128_l-BEN_ACT_TYPE
+                    wa_93128_l-BEN_NAME  wa_93128_l-BEN_AC_NO
+                    wa_93128_l-BEN_CODE  wa_93128_l-IFSC
+                    wa_93128_l-ADDR1 wa_93128_l-ADDR2 wa_93128_l-ADDR3
+                    INTO wa_record_new-record SEPARATED BY '|'.
+        APPEND wa_record_new TO IST_93128_FILE.
+     ENDLOOP.
+  ENDIF.
+
+***start of ONGC code
+* ECPF merge loop  CR 6000000474
+  IF p_payctr = 'ECPF'.
+     LOOP AT IST_96726 INTO wa_96726_l.
+        CONCATENATE wa_96726_l-BEN_TYPE wa_96726_l-BEN_ACT_TYPE
+                    wa_96726_l-BEN_NAME  wa_96726_l-BEN_AC_NO
+                    wa_96726_l-BEN_CODE  wa_96726_l-IFSC
+                    wa_96726_l-ADDR1 wa_96726_l-ADDR2 wa_96726_l-ADDR3
+                    INTO wa_record_new-record SEPARATED BY '|'.
+        APPEND wa_record_new TO IST_96726_FILE.
+     ENDLOOP.
+  ENDIF.
+***end of ONGC code
+
+  IF p_payctr = 'OVL'.
+     LOOP AT IST_30523 INTO wa_30523_l.
+        CONCATENATE wa_30523_l-BEN_TYPE wa_30523_l-BEN_ACT_TYPE
+                    wa_30523_l-BEN_NAME  wa_30523_l-BEN_AC_NO
+                    wa_30523_l-BEN_CODE  wa_30523_l-IFSC
+                    wa_30523_l-ADDR1 wa_30523_l-ADDR2 wa_30523_l-ADDR3
+                    INTO wa_record_new-record SEPARATED BY '|'.
+        APPEND wa_record_new TO IST_30523_FILE.
+     ENDLOOP.
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form PROCESS
+*&---------------------------------------------------------------------*
+FORM PROCESS.
+  IF p_payctr = 'CVP'.
+     PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_94427_FILE.
+  ELSEIF p_payctr = 'CEP'.
+     PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_93128_FILE.
+***start of ONGC code
+* Route ECPF to DIGITAL_SIGN_SAVE_LOGS  CR 6000000474
+  ELSEIF p_payctr = 'ECPF'.
+     PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_96726_FILE.
+***end of ONGC code
+  ELSEIF p_payctr = 'OVL'.
+     PERFORM DIGITAL_SIGN_SAVE_LOGS USING IST_30523_FILE.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DIGITAL_SIGN_SAVE_LOGS
+*&---------------------------------------------------------------------*
+FORM DIGITAL_SIGN_SAVE_LOGS USING p_file_table TYPE ANY TABLE.
+
+***start of ONGC code
+* Proxy class reverted from zco_sios_bank_interface_encryp to older
+* zfi_bnk_sbi_in_encco_si_sbiweb / si_sbiwebservice_enc  (S/4 HANA FP3)
+  DATA: lo_bnk_detail    TYPE REF TO zfi_bnk_sbi_in_encco_si_sbiweb,
+        proxy_data       TYPE zfi_bnk_sbi_in_encfile_upload2,
+        lt_input         TYPE zfi_bnk_sbi_in_encfile_upload1,
+***end of ONGC code
+        lo_sys_exception TYPE REF TO cx_ai_system_fault.
+
+  DATA: l_enddate  TYPE endda,
+        err_string TYPE string.
+
+  " --- Build corpus filename ---
+  IF p_payctr = 'CVP'.
+    CONCATENATE 'ONGC94427' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
+***start of ONGC code
+*   sy-host dev/qas branches commented out for S/4 HANA FP3
+*   IF sy-host = 'eccdci' OR sy-host = 'eccqci'.  "S4H FP3 -- commented
+    CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145'
+          INTO L_SENT_FILENAME SEPARATED BY '.'.
+*   ELSEIF sy-host+0(6) = 'eccpap'.               "S4H FP3 -- commented
+*   ENDIF.
+***end of ONGC code
+  ENDIF.
+
+  IF p_payctr = 'CEP'.
+    CONCATENATE 'ONGC93128' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
+***start of ONGC code
+*   sy-host dev/qas branches commented out for S/4 HANA FP3
+    CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145'
+          INTO L_SENT_FILENAME SEPARATED BY '.'.
+***end of ONGC code
+  ENDIF.
+
+  IF p_payctr = 'OVL'.
+    CONCATENATE 'ONGC30523' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
+***start of ONGC code
+*   sy-host dev/qas branches commented out for S/4 HANA FP3
+    CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145'
+          INTO L_SENT_FILENAME SEPARATED BY '.'.
+***end of ONGC code
+  ENDIF.
+
+***start of ONGC code
+* New ECPF filename block  CR 6000000474
+  IF p_payctr = 'ECPF'.
+    CONCATENATE 'ECPF96726' L_VMC_APDATE L_SENT_TIME INTO CorpFileName.
+    CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000010392857009'
+          INTO L_SENT_FILENAME SEPARATED BY '.'.
+  ENDIF.
+***end of ONGC code
+
+  " --- Prepare data for web-service proxy call ---
+  " ... populate proxy_data from p_file_table ...
+
+***start of ONGC code
+* Proxy method reverted to si_sbiwebservice_enc  (S/4 HANA FP3)
+  TRY.
+     CALL METHOD lo_bnk_detail->si_sbiwebservice_enc
+        EXPORTING output = proxy_data
+        IMPORTING input  = lt_input.
+     CATCH cx_ai_system_fault INTO lo_sys_exception.
+        err_string = lo_sys_exception->get_text( ).
+  ENDTRY.
+***end of ONGC code
+
+***start of ONGC code
+* CVP status update rewritten as SELECT + LOOP + MODIFY FROM TABLE
+* for S/4 HANA compatibility  (gaurav, 22.05.2018)
+  IF p_payctr = 'CVP'.
+    DATA : lit_zfivmsbank1   TYPE TABLE OF zfivmsbank.
+    DATA : lit_zsdcust_bank1 TYPE TABLE OF zsdcust_bank.
+    DATA : lwa_zfivmsbank1   TYPE zfivmsbank.
+    DATA : lwa_zsdcust_bank1 TYPE zsdcust_bank.
+
+    SELECT * FROM zfivmsbank INTO TABLE lit_zfivmsbank1
+       WHERE vmc_apdate = p_date
+         AND status     = 'RELEASE BY VMC'.
+    IF sy-subrc = 0.
+       LOOP AT lit_zfivmsbank1 INTO lwa_zfivmsbank1.
+          lwa_zfivmsbank1-status = 'SENT TO SBI'.
+          MODIFY lit_zfivmsbank1 FROM lwa_zfivmsbank1 INDEX sy-tabix.
+       ENDLOOP.
+       MODIFY zfivmsbank FROM TABLE lit_zfivmsbank1.
+    ENDIF.
+
+    SELECT * FROM zsdcust_bank INTO TABLE lit_zsdcust_bank1
+       WHERE chon   = p_date
+         AND status = 'RELEASE BY CMC'.
+    IF sy-subrc = 0.
+       LOOP AT lit_zsdcust_bank1 INTO lwa_zsdcust_bank1.
+          lwa_zsdcust_bank1-status = 'SENT TO SBI'.
+          MODIFY lit_zsdcust_bank1 FROM lwa_zsdcust_bank1 INDEX sy-tabix.
+       ENDLOOP.
+       MODIFY zsdcust_bank FROM TABLE lit_zsdcust_bank1.
+    ENDIF.
+  ENDIF.
+***end of ONGC code
+
+***start of ONGC code
+* Email + SMS notification after CVP file transfer  (gaurav, 22.05.2018)
+  IF p_payctr = 'CVP'.
+
+    DATA: it_zfi_alerts  TYPE TABLE OF zfi_alerts,
+          wa_zfi_alerts  TYPE zfi_alerts,
+          wa_obj_cont    TYPE solisti1,
+          it_obj_cont    TYPE TABLE OF solisti1,
+          it_obj_head    TYPE TABLE OF solisti1,
+          mail_sub       TYPE sodocchgi1,
+          it_reclist     TYPE TABLE OF somlreci1,
+          wa_reclist     TYPE somlreci1,
+          lwa_zfivmsbank TYPE zfivmsbank,
+          lit_zfivmsbank TYPE TABLE OF zfivmsbank.
+
+    DATA: http_client TYPE REF TO if_http_client.
+    DATA: messg(160), mob_no(12), result TYPE string,
+          wf_string TYPE string.
+
+    DATA: ist_pa9205 TYPE TABLE OF pa9205,
+          wa_pa9205  TYPE pa9205.
+
+    SELECT * FROM zfivmsbank INTO TABLE lit_zfivmsbank
+           WHERE vmc_apdate = p_date AND status = 'SENT TO SBI'.
+    SELECT * FROM zfi_alerts INTO TABLE it_zfi_alerts.
+
+    LOOP AT lit_zfivmsbank INTO lwa_zfivmsbank.
+
+       READ TABLE it_zfi_alerts INTO wa_zfi_alerts
+            WITH KEY categ = 'SAPMAIL' action = 'SUBJECT' ident = 'SENT_2_SBI'.
+       REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts-matt
+            WITH lwa_zfivmsbank-reqno.
+       mail_sub-obj_descr = wa_zfi_alerts-matt.
+
+       READ TABLE it_zfi_alerts INTO wa_zfi_alerts
+            WITH KEY categ = 'SAPMAIL' action = 'GESTURE' ident = 'SENT_2_SBI'.
+       wa_obj_cont-line = wa_zfi_alerts-matt.
+       APPEND wa_obj_cont TO it_obj_cont.
+
+       READ TABLE it_zfi_alerts INTO wa_zfi_alerts
+            WITH KEY categ = 'SAPMAIL' action = 'MESSAGE' ident = 'SENT_2_SBI'.
+       REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX'       IN wa_zfi_alerts-matt WITH lwa_zfivmsbank-reqno.
+       REPLACE ALL OCCURRENCES OF 'ZFIVMSBANK-LIFNR' IN wa_zfi_alerts-matt WITH lwa_zfivmsbank-lifnr.
+       REPLACE ALL OCCURRENCES OF 'ZFIVMSBANK-NAME1' IN wa_zfi_alerts-matt WITH lwa_zfivmsbank-name1.
+       wa_obj_cont-line = wa_zfi_alerts-matt.
+       APPEND wa_obj_cont TO it_obj_cont.
+
+       wa_reclist-receiver = lwa_zfivmsbank-cpf.
+       wa_reclist-rec_type = 'B'.
+       APPEND wa_reclist TO it_reclist.
+
+       CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
+          EXPORTING  document_data = mail_sub
+                     put_in_outbox = ' '
+          TABLES     object_header  = it_obj_head
+                     object_content = it_obj_cont
+                     receivers      = it_reclist.
+
+       l_enddate = sy-datum.
+       SELECT * FROM pa9205 INTO CORRESPONDING FIELDS OF TABLE ist_pa9205
+              WHERE pernr = lwa_zfivmsbank-cpf
+                AND subty = '01' AND endda = l_enddate.
+       SORT ist_pa9205 BY begda DESCENDING.
+       READ TABLE ist_pa9205 INTO wa_pa9205 INDEX 1.
+       SHIFT wa_pa9205-zphone LEFT DELETING LEADING '0'.
+       CONCATENATE '91' wa_pa9205-zphone INTO mob_no.
+
+       READ TABLE it_zfi_alerts INTO wa_zfi_alerts
+            WITH KEY categ = 'SMS' action = 'MESSAGE' ident = 'SENT_2_SBI'.
+       messg = wa_zfi_alerts-matt.
+
+       CONCATENATE
+         'http://10.205.48.190:13013/cgi-bin/sendsms?'
+         'username=ongc&password=ongc12&from=ONGC-OL&to=' mob_no
+         '&text='    messg
+         '&remLen=400'
+         INTO wf_string.
+
+       CALL METHOD cl_http_client=>create_by_url
+          EXPORTING url = wf_string
+          IMPORTING client = http_client.
+       CALL METHOD http_client->send.
+       CALL METHOD http_client->receive.
+       result = http_client->response->get_cdata( ).
+
+       CLEAR: wa_obj_cont, it_obj_cont, it_reclist, wa_reclist,
+              wa_zfi_alerts, messg, mob_no, wf_string, result.
+    ENDLOOP.
+
+  ENDIF.
+***end of ONGC code
+
+ENDFORM.
