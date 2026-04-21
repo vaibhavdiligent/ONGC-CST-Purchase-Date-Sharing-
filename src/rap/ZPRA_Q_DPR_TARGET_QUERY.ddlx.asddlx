@@ -1,0 +1,89 @@
+@Metadata.layer: #CORE
+
+annotate view ZPRA_Q_DPR_TARGET_QUERY with
+{
+
+  @UI.headerInfo: {
+    typeName:       'Target Record',
+    typeNamePlural: 'Target Records',
+    title:          { type: #STANDARD, value: 'ProductDescription' },
+    description:    { type: #STANDARD, value: 'AssetDescription'   }
+  }
+
+  /* ── Filter fields ───────────────────────────────────────────────────── */
+  @UI.selectionField: [{ position: 10 }]
+  FiscalYear;
+
+  @UI.selectionField: [{ position: 20 }]
+  FiscalPeriod;
+
+  @UI.selectionField: [{ position: 30 }]
+  Product;
+
+  @UI.selectionField: [{ position: 40 }]
+  Asset;
+
+  @UI.selectionField: [{ position: 50 }]
+  TargetCode;
+
+  /* ── Table columns ───────────────────────────────────────────────────── */
+  @UI.lineItem: [{ position: 10, importance: #HIGH,   label: 'Fiscal Year'   }]
+  FiscalYear;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH,   label: 'Period'        }]
+  FiscalPeriod;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH,   label: 'Product'       }]
+  ProductDescription;
+
+  @UI.lineItem: [{ position: 40, importance: #HIGH,   label: 'Asset'         }]
+  AssetDescription;
+
+  @UI.lineItem: [{ position: 50, importance: #MEDIUM, label: 'Block'         }]
+  Block;
+
+  @UI.lineItem: [{ position: 60, importance: #MEDIUM, label: 'Target Type'   }]
+  TargetTypeDescription;
+
+  @UI.lineItem: [{ position: 70, importance: #HIGH,   label: 'Actual Qty'    }]
+  ActualQty;
+
+  @UI.lineItem: [{ position: 80, importance: #HIGH,   label: 'Target Qty'    }]
+  TargetQty;
+
+  @UI.lineItem: [{ position: 90, importance: #HIGH,   label: 'Variance'      }]
+  VarianceQty;
+
+  @UI.lineItem: [{
+    position:    100,
+    importance:  #HIGH,
+    label:       'Achievement %',
+    criticality: 'AchievementCriticality'   /* dynamic colour: red/green */
+  }]
+  AchievementPct;
+
+  /* ── Chart ───────────────────────────────────────────────────────────── */
+  @UI.chart: [{
+    title:     'Actual vs Target by Product',
+    chartType: #BAR,
+    dimensions: ['ProductDescription'],
+    measures:   ['ActualQty', 'TargetQty'],
+    measureAttributes: [
+      { measure: 'ActualQty',  role: #AXIS_1 },
+      { measure: 'TargetQty',  role: #AXIS_1 }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductDescription', role: #CATEGORY }
+    ]
+  }]
+  ActualQty;
+
+  /* ── KPI data points ─────────────────────────────────────────────────── */
+  @UI.dataPoint: {
+    title:         'Achievement %',
+    targetValue:   100,
+    criticality:   #NEUTRAL,
+    visualization: #PROGRESS
+  }
+  AchievementPct;
+}
