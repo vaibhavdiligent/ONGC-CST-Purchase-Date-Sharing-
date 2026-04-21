@@ -1,0 +1,45 @@
+Title:
+   DPR Report
+
+Text elements:
+
+001   Date Selection
+002   UoM Selection
+003   Consortium
+004   Targets Selection
+005   Directory Path
+
+Selection texts:
+
+P_BB
+        BBL / BOE
+P_BBD
+        BOPD / BOEPD
+P_BMD
+        BOPD / MMSCMD
+P_C_JV
+        JV
+P_C_OLV
+        OVL
+P_DATE
+        Date
+P_FNAME
+        Directory Path
+P_MB
+        MMT / BCM
+P_TM
+        Tons / MSCM
+P_TMD
+        TPD / MSCMD
+P_T_BE
+        BE
+P_T_EX
+        MOU Excellent
+P_T_IN
+        Internal
+P_T_PC
+        PC
+P_T_RE
+        RE
+P_T_VG
+        MOU Very Good
