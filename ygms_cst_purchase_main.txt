@@ -1210,8 +1210,8 @@ FORM handle_allocate.
   DATA l_day TYPE char10.
   DATA l_index(2) TYPE n.
   DATA l_date TYPE sy-datum.
-  DATA l_ncv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
-  DATA l_gcv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
+  DATA l_ncv TYPE p DECIMALS 6.
+  DATA l_gcv TYPE p DECIMALS 6.
   DATA l_day_sm3 TYPE p DECIMALS 6.
   " 2.1b: Clear ALV day data before allocation to prevent additive quantities on repeated clicks
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
@@ -1762,13 +1762,13 @@ FORM save_data_to_db.
         ls_error_log   TYPE ty_error_log,
         lv_error_found TYPE abap_bool.
   " Variables for weighted average calculation
-  DATA: lv_total_vol   TYPE ygms_de_qty_mbg_cal, "p DECIMALS 3,
-        lv_sum_vol_gcv TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
-        lv_sum_vol_ncv TYPE ygms_de_qty_mbg_cal, "p DECIMALS 6,
+  DATA: lv_total_vol   TYPE p DECIMALS 3,
+        lv_sum_vol_gcv TYPE p DECIMALS 6,
+        lv_sum_vol_ncv TYPE p DECIMALS 6,
         lv_avg_gcv     TYPE ygms_de_gcv,
         lv_avg_ncv     TYPE ygms_de_ncv,
-        lv_total_mbg   TYPE ygms_de_qty_mbg_cal, "p DECIMALS 3,
-        lv_total_scm   TYPE ygms_de_qty_mbg_cal. "p DECIMALS 3.
+        lv_total_mbg   TYPE p DECIMALS 3,
+        lv_total_scm   TYPE p DECIMALS 3.
   " Variables for GAIL ID validation
   DATA: lt_gail_ids    TYPE TABLE OF yrga_cst_pur-gail_id,
         lv_gail_count  TYPE i,
@@ -4543,8 +4543,8 @@ FORM build_alv_display_table_view .
   DATA ls_alv TYPE ty_alv_display.
   DATA l_day TYPE char10.
   DATA l_index(2) TYPE n.
-  DATA l_ncv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
-  DATA l_gcv TYPE ygms_de_qty_mbg_cal."ygms_de_gcv.
+  DATA l_ncv TYPE p DECIMALS 6.
+  DATA l_gcv TYPE p DECIMALS 6.
   DATA l_day_sm3 TYPE p DECIMALS 6.
   SELECT * INTO TABLE @DATA(it_yrga_cst_pur)
     FROM yrga_cst_pur
