@@ -268,7 +268,7 @@ FORM find_bdc_block.
       IF lv_val CS ''''.
         DATA(lv_vq1) = sy-fdpos + 1.
         DATA lv_vinner TYPE string.
-        lv_vinner = lv_val+lv_vq1.
+        lv_vinner = substring( val = lv_val off = lv_vq1 ).
         IF lv_vinner CS ''''.
           DATA(lv_vq2) = sy-fdpos.
           lv_val = lv_vinner(lv_vq2).
@@ -288,7 +288,7 @@ FORM find_bdc_block.
       IF lv_raw CS ''''.
         DATA(lv_q1) = sy-fdpos + 1.
         DATA lv_rest TYPE string.
-        lv_rest = lv_raw+lv_q1.
+        lv_rest = substring( val = lv_raw off = lv_q1 ).
         " Find closing quote — end of field name
         IF lv_rest CS ''''.
           DATA(lv_q2) = sy-fdpos.
@@ -298,14 +298,14 @@ FORM find_bdc_block.
 
           " Check for value on same line after closing quote
           DATA lv_after TYPE string.
-          lv_after = lv_rest+lv_q2+1.
+          lv_after = substring( val = lv_rest off = lv_q2 + 1 ).
           CONDENSE lv_after.
           REPLACE ALL OCCURRENCES OF '.' IN lv_after WITH space.
           " Strip quotes from literal value e.g. '/00'
           IF lv_after CS ''''.
             DATA(lv_aq1) = sy-fdpos + 1.
             DATA lv_ainner TYPE string.
-            lv_ainner = lv_after+lv_aq1.
+            lv_ainner = substring( val = lv_after off = lv_aq1 ).
             IF lv_ainner CS ''''.
               DATA(lv_aq2) = sy-fdpos.
               lv_after = lv_ainner(lv_aq2).
@@ -330,10 +330,10 @@ FORM find_bdc_block.
       IF lv_raw_fn CS '='.
         DATA(lv_fn_pos) = sy-fdpos + 1.
         DATA lv_fn_rest TYPE string.
-        lv_fn_rest = lv_raw_fn+lv_fn_pos.
+        lv_fn_rest = substring( val = lv_raw_fn off = lv_fn_pos ).
         IF lv_fn_rest CS ''''.
           DATA(lv_fnq1) = sy-fdpos + 1.
-          lv_fn_rest = lv_fn_rest+lv_fnq1.
+          lv_fn_rest = substring( val = lv_fn_rest off = lv_fnq1 ).
           IF lv_fn_rest CS ''''.
             DATA(lv_fnq2) = sy-fdpos.
             CLEAR wa_bdc_map.
@@ -349,7 +349,7 @@ FORM find_bdc_block.
       IF lv_raw_fv CS '='.
         DATA(lv_fv_pos) = sy-fdpos + 1.
         DATA lv_fval TYPE string.
-        lv_fval = lv_raw_fv+lv_fv_pos.
+        lv_fval = substring( val = lv_raw_fv off = lv_fv_pos ).
         REPLACE ALL OCCURRENCES OF '.' IN lv_fval WITH space.
         CONDENSE lv_fval.
         wa_bdc_map-fval_var = lv_fval.
@@ -379,7 +379,7 @@ FORM append_bdc_map.
     DATA(lv_sp) = sy-fdpos.
     wa_bdc_map-tabname = wa_bdc_map-fnam(lv_sp).
     DATA lv_fld TYPE string.
-    lv_fld = wa_bdc_map-fnam+lv_sp.
+    lv_fld = substring( val = wa_bdc_map-fnam off = lv_sp ).
     SHIFT lv_fld LEFT BY 1 PLACES.
     wa_bdc_map-fieldname = lv_fld.
   ENDIF.
@@ -437,7 +437,7 @@ FORM find_fm_call_block.
         lv_pname = lv_raw_fm(lv_eq).
         CONDENSE lv_pname.
         DATA lv_pval TYPE string.
-        lv_pval = lv_raw_fm+lv_eq.
+        lv_pval = substring( val = lv_raw_fm off = lv_eq ).
         SHIFT lv_pval LEFT BY 1 PLACES.
         REPLACE ALL OCCURRENCES OF '.' IN lv_pval WITH space.
         CONDENSE lv_pval.
@@ -568,8 +568,13 @@ FORM get_class_method_params.
       CATCH cx_root.
         lv_typename = wa_parm-name.
     ENDTRY.
-    FIND REGEX '\\TYPE=([^\\]+)$' IN lv_typename SUBMATCHES lv_typename.
-    IF sy-subrc <> 0 OR lv_typename IS INITIAL.
+    " Extract type name: absolute_name format is \TYPE=NAME or \POOL=X\TYPE=NAME
+    IF lv_typename CS '='.
+      DATA lt_tn_parts TYPE TABLE OF string.
+      SPLIT lv_typename AT '=' INTO TABLE lt_tn_parts.
+      READ TABLE lt_tn_parts INDEX lines( lt_tn_parts ) INTO lv_typename.
+    ENDIF.
+    IF lv_typename IS INITIAL.
       lv_typename = wa_parm-name.
     ENDIF.
 
