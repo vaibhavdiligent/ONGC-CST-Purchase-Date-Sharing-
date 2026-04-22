@@ -497,11 +497,18 @@ FORM get_class_method_params.
   ENDIF.
 
   LOOP AT wa_meth-parameters INTO DATA(wa_parm).
-    " Extract type name from RTTI absolute_name e.g. \TYPE=TYPENAME
-    lv_typename = wa_parm-type_descr->absolute_name.
+    " Extract type name via RTTI (ABAP_PARMDESCR has no type_descr in this release)
+    TRY.
+        DATA(lo_ptype) = lo_desc->get_method_parameter_type(
+                           methname = to_upper( p_meth )
+                           parmname = wa_parm-name ).
+        lv_typename = lo_ptype->absolute_name.
+      CATCH cx_root.
+        lv_typename = wa_parm-name.
+    ENDTRY.
     FIND REGEX '\\TYPE=([^\\]+)$' IN lv_typename SUBMATCHES lv_typename.
-    IF sy-subrc <> 0.
-      lv_typename = wa_parm-type_descr->absolute_name.
+    IF sy-subrc <> 0 OR lv_typename IS INITIAL.
+      lv_typename = wa_parm-name.
     ENDIF.
 
     CLEAR wa_cls_param.
@@ -699,6 +706,7 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM generate_class_code_preview.
   lv_code_ctr = 1.
+  DATA lv_ln TYPE string.
 
   DEFINE add_line.
     wa_code-lineno = lv_code_ctr.
@@ -709,11 +717,11 @@ FORM generate_class_code_preview.
 
   " Header
   IF p_tcode IS NOT INITIAL.
-    add_line: |" ** begin of change - BDC → Class Method replacement **|.
-    add_line: |" Replace CALL TRANSACTION '{ p_tcode }' with { p_class }=>{ p_meth }|.
+    lv_ln = |" ** begin of change - BDC -> Class Method replacement **|. add_line: lv_ln.
+    lv_ln = |" Replace CALL TRANSACTION '{ p_tcode }' with { p_class }=>{ p_meth }|. add_line: lv_ln.
   ELSE.
-    add_line: |" ** begin of change - FM → Class Method replacement **|.
-    add_line: |" Replace CALL FUNCTION '{ p_oldfm }' with { p_class }=>{ p_meth }|.
+    lv_ln = |" ** begin of change - FM -> Class Method replacement **|. add_line: lv_ln.
+    lv_ln = |" Replace CALL FUNCTION '{ p_oldfm }' with { p_class }=>{ p_meth }|. add_line: lv_ln.
   ENDIF.
   add_line: ''.
 
@@ -725,7 +733,7 @@ FORM generate_class_code_preview.
   ELSE.
     lv_blk_start = lv_fm_start.  lv_blk_end = lv_fm_end.
   ENDIF.
-  add_line: |" --- Original block (lines { lv_blk_start }-{ lv_blk_end }) commented out ---|.
+  lv_ln = |" --- Original block (lines { lv_blk_start }-{ lv_blk_end }) commented out ---|. add_line: lv_ln.
   LOOP AT lt_source INTO wa_source FROM lv_blk_start TO lv_blk_end.
     wa_code-lineno = lv_code_ctr.
     CONCATENATE '*' wa_source-line INTO wa_code-code.
@@ -797,8 +805,8 @@ FORM generate_class_code_preview.
   ELSE.
     CONCATENATE 'lo_obj->' p_meth '('
       INTO lv_call_stmt.
-    add_line: |DATA lo_obj TYPE REF TO { p_class }.|.
-    add_line: |CREATE OBJECT lo_obj.|.
+    lv_ln = |DATA lo_obj TYPE REF TO { p_class }.|. add_line: lv_ln.
+    lv_ln = |CREATE OBJECT lo_obj.|. add_line: lv_ln.
   ENDIF.
   add_line: lv_call_stmt.
 
@@ -839,6 +847,7 @@ ENDFORM.
 FORM generate_code_preview.
   DATA: lt_params   TYPE TABLE OF fupararef,
         lt_structs  TYPE SORTED TABLE OF char50 WITH UNIQUE KEY table_line.
+  DATA lv_ln TYPE string.
 
   lv_code_ctr = 1.
 
@@ -850,12 +859,12 @@ FORM generate_code_preview.
     lv_code_ctr = lv_code_ctr + 1.
   END-OF-DEFINITION.
 
-  add_line: |" ** begin of change - BDC → FM replacement **|.
-  add_line: |" TODO: Replace CALL TRANSACTION '{ p_tcode }' with { p_fm }|.
+  lv_ln = |" ** begin of change - BDC -> FM replacement **|. add_line: lv_ln.
+  lv_ln = |" TODO: Replace CALL TRANSACTION '{ p_tcode }' with { p_fm }|. add_line: lv_ln.
   add_line: ''.
 
   " Comment out BDC lines
-  add_line: |" --- Original BDC block (lines { lv_bdc_start } - { lv_bdc_end }) commented out ---|.
+  lv_ln = |" --- Original BDC block (lines { lv_bdc_start } - { lv_bdc_end }) commented out ---|. add_line: lv_ln.
   LOOP AT lt_source INTO wa_source FROM lv_bdc_start TO lv_bdc_end.
     wa_code-lineno = lv_code_ctr.
     CONCATENATE '*' wa_source-line INTO wa_code-code.
@@ -927,7 +936,7 @@ FORM generate_code_preview.
   add_line: ''.
 
   " FM call
-  add_line: |CALL FUNCTION '{ p_fm }'|.
+  lv_ln = |CALL FUNCTION '{ p_fm }'|. add_line: lv_ln.
   DATA lv_curr_section TYPE char10.
   LOOP AT lt_distinct_params INTO wa_dp.
     CASE wa_dp-paramtype.
