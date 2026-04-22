@@ -265,7 +265,8 @@ FORM find_bdc_block.
       DATA(lv_raw) = wa_source-line.
       IF lv_raw CS '='.
         DATA(lv_pos) = sy-fdpos + 1.
-        DATA(lv_rest) = lv_raw+lv_pos.
+        DATA lv_rest TYPE string.
+        lv_rest = lv_raw+lv_pos.
         CONDENSE lv_rest.
         " Extract value between quotes
         IF lv_rest CS ''''.
@@ -370,9 +371,11 @@ FORM find_fm_call_block.
       CONDENSE lv_raw_fm.
       IF lv_raw_fm CS '='.
         DATA(lv_eq) = sy-fdpos.
-        DATA(lv_pname) = lv_raw_fm(lv_eq).
+        DATA lv_pname TYPE string.
+        lv_pname = lv_raw_fm(lv_eq).
         CONDENSE lv_pname.
-        DATA(lv_pval)  = lv_raw_fm+lv_eq.
+        DATA lv_pval TYPE string.
+        lv_pval = lv_raw_fm+lv_eq.
         SHIFT lv_pval LEFT BY 1 PLACES.
         REPLACE ALL OCCURRENCES OF '.' IN lv_pval WITH space.
         CONDENSE lv_pval.
