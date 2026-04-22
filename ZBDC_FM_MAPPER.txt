@@ -357,7 +357,7 @@ FORM find_fm_call_block.
       IF lv_line_u CS 'EXCEPTIONS'. lv_section = 'EXCEPTION'. CONTINUE. ENDIF.
 
       " End of CALL FUNCTION block
-      IF lv_line_u(1) = '.' OR ( lv_line_u CS '.' AND lv_line_u NOT CS '=' ).
+      IF lv_line_u(1) = '.' OR ( lv_line_u CS '.' AND NOT ( lv_line_u CS '=' ) ).
         lv_fm_end = lv_lineno.
         lv_in_fm  = space.
         EXIT.
@@ -442,11 +442,11 @@ FORM get_fm_fields.
     IF wa_fup-structure IS INITIAL. CONTINUE. ENDIF.
 
     SELECT fieldname, rollname
-      INTO TABLE @DATA(lt_struct_fields)
       FROM dd03l
       WHERE tabname  = @wa_fup-structure
         AND rollname IS NOT INITIAL
-        AND fieldname NOT LIKE '.%'.    " skip internal fields
+        AND fieldname NOT LIKE '.%'    " skip internal fields
+      INTO TABLE @DATA(lt_struct_fields).
 
     LOOP AT lt_struct_fields INTO DATA(wa_sf).
       CLEAR wa_fm_dd.
