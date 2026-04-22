@@ -472,12 +472,11 @@ ENDFORM.
 *&   TYPE      = type name (rollname or structure)
 *----------------------------------------------------------------------*
 FORM get_class_method_params.
-  DATA lt_seopar TYPE TABLE OF seopar.
-
-  SELECT * INTO TABLE @lt_seopar
+  SELECT *
     FROM seopar
     WHERE clsname = @p_class
-      AND cpdname = @p_meth.
+      AND cpdname = @p_meth
+    INTO TABLE @DATA(lt_seopar).
 
   IF lt_seopar IS INITIAL.
     MESSAGE |No parameters found for { p_class }->{ p_meth }| TYPE 'I'.
@@ -502,11 +501,11 @@ FORM get_class_method_params.
 
       " Expand structure fields into lt_cls_fields
       SELECT fieldname, rollname
-        INTO TABLE @DATA(lt_sf)
         FROM dd03l
         WHERE tabname  = @wa_seo-type
           AND rollname IS NOT INITIAL
-          AND fieldname NOT LIKE '.%'.
+          AND fieldname NOT LIKE '.%'
+        INTO TABLE @DATA(lt_sf).
       LOOP AT lt_sf INTO DATA(wa_sf2).
         CLEAR wa_cls_field.
         wa_cls_field-param_name = wa_seo-sconame.
