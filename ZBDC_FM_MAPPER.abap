@@ -265,7 +265,7 @@ FORM find_bdc_block.
       DATA(lv_raw) = wa_source-line.
       IF lv_raw CS '='.
         DATA(lv_pos) = sy-fdpos + 1.
-        DATA(lv_rest) = lv_raw+lv_pos.
+        DATA(lv_rest) = substring( val = lv_raw off = lv_pos ).
         CONDENSE lv_rest.
         " Extract value between quotes
         IF lv_rest CS ''''.
