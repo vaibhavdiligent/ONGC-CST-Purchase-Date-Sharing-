@@ -500,8 +500,8 @@ FORM get_class_method_params.
     " Extract type name via RTTI (ABAP_PARMDESCR has no type_descr in this release)
     TRY.
         DATA(lo_ptype) = lo_desc->get_method_parameter_type(
-                           methname = to_upper( p_meth )
-                           parmname = wa_parm-name ).
+                           p_method_name    = to_upper( p_meth )
+                           p_parameter_name = wa_parm-name ).
         lv_typename = lo_ptype->absolute_name.
       CATCH cx_root.
         lv_typename = wa_parm-name.
