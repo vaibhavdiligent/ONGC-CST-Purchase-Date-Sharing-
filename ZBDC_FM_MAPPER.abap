@@ -53,14 +53,6 @@ PARAMETERS: p_class  TYPE seoclsname,                  " Replacement Class
             p_static TYPE flag AS CHECKBOX DEFAULT 'X'." X=static, space=instance
 SELECTION-SCREEN END OF BLOCK b4.
 
-*----------------------------------------------------------------------*
-* SELECTION SCREEN TEXTS
-*----------------------------------------------------------------------*
-INITIALIZATION.
-  TEXT-001 = 'Source (BDC Transaction or Old FM)'.
-  TEXT-002 = 'Replacement Type'.
-  TEXT-003 = 'Replace with Function Module'.
-  TEXT-004 = 'Replace with Class Method'.
 
 *----------------------------------------------------------------------*
 * TYPE DEFINITIONS
