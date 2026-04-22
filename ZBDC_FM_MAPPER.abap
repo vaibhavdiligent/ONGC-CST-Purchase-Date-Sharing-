@@ -604,8 +604,14 @@ FORM get_class_method_params.
       APPEND wa_cls_param TO lt_cls_params.
 
       " Recursively expand structure (handles nested structures and table types)
+      DATA lv_px_path  TYPE char200.
+      DATA lv_px_param TYPE seocpdname.
+      DATA lv_px_dir   TYPE char1.
+      CLEAR lv_px_path.
+      lv_px_param = wa_parm-name.
+      lv_px_dir   = wa_parm-parm_kind.
       PERFORM expand_struct_fields
-        USING lv_typename space wa_parm-name wa_parm-parm_kind.
+        USING lv_typename lv_px_path lv_px_param lv_px_dir.
     ELSE.
       " Scalar type — rollname = type itself (it IS the data element)
       wa_cls_param-is_struct = space.
