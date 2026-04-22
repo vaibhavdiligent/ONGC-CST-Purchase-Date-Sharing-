@@ -309,7 +309,8 @@ FORM find_bdc_block.
       IF wa_bdc_map-fnam CS '-'.
         DATA(lv_sp) = sy-fdpos.
         wa_bdc_map-tabname   = wa_bdc_map-fnam(lv_sp).
-        DATA(lv_rest2) = wa_bdc_map-fnam+lv_sp.
+        DATA lv_rest2 TYPE string.
+        lv_rest2 = wa_bdc_map-fnam+lv_sp.
         SHIFT lv_rest2 LEFT BY 1 PLACES.
         wa_bdc_map-fieldname = lv_rest2.
       ENDIF.
