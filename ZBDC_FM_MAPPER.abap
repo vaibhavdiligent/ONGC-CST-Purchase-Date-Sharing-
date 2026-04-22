@@ -289,7 +289,8 @@ FORM find_bdc_block.
       DATA(lv_raw2) = wa_source-line.
       IF lv_raw2 CS '='.
         DATA(lv_pos2) = sy-fdpos + 1.
-        DATA(lv_fval) = lv_raw2+lv_pos2.
+        DATA lv_fval TYPE string.
+        lv_fval = lv_raw2+lv_pos2.
         CONDENSE lv_fval.
         " Remove trailing dot or period
         REPLACE ALL OCCURRENCES OF '.' IN lv_fval WITH space.
