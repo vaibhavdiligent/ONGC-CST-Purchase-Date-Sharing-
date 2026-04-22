@@ -631,7 +631,7 @@ ENDFORM.
 *& type via DD40L; appends primitive fields to lt_cls_fields.
 *----------------------------------------------------------------------*
 FORM expand_struct_fields
-  USING    p_struct  TYPE char50
+  USING    p_struct  TYPE string
            p_path    TYPE char200
            p_param   TYPE seocpdname
            p_dir     TYPE char1.
