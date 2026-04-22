@@ -472,27 +472,47 @@ ENDFORM.
 *&   TYPE      = type name (rollname or structure)
 *----------------------------------------------------------------------*
 FORM get_class_method_params.
-  SELECT *
-    FROM seopar
-    WHERE clsname = @p_class
-      AND cpdname = @p_meth
-    INTO TABLE @DATA(lt_seopar).
+  DATA: lo_desc     TYPE REF TO cl_abap_classdescr,
+        lv_typename TYPE string.
 
-  IF lt_seopar IS INITIAL.
+  TRY.
+      lo_desc = CAST cl_abap_classdescr(
+                  cl_abap_typedescr=>describe_by_name( p_class ) ).
+    CATCH cx_root.
+      MESSAGE |Class { p_class } not found or is not a class| TYPE 'I'.
+      RETURN.
+  ENDTRY.
+
+  READ TABLE lo_desc->methods
+    WITH KEY name = to_upper( p_meth )
+    INTO DATA(wa_meth).
+  IF sy-subrc <> 0.
+    MESSAGE |Method { p_meth } not found in { p_class }| TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  IF wa_meth-parameters IS INITIAL.
     MESSAGE |No parameters found for { p_class }->{ p_meth }| TYPE 'I'.
     RETURN.
   ENDIF.
 
-  LOOP AT lt_seopar INTO DATA(wa_seo).
+  LOOP AT wa_meth-parameters INTO DATA(wa_parm).
+    " Extract type name from RTTI absolute_name e.g. \TYPE=TYPENAME
+    lv_typename = wa_parm-type_descr->absolute_name.
+    FIND REGEX '\\TYPE=([^\\]+)$' IN lv_typename SUBMATCHES lv_typename.
+    IF sy-subrc <> 0.
+      lv_typename = wa_parm-type_descr->absolute_name.
+    ENDIF.
+
     CLEAR wa_cls_param.
-    wa_cls_param-param_name = wa_seo-sconame.
-    wa_cls_param-param_dir  = wa_seo-pardecltyp.
-    wa_cls_param-type_name  = wa_seo-type.
-    wa_cls_param-typtype    = wa_seo-typtype.
+    wa_cls_param-param_name = wa_parm-name.
+    wa_cls_param-param_dir  = wa_parm-parm_kind.
+    wa_cls_param-type_name  = lv_typename.
+    wa_cls_param-typtype    = '1'.
 
     " Check if the type is a structure (exists in DD02L)
     SELECT SINGLE tabname INTO @DATA(lv_tabchk)
-      FROM dd02l WHERE tabname = @wa_seo-type.
+      FROM dd02l WHERE tabname = @lv_typename.
     IF sy-subrc = 0.
       " Structure type — expand all fields
       wa_cls_param-is_struct = 'X'.
@@ -502,15 +522,15 @@ FORM get_class_method_params.
       " Expand structure fields into lt_cls_fields
       SELECT fieldname, rollname
         FROM dd03l
-        WHERE tabname  = @wa_seo-type
+        WHERE tabname  = @lv_typename
           AND rollname IS NOT INITIAL
           AND fieldname NOT LIKE '.%'
         INTO TABLE @DATA(lt_sf).
       LOOP AT lt_sf INTO DATA(wa_sf2).
         CLEAR wa_cls_field.
-        wa_cls_field-param_name = wa_seo-sconame.
-        wa_cls_field-param_dir  = wa_seo-pardecltyp.
-        wa_cls_field-type_name  = wa_seo-type.
+        wa_cls_field-param_name = wa_parm-name.
+        wa_cls_field-param_dir  = wa_parm-parm_kind.
+        wa_cls_field-type_name  = lv_typename.
         wa_cls_field-fieldname  = wa_sf2-fieldname.
         wa_cls_field-rollname   = wa_sf2-rollname.
         APPEND wa_cls_field TO lt_cls_fields.
@@ -518,16 +538,16 @@ FORM get_class_method_params.
     ELSE.
       " Scalar type — rollname = type itself (it IS the data element)
       wa_cls_param-is_struct = space.
-      wa_cls_param-rollname  = wa_seo-type.
+      wa_cls_param-rollname  = lv_typename.
       APPEND wa_cls_param TO lt_cls_params.
 
       " Also add as field entry for matching
       CLEAR wa_cls_field.
-      wa_cls_field-param_name = wa_seo-sconame.
-      wa_cls_field-param_dir  = wa_seo-pardecltyp.
-      wa_cls_field-type_name  = wa_seo-type.
-      wa_cls_field-fieldname  = wa_seo-sconame.
-      wa_cls_field-rollname   = wa_seo-type.
+      wa_cls_field-param_name = wa_parm-name.
+      wa_cls_field-param_dir  = wa_parm-parm_kind.
+      wa_cls_field-type_name  = lv_typename.
+      wa_cls_field-fieldname  = wa_parm-name.
+      wa_cls_field-rollname   = lv_typename.
       APPEND wa_cls_field TO lt_cls_fields.
     ENDIF.
   ENDLOOP.
