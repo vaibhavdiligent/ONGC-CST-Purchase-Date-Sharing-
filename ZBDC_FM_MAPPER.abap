@@ -177,14 +177,18 @@ START-OF-SELECTION.
   ENDIF.
 
   " Step 1: Read source program
-  CALL FUNCTION 'READ_REPORT'
+  DATA lv_obj_name TYPE versobjnam.
+  lv_obj_name = p_prog.
+  CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
     EXPORTING
-      progname  = p_prog
+      object_name           = lv_obj_name
+      versno                = '00000'
     TABLES
-      qtab      = lt_source
+      repos_tab             = lt_source
     EXCEPTIONS
-      not_exist = 1
-      OTHERS    = 2.
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3.
   IF sy-subrc <> 0 OR lt_source IS INITIAL.
     MESSAGE |Program { p_prog } not found or has no source| TYPE 'E'.
   ENDIF.
