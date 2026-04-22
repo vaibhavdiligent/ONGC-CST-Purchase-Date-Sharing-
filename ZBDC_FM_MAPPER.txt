@@ -876,11 +876,11 @@ FORM generate_code_preview.
   " DATA declarations for FM structures
   add_line: '" --- Data declarations for FM structures ---'.
   SELECT DISTINCT parameter, structure, paramtype
-    INTO TABLE @DATA(lt_distinct_params)
-    FROM fupararef
+     FROM fupararef
     WHERE funcname  = @p_fm
       AND paramtype IN ('I', 'E', 'T')
-      AND structure IS NOT INITIAL.
+      AND structure IS NOT INITIAL
+       INTO TABLE @DATA(lt_distinct_params).
 
   LOOP AT lt_distinct_params INTO DATA(wa_dp).
     DATA lv_decl TYPE char200.
