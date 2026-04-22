@@ -74,6 +74,7 @@ TYPES: BEGIN OF ty_cls_field,
          type_name  TYPE char50,
          fieldname  TYPE dd03l-fieldname,
          rollname   TYPE dd03l-rollname,
+         field_path TYPE char200,           " full access path for deep structures
        END OF ty_cls_field.
 
 TYPES: BEGIN OF ty_bdc_map,
@@ -88,6 +89,7 @@ TYPES: BEGIN OF ty_bdc_map,
          cls_param TYPE seocpdname,      " Matched class method parameter
          cls_field TYPE dd03l-fieldname, " Matched field in class param structure
          cls_type  TYPE char50,          " Class parameter type name
+         cls_path  TYPE char200,         " Full deep-path for nested structures
          matched   TYPE flag,            " X = matched, space = no match
          src_line  TYPE i,               " Source line number in program
        END OF ty_bdc_map.
@@ -119,6 +121,14 @@ TYPES: BEGIN OF ty_code_preview,
          lineno TYPE i,
          code   TYPE char200,
        END OF ty_code_preview.
+
+" Work item for iterative deep-structure expansion
+TYPES: BEGIN OF ty_ex_item,
+         struct_name TYPE char50,
+         path_prefix TYPE char200,
+         param_name  TYPE seocpdname,
+         param_dir   TYPE char1,
+       END OF ty_ex_item.
 
 *----------------------------------------------------------------------*
 * DATA DECLARATIONS
@@ -593,22 +603,9 @@ FORM get_class_method_params.
       wa_cls_param-rollname  = space.
       APPEND wa_cls_param TO lt_cls_params.
 
-      " Expand structure fields into lt_cls_fields
-      SELECT fieldname, rollname
-        FROM dd03l
-        WHERE tabname  = @lv_typename
-          AND rollname IS NOT INITIAL
-          AND fieldname NOT LIKE '.%'
-        INTO TABLE @DATA(lt_sf).
-      LOOP AT lt_sf INTO DATA(wa_sf2).
-        CLEAR wa_cls_field.
-        wa_cls_field-param_name = wa_parm-name.
-        wa_cls_field-param_dir  = wa_parm-parm_kind.
-        wa_cls_field-type_name  = lv_typename.
-        wa_cls_field-fieldname  = wa_sf2-fieldname.
-        wa_cls_field-rollname   = wa_sf2-rollname.
-        APPEND wa_cls_field TO lt_cls_fields.
-      ENDLOOP.
+      " Recursively expand structure (handles nested structures and table types)
+      PERFORM expand_struct_fields
+        USING lv_typename space wa_parm-name wa_parm-parm_kind.
     ELSE.
       " Scalar type — rollname = type itself (it IS the data element)
       wa_cls_param-is_struct = space.
@@ -628,6 +625,107 @@ FORM get_class_method_params.
 ENDFORM.
 
 *----------------------------------------------------------------------*
+*& Form expand_struct_fields
+*& Iterative deep-structure expansion via DD02L/DD40L.
+*& Pushes items onto lt_ex_stack; resolves STRU → recurse, INTTAB → row
+*& type via DD40L; appends primitive fields to lt_cls_fields.
+*----------------------------------------------------------------------*
+FORM expand_struct_fields
+  USING    p_struct  TYPE char50
+           p_path    TYPE char200
+           p_param   TYPE seocpdname
+           p_dir     TYPE char1.
+
+  DATA lt_ex_stack TYPE TABLE OF ty_ex_item.
+  DATA wa_ex_item  TYPE ty_ex_item.
+  DATA wa_ex_new   TYPE ty_ex_item.
+  DATA lv_ex_depth TYPE i.
+  DATA lv_ex_path  TYPE char200.
+  DATA lv_ex_tpath TYPE char200.
+
+  " Seed the stack with the top-level structure
+  CLEAR wa_ex_new.
+  wa_ex_new-struct_name = p_struct.
+  wa_ex_new-path_prefix = p_path.
+  wa_ex_new-param_name  = p_param.
+  wa_ex_new-param_dir   = p_dir.
+  APPEND wa_ex_new TO lt_ex_stack.
+
+  WHILE lt_ex_stack IS NOT INITIAL.
+    READ TABLE lt_ex_stack INTO wa_ex_item INDEX 1.
+    DELETE lt_ex_stack INDEX 1.
+
+    " Safety: stop if path depth exceeds 10 dashes
+    FIND ALL OCCURRENCES OF '-' IN wa_ex_item-path_prefix MATCH COUNT lv_ex_depth.
+    IF lv_ex_depth > 10. CONTINUE. ENDIF.
+
+    " Get all components of this structure
+    SELECT fieldname, rollname
+      FROM dd03l
+      WHERE tabname   = @wa_ex_item-struct_name
+        AND fieldname NOT LIKE '.%'
+        AND fieldname <> 'MANDT'
+      INTO TABLE @DATA(lt_ex_flds).
+
+    LOOP AT lt_ex_flds INTO DATA(wa_ex_fld).
+      IF wa_ex_fld-rollname IS INITIAL. CONTINUE. ENDIF.
+
+      " Build path for this component
+      IF wa_ex_item-path_prefix IS INITIAL.
+        lv_ex_path = wa_ex_fld-fieldname.
+      ELSE.
+        CONCATENATE wa_ex_item-path_prefix '-' wa_ex_fld-fieldname
+          INTO lv_ex_path.
+      ENDIF.
+
+      " Check whether the rollname is a type in DD02L (structure or table type)
+      SELECT SINGLE tabclass
+        FROM dd02l
+        WHERE tabname = @wa_ex_fld-rollname
+        INTO @DATA(lv_ex_tabcls).
+
+      IF sy-subrc = 0.
+        CASE lv_ex_tabcls.
+          WHEN 'STRU'.
+            " Nested flat structure — push for expansion
+            CLEAR wa_ex_new.
+            wa_ex_new-struct_name = wa_ex_fld-rollname.
+            wa_ex_new-path_prefix = lv_ex_path.
+            wa_ex_new-param_name  = wa_ex_item-param_name.
+            wa_ex_new-param_dir   = wa_ex_item-param_dir.
+            APPEND wa_ex_new TO lt_ex_stack.
+          WHEN 'INTTAB'.
+            " Table type — get the row type from DD40L, append [1] to path
+            SELECT SINGLE rowtype
+              FROM dd40l
+              WHERE typename = @wa_ex_fld-rollname
+              INTO @DATA(lv_ex_rtype).
+            IF sy-subrc = 0 AND lv_ex_rtype IS NOT INITIAL.
+              CONCATENATE lv_ex_path '[1]' INTO lv_ex_tpath.
+              CLEAR wa_ex_new.
+              wa_ex_new-struct_name = lv_ex_rtype.
+              wa_ex_new-path_prefix = lv_ex_tpath.
+              wa_ex_new-param_name  = wa_ex_item-param_name.
+              wa_ex_new-param_dir   = wa_ex_item-param_dir.
+              APPEND wa_ex_new TO lt_ex_stack.
+            ENDIF.
+        ENDCASE.
+      ELSE.
+        " Primitive field — record with full access path
+        CLEAR wa_cls_field.
+        wa_cls_field-param_name = wa_ex_item-param_name.
+        wa_cls_field-param_dir  = wa_ex_item-param_dir.
+        wa_cls_field-type_name  = wa_ex_item-struct_name.
+        wa_cls_field-fieldname  = wa_ex_fld-fieldname.
+        wa_cls_field-rollname   = wa_ex_fld-rollname.
+        wa_cls_field-field_path = lv_ex_path.
+        APPEND wa_cls_field TO lt_cls_fields.
+      ENDIF.
+    ENDLOOP.
+  ENDWHILE.
+ENDFORM.
+
+*----------------------------------------------------------------------*
 *& Form match_to_class
 *& Match BDC/FM fields to class method parameters via rollname
 *----------------------------------------------------------------------*
@@ -641,6 +739,7 @@ FORM match_to_class.
       <fs_c>-cls_param = wa_cls_field-param_name.
       <fs_c>-cls_field = wa_cls_field-fieldname.
       <fs_c>-cls_type  = wa_cls_field-type_name.
+      <fs_c>-cls_path  = wa_cls_field-field_path.
       <fs_c>-matched   = 'X'.
     ENDIF.
   ENDLOOP.
@@ -715,8 +814,9 @@ ENDFORM.
 *& Build ALV output for class method mapping
 *----------------------------------------------------------------------*
 FORM build_output_class.
-  DATA lv_match_cnt TYPE i.
-  DATA lv_total_cnt TYPE i.
+  DATA lv_match_cnt    TYPE i.
+  DATA lv_total_cnt    TYPE i.
+  DATA lv_path_to_use  TYPE char200.
 
   LOOP AT lt_bdc_map INTO wa_bdc_map.
     CLEAR wa_output.
@@ -733,13 +833,19 @@ FORM build_output_class.
       wa_output-cls_param = wa_bdc_map-cls_param.
       wa_output-cls_field = wa_bdc_map-cls_field.
 
+      " Use deep path if available, else simple field name
+      IF wa_bdc_map-cls_path IS NOT INITIAL.
+        lv_path_to_use = wa_bdc_map-cls_path.
+      ELSE.
+        lv_path_to_use = wa_bdc_map-cls_field.
+      ENDIF.
       " Check if param is a structure
       READ TABLE lt_cls_params INTO wa_cls_param
         WITH KEY param_name = wa_bdc_map-cls_param
                  is_struct  = 'X'.
       IF sy-subrc = 0.
         CONCATENATE 'ls_' wa_bdc_map-cls_param
-                    '-' wa_bdc_map-cls_field
+                    '-' lv_path_to_use
                     ' = ' wa_bdc_map-fval_var '.'
           INTO wa_output-gen_code SEPARATED BY space.
       ELSE.
@@ -822,15 +928,22 @@ FORM generate_class_code_preview.
 
   " Matched field assignments
   add_line: '" --- Auto-mapped field assignments (via DD03L rollname) ---'.
+  DATA lv_fpath      TYPE char200.
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
     DATA lv_cls_assign TYPE char200.
     DATA lv_cls_cmt    TYPE char200.
-    " Check if structured
+    " Use deep path if available (e.g. COMPANY_DATA[1]-DATA-WITHT)
+    IF wa_bdc_map-cls_path IS NOT INITIAL.
+      lv_fpath = wa_bdc_map-cls_path.
+    ELSE.
+      lv_fpath = wa_bdc_map-cls_field.
+    ENDIF.
+    " Check if param is a structure
     READ TABLE lt_cls_params INTO wa_cls_param
       WITH KEY param_name = wa_bdc_map-cls_param is_struct = 'X'.
     IF sy-subrc = 0.
       CONCATENATE 'ls_' wa_bdc_map-cls_param
-                  '-' wa_bdc_map-cls_field
+                  '-' lv_fpath
                   ' = ' wa_bdc_map-fval_var '.'
         INTO lv_cls_assign SEPARATED BY space.
     ELSE.
