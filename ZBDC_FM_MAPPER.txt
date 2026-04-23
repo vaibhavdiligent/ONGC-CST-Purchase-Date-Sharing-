@@ -921,20 +921,19 @@ FORM build_output_class.
       ELSE.
         lv_path_to_use = wa_bdc_map-cls_field.
       ENDIF.
+      " Normalise [1] → [ 1 ] for valid ABAP table expression syntax
+      REPLACE ALL OCCURRENCES OF '[1]' IN lv_path_to_use WITH '[ 1 ]'.
       " Check if param is a structure
       READ TABLE lt_cls_params INTO wa_cls_param
         WITH KEY param_name = wa_bdc_map-cls_param
                  is_struct  = 'X'.
+      DATA lv_gencode TYPE string.
       IF sy-subrc = 0.
-        CONCATENATE 'ls_' wa_bdc_map-cls_param
-                    '-' lv_path_to_use
-                    ' = ' wa_bdc_map-fval_var '.'
-          INTO wa_output-gen_code SEPARATED BY space.
+        lv_gencode = |ls_{ wa_bdc_map-cls_param }-{ lv_path_to_use } = { wa_bdc_map-fval_var }.|.
       ELSE.
-        CONCATENATE wa_bdc_map-cls_param
-                    ' = ' wa_bdc_map-fval_var '.'
-          INTO wa_output-gen_code SEPARATED BY space.
+        lv_gencode = |{ wa_bdc_map-cls_param } = { wa_bdc_map-fval_var }.|.
       ENDIF.
+      wa_output-gen_code = lv_gencode.
       wa_output-remark = wa_bdc_map-rollname.
     ELSE.
       wa_output-status = 'NO MATCH'.
@@ -1001,9 +1000,7 @@ FORM generate_class_code_preview.
   add_line: '" --- Data declarations ---'.
   LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = 'X'.
     DATA lv_cls_decl TYPE char200.
-    CONCATENATE 'DATA ls_' wa_cls_param-param_name
-      ' TYPE ' wa_cls_param-type_name '.'
-      INTO lv_cls_decl SEPARATED BY space.
+    lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
     add_line: lv_cls_decl.
   ENDLOOP.
   add_line: ''.
@@ -1014,24 +1011,23 @@ FORM generate_class_code_preview.
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
     DATA lv_cls_assign TYPE char200.
     DATA lv_cls_cmt    TYPE char200.
-    " Use deep path if available (e.g. COMPANY_DATA[1]-DATA-WITHT)
+    " Use deep path if available (e.g. COMPANY_DATA[ 1 ]-DATA-WITHT)
     IF wa_bdc_map-cls_path IS NOT INITIAL.
       lv_fpath = wa_bdc_map-cls_path.
     ELSE.
       lv_fpath = wa_bdc_map-cls_field.
     ENDIF.
+    " Normalise [1] → [ 1 ] for valid ABAP table expression syntax
+    DATA lv_clean_path TYPE string.
+    lv_clean_path = lv_fpath.
+    REPLACE ALL OCCURRENCES OF '[1]' IN lv_clean_path WITH '[ 1 ]'.
     " Check if param is a structure
     READ TABLE lt_cls_params INTO wa_cls_param
       WITH KEY param_name = wa_bdc_map-cls_param is_struct = 'X'.
     IF sy-subrc = 0.
-      CONCATENATE 'ls_' wa_bdc_map-cls_param
-                  '-' lv_fpath
-                  ' = ' wa_bdc_map-fval_var '.'
-        INTO lv_cls_assign SEPARATED BY space.
+      lv_cls_assign = |ls_{ wa_bdc_map-cls_param }-{ lv_clean_path } = { wa_bdc_map-fval_var }.|.
     ELSE.
-      CONCATENATE wa_bdc_map-cls_param
-                  ' = ' wa_bdc_map-fval_var '.'
-        INTO lv_cls_assign SEPARATED BY space.
+      lv_cls_assign = |{ wa_bdc_map-cls_param } = { wa_bdc_map-fval_var }.|.
     ENDIF.
     CONCATENATE '" BDC/FM:' wa_bdc_map-fnam
                 '→ Param:' wa_bdc_map-cls_param
