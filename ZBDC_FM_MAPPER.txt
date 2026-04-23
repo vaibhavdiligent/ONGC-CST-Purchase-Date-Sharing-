@@ -1149,6 +1149,7 @@ ENDFORM.
 *& Match BDC fields to FM parameters using rollname as bridge
 *----------------------------------------------------------------------*
 FORM match_fields.
+  " Pass 1: match by rollname (data element)
   LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_m>).
     IF <fs_m>-rollname IS INITIAL. CONTINUE. ENDIF.
 
@@ -1163,7 +1164,35 @@ FORM match_fields.
       <fs_m>-fm_wa_path   = wa_fm_dd-wa_path.
       <fs_m>-fm_datax     = wa_fm_dd-has_datax.
       <fs_m>-fm_paramtype = wa_fm_dd-paramtype.
-      <fs_m>-matched    = 'X'.
+      <fs_m>-matched      = 'X'.
+    ENDIF.
+  ENDLOOP.
+
+  " Pass 2: fallback — match unmatched entries by parameter name
+  " Handles cases where old and new FM share the same param name but different rollnames
+  LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_m2>).
+    IF <fs_m2>-matched = 'X'. CONTINUE. ENDIF.
+    " fnam holds the old FM parameter name (scalar) or PARAM-FIELD (structured)
+    DATA lv_pname_only TYPE string.
+    lv_pname_only = <fs_m2>-fnam.
+    IF lv_pname_only CS '-'.
+      " For structured params (PARAM-FIELD), extract just the PARAM part
+      DATA lv_pn_hyp TYPE i.
+      lv_pn_hyp = sy-fdpos.
+      lv_pname_only = lv_pname_only(lv_pn_hyp).
+    ENDIF.
+    READ TABLE lt_fm_dd INTO wa_fm_dd
+      WITH KEY parameter = lv_pname_only.
+    IF sy-subrc = 0.
+      <fs_m2>-fm_param     = wa_fm_dd-parameter.
+      <fs_m2>-fm_struct    = wa_fm_dd-structure.
+      <fs_m2>-fm_field     = wa_fm_dd-fieldname.
+      <fs_m2>-fm_wa_name   = wa_fm_dd-wa_name.
+      <fs_m2>-fm_wa_type   = wa_fm_dd-wa_type.
+      <fs_m2>-fm_wa_path   = wa_fm_dd-wa_path.
+      <fs_m2>-fm_datax     = wa_fm_dd-has_datax.
+      <fs_m2>-fm_paramtype = wa_fm_dd-paramtype.
+      <fs_m2>-matched      = 'X'.
     ENDIF.
   ENDLOOP.
 ENDFORM.
