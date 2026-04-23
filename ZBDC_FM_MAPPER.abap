@@ -921,8 +921,8 @@ FORM build_output_class.
       ELSE.
         lv_path_to_use = wa_bdc_map-cls_field.
       ENDIF.
-      " Normalise [1] → [ 1 ] for valid ABAP table expression syntax
-      REPLACE ALL OCCURRENCES OF '[1]' IN lv_path_to_use WITH '[ 1 ]'.
+      " Remove [1] table index — use flat path; caller adds APPEND for multi-entry
+      REPLACE ALL OCCURRENCES OF '[1]' IN lv_path_to_use WITH ''.
       " Check if param is a structure
       READ TABLE lt_cls_params INTO wa_cls_param
         WITH KEY param_name = wa_bdc_map-cls_param
@@ -1017,10 +1017,10 @@ FORM generate_class_code_preview.
     ELSE.
       lv_fpath = wa_bdc_map-cls_field.
     ENDIF.
-    " Normalise [1] → [ 1 ] for valid ABAP table expression syntax
+    " Remove [1] table index — flat path; APPEND stubs generated below
     DATA lv_clean_path TYPE string.
     lv_clean_path = lv_fpath.
-    REPLACE ALL OCCURRENCES OF '[1]' IN lv_clean_path WITH '[ 1 ]'.
+    REPLACE ALL OCCURRENCES OF '[1]' IN lv_clean_path WITH ''.
     " Check if param is a structure
     READ TABLE lt_cls_params INTO wa_cls_param
       WITH KEY param_name = wa_bdc_map-cls_param is_struct = 'X'.
@@ -1038,6 +1038,61 @@ FORM generate_class_code_preview.
     add_line: lv_cls_assign.
   ENDLOOP.
   add_line: ''.
+
+  " Generate APPEND stubs for every internal-table component in matched paths
+  DATA lt_app_stubs TYPE TABLE OF string.
+  DATA lv_app_opath TYPE string.
+  DATA lt_app_segs  TYPE TABLE OF string.
+  DATA wa_app_seg   TYPE string.
+  DATA lv_app_seg   TYPE string.
+  DATA lv_app_pfx   TYPE string.
+  DATA lv_app_tbl   TYPE string.
+  DATA lv_app_path  TYPE string.
+  DATA lv_app_line  TYPE string.
+  DATA lv_app_cnt   TYPE i.
+  DATA lv_app_idx   TYPE i.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    lv_app_opath = wa_bdc_map-cls_path.
+    CHECK lv_app_opath CS '[1]'.
+    CLEAR: lt_app_segs, lv_app_pfx.
+    SPLIT lv_app_opath AT '-' INTO TABLE lt_app_segs.
+    LOOP AT lt_app_segs INTO wa_app_seg.
+      lv_app_seg = wa_app_seg.
+      IF lv_app_seg CS '[1]'.
+        REPLACE ALL OCCURRENCES OF '[1]' IN lv_app_seg WITH ''.
+        CONDENSE lv_app_seg NO-GAPS.
+        lv_app_tbl = lv_app_seg.
+        IF lv_app_pfx IS INITIAL.
+          lv_app_path = |ls_{ wa_bdc_map-cls_param }-{ lv_app_tbl }|.
+        ELSE.
+          lv_app_path = |ls_{ wa_bdc_map-cls_param }-{ lv_app_pfx }-{ lv_app_tbl }|.
+        ENDIF.
+        lv_app_line = |APPEND ls_{ lv_app_tbl } TO { lv_app_path }.|.
+        READ TABLE lt_app_stubs TRANSPORTING NO FIELDS
+          WITH KEY table_line = lv_app_line.
+        IF sy-subrc <> 0.
+          APPEND lv_app_line TO lt_app_stubs.
+        ENDIF.
+        lv_app_pfx = COND #( WHEN lv_app_pfx IS INITIAL
+                              THEN |{ lv_app_tbl }|
+                              ELSE |{ lv_app_pfx }-{ lv_app_tbl }| ).
+      ELSE.
+        lv_app_pfx = COND #( WHEN lv_app_pfx IS INITIAL
+                              THEN |{ wa_app_seg }|
+                              ELSE |{ lv_app_pfx }-{ wa_app_seg }| ).
+      ENDIF.
+    ENDLOOP.
+  ENDLOOP.
+  IF lt_app_stubs IS NOT INITIAL.
+    add_line: '" --- APPEND stubs for internal table components (innermost first) ---'.
+    DESCRIBE TABLE lt_app_stubs LINES lv_app_cnt.
+    DO lv_app_cnt TIMES.
+      lv_app_idx = lv_app_cnt - sy-index + 1.
+      READ TABLE lt_app_stubs INTO lv_app_line INDEX lv_app_idx.
+      add_line: lv_app_line.
+    ENDDO.
+    add_line: ''.
+  ENDIF.
 
   " TODO for unmatched
   DATA lv_todo_hdr TYPE flag.
