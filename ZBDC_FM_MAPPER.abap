@@ -64,8 +64,9 @@ TYPES: BEGIN OF ty_cls_param,
          param_dir  TYPE char1,          " I=Import E=Export R=Return C=Change
          type_name  TYPE char50,         " Type e.g. LIFNR / BAPIMEPOHEADER
          typtype    TYPE char1,          " 1=type 2=obj ref 3=data ref
-         rollname   TYPE dd03l-rollname, " Data element for matching
-         is_struct  TYPE flag,           " X = structure type
+         rollname    TYPE dd03l-rollname, " Data element for matching
+         is_struct   TYPE flag,           " X = structure type
+         is_optional TYPE flag,           " X = optional, space = mandatory
        END OF ty_cls_param.
 
 " Class method field-level type (for structures)
@@ -879,10 +880,11 @@ FORM get_class_method_params.
     ENDIF.
 
     CLEAR wa_cls_param.
-    wa_cls_param-param_name = wa_parm-name.
-    wa_cls_param-param_dir  = wa_parm-parm_kind.
-    wa_cls_param-type_name  = lv_typename.
-    wa_cls_param-typtype    = '1'.
+    wa_cls_param-param_name  = wa_parm-name.
+    wa_cls_param-param_dir   = wa_parm-parm_kind.
+    wa_cls_param-type_name   = lv_typename.
+    wa_cls_param-typtype     = '1'.
+    wa_cls_param-is_optional = wa_parm-is_optional.
 
     " Check if the type is a structure (exists in DD02L)
     SELECT SINGLE tabname INTO @DATA(lv_tabchk)
@@ -1494,6 +1496,17 @@ FORM generate_class_code_preview.
     lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
     add_line: lv_cls_decl.
   ENDLOOP.
+  " Declaration hints for mandatory scalar params with no BDC match
+  LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = space AND is_optional = space.
+    IF wa_cls_param-param_dir <> 'I' AND wa_cls_param-param_dir <> 'C'. CONTINUE. ENDIF.
+    " Check if matched as scalar
+    READ TABLE lt_bdc_map TRANSPORTING NO FIELDS
+      WITH KEY cls_param = wa_cls_param-param_name matched = 'X'.
+    IF sy-subrc = 0. CONTINUE. ENDIF.
+    DATA lv_mnd_cls_decl TYPE string.
+    lv_mnd_cls_decl = |" DATA lv_{ to_lower( wa_cls_param-param_name ) } TYPE { to_lower( wa_cls_param-type_name ) }. " TODO: mandatory - fill before calling|.
+    add_line: lv_mnd_cls_decl.
+  ENDLOOP.
   " Work-area declarations for each internal-table row type used
   DATA lt_wa_seen TYPE TABLE OF string.
   DATA lv_wa_decl_ln TYPE string.
@@ -1694,7 +1707,16 @@ FORM generate_class_code_preview.
         IF wa_cls_param-is_struct = 'X'.
           lv_prm = |  EXPORTING { wa_cls_param-param_name } = ls_{ wa_cls_param-param_name }|.
         ELSE.
-          lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO: fill value|.
+          " Check if a BDC field was matched directly to this scalar param
+          READ TABLE lt_bdc_map INTO DATA(wa_cls_scl)
+            WITH KEY cls_param = wa_cls_param-param_name matched = 'X'.
+          IF sy-subrc = 0 AND wa_cls_scl-cls_field = wa_cls_scl-cls_param.
+            lv_prm = |  EXPORTING { wa_cls_param-param_name } = { wa_cls_scl-fval_var }|.
+          ELSEIF wa_cls_param-is_optional = space.
+            lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO mandatory: fill value ({ wa_cls_param-type_name })|.
+          ELSE.
+            lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO: fill value|.
+          ENDIF.
         ENDIF.
       WHEN 'E'.  " Exporting
         lv_prm = |  IMPORTING { wa_cls_param-param_name } = lv_{ wa_cls_param-param_name }|.
@@ -1815,6 +1837,38 @@ FORM generate_code_preview.
     ENDIF.
   ENDLOOP.
   add_line: 'DATA lt_return TYPE TABLE OF bapiret2.'.
+
+  " Collect covered new-FM params (structured params + scalar matched params)
+  DATA lt_mand_covered TYPE TABLE OF string.
+  LOOP AT lt_distinct_params INTO wa_dp.
+    APPEND wa_dp-parameter TO lt_mand_covered.
+  ENDLOOP.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-fm_param IS INITIAL. CONTINUE. ENDIF.
+    READ TABLE lt_mand_covered TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_bdc_map-fm_param.
+    IF sy-subrc <> 0. APPEND wa_bdc_map-fm_param TO lt_mand_covered. ENDIF.
+  ENDLOOP.
+
+  " Get mandatory params of the new FM that are not yet covered
+  DATA lt_mand_missing TYPE TABLE OF fupararef.
+  SELECT * FROM fupararef
+    WHERE funcname = @p_fm
+      AND paramtype IN ('I','E')
+      AND optional  <> 'X'
+    INTO TABLE @lt_mand_missing.
+  " Emit DATA declaration hints for each unmatched mandatory param
+  DATA lv_mand_tp TYPE string.
+  LOOP AT lt_mand_missing INTO DATA(wa_mand).
+    READ TABLE lt_mand_covered TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_mand-parameter.
+    IF sy-subrc = 0. CONTINUE. ENDIF.
+    lv_mand_tp = COND #( WHEN wa_mand-structure IS NOT INITIAL
+                          THEN wa_mand-structure
+                          ELSE wa_mand-type ).
+    lv_ln = |" DATA lv_{ to_lower( wa_mand-parameter ) } TYPE { to_lower( lv_mand_tp ) }. " TODO: mandatory - fill before calling|.
+    add_line: lv_ln.
+  ENDLOOP.
   add_line: ''.
 
   " Field assignments — matched fields (work-area style)
@@ -1929,6 +1983,24 @@ FORM generate_code_preview.
     READ TABLE lt_cf_all TRANSPORTING NO FIELDS
       WITH KEY section = wa_cf-section line = wa_cf-line.
     IF sy-subrc <> 0. APPEND wa_cf TO lt_cf_all. ENDIF.
+  ENDLOOP.
+
+  " Add TODO entries for mandatory new-FM params that were not matched
+  LOOP AT lt_mand_missing INTO wa_mand.
+    READ TABLE lt_mand_covered TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_mand-parameter.
+    IF sy-subrc = 0. CONTINUE. ENDIF.
+    CLEAR wa_cf.
+    CASE wa_mand-paramtype.
+      WHEN 'I'. wa_cf-sort_key = '1'. wa_cf-section = 'EXPORTING'.
+      WHEN 'E'. wa_cf-sort_key = '2'. wa_cf-section = 'IMPORTING'.
+      WHEN OTHERS. CONTINUE.
+    ENDCASE.
+    lv_mand_tp = COND #( WHEN wa_mand-structure IS NOT INITIAL
+                          THEN wa_mand-structure
+                          ELSE wa_mand-type ).
+    wa_cf-line = |  " TODO mandatory: { wa_mand-parameter } = ? (type: { lv_mand_tp })|.
+    APPEND wa_cf TO lt_cf_all.
   ENDLOOP.
 
   " Sort: EXPORTING first, IMPORTING second, TABLES third
