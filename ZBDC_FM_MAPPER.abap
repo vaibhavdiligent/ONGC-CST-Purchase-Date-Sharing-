@@ -507,21 +507,29 @@ FORM find_fm_call_block.
           wa_bdc_map-fnam     = lv_pname.   " old FM parameter name (uppercase)
           wa_bdc_map-fval_var = lv_pval.    " variable passed
           wa_bdc_map-src_line = lv_lineno.
-          " Get rollname for this FM parameter from FUPARAREF + DD03L
-          SELECT SINGLE structure INTO @DATA(lv_struct)
+          " Get rollname for this FM parameter from FUPARAREF
+          SELECT SINGLE structure, type INTO (@DATA(lv_struct), @DATA(lv_ptype))
             FROM fupararef
             WHERE funcname  = @p_oldfm
               AND parameter = @lv_pname.
           IF sy-subrc = 0 AND lv_struct IS NOT INITIAL.
-            " structured param — store structure as tabname for DD03L lookup
-            wa_bdc_map-tabname   = lv_struct.
-            wa_bdc_map-fieldname = lv_pname.
+            " Check if 'structure' is a real struct or just a data element reference
+            DATA lo_chk_td TYPE REF TO cl_abap_typedescr.
+            TRY.
+                lo_chk_td = cl_abap_typedescr=>describe_by_name( lv_struct ).
+              CATCH cx_root.
+                CLEAR lo_chk_td.
+            ENDTRY.
+            IF lo_chk_td IS NOT INITIAL AND lo_chk_td->kind = cl_abap_typedescr=>kind_struct.
+              " Real structure — let enrich_rollnames expand via DD03L
+              wa_bdc_map-tabname   = lv_struct.
+              wa_bdc_map-fieldname = lv_pname.
+            ELSE.
+              " Data element stored in structure column — use directly as rollname
+              wa_bdc_map-rollname = lv_struct.
+            ENDIF.
           ELSE.
-            " scalar param — get rollname directly
-            SELECT SINGLE type INTO @DATA(lv_ptype)
-              FROM fupararef
-              WHERE funcname  = @p_oldfm
-                AND parameter = @lv_pname.
+            " No structure entry — use type field as rollname
             wa_bdc_map-rollname = lv_ptype.
           ENDIF.
           APPEND wa_bdc_map TO lt_bdc_map.
@@ -622,12 +630,29 @@ FORM get_fm_fields.
 
   LOOP AT lt_fupararef INTO DATA(wa_fup).
     IF wa_fup-structure IS INITIAL.
-      " Scalar parameter — rollname is the type reference stored in fupararef-type
+      " No structure entry — use type field as rollname (scalar param)
       CLEAR wa_fm_dd.
       wa_fm_dd-parameter = wa_fup-parameter.
       wa_fm_dd-paramtype = wa_fup-paramtype.
       wa_fm_dd-fieldname = wa_fup-parameter.
-      wa_fm_dd-rollname  = wa_fup-type.   " e.g. WAERS, BETRG
+      wa_fm_dd-rollname  = wa_fup-type.
+      APPEND wa_fm_dd TO lt_fm_dd.
+      CONTINUE.
+    ENDIF.
+    " structure IS NOT INITIAL — check if it's a real structure or a data element
+    DATA lo_fmx_chk TYPE REF TO cl_abap_typedescr.
+    TRY.
+        lo_fmx_chk = cl_abap_typedescr=>describe_by_name( wa_fup-structure ).
+      CATCH cx_root.
+        CLEAR lo_fmx_chk.
+    ENDTRY.
+    IF lo_fmx_chk IS NOT INITIAL AND lo_fmx_chk->kind = cl_abap_typedescr=>kind_elem.
+      " Data element stored in structure column — treat as scalar
+      CLEAR wa_fm_dd.
+      wa_fm_dd-parameter = wa_fup-parameter.
+      wa_fm_dd-paramtype = wa_fup-paramtype.
+      wa_fm_dd-fieldname = wa_fup-parameter.
+      wa_fm_dd-rollname  = wa_fup-structure.  " the data element name IS the rollname
       APPEND wa_fm_dd TO lt_fm_dd.
       CONTINUE.
     ENDIF.
