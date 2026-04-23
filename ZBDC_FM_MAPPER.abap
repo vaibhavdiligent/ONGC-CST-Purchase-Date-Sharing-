@@ -278,8 +278,9 @@ FORM find_bdc_block.
       CONTINUE.
     ENDIF.
 
-    " Detect start of BDC block via PERFORM bdc_dynpro / bdc_field
-    IF lv_line_u CS 'PERFORM BDC_DYNPRO' OR lv_line_u CS 'PERFORM BDC_FIELD'.
+    " Detect start of BDC block — form name may have prefix e.g. F_BDC_DYNPRO
+    IF lv_line_u CS 'PERFORM' AND
+       ( lv_line_u CS 'BDC_DYNPRO' OR lv_line_u CS 'BDC_FIELD' ).
       lv_in_bdc = 'X'.
       IF lv_bdc_start = 0. lv_bdc_start = lv_lineno. ENDIF.
     ENDIF.
@@ -308,8 +309,8 @@ FORM find_bdc_block.
       CONTINUE.
     ENDIF.
 
-    " ── Detect: PERFORM bdc_field USING 'FNAM' [value] ──
-    IF lv_line_u CS 'PERFORM BDC_FIELD' AND lv_line_u CS 'USING'.
+    " ── Detect: PERFORM [prefix_]bdc_field USING 'FNAM' [value] ──
+    IF lv_line_u CS 'PERFORM' AND lv_line_u CS 'BDC_FIELD' AND lv_line_u CS 'USING'.
       DATA(lv_raw) = lv_line.
       " Find first quote — start of field name
       IF lv_raw CS ''''.
