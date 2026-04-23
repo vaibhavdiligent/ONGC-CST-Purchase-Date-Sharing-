@@ -1350,7 +1350,7 @@ FORM display_results.
       ENDIF.
 
       lo_map->display( ).
-    CATCH cx_salv_msg.
+    CATCH cx_salv_msg cx_salv_not_found.
       MESSAGE 'Error displaying mapping ALV' TYPE 'I'.
   ENDTRY.
 
@@ -1361,11 +1361,15 @@ FORM display_results.
         CHANGING  t_table      = lt_code ).
 
       lo_code->get_columns( )->set_optimize( 'X' ).
-      lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
-      lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code — copy & paste into SE38' ).
-      CAST cl_salv_column_table(
-        lo_code->get_columns( )->get_column( 'CODE' )
-      )->set_output_length( 200 ).
+      TRY.
+          lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
+          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - copy and paste into SE38' ).
+          CAST cl_salv_column_table(
+            lo_code->get_columns( )->get_column( 'CODE' )
+          )->set_output_length( 200 ).
+        CATCH cx_salv_not_found.
+          " Column not found — skip formatting, still display
+      ENDTRY.
 
       DATA(lo_disp2) = lo_code->get_display_settings( ).
       IF rb_cls = 'X'.
@@ -1375,7 +1379,7 @@ FORM display_results.
       ENDIF.
 
       lo_code->display( ).
-    CATCH cx_salv_msg.
+    CATCH cx_salv_msg cx_salv_not_found.
       MESSAGE 'Error displaying code preview ALV' TYPE 'I'.
   ENDTRY.
 ENDFORM.
