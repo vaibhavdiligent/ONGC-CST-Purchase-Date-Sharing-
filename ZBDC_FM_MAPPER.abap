@@ -1363,7 +1363,7 @@ FORM display_results.
       lo_code->get_columns( )->set_optimize( 'X' ).
       TRY.
           lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
-          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - copy and paste into SE38' ).
+          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - paste into SE38' ).
           CAST cl_salv_column_table(
             lo_code->get_columns( )->get_column( 'CODE' )
           )->set_output_length( 200 ).
