@@ -523,7 +523,7 @@ FORM expand_fm_to_field_entries.
   LOOP AT lt_bdc_map INTO wa_bdc_map.
     CLEAR lv_ex_struct.
     " Find the structure type for this parameter in the old FM
-    SELECT SINGLE structure INTO lv_ex_struct
+    SELECT SINGLE structure INTO @lv_ex_struct
       FROM fupararef
       WHERE funcname  = @p_oldfm
         AND parameter = @wa_bdc_map-fnam.
