@@ -70,12 +70,16 @@ TYPES: BEGIN OF ty_cls_param,
 
 " Class method field-level type (for structures)
 TYPES: BEGIN OF ty_cls_field,
-         param_name TYPE seocpdname,
-         param_dir  TYPE char1,
-         type_name  TYPE char50,
-         fieldname  TYPE dd03l-fieldname,
-         rollname   TYPE dd03l-rollname,
-         field_path TYPE char200,           " full access path for deep structures
+         param_name  TYPE seocpdname,
+         param_dir   TYPE char1,
+         type_name   TYPE char50,
+         fieldname   TYPE dd03l-fieldname,
+         rollname    TYPE dd03l-rollname,
+         field_path  TYPE char200,   " full access path for deep structures
+         wa_type     TYPE char50,    " row type of innermost work area
+         wa_name     TYPE char50,    " table component name -> variable ls_<wa_name>
+         wa_rel_path TYPE char200,   " path from work area to this field
+         has_datax   TYPE flag,      " X = generate DATAX = 'X' line alongside
        END OF ty_cls_field.
 
 TYPES: BEGIN OF ty_bdc_map,
@@ -90,9 +94,13 @@ TYPES: BEGIN OF ty_bdc_map,
          cls_param TYPE seocpdname,      " Matched class method parameter
          cls_field TYPE dd03l-fieldname, " Matched field in class param structure
          cls_type  TYPE char50,          " Class parameter type name
-         cls_path  TYPE char200,         " Full deep-path for nested structures
-         matched   TYPE flag,            " X = matched, space = no match
-         src_line  TYPE i,               " Source line number in program
+         cls_path    TYPE char200,       " Full deep-path for nested structures
+         cls_wa_type TYPE char50,        " Work area type name
+         cls_wa_name TYPE char50,        " Work area variable name (ls_<cls_wa_name>)
+         cls_wa_path TYPE char200,       " Path relative to work area
+         cls_datax   TYPE flag,          " X = generate DATAX = 'X' line
+         matched     TYPE flag,          " X = matched, space = no match
+         src_line    TYPE i,             " Source line number in program
        END OF ty_bdc_map.
 
 TYPES: BEGIN OF ty_fm_dd,
@@ -130,6 +138,10 @@ TYPES: BEGIN OF ty_ex_item,
          path_prefix TYPE char200,
          param_name  TYPE seocpdname,
          param_dir   TYPE char1,
+         wa_type     TYPE char50,    " row type of current work area
+         wa_name     TYPE char50,    " table component name  (ls_<wa_name>)
+         wa_rel_pfx  TYPE char200,   " path relative to current work area
+         has_datax   TYPE flag,      " X = parent struct has a DATAX sibling
        END OF ty_ex_item.
 
 *----------------------------------------------------------------------*
@@ -746,6 +758,10 @@ FORM expand_struct_fields
   wa_ex_new-path_prefix = p_path.
   wa_ex_new-param_name  = p_param.
   wa_ex_new-param_dir   = p_dir.
+  wa_ex_new-wa_type     = p_struct.
+  wa_ex_new-wa_name     = p_param.
+  wa_ex_new-wa_rel_pfx  = ''.
+  wa_ex_new-has_datax   = space.
   APPEND wa_ex_new TO lt_ex_stack.
 
   WHILE lt_ex_stack IS NOT INITIAL.
@@ -784,6 +800,10 @@ FORM expand_struct_fields
           wa_ex_new-path_prefix = lv_ex_tpath.
           wa_ex_new-param_name  = wa_ex_item-param_name.
           wa_ex_new-param_dir   = wa_ex_item-param_dir.
+          wa_ex_new-wa_type     = lv_ex_tname.
+          wa_ex_new-wa_name     = wa_ex_item-wa_name.
+          wa_ex_new-wa_rel_pfx  = ''.
+          wa_ex_new-has_datax   = space.
           APPEND wa_ex_new TO lt_ex_stack.
         CATCH cx_root.
       ENDTRY.
@@ -824,6 +844,22 @@ FORM expand_struct_fields
             wa_ex_new-path_prefix = lv_ex_path.
             wa_ex_new-param_name  = wa_ex_item-param_name.
             wa_ex_new-param_dir   = wa_ex_item-param_dir.
+            wa_ex_new-wa_type     = wa_ex_item-wa_type.
+            wa_ex_new-wa_name     = wa_ex_item-wa_name.
+            IF wa_ex_item-wa_rel_pfx IS INITIAL.
+              wa_ex_new-wa_rel_pfx = wa_ex_comp-name.
+            ELSE.
+              CONCATENATE wa_ex_item-wa_rel_pfx '-' wa_ex_comp-name
+                INTO wa_ex_new-wa_rel_pfx.
+            ENDIF.
+            " If component is 'DATA' and sibling 'DATAX' exists → mark for DATAX line
+            IF wa_ex_comp-name = 'DATA'.
+              READ TABLE lt_ex_comps INTO DATA(wa_dx_check)
+                WITH KEY name = 'DATAX'.
+              wa_ex_new-has_datax = COND #( WHEN sy-subrc = 0 THEN 'X' ELSE space ).
+            ELSE.
+              wa_ex_new-has_datax = space.
+            ENDIF.
             APPEND wa_ex_new TO lt_ex_stack.
 
           WHEN cl_abap_typedescr=>kind_table.
@@ -843,6 +879,10 @@ FORM expand_struct_fields
                 wa_ex_new-path_prefix = lv_ex_tpath.
                 wa_ex_new-param_name  = wa_ex_item-param_name.
                 wa_ex_new-param_dir   = wa_ex_item-param_dir.
+                wa_ex_new-wa_type     = lv_ex_tname.
+                wa_ex_new-wa_name     = wa_ex_comp-name.
+                wa_ex_new-wa_rel_pfx  = ''.
+                wa_ex_new-has_datax   = space.
                 APPEND wa_ex_new TO lt_ex_stack.
               CATCH cx_root.
             ENDTRY.
@@ -862,6 +902,15 @@ FORM expand_struct_fields
               wa_cls_field-fieldname  = wa_ex_comp-name.
               wa_cls_field-rollname   = lv_ex_roll.
               wa_cls_field-field_path = lv_ex_path.
+              wa_cls_field-wa_type    = wa_ex_item-wa_type.
+              wa_cls_field-wa_name    = wa_ex_item-wa_name.
+              IF wa_ex_item-wa_rel_pfx IS INITIAL.
+                wa_cls_field-wa_rel_path = wa_ex_comp-name.
+              ELSE.
+                CONCATENATE wa_ex_item-wa_rel_pfx '-' wa_ex_comp-name
+                  INTO wa_cls_field-wa_rel_path.
+              ENDIF.
+              wa_cls_field-has_datax  = wa_ex_item-has_datax.
               APPEND wa_cls_field TO lt_cls_fields.
             ENDIF.
 
@@ -882,11 +931,15 @@ FORM match_to_class.
     READ TABLE lt_cls_fields INTO wa_cls_field
       WITH KEY rollname = <fs_c>-rollname.
     IF sy-subrc = 0.
-      <fs_c>-cls_param = wa_cls_field-param_name.
-      <fs_c>-cls_field = wa_cls_field-fieldname.
-      <fs_c>-cls_type  = wa_cls_field-type_name.
-      <fs_c>-cls_path  = wa_cls_field-field_path.
-      <fs_c>-matched   = 'X'.
+      <fs_c>-cls_param   = wa_cls_field-param_name.
+      <fs_c>-cls_field   = wa_cls_field-fieldname.
+      <fs_c>-cls_type    = wa_cls_field-type_name.
+      <fs_c>-cls_path    = wa_cls_field-field_path.
+      <fs_c>-cls_wa_type = wa_cls_field-wa_type.
+      <fs_c>-cls_wa_name = wa_cls_field-wa_name.
+      <fs_c>-cls_wa_path = wa_cls_field-wa_rel_path.
+      <fs_c>-cls_datax   = wa_cls_field-has_datax.
+      <fs_c>-matched     = 'X'.
     ENDIF.
   ENDLOOP.
 ENDFORM.
@@ -1069,6 +1122,22 @@ FORM generate_class_code_preview.
     lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
     add_line: lv_cls_decl.
   ENDLOOP.
+  " Work-area declarations for each internal-table row type used
+  DATA lt_wa_seen TYPE TABLE OF string.
+  DATA lv_wa_decl_ln TYPE string.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-cls_wa_name IS INITIAL. CONTINUE. ENDIF.
+    DATA lv_wa_nm TYPE string.
+    lv_wa_nm = to_lower( wa_bdc_map-cls_wa_name ).
+    READ TABLE lt_wa_seen TRANSPORTING NO FIELDS WITH KEY table_line = lv_wa_nm.
+    IF sy-subrc <> 0.
+      APPEND lv_wa_nm TO lt_wa_seen.
+      DATA lv_wa_tp TYPE string.
+      lv_wa_tp = to_lower( wa_bdc_map-cls_wa_type ).
+      lv_wa_decl_ln = |DATA ls_{ lv_wa_nm } TYPE { lv_wa_tp }.|.
+      add_line: lv_wa_decl_ln.
+    ENDIF.
+  ENDLOOP.
   add_line: ''.
 
   " Matched field assignments
@@ -1083,26 +1152,64 @@ FORM generate_class_code_preview.
     ELSE.
       lv_fpath = wa_bdc_map-cls_field.
     ENDIF.
-    " Remove [1] table index — flat path; APPEND stubs generated below
+    " Build assignment using work-area variable (ls_<wa_name>-<rel_path>)
     DATA lv_clean_path TYPE string.
-    lv_clean_path = lv_fpath.
-    REPLACE ALL OCCURRENCES OF '[1]' IN lv_clean_path WITH ''.
+    DATA lv_wa_var     TYPE string.
+    DATA lv_wa_rpath   TYPE string.
+    IF wa_bdc_map-cls_wa_name IS NOT INITIAL.
+      lv_wa_var   = to_lower( wa_bdc_map-cls_wa_name ).
+      lv_wa_rpath = to_lower( wa_bdc_map-cls_wa_path ).
+      lv_clean_path = lv_wa_rpath.
+    ELSE.
+      " Fallback: flat path from param root
+      lv_clean_path = lv_fpath.
+      REPLACE ALL OCCURRENCES OF '[1]' IN lv_clean_path WITH ''.
+      lv_clean_path = to_lower( lv_clean_path ).
+    ENDIF.
     " Check if param is a structure
     READ TABLE lt_cls_params INTO wa_cls_param
       WITH KEY param_name = wa_bdc_map-cls_param is_struct = 'X'.
     IF sy-subrc = 0.
-      lv_cls_assign = |ls_{ wa_bdc_map-cls_param }-{ lv_clean_path } = { wa_bdc_map-fval_var }.|.
+      IF wa_bdc_map-cls_wa_name IS NOT INITIAL.
+        lv_cls_assign = |ls_{ lv_wa_var }-{ lv_clean_path } = { wa_bdc_map-fval_var }.|.
+      ELSE.
+        lv_cls_assign = |ls_{ to_lower( wa_bdc_map-cls_param ) }-{ lv_clean_path } = { wa_bdc_map-fval_var }.|.
+      ENDIF.
     ELSE.
       lv_cls_assign = |{ wa_bdc_map-cls_param } = { wa_bdc_map-fval_var }.|.
     ENDIF.
-    CONCATENATE '" BDC/FM:' wa_bdc_map-fnam
-                '→ Param:' wa_bdc_map-cls_param
-                'Field:' wa_bdc_map-cls_field
-                '(' wa_bdc_map-rollname ')'
-      INTO lv_cls_cmt SEPARATED BY space.
+    lv_cls_cmt = |" { wa_bdc_map-fnam } -> { wa_bdc_map-cls_param }-{ wa_bdc_map-cls_field } ({ wa_bdc_map-rollname })|.
     add_line: lv_cls_cmt.
     add_line: lv_cls_assign.
-    " If a companion _X / X parameter exists, set the same path to 'X'
+    " Intra-structure DATAX: if field is inside a DATA sub-structure that has a DATAX sibling
+    IF wa_bdc_map-cls_datax = 'X'.
+      DATA lv_datax_rpath TYPE string.
+      DATA lv_fn_low      TYPE string.
+      lv_fn_low      = to_lower( wa_bdc_map-cls_field ).
+      lv_datax_rpath = lv_clean_path.
+      DATA lv_data_tok TYPE string.
+      DATA lv_datx_tok TYPE string.
+      lv_data_tok = |-data-{ lv_fn_low }|.
+      lv_datx_tok = |-datax-{ lv_fn_low }|.
+      IF lv_datax_rpath CS lv_data_tok.
+        REPLACE lv_data_tok IN lv_datax_rpath WITH lv_datx_tok.
+      ELSE.
+        " data- at start
+        lv_data_tok = |data-{ lv_fn_low }|.
+        lv_datx_tok = |datax-{ lv_fn_low }|.
+        IF lv_datax_rpath CS lv_data_tok.
+          REPLACE lv_data_tok IN lv_datax_rpath WITH lv_datx_tok.
+        ENDIF.
+      ENDIF.
+      DATA lv_datax_line TYPE string.
+      IF wa_bdc_map-cls_wa_name IS NOT INITIAL.
+        lv_datax_line = |ls_{ lv_wa_var }-{ lv_datax_rpath } = 'X'.|.
+      ELSE.
+        lv_datax_line = |ls_{ to_lower( wa_bdc_map-cls_param ) }-{ lv_datax_rpath } = 'X'.|.
+      ENDIF.
+      add_line: lv_datax_line.
+    ENDIF.
+    " Separate-parameter DATAX (_X / X companion param)
     DATA lv_datax_param TYPE seocpdname.
     DATA lv_datax_assign TYPE string.
     lv_datax_param = |{ wa_bdc_map-cls_param }_X|.
@@ -1114,7 +1221,7 @@ FORM generate_class_code_preview.
         WITH KEY param_name = lv_datax_param is_struct = 'X'.
     ENDIF.
     IF sy-subrc = 0.
-      lv_datax_assign = |ls_{ lv_datax_param }-{ lv_clean_path } = 'X'.|.
+      lv_datax_assign = |ls_{ to_lower( lv_datax_param ) }-{ lv_clean_path } = 'X'.|.
       add_line: lv_datax_assign.
     ENDIF.
   ENDLOOP.
@@ -1148,7 +1255,7 @@ FORM generate_class_code_preview.
         ELSE.
           lv_app_path = |ls_{ wa_bdc_map-cls_param }-{ lv_app_pfx }-{ lv_app_tbl }|.
         ENDIF.
-        lv_app_line = |APPEND ls_{ lv_app_tbl } TO { lv_app_path }.|.
+        lv_app_line = |APPEND ls_{ to_lower( lv_app_tbl ) } TO { to_lower( lv_app_path ) }.|.
         READ TABLE lt_app_stubs TRANSPORTING NO FIELDS
           WITH KEY table_line = lv_app_line.
         IF sy-subrc <> 0.
