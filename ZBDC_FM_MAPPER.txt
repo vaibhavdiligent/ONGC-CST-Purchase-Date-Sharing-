@@ -513,20 +513,34 @@ FORM find_fm_call_block.
             WHERE funcname  = @p_oldfm
               AND parameter = @lv_pname.
           IF sy-subrc = 0 AND lv_struct IS NOT INITIAL.
-            " Check if 'structure' is a real struct or just a data element reference
-            DATA lo_chk_td TYPE REF TO cl_abap_typedescr.
-            TRY.
-                lo_chk_td = cl_abap_typedescr=>describe_by_name( lv_struct ).
-              CATCH cx_root.
-                CLEAR lo_chk_td.
-            ENDTRY.
-            IF lo_chk_td IS NOT INITIAL AND lo_chk_td->kind = cl_abap_typedescr=>kind_struct.
-              " Real structure — let enrich_rollnames expand via DD03L
-              wa_bdc_map-tabname   = lv_struct.
-              wa_bdc_map-fieldname = lv_pname.
+            IF lv_struct CS '-'.
+              " LIKE reference e.g. WMTO_S-AMOUNT -> resolve to actual rollname via DD03L
+              DATA lv_lk_hyp TYPE i.
+              lv_lk_hyp = sy-fdpos.
+              DATA lv_lk_tab TYPE string.
+              DATA lv_lk_fld TYPE string.
+              lv_lk_tab = lv_struct(lv_lk_hyp).
+              lv_lk_fld = substring( val = lv_struct off = lv_lk_hyp + 1 ).
+              SELECT SINGLE rollname FROM dd03l
+                WHERE tabname = @lv_lk_tab AND fieldname = @lv_lk_fld
+                INTO @wa_bdc_map-rollname.
+              IF sy-subrc <> 0. wa_bdc_map-rollname = lv_struct. ENDIF.
             ELSE.
-              " Data element stored in structure column — use directly as rollname
-              wa_bdc_map-rollname = lv_struct.
+              " Check if 'structure' is a real struct or just a data element reference
+              DATA lo_chk_td TYPE REF TO cl_abap_typedescr.
+              TRY.
+                  lo_chk_td = cl_abap_typedescr=>describe_by_name( lv_struct ).
+                CATCH cx_root.
+                  CLEAR lo_chk_td.
+              ENDTRY.
+              IF lo_chk_td IS NOT INITIAL AND lo_chk_td->kind = cl_abap_typedescr=>kind_struct.
+                " Real structure — let enrich_rollnames expand via DD03L
+                wa_bdc_map-tabname   = lv_struct.
+                wa_bdc_map-fieldname = lv_pname.
+              ELSE.
+                " Data element stored in structure column — use directly as rollname
+                wa_bdc_map-rollname = lv_struct.
+              ENDIF.
             ENDIF.
           ELSE.
             " No structure entry — use type field as rollname
@@ -639,7 +653,29 @@ FORM get_fm_fields.
       APPEND wa_fm_dd TO lt_fm_dd.
       CONTINUE.
     ENDIF.
-    " structure IS NOT INITIAL — check if it's a real structure or a data element
+    " structure IS NOT INITIAL — determine if LIKE ref, data element, or real struct
+    DATA lv_fmx_resolved_roll TYPE dd03l-rollname.
+    CLEAR lv_fmx_resolved_roll.
+    IF wa_fup-structure CS '-'.
+      " LIKE reference e.g. WMTO_S-AMOUNT — resolve via DD03L
+      DATA lv_fmxlk_hyp TYPE i.
+      lv_fmxlk_hyp = sy-fdpos.
+      DATA lv_fmxlk_tab TYPE string.
+      DATA lv_fmxlk_fld TYPE string.
+      lv_fmxlk_tab = wa_fup-structure(lv_fmxlk_hyp).
+      lv_fmxlk_fld = substring( val = wa_fup-structure off = lv_fmxlk_hyp + 1 ).
+      SELECT SINGLE rollname FROM dd03l
+        WHERE tabname = @lv_fmxlk_tab AND fieldname = @lv_fmxlk_fld
+        INTO @lv_fmx_resolved_roll.
+      IF sy-subrc <> 0. lv_fmx_resolved_roll = wa_fup-structure. ENDIF.
+      CLEAR wa_fm_dd.
+      wa_fm_dd-parameter = wa_fup-parameter.
+      wa_fm_dd-paramtype = wa_fup-paramtype.
+      wa_fm_dd-fieldname = wa_fup-parameter.
+      wa_fm_dd-rollname  = lv_fmx_resolved_roll.
+      APPEND wa_fm_dd TO lt_fm_dd.
+      CONTINUE.
+    ENDIF.
     DATA lo_fmx_chk TYPE REF TO cl_abap_typedescr.
     TRY.
         lo_fmx_chk = cl_abap_typedescr=>describe_by_name( wa_fup-structure ).
@@ -652,7 +688,7 @@ FORM get_fm_fields.
       wa_fm_dd-parameter = wa_fup-parameter.
       wa_fm_dd-paramtype = wa_fup-paramtype.
       wa_fm_dd-fieldname = wa_fup-parameter.
-      wa_fm_dd-rollname  = wa_fup-structure.  " the data element name IS the rollname
+      wa_fm_dd-rollname  = wa_fup-structure.
       APPEND wa_fm_dd TO lt_fm_dd.
       CONTINUE.
     ENDIF.
@@ -1563,7 +1599,7 @@ FORM generate_code_preview.
   ENDLOOP.
   add_line: ''.
 
-  " DATA declarations for FM structures
+  " DATA declarations for FM structures (real structures only, not data-element refs)
   add_line: '" --- Data declarations for FM structures ---'.
   SELECT DISTINCT parameter, structure, paramtype
      FROM fupararef
@@ -1571,6 +1607,22 @@ FORM generate_code_preview.
       AND paramtype IN ('I', 'E', 'T')
       AND structure IS NOT INITIAL
        INTO TABLE @DATA(lt_distinct_params).
+
+  " Remove entries where structure is a data element or LIKE ref (not a real structure)
+  DATA lt_dp_real TYPE TABLE LIKE lt_distinct_params.
+  LOOP AT lt_distinct_params INTO DATA(wa_dp_chk).
+    IF wa_dp_chk-structure CS '-'. CONTINUE. ENDIF.  " LIKE ref — skip
+    DATA lo_dp_chk TYPE REF TO cl_abap_typedescr.
+    TRY.
+        lo_dp_chk = cl_abap_typedescr=>describe_by_name( wa_dp_chk-structure ).
+      CATCH cx_root.
+        CLEAR lo_dp_chk.
+    ENDTRY.
+    IF lo_dp_chk IS NOT INITIAL AND lo_dp_chk->kind = cl_abap_typedescr=>kind_struct.
+      APPEND wa_dp_chk TO lt_dp_real.
+    ENDIF.
+  ENDLOOP.
+  lt_distinct_params = lt_dp_real.
 
   LOOP AT lt_distinct_params INTO DATA(wa_dp).
     DATA lv_decl TYPE char200.
