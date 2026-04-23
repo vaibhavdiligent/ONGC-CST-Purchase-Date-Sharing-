@@ -632,9 +632,12 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 *& Form expand_struct_fields
-*& Iterative deep-structure expansion via DD02L/DD40L.
-*& Pushes items onto lt_ex_stack; resolves STRU → recurse, INTTAB → row
-*& type via DD40L; appends primitive fields to lt_cls_fields.
+*& Iterative deep-structure expansion using RTTI.
+*& RTTI reliably identifies whether a component is a structure, table
+*& type or elementary field — regardless of how DD03L stores the type.
+*& Structure → expand components recursively
+*& Table type → get row type, append [1] to path, expand row structure
+*& Elementary → read rollname from DD03L and record in lt_cls_fields
 *----------------------------------------------------------------------*
 FORM expand_struct_fields
   USING    p_struct  TYPE string
@@ -642,14 +645,24 @@ FORM expand_struct_fields
            p_param   TYPE seocpdname
            p_dir     TYPE char1.
 
-  DATA lt_ex_stack TYPE TABLE OF ty_ex_item.
-  DATA wa_ex_item  TYPE ty_ex_item.
-  DATA wa_ex_new   TYPE ty_ex_item.
-  DATA lv_ex_depth TYPE i.
-  DATA lv_ex_path  TYPE char200.
-  DATA lv_ex_tpath TYPE char200.
+  " Work stack and work areas (all pre-declared — no DATA inside loops)
+  DATA lt_ex_stack  TYPE TABLE OF ty_ex_item.
+  DATA wa_ex_item   TYPE ty_ex_item.
+  DATA wa_ex_new    TYPE ty_ex_item.
+  DATA lv_ex_depth  TYPE i.
+  DATA lv_ex_path   TYPE char200.
+  DATA lv_ex_tpath  TYPE char200.
+  DATA lv_ex_tname  TYPE string.
+  DATA lt_ex_parts  TYPE TABLE OF string.
 
-  " Seed the stack with the top-level structure
+  " RTTI references
+  DATA lo_ex_tdesc  TYPE REF TO cl_abap_typedescr.
+  DATA lo_ex_strdsc TYPE REF TO cl_abap_structdescr.
+  DATA lo_ex_tabdsc TYPE REF TO cl_abap_tabledescr.
+  DATA lo_ex_row    TYPE REF TO cl_abap_typedescr.
+  DATA lt_ex_comps  TYPE abap_component_tab.
+
+  " Seed the stack with the top-level type
   CLEAR wa_ex_new.
   wa_ex_new-struct_name = p_struct.
   wa_ex_new-path_prefix = p_path.
@@ -661,73 +674,122 @@ FORM expand_struct_fields
     READ TABLE lt_ex_stack INTO wa_ex_item INDEX 1.
     DELETE lt_ex_stack INDEX 1.
 
-    " Safety: stop if path depth exceeds 10 dashes
+    " Safety: stop if path depth exceeds 10 nesting levels
     FIND ALL OCCURRENCES OF '-' IN wa_ex_item-path_prefix MATCH COUNT lv_ex_depth.
     IF lv_ex_depth > 10. CONTINUE. ENDIF.
 
-    " Get all components of this structure
-    SELECT fieldname, rollname
-      FROM dd03l
-      WHERE tabname   = @wa_ex_item-struct_name
-        AND fieldname NOT LIKE '.%'
-        AND fieldname <> 'MANDT'
-      INTO TABLE @DATA(lt_ex_flds).
+    " Get RTTI descriptor for this type name
+    TRY.
+        lo_ex_tdesc = cl_abap_typedescr=>describe_by_name( wa_ex_item-struct_name ).
+      CATCH cx_root.
+        CONTINUE.   " type not found in this system
+    ENDTRY.
 
-    LOOP AT lt_ex_flds INTO DATA(wa_ex_fld).
-      IF wa_ex_fld-rollname IS INITIAL. CONTINUE. ENDIF.
+    " ── Table type: resolve row type and push with [1] suffix ──────────
+    IF lo_ex_tdesc->kind = cl_abap_typedescr=>kind_table.
+      TRY.
+          lo_ex_tabdsc = CAST cl_abap_tabledescr( lo_ex_tdesc ).
+          lo_ex_row    = lo_ex_tabdsc->get_table_line_type( ).
+          lv_ex_tname  = lo_ex_row->absolute_name.
+          CLEAR lt_ex_parts.
+          IF lv_ex_tname CS '='.
+            SPLIT lv_ex_tname AT '=' INTO TABLE lt_ex_parts.
+            READ TABLE lt_ex_parts INDEX lines( lt_ex_parts ) INTO lv_ex_tname.
+          ENDIF.
+          IF wa_ex_item-path_prefix IS INITIAL.
+            lv_ex_tpath = '[1]'.
+          ELSE.
+            CONCATENATE wa_ex_item-path_prefix '[1]' INTO lv_ex_tpath.
+          ENDIF.
+          CLEAR wa_ex_new.
+          wa_ex_new-struct_name = lv_ex_tname.
+          wa_ex_new-path_prefix = lv_ex_tpath.
+          wa_ex_new-param_name  = wa_ex_item-param_name.
+          wa_ex_new-param_dir   = wa_ex_item-param_dir.
+          APPEND wa_ex_new TO lt_ex_stack.
+        CATCH cx_root.
+      ENDTRY.
+      CONTINUE.
+    ENDIF.
 
-      " Build path for this component
-      IF wa_ex_item-path_prefix IS INITIAL.
-        lv_ex_path = wa_ex_fld-fieldname.
-      ELSE.
-        CONCATENATE wa_ex_item-path_prefix '-' wa_ex_fld-fieldname
-          INTO lv_ex_path.
-      ENDIF.
+    " ── Structure type: iterate components ─────────────────────────────
+    IF lo_ex_tdesc->kind = cl_abap_typedescr=>kind_struct.
+      TRY.
+          lo_ex_strdsc = CAST cl_abap_structdescr( lo_ex_tdesc ).
+          lt_ex_comps  = lo_ex_strdsc->get_components( ).
+        CATCH cx_root.
+          CONTINUE.
+      ENDTRY.
 
-      " Check whether the rollname is a type in DD02L (structure or table type)
-      SELECT SINGLE tabclass
-        FROM dd02l
-        WHERE tabname = @wa_ex_fld-rollname
-        INTO @DATA(lv_ex_tabcls).
+      LOOP AT lt_ex_comps INTO DATA(wa_ex_comp).
+        IF wa_ex_comp-name IS INITIAL. CONTINUE. ENDIF.
 
-      IF sy-subrc = 0.
-        CASE lv_ex_tabcls.
-          WHEN 'STRU'.
-            " Nested flat structure — push for expansion
+        " Build access path for this component
+        IF wa_ex_item-path_prefix IS INITIAL.
+          lv_ex_path = wa_ex_comp-name.
+        ELSE.
+          CONCATENATE wa_ex_item-path_prefix '-' wa_ex_comp-name INTO lv_ex_path.
+        ENDIF.
+
+        CASE wa_ex_comp-type->kind.
+
+          WHEN cl_abap_typedescr=>kind_struct.
+            " Nested structure → push for further expansion
+            lv_ex_tname = wa_ex_comp-type->absolute_name.
+            CLEAR lt_ex_parts.
+            IF lv_ex_tname CS '='.
+              SPLIT lv_ex_tname AT '=' INTO TABLE lt_ex_parts.
+              READ TABLE lt_ex_parts INDEX lines( lt_ex_parts ) INTO lv_ex_tname.
+            ENDIF.
             CLEAR wa_ex_new.
-            wa_ex_new-struct_name = wa_ex_fld-rollname.
+            wa_ex_new-struct_name = lv_ex_tname.
             wa_ex_new-path_prefix = lv_ex_path.
             wa_ex_new-param_name  = wa_ex_item-param_name.
             wa_ex_new-param_dir   = wa_ex_item-param_dir.
             APPEND wa_ex_new TO lt_ex_stack.
-          WHEN 'INTTAB'.
-            " Table type — get the row type from DD40L, append [1] to path
-            SELECT SINGLE rowtype
-              FROM dd40l
-              WHERE typename = @wa_ex_fld-rollname
-              INTO @DATA(lv_ex_rtype).
-            IF sy-subrc = 0 AND lv_ex_rtype IS NOT INITIAL.
-              CONCATENATE lv_ex_path '[1]' INTO lv_ex_tpath.
-              CLEAR wa_ex_new.
-              wa_ex_new-struct_name = lv_ex_rtype.
-              wa_ex_new-path_prefix = lv_ex_tpath.
-              wa_ex_new-param_name  = wa_ex_item-param_name.
-              wa_ex_new-param_dir   = wa_ex_item-param_dir.
-              APPEND wa_ex_new TO lt_ex_stack.
+
+          WHEN cl_abap_typedescr=>kind_table.
+            " Table component → get row type, append [1], push row structure
+            TRY.
+                lo_ex_tabdsc = CAST cl_abap_tabledescr( wa_ex_comp-type ).
+                lo_ex_row    = lo_ex_tabdsc->get_table_line_type( ).
+                lv_ex_tname  = lo_ex_row->absolute_name.
+                CLEAR lt_ex_parts.
+                IF lv_ex_tname CS '='.
+                  SPLIT lv_ex_tname AT '=' INTO TABLE lt_ex_parts.
+                  READ TABLE lt_ex_parts INDEX lines( lt_ex_parts ) INTO lv_ex_tname.
+                ENDIF.
+                CONCATENATE lv_ex_path '[1]' INTO lv_ex_tpath.
+                CLEAR wa_ex_new.
+                wa_ex_new-struct_name = lv_ex_tname.
+                wa_ex_new-path_prefix = lv_ex_tpath.
+                wa_ex_new-param_name  = wa_ex_item-param_name.
+                wa_ex_new-param_dir   = wa_ex_item-param_dir.
+                APPEND wa_ex_new TO lt_ex_stack.
+              CATCH cx_root.
+            ENDTRY.
+
+          WHEN cl_abap_typedescr=>kind_elem.
+            " Primitive field → get rollname from DD03L for matching
+            SELECT SINGLE rollname
+              FROM dd03l
+              WHERE tabname   = @wa_ex_item-struct_name
+                AND fieldname = @wa_ex_comp-name
+              INTO @DATA(lv_ex_roll).
+            IF sy-subrc = 0 AND lv_ex_roll IS NOT INITIAL.
+              CLEAR wa_cls_field.
+              wa_cls_field-param_name = wa_ex_item-param_name.
+              wa_cls_field-param_dir  = wa_ex_item-param_dir.
+              wa_cls_field-type_name  = wa_ex_item-struct_name.
+              wa_cls_field-fieldname  = wa_ex_comp-name.
+              wa_cls_field-rollname   = lv_ex_roll.
+              wa_cls_field-field_path = lv_ex_path.
+              APPEND wa_cls_field TO lt_cls_fields.
             ENDIF.
+
         ENDCASE.
-      ELSE.
-        " Primitive field — record with full access path
-        CLEAR wa_cls_field.
-        wa_cls_field-param_name = wa_ex_item-param_name.
-        wa_cls_field-param_dir  = wa_ex_item-param_dir.
-        wa_cls_field-type_name  = wa_ex_item-struct_name.
-        wa_cls_field-fieldname  = wa_ex_fld-fieldname.
-        wa_cls_field-rollname   = wa_ex_fld-rollname.
-        wa_cls_field-field_path = lv_ex_path.
-        APPEND wa_cls_field TO lt_cls_fields.
-      ENDIF.
-    ENDLOOP.
+      ENDLOOP.
+    ENDIF.
   ENDWHILE.
 ENDFORM.
 
