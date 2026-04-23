@@ -1609,7 +1609,7 @@ FORM generate_code_preview.
        INTO TABLE @DATA(lt_distinct_params).
 
   " Remove entries where structure is a data element or LIKE ref (not a real structure)
-  DATA lt_dp_real TYPE TABLE LIKE lt_distinct_params.
+  DATA lt_dp_real LIKE lt_distinct_params.
   LOOP AT lt_distinct_params INTO DATA(wa_dp_chk).
     IF wa_dp_chk-structure CS '-'. CONTINUE. ENDIF.  " LIKE ref — skip
     DATA lo_dp_chk TYPE REF TO cl_abap_typedescr.
