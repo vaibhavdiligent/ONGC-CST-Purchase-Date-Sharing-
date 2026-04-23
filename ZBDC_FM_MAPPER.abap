@@ -1881,66 +1881,74 @@ FORM generate_code_preview.
   ENDLOOP.
   add_line: ''.
 
-  " FM call — structured params first, then scalar matched params
-  lv_ln = |CALL FUNCTION '{ p_fm }'|. add_line: lv_ln.
-  DATA lv_curr_section TYPE char10.
-  " Structured / table params
+  " FM call — build combined sorted list then emit in one pass
+  " Sort key: 1=EXPORTING (FM Importing I), 2=IMPORTING (FM Exporting E), 3=TABLES (T)
+  TYPES: BEGIN OF ty_cf_entry,
+           sort_key  TYPE char1,
+           section   TYPE char10,
+           line      TYPE string,
+         END OF ty_cf_entry.
+  DATA lt_cf_all  TYPE TABLE OF ty_cf_entry.
+  DATA wa_cf      TYPE ty_cf_entry.
+  DATA lv_cf_ln   TYPE string.
+
+  " Add structured params from new FM
   LOOP AT lt_distinct_params INTO wa_dp.
+    CLEAR wa_cf.
     CASE wa_dp-paramtype.
       WHEN 'I'.
-        IF lv_curr_section <> 'EXPORTING'.
-          add_line: '  EXPORTING'.
-          lv_curr_section = 'EXPORTING'.
-        ENDIF.
-        CONCATENATE '    ' wa_dp-parameter ' = ls_' wa_dp-parameter
-          INTO lv_decl SEPARATED BY space.
+        wa_cf-sort_key = '1'. wa_cf-section = 'EXPORTING'.
+        CONCATENATE '  ' wa_dp-parameter ' = ls_' wa_dp-parameter
+          INTO wa_cf-line.
       WHEN 'E'.
-        IF lv_curr_section <> 'IMPORTING'.
-          add_line: '  IMPORTING'.
-          lv_curr_section = 'IMPORTING'.
-        ENDIF.
-        CONCATENATE '    ' wa_dp-parameter ' = ls_' wa_dp-parameter
-          INTO lv_decl SEPARATED BY space.
+        wa_cf-sort_key = '2'. wa_cf-section = 'IMPORTING'.
+        CONCATENATE '  ' wa_dp-parameter ' = ls_' wa_dp-parameter
+          INTO wa_cf-line.
       WHEN 'T'.
-        IF lv_curr_section <> 'TABLES'.
-          add_line: '  TABLES'.
-          lv_curr_section = 'TABLES'.
-        ENDIF.
-        CONCATENATE '    ' wa_dp-parameter ' = lt_' wa_dp-parameter
-          INTO lv_decl SEPARATED BY space.
+        wa_cf-sort_key = '3'. wa_cf-section = 'TABLES'.
+        CONCATENATE '  ' wa_dp-parameter ' = lt_' wa_dp-parameter
+          INTO wa_cf-line.
     ENDCASE.
-    add_line: lv_decl.
+    IF wa_cf-sort_key IS NOT INITIAL. APPEND wa_cf TO lt_cf_all. ENDIF.
   ENDLOOP.
-  " Scalar matched params: emit NEW_PARAM = old_variable directly
-  DATA lt_sc_exp TYPE TABLE OF string.
-  DATA lt_sc_imp TYPE TABLE OF string.
-  DATA lv_sc_ln  TYPE string.
+
+  " Add scalar matched params
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
     IF wa_bdc_map-fm_struct IS NOT INITIAL OR wa_bdc_map-fm_wa_name IS NOT INITIAL.
-      CONTINUE.  " structured — already in lt_distinct_params
+      CONTINUE.
     ENDIF.
     IF wa_bdc_map-fm_param IS INITIAL. CONTINUE. ENDIF.
-    lv_sc_ln = |    { wa_bdc_map-fm_param } = { wa_bdc_map-fval_var }|.
+    CLEAR wa_cf.
     CASE wa_bdc_map-fm_paramtype.
-      WHEN 'I'.  " FM Importing → caller EXPORTING
-        READ TABLE lt_sc_exp TRANSPORTING NO FIELDS WITH KEY table_line = lv_sc_ln.
-        IF sy-subrc <> 0. APPEND lv_sc_ln TO lt_sc_exp. ENDIF.
-      WHEN 'E'.  " FM Exporting → caller IMPORTING
-        READ TABLE lt_sc_imp TRANSPORTING NO FIELDS WITH KEY table_line = lv_sc_ln.
-        IF sy-subrc <> 0. APPEND lv_sc_ln TO lt_sc_imp. ENDIF.
+      WHEN 'I'. wa_cf-sort_key = '1'. wa_cf-section = 'EXPORTING'.
+      WHEN 'E'. wa_cf-sort_key = '2'. wa_cf-section = 'IMPORTING'.
+      WHEN OTHERS. CONTINUE.
     ENDCASE.
+    wa_cf-line = |  { wa_bdc_map-fm_param } = { wa_bdc_map-fval_var }|.
+    " Dedup: skip if same line already exists
+    READ TABLE lt_cf_all TRANSPORTING NO FIELDS
+      WITH KEY section = wa_cf-section line = wa_cf-line.
+    IF sy-subrc <> 0. APPEND wa_cf TO lt_cf_all. ENDIF.
   ENDLOOP.
-  IF lt_sc_exp IS NOT INITIAL.
-    IF lv_curr_section <> 'EXPORTING'. add_line: '  EXPORTING'. ENDIF.
-    LOOP AT lt_sc_exp INTO lv_sc_ln. add_line: lv_sc_ln. ENDLOOP.
-    lv_curr_section = 'EXPORTING'.
+
+  " Sort: EXPORTING first, IMPORTING second, TABLES third
+  SORT lt_cf_all BY sort_key.
+
+  " Emit CALL FUNCTION with one section header per group
+  lv_ln = |CALL FUNCTION '{ p_fm }'|. add_line: lv_ln.
+  DATA lv_curr_section TYPE char10.
+  CLEAR lv_curr_section.
+  LOOP AT lt_cf_all INTO wa_cf.
+    IF wa_cf-section <> lv_curr_section.
+      lv_cf_ln = |  { wa_cf-section }|. add_line: lv_cf_ln.
+      lv_curr_section = wa_cf-section.
+    ENDIF.
+    add_line: wa_cf-line.
+  ENDLOOP.
+  " Add TABLES/return and EXCEPTIONS (skip if TABLES already emitted from lt_cf_all)
+  IF lv_curr_section <> 'TABLES'.
+    add_line: '  TABLES'.
   ENDIF.
-  IF lt_sc_imp IS NOT INITIAL.
-    IF lv_curr_section <> 'IMPORTING'. add_line: '  IMPORTING'. ENDIF.
-    LOOP AT lt_sc_imp INTO lv_sc_ln. add_line: lv_sc_ln. ENDLOOP.
-    lv_curr_section = 'IMPORTING'.
-  ENDIF.
-  add_line: '  TABLES'.
   add_line: '    return = lt_return'.
   add_line: '  EXCEPTIONS'.
   add_line: '    OTHERS = 99.'.
