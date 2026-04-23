@@ -103,18 +103,19 @@ TYPES: BEGIN OF ty_fm_dd,
        END OF ty_fm_dd.
 
 TYPES: BEGIN OF ty_output,
-         src_line    TYPE i,
-         bdc_fnam    TYPE char50,
-         bdc_fval    TYPE char100,
-         bdc_roll    TYPE dd03l-rollname,
-         status      TYPE char15,
-         fm_param    TYPE char50,
-         fm_struct   TYPE char50,
-         fm_field    TYPE dd03l-fieldname,
-         cls_param   TYPE seocpdname,
-         cls_field   TYPE dd03l-fieldname,
-         gen_code    TYPE char200,
-         remark      TYPE char100,
+         src_line      TYPE i,
+         bdc_fnam      TYPE char50,
+         bdc_fval      TYPE char100,
+         bdc_roll      TYPE dd03l-rollname,
+         status        TYPE char15,
+         fm_param      TYPE char50,
+         fm_struct     TYPE char50,
+         fm_field      TYPE dd03l-fieldname,
+         cls_param     TYPE seocpdname,
+         cls_field     TYPE dd03l-fieldname,
+         cls_full_path TYPE char200,    " Full mapping path e.g. IS_MASTER_DATA-VENDORS-...-BUKRS
+         gen_code      TYPE char200,
+         remark        TYPE char100,
        END OF ty_output.
 
 TYPES: BEGIN OF ty_code_preview,
@@ -923,6 +924,8 @@ FORM build_output_class.
       ENDIF.
       " Remove [1] table index — use flat path; caller adds APPEND for multi-entry
       REPLACE ALL OCCURRENCES OF '[1]' IN lv_path_to_use WITH ''.
+      " Full path column: PARAM-path e.g. IS_MASTER_DATA-VENDORS-COMPANY_DATA-BUKRS
+      wa_output-cls_full_path = |{ wa_bdc_map-cls_param }-{ lv_path_to_use }|.
       " Check if param is a structure
       READ TABLE lt_cls_params INTO wa_cls_param
         WITH KEY param_name = wa_bdc_map-cls_param
@@ -1036,6 +1039,21 @@ FORM generate_class_code_preview.
       INTO lv_cls_cmt SEPARATED BY space.
     add_line: lv_cls_cmt.
     add_line: lv_cls_assign.
+    " If a companion _X / X parameter exists, set the same path to 'X'
+    DATA lv_datax_param TYPE seocpdname.
+    DATA lv_datax_assign TYPE string.
+    lv_datax_param = |{ wa_bdc_map-cls_param }_X|.
+    READ TABLE lt_cls_params INTO wa_cls_param
+      WITH KEY param_name = lv_datax_param is_struct = 'X'.
+    IF sy-subrc <> 0.
+      lv_datax_param = |{ wa_bdc_map-cls_param }X|.
+      READ TABLE lt_cls_params INTO wa_cls_param
+        WITH KEY param_name = lv_datax_param is_struct = 'X'.
+    ENDIF.
+    IF sy-subrc = 0.
+      lv_datax_assign = |ls_{ lv_datax_param }-{ lv_clean_path } = 'X'.|.
+      add_line: lv_datax_assign.
+    ENDIF.
   ENDLOOP.
   add_line: ''.
 
@@ -1129,22 +1147,14 @@ FORM generate_class_code_preview.
     CASE wa_cls_param-param_dir.
       WHEN 'I' OR 'C'.  " Importing / Changing
         IF wa_cls_param-is_struct = 'X'.
-          CONCATENATE '  EXPORTING ' wa_cls_param-param_name
-            '= ls_' wa_cls_param-param_name
-            INTO lv_prm SEPARATED BY space.
+          lv_prm = |  EXPORTING { wa_cls_param-param_name } = ls_{ wa_cls_param-param_name }|.
         ELSE.
-          CONCATENATE '  EXPORTING ' wa_cls_param-param_name
-            '= " TODO: fill value'
-            INTO lv_prm SEPARATED BY space.
+          lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO: fill value|.
         ENDIF.
       WHEN 'E'.  " Exporting
-        CONCATENATE '  IMPORTING ' wa_cls_param-param_name
-          '= lv_' wa_cls_param-param_name
-          INTO lv_prm SEPARATED BY space.
+        lv_prm = |  IMPORTING { wa_cls_param-param_name } = lv_{ wa_cls_param-param_name }|.
       WHEN 'R'.  " Returning
-        CONCATENATE '  RECEIVING result = lv_result "'
-          wa_cls_param-type_name
-          INTO lv_prm SEPARATED BY space.
+        lv_prm = |  RECEIVING result = lv_result " { wa_cls_param-type_name }|.
     ENDCASE.
     add_line: lv_prm.
   ENDLOOP.
@@ -1307,23 +1317,25 @@ FORM display_results.
       lo_map->get_columns( )->set_optimize( 'X' ).
 
       DATA(lo_cols) = lo_map->get_columns( ).
-      lo_cols->get_column( 'SRC_LINE'  )->set_long_text( 'Source Line' ).
-      lo_cols->get_column( 'BDC_FNAM'  )->set_long_text( 'BDC Field Name' ).
-      lo_cols->get_column( 'BDC_FVAL'  )->set_long_text( 'BDC Value Variable' ).
-      lo_cols->get_column( 'BDC_ROLL'  )->set_long_text( 'Data Element (Rollname)' ).
-      lo_cols->get_column( 'STATUS'    )->set_long_text( 'Match Status' ).
-      lo_cols->get_column( 'FM_PARAM'  )->set_long_text( 'FM Parameter' ).
-      lo_cols->get_column( 'FM_STRUCT' )->set_long_text( 'FM Structure Type' ).
-      lo_cols->get_column( 'FM_FIELD'  )->set_long_text( 'FM Field Name' ).
-      lo_cols->get_column( 'CLS_PARAM' )->set_long_text( 'Class Method Parameter' ).
-      lo_cols->get_column( 'CLS_FIELD' )->set_long_text( 'Class Param Field' ).
-      lo_cols->get_column( 'GEN_CODE'  )->set_long_text( 'Generated Code Line' ).
-      lo_cols->get_column( 'REMARK'    )->set_long_text( 'Remark' ).
+      lo_cols->get_column( 'SRC_LINE'      )->set_long_text( 'Source Line' ).
+      lo_cols->get_column( 'BDC_FNAM'      )->set_long_text( 'BDC Field Name' ).
+      lo_cols->get_column( 'BDC_FVAL'      )->set_long_text( 'BDC Value Variable' ).
+      lo_cols->get_column( 'BDC_ROLL'      )->set_long_text( 'Data Element (Rollname)' ).
+      lo_cols->get_column( 'STATUS'        )->set_long_text( 'Match Status' ).
+      lo_cols->get_column( 'FM_PARAM'      )->set_long_text( 'FM Parameter' ).
+      lo_cols->get_column( 'FM_STRUCT'     )->set_long_text( 'FM Structure Type' ).
+      lo_cols->get_column( 'FM_FIELD'      )->set_long_text( 'FM Field Name' ).
+      lo_cols->get_column( 'CLS_PARAM'     )->set_long_text( 'Class Method Parameter' ).
+      lo_cols->get_column( 'CLS_FIELD'     )->set_long_text( 'Class Param Field' ).
+      lo_cols->get_column( 'CLS_FULL_PATH' )->set_long_text( 'Full Mapping Path' ).
+      lo_cols->get_column( 'GEN_CODE'      )->set_long_text( 'Generated Code Line' ).
+      lo_cols->get_column( 'REMARK'        )->set_long_text( 'Remark' ).
 
       " Hide columns not relevant to current mode
       IF rb_fm = 'X'.
-        lo_cols->get_column( 'CLS_PARAM' )->set_visible( if_salv_c_bool_sap=>false ).
-        lo_cols->get_column( 'CLS_FIELD' )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'CLS_PARAM'     )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'CLS_FIELD'     )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'CLS_FULL_PATH' )->set_visible( if_salv_c_bool_sap=>false ).
       ELSE.
         lo_cols->get_column( 'FM_PARAM'  )->set_visible( if_salv_c_bool_sap=>false ).
         lo_cols->get_column( 'FM_STRUCT' )->set_visible( if_salv_c_bool_sap=>false ).
@@ -1349,11 +1361,18 @@ FORM display_results.
         CHANGING  t_table      = lt_code ).
 
       lo_code->get_columns( )->set_optimize( 'X' ).
-      lo_code->get_columns( )->get_column( 'LINENO' )->set_long_text( 'Line' ).
-      lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code' ).
+      lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
+      lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code — copy & paste into SE38' ).
+      CAST cl_salv_column_table(
+        lo_code->get_columns( )->get_column( 'CODE' )
+      )->set_output_length( 200 ).
 
       DATA(lo_disp2) = lo_code->get_display_settings( ).
-      lo_disp2->set_list_header( |Generated Replacement Code Preview for { p_fm }| ).
+      IF rb_cls = 'X'.
+        lo_disp2->set_list_header( |Generated Code: { p_class }=>{ p_meth } replacement| ).
+      ELSE.
+        lo_disp2->set_list_header( |Generated Code: CALL FUNCTION '{ p_fm }' replacement| ).
+      ENDIF.
 
       lo_code->display( ).
     CATCH cx_salv_msg.
