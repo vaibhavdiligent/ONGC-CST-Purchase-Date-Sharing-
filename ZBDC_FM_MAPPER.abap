@@ -1699,30 +1699,42 @@ FORM generate_class_code_preview.
   ENDIF.
   add_line: lv_call_stmt.
 
-  " Parameters in call
+  " Parameters in call — group by direction, emit section header once
+  DATA lv_cls_cur_dir TYPE char10.
+  CLEAR lv_cls_cur_dir.
   LOOP AT lt_cls_params INTO wa_cls_param.
-    DATA lv_prm TYPE char200.
+    DATA lv_prm      TYPE char200.
+    DATA lv_prm_dir  TYPE char10.
+    DATA lv_prm_val  TYPE string.
     CASE wa_cls_param-param_dir.
-      WHEN 'I' OR 'C'.  " Importing / Changing
+      WHEN 'I' OR 'C'.
+        lv_prm_dir = 'EXPORTING'.
         IF wa_cls_param-is_struct = 'X'.
-          lv_prm = |  EXPORTING { wa_cls_param-param_name } = ls_{ wa_cls_param-param_name }|.
+          lv_prm_val = |ls_{ wa_cls_param-param_name }|.
         ELSE.
-          " Check if a BDC field was matched directly to this scalar param
           READ TABLE lt_bdc_map INTO DATA(wa_cls_scl)
             WITH KEY cls_param = wa_cls_param-param_name matched = 'X'.
           IF sy-subrc = 0 AND wa_cls_scl-cls_field = wa_cls_scl-cls_param.
-            lv_prm = |  EXPORTING { wa_cls_param-param_name } = { wa_cls_scl-fval_var }|.
+            lv_prm_val = wa_cls_scl-fval_var.
           ELSEIF wa_cls_param-is_optional = space.
-            lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO mandatory: fill value ({ wa_cls_param-type_name })|.
+            lv_prm_val = |" TODO mandatory: fill value ({ wa_cls_param-type_name })|.
           ELSE.
-            lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO: fill value|.
+            lv_prm_val = '" TODO: fill value'.
           ENDIF.
         ENDIF.
-      WHEN 'E'.  " Exporting
-        lv_prm = |  IMPORTING { wa_cls_param-param_name } = lv_{ wa_cls_param-param_name }|.
-      WHEN 'R'.  " Returning
-        lv_prm = |  RECEIVING result = lv_result " { wa_cls_param-type_name }|.
+      WHEN 'E'.
+        lv_prm_dir = 'IMPORTING'.
+        lv_prm_val = |lv_{ wa_cls_param-param_name }|.
+      WHEN 'R'.
+        lv_prm_dir = 'RECEIVING'.
+        lv_prm_val = |lv_result " { wa_cls_param-type_name }|.
+      WHEN OTHERS. CONTINUE.
     ENDCASE.
+    IF lv_prm_dir <> lv_cls_cur_dir.
+      lv_prm = |  { lv_prm_dir }|. add_line: lv_prm.
+      lv_cls_cur_dir = lv_prm_dir.
+    ENDIF.
+    lv_prm = |    { wa_cls_param-param_name } = { lv_prm_val }|.
     add_line: lv_prm.
   ENDLOOP.
   add_line: ').'.
