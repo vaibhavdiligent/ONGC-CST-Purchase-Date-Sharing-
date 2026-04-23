@@ -397,6 +397,14 @@ FORM append_bdc_map.
     DATA lv_fld TYPE string.
     lv_fld = substring( val = wa_bdc_map-fnam off = lv_sp ).
     SHIFT lv_fld LEFT BY 1 PLACES.
+    " Strip BDC occurrence suffix e.g. WITHT(01) → WITHT for DD03L lookup
+    " FNAM keeps the original value for display; FIELDNAME must be clean
+    IF lv_fld CS '('.
+      DATA lv_par TYPE i.
+      lv_par = sy-fdpos.
+      lv_fld = substring( val = lv_fld len = lv_par ).
+    ENDIF.
+    CONDENSE lv_fld.
     wa_bdc_map-fieldname = lv_fld.
   ENDIF.
   APPEND wa_bdc_map TO lt_bdc_map.
