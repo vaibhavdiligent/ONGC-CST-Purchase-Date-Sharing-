@@ -252,12 +252,16 @@ FORM find_bdc_block.
     DATA(lv_line_u) = lv_line.
     TRANSLATE lv_line_u TO UPPER CASE.
 
-    " Detect CALL TRANSACTION for our target tcode
-    IF lv_line_u CS 'CALL TRANSACTION' AND lv_line_u CS p_tcode.
-      lv_tcode_found = 'X'.
+    " Detect CALL TRANSACTION — always close BDC block here
+    IF lv_line_u CS 'CALL TRANSACTION'.
       lv_bdc_end  = lv_lineno.
       lv_in_bdc   = space.
       lv_pend_val = space.
+      " Mark tcode found only when the literal value appears on this line
+      " (programs using a variable for tcode still work — fields collected above)
+      IF lv_line_u CS p_tcode.
+        lv_tcode_found = 'X'.
+      ENDIF.
       CONTINUE.
     ENDIF.
 
@@ -369,7 +373,9 @@ FORM find_bdc_block.
 
   ENDLOOP.
 
-  IF lv_tcode_found = space.
+  " Warn only when the literal tcode was not found AND no fields collected
+  " (programs using a variable for tcode are OK as long as fields were found)
+  IF lv_tcode_found = space AND lt_bdc_map IS INITIAL.
     MESSAGE |CALL TRANSACTION '{ p_tcode }' not found in { p_prog }| TYPE 'I'.
   ENDIF.
 ENDFORM.
