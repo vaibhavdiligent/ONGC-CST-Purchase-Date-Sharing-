@@ -38,6 +38,7 @@ SELECTION-SCREEN SKIP 1.
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
 PARAMETERS: rb_fm    RADIOBUTTON GROUP rg1 DEFAULT 'X'
                      USER-COMMAND ucomm,               " Replace with FM
+            rb_ff    RADIOBUTTON GROUP rg1,            " Replace FM with another FM
             rb_cls   RADIOBUTTON GROUP rg1.            " Replace with Class Method
 SELECTION-SCREEN END OF BLOCK b2.
 
@@ -172,6 +173,9 @@ START-OF-SELECTION.
   IF rb_fm = 'X' AND p_fm IS INITIAL.
     MESSAGE 'Enter Replacement FM name' TYPE 'E'.
   ENDIF.
+  IF rb_ff = 'X' AND ( p_oldfm IS INITIAL OR p_fm IS INITIAL ).
+    MESSAGE 'FM->FM mode: enter both Old FM and Replacement FM' TYPE 'E'.
+  ENDIF.
   IF rb_cls = 'X' AND ( p_class IS INITIAL OR p_meth IS INITIAL ).
     MESSAGE 'Enter Replacement Class and Method name' TYPE 'E'.
   ENDIF.
@@ -215,14 +219,22 @@ START-OF-SELECTION.
   " Step 3: Enrich with rollnames from DD03L
   PERFORM enrich_rollnames.
 
-  " Step 4a: FM replacement mode
+  " Step 4a: BDC/FM → FM replacement mode
   IF rb_fm = 'X'.
     PERFORM get_fm_fields.
     PERFORM match_fields.
     PERFORM build_output.
     PERFORM generate_code_preview.
 
-  " Step 4b: Class method replacement mode
+  " Step 4b: FM → FM replacement mode (expand old FM interface, map to new FM)
+  ELSEIF rb_ff = 'X'.
+    PERFORM expand_fm_to_field_entries.  " explode old FM params to field level
+    PERFORM get_fm_fields.
+    PERFORM match_fields.
+    PERFORM build_output.
+    PERFORM generate_code_preview.
+
+  " Step 4c: BDC/FM → Class method replacement mode
   ELSEIF rb_cls = 'X'.
     PERFORM get_class_method_params.
     PERFORM match_to_class.
@@ -494,6 +506,56 @@ FORM find_fm_call_block.
       ENDIF.
     ENDIF.
   ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form expand_fm_to_field_entries
+*& For FM->FM mode: replace each structured parameter row in lt_bdc_map
+*& with one row per DD03L field, so matching by rollname works identically
+*& to the BDC->FM flow.
+*& Scalar parameters (no structure in FUPARAREF) are kept as-is.
+*----------------------------------------------------------------------*
+FORM expand_fm_to_field_entries.
+  DATA lt_expanded   TYPE TABLE OF ty_bdc_map.
+  DATA wa_exp        TYPE ty_bdc_map.
+  DATA lv_ex_struct  TYPE fupararef-structure.
+
+  LOOP AT lt_bdc_map INTO wa_bdc_map.
+    CLEAR lv_ex_struct.
+    " Find the structure type for this parameter in the old FM
+    SELECT SINGLE structure INTO lv_ex_struct
+      FROM fupararef
+      WHERE funcname  = @p_oldfm
+        AND parameter = @wa_bdc_map-fnam.
+
+    IF sy-subrc = 0 AND lv_ex_struct IS NOT INITIAL.
+      " Structured param: expand each DD03L field into its own lt_bdc_map row
+      SELECT fieldname, rollname
+        FROM dd03l
+        WHERE tabname   = @lv_ex_struct
+          AND rollname  IS NOT INITIAL
+          AND fieldname NOT LIKE '.%'
+        INTO TABLE @DATA(lt_ex_flds).
+
+      LOOP AT lt_ex_flds INTO DATA(wa_ex_fld).
+        CLEAR wa_exp.
+        " fnam:     OLD_PARAM-FIELD  (for display in ALV)
+        wa_exp-fnam      = |{ wa_bdc_map-fnam }-{ wa_ex_fld-fieldname }|.
+        " fval_var: passed_variable-FIELD  (used in generated assignment)
+        wa_exp-fval_var  = |{ wa_bdc_map-fval_var }-{ wa_ex_fld-fieldname }|.
+        wa_exp-tabname   = lv_ex_struct.
+        wa_exp-fieldname = wa_ex_fld-fieldname.
+        wa_exp-rollname  = wa_ex_fld-rollname.
+        wa_exp-src_line  = wa_bdc_map-src_line.
+        APPEND wa_exp TO lt_expanded.
+      ENDLOOP.
+    ELSE.
+      " Scalar param: keep unchanged (rollname already populated by find_fm_call_block)
+      APPEND wa_bdc_map TO lt_expanded.
+    ENDIF.
+  ENDLOOP.
+
+  lt_bdc_map = lt_expanded.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1182,13 +1244,32 @@ FORM generate_code_preview.
     lv_code_ctr = lv_code_ctr + 1.
   END-OF-DEFINITION.
 
-  lv_ln = |" ** begin of change - BDC -> FM replacement **|. add_line: lv_ln.
-  lv_ln = |" TODO: Replace CALL TRANSACTION '{ p_tcode }' with { p_fm }|. add_line: lv_ln.
+  IF rb_ff = 'X'.
+    lv_ln = |" ** begin of change - FM -> FM replacement **|.
+  ELSE.
+    lv_ln = |" ** begin of change - BDC -> FM replacement **|.
+  ENDIF.
+  add_line: lv_ln.
+  IF rb_ff = 'X'.
+    lv_ln = |" Replace CALL FUNCTION '{ p_oldfm }' with CALL FUNCTION '{ p_fm }'|.
+  ELSE.
+    lv_ln = |" Replace CALL TRANSACTION '{ p_tcode }' with CALL FUNCTION '{ p_fm }'|.
+  ENDIF.
+  add_line: lv_ln.
   add_line: ''.
 
-  " Comment out BDC lines
-  lv_ln = |" --- Original BDC block (lines { lv_bdc_start } - { lv_bdc_end }) commented out ---|. add_line: lv_ln.
-  LOOP AT lt_source INTO wa_source FROM lv_bdc_start TO lv_bdc_end.
+  " Comment out original block
+  DATA lv_gcp_start TYPE i.
+  DATA lv_gcp_end   TYPE i.
+  IF p_tcode IS NOT INITIAL.
+    lv_gcp_start = lv_bdc_start. lv_gcp_end = lv_bdc_end.
+    lv_ln = |" --- Original BDC block (lines { lv_bdc_start }-{ lv_bdc_end }) commented out ---|.
+  ELSE.
+    lv_gcp_start = lv_fm_start.  lv_gcp_end = lv_fm_end.
+    lv_ln = |" --- Original FM call (lines { lv_fm_start }-{ lv_fm_end }) commented out ---|.
+  ENDIF.
+  add_line: lv_ln.
+  LOOP AT lt_source INTO wa_source FROM lv_gcp_start TO lv_gcp_end.
     wa_code-lineno = lv_code_ctr.
     CONCATENATE '*' wa_source-line INTO wa_code-code.
     APPEND wa_code TO lt_code.
@@ -1300,7 +1381,11 @@ FORM generate_code_preview.
     add_line: 'ENDIF.'.
   ENDIF.
   add_line: ''.
-  add_line: '" ** end of change - BDC → FM replacement **'.
+  IF rb_ff = 'X'.
+    add_line: '" ** end of change - FM -> FM replacement **'.
+  ELSE.
+    add_line: '" ** end of change - BDC -> FM replacement **'.
+  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1332,21 +1417,27 @@ FORM display_results.
       lo_cols->get_column( 'REMARK'        )->set_long_text( 'Remark' ).
 
       " Hide columns not relevant to current mode
-      IF rb_fm = 'X'.
-        lo_cols->get_column( 'CLS_PARAM'     )->set_visible( if_salv_c_bool_sap=>false ).
-        lo_cols->get_column( 'CLS_FIELD'     )->set_visible( if_salv_c_bool_sap=>false ).
-        lo_cols->get_column( 'CLS_FULL_PATH' )->set_visible( if_salv_c_bool_sap=>false ).
-      ELSE.
+      IF rb_cls = 'X'.
         lo_cols->get_column( 'FM_PARAM'  )->set_visible( if_salv_c_bool_sap=>false ).
         lo_cols->get_column( 'FM_STRUCT' )->set_visible( if_salv_c_bool_sap=>false ).
         lo_cols->get_column( 'FM_FIELD'  )->set_visible( if_salv_c_bool_sap=>false ).
+      ELSE.  " rb_fm or rb_ff
+        lo_cols->get_column( 'CLS_PARAM'     )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'CLS_FIELD'     )->set_visible( if_salv_c_bool_sap=>false ).
+        lo_cols->get_column( 'CLS_FULL_PATH' )->set_visible( if_salv_c_bool_sap=>false ).
       ENDIF.
 
       DATA(lo_disp) = lo_map->get_display_settings( ).
-      IF rb_fm = 'X'.
-        lo_disp->set_list_header( |BDC/FM → FM Mapping: → { p_fm }| ).
+      IF rb_cls = 'X'.
+        lo_disp->set_list_header( |Class Method Mapping: { p_class }=>{ p_meth }| ).
+      ELSEIF rb_ff = 'X'.
+        lo_disp->set_list_header( |FM to FM Mapping: { p_oldfm } -> { p_fm }| ).
       ELSE.
-        lo_disp->set_list_header( |BDC/FM → Class Method Mapping: { p_class }=>{ p_meth }| ).
+        IF p_tcode IS NOT INITIAL.
+          lo_disp->set_list_header( |BDC to FM Mapping: { p_tcode } -> { p_fm }| ).
+        ELSE.
+          lo_disp->set_list_header( |FM to FM Mapping: { p_oldfm } -> { p_fm }| ).
+        ENDIF.
       ENDIF.
 
       lo_map->display( ).
@@ -1374,8 +1465,14 @@ FORM display_results.
       DATA(lo_disp2) = lo_code->get_display_settings( ).
       IF rb_cls = 'X'.
         lo_disp2->set_list_header( |Generated Code: { p_class }=>{ p_meth } replacement| ).
+      ELSEIF rb_ff = 'X'.
+        lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
       ELSE.
-        lo_disp2->set_list_header( |Generated Code: CALL FUNCTION '{ p_fm }' replacement| ).
+        IF p_tcode IS NOT INITIAL.
+          lo_disp2->set_list_header( |Generated Code: BDC { p_tcode } -> { p_fm }| ).
+        ELSE.
+          lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
+        ENDIF.
       ENDIF.
 
       lo_code->display( ).
