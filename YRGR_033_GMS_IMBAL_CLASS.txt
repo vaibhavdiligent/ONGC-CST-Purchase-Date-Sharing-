@@ -1,0 +1,14 @@
+CLASS lcl_event_handler DEFINITION.
+  PUBLIC SECTION.
+    METHODS: get_data.
+    CLASS-METHODS:
+      button_click FOR EVENT button_click OF cl_gui_alv_grid
+        IMPORTING es_col_id es_row_no sender,
+      top_of_page FOR EVENT top_of_page OF cl_gui_alv_grid
+        IMPORTING e_dyndoc_id table_index.
+ENDCLASS.
+CLASS lcl_event_handler IMPLEMENTATION.
+  METHOD get_data. PERFORM get_data. ENDMETHOD.
+  METHOD button_click. ENDMETHOD.
+  METHOD top_of_page. PERFORM top_of_page USING dg_dyndoc_id. ENDMETHOD.
+ENDCLASS.

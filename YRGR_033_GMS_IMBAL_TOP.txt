@@ -1,0 +1,40 @@
+TABLES : oijnomi, veda.
+TYPES: BEGIN OF t_final,
+  docnr    TYPE oijnomi-docnr,   matnr    TYPE oijnomi-matnr_i,
+  locid    TYPE oijnomi-locid,   partnr   TYPE oijnomi-partnr,
+  vbegdat  TYPE veda-vbegdat,    venddat  TYPE veda-venddat,
+  stat     TYPE char15,
+  po_imbal TYPE yy_oij_cumimb,   ne_imbal TYPE yy_oij_cumimb,
+  ret_del  TYPE vbeln,  crd_not  TYPE vbeln,  sal_ord  TYPE vbeln,
+  do       TYPE vbeln,  pgi      TYPE vbeln,  invoic   TYPE vbeln,
+  pur_ret  TYPE ebeln,  po       TYPE ebeln,  gr       TYPE ebeln,
+END OF t_final.
+DATA: lt_final TYPE TABLE OF yrx_imb_settle_qty,
+      ls_final TYPE yrx_imb_settle_qty.
+DATA: dg_html_cntrl TYPE REF TO cl_gui_html_viewer,
+      dg_parent_html TYPE REF TO cl_gui_container.
+DATA: lt_exclude TYPE ui_functions,  ls_exclude TYPE ui_func.
+DATA: gs_fieldcat TYPE lvc_s_fcat,   gs_layout  TYPE lvc_s_layo,
+      gt_fieldcat TYPE lvc_t_fcat,   grid       TYPE REF TO cl_gui_alv_grid,
+      g_custom_container TYPE REF TO cl_gui_custom_container,
+      g_container TYPE scrfname VALUE 'CUST'.
+DATA: lv_begda TYPE datum,  lv_endda TYPE datum,  lv_fromdat TYPE datum,
+      lv_todat TYPE datum,  lv_dat   TYPE char2,  lv_dat1    TYPE datum,
+      lv_dat2  TYPE datum.
+DATA last_day_of_month LIKE sy-datum.
+DATA: st_date TYPE sy-datum,  ed_date TYPE sy-datum,  lv_date TYPE sy-datum.
+DATA: lv_subrc TYPE sy-subrc,  lv_send_date TYPE sy-datum,
+      lv_send_time TYPE sy-uzeit.
+DATA: lt_email_to TYPE TABLE OF ad_smtpadr,
+      lt_email_cc TYPE TABLE OF ad_smtpadr,
+      lv_email    TYPE ad_smtpadr.
+DATA: lv_vkbur TYPE vkbur,  lv_locid TYPE oijnomi-locid.
+DATA: lv_has_role TYPE c LENGTH 1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b WITH FRAME TITLE TEXT-001.
+  PARAMETERS: r1 RADIOBUTTON GROUP r1 USER-COMMAND abc DEFAULT 'X' MODIF ID m1.
+  SELECT-OPTIONS: s_date FOR oijnomi-idate MODIF ID m2 OBLIGATORY.
+  PARAMETERS: r2 RADIOBUTTON GROUP r1 MODIF ID m5.
+  PARAMETERS: r3 RADIOBUTTON GROUP r1 MODIF ID m1.
+  PARAMETERS: p_email AS CHECKBOX MODIF ID m3.
+SELECTION-SCREEN END OF BLOCK b.
