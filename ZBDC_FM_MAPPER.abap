@@ -91,10 +91,11 @@ TYPES: BEGIN OF ty_bdc_map,
          fm_param   TYPE char50,          " Matched FM parameter name
          fm_struct  TYPE char50,          " Matched FM structure type name
          fm_field   TYPE dd03l-fieldname, " Matched field in FM structure
-         fm_wa_name TYPE char50,          " FM work area variable name
-         fm_wa_type TYPE char50,          " FM work area type name
-         fm_wa_path TYPE char200,         " FM field path relative to work area
-         fm_datax   TYPE flag,            " X = generate FM DATAX line
+         fm_wa_name   TYPE char50,          " FM work area variable name
+         fm_wa_type   TYPE char50,          " FM work area type name
+         fm_wa_path   TYPE char200,         " FM field path relative to work area
+         fm_datax     TYPE flag,            " X = generate FM DATAX line
+         fm_paramtype TYPE fupararef-paramtype, " I=Importing E=Exporting of new FM param
          cls_param TYPE seocpdname,      " Matched class method parameter
          cls_field TYPE dd03l-fieldname, " Matched field in class param structure
          cls_type  TYPE char50,          " Class parameter type name
@@ -619,7 +620,16 @@ FORM get_fm_fields.
   DATA lt_fmx_parts TYPE TABLE OF string.
 
   LOOP AT lt_fupararef INTO DATA(wa_fup).
-    IF wa_fup-structure IS INITIAL. CONTINUE. ENDIF.
+    IF wa_fup-structure IS INITIAL.
+      " Scalar parameter — rollname is the type reference stored in fupararef-type
+      CLEAR wa_fm_dd.
+      wa_fm_dd-parameter = wa_fup-parameter.
+      wa_fm_dd-paramtype = wa_fup-paramtype.
+      wa_fm_dd-fieldname = wa_fup-parameter.
+      wa_fm_dd-rollname  = wa_fup-type.   " e.g. WAERS, BETRG
+      APPEND wa_fm_dd TO lt_fm_dd.
+      CONTINUE.
+    ENDIF.
     CLEAR lt_fmx_stack.
     CLEAR wa_fmx_new.
     wa_fmx_new-struct_name = wa_fup-structure.
@@ -1083,13 +1093,14 @@ FORM match_fields.
     READ TABLE lt_fm_dd INTO wa_fm_dd
       WITH KEY rollname = <fs_m>-rollname.
     IF sy-subrc = 0.
-      <fs_m>-fm_param   = wa_fm_dd-parameter.
-      <fs_m>-fm_struct  = wa_fm_dd-structure.
-      <fs_m>-fm_field   = wa_fm_dd-fieldname.
-      <fs_m>-fm_wa_name = wa_fm_dd-wa_name.
-      <fs_m>-fm_wa_type = wa_fm_dd-wa_type.
-      <fs_m>-fm_wa_path = wa_fm_dd-wa_path.
-      <fs_m>-fm_datax   = wa_fm_dd-has_datax.
+      <fs_m>-fm_param     = wa_fm_dd-parameter.
+      <fs_m>-fm_struct    = wa_fm_dd-structure.
+      <fs_m>-fm_field     = wa_fm_dd-fieldname.
+      <fs_m>-fm_wa_name   = wa_fm_dd-wa_name.
+      <fs_m>-fm_wa_type   = wa_fm_dd-wa_type.
+      <fs_m>-fm_wa_path   = wa_fm_dd-wa_path.
+      <fs_m>-fm_datax     = wa_fm_dd-has_datax.
+      <fs_m>-fm_paramtype = wa_fm_dd-paramtype.
       <fs_m>-matched    = 'X'.
     ENDIF.
   ENDLOOP.
@@ -1569,11 +1580,16 @@ FORM generate_code_preview.
     DATA lv_fm_wa_var TYPE string.
     DATA lv_fm_path   TYPE string.
     IF wa_bdc_map-fm_wa_name IS NOT INITIAL.
+      " Work-area style (nested table row)
       lv_fm_wa_var = to_lower( wa_bdc_map-fm_wa_name ).
       lv_fm_path   = to_lower( wa_bdc_map-fm_wa_path ).
       lv_assign = |ls_{ lv_fm_wa_var }-{ lv_fm_path } = { wa_bdc_map-fval_var }.|.
-    ELSE.
+    ELSEIF wa_bdc_map-fm_struct IS NOT INITIAL.
+      " Flat structured param (no nested table WA)
       lv_assign = |ls_{ to_lower( wa_bdc_map-fm_param ) }-{ to_lower( wa_bdc_map-fm_field ) } = { wa_bdc_map-fval_var }.|.
+    ELSE.
+      " Scalar param — value goes directly in CALL FUNCTION; no pre-assignment needed
+      CONTINUE.
     ENDIF.
     lv_comment = |" { wa_bdc_map-fnam } -> { wa_bdc_map-fm_param }-{ wa_bdc_map-fm_field } ({ wa_bdc_map-rollname })|.
     add_line: lv_comment.
@@ -1620,9 +1636,10 @@ FORM generate_code_preview.
   ENDLOOP.
   add_line: ''.
 
-  " FM call
+  " FM call — structured params first, then scalar matched params
   lv_ln = |CALL FUNCTION '{ p_fm }'|. add_line: lv_ln.
   DATA lv_curr_section TYPE char10.
+  " Structured / table params
   LOOP AT lt_distinct_params INTO wa_dp.
     CASE wa_dp-paramtype.
       WHEN 'I'.
@@ -1649,6 +1666,35 @@ FORM generate_code_preview.
     ENDCASE.
     add_line: lv_decl.
   ENDLOOP.
+  " Scalar matched params: emit NEW_PARAM = old_variable directly
+  DATA lt_sc_exp TYPE TABLE OF string.
+  DATA lt_sc_imp TYPE TABLE OF string.
+  DATA lv_sc_ln  TYPE string.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-fm_struct IS NOT INITIAL OR wa_bdc_map-fm_wa_name IS NOT INITIAL.
+      CONTINUE.  " structured — already in lt_distinct_params
+    ENDIF.
+    IF wa_bdc_map-fm_param IS INITIAL. CONTINUE. ENDIF.
+    lv_sc_ln = |    { wa_bdc_map-fm_param } = { wa_bdc_map-fval_var }|.
+    CASE wa_bdc_map-fm_paramtype.
+      WHEN 'I'.  " FM Importing → caller EXPORTING
+        READ TABLE lt_sc_exp TRANSPORTING NO FIELDS WITH KEY table_line = lv_sc_ln.
+        IF sy-subrc <> 0. APPEND lv_sc_ln TO lt_sc_exp. ENDIF.
+      WHEN 'E'.  " FM Exporting → caller IMPORTING
+        READ TABLE lt_sc_imp TRANSPORTING NO FIELDS WITH KEY table_line = lv_sc_ln.
+        IF sy-subrc <> 0. APPEND lv_sc_ln TO lt_sc_imp. ENDIF.
+    ENDCASE.
+  ENDLOOP.
+  IF lt_sc_exp IS NOT INITIAL.
+    IF lv_curr_section <> 'EXPORTING'. add_line: '  EXPORTING'. ENDIF.
+    LOOP AT lt_sc_exp INTO lv_sc_ln. add_line: lv_sc_ln. ENDLOOP.
+    lv_curr_section = 'EXPORTING'.
+  ENDIF.
+  IF lt_sc_imp IS NOT INITIAL.
+    IF lv_curr_section <> 'IMPORTING'. add_line: '  IMPORTING'. ENDIF.
+    LOOP AT lt_sc_imp INTO lv_sc_ln. add_line: lv_sc_ln. ENDLOOP.
+    lv_curr_section = 'IMPORTING'.
+  ENDIF.
   add_line: '  TABLES'.
   add_line: '    return = lt_return'.
   add_line: '  EXCEPTIONS'.
