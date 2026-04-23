@@ -1365,7 +1365,8 @@ FORM generate_class_code_preview.
   DATA lt_app_segs  TYPE TABLE OF string.
   DATA wa_app_seg   TYPE string.
   DATA lv_app_seg   TYPE string.
-  DATA lv_app_pfx   TYPE string.
+  DATA lv_app_pfx   TYPE string.  " relative path within current WA
+  DATA lv_app_cur_wa TYPE string.  " current work-area variable name
   DATA lv_app_tbl   TYPE string.
   DATA lv_app_path  TYPE string.
   DATA lv_app_line  TYPE string.
@@ -1375,6 +1376,7 @@ FORM generate_class_code_preview.
     lv_app_opath = wa_bdc_map-cls_path.
     CHECK lv_app_opath CS '[1]'.
     CLEAR: lt_app_segs, lv_app_pfx.
+    lv_app_cur_wa = wa_bdc_map-cls_param.   " start at parameter level
     SPLIT lv_app_opath AT '-' INTO TABLE lt_app_segs.
     LOOP AT lt_app_segs INTO wa_app_seg.
       lv_app_seg = wa_app_seg.
@@ -1382,10 +1384,11 @@ FORM generate_class_code_preview.
         REPLACE ALL OCCURRENCES OF '[1]' IN lv_app_seg WITH ''.
         CONDENSE lv_app_seg NO-GAPS.
         lv_app_tbl = lv_app_seg.
+        " Target = parent WA + relative path within it + table component
         IF lv_app_pfx IS INITIAL.
-          lv_app_path = |ls_{ wa_bdc_map-cls_param }-{ lv_app_tbl }|.
+          lv_app_path = |ls_{ lv_app_cur_wa }-{ lv_app_tbl }|.
         ELSE.
-          lv_app_path = |ls_{ wa_bdc_map-cls_param }-{ lv_app_pfx }-{ lv_app_tbl }|.
+          lv_app_path = |ls_{ lv_app_cur_wa }-{ lv_app_pfx }-{ lv_app_tbl }|.
         ENDIF.
         lv_app_line = |APPEND ls_{ to_lower( lv_app_tbl ) } TO { to_lower( lv_app_path ) }.|.
         READ TABLE lt_app_stubs TRANSPORTING NO FIELDS
@@ -1393,9 +1396,9 @@ FORM generate_class_code_preview.
         IF sy-subrc <> 0.
           APPEND lv_app_line TO lt_app_stubs.
         ENDIF.
-        lv_app_pfx = COND #( WHEN lv_app_pfx IS INITIAL
-                              THEN |{ lv_app_tbl }|
-                              ELSE |{ lv_app_pfx }-{ lv_app_tbl }| ).
+        " Cross table boundary: new WA is this table's row, reset relative path
+        lv_app_cur_wa = lv_app_tbl.
+        CLEAR lv_app_pfx.
       ELSE.
         lv_app_pfx = COND #( WHEN lv_app_pfx IS INITIAL
                               THEN |{ wa_app_seg }|
