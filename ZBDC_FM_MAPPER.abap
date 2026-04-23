@@ -1195,6 +1195,138 @@ FORM match_fields.
       <fs_m2>-matched      = 'X'.
     ENDIF.
   ENDLOOP.
+
+  " Pass 3: numeric type compatibility — DEC / CURR / QUAN / FLTP are interchangeable amounts
+  " Build set of already-matched new FM param names to prevent double-use
+  DATA lt_fm3_taken TYPE TABLE OF string.
+  DATA lv_fm3_pn    TYPE string.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-fm_param IS INITIAL. CONTINUE. ENDIF.
+    lv_fm3_pn = wa_bdc_map-fm_param.
+    READ TABLE lt_fm3_taken TRANSPORTING NO FIELDS WITH KEY table_line = lv_fm3_pn.
+    IF sy-subrc <> 0. APPEND lv_fm3_pn TO lt_fm3_taken. ENDIF.
+  ENDLOOP.
+
+  DATA lt_num_dt TYPE TABLE OF char5.
+  APPEND: 'DEC' TO lt_num_dt, 'CURR' TO lt_num_dt,
+          'QUAN' TO lt_num_dt, 'FLTP' TO lt_num_dt.
+
+  LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_m3>).
+    IF <fs_m3>-matched = 'X' OR <fs_m3>-rollname IS INITIAL. CONTINUE. ENDIF.
+    " Get datatype of old FM param rollname
+    DATA lv_m3_dt_old TYPE dd04l-datatype.
+    SELECT SINGLE datatype FROM dd04l WHERE rollname = @<fs_m3>-rollname
+      INTO @lv_m3_dt_old.
+    IF sy-subrc <> 0. CONTINUE. ENDIF.
+    READ TABLE lt_num_dt TRANSPORTING NO FIELDS WITH KEY table_line = lv_m3_dt_old.
+    IF sy-subrc <> 0. CONTINUE. ENDIF.
+    " Look up old FM paramtype for direction matching
+    DATA lv_m3_fnam TYPE string.
+    DATA lv_m3_old_pt TYPE fupararef-paramtype.
+    lv_m3_fnam = <fs_m3>-fnam.
+    IF lv_m3_fnam CS '-'.
+      DATA lv_m3_hyp TYPE i.
+      lv_m3_hyp = sy-fdpos.
+      lv_m3_fnam = lv_m3_fnam(lv_m3_hyp).
+    ENDIF.
+    SELECT SINGLE paramtype FROM fupararef
+      WHERE funcname = @p_oldfm AND parameter = @lv_m3_fnam
+      INTO @lv_m3_old_pt.
+    " Find first available new FM param with compatible numeric type and same direction
+    LOOP AT lt_fm_dd INTO wa_fm_dd.
+      IF wa_fm_dd-rollname IS INITIAL. CONTINUE. ENDIF.
+      IF lv_m3_old_pt IS NOT INITIAL AND wa_fm_dd-paramtype <> lv_m3_old_pt. CONTINUE. ENDIF.
+      lv_fm3_pn = wa_fm_dd-parameter.
+      READ TABLE lt_fm3_taken TRANSPORTING NO FIELDS WITH KEY table_line = lv_fm3_pn.
+      IF sy-subrc = 0. CONTINUE. ENDIF.
+      DATA lv_m3_dt_new TYPE dd04l-datatype.
+      SELECT SINGLE datatype FROM dd04l WHERE rollname = @wa_fm_dd-rollname
+        INTO @lv_m3_dt_new.
+      IF sy-subrc <> 0. CONTINUE. ENDIF.
+      READ TABLE lt_num_dt TRANSPORTING NO FIELDS WITH KEY table_line = lv_m3_dt_new.
+      IF sy-subrc <> 0. CONTINUE. ENDIF.
+      " Both numeric and same direction — match!
+      <fs_m3>-fm_param     = wa_fm_dd-parameter.
+      <fs_m3>-fm_struct    = wa_fm_dd-structure.
+      <fs_m3>-fm_field     = wa_fm_dd-fieldname.
+      <fs_m3>-fm_wa_name   = wa_fm_dd-wa_name.
+      <fs_m3>-fm_wa_type   = wa_fm_dd-wa_type.
+      <fs_m3>-fm_wa_path   = wa_fm_dd-wa_path.
+      <fs_m3>-fm_datax     = wa_fm_dd-has_datax.
+      <fs_m3>-fm_paramtype = wa_fm_dd-paramtype.
+      <fs_m3>-matched      = 'X'.
+      APPEND lv_fm3_pn TO lt_fm3_taken.
+      EXIT.
+    ENDLOOP.
+  ENDLOOP.
+
+  " Pass 4: data element description text similarity (last resort)
+  " Refresh taken list after Pass 3
+  CLEAR lt_fm3_taken.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-fm_param IS INITIAL. CONTINUE. ENDIF.
+    lv_fm3_pn = wa_bdc_map-fm_param.
+    READ TABLE lt_fm3_taken TRANSPORTING NO FIELDS WITH KEY table_line = lv_fm3_pn.
+    IF sy-subrc <> 0. APPEND lv_fm3_pn TO lt_fm3_taken. ENDIF.
+  ENDLOOP.
+
+  LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_m4>).
+    IF <fs_m4>-matched = 'X' OR <fs_m4>-rollname IS INITIAL. CONTINUE. ENDIF.
+    " Get short text of old param's data element
+    DATA lv_m4_txt_old TYPE dd04t-reptext.
+    SELECT SINGLE reptext FROM dd04t
+      WHERE rollname = @<fs_m4>-rollname AND ddlanguage = @sy-langu
+      INTO @lv_m4_txt_old.
+    IF sy-subrc <> 0 OR lv_m4_txt_old IS INITIAL. CONTINUE. ENDIF.
+    TRANSLATE lv_m4_txt_old TO UPPER CASE.
+    " Try to find common keyword in new FM param descriptions
+    DATA lv_m4_fnam2 TYPE string.
+    DATA lv_m4_old_pt2 TYPE fupararef-paramtype.
+    lv_m4_fnam2 = <fs_m4>-fnam.
+    IF lv_m4_fnam2 CS '-'.
+      DATA lv_m4_hyp TYPE i.
+      lv_m4_hyp = sy-fdpos.
+      lv_m4_fnam2 = lv_m4_fnam2(lv_m4_hyp).
+    ENDIF.
+    SELECT SINGLE paramtype FROM fupararef
+      WHERE funcname = @p_oldfm AND parameter = @lv_m4_fnam2
+      INTO @lv_m4_old_pt2.
+    LOOP AT lt_fm_dd INTO wa_fm_dd.
+      IF wa_fm_dd-rollname IS INITIAL. CONTINUE. ENDIF.
+      IF lv_m4_old_pt2 IS NOT INITIAL AND wa_fm_dd-paramtype <> lv_m4_old_pt2. CONTINUE. ENDIF.
+      lv_fm3_pn = wa_fm_dd-parameter.
+      READ TABLE lt_fm3_taken TRANSPORTING NO FIELDS WITH KEY table_line = lv_fm3_pn.
+      IF sy-subrc = 0. CONTINUE. ENDIF.
+      DATA lv_m4_txt_new TYPE dd04t-reptext.
+      SELECT SINGLE reptext FROM dd04t
+        WHERE rollname = @wa_fm_dd-rollname AND ddlanguage = @sy-langu
+        INTO @lv_m4_txt_new.
+      IF sy-subrc <> 0 OR lv_m4_txt_new IS INITIAL. CONTINUE. ENDIF.
+      TRANSLATE lv_m4_txt_new TO UPPER CASE.
+      " Check if descriptions share a meaningful word (5+ chars to avoid noise)
+      DATA lv_m4_matched TYPE flag.
+      CLEAR lv_m4_matched.
+      DATA lt_m4_words TYPE TABLE OF string.
+      SPLIT lv_m4_txt_old AT space INTO TABLE lt_m4_words.
+      LOOP AT lt_m4_words INTO DATA(lv_m4_word).
+        IF strlen( lv_m4_word ) < 5. CONTINUE. ENDIF.
+        IF lv_m4_txt_new CS lv_m4_word. lv_m4_matched = 'X'. EXIT. ENDIF.
+      ENDLOOP.
+      IF lv_m4_matched = 'X'.
+        <fs_m4>-fm_param     = wa_fm_dd-parameter.
+        <fs_m4>-fm_struct    = wa_fm_dd-structure.
+        <fs_m4>-fm_field     = wa_fm_dd-fieldname.
+        <fs_m4>-fm_wa_name   = wa_fm_dd-wa_name.
+        <fs_m4>-fm_wa_type   = wa_fm_dd-wa_type.
+        <fs_m4>-fm_wa_path   = wa_fm_dd-wa_path.
+        <fs_m4>-fm_datax     = wa_fm_dd-has_datax.
+        <fs_m4>-fm_paramtype = wa_fm_dd-paramtype.
+        <fs_m4>-matched      = 'X'.
+        APPEND lv_fm3_pn TO lt_fm3_taken.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+  ENDLOOP.
 ENDFORM.
 
 *----------------------------------------------------------------------*
