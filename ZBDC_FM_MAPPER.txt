@@ -88,9 +88,13 @@ TYPES: BEGIN OF ty_bdc_map,
          tabname   TYPE dd03l-tabname,   " Table part of FNAM
          fieldname TYPE dd03l-fieldname, " Field part of FNAM
          rollname  TYPE dd03l-rollname,  " Data element (bridge for matching)
-         fm_param  TYPE char50,          " Matched FM parameter name
-         fm_struct TYPE char50,          " Matched FM structure type name
-         fm_field  TYPE dd03l-fieldname, " Matched field in FM structure
+         fm_param   TYPE char50,          " Matched FM parameter name
+         fm_struct  TYPE char50,          " Matched FM structure type name
+         fm_field   TYPE dd03l-fieldname, " Matched field in FM structure
+         fm_wa_name TYPE char50,          " FM work area variable name
+         fm_wa_type TYPE char50,          " FM work area type name
+         fm_wa_path TYPE char200,         " FM field path relative to work area
+         fm_datax   TYPE flag,            " X = generate FM DATAX line
          cls_param TYPE seocpdname,      " Matched class method parameter
          cls_field TYPE dd03l-fieldname, " Matched field in class param structure
          cls_type  TYPE char50,          " Class parameter type name
@@ -109,6 +113,10 @@ TYPES: BEGIN OF ty_fm_dd,
          structure TYPE fupararef-structure,
          fieldname TYPE dd03l-fieldname,
          rollname  TYPE dd03l-rollname,
+         wa_name   TYPE char50,    " work area variable name (table component or param)
+         wa_type   TYPE char50,    " row type of work area
+         wa_path   TYPE char200,   " path relative to work area
+         has_datax TYPE flag,      " X = parent struct has DATAX sibling
        END OF ty_fm_dd.
 
 TYPES: BEGIN OF ty_output,
@@ -592,33 +600,153 @@ ENDFORM.
 *& Get all parameter structure fields + rollnames for the FM
 *----------------------------------------------------------------------*
 FORM get_fm_fields.
-  " Get FM parameters
   DATA lt_fupararef TYPE TABLE OF fupararef.
   SELECT * INTO TABLE @lt_fupararef
     FROM fupararef
     WHERE funcname  = @p_fm
       AND paramtype IN ('I', 'E', 'T').
 
-  " For each parameter with a structure, get DD03L fields
+  " RTTI expansion — same approach as expand_struct_fields for class methods
+  DATA lt_fmx_stack TYPE TABLE OF ty_ex_item.
+  DATA wa_fmx_item  TYPE ty_ex_item.
+  DATA wa_fmx_new   TYPE ty_ex_item.
+  DATA lo_fmx_td    TYPE REF TO cl_abap_typedescr.
+  DATA lo_fmx_sd    TYPE REF TO cl_abap_structdescr.
+  DATA lo_fmx_tabd  TYPE REF TO cl_abap_tabledescr.
+  DATA lo_fmx_row   TYPE REF TO cl_abap_typedescr.
+  DATA lt_fmx_comps TYPE abap_component_tab.
+  DATA lv_fmx_tname TYPE string.
+  DATA lt_fmx_parts TYPE TABLE OF string.
+
   LOOP AT lt_fupararef INTO DATA(wa_fup).
     IF wa_fup-structure IS INITIAL. CONTINUE. ENDIF.
+    CLEAR lt_fmx_stack.
+    CLEAR wa_fmx_new.
+    wa_fmx_new-struct_name = wa_fup-structure.
+    wa_fmx_new-param_name  = wa_fup-parameter.
+    wa_fmx_new-wa_type     = wa_fup-structure.
+    wa_fmx_new-wa_name     = wa_fup-parameter.
+    wa_fmx_new-wa_rel_pfx  = ''.
+    wa_fmx_new-has_datax   = space.
+    APPEND wa_fmx_new TO lt_fmx_stack.
 
-    SELECT fieldname, rollname
-      FROM dd03l
-      WHERE tabname  = @wa_fup-structure
-        AND rollname IS NOT INITIAL
-        AND fieldname NOT LIKE '.%'    " skip internal fields
-      INTO TABLE @DATA(lt_struct_fields).
+    WHILE lt_fmx_stack IS NOT INITIAL.
+      READ TABLE lt_fmx_stack INTO wa_fmx_item INDEX 1.
+      DELETE lt_fmx_stack INDEX 1.
+      TRY.
+          lo_fmx_td = cl_abap_typedescr=>describe_by_name( wa_fmx_item-struct_name ).
+        CATCH cx_root. CONTINUE.
+      ENDTRY.
 
-    LOOP AT lt_struct_fields INTO DATA(wa_sf).
-      CLEAR wa_fm_dd.
-      wa_fm_dd-parameter = wa_fup-parameter.
-      wa_fm_dd-paramtype = wa_fup-paramtype.
-      wa_fm_dd-structure = wa_fup-structure.
-      wa_fm_dd-fieldname = wa_sf-fieldname.
-      wa_fm_dd-rollname  = wa_sf-rollname.
-      APPEND wa_fm_dd TO lt_fm_dd.
-    ENDLOOP.
+      IF lo_fmx_td->kind = cl_abap_typedescr=>kind_table.
+        TRY.
+            lo_fmx_tabd = CAST cl_abap_tabledescr( lo_fmx_td ).
+            lo_fmx_row  = lo_fmx_tabd->get_table_line_type( ).
+            lv_fmx_tname = lo_fmx_row->absolute_name.
+            CLEAR lt_fmx_parts.
+            IF lv_fmx_tname CS '='.
+              SPLIT lv_fmx_tname AT '=' INTO TABLE lt_fmx_parts.
+              READ TABLE lt_fmx_parts INDEX lines( lt_fmx_parts ) INTO lv_fmx_tname.
+            ENDIF.
+            CLEAR wa_fmx_new.
+            wa_fmx_new-struct_name = lv_fmx_tname.
+            wa_fmx_new-param_name  = wa_fmx_item-param_name.
+            wa_fmx_new-wa_type     = lv_fmx_tname.
+            wa_fmx_new-wa_name     = wa_fmx_item-wa_name.
+            wa_fmx_new-wa_rel_pfx  = ''.
+            APPEND wa_fmx_new TO lt_fmx_stack.
+          CATCH cx_root.
+        ENDTRY.
+        CONTINUE.
+      ENDIF.
+
+      IF lo_fmx_td->kind = cl_abap_typedescr=>kind_struct.
+        TRY.
+            lo_fmx_sd   = CAST cl_abap_structdescr( lo_fmx_td ).
+            lt_fmx_comps = lo_fmx_sd->get_components( ).
+          CATCH cx_root. CONTINUE.
+        ENDTRY.
+
+        LOOP AT lt_fmx_comps INTO DATA(wa_fmx_comp).
+          IF wa_fmx_comp-name IS INITIAL. CONTINUE. ENDIF.
+          CASE wa_fmx_comp-type->kind.
+
+            WHEN cl_abap_typedescr=>kind_struct.
+              lv_fmx_tname = wa_fmx_comp-type->absolute_name.
+              CLEAR lt_fmx_parts.
+              IF lv_fmx_tname CS '='.
+                SPLIT lv_fmx_tname AT '=' INTO TABLE lt_fmx_parts.
+                READ TABLE lt_fmx_parts INDEX lines( lt_fmx_parts ) INTO lv_fmx_tname.
+              ENDIF.
+              CLEAR wa_fmx_new.
+              wa_fmx_new-struct_name = lv_fmx_tname.
+              wa_fmx_new-param_name  = wa_fmx_item-param_name.
+              wa_fmx_new-wa_type     = wa_fmx_item-wa_type.
+              wa_fmx_new-wa_name     = wa_fmx_item-wa_name.
+              IF wa_fmx_item-wa_rel_pfx IS INITIAL.
+                wa_fmx_new-wa_rel_pfx = wa_fmx_comp-name.
+              ELSE.
+                CONCATENATE wa_fmx_item-wa_rel_pfx '-' wa_fmx_comp-name
+                  INTO wa_fmx_new-wa_rel_pfx.
+              ENDIF.
+              IF wa_fmx_comp-name = 'DATA'.
+                READ TABLE lt_fmx_comps INTO DATA(wa_fmdx)
+                  WITH KEY name = 'DATAX'.
+                wa_fmx_new-has_datax = COND #( WHEN sy-subrc = 0 THEN 'X' ELSE space ).
+              ELSE.
+                wa_fmx_new-has_datax = space.
+              ENDIF.
+              APPEND wa_fmx_new TO lt_fmx_stack.
+
+            WHEN cl_abap_typedescr=>kind_table.
+              TRY.
+                  lo_fmx_tabd = CAST cl_abap_tabledescr( wa_fmx_comp-type ).
+                  lo_fmx_row  = lo_fmx_tabd->get_table_line_type( ).
+                  lv_fmx_tname = lo_fmx_row->absolute_name.
+                  CLEAR lt_fmx_parts.
+                  IF lv_fmx_tname CS '='.
+                    SPLIT lv_fmx_tname AT '=' INTO TABLE lt_fmx_parts.
+                    READ TABLE lt_fmx_parts INDEX lines( lt_fmx_parts ) INTO lv_fmx_tname.
+                  ENDIF.
+                  CLEAR wa_fmx_new.
+                  wa_fmx_new-struct_name = lv_fmx_tname.
+                  wa_fmx_new-param_name  = wa_fmx_item-param_name.
+                  wa_fmx_new-wa_type     = lv_fmx_tname.
+                  wa_fmx_new-wa_name     = wa_fmx_comp-name.
+                  wa_fmx_new-wa_rel_pfx  = ''.
+                  wa_fmx_new-has_datax   = space.
+                  APPEND wa_fmx_new TO lt_fmx_stack.
+                CATCH cx_root.
+              ENDTRY.
+
+            WHEN cl_abap_typedescr=>kind_elem.
+              SELECT SINGLE rollname FROM dd03l
+                WHERE tabname   = @wa_fmx_item-struct_name
+                  AND fieldname = @wa_fmx_comp-name
+                INTO @DATA(lv_fmx_roll).
+              IF sy-subrc = 0 AND lv_fmx_roll IS NOT INITIAL.
+                CLEAR wa_fm_dd.
+                wa_fm_dd-parameter = wa_fup-parameter.
+                wa_fm_dd-paramtype = wa_fup-paramtype.
+                wa_fm_dd-structure = wa_fmx_item-struct_name.
+                wa_fm_dd-fieldname = wa_fmx_comp-name.
+                wa_fm_dd-rollname  = lv_fmx_roll.
+                wa_fm_dd-wa_name   = wa_fmx_item-wa_name.
+                wa_fm_dd-wa_type   = wa_fmx_item-wa_type.
+                IF wa_fmx_item-wa_rel_pfx IS INITIAL.
+                  wa_fm_dd-wa_path = wa_fmx_comp-name.
+                ELSE.
+                  CONCATENATE wa_fmx_item-wa_rel_pfx '-' wa_fmx_comp-name
+                    INTO wa_fm_dd-wa_path.
+                ENDIF.
+                wa_fm_dd-has_datax = wa_fmx_item-has_datax.
+                APPEND wa_fm_dd TO lt_fm_dd.
+              ENDIF.
+
+          ENDCASE.
+        ENDLOOP.
+      ENDIF.
+    ENDWHILE.
   ENDLOOP.
 ENDFORM.
 
@@ -955,10 +1083,14 @@ FORM match_fields.
     READ TABLE lt_fm_dd INTO wa_fm_dd
       WITH KEY rollname = <fs_m>-rollname.
     IF sy-subrc = 0.
-      <fs_m>-fm_param  = wa_fm_dd-parameter.
-      <fs_m>-fm_struct = wa_fm_dd-structure.
-      <fs_m>-fm_field  = wa_fm_dd-fieldname.
-      <fs_m>-matched   = 'X'.
+      <fs_m>-fm_param   = wa_fm_dd-parameter.
+      <fs_m>-fm_struct  = wa_fm_dd-structure.
+      <fs_m>-fm_field   = wa_fm_dd-fieldname.
+      <fs_m>-fm_wa_name = wa_fm_dd-wa_name.
+      <fs_m>-fm_wa_type = wa_fm_dd-wa_type.
+      <fs_m>-fm_wa_path = wa_fm_dd-wa_path.
+      <fs_m>-fm_datax   = wa_fm_dd-has_datax.
+      <fs_m>-matched    = 'X'.
     ENDIF.
   ENDLOOP.
 ENDFORM.
@@ -1398,36 +1530,74 @@ FORM generate_code_preview.
     DATA lv_decl TYPE char200.
     CASE wa_dp-paramtype.
       WHEN 'I' OR 'E'.
-        CONCATENATE 'DATA ls_' wa_dp-parameter ' TYPE '
-          wa_dp-structure '.' INTO lv_decl SEPARATED BY space.
+        lv_decl = |DATA ls_{ to_lower( wa_dp-parameter ) } TYPE { to_lower( wa_dp-structure ) }.|.
       WHEN 'T'.
-        CONCATENATE 'DATA lt_' wa_dp-parameter ' TYPE TABLE OF '
-          wa_dp-structure '.' INTO lv_decl SEPARATED BY space.
+        lv_decl = |DATA lt_{ to_lower( wa_dp-parameter ) } TYPE TABLE OF { to_lower( wa_dp-structure ) }.|.
         DATA lv_wa_decl TYPE char200.
-        CONCATENATE 'DATA ls_' wa_dp-parameter '_wa TYPE '
-          wa_dp-structure '.' INTO lv_wa_decl SEPARATED BY space.
+        lv_wa_decl = |DATA ls_{ to_lower( wa_dp-parameter ) } TYPE { to_lower( wa_dp-structure ) }.|.
         add_line: lv_wa_decl.
     ENDCASE.
     add_line: lv_decl.
   ENDLOOP.
+  " Work-area declarations for nested table rows
+  DATA lt_fm_wa_seen TYPE TABLE OF string.
+  DATA lv_fm_wa_decl TYPE string.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-fm_wa_name IS INITIAL. CONTINUE. ENDIF.
+    DATA lv_fm_wa_nm TYPE string.
+    lv_fm_wa_nm = to_lower( wa_bdc_map-fm_wa_name ).
+    READ TABLE lt_fm_wa_seen TRANSPORTING NO FIELDS WITH KEY table_line = lv_fm_wa_nm.
+    IF sy-subrc <> 0.
+      APPEND lv_fm_wa_nm TO lt_fm_wa_seen.
+      DATA lv_fm_wa_tp TYPE string.
+      lv_fm_wa_tp = to_lower( wa_bdc_map-fm_wa_type ).
+      lv_fm_wa_decl = |DATA ls_{ lv_fm_wa_nm } TYPE { lv_fm_wa_tp }.|.
+      add_line: lv_fm_wa_decl.
+    ENDIF.
+  ENDLOOP.
   add_line: 'DATA lt_return TYPE TABLE OF bapiret2.'.
   add_line: ''.
 
-  " Field assignments — matched fields
+  " Field assignments — matched fields (work-area style)
   add_line: '" --- Auto-mapped field assignments ---'.
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
-    DATA lv_assign TYPE char200.
-    CONCATENATE 'ls_' wa_bdc_map-fm_param
-                '-' wa_bdc_map-fm_field
-                ' = ' wa_bdc_map-fval_var '.'
-      INTO lv_assign SEPARATED BY space.
-    DATA lv_comment TYPE char200.
-    CONCATENATE '" BDC:' wa_bdc_map-fnam
-                '→ FM:' wa_bdc_map-fm_param '-' wa_bdc_map-fm_field
-                '(' wa_bdc_map-rollname ')'
-      INTO lv_comment SEPARATED BY space.
+    DATA lv_assign    TYPE string.
+    DATA lv_comment   TYPE string.
+    DATA lv_fm_wa_var TYPE string.
+    DATA lv_fm_path   TYPE string.
+    IF wa_bdc_map-fm_wa_name IS NOT INITIAL.
+      lv_fm_wa_var = to_lower( wa_bdc_map-fm_wa_name ).
+      lv_fm_path   = to_lower( wa_bdc_map-fm_wa_path ).
+      lv_assign = |ls_{ lv_fm_wa_var }-{ lv_fm_path } = { wa_bdc_map-fval_var }.|.
+    ELSE.
+      lv_assign = |ls_{ to_lower( wa_bdc_map-fm_param ) }-{ to_lower( wa_bdc_map-fm_field ) } = { wa_bdc_map-fval_var }.|.
+    ENDIF.
+    lv_comment = |" { wa_bdc_map-fnam } -> { wa_bdc_map-fm_param }-{ wa_bdc_map-fm_field } ({ wa_bdc_map-rollname })|.
     add_line: lv_comment.
     add_line: lv_assign.
+    " Intra-structure DATAX line
+    IF wa_bdc_map-fm_datax = 'X' AND wa_bdc_map-fm_wa_name IS NOT INITIAL.
+      DATA lv_fm_dtx_path TYPE string.
+      DATA lv_fm_fn_low   TYPE string.
+      lv_fm_fn_low   = to_lower( wa_bdc_map-fm_field ).
+      lv_fm_dtx_path = lv_fm_path.
+      DATA lv_fm_d_tok TYPE string.
+      DATA lv_fm_x_tok TYPE string.
+      lv_fm_d_tok = |-data-{ lv_fm_fn_low }|.
+      lv_fm_x_tok = |-datax-{ lv_fm_fn_low }|.
+      IF lv_fm_dtx_path CS lv_fm_d_tok.
+        REPLACE lv_fm_d_tok IN lv_fm_dtx_path WITH lv_fm_x_tok.
+      ELSE.
+        lv_fm_d_tok = |data-{ lv_fm_fn_low }|.
+        lv_fm_x_tok = |datax-{ lv_fm_fn_low }|.
+        IF lv_fm_dtx_path CS lv_fm_d_tok.
+          REPLACE lv_fm_d_tok IN lv_fm_dtx_path WITH lv_fm_x_tok.
+        ENDIF.
+      ENDIF.
+      DATA lv_fm_datax_ln TYPE string.
+      lv_fm_datax_ln = |ls_{ lv_fm_wa_var }-{ lv_fm_dtx_path } = 'X'.|.
+      add_line: lv_fm_datax_ln.
+    ENDIF.
   ENDLOOP.
   add_line: ''.
 
