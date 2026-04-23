@@ -495,6 +495,7 @@ FORM find_fm_call_block.
         DATA lv_pname TYPE string.
         lv_pname = lv_raw_fm(lv_eq).
         CONDENSE lv_pname.
+        TRANSLATE lv_pname TO UPPER CASE.   " FUPARAREF stores names in uppercase
         DATA lv_pval TYPE string.
         lv_pval = substring( val = lv_raw_fm off = lv_eq ).
         SHIFT lv_pval LEFT BY 1 PLACES.
@@ -503,7 +504,7 @@ FORM find_fm_call_block.
 
         IF lv_pname IS NOT INITIAL AND lv_pval IS NOT INITIAL.
           CLEAR wa_bdc_map.
-          wa_bdc_map-fnam     = lv_pname.   " old FM parameter name
+          wa_bdc_map-fnam     = lv_pname.   " old FM parameter name (uppercase)
           wa_bdc_map-fval_var = lv_pval.    " variable passed
           wa_bdc_map-src_line = lv_lineno.
           " Get rollname for this FM parameter from FUPARAREF + DD03L
@@ -1129,9 +1130,15 @@ FORM build_output.
       wa_output-fm_param  = wa_bdc_map-fm_param.
       wa_output-fm_struct = wa_bdc_map-fm_struct.
       wa_output-fm_field  = wa_bdc_map-fm_field.
-      CONCATENATE 'ls_' wa_bdc_map-fm_param '-' wa_bdc_map-fm_field
-                  ' = ' wa_bdc_map-fval_var '.'
-        INTO wa_output-gen_code SEPARATED BY space.
+      IF wa_bdc_map-fm_struct IS INITIAL AND wa_bdc_map-fm_wa_name IS INITIAL.
+        " Scalar param: passed directly in CALL FUNCTION
+        CONCATENATE wa_bdc_map-fm_param '=' wa_bdc_map-fval_var
+          INTO wa_output-gen_code SEPARATED BY space.
+      ELSE.
+        CONCATENATE 'ls_' wa_bdc_map-fm_param '-' wa_bdc_map-fm_field
+                    ' = ' wa_bdc_map-fval_var '.'
+          INTO wa_output-gen_code SEPARATED BY space.
+      ENDIF.
       wa_output-remark = wa_bdc_map-rollname.
     ELSE.
       wa_output-status = 'NO MATCH'.
