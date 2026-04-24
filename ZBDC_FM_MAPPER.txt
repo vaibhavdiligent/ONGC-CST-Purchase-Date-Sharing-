@@ -56,9 +56,15 @@ PARAMETERS: p_class  TYPE seoclsname,                  " Replacement Class
 SELECTION-SCREEN END OF BLOCK b4.
 
 SELECTION-SCREEN SKIP 1.
+PARAMETERS: lv_req  TYPE trkorr.                        " Transport request (mandatory when not simulating)
 PARAMETERS: p_begin TYPE char50 DEFAULT '**begin of change by'.
 PARAMETERS: p_end   TYPE char50 DEFAULT '* *End of change by'.
 PARAMETERS: p_sim TYPE flag AS CHECKBOX DEFAULT 'X'.   " Simulate (X=preview only, space=apply changes)
+
+AT SELECTION-SCREEN.
+  IF p_sim = space AND lv_req IS INITIAL.
+    MESSAGE 'Transport Request is mandatory when Simulate is unchecked' TYPE 'E'.
+  ENDIF.
 
 
 *----------------------------------------------------------------------*
@@ -267,6 +273,17 @@ START-OF-SELECTION.
   ENDIF.
   IF p_prog IS INITIAL AND p_srcfm IS INITIAL.
     MESSAGE 'Enter either Source Program or Source FM name' TYPE 'E'.
+  ENDIF.
+
+  " Validate transport request when not simulating
+  IF p_sim = space AND lv_req IS NOT INITIAL.
+    SELECT SINGLE * FROM e070 INTO @DATA(lv_e070) WHERE trkorr = @lv_req.
+    IF sy-subrc <> 0.
+      MESSAGE |Transport request { lv_req } not found| TYPE 'E'.
+    ENDIF.
+    IF lv_e070-trfunction = 'T' OR lv_e070-trfunction = 'G' OR lv_e070-trfunction = 'R'.
+      MESSAGE 'Please select a Workbench transport request, not a Customizing transport' TYPE 'E'.
+    ENDIF.
   ENDIF.
 
   " Step 1: Read source program (or resolve FM function pool)
@@ -2422,10 +2439,26 @@ FORM apply_changes.
     lv_target = p_prog.
   ENDIF.
 
-  " Write modified source back to SAP (same FM as read, INSERT REPORT)
-  INSERT REPORT lv_target FROM lt_modified.
+  " Fetch program type from TRDIR (needed by RPY_PROGRAM_UPDATE)
+  DATA lv_subc TYPE trdir-subc.
+  SELECT SINGLE subc FROM trdir INTO @lv_subc WHERE name = @lv_target.
+
+  " Write modified source back — use RPY_PROGRAM_UPDATE so change is recorded in transport
+  CALL FUNCTION 'RPY_PROGRAM_UPDATE'
+    EXPORTING
+      program_name     = lv_target
+      program_type     = lv_subc
+      transport_number = lv_req
+    TABLES
+      source_extended  = lt_modified
+    EXCEPTIONS
+      cancelled        = 1
+      permission_error = 2
+      not_found        = 3
+      OTHERS           = 4.
   IF sy-subrc = 0.
-    MESSAGE |Program { lv_target } updated successfully. Activate in SE38/SE80.| TYPE 'I'.
+    COMMIT WORK AND WAIT.
+    MESSAGE |Program { lv_target } updated and recorded in transport { lv_req }. Activate in SE38/SE80.| TYPE 'I'.
   ELSE.
     MESSAGE |Failed to update { lv_target } (sy-subrc={ sy-subrc }). Check authorizations.| TYPE 'W'.
   ENDIF.
