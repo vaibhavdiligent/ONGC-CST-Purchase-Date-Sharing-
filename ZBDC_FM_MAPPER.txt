@@ -260,24 +260,45 @@ START-OF-SELECTION.
     MESSAGE 'Enter either Source Program or Source FM name' TYPE 'E'.
   ENDIF.
 
-  " Step 1: Read source program (or resolve FM include)
+  " Step 1: Read source program (or resolve FM function pool)
   DATA lv_obj_name TYPE versobjnam.
   IF p_srcfm IS NOT INITIAL.
-    " Resolve the include that contains the FM source
     TRANSLATE p_srcfm TO UPPER CASE.
     DATA lv_fm_pname TYPE tfdir-pname.
     SELECT SINGLE pname FROM tfdir INTO @lv_fm_pname WHERE funcname = @p_srcfm.
     IF sy-subrc <> 0 OR lv_fm_pname IS INITIAL.
       MESSAGE |Function Module { p_srcfm } not found in TFDIR| TYPE 'E'.
     ENDIF.
-    lv_obj_name = lv_fm_pname.   " function pool program e.g. SAPLVEND
+    lv_obj_name = lv_fm_pname.
   ELSE.
     lv_obj_name = p_prog.
   ENDIF.
+
+  " Fetch source using VRSD version lookup (same approach as ZATC_GENERATE_PROGRAM)
+  DATA wa_vrsd TYPE vrsd.
+  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_src)
+    WHERE obj_name = @lv_obj_name.
+  IF sy-subrc = 0.
+    DATA lt_vrsd TYPE TABLE OF vrsd.
+    SELECT * FROM vrsd INTO TABLE @lt_vrsd
+      WHERE objname = @wa_tadir_src-obj_name.
+    IF sy-subrc = 0.
+      SORT lt_vrsd BY datum DESCENDING.
+      READ TABLE lt_vrsd INTO wa_vrsd INDEX 1.
+      IF wa_vrsd-versmode = 'U'.
+        wa_vrsd-versno = '00000'.
+      ENDIF.
+    ELSE.
+      wa_vrsd-versno = '00000'.
+    ENDIF.
+  ELSE.
+    wa_vrsd-versno = '00000'.
+  ENDIF.
+
   CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
     EXPORTING
       object_name           = lv_obj_name
-      versno                = '00000'
+      versno                = wa_vrsd-versno
     TABLES
       repos_tab             = lt_source
     EXCEPTIONS
