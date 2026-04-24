@@ -61,12 +61,6 @@ PARAMETERS: p_begin TYPE char50 DEFAULT '**begin of change by'.
 PARAMETERS: p_end   TYPE char50 DEFAULT '* *End of change by'.
 PARAMETERS: p_sim TYPE flag AS CHECKBOX DEFAULT 'X'.   " Simulate (X=preview only, space=apply changes)
 
-AT SELECTION-SCREEN.
-  IF p_sim = space AND lv_req IS INITIAL.
-    MESSAGE 'Transport Request is mandatory when Simulate is unchecked' TYPE 'E'.
-  ENDIF.
-
-
 *----------------------------------------------------------------------*
 * TYPE DEFINITIONS
 *----------------------------------------------------------------------*
@@ -250,6 +244,14 @@ CLASS lcl_salv_handler IMPLEMENTATION.
     PERFORM display_code_alv.
   ENDMETHOD.
 ENDCLASS.
+
+*----------------------------------------------------------------------*
+* SELECTION-SCREEN VALIDATION
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+  IF p_sim = space AND lv_req IS INITIAL.
+    MESSAGE 'Transport Request is mandatory when Simulate is unchecked' TYPE 'E'.
+  ENDIF.
 
 *----------------------------------------------------------------------*
 * START OF SELECTION
