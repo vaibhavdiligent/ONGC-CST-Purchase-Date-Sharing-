@@ -2421,10 +2421,10 @@ FORM apply_changes.
     ENDIF.
   ENDLOOP.
 
-  " Determine target program/include name for INSERT REPORT
+  " Determine target program/include name for RPY_PROGRAM_UPDATE
   DATA lv_target TYPE program.
   IF p_srcfm IS NOT INITIAL.
-    " For FM: write back to the specific include (L<AREA>U<NN>)
+    " For FM: write back to the specific source include (L<AREA>U<NN>)
     DATA lv_tfdir_incl TYPE tfdir-include.
     DATA lv_ap_pname   TYPE tfdir-pname.
     SELECT SINGLE pname, include FROM tfdir
@@ -2439,9 +2439,12 @@ FORM apply_changes.
     lv_target = p_prog.
   ENDIF.
 
-  " Fetch program type from TRDIR (needed by RPY_PROGRAM_UPDATE)
+  " Fetch program type from TRDIR; default to 'I' (include) if not found
   DATA lv_subc TYPE trdir-subc.
   SELECT SINGLE subc FROM trdir INTO @lv_subc WHERE name = @lv_target.
+  IF lv_subc IS INITIAL.
+    lv_subc = COND #( WHEN p_srcfm IS NOT INITIAL THEN 'I' ELSE '1' ).
+  ENDIF.
 
   " Write modified source back — use RPY_PROGRAM_UPDATE so change is recorded in transport
   CALL FUNCTION 'RPY_PROGRAM_UPDATE'
