@@ -1596,12 +1596,18 @@ FORM generate_class_code_preview.
   ENDLOOP.
   add_line: ''.
 
-  " DATA declarations for structured parameters
+  " DATA declarations for structured parameters (all directions) and scalar output params
   add_line: '" --- Data declarations ---'.
-  LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = 'X'.
+  LOOP AT lt_cls_params INTO wa_cls_param.
     DATA lv_cls_decl TYPE char200.
-    lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
-    add_line: lv_cls_decl.
+    IF wa_cls_param-is_struct = 'X'.
+      lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
+      add_line: lv_cls_decl.
+    ELSEIF wa_cls_param-param_dir = 'E' OR wa_cls_param-param_dir = 'R'.
+      " Scalar exporting/returning param — declare a receiver variable
+      lv_cls_decl = |DATA lv_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
+      add_line: lv_cls_decl.
+    ENDIF.
   ENDLOOP.
   " Declaration hints for mandatory scalar params with no BDC match
   LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = space AND is_optional = space.
