@@ -272,49 +272,60 @@ START-OF-SELECTION.
 *& Scan source program and extract all FNAM/FVAL pairs
 *----------------------------------------------------------------------*
 FORM find_bdc_block.
-  DATA: lv_tcode_found TYPE flag,
-        lv_pend_val    TYPE flag.   " X = waiting for value on next non-comment line
+  DATA: lv_tcode_found    TYPE flag,
+        lv_pend_val       TYPE flag,
+        lt_bdc_buf        TYPE TABLE OF ty_bdc_map,
+        lv_bdc_start_cand TYPE i.
 
   LOOP AT lt_source INTO wa_source.
     lv_lineno = sy-tabix.
     DATA(lv_line) = wa_source-line.
     CONDENSE lv_line.
 
-    " Skip pure comment lines
+    " Skip empty lines and full-line comments (* and ")
     IF lv_line IS INITIAL. CONTINUE. ENDIF.
-    IF lv_line(1) = '*'. CONTINUE. ENDIF.
+    IF lv_line(1) = '*' OR lv_line(1) = '"'. CONTINUE. ENDIF.
 
     DATA(lv_line_u) = lv_line.
     TRANSLATE lv_line_u TO UPPER CASE.
 
-    " Detect CALL TRANSACTION — always close BDC block here
+    " Detect CALL TRANSACTION — closes the current BDC block
     IF lv_line_u CS 'CALL TRANSACTION'.
-      lv_bdc_end  = lv_lineno.
+      IF lv_line_u CS p_tcode AND lv_tcode_found = space.
+        " This CALL TRANSACTION belongs to our tcode — commit the buffer
+        lt_bdc_map    = lt_bdc_buf.
+        lv_bdc_start  = lv_bdc_start_cand.
+        lv_bdc_end    = lv_lineno.
+        lv_tcode_found = 'X'.
+        EXIT.   " found what we need — stop scanning
+      ENDIF.
+      " Not our tcode — discard this block and reset for next one
+      CLEAR lt_bdc_buf.
+      lv_bdc_start_cand = 0.
       lv_in_bdc   = space.
       lv_pend_val = space.
-      " Mark tcode found only when the literal value appears on this line
-      " (programs using a variable for tcode still work — fields collected above)
-      IF lv_line_u CS p_tcode.
-        lv_tcode_found = 'X'.
-      ENDIF.
       CONTINUE.
     ENDIF.
 
-    " Detect start of BDC block — form name may have prefix e.g. F_BDC_DYNPRO
+    " Detect start of BDC block
     IF lv_line_u CS 'PERFORM' AND
        ( lv_line_u CS 'BDC_DYNPRO' OR lv_line_u CS 'BDC_FIELD' ).
       lv_in_bdc = 'X'.
-      IF lv_bdc_start = 0. lv_bdc_start = lv_lineno. ENDIF.
+      IF lv_bdc_start_cand = 0. lv_bdc_start_cand = lv_lineno. ENDIF.
     ENDIF.
 
     IF lv_in_bdc <> 'X'. CONTINUE. ENDIF.
 
-    " ── Handle pending value: value variable was on next line after field name ──
+    " ── Handle pending value: value is on next non-comment line ──
     IF lv_pend_val = 'X'.
       DATA lv_val TYPE string.
       lv_val = lv_line.
+      " Strip ABAP inline comment (everything from " onwards)
+      IF lv_val CS '"'.
+        lv_val = lv_val(sy-fdpos).
+      ENDIF.
       REPLACE ALL OCCURRENCES OF '.' IN lv_val WITH space.
-      " Strip surrounding quotes if value is a literal e.g. 'X'
+      " Strip surrounding single quotes from literals e.g. 'X'
       IF lv_val CS ''''.
         DATA(lv_vq1) = sy-fdpos + 1.
         DATA lv_vinner TYPE string.
@@ -327,31 +338,33 @@ FORM find_bdc_block.
       CONDENSE lv_val.
       wa_bdc_map-fval_var = lv_val.
       lv_pend_val = space.
-      PERFORM append_bdc_map.
+      PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
       CONTINUE.
     ENDIF.
 
     " ── Detect: PERFORM [prefix_]bdc_field USING 'FNAM' [value] ──
     IF lv_line_u CS 'PERFORM' AND lv_line_u CS 'BDC_FIELD' AND lv_line_u CS 'USING'.
       DATA(lv_raw) = lv_line.
-      " Find first quote — start of field name
       IF lv_raw CS ''''.
         DATA(lv_q1) = sy-fdpos + 1.
         DATA lv_rest TYPE string.
         lv_rest = substring( val = lv_raw off = lv_q1 ).
-        " Find closing quote — end of field name
         IF lv_rest CS ''''.
           DATA(lv_q2) = sy-fdpos.
           CLEAR wa_bdc_map.
           wa_bdc_map-fnam     = lv_rest(lv_q2).
           wa_bdc_map-src_line = lv_lineno.
 
-          " Check for value on same line after closing quote
+          " Value portion after the closing quote of the field name
           DATA lv_after TYPE string.
           lv_after = substring( val = lv_rest off = lv_q2 + 1 ).
+          " Strip ABAP inline comment before processing value
+          IF lv_after CS '"'.
+            lv_after = lv_after(sy-fdpos).
+          ENDIF.
           CONDENSE lv_after.
           REPLACE ALL OCCURRENCES OF '.' IN lv_after WITH space.
-          " Strip quotes from literal value e.g. '/00'
+          " Strip single quotes from literal value e.g. '/00'
           IF lv_after CS ''''.
             DATA(lv_aq1) = sy-fdpos + 1.
             DATA lv_ainner TYPE string.
@@ -365,9 +378,8 @@ FORM find_bdc_block.
 
           IF lv_after IS NOT INITIAL.
             wa_bdc_map-fval_var = lv_after.
-            PERFORM append_bdc_map.
+            PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
           ELSE.
-            " Value is on the next non-comment line
             lv_pend_val = 'X'.
           ENDIF.
         ENDIF.
@@ -403,38 +415,32 @@ FORM find_bdc_block.
         REPLACE ALL OCCURRENCES OF '.' IN lv_fval WITH space.
         CONDENSE lv_fval.
         wa_bdc_map-fval_var = lv_fval.
-        PERFORM append_bdc_map.
+        PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
       ENDIF.
     ENDIF.
 
   ENDLOOP.
 
-  " Warn only when the literal tcode was not found AND no fields collected
-  " (programs using a variable for tcode are OK as long as fields were found)
   IF lv_tcode_found = space AND lt_bdc_map IS INITIAL.
     MESSAGE |CALL TRANSACTION '{ p_tcode }' not found in { p_prog }| TYPE 'I'.
   ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
-*& Helper: validate, split and append wa_bdc_map to lt_bdc_map
+*& Helper: validate, split, and append wa_bdc_map to a given buffer
 *----------------------------------------------------------------------*
-FORM append_bdc_map.
-  " Skip BDC navigation fields
+FORM append_bdc_to_buf CHANGING ct_buf TYPE STANDARD TABLE.
   DATA(lv_fn_u) = wa_bdc_map-fnam.
   TRANSLATE lv_fn_u TO UPPER CASE.
   IF lv_fn_u = 'BDC_OKCODE' OR lv_fn_u = 'BDC_CURSOR'.
     CLEAR wa_bdc_map. RETURN.
   ENDIF.
-  " Split FNAM into table and field (e.g. LFBW-WITHT(01) -> LFBW / WITHT(01))
   IF wa_bdc_map-fnam CS '-'.
     DATA(lv_sp) = sy-fdpos.
     wa_bdc_map-tabname = wa_bdc_map-fnam(lv_sp).
     DATA lv_fld TYPE string.
     lv_fld = substring( val = wa_bdc_map-fnam off = lv_sp ).
     SHIFT lv_fld LEFT BY 1 PLACES.
-    " Strip BDC occurrence suffix e.g. WITHT(01) → WITHT for DD03L lookup
-    " FNAM keeps the original value for display; FIELDNAME must be clean
     IF lv_fld CS '('.
       DATA lv_par TYPE i.
       lv_par = sy-fdpos.
@@ -443,7 +449,7 @@ FORM append_bdc_map.
     CONDENSE lv_fld.
     wa_bdc_map-fieldname = lv_fld.
   ENDIF.
-  APPEND wa_bdc_map TO lt_bdc_map.
+  APPEND wa_bdc_map TO ct_buf.
   CLEAR wa_bdc_map.
 ENDFORM.
 
@@ -1724,7 +1730,11 @@ FORM generate_class_code_preview.
         ENDIF.
       WHEN 'E'.
         lv_prm_dir = 'IMPORTING'.
-        lv_prm_val = |lv_{ wa_cls_param-param_name }|.
+        IF wa_cls_param-is_struct = 'X'.
+          lv_prm_val = |ls_{ wa_cls_param-param_name }|.
+        ELSE.
+          lv_prm_val = |lv_{ wa_cls_param-param_name }|.
+        ENDIF.
       WHEN 'R'.
         lv_prm_dir = 'RECEIVING'.
         lv_prm_val = |lv_result " { wa_cls_param-type_name }|.
