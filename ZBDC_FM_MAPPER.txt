@@ -56,6 +56,8 @@ PARAMETERS: p_class  TYPE seoclsname,                  " Replacement Class
 SELECTION-SCREEN END OF BLOCK b4.
 
 SELECTION-SCREEN SKIP 1.
+PARAMETERS: p_begin TYPE char50 DEFAULT '**begin of change by'.
+PARAMETERS: p_end   TYPE char50 DEFAULT '* *End of change by'.
 PARAMETERS: p_sim TYPE flag AS CHECKBOX DEFAULT 'X'.   " Simulate (X=preview only, space=apply changes)
 
 
@@ -191,6 +193,8 @@ DATA: lv_bdc_start   TYPE i,
       lv_lineno      TYPE i,
       lv_code_ctr    TYPE i.
 
+DATA lv_datum TYPE char10.   " Formatted date DD.MM.YYYY for change markers
+
 *----------------------------------------------------------------------*
 * Local handler class for ALV interactive checkbox
 * Placed after global DATA so lt_output, wa_output, lt_bdc_map etc. are known
@@ -245,6 +249,8 @@ ENDCLASS.
 * START OF SELECTION
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
+
+  CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum(4) INTO lv_datum.
 
   " Validate inputs
   IF rb_fm = 'X' AND p_fm IS INITIAL.
@@ -1598,12 +1604,11 @@ FORM generate_class_code_preview.
     lv_code_ctr = lv_code_ctr + 1.
   END-OF-DEFINITION.
 
-  " Header
+  " Header — begin marker comes first (before old code is commented out)
+  lv_ln = |" { p_begin } { sy-uname } { lv_datum }|. add_line: lv_ln.
   IF p_tcode IS NOT INITIAL.
-    lv_ln = |" ** begin of change - BDC -> Class Method replacement **|. add_line: lv_ln.
     lv_ln = |" Replace CALL TRANSACTION '{ p_tcode }' with { p_class }=>{ p_meth }|. add_line: lv_ln.
   ELSE.
-    lv_ln = |" ** begin of change - FM -> Class Method replacement **|. add_line: lv_ln.
     lv_ln = |" Replace CALL FUNCTION '{ p_oldfm }' with { p_class }=>{ p_meth }|. add_line: lv_ln.
   ENDIF.
   add_line: ''.
@@ -1903,7 +1908,7 @@ FORM generate_class_code_preview.
   ENDLOOP.
   add_line: ').'.
   add_line: ''.
-  add_line: '" ** end of change **'.
+  lv_ln = |" { p_end } { sy-uname } { lv_datum }|. add_line: lv_ln.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1925,12 +1930,8 @@ FORM generate_code_preview.
     lv_code_ctr = lv_code_ctr + 1.
   END-OF-DEFINITION.
 
-  IF rb_ff = 'X'.
-    lv_ln = |" ** begin of change - FM -> FM replacement **|.
-  ELSE.
-    lv_ln = |" ** begin of change - BDC -> FM replacement **|.
-  ENDIF.
-  add_line: lv_ln.
+  " Begin marker comes first (before old code is commented out)
+  lv_ln = |" { p_begin } { sy-uname } { lv_datum }|. add_line: lv_ln.
   IF rb_ff = 'X'.
     lv_ln = |" Replace CALL FUNCTION '{ p_oldfm }' with CALL FUNCTION '{ p_fm }'|.
   ELSE.
@@ -2209,11 +2210,7 @@ FORM generate_code_preview.
     add_line: 'ENDIF.'.
   ENDIF.
   add_line: ''.
-  IF rb_ff = 'X'.
-    add_line: '" ** end of change - FM -> FM replacement **'.
-  ELSE.
-    add_line: '" ** end of change - BDC -> FM replacement **'.
-  ENDIF.
+  lv_ln = |" { p_end } { sy-uname } { lv_datum }|. add_line: lv_ln.
 ENDFORM.
 
 *----------------------------------------------------------------------*
