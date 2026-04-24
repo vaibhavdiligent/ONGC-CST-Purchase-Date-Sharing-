@@ -55,6 +55,9 @@ PARAMETERS: p_class  TYPE seoclsname,                  " Replacement Class
             p_static TYPE flag AS CHECKBOX DEFAULT 'X'." X=static, space=instance
 SELECTION-SCREEN END OF BLOCK b4.
 
+SELECTION-SCREEN SKIP 1.
+PARAMETERS: p_sim TYPE flag AS CHECKBOX DEFAULT 'X'.   " Simulate (X=preview only, space=apply changes)
+
 
 *----------------------------------------------------------------------*
 * TYPE DEFINITIONS
@@ -353,6 +356,11 @@ START-OF-SELECTION.
 
   " Step 5: Display results
   PERFORM display_results.
+
+  " Step 6: Apply changes to source if not in simulate mode
+  IF p_sim = space.
+    PERFORM apply_changes.
+  ENDIF.
 
 *----------------------------------------------------------------------*
 *& Form find_bdc_block
@@ -2325,4 +2333,85 @@ FORM display_results.
 
   " --- ALV 2: Generated Code Preview ---
   PERFORM display_code_alv.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form apply_changes
+*& Replace original BDC/FM block in source with generated replacement:
+*&   - Comment out each original line with *
+*&   - Insert generated code lines immediately after the commented block
+*& Uses same INSERT REPORT approach as ZATC_GENERATE_PROGRAM
+*----------------------------------------------------------------------*
+FORM apply_changes.
+  " Determine which block was identified
+  DATA lv_blk_s TYPE i.
+  DATA lv_blk_e TYPE i.
+  IF p_tcode IS NOT INITIAL.
+    lv_blk_s = lv_bdc_start.
+    lv_blk_e = lv_bdc_end.
+  ELSE.
+    lv_blk_s = lv_fm_start.
+    lv_blk_e = lv_fm_end.
+  ENDIF.
+
+  IF lv_blk_s = 0 OR lv_blk_e = 0.
+    MESSAGE 'Cannot apply: original block boundaries not found' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  " Build modified source: same as ZATC_GENERATE_PROGRAM (repos_tab_new approach)
+  DATA lt_modified TYPE TABLE OF abaptxt255.
+  DATA wa_mod      TYPE abaptxt255.
+  DATA lv_idx      TYPE i.
+
+  LOOP AT lt_source INTO wa_source.
+    lv_idx = sy-tabix.
+
+    IF lv_idx >= lv_blk_s AND lv_idx <= lv_blk_e.
+      " Comment out original line (prefix with *)
+      CLEAR wa_mod.
+      CONCATENATE '*' wa_source-line INTO wa_mod-line.
+      APPEND wa_mod TO lt_modified.
+
+      " After last original line, insert all generated code lines
+      IF lv_idx = lv_blk_e.
+        LOOP AT lt_code INTO wa_code.
+          CLEAR wa_mod.
+          wa_mod-line = wa_code-code.
+          APPEND wa_mod TO lt_modified.
+        ENDLOOP.
+      ENDIF.
+    ELSE.
+      " Outside block — copy line as-is
+      CLEAR wa_mod.
+      wa_mod-line = wa_source-line.
+      APPEND wa_mod TO lt_modified.
+    ENDIF.
+  ENDLOOP.
+
+  " Determine target program/include name for INSERT REPORT
+  DATA lv_target TYPE program.
+  IF p_srcfm IS NOT INITIAL.
+    " For FM: write back to the specific include (L<AREA>U<NN>)
+    DATA lv_tfdir_incl TYPE tfdir-include.
+    DATA lv_ap_pname   TYPE tfdir-pname.
+    SELECT SINGLE pname, include FROM tfdir
+      INTO (@lv_ap_pname, @lv_tfdir_incl)
+      WHERE funcname = @p_srcfm.
+    IF lv_ap_pname(4) = 'SAPL'.
+      CONCATENATE 'L' lv_ap_pname+4 'U' lv_tfdir_incl INTO lv_target.
+    ELSE.
+      lv_target = lv_ap_pname.
+    ENDIF.
+  ELSE.
+    lv_target = p_prog.
+  ENDIF.
+
+  " Write modified source back to SAP (same FM as read, INSERT REPORT)
+  INSERT REPORT lv_target FROM lt_modified.
+  IF sy-subrc = 0.
+    MESSAGE |Program { lv_target } updated successfully. Activate in SE38/SE80.| TYPE 'I'.
+  ELSE.
+    MESSAGE |Failed to update { lv_target } (sy-subrc={ sy-subrc }). Check authorizations.| TYPE 'W'.
+  ENDIF.
 ENDFORM.
