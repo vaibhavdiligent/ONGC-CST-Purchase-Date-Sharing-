@@ -57,57 +57,6 @@ SELECTION-SCREEN END OF BLOCK b4.
 
 
 *----------------------------------------------------------------------*
-* Local handler class for ALV interactive checkbox
-*----------------------------------------------------------------------*
-CLASS lcl_salv_handler DEFINITION.
-  PUBLIC SECTION.
-    CLASS-METHODS:
-      on_link_click
-        FOR EVENT link_click OF cl_salv_events_table
-        IMPORTING row column sender,
-      on_function
-        FOR EVENT added_function OF cl_salv_events
-        IMPORTING e_salv_function sender.
-ENDCLASS.
-
-CLASS lcl_salv_handler IMPLEMENTATION.
-  METHOD on_link_click.
-    " Toggle SELECTED checkbox for 'Name match' rows only
-    IF to_upper( column ) <> 'SELECTED'. RETURN. ENDIF.
-    READ TABLE lt_output INDEX row INTO wa_output.
-    IF sy-subrc = 0 AND wa_output-status = 'Name match'.
-      wa_output-selected = COND #( WHEN wa_output-selected = 'X' THEN space ELSE 'X' ).
-      MODIFY lt_output INDEX row FROM wa_output.
-      sender->refresh( ).
-    ENDIF.
-  ENDMETHOD.
-
-  METHOD on_function.
-    IF e_salv_function <> 'TAKE_SEL'. RETURN. ENDIF.
-    " Promote selected name-match rows to confirmed (matched='X')
-    LOOP AT lt_output INTO wa_output WHERE status = 'Name match' AND selected = 'X'.
-      LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_sel>)
-        WHERE fnam = wa_output-bdc_fnam AND matched = 'N'.
-        <fs_sel>-matched = 'X'.
-        EXIT.
-      ENDLOOP.
-    ENDLOOP.
-    " Rebuild output and regenerate code with promoted matches
-    CLEAR lt_output.
-    CLEAR lt_code.
-    IF rb_cls = 'X'.
-      PERFORM build_output_class.
-      PERFORM generate_class_code_preview.
-    ELSE.
-      PERFORM build_output.
-      PERFORM generate_code_preview.
-    ENDIF.
-    sender->refresh( ).
-    PERFORM display_code_alv.
-  ENDMETHOD.
-ENDCLASS.
-
-*----------------------------------------------------------------------*
 * TYPE DEFINITIONS
 *----------------------------------------------------------------------*
 " Class method parameter type
@@ -238,6 +187,55 @@ DATA: lv_bdc_start   TYPE i,
       lv_in_bdc      TYPE flag,
       lv_lineno      TYPE i,
       lv_code_ctr    TYPE i.
+
+*----------------------------------------------------------------------*
+* Local handler class for ALV interactive checkbox
+* Placed after global DATA so lt_output, wa_output, lt_bdc_map etc. are known
+*----------------------------------------------------------------------*
+CLASS lcl_salv_handler DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS:
+      on_link_click
+        FOR EVENT link_click OF cl_salv_events_table
+        IMPORTING row column sender,
+      on_function
+        FOR EVENT added_function OF cl_salv_events
+        IMPORTING e_salv_function sender.
+ENDCLASS.
+
+CLASS lcl_salv_handler IMPLEMENTATION.
+  METHOD on_link_click.
+    IF to_upper( column ) <> 'SELECTED'. RETURN. ENDIF.
+    READ TABLE lt_output INDEX row INTO wa_output.
+    IF sy-subrc = 0 AND wa_output-status = 'Name match'.
+      wa_output-selected = COND #( WHEN wa_output-selected = 'X' THEN space ELSE 'X' ).
+      MODIFY lt_output INDEX row FROM wa_output.
+      sender->refresh( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD on_function.
+    IF e_salv_function <> 'TAKE_SEL'. RETURN. ENDIF.
+    LOOP AT lt_output INTO wa_output WHERE status = 'Name match' AND selected = 'X'.
+      LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_sel>)
+        WHERE fnam = wa_output-bdc_fnam AND matched = 'N'.
+        <fs_sel>-matched = 'X'.
+        EXIT.
+      ENDLOOP.
+    ENDLOOP.
+    CLEAR lt_output.
+    CLEAR lt_code.
+    IF rb_cls = 'X'.
+      PERFORM build_output_class.
+      PERFORM generate_class_code_preview.
+    ELSE.
+      PERFORM build_output.
+      PERFORM generate_code_preview.
+    ENDIF.
+    sender->refresh( ).
+    PERFORM display_code_alv.
+  ENDMETHOD.
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 * START OF SELECTION
