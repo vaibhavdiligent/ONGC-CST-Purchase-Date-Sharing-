@@ -26,7 +26,8 @@ REPORT zbdc_fm_mapper.
 *----------------------------------------------------------------------*
 * SELECTION SCREEN
 *----------------------------------------------------------------------*
-PARAMETERS: p_prog   TYPE program    OBLIGATORY.       " Source program
+PARAMETERS: p_prog   TYPE program.                    " Source program (include/report)
+PARAMETERS: p_srcfm  TYPE rs38l_fnam.               " OR: source Function Module name (auto-resolves include)
 
 SELECTION-SCREEN SKIP 1.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
@@ -56,6 +57,57 @@ SELECTION-SCREEN END OF BLOCK b4.
 
 
 *----------------------------------------------------------------------*
+* Local handler class for ALV interactive checkbox
+*----------------------------------------------------------------------*
+CLASS lcl_salv_handler DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS:
+      on_link_click
+        FOR EVENT link_click OF cl_salv_events_table
+        IMPORTING row column sender,
+      on_function
+        FOR EVENT added_function OF cl_salv_events
+        IMPORTING e_salv_function sender.
+ENDCLASS.
+
+CLASS lcl_salv_handler IMPLEMENTATION.
+  METHOD on_link_click.
+    " Toggle SELECTED checkbox for 'Name match' rows only
+    IF to_upper( column ) <> 'SELECTED'. RETURN. ENDIF.
+    READ TABLE lt_output INDEX row INTO wa_output.
+    IF sy-subrc = 0 AND wa_output-status = 'Name match'.
+      wa_output-selected = COND #( WHEN wa_output-selected = 'X' THEN space ELSE 'X' ).
+      MODIFY lt_output INDEX row FROM wa_output.
+      sender->refresh( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD on_function.
+    IF e_salv_function <> 'TAKE_SEL'. RETURN. ENDIF.
+    " Promote selected name-match rows to confirmed (matched='X')
+    LOOP AT lt_output INTO wa_output WHERE status = 'Name match' AND selected = 'X'.
+      LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_sel>)
+        WHERE fnam = wa_output-bdc_fnam AND matched = 'N'.
+        <fs_sel>-matched = 'X'.
+        EXIT.
+      ENDLOOP.
+    ENDLOOP.
+    " Rebuild output and regenerate code with promoted matches
+    CLEAR lt_output.
+    CLEAR lt_code.
+    IF rb_cls = 'X'.
+      PERFORM build_output_class.
+      PERFORM generate_class_code_preview.
+    ELSE.
+      PERFORM build_output.
+      PERFORM generate_code_preview.
+    ENDIF.
+    sender->refresh( ).
+    PERFORM display_code_alv.
+  ENDMETHOD.
+ENDCLASS.
+
+*----------------------------------------------------------------------*
 * TYPE DEFINITIONS
 *----------------------------------------------------------------------*
 " Class method parameter type
@@ -64,8 +116,9 @@ TYPES: BEGIN OF ty_cls_param,
          param_dir  TYPE char1,          " I=Import E=Export R=Return C=Change
          type_name  TYPE char50,         " Type e.g. LIFNR / BAPIMEPOHEADER
          typtype    TYPE char1,          " 1=type 2=obj ref 3=data ref
-         rollname   TYPE dd03l-rollname, " Data element for matching
-         is_struct  TYPE flag,           " X = structure type
+         rollname    TYPE dd03l-rollname, " Data element for matching
+         is_struct   TYPE flag,           " X = structure type
+         is_optional TYPE flag,           " X = optional, space = mandatory
        END OF ty_cls_param.
 
 " Class method field-level type (for structures)
@@ -134,6 +187,7 @@ TYPES: BEGIN OF ty_output,
          cls_full_path TYPE char200,    " Full mapping path e.g. IS_MASTER_DATA-VENDORS-...-BUKRS
          gen_code      TYPE char200,
          remark        TYPE char100,
+         selected      TYPE char1,        " X = user confirmed field-name match
        END OF ty_output.
 
 TYPES: BEGIN OF ty_code_preview,
@@ -203,10 +257,23 @@ START-OF-SELECTION.
   IF p_tcode IS INITIAL AND p_oldfm IS INITIAL.
     MESSAGE 'Enter either BDC Transaction or Old FM name' TYPE 'E'.
   ENDIF.
+  IF p_prog IS INITIAL AND p_srcfm IS INITIAL.
+    MESSAGE 'Enter either Source Program or Source FM name' TYPE 'E'.
+  ENDIF.
 
-  " Step 1: Read source program
+  " Step 1: Read source program (or resolve FM include)
   DATA lv_obj_name TYPE versobjnam.
-  lv_obj_name = p_prog.
+  IF p_srcfm IS NOT INITIAL.
+    " Resolve the include that contains the FM source
+    TRANSLATE p_srcfm TO UPPER CASE.
+    SELECT SINGLE include INTO @DATA(lv_fm_incl) FROM enlfdir WHERE funcname = @p_srcfm.
+    IF sy-subrc <> 0 OR lv_fm_incl IS INITIAL.
+      MESSAGE |Function Module { p_srcfm } not found in ENLFDIR| TYPE 'E'.
+    ENDIF.
+    lv_obj_name = lv_fm_incl.
+  ELSE.
+    lv_obj_name = p_prog.
+  ENDIF.
   CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
     EXPORTING
       object_name           = lv_obj_name
@@ -218,7 +285,7 @@ START-OF-SELECTION.
       system_failure        = 2
       communication_failure = 3.
   IF sy-subrc <> 0 OR lt_source IS INITIAL.
-    MESSAGE |Program { p_prog } not found or has no source| TYPE 'E'.
+    MESSAGE |Source not found: { lv_obj_name }| TYPE 'E'.
   ENDIF.
 
   " Step 2: Scan source — BDC block or FM call block
@@ -271,49 +338,60 @@ START-OF-SELECTION.
 *& Scan source program and extract all FNAM/FVAL pairs
 *----------------------------------------------------------------------*
 FORM find_bdc_block.
-  DATA: lv_tcode_found TYPE flag,
-        lv_pend_val    TYPE flag.   " X = waiting for value on next non-comment line
+  DATA: lv_tcode_found    TYPE flag,
+        lv_pend_val       TYPE flag,
+        lt_bdc_buf        TYPE TABLE OF ty_bdc_map,
+        lv_bdc_start_cand TYPE i.
 
   LOOP AT lt_source INTO wa_source.
     lv_lineno = sy-tabix.
     DATA(lv_line) = wa_source-line.
     CONDENSE lv_line.
 
-    " Skip pure comment lines
+    " Skip empty lines and full-line comments (* and ")
     IF lv_line IS INITIAL. CONTINUE. ENDIF.
-    IF lv_line(1) = '*'. CONTINUE. ENDIF.
+    IF lv_line(1) = '*' OR lv_line(1) = '"'. CONTINUE. ENDIF.
 
     DATA(lv_line_u) = lv_line.
     TRANSLATE lv_line_u TO UPPER CASE.
 
-    " Detect CALL TRANSACTION — always close BDC block here
+    " Detect CALL TRANSACTION — closes the current BDC block
     IF lv_line_u CS 'CALL TRANSACTION'.
-      lv_bdc_end  = lv_lineno.
+      IF lv_line_u CS p_tcode AND lv_tcode_found = space.
+        " This CALL TRANSACTION belongs to our tcode — commit the buffer
+        lt_bdc_map    = lt_bdc_buf.
+        lv_bdc_start  = lv_bdc_start_cand.
+        lv_bdc_end    = lv_lineno.
+        lv_tcode_found = 'X'.
+        EXIT.   " found what we need — stop scanning
+      ENDIF.
+      " Not our tcode — discard this block and reset for next one
+      CLEAR lt_bdc_buf.
+      lv_bdc_start_cand = 0.
       lv_in_bdc   = space.
       lv_pend_val = space.
-      " Mark tcode found only when the literal value appears on this line
-      " (programs using a variable for tcode still work — fields collected above)
-      IF lv_line_u CS p_tcode.
-        lv_tcode_found = 'X'.
-      ENDIF.
       CONTINUE.
     ENDIF.
 
-    " Detect start of BDC block — form name may have prefix e.g. F_BDC_DYNPRO
+    " Detect start of BDC block
     IF lv_line_u CS 'PERFORM' AND
        ( lv_line_u CS 'BDC_DYNPRO' OR lv_line_u CS 'BDC_FIELD' ).
       lv_in_bdc = 'X'.
-      IF lv_bdc_start = 0. lv_bdc_start = lv_lineno. ENDIF.
+      IF lv_bdc_start_cand = 0. lv_bdc_start_cand = lv_lineno. ENDIF.
     ENDIF.
 
     IF lv_in_bdc <> 'X'. CONTINUE. ENDIF.
 
-    " ── Handle pending value: value variable was on next line after field name ──
+    " ── Handle pending value: value is on next non-comment line ──
     IF lv_pend_val = 'X'.
       DATA lv_val TYPE string.
       lv_val = lv_line.
+      " Strip ABAP inline comment (everything from " onwards)
+      IF lv_val CS '"'.
+        lv_val = lv_val(sy-fdpos).
+      ENDIF.
       REPLACE ALL OCCURRENCES OF '.' IN lv_val WITH space.
-      " Strip surrounding quotes if value is a literal e.g. 'X'
+      " Strip surrounding single quotes from literals e.g. 'X'
       IF lv_val CS ''''.
         DATA(lv_vq1) = sy-fdpos + 1.
         DATA lv_vinner TYPE string.
@@ -326,31 +404,33 @@ FORM find_bdc_block.
       CONDENSE lv_val.
       wa_bdc_map-fval_var = lv_val.
       lv_pend_val = space.
-      PERFORM append_bdc_map.
+      PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
       CONTINUE.
     ENDIF.
 
     " ── Detect: PERFORM [prefix_]bdc_field USING 'FNAM' [value] ──
     IF lv_line_u CS 'PERFORM' AND lv_line_u CS 'BDC_FIELD' AND lv_line_u CS 'USING'.
       DATA(lv_raw) = lv_line.
-      " Find first quote — start of field name
       IF lv_raw CS ''''.
         DATA(lv_q1) = sy-fdpos + 1.
         DATA lv_rest TYPE string.
         lv_rest = substring( val = lv_raw off = lv_q1 ).
-        " Find closing quote — end of field name
         IF lv_rest CS ''''.
           DATA(lv_q2) = sy-fdpos.
           CLEAR wa_bdc_map.
           wa_bdc_map-fnam     = lv_rest(lv_q2).
           wa_bdc_map-src_line = lv_lineno.
 
-          " Check for value on same line after closing quote
+          " Value portion after the closing quote of the field name
           DATA lv_after TYPE string.
           lv_after = substring( val = lv_rest off = lv_q2 + 1 ).
+          " Strip ABAP inline comment before processing value
+          IF lv_after CS '"'.
+            lv_after = lv_after(sy-fdpos).
+          ENDIF.
           CONDENSE lv_after.
           REPLACE ALL OCCURRENCES OF '.' IN lv_after WITH space.
-          " Strip quotes from literal value e.g. '/00'
+          " Strip single quotes from literal value e.g. '/00'
           IF lv_after CS ''''.
             DATA(lv_aq1) = sy-fdpos + 1.
             DATA lv_ainner TYPE string.
@@ -364,9 +444,8 @@ FORM find_bdc_block.
 
           IF lv_after IS NOT INITIAL.
             wa_bdc_map-fval_var = lv_after.
-            PERFORM append_bdc_map.
+            PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
           ELSE.
-            " Value is on the next non-comment line
             lv_pend_val = 'X'.
           ENDIF.
         ENDIF.
@@ -402,38 +481,32 @@ FORM find_bdc_block.
         REPLACE ALL OCCURRENCES OF '.' IN lv_fval WITH space.
         CONDENSE lv_fval.
         wa_bdc_map-fval_var = lv_fval.
-        PERFORM append_bdc_map.
+        PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
       ENDIF.
     ENDIF.
 
   ENDLOOP.
 
-  " Warn only when the literal tcode was not found AND no fields collected
-  " (programs using a variable for tcode are OK as long as fields were found)
   IF lv_tcode_found = space AND lt_bdc_map IS INITIAL.
     MESSAGE |CALL TRANSACTION '{ p_tcode }' not found in { p_prog }| TYPE 'I'.
   ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
-*& Helper: validate, split and append wa_bdc_map to lt_bdc_map
+*& Helper: validate, split, and append wa_bdc_map to a given buffer
 *----------------------------------------------------------------------*
-FORM append_bdc_map.
-  " Skip BDC navigation fields
+FORM append_bdc_to_buf CHANGING ct_buf TYPE STANDARD TABLE.
   DATA(lv_fn_u) = wa_bdc_map-fnam.
   TRANSLATE lv_fn_u TO UPPER CASE.
   IF lv_fn_u = 'BDC_OKCODE' OR lv_fn_u = 'BDC_CURSOR'.
     CLEAR wa_bdc_map. RETURN.
   ENDIF.
-  " Split FNAM into table and field (e.g. LFBW-WITHT(01) -> LFBW / WITHT(01))
   IF wa_bdc_map-fnam CS '-'.
     DATA(lv_sp) = sy-fdpos.
     wa_bdc_map-tabname = wa_bdc_map-fnam(lv_sp).
     DATA lv_fld TYPE string.
     lv_fld = substring( val = wa_bdc_map-fnam off = lv_sp ).
     SHIFT lv_fld LEFT BY 1 PLACES.
-    " Strip BDC occurrence suffix e.g. WITHT(01) → WITHT for DD03L lookup
-    " FNAM keeps the original value for display; FIELDNAME must be clean
     IF lv_fld CS '('.
       DATA lv_par TYPE i.
       lv_par = sy-fdpos.
@@ -442,7 +515,7 @@ FORM append_bdc_map.
     CONDENSE lv_fld.
     wa_bdc_map-fieldname = lv_fld.
   ENDIF.
-  APPEND wa_bdc_map TO lt_bdc_map.
+  APPEND wa_bdc_map TO ct_buf.
   CLEAR wa_bdc_map.
 ENDFORM.
 
@@ -879,10 +952,11 @@ FORM get_class_method_params.
     ENDIF.
 
     CLEAR wa_cls_param.
-    wa_cls_param-param_name = wa_parm-name.
-    wa_cls_param-param_dir  = wa_parm-parm_kind.
-    wa_cls_param-type_name  = lv_typename.
-    wa_cls_param-typtype    = '1'.
+    wa_cls_param-param_name  = wa_parm-name.
+    wa_cls_param-param_dir   = wa_parm-parm_kind.
+    wa_cls_param-type_name   = lv_typename.
+    wa_cls_param-typtype     = '1'.
+    wa_cls_param-is_optional = wa_parm-is_optional.
 
     " Check if the type is a structure (exists in DD02L)
     SELECT SINGLE tabname INTO @DATA(lv_tabchk)
@@ -1327,6 +1401,29 @@ FORM match_fields.
       ENDIF.
     ENDLOOP.
   ENDLOOP.
+
+  " Pass 5: field name match only — pending user confirmation (matched = 'N')
+  LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_m5>) WHERE matched = space.
+    IF <fs_m5>-fieldname IS INITIAL. CONTINUE. ENDIF.
+    DATA lv_m5_fn TYPE string.
+    lv_m5_fn = to_upper( <fs_m5>-fieldname ).
+    LOOP AT lt_fm_dd INTO DATA(wa_fm5).
+      DATA lv_m5_fm_fn TYPE string.
+      lv_m5_fm_fn = to_upper( wa_fm5-fieldname ).
+      IF lv_m5_fn = lv_m5_fm_fn.
+        <fs_m5>-fm_param     = wa_fm5-parameter.
+        <fs_m5>-fm_struct    = wa_fm5-structure.
+        <fs_m5>-fm_field     = wa_fm5-fieldname.
+        <fs_m5>-fm_wa_name   = wa_fm5-wa_name.
+        <fs_m5>-fm_wa_type   = wa_fm5-wa_type.
+        <fs_m5>-fm_wa_path   = wa_fm5-wa_path.
+        <fs_m5>-fm_datax     = wa_fm5-has_datax.
+        <fs_m5>-fm_paramtype = wa_fm5-paramtype.
+        <fs_m5>-matched      = 'N'.   " N = name-only match, pending user confirm
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+  ENDLOOP.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1362,6 +1459,15 @@ FORM build_output.
           INTO wa_output-gen_code SEPARATED BY space.
       ENDIF.
       wa_output-remark = wa_bdc_map-rollname.
+    ELSEIF wa_bdc_map-matched = 'N'.
+      " Field name match — pending user confirmation (checkbox)
+      wa_output-status    = 'Name match'.
+      wa_output-fm_param  = wa_bdc_map-fm_param.
+      wa_output-fm_struct = wa_bdc_map-fm_struct.
+      wa_output-fm_field  = wa_bdc_map-fm_field.
+      wa_output-remark    = 'Field name matched - check to confirm'.
+      CONCATENATE '" Pending:' wa_bdc_map-fnam '->' wa_bdc_map-fm_param '-' wa_bdc_map-fm_field
+        INTO wa_output-gen_code SEPARATED BY space.
     ELSE.
       wa_output-status = 'NO MATCH'.
       IF wa_bdc_map-rollname IS INITIAL.
@@ -1376,8 +1482,11 @@ FORM build_output.
     APPEND wa_output TO lt_output.
   ENDLOOP.
 
-  " Summary message
-  MESSAGE |Mapping complete: { lv_match_cnt } of { lv_total_cnt } fields matched| TYPE 'I'.
+  DATA lv_name_cnt TYPE i.
+  LOOP AT lt_bdc_map TRANSPORTING NO FIELDS WHERE matched = 'N'.
+    lv_name_cnt = lv_name_cnt + 1.
+  ENDLOOP.
+  MESSAGE |Mapping: { lv_match_cnt } confirmed, { lv_name_cnt } field-name matches pending (check checkboxes to include)| TYPE 'I'.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1487,12 +1596,29 @@ FORM generate_class_code_preview.
   ENDLOOP.
   add_line: ''.
 
-  " DATA declarations for structured parameters
+  " DATA declarations for structured parameters (all directions) and scalar output params
   add_line: '" --- Data declarations ---'.
-  LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = 'X'.
+  LOOP AT lt_cls_params INTO wa_cls_param.
     DATA lv_cls_decl TYPE char200.
-    lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
-    add_line: lv_cls_decl.
+    IF wa_cls_param-is_struct = 'X'.
+      lv_cls_decl = |DATA ls_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
+      add_line: lv_cls_decl.
+    ELSEIF wa_cls_param-param_dir = 'E' OR wa_cls_param-param_dir = 'R'.
+      " Scalar exporting/returning param — declare a receiver variable
+      lv_cls_decl = |DATA lv_{ wa_cls_param-param_name } TYPE { wa_cls_param-type_name }.|.
+      add_line: lv_cls_decl.
+    ENDIF.
+  ENDLOOP.
+  " Declaration hints for mandatory scalar params with no BDC match
+  LOOP AT lt_cls_params INTO wa_cls_param WHERE is_struct = space AND is_optional = space.
+    IF wa_cls_param-param_dir <> 'I' AND wa_cls_param-param_dir <> 'C'. CONTINUE. ENDIF.
+    " Check if matched as scalar
+    READ TABLE lt_bdc_map TRANSPORTING NO FIELDS
+      WITH KEY cls_param = wa_cls_param-param_name matched = 'X'.
+    IF sy-subrc = 0. CONTINUE. ENDIF.
+    DATA lv_mnd_cls_decl TYPE string.
+    lv_mnd_cls_decl = |" DATA lv_{ to_lower( wa_cls_param-param_name ) } TYPE { to_lower( wa_cls_param-type_name ) }. " TODO: mandatory - fill before calling|.
+    add_line: lv_mnd_cls_decl.
   ENDLOOP.
   " Work-area declarations for each internal-table row type used
   DATA lt_wa_seen TYPE TABLE OF string.
@@ -1686,21 +1812,46 @@ FORM generate_class_code_preview.
   ENDIF.
   add_line: lv_call_stmt.
 
-  " Parameters in call
+  " Parameters in call — group by direction, emit section header once
+  DATA lv_cls_cur_dir TYPE char10.
+  CLEAR lv_cls_cur_dir.
   LOOP AT lt_cls_params INTO wa_cls_param.
-    DATA lv_prm TYPE char200.
+    DATA lv_prm      TYPE char200.
+    DATA lv_prm_dir  TYPE char10.
+    DATA lv_prm_val  TYPE string.
     CASE wa_cls_param-param_dir.
-      WHEN 'I' OR 'C'.  " Importing / Changing
+      WHEN 'I' OR 'C'.
+        lv_prm_dir = 'EXPORTING'.
         IF wa_cls_param-is_struct = 'X'.
-          lv_prm = |  EXPORTING { wa_cls_param-param_name } = ls_{ wa_cls_param-param_name }|.
+          lv_prm_val = |ls_{ wa_cls_param-param_name }|.
         ELSE.
-          lv_prm = |  EXPORTING { wa_cls_param-param_name } = " TODO: fill value|.
+          READ TABLE lt_bdc_map INTO DATA(wa_cls_scl)
+            WITH KEY cls_param = wa_cls_param-param_name matched = 'X'.
+          IF sy-subrc = 0 AND wa_cls_scl-cls_field = wa_cls_scl-cls_param.
+            lv_prm_val = wa_cls_scl-fval_var.
+          ELSEIF wa_cls_param-is_optional = space.
+            lv_prm_val = |" TODO mandatory: fill value ({ wa_cls_param-type_name })|.
+          ELSE.
+            lv_prm_val = '" TODO: fill value'.
+          ENDIF.
         ENDIF.
-      WHEN 'E'.  " Exporting
-        lv_prm = |  IMPORTING { wa_cls_param-param_name } = lv_{ wa_cls_param-param_name }|.
-      WHEN 'R'.  " Returning
-        lv_prm = |  RECEIVING result = lv_result " { wa_cls_param-type_name }|.
+      WHEN 'E'.
+        lv_prm_dir = 'IMPORTING'.
+        IF wa_cls_param-is_struct = 'X'.
+          lv_prm_val = |ls_{ wa_cls_param-param_name }|.
+        ELSE.
+          lv_prm_val = |lv_{ wa_cls_param-param_name }|.
+        ENDIF.
+      WHEN 'R'.
+        lv_prm_dir = 'RECEIVING'.
+        lv_prm_val = |lv_result " { wa_cls_param-type_name }|.
+      WHEN OTHERS. CONTINUE.
     ENDCASE.
+    IF lv_prm_dir <> lv_cls_cur_dir.
+      lv_prm = |  { lv_prm_dir }|. add_line: lv_prm.
+      lv_cls_cur_dir = lv_prm_dir.
+    ENDIF.
+    lv_prm = |    { wa_cls_param-param_name } = { lv_prm_val }|.
     add_line: lv_prm.
   ENDLOOP.
   add_line: ').'.
@@ -1815,6 +1966,38 @@ FORM generate_code_preview.
     ENDIF.
   ENDLOOP.
   add_line: 'DATA lt_return TYPE TABLE OF bapiret2.'.
+
+  " Collect covered new-FM params (structured params + scalar matched params)
+  DATA lt_mand_covered TYPE TABLE OF string.
+  LOOP AT lt_distinct_params INTO wa_dp.
+    APPEND wa_dp-parameter TO lt_mand_covered.
+  ENDLOOP.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
+    IF wa_bdc_map-fm_param IS INITIAL. CONTINUE. ENDIF.
+    READ TABLE lt_mand_covered TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_bdc_map-fm_param.
+    IF sy-subrc <> 0. APPEND wa_bdc_map-fm_param TO lt_mand_covered. ENDIF.
+  ENDLOOP.
+
+  " Get mandatory params of the new FM that are not yet covered
+  DATA lt_mand_missing TYPE TABLE OF fupararef.
+  SELECT * FROM fupararef
+    WHERE funcname = @p_fm
+      AND paramtype IN ('I','E')
+      AND optional  <> 'X'
+    INTO TABLE @lt_mand_missing.
+  " Emit DATA declaration hints for each unmatched mandatory param
+  DATA lv_mand_tp TYPE string.
+  LOOP AT lt_mand_missing INTO DATA(wa_mand).
+    READ TABLE lt_mand_covered TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_mand-parameter.
+    IF sy-subrc = 0. CONTINUE. ENDIF.
+    lv_mand_tp = COND #( WHEN wa_mand-structure IS NOT INITIAL
+                          THEN wa_mand-structure
+                          ELSE wa_mand-type ).
+    lv_ln = |" DATA lv_{ to_lower( wa_mand-parameter ) } TYPE { to_lower( lv_mand_tp ) }. " TODO: mandatory - fill before calling|.
+    add_line: lv_ln.
+  ENDLOOP.
   add_line: ''.
 
   " Field assignments — matched fields (work-area style)
@@ -1931,6 +2114,24 @@ FORM generate_code_preview.
     IF sy-subrc <> 0. APPEND wa_cf TO lt_cf_all. ENDIF.
   ENDLOOP.
 
+  " Add TODO entries for mandatory new-FM params that were not matched
+  LOOP AT lt_mand_missing INTO wa_mand.
+    READ TABLE lt_mand_covered TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_mand-parameter.
+    IF sy-subrc = 0. CONTINUE. ENDIF.
+    CLEAR wa_cf.
+    CASE wa_mand-paramtype.
+      WHEN 'I'. wa_cf-sort_key = '1'. wa_cf-section = 'EXPORTING'.
+      WHEN 'E'. wa_cf-sort_key = '2'. wa_cf-section = 'IMPORTING'.
+      WHEN OTHERS. CONTINUE.
+    ENDCASE.
+    lv_mand_tp = COND #( WHEN wa_mand-structure IS NOT INITIAL
+                          THEN wa_mand-structure
+                          ELSE wa_mand-type ).
+    wa_cf-line = |  " TODO mandatory: { wa_mand-parameter } = ? (type: { lv_mand_tp })|.
+    APPEND wa_cf TO lt_cf_all.
+  ENDLOOP.
+
   " Sort: EXPORTING first, IMPORTING second, TABLES third
   SORT lt_cf_all BY sort_key.
 
@@ -1969,11 +2170,52 @@ FORM generate_code_preview.
 ENDFORM.
 
 *----------------------------------------------------------------------*
+*& Form display_code_alv
+*& Show ALV 2: Generated Code Preview
+*----------------------------------------------------------------------*
+FORM display_code_alv.
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING r_salv_table = DATA(lo_code)
+        CHANGING  t_table      = lt_code ).
+      lo_code->get_columns( )->set_optimize( 'X' ).
+      TRY.
+          lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
+          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - paste into SE38' ).
+          CAST cl_salv_column_table(
+            lo_code->get_columns( )->get_column( 'CODE' )
+          )->set_output_length( 200 ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      DATA(lo_disp2) = lo_code->get_display_settings( ).
+      IF rb_cls = 'X'.
+        lo_disp2->set_list_header( |Generated Code: { p_class }=>{ p_meth } replacement| ).
+      ELSEIF rb_ff = 'X'.
+        lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
+      ELSE.
+        IF p_tcode IS NOT INITIAL.
+          lo_disp2->set_list_header( |Generated Code: BDC { p_tcode } -> { p_fm }| ).
+        ELSE.
+          lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
+        ENDIF.
+      ENDIF.
+      lo_code->display( ).
+    CATCH cx_salv_msg cx_salv_not_found.
+      MESSAGE 'Error displaying code preview ALV' TYPE 'I'.
+  ENDTRY.
+ENDFORM.
+
+*----------------------------------------------------------------------*
 *& Form display_results
 *& Show ALV for mapping + separate ALV for code preview
 *----------------------------------------------------------------------*
 FORM display_results.
-  " --- ALV 1: Field Mapping Table ---
+  " --- ALV 1: Field Mapping Table (with optional checkbox for name-match rows) ---
+  DATA lv_has_name_match TYPE flag.
+  LOOP AT lt_output TRANSPORTING NO FIELDS WHERE status = 'Name match'.
+    lv_has_name_match = 'X'. EXIT.
+  ENDLOOP.
+
   TRY.
       cl_salv_table=>factory(
         IMPORTING r_salv_table = DATA(lo_map)
@@ -1995,6 +2237,23 @@ FORM display_results.
       lo_cols->get_column( 'CLS_FULL_PATH' )->set_long_text( 'Full Mapping Path' ).
       lo_cols->get_column( 'GEN_CODE'      )->set_long_text( 'Generated Code Line' ).
       lo_cols->get_column( 'REMARK'        )->set_long_text( 'Remark' ).
+      lo_cols->get_column( 'SELECTED'      )->set_long_text( 'Include?' ).
+
+      " Checkbox hotspot on SELECTED column for clickable toggle
+      TRY.
+          CAST cl_salv_column_table(
+            lo_cols->get_column( 'SELECTED' )
+          )->set_cell_type( if_salv_c_cell_type=>checkbox_hotspot ).
+        CATCH cx_salv_not_found cx_salv_msg.
+      ENDTRY.
+
+      " Hide SELECTED column if no name-match rows exist
+      IF lv_has_name_match = space.
+        TRY.
+            lo_cols->get_column( 'SELECTED' )->set_visible( if_salv_c_bool_sap=>false ).
+          CATCH cx_salv_not_found.
+        ENDTRY.
+      ENDIF.
 
       " Hide columns not relevant to current mode
       IF rb_cls = 'X'.
@@ -2020,43 +2279,27 @@ FORM display_results.
         ENDIF.
       ENDIF.
 
+      " Add toolbar button for accepting field-name matches
+      IF lv_has_name_match = 'X'.
+        DATA(lo_funcs) = lo_map->get_functions( ).
+        lo_funcs->set_all( if_salv_c_bool_sap=>true ).
+        lo_funcs->add_function(
+          name     = 'TAKE_SEL'
+          icon     = '@2L@'
+          text     = 'Apply Checked Mappings'
+          tooltip  = 'Promote checked field-name matches to confirmed and regenerate code'
+          position = if_salv_c_function_position=>right_of_salv_functions ).
+        " Register event handlers
+        DATA(lo_events) = CAST cl_salv_events_table( lo_map->get_event( ) ).
+        SET HANDLER lcl_salv_handler=>on_link_click FOR lo_events.
+        SET HANDLER lcl_salv_handler=>on_function   FOR lo_events.
+      ENDIF.
+
       lo_map->display( ).
-    CATCH cx_salv_msg cx_salv_not_found.
+    CATCH cx_salv_msg cx_salv_not_found cx_salv_existing.
       MESSAGE 'Error displaying mapping ALV' TYPE 'I'.
   ENDTRY.
 
   " --- ALV 2: Generated Code Preview ---
-  TRY.
-      cl_salv_table=>factory(
-        IMPORTING r_salv_table = DATA(lo_code)
-        CHANGING  t_table      = lt_code ).
-
-      lo_code->get_columns( )->set_optimize( 'X' ).
-      TRY.
-          lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
-          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - paste into SE38' ).
-          CAST cl_salv_column_table(
-            lo_code->get_columns( )->get_column( 'CODE' )
-          )->set_output_length( 200 ).
-        CATCH cx_salv_not_found.
-          " Column not found — skip formatting, still display
-      ENDTRY.
-
-      DATA(lo_disp2) = lo_code->get_display_settings( ).
-      IF rb_cls = 'X'.
-        lo_disp2->set_list_header( |Generated Code: { p_class }=>{ p_meth } replacement| ).
-      ELSEIF rb_ff = 'X'.
-        lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
-      ELSE.
-        IF p_tcode IS NOT INITIAL.
-          lo_disp2->set_list_header( |Generated Code: BDC { p_tcode } -> { p_fm }| ).
-        ELSE.
-          lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
-        ENDIF.
-      ENDIF.
-
-      lo_code->display( ).
-    CATCH cx_salv_msg cx_salv_not_found.
-      MESSAGE 'Error displaying code preview ALV' TYPE 'I'.
-  ENDTRY.
+  PERFORM display_code_alv.
 ENDFORM.
