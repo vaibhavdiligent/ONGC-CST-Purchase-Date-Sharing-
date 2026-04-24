@@ -194,6 +194,7 @@ DATA: lv_bdc_start   TYPE i,
 *----------------------------------------------------------------------*
 CLASS lcl_salv_handler DEFINITION.
   PUBLIC SECTION.
+    CLASS-DATA lo_salv TYPE REF TO cl_salv_table.  " set by display_results before registering events
     CLASS-METHODS:
       on_link_click
         FOR EVENT link_click OF cl_salv_events_table
@@ -210,7 +211,7 @@ CLASS lcl_salv_handler IMPLEMENTATION.
     IF sy-subrc = 0 AND wa_output-status = 'Name match'.
       wa_output-selected = COND #( WHEN wa_output-selected = 'X' THEN space ELSE 'X' ).
       MODIFY lt_output INDEX row FROM wa_output.
-      sender->refresh( ).
+      IF lo_salv IS BOUND. lo_salv->refresh( ). ENDIF.
     ENDIF.
   ENDMETHOD.
 
@@ -232,7 +233,7 @@ CLASS lcl_salv_handler IMPLEMENTATION.
       PERFORM build_output.
       PERFORM generate_code_preview.
     ENDIF.
-    sender->refresh( ).
+    IF lo_salv IS BOUND. lo_salv->refresh( ). ENDIF.
     PERFORM display_code_alv.
   ENDMETHOD.
 ENDCLASS.
@@ -264,11 +265,12 @@ START-OF-SELECTION.
   IF p_srcfm IS NOT INITIAL.
     " Resolve the include that contains the FM source
     TRANSLATE p_srcfm TO UPPER CASE.
-    SELECT SINGLE include INTO @DATA(lv_fm_incl) FROM enlfdir WHERE funcname = @p_srcfm.
-    IF sy-subrc <> 0 OR lv_fm_incl IS INITIAL.
+    DATA wa_enlfdir TYPE enlfdir.
+    SELECT SINGLE * FROM enlfdir INTO @wa_enlfdir WHERE funcname = @p_srcfm.
+    IF sy-subrc <> 0 OR wa_enlfdir-include IS INITIAL.
       MESSAGE |Function Module { p_srcfm } not found in ENLFDIR| TYPE 'E'.
     ENDIF.
-    lv_obj_name = lv_fm_incl.
+    lv_obj_name = wa_enlfdir-include.
   ELSE.
     lv_obj_name = p_prog.
   ENDIF.
@@ -2287,6 +2289,8 @@ FORM display_results.
           text     = 'Apply Checked Mappings'
           tooltip  = 'Promote checked field-name matches to confirmed and regenerate code'
           position = if_salv_c_function_position=>right_of_salv_functions ).
+        " Store SALV reference so handler can call refresh()
+        lcl_salv_handler=>lo_salv = lo_map.
         " Register event handlers
         DATA(lo_events) = CAST cl_salv_events_table( lo_map->get_event( ) ).
         SET HANDLER lcl_salv_handler=>on_link_click FOR lo_events.
