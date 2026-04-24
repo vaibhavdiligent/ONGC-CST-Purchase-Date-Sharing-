@@ -26,7 +26,8 @@ REPORT zbdc_fm_mapper.
 *----------------------------------------------------------------------*
 * SELECTION SCREEN
 *----------------------------------------------------------------------*
-PARAMETERS: p_prog   TYPE program    OBLIGATORY.       " Source program
+PARAMETERS: p_prog   TYPE program.                    " Source program (include/report)
+PARAMETERS: p_srcfm  TYPE rs38l_fnam.               " OR: source Function Module name (auto-resolves include)
 
 SELECTION-SCREEN SKIP 1.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
@@ -54,6 +55,57 @@ PARAMETERS: p_class  TYPE seoclsname,                  " Replacement Class
             p_static TYPE flag AS CHECKBOX DEFAULT 'X'." X=static, space=instance
 SELECTION-SCREEN END OF BLOCK b4.
 
+
+*----------------------------------------------------------------------*
+* Local handler class for ALV interactive checkbox
+*----------------------------------------------------------------------*
+CLASS lcl_salv_handler DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS:
+      on_link_click
+        FOR EVENT link_click OF cl_salv_events_table
+        IMPORTING row column sender,
+      on_function
+        FOR EVENT added_function OF cl_salv_events
+        IMPORTING e_salv_function sender.
+ENDCLASS.
+
+CLASS lcl_salv_handler IMPLEMENTATION.
+  METHOD on_link_click.
+    " Toggle SELECTED checkbox for 'Name match' rows only
+    IF to_upper( column ) <> 'SELECTED'. RETURN. ENDIF.
+    READ TABLE lt_output INDEX row INTO wa_output.
+    IF sy-subrc = 0 AND wa_output-status = 'Name match'.
+      wa_output-selected = COND #( WHEN wa_output-selected = 'X' THEN space ELSE 'X' ).
+      MODIFY lt_output INDEX row FROM wa_output.
+      sender->refresh( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD on_function.
+    IF e_salv_function <> 'TAKE_SEL'. RETURN. ENDIF.
+    " Promote selected name-match rows to confirmed (matched='X')
+    LOOP AT lt_output INTO wa_output WHERE status = 'Name match' AND selected = 'X'.
+      LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_sel>)
+        WHERE fnam = wa_output-bdc_fnam AND matched = 'N'.
+        <fs_sel>-matched = 'X'.
+        EXIT.
+      ENDLOOP.
+    ENDLOOP.
+    " Rebuild output and regenerate code with promoted matches
+    CLEAR lt_output.
+    CLEAR lt_code.
+    IF rb_cls = 'X'.
+      PERFORM build_output_class.
+      PERFORM generate_class_code_preview.
+    ELSE.
+      PERFORM build_output.
+      PERFORM generate_code_preview.
+    ENDIF.
+    sender->refresh( ).
+    PERFORM display_code_alv.
+  ENDMETHOD.
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 * TYPE DEFINITIONS
@@ -135,6 +187,7 @@ TYPES: BEGIN OF ty_output,
          cls_full_path TYPE char200,    " Full mapping path e.g. IS_MASTER_DATA-VENDORS-...-BUKRS
          gen_code      TYPE char200,
          remark        TYPE char100,
+         selected      TYPE char1,        " X = user confirmed field-name match
        END OF ty_output.
 
 TYPES: BEGIN OF ty_code_preview,
@@ -204,10 +257,23 @@ START-OF-SELECTION.
   IF p_tcode IS INITIAL AND p_oldfm IS INITIAL.
     MESSAGE 'Enter either BDC Transaction or Old FM name' TYPE 'E'.
   ENDIF.
+  IF p_prog IS INITIAL AND p_srcfm IS INITIAL.
+    MESSAGE 'Enter either Source Program or Source FM name' TYPE 'E'.
+  ENDIF.
 
-  " Step 1: Read source program
+  " Step 1: Read source program (or resolve FM include)
   DATA lv_obj_name TYPE versobjnam.
-  lv_obj_name = p_prog.
+  IF p_srcfm IS NOT INITIAL.
+    " Resolve the include that contains the FM source
+    TRANSLATE p_srcfm TO UPPER CASE.
+    SELECT SINGLE include INTO @DATA(lv_fm_incl) FROM enlfdir WHERE funcname = @p_srcfm.
+    IF sy-subrc <> 0 OR lv_fm_incl IS INITIAL.
+      MESSAGE |Function Module { p_srcfm } not found in ENLFDIR| TYPE 'E'.
+    ENDIF.
+    lv_obj_name = lv_fm_incl.
+  ELSE.
+    lv_obj_name = p_prog.
+  ENDIF.
   CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
     EXPORTING
       object_name           = lv_obj_name
@@ -219,7 +285,7 @@ START-OF-SELECTION.
       system_failure        = 2
       communication_failure = 3.
   IF sy-subrc <> 0 OR lt_source IS INITIAL.
-    MESSAGE |Program { p_prog } not found or has no source| TYPE 'E'.
+    MESSAGE |Source not found: { lv_obj_name }| TYPE 'E'.
   ENDIF.
 
   " Step 2: Scan source — BDC block or FM call block
@@ -1335,6 +1401,29 @@ FORM match_fields.
       ENDIF.
     ENDLOOP.
   ENDLOOP.
+
+  " Pass 5: field name match only — pending user confirmation (matched = 'N')
+  LOOP AT lt_bdc_map ASSIGNING FIELD-SYMBOL(<fs_m5>) WHERE matched = space.
+    IF <fs_m5>-fieldname IS INITIAL. CONTINUE. ENDIF.
+    DATA lv_m5_fn TYPE string.
+    lv_m5_fn = to_upper( <fs_m5>-fieldname ).
+    LOOP AT lt_fm_dd INTO DATA(wa_fm5).
+      DATA lv_m5_fm_fn TYPE string.
+      lv_m5_fm_fn = to_upper( wa_fm5-fieldname ).
+      IF lv_m5_fn = lv_m5_fm_fn.
+        <fs_m5>-fm_param     = wa_fm5-parameter.
+        <fs_m5>-fm_struct    = wa_fm5-structure.
+        <fs_m5>-fm_field     = wa_fm5-fieldname.
+        <fs_m5>-fm_wa_name   = wa_fm5-wa_name.
+        <fs_m5>-fm_wa_type   = wa_fm5-wa_type.
+        <fs_m5>-fm_wa_path   = wa_fm5-wa_path.
+        <fs_m5>-fm_datax     = wa_fm5-has_datax.
+        <fs_m5>-fm_paramtype = wa_fm5-paramtype.
+        <fs_m5>-matched      = 'N'.   " N = name-only match, pending user confirm
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+  ENDLOOP.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1370,6 +1459,15 @@ FORM build_output.
           INTO wa_output-gen_code SEPARATED BY space.
       ENDIF.
       wa_output-remark = wa_bdc_map-rollname.
+    ELSEIF wa_bdc_map-matched = 'N'.
+      " Field name match — pending user confirmation (checkbox)
+      wa_output-status    = 'Name match'.
+      wa_output-fm_param  = wa_bdc_map-fm_param.
+      wa_output-fm_struct = wa_bdc_map-fm_struct.
+      wa_output-fm_field  = wa_bdc_map-fm_field.
+      wa_output-remark    = 'Field name matched - check to confirm'.
+      CONCATENATE '" Pending:' wa_bdc_map-fnam '->' wa_bdc_map-fm_param '-' wa_bdc_map-fm_field
+        INTO wa_output-gen_code SEPARATED BY space.
     ELSE.
       wa_output-status = 'NO MATCH'.
       IF wa_bdc_map-rollname IS INITIAL.
@@ -1384,8 +1482,11 @@ FORM build_output.
     APPEND wa_output TO lt_output.
   ENDLOOP.
 
-  " Summary message
-  MESSAGE |Mapping complete: { lv_match_cnt } of { lv_total_cnt } fields matched| TYPE 'I'.
+  DATA lv_name_cnt TYPE i.
+  LOOP AT lt_bdc_map TRANSPORTING NO FIELDS WHERE matched = 'N'.
+    lv_name_cnt = lv_name_cnt + 1.
+  ENDLOOP.
+  MESSAGE |Mapping: { lv_match_cnt } confirmed, { lv_name_cnt } field-name matches pending (check checkboxes to include)| TYPE 'I'.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -2063,11 +2164,52 @@ FORM generate_code_preview.
 ENDFORM.
 
 *----------------------------------------------------------------------*
+*& Form display_code_alv
+*& Show ALV 2: Generated Code Preview
+*----------------------------------------------------------------------*
+FORM display_code_alv.
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING r_salv_table = DATA(lo_code)
+        CHANGING  t_table      = lt_code ).
+      lo_code->get_columns( )->set_optimize( 'X' ).
+      TRY.
+          lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
+          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - paste into SE38' ).
+          CAST cl_salv_column_table(
+            lo_code->get_columns( )->get_column( 'CODE' )
+          )->set_output_length( 200 ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      DATA(lo_disp2) = lo_code->get_display_settings( ).
+      IF rb_cls = 'X'.
+        lo_disp2->set_list_header( |Generated Code: { p_class }=>{ p_meth } replacement| ).
+      ELSEIF rb_ff = 'X'.
+        lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
+      ELSE.
+        IF p_tcode IS NOT INITIAL.
+          lo_disp2->set_list_header( |Generated Code: BDC { p_tcode } -> { p_fm }| ).
+        ELSE.
+          lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
+        ENDIF.
+      ENDIF.
+      lo_code->display( ).
+    CATCH cx_salv_msg cx_salv_not_found.
+      MESSAGE 'Error displaying code preview ALV' TYPE 'I'.
+  ENDTRY.
+ENDFORM.
+
+*----------------------------------------------------------------------*
 *& Form display_results
 *& Show ALV for mapping + separate ALV for code preview
 *----------------------------------------------------------------------*
 FORM display_results.
-  " --- ALV 1: Field Mapping Table ---
+  " --- ALV 1: Field Mapping Table (with optional checkbox for name-match rows) ---
+  DATA lv_has_name_match TYPE flag.
+  LOOP AT lt_output TRANSPORTING NO FIELDS WHERE status = 'Name match'.
+    lv_has_name_match = 'X'. EXIT.
+  ENDLOOP.
+
   TRY.
       cl_salv_table=>factory(
         IMPORTING r_salv_table = DATA(lo_map)
@@ -2089,6 +2231,23 @@ FORM display_results.
       lo_cols->get_column( 'CLS_FULL_PATH' )->set_long_text( 'Full Mapping Path' ).
       lo_cols->get_column( 'GEN_CODE'      )->set_long_text( 'Generated Code Line' ).
       lo_cols->get_column( 'REMARK'        )->set_long_text( 'Remark' ).
+      lo_cols->get_column( 'SELECTED'      )->set_long_text( 'Include?' ).
+
+      " Checkbox hotspot on SELECTED column for clickable toggle
+      TRY.
+          CAST cl_salv_column_table(
+            lo_cols->get_column( 'SELECTED' )
+          )->set_cell_type( if_salv_c_cell_type=>checkbox_hotspot ).
+        CATCH cx_salv_not_found cx_salv_msg.
+      ENDTRY.
+
+      " Hide SELECTED column if no name-match rows exist
+      IF lv_has_name_match = space.
+        TRY.
+            lo_cols->get_column( 'SELECTED' )->set_visible( if_salv_c_bool_sap=>false ).
+          CATCH cx_salv_not_found.
+        ENDTRY.
+      ENDIF.
 
       " Hide columns not relevant to current mode
       IF rb_cls = 'X'.
@@ -2114,43 +2273,27 @@ FORM display_results.
         ENDIF.
       ENDIF.
 
+      " Add toolbar button for accepting field-name matches
+      IF lv_has_name_match = 'X'.
+        DATA(lo_funcs) = lo_map->get_functions( ).
+        lo_funcs->set_all( if_salv_c_bool_sap=>true ).
+        lo_funcs->add_function(
+          name     = 'TAKE_SEL'
+          icon     = '@2L@'
+          text     = 'Apply Checked Mappings'
+          tooltip  = 'Promote checked field-name matches to confirmed and regenerate code'
+          position = if_salv_c_function_position=>right_of_salv_functions ).
+        " Register event handlers
+        DATA(lo_events) = CAST cl_salv_events_table( lo_map->get_event( ) ).
+        SET HANDLER lcl_salv_handler=>on_link_click FOR lo_events.
+        SET HANDLER lcl_salv_handler=>on_function   FOR lo_events.
+      ENDIF.
+
       lo_map->display( ).
-    CATCH cx_salv_msg cx_salv_not_found.
+    CATCH cx_salv_msg cx_salv_not_found cx_salv_existing.
       MESSAGE 'Error displaying mapping ALV' TYPE 'I'.
   ENDTRY.
 
   " --- ALV 2: Generated Code Preview ---
-  TRY.
-      cl_salv_table=>factory(
-        IMPORTING r_salv_table = DATA(lo_code)
-        CHANGING  t_table      = lt_code ).
-
-      lo_code->get_columns( )->set_optimize( 'X' ).
-      TRY.
-          lo_code->get_columns( )->get_column( 'LINENO' )->set_visible( if_salv_c_bool_sap=>false ).
-          lo_code->get_columns( )->get_column( 'CODE'   )->set_long_text( 'Generated ABAP Code - paste into SE38' ).
-          CAST cl_salv_column_table(
-            lo_code->get_columns( )->get_column( 'CODE' )
-          )->set_output_length( 200 ).
-        CATCH cx_salv_not_found.
-          " Column not found — skip formatting, still display
-      ENDTRY.
-
-      DATA(lo_disp2) = lo_code->get_display_settings( ).
-      IF rb_cls = 'X'.
-        lo_disp2->set_list_header( |Generated Code: { p_class }=>{ p_meth } replacement| ).
-      ELSEIF rb_ff = 'X'.
-        lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
-      ELSE.
-        IF p_tcode IS NOT INITIAL.
-          lo_disp2->set_list_header( |Generated Code: BDC { p_tcode } -> { p_fm }| ).
-        ELSE.
-          lo_disp2->set_list_header( |Generated Code: { p_oldfm } -> { p_fm }| ).
-        ENDIF.
-      ENDIF.
-
-      lo_code->display( ).
-    CATCH cx_salv_msg cx_salv_not_found.
-      MESSAGE 'Error displaying code preview ALV' TYPE 'I'.
-  ENDTRY.
+  PERFORM display_code_alv.
 ENDFORM.
