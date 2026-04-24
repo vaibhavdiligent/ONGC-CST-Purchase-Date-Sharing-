@@ -265,12 +265,12 @@ START-OF-SELECTION.
   IF p_srcfm IS NOT INITIAL.
     " Resolve the include that contains the FM source
     TRANSLATE p_srcfm TO UPPER CASE.
-    DATA wa_enlfdir TYPE enlfdir.
-    SELECT SINGLE * FROM enlfdir INTO @wa_enlfdir WHERE funcname = @p_srcfm.
-    IF sy-subrc <> 0 OR wa_enlfdir-include IS INITIAL.
-      MESSAGE |Function Module { p_srcfm } not found in ENLFDIR| TYPE 'E'.
+    DATA lv_fm_pname TYPE tfdir-pname.
+    SELECT SINGLE pname FROM tfdir INTO @lv_fm_pname WHERE funcname = @p_srcfm.
+    IF sy-subrc <> 0 OR lv_fm_pname IS INITIAL.
+      MESSAGE |Function Module { p_srcfm } not found in TFDIR| TYPE 'E'.
     ENDIF.
-    lv_obj_name = wa_enlfdir-include.
+    lv_obj_name = lv_fm_pname.   " function pool program e.g. SAPLVEND
   ELSE.
     lv_obj_name = p_prog.
   ENDIF.
