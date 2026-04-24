@@ -1756,6 +1756,7 @@ FORM generate_class_code_preview.
 
   " Generate APPEND stubs for every internal-table component in matched paths
   DATA lt_app_stubs TYPE TABLE OF string.
+  DATA lt_app_decls TYPE TABLE OF string.  " DATA decls for intermediate WAs missing from main section
   DATA lv_app_opath TYPE string.
   DATA lt_app_segs  TYPE TABLE OF string.
   DATA wa_app_seg   TYPE string.
@@ -1767,6 +1768,8 @@ FORM generate_class_code_preview.
   DATA lv_app_line  TYPE string.
   DATA lv_app_cnt   TYPE i.
   DATA lv_app_idx   TYPE i.
+  DATA lv_app_decl  TYPE string.
+  DATA lv_app_wa_nm TYPE string.
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
     lv_app_opath = wa_bdc_map-cls_path.
     CHECK lv_app_opath CS '[1]'.
@@ -1790,6 +1793,17 @@ FORM generate_class_code_preview.
           WITH KEY table_line = lv_app_line.
         IF sy-subrc <> 0.
           APPEND lv_app_line TO lt_app_stubs.
+          " If this WA was not declared in the main declarations section, collect a LIKE LINE OF decl
+          lv_app_wa_nm = to_lower( lv_app_tbl ).
+          READ TABLE lt_wa_seen TRANSPORTING NO FIELDS WITH KEY table_line = lv_app_wa_nm.
+          IF sy-subrc <> 0.
+            lv_app_decl = |DATA ls_{ lv_app_wa_nm } LIKE LINE OF { to_lower( lv_app_path ) }.|.
+            READ TABLE lt_app_decls TRANSPORTING NO FIELDS WITH KEY table_line = lv_app_decl.
+            IF sy-subrc <> 0.
+              APPEND lv_app_decl TO lt_app_decls.
+              APPEND lv_app_wa_nm TO lt_wa_seen.  " prevent duplicate across paths
+            ENDIF.
+          ENDIF.
         ENDIF.
         " Cross table boundary: new WA is this table's row, reset relative path
         lv_app_cur_wa = lv_app_tbl.
@@ -1803,6 +1817,10 @@ FORM generate_class_code_preview.
   ENDLOOP.
   IF lt_app_stubs IS NOT INITIAL.
     add_line: '" --- APPEND stubs for internal table components (innermost first) ---'.
+    " Declare any intermediate work-area variables not covered by the main declarations section
+    LOOP AT lt_app_decls INTO lv_app_decl.
+      add_line: lv_app_decl.
+    ENDLOOP.
     DESCRIBE TABLE lt_app_stubs LINES lv_app_cnt.
     DO lv_app_cnt TIMES.
       lv_app_idx = lv_app_cnt - sy-index + 1.
