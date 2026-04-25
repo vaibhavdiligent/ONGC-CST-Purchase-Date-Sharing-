@@ -1659,7 +1659,19 @@ FORM change_table.
           AND wa_table-value <> '(' AND wa_table-value <> ')'.
           IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
             AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            CONCATENATE '@' wa_table-value INTO wa_table-value.
+            DATA(l_bare_found) = abap_false.
+            LOOP AT it_table_q INTO DATA(wa_tq_jw).
+              READ TABLE it_fields_new INTO DATA(wa_fn_jw) WITH KEY
+                base_field = wa_table-value base_object = wa_tq_jw-value.
+              IF sy-subrc = 0.
+                CONCATENATE wa_tq_jw-symbol wa_fn_jw-element_name INTO wa_table-value.
+                l_bare_found = abap_true.
+                EXIT.
+              ENDIF.
+            ENDLOOP.
+            IF l_bare_found = abap_false.
+              CONCATENATE '@' wa_table-value INTO wa_table-value.
+            ENDIF.
           ENDIF.
         ENDIF.
         " Restore commas lost by tokenizer inside IN ( ... ) lists
