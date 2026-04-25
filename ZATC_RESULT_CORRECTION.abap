@@ -1527,9 +1527,10 @@ FORM change_table.
     LOOP AT it_table INTO DATA(wa_fae_det) FROM l_from.
       IF sy-tabix = l_where. EXIT. ENDIF.
       IF wa_fae_det-value = 'FOR'.
-        DATA(l_fae_nxt) = sy-tabix + 1.
+        DATA(l_fae_pos) = sy-tabix.          " save FOR position before READ TABLE overwrites sy-tabix
+        DATA(l_fae_nxt) = l_fae_pos + 1.
         READ TABLE it_table INTO DATA(wa_fae_nxt) INDEX l_fae_nxt.
-        IF sy-subrc = 0 AND wa_fae_nxt-value = 'ALL'. l_fae = sy-tabix. ENDIF.
+        IF sy-subrc = 0 AND wa_fae_nxt-value = 'ALL'. l_fae = l_fae_pos. ENDIF.
         EXIT.
       ENDIF.
     ENDLOOP.
@@ -1681,9 +1682,10 @@ FORM change_table.
     LOOP AT it_table INTO DATA(wa_fae_det2) FROM l_from.
       IF sy-tabix = l_where. EXIT. ENDIF.
       IF wa_fae_det2-value = 'FOR'.
-        DATA(l_fae_nxt2) = sy-tabix + 1.
+        DATA(l_fae_pos2) = sy-tabix.         " save FOR position before READ TABLE overwrites sy-tabix
+        DATA(l_fae_nxt2) = l_fae_pos2 + 1.
         READ TABLE it_table INTO DATA(wa_fae_nxt2) INDEX l_fae_nxt2.
-        IF sy-subrc = 0 AND wa_fae_nxt2-value = 'ALL'. l_fae = sy-tabix. ENDIF.
+        IF sy-subrc = 0 AND wa_fae_nxt2-value = 'ALL'. l_fae = l_fae_pos2. ENDIF.
         EXIT.
       ENDIF.
     ENDLOOP.
