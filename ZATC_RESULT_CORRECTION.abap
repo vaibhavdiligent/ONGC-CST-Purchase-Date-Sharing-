@@ -1553,6 +1553,11 @@ FORM change_table.
         READ TABLE it_fields_new INTO DATA(wa_fn3) WITH KEY base_field = wa_table-value base_object = l_table.
         IF sy-subrc = 0. CLEAR wa_table-value. CONCATENATE l_symbol wa_fn3-element_name INTO wa_table-value. ENDIF.
       ENDIF.
+      " Add @ to system variables / host vars in ON conditions (e.g. SY-LANGU, SY-DATUM)
+      " CDS field names, aliases, and SQL keywords never contain '-', so this check is safe
+      IF wa_table-value CS '-' AND wa_table-value(1) <> '@'.
+        CONCATENATE '@' wa_table-value INTO wa_table-value.
+      ENDIF.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
