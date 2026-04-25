@@ -1429,16 +1429,23 @@ FORM change_table.
     IF sy-subrc = 0. l_into = sy-tabix. ENDIF.
     READ TABLE it_table INTO wa_table WITH KEY value = 'WHERE'.
     IF sy-subrc = 0. l_where = sy-tabix. ENDIF.
+    DATA(l_from_orig) = l_from.   " save FROM position before increments
     l_from = l_from + 1.
     READ TABLE it_table INTO wa_table INDEX l_from.
     IF sy-subrc = 0. l_table = wa_table-value. wa_table_q-value = l_table. ENDIF.
     l_from = l_from + 1.
     READ TABLE it_table INTO wa_table INDEX l_from.
     IF sy-subrc = 0. l_as = wa_table-value. wa_table_q-as = l_as. ENDIF.
-    l_from = l_from + 1.
-    READ TABLE it_table INTO wa_table INDEX l_from.
-    IF sy-subrc = 0.
-      l_symbol = wa_table-value. CONCATENATE l_symbol '~' INTO l_symbol.
+    IF l_as = 'AS'.
+      l_from = l_from + 1.
+      READ TABLE it_table INTO wa_table INDEX l_from.
+      IF sy-subrc = 0.
+        l_symbol = wa_table-value. CONCATENATE l_symbol '~' INTO l_symbol.
+        wa_table_q-symbol = l_symbol.
+      ENDIF.
+    ELSE.
+      " No AS alias: table name is used as field prefix (e.g. vbrp~vbeln)
+      l_symbol = l_table. CONCATENATE l_symbol '~' INTO l_symbol.
       wa_table_q-symbol = l_symbol.
     ENDIF.
     APPEND wa_table_q TO it_table_q.
@@ -1449,15 +1456,21 @@ FORM change_table.
       l_t = l_t + 1.
       READ TABLE it_table INTO wa_t INDEX l_t.
       IF sy-subrc = 0. wa_table_q-as = wa_t-value. ENDIF.
-      l_t = l_t + 1.
-      READ TABLE it_table INTO wa_t INDEX l_t.
-      IF sy-subrc = 0.
-        wa_table_q-symbol = wa_t-value.
+      IF wa_t-value = 'AS'.
+        l_t = l_t + 1.
+        READ TABLE it_table INTO wa_t INDEX l_t.
+        IF sy-subrc = 0.
+          wa_table_q-symbol = wa_t-value.
+          CONCATENATE wa_table_q-symbol '~' INTO wa_table_q-symbol.
+        ENDIF.
+      ELSE.
+        " No AS alias: table name is used as field prefix
+        wa_table_q-symbol = wa_table_q-value.
         CONCATENATE wa_table_q-symbol '~' INTO wa_table_q-symbol.
       ENDIF.
       APPEND wa_table_q TO it_table_q.
     ENDLOOP.
-    l_from = l_from - 3.
+    l_from = l_from_orig.   " restore to FROM position (correct for both alias/no-alias)
     LOOP AT it_table_q ASSIGNING FIELD-SYMBOL(<fs_table_q>).
       CLEAR l_cl_dd_ddl_field_tracker.
       REFRESH it_fields_new_t.
@@ -1541,7 +1554,13 @@ FORM change_table.
       " Stop before FOR ALL ENTRIES (l_fae) to keep it out of the FROM clause
       IF sy-tabix = l_into OR sy-tabix = l_where OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
       READ TABLE it_table_q INTO wa_table_q WITH KEY value = wa_table-value.
-      IF sy-subrc = 0. wa_table-value = wa_table_q-new_table.
+      IF sy-subrc = 0.
+        DATA(l_old_tname) = wa_table-value.
+        wa_table-value = wa_table_q-new_table.
+        IF wa_table_q-as <> 'AS'.
+          " No explicit alias: append AS <oldname> so CDS field prefixes remain valid
+          CONCATENATE wa_table-value 'AS' l_old_tname INTO wa_table-value SEPARATED BY space.
+        ENDIF.
       ELSE.
         IF wa_table-value CS '~'.
           LOOP AT it_table_q INTO wa_table_q WHERE symbol CS wa_table-value(sy-fdpos).
