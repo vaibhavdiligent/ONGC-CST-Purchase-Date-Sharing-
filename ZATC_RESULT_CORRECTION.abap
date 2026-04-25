@@ -1592,7 +1592,7 @@ FORM change_table.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
         IF wa_table-value CS '~'.
-          DATA(l_wsym_w) = wa_table-value(sy-fdpos).
+          DATA(l_wsym_w) = substring( val = wa_table-value len = sy-fdpos ).
           DATA(l_wfld_w) = wa_table-value.
           CONCATENATE l_wsym_w '~' INTO l_wsym_w.
           REPLACE l_wsym_w IN l_wfld_w WITH '' IGNORING CASE. CONDENSE l_wfld_w.
@@ -1726,7 +1726,7 @@ FORM change_table.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
         IF wa_table-value CS '~'.
-          DATA(l_wsym_w2) = wa_table-value(sy-fdpos).
+          DATA(l_wsym_w2) = substring( val = wa_table-value len = sy-fdpos ).
           DATA(l_wfld_w2) = wa_table-value.
           CONCATENATE l_wsym_w2 '~' INTO l_wsym_w2.
           REPLACE l_wsym_w2 IN l_wfld_w2 WITH '' IGNORING CASE. CONDENSE l_wfld_w2.
