@@ -1418,8 +1418,10 @@ FORM change_table.
   DATA l_q      TYPE c.
   DATA l_q1     TYPE i.
   DATA l_bras1  TYPE i.
-  DATA l_ind    TYPE i.
-  DATA l_bet    TYPE i.
+  DATA l_ind      TYPE i.
+  DATA l_bet      TYPE i.
+  DATA l_in_paren TYPE i.
+  DATA l_paren_prev TYPE flag.
   IF l_string CS 'JOIN'.
     READ TABLE it_table INTO wa_table WITH KEY value = 'FROM'.
     IF sy-subrc = 0. l_from = sy-tabix. ENDIF.
@@ -1558,6 +1560,24 @@ FORM change_table.
       IF wa_table-value CS '-' AND wa_table-value(1) <> '@'.
         CONCATENATE '@' wa_table-value INTO wa_table-value.
       ENDIF.
+      " Map bare (non-aliased) field names in JOIN ON conditions (e.g. SPRAS -> C~Language)
+      IF NOT ( wa_table-value CS '~' ) AND wa_table-value(1) <> '@'
+        AND wa_table-value(1) <> '''' AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' )
+        AND wa_table-value <> 'JOIN' AND wa_table-value <> 'LEFT' AND wa_table-value <> 'INNER'
+        AND wa_table-value <> 'OUTER' AND wa_table-value <> 'ON' AND wa_table-value <> 'AS'
+        AND wa_table-value <> 'AND' AND wa_table-value <> 'OR' AND wa_table-value <> 'NOT'
+        AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
+        AND wa_table-value <> '<=' AND wa_table-value <> '>' AND wa_table-value <> '<'
+        AND wa_table-value <> '(' AND wa_table-value <> ')'.
+        LOOP AT it_table_q INTO DATA(wa_tq_bare).
+          READ TABLE it_fields_new INTO DATA(wa_fn_bare) WITH KEY
+            base_field = wa_table-value base_object = wa_tq_bare-value.
+          IF sy-subrc = 0.
+            CONCATENATE wa_tq_bare-symbol wa_fn_bare-element_name INTO wa_table-value.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
@@ -1595,6 +1615,7 @@ FORM change_table.
       ENDLOOP.
     ENDIF.
     " Append WHERE clause with CDS field name mapping and @ for host variables
+    CLEAR l_in_paren. CLEAR l_paren_prev.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
         IF wa_table-value CS '~'.
@@ -1608,6 +1629,7 @@ FORM change_table.
               base_field = l_wfld_w base_object = wa_table_q-value.
             IF sy-subrc = 0. CONCATENATE l_wsym_w wa_fn_w-element_name INTO wa_table-value. ENDIF.
           ENDIF.
+          CLEAR l_paren_prev.
         ELSEIF wa_table-value <> 'WHERE' AND wa_table-value <> 'AND' AND wa_table-value <> 'OR'
           AND wa_table-value <> 'NOT' AND wa_table-value <> 'IN' AND wa_table-value <> 'BETWEEN'
           AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
@@ -1619,6 +1641,20 @@ FORM change_table.
           IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
             AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
             CONCATENATE '@' wa_table-value INTO wa_table-value.
+          ENDIF.
+        ENDIF.
+        " Restore commas lost by tokenizer inside IN ( ... ) lists
+        IF wa_table-value = '('.
+          l_in_paren = l_in_paren + 1. CLEAR l_paren_prev.
+        ELSEIF wa_table-value = ')'.
+          IF l_in_paren > 0. l_in_paren = l_in_paren - 1. ENDIF. CLEAR l_paren_prev.
+        ELSEIF l_in_paren > 0.
+          IF wa_table-value(1) = '@' OR wa_table-value(1) = ''''
+            OR ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
+            IF l_paren_prev = 'X'. CONCATENATE l_query ',' INTO l_query. ENDIF.
+            l_paren_prev = 'X'.
+          ELSE.
+            CLEAR l_paren_prev.
           ENDIF.
         ENDIF.
         CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
@@ -1730,6 +1766,7 @@ FORM change_table.
       ENDLOOP.
     ENDIF.
     " Append WHERE clause with CDS field name mapping and @ for host variables
+    CLEAR l_in_paren. CLEAR l_paren_prev.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
         IF wa_table-value CS '~'.
@@ -1739,6 +1776,7 @@ FORM change_table.
           REPLACE l_wsym_w2 IN l_wfld_w2 WITH '' IGNORING CASE. CONDENSE l_wfld_w2.
           READ TABLE it_fields_new INTO DATA(wa_fn_w2) WITH KEY base_field = l_wfld_w2.
           IF sy-subrc = 0. CONCATENATE l_wsym_w2 wa_fn_w2-element_name INTO wa_table-value. ENDIF.
+          CLEAR l_paren_prev.
         ELSEIF wa_table-value <> 'WHERE' AND wa_table-value <> 'AND' AND wa_table-value <> 'OR'
           AND wa_table-value <> 'NOT' AND wa_table-value <> 'IN' AND wa_table-value <> 'BETWEEN'
           AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
@@ -1753,6 +1791,20 @@ FORM change_table.
           ELSEIF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
             AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
             CONCATENATE '@' wa_table-value INTO wa_table-value.
+          ENDIF.
+        ENDIF.
+        " Restore commas lost by tokenizer inside IN ( ... ) lists
+        IF wa_table-value = '('.
+          l_in_paren = l_in_paren + 1. CLEAR l_paren_prev.
+        ELSEIF wa_table-value = ')'.
+          IF l_in_paren > 0. l_in_paren = l_in_paren - 1. ENDIF. CLEAR l_paren_prev.
+        ELSEIF l_in_paren > 0.
+          IF wa_table-value(1) = '@' OR wa_table-value(1) = ''''
+            OR ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
+            IF l_paren_prev = 'X'. CONCATENATE l_query ',' INTO l_query. ENDIF.
+            l_paren_prev = 'X'.
+          ELSE.
+            CLEAR l_paren_prev.
           ENDIF.
         ENDIF.
         CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
