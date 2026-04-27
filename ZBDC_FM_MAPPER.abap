@@ -814,10 +814,11 @@ FORM scan_form_body_for_bdc
     " ── PERFORM [prefix_]bdc_field USING 'FNAM' [value] ──
     IF lv_sl_u CS 'PERFORM' AND lv_sl_u CS 'BDC_FIELD' AND lv_sl_u CS 'USING'.
       IF lv_sl CS ''''.
-        DATA lv_bfq1 TYPE i.
-        DATA lv_bfr  TYPE string.
-        DATA lv_bfq2 TYPE i.
-        DATA lv_bfaft TYPE string.
+        DATA lv_bfq1     TYPE i.
+        DATA lv_bfr      TYPE string.
+        DATA lv_bfq2     TYPE i.
+        DATA lv_bfaft_off TYPE i.
+        DATA lv_bfaft    TYPE string.
         lv_bfq1 = sy-fdpos + 1.
         lv_bfr  = lv_sl+lv_bfq1.
         IF lv_bfr CS ''''.
@@ -825,7 +826,8 @@ FORM scan_form_body_for_bdc
           CLEAR wa_bdc_map.
           wa_bdc_map-fnam     = lv_bfr(lv_bfq2).
           wa_bdc_map-src_line = lv_form_ln.
-          lv_bfaft = lv_bfr+lv_bfq2+1.
+          lv_bfaft_off = lv_bfq2 + 1.
+          lv_bfaft = lv_bfr+lv_bfaft_off.
           IF lv_bfaft CS '"'. lv_bfaft = lv_bfaft(sy-fdpos). ENDIF.
           CONDENSE lv_bfaft.
           REPLACE ALL OCCURRENCES OF '.' IN lv_bfaft WITH ' '.
