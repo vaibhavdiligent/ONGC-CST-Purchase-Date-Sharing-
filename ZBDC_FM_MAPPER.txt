@@ -448,7 +448,28 @@ FORM find_bdc_block.
         " Empty buffer is OK here — helper FORM resolution happens post-loop
         EXIT.
       ENDIF.
-      " Not our tcode — discard this block and reset for next one
+      " Variable tcode: CALL TRANSACTION lv_xxx — first char after keyword is not quote
+      DATA lv_ct_voff TYPE i.
+      DATA lv_ct_vrest TYPE string.
+      FIND FIRST OCCURRENCE OF 'CALL TRANSACTION ' IN lv_line_u MATCH OFFSET lv_ct_voff.
+      IF sy-subrc = 0.
+        lv_ct_voff = lv_ct_voff + 17.
+        IF lv_ct_voff < strlen( lv_line_u ).
+          lv_ct_vrest = substring( val = lv_line_u off = lv_ct_voff ).
+          CONDENSE lv_ct_vrest.
+          IF lv_ct_vrest IS NOT INITIAL AND lv_ct_vrest(1) <> ''''.
+            " Tcode is in a variable — accept as our CALL TRANSACTION
+            lv_bdc_end     = lv_lineno.
+            lv_tcode_found = 'X'.
+            IF lt_bdc_buf IS NOT INITIAL.
+              lt_bdc_map   = lt_bdc_buf.
+              lv_bdc_start = lv_bdc_start_cand.
+            ENDIF.
+            EXIT.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      " Not our tcode (different literal) — discard this block and reset for next one
       CLEAR lt_bdc_buf.
       lv_bdc_start_cand = 0.
       lv_in_bdc   = space.
