@@ -454,17 +454,7 @@ FORM find_bdc_block.
         lv_val = lv_val(sy-fdpos).
       ENDIF.
       REPLACE ALL OCCURRENCES OF '.' IN lv_val WITH space.
-      " Strip surrounding single quotes from literals e.g. 'X'
-      IF lv_val CS ''''.
-        DATA(lv_vq1) = sy-fdpos + 1.
-        DATA lv_vinner TYPE string.
-        lv_vinner = substring( val = lv_val off = lv_vq1 ).
-        IF lv_vinner CS ''''.
-          DATA(lv_vq2) = sy-fdpos.
-          lv_val = lv_vinner(lv_vq2).
-        ENDIF.
-      ENDIF.
-      CONDENSE lv_val.
+      CONDENSE lv_val.   " keep surrounding quotes so literals stay as 'X', 'VAL' etc.
       wa_bdc_map-fval_var = lv_val.
       lv_pend_val = space.
       PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
@@ -493,17 +483,7 @@ FORM find_bdc_block.
           ENDIF.
           CONDENSE lv_after.
           REPLACE ALL OCCURRENCES OF '.' IN lv_after WITH space.
-          " Strip single quotes from literal value e.g. '/00'
-          IF lv_after CS ''''.
-            DATA(lv_aq1) = sy-fdpos + 1.
-            DATA lv_ainner TYPE string.
-            lv_ainner = substring( val = lv_after off = lv_aq1 ).
-            IF lv_ainner CS ''''.
-              DATA(lv_aq2) = sy-fdpos.
-              lv_after = lv_ainner(lv_aq2).
-            ENDIF.
-          ENDIF.
-          CONDENSE lv_after.
+          CONDENSE lv_after.   " keep surrounding quotes so literals stay as 'X', 'VAL' etc.
 
           IF lv_after IS NOT INITIAL.
             wa_bdc_map-fval_var = lv_after.
