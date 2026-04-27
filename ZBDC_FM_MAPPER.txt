@@ -497,32 +497,34 @@ FORM find_bdc_block.
     ENDIF.
 
     " ── Track every non-BDC PERFORM call for helper FORM resolution ──
-    " IMPORTANT: capture sy-fdpos (offset of 'PERFORM ') BEFORE any NS check.
-    " NS sets sy-fdpos to the length of the operand on success, so reading
-    " sy-fdpos after `NS 'BDC_FIELD'` would crash the substring call below.
-    IF lv_line_u CS 'PERFORM '.
-      DATA(lv_pn_off) = sy-fdpos + 8.
-      IF lv_line_u NS 'BDC_DYNPRO' AND lv_line_u NS 'BDC_FIELD'.
-        DATA lv_line_len TYPE i.
-        lv_line_len = strlen( lv_line ).
-        IF lv_pn_off < lv_line_len.
-          DATA lv_pn_rest TYPE string.
-          lv_pn_rest = substring( val = lv_line off = lv_pn_off ).
-          CONDENSE lv_pn_rest.
-          CLEAR wa_perf_call.
-          IF lv_pn_rest CS ' '.
-            wa_perf_call-name = to_upper( lv_pn_rest(sy-fdpos) ).
-          ELSE.
-            wa_perf_call-name = to_upper( lv_pn_rest ).
-          ENDIF.
+    " Use SPLIT-into-tokens rather than offset arithmetic so behaviour is
+    " independent of sy-fdpos / substring semantics on c-fields.
+    IF lv_line_u CS 'PERFORM '
+       AND lv_line_u NS 'BDC_DYNPRO'
+       AND lv_line_u NS 'BDC_FIELD'.
+      DATA lt_pn_toks TYPE STANDARD TABLE OF string.
+      DATA lv_pn_tok  TYPE string.
+      DATA lv_pn_seen TYPE flag.
+      CLEAR lt_pn_toks.
+      SPLIT lv_line_u AT space INTO TABLE lt_pn_toks.
+      CLEAR wa_perf_call.
+      lv_pn_seen = space.
+      LOOP AT lt_pn_toks INTO lv_pn_tok.
+        IF lv_pn_tok IS INITIAL. CONTINUE. ENDIF.
+        IF lv_pn_seen = 'X'.
+          wa_perf_call-name = lv_pn_tok.
           REPLACE ALL OCCURRENCES OF '.' IN wa_perf_call-name WITH ''.
           CONDENSE wa_perf_call-name.
           IF wa_perf_call-name IS NOT INITIAL.
             wa_perf_call-line = lv_lineno.
             APPEND wa_perf_call TO lt_perf_calls.
           ENDIF.
+          EXIT.
         ENDIF.
-      ENDIF.
+        IF lv_pn_tok = 'PERFORM'.
+          lv_pn_seen = 'X'.
+        ENDIF.
+      ENDLOOP.
     ENDIF.
 
     " Detect start of BDC block (inline PERFORM bdc_dynpro/bdc_field style)
