@@ -293,11 +293,20 @@ START-OF-SELECTION.
   IF p_srcfm IS NOT INITIAL.
     TRANSLATE p_srcfm TO UPPER CASE.
     DATA lv_fm_pname TYPE tfdir-pname.
-    SELECT SINGLE pname FROM tfdir INTO @lv_fm_pname WHERE funcname = @p_srcfm.
+    DATA lv_fm_incl  TYPE tfdir-include.
+    SELECT SINGLE pname, include FROM tfdir
+      INTO (@lv_fm_pname, @lv_fm_incl)
+      WHERE funcname = @p_srcfm.
     IF sy-subrc <> 0 OR lv_fm_pname IS INITIAL.
       MESSAGE |Function Module { p_srcfm } not found in TFDIR| TYPE 'E'.
     ENDIF.
-    lv_obj_name = lv_fm_pname.
+    " Read from the U-include (actual FM code), not the function pool main include
+    " Main pool (SAPL...) contains only INCLUDE statements, not the BDC/CALL TRANSACTION code
+    IF lv_fm_pname(4) = 'SAPL'.
+      CONCATENATE 'L' lv_fm_pname+4 'U' lv_fm_incl INTO lv_obj_name.
+    ELSE.
+      lv_obj_name = lv_fm_pname.
+    ENDIF.
   ELSE.
     lv_obj_name = p_prog.
   ENDIF.
@@ -2003,25 +2012,30 @@ FORM generate_code_preview.
   ENDLOOP.
   lt_distinct_params = lt_dp_real.
 
+  " lt_fm_wa_seen tracks all variable names already declared to prevent duplicates
+  DATA lt_fm_wa_seen TYPE TABLE OF string.
+  DATA lv_fm_wa_decl TYPE string.
   LOOP AT lt_distinct_params INTO DATA(wa_dp).
     DATA lv_decl TYPE char200.
+    DATA lv_dp_nm TYPE string.
+    lv_dp_nm = to_lower( wa_dp-parameter ).
     CASE wa_dp-paramtype.
       WHEN 'I' OR 'E'.
-        lv_decl = |DATA ls_{ to_lower( wa_dp-parameter ) } TYPE { to_lower( wa_dp-structure ) }.|.
+        lv_decl = |DATA ls_{ lv_dp_nm } TYPE { to_lower( wa_dp-structure ) }.|.
+        APPEND lv_dp_nm TO lt_fm_wa_seen.   " mark as declared
       WHEN 'T'.
-        lv_decl = |DATA lt_{ to_lower( wa_dp-parameter ) } TYPE TABLE OF { to_lower( wa_dp-structure ) }.|.
+        lv_decl = |DATA lt_{ lv_dp_nm } TYPE TABLE OF { to_lower( wa_dp-structure ) }.|.
         DATA lv_wa_decl TYPE char200.
-        lv_wa_decl = |DATA ls_{ to_lower( wa_dp-parameter ) } TYPE { to_lower( wa_dp-structure ) }.|.
+        lv_wa_decl = |DATA ls_{ lv_dp_nm } TYPE { to_lower( wa_dp-structure ) }.|.
         add_line: lv_wa_decl.
+        APPEND lv_dp_nm TO lt_fm_wa_seen.   " mark ls_ and lt_ as declared
     ENDCASE.
     add_line: lv_decl.
   ENDLOOP.
-  " Work-area declarations for nested table rows
-  DATA lt_fm_wa_seen TYPE TABLE OF string.
-  DATA lv_fm_wa_decl TYPE string.
+  " Work-area declarations for nested table rows (skip any already declared above)
+  DATA lv_fm_wa_nm TYPE string.
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
     IF wa_bdc_map-fm_wa_name IS INITIAL. CONTINUE. ENDIF.
-    DATA lv_fm_wa_nm TYPE string.
     lv_fm_wa_nm = to_lower( wa_bdc_map-fm_wa_name ).
     READ TABLE lt_fm_wa_seen TRANSPORTING NO FIELDS WITH KEY table_line = lv_fm_wa_nm.
     IF sy-subrc <> 0.
@@ -2202,6 +2216,23 @@ FORM generate_code_preview.
   " Sort: EXPORTING first, IMPORTING second, TABLES third
   SORT lt_cf_all BY sort_key.
 
+  " Ensure RETURN table is in TABLES section (add if not already from lt_distinct_params)
+  DATA lv_ret_exists TYPE flag.
+  LOOP AT lt_cf_all INTO wa_cf WHERE section = 'TABLES'.
+    DATA lv_cf_upper TYPE string.
+    lv_cf_upper = to_upper( wa_cf-line ).
+    IF lv_cf_upper CS 'RETURN'.
+      lv_ret_exists = 'X'. EXIT.
+    ENDIF.
+  ENDLOOP.
+  IF lv_ret_exists = space.
+    CLEAR wa_cf.
+    wa_cf-sort_key = '3'. wa_cf-section = 'TABLES'.
+    wa_cf-line = '    RETURN = lt_return'.
+    APPEND wa_cf TO lt_cf_all.
+  ENDIF.
+  SORT lt_cf_all BY sort_key.
+
   " Emit CALL FUNCTION with one section header per group
   lv_ln = |CALL FUNCTION '{ p_fm }'|. add_line: lv_ln.
   DATA lv_curr_section TYPE char10.
@@ -2213,20 +2244,22 @@ FORM generate_code_preview.
     ENDIF.
     add_line: wa_cf-line.
   ENDLOOP.
-  " Add TABLES/return and EXCEPTIONS (skip if TABLES already emitted from lt_cf_all)
-  IF lv_curr_section <> 'TABLES'.
-    add_line: '  TABLES'.
-  ENDIF.
-  add_line: '    return = lt_return'.
-  add_line: '  EXCEPTIONS'.
-  add_line: '    OTHERS = 99.'.
 
-  " BAPI commit if it is a BAPI
+  " Close CALL FUNCTION and add error handling
   IF p_fm CS 'BAPI'.
-    add_line: 'IF sy-subrc = 0.'.
+    " BAPIs do not use EXCEPTIONS — check the RETURN table for errors instead
+    add_line: '.'.
+    add_line: 'READ TABLE lt_return WITH KEY type = ''E'' TRANSPORTING NO FIELDS.'.
+    add_line: 'IF sy-subrc <> 0.'.
     add_line: '  CALL FUNCTION ''BAPI_TRANSACTION_COMMIT'''.
     add_line: '    EXPORTING wait = ''X''.'.
+    add_line: 'ELSE.'.
+    add_line: '  " TODO: handle BAPI errors from lt_return'.
     add_line: 'ENDIF.'.
+  ELSE.
+    add_line: '  EXCEPTIONS'.
+    add_line: '    OTHERS = 99.'.
+    add_line: 'IF sy-subrc = 0. ENDIF. " TODO: handle exceptions'.
   ENDIF.
   add_line: ''.
   lv_ln = |" { p_end } { sy-uname } { lv_datum }|. add_line: lv_ln.
