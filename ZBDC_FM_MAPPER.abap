@@ -636,8 +636,10 @@ FORM find_bdc_block.
       lv_sc_len = strlen( lv_sc_lu ).
       " Stop when we reach FORM boundary (= start of the calling FORM going backward)
       IF lv_sc_lu CS 'FORM ' AND sy-fdpos = 0. EXIT. ENDIF.
-      " Look for a non-BDC PERFORM call
-      IF lv_sc_lu CS 'PERFORM '
+      " Look for a non-BDC PERFORM call — prefix check (sy-fdpos=0) ensures
+      " the line actually STARTS with 'PERFORM', not just contains the word
+      " (e.g. avoids false matches inside string literals or comments)
+      IF lv_sc_lu CS 'PERFORM ' AND sy-fdpos = 0
          AND lv_sc_lu NS 'BDC_DYNPRO'
          AND lv_sc_lu NS 'BDC_FIELD'.
         " Extract the called FORM name via token split (case-safe, no fdpos arithmetic)
