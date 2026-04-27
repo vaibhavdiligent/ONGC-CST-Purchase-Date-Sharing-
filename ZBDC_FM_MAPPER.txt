@@ -497,24 +497,31 @@ FORM find_bdc_block.
     ENDIF.
 
     " ── Track every non-BDC PERFORM call for helper FORM resolution ──
-    IF lv_line_u CS 'PERFORM '
-       AND lv_line_u NS 'BDC_DYNPRO'
-       AND lv_line_u NS 'BDC_FIELD'.
+    " IMPORTANT: capture sy-fdpos (offset of 'PERFORM ') BEFORE any NS check.
+    " NS sets sy-fdpos to the length of the operand on success, so reading
+    " sy-fdpos after `NS 'BDC_FIELD'` would crash the substring call below.
+    IF lv_line_u CS 'PERFORM '.
       DATA(lv_pn_off) = sy-fdpos + 8.
-      DATA lv_pn_rest TYPE string.
-      lv_pn_rest = substring( val = lv_line off = lv_pn_off ).
-      CONDENSE lv_pn_rest.
-      CLEAR wa_perf_call.
-      IF lv_pn_rest CS ' '.
-        wa_perf_call-name = to_upper( lv_pn_rest(sy-fdpos) ).
-      ELSE.
-        wa_perf_call-name = to_upper( lv_pn_rest ).
-      ENDIF.
-      REPLACE ALL OCCURRENCES OF '.' IN wa_perf_call-name WITH ''.
-      CONDENSE wa_perf_call-name.
-      IF wa_perf_call-name IS NOT INITIAL.
-        wa_perf_call-line = lv_lineno.
-        APPEND wa_perf_call TO lt_perf_calls.
+      IF lv_line_u NS 'BDC_DYNPRO' AND lv_line_u NS 'BDC_FIELD'.
+        DATA lv_line_len TYPE i.
+        lv_line_len = strlen( lv_line ).
+        IF lv_pn_off < lv_line_len.
+          DATA lv_pn_rest TYPE string.
+          lv_pn_rest = substring( val = lv_line off = lv_pn_off ).
+          CONDENSE lv_pn_rest.
+          CLEAR wa_perf_call.
+          IF lv_pn_rest CS ' '.
+            wa_perf_call-name = to_upper( lv_pn_rest(sy-fdpos) ).
+          ELSE.
+            wa_perf_call-name = to_upper( lv_pn_rest ).
+          ENDIF.
+          REPLACE ALL OCCURRENCES OF '.' IN wa_perf_call-name WITH ''.
+          CONDENSE wa_perf_call-name.
+          IF wa_perf_call-name IS NOT INITIAL.
+            wa_perf_call-line = lv_lineno.
+            APPEND wa_perf_call TO lt_perf_calls.
+          ENDIF.
+        ENDIF.
       ENDIF.
     ENDIF.
 
