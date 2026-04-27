@@ -483,38 +483,38 @@ FORM find_bdc_block.
       DATA(lv_la_off) = sy-fdpos + 8.
       lv_la_rest = substring( val = lv_line off = lv_la_off ).
       CONDENSE lv_la_rest.
-      IF lv_la_rest CS ' '.
-        lv_cur_loop_tbl = to_lower( lv_la_rest(sy-fdpos) ).
-      ELSE.
-        lv_cur_loop_tbl = to_lower( lv_la_rest ).
-      ENDIF.
+      " Use SPLIT to extract table name — avoids sy-fdpos dependency
+      DATA lv_la_tok1 TYPE string.
+      DATA lv_la_tok2 TYPE string.
+      SPLIT lv_la_rest AT ' ' INTO lv_la_tok1 lv_la_tok2.
+      REPLACE ALL OCCURRENCES OF '.' IN lv_la_tok1 WITH ''.
+      CONDENSE lv_la_tok1.
+      lv_cur_loop_tbl = to_lower( lv_la_tok1 ).
       CLEAR lv_cur_loop_wa.
       DATA lv_la_up TYPE string.
       lv_la_up = lv_la_rest. TRANSLATE lv_la_up TO UPPER CASE.
       IF lv_la_up CS ' INTO '.
         DATA(lv_into_off) = sy-fdpos + 6.
         DATA lv_into_rest TYPE string.
+        DATA lv_into_t1   TYPE string.
+        DATA lv_into_t2   TYPE string.
         lv_into_rest = substring( val = lv_la_rest off = lv_into_off ).
-        IF lv_into_rest CS ' '.
-          lv_cur_loop_wa = to_lower( lv_into_rest(sy-fdpos) ).
-        ELSE.
-          lv_cur_loop_wa = to_lower( lv_into_rest ).
-        ENDIF.
-        REPLACE ALL OCCURRENCES OF '.' IN lv_cur_loop_wa WITH ''.
-        CONDENSE lv_cur_loop_wa.
+        SPLIT lv_into_rest AT ' ' INTO lv_into_t1 lv_into_t2.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_into_t1 WITH ''.
+        CONDENSE lv_into_t1.
+        lv_cur_loop_wa = to_lower( lv_into_t1 ).
       ELSEIF lv_la_up CS ' ASSIGNING '.
         DATA(lv_ass_off) = sy-fdpos + 11.
         DATA lv_ass_rest TYPE string.
+        DATA lv_ass_t1   TYPE string.
+        DATA lv_ass_t2   TYPE string.
         lv_ass_rest = substring( val = lv_la_rest off = lv_ass_off ).
         REPLACE ALL OCCURRENCES OF '.' IN lv_ass_rest WITH ''.
         REPLACE ALL OCCURRENCES OF '<' IN lv_ass_rest WITH ''.
         REPLACE ALL OCCURRENCES OF '>' IN lv_ass_rest WITH ''.
-        IF lv_ass_rest CS ' '.
-          lv_cur_loop_wa = to_lower( lv_ass_rest(sy-fdpos) ).
-        ELSE.
-          lv_cur_loop_wa = to_lower( lv_ass_rest ).
-        ENDIF.
-        CONDENSE lv_cur_loop_wa.
+        SPLIT lv_ass_rest AT ' ' INTO lv_ass_t1 lv_ass_t2.
+        CONDENSE lv_ass_t1.
+        lv_cur_loop_wa = to_lower( lv_ass_t1 ).
       ENDIF.
     ENDIF.
     IF lv_line_u CS 'ENDLOOP'.
@@ -750,15 +750,16 @@ FORM scan_form_body_for_bdc
       " FORM prefix check: CS 'FORM ' with sy-fdpos=0 ensures we match
       " a line that STARTS with 'FORM ' (avoids false match on 'PERFORM')
       IF lv_sl_u CS 'FORM ' AND sy-fdpos = 0 AND lv_sl_len > 5.
-        DATA lv_fhdr TYPE string.
-        DATA lv_ftok TYPE string.
+        DATA lv_fhdr  TYPE string.
+        DATA lv_ftok  TYPE string.
+        DATA lv_ftok2 TYPE string.
         lv_fhdr = lv_sl_u+5.   " everything after 'FORM '
         CONDENSE lv_fhdr.
-        IF lv_fhdr CS ' '.
-          lv_ftok = lv_fhdr(sy-fdpos).
-        ELSE.
-          lv_ftok = lv_fhdr.
-        ENDIF.
+        " Use SPLIT to extract first token — avoids sy-fdpos dependency.
+        " CS ' ' only sets sy-fdpos to the search result; if the outer
+        " CS 'FORM ' (sy-fdpos=0) check runs immediately before, the
+        " value can look stale/zero and lv_fhdr(0) would give empty string.
+        SPLIT lv_fhdr AT ' ' INTO lv_ftok lv_ftok2.
         REPLACE ALL OCCURRENCES OF '.' IN lv_ftok WITH ''.
         CONDENSE lv_ftok.
         IF lv_ftok = lv_fn_upper.
@@ -781,39 +782,39 @@ FORM scan_form_body_for_bdc
       IF lv_sl_len > lv_la2_off.
         lv_la2 = lv_sl+lv_la2_off.
         CONDENSE lv_la2.
-        IF lv_la2 CS ' '.
-          lv_form_lp_tbl = to_lower( lv_la2(sy-fdpos) ).
-        ELSE.
-          lv_form_lp_tbl = to_lower( lv_la2 ).
-        ENDIF.
+        " Extract table name — SPLIT avoids sy-fdpos dependency
+        DATA lv_la2_t1 TYPE string.
+        DATA lv_la2_t2 TYPE string.
+        SPLIT lv_la2 AT ' ' INTO lv_la2_t1 lv_la2_t2.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_la2_t1 WITH ''.
+        CONDENSE lv_la2_t1.
+        lv_form_lp_tbl = to_lower( lv_la2_t1 ).
         CLEAR lv_form_lp_wa.
         lv_la2_u = lv_la2. TRANSLATE lv_la2_u TO UPPER CASE.
         IF lv_la2_u CS ' INTO '.
           DATA lv_into2_off TYPE i.
           DATA lv_into2     TYPE string.
+          DATA lv_into2_t1  TYPE string.
+          DATA lv_into2_t2  TYPE string.
           lv_into2_off = sy-fdpos + 6.
           lv_into2 = lv_la2+lv_into2_off.
-          IF lv_into2 CS ' '.
-            lv_form_lp_wa = to_lower( lv_into2(sy-fdpos) ).
-          ELSE.
-            lv_form_lp_wa = to_lower( lv_into2 ).
-          ENDIF.
-          REPLACE ALL OCCURRENCES OF '.' IN lv_form_lp_wa WITH ''.
-          CONDENSE lv_form_lp_wa.
+          SPLIT lv_into2 AT ' ' INTO lv_into2_t1 lv_into2_t2.
+          REPLACE ALL OCCURRENCES OF '.' IN lv_into2_t1 WITH ''.
+          CONDENSE lv_into2_t1.
+          lv_form_lp_wa = to_lower( lv_into2_t1 ).
         ELSEIF lv_la2_u CS ' ASSIGNING '.
           DATA lv_ass2_off TYPE i.
           DATA lv_ass2     TYPE string.
+          DATA lv_ass2_t1  TYPE string.
+          DATA lv_ass2_t2  TYPE string.
           lv_ass2_off = sy-fdpos + 11.
           lv_ass2 = lv_la2+lv_ass2_off.
           REPLACE ALL OCCURRENCES OF '.' IN lv_ass2 WITH ''.
           REPLACE ALL OCCURRENCES OF '<' IN lv_ass2 WITH ''.
           REPLACE ALL OCCURRENCES OF '>' IN lv_ass2 WITH ''.
-          IF lv_ass2 CS ' '.
-            lv_form_lp_wa = to_lower( lv_ass2(sy-fdpos) ).
-          ELSE.
-            lv_form_lp_wa = to_lower( lv_ass2 ).
-          ENDIF.
-          CONDENSE lv_form_lp_wa.
+          SPLIT lv_ass2 AT ' ' INTO lv_ass2_t1 lv_ass2_t2.
+          CONDENSE lv_ass2_t1.
+          lv_form_lp_wa = to_lower( lv_ass2_t1 ).
         ENDIF.
       ENDIF.
     ENDIF.
