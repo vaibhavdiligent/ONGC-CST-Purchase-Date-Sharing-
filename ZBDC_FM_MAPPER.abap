@@ -465,6 +465,19 @@ FORM find_bdc_block.
         ENDIF.
         REPLACE ALL OCCURRENCES OF '.' IN lv_cur_loop_wa WITH ''.
         CONDENSE lv_cur_loop_wa.
+      ELSEIF lv_la_up CS ' ASSIGNING '.
+        DATA(lv_ass_off) = sy-fdpos + 11.
+        DATA lv_ass_rest TYPE string.
+        lv_ass_rest = substring( val = lv_la_rest off = lv_ass_off ).
+        REPLACE ALL OCCURRENCES OF '.' IN lv_ass_rest WITH ''.
+        REPLACE ALL OCCURRENCES OF '<' IN lv_ass_rest WITH ''.
+        REPLACE ALL OCCURRENCES OF '>' IN lv_ass_rest WITH ''.
+        IF lv_ass_rest CS ' '.
+          lv_cur_loop_wa = to_lower( lv_ass_rest(sy-fdpos) ).
+        ELSE.
+          lv_cur_loop_wa = to_lower( lv_ass_rest ).
+        ENDIF.
+        CONDENSE lv_cur_loop_wa.
       ENDIF.
     ENDIF.
     IF lv_line_u CS 'ENDLOOP'.
@@ -563,6 +576,8 @@ FORM find_bdc_block.
         REPLACE ALL OCCURRENCES OF '.' IN lv_fval WITH space.
         CONDENSE lv_fval.
         wa_bdc_map-fval_var = lv_fval.
+        wa_bdc_map-loop_wa  = lv_cur_loop_wa.
+        wa_bdc_map-loop_tbl = lv_cur_loop_tbl.
         PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
       ENDIF.
     ENDIF.
