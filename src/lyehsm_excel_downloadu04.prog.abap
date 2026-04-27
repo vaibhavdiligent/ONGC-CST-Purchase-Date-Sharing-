@@ -72,7 +72,6 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
   ls_audit_header = es_audit_header.
 
   ls_audit_obs-status = 'O'.
-  ls_audit_obs-obs_no = 00001.
 
   lv_range_nr = '01'.
   lv_object   = 'YAUDIT'.
@@ -137,75 +136,53 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
   ENDIF.
 *************************************End of Authorization Code*************************************
 
-  DATA: lv_date TYPE datum.
-  LOOP AT it_excel_data INTO DATA(ls_audit_data).
+* If no rows uploaded, nothing to save
+  IF it_excel_data[] IS INITIAL.
+    EXIT.
+  ENDIF.
 
-    CLEAR: lv_rcdate, lv_aufrom, lv_tgt_date, lv_delayed_text, lv_audit_number.
-
-    PERFORM date_conv USING ls_audit_data-rcdate CHANGING lv_date.
-    lv_rcdate = lv_date.
-    CLEAR lv_date.
-
-    PERFORM date_conv USING ls_audit_data-aufrom CHANGING lv_date.
-    lv_aufrom = lv_date.
-    CLEAR lv_date.
-
-    CALL FUNCTION 'CONVERT_DATE_INPUT'
+* === ONE AUDIT NUMBER PER EXCEL UPLOAD ===
+  IF ls_audit_header-audit_no IS INITIAL.
+    CALL FUNCTION 'NUMBER_GET_NEXT'
       EXPORTING
-        input  = ls_audit_data-tgtdate
+        nr_range_nr             = lv_range_nr
+        object                  = lv_object
       IMPORTING
-        output = lv_tgt_date
+        number                  = lv_audit_number
       EXCEPTIONS
-        OTHERS = 1.
-
-    IF ls_audit_header-audit_no IS INITIAL.
-      CALL FUNCTION 'NUMBER_GET_NEXT'
-        EXPORTING
-          nr_range_nr             = lv_range_nr
-          object                  = lv_object
-        IMPORTING
-          number                  = lv_audit_number
-        EXCEPTIONS
-          interval_not_found      = 1
-          number_range_not_intern = 2
-          object_not_found        = 3
-          quantity_is_0           = 4
-          quantity_is_not_1       = 5
-          interval_overflow       = 6
-          buffer_overflow         = 7.
-      IF sy-subrc NE 0.
-        MESSAGE 'PLEASE MAINTAIN NUMBER RANGE' TYPE 'I'.
-        EXIT.
-      ELSE.
-*— ASSIGN NUMBER AT HEADER LEVEL
-        ls_audit_header-audit_no = lv_audit_number.
-*— ASSIGN NUMBER AT OBSERVATION LEVEL
-        ls_audit_obs-audit_no = lv_audit_number.
-      ENDIF.
-    ELSE.
-      ls_audit_obs-audit_no = ls_audit_header-audit_no.
+        interval_not_found      = 1
+        number_range_not_intern = 2
+        object_not_found        = 3
+        quantity_is_0           = 4
+        quantity_is_not_1       = 5
+        interval_overflow       = 6
+        buffer_overflow         = 7.
+    IF sy-subrc NE 0.
+      MESSAGE 'PLEASE MAINTAIN NUMBER RANGE' TYPE 'I'.
+      EXIT.
     ENDIF.
+    ls_audit_header-audit_no = lv_audit_number.
+  ENDIF.
 
-    CLEAR: lt_mod.
+  CLEAR lt_mod.
 
-    TRY.
+  TRY.
+*=== CREATE THE SINGLE AUDIT HEADER (ROOT) ===
       CREATE DATA lr_audit.
-      CLEAR: ls_text, lt_text.
-
       lr_audit->key            = /bobf/cl_frw_factory=>get_new_key( ).
-      lr_audit->audit_plant    = ls_audit_data-plant.
+      lr_audit->audit_plant    = ls_audit_header-audit_plant.
       lr_audit->audit_no       = ls_audit_header-audit_no.
-      lr_audit->audit_type     = ls_audit_data-autype.
+      lr_audit->audit_type     = ls_audit_header-audit_type.
       lr_audit->audit_date     = ls_audit_header-audit_date.
-      lr_audit->audit_from     = lv_aufrom.
+      lr_audit->audit_from     = ls_audit_header-audit_from.
       lr_audit->audit_to       = ls_audit_header-audit_to.
-      lr_audit->audit_rec_date = lv_rcdate.
+      lr_audit->audit_rec_date = ls_audit_header-audit_rec_date.
       lr_audit->audit_scope    = ls_audit_header-audit_scope.
       lr_audit->audit_agency   = ls_audit_header-audit_agency.
       lr_audit->cname          = sy-uname.
       lr_audit->cdate          = sy-datum.
       lr_audit->ctime          = sy-uzeit.
-      lr_audit->delay_reason   = lv_delayed_text.
+      lr_audit->delay_reason   = ls_audit_header-delay_reason.
 
       APPEND INITIAL LINE TO lt_mod ASSIGNING <ls_mod>.
       <ls_mod>-node        = yif_y_ehs_audit1_c=>sc_node-audit_header.
@@ -213,7 +190,7 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
       <ls_mod>-key         = lr_audit->key.
       <ls_mod>-data        = lr_audit.
 
-*— SET AUDITORS
+*=== ATTACH AUDITORS ONCE TO THE SINGLE HEADER ===
       LOOP AT it_auditors ASSIGNING <fs_auditors>.
         FREE lr_auditors.
         CREATE DATA lr_auditors.
@@ -230,79 +207,119 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
         <ls_mod>-data        = lr_auditors.
       ENDLOOP.
 
+*=== ADD ONE OBSERVATION PER EXCEL ROW (UNIQUE OBS_NO) ===
+      DATA: lv_date   TYPE datum,
+            lv_obs_no TYPE yy_obs_no VALUE 0.
+
+      LOOP AT it_excel_data INTO DATA(ls_audit_data).
+
+        CLEAR: lv_rcdate, lv_aufrom, lv_tgt_date, lv_delayed_text, ls_text, lt_text.
+
+        lv_obs_no = lv_obs_no + 1.
+        ls_audit_obs-audit_no = ls_audit_header-audit_no.
+        ls_audit_obs-obs_no   = lv_obs_no.
+
+        PERFORM date_conv USING ls_audit_data-rcdate CHANGING lv_date.
+        lv_rcdate = lv_date.
+        CLEAR lv_date.
+
+        PERFORM date_conv USING ls_audit_data-aufrom CHANGING lv_date.
+        lv_aufrom = lv_date.
+        CLEAR lv_date.
+
+        CALL FUNCTION 'CONVERT_DATE_INPUT'
+          EXPORTING
+            input  = ls_audit_data-tgtdate
+          IMPORTING
+            output = lv_tgt_date
+          EXCEPTIONS
+            OTHERS = 1.
+
 *— SET OBSERVATIONS
-      IF ev_coordinator_role = 'X'.
-        ls_text-obs_no = ls_audit_obs-obs_no.
-        ls_text-type   = 'OBS'.
-        ls_text-text   = ls_audit_data-obstext.
-        APPEND ls_text TO lt_text.
-      ENDIF.
+        IF ev_coordinator_role = 'X'.
+          ls_text-obs_no = ls_audit_obs-obs_no.
+          ls_text-type   = 'OBS'.
+          ls_text-text   = ls_audit_data-obstext.
+          APPEND ls_text TO lt_text.
+        ENDIF.
 
-      FREE lr_obs.
-      CREATE DATA lr_obs.
-      lr_obs->key           = /bobf/cl_frw_factory=>get_new_key( ).
-      lr_obs->audit_no      = ls_audit_obs-audit_no.
-      lr_obs->obs_no        = ls_audit_obs-obs_no.
-      lr_obs->audit_ref_no  = ls_audit_data-refno.
-      lr_obs->saved_status  = lv_save_mode.
-      lr_obs->location      = ls_audit_data-location.
-      lr_obs->sublocation   = ls_audit_data-subloc.
-      lr_obs->priority      = ls_audit_data-priority.
-      lr_obs->target_date   = lv_tgt_date.
-      lr_obs->status        = ls_audit_obs-status.
-      lr_obs->resp_person1  = ls_audit_data-impl01.
-      lr_obs->resp_person2  = ls_audit_data-impl02.
-      lr_obs->resp_person3  = ls_audit_data-impl03.
-* SOC ADDED BY SHUBHAM DATE:15.06.2020 CHARM:4000002126
-      lr_obs->resp_person4  = ls_audit_data-impl04.
-      lr_obs->resp_person5  = ls_audit_data-impl05.
-      lr_obs->resp_person6  = ls_audit_data-impl06.
-      lr_obs->resp_person7  = ls_audit_data-impl07.
-      lr_obs->resp_person8  = ls_audit_data-impl08.
-      lr_obs->resp_person9  = ls_audit_data-impl09.
-      lr_obs->resp_person10 = ls_audit_data-impl10.
-      lr_obs->resp_person11 = ls_audit_data-impl11.
-      lr_obs->resp_person12 = ls_audit_data-impl12.
-      lr_obs->resp_person13 = ls_audit_data-impl13.
-      lr_obs->resp_person14 = ls_audit_data-impl14.
-      lr_obs->resp_person15 = ls_audit_data-impl15.
-* EOC ADDED BY SHUBHAM DATE:15.06.2020 CHARM:4000002126
-      lr_obs->cname         = sy-uname.
-      lr_obs->cdate         = sy-datum.
-      lr_obs->ctime         = sy-uzeit.
-
-      APPEND INITIAL LINE TO lt_mod ASSIGNING <ls_mod>.
-      <ls_mod>-node        = yif_y_ehs_audit1_c=>sc_node-audit_observations.
-      <ls_mod>-change_mode = /bobf/if_frw_c=>sc_modify_create.
-      <ls_mod>-source_node = yif_y_ehs_audit1_c=>sc_node-audit_header.
-      <ls_mod>-association = yif_y_ehs_audit1_c=>sc_association-audit_header-audit_observations.
-      <ls_mod>-source_key  = lr_audit->key.
-      <ls_mod>-key         = lr_obs->key.
-      <ls_mod>-data        = lr_obs.
-
-*— SET AUDIT'S OBSERVATION TEXT
-      FREE lr_aud_obs.
-      CREATE DATA lr_aud_obs.
-      READ TABLE lt_text INTO ls_text WITH KEY obs_no = ls_audit_obs-obs_no
-                                               type   = 'OBS'.
-      IF sy-subrc EQ 0.
-        lr_aud_obs->key        = /bobf/cl_frw_factory=>get_new_key( ).
-        lr_aud_obs->created_by = sy-uname.
-        lr_aud_obs->created_on = sy-datum.
-        lr_aud_obs->audit_text = ls_text-text.
+        FREE lr_obs.
+        CREATE DATA lr_obs.
+        lr_obs->key           = /bobf/cl_frw_factory=>get_new_key( ).
+        lr_obs->audit_no      = ls_audit_obs-audit_no.
+        lr_obs->obs_no        = ls_audit_obs-obs_no.
+        lr_obs->audit_ref_no  = ls_audit_data-refno.
+        lr_obs->saved_status  = lv_save_mode.
+        lr_obs->location      = ls_audit_data-location.
+        lr_obs->sublocation   = ls_audit_data-subloc.
+        lr_obs->priority      = ls_audit_data-priority.
+        lr_obs->target_date   = lv_tgt_date.
+        lr_obs->status        = ls_audit_obs-status.
+        lr_obs->resp_person1  = ls_audit_data-impl01.
+        lr_obs->resp_person2  = ls_audit_data-impl02.
+        lr_obs->resp_person3  = ls_audit_data-impl03.
+        lr_obs->resp_person4  = ls_audit_data-impl04.
+        lr_obs->resp_person5  = ls_audit_data-impl05.
+        lr_obs->resp_person6  = ls_audit_data-impl06.
+        lr_obs->resp_person7  = ls_audit_data-impl07.
+        lr_obs->resp_person8  = ls_audit_data-impl08.
+        lr_obs->resp_person9  = ls_audit_data-impl09.
+        lr_obs->resp_person10 = ls_audit_data-impl10.
+        lr_obs->resp_person11 = ls_audit_data-impl11.
+        lr_obs->resp_person12 = ls_audit_data-impl12.
+        lr_obs->resp_person13 = ls_audit_data-impl13.
+        lr_obs->resp_person14 = ls_audit_data-impl14.
+        lr_obs->resp_person15 = ls_audit_data-impl15.
+        lr_obs->cname         = sy-uname.
+        lr_obs->cdate         = sy-datum.
+        lr_obs->ctime         = sy-uzeit.
 
         APPEND INITIAL LINE TO lt_mod ASSIGNING <ls_mod>.
-        <ls_mod>-node        = yif_y_ehs_audit1_c=>sc_node-audit_obs_text.
+        <ls_mod>-node        = yif_y_ehs_audit1_c=>sc_node-audit_observations.
         <ls_mod>-change_mode = /bobf/if_frw_c=>sc_modify_create.
-        <ls_mod>-source_node = yif_y_ehs_audit1_c=>sc_node-audit_observations.
-        <ls_mod>-association = yif_y_ehs_audit1_c=>sc_association-audit_observations-audit_obs_text.
-        <ls_mod>-source_key  = lr_obs->key.
-        <ls_mod>-root_key    = lr_audit->key.
-        <ls_mod>-key         = lr_aud_obs->key.
-        <ls_mod>-data        = lr_aud_obs.
-      ENDIF.
+        <ls_mod>-source_node = yif_y_ehs_audit1_c=>sc_node-audit_header.
+        <ls_mod>-association = yif_y_ehs_audit1_c=>sc_association-audit_header-audit_observations.
+        <ls_mod>-source_key  = lr_audit->key.
+        <ls_mod>-key         = lr_obs->key.
+        <ls_mod>-data        = lr_obs.
 
-*— CREATE RECORD
+*— SET AUDIT'S OBSERVATION TEXT
+        READ TABLE lt_text INTO ls_text WITH KEY obs_no = ls_audit_obs-obs_no
+                                                 type   = 'OBS'.
+        IF sy-subrc EQ 0.
+          FREE lr_aud_obs.
+          CREATE DATA lr_aud_obs.
+          lr_aud_obs->key        = /bobf/cl_frw_factory=>get_new_key( ).
+          lr_aud_obs->created_by = sy-uname.
+          lr_aud_obs->created_on = sy-datum.
+          lr_aud_obs->audit_text = ls_text-text.
+
+          APPEND INITIAL LINE TO lt_mod ASSIGNING <ls_mod>.
+          <ls_mod>-node        = yif_y_ehs_audit1_c=>sc_node-audit_obs_text.
+          <ls_mod>-change_mode = /bobf/if_frw_c=>sc_modify_create.
+          <ls_mod>-source_node = yif_y_ehs_audit1_c=>sc_node-audit_observations.
+          <ls_mod>-association = yif_y_ehs_audit1_c=>sc_association-audit_observations-audit_obs_text.
+          <ls_mod>-source_key  = lr_obs->key.
+          <ls_mod>-root_key    = lr_audit->key.
+          <ls_mod>-key         = lr_aud_obs->key.
+          <ls_mod>-data        = lr_aud_obs.
+        ENDIF.
+
+*— RECORD STATUS-CHANGE ENTRY (BUFFERED, INSERTED ONCE AFTER LOOP)
+        CLEAR ls_audit_chang.
+        ls_audit_chang-audit_no    = ls_audit_header-audit_no.
+        ls_audit_chang-obs_no      = ls_audit_obs-obs_no.
+        ls_audit_chang-status      = ls_audit_obs-status.
+        ls_audit_chang-change_on   = sy-datum.
+        ls_audit_chang-change_time = sy-uzeit.
+        ls_audit_chang-change_by   = sy-uname.
+        APPEND ls_audit_chang TO lt_audit_chang.
+
+        lv_row += 1.
+
+      ENDLOOP.
+
+*=== ONE MODIFY CALL FOR THE WHOLE AUDIT ===
       CALL METHOD mo_svc_mngr->modify
         EXPORTING
           it_modification = lt_mod
@@ -310,9 +327,7 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
           eo_change       = lo_change
           eo_message      = lo_message.
 
-      lv_row += 1.
-
-*— CHECK FOR ERRORS:
+*— CHECK FOR ERRORS
       IF lo_message IS BOUND.
         IF lo_message->check( ) EQ abap_true.
           lo_message->get_messages( IMPORTING et_message = lt_messages ).
@@ -328,15 +343,14 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
         ENDIF.
       ENDIF.
 
-*— APPLY THE TRANSACTIONAL CHANGES:
+*=== ONE SAVE CALL FOR THE WHOLE TRANSACTION ===
       CALL METHOD mo_txn_mngr->save
         IMPORTING
           eo_message  = lo_message
           ev_rejected = lv_rejected.
 
-*— CHECK MESSAGES
       IF lv_rejected EQ abap_true.
-        IF lo_message->check( ) EQ abap_true.
+        IF lo_message IS BOUND AND lo_message->check( ) EQ abap_true.
           lo_message->get_messages( IMPORTING et_message = lt_messages ).
           LOOP AT lt_messages ASSIGNING <ls_message>.
             IF sy-tabix = 1.
@@ -349,26 +363,16 @@ FUNCTION YEHSM_ECEL_DATA_SAVE.
           EXIT.
         ENDIF.
       ELSE.
-        ls_audit_chang-audit_no    = ls_audit_header-audit_no.
-        ls_audit_chang-obs_no      = ls_audit_obs-obs_no.
-        ls_audit_chang-status      = ls_audit_obs-status.
-        ls_audit_chang-change_on   = sy-datum.
-        ls_audit_chang-change_time = sy-uzeit.
-        ls_audit_chang-change_by   = sy-uname.
-        APPEND ls_audit_chang TO lt_audit_chang.
+*— PERSIST STATUS-CHANGE LOG ONLY ON SUCCESSFUL SAVE
+        IF lt_audit_chang IS NOT INITIAL.
+          MODIFY yehs_audit_chang FROM TABLE lt_audit_chang.
+        ENDIF.
       ENDIF.
 
     CATCH /bobf/cx_frw INTO lx_bopf_ex.
       lv_err_msg = lx_bopf_ex->get_text( ).
       MESSAGE : lv_err_msg TYPE 'E'.
-    ENDTRY.
-
-    CLEAR: ls_audit_obs-audit_no, ls_audit_data, ls_return, ls_audit_chang,
-           ls_audit_header-audit_no.
-
-  ENDLOOP.
-
-  MODIFY yehs_audit_chang FROM TABLE lt_audit_chang.
+  ENDTRY.
 
 ENDFUNCTION.
 
@@ -396,6 +400,6 @@ FORM date_conv USING p_date TYPE char20 CHANGING lv_date TYPE datum.
   IF lv_day < 10.
     CONCATENATE '0' lv_day INTO lv_day.
   ENDIF.
-  CONCATENATE sy-datum+0(2) lv_year lv_mon lv_day INTO lv_date.
+  CONCATENATE lv_year lv_mon lv_day INTO lv_date.
   CLEAR: lv_year, lv_mon, lv_day.
 ENDFORM.
