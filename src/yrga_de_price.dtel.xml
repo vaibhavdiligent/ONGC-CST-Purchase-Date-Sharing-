@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DTEL" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DD04V>
+    <ROLLNAME>YRGA_DE_PRICE</ROLLNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DOMNAME>YRGA_PRICE</DOMNAME>
+    <HEADLEN>10</HEADLEN>
+    <SCRLEN1>05</SCRLEN1>
+    <SCRLEN2>10</SCRLEN2>
+    <SCRLEN3>15</SCRLEN3>
+    <DDTEXT>Price / Rate Value</DDTEXT>
+    <REPTEXT>Price</REPTEXT>
+    <SCRTEXT_S>Price</SCRTEXT_S>
+    <SCRTEXT_M>Price/Rate</SCRTEXT_M>
+    <SCRTEXT_L>Price / Rate Value</SCRTEXT_L>
+   </DD04V>
+  </asx:values>
+ </asx:abap>
+</abapGit>
