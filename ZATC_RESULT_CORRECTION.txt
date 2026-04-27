@@ -1422,6 +1422,8 @@ FORM change_table.
   DATA l_bet      TYPE i.
   DATA l_in_paren TYPE i.
   DATA l_paren_prev TYPE flag.
+  DATA l_prev_at_tok TYPE flag.
+  DATA l_at_paren_depth TYPE i.
   IF l_string CS 'JOIN'.
     READ TABLE it_table INTO wa_table WITH KEY value = 'FROM'.
     IF sy-subrc = 0. l_from = sy-tabix. ENDIF.
@@ -1672,16 +1674,28 @@ FORM change_table.
     " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
     IF l_into > 0.
-      CLEAR l_bras.
+      CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       LOOP AT it_table INTO wa_table FROM l_into.
         IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
         IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        IF wa_table-value = '(' AND l_prev_at_tok = abap_true.
+          l_at_paren_depth = l_at_paren_depth + 1.
+        ELSEIF wa_table-value = ')' AND l_at_paren_depth > 0.
+          l_at_paren_depth = l_at_paren_depth - 1.
+        ENDIF.
         IF wa_table-value <> 'TABLE' AND wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
           AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN' AND wa_table-value <> 'INTO'
           AND wa_table-value <> 'CORRESPONDING' AND wa_table-value <> 'FIELDS'
-          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('.
-          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
+          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('
+          AND wa_table-value <> 'UP' AND wa_table-value <> 'TO' AND wa_table-value <> 'ROWS'
+          AND wa_table-value <> 'APPENDING' AND wa_table-value <> 'PACKAGE' AND wa_table-value <> 'SIZE'.
+          IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
+            AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' )
+            AND l_at_paren_depth = 0.
+            CONCATENATE '@' wa_table-value INTO wa_table-value.
+          ENDIF.
         ENDIF.
+        IF wa_table-value(1) = '@'. l_prev_at_tok = abap_true. ELSE. CLEAR l_prev_at_tok. ENDIF.
         IF wa_table-value = '('. l_bras = ','. ELSEIF wa_table-value = ')'. CLEAR l_bras. ENDIF.
         l_bras1 = sy-tabix + 1.
         READ TABLE it_table INTO DATA(wa_table_b) INDEX l_bras1.
@@ -1824,16 +1838,28 @@ FORM change_table.
     " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
     IF l_into > 0.
-      CLEAR l_bras.
+      CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       LOOP AT it_table INTO wa_table FROM l_into.
         IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
         IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        IF wa_table-value = '(' AND l_prev_at_tok = abap_true.
+          l_at_paren_depth = l_at_paren_depth + 1.
+        ELSEIF wa_table-value = ')' AND l_at_paren_depth > 0.
+          l_at_paren_depth = l_at_paren_depth - 1.
+        ENDIF.
         IF wa_table-value <> 'TABLE' AND wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
           AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN' AND wa_table-value <> 'INTO'
           AND wa_table-value <> 'CORRESPONDING' AND wa_table-value <> 'FIELDS'
-          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('.
-          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
+          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('
+          AND wa_table-value <> 'UP' AND wa_table-value <> 'TO' AND wa_table-value <> 'ROWS'
+          AND wa_table-value <> 'APPENDING' AND wa_table-value <> 'PACKAGE' AND wa_table-value <> 'SIZE'.
+          IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
+            AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' )
+            AND l_at_paren_depth = 0.
+            CONCATENATE '@' wa_table-value INTO wa_table-value.
+          ENDIF.
         ENDIF.
+        IF wa_table-value(1) = '@'. l_prev_at_tok = abap_true. ELSE. CLEAR l_prev_at_tok. ENDIF.
         IF wa_table-value = '('. l_bras = ','. ELSEIF wa_table-value = ')'. CLEAR l_bras. ENDIF.
         l_bras1 = sy-tabix + 1.
         READ TABLE it_table INTO wa_table_b INDEX l_bras1.
