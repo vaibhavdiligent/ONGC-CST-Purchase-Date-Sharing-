@@ -437,37 +437,41 @@ FORM find_bdc_block.
 
     " Detect CALL TRANSACTION — closes the current BDC block
     IF lv_line_u CS 'CALL TRANSACTION'.
-      IF lv_line_u CS p_tcode AND lv_tcode_found = space.
+      " Determine if this is our tcode: literal match OR variable tcode (first char ≠ quote)
+      DATA lv_is_our_ct TYPE flag.
+      CLEAR lv_is_our_ct.
+      IF lv_line_u CS p_tcode.
+        lv_is_our_ct = 'X'.   " literal match
+      ELSE.
+        DATA lv_ct_voff TYPE i.
+        DATA lv_ct_vrest TYPE string.
+        FIND FIRST OCCURRENCE OF 'CALL TRANSACTION ' IN lv_line_u MATCH OFFSET lv_ct_voff.
+        IF sy-subrc = 0.
+          lv_ct_voff = lv_ct_voff + 17.
+          IF lv_ct_voff < strlen( lv_line_u ).
+            lv_ct_vrest = substring( val = lv_line_u off = lv_ct_voff ).
+            CONDENSE lv_ct_vrest.
+            IF lv_ct_vrest IS NOT INITIAL AND lv_ct_vrest(1) <> ''''.
+              lv_is_our_ct = 'X'.   " tcode in a variable
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF lv_is_our_ct = 'X'.
+        " Our CALL TRANSACTION — commit this BDC block and keep scanning for more.
+        " APPEND (not replace) so multiple occurrences are all collected.
         lv_bdc_end     = lv_lineno.
         lv_tcode_found = 'X'.
         IF lt_bdc_buf IS NOT INITIAL.
-          " Inline BDC data found — commit and stop
-          lt_bdc_map   = lt_bdc_buf.
-          lv_bdc_start = lv_bdc_start_cand.
+          APPEND LINES OF lt_bdc_buf TO lt_bdc_map.
+          IF lv_bdc_start = 0. lv_bdc_start = lv_bdc_start_cand. ENDIF.
         ENDIF.
-        " Empty buffer is OK here — helper FORM resolution happens post-loop
-        EXIT.
-      ENDIF.
-      " Variable tcode: CALL TRANSACTION lv_xxx — first char after keyword is not quote
-      DATA lv_ct_voff TYPE i.
-      DATA lv_ct_vrest TYPE string.
-      FIND FIRST OCCURRENCE OF 'CALL TRANSACTION ' IN lv_line_u MATCH OFFSET lv_ct_voff.
-      IF sy-subrc = 0.
-        lv_ct_voff = lv_ct_voff + 17.
-        IF lv_ct_voff < strlen( lv_line_u ).
-          lv_ct_vrest = substring( val = lv_line_u off = lv_ct_voff ).
-          CONDENSE lv_ct_vrest.
-          IF lv_ct_vrest IS NOT INITIAL AND lv_ct_vrest(1) <> ''''.
-            " Tcode is in a variable — accept as our CALL TRANSACTION
-            lv_bdc_end     = lv_lineno.
-            lv_tcode_found = 'X'.
-            IF lt_bdc_buf IS NOT INITIAL.
-              lt_bdc_map   = lt_bdc_buf.
-              lv_bdc_start = lv_bdc_start_cand.
-            ENDIF.
-            EXIT.
-          ENDIF.
-        ENDIF.
+        " Reset for next BDC block — CONTINUE (not EXIT) to catch all occurrences
+        CLEAR lt_bdc_buf.
+        lv_bdc_start_cand = 0.
+        lv_in_bdc   = space.
+        lv_pend_val = space.
+        CONTINUE.
       ENDIF.
       " Not our tcode (different literal) — discard this block and reset for next one
       CLEAR lt_bdc_buf.
@@ -637,7 +641,6 @@ FORM find_bdc_block.
   " line to find non-BDC PERFORM calls, then search the whole source for
   " that FORM's definition and extract its BDC entries.
   IF lv_tcode_found = 'X' AND lt_bdc_map IS INITIAL.
-    MESSAGE |BDC helper scan: CALL TRANSACTION found at line { lv_bdc_end } — scanning backward from { lv_bdc_end - 1 }| TYPE 'I'.
     lv_hlp_found = space.
     lv_scan_idx  = lv_bdc_end - 1.
     WHILE lv_scan_idx > 0 AND lv_hlp_found = space.
@@ -677,7 +680,6 @@ FORM find_bdc_block.
           IF lv_sc_tok = 'PERFORM'. lv_sc_seen = 'X'. ENDIF.
         ENDLOOP.
         IF lv_help_nm IS NOT INITIAL.
-          MESSAGE |BDC helper scan: found PERFORM '{ lv_help_nm }' at line { lv_scan_idx } — scanning FORM body| TYPE 'I'.
           CLEAR lt_form_buf. CLEAR lv_form_start.
           PERFORM scan_form_body_for_bdc
             USING lv_help_nm
@@ -907,14 +909,6 @@ FORM scan_form_body_for_bdc
     ENDIF.
   ENDLOOP.
 
-  " Diagnostic: report result so caller can see what happened
-  IF lv_in_form = space.
-    MESSAGE |scan_form: FORM '{ lv_fn_upper }' NOT FOUND in source ({ lines( lt_source ) } lines scanned)| TYPE 'I'.
-  ELSEIF lines( ct_buf ) = 0.
-    MESSAGE |scan_form: FORM '{ lv_fn_upper }' found at line { cv_form_start } but 0 BDC fields extracted| TYPE 'I'.
-  ELSE.
-    MESSAGE |scan_form: FORM '{ lv_fn_upper }' found at line { cv_form_start } — { lines( ct_buf ) } BDC fields extracted| TYPE 'I'.
-  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
