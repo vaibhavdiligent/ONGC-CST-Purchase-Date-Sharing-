@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DTEL" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DD04V>
+    <ROLLNAME>YRGA_DE_INVOICE_NO</ROLLNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DOMNAME>YRGA_INVOICE_NO</DOMNAME>
+    <HEADLEN>20</HEADLEN>
+    <SCRLEN1>10</SCRLEN1>
+    <SCRLEN2>15</SCRLEN2>
+    <SCRLEN3>20</SCRLEN3>
+    <DDTEXT>Invoice / Document Number</DDTEXT>
+    <REPTEXT>Invoice No.</REPTEXT>
+    <SCRTEXT_S>Inv. No.</SCRTEXT_S>
+    <SCRTEXT_M>Invoice No.</SCRTEXT_M>
+    <SCRTEXT_L>Invoice Number</SCRTEXT_L>
+   </DD04V>
+  </asx:values>
+ </asx:abap>
+</abapGit>
