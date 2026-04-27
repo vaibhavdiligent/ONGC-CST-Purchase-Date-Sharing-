@@ -694,11 +694,15 @@ FORM scan_form_body_for_bdc
     TRANSLATE lv_flu TO UPPER CASE.
 
     " ── Locate FORM <iv_form_name> ──
+    " Use prefix check: CS 'FORM ' would falsely match 'PERFORM ' too
+    " because 'FORM ' is a suffix of 'PERFORM '. lv_fl is CONDENSEd,
+    " so a real FORM definition starts with 'FORM ' at offset 0.
+    DATA lv_flu_len TYPE i.
+    lv_flu_len = strlen( lv_flu ).
     IF lv_in_form = space.
-      IF lv_flu CS 'FORM '.
-        DATA(lv_foff) = sy-fdpos + 5.
+      IF lv_flu_len >= 5 AND lv_flu(5) = 'FORM '.
         DATA lv_fname TYPE string.
-        lv_fname = substring( val = lv_flu off = lv_foff ).
+        lv_fname = substring( val = lv_flu off = 5 ).
         CONDENSE lv_fname.
         DATA lv_fw TYPE string.
         IF lv_fname CS ' '.
@@ -716,8 +720,8 @@ FORM scan_form_body_for_bdc
       CONTINUE.
     ENDIF.
 
-    " ── Inside the FORM ──
-    IF lv_flu CS 'ENDFORM'. EXIT. ENDIF.
+    " ── Inside the FORM: detect ENDFORM (prefix, not substring) ──
+    IF lv_flu_len >= 7 AND lv_flu(7) = 'ENDFORM'. EXIT. ENDIF.
 
     " Track LOOP / ENDLOOP for item processing
     IF lv_flu CS 'LOOP AT '.
