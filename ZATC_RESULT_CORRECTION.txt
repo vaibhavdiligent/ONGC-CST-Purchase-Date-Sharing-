@@ -1599,30 +1599,7 @@ FORM change_table.
       ENDIF.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
-    CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
-    IF l_into > 0.
-      CLEAR l_bras.
-      LOOP AT it_table INTO wa_table FROM l_into.
-        IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
-        IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
-        IF wa_table-value <> 'TABLE' AND wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
-          AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN' AND wa_table-value <> 'INTO'
-          AND wa_table-value <> 'CORRESPONDING' AND wa_table-value <> 'FIELDS'
-          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('.
-          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
-        ENDIF.
-        IF wa_table-value = '('. l_bras = ','. ELSEIF wa_table-value = ')'. CLEAR l_bras. ENDIF.
-        l_bras1 = sy-tabix + 1.
-        READ TABLE it_table INTO DATA(wa_table_b) INDEX l_bras1.
-        IF sy-subrc = 0. IF wa_table_b-value = ')'. CLEAR l_bras. ENDIF. ENDIF.
-        IF wa_table-value <> '(' AND wa_table-value <> ')'.
-          CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
-        ELSE.
-          CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
-        ENDIF.
-      ENDLOOP.
-    ENDIF.
-    " Append FOR ALL ENTRIES IN @itab after INTO TABLE (correct S/4 Open SQL order)
+    " Append FOR ALL ENTRIES IN @itab after FROM (before WHERE)
     IF l_fae > 0.
       LOOP AT it_table INTO wa_table FROM l_fae.
         IF l_where > 0 AND sy-tabix = l_where. EXIT. ENDIF.
@@ -1690,6 +1667,30 @@ FORM change_table.
           ENDIF.
         ENDIF.
         CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
+      ENDLOOP.
+    ENDIF.
+    " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
+    CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    IF l_into > 0.
+      CLEAR l_bras.
+      LOOP AT it_table INTO wa_table FROM l_into.
+        IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
+        IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        IF wa_table-value <> 'TABLE' AND wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
+          AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN' AND wa_table-value <> 'INTO'
+          AND wa_table-value <> 'CORRESPONDING' AND wa_table-value <> 'FIELDS'
+          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('.
+          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
+        ENDIF.
+        IF wa_table-value = '('. l_bras = ','. ELSEIF wa_table-value = ')'. CLEAR l_bras. ENDIF.
+        l_bras1 = sy-tabix + 1.
+        READ TABLE it_table INTO DATA(wa_table_b) INDEX l_bras1.
+        IF sy-subrc = 0. IF wa_table_b-value = ')'. CLEAR l_bras. ENDIF. ENDIF.
+        IF wa_table-value <> '(' AND wa_table-value <> ')'.
+          CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
+        ELSE.
+          CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
+        ENDIF.
       ENDLOOP.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
@@ -1763,30 +1764,7 @@ FORM change_table.
       ENDIF.
     ENDLOOP.
     CONCATENATE l_query 'FROM' l_ars2-successor_tadir_obj_name INTO l_query SEPARATED BY space.
-    CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
-    IF l_into > 0.
-      CLEAR l_bras.
-      LOOP AT it_table INTO wa_table FROM l_into.
-        IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
-        IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
-        IF wa_table-value <> 'TABLE' AND wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
-          AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN' AND wa_table-value <> 'INTO'
-          AND wa_table-value <> 'CORRESPONDING' AND wa_table-value <> 'FIELDS'
-          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('.
-          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
-        ENDIF.
-        IF wa_table-value = '('. l_bras = ','. ELSEIF wa_table-value = ')'. CLEAR l_bras. ENDIF.
-        l_bras1 = sy-tabix + 1.
-        READ TABLE it_table INTO wa_table_b INDEX l_bras1.
-        IF sy-subrc = 0. IF wa_table_b-value = ')'. CLEAR l_bras. ENDIF. ENDIF.
-        IF wa_table-value <> '(' AND wa_table-value <> ')'.
-          CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
-        ELSE.
-          CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
-        ENDIF.
-      ENDLOOP.
-    ENDIF.
-    " Append FOR ALL ENTRIES IN @itab after INTO TABLE
+    " Append FOR ALL ENTRIES IN @itab after FROM (before WHERE)
     IF l_fae > 0.
       LOOP AT it_table INTO wa_table FROM l_fae.
         IF l_where > 0 AND sy-tabix = l_where. EXIT. ENDIF.
@@ -1841,6 +1819,30 @@ FORM change_table.
           ENDIF.
         ENDIF.
         CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
+      ENDLOOP.
+    ENDIF.
+    " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
+    CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    IF l_into > 0.
+      CLEAR l_bras.
+      LOOP AT it_table INTO wa_table FROM l_into.
+        IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
+        IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        IF wa_table-value <> 'TABLE' AND wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
+          AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN' AND wa_table-value <> 'INTO'
+          AND wa_table-value <> 'CORRESPONDING' AND wa_table-value <> 'FIELDS'
+          AND wa_table-value <> 'OF' AND wa_table-value <> ')' AND wa_table-value <> '('.
+          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
+        ENDIF.
+        IF wa_table-value = '('. l_bras = ','. ELSEIF wa_table-value = ')'. CLEAR l_bras. ENDIF.
+        l_bras1 = sy-tabix + 1.
+        READ TABLE it_table INTO wa_table_b INDEX l_bras1.
+        IF sy-subrc = 0. IF wa_table_b-value = ')'. CLEAR l_bras. ENDIF. ENDIF.
+        IF wa_table-value <> '(' AND wa_table-value <> ')'.
+          CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
+        ELSE.
+          CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
+        ENDIF.
       ENDLOOP.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
