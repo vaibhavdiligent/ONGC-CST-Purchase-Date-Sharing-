@@ -407,17 +407,21 @@ FORM find_bdc_block.
         lv_pend_val       TYPE flag,
         lt_bdc_buf        TYPE TABLE OF ty_bdc_map,
         lv_bdc_start_cand TYPE i.
-  DATA lv_cur_loop_wa  TYPE char50.   " current BDC loop work-area variable
-  DATA lv_cur_loop_tbl TYPE char50.   " current BDC loop table variable
-
-  " Track every non-BDC PERFORM <name> call. Used post-loop to resolve
-  " a helper FORM that fills the BDC table (e.g. PERFORM FILLBDCDATA).
-  TYPES: BEGIN OF ty_perf_call,
-           name TYPE char50,
-           line TYPE i,
-         END OF ty_perf_call.
-  DATA lt_perf_calls TYPE STANDARD TABLE OF ty_perf_call.
-  DATA wa_perf_call  TYPE ty_perf_call.
+  DATA lv_cur_loop_wa  TYPE char50.
+  DATA lv_cur_loop_tbl TYPE char50.
+  " Post-loop backward-scan variables – declared at FORM top to avoid
+  " scope/initialisation issues with DATA inside processing blocks.
+  DATA lt_form_buf   TYPE TABLE OF ty_bdc_map.
+  DATA lv_form_start TYPE i.
+  DATA lv_scan_idx   TYPE i.
+  DATA lv_sc_line    TYPE string.
+  DATA lv_sc_lu      TYPE string.
+  DATA lv_sc_len     TYPE i.
+  DATA lt_sc_toks    TYPE TABLE OF string.
+  DATA lv_sc_tok     TYPE string.
+  DATA lv_sc_seen    TYPE flag.
+  DATA lv_help_nm    TYPE char50.
+  DATA lv_hlp_found  TYPE flag.
 
   LOOP AT lt_source INTO wa_source.
     lv_lineno = sy-tabix.
@@ -494,37 +498,6 @@ FORM find_bdc_block.
     ENDIF.
     IF lv_line_u CS 'ENDLOOP'.
       CLEAR lv_cur_loop_wa. CLEAR lv_cur_loop_tbl.
-    ENDIF.
-
-    " ── Track every non-BDC PERFORM call for helper FORM resolution ──
-    " Use SPLIT-into-tokens rather than offset arithmetic so behaviour is
-    " independent of sy-fdpos / substring semantics on c-fields.
-    IF lv_line_u CS 'PERFORM '
-       AND lv_line_u NS 'BDC_DYNPRO'
-       AND lv_line_u NS 'BDC_FIELD'.
-      DATA lt_pn_toks TYPE STANDARD TABLE OF string.
-      DATA lv_pn_tok  TYPE string.
-      DATA lv_pn_seen TYPE flag.
-      CLEAR lt_pn_toks.
-      SPLIT lv_line_u AT space INTO TABLE lt_pn_toks.
-      CLEAR wa_perf_call.
-      lv_pn_seen = space.
-      LOOP AT lt_pn_toks INTO lv_pn_tok.
-        IF lv_pn_tok IS INITIAL. CONTINUE. ENDIF.
-        IF lv_pn_seen = 'X'.
-          wa_perf_call-name = lv_pn_tok.
-          REPLACE ALL OCCURRENCES OF '.' IN wa_perf_call-name WITH ''.
-          CONDENSE wa_perf_call-name.
-          IF wa_perf_call-name IS NOT INITIAL.
-            wa_perf_call-line = lv_lineno.
-            APPEND wa_perf_call TO lt_perf_calls.
-          ENDIF.
-          EXIT.
-        ENDIF.
-        IF lv_pn_tok = 'PERFORM'.
-          lv_pn_seen = 'X'.
-        ENDIF.
-      ENDLOOP.
     ENDIF.
 
     " Detect start of BDC block (inline PERFORM bdc_dynpro/bdc_field style)
@@ -630,31 +603,60 @@ FORM find_bdc_block.
   " ── Helper FORM resolution ──
   " If CALL TRANSACTION p_tcode was found but no inline BDC entries were
   " collected, the BDC table was filled by a separately-defined FORM
-  " (e.g. PERFORM FILLBDCDATA). Walk the recorded PERFORM calls in
-  " reverse order (most recent first), and for each non-BDC PERFORM
-  " whose line is before the CALL TRANSACTION, scan the named FORM's
-  " body for BDC entries. The first FORM that yields entries wins.
+  " (e.g. PERFORM FILLBDCDATA). Scan backward from the CALL TRANSACTION
+  " line to find non-BDC PERFORM calls, then search the whole source for
+  " that FORM's definition and extract its BDC entries.
   IF lv_tcode_found = 'X' AND lt_bdc_map IS INITIAL.
-    DATA lv_pc_idx     TYPE i.
-    DATA lt_form_buf   TYPE TABLE OF ty_bdc_map.
-    DATA lv_form_start TYPE i.
-    lv_pc_idx = lines( lt_perf_calls ).
-    WHILE lv_pc_idx > 0.
-      READ TABLE lt_perf_calls INTO wa_perf_call INDEX lv_pc_idx.
+    lv_hlp_found = space.
+    lv_scan_idx  = lv_bdc_end - 1.
+    WHILE lv_scan_idx > 0 AND lv_hlp_found = space.
+      READ TABLE lt_source INTO wa_source INDEX lv_scan_idx.
       IF sy-subrc <> 0. EXIT. ENDIF.
-      IF wa_perf_call-line >= lv_bdc_end.
-        lv_pc_idx = lv_pc_idx - 1. CONTINUE.
+      lv_sc_line = wa_source-line.
+      CONDENSE lv_sc_line.
+      lv_sc_len = strlen( lv_sc_line ).
+      IF lv_sc_len = 0.
+        lv_scan_idx = lv_scan_idx - 1. CONTINUE.
       ENDIF.
-      CLEAR: lt_form_buf, lv_form_start.
-      PERFORM scan_form_body_for_bdc
-        USING wa_perf_call-name
-        CHANGING lt_form_buf lv_form_start.
-      IF lt_form_buf IS NOT INITIAL.
-        lt_bdc_map   = lt_form_buf.
-        lv_bdc_start = wa_perf_call-line.   " PERFORM line = block start
-        EXIT.
+      IF lv_sc_line(1) = '*' OR lv_sc_line(1) = '"'.
+        lv_scan_idx = lv_scan_idx - 1. CONTINUE.
       ENDIF.
-      lv_pc_idx = lv_pc_idx - 1.
+      lv_sc_lu = lv_sc_line.
+      TRANSLATE lv_sc_lu TO UPPER CASE.
+      lv_sc_len = strlen( lv_sc_lu ).
+      " Stop when we reach the start of the calling FORM (FORM or ENDFORM boundary)
+      IF lv_sc_len >= 7 AND lv_sc_lu(7) = 'ENDFORM'. EXIT. ENDIF.
+      IF lv_sc_len >= 5 AND lv_sc_lu(5) = 'FORM '. EXIT. ENDIF.
+      " Look for a non-BDC PERFORM call
+      IF lv_sc_lu CS 'PERFORM '
+         AND lv_sc_lu NS 'BDC_DYNPRO'
+         AND lv_sc_lu NS 'BDC_FIELD'.
+        " Extract the called FORM name via token split (case-safe, no fdpos arithmetic)
+        CLEAR lt_sc_toks. CLEAR lv_sc_seen. CLEAR lv_help_nm.
+        SPLIT lv_sc_lu AT space INTO TABLE lt_sc_toks.
+        LOOP AT lt_sc_toks INTO lv_sc_tok.
+          IF lv_sc_tok IS INITIAL. CONTINUE. ENDIF.
+          IF lv_sc_seen = 'X'.
+            lv_help_nm = lv_sc_tok.
+            REPLACE ALL OCCURRENCES OF '.' IN lv_help_nm WITH ''.
+            CONDENSE lv_help_nm.
+            EXIT.
+          ENDIF.
+          IF lv_sc_tok = 'PERFORM'. lv_sc_seen = 'X'. ENDIF.
+        ENDLOOP.
+        IF lv_help_nm IS NOT INITIAL.
+          CLEAR lt_form_buf. CLEAR lv_form_start.
+          PERFORM scan_form_body_for_bdc
+            USING lv_help_nm
+            CHANGING lt_form_buf lv_form_start.
+          IF lt_form_buf IS NOT INITIAL.
+            lt_bdc_map   = lt_form_buf.
+            lv_bdc_start = lv_scan_idx.
+            lv_hlp_found = 'X'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      lv_scan_idx = lv_scan_idx - 1.
     ENDWHILE.
   ENDIF.
 
@@ -682,6 +684,7 @@ FORM scan_form_body_for_bdc
   DATA lv_form_lp_tbl TYPE char50.
   DATA lv_form_ln     TYPE i.
   DATA wa_src_loc     TYPE abaptxt255.
+  DATA lv_fn_cmp      TYPE string.
 
   CLEAR ct_buf.
   CLEAR cv_form_start.
@@ -714,7 +717,11 @@ FORM scan_form_body_for_bdc
         ENDIF.
         REPLACE ALL OCCURRENCES OF '.' IN lv_fw WITH ''.
         CONDENSE lv_fw.
-        IF lv_fw = iv_form_name.
+        TRANSLATE lv_fw TO UPPER CASE.
+        lv_fn_cmp = iv_form_name.
+        CONDENSE lv_fn_cmp.
+        TRANSLATE lv_fn_cmp TO UPPER CASE.
+        IF lv_fw = lv_fn_cmp.
           lv_in_form = 'X'.
           cv_form_start = lv_form_ln.
         ENDIF.
