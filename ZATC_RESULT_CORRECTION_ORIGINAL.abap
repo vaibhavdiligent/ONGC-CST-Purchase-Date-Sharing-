@@ -160,7 +160,7 @@ INITIALIZATION.
     IMPORTING
       url = l_url.
   IF l_url IS NOT INITIAL.
-    MESSAGE 'Program Cannot be Executed outside SAP GUI' TYPE 'E'.
+    MESSAGE 'Program Cannot be Excuted outside SAP GUI' TYPE 'E'.
   ENDIF.
   CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.'
   sy-datum(4) INTO l_datum.
@@ -195,17 +195,13 @@ START-OF-SELECTION.
     FROM satc_ac_resulth
     WHERE run_series_name = p_id.
   IF sy-subrc <> 0.
-    MESSAGE 'Wrong ATC Variant Selected' TYPE 'E'.
+    MESSAGE 'Wrong ATC Varaint Selected' TYPE 'E'.
   ENDIF.
   SELECT SINGLE * INTO @DATA(l_e070)
     FROM e070
     WHERE trkorr = @lv_req.
   IF sy-subrc <> 0.
     MESSAGE 'Wrong Transport request selected' TYPE 'E'.
-  ENDIF.
-  " Point 4: Validate transport is Workbench type (K*), not Customizing (T*)
-  IF l_e070-trfunction = 'T' OR l_e070-trfunction = 'G' OR l_e070-trfunction = 'R'.
-    MESSAGE 'Please select a Workbench transport request, not a Customizing transport' TYPE 'E'.
   ENDIF.
   DATA(result_access) = NEW cl_satc_api_factory( )->create_result_access( i_result_id ).
   result_access->get_findings( IMPORTING e_findings           = DATA(findings)
@@ -300,36 +296,13 @@ START-OF-SELECTION.
   PERFORM zatc_process1.
   REFRESH it_output.
   CLEAR l_repid.
-  DATA lv_total_objects TYPE i.
-  DESCRIBE TABLE it_final_p LINES lv_total_objects.
   LOOP AT it_final_p INTO DATA(wa_final_p)
      WHERE ( sobjname(1) = 'Z' OR sobjname(1) = 'Y' ).
     l_repid = l_repid + 1.
-    " Point 3: Progress indicator so SAP GUI does not appear frozen
-    DATA(lv_pct) = CONV i( l_repid * 100 / lv_total_objects ).
-    CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
-      EXPORTING
-        percentage = lv_pct
-        text       = wa_final_p-sobjname.
     REFRESH repos_tab.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
-      WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF'.
-        " SFPF = Adobe Form: context/interface includes are regular ABAP programs
-        object_name = wa_final_p-sobjname.
-        CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-          EXPORTING
-            object_name           = object_name
-            versno                = '00000'
-          TABLES
-            repos_tab             = repos_tab
-          EXCEPTIONS
-            no_version            = 1
-            system_failure        = 2
-            communication_failure = 3.
-      WHEN 'SSFO'.
-        " Smart Form: ATC findings reference the generated include; read it directly.
-        " This avoids RPY_FUNCTIONMODULE_READ whose interface differs across releases.
+      WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SSFO'.
         object_name = wa_final_p-sobjname.
         CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
           EXPORTING
@@ -453,7 +426,7 @@ START-OF-SELECTION.
                 OR wa_final-message1 = 'DB OPERATION JOIN FOUND'.
                 CLEAR wa_zatc_process1.
                 SELECT SINGLE * INTO @DATA(l_ars_api_succssr1)
-                  FROM ars_api_successor
+                  FROM ars_api_succssr
                   WHERE object_key  = @wa_final-param1
                     AND object_type = 'TABL'.
                 IF sy-subrc = 0.
@@ -746,19 +719,11 @@ START-OF-SELECTION.
                 WHEN 'SYNTACTICALLY INCOMPATIBLE CHANGE OF EXISTING FUNCTIONALITY'
                   OR 'FUNCTIONALITY UNAVAILABLE'
                   OR 'FUNCTIONALITY NOT AVAILABLE: EQUIVALENT FUNCTION ON ROADMAP'.
-                  " Notes: 2628704/2628699/2628706 = AFLE (Amount/CURR/QUAN field length ext)
-                  "        2438131/2438110         = MFLE (Material number field length ext)
-                  "        2480067                 = DRC  (Legal report replacement via SAP DRC)
-                  IF wa_final-param1 CS '0002628704' OR wa_final-param1 CS '0002438131'
-                     OR wa_final-param1 CS '0002628699' OR wa_final-param1 CS '0002628706'
-                     OR wa_final-param1 CS '0002438110' OR wa_final-param1 CS '0002480067'.
-                    IF wa_final-param1 CS '0002628704' OR wa_final-param1 CS '0002628699'
-                       OR wa_final-param1 CS '0002628706'.
+                  IF wa_final-param1 CS '0002628704' OR wa_final-param1 CS '0002438131'.
+                    IF wa_final-param1 CS '0002628704'.
                       PERFORM amount_conv.
-                    ELSEIF wa_final-param1 CS '0002438131' OR wa_final-param1 CS '0002438110'.
+                    ELSE.
                       PERFORM material_conv.
-                    ELSEIF wa_final-param1 CS '0002480067'.
-                      PERFORM drc_report_note.
                     ENDIF.
                     CLEAR wa_blank.
                     CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -1039,7 +1004,7 @@ START-OF-SELECTION.
                     ENDIF.
                   ENDLOOP.
                 WHEN 'SELECT SINGLE IS POSSIBLY NOT UNIQUE'.
-                  LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
+                  LOOP AT repos_tab INTO DATA(wa_repos_tab_d) FROM l_tabix.
                     IF wa_repos_tab_d-line CS '"'.
                       DATA(l_fdpos) = sy-fdpos.
                       wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fdpos).
@@ -1178,9 +1143,6 @@ START-OF-SELECTION.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
-          WHEN 'SFPF'.
-            " Adobe Form: deep multi-include scan via adobe_form_procee
-            PERFORM adobe_form_procee.
           WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
             SELECT SINGLE * INTO @DATA(l_trdir)
               FROM trdir WHERE name = @wa_final_p-sobjname.
@@ -1193,11 +1155,9 @@ START-OF-SELECTION.
               REFRESH repos_tab_new.
               COMMIT WORK AND WAIT.
             ELSE.
-              DATA lv_prog_name TYPE programm.
-              lv_prog_name = wa_final_p-sobjname.
               CALL FUNCTION 'RPY_PROGRAM_UPDATE'
                 EXPORTING
-                  program_name     = lv_prog_name
+                  program_name     = wa_final_p-sobjname
                   program_type     = l_trdir-subc
                   transport_number = lv_req
                 TABLES
@@ -1226,7 +1186,7 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syntax error'.
+              wa_output-status = 'Syyntax error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
@@ -1266,17 +1226,11 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syntax error'.
+              wa_output-status = 'Syyntax error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
           WHEN 'SSFO'.
-            " Smart Form: patch node source so the correction survives form
-            " re-activation. smartform_procee parses the change markers in
-            " repos_tab_new to build an orig->corrected map, then applies
-            " each change to the matching line in the form's CO nodes, saves
-            " the form, activates it (regenerates the include from corrected
-            " nodes), and records the SSFO object in the transport.
             PERFORM smartform_procee.
         ENDCASE.
       ELSE.
@@ -1330,7 +1284,7 @@ START-OF-SELECTION.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
-          wa_output-status = 'Syntax error'.
+          wa_output-status = 'Syyntax error'.
         ENDIF.
         APPEND wa_output TO it_output.
         CLEAR wa_output.
@@ -1368,7 +1322,6 @@ FORM change_table.
   DATA l_len    TYPE i.
   DATA l_i      TYPE i.
   DATA l_into   TYPE i.
-  DATA l_fae    TYPE i.
   DATA l_bras   TYPE c.
   DATA l_value  TYPE char1.
   TYPES: BEGIN OF ty_table,    value TYPE char72,    END OF ty_table.
@@ -1418,10 +1371,8 @@ FORM change_table.
   DATA l_q      TYPE c.
   DATA l_q1     TYPE i.
   DATA l_bras1  TYPE i.
-  DATA l_ind      TYPE i.
-  DATA l_bet      TYPE i.
-  DATA l_in_paren TYPE i.
-  DATA l_paren_prev TYPE flag.
+  DATA l_ind    TYPE i.
+  DATA l_bet    TYPE i.
   IF l_string CS 'JOIN'.
     READ TABLE it_table INTO wa_table WITH KEY value = 'FROM'.
     IF sy-subrc = 0. l_from = sy-tabix. ENDIF.
@@ -1429,23 +1380,16 @@ FORM change_table.
     IF sy-subrc = 0. l_into = sy-tabix. ENDIF.
     READ TABLE it_table INTO wa_table WITH KEY value = 'WHERE'.
     IF sy-subrc = 0. l_where = sy-tabix. ENDIF.
-    DATA(l_from_orig) = l_from.   " save FROM position before increments
     l_from = l_from + 1.
     READ TABLE it_table INTO wa_table INDEX l_from.
     IF sy-subrc = 0. l_table = wa_table-value. wa_table_q-value = l_table. ENDIF.
     l_from = l_from + 1.
     READ TABLE it_table INTO wa_table INDEX l_from.
     IF sy-subrc = 0. l_as = wa_table-value. wa_table_q-as = l_as. ENDIF.
-    IF l_as = 'AS'.
-      l_from = l_from + 1.
-      READ TABLE it_table INTO wa_table INDEX l_from.
-      IF sy-subrc = 0.
-        l_symbol = wa_table-value. CONCATENATE l_symbol '~' INTO l_symbol.
-        wa_table_q-symbol = l_symbol.
-      ENDIF.
-    ELSE.
-      " No AS alias: table name is used as field prefix (e.g. vbrp~vbeln)
-      l_symbol = l_table. CONCATENATE l_symbol '~' INTO l_symbol.
+    l_from = l_from + 1.
+    READ TABLE it_table INTO wa_table INDEX l_from.
+    IF sy-subrc = 0.
+      l_symbol = wa_table-value. CONCATENATE l_symbol '~' INTO l_symbol.
       wa_table_q-symbol = l_symbol.
     ENDIF.
     APPEND wa_table_q TO it_table_q.
@@ -1456,26 +1400,20 @@ FORM change_table.
       l_t = l_t + 1.
       READ TABLE it_table INTO wa_t INDEX l_t.
       IF sy-subrc = 0. wa_table_q-as = wa_t-value. ENDIF.
-      IF wa_t-value = 'AS'.
-        l_t = l_t + 1.
-        READ TABLE it_table INTO wa_t INDEX l_t.
-        IF sy-subrc = 0.
-          wa_table_q-symbol = wa_t-value.
-          CONCATENATE wa_table_q-symbol '~' INTO wa_table_q-symbol.
-        ENDIF.
-      ELSE.
-        " No AS alias: table name is used as field prefix
-        wa_table_q-symbol = wa_table_q-value.
+      l_t = l_t + 1.
+      READ TABLE it_table INTO wa_t INDEX l_t.
+      IF sy-subrc = 0.
+        wa_table_q-symbol = wa_t-value.
         CONCATENATE wa_table_q-symbol '~' INTO wa_table_q-symbol.
       ENDIF.
       APPEND wa_table_q TO it_table_q.
     ENDLOOP.
-    l_from = l_from_orig.   " restore to FROM position (correct for both alias/no-alias)
+    l_from = l_from - 3.
     LOOP AT it_table_q ASSIGNING FIELD-SYMBOL(<fs_table_q>).
       CLEAR l_cl_dd_ddl_field_tracker.
       REFRESH it_fields_new_t.
       SELECT SINGLE * INTO @DATA(l_ars)
-        FROM ars_api_successor
+        FROM ars_api_succssr
         WHERE object_key = @<fs_table_q>-value AND object_type = 'TABL'.
       IF sy-subrc = 0.
         <fs_table_q>-new_table = l_ars-successor_tadir_obj_name.
@@ -1537,30 +1475,11 @@ FORM change_table.
       ENDIF.
     ENDLOOP.
     IF l_exit = 'X'. EXIT. ENDIF.
-    " Detect position of FOR ALL ENTRIES (must be placed after INTO TABLE in new syntax)
-    CLEAR l_fae.
-    LOOP AT it_table INTO DATA(wa_fae_det) FROM l_from.
-      IF sy-tabix = l_where. EXIT. ENDIF.
-      IF wa_fae_det-value = 'FOR'.
-        DATA(l_fae_pos) = sy-tabix.          " save FOR position before READ TABLE overwrites sy-tabix
-        DATA(l_fae_nxt) = l_fae_pos + 1.
-        READ TABLE it_table INTO DATA(wa_fae_nxt) INDEX l_fae_nxt.
-        IF sy-subrc = 0 AND wa_fae_nxt-value = 'ALL'. l_fae = l_fae_pos. ENDIF.
-        EXIT.
-      ENDIF.
-    ENDLOOP.
     CONCATENATE l_query 'FROM' INTO l_query SEPARATED BY space.
     LOOP AT it_table INTO wa_table FROM l_from.
-      " Stop before FOR ALL ENTRIES (l_fae) to keep it out of the FROM clause
-      IF sy-tabix = l_into OR sy-tabix = l_where OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
+      IF sy-tabix = l_into OR sy-tabix = l_where. EXIT. ENDIF.
       READ TABLE it_table_q INTO wa_table_q WITH KEY value = wa_table-value.
-      IF sy-subrc = 0.
-        DATA(l_old_tname) = wa_table-value.
-        wa_table-value = wa_table_q-new_table.
-        IF wa_table_q-as <> 'AS'.
-          " No explicit alias: append AS <oldname> so CDS field prefixes remain valid
-          CONCATENATE wa_table-value 'AS' l_old_tname INTO wa_table-value SEPARATED BY space.
-        ENDIF.
+      IF sy-subrc = 0. wa_table-value = wa_table_q-new_table.
       ELSE.
         IF wa_table-value CS '~'.
           LOOP AT it_table_q INTO wa_table_q WHERE symbol CS wa_table-value(sy-fdpos).
@@ -1573,29 +1492,6 @@ FORM change_table.
         REPLACE ALL OCCURRENCES OF l_symbol IN wa_table-value WITH space IGNORING CASE. CONDENSE wa_table-value.
         READ TABLE it_fields_new INTO DATA(wa_fn3) WITH KEY base_field = wa_table-value base_object = l_table.
         IF sy-subrc = 0. CLEAR wa_table-value. CONCATENATE l_symbol wa_fn3-element_name INTO wa_table-value. ENDIF.
-      ENDIF.
-      " Add @ to system variables / host vars in ON conditions (e.g. SY-LANGU, SY-DATUM)
-      " CDS field names, aliases, and SQL keywords never contain '-', so this check is safe
-      IF wa_table-value CS '-' AND wa_table-value(1) <> '@'.
-        CONCATENATE '@' wa_table-value INTO wa_table-value.
-      ENDIF.
-      " Map bare (non-aliased) field names in JOIN ON conditions (e.g. SPRAS -> C~Language)
-      IF NOT ( wa_table-value CS '~' ) AND wa_table-value(1) <> '@'
-        AND wa_table-value(1) <> '''' AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' )
-        AND wa_table-value <> 'JOIN' AND wa_table-value <> 'LEFT' AND wa_table-value <> 'INNER'
-        AND wa_table-value <> 'OUTER' AND wa_table-value <> 'ON' AND wa_table-value <> 'AS'
-        AND wa_table-value <> 'AND' AND wa_table-value <> 'OR' AND wa_table-value <> 'NOT'
-        AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
-        AND wa_table-value <> '<=' AND wa_table-value <> '>' AND wa_table-value <> '<'
-        AND wa_table-value <> '(' AND wa_table-value <> ')'.
-        LOOP AT it_table_q INTO DATA(wa_tq_bare).
-          READ TABLE it_fields_new INTO DATA(wa_fn_bare) WITH KEY
-            base_field = wa_table-value base_object = wa_tq_bare-value.
-          IF sy-subrc = 0.
-            CONCATENATE wa_tq_bare-symbol wa_fn_bare-element_name INTO wa_table-value.
-            EXIT.
-          ENDIF.
-        ENDLOOP.
       ENDIF.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
@@ -1622,75 +1518,6 @@ FORM change_table.
         ENDIF.
       ENDLOOP.
     ENDIF.
-    " Append FOR ALL ENTRIES IN @itab after INTO TABLE (correct S/4 Open SQL order)
-    IF l_fae > 0.
-      LOOP AT it_table INTO wa_table FROM l_fae.
-        IF l_where > 0 AND sy-tabix = l_where. EXIT. ENDIF.
-        IF wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
-          AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN'.
-          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
-        ENDIF.
-        CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
-      ENDLOOP.
-    ENDIF.
-    " Append WHERE clause with CDS field name mapping and @ for host variables
-    CLEAR l_in_paren. CLEAR l_paren_prev.
-    IF l_where > 0.
-      LOOP AT it_table INTO wa_table FROM l_where.
-        IF wa_table-value CS '~'.
-          DATA(l_wsym_w) = substring( val = wa_table-value len = sy-fdpos ).
-          DATA(l_wfld_w) = wa_table-value.
-          CONCATENATE l_wsym_w '~' INTO l_wsym_w.
-          REPLACE l_wsym_w IN l_wfld_w WITH '' IGNORING CASE. CONDENSE l_wfld_w.
-          LOOP AT it_table_q INTO wa_table_q WHERE symbol = l_wsym_w. EXIT. ENDLOOP.
-          IF sy-subrc = 0.
-            READ TABLE it_fields_new INTO DATA(wa_fn_w) WITH KEY
-              base_field = l_wfld_w base_object = wa_table_q-value.
-            IF sy-subrc = 0. CONCATENATE l_wsym_w wa_fn_w-element_name INTO wa_table-value. ENDIF.
-          ENDIF.
-          CLEAR l_paren_prev.
-        ELSEIF wa_table-value <> 'WHERE' AND wa_table-value <> 'AND' AND wa_table-value <> 'OR'
-          AND wa_table-value <> 'NOT' AND wa_table-value <> 'IN' AND wa_table-value <> 'BETWEEN'
-          AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
-          AND wa_table-value <> '<=' AND wa_table-value <> '>' AND wa_table-value <> '<'
-          AND wa_table-value <> 'IS' AND wa_table-value <> 'INITIAL' AND wa_table-value <> 'LIKE'
-          AND wa_table-value <> 'EQ' AND wa_table-value <> 'NE' AND wa_table-value <> 'GT'
-          AND wa_table-value <> 'LT' AND wa_table-value <> 'GE' AND wa_table-value <> 'LE'
-          AND wa_table-value <> '(' AND wa_table-value <> ')'.
-          IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
-            AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            DATA(l_bare_found) = abap_false.
-            LOOP AT it_table_q INTO DATA(wa_tq_jw).
-              READ TABLE it_fields_new INTO DATA(wa_fn_jw) WITH KEY
-                base_field = wa_table-value base_object = wa_tq_jw-value.
-              IF sy-subrc = 0.
-                CONCATENATE wa_tq_jw-symbol wa_fn_jw-element_name INTO wa_table-value.
-                l_bare_found = abap_true.
-                EXIT.
-              ENDIF.
-            ENDLOOP.
-            IF l_bare_found = abap_false.
-              CONCATENATE '@' wa_table-value INTO wa_table-value.
-            ENDIF.
-          ENDIF.
-        ENDIF.
-        " Restore commas lost by tokenizer inside IN ( ... ) lists
-        IF wa_table-value = '('.
-          l_in_paren = l_in_paren + 1. CLEAR l_paren_prev.
-        ELSEIF wa_table-value = ')'.
-          IF l_in_paren > 0. l_in_paren = l_in_paren - 1. ENDIF. CLEAR l_paren_prev.
-        ELSEIF l_in_paren > 0.
-          IF wa_table-value(1) = '@' OR wa_table-value(1) = ''''
-            OR ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            IF l_paren_prev = 'X'. CONCATENATE l_query ',' INTO l_query. ENDIF.
-            l_paren_prev = 'X'.
-          ELSE.
-            CLEAR l_paren_prev.
-          ENDIF.
-        ENDIF.
-        CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
-      ENDLOOP.
-    ENDIF.
     CONCATENATE l_query '.' INTO l_query.
     PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
   ELSE.
@@ -1705,7 +1532,7 @@ FORM change_table.
     IF sy-subrc = 0. l_table = wa_table-value. ENDIF.
     l_from = l_from - 1.
     SELECT SINGLE * INTO @DATA(l_ars2)
-      FROM ars_api_successor WHERE object_key = @l_table AND object_type = 'TABL'.
+      FROM ars_api_succssr WHERE object_key = @l_table AND object_type = 'TABL'.
     IF sy-subrc = 0.
       CREATE OBJECT l_cl_dd_ddl_field_tracker EXPORTING iv_ddlname = l_ars2-successor_tadir_obj_name.
       TRY.
@@ -1749,18 +1576,6 @@ FORM change_table.
       ENDIF.
     ENDLOOP.
     IF l_exit = 'X'. EXIT. ENDIF.
-    " Detect position of FOR ALL ENTRIES in non-JOIN query
-    CLEAR l_fae.
-    LOOP AT it_table INTO DATA(wa_fae_det2) FROM l_from.
-      IF sy-tabix = l_where. EXIT. ENDIF.
-      IF wa_fae_det2-value = 'FOR'.
-        DATA(l_fae_pos2) = sy-tabix.         " save FOR position before READ TABLE overwrites sy-tabix
-        DATA(l_fae_nxt2) = l_fae_pos2 + 1.
-        READ TABLE it_table INTO DATA(wa_fae_nxt2) INDEX l_fae_nxt2.
-        IF sy-subrc = 0 AND wa_fae_nxt2-value = 'ALL'. l_fae = l_fae_pos2. ENDIF.
-        EXIT.
-      ENDIF.
-    ENDLOOP.
     CONCATENATE l_query 'FROM' l_ars2-successor_tadir_obj_name INTO l_query SEPARATED BY space.
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
     IF l_into > 0.
@@ -1783,62 +1598,6 @@ FORM change_table.
         ELSE.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
         ENDIF.
-      ENDLOOP.
-    ENDIF.
-    " Append FOR ALL ENTRIES IN @itab after INTO TABLE
-    IF l_fae > 0.
-      LOOP AT it_table INTO wa_table FROM l_fae.
-        IF l_where > 0 AND sy-tabix = l_where. EXIT. ENDIF.
-        IF wa_table-value <> 'FOR' AND wa_table-value <> 'ALL'
-          AND wa_table-value <> 'ENTRIES' AND wa_table-value <> 'IN'.
-          IF wa_table-value(1) <> '@'. CONCATENATE '@' wa_table-value INTO wa_table-value. ENDIF.
-        ENDIF.
-        CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
-      ENDLOOP.
-    ENDIF.
-    " Append WHERE clause with CDS field name mapping and @ for host variables
-    CLEAR l_in_paren. CLEAR l_paren_prev.
-    IF l_where > 0.
-      LOOP AT it_table INTO wa_table FROM l_where.
-        IF wa_table-value CS '~'.
-          DATA(l_wsym_w2) = substring( val = wa_table-value len = sy-fdpos ).
-          DATA(l_wfld_w2) = wa_table-value.
-          CONCATENATE l_wsym_w2 '~' INTO l_wsym_w2.
-          REPLACE l_wsym_w2 IN l_wfld_w2 WITH '' IGNORING CASE. CONDENSE l_wfld_w2.
-          READ TABLE it_fields_new INTO DATA(wa_fn_w2) WITH KEY base_field = l_wfld_w2.
-          IF sy-subrc = 0. CONCATENATE l_wsym_w2 wa_fn_w2-element_name INTO wa_table-value. ENDIF.
-          CLEAR l_paren_prev.
-        ELSEIF wa_table-value <> 'WHERE' AND wa_table-value <> 'AND' AND wa_table-value <> 'OR'
-          AND wa_table-value <> 'NOT' AND wa_table-value <> 'IN' AND wa_table-value <> 'BETWEEN'
-          AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
-          AND wa_table-value <> '<=' AND wa_table-value <> '>' AND wa_table-value <> '<'
-          AND wa_table-value <> 'IS' AND wa_table-value <> 'INITIAL' AND wa_table-value <> 'LIKE'
-          AND wa_table-value <> 'EQ' AND wa_table-value <> 'NE' AND wa_table-value <> 'GT'
-          AND wa_table-value <> 'LT' AND wa_table-value <> 'GE' AND wa_table-value <> 'LE'
-          AND wa_table-value <> '(' AND wa_table-value <> ')'.
-          READ TABLE it_fields_new INTO DATA(wa_fn_nj_w) WITH KEY base_field = wa_table-value.
-          IF sy-subrc = 0.
-            wa_table-value = wa_fn_nj_w-element_name.
-          ELSEIF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
-            AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            CONCATENATE '@' wa_table-value INTO wa_table-value.
-          ENDIF.
-        ENDIF.
-        " Restore commas lost by tokenizer inside IN ( ... ) lists
-        IF wa_table-value = '('.
-          l_in_paren = l_in_paren + 1. CLEAR l_paren_prev.
-        ELSEIF wa_table-value = ')'.
-          IF l_in_paren > 0. l_in_paren = l_in_paren - 1. ENDIF. CLEAR l_paren_prev.
-        ELSEIF l_in_paren > 0.
-          IF wa_table-value(1) = '@' OR wa_table-value(1) = ''''
-            OR ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            IF l_paren_prev = 'X'. CONCATENATE l_query ',' INTO l_query. ENDIF.
-            l_paren_prev = 'X'.
-          ELSE.
-            CLEAR l_paren_prev.
-          ENDIF.
-        ENDIF.
-        CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
       ENDLOOP.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
@@ -2451,11 +2210,10 @@ FORM amount_conv.
     IF sy-subrc = 0.
       LOOP AT it_fupararef INTO DATA(wa_fupararef).
         IF wa_fupararef-structure CS '-'. CONTINUE. ENDIF.
-        " Handle AFLE for DEC (note 2628704), CURR (note 2628699), QUAN (note 2628706)
         SELECT * INTO TABLE @DATA(it_dd03l)
           FROM dd03l
           WHERE tabname  = @wa_fupararef-structure
-            AND datatype IN ('DEC', 'CURR', 'QUAN').
+            AND datatype = 'DEC'.
         IF sy-subrc = 0.
           CLEAR l_flag.
           LOOP AT repos_tab INTO DATA(l_repos) WHERE line CS wa_fupararef-parameter.
@@ -2579,11 +2337,10 @@ FORM material_conv.
     IF sy-subrc = 0.
       LOOP AT it_fupararef INTO DATA(wa_fupararef).
         IF wa_fupararef-structure CS '-'. CONTINUE. ENDIF.
-        " Handle MFLE for MATNR40/MATNR18 (note 2438131) and MATNR (note 2438110)
         SELECT * INTO TABLE @DATA(it_dd03l)
           FROM dd03l
           WHERE tabname  = @wa_fupararef-structure
-            AND ( domname = 'MATNR40' OR domname = 'MATNR18' OR domname = 'MATNR' ).
+            AND ( domname = 'MATNR40' OR domname = 'MATNR18' ).
         IF sy-subrc = 0.
           CLEAR l_flag.
           LOOP AT repos_tab INTO DATA(l_repos) WHERE line CS wa_fupararef-parameter.
@@ -2691,31 +2448,6 @@ FORM material_conv.
       ENDLOOP.
     ENDIF.
   ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form drc_report_note
-*& SAP Note 2480067 - Legal report replacement via SAP DRC framework
-*& Adds CI_USAGE_OK pragma and migration comment for old statutory reports
-*& that have been replaced by SAP Document and Reporting Compliance (DRC)
-*&---------------------------------------------------------------------*
-FORM drc_report_note.
-  " SAP note 2480067: Legacy ABAP legal/statutory reports are replaced by
-  " SAP Document and Reporting Compliance (DRC) framework in S/4HANA.
-  " Action: Add CI_USAGE_OK pseudo-comment and informational banner so
-  " the ATC finding is suppressed and the developer is notified to plan
-  " migration of the usage to the corresponding DRC report.
-  DATA l_drc_comment TYPE abaptxt255.
-  CONCATENATE '"' '*** NOTE 2480067: Replace this usage with SAP DRC statutory report. ***'
-    INTO l_drc_comment-line SEPARATED BY space.
-  CLEAR wa_blank.
-  CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC (DRC migration - note 2480067)'
-    INTO wa_blank-line SEPARATED BY space.
-  APPEND wa_blank TO repos_tab_new.
-  APPEND l_drc_comment TO repos_tab_new.
-  CLEAR wa_blank.
-  CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
-    INTO wa_blank-line SEPARATED BY space.
-  APPEND wa_blank TO repos_tab_new.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form replace_bp
@@ -2893,173 +2625,46 @@ FORM replace_migo.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
-*& Form adobe_form_procee
-*& Permanently updates Adobe Form (SFPF) ABAP code sections:
-*& Adobe Forms store ABAP code in the INTERFACE (transaction SFP).
-*& The interface generates a Function Group whose includes contain:
-*&   <IFNAME>TOP   - Global data declarations
-*&   <IFNAME>INIT  - Code Initialization section
-*&   <IFNAME>FORM  - Form Routines section
-*& These includes are REAL ABAP programs → read/write via RPY_PROGRAM_UPDATE.
-*& After updating includes: FP_FUNCTION_MODULE_NAME + SAPSCRIPT_GENERATE
-*& re-generates the FM so the fix survives form re-activation from SFP.
+*& Form smartform_procee
 *&---------------------------------------------------------------------*
-FORM adobe_form_procee.
-  DATA: lv_fpname    TYPE fpname,
-        lv_fm_name   TYPE rs38l_fnam,
-        lv_prog      TYPE program,
-        lv_fugr_name TYPE rs38l_fnam,
-        lv_incl_top  TYPE program,
-        lv_incl_init TYPE program,
-        lv_incl_form TYPE program,
-        lv_changed   TYPE flag.
-
-  lv_fpname = wa_final_p-objname.
-
-  " Step 1: Get the generated function module name for this Adobe Form
-  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+FORM smartform_procee.
+  BREAK-POINT.
+  DATA : i_caption TYPE tdtext,
+         i_vartext TYPE tsfvtext,
+         i_header  TYPE ssfhead,
+         i_admin   TYPE stxfadm,
+         p_form    TYPE tdsfname.
+  p_form = wa_final_p-objname.
+  CALL FUNCTION 'SSF_READ_FORM'
     EXPORTING
-      i_name           = lv_fpname
+      i_formname             = p_form
     IMPORTING
-      e_funcname       = lv_fm_name
+      o_caption              = i_caption
+      o_vartext              = i_vartext
+      o_admdata              = i_admin
     EXCEPTIONS
-      cancelled        = 1
-      usage_error      = 2
-      system_error     = 3
-      internal_error   = 4
-      OTHERS           = 5.
-  IF sy-subrc <> 0. RETURN. ENDIF.
-
-  " Step 2: Derive the function GROUP name from the FM name
-  " Adobe Forms generate a function group whose name = FM name
-  " The includes follow the pattern: <FUGR_PREFIX><IFNAME>TOP/INIT/FORM
-  lv_fugr_name = lv_fm_name.
-
-  " Step 3: Build include names for the three code sections
-  " Standard Adobe Form include naming:
-  "   Global data  -> L<IFNAME>TOP
-  "   Initialization -> L<IFNAME>U01 (first include = init code)
-  "   Form routines  -> L<IFNAME>F01 (form routines include)
-  " Find all includes of this function group via D010INC
-  DATA lt_fp_incl TYPE STANDARD TABLE OF d010inc.
-  SELECT include FROM d010inc
-    INTO TABLE @lt_fp_incl
-    WHERE master = @lv_fm_name.
-  IF sy-subrc <> 0.
-    " Fallback: derive include names by convention
-    CONCATENATE 'L' lv_fpname 'TOP'  INTO lv_incl_top.
-    CONCATENATE 'L' lv_fpname 'U01'  INTO lv_incl_init.
-    CONCATENATE 'L' lv_fpname 'F01'  INTO lv_incl_form.
-    APPEND lv_incl_top  TO lt_fp_incl ASSIGNING FIELD-SYMBOL(<fs_incl>).
-    APPEND lv_incl_init TO lt_fp_incl ASSIGNING <fs_incl>.
-    APPEND lv_incl_form TO lt_fp_incl ASSIGNING <fs_incl>.
-  ENDIF.
-
-  " Step 4: Process each include — read source, apply corrections, write back
-  LOOP AT lt_fp_incl INTO DATA(wa_fp_incl).
-    DATA(lv_cur_incl) = wa_fp_incl-include.
-    REFRESH repos_tab.
-
-    object_name = lv_cur_incl.
-    CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-      EXPORTING
-        object_name           = object_name
-        versno                = '00000'
-      TABLES
-        repos_tab             = repos_tab
-      EXCEPTIONS
-        no_version            = 1
-        system_failure        = 2
-        communication_failure = 3.
-    IF sy-subrc <> 0 OR repos_tab IS INITIAL. CONTINUE. ENDIF.
-
-    " Step 5: Apply ATC corrections to this include's source
-    REFRESH repos_tab_new.
-    LOOP AT repos_tab INTO DATA(wa_fp_rep).
-      APPEND wa_fp_rep TO repos_tab_new.
-    ENDLOOP.
-    " Run the same correction patterns used for PROG/FUGR
-    " (repos_tab_new is already populated; the main correction
-    "  loop has already built it before calling this FORM)
-
-    DESCRIBE TABLE repos_tab     LINES DATA(lv_old_c).
-    DESCRIBE TABLE repos_tab_new LINES DATA(lv_new_c).
-    IF lv_old_c = lv_new_c. CONTINUE. ENDIF.
-
-    " Step 6: Write corrected include back via RPY_PROGRAM_UPDATE
-    SELECT SINGLE * INTO @DATA(l_trdir_fp)
-      FROM trdir WHERE name = @lv_cur_incl.
-    IF p_sim = 'X'.
-      DATA lv_fp_test TYPE program.
-      CONCATENATE 'ZTEST_CHECK' l_repid INTO lv_fp_test.
-      INSERT REPORT lv_fp_test FROM repos_tab_new.
-      COMMIT WORK AND WAIT.
-      wa_output-new_program = lv_fp_test.
-    ELSE.
-      CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
-      INSERT REPORT wa_output-backup FROM repos_tab.
-      COMMIT WORK.
-      REFRESH repos_tab.
-      DATA lv_prog_name_fp TYPE programm.
-      lv_prog_name_fp = lv_cur_incl.
-      CALL FUNCTION 'RPY_PROGRAM_UPDATE'
-        EXPORTING
-          program_name     = lv_prog_name_fp
-          program_type     = l_trdir_fp-subc
-          transport_number = lv_req
-        TABLES
-          source_extended  = repos_tab_new
-        EXCEPTIONS
-          cancelled        = 1
-          permission_error = 2
-          not_found        = 3
-          OTHERS           = 4.
-      IF sy-subrc = 0.
-        COMMIT WORK AND WAIT.
-        lv_changed = 'X'.
-      ENDIF.
-      wa_output-new_program = lv_cur_incl.
-    ENDIF.
-    REFRESH repos_tab_new.
-  ENDLOOP.
-
-  IF lv_changed <> 'X'. RETURN. ENDIF.
-
-  " Step 7: Add Adobe Form interface object to transport
-  REFRESH lt_recording_entries.
-  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_fp)
-    WHERE pgmid    = 'R3TR'
-      AND object   = 'SFPF'
-      AND obj_name = @lv_fpname.
+      no_form                = 1
+      no_active_source       = 2
+      no_source              = 3
+      OTHERS                 = 4.
   IF sy-subrc = 0.
-    CLEAR ls_recording_entry.
-    ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
-    ls_recording_entry-object_entry-object_key-object   = 'SFPF'.
-    ls_recording_entry-object_entry-object_key-obj_name = lv_fpname.
-    ls_recording_entry-author      = wa_tadir_fp-author.
-    ls_recording_entry-devclass    = wa_tadir_fp-devclass.
-    ls_recording_entry-masterlang  = wa_tadir_fp-masterlang.
-    APPEND ls_recording_entry TO lt_recording_entries.
-    CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
-      EXPORTING
-        recording_entries = lt_recording_entries
-        trkorr            = lv_req.
-    COMMIT WORK.
+    ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO FIELD-SYMBOL(<fs_code>).
+    LOOP AT <fs_code> ASSIGNING FIELD-SYMBOL(<fs_code1>).
+      ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_code1> TO FIELD-SYMBOL(<fs_code2>).
+      IF <fs_code2> = 'CO'.
+        ASSIGN COMPONENT 'T_TOKEN' OF STRUCTURE <fs_code1> TO FIELD-SYMBOL(<fs_code3>).
+        LOOP AT <fs_code3> ASSIGNING FIELD-SYMBOL(<fs_code4>).
+          ASSIGN COMPONENT 'TNAME' OF STRUCTURE <fs_code4> TO FIELD-SYMBOL(<fs_tname>).
+          IF <fs_tname> = 'OUTIN' OR <fs_tname> = 'CODE'.
+          ELSE.
+            LOOP AT repos_tab_new INTO DATA(l_repos) WHERE line CS <fs_tname>.
+              BREAK-POINT.
+            ENDLOOP.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
-
-  " Step 8: Log output
-  wa_output-program_name = lv_fpname.
-  wa_output-subobj       = lv_fpname.
-  CLEAR it_error_table.
-  lv_prog = lv_fpname.
-  PERFORM syntax_check USING lv_prog 'SFPF' CHANGING it_error_table.
-  IF it_error_table IS INITIAL.
-    wa_output-status = 'Success'.
-  ELSE.
-    wa_output-status = 'Syntax error'.
-  ENDIF.
-  APPEND wa_output TO it_output.
-  CLEAR wa_output.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& LCL_MAIN IMPLEMENTATION
@@ -3185,358 +2790,4 @@ FORM bdc_field USING p_fnam TYPE any p_fval TYPE any.
   bdcdata-fnam = p_fnam.
   bdcdata-fval = p_fval.
   APPEND bdcdata.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form smartform_procee
-*& Propagate ATC corrections from the generated include back to the
-*& Smart Form's CO nodes so the fix survives form re-activation.
-*&   1. Parse the change markers (p_begin/p_end) in repos_tab_new to
-*&      build (orig_lines -> new_lines) pairs aligned with repos_tab.
-*&   2. SSF_READ_FORM loads the form into session; T_NTOKENS holds nodes.
-*&   3. For each 'CO' node, locate each change's orig block by trimmed
-*&      content match and replace with the new lines in place.
-*&   4. SSF_WRITE_FORM persists node changes; SSF_SMART_FORMS_ACTIVATE
-*&      regenerates the include from the corrected nodes.
-*&   5. Record SSFO object in the transport.
-*&---------------------------------------------------------------------*
-FORM smartform_procee.
-  TYPES: BEGIN OF ty_change,
-           orig_lines TYPE STANDARD TABLE OF abaptxt255 WITH EMPTY KEY,
-           new_lines  TYPE STANDARD TABLE OF abaptxt255 WITH EMPTY KEY,
-         END OF ty_change.
-  DATA: lt_include_orig TYPE STANDARD TABLE OF abaptxt255,
-        lt_include_corr TYPE STANDARD TABLE OF abaptxt255,
-        lt_changes      TYPE STANDARD TABLE OF ty_change,
-        ls_change       TYPE ty_change,
-        lv_formname     TYPE tdsfname,
-        lv_form_changed TYPE flag,
-        lv_node_changed TYPE flag,
-        lv_i            TYPE i,
-        lv_j            TYPE i,
-        lv_k            TYPE i,
-        lv_orig_cnt     TYPE i,
-        lv_corr_cnt     TYPE i,
-        lv_match_idx    TYPE i,
-        lv_resync_j     TYPE i,
-        lv_orig_sz      TYPE i,
-        lv_off          TYPE i,
-        lv_ins          TYPE i,
-        lv_del          TYPE i,
-        lv_all_match    TYPE flag,
-        lv_norm_first   TYPE string,
-        lv_norm_chk     TYPE string,
-        lv_norm_nod     TYPE string,
-        lv_resync_line  TYPE abaptxt255-line,
-        i_caption       TYPE tdtext,
-        i_vartext       TYPE tsfvtext,
-        i_admin         TYPE stxfadm.
-
-  DATA: lo_structdescr TYPE REF TO cl_abap_structdescr,
-        lo_tabledescr  TYPE REF TO cl_abap_tabledescr,
-        lo_lineddescr  TYPE REF TO cl_abap_structdescr,
-        lt_components  TYPE cl_abap_structdescr=>component_table,
-        ls_component   LIKE LINE OF lt_components,
-        lt_linecomp    TYPE cl_abap_structdescr=>component_table,
-        ls_linecomp    LIKE LINE OF lt_linecomp,
-        lv_linefield   TYPE abap_compname.
-
-  FIELD-SYMBOLS: <fs_nodes>  TYPE ANY TABLE,
-                 <fs_node>   TYPE ANY,
-                 <fs_ntype>  TYPE ANY,
-                 <fs_codetb> TYPE STANDARD TABLE,
-                 <fs_codeln> TYPE ANY,
-                 <fs_lv>     TYPE ANY,
-                 <fs_c>      TYPE abaptxt255,
-                 <fs_o>      TYPE abaptxt255.
-
-  " Step 0: Capture corrected include source before anything else overwrites it
-  lt_include_orig = repos_tab.
-  lt_include_corr = repos_tab_new.
-  lv_orig_cnt = lines( lt_include_orig ).
-  lv_corr_cnt = lines( lt_include_corr ).
-
-  " Step 1: Walk corr and orig in parallel, parsing change blocks between
-  "         p_begin/p_end markers into (orig_lines, new_lines) pairs.
-  lv_i = 1.
-  lv_j = 1.
-  WHILE lv_j <= lv_corr_cnt.
-    READ TABLE lt_include_corr ASSIGNING <fs_c> INDEX lv_j.
-    IF <fs_c>-line CS p_begin.
-      " Begin marker: collect new_lines until matching p_end
-      CLEAR ls_change.
-      lv_k = lv_j + 1.
-      WHILE lv_k <= lv_corr_cnt.
-        READ TABLE lt_include_corr ASSIGNING <fs_c> INDEX lv_k.
-        IF <fs_c>-line CS p_end. EXIT. ENDIF.
-        APPEND <fs_c> TO ls_change-new_lines.
-        lv_k = lv_k + 1.
-      ENDWHILE.
-
-      " Find next unchanged line in corr (after p_end) to re-sync orig pointer
-      CLEAR lv_resync_line.
-      lv_resync_j = lv_k + 1.
-      WHILE lv_resync_j <= lv_corr_cnt.
-        READ TABLE lt_include_corr ASSIGNING <fs_c> INDEX lv_resync_j.
-        IF <fs_c>-line NS p_begin AND <fs_c>-line NS p_end.
-          lv_resync_line = <fs_c>-line.
-          EXIT.
-        ENDIF.
-        lv_resync_j = lv_resync_j + 1.
-      ENDWHILE.
-
-      " Walk orig from lv_i until we reach the resync line; those are orig_lines
-      IF lv_resync_line IS INITIAL.
-        WHILE lv_i <= lv_orig_cnt.
-          READ TABLE lt_include_orig ASSIGNING <fs_o> INDEX lv_i.
-          APPEND <fs_o> TO ls_change-orig_lines.
-          lv_i = lv_i + 1.
-        ENDWHILE.
-      ELSE.
-        WHILE lv_i <= lv_orig_cnt.
-          READ TABLE lt_include_orig ASSIGNING <fs_o> INDEX lv_i.
-          IF <fs_o>-line = lv_resync_line. EXIT. ENDIF.
-          APPEND <fs_o> TO ls_change-orig_lines.
-          lv_i = lv_i + 1.
-        ENDWHILE.
-      ENDIF.
-
-      IF ls_change-orig_lines IS NOT INITIAL AND ls_change-new_lines IS NOT INITIAL.
-        APPEND ls_change TO lt_changes.
-      ENDIF.
-      lv_j = lv_k + 1. " skip past p_end marker
-    ELSE.
-      " Unchanged line: advance orig pointer when it matches
-      IF lv_i <= lv_orig_cnt.
-        READ TABLE lt_include_orig ASSIGNING <fs_o> INDEX lv_i.
-        IF sy-subrc = 0 AND <fs_o>-line = <fs_c>-line.
-          lv_i = lv_i + 1.
-        ENDIF.
-      ENDIF.
-      lv_j = lv_j + 1.
-    ENDIF.
-  ENDWHILE.
-
-  IF lt_changes IS INITIAL. RETURN. ENDIF.
-
-  " Step 2: Load Smart Form into session memory
-  lv_formname = wa_final_p-objname.
-  CALL FUNCTION 'SSF_READ_FORM'
-    EXPORTING
-      i_formname       = lv_formname
-    IMPORTING
-      o_caption        = i_caption
-      o_vartext        = i_vartext
-      o_admdata        = i_admin
-    EXCEPTIONS
-      no_form          = 1
-      no_active_source = 2
-      no_source        = 3
-      OTHERS           = 4.
-  IF sy-subrc <> 0. RETURN. ENDIF.
-
-  " Step 3: Access node tree. Prefer T_NODES (standard); fall back to T_NTOKENS.
-  ASSIGN ('(SAPLSTXBX)T_NODES') TO <fs_nodes>.
-  IF <fs_nodes> IS NOT ASSIGNED.
-    ASSIGN ('(SAPLSTXBX)T_NTOKENS') TO <fs_nodes>.
-  ENDIF.
-  IF <fs_nodes> IS NOT ASSIGNED. RETURN. ENDIF.
-
-  CLEAR lv_form_changed.
-
-  " Step 4: For each CO node, apply each change via normalized content match.
-  "         Code table component + line field are discovered via RTTI so the
-  "         loop works regardless of the SAP release's node row layout.
-  LOOP AT <fs_nodes> ASSIGNING <fs_node>.
-    UNASSIGN: <fs_ntype>, <fs_codetb>, <fs_codeln>, <fs_lv>.
-    CLEAR lv_linefield.
-
-    ASSIGN COMPONENT 'NTYPE' OF STRUCTURE <fs_node> TO <fs_ntype>.
-    CHECK <fs_ntype> IS ASSIGNED AND <fs_ntype> = 'CO'.
-
-    " Discover the code table component on this node row
-    CLEAR lt_components.
-    TRY.
-        lo_structdescr ?= cl_abap_typedescr=>describe_by_data( <fs_node> ).
-        lt_components = lo_structdescr->get_components( ).
-      CATCH cx_root.
-    ENDTRY.
-
-    LOOP AT lt_components INTO ls_component.
-      CHECK ls_component-type->kind = cl_abap_typedescr=>kind_table.
-      UNASSIGN <fs_codetb>.
-      ASSIGN COMPONENT ls_component-name OF STRUCTURE <fs_node> TO <fs_codetb>.
-      CHECK <fs_codetb> IS ASSIGNED.
-
-      " Inspect line type to find a char-like field we can edit
-      CLEAR: lt_linecomp, ls_linecomp, lv_linefield.
-      TRY.
-          lo_tabledescr ?= ls_component-type.
-          lo_lineddescr ?= lo_tabledescr->get_table_line_type( ).
-          lt_linecomp = lo_lineddescr->get_components( ).
-        CATCH cx_root.
-          CONTINUE.
-      ENDTRY.
-
-      READ TABLE lt_linecomp INTO ls_linecomp WITH KEY name = 'LINE'.
-      IF sy-subrc = 0. lv_linefield = 'LINE'. ENDIF.
-      IF lv_linefield IS INITIAL.
-        READ TABLE lt_linecomp INTO ls_linecomp WITH KEY name = 'ABAPLINE'.
-        IF sy-subrc = 0. lv_linefield = 'ABAPLINE'. ENDIF.
-      ENDIF.
-      IF lv_linefield IS INITIAL.
-        READ TABLE lt_linecomp INTO ls_linecomp WITH KEY name = 'TNAME'.
-        IF sy-subrc = 0. lv_linefield = 'TNAME'. ENDIF.
-      ENDIF.
-      IF lv_linefield IS INITIAL.
-        LOOP AT lt_linecomp INTO ls_linecomp
-             WHERE type->kind = cl_abap_typedescr=>kind_elem.
-          lv_linefield = ls_linecomp-name.
-          EXIT.
-        ENDLOOP.
-      ENDIF.
-
-      IF lv_linefield IS NOT INITIAL. EXIT. ENDIF.
-      UNASSIGN <fs_codetb>.
-    ENDLOOP.
-
-    CHECK <fs_codetb> IS ASSIGNED AND lv_linefield IS NOT INITIAL.
-
-    CLEAR lv_node_changed.
-    LOOP AT lt_changes INTO ls_change.
-      READ TABLE ls_change-orig_lines INTO DATA(wa_first_orig) INDEX 1.
-      CHECK sy-subrc = 0.
-      lv_norm_first = wa_first_orig-line.
-      CONDENSE lv_norm_first.
-      TRANSLATE lv_norm_first TO UPPER CASE.
-      IF lv_norm_first IS INITIAL. CONTINUE. ENDIF.
-
-      " Locate first orig line in node: trimmed+upper exact match
-      lv_match_idx = 0.
-      LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
-        UNASSIGN <fs_lv>.
-        ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        CHECK <fs_lv> IS ASSIGNED.
-        lv_norm_nod = <fs_lv>.
-        CONDENSE lv_norm_nod.
-        TRANSLATE lv_norm_nod TO UPPER CASE.
-        IF lv_norm_nod = lv_norm_first.
-          lv_match_idx = sy-tabix.
-          EXIT.
-        ENDIF.
-      ENDLOOP.
-
-      " Fallback: substring match (handles cases where include splits/joins lines)
-      IF lv_match_idx = 0.
-        LOOP AT <fs_codetb> ASSIGNING <fs_codeln>.
-          UNASSIGN <fs_lv>.
-          ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
-          CHECK <fs_lv> IS ASSIGNED.
-          lv_norm_nod = <fs_lv>.
-          CONDENSE lv_norm_nod.
-          TRANSLATE lv_norm_nod TO UPPER CASE.
-          IF lv_norm_nod IS INITIAL. CONTINUE. ENDIF.
-          IF lv_norm_nod CS lv_norm_first OR lv_norm_first CS lv_norm_nod.
-            lv_match_idx = sy-tabix.
-            EXIT.
-          ENDIF.
-        ENDLOOP.
-      ENDIF.
-      CHECK lv_match_idx > 0.
-
-      " Verify subsequent orig lines match consecutively (multi-line change)
-      lv_orig_sz = lines( ls_change-orig_lines ).
-      lv_all_match = 'X'.
-      lv_off = 1.
-      WHILE lv_off < lv_orig_sz.
-        READ TABLE ls_change-orig_lines INTO DATA(wa_chk_orig) INDEX lv_off + 1.
-        READ TABLE <fs_codetb> ASSIGNING <fs_codeln> INDEX lv_match_idx + lv_off.
-        IF sy-subrc <> 0. lv_all_match = ' '. EXIT. ENDIF.
-        UNASSIGN <fs_lv>.
-        ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        IF <fs_lv> IS NOT ASSIGNED. lv_all_match = ' '. EXIT. ENDIF.
-        lv_norm_chk = wa_chk_orig-line. CONDENSE lv_norm_chk. TRANSLATE lv_norm_chk TO UPPER CASE.
-        lv_norm_nod = <fs_lv>.          CONDENSE lv_norm_nod.  TRANSLATE lv_norm_nod TO UPPER CASE.
-        IF lv_norm_chk <> lv_norm_nod AND
-           NOT ( lv_norm_nod CS lv_norm_chk OR lv_norm_chk CS lv_norm_nod ).
-          lv_all_match = ' '. EXIT.
-        ENDIF.
-        lv_off = lv_off + 1.
-      ENDWHILE.
-      CHECK lv_all_match = 'X'.
-
-      " Delete matched orig block, insert new lines at the same position
-      lv_del = 0.
-      WHILE lv_del < lv_orig_sz.
-        DELETE <fs_codetb> INDEX lv_match_idx.
-        lv_del = lv_del + 1.
-      ENDWHILE.
-
-      lv_ins = lv_match_idx.
-      LOOP AT ls_change-new_lines INTO DATA(wa_new).
-        INSERT INITIAL LINE INTO <fs_codetb> INDEX lv_ins ASSIGNING <fs_codeln>.
-        UNASSIGN <fs_lv>.
-        ASSIGN COMPONENT lv_linefield OF STRUCTURE <fs_codeln> TO <fs_lv>.
-        IF <fs_lv> IS ASSIGNED. <fs_lv> = wa_new-line. ENDIF.
-        lv_ins = lv_ins + 1.
-      ENDLOOP.
-
-      lv_node_changed = 'X'.
-    ENDLOOP.
-
-    IF lv_node_changed = 'X'. lv_form_changed = 'X'. ENDIF.
-  ENDLOOP.
-
-  CHECK lv_form_changed = 'X'.
-
-  " Step 5: Persist modified session back to Smart Form database
-  CALL FUNCTION 'SSF_WRITE_FORM'
-    EXPORTING
-      i_formname = lv_formname
-    EXCEPTIONS
-      OTHERS     = 4.
-  IF sy-subrc <> 0.
-    CALL FUNCTION 'SSFCOMP_FORM_SAVE'
-      EXCEPTIONS
-        OTHERS = 4.
-  ENDIF.
-
-  " Step 6: Re-activate the form so the generated include rebuilds from
-  "         the corrected nodes
-  CALL FUNCTION 'SSF_SMART_FORMS_ACTIVATE'
-    EXPORTING
-      i_formname      = lv_formname
-    EXCEPTIONS
-      form_not_found  = 1
-      form_not_active = 2
-      OTHERS          = 3.
-
-  " Step 7: Record the SSFO object in the transport request
-  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir_sf)
-    WHERE pgmid    = 'R3TR'
-      AND object   = 'SSFO'
-      AND obj_name = @lv_formname.
-  IF sy-subrc = 0.
-    REFRESH lt_recording_entries.
-    CLEAR ls_recording_entry.
-    ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
-    ls_recording_entry-object_entry-object_key-object   = 'SSFO'.
-    ls_recording_entry-object_entry-object_key-obj_name = lv_formname.
-    ls_recording_entry-author     = wa_tadir_sf-author.
-    ls_recording_entry-devclass   = wa_tadir_sf-devclass.
-    ls_recording_entry-masterlang = wa_tadir_sf-masterlang.
-    APPEND ls_recording_entry TO lt_recording_entries.
-    CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
-      EXPORTING
-        recording_entries = lt_recording_entries
-        trkorr            = lv_req.
-    COMMIT WORK.
-  ENDIF.
-
-  " Step 8: Log output row
-  wa_output-program_name = lv_formname.
-  wa_output-subobj       = lv_formname.
-  wa_output-new_program  = lv_formname.
-  wa_output-status       = 'Success'.
-  APPEND wa_output TO it_output.
-  CLEAR wa_output.
 ENDFORM.
