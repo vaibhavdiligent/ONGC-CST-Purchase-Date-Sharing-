@@ -2523,12 +2523,8 @@ FORM apply_changes.
     lv_idx = sy-tabix.
 
     IF lv_idx >= lv_blk_s AND lv_idx <= lv_blk_e.
-      " Comment out original line (prefix with *)
-      CLEAR wa_mod.
-      CONCATENATE '*' wa_source-line INTO wa_mod-line.
-      APPEND wa_mod TO lt_modified.
-
-      " After last original line, insert all generated code lines
+      " lt_code already contains: begin marker, original lines commented out, new code, end marker
+      " So skip the original block lines; insert lt_code only once after the last line
       IF lv_idx = lv_blk_e.
         LOOP AT lt_code INTO wa_code.
           CLEAR wa_mod.
