@@ -113,6 +113,8 @@ TYPES: BEGIN OF ty_bdc_map,
          cls_datax   TYPE flag,          " X = generate DATAX = 'X' line
          matched     TYPE flag,          " X = matched, space = no match
          src_line    TYPE i,             " Source line number in program
+         loop_wa     TYPE char50,        " Work area used in the original BDC loop (e.g. wa_item)
+         loop_tbl    TYPE char50,        " Table iterated in the original BDC loop (e.g. lt_items)
        END OF ty_bdc_map.
 
 TYPES: BEGIN OF ty_fm_dd,
@@ -405,6 +407,8 @@ FORM find_bdc_block.
         lv_pend_val       TYPE flag,
         lt_bdc_buf        TYPE TABLE OF ty_bdc_map,
         lv_bdc_start_cand TYPE i.
+  DATA lv_cur_loop_wa  TYPE char50.   " current BDC loop work-area variable
+  DATA lv_cur_loop_tbl TYPE char50.   " current BDC loop table variable
 
   LOOP AT lt_source INTO wa_source.
     lv_lineno = sy-tabix.
@@ -436,6 +440,37 @@ FORM find_bdc_block.
       CONTINUE.
     ENDIF.
 
+    " ── Track LOOP / ENDLOOP to detect BDC item processing loops ──
+    IF lv_line_u CS 'LOOP AT '.
+      DATA lv_la_rest TYPE string.
+      DATA(lv_la_off) = sy-fdpos + 8.
+      lv_la_rest = substring( val = lv_line off = lv_la_off ).
+      CONDENSE lv_la_rest.
+      IF lv_la_rest CS ' '.
+        lv_cur_loop_tbl = to_lower( lv_la_rest(sy-fdpos) ).
+      ELSE.
+        lv_cur_loop_tbl = to_lower( lv_la_rest ).
+      ENDIF.
+      CLEAR lv_cur_loop_wa.
+      DATA lv_la_up TYPE string.
+      lv_la_up = lv_la_rest. TRANSLATE lv_la_up TO UPPER CASE.
+      IF lv_la_up CS ' INTO '.
+        DATA(lv_into_off) = sy-fdpos + 6.
+        DATA lv_into_rest TYPE string.
+        lv_into_rest = substring( val = lv_la_rest off = lv_into_off ).
+        IF lv_into_rest CS ' '.
+          lv_cur_loop_wa = to_lower( lv_into_rest(sy-fdpos) ).
+        ELSE.
+          lv_cur_loop_wa = to_lower( lv_into_rest ).
+        ENDIF.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_cur_loop_wa WITH ''.
+        CONDENSE lv_cur_loop_wa.
+      ENDIF.
+    ENDIF.
+    IF lv_line_u CS 'ENDLOOP'.
+      CLEAR lv_cur_loop_wa. CLEAR lv_cur_loop_tbl.
+    ENDIF.
+
     " Detect start of BDC block
     IF lv_line_u CS 'PERFORM' AND
        ( lv_line_u CS 'BDC_DYNPRO' OR lv_line_u CS 'BDC_FIELD' ).
@@ -456,6 +491,8 @@ FORM find_bdc_block.
       REPLACE ALL OCCURRENCES OF '.' IN lv_val WITH space.
       CONDENSE lv_val.   " keep surrounding quotes so literals stay as 'X', 'VAL' etc.
       wa_bdc_map-fval_var = lv_val.
+      wa_bdc_map-loop_wa  = lv_cur_loop_wa.
+      wa_bdc_map-loop_tbl = lv_cur_loop_tbl.
       lv_pend_val = space.
       PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
       CONTINUE.
@@ -487,6 +524,8 @@ FORM find_bdc_block.
 
           IF lv_after IS NOT INITIAL.
             wa_bdc_map-fval_var = lv_after.
+            wa_bdc_map-loop_wa  = lv_cur_loop_wa.
+            wa_bdc_map-loop_tbl = lv_cur_loop_tbl.
             PERFORM append_bdc_to_buf CHANGING lt_bdc_buf.
           ELSE.
             lv_pend_val = 'X'.
@@ -2005,10 +2044,16 @@ FORM generate_code_preview.
         APPEND lv_dp_nm TO lt_fm_wa_seen.   " mark as declared
       WHEN 'T'.
         lv_decl = |DATA lt_{ lv_dp_nm } TYPE TABLE OF { to_lower( wa_dp-structure ) }.|.
-        DATA lv_wa_decl TYPE char200.
-        lv_wa_decl = |DATA ls_{ lv_dp_nm } TYPE { to_lower( wa_dp-structure ) }.|.
-        add_line: lv_wa_decl.
-        APPEND lv_dp_nm TO lt_fm_wa_seen.   " mark ls_ and lt_ as declared
+        " Only declare row work area (ls_) for input tables that have BDC-matched entries
+        " Output tables like RETURN are filled by the FM — no ls_ needed
+        READ TABLE lt_bdc_map TRANSPORTING NO FIELDS
+          WITH KEY fm_wa_name = wa_dp-parameter matched = 'X'.
+        IF sy-subrc = 0.
+          DATA lv_wa_decl TYPE char200.
+          lv_wa_decl = |DATA ls_{ lv_dp_nm } TYPE { to_lower( wa_dp-structure ) }.|.
+          add_line: lv_wa_decl.
+        ENDIF.
+        APPEND lv_dp_nm TO lt_fm_wa_seen.   " mark lt_ as declared (prevents hardcoded duplicate)
     ENDCASE.
     add_line: lv_decl.
   ENDLOOP.
@@ -2026,7 +2071,11 @@ FORM generate_code_preview.
       add_line: lv_fm_wa_decl.
     ENDIF.
   ENDLOOP.
-  add_line: 'DATA lt_return TYPE TABLE OF bapiret2.'.
+  " Fallback: ensure lt_return is declared even if RETURN is not in fupararef
+  READ TABLE lt_fm_wa_seen TRANSPORTING NO FIELDS WITH KEY table_line = 'return'.
+  IF sy-subrc <> 0.
+    add_line: 'DATA lt_return TYPE TABLE OF bapiret2.'.
+  ENDIF.
 
   " Collect covered new-FM params (structured params + scalar matched params)
   DATA lt_mand_covered TYPE TABLE OF string.
@@ -2061,23 +2110,20 @@ FORM generate_code_preview.
   ENDLOOP.
   add_line: ''.
 
-  " Field assignments — matched fields (work-area style)
-  add_line: '" --- Auto-mapped field assignments ---'.
-  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X'.
-    DATA lv_assign    TYPE string.
-    DATA lv_comment   TYPE string.
-    DATA lv_fm_wa_var TYPE string.
-    DATA lv_fm_path   TYPE string.
+  " Field assignments — header entries (not inside a BDC loop)
+  add_line: '" --- Auto-mapped field assignments (header) ---'.
+  DATA lv_assign    TYPE string.
+  DATA lv_comment   TYPE string.
+  DATA lv_fm_wa_var TYPE string.
+  DATA lv_fm_path   TYPE string.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X' AND loop_wa = space.
     IF wa_bdc_map-fm_wa_name IS NOT INITIAL.
-      " Work-area style (nested table row)
       lv_fm_wa_var = to_lower( wa_bdc_map-fm_wa_name ).
       lv_fm_path   = to_lower( wa_bdc_map-fm_wa_path ).
       lv_assign = |ls_{ lv_fm_wa_var }-{ lv_fm_path } = { wa_bdc_map-fval_var }.|.
     ELSEIF wa_bdc_map-fm_struct IS NOT INITIAL.
-      " Flat structured param (no nested table WA)
       lv_assign = |ls_{ to_lower( wa_bdc_map-fm_param ) }-{ to_lower( wa_bdc_map-fm_field ) } = { wa_bdc_map-fval_var }.|.
     ELSE.
-      " Scalar param — value goes directly in CALL FUNCTION; no pre-assignment needed
       CONTINUE.
     ENDIF.
     lv_comment = |" { wa_bdc_map-fnam } -> { wa_bdc_map-fm_param }-{ wa_bdc_map-fm_field } ({ wa_bdc_map-rollname })|.
@@ -2108,6 +2154,53 @@ FORM generate_code_preview.
     ENDIF.
   ENDLOOP.
   add_line: ''.
+
+  " Item assignments — one LOOP block per unique (loop_wa / loop_tbl / fm table param) combination
+  TYPES: BEGIN OF ty_lgrp,
+           loop_tbl TYPE char50,
+           loop_wa  TYPE char50,
+           fm_nm    TYPE char50,
+         END OF ty_lgrp.
+  DATA lt_lgrps TYPE TABLE OF ty_lgrp.
+  DATA wa_lgrp  TYPE ty_lgrp.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X' AND loop_wa <> space.
+    wa_lgrp-loop_wa  = wa_bdc_map-loop_wa.
+    wa_lgrp-loop_tbl = wa_bdc_map-loop_tbl.
+    wa_lgrp-fm_nm    = COND #( WHEN wa_bdc_map-fm_wa_name IS NOT INITIAL
+                                THEN wa_bdc_map-fm_wa_name
+                                ELSE wa_bdc_map-fm_param ).
+    READ TABLE lt_lgrps TRANSPORTING NO FIELDS
+      WITH KEY loop_wa = wa_lgrp-loop_wa fm_nm = wa_lgrp-fm_nm.
+    IF sy-subrc <> 0. APPEND wa_lgrp TO lt_lgrps. ENDIF.
+  ENDLOOP.
+  LOOP AT lt_lgrps INTO wa_lgrp.
+    DATA lv_ls_nm TYPE string.
+    DATA lv_lt_nm TYPE string.
+    lv_ls_nm = to_lower( wa_lgrp-fm_nm ).
+    lv_lt_nm = lv_ls_nm.
+    lv_ln = |" --- Item assignments: { wa_lgrp-loop_tbl } -> lt_{ lv_lt_nm } ---|.
+    add_line: lv_ln.
+    lv_ln = |LOOP AT { wa_lgrp-loop_tbl } INTO { wa_lgrp-loop_wa }.|. add_line: lv_ln.
+    lv_ln = |  CLEAR ls_{ lv_ls_nm }.|. add_line: lv_ln.
+    LOOP AT lt_bdc_map INTO wa_bdc_map
+      WHERE matched = 'X' AND loop_wa = wa_lgrp-loop_wa.
+      IF wa_bdc_map-fm_wa_name IS NOT INITIAL.
+        lv_fm_wa_var = to_lower( wa_bdc_map-fm_wa_name ).
+        lv_fm_path   = to_lower( wa_bdc_map-fm_wa_path ).
+        lv_assign  = |  ls_{ lv_fm_wa_var }-{ lv_fm_path } = { wa_bdc_map-fval_var }.|.
+      ELSEIF wa_bdc_map-fm_struct IS NOT INITIAL.
+        lv_assign  = |  ls_{ lv_ls_nm }-{ to_lower( wa_bdc_map-fm_field ) } = { wa_bdc_map-fval_var }.|.
+      ELSE.
+        CONTINUE.
+      ENDIF.
+      lv_comment = |  " { wa_bdc_map-fnam } -> { wa_bdc_map-fm_param }-{ wa_bdc_map-fm_field }|.
+      add_line: lv_comment.
+      add_line: lv_assign.
+    ENDLOOP.
+    lv_ln = |  APPEND ls_{ lv_ls_nm } TO lt_{ lv_lt_nm }.|. add_line: lv_ln.
+    add_line: 'ENDLOOP.'.
+    add_line: ''.
+  ENDLOOP.
 
   " TODO comments for unmatched fields
   DATA lv_has_todo TYPE flag.
