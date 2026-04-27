@@ -584,6 +584,215 @@ FORM find_bdc_block.
 
   ENDLOOP.
 
+  " ── Fallback: BDC data is inside a helper FORM called via PERFORM ──
+  " If CALL TRANSACTION was found but no BDC entries were collected inline,
+  " look backwards from the CALL TRANSACTION line for PERFORM <form>,
+  " then scan that FORM's body for BDC entries.
+  IF lv_tcode_found = 'X' AND lt_bdc_map IS INITIAL AND lv_bdc_end > 0.
+    DATA lv_hlp_form  TYPE char50.   " name of helper FORM
+    DATA lv_hlp_start TYPE i.        " line no. of PERFORM <form> in calling code
+
+    " Scan backwards (up to 15 lines) from CALL TRANSACTION to find PERFORM <form>
+    DATA lv_hbi TYPE i.
+    lv_hbi = lv_bdc_end.
+    DO 15 TIMES.
+      lv_hbi = lv_hbi - 1.
+      IF lv_hbi <= 0. EXIT. ENDIF.
+      READ TABLE lt_source INTO wa_source INDEX lv_hbi.
+      IF sy-subrc <> 0. EXIT. ENDIF.
+      DATA lv_hbk TYPE string.
+      lv_hbk = wa_source-line. CONDENSE lv_hbk.
+      IF lv_hbk IS INITIAL OR lv_hbk(1) = '*' OR lv_hbk(1) = '"'. CONTINUE. ENDIF.
+      DATA lv_hbk_u TYPE string.
+      lv_hbk_u = lv_hbk. TRANSLATE lv_hbk_u TO UPPER CASE.
+      IF lv_hbk_u CS 'PERFORM '.
+        DATA lv_hperf_off TYPE i. lv_hperf_off = sy-fdpos + 8.
+        DATA lv_hperf_rest TYPE string.
+        lv_hperf_rest = substring( val = lv_hbk off = lv_hperf_off ).
+        CONDENSE lv_hperf_rest.
+        IF lv_hperf_rest CS ' '.
+          lv_hlp_form = to_upper( lv_hperf_rest(sy-fdpos) ).
+        ELSE.
+          lv_hlp_form = to_upper( lv_hperf_rest ).
+        ENDIF.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_hlp_form WITH ''.
+        CONDENSE lv_hlp_form.
+        lv_hlp_start = lv_hbi.
+        EXIT.
+      ENDIF.
+      " Stop at block-ending keywords
+      IF lv_hbk_u CS 'ENDLOOP' OR lv_hbk_u CS 'ENDIF' OR lv_hbk_u CS 'ENDFORM'. EXIT. ENDIF.
+    ENDDO.
+
+    " Scan the helper FORM body for BDC_FIELD/BDC_DYNPRO entries
+    IF lv_hlp_form IS NOT INITIAL.
+      DATA lv_in_hlp     TYPE flag.
+      DATA lv_hlp_pend   TYPE flag.
+      DATA lv_hlp_lp_wa  TYPE char50.
+      DATA lv_hlp_lp_tbl TYPE char50.
+      DATA wa_bdc_hlp    TYPE ty_bdc_map.
+
+      LOOP AT lt_source INTO wa_source.
+        DATA lv_hl TYPE string.
+        lv_hl = wa_source-line. CONDENSE lv_hl.
+        IF lv_hl IS INITIAL. CONTINUE. ENDIF.
+        IF lv_hl(1) = '*' OR lv_hl(1) = '"'. CONTINUE. ENDIF.
+        DATA lv_hl_u TYPE string.
+        lv_hl_u = lv_hl. TRANSLATE lv_hl_u TO UPPER CASE.
+
+        " ── Locate FORM <helper> ──
+        IF lv_in_hlp = space.
+          IF lv_hl_u CS 'FORM '.
+            DATA lv_af_form TYPE string.
+            DATA(lv_fkw_off) = sy-fdpos + 5.
+            lv_af_form = substring( val = lv_hl_u off = lv_fkw_off ).
+            CONDENSE lv_af_form.
+            DATA lv_hform_nm TYPE string.
+            IF lv_af_form CS ' '.
+              lv_hform_nm = lv_af_form(sy-fdpos).
+            ELSE.
+              lv_hform_nm = lv_af_form.
+            ENDIF.
+            REPLACE ALL OCCURRENCES OF '.' IN lv_hform_nm WITH ''.
+            CONDENSE lv_hform_nm.
+            IF lv_hform_nm = lv_hlp_form.
+              lv_in_hlp = 'X'.
+            ENDIF.
+          ENDIF.
+          CONTINUE.
+        ENDIF.
+
+        " ── Inside the helper FORM ──
+        IF lv_hl_u CS 'ENDFORM'. EXIT. ENDIF.
+
+        " Track LOOP/ENDLOOP for item loops inside the helper FORM
+        IF lv_hl_u CS 'LOOP AT '.
+          DATA lv_hla_rest TYPE string.
+          DATA(lv_hla_off) = sy-fdpos + 8.
+          lv_hla_rest = substring( val = lv_hl off = lv_hla_off ).
+          CONDENSE lv_hla_rest.
+          IF lv_hla_rest CS ' '.
+            lv_hlp_lp_tbl = to_lower( lv_hla_rest(sy-fdpos) ).
+          ELSE.
+            lv_hlp_lp_tbl = to_lower( lv_hla_rest ).
+          ENDIF.
+          CLEAR lv_hlp_lp_wa.
+          DATA lv_hla_up TYPE string.
+          lv_hla_up = lv_hla_rest. TRANSLATE lv_hla_up TO UPPER CASE.
+          IF lv_hla_up CS ' INTO '.
+            DATA(lv_h_into_off) = sy-fdpos + 6.
+            DATA lv_h_into_rest TYPE string.
+            lv_h_into_rest = substring( val = lv_hla_rest off = lv_h_into_off ).
+            IF lv_h_into_rest CS ' '.
+              lv_hlp_lp_wa = to_lower( lv_h_into_rest(sy-fdpos) ).
+            ELSE.
+              lv_hlp_lp_wa = to_lower( lv_h_into_rest ).
+            ENDIF.
+            REPLACE ALL OCCURRENCES OF '.' IN lv_hlp_lp_wa WITH ''.
+            CONDENSE lv_hlp_lp_wa.
+          ELSEIF lv_hla_up CS ' ASSIGNING '.
+            DATA(lv_h_ass_off) = sy-fdpos + 11.
+            DATA lv_h_ass_rest TYPE string.
+            lv_h_ass_rest = substring( val = lv_hla_rest off = lv_h_ass_off ).
+            REPLACE ALL OCCURRENCES OF '.' IN lv_h_ass_rest WITH ''.
+            REPLACE ALL OCCURRENCES OF '<' IN lv_h_ass_rest WITH ''.
+            REPLACE ALL OCCURRENCES OF '>' IN lv_h_ass_rest WITH ''.
+            IF lv_h_ass_rest CS ' '.
+              lv_hlp_lp_wa = to_lower( lv_h_ass_rest(sy-fdpos) ).
+            ELSE.
+              lv_hlp_lp_wa = to_lower( lv_h_ass_rest ).
+            ENDIF.
+            CONDENSE lv_hlp_lp_wa.
+          ENDIF.
+        ENDIF.
+        IF lv_hl_u CS 'ENDLOOP'. CLEAR lv_hlp_lp_wa. CLEAR lv_hlp_lp_tbl. ENDIF.
+
+        " ── Handle pending value (value on next line) ──
+        IF lv_hlp_pend = 'X'.
+          DATA lv_hlp_val TYPE string.
+          lv_hlp_val = lv_hl.
+          IF lv_hlp_val CS '"'. lv_hlp_val = lv_hlp_val(sy-fdpos). ENDIF.
+          REPLACE ALL OCCURRENCES OF '.' IN lv_hlp_val WITH space.
+          CONDENSE lv_hlp_val.
+          wa_bdc_hlp-fval_var = lv_hlp_val.
+          wa_bdc_hlp-loop_wa  = lv_hlp_lp_wa.
+          wa_bdc_hlp-loop_tbl = lv_hlp_lp_tbl.
+          wa_bdc_map = wa_bdc_hlp.
+          CLEAR wa_bdc_hlp.
+          lv_hlp_pend = space.
+          PERFORM append_bdc_to_buf CHANGING lt_bdc_map.
+          CONTINUE.
+        ENDIF.
+
+        " ── PERFORM [prefix_]bdc_field USING 'FNAM' [value] ──
+        IF lv_hl_u CS 'PERFORM' AND lv_hl_u CS 'BDC_FIELD' AND lv_hl_u CS 'USING'.
+          IF lv_hl CS ''''.
+            DATA(lv_hq1) = sy-fdpos + 1.
+            DATA lv_hrest TYPE string.
+            lv_hrest = substring( val = lv_hl off = lv_hq1 ).
+            IF lv_hrest CS ''''.
+              DATA(lv_hq2) = sy-fdpos.
+              CLEAR wa_bdc_hlp.
+              wa_bdc_hlp-fnam     = lv_hrest(lv_hq2).
+              wa_bdc_hlp-src_line = sy-tabix.
+              DATA lv_hafter TYPE string.
+              lv_hafter = substring( val = lv_hrest off = lv_hq2 + 1 ).
+              IF lv_hafter CS '"'. lv_hafter = lv_hafter(sy-fdpos). ENDIF.
+              CONDENSE lv_hafter.
+              REPLACE ALL OCCURRENCES OF '.' IN lv_hafter WITH space.
+              CONDENSE lv_hafter.
+              IF lv_hafter IS NOT INITIAL.
+                wa_bdc_hlp-fval_var = lv_hafter.
+                wa_bdc_hlp-loop_wa  = lv_hlp_lp_wa.
+                wa_bdc_hlp-loop_tbl = lv_hlp_lp_tbl.
+                wa_bdc_map = wa_bdc_hlp. CLEAR wa_bdc_hlp.
+                PERFORM append_bdc_to_buf CHANGING lt_bdc_map.
+              ELSE.
+                lv_hlp_pend = 'X'.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+        " ── Direct -FNAM / -FVAL assignments ──
+        IF lv_hl_u CS '-FNAM' AND lv_hl_u CS '='.
+          IF lv_hl CS '='.
+            DATA(lv_hfn_pos) = sy-fdpos + 1.
+            DATA lv_hfn_rest TYPE string.
+            lv_hfn_rest = substring( val = lv_hl off = lv_hfn_pos ).
+            IF lv_hfn_rest CS ''''.
+              DATA(lv_hfnq1) = sy-fdpos + 1.
+              lv_hfn_rest = substring( val = lv_hfn_rest off = lv_hfnq1 ).
+              IF lv_hfn_rest CS ''''.
+                DATA(lv_hfnq2) = sy-fdpos.
+                CLEAR wa_bdc_hlp.
+                wa_bdc_hlp-fnam     = lv_hfn_rest(lv_hfnq2).
+                wa_bdc_hlp-src_line = sy-tabix.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+        IF lv_hl_u CS '-FVAL' AND lv_hl_u CS '=' AND wa_bdc_hlp-fnam IS NOT INITIAL.
+          IF lv_hl CS '='.
+            DATA(lv_hfv_pos) = sy-fdpos + 1.
+            DATA lv_hfv_rest TYPE string.
+            lv_hfv_rest = substring( val = lv_hl off = lv_hfv_pos ).
+            REPLACE ALL OCCURRENCES OF '.' IN lv_hfv_rest WITH space.
+            CONDENSE lv_hfv_rest.
+            wa_bdc_hlp-fval_var = lv_hfv_rest.
+            wa_bdc_hlp-loop_wa  = lv_hlp_lp_wa.
+            wa_bdc_hlp-loop_tbl = lv_hlp_lp_tbl.
+            wa_bdc_map = wa_bdc_hlp. CLEAR wa_bdc_hlp.
+            PERFORM append_bdc_to_buf CHANGING lt_bdc_map.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+
+      " Set block start to the PERFORM line in the calling code
+      IF lv_hlp_start > 0. lv_bdc_start = lv_hlp_start. ENDIF.
+    ENDIF.
+  ENDIF.
+
   IF lv_tcode_found = space AND lt_bdc_map IS INITIAL.
     MESSAGE |CALL TRANSACTION '{ p_tcode }' not found in { p_prog }| TYPE 'I'.
   ENDIF.
