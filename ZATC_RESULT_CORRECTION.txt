@@ -82,8 +82,10 @@ TYPES : BEGIN OF ty_zatc_process1,
           correction_value TYPE char30,
         END OF ty_zatc_process1.
 DATA it_zatc_process_all TYPE TABLE OF ty_zatc_process_all.
+DATA it_zatc_process_dte TYPE TABLE OF ty_zatc_process_all.
 DATA it_zatc_process1 TYPE TABLE OF ty_zatc_process1.
 DATA wa_zatc_process_all TYPE  ty_zatc_process_all.
+DATA wa_zatc_process_dte TYPE  ty_zatc_process_all.
 DATA wa_zatc_process1 TYPE  ty_zatc_process1.
 DATA l_repid(5) TYPE n.
 DATA it_rt_base_fields TYPE tt_base_fields.
@@ -297,6 +299,7 @@ START-OF-SELECTION.
   SORT it_final BY priority line ASCENDING.
   DELETE ADJACENT DUPLICATES FROM it_final COMPARING line objname sobjname.
   PERFORM zatc_process_all.
+  PERFORM zatc_process_dte.
   PERFORM zatc_process1.
   REFRESH it_output.
   CLEAR l_repid.
@@ -2413,6 +2416,12 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM zatc_process_all.
   SELECT * INTO TABLE it_zatc_process_all FROM zatc_process_all.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form zatc_process_dte
+*&---------------------------------------------------------------------*
+FORM zatc_process_dte.
+  SELECT * INTO TABLE it_zatc_process_dte FROM zatc_process_dte.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form zatc_process1
