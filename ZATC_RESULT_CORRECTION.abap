@@ -1014,13 +1014,22 @@ START-OF-SELECTION.
                   OR 'SELECT ... FOR (FORMER) POOL TABLE ... WITHOUT ORDER BY FOUND'
                   OR 'SELECT .. UP TO .. ROWS WITHOUT ORDER BY FOUND'.
                   CLEAR l_for.
+                  CLEAR wa_blank.
+                  CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
+                    INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CLEAR wa_blank.
                   LOOP AT repos_tab INTO DATA(wa_repos_tab1) FROM l_tabix1.
                     l_tab = sy-tabix.
                     IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'.
                       l_for = 'X'.
                     ENDIF.
                     IF wa_repos_tab1-line CS '.' AND l_for IS INITIAL.
+                      CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
+                      APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
                       REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab1-line WITH space IGNORING CASE.
+                      REPLACE ALL OCCURRENCES OF 'ENDSELECT' IN wa_repos_tab1-line WITH space IGNORING CASE.
+                      CONDENSE wa_repos_tab1-line.
                       CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
                         INTO wa_repos_tab1-line SEPARATED BY space.
                       APPEND wa_repos_tab1 TO repos_tab_new.
@@ -1028,16 +1037,25 @@ START-OF-SELECTION.
                       EXIT.
                     ELSE.
                       IF l_for = 'X' AND wa_repos_tab1-line CS '.'.
+                        CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
+                        APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
                         CONCATENATE wa_repos_tab1-line '"#EC CI_NOORDER'
                           INTO wa_repos_tab1-line SEPARATED BY space.
                         APPEND wa_repos_tab1 TO repos_tab_new.
                         l_tab = l_tab + 1.
                         EXIT.
                       ELSE.
+                        CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
+                        APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
                         APPEND wa_repos_tab1 TO repos_tab_new.
                       ENDIF.
                     ENDIF.
                   ENDLOOP.
+                  CLEAR wa_blank.
+                  CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+                    INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CLEAR wa_blank.
                 WHEN 'SELECT SINGLE IS POSSIBLY NOT UNIQUE'.
                   LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
                     IF wa_repos_tab_d-line CS '"'.
@@ -2060,6 +2078,12 @@ FORM process_read.
     ENDIF.
     l_fp = l_fp - 1.
   ENDDO.
+  " Skip if this exact SORT is already in repos_tab_new (avoid duplicate on repeated ATC findings)
+  DATA l_sort_dup TYPE flag.
+  LOOP AT repos_tab_new INTO DATA(wa_dup_check).
+    IF wa_dup_check-line CS l_line_new. l_sort_dup = abap_true. EXIT. ENDIF.
+  ENDLOOP.
+  IF l_sort_dup = abap_true. RETURN. ENDIF.
   DATA it_repos TYPE STANDARD TABLE OF abaptxt255.
   MOVE repos_tab_new[] TO it_repos.
   REFRESH repos_tab_new.
