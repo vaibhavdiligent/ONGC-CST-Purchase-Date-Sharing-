@@ -500,9 +500,18 @@ FORM find_bdc_block.
       CLEAR lv_cur_loop_wa. CLEAR lv_cur_loop_tbl.
     ENDIF.
 
-    " Detect start of BDC block (inline PERFORM bdc_dynpro/bdc_field style)
+    " Detect start of BDC block — supports both styles:
+    "   1) PERFORM bdc_dynpro/bdc_field USING ...   (helper-FORM call style)
+    "   2) BDCTAB-DYNPRO = ... / BDCTAB-FNAM = ... (direct-assignment style)
     IF lv_line_u CS 'PERFORM' AND
        ( lv_line_u CS 'BDC_DYNPRO' OR lv_line_u CS 'BDC_FIELD' ).
+      lv_in_bdc = 'X'.
+      IF lv_bdc_start_cand = 0. lv_bdc_start_cand = lv_lineno. ENDIF.
+    ENDIF.
+    IF lv_line_u CS '=' AND
+       ( lv_line_u CS '-FNAM'    OR lv_line_u CS '-FVAL'
+         OR lv_line_u CS '-DYNPRO' OR lv_line_u CS '-PROGRAM'
+         OR lv_line_u CS '-DYNBEGIN' ).
       lv_in_bdc = 'X'.
       IF lv_bdc_start_cand = 0. lv_bdc_start_cand = lv_lineno. ENDIF.
     ENDIF.
