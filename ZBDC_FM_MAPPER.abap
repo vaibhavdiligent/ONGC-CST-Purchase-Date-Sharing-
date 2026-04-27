@@ -616,6 +616,7 @@ FORM find_bdc_block.
   " line to find non-BDC PERFORM calls, then search the whole source for
   " that FORM's definition and extract its BDC entries.
   IF lv_tcode_found = 'X' AND lt_bdc_map IS INITIAL.
+    MESSAGE |BDC helper scan: CALL TRANSACTION found at line { lv_bdc_end } — scanning backward from { lv_bdc_end - 1 }| TYPE 'I'.
     lv_hlp_found = space.
     lv_scan_idx  = lv_bdc_end - 1.
     WHILE lv_scan_idx > 0 AND lv_hlp_found = space.
@@ -633,9 +634,8 @@ FORM find_bdc_block.
       lv_sc_lu = lv_sc_line.
       TRANSLATE lv_sc_lu TO UPPER CASE.
       lv_sc_len = strlen( lv_sc_lu ).
-      " Stop when we reach the start of the calling FORM (FORM or ENDFORM boundary)
-      IF lv_sc_len >= 7 AND lv_sc_lu(7) = 'ENDFORM'. EXIT. ENDIF.
-      IF lv_sc_len >= 5 AND lv_sc_lu(5) = 'FORM '. EXIT. ENDIF.
+      " Stop when we reach FORM boundary (= start of the calling FORM going backward)
+      IF lv_sc_lu CS 'FORM ' AND sy-fdpos = 0. EXIT. ENDIF.
       " Look for a non-BDC PERFORM call
       IF lv_sc_lu CS 'PERFORM '
          AND lv_sc_lu NS 'BDC_DYNPRO'
@@ -654,6 +654,7 @@ FORM find_bdc_block.
           IF lv_sc_tok = 'PERFORM'. lv_sc_seen = 'X'. ENDIF.
         ENDLOOP.
         IF lv_help_nm IS NOT INITIAL.
+          MESSAGE |BDC helper scan: found PERFORM '{ lv_help_nm }' at line { lv_scan_idx } — scanning FORM body| TYPE 'I'.
           CLEAR lt_form_buf. CLEAR lv_form_start.
           PERFORM scan_form_body_for_bdc
             USING lv_help_nm
@@ -687,50 +688,57 @@ FORM scan_form_body_for_bdc
   CHANGING ct_buf       TYPE STANDARD TABLE
            cv_form_start TYPE i.
 
-  DATA lv_in_form     TYPE flag.
-  DATA lv_form_pend   TYPE flag.
-  DATA lv_form_lp_wa  TYPE char50.
-  DATA lv_form_lp_tbl TYPE char50.
-  DATA lv_form_ln     TYPE i.
-  DATA wa_src_loc     TYPE abaptxt255.
-  DATA lv_fn_cmp      TYPE string.
+  " All line variables declared explicitly as TYPE string to avoid c255 inference.
+  DATA: lv_in_form    TYPE flag,
+        lv_form_pend  TYPE flag,
+        lv_form_lp_wa TYPE char50,
+        lv_form_lp_tbl TYPE char50,
+        lv_form_ln    TYPE i,
+        lv_fn_upper   TYPE string,   " target FORM name, uppercased
+        lv_cur_fnam   TYPE char50.   " pending field name from -FNAM line
+
+  DATA wa_src2   TYPE abaptxt255.
+  DATA lv_sl     TYPE string.   " source line (condensed, original case)
+  DATA lv_sl_u   TYPE string.   " source line (upper case)
+  DATA lv_sl_len TYPE i.
 
   CLEAR ct_buf.
   CLEAR cv_form_start.
+  CLEAR lv_in_form.
+  CLEAR lv_cur_fnam.
+  CLEAR wa_bdc_map.
 
-  LOOP AT lt_source INTO wa_src_loc.
+  lv_fn_upper = iv_form_name.
+  CONDENSE lv_fn_upper.
+  TRANSLATE lv_fn_upper TO UPPER CASE.
+  IF lv_fn_upper IS INITIAL. RETURN. ENDIF.
+
+  LOOP AT lt_source INTO wa_src2.
     lv_form_ln = sy-tabix.
-    DATA(lv_fl) = wa_src_loc-line.
-    CONDENSE lv_fl.
-    IF lv_fl IS INITIAL. CONTINUE. ENDIF.
-    IF lv_fl(1) = '*' OR lv_fl(1) = '"'. CONTINUE. ENDIF.
-    DATA(lv_flu) = lv_fl.
-    TRANSLATE lv_flu TO UPPER CASE.
+    lv_sl = wa_src2-line.     " c255 → string (CONDENSE below removes trailing spaces)
+    CONDENSE lv_sl.
+    IF lv_sl IS INITIAL. CONTINUE. ENDIF.
+    IF lv_sl(1) = '*' OR lv_sl(1) = '"'. CONTINUE. ENDIF.
+    lv_sl_u = lv_sl.
+    TRANSLATE lv_sl_u TO UPPER CASE.
+    lv_sl_len = strlen( lv_sl_u ).
 
-    " ── Locate FORM <iv_form_name> ──
-    " Use prefix check: CS 'FORM ' would falsely match 'PERFORM ' too
-    " because 'FORM ' is a suffix of 'PERFORM '. lv_fl is CONDENSEd,
-    " so a real FORM definition starts with 'FORM ' at offset 0.
-    DATA lv_flu_len TYPE i.
-    lv_flu_len = strlen( lv_flu ).
     IF lv_in_form = space.
-      IF lv_flu_len >= 5 AND lv_flu(5) = 'FORM '.
-        DATA lv_fname TYPE string.
-        lv_fname = substring( val = lv_flu off = 5 ).
-        CONDENSE lv_fname.
-        DATA lv_fw TYPE string.
-        IF lv_fname CS ' '.
-          lv_fw = lv_fname(sy-fdpos).
+      " FORM prefix check: CS 'FORM ' with sy-fdpos=0 ensures we match
+      " a line that STARTS with 'FORM ' (avoids false match on 'PERFORM')
+      IF lv_sl_u CS 'FORM ' AND sy-fdpos = 0 AND lv_sl_len > 5.
+        DATA lv_fhdr TYPE string.
+        DATA lv_ftok TYPE string.
+        lv_fhdr = lv_sl_u+5.   " everything after 'FORM '
+        CONDENSE lv_fhdr.
+        IF lv_fhdr CS ' '.
+          lv_ftok = lv_fhdr(sy-fdpos).
         ELSE.
-          lv_fw = lv_fname.
+          lv_ftok = lv_fhdr.
         ENDIF.
-        REPLACE ALL OCCURRENCES OF '.' IN lv_fw WITH ''.
-        CONDENSE lv_fw.
-        TRANSLATE lv_fw TO UPPER CASE.
-        lv_fn_cmp = iv_form_name.
-        CONDENSE lv_fn_cmp.
-        TRANSLATE lv_fn_cmp TO UPPER CASE.
-        IF lv_fw = lv_fn_cmp.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_ftok WITH ''.
+        CONDENSE lv_ftok.
+        IF lv_ftok = lv_fn_upper.
           lv_in_form = 'X'.
           cv_form_start = lv_form_ln.
         ENDIF.
@@ -738,61 +746,64 @@ FORM scan_form_body_for_bdc
       CONTINUE.
     ENDIF.
 
-    " ── Inside the FORM: detect ENDFORM (prefix, not substring) ──
-    IF lv_flu_len >= 7 AND lv_flu(7) = 'ENDFORM'. EXIT. ENDIF.
+    " ENDFORM prefix: CS 'ENDFORM' with sy-fdpos=0
+    IF lv_sl_u CS 'ENDFORM' AND sy-fdpos = 0. EXIT. ENDIF.
 
-    " Track LOOP / ENDLOOP for item processing
-    IF lv_flu CS 'LOOP AT '.
-      DATA lv_fla_rest TYPE string.
-      DATA(lv_fla_off) = sy-fdpos + 8.
-      lv_fla_rest = substring( val = lv_fl off = lv_fla_off ).
-      CONDENSE lv_fla_rest.
-      IF lv_fla_rest CS ' '.
-        lv_form_lp_tbl = to_lower( lv_fla_rest(sy-fdpos) ).
-      ELSE.
-        lv_form_lp_tbl = to_lower( lv_fla_rest ).
-      ENDIF.
-      CLEAR lv_form_lp_wa.
-      DATA lv_fla_up TYPE string.
-      lv_fla_up = lv_fla_rest. TRANSLATE lv_fla_up TO UPPER CASE.
-      IF lv_fla_up CS ' INTO '.
-        DATA(lv_finto_off) = sy-fdpos + 6.
-        DATA lv_finto_rest TYPE string.
-        lv_finto_rest = substring( val = lv_fla_rest off = lv_finto_off ).
-        IF lv_finto_rest CS ' '.
-          lv_form_lp_wa = to_lower( lv_finto_rest(sy-fdpos) ).
+    " ── Track LOOP / ENDLOOP for item-processing context ──
+    IF lv_sl_u CS 'LOOP AT '.
+      DATA lv_la2     TYPE string.
+      DATA lv_la2_off TYPE i.
+      DATA lv_la2_u   TYPE string.
+      lv_la2_off = sy-fdpos + 8.
+      IF lv_sl_len > lv_la2_off.
+        lv_la2 = lv_sl+lv_la2_off.
+        CONDENSE lv_la2.
+        IF lv_la2 CS ' '.
+          lv_form_lp_tbl = to_lower( lv_la2(sy-fdpos) ).
         ELSE.
-          lv_form_lp_wa = to_lower( lv_finto_rest ).
+          lv_form_lp_tbl = to_lower( lv_la2 ).
         ENDIF.
-        REPLACE ALL OCCURRENCES OF '.' IN lv_form_lp_wa WITH ''.
-        CONDENSE lv_form_lp_wa.
-      ELSEIF lv_fla_up CS ' ASSIGNING '.
-        DATA(lv_fass_off) = sy-fdpos + 11.
-        DATA lv_fass_rest TYPE string.
-        lv_fass_rest = substring( val = lv_fla_rest off = lv_fass_off ).
-        REPLACE ALL OCCURRENCES OF '.' IN lv_fass_rest WITH ''.
-        REPLACE ALL OCCURRENCES OF '<' IN lv_fass_rest WITH ''.
-        REPLACE ALL OCCURRENCES OF '>' IN lv_fass_rest WITH ''.
-        IF lv_fass_rest CS ' '.
-          lv_form_lp_wa = to_lower( lv_fass_rest(sy-fdpos) ).
-        ELSE.
-          lv_form_lp_wa = to_lower( lv_fass_rest ).
+        CLEAR lv_form_lp_wa.
+        lv_la2_u = lv_la2. TRANSLATE lv_la2_u TO UPPER CASE.
+        IF lv_la2_u CS ' INTO '.
+          DATA lv_into2_off TYPE i.
+          DATA lv_into2     TYPE string.
+          lv_into2_off = sy-fdpos + 6.
+          lv_into2 = lv_la2+lv_into2_off.
+          IF lv_into2 CS ' '.
+            lv_form_lp_wa = to_lower( lv_into2(sy-fdpos) ).
+          ELSE.
+            lv_form_lp_wa = to_lower( lv_into2 ).
+          ENDIF.
+          REPLACE ALL OCCURRENCES OF '.' IN lv_form_lp_wa WITH ''.
+          CONDENSE lv_form_lp_wa.
+        ELSEIF lv_la2_u CS ' ASSIGNING '.
+          DATA lv_ass2_off TYPE i.
+          DATA lv_ass2     TYPE string.
+          lv_ass2_off = sy-fdpos + 11.
+          lv_ass2 = lv_la2+lv_ass2_off.
+          REPLACE ALL OCCURRENCES OF '.' IN lv_ass2 WITH ''.
+          REPLACE ALL OCCURRENCES OF '<' IN lv_ass2 WITH ''.
+          REPLACE ALL OCCURRENCES OF '>' IN lv_ass2 WITH ''.
+          IF lv_ass2 CS ' '.
+            lv_form_lp_wa = to_lower( lv_ass2(sy-fdpos) ).
+          ELSE.
+            lv_form_lp_wa = to_lower( lv_ass2 ).
+          ENDIF.
+          CONDENSE lv_form_lp_wa.
         ENDIF.
-        CONDENSE lv_form_lp_wa.
       ENDIF.
     ENDIF.
-    IF lv_flu CS 'ENDLOOP'.
-      CLEAR lv_form_lp_wa. CLEAR lv_form_lp_tbl.
-    ENDIF.
+    IF lv_sl_u CS 'ENDLOOP'. CLEAR lv_form_lp_wa. CLEAR lv_form_lp_tbl. ENDIF.
 
-    " ── Pending value: previous line set FNAM, value is on this line ──
+    " ── Pending value: multi-line PERFORM bdc_field (value on next line) ──
     IF lv_form_pend = 'X'.
-      DATA lv_pval TYPE string.
-      lv_pval = lv_fl.
-      IF lv_pval CS '"'. lv_pval = lv_pval(sy-fdpos). ENDIF.
-      REPLACE ALL OCCURRENCES OF '.' IN lv_pval WITH space.
-      CONDENSE lv_pval.
-      wa_bdc_map-fval_var = lv_pval.
+      DATA lv_pval2 TYPE string.
+      lv_pval2 = lv_sl.
+      IF lv_pval2 CS '"'. lv_pval2 = lv_pval2(sy-fdpos). ENDIF.
+      REPLACE ALL OCCURRENCES OF '.' IN lv_pval2 WITH ' '.
+      CONDENSE lv_pval2.
+      wa_bdc_map-fval_var = lv_pval2.
       wa_bdc_map-loop_wa  = lv_form_lp_wa.
       wa_bdc_map-loop_tbl = lv_form_lp_tbl.
       lv_form_pend = space.
@@ -801,25 +812,26 @@ FORM scan_form_body_for_bdc
     ENDIF.
 
     " ── PERFORM [prefix_]bdc_field USING 'FNAM' [value] ──
-    IF lv_flu CS 'PERFORM' AND lv_flu CS 'BDC_FIELD' AND lv_flu CS 'USING'.
-      DATA(lv_fraw) = lv_fl.
-      IF lv_fraw CS ''''.
-        DATA(lv_fq1) = sy-fdpos + 1.
-        DATA lv_frest TYPE string.
-        lv_frest = substring( val = lv_fraw off = lv_fq1 ).
-        IF lv_frest CS ''''.
-          DATA(lv_fq2) = sy-fdpos.
+    IF lv_sl_u CS 'PERFORM' AND lv_sl_u CS 'BDC_FIELD' AND lv_sl_u CS 'USING'.
+      IF lv_sl CS ''''.
+        DATA lv_bfq1 TYPE i.
+        DATA lv_bfr  TYPE string.
+        DATA lv_bfq2 TYPE i.
+        DATA lv_bfaft TYPE string.
+        lv_bfq1 = sy-fdpos + 1.
+        lv_bfr  = lv_sl+lv_bfq1.
+        IF lv_bfr CS ''''.
+          lv_bfq2 = sy-fdpos.
           CLEAR wa_bdc_map.
-          wa_bdc_map-fnam     = lv_frest(lv_fq2).
+          wa_bdc_map-fnam     = lv_bfr(lv_bfq2).
           wa_bdc_map-src_line = lv_form_ln.
-          DATA lv_fafter TYPE string.
-          lv_fafter = substring( val = lv_frest off = lv_fq2 + 1 ).
-          IF lv_fafter CS '"'. lv_fafter = lv_fafter(sy-fdpos). ENDIF.
-          CONDENSE lv_fafter.
-          REPLACE ALL OCCURRENCES OF '.' IN lv_fafter WITH space.
-          CONDENSE lv_fafter.
-          IF lv_fafter IS NOT INITIAL.
-            wa_bdc_map-fval_var = lv_fafter.
+          lv_bfaft = lv_bfr+lv_bfq2+1.
+          IF lv_bfaft CS '"'. lv_bfaft = lv_bfaft(sy-fdpos). ENDIF.
+          CONDENSE lv_bfaft.
+          REPLACE ALL OCCURRENCES OF '.' IN lv_bfaft WITH ' '.
+          CONDENSE lv_bfaft.
+          IF lv_bfaft IS NOT INITIAL.
+            wa_bdc_map-fval_var = lv_bfaft.
             wa_bdc_map-loop_wa  = lv_form_lp_wa.
             wa_bdc_map-loop_tbl = lv_form_lp_tbl.
             PERFORM append_bdc_to_buf CHANGING ct_buf.
@@ -830,42 +842,53 @@ FORM scan_form_body_for_bdc
       ENDIF.
     ENDIF.
 
-    " ── Direct -FNAM = '...' (BDCTAB-FNAM = 'XYZ' style) ──
-    IF lv_flu CS '-FNAM' AND lv_flu CS '='.
-      DATA(lv_frw_fn) = lv_fl.
-      IF lv_frw_fn CS '='.
-        DATA(lv_ffn_pos) = sy-fdpos + 1.
-        DATA lv_ffn_rest TYPE string.
-        lv_ffn_rest = substring( val = lv_frw_fn off = lv_ffn_pos ).
-        IF lv_ffn_rest CS ''''.
-          DATA(lv_ffnq1) = sy-fdpos + 1.
-          lv_ffn_rest = substring( val = lv_ffn_rest off = lv_ffnq1 ).
-          IF lv_ffn_rest CS ''''.
-            DATA(lv_ffnq2) = sy-fdpos.
-            CLEAR wa_bdc_map.
-            wa_bdc_map-fnam     = lv_ffn_rest(lv_ffnq2).
-            wa_bdc_map-src_line = lv_form_ln.
-          ENDIF.
+    " ── Direct -FNAM = 'field-name' (e.g. BDCTAB-FNAM = 'KNA1-KTOKD') ──
+    IF lv_sl_u CS '-FNAM' AND lv_sl_u CS '='.
+      IF lv_sl CS ''''.
+        DATA lv_fnq1 TYPE i.
+        DATA lv_fnr  TYPE string.
+        DATA lv_fnq2 TYPE i.
+        lv_fnq1 = sy-fdpos + 1.
+        lv_fnr  = lv_sl+lv_fnq1.
+        IF lv_fnr CS ''''.
+          lv_fnq2 = sy-fdpos.
+          CLEAR wa_bdc_map.
+          CLEAR lv_cur_fnam.
+          wa_bdc_map-fnam = lv_fnr(lv_fnq2).
+          lv_cur_fnam     = wa_bdc_map-fnam.
+          wa_bdc_map-src_line = lv_form_ln.
         ENDIF.
       ENDIF.
     ENDIF.
 
-    " ── Direct -FVAL = ... (BDCTAB-FVAL = LV_VAR style) ──
-    IF lv_flu CS '-FVAL' AND lv_flu CS '=' AND wa_bdc_map-fnam IS NOT INITIAL.
-      DATA(lv_frw_fv) = lv_fl.
-      IF lv_frw_fv CS '='.
-        DATA(lv_ffv_pos) = sy-fdpos + 1.
-        DATA lv_ffval TYPE string.
-        lv_ffval = substring( val = lv_frw_fv off = lv_ffv_pos ).
-        REPLACE ALL OCCURRENCES OF '.' IN lv_ffval WITH space.
-        CONDENSE lv_ffval.
-        wa_bdc_map-fval_var = lv_ffval.
+    " ── Direct -FVAL = variable-or-literal (e.g. BDCTAB-FVAL = WA-FIELD) ──
+    IF lv_sl_u CS '-FVAL' AND lv_sl_u CS '=' AND lv_cur_fnam IS NOT INITIAL.
+      IF lv_sl CS '='.
+        DATA lv_fvpos TYPE i.
+        DATA lv_fvval TYPE string.
+        lv_fvpos = sy-fdpos + 1.
+        lv_fvval = lv_sl+lv_fvpos.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_fvval WITH ' '.
+        CONDENSE lv_fvval.
+        wa_bdc_map-fnam     = lv_cur_fnam.
+        wa_bdc_map-src_line = lv_form_ln.
+        wa_bdc_map-fval_var = lv_fvval.
         wa_bdc_map-loop_wa  = lv_form_lp_wa.
         wa_bdc_map-loop_tbl = lv_form_lp_tbl.
         PERFORM append_bdc_to_buf CHANGING ct_buf.
+        CLEAR lv_cur_fnam.
       ENDIF.
     ENDIF.
   ENDLOOP.
+
+  " Diagnostic: report result so caller can see what happened
+  IF lv_in_form = space.
+    MESSAGE |scan_form: FORM '{ lv_fn_upper }' NOT FOUND in source ({ lines( lt_source ) } lines scanned)| TYPE 'I'.
+  ELSEIF lines( ct_buf ) = 0.
+    MESSAGE |scan_form: FORM '{ lv_fn_upper }' found at line { cv_form_start } but 0 BDC fields extracted| TYPE 'I'.
+  ELSE.
+    MESSAGE |scan_form: FORM '{ lv_fn_upper }' found at line { cv_form_start } — { lines( ct_buf ) } BDC fields extracted| TYPE 'I'.
+  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
