@@ -446,16 +446,23 @@ FORM find_bdc_block.
       IF lv_line_u CS p_tcode.
         lv_is_our_ct = 'X'.   " literal match
       ELSE.
-        DATA lv_ct_voff TYPE i.
+        DATA lv_ct_voff  TYPE i.
         DATA lv_ct_vrest TYPE string.
+        DATA lv_ct_vname TYPE string.
+        DATA lv_ct_vdmy  TYPE string.
         FIND FIRST OCCURRENCE OF 'CALL TRANSACTION ' IN lv_line_u MATCH OFFSET lv_ct_voff.
         IF sy-subrc = 0.
           lv_ct_voff = lv_ct_voff + 17.
           IF lv_ct_voff < strlen( lv_line_u ).
             lv_ct_vrest = substring( val = lv_line_u off = lv_ct_voff ).
             CONDENSE lv_ct_vrest.
-            IF lv_ct_vrest IS NOT INITIAL AND lv_ct_vrest(1) <> ''''.
-              lv_is_our_ct = 'X'.   " tcode in a variable
+            SPLIT lv_ct_vrest AT ' ' INTO lv_ct_vname lv_ct_vdmy.
+            REPLACE ALL OCCURRENCES OF '.' IN lv_ct_vname WITH ''.
+            " Require the variable name to contain '_' to distinguish program-level
+            " variables (lv_tcode, p_tcode) from short FORM USING parameters (TCODE, TC)
+            IF lv_ct_vname IS NOT INITIAL AND lv_ct_vname(1) <> ''''
+               AND lv_ct_vname CS '_'.
+              lv_is_our_ct = 'X'.   " tcode in a named variable (e.g. lv_tcode, p_tcode)
             ENDIF.
           ENDIF.
         ENDIF.
