@@ -636,7 +636,9 @@ START-OF-SELECTION.
                   OR 'CALL FUNCTION GENERIC PARAMETER' OR 'WRITE ISSUE' OR 'WRITE-LENGTH ISSUE'
                   OR 'SET PARAMETER ISSUE' OR 'OLD SELECT TYPE CONFLICT' OR 'MOVE GENERIC ->'
                   OR 'MOVE -> GENERIC' OR ' REPLACE ISSUE' OR 'OFFSET/LENGTH-ACCESS'
-                  OR 'OLD MOVE LENGTH CONFLICT' OR 'GENERIC SOURCE CODE ISSUE'.
+                  OR 'OLD MOVE LENGTH CONFLICT' OR 'GENERIC SOURCE CODE ISSUE'
+                  OR 'MESSAGE-WITH LENGTH CONFLICT' OR 'STRUCTURE-COMPONENT LENGTH CONFLICT'
+                  OR 'EXPORT ISSUE' OR 'GET PARAMETER ISSUE'.
                   IF ( wa_final-check_message = 'OFFSET/LENGTH-ACCESS' OR
                        wa_final-check_message = 'OLD MOVE LENGTH CONFLICT' ).
                     IF wa_final-priority > 1.
@@ -780,34 +782,42 @@ START-OF-SELECTION.
                     READ TABLE it_zatc_process_all INTO wa_zatc_process_all WITH KEY
                       srch_tem     = wa_final-param2
                       ref_obj_type = wa_final-param3.
+                    IF sy-subrc <> 0.
+                      READ TABLE it_zatc_process_dte INTO wa_zatc_process_dte WITH KEY
+                        srch_tem     = wa_final-param2
+                        ref_obj_type = wa_final-param3.
+                      IF sy-subrc = 0. wa_zatc_process_all = wa_zatc_process_dte. ENDIF.
+                    ENDIF.
                     IF sy-subrc = 0 AND wa_zatc_process_all-solution = 'X'
                       AND wa_zatc_process_all-fix_by <> 'FIT GAP'.
-                      CASE wa_final-param3.
-                        WHEN 'DTEL'.
-                          CLEAR wa_blank.
-                          CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
-                            INTO wa_blank-line SEPARATED BY space.
-                          APPEND wa_blank TO repos_tab_new.
-                          CLEAR wa_blank.
-                          CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line SEPARATED BY space.
-                          APPEND wa_blank TO repos_tab_new.
-                          CLEAR wa_blank.
-                          IF wa_repos_tab-line CS 'TYPE'.
-                            DATA(l_dy) = sy-fdpos.
-                            DATA(l_n) = strlen( wa_repos_tab-line ).
-                            l_n = l_n - l_dy + 1.
-                          ENDIF.
-                          REPLACE ALL OCCURRENCES OF wa_final-param2 IN wa_repos_tab-line+l_dy(l_n)
-                            WITH wa_zatc_process_all-correction_value IGNORING CASE.
-                          APPEND wa_repos_tab TO repos_tab_new.
-                          CLEAR wa_blank.
-                          CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
-                            INTO wa_blank-line SEPARATED BY space.
-                          APPEND wa_blank TO repos_tab_new.
-                          CLEAR wa_blank.
-                        WHEN OTHERS.
-                          APPEND wa_repos_tab TO repos_tab_new.
-                      ENDCASE.
+                      IF wa_final-param3 = 'DTEL' OR wa_final-param3 = 'DOMA'.
+                        CLEAR wa_blank.
+                        CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
+                          INTO wa_blank-line SEPARATED BY space.
+                        APPEND wa_blank TO repos_tab_new.
+                        CLEAR wa_blank.
+                        CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line SEPARATED BY space.
+                        APPEND wa_blank TO repos_tab_new.
+                        CLEAR wa_blank.
+                        DATA(l_dy) = 0.
+                        IF wa_repos_tab-line CS 'TYPE'.
+                          l_dy = sy-fdpos.
+                          DATA(l_n) = strlen( wa_repos_tab-line ).
+                          l_n = l_n - l_dy + 1.
+                        ELSE.
+                          l_n = strlen( wa_repos_tab-line ).
+                        ENDIF.
+                        REPLACE ALL OCCURRENCES OF wa_final-param2 IN wa_repos_tab-line+l_dy(l_n)
+                          WITH wa_zatc_process_all-correction_value IGNORING CASE.
+                        APPEND wa_repos_tab TO repos_tab_new.
+                        CLEAR wa_blank.
+                        CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+                          INTO wa_blank-line SEPARATED BY space.
+                        APPEND wa_blank TO repos_tab_new.
+                        CLEAR wa_blank.
+                      ELSE.
+                        APPEND wa_repos_tab TO repos_tab_new.
+                      ENDIF.
                     ELSEIF wa_final-priority = '1' AND wa_final-param3 = 'TRAN'.
                       IF wa_final-param2+3(1) = '3'.
                         SELECT SINGLE * INTO @DATA(l_prgn_corr2)
