@@ -2338,33 +2338,60 @@ FORM generate_code_preview.
     lv_ln = |" --- Original FM call (lines { lv_fm_start }-{ lv_fm_end }) commented out ---|.
   ENDIF.
   add_line: lv_ln.
-  DATA lv_cml_u    TYPE string.
-  DATA lv_cml_rest TYPE string.
-  DATA lv_cml_tok1 TYPE string.
-  DATA lv_cml_tok2 TYPE string.
-  DATA lv_do_cmt   TYPE flag.
+  DATA lv_cml_u       TYPE string.
+  DATA lv_cml_rest    TYPE string.
+  DATA lv_cml_tok1    TYPE string.
+  DATA lv_cml_tok2    TYPE string.
+  DATA lv_do_cmt      TYPE flag.
+  DATA lv_in_cmt_stmt TYPE flag.   " X = inside multi-line statement being commented
+  DATA lv_cml_len     TYPE i.
+  DATA lv_cml_loff    TYPE i.
+  DATA lv_cml_last    TYPE char1.
+  CLEAR lv_in_cmt_stmt.
   LOOP AT lt_source INTO wa_source FROM lv_gcp_start TO lv_gcp_end.
     lv_cml_u = wa_source-line.
     TRANSLATE lv_cml_u TO UPPER CASE.
     CONDENSE lv_cml_u.
     CLEAR lv_do_cmt.
-    " Comment lines that carry BDC-specific content
-    IF lv_cml_u CS 'BDC_DYNPRO'       OR lv_cml_u CS 'BDC_FIELD'
-    OR lv_cml_u CS 'BDC_CURSOR'       OR lv_cml_u CS 'BDC_OKCODE'
-    OR lv_cml_u CS 'CALL TRANSACTION' OR lv_cml_u CS '-FNAM'
-    OR lv_cml_u CS '-FVAL'            OR lv_cml_u CS 'BDCDATA'
-    OR lv_cml_u CS 'BDCTAB'.
+    IF lv_in_cmt_stmt = 'X'.
+      " Continuation line of a multi-line statement already being commented
       lv_do_cmt = 'X'.
-    ELSEIF strlen( lv_cml_u ) >= 8 AND lv_cml_u(8) = 'PERFORM '.
-      " Comment PERFORM only when it calls a known BDC helper FORM
-      lv_cml_rest = lv_cml_u+8.
-      CONDENSE lv_cml_rest.
-      SPLIT lv_cml_rest AT ' ' INTO lv_cml_tok1 lv_cml_tok2.
-      REPLACE ALL OCCURRENCES OF '.' IN lv_cml_tok1 WITH ''.
-      CONDENSE lv_cml_tok1.
-      READ TABLE lt_bdc_hlp_nms TRANSPORTING NO FIELDS
-        WITH KEY table_line = lv_cml_tok1.
-      IF sy-subrc = 0. lv_do_cmt = 'X'. ENDIF.
+    ELSE.
+      " Comment lines that carry BDC-specific content
+      IF lv_cml_u CS 'BDC_DYNPRO'       OR lv_cml_u CS 'BDC_FIELD'
+      OR lv_cml_u CS 'BDC_CURSOR'       OR lv_cml_u CS 'BDC_OKCODE'
+      OR lv_cml_u CS 'CALL TRANSACTION' OR lv_cml_u CS '-FNAM'
+      OR lv_cml_u CS '-FVAL'            OR lv_cml_u CS 'BDCDATA'
+      OR lv_cml_u CS 'BDCTAB'.
+        lv_do_cmt = 'X'.
+      ELSEIF strlen( lv_cml_u ) >= 8 AND lv_cml_u(8) = 'PERFORM '.
+        " Comment PERFORM only when it calls a known BDC helper FORM
+        lv_cml_rest = lv_cml_u+8.
+        CONDENSE lv_cml_rest.
+        SPLIT lv_cml_rest AT ' ' INTO lv_cml_tok1 lv_cml_tok2.
+        REPLACE ALL OCCURRENCES OF '.' IN lv_cml_tok1 WITH ''.
+        CONDENSE lv_cml_tok1.
+        READ TABLE lt_bdc_hlp_nms TRANSPORTING NO FIELDS
+          WITH KEY table_line = lv_cml_tok1.
+        IF sy-subrc = 0. lv_do_cmt = 'X'. ENDIF.
+      ENDIF.
+    ENDIF.
+    " Track whether the statement continues onto the next line (no trailing '.')
+    IF lv_do_cmt = 'X'.
+      lv_cml_len = strlen( lv_cml_u ).
+      IF lv_cml_len > 0.
+        lv_cml_loff = lv_cml_len - 1.
+        lv_cml_last = lv_cml_u+lv_cml_loff(1).
+        IF lv_cml_last = '.'.
+          lv_in_cmt_stmt = space.   " Statement terminates here
+        ELSE.
+          lv_in_cmt_stmt = 'X'.     " Statement continues on next line
+        ENDIF.
+      ELSE.
+        lv_in_cmt_stmt = 'X'.       " Blank continuation — keep flag
+      ENDIF.
+    ELSE.
+      lv_in_cmt_stmt = space.
     ENDIF.
     wa_code-lineno = lv_code_ctr.
     IF lv_do_cmt = 'X'.
