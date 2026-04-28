@@ -2401,6 +2401,15 @@ FORM generate_code_preview.
     lv_cml_u = wa_source-line.
     TRANSLATE lv_cml_u TO UPPER CASE.
     CONDENSE lv_cml_u.
+    " Skip lines that are already commented — pass through as-is; never carry lv_in_cmt_stmt
+    IF strlen( lv_cml_u ) > 0 AND ( lv_cml_u(1) = '*' OR lv_cml_u(1) = '"' ).
+      lv_in_cmt_stmt = space.
+      wa_code-lineno = lv_code_ctr.
+      wa_code-code = wa_source-line.
+      APPEND wa_code TO lt_code.
+      lv_code_ctr = lv_code_ctr + 1.
+      CONTINUE.
+    ENDIF.
     CLEAR lv_do_cmt.
     IF lv_in_cmt_stmt = 'X'.
       " Continuation line of a multi-line statement already being commented
