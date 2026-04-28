@@ -1032,21 +1032,43 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
+                  DATA l_has_into TYPE flag.
+                  CLEAR l_has_into.
                   LOOP AT repos_tab INTO DATA(wa_repos_tab1) FROM l_tabix1.
                     l_tab = sy-tabix.
                     IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'.
                       l_for = 'X'.
                     ENDIF.
+                    IF wa_repos_tab1-line CS 'INTO'. l_has_into = 'X'. ENDIF.
                     IF wa_repos_tab1-line CS '.' AND l_for IS INITIAL.
                       CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
                       APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
                       REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab1-line WITH space IGNORING CASE.
                       REPLACE ALL OCCURRENCES OF 'ENDSELECT' IN wa_repos_tab1-line WITH space IGNORING CASE.
                       CONDENSE wa_repos_tab1-line.
-                      CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
-                        INTO wa_repos_tab1-line SEPARATED BY space.
+                      IF l_has_into IS INITIAL.
+                        CONCATENATE wa_repos_tab1-line 'INTO TABLE @DATA(lt_result) ORDER BY PRIMARY KEY.'
+                          INTO wa_repos_tab1-line SEPARATED BY space.
+                      ELSE.
+                        CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
+                          INTO wa_repos_tab1-line SEPARATED BY space.
+                      ENDIF.
                       APPEND wa_repos_tab1 TO repos_tab_new.
                       l_tab = l_tab + 1.
+                      " Also strip ENDSELECT from the immediately following line
+                      DATA(l_endsel_idx) = l_tab.
+                      DATA wa_endsel TYPE abaptxt255.
+                      READ TABLE repos_tab INTO wa_endsel INDEX l_endsel_idx.
+                      IF sy-subrc = 0.
+                        DATA(l_endsel_chk) = wa_endsel-line.
+                        CONDENSE l_endsel_chk.
+                        TRANSLATE l_endsel_chk TO UPPER CASE.
+                        IF l_endsel_chk CS 'ENDSELECT'.
+                          CONCATENATE '*' wa_endsel-line INTO wa_blank-line.
+                          APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
+                          l_tab = l_tab + 1.
+                        ENDIF.
+                      ENDIF.
                       EXIT.
                     ELSE.
                       IF l_for = 'X' AND wa_repos_tab1-line CS '.'.
@@ -1219,7 +1241,7 @@ START-OF-SELECTION.
             wa_output-subobj = wa_final_p-sobjname.
             IF p_sim = 'X'.
               CLEAR wa_final_p-sobjname.
-              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_final_p-sobjname.
+              CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_final_p-sobjname.
               INSERT REPORT wa_final_p-sobjname FROM repos_tab_new.
               REFRESH repos_tab_new.
               COMMIT WORK AND WAIT.
@@ -1242,7 +1264,7 @@ START-OF-SELECTION.
                 COMMIT WORK AND WAIT.
                 IF p_sim IS INITIAL.
                   CLEAR wa_output-backup.
-                  CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
+                  CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
                   INSERT REPORT wa_output-backup FROM repos_tab.
                   REFRESH repos_tab.
                   COMMIT WORK.
@@ -1268,10 +1290,10 @@ START-OF-SELECTION.
             wa_output-subobj = wa_includes-incname.
             IF p_sim = 'X'.
               CLEAR wa_includes-incname.
-              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_includes-incname.
+              CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_includes-incname.
             ELSE.
               CLEAR wa_output-backup.
-              CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
+              CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
               INSERT REPORT wa_output-backup FROM repos_tab.
               COMMIT WORK.
               REFRESH repos_tab.
@@ -1707,7 +1729,8 @@ FORM change_table.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       LOOP AT it_table INTO wa_table FROM l_into.
-        IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
+        IF sy-tabix = l_from OR sy-tabix = l_where
+          OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
         IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
         IF wa_table-value = '(' AND l_prev_at_tok = abap_true.
           l_at_paren_depth = l_at_paren_depth + 1.
@@ -1871,7 +1894,8 @@ FORM change_table.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       LOOP AT it_table INTO wa_table FROM l_into.
-        IF sy-tabix = l_from OR sy-tabix = l_where. EXIT. ENDIF.
+        IF sy-tabix = l_from OR sy-tabix = l_where
+          OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
         IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
         IF wa_table-value = '(' AND l_prev_at_tok = abap_true.
           l_at_paren_depth = l_at_paren_depth + 1.
@@ -3064,12 +3088,12 @@ FORM adobe_form_procee.
       FROM trdir WHERE name = @lv_cur_incl.
     IF p_sim = 'X'.
       DATA lv_fp_test TYPE program.
-      CONCATENATE 'ZTEST_CHECK' l_repid INTO lv_fp_test.
+      CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO lv_fp_test.
       INSERT REPORT lv_fp_test FROM repos_tab_new.
       COMMIT WORK AND WAIT.
       wa_output-new_program = lv_fp_test.
     ELSE.
-      CONCATENATE 'ZTEST_CHECK' l_repid INTO wa_output-backup.
+      CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
       INSERT REPORT wa_output-backup FROM repos_tab.
       COMMIT WORK.
       REFRESH repos_tab.
