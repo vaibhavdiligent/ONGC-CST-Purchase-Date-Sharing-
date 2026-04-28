@@ -195,6 +195,8 @@ DATA: lv_bdc_start   TYPE i,
       lv_lineno      TYPE i,
       lv_code_ctr    TYPE i.
 
+DATA lt_bdc_hlp_nms TYPE TABLE OF string.  " BDC helper FORM names found during backward scan
+
 DATA lv_datum TYPE char10.   " Formatted date DD.MM.YYYY for change markers
 
 *----------------------------------------------------------------------*
@@ -688,6 +690,7 @@ FORM find_bdc_block.
             lt_bdc_map   = lt_form_buf.
             lv_bdc_start = lv_scan_idx.
             lv_hlp_found = 'X'.
+            APPEND lv_help_nm TO lt_bdc_hlp_nms.
           ENDIF.
         ENDIF.
       ENDIF.
@@ -2335,9 +2338,40 @@ FORM generate_code_preview.
     lv_ln = |" --- Original FM call (lines { lv_fm_start }-{ lv_fm_end }) commented out ---|.
   ENDIF.
   add_line: lv_ln.
+  DATA lv_cml_u    TYPE string.
+  DATA lv_cml_rest TYPE string.
+  DATA lv_cml_tok1 TYPE string.
+  DATA lv_cml_tok2 TYPE string.
+  DATA lv_do_cmt   TYPE flag.
   LOOP AT lt_source INTO wa_source FROM lv_gcp_start TO lv_gcp_end.
+    lv_cml_u = wa_source-line.
+    TRANSLATE lv_cml_u TO UPPER CASE.
+    CONDENSE lv_cml_u.
+    CLEAR lv_do_cmt.
+    " Comment lines that carry BDC-specific content
+    IF lv_cml_u CS 'BDC_DYNPRO'       OR lv_cml_u CS 'BDC_FIELD'
+    OR lv_cml_u CS 'BDC_CURSOR'       OR lv_cml_u CS 'BDC_OKCODE'
+    OR lv_cml_u CS 'CALL TRANSACTION' OR lv_cml_u CS '-FNAM'
+    OR lv_cml_u CS '-FVAL'            OR lv_cml_u CS 'BDCDATA'
+    OR lv_cml_u CS 'BDCTAB'.
+      lv_do_cmt = 'X'.
+    ELSEIF strlen( lv_cml_u ) >= 8 AND lv_cml_u(8) = 'PERFORM '.
+      " Comment PERFORM only when it calls a known BDC helper FORM
+      lv_cml_rest = lv_cml_u+8.
+      CONDENSE lv_cml_rest.
+      SPLIT lv_cml_rest AT ' ' INTO lv_cml_tok1 lv_cml_tok2.
+      REPLACE ALL OCCURRENCES OF '.' IN lv_cml_tok1 WITH ''.
+      CONDENSE lv_cml_tok1.
+      READ TABLE lt_bdc_hlp_nms TRANSPORTING NO FIELDS
+        WITH KEY table_line = lv_cml_tok1.
+      IF sy-subrc = 0. lv_do_cmt = 'X'. ENDIF.
+    ENDIF.
     wa_code-lineno = lv_code_ctr.
-    CONCATENATE '*' wa_source-line INTO wa_code-code.
+    IF lv_do_cmt = 'X'.
+      CONCATENATE '*' wa_source-line INTO wa_code-code.
+    ELSE.
+      wa_code-code = wa_source-line.
+    ENDIF.
     APPEND wa_code TO lt_code.
     lv_code_ctr = lv_code_ctr + 1.
   ENDLOOP.
@@ -2501,6 +2535,10 @@ FORM generate_code_preview.
   DATA lt_lgrps TYPE TABLE OF ty_lgrp.
   DATA wa_lgrp  TYPE ty_lgrp.
   LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X' AND loop_wa <> space.
+    " Only TABLE-type FM params (type 'T') need a LOOP/CLEAR/APPEND block
+    IF wa_bdc_map-fm_paramtype IS NOT INITIAL AND wa_bdc_map-fm_paramtype <> 'T'.
+      CONTINUE.
+    ENDIF.
     wa_lgrp-loop_wa  = wa_bdc_map-loop_wa.
     wa_lgrp-loop_tbl = wa_bdc_map-loop_tbl.
     wa_lgrp-fm_nm    = COND #( WHEN wa_bdc_map-fm_wa_name IS NOT INITIAL
@@ -2521,6 +2559,11 @@ FORM generate_code_preview.
     lv_ln = |  CLEAR ls_{ lv_ls_nm }.|. add_line: lv_ln.
     LOOP AT lt_bdc_map INTO wa_bdc_map
       WHERE matched = 'X' AND loop_wa = wa_lgrp-loop_wa.
+      " Only include entries that belong to this lgrp's FM parameter
+      DATA(lv_inner_fm_nm) = COND #( WHEN wa_bdc_map-fm_wa_name IS NOT INITIAL
+                                       THEN wa_bdc_map-fm_wa_name
+                                       ELSE wa_bdc_map-fm_param ).
+      IF lv_inner_fm_nm <> wa_lgrp-fm_nm. CONTINUE. ENDIF.
       IF wa_bdc_map-fm_wa_name IS NOT INITIAL.
         lv_fm_wa_var = to_lower( wa_bdc_map-fm_wa_name ).
         lv_fm_path   = to_lower( wa_bdc_map-fm_wa_path ).
@@ -2535,6 +2578,52 @@ FORM generate_code_preview.
       add_line: lv_assign.
     ENDLOOP.
     lv_ln = |  APPEND ls_{ lv_ls_nm } TO lt_{ lv_lt_nm }.|. add_line: lv_ln.
+    add_line: 'ENDLOOP.'.
+    add_line: ''.
+  ENDLOOP.
+
+  " Non-TABLE (Importing/Exporting) FM params that live inside a BDC source loop:
+  " emit as a LOOP block without CLEAR/APPEND (header-type assignments)
+  DATA lt_nt_lgrps TYPE TABLE OF ty_lgrp.
+  DATA wa_nt_lgrp  TYPE ty_lgrp.
+  LOOP AT lt_bdc_map INTO wa_bdc_map WHERE matched = 'X' AND loop_wa <> space.
+    IF wa_bdc_map-fm_paramtype IS INITIAL OR wa_bdc_map-fm_paramtype = 'T'. CONTINUE. ENDIF.
+    wa_nt_lgrp-loop_wa  = wa_bdc_map-loop_wa.
+    wa_nt_lgrp-loop_tbl = wa_bdc_map-loop_tbl.
+    wa_nt_lgrp-fm_nm    = COND #( WHEN wa_bdc_map-fm_wa_name IS NOT INITIAL
+                                    THEN wa_bdc_map-fm_wa_name
+                                    ELSE wa_bdc_map-fm_param ).
+    READ TABLE lt_nt_lgrps TRANSPORTING NO FIELDS
+      WITH KEY loop_wa = wa_nt_lgrp-loop_wa fm_nm = wa_nt_lgrp-fm_nm.
+    IF sy-subrc <> 0. APPEND wa_nt_lgrp TO lt_nt_lgrps. ENDIF.
+  ENDLOOP.
+  LOOP AT lt_nt_lgrps INTO wa_nt_lgrp.
+    DATA lv_nt_ls_nm TYPE string.
+    lv_nt_ls_nm = to_lower( wa_nt_lgrp-fm_nm ).
+    lv_ln = |" --- Header/scalar assignments: { wa_nt_lgrp-loop_tbl } -> ls_{ lv_nt_ls_nm } ---|.
+    add_line: lv_ln.
+    lv_ln = |LOOP AT { wa_nt_lgrp-loop_tbl } INTO { wa_nt_lgrp-loop_wa }.|. add_line: lv_ln.
+    LOOP AT lt_bdc_map INTO wa_bdc_map
+      WHERE matched = 'X' AND loop_wa = wa_nt_lgrp-loop_wa.
+      IF wa_bdc_map-fm_paramtype IS INITIAL OR wa_bdc_map-fm_paramtype = 'T'. CONTINUE. ENDIF.
+      DATA(lv_nt_inner_nm) = COND #( WHEN wa_bdc_map-fm_wa_name IS NOT INITIAL
+                                       THEN wa_bdc_map-fm_wa_name
+                                       ELSE wa_bdc_map-fm_param ).
+      IF lv_nt_inner_nm <> wa_nt_lgrp-fm_nm. CONTINUE. ENDIF.
+      IF wa_bdc_map-fm_wa_name IS NOT INITIAL.
+        lv_fm_wa_var = to_lower( wa_bdc_map-fm_wa_name ).
+        lv_fm_path   = to_lower( wa_bdc_map-fm_wa_path ).
+        lv_assign  = |  ls_{ lv_fm_wa_var }-{ lv_fm_path } = { wa_bdc_map-fval_var }.|.
+      ELSEIF wa_bdc_map-fm_struct IS NOT INITIAL.
+        DATA(lv_nt_nm) = to_lower( wa_bdc_map-fm_param ).
+        lv_assign  = |  ls_{ lv_nt_nm }-{ to_lower( wa_bdc_map-fm_field ) } = { wa_bdc_map-fval_var }.|.
+      ELSE.
+        CONTINUE.
+      ENDIF.
+      lv_comment = |  " { wa_bdc_map-fnam } -> { wa_bdc_map-fm_param }-{ wa_bdc_map-fm_field }|.
+      add_line: lv_comment.
+      add_line: lv_assign.
+    ENDLOOP.
     add_line: 'ENDLOOP.'.
     add_line: ''.
   ENDLOOP.
