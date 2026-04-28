@@ -468,6 +468,41 @@ FORM find_bdc_block.
           APPEND LINES OF lt_bdc_buf TO lt_bdc_map.
           IF lv_bdc_start = 0. lv_bdc_start = lv_bdc_start_cand. ENDIF.
         ENDIF.
+        " Extend lv_bdc_end past continuation lines (OPTIONS/MESSAGES/MODE/UPDATE)
+        " so the full multi-line statement falls inside the comment-out range.
+        DATA lv_ct_fwd_u    TYPE string.
+        DATA lv_ct_fwd_len  TYPE i.
+        DATA lv_ct_fwd_loff TYPE i.
+        DATA lv_ct_fwd_last TYPE char1.
+        DATA lv_ct_fwd_idx  TYPE i.
+        DATA lv_ct_fwd_wa   TYPE abaptxt255.
+        lv_ct_fwd_u = lv_line_u.
+        lv_ct_fwd_len = strlen( lv_ct_fwd_u ).
+        IF lv_ct_fwd_len > 0.
+          lv_ct_fwd_loff = lv_ct_fwd_len - 1.
+          lv_ct_fwd_last = lv_ct_fwd_u+lv_ct_fwd_loff(1).
+        ELSE.
+          lv_ct_fwd_last = space.
+        ENDIF.
+        IF lv_ct_fwd_last <> '.'.
+          " Statement not terminated on this line — scan forward to find '.'
+          lv_ct_fwd_idx = lv_lineno + 1.
+          WHILE lv_ct_fwd_idx <= lines( lt_source ).
+            READ TABLE lt_source INTO lv_ct_fwd_wa INDEX lv_ct_fwd_idx.
+            IF sy-subrc <> 0. EXIT. ENDIF.
+            lv_ct_fwd_u = lv_ct_fwd_wa-line.
+            TRANSLATE lv_ct_fwd_u TO UPPER CASE.
+            CONDENSE lv_ct_fwd_u.
+            lv_bdc_end = lv_ct_fwd_idx.
+            lv_ct_fwd_len = strlen( lv_ct_fwd_u ).
+            IF lv_ct_fwd_len > 0.
+              lv_ct_fwd_loff = lv_ct_fwd_len - 1.
+              lv_ct_fwd_last = lv_ct_fwd_u+lv_ct_fwd_loff(1).
+              IF lv_ct_fwd_last = '.'. EXIT. ENDIF.
+            ENDIF.
+            lv_ct_fwd_idx = lv_ct_fwd_idx + 1.
+          ENDWHILE.
+        ENDIF.
         " Reset for next BDC block — CONTINUE (not EXIT) to catch all occurrences
         CLEAR lt_bdc_buf.
         lv_bdc_start_cand = 0.
