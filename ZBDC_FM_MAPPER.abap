@@ -60,6 +60,7 @@ PARAMETERS: lv_req  TYPE trkorr.                        " Transport request (man
 PARAMETERS: p_begin TYPE char50 DEFAULT '**begin of change by'.
 PARAMETERS: p_end   TYPE char50 DEFAULT '* *End of change by'.
 PARAMETERS: p_sim TYPE flag AS CHECKBOX DEFAULT 'X'.   " Simulate (X=preview only, space=apply changes)
+PARAMETERS: p_export TYPE flag AS CHECKBOX DEFAULT space.  "RHA++
 
 *----------------------------------------------------------------------*
 * TYPE DEFINITIONS
@@ -588,6 +589,7 @@ FORM find_bdc_block.
       IF lv_val CS '"'.
         lv_val = lv_val(sy-fdpos).
       ENDIF.
+      PERFORM try_convert_date_literal CHANGING lv_val.
       REPLACE ALL OCCURRENCES OF '.' IN lv_val WITH space.
       CONDENSE lv_val.   " keep surrounding quotes so literals stay as 'X', 'VAL' etc.
       wa_bdc_map-fval_var = lv_val.
@@ -619,6 +621,7 @@ FORM find_bdc_block.
             lv_after = lv_after(sy-fdpos).
           ENDIF.
           CONDENSE lv_after.
+          PERFORM try_convert_date_literal CHANGING lv_after.
           REPLACE ALL OCCURRENCES OF '.' IN lv_after WITH space.
           CONDENSE lv_after.   " keep surrounding quotes so literals stay as 'X', 'VAL' etc.
 
@@ -660,6 +663,7 @@ FORM find_bdc_block.
         DATA(lv_fv_pos) = sy-fdpos + 1.
         DATA lv_fval TYPE string.
         lv_fval = substring( val = lv_raw_fv off = lv_fv_pos ).
+        PERFORM try_convert_date_literal CHANGING lv_fval.
         REPLACE ALL OCCURRENCES OF '.' IN lv_fval WITH space.
         CONDENSE lv_fval.
         wa_bdc_map-fval_var = lv_fval.
@@ -865,6 +869,7 @@ FORM scan_form_body_for_bdc
       DATA lv_pval2 TYPE string.
       lv_pval2 = lv_sl.
       IF lv_pval2 CS '"'. lv_pval2 = lv_pval2(sy-fdpos). ENDIF.
+      PERFORM try_convert_date_literal CHANGING lv_pval2.
       REPLACE ALL OCCURRENCES OF '.' IN lv_pval2 WITH ' '.
       CONDENSE lv_pval2.
       wa_bdc_map-fval_var = lv_pval2.
@@ -894,6 +899,7 @@ FORM scan_form_body_for_bdc
           lv_bfaft = lv_bfr+lv_bfaft_off.
           IF lv_bfaft CS '"'. lv_bfaft = lv_bfaft(sy-fdpos). ENDIF.
           CONDENSE lv_bfaft.
+          PERFORM try_convert_date_literal CHANGING lv_bfaft.
           REPLACE ALL OCCURRENCES OF '.' IN lv_bfaft WITH ' '.
           CONDENSE lv_bfaft.
           IF lv_bfaft IS NOT INITIAL.
@@ -934,6 +940,7 @@ FORM scan_form_body_for_bdc
         DATA lv_fvval TYPE string.
         lv_fvpos = sy-fdpos + 1.
         lv_fvval = lv_sl+lv_fvpos.
+        PERFORM try_convert_date_literal CHANGING lv_fvval.
         REPLACE ALL OCCURRENCES OF '.' IN lv_fvval WITH ' '.
         CONDENSE lv_fvval.
         wa_bdc_map-fnam     = lv_cur_fnam.
@@ -3056,5 +3063,32 @@ FORM apply_changes.
     MESSAGE |Program { lv_target } updated and recorded in transport { lv_req }. Activate in SE38/SE80.| TYPE 'I'.
   ELSE.
     MESSAGE |Failed to update { lv_target } (sy-subrc={ sy-subrc }). Check authorizations.| TYPE 'W'.
+  ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*& Form try_convert_date_literal
+*& If cv_val holds a quoted 'DD.MM.YYYY' literal, rewrite as 'YYYYMMDD'
+*----------------------------------------------------------------------*
+FORM try_convert_date_literal CHANGING cv_val TYPE string.
+  DATA lv_v    TYPE string.
+  DATA lv_ln   TYPE i.
+  DATA lv_lnm1 TYPE i.
+  lv_v = cv_val.
+  CONDENSE lv_v.
+  " Strip trailing ABAP statement period before pattern check
+  lv_ln = strlen( lv_v ).
+  IF lv_ln > 0.
+    lv_lnm1 = lv_ln - 1.
+    IF lv_v+lv_lnm1(1) = '.'.
+      lv_v = lv_v(lv_lnm1).
+      CONDENSE lv_v.
+      lv_ln = strlen( lv_v ).
+    ENDIF.
+  ENDIF.
+  " Quoted 'DD.MM.YYYY' = exactly 12 chars, single quotes at 0 and 11, dots at 3 and 6
+  IF lv_ln = 12 AND lv_v(1) = ''''
+              AND lv_v+3(1) = '.' AND lv_v+6(1) = '.'.
+    cv_val = |'{ lv_v+7(4) }{ lv_v+4(2) }{ lv_v+1(2) }'|.
   ENDIF.
 ENDFORM.
