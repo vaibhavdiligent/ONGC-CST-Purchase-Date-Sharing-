@@ -807,7 +807,7 @@ FORM build_alv_display_table.
         APPEND ls_alv TO gt_alv_display.
       ENDIF.
     ENDLOOP.
-    " Populate ONGC Material for all rows from gas receipt (covers GJ and other rows)
+    " Populate ONGC Material for all rows from gas receipt or mat map
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ongc_pop>)
       WHERE ongc_material IS INITIAL.
       READ TABLE gt_gas_receipt INTO DATA(ls_ongc_rcpt)
@@ -815,6 +815,13 @@ FORM build_alv_display_table.
                  material    = <fs_ongc_pop>-material.
       IF sy-subrc = 0.
         <fs_ongc_pop>-ongc_material = ls_ongc_rcpt-ongc_material.
+      ELSE.
+        READ TABLE lt_valid_map INTO ls_vmap_chk
+          WITH KEY location_id   = <fs_ongc_pop>-location_id
+                   gail_material = <fs_ongc_pop>-material.
+        IF sy-subrc = 0.
+          <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
+        ENDIF.
       ENDIF.
     ENDLOOP.
   ENDIF.
