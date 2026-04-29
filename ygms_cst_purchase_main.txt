@@ -1285,14 +1285,27 @@ FORM handle_allocate.
         " Excluded rows: display 0 for both sales columns
         <fs_alv_sales>-total_sales_mbg = 0.
       ELSE.
-        READ TABLE it_final_main INTO DATA(ls_fin_row)
-          WITH KEY empst = <fs_alv_sales>-location_id
-                   regio = <fs_alv_sales>-state_code
-                   matnr = <fs_alv_sales>-material.
-        IF sy-subrc = 0.
-          <fs_alv_sales>-total_sales_mbg = ls_fin_row-matnr1.
+        IF <fs_alv_sales>-state_code <> 'GJ'.
+          READ TABLE it_final_main INTO DATA(ls_fin_row)
+            WITH KEY empst = <fs_alv_sales>-location_id
+                     regio = <fs_alv_sales>-state_code
+                     matnr = <fs_alv_sales>-material.
+          IF sy-subrc = 0.
+            <fs_alv_sales>-total_sales_mbg = ls_fin_row-matnr1.
+          ELSE.
+            <fs_alv_sales>-total_sales_mbg = 0.
+          ENDIF.
         ELSE.
-          <fs_alv_sales>-total_sales_mbg = 0.
+          READ TABLE it_final_main_gj INTO ls_fin_row
+  WITH KEY empst = <fs_alv_sales>-location_id
+           regio = <fs_alv_sales>-state_code
+           matnr = <fs_alv_sales>-material.
+          IF sy-subrc = 0.
+            <fs_alv_sales>-total_sales_mbg = ls_fin_row-matnr1.
+          ELSE.
+            <fs_alv_sales>-total_sales_mbg = 0.
+          ENDIF.
+
         ENDIF.
       ENDIF.
       <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
@@ -4623,20 +4636,32 @@ FORM build_alv_display_table_view .
     IF <fs_alv_view>-exclude = 'X'.
       <fs_alv_view>-total_sales_mbg = 0.
     ELSE.
-      READ TABLE it_final_main INTO DATA(ls_fin_view)
-        WITH KEY empst = <fs_alv_view>-location_id
-                 regio = <fs_alv_view>-state_code
-                 matnr = <fs_alv_view>-material.
-      IF sy-subrc = 0.
-        <fs_alv_view>-total_sales_mbg = ls_fin_view-matnr1.
+      IF <fs_alv_view>-state_code <> 'GJ'.
+        READ TABLE it_final_main INTO DATA(ls_fin_view)
+          WITH KEY empst = <fs_alv_view>-location_id
+                   regio = <fs_alv_view>-state_code
+                   matnr = <fs_alv_view>-material.
+        IF sy-subrc = 0.
+          <fs_alv_view>-total_sales_mbg = ls_fin_view-matnr1.
+        ELSE.
+          <fs_alv_view>-total_sales_mbg = 0.
+        ENDIF.
       ELSE.
-        <fs_alv_view>-total_sales_mbg = 0.
+        READ TABLE it_final_main_gj INTO ls_fin_view
+    WITH KEY empst = <fs_alv_view>-location_id
+             regio = <fs_alv_view>-state_code
+             matnr = <fs_alv_view>-material.
+        IF sy-subrc = 0.
+          <fs_alv_view>-total_sales_mbg = ls_fin_view-matnr1.
+        ELSE.
+          <fs_alv_view>-total_sales_mbg = 0.
+        ENDIF.
       ENDIF.
     ENDIF.
     <fs_alv_view>-alloc_sales_mbg = <fs_alv_view>-total_mbg - <fs_alv_view>-total_sales_mbg.
     DATA lv_rnd_view TYPE p DECIMALS 3.
     lv_rnd_view = <fs_alv_view>-alloc_sales_mbg.
-    IF lv_rnd_view <> 0 AND <fs_alv_view>-state_code <> 'GJ'.
+    IF lv_rnd_view <> 0 AND <fs_alv_view>-state_code <> 'GJ' and abs( lv_rnd_view ) > '0.01'.
       <fs_alv_view>-row_color = 'C600'.
     ELSE.
       CLEAR <fs_alv_view>-row_color.
