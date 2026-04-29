@@ -1032,6 +1032,8 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
+                  DATA l_is_cursor_loop TYPE flag.
+                  CLEAR l_is_cursor_loop.
                   LOOP AT repos_tab INTO DATA(wa_repos_tab1) FROM l_tabix1.
                     l_tab = sy-tabix.
                     IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'.
@@ -1046,6 +1048,16 @@ START-OF-SELECTION.
                         INTO wa_repos_tab1-line SEPARATED BY space.
                       APPEND wa_repos_tab1 TO repos_tab_new.
                       l_tab = l_tab + 1.
+                      " Peek at the next line to detect cursor loop (ENDSELECT follows)
+                      DATA wa_peek_endsel TYPE abaptxt255.
+                      READ TABLE repos_tab INTO wa_peek_endsel INDEX l_tab.
+                      IF sy-subrc = 0.
+                        DATA(l_peek_line) = wa_peek_endsel-line.
+                        CONDENSE l_peek_line. TRANSLATE l_peek_line TO UPPER CASE.
+                        IF l_peek_line CS 'ENDSELECT'.
+                          l_is_cursor_loop = abap_true.
+                        ENDIF.
+                      ENDIF.
                       EXIT.
                     ELSE.
                       IF l_for = 'X' AND wa_repos_tab1-line CS '.'.
@@ -2100,7 +2112,7 @@ FORM process_read.
     IF sy-subrc = 0.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. DATA(l_cont2) = 'X'. l_fp = l_fp - 1. CONTINUE. ENDIF.
-      IF wa_rep-line CS 'LOOP'.
+      IF wa_rep-line CS 'LOOP AT'.
         IF l_cont IS INITIAL. EXIT.
         ELSE. CLEAR l_cont. ENDIF.
       ENDIF.
@@ -2182,7 +2194,7 @@ FORM process_change_loop.
     IF sy-subrc = 0.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. l_cont1 = l_cont1 + 1. l_fp = l_fp - 1. CONTINUE. ENDIF.
-      IF wa_rep-line CS 'LOOP'.
+      IF wa_rep-line CS 'LOOP AT'.
         IF l_cont1 IS INITIAL. EXIT.
         ELSE. l_cont1 = l_cont1 - 1. ENDIF.
       ENDIF.
@@ -2263,7 +2275,7 @@ FORM endat.
     IF sy-subrc = 0.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. l_cont = l_cont + 1. l_fp = l_fp - 1. CONTINUE. ENDIF.
-      IF wa_rep-line CS 'LOOP'.
+      IF wa_rep-line CS 'LOOP AT'.
         IF l_cont IS INITIAL. EXIT.
         ELSE. l_cont = l_cont - 1. ENDIF.
       ENDIF.
@@ -2324,7 +2336,7 @@ FORM loop_exit.
     IF sy-subrc = 0.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. l_cont1 = l_cont1 + 1. l_fp = l_fp - 1. CONTINUE. ENDIF.
-      IF wa_rep-line CS 'LOOP'.
+      IF wa_rep-line CS 'LOOP AT'.
         IF l_cont1 IS INITIAL. EXIT.
         ELSE. l_cont1 = l_cont1 - 1. ENDIF.
       ENDIF.
