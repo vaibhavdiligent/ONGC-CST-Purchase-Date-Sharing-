@@ -104,7 +104,7 @@ CLASS lcl_event_handler DEFINITION.
         IMPORTING e_row_id e_column_id,
       on_onf4
         FOR EVENT onf4 OF cl_gui_alv_grid
-        IMPORTING e_fieldname e_rowno es_row_no e_ucomm er_event_data.
+        IMPORTING e_fieldname e_rowno es_row_no er_event_data.
 ENDCLASS.
 
 DATA: go_handler TYPE REF TO lcl_event_handler.
