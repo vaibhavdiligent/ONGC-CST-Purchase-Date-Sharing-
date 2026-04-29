@@ -45,6 +45,7 @@ TYPES: BEGIN OF ty_alv_display,
          location_id     TYPE ygms_de_loc_id,
          material        TYPE ygms_de_gail_mat,
          ongc_material   TYPE ygms_de_ongc_mat,
+         static_flag     TYPE c LENGTH 1,
          total_mbg       TYPE p DECIMALS 6,
          total_scm       TYPE p DECIMALS 6,
          total_sales_mbg TYPE p DECIMALS 6,
@@ -736,7 +737,7 @@ FORM build_alv_display_table.
   " Also remove rows where NCST flag is set (non-CST materials not subject to allocation)
   DATA lt_valid_map TYPE TABLE OF yrga_cst_mat_map.
   IF gt_alv_display IS NOT INITIAL.
-    SELECT location_id gail_material ncst
+    SELECT location_id gail_material ongc_material ncst static state
       FROM yrga_cst_mat_map
       INTO CORRESPONDING FIELDS OF TABLE lt_valid_map
       WHERE location_id IN s_loc
@@ -772,6 +773,27 @@ FORM build_alv_display_table.
       ENDIF.
     ENDLOOP.
     gt_alv_display = lt_alv_keep.
+    " Add rows for Static Material combinations from YRGA_CST_MAT_MAP
+    DATA: lv_static_state_desc TYPE bezei20.
+    LOOP AT lt_valid_map INTO ls_vmap_chk WHERE static = 'X' AND ncst <> 'X'.
+      READ TABLE gt_alv_display TRANSPORTING NO FIELDS
+        WITH KEY location_id   = ls_vmap_chk-location_id
+                 material      = ls_vmap_chk-gail_material
+                 state_code    = ls_vmap_chk-state.
+      IF sy-subrc <> 0.
+        CLEAR lv_static_state_desc.
+        SELECT SINGLE bezei INTO lv_static_state_desc
+          FROM t005u WHERE spras = sy-langu AND land1 = 'IN' AND bland = ls_vmap_chk-state.
+        CLEAR ls_alv.
+        ls_alv-state_code    = ls_vmap_chk-state.
+        ls_alv-state         = lv_static_state_desc.
+        ls_alv-location_id   = ls_vmap_chk-location_id.
+        ls_alv-material      = ls_vmap_chk-gail_material.
+        ls_alv-ongc_material = ls_vmap_chk-ongc_material.
+        ls_alv-static_flag   = 'X'.
+        APPEND ls_alv TO gt_alv_display.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -1234,17 +1256,78 @@ FORM handle_allocate.
            <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15,
            <fs_clear>-day16.
   ENDLOOP.
-  " Apply allocation per location + state + material
+  " Static Material Allocation: allocate 100% of receipt to designated state
   DATA: c_tgqty_alloc TYPE msego2-adqnt,
         i_trqty_alloc TYPE msego2-adqnt,
         lv_gcv_alloc  TYPE oib_par_fltp,
         lv_ncv_alloc  TYPE oib_par_fltp.
+  DATA: lt_static_map TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id ongc_material gail_material static state
+    FROM yrga_cst_mat_map
+    INTO CORRESPONDING FIELDS OF TABLE lt_static_map
+    WHERE location_id IN s_loc
+      AND static = 'X'
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    = ' '.
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_static>)
+    WHERE static_flag = 'X' AND exclude IS INITIAL.
+    CLEAR l_index.
+    CLEAR: l_ncv, l_gcv, l_day_sm3.
+    l_date = s_date-low.
+    DATA lv_static_days TYPE i.
+    lv_static_days = gv_date_to - gv_date_from + 1.
+    DO lv_static_days TIMES.
+      l_index = l_index + 1.
+      CLEAR l_day.
+      CONCATENATE 'DAY' l_index INTO l_day.
+      ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv_static> TO FIELD-SYMBOL(<fs_static_day>).
+      IF sy-subrc = 0.
+        READ TABLE gt_gas_receipt INTO wa_gas_receipt WITH KEY
+          location_id = <fs_alv_static>-location_id
+          gas_day     = l_date
+          material    = <fs_alv_static>-material.
+        IF sy-subrc = 0.
+          <fs_alv_static>-ongc_material = wa_gas_receipt-ongc_material.
+          l_day_sm3 = wa_gas_receipt-qty_scm.
+          <fs_static_day> = l_day_sm3.
+          <fs_alv_static>-total_scm = <fs_alv_static>-total_scm + l_day_sm3.
+          l_gcv = ( l_day_sm3 * wa_gas_receipt-gcv ) + l_gcv.
+          l_ncv = ( l_day_sm3 * wa_gas_receipt-ncv ) + l_ncv.
+        ENDIF.
+      ENDIF.
+      l_date = l_date + 1.
+    ENDDO.
+    IF <fs_alv_static>-total_scm > 0.
+      <fs_alv_static>-gcv = round( val = l_gcv / <fs_alv_static>-total_scm dec = 3 ).
+      <fs_alv_static>-ncv = round( val = l_ncv / <fs_alv_static>-total_scm dec = 3 ).
+    ENDIF.
+    IF <fs_alv_static>-gcv > 0 AND <fs_alv_static>-total_scm > 0.
+      CLEAR c_tgqty_alloc.
+      i_trqty_alloc = <fs_alv_static>-total_scm.
+      lv_gcv_alloc  = <fs_alv_static>-gcv.
+      lv_ncv_alloc  = <fs_alv_static>-ncv.
+      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+        EXPORTING
+          i_trqty = i_trqty_alloc
+          i_truom = 'SM3'
+          i_tguom = 'MBG'
+          lv_gcv  = lv_gcv_alloc
+          lv_ncv  = lv_ncv_alloc
+        CHANGING
+          c_tgqty = c_tgqty_alloc.
+      <fs_alv_static>-total_mbg = round( val = c_tgqty_alloc dec = 3 ).
+    ENDIF.
+    CLEAR l_day_sm3.
+  ENDLOOP.
+  " Apply percentage-based allocation per location + state + material (skip static combos)
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>)
-      WHERE location_id = wa_state-empst
-        AND state_code  = wa_state-state_code
-        AND material    = wa_state-matnr
-        AND exclude     IS INITIAL.
+      WHERE location_id  = wa_state-empst
+        AND state_code   = wa_state-state_code
+        AND material     = wa_state-matnr
+        AND exclude      IS INITIAL
+        AND static_flag  IS INITIAL.
       CLEAR l_index.
       CLEAR: l_ncv, l_gcv,l_day_sm3.
       l_date = s_date-low.
@@ -1261,6 +1344,14 @@ FORM handle_allocate.
             gas_day     = l_date
             material    = wa_state-matnr.
           IF sy-subrc = 0.
+            READ TABLE lt_static_map TRANSPORTING NO FIELDS
+              WITH KEY location_id   = wa_gas_receipt-location_id
+                       ongc_material = wa_gas_receipt-ongc_material
+                       gail_material = wa_gas_receipt-material.
+            IF sy-subrc = 0.
+              l_date = l_date + 1.
+              CONTINUE.
+            ENDIF.
             <fs_alv>-ongc_material = wa_gas_receipt-ongc_material.
             l_day_sm3 = ( wa_gas_receipt-qty_scm * wa_state-percentage ) / 100.
             l_day_sm3 = ceil( l_day_sm3 * 100 ) / 100.
@@ -1839,8 +1930,8 @@ FORM handle_edit.
   " Set cell styles: disable DAY columns for excluded rows
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_edit_row>).
     CLEAR <fs_edit_row>-celltab.
-    IF lv_new_day_edit = abap_true AND <fs_edit_row>-exclude = 'X'.
-      " Disable all DAY columns for excluded rows
+    IF lv_new_day_edit = abap_true AND ( <fs_edit_row>-exclude = 'X' OR <fs_edit_row>-static_flag = 'X' ).
+      " Disable all DAY columns for excluded and static rows
       DATA lv_edit_days TYPE i.
       lv_edit_days = gv_date_to - gv_date_from + 1.
       DO lv_edit_days TIMES.
