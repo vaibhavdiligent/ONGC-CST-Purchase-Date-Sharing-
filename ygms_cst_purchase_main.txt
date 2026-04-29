@@ -307,6 +307,7 @@ TYPE-POOLS : slis.
 DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
       it_final         TYPE TABLE OF ty_final,
       it_final_main    TYPE TABLE OF ty_final1,
+      it_final_main_gj TYPE TABLE OF ty_final1,
       wa_final_main    TYPE ty_final1.
 DATA gt_cst_b2b_1 TYPE TABLE OF yrga_cst_b2b_1.
 * Flags for button visibility and state
@@ -358,7 +359,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
         IF sy-subrc = 0.
           lv_day_edit = ls_fcat-edit.
         ENDIF.
-        REFRESH : gt_cst_b2b_1 , gt_gas_receipt , gt_alv_display ,it_final_main.
+        REFRESH : gt_cst_b2b_1 , gt_gas_receipt , gt_alv_display ,it_final_main,it_final_main_gj.
         PERFORM fetch_b2b_data.
         PERFORM map_location_ids.
         PERFORM map_material_names.
@@ -661,8 +662,9 @@ FORM fetch_data_yrxr098.
   IMPORT gt_fieldcat = gt_fieldcat_slis  FROM MEMORY ID 'FC'.
   IMPORT it_final FROM MEMORY ID 'FI'.
   SORT it_final BY regio.
-  DELETE it_final WHERE regio = 'GJ'.
-  LOOP AT it_final INTO DATA(wa_final).
+*  DELETE it_final WHERE regio = 'GJ'.
+  LOOP AT it_final INTO DATA(wa_final) .
+
     MOVE-CORRESPONDING wa_final TO wa_final_main.
     LOOP AT gt_fieldcat_slis INTO DATA(wa_fieldcat) WHERE fieldname CS 'MATNR'.
       REPLACE ALL OCCURRENCES OF 'Qty in MMBTU of' IN wa_fieldcat-seltext_l WITH space.
@@ -672,7 +674,11 @@ FORM fetch_data_yrxr098.
       IF sy-subrc = 0.
         wa_final_main-matnr1 = <fs_value>.
       ENDIF.
-      APPEND wa_final_main TO it_final_main.
+      IF wa_final-regio = 'GJ'.
+        APPEND wa_final_main TO it_final_main_gj.
+      ELSE.
+        APPEND wa_final_main TO it_final_main.
+      ENDIF.
     ENDLOOP.
   ENDLOOP.
   SORT it_final_main BY matnr.
@@ -1074,7 +1080,7 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
       IF sy-subrc = 0.
         lv_day_edit = ls_fcat-edit.
       ENDIF.
-      REFRESH : gt_cst_b2b_1 , gt_gas_receipt , gt_alv_display ,it_final_main.
+      REFRESH : gt_cst_b2b_1 , gt_gas_receipt , gt_alv_display ,it_final_main,it_final_main_gj.
       PERFORM fetch_b2b_data.
       PERFORM map_location_ids.
       PERFORM map_material_names.
