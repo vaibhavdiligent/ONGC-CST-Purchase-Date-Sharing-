@@ -44,6 +44,7 @@ TYPES: BEGIN OF ty_alv_display,
          state           TYPE bezei20,
          location_id     TYPE ygms_de_loc_id,
          material        TYPE ygms_de_gail_mat,
+         ongc_material   TYPE ygms_de_ongc_mat,
          total_mbg       TYPE p DECIMALS 6,
          total_scm       TYPE p DECIMALS 6,
          total_sales_mbg TYPE p DECIMALS 6,
@@ -817,6 +818,12 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
+  ls_fieldcat-coltext   = 'ONGC Material'.
+  ls_fieldcat-outputlen = 18.
+  ls_fieldcat-edit      = abap_false.
+  APPEND ls_fieldcat TO gt_fieldcat.
+  CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_MBG'.
   ls_fieldcat-coltext   = 'Total, MBG'.
   ls_fieldcat-outputlen = 12.
@@ -1105,6 +1112,7 @@ FORM handle_allocate.
     READ TABLE gt_alv_display TRANSPORTING NO FIELDS
       WITH KEY location_id = wa_final_main-empst
                state_code  = wa_final_main-regio
+               material    = wa_final_main-matnr
                exclude     = 'X'.
     IF sy-subrc = 0.
       CONTINUE.
@@ -1122,6 +1130,7 @@ FORM handle_allocate.
     READ TABLE gt_alv_display TRANSPORTING NO FIELDS
       WITH KEY location_id = wa_final_main-empst
                state_code  = wa_final_main-regio
+               material    = wa_final_main-matnr
                exclude     = 'X'.
     IF sy-subrc = 0.
       CONTINUE.
@@ -1226,6 +1235,10 @@ FORM handle_allocate.
            <fs_clear>-day16.
   ENDLOOP.
   " Apply allocation per location + state + material
+  DATA: c_tgqty_alloc TYPE msego2-adqnt,
+        i_trqty_alloc TYPE msego2-adqnt,
+        lv_gcv_alloc  TYPE oib_par_fltp,
+        lv_ncv_alloc  TYPE oib_par_fltp.
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>)
       WHERE location_id = wa_state-empst
@@ -1248,9 +1261,9 @@ FORM handle_allocate.
             gas_day     = l_date
             material    = wa_state-matnr.
           IF sy-subrc = 0.
-            <fs_day> = ( wa_gas_receipt-qty_mbg * wa_state-percentage ) / 100.
-            <fs_alv>-total_mbg = <fs_alv>-total_mbg + <fs_day>.
+            <fs_alv>-ongc_material = wa_gas_receipt-ongc_material.
             l_day_sm3 = ( wa_gas_receipt-qty_scm * wa_state-percentage ) / 100.
+            l_day_sm3 = ceil( l_day_sm3 * 100 ) / 100.
             <fs_day> = l_day_sm3.
             <fs_alv>-total_scm = <fs_alv>-total_scm + l_day_sm3.
             l_gcv = ( l_day_sm3 * wa_gas_receipt-gcv ) + l_gcv.
@@ -1259,10 +1272,176 @@ FORM handle_allocate.
         ENDIF.
         l_date = l_date + 1.
       ENDDO.
-      <fs_alv>-gcv = l_gcv / <fs_alv>-total_scm.
-      <fs_alv>-ncv = l_ncv / <fs_alv>-total_scm.
+      <fs_alv>-gcv = round( val = l_gcv / <fs_alv>-total_scm dec = 3 ).
+      <fs_alv>-ncv = round( val = l_ncv / <fs_alv>-total_scm dec = 3 ).
+      IF <fs_alv>-gcv > 0 AND <fs_alv>-total_scm > 0.
+        CLEAR c_tgqty_alloc.
+        i_trqty_alloc = <fs_alv>-total_scm.
+        lv_gcv_alloc  = <fs_alv>-gcv.
+        lv_ncv_alloc  = <fs_alv>-ncv.
+        CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+          EXPORTING
+            i_trqty = i_trqty_alloc
+            i_truom = 'SM3'
+            i_tguom = 'MBG'
+            lv_gcv  = lv_gcv_alloc
+            lv_ncv  = lv_ncv_alloc
+          CHANGING
+            c_tgqty = c_tgqty_alloc.
+        <fs_alv>-total_mbg = round( val = c_tgqty_alloc dec = 3 ).
+      ENDIF.
       CLEAR l_day_sm3.
     ENDLOOP.
+  ENDLOOP.
+  " Difference adjustment: distribute rounding error from CEIL back to first eligible row
+  DATA: lt_adj_rows LIKE gt_alv_display,
+        lv_adj_days TYPE i,
+        lv_adj_idx  TYPE i,
+        lv_adj_idx2(2) TYPE n,
+        lv_adj_day  TYPE char10,
+        lv_adj_date TYPE datum,
+        lv_sum_alloc TYPE p DECIMALS 6,
+        lv_receipt_qty TYPE p DECIMALS 6,
+        lv_diff      TYPE p DECIMALS 6.
+  TYPES: BEGIN OF ty_adj_key,
+           location_id   TYPE ygms_de_loc_id,
+           material      TYPE ygms_de_gail_mat,
+           ongc_material TYPE ygms_de_ongc_mat,
+         END OF ty_adj_key.
+  DATA: lt_adj_keys TYPE TABLE OF ty_adj_key,
+        ls_adj_key  TYPE ty_adj_key.
+  lv_adj_days = gv_date_to - gv_date_from + 1.
+  CLEAR lt_adj_rows.
+  LOOP AT gt_alv_display INTO gs_alv_display
+    WHERE total_scm > 0 AND exclude IS INITIAL.
+    APPEND gs_alv_display TO lt_adj_rows.
+  ENDLOOP.
+  " Sort by IT_ASALES order (state by sales desc), Gujarat first
+  SORT lt_adj_rows BY location_id material ongc_material ASCENDING.
+  DATA lt_adj_sorted LIKE lt_adj_rows.
+  DATA: ls_adj_row LIKE LINE OF lt_adj_rows.
+  LOOP AT lt_adj_rows INTO ls_adj_row WHERE state_code = 'GJ'.
+    APPEND ls_adj_row TO lt_adj_sorted.
+  ENDLOOP.
+  LOOP AT it_asales INTO wa_asales.
+    LOOP AT lt_adj_rows INTO ls_adj_row
+      WHERE location_id = wa_asales-empst AND state_code = wa_asales-regio AND state_code <> 'GJ'.
+      APPEND ls_adj_row TO lt_adj_sorted.
+    ENDLOOP.
+  ENDLOOP.
+  lt_adj_rows = lt_adj_sorted.
+  " Build unique location-material-ongc_material keys
+  LOOP AT lt_adj_rows INTO ls_adj_row.
+    ls_adj_key-location_id   = ls_adj_row-location_id.
+    ls_adj_key-material      = ls_adj_row-material.
+    ls_adj_key-ongc_material = ls_adj_row-ongc_material.
+    COLLECT ls_adj_key INTO lt_adj_keys.
+  ENDLOOP.
+  " For each day, adjust differences
+  DO lv_adj_days TIMES.
+    lv_adj_idx = sy-index.
+    lv_adj_idx2 = lv_adj_idx.
+    CLEAR lv_adj_day.
+    CONCATENATE 'DAY' lv_adj_idx2 INTO lv_adj_day.
+    lv_adj_date = gv_date_from + lv_adj_idx - 1.
+    LOOP AT lt_adj_keys INTO ls_adj_key.
+      CLEAR lv_sum_alloc.
+      LOOP AT lt_adj_rows INTO ls_adj_row
+        WHERE location_id   = ls_adj_key-location_id
+          AND material      = ls_adj_key-material
+          AND ongc_material = ls_adj_key-ongc_material.
+        ASSIGN COMPONENT lv_adj_day OF STRUCTURE ls_adj_row TO FIELD-SYMBOL(<fs_adj_val>).
+        IF sy-subrc = 0.
+          lv_sum_alloc = lv_sum_alloc + <fs_adj_val>.
+        ENDIF.
+      ENDLOOP.
+      READ TABLE gt_gas_receipt INTO DATA(ls_adj_rcpt)
+        WITH KEY location_id = ls_adj_key-location_id
+                 gas_day     = lv_adj_date
+                 material    = ls_adj_key-material.
+      IF sy-subrc = 0.
+        lv_receipt_qty = ls_adj_rcpt-qty_scm.
+      ELSE.
+        CONTINUE.
+      ENDIF.
+      lv_diff = lv_receipt_qty - lv_sum_alloc.
+      IF lv_diff <> 0.
+        LOOP AT lt_adj_rows ASSIGNING FIELD-SYMBOL(<fs_adj_row>)
+          WHERE location_id   = ls_adj_key-location_id
+            AND material      = ls_adj_key-material
+            AND ongc_material = ls_adj_key-ongc_material.
+          ASSIGN COMPONENT lv_adj_day OF STRUCTURE <fs_adj_row> TO FIELD-SYMBOL(<fs_adj_cell>).
+          IF sy-subrc = 0.
+            <fs_adj_cell> = <fs_adj_cell> + lv_diff.
+            IF <fs_adj_cell> >= 0.
+              lv_diff = 0.
+              EXIT.
+            ELSE.
+              lv_diff = <fs_adj_cell>.
+              <fs_adj_cell> = 0.
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDLOOP.
+  ENDDO.
+  " Write adjusted values back to gt_alv_display and recalculate totals
+  LOOP AT lt_adj_rows INTO ls_adj_row.
+    READ TABLE gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_adj>)
+      WITH KEY location_id   = ls_adj_row-location_id
+               state_code    = ls_adj_row-state_code
+               material      = ls_adj_row-material
+               ongc_material = ls_adj_row-ongc_material.
+    IF sy-subrc = 0.
+      MOVE-CORRESPONDING ls_adj_row TO <fs_alv_adj>.
+      " Recalculate Total SCM
+      <fs_alv_adj>-total_scm = ls_adj_row-day01 + ls_adj_row-day02 + ls_adj_row-day03 +
+                               ls_adj_row-day04 + ls_adj_row-day05 + ls_adj_row-day06 +
+                               ls_adj_row-day07 + ls_adj_row-day08 + ls_adj_row-day09 +
+                               ls_adj_row-day10 + ls_adj_row-day11 + ls_adj_row-day12 +
+                               ls_adj_row-day13 + ls_adj_row-day14 + ls_adj_row-day15 +
+                               ls_adj_row-day16.
+      " Recalculate weighted GCV/NCV
+      CLEAR: l_gcv, l_ncv.
+      lv_adj_date = gv_date_from.
+      DO lv_adj_days TIMES.
+        lv_adj_idx2 = sy-index.
+        CONCATENATE 'DAY' lv_adj_idx2 INTO lv_adj_day.
+        ASSIGN COMPONENT lv_adj_day OF STRUCTURE <fs_alv_adj> TO FIELD-SYMBOL(<fs_adj_dy>).
+        IF sy-subrc = 0 AND <fs_adj_dy> > 0.
+          READ TABLE gt_gas_receipt INTO ls_adj_rcpt
+            WITH KEY location_id = <fs_alv_adj>-location_id
+                     gas_day     = lv_adj_date
+                     material    = <fs_alv_adj>-material.
+          IF sy-subrc = 0.
+            l_gcv = l_gcv + ( <fs_adj_dy> * ls_adj_rcpt-gcv ).
+            l_ncv = l_ncv + ( <fs_adj_dy> * ls_adj_rcpt-ncv ).
+          ENDIF.
+        ENDIF.
+        lv_adj_date = lv_adj_date + 1.
+      ENDDO.
+      IF <fs_alv_adj>-total_scm > 0.
+        <fs_alv_adj>-gcv = round( val = l_gcv / <fs_alv_adj>-total_scm dec = 3 ).
+        <fs_alv_adj>-ncv = round( val = l_ncv / <fs_alv_adj>-total_scm dec = 3 ).
+      ENDIF.
+      " Recalculate Total MBG via FM
+      IF <fs_alv_adj>-gcv > 0 AND <fs_alv_adj>-total_scm > 0.
+        CLEAR c_tgqty_alloc.
+        i_trqty_alloc = <fs_alv_adj>-total_scm.
+        lv_gcv_alloc  = <fs_alv_adj>-gcv.
+        lv_ncv_alloc  = <fs_alv_adj>-ncv.
+        CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+          EXPORTING
+            i_trqty = i_trqty_alloc
+            i_truom = 'SM3'
+            i_tguom = 'MBG'
+            lv_gcv  = lv_gcv_alloc
+            lv_ncv  = lv_ncv_alloc
+          CHANGING
+            c_tgqty = c_tgqty_alloc.
+        <fs_alv_adj>-total_mbg = round( val = c_tgqty_alloc dec = 3 ).
+      ENDIF.
+    ENDIF.
   ENDLOOP.
   " 2.1a/2.3e: Disable checkboxes after allocation
   DATA: lr_grid_alloc TYPE REF TO cl_gui_alv_grid,
@@ -4576,6 +4755,7 @@ FORM build_alv_display_table_view .
       ls_alv-material    = wa_csr_pur_temp-material.
       ls_alv-location_id = wa_csr_pur_temp-location.
       ls_alv-exclude     = wa_csr_pur_temp-exclude.
+      ls_alv-ongc_material = wa_csr_pur_temp-ongc_mater.
       CLEAR l_index.
       LOOP AT it_yrga_cst_pur INTO DATA(wa_yrga_cst_pur)
         WHERE location   = wa_csr_pur_temp-location
