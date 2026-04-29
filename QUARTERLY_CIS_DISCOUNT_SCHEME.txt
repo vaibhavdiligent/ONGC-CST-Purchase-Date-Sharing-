@@ -1,0 +1,161 @@
+================================================================================
+        SPECIAL CIS LINKED POST SALES DISCOUNT - QUARTERLY SCHEME (ZQIS)
+                       (As Implemented in YRVG004_QAIS_EXECUTE)
+================================================================================
+
+1.  Special CIS Linked Post Sales Discount - Quarterly (ZQIS):
+--------------------------------------------------------------------------------
+
+    Quarter Periods covered:
+
+    Q1 : April   01  to  June      30
+    Q2 : July    01  to  September 30
+    Q3 : October 01  to  December  31
+    Q4 : January 01  to  March     31
+
+--------------------------------------------------------------------------------
+
+    Month-wise Lifting Quantities mapped per Quarter:
+
+    +----------+-------+-------+-------+-------------------+
+    | Quarter  | M-1   | M-2   | M-3   | Fields Used       |
+    +----------+-------+-------+-------+-------------------+
+    | Q1       | APR   | MAY   | JUN   | m1  / m2  / m3    |
+    | Q2       | JUL   | AUG   | SEP   | m4  / m5  / m6    |
+    | Q3       | OCT   | NOV   | DEC   | m7  / m8  / m9    |
+    | Q4       | JAN   | FEB   | MAR   | m10 / m11 / m12   |
+    +----------+-------+-------+-------+-------------------+
+
+    Fields per month:
+      grp_lift_qty_mXX  = Group lifting quantity (all customers in group)
+      ind_lift_qty_mXX  = Individual customer lifting quantity
+      ind_elgl_qty_mXX  = Individual eligible quantity (after min/max cap)
+
+--------------------------------------------------------------------------------
+
+2.  Discount Eligibility Criteria:
+--------------------------------------------------------------------------------
+
+    Sl.   Eligibility Condition               Eligible Quantity (Ind.)
+    No.
+    ---   ----------------------------------- --------------------------------
+    i.    Group Lifting (BCQ) >= Min% of QCQ  Eligible for discount
+          AND <= Max% of QCQ
+
+    ii.   Group Lifting > Max% of QCQ         Capped at Max% of QCQ
+                                              (pro-rated for individual)
+
+    iii.  Group Lifting < Min% of QCQ         NOT eligible (qty = 0)
+    ---   ----------------------------------- --------------------------------
+
+    Where:
+      QCQ (Quarterly Committed Qty) = sum of committed_qty_m1 + m2 + m3
+                                      for the respective quarter
+      BCQ (Bi-monthly Committed Qty) = as applicable per amendment
+      Min% = wa_yrva_mstr_waiver-min_perc_qX  (default: 85%)
+      Max% = wa_yrva_mstr_waiver-max_perc_qX  (default: 125%)
+
+    P&D Sector Customers:
+      If p_d_sector = 'X', the Max% cap is replaced by pd_perc_qX
+      from master waiver table (yrva_mstr_waiver).
+      If pd_perc_qX is initial, no upper cap is applied (open-ended).
+
+    Special Waiver:
+      If waiver_qty = 'Q1', the min_perc_q1 is reduced to 65%.
+      Additional per-month waivers (yrva_qais_add_wv) are also checked.
+      Revival failure (yrva_revival_fai) may override eligibility.
+
+--------------------------------------------------------------------------------
+
+3.  Eligible Quantity Formula:
+--------------------------------------------------------------------------------
+
+    Total Group Lifting (BCQ) = grp_lift_qty_m1 + grp_lift_qty_m2
+                                + grp_lift_qty_m3
+
+    Individual Eligible Qty (per month):
+      ind_elgl_qty_mX = ind_lift_qty_mX   (if BCQ within min-max band)
+
+    If BCQ > Max Cap:
+      ind_elgl_qty_mX = (ind_lift_qty_mX / grp_lift_qty_mX) * Max_Cap_Qty
+
+    Total Eligible Qty (quarter):
+      tot_elgl_qty = ind_elgl_qty_m1 + ind_elgl_qty_m2 + ind_elgl_qty_m3
+
+--------------------------------------------------------------------------------
+
+4.  Discount Rate Determination (Condition Type ZQIS):
+--------------------------------------------------------------------------------
+
+    Rate is fetched from SAP condition table:
+      A350  (kappl='V', kschl='ZQIS', vkorg='5000')
+      KONM  (scale-based rate table via knumh)
+
+    Scale lookup (sorted DESCENDING by kstbm):
+      Rate (w_kbetr) = kbetr where kstbm <= customer's QCQ (mou_qty)
+      i.e., the highest scale bracket not exceeding the committed qty.
+
+    Discount Amount:
+      value = tot_elgl_qty * w_kbetr
+
+    Note: If computed value is negative, absolute value is used.
+
+--------------------------------------------------------------------------------
+
+5.  Quarter-4 (January to March) - Special Rules:
+--------------------------------------------------------------------------------
+
+    i.   Customers with mou_begda >= 01-Feb-2024 are EXCLUDED from
+         Q4 quarterly discount (lv_flag123 is set, record is skipped).
+
+    ii.  Q4 months mapped as:
+           January  = grp/ind_lift_qty_m10
+           February = grp/ind_lift_qty_m11
+           March    = grp/ind_lift_qty_m12
+
+    iii. w_endda_prev = selection date - 1 (previous quarter end date)
+         is computed to support prior-quarter data lookup.
+
+    iv.  P&D sector: max_perc_q4 replaced by pd_perc_q4.
+
+--------------------------------------------------------------------------------
+
+6.  Quarterly Discount ALV Output Columns:
+--------------------------------------------------------------------------------
+
+    Customer No.    | Customer Name   | Group Code (KVGR2)
+    Sales Office    | Committed Qty   | Group Lifting (M1/M2/M3)
+    Ind. Lifting    | Ind. Eligible   | Total Group Lifting
+    Total Eligible  | Disc. Rate      | Remarks
+    Sale Order No.  | Select (checkbox)
+
+--------------------------------------------------------------------------------
+
+7.  Grade / Sector Applicability:
+--------------------------------------------------------------------------------
+
+    Grades applicable are configured in table YRVA_GRADE_CISD.
+    S922 lifting records are filtered using lt_kondm (grade range).
+
+    Sector ranges (from YRVA_PRS_GRADES):
+      range_p  = P-sector grades  (indicator = 'P')
+      range_r  = R-sector grades  (indicator = 'R')
+      range_s  = S-sector grades  (indicator = 'S')
+
+--------------------------------------------------------------------------------
+
+8.  Sales Order Creation (on selection in ALV):
+--------------------------------------------------------------------------------
+
+    On user action FCOD (Create), BAPI_SALESDOCU_CREATEFROMDATA is called:
+      Doc Type  : ZP09 (Credit Memo Request)
+      Condition : ZQIS at item level
+      Quantity  : tot_elgl_qty
+      Customer  : pkunag (from it_data_quater)
+
+    After successful creation, record is logged in YRVA_REBATE table.
+    Locking is done via ENQUEUE_EZ004_LOCK before creation.
+
+================================================================================
+END OF DOCUMENT
+================================================================================
