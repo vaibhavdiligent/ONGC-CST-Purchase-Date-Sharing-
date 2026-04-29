@@ -14,7 +14,7 @@ TABLES: oijnomi.
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_pur,
          gas_day     TYPE aedat,
-         location_id TYPE char10,
+         locid TYPE char10,
          material    TYPE matnr,
          state_code  TYPE char2,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
@@ -43,7 +43,7 @@ TYPES: BEGIN OF ty_main,
 TYPES: BEGIN OF ty_display,
          sel         TYPE char1,
          gas_day     TYPE aedat,
-         location_id TYPE char10,
+         locid TYPE char10,
          material    TYPE matnr,
          state_code  TYPE char2,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
@@ -216,10 +216,10 @@ CLASS lcl_event_handler IMPLEMENTATION.
         ELSE.
           lv_newsel = abap_true.
         ENDIF.
-        lv_locid  = ls_disp-location_id.
+        lv_locid  = ls_disp-locid.
         lv_date   = ls_disp-gas_day.
         LOOP AT gt_display INTO ls_disp.
-          IF ls_disp-location_id = lv_locid AND ls_disp-gas_day = lv_date.
+          IF ls_disp-locid = lv_locid AND ls_disp-gas_day = lv_date.
             ls_disp-sel = lv_newsel.
             MODIFY gt_display FROM ls_disp.
           ENDIF.
@@ -327,11 +327,12 @@ FORM validate_selection_screen.
   DATA: ls_locid  LIKE LINE OF s_locid,
         ls_date   LIKE LINE OF s_date,
         lv_day_lo TYPE i,
-        lv_day_hi TYPE i.
+        lv_day_hi TYPE i,
+        lv_loc    TYPE oij_locid.
 
   LOOP AT s_locid INTO ls_locid WHERE sign = 'I' AND option = 'EQ'.
-    SELECT SINGLE location_id FROM yrga_cst_loc_map INTO @DATA(lv_loc)
-      WHERE location_id = @ls_locid-low.
+    SELECT SINGLE locid FROM yrga_cst_loc_map INTO lv_loc
+      WHERE locid = ls_locid-low.
     IF sy-subrc <> 0.
       MESSAGE e000(oo) WITH
         'Business Location doesn''t pertain to ONGC CST Purchase:'
@@ -361,11 +362,11 @@ FORM fetch_pur_data.
         ls_styl TYPE lvc_s_styl,
         ls_col  TYPE lvc_s_scol.
 
-  SELECT gas_day, location_id, material, state_code, qty_scm, gail_id, deleted
+  SELECT gas_day, locid, material, state_code, qty_scm, gail_id, deleted
     FROM yrga_cst_pur
     INTO TABLE @lt_pur
     WHERE gas_day     IN @s_date
-      AND location_id IN @s_locid
+      AND locid IN @s_locid
       AND deleted    <> @gc_deleted
       AND state_code <> @gc_excl_state.
 
@@ -376,14 +377,14 @@ FORM fetch_pur_data.
     CLEAR ls_disp.
     ls_disp-sel         = ' '.
     ls_disp-gas_day     = ls_pur-gas_day.
-    ls_disp-location_id = ls_pur-location_id.
+    ls_disp-locid = ls_pur-locid.
     ls_disp-material    = ls_pur-material.
     ls_disp-state_code  = ls_pur-state_code.
     ls_disp-qty_scm     = ls_pur-qty_scm.
     ls_disp-gail_id     = ls_pur-gail_id.
 
     PERFORM derive_outline_agreement
-      USING    ls_pur-location_id ls_pur-material
+      USING    ls_pur-locid ls_pur-material
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
     PERFORM derive_batch USING ls_pur-material CHANGING ls_disp-charg.
@@ -458,8 +459,8 @@ FORM derive_batch
   DATA: lt_mcha TYPE STANDARD TABLE OF mcha,
         ls_mcha TYPE mcha.
   CLEAR cv_charg.
-  SELECT matnr, werks, charg, ersda, lvorm FROM mcha
-    INTO TABLE @lt_mcha WHERE matnr = @iv_matnr AND lvorm = ' '.
+  SELECT matnr werks charg ersda lvorm FROM mcha
+    INTO CORRESPONDING FIELDS OF TABLE lt_mcha WHERE matnr = iv_matnr AND lvorm = ' '.
   IF sy-subrc <> 0 OR lt_mcha IS INITIAL. RETURN. ENDIF.
   SORT lt_mcha BY ersda DESCENDING.
   READ TABLE lt_mcha INDEX 1 INTO ls_mcha.
@@ -476,8 +477,8 @@ FORM get_valid_batches_for_material
         ls_mcha TYPE mcha,
         ls_val  TYPE ty_batch_vals.
   REFRESH ct_batch.
-  SELECT matnr, werks, charg, ersda, lvorm FROM mcha
-    INTO TABLE @lt_mcha WHERE matnr = @iv_matnr AND lvorm = ' '.
+  SELECT matnr werks charg ersda lvorm FROM mcha
+    INTO CORRESPONDING FIELDS OF TABLE lt_mcha WHERE matnr = iv_matnr AND lvorm = ' '.
   SORT lt_mcha BY ersda DESCENDING.
   LOOP AT lt_mcha INTO ls_mcha.
     ls_val-charg = ls_mcha-charg.
@@ -551,7 +552,7 @@ FORM build_fieldcat.
 
   add_field 'SEL'         'Sel'               3   ' ' 'X'.
   add_field 'GAS_DAY'     'Gas Day'          10   ' ' ' '.
-  add_field 'LOCATION_ID' 'Location'         10   ' ' ' '.
+  add_field 'LOCID' 'Location'         10   ' ' ' '.
   add_field 'MATERIAL'    'Material'         18   ' ' ' '.
   add_field 'STATE_CODE'  'State'             4   ' ' ' '.
   add_field 'QTY_SCM'     'Qty SCM'          15   ' ' ' '.
@@ -618,7 +619,7 @@ FORM handle_create_nomination.
     ls_main-tsyst = ''.
     ls_main-vbeln = ls_disp-outline_agr.
     ls_main-date  = ls_disp-gas_day.
-    ls_main-locid = ls_disp-location_id.
+    ls_main-locid = ls_disp-locid.
     ls_main-matnr = ls_disp-material.
     ls_main-menge = ls_disp-qty_scm.
     ls_main-unit  = gc_sm3.
