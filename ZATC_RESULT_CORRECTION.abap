@@ -1042,10 +1042,30 @@ START-OF-SELECTION.
                     IF wa_repos_tab1-line CS '.' AND l_for IS INITIAL.
                       CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
                       APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
-                      REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab1-line WITH space IGNORING CASE.
-                      CONDENSE wa_repos_tab1-line.
-                      CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
-                        INTO wa_repos_tab1-line SEPARATED BY space.
+                      " Split at the FIRST '.' so trailing tokens (e.g. ENDSELECT.) on the same line are preserved
+                      DATA l_dot_pos    TYPE i.
+                      DATA l_total_len  TYPE i.
+                      DATA l_after_pos  TYPE i.
+                      DATA l_after_len  TYPE i.
+                      DATA l_before_dot TYPE string.
+                      DATA l_after_dot  TYPE string.
+                      l_dot_pos = sy-fdpos.
+                      l_total_len = strlen( wa_repos_tab1-line ).
+                      l_before_dot = wa_repos_tab1-line(l_dot_pos).
+                      l_after_pos = l_dot_pos + 1.
+                      CLEAR l_after_dot.
+                      IF l_total_len > l_after_pos.
+                        l_after_len = l_total_len - l_after_pos.
+                        l_after_dot = wa_repos_tab1-line+l_after_pos(l_after_len).
+                      ENDIF.
+                      CONDENSE l_before_dot. CONDENSE l_after_dot.
+                      IF l_after_dot IS NOT INITIAL.
+                        CONCATENATE l_before_dot 'ORDER BY PRIMARY KEY.' l_after_dot
+                          INTO wa_repos_tab1-line SEPARATED BY space.
+                      ELSE.
+                        CONCATENATE l_before_dot 'ORDER BY PRIMARY KEY.'
+                          INTO wa_repos_tab1-line SEPARATED BY space.
+                      ENDIF.
                       APPEND wa_repos_tab1 TO repos_tab_new.
                       l_tab = l_tab + 1.
                       " Peek at the next line to detect cursor loop (ENDSELECT follows)
@@ -1212,6 +1232,29 @@ START-OF-SELECTION.
             WHEN OTHERS.
               APPEND wa_repos_tab TO repos_tab_new.
           ENDCASE.
+          " Handle additional findings on the same line.  READ TABLE above only
+          " retrieves the first match (highest priority); a single source line can
+          " carry multiple findings (e.g., WRITE ISSUE plus WRITE IN LOOP).  The
+          " first finding's handler has already commented/transformed the line, so
+          " here we only run handlers that are additive and don't re-touch the
+          " source line itself - currently just SORT insertion via loop_exit.
+          DATA wa_extra TYPE ty_final.
+          DATA l_extra_count TYPE i.
+          CLEAR l_extra_count.
+          LOOP AT it_final INTO wa_extra WHERE
+            program_name = wa_final_p-program_name
+            AND sobjname = wa_final_p-sobjname
+            AND line = l_tabix.
+            l_extra_count = l_extra_count + 1.
+            IF l_extra_count = 1. CONTINUE. ENDIF.
+            DATA(l_extra_msg) = wa_extra-check_message.
+            TRANSLATE l_extra_msg TO UPPER CASE.
+            IF l_extra_msg CS 'WRITE IN LOOP'
+              OR l_extra_msg CS 'LOOP AT ITAB. EXIT'
+              OR l_extra_msg CS 'LOOP AT EMPTY ITAB'.
+              PERFORM loop_exit.
+            ENDIF.
+          ENDLOOP.
         ENDIF.
       ENDLOOP.
     ENDIF.
@@ -1550,6 +1593,7 @@ FORM change_table.
           LOOP AT it_fields_new INTO DATA(wa_fn) WHERE is_calculated IS INITIAL.
             CONCATENATE l_query l_q wa_fn-element_name 'AS' wa_fn-base_field
               INTO l_query SEPARATED BY space.
+            l_q = ','.
           ENDLOOP.
         ELSE.
           MOVE it_query[] TO it_query_new[]. l_exit = 'X'. EXIT.
@@ -1797,6 +1841,7 @@ FORM change_table.
           LOOP AT it_fields_new INTO DATA(wa_fn4) WHERE is_calculated IS INITIAL.
             CONCATENATE l_query l_q wa_fn4-element_name 'AS' wa_fn4-base_field
               INTO l_query SEPARATED BY space.
+            l_q = ','.
           ENDLOOP.
         ELSE.
           MOVE it_query[] TO it_query_new[]. l_exit = 'X'. EXIT.
