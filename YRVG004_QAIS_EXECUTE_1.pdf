@@ -1,0 +1,136 @@
+%PDF-1.3
+%‚„œ”
+%RSTXPDF3 Parameters: #DRSTXh
+2 0 obj
+/WinAnsiEncoding
+endobj
+3 0 obj
+<<
+%Devtype POST2    Font TIMES    normal Lang EN
+/Type /Font
+/Subtype /Type1
+/BaseFont /Times-Roman
+/Name /F001
+/Encoding 2 0 R
+>>
+endobj
+4 0 obj
+<<
+%Devtype POST2    Font COURIER  normal Lang EN
+/Type /Font
+/Subtype /Type1
+/BaseFont /Courier
+/Name /F002
+/Encoding 2 0 R
+>>
+endobj
+5 0 obj
+<<
+%Devtype POST2    Font HELVE    bold Lang EN
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica-Bold
+/Name /F003
+/Encoding 2 0 R
+>>
+endobj
+6 0 obj
+<<
+/Length 7 0 R
+>>
+stream
+ /F001 10.00 Tf 0.00 Tw 0 g BT 99.20 718.45 Td <5468652070726F6772616D20>Tj ET 0 g BT 153.70 718.45 Td <595256473030345F514149535F45584543555445>Tj ET 0 g BT 275.70 718.45 Td <2020202020202020202020202020202020202020206973206E6F7420>Tj ET 0 g BT
+ 352.70 718.45 Td <646F63756D656E7465642E>Tj ET /F002 12.00 Tf 0 g BT 70.85 95.80 Td 0 Tw <5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F>Tj ET 0 g BT 294.05 95.80 Td 0 Tw <5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F>Tj
+ ET 0 g BT 517.25 95.80 Td 0 Tw <5F5F>Tj ET /F003 10.00 Tf 0.00 Tw 0 g BT 70.85 83.80 Td <534150204147>Tj ET 0 g BT 279.70 83.80 Td <32392E30342E32303236>Tj ET 0 g BT 527.35 83.80 Td <31>Tj ET /F003 10.00 Tf 0.00 Tw 0 g BT 70.85 809.50 Td
+ <50726F6772616D5F446F63756D656E746174696F6E>Tj ET 0 g BT 478.45 809.50 Td <522F332D53797374656D>Tj ET /F002 12.00 Tf 0 g BT 70.85 806.65 Td 0 Tw <5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F>Tj ET 0 g BT 294.05 806.65 Td 0 Tw
+ <5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F5F>Tj ET 0 g BT 517.25 806.65 Td 0 Tw <5F5F>Tj ET /F003 10.00 Tf 0.00 Tw 0 g BT 70.85 794.65 Td <50726F6772616D6D3A>Tj ET 0 g BT 240.90 794.65 Td <595256473030345F514149535F45584543555445>Tj
+ ET
+endstream
+endobj
+7 0 obj
+1246
+endobj
+8 0 obj
+<<
+/Type /Page
+/MediaBox
+[0 0 1008 864]
+/Parent 1 0 R
+/Resources
+<<
+/ProcSet
+[/PDF /Text]
+/Font
+<<
+/F001 3 0 R
+/F002 4 0 R
+/F003 5 0 R
+>>
+/XObject
+<<
+>>
+>>
+/Contents 6 0 R
+>>
+endobj
+9 0 obj
+<<
+/Author (XSAP_AB2 )
+/CreationDate (D:20260429062610)
+/Creator (Form DOCU_PROGRAM EN)
+/Producer (SAP NetWeaver 758 )
+%SAPinfoStart TOA_DARA
+%FUNCTION=(    )
+%MANDANT=(   )
+%DEL_DATE=(00000000)
+%SAP_OBJECT=(          )
+%AR_OBJECT=(          )
+%OBJECT_ID=(                                                  )
+%FORM_ID=(                                        )
+%FORMARCHIV=(  )
+%RESERVE=(                           )
+%NOTIZ=(                                                                )
+%-(                                                                )
+%-(                                                                )
+%-(                                                                )
+%SAPinfoEnd TOA_DARA
+>>
+endobj
+1 0 obj
+<<
+/Type /Pages
+/Kids
+[ 8 0 R
+]
+/Count 1
+>>
+endobj
+10 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/PageMode /UseNone
+>>
+endobj
+xref
+0 11
+0000000000 65535 f
+0000002853 00000 n
+0000000048 00000 n
+0000000083 00000 n
+0000000240 00000 n
+0000000393 00000 n
+0000000551 00000 n
+0000001858 00000 n
+0000001881 00000 n
+0000002094 00000 n
+0000002921 00000 n
+trailer
+<<
+/Size 11
+/Root 10 0 R
+/Info 9 0 R
+>>
+startxref
+2997
+%%EOF
