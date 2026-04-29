@@ -176,7 +176,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
     APPEND ls_tb TO e_object->mt_toolbar.
     CLEAR ls_tb.
     ls_tb-function  = 'CRENOM'.
-    ls_tb-icon      = icon_execute.
+    ls_tb-icon      = icon_system_run.
     ls_tb-quickinfo = 'Create Nomination'.
     ls_tb-text      = 'Create Nomination'.
     APPEND ls_tb TO e_object->mt_toolbar.
