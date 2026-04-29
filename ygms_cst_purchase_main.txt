@@ -807,10 +807,18 @@ FORM build_alv_display_table.
         APPEND ls_alv TO gt_alv_display.
       ENDIF.
     ENDLOOP.
+    " Populate ONGC Material for all rows from gas receipt (covers GJ and other rows)
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ongc_pop>)
+      WHERE ongc_material IS INITIAL.
+      READ TABLE gt_gas_receipt INTO DATA(ls_ongc_rcpt)
+        WITH KEY location_id = <fs_ongc_pop>-location_id
+                 material    = <fs_ongc_pop>-material.
+      IF sy-subrc = 0.
+        <fs_ongc_pop>-ongc_material = ls_ongc_rcpt-ongc_material.
+      ENDIF.
+    ENDLOOP.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form DISPLAY_EDITABLE_ALV
 *&---------------------------------------------------------------------*
 FORM display_editable_alv.
   DATA: ls_fieldcat TYPE lvc_s_fcat,
@@ -1592,7 +1600,8 @@ FORM handle_allocate.
         ENDIF.
       ENDIF.
       <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
-      IF <fs_alv_sales>-alloc_sales_mbg < 0 OR <fs_alv_sales>-alloc_sales_mbg > 1.
+      IF <fs_alv_sales>-state_code <> 'GJ' AND
+       ( <fs_alv_sales>-alloc_sales_mbg < 0 OR <fs_alv_sales>-alloc_sales_mbg > 1 ).
         <fs_alv_sales>-row_color = 'C600'. " Red
       ELSE.
         CLEAR <fs_alv_sales>-row_color.
@@ -4824,7 +4833,8 @@ FORM recalculate_totals.
     ENDIF.
     " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
-    IF <fs_alv>-alloc_sales_mbg < 0 OR <fs_alv>-alloc_sales_mbg > 1.
+    IF <fs_alv>-state_code <> 'GJ' AND
+     ( <fs_alv>-alloc_sales_mbg < 0 OR <fs_alv>-alloc_sales_mbg > 1 ).
       <fs_alv>-row_color = 'C600'. " Red
     ELSE.
       CLEAR <fs_alv>-row_color.
@@ -4952,7 +4962,8 @@ FORM build_alv_display_table_view .
       ENDIF.
     ENDIF.
     <fs_alv_view>-alloc_sales_mbg = <fs_alv_view>-total_mbg - <fs_alv_view>-total_sales_mbg.
-    IF <fs_alv_view>-alloc_sales_mbg < 0 OR <fs_alv_view>-alloc_sales_mbg > 1.
+    IF <fs_alv_view>-state_code <> 'GJ' AND
+     ( <fs_alv_view>-alloc_sales_mbg < 0 OR <fs_alv_view>-alloc_sales_mbg > 1 ).
       <fs_alv_view>-row_color = 'C600'.
     ELSE.
       CLEAR <fs_alv_view>-row_color.
