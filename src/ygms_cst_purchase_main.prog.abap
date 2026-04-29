@@ -1272,8 +1272,10 @@ FORM handle_allocate.
         ENDIF.
         l_date = l_date + 1.
       ENDDO.
-      <fs_alv>-gcv = round( val = l_gcv / <fs_alv>-total_scm dec = 3 ).
-      <fs_alv>-ncv = round( val = l_ncv / <fs_alv>-total_scm dec = 3 ).
+      IF <fs_alv>-total_scm > 0.
+        <fs_alv>-gcv = round( val = l_gcv / <fs_alv>-total_scm dec = 3 ).
+        <fs_alv>-ncv = round( val = l_ncv / <fs_alv>-total_scm dec = 3 ).
+      ENDIF.
       IF <fs_alv>-gcv > 0 AND <fs_alv>-total_scm > 0.
         CLEAR c_tgqty_alloc.
         i_trqty_alloc = <fs_alv>-total_scm.
