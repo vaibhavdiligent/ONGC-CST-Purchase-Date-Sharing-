@@ -591,16 +591,22 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM handle_create_nomination
-* Builds i_main, exports to memory, submits YRXR036_PURC_NOM_G1
+* Builds i_main matching YRXR036_PURC_NOM_G1 ty_main exactly,
+* exports to memory, then SUBMITs via SELECTION-TABLE so YRGR040
+* reads memory instead of Excel (r_excel = 'X' triggers batch_validate
+* → get_nomination → createfromdata flow).
 *----------------------------------------------------------------------*
 FORM handle_create_nomination.
-  DATA: lt_sel    TYPE tt_display,
-        ls_disp   TYPE ty_display,
-        lt_main   TYPE tt_main,
-        ls_main   TYPE ty_main,
-        lt_errors TYPE tt_main,
-        lv_rank   TYPE i VALUE 1.
+  DATA: lt_sel       TYPE tt_display,
+        ls_disp      TYPE ty_display,
+        lt_main      TYPE tt_main,
+        ls_main      TYPE ty_main,
+        lt_errors    TYPE tt_main,
+        lv_rank      TYPE i VALUE 1,
+        i_rspartab   TYPE STANDARD TABLE OF rsparams,
+        wa_rspartab  LIKE LINE OF i_rspartab.
 
+  " Collect selected rows
   LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
     APPEND ls_disp TO lt_sel.
   ENDLOOP.
@@ -609,6 +615,7 @@ FORM handle_create_nomination.
     RETURN.
   ENDIF.
 
+  " Pre-flight checks
   LOOP AT lt_sel INTO ls_disp.
     IF ls_disp-outline_agr IS INITIAL.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
@@ -620,9 +627,13 @@ FORM handle_create_nomination.
     ENDIF.
   ENDLOOP.
 
+  " Build i_main in the exact column order YRXR036_PURC_NOM_G1 expects:
+  " tsyst (blank - filled by batch_validate via oij_el_doc_mot),
+  " vbeln = OA, date = gas_day, locid, matnr, menge, unit = SM3,
+  " charg, rank
   LOOP AT lt_sel INTO ls_disp.
     CLEAR ls_main.
-    ls_main-tsyst = ''.
+    ls_main-tsyst = ''.               " batch_validate derives from oij_el_doc_mot
     ls_main-vbeln = ls_disp-outline_agr.
     ls_main-date  = ls_disp-gas_day.
     ls_main-locid = ls_disp-location_id.
@@ -635,12 +646,26 @@ FORM handle_create_nomination.
     lv_rank = lv_rank + 1.
   ENDLOOP.
 
+  " Export i_main so YRXR036_PURC_NOM_G1 can IMPORT it at START-OF-SELECTION
   EXPORT lt_main TO MEMORY ID gc_memory_id.
 
+  " Build selection-table: set r_excel = 'X' to trigger the
+  " batch_validate → get_nomination → createfromdata path in YRGR040
+  CLEAR wa_rspartab.
+  wa_rspartab-selname = 'R_EXCEL'.
+  wa_rspartab-kind    = 'P'.
+  wa_rspartab-low     = abap_true.
+  APPEND wa_rspartab TO i_rspartab.
+
+  " SUBMIT via selection screen - same pattern YRGR040 uses internally
+  " (e.g. SUBMIT yrxr008_nomination_corr_copy USING SELECTION-SCREEN
+  "  '1000' WITH SELECTION-TABLE i_rspartab AND RETURN)
   SUBMIT yrxr036_purc_nom_g1
-    WITH r_excel = abap_true
+    USING SELECTION-SCREEN '1000'
+    WITH SELECTION-TABLE i_rspartab
     AND RETURN.
 
+  " Retrieve any errors YRGR040 exported back
   IMPORT lt_errors FROM MEMORY ID gc_err_mem_id.
   FREE MEMORY ID gc_memory_id.
   FREE MEMORY ID gc_err_mem_id.
