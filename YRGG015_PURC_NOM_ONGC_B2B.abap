@@ -79,7 +79,7 @@ DATA: gt_display   TYPE tt_display,
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
-           gc_role_core  TYPE string VALUE 'ZC_GMS_CORE_TEAM',
+           gc_role_core  TYPE char30 VALUE 'ZC_GMS_CORE_TEAM',
            gc_excl_state TYPE char2  VALUE 'GJ',
            gc_deleted    TYPE char1  VALUE 'X',
            gc_sm3        TYPE meins  VALUE 'SM3'.
@@ -114,7 +114,7 @@ DATA: go_handler TYPE REF TO lcl_event_handler.
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_locid FOR oijnomi-locid NO INTERVALS,
-                  s_date  FOR oijnomi-nom_date.
+                  s_date  FOR oijnomi-idate.
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
@@ -167,7 +167,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
     DATA: ls_tb TYPE stb_button.
     CLEAR ls_tb.
     ls_tb-function  = 'BCMASS'.
-    ls_tb-icon      = icon_batch_input.
+    ls_tb-icon      = icon_batch.
     ls_tb-quickinfo = 'Batch Change in Mass'.
     ls_tb-text      = 'Batch Change'.
     APPEND ls_tb TO e_object->mt_toolbar.
@@ -176,7 +176,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
     APPEND ls_tb TO e_object->mt_toolbar.
     CLEAR ls_tb.
     ls_tb-function  = 'CRENOM'.
-    ls_tb-icon      = icon_execute_object.
+    ls_tb-icon      = icon_execute.
     ls_tb-quickinfo = 'Create Nomination'.
     ls_tb-text      = 'Create Nomination'.
     APPEND ls_tb TO e_object->mt_toolbar.
@@ -211,7 +211,11 @@ CLASS lcl_event_handler IMPLEMENTATION.
     IF e_column_id-fieldname = 'SEL'.
       READ TABLE gt_display INDEX e_row_id-index INTO ls_disp.
       IF sy-subrc = 0.
-        lv_newsel = COND #( WHEN ls_disp-sel = abap_true THEN ' ' ELSE abap_true ).
+        IF ls_disp-sel = abap_true.
+          lv_newsel = ' '.
+        ELSE.
+          lv_newsel = abap_true.
+        ENDIF.
         lv_locid  = ls_disp-location_id.
         lv_date   = ls_disp-gas_day.
         LOOP AT gt_display INTO ls_disp.
@@ -403,7 +407,7 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM derive_outline_agreement
-* OIJ_EL_DOC_MOT -> T001W (WERKS=2*) -> EKPO (MWSKZ=DQ, loekz=' ') -> latest
+* EKKO/EKPO: bstyp=K, werks LIKE 2%, matnr match, mwskz=DQ -> latest
 *----------------------------------------------------------------------*
 FORM derive_outline_agreement
   USING    iv_locid   TYPE char10
@@ -411,52 +415,31 @@ FORM derive_outline_agreement
   CHANGING cv_vbeln   TYPE ebeln
            cv_missing TYPE char1.
 
-  DATA: lt_mot        TYPE STANDARD TABLE OF oij_el_doc_mot,
-        ls_mot        TYPE oij_el_doc_mot,
-        lt_werks      TYPE STANDARD TABLE OF werks_d,
-        lv_werks      TYPE werks_d,
+  DATA: BEGIN OF ls_res,
+          ebeln TYPE ekko-ebeln,
+          bedat TYPE ekko-bedat,
+        END OF ls_res,
+        lt_res        LIKE STANDARD TABLE OF ls_res,
         lv_best_vbeln TYPE ebeln,
         lv_best_bedat TYPE bedat.
 
   CLEAR: cv_vbeln, cv_missing.
 
-  SELECT * FROM oij_el_doc_mot INTO TABLE @lt_mot WHERE locid = @iv_locid.
-  IF lt_mot IS INITIAL. cv_missing = abap_true. RETURN. ENDIF.
+  SELECT ekko~ebeln ekko~bedat
+    FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
+    INTO CORRESPONDING FIELDS OF TABLE lt_res
+    WHERE ekko~bstyp = 'K'
+      AND ekpo~werks  LIKE '2%'
+      AND ekpo~matnr  = iv_matnr
+      AND ekpo~mwskz  = 'DQ'
+      AND ekpo~loekz  = ' '
+      AND ekko~loekz  = ' '.
 
-  LOOP AT lt_mot INTO ls_mot.
-    SELECT werks FROM t001w INTO TABLE @DATA(lt_t001w)
-      WHERE werks LIKE '2%' AND kunnr = @ls_mot-bpnam.
-    IF sy-subrc = 0.
-      LOOP AT lt_t001w INTO DATA(ls_t001w).
-        APPEND ls_t001w-werks TO lt_werks.
-      ENDLOOP.
+  LOOP AT lt_res INTO ls_res.
+    IF ls_res-bedat > lv_best_bedat.
+      lv_best_bedat = ls_res-bedat.
+      lv_best_vbeln = ls_res-ebeln.
     ENDIF.
-  ENDLOOP.
-
-  IF lt_werks IS INITIAL.
-    SELECT werks FROM t001w INTO TABLE @lt_werks
-      WHERE werks LIKE '2%' AND regio = @iv_locid(2).
-    IF sy-subrc <> 0. cv_missing = abap_true. RETURN. ENDIF.
-  ENDIF.
-
-  SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
-
-  LOOP AT lt_werks INTO lv_werks.
-    SELECT ekko~ebeln, ekko~bedat
-      FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
-      INTO TABLE @DATA(lt_res)
-      WHERE ekko~bstyp = 'K'
-        AND ekpo~werks  = @lv_werks
-        AND ekpo~matnr  = @iv_matnr
-        AND ekpo~mwskz  = 'DQ'
-        AND ekpo~loekz  = ' '
-        AND ekko~loekz  = ' '.
-    LOOP AT lt_res INTO DATA(ls_res).
-      IF ls_res-bedat > lv_best_bedat.
-        lv_best_bedat = ls_res-bedat.
-        lv_best_vbeln = ls_res-ebeln.
-      ENDIF.
-    ENDLOOP.
   ENDLOOP.
 
   IF lv_best_vbeln IS NOT INITIAL.
@@ -528,15 +511,19 @@ FORM display_alv_grid.
   SET HANDLER go_handler->on_data_changed  FOR go_alv.
   SET HANDLER go_handler->on_hotspot_click FOR go_alv.
   SET HANDLER go_handler->on_onf4          FOR go_alv.
-  go_alv->register_f4_for_fields(
-    EXPORTING it_f4 = VALUE lvc_t_f4(
-      ( fieldname = 'CHARG' register_f4 = cl_gui_alv_grid=>m_mb_f4 ) ) ).
+  DATA: lt_f4reg  TYPE lvc_t_f4,
+        ls_f4reg  TYPE lvc_s_f4,
+        lt_excl   TYPE ui_functions.
+  ls_f4reg-fieldname = 'CHARG'.
+  ls_f4reg-register  = 'X'.
+  APPEND ls_f4reg TO lt_f4reg.
+  go_alv->register_f4_for_fields( EXPORTING it_f4 = lt_f4reg ).
   PERFORM build_fieldcat.
   PERFORM set_alv_layout.
   go_alv->set_table_for_first_display(
     EXPORTING
       is_layout            = gs_layout
-      it_toolbar_excluding = VALUE ui_functions( )
+      it_toolbar_excluding = lt_excl
     CHANGING
       it_outtab            = gt_display
       it_fieldcatalog      = gt_fcat
@@ -695,7 +682,8 @@ ENDFORM.
 FORM display_nomination_errors USING it_errors TYPE tt_main.
   DATA: lt_fcat   TYPE lvc_t_fcat,
         ls_fcat   TYPE lvc_s_fcat,
-        ls_layout TYPE lvc_s_layo.
+        ls_layout TYPE lvc_s_layo,
+        ls_e      TYPE ty_main.
 
   ls_fcat-fieldname = 'LOCID'. ls_fcat-coltext = 'Location'. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
   ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
@@ -710,7 +698,7 @@ FORM display_nomination_errors USING it_errors TYPE tt_main.
     EXPORTING caption = 'Nomination Errors' top = 10 left = 10 width = 500 height = 300
     EXCEPTIONS OTHERS = 1.
   IF sy-subrc <> 0.
-    LOOP AT it_errors INTO DATA(ls_e) WHERE msgty = 'E' OR msgty = 'A'.
+    LOOP AT it_errors INTO ls_e WHERE msgty = 'E' OR msgty = 'A'.
       MESSAGE ls_e-msg TYPE 'S' DISPLAY LIKE 'E'.
     ENDLOOP.
     RETURN.
@@ -734,7 +722,8 @@ FORM handle_batch_mass_change.
         ls_bat    TYPE ty_batch_vals,
         lt_f4     TYPE STANDARD TABLE OF ddshretval,
         ls_f4     TYPE ddshretval,
-        lv_charg  TYPE charg_d.
+        lv_charg  TYPE charg_d,
+        lv_rc     TYPE char1.
 
   LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
     READ TABLE lt_matnrs WITH KEY table_line = ls_disp-material TRANSPORTING NO FIELDS.
@@ -756,7 +745,7 @@ FORM handle_batch_mass_change.
     CALL FUNCTION 'POPUP_WITH_TABLE_DISPLAY'
       EXPORTING endpos_col = 60 endpos_row = 15 startpos_col = 5 startpos_row = 5
                 titletext  = |Select Batch for Material { lv_matnr }|
-      IMPORTING RETURNCODE = DATA(lv_rc)
+      IMPORTING RETURNCODE = lv_rc
       TABLES    valuetab   = lt_f4
       EXCEPTIONS OTHERS    = 1.
     IF sy-subrc = 0 AND lv_rc = ''.
