@@ -707,7 +707,14 @@ FORM build_alv_display_table.
     ls_alv-state      = wa_final_main-regio_desc.
     ls_alv-material   = wa_final_main-matnr.
     ls_alv-location_id = wa_final_main-empst.
+    READ TABLE gt_gas_receipt INTO DATA(ls_rcpt_ongc)
+      WITH KEY location_id = wa_final_main-empst
+               material    = wa_final_main-matnr.
+    IF sy-subrc = 0.
+      ls_alv-ongc_material = ls_rcpt_ongc-ongc_material.
+    ENDIF.
     APPEND ls_alv TO gt_alv_display.
+    CLEAR ls_alv.
   ENDLOOP.
   DATA it_gas_receipt TYPE TABLE OF ty_gas_receipt.
   MOVE gt_gas_receipt[] TO it_gas_receipt[].
@@ -1581,9 +1588,7 @@ FORM handle_allocate.
         ENDIF.
       ENDIF.
       <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
-      DATA lv_rnd_alloc TYPE p DECIMALS 3.
-      lv_rnd_alloc = <fs_alv_sales>-alloc_sales_mbg.
-      IF lv_rnd_alloc <> 0 AND <fs_alv_sales>-state_code <> 'GJ'.
+      IF <fs_alv_sales>-alloc_sales_mbg < 0 OR <fs_alv_sales>-alloc_sales_mbg > 1.
         <fs_alv_sales>-row_color = 'C600'. " Red
       ELSE.
         CLEAR <fs_alv_sales>-row_color.
@@ -1654,10 +1659,13 @@ FORM handle_validate.
   ENDIF.
   PERFORM build_validation_data.
   DELETE gt_validation WHERE ctp_id IS INITIAL.
-  " Check if any DIFF_PUR_SUP_MBG > 0.009
   lv_diff_ok = abap_true.
   LOOP AT gt_validation INTO gs_validation.
-    IF abs( gs_validation-diff_pur_sup_mbg ) > '0.009'.
+    IF gs_validation-diff_pur_sup_scm <> 0.
+      lv_diff_ok = abap_false.
+      EXIT.
+    ENDIF.
+    IF gs_validation-diff_pur_sup_mbg < 0 OR gs_validation-diff_pur_sup_mbg > 1.
       lv_diff_ok = abap_false.
       EXIT.
     ENDIF.
@@ -1673,7 +1681,7 @@ FORM handle_validate.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Validation FAILED'
-        txt1  = 'Difference > 0.009 MBG found in validation data.'
+        txt1  = 'Validation failed. SCM difference found or MBG out of range.'
         txt2  = 'Please adjust the day values and re-validate.'
         txt3  = 'Save button will remain DISABLED.'
         txt4  = ''.
@@ -1683,7 +1691,7 @@ FORM handle_validate.
     CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
         titel = 'Validation PASSED'
-        txt1  = 'All differences are within acceptable limit (<= 0.009 MBG).'
+        txt1  = 'Validation Successful.'
         txt2  = 'Save button is now ENABLED.'
         txt3  = 'You can proceed to save the data.'
         txt4  = ''.
@@ -2239,10 +2247,20 @@ FORM save_data_to_db.
         ls_cst_fnt-state = gs_alv_display-state.
       ENDIF.
     ENDIF.
-    " Calculate weighted average GCV/NCV
-    IF lv_total_vol > 0.
-      lv_avg_gcv = lv_sum_vol_gcv / lv_total_vol.
-      lv_avg_ncv = lv_sum_vol_ncv / lv_total_vol.
+    " Get GCV/NCV/MBG from ALV display to match what user sees on screen
+    READ TABLE gt_alv_display INTO gs_alv_display
+      WITH KEY location_id = ls_gail_id_map-location_id
+               material    = ls_gail_id_map-material
+               state_code  = ls_gail_id_map-state_code.
+    IF sy-subrc = 0.
+      lv_avg_gcv   = gs_alv_display-gcv.
+      lv_avg_ncv   = gs_alv_display-ncv.
+      lv_total_mbg = gs_alv_display-total_mbg.
+    ELSE.
+      IF lv_total_vol > 0.
+        lv_avg_gcv = lv_sum_vol_gcv / lv_total_vol.
+        lv_avg_ncv = lv_sum_vol_ncv / lv_total_vol.
+      ENDIF.
     ENDIF.
     " Populate fortnightly record
     ls_cst_fnt-date_from    = gv_date_from.
@@ -4776,12 +4794,12 @@ FORM recalculate_totals.
       lv_wt_date = lv_wt_date + 1.
     ENDDO.
     IF <fs_alv>-total_scm > 0.
-      <fs_alv>-gcv = lv_sum_gcv / <fs_alv>-total_scm.
-      <fs_alv>-ncv = lv_sum_ncv / <fs_alv>-total_scm.
+      <fs_alv>-gcv = round( val = lv_sum_gcv / <fs_alv>-total_scm dec = 3 ).
+      <fs_alv>-ncv = round( val = lv_sum_ncv / <fs_alv>-total_scm dec = 3 ).
     ELSE.
       CLEAR: <fs_alv>-gcv, <fs_alv>-ncv, <fs_alv>-total_mbg.
     ENDIF.
-    " Convert TOTAL_SCM to TOTAL_MBG using recalculated GCV/NCV
+    " Convert TOTAL_SCM to TOTAL_MBG using rounded GCV/NCV
     IF <fs_alv>-gcv > 0 AND <fs_alv>-total_scm > 0.
       CLEAR c_tgqty.
       i_trqty = <fs_alv>-total_scm.
@@ -4796,15 +4814,13 @@ FORM recalculate_totals.
           lv_ncv  = lv_ncv
         CHANGING
           c_tgqty = c_tgqty.
-      <fs_alv>-total_mbg = c_tgqty.
+      <fs_alv>-total_mbg = round( val = c_tgqty dec = 3 ).
     ELSE.
       CLEAR <fs_alv>-total_mbg.
     ENDIF.
     " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
-    DATA lv_rnd_alv TYPE p DECIMALS 3.
-    lv_rnd_alv = <fs_alv>-alloc_sales_mbg.
-    IF lv_rnd_alv <> 0 AND <fs_alv>-state_code <> 'GJ'.
+    IF <fs_alv>-alloc_sales_mbg < 0 OR <fs_alv>-alloc_sales_mbg > 1.
       <fs_alv>-row_color = 'C600'. " Red
     ELSE.
       CLEAR <fs_alv>-row_color.
@@ -4932,9 +4948,7 @@ FORM build_alv_display_table_view .
       ENDIF.
     ENDIF.
     <fs_alv_view>-alloc_sales_mbg = <fs_alv_view>-total_mbg - <fs_alv_view>-total_sales_mbg.
-    DATA lv_rnd_view TYPE p DECIMALS 3.
-    lv_rnd_view = <fs_alv_view>-alloc_sales_mbg.
-    IF lv_rnd_view <> 0 AND <fs_alv_view>-state_code <> 'GJ' and abs( lv_rnd_view ) > '0.01'.
+    IF <fs_alv_view>-alloc_sales_mbg < 0 OR <fs_alv_view>-alloc_sales_mbg > 1.
       <fs_alv_view>-row_color = 'C600'.
     ELSE.
       CLEAR <fs_alv_view>-row_color.
