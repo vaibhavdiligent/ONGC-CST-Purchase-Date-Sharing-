@@ -238,7 +238,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
             ls_bat     TYPE ty_batch_vals.
       READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
       IF sy-subrc <> 0. RETURN. ENDIF.
-      PERFORM get_valid_batches_for_material USING ls_disp-material CHANGING lt_batches.
+      PERFORM get_valid_batches_for_material USING ls_disp-material ls_disp-state_code CHANGING lt_batches.
       IF lt_batches IS INITIAL.
         MESSAGE 'No valid batches found for this material.' TYPE 'S' DISPLAY LIKE 'W'.
         RETURN.
@@ -340,7 +340,14 @@ FORM validate_selection_screen.
     ENDIF.
   ENDLOOP.
 
+  IF s_date[] IS INITIAL.
+    MESSAGE e000(oo) WITH 'Gas Day from date is mandatory' ' ' ' ' ' '.
+  ENDIF.
+
   LOOP AT s_date INTO ls_date WHERE sign = 'I' AND option = 'BT'.
+    IF ls_date-low IS INITIAL.
+      MESSAGE e000(oo) WITH 'Gas Day from date is mandatory' ' ' ' ' ' '.
+    ENDIF.
     lv_day_lo = ls_date-low+6(2).
     lv_day_hi = ls_date-high+6(2).
     IF lv_day_lo <> 1 AND lv_day_lo <> 16.
@@ -388,14 +395,14 @@ FORM fetch_pur_data.
       USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
-    PERFORM derive_batch USING ls_pur-material CHANGING ls_disp-charg.
+    PERFORM derive_batch USING ls_pur-material ls_pur-state_code CHANGING ls_disp-charg.
 
     CLEAR ls_disp-celltab.
     ls_styl-fieldname = 'CHARG'.
     ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
     APPEND ls_styl TO ls_disp-celltab.
 
-    IF ls_disp-oa_missing = abap_true.
+    IF ls_disp-oa_missing = abap_true AND ls_pur-state_code <> gc_excl_state.
       CLEAR ls_col.
       ls_col-fname     = 'OUTLINE_AGR'.
       ls_col-color-col = 6.
@@ -492,13 +499,28 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM derive_batch
   USING    iv_matnr TYPE matnr
+           iv_state TYPE char2
   CHANGING cv_charg TYPE charg_d.
-  DATA: lt_mcha TYPE STANDARD TABLE OF mcha,
-        ls_mcha TYPE mcha.
+  DATA: lt_mcha  TYPE STANDARD TABLE OF mcha,
+        ls_mcha  TYPE mcha,
+        lt_werks TYPE STANDARD TABLE OF werks_d,
+        lv_werks TYPE werks_d.
   CLEAR cv_charg.
-  SELECT matnr werks charg ersda lvorm FROM mcha
-    INTO CORRESPONDING FIELDS OF TABLE lt_mcha WHERE matnr = iv_matnr AND lvorm = ' '.
-  IF sy-subrc <> 0 OR lt_mcha IS INITIAL. RETURN. ENDIF.
+  SELECT werks FROM t001w INTO TABLE lt_werks
+    WHERE werks LIKE '2%' AND regio = iv_state.
+  IF lt_werks IS NOT INITIAL.
+    SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
+    LOOP AT lt_werks INTO lv_werks.
+      SELECT matnr werks charg ersda lvorm FROM mcha
+        APPENDING CORRESPONDING FIELDS OF TABLE lt_mcha
+        WHERE matnr = iv_matnr AND werks = lv_werks AND lvorm = ' '.
+    ENDLOOP.
+  ELSE.
+    SELECT matnr werks charg ersda lvorm FROM mcha
+      INTO CORRESPONDING FIELDS OF TABLE lt_mcha
+      WHERE matnr = iv_matnr AND lvorm = ' '.
+  ENDIF.
+  IF lt_mcha IS INITIAL. RETURN. ENDIF.
   SORT lt_mcha BY ersda DESCENDING.
   READ TABLE lt_mcha INDEX 1 INTO ls_mcha.
   IF sy-subrc = 0. cv_charg = ls_mcha-charg. ENDIF.
@@ -509,13 +531,28 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM get_valid_batches_for_material
   USING    iv_matnr  TYPE matnr
+           iv_state  TYPE char2
   CHANGING ct_batch  TYPE STANDARD TABLE.
-  DATA: lt_mcha TYPE STANDARD TABLE OF mcha,
-        ls_mcha TYPE mcha,
-        ls_val  TYPE ty_batch_vals.
+  DATA: lt_mcha  TYPE STANDARD TABLE OF mcha,
+        ls_mcha  TYPE mcha,
+        ls_val   TYPE ty_batch_vals,
+        lt_werks TYPE STANDARD TABLE OF werks_d,
+        lv_werks TYPE werks_d.
   REFRESH ct_batch.
-  SELECT matnr werks charg ersda lvorm FROM mcha
-    INTO CORRESPONDING FIELDS OF TABLE lt_mcha WHERE matnr = iv_matnr AND lvorm = ' '.
+  SELECT werks FROM t001w INTO TABLE lt_werks
+    WHERE werks LIKE '2%' AND regio = iv_state.
+  IF lt_werks IS NOT INITIAL.
+    SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
+    LOOP AT lt_werks INTO lv_werks.
+      SELECT matnr werks charg ersda lvorm FROM mcha
+        APPENDING CORRESPONDING FIELDS OF TABLE lt_mcha
+        WHERE matnr = iv_matnr AND werks = lv_werks AND lvorm = ' '.
+    ENDLOOP.
+  ELSE.
+    SELECT matnr werks charg ersda lvorm FROM mcha
+      INTO CORRESPONDING FIELDS OF TABLE lt_mcha
+      WHERE matnr = iv_matnr AND lvorm = ' '.
+  ENDIF.
   SORT lt_mcha BY ersda DESCENDING.
   LOOP AT lt_mcha INTO ls_mcha.
     ls_val-charg = ls_mcha-charg.
@@ -763,9 +800,15 @@ FORM handle_batch_mass_change.
         lv_charg  TYPE charg_d,
         lv_rc     TYPE char1.
 
+  DATA: lv_xchpf TYPE mara-xchpf.
   LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
     READ TABLE lt_matnrs WITH KEY table_line = ls_disp-material TRANSPORTING NO FIELDS.
-    IF sy-subrc <> 0. APPEND ls_disp-material TO lt_matnrs. ENDIF.
+    IF sy-subrc <> 0.
+      SELECT SINGLE xchpf FROM mara INTO lv_xchpf WHERE matnr = ls_disp-material.
+      IF sy-subrc = 0 AND lv_xchpf = 'X'.
+        APPEND ls_disp-material TO lt_matnrs.
+      ENDIF.
+    ENDIF.
   ENDLOOP.
   IF lt_matnrs IS INITIAL.
     MESSAGE 'Select rows first.' TYPE 'S' DISPLAY LIKE 'W'. RETURN.
@@ -773,7 +816,8 @@ FORM handle_batch_mass_change.
 
   LOOP AT lt_matnrs INTO lv_matnr.
     REFRESH: lt_batches, lt_f4.
-    PERFORM get_valid_batches_for_material USING lv_matnr CHANGING lt_batches.
+    READ TABLE gt_display INTO ls_disp WITH KEY material = lv_matnr.
+    PERFORM get_valid_batches_for_material USING lv_matnr ls_disp-state_code CHANGING lt_batches.
     IF lt_batches IS INITIAL. CONTINUE. ENDIF.
     LOOP AT lt_batches INTO ls_bat.
       ls_f4-fieldname = 'CHARG'. ls_f4-fieldval = ls_bat-charg.
