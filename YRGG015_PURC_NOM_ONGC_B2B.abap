@@ -104,7 +104,7 @@ CLASS lcl_event_handler DEFINITION.
         IMPORTING e_row_id e_column_id,
       on_onf4
         FOR EVENT onf4 OF cl_gui_alv_grid
-        IMPORTING e_fieldname e_rowno es_row_no er_event_data.
+        IMPORTING e_fieldname es_row_no er_event_data.
 ENDCLASS.
 
 DATA: go_handler TYPE REF TO lcl_event_handler.
@@ -232,7 +232,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
             lt_f4vals  TYPE STANDARD TABLE OF ddshretval,
             ls_f4val   TYPE ddshretval,
             ls_bat     TYPE ty_batch_vals.
-      READ TABLE gt_display INDEX e_rowno INTO ls_disp.
+      READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
       IF sy-subrc <> 0. RETURN. ENDIF.
       PERFORM get_valid_batches_for_material USING ls_disp-material CHANGING lt_batches.
       IF lt_batches IS INITIAL.
@@ -249,7 +249,7 @@ CLASS lcl_event_handler IMPLEMENTATION.
           retfield        = 'CHARG'
           dynpprog        = sy-repid
           dynpnr          = sy-dynnr
-          stepl           = e_rowno
+          stepl           = es_row_no-row_id
           value_org       = 'S'
         TABLES
           value_tab       = lt_f4vals
