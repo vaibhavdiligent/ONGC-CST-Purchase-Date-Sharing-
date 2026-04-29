@@ -591,20 +591,17 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM handle_create_nomination
-* Builds i_main matching YRXR036_PURC_NOM_G1 ty_main exactly,
-* exports to memory, then SUBMITs via SELECTION-TABLE so YRGR040
-* reads memory instead of Excel (r_excel = 'X' triggers batch_validate
-* → get_nomination → createfromdata flow).
 *----------------------------------------------------------------------*
 FORM handle_create_nomination.
-  DATA: lt_sel       TYPE tt_display,
-        ls_disp      TYPE ty_display,
-        lt_main      TYPE tt_main,
-        ls_main      TYPE ty_main,
-        lt_errors    TYPE tt_main,
-        lv_rank      TYPE i VALUE 1,
-        i_rspartab   TYPE STANDARD TABLE OF rsparams,
-        wa_rspartab  LIKE LINE OF i_rspartab.
+  DATA: lt_sel      TYPE tt_display,
+        ls_disp     TYPE ty_display,
+        lt_main     TYPE tt_main,
+        ls_main     TYPE ty_main,
+        lt_errors   TYPE tt_main,
+        i_rspartab  TYPE STANDARD TABLE OF rsparams,
+        wa_rspartab LIKE LINE OF i_rspartab,
+        ls_sdate    LIKE LINE OF s_date,
+        ls_slocid   LIKE LINE OF s_locid.
 
   " Collect selected rows
   LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
@@ -627,13 +624,11 @@ FORM handle_create_nomination.
     ENDIF.
   ENDLOOP.
 
-  " Build i_main in the exact column order YRXR036_PURC_NOM_G1 expects:
-  " tsyst (blank - filled by batch_validate via oij_el_doc_mot),
-  " vbeln = OA, date = gas_day, locid, matnr, menge, unit = SM3,
-  " charg, rank
+  " Build i_main: tsyst blank (batch_validate fills from oij_el_doc_mot),
+  " rank = 1 for all rows (equal priority in ONGC B2B purchase)
   LOOP AT lt_sel INTO ls_disp.
     CLEAR ls_main.
-    ls_main-tsyst = ''.               " batch_validate derives from oij_el_doc_mot
+    ls_main-tsyst = ''.
     ls_main-vbeln = ls_disp-outline_agr.
     ls_main-date  = ls_disp-gas_day.
     ls_main-locid = ls_disp-location_id.
@@ -641,25 +636,41 @@ FORM handle_create_nomination.
     ls_main-menge = ls_disp-qty_scm.
     ls_main-unit  = gc_sm3.
     ls_main-charg = ls_disp-charg.
-    ls_main-rank  = lv_rank.
+    ls_main-rank  = 1.
     APPEND ls_main TO lt_main.
-    lv_rank = lv_rank + 1.
   ENDLOOP.
 
-  " Export i_main so YRXR036_PURC_NOM_G1 can IMPORT it at START-OF-SELECTION
+  " Export i_main so YRXR036_PURC_NOM_G1 imports it at START-OF-SELECTION
   EXPORT lt_main TO MEMORY ID gc_memory_id.
 
-  " Build selection-table: set r_excel = 'X' to trigger the
-  " batch_validate → get_nomination → createfromdata path in YRGR040
+  " R_EXCEL = 'X' triggers batch_validate -> get_nomination -> createfromdata in YRGR040
   CLEAR wa_rspartab.
   wa_rspartab-selname = 'R_EXCEL'.
   wa_rspartab-kind    = 'P'.
   wa_rspartab-low     = abap_true.
   APPEND wa_rspartab TO i_rspartab.
 
-  " SUBMIT via selection screen - same pattern YRGR040 uses internally
-  " (e.g. SUBMIT yrxr008_nomination_corr_copy USING SELECTION-SCREEN
-  "  '1000' WITH SELECTION-TABLE i_rspartab AND RETURN)
+  " Pass S_DATE range so YRGR040 filters nominations by the same fortnight
+  LOOP AT s_date INTO ls_sdate.
+    CLEAR wa_rspartab.
+    wa_rspartab-selname = 'S_DATE'.
+    wa_rspartab-kind    = 'S'.
+    wa_rspartab-sign    = ls_sdate-sign.
+    wa_rspartab-option  = ls_sdate-option.
+    wa_rspartab-low     = ls_sdate-low.
+    wa_rspartab-high    = ls_sdate-high.
+    APPEND wa_rspartab TO i_rspartab.
+  ENDLOOP.
+
+  " Pass P_LOCID1 for each location selected on YRGG015 selection screen
+  LOOP AT s_locid INTO ls_slocid WHERE sign = 'I' AND option = 'EQ'.
+    CLEAR wa_rspartab.
+    wa_rspartab-selname = 'P_LOCID1'.
+    wa_rspartab-kind    = 'P'.
+    wa_rspartab-low     = ls_slocid-low.
+    APPEND wa_rspartab TO i_rspartab.
+  ENDLOOP.
+
   SUBMIT yrxr036_purc_nom_g1
     USING SELECTION-SCREEN '1000'
     WITH SELECTION-TABLE i_rspartab
