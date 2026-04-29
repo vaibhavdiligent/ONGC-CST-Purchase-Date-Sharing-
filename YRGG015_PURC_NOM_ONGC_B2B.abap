@@ -385,7 +385,7 @@ FORM fetch_pur_data.
     ls_disp-gail_id     = ls_pur-gail_id.
 
     PERFORM derive_outline_agreement
-      USING    ls_pur-locid ls_pur-material
+      USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
     PERFORM derive_batch USING ls_pur-material CHANGING ls_disp-charg.
@@ -409,15 +409,26 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM derive_outline_agreement
-* EKKO/EKPO: bstyp=K, werks LIKE 2%, matnr match, mwskz=DQ -> latest
+* FSD 5a: OIJ_EL_DOC_MOT (matnr+locid+delind+date range) -> VBELNs
+* FSD 5b: T001W (state+werks=2*) -> plants
+* FSD 5c: EKPO (ebeln in VBELNs, werks, mwskz=DQ, lvorm ne X) -> OAs
+* FSD 5d: retain latest OA by bedat
 *----------------------------------------------------------------------*
 FORM derive_outline_agreement
   USING    iv_locid   TYPE char10
            iv_matnr   TYPE matnr
+           iv_date    TYPE aedat
+           iv_state   TYPE char2
   CHANGING cv_vbeln   TYPE ebeln
            cv_missing TYPE char1.
 
-  DATA: BEGIN OF ls_res,
+  DATA: BEGIN OF ls_oa,
+          vbeln TYPE ebeln,
+        END OF ls_oa,
+        lt_oa         LIKE STANDARD TABLE OF ls_oa,
+        lt_werks      TYPE STANDARD TABLE OF werks_d,
+        lv_werks      TYPE werks_d,
+        BEGIN OF ls_res,
           ebeln TYPE ekko-ebeln,
           bedat TYPE ekko-bedat,
         END OF ls_res,
@@ -427,21 +438,46 @@ FORM derive_outline_agreement
 
   CLEAR: cv_vbeln, cv_missing.
 
-  SELECT ekko~ebeln ekko~bedat
-    FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
-    INTO CORRESPONDING FIELDS OF TABLE lt_res
-    WHERE ekko~bstyp = 'K'
-      AND ekpo~werks  LIKE '2%'
-      AND ekpo~matnr  = iv_matnr
-      AND ekpo~mwskz  = 'DQ'
-      AND ekpo~loekz  = ' '
-      AND ekko~loekz  = ' '.
+  " FSD 5a: get OAs from OIJ_EL_DOC_MOT
+  SELECT vbeln FROM oij_el_doc_mot
+    INTO CORRESPONDING FIELDS OF TABLE lt_oa
+    WHERE matnr     =  iv_matnr
+      AND locid     =  iv_locid
+      AND delind    <> 'X'
+      AND fromdate  <= iv_date
+      AND todate    >= iv_date.
 
-  LOOP AT lt_res INTO ls_res.
-    IF ls_res-bedat > lv_best_bedat.
-      lv_best_bedat = ls_res-bedat.
-      lv_best_vbeln = ls_res-ebeln.
-    ENDIF.
+  IF lt_oa IS INITIAL.
+    cv_missing = abap_true. RETURN.
+  ENDIF.
+
+  " FSD 5b: get plants for state from T001W, WERKS = 2*
+  SELECT werks FROM t001w INTO TABLE lt_werks
+    WHERE werks LIKE '2%' AND regio = iv_state.
+
+  IF lt_werks IS INITIAL.
+    cv_missing = abap_true. RETURN.
+  ENDIF.
+  SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
+
+  " FSD 5c+5d: EKPO/EKKO filter; keep latest OA by bedat
+  LOOP AT lt_oa INTO ls_oa.
+    LOOP AT lt_werks INTO lv_werks.
+      SELECT ekko~ebeln ekko~bedat
+        FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
+        INTO CORRESPONDING FIELDS OF TABLE lt_res
+        WHERE ekko~ebeln  =  ls_oa-vbeln
+          AND ekpo~werks  =  lv_werks
+          AND ekpo~lvorm  <> 'X'
+          AND ekpo~mwskz  =  'DQ'
+          AND ekko~loekz  =  ' '.
+      LOOP AT lt_res INTO ls_res.
+        IF ls_res-bedat > lv_best_bedat.
+          lv_best_bedat = ls_res-bedat.
+          lv_best_vbeln = ls_res-ebeln.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
   ENDLOOP.
 
   IF lv_best_vbeln IS NOT INITIAL.
