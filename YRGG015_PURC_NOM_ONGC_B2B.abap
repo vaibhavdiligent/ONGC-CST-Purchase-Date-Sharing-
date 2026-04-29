@@ -126,8 +126,8 @@ SELECTION-SCREEN END OF BLOCK b2.
 *----------------------------------------------------------------------*
 INITIALIZATION.
   PERFORM set_default_fn_dates.
-  TEXT-001 = 'Selection Criteria'.
-  TEXT-002 = 'Background Processing'.
+*  TEXT-001 = 'Selection Criteria'.
+*  TEXT-002 = 'Background Processing'.
 
 *----------------------------------------------------------------------*
 * AT SELECTION-SCREEN OUTPUT
@@ -331,8 +331,8 @@ FORM validate_selection_screen.
         lv_loc    TYPE oij_locid.
 
   LOOP AT s_locid INTO ls_locid WHERE sign = 'I' AND option = 'EQ'.
-    SELECT SINGLE locid FROM yrga_cst_loc_map INTO lv_loc
-      WHERE locid = ls_locid-low.
+    SELECT SINGLE GAIL_LOC_ID FROM yrga_cst_loc_map INTO lv_loc
+      WHERE GAIL_LOC_ID = ls_locid-low.
     IF sy-subrc <> 0.
       MESSAGE e000(oo) WITH
         'Business Location doesn''t pertain to ONGC CST Purchase:'
@@ -362,13 +362,14 @@ FORM fetch_pur_data.
         ls_styl TYPE lvc_s_styl,
         ls_col  TYPE lvc_s_scol.
 
-  SELECT gas_day, locid, material, state_code, qty_scm, gail_id, deleted
+  SELECT gas_day location AS locid material state_code
+         qty_in_scm AS qty_scm gail_id deleted
     FROM yrga_cst_pur
-    INTO TABLE @lt_pur
-    WHERE gas_day     IN @s_date
-      AND locid IN @s_locid
-      AND deleted    <> @gc_deleted
-      AND state_code <> @gc_excl_state.
+    INTO CORRESPONDING FIELDS OF TABLE lt_pur
+    WHERE gas_day    IN s_date
+      AND location   IN s_locid
+      AND deleted   <> gc_deleted
+      AND state_code <> gc_excl_state.
 
   IF sy-subrc <> 0 OR lt_pur IS INITIAL. RETURN. ENDIF.
   DELETE lt_pur WHERE qty_scm = 0.
