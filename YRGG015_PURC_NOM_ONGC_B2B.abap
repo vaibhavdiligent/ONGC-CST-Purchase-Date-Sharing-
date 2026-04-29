@@ -65,17 +65,27 @@ TYPES: BEGIN OF ty_batch_vals,
 TYPES: tt_main    TYPE STANDARD TABLE OF ty_main.
 TYPES: tt_display TYPE STANDARD TABLE OF ty_display.
 
+TYPES: BEGIN OF ty_batch_assign,
+         matnr      TYPE matnr,
+         state_code TYPE char2,
+         charg      TYPE charg_d,
+       END OF ty_batch_assign.
+TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
+
 *----------------------------------------------------------------------*
 * DATA DECLARATIONS
 *----------------------------------------------------------------------*
-DATA: gt_display   TYPE tt_display,
-      gt_main      TYPE tt_main,
-      go_alv       TYPE REF TO cl_gui_alv_grid,
-      go_container TYPE REF TO cl_gui_custom_container,
-      gs_layout    TYPE lvc_s_layo,
-      gt_fcat      TYPE lvc_t_fcat,
-      gv_okcode    TYPE syucomm,
-      gv_auth_bg   TYPE char1.
+DATA: gt_display      TYPE tt_display,
+      gt_main         TYPE tt_main,
+      go_alv          TYPE REF TO cl_gui_alv_grid,
+      go_container    TYPE REF TO cl_gui_custom_container,
+      gs_layout       TYPE lvc_s_layo,
+      gt_fcat         TYPE lvc_t_fcat,
+      gv_okcode       TYPE syucomm,
+      gv_auth_bg      TYPE char1,
+      go_batch_popup  TYPE REF TO cl_gui_dialogbox_container,
+      go_batch_alv    TYPE REF TO cl_gui_alv_grid,
+      gt_batch_assign TYPE tt_batch_assign.
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
@@ -104,7 +114,12 @@ CLASS lcl_event_handler DEFINITION.
         IMPORTING e_row_id e_column_id,
       on_onf4
         FOR EVENT onf4 OF cl_gui_alv_grid
-        IMPORTING e_fieldname es_row_no er_event_data.
+        IMPORTING e_fieldname es_row_no er_event_data,
+      on_batch_data_changed
+        FOR EVENT data_changed OF cl_gui_alv_grid
+        IMPORTING er_data_changed,
+      on_batch_dlg_close
+        FOR EVENT close OF cl_gui_dialogbox_container.
 ENDCLASS.
 
 DATA: go_handler TYPE REF TO lcl_event_handler.
@@ -152,7 +167,9 @@ START-OF-SELECTION.
     LEAVE LIST-PROCESSING.
   ENDIF.
 
-  IF p_bgrun = abap_true.
+  IF sy-batch = 'X'.
+    PERFORM create_all_nominations_bg.
+  ELSEIF p_bgrun = abap_true.
     PERFORM schedule_background_job.
   ELSE.
     PERFORM display_alv_grid.
@@ -264,6 +281,43 @@ CLASS lcl_event_handler IMPLEMENTATION.
       IF sy-subrc = 0.
         er_event_data->m_event_handled = abap_true.
       ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD on_batch_data_changed.
+    DATA: ls_mod    TYPE lvc_s_modi,
+          ls_assign TYPE ty_batch_assign.
+    LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
+      IF ls_mod-fieldname = 'CHARG'.
+        READ TABLE gt_batch_assign INDEX ls_mod-row_id INTO ls_assign.
+        IF sy-subrc = 0.
+          ls_assign-charg = ls_mod-value.
+          MODIFY gt_batch_assign INDEX ls_mod-row_id FROM ls_assign.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD on_batch_dlg_close.
+    DATA: ls_assign TYPE ty_batch_assign,
+          ls_disp   TYPE ty_display.
+    LOOP AT gt_batch_assign INTO ls_assign.
+      IF ls_assign-charg IS INITIAL. CONTINUE. ENDIF.
+      LOOP AT gt_display INTO ls_disp WHERE sel = abap_true AND material = ls_assign-matnr.
+        ls_disp-charg = ls_assign-charg.
+        MODIFY gt_display FROM ls_disp.
+      ENDLOOP.
+    ENDLOOP.
+    IF go_batch_alv IS NOT INITIAL.
+      go_batch_alv->free( ).
+      CLEAR go_batch_alv.
+    ENDIF.
+    IF go_batch_popup IS NOT INITIAL.
+      go_batch_popup->free( ).
+      CLEAR go_batch_popup.
+    ENDIF.
+    IF go_alv IS NOT INITIAL.
+      go_alv->refresh_table_display( ).
     ENDIF.
   ENDMETHOD.
 
@@ -788,59 +842,82 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM handle_batch_mass_change
+* Gap 2: distinct messages for "nothing selected" vs "no batch-managed"
+* Gap 3: single combined dialog for all materials instead of sequential popups
 *----------------------------------------------------------------------*
 FORM handle_batch_mass_change.
-  DATA: ls_disp   TYPE ty_display,
-        lt_matnrs TYPE STANDARD TABLE OF matnr,
-        lv_matnr  TYPE matnr,
-        lt_batches TYPE STANDARD TABLE OF ty_batch_vals,
-        ls_bat    TYPE ty_batch_vals,
-        lt_f4     TYPE STANDARD TABLE OF ddshretval,
-        ls_f4     TYPE ddshretval,
-        lv_charg  TYPE charg_d,
-        lv_rc     TYPE char1.
+  DATA: ls_disp     TYPE ty_display,
+        ls_assign   TYPE ty_batch_assign,
+        lv_xchpf    TYPE mara-xchpf,
+        lv_rows_sel TYPE i,
+        lt_fcat     TYPE lvc_t_fcat,
+        ls_fcat     TYPE lvc_s_fcat,
+        ls_layout   TYPE lvc_s_layo.
 
-  DATA: lv_xchpf TYPE mara-xchpf.
+  REFRESH gt_batch_assign.
+  lv_rows_sel = 0.
+
   LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
-    READ TABLE lt_matnrs WITH KEY table_line = ls_disp-material TRANSPORTING NO FIELDS.
+    ADD 1 TO lv_rows_sel.
+    READ TABLE gt_batch_assign WITH KEY matnr = ls_disp-material TRANSPORTING NO FIELDS.
     IF sy-subrc <> 0.
       SELECT SINGLE xchpf FROM mara INTO lv_xchpf WHERE matnr = ls_disp-material.
       IF sy-subrc = 0 AND lv_xchpf = 'X'.
-        APPEND ls_disp-material TO lt_matnrs.
+        CLEAR ls_assign.
+        ls_assign-matnr      = ls_disp-material.
+        ls_assign-state_code = ls_disp-state_code.
+        PERFORM derive_batch USING ls_disp-material ls_disp-state_code
+                             CHANGING ls_assign-charg.
+        APPEND ls_assign TO gt_batch_assign.
       ENDIF.
     ENDIF.
   ENDLOOP.
-  IF lt_matnrs IS INITIAL.
+
+  IF lv_rows_sel = 0.
     MESSAGE 'Select rows first.' TYPE 'S' DISPLAY LIKE 'W'. RETURN.
   ENDIF.
+  IF gt_batch_assign IS INITIAL.
+    MESSAGE 'No batch-managed materials found in selected rows.' TYPE 'S'
+            DISPLAY LIKE 'W'. RETURN.
+  ENDIF.
 
-  LOOP AT lt_matnrs INTO lv_matnr.
-    REFRESH: lt_batches, lt_f4.
-    READ TABLE gt_display INTO ls_disp WITH KEY material = lv_matnr.
-    PERFORM get_valid_batches_for_material USING lv_matnr ls_disp-state_code CHANGING lt_batches.
-    IF lt_batches IS INITIAL. CONTINUE. ENDIF.
-    LOOP AT lt_batches INTO ls_bat.
-      ls_f4-fieldname = 'CHARG'. ls_f4-fieldval = ls_bat-charg.
-      APPEND ls_f4 TO lt_f4. CLEAR ls_f4.
-    ENDLOOP.
-    CLEAR lv_charg.
-    CALL FUNCTION 'POPUP_WITH_TABLE_DISPLAY'
-      EXPORTING endpos_col = 60 endpos_row = 15 startpos_col = 5 startpos_row = 5
-                titletext  = |Select Batch for Material { lv_matnr }|
-      IMPORTING RETURNCODE = lv_rc
-      TABLES    valuetab   = lt_f4
-      EXCEPTIONS OTHERS    = 1.
-    IF sy-subrc = 0 AND lv_rc = ''.
-      READ TABLE lt_f4 INDEX 1 INTO ls_f4.
-      IF sy-subrc = 0. lv_charg = ls_f4-fieldval. ENDIF.
-    ENDIF.
-    IF lv_charg IS INITIAL. CONTINUE. ENDIF.
-    LOOP AT gt_display INTO ls_disp WHERE sel = abap_true AND material = lv_matnr.
-      ls_disp-charg = lv_charg.
-      MODIFY gt_display FROM ls_disp.
-    ENDLOOP.
-  ENDLOOP.
-  go_alv->refresh_table_display( ).
+  " Single batch assignment dialog showing all materials at once (FSD Point 6)
+  CREATE OBJECT go_batch_popup
+    EXPORTING
+      caption    = 'Batch Assignment'
+      top        = 5
+      left       = 5
+      width      = 500
+      height     = 300
+    EXCEPTIONS OTHERS = 1.
+  IF sy-subrc <> 0.
+    MESSAGE 'Error opening batch assignment dialog.' TYPE 'S' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+  SET HANDLER go_handler->on_batch_dlg_close FOR go_batch_popup.
+
+  CREATE OBJECT go_batch_alv
+    EXPORTING i_parent = go_batch_popup
+    EXCEPTIONS OTHERS = 1.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  SET HANDLER go_handler->on_batch_data_changed FOR go_batch_alv.
+
+  ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. ls_fcat-outputlen = 18.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'CHARG'. ls_fcat-coltext = 'Batch'. ls_fcat-outputlen = 10.
+  ls_fcat-edit = abap_true.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+
+  ls_layout-cwidth_opt = abap_true.
+  ls_layout-edit       = abap_true.
+
+  go_batch_alv->set_table_for_first_display(
+    EXPORTING is_layout       = ls_layout
+    CHANGING  it_outtab       = gt_batch_assign
+              it_fieldcatalog = lt_fcat
+    EXCEPTIONS OTHERS = 1 ).
+
+  go_batch_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -868,6 +945,65 @@ FORM schedule_background_job.
   ELSE.
     MESSAGE 'Error scheduling background job.' TYPE 'E'.
   ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM create_all_nominations_bg
+* Called when sy-batch='X': builds nominations for ALL valid display rows
+* and SUBMITs YRGR040 without any GUI interaction (FSD Point 14)
+*----------------------------------------------------------------------*
+FORM create_all_nominations_bg.
+  DATA: ls_disp     TYPE ty_display,
+        lt_main     TYPE tt_main,
+        ls_main     TYPE ty_main,
+        i_rspartab  TYPE STANDARD TABLE OF rsparams,
+        wa_rspartab LIKE LINE OF i_rspartab,
+        ls_sdate    LIKE LINE OF s_date,
+        ls_slocid   LIKE LINE OF s_locid.
+
+  LOOP AT gt_display INTO ls_disp.
+    IF ls_disp-outline_agr IS INITIAL OR ls_disp-charg IS INITIAL. CONTINUE. ENDIF.
+    CLEAR ls_main.
+    ls_main-vbeln = ls_disp-outline_agr.
+    ls_main-date  = ls_disp-gas_day.
+    ls_main-locid = ls_disp-locid.
+    ls_main-matnr = ls_disp-material.
+    ls_main-menge = ls_disp-qty_scm.
+    ls_main-unit  = gc_sm3.
+    ls_main-charg = ls_disp-charg.
+    ls_main-rank  = 1.
+    APPEND ls_main TO lt_main.
+  ENDLOOP.
+
+  IF lt_main IS INITIAL. RETURN. ENDIF.
+
+  EXPORT lt_main TO MEMORY ID gc_memory_id.
+
+  CLEAR wa_rspartab.
+  wa_rspartab-selname = 'R_EXCEL'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
+  APPEND wa_rspartab TO i_rspartab.
+
+  LOOP AT s_date INTO ls_sdate.
+    CLEAR wa_rspartab.
+    wa_rspartab-selname = 'S_DATE'. wa_rspartab-kind    = 'S'.
+    wa_rspartab-sign    = ls_sdate-sign. wa_rspartab-option = ls_sdate-option.
+    wa_rspartab-low     = ls_sdate-low.  wa_rspartab-high   = ls_sdate-high.
+    APPEND wa_rspartab TO i_rspartab.
+  ENDLOOP.
+
+  LOOP AT s_locid INTO ls_slocid WHERE sign = 'I' AND option = 'EQ'.
+    CLEAR wa_rspartab.
+    wa_rspartab-selname = 'P_LOCID1'. wa_rspartab-kind = 'P'.
+    wa_rspartab-low     = ls_slocid-low.
+    APPEND wa_rspartab TO i_rspartab.
+  ENDLOOP.
+
+  SUBMIT yrxr036_purc_nom_g1
+    USING SELECTION-SCREEN '1000'
+    WITH SELECTION-TABLE i_rspartab
+    AND RETURN.
+
+  FREE MEMORY ID gc_memory_id.
 ENDFORM.
 
 *----------------------------------------------------------------------*
