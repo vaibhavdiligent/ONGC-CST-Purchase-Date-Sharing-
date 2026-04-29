@@ -1210,7 +1210,6 @@ FORM handle_allocate.
         LOOP AT it_state ASSIGNING FIELD-SYMBOL(<fs_state>) WHERE
           empst = <fs_sales>-empst AND
           matnr = <fs_sales>-matnr AND state_code = wa_asales-regio.
-*          IF sy-subrc = 0.
           IF <fs_state>-qty_mbg > abs( l_left ).
             <fs_state>-qty_allocated = <fs_state>-qty_mbg + l_left.
             l_exit = 'X'.
@@ -1219,7 +1218,6 @@ FORM handle_allocate.
             l_left = l_left + <fs_state>-qty_mbg.
             CLEAR <fs_state>-qty_allocated.
           ENDIF.
-*          ENDIF.
         ENDLOOP.
         IF l_exit = 'X'.
           EXIT.
