@@ -635,7 +635,7 @@ START-OF-SELECTION.
                 WHEN 'CALL METHOD GENERIC PARAMETER' OR 'OLD STRUCTURE-COMPONENT TYPE CONFLICT'
                   OR 'CALL FUNCTION GENERIC PARAMETER' OR 'WRITE ISSUE' OR 'WRITE-LENGTH ISSUE'
                   OR 'SET PARAMETER ISSUE' OR 'OLD SELECT TYPE CONFLICT' OR 'MOVE GENERIC ->'
-                  OR 'MOVE -> GENERIC' OR ' REPLACE ISSUE' OR 'OFFSET/LENGTH-ACCESS'
+                  OR 'MOVE -> GENERIC' OR 'REPLACE ISSUE' OR 'OFFSET/LENGTH-ACCESS'
                   OR 'OLD MOVE LENGTH CONFLICT' OR 'GENERIC SOURCE CODE ISSUE'
                   OR 'MESSAGE-WITH LENGTH CONFLICT' OR 'STRUCTURE-COMPONENT LENGTH CONFLICT'
                   OR 'EXPORT ISSUE' OR 'GET PARAMETER ISSUE'.
@@ -1032,43 +1032,20 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
-                  DATA l_has_into TYPE flag.
-                  CLEAR l_has_into.
                   LOOP AT repos_tab INTO DATA(wa_repos_tab1) FROM l_tabix1.
                     l_tab = sy-tabix.
                     IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'.
                       l_for = 'X'.
                     ENDIF.
-                    IF wa_repos_tab1-line CS 'INTO'. l_has_into = 'X'. ENDIF.
                     IF wa_repos_tab1-line CS '.' AND l_for IS INITIAL.
                       CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
                       APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
                       REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab1-line WITH space IGNORING CASE.
-                      REPLACE ALL OCCURRENCES OF 'ENDSELECT' IN wa_repos_tab1-line WITH space IGNORING CASE.
                       CONDENSE wa_repos_tab1-line.
-                      IF l_has_into IS INITIAL.
-                        CONCATENATE wa_repos_tab1-line 'INTO TABLE @DATA(lt_result) ORDER BY PRIMARY KEY.'
-                          INTO wa_repos_tab1-line SEPARATED BY space.
-                      ELSE.
-                        CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
-                          INTO wa_repos_tab1-line SEPARATED BY space.
-                      ENDIF.
+                      CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
+                        INTO wa_repos_tab1-line SEPARATED BY space.
                       APPEND wa_repos_tab1 TO repos_tab_new.
                       l_tab = l_tab + 1.
-                      " Also strip ENDSELECT from the immediately following line
-                      DATA(l_endsel_idx) = l_tab.
-                      DATA wa_endsel TYPE abaptxt255.
-                      READ TABLE repos_tab INTO wa_endsel INDEX l_endsel_idx.
-                      IF sy-subrc = 0.
-                        DATA(l_endsel_chk) = wa_endsel-line.
-                        CONDENSE l_endsel_chk.
-                        TRANSLATE l_endsel_chk TO UPPER CASE.
-                        IF l_endsel_chk CS 'ENDSELECT'.
-                          CONCATENATE '*' wa_endsel-line INTO wa_blank-line.
-                          APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
-                          l_tab = l_tab + 1.
-                        ENDIF.
-                      ENDIF.
                       EXIT.
                     ELSE.
                       IF l_for = 'X' AND wa_repos_tab1-line CS '.'.
@@ -1728,10 +1705,16 @@ FORM change_table.
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
+      DATA l_nosp TYPE flag.
       LOOP AT it_table INTO wa_table FROM l_into.
         IF sy-tabix = l_from OR sy-tabix = l_where
           OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
         IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        " Determine if this token must be glued to the previous (no space) - for @DATA(...)
+        CLEAR l_nosp.
+        IF ( wa_table-value = '(' AND l_prev_at_tok = abap_true ) OR l_at_paren_depth > 0.
+          l_nosp = abap_true.
+        ENDIF.
         IF wa_table-value = '(' AND l_prev_at_tok = abap_true.
           l_at_paren_depth = l_at_paren_depth + 1.
         ELSEIF wa_table-value = ')' AND l_at_paren_depth > 0.
@@ -1754,7 +1737,9 @@ FORM change_table.
         l_bras1 = sy-tabix + 1.
         READ TABLE it_table INTO DATA(wa_table_b) INDEX l_bras1.
         IF sy-subrc = 0. IF wa_table_b-value = ')'. CLEAR l_bras. ENDIF. ENDIF.
-        IF wa_table-value <> '(' AND wa_table-value <> ')'.
+        IF l_nosp = abap_true.
+          CONCATENATE l_query wa_table-value INTO l_query.
+        ELSEIF wa_table-value <> '(' AND wa_table-value <> ')'.
           CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
         ELSE.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
@@ -1893,10 +1878,16 @@ FORM change_table.
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
+      DATA l_nosp2 TYPE flag.
       LOOP AT it_table INTO wa_table FROM l_into.
         IF sy-tabix = l_from OR sy-tabix = l_where
           OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
         IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        " Determine if this token must be glued to the previous (no space) - for @DATA(...)
+        CLEAR l_nosp2.
+        IF ( wa_table-value = '(' AND l_prev_at_tok = abap_true ) OR l_at_paren_depth > 0.
+          l_nosp2 = abap_true.
+        ENDIF.
         IF wa_table-value = '(' AND l_prev_at_tok = abap_true.
           l_at_paren_depth = l_at_paren_depth + 1.
         ELSEIF wa_table-value = ')' AND l_at_paren_depth > 0.
@@ -1919,7 +1910,9 @@ FORM change_table.
         l_bras1 = sy-tabix + 1.
         READ TABLE it_table INTO wa_table_b INDEX l_bras1.
         IF sy-subrc = 0. IF wa_table_b-value = ')'. CLEAR l_bras. ENDIF. ENDIF.
-        IF wa_table-value <> '(' AND wa_table-value <> ')'.
+        IF l_nosp2 = abap_true.
+          CONCATENATE l_query wa_table-value INTO l_query.
+        ELSEIF wa_table-value <> '(' AND wa_table-value <> ')'.
           CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
         ELSE.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
