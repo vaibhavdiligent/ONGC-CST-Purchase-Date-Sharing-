@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Q4 Formula Changes - Original vs Amended</title>
+  <style>
+    @media print { body { margin: 30px 40px; } }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      margin: 40px 60px;
+      color: #000;
+      background: #fff;
+      line-height: 1.6;
+    }
+    h1 { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 4px; }
+    .subtitle { text-align: center; font-size: 11pt; color: #555; margin-bottom: 24px; }
+    h2 { font-size: 12.5pt; font-weight: bold; text-decoration: underline; margin: 22px 0 8px 0; }
+    h3 { font-size: 12pt; font-weight: bold; margin: 14px 0 6px 0; }
+
+    table { border-collapse: collapse; width: 100%; margin: 8px 0 18px 0; font-size: 11.5pt; }
+    th, td { border: 1.5px solid #000; padding: 7px 11px; vertical-align: top; }
+    th { background: #f0f0f0; font-weight: bold; text-align: center; }
+    td.label { font-weight: bold; width: 20%; background: #fafafa; }
+    td.old { background: #fff0f0; width: 38%; }
+    td.new { background: #f0fff0; width: 38%; }
+
+    .code {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10pt;
+      background: #f5f5f5;
+      border-left: 3px solid #888;
+      padding: 6px 10px;
+      margin: 4px 0;
+      white-space: pre-wrap;
+    }
+    .code-old {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10pt;
+      background: #fff0f0;
+      border-left: 3px solid #cc0000;
+      padding: 6px 10px;
+      margin: 4px 0;
+      white-space: pre-wrap;
+    }
+    .code-new {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10pt;
+      background: #f0fff0;
+      border-left: 3px solid #006600;
+      padding: 6px 10px;
+      margin: 4px 0;
+      white-space: pre-wrap;
+    }
+    .removed { color: #cc0000; font-weight: bold; }
+    .added   { color: #006600; font-weight: bold; }
+    .tag {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10pt;
+      background: #efefef;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 0 4px;
+    }
+    hr { border: none; border-top: 1px solid #ccc; margin: 20px 0; }
+    .legend { font-size: 10.5pt; margin-bottom: 14px; }
+    .legend span { display: inline-block; padding: 2px 10px; margin-right: 10px; border: 1px solid #999; }
+    .leg-old { background: #fff0f0; }
+    .leg-new { background: #f0fff0; }
+  </style>
+</head>
+<body>
+
+<h1>Formula Changes: Original vs Amended Q4 Discount</h1>
+<p class="subtitle">
+  Original: <strong>YRVG004_QAIS_EXECUTE</strong> &nbsp;|&nbsp;
+  Amended: <strong>YRVG004_QAIS_Q4_AMEND</strong>
+</p>
+
+<div class="legend">
+  <span class="leg-old">Original Code (Removed / Changed)</span>
+  <span class="leg-new">Amended Code (New / Added)</span>
+</div>
+
+<hr>
+
+<!-- =================== CHANGE 1 =================== -->
+<h2>Change 1 &mdash; BCQ / QCQ Base Definition</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">What is BCQ?</td>
+    <td class="old">
+      Full quarter committed qty (all 3 months)<br>
+      <span class="removed">QCQ = Jan MCQ + Feb MCQ + Mar MCQ</span>
+      <div class="code-old">w_quater_min = (commited_qty_m10
+            + commited_qty_m11
+            + commited_qty_m12)
+            * min_perc_q4 / 100</div>
+    </td>
+    <td class="new">
+      Bi-monthly committed qty (Jan+Feb only)<br>
+      <span class="added">BCQ = Jan MCQ + Feb MCQ</span>
+      <div class="code-new">lv_bcq = commited_qty_m10
+       + commited_qty_m11
+
+lv_qcq = commited_qty_m10
+       + commited_qty_m11
+       + commited_qty_m12</div>
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 2 =================== -->
+<h2>Change 2 &mdash; Slab % Calculation Formula</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">Slab % Formula</td>
+    <td class="old">
+      <span class="removed">Single calculation using full quarter lifting vs full QCQ</span>
+      <div class="code-old">( grp_lift_qty_m10
++ grp_lift_qty_m11
++ grp_lift_qty_m12 )
+/ ( commited_qty_m10
+  + commited_qty_m11
+  + commited_qty_m12 )
+* 100</div>
+      Used implicitly via min/max threshold comparisons only.
+    </td>
+    <td class="new">
+      <span class="added">Two separate calculations:</span>
+      <div class="code-new">-- Amended %: Jan+Feb lift vs BCQ
+lv_amended_pct =
+  ( grp_lift_qty_m10
+  + grp_lift_qty_m11 )
+  / lv_bcq * 100
+
+-- Original %: Full quarter vs QCQ
+lv_orig_pct =
+  ( grp_lift_qty_m10
+  + grp_lift_qty_m11
+  + grp_lift_qty_m12 )
+  / lv_qcq * 100</div>
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 3 =================== -->
+<h2>Change 3 &mdash; Slab Thresholds</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">Min Threshold</td>
+    <td class="old">
+      <span class="removed">85% of QCQ</span> (from <span class="tag">yrva_mstr_waiver-min_perc_q4</span>)
+      <div class="code-old">w_quater_min = QCQ * 85 / 100</div>
+      Below 85% → not eligible
+    </td>
+    <td class="new">
+      <span class="added">100% of BCQ (fixed)</span>
+      <div class="code-new">IF p_perc GE 100 → eligible</div>
+      Below 100% → NA (not eligible)
+    </td>
+  </tr>
+  <tr>
+    <td class="label">Slab Breakpoints</td>
+    <td class="old">
+      <span class="removed">Max cap: 125% of QCQ</span> (from <span class="tag">yrva_mstr_waiver-max_perc_q4</span>)<br>
+      No intermediate slabs — single rate from KONM scale
+    </td>
+    <td class="new">
+      <span class="added">Three fixed breakpoints:</span>
+      <div class="code-new">IF p_perc GE 120 → p_rate = 2500
+ELSEIF p_perc GE 110 → p_rate = 2000
+ELSEIF p_perc GE 100 → p_rate = 1500
+ELSE               → p_rate = 0 (NA)</div>
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 4 =================== -->
+<h2>Change 4 &mdash; Discount Rate Source</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">Rate Source</td>
+    <td class="old">
+      <span class="removed">Dynamic lookup from SAP condition table</span>
+      <div class="code-old">SELECT from A350 (kschl='ZQIS')
+→ SELECT from KONM (scale table)
+SORT i_cond BY kstbm DESCENDING.
+LOOP AT i_cond
+  WHERE kstbm LE mou_qty.
+  w_kbetr = i_cond-kbetr.
+ENDLOOP.</div>
+    </td>
+    <td class="new">
+      <span class="added">Fixed rates from new FORM GET_Q4_SLAB_RATE</span>
+      <div class="code-new">FORM get_q4_slab_rate
+  USING p_perc CHANGING p_rate.
+  IF p_perc GE 120. p_rate = 2500.
+  ELSEIF p_perc GE 110. p_rate = 2000.
+  ELSEIF p_perc GE 100. p_rate = 1500.
+  ENDIF.
+ENDFORM.</div>
+      No A350 / KONM lookup for Q4.
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 5 =================== -->
+<h2>Change 5 &mdash; Fallback / Comparison Logic</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">New Customer Handling</td>
+    <td class="old">
+      <span class="removed">Hard exclusion — record skipped entirely</span>
+      <div class="code-old">IF mou_begda GE '20240201'.
+  lv_flag123 = 'X'.
+  EXIT.
+ENDIF.</div>
+      Customer with MOU from Feb-2024 gets NO discount — no comparison done.
+    </td>
+    <td class="new">
+      <span class="added">Compare both schemes — give higher rate</span>
+      <div class="code-new">PERFORM get_q4_slab_rate
+  USING lv_amended_pct
+  CHANGING lv_amended_rt.
+PERFORM get_q4_slab_rate
+  USING lv_orig_pct
+  CHANGING lv_orig_rt.
+
+IF lv_orig_rt GT lv_amended_rt.
+  lv_q4_amended_rate = lv_orig_rt.
+  scheme = 'ORIGINAL'.
+ELSEIF lv_amended_rt GT 0.
+  lv_q4_amended_rate = lv_amended_rt.
+  scheme = 'AMENDED'.
+ELSE.
+  lv_flag123 = 'X'. "both NA
+  scheme = 'NA'.
+ENDIF.</div>
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 6 =================== -->
+<h2>Change 6 &mdash; Discount Amount Calculation</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">Amount Formula</td>
+    <td class="old">
+      <span class="removed">Single combined amount: all 3 months together</span>
+      <div class="code-old">tot_elgl_qty =
+  ind_elgl_qty_m1   (Jan)
++ ind_elgl_qty_m2   (Feb)
++ ind_elgl_qty_m3   (Mar)
+
+value = tot_elgl_qty * w_kbetr</div>
+      Jan, Feb, Mar not shown separately.
+    </td>
+    <td class="new">
+      <span class="added">Split: Jan+Feb amount and Mar amount shown separately</span>
+      <div class="code-new">jan_feb_amt =
+  ( ind_elgl_qty_m1    (Jan)
+  + ind_elgl_qty_m2 )  (Feb)
+  * lv_q4_amended_rate
+
+mar_amt =
+  ind_elgl_qty_m3      (Mar)
+  * lv_q4_amended_rate
+
+value = jan_feb_amt + mar_amt</div>
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 7 =================== -->
+<h2>Change 7 &mdash; New Fields in Output (it_data_quater)</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">Output Structure</td>
+    <td class="old">
+      <span class="removed">No BCQ/QCQ % columns</span><br>
+      Only: tot_grp_lift_qty, tot_elgl_qty, value, remarks
+    </td>
+    <td class="new">
+      <span class="added">5 new fields added to it_data_quater:</span>
+      <div class="code-new">bcq_perc    "Amended BCQ %
+orig_perc   "Original QCQ %
+scheme      "AMENDED / ORIGINAL / NA
+jan_feb_amt "Jan+Feb discount Rs
+mar_amt     "Mar discount Rs</div>
+    </td>
+  </tr>
+  <tr>
+    <td class="label">ALV Columns (Q4)</td>
+    <td class="old">
+      <span class="removed">Tot Grp Lift Qty, Total Eligible Qty, Quarterly Discount</span>
+    </td>
+    <td class="new">
+      <span class="added">Jan Grp Lift, Feb Grp Lift, Mar Grp Lift,<br>
+      Amended BCQ%, Original QCQ%, Scheme Used,<br>
+      Jan Ind Elgl, Feb Ind Elgl, Mar Ind Elgl,<br>
+      Total Eligible Qty, Jan+Feb Amt, Mar Amt, Total Q4 Discount</span>
+    </td>
+  </tr>
+</table>
+
+<!-- =================== CHANGE 8 =================== -->
+<h2>Change 8 &mdash; New FORM Added</h2>
+
+<table>
+  <tr>
+    <th style="width:20%">Aspect</th>
+    <th>Original Program</th>
+    <th>Amended Program</th>
+  </tr>
+  <tr>
+    <td class="label">New Form</td>
+    <td class="old">
+      <span class="removed">Not present</span><br>
+      Rate looked up from KONM for all quarters.
+    </td>
+    <td class="new">
+      <span class="added">FORM GET_Q4_SLAB_RATE added</span>
+      <div class="code-new">FORM get_q4_slab_rate
+  USING    p_perc TYPE p
+  CHANGING p_rate TYPE kbetr.
+  CLEAR p_rate.
+  IF p_perc GE 120. p_rate = 2500.
+  ELSEIF p_perc GE 110. p_rate = 2000.
+  ELSEIF p_perc GE 100. p_rate = 1500.
+  ENDIF.
+ENDFORM.</div>
+      Called twice per customer: once for amended%, once for original%.
+    </td>
+  </tr>
+</table>
+
+<hr>
+
+<!-- =================== SUMMARY TABLE =================== -->
+<h2>Summary of All Changes</h2>
+
+<table>
+  <tr>
+    <th style="width:5%">No.</th>
+    <th style="width:25%">What Changed</th>
+    <th>Original</th>
+    <th>Amended</th>
+  </tr>
+  <tr>
+    <td style="text-align:center">1</td>
+    <td><strong>BCQ Definition</strong></td>
+    <td class="old">Jan + Feb + Mar MCQ (full quarter)</td>
+    <td class="new">Jan + Feb MCQ only (bi-monthly)</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">2</td>
+    <td><strong>Slab % Formula</strong></td>
+    <td class="old">Full quarter lift / Full QCQ × 100</td>
+    <td class="new">Two formulas: Amended (Jan+Feb / BCQ) AND Original (Full / QCQ)</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">3</td>
+    <td><strong>Min Threshold</strong></td>
+    <td class="old">85% of QCQ (from master waiver table)</td>
+    <td class="new">100% of BCQ (fixed)</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">4</td>
+    <td><strong>Slab Breakpoints</strong></td>
+    <td class="old">125% cap — single rate from KONM scale</td>
+    <td class="new">100% → 1500 / 110% → 2000 / 120% → 2500 (fixed)</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">5</td>
+    <td><strong>Rate Source</strong></td>
+    <td class="old">Dynamic from A350 → KONM condition table</td>
+    <td class="new">Fixed slab amounts via GET_Q4_SLAB_RATE</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">6</td>
+    <td><strong>Fallback Logic</strong></td>
+    <td class="old">MOU from Feb-2024 → skip entirely (EXIT)</td>
+    <td class="new">Compare both schemes → apply higher rate</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">7</td>
+    <td><strong>Amount Split</strong></td>
+    <td class="old">One combined value for Jan+Feb+Mar</td>
+    <td class="new">Jan+Feb amount and Mar amount shown separately</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">8</td>
+    <td><strong>Output Columns</strong></td>
+    <td class="old">Tot Grp Lift Qty, Total Eligible Qty, Discount</td>
+    <td class="new">+ Amended BCQ%, Original QCQ%, Scheme, Jan+Feb Amt, Mar Amt</td>
+  </tr>
+  <tr>
+    <td style="text-align:center">9</td>
+    <td><strong>New FORM</strong></td>
+    <td class="old">Not present</td>
+    <td class="new">GET_Q4_SLAB_RATE added</td>
+  </tr>
+</table>
+
+<p style="font-size:10.5pt; margin-top:16px;">
+  <strong>Note:</strong> All changes are isolated to Q4 (January–March) processing only.
+  Q1 (Apr–Jun), Q2 (Jul–Sep), Q3 (Oct–Dec) and all other discount types
+  (Annual, Monthly, Consistency) are <strong>unchanged</strong>.
+</p>
+
+</body>
+</html>
