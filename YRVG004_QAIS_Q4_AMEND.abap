@@ -122,6 +122,7 @@ DATA: BEGIN OF it_data_quater OCCURS 0,
         bcq_perc         TYPE p DECIMALS 2,
         orig_perc        TYPE p DECIMALS 2,
         scheme(10),
+        disc_slab        TYPE kbetr,
         jan_feb_amt      TYPE kbetr,
         mar_amt          TYPE kbetr,
         value            TYPE kbetr,
@@ -845,7 +846,11 @@ FORM quarter_discount .
     it_data_quater-kunnr   = wa_yrva_qais_data-kunnr.
     it_data_quater-kvgr2   = wa_yrva_qais_data-kvgr2.
     it_data_quater-vkbur   = wa_yrva_qais_data-vkbur.
-    it_data_quater-mou_qty = wa_yrva_qais_data-mou_qty.
+    IF w_q4 = 'X'.
+      it_data_quater-mou_qty = wa_yrva_qais_data-commited_qty_m12.
+    ELSE.
+      it_data_quater-mou_qty = wa_yrva_qais_data-mou_qty.
+    ENDIF.
     IF w_q1 = 'X'.     PERFORM q1_discount.
     ELSEIF w_q2 = 'X'. PERFORM q2_discount.
     ELSEIF w_q3 = 'X'. PERFORM q3_discount.
@@ -1056,14 +1061,17 @@ FORM q4_discount .
   " Apply higher rate - criterion iv: original scheme if it gives higher slab
   IF lv_orig_rt GT lv_amended_rt.
     lv_q4_amended_rate = lv_orig_rt.
-    it_data_quater-scheme = 'ORIGINAL'.
+    it_data_quater-scheme    = 'ORIGINAL'.
+    it_data_quater-disc_slab = lv_orig_rt.
   ELSEIF lv_amended_rt GT 0.
     lv_q4_amended_rate = lv_amended_rt.
-    it_data_quater-scheme = 'AMENDED'.
+    it_data_quater-scheme    = 'AMENDED'.
+    it_data_quater-disc_slab = lv_amended_rt.
   ELSE.
     " Neither scheme qualifies - skip record
     lv_flag123 = 'X'.
-    it_data_quater-scheme = 'NA'.
+    it_data_quater-scheme    = 'NA'.
+    it_data_quater-disc_slab = 0.
     EXIT.
   ENDIF.
 
@@ -1849,7 +1857,7 @@ FORM create_field_catalog .
     IF w_q4 = 'X'.
       "--- Q4 Amended specific columns ---
       gt_fieldcat-fieldname = 'MOU_QTY'. gt_fieldcat-outputlen = 12.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'MCQ (Monthly)'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'MCQ'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'GRP_LIFT_QTY_M1'. gt_fieldcat-outputlen = 12.
@@ -1865,11 +1873,11 @@ FORM create_field_catalog .
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'BCQ_PERC'. gt_fieldcat-outputlen = 10.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Amended BCQ%'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Slab%-BCQ'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'ORIG_PERC'. gt_fieldcat-outputlen = 10.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Original QCQ%'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Slab%-QCQ'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'SCHEME'. gt_fieldcat-outputlen = 10.
@@ -1892,6 +1900,10 @@ FORM create_field_catalog .
       gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Total Eligible Qty'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
+      gt_fieldcat-fieldname = 'DISC_SLAB'. gt_fieldcat-outputlen = 12.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Eligible Slab'.
+      APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
+
       gt_fieldcat-fieldname = 'JAN_FEB_AMT'. gt_fieldcat-outputlen = 18.
       gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Jan+Feb Amt (Rs)'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
@@ -1901,7 +1913,7 @@ FORM create_field_catalog .
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'VALUE'. gt_fieldcat-outputlen = 25.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Total Q4 Amend Discount'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Q4 CIS Linked 2025-26'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
     ELSE.
       "--- Q1/Q2/Q3 standard columns ---
@@ -1965,7 +1977,12 @@ FORM create_field_catalog .
   ENDIF.
 
   gt_fieldcat-fieldname = 'REMARKS'. gt_fieldcat-outputlen = 40.
-  gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'REMARKS'. gt_fieldcat-input = 'X'.
+  IF r_quater = 'X' AND w_q4 = 'X'.
+    gt_fieldcat-seltext_m = 'CIS Linked 2026-27 Q4'.
+  ELSE.
+    gt_fieldcat-seltext_m = 'REMARKS'.
+  ENDIF.
+  gt_fieldcat-col_pos = w_sr. gt_fieldcat-input = 'X'.
   APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
   gt_fieldcat-fieldname = 'SALE_ORDER'. gt_fieldcat-outputlen = 15.
