@@ -5009,10 +5009,42 @@ FORM build_alv_display_table_view .
       APPEND wa_final_main TO it_final_main.
     ENDIF.
   ENDLOOP.
+  " Identify and handle static material rows
+  DATA: lt_static_view TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id ongc_material gail_material static state
+    FROM yrga_cst_mat_map
+    INTO CORRESPONDING FIELDS OF TABLE lt_static_view
+    WHERE location_id IN s_loc
+      AND static = 'X'
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    = ' '.
+  " Mark static rows and remove static rows for wrong state
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_view_static>).
+    READ TABLE lt_static_view TRANSPORTING NO FIELDS
+      WITH KEY location_id   = <fs_view_static>-location_id
+               gail_material = <fs_view_static>-material
+               ongc_material = <fs_view_static>-ongc_material.
+    IF sy-subrc = 0.
+      READ TABLE lt_static_view TRANSPORTING NO FIELDS
+        WITH KEY location_id   = <fs_view_static>-location_id
+                 gail_material = <fs_view_static>-material
+                 ongc_material = <fs_view_static>-ongc_material
+                 state         = <fs_view_static>-state_code.
+      IF sy-subrc = 0.
+        <fs_view_static>-static_flag = 'X'.
+      ELSE.
+        <fs_view_static>-ongc_material = '##DELETE##'.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+  DELETE gt_alv_display WHERE ongc_material = '##DELETE##'.
   " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_view>).
     IF <fs_alv_view>-exclude = 'X'.
       <fs_alv_view>-total_sales_mbg = 0.
+    ELSEIF <fs_alv_view>-static_flag = 'X'.
+      <fs_alv_view>-total_sales_mbg = <fs_alv_view>-total_mbg.
     ELSE.
       IF <fs_alv_view>-state_code <> 'GJ'.
         READ TABLE it_final_main INTO DATA(ls_fin_view)
