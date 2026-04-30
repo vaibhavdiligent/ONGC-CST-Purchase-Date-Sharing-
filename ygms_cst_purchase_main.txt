@@ -2228,7 +2228,6 @@ FORM save_data_to_db.
         IF sy-subrc = 0.
           ls_cst_pur-ctp         = ls_receipt-ctp_id.
           ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
-          ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
         ENDIF.
       ENDIF.
       ls_cst_pur-time_stamp   = lv_ts_char.
