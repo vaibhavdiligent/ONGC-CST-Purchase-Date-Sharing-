@@ -814,14 +814,18 @@ FORM build_alv_display_table.
         EXIT.
       ENDLOOP.
       IF lv_ongc_found = abap_false.
-        READ TABLE lt_valid_map INTO ls_vmap_chk
-          WITH KEY location_id   = <fs_ongc_pop>-location_id
-                   gail_material = <fs_ongc_pop>-material.
-        IF sy-subrc = 0.
+        LOOP AT lt_valid_map INTO ls_vmap_chk
+          WHERE location_id   = <fs_ongc_pop>-location_id
+            AND gail_material = <fs_ongc_pop>-material.
+          IF ls_vmap_chk-static = 'X' AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+            CONTINUE.
+          ENDIF.
           <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
-        ENDIF.
+          EXIT.
+        ENDLOOP.
       ENDIF.
     ENDLOOP.
+    DELETE gt_alv_display WHERE ongc_material IS INITIAL.
     " Add/mark rows for Static Material combinations from YRGA_CST_MAT_MAP
     DATA: lv_static_state_desc TYPE bezei20.
     LOOP AT lt_valid_map INTO ls_vmap_chk WHERE static = 'X' AND ncst <> 'X'.
