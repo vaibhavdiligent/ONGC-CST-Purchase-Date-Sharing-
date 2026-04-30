@@ -803,15 +803,17 @@ FORM build_alv_display_table.
         ENDIF.
       ENDIF.
     ENDLOOP.
-    " Add rows for Static Material combinations from YRGA_CST_MAT_MAP
+    " Add/mark rows for Static Material combinations from YRGA_CST_MAT_MAP
     DATA: lv_static_state_desc TYPE bezei20.
     LOOP AT lt_valid_map INTO ls_vmap_chk WHERE static = 'X' AND ncst <> 'X'.
-      READ TABLE gt_alv_display TRANSPORTING NO FIELDS
+      READ TABLE gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_static_chk>)
         WITH KEY location_id   = ls_vmap_chk-location_id
                  material      = ls_vmap_chk-gail_material
                  state_code    = ls_vmap_chk-state
                  ongc_material = ls_vmap_chk-ongc_material.
-      IF sy-subrc <> 0.
+      IF sy-subrc = 0.
+        <fs_static_chk>-static_flag = 'X'.
+      ELSE.
         CLEAR lv_static_state_desc.
         SELECT SINGLE bezei INTO lv_static_state_desc
           FROM t005u WHERE spras = sy-langu AND land1 = 'IN' AND bland = ls_vmap_chk-state.
