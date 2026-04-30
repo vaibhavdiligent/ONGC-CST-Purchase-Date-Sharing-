@@ -1317,9 +1317,10 @@ FORM handle_allocate.
         ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv> TO FIELD-SYMBOL(<fs_day>).
         IF sy-subrc = 0.
           READ TABLE gt_gas_receipt INTO wa_gas_receipt WITH KEY
-            location_id = wa_state-empst
-            gas_day     = l_date
-            material    = wa_state-matnr.
+            location_id   = wa_state-empst
+            gas_day       = l_date
+            material      = wa_state-matnr
+            ongc_material = <fs_alv>-ongc_material.
           IF sy-subrc = 0.
             READ TABLE lt_static_map TRANSPORTING NO FIELDS
               WITH KEY location_id   = wa_gas_receipt-location_id
@@ -1426,9 +1427,10 @@ FORM handle_allocate.
         ENDIF.
       ENDLOOP.
       READ TABLE gt_gas_receipt INTO DATA(ls_adj_rcpt)
-        WITH KEY location_id = ls_adj_key-location_id
-                 gas_day     = lv_adj_date
-                 material    = ls_adj_key-material.
+        WITH KEY location_id   = ls_adj_key-location_id
+                 gas_day       = lv_adj_date
+                 material      = ls_adj_key-material
+                 ongc_material = ls_adj_key-ongc_material.
       IF sy-subrc = 0.
         lv_receipt_qty = ls_adj_rcpt-qty_scm.
       ELSE.
@@ -1480,9 +1482,10 @@ FORM handle_allocate.
         ASSIGN COMPONENT lv_adj_day OF STRUCTURE <fs_alv_adj> TO FIELD-SYMBOL(<fs_adj_dy>).
         IF sy-subrc = 0 AND <fs_adj_dy> > 0.
           READ TABLE gt_gas_receipt INTO ls_adj_rcpt
-            WITH KEY location_id = <fs_alv_adj>-location_id
-                     gas_day     = lv_adj_date
-                     material    = <fs_alv_adj>-material.
+            WITH KEY location_id   = <fs_alv_adj>-location_id
+                     gas_day       = lv_adj_date
+                     material      = <fs_alv_adj>-material
+                     ongc_material = <fs_alv_adj>-ongc_material.
           IF sy-subrc = 0.
             l_gcv = l_gcv + ( <fs_adj_dy> * ls_adj_rcpt-gcv ).
             l_ncv = l_ncv + ( <fs_adj_dy> * ls_adj_rcpt-ncv ).
@@ -1610,9 +1613,10 @@ FORM handle_static_allocation.
       ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv_static> TO FIELD-SYMBOL(<fs_static_day>).
       IF sy-subrc = 0.
         READ TABLE gt_gas_receipt INTO DATA(wa_gas_static) WITH KEY
-          location_id = <fs_alv_static>-location_id
-          gas_day     = l_date
-          material    = <fs_alv_static>-material.
+          location_id   = <fs_alv_static>-location_id
+          gas_day       = l_date
+          material      = <fs_alv_static>-material
+          ongc_material = <fs_alv_static>-ongc_material.
         IF sy-subrc = 0.
           <fs_alv_static>-ongc_material = wa_gas_static-ongc_material.
           l_day_sm3 = wa_gas_static-qty_scm.
