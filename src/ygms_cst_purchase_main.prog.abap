@@ -1282,7 +1282,7 @@ FORM handle_allocate.
            <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15,
            <fs_clear>-day16.
   ENDLOOP.
-  " Static Material Allocation: allocate 100% of receipt to designated state
+  " Fetch static material map for skipping in percentage-based allocation
   DATA: c_tgqty_alloc TYPE msego2-adqnt,
         i_trqty_alloc TYPE msego2-adqnt,
         lv_gcv_alloc  TYPE oib_par_fltp,
@@ -1296,56 +1296,6 @@ FORM handle_allocate.
       AND valid_from <= gv_date_from
       AND valid_to   >= gv_date_to
       AND deleted    = ' '.
-  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_static>)
-    WHERE static_flag = 'X' AND exclude IS INITIAL.
-    CLEAR l_index.
-    CLEAR: l_ncv, l_gcv, l_day_sm3.
-    l_date = s_date-low.
-    DATA lv_static_days TYPE i.
-    lv_static_days = gv_date_to - gv_date_from + 1.
-    DO lv_static_days TIMES.
-      l_index = l_index + 1.
-      CLEAR l_day.
-      CONCATENATE 'DAY' l_index INTO l_day.
-      ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv_static> TO FIELD-SYMBOL(<fs_static_day>).
-      IF sy-subrc = 0.
-        READ TABLE gt_gas_receipt INTO wa_gas_receipt WITH KEY
-          location_id = <fs_alv_static>-location_id
-          gas_day     = l_date
-          material    = <fs_alv_static>-material.
-        IF sy-subrc = 0.
-          <fs_alv_static>-ongc_material = wa_gas_receipt-ongc_material.
-          l_day_sm3 = wa_gas_receipt-qty_scm.
-          <fs_static_day> = l_day_sm3.
-          <fs_alv_static>-total_scm = <fs_alv_static>-total_scm + l_day_sm3.
-          l_gcv = ( l_day_sm3 * wa_gas_receipt-gcv ) + l_gcv.
-          l_ncv = ( l_day_sm3 * wa_gas_receipt-ncv ) + l_ncv.
-        ENDIF.
-      ENDIF.
-      l_date = l_date + 1.
-    ENDDO.
-    IF <fs_alv_static>-total_scm > 0.
-      <fs_alv_static>-gcv = round( val = l_gcv / <fs_alv_static>-total_scm dec = 3 ).
-      <fs_alv_static>-ncv = round( val = l_ncv / <fs_alv_static>-total_scm dec = 3 ).
-    ENDIF.
-    IF <fs_alv_static>-gcv > 0 AND <fs_alv_static>-total_scm > 0.
-      CLEAR c_tgqty_alloc.
-      i_trqty_alloc = <fs_alv_static>-total_scm.
-      lv_gcv_alloc  = <fs_alv_static>-gcv.
-      lv_ncv_alloc  = <fs_alv_static>-ncv.
-      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-        EXPORTING
-          i_trqty = i_trqty_alloc
-          i_truom = 'SM3'
-          i_tguom = 'MBG'
-          lv_gcv  = lv_gcv_alloc
-          lv_ncv  = lv_ncv_alloc
-        CHANGING
-          c_tgqty = c_tgqty_alloc.
-      <fs_alv_static>-total_mbg = round( val = c_tgqty_alloc dec = 3 ).
-    ENDIF.
-    CLEAR l_day_sm3.
-  ENDLOOP.
   " Apply percentage-based allocation per location + state + material (skip static combos)
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>)
@@ -1616,6 +1566,8 @@ FORM handle_allocate.
     ENDLOOP.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
+  " Static Material Allocation: run after non-static allocation is complete
+  PERFORM handle_static_allocation.
   " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
   gv_allocated = abap_true.
   PERFORM refresh_pf_status.
@@ -1627,6 +1579,72 @@ FORM handle_allocate.
       txt2  = 'Please validate the data.'
       txt3  = ''
       txt4  = ''.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form HANDLE_STATIC_ALLOCATION
+*& Allocate 100% of receipt qty to designated state for static combos
+*&---------------------------------------------------------------------*
+FORM handle_static_allocation.
+  DATA: l_day     TYPE char10,
+        l_index(2) TYPE n,
+        l_date    TYPE sy-datum,
+        l_ncv     TYPE p DECIMALS 6,
+        l_gcv     TYPE p DECIMALS 6,
+        l_day_sm3 TYPE p DECIMALS 6.
+  DATA: c_tgqty_s TYPE msego2-adqnt,
+        i_trqty_s TYPE msego2-adqnt,
+        lv_gcv_s  TYPE oib_par_fltp,
+        lv_ncv_s  TYPE oib_par_fltp.
+  DATA: lv_static_days TYPE i.
+  lv_static_days = gv_date_to - gv_date_from + 1.
+  LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_static>)
+    WHERE static_flag = 'X' AND exclude IS INITIAL.
+    CLEAR l_index.
+    CLEAR: l_ncv, l_gcv, l_day_sm3.
+    l_date = s_date-low.
+    DO lv_static_days TIMES.
+      l_index = l_index + 1.
+      CLEAR l_day.
+      CONCATENATE 'DAY' l_index INTO l_day.
+      ASSIGN COMPONENT l_day OF STRUCTURE <fs_alv_static> TO FIELD-SYMBOL(<fs_static_day>).
+      IF sy-subrc = 0.
+        READ TABLE gt_gas_receipt INTO DATA(wa_gas_static) WITH KEY
+          location_id = <fs_alv_static>-location_id
+          gas_day     = l_date
+          material    = <fs_alv_static>-material.
+        IF sy-subrc = 0.
+          <fs_alv_static>-ongc_material = wa_gas_static-ongc_material.
+          l_day_sm3 = wa_gas_static-qty_scm.
+          <fs_static_day> = l_day_sm3.
+          <fs_alv_static>-total_scm = <fs_alv_static>-total_scm + l_day_sm3.
+          l_gcv = ( l_day_sm3 * wa_gas_static-gcv ) + l_gcv.
+          l_ncv = ( l_day_sm3 * wa_gas_static-ncv ) + l_ncv.
+        ENDIF.
+      ENDIF.
+      l_date = l_date + 1.
+    ENDDO.
+    IF <fs_alv_static>-total_scm > 0.
+      <fs_alv_static>-gcv = round( val = l_gcv / <fs_alv_static>-total_scm dec = 3 ).
+      <fs_alv_static>-ncv = round( val = l_ncv / <fs_alv_static>-total_scm dec = 3 ).
+    ENDIF.
+    IF <fs_alv_static>-gcv > 0 AND <fs_alv_static>-total_scm > 0.
+      CLEAR c_tgqty_s.
+      i_trqty_s = <fs_alv_static>-total_scm.
+      lv_gcv_s  = <fs_alv_static>-gcv.
+      lv_ncv_s  = <fs_alv_static>-ncv.
+      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+        EXPORTING
+          i_trqty = i_trqty_s
+          i_truom = 'SM3'
+          i_tguom = 'MBG'
+          lv_gcv  = lv_gcv_s
+          lv_ncv  = lv_ncv_s
+        CHANGING
+          c_tgqty = c_tgqty_s.
+      <fs_alv_static>-total_mbg = round( val = c_tgqty_s dec = 3 ).
+    ENDIF.
+    CLEAR l_day_sm3.
+  ENDLOOP.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_VALIDATE
