@@ -1095,8 +1095,10 @@ START-OF-SELECTION.
                   CLEAR l_is_cursor_loop.
                   " Detect database/CDS views.  ORDER BY PRIMARY KEY is invalid
                   " on views (ARS_API_SUCCSSR etc.); fall back to "#EC CI_NOORDER.
-                  DATA l_is_view  TYPE flag.
-                  DATA l_sel_tab  TYPE tabname.
+                  DATA l_is_view    TYPE flag.
+                  DATA l_sel_tab    TYPE tabname.
+                  DATA l_after_from TYPE string.
+                  DATA l_rest_ign   TYPE string.
                   CLEAR: l_is_view, l_sel_tab.
                   LOOP AT repos_tab INTO DATA(wa_from_scan) FROM l_tabix1.
                     DATA(l_from_scan_line) = wa_from_scan-line.
@@ -1106,9 +1108,9 @@ START-OF-SELECTION.
                       DATA(l_from_total) = strlen( l_from_scan_line ).
                       IF l_from_total > l_from_pos.
                         DATA(l_from_remain) = l_from_total - l_from_pos.
-                        DATA(l_after_from)  = l_from_scan_line+l_from_pos(l_from_remain).
+                        l_after_from = l_from_scan_line+l_from_pos(l_from_remain).
                         CONDENSE l_after_from.
-                        SPLIT l_after_from AT space INTO l_sel_tab DATA(l_rest_ignored).
+                        SPLIT l_after_from AT space INTO l_sel_tab l_rest_ign.
                         REPLACE ALL OCCURRENCES OF '.' IN l_sel_tab WITH space.
                         CONDENSE l_sel_tab.
                       ENDIF.
