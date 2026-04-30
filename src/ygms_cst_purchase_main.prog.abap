@@ -1649,6 +1649,8 @@ FORM handle_static_allocation.
           c_tgqty = c_tgqty_s.
       <fs_alv_static>-total_mbg = round( val = c_tgqty_s dec = 3 ).
     ENDIF.
+    <fs_alv_static>-total_sales_mbg = <fs_alv_static>-total_mbg.
+    <fs_alv_static>-alloc_sales_mbg = 0.
     CLEAR l_day_sm3.
   ENDLOOP.
 ENDFORM.
