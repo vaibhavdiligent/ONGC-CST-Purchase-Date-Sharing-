@@ -1203,8 +1203,24 @@ FORM handle_allocate.
     wa_state-matnr      = wa_final_main-matnr.
     COLLECT wa_state INTO it_state.
   ENDLOOP.
-  " Collect supply data per location + material
+  " Collect supply data per location + material (skip static gas receipts)
+  DATA: lt_static_map TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id ongc_material gail_material static state
+    FROM yrga_cst_mat_map
+    INTO CORRESPONDING FIELDS OF TABLE lt_static_map
+    WHERE location_id IN s_loc
+      AND static = 'X'
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    = ' '.
   LOOP AT gt_gas_receipt INTO DATA(wa_gas_receipt).
+    READ TABLE lt_static_map TRANSPORTING NO FIELDS
+      WITH KEY location_id   = wa_gas_receipt-location_id
+               ongc_material = wa_gas_receipt-ongc_material
+               gail_material = wa_gas_receipt-material.
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
     wa_sales-empst          = wa_gas_receipt-location_id.
     wa_sales-matnr          = wa_gas_receipt-material.
     wa_sales-qty_mbg_supply = wa_gas_receipt-qty_mbg.
@@ -1285,20 +1301,10 @@ FORM handle_allocate.
            <fs_clear>-day13, <fs_clear>-day14, <fs_clear>-day15,
            <fs_clear>-day16.
   ENDLOOP.
-  " Fetch static material map for skipping in percentage-based allocation
   DATA: c_tgqty_alloc TYPE msego2-adqnt,
         i_trqty_alloc TYPE msego2-adqnt,
         lv_gcv_alloc  TYPE oib_par_fltp,
         lv_ncv_alloc  TYPE oib_par_fltp.
-  DATA: lt_static_map TYPE TABLE OF yrga_cst_mat_map.
-  SELECT location_id ongc_material gail_material static state
-    FROM yrga_cst_mat_map
-    INTO CORRESPONDING FIELDS OF TABLE lt_static_map
-    WHERE location_id IN s_loc
-      AND static = 'X'
-      AND valid_from <= gv_date_from
-      AND valid_to   >= gv_date_to
-      AND deleted    = ' '.
   " Apply percentage-based allocation per location + state + material (skip static combos)
   LOOP AT it_state INTO wa_state WHERE percentage IS NOT INITIAL.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv>)
