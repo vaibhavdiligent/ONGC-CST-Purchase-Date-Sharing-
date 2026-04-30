@@ -2191,11 +2191,11 @@ FORM save_data_to_db.
       ls_cst_pur-state_code   = gs_alv_display-state_code.
       ls_cst_pur-state        = gs_alv_display-state.
       " Get CTP, ONGC material, and GCV/NCV from gas receipt (supply table)
-      " 2.4a: GCV/NCV values from supply table per Gas Day + Location ID
       READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
-        WITH KEY location_id = gs_alv_display-location_id
-                 material    = gs_alv_display-material
-                 gas_day     = lv_date.
+        WITH KEY location_id   = gs_alv_display-location_id
+                 material      = gs_alv_display-material
+                 gas_day       = lv_date
+                 ongc_material = gs_alv_display-ongc_material.
       IF sy-subrc = 0.
         ls_cst_pur-ctp         = ls_receipt-ctp_id.
         ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
@@ -2204,14 +2204,13 @@ FORM save_data_to_db.
         ls_cst_pur-ncv         = ls_receipt-ncv.
       ELSE.
         READ TABLE gt_gas_receipt INTO ls_receipt
-          WITH KEY location_id = gs_alv_display-location_id
-                   material    = gs_alv_display-material.
+          WITH KEY location_id   = gs_alv_display-location_id
+                   material      = gs_alv_display-material
+                   ongc_material = gs_alv_display-ongc_material.
         IF sy-subrc = 0.
           ls_cst_pur-ctp         = ls_receipt-ctp_id.
           ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
           ls_cst_pur-ongc_id     = ls_receipt-ongc_id.
-*          ls_cst_pur-gcv         = ls_receipt-gcv.
-*          ls_cst_pur-ncv         = ls_receipt-ncv.
         ENDIF.
       ENDIF.
       ls_cst_pur-time_stamp   = lv_ts_char.
