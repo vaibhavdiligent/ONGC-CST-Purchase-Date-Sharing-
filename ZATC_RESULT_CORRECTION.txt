@@ -572,18 +572,32 @@ START-OF-SELECTION.
                         ENDIF.
                         IF it_query_new[] IS NOT INITIAL.
                           IF it_query_new[] = it_query[].
-                            CLEAR l_tab.
+                            " No table replacement found.  The earlier deletion
+                            " block already removed the SELECT header lines from
+                            " repos_tab_new (going back from the flagged line to
+                            " the SELECT keyword).  We must therefore re-append
+                            " the full query (with the pseudo comment on the last
+                            " line) and keep l_tab so the outer loop skips the
+                            " query body that follows.
                             CLEAR wa_blank.
                             CONCATENATE '"' '"' p_rem p_begin sy-uname l_datum ' for ATC '
                               INTO wa_blank-line SEPARATED BY space.
                             APPEND wa_blank TO repos_tab_new.
+                            CLEAR wa_blank.
                             CLEAR l_note.
                             CONCATENATE '"#EC CI_DB_OPERATION_OK[' wa_final-note ']'
                               INTO l_note.
-                            CONCATENATE wa_repos_tab-line l_note
-                              INTO wa_repos_tab-line SEPARATED BY space.
-                            APPEND wa_repos_tab TO repos_tab_new.
-                            CLEAR wa_blank.
+                            DESCRIBE TABLE it_query LINES DATA(l_q_lines).
+                            LOOP AT it_query INTO wa_query.
+                              IF sy-tabix = l_q_lines.
+                                CONCATENATE wa_query-str l_note
+                                  INTO wa_blank-line SEPARATED BY space.
+                              ELSE.
+                                wa_blank-line = wa_query-str.
+                              ENDIF.
+                              APPEND wa_blank TO repos_tab_new.
+                              CLEAR wa_blank.
+                            ENDLOOP.
                             CONCATENATE '"' '"' p_rem p_end sy-uname l_datum 'for ATC'
                               INTO wa_blank-line SEPARATED BY space.
                             APPEND wa_blank TO repos_tab_new.
@@ -944,7 +958,48 @@ START-OF-SELECTION.
                 APPEND wa_repos_tab TO repos_tab_new.
               ENDIF.
             WHEN 'SEARCH PROBLEMATIC STATEMENTS FOR RESULT OF SELECT/OPEN CURSOR WITHOUT ORDER BY'.
-              CASE wa_final-check_message.
+              " Normalize check_message - SAP ATC may substitute the literal table
+              " name / line number in place of the '...' placeholder, which breaks
+              " the literal WHEN clauses below.  Map well-known patterns back to
+              " their template form before the CASE.
+              DATA(l_norm_msg) = wa_final-check_message.
+              IF l_norm_msg CS 'FOR (FORMER) CLUSTER TABLE' AND l_norm_msg CS 'WITHOUT ORDER BY'.
+                l_norm_msg = 'SELECT ... FOR (FORMER) CLUSTER TABLE ... WITHOUT ORDER BY FOUND'.
+              ELSEIF l_norm_msg CS 'FOR (FORMER) POOL TABLE' AND l_norm_msg CS 'WITHOUT ORDER BY'.
+                l_norm_msg = 'SELECT ... FOR (FORMER) POOL TABLE ... WITHOUT ORDER BY FOUND'.
+              ELSEIF l_norm_msg CS 'UP TO' AND l_norm_msg CS 'ROWS WITHOUT ORDER BY'.
+                l_norm_msg = 'SELECT .. UP TO .. ROWS WITHOUT ORDER BY FOUND'.
+              ELSEIF l_norm_msg CS 'LOOP AT EMPTY ITAB'.
+                l_norm_msg = 'LOOP AT EMPTY ITAB. ... FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'LOOP AT ITAB. EXIT' OR l_norm_msg CS 'LOOP AT ITAB. RETURN'
+                  OR l_norm_msg CS 'LOOP AT ITAB. LEAVE' OR l_norm_msg CS 'EXIT/RETURN/LEAVE'.
+                l_norm_msg = 'LOOP AT ITAB. EXIT/RETURN/LEAVE ... FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'WRITE IN LOOP'.
+                l_norm_msg = 'WRITE IN LOOP FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'DELETE ADJACENT DUPLICATES'.
+                l_norm_msg = 'DELETE ADJACENT DUPLICATES FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'ON CHANGE OF'.
+                l_norm_msg = 'LOOP AT ITAB. ON CHANGE OF ... ENDON. FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'ENDAT'.
+                l_norm_msg = 'LOOP AT ITAB. AT ... ENDAT. FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'BINARY SEARCH'.
+                l_norm_msg = 'READ .. BINARY SEARCH FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'EMPTY SELECT' OR l_norm_msg CS 'EMPTY SELECT/ENDSELECT'.
+                l_norm_msg = 'EMPTY SELECT/ENDSELECT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'ALV CALL'.
+                l_norm_msg = 'ALV CALL AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'READ TABLE' AND l_norm_msg CS 'INDEX'.
+                l_norm_msg = 'READ TABLE ... INDEX 1 FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'FROM/TO'.
+                l_norm_msg = 'LOOP AT ITAB FROM/TO FOR RESULT OF STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'MODIFY' AND l_norm_msg CS 'INDEX'.
+                l_norm_msg = 'MODIFY ... INDEX FOR RESULT OF SELECT STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'DELETE' AND l_norm_msg CS 'INDEX'.
+                l_norm_msg = 'DELETE ... INDEX FOR RESULT OF SELECT STATEMENT AT ... LINE ...'.
+              ELSEIF l_norm_msg CS 'NOT UNIQUE'.
+                l_norm_msg = 'SELECT SINGLE IS POSSIBLY NOT UNIQUE'.
+              ENDIF.
+              CASE l_norm_msg.
                 WHEN 'DELETE ADJACENT DUPLICATES FOR RESULT OF STATEMENT AT ... LINE ...'.
                   l_text = wa_repos_tab-line.
                   TRANSLATE l_text TO UPPER CASE.
@@ -967,7 +1022,11 @@ START-OF-SELECTION.
                   REPLACE ALL OCCURRENCES OF 'COMPARING' IN l_text WITH space IGNORING CASE.
                   CONDENSE l_text.
                   l_where = l_text.
-                  IF l_where CS 'ALL FIELDS'.
+                  " Strip trailing period that gets included when DELETE has no
+                  " COMPARING clause (e.g. "DELETE ADJACENT DUPLICATES FROM lt_x.")
+                  REPLACE ALL OCCURRENCES OF '.' IN l_table WITH space.
+                  CONDENSE l_table.
+                  IF l_where IS INITIAL OR l_where CS 'ALL FIELDS'.
                     CONCATENATE 'SORT' l_table '.' INTO l_new SEPARATED BY space.
                   ELSE.
                     CONCATENATE 'SORT' l_table 'BY' l_where INTO l_new SEPARATED BY space.
@@ -1034,6 +1093,36 @@ START-OF-SELECTION.
                   CLEAR wa_blank.
                   DATA l_is_cursor_loop TYPE flag.
                   CLEAR l_is_cursor_loop.
+                  " Detect database/CDS views.  ORDER BY PRIMARY KEY is invalid
+                  " on views (ARS_API_SUCCSSR etc.); fall back to "#EC CI_NOORDER.
+                  DATA l_is_view  TYPE flag.
+                  DATA l_sel_tab  TYPE tabname.
+                  CLEAR: l_is_view, l_sel_tab.
+                  LOOP AT repos_tab INTO DATA(wa_from_scan) FROM l_tabix1.
+                    DATA(l_from_scan_line) = wa_from_scan-line.
+                    TRANSLATE l_from_scan_line TO UPPER CASE.
+                    IF l_from_scan_line CS ' FROM '.
+                      DATA(l_from_pos)   = sy-fdpos + 6.
+                      DATA(l_from_total) = strlen( l_from_scan_line ).
+                      IF l_from_total > l_from_pos.
+                        DATA(l_from_remain) = l_from_total - l_from_pos.
+                        DATA(l_after_from)  = l_from_scan_line+l_from_pos(l_from_remain).
+                        CONDENSE l_after_from.
+                        SPLIT l_after_from AT space INTO l_sel_tab DATA(l_rest_ignored).
+                        REPLACE ALL OCCURRENCES OF '.' IN l_sel_tab WITH space.
+                        CONDENSE l_sel_tab.
+                      ENDIF.
+                      EXIT.
+                    ENDIF.
+                    IF wa_from_scan-line CS '.'. EXIT. ENDIF.
+                  ENDLOOP.
+                  IF l_sel_tab IS NOT INITIAL.
+                    SELECT SINGLE tabclass FROM dd02l INTO @DATA(l_tabclass)
+                      WHERE tabname = @l_sel_tab.
+                    IF sy-subrc = 0 AND l_tabclass = 'VIEW'.
+                      l_is_view = abap_true.
+                    ENDIF.
+                  ENDIF.
                   LOOP AT repos_tab INTO DATA(wa_repos_tab1) FROM l_tabix1.
                     l_tab = sy-tabix.
                     IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'.
@@ -1059,14 +1148,29 @@ START-OF-SELECTION.
                         l_after_dot = wa_repos_tab1-line+l_after_pos(l_after_len).
                       ENDIF.
                       CONDENSE l_before_dot. CONDENSE l_after_dot.
-                      IF l_after_dot IS NOT INITIAL.
-                        CONCATENATE l_before_dot 'ORDER BY PRIMARY KEY.' l_after_dot
+                      IF l_is_view = abap_true.
+                        " ORDER BY PRIMARY KEY is invalid on views - use NOORDER pseudo comment.
+                        " Comment must end the line, so emit any trailing tokens
+                        " (e.g. ENDSELECT.) on a separate line.
+                        CONCATENATE l_before_dot '. "#EC CI_NOORDER'
                           INTO wa_repos_tab1-line SEPARATED BY space.
+                        APPEND wa_repos_tab1 TO repos_tab_new.
+                        IF l_after_dot IS NOT INITIAL.
+                          CLEAR wa_blank.
+                          wa_blank-line = l_after_dot.
+                          APPEND wa_blank TO repos_tab_new.
+                          CLEAR wa_blank.
+                        ENDIF.
                       ELSE.
-                        CONCATENATE l_before_dot 'ORDER BY PRIMARY KEY.'
-                          INTO wa_repos_tab1-line SEPARATED BY space.
+                        IF l_after_dot IS NOT INITIAL.
+                          CONCATENATE l_before_dot 'ORDER BY PRIMARY KEY.' l_after_dot
+                            INTO wa_repos_tab1-line SEPARATED BY space.
+                        ELSE.
+                          CONCATENATE l_before_dot 'ORDER BY PRIMARY KEY.'
+                            INTO wa_repos_tab1-line SEPARATED BY space.
+                        ENDIF.
+                        APPEND wa_repos_tab1 TO repos_tab_new.
                       ENDIF.
-                      APPEND wa_repos_tab1 TO repos_tab_new.
                       l_tab = l_tab + 1.
                       " Peek at the next line to detect cursor loop (ENDSELECT follows)
                       DATA wa_peek_endsel TYPE abaptxt255.
@@ -2262,6 +2366,23 @@ FORM process_change_loop.
     CONCATENATE l_line_new wa_table-value INTO l_line_new SEPARATED BY space.
   ENDLOOP.
   CONCATENATE l_line_new '.' INTO l_line_new SEPARATED BY space.
+  " Skip if a SORT for the same table was already inserted just above
+  " the LOOP - prevents duplicates when both ON CHANGE OF and another
+  " same-loop finding (AT NEW / AT END / EXIT) trigger sorting.
+  DATA(l_chk_idx) = l_fp - 1.
+  DATA l_dup_skip TYPE flag.
+  DO 30 TIMES.
+    READ TABLE repos_tab_new INTO DATA(wa_chk) INDEX l_chk_idx.
+    IF sy-subrc <> 0. EXIT. ENDIF.
+    DATA(l_chk_up) = wa_chk-line.
+    TRANSLATE l_chk_up TO UPPER CASE.
+    IF l_chk_up CS 'LOOP AT'. EXIT. ENDIF.
+    IF l_chk_up CS 'SORT' AND l_chk_up CS l_table.
+      l_dup_skip = abap_true. EXIT.
+    ENDIF.
+    l_chk_idx = l_chk_idx - 1.
+  ENDDO.
+  IF l_dup_skip = abap_true. RETURN. ENDIF.
   DATA it_repos TYPE STANDARD TABLE OF abaptxt255.
   MOVE repos_tab_new[] TO it_repos.
   REFRESH repos_tab_new.
@@ -2339,6 +2460,23 @@ FORM endat.
     l_tab = l_tab + 1.
   ENDDO.
   CONCATENATE 'SORT' l_table 'BY' l_field '.' INTO l_line_new SEPARATED BY space.
+  " Skip if a SORT for the same table was already inserted just above
+  " the LOOP - prevents duplicates when AT NEW / AT END combine with
+  " other same-loop ATC findings.
+  DATA(l_chk_idx) = l_fp - 1.
+  DATA l_dup_skip TYPE flag.
+  DO 30 TIMES.
+    READ TABLE repos_tab_new INTO DATA(wa_chk) INDEX l_chk_idx.
+    IF sy-subrc <> 0. EXIT. ENDIF.
+    DATA(l_chk_up) = wa_chk-line.
+    TRANSLATE l_chk_up TO UPPER CASE.
+    IF l_chk_up CS 'LOOP AT'. EXIT. ENDIF.
+    IF l_chk_up CS 'SORT' AND l_chk_up CS l_table.
+      l_dup_skip = abap_true. EXIT.
+    ENDIF.
+    l_chk_idx = l_chk_idx - 1.
+  ENDDO.
+  IF l_dup_skip = abap_true. RETURN. ENDIF.
   DATA it_repos TYPE STANDARD TABLE OF abaptxt255.
   MOVE repos_tab_new[] TO it_repos.
   REFRESH repos_tab_new.
@@ -2401,11 +2539,17 @@ FORM loop_exit.
   ENDDO.
   CONCATENATE 'SORT' l_table '.' INTO l_line_new SEPARATED BY space.
   DATA(l_fp1) = l_fp - 1.
-  DO 20 TIMES.
+  DO 30 TIMES.
     READ TABLE repos_tab_new INTO wa_rep INDEX l_fp1.
-    IF sy-subrc = 0.
-      IF wa_rep-line = l_line_new. l_exit = 'X'. EXIT. ENDIF.
-    ELSE. EXIT.
+    IF sy-subrc <> 0. EXIT. ENDIF.
+    DATA(l_chk_le) = wa_rep-line.
+    TRANSLATE l_chk_le TO UPPER CASE.
+    " Stop scanning when we hit the LOOP AT itself (or anything above it).
+    IF l_chk_le CS 'LOOP AT'. EXIT. ENDIF.
+    " Skip if any SORT for the same table is already there
+    " (covers SORT t. / SORT t BY f. / SORT t BY f1 f2.).
+    IF l_chk_le CS 'SORT' AND l_chk_le CS l_table.
+      l_exit = 'X'. EXIT.
     ENDIF.
     l_fp1 = l_fp1 - 1.
   ENDDO.
