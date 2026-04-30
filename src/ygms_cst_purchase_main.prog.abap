@@ -1204,20 +1204,12 @@ FORM handle_allocate.
     COLLECT wa_state INTO it_state.
   ENDLOOP.
   " Collect supply data per location + material (skip static gas receipts)
-  DATA: lt_static_map TYPE TABLE OF yrga_cst_mat_map.
-  SELECT location_id ongc_material gail_material static state
-    FROM yrga_cst_mat_map
-    INTO CORRESPONDING FIELDS OF TABLE lt_static_map
-    WHERE location_id IN s_loc
-      AND static = 'X'
-      AND valid_from <= gv_date_from
-      AND valid_to   >= gv_date_to
-      AND deleted    = ' '.
   LOOP AT gt_gas_receipt INTO DATA(wa_gas_receipt).
-    READ TABLE lt_static_map TRANSPORTING NO FIELDS
+    READ TABLE gt_alv_display TRANSPORTING NO FIELDS
       WITH KEY location_id   = wa_gas_receipt-location_id
+               material      = wa_gas_receipt-material
                ongc_material = wa_gas_receipt-ongc_material
-               gail_material = wa_gas_receipt-material.
+               static_flag   = 'X'.
     IF sy-subrc = 0.
       CONTINUE.
     ENDIF.
@@ -1330,10 +1322,11 @@ FORM handle_allocate.
             material      = wa_state-matnr
             ongc_material = <fs_alv>-ongc_material.
           IF sy-subrc = 0.
-            READ TABLE lt_static_map TRANSPORTING NO FIELDS
+            READ TABLE gt_alv_display TRANSPORTING NO FIELDS
               WITH KEY location_id   = wa_gas_receipt-location_id
+                       material      = wa_gas_receipt-material
                        ongc_material = wa_gas_receipt-ongc_material
-                       gail_material = wa_gas_receipt-material.
+                       static_flag   = 'X'.
             IF sy-subrc = 0.
               l_date = l_date + 1.
               CONTINUE.
