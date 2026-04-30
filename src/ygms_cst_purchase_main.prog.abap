@@ -786,27 +786,6 @@ FORM build_alv_display_table.
       ENDIF.
     ENDLOOP.
     gt_alv_display = lt_alv_keep.
-    " Add rows for Static Material combinations from YRGA_CST_MAT_MAP
-    DATA: lv_static_state_desc TYPE bezei20.
-    LOOP AT lt_valid_map INTO ls_vmap_chk WHERE static = 'X' AND ncst <> 'X'.
-      READ TABLE gt_alv_display TRANSPORTING NO FIELDS
-        WITH KEY location_id   = ls_vmap_chk-location_id
-                 material      = ls_vmap_chk-gail_material
-                 state_code    = ls_vmap_chk-state.
-      IF sy-subrc <> 0.
-        CLEAR lv_static_state_desc.
-        SELECT SINGLE bezei INTO lv_static_state_desc
-          FROM t005u WHERE spras = sy-langu AND land1 = 'IN' AND bland = ls_vmap_chk-state.
-        CLEAR ls_alv.
-        ls_alv-state_code    = ls_vmap_chk-state.
-        ls_alv-state         = lv_static_state_desc.
-        ls_alv-location_id   = ls_vmap_chk-location_id.
-        ls_alv-material      = ls_vmap_chk-gail_material.
-        ls_alv-ongc_material = ls_vmap_chk-ongc_material.
-        ls_alv-static_flag   = 'X'.
-        APPEND ls_alv TO gt_alv_display.
-      ENDIF.
-    ENDLOOP.
     " Populate ONGC Material for all rows from gas receipt or mat map
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ongc_pop>)
       WHERE ongc_material IS INITIAL.
@@ -822,6 +801,28 @@ FORM build_alv_display_table.
         IF sy-subrc = 0.
           <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
         ENDIF.
+      ENDIF.
+    ENDLOOP.
+    " Add rows for Static Material combinations from YRGA_CST_MAT_MAP
+    DATA: lv_static_state_desc TYPE bezei20.
+    LOOP AT lt_valid_map INTO ls_vmap_chk WHERE static = 'X' AND ncst <> 'X'.
+      READ TABLE gt_alv_display TRANSPORTING NO FIELDS
+        WITH KEY location_id   = ls_vmap_chk-location_id
+                 material      = ls_vmap_chk-gail_material
+                 state_code    = ls_vmap_chk-state
+                 ongc_material = ls_vmap_chk-ongc_material.
+      IF sy-subrc <> 0.
+        CLEAR lv_static_state_desc.
+        SELECT SINGLE bezei INTO lv_static_state_desc
+          FROM t005u WHERE spras = sy-langu AND land1 = 'IN' AND bland = ls_vmap_chk-state.
+        CLEAR ls_alv.
+        ls_alv-state_code    = ls_vmap_chk-state.
+        ls_alv-state         = lv_static_state_desc.
+        ls_alv-location_id   = ls_vmap_chk-location_id.
+        ls_alv-material      = ls_vmap_chk-gail_material.
+        ls_alv-ongc_material = ls_vmap_chk-ongc_material.
+        ls_alv-static_flag   = 'X'.
+        APPEND ls_alv TO gt_alv_display.
       ENDIF.
     ENDLOOP.
   ENDIF.
