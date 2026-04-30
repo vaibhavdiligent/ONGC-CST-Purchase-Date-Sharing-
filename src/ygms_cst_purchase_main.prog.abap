@@ -795,12 +795,18 @@ FORM build_alv_display_table.
       LOOP AT gt_gas_receipt INTO DATA(ls_ongc_rcpt)
         WHERE location_id = <fs_ongc_pop>-location_id
           AND material    = <fs_ongc_pop>-material.
-        READ TABLE lt_valid_map INTO ls_vmap_chk
-          WITH KEY location_id   = ls_ongc_rcpt-location_id
-                   gail_material = ls_ongc_rcpt-material
-                   ongc_material = ls_ongc_rcpt-ongc_material
-                   static        = 'X'.
-        IF sy-subrc = 0 AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+        DATA lv_skip_static TYPE abap_bool.
+        lv_skip_static = abap_false.
+        LOOP AT lt_valid_map INTO ls_vmap_chk
+          WHERE location_id   = ls_ongc_rcpt-location_id
+            AND gail_material = ls_ongc_rcpt-material
+            AND ongc_material = ls_ongc_rcpt-ongc_material
+            AND static        = 'X'.
+          IF ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+            lv_skip_static = abap_true.
+          ENDIF.
+        ENDLOOP.
+        IF lv_skip_static = abap_true.
           CONTINUE.
         ENDIF.
         <fs_ongc_pop>-ongc_material = ls_ongc_rcpt-ongc_material.
@@ -2149,7 +2155,7 @@ FORM save_data_to_db.
   " Initialize error flag
   lv_error_found = abap_false.
   " First pass: Generate unique GAIL_IDs for each Location-Material-State combination
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  LOOP AT gt_alv_display INTO gs_alv_display.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id = gs_alv_display-location_id
                material    = gs_alv_display-material
@@ -2173,8 +2179,8 @@ FORM save_data_to_db.
       ENDIF.
     ENDIF.
   ENDLOOP.
-  " Second pass: Create daily records for YRGA_CST_PUR (skip excluded rows)
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  " Second pass: Create daily records for YRGA_CST_PUR (include excluded rows too)
+  LOOP AT gt_alv_display INTO gs_alv_display.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id = gs_alv_display-location_id
                material    = gs_alv_display-material
@@ -4628,6 +4634,7 @@ FORM display_daily_preview USING pt_daily TYPE STANDARD TABLE.
   ls_fieldcat-fieldname = 'CTP_ID'.
   ls_fieldcat-seltext_l = 'CTP ID'.
   ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GAIL_LOC_ID'.
@@ -4688,6 +4695,7 @@ FORM display_daily_preview USING pt_daily TYPE STANDARD TABLE.
   ls_fieldcat-fieldname = 'ONGC_ID'.
   ls_fieldcat-seltext_l = 'ONGC ID'.
   ls_fieldcat-col_pos   = 12.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GAIL_ID'.
@@ -4735,11 +4743,13 @@ FORM display_fnt_preview USING pt_fnt TYPE STANDARD TABLE.
   ls_fieldcat-fieldname = 'CTP_ID'.
   ls_fieldcat-seltext_l = 'CTP ID'.
   ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_MATER'.
   ls_fieldcat-seltext_l = 'ONGC Material'.
   ls_fieldcat-col_pos   = 4.
+  ls_fieldcat-outputlen = 25.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GAIL_LOC_ID'.
@@ -4769,7 +4779,7 @@ FORM display_fnt_preview USING pt_fnt TYPE STANDARD TABLE.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-do_sum    = abap_true.
   ls_fieldcat-decimals_out = 3.
-  ls_fieldcat-outputlen = 15.
+  ls_fieldcat-outputlen = 18.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'GCV'.
