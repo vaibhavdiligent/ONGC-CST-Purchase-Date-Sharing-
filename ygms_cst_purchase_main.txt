@@ -2274,9 +2274,20 @@ FORM save_data_to_db.
     ENDLOOP.
     " Fallback: if CTP still not set, get from gas receipt directly
     IF ls_cst_fnt-ctp IS INITIAL.
-      READ TABLE gt_gas_receipt INTO DATA(ls_fnt_receipt)
+      READ TABLE gt_alv_display INTO gs_alv_display
         WITH KEY location_id = ls_gail_id_map-location_id
-                 material    = ls_gail_id_map-material.
+                 material    = ls_gail_id_map-material
+                 state_code  = ls_gail_id_map-state_code.
+      IF sy-subrc = 0.
+        READ TABLE gt_gas_receipt INTO DATA(ls_fnt_receipt)
+          WITH KEY location_id   = ls_gail_id_map-location_id
+                   material      = ls_gail_id_map-material
+                   ongc_material = gs_alv_display-ongc_material.
+      ELSE.
+        READ TABLE gt_gas_receipt INTO ls_fnt_receipt
+          WITH KEY location_id = ls_gail_id_map-location_id
+                   material    = ls_gail_id_map-material.
+      ENDIF.
       IF sy-subrc = 0.
         ls_cst_fnt-ctp        = ls_fnt_receipt-ctp_id.
         ls_cst_fnt-ongc_mater = ls_fnt_receipt-ongc_material.
@@ -4828,9 +4839,10 @@ FORM recalculate_totals.
       ASSIGN COMPONENT lv_day_fld OF STRUCTURE <fs_alv> TO FIELD-SYMBOL(<fs_wt_day>).
       IF sy-subrc = 0 AND <fs_wt_day> > 0.
         READ TABLE gt_gas_receipt INTO DATA(wa_gcv_rcpt)
-          WITH KEY location_id = <fs_alv>-location_id
-                   gas_day     = lv_wt_date
-                   material    = <fs_alv>-material.
+          WITH KEY location_id   = <fs_alv>-location_id
+                   gas_day       = lv_wt_date
+                   material      = <fs_alv>-material
+                   ongc_material = <fs_alv>-ongc_material.
         IF sy-subrc = 0.
           lv_sum_gcv = lv_sum_gcv + ( <fs_wt_day> * wa_gcv_rcpt-gcv ).
           lv_sum_ncv = lv_sum_ncv + ( <fs_wt_day> * wa_gcv_rcpt-ncv ).
