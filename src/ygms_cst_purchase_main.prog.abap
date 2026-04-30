@@ -787,14 +787,27 @@ FORM build_alv_display_table.
     ENDLOOP.
     gt_alv_display = lt_alv_keep.
     " Populate ONGC Material for all rows from gas receipt or mat map
+    " Skip gas receipts whose ongc_material is static for a different state
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ongc_pop>)
       WHERE ongc_material IS INITIAL.
-      READ TABLE gt_gas_receipt INTO DATA(ls_ongc_rcpt)
-        WITH KEY location_id = <fs_ongc_pop>-location_id
-                 material    = <fs_ongc_pop>-material.
-      IF sy-subrc = 0.
+      DATA lv_ongc_found TYPE abap_bool.
+      lv_ongc_found = abap_false.
+      LOOP AT gt_gas_receipt INTO DATA(ls_ongc_rcpt)
+        WHERE location_id = <fs_ongc_pop>-location_id
+          AND material    = <fs_ongc_pop>-material.
+        READ TABLE lt_valid_map INTO ls_vmap_chk
+          WITH KEY location_id   = ls_ongc_rcpt-location_id
+                   gail_material = ls_ongc_rcpt-material
+                   ongc_material = ls_ongc_rcpt-ongc_material
+                   static        = 'X'.
+        IF sy-subrc = 0 AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+          CONTINUE.
+        ENDIF.
         <fs_ongc_pop>-ongc_material = ls_ongc_rcpt-ongc_material.
-      ELSE.
+        lv_ongc_found = abap_true.
+        EXIT.
+      ENDLOOP.
+      IF lv_ongc_found = abap_false.
         READ TABLE lt_valid_map INTO ls_vmap_chk
           WITH KEY location_id   = <fs_ongc_pop>-location_id
                    gail_material = <fs_ongc_pop>-material.
@@ -1711,7 +1724,7 @@ FORM handle_validate.
       lv_diff_ok = abap_false.
       EXIT.
     ENDIF.
-    IF gs_validation-diff_pur_sup_mbg < 0 OR gs_validation-diff_pur_sup_mbg > 1.
+    IF gs_validation-diff_pur_sup_mbg < -1 OR gs_validation-diff_pur_sup_mbg > 1.
       lv_diff_ok = abap_false.
       EXIT.
     ENDIF.
@@ -1810,36 +1823,41 @@ FORM build_validation_data.
   DATA: ls_validation TYPE ty_validation.
   CLEAR gt_validation.
   DATA: BEGIN OF ls_key,
-          location_id TYPE ygms_de_loc_id,
-          material    TYPE ygms_de_gail_mat,
+          location_id   TYPE ygms_de_loc_id,
+          material      TYPE ygms_de_gail_mat,
+          ongc_material TYPE ygms_de_ongc_mat,
         END OF ls_key,
         lt_keys LIKE TABLE OF ls_key.
   LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
-    ls_key-location_id = gs_alv_display-location_id.
-    ls_key-material    = gs_alv_display-material.
+    ls_key-location_id   = gs_alv_display-location_id.
+    ls_key-material      = gs_alv_display-material.
+    ls_key-ongc_material = gs_alv_display-ongc_material.
     COLLECT ls_key INTO lt_keys.
   ENDLOOP.
   LOOP AT lt_keys INTO ls_key.
     CLEAR ls_validation.
-    ls_validation-location_id = ls_key-location_id.
-    ls_validation-material    = ls_key-material.
+    ls_validation-location_id   = ls_key-location_id.
+    ls_validation-material      = ls_key-material.
+    ls_validation-ongc_material = ls_key-ongc_material.
     LOOP AT gt_alv_display INTO gs_alv_display
-      WHERE location_id = ls_key-location_id
-        AND material    = ls_key-material
-        AND exclude     IS INITIAL.
+      WHERE location_id   = ls_key-location_id
+        AND material      = ls_key-material
+        AND ongc_material = ls_key-ongc_material
+        AND exclude       IS INITIAL.
       ls_validation-allocated_scm = ls_validation-allocated_scm + gs_alv_display-total_scm.
       ls_validation-allocated_mbg = ls_validation-allocated_mbg + gs_alv_display-total_mbg.
     ENDLOOP.
     READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
-      WITH KEY location_id = ls_key-location_id
-               material    = ls_key-material.
+      WITH KEY location_id   = ls_key-location_id
+               material      = ls_key-material
+               ongc_material = ls_key-ongc_material.
     IF sy-subrc = 0.
-      ls_validation-ctp_id        = ls_receipt-ctp_id.
-      ls_validation-ongc_material = ls_receipt-ongc_material.
+      ls_validation-ctp_id = ls_receipt-ctp_id.
     ENDIF.
     LOOP AT gt_gas_receipt INTO ls_receipt
-      WHERE location_id = ls_key-location_id
-        AND material    = ls_key-material.
+      WHERE location_id   = ls_key-location_id
+        AND material      = ls_key-material
+        AND ongc_material = ls_key-ongc_material.
       ls_validation-supply_scm = ls_validation-supply_scm + ls_receipt-qty_scm.
       ls_validation-supply_mbg = ls_validation-supply_mbg + ls_receipt-qty_mbg.
     ENDLOOP.
