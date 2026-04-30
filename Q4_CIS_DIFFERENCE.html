@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Q4 CIS Discount - Difference Analysis</title>
+  <style>
+    @media print { body { margin: 40px 60px; } }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      margin: 50px 70px;
+      color: #000;
+      background: #fff;
+      line-height: 1.7;
+    }
+    h1 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 11pt;
+      color: #444;
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 12.5pt;
+      font-weight: bold;
+      text-decoration: underline;
+      margin: 24px 0 8px 0;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 8px 0 18px 0;
+      font-size: 12pt;
+    }
+    table th, table td {
+      border: 1.5px solid #000;
+      padding: 8px 13px;
+      vertical-align: top;
+    }
+    table th {
+      font-weight: bold;
+      text-align: center;
+      background-color: #f0f0f0;
+    }
+    td.point { width: 5%; text-align: center; font-weight: bold; }
+    td.aspect { width: 20%; font-weight: bold; }
+    td.current { width: 35%; background-color: #fff8f8; }
+    td.amended { width: 35%; background-color: #f0fff0; }
+    .red   { color: #cc0000; font-weight: bold; }
+    .green { color: #006600; font-weight: bold; }
+    .tag {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10.5pt;
+      background: #efefef;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 0 4px;
+    }
+    .formula { font-style: italic; }
+    .legend {
+      margin-bottom: 16px;
+      font-size: 11pt;
+    }
+    .legend span {
+      display: inline-block;
+      padding: 2px 10px;
+      margin-right: 10px;
+      border: 1px solid #999;
+    }
+    .leg-current { background-color: #fff8f8; }
+    .leg-amended { background-color: #f0fff0; }
+    hr { border: none; border-top: 1px solid #bbb; margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+  <h1>Q-4 CIS Discount &mdash; Difference: Present Logic vs Amended Scheme</h1>
+  <p class="subtitle">Program: YRVG004_QAIS_EXECUTE &nbsp;|&nbsp; Form: Q4_DISCOUNT &nbsp;|&nbsp; Condition: ZQIS</p>
+
+  <div class="legend">
+    <span class="leg-current">Present Code (Existing)</span>
+    <span class="leg-amended">Amended Scheme (As per Circular)</span>
+  </div>
+
+  <hr>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:5%">Sl.<br>No.</th>
+        <th style="width:20%">Aspect</th>
+        <th style="width:37%">Present Code Logic</th>
+        <th style="width:38%">Amended Logic (Screenshot)</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- POINT 1 -->
+      <tr>
+        <td class="point">1</td>
+        <td class="aspect">BCQ / QCQ Definition</td>
+        <td class="current">
+          <span class="red">Full quarter</span> is used as base.<br><br>
+          BCQ = Jan + Feb + <span class="red">Mar</span><br>
+          <span class="tag">commited_qty_m10 + commited_qty_m11 + commited_qty_m12</span>
+        </td>
+        <td class="amended">
+          <span class="green">Bi-monthly</span> committed qty as base.<br><br>
+          BCQ = Jan + Feb <span class="green">only</span><br>
+          <span class="formula">(Jan'26MCQ + Feb'26MCQ)</span>
+        </td>
+      </tr>
+
+      <!-- POINT 2 -->
+      <tr>
+        <td class="point">2</td>
+        <td class="aspect">Slab Determination Formula</td>
+        <td class="current">
+          % achieved = <span class="red">(Jan + Feb + Mar lifting)</span> / Full QCQ &times; 100<br><br>
+          Thresholds from <span class="tag">YRVA_MSTR_WAIVER</span>:<br>
+          &nbsp;&bull; Min = <span class="red">85%</span> of QCQ<br>
+          &nbsp;&bull; Max = <span class="red">125%</span> of QCQ
+        </td>
+        <td class="amended">
+          % achieved = <span class="green">(Jan lifting + Feb lifting)</span> / BCQ &times; 100<br><br>
+          <span class="formula">{Lifting of Jan + Lifting of Feb} / BCQ &times; 100</span><br><br>
+          Fixed slab thresholds:<br>
+          &nbsp;&bull; Slab I &nbsp; = <span class="green">&ge; 100%</span> of BCQ<br>
+          &nbsp;&bull; Slab II &nbsp;= <span class="green">&ge; 110%</span> of BCQ<br>
+          &nbsp;&bull; Slab III = <span class="green">&ge; 120%</span> of BCQ
+        </td>
+      </tr>
+
+      <!-- POINT 3 -->
+      <tr>
+        <td class="point">3</td>
+        <td class="aspect">Discount Rates (Rs./MT)</td>
+        <td class="current">
+          <span class="red">Dynamic</span> — fetched from SAP condition table:<br>
+          A350 &rarr; KONM (scale-based)<br><br>
+          Rate = highest <span class="tag">kstbm</span> bracket &le; <span class="tag">mou_qty</span><br>
+          No fixed amounts in code.
+        </td>
+        <td class="amended">
+          <span class="green">Fixed</span> slab amounts:<br><br>
+          &nbsp;&bull; Slab I &nbsp; &rarr; <span class="green">Rs. 1500 / MT</span><br>
+          &nbsp;&bull; Slab II &nbsp;&rarr; <span class="green">Rs. 2000 / MT</span><br>
+          &nbsp;&bull; Slab III &rarr; <span class="green">Rs. 2500 / MT</span>
+        </td>
+      </tr>
+
+      <!-- POINT 4 -->
+      <tr>
+        <td class="point">4</td>
+        <td class="aspect">March Lifting Treatment</td>
+        <td class="current">
+          March is <span class="red">included in slab eligibility check</span> together with Jan &amp; Feb.<br><br>
+          <span class="tag">tot_elgl_qty = ind_elgl_qty_m1 + ind_elgl_qty_m2 + ind_elgl_qty_m3</span><br><br>
+          All 3 months treated equally — one combined discount value.
+        </td>
+        <td class="amended">
+          March is <span class="green">calculated separately</span>.<br><br>
+          Slab rate determined from Jan+Feb lifting only,<br>
+          then applied on Mar'26 lifting independently:<br><br>
+          <span class="formula">Mar Discount = Slab Rate &times; Mar'26 lifting</span><br><br>
+          Disbursement = (Jan+Feb eligible qty) <span class="green">+</span> (Mar lifting) — separately.
+        </td>
+      </tr>
+
+      <!-- POINT 5 -->
+      <tr>
+        <td class="point">5</td>
+        <td class="aspect">Fallback to Original Scheme</td>
+        <td class="current">
+          Customers with <span class="tag">mou_begda &ge; 01-Feb-2024</span> are <span class="red">completely excluded</span> — record is skipped.<br><br>
+          <span class="tag">lv_flag123 = 'X' → EXIT</span><br><br>
+          No comparison between original and amended scheme.
+        </td>
+        <td class="amended">
+          <span class="green">Comparison required</span>:<br><br>
+          If customer eligible for <span class="green">higher slab</span> under original scheme:<br>
+          <span class="formula">{original % of QCQ (Jan+Feb+Mar MCQ) vs lifting (Jan+Feb+Mar)}</span><br><br>
+          then <span class="green">original scheme applies</span> — customer is <span class="green">NOT skipped</span>, better of the two is given.
+        </td>
+      </tr>
+
+      <!-- POINT 6 -->
+      <tr>
+        <td class="point">6</td>
+        <td class="aspect">Grade Applicability</td>
+        <td class="current">
+          <span class="red">All CIS grades</span> from table <span class="tag">YRVA_GRADE_CISD</span> are included.<br><br>
+          Filtered via <span class="tag">lt_kondm</span> range in S922 query.
+        </td>
+        <td class="amended">
+          Restricted to <span class="green">A, B, OG grades only</span>.<br><br>
+          Other grades not eligible for Q4 amended discount.
+        </td>
+      </tr>
+
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2>Impact Summary</h2>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:5%">Sl.<br>No.</th>
+        <th style="width:30%">Change Required</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="point">1</td>
+        <td><strong>BCQ Recalculation</strong></td>
+        <td>Change BCQ base from 3-month QCQ to 2-month (Jan+Feb MCQ only) in <span class="tag">Q4_DISCOUNT</span> form.</td>
+      </tr>
+      <tr>
+        <td class="point">2</td>
+        <td><strong>Slab Threshold Change</strong></td>
+        <td>Replace 85%/125% thresholds with fixed 100%/110%/120% breakpoints for Q4.</td>
+      </tr>
+      <tr>
+        <td class="point">3</td>
+        <td><strong>Hardcode Slab Rates</strong></td>
+        <td>Replace dynamic KONM rate lookup with fixed rates: 1500/2000/2500 Rs./MT for Q4.</td>
+      </tr>
+      <tr>
+        <td class="point">4</td>
+        <td><strong>Separate Mar Calculation</strong></td>
+        <td>Split <span class="tag">Q4_MAR</span> logic: slab rate × Mar'26 lifting computed independently, not lumped with Jan+Feb eligible qty.</td>
+      </tr>
+      <tr>
+        <td class="point">5</td>
+        <td><strong>Fallback Comparison</strong></td>
+        <td>Replace hard exclusion (<span class="tag">lv_flag123 EXIT</span>) with comparison: compute both original and amended discount, apply whichever is higher.</td>
+      </tr>
+      <tr>
+        <td class="point">6</td>
+        <td><strong>Grade Filter</strong></td>
+        <td>Add grade restriction to A, B, OG only for Q4 amended scheme in <span class="tag">lt_kondm</span> filter.</td>
+      </tr>
+    </tbody>
+  </table>
+
+</body>
+</html>

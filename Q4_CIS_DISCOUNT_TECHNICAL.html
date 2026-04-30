@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Special CIS Linked Post Sales Discount - Q4 (Technical)</title>
+  <style>
+    @media print {
+      body { margin: 40px 60px; }
+    }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 12pt;
+      margin: 50px 70px;
+      color: #000;
+      line-height: 1.7;
+      background: #fff;
+    }
+    .main-title {
+      font-size: 13pt;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: 12.5pt;
+      font-weight: bold;
+      text-decoration: underline;
+      margin: 22px 0 8px 0;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 10px 0 20px 0;
+      font-size: 12pt;
+    }
+    table th, table td {
+      border: 1.5px solid #000;
+      padding: 7px 11px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    table th { font-weight: bold; }
+    table td.left { text-align: left; }
+
+    .criteria-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .criteria-list li {
+      display: flex;
+      margin-bottom: 10px;
+      text-align: justify;
+      align-items: flex-start;
+    }
+    .criteria-list li .lbl { min-width: 30px; }
+    .criteria-list li .txt { flex: 1; }
+
+    .code-box {
+      background: #f5f5f5;
+      border-left: 3px solid #666;
+      padding: 6px 12px;
+      margin: 6px 0 2px 0;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10.5pt;
+      color: #333;
+    }
+    .tag {
+      display: inline-block;
+      background: #e0e0e0;
+      border: 1px solid #aaa;
+      border-radius: 3px;
+      padding: 0 5px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10pt;
+    }
+    em { font-style: italic; }
+    .note {
+      font-size: 10.5pt;
+      color: #444;
+      margin-top: 4px;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #ccc;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <p class="main-title">
+    1.&nbsp;&nbsp;Special CIS Linked Post Sales Discount for Q-4 (Jan'26 to Mar'26)(Amended)
+    &mdash; Technical Reference
+  </p>
+  <p style="margin-top:-8px; font-size:11pt;">
+    Program: <span class="tag">YRVG004_QAIS_EXECUTE</span> &nbsp;|&nbsp;
+    Include: <span class="tag">YRVG004_QAIS_EXECUTE_F01</span> &nbsp;|&nbsp;
+    Condition Type: <span class="tag">ZQIS</span>
+  </p>
+
+  <hr class="divider">
+
+  <!-- SLAB TABLE -->
+  <p class="section-title">A. Discount Slab Table (Q-4 Amended)</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:6%">Sl.<br>no.</th>
+        <th>Discount Slabs as per % Qtr-4 lifting against BCQ</th>
+        <th>Discount Slab Amount<br>(Rs./MT) (on All Grades)</th>
+        <th style="width:21%">Grade Quality<br>Applicability</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>I.</td>
+        <td>&ge; 100% of BCQ (Jan'26+Feb'26) of Q4</td>
+        <td>1500</td>
+        <td rowspan="3" style="vertical-align:middle;">A, B, OG grades</td>
+      </tr>
+      <tr>
+        <td>II.</td>
+        <td>&ge; 110% of BCQ (Jan'26+Feb'26) of Q4</td>
+        <td>2000</td>
+      </tr>
+      <tr>
+        <td>III.</td>
+        <td>&ge; 120% of BCQ (Jan'26+Feb'26) of Q4</td>
+        <td>2500</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- MONTH FIELD MAPPING -->
+  <p class="section-title">B. Month-to-Field Mapping (Q4)</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Month</th>
+        <th>Group Lifting Field</th>
+        <th>Individual Lifting Field</th>
+        <th>Eligible Qty Field</th>
+        <th>Committed Qty Field</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>January (M10)</td>
+        <td class="left"><span class="tag">grp_lift_qty_m10</span></td>
+        <td class="left"><span class="tag">ind_lift_qty_m10</span></td>
+        <td class="left"><span class="tag">ind_elgl_qty_m1</span></td>
+        <td class="left"><span class="tag">commited_qty_m10</span></td>
+      </tr>
+      <tr>
+        <td>February (M11)</td>
+        <td class="left"><span class="tag">grp_lift_qty_m11</span></td>
+        <td class="left"><span class="tag">ind_lift_qty_m11</span></td>
+        <td class="left"><span class="tag">ind_elgl_qty_m2</span></td>
+        <td class="left"><span class="tag">commited_qty_m11</span></td>
+      </tr>
+      <tr>
+        <td>March (M12)</td>
+        <td class="left"><span class="tag">grp_lift_qty_m12</span></td>
+        <td class="left"><span class="tag">ind_lift_qty_m12</span></td>
+        <td class="left"><span class="tag">ind_elgl_qty_m3</span></td>
+        <td class="left"><span class="tag">commited_qty_m12</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- REVISED CRITERIA WITH TECH DETAIL -->
+  <p class="section-title">C. Revised Criteria for Discount Applicability</p>
+
+  <ul class="criteria-list">
+    <li>
+      <span class="lbl">i.</span>
+      <span class="txt">
+        <strong>Revised BCQ (Bi-monthly Committed Qty):</strong><br>
+        QCQ is revised to BCQ = Total (Jan'26MCQ + Feb'26MCQ). Slab is determined as
+        <em>{(Lifting of Jan + Lifting of Feb) / BCQ} x 100</em>.
+        <div class="code-box">
+          BCQ = commited_qty_m10 + commited_qty_m11<br>
+          % achieved = (grp_lift_qty_m10 + grp_lift_qty_m11) / BCQ * 100<br>
+          Slab lookup: SORT i_cond DESCENDING BY kstbm<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+          LOOP AT i_cond WHERE kstbm &lt;= mou_qty → w_kbetr = kbetr
+        </div>
+        <p class="note">Condition records fetched from: A350 (kschl='ZQIS', vkorg='5000') &rarr; KONM (knumh, kbetr, kstbm)</p>
+      </span>
+    </li>
+    <li>
+      <span class="lbl">ii.</span>
+      <span class="txt">
+        <strong>Mar'26 Discount Calculation:</strong><br>
+        Slab rate (determined in i.) is applied on Mar'26 individual lifting.
+        <em>(Slab rate as per sl.no. (1.i.) X CIS customer Mar'26 lifting)</em>.
+        <div class="code-box">
+          Mar eligible qty = ind_lift_qty_m12 (FORM q4_mar)<br>
+          value = tot_elgl_qty * w_kbetr
+        </div>
+      </span>
+    </li>
+    <li>
+      <span class="lbl">iii.</span>
+      <span class="txt">
+        <strong>Combined Disbursement:</strong><br>
+        Discounts disbursed on combined lifting Jan'26 to Feb'26 &amp; Mar'26 separately.
+        <div class="code-box">
+          tot_elgl_qty = ind_elgl_qty_m1 (Jan) + ind_elgl_qty_m2 (Feb) + ind_elgl_qty_m3 (Mar)
+        </div>
+      </span>
+    </li>
+    <li>
+      <span class="lbl">iv.</span>
+      <span class="txt">
+        <strong>Original Scheme Fallback:</strong><br>
+        If customer is eligible for a higher slab under the original scheme
+        <em>{original % slab of QCQ (MCQ Jan'26 + MCQ Feb'26 + MCQ Mar'26) and lifting
+        (Jan'26+Feb'26+Mar'26)}</em> then original scheme applies.
+        <div class="code-box">
+          IF wa_yrva_qais_data-mou_begda GE '20240201'.<br>
+          &nbsp;&nbsp;lv_flag123 = 'X'. EXIT.<br>
+          ENDIF.<br>
+          <span style="color:#666">← Customers with MOU start &ge; 01-Feb-2024 excluded from Q4 amended scheme</span>
+        </div>
+      </span>
+    </li>
+  </ul>
+
+  <hr class="divider">
+
+  <!-- ELIGIBILITY LOGIC -->
+  <p class="section-title">D. Eligibility Threshold Logic</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Condition</th>
+        <th>Result</th>
+        <th>Source Field (YRVA_MSTR_WAIVER)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Group lifting &lt; Min% of QCQ</td>
+        <td>NOT eligible — qty = 0</td>
+        <td><span class="tag">min_perc_q4</span> (default 85%)</td>
+      </tr>
+      <tr>
+        <td>Group lifting &ge; Min% AND &le; Max% of QCQ</td>
+        <td>Fully eligible</td>
+        <td><span class="tag">max_perc_q4</span> (default 125%)</td>
+      </tr>
+      <tr>
+        <td>Group lifting &gt; Max% of QCQ</td>
+        <td>Capped at Max% — pro-rated for individual</td>
+        <td><span class="tag">max_perc_q4</span></td>
+      </tr>
+      <tr>
+        <td>P&amp;D Sector customer (p_d_sector = 'X')</td>
+        <td>Max% replaced by <span class="tag">pd_perc_q4</span></td>
+        <td><span class="tag">pd_perc_q4</span></td>
+      </tr>
+      <tr>
+        <td>Waiver granted (YRVA_QAIS_ADD_WV)</td>
+        <td>Min% override for that month</td>
+        <td><span class="tag">waiver_month</span> = JAN/FEB/MAR</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- SALES ORDER -->
+  <p class="section-title">E. Sales Order Creation</p>
+
+  <table>
+    <tbody>
+      <tr>
+        <td style="width:30%; text-align:left; font-weight:bold;">BAPI</td>
+        <td class="left"><span class="tag">BAPI_SALESDOCU_CREATEFROMDATA</span></td>
+      </tr>
+      <tr>
+        <td class="left" style="font-weight:bold;">Document Type</td>
+        <td class="left"><span class="tag">ZP09</span> — Credit Memo Request</td>
+      </tr>
+      <tr>
+        <td class="left" style="font-weight:bold;">Condition Type</td>
+        <td class="left"><span class="tag">ZQIS</span></td>
+      </tr>
+      <tr>
+        <td class="left" style="font-weight:bold;">Quantity Used</td>
+        <td class="left"><span class="tag">tot_elgl_qty</span></td>
+      </tr>
+      <tr>
+        <td class="left" style="font-weight:bold;">Log Table</td>
+        <td class="left"><span class="tag">YRVA_REBATE</span></td>
+      </tr>
+      <tr>
+        <td class="left" style="font-weight:bold;">Lock Object</td>
+        <td class="left"><span class="tag">ENQUEUE_EZ004_LOCK</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+</body>
+</html>
