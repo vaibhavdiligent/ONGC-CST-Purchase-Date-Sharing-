@@ -837,17 +837,23 @@ FORM build_alv_display_table.
       IF sy-subrc = 0.
         <fs_static_chk>-static_flag = 'X'.
       ELSE.
-        CLEAR lv_static_state_desc.
-        SELECT SINGLE bezei INTO lv_static_state_desc
-          FROM t005u WHERE spras = sy-langu AND land1 = 'IN' AND bland = ls_vmap_chk-state.
-        CLEAR ls_alv.
-        ls_alv-state_code    = ls_vmap_chk-state.
-        ls_alv-state         = lv_static_state_desc.
-        ls_alv-location_id   = ls_vmap_chk-location_id.
-        ls_alv-material      = ls_vmap_chk-gail_material.
-        ls_alv-ongc_material = ls_vmap_chk-ongc_material.
-        ls_alv-static_flag   = 'X'.
-        APPEND ls_alv TO gt_alv_display.
+        READ TABLE gt_gas_receipt TRANSPORTING NO FIELDS
+          WITH KEY location_id   = ls_vmap_chk-location_id
+                   material      = ls_vmap_chk-gail_material
+                   ongc_material = ls_vmap_chk-ongc_material.
+        IF sy-subrc = 0.
+          CLEAR lv_static_state_desc.
+          SELECT SINGLE bezei INTO lv_static_state_desc
+            FROM t005u WHERE spras = sy-langu AND land1 = 'IN' AND bland = ls_vmap_chk-state.
+          CLEAR ls_alv.
+          ls_alv-state_code    = ls_vmap_chk-state.
+          ls_alv-state         = lv_static_state_desc.
+          ls_alv-location_id   = ls_vmap_chk-location_id.
+          ls_alv-material      = ls_vmap_chk-gail_material.
+          ls_alv-ongc_material = ls_vmap_chk-ongc_material.
+          ls_alv-static_flag   = 'X'.
+          APPEND ls_alv TO gt_alv_display.
+        ENDIF.
       ENDIF.
     ENDLOOP.
   ENDIF.
