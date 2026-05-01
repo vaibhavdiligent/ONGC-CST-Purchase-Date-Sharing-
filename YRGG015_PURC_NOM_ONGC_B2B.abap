@@ -78,10 +78,9 @@ TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
 DATA: gt_display      TYPE tt_display,
       gt_main         TYPE tt_main,
       go_alv          TYPE REF TO cl_gui_alv_grid,
-      go_container    TYPE REF TO cl_gui_custom_container,
+      go_container    TYPE REF TO cl_gui_docking_container,
       gs_layout       TYPE lvc_s_layo,
       gt_fcat         TYPE lvc_t_fcat,
-      gv_okcode       TYPE syucomm,
       gv_auth_bg      TYPE char1,
       go_batch_popup  TYPE REF TO cl_gui_dialogbox_container,
       go_batch_alv    TYPE REF TO cl_gui_alv_grid,
@@ -622,9 +621,15 @@ ENDFORM.
 * FORM display_alv_grid
 *----------------------------------------------------------------------*
 FORM display_alv_grid.
+  " Use docking container — no screen painter / CALL SCREEN needed in a REPORT.
+  " CALL SCREEN 1000 would conflict with the report's standard selection screen 1000.
   IF go_container IS INITIAL.
     CREATE OBJECT go_container
-      EXPORTING container_name = 'ALV_CONTAINER'
+      EXPORTING
+        repid     = sy-repid
+        dynnr     = sy-dynnr
+        side      = cl_gui_docking_container=>dock_at_bottom
+        extension = 5000
       EXCEPTIONS OTHERS = 1.
     IF sy-subrc <> 0. MESSAGE 'Error creating ALV container.' TYPE 'E'. ENDIF.
   ENDIF.
@@ -640,9 +645,9 @@ FORM display_alv_grid.
   SET HANDLER go_handler->on_data_changed  FOR go_alv.
   SET HANDLER go_handler->on_hotspot_click FOR go_alv.
   SET HANDLER go_handler->on_onf4          FOR go_alv.
-  DATA: lt_f4reg  TYPE lvc_t_f4,
-        ls_f4reg  TYPE lvc_s_f4,
-        lt_excl   TYPE ui_functions.
+  DATA: lt_f4reg TYPE lvc_t_f4,
+        ls_f4reg TYPE lvc_s_f4,
+        lt_excl  TYPE ui_functions.
   ls_f4reg-fieldname = 'CHARG'.
   ls_f4reg-register  = 'X'.
   APPEND ls_f4reg TO lt_f4reg.
@@ -658,7 +663,6 @@ FORM display_alv_grid.
       it_fieldcatalog      = gt_fcat
     EXCEPTIONS OTHERS = 1 ).
   IF sy-subrc <> 0. MESSAGE 'Error displaying ALV grid.' TYPE 'E'. ENDIF.
-  CALL SCREEN 1000.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1006,13 +1010,3 @@ FORM create_all_nominations_bg.
   FREE MEMORY ID gc_memory_id.
 ENDFORM.
 
-*----------------------------------------------------------------------*
-* Screen 1000 PAI
-*----------------------------------------------------------------------*
-MODULE user_command_1000 INPUT.
-  CASE gv_okcode.
-    WHEN 'BACK' OR 'EXIT' OR 'CANC'.
-      LEAVE TO SCREEN 0.
-  ENDCASE.
-  CLEAR gv_okcode.
-ENDMODULE.
