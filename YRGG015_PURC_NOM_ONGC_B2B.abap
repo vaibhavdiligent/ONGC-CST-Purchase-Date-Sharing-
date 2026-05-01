@@ -72,6 +72,30 @@ TYPES: BEGIN OF ty_batch_assign,
        END OF ty_batch_assign.
 TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
 
+" Cache types for bulk pre-fetch (performance)
+TYPES: BEGIN OF ty_mot_cache,
+         vbeln    TYPE ebeln,
+         matnr    TYPE matnr,
+         locid    TYPE char10,
+         fromdate TYPE d,
+         todate   TYPE d,
+       END OF ty_mot_cache.
+TYPES: BEGIN OF ty_ekoa_cache,
+         ebeln TYPE ebeln,
+         bedat TYPE d,
+         werks TYPE werks_d,
+       END OF ty_ekoa_cache.
+TYPES: BEGIN OF ty_t001w_cache,
+         werks TYPE werks_d,
+         regio TYPE regio,
+       END OF ty_t001w_cache.
+TYPES: BEGIN OF ty_mcha_cache,
+         matnr TYPE matnr,
+         werks TYPE werks_d,
+         charg TYPE charg_d,
+         ersda TYPE d,
+       END OF ty_mcha_cache.
+
 *----------------------------------------------------------------------*
 * DATA DECLARATIONS
 *----------------------------------------------------------------------*
@@ -81,9 +105,16 @@ DATA: gt_display      TYPE tt_display,
       gs_layout       TYPE lvc_s_layo,
       gt_fcat         TYPE lvc_t_fcat,
       gv_auth_bg      TYPE char1,
+      gv_toolbar_done TYPE char1,
       go_batch_popup  TYPE REF TO cl_gui_dialogbox_container,
       go_batch_alv    TYPE REF TO cl_gui_alv_grid,
       gt_batch_assign TYPE tt_batch_assign.
+
+" Reference data cache (populated once in fetch_pur_data for performance)
+DATA: gt_mot_c   TYPE STANDARD TABLE OF ty_mot_cache,
+      gt_ekoa_c  TYPE STANDARD TABLE OF ty_ekoa_cache,
+      gt_t001w_c TYPE STANDARD TABLE OF ty_t001w_cache,
+      gt_mcha_c  TYPE STANDARD TABLE OF ty_mcha_cache.
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
@@ -98,6 +129,9 @@ CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
 CLASS lcl_alv_handler DEFINITION.
   PUBLIC SECTION.
     METHODS:
+      on_alv_toolbar
+        FOR EVENT toolbar OF cl_gui_alv_grid
+        IMPORTING e_object e_interactive,
       on_main_data_changed
         FOR EVENT data_changed OF cl_gui_alv_grid
         IMPORTING er_data_changed,
@@ -165,6 +199,27 @@ START-OF-SELECTION.
 * ALV EVENT HANDLER - IMPLEMENTATION
 *----------------------------------------------------------------------*
 CLASS lcl_alv_handler IMPLEMENTATION.
+
+  METHOD on_alv_toolbar.
+    DATA: ls_tb TYPE stb_button.
+    IF gv_toolbar_done = abap_true. RETURN. ENDIF.
+    CLEAR ls_tb.
+    ls_tb-function  = 'BCMASS'.
+    ls_tb-icon      = icon_batch.
+    ls_tb-quickinfo = 'Batch Change in Mass'.
+    ls_tb-text      = 'Batch Change'.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+    CLEAR ls_tb.
+    ls_tb-butn_type = 3.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
+    CLEAR ls_tb.
+    ls_tb-function  = 'CRENOM'.
+    ls_tb-icon      = icon_execute_object.
+    ls_tb-quickinfo = 'Create Nomination'.
+    ls_tb-text      = 'Create Nomination'.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
+    gv_toolbar_done = abap_true.
+  ENDMETHOD.
 
   METHOD on_main_data_changed.
     DATA: ls_mod  TYPE lvc_s_modi,
@@ -329,16 +384,20 @@ FORM fetch_pur_data.
 
   IF sy-subrc <> 0 OR lt_pur IS INITIAL. RETURN. ENDIF.
   DELETE lt_pur WHERE qty_scm = 0.
+  IF lt_pur IS INITIAL. RETURN. ENDIF.
+
+  " Bulk pre-fetch all reference data (5 SELECTs instead of N*M)
+  PERFORM prefetch_reference_data USING lt_pur.
 
   LOOP AT lt_pur INTO ls_pur.
     CLEAR ls_disp.
-    ls_disp-sel         = ' '.
-    ls_disp-gas_day     = ls_pur-gas_day.
-    ls_disp-locid = ls_pur-locid.
-    ls_disp-material    = ls_pur-material.
-    ls_disp-state_code  = ls_pur-state_code.
-    ls_disp-qty_scm     = ls_pur-qty_scm.
-    ls_disp-gail_id     = ls_pur-gail_id.
+    ls_disp-sel        = ' '.
+    ls_disp-gas_day    = ls_pur-gas_day.
+    ls_disp-locid      = ls_pur-locid.
+    ls_disp-material   = ls_pur-material.
+    ls_disp-state_code = ls_pur-state_code.
+    ls_disp-qty_scm    = ls_pur-qty_scm.
+    ls_disp-gail_id    = ls_pur-gail_id.
 
     PERFORM derive_outline_agreement
       USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
@@ -364,11 +423,92 @@ FORM fetch_pur_data.
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM derive_outline_agreement
-* FSD 5a: OIJ_EL_DOC_MOT (matnr+locid+delind+date range) -> VBELNs
-* FSD 5b: T001W (state+werks=2*) -> plants
-* FSD 5c: EKPO (ebeln in VBELNs, werks, mwskz=DQ, lvorm ne X) -> OAs
-* FSD 5d: retain latest OA by bedat
+* FORM prefetch_reference_data — 5 bulk SELECTs replacing N*M queries
+*----------------------------------------------------------------------*
+FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
+  DATA: ls_pur     TYPE ty_pur,
+        ls_mot     TYPE ty_mot_cache,
+        ls_sdate   LIKE LINE OF s_date,
+        lv_min_dt  TYPE d,
+        lv_max_dt  TYPE d,
+        lr_state   TYPE RANGE OF regio,
+        ls_rstate  LIKE LINE OF lr_state,
+        lr_matnr   TYPE RANGE OF matnr,
+        ls_rmatnr  LIKE LINE OF lr_matnr,
+        lr_vbeln   TYPE RANGE OF ebeln,
+        ls_rvbeln  LIKE LINE OF lr_vbeln.
+
+  " Collect unique states and materials for range conditions
+  LOOP AT it_pur INTO ls_pur.
+    ls_rstate-sign = 'I'. ls_rstate-option = 'EQ'.
+    ls_rstate-low  = ls_pur-state_code.
+    APPEND ls_rstate TO lr_state.
+    ls_rmatnr-sign = 'I'. ls_rmatnr-option = 'EQ'.
+    ls_rmatnr-low  = ls_pur-material.
+    APPEND ls_rmatnr TO lr_matnr.
+  ENDLOOP.
+  SORT lr_state  BY low. DELETE ADJACENT DUPLICATES FROM lr_state  COMPARING low.
+  SORT lr_matnr  BY low. DELETE ADJACENT DUPLICATES FROM lr_matnr  COMPARING low.
+
+  " Min/max gas day from selection screen
+  LOOP AT s_date INTO ls_sdate WHERE sign = 'I'.
+    IF lv_min_dt IS INITIAL OR ls_sdate-low < lv_min_dt.
+      lv_min_dt = ls_sdate-low.
+    ENDIF.
+    IF ls_sdate-high > lv_max_dt. lv_max_dt = ls_sdate-high. ENDIF.
+    IF ls_sdate-option = 'EQ' AND ls_sdate-low > lv_max_dt.
+      lv_max_dt = ls_sdate-low.
+    ENDIF.
+  ENDLOOP.
+
+  " 1. T001W: all relevant plants by state
+  REFRESH gt_t001w_c.
+  SELECT werks regio FROM t001w INTO CORRESPONDING FIELDS OF TABLE gt_t001w_c
+    WHERE regio IN lr_state AND werks LIKE '2%'.
+  SORT gt_t001w_c BY regio werks.
+
+  " 2. OIJ_EL_DOC_MOT: all OAs overlapping the selected date range
+  REFRESH gt_mot_c.
+  SELECT vbeln matnr locid fromdate todate FROM oij_el_doc_mot
+    INTO CORRESPONDING FIELDS OF TABLE gt_mot_c
+    WHERE delind    <> 'X'
+      AND fromdate  <= lv_max_dt
+      AND todate    >= lv_min_dt.
+  SORT gt_mot_c BY matnr locid.
+
+  " 3. Build VBELN range from MOT results
+  LOOP AT gt_mot_c INTO ls_mot.
+    ls_rvbeln-sign = 'I'. ls_rvbeln-option = 'EQ'.
+    ls_rvbeln-low  = ls_mot-vbeln.
+    APPEND ls_rvbeln TO lr_vbeln.
+  ENDLOOP.
+  SORT lr_vbeln BY low. DELETE ADJACENT DUPLICATES FROM lr_vbeln COMPARING low.
+
+  " 4. EKKO+EKPO: all relevant OA lines (DQ tax, not deleted)
+  REFRESH gt_ekoa_c.
+  IF lr_vbeln IS NOT INITIAL AND gt_t001w_c IS NOT INITIAL.
+    SELECT ekko~ebeln ekko~bedat ekpo~werks
+      FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
+      INTO CORRESPONDING FIELDS OF TABLE gt_ekoa_c
+      WHERE ekko~ebeln IN lr_vbeln
+        AND ekpo~lvorm <> 'X'
+        AND ekpo~mwskz =  'DQ'
+        AND ekko~loekz =  ' '.
+    SORT gt_ekoa_c BY ebeln werks.
+  ENDIF.
+
+  " 5. MCHA: all batches for relevant materials (not marked for deletion)
+  REFRESH gt_mcha_c.
+  IF lr_matnr IS NOT INITIAL.
+    SELECT matnr werks charg ersda FROM mcha
+      INTO CORRESPONDING FIELDS OF TABLE gt_mcha_c
+      WHERE matnr IN lr_matnr AND lvorm = ' '.
+    SORT gt_mcha_c BY matnr ersda DESCENDING.
+  ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM derive_outline_agreement — uses pre-fetched cache (no DB calls)
 *----------------------------------------------------------------------*
 FORM derive_outline_agreement
   USING    iv_locid   TYPE char10
@@ -378,59 +518,39 @@ FORM derive_outline_agreement
   CHANGING cv_vbeln   TYPE ebeln
            cv_missing TYPE char1.
 
-  DATA: BEGIN OF ls_oa,
-          vbeln TYPE ebeln,
-        END OF ls_oa,
-        lt_oa         LIKE STANDARD TABLE OF ls_oa,
+  DATA: ls_mot        TYPE ty_mot_cache,
+        ls_t001w      TYPE ty_t001w_cache,
+        ls_ek         TYPE ty_ekoa_cache,
+        lt_cand       TYPE STANDARD TABLE OF ebeln,
         lt_werks      TYPE STANDARD TABLE OF werks_d,
+        lv_vbeln      TYPE ebeln,
         lv_werks      TYPE werks_d,
-        BEGIN OF ls_res,
-          ebeln TYPE ekko-ebeln,
-          bedat TYPE ekko-bedat,
-        END OF ls_res,
-        lt_res        LIKE STANDARD TABLE OF ls_res,
         lv_best_vbeln TYPE ebeln,
-        lv_best_bedat TYPE bedat.
+        lv_best_bedat TYPE d.
 
   CLEAR: cv_vbeln, cv_missing.
 
-  " FSD 5a: get OAs from OIJ_EL_DOC_MOT
-  SELECT vbeln FROM oij_el_doc_mot
-    INTO CORRESPONDING FIELDS OF TABLE lt_oa
-    WHERE matnr     =  iv_matnr
-      AND locid     =  iv_locid
-      AND delind    <> 'X'
-      AND fromdate  <= iv_date
-      AND todate    >= iv_date.
+  " 5a: find candidate OAs from pre-fetched MOT data (in memory)
+  LOOP AT gt_mot_c INTO ls_mot WHERE matnr = iv_matnr AND locid = iv_locid.
+    IF iv_date >= ls_mot-fromdate AND iv_date <= ls_mot-todate.
+      APPEND ls_mot-vbeln TO lt_cand.
+    ENDIF.
+  ENDLOOP.
+  IF lt_cand IS INITIAL. cv_missing = abap_true. RETURN. ENDIF.
 
-  IF lt_oa IS INITIAL.
-    cv_missing = abap_true. RETURN.
-  ENDIF.
+  " 5b: get plants for state from pre-fetched T001W
+  LOOP AT gt_t001w_c INTO ls_t001w WHERE regio = iv_state.
+    APPEND ls_t001w-werks TO lt_werks.
+  ENDLOOP.
+  IF lt_werks IS INITIAL. cv_missing = abap_true. RETURN. ENDIF.
 
-  " FSD 5b: get plants for state from T001W, WERKS = 2*
-  SELECT werks FROM t001w INTO TABLE lt_werks
-    WHERE werks LIKE '2%' AND regio = iv_state.
-
-  IF lt_werks IS INITIAL.
-    cv_missing = abap_true. RETURN.
-  ENDIF.
-  SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
-
-  " FSD 5c+5d: EKPO/EKKO filter; keep latest OA by bedat
-  LOOP AT lt_oa INTO ls_oa.
+  " 5c+5d: find best OA by latest BEDAT from pre-fetched EKKO+EKPO
+  LOOP AT lt_cand INTO lv_vbeln.
     LOOP AT lt_werks INTO lv_werks.
-      SELECT ekko~ebeln ekko~bedat
-        FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
-        INTO CORRESPONDING FIELDS OF TABLE lt_res
-        WHERE ekko~ebeln  =  ls_oa-vbeln
-          AND ekpo~werks  =  lv_werks
-          AND ekpo~lvorm  <> 'X'
-          AND ekpo~mwskz  =  'DQ'
-          AND ekko~loekz  =  ' '.
-      LOOP AT lt_res INTO ls_res.
-        IF ls_res-bedat > lv_best_bedat.
-          lv_best_bedat = ls_res-bedat.
-          lv_best_vbeln = ls_res-ebeln.
+      LOOP AT gt_ekoa_c INTO ls_ek WHERE ebeln = lv_vbeln AND werks = lv_werks.
+        IF ls_ek-bedat > lv_best_bedat.
+          lv_best_bedat = ls_ek-bedat.
+          lv_best_vbeln = ls_ek-ebeln.
         ENDIF.
       ENDLOOP.
     ENDLOOP.
@@ -444,35 +564,31 @@ FORM derive_outline_agreement
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM derive_batch  - latest batch from MCHA (LVORM = blank)
+* FORM derive_batch — uses pre-fetched MCHA cache (no DB calls)
 *----------------------------------------------------------------------*
 FORM derive_batch
   USING    iv_matnr TYPE matnr
            iv_state TYPE char2
   CHANGING cv_charg TYPE charg_d.
-  DATA: lt_mcha  TYPE STANDARD TABLE OF mcha,
-        ls_mcha  TYPE mcha,
+  DATA: ls_t001w TYPE ty_t001w_cache,
+        ls_mcha  TYPE ty_mcha_cache,
         lt_werks TYPE STANDARD TABLE OF werks_d,
         lv_werks TYPE werks_d.
   CLEAR cv_charg.
-  SELECT werks FROM t001w INTO TABLE lt_werks
-    WHERE werks LIKE '2%' AND regio = iv_state.
-  IF lt_werks IS NOT INITIAL.
-    SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
-    LOOP AT lt_werks INTO lv_werks.
-      SELECT matnr werks charg ersda lvorm FROM mcha
-        APPENDING CORRESPONDING FIELDS OF TABLE lt_mcha
-        WHERE matnr = iv_matnr AND werks = lv_werks AND lvorm = ' '.
-    ENDLOOP.
-  ELSE.
-    SELECT matnr werks charg ersda lvorm FROM mcha
-      INTO CORRESPONDING FIELDS OF TABLE lt_mcha
-      WHERE matnr = iv_matnr AND lvorm = ' '.
-  ENDIF.
-  IF lt_mcha IS INITIAL. RETURN. ENDIF.
-  SORT lt_mcha BY ersda DESCENDING.
-  READ TABLE lt_mcha INDEX 1 INTO ls_mcha.
-  IF sy-subrc = 0. cv_charg = ls_mcha-charg. ENDIF.
+
+  " Get state-specific plants from cache
+  LOOP AT gt_t001w_c INTO ls_t001w WHERE regio = iv_state.
+    APPEND ls_t001w-werks TO lt_werks.
+  ENDLOOP.
+
+  " Find latest batch for this material (cache sorted by ersda DESC)
+  LOOP AT gt_mcha_c INTO ls_mcha WHERE matnr = iv_matnr.
+    IF lt_werks IS NOT INITIAL.
+      READ TABLE lt_werks WITH KEY table_line = ls_mcha-werks TRANSPORTING NO FIELDS.
+      IF sy-subrc <> 0. CONTINUE. ENDIF.
+    ENDIF.
+    cv_charg = ls_mcha-charg. RETURN.
+  ENDLOOP.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -677,32 +793,23 @@ ENDFORM.
 FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
                         e_interactive TYPE char1.
   DATA: ls_tb TYPE stb_button.
+  IF gv_toolbar_done = abap_true. RETURN. ENDIF.
   CLEAR ls_tb.
   ls_tb-function  = 'BCMASS'.
   ls_tb-icon      = icon_batch.
   ls_tb-quickinfo = 'Batch Change in Mass'.
   ls_tb-text      = 'Batch Change'.
-  APPEND ls_tb TO e_object->mt_toolbar.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
   CLEAR ls_tb.
   ls_tb-butn_type = 3.
-  APPEND ls_tb TO e_object->mt_toolbar.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
   CLEAR ls_tb.
   ls_tb-function  = 'CRENOM'.
   ls_tb-icon      = icon_execute_object.
   ls_tb-quickinfo = 'Create Nomination'.
   ls_tb-text      = 'Create Nomination'.
-  APPEND ls_tb TO e_object->mt_toolbar.
-
-  " Register data_changed handler once ALV grid is initialized
-  IF go_alv IS INITIAL.
-    CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
-      IMPORTING e_grid = go_alv.
-  ENDIF.
-  IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
-    CREATE OBJECT go_alv_handler.
-    SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
-    go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
-  ENDIF.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
+  gv_toolbar_done = abap_true.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -715,6 +822,15 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
       IMPORTING e_grid = go_alv.
   ENDIF.
   IF go_alv IS NOT INITIAL.
+    IF go_alv_handler IS INITIAL.
+      CREATE OBJECT go_alv_handler.
+      SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
+      SET HANDLER go_alv_handler->on_alv_toolbar       FOR go_alv.
+      go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+    ENDIF.
+    IF gv_toolbar_done = ' '.
+      go_alv->set_toolbar_interactive( abap_true ).
+    ENDIF.
     go_alv->check_changed_data( ).
   ENDIF.
   CASE r_ucomm.
