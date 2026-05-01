@@ -633,24 +633,17 @@ ENDFORM.
 * FORM display_alv_grid  — REUSE_ALV_GRID_DISPLAY_LVC, no screen painter
 *----------------------------------------------------------------------*
 FORM display_alv_grid.
-  DATA: lt_events  TYPE slis_t_event,
-        ls_event   TYPE slis_alv_event,
-        lv_title   TYPE lvc_title,
-        ls_variant TYPE disvariant.
-
-  " TOOLBAR event: add custom buttons and register data_changed handler
-  ls_event-name = 'TOOLBAR'.
-  ls_event-form = 'ALV_TOOLBAR'.
-  APPEND ls_event TO lt_events.
+  DATA: lv_title   TYPE lvc_title,
+        ls_variant TYPE disvariant,
+        ls_sloc    LIKE LINE OF s_locid,
+        ls_sdate   LIKE LINE OF s_date,
+        lv_locid   TYPE char40,
+        lv_dates   TYPE char40.
 
   PERFORM build_fieldcat.
   PERFORM set_alv_layout.
 
   " Build grid title with selected location/date info
-  DATA: lv_locid  TYPE char40,
-        lv_dates  TYPE char40,
-        ls_sloc   LIKE LINE OF s_locid,
-        ls_sdate  LIKE LINE OF s_date.
   READ TABLE s_locid INDEX 1 INTO ls_sloc.
   IF sy-subrc = 0. lv_locid = ls_sloc-low. ENDIF.
   READ TABLE s_date  INDEX 1 INTO ls_sdate.
@@ -667,21 +660,40 @@ FORM display_alv_grid.
 
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
-      i_callback_program      = sy-repid
-      i_callback_user_command = 'USER_COMMAND'
-      i_grid_title            = lv_title
-      is_layout_lvc           = gs_layout
-      it_fieldcat_lvc         = gt_fcat
-      it_events               = lt_events
-      i_save                  = 'A'
-      is_variant              = ls_variant
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'SET_PF_STATUS'
+      i_callback_user_command  = 'USER_COMMAND'
+      i_grid_title             = lv_title
+      is_layout_lvc            = gs_layout
+      it_fieldcat_lvc          = gt_fcat
+      i_save                   = 'A'
+      is_variant               = ls_variant
     TABLES
-      t_outtab                = gt_display
+      t_outtab                 = gt_display
     EXCEPTIONS
-      program_error           = 1
-      OTHERS                  = 2.
+      program_error            = 1
+      OTHERS                   = 2.
   IF sy-subrc <> 0.
     MESSAGE 'Error displaying ALV grid.' TYPE 'E'.
+  ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM set_pf_status — sets PF status with custom buttons
+* Requires PF status 'YRGG015' created in SE41 for this program,
+* copied from SAPLSLVC_FULLSCREEN/STANDARD_FULLSCREEN with BCMASS+CRENOM
+*----------------------------------------------------------------------*
+FORM set_pf_status USING rt_extab TYPE slis_t_extab.
+  SET PF-STATUS 'YRGG015' EXCLUDING rt_extab.
+  " Register data_changed handler here (fires during ALV initialization)
+  IF go_alv IS INITIAL.
+    CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+      IMPORTING e_grid = go_alv.
+  ENDIF.
+  IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
+    CREATE OBJECT go_alv_handler.
+    SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
+    go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
   ENDIF.
 ENDFORM.
 
@@ -822,15 +834,6 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
       IMPORTING e_grid = go_alv.
   ENDIF.
   IF go_alv IS NOT INITIAL.
-    IF go_alv_handler IS INITIAL.
-      CREATE OBJECT go_alv_handler.
-      SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
-      SET HANDLER go_alv_handler->on_alv_toolbar       FOR go_alv.
-      go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
-    ENDIF.
-    IF gv_toolbar_done = ' '.
-      go_alv->set_toolbar_interactive( ).
-    ENDIF.
     go_alv->check_changed_data( ).
   ENDIF.
   CASE r_ucomm.
