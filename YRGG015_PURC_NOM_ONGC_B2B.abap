@@ -829,7 +829,7 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
       go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
     ENDIF.
     IF gv_toolbar_done = ' '.
-      go_alv->set_toolbar_interactive( abap_true ).
+      go_alv->set_toolbar_interactive( ).
     ENDIF.
     go_alv->check_changed_data( ).
   ENDIF.
