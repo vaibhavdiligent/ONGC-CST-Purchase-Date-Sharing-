@@ -668,9 +668,7 @@ FORM set_alv_layout.
   gs_layout-edit        = abap_true.
   gs_layout-ctab_fname  = 'T_COLOR'.
   gs_layout-stylefname  = 'CELLTAB'.
-  gs_layout-info_fname  = ' '.
   gs_layout-no_rowmark  = abap_true.
-  gs_layout-col_pos     = 0.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -690,7 +688,7 @@ FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
   APPEND ls_tb TO e_object->mt_toolbar.
   CLEAR ls_tb.
   ls_tb-function  = 'CRENOM'.
-  ls_tb-icon      = icon_system_run.
+  ls_tb-icon      = icon_execute_object.
   ls_tb-quickinfo = 'Create Nomination'.
   ls_tb-text      = 'Create Nomination'.
   APPEND ls_tb TO e_object->mt_toolbar.
