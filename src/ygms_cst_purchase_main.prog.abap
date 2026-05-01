@@ -1301,8 +1301,8 @@ FORM handle_allocate.
   DATA l_day TYPE char10.
   DATA l_index(2) TYPE n.
   DATA l_date TYPE sy-datum.
-  DATA l_ncv TYPE p DECIMALS 6.
-  DATA l_gcv TYPE p DECIMALS 6.
+  DATA l_ncv TYPE p LENGTH 16 DECIMALS 6.
+  DATA l_gcv TYPE p LENGTH 16 DECIMALS 6.
   DATA l_day_sm3 TYPE p DECIMALS 6.
   " 2.1b: Clear ALV day data before allocation to prevent additive quantities on repeated clicks
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_clear>).
@@ -1616,8 +1616,8 @@ FORM handle_static_allocation.
   DATA: l_day     TYPE char10,
         l_index(2) TYPE n,
         l_date    TYPE sy-datum,
-        l_ncv     TYPE p DECIMALS 6,
-        l_gcv     TYPE p DECIMALS 6,
+        l_ncv     TYPE p LENGTH 16 DECIMALS 6,
+        l_gcv     TYPE p LENGTH 16 DECIMALS 6,
         l_day_sm3 TYPE p DECIMALS 6.
   DATA: c_tgqty_s TYPE msego2-adqnt,
         i_trqty_s TYPE msego2-adqnt,
@@ -2130,8 +2130,8 @@ FORM save_data_to_db.
         lv_error_found TYPE abap_bool.
   " Variables for weighted average calculation
   DATA: lv_total_vol   TYPE p DECIMALS 3,
-        lv_sum_vol_gcv TYPE p DECIMALS 6,
-        lv_sum_vol_ncv TYPE p DECIMALS 6,
+        lv_sum_vol_gcv TYPE p LENGTH 16 DECIMALS 6,
+        lv_sum_vol_ncv TYPE p LENGTH 16 DECIMALS 6,
         lv_avg_gcv     TYPE ygms_de_gcv,
         lv_avg_ncv     TYPE ygms_de_ncv,
         lv_total_mbg   TYPE p DECIMALS 3,
@@ -3285,8 +3285,8 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
            state        TYPE yrga_cst_pur-state,
            total_mbg    TYPE yrga_cst_pur-qty_in_mbg,
            total_scm    TYPE yrga_cst_pur-qty_in_scm,
-           sum_vol_gcv  TYPE p DECIMALS 6,
-           sum_vol_ncv  TYPE p DECIMALS 6,
+           sum_vol_gcv  TYPE p LENGTH 16 DECIMALS 6,
+           sum_vol_ncv  TYPE p LENGTH 16 DECIMALS 6,
            total_vol    TYPE yrga_cst_pur-qty_in_scm,
          END OF ty_summary.
   DATA: lt_summary TYPE SORTED TABLE OF ty_summary WITH UNIQUE KEY ctp state_code ongc_mater,
@@ -4933,8 +4933,8 @@ FORM build_alv_display_table_view .
   DATA ls_alv TYPE ty_alv_display.
   DATA l_day TYPE char10.
   DATA l_index(2) TYPE n.
-  DATA l_ncv TYPE p DECIMALS 6.
-  DATA l_gcv TYPE p DECIMALS 6.
+  DATA l_ncv TYPE p LENGTH 16 DECIMALS 6.
+  DATA l_gcv TYPE p LENGTH 16 DECIMALS 6.
   DATA l_day_sm3 TYPE p DECIMALS 6.
   SELECT * INTO TABLE @DATA(it_yrga_cst_pur)
     FROM yrga_cst_pur
