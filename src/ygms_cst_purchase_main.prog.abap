@@ -1361,6 +1361,22 @@ FORM handle_allocate.
             <fs_alv>-total_scm = <fs_alv>-total_scm + l_day_sm3.
             l_gcv = ( l_day_sm3 * wa_gas_receipt-gcv ) + l_gcv.
             l_ncv = ( l_day_sm3 * wa_gas_receipt-ncv ) + l_ncv.
+            IF l_day_sm3 > 0 AND wa_gas_receipt-gcv > 0.
+              CLEAR c_tgqty_alloc.
+              i_trqty_alloc = l_day_sm3.
+              lv_gcv_alloc  = wa_gas_receipt-gcv.
+              lv_ncv_alloc  = wa_gas_receipt-ncv.
+              CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+                EXPORTING
+                  i_trqty = i_trqty_alloc
+                  i_truom = 'SM3'
+                  i_tguom = 'MBG'
+                  lv_gcv  = lv_gcv_alloc
+                  lv_ncv  = lv_ncv_alloc
+                CHANGING
+                  c_tgqty = c_tgqty_alloc.
+              <fs_alv>-total_mbg = <fs_alv>-total_mbg + round( val = c_tgqty_alloc dec = 3 ).
+            ENDIF.
           ENDIF.
         ENDIF.
         l_date = l_date + 1.
@@ -1368,22 +1384,6 @@ FORM handle_allocate.
       IF <fs_alv>-total_scm > 0.
         <fs_alv>-gcv = round( val = l_gcv / <fs_alv>-total_scm dec = 3 ).
         <fs_alv>-ncv = round( val = l_ncv / <fs_alv>-total_scm dec = 3 ).
-      ENDIF.
-      IF <fs_alv>-gcv > 0 AND <fs_alv>-total_scm > 0.
-        CLEAR c_tgqty_alloc.
-        i_trqty_alloc = <fs_alv>-total_scm.
-        lv_gcv_alloc  = <fs_alv>-gcv.
-        lv_ncv_alloc  = <fs_alv>-ncv.
-        CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-          EXPORTING
-            i_trqty = i_trqty_alloc
-            i_truom = 'SM3'
-            i_tguom = 'MBG'
-            lv_gcv  = lv_gcv_alloc
-            lv_ncv  = lv_ncv_alloc
-          CHANGING
-            c_tgqty = c_tgqty_alloc.
-        <fs_alv>-total_mbg = round( val = c_tgqty_alloc dec = 3 ).
       ENDIF.
       CLEAR l_day_sm3.
     ENDLOOP.
@@ -1521,23 +1521,38 @@ FORM handle_allocate.
         <fs_alv_adj>-gcv = round( val = l_gcv / <fs_alv_adj>-total_scm dec = 3 ).
         <fs_alv_adj>-ncv = round( val = l_ncv / <fs_alv_adj>-total_scm dec = 3 ).
       ENDIF.
-      " Recalculate Total MBG via FM
-      IF <fs_alv_adj>-gcv > 0 AND <fs_alv_adj>-total_scm > 0.
-        CLEAR c_tgqty_alloc.
-        i_trqty_alloc = <fs_alv_adj>-total_scm.
-        lv_gcv_alloc  = <fs_alv_adj>-gcv.
-        lv_ncv_alloc  = <fs_alv_adj>-ncv.
-        CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-          EXPORTING
-            i_trqty = i_trqty_alloc
-            i_truom = 'SM3'
-            i_tguom = 'MBG'
-            lv_gcv  = lv_gcv_alloc
-            lv_ncv  = lv_ncv_alloc
-          CHANGING
-            c_tgqty = c_tgqty_alloc.
-        <fs_alv_adj>-total_mbg = round( val = c_tgqty_alloc dec = 3 ).
-      ENDIF.
+      " Recalculate Total MBG per day via FM
+      <fs_alv_adj>-total_mbg = 0.
+      lv_adj_date = gv_date_from.
+      DO lv_adj_days TIMES.
+        lv_adj_idx2 = sy-index.
+        CONCATENATE 'DAY' lv_adj_idx2 INTO lv_adj_day.
+        ASSIGN COMPONENT lv_adj_day OF STRUCTURE <fs_alv_adj> TO FIELD-SYMBOL(<fs_adj_mbg>).
+        IF sy-subrc = 0 AND <fs_adj_mbg> > 0.
+          READ TABLE gt_gas_receipt INTO ls_adj_rcpt
+            WITH KEY location_id   = <fs_alv_adj>-location_id
+                     gas_day       = lv_adj_date
+                     material      = <fs_alv_adj>-material
+                     ongc_material = <fs_alv_adj>-ongc_material.
+          IF sy-subrc = 0 AND ls_adj_rcpt-gcv > 0.
+            CLEAR c_tgqty_alloc.
+            i_trqty_alloc = <fs_adj_mbg>.
+            lv_gcv_alloc  = ls_adj_rcpt-gcv.
+            lv_ncv_alloc  = ls_adj_rcpt-ncv.
+            CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+              EXPORTING
+                i_trqty = i_trqty_alloc
+                i_truom = 'SM3'
+                i_tguom = 'MBG'
+                lv_gcv  = lv_gcv_alloc
+                lv_ncv  = lv_ncv_alloc
+              CHANGING
+                c_tgqty = c_tgqty_alloc.
+            <fs_alv_adj>-total_mbg = <fs_alv_adj>-total_mbg + round( val = c_tgqty_alloc dec = 3 ).
+          ENDIF.
+        ENDIF.
+        lv_adj_date = lv_adj_date + 1.
+      ENDDO.
     ENDIF.
   ENDLOOP.
   " 2.1a/2.3e: Disable checkboxes after allocation
@@ -1648,6 +1663,22 @@ FORM handle_static_allocation.
           <fs_alv_static>-total_scm = <fs_alv_static>-total_scm + l_day_sm3.
           l_gcv = ( l_day_sm3 * wa_gas_static-gcv ) + l_gcv.
           l_ncv = ( l_day_sm3 * wa_gas_static-ncv ) + l_ncv.
+          IF l_day_sm3 > 0 AND wa_gas_static-gcv > 0.
+            CLEAR c_tgqty_s.
+            i_trqty_s = l_day_sm3.
+            lv_gcv_s  = wa_gas_static-gcv.
+            lv_ncv_s  = wa_gas_static-ncv.
+            CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+              EXPORTING
+                i_trqty = i_trqty_s
+                i_truom = 'SM3'
+                i_tguom = 'MBG'
+                lv_gcv  = lv_gcv_s
+                lv_ncv  = lv_ncv_s
+              CHANGING
+                c_tgqty = c_tgqty_s.
+            <fs_alv_static>-total_mbg = <fs_alv_static>-total_mbg + round( val = c_tgqty_s dec = 3 ).
+          ENDIF.
         ENDIF.
       ENDIF.
       l_date = l_date + 1.
@@ -1655,22 +1686,6 @@ FORM handle_static_allocation.
     IF <fs_alv_static>-total_scm > 0.
       <fs_alv_static>-gcv = round( val = l_gcv / <fs_alv_static>-total_scm dec = 3 ).
       <fs_alv_static>-ncv = round( val = l_ncv / <fs_alv_static>-total_scm dec = 3 ).
-    ENDIF.
-    IF <fs_alv_static>-gcv > 0 AND <fs_alv_static>-total_scm > 0.
-      CLEAR c_tgqty_s.
-      i_trqty_s = <fs_alv_static>-total_scm.
-      lv_gcv_s  = <fs_alv_static>-gcv.
-      lv_ncv_s  = <fs_alv_static>-ncv.
-      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-        EXPORTING
-          i_trqty = i_trqty_s
-          i_truom = 'SM3'
-          i_tguom = 'MBG'
-          lv_gcv  = lv_gcv_s
-          lv_ncv  = lv_ncv_s
-        CHANGING
-          c_tgqty = c_tgqty_s.
-      <fs_alv_static>-total_mbg = round( val = c_tgqty_s dec = 3 ).
     ENDIF.
     <fs_alv_static>-total_sales_mbg = <fs_alv_static>-total_mbg.
     <fs_alv_static>-alloc_sales_mbg = 0.
@@ -4877,6 +4892,22 @@ FORM recalculate_totals.
         IF sy-subrc = 0.
           lv_sum_gcv = lv_sum_gcv + ( <fs_wt_day> * wa_gcv_rcpt-gcv ).
           lv_sum_ncv = lv_sum_ncv + ( <fs_wt_day> * wa_gcv_rcpt-ncv ).
+          IF wa_gcv_rcpt-gcv > 0.
+            CLEAR c_tgqty.
+            i_trqty = <fs_wt_day>.
+            lv_gcv  = wa_gcv_rcpt-gcv.
+            lv_ncv  = wa_gcv_rcpt-ncv.
+            CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
+              EXPORTING
+                i_trqty = i_trqty
+                i_truom = 'SM3'
+                i_tguom = 'MBG'
+                lv_gcv  = lv_gcv
+                lv_ncv  = lv_ncv
+              CHANGING
+                c_tgqty = c_tgqty.
+            <fs_alv>-total_mbg = <fs_alv>-total_mbg + round( val = c_tgqty dec = 3 ).
+          ENDIF.
         ENDIF.
       ENDIF.
       lv_wt_date = lv_wt_date + 1.
@@ -4886,25 +4917,6 @@ FORM recalculate_totals.
       <fs_alv>-ncv = round( val = lv_sum_ncv / <fs_alv>-total_scm dec = 3 ).
     ELSE.
       CLEAR: <fs_alv>-gcv, <fs_alv>-ncv, <fs_alv>-total_mbg.
-    ENDIF.
-    " Convert TOTAL_SCM to TOTAL_MBG using rounded GCV/NCV
-    IF <fs_alv>-gcv > 0 AND <fs_alv>-total_scm > 0.
-      CLEAR c_tgqty.
-      i_trqty = <fs_alv>-total_scm.
-      lv_gcv  = <fs_alv>-gcv.
-      lv_ncv  = <fs_alv>-ncv.
-      CALL FUNCTION 'YRX_QTY_UOM_TO_QTY_UOM'
-        EXPORTING
-          i_trqty = i_trqty
-          i_truom = 'SM3'
-          i_tguom = 'MBG'
-          lv_gcv  = lv_gcv
-          lv_ncv  = lv_ncv
-        CHANGING
-          c_tgqty = c_tgqty.
-      <fs_alv>-total_mbg = round( val = c_tgqty dec = 3 ).
-    ELSE.
-      CLEAR <fs_alv>-total_mbg.
     ENDIF.
     " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
