@@ -517,8 +517,10 @@ ENDFORM.
 * FORM display_alv_grid  — REUSE_ALV_GRID_DISPLAY_LVC, no screen painter
 *----------------------------------------------------------------------*
 FORM display_alv_grid.
-  DATA: lt_events TYPE slis_t_event,
-        ls_event  TYPE slis_alv_event.
+  DATA: lt_events  TYPE slis_t_event,
+        ls_event   TYPE slis_alv_event,
+        lv_title   TYPE lvc_title,
+        ls_variant TYPE disvariant.
 
   " TOOLBAR event: add custom buttons and register data_changed handler
   ls_event-name = 'TOOLBAR'.
@@ -528,13 +530,35 @@ FORM display_alv_grid.
   PERFORM build_fieldcat.
   PERFORM set_alv_layout.
 
+  " Build grid title with selected location/date info
+  DATA: lv_locid  TYPE char40,
+        lv_dates  TYPE char40,
+        ls_sloc   LIKE LINE OF s_locid,
+        ls_sdate  LIKE LINE OF s_date.
+  READ TABLE s_locid INDEX 1 INTO ls_sloc.
+  IF sy-subrc = 0. lv_locid = ls_sloc-low. ENDIF.
+  READ TABLE s_date  INDEX 1 INTO ls_sdate.
+  IF sy-subrc = 0.
+    CONCATENATE ls_sdate-low '-' ls_sdate-high INTO lv_dates.
+  ENDIF.
+  CONCATENATE 'Purchase Nomination - ONGC B2B'
+              '  |  Location:' lv_locid
+              '  |  Period:' lv_dates
+              INTO lv_title SEPARATED BY ' '.
+  CONDENSE lv_title.
+
+  ls_variant-report = sy-repid.
+
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
       i_callback_program      = sy-repid
       i_callback_user_command = 'USER_COMMAND'
+      i_grid_title            = lv_title
       is_layout_lvc           = gs_layout
       it_fieldcat_lvc         = gt_fcat
       it_events               = lt_events
+      i_save                  = 'A'
+      is_variant              = ls_variant
     TABLES
       t_outtab                = gt_display
     EXCEPTIONS
@@ -551,29 +575,87 @@ ENDFORM.
 FORM build_fieldcat.
   DATA: ls_fcat TYPE lvc_s_fcat.
 
-  DEFINE add_field.
-    CLEAR ls_fcat.
-    ls_fcat-fieldname = &1.
-    ls_fcat-coltext   = &2.
-    ls_fcat-seltext   = &2.
-    ls_fcat-outputlen = &3.
-    ls_fcat-edit      = &4.
-    ls_fcat-hotspot   = &5.
-    APPEND ls_fcat TO gt_fcat.
-  END-OF-DEFINITION.
+  " SEL - checkbox with hotspot for group toggle
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'SEL'.
+  ls_fcat-coltext   = 'Sel'.
+  ls_fcat-seltext   = 'Select'.
+  ls_fcat-checkbox  = abap_true.
+  ls_fcat-hotspot   = abap_true.
+  ls_fcat-outputlen = 4.
+  APPEND ls_fcat TO gt_fcat.
 
-  add_field 'SEL'         'Sel'               3   ' ' 'X'.
-  add_field 'GAS_DAY'     'Gas Day'          10   ' ' ' '.
-  add_field 'LOCID' 'Location'         10   ' ' ' '.
-  add_field 'MATERIAL'    'Material'         18   ' ' ' '.
-  add_field 'STATE_CODE'  'State'             4   ' ' ' '.
-  add_field 'QTY_SCM'     'Qty SCM'          15   ' ' ' '.
-  add_field 'GAIL_ID'     'GAIL ID'          20   ' ' ' '.
-  add_field 'OUTLINE_AGR' 'Outline Agreement' 10  ' ' ' '.
-  add_field 'CHARG'       'Batch'            10   'X' ' '.
+  " GAS_DAY
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'GAS_DAY'.
+  ls_fcat-coltext   = 'Gas Day'.
+  ls_fcat-seltext   = 'Gas Day'.
+  ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO gt_fcat.
 
+  " LOCID
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'LOCID'.
+  ls_fcat-coltext   = 'Location'.
+  ls_fcat-seltext   = 'Location'.
+  ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO gt_fcat.
+
+  " MATERIAL
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'MATERIAL'.
+  ls_fcat-coltext   = 'Material'.
+  ls_fcat-seltext   = 'Material'.
+  ls_fcat-outputlen = 20.
+  APPEND ls_fcat TO gt_fcat.
+
+  " STATE_CODE
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'STATE_CODE'.
+  ls_fcat-coltext   = 'State'.
+  ls_fcat-seltext   = 'State Code'.
+  ls_fcat-outputlen = 6.
+  APPEND ls_fcat TO gt_fcat.
+
+  " QTY_SCM - right-aligned quantity
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'QTY_SCM'.
+  ls_fcat-coltext   = 'Qty (SCM)'.
+  ls_fcat-seltext   = 'Quantity SCM'.
+  ls_fcat-outputlen = 16.
+  ls_fcat-datatype  = 'QUAN'.
+  ls_fcat-no_sign   = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  " GAIL_ID
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'GAIL_ID'.
+  ls_fcat-coltext   = 'GAIL ID'.
+  ls_fcat-seltext   = 'GAIL ID'.
+  ls_fcat-outputlen = 22.
+  APPEND ls_fcat TO gt_fcat.
+
+  " OUTLINE_AGR
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OUTLINE_AGR'.
+  ls_fcat-coltext   = 'Outline Agreement'.
+  ls_fcat-seltext   = 'Outline Agreement'.
+  ls_fcat-outputlen = 14.
+  APPEND ls_fcat TO gt_fcat.
+
+  " CHARG - editable batch field
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'CHARG'.
+  ls_fcat-coltext   = 'Batch'.
+  ls_fcat-seltext   = 'Batch Number'.
+  ls_fcat-outputlen = 12.
+  ls_fcat-edit      = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  " Technical fields (hidden)
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'T_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
+  CLEAR ls_fcat.
   ls_fcat-fieldname = 'CELLTAB'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
 ENDFORM.
 
@@ -581,12 +663,14 @@ ENDFORM.
 * FORM set_alv_layout
 *----------------------------------------------------------------------*
 FORM set_alv_layout.
-  gs_layout-cwidth_opt = abap_true.
-  gs_layout-zebra      = abap_true.
-  gs_layout-edit       = abap_true.
-  gs_layout-ctab_fname = 'T_COLOR'.
-  gs_layout-stylefname = 'CELLTAB'.
-  gs_layout-sel_mode   = 'D'.
+  gs_layout-cwidth_opt  = abap_true.
+  gs_layout-zebra       = abap_true.
+  gs_layout-edit        = abap_true.
+  gs_layout-ctab_fname  = 'T_COLOR'.
+  gs_layout-stylefname  = 'CELLTAB'.
+  gs_layout-info_fname  = ' '.
+  gs_layout-no_rowmark  = abap_true.
+  gs_layout-col_pos     = 0.
 ENDFORM.
 
 *----------------------------------------------------------------------*
