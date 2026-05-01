@@ -78,7 +78,6 @@ TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
 DATA: gt_display      TYPE tt_display,
       gt_main         TYPE tt_main,
       go_alv          TYPE REF TO cl_gui_alv_grid,
-      go_container    TYPE REF TO cl_gui_docking_container,
       gs_layout       TYPE lvc_s_layo,
       gt_fcat         TYPE lvc_t_fcat,
       gv_auth_bg      TYPE char1,
@@ -94,26 +93,11 @@ CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_sm3        TYPE meins  VALUE 'SM3'.
 
 *----------------------------------------------------------------------*
-* EVENT HANDLER CLASS DEFINITION
+* BATCH DIALOG HANDLER CLASS (for BCMASS popup only)
 *----------------------------------------------------------------------*
-CLASS lcl_event_handler DEFINITION.
+CLASS lcl_batch_handler DEFINITION.
   PUBLIC SECTION.
     METHODS:
-      on_toolbar
-        FOR EVENT toolbar OF cl_gui_alv_grid
-        IMPORTING e_object e_interactive,
-      on_user_command
-        FOR EVENT user_command OF cl_gui_alv_grid
-        IMPORTING e_ucomm,
-      on_data_changed
-        FOR EVENT data_changed OF cl_gui_alv_grid
-        IMPORTING er_data_changed,
-      on_hotspot_click
-        FOR EVENT hotspot_click OF cl_gui_alv_grid
-        IMPORTING e_row_id e_column_id,
-      on_onf4
-        FOR EVENT onf4 OF cl_gui_alv_grid
-        IMPORTING e_fieldname es_row_no er_event_data,
       on_batch_data_changed
         FOR EVENT data_changed OF cl_gui_alv_grid
         IMPORTING er_data_changed,
@@ -121,7 +105,7 @@ CLASS lcl_event_handler DEFINITION.
         FOR EVENT close OF cl_gui_dialogbox_container.
 ENDCLASS.
 
-DATA: go_handler TYPE REF TO lcl_event_handler.
+DATA: go_batch_handler TYPE REF TO lcl_batch_handler.
 
 *----------------------------------------------------------------------*
 * SELECTION SCREEN
@@ -175,113 +159,9 @@ START-OF-SELECTION.
   ENDIF.
 
 *----------------------------------------------------------------------*
-* EVENT HANDLER CLASS - IMPLEMENTATION
+* BATCH DIALOG HANDLER - IMPLEMENTATION
 *----------------------------------------------------------------------*
-CLASS lcl_event_handler IMPLEMENTATION.
-
-  METHOD on_toolbar.
-    DATA: ls_tb TYPE stb_button.
-    CLEAR ls_tb.
-    ls_tb-function  = 'BCMASS'.
-    ls_tb-icon      = icon_batch.
-    ls_tb-quickinfo = 'Batch Change in Mass'.
-    ls_tb-text      = 'Batch Change'.
-    APPEND ls_tb TO e_object->mt_toolbar.
-    CLEAR ls_tb.
-    ls_tb-butn_type = 3.
-    APPEND ls_tb TO e_object->mt_toolbar.
-    CLEAR ls_tb.
-    ls_tb-function  = 'CRENOM'.
-    ls_tb-icon      = icon_system_run.
-    ls_tb-quickinfo = 'Create Nomination'.
-    ls_tb-text      = 'Create Nomination'.
-    APPEND ls_tb TO e_object->mt_toolbar.
-  ENDMETHOD.
-
-  METHOD on_user_command.
-    CASE e_ucomm.
-      WHEN 'BCMASS'. PERFORM handle_batch_mass_change.
-      WHEN 'CRENOM'. PERFORM handle_create_nomination.
-    ENDCASE.
-  ENDMETHOD.
-
-  METHOD on_data_changed.
-    DATA: ls_mod  TYPE lvc_s_modi,
-          ls_disp TYPE ty_display.
-    LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
-      IF ls_mod-fieldname = 'CHARG'.
-        READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
-        IF sy-subrc = 0.
-          ls_disp-charg = ls_mod-value.
-          MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-  ENDMETHOD.
-
-  METHOD on_hotspot_click.
-    DATA: ls_disp  TYPE ty_display,
-          lv_locid TYPE char10,
-          lv_date  TYPE aedat,
-          lv_newsel TYPE char1.
-    IF e_column_id-fieldname = 'SEL'.
-      READ TABLE gt_display INDEX e_row_id-index INTO ls_disp.
-      IF sy-subrc = 0.
-        IF ls_disp-sel = abap_true.
-          lv_newsel = ' '.
-        ELSE.
-          lv_newsel = abap_true.
-        ENDIF.
-        lv_locid  = ls_disp-locid.
-        lv_date   = ls_disp-gas_day.
-        LOOP AT gt_display INTO ls_disp.
-          IF ls_disp-locid = lv_locid AND ls_disp-gas_day = lv_date.
-            ls_disp-sel = lv_newsel.
-            MODIFY gt_display FROM ls_disp.
-          ENDIF.
-        ENDLOOP.
-        go_alv->refresh_table_display( ).
-      ENDIF.
-    ENDIF.
-  ENDMETHOD.
-
-  METHOD on_onf4.
-    IF e_fieldname = 'CHARG'.
-      DATA: ls_disp    TYPE ty_display,
-            lt_batches TYPE STANDARD TABLE OF ty_batch_vals,
-            lt_f4vals  TYPE STANDARD TABLE OF ddshretval,
-            ls_f4val   TYPE ddshretval,
-            ls_bat     TYPE ty_batch_vals.
-      READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
-      IF sy-subrc <> 0. RETURN. ENDIF.
-      PERFORM get_valid_batches_for_material USING ls_disp-material ls_disp-state_code CHANGING lt_batches.
-      IF lt_batches IS INITIAL.
-        MESSAGE 'No valid batches found for this material.' TYPE 'S' DISPLAY LIKE 'W'.
-        RETURN.
-      ENDIF.
-      LOOP AT lt_batches INTO ls_bat.
-        ls_f4val-fieldname = 'CHARG'.
-        ls_f4val-fieldval  = ls_bat-charg.
-        APPEND ls_f4val TO lt_f4vals.
-      ENDLOOP.
-      CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
-        EXPORTING
-          retfield        = 'CHARG'
-          dynpprog        = sy-repid
-          dynpnr          = sy-dynnr
-          stepl           = es_row_no-row_id
-          value_org       = 'S'
-        TABLES
-          value_tab       = lt_f4vals
-        EXCEPTIONS
-          parameter_error = 1
-          no_values_found = 2
-          OTHERS          = 3.
-      IF sy-subrc = 0.
-        er_event_data->m_event_handled = abap_true.
-      ENDIF.
-    ENDIF.
-  ENDMETHOD.
+CLASS lcl_batch_handler IMPLEMENTATION.
 
   METHOD on_batch_data_changed.
     DATA: ls_mod    TYPE lvc_s_modi,
@@ -308,12 +188,10 @@ CLASS lcl_event_handler IMPLEMENTATION.
       ENDLOOP.
     ENDLOOP.
     IF go_batch_alv IS NOT INITIAL.
-      go_batch_alv->free( ).
-      CLEAR go_batch_alv.
+      go_batch_alv->free( ). CLEAR go_batch_alv.
     ENDIF.
     IF go_batch_popup IS NOT INITIAL.
-      go_batch_popup->free( ).
-      CLEAR go_batch_popup.
+      go_batch_popup->free( ). CLEAR go_batch_popup.
     ENDIF.
     IF go_alv IS NOT INITIAL.
       go_alv->refresh_table_display( ).
@@ -618,51 +496,42 @@ FORM get_valid_batches_for_material
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM display_alv_grid
+* FORM display_alv_grid  — uses standard REUSE_ALV_GRID_DISPLAY_LVC
 *----------------------------------------------------------------------*
 FORM display_alv_grid.
-  " Use docking container — no screen painter / CALL SCREEN needed in a REPORT.
-  " CALL SCREEN 1000 would conflict with the report's standard selection screen 1000.
-  IF go_container IS INITIAL.
-    CREATE OBJECT go_container
-      EXPORTING
-        repid     = sy-repid
-        dynnr     = sy-dynnr
-        side      = cl_gui_docking_container=>dock_at_bottom
-        extension = 5000
-      EXCEPTIONS OTHERS = 1.
-    IF sy-subrc <> 0. MESSAGE 'Error creating ALV container.' TYPE 'E'. ENDIF.
-  ENDIF.
-  IF go_alv IS INITIAL.
-    CREATE OBJECT go_alv
-      EXPORTING i_parent = go_container
-      EXCEPTIONS OTHERS = 1.
-    IF sy-subrc <> 0. MESSAGE 'Error creating ALV grid.' TYPE 'E'. ENDIF.
-  ENDIF.
-  CREATE OBJECT go_handler.
-  SET HANDLER go_handler->on_toolbar       FOR go_alv.
-  SET HANDLER go_handler->on_user_command  FOR go_alv.
-  SET HANDLER go_handler->on_data_changed  FOR go_alv.
-  SET HANDLER go_handler->on_hotspot_click FOR go_alv.
-  SET HANDLER go_handler->on_onf4          FOR go_alv.
-  DATA: lt_f4reg TYPE lvc_t_f4,
-        ls_f4reg TYPE lvc_s_f4,
-        lt_excl  TYPE ui_functions.
-  ls_f4reg-fieldname = 'CHARG'.
-  ls_f4reg-register  = 'X'.
-  APPEND ls_f4reg TO lt_f4reg.
-  go_alv->register_f4_for_fields( EXPORTING it_f4 = lt_f4reg ).
+  DATA: lt_events TYPE slis_t_event,
+        ls_event  TYPE slis_alv_event,
+        ls_gset   TYPE lvc_s_glay.
+
+  ls_event-name = 'TOOLBAR'.      ls_event-form = 'ALV_TOOLBAR'.
+  APPEND ls_event TO lt_events. CLEAR ls_event.
+  ls_event-name = 'USER_COMMAND'. ls_event-form = 'ALV_USER_COMMAND'.
+  APPEND ls_event TO lt_events. CLEAR ls_event.
+  ls_event-name = 'DATA_CHANGED'. ls_event-form = 'ALV_DATA_CHANGED'.
+  APPEND ls_event TO lt_events. CLEAR ls_event.
+  ls_event-name = 'ONF4'.         ls_event-form = 'ALV_ONF4'.
+  APPEND ls_event TO lt_events.
+
+  ls_gset-edt_cll_cb = abap_true.
+
   PERFORM build_fieldcat.
   PERFORM set_alv_layout.
-  go_alv->set_table_for_first_display(
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
-      is_layout            = gs_layout
-      it_toolbar_excluding = lt_excl
-    CHANGING
-      it_outtab            = gt_display
-      it_fieldcatalog      = gt_fcat
-    EXCEPTIONS OTHERS = 1 ).
-  IF sy-subrc <> 0. MESSAGE 'Error displaying ALV grid.' TYPE 'E'. ENDIF.
+      i_callback_program = sy-repid
+      is_layout_lvc      = gs_layout
+      it_fieldcat_lvc    = gt_fcat
+      it_events          = lt_events
+      is_grid_settings   = ls_gset
+    TABLES
+      t_outtab           = gt_display
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+    MESSAGE 'Error displaying ALV grid.' TYPE 'E'.
+  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -691,6 +560,8 @@ FORM build_fieldcat.
   add_field 'GAIL_ID'     'GAIL ID'          20   ' ' ' '.
   add_field 'OUTLINE_AGR' 'Outline Agreement' 10  ' ' ' '.
   add_field 'CHARG'       'Batch'            10   'X' ' '.
+  ls_fcat-f4availabl = 'X'.
+  MODIFY gt_fcat INDEX sy-tabix FROM ls_fcat.
 
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'T_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
@@ -707,6 +578,137 @@ FORM set_alv_layout.
   gs_layout-ctab_fname = 'T_COLOR'.
   gs_layout-stylefname = 'CELLTAB'.
   gs_layout-sel_mode   = 'D'.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM alv_toolbar  — adds BCMASS and CRENOM buttons to ALV toolbar
+*----------------------------------------------------------------------*
+FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
+                        e_interactive TYPE char1.
+  DATA: ls_tb TYPE stb_button.
+  CLEAR ls_tb.
+  ls_tb-function  = 'BCMASS'.
+  ls_tb-icon      = icon_batch.
+  ls_tb-quickinfo = 'Batch Change in Mass'.
+  ls_tb-text      = 'Batch Change'.
+  APPEND ls_tb TO e_object->mt_toolbar.
+  CLEAR ls_tb.
+  ls_tb-butn_type = 3.
+  APPEND ls_tb TO e_object->mt_toolbar.
+  CLEAR ls_tb.
+  ls_tb-function  = 'CRENOM'.
+  ls_tb-icon      = icon_system_run.
+  ls_tb-quickinfo = 'Create Nomination'.
+  ls_tb-text      = 'Create Nomination'.
+  APPEND ls_tb TO e_object->mt_toolbar.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM alv_user_command  — handles toolbar buttons and hotspot clicks
+*----------------------------------------------------------------------*
+FORM alv_user_command USING r_ucomm    LIKE sy-ucomm
+                             rs_selfield TYPE slis_selfield.
+  IF go_alv IS INITIAL.
+    CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+      IMPORTING e_grid = go_alv.
+  ENDIF.
+  CASE r_ucomm.
+    WHEN 'BCMASS'. PERFORM handle_batch_mass_change.
+    WHEN 'CRENOM'. PERFORM handle_create_nomination.
+    WHEN '&IC1'.
+      IF rs_selfield-fieldname = 'SEL'.
+        PERFORM toggle_sel_for_row USING rs_selfield-tabindex.
+      ENDIF.
+  ENDCASE.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM alv_data_changed  — updates gt_display when CHARG is edited
+*----------------------------------------------------------------------*
+FORM alv_data_changed USING er_data_changed TYPE REF TO cl_alv_changed_data_protocol.
+  DATA: ls_mod  TYPE lvc_s_modi,
+        ls_disp TYPE ty_display.
+  LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
+    IF ls_mod-fieldname = 'CHARG'.
+      READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
+      IF sy-subrc = 0.
+        ls_disp-charg = ls_mod-value.
+        MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM alv_onf4  — custom F4 help for CHARG using valid batches
+*----------------------------------------------------------------------*
+FORM alv_onf4 USING e_fieldname   TYPE lvc_fname
+                     es_row_no     TYPE lvc_s_roid
+                     er_event_data TYPE REF TO cl_alv_event_data
+                     et_bad_cells  TYPE lvc_t_modi
+                     e_display     TYPE char01.
+  DATA: ls_disp    TYPE ty_display,
+        lt_batches TYPE STANDARD TABLE OF ty_batch_vals,
+        lt_f4vals  TYPE STANDARD TABLE OF ddshretval,
+        ls_f4val   TYPE ddshretval,
+        ls_bat     TYPE ty_batch_vals.
+  IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
+  READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  PERFORM get_valid_batches_for_material USING ls_disp-material ls_disp-state_code
+    CHANGING lt_batches.
+  IF lt_batches IS INITIAL.
+    MESSAGE 'No valid batches found for this material.' TYPE 'S' DISPLAY LIKE 'W'.
+    RETURN.
+  ENDIF.
+  LOOP AT lt_batches INTO ls_bat.
+    ls_f4val-fieldname = 'CHARG'. ls_f4val-fieldval = ls_bat-charg.
+    APPEND ls_f4val TO lt_f4vals.
+  ENDLOOP.
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'CHARG'
+      dynpprog        = sy-repid
+      dynpnr          = sy-dynnr
+      stepl           = es_row_no-row_id
+      value_org       = 'S'
+    TABLES
+      value_tab       = lt_f4vals
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+  IF sy-subrc = 0.
+    er_event_data->m_event_handled = abap_true.
+  ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM toggle_sel_for_row  — toggle SEL for all rows sharing locid+date
+*----------------------------------------------------------------------*
+FORM toggle_sel_for_row USING iv_index TYPE i.
+  DATA: ls_disp   TYPE ty_display,
+        lv_locid  TYPE char10,
+        lv_date   TYPE aedat,
+        lv_newsel TYPE char1.
+  READ TABLE gt_display INDEX iv_index INTO ls_disp.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  IF ls_disp-sel = abap_true.
+    lv_newsel = ' '.
+  ELSE.
+    lv_newsel = abap_true.
+  ENDIF.
+  lv_locid = ls_disp-locid.
+  lv_date  = ls_disp-gas_day.
+  LOOP AT gt_display INTO ls_disp.
+    IF ls_disp-locid = lv_locid AND ls_disp-gas_day = lv_date.
+      ls_disp-sel = lv_newsel.
+      MODIFY gt_display FROM ls_disp.
+    ENDIF.
+  ENDLOOP.
+  IF go_alv IS NOT INITIAL.
+    go_alv->refresh_table_display( ).
+  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -886,6 +888,7 @@ FORM handle_batch_mass_change.
   ENDIF.
 
   " Single batch assignment dialog showing all materials at once (FSD Point 6)
+  CREATE OBJECT go_batch_handler.
   CREATE OBJECT go_batch_popup
     EXPORTING
       caption    = 'Batch Assignment'
@@ -898,13 +901,13 @@ FORM handle_batch_mass_change.
     MESSAGE 'Error opening batch assignment dialog.' TYPE 'S' DISPLAY LIKE 'E'.
     RETURN.
   ENDIF.
-  SET HANDLER go_handler->on_batch_dlg_close FOR go_batch_popup.
+  SET HANDLER go_batch_handler->on_batch_dlg_close FOR go_batch_popup.
 
   CREATE OBJECT go_batch_alv
     EXPORTING i_parent = go_batch_popup
     EXCEPTIONS OTHERS = 1.
   IF sy-subrc <> 0. RETURN. ENDIF.
-  SET HANDLER go_handler->on_batch_data_changed FOR go_batch_alv.
+  SET HANDLER go_batch_handler->on_batch_data_changed FOR go_batch_alv.
 
   ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. ls_fcat-outputlen = 18.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
