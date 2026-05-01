@@ -4979,11 +4979,49 @@ FORM build_alv_display_table_view .
     CLEAR: ls_alv.
     CLEAR: l_gcv, l_ncv.
   ENDIF.
+  " Fetch static material map for filtering
+  DATA: lt_static_view TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id ongc_material gail_material static state
+    FROM yrga_cst_mat_map
+    INTO CORRESPONDING FIELDS OF TABLE lt_static_view
+    WHERE location_id IN s_loc
+      AND static = 'X'
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    = ' '.
   DATA it_gas_receipt TYPE TABLE OF ty_gas_receipt.
   MOVE gt_gas_receipt[] TO it_gas_receipt[].
   SORT it_gas_receipt BY location_id material.
   DELETE ADJACENT DUPLICATES FROM it_gas_receipt COMPARING location_id material.
   LOOP AT it_gas_receipt INTO DATA(wa_gas_temp).
+    " Skip GJ fallback if all ongc_materials are static for non-GJ states
+    DATA lv_all_static_v TYPE abap_bool.
+    lv_all_static_v = abap_true.
+    LOOP AT gt_gas_receipt INTO DATA(ls_gas_chk_v)
+      WHERE location_id = wa_gas_temp-location_id
+        AND material    = wa_gas_temp-material.
+      READ TABLE lt_static_view TRANSPORTING NO FIELDS
+        WITH KEY location_id   = ls_gas_chk_v-location_id
+                 gail_material = ls_gas_chk_v-material
+                 ongc_material = ls_gas_chk_v-ongc_material.
+      IF sy-subrc <> 0.
+        lv_all_static_v = abap_false.
+        EXIT.
+      ELSE.
+        READ TABLE lt_static_view TRANSPORTING NO FIELDS
+          WITH KEY location_id   = ls_gas_chk_v-location_id
+                   gail_material = ls_gas_chk_v-material
+                   ongc_material = ls_gas_chk_v-ongc_material
+                   state         = 'GJ'.
+        IF sy-subrc = 0.
+          lv_all_static_v = abap_false.
+          EXIT.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    IF lv_all_static_v = abap_true.
+      CONTINUE.
+    ENDIF.
     READ TABLE gt_alv_display TRANSPORTING NO FIELDS
       WITH KEY location_id = wa_gas_temp-location_id
                material    = wa_gas_temp-material
@@ -5009,16 +5047,6 @@ FORM build_alv_display_table_view .
       APPEND wa_final_main TO it_final_main.
     ENDIF.
   ENDLOOP.
-  " Identify and handle static material rows
-  DATA: lt_static_view TYPE TABLE OF yrga_cst_mat_map.
-  SELECT location_id ongc_material gail_material static state
-    FROM yrga_cst_mat_map
-    INTO CORRESPONDING FIELDS OF TABLE lt_static_view
-    WHERE location_id IN s_loc
-      AND static = 'X'
-      AND valid_from <= gv_date_from
-      AND valid_to   >= gv_date_to
-      AND deleted    = ' '.
   " Mark static rows and remove static rows for wrong state
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_view_static>).
     READ TABLE lt_static_view TRANSPORTING NO FIELDS
