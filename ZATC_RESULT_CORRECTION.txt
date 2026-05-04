@@ -1956,7 +1956,11 @@ FORM change_table.
         IF l_nosp = abap_true.
           CONCATENATE l_query wa_table-value INTO l_query.
         ELSEIF wa_table-value <> '(' AND wa_table-value <> ')'.
-          CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
+          IF l_bras = ','.
+            CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
+          ELSE.
+            CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
+          ENDIF.
         ELSE.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
         ENDIF.
@@ -2157,7 +2161,11 @@ FORM change_table.
         IF l_nosp2 = abap_true.
           CONCATENATE l_query wa_table-value INTO l_query.
         ELSEIF wa_table-value <> '(' AND wa_table-value <> ')'.
-          CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
+          IF l_bras = ','.
+            CONCATENATE l_query wa_table-value l_bras INTO l_query SEPARATED BY space.
+          ELSE.
+            CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
+          ENDIF.
         ELSE.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
         ENDIF.
