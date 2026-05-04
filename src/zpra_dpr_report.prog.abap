@@ -2141,6 +2141,8 @@ FORM calculated_wtd_pi .
          lv_index1      TYPE                   sy-tabix,
          lv_date1       TYPE                   sy-datum,
          lv_date2       TYPE                   sy-datum.
+  DATA : lt_zpra_t_ast_pi TYPE STANDARD TABLE OF zpra_t_ast_pi,
+         ls_zpra_t_ast_pi TYPE zpra_t_ast_pi.
 
   FIELD-SYMBOLS : <fs_wtd_pi> TYPE ty_wtd_pi .
 * Here we are calculating weighted PI for each asset for each day. This will be used to convert quantities to OVL level
@@ -2259,39 +2261,30 @@ FORM calculated_wtd_pi .
   ENDLOOP.
 
   DELETE ADJACENT DUPLICATES FROM gt_wtd_pi COMPARING ALL FIELDS.
+* Pre-fetch zpra_t_ast_pi for all assets to avoid SELECT SINGLE inside loop
+  IF gt_zpra_c_prd_prof IS NOT INITIAL.
+    SELECT *
+      FROM zpra_t_ast_pi
+      INTO TABLE lt_zpra_t_ast_pi
+       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
+     WHERE asset EQ gt_zpra_c_prd_prof-asset.
+    SORT lt_zpra_t_ast_pi BY asset vld_frm vld_to.
+  ENDIF.
 * If on last date no data of any block of asset is maintained, PI at top will not be shown. Calcuating that
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
     READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_date
                                                          product = gs_zpra_c_prd_prof-product
                                                          asset   = gs_zpra_c_prd_prof-asset.
-*    IF sy-subrc IS NOT INITIAL.
-*      gs_wtd_pi-production_date  = p_date .
-*      gs_wtd_pi-product          = gs_zpra_c_prd_prof-product .
-*      gs_wtd_pi-asset            = gs_zpra_c_prd_prof-asset .
-*      CLEAR : lv_numerator   ,
-*              lv_denominator ,
-*              lv_pi          .
-*      LOOP AT gt_zpra_t_prd_pi INTO gs_zpra_t_prd_pi WHERE asset   EQ gs_wtd_pi-asset
-*                                                       AND vld_frm LE gs_wtd_pi-production_date
-*                                                       AND vld_to  GE gs_wtd_pi-production_date .
-*        lv_pi = gs_zpra_t_prd_pi-pi .
-*        lv_numerator   = lv_numerator   + lv_pi .
-*        lv_denominator = lv_denominator + 1 .
-*      ENDLOOP .
-*      IF lv_denominator IS NOT INITIAL.
-*        gs_wtd_pi-pi               = lv_numerator / lv_denominator.
-*        gs_wtd_pi-numerator        = lv_numerator   .
-*        gs_wtd_pi-denominator      = lv_denominator .
-*        APPEND gs_wtd_pi TO gt_wtd_pi .
-*      ENDIF.
     IF sy-subrc IS NOT INITIAL .
-      SELECT SINGLE pi
-               FROM zpra_t_ast_pi
-               INTO lv_pi
-              WHERE asset   EQ gs_zpra_c_prd_prof-asset
-                AND vld_frm LE p_date
-                AND vld_to  GE p_date .
-      IF sy-subrc IS INITIAL.
+      CLEAR lv_pi .
+      LOOP AT lt_zpra_t_ast_pi INTO ls_zpra_t_ast_pi
+        WHERE asset   EQ gs_zpra_c_prd_prof-asset
+          AND vld_frm LE p_date
+          AND vld_to  GE p_date.
+        lv_pi = ls_zpra_t_ast_pi-pi.
+        EXIT.
+      ENDLOOP.
+      IF lv_pi IS NOT INITIAL.
         gs_wtd_pi-production_date  = p_date .
         gs_wtd_pi-product          = gs_zpra_c_prd_prof-product .
         gs_wtd_pi-asset            = gs_zpra_c_prd_prof-asset .
@@ -2300,13 +2293,15 @@ FORM calculated_wtd_pi .
       ENDIF.
     ELSEIF   gs_wtd_pi-pi IS INITIAL .
       lv_index = sy-tabix .
-      SELECT SINGLE pi
-               FROM zpra_t_ast_pi
-               INTO lv_pi
-              WHERE asset   EQ gs_wtd_pi-asset
-                AND vld_frm LE gs_wtd_pi-production_date
-                AND vld_to  GE gs_wtd_pi-production_date .
-      IF sy-subrc IS INITIAL.
+      CLEAR lv_pi .
+      LOOP AT lt_zpra_t_ast_pi INTO ls_zpra_t_ast_pi
+        WHERE asset   EQ gs_wtd_pi-asset
+          AND vld_frm LE gs_wtd_pi-production_date
+          AND vld_to  GE gs_wtd_pi-production_date.
+        lv_pi = ls_zpra_t_ast_pi-pi.
+        EXIT.
+      ENDLOOP.
+      IF lv_pi IS NOT INITIAL.
         gs_wtd_pi-pi = lv_pi .
         MODIFY gt_wtd_pi FROM gs_wtd_pi INDEX lv_index .
       ENDIF.
@@ -2915,10 +2910,21 @@ FORM display_asset_names .
          lv_index      TYPE sy-tabix.
   DATA : v_expdt_cnt   TYPE i,
          lv_expdt_lines TYPE sy-tabix.
-  DATA : lt_expdt TYPE STANDARD TABLE OF zpra_t_prd_pi,
-         ls_expdt TYPE zpra_t_prd_pi.
+  DATA : lt_expdt     TYPE STANDARD TABLE OF zpra_t_prd_pi,
+         ls_expdt     TYPE zpra_t_prd_pi,
+         lt_all_prd_pi TYPE STANDARD TABLE OF zpra_t_prd_pi.
   CLEAR   gs_paste .
   REFRESH gt_paste .
+
+* Pre-fetch zpra_t_prd_pi for all assets to avoid SELECT inside loop
+  IF gt_zpra_c_prd_prof IS NOT INITIAL.
+    SELECT *
+      FROM zpra_t_prd_pi
+      INTO TABLE lt_all_prd_pi
+       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
+     WHERE asset EQ gt_zpra_c_prd_prof-asset.
+    SORT lt_all_prd_pi BY asset liscense_exp_dt.
+  ENDIF.
 
   LOOP AT gt_dyn_fcat INTO gs_dyn_fcat .
     IF gs_dyn_fcat-fieldname EQ 'COL01'.
@@ -2953,10 +2959,8 @@ FORM display_asset_names .
 *            ENDIF
 ************************************Changes by hrishikesh nikam on 31.03.2022*************************************
           REFRESH lt_expdt.
-          SELECT *
-            FROM zpra_t_prd_pi
-            INTO TABLE lt_expdt
-           WHERE asset = lv_asset.
+          lt_expdt = lt_all_prd_pi.
+          DELETE lt_expdt WHERE asset NE lv_asset.
           IF lt_expdt IS NOT INITIAL.
             DESCRIBE TABLE lt_expdt LINES lv_expdt_lines.
             CLEAR v_expdt_cnt.
@@ -5706,16 +5710,6 @@ FORM fetch_data_section2b .
     gt_zpra_t_prd_tar_3a = gt_zpra_t_prd_tar.
     gt_zpra_t_prd_tar_3b = gt_zpra_t_prd_tar.
 
-    SELECT *
-      FROM zpra_t_tar_cf
-      INTO TABLE gt_zpra_t_tar_cf
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE gjahr EQ gv_current_gjahr
-       AND asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product .
-
-    SORT gt_zpra_t_tar_cf BY gjahr asset block product .
   ENDIF.
 
 ENDFORM.
