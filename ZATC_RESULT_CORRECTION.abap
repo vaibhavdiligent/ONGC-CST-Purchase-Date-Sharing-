@@ -711,8 +711,29 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
+                WHEN 'OLD ARITHMETIC TYPE CONFLICT'.
+                  CLEAR wa_blank.
+                  CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
+                    INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CLEAR wa_blank.
+                  IF wa_repos_tab-line CS '"'.
+                    wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+                    REPLACE ALL OCCURRENCES OF '"' IN wa_repos_tab-line WITH space.
+                    CONDENSE wa_repos_tab-line.
+                  ENDIF.
+                  CONCATENATE wa_repos_tab-line '"#EC CI_NO_TRANSFORM'
+                    INTO wa_repos_tab-line SEPARATED BY space.
+                  APPEND wa_repos_tab TO repos_tab_new.
+                  CLEAR wa_blank.
+                  CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+                    INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CLEAR wa_blank.
                 WHEN 'MOVE TYPE CONFLICT' OR 'MOVE LENGTH CONFLICT'
-                  OR 'OLD ARITHMETIC TYPE CONFLICT' OR 'OLD MOVE TYPE CONFLICT'.
+                  OR 'OLD MOVE TYPE CONFLICT'.
                   IF wa_repos_tab-line CS '='.
                     DATA(l_fpos) = sy-fdpos.
                     DATA(l_i) = strlen( wa_repos_tab-line ).
