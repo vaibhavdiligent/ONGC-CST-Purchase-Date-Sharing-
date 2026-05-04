@@ -343,8 +343,8 @@ SELECT-OPTIONS :
   s_kvgr2   FOR s922-kvgr2  NO INTERVALS NO-EXTENSION.
 SELECTION-SCREEN SKIP.
 
-PARAMETERS: r_month   RADIOBUTTON GROUP rd1 USER-COMMAND r1 DEFAULT 'X',
-            r_quater  RADIOBUTTON GROUP rd1,
+PARAMETERS: r_month   RADIOBUTTON GROUP rd1 USER-COMMAND r1,
+            r_quater  RADIOBUTTON GROUP rd1 DEFAULT 'X',
             r_annual  RADIOBUTTON GROUP rd1,
             r_consis  RADIOBUTTON GROUP rd1.
 SELECTION-SCREEN SKIP.
@@ -375,25 +375,12 @@ PARAMETERS: c_chk TYPE flag NO-DISPLAY DEFAULT ' '.
 SELECTION-SCREEN : END OF BLOCK b1.
 
 AT SELECTION-SCREEN OUTPUT.
+  " Hide all radio buttons except Quarterly — this program is Q4 only
   LOOP AT SCREEN.
-    IF r_month = 'X' OR r_quater = 'X' OR r_annual = 'X' OR r_rhd = 'X'
-       OR r_rlld = 'X' OR c_maint = 'X' OR c_maint1 = 'X'.
-      IF screen-name = 'R_CONSIS'.
-        screen-input = 0.
-        MODIFY SCREEN.
-      ENDIF.
-    ENDIF.
-  ENDLOOP.
-  LOOP AT SCREEN.
-    IF screen-name = 'R_RPD'.
-      screen-input = 0.
-      MODIFY SCREEN.
-    ENDIF.
-    IF screen-name = 'R_NEWCUS'.
-      screen-input = 0.
-      MODIFY SCREEN.
-    ENDIF.
-    IF screen-name = 'R_RHD' OR screen-name = 'R_RLLD' OR screen-name = 'C_MAINT' OR screen-name = 'C_MAINT1'.
+    IF screen-name = 'R_MONTH' OR screen-name = 'R_ANNUAL' OR screen-name = 'R_CONSIS'
+       OR screen-name = 'R_RHD'  OR screen-name = 'R_RLLD'
+       OR screen-name = 'C_MAINT' OR screen-name = 'C_MAINT1'
+       OR screen-name = 'R_RPD' OR screen-name = 'R_NEWCUS'.
       screen-invisible = 1.
       MODIFY SCREEN.
     ENDIF.
@@ -420,6 +407,8 @@ INITIALIZATION.
 * MAIN PROGRAM (from YRVG004_QAIS_EXECUTE)
 *=======================================================================
 INITIALIZATION.
+  TEXT-001 = 'CIS Linked Discount Scheme - Q4 FY 2025-26'.
+  i_layout-reptitle = 'CIS Linked Discount Scheme - Q4 FY 2025-26'.
   GET PARAMETER ID 'ZFL' FIELD lv_siml.
   IF lv_siml EQ 'X'.
     MESSAGE 'This option is for getting a snapshot of CIS status as on date when performed. Please use this option diligently.' TYPE 'I'.
@@ -1058,8 +1047,9 @@ FORM q4_discount .
   PERFORM get_q4_slab_rate USING lv_amended_pct CHANGING lv_amended_rt.
   PERFORM get_q4_slab_rate USING lv_orig_pct    CHANGING lv_orig_rt.
 
-  " Apply higher rate - criterion iv: original scheme if it gives higher slab
-  IF lv_orig_rt GT lv_amended_rt.
+  " Apply higher rate - criterion iv: original scheme if it gives equal or higher slab
+  " (when QCQ% >= BCQ%, original scheme is at least as good → prefer original)
+  IF lv_orig_rt GE lv_amended_rt AND lv_orig_rt GT 0.
     lv_q4_amended_rate = lv_orig_rt.
     it_data_quater-scheme    = 'ORIGINAL'.
     it_data_quater-disc_slab = lv_orig_rt.
@@ -1885,15 +1875,15 @@ FORM create_field_catalog .
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'IND_ELGL_QTY_M1'. gt_fieldcat-outputlen = 12.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Jan Ind Elgl'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Jan Eligible Qty'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'IND_ELGL_QTY_M2'. gt_fieldcat-outputlen = 12.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Feb Ind Elgl'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Feb Eligible Qty'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'IND_ELGL_QTY_M3'. gt_fieldcat-outputlen = 12.
-      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Mar Ind Elgl'.
+      gt_fieldcat-col_pos = w_sr. gt_fieldcat-seltext_m = 'Mar Eligible Qty'.
       APPEND gt_fieldcat. CLEAR gt_fieldcat. w_sr = w_sr + 1.
 
       gt_fieldcat-fieldname = 'TOT_ELGL_QTY'. gt_fieldcat-outputlen = 15.
@@ -1978,7 +1968,7 @@ FORM create_field_catalog .
 
   gt_fieldcat-fieldname = 'REMARKS'. gt_fieldcat-outputlen = 40.
   IF r_quater = 'X' AND w_q4 = 'X'.
-    gt_fieldcat-seltext_m = 'CIS Linked 2026-27 Q4'.
+    gt_fieldcat-seltext_m = 'CIS Linked Q4 2026-27'.
   ELSE.
     gt_fieldcat-seltext_m = 'REMARKS'.
   ENDIF.
