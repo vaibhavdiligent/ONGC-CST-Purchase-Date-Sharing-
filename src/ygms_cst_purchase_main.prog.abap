@@ -479,6 +479,11 @@ START-OF-SELECTION.
     CHECK gt_gas_receipt IS NOT INITIAL.
     PERFORM map_location_ids.
     PERFORM map_material_names.
+    " Check each Location ID for receipt data (after location mapping)
+    IF p_view IS INITIAL.
+      PERFORM check_missing_locations.
+      CHECK gt_gas_receipt IS NOT INITIAL.
+    ENDIF.
     " Validate calorific values after mapping so GT_GAS_RECEIPT has location_id populated
     IF p_view IS INITIAL.
       DATA: lv_cv_valid TYPE abap_bool.
@@ -599,50 +604,6 @@ FORM fetch_b2b_data.
   DATA(lv_count) = lines( gt_gas_receipt ).
   MESSAGE s000(ygms_msg) WITH lv_count 'B2B records fetched'.
   MOVE lt_b2b_data[] TO gt_cst_b2b_1[].
-  " Check each Location ID for receipt data
-  TYPES: BEGIN OF ty_miss_loc,
-           location_id TYPE ygms_de_loc_id,
-         END OF ty_miss_loc.
-  DATA: lt_missing_loc TYPE TABLE OF ty_miss_loc,
-        ls_missing_loc TYPE ty_miss_loc.
-  LOOP AT s_loc.
-    READ TABLE gt_gas_receipt TRANSPORTING NO FIELDS
-      WITH KEY location_id = s_loc-low.
-    IF sy-subrc <> 0.
-      ls_missing_loc-location_id = s_loc-low.
-      APPEND ls_missing_loc TO lt_missing_loc.
-    ENDIF.
-  ENDLOOP.
-  IF lt_missing_loc IS NOT INITIAL.
-    DATA: lv_miss_answer TYPE c LENGTH 1.
-    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
-      EXPORTING
-        textline1      = 'Receipt data not present for a few Location IDs.'
-        textline2      = 'Click Yes to view details.'
-        titel          = 'Missing Receipt Data'
-        cancel_display = ' '
-      IMPORTING
-        answer         = lv_miss_answer.
-    IF lv_miss_answer = 'J'.
-      DATA: lt_miss_fcat TYPE slis_t_fieldcat_alv,
-            ls_miss_fcat TYPE slis_fieldcat_alv.
-      ls_miss_fcat-fieldname = 'LOCATION_ID'.
-      ls_miss_fcat-seltext_l = 'Location ID'.
-      ls_miss_fcat-outputlen = 20.
-      APPEND ls_miss_fcat TO lt_miss_fcat.
-      CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
-        EXPORTING
-          i_title     = 'Location IDs Without Receipt Data'
-          i_selection = ' '
-          i_zebra     = abap_true
-          i_tabname   = 'LT_MISSING_LOC'
-          it_fieldcat = lt_miss_fcat
-        TABLES
-          t_outtab    = lt_missing_loc.
-    ENDIF.
-    CLEAR gt_gas_receipt.
-    RETURN.
-  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form MAP_LOCATION_IDS
@@ -6738,5 +6699,44 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
     ENDIF.
     " Volume mismatch blocks the allocation process - do not continue
     RETURN.
+  ENDIF.
+ENDFORM.*&---------------------------------------------------------------------*
+*& Form CHECK_MISSING_LOCATIONS
+*&---------------------------------------------------------------------*
+FORM check_missing_locations.
+  DATA: lt_missing TYPE TABLE OF string,
+        lv_loc     TYPE string,
+        lv_found   TYPE abap_bool,
+        lv_msg     TYPE string.
+  LOOP AT s_loc.
+    lv_found = abap_false.
+    LOOP AT gt_gas_receipt INTO DATA(ls_rcpt_chk)
+      WHERE location_id = s_loc-low.
+      lv_found = abap_true.
+      EXIT.
+    ENDLOOP.
+    IF lv_found = abap_false.
+      lv_loc = s_loc-low.
+      CONDENSE lv_loc.
+      APPEND lv_loc TO lt_missing.
+    ENDIF.
+  ENDLOOP.
+  IF lt_missing IS NOT INITIAL.
+    CLEAR lv_msg.
+    LOOP AT lt_missing INTO lv_loc.
+      IF lv_msg IS INITIAL.
+        lv_msg = lv_loc.
+      ELSE.
+        CONCATENATE lv_msg ',' lv_loc INTO lv_msg SEPARATED BY space.
+      ENDIF.
+    ENDLOOP.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'Missing Receipt Data'
+        txt1  = 'Receipt data not present for a few Location IDs.'
+        txt2  = lv_msg
+        txt3  = 'Program cannot proceed.'
+        txt4  = ''.
+    CLEAR gt_gas_receipt.
   ENDIF.
 ENDFORM.
