@@ -1904,8 +1904,8 @@ FORM build_validation_data.
       WHERE location_id   = ls_key-location_id
         AND material      = ls_key-material
         AND ongc_material = ls_key-ongc_material.
-      ls_validation-supply_scm = ls_validation-supply_scm + ls_receipt-qty_scm.
-      ls_validation-supply_mbg = ls_validation-supply_mbg + ls_receipt-qty_mbg.
+      ls_validation-supply_scm = ls_validation-supply_scm + round( val = ls_receipt-qty_scm dec = 3 ).
+      ls_validation-supply_mbg = ls_validation-supply_mbg + round( val = ls_receipt-qty_mbg dec = 3 ).
     ENDLOOP.
     ls_validation-diff_pur_sup_scm = ls_validation-allocated_scm - ls_validation-supply_scm.
     ls_validation-diff_pur_sup_mbg = ls_validation-allocated_mbg - ls_validation-supply_mbg.
@@ -3150,65 +3150,87 @@ FORM send_email USING pt_emails   TYPE string_table
         i_type    = 'HTM'
         i_text    = lt_body
         i_subject = lv_subject ).
-      " --- Daily attachments ---
-      " Add Daily Excel attachment if selected
-      IF pv_send_xls = 'X'.
-        CLEAR: lt_att_hex, lv_att_size.
-        PERFORM build_excel_attachment USING pt_data
-                                      CHANGING lt_att_hex lv_att_size.
-        CONCATENATE 'Daily CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
-        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
-        lo_document->add_attachment(
-          i_attachment_type    = 'XLS'
-          i_attachment_subject = lv_att_subject
-          i_attachment_size    = lv_att_size
-          i_att_content_hex    = lt_att_hex ).
-      ENDIF.
-      " Add Daily PDF attachment if selected
-      IF pv_send_pdf = 'X'.
-        CLEAR: lt_att_text, lv_att_size.
-        DATA: lt_dummy_tline TYPE TABLE OF tline,
-              lv_dummy_len   TYPE i.
-        PERFORM build_pdf_attachment USING pt_data
-                                    CHANGING lt_att_text lv_att_size
-                                             lt_dummy_tline lv_dummy_len.
-        CONCATENATE 'Daily CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
-        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
-        lo_document->add_attachment(
-          i_attachment_type    = 'PDF'
-          i_attachment_subject = lv_att_subject
-          i_attachment_size    = lv_att_size
-          i_att_content_text   = lt_att_text ).
-      ENDIF.
-      " --- Fortnightly attachments ---
-      " Add Fortnightly Excel attachment if selected
-      IF pv_send_xls = 'X'.
-        CLEAR: lt_att_hex, lv_att_size.
-        PERFORM build_fnt_excel_attachment USING pt_fnt_data
-                                          CHANGING lt_att_hex lv_att_size.
-        CONCATENATE 'Fortnightly CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
-        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
-        lo_document->add_attachment(
-          i_attachment_type    = 'XLS'
-          i_attachment_subject = lv_att_subject
-          i_attachment_size    = lv_att_size
-          i_att_content_hex    = lt_att_hex ).
-      ENDIF.
-      " Add Fortnightly PDF attachment if selected
-      IF pv_send_pdf = 'X'.
-        CLEAR: lt_att_text, lv_att_size.
-        CLEAR: lt_dummy_tline, lv_dummy_len.
-        PERFORM build_fnt_pdf_attachment USING pt_fnt_data
-                                        CHANGING lt_att_text lv_att_size
-                                                 lt_dummy_tline lv_dummy_len.
-        CONCATENATE 'Fortnightly CST Purchase' lv_date_from_str INTO lv_att_subject SEPARATED BY space.
-        CONCATENATE lv_att_subject '-' lv_date_to_str INTO lv_att_subject.
-        lo_document->add_attachment(
-          i_attachment_type    = 'PDF'
-          i_attachment_subject = lv_att_subject
-          i_attachment_size    = lv_att_size
-          i_att_content_text   = lt_att_text ).
-      ENDIF.
+      " --- Create separate attachments per Location ID ---
+      DATA: lt_loc_daily TYPE TABLE OF yrga_cst_pur,
+            lt_loc_fnt   TYPE TABLE OF yrga_cst_fn_data,
+            lt_eml_locs  TYPE TABLE OF ygms_de_loc_id,
+            lv_eml_loc   TYPE ygms_de_loc_id,
+            lv_loc_name  TYPE string.
+      DATA: lt_dummy_tline TYPE TABLE OF tline,
+            lv_dummy_len   TYPE i.
+      LOOP AT pt_data INTO ls_pur.
+        COLLECT ls_pur-location INTO lt_eml_locs.
+      ENDLOOP.
+      SORT lt_eml_locs.
+      LOOP AT lt_eml_locs INTO lv_eml_loc.
+        lv_loc_name = lv_eml_loc.
+        CONDENSE lv_loc_name.
+        " Filter daily data for this location
+        CLEAR lt_loc_daily.
+        LOOP AT pt_data INTO ls_pur WHERE location = lv_eml_loc.
+          APPEND ls_pur TO lt_loc_daily.
+        ENDLOOP.
+        " Filter fortnightly data for this location
+        CLEAR lt_loc_fnt.
+        DATA ls_fnt_eml TYPE yrga_cst_fn_data.
+        LOOP AT pt_fnt_data INTO ls_fnt_eml WHERE location = lv_eml_loc.
+          APPEND ls_fnt_eml TO lt_loc_fnt.
+        ENDLOOP.
+        " Daily Excel per location
+        IF pv_send_xls = 'X' AND lt_loc_daily IS NOT INITIAL.
+          CLEAR: lt_att_hex, lv_att_size.
+          PERFORM build_excel_attachment USING lt_loc_daily
+                                        CHANGING lt_att_hex lv_att_size.
+          CONCATENATE 'Daily' lv_loc_name lv_date_from_str '-' lv_date_to_str
+            INTO lv_att_subject SEPARATED BY space.
+          lo_document->add_attachment(
+            i_attachment_type    = 'XLS'
+            i_attachment_subject = lv_att_subject
+            i_attachment_size    = lv_att_size
+            i_att_content_hex    = lt_att_hex ).
+        ENDIF.
+        " Daily PDF per location
+        IF pv_send_pdf = 'X' AND lt_loc_daily IS NOT INITIAL.
+          CLEAR: lt_att_text, lv_att_size, lt_dummy_tline, lv_dummy_len.
+          PERFORM build_pdf_attachment USING lt_loc_daily
+                                      CHANGING lt_att_text lv_att_size
+                                               lt_dummy_tline lv_dummy_len.
+          CONCATENATE 'Daily' lv_loc_name lv_date_from_str '-' lv_date_to_str
+            INTO lv_att_subject SEPARATED BY space.
+          lo_document->add_attachment(
+            i_attachment_type    = 'PDF'
+            i_attachment_subject = lv_att_subject
+            i_attachment_size    = lv_att_size
+            i_att_content_text   = lt_att_text ).
+        ENDIF.
+        " Fortnightly Excel per location
+        IF pv_send_xls = 'X' AND lt_loc_fnt IS NOT INITIAL.
+          CLEAR: lt_att_hex, lv_att_size.
+          PERFORM build_fnt_excel_attachment USING lt_loc_fnt
+                                            CHANGING lt_att_hex lv_att_size.
+          CONCATENATE 'Fnt' lv_loc_name lv_date_from_str '-' lv_date_to_str
+            INTO lv_att_subject SEPARATED BY space.
+          lo_document->add_attachment(
+            i_attachment_type    = 'XLS'
+            i_attachment_subject = lv_att_subject
+            i_attachment_size    = lv_att_size
+            i_att_content_hex    = lt_att_hex ).
+        ENDIF.
+        " Fortnightly PDF per location
+        IF pv_send_pdf = 'X' AND lt_loc_fnt IS NOT INITIAL.
+          CLEAR: lt_att_text, lv_att_size, lt_dummy_tline, lv_dummy_len.
+          PERFORM build_fnt_pdf_attachment USING lt_loc_fnt
+                                          CHANGING lt_att_text lv_att_size
+                                                   lt_dummy_tline lv_dummy_len.
+          CONCATENATE 'Fnt' lv_loc_name lv_date_from_str '-' lv_date_to_str
+            INTO lv_att_subject SEPARATED BY space.
+          lo_document->add_attachment(
+            i_attachment_type    = 'PDF'
+            i_attachment_subject = lv_att_subject
+            i_attachment_size    = lv_att_size
+            i_att_content_text   = lt_att_text ).
+        ENDIF.
+      ENDLOOP.
       " Set document to send request
       lo_send_request->set_document( lo_document ).
       " Add all recipients
