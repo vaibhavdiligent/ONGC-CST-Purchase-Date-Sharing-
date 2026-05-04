@@ -4028,191 +4028,31 @@ FORM convert_non_gas_units_2a2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   ENDCASE.
 
 ENDFORM.
-FORM convert_sec2a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
+FORM convert_target_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
+* Consolidated converter used by sec2a, sec2b, sec2c and sec5a (originally 4 identical FORMs)
   CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
+  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr   = gv_current_gjahr
+                                                             asset   = p_zpra_t_prd_tar-asset
+                                                             block   = p_zpra_t_prd_tar-block
                                                              product = p_zpra_t_prd_tar-product BINARY SEARCH .
   IF p_zpra_t_prd_tar-product NE c_prod_gas .
     CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
+      WHEN p_bb OR p_bbd OR p_bmd.
+        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000000 * gs_zpra_t_tar_cf-conv_factor .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
+      WHEN p_tm OR p_tmd.
+        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000000 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty   * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2  * gs_zpra_t_tar_cf-conv_factor * 1000000 .
       WHEN OTHERS.
     ENDCASE.
   ELSE.
     CASE abap_true.
-      WHEN p_bb.
+      WHEN p_bb OR p_bbd.
         p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
+      WHEN p_tm OR p_tmd.
+        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000000 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 .
-      WHEN OTHERS.
-    ENDCASE.
-  ENDIF.
-ENDFORM.
-FORM convert_sec2b_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
-  CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
-                                                             product = p_zpra_t_prd_tar-product BINARY SEARCH .
-  IF p_zpra_t_prd_tar-product NE c_prod_gas .
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor. " / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor. " / gv_current_gjahr_days.
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 ." / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 . "/ gv_current_gjahr_days .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor ."/ gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor ."/ gv_current_gjahr_days.
-      WHEN OTHERS.
-    ENDCASE.
-  ELSE.
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 ."/ gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 ."/ gv_current_gjahr_days.
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000. " / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000." / gv_current_gjahr_days .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 ." / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 ."/ gv_current_gjahr_days.
-      WHEN OTHERS.
-    ENDCASE.
-  ENDIF.
-ENDFORM.
-FORM convert_sec2c_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
-  CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
-                                                             product = p_zpra_t_prd_tar-product BINARY SEARCH .
-  IF p_zpra_t_prd_tar-product NE c_prod_gas .
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN OTHERS.
-    ENDCASE.
-  ELSE.
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 .
-      WHEN OTHERS.
-    ENDCASE.
-  ENDIF.
-ENDFORM.
-FORM convert_sec5a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
-  CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
-                                                             product = p_zpra_t_prd_tar-product BINARY SEARCH .
-  IF p_zpra_t_prd_tar-product NE c_prod_gas .
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN OTHERS.
-    ENDCASE.
-  ELSE.
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
       WHEN p_bmd.
         p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 .
@@ -4730,7 +4570,7 @@ FORM fill_dynamic_table_sec2a1 .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-    PERFORM convert_sec2a_units CHANGING gs_zpra_t_prd_tar.
+    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = c_prod_gas.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -4822,7 +4662,7 @@ FORM fill_dynamic_table_sec2b .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-    PERFORM convert_sec2b_units CHANGING gs_zpra_t_prd_tar.
+    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = c_prod_gas.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -4915,7 +4755,7 @@ FORM fill_dynamic_table_sec2c .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-    PERFORM convert_sec2c_units CHANGING gs_zpra_t_prd_tar.
+    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = c_prod_gas.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -8486,7 +8326,7 @@ FORM fill_dynamic_table_sec3a .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-*    PERFORM convert_sec2a_units CHANGING gs_zpra_t_prd_tar.
+*    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = '722000004'.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -8536,7 +8376,7 @@ FORM fill_dynamic_table_sec3b .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-*    PERFORM convert_sec2a_units CHANGING gs_zpra_t_prd_tar.
+*    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = '722000004'.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -9271,7 +9111,7 @@ FORM fill_dynamic_table_sec5a .
 ***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 *   gs_zpra_t_tar_cf-conv_factor .
 ***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 * 1000000 .
 ***     ENDIF.
-      PERFORM convert_sec5a_units CHANGING gs_zpra_t_prd_tar.
+      PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
       lv_col_name = gs_zpra_t_prd_tar-tar_code .
       ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
