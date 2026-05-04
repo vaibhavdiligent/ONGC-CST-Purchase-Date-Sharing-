@@ -984,6 +984,9 @@ START-OF-SELECTION.
               " the literal WHEN clauses below.  Map well-known patterns back to
               " their template form before the CASE.
               DATA(l_norm_msg) = wa_final-check_message.
+              IF l_norm_msg IS INITIAL.
+                l_norm_msg = wa_final-message1.
+              ENDIF.
               IF l_norm_msg CS 'FOR (FORMER) CLUSTER TABLE' AND l_norm_msg CS 'WITHOUT ORDER BY'.
                 l_norm_msg = 'SELECT ... FOR (FORMER) CLUSTER TABLE ... WITHOUT ORDER BY FOUND'.
               ELSEIF l_norm_msg CS 'FOR (FORMER) POOL TABLE' AND l_norm_msg CS 'WITHOUT ORDER BY'.
