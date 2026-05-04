@@ -1618,8 +1618,14 @@ FORM change_table.
   IF l_string CS 'JOIN'.
     READ TABLE it_table INTO wa_table WITH KEY value = 'FROM'.
     IF sy-subrc = 0. l_from = sy-tabix. ENDIF.
+    DATA l_is_appending TYPE flag.
+    CLEAR l_is_appending.
     READ TABLE it_table INTO wa_table WITH KEY value = 'INTO'.
     IF sy-subrc = 0. l_into = sy-tabix. ENDIF.
+    IF l_into = 0.
+      READ TABLE it_table INTO wa_table WITH KEY value = 'APPENDING'.
+      IF sy-subrc = 0. l_into = sy-tabix. l_is_appending = abap_true. ENDIF.
+    ENDIF.
     READ TABLE it_table INTO wa_table WITH KEY value = 'WHERE'.
     IF sy-subrc = 0. l_where = sy-tabix. ENDIF.
     DATA(l_from_orig) = l_from.   " save FROM position before increments
@@ -1878,15 +1884,19 @@ FORM change_table.
         CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
       ENDLOOP.
     ENDIF.
-    " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
-    CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    " INTO / APPENDING TABLE must come after WHERE in S/4HANA Open SQL syntax
+    IF l_is_appending = abap_true.
+      CONCATENATE l_query 'APPENDING' INTO l_query SEPARATED BY space.
+    ELSE.
+      CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    ENDIF.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       DATA l_nosp TYPE flag.
       LOOP AT it_table INTO wa_table FROM l_into.
         IF sy-tabix = l_from OR sy-tabix = l_where
           OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
-        IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        IF wa_table-value = 'INTO' OR wa_table-value = 'APPENDING'. CONTINUE. ENDIF.
         " Determine if this token must be glued to the previous (no space) - for @DATA(...)
         CLEAR l_nosp.
         IF ( wa_table-value = '(' AND l_prev_at_tok = abap_true ) OR l_at_paren_depth > 0.
@@ -1928,8 +1938,13 @@ FORM change_table.
   ELSE.
     READ TABLE it_table INTO wa_table WITH KEY value = 'FROM'.
     IF sy-subrc = 0. l_from = sy-tabix. ENDIF.
+    CLEAR l_is_appending.
     READ TABLE it_table INTO wa_table WITH KEY value = 'INTO'.
     IF sy-subrc = 0. l_into = sy-tabix. ENDIF.
+    IF l_into = 0.
+      READ TABLE it_table INTO wa_table WITH KEY value = 'APPENDING'.
+      IF sy-subrc = 0. l_into = sy-tabix. l_is_appending = abap_true. ENDIF.
+    ENDIF.
     READ TABLE it_table INTO wa_table WITH KEY value = 'WHERE'.
     IF sy-subrc = 0. l_where = sy-tabix. ENDIF.
     l_from = l_from + 1.
@@ -2070,15 +2085,19 @@ FORM change_table.
         CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
       ENDLOOP.
     ENDIF.
-    " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
-    CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    " INTO / APPENDING TABLE must come after WHERE in S/4HANA Open SQL syntax
+    IF l_is_appending = abap_true.
+      CONCATENATE l_query 'APPENDING' INTO l_query SEPARATED BY space.
+    ELSE.
+      CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    ENDIF.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       DATA l_nosp2 TYPE flag.
       LOOP AT it_table INTO wa_table FROM l_into.
         IF sy-tabix = l_from OR sy-tabix = l_where
           OR ( l_fae > 0 AND sy-tabix = l_fae ). EXIT. ENDIF.
-        IF wa_table-value = 'INTO'. CONTINUE. ENDIF.
+        IF wa_table-value = 'INTO' OR wa_table-value = 'APPENDING'. CONTINUE. ENDIF.
         " Determine if this token must be glued to the previous (no space) - for @DATA(...)
         CLEAR l_nosp2.
         IF ( wa_table-value = '(' AND l_prev_at_tok = abap_true ) OR l_at_paren_depth > 0.
