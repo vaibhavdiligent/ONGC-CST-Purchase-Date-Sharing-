@@ -600,14 +600,17 @@ FORM fetch_b2b_data.
   MESSAGE s000(ygms_msg) WITH lv_count 'B2B records fetched'.
   MOVE lt_b2b_data[] TO gt_cst_b2b_1[].
   " Check each Location ID for receipt data
-  DATA: lt_missing_loc TYPE TABLE OF ygms_de_loc_id,
-        lv_missing_loc TYPE ygms_de_loc_id.
+  TYPES: BEGIN OF ty_miss_loc,
+           location_id TYPE ygms_de_loc_id,
+         END OF ty_miss_loc.
+  DATA: lt_missing_loc TYPE TABLE OF ty_miss_loc,
+        ls_missing_loc TYPE ty_miss_loc.
   LOOP AT s_loc.
-    lv_missing_loc = s_loc-low.
     READ TABLE gt_gas_receipt TRANSPORTING NO FIELDS
-      WITH KEY location_id = lv_missing_loc.
+      WITH KEY location_id = s_loc-low.
     IF sy-subrc <> 0.
-      APPEND lv_missing_loc TO lt_missing_loc.
+      ls_missing_loc-location_id = s_loc-low.
+      APPEND ls_missing_loc TO lt_missing_loc.
     ENDIF.
   ENDLOOP.
   IF lt_missing_loc IS NOT INITIAL.
@@ -623,7 +626,7 @@ FORM fetch_b2b_data.
     IF lv_miss_answer = 'J'.
       DATA: lt_miss_fcat TYPE slis_t_fieldcat_alv,
             ls_miss_fcat TYPE slis_fieldcat_alv.
-      ls_miss_fcat-fieldname = 'TABLE_LINE'.
+      ls_miss_fcat-fieldname = 'LOCATION_ID'.
       ls_miss_fcat-seltext_l = 'Location ID'.
       ls_miss_fcat-outputlen = 20.
       APPEND ls_miss_fcat TO lt_miss_fcat.
