@@ -2613,187 +2613,160 @@ ENDFORM.
 *& Download saved data as Excel or PDF to local computer
 *&---------------------------------------------------------------------*
 FORM handle_download.
-  DATA: lt_send_data TYPE TABLE OF yrga_cst_pur,
-        lt_fnt_data  TYPE TABLE OF yrga_cst_fn_data.
+  DATA: lt_all_daily TYPE TABLE OF yrga_cst_pur,
+        lt_all_fnt   TYPE TABLE OF yrga_cst_fn_data,
+        lt_loc_data  TYPE TABLE OF yrga_cst_pur,
+        lt_fnt_loc   TYPE TABLE OF yrga_cst_fn_data.
   DATA: lv_date_from_str TYPE c LENGTH 10,
         lv_date_to_str   TYPE c LENGTH 10.
   DATA: lv_filename    TYPE string,
         lv_fullpath    TYPE string,
         lv_path        TYPE string,
         lv_user_action TYPE i.
+  DATA: lv_loc_id      TYPE ygms_de_loc_id,
+        lv_loc_str     TYPE string,
+        lv_def_name    TYPE string.
+  DATA: lt_unique_loc TYPE TABLE OF ygms_de_loc_id.
 
   WRITE gv_date_from TO lv_date_from_str DD/MM/YYYY.
   WRITE gv_date_to   TO lv_date_to_str   DD/MM/YYYY.
 
-  " Fetch daily data from YRGA_CST_PUR where EXCLUDED flag is not X
   SELECT * FROM yrga_cst_pur
-    INTO TABLE lt_send_data
+    INTO TABLE lt_all_daily
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc
       AND exclude <> 'X' AND deleted = ' '.
 
-  IF lt_send_data IS INITIAL.
+  IF lt_all_daily IS INITIAL.
     MESSAGE s000(ygms_msg) WITH 'No saved data found for the selected period' DISPLAY LIKE 'W'.
     RETURN.
   ENDIF.
 
-  " Fetch fortnightly data from YRGA_CST_FN_DATA
   SELECT * FROM yrga_cst_fn_data
-    INTO TABLE lt_fnt_data
+    INTO TABLE lt_all_fnt
     WHERE date_from = gv_date_from
       AND date_to   = gv_date_to
       AND location  IN s_loc AND deleted = ' '.
 
-  IF p_dxls IS NOT INITIAL.
-    " --- Download as Excel ---
-    " Build daily Excel content
-    DATA: lt_daily_xls    TYPE solix_tab,
-          lv_daily_sz_raw TYPE sood-objlen,
-          lv_daily_sz     TYPE i.
-    PERFORM build_excel_attachment USING lt_send_data
-                                  CHANGING lt_daily_xls lv_daily_sz_raw.
-    lv_daily_sz = lv_daily_sz_raw.
+  " Get unique Location IDs
+  LOOP AT lt_all_daily INTO DATA(ls_pur_loc).
+    COLLECT ls_pur_loc-location INTO lt_unique_loc.
+  ENDLOOP.
+  SORT lt_unique_loc.
 
-    " Prompt user for daily file save location
-    DATA lv_def_daily TYPE string.
-    CONCATENATE 'Daily_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_def_daily.
-    REPLACE ALL OCCURRENCES OF '/' IN lv_def_daily WITH '-'.
-    CALL METHOD cl_gui_frontend_services=>file_save_dialog
-      EXPORTING
-        default_file_name = lv_def_daily
-        default_extension = 'xls'
-        file_filter       = 'Excel Files (*.xls)|*.xls|All Files (*.*)|*.*'
-      CHANGING
-        filename          = lv_filename
-        path              = lv_path
-        fullpath          = lv_fullpath
-        user_action       = lv_user_action.
-
-    IF lv_user_action = cl_gui_frontend_services=>action_ok.
-      CALL METHOD cl_gui_frontend_services=>gui_download
-        EXPORTING
-          bin_filesize = lv_daily_sz
-          filename     = lv_fullpath
-          filetype     = 'BIN'
-        CHANGING
-          data_tab     = lt_daily_xls.
-      MESSAGE s000(ygms_msg) WITH 'Daily Excel downloaded successfully'.
-    ENDIF.
-
-    " Build fortnightly Excel content
-    IF lt_fnt_data IS NOT INITIAL.
-      DATA: lt_fnt_xls    TYPE solix_tab,
-            lv_fnt_sz_raw TYPE sood-objlen,
-            lv_fnt_sz     TYPE i.
-      PERFORM build_fnt_excel_attachment USING lt_fnt_data
-                                        CHANGING lt_fnt_xls lv_fnt_sz_raw.
-      lv_fnt_sz = lv_fnt_sz_raw.
-
-      DATA lv_def_fnt TYPE string.
-      CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_def_fnt.
-      REPLACE ALL OCCURRENCES OF '/' IN lv_def_fnt WITH '-'.
-      CLEAR: lv_filename, lv_fullpath, lv_path.
-      CALL METHOD cl_gui_frontend_services=>file_save_dialog
-        EXPORTING
-          default_file_name = lv_def_fnt
-          default_extension = 'xls'
-          file_filter       = 'Excel Files (*.xls)|*.xls|All Files (*.*)|*.*'
-        CHANGING
-          filename          = lv_filename
-          path              = lv_path
-          fullpath          = lv_fullpath
-          user_action       = lv_user_action.
-
-      IF lv_user_action = cl_gui_frontend_services=>action_ok.
-        CALL METHOD cl_gui_frontend_services=>gui_download
-          EXPORTING
-            bin_filesize = lv_fnt_sz
-            filename     = lv_fullpath
-            filetype     = 'BIN'
-          CHANGING
-            data_tab     = lt_fnt_xls.
-        MESSAGE s000(ygms_msg) WITH 'Fortnightly Excel downloaded successfully'.
-      ENDIF.
-    ENDIF.
-
-  ELSEIF p_dpdf IS NOT INITIAL.
-    " --- Download as PDF ---
-    " Build daily PDF content (spool-based)
-    DATA: lt_daily_pdf        TYPE soli_tab,
-          lv_daily_pdf_sz_raw TYPE sood-objlen,
-          lv_daily_pdf_sz     TYPE i.
-    DATA: lt_daily_pdf_raw TYPE TABLE OF tline,
-          lv_daily_pdf_len TYPE i.
-    PERFORM build_pdf_attachment USING lt_send_data
-                                CHANGING lt_daily_pdf lv_daily_pdf_sz_raw
-                                         lt_daily_pdf_raw lv_daily_pdf_len.
-
-    DATA lv_def_daily_pdf TYPE string.
-    CONCATENATE 'Daily_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_daily_pdf.
-    REPLACE ALL OCCURRENCES OF '/' IN lv_def_daily_pdf WITH '-'.
-    CLEAR: lv_filename, lv_fullpath, lv_path.
-    CALL METHOD cl_gui_frontend_services=>file_save_dialog
-      EXPORTING
-        default_file_name = lv_def_daily_pdf
-        default_extension = 'pdf'
-        file_filter       = 'PDF Files (*.pdf)|*.pdf|All Files (*.*)|*.*'
-      CHANGING
-        filename          = lv_filename
-        path              = lv_path
-        fullpath          = lv_fullpath
-        user_action       = lv_user_action.
-
-    IF lv_user_action = cl_gui_frontend_services=>action_ok.
-      " Use raw tline table directly — avoids Unicode dump with solix_tab
-      CALL METHOD cl_gui_frontend_services=>gui_download
-        EXPORTING
-          bin_filesize = lv_daily_pdf_len
-          filename     = lv_fullpath
-          filetype     = 'BIN'
-        CHANGING
-          data_tab     = lt_daily_pdf_raw.
-      MESSAGE s000(ygms_msg) WITH 'Daily PDF downloaded successfully'.
-    ENDIF.
-
-    " Build fortnightly PDF content
-    IF lt_fnt_data IS NOT INITIAL.
-      DATA: lt_fnt_pdf        TYPE soli_tab,
-            lv_fnt_pdf_sz_raw TYPE sood-objlen,
-            lv_fnt_pdf_sz     TYPE i.
-      DATA: lt_fnt_pdf_raw TYPE TABLE OF tline,
-            lv_fnt_pdf_len TYPE i.
-      PERFORM build_fnt_pdf_attachment USING lt_fnt_data
-                                      CHANGING lt_fnt_pdf lv_fnt_pdf_sz_raw
-                                               lt_fnt_pdf_raw lv_fnt_pdf_len.
-
-      DATA lv_def_fnt_pdf TYPE string.
-      CONCATENATE 'Fortnightly_CST_Purchase_' lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_def_fnt_pdf.
-      REPLACE ALL OCCURRENCES OF '/' IN lv_def_fnt_pdf WITH '-'.
-      CLEAR: lv_filename, lv_fullpath, lv_path.
-      CALL METHOD cl_gui_frontend_services=>file_save_dialog
-        EXPORTING
-          default_file_name = lv_def_fnt_pdf
-          default_extension = 'pdf'
-          file_filter       = 'PDF Files (*.pdf)|*.pdf|All Files (*.*)|*.*'
-        CHANGING
-          filename          = lv_filename
-          path              = lv_path
-          fullpath          = lv_fullpath
-          user_action       = lv_user_action.
-
-      IF lv_user_action = cl_gui_frontend_services=>action_ok.
-        " Use raw tline table directly — avoids Unicode dump with solix_tab
-        CALL METHOD cl_gui_frontend_services=>gui_download
-          EXPORTING
-            bin_filesize = lv_fnt_pdf_len
-            filename     = lv_fullpath
-            filetype     = 'BIN'
-          CHANGING
-            data_tab     = lt_fnt_pdf_raw.
-        MESSAGE s000(ygms_msg) WITH 'Fortnightly PDF downloaded successfully'.
-      ENDIF.
-    ENDIF.
+  " First ask user for folder to save files
+  DATA lv_folder TYPE string.
+  CALL METHOD cl_gui_frontend_services=>directory_browse
+    EXPORTING
+      window_title = 'Select folder to save files'
+    CHANGING
+      selected_folder = lv_folder.
+  IF lv_folder IS INITIAL.
+    MESSAGE s000(ygms_msg) WITH 'Download cancelled'.
+    RETURN.
   ENDIF.
+
+  " Loop through each Location ID and generate files
+  LOOP AT lt_unique_loc INTO lv_loc_id.
+    lv_loc_str = lv_loc_id.
+    CONDENSE lv_loc_str.
+
+    " Filter daily data for this location
+    CLEAR lt_loc_data.
+    LOOP AT lt_all_daily INTO DATA(ls_daily_dl) WHERE location = lv_loc_id.
+      APPEND ls_daily_dl TO lt_loc_data.
+    ENDLOOP.
+    IF lt_loc_data IS INITIAL.
+      CONTINUE.
+    ENDIF.
+
+    " Filter fortnightly data for this location
+    CLEAR lt_fnt_loc.
+    LOOP AT lt_all_fnt INTO DATA(ls_fnt_dl) WHERE location = lv_loc_id.
+      APPEND ls_fnt_dl TO lt_fnt_loc.
+    ENDLOOP.
+
+    IF p_dxls IS NOT INITIAL.
+      " --- Daily Excel ---
+      DATA: lt_xls    TYPE solix_tab,
+            lv_sz_raw TYPE sood-objlen,
+            lv_sz     TYPE i.
+      CLEAR: lt_xls, lv_sz_raw.
+      PERFORM build_excel_attachment USING lt_loc_data
+                                    CHANGING lt_xls lv_sz_raw.
+      lv_sz = lv_sz_raw.
+      CONCATENATE lv_folder '\Daily_CST_Purchase_' lv_loc_str '_'
+        lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_fullpath.
+      REPLACE ALL OCCURRENCES OF '/' IN lv_fullpath WITH '-'.
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = lv_sz
+          filename     = lv_fullpath
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = lt_xls.
+
+      " --- Fortnightly Excel ---
+      IF lt_fnt_loc IS NOT INITIAL.
+        CLEAR: lt_xls, lv_sz_raw.
+        PERFORM build_fnt_excel_attachment USING lt_fnt_loc
+                                          CHANGING lt_xls lv_sz_raw.
+        lv_sz = lv_sz_raw.
+        CONCATENATE lv_folder '\Fortnightly_CST_Purchase_' lv_loc_str '_'
+          lv_date_from_str '_' lv_date_to_str '.xls' INTO lv_fullpath.
+        REPLACE ALL OCCURRENCES OF '/' IN lv_fullpath WITH '-'.
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = lv_sz
+            filename     = lv_fullpath
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = lt_xls.
+      ENDIF.
+
+    ELSEIF p_dpdf IS NOT INITIAL.
+      " --- Daily PDF ---
+      DATA: lt_pdf_text TYPE soli_tab,
+            lv_pdf_sz   TYPE sood-objlen.
+      DATA: lt_pdf_raw TYPE TABLE OF tline,
+            lv_pdf_len TYPE i.
+      CLEAR: lt_pdf_text, lv_pdf_sz, lt_pdf_raw, lv_pdf_len.
+      PERFORM build_pdf_attachment USING lt_loc_data
+                                  CHANGING lt_pdf_text lv_pdf_sz
+                                           lt_pdf_raw lv_pdf_len.
+      CONCATENATE lv_folder '\Daily_CST_Purchase_' lv_loc_str '_'
+        lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_fullpath.
+      REPLACE ALL OCCURRENCES OF '/' IN lv_fullpath WITH '-'.
+      CALL METHOD cl_gui_frontend_services=>gui_download
+        EXPORTING
+          bin_filesize = lv_pdf_len
+          filename     = lv_fullpath
+          filetype     = 'BIN'
+        CHANGING
+          data_tab     = lt_pdf_raw.
+
+      " --- Fortnightly PDF ---
+      IF lt_fnt_loc IS NOT INITIAL.
+        CLEAR: lt_pdf_text, lv_pdf_sz, lt_pdf_raw, lv_pdf_len.
+        PERFORM build_fnt_pdf_attachment USING lt_fnt_loc
+                                        CHANGING lt_pdf_text lv_pdf_sz
+                                                 lt_pdf_raw lv_pdf_len.
+        CONCATENATE lv_folder '\Fortnightly_CST_Purchase_' lv_loc_str '_'
+          lv_date_from_str '_' lv_date_to_str '.pdf' INTO lv_fullpath.
+        REPLACE ALL OCCURRENCES OF '/' IN lv_fullpath WITH '-'.
+        CALL METHOD cl_gui_frontend_services=>gui_download
+          EXPORTING
+            bin_filesize = lv_pdf_len
+            filename     = lv_fullpath
+            filetype     = 'BIN'
+          CHANGING
+            data_tab     = lt_pdf_raw.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  DATA(lv_loc_count) = lines( lt_unique_loc ).
+  MESSAGE s000(ygms_msg) WITH 'Files downloaded for' lv_loc_count 'Location ID(s)'.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_SEND
