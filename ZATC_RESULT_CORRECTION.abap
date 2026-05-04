@@ -609,15 +609,20 @@ START-OF-SELECTION.
                             APPEND wa_blank TO repos_tab_new.
                             CLEAR wa_blank.
                             LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
-                              IF wa_repos_tab_d-line CS '.'.
-                                CONCATENATE '*' wa_repos_tab_d-line INTO wa_blank-line.
-                                APPEND wa_blank TO repos_tab_new.
-                                CLEAR wa_blank.
+                              " Comment out the full original line (preserving any inline comment).
+                              " Check for statement-ending period only in the code portion
+                              " (before any inline comment), so a period inside a comment like
+                              " " Added field X by DG0403." does not cause an early EXIT.
+                              DATA l_code_part TYPE string.
+                              l_code_part = wa_repos_tab_d-line.
+                              IF l_code_part CS '"'.
+                                l_code_part = l_code_part(sy-fdpos).
+                              ENDIF.
+                              CONCATENATE '*' wa_repos_tab_d-line INTO wa_blank-line.
+                              APPEND wa_blank TO repos_tab_new.
+                              CLEAR wa_blank.
+                              IF l_code_part CS '.'.
                                 EXIT.
-                              ELSE.
-                                CONCATENATE '*' wa_repos_tab_d-line INTO wa_blank-line.
-                                APPEND wa_blank TO repos_tab_new.
-                                CLEAR wa_blank.
                               ENDIF.
                             ENDLOOP.
                             LOOP AT it_query_new INTO wa_query.
