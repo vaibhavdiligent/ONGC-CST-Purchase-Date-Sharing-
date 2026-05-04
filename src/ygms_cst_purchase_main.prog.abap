@@ -478,12 +478,8 @@ START-OF-SELECTION.
     PERFORM fetch_b2b_data.
     CHECK gt_gas_receipt IS NOT INITIAL.
     PERFORM map_location_ids.
+    CHECK gt_gas_receipt IS NOT INITIAL.
     PERFORM map_material_names.
-    " Check each Location ID for receipt data (after location mapping)
-    IF p_view IS INITIAL.
-      PERFORM check_missing_locations.
-      CHECK gt_gas_receipt IS NOT INITIAL.
-    ENDIF.
     " Validate calorific values after mapping so GT_GAS_RECEIPT has location_id populated
     IF p_view IS INITIAL.
       DATA: lv_cv_valid TYPE abap_bool.
@@ -616,6 +612,10 @@ FORM map_location_ids.
       <fs_receipt>-location_id = ls_map-gail_loc_id.
     ENDIF.
   ENDLOOP.
+  " Check each Location ID for receipt data right after location_id is filled
+  IF p_view IS INITIAL.
+    PERFORM check_missing_locations.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form MAP_MATERIAL_NAMES
