@@ -826,7 +826,7 @@ START-OF-SELECTION.
                       READ TABLE it_zatc_process_dte INTO wa_zatc_process_dte WITH KEY
                         srch_tem     = wa_final-param2
                         ref_obj_type = wa_final-param3.
-                      IF sy-subrc = 0. wa_zatc_process_all = wa_zatc_process_dte. ENDIF.
+                      IF sy-subrc = 0. MOVE-CORRESPONDING wa_zatc_process_dte TO wa_zatc_process_all. ENDIF.
                     ENDIF.
                     IF sy-subrc = 0 AND wa_zatc_process_all-solution = 'X'
                       AND wa_zatc_process_all-fix_by <> 'FIT GAP'.
