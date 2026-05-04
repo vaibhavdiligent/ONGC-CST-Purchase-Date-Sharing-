@@ -957,6 +957,11 @@ FORM display_editable_alv.
   ls_fieldcat-edit      = abap_false.
   APPEND ls_fieldcat TO gt_fieldcat.
   CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'STATIC_FLAG'.
+  ls_fieldcat-no_out    = abap_true.
+  ls_fieldcat-tech      = abap_true.
+  APPEND ls_fieldcat TO gt_fieldcat.
+  CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TOTAL_MBG'.
   ls_fieldcat-coltext   = 'Total, MBG'.
   ls_fieldcat-outputlen = 12.
