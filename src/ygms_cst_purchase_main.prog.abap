@@ -3011,8 +3011,8 @@ ENDFORM.
 *& Send email with PDF and/or Excel attachments using CL_BCS
 *&---------------------------------------------------------------------*
 FORM send_email USING pt_emails   TYPE string_table
-                      pt_data     TYPE TABLE OF yrga_cst_pur
-                      pt_fnt_data TYPE TABLE OF yrga_cst_fn_data
+                      pt_data     LIKE lt_send_data
+                      pt_fnt_data LIKE lt_send_data_fn
                       pv_send_pdf TYPE c
                       pv_send_xls TYPE c.
   DATA: lo_send_request TYPE REF TO cl_bcs,
