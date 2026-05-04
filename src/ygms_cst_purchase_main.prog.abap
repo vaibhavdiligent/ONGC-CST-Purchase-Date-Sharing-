@@ -496,6 +496,16 @@ START-OF-SELECTION.
     ELSE.
       " View -> Allocation Details: same as existing view logic
       PERFORM build_alv_display_table_view.
+      IF gt_alv_display IS INITIAL.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'No Data'
+            txt1  = 'No allocation data found.'
+            txt2  = ''
+            txt3  = ''
+            txt4  = ''.
+        RETURN.
+      ENDIF.
     ENDIF.
     PERFORM display_editable_alv.
   ENDIF.
@@ -589,7 +599,47 @@ FORM fetch_b2b_data.
   DATA(lv_count) = lines( gt_gas_receipt ).
   MESSAGE s000(ygms_msg) WITH lv_count 'B2B records fetched'.
   MOVE lt_b2b_data[] TO gt_cst_b2b_1[].
-ENDFORM.
+  " Check each Location ID for receipt data
+  DATA: lt_missing_loc TYPE TABLE OF ygms_de_loc_id,
+        lv_missing_loc TYPE ygms_de_loc_id.
+  LOOP AT s_loc.
+    lv_missing_loc = s_loc-low.
+    READ TABLE gt_gas_receipt TRANSPORTING NO FIELDS
+      WITH KEY location_id = lv_missing_loc.
+    IF sy-subrc <> 0.
+      APPEND lv_missing_loc TO lt_missing_loc.
+    ENDIF.
+  ENDLOOP.
+  IF lt_missing_loc IS NOT INITIAL.
+    DATA: lv_miss_answer TYPE c LENGTH 1.
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        textline1      = 'Receipt data not present for a few Location IDs.'
+        textline2      = 'Click Yes to view details.'
+        titel          = 'Missing Receipt Data'
+        cancel_display = ' '
+      IMPORTING
+        answer         = lv_miss_answer.
+    IF lv_miss_answer = 'J'.
+      DATA: lt_miss_fcat TYPE slis_t_fieldcat_alv,
+            ls_miss_fcat TYPE slis_fieldcat_alv.
+      ls_miss_fcat-fieldname = 'TABLE_LINE'.
+      ls_miss_fcat-seltext_l = 'Location ID'.
+      ls_miss_fcat-outputlen = 20.
+      APPEND ls_miss_fcat TO lt_miss_fcat.
+      CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+        EXPORTING
+          i_title     = 'Location IDs Without Receipt Data'
+          i_selection = ' '
+          i_zebra     = abap_true
+          i_tabname   = 'LT_MISSING_LOC'
+          it_fieldcat = lt_miss_fcat
+        TABLES
+          t_outtab    = lt_missing_loc.
+    ENDIF.
+    CLEAR gt_gas_receipt.
+    RETURN.
+  ENDIF.
 *&---------------------------------------------------------------------*
 *& Form MAP_LOCATION_IDS
 *&---------------------------------------------------------------------*
@@ -4881,8 +4931,8 @@ FORM recalculate_totals.
     IF gv_date_to - gv_date_from + 1 = 16.
       <fs_alv>-total_scm = <fs_alv>-total_scm + <fs_alv>-day16.
     ENDIF.
-    " Recalculate weighted average GCV/NCV from gt_gas_receipt based on edited day volumes
-    CLEAR: lv_sum_gcv, lv_sum_ncv, lv_wt_idx.
+    " Recalculate weighted average GCV/NCV and MBG from gt_gas_receipt based on edited day volumes
+    CLEAR: lv_sum_gcv, lv_sum_ncv, lv_wt_idx, <fs_alv>-total_mbg.
     lv_wt_date = gv_date_from.
     lv_wt_days = gv_date_to - gv_date_from + 1.
     DO lv_wt_days TIMES.
