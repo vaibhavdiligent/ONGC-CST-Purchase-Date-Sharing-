@@ -1047,13 +1047,22 @@ FORM q4_discount .
   PERFORM get_q4_slab_rate USING lv_amended_pct CHANGING lv_amended_rt.
   PERFORM get_q4_slab_rate USING lv_orig_pct    CHANGING lv_orig_rt.
 
-  " Apply higher rate - criterion iv: original scheme if it gives equal or higher slab
-  " (when QCQ% >= BCQ%, original scheme is at least as good → prefer original)
-  IF lv_orig_rt GE lv_amended_rt AND lv_orig_rt GT 0.
+  " Apply higher rate - criterion iv:
+  " ORIGINAL wins only if it gives strictly higher rate,
+  " OR same rate but QCQ% > BCQ% (original scheme performs better)
+  " AMENDED wins in all other cases (including BCQ% >= QCQ% with same rate)
+  IF lv_orig_rt GT lv_amended_rt.
+    " Original gives a higher slab rate → use original
+    lv_q4_amended_rate = lv_orig_rt.
+    it_data_quater-scheme    = 'ORIGINAL'.
+    it_data_quater-disc_slab = lv_orig_rt.
+  ELSEIF lv_orig_rt EQ lv_amended_rt AND lv_orig_rt GT 0 AND lv_orig_pct GT lv_amended_pct.
+    " Same slab rate, but original QCQ% is higher → use original
     lv_q4_amended_rate = lv_orig_rt.
     it_data_quater-scheme    = 'ORIGINAL'.
     it_data_quater-disc_slab = lv_orig_rt.
   ELSEIF lv_amended_rt GT 0.
+    " Amended scheme is at least as good → use amended
     lv_q4_amended_rate = lv_amended_rt.
     it_data_quater-scheme    = 'AMENDED'.
     it_data_quater-disc_slab = lv_amended_rt.
