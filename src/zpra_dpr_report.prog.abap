@@ -2141,6 +2141,8 @@ FORM calculated_wtd_pi .
          lv_index1      TYPE                   sy-tabix,
          lv_date1       TYPE                   sy-datum,
          lv_date2       TYPE                   sy-datum.
+  DATA : lt_zpra_t_ast_pi TYPE STANDARD TABLE OF zpra_t_ast_pi,
+         ls_zpra_t_ast_pi TYPE zpra_t_ast_pi.
 
   FIELD-SYMBOLS : <fs_wtd_pi> TYPE ty_wtd_pi .
 * Here we are calculating weighted PI for each asset for each day. This will be used to convert quantities to OVL level
@@ -2237,12 +2239,12 @@ FORM calculated_wtd_pi .
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof..
     lv_date1 = gv_month_back_datum .
     DO .
-      READ TABLE gt_wtd_pi INTO ls_wtd_pi_t WITH KEY production_date = lv_date1 BINARY SEARCH .
+      READ TABLE gt_wtd_pi INTO ls_wtd_pi_t WITH KEY production_date = lv_date1
                                                              product = ls_zpra_c_prd_prof-product
                                                              asset   = ls_zpra_c_prd_prof-asset BINARY SEARCH.
       IF sy-subrc IS NOT INITIAL OR ls_wtd_pi_t-pi IS INITIAL.
         lv_date2 = lv_date1 - 1.
-        READ TABLE gt_wtd_pi INTO ls_wtd_pi WITH KEY production_date = lv_date2 BINARY SEARCH .
+        READ TABLE gt_wtd_pi INTO ls_wtd_pi WITH KEY production_date = lv_date2
                                                              product = ls_zpra_c_prd_prof-product
                                                              asset   = ls_zpra_c_prd_prof-asset BINARY SEARCH.
         IF sy-subrc IS INITIAL.
@@ -2259,39 +2261,30 @@ FORM calculated_wtd_pi .
   ENDLOOP.
 
   DELETE ADJACENT DUPLICATES FROM gt_wtd_pi COMPARING ALL FIELDS.
+* Pre-fetch zpra_t_ast_pi for all assets to avoid SELECT SINGLE inside loop
+  IF gt_zpra_c_prd_prof IS NOT INITIAL.
+    SELECT *
+      FROM zpra_t_ast_pi
+      INTO TABLE lt_zpra_t_ast_pi
+       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
+     WHERE asset EQ gt_zpra_c_prd_prof-asset.
+    SORT lt_zpra_t_ast_pi BY asset vld_frm vld_to.
+  ENDIF.
 * If on last date no data of any block of asset is maintained, PI at top will not be shown. Calcuating that
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
-    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_date BINARY SEARCH .
+    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_date
                                                          product = gs_zpra_c_prd_prof-product
                                                          asset   = gs_zpra_c_prd_prof-asset.
-*    IF sy-subrc IS NOT INITIAL.
-*      gs_wtd_pi-production_date  = p_date .
-*      gs_wtd_pi-product          = gs_zpra_c_prd_prof-product .
-*      gs_wtd_pi-asset            = gs_zpra_c_prd_prof-asset .
-*      CLEAR : lv_numerator   ,
-*              lv_denominator ,
-*              lv_pi          .
-*      LOOP AT gt_zpra_t_prd_pi INTO gs_zpra_t_prd_pi WHERE asset   EQ gs_wtd_pi-asset
-*                                                       AND vld_frm LE gs_wtd_pi-production_date
-*                                                       AND vld_to  GE gs_wtd_pi-production_date .
-*        lv_pi = gs_zpra_t_prd_pi-pi .
-*        lv_numerator   = lv_numerator   + lv_pi .
-*        lv_denominator = lv_denominator + 1 .
-*      ENDLOOP .
-*      IF lv_denominator IS NOT INITIAL.
-*        gs_wtd_pi-pi               = lv_numerator / lv_denominator.
-*        gs_wtd_pi-numerator        = lv_numerator   .
-*        gs_wtd_pi-denominator      = lv_denominator .
-*        APPEND gs_wtd_pi TO gt_wtd_pi .
-*      ENDIF.
     IF sy-subrc IS NOT INITIAL .
-      SELECT SINGLE pi
-               FROM zpra_t_ast_pi
-               INTO lv_pi
-              WHERE asset   EQ gs_zpra_c_prd_prof-asset
-                AND vld_frm LE p_date
-                AND vld_to  GE p_date .
-      IF sy-subrc IS INITIAL.
+      CLEAR lv_pi .
+      LOOP AT lt_zpra_t_ast_pi INTO ls_zpra_t_ast_pi
+        WHERE asset   EQ gs_zpra_c_prd_prof-asset
+          AND vld_frm LE p_date
+          AND vld_to  GE p_date.
+        lv_pi = ls_zpra_t_ast_pi-pi.
+        EXIT.
+      ENDLOOP.
+      IF lv_pi IS NOT INITIAL.
         gs_wtd_pi-production_date  = p_date .
         gs_wtd_pi-product          = gs_zpra_c_prd_prof-product .
         gs_wtd_pi-asset            = gs_zpra_c_prd_prof-asset .
@@ -2300,13 +2293,15 @@ FORM calculated_wtd_pi .
       ENDIF.
     ELSEIF   gs_wtd_pi-pi IS INITIAL .
       lv_index = sy-tabix .
-      SELECT SINGLE pi
-               FROM zpra_t_ast_pi
-               INTO lv_pi
-              WHERE asset   EQ gs_wtd_pi-asset
-                AND vld_frm LE gs_wtd_pi-production_date
-                AND vld_to  GE gs_wtd_pi-production_date .
-      IF sy-subrc IS INITIAL.
+      CLEAR lv_pi .
+      LOOP AT lt_zpra_t_ast_pi INTO ls_zpra_t_ast_pi
+        WHERE asset   EQ gs_wtd_pi-asset
+          AND vld_frm LE gs_wtd_pi-production_date
+          AND vld_to  GE gs_wtd_pi-production_date.
+        lv_pi = ls_zpra_t_ast_pi-pi.
+        EXIT.
+      ENDLOOP.
+      IF lv_pi IS NOT INITIAL.
         gs_wtd_pi-pi = lv_pi .
         MODIFY gt_wtd_pi FROM gs_wtd_pi INDEX lv_index .
       ENDIF.
@@ -2416,7 +2411,7 @@ FORM calculated_wtd_cf .
 
   SORT gt_wtd_cf BY product asset .
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
-    READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
+    READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = gs_zpra_c_prd_prof-product
                                                    asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
     IF sy-subrc IS NOT INITIAL.
       CLEAR lv_count .
@@ -2915,10 +2910,21 @@ FORM display_asset_names .
          lv_index      TYPE sy-tabix.
   DATA : v_expdt_cnt   TYPE i,
          lv_expdt_lines TYPE sy-tabix.
-  DATA : lt_expdt TYPE STANDARD TABLE OF zpra_t_prd_pi,
-         ls_expdt TYPE zpra_t_prd_pi.
+  DATA : lt_expdt     TYPE STANDARD TABLE OF zpra_t_prd_pi,
+         ls_expdt     TYPE zpra_t_prd_pi,
+         lt_all_prd_pi TYPE STANDARD TABLE OF zpra_t_prd_pi.
   CLEAR   gs_paste .
   REFRESH gt_paste .
+
+* Pre-fetch zpra_t_prd_pi for all assets to avoid SELECT inside loop
+  IF gt_zpra_c_prd_prof IS NOT INITIAL.
+    SELECT *
+      FROM zpra_t_prd_pi
+      INTO TABLE lt_all_prd_pi
+       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
+     WHERE asset EQ gt_zpra_c_prd_prof-asset.
+    SORT lt_all_prd_pi BY asset liscense_exp_dt.
+  ENDIF.
 
   LOOP AT gt_dyn_fcat INTO gs_dyn_fcat .
     IF gs_dyn_fcat-fieldname EQ 'COL01'.
@@ -2953,10 +2959,8 @@ FORM display_asset_names .
 *            ENDIF
 ************************************Changes by hrishikesh nikam on 31.03.2022*************************************
           REFRESH lt_expdt.
-          SELECT *
-            FROM zpra_t_prd_pi
-            INTO TABLE lt_expdt
-           WHERE asset = lv_asset.
+          lt_expdt = lt_all_prd_pi.
+          DELETE lt_expdt WHERE asset NE lv_asset.
           IF lt_expdt IS NOT INITIAL.
             DESCRIBE TABLE lt_expdt LINES lv_expdt_lines.
             CLEAR v_expdt_cnt.
@@ -3028,14 +3032,14 @@ FORM display_pi .
       SPLIT gs_dyn_fcat-fieldname AT '-' INTO lv_product lv_asset .
       IF lv_asset NE 'COMBINE'.
         CLEAR gs_wtd_pi .
-        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product BINARY SEARCH .
+        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
                                                      asset   = lv_asset .
         IF sy-subrc IS INITIAL.
           lv_pi = gs_wtd_pi-pi .
         ENDIF.
       ELSE.
         CLEAR gs_wtd_pi .
-        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product BINARY SEARCH .
+        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
                                                      asset   = 'COMBINE' .
         IF sy-subrc IS INITIAL.
           lv_pi = gs_wtd_pi-pi .
@@ -3084,7 +3088,7 @@ FORM display_cf .
       SPLIT gs_dyn_fcat-fieldname AT '-' INTO lv_product lv_asset .
       IF lv_asset NE 'COMBINE'.
         CLEAR gs_wtd_pi .
-        READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = lv_product BINARY SEARCH .
+        READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = lv_product
                                                            asset   = lv_asset BINARY SEARCH .
         IF sy-subrc IS INITIAL.
           lv_cf = gs_wtd_cf-cf .
@@ -3579,7 +3583,7 @@ ENDFORM.
 FORM convert_non_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   CHECK p_zpra_t_dly_prd-product NE '722000004' .
   CLEAR gs_wtd_cf .
-  READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = p_zpra_t_dly_prd-product BINARY SEARCH .
+  READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = p_zpra_t_dly_prd-product
                                                asset   = p_zpra_t_dly_prd-asset BINARY SEARCH .
   CASE abap_true.
     WHEN p_bb.
@@ -4024,191 +4028,31 @@ FORM convert_non_gas_units_2a2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   ENDCASE.
 
 ENDFORM.
-FORM convert_sec2a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
+FORM convert_target_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
+* Consolidated converter used by sec2a, sec2b, sec2c and sec5a (originally 4 identical FORMs)
   CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
+  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr   = gv_current_gjahr
+                                                             asset   = p_zpra_t_prd_tar-asset
+                                                             block   = p_zpra_t_prd_tar-block
                                                              product = p_zpra_t_prd_tar-product BINARY SEARCH .
   IF p_zpra_t_prd_tar-product NE c_prod_gas .
     CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
+      WHEN p_bb OR p_bbd OR p_bmd.
+        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000000 * gs_zpra_t_tar_cf-conv_factor .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
+      WHEN p_tm OR p_tmd.
+        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000000 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty   * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2  * gs_zpra_t_tar_cf-conv_factor * 1000000 .
       WHEN OTHERS.
     ENDCASE.
   ELSE.
     CASE abap_true.
-      WHEN p_bb.
+      WHEN p_bb OR p_bbd.
         p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
+      WHEN p_tm OR p_tmd.
+        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000000 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 .
-      WHEN OTHERS.
-    ENDCASE.
-  ENDIF.
-ENDFORM.
-FORM convert_sec2b_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
-  CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
-                                                             product = p_zpra_t_prd_tar-product BINARY SEARCH .
-  IF p_zpra_t_prd_tar-product NE c_prod_gas .
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor. " / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor. " / gv_current_gjahr_days.
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 ." / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 . "/ gv_current_gjahr_days .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor ."/ gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor ."/ gv_current_gjahr_days.
-      WHEN OTHERS.
-    ENDCASE.
-  ELSE.
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 ."/ gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 ."/ gv_current_gjahr_days.
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000. " / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000." / gv_current_gjahr_days .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 ." / gv_current_gjahr_days.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 ."/ gv_current_gjahr_days.
-      WHEN OTHERS.
-    ENDCASE.
-  ENDIF.
-ENDFORM.
-FORM convert_sec2c_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
-  CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
-                                                             product = p_zpra_t_prd_tar-product BINARY SEARCH .
-  IF p_zpra_t_prd_tar-product NE c_prod_gas .
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN OTHERS.
-    ENDCASE.
-  ELSE.
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 .
-      WHEN OTHERS.
-    ENDCASE.
-  ENDIF.
-ENDFORM.
-FORM convert_sec5a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
-  CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
-                                                             asset = p_zpra_t_prd_tar-asset
-                                                             block = p_zpra_t_prd_tar-block
-                                                             product = p_zpra_t_prd_tar-product BINARY SEARCH .
-  IF p_zpra_t_prd_tar-product NE c_prod_gas .
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor.
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor.
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
-      WHEN p_bmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000  * gs_zpra_t_tar_cf-conv_factor .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 * gs_zpra_t_tar_cf-conv_factor .
-      WHEN OTHERS.
-    ENDCASE.
-  ELSE.
-    CASE abap_true.
-      WHEN p_bb.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_bbd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 * 6290 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 * 6290 .
-      WHEN p_tm.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_tmd.
-        p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty * 1000000 .
-        p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000000 .
-      WHEN p_mb .
       WHEN p_bmd.
         p_zpra_t_prd_tar-tar_qty  = p_zpra_t_prd_tar-tar_qty  * 1000 .
         p_zpra_t_prd_tar-tar_qty2 = p_zpra_t_prd_tar-tar_qty2 * 1000 .
@@ -4220,12 +4064,12 @@ FORM get_pi_for_null_values USING p_zpra_t_dly_prd TYPE zpra_t_dly_prd
                                       p_combine.
   CLEAR gs_wtd_cf .
   IF p_combine IS NOT INITIAL.
-    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date BINARY SEARCH .
+    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date
                                                          product = p_zpra_t_dly_prd-product
                                                            asset = 'COMBINE' BINARY SEARCH  .
 
   ELSE.
-    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date BINARY SEARCH .
+    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date
                                                          product = p_zpra_t_dly_prd-product
                                                            asset = p_zpra_t_dly_prd-asset BINARY SEARCH .
   ENDIF.
@@ -4726,7 +4570,7 @@ FORM fill_dynamic_table_sec2a1 .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-    PERFORM convert_sec2a_units CHANGING gs_zpra_t_prd_tar.
+    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = c_prod_gas.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -4818,7 +4662,7 @@ FORM fill_dynamic_table_sec2b .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-    PERFORM convert_sec2b_units CHANGING gs_zpra_t_prd_tar.
+    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = c_prod_gas.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -4911,7 +4755,7 @@ FORM fill_dynamic_table_sec2c .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-    PERFORM convert_sec2c_units CHANGING gs_zpra_t_prd_tar.
+    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = c_prod_gas.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -5190,7 +5034,7 @@ FORM fill_dynamic_table_sec2a3 .
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
     lv_index = sy-tabix .
     CLEAR lv_combine_field .
-    READ TABLE gt_zpra_t_mrec_app_2a3 INTO gs_zpra_t_mrec_app WITH KEY gjahr   = gv_month_back_gjahr BINARY SEARCH .
+    READ TABLE gt_zpra_t_mrec_app_2a3 INTO gs_zpra_t_mrec_app WITH KEY gjahr   = gv_month_back_gjahr
                                                                        monat   = gv_month_back_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                        asset   = gs_zpra_c_prd_prof-asset
@@ -5232,7 +5076,7 @@ FORM fill_dynamic_table_sec2a3 .
       ENDIF.
     ELSE. "Now work out from MREC
 
-      READ TABLE gt_zpra_t_mrec_prd_2a3 INTO gs_zpra_t_mrec_prd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
+      READ TABLE gt_zpra_t_mrec_prd_2a3 INTO gs_zpra_t_mrec_prd WITH KEY product = gs_zpra_c_prd_prof-product
                                                                          asset   = gs_zpra_c_prd_prof-asset
                                                                          block   = gs_zpra_c_prd_prof-block
                                                                          gjahr   = gv_month_back_gjahr
@@ -5706,16 +5550,6 @@ FORM fetch_data_section2b .
     gt_zpra_t_prd_tar_3a = gt_zpra_t_prd_tar.
     gt_zpra_t_prd_tar_3b = gt_zpra_t_prd_tar.
 
-    SELECT *
-      FROM zpra_t_tar_cf
-      INTO TABLE gt_zpra_t_tar_cf
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE gjahr EQ gv_current_gjahr
-       AND asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product .
-
-    SORT gt_zpra_t_tar_cf BY gjahr asset block product .
   ENDIF.
 
 ENDFORM.
@@ -5937,7 +5771,7 @@ FORM fetch_data_section2d .
       lv_monat = lv_monat + 1 .
       lv_gjahr = gv_last_gjahr .
       DO  2 TIMES .
-        READ TABLE gt_zpra_t_mrec_app_2d TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_app_2d TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
                                                                          monat = lv_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                          asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
@@ -6111,7 +5945,7 @@ FORM fetch_data_section2f .
       lv_monat = lv_monat + 1 .
       lv_gjahr = gv_last_gjahr .
       DO  1 TIMES .
-        READ TABLE gt_zpra_t_mrec_app_2f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_app_2f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
                                                                          monat = lv_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                          asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
@@ -6958,7 +6792,7 @@ FORM fill_dynamic_table_sec2d .
       DO .
         lv_monat = lv_monat + 1 .
         CLEAR lv_combine_field .
-        READ TABLE gt_zpra_t_mrec_app_2d INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_app_2d INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
                                                                           monat   = lv_monat
                                                                           product = gs_zpra_c_prd_prof-product
                                                                           asset   = gs_zpra_c_prd_prof-asset
@@ -7054,7 +6888,7 @@ FORM fill_dynamic_table_sec2d .
           IF lv_monat EQ gv_current_monat.
             CONCATENATE gv_search_end_datum(4) p_date+4(4) INTO gv_search_end_datum .
           ENDIF.
-          READ TABLE gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
+          READ TABLE gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
                                                                               asset = gs_zpra_c_prd_prof-asset
                                                                               block = gs_zpra_c_prd_prof-block
                                                                     production_date = gv_search_begin_datum BINARY SEARCH .
@@ -7297,7 +7131,7 @@ FORM fill_dynamic_table_sec2f .
     DO .
       lv_monat = lv_monat + 1 .
       CLEAR lv_combine_field .
-      READ TABLE gt_zpra_t_mrec_app_2f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
+      READ TABLE gt_zpra_t_mrec_app_2f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
                                                                         monat   = lv_monat
                                                                         product = gs_zpra_c_prd_prof-product
                                                                         asset   = gs_zpra_c_prd_prof-asset
@@ -7385,7 +7219,7 @@ FORM fill_dynamic_table_sec2f .
 **           ENDIF.
       ELSE.
         PERFORM get_days_in_period USING lv_gjahr lv_monat CHANGING lv_days .
-        READ TABLE gt_zpra_t_dly_rprd_2f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
+        READ TABLE gt_zpra_t_dly_rprd_2f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
                                                                             asset = gs_zpra_c_prd_prof-asset
                                                                             block = gs_zpra_c_prd_prof-block
                                                                   production_date = gv_search_begin_datum BINARY SEARCH .
@@ -7674,7 +7508,7 @@ FORM fill_dynamic_table_sec3c .
     DO .
       lv_monat = lv_monat + 1 .
       CLEAR lv_combine_field .
-      READ TABLE gt_zpra_t_mrec_app INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
+      READ TABLE gt_zpra_t_mrec_app INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
                                                                      monat   = lv_monat
                                                                      product = gs_zpra_c_prd_prof-product
                                                                      asset   = gs_zpra_c_prd_prof-asset
@@ -7723,7 +7557,7 @@ FORM fill_dynamic_table_sec3c .
           gv_search_end_datum = p_date .
         ENDIF.
         CLEAR lv_found .
-        READ TABLE gt_zpra_t_dly_rprd_3c INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
+        READ TABLE gt_zpra_t_dly_rprd_3c INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
                                                                             asset = gs_zpra_c_prd_prof-asset
                                                                             block = gs_zpra_c_prd_prof-block
                                                                   production_date = gv_search_begin_datum BINARY SEARCH .
@@ -7933,7 +7767,7 @@ FORM fill_dynamic_table_sec3f .
       DO .
         lv_monat = lv_monat + 1 .
         CLEAR lv_combine_field .
-        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
                                                                           monat   = lv_monat
                                                                           product = gs_zpra_c_prd_prof-product
                                                                           asset   = gs_zpra_c_prd_prof-asset
@@ -7975,7 +7809,7 @@ FORM fill_dynamic_table_sec3f .
         ELSE. "Now work out from daily reconciled production
           PERFORM get_days_in_period USING lv_gjahr lv_monat CHANGING lv_days .
           CLEAR lv_found .
-          READ TABLE gt_zpra_t_dly_rprd_3f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
+          READ TABLE gt_zpra_t_dly_rprd_3f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
                                                                               asset = gs_zpra_c_prd_prof-asset
                                                                               block = gs_zpra_c_prd_prof-block
                                                                     production_date = gv_search_begin_datum BINARY SEARCH.
@@ -8184,7 +8018,7 @@ FORM fill_dynamic_table_sec4a .
     lv_monat = '00' .
     DO .
       lv_monat = lv_monat + 1 .
-      READ TABLE gt_zpra_t_mrec_app_4a INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
+      READ TABLE gt_zpra_t_mrec_app_4a INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
                                                                         monat   = lv_monat
                                                                         product = gs_zpra_c_prd_prof-product
                                                                         asset   = gs_zpra_c_prd_prof-asset
@@ -8492,7 +8326,7 @@ FORM fill_dynamic_table_sec3a .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-*    PERFORM convert_sec2a_units CHANGING gs_zpra_t_prd_tar.
+*    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = '722000004'.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -8542,7 +8376,7 @@ FORM fill_dynamic_table_sec3b .
       PERFORM get_target_type_name USING gs_zpra_t_prd_tar-tar_code CHANGING lv_target_name.
       <gfs_field> = lv_target_name.
     ENDAT .
-*    PERFORM convert_sec2a_units CHANGING gs_zpra_t_prd_tar.
+*    PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
     IF gs_zpra_t_prd_tar-product = '722000004'.
       READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_prd_tar-asset BINARY SEARCH .
@@ -8646,7 +8480,7 @@ FORM fetch_data_section3c .
     lv_monat = '00' .
     DO .
       lv_monat = lv_monat + 1 .
-      READ TABLE gt_zpra_t_mrec_app TRANSPORTING NO FIELDS WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
+      READ TABLE gt_zpra_t_mrec_app TRANSPORTING NO FIELDS WITH KEY gjahr = gv_current_gjahr
                                                                     monat = lv_monat
                                                                   product = gs_zpra_c_prd_prof-product
                                                                     asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
@@ -8854,7 +8688,7 @@ FORM fetch_data_section3f .
       DO .
         lv_monat = lv_monat + 1 .
 
-        READ TABLE gt_zpra_t_mrec_prd_3f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_prd_3f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
                                                                          monat = lv_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                          asset = gs_zpra_c_prd_prof-asset.
@@ -8877,7 +8711,7 @@ FORM fetch_data_section3f .
             MESSAGE 'Internal Error' TYPE 'E' .
           ENDIF.
    clear GS_ZPRA_T_PRD_PI.
-   READ TABLE gt_zpra_t_prd_pi_3f INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = GS_zpra_c_prd_prof-asset BINARY SEARCH .
+   READ TABLE gt_zpra_t_prd_pi_3f INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = GS_zpra_c_prd_prof-asset
                                                                   block = GS_zpra_c_prd_prof-block.
     IF SY-SUBRC eq 0 and  GS_ZPRA_T_PRD_PI-PROD_START_DATE LE  lv_month_begin_date.
 
@@ -9016,7 +8850,7 @@ FORM fetch_data_section4a .
     lv_monat = '00' .
     DO .
       lv_monat = lv_monat + 1 .
-      READ TABLE gt_zpra_t_mrec_app_4a TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
+      READ TABLE gt_zpra_t_mrec_app_4a TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
                                                                        monat = lv_monat
                                                                      product = c_prod_gas
                                                                        asset = gs_zdpr_gas_combine-asset BINARY SEARCH .
@@ -9277,12 +9111,11 @@ FORM fill_dynamic_table_sec5a .
 ***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 *   gs_zpra_t_tar_cf-conv_factor .
 ***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 * 1000000 .
 ***     ENDIF.
-      PERFORM convert_sec5a_units CHANGING gs_zpra_t_prd_tar.
+      PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
 
       lv_col_name = gs_zpra_t_prd_tar-tar_code .
       ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-*     <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 / lv_days .
-      <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty / lv_days .
+      <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 / lv_days .
       UNASSIGN <gfs_field> .
 
     ENDLOOP.
@@ -10051,7 +9884,7 @@ FORM get_target_start_date  USING    p_index
     IF sy-subrc IS INITIAL.
       IF lv_asset NE 'TOTAL' AND lv_asset NE 'COMBINE' .
 
-        READ TABLE gt_tar_start_dates INTO gs_tar_start_dates WITH KEY asset = lv_asset BINARY SEARCH .
+        READ TABLE gt_tar_start_dates INTO gs_tar_start_dates WITH KEY asset = lv_asset
                                                                     tar_code = p_tar_code BINARY SEARCH.
         IF sy-subrc IS INITIAL.
           p_start_date = gs_tar_start_dates-vld_frm .
@@ -10178,7 +10011,7 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
   DELETE ADJACENT DUPLICATES FROM gt_prod_start_end_dates COMPARING asset block .
   LOOP AT p_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
     lv_index = sy-tabix .
-    READ TABLE gt_prod_start_end_dates INTO gs_prod_start_end_dates WITH KEY asset = ls_zpra_c_prd_prof-asset BINARY SEARCH .
+    READ TABLE gt_prod_start_end_dates INTO gs_prod_start_end_dates WITH KEY asset = ls_zpra_c_prd_prof-asset
                                                                              block = ls_zpra_c_prd_prof-block BINARY SEARCH .
     IF sy-subrc IS INITIAL.
       IF gs_prod_start_end_dates-prod_start_date IS INITIAL.
@@ -10223,7 +10056,7 @@ FORM get_cf_from_date  USING    p_rec_date
       t009b_notfound = 03.
 
   IF sy-subrc IS INITIAL.
-    READ TABLE gt_cf INTO gs_cf WITH KEY gjahr = lv_gjahr BINARY SEARCH .
+    READ TABLE gt_cf INTO gs_cf WITH KEY gjahr = lv_gjahr
                                        product = p_product
                                          asset = p_asset
                                          block = p_block BINARY SEARCH .
@@ -10337,7 +10170,7 @@ FORM POPULATE_NO_DATA_ENTRIES_3F  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_p
 
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
     clear GS_ZPRA_T_PRD_PI.
-    READ TABLE GT_ZPRA_T_PRD_PI_3F INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = ls_zpra_c_prd_prof-asset BINARY SEARCH .
+    READ TABLE GT_ZPRA_T_PRD_PI_3F INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = ls_zpra_c_prd_prof-asset
                                                                 block = ls_zpra_c_prd_prof-block .
     IF SY-SUBRC = 0.
      IF GS_ZPRA_T_PRD_PI-PROD_START_DATE gt p_from_date .
