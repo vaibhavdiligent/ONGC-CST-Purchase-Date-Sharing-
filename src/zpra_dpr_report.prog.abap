@@ -477,15 +477,6 @@ START-OF-SELECTION .
 
 *--- Form Routines ---*
 *&---------------------------------------------------------------------*
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-
 FORM fetch_data .
 *  DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd .
   DATA : lv_mrec_start_date  TYPE sy-datum,
@@ -940,14 +931,6 @@ FORM fetch_data .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_data .
   PERFORM start_excel      .
 
@@ -974,14 +957,6 @@ FORM process_data .
   PERFORM set_cell_formats .
   PERFORM finalize_worksheet .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC1_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec1_data .
   gt_zpra_t_dly_prd2 = gt_zpra_t_dly_prd.
   SORT gt_zpra_t_dly_prd2 BY product asset  .
@@ -992,103 +967,91 @@ FORM process_sec1_data .
   PERFORM fill_dynamic_table_sec1    .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC2_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec2_data .
 
   PERFORM process_sec2a_data .
 * Section 2b is same as 2a1 only difference being section 2a1 takes only
 * current month data, 2b shows whole year data
   PERFORM fetch_data_section2b .
-  PERFORM prepare_dynamic_table_sec2b .
+  PERFORM create_dynamic_table CHANGING gt_sec2b_table .
+  ASSIGN gt_sec2b_table->* TO <gfs_sec2b_table> .
   PERFORM process_sec2b_data .
 * Section 2c is same as 2b only difference being section  2b shows whole year data
 * 2c shows YTD data
   PERFORM fetch_data_section2c .
-  PERFORM prepare_dynamic_table_sec2c .
+  PERFORM create_dynamic_table CHANGING gt_sec2c_table .
+  ASSIGN gt_sec2c_table->* TO <gfs_sec2c_table> .
   PERFORM process_sec2c_data .
 
   PERFORM fetch_data_section2d .
   PERFORM process_gas_records_2d .
-  PERFORM prepare_dynamic_table_sec2d .
+  PERFORM create_dynamic_table CHANGING gt_sec2d_table .
+  ASSIGN gt_sec2d_table->* TO <gfs_sec2d_table> .
   PERFORM fill_dynamic_table_sec2d .
   PERFORM display_section2d .
 
   IF p_bbd IS NOT INITIAL OR
      p_tmd IS NOT INITIAL OR
      p_bmd IS NOT INITIAL .
-    PERFORM prepare_dynamic_table_sec2e .
+    PERFORM create_dynamic_table CHANGING gt_sec2e_table .
+    ASSIGN gt_sec2e_table->* TO <gfs_sec2e_table> .
     PERFORM fill_dynamic_table_sec2e .
     PERFORM display_section2e .
   ENDIF.
   PERFORM fetch_data_section2f .
   PERFORM process_gas_records_2f .
-  PERFORM prepare_dynamic_table_sec2f .
+  PERFORM create_dynamic_table CHANGING gt_sec2f_table .
+  ASSIGN gt_sec2f_table->* TO <gfs_sec2f_table> .
   PERFORM fill_dynamic_table_sec2f .
   PERFORM display_section2f .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC3_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec3_data .
 
   PERFORM display_section3_header .
 
-  PERFORM prepare_dynamic_table_sec3a .
+  PERFORM create_dynamic_table CHANGING gt_sec3a_table .
+  ASSIGN gt_sec3a_table->* TO <gfs_sec3a_table> .
   PERFORM fill_dynamic_table_sec3a .
   PERFORM display_section3a .
 
-  PERFORM prepare_dynamic_table_sec3b .
+  PERFORM create_dynamic_table CHANGING gt_sec3b_table .
+  ASSIGN gt_sec3b_table->* TO <gfs_sec3b_table> .
   PERFORM process_sec3b_data .
   PERFORM fill_dynamic_table_sec3b .
   PERFORM display_section3b .
 
   PERFORM fetch_data_section3c .
   PERFORM process_gas_records_3c .
-  PERFORM prepare_dynamic_table_sec3c .
+  PERFORM create_dynamic_table CHANGING gt_sec3c_table .
+  ASSIGN gt_sec3c_table->* TO <gfs_sec3c_table> .
   PERFORM fill_dynamic_table_sec3c .
   PERFORM display_section3c .
 
-  PERFORM prepare_dynamic_table_sec3d .
+  PERFORM create_dynamic_table CHANGING gt_sec3d_table .
+  ASSIGN gt_sec3d_table->* TO <gfs_sec3d_table> .
   PERFORM fill_dynamic_table_sec3d .
   PERFORM display_section3d .
 
-  PERFORM prepare_dynamic_table_sec3e .
+  PERFORM create_dynamic_table CHANGING gt_sec3e_table .
+  ASSIGN gt_sec3e_table->* TO <gfs_sec3e_table> .
   PERFORM fill_dynamic_table_sec3e .
   PERFORM display_section3e .
 
   PERFORM fetch_data_section3f .
   PERFORM process_gas_records_3f .
-  PERFORM prepare_dynamic_table_sec3f .
+  PERFORM create_dynamic_table CHANGING gt_sec3f_table .
+  ASSIGN gt_sec3f_table->* TO <gfs_sec3f_table> .
   PERFORM fill_dynamic_table_sec3f .
   PERFORM display_section3f .
 
   gv_sec3_end_row = gv_row .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC4_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec4_data .
   PERFORM fetch_data_section4a .
   PERFORM process_gas_records_4a .
-  PERFORM prepare_dynamic_table_sec4a .
+  PERFORM create_dynamic_table CHANGING gt_sec4a_table .
+  ASSIGN gt_sec4a_table->* TO <gfs_sec4a_table> .
   PERFORM fill_dynamic_table_sec4a .
 
   PERFORM display_section4a .
@@ -1114,14 +1077,6 @@ FORM process_sec6_data .
   PERFORM display_section6 .
 ENDFORM .
 
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM prepare_dynamic_table_sec1 .
   DATA : lv_col_name       TYPE lvc_fname,
          lv_product        TYPE zpra_t_dly_prd-product,
@@ -1203,16 +1158,6 @@ FORM prepare_dynamic_table_sec1 .
     ASSIGN gt_dyn_table->* TO <gfs_dyn_table>.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  ADD_DYN_FIELD
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_COLPOS  text
-*      -->P_COL01  text
-*      -->P_COLTEXT  text
-*      -->P_OUTPUTLEN  text
-*----------------------------------------------------------------------*
 FORM add_dyn_field  USING    p_colname
                              p_coltext
                              p_outputlen.
@@ -1227,14 +1172,6 @@ FORM add_dyn_field  USING    p_colname
 *gs_dyn_fcat-key_sel = X.
   APPEND gs_dyn_fcat TO gt_dyn_fcat.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec1 .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -1339,14 +1276,6 @@ FORM fill_dynamic_table_sec1 .
     ENDDO.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SECTION1
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_section1 .
   PERFORM display_section1_header .
   PERFORM display_section1_data   .
@@ -1363,7 +1292,7 @@ FORM display_section2a2 .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section2a2_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec2a2_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1387,7 +1316,7 @@ FORM display_section2a3 .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section2a3_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec2a3_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1411,7 +1340,7 @@ FORM display_section2d .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section2d_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec2d_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1435,7 +1364,7 @@ FORM display_section2f .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section2f_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec2f_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1461,7 +1390,7 @@ FORM display_section3a .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section3a_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec3a_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 *----------------Changes to show blank line if target data is not available----------*
   IF gt_paste IS NOT INITIAL.
@@ -1494,7 +1423,7 @@ FORM display_section3b .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section3b_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec3b_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 *----------------Changes to show blank line if target data is not available----------*
   IF gt_paste IS NOT INITIAL.
@@ -1527,7 +1456,7 @@ FORM display_section2e .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section2e_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec2e_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 *----------------Changes to show blank line if asking rate is not available----------*
   IF gt_paste IS NOT INITIAL.
@@ -1557,7 +1486,7 @@ FORM display_section3c .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section3c_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec3c_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1738,7 +1667,7 @@ FORM display_section6 .
   gv_row   = 44 .
   gv_col   = 1  .
 
-  PERFORM prepare_section6_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec6_table> .
   DESCRIBE TABLE gt_paste LINES lv_lines .
   CHECK lv_lines GT 0 .
 
@@ -1876,7 +1805,7 @@ FORM display_section3f .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section3f_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec3f_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1900,7 +1829,7 @@ FORM display_section3d .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section3d_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec3d_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1923,7 +1852,7 @@ FORM display_section3e .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section3e_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec3e_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
@@ -1939,14 +1868,6 @@ FORM display_section3e .
   PERFORM show_progress USING '40' .
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  START_EXCEL
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM start_excel .
   CREATE OBJECT go_excel 'excel.application' .
   SET PROPERTY OF go_excel 'VISIBLE' = 0 .
@@ -1986,14 +1907,6 @@ FORM start_excel .
 
   gv_row = 1 .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SECTION1_HEADER
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_section1_header .
   PERFORM display_logo .
   PERFORM display_report_date .
@@ -2007,14 +1920,6 @@ FORM display_section1_header .
   PERFORM join_header1_column_1_2 .
   PERFORM set_section1_header_colors .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SECTION1_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_section1_data .
   DATA : lv_lines TYPE sy-tabix,
          lv_col   TYPE sy-tabix.
@@ -2025,7 +1930,7 @@ FORM display_section1_data .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section1_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_dyn_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
   PERFORM colour_alternate_rows .
@@ -2044,42 +1949,17 @@ FORM formatting_section1 .
   PERFORM format_sec1_header .
   PERFORM format_sec1_data_col_1_2 .
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  SELECT_CELL
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GV_ROW  text
-*      -->P_GV_COL  text
-*----------------------------------------------------------------------*
 FORM select_cell  USING    p_row
                            p_col.
   CALL METHOD OF go_excel 'Cells' = go_cell
                          EXPORTING #1 = p_row #2 = p_col.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CELL_VALUE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_0393   text
-*----------------------------------------------------------------------*
 FORM set_cell  USING    p_cell_value
                         p_wraptext  .
   SET PROPERTY OF go_cell 'Value' = p_cell_value .
   SET PROPERTY OF go_cell 'WrapText' = p_wraptext .
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  SELECT_RANGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GV_ROW  text
-*      -->P_1      text
-*      -->P_GV_SEC1_LINES  text
-*      -->P_30     text
-*----------------------------------------------------------------------*
 FORM select_range  USING    p_s_row
                             p_s_col
                             p_e_row
@@ -2108,13 +1988,6 @@ FORM set_range  USING    p_cell_value
   SET PROPERTY OF go_range 'Value' = p_cell_value .
   SET PROPERTY OF go_range 'WrapText' = p_wraptext .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SET_RANGE_FONT
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_1263   text
-*----------------------------------------------------------------------*
 FORM set_range_font  USING    p_size
                               p_bold.
   GET PROPERTY OF go_range 'FONT' = go_font .
@@ -2142,16 +2015,6 @@ FORM set_range_formatting USING p_wraptext
   ENDIF.
 
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  SET_THIN_BORDER
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_1      text
-*      -->P_1      text
-*      -->P_1      text
-*      -->P_1      text
-*----------------------------------------------------------------------*
 FORM set_thin_border   USING    p_left
                                 p_right
                                 p_top
@@ -2174,14 +2037,6 @@ FORM set_thin_border   USING    p_left
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  ROW_HEIGHT
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_7      text
-*      -->P_15     text
-*----------------------------------------------------------------------*
 FORM row_height  USING  p_row
                         p_height .
   CALL METHOD OF go_excel 'ROWS' = go_row
@@ -2218,147 +2073,6 @@ FORM format_sec1_data_col_1_2 .
   PERFORM select_range USING gv_sec1_data_start_row 1 gv_row 2 .
   PERFORM set_range_formatting USING  0 'C' 'C' .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_SECTION1_PASTE_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_section1_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_dyn_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section2a2_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec2a2_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section2a3_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec2a3_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section2d_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec2d_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section2f_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec2f_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section2e_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec2e_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  ADD_PRODUCT_RANGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_0688   text
-*----------------------------------------------------------------------*
 FORM add_product_range  USING  p_product.
 
   CLEAR r_product .
@@ -2369,13 +2083,6 @@ FORM add_product_range  USING  p_product.
 
   APPEND r_product TO r_product[] .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  ADD_VL_TYPE_RANGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_0704   text
-*----------------------------------------------------------------------*
 FORM add_vl_type_range  USING  p_vl_type .
 
   CLEAR r_prd_vl_type .
@@ -2407,13 +2114,6 @@ FORM buiild_tar_code_range .
     PERFORM add_tar_code_range USING 'TAR_RE' .
   ENDIF.
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  ADD_VL_TAR_CODE_RANGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_0704   text
-*----------------------------------------------------------------------*
 FORM add_tar_code_range  USING  p_tar_code .
 
   CLEAR r_tar_code .
@@ -2424,14 +2124,6 @@ FORM add_tar_code_range  USING  p_tar_code .
 
   APPEND r_tar_code TO r_tar_code[] .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CALCULATED_WTD_PI
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM calculated_wtd_pi .
 
   DATA : lt_dly_prd         TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -2545,12 +2237,12 @@ FORM calculated_wtd_pi .
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof..
     lv_date1 = gv_month_back_datum .
     DO .
-      READ TABLE gt_wtd_pi INTO ls_wtd_pi_t WITH KEY production_date = lv_date1
+      READ TABLE gt_wtd_pi INTO ls_wtd_pi_t WITH KEY production_date = lv_date1 BINARY SEARCH .
                                                              product = ls_zpra_c_prd_prof-product
                                                              asset   = ls_zpra_c_prd_prof-asset BINARY SEARCH.
       IF sy-subrc IS NOT INITIAL OR ls_wtd_pi_t-pi IS INITIAL.
         lv_date2 = lv_date1 - 1.
-        READ TABLE gt_wtd_pi INTO ls_wtd_pi WITH KEY production_date = lv_date2
+        READ TABLE gt_wtd_pi INTO ls_wtd_pi WITH KEY production_date = lv_date2 BINARY SEARCH .
                                                              product = ls_zpra_c_prd_prof-product
                                                              asset   = ls_zpra_c_prd_prof-asset BINARY SEARCH.
         IF sy-subrc IS INITIAL.
@@ -2569,7 +2261,7 @@ FORM calculated_wtd_pi .
   DELETE ADJACENT DUPLICATES FROM gt_wtd_pi COMPARING ALL FIELDS.
 * If on last date no data of any block of asset is maintained, PI at top will not be shown. Calcuating that
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
-    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_date
+    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_date BINARY SEARCH .
                                                          product = gs_zpra_c_prd_prof-product
                                                          asset   = gs_zpra_c_prd_prof-asset.
 *    IF sy-subrc IS NOT INITIAL.
@@ -2664,14 +2356,6 @@ FORM calculated_wtd_pi .
 
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CALCULATED_WTD_cf
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM calculated_wtd_cf .
   DATA : ls_zpra_t_mrec_prd_temp TYPE            ty_zpra_t_mrec_prd .
   DATA : lv_index       TYPE                   sy-tabix,
@@ -2732,7 +2416,7 @@ FORM calculated_wtd_cf .
 
   SORT gt_wtd_cf BY product asset .
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
-    READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = gs_zpra_c_prd_prof-product
+    READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
                                                    asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
     IF sy-subrc IS NOT INITIAL.
       CLEAR lv_count .
@@ -2754,14 +2438,6 @@ FORM calculated_wtd_cf .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records .
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd  .
 
@@ -2866,14 +2542,6 @@ FORM process_gas_records .
   SORT  gt_zpra_t_dly_prd_mb BY production_date product asset .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_NULL_VALUES_WITH_PREVIOUS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_null_values_with_previous .
 
   DATA : ls_zpra_t_dly_prd TYPE zpra_t_dly_prd .
@@ -2973,14 +2641,6 @@ FORM fill_null_values_with_previous .
   ENDDO.
   UNASSIGN : <lfs_dyn_line> .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PASTE_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM paste_data .
   DO 10 TIMES .
     CALL METHOD cl_gui_frontend_services=>clipboard_export
@@ -3003,14 +2663,6 @@ FORM paste_data .
     ENDIF.
   ENDDO.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PASTE_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM paste_data_sheet3 .
   DO 10 TIMES .
     CALL METHOD cl_gui_frontend_services=>clipboard_export
@@ -3034,14 +2686,6 @@ FORM paste_data_sheet3 .
   ENDDO.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PASTE_DATA_sheet2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM paste_data_sheet2 .
   DO 10 TIMES .
     CALL METHOD cl_gui_frontend_services=>clipboard_export
@@ -3064,14 +2708,6 @@ FORM paste_data_sheet2 .
     ENDIF.
   ENDDO.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  COLOUR_YELLOW_CELLS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM colour_yellow_cells .
   DATA : lv_row TYPE sy-tabix .
   LOOP AT gt_copied_cells INTO gs_copied_cells.
@@ -3088,14 +2724,6 @@ FORM colour_yellow_cells .
     SET PROPERTY OF go_font 'COLOR' = '-16776961' .
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_LOGO
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_logo .
   PERFORM download_image .
   PERFORM display_image  .
@@ -3103,14 +2731,6 @@ FORM display_logo .
 
   PERFORM show_progress USING '0' .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DOWNLOAD_IMAGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM download_image .
 
   DATA : l_bytecount TYPE i,
@@ -3173,14 +2793,6 @@ FORM download_image .
             WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_IMAGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_image .
   DATA lo_shapes TYPE ole2_object .
 
@@ -3199,14 +2811,6 @@ FORM display_image .
 
   gv_row = gv_row + 2 .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DELETE_IMAGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM delete_image .
   DATA : lv_file TYPE string,
          lv_rc   TYPE i.
@@ -3228,14 +2832,6 @@ FORM delete_image .
       wrong_parameter      = 8
       OTHERS               = 9.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_REPORT_DATE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_report_date .
   DATA : lv_date    TYPE char50,
          lv_heading TYPE char100.
@@ -3260,14 +2856,6 @@ FORM display_report_date .
   SET PROPERTY OF go_font  'BOLD' = 1 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_PRODUCT_NAMES
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_product_names .
   DATA : lv_separator TYPE char10,
          lv_no_comma  TYPE c.
@@ -3319,21 +2907,16 @@ FORM display_product_names .
   ENDLOOP.
 *  PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_ASSET_NAMES
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_asset_names .
   DATA : lv_product    TYPE zpra_t_dly_prd-product,
          lv_asset      TYPE zpra_t_dly_prd-asset,
          lv_asset_desc TYPE char512,
          lv_asset_pre  TYPE char512,
          lv_index      TYPE sy-tabix.
-  DATA : v_expdt_cnt TYPE I.
+  DATA : v_expdt_cnt   TYPE i,
+         lv_expdt_lines TYPE sy-tabix.
+  DATA : lt_expdt TYPE STANDARD TABLE OF zpra_t_prd_pi,
+         ls_expdt TYPE zpra_t_prd_pi.
   CLEAR   gs_paste .
   REFRESH gt_paste .
 
@@ -3369,21 +2952,26 @@ FORM display_asset_names .
 *            CONCATENATE lv_asset_desc '*' INTO lv_asset_desc.
 *            ENDIF
 ************************************Changes by hrishikesh nikam on 31.03.2022*************************************
-          SELECT ASSET, BLOCK, LISCENSE_EXP_DT from ZPRA_T_PRD_PI INTO TABLE @data(v_expdt)
-            WHERE ASSET = @lv_asset.
-           IF  v_expdt is NOT INITIAL.
-            DESCRIBE TABLE v_expdt LINES DATA(v_expdt_lines).
-              CLEAR v_expdt_cnt.
-              LOOP AT v_expdt INTO DATA(ls_v_expdt) WHERE ASSET = LV_ASSET AND LISCENSE_EXP_DT LT P_DATE .
-               IF ls_v_expdt-liscense_exp_dt GT '00000000'.
+          REFRESH lt_expdt.
+          SELECT *
+            FROM zpra_t_prd_pi
+            INTO TABLE lt_expdt
+           WHERE asset = lv_asset.
+          IF lt_expdt IS NOT INITIAL.
+            DESCRIBE TABLE lt_expdt LINES lv_expdt_lines.
+            CLEAR v_expdt_cnt.
+            LOOP AT lt_expdt INTO ls_expdt
+              WHERE asset          = lv_asset
+                AND liscense_exp_dt LT p_date.
+              IF ls_expdt-liscense_exp_dt GT '00000000'.
                 v_expdt_cnt = v_expdt_cnt + 1.
-               ENDIF.
-               CLEAR ls_v_expdt.
-              ENDLOOP.
-            IF  v_expdt_cnt = v_expdt_lines.
-             CONCATENATE lv_asset_desc '*' INTO lv_asset_desc.
+              ENDIF.
+              CLEAR ls_expdt.
+            ENDLOOP.
+            IF v_expdt_cnt = lv_expdt_lines.
+              CONCATENATE lv_asset_desc '*' INTO lv_asset_desc.
             ENDIF.
-           ENDIF.
+          ENDIF.
 *******************************************************************************************************************
         ENDIF.
       ELSE.
@@ -3421,14 +3009,6 @@ FORM display_asset_names .
   PERFORM paste_data .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_PI
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_pi .
 
   DATA : lv_product TYPE zpra_t_dly_prd-product,
@@ -3448,14 +3028,14 @@ FORM display_pi .
       SPLIT gs_dyn_fcat-fieldname AT '-' INTO lv_product lv_asset .
       IF lv_asset NE 'COMBINE'.
         CLEAR gs_wtd_pi .
-        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
+        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product BINARY SEARCH .
                                                      asset   = lv_asset .
         IF sy-subrc IS INITIAL.
           lv_pi = gs_wtd_pi-pi .
         ENDIF.
       ELSE.
         CLEAR gs_wtd_pi .
-        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
+        READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product BINARY SEARCH .
                                                      asset   = 'COMBINE' .
         IF sy-subrc IS INITIAL.
           lv_pi = gs_wtd_pi-pi .
@@ -3485,14 +3065,6 @@ FORM display_pi .
   PERFORM set_numberformat USING '0.000' .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_CF
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_cf .
 
   DATA : lv_product TYPE zpra_t_dly_prd-product,
@@ -3512,7 +3084,7 @@ FORM display_cf .
       SPLIT gs_dyn_fcat-fieldname AT '-' INTO lv_product lv_asset .
       IF lv_asset NE 'COMBINE'.
         CLEAR gs_wtd_pi .
-        READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = lv_product
+        READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = lv_product BINARY SEARCH .
                                                            asset   = lv_asset BINARY SEARCH .
         IF sy-subrc IS INITIAL.
           lv_cf = gs_wtd_cf-cf .
@@ -3649,15 +3221,6 @@ FORM display_units .
   PERFORM set_range_formatting USING 0 'C' 'C' .
 
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  GET_UNIT_DESC
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_PRODUCT  text
-*      <--P_IND_UNIT  text
-*      <--P_TOTAL_UNIT  text
-*----------------------------------------------------------------------*
 FORM get_unit_desc  USING    p_product
                     CHANGING p_ind_unit
                              p_total_unit.
@@ -3754,13 +3317,6 @@ FORM get_unit_desc  USING    p_product
   ENDCASE.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  WRITE_PRODUCT_NAME
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_R_PRODUCT_LOW  text
-*----------------------------------------------------------------------*
 FORM write_product_name  USING    p_product.
   DATA : lv_product   TYPE zpra_t_dly_prd-product,
          lv_asset     TYPE zpra_t_dly_prd-asset,
@@ -3797,14 +3353,6 @@ FORM write_product_name  USING    p_product.
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  COLOUR_ALTERNATE_ROWS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM colour_alternate_rows .
   DATA : lv_lines       TYPE sy-tabix,
          lv_switch_flag TYPE c.
@@ -3821,13 +3369,6 @@ FORM colour_alternate_rows .
     gv_s_row = gv_s_row + 1 .
   ENDDO.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SET_RANGE_INTERIOR
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_1263   text
-*----------------------------------------------------------------------*
 FORM set_range_interior  USING    p_color.
   GET PROPERTY OF go_range 'interior' = go_interior .
   SET PROPERTY OF go_interior 'Color' = p_color .
@@ -3836,14 +3377,6 @@ FORM set_numberformat USING p_format.
   SET PROPERTY OF go_range 'NumberFormat' = p_format .
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  SET_SECTION1_HEADER_COLORS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM set_section1_header_colors .
   DATA lv_color TYPE sy-tabix .
   PERFORM select_range USING gv_start_row 1 gv_row 2 .
@@ -3867,13 +3400,6 @@ FORM set_section1_header_colors .
   PERFORM select_range USING gv_start_row gv_table_columns gv_row gv_table_columns .
   PERFORM set_range_interior USING gv_header_gt_colour .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -3905,13 +3431,6 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_UNITS2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_units2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -3943,13 +3462,6 @@ FORM convert_gas_units2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_UNITS_TO_BOPD
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_units_to_bopd  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -3967,13 +3479,6 @@ FORM convert_gas_units_to_bopd  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_UNITS_TO_BCM
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_units_to_bcm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -3993,13 +3498,6 @@ FORM convert_gas_units_to_bcm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_UNITS_TO_MMSCM
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_units_to_mmscm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -4019,13 +3517,6 @@ FORM convert_gas_units_to_mmscm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_MREC_GAS_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_MREC_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -4057,13 +3548,6 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_MREC_TO_BCM
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_MREC_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_mrec_to_bcm  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -4080,13 +3564,6 @@ FORM convert_mrec_to_bcm  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
 
   p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_MREC_GAS_UNITS_TO_BOE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_ZPRA_T_MREC_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_mrec_gas_to_mmscm  CHANGING p_zpra_t_mrec_app TYPE ty_zpra_t_mrec_app.
   DATA : lv_qty TYPE char50 .
 * First Convert to MCM
@@ -4099,17 +3576,10 @@ FORM convert_mrec_gas_to_mmscm  CHANGING p_zpra_t_mrec_app TYPE ty_zpra_t_mrec_a
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_NON_GAS_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_non_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   CHECK p_zpra_t_dly_prd-product NE '722000004' .
   CLEAR gs_wtd_cf .
-  READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = p_zpra_t_dly_prd-product
+  READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = p_zpra_t_dly_prd-product BINARY SEARCH .
                                                asset   = p_zpra_t_dly_prd-asset BINARY SEARCH .
   CASE abap_true.
     WHEN p_bb.
@@ -4133,13 +3603,6 @@ FORM convert_non_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   ENDCASE.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_NON_GAS_UNITS2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_non_gas_units2  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd .
   DATA : lv_cf TYPE zpra_t_tar_cf-conv_factor .
   DATA : lv_buper TYPE t009b-poper,
@@ -4231,13 +3694,6 @@ FORM convert_non_gas_units2  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t_
   ENDCASE.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_NON_GAS_UNITS3C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_non_gas_units3c  USING p_monat TYPE zpra_t_mrec_prd-monat CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd .
   DATA : lv_cf TYPE zpra_t_mrec_prd-prod_vl_qty1 .
   DATA : lv_buper TYPE t009b-poper,
@@ -4294,13 +3750,6 @@ FORM convert_non_gas_units3c  USING p_monat TYPE zpra_t_mrec_prd-monat CHANGING 
 *   CLEAR p_zpra_t_dly_prd-prod_vl_qty1 .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_RPRD_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_ZPRA_T_DLY_RPRD  text
-*----------------------------------------------------------------------*
 FORM convert_rprd_units_mb  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
 
   IF  p_zpra_t_dly_rprd-product NE c_prod_gas.
@@ -4370,13 +3819,6 @@ FORM convert_rprd_units_mb  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
 
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_RPRD_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_ZPRA_T_DLY_RPRD  text
-*----------------------------------------------------------------------*
 FORM convert_rprd_units  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
 
   IF  p_zpra_t_dly_rprd-product NE c_prod_gas.
@@ -4447,13 +3889,6 @@ FORM convert_rprd_units  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_NON_GAS_UNITS3F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_non_gas_units3f  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd .
   DATA : lv_cf TYPE zpra_t_tar_cf-conv_factor .
 
@@ -4507,13 +3942,6 @@ FORM convert_non_gas_units3f  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t
 *      p_zpra_t_dly_prd-prod_vl_qty1 = p_zpra_t_dly_prd-prod_vl_qty1 / 1000000 .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_NON_GAS_MREC_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_non_gas_mrec_units  USING p_days CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
   CHECK p_zpra_t_mrec_prd-product NE c_prod_gas.
   CASE abap_true.
@@ -4598,7 +4026,7 @@ FORM convert_non_gas_units_2a2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 ENDFORM.
 FORM convert_sec2a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
   CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
+  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
                                                              asset = p_zpra_t_prd_tar-asset
                                                              block = p_zpra_t_prd_tar-block
                                                              product = p_zpra_t_prd_tar-product BINARY SEARCH .
@@ -4646,7 +4074,7 @@ FORM convert_sec2a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
 ENDFORM.
 FORM convert_sec2b_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
   CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
+  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
                                                              asset = p_zpra_t_prd_tar-asset
                                                              block = p_zpra_t_prd_tar-block
                                                              product = p_zpra_t_prd_tar-product BINARY SEARCH .
@@ -4694,7 +4122,7 @@ FORM convert_sec2b_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
 ENDFORM.
 FORM convert_sec2c_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
   CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
+  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
                                                              asset = p_zpra_t_prd_tar-asset
                                                              block = p_zpra_t_prd_tar-block
                                                              product = p_zpra_t_prd_tar-product BINARY SEARCH .
@@ -4742,7 +4170,7 @@ FORM convert_sec2c_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
 ENDFORM.
 FORM convert_sec5a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
   CLEAR gs_zpra_t_tar_cf .
-  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr
+  READ TABLE gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
                                                              asset = p_zpra_t_prd_tar-asset
                                                              block = p_zpra_t_prd_tar-block
                                                              product = p_zpra_t_prd_tar-product BINARY SEARCH .
@@ -4788,24 +4216,16 @@ FORM convert_sec5a_units  CHANGING p_zpra_t_prd_tar TYPE ty_zpra_t_prd_tar.
     ENDCASE.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_PI_FOR_NULL_VALUES
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM get_pi_for_null_values USING p_zpra_t_dly_prd TYPE zpra_t_dly_prd
                                       p_combine.
   CLEAR gs_wtd_cf .
   IF p_combine IS NOT INITIAL.
-    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date
+    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date BINARY SEARCH .
                                                          product = p_zpra_t_dly_prd-product
                                                            asset = 'COMBINE' BINARY SEARCH  .
 
   ELSE.
-    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date
+    READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY production_date = p_zpra_t_dly_prd-production_date BINARY SEARCH .
                                                          product = p_zpra_t_dly_prd-product
                                                            asset = p_zpra_t_dly_prd-asset BINARY SEARCH .
   ENDIF.
@@ -4830,14 +4250,6 @@ FORM get_pi_for_null_values USING p_zpra_t_dly_prd TYPE zpra_t_dly_prd
     gv_grand_total_mul  = 0 .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_CONSTORIUM_MULTIPLIERS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM get_constorium_multipliers USING p_zpra_t_dly_prd TYPE zpra_t_dly_prd
                                       p_combine.
 *  CLEAR gs_wtd_cf .
@@ -4892,14 +4304,6 @@ FORM get_constorium_multipliers USING p_zpra_t_dly_prd TYPE zpra_t_dly_prd
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_CONSTORIUM_MULTIPLIERS_2A2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM get_constorium_multipliers_2a2 USING p_table.
   CLEAR gs_zpra_t_prd_pi .
   DATA: lv_numerator   TYPE                   zpra_t_dly_prd-prod_vl_qty1,
@@ -5062,14 +4466,6 @@ FORM get_constorium_multipliers_2a2 USING p_table.
 *    gv_grand_total_mul = gv_grand_total_mul * 6290 .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SET_COLUMN_WIDTH
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM set_columns_width .
   DATA lv_end_col TYPE sy-tabix .
   lv_end_col = gv_table_columns - 1 .
@@ -5095,14 +4491,6 @@ FORM col_width  USING p_col_start
 * PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  COLOUR_DATES
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM colour_dates .
   DATA : lv_lines   TYPE sy-tabix,
          lv_end_row TYPE sy-tabix.
@@ -5116,14 +4504,6 @@ FORM colour_dates .
   SET PROPERTY OF go_interior 'Color' = gv_dates_colour .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  JOIN_HEADER_TOTAL_CELLS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM join_header_total_cells .
   DATA : lv_end_row   TYPE sy-tabix .
   lv_end_row = gv_sec1_h_start_row + 1 .
@@ -5142,14 +4522,6 @@ FORM join_header1_column_1_2.
   CALL METHOD OF go_range 'Merge' .
 ENDFORM .
 
-*&---------------------------------------------------------------------*
-*&      Form  COLOUR_SEC1_DATA_TOTALS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM colour_sec1_data_totals .
 
   DATA : lv_end_row TYPE sy-tabix,
@@ -5180,44 +4552,31 @@ FORM colour_sec1_data_totals .
   PERFORM set_range_interior USING gv_header_gt_colour .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC2A_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec2a_data .
   SORT gt_zpra_t_mrec_prd BY product ASCENDING asset ASCENDING block ASCENDING prd_vl_type ASCENDING  gjahr DESCENDING monat DESCENDING .
 
   PERFORM convert_sec2a_to_jvl.
-  PERFORM prepare_dynamic_table_sec2a1 .
+  PERFORM create_dynamic_table CHANGING gt_sec2a1_table .
+  ASSIGN gt_sec2a1_table->* TO <gfs_sec2_table> .
   PERFORM fill_dynamic_table_sec2a1    .
   gv_colour = gv_sec2a_tgt_colour .
   CONCATENATE 'Target' ':' gv_month_name gv_current_calendar_gjahr INTO gv_txt SEPARATED BY space.
   PERFORM display_section2a1 .
 
-  PERFORM prepare_dynamic_table_sec2a2 .
+  PERFORM create_dynamic_table CHANGING gt_sec2a2_table .
+  ASSIGN gt_sec2a2_table->* TO <gfs_sec2a2_table> .
   PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd USING gv_month_back_datum p_date .
   PERFORM fill_dynamic_table_sec2a2    .
   PERFORM display_section2a2 .
 
   PERFORM fetch_data_section2a3 .
   PERFORM process_gas_records_2a3 .
-  PERFORM prepare_dynamic_table_sec2a3 .
+  PERFORM create_dynamic_table CHANGING gt_sec2a3_table .
+  ASSIGN gt_sec2a3_table->* TO <gfs_sec2a3_table> .
   PERFORM fill_dynamic_table_sec2a3    .
   PERFORM display_section2a3 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_SEC2A_TO_JVL
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM convert_sec2a_to_jvl .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
   DATA:  lv_numerator                   TYPE ty_zpra_t_prd_tar-tar_qty .
@@ -5242,14 +4601,6 @@ FORM convert_sec2a_to_jvl .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_SEC2B_TO_JVL
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM convert_sec2b_to_jvl .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
   DATA :lv_numerator TYPE                   p LENGTH 16 DECIMALS 9,
@@ -5300,14 +4651,6 @@ FORM convert_sec2b_to_jvl .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_SEC2C_TO_JVL
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM convert_sec2c_to_jvl .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
   DATA :lv_numerator TYPE                   p LENGTH 16 DECIMALS 9,
@@ -5364,14 +4707,6 @@ FORM convert_sec2c_to_jvl .
   ENDLOOP.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2A1
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2a1 .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -5464,14 +4799,6 @@ FORM fill_dynamic_table_sec2a1 .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2B
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2b .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -5565,14 +4892,6 @@ FORM fill_dynamic_table_sec2b .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2c .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -5664,14 +4983,6 @@ FORM fill_dynamic_table_sec2c .
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2A2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2a2 .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -5853,14 +5164,6 @@ FORM fill_dynamic_table_sec2a2 .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2A3
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2a3 .
   DATA : lt_zpra_t_dly_prd     TYPE STANDARD TABLE OF zpra_t_dly_prd .
   DATA : ls_zpra_t_dly_prd     TYPE                   zpra_t_dly_prd .
@@ -5887,7 +5190,7 @@ FORM fill_dynamic_table_sec2a3 .
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof.
     lv_index = sy-tabix .
     CLEAR lv_combine_field .
-    READ TABLE gt_zpra_t_mrec_app_2a3 INTO gs_zpra_t_mrec_app WITH KEY gjahr   = gv_month_back_gjahr
+    READ TABLE gt_zpra_t_mrec_app_2a3 INTO gs_zpra_t_mrec_app WITH KEY gjahr   = gv_month_back_gjahr BINARY SEARCH .
                                                                        monat   = gv_month_back_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                        asset   = gs_zpra_c_prd_prof-asset
@@ -5929,7 +5232,7 @@ FORM fill_dynamic_table_sec2a3 .
       ENDIF.
     ELSE. "Now work out from MREC
 
-      READ TABLE gt_zpra_t_mrec_prd_2a3 INTO gs_zpra_t_mrec_prd WITH KEY product = gs_zpra_c_prd_prof-product
+      READ TABLE gt_zpra_t_mrec_prd_2a3 INTO gs_zpra_t_mrec_prd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
                                                                          asset   = gs_zpra_c_prd_prof-asset
                                                                          block   = gs_zpra_c_prd_prof-block
                                                                          gjahr   = gv_month_back_gjahr
@@ -6083,382 +5386,6 @@ FORM fill_dynamic_table_sec2a3 .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2a1 .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2a1_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2a1_table->* TO <gfs_sec2_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2A2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2a2 .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2a2_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2a2_table->* TO <gfs_sec2a2_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2A2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2b .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2b_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2b_table->* TO <gfs_sec2b_table>.
-  ENDIF.
-ENDFORM.
-FORM prepare_dynamic_table_sec2c .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2c_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2c_table->* TO <gfs_sec2c_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2A3
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2a3 .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2a3_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2a3_table->* TO <gfs_sec2a3_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2d .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2d_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2d_table->* TO <gfs_sec2d_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2f .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2f_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2f_table->* TO <gfs_sec2f_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec3a .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec3a_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec3a_table->* TO <gfs_sec3a_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec3b .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec3b_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec3b_table->* TO <gfs_sec3b_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC3C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec3c .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec3c_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec3c_table->* TO <gfs_sec3c_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC3D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec3d .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec3d_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec3d_table->* TO <gfs_sec3d_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC3E
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec3e .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec3e_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec3e_table->* TO <gfs_sec3e_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC3F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec3f .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec3f_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec3f_table->* TO <gfs_sec3f_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC4A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec4a .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec4a_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec4a_table->* TO <gfs_sec4a_table>.
-  ENDIF.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC2E
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM prepare_dynamic_table_sec2e .
-  CALL METHOD cl_alv_table_create=>create_dynamic_table
-    EXPORTING
-*     i_style_table             = X
-      it_fieldcatalog           = gt_dyn_fcat
-    IMPORTING
-      ep_table                  = gt_sec2e_table
-    EXCEPTIONS
-      generate_subpool_dir_full = 1
-      OTHERS                    = 2.
-  IF sy-subrc NE 0.
-    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
-  ELSE.
-* Assign the new table to field symbol
-    ASSIGN gt_sec2e_table->* TO <gfs_sec2e_table>.
-  ENDIF.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_TARGET_TYPE_NAME
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GS_ZPRA_T_PRD_TAR_TAR_CODE  text
-*      <--P_<GFS_FIELD>  text
-*----------------------------------------------------------------------*
 FORM get_target_type_name  USING    p_tar_code
                            CHANGING p_target_name.
   CASE p_tar_code.
@@ -6477,14 +5404,6 @@ FORM get_target_type_name  USING    p_tar_code
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_TARGET_FROM_NAME
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GS_ZPRA_T_PRD_TAR_TAR_CODE  text
-*      <--P_<GFS_FIELD>  text
-*----------------------------------------------------------------------*
 FORM get_target_from_name  USING    p_target_name
                            CHANGING p_tar_code.
   CASE p_target_name.
@@ -6503,14 +5422,6 @@ FORM get_target_from_name  USING    p_target_name
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SEC2A_TARGE2TS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_sec2a_targets .
 
   DATA lv_lines TYPE sy-tabix .
@@ -6528,7 +5439,7 @@ FORM display_sec2a_targets .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
   gv_e_col = gv_s_col + gv_table_columns - 1.
-  PERFORM prepare_section2a_paste_data .
+  PERFORM prepare_paste_data TABLES <gfs_sec2_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 *----------------Changes to show blank line if target data is not available----------*
   IF gt_paste IS NOT INITIAL.
@@ -6545,111 +5456,6 @@ FORM display_sec2a_targets .
   PERFORM set_range USING gv_txt 0.
 
 
-ENDFORM.
-FORM prepare_section2a_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec2_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section3a_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec3a_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section3b_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec3b_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section3c_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec3c_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section3f_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec3f_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
 ENDFORM.
 FORM prepare_section4a_paste_data .
   DATA lv_index TYPE sy-tabix .
@@ -6673,10 +5479,14 @@ FORM prepare_section4a_paste_data .
   ENDLOOP.
 ENDFORM.
 FORM prepare_section4b_paste_data .
-  DATA : lv_date       TYPE char20,
-         lv_asset_desc TYPE char512,
-         lv_expcom TYPE char100,
-         lv_expdt TYPE char20.
+  DATA : lv_date        TYPE char20,
+         lv_asset_desc  TYPE char512,
+         lv_expcom      TYPE char100,
+         lv_expdt       TYPE char20.
+  DATA : lt_exp_asset   TYPE STANDARD TABLE OF zpra_t_prd_pi,
+         lt_exp_asset1  TYPE STANDARD TABLE OF zpra_t_prd_pi,
+         ls_exp_asset   TYPE zpra_t_prd_pi,
+         ls_exp_asset1  TYPE zpra_t_prd_pi.
 
   CLEAR gs_paste.
   REFRESH gt_paste .
@@ -6702,18 +5512,22 @@ FORM prepare_section4b_paste_data .
   ENDLOOP.
 
 ***********************************Changes by hrishikesh nikam on 23.05.22**********
-  SELECT * from zpra_t_prd_pi INTO TABLE @data(lt_exp_asset)
-    WHERE LISCENSE_EXP_DT LT @sy-datum.
+  SELECT *
+    FROM zpra_t_prd_pi
+    INTO TABLE lt_exp_asset
+   WHERE liscense_exp_dt LT sy-datum.
 
-  SELECT ASSET FROM zpra_t_prd_pi INTO TABLE @DATA(LT_EXP_ASSET1)
-                 FOR ALL ENTRIES IN @lt_exp_asset
-                 WHERE ASSET = @lt_exp_asset-asset
-                  AND LISCENSE_EXP_DT GT @SY-DATUM .
+  SELECT asset
+    FROM zpra_t_prd_pi
+    INTO TABLE lt_exp_asset1
+     FOR ALL ENTRIES IN lt_exp_asset
+   WHERE asset          = lt_exp_asset-asset
+     AND liscense_exp_dt GT sy-datum.
 
 
 *    DELETE lt_exp_asset WHERE LISCENSE_EXP_DT GT SY-DATUM. "Todays Date
 
-    LOOP AT lt_exp_asset1 INTO DATA(ls_exp_asset1).
+    LOOP AT lt_exp_asset1 INTO ls_exp_asset1.
 *      IF ls_exp_asset1-asset GT SY-DATUM.
        DELETE lt_exp_asset WHERE ASSET = ls_exp_asset1-asset .
 *      ENDIF.
@@ -6726,7 +5540,7 @@ FORM prepare_section4b_paste_data .
 
 
 ***********************************end of Changes by hrishikesh nikam on 23.05.22**********
-    LOOP AT lt_exp_asset INTO DATA(ls_exp_asset).                   ""changes by hrishikesh nikam
+    LOOP AT lt_exp_asset INTO ls_exp_asset.
       if ls_exp_asset-liscense_exp_dt LT p_date.                    ""changes by hrishikesh nikam
 
          CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
@@ -6783,77 +5597,6 @@ FORM prepare_section5a_paste_data .
     APPEND gs_paste TO gt_paste .
   ENDDO.
 ENDFORM.
-FORM prepare_section6_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec6_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section3d_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec3d_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-FORM prepare_section3e_paste_data .
-  DATA lv_index TYPE sy-tabix .
-  CLEAR gs_paste.
-  REFRESH gt_paste .
-  LOOP AT <gfs_sec3e_table> ASSIGNING <gfs_dyn_line>.
-    CLEAR gs_paste .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS INITIAL.
-        IF lv_index NE 1.
-          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste .
-        ENDIF.
-        CONCATENATE gs_paste <gfs_field> INTO gs_paste .
-      ELSE.
-        EXIT .
-      ENDIF.
-    ENDDO.
-    APPEND gs_paste TO gt_paste .
-  ENDLOOP.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_SECTION2A2_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_section2a2_data .
   DATA : lt_zpra_t_dly_prd         TYPE STANDARD TABLE OF zpra_t_dly_prd,
          lt_zpra_t_dly_prd_current TYPE STANDARD TABLE OF zpra_t_dly_prd.
@@ -6912,14 +5655,6 @@ FORM fetch_section2a2_data .
 
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION2B
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section2b .
 * DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd .
 *
@@ -6984,14 +5719,6 @@ FORM fetch_data_section2b .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC2B_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec2b_data .
   REFRESH <gfs_sec2_table> .
 
@@ -7004,14 +5731,6 @@ FORM process_sec2b_data .
   PERFORM show_progress USING '10' .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC2C_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec2c_data .
   REFRESH <gfs_sec2_table> .
   PERFORM convert_sec2c_to_jvl.
@@ -7021,14 +5740,6 @@ FORM process_sec2c_data .
   PERFORM display_section2a1 .
   <gfs_sec2c_table> = <gfs_sec2_table> .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_SEC3b_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_sec3b_data .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
   DATA:  lv_denominator TYPE                   zpra_t_dly_prd-prod_vl_qty1,
@@ -7065,28 +5776,12 @@ FORM process_sec3b_data .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION2C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section2c .
   DELETE gt_zpra_t_prd_tar    WHERE monat GT gv_current_monat .
   DELETE gt_zpra_t_prd_tar_2c WHERE monat GT gv_current_monat .
 
   gt_zpra_t_prd_tar_5a = gt_zpra_t_prd_tar .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION2A3
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section2a3 .
 *  DATA : lt_zpra_t_dly_prd TYPE STANDARD TABLE OF zpra_t_dly_prd .
 *  lt_zpra_t_dly_prd = gt_zpra_t_dly_prd .
@@ -7168,14 +5863,6 @@ FORM fetch_data_section2a3 .
   SORT gt_zpra_t_prd_pi_lm BY asset block vld_frm vld_to .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION2D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section2d .
 *  DATA : lt_zpra_t_dly_prd   TYPE STANDARD TABLE OF zpra_t_dly_prd .
 *  DATA : ls_zpra_t_dly_prd   TYPE                   zpra_t_dly_prd .
@@ -7250,7 +5937,7 @@ FORM fetch_data_section2d .
       lv_monat = lv_monat + 1 .
       lv_gjahr = gv_last_gjahr .
       DO  2 TIMES .
-        READ TABLE gt_zpra_t_mrec_app_2d TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
+        READ TABLE gt_zpra_t_mrec_app_2d TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
                                                                          monat = lv_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                          asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
@@ -7357,14 +6044,6 @@ FORM fetch_data_section2d .
   SORT gt_zpra_t_prd_pi_2d BY asset block vld_frm vld_to .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION2F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section2f .
 *  DATA : lt_zpra_t_dly_prd   TYPE STANDARD TABLE OF zpra_t_dly_prd .
 *  DATA : ls_zpra_t_dly_prd   TYPE                   zpra_t_dly_prd .
@@ -7432,7 +6111,7 @@ FORM fetch_data_section2f .
       lv_monat = lv_monat + 1 .
       lv_gjahr = gv_last_gjahr .
       DO  1 TIMES .
-        READ TABLE gt_zpra_t_mrec_app_2f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
+        READ TABLE gt_zpra_t_mrec_app_2f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
                                                                          monat = lv_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                          asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
@@ -7543,14 +6222,6 @@ FORM fetch_data_section2f .
   PERFORM show_progress USING '30' .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_2A3
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_2a3 .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -7637,14 +6308,6 @@ FORM process_gas_records_2a3 .
   SORT gt_zpra_t_mrec_prd_2a3 BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_2D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_2d .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -7779,14 +6442,6 @@ FORM process_gas_records_2d .
 * SORT  gt_zpra_t_mrec_prd_2d BY gjahr monat product asset block prd_vl_type . .
   SORT gt_zpra_t_mrec_prd_2d BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_3C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_3c .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -7880,14 +6535,6 @@ FORM process_gas_records_3c .
   SORT gt_zpra_t_mrec_prd_3c BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_3C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_3f .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -7981,14 +6628,6 @@ FORM process_gas_records_3f .
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_4A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_4a .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -8077,14 +6716,6 @@ FORM process_gas_records_4a .
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_2F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_2f .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -8219,14 +6850,6 @@ FORM process_gas_records_2f .
 * SORT  gt_zpra_t_mrec_prd_2f BY gjahr monat product asset block prd_vl_type . .
   SORT gt_zpra_t_mrec_prd_2f  BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_PER_DAY_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_LV_DAYS  text
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_per_day_units  USING    p_days
                                 CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   CHECK p_zpra_t_dly_prd-product EQ c_prod_gas .
@@ -8236,14 +6859,6 @@ FORM convert_gas_per_day_units  USING    p_days
     p_zpra_t_dly_prd-prod_vl_qty1 = p_zpra_t_dly_prd-prod_vl_qty1 / p_days .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_PER_DAY_UNITS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_LV_DAYS  text
-*      <--P_GS_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM convert_mrec_gas_per_day_units  USING    p_days
                                 CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
   CHECK p_zpra_t_mrec_prd-product EQ '722000004' .
@@ -8253,14 +6868,6 @@ FORM convert_mrec_gas_per_day_units  USING    p_days
     p_zpra_t_mrec_prd-prod_vl_qty1 = p_zpra_t_mrec_prd-prod_vl_qty1 / p_days .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROTECT_WORKSHEET
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM finalize_worksheet .
   DATA: lv_sheet_name TYPE char50,
         lv_uzeit_ext  TYPE char8,
@@ -8304,14 +6911,6 @@ FORM finalize_worksheet .
   EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME' .
   MESSAGE 'Report downloaded sucessfully' TYPE 'S' .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  LOCK_XLS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM lock_xls .
 
   DATA : lv_uuid_16    TYPE sysuuid_x16 .
@@ -8322,14 +6921,6 @@ FORM lock_xls .
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2d .
 
   DATA : lt_dly_prd_main   TYPE STANDARD TABLE OF zpra_t_dly_prd,
@@ -8367,7 +6958,7 @@ FORM fill_dynamic_table_sec2d .
       DO .
         lv_monat = lv_monat + 1 .
         CLEAR lv_combine_field .
-        READ TABLE gt_zpra_t_mrec_app_2d INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
+        READ TABLE gt_zpra_t_mrec_app_2d INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
                                                                           monat   = lv_monat
                                                                           product = gs_zpra_c_prd_prof-product
                                                                           asset   = gs_zpra_c_prd_prof-asset
@@ -8463,7 +7054,7 @@ FORM fill_dynamic_table_sec2d .
           IF lv_monat EQ gv_current_monat.
             CONCATENATE gv_search_end_datum(4) p_date+4(4) INTO gv_search_end_datum .
           ENDIF.
-          READ TABLE gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
+          READ TABLE gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
                                                                               asset = gs_zpra_c_prd_prof-asset
                                                                               block = gs_zpra_c_prd_prof-block
                                                                     production_date = gv_search_begin_datum BINARY SEARCH .
@@ -8667,14 +7258,6 @@ FORM fill_dynamic_table_sec2d .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2f .
 
 
@@ -8714,7 +7297,7 @@ FORM fill_dynamic_table_sec2f .
     DO .
       lv_monat = lv_monat + 1 .
       CLEAR lv_combine_field .
-      READ TABLE gt_zpra_t_mrec_app_2f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
+      READ TABLE gt_zpra_t_mrec_app_2f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
                                                                         monat   = lv_monat
                                                                         product = gs_zpra_c_prd_prof-product
                                                                         asset   = gs_zpra_c_prd_prof-asset
@@ -8802,7 +7385,7 @@ FORM fill_dynamic_table_sec2f .
 **           ENDIF.
       ELSE.
         PERFORM get_days_in_period USING lv_gjahr lv_monat CHANGING lv_days .
-        READ TABLE gt_zpra_t_dly_rprd_2f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
+        READ TABLE gt_zpra_t_dly_rprd_2f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
                                                                             asset = gs_zpra_c_prd_prof-asset
                                                                             block = gs_zpra_c_prd_prof-block
                                                                   production_date = gv_search_begin_datum BINARY SEARCH .
@@ -8987,14 +7570,6 @@ FORM fill_dynamic_table_sec2f .
 
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC2E
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec2e .
   DATA   lv_index TYPE sy-index .
   DATA : lv_amt         TYPE p LENGTH 12 DECIMALS 9,
@@ -9070,14 +7645,6 @@ FORM fill_dynamic_table_sec2e .
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC3C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec3c .
 
 
@@ -9107,7 +7674,7 @@ FORM fill_dynamic_table_sec3c .
     DO .
       lv_monat = lv_monat + 1 .
       CLEAR lv_combine_field .
-      READ TABLE gt_zpra_t_mrec_app INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
+      READ TABLE gt_zpra_t_mrec_app INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
                                                                      monat   = lv_monat
                                                                      product = gs_zpra_c_prd_prof-product
                                                                      asset   = gs_zpra_c_prd_prof-asset
@@ -9156,7 +7723,7 @@ FORM fill_dynamic_table_sec3c .
           gv_search_end_datum = p_date .
         ENDIF.
         CLEAR lv_found .
-        READ TABLE gt_zpra_t_dly_rprd_3c INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
+        READ TABLE gt_zpra_t_dly_rprd_3c INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
                                                                             asset = gs_zpra_c_prd_prof-asset
                                                                             block = gs_zpra_c_prd_prof-block
                                                                   production_date = gv_search_begin_datum BINARY SEARCH .
@@ -9328,14 +7895,6 @@ FORM fill_dynamic_table_sec3c .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC3F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec3f .
 
   DATA : lt_zpra_t_dly_prd     TYPE STANDARD TABLE OF zpra_t_dly_prd .
@@ -9374,7 +7933,7 @@ FORM fill_dynamic_table_sec3f .
       DO .
         lv_monat = lv_monat + 1 .
         CLEAR lv_combine_field .
-        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
+        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
                                                                           monat   = lv_monat
                                                                           product = gs_zpra_c_prd_prof-product
                                                                           asset   = gs_zpra_c_prd_prof-asset
@@ -9416,7 +7975,7 @@ FORM fill_dynamic_table_sec3f .
         ELSE. "Now work out from daily reconciled production
           PERFORM get_days_in_period USING lv_gjahr lv_monat CHANGING lv_days .
           CLEAR lv_found .
-          READ TABLE gt_zpra_t_dly_rprd_3f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
+          READ TABLE gt_zpra_t_dly_rprd_3f INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product BINARY SEARCH .
                                                                               asset = gs_zpra_c_prd_prof-asset
                                                                               block = gs_zpra_c_prd_prof-block
                                                                     production_date = gv_search_begin_datum BINARY SEARCH.
@@ -9592,14 +8151,6 @@ FORM fill_dynamic_table_sec3f .
     ENDIF.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC4A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec4a .
 
   DATA : lt_zpra_t_dly_prd     TYPE STANDARD TABLE OF zpra_t_dly_prd .
@@ -9633,7 +8184,7 @@ FORM fill_dynamic_table_sec4a .
     lv_monat = '00' .
     DO .
       lv_monat = lv_monat + 1 .
-      READ TABLE gt_zpra_t_mrec_app_4a INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
+      READ TABLE gt_zpra_t_mrec_app_4a INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr BINARY SEARCH .
                                                                         monat   = lv_monat
                                                                         product = gs_zpra_c_prd_prof-product
                                                                         asset   = gs_zpra_c_prd_prof-asset
@@ -9717,14 +8268,6 @@ FORM fill_dynamic_table_sec4a .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC3D
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec3d .
   DATA lv_index TYPE sy-index .
   DATA lv_amt TYPE p LENGTH 12 DECIMALS 9 .
@@ -9766,14 +8309,6 @@ FORM fill_dynamic_table_sec3d .
     ENDLOOP.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC3E
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec3e .
   DATA lv_index TYPE sy-index .
   DATA lv_amt TYPE p LENGTH 12 DECIMALS 9 .
@@ -9816,15 +8351,6 @@ FORM fill_dynamic_table_sec3e .
     ENDLOOP.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_DAYS_IN_PERIOD
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GS_ZPRA_T_MREC_PRD_GJAHR  text
-*      -->P_GS_ZPRA_T_MREC_PRD_MONAT  text
-*      <--P_LV_DAYS  text
-*----------------------------------------------------------------------*
 FORM get_days_in_period  USING    p_gjahr
                                   p_monat
                          CHANGING p_days.
@@ -9869,26 +8395,10 @@ FORM get_days_in_period  USING    p_gjahr
   p_days = gv_search_end_datum - gv_search_begin_datum + 1 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SECTION3_HEADER
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_section3_header .
   PERFORM display_section3_header_1 .
   PERFORM display_section3_header_2 .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SECTION3_HEADER_1
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_section3_header_1 .
 
   gv_row = gv_row + 1 .
@@ -9923,14 +8433,6 @@ FORM display_section3_header_1 .
   SET PROPERTY OF go_font  'BOLD' = 1 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_SECTION3_HEADER_2
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_section3_header_2 .
   DATA gv_txt TYPE char50 .
 
@@ -9976,14 +8478,6 @@ FORM display_section3_header_2 .
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SE3A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec3a .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -10034,14 +8528,6 @@ FORM fill_dynamic_table_sec3a .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SE3B
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec3b .
   DATA : lv_col_name      TYPE lvc_fname,
          lv_combine_field TYPE c,
@@ -10092,14 +8578,6 @@ FORM fill_dynamic_table_sec3b .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION3C
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section3c .
 
   DATA : lv_monat            TYPE                   zpra_t_mrec_prd-monat,
@@ -10168,7 +8646,7 @@ FORM fetch_data_section3c .
     lv_monat = '00' .
     DO .
       lv_monat = lv_monat + 1 .
-      READ TABLE gt_zpra_t_mrec_app TRANSPORTING NO FIELDS WITH KEY gjahr = gv_current_gjahr
+      READ TABLE gt_zpra_t_mrec_app TRANSPORTING NO FIELDS WITH KEY gjahr = gv_current_gjahr BINARY SEARCH .
                                                                     monat = lv_monat
                                                                   product = gs_zpra_c_prd_prof-product
                                                                     asset = gs_zpra_c_prd_prof-asset BINARY SEARCH .
@@ -10271,14 +8749,6 @@ FORM fetch_data_section3c .
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION3F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section3f .
 
   DATA : lv_monat            TYPE                   zpra_t_mrec_prd-monat,
@@ -10384,7 +8854,7 @@ FORM fetch_data_section3f .
       DO .
         lv_monat = lv_monat + 1 .
 
-        READ TABLE gt_zpra_t_mrec_prd_3f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
+        READ TABLE gt_zpra_t_mrec_prd_3f TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
                                                                          monat = lv_monat
                                                                        product = gs_zpra_c_prd_prof-product
                                                                          asset = gs_zpra_c_prd_prof-asset.
@@ -10407,7 +8877,7 @@ FORM fetch_data_section3f .
             MESSAGE 'Internal Error' TYPE 'E' .
           ENDIF.
    clear GS_ZPRA_T_PRD_PI.
-   READ TABLE gt_zpra_t_prd_pi_3f INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = GS_zpra_c_prd_prof-asset
+   READ TABLE gt_zpra_t_prd_pi_3f INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = GS_zpra_c_prd_prof-asset BINARY SEARCH .
                                                                   block = GS_zpra_c_prd_prof-block.
     IF SY-SUBRC eq 0 and  GS_ZPRA_T_PRD_PI-PROD_START_DATE LE  lv_month_begin_date.
 
@@ -10491,14 +8961,6 @@ FORM fetch_data_section3f .
   ENDIF.
 clear GS_ZPRA_T_PRD_PI.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION3F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section4a .
   DATA : lv_monat            TYPE                   zpra_t_mrec_prd-monat,
          lv_gjahr            TYPE                   zpra_t_mrec_prd-gjahr,
@@ -10554,7 +9016,7 @@ FORM fetch_data_section4a .
     lv_monat = '00' .
     DO .
       lv_monat = lv_monat + 1 .
-      READ TABLE gt_zpra_t_mrec_app_4a TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr
+      READ TABLE gt_zpra_t_mrec_app_4a TRANSPORTING NO FIELDS WITH KEY gjahr = lv_gjahr BINARY SEARCH .
                                                                        monat = lv_monat
                                                                      product = c_prod_gas
                                                                        asset = gs_zdpr_gas_combine-asset BINARY SEARCH .
@@ -10650,14 +9112,6 @@ FORM fetch_data_section4a .
     SORT gt_zpra_t_prd_pi_4a BY asset block vld_frm vld_to .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC5A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM prepare_dynamic_table_sec5a .
   REFRESH gt_dyn_fcat .
 
@@ -10702,14 +9156,6 @@ FORM prepare_dynamic_table_sec5a .
     ASSIGN gt_sec5a_table->* TO <gfs_sec5a_table>.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PREPARE_DYNAMIC_TABLE_SEC6
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM prepare_dynamic_table_sec6 .
   REFRESH gt_dyn_fcat .
 
@@ -10737,14 +9183,6 @@ FORM prepare_dynamic_table_sec6 .
     ASSIGN gt_sec6_table->* TO <gfs_sec6_table>.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC5A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec5a .
   DATA : lv_date         TYPE sy-datum,
          lv_monat_3digit TYPE t009b-poper,
@@ -10858,26 +9296,10 @@ FORM fill_dynamic_table_sec5a .
     ENDLOOP.
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC6
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec6 .
   PERFORM fill_dynamic_table_sec6a .
   PERFORM fill_dynamic_table_sec6b .
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC6a
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec6a .
   DATA lv_qty TYPE char50 .
 
@@ -10956,14 +9378,6 @@ FORM fill_dynamic_table_sec6a .
 
   ENDIF.
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  FILL_DYNAMIC_TABLE_SEC6B
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fill_dynamic_table_sec6b .
   FIELD-SYMBOLS : <lfs_field1> ,
                   <lfs_field2>  .
@@ -11133,14 +9547,6 @@ FORM get_achievement_6c .
     ENDIF.
   ENDDO.
 ENDFORM .
-*&---------------------------------------------------------------------*
-*&      Form  FETCH_DATA_SECTION5A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM fetch_data_section5a .
   DATA : lv_gjahr TYPE zpra_t_mrec_prd-gjahr .
   SELECT *
@@ -11206,14 +9612,6 @@ FORM fetch_data_section5a .
      AND product EQ gt_zpra_c_prd_prof-product .
   SORT gt_zpra_t_tar_cf_5a BY gjahr product asset block .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  PROCESS_GAS_RECORDS_5A
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM process_gas_records_5a .
 
   DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd  .
@@ -11259,14 +9657,6 @@ FORM process_gas_records_5a .
   SORT  gt_zpra_t_dly_prd_5a BY production_date product asset .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  BORDER_CELLS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM border_cells .
 
   gv_s_row  = gv_start_row .
@@ -11287,14 +9677,6 @@ FORM border_cells .
   PERFORM set_all_borders_range .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SET_CELL_FORMATS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM set_cell_formats .
   DATA : lv_number_format TYPE char10,
          lv_row           TYPE sy-tabix,
@@ -11304,7 +9686,7 @@ FORM set_cell_formats .
   PERFORM set_numberformat USING lv_number_format .
   IF p_bmd IS NOT INITIAL.
     lv_number_format = '0.000' .
-    READ TABLE gt_product_col INTO gs_product_col WITH KEY product = c_prod_gas .
+    READ TABLE gt_product_col INTO gs_product_col WITH KEY product = c_prod_gas  BINARY SEARCH .
     IF sy-subrc IS INITIAL.
       PERFORM select_range USING gv_sec1_data_start_row gs_product_col-s_col gv_sec2_end_row gs_product_col-e_col  .
       PERFORM set_numberformat USING lv_number_format .
@@ -11332,16 +9714,6 @@ FORM set_cell_formats .
 *  PERFORM set_range_formatting USING  1 'C' 'C' .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SET_BORDER_RANGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_1      text
-*      -->P_1      text
-*      -->P_1      text
-*      -->P_1      text
-*----------------------------------------------------------------------*
 FORM set_border_range  USING    p_left
                                 p_right
                                 p_top
@@ -11363,16 +9735,6 @@ FORM set_border_range  USING    p_left
     SET PROPERTY OF go_border 'LineStyle' = '1' .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SET_ALL_BORDERS_RANGE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_1      text
-*      -->P_1      text
-*      -->P_1      text
-*      -->P_1      text
-*----------------------------------------------------------------------*
 FORM set_all_borders_range  .
   CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
   SET PROPERTY OF go_border 'LineStyle' = '1'  .
@@ -11393,14 +9755,6 @@ FORM set_all_borders_range  .
   SET PROPERTY OF go_border 'LineStyle' = '1' .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CLEAR_VARIABLES
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM clear_variables .
 
   REFRESH : gt_zpra_t_dly_prd            ,
@@ -11614,13 +9968,6 @@ FORM clear_variables .
 
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  SHOW_PROGRESS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_1004   text
-*----------------------------------------------------------------------*
 FORM show_progress  USING   p_percent .
   DATA lv_text TYPE char50 .
   CONCATENATE p_percent '% Complete' INTO lv_text .
@@ -11630,13 +9977,6 @@ FORM show_progress  USING   p_percent .
       text = lv_text.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_FULL_NUMBER_FORMAT
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_NUMBER_FORMAT  text
-*----------------------------------------------------------------------*
 FORM get_full_number_format  CHANGING p_number_format.
 
   p_number_format = '0.000' .
@@ -11647,13 +9987,6 @@ FORM get_full_number_format  CHANGING p_number_format.
     p_number_format = '0' .
   ENDIF.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  ADD_DUMMY_DATA
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_LT_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM add_dummy_data  TABLES   pt_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd.
 
   DATA : ls_zpra_t_dly_prd TYPE zpra_t_dly_prd .
@@ -11676,14 +10009,6 @@ FORM add_dummy_data  TABLES   pt_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd.
   ENDDO.
   SORT pt_zpra_t_dly_prd BY production_date .
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_ASSET_START_DATE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_LV_INDEX  text
-*      <--P_LV_START_DATE  text
-*----------------------------------------------------------------------*
 FORM get_asset_start_date  USING    p_index
                            CHANGING p_start_date.
   DATA : lt_zpra_t_prd_pi TYPE STANDARD TABLE OF ty_zpra_t_prd_pi .
@@ -11711,14 +10036,6 @@ FORM get_asset_start_date  USING    p_index
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_TARGET_START_DATE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_LV_INDEX  text
-*      <--P_LV_START_DATE  text
-*----------------------------------------------------------------------*
 FORM get_target_start_date  USING    p_index
                                      p_tar_code
                            CHANGING p_start_date.
@@ -11734,7 +10051,7 @@ FORM get_target_start_date  USING    p_index
     IF sy-subrc IS INITIAL.
       IF lv_asset NE 'TOTAL' AND lv_asset NE 'COMBINE' .
 
-        READ TABLE gt_tar_start_dates INTO gs_tar_start_dates WITH KEY asset = lv_asset
+        READ TABLE gt_tar_start_dates INTO gs_tar_start_dates WITH KEY asset = lv_asset BINARY SEARCH .
                                                                     tar_code = p_tar_code BINARY SEARCH.
         IF sy-subrc IS INITIAL.
           p_start_date = gs_tar_start_dates-vld_frm .
@@ -11744,14 +10061,6 @@ FORM get_target_start_date  USING    p_index
   ENDIF.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  FREE_CLIPBOARD
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM free_clipboard .
   REFRESH gt_paste .
   CALL METHOD cl_gui_frontend_services=>clipboard_export
@@ -11765,13 +10074,6 @@ FORM free_clipboard .
       OTHERS       = 4.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  POPULATE_NO_DATA_ENTRIES
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GT_ZPRA_T_DLY_PRD  text
-*----------------------------------------------------------------------*
 FORM populate_no_data_entries  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
 
@@ -11827,14 +10129,6 @@ FORM populate_no_data_entries  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
     ENDDO.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  DISPLAY_RUN_DATE_TIME
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
 FORM display_run_date_time .
   DATA : lv_date_ext TYPE char20,
          lv_time_ext TYPE char8.
@@ -11862,15 +10156,6 @@ FORM display_run_date_time .
   PERFORM set_range_font  USING 9 0 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  REMOVE_EXPIRED_BLOCKS
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GT_ZPRA_C_PRD_PROF  text
-*      -->P_SY_DATUM  text
-*      -->P_SY_DATUM  text
-*----------------------------------------------------------------------*
 FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_prof
                             USING    p_from_date p_to_date.
 
@@ -11893,7 +10178,7 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
   DELETE ADJACENT DUPLICATES FROM gt_prod_start_end_dates COMPARING asset block .
   LOOP AT p_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
     lv_index = sy-tabix .
-    READ TABLE gt_prod_start_end_dates INTO gs_prod_start_end_dates WITH KEY asset = ls_zpra_c_prd_prof-asset
+    READ TABLE gt_prod_start_end_dates INTO gs_prod_start_end_dates WITH KEY asset = ls_zpra_c_prd_prof-asset BINARY SEARCH .
                                                                              block = ls_zpra_c_prd_prof-block BINARY SEARCH .
     IF sy-subrc IS INITIAL.
       IF gs_prod_start_end_dates-prod_start_date IS INITIAL.
@@ -11909,27 +10194,12 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  CONVERT_GAS_RPRD_TO_BOE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      <--P_GS_ZPRA_T_DLY_RPRD  text
-*----------------------------------------------------------------------*
 FORM convert_gas_rprd_to_boe  CHANGING p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
 
   p_zpra_t_dly_rprd-jv_rcn_vl_qty3   = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
   p_zpra_t_dly_rprd-ovl_rcn_vl_qty3  = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  GET_CF_FROM_DATE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_P_ZPRA_T_DLY_PRD_PRODUCTION_DA  text
-*      <--P_LV_CF  text
-*----------------------------------------------------------------------*
 FORM get_cf_from_date  USING    p_rec_date
                                 p_product
                                 p_asset
@@ -11953,7 +10223,7 @@ FORM get_cf_from_date  USING    p_rec_date
       t009b_notfound = 03.
 
   IF sy-subrc IS INITIAL.
-    READ TABLE gt_cf INTO gs_cf WITH KEY gjahr = lv_gjahr
+    READ TABLE gt_cf INTO gs_cf WITH KEY gjahr = lv_gjahr BINARY SEARCH .
                                        product = p_product
                                          asset = p_asset
                                          block = p_block BINARY SEARCH .
@@ -12048,15 +10318,6 @@ FORM convert_non_gas_units_5a  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   ENDCASE.
 
 ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  POPULATE_NO_DATA_ENTRIES_3F
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_GT_ZPRA_T_DLY_PRD_3F  text
-*      -->P_R_PRODUCTION_DATE_LOW  text
-*      -->P_R_PRODUCTION_DATE_HIGH  text
-*----------------------------------------------------------------------*
 FORM POPULATE_NO_DATA_ENTRIES_3F  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
 
@@ -12076,7 +10337,7 @@ FORM POPULATE_NO_DATA_ENTRIES_3F  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_p
 
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
     clear GS_ZPRA_T_PRD_PI.
-    READ TABLE GT_ZPRA_T_PRD_PI_3F INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = ls_zpra_c_prd_prof-asset
+    READ TABLE GT_ZPRA_T_PRD_PI_3F INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = ls_zpra_c_prd_prof-asset BINARY SEARCH .
                                                                 block = ls_zpra_c_prd_prof-block .
     IF SY-SUBRC = 0.
      IF GS_ZPRA_T_PRD_PI-PROD_START_DATE gt p_from_date .
@@ -12121,4 +10382,49 @@ FORM POPULATE_NO_DATA_ENTRIES_3F  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_p
     ENDDO.
   ENDLOOP.
 
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  PREPARE_PASTE_DATA
+*& Generic clipboard paste preparation - works with any dynamic table
+*&---------------------------------------------------------------------*
+FORM prepare_paste_data TABLES p_table.
+  FIELD-SYMBOLS: <fs_line> TYPE ANY,
+                 <fs_fld>  TYPE ANY.
+  DATA lv_index TYPE sy-tabix.
+  CLEAR gs_paste.
+  REFRESH gt_paste.
+  LOOP AT p_table ASSIGNING <fs_line>.
+    CLEAR gs_paste.
+    DO.
+      lv_index = sy-index.
+      ASSIGN COMPONENT lv_index OF STRUCTURE <fs_line> TO <fs_fld>.
+      IF sy-subrc IS INITIAL.
+        IF lv_index NE 1.
+          CONCATENATE gs_paste cl_abap_char_utilities=>horizontal_tab INTO gs_paste.
+        ENDIF.
+        CONCATENATE gs_paste <fs_fld> INTO gs_paste.
+      ELSE.
+        EXIT.
+      ENDIF.
+    ENDDO.
+    APPEND gs_paste TO gt_paste.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  CREATE_DYNAMIC_TABLE
+*& Creates a dynamic table from gt_dyn_fcat into the given reference
+*&---------------------------------------------------------------------*
+FORM create_dynamic_table CHANGING p_table TYPE REF TO data.
+  CALL METHOD cl_alv_table_create=>create_dynamic_table
+    EXPORTING
+      it_fieldcatalog           = gt_dyn_fcat
+    IMPORTING
+      ep_table                  = p_table
+    EXCEPTIONS
+      generate_subpool_dir_full = 1
+      OTHERS                    = 2.
+  IF sy-subrc NE 0.
+    MESSAGE 'Unexpected Internal Error' TYPE 'E'.
+  ENDIF.
 ENDFORM.
