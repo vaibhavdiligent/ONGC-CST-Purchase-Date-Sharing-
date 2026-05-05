@@ -8632,7 +8632,7 @@ FORM fetch_data_section3f .
      AND asset EQ gt_zpra_c_prd_prof-asset
      AND block EQ gt_zpra_c_prd_prof-block
      AND product EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type IN r_prd_vl_type[] .
+     AND prd_vl_type EQ 'NET_PROD' .
 
   SORT gt_zpra_t_mrec_app_3f BY gjahr monat asset block product .
 
