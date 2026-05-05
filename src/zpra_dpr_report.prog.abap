@@ -7767,12 +7767,11 @@ FORM fill_dynamic_table_sec3f .
       DO .
         lv_monat = lv_monat + 1 .
         CLEAR lv_combine_field .
-        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr       = lv_gjahr
-                                                                          monat       = lv_monat
-                                                                          product     = gs_zpra_c_prd_prof-product
-                                                                          asset       = gs_zpra_c_prd_prof-asset
-                                                                          block       = gs_zpra_c_prd_prof-block
-                                                                          prd_vl_type = 'NET_PROD' BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
+                                                                          monat   = lv_monat
+                                                                          asset   = gs_zpra_c_prd_prof-asset
+                                                                          block   = gs_zpra_c_prd_prof-block
+                                                                          product = gs_zpra_c_prd_prof-product BINARY SEARCH .
         IF sy-subrc IS INITIAL. "if found in MREC APP
           gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * 1000000 .
           IF gs_zpra_t_mrec_app-product = c_prod_gas.
@@ -8635,7 +8634,7 @@ FORM fetch_data_section3f .
      AND product EQ gt_zpra_c_prd_prof-product
      AND prd_vl_type IN r_prd_vl_type[] .
 
-  SORT gt_zpra_t_mrec_app_3f BY gjahr monat product asset block  prd_vl_type .
+  SORT gt_zpra_t_mrec_app_3f BY gjahr monat asset block product .
 
     CONCATENATE gv_5_back_gjahr '0401' INTO lv_date  .
     CONCATENATE gv_current_gjahr   '0331' INTO lv_date2 .
