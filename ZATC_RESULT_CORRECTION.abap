@@ -588,10 +588,19 @@ START-OF-SELECTION.
                             CONCATENATE '"#EC CI_DB_OPERATION_OK[' wa_final-note ']'
                               INTO l_note.
                             DESCRIBE TABLE it_query LINES DATA(l_q_lines).
+                            DATA l_starred_q TYPE flag.
+                            CLEAR l_starred_q.
                             LOOP AT it_query INTO wa_query.
                               IF sy-tabix = l_q_lines.
-                                CONCATENATE wa_query-str l_note
-                                  INTO wa_blank-line SEPARATED BY space.
+                                DATA(l_last_qs) = wa_query-str.
+                                CONDENSE l_last_qs.
+                                IF strlen( l_last_qs ) > 0 AND l_last_qs(1) = '*'.
+                                  l_starred_q = abap_true.
+                                  wa_blank-line = wa_query-str.
+                                ELSE.
+                                  CONCATENATE wa_query-str l_note
+                                    INTO wa_blank-line SEPARATED BY space.
+                                ENDIF.
                               ELSE.
                                 wa_blank-line = wa_query-str.
                               ENDIF.
@@ -602,6 +611,15 @@ START-OF-SELECTION.
                               INTO wa_blank-line SEPARATED BY space.
                             APPEND wa_blank TO repos_tab_new.
                             CLEAR wa_blank.
+                            IF l_starred_q = abap_true AND l_tab IS NOT INITIAL.
+                              READ TABLE repos_tab INTO DATA(wa_repos_next) INDEX l_tab.
+                              IF sy-subrc = 0.
+                                CONCATENATE wa_repos_next-line l_note INTO wa_blank-line SEPARATED BY space.
+                                APPEND wa_blank TO repos_tab_new.
+                                CLEAR wa_blank.
+                                l_tab = l_tab + 1.
+                              ENDIF.
+                            ENDIF.
                           ELSE.
                             CLEAR wa_blank.
                             CONCATENATE '"' '"' p_rem p_begin sy-uname l_datum ' for ATC '
