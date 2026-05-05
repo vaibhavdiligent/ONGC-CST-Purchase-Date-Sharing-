@@ -3,6 +3,10 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
+*& VERSION : 1.3  |  Git: 5db3f3b  |  Date: 05-MAY-2026
+*& Changes : Fix sec3f Sakhalin-1 historical oil CF (use zpra_t_tar_cf
+*&           latest year, skip MREC_PRD ratio) and restore gas PI for
+*&           dly_prd path (gas stores JV; PI applied to get OVL share).
 *&---------------------------------------------------------------------*
 REPORT ZPRA_DPR_REPORT.
 
