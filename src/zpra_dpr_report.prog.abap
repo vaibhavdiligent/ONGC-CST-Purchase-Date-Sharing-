@@ -8677,7 +8677,6 @@ FORM fetch_data_section3f .
      INTO TABLE gt_zpra_t_prd_pi_3f
       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
     WHERE asset EQ gt_zpra_c_prd_prof-asset
-      AND block EQ gt_zpra_c_prd_prof-block
       AND vld_frm LE lv_date2
       AND vld_to  GE lv_date .
 
