@@ -676,7 +676,8 @@ START-OF-SELECTION.
                   OR 'MOVE -> GENERIC' OR 'REPLACE ISSUE' OR 'OFFSET/LENGTH-ACCESS'
                   OR 'OLD MOVE LENGTH CONFLICT' OR 'GENERIC SOURCE CODE ISSUE'
                   OR 'MESSAGE-WITH LENGTH CONFLICT' OR 'STRUCTURE-COMPONENT LENGTH CONFLICT'
-                  OR 'EXPORT ISSUE' OR 'GET PARAMETER ISSUE' OR 'ASSIGN COMPONENT'.
+                  OR 'EXPORT ISSUE' OR 'GET PARAMETER ISSUE' OR 'ASSIGN COMPONENT'
+                  OR 'OBJECT EXPORTED'.
                   IF ( wa_final-check_message = 'OFFSET/LENGTH-ACCESS' OR
                        wa_final-check_message = 'OLD MOVE LENGTH CONFLICT' ).
                     IF wa_final-priority > 1.
