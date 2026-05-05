@@ -7789,7 +7789,8 @@ FORM fill_dynamic_table_sec3f .
           ENDIF.
           ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
           IF <gfs_field> IS ASSIGNED.
-            <gfs_field> = <gfs_field> + gs_zpra_t_mrec_app-app_vl_qty .
+*           DEBUG: hardcoded marker for MREC_APP Individual path (5,555,555 MT = 5.555 MMT)
+            <gfs_field> = <gfs_field> + 5555555 .
             UNASSIGN <gfs_field> .
           ENDIF.
 *     Product Total..
@@ -7854,7 +7855,8 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
+*               DEBUG: hardcoded marker for dly_rprd Individual path (7,777,777 MT = 7.777 MMT)
+                <gfs_field> = <gfs_field> + 7777777 .
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
@@ -7910,7 +7912,8 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_prd-prod_vl_qty1.
+*               DEBUG: hardcoded marker for dly_prd Individual path (8,888,888 MT = 8.888 MMT)
+                <gfs_field> = <gfs_field> + 8888888 .
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
