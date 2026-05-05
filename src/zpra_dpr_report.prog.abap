@@ -3,7 +3,7 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.3  |  Git: 5db3f3b  |  Date: 05-MAY-2026
+*& VERSION : 1.4  |  Git: DEBUG    |  Date: 05-MAY-2026
 *& Changes : Fix sec3f Sakhalin-1 historical oil CF (use zpra_t_tar_cf
 *&           latest year, skip MREC_PRD ratio) and restore gas PI for
 *&           dly_prd path (gas stores JV; PI applied to get OVL share).
@@ -3902,22 +3902,29 @@ FORM convert_non_gas_units3f  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t
 
   CHECK p_zpra_t_dly_prd-product NE c_prod_gas.
 
-  " Try exact fiscal-year match from the dedicated CF table (zpra_t_tar_cf).
-  PERFORM get_cf_from_date USING  p_zpra_t_dly_prd-production_date
-                                  p_zpra_t_dly_prd-product
-                                  p_zpra_t_dly_prd-asset
-                                  p_zpra_t_dly_prd-block
-                         CHANGING lv_cf.
+  " DEBUG: hardcode CF=7.39 for RUS_SK1 to confirm this form is reached.
+  " If Sakhalin-1 oil 2020-21 changes from 12.238 -> ~2.45, CF lookup is
+  " the issue. If value stays 12.238, the data is coming via MREC_APP path.
+  IF p_zpra_t_dly_prd-asset EQ 'RUS_SK1'.
+    lv_cf = '7.39'.
+  ELSE.
+    " Try exact fiscal-year match from the dedicated CF table (zpra_t_tar_cf).
+    PERFORM get_cf_from_date USING  p_zpra_t_dly_prd-production_date
+                                    p_zpra_t_dly_prd-product
+                                    p_zpra_t_dly_prd-asset
+                                    p_zpra_t_dly_prd-block
+                           CHANGING lv_cf.
 
-  " No exact-year CF found — use the most-recent available entry for this
-  " product/asset/block (gt_cf is sorted gjahr ASC, so last iteration wins).
-  IF lv_cf IS INITIAL .
-    LOOP AT gt_cf INTO gs_cf WHERE product EQ p_zpra_t_dly_prd-product
-                               AND asset   EQ p_zpra_t_dly_prd-asset
-                               AND block   EQ p_zpra_t_dly_prd-block .
-      lv_cf = gs_cf-conv_factor .
-    ENDLOOP .
-  ENDIF .
+    " No exact-year CF found: use the most-recent entry for this
+    " product/asset/block (gt_cf sorted gjahr ASC, last iteration wins).
+    IF lv_cf IS INITIAL .
+      LOOP AT gt_cf INTO gs_cf WHERE product EQ p_zpra_t_dly_prd-product
+                                 AND asset   EQ p_zpra_t_dly_prd-asset
+                                 AND block   EQ p_zpra_t_dly_prd-block .
+        lv_cf = gs_cf-conv_factor .
+      ENDLOOP .
+    ENDIF .
+  ENDIF.
 
   IF lv_cf IS NOT INITIAL.
     p_zpra_t_dly_prd-prod_vl_qty1 = p_zpra_t_dly_prd-prod_vl_qty1 / lv_cf .
