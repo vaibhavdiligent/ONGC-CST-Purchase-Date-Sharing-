@@ -7775,19 +7775,6 @@ FORM fill_dynamic_table_sec3f .
                                                                           prd_vl_type = 'NET_PROD' BINARY SEARCH .
         IF sy-subrc IS INITIAL. "if found in MREC APP
           gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * 1000000 .
-*     Apply Participation Interest to convert JV 100% NET_PROD to OVL share
-          DATA: lv_pi_date TYPE sy-datum .
-          CONCATENATE lv_gjahr lv_monat '01' INTO lv_pi_date .
-          CLEAR gs_zpra_t_prd_pi .
-          LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi WHERE asset   EQ gs_zpra_t_mrec_app-asset
-                                                              AND block   EQ gs_zpra_t_mrec_app-block
-                                                              AND vld_frm LE lv_pi_date
-                                                              AND vld_to  GE lv_pi_date.
-            EXIT.
-          ENDLOOP.
-          IF gs_zpra_t_prd_pi-pi IS NOT INITIAL.
-            gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * gs_zpra_t_prd_pi-pi / 100 .
-          ENDIF.
           IF gs_zpra_t_mrec_app-product = c_prod_gas.
             READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_mrec_app-asset BINARY SEARCH .
             IF  sy-subrc IS INITIAL.
