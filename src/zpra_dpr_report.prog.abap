@@ -3897,61 +3897,26 @@ FORM convert_non_gas_units3f  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t
   DATA : lv_cf TYPE zpra_t_tar_cf-conv_factor .
 
   CHECK p_zpra_t_dly_prd-product NE c_prod_gas.
-  CLEAR gs_zpra_t_mrec_prd .
 
-  DATA : lv_buper TYPE t009b-poper,
-         lv_monat TYPE zpra_t_mrec_prd-monat,
-         lv_gjahr TYPE t009b-bdatj.
+  " Try exact fiscal-year match from the dedicated CF table (zpra_t_tar_cf).
+  PERFORM get_cf_from_date USING  p_zpra_t_dly_prd-production_date
+                                  p_zpra_t_dly_prd-product
+                                  p_zpra_t_dly_prd-asset
+                                  p_zpra_t_dly_prd-block
+                         CHANGING lv_cf.
 
-  CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
-    EXPORTING
-      i_date         = p_zpra_t_dly_prd-production_date
-    " I_MONMIT       = 00
-      i_periv        = gv_periv
-    IMPORTING
-      e_buper        = lv_buper
-      e_gjahr        = lv_gjahr
-    EXCEPTIONS
-      input_false    = 01
-      t009_notfound  = 02
-      t009b_notfound = 03.
-  lv_monat = lv_buper+1(2) .
+  " No exact-year CF found — use the most-recent available entry for this
+  " product/asset/block (gt_cf is sorted gjahr ASC, so last iteration wins).
+  IF lv_cf IS INITIAL .
+    LOOP AT gt_cf INTO gs_cf WHERE product EQ p_zpra_t_dly_prd-product
+                               AND asset   EQ p_zpra_t_dly_prd-asset
+                               AND block   EQ p_zpra_t_dly_prd-block .
+      lv_cf = gs_cf-conv_factor .
+    ENDLOOP .
+  ENDIF .
 
-  LOOP AT gt_zpra_t_mrec_prd_3f INTO gs_zpra_t_mrec_prd WHERE product = p_zpra_t_dly_prd-product
-                                                             AND       asset   = p_zpra_t_dly_prd-asset
-                                                             AND       block   = p_zpra_t_dly_prd-block
-                                                             AND   prd_vl_type = p_zpra_t_dly_prd-prd_vl_type . " No binary search
-    IF gs_zpra_t_mrec_prd-gjahr GT lv_gjahr.
-      CLEAR gs_zpra_t_mrec_prd .
-      CONTINUE .
-    ENDIF.
-    IF gs_zpra_t_mrec_prd-gjahr EQ lv_gjahr AND
-       gs_zpra_t_mrec_prd-monat GT lv_monat .
-      CLEAR gs_zpra_t_mrec_prd .
-      CONTINUE .
-    ENDIF.
-    EXIT .
-  ENDLOOP .
-  IF gs_zpra_t_mrec_prd-prod_vl_qty2 IS NOT INITIAL.
-    lv_cf = gs_zpra_t_mrec_prd-prod_vl_qty1 /  gs_zpra_t_mrec_prd-prod_vl_qty2 .
-  ELSE.
-    PERFORM get_cf_from_date USING  p_zpra_t_dly_prd-production_date
-                                    p_zpra_t_dly_prd-product
-                                    p_zpra_t_dly_prd-asset
-                                    p_zpra_t_dly_prd-block
-                           CHANGING lv_cf.
-    IF lv_cf IS INITIAL .
-      LOOP AT gt_cf INTO gs_cf WHERE product EQ p_zpra_t_dly_prd-product
-                                 AND asset   EQ p_zpra_t_dly_prd-asset
-                                 AND block   EQ p_zpra_t_dly_prd-block .
-        lv_cf = gs_cf-conv_factor .
-        EXIT .
-      ENDLOOP .
-    ENDIF .
-  ENDIF.
   IF lv_cf IS NOT INITIAL.
     p_zpra_t_dly_prd-prod_vl_qty1 = p_zpra_t_dly_prd-prod_vl_qty1 / lv_cf .
-*      p_zpra_t_dly_prd-prod_vl_qty1 = p_zpra_t_dly_prd-prod_vl_qty1 / 1000000 .
   ENDIF.
 ENDFORM.
 FORM convert_non_gas_mrec_units  USING p_days CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
