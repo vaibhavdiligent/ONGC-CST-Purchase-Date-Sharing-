@@ -3,10 +3,11 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.4  |  Git: DEBUG    |  Date: 05-MAY-2026
-*& Changes : Fix sec3f Sakhalin-1 historical oil CF (use zpra_t_tar_cf
-*&           latest year, skip MREC_PRD ratio) and restore gas PI for
-*&           dly_prd path (gas stores JV; PI applied to get OVL share).
+*& VERSION : 1.6  |  Git: dly_rprd-PI-CS |  Date: 05-MAY-2026
+*& Changes : Fix sec3f Sakhalin-1 historical oil — apply PI in dly_rprd
+*&           path (ovl_prd_vl_qty1 stores JV for SK1 historical years).
+*&           Broaden asset match to CS 'SK' in case code differs from RUS_SK1.
+*&           Also: gas PI in dly_prd, CF lookup from zpra_t_tar_cf.
 *&---------------------------------------------------------------------*
 REPORT ZPRA_DPR_REPORT.
 
@@ -3905,7 +3906,9 @@ FORM convert_non_gas_units3f  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t
   " DEBUG: hardcode CF=7.39 for RUS_SK1 to confirm this form is reached.
   " If Sakhalin-1 oil 2020-21 changes from 12.238 -> ~2.45, CF lookup is
   " the issue. If value stays 12.238, the data is coming via MREC_APP path.
-  IF p_zpra_t_dly_prd-asset EQ 'RUS_SK1'.
+  IF p_zpra_t_dly_prd-asset EQ 'RUS_SK1' OR
+     p_zpra_t_dly_prd-asset CS 'SK' OR
+     p_zpra_t_dly_prd-asset CS 'SAKH'.
     lv_cf = '7.39'.
   ELSE.
     " Try exact fiscal-year match from the dedicated CF table (zpra_t_tar_cf).
@@ -7823,6 +7826,31 @@ FORM fill_dynamic_table_sec3f .
 
               PERFORM convert_rprd_units_mb USING gs_zpra_t_dly_rprd .
 
+              " For Sakhalin-1 oil, dly_rprd ovl_prd_vl_qty1 actually stores
+              " JV production (data inconsistency). Apply PI to get OVL share.
+              IF ( gs_zpra_t_dly_rprd-asset EQ 'RUS_SK1' OR
+                   gs_zpra_t_dly_rprd-asset CS 'SK' OR
+                   gs_zpra_t_dly_rprd-asset CS 'SAKH' ) AND
+                 gs_zpra_t_dly_rprd-product NE c_prod_gas .
+                CLEAR gs_zpra_t_prd_pi .
+                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                  WHERE asset   EQ gs_zpra_t_dly_rprd-asset
+                    AND block   EQ gs_zpra_t_dly_rprd-block
+                    AND vld_frm LE gs_zpra_t_dly_rprd-production_date
+                    AND vld_to  GE gs_zpra_t_dly_rprd-production_date .
+                  EXIT .
+                ENDLOOP .
+                IF sy-subrc IS NOT INITIAL .
+                  LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                    WHERE asset EQ gs_zpra_t_dly_rprd-asset .
+                    EXIT .
+                  ENDLOOP .
+                ENDIF .
+                IF gs_zpra_t_prd_pi-pi IS NOT INITIAL .
+                  gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 = gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * gs_zpra_t_prd_pi-pi / 100 .
+                ENDIF .
+              ENDIF .
+
               IF gs_zpra_t_dly_rprd-product = c_prod_gas .
                 READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_dly_rprd-asset BINARY SEARCH .
                 IF  sy-subrc IS INITIAL.
@@ -7869,8 +7897,11 @@ FORM fill_dynamic_table_sec3f .
               PERFORM convert_non_gas_units3f USING lv_days CHANGING gs_zpra_t_dly_prd .
 
               " Gas in zpra_t_dly_prd stores JV production; oil already stores OVL share.
-              " Apply PI to gas only to convert from JV to OVL.
-              IF gs_zpra_t_dly_prd-product EQ c_prod_gas.
+              " Apply PI to gas; also apply PI to SK non-gas (data inconsistency: SK
+              " historical oil in dly_prd also stores JV after CF conversion).
+              IF gs_zpra_t_dly_prd-product EQ c_prod_gas OR
+                 gs_zpra_t_dly_prd-asset CS 'SK' OR
+                 gs_zpra_t_dly_prd-asset CS 'SAKH'.
                 CLEAR gs_zpra_t_prd_pi .
                 LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
                   WHERE asset   EQ gs_zpra_t_dly_prd-asset
