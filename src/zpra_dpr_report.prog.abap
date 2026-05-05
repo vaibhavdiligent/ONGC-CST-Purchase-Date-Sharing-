@@ -3,10 +3,10 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.4  |  Git: DEBUG    |  Date: 05-MAY-2026
-*& Changes : Fix sec3f Sakhalin-1 historical oil CF (use zpra_t_tar_cf
-*&           latest year, skip MREC_PRD ratio) and restore gas PI for
-*&           dly_prd path (gas stores JV; PI applied to get OVL share).
+*& VERSION : 1.5  |  Git: dly_rprd-PI |  Date: 05-MAY-2026
+*& Changes : Fix sec3f Sakhalin-1 historical oil — apply PI in dly_rprd
+*&           path (ovl_prd_vl_qty1 stores JV for SK1 historical years).
+*&           Also: gas PI in dly_prd, CF lookup from zpra_t_tar_cf.
 *&---------------------------------------------------------------------*
 REPORT ZPRA_DPR_REPORT.
 
@@ -7822,6 +7822,29 @@ FORM fill_dynamic_table_sec3f .
               CLEAR lv_combine_field .
 
               PERFORM convert_rprd_units_mb USING gs_zpra_t_dly_rprd .
+
+              " For Sakhalin-1 oil, dly_rprd ovl_prd_vl_qty1 actually stores
+              " JV production (data inconsistency). Apply PI to get OVL share.
+              IF gs_zpra_t_dly_rprd-asset EQ 'RUS_SK1' AND
+                 gs_zpra_t_dly_rprd-product NE c_prod_gas .
+                CLEAR gs_zpra_t_prd_pi .
+                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                  WHERE asset   EQ gs_zpra_t_dly_rprd-asset
+                    AND block   EQ gs_zpra_t_dly_rprd-block
+                    AND vld_frm LE gs_zpra_t_dly_rprd-production_date
+                    AND vld_to  GE gs_zpra_t_dly_rprd-production_date .
+                  EXIT .
+                ENDLOOP .
+                IF sy-subrc IS NOT INITIAL .
+                  LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                    WHERE asset EQ gs_zpra_t_dly_rprd-asset .
+                    EXIT .
+                  ENDLOOP .
+                ENDIF .
+                IF gs_zpra_t_prd_pi-pi IS NOT INITIAL .
+                  gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 = gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * gs_zpra_t_prd_pi-pi / 100 .
+                ENDIF .
+              ENDIF .
 
               IF gs_zpra_t_dly_rprd-product = c_prod_gas .
                 READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_dly_rprd-asset BINARY SEARCH .
