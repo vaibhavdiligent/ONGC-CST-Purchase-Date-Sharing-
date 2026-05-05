@@ -447,6 +447,7 @@ START-OF-SELECTION.
           CLEAR l_table.
           CLEAR l_where.
           CLEAR l_v.
+          CLEAR l_new.
           TRANSLATE wa_final-check_message TO UPPER CASE.
           TRANSLATE wa_final-check_title TO UPPER CASE.
           TRANSLATE wa_final-message1 TO UPPER CASE.
