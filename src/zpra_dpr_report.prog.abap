@@ -7845,6 +7845,9 @@ FORM fill_dynamic_table_sec3f .
                   lv_combine_field = 'X' .
                 ENDIF.
               ENDIF.
+              PERFORM get_constorium_multipliers_2a2 USING '8'.
+              gv_individual_mul  = gv_total_mul . "section 3 is always OVL Level
+              gv_grand_total_mul = gv_total_mul . "section 3 is always OVL Level
 *           Individual Column..
               gv_len = strlen( gs_zpra_t_dly_rprd-product ) .
               IF lv_combine_field IS INITIAL.
@@ -7854,21 +7857,21 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
+                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * gv_individual_mul.
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
               CONCATENATE gs_zpra_t_dly_rprd-product(gv_len) '-' 'TOTAL'                   INTO lv_col_name .
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
+                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * gv_total_mul.
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Grand Total
               CONCATENATE 'GRAND' '-' 'TOTAL'                                              INTO lv_col_name .
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
+                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * gv_grand_total_mul.
                 UNASSIGN <gfs_field> .
               ENDIF.
             ENDLOOP.
