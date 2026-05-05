@@ -3940,6 +3940,14 @@ FORM convert_non_gas_units3f  USING p_days CHANGING p_zpra_t_dly_prd TYPE zpra_t
                                     p_zpra_t_dly_prd-asset
                                     p_zpra_t_dly_prd-block
                            CHANGING lv_cf.
+    IF lv_cf IS INITIAL .
+      LOOP AT gt_cf INTO gs_cf WHERE product EQ p_zpra_t_dly_prd-product
+                                 AND asset   EQ p_zpra_t_dly_prd-asset
+                                 AND block   EQ p_zpra_t_dly_prd-block .
+        lv_cf = gs_cf-conv_factor .
+        EXIT .
+      ENDLOOP .
+    ENDIF .
   ENDIF.
   IF lv_cf IS NOT INITIAL.
     p_zpra_t_dly_prd-prod_vl_qty1 = p_zpra_t_dly_prd-prod_vl_qty1 / lv_cf .
@@ -7890,39 +7898,6 @@ FORM fill_dynamic_table_sec3f .
                   lv_combine_field = 'X' .
                 ENDIF.
               ENDIF.
-*           Apply OVL PI to prod_vl_qty1: look up by asset+block with date filter,
-*           fall back to asset-only lookup if block name doesn't match PI table.
-              CLEAR gs_zpra_t_prd_pi .
-              LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
-                WHERE asset   EQ gs_zpra_t_dly_prd-asset
-                  AND block   EQ gs_zpra_t_dly_prd-block
-                  AND vld_frm LE gs_zpra_t_dly_prd-production_date
-                  AND vld_to  GE gs_zpra_t_dly_prd-production_date .
-                EXIT .
-              ENDLOOP .
-              IF sy-subrc IS NOT INITIAL .
-                READ TABLE gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
-                  WITH KEY asset = gs_zpra_t_dly_prd-asset
-                           block = gs_zpra_t_dly_prd-block .
-              ENDIF .
-              IF sy-subrc IS NOT INITIAL .
-                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
-                  WHERE asset   EQ gs_zpra_t_dly_prd-asset
-                    AND vld_frm LE gs_zpra_t_dly_prd-production_date
-                    AND vld_to  GE gs_zpra_t_dly_prd-production_date .
-                  EXIT .
-                ENDLOOP .
-              ENDIF .
-              IF sy-subrc IS NOT INITIAL .
-                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
-                  WHERE asset EQ gs_zpra_t_dly_prd-asset .
-                  EXIT .
-                ENDLOOP .
-              ENDIF .
-              IF gs_zpra_t_prd_pi-pi IS NOT INITIAL .
-                gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1
-                                                * gs_zpra_t_prd_pi-pi / 100 .
-              ENDIF .
 *           Individual Column..
               gv_len = strlen( gs_zpra_t_dly_prd-product ) .
               IF lv_combine_field IS INITIAL.
