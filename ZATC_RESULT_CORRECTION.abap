@@ -607,10 +607,6 @@ START-OF-SELECTION.
                               APPEND wa_blank TO repos_tab_new.
                               CLEAR wa_blank.
                             ENDLOOP.
-                            CONCATENATE '"' '"' p_rem p_end sy-uname l_datum 'for ATC'
-                              INTO wa_blank-line SEPARATED BY space.
-                            APPEND wa_blank TO repos_tab_new.
-                            CLEAR wa_blank.
                             IF l_starred_q = abap_true AND l_tab IS NOT INITIAL.
                               READ TABLE repos_tab INTO DATA(wa_repos_next) INDEX l_tab.
                               IF sy-subrc = 0.
@@ -620,6 +616,10 @@ START-OF-SELECTION.
                                 l_tab = l_tab + 1.
                               ENDIF.
                             ENDIF.
+                            CONCATENATE '"' '"' p_rem p_end sy-uname l_datum 'for ATC'
+                              INTO wa_blank-line SEPARATED BY space.
+                            APPEND wa_blank TO repos_tab_new.
+                            CLEAR wa_blank.
                           ELSE.
                             CLEAR wa_blank.
                             CONCATENATE '"' '"' p_rem p_begin sy-uname l_datum ' for ATC '
