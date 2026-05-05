@@ -7890,8 +7890,8 @@ FORM fill_dynamic_table_sec3f .
                   lv_combine_field = 'X' .
                 ENDIF.
               ENDIF.
-*           Apply OVL PI to prod_vl_qty1: try date-filtered lookup first,
-*           fall back to asset+block only if no dated record found.
+*           Apply OVL PI to prod_vl_qty1: look up by asset+block with date filter,
+*           fall back to asset-only lookup if block name doesn't match PI table.
               CLEAR gs_zpra_t_prd_pi .
               LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
                 WHERE asset   EQ gs_zpra_t_dly_prd-asset
@@ -7904,6 +7904,20 @@ FORM fill_dynamic_table_sec3f .
                 READ TABLE gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
                   WITH KEY asset = gs_zpra_t_dly_prd-asset
                            block = gs_zpra_t_dly_prd-block .
+              ENDIF .
+              IF sy-subrc IS NOT INITIAL .
+                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                  WHERE asset   EQ gs_zpra_t_dly_prd-asset
+                    AND vld_frm LE gs_zpra_t_dly_prd-production_date
+                    AND vld_to  GE gs_zpra_t_dly_prd-production_date .
+                  EXIT .
+                ENDLOOP .
+              ENDIF .
+              IF sy-subrc IS NOT INITIAL .
+                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                  WHERE asset EQ gs_zpra_t_dly_prd-asset .
+                  EXIT .
+                ENDLOOP .
               ENDIF .
               IF gs_zpra_t_prd_pi-pi IS NOT INITIAL .
                 gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1
