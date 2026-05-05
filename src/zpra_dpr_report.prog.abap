@@ -7941,22 +7941,6 @@ FORM fill_dynamic_table_sec3f .
     lv_gjahr = lv_gjahr + 1 .
   ENDDO .
 
-* DEBUG: FORM-ENTERED marker - override ALL numeric cells to 4444444 MT (= 4.444 MMT)
-* If we see 4.444 MMT in the output, this proves fill_dynamic_table_sec3f was executed.
-* If we still see 16.151 etc, the SAP system is running an OLD compiled version.
-  LOOP AT <gfs_sec3f_table> ASSIGNING <gfs_dyn_line> .
-    DO .
-      lv_index = sy-index .
-      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF sy-subrc IS NOT INITIAL.
-        EXIT .
-      ENDIF.
-      IF lv_index GT 2.
-        <gfs_field> = 4444444 .
-      ENDIF.
-    ENDDO.
-  ENDLOOP.
-
   LOOP AT <gfs_sec3f_table> ASSIGNING <gfs_dyn_line> .
     DO .
       lv_index = sy-index .
