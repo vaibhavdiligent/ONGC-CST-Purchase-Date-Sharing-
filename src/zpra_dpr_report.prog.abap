@@ -7854,7 +7854,7 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-jv_prd_vl_qty1.
+                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
@@ -8631,8 +8631,7 @@ FORM fetch_data_section3f .
      AND gjahr LE gv_last_gjahr
      AND asset EQ gt_zpra_c_prd_prof-asset
      AND block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type EQ 'NET_PROD' .
+     AND product EQ gt_zpra_c_prd_prof-product .
 
   SORT gt_zpra_t_mrec_app_3f BY gjahr monat asset block product .
 
