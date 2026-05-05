@@ -7767,11 +7767,12 @@ FORM fill_dynamic_table_sec3f .
       DO .
         lv_monat = lv_monat + 1 .
         CLEAR lv_combine_field .
-        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr   = lv_gjahr
-                                                                          monat   = lv_monat
-                                                                          product = gs_zpra_c_prd_prof-product
-                                                                          asset   = gs_zpra_c_prd_prof-asset
-                                                                          block   = gs_zpra_c_prd_prof-block BINARY SEARCH .
+        READ TABLE gt_zpra_t_mrec_app_3f INTO gs_zpra_t_mrec_app WITH KEY gjahr       = lv_gjahr
+                                                                          monat       = lv_monat
+                                                                          product     = gs_zpra_c_prd_prof-product
+                                                                          asset       = gs_zpra_c_prd_prof-asset
+                                                                          block       = gs_zpra_c_prd_prof-block
+                                                                          prd_vl_type = 'NET_PROD' BINARY SEARCH .
         IF sy-subrc IS INITIAL. "if found in MREC APP
           gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * 1000000 .
           IF gs_zpra_t_mrec_app-product = c_prod_gas.
@@ -9085,15 +9086,13 @@ FORM fill_dynamic_table_sec5a .
     IF <gfs_field> IS ASSIGNED.
       LOOP AT gt_zpra_t_dly_prd_5a INTO gs_zpra_t_dly_prd WHERE production_date EQ lv_date.
         PERFORM convert_non_gas_units_5a CHANGING gs_zpra_t_dly_prd.
-        IF p_c_jv IS INITIAL.
-          LOOP AT gt_zpra_t_prd_pi_5a INTO gs_zpra_t_prd_pi WHERE asset EQ gs_zpra_t_dly_prd-asset
-                                                              AND block EQ gs_zpra_t_dly_prd-block
-                                                              AND vld_frm LE lv_date
-                                                              AND vld_to  GE lv_date.
-            EXIT .
-          ENDLOOP.
-          gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1 * gs_zpra_t_prd_pi-pi / 100 .
-        ENDIF.
+        LOOP AT gt_zpra_t_prd_pi_5a INTO gs_zpra_t_prd_pi WHERE asset EQ gs_zpra_t_dly_prd-asset
+                                                            AND block EQ gs_zpra_t_dly_prd-block
+                                                            AND vld_frm LE lv_date
+                                                            AND vld_to  GE lv_date.
+          EXIT .
+        ENDLOOP.
+        gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1 * gs_zpra_t_prd_pi-pi / 100 .
         <gfs_field> = <gfs_field> + gs_zpra_t_dly_prd-prod_vl_qty1 .
       ENDLOOP.
       UNASSIGN <gfs_field> .
