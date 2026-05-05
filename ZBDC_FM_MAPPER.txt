@@ -2954,12 +2954,16 @@ FORM display_results.
       IF lv_has_name_match = 'X'.
         DATA(lo_funcs) = lo_map->get_functions( ).
         lo_funcs->set_all( if_salv_c_bool_sap=>true ).
-        lo_funcs->add_function(
-          name     = 'TAKE_SEL'
-          icon     = '@2L@'
-          text     = 'Apply Checked Mappings'
-          tooltip  = 'Promote checked field-name matches to confirmed and regenerate code'
-          position = if_salv_c_function_position=>right_of_salv_functions ).
+        TRY.
+            lo_funcs->add_function(
+              name     = 'TAKE_SEL'
+              icon     = '@2L@'
+              text     = 'Apply Checked Mappings'
+              tooltip  = 'Promote checked field-name matches to confirmed and regenerate code'
+              position = if_salv_c_function_position=>right_of_salv_functions ).
+          CATCH cx_salv_method_not_supported.
+            " Custom toolbar button not supported in fullscreen list ALV — display without it
+        ENDTRY.
         " Store SALV reference so handler can call refresh()
         lcl_salv_handler=>lo_salv = lo_map.
         " Register event handlers
