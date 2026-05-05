@@ -7857,6 +7857,28 @@ FORM fill_dynamic_table_sec3f .
 
               PERFORM convert_non_gas_units3f USING lv_days CHANGING gs_zpra_t_dly_prd .
 
+              " Gas in zpra_t_dly_prd stores JV production; oil already stores OVL share.
+              " Apply PI to gas only to convert from JV to OVL.
+              IF gs_zpra_t_dly_prd-product EQ c_prod_gas.
+                CLEAR gs_zpra_t_prd_pi .
+                LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                  WHERE asset   EQ gs_zpra_t_dly_prd-asset
+                    AND block   EQ gs_zpra_t_dly_prd-block
+                    AND vld_frm LE gs_zpra_t_dly_prd-production_date
+                    AND vld_to  GE gs_zpra_t_dly_prd-production_date .
+                  EXIT .
+                ENDLOOP .
+                IF sy-subrc IS NOT INITIAL .
+                  LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                    WHERE asset EQ gs_zpra_t_dly_prd-asset .
+                    EXIT .
+                  ENDLOOP .
+                ENDIF .
+                IF gs_zpra_t_prd_pi-pi IS NOT INITIAL .
+                  gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1 * gs_zpra_t_prd_pi-pi / 100 .
+                ENDIF .
+              ENDIF.
+
               IF gs_zpra_t_dly_prd-product EQ c_prod_gas.
                 READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_dly_prd-asset BINARY SEARCH .
                 IF  sy-subrc IS INITIAL.
