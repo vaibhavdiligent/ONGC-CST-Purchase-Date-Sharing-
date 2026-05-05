@@ -7789,8 +7789,8 @@ FORM fill_dynamic_table_sec3f .
           ENDIF.
           ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
           IF <gfs_field> IS ASSIGNED.
-*           DEBUG: hardcoded marker for MREC_APP Individual path (5,555,555 MT = 5.555 MMT)
-            <gfs_field> = <gfs_field> + 5555555 .
+*           DEBUG: OVERRIDE marker for MREC_APP Individual path (= 1.111 MMT after /1M)
+            <gfs_field> = 1111111 .
             UNASSIGN <gfs_field> .
           ENDIF.
 *     Product Total..
@@ -7855,8 +7855,8 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-*               DEBUG: hardcoded marker for dly_rprd Individual path (7,777,777 MT = 7.777 MMT)
-                <gfs_field> = <gfs_field> + 7777777 .
+*               DEBUG: OVERRIDE marker for dly_rprd Individual path (= 2.222 MMT after /1M)
+                <gfs_field> = 2222222 .
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
@@ -7912,8 +7912,8 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-*               DEBUG: hardcoded marker for dly_prd Individual path (8,888,888 MT = 8.888 MMT)
-                <gfs_field> = <gfs_field> + 8888888 .
+*               DEBUG: OVERRIDE marker for dly_prd Individual path (= 3.333 MMT after /1M)
+                <gfs_field> = 3333333 .
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
@@ -7940,6 +7940,22 @@ FORM fill_dynamic_table_sec3f .
     ENDLOOP.
     lv_gjahr = lv_gjahr + 1 .
   ENDDO .
+
+* DEBUG: FORM-ENTERED marker - override ALL numeric cells to 4444444 MT (= 4.444 MMT)
+* If we see 4.444 MMT in the output, this proves fill_dynamic_table_sec3f was executed.
+* If we still see 16.151 etc, the SAP system is running an OLD compiled version.
+  LOOP AT <gfs_sec3f_table> ASSIGNING <gfs_dyn_line> .
+    DO .
+      lv_index = sy-index .
+      ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+      IF sy-subrc IS NOT INITIAL.
+        EXIT .
+      ENDIF.
+      IF lv_index GT 2.
+        <gfs_field> = 4444444 .
+      ENDIF.
+    ENDDO.
+  ENDLOOP.
 
   LOOP AT <gfs_sec3f_table> ASSIGNING <gfs_dyn_line> .
     DO .
