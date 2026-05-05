@@ -14,11 +14,12 @@ TABLES: oijnomi.
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_pur,
          gas_day     TYPE aedat,
-         locid TYPE char10,
+         locid       TYPE char10,
          material    TYPE matnr,
          state_code  TYPE char2,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
          gail_id     TYPE char20,
+         ongc_id     TYPE char20,
          deleted     TYPE char1,
        END OF ty_pur.
 
@@ -42,12 +43,14 @@ TYPES: BEGIN OF ty_main,
 
 TYPES: BEGIN OF ty_display,
          sel         TYPE char1,
+         exclude     TYPE char1,
          gas_day     TYPE aedat,
-         locid TYPE char10,
+         locid       TYPE char10,
          material    TYPE matnr,
          state_code  TYPE char2,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
          gail_id     TYPE char20,
+         ongc_id     TYPE char20,
          outline_agr TYPE ebeln,
          charg       TYPE charg_d,
          oa_missing  TYPE char1,
@@ -374,48 +377,67 @@ FORM fetch_pur_data.
         ls_col  TYPE lvc_s_scol.
 
   SELECT gas_day location AS locid material state_code
-         qty_in_scm AS qty_scm gail_id deleted
+         qty_in_scm AS qty_scm gail_id ongc_id deleted
     FROM yrga_cst_pur
     INTO CORRESPONDING FIELDS OF TABLE lt_pur
-    WHERE gas_day    IN s_date
-      AND location   IN s_locid
-      AND deleted   <> gc_deleted
-      AND state_code <> gc_excl_state.
+    WHERE gas_day  IN s_date
+      AND location IN s_locid
+      AND deleted <> gc_deleted.
 
   IF sy-subrc <> 0 OR lt_pur IS INITIAL. RETURN. ENDIF.
-  DELETE lt_pur WHERE qty_scm = 0.
-  IF lt_pur IS INITIAL. RETURN. ENDIF.
 
   " Bulk pre-fetch all reference data (5 SELECTs instead of N*M)
   PERFORM prefetch_reference_data USING lt_pur.
 
   LOOP AT lt_pur INTO ls_pur.
     CLEAR ls_disp.
-    ls_disp-sel        = ' '.
     ls_disp-gas_day    = ls_pur-gas_day.
     ls_disp-locid      = ls_pur-locid.
     ls_disp-material   = ls_pur-material.
     ls_disp-state_code = ls_pur-state_code.
     ls_disp-qty_scm    = ls_pur-qty_scm.
     ls_disp-gail_id    = ls_pur-gail_id.
+    ls_disp-ongc_id    = ls_pur-ongc_id.
 
-    PERFORM derive_outline_agreement
-      USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
-      CHANGING ls_disp-outline_agr ls_disp-oa_missing.
-
-    PERFORM derive_batch USING ls_pur-material ls_pur-state_code CHANGING ls_disp-charg.
-
-    CLEAR ls_disp-celltab.
-    ls_styl-fieldname = 'CHARG'.
-    ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
-    APPEND ls_styl TO ls_disp-celltab.
-
-    IF ls_disp-oa_missing = abap_true AND ls_pur-state_code <> gc_excl_state.
+    " Determine if row is excluded from nomination (GJ state or zero qty)
+    IF ls_pur-state_code = gc_excl_state OR ls_pur-qty_scm = 0.
+      ls_disp-exclude = 'X'.
+      ls_disp-sel     = ' '.
+      " Disable both SEL checkbox and CHARG edit for excluded rows
+      CLEAR ls_styl.
+      ls_styl-fieldname = 'SEL'.
+      ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
+      APPEND ls_styl TO ls_disp-celltab.
+      ls_styl-fieldname = 'CHARG'.
+      ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
+      APPEND ls_styl TO ls_disp-celltab.
+      " Light grey row background for visual distinction
       CLEAR ls_col.
-      ls_col-fname     = 'OUTLINE_AGR'.
-      ls_col-color-col = 6.
-      ls_col-color-int = 1.
+      ls_col-fname     = 'EXCLUDE'.
+      ls_col-color-col = 7.
+      ls_col-color-int = 0.
       APPEND ls_col TO ls_disp-t_color.
+    ELSE.
+      ls_disp-exclude = ' '.
+      ls_disp-sel     = ' '.
+      CLEAR ls_styl.
+      ls_styl-fieldname = 'CHARG'.
+      ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
+      APPEND ls_styl TO ls_disp-celltab.
+
+      PERFORM derive_outline_agreement
+        USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
+        CHANGING ls_disp-outline_agr ls_disp-oa_missing.
+
+      PERFORM derive_batch USING ls_pur-material ls_pur-state_code CHANGING ls_disp-charg.
+
+      IF ls_disp-oa_missing = abap_true.
+        CLEAR ls_col.
+        ls_col-fname     = 'OUTLINE_AGR'.
+        ls_col-color-col = 6.
+        ls_col-color-int = 1.
+        APPEND ls_col TO ls_disp-t_color.
+      ENDIF.
     ENDIF.
 
     APPEND ls_disp TO gt_display.
@@ -713,6 +735,15 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 4.
   APPEND ls_fcat TO gt_fcat.
 
+  " EXCLUDE - marks rows not eligible for nomination (GJ state or zero qty)
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'EXCLUDE'.
+  ls_fcat-coltext   = 'Exclude'.
+  ls_fcat-seltext   = 'Excluded'.
+  ls_fcat-outputlen = 8.
+  ls_fcat-checkbox  = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
   " GAS_DAY
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'GAS_DAY'.
@@ -760,6 +791,14 @@ FORM build_fieldcat.
   ls_fcat-fieldname = 'GAIL_ID'.
   ls_fcat-coltext   = 'GAIL ID'.
   ls_fcat-seltext   = 'GAIL ID'.
+  ls_fcat-outputlen = 22.
+  APPEND ls_fcat TO gt_fcat.
+
+  " ONGC_ID
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'ONGC_ID'.
+  ls_fcat-coltext   = 'ONGC ID'.
+  ls_fcat-seltext   = 'ONGC ID'.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
@@ -858,6 +897,7 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
         lv_newsel TYPE char1.
   READ TABLE gt_display INDEX iv_index INTO ls_disp.
   IF sy-subrc <> 0. RETURN. ENDIF.
+  IF ls_disp-exclude = 'X'. RETURN. ENDIF.   " excluded rows cannot be selected
   IF ls_disp-sel = abap_true.
     lv_newsel = ' '.
   ELSE.
@@ -866,7 +906,8 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
   lv_locid = ls_disp-locid.
   lv_date  = ls_disp-gas_day.
   LOOP AT gt_display INTO ls_disp.
-    IF ls_disp-locid = lv_locid AND ls_disp-gas_day = lv_date.
+    IF ls_disp-locid = lv_locid AND ls_disp-gas_day = lv_date
+       AND ls_disp-exclude <> 'X'.
       ls_disp-sel = lv_newsel.
       MODIFY gt_display FROM ls_disp.
     ENDIF.
