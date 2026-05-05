@@ -7789,8 +7789,7 @@ FORM fill_dynamic_table_sec3f .
           ENDIF.
           ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
           IF <gfs_field> IS ASSIGNED.
-*           DEBUG: OVERRIDE marker for MREC_APP Individual path (= 1.111 MMT after /1M)
-            <gfs_field> = 1111111 .
+            <gfs_field> = <gfs_field> + gs_zpra_t_mrec_app-app_vl_qty .
             UNASSIGN <gfs_field> .
           ENDIF.
 *     Product Total..
@@ -7855,8 +7854,7 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-*               DEBUG: OVERRIDE marker for dly_rprd Individual path (= 2.222 MMT after /1M)
-                <gfs_field> = 2222222 .
+                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
@@ -7892,17 +7890,25 @@ FORM fill_dynamic_table_sec3f .
                   lv_combine_field = 'X' .
                 ENDIF.
               ENDIF.
-*           Apply OVL PI directly to prod_vl_qty1 (same approach as ZPRA_FIVE_YEAR_PROD_REPORT)
+*           Apply OVL PI to prod_vl_qty1: try date-filtered lookup first,
+*           fall back to asset+block only if no dated record found.
               CLEAR gs_zpra_t_prd_pi .
               LOOP AT gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
                 WHERE asset   EQ gs_zpra_t_dly_prd-asset
                   AND block   EQ gs_zpra_t_dly_prd-block
                   AND vld_frm LE gs_zpra_t_dly_prd-production_date
                   AND vld_to  GE gs_zpra_t_dly_prd-production_date .
-                gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1
-                                                * gs_zpra_t_prd_pi-pi / 100 .
                 EXIT .
               ENDLOOP .
+              IF sy-subrc IS NOT INITIAL .
+                READ TABLE gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+                  WITH KEY asset = gs_zpra_t_dly_prd-asset
+                           block = gs_zpra_t_dly_prd-block .
+              ENDIF .
+              IF gs_zpra_t_prd_pi-pi IS NOT INITIAL .
+                gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1
+                                                * gs_zpra_t_prd_pi-pi / 100 .
+              ENDIF .
 *           Individual Column..
               gv_len = strlen( gs_zpra_t_dly_prd-product ) .
               IF lv_combine_field IS INITIAL.
@@ -7912,8 +7918,7 @@ FORM fill_dynamic_table_sec3f .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-*               DEBUG: OVERRIDE marker for dly_prd Individual path (= 3.333 MMT after /1M)
-                <gfs_field> = 3333333 .
+                <gfs_field> = <gfs_field> + gs_zpra_t_dly_prd-prod_vl_qty1.
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
