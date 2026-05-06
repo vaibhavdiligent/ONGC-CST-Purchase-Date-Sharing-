@@ -9193,7 +9193,7 @@ FORM fill_dynamic_table_sec6a .
       lv_qty = lv_qty + <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-    SHIFT lv_qty LEFT DELETING LEADING space .
+*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
     ASSIGN COMPONENT 'OIL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
@@ -9211,7 +9211,7 @@ FORM fill_dynamic_table_sec6a .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-    SHIFT lv_qty LEFT DELETING LEADING space .
+*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
     ASSIGN COMPONENT 'GAS_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
@@ -9229,7 +9229,7 @@ FORM fill_dynamic_table_sec6a .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-    SHIFT lv_qty LEFT DELETING LEADING space .
+*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
     ASSIGN COMPONENT 'TOTAL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
