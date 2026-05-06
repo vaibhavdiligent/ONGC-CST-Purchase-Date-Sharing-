@@ -511,6 +511,7 @@ endif.
 endif.
 endif.
 endif.
+endif.
 endloop.
 * Employee Registration - D
 loop at ist_zfivms_brd into wa_zfivms_brd where status = 'RELEASE BY EMPLOYEE' .
@@ -567,8 +568,8 @@ concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_in
 append ist_ddata_sbi_e.
 endif.
 endif.
-endloop.
 endif.
+endloop.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -639,12 +640,10 @@ endif.
 concatenate g_fsnam '3P.' g_date_rd '.94427' '.txt' into g_filename1.
 "16062011
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/m
-um/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "04052011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "04052011
 * End of <RD1K976705> on 10062011
 *
-concatenate '/usr/sap/syst-sysid/DigSignApp/data/output/signed/mum/
-' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/syst-sysid/DigSignApp/data/output/signed/mum/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 *
 concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' '3P.'
 g_date_rd '.94427' '.txt' into g_filename1. "11042011
@@ -659,8 +658,7 @@ g_date_rd g_time_rd '.txt' into g_filename1.
 IF p_payctr = 'CVP' .
 ** Opening the File
 *
-open dataset g_filename1 for output in text mode ENCODING DEFAULT M
-ESSAGE D_MSG_TEXT.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT MESSAGE D_MSG_TEXT.
 ** Begin of <> on 04052011
 *
 IF SY-SUBRC NE 0.
@@ -937,12 +935,10 @@ concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
 filename1.
 endif.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 * End of <> on 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P.
-' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 *
 concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P'
 g_date_rd g_time_rd '.txt' into g_filename1.
@@ -1004,15 +1000,12 @@ select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = 
 and zbukr = 'MUM'.
 concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP
-.' g_date_rd '.94427' '.txt' into g_filename1."11042011 04052011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1."11042011 04052011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP
-' g_date_rd g_time_rd '.txt' into g_filename1.
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP' g_date_rd g_time_rd '.txt' into g_filename1.
 * End of <> on 24212010
 
 **Begin RD1K991769 CAB_ALOK
@@ -1177,16 +1170,13 @@ concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
 endif.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBT
-P.' g_date_rd '.94427' '.txt' into g_filename1.
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1.
 "11042011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBT
-P' g_date_rd g_time_rd '.txt' into g_filename1.
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBTP' g_date_rd g_time_rd '.txt' into g_filename1.
 * End of <> on 24122010
 **Begin RD1K991769 CAB_ALOK
 
@@ -1362,8 +1352,7 @@ concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1. "16062
 concatenate g_fsnam '3P.' g_date_rd '.30523' '.txt' into g_filename1. "16062011
 endif.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ovl/' '3P.' g_date_rd '.30523' '.txt' into g_filename1.
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' '3P.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 **Begin RD1K991769 CAB_ALOK
 
@@ -1520,8 +1509,7 @@ concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
 filename1.
 endif.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ovl/' 'D3P.' g_date_rd '.30523' '.txt' into g_filename1.
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'D3P.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 **Begin RD1K991769 CAB_ALOK
 
@@ -1680,8 +1668,7 @@ if sy-subrc = 0.
 concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 endif.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ovl/' 'IBTP.' g_date_rd '.30523' '.txt' into g_filename1.
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'IBTP.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 
 **Begin RD1K991769 CAB_ALOK
@@ -1835,8 +1822,7 @@ concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
 endif.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ovl/' 'DIBTP.' g_date_rd '.30523' '.txt' into g_filename1.
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'DIBTP.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 **Begin RD1K991769 CAB_ALOK
 
@@ -2032,8 +2018,7 @@ and zbukr = 'ECPF'.
 concatenate g_fsnam '3P.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
 concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.'
@@ -2296,12 +2281,10 @@ and zbukr = 'ECPF'.
 concatenate g_fsnam 'D3P.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
 * End of <> on 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.
-' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 **Begin RD1K991769 CAB_ALOK
 
 * ZVMSFILEGEN_CEP, CEP, D3P (SBI - DeRegis. )
@@ -2355,12 +2338,10 @@ and zbukr = 'ECPF'.
 concatenate g_fsnam 'IBTP.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP
-.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 **Begin RD1K991769 CAB_ALOK
 
 * ZVMSFILEGEN_CEP, CEP, IBTP (nonSBI - Regis. )
@@ -2521,12 +2502,10 @@ and zbukr = 'ECPF'.
 concatenate g_fsnam 'DIBTP.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
-ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 * End of <> on 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBT
-P.' g_date_rd '.93128' '.txt' into g_filename1.
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
 "11042011
 **Begin RD1K991769 CAB_ALOK
 
@@ -2696,12 +2675,10 @@ concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
 * endif.
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
-/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.
-' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 *
 *
 *
@@ -2945,12 +2922,10 @@ filename1.
 * endif.
 *
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
-/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
 ** End of <> on 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P
-.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 *
 *
 *
@@ -2991,12 +2966,10 @@ concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 * endif.
 *
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
-/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBT
-P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 *
 *
 open dataset g_filename1 for output in text mode ENCODING DEFAULT.
@@ -3134,12 +3107,10 @@ g_filename1.
 * endif.
 *
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
-/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> on 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIB
-TP.' g_date_rd '.93128' '.txt' into g_filename1.
+concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
 "11042011
 *
 *
@@ -3312,11 +3283,10 @@ wa_zfivms_brd-STATUS
 
 = 'RELEASE BY EMPLOYEE'.
 
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-per
-nr
+select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
 and anssa in ('1', '3' )
 and endda = l_enddate. "'
-31.12.9999'.
+"31.12.9999'.
 read table ist_pa0006 into wa_pa0006 with key anssa = '1'.
 if sy-subrc = 0.
 if not wa_pa0006-name2 is initial.
@@ -3531,7 +3501,7 @@ wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 3012
 wa_zfivms_brd-STATUS = 'RELEASE BY EMPLOYEE'.
 
 refresh ist_pa0006.
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009tpernr
+select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009t-pernr
 and anssa in ('1', '3'
 )
 and endda = l_enddate.
@@ -3746,11 +3716,10 @@ wa_zfivms_brd-STATUS
 
 = 'RELEASE BY EMPLOYEE FOR OVL'.
 
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-per
-nr
+select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
 and anssa in ('1', '3' )
 and endda = l_enddate. "'
-31.12.9999'.
+"31.12.9999'.
 read table ist_pa0006 into wa_pa0006 with key anssa = '1'.
 if sy-subrc = 0.
 if not wa_pa0006-name2 is initial.
@@ -3949,7 +3918,7 @@ wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 3012
 wa_zfivms_brd-STATUS = 'RELEASE BY EMPLOYEE FOR OVL'.
 
 refresh ist_pa0006.
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009tpernr
+select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009t-pernr
 and anssa in ('1', '3'
 )
 and endda = l_enddate.
@@ -4171,22 +4140,22 @@ p_ist_record type standard table.
 *Address1 Address2 Add
 *ress3
 ***S
-A
+*A
 *KOINH_NEW
 **
 *BANKN_NEW
 *SPAN
-BANKL_NEW
+*BANKL_NEW
 *
 *STREET STR_SUPPL1
 *CITY1
 ***2. D3P ( SBI, De-registration)
 *============================================
 **ORIENT ENTERPRISE GUJ PVT LTD#
-____#00000030043632391#03993#00000024
-00001R0000807379#
+*____#00000030043632391#03993#00000024
+*00001R0000807379#
 **KOINH_NEW #
-# BANKN_NEW # BANKL_NEW # SPAN #
+*# BANKN_NEW # BANKL_NEW # SPAN #
 ** New Format
 **S D ComBenNSRegSBAdd1 00000037773091731 EDYWYE35 ICIC0000001 MIN NAGAR
 WEST NETHAJI AV TAMILNADU INDIA
@@ -5281,45 +5250,38 @@ concatenate 'ONGC94427' l_vmc_apdate l_sent_time into corpfilename
 *
 IF sy-host = 'eccdci' OR sy-host = 'eccqci'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003223534.t
-
-xt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000030340574145' int
-o l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003223534.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+concatenate 'COMPBEN' curr_date corpfilename '00000030340574145' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
 ELSEIF sy-host+0(6) = 'eccpap'.
 "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145.t
-xt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030340574145.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
 CONCATENATE 'COMPBEN' curr_date corpfilename '00000030340574145'
 INTO l_sent_filename SEPARATED BY '.' .
 "changes on 30.07.14 "S4H F
-P3 changes
+"P3 changes
 *
 * ENDIF.
 "S4H FP3 changes
 endif.
 if p_payctr = 'CEP'.
 *COMPBEN. CURR_DATE 070114.ONGC93128 VMC_APDATE SENT_TIME .0000003071731
-4079.txt for
+*4079.txt for
 concatenate 'ONGC93128' l_vmc_apdate l_sent_time into corpfilename
 .
 *
 if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576
-.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000030717314079' int
-o l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+concatenate 'COMPBEN' curr_date corpfilename '00000030717314079' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
 elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030717314079
-.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030717314079.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
 concatenate 'COMPBEN' curr_date corpfilename '00000030717314079'
 into l_sent_filename separated by '.' .
@@ -5336,16 +5298,14 @@ concatenate 'ECPF96726' l_vmc_apdate l_sent_time into corpfilename
 *
 if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576
-.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 concatenate 'COMPBEN' curr_date corpfilename '00000010392857009' int
 o l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
 elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030717314079
-.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030717314079.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
 concatenate 'COMPBEN' curr_date corpfilename '00000010392857009'
 into l_sent_filename separated by '.' .
@@ -5362,8 +5322,7 @@ concatenate 'OVL30523' l_vmc_apdate l_sent_time into corpfilename .
 *
 if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003139979.t
-xt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003139979.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
 concatenate 'COMPBEN' curr_date corpfilename '00000030003139979'
 into l_sent_filename separated by '.' .
@@ -5371,8 +5330,7 @@ into l_sent_filename separated by '.' .
 *
 elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
-CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000010277786661
-.txt' INTO L_SENT_FILENAME SEPARATED BY '.' .
+CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000010277786661.txt' INTO L_SENT_FILENAME SEPARATED BY '.' .
 "changes on 30.07.14
 concatenate 'COMPBEN' curr_date corpfilename '00000010277786661' int
 o l_sent_filename separated by '.' .
@@ -5495,9 +5453,7 @@ doc_type
 = 'TXT'
 *
 ssf_id
-= 'CN=TEST CLASS IIIB SHATWO, SP=Gujarat, postalC
-ode=392015, OU=CID - 2431135, OU=Marketing, O=Gujarat Narmada Valley Fer
-tilizers Company Limited, C=IN'."wa_ZFI_BATCH_SIGN-ssf_screen.
+= 'CN=TEST CLASS IIIB SHATWO, SP=Gujarat, postalCode=392015, OU=CID - 2431135, OU=Marketing, O=Gujarat Narmada Valley Fertilizers Company Limited, C=IN'."wa_ZFI_BATCH_SIGN-ssf_screen.
 importing
 crc
 = crc
@@ -5700,10 +5656,8 @@ wf_string
 type string,
 mob_no(12),
 result
-type string,l_reason_desc(35), l_result(
-disp_txt
-
-type string.
+type string,l_reason_desc(35), l_result(35),
+disp_txt type string.
 
 clear: mob_no, messg, wf_string, result.
 clear: l_reason_desc, l_result.
@@ -5711,32 +5665,30 @@ select * from zfivmsbank into table lit_zfivmsbank where vmc_apdate = p_date
 and status = 'SENT TO SBI'.
 select * from zfi_alerts into table it_zfi_alerts.
 
-ts3.
+"ts3.
 
 loop at lit_zfivmsbank into lwa_zfivmsbank.
-clear: wa_zfi_alerts,wa_zfi_alerts1,wa_zfi_alerts2,wa_zfi_aler
+clear: wa_zfi_alerts,wa_zfi_alerts1,wa_zfi_alerts2,wa_zfi_alerts3.
 
-SAPMAIL'
+"SAPMAIL'
 
 refresh:it_obj_cont,it_obj_head,it_reclist.
-read table it_zfi_alerts into wa_zfi_alerts with key categ = '
-action =
+read table it_zfi_alerts into wa_zfi_alerts with key categ = 'SAPMAIL'
+action = 'SUBJECT'
 
-'SUBJECT'
-'SENT_2_SBI'.
+ident = 'SENT_2_SBI'.
+"'SENT_2_SBI' duplicate removed.
 if sy-subrc = 0.
 
-ident =
+"ident =
 
-replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts-mat
-t with lwa_zfivmsbank-reqno.
+replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts-matt with lwa_zfivmsbank-reqno.
 mail_sub-obj_descr = wa_zfi_alerts-matt.
-= 'SAPMAIL'
+"= 'SAPMAIL'
 
-read table it_zfi_alerts into wa_zfi_alerts1 with key categ
+read table it_zfi_alerts into wa_zfi_alerts1 with key categ = 'SAPMAIL'
 
-action
-= 'GESTURE'.
+action = 'GESTURE'.
 *
 IF sy-subrc = 0.
 wa_obj_cont-line = wa_zfi_alerts1-matt.
@@ -5750,12 +5702,9 @@ ident
 = 'SENT_2_SBI'.
 *
 REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts2-matt WITH zfivmsbank-reqno.
-replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts2-ma
-tt with lwa_zfivmsbank-reqno.
-replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_aler
-ts2-matt with lwa_zfivmsbank-lifnr.
-replace all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_aler
-ts2-matt with lwa_zfivmsbank-name1.
+replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts2-matt with lwa_zfivmsbank-reqno.
+replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts2-matt with lwa_zfivmsbank-lifnr.
+replace all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts2-matt with lwa_zfivmsbank-name1.
 wa_obj_cont-line = wa_zfi_alerts2-matt.
 append wa_obj_cont to it_obj_cont.
 wa_reclist-receiver = lwa_zfivmsbank-cpf.
@@ -5765,28 +5714,21 @@ ENDIF.
 
 *
 
-read table it_zfi_alerts into wa_zfi_alerts3 with key categ
+read table it_zfi_alerts into wa_zfi_alerts3 with key categ = 'SMS'
 
-= 'SMS'
+action = 'MESSAGE'
 
-action = '
+ident = 'SENT_2_SBI'.
 
-MESSAGE'
-ENT_2_SBI'.
 
-ident = 'S
 shift lwa_zfivmsbank-reqno left deleting leading '0'.
 shift lwa_zfivmsbank-lifnr left deleting leading '0'.
 wa_new1-name1 = lwa_zfivmsbank-name1+0(19).
 
-replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts3-ma
-tt with lwa_zfivmsbank-reqno.
-replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_aler
-ts3-matt with lwa_zfivmsbank-lifnr.
-replace all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_aler
-ts3-matt with wa_new1-name1.
-replace all occurrences of '&' in wa_zfi_alerts3-matt with '
-and'.
+replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts3-matt with lwa_zfivmsbank-reqno.
+replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts3-matt with lwa_zfivmsbank-lifnr.
+replace all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts3-matt with wa_new1-name1.
+replace all occurrences of '&' in wa_zfi_alerts3-matt with 'and'.
 messg = wa_zfi_alerts3-matt.
 *
 *
