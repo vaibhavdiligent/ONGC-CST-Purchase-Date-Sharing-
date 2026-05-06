@@ -229,14 +229,12 @@ START-OF-SELECTION.
   PERFORM CLEAR_VAR.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
-* NOTE: INCLUDE zbcm_class - keep as INCLUDE (system-level class, not part of this program)
+* NOTE: INCLUDE zbcm_class - system-level class, keep as INCLUDE
 INCLUDE zbcm_class.
-* NOTE: INCLUDE zbcm_class_declare - keep as INCLUDE (system-level class, not part of this program)
+* NOTE: INCLUDE zbcm_class_declare - system-level class, keep as INCLUDE
 INCLUDE zbcm_class_declare.
 *&---------------------------------------------------------------------*
 *& Inlined from INCLUDE zfivms_brd_sel_filegen_digso01
-*&---------------------------------------------------------------------*
-*& Module STATUS_0100 OUTPUT
 *&---------------------------------------------------------------------*
 MODULE STATUS_0100 OUTPUT.
   " No interactive screen - batch program
@@ -249,13 +247,9 @@ MODULE USER_COMMAND_0100 INPUT.
   " No interactive screen - batch program
 ENDMODULE.
 
-* NOTE: DIGSI01 selection screen block removed - p_date, p_payctr already
-* declared in the main program above (OVL base selection screen kept).
-
+* NOTE: DIGSI01 selection screen removed - already declared above (OVL base)
 *&---------------------------------------------------------------------*
 *& Inlined from INCLUDE zfivms_brd_sel_filegen_digsf01
-*&---------------------------------------------------------------------*
-*& Form AUTH_CHECK
 *&---------------------------------------------------------------------*
 form auth_check .
 * Check auth
@@ -334,9 +328,9 @@ write p_date to p_date YYMMDD.
 
 **Begin RD1K991769 CAB_ALOK
 * select * from pa0009 into table ist_pa0009as where aedtm = p_date and
-endda = l_enddate "p_date
+* endda = l_enddate "p_date
 *
-and subty = '0'.
+* and subty = '0'.
 select * from pa0009
 
 into table ist_pa0009as
@@ -345,23 +339,23 @@ and endda = l_enddate
 and aedtm = p_date
 and flag1 = ''.
 *
-and FLAG2 = ''.
+* and FLAG2 = ''.
 **End RD1K991769 CAB_ALOK
 * if sy-subrc = 0.
 *
-append ist_pa0009as to ist_pa0009.
+* append ist_pa0009as to ist_pa0009.
 *
-sort ist_pa0009as descending by pernr.
+* sort ist_pa0009as descending by pernr.
 *
-read table ist_pa0009as into wa_pa0009as with key
+* read table ist_pa0009as into wa_pa0009as with key
 *
-l_begdateas = wa_pa0009as-begda - 1.
+* l_begdateas = wa_pa0009as-begda - 1.
 *
-select * from pa0009 into table ist_pa0009as1 where endda = l_be
+* select * from pa0009 into table ist_pa0009as1 where endda = l_be
 *
-and subty = '0'.
+* and subty = '0'.
 *
-endif.
+* endif.
 * Begin of <> on 16072012
 ist_pa0009[] = ist_pa0009as[].
 **Begin RD1K991769 CAB_ALOK
@@ -369,10 +363,10 @@ ist_pa0009_BAK[] = ist_pa0009as[].
 **End RD1K991769 CAB_ALOK
 
 * select * from pa0009 into table ist_pa0009 where begda = p_date and e
-ndda = l_enddate "'31.12.9999' "p_date
+"ndda = l_enddate "'31.12.9999' "p_date
 *
-and subty = '0'." and zl
-sch in ('S','N','8','9'). "20062011 20062011
+* and subty = '0'." and zl
+"sch in ('S','N','8','9'). "20062011 20062011
 *
 ** if sy-subrc = 0.
 "16022012
@@ -380,7 +374,7 @@ sch in ('S','N','8','9'). "20062011 20062011
 *
 * loop at ist_pa0009as into wa_pa0009as.
 *
-append wa_pa0009as to ist_pa0009 ." from . "index sy-tabix.
+* append wa_pa0009as to ist_pa0009 ." from . "index sy-tabix.
 * endloop.
 * End of <> on 16072012
 * End of <> on 291211
@@ -390,10 +384,8 @@ clear wa_pa0009 .
 **End RD1K991769 CAB_ALOK
 loop at ist_pa0009 into wa_pa0009.
 l_tabix = sy-tabix.
-select single bukrs into l_bukrs from pa0001 where pernr = wa_pa0009
--pernr
-and begda <= p_date a
-nd endda >= p_date . "p_date
+select single bukrs into l_bukrs from pa0001 where pernr = wa_pa0009-pernr
+and begda <= p_date and endda >= p_date . "p_date
 if sy-subrc = 0.
 *
 loop at ist_pa0009 into wa_pa0009.
@@ -417,42 +409,39 @@ endloop.
 "21062011
 
 * Begin of <> on 231110
-select * from zfivms_resend into table ist_zfivms_resend where status
-= 'DEREGISTRATION FAILURE'.
+select * from zfivms_resend into table ist_zfivms_resend where status = 'DEREGISTRATION FAILURE'.
 * End of <>
 * select * from zfivms_brd into table ist_zfivms_brd where vmc_apdate =
-p_date and status = 'APPROVED BY VMC'.
+* p_date and status = 'APPROVED BY VMC'.
 * Begin of <> on 09052012
 if not p_date is initial and not s_span is initial.
 """"""""
 "added by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate EQ p_date and span in s_span )
 and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 04.01.2013 for file generation even if
-customer bank data is not there RD1K983162
+"customer bank data is not there RD1K983162
 """"""""""
-select * from zfivms_brd into table ist_zfivms_brd where ( vmc_apda
-te EQ p_date and span in s_span )
-and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE B
-Y VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+select * from zfivms_brd into table ist_zfivms_brd where ( vmc_apdate EQ p_date and span in s_span )
+and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 04.01.2013 for file generation even if cus
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 "added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span )
 *
-and status in ('RELEASE BY CMC').
+* and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
 "end of comment by lipsy on 04.01.2013 for file generation even if
-customer bank data is not there RD1K983162
+"customer bank data is not there RD1K983162
 
 elseif not p_date is initial.
 """""""""
 "added by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 vmc_apdate = p_date
 and status in ('RELEASE BY CMC').
@@ -464,17 +453,17 @@ select * from zfivms_brd into table ist_zfivms_brd where vmc_apdate
 and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY
 VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 
 "added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span )
 *
-and status in ('RELEASE BY CMC').
+* and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
 "commented by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 elseif not s_span is initial.
 """""""""
 "added by lipsy on 04.01.2013 for file generation even if customer ban
@@ -484,22 +473,22 @@ s
 pan in s_span
 and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 04.01.2013 for file generation even if cus
-tomer bank data is not there RD1K983162
+"tomer bank data is not there RD1K983162
 """"""""
 "
 "commented by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 """"added by lipsy on 28.12.2012 RD1K983099
 "added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span )
 *
-and status in ('RELEASE BY CMC').
+* and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
 """""end of addition by lipsy on 28.12.2012 RD1K983099
 "commented by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 """"""""""
 select * from zfivms_brd into table ist_zfivms_brd where span in s_
 span
@@ -511,7 +500,7 @@ VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span )
 *
-and status in ('RELEASE BY CMC').
+* and status in ('RELEASE BY CMC').
 *"end of addition by lipsy on 27.09.2012
 "commented by lipsy on 28.12.2012 RD1K983099
 endif.
@@ -520,13 +509,13 @@ endif.
 status in ('APPROVED BY VMC' , 'APPROVED BY EMPLOYEE' , 'APPROVED BY
 VMC FOR OVL', 'APPROVED BY EMPLOYEE FOR OVL'). 290911
 "commented by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 * if sy-subrc = 0.
 "commented by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 """""""""""
 "added by lipsy on 04.01.2013 for file generation even if customer
-bank data is not there RD1K983162
+"bank data is not there RD1K983162
 if ist_zfivms_brd is not INITIAL or ist_zsdcust_bankupd is NOT INITI
 
 AL.
@@ -603,7 +592,7 @@ else.
 *
 valid_input_as = wa_zfivms_brd-bankl_new.
 *
-endif.
+* endif.
 clear valid_input_as.
 valid_input_as = wa_zfivms_brd-bankl_new.
 **End RD1K991769 CAB_ALOK
@@ -655,10 +644,8 @@ vms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' i
 nto ist_rdata_nonsbi-span.
 * End of <> on 18052012
 if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zf
-ivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
 
 into ist_rdata_nonsbi-span.
 MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl.
@@ -666,27 +653,21 @@ MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl.
 append ist_rdata_nonsbi_ovl.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
 perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zf
-ivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_
 rdata_nonsbi-span.
-MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl_
-e. "28062011
+MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl_e. "28062011
 append ist_rdata_nonsbi_ovl_e.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
 perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zf
-ivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_
 rdata_nonsbi_s-span.
 append ist_rdata_nonsbi_s.
 elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
 concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_
 new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zf
-ivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
 into ist_rdata_nonsbi-span.
 append ist_rdata_nonsbi.
 "added by lipsy on 27.09.2012
@@ -694,8 +675,7 @@ elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
 if wa_zfivms_brd-span+13(1) = 'R'."r is registration
 concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_
 new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zf
-ivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
 into ist_rdata_nonsbi-span.
 append ist_rdata_nonsbi.
 endif.
@@ -716,8 +696,7 @@ perform add_7x_emp_D.
 concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#'
 
 wa_zfivms_brd-koinh_new '#' l_spanasa '#' into ist_ddata_nonsbi-span.
-MOVE-CORRESPONDING ist_ddata_nonsbi to ist_ddata_nonsbi_ovl_
-e. "28062011
+MOVE-CORRESPONDING ist_ddata_nonsbi to ist_ddata_nonsbi_ovl_e. "28062011
 append ist_ddata_nonsbi_ovl_e.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
 perform add_7x_emp_D.
@@ -747,31 +726,26 @@ if wa_zfivms_brd-span ca 'R'.
 * 18052012
 * move-corresponding wa_zfivms_brd to ist_rdata_sbi.
 if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbispan.
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbispan.
 MOVE-CORRESPONDING ist_rdata_sbi to ist_rdata_sbi_ovl. "0505
 append ist_rdata_sbi_ovl.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
 perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi-span.
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi-span.
 MOVE-CORRESPONDING ist_rdata_sbi to ist_rdata_sbi_ovl_e.
 append ist_rdata_sbi_ovl_e.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
 perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi_s-span.
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi_s-span.
 append ist_rdata_sbi_s.
 elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbispan.
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbispan.
 append ist_rdata_sbi.
 
 "added by lipsy on 27.09.2012
 elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
 if wa_zfivms_brd-span+13(1) = 'R'."r is for registration
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn
-_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbispan.
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbispan.
 append ist_rdata_sbi.
 endif.
 "end of addition by lipsy on 27.09.2012
@@ -832,7 +806,7 @@ else.
 *
 valid_input_as = wa_zfivms_brd-bankl_new.
 *
-endif.
+* endif.
 clear valid_input_as.
 valid_input_as = wa_zfivms_brd-bankl_new.
 **End RD1K991769 CAB_ALOK
@@ -858,8 +832,7 @@ append ist_rdata_nonsbi_e.
 elseif wa_zfivms_brd-span ca 'D'.
 *
 perform add_7x_emp_D.
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa
-_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi
+concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi
 _e-span.
 append ist_ddata_nonsbi_e.
 endif.
@@ -878,8 +851,7 @@ elseif wa_zfivms_brd-span ca 'D'.
 *
 perform add_7x_emp_D.
 concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-ban
-kn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi
-_e-span.
+kn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi_e-span.
 append ist_ddata_sbi_e.
 endif.
 endif.
@@ -987,7 +959,7 @@ WRITE: 'File cannot be opened. Reason:', D_MSG_TEXT.
 *
 EXIT.
 *
-ENDIF.
+* ENDIF.
 ** Transferring Data
 ** End of <>
 *
@@ -1124,7 +1096,7 @@ ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "end of open 27.09.2012
 * End of <> on 07082012
-endif.
+* endif.
 * Begin of <> on 16072012
 if not ist_ddata_sbi_s[] is initial.
 append lines of ist_ddata_sbi_s to ist_ddata_sbi.
@@ -1244,7 +1216,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open of comment by lipsy on 3.10.2012
@@ -1475,13 +1447,13 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open 27.09.2012
 * End of <> on 07082012
 * 14102011 17102011 090502012
-endif.
+* endif.
 * Begin of <> on 16072012
 if not ist_ddata_nonsbi_s[] is initial.
 append lines of ist_ddata_nonsbi_s to ist_ddata_nonsbi.
@@ -1550,8 +1522,7 @@ ENDIF. " IF p_payctr = 'CVP' .
 "opened comment for testing by lipsy on 3.10.2012
 * Begin of Comment on 07082012
 *
-concatenate '/usr/sap/RP1/FIN/epay/send/mum/' 'DIBTP' g_date_rd g
-_time_rd '.txt' into g_filename.
+concatenate '/usr/sap/RP1/FIN/epay/send/mum/' 'DIBTP' g_date_rd g_time_rd '.txt' into g_filename.
 * Begin of <> on 21122010
 *
 concatenate 'C:\SPAN\' 'D_NONSBI' g_date_rd g_time_rd '.txt' into
@@ -1651,14 +1622,13 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open of comment by lipsy on 03.10.2012
 
 loop at ist_ddata_nonsbi into wa_ddata_nonsbi.
-split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zf
-ivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
+split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
 update zfivms_resend set status = 'SENT TO SBI'
 where span = wa_zfivms_brd-span.
 where span = wa_zfivms_brd-span.
@@ -1666,7 +1636,7 @@ endloop.
 
 *
 
-endif.
+* endif.
 * Code Written for OVL Bank registration Date 02-05-2011
 clear : l_rsbi, l_dsbi.
 * OVL SBI - R
@@ -1824,7 +1794,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -1984,7 +1954,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 loop at ist_ddata_sbi_ovl into wa_ddata_sbi.
 split wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
@@ -2010,8 +1980,7 @@ select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path wh
 ere sysid = syst-sysid
 and zbukr = 'OVL'.
 if sy-subrc = 0.
-concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g
-_filename1.
+concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 endif.
 *
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/
@@ -2146,7 +2115,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -2307,11 +2276,10 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 loop at ist_ddata_nonsbi_ovl into wa_ddata_nonsbi.
-split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zf
-ivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
+split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
 update zfivms_resend set status = 'SENT TO SBI'
 where span = wa_zfivms_brd-span.
 endloop.
@@ -2326,8 +2294,7 @@ update zfivmsbank set status = 'SENT TO SBI'
 *
 where vmc_apdate = p_date
 *
-and status in ('RELEASE BY VMC' , 'RELEASE B
-Y EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+* and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 **
 update zfivmsbank set status = 'SENT TO SBI'
 
@@ -2342,7 +2309,7 @@ update zsdcust_bank set status = 'SENT TO SBI'
 *
 where chon = p_date
 *
-and status = 'RELEASE BY CMC'.
+* and status = 'RELEASE BY CMC'.
 *
 "end of addition by lipsy on 27.09.2012
 * endif.
@@ -2421,8 +2388,7 @@ ENDIF. "
 "opened and commented by lipsy on 7.01.2013
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'R_SBI_E' g_date_rd g_time_rd '.txt' into g
-_filename.
+concatenate 'C:\SPAN\' 'R_SBI_E' g_date_rd g_time_rd '.txt' into g_filename.
 "11042011 "21062011 291211 27012012
 *
 *
@@ -2520,7 +2486,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -2533,8 +2499,7 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'D_SBI_E' g_date_rd g_time_rd '.txt' into g
-_filename. "21122010 "11042011 21060211 291211 27012012
+concatenate 'C:\SPAN\' 'D_SBI_E' g_date_rd g_time_rd '.txt' into g_filename. "21122010 "11042011 21060211 291211 27012012
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -2630,7 +2595,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 
 * Begin of <> on 10062011
@@ -2685,7 +2650,7 @@ perform PREPARE_NEW_FORMAT USING 'D3P' '96726' ist_ddata_sbi_e[] .
 endif.
 ENDIF. "
 ***end of ONGC code
-endif.
+* endif.
 * NON SBI
 
 clear : l_rsbi , l_dsbi.
@@ -2855,7 +2820,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -3027,9 +2992,9 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * End of <> on 07082012
-endif.
+* endif.
 * OVL Employee
 clear : l_rsbi , l_dsbi.
 * Begin of <> on 06072011
@@ -3048,14 +3013,14 @@ g_time_rd = sy-uzeit.
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
 where sysid = syst-sysid
 *
-and zbukr = 'OVL'.
+* and zbukr = 'OVL'.
 *
 if sy-subrc = 0.
 *
 concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_f
 ilename1.
 *
-endif.
+* endif.
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
 /ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
@@ -3175,7 +3140,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * endif.
 *
 *
@@ -3290,20 +3255,20 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 ** Begin of <> on 10062011
 *
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
 where sysid = syst-sysid
 *
-and zbukr = 'OVL'.
+* and zbukr = 'OVL'.
 *
 if sy-subrc = 0.
 *
 concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
 filename1.
 *
-endif.
+* endif.
 *
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
@@ -3343,14 +3308,13 @@ select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path wh
 
 ere sysid = syst-sysid
 *
-and zbukr = 'OVL'.
+* and zbukr = 'OVL'.
 *
 if sy-subrc = 0.
 *
-concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g
-_filename1.
+concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
-endif.
+* endif.
 *
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
@@ -3468,7 +3432,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * endif.
 *
 * describe table ist_ddata_nonsbi_ovl_e lines l_dsbi.
@@ -3486,14 +3450,14 @@ g_time_rd = sy-uzeit.
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path w
 here sysid = syst-sysid
 *
-and zbukr = 'OVL'.
+* and zbukr = 'OVL'.
 *
 if sy-subrc = 0.
 *
 concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
 *
-endif.
+* endif.
 *
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed
@@ -3616,7 +3580,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-ENDIF.
+* ENDIF.
 * endif.
 * End of <> 06072011
 ENDFORM.
@@ -3726,9 +3690,9 @@ wa_zfivms_brd-STREET = 'ONGC'.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 * End of <> on 30052012
-endif.
-endif.
-endif.
+* endif.
+* endif.
+* endif.
 * Begin of <> on 20062011 21062011
 
 refresh ist_zfivms_brd1.
@@ -3838,7 +3802,7 @@ clear wa_pa0009t.
 **Begin RD1K991769 CAB_ALOK
 * select single * from pa0009 into wa_pa0009t where pernr = wa_pa0009pernr and endda = l_begdate "begda = p_date and
 *
-and subty = '0'." and zlsch
+* and subty = '0'." and zlsch
 in ('S','N'). 20062011
 select single *
 from pa0009
@@ -3848,7 +3812,7 @@ and subty = '0'
 and endda = l_begdate
 and ( flag1 = '' or flag1 = 'S' or flag1 = 'F').
 *
-and FLAG2 = ''.
+* and FLAG2 = ''.
 **End RD1K991769 CAB_ALOK
 
 if sy-subrc = 0.
@@ -3872,7 +3836,7 @@ else.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 *
-endif.
+* endif.
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 **End RD1K991769 CAB_ALOK
 
@@ -4020,7 +3984,7 @@ endda = l_begdate and subty = '0'.
 **
 clear : wa_zfivms_brd , wa_zfivms_brd1.
 *
-endif.
+* endif.
 
 *
 *
@@ -4178,8 +4142,8 @@ wa_zfivms_brd-STREET = 'ONGC'.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 * End of <> on 30052012
-endif.
-endif.
+* endif.
+* endif.
 
 "wa_pa0006-stras.
 
@@ -4255,10 +4219,10 @@ clear wa_pa0009t.
 **End RD1K991769 CAB_ALOK
 * select single * from pa0009 into wa_pa0009t where pernr = wa_pa0009pernr "30062011
 *
-and endda = l_begdate
+* and endda = l_begdate
 "begda = p_date and
 *
-and subty = '0'. " and
+* and subty = '0'. " and
 zlsch in ('S','N','8','9'). "('S','N'). 20062011 20062011
 select single *
 from pa0009
@@ -4268,7 +4232,7 @@ and subty = '0'
 and endda = l_begdate
 and ( flag1 = '' or flag1 = 'S' or flag1 = 'F').
 *
-and FLAG2 = ''.
+* and FLAG2 = ''.
 if sy-subrc = 0.
 * Begin of <> on 15022012
 */..Begin of Change CR :30014976 by CAB_RAMA
@@ -4290,7 +4254,7 @@ else.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 *
-endif.
+* endif.
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 **End RD1K991769 CAB_ALOK
 
@@ -4402,7 +4366,7 @@ endda = l_begdate and subty = '0'.
 clear : wa_zfivms_brd .
 "21062011
 *
-endif.
+* endif.
 *
 *
 *
@@ -5708,7 +5672,7 @@ INTO l_sent_filename SEPARATED BY '.' .
 "changes on 30.07.14 "S4H F
 P3 changes
 *
-ENDIF.
+* ENDIF.
 "S4H FP3 changes
 endif.
 if p_payctr = 'CEP'.
@@ -6042,7 +6006,7 @@ modify zfivmsbank from table lit_zfivmsbank1 ."added by gaurav
 *
 *
 
-endif.
+* endif.
 update zfivmsbank set status = 'SENT TO SBI'
 where vmc_apdate = p_date
 and status = 'RELEASE BY VMC'.
@@ -6160,8 +6124,7 @@ action
 ident
 = 'SENT_2_SBI'.
 *
-REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa
-_zfi_alerts2-matt WITH zfivmsbank-reqno.
+REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts2-matt WITH zfivmsbank-reqno.
 replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts2-ma
 tt with lwa_zfivmsbank-reqno.
 replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_aler
@@ -6213,7 +6176,7 @@ messg = wa_zfi_alerts3-matt.
 *
 *
 
-endif.
+* endif.
 
 wa_obj_cont-line = 'testing'.
 APPEND wa_obj_cont TO it_obj_cont.
