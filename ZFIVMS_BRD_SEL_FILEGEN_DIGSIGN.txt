@@ -39,13 +39,13 @@ TABLES : ZFIVMS_BRD , pa0001, pa0006 , pa0009 , pa9205 , zfi_path.
 
 ************************************************************************
 * Begin RD1K991769 CAB_ALOK   CR 30010502
-types: begin of TY_record,            " Old record
+TYPES: begin of TY_record,            " Old record
   record(200) ,
-end of TY_record.
-types: begin of TY_record_new,        " concatenated record in NEW_FORMAT, max length > 200
+END of TY_record.
+TYPES: begin of TY_record_new,        " concatenated record in NEW_FORMAT, max length > 200
   record(210) ,
-end of TY_record_new.
-types: begin of TY_NEW_FORMAT,        "length 194 + 8 separators +EoL
+END of TY_record_new.
+TYPES: begin of TY_NEW_FORMAT,        "length 194 + 8 separators +EoL
   BEN_TYPE(1),            "Beneficiary Type * 1
   BEN_ACT_TYPE(1),        "Beneficiary Action Type * 1
   BEN_NAME(35),           "Beneficiary Name * 35
@@ -57,106 +57,106 @@ types: begin of TY_NEW_FORMAT,        "length 194 + 8 separators +EoL
   ADDR1(35),              "Address1 35
   ADDR2(35),              "Address2 35
   ADDR3(35),              "Address3 35
-end of TY_NEW_FORMAT.
+END of TY_NEW_FORMAT.
 
-data: IST_94427      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "cvp-mum
-data: IST_93128      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "cep-ddn
-data: IST_30523      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "ovl
-data: IST_94427_FILE TYPE STANDARD TABLE OF TY_record_new.  "cvp
-data: IST_93128_FILE TYPE STANDARD TABLE OF TY_record_new.  "ddn
-data: IST_30523_FILE TYPE STANDARD TABLE OF TY_record_new.  "ovl
+DATA: IST_94427      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "cvp-mum
+DATA: IST_93128      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "cep-ddn
+DATA: IST_30523      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "ovl
+DATA: IST_94427_FILE TYPE STANDARD TABLE OF TY_record_new.  "cvp
+DATA: IST_93128_FILE TYPE STANDARD TABLE OF TY_record_new.  "ddn
+DATA: IST_30523_FILE TYPE STANDARD TABLE OF TY_record_new.  "ovl
 ***start of ONGC code
 **** START CR 6000000474   ON 20.11.18
-data: IST_96726      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "ECPF
-data: IST_96726_FILE TYPE STANDARD TABLE OF TY_record_new.  "ECPF
+DATA: IST_96726      TYPE STANDARD TABLE OF TY_NEW_FORMAT.  "ECPF
+DATA: IST_96726_FILE TYPE STANDARD TABLE OF TY_record_new.  "ECPF
 ***END
 ***end of ONGC code
-data: trans_string type string.
+DATA: trans_string type string.
 * End RD1K991769 CAB_ALOK   CR 30010502
 ***********************************************************************
-data : begin of ist_rdata_sbi occurs 0,
+DATA : begin of ist_rdata_sbi occurs 0,
   span(200),
 *  koinh_new type zfivmsbank-koinh_new,
 *  bankn_new type zfivmsbank-bankn_new,
 *  bankl_new type zfivmsbank-bankl_new,
-end of ist_rdata_sbi.
-data : begin of ist_rdata_nonsbi occurs 0,
+END of ist_rdata_sbi.
+DATA : begin of ist_rdata_nonsbi occurs 0,
   span(200),
-end of ist_rdata_nonsbi.
-data : begin of ist_ddata_sbi occurs 0,
+END of ist_rdata_nonsbi.
+DATA : begin of ist_ddata_sbi occurs 0,
   span(200),
-end of ist_ddata_sbi.
-data : begin of ist_ddata_nonsbi occurs 0,
+END of ist_ddata_sbi.
+DATA : begin of ist_ddata_nonsbi occurs 0,
   span(200),
-end of ist_ddata_nonsbi.
+END of ist_ddata_nonsbi.
 * Begin of < > on 02052011
-data : begin of ist_rdata_sbi_ovl occurs 0,
+DATA : begin of ist_rdata_sbi_ovl occurs 0,
   span(200),
-end of ist_rdata_sbi_ovl.
-data : begin of ist_rdata_nonsbi_ovl occurs 0,
+END of ist_rdata_sbi_ovl.
+DATA : begin of ist_rdata_nonsbi_ovl occurs 0,
   span(200),
-end of ist_rdata_nonsbi_ovl.
-data : begin of ist_ddata_sbi_ovl occurs 0,
+END of ist_rdata_nonsbi_ovl.
+DATA : begin of ist_ddata_sbi_ovl occurs 0,
   span(200),
-end of ist_ddata_sbi_ovl.
-data : begin of ist_ddata_nonsbi_ovl occurs 0,
+END of ist_ddata_sbi_ovl.
+DATA : begin of ist_ddata_nonsbi_ovl occurs 0,
   span(200),
-end of ist_ddata_nonsbi_ovl.
+END of ist_ddata_nonsbi_ovl.
 * End of <> on 02052011
 * Begin of < > on 16072012
-data : begin of ist_rdata_sbi_s occurs 0,
+DATA : begin of ist_rdata_sbi_s occurs 0,
   span(200),
-end of ist_rdata_sbi_s.
-data : begin of ist_ddata_sbi_s occurs 0,
+END of ist_rdata_sbi_s.
+DATA : begin of ist_ddata_sbi_s occurs 0,
   span(200),
-end of ist_ddata_sbi_s.
-data : begin of ist_rdata_nonsbi_s occurs 0,
+END of ist_ddata_sbi_s.
+DATA : begin of ist_rdata_nonsbi_s occurs 0,
   span(200),
-end of ist_rdata_nonsbi_s.
-data : begin of ist_ddata_nonsbi_s occurs 0,
+END of ist_rdata_nonsbi_s.
+DATA : begin of ist_ddata_nonsbi_s occurs 0,
   span(200),
-end of ist_ddata_nonsbi_s.
+END of ist_ddata_nonsbi_s.
 * End of <> on 16072012
 * Begin of < > on 28062011
-data : begin of ist_rdata_sbi_ovl_e occurs 0,
+DATA : begin of ist_rdata_sbi_ovl_e occurs 0,
   span(200),
-end of ist_rdata_sbi_ovl_e.
-data : begin of ist_ddata_sbi_ovl_e occurs 0,
+END of ist_rdata_sbi_ovl_e.
+DATA : begin of ist_ddata_sbi_ovl_e occurs 0,
   span(200),
-end of ist_ddata_sbi_ovl_e.
-data : begin of ist_rdata_nonsbi_ovl_e occurs 0,
+END of ist_ddata_sbi_ovl_e.
+DATA : begin of ist_rdata_nonsbi_ovl_e occurs 0,
   span(200),
-end of ist_rdata_nonsbi_ovl_e.
-data : begin of ist_ddata_nonsbi_ovl_e occurs 0,
+END of ist_rdata_nonsbi_ovl_e.
+DATA : begin of ist_ddata_nonsbi_ovl_e occurs 0,
   span(200),
-end of ist_ddata_nonsbi_ovl_e.
+END of ist_ddata_nonsbi_ovl_e.
 * End of <> on 28062011
-data : begin of ist_rdata_sbi_e occurs 0,
+DATA : begin of ist_rdata_sbi_e occurs 0,
   span(200),
 *  koinh_new type zfivmsbank-koinh_new,
 *  bankn_new type zfivmsbank-bankn_new,
 *  bankl_new type zfivmsbank-bankl_new,
-end of ist_rdata_sbi_e.
-data : begin of ist_rdata_nonsbi_e occurs 0,
+END of ist_rdata_sbi_e.
+DATA : begin of ist_rdata_nonsbi_e occurs 0,
   span(200),
-end of ist_rdata_nonsbi_e.
-data : begin of ist_ddata_sbi_e occurs 0,
+END of ist_rdata_nonsbi_e.
+DATA : begin of ist_ddata_sbi_e occurs 0,
   span(200),
-end of ist_ddata_sbi_e.
-data : begin of ist_ddata_nonsbi_e occurs 0,
+END of ist_ddata_sbi_e.
+DATA : begin of ist_ddata_nonsbi_e occurs 0,
   span(200),
-end of ist_ddata_nonsbi_e.
-data : wa_ddata_sbi    like ist_ddata_sbi,
+END of ist_ddata_nonsbi_e.
+DATA : wa_ddata_sbi    like ist_ddata_sbi,
        wa_ddata_nonsbi like ist_ddata_nonsbi,
        g_benf.
 * Begin of <> on 10062011
-data : ist_zfi_path type table of zfi_path,
+DATA : ist_zfi_path type table of zfi_path,
        wa_path      type zfi_path.
 * End of <> on 10062011
 * Begin of <RD1K977143> on 14072011
-data : g_filegen.
+DATA : g_filegen.
 * End of <RD1K977143> on 14072011
-data : ist_zfivms_resend   type table of zfivms_resend,
+DATA : ist_zfivms_resend   type table of zfivms_resend,
        wa_zfivms_resend    type zfivms_resend,
        ist_zfivms_brd      type table of zfivms_brd,
        wa_zfivms_brd       type zfivms_brd,
@@ -188,20 +188,20 @@ data : ist_zfivms_resend   type table of zfivms_resend,
        g_fsnam     type zfi_path-fsnam,
        g_corpid    type zfi_path-corpid.
 * Begin of <> on 18052012
-data : l_spanemp(17),
+DATA : l_spanemp(17),
        l_spanasa(24),
        l_span(7),
        l_strlen type n.
 * End of <> on 18052012
-data : valid_characters_as type string,
+DATA : valid_characters_as type string,
        valid_input_as      type string.
 
 **Begin RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
-data g_cancel_pressed(1).
-data: ok_code2000      TYPE sy-ucomm.
+DATA g_cancel_pressed(1).
+DATA: ok_code2000      TYPE sy-ucomm.
 DATA: G_PASSWD_INPUT   TYPE SSFINFO-PASSWORD.
 DATA  G_PASSWORD       TYPE SSFINFO-PASSWORD.
-data ist_pa0009_BAK    type table of pa0009.
+DATA ist_pa0009_BAK    type table of pa0009.
 DATA: IST_pa0009_OVL   type table of pa0009,
       IST_pa0009_ONGC  type table of pa0009.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
@@ -420,7 +420,7 @@ START-OF-SELECTION.
   PERFORM AUTH_CHECK.
   PERFORM SET_TRANS.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
-  perform check_req_value.
+  PERFORM check_req_value.
   PERFORM EXTRACT_DATA.
 **Begin RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 * PERFORM GENERATE_FILE.

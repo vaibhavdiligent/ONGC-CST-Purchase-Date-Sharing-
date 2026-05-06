@@ -6,7 +6,7 @@
 *&---------------------------------------------------------------------*
 *& Form AUTH_CHECK
 *&---------------------------------------------------------------------*
-form auth_check .
+FORM auth_check .
 * Check auth
 * tcode: ZFIBENFILEGEN
 *roles
@@ -29,34 +29,34 @@ form auth_check .
 authority-check object 'ZFIBENREG'
 id 'ZPAY_CTR' field p_payctr
 id 'ACTVT' field '16'.
-if sy-subrc <> 0.
-message 'No authorization' type 'E'.
-endif.
-endform.
+IF sy-subrc <> 0.
+MESSAGE 'No authorization' type 'E'.
+ENDIF.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form SET_TRANS
 *&---------------------------------------------------------------------*
-form set_trans .
-concatenate ''' ~ ! ` ! @ # $ % ^ & * ( ) _ - '
+FORM set_trans .
+CONCATENATE ''' ~ ! ` ! @ # $ % ^ & * ( ) _ - '
             '/ , . < > ''' into trans_string respecting blanks.
-endform.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form CHECK_REQ_VALUE
 *&---------------------------------------------------------------------*
 FORM CHECK_REQ_VALUE .
-if p_date is initial and s_span is initial.
-message e434(zfi).
-endif.
+IF p_date is initial and s_span is initial.
+MESSAGE e434(zfi).
+ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form EXTRACT_DATA
 *&---------------------------------------------------------------------*
 FORM EXTRACT_DATA .
-data : l_begdate
-type pa0009-begda,
+DATA : l_begdate
+TYPE pa0009-begda,
 l_begdateas type pa0009-begda,
 l_strlen type n,
 l_line(2),
@@ -67,7 +67,7 @@ l_tabix type sy-tabix,
 "20062011
 l_bukrs type pa0001-bukrs.
 "16062011
-concatenate 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+CONCATENATE 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 'abcdefghijklmnopqrstuvwxyz' into valid_characters_as.
 * Begin of <> on 01022011
 *
@@ -79,20 +79,20 @@ concatenate 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 *
 
 CONCATENATE p_date(4) p_date(4) p_date(4) into l_begda.
-write p_date to p_date YYMMDD.
+WRITE p_date to p_date YYMMDD.
 
 **Begin RD1K991769 CAB_ALOK
 * select * from pa0009 into table ist_pa0009as where aedtm = p_date and
 * endda = l_enddate "p_date
 *
 * and subty = '0'.
-select * from pa0009
+SELECT * from pa0009
 
-into table ist_pa0009as
-where subty = '0'
-and endda = l_enddate
-and aedtm = p_date
-and flag1 = ''.
+INTO table ist_pa0009as
+WHERE subty = '0'
+AND endda = l_enddate
+AND aedtm = p_date
+AND flag1 = ''.
 *
 * and FLAG2 = ''.
 **End RD1K991769 CAB_ALOK
@@ -135,55 +135,55 @@ ist_pa0009_BAK[] = ist_pa0009as[].
 * End of <> on 291211
 * Begin of <> on 16062011 To take OVL employee data also
 **Begin RD1K991769 CAB_ALOK
-clear wa_pa0009 .
+CLEAR wa_pa0009 .
 **End RD1K991769 CAB_ALOK
-loop at ist_pa0009 into wa_pa0009.
+LOOP at ist_pa0009 into wa_pa0009.
 l_tabix = sy-tabix.
-select single bukrs into l_bukrs from pa0001 where pernr = wa_pa0009-pernr
-and begda <= p_date and endda >= p_date . "p_date
-if sy-subrc = 0.
+SELECT single bukrs into l_bukrs from pa0001 where pernr = wa_pa0009-pernr
+AND begda <= p_date and endda >= p_date . "p_date
+IF sy-subrc = 0.
 * End of <> on 16062011
-if l_bukrs = 'OVL'.
-perform get_ovl_emlpoyee_details.
+IF l_bukrs = 'OVL'.
+PERFORM get_ovl_emlpoyee_details.
 ***start of ONGC code
-elseif l_bukrs = 'OGL'.
+ELSEIF l_bukrs = 'OGL'.
 CONTINUE.
 ***end of ONGC code
 
-else.
-perform get_ongc_emlpoyee_details.
-endif.
-endif.
-clear wa_pa0009.
-endloop.
+ELSE.
+PERFORM get_ongc_emlpoyee_details.
+ENDIF.
+ENDIF.
+CLEAR wa_pa0009.
+ENDLOOP.
 * endif.
 * End of <>
 
 "21062011
 
 * Begin of <> on 231110
-select * from zfivms_resend into table ist_zfivms_resend where status = 'DEREGISTRATION FAILURE'.
+SELECT * from zfivms_resend into table ist_zfivms_resend where status = 'DEREGISTRATION FAILURE'.
 * End of <>
 * select * from zfivms_brd into table ist_zfivms_brd where vmc_apdate =
 * p_date and status = 'APPROVED BY VMC'.
 * Begin of <> on 09052012
-if not p_date is initial and not s_span is initial.
+IF not p_date is initial and not s_span is initial.
 """"""""
 "added by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate EQ p_date and span in s_span )
-and status in ('RELEASE BY CMC').
+AND status in ('RELEASE BY CMC').
 "end of addition by lipsy on 04.01.2013 for file generation even if
 "customer bank data is not there RD1K983162
 """"""""""
-select * from zfivms_brd into table ist_zfivms_brd where ( vmc_apdate EQ p_date and span in s_span )
-and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+SELECT * from zfivms_brd into table ist_zfivms_brd where ( vmc_apdate EQ p_date and span in s_span )
+AND status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 04.01.2013 for file generation even if cus
 "bank data is not there RD1K983162
 "added by lipsy on 27.09.2012
 *
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
@@ -191,36 +191,36 @@ select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 "end of comment by lipsy on 04.01.2013 for file generation even if
 "customer bank data is not there RD1K983162
 
-elseif not p_date is initial.
+ELSEIF not p_date is initial.
 """""""""
 "added by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 vmc_apdate = p_date
-and status in ('RELEASE BY CMC').
+AND status in ('RELEASE BY CMC').
 "end of addition by lipsy on 04.01.2013 for file generation even if customer bank data is not there RD1K983162
 """"""""
-select * from zfivms_brd into table ist_zfivms_brd where vmc_apdate
+SELECT * from zfivms_brd into table ist_zfivms_brd where vmc_apdate
 = p_date
-and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+AND status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
 
 "added by lipsy on 27.09.2012
 *
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
 "commented by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
-elseif not s_span is initial.
+ELSEIF not s_span is initial.
 """""""""
 "added by lipsy on 04.01.2013 for file generation even if customer bank data is not there RD1K983162
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 span in s_span
-and status in ('RELEASE BY CMC').
+AND status in ('RELEASE BY CMC').
 "end of addition by lipsy on 04.01.2013 for file generation even if cus
 "tomer bank data is not there RD1K983162
 """"""""
@@ -230,7 +230,7 @@ and status in ('RELEASE BY CMC').
 """"added by lipsy on 28.12.2012 RD1K983099
 "added by lipsy on 27.09.2012
 *
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
@@ -239,18 +239,18 @@ select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 "commented by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
 """"""""""
-select * from zfivms_brd into table ist_zfivms_brd where span in s_span
-and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+SELECT * from zfivms_brd into table ist_zfivms_brd where span in s_span
+AND status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 28.12.2012 RD1K983099
 *"added by lipsy on 27.09.2012
 *
-select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
+SELECT * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 ( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
 *"end of addition by lipsy on 27.09.2012
 "commented by lipsy on 28.12.2012 RD1K983099
-endif.
+ENDIF.
 * End of <> on 09052012
 *
 * status in ('APPROVED BY VMC' , 'APPROVED BY EMPLOYEE' , 'APPROVED BY VMC FOR OVL', 'APPROVED BY EMPLOYEE FOR OVL'). 290911
@@ -262,7 +262,7 @@ endif.
 """""""""""
 "added by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
-if ist_zfivms_brd is not INITIAL or ist_zsdcust_bankupd is NOT INITIAL.
+IF ist_zfivms_brd is not INITIAL or ist_zsdcust_bankupd is NOT INITIAL.
 "end of addition by lipsy on 04.01.2013 for file generation even if customer bank data is not there RD1K983162
 """"""""
 * Begin of <> on 21062011
@@ -275,72 +275,72 @@ sort ist_zfivms_brd1 DESCENDING by span .
 ***S/4 End of Change
 * Support # TR RD1K9A0Q5P # 2022/11/28
 ***end of ONGC code
-Delete ADJACENT DUPLICATES FROM ist_zfivms_brd1 comparing span.
-loop at ist_zfivms_brd1 into wa_zfivms_brd1.
+DELETE ADJACENT DUPLICATES FROM ist_zfivms_brd1 comparing span.
+LOOP at ist_zfivms_brd1 into wa_zfivms_brd1.
 ist_zfivms_brdt[] = ist_zfivms_brd[].
-loop at ist_zfivms_brdt into wa_zfivms_brdt where span = wa_zfivms_brd1-span.
-append wa_zfivms_brdt to ist_zfivms_brdtmp .
-endloop.
+LOOP at ist_zfivms_brdt into wa_zfivms_brdt where span = wa_zfivms_brd1-span.
+APPEND wa_zfivms_brdt to ist_zfivms_brdtmp .
+ENDLOOP.
 *
-delete ist_zfivms_brdt where span <> wa_zfivms_brd1-span.
-if sy-subrc = 0.
-clear l_line.
-describe table ist_zfivms_brdtmp lines l_line.
-shift l_line left deleting leading '0'.
+DELETE ist_zfivms_brdt where span <> wa_zfivms_brd1-span.
+IF sy-subrc = 0.
+CLEAR l_line.
+DESCRIBE table ist_zfivms_brdtmp lines l_line.
+SHIFT l_line left deleting leading '0'.
 "16072012
-if l_line > 0.
-read table ist_zfivms_brdtmp into wa_zfivms_brdtmp with key seqno = l_line.
-if sy-subrc <> 0.
-read table ist_zfivms_brdtmp into wa_zfivms_brdtmp index 1.
-endif.
-endif.
+IF l_line > 0.
+READ table ist_zfivms_brdtmp into wa_zfivms_brdtmp with key seqno = l_line.
+IF sy-subrc <> 0.
+READ table ist_zfivms_brdtmp into wa_zfivms_brdtmp index 1.
+ENDIF.
+ENDIF.
 *
 sort ist_zfivms_brdtmp ascending by seqno span.
 *
-read table ist_zfivms_brdtmp into wa_zfivms_brdtmp index 1.
-append wa_zfivms_brdtmp to ist_zfivms_brdtmp1.
+READ table ist_zfivms_brdtmp into wa_zfivms_brdtmp index 1.
+APPEND wa_zfivms_brdtmp to ist_zfivms_brdtmp1.
 *
-modify ist_zfivms_brdtmp1 from wa_zfivms_brdtmp.
-refresh ist_zfivms_brdtmp.
-endif.
-endloop.
-refresh ist_zfivms_brd.
+MODIFY ist_zfivms_brdtmp1 from wa_zfivms_brdtmp.
+REFRESH ist_zfivms_brdtmp.
+ENDIF.
+ENDLOOP.
+REFRESH ist_zfivms_brd.
 ist_zfivms_brd[] = ist_zfivms_brdtmp1[].
 * End of <> on 21062011
 * Begin of <> on 16072012
-loop at ist_zfivms_resend into wa_zfivms_resend.
+LOOP at ist_zfivms_resend into wa_zfivms_resend.
 move-corresponding wa_zfivms_resend to wa_zfivms_brd.
-append wa_zfivms_brd to ist_zfivms_brd.
+APPEND wa_zfivms_brd to ist_zfivms_brd.
 *
-append lines of ist_zfivms_resend to ist_zfivms_brd.
-endloop.
+APPEND lines of ist_zfivms_resend to ist_zfivms_brd.
+ENDLOOP.
 * End of <> on 16072012
 "added by lipsy on 27.09.2012
 APPEND LINES OF ist_zsdcust_bankupd TO ist_zfivms_brd.
 "end of addition by lipsy on 27.09.2012
 * Vendor Registration - D
-loop at ist_zfivms_brd into wa_zfivms_brd . "where status <> 'APPROVED BY EMPLOYEE'.
+LOOP at ist_zfivms_brd into wa_zfivms_brd . "where status <> 'APPROVED BY EMPLOYEE'.
 * Begin of <> on 03122010
 
 **Begin RD1K991769 CAB_ALOK
 *
-if wa_zfivms_brd-bankl_new(4) = 'SBIN'.
+IF wa_zfivms_brd-bankl_new(4) = 'SBIN'.
 *
 valid_input_as = wa_zfivms_brd-bankl_new+6(5).
 *
-else.
+ELSE.
 *
 valid_input_as = wa_zfivms_brd-bankl_new.
 *
-endif.
-clear valid_input_as.
+ENDIF.
+CLEAR valid_input_as.
 valid_input_as = wa_zfivms_brd-bankl_new.
 **End RD1K991769 CAB_ALOK
 
 * End of <> on 03122010
-check valid_input_as is not INITIAL.
+CHECK valid_input_as is not INITIAL.
 "28.08.2014
-condense valid_input_as.
+CONDENSE valid_input_as.
 * NON SBI
 *{
 ***start of ONGC code
@@ -368,209 +368,209 @@ ENDIF.
 ***end of ONGC code
 **Begin RD1K991769 CAB_ALOK
 *
-if valid_input_as ca valid_characters_as.
+IF valid_input_as ca valid_characters_as.
 ***start of ONGC code
-if valid_input_as+0(4) <> 'SBIN' AND L_SBI_OTH = ''.
+IF valid_input_as+0(4) <> 'SBIN' AND L_SBI_OTH = ''.
 ***end of ONGC code
 **End RD1K991769 CAB_ALOK
-if wa_zfivms_brd-span ca 'R'.
+IF wa_zfivms_brd-span ca 'R'.
 * Begin of <> on 18052012
 *
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 *
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' into ist_rdata_nonsbi-span.
 * End of <> on 18052012
-if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+IF wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
 
-into ist_rdata_nonsbi-span.
+INTO ist_rdata_nonsbi-span.
 MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl.
 "05052011
-append ist_rdata_nonsbi_ovl.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
-perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+APPEND ist_rdata_nonsbi_ovl.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
+PERFORM add_7x_emp.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_rdata_nonsbi-span.
 MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl_e. "28062011
-append ist_rdata_nonsbi_ovl_e.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
-perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+APPEND ist_rdata_nonsbi_ovl_e.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
+PERFORM add_7x_emp.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_rdata_nonsbi_s-span.
-append ist_rdata_nonsbi_s.
-elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+APPEND ist_rdata_nonsbi_s.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY VMC'.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
-into ist_rdata_nonsbi-span.
-append ist_rdata_nonsbi.
+INTO ist_rdata_nonsbi-span.
+APPEND ist_rdata_nonsbi.
 "added by lipsy on 27.09.2012
-elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
-if wa_zfivms_brd-span+13(1) = 'R'."r is registration
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY CMC'.
+IF wa_zfivms_brd-span+13(1) = 'R'."r is registration
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
-into ist_rdata_nonsbi-span.
-append ist_rdata_nonsbi.
-endif.
+INTO ist_rdata_nonsbi-span.
+APPEND ist_rdata_nonsbi.
+ENDIF.
 "end of addition by lipsy on 27.09.2012
-endif.
-elseif wa_zfivms_brd-span ca 'D'.
+ENDIF.
+ELSEIF wa_zfivms_brd-span ca 'D'.
 * 18052012
-if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#'
+IF wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
+CONCATENATE wa_zfivms_brd-bankn_new '#' valid_input_as '#'
 wa_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi-span.
 MOVE-CORRESPONDING ist_ddata_nonsbi to ist_ddata_nonsbi_ovl.
 "05052011
-append ist_ddata_nonsbi_ovl.
+APPEND ist_ddata_nonsbi_ovl.
 
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
-perform add_7x_emp_D.
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#'
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
+PERFORM add_7x_emp_D.
+CONCATENATE wa_zfivms_brd-bankn_new '#' valid_input_as '#'
 
 wa_zfivms_brd-koinh_new '#' l_spanasa '#' into ist_ddata_nonsbi-span.
 MOVE-CORRESPONDING ist_ddata_nonsbi to ist_ddata_nonsbi_ovl_e. "28062011
-append ist_ddata_nonsbi_ovl_e.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
-perform add_7x_emp_D.
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#'
+APPEND ist_ddata_nonsbi_ovl_e.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
+PERFORM add_7x_emp_D.
+CONCATENATE wa_zfivms_brd-bankn_new '#' valid_input_as '#'
 wa_zfivms_brd-koinh_new '#' l_spanasa '#' into ist_ddata_nonsbi_s-span
 .
-append ist_ddata_nonsbi_s.
-elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#'
+APPEND ist_ddata_nonsbi_s.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY VMC'.
+CONCATENATE wa_zfivms_brd-bankn_new '#' valid_input_as '#'
 wa_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi-span.
-append ist_ddata_nonsbi.
+APPEND ist_ddata_nonsbi.
 "addition by lipsy on 27.09.2012
-elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
-if wa_zfivms_brd-span+13(1) = 'D'."d is for deregistration
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#'
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY CMC'.
+IF wa_zfivms_brd-span+13(1) = 'D'."d is for deregistration
+CONCATENATE wa_zfivms_brd-bankn_new '#' valid_input_as '#'
 wa_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi-span.
-append ist_ddata_nonsbi.
-endif.
+APPEND ist_ddata_nonsbi.
+ENDIF.
 "end of addition by lipsy on 27.09.2012
-endif.
-endif.
-else.
+ENDIF.
+ENDIF.
+ELSE.
 * SBI
-if wa_zfivms_brd-span ca 'R'.
+IF wa_zfivms_brd-span ca 'R'.
 * 18052012
 * move-corresponding wa_zfivms_brd to ist_rdata_sbi.
-if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi-span.
+IF wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi-span.
 MOVE-CORRESPONDING ist_rdata_sbi to ist_rdata_sbi_ovl. "0505
-append ist_rdata_sbi_ovl.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
-perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi-span.
+APPEND ist_rdata_sbi_ovl.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
+PERFORM add_7x_emp.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi-span.
 MOVE-CORRESPONDING ist_rdata_sbi to ist_rdata_sbi_ovl_e.
-append ist_rdata_sbi_ovl_e.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
-perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi_s-span.
-append ist_rdata_sbi_s.
-elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi-span.
-append ist_rdata_sbi.
+APPEND ist_rdata_sbi_ovl_e.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
+PERFORM add_7x_emp.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' l_spanasa '*' into ist_rdata_sbi_s-span.
+APPEND ist_rdata_sbi_s.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY VMC'.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi-span.
+APPEND ist_rdata_sbi.
 
 "added by lipsy on 27.09.2012
-elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
-if wa_zfivms_brd-span+13(1) = 'R'."r is for registration
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi-span.
-append ist_rdata_sbi.
-endif.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY CMC'.
+IF wa_zfivms_brd-span+13(1) = 'R'."r is for registration
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi-span.
+APPEND ist_rdata_sbi.
+ENDIF.
 "end of addition by lipsy on 27.09.2012
-endif.
-elseif wa_zfivms_brd-span ca 'D'.
+ENDIF.
+ELSEIF wa_zfivms_brd-span ca 'D'.
 * 18052012
-if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
-concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi-span.
+IF wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
+CONCATENATE wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi-span.
 MOVE-CORRESPONDING ist_ddata_sbi to ist_ddata_sbi_ovl. "0505
-append ist_ddata_sbi_ovl.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
-perform add_7x_emp_D.
-concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' l_spanasa '#' into ist_ddata_sbi-span.
+APPEND ist_ddata_sbi_ovl.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
+PERFORM add_7x_emp_D.
+CONCATENATE wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' l_spanasa '#' into ist_ddata_sbi-span.
 MOVE-CORRESPONDING ist_ddata_sbi to ist_ddata_sbi_ovl_e.
-append ist_ddata_sbi_ovl_e.
-elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
-perform add_7x_emp_D.
-concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' l_spanasa '#' into ist_ddata_sbi_s-span.
-append ist_ddata_sbi_s.
-elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
-concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi-span.
-append ist_ddata_sbi.
+APPEND ist_ddata_sbi_ovl_e.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
+PERFORM add_7x_emp_D.
+CONCATENATE wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' l_spanasa '#' into ist_ddata_sbi_s-span.
+APPEND ist_ddata_sbi_s.
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY VMC'.
+CONCATENATE wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi-span.
+APPEND ist_ddata_sbi.
 
 
 "added by lipsy on 27.09.2012
-elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
-if wa_zfivms_brd-span+13(1) = 'D'."D is for Deregistratio
+ELSEIF wa_zfivms_brd-status = 'RELEASE BY CMC'.
+IF wa_zfivms_brd-span+13(1) = 'D'."D is for Deregistratio
 
-concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi-span.
-append ist_ddata_sbi.
-endif.
+CONCATENATE wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi-span.
+APPEND ist_ddata_sbi.
+ENDIF.
 "end of addition by lipsy on 27.09.2012
-endif.
-endif.
-endif.
-endif.
-endloop.
+ENDIF.
+ENDIF.
+ENDIF.
+ENDIF.
+ENDLOOP.
 * Employee Registration - D
-loop at ist_zfivms_brd into wa_zfivms_brd where status = 'RELEASE BY EMPLOYEE' .
+LOOP at ist_zfivms_brd into wa_zfivms_brd where status = 'RELEASE BY EMPLOYEE' .
 
 **Begin RD1K991769 CAB_ALOK
 *
-if wa_zfivms_brd-bankl_new(4) = 'SBIN'.
+IF wa_zfivms_brd-bankl_new(4) = 'SBIN'.
 *
 valid_input_as = wa_zfivms_brd-bankl_new+6(5).
 *
-else.
+ELSE.
 *
 valid_input_as = wa_zfivms_brd-bankl_new.
 *
-endif.
-clear valid_input_as.
+ENDIF.
+CLEAR valid_input_as.
 valid_input_as = wa_zfivms_brd-bankl_new.
 **End RD1K991769 CAB_ALOK
-check valid_input_as is not INITIAL.
+CHECK valid_input_as is not INITIAL.
 "28.08.2014
-condense valid_input_as.
+CONDENSE valid_input_as.
 * NON SBI
 **Begin RD1K991769 CAB_ALOK
 *
-if valid_input_as ca valid_characters_as.
-if valid_input_as+0(4) <> 'SBIN'.
+IF valid_input_as ca valid_characters_as.
+IF valid_input_as+0(4) <> 'SBIN'.
 **End RD1K991769 CAB_ALOK
-if wa_zfivms_brd-span ca 'R'.
-perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
+IF wa_zfivms_brd-span ca 'R'.
+PERFORM add_7x_emp.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' into ist_rdata_nonsbi_e-span.
 *
 
-append ist_rdata_nonsbi_e.
-elseif wa_zfivms_brd-span ca 'D'.
+APPEND ist_rdata_nonsbi_e.
+ELSEIF wa_zfivms_brd-span ca 'D'.
 *
-perform add_7x_emp_D.
-concatenate wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi_e-span.
-append ist_ddata_nonsbi_e.
-endif.
-else.
+PERFORM add_7x_emp_D.
+CONCATENATE wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-koinh_new '#' wa_zfivms_brd-span '#' into ist_ddata_nonsbi_e-span.
+APPEND ist_ddata_nonsbi_e.
+ENDIF.
+ELSE.
 * SBI
-if wa_zfivms_brd-span ca 'R'.
+IF wa_zfivms_brd-span ca 'R'.
 *
-perform add_7x_emp.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi_e-span.
+PERFORM add_7x_emp.
+CONCATENATE wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*' wa_zfivms_brd-span '*' into ist_rdata_sbi_e-span.
 *
 move-corresponding wa_zfivms_brd to ist_rdata_sbi.
-append ist_rdata_sbi_e.
-elseif wa_zfivms_brd-span ca 'D'.
+APPEND ist_rdata_sbi_e.
+ELSEIF wa_zfivms_brd-span ca 'D'.
 *
-perform add_7x_emp_D.
-concatenate wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi_e-span.
-append ist_ddata_sbi_e.
-endif.
-endif.
-endif.
-endloop.
-endif.
+PERFORM add_7x_emp_D.
+CONCATENATE wa_zfivms_brd-koinh_new '#' '#' wa_zfivms_brd-bankn_new '#' valid_input_as '#' wa_zfivms_brd-span '#' into ist_ddata_sbi_e-span.
+APPEND ist_ddata_sbi_e.
+ENDIF.
+ENDIF.
+ENDIF.
+ENDLOOP.
+ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -582,11 +582,11 @@ FORM GENERATE_NEW_FORMAT .
 *
 *
 
-refresh: IST_94427 . "cvp-mum
-refresh: IST_93128 . "cep-ddn
-refresh:IST_30523 . "övl
+REFRESH: IST_94427 . "cvp-mum
+REFRESH: IST_93128 . "cep-ddn
+REFRESH:IST_30523 . "övl
 ***start of ONGC code
-refresh: IST_96726 . "ECPF
+REFRESH: IST_96726 . "ECPF
 ***end of ONGC code
 PERFORM vendor_filegen.
 PERFORM employee_filegen.
@@ -594,11 +594,11 @@ PERFORM employee_filegen.
 *
 *
 
-if g_filegen = 'X'.
-message s411(zfi).
-endif.
+IF g_filegen = 'X'.
+MESSAGE s411(zfi).
+ENDIF.
 
-refresh : ist_zfivms_brdtmp,ist_ddata_sbi_e,ist_rdata_sbi_e,ist_ddata_nonsbi_e,ist_rdata_nonsbi_e,ist_zfivms_brd,ist_zfivms_resend.
+REFRESH : ist_zfivms_brdtmp,ist_ddata_sbi_e,ist_rdata_sbi_e,ist_ddata_nonsbi_e,ist_rdata_nonsbi_e,ist_zfivms_brd,ist_zfivms_resend.
 
 ENDFORM.
 
@@ -616,37 +616,37 @@ DATA : D_MSG_TEXT(50).
 
 * SBI
 * Begin of <> on 16072012
-if not ist_rdata_sbi_s[] is initial.
-append lines of ist_rdata_sbi_s to ist_rdata_sbi.
-endif.
+IF not ist_rdata_sbi_s[] is initial.
+APPEND lines of ist_rdata_sbi_s to ist_rdata_sbi.
+ENDIF.
 * End of <> on 16072012
-describe table ist_rdata_sbi lines l_rsbi.
-if l_rsbi > 0.
+DESCRIBE table ist_rdata_sbi lines l_rsbi.
+IF l_rsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <RD1K976705> on 10062011 15062011
 * Begin of <> on 24122010
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'MUM'.
-if sy-subrc = 0.
-concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
-endif.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'MUM'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+ENDIF.
 *
-concatenate g_fsnam '3P.' g_date_rd '.94427' '.txt' into g_filename1.
+CONCATENATE g_fsnam '3P.' g_date_rd '.94427' '.txt' into g_filename1.
 "16062011
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "04052011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "04052011
 * End of <RD1K976705> on 10062011
 *
-concatenate '/usr/sap/syst-sysid/DigSignApp/data/output/signed/mum/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/syst-sysid/DigSignApp/data/output/signed/mum/' '3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' '3P.'
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' '3P.'
 g_date_rd '.94427' '.txt' into g_filename1. "11042011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' '3P'
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' '3P'
 g_date_rd g_time_rd '.txt' into g_filename1.
 * End of <> on 24122010
 **Begin RD1K991769 CAB_ALOK
@@ -656,7 +656,7 @@ g_date_rd g_time_rd '.txt' into g_filename1.
 IF p_payctr = 'CVP' .
 ** Opening the File
 *
-open dataset g_filename1 for output in text mode ENCODING DEFAULT MESSAGE D_MSG_TEXT.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT MESSAGE D_MSG_TEXT.
 ** Begin of <> on 04052011
 *
 IF SY-SUBRC NE 0.
@@ -671,21 +671,21 @@ ENDIF.
 *
 LOOP AT ist_rdata_sbi.
 *
-transfer ist_rdata_sbi to g_filename1.
+TRANSFER ist_rdata_sbi to g_filename1.
 *
 g_filegen = 'X'.
 *
 ENDLOOP.
 ** Closing the File
 *
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 
 *
 
-if ist_rdata_sbi[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING '3P' '94427' ist_rdata_sbi[] .
+IF ist_rdata_sbi[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING '3P' '94427' ist_rdata_sbi[] .
 PERFORM DO_DS tables ist_rdata_sbi using g_filename1 .
-endif.
+ENDIF.
 ENDIF. " p_payctr = 'CVP' .
 
 **End RD1K991769 CAB_ALOK
@@ -695,7 +695,7 @@ ENDIF. " p_payctr = 'CVP' .
 "opened commented part on 27.09.2012
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'R_SBI' g_date_rd g_time_rd '.txt' into g_filename. "21122010 11042011 21062011 05072011
+CONCATENATE 'C:\SPAN\' 'R_SBI' g_date_rd g_time_rd '.txt' into g_filename. "21122010 11042011 21062011 05072011
 *
 *
 * CALL FUNCTION 'GUI_DOWNLOAD'
@@ -803,14 +803,14 @@ ENDIF.
 * End of <> on 07082012
 ENDIF.
 * Begin of <> on 16072012
-if not ist_ddata_sbi_s[] is initial.
-append lines of ist_ddata_sbi_s to ist_ddata_sbi.
-endif.
+IF not ist_ddata_sbi_s[] is initial.
+APPEND lines of ist_ddata_sbi_s to ist_ddata_sbi.
+ENDIF.
 * End of <> on 16072012
-describe table ist_ddata_sbi lines l_dsbi.
-if l_dsbi > 0.
+DESCRIBE table ist_ddata_sbi lines l_dsbi.
+IF l_dsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
@@ -819,9 +819,9 @@ g_time_rd = sy-uzeit.
 "opened comment on 3.10.2012 for testing by lipsy
 * Begin of Comment on 07082012
 *
-concatenate '/usr/sap/RP1/FIN/epay/send/mum/' 'D3P' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE '/usr/sap/RP1/FIN/epay/send/mum/' 'D3P' g_date_rd g_time_rd '.txt' into g_filename.
 *
-concatenate 'C:\SPAN\' 'D_SBI' g_date_rd g_time_rd '.txt' into g_filename. "21122010
+CONCATENATE 'C:\SPAN\' 'D_SBI' g_date_rd g_time_rd '.txt' into g_filename. "21122010
 "11042011 21062011 05072011
 *
 
@@ -926,18 +926,18 @@ ENDIF.
 * End of <> on 07082012
 * Begin of <> on 10062011
 * Begin of <> on 24122010
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'MUM'.
-if sy-subrc = 0.
-concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
-endif.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'MUM'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+ENDIF.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 * End of <> on 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P'
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'D3P'
 g_date_rd g_time_rd '.txt' into g_filename1.
 * End of <> on 24212010
 **Begin RD1K991769 CAB_ALOK
@@ -952,57 +952,57 @@ IF p_payctr = 'CVP' .
 **
 **
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_ddata_sbi.
-transfer ist_ddata_sbi to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_ddata_sbi.
+TRANSFER ist_ddata_sbi to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_ddata_sbi[] is not INITIAL.
+CLOSE dataset g_filename1.
+IF ist_ddata_sbi[] is not INITIAL.
 
 *
 
-perform PREPARE_NEW_FORMAT USING 'D3P' '94427' ist_ddata_sbi[] .
+PERFORM PREPARE_NEW_FORMAT USING 'D3P' '94427' ist_ddata_sbi[] .
 PERFORM DO_DS tables ist_ddata_sbi using g_filename1 .
 
-endif.
+ENDIF.
 ENDIF. " p_payctr = 'CVP' .
 **End RD1K991769 CAB_ALOK
-loop at ist_ddata_sbi into wa_ddata_sbi.
-split wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
+LOOP at ist_ddata_sbi into wa_ddata_sbi.
+SPLIT wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
 wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-span.
 *
 * split wa_ddata_sbi at '#' into : g_koinh g_benf g_bankn g_bankl
 * g_status g_remarks g_span.
-update zfivms_resend set status = 'SENT TO SBI'
-where span = wa_zfivms_brd-span.
-endloop.
-endif.
+UPDATE zfivms_resend set status = 'SENT TO SBI'
+WHERE span = wa_zfivms_brd-span.
+ENDLOOP.
+ENDIF.
 * NON SBI
-clear : l_rsbi , l_dsbi.
+CLEAR : l_rsbi , l_dsbi.
 * Begin of <> on 16072012
-if not ist_rdata_nonsbi_s[] is initial.
-append lines of ist_rdata_nonsbi_s to ist_rdata_nonsbi.
-endif.
+IF not ist_rdata_nonsbi_s[] is initial.
+APPEND lines of ist_rdata_nonsbi_s to ist_rdata_nonsbi.
+ENDIF.
 * End of <> on 16072012
-describe table ist_rdata_nonsbi lines l_rsbi.
-if l_rsbi > 0.
+DESCRIBE table ist_rdata_nonsbi lines l_rsbi.
+IF l_rsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
 * Begin of <> on 24122010
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'MUM'.
-concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'MUM'.
+CONCATENATE g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1."11042011 04052011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP.' g_date_rd '.94427' '.txt' into g_filename1."11042011 04052011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP' g_date_rd g_time_rd '.txt' into g_filename1.
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'IBTP' g_date_rd g_time_rd '.txt' into g_filename1.
 * End of <> on 24212010
 
 **Begin RD1K991769 CAB_ALOK
@@ -1020,16 +1020,16 @@ IF p_payctr = 'CVP' .
 .
 *
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_rdata_nonsbi.
-transfer ist_rdata_nonsbi to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_rdata_nonsbi.
+TRANSFER ist_rdata_nonsbi to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_rdata_nonsbi[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'IBTP' '94427' ist_rdata_nonsbi[] .
+CLOSE dataset g_filename1.
+IF ist_rdata_nonsbi[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '94427' ist_rdata_nonsbi[] .
 PERFORM DO_DS tables ist_rdata_nonsbi using g_filename1 .
-endif.
+ENDIF.
 
 ENDIF. " IF p_payctr = 'CVP'
 **End RD1K991769 CAB_ALOK
@@ -1039,9 +1039,9 @@ ENDIF. " IF p_payctr = 'CVP'
 "opened commented part 27.09.2012
 * Begin of Comment on 07082012
 *
-concatenate '/usr/sap/RP1/FIN/epay/send/mum/' 'IBTP' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE '/usr/sap/RP1/FIN/epay/send/mum/' 'IBTP' g_date_rd g_time_rd '.txt' into g_filename.
 *
-concatenate 'C:\SPAN\' 'R_NONSBI' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE 'C:\SPAN\' 'R_NONSBI' g_date_rd g_time_rd '.txt' into g_filename.
 "11042011 21062011 05072011
 *
 *
@@ -1147,32 +1147,32 @@ ENDIF.
 * 14102011 17102011 090502012
 ENDIF.
 * Begin of <> on 16072012
-if not ist_ddata_nonsbi_s[] is initial.
-append lines of ist_ddata_nonsbi_s to ist_ddata_nonsbi.
-endif.
+IF not ist_ddata_nonsbi_s[] is initial.
+APPEND lines of ist_ddata_nonsbi_s to ist_ddata_nonsbi.
+ENDIF.
 * End of <> on 16072012
-describe table ist_ddata_nonsbi lines l_dsbi.
-if l_dsbi > 0.
+DESCRIBE table ist_ddata_nonsbi lines l_dsbi.
+IF l_dsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
 * Begin of <> on 24122010
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'MUM'.
-if sy-subrc = 0.
-concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'MUM'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
-endif.
+ENDIF.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBTP.' g_date_rd '.94427' '.txt' into g_filename1.
 "11042011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBTP' g_date_rd g_time_rd '.txt' into g_filename1.
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/mum/' 'DIBTP' g_date_rd g_time_rd '.txt' into g_filename1.
 * End of <> on 24122010
 **Begin RD1K991769 CAB_ALOK
 
@@ -1185,9 +1185,9 @@ IF p_payctr = 'CVP' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_ddata_nonsbi.
-transfer ist_ddata_nonsbi to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_ddata_nonsbi.
+TRANSFER ist_ddata_nonsbi to g_filename1.
 g_filegen = 'X'.
 
 ***
@@ -1197,11 +1197,11 @@ g_filegen = 'X'.
 *
 
 ENDLOOP.
-close dataset g_filename1.
-if ist_ddata_nonsbi[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '94427' ist_ddata_nonsbi[] .
+CLOSE dataset g_filename1.
+IF ist_ddata_nonsbi[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '94427' ist_ddata_nonsbi[] .
 PERFORM DO_DS tables ist_ddata_nonsbi using g_filename1 .
-endif.
+ENDIF.
 
 ENDIF. " IF p_payctr = 'CVP' .
 **End RD1K991769 CAB_ALOK
@@ -1210,10 +1210,10 @@ ENDIF. " IF p_payctr = 'CVP' .
 "opened comment for testing by lipsy on 3.10.2012
 * Begin of Comment on 07082012
 *
-concatenate '/usr/sap/RP1/FIN/epay/send/mum/' 'DIBTP' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE '/usr/sap/RP1/FIN/epay/send/mum/' 'DIBTP' g_date_rd g_time_rd '.txt' into g_filename.
 * Begin of <> on 21122010
 *
-concatenate 'C:\SPAN\' 'D_NONSBI' g_date_rd g_time_rd '.txt' into
+CONCATENATE 'C:\SPAN\' 'D_NONSBI' g_date_rd g_time_rd '.txt' into
 g_filename. "21122010 "11042011 21062011 05072011
 *
 *
@@ -1315,38 +1315,38 @@ ENDIF.
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open of comment by lipsy on 03.10.2012
 
-loop at ist_ddata_nonsbi into wa_ddata_nonsbi.
-split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
-update zfivms_resend set status = 'SENT TO SBI'
-where span = wa_zfivms_brd-span.
-endloop.
+LOOP at ist_ddata_nonsbi into wa_ddata_nonsbi.
+SPLIT wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
+UPDATE zfivms_resend set status = 'SENT TO SBI'
+WHERE span = wa_zfivms_brd-span.
+ENDLOOP.
 
 *
 
 ENDIF.
 * Code Written for OVL Bank registration Date 02-05-2011
-clear : l_rsbi, l_dsbi.
+CLEAR : l_rsbi, l_dsbi.
 * OVL SBI - R
 * Begin of <RD1K977143> on 14072011
-if not ist_rdata_sbi_ovl_e[] is initial.
+IF not ist_rdata_sbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
-append lines of ist_rdata_sbi_ovl_e to ist_rdata_sbi_ovl.
+APPEND lines of ist_rdata_sbi_ovl_e to ist_rdata_sbi_ovl.
 "06072011
-endif.
-describe table ist_rdata_sbi_ovl lines l_rsbi.
-if l_rsbi > 0.
+ENDIF.
+DESCRIBE table ist_rdata_sbi_ovl lines l_rsbi.
+IF l_rsbi > 0.
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'OVL'.
-if sy-subrc = 0.
-concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1. "16062011
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'OVL'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1. "16062011
 *
-concatenate g_fsnam '3P.' g_date_rd '.30523' '.txt' into g_filename1. "16062011
-endif.
+CONCATENATE g_fsnam '3P.' g_date_rd '.30523' '.txt' into g_filename1. "16062011
+ENDIF.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' '3P.' g_date_rd '.30523' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' '3P.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 **Begin RD1K991769 CAB_ALOK
 
@@ -1363,15 +1363,15 @@ IF p_payctr = 'OVL' .
 
 .
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_rdata_sbi_ovl.
-transfer ist_rdata_sbi_ovl to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_rdata_sbi_ovl.
+TRANSFER ist_rdata_sbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_rdata_sbi_ovl[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING '3P' '30523' ist_rdata_sbi_ovl[] .
-endif.
+CLOSE dataset g_filename1.
+IF ist_rdata_sbi_ovl[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING '3P' '30523' ist_rdata_sbi_ovl[] .
+ENDIF.
 
 ENDIF. " p_payctr = 'OVL' .
 **End RD1K991769 CAB_ALOK
@@ -1379,7 +1379,7 @@ ENDIF. " p_payctr = 'OVL' .
 "opened and commented by lipsy on 7.01.2013
 * Begin of Comment on 07082012
 *
-Concatenate 'C:\SPAN\' 'R_SBI_OVL' g_date_rd g_time_rd '.txt' into
+CONCATENATE 'C:\SPAN\' 'R_SBI_OVL' g_date_rd g_time_rd '.txt' into
 g_filename. "05052011 "10062011 21062011 05072011 110711
 *
 *
@@ -1479,29 +1479,29 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
-endif.
+ENDIF.
 * SBI - D
-clear : l_rsbi, l_dsbi.
+CLEAR : l_rsbi, l_dsbi.
 "14072011 RD1K9771
 * Begin of <RD1K977143> on 14072011
-if not ist_ddata_sbi_ovl_e[] is initial.
+IF not ist_ddata_sbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
-append lines of ist_ddata_sbi_ovl_e to ist_ddata_sbi_ovl.
+APPEND lines of ist_ddata_sbi_ovl_e to ist_ddata_sbi_ovl.
 "06072011
-endif.
-describe table ist_ddata_sbi_ovl lines l_dsbi.
-if l_dsbi > 0.
+ENDIF.
+DESCRIBE table ist_ddata_sbi_ovl lines l_dsbi.
+IF l_dsbi > 0.
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
 
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'OVL'.
-if sy-subrc = 0.
-concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
-endif.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'OVL'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+ENDIF.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'D3P.' g_date_rd '.30523' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'D3P.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 **Begin RD1K991769 CAB_ALOK
 
@@ -1516,25 +1516,25 @@ IF p_payctr = 'OVL' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_ddata_sbi_ovl.
-transfer ist_ddata_sbi_ovl to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_ddata_sbi_ovl.
+TRANSFER ist_ddata_sbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_ddata_sbi_ovl[] is not INITIAL.
+CLOSE dataset g_filename1.
+IF ist_ddata_sbi_ovl[] is not INITIAL.
 
 .
 
-perform PREPARE_NEW_FORMAT USING 'D3P' '30523' ist_ddata_sbi_ovl[] .
-endif.
+PERFORM PREPARE_NEW_FORMAT USING 'D3P' '30523' ist_ddata_sbi_ovl[] .
+ENDIF.
 
 ENDIF. " p_payctr = 'OVL' .
 **End RD1K991769 CAB_ALOK
 ** Begin of Comment on 07082012
 *
 *
-Concatenate 'C:\SPAN\' 'D_SBI_OVL' g_date_rd g_time_rd '.txt' into
+CONCATENATE 'C:\SPAN\' 'D_SBI_OVL' g_date_rd g_time_rd '.txt' into
 g_filename. "05052011 21062011 05072011 11072011
 *
 *
@@ -1634,32 +1634,32 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
 ENDIF.
 * End of <> on 07082012
-loop at ist_ddata_sbi_ovl into wa_ddata_sbi.
-split wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
+LOOP at ist_ddata_sbi_ovl into wa_ddata_sbi.
+SPLIT wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
 wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-span.
-update zfivms_resend set status = 'SENT TO SBI'
-where span = wa_zfivms_brd-span.
-endloop.
-endif.
+UPDATE zfivms_resend set status = 'SENT TO SBI'
+WHERE span = wa_zfivms_brd-span.
+ENDLOOP.
+ENDIF.
 * NON SBI - R
-clear : l_rsbi , l_dsbi.
+CLEAR : l_rsbi , l_dsbi.
 * Begin of <RD1K977143> on 14072011
-if not ist_rdata_nonsbi_ovl_e[] is initial.
+IF not ist_rdata_nonsbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
-append lines of ist_rdata_nonsbi_ovl_e to ist_rdata_nonsbi_ovl. "06072011
-endif.
-describe table ist_rdata_nonsbi_ovl lines l_rsbi.
-if l_rsbi > 0.
+APPEND lines of ist_rdata_nonsbi_ovl_e to ist_rdata_nonsbi_ovl. "06072011
+ENDIF.
+DESCRIBE table ist_rdata_nonsbi_ovl lines l_rsbi.
+IF l_rsbi > 0.
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'OVL'.
-if sy-subrc = 0.
-concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
-endif.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'OVL'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+ENDIF.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'IBTP.' g_date_rd '.30523' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'IBTP.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 
 **Begin RD1K991769 CAB_ALOK
@@ -1676,16 +1676,16 @@ IF p_payctr = 'OVL' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_rdata_nonsbi_ovl. "ist_rdata_nonsbi. "19052011
-transfer ist_rdata_nonsbi_ovl to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_rdata_nonsbi_ovl. "ist_rdata_nonsbi. "19052011
+TRANSFER ist_rdata_nonsbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 
-if ist_rdata_nonsbi_ovl[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'IBTP' '30523' ist_rdata_nonsbi_ovl[] .
-endif.
+IF ist_rdata_nonsbi_ovl[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '30523' ist_rdata_nonsbi_ovl[] .
+ENDIF.
 ENDIF. " p_payctr = 'OVL' .
 **End RD1K991769 CAB_ALOK
 "opened and commented by lipsy on 7.01.2013
@@ -1791,28 +1791,28 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
-endif.
+ENDIF.
 * NON SBI - D
-clear : l_rsbi, l_dsbi.
+CLEAR : l_rsbi, l_dsbi.
 "14072011 RD1K9771
 * Begin of <RD1K977143> on 14072011
-if not ist_ddata_nonsbi_ovl_e[] is initial.
+IF not ist_ddata_nonsbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
-append lines of ist_ddata_nonsbi_ovl_e to ist_ddata_nonsbi_ovl. "06072011
-endif.
-describe table ist_ddata_nonsbi_ovl lines l_dsbi.
-if l_dsbi > 0.
+APPEND lines of ist_ddata_nonsbi_ovl_e to ist_ddata_nonsbi_ovl. "06072011
+ENDIF.
+DESCRIBE table ist_ddata_nonsbi_ovl lines l_dsbi.
+IF l_dsbi > 0.
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
-and zbukr = 'OVL'.
-if sy-subrc = 0.
-concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
+AND zbukr = 'OVL'.
+IF sy-subrc = 0.
+CONCATENATE g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
-endif.
+ENDIF.
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'DIBTP.' g_date_rd '.30523' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'DIBTP.' g_date_rd '.30523' '.txt' into g_filename1.
 * End of <> on 10062011
 **Begin RD1K991769 CAB_ALOK
 
@@ -1828,23 +1828,23 @@ IF p_payctr = 'OVL' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_ddata_nonsbi_ovl. "ist_ddata_nonsbi. 19052011
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_ddata_nonsbi_ovl. "ist_ddata_nonsbi. 19052011
 * transfer ist_ddata_nonsbi to g_filename1. "19052011
-transfer ist_ddata_nonsbi_ovl to g_filename1.
+TRANSFER ist_ddata_nonsbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 
-if ist_ddata_nonsbi_ovl[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '30523' ist_ddata_nonsbi_ovl[] .
-endif.
+IF ist_ddata_nonsbi_ovl[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '30523' ist_ddata_nonsbi_ovl[] .
+ENDIF.
 ENDIF. " p_payctr = 'OVL' .
 **End RD1K991769 CAB_ALOK
 * Begin of Comment on 07082012
 *
 
-Concatenate 'C:\SPAN\' 'D_NONSBI_OVL'
+CONCATENATE 'C:\SPAN\' 'D_NONSBI_OVL'
 
 g_date_rd g_time_rd '.txt' into g_filename. "05052011 21062011 11072011
 **
@@ -1944,12 +1944,12 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
 ENDIF.
 * End of <> on 07082012
-loop at ist_ddata_nonsbi_ovl into wa_ddata_nonsbi.
-split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
-update zfivms_resend set status = 'SENT TO SBI'
-where span = wa_zfivms_brd-span.
-endloop.
-endif.
+LOOP at ist_ddata_nonsbi_ovl into wa_ddata_nonsbi.
+SPLIT wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
+UPDATE zfivms_resend set status = 'SENT TO SBI'
+WHERE span = wa_zfivms_brd-span.
+ENDLOOP.
+ENDIF.
 * End of Logic for OVL
 **Begin RD1K991769 CAB_ALOK
 * describe table ist_zfivms_brd lines l_stat.
@@ -1962,10 +1962,10 @@ endif.
 *
 * and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 **
-update zfivmsbank set status = 'SENT TO SBI'
+UPDATE zfivmsbank set status = 'SENT TO SBI'
 
 **
-where vmc_apdate = p_date.
+WHERE vmc_apdate = p_date.
 ** End of <> on 26082011
 *
 *
@@ -1989,27 +1989,27 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM EMPLOYEE_FILEGEN .
 * SBI
-describe table ist_rdata_sbi_e lines l_rsbi.
-if l_rsbi > 0.
+DESCRIBE table ist_rdata_sbi_e lines l_rsbi.
+IF l_rsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'DDN'.
-concatenate g_fsnam '3P.' g_date_rd '.93128' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'DDN'.
+CONCATENATE g_fsnam '3P.' g_date_rd '.93128' '.txt' into g_filename1.
 ***start of ONGC code
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'ECPF'.
-concatenate g_fsnam '3P.' g_date_rd '.96726' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'ECPF'.
+CONCATENATE g_fsnam '3P.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.'
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.'
 g_date_rd '.93128' '.txt' into g_filename1. "11042011
 **Begin RD1K991769 CAB_ALOK
 
@@ -2018,7 +2018,7 @@ g_date_rd '.93128' '.txt' into g_filename1. "11042011
 IF p_payctr = 'CEP'.
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT
 
 .
 ***
@@ -2027,21 +2027,21 @@ open dataset g_filename1 for output in text mode ENCODING DEFAULT
 ***
 ***
 
-loop at ist_rdata_sbi_e.
-transfer ist_rdata_sbi_e to g_filename1.
+LOOP at ist_rdata_sbi_e.
+TRANSFER ist_rdata_sbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_rdata_sbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING '3P' '93128' ist_rdata_sbi_e[] .
-endif.
+CLOSE dataset g_filename1.
+IF ist_rdata_sbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING '3P' '93128' ist_rdata_sbi_e[] .
+ENDIF.
 
 ENDIF. " p_payctr = 'CEP .
 ***start of ONGC code
 IF p_payctr = 'ECPF'.
-if ist_rdata_sbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING '3P' '96726' ist_rdata_sbi_e[] .
-endif.
+IF ist_rdata_sbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING '3P' '96726' ist_rdata_sbi_e[] .
+ENDIF.
 ENDIF. "
 ***end of ONGC code
 **End RD1K991769 CAB_ALOK
@@ -2049,7 +2049,7 @@ ENDIF. "
 "opened and commented by lipsy on 7.01.2013
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'R_SBI_E' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE 'C:\SPAN\' 'R_SBI_E' g_date_rd g_time_rd '.txt' into g_filename.
 "11042011 "21062011 291211 27012012
 *
 *
@@ -2150,17 +2150,17 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
-endif.
-describe table ist_ddata_sbi_e lines l_dsbi.
-if l_dsbi > 0.
+ENDIF.
+DESCRIBE table ist_ddata_sbi_e lines l_dsbi.
+IF l_dsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'D_SBI_E' g_date_rd g_time_rd '.txt' into g_filename. "21122010 "11042011 21060211 291211 27012012
+CONCATENATE 'C:\SPAN\' 'D_SBI_E' g_date_rd g_time_rd '.txt' into g_filename. "21122010 "11042011 21060211 291211 27012012
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -2260,19 +2260,19 @@ ENDIF.
 * End of <> on 07082012
 
 * Begin of <> on 10062011
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'DDN'.
-concatenate g_fsnam 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'DDN'.
+CONCATENATE g_fsnam 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
 ***start of ONGC code
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'ECPF'.
-concatenate g_fsnam 'D3P.' g_date_rd '.96726' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'ECPF'.
+CONCATENATE g_fsnam 'D3P.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
 * End of <> on 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 **Begin RD1K991769 CAB_ALOK
 
 * ZVMSFILEGEN_CEP, CEP, D3P (SBI - DeRegis. )
@@ -2286,50 +2286,50 @@ IF p_payctr = 'CEP'.
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_ddata_sbi_e.
-transfer ist_ddata_sbi_e to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_ddata_sbi_e.
+TRANSFER ist_ddata_sbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_ddata_sbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'D3P' '93128' ist_ddata_sbi_e[] .
-endif.
+CLOSE dataset g_filename1.
+IF ist_ddata_sbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'D3P' '93128' ist_ddata_sbi_e[] .
+ENDIF.
 
 ENDIF. " p_payctr = 'CEP' .
 **End RD1K991769 CAB_ALOK
 ***start of ONGC code
 IF p_payctr = 'ECPF'.
-if ist_ddata_sbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'D3P' '96726' ist_ddata_sbi_e[] .
-endif.
+IF ist_ddata_sbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'D3P' '96726' ist_ddata_sbi_e[] .
+ENDIF.
 ENDIF. "
 ***end of ONGC code
 ENDIF.
 * NON SBI
 
-clear : l_rsbi , l_dsbi.
-describe table ist_rdata_nonsbi_e lines l_rsbi.
-if l_rsbi > 0.
+CLEAR : l_rsbi , l_dsbi.
+DESCRIBE table ist_rdata_nonsbi_e lines l_rsbi.
+IF l_rsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'DDN'.
-concatenate g_fsnam 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'DDN'.
+CONCATENATE g_fsnam 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1.
 ***start of ONGC code
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'ECPF'.
-concatenate g_fsnam 'IBTP.' g_date_rd '.96726' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'ECPF'.
+CONCATENATE g_fsnam 'IBTP.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 * End of <> 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 **Begin RD1K991769 CAB_ALOK
 
 * ZVMSFILEGEN_CEP, CEP, IBTP (nonSBI - Regis. )
@@ -2343,31 +2343,31 @@ IF p_payctr = 'CEP'.
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_rdata_nonsbi_e.
-transfer ist_rdata_nonsbi_e to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_rdata_nonsbi_e.
+TRANSFER ist_rdata_nonsbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_rdata_nonsbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'IBTP' '93128' ist_rdata_nonsbi_e[] .
+CLOSE dataset g_filename1.
+IF ist_rdata_nonsbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '93128' ist_rdata_nonsbi_e[] .
 
-endif.
+ENDIF.
 ENDIF. " p_payctr = 'CEP' .
 **End RD1K991769 CAB_ALOK
 ***start of ONGC code
 IF p_payctr = 'ECPF'.
-if ist_rdata_nonsbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'IBTP' '96726' ist_rdata_nonsbi_e[] .
+IF ist_rdata_nonsbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '96726' ist_rdata_nonsbi_e[] .
 
-endif.
+ENDIF.
 
 ENDIF. "
 ***end of ONGC code
 "opened and commented by lipsy on 7.01.2013
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'R_NONSBI_E' g_date_rd g_time_rd '.txt' into g_filename. "11042011 21062011
+CONCATENATE 'C:\SPAN\' 'R_NONSBI_E' g_date_rd g_time_rd '.txt' into g_filename. "11042011 21062011
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -2466,28 +2466,28 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
-endif.
-describe table ist_ddata_nonsbi_e lines l_dsbi.
-if l_dsbi > 0.
+ENDIF.
+DESCRIBE table ist_ddata_nonsbi_e lines l_dsbi.
+IF l_dsbi > 0.
 *
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 * Begin of <> on 10062011
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'DDN'.
-concatenate g_fsnam 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'DDN'.
+CONCATENATE g_fsnam 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
 ***start of ONGC code
-select single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
-and zbukr = 'ECPF'.
-concatenate g_fsnam 'DIBTP.' g_date_rd '.96726' '.txt' into g_filename1.
+SELECT single fsnam into g_fsnam from zfi_path where sysid = syst-sysid
+AND zbukr = 'ECPF'.
+CONCATENATE g_fsnam 'DIBTP.' g_date_rd '.96726' '.txt' into g_filename1.
 ***end of ONGC code
 *
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 * End of <> on 10062011
 *
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
 "11042011
 **Begin RD1K991769 CAB_ALOK
 
@@ -2502,29 +2502,29 @@ IF p_payctr = 'CEP'.
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-loop at ist_ddata_nonsbi_e.
-transfer ist_ddata_nonsbi_e to g_filename1.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
+LOOP at ist_ddata_nonsbi_e.
+TRANSFER ist_ddata_nonsbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
-close dataset g_filename1.
-if ist_ddata_nonsbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '93128' ist_ddata_nonsbi_e[] .
+CLOSE dataset g_filename1.
+IF ist_ddata_nonsbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '93128' ist_ddata_nonsbi_e[] .
 
-endif.
+ENDIF.
 ENDIF. " p_payctr = 'CEP' .
 **End RD1K991769 CAB_ALOK
 ***start of ONGC code
 IF p_payctr = 'ECPF'.
-if ist_ddata_nonsbi_e[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '96726' ist_ddata_nonsbi_e[] .
+IF ist_ddata_nonsbi_e[] is not INITIAL.
+PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '96726' ist_ddata_nonsbi_e[] .
 
-endif.
+ENDIF.
 ENDIF.
 ***end of ONGC code
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'D_NONSBI_E' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE 'C:\SPAN\' 'D_NONSBI_E' g_date_rd g_time_rd '.txt' into g_filename.
 "11042011 21062011
 *
 *
@@ -2626,13 +2626,13 @@ ENDIF.
 * End of <> on 07082012
 ENDIF.
 * OVL Employee
-clear : l_rsbi , l_dsbi.
+CLEAR : l_rsbi , l_dsbi.
 * Begin of <> on 06072011
 * SBI
 * describe table ist_rdata_sbi_ovl_e lines l_rsbi.
 * if l_rsbi > 0.
 **
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 *
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
@@ -2640,37 +2640,37 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 ** Begin of <> on 10062011
 *
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
-where sysid = syst-sysid.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
+WHERE sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
-if sy-subrc = 0.
+IF sy-subrc = 0.
 *
-concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+CONCATENATE g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
 ENDIF.
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 *
 *
 *
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-loop at ist_rdata_sbi_ovl_e.
+LOOP at ist_rdata_sbi_ovl_e.
 
 *
-transfer ist_rdata_sbi_ovl_e to g_filename1.
+TRANSFER ist_rdata_sbi_ovl_e to g_filename1.
 *
 ENDLOOP.
 *
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 *
 *
-concatenate 'C:\SPAN\' 'R_SBI_OVL_E' g_date_rd g_time_rd '.txt' into g_filename.
+CONCATENATE 'C:\SPAN\' 'R_SBI_OVL_E' g_date_rd g_time_rd '.txt' into g_filename.
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -2771,11 +2771,11 @@ ENDIF.
 *
 *
 
-describe table ist_ddata_sbi_ovl_e lines l_dsbi.
-if l_dsbi > 0.
+DESCRIBE table ist_ddata_sbi_ovl_e lines l_dsbi.
+IF l_dsbi > 0.
 
 **
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 *
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
@@ -2783,7 +2783,7 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 *
 *
-concatenate 'C:\SPAN\' 'D_SBI_OVL_E' g_date_rd g_time_rd '.txt' into g_filename. "21122010 "11042011 21060211
+CONCATENATE 'C:\SPAN\' 'D_SBI_OVL_E' g_date_rd g_time_rd '.txt' into g_filename. "21122010 "11042011 21060211
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -2883,34 +2883,34 @@ WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 ENDIF.
 ** Begin of <> on 10062011
 *
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
-where sysid = syst-sysid.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
+WHERE sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
-if sy-subrc = 0.
+IF sy-subrc = 0.
 *
-concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+CONCATENATE g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
 ENDIF.
 *
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
 ** End of <> on 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 *
 *
 *
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-loop at ist_ddata_sbi_ovl_e.
+LOOP at ist_ddata_sbi_ovl_e.
 *
-transfer ist_ddata_sbi_ovl_e to g_filename1.
+TRANSFER ist_ddata_sbi_ovl_e to g_filename1.
 *
 ENDLOOP.
 *
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 *
 ENDIF.
 * NON SBI
@@ -2918,7 +2918,7 @@ ENDIF.
 * describe table ist_rdata_nonsbi_ovl_e lines l_rsbi.
 * if l_rsbi > 0.
 **
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 *
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
@@ -2926,35 +2926,35 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 ** Begin of <> on 10062011
 *
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
-if sy-subrc = 0.
+IF sy-subrc = 0.
 *
-concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
+CONCATENATE g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
 ENDIF.
 *
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 *
 *
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-loop at ist_rdata_nonsbi_ovl_e.
+LOOP at ist_rdata_nonsbi_ovl_e.
 *
-transfer ist_rdata_nonsbi_ovl_e to g_filename1.
+TRANSFER ist_rdata_nonsbi_ovl_e to g_filename1.
 *
 ENDLOOP.
 *
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 *
-concatenate 'C:\SPAN\' 'R_NONSBI_OVL_E' g_date_rd g_time_rd '.txt'
-into g_filename. "11042011 21062011
+CONCATENATE 'C:\SPAN\' 'R_NONSBI_OVL_E' g_date_rd g_time_rd '.txt'
+INTO g_filename. "11042011 21062011
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -3057,7 +3057,7 @@ ENDIF.
 * if l_dsbi > 0.
 
 **
-write sy-datum to g_date_rd DDMMYY.
+WRITE sy-datum to g_date_rd DDMMYY.
 "14022011
 *
 CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
@@ -3065,39 +3065,39 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 ** Begin of <> on 10062011
 *
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid.
+SELECT single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
-if sy-subrc = 0.
+IF sy-subrc = 0.
 *
-concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
+CONCATENATE g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
 *
 ENDIF.
 *
 **
-concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
+CONCATENATE '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> on 10062011
 **
-concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
+CONCATENATE '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1.
 "11042011
 *
 *
-open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+OPEN dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-loop at ist_ddata_nonsbi_ovl_e.
+LOOP at ist_ddata_nonsbi_ovl_e.
 *
-transfer ist_ddata_nonsbi_ovl_e to g_filename1.
+TRANSFER ist_ddata_nonsbi_ovl_e to g_filename1.
 *
 ENDLOOP.
 *
-close dataset g_filename1.
+CLOSE dataset g_filename1.
 *
 *
 *
-concatenate 'C:\SPAN\' 'D_NONSBI_OVL_E' g_date_rd g_time_rd '.txt'
-into g_filename.
+CONCATENATE 'C:\SPAN\' 'D_NONSBI_OVL_E' g_date_rd g_time_rd '.txt'
+INTO g_filename.
 "11042011 21062011
 *
 *
@@ -3204,7 +3204,7 @@ ENDFORM.
 *& Form GET_ONGC_EMLPOYEE_DETAILS
 *&---------------------------------------------------------------------*
 FORM GET_ONGC_EMLPOYEE_DETAILS .
-data : l_begdate type pa0009-begda,
+DATA : l_begdate type pa0009-begda,
 l_strlen type n,
 l_line(2) type n,
 l_enddate type pa0009-endda value '99991231',
@@ -3229,11 +3229,11 @@ wa_zfivms_brd-BANKL_NEW = wa_pa0009-bankl.
 wa_zfivms_brd-BANKL_NEW = wa_pa0009-bankl.
 **End RD1K991769 CAB_ALOK
 wa_zfivms_brd-bankn_new = wa_pa0009-bankn.
-if not wa_pa0009-emftx is initial.
+IF not wa_pa0009-emftx is initial.
 wa_zfivms_brd-koinh_new = wa_pa0009-emftx.
-else.
-select single ename from pa0001 into wa_zfivms_brd-koinh_new where pernr = wa_pa0009-pernr.
-endif.
+ELSE.
+SELECT single ename from pa0001 into wa_zfivms_brd-koinh_new where pernr = wa_pa0009-pernr.
+ENDIF.
 **Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
@@ -3243,57 +3243,57 @@ TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 
 * CR 30010502:Beneficiary file-digital signing,
 
-select single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
+SELECT single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
 wa_zfivms_brd-STATUS
 
 = 'RELEASE BY EMPLOYEE'.
 
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
-and anssa in ('1', '3' )
-and endda = l_enddate. "'
+SELECT * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
+AND anssa in ('1', '3' )
+AND endda = l_enddate. "'
 "31.12.9999'.
-read table ist_pa0006 into wa_pa0006 with key anssa = '1'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '1'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2. 2
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01. 2
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 "wa_pa0006-stras. 2
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
-read table ist_pa0006 into wa_pa0006 with key anssa = '3'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+ENDIF.
+ELSE.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '3'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2. 2
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01. 2
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
 * 290911
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
+ENDIF.
+ELSE.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01.
 * 290911
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
 * 290911
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
+ENDIF.
 wa_zfivms_brd-STREET = 'ONGC'.
-endif.
+ENDIF.
 * Begin of <> on 30052012
-else.
+ELSE.
 wa_zfivms_brd-STREET = 'ONGC'.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
@@ -3303,31 +3303,31 @@ ENDIF.
 ENDIF.
 * Begin of <> on 20062011 21062011
 
-refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
-if sy-subrc = 0.
+REFRESH ist_zfivms_brd1.
+SELECT * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
+IF sy-subrc = 0.
 * Begin of <> on 22052012
-clear l_line.
-describe table ist_zfivms_brd1 lines l_line.
-shift l_line left deleting leading '0'.
+CLEAR l_line.
+DESCRIBE table ist_zfivms_brd1 lines l_line.
+SHIFT l_line left deleting leading '0'.
 "16072012
-if l_line > 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_line.
-if sy-subrc <> 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-endif.
+IF l_line > 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_line.
+IF sy-subrc <> 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+ENDIF.
 *
 sort ist_zfivms_brd1 descending by seqno.
 *
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
 * End of <> on 22052012
-if sy-subrc = 0.
+IF sy-subrc = 0.
 wa_zfivms_brd-seqno = wa_zfivms_brd1-seqno + 1.
-endif.
-endif.
-modify zfivms_brd from wa_zfivms_brd .
+ENDIF.
+ENDIF.
+MODIFY zfivms_brd from wa_zfivms_brd .
 *
-update zfivms_brd set seqno = wa_zfivms_brd-seqno
+UPDATE zfivms_brd set seqno = wa_zfivms_brd-seqno
 *
 BANKL_NEW = wa_zfivms_brd-BANKL_NEW
 *
@@ -3354,18 +3354,18 @@ STATUS
 REMARKS
 = wa_zfivms_brd-REMARKS
 *
-where span = wa_zfivms_brd-span .
-else.
+WHERE span = wa_zfivms_brd-span .
+ELSE.
 * End of <> on 20062011
 wa_zfivms_brd-seqno = 1.
-modify zfivms_brd from wa_zfivms_brd .
-endif.
+MODIFY zfivms_brd from wa_zfivms_brd .
+ENDIF.
 .
 "ENDDA
 **Begin RD1K991769 CAB_ALOK
 * if sy-subrc = 0.
 *
-update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddate and subty = '0'.
+UPDATE pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddate and subty = '0'.
 * endif.
 *
 *
@@ -3374,12 +3374,12 @@ update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddat
 *
 *
 
-update pa0009
+UPDATE pa0009
 "FLAG2
-set flag2 = 'X'
-where pernr = wa_pa0009-pernr
-and endda = l_enddate
-and subty = '0'.
+SET flag2 = 'X'
+WHERE pernr = wa_pa0009-pernr
+AND endda = l_enddate
+AND subty = '0'.
 wa_pa0009t-FLAG2 = 'X'.
 
 wa_pa0009-FLAG1 = 'R'.
@@ -3394,31 +3394,31 @@ APPEND wa_pa0009 TO IST_pa0009_ONGC.
 **End RD1K991769 CAB_ALOK
 *
 
-clear : wa_zfivms_brd , wa_zfivms_brd1.
-append wa_zfivms_brd to ist_zfivms_brd.
+CLEAR : wa_zfivms_brd , wa_zfivms_brd1.
+APPEND wa_zfivms_brd to ist_zfivms_brd.
 
 "ENDDA
 
 l_begdate = wa_pa0009-begda - 1.
 **Begin RD1K991769 CAB_ALOK
-clear wa_pa0009t.
+CLEAR wa_pa0009t.
 **End RD1K991769 CAB_ALOK
 **Begin RD1K991769 CAB_ALOK
 * select single * from pa0009 into wa_pa0009t where pernr = wa_pa0009pernr and endda = l_begdate "begda = p_date and
 *
 * and subty = '0'. " and zlsch in ('S','N'). 20062011
-select single *
-from pa0009
-into wa_pa0009t
-where pernr = wa_pa0009-pernr
-and subty = '0'
-and endda = l_begdate
-and ( flag1 = '' or flag1 = 'S' or flag1 = 'F').
+SELECT single *
+FROM pa0009
+INTO wa_pa0009t
+WHERE pernr = wa_pa0009-pernr
+AND subty = '0'
+AND endda = l_begdate
+AND ( flag1 = '' or flag1 = 'S' or flag1 = 'F').
 *
 * and FLAG2 = ''.
 **End RD1K991769 CAB_ALOK
 
-if sy-subrc = 0.
+IF sy-subrc = 0.
 * Begin of <> on 15022012
 */..Begin of Change CR :30014976 by CAB_RAMA
 * CONCATENATE 'EMP0000000000D00' wa_pa0009t-pernr into wa_zfivms_brd-span.
@@ -3429,11 +3429,11 @@ CONCATENATE '0000000000000D00' wa_pa0009t-pernr into wa_zfivms_brd-span.
 * End of <> on 15022012
 **Begin RD1K991769 CAB_ALOK
 *
-if wa_pa0009t-bankl(4) = 'SBIN'.
+IF wa_pa0009t-bankl(4) = 'SBIN'.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl+6(5).
 *
-else.
+ELSE.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 *
@@ -3442,104 +3442,104 @@ wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 **End RD1K991769 CAB_ALOK
 
 wa_zfivms_brd-bankn_new = wa_pa0009t-bankn.
-if not wa_pa0009t-emftx is initial.
+IF not wa_pa0009t-emftx is initial.
 wa_zfivms_brd-koinh_new = wa_pa0009t-emftx.
-else.
-select single ename from pa0001 into wa_zfivms_brd-koinh_new where
+ELSE.
+SELECT single ename from pa0001 into wa_zfivms_brd-koinh_new where
 pernr = wa_pa0009t-pernr.
-endif.
+ENDIF.
 **Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 **End RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing,
 * Logging
-select single zphone from pa9205 into wa_zfivms_brd-tel_number where
+SELECT single zphone from pa9205 into wa_zfivms_brd-tel_number where
 pernr = wa_pa0009-pernr and subty = '01'.
 
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 3012
 wa_zfivms_brd-STATUS = 'RELEASE BY EMPLOYEE'.
 
-refresh ist_pa0006.
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009t-pernr
-and anssa in ('1', '3'
+REFRESH ist_pa0006.
+SELECT * from pa0006 into table ist_pa0006 where pernr = wa_pa0009t-pernr
+AND anssa in ('1', '3'
 )
-and endda = l_enddate.
+AND endda = l_enddate.
 "'31.12.9999'.
-read table ist_pa0006 into wa_pa0006 with key anssa = '1'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '1'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras. 2
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
-read table ist_pa0006 into wa_pa0006 with key anssa = '3'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+ENDIF.
+ELSE.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '3'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2
 .
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01
 .
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras
 .
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
+ENDIF.
+ELSE.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01
 .
 
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 
 "wa_pa0006-stras
 
 .
 
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
+ENDIF.
 wa_zfivms_brd-STREET = 'ONGC'.
-endif.
-endif.
-endif.
-endif.
+ENDIF.
+ENDIF.
+ENDIF.
+ENDIF.
 * Begin of <> on 20062011 21062011
-refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
-if sy-subrc = 0.
+REFRESH ist_zfivms_brd1.
+SELECT * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
+IF sy-subrc = 0.
 * Begin of <> on 22052012
-clear l_line.
-describe table ist_zfivms_brd1 lines l_line.
-shift l_line left deleting leading '0'.
+CLEAR l_line.
+DESCRIBE table ist_zfivms_brd1 lines l_line.
+SHIFT l_line left deleting leading '0'.
 "16072012
-if l_line > 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno =
+IF l_line > 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno =
 l_line.
-if sy-subrc <> 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-endif.
+IF sy-subrc <> 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+ENDIF.
 *
 sort ist_zfivms_brd1 descending by seqno.
 *
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-if sy-subrc = 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+IF sy-subrc = 0.
 wa_zfivms_brd-seqno = wa_zfivms_brd1-seqno + 1.
-endif.
-endif.
-modify zfivms_brd from wa_zfivms_brd .
+ENDIF.
+ENDIF.
+MODIFY zfivms_brd from wa_zfivms_brd .
 *
-update zfivms_brd set seqno = wa_zfivms_brd-seqno
+UPDATE zfivms_brd set seqno = wa_zfivms_brd-seqno
 *
 BANKL_NEW = wa_zfivms_brd-BANKL_NEW
 *
@@ -3566,21 +3566,21 @@ STATUS
 REMARKS
 = wa_zfivms_brd-REMARKS
 *
-where span = wa_zfivms_brd-span .
-else.
+WHERE span = wa_zfivms_brd-span .
+ELSE.
 * End of <> on 20062011
 wa_zfivms_brd-seqno = 1.
-modify zfivms_brd from wa_zfivms_brd .
+MODIFY zfivms_brd from wa_zfivms_brd .
 "ENDDA
-endif.
+ENDIF.
 **Begin RD1K991769 CAB_ALOK
 *
-if sy-subrc = 0.
+IF sy-subrc = 0.
 *
-update pa0009 set flag1 = 'D' where pernr = wa_pa0009t-pernr and
+UPDATE pa0009 set flag1 = 'D' where pernr = wa_pa0009t-pernr and
 endda = l_begdate and subty = '0'.
 **
-clear : wa_zfivms_brd , wa_zfivms_brd1.
+CLEAR : wa_zfivms_brd , wa_zfivms_brd1.
 *
 ENDIF.
 
@@ -3591,11 +3591,11 @@ ENDIF.
 *
 *
 
-update pa0009
-set flag2 = 'X'
-where pernr = wa_pa0009t-pernr
-and endda = l_begdate
-and subty = '0'.
+UPDATE pa0009
+SET flag2 = 'X'
+WHERE pernr = wa_pa0009t-pernr
+AND endda = l_begdate
+AND subty = '0'.
 wa_pa0009t-FLAG2 = 'X'.
 
 wa_pa0009t-FLAG1 = 'D'.
@@ -3608,15 +3608,15 @@ APPEND wa_pa0009t TO IST_pa0009_ONGC.
 *1234
 **End RD1K991769 CAB_ALOK
 
-clear : wa_zfivms_brd , wa_zfivms_brd1.
-endif.
+CLEAR : wa_zfivms_brd , wa_zfivms_brd1.
+ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form GET_OVL_EMLPOYEE_DETAILS
 *&---------------------------------------------------------------------*
 FORM GET_OVL_EMLPOYEE_DETAILS .
-data : l_begdate type pa0009-begda,
+DATA : l_begdate type pa0009-begda,
 l_strlen type n,
 l_line(2) type n,
 l_enddate type pa0009-endda value '99991231',
@@ -3648,11 +3648,11 @@ wa_zfivms_brd-BANKL_NEW = wa_pa0009-bankl.
 wa_zfivms_brd-BANKL_NEW = wa_pa0009-bankl.
 **End RD1K991769 CAB_ALOK
 wa_zfivms_brd-bankn_new = wa_pa0009-bankn.
-if not wa_pa0009-emftx is initial.
+IF not wa_pa0009-emftx is initial.
 wa_zfivms_brd-koinh_new = wa_pa0009-emftx.
-else.
-select single ename from pa0001 into wa_zfivms_brd-koinh_new where pernr = wa_pa0009-pernr.
-endif.
+ELSE.
+SELECT single ename from pa0001 into wa_zfivms_brd-koinh_new where pernr = wa_pa0009-pernr.
+ENDIF.
 **Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
@@ -3662,7 +3662,7 @@ TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 
 * CR 30010502:Beneficiary file-digital signing,
 
-select single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
+SELECT single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 .
 
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
@@ -3670,49 +3670,49 @@ wa_zfivms_brd-STATUS
 
 = 'RELEASE BY EMPLOYEE FOR OVL'.
 
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
-and anssa in ('1', '3' )
-and endda = l_enddate. "'
+SELECT * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
+AND anssa in ('1', '3' )
+AND endda = l_enddate. "'
 "31.12.9999'.
-read table ist_pa0006 into wa_pa0006 with key anssa = '1'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '1'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
+ENDIF.
+ELSE.
 wa_zfivms_brd-STREET = 'ONGC'.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 "wa_pa0006-stras.
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-endif.
-else.
-read table ist_pa0006 into wa_pa0006 with key anssa = '3'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+ENDIF.
+ENDIF.
+ELSE.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '3'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 
 wa_zfivms_brd-STR_SUPPL1 ='TEL BHAVAN'.
 
 " wa_pa0006-stras
 
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
+ENDIF.
+ELSE.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 
 "wa_pa0006-ort01
@@ -3721,15 +3721,15 @@ wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 
 .
 
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
+ENDIF.
 wa_zfivms_brd-STREET = 'ONGC'.
-endif.
+ENDIF.
 * Begin of <> on 30052012
-else.
+ELSE.
 wa_zfivms_brd-STREET = 'ONGC'.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
@@ -3740,41 +3740,41 @@ ENDIF.
 "wa_pa0006-stras.
 
 *Begin of <> on 20062011 21062011
-refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
-if sy-subrc = 0.
+REFRESH ist_zfivms_brd1.
+SELECT * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
+IF sy-subrc = 0.
 * Begin of <> on 22052012
-clear l_line.
-describe table ist_zfivms_brd1 lines l_line.
-shift l_line left deleting leading '0'.
+CLEAR l_line.
+DESCRIBE table ist_zfivms_brd1 lines l_line.
+SHIFT l_line left deleting leading '0'.
 "16072012
-if l_line > 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_line.
-if sy-subrc <> 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-endif.
+IF l_line > 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_line.
+IF sy-subrc <> 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+ENDIF.
 *
 sort ist_zfivms_brd1 descending by seqno.
 *
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-if sy-subrc = 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+IF sy-subrc = 0.
 wa_zfivms_brd-seqno = wa_zfivms_brd1-seqno + 1.
-endif.
-endif.
-modify zfivms_brd from wa_zfivms_brd .
-else.
+ENDIF.
+ENDIF.
+MODIFY zfivms_brd from wa_zfivms_brd .
+ELSE.
 * End of <> on 20062011
 wa_zfivms_brd-seqno = 1.
-modify zfivms_brd from wa_zfivms_brd .
-endif.
+MODIFY zfivms_brd from wa_zfivms_brd .
+ENDIF.
 * modify zfivms_brd from wa_zfivms_brd .
 "ENDDA
 **Begin RD1K991769 CAB_ALOK
 * if sy-subrc = 0.
 *
-update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddate and subty = '0'.
+UPDATE pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddate and subty = '0'.
 *
-clear : wa_zfivms_brd .
+CLEAR : wa_zfivms_brd .
 "21062011
 * endif.
 
@@ -3785,11 +3785,11 @@ clear : wa_zfivms_brd .
 *
 *
 
-update pa0009
-set flag2 = 'X'
-where pernr = wa_pa0009-pernr
-and endda = l_enddate
-and subty = '0'.
+UPDATE pa0009
+SET flag2 = 'X'
+WHERE pernr = wa_pa0009-pernr
+AND endda = l_enddate
+AND subty = '0'.
 wa_pa0009-FLAG2 = 'X'.
 
 wa_pa0009-FLAG1 = 'R'.
@@ -3797,14 +3797,14 @@ APPEND wa_pa0009 TO IST_pa0009_OVL.
 **End RD1K991769 CAB_ALOK
 *
 
-clear : wa_zfivms_brd , wa_zfivms_brd1 .
-append wa_zfivms_brd to ist_zfivms_brd.
+CLEAR : wa_zfivms_brd , wa_zfivms_brd1 .
+APPEND wa_zfivms_brd to ist_zfivms_brd.
 
 "ENDDA
 
 l_begdate = wa_pa0009-begda - 1.
 **Begin RD1K991769 CAB_ALOK
-clear wa_pa0009t.
+CLEAR wa_pa0009t.
 **End RD1K991769 CAB_ALOK
 * select single * from pa0009 into wa_pa0009t where pernr = wa_pa0009pernr "30062011
 *
@@ -3812,16 +3812,16 @@ clear wa_pa0009t.
 "begda = p_date and
 *
 * and subty = '0'. " and zlsch in ('S','N','8','9'). 20062011 20062011
-select single *
-from pa0009
-into wa_pa0009t
-where pernr = wa_pa0009-pernr
-and subty = '0'
-and endda = l_begdate
-and ( flag1 = '' or flag1 = 'S' or flag1 = 'F').
+SELECT single *
+FROM pa0009
+INTO wa_pa0009t
+WHERE pernr = wa_pa0009-pernr
+AND subty = '0'
+AND endda = l_begdate
+AND ( flag1 = '' or flag1 = 'S' or flag1 = 'F').
 *
 * and FLAG2 = ''.
-if sy-subrc = 0.
+IF sy-subrc = 0.
 * Begin of <> on 15022012
 */..Begin of Change CR :30014976 by CAB_RAMA
 * CONCATENATE 'EMP0000000000D00' wa_pa0009t-pernr into wa_zfivms_brd-span.
@@ -3832,11 +3832,11 @@ CONCATENATE '0000000000000D00' wa_pa0009t-pernr into wa_zfivms_brd-span.
 * End of <> on 15022012
 **Begin RD1K991769 CAB_ALOK
 *
-if wa_pa0009t-bankl(4) = 'SBIN'.
+IF wa_pa0009t-bankl(4) = 'SBIN'.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl+6(5).
 *
-else.
+ELSE.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 *
@@ -3845,12 +3845,12 @@ wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 **End RD1K991769 CAB_ALOK
 
 wa_zfivms_brd-bankn_new = wa_pa0009t-bankn.
-if not wa_pa0009t-emftx is initial.
+IF not wa_pa0009t-emftx is initial.
 wa_zfivms_brd-koinh_new = wa_pa0009t-emftx.
-else.
-select single ename from pa0001 into wa_zfivms_brd-koinh_new where
+ELSE.
+SELECT single ename from pa0001 into wa_zfivms_brd-koinh_new where
 pernr = wa_pa0009t-pernr.
-endif.
+ENDIF.
 **Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
@@ -3860,94 +3860,94 @@ TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 
 * CR 30010502:Beneficiary file-digital signing,
 
-select single zphone from pa9205 into wa_zfivms_brd-tel_number where
+SELECT single zphone from pa9205 into wa_zfivms_brd-tel_number where
 pernr = wa_pa0009-pernr and subty = '01'.
 
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 3012
 wa_zfivms_brd-STATUS = 'RELEASE BY EMPLOYEE FOR OVL'.
 
-refresh ist_pa0006.
-select * from pa0006 into table ist_pa0006 where pernr = wa_pa0009t-pernr
-and anssa in ('1', '3'
+REFRESH ist_pa0006.
+SELECT * from pa0006 into table ist_pa0006 where pernr = wa_pa0009t-pernr
+AND anssa in ('1', '3'
 )
-and endda = l_enddate.
+AND endda = l_enddate.
 "'31.12.9999'.
-read table ist_pa0006 into wa_pa0006 with key anssa = '1'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '1'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET = 'ONGC'.
 "wa_pa0006-name2.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'. "wa_pa0006-ort01.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
-read table ist_pa0006 into wa_pa0006 with key anssa = '3'.
-if sy-subrc = 0.
-if not wa_pa0006-name2 is initial.
+ENDIF.
+ELSE.
+READ table ist_pa0006 into wa_pa0006 with key anssa = '3'.
+IF sy-subrc = 0.
+IF not wa_pa0006-name2 is initial.
 wa_zfivms_brd-STREET ='ONGC'. " wa_pa0006-name2.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'. "wa_pa0006-ort01.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
-else.
+ELSE.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
-else.
+ENDIF.
+ELSE.
 wa_zfivms_brd-CITY1 ='DEHRADUN'. " wa_pa0006-ort01.
-if not wa_pa0006-stras is initial.
+IF not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
-else.
+ELSE.
 
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
-endif.
+ENDIF.
 wa_zfivms_brd-STREET = 'ONGC'.
-endif.
-endif.
-endif.
-endif.
+ENDIF.
+ENDIF.
+ENDIF.
+ENDIF.
 *Begin of <> on 20062011 21062011
-refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
-if sy-subrc = 0.
+REFRESH ist_zfivms_brd1.
+SELECT * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
+IF sy-subrc = 0.
 * Begin of <> on 22052012
-clear l_line.
-describe table ist_zfivms_brd1 lines l_line.
-shift l_line left deleting leading '0'.
+CLEAR l_line.
+DESCRIBE table ist_zfivms_brd1 lines l_line.
+SHIFT l_line left deleting leading '0'.
 "16072012
-if l_line > 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno =
+IF l_line > 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno =
 l_line.
-if sy-subrc <> 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-endif.
+IF sy-subrc <> 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+ENDIF.
 *
 sort ist_zfivms_brd1 descending by seqno.
 *
-read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
-if sy-subrc = 0.
+READ table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
+IF sy-subrc = 0.
 wa_zfivms_brd-seqno = wa_zfivms_brd1-seqno + 1.
-endif.
-endif.
+ENDIF.
+ENDIF.
 * End of <> on 22052012
-modify zfivms_brd from wa_zfivms_brd .
-else.
+MODIFY zfivms_brd from wa_zfivms_brd .
+ELSE.
 * End of <> on 20062011
 wa_zfivms_brd-seqno = 1.
-modify zfivms_brd from wa_zfivms_brd .
-endif.
+MODIFY zfivms_brd from wa_zfivms_brd .
+ENDIF.
 *
-modify zfivms_brd from wa_zfivms_brd .
+MODIFY zfivms_brd from wa_zfivms_brd .
 "ENDDA
 **Begin RD1K991769 CAB_ALOK
 *
-if sy-subrc = 0.
+IF sy-subrc = 0.
 *
-update pa0009 set flag1 = 'D' where pernr = wa_pa0009t-pernr and
+UPDATE pa0009 set flag1 = 'D' where pernr = wa_pa0009t-pernr and
 endda = l_begdate and subty = '0'.
 *
-clear : wa_zfivms_brd .
+CLEAR : wa_zfivms_brd .
 "21062011
 *
 ENDIF.
@@ -3958,18 +3958,18 @@ ENDIF.
 *
 *
 
-update pa0009
-set flag2 = 'X'
-where pernr = wa_pa0009t-pernr
-and endda = l_begdate
-and subty = '0'.
+UPDATE pa0009
+SET flag2 = 'X'
+WHERE pernr = wa_pa0009t-pernr
+AND endda = l_begdate
+AND subty = '0'.
 wa_pa0009t-FLAG2 = 'X'.
 wa_pa0009t-FLAG1 = 'D'.
 
 APPEND wa_pa0009t TO IST_pa0009_OVL.
 **End RD1K991769 CAB_ALOK
-clear : wa_zfivms_brd , wa_zfivms_brd1 .
-endif.
+CLEAR : wa_zfivms_brd , wa_zfivms_brd1 .
+ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -3985,7 +3985,7 @@ FORM ADD_7X_EMP .
 * l_strlen.
 * l_spanemp = wa_zfivms_brd-span(17).
 l_spanasa = wa_zfivms_brd-span.
-replace 'R0000' in l_spanasa with 'R0007'.
+REPLACE 'R0000' in l_spanasa with 'R0007'.
 *
 *
 *
@@ -4004,13 +4004,13 @@ replace 'R0000' in l_spanasa with 'R0007'.
 *
 *
 
-shift l_spanasa left deleting leading '0'.
+SHIFT l_spanasa left deleting leading '0'.
 l_strlen = strlen( l_spanasa ).
-if l_strlen = '5'.
-concatenate '70' l_spanasa into l_span.
-elseif l_strlen = '6'.
-concatenate '7' l_spanasa into l_span.
-endif.
+IF l_strlen = '5'.
+CONCATENATE '70' l_spanasa into l_span.
+ELSEIF l_strlen = '6'.
+CONCATENATE '7' l_spanasa into l_span.
+ENDIF.
 
 ENDFORM.
 
@@ -4019,35 +4019,35 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM ADD_7X_EMP_D .
 l_spanasa = wa_zfivms_brd-span.
-replace 'D0000' in l_spanasa with 'D0007'.
+REPLACE 'D0000' in l_spanasa with 'D0007'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form CLEAR_VAR
 *&---------------------------------------------------------------------*
-form clear_var .
+FORM clear_var .
 
 *
 *
 *
 *
 
-refresh: ist_94427 . "cvp-mum
-refresh: ist_93128 . "cep-ddn
-refresh: ist_30523 . "övl
-refresh: ist_94427_file . "cvp-mum
-refresh: ist_93128_file . "cep-ddn
-refresh: ist_30523_file . "övl
+REFRESH: ist_94427 . "cvp-mum
+REFRESH: ist_93128 . "cep-ddn
+REFRESH: ist_30523 . "övl
+REFRESH: ist_94427_file . "cvp-mum
+REFRESH: ist_93128_file . "cep-ddn
+REFRESH: ist_30523_file . "övl
 ***start of ONGC code
-refresh: ist_96726 . " ECPF
-refresh: ist_96726_file . "ECPF
+REFRESH: ist_96726 . " ECPF
+REFRESH: ist_96726_file . "ECPF
 ***end of ONGC code
-endform.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form PREPARE_NEW_FORMAT
 *&---------------------------------------------------------------------*
-form prepare_new_format
+FORM prepare_new_format
 *TP
 
 *
@@ -4125,33 +4125,33 @@ p_ist_record type standard table.
 **O A ComBenNSRegOBAdd1 111222333777 STSNS64636 ICIC0000001 MIN NAGAR WEST NETHAJI AV TAMILNADU INDIA
 **O A KOINH_NEW BANKN_NEW
 *SPAN BANKL_NEW STREET STR_SUPPL1 CITY1
-data: l_koinh_new  type zfivms_brd-koinh_new, " KOINH_FI,
+DATA: l_koinh_new  type zfivms_brd-koinh_new, " KOINH_FI,
 l_bankn_new type zfivms_brd-bankn_new, " BANKN,
 l_bankl_new type zfivms_brd-bankl_new, " BANKK,
 l_dummy(10),
 l_span
-type zfivms_brd-span, " ZSPAN,
+TYPE zfivms_brd-span, " ZSPAN,
 l_street
-type zfivms_brd-street,
+TYPE zfivms_brd-street,
 l_str_suppl1 type zfivms_brd-str_suppl1,
 l_city1
-type zfivms_brd-city1,
+TYPE zfivms_brd-city1,
 l_phone(30).
-data: wa_record type ty_record.
-data: wa_94427 type ty_new_format.
-data: wa_30523 type ty_new_format.
-data: wa_93128 type ty_new_format.
+DATA: wa_record type ty_record.
+DATA: wa_94427 type ty_new_format.
+DATA: wa_30523 type ty_new_format.
+DATA: wa_93128 type ty_new_format.
 
-data: wa_96726 type ty_new_format.
+DATA: wa_96726 type ty_new_format.
 *BREAK-POINT.
-if p_corpid = '94427'.
+IF p_corpid = '94427'.
 
 " 94427 - MUM " create IST_94427[]
 
-case p_type.
-when '3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
+CASE p_type.
+WHEN '3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4177,27 +4177,27 @@ wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
 wa_94427-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
-where span = l_span.
-if wa_94427-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
+WHERE span = l_span.
+IF wa_94427-addr1 is initial.
 wa_94427-addr1 = 'ONGC'.
-endif.
-if wa_94427-addr2 is initial.
+ENDIF.
+IF wa_94427-addr2 is initial.
 wa_94427-addr2 = 'ONGC'.
-endif.
-if wa_94427-addr3 is initial.
+ENDIF.
+IF wa_94427-addr3 is initial.
 wa_94427-addr3 = 'ONGC'.
-endif.
-append wa_94427 to ist_94427.
-clear: wa_record, wa_94427.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_94427 to ist_94427.
+CLEAR: wa_record, wa_94427.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'D3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
+ENDLOOP.
+WHEN 'D3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4225,27 +4225,27 @@ wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
 wa_94427-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
-where span = l_span.
-if wa_94427-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
+WHERE span = l_span.
+IF wa_94427-addr1 is initial.
 wa_94427-addr1 = 'ONGC'.
-endif.
-if wa_94427-addr2 is initial.
+ENDIF.
+IF wa_94427-addr2 is initial.
 wa_94427-addr2 = 'ONGC'.
-endif.
-if wa_94427-addr3 is initial.
+ENDIF.
+IF wa_94427-addr3 is initial.
 wa_94427-addr3 = 'ONGC'.
-endif.
-append wa_94427 to ist_94427.
-clear: wa_record, wa_94427.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_94427 to ist_94427.
+CLEAR: wa_record, wa_94427.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'IBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
+ENDLOOP.
+WHEN 'IBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
 
 *
 
@@ -4286,24 +4286,24 @@ WHERE SPAN = L_SPAN.
 wa_94427-addr1 = l_street .
 wa_94427-addr2 = l_str_suppl1.
 wa_94427-addr3 = l_city1.
-if wa_94427-addr1 is initial.
+IF wa_94427-addr1 is initial.
 wa_94427-addr1 = 'ONGC'.
-endif.
-if wa_94427-addr2 is initial.
+ENDIF.
+IF wa_94427-addr2 is initial.
 wa_94427-addr2 = 'ONGC'.
-endif.
-if wa_94427-addr3 is initial.
+ENDIF.
+IF wa_94427-addr3 is initial.
 wa_94427-addr3 = 'ONGC'.
-endif.
+ENDIF.
 
-append wa_94427 to ist_94427.
-clear: wa_record, wa_94427.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+APPEND wa_94427 to ist_94427.
+CLEAR: wa_record, wa_94427.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1, l_phone.
-endloop.
-when 'DIBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
+ENDLOOP.
+WHEN 'DIBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
 *
 
 * create new record
@@ -4329,37 +4329,37 @@ wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
 wa_94427-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
-where span = l_span.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
+WHERE span = l_span.
 wa_94427-addr1 = l_street .
 wa_94427-addr2 = l_str_suppl1.
 wa_94427-addr3 = l_city1.
-if wa_94427-addr1 is initial.
+IF wa_94427-addr1 is initial.
 wa_94427-addr1 = 'ONGC'.
-endif.
-if wa_94427-addr2 is initial.
+ENDIF.
+IF wa_94427-addr2 is initial.
 wa_94427-addr2 = 'ONGC'.
-endif.
-if wa_94427-addr3 is initial.
+ENDIF.
+IF wa_94427-addr3 is initial.
 wa_94427-addr3 = 'ONGC'.
 
-endif.
-append wa_94427 to ist_94427.
-clear: wa_record, wa_94427.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_94427 to ist_94427.
+CLEAR: wa_record, wa_94427.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-endcase.
-elseif p_corpid = '30523'.
+ENDLOOP.
+ENDCASE.
+ELSEIF p_corpid = '30523'.
 
 " 30523 - ovl " prepare IST_30523[]
 
-case p_type.
-when '3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
+CASE p_type.
+WHEN '3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4385,28 +4385,28 @@ wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
 wa_30523-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
-where span = l_span.
-if wa_30523-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
+WHERE span = l_span.
+IF wa_30523-addr1 is initial.
 wa_30523-addr1 = 'ONGC'.
-endif.
-if wa_30523-addr2 is initial.
+ENDIF.
+IF wa_30523-addr2 is initial.
 wa_30523-addr2 = 'ONGC'.
-endif.
-if wa_30523-addr3 is initial.
+ENDIF.
+IF wa_30523-addr3 is initial.
 wa_30523-addr3 = 'ONGC'.
-endif.
-append wa_30523 to ist_30523.
-clear: wa_record, wa_30523.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_30523 to ist_30523.
+CLEAR: wa_record, wa_30523.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'D3P'.
+ENDLOOP.
+WHEN 'D3P'.
 
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4432,27 +4432,27 @@ wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
 wa_30523-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
-where span = l_span.
-if wa_30523-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
+WHERE span = l_span.
+IF wa_30523-addr1 is initial.
 wa_30523-addr1 = 'ONGC'.
-endif.
-if wa_30523-addr2 is initial.
+ENDIF.
+IF wa_30523-addr2 is initial.
 wa_30523-addr2 = 'ONGC'.
-endif.
-if wa_30523-addr3 is initial.
+ENDIF.
+IF wa_30523-addr3 is initial.
 wa_30523-addr3 = 'ONGC'.
-endif.
-append wa_30523 to ist_30523.
-clear: wa_record, wa_30523.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_30523 to ist_30523.
+CLEAR: wa_record, wa_30523.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'IBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
+ENDLOOP.
+WHEN 'IBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
 
 *
 
@@ -4494,24 +4494,24 @@ WHERE SPAN = L_SPAN.
 wa_30523-addr1 = l_street .
 wa_30523-addr2 = l_str_suppl1.
 wa_30523-addr3 = l_city1.
-if wa_30523-addr1 is initial.
+IF wa_30523-addr1 is initial.
 wa_30523-addr1 = 'ONGC'.
-endif.
-if wa_30523-addr2 is initial.
+ENDIF.
+IF wa_30523-addr2 is initial.
 wa_30523-addr2 = 'ONGC'.
-endif.
-if wa_30523-addr3 is initial.
+ENDIF.
+IF wa_30523-addr3 is initial.
 wa_30523-addr3 = 'ONGC'.
-endif.
+ENDIF.
 
-append wa_30523 to ist_30523.
-clear: wa_record, wa_30523.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+APPEND wa_30523 to ist_30523.
+CLEAR: wa_record, wa_30523.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1, l_phone.
-endloop.
-when 'DIBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
+ENDLOOP.
+WHEN 'DIBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
 *
 
 * create new record
@@ -4537,37 +4537,37 @@ wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
 wa_30523-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
-where span = l_span.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
+WHERE span = l_span.
 wa_30523-addr1 = l_street .
 wa_30523-addr2 = l_str_suppl1.
 wa_30523-addr3 = l_city1.
 
-if wa_30523-addr1 is initial.
+IF wa_30523-addr1 is initial.
 wa_30523-addr1 = 'ONGC'.
-endif.
-if wa_30523-addr2 is initial.
+ENDIF.
+IF wa_30523-addr2 is initial.
 wa_30523-addr2 = 'ONGC'.
-endif.
-if wa_30523-addr3 is initial.
+ENDIF.
+IF wa_30523-addr3 is initial.
 wa_30523-addr3 = 'ONGC'.
-endif.
-append wa_30523 to ist_30523.
-clear: wa_record, wa_30523.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_30523 to ist_30523.
+CLEAR: wa_record, wa_30523.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-endcase.
-elseif p_corpid = '93128'.
+ENDLOOP.
+ENDCASE.
+ELSEIF p_corpid = '93128'.
 
 " 93128 - CEP " prepare IST_93128[]
 
-case p_type.
-when '3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
+CASE p_type.
+WHEN '3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4593,28 +4593,28 @@ wa_93128-ben_code = l_span .
 "Beneficiary Code, 24
 wa_93128-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
-where span = l_span.
-if wa_93128-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
+WHERE span = l_span.
+IF wa_93128-addr1 is initial.
 wa_93128-addr1 = 'ONGC'.
-endif.
-if wa_93128-addr2 is initial.
+ENDIF.
+IF wa_93128-addr2 is initial.
 wa_93128-addr2 = 'ONGC'.
-endif.
-if wa_93128-addr3 is initial.
+ENDIF.
+IF wa_93128-addr3 is initial.
 wa_93128-addr3 = 'ONGC'.
-endif.
+ENDIF.
 
-append wa_93128 to ist_93128.
-clear: wa_record, wa_93128.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+APPEND wa_93128 to ist_93128.
+CLEAR: wa_record, wa_93128.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'D3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
+ENDLOOP.
+WHEN 'D3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4640,27 +4640,27 @@ wa_93128-ben_code = l_span .
 "Beneficiary Code, 24
 wa_93128-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
-where span = l_span.
-if wa_93128-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
+WHERE span = l_span.
+IF wa_93128-addr1 is initial.
 wa_93128-addr1 = 'ONGC'.
-endif.
-if wa_93128-addr2 is initial.
+ENDIF.
+IF wa_93128-addr2 is initial.
 wa_93128-addr2 = 'ONGC'.
-endif.
-if wa_93128-addr3 is initial.
+ENDIF.
+IF wa_93128-addr3 is initial.
 wa_93128-addr3 = 'ONGC'.
-endif.
-append wa_93128 to ist_93128.
-clear: wa_record, wa_93128.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_93128 to ist_93128.
+CLEAR: wa_record, wa_93128.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'IBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
+ENDLOOP.
+WHEN 'IBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
 *
 
 * create new record
@@ -4699,24 +4699,24 @@ WHERE SPAN = L_SPAN.
 wa_93128-addr1 = l_street .
 wa_93128-addr2 = l_str_suppl1.
 wa_93128-addr3 = l_city1.
-if wa_93128-addr1 is initial.
+IF wa_93128-addr1 is initial.
 wa_93128-addr1 = 'ONGC'.
-endif.
-if wa_93128-addr2 is initial.
+ENDIF.
+IF wa_93128-addr2 is initial.
 wa_93128-addr2 = 'ONGC'.
-endif.
-if wa_93128-addr3 is initial.
+ENDIF.
+IF wa_93128-addr3 is initial.
 wa_93128-addr3 = 'ONGC'.
-endif.
+ENDIF.
 
-append wa_93128 to ist_93128.
-clear: wa_record, wa_93128.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+APPEND wa_93128 to ist_93128.
+CLEAR: wa_record, wa_93128.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1, l_phone.
-endloop.
-when 'DIBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
+ENDLOOP.
+WHEN 'DIBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
 *
 
 * create new record
@@ -4743,38 +4743,38 @@ wa_93128-ben_code = l_span .
 wa_93128-ifsc
 = l_bankl_new . "IFS Code# 11
 
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
-where span = l_span.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
+WHERE span = l_span.
 wa_93128-addr1 = l_street .
 wa_93128-addr2 = l_str_suppl1.
 wa_93128-addr3 = l_city1.
-if wa_93128-addr1 is initial.
+IF wa_93128-addr1 is initial.
 wa_93128-addr1 = 'ONGC'.
-endif.
-if wa_93128-addr2 is initial.
+ENDIF.
+IF wa_93128-addr2 is initial.
 wa_93128-addr2 = 'ONGC'.
-endif.
-if wa_93128-addr3 is initial.
+ENDIF.
+IF wa_93128-addr3 is initial.
 wa_93128-addr3 = 'ONGC'.
-endif.
-append wa_93128 to ist_93128.
-clear: wa_record, wa_93128.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_93128 to ist_93128.
+CLEAR: wa_record, wa_93128.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-endcase.
+ENDLOOP.
+ENDCASE.
 *****start trust
 ***start of ONGC code
-elseif p_corpid = '96726'.
+ELSEIF p_corpid = '96726'.
 
 " 93128 - CEP " prepare IST_93128[]
 
-case p_type.
-when '3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
+CASE p_type.
+WHEN '3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4800,29 +4800,29 @@ wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
 wa_96726-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
-where span = l_span.
-if wa_96726-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+WHERE span = l_span.
+IF wa_96726-addr1 is initial.
 
 wa_96726-addr1 = 'ECPF'.
-endif.
+ENDIF.
 ***end of ONGC code
-if wa_96726-addr2 is initial.
+IF wa_96726-addr2 is initial.
 wa_96726-addr2 = 'ECPF'.
-endif.
-if wa_96726-addr3 is initial.
+ENDIF.
+IF wa_96726-addr3 is initial.
 wa_96726-addr3 = 'ECPF'.
-endif.
-append wa_96726 to ist_96726.
-clear: wa_record, wa_96726.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_96726 to ist_96726.
+CLEAR: wa_record, wa_96726.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'D3P'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
+ENDLOOP.
+WHEN 'D3P'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_koinh_new l_dummy l_bankn_new l_bankl_new l_span .
 *
 
 * create new record
@@ -4848,28 +4848,28 @@ wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
 wa_96726-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
-where span = l_span.
-if wa_96726-addr1 is initial.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+WHERE span = l_span.
+IF wa_96726-addr1 is initial.
 wa_96726-addr1 = 'ECPF'.
-endif.
-if wa_96726-addr2 is initial.
+ENDIF.
+IF wa_96726-addr2 is initial.
 wa_96726-addr2 = 'ECPF'.
-endif.
-if wa_96726-addr3 is initial.
+ENDIF.
+IF wa_96726-addr3 is initial.
 wa_96726-addr3 = 'ECPF'.
-endif.
-append wa_96726 to ist_96726.
-clear: wa_record, wa_96726.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_96726 to ist_96726.
+CLEAR: wa_record, wa_96726.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-when 'IBTP'.
+ENDLOOP.
+WHEN 'IBTP'.
 
-loop at p_ist_record into wa_record.
-split wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '*' into l_koinh_new l_bankn_new l_bankl_new l_street l_str_suppl1 l_city1 l_phone l_span .
 
 *
 
@@ -4908,24 +4908,24 @@ WHERE SPAN = L_SPAN.
 wa_96726-addr1 = l_street .
 wa_96726-addr2 = l_str_suppl1.
 wa_96726-addr3 = l_city1.
-if wa_96726-addr1 is initial.
+IF wa_96726-addr1 is initial.
 wa_96726-addr1 = 'ECPF'.
-endif.
-if wa_96726-addr2 is initial.
+ENDIF.
+IF wa_96726-addr2 is initial.
 wa_96726-addr2 = 'ECPF'.
-endif.
-if wa_96726-addr3 is initial.
+ENDIF.
+IF wa_96726-addr3 is initial.
 wa_96726-addr3 = 'ECPF'.
-endif.
+ENDIF.
 
-append wa_96726 to ist_96726.
-clear: wa_record, wa_96726.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+APPEND wa_96726 to ist_96726.
+CLEAR: wa_record, wa_96726.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1, l_phone.
-endloop.
-when 'DIBTP'.
-loop at p_ist_record into wa_record.
-split wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
+ENDLOOP.
+WHEN 'DIBTP'.
+LOOP at p_ist_record into wa_record.
+SPLIT wa_record at '#' into l_bankn_new l_bankl_new l_koinh_new l_span .
 *
 
 * create new record
@@ -4952,54 +4952,54 @@ wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
 wa_96726-ifsc
 = l_bankl_new . "IFS Code# 11
-select single street str_suppl1 city1
-from zfivms_brd
-into (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
-where span = l_span.
+SELECT single street str_suppl1 city1
+FROM zfivms_brd
+INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
+WHERE span = l_span.
 wa_96726-addr1 = l_street .
 wa_96726-addr2 = l_str_suppl1.
 wa_96726-addr3 = l_city1.
-if wa_96726-addr1 is initial.
+IF wa_96726-addr1 is initial.
 wa_96726-addr1 = 'ECPF'.
-endif.
-if wa_96726-addr2 is initial.
+ENDIF.
+IF wa_96726-addr2 is initial.
 wa_96726-addr2 = 'ECPF'.
-endif.
-if wa_96726-addr3 is initial.
+ENDIF.
+IF wa_96726-addr3 is initial.
 wa_96726-addr3 = 'ECPF'.
-endif.
-append wa_96726 to ist_96726.
-clear: wa_record, wa_96726.
-clear: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
+ENDIF.
+APPEND wa_96726 to ist_96726.
+CLEAR: wa_record, wa_96726.
+CLEAR: l_koinh_new, l_bankn_new, l_bankl_new, l_span, l_street
 , l_str_suppl1, l_city1.
-endloop.
-endcase.
+ENDLOOP.
+ENDCASE.
 *** end trust
-endif. " P_CORPID
+ENDIF. " P_CORPID
 
-endform.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form MERGE_FILE
 *&---------------------------------------------------------------------*
-form merge_file .
+FORM merge_file .
 ** Prepare records with separator.
-refresh: ist_94427_file . "cvp-mum
-refresh: ist_93128_file . "cep-ddn
-refresh: ist_30523_file . "övl
+REFRESH: ist_94427_file . "cvp-mum
+REFRESH: ist_93128_file . "cep-ddn
+REFRESH: ist_30523_file . "övl
 
 *
 *
 *
 *
 
-data: wa_94427 type ty_new_format.
-data: wa_93128 type ty_new_format.
-data: wa_30523 type ty_new_format.
-data: wa_record_new type ty_record_new.
+DATA: wa_94427 type ty_new_format.
+DATA: wa_93128 type ty_new_format.
+DATA: wa_30523 type ty_new_format.
+DATA: wa_record_new type ty_record_new.
 *** start trust
-refresh: ist_96726_file . "övl
-data: wa_96726 type ty_new_format.
+REFRESH: ist_96726_file . "övl
+DATA: wa_96726 type ty_new_format.
 *** end trust
 * BEN_TYPE(1),                "Beneficiary Type * 1
 * BEN_ACT_TYPE(1),            " Beneficiary Action Type * 1
@@ -5010,10 +5010,10 @@ data: wa_96726 type ty_new_format.
 * ADDR1(35),                  "Address1 35
 * ADDR2(35),                  "Address2 35
 * ADDR3(35),                  "Address3 35
-if p_payctr = 'CVP' .
-loop at ist_94427 into wa_94427.
+IF p_payctr = 'CVP' .
+LOOP at ist_94427 into wa_94427.
 
-concatenate wa_94427-ben_type
+CONCATENATE wa_94427-ben_type
 
 wa_94427-ben_act_type
 
@@ -5021,15 +5021,15 @@ wa_94427-ben_name
 
 wa_94427-ben_ac_no wa_94427-ben_code wa_94427-ifsc
 wa_94427-addr1 wa_94427-addr2 wa_94427-addr3
-into wa_record_new-record separated by ' '.
-append wa_record_new to ist_94427_file.
+INTO wa_record_new-record separated by ' '.
+APPEND wa_record_new to ist_94427_file.
 
-endloop.
-endif.
-if p_payctr = 'CEP' .
-loop at ist_93128 into wa_93128.
+ENDLOOP.
+ENDIF.
+IF p_payctr = 'CEP' .
+LOOP at ist_93128 into wa_93128.
 
-concatenate wa_93128-ben_type
+CONCATENATE wa_93128-ben_type
 
 wa_93128-ben_act_type
 
@@ -5037,16 +5037,16 @@ wa_93128-ben_name
 
 wa_93128-ben_ac_no wa_93128-ben_code wa_93128-ifsc
 wa_93128-addr1 wa_93128-addr2 wa_93128-addr3
-into wa_record_new-record separated by ' '.
-append wa_record_new to ist_93128_file.
+INTO wa_record_new-record separated by ' '.
+APPEND wa_record_new to ist_93128_file.
 
-endloop.
-endif.
+ENDLOOP.
+ENDIF.
 *** start trust
-if p_payctr = 'ECPF' .
-loop at ist_96726 into wa_96726.
+IF p_payctr = 'ECPF' .
+LOOP at ist_96726 into wa_96726.
 
-concatenate wa_96726-ben_type
+CONCATENATE wa_96726-ben_type
 
 wa_96726-ben_act_type
 
@@ -5054,16 +5054,16 @@ wa_96726-ben_name
 
 wa_96726-ben_ac_no wa_96726-ben_code wa_96726-ifsc
 wa_96726-addr1 wa_96726-addr2 wa_96726-addr3
-into wa_record_new-record separated by ' '.
+INTO wa_record_new-record separated by ' '.
 
-append wa_record_new to ist_96726_file.
-endloop.
-endif.
+APPEND wa_record_new to ist_96726_file.
+ENDLOOP.
+ENDIF.
 ** end trust
-if p_payctr = 'OVL' .
-loop at ist_30523 into wa_30523.
+IF p_payctr = 'OVL' .
+LOOP at ist_30523 into wa_30523.
 
-concatenate wa_30523-ben_type
+CONCATENATE wa_30523-ben_type
 
 wa_30523-ben_act_type
 
@@ -5071,18 +5071,18 @@ wa_30523-ben_name
 
 wa_30523-ben_ac_no wa_30523-ben_code wa_30523-ifsc
 wa_30523-addr1 wa_30523-addr2 wa_30523-addr3
-into wa_record_new-record separated by ' '.
-append wa_record_new to ist_30523_file.
+INTO wa_record_new-record separated by ' '.
+APPEND wa_record_new to ist_30523_file.
 
-endloop.
-endif.
+ENDLOOP.
+ENDIF.
 
-endform.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form PROCESS
 *&---------------------------------------------------------------------*
-form process .
+FORM process .
 
 *
 *
@@ -5092,23 +5092,23 @@ form process .
 * IST_94427_FILE . "cvp-mum
 * IST_93128_FILE . "cep-ddn
 * IST_30523_FILE . "övl
-if p_payctr = 'CVP'.
-perform digital_sign_save_logs using ist_94427_file.
-elseif p_payctr = 'CEP' .
-perform digital_sign_save_logs using ist_93128_file.
+IF p_payctr = 'CVP'.
+PERFORM digital_sign_save_logs using ist_94427_file.
+ELSEIF p_payctr = 'CEP' .
+PERFORM digital_sign_save_logs using ist_93128_file.
 *** start trust
-elseif p_payctr = 'ECPF' .
-perform digital_sign_save_logs using ist_96726_file.
+ELSEIF p_payctr = 'ECPF' .
+PERFORM digital_sign_save_logs using ist_96726_file.
 *end trust
-elseif p_payctr = 'OVL'.
-perform digital_sign_save_logs using ist_30523_file.
-endif.
-endform.
+ELSEIF p_payctr = 'OVL'.
+PERFORM digital_sign_save_logs using ist_30523_file.
+ENDIF.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form DIGITAL_SIGN_SAVE_LOGS
 *&---------------------------------------------------------------------*
-form digital_sign_save_logs using ist_sbi_file type standard table.
+FORM digital_sign_save_logs using ist_sbi_file type standard table.
 
 *
 
@@ -5132,24 +5132,24 @@ form digital_sign_save_logs using ist_sbi_file type standard table.
 *RAW_DATA RAWSTRING 0
 *DATA_SENT RAWSTRING 0
 *DATA_RECEIVED RAWSTRING 0
-data: wa_zfiben_file_moni type zfiben_file_moni.
-data: l_vmc_apdate
-type zfiben_file_moni-vmc_apdate,
+DATA: wa_zfiben_file_moni type zfiben_file_moni.
+DATA: l_vmc_apdate
+TYPE zfiben_file_moni-vmc_apdate,
 l_sent_date
-type zfiben_file_moni-sent_date,
+TYPE zfiben_file_moni-sent_date,
 l_sent_time
-type zfiben_file_moni-sent_time,
+TYPE zfiben_file_moni-sent_time,
 l_sent_filename type zfiben_file_moni-sent_filename,
 l_sent_flag
-type zfiben_file_moni-sent_flag,
+TYPE zfiben_file_moni-sent_flag,
 l_sent_userid
-type zfiben_file_moni-sent_userid,
+TYPE zfiben_file_moni-sent_userid,
 l_sent_error
-type zfiben_file_moni-sent_error,
+TYPE zfiben_file_moni-sent_error,
 l_raw_data
-type xstring, "ZFIBEN_FILE_MONI-RAW_DATA,
+TYPE xstring, "ZFIBEN_FILE_MONI-RAW_DATA,
 l_data_sent
-type zfiben_file_moni-data_sent.
+TYPE zfiben_file_moni-data_sent.
 *=============================================
 ******** Monitoring
 l_vmc_apdate = p_date.
@@ -5157,20 +5157,20 @@ l_sent_date = sy-datum.
 l_sent_time = sy-uzeit.
 l_sent_userid = sy-uname.
 ** Derive File Name: L_SENT_FILENAME
-data: curr_date(6),
+DATA: curr_date(6),
 corpfilename(23),
 corpacno(17).
 ** CURR_DATE 19801216
-concatenate sy-datum+6(2) sy-datum+4(2) sy-datum+2(2) into curr_date.
-if p_payctr = 'CVP'.
+CONCATENATE sy-datum+6(2) sy-datum+4(2) sy-datum+2(2) into curr_date.
+IF p_payctr = 'CVP'.
 * COMPBEN. CURR_DATE 070114.ONGC94427 VMC_APDATE SENT_TIME .00000030340574145.txt
-concatenate 'ONGC94427' l_vmc_apdate l_sent_time into corpfilename
+CONCATENATE 'ONGC94427' l_vmc_apdate l_sent_time into corpfilename
 .
 *
 IF sy-host = 'eccdci' OR sy-host = 'eccqci'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003223534.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000030340574145' into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000030340574145' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
 ELSEIF sy-host+0(6) = 'eccpap'.
@@ -5185,176 +5185,173 @@ INTO l_sent_filename SEPARATED BY '.' .
 *
 ENDIF.
 "S4H FP3 changes
-endif.
-if p_payctr = 'CEP'.
+ENDIF.
+IF p_payctr = 'CEP'.
 *COMPBEN. CURR_DATE 070114.ONGC93128 VMC_APDATE SENT_TIME .0000003071731
 *4079.txt for
-concatenate 'ONGC93128' l_vmc_apdate l_sent_time into corpfilename
+CONCATENATE 'ONGC93128' l_vmc_apdate l_sent_time into corpfilename
 .
 *
-if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
+IF sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000030717314079' into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000030717314079' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
-elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
+ELSEIF sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030717314079.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
-concatenate 'COMPBEN' curr_date corpfilename '00000030717314079'
-into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000030717314079'
+INTO l_sent_filename separated by '.' .
 "changes on 30.07.14 "S4H FP
 *
-endif. "S4H FP3 changes
-endif.
+ENDIF. "S4H FP3 changes
+ENDIF.
 ***start trust
-if p_payctr = 'ECPF'.
+IF p_payctr = 'ECPF'.
 *COMPBEN. CURR_DATE 070114.ONGC93128 VMC_APDATE SENT_TIME .00000030717314079.txt for
-concatenate 'ECPF96726' l_vmc_apdate l_sent_time into corpfilename
+CONCATENATE 'ECPF96726' l_vmc_apdate l_sent_time into corpfilename
 .
 *
-if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
+IF sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000010392857009' into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000010392857009' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
-elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
+ELSEIF sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030717314079.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
-concatenate 'COMPBEN' curr_date corpfilename '00000010392857009'
-into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000010392857009'
+INTO l_sent_filename separated by '.' .
 "changes on 30.07.14 "S4H FP
 *
-endif. "S4H FP3 changes
-endif.
+ENDIF. "S4H FP3 changes
+ENDIF.
 ***end trust
-if p_payctr = 'OVL'.
+IF p_payctr = 'OVL'.
 * OVL : COMPBEN.CURR_DATE 070114.OVL30523 VMC_APDATE SENT_TIME . 00000010277786661.txt
-concatenate 'OVL30523' l_vmc_apdate l_sent_time into corpfilename .
+CONCATENATE 'OVL30523' l_vmc_apdate l_sent_time into corpfilename .
 
 *
-if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
+IF sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003139979.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
 *
-concatenate 'COMPBEN' curr_date corpfilename '00000030003139979'
-into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000030003139979'
+INTO l_sent_filename separated by '.' .
 "changes on 30.07.14 "S4H FP
 *
-elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
+ELSEIF sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000010277786661.txt' INTO L_SENT_FILENAME SEPARATED BY '.' .
 "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000010277786661' into l_sent_filename separated by '.' .
+CONCATENATE 'COMPBEN' curr_date corpfilename '00000010277786661' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
-endif. "S4H FP3 changes
-endif.
+ENDIF. "S4H FP3 changes
+ENDIF.
 *=============================================
 ** Digital signing
-data: in_data_table like ssfbin occurs 0 with header line.
-data: params like ssfparms.
-data: crc
-type i.
-data: doc_sig type xstring.
-data: doc_ver type xstring.
-data: doc_line type string.
-data: doc_tab type ssftxttab.
-data: sig_list type ssfsignertab.
-data: go_file_verifier type ref to lcl_file_verifier,
+DATA: in_data_table like ssfbin occurs 0 with header line.
+DATA: params like ssfparms.
+DATA: crc
+TYPE i.
+DATA: doc_sig type xstring.
+DATA: doc_ver type xstring.
+DATA: doc_line type string.
+DATA: doc_tab type ssftxttab.
+DATA: sig_list type ssfsignertab.
+DATA: go_file_verifier type ref to lcl_file_verifier,
 l_sign
-type ssfsigner.
-data it_zuser_signer type table of zuser_signer.
-data wa_zuser_signer type zuser_signer.
-data: ev_owner
-type string,
+TYPE ssfsigner.
+DATA it_zuser_signer type table of zuser_signer.
+DATA wa_zuser_signer type zuser_signer.
+DATA: ev_owner
+TYPE string,
 ev_email
-type string,
+TYPE string,
 ev_serial
-type string,
+TYPE string,
 ev_thumbprint
-type string,
+TYPE string,
 ev_validfrom
-type string,
+TYPE string,
 ev_validto
-type string,
+TYPE string,
 ev_issuer
-type string,
+TYPE string,
 ev_bindocument_out type xstring,
 e_int
-type i.
-data: lo_bnk_detail
-type ref to zfi_bnk_sbi_in_encco_si_sbiweb,
+TYPE i.
+DATA: lo_bnk_detail
+TYPE ref to zfi_bnk_sbi_in_encco_si_sbiweb,
 proxy_data
-type zfi_bnk_sbi_in_encfile_upload2,
+TYPE zfi_bnk_sbi_in_encfile_upload2,
 lt_input
-type zfi_bnk_sbi_in_encfile_upload1,
+TYPE zfi_bnk_sbi_in_encfile_upload1,
 lo_sys_exception type ref to cx_ai_system_fault.
-data: err_string
-type string.
-data: wa_pa0009_bak type pa0009.
-create object lo_bnk_detail.
+DATA: err_string
+TYPE string.
+DATA: wa_pa0009_bak type pa0009.
+CREATE object lo_bnk_detail.
 
-call function 'SCMS_TEXT_TO_BINARY'
+CALL function 'SCMS_TEXT_TO_BINARY'
 * EXPORTING
 *   FIRST_LINE         = 0
 *   LAST_LINE          = 0
 *   APPEND_TO_TABLE    = ' '
 *   MIMETYPE           = ' '
 *   ENCODING           = ' '
-importing
+IMPORTING
 output_length = params-indatalen
 
-tables
+TABLES
 text_tab    = ist_sbi_file
 binary_tab  = in_data_table
 * EXCEPTIONS
 *   FAILED   = 1
 *   OTHERS   = 2
         .
-if sy-subrc <> 0.
-message e570(zfi).
-endif.
-call function 'SCMS_BINARY_TO_XSTRING'
-exporting
+IF sy-subrc <> 0.
+MESSAGE e570(zfi).
+ENDIF.
+CALL function 'SCMS_BINARY_TO_XSTRING'
+EXPORTING
 input_length = params-indatalen
 *   FIRST_LINE         = 0
 *   LAST_LINE          = 0
-importing
+IMPORTING
 buffer
 = l_raw_data
-tables
+TABLES
 binary_tab
 = in_data_table
-exceptions
+EXCEPTIONS
 failed
 = 1
 others
 = 2.
-if sy-subrc <> 0.
-message e570(zfi).
-endif.
-call function 'SSFS_CALL_CONTROL'
-exporting
+IF sy-subrc <> 0.
+MESSAGE e570(zfi).
+ENDIF.
+CALL function 'SSFS_CALL_CONTROL'
+EXPORTING
 *
 TXTDOCUMENT
 = doc_tab
 bindocument
 = l_raw_data
-doc_type
-= 'TXT'
-*
-ssf_id
-= 'CN=TEST CLASS IIIB SHATWO, SP=Gujarat, postalCode=392015, OU=CID - 2431135, OU=Marketing, O=Gujarat Narmada Valley Fertilizers Company Limited, C=IN'."wa_ZFI_BATCH_SIGN-ssf_screen.
-importing
+doc_type    = 'TXT'
+*   ssf_id      = 'CN=TEST CLASS IIIB SHATWO, SP=Gujarat, postalCode=392015, OU=CID - 2431135, OU=Marketing, O=Gujarat Narmada Valley Fertilizers Company Limited, C=IN'."wa_ZFI_BATCH_SIGN-ssf_screen.
+IMPORTING
 crc
 = crc
 signature
 = doc_sig
-exceptions
+EXCEPTIONS
 parameter_error = 1
 conversion_error = 2
 control_error
@@ -5364,39 +5361,39 @@ frontend_error
 others
 = 5.
 **verify signature wrt userID
-if crc = 0. " 'SSFS_CALL_CONTROL'
-refresh sig_list.
-call function 'SSFS_SERVER_VERIFY'
-exporting
+IF crc = 0. " 'SSFS_CALL_CONTROL'
+REFRESH sig_list.
+CALL function 'SSFS_SERVER_VERIFY'
+EXPORTING
 *
 SSFAPPLIC = ' '
 signature
 = doc_sig
-importing
+IMPORTING
 crc
 = crc
 signerlist
 = sig_list
 txtdocument_out = doc_tab
 bindocument_out = doc_ver
-exceptions
+EXCEPTIONS
 kernel_error
 = 1
 
 parameter_error = 2
 others
 = 3.
-if sy-subrc <> 0.
-write: / 'Error while verifying signture:'(erv), sy-subrc.
-exit.
-elseif crc = 0. " signature OK
+IF sy-subrc <> 0.
+WRITE: / 'Error while verifying signture:'(erv), sy-subrc.
+EXIT.
+ELSEIF crc = 0. " signature OK
 go_file_verifier = lcl_file_verifier=>get_instance( ).
-read table sig_list into l_sign index 1.
-if sy-subrc = 0.
-call method go_file_verifier->get_signer_info
-exporting
+READ table sig_list into l_sign index 1.
+IF sy-subrc = 0.
+CALL method go_file_verifier->get_signer_info
+EXPORTING
 is_signerlist = l_sign
-importing
+IMPORTING
 ev_owner
 = ev_owner
 ev_email
@@ -5411,36 +5408,36 @@ ev_issuer
 = ev_issuer
 e_int
 = e_int.
-endif.
-select * into table it_zuser_signer
-from zuser_signer where uname = sy-uname
-and active = 'X'.
-if sy-subrc = 0.
-read table it_zuser_signer into wa_zuser_signer with key thumbprin = ev_thumbprint.
-if sy-subrc = 0.
+ENDIF.
+SELECT * into table it_zuser_signer
+FROM zuser_signer where uname = sy-uname
+AND active = 'X'.
+IF sy-subrc = 0.
+READ table it_zuser_signer into wa_zuser_signer with key thumbprin = ev_thumbprint.
+IF sy-subrc = 0.
 l_data_sent = doc_sig.
-else.
-message 'Wrong Signature used for signing' type 'I'.
-exit.
-endif.
-else.
-message 'No Signature Maintained for user' type 'I'.
-exit.
-endif.
-endif.
+ELSE.
+MESSAGE 'Wrong Signature used for signing' type 'I'.
+EXIT.
+ENDIF.
+ELSE.
+MESSAGE 'No Signature Maintained for user' type 'I'.
+EXIT.
+ENDIF.
+ENDIF.
 proxy_data-parameters-arg0 = l_sent_filename.
 proxy_data-parameters-arg1 = l_data_sent.
 
-try.
-call method lo_bnk_detail->si_sbiwebservice_enc
-exporting
-output = proxy_data
-importing
-input = lt_input.
-catch cx_ai_system_fault into lo_sys_exception.
+TRY.
+CALL method lo_bnk_detail->si_sbiwebservice_enc
+EXPORTING
+OUTPUT = proxy_data
+IMPORTING
+INPUT = lt_input.
+CATCH cx_ai_system_fault into lo_sys_exception.
 err_string = lo_sys_exception->get_text( ).
-catch cx_ai_application_fault .
-endtry.
+CATCH cx_ai_application_fault .
+ENDTRY.
 ** update Moniotoring logs in table ZFIBEN_FILE_MONI
 
 wa_zfiben_file_moni-vmc_apdate = l_vmc_apdate.
@@ -5451,45 +5448,45 @@ wa_zfiben_file_moni-sent_userid = l_sent_userid.
 wa_zfiben_file_moni-raw_data = l_raw_data.
 wa_zfiben_file_moni-data_sent = l_data_sent.
 wa_zfiben_file_moni-sent_flag = 'X' .
-if err_string is not initial.
+IF err_string is not initial.
 wa_zfiben_file_moni-sent_error = 'X' .
-modify zfiben_file_moni from wa_zfiben_file_moni.
-message 'Error while sending data' type 'I'.
-else.
-modify zfiben_file_moni from wa_zfiben_file_moni.
-message 'Data sent successfully' type 'I'.
-if p_payctr = 'CVP'.
+MODIFY zfiben_file_moni from wa_zfiben_file_moni.
+MESSAGE 'Error while sending data' type 'I'.
+ELSE.
+MODIFY zfiben_file_moni from wa_zfiben_file_moni.
+MESSAGE 'Data sent successfully' type 'I'.
+IF p_payctr = 'CVP'.
 " 'RELEASE BY VMC' & 'RELEASE BY CMC'.
-data : lit_zfivmsbank1 type table of zfivmsbank.
-data : lit_zsdcust_bank1 type table of zsdcust_bank.
-data : lwa_zfivmsbank1 type zfivmsbank.
-data : lwa_zsdcust_bank1 type zsdcust_bank.
-select * from zfivmsbank into table lit_zfivmsbank1 where vmc_apdate = p_date
-and status = 'RELEASE BY VMC'.
-if sy-subrc eq 0.
-loop at lit_zfivmsbank1 into lwa_zfivmsbank1.
+DATA : lit_zfivmsbank1 type table of zfivmsbank.
+DATA : lit_zsdcust_bank1 type table of zsdcust_bank.
+DATA : lwa_zfivmsbank1 type zfivmsbank.
+DATA : lwa_zsdcust_bank1 type zsdcust_bank.
+SELECT * from zfivmsbank into table lit_zfivmsbank1 where vmc_apdate = p_date
+AND status = 'RELEASE BY VMC'.
+IF sy-subrc eq 0.
+LOOP at lit_zfivmsbank1 into lwa_zfivmsbank1.
 lwa_zfivmsbank1-status = 'SENT TO SBI'.
-modify lit_zfivmsbank1 from lwa_zfivmsbank1 index sy-tabix.
-endloop.
-modify zfivmsbank from table lit_zfivmsbank1 ."added by gaurav
+MODIFY lit_zfivmsbank1 from lwa_zfivmsbank1 index sy-tabix.
+ENDLOOP.
+MODIFY zfivmsbank from table lit_zfivmsbank1 ."added by gaurav
 *
 *
 *
 
 ENDIF.
-update zfivmsbank set status = 'SENT TO SBI'
-where vmc_apdate = p_date
-and status = 'RELEASE BY VMC'.
+UPDATE zfivmsbank set status = 'SENT TO SBI'
+WHERE vmc_apdate = p_date
+AND status = 'RELEASE BY VMC'.
 
-select * from zsdcust_bank into table lit_zsdcust_bank1 where chon = p_date
-and status = 'RELEASE BY CMC'.
-if sy-subrc eq 0.
-loop at lit_zsdcust_bank1 into lwa_zsdcust_bank1.
+SELECT * from zsdcust_bank into table lit_zsdcust_bank1 where chon = p_date
+AND status = 'RELEASE BY CMC'.
+IF sy-subrc eq 0.
+LOOP at lit_zsdcust_bank1 into lwa_zsdcust_bank1.
 lwa_zsdcust_bank1-status = 'SENT TO SBI'.
-modify lit_zsdcust_bank1 from lwa_zsdcust_bank1 index sy-tabix.
-endloop.
-modify zsdcust_bank from table lit_zsdcust_bank1."added by gaurav
-endif.
+MODIFY lit_zsdcust_bank1 from lwa_zsdcust_bank1 index sy-tabix.
+ENDLOOP.
+MODIFY zsdcust_bank from table lit_zsdcust_bank1."added by gaurav
+ENDIF.
 *
 *
 *
@@ -5504,80 +5501,80 @@ BREAK-POINT.
 
 * 50),
 
-data: it_zfi_alerts type table of zfi_alerts,
-wa_zfi_alerts type zfi_alerts,
-wa_zfi_alerts1 type zfi_alerts,
-wa_zfi_alerts2 type zfi_alerts,
-wa_zfi_alerts3 type zfi_alerts,
+DATA: it_zfi_alerts type table of ty_zfi_alerts,
+wa_zfi_alerts type ty_zfi_alerts,
+wa_zfi_alerts1 type ty_zfi_alerts,
+wa_zfi_alerts2 type ty_zfi_alerts,
+wa_zfi_alerts3 type ty_zfi_alerts,
 wa_obj_head
-type solisti1,
+TYPE solisti1,
 wa_obj_cont
-type solisti1,
+TYPE solisti1,
 it_obj_cont
-type table of solisti1,
+TYPE table of solisti1,
 it_obj_head
-type table of solisti1,
+TYPE table of solisti1,
 mail_sub
-type sodocchgi1,
+TYPE sodocchgi1,
 it_reclist
-type table of somlreci1,
+TYPE table of somlreci1,
 wa_reclist
-type somlreci1,
+TYPE somlreci1,
 lwa_zfivmsbank type zfivmsbank,
 lit_zfivmsbank type table of zfivmsbank,
 wa_new1
-type zfivmsbank.
-data: http_client type ref to if_http_client.
-data: messg(160),
+TYPE zfivmsbank.
+DATA: http_client type ref to if_http_client.
+DATA: messg(160),
 l_enddate
-type pa0009-endda value '99991231',
+TYPE pa0009-endda value '99991231',
 ist_pa9205
-type table of pa9205,
+TYPE table of pa9205,
 wa_pa9205
-type
+TYPE
 pa9205,
 wf_string
-type string,
+TYPE string,
 mob_no(12),
 result
-type string,l_reason_desc(35), l_result(35),
+TYPE string,l_reason_desc(35), l_result(35),
 disp_txt type string.
 
-clear: mob_no, messg, wf_string, result.
-clear: l_reason_desc, l_result.
-select * from zfivmsbank into table lit_zfivmsbank where vmc_apdate = p_date
-and status = 'SENT TO SBI'.
-select * from zfi_alerts into table it_zfi_alerts.
+CLEAR: mob_no, messg, wf_string, result.
+CLEAR: l_reason_desc, l_result.
+SELECT * from zfivmsbank into table lit_zfivmsbank where vmc_apdate = p_date
+AND status = 'SENT TO SBI'.
+SELECT * from zfi_alerts into table it_zfi_alerts.
 
 "ts3.
 
-loop at lit_zfivmsbank into lwa_zfivmsbank.
-clear: wa_zfi_alerts,wa_zfi_alerts1,wa_zfi_alerts2,wa_zfi_alerts3.
+LOOP at lit_zfivmsbank into lwa_zfivmsbank.
+CLEAR: wa_zfi_alerts,wa_zfi_alerts1,wa_zfi_alerts2,wa_zfi_alerts3.
 
 "SAPMAIL'
 
-refresh:it_obj_cont,it_obj_head,it_reclist.
-read table it_zfi_alerts into wa_zfi_alerts with key categ = 'SAPMAIL'
+REFRESH:it_obj_cont,it_obj_head,it_reclist.
+READ table it_zfi_alerts into wa_zfi_alerts with key categ = 'SAPMAIL'
 action = 'SUBJECT'
 
 ident = 'SENT_2_SBI'.
 "'SENT_2_SBI' duplicate removed.
-if sy-subrc = 0.
+IF sy-subrc = 0.
 
 "ident =
 
-replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts-matt with lwa_zfivmsbank-reqno.
+REPLACE all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts-matt with lwa_zfivmsbank-reqno.
 mail_sub-obj_descr = wa_zfi_alerts-matt.
 "= 'SAPMAIL'
 
-read table it_zfi_alerts into wa_zfi_alerts1 with key categ = 'SAPMAIL'
+READ table it_zfi_alerts into wa_zfi_alerts1 with key categ = 'SAPMAIL'
 
 action = 'GESTURE'.
 *
 IF sy-subrc = 0.
 wa_obj_cont-line = wa_zfi_alerts1-matt.
-append wa_obj_cont to it_obj_cont.
-read table it_zfi_alerts into wa_zfi_alerts2 with key categ
+APPEND wa_obj_cont to it_obj_cont.
+READ table it_zfi_alerts into wa_zfi_alerts2 with key categ
 = 'SAPMAIL'
 action
 = 'MESSAGE'
@@ -5586,33 +5583,33 @@ ident
 = 'SENT_2_SBI'.
 *
 REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts2-matt WITH zfivmsbank-reqno.
-replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts2-matt with lwa_zfivmsbank-reqno.
-replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts2-matt with lwa_zfivmsbank-lifnr.
-replace all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts2-matt with lwa_zfivmsbank-name1.
+REPLACE all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts2-matt with lwa_zfivmsbank-reqno.
+REPLACE all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts2-matt with lwa_zfivmsbank-lifnr.
+REPLACE all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts2-matt with lwa_zfivmsbank-name1.
 wa_obj_cont-line = wa_zfi_alerts2-matt.
-append wa_obj_cont to it_obj_cont.
+APPEND wa_obj_cont to it_obj_cont.
 wa_reclist-receiver = lwa_zfivmsbank-cpf.
 wa_reclist-rec_type = 'B'.
-append wa_reclist to it_reclist.
+APPEND wa_reclist to it_reclist.
 ENDIF.
 
 *
 
-read table it_zfi_alerts into wa_zfi_alerts3 with key categ = 'SMS'
+READ table it_zfi_alerts into wa_zfi_alerts3 with key categ = 'SMS'
 
 action = 'MESSAGE'
 
 ident = 'SENT_2_SBI'.
 
 
-shift lwa_zfivmsbank-reqno left deleting leading '0'.
-shift lwa_zfivmsbank-lifnr left deleting leading '0'.
+SHIFT lwa_zfivmsbank-reqno left deleting leading '0'.
+SHIFT lwa_zfivmsbank-lifnr left deleting leading '0'.
 wa_new1-name1 = lwa_zfivmsbank-name1+0(19).
 
-replace all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts3-matt with lwa_zfivmsbank-reqno.
-replace all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts3-matt with lwa_zfivmsbank-lifnr.
-replace all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts3-matt with wa_new1-name1.
-replace all occurrences of '&' in wa_zfi_alerts3-matt with 'and'.
+REPLACE all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts3-matt with lwa_zfivmsbank-reqno.
+REPLACE all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts3-matt with lwa_zfivmsbank-lifnr.
+REPLACE all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts3-matt with wa_new1-name1.
+REPLACE all occurrences of '&' in wa_zfi_alerts3-matt with 'and'.
 messg = wa_zfi_alerts3-matt.
 *
 *
@@ -5634,8 +5631,8 @@ APPEND wa_obj_cont TO it_obj_cont.
 wa_obj_head-line = 'heading'.
 APPEND wa_obj_head TO it_obj_head.
 
-call function 'SO_NEW_DOCUMENT_SEND_API1'
-exporting
+CALL function 'SO_NEW_DOCUMENT_SEND_API1'
+EXPORTING
 document_data
 = mail_sub
 DOCUMENT_TYPE
@@ -5653,7 +5650,7 @@ SENT_TO_ALL
 =
 NEW_OBJECT_ID
 =
-tables
+TABLES
 object_header
 = it_obj_head
 object_content
@@ -5667,7 +5664,7 @@ OBJECT_PARB
 =
 receivers
 = it_reclist
-exceptions
+EXCEPTIONS
 too_many_receivers
 = 1
 document_not_sent
@@ -5683,9 +5680,9 @@ enqueue_error
 = 7
 others
 = 8.
-if sy-subrc = 0.
+IF sy-subrc = 0.
 COMMIT WORK.
-endif.
+ENDIF.
 
 *
 *
@@ -5693,78 +5690,78 @@ endif.
 
 *
 
-select * from pa9205 into corresponding fields of table ist_pa
+SELECT * from pa9205 into corresponding fields of table ist_pa
 9205 where pernr = lwa_zfivmsbank-cpf"ZMM_VEND_UNBLOCK-ERNAM
-and subty = '01'
+AND subty = '01'
 
 "22112013 by Sudhir Sharma
 
-and endda = l_enddate.
-if sy-subrc = 0.
+AND endda = l_enddate.
+IF sy-subrc = 0.
 sort ist_pa9205 by begda descending.
-read table ist_pa9205 into wa_pa9205 index 1.
-if sy-subrc = 0.
-shift wa_pa9205-zphone left deleting leading '0'.
-concatenate '91' wa_pa9205-zphone into mob_no.
-clear wf_string .
-concatenate
+READ table ist_pa9205 into wa_pa9205 index 1.
+IF sy-subrc = 0.
+SHIFT wa_pa9205-zphone left deleting leading '0'.
+CONCATENATE '91' wa_pa9205-zphone into mob_no.
+CLEAR wf_string .
+CONCATENATE
 'http://10.205.48.190:13013/cgi-bin/sendsms?'
 'username=ongc&password=ongc12&from=ONGC-OL&to=' mob_no
 '&text=' messg
 '&remLen=400' "180' 20032013
-into wf_string .
-call method cl_http_client=>create_by_url
-exporting
+INTO wf_string .
+CALL method cl_http_client=>create_by_url
+EXPORTING
 url
 = wf_string
-importing
+IMPORTING
 client
 = http_client
-exceptions
+EXCEPTIONS
 argument_not_found = 1
 plugin_not_active = 2
 internal_error
 = 3
 others
 = 4.
-call method http_client->send
-exceptions
+CALL method http_client->send
+EXCEPTIONS
 http_communication_failure = 1
 http_invalid_state
 = 2.
-call method http_client->receive
-exceptions
+CALL method http_client->receive
+EXCEPTIONS
 http_communication_failure = 1
 http_invalid_state
 = 2
 
 http_processing_failed
 = 3.
-clear result .
+CLEAR result .
 result = http_client->response->get_cdata( ).
-move result to l_result .
-concatenate 'Message from SMS gateway:' l_result+2 into l_
+MOVE result to l_result .
+CONCATENATE 'Message from SMS gateway:' l_result+2 into l_
 
 result.
 
-endif.
-endif.
-endloop.
+ENDIF.
+ENDIF.
+ENDLOOP.
 
 *****************************************************changes by gaurav o
 n 22 may.
 
-elseif p_payctr = 'OVL'.
+ELSEIF p_payctr = 'OVL'.
 " 'RELEASE BY VMC FOR OVL'
-update zfivmsbank set status = 'SENT TO SBI'
-where vmc_apdate = p_date
-and status = 'RELEASE BY VMC FOR OVL'.
+UPDATE zfivmsbank set status = 'SENT TO SBI'
+WHERE vmc_apdate = p_date
+AND status = 'RELEASE BY VMC FOR OVL'.
 " ZFIVMS_BRD-'RELEASE BY EMPLOYEE FOR OVL' === pa0009
 " set flag - R / D
-clear wa_pa0009_bak.
-loop at ist_pa0009_OVL into wa_pa0009_BAK.
-endloop.
-modify pa0009 from table ist_pa0009_ovl.
+CLEAR wa_pa0009_bak.
+LOOP at ist_pa0009_OVL into wa_pa0009_BAK.
+ENDLOOP.
+MODIFY pa0009 from table ist_pa0009_ovl.
 
 *
 *
@@ -5772,32 +5769,31 @@ modify pa0009 from table ist_pa0009_ovl.
 *
 *
 
-elseif p_payctr = 'CEP'.
+ELSEIF p_payctr = 'CEP'.
 " ZFIVMS_BRD-'RELEASE BY EMPLOYEE' === pa0009
 " set flag - R / D
-clear wa_pa0009_bak.
-loop at ist_pa0009_ONGC into wa_pa0009_BAK.
-endloop.
-modify pa0009 from table ist_pa0009_ongc.
-endif.
-endif.
-else.
+CLEAR wa_pa0009_bak.
+LOOP at ist_pa0009_ONGC into wa_pa0009_BAK.
+ENDLOOP.
+MODIFY pa0009 from table ist_pa0009_ongc.
+ENDIF.
+ENDIF.
+ELSE.
 
 "\\ 'SSFS_CALL_CONTROL'
 
-case crc.
-when '2'.
-message 'Please insert E-token' type 'I'.
-exit.
-when others.
-message 'Error while signing' type 'E'.
-exit.
-endcase.
-endif.
+CASE crc.
+WHEN '2'.
+MESSAGE 'Please insert E-token' type 'I'.
+EXIT.
+WHEN others.
+MESSAGE 'Error while signing' type 'E'.
+EXIT.
+ENDCASE.
+ENDIF.
 
 "\\ 'SSFS_CALL_CONTROL'
 
-clear: wa_zfiben_file_moni.
+CLEAR: wa_zfiben_file_moni.
 
-endform.
-
+ENDFORM.
