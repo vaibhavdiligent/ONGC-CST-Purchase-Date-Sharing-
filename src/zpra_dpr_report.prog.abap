@@ -3,10 +3,12 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.6  |  Git: dly_rprd-PI-CS |  Date: 05-MAY-2026
-*& Changes : Fix sec3f Sakhalin-1 historical oil — apply PI in dly_rprd
-*&           path (ovl_prd_vl_qty1 stores JV for SK1 historical years).
-*&           Broaden asset match to CS 'SK' in case code differs from RUS_SK1.
+*& VERSION : 1.7  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
+*& Changes : v1.7 - Fix COMPUTE_BCD_OVERFLOW dump in convert_gas_units
+*&           and similar forms. Replace lv_qty TYPE char50/char35 with
+*&           TYPE p LENGTH 16 DECIMALS 7 to support large gas quantities
+*&           multiplied by 6290 (BOE conversion). Affects 11 declarations.
+*&           v1.6 - Sakhalin-1 historical oil PI fix (CS 'SK'/'SAKH').
 *&           Also: gas PI in dly_prd, CF lookup from zpra_t_tar_cf.
 *&---------------------------------------------------------------------*
 REPORT ZPRA_DPR_REPORT.
@@ -3410,7 +3412,7 @@ FORM set_section1_header_colors .
   PERFORM set_range_interior USING gv_header_gt_colour .
 ENDFORM.
 FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3441,7 +3443,7 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   ENDCASE.
 ENDFORM.
 FORM convert_gas_units2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3472,7 +3474,7 @@ FORM convert_gas_units2  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   ENDCASE.
 ENDFORM.
 FORM convert_gas_units_to_bopd  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3489,7 +3491,7 @@ FORM convert_gas_units_to_bopd  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 
 ENDFORM.
 FORM convert_gas_units_to_bcm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3508,7 +3510,7 @@ FORM convert_gas_units_to_bcm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 
 ENDFORM.
 FORM convert_gas_units_to_mmscm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 * Multiplying by 1000 due to decimal precision, will divide later
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3527,7 +3529,7 @@ FORM convert_gas_units_to_mmscm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 ENDFORM.
 
 FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_mrec_prd-prod_vl_uom1 .
@@ -3558,7 +3560,7 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
   ENDCASE.
 ENDFORM.
 FORM convert_mrec_to_bcm  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_mrec_prd-prod_vl_uom1 .
@@ -3574,7 +3576,7 @@ FORM convert_mrec_to_bcm  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
   p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
 ENDFORM.
 FORM convert_mrec_gas_to_mmscm  CHANGING p_zpra_t_mrec_app TYPE ty_zpra_t_mrec_app.
-  DATA : lv_qty TYPE char50 .
+  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 * Mutiplying by 1000 for decimal error precision, will divide later
 * lv_qty = p_zpra_t_mrec_app-app_vl_qty * 1000 .
@@ -9164,7 +9166,7 @@ FORM fill_dynamic_table_sec6 .
   PERFORM fill_dynamic_table_sec6b .
 ENDFORM .
 FORM fill_dynamic_table_sec6a .
-  DATA lv_qty TYPE char50 .
+  DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 
   READ TABLE <gfs_sec2d_table> ASSIGNING <gfs_dyn_line> INDEX 1 .
   IF sy-subrc IS INITIAL.
@@ -9259,7 +9261,7 @@ FORM fill_dynamic_table_sec6b .
   ENDLOOP.
 ENDFORM .
 FORM get_annual_targets_6b .
-  DATA lv_qty TYPE char35 .
+  DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
   ASSIGN COMPONENT '722000001-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
   IF <gfs_field> IS ASSIGNED .
     lv_qty = lv_qty + <gfs_field> .
@@ -9311,7 +9313,7 @@ FORM get_annual_targets_6b .
   ENDIF.
 ENDFORM .
 FORM get_ytd_targets_6b .
-  DATA lv_qty TYPE char35 .
+  DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
   FIELD-SYMBOLS : <lfs_field1> ,
                   <lfs_field2> .
   LOOP AT <gfs_sec2c_table> ASSIGNING <gfs_dyn_line3> .
