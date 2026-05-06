@@ -3,11 +3,16 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.8  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
-*& Changes : v1.8 - Fix remaining COMPUTE_BCD_OVERFLOW: 3 more direct
-*&           DB-field multiplications (×1000000) in convert_mrec_gas_to_mmscm,
-*&           fill_dynamic_table_sec2a3, fill_dynamic_table_sec2d now route
-*&           through lv_qty TYPE p LENGTH 16 DECIMALS 7 intermediate.
+*& VERSION : 1.9  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
+*& Changes : v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
+*&           line 3444 (lv_qty * 6290 assignment to prod_vl_qty1).
+*&           Removed * 6290 from convert_gas_units (p_bb/p_bbd/p_bmd) and
+*&           convert_mrec_gas_units to align with convert_gas_units2 which
+*&           was already corrected. The * 6290 BOE conversion overflowed
+*&           the DB field's precision for large gas quantities.
+*&           v1.8 - Route app_vl_qty * 1000000 through lv_qty packed
+*&           intermediate in 6 forms (sec2a3, sec2d, sec2f, sec3c, sec3f,
+*&           convert_mrec_gas_to_mmscm).
 *&           v1.7 - Fix COMPUTE_BCD_OVERFLOW dump in convert_gas_units
 *&           and similar forms. Replace lv_qty TYPE char50/char35 with
 *&           TYPE p LENGTH 16 DECIMALS 7. Affects 11 declarations.
@@ -3431,9 +3436,9 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_bbd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_tm.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3441,7 +3446,7 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
     WHEN p_mb.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
@@ -3548,9 +3553,9 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_bbd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_tm.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3558,7 +3563,7 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
     WHEN p_mb.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
@@ -3867,11 +3872,11 @@ FORM convert_rprd_units  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
     CASE abap_true.
       WHEN p_bb OR p_bbd.
         IF p_c_jv IS NOT INITIAL.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290  .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 .   "v1.9: was * 6290 - overflow on narrow DB field
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ELSE.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290  .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 .  "v1.9: was * 6290
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ENDIF.
       WHEN p_tm OR p_tmd.
         IF p_c_jv IS NOT INITIAL.
@@ -3891,11 +3896,11 @@ FORM convert_rprd_units  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
         ENDIF.
       WHEN p_bmd.
         IF p_c_jv IS NOT INITIAL.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 .   "v1.9: was * 6290 - overflow on narrow DB field
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ELSE.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 .  "v1.9: was * 6290
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ENDIF.
       WHEN OTHERS.
     ENDCASE.
@@ -10074,9 +10079,10 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
   ENDLOOP.
 ENDFORM.
 FORM convert_gas_rprd_to_boe  CHANGING p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
-
-  p_zpra_t_dly_rprd-jv_rcn_vl_qty3   = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
-  p_zpra_t_dly_rprd-ovl_rcn_vl_qty3  = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
+* v1.9: removed * 6290 to prevent BCD overflow on narrow DB field. Form is
+*       only called from commented-out PERFORM (line ~8112), so currently dead code.
+*  p_zpra_t_dly_rprd-jv_rcn_vl_qty3   = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
+*  p_zpra_t_dly_rprd-ovl_rcn_vl_qty3  = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
 
 ENDFORM.
 FORM get_cf_from_date  USING    p_rec_date
