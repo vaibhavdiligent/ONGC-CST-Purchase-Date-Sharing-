@@ -826,6 +826,7 @@ append ist_ddata_sbi_e.
 endif.
 endif.
 endif.
+endif.
 endloop.
 ENDFORM.
 
@@ -924,7 +925,7 @@ WRITE: 'File cannot be opened. Reason:', D_MSG_TEXT.
 *
 EXIT.
 *
-* ENDIF.
+ENDIF.
 ** Transferring Data
 ** End of <>
 *
@@ -1060,7 +1061,7 @@ ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "end of open 27.09.2012
 * End of <> on 07082012
-* endif.
+ENDIF.
 * Begin of <> on 16072012
 if not ist_ddata_sbi_s[] is initial.
 append lines of ist_ddata_sbi_s to ist_ddata_sbi.
@@ -1178,7 +1179,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open of comment by lipsy on 3.10.2012
@@ -1400,13 +1401,13 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open 27.09.2012
 * End of <> on 07082012
 * 14102011 17102011 090502012
-* endif.
+ENDIF.
 * Begin of <> on 16072012
 if not ist_ddata_nonsbi_s[] is initial.
 append lines of ist_ddata_nonsbi_s to ist_ddata_nonsbi.
@@ -1571,7 +1572,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 "opened and commented by lipsy on 7.01.2013
 "commented by lipsy on 28.12.2012 <RD1K983099>
 "end of open of comment by lipsy on 03.10.2012
@@ -1585,7 +1586,7 @@ endloop.
 
 *
 
-* endif.
+ENDIF.
 * Code Written for OVL Bank registration Date 02-05-2011
 clear : l_rsbi, l_dsbi.
 * OVL SBI - R
@@ -1739,7 +1740,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -1897,7 +1898,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 loop at ist_ddata_sbi_ovl into wa_ddata_sbi.
 split wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
@@ -2054,7 +2055,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -2211,7 +2212,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 loop at ist_ddata_nonsbi_ovl into wa_ddata_nonsbi.
 split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
@@ -2416,7 +2417,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -2525,7 +2526,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 
 * Begin of <> on 10062011
@@ -2574,7 +2575,7 @@ perform PREPARE_NEW_FORMAT USING 'D3P' '96726' ist_ddata_sbi_e[] .
 endif.
 ENDIF. "
 ***end of ONGC code
-* endif.
+ENDIF.
 * NON SBI
 
 clear : l_rsbi , l_dsbi.
@@ -2738,7 +2739,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
 "opened and commented by lipsy on 7.01.2013
 endif.
@@ -2903,9 +2904,9 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 * End of <> on 07082012
-* endif.
+ENDIF.
 * OVL Employee
 clear : l_rsbi , l_dsbi.
 * Begin of <> on 06072011
@@ -2930,7 +2931,7 @@ if sy-subrc = 0.
 *
 concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
-* endif.
+ENDIF.
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
 ** End of <> 10062011
@@ -3048,8 +3049,8 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
-* endif.
+ENDIF.
+ENDIF.
 *
 *
 
@@ -3163,7 +3164,7 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
+ENDIF.
 ** Begin of <> on 10062011
 *
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
@@ -3176,7 +3177,7 @@ if sy-subrc = 0.
 concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
 filename1.
 *
-* endif.
+ENDIF.
 *
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '.93128' '.txt' into g_filename1.
@@ -3196,7 +3197,7 @@ ENDLOOP.
 *
 close dataset g_filename1.
 *
-* endif.
+ENDIF.
 * NON SBI
 * clear : l_rsbi , l_dsbi.
 * describe table ist_rdata_nonsbi_ovl_e lines l_rsbi.
@@ -3220,7 +3221,7 @@ if sy-subrc = 0.
 *
 concatenate g_fsnam 'IBTP.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
-* endif.
+ENDIF.
 *
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
@@ -3336,8 +3337,8 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
-* endif.
+ENDIF.
+ENDIF.
 *
 * describe table ist_ddata_nonsbi_ovl_e lines l_dsbi.
 * if l_dsbi > 0.
@@ -3361,7 +3362,7 @@ if sy-subrc = 0.
 concatenate g_fsnam 'DIBTP.' g_date_rd '.' g_corpid '.txt' into
 g_filename1.
 *
-* endif.
+ENDIF.
 *
 **
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd '.93128' '.txt' into g_filename1. "11042011
@@ -3482,8 +3483,8 @@ MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
 *
 WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
 *
-* ENDIF.
-* endif.
+ENDIF.
+ENDIF.
 * End of <> 06072011
 ENDFORM.
 
@@ -3589,9 +3590,9 @@ wa_zfivms_brd-STREET = 'ONGC'.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 * End of <> on 30052012
-* endif.
-* endif.
-* endif.
+ENDIF.
+ENDIF.
+ENDIF.
 * Begin of <> on 20062011 21062011
 
 refresh ist_zfivms_brd1.
@@ -3733,7 +3734,7 @@ else.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 *
-* endif.
+ENDIF.
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 **End RD1K991769 CAB_ALOK
 
@@ -3881,7 +3882,7 @@ endda = l_begdate and subty = '0'.
 **
 clear : wa_zfivms_brd , wa_zfivms_brd1.
 *
-* endif.
+ENDIF.
 
 *
 *
@@ -4037,8 +4038,8 @@ wa_zfivms_brd-STREET = 'ONGC'.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 * End of <> on 30052012
-* endif.
-* endif.
+ENDIF.
+ENDIF.
 
 "wa_pa0006-stras.
 
@@ -4147,7 +4148,7 @@ else.
 *
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 *
-* endif.
+ENDIF.
 wa_zfivms_brd-BANKL_NEW = wa_pa0009t-bankl.
 **End RD1K991769 CAB_ALOK
 
@@ -4259,7 +4260,7 @@ endda = l_begdate and subty = '0'.
 clear : wa_zfivms_brd .
 "21062011
 *
-* endif.
+ENDIF.
 *
 *
 *
@@ -5521,7 +5522,7 @@ INTO l_sent_filename SEPARATED BY '.' .
 "changes on 30.07.14 "S4H F
 "P3 changes
 *
-* ENDIF.
+ENDIF.
 "S4H FP3 changes
 endif.
 if p_payctr = 'CEP'.
@@ -5845,7 +5846,7 @@ modify zfivmsbank from table lit_zfivmsbank1 ."added by gaurav
 *
 *
 
-* endif.
+ENDIF.
 update zfivmsbank set status = 'SENT TO SBI'
 where vmc_apdate = p_date
 and status = 'RELEASE BY VMC'.
@@ -6000,7 +6001,7 @@ messg = wa_zfi_alerts3-matt.
 *
 *
 
-* endif.
+ENDIF.
 
 wa_obj_cont-line = 'testing'.
 APPEND wa_obj_cont TO it_obj_cont.
