@@ -5299,7 +5299,7 @@ data: wa_pa0009_bak type pa0009.
 create object lo_bnk_detail.
 
 call function 'SCMS_TEXT_TO_BINARY'
-* EXPORTING
+EXPORTING
 *
 FIRST_LINE
 = 0
@@ -5313,8 +5313,7 @@ APPEND_TO_TABLE
 MIMETYPE
 = ' '
 *
-ENCODING
-=
+ENCODING = ' '
 importing
 output_length = params-indatalen
 
@@ -5389,8 +5388,7 @@ refresh sig_list.
 call function 'SSFS_SERVER_VERIFY'
 exporting
 *
-SSFAPPLIC
-=
+SSFAPPLIC = ' '
 signature
 = doc_sig
 importing
@@ -5437,8 +5435,7 @@ select * into table it_zuser_signer
 from zuser_signer where uname = sy-uname
 and active = 'X'.
 if sy-subrc = 0.
-read table it_zuser_signer into wa_zuser_signer with key thumbpr
-in = ev_thumbprint.
+read table it_zuser_signer into wa_zuser_signer with key thumbprint = ev_thumbprint.
 if sy-subrc = 0.
 l_data_sent = doc_sig.
 else.
@@ -5450,11 +5447,8 @@ message 'No Signature Maintained for user' type 'I'.
 exit.
 endif.
 endif.
-proxy_data-parameters-arg0
-proxy_data-parameters-arg1
-
-= l_sent_filename.
-= l_data_sent.
+proxy_data-parameters-arg0 = l_sent_filename.
+proxy_data-parameters-arg1 = l_data_sent.
 
 try.
 call method lo_bnk_detail->si_sbiwebservice_enc
@@ -5466,9 +5460,7 @@ catch cx_ai_system_fault into lo_sys_exception.
 err_string = lo_sys_exception->get_text( ).
 catch cx_ai_application_fault .
 endtry.
-** update Moniotoring logs
-
-in table ZFIBEN_FILE_MONI
+** update Moniotoring logs in table ZFIBEN_FILE_MONI
 
 wa_zfiben_file_moni-vmc_apdate = l_vmc_apdate.
 wa_zfiben_file_moni-sent_date = l_sent_date.
@@ -5513,8 +5505,7 @@ and status = 'RELEASE BY CMC'.
 if sy-subrc eq 0.
 loop at lit_zsdcust_bank1 into lwa_zsdcust_bank1.
 lwa_zsdcust_bank1-status = 'SENT TO SBI'.
-modify lit_zsdcust_bank1 from lwa_zsdcust_bank1 index sy-tab
-ix.
+modify lit_zsdcust_bank1 from lwa_zsdcust_bank1 index sy-tabix.
 endloop.
 modify zsdcust_bank from table lit_zsdcust_bank1."added by gaurav
 endif.
@@ -5530,7 +5521,7 @@ AND status = 'RELEASE BY CMC'.
 *
 BREAK-POINT.
 
-50),
+* 50),
 
 data: it_zfi_alerts type table of zfi_alerts,
 wa_zfi_alerts type zfi_alerts,
