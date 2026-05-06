@@ -972,8 +972,8 @@ loop at ist_ddata_sbi into wa_ddata_sbi.
 split wa_ddata_sbi at '#' into : wa_zfivms_brd-koinh_new g_benf
 wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-span.
 *
-split wa_ddata_sbi at '#' into : g_koinh g_benf g_bankn g_bankl
-g_status g_remarks g_span.
+* split wa_ddata_sbi at '#' into : g_koinh g_benf g_bankn g_bankl
+* g_status g_remarks g_span.
 update zfivms_resend set status = 'SENT TO SBI'
 where span = wa_zfivms_brd-span.
 endloop.
@@ -1318,7 +1318,6 @@ ENDIF.
 loop at ist_ddata_nonsbi into wa_ddata_nonsbi.
 split wa_ddata_nonsbi at '#' into : wa_zfivms_brd-bankn_new wa_zfivms_brd-bankl_new wa_zfivms_brd-koinh_new wa_zfivms_brd-span.
 update zfivms_resend set status = 'SENT TO SBI'
-where span = wa_zfivms_brd-span.
 where span = wa_zfivms_brd-span.
 endloop.
 
@@ -1957,9 +1956,9 @@ endif.
 * if l_stat > 0.
 ** Begin of <> on 26082011
 *
-update zfivmsbank set status = 'SENT TO SBI'
+* update zfivmsbank set status = 'SENT TO SBI'
 *
-where vmc_apdate = p_date
+* where vmc_apdate = p_date
 *
 * and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 **
@@ -5581,8 +5580,7 @@ update zfivmsbank set status = 'SENT TO SBI'
 where vmc_apdate = p_date
 and status = 'RELEASE BY VMC'.
 
-select * from zsdcust_bank into table lit_zsdcust_bank1 where ch
-on = p_date
+select * from zsdcust_bank into table lit_zsdcust_bank1 where chon = p_date
 and status = 'RELEASE BY CMC'.
 if sy-subrc eq 0.
 loop at lit_zsdcust_bank1 into lwa_zsdcust_bank1.
