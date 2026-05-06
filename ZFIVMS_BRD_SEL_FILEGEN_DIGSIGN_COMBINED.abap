@@ -206,6 +206,15 @@ DATA: IST_pa0009_OVL   type table of pa0009,
       IST_pa0009_ONGC  type table of pa0009.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
+
+*&---------------------------------------------------------------------*
+*& Local type for ZFI_ALERTS table (fallback if DDIC table missing)
+*&---------------------------------------------------------------------*
+TYPES: BEGIN OF ty_zfi_alerts,
+         categ TYPE c LENGTH 10,
+         matt  TYPE c LENGTH 255,
+       END OF ty_zfi_alerts.
+
 *&---------------------------------------------------------------------*
 *& Inlined: Include ZBCM_CLASS  (LCL_FILE_VERIFIER definition)
 *&---------------------------------------------------------------------*
@@ -5758,18 +5767,12 @@ importing
 output_length = params-indatalen
 
 tables
-text_tab
-= ist_sbi_file
-binary_tab
-= in_data_table
+text_tab    = ist_sbi_file
+binary_tab  = in_data_table
 * EXCEPTIONS
-*
-FAILED
-= 1
-*
-OTHERS
-= 2
-.
+*   FAILED   = 1
+*   OTHERS   = 2
+        .
 if sy-subrc <> 0.
 message e570(zfi).
 endif.
@@ -5871,7 +5874,7 @@ select * into table it_zuser_signer
 from zuser_signer where uname = sy-uname
 and active = 'X'.
 if sy-subrc = 0.
-read table it_zuser_signer into wa_zuser_signer with key thumbprint = ev_thumbprint.
+read table it_zuser_signer into wa_zuser_signer with key thumbprin = ev_thumbprint.
 if sy-subrc = 0.
 l_data_sent = doc_sig.
 else.

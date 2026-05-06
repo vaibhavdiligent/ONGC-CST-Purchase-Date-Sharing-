@@ -206,6 +206,15 @@ DATA: IST_pa0009_OVL   type table of pa0009,
       IST_pa0009_ONGC  type table of pa0009.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
+
+*&---------------------------------------------------------------------*
+*& Local type for ZFI_ALERTS table (fallback if DDIC table missing)
+*&---------------------------------------------------------------------*
+TYPES: BEGIN OF ty_zfi_alerts,
+         categ TYPE c LENGTH 10,
+         matt  TYPE c LENGTH 255,
+       END OF ty_zfi_alerts.
+
 *&---------------------------------------------------------------------*
 *& Inlined: Include ZBCM_CLASS  (LCL_FILE_VERIFIER definition)
 *&---------------------------------------------------------------------*
