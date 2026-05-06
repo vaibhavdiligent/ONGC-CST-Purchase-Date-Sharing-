@@ -2228,9 +2228,9 @@ where vmc_apdate = p_date.
 *
 "added by lipsy on 27.09.2012
 *
-update zsdcust_bank set status = 'SENT TO SBI'
+* update zsdcust_bank set status = 'SENT TO SBI'
 *
-where chon = p_date
+* where chon = p_date
 *
 * and status = 'RELEASE BY CMC'.
 *
