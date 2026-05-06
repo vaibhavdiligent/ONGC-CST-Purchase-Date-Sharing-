@@ -5187,12 +5187,10 @@ l_sent_userid = sy-uname.
 data: curr_date(6),
 corpfilename(23),
 corpacno(17).
-** CURR_DATE
-19801216
+** CURR_DATE 19801216
 concatenate sy-datum+6(2) sy-datum+4(2) sy-datum+2(2) into curr_date.
 if p_payctr = 'CVP'.
-* COMPBEN. CURR_DATE 070114.ONGC94427 VMC_APDATE SENT_TIME .000000303405
-74145.txt
+* COMPBEN. CURR_DATE 070114.ONGC94427 VMC_APDATE SENT_TIME .00000030340574145.txt
 concatenate 'ONGC94427' l_vmc_apdate l_sent_time into corpfilename
 .
 *
@@ -5262,8 +5260,7 @@ endif. "S4H FP3 changes
 endif.
 ***end trust
 if p_payctr = 'OVL'.
-* OVL : COMPBEN.CURR_DATE 070114.OVL30523 VMC_APDATE SENT_TIME . 0000001
-0277786661.txt
+* OVL : COMPBEN.CURR_DATE 070114.OVL30523 VMC_APDATE SENT_TIME . 00000010277786661.txt
 concatenate 'OVL30523' l_vmc_apdate l_sent_time into corpfilename .
 
 *
