@@ -826,8 +826,8 @@ append ist_ddata_sbi_e.
 endif.
 endif.
 endif.
-endif.
 endloop.
+endif.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -855,8 +855,7 @@ if g_filegen = 'X'.
 message s411(zfi).
 endif.
 
-refresh : ist_zfivms_brdtmp,ist_ddata_sbi_e,ist_rdata_sbi_e,ist_ddata_
-nonsbi_e,ist_rdata_nonsbi_e,ist_zfivms_brd,ist_zfivms_resend.
+refresh : ist_zfivms_brdtmp,ist_ddata_sbi_e,ist_rdata_sbi_e,ist_ddata_nonsbi_e,ist_rdata_nonsbi_e,ist_zfivms_brd,ist_zfivms_resend.
 
 ENDFORM.
 
@@ -890,9 +889,7 @@ g_time_rd = sy-uzeit.
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
 and zbukr = 'MUM'.
 if sy-subrc = 0.
-concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_fi
-
-lename1.
+concatenate g_fsnam '3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 endif.
 *
 concatenate g_fsnam '3P.' g_date_rd '.94427' '.txt' into g_filename1.
@@ -944,7 +941,7 @@ close dataset g_filename1.
 
 if ist_rdata_sbi[] is not INITIAL.
 perform PREPARE_NEW_FORMAT USING '3P' '94427' ist_rdata_sbi[] .
-PERFORM DO_DS tables ist_rdata_sbi using sbi_filename .
+PERFORM DO_DS tables ist_rdata_sbi using g_filename1 .
 endif.
 ENDIF. " p_payctr = 'CVP' .
 
@@ -958,7 +955,7 @@ ENDIF. " p_payctr = 'CVP' .
 concatenate 'C:\SPAN\' 'R_SBI' g_date_rd g_time_rd '.txt' into g_filename. "21122010 11042011 21062011 05072011
 *
 *
-CALL FUNCTION 'GUI_DOWNLOAD'
+* CALL FUNCTION 'GUI_DOWNLOAD'
 
 *
 *
@@ -995,62 +992,62 @@ CALL FUNCTION 'GUI_DOWNLOAD'
 *
 *
 
-EXPORTING
-FILENAME
-FILETYPE
-WRITE_FIELD_SEPARATOR
-TABLES
-DATA_TAB
-EXCEPTIONS
-FILE_WRITE_ERROR
-NO_BATCH
-GUI_REFUSE_FILETRANSFER
-INVALID_TYPE
-NO_AUTHORITY
-UNKNOWN_ERROR
-HEADER_NOT_ALLOWED
-SEPARATOR_NOT_ALLOWED
-FILESIZE_NOT_ALLOWED
-HEADER_TOO_LONG
-DP_ERROR_CREATE
-DP_ERROR_SEND
-DP_ERROR_WRITE
-UNKNOWN_DP_ERROR
-ACCESS_DENIED
-DP_OUT_OF_MEMORY
-DISK_FULL
-DP_TIMEOUT
-FILE_NOT_FOUND
-DATAPROVIDER_EXCEPTION
-CONTROL_FLUSH_ERROR
-OTHERS
+* EXPORTING
+* FILENAME
+* FILETYPE
+* WRITE_FIELD_SEPARATOR
+* TABLES
+* DATA_TAB
+* EXCEPTIONS
+* FILE_WRITE_ERROR
+* NO_BATCH
+* GUI_REFUSE_FILETRANSFER
+* INVALID_TYPE
+* NO_AUTHORITY
+* UNKNOWN_ERROR
+* HEADER_NOT_ALLOWED
+* SEPARATOR_NOT_ALLOWED
+* FILESIZE_NOT_ALLOWED
+* HEADER_TOO_LONG
+* DP_ERROR_CREATE
+* DP_ERROR_SEND
+* DP_ERROR_WRITE
+* UNKNOWN_DP_ERROR
+* ACCESS_DENIED
+* DP_OUT_OF_MEMORY
+* DISK_FULL
+* DP_TIMEOUT
+* FILE_NOT_FOUND
+* DATAPROVIDER_EXCEPTION
+* CONTROL_FLUSH_ERROR
+* OTHERS
 
-= g_filename
-= 'ASC'
-= '*'
-= ist_rdata_sbi
-= 1
-= 2
-= 3
-= 4
-= 5
-= 6
-= 7
-= 8
-= 9
-= 10
-= 11
-= 12
-= 13
-= 14
-= 15
-= 16
-= 17
-= 18
-= 19
-= 20
-= 21
-= 22.
+* = g_filename
+* = 'ASC'
+* = '*'
+* = ist_rdata_sbi
+* = 1
+* = 2
+* = 3
+* = 4
+* = 5
+* = 6
+* = 7
+* = 8
+* = 9
+* = 10
+* = 11
+* = 12
+* = 13
+* = 14
+* = 15
+* = 16
+* = 17
+* = 18
+* = 19
+* = 20
+* = 21
+* = 22.
 
 IF SY-SUBRC <> 0.
 MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
@@ -1189,8 +1186,7 @@ ENDIF.
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
 and zbukr = 'MUM'.
 if sy-subrc = 0.
-concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
-filename1.
+concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 endif.
 *
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/mum/' 'D3P.' g_date_rd '.94427' '.txt' into g_filename1. "11042011
@@ -1214,7 +1210,7 @@ IF p_payctr = 'CVP' .
 **
 
 open dataset g_filename1 for output in text mode ENCODING DEFAULT.
-lOOP AT ist_ddata_sbi.
+loop at ist_ddata_sbi.
 transfer ist_ddata_sbi to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -1224,7 +1220,7 @@ if ist_ddata_sbi[] is not INITIAL.
 *
 
 perform PREPARE_NEW_FORMAT USING 'D3P' '94427' ist_ddata_sbi[] .
-PERFORM DO_DS tables ist_ddata_sbi using sbi_filename .
+PERFORM DO_DS tables ist_ddata_sbi using g_filename1 .
 
 endif.
 ENDIF. " p_payctr = 'CVP' .
@@ -1281,15 +1277,15 @@ IF p_payctr = 'CVP' .
 .
 *
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_rdata_nonsbi.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_rdata_nonsbi.
 transfer ist_rdata_nonsbi to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
 close dataset g_filename1.
 if ist_rdata_nonsbi[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'IBTP' '94427' ist_rdata_nonsbi[]
-PERFORM DO_DS tables ist_rdata_nonsbi using sbi_filename .
+perform PREPARE_NEW_FORMAT USING 'IBTP' '94427' ist_rdata_nonsbi[] .
+PERFORM DO_DS tables ist_rdata_nonsbi using g_filename1 .
 endif.
 
 ENDIF. " IF p_payctr = 'CVP'
@@ -1302,8 +1298,7 @@ ENDIF. " IF p_payctr = 'CVP'
 *
 concatenate '/usr/sap/RP1/FIN/epay/send/mum/' 'IBTP' g_date_rd g_time_rd '.txt' into g_filename.
 *
-concatenate 'C:\SPAN\' 'R_NONSBI' g_date_rd g_time_rd '.txt' into
-g_filename.
+concatenate 'C:\SPAN\' 'R_NONSBI' g_date_rd g_time_rd '.txt' into g_filename.
 "11042011 21062011 05072011
 *
 *
@@ -1447,22 +1442,22 @@ IF p_payctr = 'CVP' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_ddata_nonsbi.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_ddata_nonsbi.
 transfer ist_ddata_nonsbi to g_filename1.
 g_filegen = 'X'.
 
 ***
 ***
 
-] .
+* ] .
 *
 
 ENDLOOP.
 close dataset g_filename1.
 if ist_ddata_nonsbi[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '94427' ist_ddata_nonsbi[
-PERFORM DO_DS tables ist_ddata_nonsbi using sbi_filename .
+perform PREPARE_NEW_FORMAT USING 'DIBTP' '94427' ist_ddata_nonsbi[] .
+PERFORM DO_DS tables ist_ddata_nonsbi using g_filename1 .
 endif.
 
 ENDIF. " IF p_payctr = 'CVP' .
@@ -1594,8 +1589,7 @@ clear : l_rsbi, l_dsbi.
 if not ist_rdata_sbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
 append lines of ist_rdata_sbi_ovl_e to ist_rdata_sbi_ovl.
-"06
-072011
+"06072011
 endif.
 describe table ist_rdata_sbi_ovl lines l_rsbi.
 if l_rsbi > 0.
@@ -1627,14 +1621,14 @@ IF p_payctr = 'OVL' .
 
 .
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_rdata_sbi_ovl.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_rdata_sbi_ovl.
 transfer ist_rdata_sbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
 close dataset g_filename1.
 if ist_rdata_sbi_ovl[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING '3P' '30523' ist_rdata_sbi_ovl[]
+perform PREPARE_NEW_FORMAT USING '3P' '30523' ist_rdata_sbi_ovl[] .
 endif.
 
 ENDIF. " p_payctr = 'OVL' .
@@ -1751,8 +1745,7 @@ clear : l_rsbi, l_dsbi.
 if not ist_ddata_sbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
 append lines of ist_ddata_sbi_ovl_e to ist_ddata_sbi_ovl.
-"06
-072011
+"06072011
 endif.
 describe table ist_ddata_sbi_ovl lines l_dsbi.
 if l_dsbi > 0.
@@ -1763,8 +1756,7 @@ g_time_rd = sy-uzeit.
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid
 and zbukr = 'OVL'.
 if sy-subrc = 0.
-concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
-filename1.
+concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 endif.
 *
 concatenate '/usr/sap/' syst-sysid '/DigSignApp/data/output/signed/ovl/' 'D3P.' g_date_rd '.30523' '.txt' into g_filename1.
@@ -1782,8 +1774,8 @@ IF p_payctr = 'OVL' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_ddata_sbi_ovl.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_ddata_sbi_ovl.
 transfer ist_ddata_sbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -1792,7 +1784,7 @@ if ist_ddata_sbi_ovl[] is not INITIAL.
 
 .
 
-perform PREPARE_NEW_FORMAT USING 'D3P' '30523' ist_ddata_sbi_ovl[]
+perform PREPARE_NEW_FORMAT USING 'D3P' '30523' ist_ddata_sbi_ovl[] .
 endif.
 
 ENDIF. " p_payctr = 'OVL' .
@@ -1912,8 +1904,7 @@ clear : l_rsbi , l_dsbi.
 * Begin of <RD1K977143> on 14072011
 if not ist_rdata_nonsbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
-append lines of ist_rdata_nonsbi_ovl_e to ist_rdata_nonsbi_ovl. "06
-072011
+append lines of ist_rdata_nonsbi_ovl_e to ist_rdata_nonsbi_ovl. "06072011
 endif.
 describe table ist_rdata_nonsbi_ovl lines l_rsbi.
 if l_rsbi > 0.
@@ -1943,8 +1934,8 @@ IF p_payctr = 'OVL' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_rdata_nonsbi_ovl. "ist_rdata_nonsbi. "19052011
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_rdata_nonsbi_ovl. "ist_rdata_nonsbi. "19052011
 transfer ist_rdata_nonsbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -2065,8 +2056,7 @@ clear : l_rsbi, l_dsbi.
 * Begin of <RD1K977143> on 14072011
 if not ist_ddata_nonsbi_ovl_e[] is initial.
 * End of <RD1K977143> on 14072011
-append lines of ist_ddata_nonsbi_ovl_e to ist_ddata_nonsbi_ovl. "06
-072011
+append lines of ist_ddata_nonsbi_ovl_e to ist_ddata_nonsbi_ovl. "06072011
 endif.
 describe table ist_ddata_nonsbi_ovl lines l_dsbi.
 if l_dsbi > 0.
@@ -2096,18 +2086,16 @@ IF p_payctr = 'OVL' .
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_ddata_nonsbi_ovl. "ist_ddata_nonsbi. 19052011
-transfer ist_ddata_nonsbi to g_filename1.
-19052011
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_ddata_nonsbi_ovl. "ist_ddata_nonsbi. 19052011
+* transfer ist_ddata_nonsbi to g_filename1. "19052011
 transfer ist_ddata_nonsbi_ovl to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
 close dataset g_filename1.
 
 if ist_ddata_nonsbi_ovl[] is not INITIAL.
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '30523' ist_ddata_nonsbi_
-ovl[] .
+perform PREPARE_NEW_FORMAT USING 'DIBTP' '30523' ist_ddata_nonsbi_ovl[] .
 endif.
 ENDIF. " p_payctr = 'OVL' .
 **End RD1K991769 CAB_ALOK
@@ -2297,7 +2285,7 @@ open dataset g_filename1 for output in text mode ENCODING DEFAULT
 ***
 ***
 
-lOOP AT ist_rdata_sbi_e.
+loop at ist_rdata_sbi_e.
 transfer ist_rdata_sbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -2556,8 +2544,8 @@ IF p_payctr = 'CEP'.
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_ddata_sbi_e.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_ddata_sbi_e.
 transfer ist_ddata_sbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -2613,8 +2601,8 @@ IF p_payctr = 'CEP'.
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_rdata_nonsbi_e.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_rdata_nonsbi_e.
 transfer ist_rdata_nonsbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -2778,8 +2766,8 @@ IF p_payctr = 'CEP'.
 ***
 ***
 
-open dataset g_filename1 for output in text mode ENCODING DEFAULT
-lOOP AT ist_ddata_nonsbi_e.
+open dataset g_filename1 for output in text mode ENCODING DEFAULT.
+loop at ist_ddata_nonsbi_e.
 transfer ist_ddata_nonsbi_e to g_filename1.
 g_filegen = 'X'.
 ENDLOOP.
@@ -2942,7 +2930,7 @@ concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' '3P.' g_date_rd '.
 *
 open dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-lOOP AT ist_rdata_sbi_ovl_e.
+loop at ist_rdata_sbi_ovl_e.
 
 *
 transfer ist_rdata_sbi_ovl_e to g_filename1.
@@ -3174,8 +3162,7 @@ where sysid = syst-sysid
 *
 if sy-subrc = 0.
 *
-concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_
-filename1.
+concatenate g_fsnam 'D3P.' g_date_rd '.' g_corpid '.txt' into g_filename1.
 *
 ENDIF.
 *
@@ -3189,7 +3176,7 @@ concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'D3P.' g_date_rd '
 *
 open dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-lOOP AT ist_ddata_sbi_ovl_e.
+loop at ist_ddata_sbi_ovl_e.
 *
 transfer ist_ddata_sbi_ovl_e to g_filename1.
 *
@@ -3232,7 +3219,7 @@ concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'IBTP.' g_date_rd 
 *
 open dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-lOOP AT ist_rdata_nonsbi_ovl_e.
+loop at ist_rdata_nonsbi_ovl_e.
 *
 transfer ist_rdata_nonsbi_ovl_e to g_filename1.
 *
@@ -3374,7 +3361,7 @@ concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/ddn/' 'DIBTP.' g_date_rd
 *
 open dataset g_filename1 for output in text mode ENCODING DEFAULT.
 *
-lOOP AT ist_ddata_nonsbi_ovl_e.
+loop at ist_ddata_nonsbi_ovl_e.
 *
 transfer ist_ddata_nonsbi_ovl_e to g_filename1.
 *
