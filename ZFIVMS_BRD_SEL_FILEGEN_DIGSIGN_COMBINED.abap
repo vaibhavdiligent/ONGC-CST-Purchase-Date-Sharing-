@@ -430,14 +430,11 @@ START-OF-SELECTION.
   PERFORM CLEAR_VAR.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
-* INCLUDE zbcm_class.                          " inlined above
-* INCLUDE zbcm_class_declare.                  " inlined above
-* INCLUDE zfivms_brd_sel_filegen_digso01.      " inlined by combiner
-* INCLUDE zfivms_brd_sel_filegen_digsi01.      " not used (interactive screens)
-* INCLUDE zfivms_brd_sel_filegen_digsf01.      " inlined by combiner
+* INCLUDE zbcm_class.            " inlined above (LCL_FILE_VERIFIER)
+* INCLUDE zbcm_class_declare.    " inlined above (LCL_FILE_VERIFIER impl)
 
 *&---------------------------------------------------------------------*
-*& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSO01                            *
+*& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSO01
 *&---------------------------------------------------------------------*
 *&---------------------------------------------------------------------*
 *& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSO01
@@ -460,7 +457,42 @@ MODULE USER_COMMAND_0100 INPUT.
 ENDMODULE.
 
 *&---------------------------------------------------------------------*
-*& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSF01                            *
+*& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSI01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSI01
+*& Selection Screen Include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
+*& No changes between OVL and ONGC versions.
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+
+PARAMETERS:
+  p_date   TYPE sy-datum OBLIGATORY DEFAULT sy-datum,
+  p_payctr TYPE zpayctr  OBLIGATORY.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
+
+PARAMETERS:
+  p_test   TYPE c AS CHECKBOX DEFAULT ' '.
+
+SELECTION-SCREEN END OF BLOCK b2.
+
+*&---------------------------------------------------------------------*
+*& AT SELECTION-SCREEN
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+
+  AUTHORITY-CHECK OBJECT 'ZFIBENREG'
+    FIELD 'ZPAY_CTR' ID 'ZPAY_CTR' FIELD p_payctr.
+  IF sy-subrc <> 0.
+    MESSAGE e001(zfi) WITH p_payctr.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSF01
 *&---------------------------------------------------------------------*
 *&---------------------------------------------------------------------*
 *& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSF01
