@@ -4368,8 +4368,7 @@ p_ist_record type standard table.
 *SPAN BANKL_NEW STREET STR_SUPPL1 CITY1
 ***3.0 IBTP ( Non-SBI, registration)
 *============================================
-**AS & Sons*361101010036053*UBIN0536113*ONGC*ONGC*ONGC**0000000001948R00
-00100032*
+**AS & Sons*361101010036053*UBIN0536113*ONGC*ONGC*ONGC**000000000194800100032*
 **KOINH_NEW* BANKN_NEW * BANKL_NEW *STREET* STR_SUPPL1*CITY1*SPAN *
 ** New Format
 **O A ComBenNSRegOBAdd1 111222333777 STSNS64636 ICIC0000001 MIN NAGAR WEST NETHAJI AV TAMILNADU INDIA
@@ -4377,8 +4376,7 @@ p_ist_record type standard table.
 *SPAN BANKL_NEW STREET STR_SUPPL1 CITY1
 ***4.0 DIBTP ( Non-SBI, De-registration)
 *============================================
-**AS & Sons*361101010036053*UBIN0536113*ONGC*ONGC*ONGC**0000000001948R00
-00100032*
+**AS & Sons*361101010036053*UBIN0536113*ONGC*ONGC*ONGC**000000000194800100032*
 **KOINH_NEW* BANKN_NEW * BANKL_NEW *STREET* STR_SUPPL1*CITY1*SPAN *
 ** New Format
 **O A ComBenNSRegOBAdd1 111222333777 STSNS64636 ICIC0000001 MIN NAGAR WEST NETHAJI AV TAMILNADU INDIA
@@ -5405,14 +5403,10 @@ form digital_sign_save_logs using ist_sbi_file type standard table.
 *RECEIVED_TIME UZEIT TIMS 6
 *RECEIVED_FILENAME ZBENE_FILE_NAME CHAR 150
 *RECEIVED_FLAG FLAG CHAR 1
-*SENT_ERROR
-STRING 0
-*RAW_DATA
-RAWSTRING 0
-*DATA_SENT
-RAWSTRING 0
-*DATA_RECEIVED
-RAWSTRING 0
+*SENT_ERROR STRING 0
+*RAW_DATA RAWSTRING 0
+*DATA_SENT RAWSTRING 0
+*DATA_RECEIVED RAWSTRING 0
 data: wa_zfiben_file_moni type zfiben_file_moni.
 data: l_vmc_apdate
 type zfiben_file_moni-vmc_apdate,
@@ -5491,8 +5485,7 @@ endif. "S4H FP3 changes
 endif.
 ***start trust
 if p_payctr = 'ECPF'.
-*COMPBEN. CURR_DATE 070114.ONGC93128 VMC_APDATE SENT_TIME .0000003071731
-4079.txt for
+*COMPBEN. CURR_DATE 070114.ONGC93128 VMC_APDATE SENT_TIME .00000030717314079.txt for
 concatenate 'ECPF96726' l_vmc_apdate l_sent_time into corpfilename
 .
 *
@@ -5808,8 +5801,7 @@ UPDATE zsdcust_bank SET status = 'SENT TO SBI'
 WHERE chon = p_date
 AND status = 'RELEASE BY CMC'.
 
-*****************************************************changes by gaurav o
-n 22 may 2018
+*****************************************************changes by gaurav on 22 may 2018
 *
 BREAK-POINT.
 
