@@ -265,12 +265,12 @@ form auth_check .
 *2. D:FI_FILEGEN_CEP
 *3. D:FI_FILEGEN_OVL
 *
-Object
-:ZFIBENREG
+* Object
+* :ZFIBENREG
 *
-Field :ZPAY_CTR (03,16)
+* Field :ZPAY_CTR (03,16)
 *
-Value :CVP / CEP / OVL
+* Value :CVP / CEP / OVL
 
 *
 *
@@ -290,7 +290,7 @@ endform.
 *&---------------------------------------------------------------------*
 form set_trans .
 concatenate ''' ~ ! ` ! @ # $ % ^ & * ( ) _ - '
-/ , . < > ' into trans_string respecting blanks.
+            '/ , . < > ''' into trans_string respecting blanks.
 endform.
 
 *&---------------------------------------------------------------------*
