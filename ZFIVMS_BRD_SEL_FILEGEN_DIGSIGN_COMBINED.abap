@@ -211,8 +211,10 @@ DATA: IST_pa0009_OVL   type table of pa0009,
 *& Local type for ZFI_ALERTS table (fallback if DDIC table missing)
 *&---------------------------------------------------------------------*
 TYPES: BEGIN OF ty_zfi_alerts,
-         categ TYPE c LENGTH 10,
-         matt  TYPE c LENGTH 255,
+         categ  TYPE c LENGTH 10,
+         action TYPE c LENGTH 20,
+         ident  TYPE c LENGTH 20,
+         matt   TYPE c LENGTH 255,
        END OF ty_zfi_alerts.
 
 *&---------------------------------------------------------------------*
@@ -1170,7 +1172,7 @@ CLOSE dataset g_filename1.
 
 IF ist_rdata_sbi[] is not INITIAL.
 PERFORM PREPARE_NEW_FORMAT USING '3P' '94427' ist_rdata_sbi[] .
-PERFORM DO_DS tables ist_rdata_sbi using g_filename1 .
+* PERFORM DO_DS tables ist_rdata_sbi using g_filename1 .
 ENDIF.
 ENDIF. " p_payctr = 'CVP' .
 
@@ -1449,7 +1451,7 @@ IF ist_ddata_sbi[] is not INITIAL.
 *
 
 PERFORM PREPARE_NEW_FORMAT USING 'D3P' '94427' ist_ddata_sbi[] .
-PERFORM DO_DS tables ist_ddata_sbi using g_filename1 .
+* PERFORM DO_DS tables ist_ddata_sbi using g_filename1 .
 
 ENDIF.
 ENDIF. " p_payctr = 'CVP' .
@@ -1514,7 +1516,7 @@ ENDLOOP.
 CLOSE dataset g_filename1.
 IF ist_rdata_nonsbi[] is not INITIAL.
 PERFORM PREPARE_NEW_FORMAT USING 'IBTP' '94427' ist_rdata_nonsbi[] .
-PERFORM DO_DS tables ist_rdata_nonsbi using g_filename1 .
+* PERFORM DO_DS tables ist_rdata_nonsbi using g_filename1 .
 ENDIF.
 
 ENDIF. " IF p_payctr = 'CVP'
@@ -1686,7 +1688,7 @@ ENDLOOP.
 CLOSE dataset g_filename1.
 IF ist_ddata_nonsbi[] is not INITIAL.
 PERFORM PREPARE_NEW_FORMAT USING 'DIBTP' '94427' ist_ddata_nonsbi[] .
-PERFORM DO_DS tables ist_ddata_nonsbi using g_filename1 .
+* PERFORM DO_DS tables ist_ddata_nonsbi using g_filename1 .
 ENDIF.
 
 ENDIF. " IF p_payctr = 'CVP' .
@@ -6030,7 +6032,7 @@ CLEAR: mob_no, messg, wf_string, result.
 CLEAR: l_reason_desc, l_result.
 SELECT * from zfivmsbank into table lit_zfivmsbank where vmc_apdate = p_date
 AND status = 'SENT TO SBI'.
-SELECT * from zfi_alerts into table it_zfi_alerts.
+* SELECT * from zfi_alerts into table it_zfi_alerts.
 
 "ts3.
 
@@ -6068,7 +6070,7 @@ action
 ident
 = 'SENT_2_SBI'.
 *
-REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts2-matt WITH zfivmsbank-reqno.
+* REPLACE ALL OCCURRENCES OF 'XXXXXXXXXX' IN wa_zfi_alerts2-matt WITH zfivmsbank-reqno.
 REPLACE all occurrences of 'XXXXXXXXXX' in wa_zfi_alerts2-matt with lwa_zfivmsbank-reqno.
 REPLACE all occurrences of 'ZFIVMSBANK-LIFNR' in wa_zfi_alerts2-matt with lwa_zfivmsbank-lifnr.
 REPLACE all occurrences of 'ZFIVMSBANK-NAME1' in wa_zfi_alerts2-matt with lwa_zfivmsbank-name1.
@@ -6125,17 +6127,12 @@ DOCUMENT_TYPE
 = 'RAW'
 put_in_outbox
 = ' '
-commit_work
-= 'X'
-IP_ENCRYPT
-=
-IP_SIGN
-=
+commit_work    = 'X'
+*   IP_ENCRYPT     =
+*   IP_SIGN        =
 IMPORTING
-SENT_TO_ALL
-=
-NEW_OBJECT_ID
-=
+*   SENT_TO_ALL    =
+*   NEW_OBJECT_ID  =
 TABLES
 object_header
 = it_obj_head
@@ -6176,8 +6173,7 @@ ENDIF.
 
 *
 
-SELECT * from pa9205 into corresponding fields of table ist_pa
-9205 where pernr = lwa_zfivmsbank-cpf"ZMM_VEND_UNBLOCK-ERNAM
+SELECT * from pa9205 into corresponding fields of table ist_pa9205 where pernr = lwa_zfivmsbank-cpf"ZMM_VEND_UNBLOCK-ERNAM
 AND subty = '01'
 
 "22112013 by Sudhir Sharma
@@ -6226,16 +6222,13 @@ http_processing_failed
 CLEAR result .
 result = http_client->response->get_cdata( ).
 MOVE result to l_result .
-CONCATENATE 'Message from SMS gateway:' l_result+2 into l_
-
-result.
+CONCATENATE 'Message from SMS gateway:' l_result+2 into l_result.
 
 ENDIF.
 ENDIF.
 ENDLOOP.
 
-*****************************************************changes by gaurav o
-n 22 may.
+*****************************************************changes by gaurav on 22 may.
 
 ELSEIF p_payctr = 'OVL'.
 " 'RELEASE BY VMC FOR OVL'

@@ -211,8 +211,10 @@ DATA: IST_pa0009_OVL   type table of pa0009,
 *& Local type for ZFI_ALERTS table (fallback if DDIC table missing)
 *&---------------------------------------------------------------------*
 TYPES: BEGIN OF ty_zfi_alerts,
-         categ TYPE c LENGTH 10,
-         matt  TYPE c LENGTH 255,
+         categ  TYPE c LENGTH 10,
+         action TYPE c LENGTH 20,
+         ident  TYPE c LENGTH 20,
+         matt   TYPE c LENGTH 255,
        END OF ty_zfi_alerts.
 
 *&---------------------------------------------------------------------*
