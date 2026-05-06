@@ -1,0 +1,681 @@
+*&---------------------------------------------------------------------*
+*& Report RGJV_UPDATE_ACC_DATA_IN_ACDOCA
+*&---------------------------------------------------------------------*
+*& This report update the ACDOCA table with internal JV documents
+*&---------------------------------------------------------------------*
+report zrgjv_update_acc_data_in_acd line-size 200.
+
+tables: jvso1.
+
+types:
+    begin of gty_s_log.
+        include type jva_acd_upd_log.
+    types:
+        type             type jvso1-activ,
+        jvdoctype        type char2,
+        heuristic_hit    type abap_bool,
+        balances_correct type abap_bool,
+        updated          type abap_bool,
+        comment          type string,
+        messages         type bapiret2_t,
+      end of gty_s_log .
+
+
+  types:
+    begin of gty_s_doc,
+        rldnr                   type jvso1-rldnr,
+        rbukrs                  type jvso1-rbukrs,
+        rkokrs                  type jvso1-rkokrs,
+        ryear                   type jvso1-ryear,
+        docnr                   type jvso1-docnr,
+        activ                   type jvso1-activ,
+        reffidoc                type jvso1-reffidoc,
+        refdocnr                type jvso1-refdocnr,
+        jvdoctype               type char2,
+        is_fi_doc               type abap_bool,
+        is_co_doc               type abap_bool,
+        glvor                   type bkpf-glvor,
+        tcode                   type bkpf-tcode,
+        bstat                   type bkpf-bstat,
+        zuonr                   type accit-zuonr,
+        ledger                  type rldnr,
+        posting_mode            type char1,
+        jv_no_of_lines          type i,
+        gl_no_of_lines          type i,
+        jv_no_of_lines_excluded type i,
+        gl_no_of_lines_excluded type i,
+        corr_type               type char1,
+        balances_correct        type abap_bool,
+        balances_log            type gty_s_log,
+        mig_source              type acdoca-mig_source,
+        archived                type char1,
+        error                   type char1,
+        display                 type char1,
+        comment                 type c length 150,
+      end of gty_s_doc .
+  types:
+    gty_t_doc type standard table of gty_s_doc with default key .
+
+
+  data gt_doc_r type  gty_t_doc .
+
+
+selection-screen begin of block selection_parameters with frame title text-sel.
+  select-options: s_bukrs  for  jvso1-rbukrs   memory id buk,
+                  s_ryear  for  jvso1-ryear    memory id fyr,
+                  s_poper  for  jvso1-poper    memory id per,
+                  s_belnr  for  jvso1-reffidoc memory id doc,
+                  s_refnr  for  jvso1-refdocnr memory id ref.
+  selection-screen begin of block document_types with frame title text-dct.
+    parameters: p_fidocs as checkbox memory id fid default abap_true,
+                p_codocs as checkbox memory id cod default ' '.
+    selection-screen begin of block prodper_handling with frame title text-pph.
+      parameters: p_ppper as checkbox default abap_true.
+      parameters: p_ppday as checkbox.
+    selection-screen end of block prodper_handling.
+    parameters: p_exclbl  as checkbox memory id exb default abap_true.
+  selection-screen end of block document_types.
+
+  parameters: p_alllds radiobutton group ledg default 'X',
+              p_jvledg radiobutton group ledg.
+  selection-screen skip.
+
+* Hidden parameter needed for showing/hiding additional selection parameters
+  parameters: p_ado(1) type c no-display.   "Close Block
+
+* Further selection parameters (hidden by default)
+  selection-screen:
+  pushbutton /1(35) pushadoo  "Button to open the add. selection parameters
+    user-command ucomm_openado  modif id ado,               "#EC NEEDED
+  pushbutton /1(35) pushadoc  "Button to close the add. selection parameters
+    user-command ucomm_closeado modif id adc.               "#EC NEEDED
+
+  select-options: s_budat  for  jvso1-budat    modif id adc,
+                  s_bldat  for  jvso1-bldat    modif id adc,
+                  s_racct  for  jvso1-racct    modif id adc,
+                  s_rjvnam for  jvso1-rjvnam   modif id adc,
+                  s_regrou for  jvso1-regrou   modif id adc,
+                  s_rrecin for  jvso1-rrecin   modif id adc,
+                  s_bilid  for  jvso1-bilid    modif id adc,
+                  s_prodp  for  jvso1-prodper  modif id adc,
+                  s_rcntr  for  jvso1-rcntr    modif id adc,
+                  s_rordnr for  jvso1-rordnr   modif id adc,
+                  s_rprojk for  jvso1-rprojk   modif id adc,
+                  s_nplnr  for  jvso1-nplnr    modif id adc,
+                  s_aufpl  for  jvso1-aufpl    modif id adc,
+                  s_aplzl  for  jvso1-aplzl    modif id adc.
+
+selection-screen end of block selection_parameters.
+
+selection-screen begin of block accounting_entities with frame title text-acc.
+  parameters: p_vname as checkbox memory id vnm default abap_true,
+              p_egrup as checkbox memory id eqg default abap_true,
+              p_vptnr as checkbox memory id vpt default abap_true,
+              p_recid as checkbox memory id rec default abap_true,
+              p_bilid as checkbox memory id bil default abap_true,
+              p_prodp as checkbox memory id prp default abap_true,
+              p_cobs  as checkbox memory id vpt default abap_true,
+              p_coco  as checkbox memory id vpt default abap_false.
+
+* Hidden parameter needed for showing/hiding the update options
+  parameters: p_upo(1) type c no-display.   "Close Block
+
+* Update options (hidden by default)
+  selection-screen:
+  pushbutton /1(35) pushupoo  "Button to open the update options
+    user-command ucomm_openupo  modif id upo,               "#EC NEEDED
+  pushbutton /1(35) pushupoc  "Button to close the update options
+    user-command ucomm_closeupo modif id upc.               "#EC NEEDED
+
+  selection-screen begin of block venture_upd_options with frame title text-vuo.
+    parameters: p_vnupd radiobutton group vent modif id upc default 'X',
+                p_vnrep radiobutton group vent modif id upc.
+  selection-screen end of block venture_upd_options.
+
+  selection-screen begin of block egrup_upd_options with frame title text-euo.
+    parameters: p_egupd radiobutton group eqgp modif id upc default 'X',
+                p_egrep radiobutton group eqgp modif id upc.
+  selection-screen end of block egrup_upd_options.
+
+  selection-screen begin of block partner_upd_options with frame title text-vpo.
+    parameters: p_vpupd radiobutton group vptn modif id upc default 'X',
+                p_vprep radiobutton group vptn modif id upc.
+  selection-screen end of block partner_upd_options.
+
+  selection-screen begin of block recid_upd_options with frame title text-ruo.
+    parameters: p_riupd radiobutton group rind modif id upc default 'X',
+                p_rirep radiobutton group rind modif id upc.
+  selection-screen end of block recid_upd_options.
+
+  selection-screen begin of block bilid_upd_options with frame title text-buo.
+    parameters: p_biupd radiobutton group bind modif id upc default 'X',
+                p_birep radiobutton group bind modif id upc.
+  selection-screen end of block bilid_upd_options.
+
+  selection-screen begin of block prodper_upd_options with frame title text-puo.
+    parameters: p_ppupd radiobutton group prop modif id upc default 'X',
+                p_pprep radiobutton group prop modif id upc.
+  selection-screen end of block prodper_upd_options.
+
+  selection-screen begin of block co_bs_upd_options with frame title text-cbo.
+    parameters: p_bsupd radiobutton group cobs modif id upc default 'X',
+                p_bsrep radiobutton group cobs modif id upc.
+  selection-screen end of block co_bs_upd_options.
+
+  selection-screen begin of block co_co_upd_options with frame title text-cco.
+    parameters: p_coupd radiobutton group coco modif id upc,
+                p_corep radiobutton group coco modif id upc default 'X'.
+  selection-screen end of block co_co_upd_options.
+
+selection-screen end of block accounting_entities.
+
+selection-screen begin of block posting_date_options with frame title text-psd.
+  parameters: p_oripd radiobutton group pdt default 'X',
+              p_newpd radiobutton group pdt,
+              p_budat type budat.
+selection-screen end of block posting_date_options.
+
+selection-screen begin of block processing_options with frame title text-pro.
+  parameters: p_analys radiobutton group runt,
+              p_test   radiobutton group runt default 'X',
+              p_update radiobutton group runt.
+  selection-screen skip.
+  parameters: p_balov as checkbox default abap_true,
+              p_heur  as checkbox default abap_true.
+  selection-screen skip.
+  selection-screen begin of block bulk_proc_options with frame title text-blk.
+    parameters: p_bldoch type numc7 memory id nd1 default 500000,
+                p_bldlpr type numc4 memory id nd2 default 500.
+  selection-screen end of block bulk_proc_options.
+  selection-screen begin of block parallel_options with frame title text-prl.
+    parameters: p_parall as checkbox default abap_true,
+                p_rfcgrp type spta_rfcgr memory id spta_rfcgr default 'parallel_generators',
+                p_mxtsks type numc2      memory id mxt        default 20,
+                p_doctsk type numc7      memory id dct        default 1000000,
+                p_sptask as checkbox     memory id spt.
+  selection-screen end of block parallel_options.
+  selection-screen begin of block log_upd_options with frame title text-luo.
+    parameters: p_luptsk as checkbox     memory id par default abap_true,
+                p_lbulk  type numc4      memory id lbl default 1000,
+                p_lgltms radiobutton group tmst default 'X',
+                p_luptms radiobutton group tmst.
+  selection-screen end of block log_upd_options.
+selection-screen end of block processing_options.
+
+selection-screen begin of block output_options with frame title text-opo.
+  parameters: p_shwall radiobutton group disp,
+              p_upderr radiobutton group disp default 'X',
+              p_erronl radiobutton group disp.
+  selection-screen skip.
+  parameters: p_spfor as checkbox memory id spf,
+              p_nodet as checkbox memory id ndt,
+              p_se16n as checkbox memory id s16.
+selection-screen end of block output_options.
+
+
+data: go_correct_acdoca   type ref to if_jva_mig_correct_acdoca,
+      gv_cursor_field(20) type c value 'P_BUKRS',
+      gv_sscr_ucomm       type sy-ucomm.
+
+
+*----------------------------------------------------------------------*
+*       INITIALIZATION
+*----------------------------------------------------------------------*
+initialization.
+
+  perform modify_screen.
+
+
+*----------------------------------------------------------------------*
+*       AT SELECTION SCREEN ON [several fields]
+*----------------------------------------------------------------------*
+at selection-screen on p_bldoch.
+  if p_bldoch < 100 or
+     p_bldoch > 9999999.
+    p_bldoch = 500000.
+  endif.
+
+at selection-screen on p_bldlpr.
+  if p_bldlpr < 1 or
+     p_bldlpr > 9999.
+    p_bldlpr = 500.
+  endif.
+
+at selection-screen on p_mxtsks.
+  if p_mxtsks < 2 or
+     p_mxtsks > 99.
+    p_mxtsks = 20.
+  endif.
+
+at selection-screen on p_doctsk.
+  if p_doctsk < 100 or
+     p_doctsk > 9999999.
+    p_doctsk = 1000000.
+  endif.
+
+
+*----------------------------------------------------------------------*
+*       AT SELECTION-SCREEN OUTPUT
+*----------------------------------------------------------------------*
+at selection-screen output.
+
+  perform prepare_sel_screen_frame.
+
+
+*----------------------------------------------------------------------*
+*       AT SELECTION-SCREEN
+*----------------------------------------------------------------------*
+at selection-screen.
+
+  perform process_sel_screen_actions.
+
+
+*&---------------------------------------------------------------------*
+*&      AT LINE-SELECTION
+*&---------------------------------------------------------------------*
+at line-selection.
+
+  if sy-lsind = 1 and
+     sy-lisel is not initial.
+    cl_jva_mig_alv_output=>get_instance( )->display_spool_classic( sy-lisel ).
+  endif.
+
+
+*----------------------------------------------------------------------*
+*       END-OF-SELECTION
+*----------------------------------------------------------------------*
+end-of-selection.
+
+  perform run_process.
+
+
+*&---------------------------------------------------------------------*
+*&   FORM run_process
+*&---------------------------------------------------------------------*
+form run_process.
+
+  data: ls_progpars type zCL_JVA_MIG_CORRECT_ACDOCA=>if_jva_mig_correct_acdoca~gty_program_parameters.
+
+  ls_progpars = value #( r_bukrs                        = s_bukrs[]
+                         r_ryear                        = s_ryear[]
+                         r_poper                        = s_poper[]
+                         r_belnr                        = s_belnr[]
+                         r_refnr                        = s_refnr[]
+
+                         r_budat                        = s_budat[]
+                         r_bldat                        = s_bldat[]
+                         r_racct                        = s_racct[]
+                         r_rjvnam                       = s_rjvnam[]
+                         r_regrou                       = s_regrou[]
+                         r_rrecin                       = s_rrecin[]
+                         r_bilid                        = s_bilid[]
+                         r_prodper                      = s_prodp[]
+                         r_rcntr                        = s_rcntr[]
+                         r_rordnr                       = s_rordnr[]
+                         r_rprojk                       = s_rprojk[]
+                         r_nplnr                        = s_nplnr[]
+                         r_aufpl                        = s_aufpl[]
+                         r_aplzl                        = s_aplzl[]
+
+                         select_fi_documents            = p_fidocs
+                         select_co_documents            = p_codocs
+
+                         prodper_as_period              = p_ppper
+                         prodper_last_eq_first          = p_ppday
+
+                         post_equity_change             = abap_false
+                         post_suspense                  = abap_false
+                         post_equity_adjust             = abap_false
+                         post_farm_in_out               = abap_false
+                         post_cutback                   = abap_false
+                         post_cash_call                 = abap_false
+
+                         check_venture                  = p_vname
+                         update_venture                 = p_vnupd
+                         repost_venture                 = p_vnrep
+                         check_equity_group             = p_egrup
+                         update_equity_group            = p_egupd
+                         repost_equity_group            = p_egrep
+                         check_venture_partner          = p_vptnr
+                         update_venture_partner         = p_vpupd
+                         repost_venture_partner         = p_vprep
+                         check_recovery_indicator       = p_recid
+                         update_recovery_indicator      = p_riupd
+                         repost_recovery_indicator      = p_rirep
+                         check_billing_indicator        = p_bilid
+                         update_billing_indicator       = p_biupd
+                         repost_billing_indicator       = p_birep
+                         check_production_period        = p_prodp
+                         update_production_period       = p_ppupd
+                         repost_production_period       = p_pprep
+                         check_co_in_bs_lines           = p_cobs
+                         update_co_in_bs_lines          = p_bsupd
+                         repost_co_in_bs_lines          = p_bsrep
+                         check_co_in_co_lines           = p_coco
+                         update_co_in_co_lines          = p_coupd
+                         repost_co_in_co_lines          = p_corep
+
+                         exclude_balancing_lines        = p_exclbl
+
+                         use_original_posting_date      = p_oripd
+                         use_new_posting_date           = p_newpd
+                         posting_date                   = p_budat
+
+                         analysis_only                  = p_analys
+                         testrun                        = p_test
+
+                         correct_all_ledgers            = p_alllds
+
+                         heuristic_line_assignment      = p_heur
+                         balance_check_over_line_check  = p_balov
+
+                         bulk_no_of_doc_headers_in_mem  = conv int4( p_bldoch )
+                         bulk_no_of_docs_for_line_proc  = conv int4( p_bldlpr )
+
+                         log_use_update_task_for_db_upd = p_luptsk
+                         log_bulk_no_of_itms_for_db_upd = p_lbulk
+                         log_set_global_timestamp       = p_lgltms
+                         log_set_timestamp_at_db_update = p_luptms
+
+                         parallel_processing            = p_parall
+                         server_group                   = p_rfcgrp
+                         maximum_number_of_tasks        = p_mxtsks
+                         number_of_docs_per_task        = p_doctsk
+                         create_spool_for_each_task     = p_sptask
+
+                         update_existing_lines          = abap_false
+                         post_new_documents             = abap_false
+
+                         show_all_lines                 = p_shwall
+                         show_updates_and_errors        = p_upderr
+                         show_errors_only               = p_erronl
+
+                         create_spools_in_foreground    = p_spfor
+                         do_not_store_issue_details     = p_nodet
+                         use_se16n_to_display_doc       = p_se16n
+
+                         repid_callback                 = sy-repid ).
+
+  go_correct_acdoca = zCL_JVA_MIG_CORRECT_ACDOCA=>get_instance( ).
+
+  go_correct_acdoca->execute_process( ls_progpars ).
+
+  import gt_doc_r = gt_doc_r  from MEMORY id 'JVA'.
+
+*CALL METHOD go_correct_acdoca->EXE_PROCESS
+*  EXPORTING
+*    IS_PROGPARS = ls_progpars
+*  IMPORTING
+*    LT_DCO_R    = gt_doc_r.
+    .
+
+
+endform.
+
+*---------------------------------------------------------------------*
+*       FORM BEFORE_RFC                                               *
+*---------------------------------------------------------------------*
+*       Callback-Form for parallel processing                         *
+*       invoked before each RFC                                       *
+*---------------------------------------------------------------------*
+form before_rfc using    is_before_rfc_imp     type spta_t_before_rfc_imp
+                changing cs_before_rfc_exp     type spta_t_before_rfc_exp
+                         ct_rfcdata            type spta_t_indxtab
+                         ct_failed_objects     type spta_t_failed_objects
+                         ct_objects_in_process type spta_t_objects_in_process
+                         cv_user_param.
+
+  go_correct_acdoca->parall_before_rfc( exporting
+                                          is_before_rfc_imp     = is_before_rfc_imp
+                                        changing
+                                          cs_before_rfc_exp     = cs_before_rfc_exp
+                                          ct_rfcdata            = ct_rfcdata
+                                          ct_failed_objects     = ct_failed_objects
+                                          ct_objects_in_process = ct_objects_in_process
+                                          cv_user_param         = cv_user_param ).
+
+endform.                               "BEFORE_RFC
+
+*---------------------------------------------------------------------*
+*       FORM IN_RFC                                                   *
+*---------------------------------------------------------------------*
+*       Callback-Form for parallel processing                         *
+*       Invoked within the RFC                                        *
+*---------------------------------------------------------------------*
+form in_rfc using    is_in_rfc_imp type spta_t_in_rfc_imp
+            changing cs_in_rfc_exp type spta_t_in_rfc_exp
+                     ct_rfcdata    type spta_t_indxtab.
+
+  zCL_JVA_MIG_CORRECT_ACDOCA=>get_instance( )->parall_in_rfc( exporting
+                                                               is_in_rfc_imp = is_in_rfc_imp
+                                                             changing
+                                                               cs_in_rfc_exp = cs_in_rfc_exp
+                                                               ct_rfcdata    = ct_rfcdata ).
+
+endform.
+
+*---------------------------------------------------------------------*
+*       FORM AFTER_RFC                                                *
+*---------------------------------------------------------------------*
+*       Callback-Form for parallel processing                         *
+*       Invoked after RFC                                             *
+*---------------------------------------------------------------------*
+form after_rfc using    it_rfcdata            type spta_t_indxtab
+                        iv_rfcsubrc           type sy-subrc
+                        iv_rfcmsg             type spta_t_rfcmsg
+                        it_objects_in_process type spta_t_objects_in_process
+                        is_after_rfc_imp      type spta_t_after_rfc_imp
+               changing cs_after_rfc_exp      type spta_t_after_rfc_exp
+                        cv_user_param.
+
+  go_correct_acdoca->parall_after_rfc( exporting
+                                         it_rfcdata            = it_rfcdata
+                                         iv_rfcsubrc           = iv_rfcsubrc
+                                         iv_rfcmsg             = iv_rfcmsg
+                                         it_objects_in_process = it_objects_in_process
+                                         is_after_rfc_imp      = is_after_rfc_imp
+                                       changing
+                                         cs_after_rfc_exp      = cs_after_rfc_exp
+                                         cv_user_param         = cv_user_param ).
+
+endform.                               "AFTER_RFC
+
+*&---------------------------------------------------------------------*
+*&   FORM modify_screen
+*&---------------------------------------------------------------------*
+form modify_screen.
+
+* Close Selection-Screen
+  p_ado = abap_true.
+
+* Set Text and Icon for Pushbutton "Additional Selection Parameters"
+  concatenate icon_collapse: text-add into pushadoc.
+  concatenate icon_expand:   text-add into pushadoo.
+
+* Close Selection-Screen Block 1
+  p_upo = abap_true.
+
+* Set Text and Icon for Pushbutton "Additional Update Options"
+  concatenate icon_collapse: text-upo into pushupoo.
+  concatenate icon_expand:   text-upo into pushupoc.
+
+endform.
+
+*---------------------------------------------------------------------*
+*       FORM prepare_sel_screen_frame
+*---------------------------------------------------------------------*
+form prepare_sel_screen_frame.
+
+  loop at screen.
+    perform close_block using: p_ado 'ADC' space,
+                               p_ado 'ADO' abap_true.
+    perform close_block using: p_upo 'UPC' space,
+                               p_upo 'UPO' abap_true.
+  endloop.
+
+  case gv_sscr_ucomm.
+    when 'UCOMM_OPENADO'.                   "Open Block
+      set cursor field 'S_BUDAT'.
+    when 'UCOMM_OPENUPO'.                   "Open Block
+      set cursor field 'P_VNCORR'.
+    when others.
+      set cursor field gv_cursor_field.
+  endcase.
+
+endform.
+
+*---------------------------------------------------------------------*
+*       FORM process_sel_screen_actions
+*---------------------------------------------------------------------*
+form process_sel_screen_actions.
+
+  get cursor field gv_cursor_field.
+
+  gv_sscr_ucomm = sy-ucomm. "sscrfields-ucomm.
+
+* Auf die User-Commands reagieren
+  case gv_sscr_ucomm.
+    when 'UCOMM_OPENADO'.                   "Open Block
+      clear p_ado.
+    when 'UCOMM_CLOSEADO'.                  "Close Block
+      p_ado = abap_true.
+
+    when 'UCOMM_OPENUPO'.                   "Open Block
+      clear p_upo.
+    when 'UCOMM_CLOSEUPO'.                  "Close Block
+      p_upo = abap_true.
+  endcase.
+
+endform.
+
+*---------------------------------------------------------------------*
+*       FORM close_block
+*---------------------------------------------------------------------*
+form close_block using value(iv_close_block) like p_ado
+                       iv_modify_id          like screen-group1
+                       iv_convert.
+
+  if not iv_convert is initial.
+    if iv_close_block is initial.
+      iv_close_block = abap_true.
+    else.
+      clear iv_close_block.
+    endif.
+  endif.
+
+  if ( screen-group1 = iv_modify_id )
+  and ( not iv_close_block is initial ).
+    screen-active = '0'.
+    modify screen.
+  endif.
+
+endform.                               " CLOSE_BLOCK
+
+
+*---------------------------------------------------------------------*
+* UNIT TEST
+*---------------------------------------------------------------------*
+class ltc_test definition final
+  for testing
+  risk level harmless
+  duration short.
+
+  private section.
+
+    methods:
+      run_ok for testing,
+      parallelization_handlers_ok for testing.
+
+endclass.
+
+class ltc_test implementation.
+
+  method run_ok.
+
+    data: lv_subrc type sy-subrc,
+          lo_mock  type ref to if_jva_mig_correct_acdoca.
+
+    lo_mock ?= cl_abap_testdouble=>create( 'IF_JVA_MIG_CORRECT_ACDOCA' ).
+    zCL_JVA_MIG_CORRECT_ACDOCA=>set_instance( lo_mock ).
+
+    try.
+        perform run_process.
+      catch cx_root.
+        lv_subrc = 4.
+    endtry.
+
+    cl_abap_unit_assert=>assert_equals( act = lv_subrc
+                                        quit = if_aunit_constants=>quit-no
+                                        exp = 0 ).
+
+  endmethod.
+
+  method parallelization_handlers_ok.
+
+    data: lv_subrc              type sy-subrc,
+          ls_before_rfc_imp     type spta_t_before_rfc_imp,
+          ls_before_rfc_exp     type spta_t_before_rfc_exp,
+          lt_rfcdata            type spta_t_indxtab,
+          lt_failed_objects     type spta_t_failed_objects,
+          lt_objects_in_process type spta_t_objects_in_process,
+          lv_user_param         type c,
+          lv_rfcsubrc           type sy-subrc,
+          lv_rfcmsg             type spta_t_rfcmsg,
+          ls_after_rfc_imp      type spta_t_after_rfc_imp,
+          ls_after_rfc_exp      type spta_t_after_rfc_exp,
+          ls_in_rfc_imp         type spta_t_in_rfc_imp,
+          ls_in_rfc_exp         type spta_t_in_rfc_exp.
+
+    go_correct_acdoca = zCL_JVA_MIG_CORRECT_ACDOCA=>get_instance( ).
+
+    try.
+        perform before_rfc using    ls_before_rfc_imp
+                           changing ls_before_rfc_exp
+                                    lt_rfcdata
+                                    lt_failed_objects
+                                    lt_objects_in_process
+                                    lv_user_param.
+      catch cx_root.
+        lv_subrc = 4.
+    endtry.
+
+    cl_abap_unit_assert=>assert_equals( act = lv_subrc
+                                        quit = if_aunit_constants=>quit-no
+                                        exp = 0 ).
+
+
+    clear lv_subrc.
+
+    try.
+        perform in_rfc using    ls_in_rfc_imp
+                       changing ls_in_rfc_exp
+                                lt_rfcdata.
+      catch cx_root.
+        lv_subrc = 4.
+    endtry.
+
+    cl_abap_unit_assert=>assert_equals( act = lv_subrc
+                                        quit = if_aunit_constants=>quit-no
+                                        exp = 0 ).
+
+    clear lv_subrc.
+
+    try.
+        perform after_rfc using    lt_rfcdata
+                                   lv_rfcsubrc
+                                   lv_rfcmsg
+                                   lt_objects_in_process
+                                   ls_after_rfc_imp
+                          changing ls_after_rfc_exp
+                                   lv_user_param.
+      catch cx_root.
+        lv_subrc = 4.
+    endtry.
+
+    cl_abap_unit_assert=>assert_equals( act = lv_subrc
+                                        quit = if_aunit_constants=>quit-no
+                                        exp = 0 ).
+
+  endmethod.
+
+endclass.
