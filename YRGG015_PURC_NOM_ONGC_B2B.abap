@@ -138,9 +138,21 @@ CLASS lcl_alv_handler DEFINITION.
       on_main_data_changed
         FOR EVENT data_changed OF cl_gui_alv_grid
         IMPORTING er_data_changed,
+      on_main_f4
+        FOR EVENT onf4 OF cl_gui_alv_grid
+        IMPORTING e_fieldname es_row_no er_event_data et_bad_cells e_display,
       on_batch_data_changed
         FOR EVENT data_changed OF cl_gui_alv_grid
         IMPORTING er_data_changed,
+      on_batch_toolbar
+        FOR EVENT toolbar OF cl_gui_alv_grid
+        IMPORTING e_object e_interactive,
+      on_batch_cmd
+        FOR EVENT user_command OF cl_gui_alv_grid
+        IMPORTING e_ucomm,
+      on_batch_f4
+        FOR EVENT onf4 OF cl_gui_alv_grid
+        IMPORTING e_fieldname es_row_no er_event_data et_bad_cells e_display,
       on_batch_dlg_close
         FOR EVENT close OF cl_gui_dialogbox_container.
 ENDCLASS.
@@ -252,12 +264,59 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
-  METHOD on_batch_dlg_close.
+  METHOD on_main_f4.
+    DATA: ls_disp   TYPE ty_display,
+          ls_mcha   TYPE ty_mcha_cache,
+          ls_t001w  TYPE ty_t001w_cache,
+          lt_werks  TYPE STANDARD TABLE OF werks_d,
+          lt_f4vals TYPE STANDARD TABLE OF ddshretval,
+          ls_f4val  TYPE ddshretval.
+    IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
+    READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
+    IF sy-subrc <> 0 OR ls_disp-exclude = 'X'. RETURN. ENDIF.
+    LOOP AT gt_t001w_c INTO ls_t001w WHERE regio = ls_disp-state_code.
+      APPEND ls_t001w-werks TO lt_werks.
+    ENDLOOP.
+    LOOP AT gt_mcha_c INTO ls_mcha WHERE matnr = ls_disp-material.
+      IF lt_werks IS NOT INITIAL.
+        READ TABLE lt_werks WITH KEY table_line = ls_mcha-werks TRANSPORTING NO FIELDS.
+        IF sy-subrc <> 0. CONTINUE. ENDIF.
+      ENDIF.
+      ls_f4val-fieldname = 'CHARG'. ls_f4val-fieldval = ls_mcha-charg.
+      APPEND ls_f4val TO lt_f4vals. CLEAR ls_f4val.
+    ENDLOOP.
+    IF lt_f4vals IS INITIAL.
+      MESSAGE 'No valid batches found for this material.' TYPE 'S' DISPLAY LIKE 'W'.
+      er_event_data->m_event_handled = abap_true. RETURN.
+    ENDIF.
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING retfield = 'CHARG' dynpprog = sy-repid dynpnr = sy-dynnr
+                stepl    = es_row_no-row_id value_org = 'S'
+      TABLES    value_tab       = lt_f4vals
+      EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
+    er_event_data->m_event_handled = abap_true.
+  ENDMETHOD.
+
+  METHOD on_batch_toolbar.
+    DATA: ls_tb TYPE stb_button.
+    CLEAR ls_tb.
+    ls_tb-function  = 'BATCH_OK'.
+    ls_tb-text      = 'Apply Batch'.
+    ls_tb-quickinfo = 'Apply batch to selected rows'.
+    ls_tb-icon      = icon_save.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+  ENDMETHOD.
+
+  METHOD on_batch_cmd.
     DATA: ls_assign TYPE ty_batch_assign,
           ls_disp   TYPE ty_display.
-    LOOP AT gt_batch_assign INTO ls_assign.
-      IF ls_assign-charg IS INITIAL. CONTINUE. ENDIF.
-      LOOP AT gt_display INTO ls_disp WHERE sel = abap_true AND material = ls_assign-matnr.
+    IF e_ucomm <> 'BATCH_OK'. RETURN. ENDIF.
+    IF go_batch_alv IS NOT INITIAL.
+      go_batch_alv->check_changed_data( ).
+    ENDIF.
+    LOOP AT gt_batch_assign INTO ls_assign WHERE charg IS NOT INITIAL.
+      LOOP AT gt_display INTO ls_disp
+        WHERE sel = abap_true AND material = ls_assign-matnr AND exclude <> 'X'.
         ls_disp-charg = ls_assign-charg.
         MODIFY gt_display FROM ls_disp.
       ENDLOOP.
@@ -270,6 +329,49 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     ENDIF.
     IF go_alv IS NOT INITIAL.
       go_alv->refresh_table_display( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD on_batch_f4.
+    DATA: ls_assign TYPE ty_batch_assign,
+          ls_mcha   TYPE ty_mcha_cache,
+          ls_t001w  TYPE ty_t001w_cache,
+          lt_werks  TYPE STANDARD TABLE OF werks_d,
+          lt_f4vals TYPE STANDARD TABLE OF ddshretval,
+          ls_f4val  TYPE ddshretval.
+    IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
+    READ TABLE gt_batch_assign INDEX es_row_no-row_id INTO ls_assign.
+    IF sy-subrc <> 0. RETURN. ENDIF.
+    LOOP AT gt_t001w_c INTO ls_t001w WHERE regio = ls_assign-state_code.
+      APPEND ls_t001w-werks TO lt_werks.
+    ENDLOOP.
+    LOOP AT gt_mcha_c INTO ls_mcha WHERE matnr = ls_assign-matnr.
+      IF lt_werks IS NOT INITIAL.
+        READ TABLE lt_werks WITH KEY table_line = ls_mcha-werks TRANSPORTING NO FIELDS.
+        IF sy-subrc <> 0. CONTINUE. ENDIF.
+      ENDIF.
+      ls_f4val-fieldname = 'CHARG'. ls_f4val-fieldval = ls_mcha-charg.
+      APPEND ls_f4val TO lt_f4vals. CLEAR ls_f4val.
+    ENDLOOP.
+    IF lt_f4vals IS INITIAL.
+      MESSAGE 'No valid batches for this material.' TYPE 'S' DISPLAY LIKE 'W'.
+      er_event_data->m_event_handled = abap_true. RETURN.
+    ENDIF.
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING retfield = 'CHARG' dynpprog = sy-repid dynpnr = sy-dynnr
+                stepl    = es_row_no-row_id value_org = 'S'
+      TABLES    value_tab       = lt_f4vals
+      EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
+    er_event_data->m_event_handled = abap_true.
+  ENDMETHOD.
+
+  METHOD on_batch_dlg_close.
+    " X pressed = cancel, discard changes
+    IF go_batch_alv IS NOT INITIAL.
+      go_batch_alv->free( ). CLEAR go_batch_alv.
+    ENDIF.
+    IF go_batch_popup IS NOT INITIAL.
+      go_batch_popup->free( ). CLEAR go_batch_popup.
     ENDIF.
   ENDMETHOD.
 
@@ -331,11 +433,14 @@ ENDFORM.
 * FORM validate_selection_screen
 *----------------------------------------------------------------------*
 FORM validate_selection_screen.
-  DATA: ls_locid  LIKE LINE OF s_locid,
-        ls_date   LIKE LINE OF s_date,
-        lv_day_lo TYPE i,
-        lv_day_hi TYPE i,
-        lv_loc    TYPE oij_locid.
+  DATA: ls_locid   LIKE LINE OF s_locid,
+        ls_date    LIKE LINE OF s_date,
+        lv_day_lo  TYPE i,
+        lv_day_hi  TYPE i,
+        lv_loc     TYPE oij_locid,
+        lv_today   TYPE d,
+        lv_fn_end  TYPE d,
+        lv_fn_day  TYPE i.
 
   LOOP AT s_locid INTO ls_locid WHERE sign = 'I' AND option = 'EQ'.
     SELECT SINGLE GAIL_LOC_ID FROM yrga_cst_loc_map INTO lv_loc
@@ -362,6 +467,26 @@ FORM validate_selection_screen.
     ENDIF.
     IF lv_day_hi <> 15 AND lv_day_hi < 28.
       MESSAGE e000(oo) WITH 'Date range must end on 15th or last day of month' ' ' ' ' ' '.
+    ENDIF.
+  ENDLOOP.
+
+  " Validate selected dates do not exceed current fortnight end date
+  lv_today  = sy-datum.
+  lv_fn_day = lv_today+6(2).
+  IF lv_fn_day <= 15.
+    lv_fn_end      = lv_today.
+    lv_fn_end+6(2) = '15'.
+  ELSE.
+    CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
+      EXPORTING month_date        = lv_today
+      IMPORTING last_day_of_month = lv_fn_end.
+  ENDIF.
+
+  LOOP AT s_date INTO ls_date WHERE sign = 'I'.
+    IF ( ls_date-option = 'BT' AND ls_date-high > lv_fn_end ) OR
+       ( ls_date-option = 'EQ' AND ls_date-low  > lv_fn_end ).
+      MESSAGE e000(oo) WITH 'Date cannot exceed current FN end date:'
+                             lv_fn_end ' ' ' '.
     ENDIF.
   ENDLOOP.
 ENDFORM.
@@ -715,6 +840,7 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
     CREATE OBJECT go_alv_handler.
     SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
   ENDIF.
 ENDFORM.
@@ -812,11 +938,12 @@ FORM build_fieldcat.
 
   " CHARG - editable batch field
   CLEAR ls_fcat.
-  ls_fcat-fieldname = 'CHARG'.
-  ls_fcat-coltext   = 'Batch'.
-  ls_fcat-seltext   = 'Batch Number'.
-  ls_fcat-outputlen = 12.
-  ls_fcat-edit      = abap_true.
+  ls_fcat-fieldname  = 'CHARG'.
+  ls_fcat-coltext    = 'Batch'.
+  ls_fcat-seltext    = 'Batch Number'.
+  ls_fcat-outputlen  = 12.
+  ls_fcat-edit       = abap_true.
+  ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
   " Technical fields (hidden)
@@ -1116,11 +1243,15 @@ FORM handle_batch_mass_change.
     EXCEPTIONS OTHERS = 1.
   IF sy-subrc <> 0. RETURN. ENDIF.
   SET HANDLER go_alv_handler->on_batch_data_changed FOR go_batch_alv.
+  SET HANDLER go_alv_handler->on_batch_toolbar       FOR go_batch_alv.
+  SET HANDLER go_alv_handler->on_batch_cmd           FOR go_batch_alv.
+  SET HANDLER go_alv_handler->on_batch_f4            FOR go_batch_alv.
 
   ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. ls_fcat-outputlen = 18.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
-  ls_fcat-fieldname = 'CHARG'. ls_fcat-coltext = 'Batch'. ls_fcat-outputlen = 10.
-  ls_fcat-edit = abap_true.
+  ls_fcat-fieldname  = 'CHARG'. ls_fcat-coltext = 'Batch'. ls_fcat-outputlen = 10.
+  ls_fcat-edit       = abap_true.
+  ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
 
   ls_layout-cwidth_opt = abap_true.
@@ -1133,6 +1264,7 @@ FORM handle_batch_mass_change.
     EXCEPTIONS OTHERS = 1 ).
 
   go_batch_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+  go_batch_alv->set_toolbar_interactive( ).
 ENDFORM.
 
 *----------------------------------------------------------------------*
