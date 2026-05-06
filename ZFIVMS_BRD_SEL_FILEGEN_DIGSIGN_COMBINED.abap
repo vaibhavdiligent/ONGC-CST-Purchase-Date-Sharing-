@@ -3343,9 +3343,7 @@ TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 
 SELECT single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
-wa_zfivms_brd-STATUS
-
-= 'RELEASE BY EMPLOYEE'.
+wa_zfivms_brd-STATUS = 'RELEASE BY EMPLOYEE'.
 
 SELECT * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
 AND anssa in ('1', '3' )
@@ -3758,9 +3756,7 @@ SELECT single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_
 .
 
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
-wa_zfivms_brd-STATUS
-
-= 'RELEASE BY EMPLOYEE FOR OVL'.
+wa_zfivms_brd-STATUS = 'RELEASE BY EMPLOYEE FOR OVL'.
 
 SELECT * from pa0006 into table ist_pa0006 where pernr = wa_pa0009-pernr
 AND anssa in ('1', '3' )
@@ -4267,8 +4263,7 @@ IMPORTING
 OUTPUT = WA_94427-BEN_AC_NO.
 wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
-wa_94427-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_94427-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
@@ -4315,8 +4310,7 @@ IMPORTING
 OUTPUT = WA_94427-BEN_AC_NO.
 wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
-wa_94427-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_94427-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
@@ -4362,8 +4356,7 @@ IMPORTING
 OUTPUT = WA_94427-BEN_AC_NO.
 wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
-wa_94427-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_94427-ifsc = l_bankl_new . "IFS Code# 11
 ***
 ***
 
@@ -4419,8 +4412,7 @@ IMPORTING
 OUTPUT = WA_94427-BEN_AC_NO.
 wa_94427-ben_code = l_span .
 "Beneficiary Code, 24
-wa_94427-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_94427-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_94427-addr1, wa_94427-addr2, wa_94427-addr3)
@@ -4475,8 +4467,7 @@ IMPORTING
 OUTPUT = WA_30523-BEN_AC_NO.
 wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
-wa_30523-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_30523-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
@@ -4522,8 +4513,7 @@ IMPORTING
 OUTPUT = WA_30523-BEN_AC_NO.
 wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
-wa_30523-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_30523-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
@@ -4571,8 +4561,7 @@ IMPORTING
 OUTPUT = WA_30523-BEN_AC_NO.
 wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
-wa_30523-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_30523-ifsc = l_bankl_new . "IFS Code# 11
 
 ***
 ***
@@ -4627,8 +4616,7 @@ IMPORTING
 OUTPUT = WA_30523-BEN_AC_NO.
 wa_30523-ben_code = l_span .
 "Beneficiary Code, 24
-wa_30523-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_30523-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_30523-addr1, wa_30523-addr2, wa_30523-addr3)
@@ -4683,8 +4671,7 @@ IMPORTING
 OUTPUT = WA_93128-BEN_AC_NO.
 wa_93128-ben_code = l_span .
 "Beneficiary Code, 24
-wa_93128-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_93128-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
@@ -4730,8 +4717,7 @@ IMPORTING
 OUTPUT = WA_93128-BEN_AC_NO.
 wa_93128-ben_code = l_span .
 "Beneficiary Code, 24
-wa_93128-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_93128-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_93128-addr1, wa_93128-addr2, wa_93128-addr3)
@@ -4777,8 +4763,7 @@ IMPORTING
 OUTPUT = WA_93128-BEN_AC_NO.
 wa_93128-ben_code = l_span .
 "Beneficiary Code, 24
-wa_93128-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_93128-ifsc = l_bankl_new . "IFS Code# 11
 ***
 ***
 ***
@@ -4832,8 +4817,7 @@ IMPORTING
 OUTPUT = WA_93128-BEN_AC_NO.
 wa_93128-ben_code = l_span .
 "Beneficiary Code, 24
-wa_93128-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_93128-ifsc = l_bankl_new . "IFS Code# 11
 
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
@@ -4890,8 +4874,7 @@ IMPORTING
 OUTPUT = WA_93128-BEN_AC_NO.
 wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
-wa_96726-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_96726-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
@@ -4938,8 +4921,7 @@ IMPORTING
 OUTPUT = WA_93128-BEN_AC_NO.
 wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
-wa_96726-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_96726-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
@@ -4986,8 +4968,7 @@ IMPORTING
 OUTPUT = WA_96726-BEN_AC_NO.
 wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
-wa_96726-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_96726-ifsc = l_bankl_new . "IFS Code# 11
 ***
 ***
 ***
@@ -5042,8 +5023,7 @@ IMPORTING
 OUTPUT = WA_96726-BEN_AC_NO.
 wa_96726-ben_code = l_span .
 "Beneficiary Code, 24
-wa_96726-ifsc
-= l_bankl_new . "IFS Code# 11
+wa_96726-ifsc = l_bankl_new . "IFS Code# 11
 SELECT single street str_suppl1 city1
 FROM zfivms_brd
 INTO (wa_96726-addr1, wa_96726-addr2, wa_96726-addr3)
