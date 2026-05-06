@@ -576,7 +576,7 @@ endloop.
 APPEND LINES OF ist_zsdcust_bankupd TO ist_zfivms_brd.
 "end of addition by lipsy on 27.09.2012
 * Vendor Registration - D
-loop at ist_zfivms_brd into wa_zfivms_brd . \"where status <> 'APPROVED BY EMPLOYEE'.
+loop at ist_zfivms_brd into wa_zfivms_brd . "where status <> 'APPROVED BY EMPLOYEE'.
 * Begin of <> on 03122010
 
 **Begin RD1K991769 CAB_ALOK
@@ -589,7 +589,7 @@ else.
 *
 valid_input_as = wa_zfivms_brd-bankl_new.
 *
-* endif.
+endif.
 clear valid_input_as.
 valid_input_as = wa_zfivms_brd-bankl_new.
 **End RD1K991769 CAB_ALOK
@@ -633,11 +633,9 @@ if valid_input_as+0(4) <> 'SBIN' AND L_SBI_OTH = ''.
 if wa_zfivms_brd-span ca 'R'.
 * Begin of <> on 18052012
 *
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_
-new '*' valid_input_as '*'
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 *
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfi
-vms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' nto ist_rdata_nonsbi-span.
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' into ist_rdata_nonsbi-span.
 * End of <> on 18052012
 if wa_zfivms_brd-status = 'RELEASE BY VMC FOR OVL'.
 concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
@@ -650,27 +648,23 @@ append ist_rdata_nonsbi_ovl.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE FOR OVL'. "
 perform add_7x_emp.
 concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_
-rdata_nonsbi-span.
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_rdata_nonsbi-span.
 MOVE-CORRESPONDING ist_rdata_nonsbi to ist_rdata_nonsbi_ovl_e. "28062011
 append ist_rdata_nonsbi_ovl_e.
 elseif wa_zfivms_brd-status = 'RELEASE BY EMPLOYEE'.
 perform add_7x_emp.
 concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_
-rdata_nonsbi_s-span.
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' l_spanasa '*' into ist_rdata_nonsbi_s-span.
 append ist_rdata_nonsbi_s.
 elseif wa_zfivms_brd-status = 'RELEASE BY VMC'.
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_
-new '*' valid_input_as '*'
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
 into ist_rdata_nonsbi-span.
 append ist_rdata_nonsbi.
 "added by lipsy on 27.09.2012
 elseif wa_zfivms_brd-status = 'RELEASE BY CMC'.
 if wa_zfivms_brd-span+13(1) = 'R'."r is registration
-concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_
-new '*' valid_input_as '*'
+concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
 wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*'
 into ist_rdata_nonsbi-span.
 append ist_rdata_nonsbi.
@@ -788,7 +782,7 @@ else.
 *
 valid_input_as = wa_zfivms_brd-bankl_new.
 *
-* endif.
+endif.
 clear valid_input_as.
 valid_input_as = wa_zfivms_brd-bankl_new.
 **End RD1K991769 CAB_ALOK
@@ -804,7 +798,7 @@ if valid_input_as+0(4) <> 'SBIN'.
 if wa_zfivms_brd-span ca 'R'.
 perform add_7x_emp.
 concatenate wa_zfivms_brd-koinh_new '*' wa_zfivms_brd-bankn_new '*' valid_input_as '*'
-wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' nto ist_rdata_nonsbi_e-span.
+wa_zfivms_brd-street '*' wa_zfivms_brd-str_suppl1 '*' wa_zfivms_brd-city1 '*' wa_zfivms_brd-tel_number '*' wa_zfivms_brd-span '*' into ist_rdata_nonsbi_e-span.
 *
 
 append ist_rdata_nonsbi_e.
@@ -1976,7 +1970,7 @@ ENDIF. " p_payctr = 'OVL' .
 "opened and commented by lipsy on 7.01.2013
 * Begin of Comment on 07082012
 *
-Concatenate 'C:\SPAN\' 'R_NONSBI_OVL' g_date_rd g_time_rd '.txt' nto g_filename. "04052011 21062011 05072011 11072011
+* Concatenate 'C:\SPAN\' 'R_NONSBI_OVL' g_date_rd g_time_rd '.txt' into g_filename. "04052011 21062011 05072011 11072011
 **
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
