@@ -206,6 +206,43 @@ DATA: IST_pa0009_OVL   type table of pa0009,
       IST_pa0009_ONGC  type table of pa0009.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
+*----------------------------------------------------------------------*
+*       Local class LCL_FILE_VERIFIER (stub for missing ZBCM_CLASS)
+*----------------------------------------------------------------------*
+class lcl_file_verifier definition.
+  public section.
+    class-methods get_instance
+      returning value(ro_instance) type ref to lcl_file_verifier.
+    methods get_signer_info
+      importing
+        is_signerlist type ssfsigner
+      exporting
+        ev_owner      type string
+        ev_email      type string
+        ev_serial     type string
+        ev_thumbprint type string
+        ev_validfrom  type string
+        ev_validto    type string
+        ev_issuer     type string
+        e_int         type i.
+endclass.
+
+class lcl_file_verifier implementation.
+  method get_instance.
+    create object ro_instance.
+  endmethod.
+  method get_signer_info.
+    ev_owner      = is_signerlist-id.
+    ev_email      = ''.
+    ev_serial     = is_signerlist-serialno.
+    ev_thumbprint = is_signerlist-thumbprint.
+    ev_validfrom  = is_signerlist-validfrom.
+    ev_validto    = is_signerlist-validto.
+    ev_issuer     = is_signerlist-issuer.
+    e_int         = 0.
+  endmethod.
+endclass.
+
 selection-screen begin of block rad1 with frame title text-001.
 PARAMETERS : p_date   type zfivmsbank-VMC_APDATE.
 * Begin of <> on 09052012
