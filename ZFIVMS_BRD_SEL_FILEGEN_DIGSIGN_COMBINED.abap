@@ -206,42 +206,197 @@ DATA: IST_pa0009_OVL   type table of pa0009,
       IST_pa0009_ONGC  type table of pa0009.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
-*----------------------------------------------------------------------*
-*       Local class LCL_FILE_VERIFIER (stub for missing ZBCM_CLASS)
-*----------------------------------------------------------------------*
-class lcl_file_verifier definition.
-  public section.
-    class-methods get_instance
-      returning value(ro_instance) type ref to lcl_file_verifier.
-    methods get_signer_info
-      importing
-        is_signerlist type ssfsigner
-      exporting
-        ev_owner      type string
-        ev_email      type string
-        ev_serial     type string
-        ev_thumbprint type string
-        ev_validfrom  type string
-        ev_validto    type string
-        ev_issuer     type string
-        e_int         type i.
-endclass.
+*&---------------------------------------------------------------------*
+*& Inlined: Include ZBCM_CLASS  (LCL_FILE_VERIFIER definition)
+*&---------------------------------------------------------------------*
+CLASS lcl_file_verifier DEFINITION CREATE PRIVATE FINAL.
 
-class lcl_file_verifier implementation.
-  method get_instance.
-    create object ro_instance.
-  endmethod.
-  method get_signer_info.
-    ev_owner      = is_signerlist-id.
-    ev_email      = ''.
-    ev_serial     = is_signerlist-serialno.
-    ev_thumbprint = is_signerlist-thumbprint.
-    ev_validfrom  = is_signerlist-validfrom.
-    ev_validto    = is_signerlist-validto.
-    ev_issuer     = is_signerlist-issuer.
-    e_int         = 0.
-  endmethod.
-endclass.
+  PUBLIC SECTION.
+
+    CLASS-METHODS:
+      get_instance
+        RETURNING
+          value(ro_obj) TYPE REF TO lcl_file_verifier.
+
+    METHODS:
+      verify_signature
+        IMPORTING
+          value(iv_signature)       TYPE xstring
+        EXPORTING
+          value(ev_owner)           TYPE string
+          value(ev_email)           TYPE string
+          value(ev_serial)          TYPE string
+          value(ev_thumbprint)      TYPE string
+          value(ev_validfrom)       TYPE string
+          value(ev_validto)         TYPE string
+          value(ev_issuer)          TYPE string
+          value(ev_bindocument_out) TYPE xstring,
+
+      get_filename
+        EXPORTING
+          value(ev_filename_save) TYPE string
+          value(ev_file_type)     TYPE char10.
+
+    CLASS-DATA: go_object TYPE REF TO lcl_file_verifier.
+
+    METHODS:
+      get_signer_info
+        IMPORTING
+          value(is_signerlist) TYPE ssfsigner
+        EXPORTING
+          value(ev_owner)      TYPE string
+          value(ev_email)      TYPE string
+          value(ev_serial)     TYPE string
+          value(ev_thumbprint) TYPE string
+          value(ev_validfrom)  TYPE string
+          value(ev_validto)    TYPE string
+          value(ev_issuer)     TYPE string
+          value(e_int)         TYPE i.
+
+    DATA: mv_filename_save TYPE string,
+          mv_file_type     TYPE char10.
+
+ENDCLASS.
+
+*&---------------------------------------------------------------------*
+*& Inlined: Include ZBCM_CLASS_DECLARE  (LCL_FILE_VERIFIER implementation)
+*&---------------------------------------------------------------------*
+CLASS lcl_file_verifier IMPLEMENTATION.
+
+  METHOD get_instance.
+    IF lcl_file_verifier=>go_object IS INITIAL.
+      CREATE OBJECT lcl_file_verifier=>go_object.
+    ENDIF.
+    ro_obj = lcl_file_verifier=>go_object.
+  ENDMETHOD.
+
+  METHOD verify_signature.
+    DATA: lv_crc             TYPE i,
+          lv_bindocument_out TYPE xstring,
+          lt_signerlist      TYPE ssfsignertab,
+          ls_signerlist      TYPE ssfsigner.
+
+    CALL FUNCTION 'SSFS_SERVER_VERIFY'
+      EXPORTING
+        signature        = iv_signature
+      IMPORTING
+        crc              = lv_crc
+        signerlist       = lt_signerlist
+        bindocument_out  = lv_bindocument_out
+      EXCEPTIONS
+        kernel_error     = 1
+        parameter_error  = 2
+        conversion_error = 3
+        OTHERS           = 4.
+
+    IF sy-subrc <> 0.
+      MESSAGE text-016 TYPE 'E'.
+    ELSE.
+      IF lv_crc <> 0 AND lv_crc <> 5.
+        MESSAGE text-016 TYPE 'E'.
+      ELSE.
+        MESSAGE text-004 TYPE 'S'.
+        READ TABLE lt_signerlist INTO ls_signerlist INDEX 1.
+        CALL METHOD get_signer_info
+          EXPORTING
+            is_signerlist = ls_signerlist
+          IMPORTING
+            ev_owner      = ev_owner
+            ev_email      = ev_email
+            ev_serial     = ev_serial
+            ev_thumbprint = ev_thumbprint
+            ev_validfrom  = ev_validfrom
+            ev_validto    = ev_validto
+            ev_issuer     = ev_issuer.
+        ev_bindocument_out = lv_bindocument_out.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_signer_info.
+    DATA: lo_pdo_dig_sig TYPE REF TO cl_abap_x509_certificate,
+          lv_text        TYPE c LENGTH 200,
+          ls_email       TYPE sx_address.
+
+    lo_pdo_dig_sig = cl_abap_x509_certificate=>get_instance( is_signerlist-cert ).
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_subject_issuer
+          IMPORTING
+            ef_subject = ev_owner
+            ef_issuer  = ev_issuer.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_serial_hex
+          RECEIVING
+            rf_value = ev_serial.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_pk_finger_print
+          RECEIVING
+            rf_value = ev_thumbprint.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_valid_from
+          IMPORTING
+            ef_gmt_string = ev_validfrom.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_valid_to
+          IMPORTING
+            ef_gmt_string = ev_validto.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_version
+          RECEIVING
+            rf_int = e_int.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+
+    TRY.
+        CALL METHOD lo_pdo_dig_sig->get_subject_alt_string
+          RECEIVING
+            rf_string = ev_email.
+
+        IF ev_email IS NOT INITIAL.
+          CLEAR lv_text.
+          SPLIT ev_email AT '=' INTO ev_email lv_text.
+          ls_email-type    = 'INT'.
+          ls_email-address = lv_text.
+          CALL FUNCTION 'SX_INTERNET_ADDRESS_TO_NORMAL'
+            EXPORTING
+              address_unstruct    = ls_email
+            EXCEPTIONS
+              error_address_type  = 1
+              error_address       = 2
+              error_group_address = 3
+              OTHERS              = 4.
+          IF sy-subrc = 0.
+            ev_email = lv_text.
+          ELSE.
+            CLEAR ev_email.
+          ENDIF.
+        ENDIF.
+      CATCH cx_abap_x509_certificate .
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD get_filename.
+    ev_filename_save = mv_filename_save.
+    ev_file_type     = mv_file_type.
+  ENDMETHOD.
+
+ENDCLASS.
 
 selection-screen begin of block rad1 with frame title text-001.
 PARAMETERS : p_date   type zfivmsbank-VMC_APDATE.
