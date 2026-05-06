@@ -2927,8 +2927,7 @@ ENDLOOP.
 close dataset g_filename1.
 *
 *
-concatenate 'C:\SPAN\' 'R_SBI_OVL_E' g_date_rd g_time_rd '.txt' in
-to g_filename.
+concatenate 'C:\SPAN\' 'R_SBI_OVL_E' g_date_rd g_time_rd '.txt' into g_filename.
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -3041,8 +3040,7 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 *
 *
-concatenate 'C:\SPAN\' 'D_SBI_OVL_E' g_date_rd g_time_rd '.txt' in
-to g_filename. "21122010 "11042011 21060211
+concatenate 'C:\SPAN\' 'D_SBI_OVL_E' g_date_rd g_time_rd '.txt' into g_filename. "21122010 "11042011 21060211
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -3498,9 +3496,9 @@ endif.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 **End RD1K991769 CAB_ALOK
-Logging
+* Logging
 
-CR 30010502:Beneficiary file-digital signing,
+* CR 30010502:Beneficiary file-digital signing,
 
 select single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
@@ -3535,17 +3533,17 @@ wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01. 2
 if not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
-290911
+* 290911
 else.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 endif.
 else.
 wa_zfivms_brd-CITY1 = 'DEHRADUN'.
 "wa_pa0006-ort01.
-290911
+* 290911
 if not wa_pa0006-stras is initial.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'. "wa_pa0006-stras.
-290911
+* 290911
 else.
 wa_zfivms_brd-STR_SUPPL1 = 'TEL BHAVAN'.
 endif.
@@ -3563,8 +3561,7 @@ ENDIF.
 * Begin of <> on 20062011 21062011
 
 refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfivm
-s_brd1 where span = wa_zfivms_brd-span.
+select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
 if sy-subrc = 0.
 * Begin of <> on 22052012
 clear l_line.
@@ -3572,8 +3569,7 @@ describe table ist_zfivms_brd1 lines l_line.
 shift l_line left deleting leading '0'.
 "16072012
 if l_line > 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_
-line.
+read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_line.
 if sy-subrc <> 0.
 read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
 endif.
@@ -3603,8 +3599,7 @@ STR_SUPPL1 = wa_zfivms_brd-STR_SUPPL1
 *
 TEL_NUMBER = wa_zfivms_brd-TEL_NUMBER
 *
-*CITY1
-= wa_zfivms_brd-CITY1
+CITY1 = wa_zfivms_brd-CITY1
 *
 VMC_APDATE = wa_zfivms_brd-VMC_APDATE
 *
@@ -3627,8 +3622,7 @@ endif.
 **Begin RD1K991769 CAB_ALOK
 * if sy-subrc = 0.
 *
-update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and end
-da = l_enddate and subty = '0'.
+update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddate and subty = '0'.
 * endif.
 *
 *
@@ -3669,8 +3663,7 @@ clear wa_pa0009t.
 **Begin RD1K991769 CAB_ALOK
 * select single * from pa0009 into wa_pa0009t where pernr = wa_pa0009pernr and endda = l_begdate "begda = p_date and
 *
-* and subty = '0'." and zlsch
-in ('S','N'). 20062011
+* and subty = '0'. " and zlsch in ('S','N'). 20062011
 select single *
 from pa0009
 into wa_pa0009t
@@ -3717,7 +3710,7 @@ endif.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 **End RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing,
-Logging
+* Logging
 select single zphone from pa9205 into wa_zfivms_brd-tel_number where
 pernr = wa_pa0009-pernr and subty = '01'.
 
@@ -3780,8 +3773,7 @@ endif.
 endif.
 * Begin of <> on 20062011 21062011
 refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfi
-vms_brd1 where span = wa_zfivms_brd-span.
+select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
 if sy-subrc = 0.
 * Begin of <> on 22052012
 clear l_line.
@@ -3819,8 +3811,7 @@ STR_SUPPL1 = wa_zfivms_brd-STR_SUPPL1
 *
 TEL_NUMBER = wa_zfivms_brd-TEL_NUMBER
 *
-*CITY1
-= wa_zfivms_brd-CITY1
+CITY1 = wa_zfivms_brd-CITY1
 *
 VMC_APDATE = wa_zfivms_brd-VMC_APDATE
 *
@@ -3924,9 +3915,9 @@ endif.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 **End RD1K991769 CAB_ALOK
-Logging
+* Logging
 
-CR 30010502:Beneficiary file-digital signing,
+* CR 30010502:Beneficiary file-digital signing,
 
 select single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 .
@@ -4007,8 +3998,7 @@ ENDIF.
 
 *Begin of <> on 20062011 21062011
 refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfivm
-s_brd1 where span = wa_zfivms_brd-span.
+select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
 if sy-subrc = 0.
 * Begin of <> on 22052012
 clear l_line.
@@ -4016,8 +4006,7 @@ describe table ist_zfivms_brd1 lines l_line.
 shift l_line left deleting leading '0'.
 "16072012
 if l_line > 0.
-read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_
-line.
+read table ist_zfivms_brd1 into wa_zfivms_brd1 with key seqno = l_line.
 if sy-subrc <> 0.
 read table ist_zfivms_brd1 into wa_zfivms_brd1 index 1.
 endif.
@@ -4040,8 +4029,7 @@ endif.
 **Begin RD1K991769 CAB_ALOK
 * if sy-subrc = 0.
 *
-update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and end
-da = l_enddate and subty = '0'.
+update pa0009 set flag1 = 'R' where pernr = wa_pa0009-pernr and endda = l_enddate and subty = '0'.
 *
 clear : wa_zfivms_brd .
 "21062011
@@ -4080,8 +4068,7 @@ clear wa_pa0009t.
 * and endda = l_begdate
 "begda = p_date and
 *
-* and subty = '0'. " and
-zlsch in ('S','N','8','9'). "('S','N'). 20062011 20062011
+* and subty = '0'. " and zlsch in ('S','N','8','9'). 20062011 20062011
 select single *
 from pa0009
 into wa_pa0009t
@@ -4126,9 +4113,9 @@ endif.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
 **End RD1K991769 CAB_ALOK
-Logging
+* Logging
 
-CR 30010502:Beneficiary file-digital signing,
+* CR 30010502:Beneficiary file-digital signing,
 
 select single zphone from pa9205 into wa_zfivms_brd-tel_number where
 pernr = wa_pa0009-pernr and subty = '01'.
@@ -4179,8 +4166,7 @@ endif.
 endif.
 *Begin of <> on 20062011 21062011
 refresh ist_zfivms_brd1.
-select * from zfivms_brd into corresponding fields of table ist_zfi
-vms_brd1 where span = wa_zfivms_brd-span.
+select * from zfivms_brd into corresponding fields of table ist_zfivms_brd1 where span = wa_zfivms_brd-span.
 if sy-subrc = 0.
 * Begin of <> on 22052012
 clear l_line.
@@ -4249,11 +4235,11 @@ ENDFORM.
 FORM ADD_7X_EMP .
 * clear : l_spanemp,
 *
-l_spanasa,
+* l_spanasa,
 *
-l_span,
+* l_span,
 *
-l_strlen.
+* l_strlen.
 * l_spanemp = wa_zfivms_brd-span(17).
 l_spanasa = wa_zfivms_brd-span.
 replace 'R0000' in l_spanasa with 'R0007'.
