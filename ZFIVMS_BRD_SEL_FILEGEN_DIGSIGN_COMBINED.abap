@@ -430,7 +430,11 @@ START-OF-SELECTION.
   PERFORM CLEAR_VAR.
 **End RD1K991769 CAB_ALOK   CR 30010502 Beneficiary file-digital signing
 
-INCLUDE zfivms_brd_sel_filegen_digsf01.
+* INCLUDE zbcm_class.                          " inlined above
+* INCLUDE zbcm_class_declare.                  " inlined above
+* INCLUDE zfivms_brd_sel_filegen_digso01.      " inlined by combiner
+* INCLUDE zfivms_brd_sel_filegen_digsi01.      " not used (interactive screens)
+* INCLUDE zfivms_brd_sel_filegen_digsf01.      " inlined by combiner
 
 *&---------------------------------------------------------------------*
 *& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSO01                            *
