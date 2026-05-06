@@ -409,6 +409,161 @@ form run_process.
 *    LT_DCO_R    = gt_doc_r.
     .
 
+  perform display_alv_doc_r.
+
+endform.
+
+*&---------------------------------------------------------------------*
+*&   FORM display_alv_doc_r
+*&---------------------------------------------------------------------*
+form display_alv_doc_r.
+
+  types:
+    begin of lty_s_alv,
+      rbukrs    type rbukrs,        " Company Code
+      docnr     type jvso1-docnr,   " Document Number
+      docln     type posnr_d,       " Document Line
+      racct     type racct,         " Account
+      prctr     type prctr,         " Profit Center
+      old_vname type jvso1-rjvnam,  " Old Venture Name
+      old_egrup type jvso1-regrou,  " Old Equity Group
+      old_recid type jvso1-rrecin,  " Old Recovery Indicator
+      new_vname type jvso1-rjvnam,  " New Venture Name
+      new_egrup type jvso1-regrou,  " New Equity Group
+      new_recid type jvso1-rrecin,  " New Recovery Indicator
+    end of lty_s_alv.
+
+  data: lt_alv       type standard table of lty_s_alv,
+        ls_alv       type lty_s_alv,
+        lo_salv      type ref to cl_salv_table,
+        lo_columns   type ref to cl_salv_columns_table,
+        lo_column    type ref to cl_salv_column_table,
+        lo_functions type ref to cl_salv_functions_list,
+        lo_display   type ref to cl_salv_display_settings.
+
+  field-symbols: <ls_doc> type gty_s_doc.
+
+  loop at gt_doc_r assigning <ls_doc>.
+    clear ls_alv.
+    ls_alv-rbukrs    = <ls_doc>-rbukrs.
+    ls_alv-docnr     = <ls_doc>-docnr.
+    " DOCLN / RACCT / PRCTR / OLD_VNAME / OLD_EGRUP / OLD_RECID:
+    " to be populated once new logic is provided
+    ls_alv-new_vname = ls_alv-old_vname.
+    ls_alv-new_egrup = ls_alv-old_egrup.
+    ls_alv-new_recid = ls_alv-old_recid.
+    append ls_alv to lt_alv.
+  endloop.
+
+  try.
+      cl_salv_table=>factory(
+        importing
+          r_salv_table = lo_salv
+        changing
+          t_table      = lt_alv ).
+    catch cx_salv_msg.
+      return.
+  endtry.
+
+  lo_columns = lo_salv->get_columns( ).
+  lo_columns->set_optimize( abap_true ).
+
+  try.
+      lo_column ?= lo_columns->get_column( 'RBUKRS' ).
+      lo_column->set_short_text( 'Co.Code' ).
+      lo_column->set_medium_text( 'Co.Code' ).
+      lo_column->set_long_text( 'Company Code' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'DOCNR' ).
+      lo_column->set_short_text( 'Doc.No.' ).
+      lo_column->set_medium_text( 'Document No.' ).
+      lo_column->set_long_text( 'Document Number' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'DOCLN' ).
+      lo_column->set_short_text( 'Doc.Ln' ).
+      lo_column->set_medium_text( 'Document Ln' ).
+      lo_column->set_long_text( 'Document Line' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'RACCT' ).
+      lo_column->set_short_text( 'Account' ).
+      lo_column->set_medium_text( 'Account' ).
+      lo_column->set_long_text( 'Account' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'PRCTR' ).
+      lo_column->set_short_text( 'Prft.Ctr' ).
+      lo_column->set_medium_text( 'Profit Center' ).
+      lo_column->set_long_text( 'Profit Center' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'OLD_VNAME' ).
+      lo_column->set_short_text( 'Old VNam' ).
+      lo_column->set_medium_text( 'Old Vent.Name' ).
+      lo_column->set_long_text( 'Old Venture Name' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'OLD_EGRUP' ).
+      lo_column->set_short_text( 'Old EGrp' ).
+      lo_column->set_medium_text( 'Old Eq.Group' ).
+      lo_column->set_long_text( 'Old Equity Group' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'OLD_RECID' ).
+      lo_column->set_short_text( 'Old RecID' ).
+      lo_column->set_medium_text( 'Old Rec.Ind.' ).
+      lo_column->set_long_text( 'Old Recovery Indicator' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'NEW_VNAME' ).
+      lo_column->set_short_text( 'New VNam' ).
+      lo_column->set_medium_text( 'New Vent.Name' ).
+      lo_column->set_long_text( 'New Venture Name' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'NEW_EGRUP' ).
+      lo_column->set_short_text( 'New EGrp' ).
+      lo_column->set_medium_text( 'New Eq.Group' ).
+      lo_column->set_long_text( 'New Equity Group' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  try.
+      lo_column ?= lo_columns->get_column( 'NEW_RECID' ).
+      lo_column->set_short_text( 'New RecID' ).
+      lo_column->set_medium_text( 'New Rec.Ind.' ).
+      lo_column->set_long_text( 'New Recovery Indicator' ).
+    catch cx_salv_not_found. "#EC NO_HANDLER
+  endtry.
+
+  lo_functions = lo_salv->get_functions( ).
+  lo_functions->set_all( abap_true ).
+
+  lo_display = lo_salv->get_display_settings( ).
+  lo_display->set_list_header( 'Document Data - Old vs New JV Accounting Entities' ).
+  lo_display->set_striped_pattern( abap_true ).
+
+  lo_salv->display( ).
 
 endform.
 
