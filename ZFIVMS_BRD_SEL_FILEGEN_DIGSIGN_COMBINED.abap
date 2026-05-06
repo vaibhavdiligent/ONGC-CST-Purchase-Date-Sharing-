@@ -437,59 +437,49 @@ START-OF-SELECTION.
 *& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSO01
 *&---------------------------------------------------------------------*
 *&---------------------------------------------------------------------*
-*& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSO01
-*& Output Include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
-*& No changes between OVL and ONGC versions.
+*& Include          ZFIVMS_BRD_SEL_FILEGEN_DIGSO01
+*& PBO modules for screen 2000 (PIN entry popup)
 *&---------------------------------------------------------------------*
 
 *&---------------------------------------------------------------------*
-*& Module STATUS_0100 OUTPUT
+*& Module STATUS_2000 OUTPUT
 *&---------------------------------------------------------------------*
-MODULE STATUS_0100 OUTPUT.
-  " No interactive screen - batch program
-ENDMODULE.
-
-*&---------------------------------------------------------------------*
-*& Module USER_COMMAND_0100 INPUT
-*&---------------------------------------------------------------------*
-MODULE USER_COMMAND_0100 INPUT.
-  " No interactive screen - batch program
-ENDMODULE.
+MODULE status_2000 OUTPUT.
+  CLEAR g_password.
+  SET TITLEBAR 'Enter PIN'.
+  SET PF-STATUS 'POPUP'.
+ENDMODULE.                    " STATUS_2000 OUTPUT
 
 *&---------------------------------------------------------------------*
 *& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSI01
 *&---------------------------------------------------------------------*
 *&---------------------------------------------------------------------*
-*& Include ZFIVMS_BRD_SEL_FILEGEN_DIGSI01
-*& Selection Screen Include for ZFIVMS_BRD_SEL_FILEGEN_DIGSIGN
-*& No changes between OVL and ONGC versions.
+*& Include          ZFIVMS_BRD_SEL_FILEGEN_DIGSI01
+*& PAI modules for screen 2000 (PIN entry popup)
 *&---------------------------------------------------------------------*
 
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+*&---------------------------------------------------------------------*
+*& Module USER_POPUP_EXIT INPUT
+*&---------------------------------------------------------------------*
+MODULE user_popup_exit INPUT.
 
-PARAMETERS:
-  p_date   TYPE sy-datum OBLIGATORY DEFAULT sy-datum,
-  p_payctr TYPE zpayctr  OBLIGATORY.
+  g_cancel_pressed = ' '.
 
-SELECTION-SCREEN END OF BLOCK b1.
-
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
-
-PARAMETERS:
-  p_test   TYPE c AS CHECKBOX DEFAULT ' '.
-
-SELECTION-SCREEN END OF BLOCK b2.
+  CASE ok_code2000.
+    WHEN 'CANCEL'.
+      g_cancel_pressed = 'X'.
+      LEAVE TO SCREEN 0.
+    WHEN 'OK'.
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+ENDMODULE.                    " USER_POPUP_EXIT INPUT
 
 *&---------------------------------------------------------------------*
-*& AT SELECTION-SCREEN
+*& Module DUMMY INPUT
 *&---------------------------------------------------------------------*
-AT SELECTION-SCREEN.
+MODULE dummy INPUT.
 
-  AUTHORITY-CHECK OBJECT 'ZFIBENREG'
-    FIELD 'ZPAY_CTR' ID 'ZPAY_CTR' FIELD p_payctr.
-  IF sy-subrc <> 0.
-    MESSAGE e001(zfi) WITH p_payctr.
-  ENDIF.
+ENDMODULE.                    " DUMMY INPUT
 
 *&---------------------------------------------------------------------*
 *& Inlined: ZFIVMS_BRD_SEL_FILEGEN_DIGSF01
