@@ -249,34 +249,8 @@ MODULE USER_COMMAND_0100 INPUT.
   " No interactive screen - batch program
 ENDMODULE.
 
-*&---------------------------------------------------------------------*
-*& Inlined from INCLUDE zfivms_brd_sel_filegen_digsi01
-*&---------------------------------------------------------------------*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
-
-PARAMETERS:
-  p_date   TYPE sy-datum OBLIGATORY DEFAULT sy-datum,
-  p_payctr TYPE zpayctr  OBLIGATORY.
-
-SELECTION-SCREEN END OF BLOCK b1.
-
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
-
-PARAMETERS:
-  p_test   TYPE c AS CHECKBOX DEFAULT ' '.
-
-SELECTION-SCREEN END OF BLOCK b2.
-
-*&---------------------------------------------------------------------*
-*& AT SELECTION-SCREEN
-*&---------------------------------------------------------------------*
-AT SELECTION-SCREEN.
-
-  AUTHORITY-CHECK OBJECT 'ZFIBENREG'
-    FIELD 'ZPAY_CTR' ID 'ZPAY_CTR' FIELD p_payctr.
-  IF sy-subrc <> 0.
-    MESSAGE e001(zfi) WITH p_payctr.
-  ENDIF.
+* NOTE: DIGSI01 selection screen block removed - p_date, p_payctr already
+* declared in the main program above (OVL base selection screen kept).
 
 *&---------------------------------------------------------------------*
 *& Inlined from INCLUDE zfivms_brd_sel_filegen_digsf01
