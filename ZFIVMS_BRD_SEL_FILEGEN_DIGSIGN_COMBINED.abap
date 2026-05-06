@@ -5748,21 +5748,12 @@ data: wa_pa0009_bak type pa0009.
 create object lo_bnk_detail.
 
 call function 'SCMS_TEXT_TO_BINARY'
-EXPORTING
-*
-FIRST_LINE
-= 0
-*
-LAST_LINE
-= 0
-*
-APPEND_TO_TABLE
-= ' '
-*
-MIMETYPE
-= ' '
-*
-ENCODING = ' '
+* EXPORTING
+*   FIRST_LINE         = 0
+*   LAST_LINE          = 0
+*   APPEND_TO_TABLE    = ' '
+*   MIMETYPE           = ' '
+*   ENCODING           = ' '
 importing
 output_length = params-indatalen
 
@@ -5785,12 +5776,8 @@ endif.
 call function 'SCMS_BINARY_TO_XSTRING'
 exporting
 input_length = params-indatalen
-*
-FIRST_LINE
-= 0
-*
-LAST_LINE
-= 0
+*   FIRST_LINE         = 0
+*   LAST_LINE          = 0
 importing
 buffer
 = l_raw_data
