@@ -6134,19 +6134,12 @@ IMPORTING
 *   SENT_TO_ALL    =
 *   NEW_OBJECT_ID  =
 TABLES
-object_header
-= it_obj_head
-object_content
-= it_obj_cont
-
-CONTENTS_HEX
-=
-OBJECT_PARA
-=
-OBJECT_PARB
-=
-receivers
-= it_reclist
+object_header     = it_obj_head
+object_content    = it_obj_cont
+*   CONTENTS_HEX  =
+*   OBJECT_PARA   =
+*   OBJECT_PARB   =
+receivers         = it_reclist
 EXCEPTIONS
 too_many_receivers
 = 1
