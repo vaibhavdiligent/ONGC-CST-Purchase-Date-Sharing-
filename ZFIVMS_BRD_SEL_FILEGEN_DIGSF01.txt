@@ -55,8 +55,7 @@ ENDFORM.
 *& Form EXTRACT_DATA
 *&---------------------------------------------------------------------*
 FORM EXTRACT_DATA .
-DATA : l_begdate
-TYPE pa0009-begda,
+DATA : l_begdate TYPE pa0009-begda,
 l_begdateas type pa0009-begda,
 l_strlen type n,
 l_line(2),
@@ -349,8 +348,7 @@ CONSTANTS: g_setclass LIKE setleaf-setclass VALUE '0000',
 g_setname LIKE setleaf-setname VALUE 'ZFI_SBIN_EXCEPTION '
 .
 DATA :
-ist_setleaf
-LIKE setleaf OCCURS 0 WITH HEADER LINE,
+ist_setleaf LIKE setleaf OCCURS 0 WITH HEADER LINE,
 L_SBI_OTH(1) TYPE C.
 CLEAR : ist_setleaf, L_SBI_OTH.
 REFRESH : ist_setleaf.
@@ -3729,13 +3727,10 @@ DATA: l_koinh_new  type zfivms_brd-koinh_new, " KOINH_FI,
 l_bankn_new type zfivms_brd-bankn_new, " BANKN,
 l_bankl_new type zfivms_brd-bankl_new, " BANKK,
 l_dummy(10),
-l_span
-TYPE zfivms_brd-span, " ZSPAN,
-l_street
-TYPE zfivms_brd-street,
+l_span TYPE zfivms_brd-span, " ZSPAN,
+l_street TYPE zfivms_brd-street,
 l_str_suppl1 type zfivms_brd-str_suppl1,
-l_city1
-TYPE zfivms_brd-city1,
+l_city1 TYPE zfivms_brd-city1,
 l_phone(30).
 DATA: wa_record type ty_record.
 DATA: wa_94427 type ty_new_format.
@@ -4717,23 +4712,15 @@ FORM digital_sign_save_logs using ist_sbi_file type standard table.
 *DATA_SENT RAWSTRING 0
 *DATA_RECEIVED RAWSTRING 0
 DATA: wa_zfiben_file_moni type zfiben_file_moni.
-DATA: l_vmc_apdate
-TYPE zfiben_file_moni-vmc_apdate,
-l_sent_date
-TYPE zfiben_file_moni-sent_date,
-l_sent_time
-TYPE zfiben_file_moni-sent_time,
+DATA: l_vmc_apdate TYPE zfiben_file_moni-vmc_apdate,
+l_sent_date TYPE zfiben_file_moni-sent_date,
+l_sent_time TYPE zfiben_file_moni-sent_time,
 l_sent_filename type zfiben_file_moni-sent_filename,
-l_sent_flag
-TYPE zfiben_file_moni-sent_flag,
-l_sent_userid
-TYPE zfiben_file_moni-sent_userid,
-l_sent_error
-TYPE zfiben_file_moni-sent_error,
-l_raw_data
-TYPE xstring, "ZFIBEN_FILE_MONI-RAW_DATA,
-l_data_sent
-TYPE zfiben_file_moni-data_sent.
+l_sent_flag TYPE zfiben_file_moni-sent_flag,
+l_sent_userid TYPE zfiben_file_moni-sent_userid,
+l_sent_error TYPE zfiben_file_moni-sent_error,
+l_raw_data TYPE xstring, "ZFIBEN_FILE_MONI-RAW_DATA,
+l_data_sent TYPE zfiben_file_moni-data_sent.
 *=============================================
 ******** Monitoring
 l_vmc_apdate = p_date.
@@ -4841,44 +4828,30 @@ ENDIF.
 ** Digital signing
 DATA: in_data_table like ssfbin occurs 0 with header line.
 DATA: params like ssfparms.
-DATA: crc
-TYPE i.
+DATA: crc TYPE i.
 DATA: doc_sig type xstring.
 DATA: doc_ver type xstring.
 DATA: doc_line type string.
 DATA: doc_tab type ssftxttab.
 DATA: sig_list type ssfsignertab.
 DATA: go_file_verifier type ref to lcl_file_verifier,
-l_sign
-TYPE ssfsigner.
+l_sign TYPE ssfsigner.
 DATA it_zuser_signer type table of zuser_signer.
 DATA wa_zuser_signer type zuser_signer.
-DATA: ev_owner
-TYPE string,
-ev_email
-TYPE string,
-ev_serial
-TYPE string,
-ev_thumbprint
-TYPE string,
-ev_validfrom
-TYPE string,
-ev_validto
-TYPE string,
-ev_issuer
-TYPE string,
+DATA: ev_owner TYPE string,
+ev_email TYPE string,
+ev_serial TYPE string,
+ev_thumbprint TYPE string,
+ev_validfrom TYPE string,
+ev_validto TYPE string,
+ev_issuer TYPE string,
 ev_bindocument_out type xstring,
-e_int
-TYPE i.
-DATA: lo_bnk_detail
-TYPE ref to zfi_bnk_sbi_in_encco_si_sbiweb,
-proxy_data
-TYPE zfi_bnk_sbi_in_encfile_upload2,
-lt_input
-TYPE zfi_bnk_sbi_in_encfile_upload1,
+e_int TYPE i.
+DATA: lo_bnk_detail TYPE ref to zfi_bnk_sbi_in_encco_si_sbiweb,
+proxy_data TYPE zfi_bnk_sbi_in_encfile_upload2,
+lt_input TYPE zfi_bnk_sbi_in_encfile_upload1,
 lo_sys_exception type ref to cx_ai_system_fault.
-DATA: err_string
-TYPE string.
+DATA: err_string TYPE string.
 DATA: wa_pa0009_bak type pa0009.
 CREATE object lo_bnk_detail.
 
@@ -5068,38 +5041,25 @@ wa_zfi_alerts type ty_zfi_alerts,
 wa_zfi_alerts1 type ty_zfi_alerts,
 wa_zfi_alerts2 type ty_zfi_alerts,
 wa_zfi_alerts3 type ty_zfi_alerts,
-wa_obj_head
-TYPE solisti1,
-wa_obj_cont
-TYPE solisti1,
-it_obj_cont
-TYPE table of solisti1,
-it_obj_head
-TYPE table of solisti1,
-mail_sub
-TYPE sodocchgi1,
-it_reclist
-TYPE table of somlreci1,
-wa_reclist
-TYPE somlreci1,
+wa_obj_head TYPE solisti1,
+wa_obj_cont TYPE solisti1,
+it_obj_cont TYPE table of solisti1,
+it_obj_head TYPE table of solisti1,
+mail_sub TYPE sodocchgi1,
+it_reclist TYPE table of somlreci1,
+wa_reclist TYPE somlreci1,
 lwa_zfivmsbank type zfivmsbank,
 lit_zfivmsbank type table of zfivmsbank,
-wa_new1
-TYPE zfivmsbank.
+wa_new1 TYPE zfivmsbank.
 DATA: http_client type ref to if_http_client.
 DATA: messg(160),
-l_enddate
-TYPE pa0009-endda value '99991231',
-ist_pa9205
-TYPE table of pa9205,
-wa_pa9205
-TYPE
+l_enddate TYPE pa0009-endda value '99991231',
+ist_pa9205 TYPE table of pa9205,
+wa_pa9205 TYPE
 pa9205,
-wf_string
-TYPE string,
+wf_string TYPE string,
 mob_no(12),
-result
-TYPE string,l_reason_desc(35), l_result(35),
+result TYPE string,l_reason_desc(35), l_result(35),
 disp_txt type string.
 
 CLEAR: mob_no, messg, wf_string, result.
