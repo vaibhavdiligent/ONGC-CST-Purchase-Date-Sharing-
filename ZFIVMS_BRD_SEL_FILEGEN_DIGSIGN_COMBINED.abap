@@ -5240,8 +5240,7 @@ endform.
 *& Form MERGE_FILE
 *&---------------------------------------------------------------------*
 form merge_file .
-** Prepare records with
-separator.
+** Prepare records with separator.
 refresh: ist_94427_file . "cvp-mum
 refresh: ist_93128_file . "cep-ddn
 refresh: ist_30523_file . "övl
@@ -5259,32 +5258,15 @@ data: wa_record_new type ty_record_new.
 refresh: ist_96726_file . "övl
 data: wa_96726 type ty_new_format.
 *** end trust
-*
-BEN_TYPE(1),
-"Beneficiary Type * 1
-*
-BEN_ACT_TYPE(1), " Beneficiary Action Type * 1
-*
-BEN_NAME(35),
-"Beneficiary Name * 35
-*
-BEN_AC_NO(17),
-"Beneficiary Account Number * 33//17
-*
-BEN_CODE(24),
-"Beneficiary Code 20 (back to 24)
-*
-IFSC(11),
-"IFS Code# 11
-*
-ADDR1(35),
-"Address1 35
-*
-ADDR2(35),
-"Address2 35
-*
-ADDR3(35),
-"Address3 35
+* BEN_TYPE(1),                "Beneficiary Type * 1
+* BEN_ACT_TYPE(1),            " Beneficiary Action Type * 1
+* BEN_NAME(35),               "Beneficiary Name * 35
+* BEN_AC_NO(17),              "Beneficiary Account Number * 33//17
+* BEN_CODE(24),               "Beneficiary Code 20 (back to 24)
+* IFSC(11),                   "IFS Code# 11
+* ADDR1(35),                  "Address1 35
+* ADDR2(35),                  "Address2 35
+* ADDR3(35),                  "Address3 35
 if p_payctr = 'CVP' .
 loop at ist_94427 into wa_94427.
 
