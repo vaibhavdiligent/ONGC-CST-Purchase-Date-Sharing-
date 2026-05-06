@@ -2607,10 +2607,7 @@ g_filegen = 'X'.
 ENDLOOP.
 close dataset g_filename1.
 if ist_rdata_nonsbi_e[] is not INITIAL.
-
-[] .
-
-perform PREPARE_NEW_FORMAT USING 'IBTP' '93128' ist_rdata_nonsbi_e
+perform PREPARE_NEW_FORMAT USING 'IBTP' '93128' ist_rdata_nonsbi_e[] .
 
 endif.
 ENDIF. " p_payctr = 'CEP' .
@@ -2618,9 +2615,7 @@ ENDIF. " p_payctr = 'CEP' .
 ***start of ONGC code
 IF p_payctr = 'ECPF'.
 if ist_rdata_nonsbi_e[] is not INITIAL.
-[] .
-
-perform PREPARE_NEW_FORMAT USING 'IBTP' '96726' ist_rdata_nonsbi_e
+perform PREPARE_NEW_FORMAT USING 'IBTP' '96726' ist_rdata_nonsbi_e[] .
 
 endif.
 
@@ -2629,8 +2624,7 @@ ENDIF. "
 "opened and commented by lipsy on 7.01.2013
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'R_NONSBI_E' g_date_rd g_time_rd '.txt' int
-o g_filename. "11042011 21062011
+concatenate 'C:\SPAN\' 'R_NONSBI_E' g_date_rd g_time_rd '.txt' into g_filename. "11042011 21062011
 *
 *
 CALL FUNCTION 'GUI_DOWNLOAD'
@@ -2772,10 +2766,7 @@ g_filegen = 'X'.
 ENDLOOP.
 close dataset g_filename1.
 if ist_ddata_nonsbi_e[] is not INITIAL.
-
-e[] .
-
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '93128' ist_ddata_nonsbi_
+perform PREPARE_NEW_FORMAT USING 'DIBTP' '93128' ist_ddata_nonsbi_e[] .
 
 endif.
 ENDIF. " p_payctr = 'CEP' .
@@ -2783,17 +2774,14 @@ ENDIF. " p_payctr = 'CEP' .
 ***start of ONGC code
 IF p_payctr = 'ECPF'.
 if ist_ddata_nonsbi_e[] is not INITIAL.
-e[] .
-
-perform PREPARE_NEW_FORMAT USING 'DIBTP' '96726' ist_ddata_nonsbi_
+perform PREPARE_NEW_FORMAT USING 'DIBTP' '96726' ist_ddata_nonsbi_e[] .
 
 endif.
 ENDIF.
 ***end of ONGC code
 * Begin of Comment on 07082012
 *
-concatenate 'C:\SPAN\' 'D_NONSBI_E' g_date_rd g_time_rd '.txt' int
-o g_filename.
+concatenate 'C:\SPAN\' 'D_NONSBI_E' g_date_rd g_time_rd '.txt' into g_filename.
 "11042011 21062011
 *
 *
@@ -2910,7 +2898,7 @@ g_time_rd = sy-uzeit.
 ** Begin of <> on 10062011
 *
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
-where sysid = syst-sysid
+where sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
@@ -3155,7 +3143,7 @@ ENDIF.
 ** Begin of <> on 10062011
 *
 select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path
-where sysid = syst-sysid
+where sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
@@ -3197,9 +3185,7 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 ** Begin of <> on 10062011
 *
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path wh
-
-ere sysid = syst-sysid
+select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
@@ -3338,8 +3324,7 @@ CONCATENATE SY-DATUM+6(2) SY-DATUM+4(2) SY-DATUM(4) into g_date_rd.
 g_time_rd = sy-uzeit.
 ** Begin of <> on 10062011
 *
-select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path w
-here sysid = syst-sysid
+select single fsnam corpid into (g_fsnam, g_corpid) from zfi_path where sysid = syst-sysid.
 *
 * and zbukr = 'OVL'.
 *
@@ -3490,8 +3475,7 @@ l_begda(10).
 CONCATENATE 'EMP0000000000R00' wa_pa0009-pernr into wa_zfivms_brd-span.
 CONCATENATE 'EM' sy-datum '000R00' wa_pa0009-pernr into wa_zfivms_brd-span.
 */..End of Change CR :30014976 by CAB_RAMA
-* CONCATENATE '0000000000000R00' wa_pa0009-pernr into wa_zfivms_brd-spa
-n.
+* CONCATENATE '0000000000000R00' wa_pa0009-pernr into wa_zfivms_brd-span.
 * End of <> on 15022012
 **Begin RD1K991769 CAB_ALOK
 * if wa_pa0009-bankl(4) = 'SBIN'.
@@ -3507,11 +3491,9 @@ wa_zfivms_brd-bankn_new = wa_pa0009-bankn.
 if not wa_pa0009-emftx is initial.
 wa_zfivms_brd-koinh_new = wa_pa0009-emftx.
 else.
-select single ename from pa0001 into wa_zfivms_brd-koinh_new where p
-ernr = wa_pa0009-pernr.
+select single ename from pa0001 into wa_zfivms_brd-koinh_new where pernr = wa_pa0009-pernr.
 endif.
-**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digi
-tal signing, Logging
+**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
@@ -3520,8 +3502,7 @@ Logging
 
 CR 30010502:Beneficiary file-digital signing,
 
-select single zphone from pa9205 into wa_zfivms_brd-tel_number where p
-ernr = wa_pa0009-pernr and subty = '01'.
+select single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
 wa_zfivms_brd-STATUS
 
@@ -3731,8 +3712,7 @@ else.
 select single ename from pa0001 into wa_zfivms_brd-koinh_new where
 pernr = wa_pa0009t-pernr.
 endif.
-**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digi
-tal signing, Logging
+**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
@@ -3916,8 +3896,7 @@ l_begda(10).
 *
 
 */..Begin of Change CR :30014976 by CAB_RAMA
-* CONCATENATE 'EMP0000000000R00' wa_pa0009-pernr into wa_zfivms_brd-spa
-n.
+* CONCATENATE 'EMP0000000000R00' wa_pa0009-pernr into wa_zfivms_brd-span.
 CONCATENATE 'EM' sy-datum '000R00' wa_pa0009-pernr into wa_zfivms_brd-span.
 */..End of Change CR :30014976 by CAB_RAMA
 * CONCATENATE '0000000000000R00' wa_pa0009-pernr into wa_zfivms_brd-span
@@ -3938,11 +3917,9 @@ wa_zfivms_brd-bankn_new = wa_pa0009-bankn.
 if not wa_pa0009-emftx is initial.
 wa_zfivms_brd-koinh_new = wa_pa0009-emftx.
 else.
-select single ename from pa0001 into wa_zfivms_brd-koinh_new where p
-ernr = wa_pa0009-pernr.
+select single ename from pa0001 into wa_zfivms_brd-koinh_new where pernr = wa_pa0009-pernr.
 endif.
-**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digi
-tal signing, Logging
+**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
@@ -3951,8 +3928,7 @@ Logging
 
 CR 30010502:Beneficiary file-digital signing,
 
-select single zphone from pa9205 into wa_zfivms_brd-tel_number where p
-ernr = wa_pa0009-pernr and subty = '01'.
+select single zphone from pa9205 into wa_zfivms_brd-tel_number where pernr = wa_pa0009-pernr and subty = '01'.
 .
 
 wa_zfivms_brd-vmc_apdate = wa_pa0009-aedtm . " wa_pa0009-begda. 301211
@@ -4145,8 +4121,7 @@ else.
 select single ename from pa0001 into wa_zfivms_brd-koinh_new where
 pernr = wa_pa0009t-pernr.
 endif.
-**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digi
-tal signing, Logging
+**Begin 26.05.2014 RD1K991769 CAB_ALOK CR 30010502:Beneficiary file-digital signing, Logging
 *REPLACE ALL OCCURRENCES OF '.' IN wa_zfivms_brd-koinh_new WITH space.
 *translate
 TRANSLATE wa_zfivms_brd-koinh_new USING trans_string.
@@ -5543,8 +5518,7 @@ concatenate 'ECPF96726' l_vmc_apdate l_sent_time into corpfilename
 if sy-host = 'eccdci' or sy-host = 'eccqci'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000030003079576.txt' INTO L_SENT_FILENAME SEPARATED BY '.' . "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000010392857009' int
-o l_sent_filename separated by '.' .
+concatenate 'COMPBEN' curr_date corpfilename '00000010392857009' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
 elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
@@ -5576,8 +5550,7 @@ elseif sy-host+0(6) = 'eccpap'. "S4H FP3 changes
 *
 CONCATENATE 'COMPBEN' CURR_DATE CorpFileName '00000010277786661.txt' INTO L_SENT_FILENAME SEPARATED BY '.' .
 "changes on 30.07.14
-concatenate 'COMPBEN' curr_date corpfilename '00000010277786661' int
-o l_sent_filename separated by '.' .
+concatenate 'COMPBEN' curr_date corpfilename '00000010277786661' into l_sent_filename separated by '.' .
 "changes on 30.07.14
 *
 endif. "S4H FP3 changes
@@ -5845,8 +5818,7 @@ lwa_zsdcust_bank1-status = 'SENT TO SBI'.
 modify lit_zsdcust_bank1 from lwa_zsdcust_bank1 index sy-tab
 ix.
 endloop.
-modify zsdcust_bank from table lit_zsdcust_bank1."added by gau
-rav
+modify zsdcust_bank from table lit_zsdcust_bank1."added by gaurav
 endif.
 *
 *
