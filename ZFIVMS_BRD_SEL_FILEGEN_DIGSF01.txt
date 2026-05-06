@@ -142,8 +142,6 @@ l_tabix = sy-tabix.
 select single bukrs into l_bukrs from pa0001 where pernr = wa_pa0009-pernr
 and begda <= p_date and endda >= p_date . "p_date
 if sy-subrc = 0.
-*
-loop at ist_pa0009 into wa_pa0009.
 * End of <> on 16062011
 if l_bukrs = 'OVL'.
 perform get_ovl_emlpoyee_details.
@@ -186,7 +184,7 @@ and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OV
 "added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
-( vmc_apdate = p_date and span in s_span )
+( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
@@ -204,15 +202,14 @@ and status in ('RELEASE BY CMC').
 """"""""
 select * from zfivms_brd into table ist_zfivms_brd where vmc_apdate
 = p_date
-and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY
-VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
 
 "added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
-( vmc_apdate = p_date and span in s_span )
+( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
@@ -220,11 +217,9 @@ select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 "bank data is not there RD1K983162
 elseif not s_span is initial.
 """""""""
-"added by lipsy on 04.01.2013 for file generation even if customer ban
-k data is not there RD1K983162
+"added by lipsy on 04.01.2013 for file generation even if customer bank data is not there RD1K983162
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
-s
-pan in s_span
+span in s_span
 and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 04.01.2013 for file generation even if cus
 "tomer bank data is not there RD1K983162
@@ -236,7 +231,7 @@ and status in ('RELEASE BY CMC').
 "added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
-( vmc_apdate = p_date and span in s_span )
+( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
 "end of addition by lipsy on 27.09.2012
@@ -244,15 +239,13 @@ select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 "commented by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
 """"""""""
-select * from zfivms_brd into table ist_zfivms_brd where span in s_
-span
-and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY
-VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
+select * from zfivms_brd into table ist_zfivms_brd where span in s_span
+and status in ('RELEASE BY VMC' , 'RELEASE BY EMPLOYEE' , 'RELEASE BY VMC FOR OVL', 'RELEASE BY EMPLOYEE FOR OVL').
 "commented by lipsy on 28.12.2012 RD1K983099
 *"added by lipsy on 27.09.2012
 *
 select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
-( vmc_apdate = p_date and span in s_span )
+( vmc_apdate = p_date and span in s_span ).
 *
 * and status in ('RELEASE BY CMC').
 *"end of addition by lipsy on 27.09.2012
@@ -260,8 +253,7 @@ select * from zsdcust_bankupd into table ist_zsdcust_bankupd where
 endif.
 * End of <> on 09052012
 *
-status in ('APPROVED BY VMC' , 'APPROVED BY EMPLOYEE' , 'APPROVED BY
-VMC FOR OVL', 'APPROVED BY EMPLOYEE FOR OVL'). 290911
+* status in ('APPROVED BY VMC' , 'APPROVED BY EMPLOYEE' , 'APPROVED BY VMC FOR OVL', 'APPROVED BY EMPLOYEE FOR OVL'). 290911
 "commented by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
 * if sy-subrc = 0.
@@ -270,9 +262,7 @@ VMC FOR OVL', 'APPROVED BY EMPLOYEE FOR OVL'). 290911
 """""""""""
 "added by lipsy on 04.01.2013 for file generation even if customer
 "bank data is not there RD1K983162
-if ist_zfivms_brd is not INITIAL or ist_zsdcust_bankupd is NOT INITI
-
-AL.
+if ist_zfivms_brd is not INITIAL or ist_zsdcust_bankupd is NOT INITIAL.
 "end of addition by lipsy on 04.01.2013 for file generation even if customer bank data is not there RD1K983162
 """"""""
 * Begin of <> on 21062011
@@ -280,16 +270,15 @@ sort ist_zfivms_brd DESCENDING by span .
 ist_zfivms_brd1[] = ist_zfivms_brd[].
 ***start of ONGC code
 ***S/4 Start of Change
-Support # TR RD1K9A0Q5P # 2022/11/28
+* Support # TR RD1K9A0Q5P # 2022/11/28
 sort ist_zfivms_brd1 DESCENDING by span .
 ***S/4 End of Change
-Support # TR RD1K9A0Q5P # 2022/11/28
+* Support # TR RD1K9A0Q5P # 2022/11/28
 ***end of ONGC code
 Delete ADJACENT DUPLICATES FROM ist_zfivms_brd1 comparing span.
 loop at ist_zfivms_brd1 into wa_zfivms_brd1.
 ist_zfivms_brdt[] = ist_zfivms_brd[].
-loop at ist_zfivms_brdt into wa_zfivms_brdt where span = wa_zfivm
-s_brd1-span.
+loop at ist_zfivms_brdt into wa_zfivms_brdt where span = wa_zfivms_brd1-span.
 append wa_zfivms_brdt to ist_zfivms_brdtmp .
 endloop.
 *
@@ -300,8 +289,7 @@ describe table ist_zfivms_brdtmp lines l_line.
 shift l_line left deleting leading '0'.
 "16072012
 if l_line > 0.
-read table ist_zfivms_brdtmp into wa_zfivms_brdtmp with key se
-qno = l_line.
+read table ist_zfivms_brdtmp into wa_zfivms_brdtmp with key seqno = l_line.
 if sy-subrc <> 0.
 read table ist_zfivms_brdtmp into wa_zfivms_brdtmp index 1.
 endif.
@@ -322,7 +310,7 @@ ist_zfivms_brd[] = ist_zfivms_brdtmp1[].
 * Begin of <> on 16072012
 loop at ist_zfivms_resend into wa_zfivms_resend.
 move-corresponding wa_zfivms_resend to wa_zfivms_brd.
-append wa_zfivms_brd to ist_zfivms_brd..
+append wa_zfivms_brd to ist_zfivms_brd.
 *
 append lines of ist_zfivms_resend to ist_zfivms_brd.
 endloop.
@@ -331,8 +319,7 @@ endloop.
 APPEND LINES OF ist_zsdcust_bankupd TO ist_zfivms_brd.
 "end of addition by lipsy on 27.09.2012
 * Vendor Registration - D
-loop at ist_zfivms_brd into wa_zfivms_brd . "where status <> 'APPROV
-ED BY EMPLOYEE'.
+loop at ist_zfivms_brd into wa_zfivms_brd . \"where status <> 'APPROVED BY EMPLOYEE'.
 * Begin of <> on 03122010
 
 **Begin RD1K991769 CAB_ALOK
@@ -532,8 +519,7 @@ endif.
 endif.
 endloop.
 * Employee Registration - D
-loop at ist_zfivms_brd into wa_zfivms_brd where status = 'RELEASE BY
-EMPLOYEE' .
+loop at ist_zfivms_brd into wa_zfivms_brd where status = 'RELEASE BY EMPLOYEE' .
 
 **Begin RD1K991769 CAB_ALOK
 *
