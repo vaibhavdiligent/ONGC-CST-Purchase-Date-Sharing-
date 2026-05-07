@@ -488,11 +488,14 @@ FORM get_range_string CHANGING pv_range TYPE string.
 ENDFORM.
 
 FORM merge_range .
-  go_xlsx_active->set_merge(
-    ip_row       = gv_s_row
-    ip_column_start    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_end = gv_e_col ).
+  TRY.
+      go_xlsx_active->set_merge(
+        ip_row          = gv_s_row
+        ip_column_start = gv_s_col
+        ip_row_to       = gv_e_row
+        ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 FORM set_fill_color USING p_ole2_color TYPE i.
@@ -506,12 +509,15 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
   lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
-  go_xlsx_active->set_area_style(
+  TRY.
+      go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 *--- Form Routines ---*
@@ -1827,11 +1833,11 @@ ENDFORM.
 FORM start_excel .
   go_xlsx = NEW zcl_excel( ).
   go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
-  DATA lv_t1 TYPE c LENGTH 30. lv_t1 = gv_sheet1_name. go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
+  DATA lv_t1 TYPE c LENGTH 31. lv_t1 = gv_sheet1_name. go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
   go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
-  DATA lv_t2 TYPE c LENGTH 30. lv_t2 = gv_sheet2_name. go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
+  DATA lv_t2 TYPE c LENGTH 31. lv_t2 = gv_sheet2_name. go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
   go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
-  DATA lv_t3 TYPE c LENGTH 30. lv_t3 = gv_sheet3_name. go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
+  DATA lv_t3 TYPE c LENGTH 31. lv_t3 = gv_sheet3_name. go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
   go_xlsx_active = go_xlsx_sheet1.
   " Page setup equivalent: landscape, fit to 1 page wide
 
@@ -1891,7 +1897,7 @@ FORM set_cell  USING    p_cell_value
   DATA lv_v TYPE string.
   lv_v = p_cell_value.
   IF lv_v IS NOT INITIAL.
-    go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ).
+    TRY. go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ). CATCH zcx_excel. ENDTRY.
   ENDIF.
 ENDFORM.
 
@@ -1909,7 +1915,7 @@ FORM set_range  USING    p_cell_value
   DATA lv_v TYPE string.
   lv_v = p_cell_value.
   IF lv_v IS NOT INITIAL.
-    go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ).
+    TRY. go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ). CATCH zcx_excel. ENDTRY.
   ENDIF.
 ENDFORM.
 FORM set_range_font  USING    p_size
@@ -1918,12 +1924,15 @@ FORM set_range_font  USING    p_size
   lo_style = go_xlsx->add_new_style( ).
   lo_style->font->size = p_size.
   IF p_bold = 1. lo_style->font->bold = abap_true. ENDIF.
-  go_xlsx_active->set_area_style(
+  TRY.
+      go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 FORM set_range_formatting USING p_wraptext
@@ -1944,12 +1953,15 @@ FORM set_range_formatting USING p_wraptext
     WHEN 'T'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_top.
     WHEN 'B'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_bottom.
   ENDCASE.
-  go_xlsx_active->set_area_style(
+  TRY.
+      go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM .
 FORM set_thin_border   USING    p_left
                                 p_right
@@ -2560,7 +2572,7 @@ FORM paste_data .
     SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
     LOOP AT lt_vals INTO lv_val.
       IF lv_val IS NOT INITIAL.
-        go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+        TRY. go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ). CATCH zcx_excel. ENDTRY.
       ENDIF.
       lv_col = lv_col + 1.
     ENDLOOP.
@@ -2578,7 +2590,7 @@ FORM paste_data_sheet3 .
     SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
     LOOP AT lt_vals INTO lv_val.
       IF lv_val IS NOT INITIAL.
-        go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+        TRY. go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ). CATCH zcx_excel. ENDTRY.
       ENDIF.
       lv_col = lv_col + 1.
     ENDLOOP.
@@ -2596,7 +2608,7 @@ FORM paste_data_sheet2 .
     SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
     LOOP AT lt_vals INTO lv_val.
       IF lv_val IS NOT INITIAL.
-        go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+        TRY. go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ). CATCH zcx_excel. ENDTRY.
       ENDIF.
       lv_col = lv_col + 1.
     ENDLOOP.
@@ -3275,12 +3287,15 @@ FORM set_numberformat USING p_format.
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->number_format->format_code = p_format.
-  go_xlsx_active->set_area_style(
+  TRY.
+      go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 FORM set_section1_header_colors .
@@ -6601,7 +6616,7 @@ FORM finalize_worksheet .
 
   REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
   CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
-  DATA lv_t_fin TYPE c LENGTH 30. lv_t_fin = lv_sheet_name. go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
+  DATA lv_t_fin TYPE c LENGTH 31. lv_t_fin = lv_sheet_name. go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
   " Build filename
   CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
 
@@ -9472,12 +9487,15 @@ FORM set_border_range  USING    p_left
   IF p_right  = 1. lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin. ENDIF.
   IF p_top    = 1. lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin. ENDIF.
   IF p_bottom = 1. lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin. ENDIF.
-  go_xlsx_active->set_area_style(
+  TRY.
+      go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 FORM set_all_borders_range  .
   DATA lo_style TYPE REF TO zcl_excel_style.
@@ -9486,12 +9504,15 @@ FORM set_all_borders_range  .
   lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin.
   lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin.
   lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin.
-  go_xlsx_active->set_area_style(
+  TRY.
+      go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 FORM clear_variables .
 
