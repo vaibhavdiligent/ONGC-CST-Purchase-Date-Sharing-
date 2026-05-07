@@ -851,8 +851,8 @@ FORM fetch_data .
 *           monat GE @gv_mrec_monat_start ) OR
 *           ( gjahr EQ @gv_mrec_gjahr_end AND
 *           monat LE @gv_mrec_monat_end ) ) .
-       AND ( gjahr GE gv_mrec_gjahr_start AND
-             gjahr LE gv_mrec_gjahr_end ) .
+       AND ( gjahr GE @gv_mrec_gjahr_start AND
+             gjahr LE @gv_mrec_gjahr_end ) .
     DELETE gt_zpra_t_mrec_prd WHERE gjahr EQ gv_mrec_gjahr_end   AND monat GT gv_mrec_monat_end   .
     DELETE gt_zpra_t_mrec_prd WHERE gjahr EQ gv_mrec_gjahr_start AND monat LT gv_mrec_monat_start .
   ENDIF.
@@ -931,7 +931,7 @@ FORM fetch_data .
 
   SELECT asset,
          tar_code,
-         MIN(, vld_frm, )
+         MIN( vld_frm)
     FROM zpra_t_tar_pi
     INTO TABLE @gt_tar_start_dates
    WHERE tar_code IN @r_tar_code[]
@@ -5368,7 +5368,7 @@ FORM prepare_section4b_paste_data .
     FROM zpra_t_prd_pi
     INTO TABLE @lt_exp_asset1
      FOR ALL ENTRIES IN @lt_exp_asset
-   WHERE asset          = lt_exp_asset-asset
+   WHERE asset          = @lt_exp_asset-asset
      AND liscense_exp_dt GT @sy-datum.
 
 
@@ -8497,8 +8497,8 @@ FORM fetch_data_section3c .
      AND product      EQ @gt_zpra_c_prd_prof-product
      AND prd_vl_type  IN @r_prd_vl_type[]
 *     AND ( gjahr EQ @gv_last_gjahr OR gjahr EQ @gv_current_gjahr   ) .
-    AND gjahr GE lv_gjahr
-    AND gjahr LE gv_current_gjahr .
+    AND gjahr GE @lv_gjahr
+    AND gjahr LE @gv_current_gjahr .
   SORT gt_zpra_t_mrec_prd_3c BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
   DELETE gt_zpra_t_mrec_prd_3c WHERE gjahr EQ gv_current_gjahr AND monat GT gv_current_monat .
   SELECT gjahr,
@@ -8874,7 +8874,7 @@ FORM fetch_data_section4a .
     INTO TABLE @gt_zpra_t_mrec_prd_4a
      FOR ALL ENTRIES IN @gt_zdpr_gas_combine
    WHERE asset        EQ @gt_zdpr_gas_combine-asset
-     AND product      EQ c_prod_gas
+     AND product      EQ @c_prod_gas
      AND prd_vl_type  IN @r_prd_vl_type[]
      AND gjahr GE @gv_last_gjahr
      AND monat LE @gv_current_monat .
@@ -8966,7 +8966,7 @@ FORM fetch_data_section4a .
       INTO TABLE @gt_zpra_t_dly_rprd_4a
        FOR ALL ENTRIES IN @gt_zdpr_gas_combine
      WHERE asset EQ @gt_zdpr_gas_combine-asset
-       AND product EQ c_prod_gas
+       AND product EQ @c_prod_gas
        AND prd_vl_type EQ 'NET_PROD'
        AND production_date IN @r_production_date[].
     SORT gt_zpra_t_dly_rprd_4a BY product asset block production_date .
@@ -8976,7 +8976,7 @@ FORM fetch_data_section4a .
       INTO TABLE @gt_zpra_t_dly_prd_4a
        FOR ALL ENTRIES IN @gt_zdpr_gas_combine
      WHERE asset EQ @gt_zdpr_gas_combine-asset
-       AND product EQ c_prod_gas
+       AND product EQ @c_prod_gas
        AND prd_vl_type IN @r_prd_vl_type[]
        AND production_date IN @r_production_date[] .
     SORT gt_zpra_t_dly_prd_4a BY product asset block production_date .
