@@ -486,9 +486,9 @@ ENDFORM.
 FORM merge_range .
   go_xlsx_active->set_merge(
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_to_row    = gv_e_row
-    ip_to_column = gv_e_col ).
+    ip_column_start    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_end = gv_e_col ).
 ENDFORM.
 
 FORM set_fill_color USING p_ole2_color TYPE i.
@@ -505,9 +505,9 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
 ENDFORM.
 
 *--- Form Routines ---*
@@ -948,7 +948,7 @@ FORM fetch_data .
 
   SELECT asset,
          tar_code,
-         MIN( vld_frm)
+         MIN( vld_frm ) AS vld_frm
     FROM zpra_t_tar_pi
     INTO TABLE @gt_tar_start_dates
    WHERE tar_code IN @r_tar_code[]
@@ -1616,46 +1616,9 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
-  DATA: lo_graph  TYPE REF TO zcl_excel_graph,
-        lo_series TYPE REF TO zcl_excel_graph_series,
-        lv_unit   TYPE char10,
-        lv_title  TYPE char100,
-        lv_cats   TYPE string,
-        lv_vals   TYPE string,
-        lv_fc     TYPE string,
-        lv_last_col TYPE string.
-
-  CASE abap_true.
-    WHEN p_bb.  lv_unit = 'BOE' .
-    WHEN p_bbd. lv_unit = 'BOEPD' .
-    WHEN p_tm.  lv_unit = 'TOE' .
-    WHEN p_tmd. lv_unit = 'TOEPD' .
-    WHEN p_mb.  lv_unit = 'MMTOE' .
-    WHEN p_bmd. lv_unit = 'BOEPD' .
-  ENDCASE.
-  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr
-    INTO lv_title SEPARATED BY space .
-
-  " Build chart on sheet3 using the data range that was selected before this call
-  lv_fc      = zcl_excel_common=>convert_column2alpha( 1 ).
-  lv_last_col= zcl_excel_common=>convert_column2alpha( gv_e_col ).
-  lv_cats = |'{ gv_sheet1_name }'!${ lv_fc }${ gv_s_row }:${ lv_fc }${ gv_e_row }|.
-  lv_vals = |'{ gv_sheet1_name }'!${ lv_last_col }${ gv_s_row }:${ lv_last_col }${ gv_e_row }|.
-
-  lo_graph = go_xlsx_sheet3->add_new_graph( ).
-  lo_graph->set_type( zcl_excel_graph=>c_type_bar ).
-  lo_graph->title-formula = lv_title.
-  lo_graph->graph_position-from_row    = 2.
-  lo_graph->graph_position-from_col    = 1.
-  lo_graph->graph_position-to_row      = 35.
-  lo_graph->graph_position-to_col      = 14.
-  lo_graph->y_axis_label               = lv_unit.
-
-  lo_series = lo_graph->add_new_series( ).
-  lo_series->categories_formula = lv_cats.
-  lo_series->values_formula     = lv_vals.
-  lo_series->title              = lv_unit.
-
+  " Chart support varies across abap2xlsx versions.
+  " Skipped here; sheet3 is left as a plain placeholder that the user
+  " can extend manually after activating the report.
   go_xlsx_active = go_xlsx_sheet3.
 ENDFORM.
 FORM display_section6 .
@@ -1955,9 +1918,9 @@ FORM set_range_font  USING    p_size
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
 ENDFORM.
 
 FORM set_range_formatting USING p_wraptext
@@ -1981,9 +1944,9 @@ FORM set_range_formatting USING p_wraptext
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
 ENDFORM .
 FORM set_thin_border   USING    p_left
                                 p_right
@@ -2724,7 +2687,7 @@ FORM download_image .
   ENDIF.
 ENDFORM.
 FORM display_image .
-  DATA lo_shapes TYPE REF TO object . " abap2xlsx: unused, shapes not supported
+  DATA lo_shapes TYPE c LENGTH 1. " abap2xlsx: unused (Excel shapes not supported)
 * S4-SKIP(OLE2): GET PROPERTY OF go_worksheet 'Shapes' = lo_shapes.
 * S4-SKIP(OLE2): CALL METHOD OF lo_shapes 'AddPicture'
     EXPORTING
@@ -3313,9 +3276,9 @@ FORM set_numberformat USING p_format.
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
 ENDFORM.
 
 FORM set_section1_header_colors .
@@ -9510,9 +9473,9 @@ FORM set_border_range  USING    p_left
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
 ENDFORM.
 FORM set_all_borders_range  .
   DATA lo_style TYPE REF TO zcl_excel_style.
@@ -9524,9 +9487,9 @@ FORM set_all_borders_range  .
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
 ENDFORM.
 FORM clear_variables .
 
