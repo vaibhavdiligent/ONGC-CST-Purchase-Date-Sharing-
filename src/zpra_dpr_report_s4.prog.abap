@@ -3,7 +3,7 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) — S/4HANA Edition
-*& VERSION : 2.2  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
+*& VERSION : 2.3  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
 *& Based on: ZPRA_DPR_REPORT v1.9 (100% business logic preserved)
 *&
 *& S/4HANA changes vs original:
@@ -453,6 +453,20 @@ START-OF-SELECTION .
 *  add_cell(); get_xlsx() zips it and returns xstring ready for
 *  GUI_DOWNLOAD.  Replaces the OLE2 CREATE OBJECT go_excel approach.
 *----------------------------------------------------------------------*
+"======================================================================
+" lcl_xlsx_writer v2.3 — performance-optimised server-side XLSX writer
+"
+" KEY IMPROVEMENTS vs v2.0–2.2:
+"  1. Cells stored in a SORTED typed table (row/col INTEGER keys) instead
+"     of encoded strings — eliminates lexicographic mis-sort and the
+"     encode/decode overhead per cell.
+"  2. sheet_xml builds XML into a STRING TABLE (lt_parts) and joins once
+"     with concat_lines_of() — eliminates the O(n²) string-copy loop.
+"  3. to_xs reuses a single codepage converter (CLASS-DATA) instead of
+"     creating a new object for every xml segment.
+"  4. finalize_worksheet uses SCMS_XSTRING_TO_BINARY instead of a manual
+"     WHILE loop — conversion done in one C-level SAP kernel call.
+"======================================================================
 CLASS lcl_xlsx_writer DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS:
@@ -461,9 +475,17 @@ CLASS lcl_xlsx_writer DEFINITION FINAL.
       clear_all,
       get_xlsx    RETURNING VALUE(rv_xs) TYPE xstring.
   PRIVATE SECTION.
+    TYPES: BEGIN OF ty_cell,
+             row TYPE i,
+             col TYPE i,
+             typ TYPE c LENGTH 1,
+             val TYPE string,
+           END OF ty_cell.
     CLASS-DATA:
       gv_sheet_name TYPE string,
-      gt_cells      TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+      go_conv       TYPE REF TO cl_abap_conv_out_ce,
+      gt_cells      TYPE SORTED TABLE OF ty_cell
+                         WITH NON-UNIQUE KEY row col.
     CLASS-METHODS:
       col_name  IMPORTING iv_col TYPE i RETURNING VALUE(rv_n) TYPE string,
       to_xs     IMPORTING iv_xml TYPE string RETURNING VALUE(rv_xs) TYPE xstring,
@@ -476,19 +498,28 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
   METHOD init_sheet.
     CLEAR gt_cells.
     gv_sheet_name = iv_name.
+    "create once — reused by every to_xs call
+    IF go_conv IS NOT BOUND.
+      go_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+    ENDIF.
   ENDMETHOD.
   METHOD clear_all.
     CLEAR: gt_cells, gv_sheet_name.
   ENDMETHOD.
   METHOD add_cell.
+    DATA ls TYPE ty_cell.
     DATA lv_v TYPE string.
     lv_v = iv_value.
+    "XML-escape in place
     REPLACE ALL OCCURRENCES OF `&` IN lv_v WITH `&amp;`.
     REPLACE ALL OCCURRENCES OF `<` IN lv_v WITH `&lt;`.
     REPLACE ALL OCCURRENCES OF `>` IN lv_v WITH `&gt;`.
-    DATA lv_t TYPE string.
-    lv_t = COND #( WHEN lv_v CO '0123456789.-' AND lv_v IS NOT INITIAL THEN 'N' ELSE 'S' ).
-    APPEND |{ iv_row }~{ iv_col }~{ lv_t }~{ lv_v }| TO gt_cells.
+    ls-row = iv_row.
+    ls-col = iv_col.
+    ls-typ = COND #( WHEN lv_v CO '0123456789.-' AND lv_v IS NOT INITIAL
+                     THEN 'N' ELSE 'S' ).
+    ls-val = lv_v.
+    INSERT ls INTO TABLE gt_cells.
   ENDMETHOD.
   METHOD col_name.
     DATA lv_c TYPE i.
@@ -496,48 +527,49 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
     lv_c = iv_col.
     DO.
       lv_r = ( lv_c - 1 ) MOD 26.
-      rv_n = substring( val = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' off = lv_r len = 1 ) && rv_n.
+      rv_n = substring( val = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                        off = lv_r len = 1 ) && rv_n.
       lv_c = ( lv_c - lv_r - 1 ) / 26.
       IF lv_c = 0. EXIT. ENDIF.
     ENDDO.
   ENDMETHOD.
   METHOD to_xs.
-    "S4: convert( source ) returns xstring — no named EXPORTING/IMPORTING needed
-    rv_xs = cl_abap_conv_codepage=>create_out( codepage = `UTF-8` )->convert( iv_xml ).
+    "reuse cached converter — avoids creating a new object per call
+    IF go_conv IS NOT BOUND.
+      go_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+    ENDIF.
+    go_conv->convert( EXPORTING data   = iv_xml
+                      IMPORTING buffer = rv_xs ).
   ENDMETHOD.
   METHOD sheet_xml.
-    DATA lt_s TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-    lt_s = gt_cells.
-    SORT lt_s.
-    rv_xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-          && `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
-          && `<sheetData>`.
-    DATA lv_pr TYPE i VALUE 0.
-    LOOP AT lt_s INTO DATA(lv_e).
-      SPLIT lv_e AT '~' INTO DATA(lv_r) DATA(lv_c) DATA(lv_t) DATA(lv_v).
-      DATA lv_ri TYPE i.
-      DATA lv_ci TYPE i.
-      lv_ri = lv_r.
-      lv_ci = lv_c.
-      IF lv_ri <> lv_pr.
-        IF lv_pr > 0. rv_xml = rv_xml && `</row>`. ENDIF.
-        rv_xml = rv_xml && |<row r="{ lv_ri }">|.
-        lv_pr = lv_ri.
+    "Build XML into a STRING TABLE — one APPEND per fragment, then join
+    "once.  Avoids the O(n²) copy cost of repeated string concatenation.
+    DATA lt_parts TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+    DATA lv_pr    TYPE i VALUE 0.
+    APPEND `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+      && `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+      && `<sheetData>` TO lt_parts.
+    LOOP AT gt_cells INTO DATA(ls).
+      IF ls-row <> lv_pr.
+        IF lv_pr > 0. APPEND `</row>` TO lt_parts. ENDIF.
+        APPEND |<row r="{ ls-row }">| TO lt_parts.
+        lv_pr = ls-row.
       ENDIF.
-      DATA lv_ref TYPE string.
-      lv_ref = col_name( lv_ci ) && lv_ri.
-      IF lv_t = 'N'.
-        rv_xml = rv_xml && |<c r="{ lv_ref }"><v>{ lv_v }</v></c>|.
+      DATA(lv_ref) = col_name( ls-col ) && ls-row.
+      IF ls-typ = 'N'.
+        APPEND |<c r="{ lv_ref }"><v>{ ls-val }</v></c>| TO lt_parts.
       ELSE.
-        rv_xml = rv_xml && |<c r="{ lv_ref }" t="inlineStr"><is><t>{ lv_v }</t></is></c>|.
+        APPEND |<c r="{ lv_ref }" t="inlineStr"><is><t>{ ls-val }</t></is></c>|
+          TO lt_parts.
       ENDIF.
     ENDLOOP.
-    IF lv_pr > 0. rv_xml = rv_xml && `</row>`. ENDIF.
-    rv_xml = rv_xml && `</sheetData></worksheet>`.
+    IF lv_pr > 0. APPEND `</row>` TO lt_parts. ENDIF.
+    APPEND `</sheetData></worksheet>` TO lt_parts.
+    rv_xml = concat_lines_of( table = lt_parts sep = `` ).
   ENDMETHOD.
   METHOD wb_xml.
-    DATA lv_n TYPE string.
-    lv_n = COND #( WHEN gv_sheet_name IS INITIAL THEN 'DPR' ELSE gv_sheet_name ).
+    DATA(lv_n) = COND string( WHEN gv_sheet_name IS INITIAL
+                               THEN 'DPR' ELSE gv_sheet_name ).
     rv_xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
           && `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `
           && `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
@@ -580,10 +612,9 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
           && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`
           && `</Relationships>`.
     lo_zip->add( name = 'xl/_rels/workbook.xml.rels' content = to_xs( lv_wr ) ).
-    lo_zip->add( name = 'xl/workbook.xml'           content = to_xs( wb_xml( ) ) ).
-    lo_zip->add( name = 'xl/styles.xml'             content = to_xs( sty_xml( ) ) ).
-    lo_zip->add( name = 'xl/worksheets/sheet1.xml'  content = to_xs( sheet_xml( ) ) ).
-    "S4: cl_abap_zip->save() returns xstring directly
+    lo_zip->add( name = 'xl/workbook.xml'            content = to_xs( wb_xml( ) ) ).
+    lo_zip->add( name = 'xl/styles.xml'              content = to_xs( sty_xml( ) ) ).
+    lo_zip->add( name = 'xl/worksheets/sheet1.xml'   content = to_xs( sheet_xml( ) ) ).
     rv_xs = lo_zip->save( ).
   ENDMETHOD.
 ENDCLASS.
@@ -6364,12 +6395,10 @@ FORM convert_mrec_gas_per_day_units  USING    p_days
 ENDFORM.
 FORM finalize_worksheet .
   "S4: server-side XLSX generation and download (replaces OLE2 Excel save/PDF)
-  DATA: lv_xstr   TYPE xstring,
-        lt_bin    TYPE STANDARD TABLE OF x255 WITH DEFAULT KEY,
-        ls_bin    TYPE x255,
-        lv_xlen   TYPE i,
-        lv_off    TYPE i,
-        lv_fname  TYPE string,
+  DATA: lv_xstr      TYPE xstring,
+        lt_bin       TYPE STANDARD TABLE OF x255 WITH DEFAULT KEY,
+        lv_xlen      TYPE i,
+        lv_fname     TYPE string,
         lv_datum_ext TYPE char10,
         lv_uzeit_ext TYPE char8.
 
@@ -6386,15 +6415,14 @@ FORM finalize_worksheet .
   PERFORM free_clipboard .
 
   lv_xstr = lcl_xlsx_writer=>get_xlsx( ).
-  lv_xlen = xstrlen( lv_xstr ).
-  lv_off  = 0.
-  WHILE lv_off < lv_xlen.
-    DATA(lv_chunk) = lv_xlen - lv_off.
-    IF lv_chunk > 255. lv_chunk = 255. ENDIF.
-    ls_bin = lv_xstr+lv_off(lv_chunk).
-    APPEND ls_bin TO lt_bin.
-    lv_off = lv_off + lv_chunk.
-  ENDWHILE.
+  "Use SAP kernel call — far faster than a manual WHILE loop
+  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+    EXPORTING
+      buffer        = lv_xstr
+    IMPORTING
+      output_length = lv_xlen
+    TABLES
+      binary_tab    = lt_bin.
 
   CALL FUNCTION 'GUI_DOWNLOAD'
     EXPORTING
