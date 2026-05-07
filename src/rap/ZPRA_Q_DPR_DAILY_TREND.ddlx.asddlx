@@ -1,0 +1,140 @@
+@Metadata.layer: #CORE
+
+/*
+ * Metadata Extension for ZPRA_Q_DPR_DAILY_TREND.
+ *
+ * Drives the on-screen rendering of the daily production trend
+ * graph in Fiori Elements Analytical List Page (ALP):
+ *   - Selection bar (date range, asset)
+ *   - Line / area chart with Date on X-axis, ProdQty1 on Y-axis,
+ *     series-broken-by Product
+ *   - Tabular data underneath (same rows that flow to Excel)
+ *
+ * The native Fiori "Export to Spreadsheet" toolbar button uses
+ * @UI.lineItem definitions; this gives the user an inline Excel
+ * export in addition to the dedicated downloadProduction action.
+ */
+annotate view ZPRA_Q_DPR_DAILY_TREND with
+{
+
+  /* ── Header info ──────────────────────────────────────────────────────── */
+  @UI.headerInfo: {
+    typeName:       'Daily Production Trend',
+    typeNamePlural: 'Daily Production Trend',
+    title:          { type: #STANDARD, value: 'ProductDescription' },
+    description:    { type: #STANDARD, value: 'AssetDescription'   }
+  }
+
+  /* ── Selection / Filter fields ────────────────────────────────────────── */
+  @UI.selectionField: [{ position: 10 }]
+  ProductionDate;
+
+  @UI.selectionField: [{ position: 20 }]
+  CalendarYear;
+
+  @UI.selectionField: [{ position: 30 }]
+  CalendarMonth;
+
+  @UI.selectionField: [{ position: 40 }]
+  Product;
+
+  @UI.selectionField: [{ position: 50 }]
+  Asset;
+
+  /* ── Table columns (drive built-in Export to Spreadsheet) ─────────────── */
+
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
+  ProductionDate;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
+  ProductDescription;
+
+  @UI.lineItem: [{ position: 30, importance: #MEDIUM, label: 'Asset' }]
+  AssetDescription;
+
+  @UI.lineItem: [{ position: 40, importance: #HIGH, label: 'JV Daily Prod (UoM1)' }]
+  ProdQty1;
+
+  @UI.lineItem: [{ position: 50, importance: #LOW, label: 'UoM' }]
+  ProdUom1;
+
+  @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'OVL Share (UoM1)' }]
+  OvlShareQty1;
+
+  @UI.lineItem: [{ position: 70, importance: #MEDIUM, label: 'JV Daily Prod (UoM2)' }]
+  ProdQty2;
+
+  @UI.lineItem: [{ position: 80, importance: #MEDIUM, label: 'OVL Share (UoM2)' }]
+  OvlShareQty2;
+
+  /* ── Primary chart: time-series LINE  (Daily trend) ──────────────────── */
+  @UI.chart: [{
+    qualifier:  'TrendLine',
+    title:      'Daily Production Trend',
+    chartType:  #LINE,
+    dimensions: ['ProductionDate', 'ProductDescription'],
+    measures:   ['ProdQty1', 'OvlShareQty1'],
+    measureAttributes: [
+      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
+      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductionDate',     role: #CATEGORY },
+      { dimension: 'ProductDescription', role: #SERIES   }
+    ]
+  },
+  /* ── Secondary chart: COLUMN — distribution by product/asset ───────── */
+  {
+    qualifier:  'ProductMix',
+    title:      'Production Mix by Product',
+    chartType:  #COLUMN_STACKED,
+    dimensions: ['ProductDescription'],
+    measures:   ['ProdQty1'],
+    measureAttributes: [
+      { measure: 'ProdQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductDescription', role: #CATEGORY }
+    ]
+  },
+  /* ── Tertiary chart: AREA — cumulative OVL share over time ─────────── */
+  {
+    qualifier:  'OvlShareArea',
+    title:      'OVL Share Production',
+    chartType:  #AREA,
+    dimensions: ['ProductionDate'],
+    measures:   ['OvlShareQty1'],
+    measureAttributes: [
+      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductionDate', role: #CATEGORY }
+    ]
+  }]
+  ProdQty1;
+
+  /* ── KPI tiles ────────────────────────────────────────────────────────── */
+  @UI.dataPoint: {
+    title:       'Total JV Production',
+    criticality: #NEUTRAL
+  }
+  ProdQty1;
+
+  @UI.dataPoint: {
+    title:       'OVL Share',
+    criticality: #POSITIVE
+  }
+  OvlShareQty1;
+
+  /* ── Presentation variant: chart on top, table below (ALP default) ──── */
+  @UI.presentationVariant: [{
+    qualifier:        'Default',
+    visualizations:   [
+      { type: #AS_CHART, qualifier: 'TrendLine' },
+      { type: #AS_LINEITEM }
+    ],
+    sortOrder:        [{ by: 'ProductionDate', direction: #ASC }]
+  }]
+  ProductionDate;
+
+}

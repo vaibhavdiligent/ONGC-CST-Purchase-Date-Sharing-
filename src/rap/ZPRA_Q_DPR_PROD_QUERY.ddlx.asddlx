@@ -75,22 +75,67 @@ annotate view ZPRA_Q_DPR_PROD_QUERY with
   @UI.lineItem: [{ position: 110, importance: #LOW, label: 'PI %' }]
   ParticipatingInterest;
 
-  /* ── Chart definition ─────────────────────────────────────────────────── */
-  @UI.chart: [{
-    title:        'Daily Production by Product',
-    chartType:    #COLUMN,
-    dimensions:   ['ProductionDate', 'ProductDescription'],
-    measures:     ['ProdQty1', 'OvlShareQty1'],
-    measureAttributes: [
-      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
-      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-    ],
-    dimensionAttributes: [
-      { dimension: 'ProductionDate',    role: #CATEGORY },
-      { dimension: 'ProductDescription', role: #SERIES   }
-    ]
-  }]
+  /* ── Chart definition (multiple charts switchable in ALP toolbar) ───── */
+  @UI.chart: [
+    /* Primary: column chart by date+product */
+    {
+      qualifier:  'ByDate',
+      title:      'Daily Production by Product',
+      chartType:  #COLUMN,
+      dimensions: ['ProductionDate', 'ProductDescription'],
+      measures:   ['ProdQty1', 'OvlShareQty1'],
+      measureAttributes: [
+        { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
+        { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+      ],
+      dimensionAttributes: [
+        { dimension: 'ProductionDate',     role: #CATEGORY },
+        { dimension: 'ProductDescription', role: #SERIES   }
+      ]
+    },
+    /* Comparison: JV vs OVL share — pie */
+    {
+      qualifier:  'JvVsOvl',
+      title:      'JV vs OVL Share',
+      chartType:  #DONUT,
+      dimensions: ['ProductDescription'],
+      measures:   ['ProdQty1', 'OvlShareQty1'],
+      measureAttributes: [
+        { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
+        { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+      ],
+      dimensionAttributes: [
+        { dimension: 'ProductDescription', role: #CATEGORY }
+      ]
+    },
+    /* Asset breakdown: stacked column */
+    {
+      qualifier:  'ByAsset',
+      title:      'Production by Asset',
+      chartType:  #COLUMN_STACKED,
+      dimensions: ['AssetDescription', 'ProductDescription'],
+      measures:   ['ProdQty1'],
+      measureAttributes: [
+        { measure: 'ProdQty1', role: #AXIS_1, asDataPoint: true }
+      ],
+      dimensionAttributes: [
+        { dimension: 'AssetDescription',   role: #CATEGORY },
+        { dimension: 'ProductDescription', role: #SERIES   }
+      ]
+    }
+  ]
   ProdQty1;
+
+  /* ── Presentation variant: chart-on-top + table-below (ALP default) ── */
+  @UI.presentationVariant: [{
+    qualifier:      'Default',
+    visualizations: [
+      { type: #AS_CHART,    qualifier: 'ByDate' },
+      { type: #AS_LINEITEM }
+    ],
+    sortOrder:      [{ by: 'ProductionDate', direction: #ASC }]
+  }]
+  ProductionDate;
 
   /* ── Data point (KPI card value) ─────────────────────────────────────── */
   @UI.dataPoint: {

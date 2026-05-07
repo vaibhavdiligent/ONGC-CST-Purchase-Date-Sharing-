@@ -3,11 +3,19 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.7  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
-*& Changes : v1.7 - Fix COMPUTE_BCD_OVERFLOW dump in convert_gas_units
+*& VERSION : 1.9  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
+*& Changes : v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
+*&           line 3444 (lv_qty * 6290 assignment to prod_vl_qty1).
+*&           Removed * 6290 from convert_gas_units (p_bb/p_bbd/p_bmd) and
+*&           convert_mrec_gas_units to align with convert_gas_units2 which
+*&           was already corrected. The * 6290 BOE conversion overflowed
+*&           the DB field's precision for large gas quantities.
+*&           v1.8 - Route app_vl_qty * 1000000 through lv_qty packed
+*&           intermediate in 6 forms (sec2a3, sec2d, sec2f, sec3c, sec3f,
+*&           convert_mrec_gas_to_mmscm).
+*&           v1.7 - Fix COMPUTE_BCD_OVERFLOW dump in convert_gas_units
 *&           and similar forms. Replace lv_qty TYPE char50/char35 with
-*&           TYPE p LENGTH 16 DECIMALS 7 to support large gas quantities
-*&           multiplied by 6290 (BOE conversion). Affects 11 declarations.
+*&           TYPE p LENGTH 16 DECIMALS 7. Affects 11 declarations.
 *&           v1.6 - Sakhalin-1 historical oil PI fix (CS 'SK'/'SAKH').
 *&           Also: gas PI in dly_prd, CF lookup from zpra_t_tar_cf.
 *&---------------------------------------------------------------------*
@@ -3428,9 +3436,9 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_bbd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_tm.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3438,7 +3446,7 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
     WHEN p_mb.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
@@ -3545,9 +3553,9 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_bbd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 6290 .
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN p_tm.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3555,7 +3563,7 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
     WHEN p_mb.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
@@ -3578,9 +3586,9 @@ ENDFORM.
 FORM convert_mrec_gas_to_mmscm  CHANGING p_zpra_t_mrec_app TYPE ty_zpra_t_mrec_app.
   DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
-* Mutiplying by 1000 for decimal error precision, will divide later
-* lv_qty = p_zpra_t_mrec_app-app_vl_qty * 1000 .
-  p_zpra_t_mrec_app-app_vl_qty = 1000 * p_zpra_t_mrec_app-app_vl_qty * 1000 .
+* v1.8: Use lv_qty (packed p16) as intermediate to avoid BCD overflow on DB field type
+  lv_qty = p_zpra_t_mrec_app-app_vl_qty .
+  p_zpra_t_mrec_app-app_vl_qty = lv_qty * 1000000 .
 
 * Convert to BOE
 * p_zpra_t_mrec_app-app_vl_qty = lv_qty * 6290 .
@@ -3864,11 +3872,11 @@ FORM convert_rprd_units  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
     CASE abap_true.
       WHEN p_bb OR p_bbd.
         IF p_c_jv IS NOT INITIAL.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290  .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 .   "v1.9: was * 6290 - overflow on narrow DB field
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ELSE.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290  .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 .  "v1.9: was * 6290
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ENDIF.
       WHEN p_tm OR p_tmd.
         IF p_c_jv IS NOT INITIAL.
@@ -3888,11 +3896,11 @@ FORM convert_rprd_units  USING    p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
         ENDIF.
       WHEN p_bmd.
         IF p_c_jv IS NOT INITIAL.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 .   "v1.9: was * 6290 - overflow on narrow DB field
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ELSE.
-          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
-          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
+          p_zpra_t_dly_rprd-jv_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 .  "v1.9: was * 6290
+          p_zpra_t_dly_rprd-ovl_prd_vl_qty1 = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 . "v1.9: was * 6290
         ENDIF.
       WHEN OTHERS.
     ENDCASE.
@@ -5006,7 +5014,8 @@ FORM fill_dynamic_table_sec2a3 .
          lv_days          TYPE sy-tabix,
          lv_start_date    TYPE sy-datum,
          lv_product       TYPE char100,
-         lv_asset         TYPE char100.
+         lv_asset         TYPE char100,
+         lv_qty           TYPE p LENGTH 16 DECIMALS 7 . " v1.8: packed intermediate for BCD-safe multiplication
 
 *  lv_days = gv_month_back_end_datum - gv_month_back_begin_datum + 1 .
   lv_days = 1 .
@@ -5029,7 +5038,8 @@ FORM fill_dynamic_table_sec2a3 .
                                                                        asset   = gs_zpra_c_prd_prof-asset
                                                                        block   = gs_zpra_c_prd_prof-block BINARY SEARCH .
     IF sy-subrc IS INITIAL. "if found in MREC APP
-      gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty  * 1000000 .
+      lv_qty = gs_zpra_t_mrec_app-app_vl_qty .                        " v1.8: use packed intermediate to avoid BCD overflow
+      gs_zpra_t_mrec_app-app_vl_qty = lv_qty * 1000000 .
       IF gs_zpra_t_mrec_app-product = c_prod_gas.
         READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_mrec_app-asset BINARY SEARCH .
         IF  sy-subrc IS INITIAL.
@@ -6763,7 +6773,8 @@ FORM fill_dynamic_table_sec2d .
          lv_start_date    TYPE                   sy-datum,
          lv_mmscmd_mul    TYPE                   sy-tabix,
          lv_product       TYPE                   char100,
-         lv_asset         TYPE                   char100.
+         lv_asset         TYPE                   char100,
+         lv_qty           TYPE                   p LENGTH 16 DECIMALS 7 . " v1.8: BCD-safe intermediate
 
   gt_zpra_t_mrec_prd =  gt_zpra_t_mrec_prd_2d .
   lt_dly_prd_main = gt_zpra_t_dly_prd_2d .
@@ -6787,7 +6798,8 @@ FORM fill_dynamic_table_sec2d .
                                                                           asset   = gs_zpra_c_prd_prof-asset
                                                                           block   = gs_zpra_c_prd_prof-block BINARY SEARCH .
         IF sy-subrc IS INITIAL. "if found in MREC APP
-          gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty  * 1000000 .
+          lv_qty = gs_zpra_t_mrec_app-app_vl_qty .                    " v1.8: packed intermediate avoids BCD overflow
+          gs_zpra_t_mrec_app-app_vl_qty = lv_qty * 1000000 .
           IF gs_zpra_t_mrec_app-product = c_prod_gas.
             READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_mrec_app-asset BINARY SEARCH .
             IF  sy-subrc IS INITIAL.
@@ -7100,7 +7112,8 @@ FORM fill_dynamic_table_sec2f .
          lv_start_date    TYPE                   sy-datum,
          lv_mmscmd_mul    TYPE                   sy-tabix,
          lv_product       TYPE                   char100,
-         lv_asset         TYPE                   char100.
+         lv_asset         TYPE                   char100,
+         lv_qty           TYPE                   p LENGTH 16 DECIMALS 7 . " v1.8: BCD-safe intermediate
 
   gt_zpra_t_mrec_prd =  gt_zpra_t_mrec_prd_2f .
   lt_dly_prd_main = gt_zpra_t_dly_prd .
@@ -7126,7 +7139,8 @@ FORM fill_dynamic_table_sec2f .
                                                                         asset   = gs_zpra_c_prd_prof-asset
                                                                         block   = gs_zpra_c_prd_prof-block BINARY SEARCH .
       IF sy-subrc IS INITIAL. "if found in MREC APP
-        gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * 1000000 .
+        lv_qty = gs_zpra_t_mrec_app-app_vl_qty .                      " v1.8: packed intermediate avoids BCD overflow
+        gs_zpra_t_mrec_app-app_vl_qty = lv_qty * 1000000 .
         IF gs_zpra_t_mrec_app-product = c_prod_gas.
           READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_mrec_app-asset BINARY SEARCH .
           IF  sy-subrc IS INITIAL.
@@ -7482,7 +7496,8 @@ FORM fill_dynamic_table_sec3c .
          lv_index         TYPE                   sy-tabix,
          lv_rprd_index    TYPE                   sy-tabix,
          lv_col_name      TYPE                   lvc_fname,
-         lv_found         TYPE                   c.
+         lv_found         TYPE                   c,
+         lv_qty           TYPE                   p LENGTH 16 DECIMALS 7 . " v1.8: BCD-safe intermediate
   FIELD-SYMBOLS : <lfs_dyn_line> ,
                   <lfs_field>    .
 * If directly working with MMT, then due to rounding off, value mismatches..
@@ -7503,10 +7518,12 @@ FORM fill_dynamic_table_sec3c .
                                                                      asset   = gs_zpra_c_prd_prof-asset
                                                                      block   = gs_zpra_c_prd_prof-block BINARY SEARCH .
       IF sy-subrc IS INITIAL. "if found in MREC APP
-        gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * 1000000 .
+        lv_qty = gs_zpra_t_mrec_app-app_vl_qty .                      " v1.8: packed intermediate avoids BCD overflow
+        gs_zpra_t_mrec_app-app_vl_qty = lv_qty * 1000000 .
         IF gs_zpra_t_mrec_app-monat EQ gv_current_monat.
           PERFORM get_days_in_period USING gs_zpra_t_mrec_app-gjahr gs_zpra_t_mrec_app-monat CHANGING lv_days .
-          gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * ( p_date - gv_search_begin_datum + 1 ) / lv_days .
+          lv_qty = gs_zpra_t_mrec_app-app_vl_qty .
+          gs_zpra_t_mrec_app-app_vl_qty = lv_qty * ( p_date - gv_search_begin_datum + 1 ) / lv_days .
         ENDIF.
         IF gs_zpra_t_mrec_app-product = c_prod_gas.
           READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_mrec_app-asset BINARY SEARCH .
@@ -7731,7 +7748,8 @@ FORM fill_dynamic_table_sec3f .
          lv_index         TYPE                   sy-tabix,
          lv_rprd_index    TYPE                   sy-tabix,
          lv_col_name      TYPE                   lvc_fname,
-         lv_found         TYPE                   c.
+         lv_found         TYPE                   c,
+         lv_qty           TYPE                   p LENGTH 16 DECIMALS 7 . " v1.8: BCD-safe intermediate
   FIELD-SYMBOLS : <lfs_dyn_line> ,
                   <lfs_field>    .
 
@@ -7762,7 +7780,8 @@ FORM fill_dynamic_table_sec3f .
                                                                           block   = gs_zpra_c_prd_prof-block
                                                                           product = gs_zpra_c_prd_prof-product BINARY SEARCH .
         IF sy-subrc IS INITIAL. "if found in MREC APP
-          gs_zpra_t_mrec_app-app_vl_qty = gs_zpra_t_mrec_app-app_vl_qty * 1000000 .
+          lv_qty = gs_zpra_t_mrec_app-app_vl_qty .                    " v1.8: packed intermediate avoids BCD overflow
+          gs_zpra_t_mrec_app-app_vl_qty = lv_qty * 1000000 .
           IF gs_zpra_t_mrec_app-product = c_prod_gas.
             READ TABLE gt_zdpr_gas_combine INTO gs_zdpr_gas_combine WITH KEY asset = gs_zpra_t_mrec_app-asset BINARY SEARCH .
             IF  sy-subrc IS INITIAL.
@@ -9193,7 +9212,7 @@ FORM fill_dynamic_table_sec6a .
       lv_qty = lv_qty + <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-    SHIFT lv_qty LEFT DELETING LEADING space .
+*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
     ASSIGN COMPONENT 'OIL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
@@ -9211,7 +9230,7 @@ FORM fill_dynamic_table_sec6a .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-    SHIFT lv_qty LEFT DELETING LEADING space .
+*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
     ASSIGN COMPONENT 'GAS_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
@@ -9229,7 +9248,7 @@ FORM fill_dynamic_table_sec6a .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-    SHIFT lv_qty LEFT DELETING LEADING space .
+*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
     ASSIGN COMPONENT 'TOTAL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
@@ -10060,9 +10079,10 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
   ENDLOOP.
 ENDFORM.
 FORM convert_gas_rprd_to_boe  CHANGING p_zpra_t_dly_rprd TYPE zpra_t_dly_rprd.
-
-  p_zpra_t_dly_rprd-jv_rcn_vl_qty3   = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
-  p_zpra_t_dly_rprd-ovl_rcn_vl_qty3  = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
+* v1.9: removed * 6290 to prevent BCD overflow on narrow DB field. Form is
+*       only called from commented-out PERFORM (line ~8112), so currently dead code.
+*  p_zpra_t_dly_rprd-jv_rcn_vl_qty3   = p_zpra_t_dly_rprd-jv_rcn_vl_qty3 * 6290 .
+*  p_zpra_t_dly_rprd-ovl_rcn_vl_qty3  = p_zpra_t_dly_rprd-ovl_rcn_vl_qty3 * 6290 .
 
 ENDFORM.
 FORM get_cf_from_date  USING    p_rec_date

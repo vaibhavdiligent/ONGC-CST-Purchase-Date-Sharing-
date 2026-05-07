@@ -62,21 +62,62 @@ annotate view ZPRA_Q_DPR_TARGET_QUERY with
   }]
   AchievementPct;
 
-  /* ── Chart ───────────────────────────────────────────────────────────── */
-  @UI.chart: [{
-    title:     'Actual vs Target by Product',
-    chartType: #BAR,
-    dimensions: ['ProductDescription'],
-    measures:   ['ActualQty', 'TargetQty'],
-    measureAttributes: [
-      { measure: 'ActualQty',  role: #AXIS_1 },
-      { measure: 'TargetQty',  role: #AXIS_1 }
-    ],
-    dimensionAttributes: [
-      { dimension: 'ProductDescription', role: #CATEGORY }
-    ]
-  }]
+  /* ── Charts (multiple — switchable in ALP toolbar) ───────────────── */
+  @UI.chart: [
+    {
+      qualifier:  'ActualVsTarget',
+      title:      'Actual vs Target by Product',
+      chartType:  #BAR,
+      dimensions: ['ProductDescription'],
+      measures:   ['ActualQty', 'TargetQty'],
+      measureAttributes: [
+        { measure: 'ActualQty', role: #AXIS_1 },
+        { measure: 'TargetQty', role: #AXIS_1 }
+      ],
+      dimensionAttributes: [
+        { dimension: 'ProductDescription', role: #CATEGORY }
+      ]
+    },
+    {
+      qualifier:  'AchievementByAsset',
+      title:      'Achievement % by Asset',
+      chartType:  #COLUMN,
+      dimensions: ['AssetDescription'],
+      measures:   ['AchievementPct'],
+      measureAttributes: [
+        { measure: 'AchievementPct', role: #AXIS_1, asDataPoint: true }
+      ],
+      dimensionAttributes: [
+        { dimension: 'AssetDescription', role: #CATEGORY }
+      ]
+    },
+    {
+      qualifier:  'VarianceByPeriod',
+      title:      'Variance by Period',
+      chartType:  #COLUMN,
+      dimensions: ['FiscalPeriod', 'ProductDescription'],
+      measures:   ['VarianceQty'],
+      measureAttributes: [
+        { measure: 'VarianceQty', role: #AXIS_1, asDataPoint: true }
+      ],
+      dimensionAttributes: [
+        { dimension: 'FiscalPeriod',       role: #CATEGORY },
+        { dimension: 'ProductDescription', role: #SERIES   }
+      ]
+    }
+  ]
   ActualQty;
+
+  /* ── Presentation variant: chart-on-top + table-below ─────────────── */
+  @UI.presentationVariant: [{
+    qualifier:      'Default',
+    visualizations: [
+      { type: #AS_CHART,    qualifier: 'ActualVsTarget' },
+      { type: #AS_LINEITEM }
+    ],
+    sortOrder:      [{ by: 'FiscalPeriod', direction: #ASC }]
+  }]
+  FiscalPeriod;
 
   /* ── KPI data points ─────────────────────────────────────────────────── */
   @UI.dataPoint: {

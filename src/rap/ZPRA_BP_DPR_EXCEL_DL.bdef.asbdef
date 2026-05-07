@@ -2,15 +2,23 @@ managed implementation in class zbp_zpra_dpr_excel_dl unique;
 strict ( 2 );
 
 /*
- * Behavior Definition for DPR Excel Download Actions.
+ * Behavior Definition for DPR Download Actions (Excel + PDF).
  *
- * Two static actions are exposed:
- *   downloadProduction  – exports daily production data to Excel
- *   downloadTargets     – exports target vs actual data to Excel
+ * Four static (unbound) actions are exposed:
+ *   downloadProduction      – exports daily production data to Excel
+ *   downloadTargets         – exports target vs actual data to Excel
+ *   downloadPdfProduction   – exports daily production data to PDF
+ *   downloadPdfTargets      – exports target vs actual data to PDF
  *
- * Both are unbound (static) actions callable via OData V4:
- *   POST /DPRExcelDownload/downloadProduction
- *   POST /DPRExcelDownload/downloadTargets
+ * Each action is callable independently via OData V4:
+ *   POST /DPRExcelDownload/com.sap.gateway.srvd.zpra_sd_dpr_analytics.v0001.downloadProduction
+ *   POST /DPRExcelDownload/com.sap.gateway.srvd.zpra_sd_dpr_analytics.v0001.downloadTargets
+ *   POST /DPRExcelDownload/com.sap.gateway.srvd.zpra_sd_dpr_analytics.v0001.downloadPdfProduction
+ *   POST /DPRExcelDownload/com.sap.gateway.srvd.zpra_sd_dpr_analytics.v0001.downloadPdfTargets
+ *
+ * The Fiori Elements UI renders these as separate toolbar buttons:
+ *   - "Export to Excel"  → downloadProduction / downloadTargets
+ *   - "Export to PDF"    → downloadPdfProduction / downloadPdfTargets
  */
 
 define behavior for ZPRA_I_DPR_EXCEL_DL alias DPRExcelDownload
@@ -18,10 +26,10 @@ define behavior for ZPRA_I_DPR_EXCEL_DL alias DPRExcelDownload
   authorization master ( instance )
   etag none
 {
-  /* Read-only: no CUD operations */
+  /* Read-only entity: CUD only declared so RAP framework is satisfied */
   create; delete; update;
 
-  /* ── Static (unbound) actions ──────────────────────────────────────── */
+  /* ── Excel actions ─────────────────────────────────────────────────── */
 
   static action downloadProduction
     parameter ZPRA_A_DPR_PROD_PARAM
@@ -30,4 +38,14 @@ define behavior for ZPRA_I_DPR_EXCEL_DL alias DPRExcelDownload
   static action downloadTargets
     parameter ZPRA_A_DPR_TAR_PARAM
     result   [1] ZPRA_A_DPR_EXCEL_RESULT;
+
+  /* ── PDF actions  ──────────────────────────────────────────────────── */
+
+  static action downloadPdfProduction
+    parameter ZPRA_A_DPR_PROD_PARAM
+    result   [1] ZPRA_A_DPR_PDF_RESULT;
+
+  static action downloadPdfTargets
+    parameter ZPRA_A_DPR_TAR_PARAM
+    result   [1] ZPRA_A_DPR_PDF_RESULT;
 }
