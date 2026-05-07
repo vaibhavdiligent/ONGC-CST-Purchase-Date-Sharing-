@@ -352,8 +352,6 @@ FORM send_email_posted.
     " Send as HTML via SAP Business Workplace
     ls_doc_data-obj_descr = lv_subject.
     ls_doc_data-obj_name  = 'HTM'.    " HTML format
-    " Sender: GAIL PARTNER CARE GMS (same as YRGI001)
-    ls_doc_data-from_name = 'GAIL PARTNER CARE GMS'.
 
     LOOP AT lt_to_email INTO lv_ep_email.
       CLEAR ls_receiver. ls_receiver-receiver = lv_ep_email.
@@ -650,7 +648,6 @@ FORM send_email_not_posted.
     " Send as HTML; sender display name = GAIL PARTNER CARE GMS (ref YRGI001)
     ls_doc_data-obj_descr = lv_subject.
     ls_doc_data-obj_name  = 'HTM'.
-    ls_doc_data-from_name = 'GAIL PARTNER CARE GMS'.
 
     LOOP AT lt_to_email INTO lv_np_email.
       CLEAR ls_receiver. ls_receiver-receiver = lv_np_email.
