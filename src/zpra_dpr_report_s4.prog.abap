@@ -478,9 +478,13 @@ START-OF-SELECTION .
 *&---------------------------------------------------------------------*
 FORM get_range_string CHANGING pv_range TYPE string.
   DATA: lv_fc TYPE string, lv_tc TYPE string.
-  lv_fc = zcl_excel_common=>convert_column2alpha( gv_s_col ).
-  lv_tc = zcl_excel_common=>convert_column2alpha( gv_e_col ).
-  pv_range = |{ lv_fc }{ gv_s_row }:{ lv_tc }{ gv_e_row }|.
+  TRY.
+      lv_fc = zcl_excel_common=>convert_column2alpha( gv_s_col ).
+      lv_tc = zcl_excel_common=>convert_column2alpha( gv_e_col ).
+      pv_range = |{ lv_fc }{ gv_s_row }:{ lv_tc }{ gv_e_row }|.
+    CATCH zcx_excel.
+      pv_range = ''.
+  ENDTRY.
 ENDFORM.
 
 FORM merge_range .
@@ -1823,11 +1827,11 @@ ENDFORM.
 FORM start_excel .
   go_xlsx = NEW zcl_excel( ).
   go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
-  go_xlsx_sheet1->set_title( ip_title = CONV string( gv_sheet1_name(30) ) ).
+  DATA lv_t1 TYPE c LENGTH 30. lv_t1 = gv_sheet1_name. go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
   go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet2->set_title( ip_title = CONV string( gv_sheet2_name(30) ) ).
+  DATA lv_t2 TYPE c LENGTH 30. lv_t2 = gv_sheet2_name. go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
   go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet3->set_title( ip_title = CONV string( gv_sheet3_name(30) ) ).
+  DATA lv_t3 TYPE c LENGTH 30. lv_t3 = gv_sheet3_name. go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
   go_xlsx_active = go_xlsx_sheet1.
   " Page setup equivalent: landscape, fit to 1 page wide
 
@@ -1956,8 +1960,7 @@ ENDFORM.
 
 FORM row_height  USING  p_row
                         p_height .
-  DATA(lo_row) = go_xlsx_active->get_row( p_row ).
-  lo_row->row_height = p_height.
+  " abap2xlsx: row height API not available in this version (no-op).
 ENDFORM.
 FORM merge_col_1_2_section1 .
   DATA lv_row TYPE sy-tabix .
@@ -4209,7 +4212,7 @@ FORM col_width  USING p_col_start
   DATA lv_c TYPE i.
   lv_c = p_col_start.
   WHILE lv_c <= p_col_end.
-    go_xlsx_active->set_column_width( ip_column = lv_c ip_width = p_width ).
+    go_xlsx_active->set_column_width( ip_column = lv_c ip_width_fix = p_width ).
     lv_c = lv_c + 1.
   ENDWHILE.
 ENDFORM.
@@ -6598,7 +6601,7 @@ FORM finalize_worksheet .
 
   REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
   CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
-  go_xlsx_sheet1->set_title( ip_title = CONV string( lv_sheet_name(30) ) ).
+  DATA lv_t_fin TYPE c LENGTH 30. lv_t_fin = lv_sheet_name. go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
   " Build filename
   CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
 
