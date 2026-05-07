@@ -1,9 +1,12 @@
 *&---------------------------------------------------------------------*
-*& Report  ZPRA_DPR_REPORT
+*& Report  ZPRA_DPR_REPORT_S4 (S/4HANA edition)
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.9  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
+*& VERSION : 3.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 07-MAY-2026
+*& v3.1 - Modern ABAP: REFRESH->CLEAR, OCCURS removed, @ host vars in SELECT.
+*&        OLE2 path retained for full Excel formatting + PDF export.
+*& v1.9 (parent) - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
 *& Changes : v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
 *&           line 3444 (lv_qty * 6290 assignment to prod_vl_qty1).
 *&           Removed * 6290 from convert_gas_units (p_bb/p_bbd/p_bmd) and
@@ -526,8 +529,8 @@ FORM fetch_data .
 * Select those assets which are configured for DPR Report .
   SELECT *
     FROM zpra_c_dpr_prof
-    INTO TABLE gt_zpra_c_dpr_prof
-   WHERE product IN r_product[]
+    INTO TABLE @gt_zpra_c_dpr_prof
+   WHERE product IN @r_product[]
      AND display_opt NE ' ' .
   IF sy-subrc IS NOT INITIAL .
     MESSAGE 'No assets configured for DPR Report' TYPE 'E' .
@@ -536,10 +539,10 @@ FORM fetch_data .
          asset
          block
     FROM zpra_c_prd_prof
-    INTO TABLE          gt_zpra_c_prd_prof
-     FOR ALL ENTRIES IN gt_zpra_c_dpr_prof
-   WHERE product     EQ gt_zpra_c_dpr_prof-product
-     AND asset       EQ gt_zpra_c_dpr_prof-asset .
+    INTO TABLE          @gt_zpra_c_prd_prof
+     FOR ALL ENTRIES IN @gt_zpra_c_dpr_prof
+   WHERE product     EQ @gt_zpra_c_dpr_prof-product
+     AND asset       EQ @gt_zpra_c_dpr_prof-asset .
   IF sy-subrc IS NOT INITIAL.
     MESSAGE 'No Assets found in product profile' TYPE 'E' .
   ENDIF.
@@ -552,7 +555,7 @@ FORM fetch_data .
 
   SELECT SINGLE periv
            FROM t001
-           INTO gv_periv
+           INTO @gv_periv
           WHERE bukrs EQ 'OVL' .
   IF sy-subrc IS NOT INITIAL.
     MESSAGE 'Company Code OVL does not exist' TYPE 'E' .
@@ -618,15 +621,15 @@ FORM fetch_data .
   gv_current_month_days = gv_month_end_datum - gv_month_begin_datum + 1.
   SELECT SINGLE ltx
            FROM t247
-           INTO gv_month_name
+           INTO @gv_month_name
           WHERE spras = sy-langu
-            AND mnr EQ p_date+4(2).
+            AND mnr EQ @p_date+4(2).
 
   SELECT SINGLE ltx
            FROM t247
-           INTO gv_last_month_name
+           INTO @gv_last_month_name
           WHERE spras = sy-langu
-            AND mnr EQ gv_month_back_begin_datum+4(2).
+            AND mnr EQ @gv_month_back_begin_datum+4(2).
 
 * SELECT *
 *   FROM zdpr_gas_combine
@@ -639,7 +642,7 @@ FORM fetch_data .
   ENDLOOP.
   SORT gt_zdpr_gas_combine BY asset .
 
-  REFRESH r_combine_asset[] .
+  CLEAR r_combine_asset[].
   LOOP AT gt_zdpr_gas_combine INTO gs_zdpr_gas_combine.
     r_combine_asset-sign   = 'I' .
     r_combine_asset-option = 'EQ' .
@@ -649,14 +652,14 @@ FORM fetch_data .
 
   SELECT *
     FROM zpra_t_dly_prd
-    INTO TABLE gt_zpra_t_dly_prd
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE production_date LE p_date
-     AND production_date GE gv_month_back_datum
-     AND product     EQ gt_zpra_c_prd_prof-product
-     AND asset       EQ gt_zpra_c_prd_prof-asset
-     AND block       EQ gt_zpra_c_prd_prof-block
-     AND prd_vl_type IN r_prd_vl_type[] .
+    INTO TABLE @gt_zpra_t_dly_prd
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE production_date LE @p_date
+     AND production_date GE @gv_month_back_datum
+     AND product     EQ @gt_zpra_c_prd_prof-product
+     AND asset       EQ @gt_zpra_c_prd_prof-asset
+     AND block       EQ @gt_zpra_c_prd_prof-block
+     AND prd_vl_type IN @r_prd_vl_type[] .
 
   IF sy-subrc IS NOT INITIAL.
     MESSAGE 'No data found for the selection' TYPE 'E' .
@@ -676,12 +679,12 @@ FORM fetch_data .
         pi
         prod_start_date
    FROM zpra_t_prd_pi
-   INTO TABLE gt_zpra_t_prd_pi
-    FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-  WHERE asset EQ gt_zpra_c_prd_prof-asset
-    AND block EQ gt_zpra_c_prd_prof-block
-    AND vld_frm LE p_date
-    AND vld_to  GE gv_month_back_datum .
+   INTO TABLE @gt_zpra_t_prd_pi
+    FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+  WHERE asset EQ @gt_zpra_c_prd_prof-asset
+    AND block EQ @gt_zpra_c_prd_prof-block
+    AND vld_frm LE @p_date
+    AND vld_to  GE @gv_month_back_datum .
 
   SORT gt_zpra_t_prd_pi BY asset block vld_frm vld_to .
 
@@ -694,7 +697,7 @@ FORM fetch_data .
 
   SELECT SINGLE periv
            FROM t001
-           INTO gv_periv
+           INTO @gv_periv
           WHERE bukrs EQ 'OVL' .
   IF sy-subrc IS NOT INITIAL.
     MESSAGE 'Company Code OVL does not exist' TYPE 'E' .
@@ -817,15 +820,15 @@ FORM fetch_data .
            prod_vl_qty2
            prod_vl_uom2
       FROM zpra_t_mrec_prd
-      INTO TABLE gt_zpra_t_mrec_prd
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset        EQ gt_zpra_c_prd_prof-asset
-       AND block        EQ gt_zpra_c_prd_prof-block
-       AND product      EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type  IN r_prd_vl_type[]
-       AND gjahr EQ gv_mrec_gjahr_start
-       AND monat GE gv_mrec_monat_start
-       AND monat LE gv_mrec_monat_end .
+      INTO TABLE @gt_zpra_t_mrec_prd
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+       AND block        EQ @gt_zpra_c_prd_prof-block
+       AND product      EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type  IN @r_prd_vl_type[]
+       AND gjahr EQ @gv_mrec_gjahr_start
+       AND monat GE @gv_mrec_monat_start
+       AND monat LE @gv_mrec_monat_end .
   ELSE.
     SELECT gjahr
            monat
@@ -838,16 +841,16 @@ FORM fetch_data .
            prod_vl_qty2
            prod_vl_uom2
       FROM zpra_t_mrec_prd
-      INTO TABLE gt_zpra_t_mrec_prd
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset        EQ gt_zpra_c_prd_prof-asset
-       AND block        EQ gt_zpra_c_prd_prof-block
-       AND product      EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type  IN r_prd_vl_type[]
-*     AND ( ( gjahr EQ gv_mrec_gjahr_start AND
-*           monat GE gv_mrec_monat_start ) OR
-*           ( gjahr EQ gv_mrec_gjahr_end AND
-*           monat LE gv_mrec_monat_end ) ) .
+      INTO TABLE @gt_zpra_t_mrec_prd
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+       AND block        EQ @gt_zpra_c_prd_prof-block
+       AND product      EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type  IN @r_prd_vl_type[]
+*     AND ( ( gjahr EQ @gv_mrec_gjahr_start AND
+*           monat GE @gv_mrec_monat_start ) OR
+*           ( gjahr EQ @gv_mrec_gjahr_end AND
+*           monat LE @gv_mrec_monat_end ) ) .
        AND ( gjahr GE gv_mrec_gjahr_start AND
              gjahr LE gv_mrec_gjahr_end ) .
     DELETE gt_zpra_t_mrec_prd WHERE gjahr EQ gv_mrec_gjahr_end   AND monat GT gv_mrec_monat_end   .
@@ -857,9 +860,9 @@ FORM fetch_data .
   SELECT dn_no
          dn_de
     FROM zoiu_pr_dn
-    INTO TABLE gt_asset_desc
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE dn_no EQ gt_zpra_c_prd_prof-asset .
+    INTO TABLE @gt_asset_desc
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE dn_no EQ @gt_zpra_c_prd_prof-asset .
 
   SORT gt_asset_desc BY asset .
 
@@ -873,12 +876,12 @@ FORM fetch_data .
            vld_to
            pi
       FROM zpra_t_tar_pi
-      INTO TABLE gt_zpra_t_tar_pi
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND vld_frm LE gv_month_end_datum
-       AND vld_to  GE gv_month_begin_datum .
+      INTO TABLE @gt_zpra_t_tar_pi
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND vld_frm LE @gv_month_end_datum
+       AND vld_to  GE @gv_month_begin_datum .
     SORT gt_zpra_t_tar_pi BY asset block tar_code vld_frm .
 
     SELECT tar_code
@@ -891,36 +894,36 @@ FORM fetch_data .
            tar_qty
            uom
       FROM zpra_t_prd_tar
-      INTO TABLE gt_zpra_t_prd_tar
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE gjahr EQ gv_current_gjahr
-       AND monat EQ gv_current_monat
-       AND asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prod_vl_type_cd IN r_prd_vl_type[]
-       AND tar_code IN r_tar_code[] .
+      INTO TABLE @gt_zpra_t_prd_tar
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE gjahr EQ @gv_current_gjahr
+       AND monat EQ @gv_current_monat
+       AND asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prod_vl_type_cd IN @r_prd_vl_type[]
+       AND tar_code IN @r_tar_code[] .
     SORT gt_zpra_t_prd_tar BY gjahr monat asset block product prod_vl_type_cd tar_code .
 
     SELECT *
       FROM zpra_t_tar_cf
-      INTO TABLE gt_zpra_t_tar_cf
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE gjahr EQ gv_current_gjahr
-       AND asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product .
+      INTO TABLE @gt_zpra_t_tar_cf
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE gjahr EQ @gv_current_gjahr
+       AND asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product .
 
     SORT gt_zpra_t_tar_cf BY gjahr asset block product .
   ENDIF.
 
   SELECT *
     FROM zpra_t_tar_cf
-    INTO TABLE gt_cf
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE   asset EQ gt_zpra_c_prd_prof-asset
-     AND   block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product .
+    INTO TABLE @gt_cf
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE   asset EQ @gt_zpra_c_prd_prof-asset
+     AND   block EQ @gt_zpra_c_prd_prof-block
+     AND product EQ @gt_zpra_c_prd_prof-product .
 
   SORT gt_cf BY gjahr product asset block  .
 
@@ -930,8 +933,8 @@ FORM fetch_data .
          tar_code
          MIN( vld_frm )
     FROM zpra_t_tar_pi
-    INTO TABLE gt_tar_start_dates
-   WHERE tar_code IN r_tar_code[]
+    INTO TABLE @gt_tar_start_dates
+   WHERE tar_code IN @r_tar_code[]
    GROUP BY asset tar_code .
   SORT gt_tar_start_dates BY asset tar_code .
 
@@ -1100,7 +1103,7 @@ FORM prepare_dynamic_table_sec1 .
   DATA : lt_zpra_c_prd_prof  TYPE STANDARD TABLE OF ty_zpra_c_prd_prof,
          lt_zpra_c_prd_prof2 TYPE STANDARD TABLE OF ty_zpra_c_prd_prof.
   CLEAR gv_pos .
-  REFRESH gt_dyn_fcat .
+  CLEAR gt_dyn_fcat[].
   PERFORM add_dyn_field USING 'COL01' 'Column1' 30 .
   PERFORM add_dyn_field USING 'COL02' 'Column1' 30 .
 
@@ -2109,7 +2112,7 @@ FORM add_vl_type_range  USING  p_vl_type .
   APPEND r_prd_vl_type TO r_prd_vl_type[] .
 ENDFORM.
 FORM buiild_tar_code_range .
-  REFRESH r_tar_code[] .
+  CLEAR r_tar_code[].
   IF p_t_be IS NOT INITIAL.
     PERFORM add_tar_code_range USING 'TAR_BE' .
   ENDIF.
@@ -2162,7 +2165,7 @@ FORM calculated_wtd_pi .
   FIELD-SYMBOLS : <fs_wtd_pi> TYPE ty_wtd_pi .
 * Here we are calculating weighted PI for each asset for each day. This will be used to convert quantities to OVL level
 * Formula used is wtd pi = sum of all block of assets' pi * quantity  divided by sum of all blocks quantity
-  REFRESH gt_wtd_pi .
+  CLEAR gt_wtd_pi[].
   lt_dly_prd = gt_zpra_t_dly_prd .
 
   PERFORM populate_no_data_entries TABLES lt_dly_prd USING gv_month_back_datum p_date .
@@ -2280,9 +2283,9 @@ FORM calculated_wtd_pi .
   IF gt_zpra_c_prd_prof IS NOT INITIAL.
     SELECT *
       FROM zpra_t_ast_pi
-      INTO TABLE lt_zpra_t_ast_pi
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset.
+      INTO TABLE @lt_zpra_t_ast_pi
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset.
     SORT lt_zpra_t_ast_pi BY asset vld_frm vld_to.
   ENDIF.
 * If on last date no data of any block of asset is maintained, PI at top will not be shown. Calcuating that
@@ -2749,9 +2752,10 @@ FORM download_image .
 
   DATA: graphic_size TYPE i.
 
-  DATA: BEGIN OF graphic_table OCCURS 0,
-          line(255) TYPE x,
-        END OF graphic_table.
+  TYPES: BEGIN OF ty_graphic_line,
+           line(255) TYPE x,
+         END OF ty_graphic_line.
+  DATA graphic_table TYPE STANDARD TABLE OF ty_graphic_line WITH EMPTY KEY.
 
   CONCATENATE p_fname '\' sy-datum sy-uzeit '.bmp' INTO gv_image_name .
   CALL FUNCTION 'SAPSCRIPT_GET_GRAPHIC_BDS'
@@ -2929,15 +2933,15 @@ FORM display_asset_names .
          ls_expdt     TYPE zpra_t_prd_pi,
          lt_all_prd_pi TYPE STANDARD TABLE OF zpra_t_prd_pi.
   CLEAR   gs_paste .
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
 
 * Pre-fetch zpra_t_prd_pi for all assets to avoid SELECT inside loop
   IF gt_zpra_c_prd_prof IS NOT INITIAL.
     SELECT *
       FROM zpra_t_prd_pi
-      INTO TABLE lt_all_prd_pi
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset.
+      INTO TABLE @lt_all_prd_pi
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset.
     SORT lt_all_prd_pi BY asset liscense_exp_dt.
   ENDIF.
 
@@ -2973,7 +2977,7 @@ FORM display_asset_names .
 *            CONCATENATE lv_asset_desc '*' INTO lv_asset_desc.
 *            ENDIF
 ************************************Changes by hrishikesh nikam on 31.03.2022*************************************
-          REFRESH lt_expdt.
+          CLEAR lt_expdt[].
           lt_expdt = lt_all_prd_pi.
           DELETE lt_expdt WHERE asset NE lv_asset.
           IF lt_expdt IS NOT INITIAL.
@@ -3035,7 +3039,7 @@ FORM display_pi .
          lv_pi      TYPE char50,
          lv_col     TYPE sy-tabix.
   CLEAR   gs_paste .
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
   SORT gt_wtd_pi BY product ASCENDING asset ASCENDING production_date DESCENDING .
   LOOP AT gt_dyn_fcat INTO gs_dyn_fcat .
     IF gs_dyn_fcat-fieldname EQ 'COL01'.
@@ -3091,7 +3095,7 @@ FORM display_cf .
          lv_cf      TYPE char50,
          lv_col     TYPE sy-tabix.
   CLEAR   gs_paste .
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
 
   LOOP AT gt_dyn_fcat INTO gs_dyn_fcat .
     IF gs_dyn_fcat-fieldname EQ 'COL01'.
@@ -4845,7 +4849,7 @@ FORM fill_dynamic_table_sec2a2 .
   lv_days  = 1 .
   lv_days2 =  p_date - gv_month_begin_datum + 1 .
 
-  REFRESH <gfs_sec2a2_table> .
+  CLEAR <gfs_sec2a2_table>[].
   APPEND INITIAL LINE TO <gfs_sec2a2_table> ASSIGNING <gfs_dyn_line> .
   ASSIGN COMPONENT 'COL02' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
   CONCATENATE gv_month_name  gv_current_calendar_gjahr INTO <gfs_field> SEPARATED BY space .
@@ -5303,7 +5307,7 @@ ENDFORM.
 FORM prepare_section4a_paste_data .
   DATA lv_index TYPE sy-tabix .
   CLEAR gs_paste.
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
   LOOP AT <gfs_sec4a_table> ASSIGNING <gfs_dyn_line>.
     CLEAR gs_paste .
     DO 2 TIMES.
@@ -5332,7 +5336,7 @@ FORM prepare_section4b_paste_data .
          ls_exp_asset1  TYPE zpra_t_prd_pi.
 
   CLEAR gs_paste.
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
   LOOP AT gt_zpra_t_dly_prd INTO gs_zpra_t_dly_prd WHERE production_date EQ p_date AND comments IS NOT INITIAL.
     CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
       EXPORTING
@@ -5357,13 +5361,13 @@ FORM prepare_section4b_paste_data .
 ***********************************Changes by hrishikesh nikam on 23.05.22**********
   SELECT *
     FROM zpra_t_prd_pi
-    INTO TABLE lt_exp_asset
+    INTO TABLE @lt_exp_asset
    WHERE liscense_exp_dt LT sy-datum.
 
   SELECT asset
     FROM zpra_t_prd_pi
-    INTO TABLE lt_exp_asset1
-     FOR ALL ENTRIES IN lt_exp_asset
+    INTO TABLE @lt_exp_asset1
+     FOR ALL ENTRIES IN @lt_exp_asset
    WHERE asset          = lt_exp_asset-asset
      AND liscense_exp_dt GT sy-datum.
 
@@ -5424,7 +5428,7 @@ FORM prepare_section5a_paste_data .
   DATA : lv_index  TYPE sy-tabix,
          lv_col_no TYPE sy-tabix.
   CLEAR gs_paste.
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
   DO gv_5a_cols TIMES .
     lv_col_no = sy-index .
     READ TABLE gt_dyn_fcat INTO gs_dyn_fcat INDEX lv_col_no .
@@ -5461,14 +5465,14 @@ FORM fetch_section2a2_data .
 
   SELECT *
    FROM zpra_t_dly_prd
-   INTO TABLE gt_zpra_t_dly_prd_mb
-    FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-  WHERE product EQ gt_zpra_c_prd_prof-product
-    AND asset   EQ gt_zpra_c_prd_prof-asset
-    AND block   EQ gt_zpra_c_prd_prof-block
-    AND production_date LE lv_last_year_date
-    AND production_date GE gv_year_back_begin_datum
-    AND prd_vl_type IN r_prd_vl_type[] .
+   INTO TABLE @gt_zpra_t_dly_prd_mb
+    FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+  WHERE product EQ @gt_zpra_c_prd_prof-product
+    AND asset   EQ @gt_zpra_c_prd_prof-asset
+    AND block   EQ @gt_zpra_c_prd_prof-block
+    AND production_date LE @lv_last_year_date
+    AND production_date GE @gv_year_back_begin_datum
+    AND prd_vl_type IN @r_prd_vl_type[] .
 
   PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd_mb USING gv_year_back_begin_datum lv_last_year_date .
 
@@ -5487,12 +5491,12 @@ FORM fetch_section2a2_data .
         pi
         prod_start_date
    FROM zpra_t_prd_pi
-   INTO TABLE gt_zpra_t_prd_pi_mb
-    FOR ALL ENTRIES IN gt_zpra_t_dly_prd_mb
-  WHERE asset EQ gt_zpra_t_dly_prd_mb-asset
-    AND block EQ gt_zpra_t_dly_prd_mb-block
-    AND vld_frm LE gt_zpra_t_dly_prd_mb-production_date
-    AND vld_to  GE gt_zpra_t_dly_prd_mb-production_date .
+   INTO TABLE @gt_zpra_t_prd_pi_mb
+    FOR ALL ENTRIES IN @gt_zpra_t_dly_prd_mb
+  WHERE asset EQ @gt_zpra_t_dly_prd_mb-asset
+    AND block EQ @gt_zpra_t_dly_prd_mb-block
+    AND vld_frm LE @gt_zpra_t_dly_prd_mb-production_date
+    AND vld_to  GE @gt_zpra_t_dly_prd_mb-production_date .
 
   SORT gt_zpra_t_prd_pi_mb BY asset block vld_frm vld_to .
 
@@ -5505,8 +5509,7 @@ FORM fetch_data_section2b .
 * SORT lt_zpra_t_dly_prd BY asset block product prd_vl_type.
 * DELETE ADJACENT DUPLICATES FROM lt_zpra_t_dly_prd COMPARING asset block product prd_vl_type .
 
-  REFRESH : gt_zpra_t_tar_pi ,
-            gt_zpra_t_prd_tar .
+  CLEAR : gt_zpra_t_tar_pi[], gt_zpra_t_prd_tar[].
   IF r_tar_code[] IS NOT INITIAL.
 
     SELECT asset
@@ -5516,13 +5519,13 @@ FORM fetch_data_section2b .
            vld_to
            pi
       FROM zpra_t_tar_pi
-      INTO TABLE gt_zpra_t_tar_pi
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND vld_frm LE gv_year_end_date
-       AND vld_to  GE gv_year_start_date
-       AND tar_code IN r_tar_code[] .
+      INTO TABLE @gt_zpra_t_tar_pi
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND vld_frm LE @gv_year_end_date
+       AND vld_to  GE @gv_year_start_date
+       AND tar_code IN @r_tar_code[] .
     SORT gt_zpra_t_tar_pi BY asset block tar_code vld_frm .
 
     SELECT tar_code
@@ -5535,14 +5538,14 @@ FORM fetch_data_section2b .
            tar_qty
            uom
       FROM zpra_t_prd_tar
-      INTO TABLE gt_zpra_t_prd_tar
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE gjahr EQ gv_current_gjahr
-       AND asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prod_vl_type_cd IN r_prd_vl_type[]
-       AND tar_code IN r_tar_code[] .
+      INTO TABLE @gt_zpra_t_prd_tar
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE gjahr EQ @gv_current_gjahr
+       AND asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prod_vl_type_cd IN @r_prd_vl_type[]
+       AND tar_code IN @r_tar_code[] .
     SORT gt_zpra_t_prd_tar BY gjahr monat asset block product prod_vl_type_cd tar_code .
 
     gt_zpra_t_prd_tar_2c = gt_zpra_t_prd_tar.
@@ -5553,7 +5556,7 @@ FORM fetch_data_section2b .
 
 ENDFORM.
 FORM process_sec2b_data .
-  REFRESH <gfs_sec2_table> .
+  CLEAR <gfs_sec2_table>[].
 
   PERFORM convert_sec2b_to_jvl.
   PERFORM fill_dynamic_table_sec2b    .
@@ -5565,7 +5568,7 @@ FORM process_sec2b_data .
 
 ENDFORM.
 FORM process_sec2c_data .
-  REFRESH <gfs_sec2_table> .
+  CLEAR <gfs_sec2_table>[].
   PERFORM convert_sec2c_to_jvl.
   PERFORM fill_dynamic_table_sec2c    .
   gv_colour = gv_sec2c_colour .
@@ -5623,14 +5626,14 @@ FORM fetch_data_section2a3 .
   DATA : lv_gjahr TYPE zpra_t_mrec_prd-gjahr .
   SELECT *
     FROM zpra_t_dly_prd
-    INTO TABLE gt_zpra_t_dly_prd_2a3
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset EQ gt_zpra_c_prd_prof-asset
-     AND block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type IN r_prd_vl_type[]
-     AND production_date GE gv_month_back_begin_datum
-     AND production_date LE gv_month_back_end_datum .
+    INTO TABLE @gt_zpra_t_dly_prd_2a3
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset EQ @gt_zpra_c_prd_prof-asset
+     AND block EQ @gt_zpra_c_prd_prof-block
+     AND product EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type IN @r_prd_vl_type[]
+     AND production_date GE @gv_month_back_begin_datum
+     AND production_date LE @gv_month_back_end_datum .
 
   PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd_2a3 USING gv_month_back_begin_datum gv_month_back_end_datum .
 
@@ -5646,14 +5649,14 @@ FORM fetch_data_section2a3 .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_2a3
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr GE lv_gjahr
-     AND gjahr LE gv_month_back_gjahr .
+    INTO TABLE @gt_zpra_t_mrec_prd_2a3
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr GE @lv_gjahr
+     AND gjahr LE @gv_month_back_gjahr .
 *     AND gjahr EQ gv_month_back_gjahr
 *     AND monat EQ gv_month_back_monat .
   DELETE gt_zpra_t_mrec_prd_2a3 WHERE gjahr EQ gv_month_back_gjahr AND monat GT gv_month_back_monat .
@@ -5668,14 +5671,14 @@ FORM fetch_data_section2a3 .
            app_vl_qty
            app_vl_uom
       FROM zpra_t_mrec_app
-      INTO TABLE gt_zpra_t_mrec_app_2a3
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr EQ gv_month_back_gjahr
-     AND monat EQ gv_month_back_monat .
+      INTO TABLE @gt_zpra_t_mrec_app_2a3
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr EQ @gv_month_back_gjahr
+     AND monat EQ @gv_month_back_monat .
 
     SORT gt_zpra_t_mrec_app_2a3 BY gjahr monat product asset block  prd_vl_type .
   ENDIF.
@@ -5686,12 +5689,12 @@ FORM fetch_data_section2a3 .
         pi
         prod_start_date
    FROM zpra_t_prd_pi
-   INTO TABLE gt_zpra_t_prd_pi_lm
-    FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-  WHERE asset EQ gt_zpra_c_prd_prof-asset
-    AND block EQ gt_zpra_c_prd_prof-block
-    AND vld_frm LE gv_month_back_end_datum
-    AND vld_to  GE gv_month_back_begin_datum .
+   INTO TABLE @gt_zpra_t_prd_pi_lm
+    FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+  WHERE asset EQ @gt_zpra_c_prd_prof-asset
+    AND block EQ @gt_zpra_c_prd_prof-block
+    AND vld_frm LE @gv_month_back_end_datum
+    AND vld_to  GE @gv_month_back_begin_datum .
 
   SORT gt_zpra_t_prd_pi_lm BY asset block vld_frm vld_to .
 
@@ -5721,15 +5724,15 @@ FORM fetch_data_section2d .
            app_vl_qty
            app_vl_uom
       FROM zpra_t_mrec_app
-      INTO TABLE gt_zpra_t_mrec_app_2d
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset        EQ gt_zpra_c_prd_prof-asset
-       AND block        EQ gt_zpra_c_prd_prof-block
-       AND product      EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type  IN r_prd_vl_type[]
-       AND ( gjahr EQ gv_last_gjahr
-        OR ( gjahr EQ gv_current_gjahr  AND
-             monat LE gv_current_monat ) ) .
+      INTO TABLE @gt_zpra_t_mrec_app_2d
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+       AND block        EQ @gt_zpra_c_prd_prof-block
+       AND product      EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type  IN @r_prd_vl_type[]
+       AND ( gjahr EQ @gv_last_gjahr
+        OR ( gjahr EQ @gv_current_gjahr  AND
+             monat LE @gv_current_monat ) ) .
 
     SORT gt_zpra_t_mrec_app_2d BY gjahr monat product asset block  prd_vl_type .
   ENDIF.
@@ -5746,14 +5749,14 @@ FORM fetch_data_section2d .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_2d
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr GE lv_gjahr
-     AND gjahr LE gv_current_gjahr  .
+    INTO TABLE @gt_zpra_t_mrec_prd_2d
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr GE @lv_gjahr
+     AND gjahr LE @gv_current_gjahr  .
   DELETE gt_zpra_t_mrec_prd_2d WHERE gjahr EQ gv_current_gjahr AND monat GT gv_current_monat .
 *     AND ( gjahr EQ gv_last_gjahr
 *      OR ( gjahr EQ gv_current_gjahr  AND
@@ -5762,7 +5765,7 @@ FORM fetch_data_section2d .
 *  SORT gt_zpra_t_mrec_prd_2d BY gjahr monat product asset block .
   SORT gt_zpra_t_mrec_prd_2d BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 
-  REFRESH r_production_date[] .
+  CLEAR r_production_date[].
 
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof .
     lv_monat = '00' .
@@ -5828,13 +5831,13 @@ FORM fetch_data_section2d .
   IF r_production_date[] IS NOT INITIAL .
     SELECT *
       FROM zpra_t_dly_prd
-      INTO TABLE gt_zpra_t_dly_prd_2d
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset            EQ gt_zpra_c_prd_prof-asset
-       AND block            EQ gt_zpra_c_prd_prof-block
-       AND product          EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type      IN r_prd_vl_type[]
-       AND production_date  IN r_production_date[] .
+      INTO TABLE @gt_zpra_t_dly_prd_2d
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset            EQ @gt_zpra_c_prd_prof-asset
+       AND block            EQ @gt_zpra_c_prd_prof-block
+       AND product          EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type      IN @r_prd_vl_type[]
+       AND production_date  IN @r_production_date[] .
     DESCRIBE TABLE r_production_date[] LINES lv_count .
     lv_count = lv_count / 2 .
     LOOP AT r_production_date.
@@ -5847,14 +5850,14 @@ FORM fetch_data_section2d .
 
     SELECT *
       FROM zpra_t_dly_rprd
-      INTO TABLE gt_zpra_t_dly_rprd_2d
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-*       AND prd_vl_type IN r_prd_vl_type[]
+      INTO TABLE @gt_zpra_t_dly_rprd_2d
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+*       AND prd_vl_type IN @r_prd_vl_type[]
        AND prd_vl_type EQ 'NET_PROD'
-       AND production_date IN r_production_date[] .
+       AND production_date IN @r_production_date[] .
 
     SORT gt_zpra_t_dly_rprd_2d BY product asset block production_date .
 
@@ -5867,12 +5870,12 @@ FORM fetch_data_section2d .
         pi
         prod_start_date
    FROM zpra_t_prd_pi
-   INTO TABLE gt_zpra_t_prd_pi_2d
-    FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-  WHERE asset EQ gt_zpra_c_prd_prof-asset
-    AND block EQ gt_zpra_c_prd_prof-block
-    AND vld_frm LE p_date
-    AND vld_to  GE lv_date .
+   INTO TABLE @gt_zpra_t_prd_pi_2d
+    FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+  WHERE asset EQ @gt_zpra_c_prd_prof-asset
+    AND block EQ @gt_zpra_c_prd_prof-block
+    AND vld_frm LE @p_date
+    AND vld_to  GE @lv_date .
 
   SORT gt_zpra_t_prd_pi_2d BY asset block vld_frm vld_to .
 
@@ -5903,14 +5906,14 @@ FORM fetch_data_section2f .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_2f
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr        LE gv_last_gjahr
-     AND gjahr        GE lv_gjahr .
+    INTO TABLE @gt_zpra_t_mrec_prd_2f
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr        LE @gv_last_gjahr
+     AND gjahr        GE @lv_gjahr .
 
 *  SORT gt_zpra_t_mrec_prd_2f BY gjahr monat product asset block .
   SORT gt_zpra_t_mrec_prd_2f  BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
@@ -5926,17 +5929,17 @@ FORM fetch_data_section2f .
            app_vl_qty
            app_vl_uom
       FROM zpra_t_mrec_app
-      INTO TABLE gt_zpra_t_mrec_app_2f
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE gjahr EQ gv_last_gjahr
-       AND asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type IN r_prd_vl_type[] .
+      INTO TABLE @gt_zpra_t_mrec_app_2f
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE gjahr EQ @gv_last_gjahr
+       AND asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type IN @r_prd_vl_type[] .
 
     SORT gt_zpra_t_mrec_app_2f BY gjahr monat product asset block  prd_vl_type .
   ENDIF.
-  REFRESH r_production_date[] .
+  CLEAR r_production_date[].
 
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof .
     lv_monat = '00' .
@@ -6003,13 +6006,13 @@ FORM fetch_data_section2f .
   IF r_production_date[] IS NOT INITIAL .
     SELECT *
       FROM zpra_t_dly_prd
-      INTO TABLE gt_zpra_t_dly_prd_2f
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type IN r_prd_vl_type[]
-       AND production_date IN r_production_date[] .
+      INTO TABLE @gt_zpra_t_dly_prd_2f
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type IN @r_prd_vl_type[]
+       AND production_date IN @r_production_date[] .
 
     LOOP AT r_production_date.
       PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd_2f USING r_production_date-low r_production_date-high .
@@ -6020,14 +6023,14 @@ FORM fetch_data_section2f .
 
     SELECT *
       FROM zpra_t_dly_rprd
-      INTO TABLE gt_zpra_t_dly_rprd_2f
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-*       AND prd_vl_type IN r_prd_vl_type[]
+      INTO TABLE @gt_zpra_t_dly_rprd_2f
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+*       AND prd_vl_type IN @r_prd_vl_type[]
        AND prd_vl_type EQ 'NET_PROD'
-       AND production_date IN r_production_date[] .
+       AND production_date IN @r_production_date[] .
 
     SORT gt_zpra_t_dly_rprd_2f BY product asset block production_date .
 
@@ -6044,12 +6047,12 @@ FORM fetch_data_section2f .
         pi
         prod_start_date
    FROM zpra_t_prd_pi
-   INTO TABLE gt_zpra_t_prd_pi_2f
-    FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-  WHERE asset EQ gt_zpra_c_prd_prof-asset
-    AND block EQ gt_zpra_c_prd_prof-block
-    AND vld_frm LE lv_date2
-    AND vld_to  GE lv_date .
+   INTO TABLE @gt_zpra_t_prd_pi_2f
+    FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+  WHERE asset EQ @gt_zpra_c_prd_prof-asset
+    AND block EQ @gt_zpra_c_prd_prof-block
+    AND vld_frm LE @lv_date2
+    AND vld_to  GE @lv_date .
 
   SORT gt_zpra_t_prd_pi_2f BY asset block vld_frm vld_to .
   PERFORM show_progress USING '30' .
@@ -7417,7 +7420,7 @@ FORM fill_dynamic_table_sec2e .
          lv_start_date  TYPE sy-tabix,
          lv_tar_code    TYPE zpra_t_prd_tar-tar_code.
 
-  REFRESH <gfs_sec2e_table> .
+  CLEAR <gfs_sec2e_table>[].
   READ TABLE <gfs_sec2d_table> ASSIGNING <gfs_dyn_line> INDEX 1 .
   IF  sy-subrc IS INITIAL .
     LOOP AT <gfs_sec2b_table> ASSIGNING <gfs_dyn_line2>.
@@ -8160,7 +8163,7 @@ ENDFORM.
 FORM fill_dynamic_table_sec3d .
   DATA lv_index TYPE sy-index .
   DATA lv_amt TYPE p LENGTH 12 DECIMALS 9 .
-  REFRESH <gfs_sec3d_table> .
+  CLEAR <gfs_sec3d_table>[].
   READ TABLE <gfs_sec3c_table> ASSIGNING <gfs_dyn_line> INDEX 1 .
   IF  sy-subrc IS INITIAL .
     LOOP AT <gfs_sec3b_table> ASSIGNING <gfs_dyn_line2>.
@@ -8202,7 +8205,7 @@ FORM fill_dynamic_table_sec3e .
   DATA lv_index TYPE sy-index .
   DATA lv_amt TYPE p LENGTH 12 DECIMALS 9 .
 
-  REFRESH <gfs_sec3e_table> .
+  CLEAR <gfs_sec3e_table>[].
   READ TABLE <gfs_sec3c_table> ASSIGNING <gfs_dyn_line> INDEX 1 .
   IF  sy-subrc IS INITIAL .
     LOOP AT <gfs_sec3a_table> ASSIGNING <gfs_dyn_line2>.
@@ -8487,13 +8490,13 @@ FORM fetch_data_section3c .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_3c
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-*     AND ( gjahr EQ gv_last_gjahr OR gjahr EQ gv_current_gjahr   ) .
+    INTO TABLE @gt_zpra_t_mrec_prd_3c
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+*     AND ( gjahr EQ @gv_last_gjahr OR gjahr EQ @gv_current_gjahr   ) .
     AND gjahr GE lv_gjahr
     AND gjahr LE gv_current_gjahr .
   SORT gt_zpra_t_mrec_prd_3c BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
@@ -8507,29 +8510,29 @@ FORM fetch_data_section3c .
          app_vl_qty
          app_vl_uom
     FROM zpra_t_mrec_app
-    INTO TABLE gt_zpra_t_mrec_app
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE gjahr EQ gv_current_gjahr
-     AND monat LE gv_current_monat
-     AND asset EQ gt_zpra_c_prd_prof-asset
-     AND block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type IN r_prd_vl_type[] .
+    INTO TABLE @gt_zpra_t_mrec_app
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE gjahr EQ @gv_current_gjahr
+     AND monat LE @gv_current_monat
+     AND asset EQ @gt_zpra_c_prd_prof-asset
+     AND block EQ @gt_zpra_c_prd_prof-block
+     AND product EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type IN @r_prd_vl_type[] .
 
   SORT gt_zpra_t_mrec_app BY gjahr monat product asset block  prd_vl_type .
 
   SELECT *
     FROM zpra_t_tar_cf
-    INTO TABLE gt_zpra_t_tar_cf_3c
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE gjahr        EQ gv_current_gjahr
-     AND asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product .
+    INTO TABLE @gt_zpra_t_tar_cf_3c
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE gjahr        EQ @gv_current_gjahr
+     AND asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product .
 
   SORT gt_zpra_t_tar_cf_3c BY gjahr asset block product.
 
-  REFRESH r_production_date[] .
+  CLEAR r_production_date[].
 
   LOOP AT gt_zpra_c_prd_prof INTO gs_zpra_c_prd_prof .
     lv_monat = '00' .
@@ -8591,13 +8594,13 @@ FORM fetch_data_section3c .
   IF r_production_date[] IS NOT INITIAL .
     SELECT *
       FROM zpra_t_dly_prd
-      INTO TABLE gt_zpra_t_dly_prd_3c
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type IN r_prd_vl_type[]
-       AND production_date IN r_production_date[] .
+      INTO TABLE @gt_zpra_t_dly_prd_3c
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type IN @r_prd_vl_type[]
+       AND production_date IN @r_production_date[] .
     LOOP AT r_production_date.
       PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd_3c USING r_production_date-low r_production_date-high .
     ENDLOOP.
@@ -8606,14 +8609,14 @@ FORM fetch_data_section3c .
 
     SELECT *
       FROM zpra_t_dly_rprd
-      INTO TABLE gt_zpra_t_dly_rprd_3c
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-*       AND prd_vl_type IN r_prd_vl_type[]
+      INTO TABLE @gt_zpra_t_dly_rprd_3c
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+*       AND prd_vl_type IN @r_prd_vl_type[]
        AND prd_vl_type EQ 'NET_PROD'
-       AND production_date IN r_production_date[] .
+       AND production_date IN @r_production_date[] .
 
     SORT gt_zpra_t_dly_rprd_3c BY product asset block production_date .
 
@@ -8625,12 +8628,12 @@ FORM fetch_data_section3c .
           pi
           prod_start_date
      FROM zpra_t_prd_pi
-     INTO TABLE gt_zpra_t_prd_pi_3c
-      FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-    WHERE asset EQ gt_zpra_c_prd_prof-asset
-      AND block EQ gt_zpra_c_prd_prof-block
-      AND vld_frm LE p_date
-      AND vld_to  GE lv_date .
+     INTO TABLE @gt_zpra_t_prd_pi_3c
+      FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+    WHERE asset EQ @gt_zpra_c_prd_prof-asset
+      AND block EQ @gt_zpra_c_prd_prof-block
+      AND vld_frm LE @p_date
+      AND vld_to  GE @lv_date .
 
     SORT gt_zpra_t_prd_pi_3c BY asset block vld_frm vld_to .
 
@@ -8661,14 +8664,14 @@ FORM fetch_data_section3f .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_3f
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr GE gv_5_back_gjahr
-     AND gjahr LE gv_last_gjahr.
+    INTO TABLE @gt_zpra_t_mrec_prd_3f
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr GE @gv_5_back_gjahr
+     AND gjahr LE @gv_last_gjahr.
   SORT gt_zpra_t_mrec_prd_3f BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 
   SELECT gjahr
@@ -8680,13 +8683,13 @@ FORM fetch_data_section3f .
          app_vl_qty
          app_vl_uom
     FROM zpra_t_mrec_app
-    INTO TABLE gt_zpra_t_mrec_app_3f
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE gjahr GE gv_5_back_gjahr
-     AND gjahr LE gv_last_gjahr
-     AND asset EQ gt_zpra_c_prd_prof-asset
-     AND block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product .
+    INTO TABLE @gt_zpra_t_mrec_app_3f
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE gjahr GE @gv_5_back_gjahr
+     AND gjahr LE @gv_last_gjahr
+     AND asset EQ @gt_zpra_c_prd_prof-asset
+     AND block EQ @gt_zpra_c_prd_prof-block
+     AND product EQ @gt_zpra_c_prd_prof-product .
 
   SORT gt_zpra_t_mrec_app_3f BY gjahr monat asset block product .
 
@@ -8699,40 +8702,40 @@ FORM fetch_data_section3f .
           pi
           prod_start_date
      FROM zpra_t_prd_pi
-     INTO TABLE gt_zpra_t_prd_pi_3f
-      FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-    WHERE asset EQ gt_zpra_c_prd_prof-asset
-      AND vld_frm LE lv_date2
-      AND vld_to  GE lv_date .
+     INTO TABLE @gt_zpra_t_prd_pi_3f
+      FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+    WHERE asset EQ @gt_zpra_c_prd_prof-asset
+      AND vld_frm LE @lv_date2
+      AND vld_to  GE @lv_date .
 
     SORT gt_zpra_t_prd_pi_3f BY asset block vld_frm vld_to .
 
        SELECT *
       FROM zpra_t_dly_prd
-      INTO TABLE gt_zpra_t_dly_prd_3f
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type IN r_prd_vl_type[]
-       AND  production_date BETWEEN  lv_date  AND LV_DATE2 .
+      INTO TABLE @gt_zpra_t_dly_prd_3f
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type IN @r_prd_vl_type[]
+       AND  production_date BETWEEN  @lv_date  AND @LV_DATE2 .
 *       AND production_date IN r_production_date[] .
 
        SELECT *
       FROM zpra_t_dly_rprd
-      INTO TABLE gt_zpra_t_dly_rprd_3f
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-*       AND prd_vl_type IN r_prd_vl_type[]
+      INTO TABLE @gt_zpra_t_dly_rprd_3f
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+*       AND prd_vl_type IN @r_prd_vl_type[]
        AND prd_vl_type EQ 'NET_PROD'
-        AND  production_date BETWEEN  lv_date  AND LV_DATE2 .
+        AND  production_date BETWEEN  @lv_date  AND @LV_DATE2 .
 *       AND production_date IN r_production_date[] .
     SORT gt_zpra_t_dly_rprd_3f BY product asset block production_date .
 
 
-  REFRESH r_production_date[] .
+  CLEAR r_production_date[].
   lv_gjahr = gv_5_back_gjahr - 1.
   DO 5 TIMES .
     lv_gjahr = lv_gjahr + 1 .
@@ -8809,13 +8812,13 @@ FORM fetch_data_section3f .
 
       SELECT *
       FROM zpra_dly_prd_nd
-      INTO TABLE gt_zpra_t_dly_prd_nd
-       FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-     WHERE asset EQ gt_zpra_c_prd_prof-asset
-       AND block EQ gt_zpra_c_prd_prof-block
-       AND product EQ gt_zpra_c_prd_prof-product
-       AND prd_vl_type IN r_prd_vl_type[]
-       AND  production_date BETWEEN  lv_date  AND LV_DATE2 .
+      INTO TABLE @gt_zpra_t_dly_prd_nd
+       FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+     WHERE asset EQ @gt_zpra_c_prd_prof-asset
+       AND block EQ @gt_zpra_c_prd_prof-block
+       AND product EQ @gt_zpra_c_prd_prof-product
+       AND prd_vl_type IN @r_prd_vl_type[]
+       AND  production_date BETWEEN  @lv_date  AND @LV_DATE2 .
 
 *    LOOP AT r_production_date.
 *    loop at gt_zpra_t_dly_prd_nd INTO gs_zpra_t_dly_prd_nd where PRODUCTION_DATE BETWEEN  r_production_date-low  AND r_production_date-high .
@@ -8868,13 +8871,13 @@ FORM fetch_data_section4a .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_4a
-     FOR ALL ENTRIES IN gt_zdpr_gas_combine
-   WHERE asset        EQ gt_zdpr_gas_combine-asset
+    INTO TABLE @gt_zpra_t_mrec_prd_4a
+     FOR ALL ENTRIES IN @gt_zdpr_gas_combine
+   WHERE asset        EQ @gt_zdpr_gas_combine-asset
      AND product      EQ c_prod_gas
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr GE gv_last_gjahr
-     AND monat LE gv_current_monat .
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr GE @gv_last_gjahr
+     AND monat LE @gv_current_monat .
 
   SORT gt_zpra_t_mrec_prd_4a BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 ***  SELECT gjahr
@@ -8897,7 +8900,7 @@ FORM fetch_data_section4a .
 ***  SORT gt_zpra_t_mrec_app_4a BY gjahr monat product asset block  prd_vl_type .
 ***
 
-  REFRESH r_production_date[] .
+  CLEAR r_production_date[].
   lv_gjahr = gv_current_gjahr .
   LOOP AT gt_zdpr_gas_combine INTO gs_zdpr_gas_combine .
     lv_monat = '00' .
@@ -8960,22 +8963,22 @@ FORM fetch_data_section4a .
   IF r_production_date[] IS NOT INITIAL .
     SELECT *
       FROM zpra_t_dly_rprd
-      INTO TABLE gt_zpra_t_dly_rprd_4a
-       FOR ALL ENTRIES IN gt_zdpr_gas_combine
-     WHERE asset EQ gt_zdpr_gas_combine-asset
+      INTO TABLE @gt_zpra_t_dly_rprd_4a
+       FOR ALL ENTRIES IN @gt_zdpr_gas_combine
+     WHERE asset EQ @gt_zdpr_gas_combine-asset
        AND product EQ c_prod_gas
        AND prd_vl_type EQ 'NET_PROD'
-       AND production_date IN r_production_date[].
+       AND production_date IN @r_production_date[].
     SORT gt_zpra_t_dly_rprd_4a BY product asset block production_date .
 
     SELECT *
       FROM zpra_t_dly_prd
-      INTO TABLE gt_zpra_t_dly_prd_4a
-       FOR ALL ENTRIES IN gt_zdpr_gas_combine
-     WHERE asset EQ gt_zdpr_gas_combine-asset
+      INTO TABLE @gt_zpra_t_dly_prd_4a
+       FOR ALL ENTRIES IN @gt_zdpr_gas_combine
+     WHERE asset EQ @gt_zdpr_gas_combine-asset
        AND product EQ c_prod_gas
-       AND prd_vl_type IN r_prd_vl_type[]
-       AND production_date IN r_production_date[] .
+       AND prd_vl_type IN @r_prd_vl_type[]
+       AND production_date IN @r_production_date[] .
     SORT gt_zpra_t_dly_prd_4a BY product asset block production_date .
 
     LOOP AT r_production_date.
@@ -8990,17 +8993,17 @@ FORM fetch_data_section4a .
           pi
           prod_start_date
      FROM zpra_t_prd_pi
-     INTO TABLE gt_zpra_t_prd_pi_4a
-      FOR ALL ENTRIES IN gt_zdpr_gas_combine
-    WHERE asset EQ gt_zdpr_gas_combine-asset
-      AND vld_frm LE p_date
-      AND vld_to  GE lv_date .
+     INTO TABLE @gt_zpra_t_prd_pi_4a
+      FOR ALL ENTRIES IN @gt_zdpr_gas_combine
+    WHERE asset EQ @gt_zdpr_gas_combine-asset
+      AND vld_frm LE @p_date
+      AND vld_to  GE @lv_date .
 
     SORT gt_zpra_t_prd_pi_4a BY asset block vld_frm vld_to .
   ENDIF.
 ENDFORM.
 FORM prepare_dynamic_table_sec5a .
-  REFRESH gt_dyn_fcat .
+  CLEAR gt_dyn_fcat[].
 
   PERFORM add_dyn_field USING 'PRODUCTION_DATE' 'Production Date'  15 .
 
@@ -9044,7 +9047,7 @@ FORM prepare_dynamic_table_sec5a .
   ENDIF.
 ENDFORM.
 FORM prepare_dynamic_table_sec6 .
-  REFRESH gt_dyn_fcat .
+  CLEAR gt_dyn_fcat[].
 
   PERFORM add_dyn_field USING 'COL1' 'COL1'  50 .
   PERFORM add_dyn_field USING 'OIL_ANNUAL' 'OIL_ANNUAL'  35 .
@@ -9435,14 +9438,14 @@ FORM fetch_data_section5a .
   DATA : lv_gjahr TYPE zpra_t_mrec_prd-gjahr .
   SELECT *
     FROM zpra_t_dly_prd
-    INTO TABLE gt_zpra_t_dly_prd_5a
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset EQ gt_zpra_c_prd_prof-asset
-     AND block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type IN r_prd_vl_type[]
-     AND production_date GE gv_year_start_date
-     AND production_date LE p_date .
+    INTO TABLE @gt_zpra_t_dly_prd_5a
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset EQ @gt_zpra_c_prd_prof-asset
+     AND block EQ @gt_zpra_c_prd_prof-block
+     AND product EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type IN @r_prd_vl_type[]
+     AND production_date GE @gv_year_start_date
+     AND production_date LE @p_date .
 
   PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd_5a USING gv_year_start_date p_date .
 
@@ -9460,14 +9463,14 @@ FORM fetch_data_section5a .
          prod_vl_qty2
          prod_vl_uom2
     FROM zpra_t_mrec_prd
-    INTO TABLE gt_zpra_t_mrec_prd_5a
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE asset        EQ gt_zpra_c_prd_prof-asset
-     AND block        EQ gt_zpra_c_prd_prof-block
-     AND product      EQ gt_zpra_c_prd_prof-product
-     AND prd_vl_type  IN r_prd_vl_type[]
-     AND gjahr        GE lv_gjahr
-     AND gjahr        LE gv_current_gjahr .
+    INTO TABLE @gt_zpra_t_mrec_prd_5a
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE asset        EQ @gt_zpra_c_prd_prof-asset
+     AND block        EQ @gt_zpra_c_prd_prof-block
+     AND product      EQ @gt_zpra_c_prd_prof-product
+     AND prd_vl_type  IN @r_prd_vl_type[]
+     AND gjahr        GE @lv_gjahr
+     AND gjahr        LE @gv_current_gjahr .
 
   SORT gt_zpra_t_mrec_prd_5a BY product ASCENDING asset ASCENDING block  ASCENDING prd_vl_type ASCENDING gjahr DESCENDING monat DESCENDING .
 
@@ -9479,21 +9482,21 @@ FORM fetch_data_section5a .
         pi
         prod_start_date
    FROM zpra_t_prd_pi
-   INTO TABLE gt_zpra_t_prd_pi_5a
-    FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-  WHERE asset EQ gt_zpra_c_prd_prof-asset
-    AND block EQ gt_zpra_c_prd_prof-block
-    AND vld_frm LE p_date
-    AND vld_to  GE gv_year_start_date .
+   INTO TABLE @gt_zpra_t_prd_pi_5a
+    FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+  WHERE asset EQ @gt_zpra_c_prd_prof-asset
+    AND block EQ @gt_zpra_c_prd_prof-block
+    AND vld_frm LE @p_date
+    AND vld_to  GE @gv_year_start_date .
 
   SELECT *
     FROM zpra_t_tar_cf
-    INTO TABLE gt_zpra_t_tar_cf_5a
-     FOR ALL ENTRIES IN gt_zpra_c_prd_prof
-   WHERE gjahr EQ gv_current_gjahr
-     AND asset EQ gt_zpra_c_prd_prof-asset
-     AND block EQ gt_zpra_c_prd_prof-block
-     AND product EQ gt_zpra_c_prd_prof-product .
+    INTO TABLE @gt_zpra_t_tar_cf_5a
+     FOR ALL ENTRIES IN @gt_zpra_c_prd_prof
+   WHERE gjahr EQ @gv_current_gjahr
+     AND asset EQ @gt_zpra_c_prd_prof-asset
+     AND block EQ @gt_zpra_c_prd_prof-block
+     AND product EQ @gt_zpra_c_prd_prof-product .
   SORT gt_zpra_t_tar_cf_5a BY gjahr product asset block .
 ENDFORM.
 FORM process_gas_records_5a .
@@ -9641,52 +9644,7 @@ FORM set_all_borders_range  .
 ENDFORM.
 FORM clear_variables .
 
-  REFRESH : gt_zpra_t_dly_prd            ,
-            gt_zpra_t_dly_prd2           ,
-            gt_zpra_t_dly_prd_mb         ,
-            gt_zpra_t_dly_prd_2a3        ,
-            gt_zpra_t_dly_prd_2d         ,
-            gt_zpra_t_dly_prd_2f         ,
-            gt_zpra_t_dly_prd_3c         ,
-            gt_zpra_t_dly_prd_3f         ,
-            gt_zpra_t_dly_prd_4a         ,
-            gt_zpra_t_dly_prd_5a         ,
-            gt_zdpr_gas_combine          ,
-            gt_zpra_t_prd_pi             ,
-            gt_zpra_t_prd_pi_mb          ,
-            gt_zpra_t_prd_pi_lm          ,
-            gt_zpra_t_prd_pi_2d          ,
-            gt_zpra_t_prd_pi_2f          ,
-            gt_zpra_t_prd_pi_3c          ,
-            gt_zpra_t_prd_pi_3f          ,
-            gt_zpra_t_prd_pi_4a          ,
-            gt_zpra_t_prd_pi_5a          ,
-            gt_zpra_t_mrec_prd           ,
-            gt_zpra_t_mrec_prd_2a3       ,
-            gt_zpra_t_mrec_prd_2d        ,
-            gt_zpra_t_mrec_prd_2f        ,
-            gt_zpra_t_mrec_prd_3c        ,
-            gt_zpra_t_mrec_prd_3f        ,
-            gt_zpra_t_mrec_prd_4a        ,
-            gt_wtd_pi                    ,
-            gt_wtd_cf                    ,
-            gt_asset_desc                ,
-            gt_paste                     ,
-            gt_copied_cells              ,
-            gt_product_col               ,
-            gt_zpra_t_tar_pi             ,
-            gt_zpra_t_prd_tar            ,
-            gt_zpra_t_prd_tar_2c         ,
-            gt_zpra_t_prd_tar_3a         ,
-            gt_zpra_t_prd_tar_3b         ,
-            gt_zpra_t_prd_tar_5a         ,
-            gt_zpra_t_tar_cf             ,
-            gt_zpra_t_tar_cf_5a          ,
-            gt_zpra_c_prd_prof           ,
-            gt_zpra_c_dpr_prof           ,
-            gt_zpra_t_mrec_app           ,
-            gt_zpra_t_mrec_app_3f        ,
-            gt_zpra_t_mrec_app_4a        .
+  CLEAR : gt_zpra_t_dly_prd[], gt_zpra_t_dly_prd2[], gt_zpra_t_dly_prd_mb[], gt_zpra_t_dly_prd_2a3[], gt_zpra_t_dly_prd_2d[], gt_zpra_t_dly_prd_2f[], gt_zpra_t_dly_prd_3c[], gt_zpra_t_dly_prd_3f[], gt_zpra_t_dly_prd_4a[], gt_zpra_t_dly_prd_5a[], gt_zdpr_gas_combine[], gt_zpra_t_prd_pi[], gt_zpra_t_prd_pi_mb[], gt_zpra_t_prd_pi_lm[], gt_zpra_t_prd_pi_2d[], gt_zpra_t_prd_pi_2f[], gt_zpra_t_prd_pi_3c[], gt_zpra_t_prd_pi_3f[], gt_zpra_t_prd_pi_4a[], gt_zpra_t_prd_pi_5a[], gt_zpra_t_mrec_prd[], gt_zpra_t_mrec_prd_2a3[], gt_zpra_t_mrec_prd_2d[], gt_zpra_t_mrec_prd_2f[], gt_zpra_t_mrec_prd_3c[], gt_zpra_t_mrec_prd_3f[], gt_zpra_t_mrec_prd_4a[], gt_wtd_pi[], gt_wtd_cf[], gt_asset_desc[], gt_paste[], gt_copied_cells[], gt_product_col[], gt_zpra_t_tar_pi[], gt_zpra_t_prd_tar[], gt_zpra_t_prd_tar_2c[], gt_zpra_t_prd_tar_3a[], gt_zpra_t_prd_tar_3b[], gt_zpra_t_prd_tar_5a[], gt_zpra_t_tar_cf[], gt_zpra_t_tar_cf_5a[], gt_zpra_c_prd_prof[], gt_zpra_c_dpr_prof[], gt_zpra_t_mrec_app[], gt_zpra_t_mrec_app_3f[], gt_zpra_t_mrec_app_4a[].
   CLEAR   : gs_zpra_t_dly_prd            ,
             gs_zdpr_gas_combine          ,
             gs_zpra_t_prd_pi             ,
@@ -9704,11 +9662,7 @@ FORM clear_variables .
             gs_zpra_c_dpr_prof           ,
             gs_zpra_t_mrec_app           .
 
-  REFRESH : r_product[]                  ,
-            r_prd_vl_type[]              ,
-            r_combine_asset[]            ,
-            r_tar_code[]                 ,
-            r_production_date[]          .
+  CLEAR : r_product[], r_prd_vl_type[], r_combine_asset[], r_tar_code[], r_production_date[].
 
   CLEAR   : r_product                    ,
             r_prd_vl_type                ,
@@ -9946,7 +9900,7 @@ FORM get_target_start_date  USING    p_index
 
 ENDFORM.
 FORM free_clipboard .
-  REFRESH gt_paste .
+  CLEAR gt_paste[].
   CALL METHOD cl_gui_frontend_services=>clipboard_export
     IMPORTING
       data         = gt_paste
@@ -10045,7 +9999,7 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
 
   DATA : ls_zpra_c_prd_prof TYPE ty_zpra_c_prd_prof .
   DATA : lv_index TYPE sy-tabix .
-  REFRESH gt_prod_start_end_dates .
+  CLEAR gt_prod_start_end_dates[].
   SELECT asset
          block
          vld_frm
@@ -10053,10 +10007,10 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
          prod_start_date
          liscense_exp_dt
     FROM zpra_t_prd_pi
-    INTO TABLE gt_prod_start_end_dates
-     FOR ALL ENTRIES IN p_zpra_c_prd_prof
-   WHERE asset EQ p_zpra_c_prd_prof-asset
-     AND block EQ p_zpra_c_prd_prof-block .
+    INTO TABLE @gt_prod_start_end_dates
+     FOR ALL ENTRIES IN @p_zpra_c_prd_prof
+   WHERE asset EQ @p_zpra_c_prd_prof-asset
+     AND block EQ @p_zpra_c_prd_prof-block .
 
   SORT gt_prod_start_end_dates BY asset ASCENDING block ASCENDING vld_to DESCENDING .
   DELETE ADJACENT DUPLICATES FROM gt_prod_start_end_dates COMPARING asset block .
@@ -10278,7 +10232,7 @@ FORM prepare_paste_data TABLES p_table.
                  <fs_fld>  TYPE ANY.
   DATA lv_index TYPE sy-tabix.
   CLEAR gs_paste.
-  REFRESH gt_paste.
+  CLEAR gt_paste[].
   LOOP AT p_table ASSIGNING <fs_line>.
     CLEAR gs_paste.
     DO.
