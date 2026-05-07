@@ -1843,7 +1843,7 @@ FORM start_excel .
   gv_sheet2_name = '2' .
   gv_sheet3_name = 'Production Performance' .
   lcl_xlsx_writer=>clear_all( ).
-  lcl_xlsx_writer=>add_sheet( 'DPR' ).
+  lcl_xlsx_writer=>init_sheet( 'DPR' ).
   gv_row = 1 .
 ENDFORM.
 FORM display_section1_header .
