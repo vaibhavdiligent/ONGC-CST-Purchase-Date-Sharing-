@@ -952,7 +952,7 @@ FORM fetch_data .
     FROM zpra_t_tar_pi
     INTO TABLE @gt_tar_start_dates
    WHERE tar_code IN @r_tar_code[]
-   GROUP BY asset tar_code .
+   GROUP BY asset, tar_code .
   SORT gt_tar_start_dates BY asset tar_code .
 
   lt_zpra_c_prd_prof = gt_zpra_c_prd_prof .
@@ -1823,15 +1823,14 @@ ENDFORM.
 FORM start_excel .
   go_xlsx = NEW zcl_excel( ).
   go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
-  go_xlsx_sheet1->set_title( ip_title = gv_sheet1_name ).
+  go_xlsx_sheet1->set_title( ip_title = CONV string( gv_sheet1_name(30) ) ).
   go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet2->set_title( ip_title = gv_sheet2_name ).
+  go_xlsx_sheet2->set_title( ip_title = CONV string( gv_sheet2_name(30) ) ).
   go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet3->set_title( ip_title = gv_sheet3_name ).
+  go_xlsx_sheet3->set_title( ip_title = CONV string( gv_sheet3_name(30) ) ).
   go_xlsx_active = go_xlsx_sheet1.
   " Page setup equivalent: landscape, fit to 1 page wide
-  go_xlsx_sheet1->set_print_fittopage( ip_fittopage = abap_true ).
-  go_xlsx_sheet3->set_print_fittopage( ip_fittopage = abap_true ).
+
   gv_row = 1 .
 ENDFORM.
 FORM display_section1_header .
@@ -1929,7 +1928,7 @@ FORM set_range_formatting USING p_wraptext
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   IF p_wraptext = 1.
-    lo_style->alignment->wrap_text = abap_true.
+    lo_style->alignment->wraptext = abap_true.
   ENDIF.
   CASE p_horizontal.
     WHEN 'C'. lo_style->alignment->horizontal = zcl_excel_style_alignment=>c_horizontal_center.
@@ -1957,7 +1956,8 @@ ENDFORM.
 
 FORM row_height  USING  p_row
                         p_height .
-  go_xlsx_active->set_row_height( ip_row = p_row ip_row_height = p_height ).
+  DATA(lo_row) = go_xlsx_active->get_row( p_row ).
+  lo_row->row_height = p_height.
 ENDFORM.
 FORM merge_col_1_2_section1 .
   DATA lv_row TYPE sy-tabix .
@@ -1966,9 +1966,8 @@ FORM merge_col_1_2_section1 .
   lv_row = gv_sec1_h_start_row + 1 .
   PERFORM select_range USING lv_row 1 gv_row 2 .
 * S4-SKIP(OLE2): CALL METHOD OF go_range 'PasteSpecial'
-    EXPORTING
-      #1 = -4122.
-
+*    EXPORTING
+*      #1 = -4122.
   PERFORM select_range USING lv_row 1 gv_row 2  .
   PERFORM set_numberformat USING 'dd-mmm-yyyy'.
 
@@ -2607,9 +2606,9 @@ FORM colour_yellow_cells .
   LOOP AT gt_copied_cells INTO gs_copied_cells.
     lv_row = gv_row + gs_copied_cells-row - 1 .
 * S4-SKIP(OLE2): CALL METHOD OF go_excel 'Cells' = go_cell
-     EXPORTING
-     #1 = lv_row
-     #2 = gs_copied_cells-col .
+*     EXPORTING
+*     #1 = lv_row
+*     #2 = gs_copied_cells-col .
 * S4-SKIP(OLE2): GET PROPERTY OF go_cell 'interior' = go_interior .
 * S4-SKIP(OLE2): SET PROPERTY OF go_interior 'Color' = 65535 .
 * S4-SKIP(OLE2): GET PROPERTY OF go_cell 'FONT' = go_font .
@@ -2687,17 +2686,17 @@ FORM download_image .
   ENDIF.
 ENDFORM.
 FORM display_image .
-  DATA lo_shapes TYPE c LENGTH 1. " abap2xlsx: unused (Excel shapes not supported)
+  " abap2xlsx: lo_shapes (Excel shapes) not supported in this version
 * S4-SKIP(OLE2): GET PROPERTY OF go_worksheet 'Shapes' = lo_shapes.
 * S4-SKIP(OLE2): CALL METHOD OF lo_shapes 'AddPicture'
-    EXPORTING
-      #1 = gv_image_name "image file name on presentation server
-      #2 = '1'
-      #3 = '1'
-      #4 = 1      "left
-      #5 = 1      "top
-      #6 = 390    "right
-      #7 = 45.    "bottom
+*    EXPORTING
+*      #1 = gv_image_name "image file name on presentation server
+*      #2 = '1'
+*      #3 = '1'
+*      #4 = 1      "left
+*      #5 = 1      "top
+*      #6 = 390    "right
+*      #7 = 45.    "bottom
 
   gv_row = gv_row + 2 .
 ENDFORM.
@@ -4207,10 +4206,12 @@ ENDFORM.
 FORM col_width  USING p_col_start
                       p_col_end
                       p_width.
-  go_xlsx_active->set_column_width(
-    ip_column_start = p_col_start
-    ip_column_end   = p_col_end
-    ip_width        = p_width ).
+  DATA lv_c TYPE i.
+  lv_c = p_col_start.
+  WHILE lv_c <= p_col_end.
+    go_xlsx_active->set_column_width( ip_column = lv_c ip_width = p_width ).
+    lv_c = lv_c + 1.
+  ENDWHILE.
 ENDFORM.
 FORM colour_dates .
   DATA : lv_lines   TYPE sy-tabix,
@@ -6597,9 +6598,7 @@ FORM finalize_worksheet .
 
   REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
   CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
-  go_xlsx_sheet1->set_title( ip_title = lv_sheet_name ).
-  go_xlsx_sheet2->set_visible( ip_visible = zcl_excel_worksheet=>c_xlsheetvishidden ).
-
+  go_xlsx_sheet1->set_title( ip_title = CONV string( lv_sheet_name(30) ) ).
   " Build filename
   CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
 
@@ -9469,7 +9468,7 @@ FORM set_border_range  USING    p_left
   IF p_left   = 1. lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin. ENDIF.
   IF p_right  = 1. lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin. ENDIF.
   IF p_top    = 1. lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_bottom = 1. lo_style->borders->bottom->border_style = zcl_excel_style_border=>c_border_thin. ENDIF.
+  IF p_bottom = 1. lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin. ENDIF.
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
@@ -9483,7 +9482,7 @@ FORM set_all_borders_range  .
   lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin.
   lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin.
   lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->bottom->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin.
   go_xlsx_active->set_area_style(
     ip_style     = lo_style
     ip_row       = gv_s_row
