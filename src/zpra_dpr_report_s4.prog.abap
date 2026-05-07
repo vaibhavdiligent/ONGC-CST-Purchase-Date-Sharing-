@@ -535,8 +535,8 @@ FORM fetch_data .
   IF sy-subrc IS NOT INITIAL .
     MESSAGE 'No assets configured for DPR Report' TYPE 'E' .
   ENDIF.
-  SELECT product
-         asset
+  SELECT product,
+         asset,
          block
     FROM zpra_c_prd_prof
     INTO TABLE          @gt_zpra_c_prd_prof
@@ -622,13 +622,13 @@ FORM fetch_data .
   SELECT SINGLE ltx
            FROM t247
            INTO @gv_month_name
-          WHERE spras = sy-langu
+          WHERE spras = @sy-langu
             AND mnr EQ @p_date+4(2).
 
   SELECT SINGLE ltx
            FROM t247
            INTO @gv_last_month_name
-          WHERE spras = sy-langu
+          WHERE spras = @sy-langu
             AND mnr EQ @gv_month_back_begin_datum+4(2).
 
 * SELECT *
@@ -672,11 +672,11 @@ FORM fetch_data .
 * SORT lt_zpra_t_dly_prd BY asset block product prd_vl_type.
 * DELETE ADJACENT DUPLICATES FROM lt_zpra_t_dly_prd COMPARING asset block product prd_vl_type .
 
-  SELECT asset
-        block
-        vld_frm
-        vld_to
-        pi
+  SELECT asset,
+        block,
+        vld_frm,
+        vld_to,
+        pi,
         prod_start_date
    FROM zpra_t_prd_pi
    INTO TABLE @gt_zpra_t_prd_pi
@@ -809,15 +809,15 @@ FORM fetch_data .
   gv_month_back_monat = lv_monat+1(2) .
   gv_mrec_monat_end = lv_monat+1(2) .
   IF gv_mrec_gjahr_start EQ gv_mrec_gjahr_end .
-    SELECT gjahr
-           monat
-           asset
-           block
-           product
-           prd_vl_type
-           prod_vl_qty1
-           prod_vl_uom1
-           prod_vl_qty2
+    SELECT gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prd_vl_type,
+           prod_vl_qty1,
+           prod_vl_uom1,
+           prod_vl_qty2,
            prod_vl_uom2
       FROM zpra_t_mrec_prd
       INTO TABLE @gt_zpra_t_mrec_prd
@@ -830,15 +830,15 @@ FORM fetch_data .
        AND monat GE @gv_mrec_monat_start
        AND monat LE @gv_mrec_monat_end .
   ELSE.
-    SELECT gjahr
-           monat
-           asset
-           block
-           product
-           prd_vl_type
-           prod_vl_qty1
-           prod_vl_uom1
-           prod_vl_qty2
+    SELECT gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prd_vl_type,
+           prod_vl_qty1,
+           prod_vl_uom1,
+           prod_vl_qty2,
            prod_vl_uom2
       FROM zpra_t_mrec_prd
       INTO TABLE @gt_zpra_t_mrec_prd
@@ -857,7 +857,7 @@ FORM fetch_data .
     DELETE gt_zpra_t_mrec_prd WHERE gjahr EQ gv_mrec_gjahr_start AND monat LT gv_mrec_monat_start .
   ENDIF.
 
-  SELECT dn_no
+  SELECT dn_no,
          dn_de
     FROM zoiu_pr_dn
     INTO TABLE @gt_asset_desc
@@ -869,11 +869,11 @@ FORM fetch_data .
   DELETE gt_zpra_t_mrec_prd WHERE product EQ c_prod_gas .
   SORT gt_zpra_t_mrec_prd BY product ASCENDING asset ASCENDING gjahr DESCENDING monat DESCENDING block ASCENDING prd_vl_type ASCENDING .
   IF r_tar_code[] IS NOT INITIAL.
-    SELECT asset
-           block
-           tar_code
-           vld_frm
-           vld_to
+    SELECT asset,
+           block,
+           tar_code,
+           vld_frm,
+           vld_to,
            pi
       FROM zpra_t_tar_pi
       INTO TABLE @gt_zpra_t_tar_pi
@@ -884,14 +884,14 @@ FORM fetch_data .
        AND vld_to  GE @gv_month_begin_datum .
     SORT gt_zpra_t_tar_pi BY asset block tar_code vld_frm .
 
-    SELECT tar_code
-           gjahr
-           monat
-           asset
-           block
-           product
-           prod_vl_type_cd
-           tar_qty
+    SELECT tar_code,
+           gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prod_vl_type_cd,
+           tar_qty,
            uom
       FROM zpra_t_prd_tar
       INTO TABLE @gt_zpra_t_prd_tar
@@ -929,9 +929,9 @@ FORM fetch_data .
 
   PERFORM fetch_section2a2_data .
 
-  SELECT asset
-         tar_code
-         MIN( vld_frm )
+  SELECT asset,
+         tar_code,
+         MIN(, vld_frm, )
     FROM zpra_t_tar_pi
     INTO TABLE @gt_tar_start_dates
    WHERE tar_code IN @r_tar_code[]
@@ -5362,14 +5362,14 @@ FORM prepare_section4b_paste_data .
   SELECT *
     FROM zpra_t_prd_pi
     INTO TABLE @lt_exp_asset
-   WHERE liscense_exp_dt LT sy-datum.
+   WHERE liscense_exp_dt LT @sy-datum.
 
   SELECT asset
     FROM zpra_t_prd_pi
     INTO TABLE @lt_exp_asset1
      FOR ALL ENTRIES IN @lt_exp_asset
    WHERE asset          = lt_exp_asset-asset
-     AND liscense_exp_dt GT sy-datum.
+     AND liscense_exp_dt GT @sy-datum.
 
 
 *    DELETE lt_exp_asset WHERE LISCENSE_EXP_DT GT SY-DATUM. "Todays Date
@@ -5484,11 +5484,11 @@ FORM fetch_section2a2_data .
   SORT lt_zpra_t_dly_prd BY asset block product prd_vl_type.
   DELETE ADJACENT DUPLICATES FROM lt_zpra_t_dly_prd COMPARING asset block product prd_vl_type .
 
-  SELECT asset
-        block
-        vld_frm
-        vld_to
-        pi
+  SELECT asset,
+        block,
+        vld_frm,
+        vld_to,
+        pi,
         prod_start_date
    FROM zpra_t_prd_pi
    INTO TABLE @gt_zpra_t_prd_pi_mb
@@ -5512,11 +5512,11 @@ FORM fetch_data_section2b .
   CLEAR : gt_zpra_t_tar_pi[], gt_zpra_t_prd_tar[].
   IF r_tar_code[] IS NOT INITIAL.
 
-    SELECT asset
-           block
-           tar_code
-           vld_frm
-           vld_to
+    SELECT asset,
+           block,
+           tar_code,
+           vld_frm,
+           vld_to,
            pi
       FROM zpra_t_tar_pi
       INTO TABLE @gt_zpra_t_tar_pi
@@ -5528,14 +5528,14 @@ FORM fetch_data_section2b .
        AND tar_code IN @r_tar_code[] .
     SORT gt_zpra_t_tar_pi BY asset block tar_code vld_frm .
 
-    SELECT tar_code
-           gjahr
-           monat
-           asset
-           block
-           product
-           prod_vl_type_cd
-           tar_qty
+    SELECT tar_code,
+           gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prod_vl_type_cd,
+           tar_qty,
            uom
       FROM zpra_t_prd_tar
       INTO TABLE @gt_zpra_t_prd_tar
@@ -5638,15 +5638,15 @@ FORM fetch_data_section2a3 .
   PERFORM populate_no_data_entries TABLES gt_zpra_t_dly_prd_2a3 USING gv_month_back_begin_datum gv_month_back_end_datum .
 
   lv_gjahr = gv_month_back_gjahr - 2 .
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_2a3
@@ -5662,13 +5662,13 @@ FORM fetch_data_section2a3 .
   DELETE gt_zpra_t_mrec_prd_2a3 WHERE gjahr EQ gv_month_back_gjahr AND monat GT gv_month_back_monat .
   IF p_mb    IS NOT INITIAL AND
      p_c_olv IS NOT INITIAL.
-    SELECT gjahr
-           monat
-           asset
-           block
-           product
-           prd_vl_type
-           app_vl_qty
+    SELECT gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prd_vl_type,
+           app_vl_qty,
            app_vl_uom
       FROM zpra_t_mrec_app
       INTO TABLE @gt_zpra_t_mrec_app_2a3
@@ -5682,11 +5682,11 @@ FORM fetch_data_section2a3 .
 
     SORT gt_zpra_t_mrec_app_2a3 BY gjahr monat product asset block  prd_vl_type .
   ENDIF.
-  SELECT asset
-        block
-        vld_frm
-        vld_to
-        pi
+  SELECT asset,
+        block,
+        vld_frm,
+        vld_to,
+        pi,
         prod_start_date
    FROM zpra_t_prd_pi
    INTO TABLE @gt_zpra_t_prd_pi_lm
@@ -5715,13 +5715,13 @@ FORM fetch_data_section2d .
   IF p_mb    IS NOT INITIAL AND
      p_c_olv IS NOT INITIAL.
 
-    SELECT gjahr
-           monat
-           asset
-           block
-           product
-           prd_vl_type
-           app_vl_qty
+    SELECT gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prd_vl_type,
+           app_vl_qty,
            app_vl_uom
       FROM zpra_t_mrec_app
       INTO TABLE @gt_zpra_t_mrec_app_2d
@@ -5738,15 +5738,15 @@ FORM fetch_data_section2d .
   ENDIF.
   lv_gjahr = gv_last_gjahr - 2 .
 
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_2d
@@ -5863,11 +5863,11 @@ FORM fetch_data_section2d .
 
   ENDIF.
   CONCATENATE gv_last_gjahr '0101' INTO lv_date .
-  SELECT asset
-        block
-        vld_frm
-        vld_to
-        pi
+  SELECT asset,
+        block,
+        vld_frm,
+        vld_to,
+        pi,
         prod_start_date
    FROM zpra_t_prd_pi
    INTO TABLE @gt_zpra_t_prd_pi_2d
@@ -5895,15 +5895,15 @@ FORM fetch_data_section2f .
 *  SORT lt_zpra_t_dly_prd BY product asset block  .
 *  DELETE ADJACENT DUPLICATES FROM lt_zpra_t_dly_prd COMPARING product asset block  .
   lv_gjahr = gv_last_gjahr - 3 .
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_2f
@@ -5920,13 +5920,13 @@ FORM fetch_data_section2f .
 
   IF p_mb    IS NOT INITIAL AND
      p_c_olv IS NOT INITIAL.
-    SELECT gjahr
-           monat
-           asset
-           block
-           product
-           prd_vl_type
-           app_vl_qty
+    SELECT gjahr,
+           monat,
+           asset,
+           block,
+           product,
+           prd_vl_type,
+           app_vl_qty,
            app_vl_uom
       FROM zpra_t_mrec_app
       INTO TABLE @gt_zpra_t_mrec_app_2f
@@ -6040,11 +6040,11 @@ FORM fetch_data_section2f .
   CONCATENATE gv_last_gjahr '0401' INTO lv_date .
   CONCATENATE gv_current_gjahr '0331' INTO lv_date2 .
 
-  SELECT asset
-        block
-        vld_frm
-        vld_to
-        pi
+  SELECT asset,
+        block,
+        vld_frm,
+        vld_to,
+        pi,
         prod_start_date
    FROM zpra_t_prd_pi
    INTO TABLE @gt_zpra_t_prd_pi_2f
@@ -8479,15 +8479,15 @@ FORM fetch_data_section3c .
          lv_month_end_date   TYPE                   sy-datum,
          lv_poper            TYPE                   t009b-poper.
   lv_gjahr = gv_last_gjahr - 1 .
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_3c
@@ -8501,13 +8501,13 @@ FORM fetch_data_section3c .
     AND gjahr LE gv_current_gjahr .
   SORT gt_zpra_t_mrec_prd_3c BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
   DELETE gt_zpra_t_mrec_prd_3c WHERE gjahr EQ gv_current_gjahr AND monat GT gv_current_monat .
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         app_vl_qty
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         app_vl_qty,
          app_vl_uom
     FROM zpra_t_mrec_app
     INTO TABLE @gt_zpra_t_mrec_app
@@ -8621,11 +8621,11 @@ FORM fetch_data_section3c .
     SORT gt_zpra_t_dly_rprd_3c BY product asset block production_date .
 
     CONCATENATE gv_current_gjahr '0101' INTO lv_date .
-    SELECT asset
-          block
-          vld_frm
-          vld_to
-          pi
+    SELECT asset,
+          block,
+          vld_frm,
+          vld_to,
+          pi,
           prod_start_date
      FROM zpra_t_prd_pi
      INTO TABLE @gt_zpra_t_prd_pi_3c
@@ -8653,15 +8653,15 @@ FORM fetch_data_section3f .
          lv_count            TYPE                   sy-tabix,
          lv_flagnd.
 
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_3f
@@ -8674,13 +8674,13 @@ FORM fetch_data_section3f .
      AND gjahr LE @gv_last_gjahr.
   SORT gt_zpra_t_mrec_prd_3f BY product ASCENDING asset ASCENDING block  ASCENDING gjahr DESCENDING monat DESCENDING .
 
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         app_vl_qty
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         app_vl_qty,
          app_vl_uom
     FROM zpra_t_mrec_app
     INTO TABLE @gt_zpra_t_mrec_app_3f
@@ -8695,11 +8695,11 @@ FORM fetch_data_section3f .
 
     CONCATENATE gv_5_back_gjahr '0401' INTO lv_date  .
     CONCATENATE gv_current_gjahr   '0331' INTO lv_date2 .
-    SELECT asset
-          block
-          vld_frm
-          vld_to
-          pi
+    SELECT asset,
+          block,
+          vld_frm,
+          vld_to,
+          pi,
           prod_start_date
      FROM zpra_t_prd_pi
      INTO TABLE @gt_zpra_t_prd_pi_3f
@@ -8860,15 +8860,15 @@ FORM fetch_data_section4a .
          lv_month_end_date   TYPE                   sy-datum,
          lv_poper            TYPE                   t009b-poper.
 
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_4a
@@ -8986,11 +8986,11 @@ FORM fetch_data_section4a .
     ENDLOOP.
 
     CONCATENATE gv_last_gjahr '0101' INTO lv_date  .
-    SELECT asset
-          block
-          vld_frm
-          vld_to
-          pi
+    SELECT asset,
+          block,
+          vld_frm,
+          vld_to,
+          pi,
           prod_start_date
      FROM zpra_t_prd_pi
      INTO TABLE @gt_zpra_t_prd_pi_4a
@@ -9452,15 +9452,15 @@ FORM fetch_data_section5a .
   SORT gt_zpra_t_dly_prd_5a BY production_date product asset block  .
 
   lv_gjahr = gv_current_gjahr - 3 .
-  SELECT gjahr
-         monat
-         asset
-         block
-         product
-         prd_vl_type
-         prod_vl_qty1
-         prod_vl_uom1
-         prod_vl_qty2
+  SELECT gjahr,
+         monat,
+         asset,
+         block,
+         product,
+         prd_vl_type,
+         prod_vl_qty1,
+         prod_vl_uom1,
+         prod_vl_qty2,
          prod_vl_uom2
     FROM zpra_t_mrec_prd
     INTO TABLE @gt_zpra_t_mrec_prd_5a
@@ -9475,11 +9475,11 @@ FORM fetch_data_section5a .
   SORT gt_zpra_t_mrec_prd_5a BY product ASCENDING asset ASCENDING block  ASCENDING prd_vl_type ASCENDING gjahr DESCENDING monat DESCENDING .
 
 
-  SELECT asset
-        block
-        vld_frm
-        vld_to
-        pi
+  SELECT asset,
+        block,
+        vld_frm,
+        vld_to,
+        pi,
         prod_start_date
    FROM zpra_t_prd_pi
    INTO TABLE @gt_zpra_t_prd_pi_5a
@@ -10000,11 +10000,11 @@ FORM remove_expired_blocks  TABLES   p_zpra_c_prd_prof STRUCTURE gs_zpra_c_prd_p
   DATA : ls_zpra_c_prd_prof TYPE ty_zpra_c_prd_prof .
   DATA : lv_index TYPE sy-tabix .
   CLEAR gt_prod_start_end_dates[].
-  SELECT asset
-         block
-         vld_frm
-         vld_to
-         prod_start_date
+  SELECT asset,
+         block,
+         vld_frm,
+         vld_to,
+         prod_start_date,
          liscense_exp_dt
     FROM zpra_t_prd_pi
     INTO TABLE @gt_prod_start_end_dates
