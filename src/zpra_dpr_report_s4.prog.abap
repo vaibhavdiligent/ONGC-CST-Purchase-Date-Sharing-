@@ -1,18 +1,23 @@
 *&---------------------------------------------------------------------*
-*& Report  ZPRA_DPR_REPORT_S4
-*&---------------------------------------------------------------------*
-*& Daily Production Report (DPR) — S/4HANA Hybrid Edition
-*& VERSION : 2.4  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
-*& Based on: ZPRA_DPR_REPORT v1.9 (100% business logic preserved)
+*& Report  ZPRA_DPR_REPORT
 *&
-*& OPERATING MODES
-*&   Default (p_full = ' ')  : Fast server-side plain XLSX via
-*&                              lcl_xlsx_writer + cl_abap_zip + GUI_DOWNLOAD.
-*&                              No OLE2 calls.  No formatting.  No PDF.
-*&                              ~10–50× faster than OLE2.
-*&   Full   (p_full = 'X')  : Original OLE2 path — full Excel formatting
-*&                              + Excel COM PDF export.  Requires SAP GUI.
-*&                              Same speed as the original program.
+*&---------------------------------------------------------------------*
+*& Daily Production Report (DPR) - Single flat program without includes
+*& VERSION : 1.9  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
+*& Changes : v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
+*&           line 3444 (lv_qty * 6290 assignment to prod_vl_qty1).
+*&           Removed * 6290 from convert_gas_units (p_bb/p_bbd/p_bmd) and
+*&           convert_mrec_gas_units to align with convert_gas_units2 which
+*&           was already corrected. The * 6290 BOE conversion overflowed
+*&           the DB field's precision for large gas quantities.
+*&           v1.8 - Route app_vl_qty * 1000000 through lv_qty packed
+*&           intermediate in 6 forms (sec2a3, sec2d, sec2f, sec3c, sec3f,
+*&           convert_mrec_gas_to_mmscm).
+*&           v1.7 - Fix COMPUTE_BCD_OVERFLOW dump in convert_gas_units
+*&           and similar forms. Replace lv_qty TYPE char50/char35 with
+*&           TYPE p LENGTH 16 DECIMALS 7. Affects 11 declarations.
+*&           v1.6 - Sakhalin-1 historical oil PI fix (CS 'SK'/'SAKH').
+*&           Also: gas PI in dly_prd, CF lookup from zpra_t_tar_cf.
 *&---------------------------------------------------------------------*
 REPORT ZPRA_DPR_REPORT_S4.
 
@@ -404,9 +409,6 @@ DATA: gv_row                        TYPE sy-tabix   ,
       gv_sheet1_name                TYPE char50  ,
       gv_sheet2_name                TYPE char50  ,
       gv_sheet3_name                TYPE char50  .
-DATA: gv_xlsx_cell_row TYPE i,
-      gv_xlsx_cell_col TYPE i.
-
 DATA gs_temp TYPE zoiu_pr_dn .
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001 .
   PARAMETERS : p_date TYPE sy-datum OBLIGATORY.
@@ -434,12 +436,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE text-004 .
                p_t_re TYPE char1 AS CHECKBOX .
 SELECTION-SCREEN END OF BLOCK   b4 .
 SELECTION-SCREEN BEGIN OF BLOCK b5 WITH FRAME TITLE text-005 .
-  PARAMETERS : p_fname TYPE string .
+  PARAMETERS : p_fname TYPE string OBLIGATORY .
 SELECTION-SCREEN END OF BLOCK   b5 .
-
-SELECTION-SCREEN BEGIN OF BLOCK b6 WITH FRAME TITLE text-006 .
-  PARAMETERS : p_full TYPE char1 AS CHECKBOX .   "X = full OLE2 mode (formatted + PDF)
-SELECTION-SCREEN END OF BLOCK   b6 .
 
 AT SELECTION-SCREEN .
   IF p_t_be IS INITIAL AND
@@ -494,163 +492,6 @@ START-OF-SELECTION .
 
 *--- Form Routines ---*
 *&---------------------------------------------------------------------*
-
-*----------------------------------------------------------------------*
-*  LOCAL CLASS: LCL_XLSX_WRITER  (S/4HANA fast plain-XLSX path)
-*  Builds Open XML workbook in memory; one GUI_DOWNLOAD call to ship it.
-*  Performance optimisations:
-*    - Cells in SORTED TABLE keyed by row/col (correct numeric order)
-*    - sheet_xml builds string table, joins once  (avoids O(n²) concat)
-*    - Cached cl_abap_conv_out_ce instance (one converter, reused)
-*    - SCMS_XSTRING_TO_BINARY for the xstring→x255 chunk conversion
-*----------------------------------------------------------------------*
-CLASS lcl_xlsx_writer DEFINITION FINAL.
-  PUBLIC SECTION.
-    CLASS-METHODS:
-      init_sheet  IMPORTING iv_name TYPE string DEFAULT 'DPR',
-      add_cell    IMPORTING iv_row TYPE i iv_col TYPE i iv_value TYPE string,
-      clear_all,
-      get_xlsx    RETURNING VALUE(rv_xs) TYPE xstring.
-  PRIVATE SECTION.
-    TYPES: BEGIN OF ty_cell,
-             row TYPE i,
-             col TYPE i,
-             typ TYPE c LENGTH 1,
-             val TYPE string,
-           END OF ty_cell.
-    CLASS-DATA:
-      gv_sheet_name TYPE string,
-      go_conv       TYPE REF TO cl_abap_conv_out_ce,
-      gt_cells      TYPE SORTED TABLE OF ty_cell
-                         WITH NON-UNIQUE KEY row col.
-    CLASS-METHODS:
-      col_name  IMPORTING iv_col TYPE i RETURNING VALUE(rv_n) TYPE string,
-      to_xs     IMPORTING iv_xml TYPE string RETURNING VALUE(rv_xs) TYPE xstring,
-      sheet_xml RETURNING VALUE(rv_xml) TYPE string,
-      wb_xml    RETURNING VALUE(rv_xml) TYPE string,
-      sty_xml   RETURNING VALUE(rv_xml) TYPE string.
-ENDCLASS.
-
-CLASS lcl_xlsx_writer IMPLEMENTATION.
-  METHOD init_sheet.
-    CLEAR gt_cells.
-    gv_sheet_name = iv_name.
-    IF go_conv IS NOT BOUND.
-      go_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-    ENDIF.
-  ENDMETHOD.
-  METHOD clear_all.
-    CLEAR: gt_cells, gv_sheet_name.
-  ENDMETHOD.
-  METHOD add_cell.
-    DATA ls TYPE ty_cell.
-    DATA lv_v TYPE string.
-    lv_v = iv_value.
-    REPLACE ALL OCCURRENCES OF `&` IN lv_v WITH `&amp;`.
-    REPLACE ALL OCCURRENCES OF `<` IN lv_v WITH `&lt;`.
-    REPLACE ALL OCCURRENCES OF `>` IN lv_v WITH `&gt;`.
-    ls-row = iv_row.
-    ls-col = iv_col.
-    ls-typ = COND #( WHEN lv_v CO '0123456789.-' AND lv_v IS NOT INITIAL
-                     THEN 'N' ELSE 'S' ).
-    ls-val = lv_v.
-    INSERT ls INTO TABLE gt_cells.
-  ENDMETHOD.
-  METHOD col_name.
-    DATA lv_c TYPE i.
-    DATA lv_r TYPE i.
-    lv_c = iv_col.
-    DO.
-      lv_r = ( lv_c - 1 ) MOD 26.
-      rv_n = substring( val = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-                        off = lv_r len = 1 ) && rv_n.
-      lv_c = ( lv_c - lv_r - 1 ) / 26.
-      IF lv_c = 0. EXIT. ENDIF.
-    ENDDO.
-  ENDMETHOD.
-  METHOD to_xs.
-    IF go_conv IS NOT BOUND.
-      go_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
-    ENDIF.
-    go_conv->convert( EXPORTING data   = iv_xml
-                      IMPORTING buffer = rv_xs ).
-  ENDMETHOD.
-  METHOD sheet_xml.
-    DATA lt_parts TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-    DATA lv_pr    TYPE i VALUE 0.
-    APPEND `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-      && `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
-      && `<sheetData>` TO lt_parts.
-    LOOP AT gt_cells INTO DATA(ls).
-      IF ls-row <> lv_pr.
-        IF lv_pr > 0. APPEND `</row>` TO lt_parts. ENDIF.
-        APPEND |<row r="{ ls-row }">| TO lt_parts.
-        lv_pr = ls-row.
-      ENDIF.
-      DATA(lv_ref) = col_name( ls-col ) && ls-row.
-      IF ls-typ = 'N'.
-        APPEND |<c r="{ lv_ref }"><v>{ ls-val }</v></c>| TO lt_parts.
-      ELSE.
-        APPEND |<c r="{ lv_ref }" t="inlineStr"><is><t>{ ls-val }</t></is></c>|
-          TO lt_parts.
-      ENDIF.
-    ENDLOOP.
-    IF lv_pr > 0. APPEND `</row>` TO lt_parts. ENDIF.
-    APPEND `</sheetData></worksheet>` TO lt_parts.
-    rv_xml = concat_lines_of( table = lt_parts sep = `` ).
-  ENDMETHOD.
-  METHOD wb_xml.
-    DATA(lv_n) = COND string( WHEN gv_sheet_name IS INITIAL
-                              THEN 'DPR' ELSE gv_sheet_name ).
-    rv_xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-      && `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `
-      && `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
-      && `<sheets>`
-      && |<sheet name="{ lv_n }" sheetId="1" r:id="rId1"/>|
-      && `</sheets></workbook>`.
-  ENDMETHOD.
-  METHOD sty_xml.
-    rv_xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-      && `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
-      && `<fonts count="1"><font><sz val="10"/><name val="Calibri"/></font></fonts>`
-      && `<fills count="2"><fill><patternFill patternType="none"/></fill>`
-      && `<fill><patternFill patternType="gray125"/></fill></fills>`
-      && `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
-      && `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
-      && `<cellXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>`
-      && `</styleSheet>`.
-  ENDMETHOD.
-  METHOD get_xlsx.
-    DATA(lo_zip) = NEW cl_abap_zip( ).
-    DATA lv_ct TYPE string.
-    lv_ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-       && `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
-       && `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
-       && `<Default Extension="xml" ContentType="application/xml"/>`
-       && `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
-       && `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
-       && `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
-       && `</Types>`.
-    lo_zip->add( name = '[Content_Types].xml' content = to_xs( lv_ct ) ).
-    DATA lv_r TYPE string.
-    lv_r = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-      && `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-      && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`
-      && `</Relationships>`.
-    lo_zip->add( name = '_rels/.rels' content = to_xs( lv_r ) ).
-    DATA lv_wr TYPE string.
-    lv_wr = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-      && `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-      && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`
-      && `</Relationships>`.
-    lo_zip->add( name = 'xl/_rels/workbook.xml.rels' content = to_xs( lv_wr ) ).
-    lo_zip->add( name = 'xl/workbook.xml'            content = to_xs( wb_xml( ) ) ).
-    lo_zip->add( name = 'xl/styles.xml'              content = to_xs( sty_xml( ) ) ).
-    lo_zip->add( name = 'xl/worksheets/sheet1.xml'   content = to_xs( sheet_xml( ) ) ).
-    rv_xs = lo_zip->save( ).
-  ENDMETHOD.
-ENDCLASS.
-
 FORM fetch_data .
 *  DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd .
   DATA : lv_mrec_start_date  TYPE sy-datum,
@@ -1126,49 +967,10 @@ FORM process_data .
   CALL METHOD OF go_worksheet 'ACTIVATE'.
 
   PERFORM set_columns_width .
-  IF p_full IS INITIAL. RETURN. ENDIF.
 
   PERFORM border_cells .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM set_cell_formats .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM finalize_worksheet .
-  IF p_full IS INITIAL.
-    "S4 fast path — server-side XLSX + GUI_DOWNLOAD
-    DATA: lv_xstr      TYPE xstring,
-          lt_bin       TYPE STANDARD TABLE OF x255 WITH DEFAULT KEY,
-          lv_xlen      TYPE i,
-          lv_fname     TYPE string,
-          lv_datum_ext TYPE char10,
-          lv_uzeit_ext TYPE char8.
-    CONCATENATE sy-uzeit(2) '-' sy-uzeit+2(2) '-' sy-uzeit+4(2) INTO lv_uzeit_ext .
-    CONCATENATE sy-datum+6(2) '-' sy-datum+4(2) '-' sy-datum(4) INTO lv_datum_ext .
-    IF p_fname IS NOT INITIAL.
-      CONCATENATE p_fname '\DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname .
-    ELSE.
-      CONCATENATE 'DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname .
-    ENDIF.
-    REFRESH gt_paste.
-    lv_xstr = lcl_xlsx_writer=>get_xlsx( ).
-    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
-      EXPORTING  buffer        = lv_xstr
-      IMPORTING  output_length = lv_xlen
-      TABLES     binary_tab    = lt_bin.
-    CALL FUNCTION 'GUI_DOWNLOAD'
-      EXPORTING filename     = lv_fname
-                filetype     = 'BIN'
-                bin_filesize = lv_xlen
-      TABLES    data_tab     = lt_bin
-      EXCEPTIONS file_write_error = 1 OTHERS = 2.
-    IF sy-subrc IS INITIAL.
-      MESSAGE 'Report downloaded successfully (XLSX)' TYPE 'S'.
-    ELSE.
-      MESSAGE 'Error downloading report' TYPE 'E'.
-    ENDIF.
-    RETURN.
-  ENDIF.
-
-  "Full OLE2 path follows ↓
 ENDFORM.
 FORM process_sec1_data .
   gt_zpra_t_dly_prd2 = gt_zpra_t_dly_prd.
@@ -1508,24 +1310,6 @@ FORM display_section2a2 .
   PERFORM prepare_paste_data TABLES <gfs_sec2a2_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-  "S4: always write gt_paste rows to xlsx writer
-  DATA: lvr     TYPE i,
-        lvc     TYPE i,
-        lvval   TYPE string,
-        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-  lvr = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lvc = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lvval.
-      IF lvval IS NOT INITIAL.
-        lcl_xlsx_writer=>add_cell( iv_row = lvr iv_col = lvc iv_value = lvval ).
-      ENDIF.
-      lvc = lvc + 1.
-    ENDLOOP.
-    lvr = lvr + 1.
-  ENDLOOP.
-  IF p_full IS INITIAL. RETURN. ENDIF.
 
   GET PROPERTY OF go_range 'interior' = go_interior .
   SET PROPERTY OF go_interior 'Color' = gv_sec2a2_colour .
@@ -1828,27 +1612,8 @@ FORM display_section5a .
   PERFORM prepare_section5a_paste_data .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data_sheet2 .
-  "S4: always write gt_paste rows to xlsx writer
-  DATA: lvr     TYPE i,
-        lvc     TYPE i,
-        lvval   TYPE string,
-        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-  lvr = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lvc = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lvval.
-      IF lvval IS NOT INITIAL.
-        lcl_xlsx_writer=>add_cell( iv_row = lvr iv_col = lvc iv_value = lvval ).
-      ENDIF.
-      lvc = lvc + 1.
-    ENDLOOP.
-    lvr = lvr + 1.
-  ENDLOOP.
-  IF p_full IS INITIAL. RETURN. ENDIF.
 
   PERFORM create_chart .
-  IF p_full IS INITIAL. RETURN. ENDIF.
 
 ENDFORM.
 FORM create_chart .
@@ -2027,24 +1792,6 @@ FORM display_section6 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data_sheet3 .
-  "S4: always write gt_paste rows to xlsx writer
-  DATA: lvr     TYPE i,
-        lvc     TYPE i,
-        lvval   TYPE string,
-        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-  lvr = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lvc = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lvval.
-      IF lvval IS NOT INITIAL.
-        lcl_xlsx_writer=>add_cell( iv_row = lvr iv_col = lvc iv_value = lvval ).
-      ENDIF.
-      lvc = lvc + 1.
-    ENDLOOP.
-    lvr = lvr + 1.
-  ENDLOOP.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM set_all_borders_range .
 
   CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
@@ -2137,16 +1884,6 @@ FORM display_section3e .
 ENDFORM.
 
 FORM start_excel .
-  "S4: always initialise the fast XLSX writer
-  lcl_xlsx_writer=>clear_all( ).
-  lcl_xlsx_writer=>init_sheet( 'DPR' ).
-  IF p_full IS INITIAL.
-    gv_sheet1_name = '1' .
-    gv_sheet2_name = '2' .
-    gv_sheet3_name = 'Production Performance' .
-    gv_row = 1 .
-    RETURN.
-  ENDIF.
   CREATE OBJECT go_excel 'excel.application' .
   SET PROPERTY OF go_excel 'VISIBLE' = 0 .
   CALL METHOD OF go_excel 'WORKBOOKS' = go_workbooks .
@@ -2187,7 +1924,6 @@ FORM start_excel .
 ENDFORM.
 FORM display_section1_header .
   PERFORM display_logo .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM display_report_date .
   PERFORM display_product_names .
   PERFORM display_asset_names .
@@ -2196,10 +1932,8 @@ FORM display_section1_header .
   PERFORM display_consortium_level .
   PERFORM display_units .
   PERFORM join_header_total_cells .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM join_header1_column_1_2 .
   PERFORM set_section1_header_colors .
-  IF p_full IS INITIAL. RETURN. ENDIF.
 ENDFORM.
 FORM display_section1_data .
   DATA : lv_lines TYPE sy-tabix,
@@ -2215,13 +1949,9 @@ FORM display_section1_data .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
   PERFORM colour_alternate_rows .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM colour_yellow_cells .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM colour_dates .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM colour_sec1_data_totals .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   gv_row = gv_e_row .
   gv_sec2_start_row = gv_row + 1.
 
@@ -2231,29 +1961,16 @@ FORM display_section1_data .
 ENDFORM.
 FORM formatting_section1 .
   PERFORM merge_col_1_2_section1 .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM format_sec1_header .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM format_sec1_data_col_1_2 .
-  IF p_full IS INITIAL. RETURN. ENDIF.
 ENDFORM .
 FORM select_cell  USING    p_row
                            p_col.
-  "S4: always track xlsx position
-  gv_xlsx_cell_row = p_row. gv_xlsx_cell_col = p_col.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   CALL METHOD OF go_excel 'Cells' = go_cell
                          EXPORTING #1 = p_row #2 = p_col.
 ENDFORM.
 FORM set_cell  USING    p_cell_value
                         p_wraptext  .
-  "S4: always write to xlsx writer
-  DATA lv_v TYPE string.
-  lv_v = p_cell_value.
-  IF lv_v IS NOT INITIAL.
-    lcl_xlsx_writer=>add_cell( iv_row = gv_xlsx_cell_row iv_col = gv_xlsx_cell_col iv_value = lv_v ).
-  ENDIF.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   SET PROPERTY OF go_cell 'Value' = p_cell_value .
   SET PROPERTY OF go_cell 'WrapText' = p_wraptext .
 ENDFORM.
@@ -2262,11 +1979,6 @@ FORM select_range  USING    p_s_row
                             p_s_col
                             p_e_row
                             p_e_col .
-  "S4: always track xlsx range positions
-  gv_s_row = p_s_row . gv_s_col = p_s_col .
-  gv_e_row = p_e_row . gv_e_col = p_e_col .
-  gv_xlsx_cell_row = p_s_row . gv_xlsx_cell_col = p_s_col .
-  IF p_full IS INITIAL. RETURN. ENDIF.
 
   CALL METHOD OF go_excel 'Cells' = go_cell_from
    EXPORTING
@@ -2288,19 +2000,11 @@ FORM select_range  USING    p_s_row
 ENDFORM.
 FORM set_range  USING    p_cell_value
                         p_wraptext  .
-  "S4: always write top-left of range to xlsx writer
-  DATA lv_v TYPE string.
-  lv_v = p_cell_value.
-  IF lv_v IS NOT INITIAL.
-    lcl_xlsx_writer=>add_cell( iv_row = gv_s_row iv_col = gv_s_col iv_value = lv_v ).
-  ENDIF.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   SET PROPERTY OF go_range 'Value' = p_cell_value .
   SET PROPERTY OF go_range 'WrapText' = p_wraptext .
 ENDFORM.
 FORM set_range_font  USING    p_size
                               p_bold.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   GET PROPERTY OF go_range 'FONT' = go_font .
   SET PROPERTY OF go_font  'BOLD' = p_bold .
   SET PROPERTY OF go_font  'Size' = p_size .
@@ -2309,7 +2013,6 @@ ENDFORM.
 FORM set_range_formatting USING p_wraptext
                                 p_horizontal
                                 p_vertical .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   SET PROPERTY OF go_range 'WrapText' = p_wraptext .
   IF p_horizontal EQ 'C'.
     SET PROPERTY OF go_range 'HorizontalAlignment' =  -4108 .
@@ -2331,7 +2034,6 @@ FORM set_thin_border   USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   IF p_left EQ 1 .
     CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
     SET PROPERTY OF go_border 'LineStyle' = '1'  .
@@ -2352,7 +2054,6 @@ ENDFORM.
 
 FORM row_height  USING  p_row
                         p_height .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   CALL METHOD OF go_excel 'ROWS' = go_row
     EXPORTING
       #1 = p_row .
@@ -3035,7 +2736,6 @@ FORM colour_yellow_cells .
 ENDFORM.
 FORM display_logo .
   PERFORM download_image .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM display_image  .
   PERFORM delete_image   .
 
@@ -3104,7 +2804,6 @@ FORM download_image .
   ENDIF.
 ENDFORM.
 FORM display_image .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   DATA lo_shapes TYPE ole2_object .
 
 
@@ -3123,7 +2822,6 @@ FORM display_image .
   gv_row = gv_row + 2 .
 ENDFORM.
 FORM delete_image .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   DATA : lv_file TYPE string,
          lv_rc   TYPE i.
   lv_file = gv_image_name .
@@ -3691,12 +3389,10 @@ FORM colour_alternate_rows .
   ENDDO.
 ENDFORM.
 FORM set_range_interior  USING    p_color.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   GET PROPERTY OF go_range 'interior' = go_interior .
   SET PROPERTY OF go_interior 'Color' = p_color .
 ENDFORM.
 FORM set_numberformat USING p_format.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   SET PROPERTY OF go_range 'NumberFormat' = p_format .
 ENDFORM.
 
@@ -4626,7 +4322,6 @@ ENDFORM.
 FORM col_width  USING p_col_start
                       p_col_end
                       p_width.
-  IF p_full IS INITIAL. RETURN. ENDIF.
 *CALL METHOD OF go_excel 'Columns' = go_column
 *  EXPORTING
 *    #1 = p_col.
@@ -4664,7 +4359,6 @@ FORM join_header_total_cells .
 
 ENDFORM.
 FORM join_header1_column_1_2.
-  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM select_range USING gv_sec1_h_start_row 1 gv_sec1_h_start_row 2 .
   CALL METHOD OF go_range 'Merge' .
 ENDFORM .
@@ -7016,7 +6710,6 @@ FORM finalize_worksheet .
 
   PERFORM free_clipboard .
   PERFORM lock_xls .
-  IF p_full IS INITIAL. RETURN. ENDIF.
 
   CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
     EXPORTING
@@ -9909,7 +9602,6 @@ FORM set_border_range  USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   IF p_left EQ 1 .
     CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
     SET PROPERTY OF go_border 'LineStyle' = '1'  .
@@ -9928,7 +9620,6 @@ FORM set_border_range  USING    p_left
   ENDIF.
 ENDFORM.
 FORM set_all_borders_range  .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
   SET PROPERTY OF go_border 'LineStyle' = '1'  .
 
@@ -10256,7 +9947,6 @@ FORM get_target_start_date  USING    p_index
 ENDFORM.
 FORM free_clipboard .
   REFRESH gt_paste .
-  IF p_full IS INITIAL. RETURN. ENDIF.
   CALL METHOD cl_gui_frontend_services=>clipboard_export
     IMPORTING
       data         = gt_paste
