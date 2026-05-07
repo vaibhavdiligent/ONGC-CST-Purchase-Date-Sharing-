@@ -1835,24 +1835,17 @@ FORM start_excel .
         lv_t2 TYPE c LENGTH 31,
         lv_t3 TYPE c LENGTH 31.
 
-  go_xlsx = NEW zcl_excel( ).
-  go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
-  go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
+  TRY.
+      go_xlsx = NEW zcl_excel( ).
+      go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
+      go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
+      go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
 
-  " Excel rejects pure-numeric / duplicate / empty sheet names — use safe titles.
-  lv_t1 = 'DPR'.
-  lv_t2 = 'DPR_2'.
-  lv_t3 = 'Production_Performance'.
-  TRY.
+      lv_t1 = 'DPR'.
+      lv_t2 = 'DPR_2'.
+      lv_t3 = 'Production_Performance'.
       go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
-    CATCH zcx_excel.
-  ENDTRY.
-  TRY.
       go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
-    CATCH zcx_excel.
-  ENDTRY.
-  TRY.
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
     CATCH zcx_excel.
   ENDTRY.
@@ -6636,7 +6629,7 @@ FORM finalize_worksheet .
   DATA lv_t_fin TYPE c LENGTH 31.
   lv_t_fin = lv_sheet_name.
   " sanitize: replace invalid chars
-  REPLACE ALL OCCURRENCES OF REGEX '[\\\\/\\?*\\[\\]:]' IN lv_t_fin WITH '_'.
+  TRANSLATE lv_t_fin USING '\_/_?_*_[_]_:_'.
   TRY.
       go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
     CATCH zcx_excel.
