@@ -54,6 +54,18 @@
      <LENGTH>23</LENGTH>
     </item>
     <item>
+     <ID>I</ID>
+     <KEY>006</KEY>
+     <ENTRY>Output Mode</ENTRY>
+     <LENGTH>11</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_FULL</KEY>
+     <ENTRY>        Full Format + PDF (slow, OLE2)</ENTRY>
+     <LENGTH>38</LENGTH>
+    </item>
+    <item>
      <ID>S</ID>
      <KEY>P_BB</KEY>
      <ENTRY>        BBL / BOE</ENTRY>

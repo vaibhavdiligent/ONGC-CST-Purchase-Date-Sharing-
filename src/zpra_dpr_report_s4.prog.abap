@@ -1,21 +1,18 @@
 *&---------------------------------------------------------------------*
 *& Report  ZPRA_DPR_REPORT_S4
-*&
 *&---------------------------------------------------------------------*
-*& Daily Production Report (DPR) — S/4HANA Edition
-*& VERSION : 2.3  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
+*& Daily Production Report (DPR) — S/4HANA Hybrid Edition
+*& VERSION : 2.4  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
 *& Based on: ZPRA_DPR_REPORT v1.9 (100% business logic preserved)
 *&
-*& S/4HANA changes vs original:
-*&   - Server-side XLSX via lcl_xlsx_writer (Open XML + cl_abap_zip).
-*&     Replaces CREATE OBJECT go_excel 'excel.application' and all OLE2
-*&     COM automation — eliminates thousands of round-trips and clipboard
-*&     paste loops.  finalize_worksheet → single GUI_DOWNLOAD of xstring.
-*&   - set_cell / set_range / paste_data write to lcl_xlsx_writer instead
-*&     of OLE2 go_cell / go_range / clipboard.
-*&   - p_fname directory parameter removed (server-side needs no path).
-*&   - OLE2 ole2_object DATA declarations replaced with stubs.
-*&   - All BCD overflow fixes from v1.7/v1.8/v1.9 fully preserved.
+*& OPERATING MODES
+*&   Default (p_full = ' ')  : Fast server-side plain XLSX via
+*&                              lcl_xlsx_writer + cl_abap_zip + GUI_DOWNLOAD.
+*&                              No OLE2 calls.  No formatting.  No PDF.
+*&                              ~10–50× faster than OLE2.
+*&   Full   (p_full = 'X')  : Original OLE2 path — full Excel formatting
+*&                              + Excel COM PDF export.  Requires SAP GUI.
+*&                              Same speed as the original program.
 *&---------------------------------------------------------------------*
 REPORT ZPRA_DPR_REPORT_S4.
 
@@ -352,8 +349,34 @@ FIELD-SYMBOLS: <gfs_dyn_table>      TYPE STANDARD TABLE,
                <gfs_field2>     ,
                <gfs_field3>     .
 
-"S4: OLE2 objects removed — replaced by lcl_xlsx_writer (server-side XLSX)
-DATA: go_dummy TYPE i.   "placeholder — keeps any residual references from causing syntax errors
+DATA: go_excel                      TYPE ole2_object,
+      go_workbooks                  TYPE ole2_object,
+      go_workbook                   TYPE ole2_object,
+      go_workbook2                  TYPE ole2_object,
+      go_sheets                     TYPE ole2_object,
+      go_worksheet                  TYPE ole2_object,
+      go_worksheet2                 TYPE ole2_object,
+      go_worksheet3                 TYPE ole2_object,
+      go_application                TYPE ole2_object ,
+      go_pagesetup                  TYPE ole2_object ,
+      go_cell                       TYPE ole2_object,
+      go_font                       TYPE ole2_object,
+      go_border                     TYPE ole2_object,
+      go_range0                     TYPE ole2_object,
+      go_range                      TYPE ole2_object,
+      go_column                     TYPE ole2_object,
+      go_row                        TYPE ole2_object,
+      go_cell_from                  TYPE ole2_object,
+      go_cell_to                    TYPE ole2_object,
+      go_interior                   TYPE ole2_object,
+      go_charts                     TYPE ole2_object,
+      go_chart                      TYPE ole2_object,
+      go_chartobjects               TYPE ole2_object ,
+      go_title                      TYPE ole2_object ,
+      go_titlechar                  TYPE ole2_object ,
+      go_axes                       TYPE ole2_object ,
+      go_axestitle                  TYPE ole2_object ,
+      go_legend                     TYPE ole2_object .
 
 DATA: gv_row                        TYPE sy-tabix   ,
       gv_col                        TYPE sy-tabix   ,
@@ -381,9 +404,9 @@ DATA: gv_row                        TYPE sy-tabix   ,
       gv_sheet1_name                TYPE char50  ,
       gv_sheet2_name                TYPE char50  ,
       gv_sheet3_name                TYPE char50  .
-"S4: cell/range position trackers replacing OLE2 go_cell / go_range tracking
-DATA: gv_xlsx_cell_row              TYPE i       ,
-      gv_xlsx_cell_col              TYPE i       .
+DATA: gv_xlsx_cell_row TYPE i,
+      gv_xlsx_cell_col TYPE i.
+
 DATA gs_temp TYPE zoiu_pr_dn .
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001 .
   PARAMETERS : p_date TYPE sy-datum OBLIGATORY.
@@ -414,6 +437,10 @@ SELECTION-SCREEN BEGIN OF BLOCK b5 WITH FRAME TITLE text-005 .
   PARAMETERS : p_fname TYPE string .
 SELECTION-SCREEN END OF BLOCK   b5 .
 
+SELECTION-SCREEN BEGIN OF BLOCK b6 WITH FRAME TITLE text-006 .
+  PARAMETERS : p_full TYPE char1 AS CHECKBOX .   "X = full OLE2 mode (formatted + PDF)
+SELECTION-SCREEN END OF BLOCK   b6 .
+
 AT SELECTION-SCREEN .
   IF p_t_be IS INITIAL AND
      p_t_in IS INITIAL AND
@@ -426,17 +453,37 @@ AT SELECTION-SCREEN .
   IF p_date GT sy-datum.
     MESSAGE 'DPR cannot be run for future dates' TYPE 'E' .
   ENDIF.
-AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
-  CALL METHOD cl_gui_frontend_services=>directory_browse
-    EXPORTING
-      window_title         = 'Select Download Folder'
-    CHANGING
-      selected_folder      = p_fname
-    EXCEPTIONS
-      cntl_error           = 1
-      error_no_gui         = 2
-      not_supported_by_gui = 3
-      OTHERS               = 4.
+  AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
+*
+*CALL FUNCTION 'F4_FILENAME'
+*
+*EXPORTING
+*
+*program_name = syst-cprog
+*
+*dynpro_number = syst-dynnr
+*
+*field_name = ' '
+*
+*IMPORTING
+*
+*file_name = p_fname.
+
+CALL METHOD cl_gui_frontend_services=>directory_browse
+  EXPORTING
+    window_title         = 'Please Select Directory to download File'
+*    initial_folder       =
+  CHANGING
+    selected_folder      = p_fname
+  EXCEPTIONS
+    cntl_error           = 1
+    error_no_gui         = 2
+    not_supported_by_gui = 3
+    others               = 4
+        .
+IF sy-subrc IS NOT INITIAL.
+  MESSAGE 'Error getting Directory Name' TYPE 'E' .
+ENDIF.
 *&---------------------------------------------------------------------*
 
 START-OF-SELECTION .
@@ -447,26 +494,16 @@ START-OF-SELECTION .
 
 *--- Form Routines ---*
 *&---------------------------------------------------------------------*
+
 *----------------------------------------------------------------------*
-*  LOCAL CLASS: LCL_XLSX_WRITER  (S/4HANA — server-side XLSX, no OLE2)
-*  Builds Open XML workbook in ABAP memory.  All data written via
-*  add_cell(); get_xlsx() zips it and returns xstring ready for
-*  GUI_DOWNLOAD.  Replaces the OLE2 CREATE OBJECT go_excel approach.
+*  LOCAL CLASS: LCL_XLSX_WRITER  (S/4HANA fast plain-XLSX path)
+*  Builds Open XML workbook in memory; one GUI_DOWNLOAD call to ship it.
+*  Performance optimisations:
+*    - Cells in SORTED TABLE keyed by row/col (correct numeric order)
+*    - sheet_xml builds string table, joins once  (avoids O(n²) concat)
+*    - Cached cl_abap_conv_out_ce instance (one converter, reused)
+*    - SCMS_XSTRING_TO_BINARY for the xstring→x255 chunk conversion
 *----------------------------------------------------------------------*
-"======================================================================
-" lcl_xlsx_writer v2.3 — performance-optimised server-side XLSX writer
-"
-" KEY IMPROVEMENTS vs v2.0–2.2:
-"  1. Cells stored in a SORTED typed table (row/col INTEGER keys) instead
-"     of encoded strings — eliminates lexicographic mis-sort and the
-"     encode/decode overhead per cell.
-"  2. sheet_xml builds XML into a STRING TABLE (lt_parts) and joins once
-"     with concat_lines_of() — eliminates the O(n²) string-copy loop.
-"  3. to_xs reuses a single codepage converter (CLASS-DATA) instead of
-"     creating a new object for every xml segment.
-"  4. finalize_worksheet uses SCMS_XSTRING_TO_BINARY instead of a manual
-"     WHILE loop — conversion done in one C-level SAP kernel call.
-"======================================================================
 CLASS lcl_xlsx_writer DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS:
@@ -498,7 +535,6 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
   METHOD init_sheet.
     CLEAR gt_cells.
     gv_sheet_name = iv_name.
-    "create once — reused by every to_xs call
     IF go_conv IS NOT BOUND.
       go_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
     ENDIF.
@@ -510,7 +546,6 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
     DATA ls TYPE ty_cell.
     DATA lv_v TYPE string.
     lv_v = iv_value.
-    "XML-escape in place
     REPLACE ALL OCCURRENCES OF `&` IN lv_v WITH `&amp;`.
     REPLACE ALL OCCURRENCES OF `<` IN lv_v WITH `&lt;`.
     REPLACE ALL OCCURRENCES OF `>` IN lv_v WITH `&gt;`.
@@ -534,7 +569,6 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
     ENDDO.
   ENDMETHOD.
   METHOD to_xs.
-    "reuse cached converter — avoids creating a new object per call
     IF go_conv IS NOT BOUND.
       go_conv = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
     ENDIF.
@@ -542,8 +576,6 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
                       IMPORTING buffer = rv_xs ).
   ENDMETHOD.
   METHOD sheet_xml.
-    "Build XML into a STRING TABLE — one APPEND per fragment, then join
-    "once.  Avoids the O(n²) copy cost of repeated string concatenation.
     DATA lt_parts TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
     DATA lv_pr    TYPE i VALUE 0.
     APPEND `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
@@ -569,48 +601,48 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
   ENDMETHOD.
   METHOD wb_xml.
     DATA(lv_n) = COND string( WHEN gv_sheet_name IS INITIAL
-                               THEN 'DPR' ELSE gv_sheet_name ).
+                              THEN 'DPR' ELSE gv_sheet_name ).
     rv_xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-          && `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `
-          && `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
-          && `<sheets>`
-          && |<sheet name="{ lv_n }" sheetId="1" r:id="rId1"/>|
-          && `</sheets></workbook>`.
+      && `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" `
+      && `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+      && `<sheets>`
+      && |<sheet name="{ lv_n }" sheetId="1" r:id="rId1"/>|
+      && `</sheets></workbook>`.
   ENDMETHOD.
   METHOD sty_xml.
     rv_xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-          && `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
-          && `<fonts count="1"><font><sz val="10"/><name val="Calibri"/></font></fonts>`
-          && `<fills count="2"><fill><patternFill patternType="none"/></fill>`
-          && `<fill><patternFill patternType="gray125"/></fill></fills>`
-          && `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
-          && `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
-          && `<cellXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>`
-          && `</styleSheet>`.
+      && `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+      && `<fonts count="1"><font><sz val="10"/><name val="Calibri"/></font></fonts>`
+      && `<fills count="2"><fill><patternFill patternType="none"/></fill>`
+      && `<fill><patternFill patternType="gray125"/></fill></fills>`
+      && `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
+      && `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
+      && `<cellXfs><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>`
+      && `</styleSheet>`.
   ENDMETHOD.
   METHOD get_xlsx.
     DATA(lo_zip) = NEW cl_abap_zip( ).
     DATA lv_ct TYPE string.
     lv_ct = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-         && `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
-         && `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
-         && `<Default Extension="xml" ContentType="application/xml"/>`
-         && `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
-         && `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
-         && `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
-         && `</Types>`.
+       && `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+       && `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
+       && `<Default Extension="xml" ContentType="application/xml"/>`
+       && `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
+       && `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+       && `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
+       && `</Types>`.
     lo_zip->add( name = '[Content_Types].xml' content = to_xs( lv_ct ) ).
     DATA lv_r TYPE string.
     lv_r = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-        && `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-        && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`
-        && `</Relationships>`.
+      && `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+      && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`
+      && `</Relationships>`.
     lo_zip->add( name = '_rels/.rels' content = to_xs( lv_r ) ).
     DATA lv_wr TYPE string.
     lv_wr = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
-          && `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
-          && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`
-          && `</Relationships>`.
+      && `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+      && `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>`
+      && `</Relationships>`.
     lo_zip->add( name = 'xl/_rels/workbook.xml.rels' content = to_xs( lv_wr ) ).
     lo_zip->add( name = 'xl/workbook.xml'            content = to_xs( wb_xml( ) ) ).
     lo_zip->add( name = 'xl/styles.xml'              content = to_xs( sty_xml( ) ) ).
@@ -619,7 +651,6 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
   ENDMETHOD.
 ENDCLASS.
 
-*----------------------------------------------------------------------*
 FORM fetch_data .
 *  DATA : lt_zpra_t_dly_prd  TYPE STANDARD TABLE OF zpra_t_dly_prd .
   DATA : lv_mrec_start_date  TYPE sy-datum,
@@ -1086,17 +1117,58 @@ FORM process_data .
 
   PERFORM process_sec4_data .
 
-  "S4: worksheet activate not needed for server-side XLSX
+  CALL METHOD OF go_worksheet2 'ACTIVATE'.
+
   PERFORM process_sec5_data .
 
   PERFORM process_sec6_data .
 
-  "S4: worksheet activate not needed for server-side XLSX
+  CALL METHOD OF go_worksheet 'ACTIVATE'.
+
   PERFORM set_columns_width .
+  IF p_full IS INITIAL. RETURN. ENDIF.
 
   PERFORM border_cells .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM set_cell_formats .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM finalize_worksheet .
+  IF p_full IS INITIAL.
+    "S4 fast path — server-side XLSX + GUI_DOWNLOAD
+    DATA: lv_xstr      TYPE xstring,
+          lt_bin       TYPE STANDARD TABLE OF x255 WITH DEFAULT KEY,
+          lv_xlen      TYPE i,
+          lv_fname     TYPE string,
+          lv_datum_ext TYPE char10,
+          lv_uzeit_ext TYPE char8.
+    CONCATENATE sy-uzeit(2) '-' sy-uzeit+2(2) '-' sy-uzeit+4(2) INTO lv_uzeit_ext .
+    CONCATENATE sy-datum+6(2) '-' sy-datum+4(2) '-' sy-datum(4) INTO lv_datum_ext .
+    IF p_fname IS NOT INITIAL.
+      CONCATENATE p_fname '\DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname .
+    ELSE.
+      CONCATENATE 'DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname .
+    ENDIF.
+    REFRESH gt_paste.
+    lv_xstr = lcl_xlsx_writer=>get_xlsx( ).
+    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+      EXPORTING  buffer        = lv_xstr
+      IMPORTING  output_length = lv_xlen
+      TABLES     binary_tab    = lt_bin.
+    CALL FUNCTION 'GUI_DOWNLOAD'
+      EXPORTING filename     = lv_fname
+                filetype     = 'BIN'
+                bin_filesize = lv_xlen
+      TABLES    data_tab     = lt_bin
+      EXCEPTIONS file_write_error = 1 OTHERS = 2.
+    IF sy-subrc IS INITIAL.
+      MESSAGE 'Report downloaded successfully (XLSX)' TYPE 'S'.
+    ELSE.
+      MESSAGE 'Error downloading report' TYPE 'E'.
+    ENDIF.
+    RETURN.
+  ENDIF.
+
+  "Full OLE2 path follows ↓
 ENDFORM.
 FORM process_sec1_data .
   gt_zpra_t_dly_prd2 = gt_zpra_t_dly_prd.
@@ -1436,11 +1508,34 @@ FORM display_section2a2 .
   PERFORM prepare_paste_data TABLES <gfs_sec2a2_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
+  "S4: always write gt_paste rows to xlsx writer
+  DATA: lvr     TYPE i,
+        lvc     TYPE i,
+        lvval   TYPE string,
+        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+  lvr = gv_s_row.
+  LOOP AT gt_paste INTO gs_paste.
+    lvc = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lvval.
+      IF lvval IS NOT INITIAL.
+        lcl_xlsx_writer=>add_cell( iv_row = lvr iv_col = lvc iv_value = lvval ).
+      ENDIF.
+      lvc = lvc + 1.
+    ENDLOOP.
+    lvr = lvr + 1.
+  ENDLOOP.
+  IF p_full IS INITIAL. RETURN. ENDIF.
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec2a2_colour .
   gv_row = gv_e_row .
 
+  PERFORM select_range USING gv_s_row 2 gv_e_row 2  .
+  PERFORM set_numberformat USING 'mmm yyyy'.
+
   PERFORM select_range USING gv_s_row 1 gv_e_row 1  .
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'Prod. : MTD Actual'  0.
 
 ENDFORM.
@@ -1456,8 +1551,12 @@ FORM display_section2a3 .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec2a3_colour .
   gv_row = gv_e_row .
+
+  PERFORM select_range USING gv_row 2 gv_row 2  .
+  PERFORM set_numberformat USING 'mmm yyyy'.
 
 *  PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
 *  PERFORM set_range USING 'Monthly Actual' 0.
@@ -1476,10 +1575,15 @@ FORM display_section2d .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec2d_colour .
   gv_row = gv_e_row .
 
+*  PERFORM select_range USING gv_row 2 gv_row 2  .
+*  PERFORM set_numberformat USING 'mmmm yyyy'.
+
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'YTD Actual Prod.' 0.
 ENDFORM.
 FORM display_section2f .
@@ -1495,9 +1599,12 @@ FORM display_section2f .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec2f_colour .
   gv_row = gv_e_row .
   gv_sec2_end_row = gv_row .
+*  PERFORM select_range USING gv_row 2 gv_row 2  .
+*  PERFORM set_numberformat USING 'mmmm yyyy'.
 ENDFORM.
 FORM display_section3a .
   DATA lv_lines TYPE sy-tabix .
@@ -1522,10 +1629,12 @@ FORM display_section3a .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3a_colour .
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   CONCATENATE 'Target :' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM set_range USING gv_txt 0.
 
@@ -1553,10 +1662,12 @@ FORM display_section3b .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3b_colour .
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   CONCATENATE 'YTD Target :' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM set_range USING gv_txt 0.
 
@@ -1584,10 +1695,15 @@ FORM display_section2e .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904754--------------------*
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec2e_colour .
   gv_row = gv_e_row .
 
+*  PERFORM select_range USING gv_row 2 gv_row 2  .
+*  PERFORM set_numberformat USING 'mmmm yyyy'.
+
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   CONCATENATE 'Asking Rate :' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO lv_txt SEPARATED BY space.
   PERFORM set_range USING lv_txt 1.
 
@@ -1605,7 +1721,8 @@ FORM display_section3c .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3c_colour .
   gv_row = gv_e_row .
 
 ENDFORM.
@@ -1616,13 +1733,17 @@ FORM display_section4a .
   gv_row   = gv_row + 2 .
   gv_sec4_start_row = gv_row .
   PERFORM select_range USING gv_row 1 gv_row 2  .
-  "S4: merge/colour not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'Gas Production (YTD)' 0.
+
+  PERFORM set_range_interior USING gv_header_gas_colour.
 
   gv_row   = gv_row + 1 .
   PERFORM select_range USING gv_row 1 gv_row 2  .
-  "S4: merge/colour not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'Unit of Measurement: MMSCM' 0.
+
+  PERFORM set_range_interior USING gv_header_gas_colour.
 
   gv_row   = gv_row + 1 .
   gv_s_row = gv_row .
@@ -1660,8 +1781,12 @@ FORM display_section4b .
   PERFORM set_range USING 'Date' 0.
 
   PERFORM select_range USING gv_row 3 gv_row 9  .
-  "S4: merge not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'Comments' 0.
+
+  PERFORM select_range USING gv_row 1 gv_row 9  .
+  PERFORM set_range_font  USING 13 1 .
+  PERFORM set_all_borders_range .
 
   gv_row   = gv_row + 1 .
   gv_s_row = gv_row .
@@ -1672,7 +1797,17 @@ FORM display_section4b .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: border/formatting not applicable for server-side XLSX
+  PERFORM select_range USING gv_s_row 1 gv_e_row 2  .
+  PERFORM set_all_borders_range .
+
+  PERFORM select_range USING gv_s_row 3 gv_e_row 9  .
+  PERFORM set_thin_border USING 1 1 1 1 .
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+
+
   gv_row = gv_e_row .
 
 ENDFORM.
@@ -1693,12 +1828,85 @@ FORM display_section5a .
   PERFORM prepare_section5a_paste_data .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data_sheet2 .
+  "S4: always write gt_paste rows to xlsx writer
+  DATA: lvr     TYPE i,
+        lvc     TYPE i,
+        lvval   TYPE string,
+        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+  lvr = gv_s_row.
+  LOOP AT gt_paste INTO gs_paste.
+    lvc = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lvval.
+      IF lvval IS NOT INITIAL.
+        lcl_xlsx_writer=>add_cell( iv_row = lvr iv_col = lvc iv_value = lvval ).
+      ENDIF.
+      lvc = lvc + 1.
+    ENDLOOP.
+    lvr = lvr + 1.
+  ENDLOOP.
+  IF p_full IS INITIAL. RETURN. ENDIF.
 
   PERFORM create_chart .
+  IF p_full IS INITIAL. RETURN. ENDIF.
 
 ENDFORM.
 FORM create_chart .
-  "S4: chart creation not applicable for server-side XLSX
+  DATA : lv_chart_title TYPE char50,
+         lv_unit        TYPE char10.
+  CASE abap_true.
+    WHEN p_bb.
+      lv_unit   = 'BOE' .
+    WHEN p_bbd.
+      lv_unit   = 'BOEPD' .
+    WHEN p_tm.
+      lv_unit   = 'TOE' .
+    WHEN p_tmd.
+      lv_unit   = 'TOEPD' .
+    WHEN p_mb.
+      lv_unit   = 'MMTOE' .
+    WHEN p_bmd.
+      lv_unit   = 'BOEPD' .
+    WHEN OTHERS.
+  ENDCASE.
+  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr INTO lv_chart_title SEPARATED BY space .
+  GET PROPERTY OF go_application 'Charts' = go_charts .
+  CALL METHOD OF go_charts 'Add' = go_chart .
+  CALL METHOD OF go_chart 'Activate' .
+  SET PROPERTY OF go_chart 'HasTitle' = 1.
+  GET PROPERTY OF go_chart 'ChartTitle' = go_title.
+  GET PROPERTY OF go_title 'Characters' = go_titlechar.
+  SET PROPERTY OF go_titlechar 'Text' = lv_chart_title.
+
+  CALL METHOD OF go_chart 'Axes' = go_axes
+    EXPORTING    #2 = 2.
+  SET PROPERTY OF go_axes 'HasTitle' = 1.
+  GET PROPERTY OF go_axes 'AxisTitle' = go_axestitle.
+  GET PROPERTY OF go_axestitle 'Characters' = go_axestitle.
+  SET PROPERTY OF go_axestitle 'Text' = lv_unit.
+
+  SET PROPERTY OF go_chart 'HasLegend' = 1.
+  GET PROPERTY OF go_chart 'Legend'  = go_legend.
+  CALL METHOD OF go_legend 'Select'.
+  SET PROPERTY OF go_legend 'Position'  =  '-4160'.
+
+  SET PROPERTY OF go_chart 'ChartType' = '65' .
+  CALL METHOD OF go_chart 'SetSourceData'
+    EXPORTING
+      #1 = go_range
+      #2 = 1.
+  CALL METHOD OF go_worksheet3 'ACTIVATE'.
+
+  CALL METHOD OF go_chart 'Location'
+    EXPORTING
+      #1 = 2
+      #2 = gv_sheet3_name.
+  CALL METHOD OF go_worksheet3 'ChartObjects' = go_chartobjects .
+  SET PROPERTY OF go_chartobjects 'Left' = 1 .
+  SET PROPERTY OF go_chartobjects 'Top' = 30 .
+  SET PROPERTY OF go_chartobjects 'Height' = 600 .
+  SET PROPERTY OF go_chartobjects 'Width' = 1000 .
+
 ENDFORM.
 FORM display_section6 .
   DATA lv_lines TYPE sy-tabix .
@@ -1722,7 +1930,7 @@ FORM display_section6 .
   CONCATENATE 'ONGC Videsh' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  "S4: merge not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING gv_txt 0.
 
   gv_e_row = gv_s_row .
@@ -1732,7 +1940,7 @@ FORM display_section6 .
   PERFORM get_unit_desc USING c_prod_oil CHANGING lv_ind_unit lv_total_unit .
   CONCATENATE 'Oil, LNG & Condensate (' lv_ind_unit ')' INTO gv_txt SEPARATED BY space.
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  "S4: merge not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING gv_txt 0.
 
   gv_e_row = gv_s_row .
@@ -1742,7 +1950,7 @@ FORM display_section6 .
   PERFORM get_unit_desc USING c_prod_gas CHANGING lv_ind_unit lv_total_unit .
   CONCATENATE 'Gas (' lv_ind_unit ')' INTO gv_txt SEPARATED BY space.
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  "S4: merge not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING gv_txt 0.
 
   CASE abap_true.
@@ -1767,7 +1975,7 @@ FORM display_section6 .
 
   CONCATENATE 'Total (O+OEG) (' lv_gt_unit ')' INTO gv_txt SEPARATED BY space.
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  "S4: merge not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING gv_txt 0.
 
   gv_s_row = gv_s_row + 1 .
@@ -1802,7 +2010,15 @@ FORM display_section6 .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM set_range USING 'YTD' 0.
 
-  "S4: colour/border/formatting not applicable for server-side XLSX
+  PERFORM select_range USING gv_row 1 gv_e_row gv_e_col  .
+  PERFORM set_range_font  USING 13 1 .
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = 12611584 .
+  GET PROPERTY OF go_range 'FONT' = go_font .
+  SET PROPERTY OF go_font 'COLOR' = '-460552' .
+  PERFORM set_range_formatting USING  0 'C' 'C' .
+  PERFORM set_all_borders_range .
+
   gv_row   = gv_row + 2 .
   gv_s_row = gv_row .
   gv_s_col = 1 .
@@ -1811,8 +2027,41 @@ FORM display_section6 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data_sheet3 .
+  "S4: always write gt_paste rows to xlsx writer
+  DATA: lvr     TYPE i,
+        lvc     TYPE i,
+        lvval   TYPE string,
+        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+  lvr = gv_s_row.
+  LOOP AT gt_paste INTO gs_paste.
+    lvc = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lvval.
+      IF lvval IS NOT INITIAL.
+        lcl_xlsx_writer=>add_cell( iv_row = lvr iv_col = lvc iv_value = lvval ).
+      ENDIF.
+      lvc = lvc + 1.
+    ENDLOOP.
+    lvr = lvr + 1.
+  ENDLOOP.
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  PERFORM set_all_borders_range .
+
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
 
   gv_row = gv_e_row .
+  gv_s_col = gv_s_col + 1 .
+  PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
+  PERFORM set_range_formatting USING  0 'C' 'C' .
+  PERFORM set_numberformat USING '0.000' .
+
+  PERFORM col_width USING 1 1 '27'  .
+  PERFORM col_width USING 2 7 '16'  .
+
+  PERFORM select_range USING 1 1 1 1  .
 
 ENDFORM.
 FORM display_section3f .
@@ -1828,10 +2077,12 @@ FORM display_section3f .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3f_colour .
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   gv_txt = 'Actual Production'.
   PERFORM set_range USING gv_txt 1.
 
@@ -1850,10 +2101,12 @@ FORM display_section3d .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3d_colour .
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   gv_txt = '% Achiev. wrt YTD Target' .
   PERFORM set_range USING gv_txt 1.
 
@@ -1871,10 +2124,12 @@ FORM display_section3e .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
 
-  "S4: colour/merge/formatting not applicable for server-side XLSX
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3e_colour .
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
+  CALL METHOD OF go_range 'Merge' .
   gv_txt = '% Achiev. wrt Yearly Target' .
   PERFORM set_range USING gv_txt 1.
 
@@ -1882,16 +2137,57 @@ FORM display_section3e .
 ENDFORM.
 
 FORM start_excel .
-  "S4: Initialize server-side XLSX writer (replaces OLE2 Excel automation)
+  "S4: always initialise the fast XLSX writer
+  lcl_xlsx_writer=>clear_all( ).
+  lcl_xlsx_writer=>init_sheet( 'DPR' ).
+  IF p_full IS INITIAL.
+    gv_sheet1_name = '1' .
+    gv_sheet2_name = '2' .
+    gv_sheet3_name = 'Production Performance' .
+    gv_row = 1 .
+    RETURN.
+  ENDIF.
+  CREATE OBJECT go_excel 'excel.application' .
+  SET PROPERTY OF go_excel 'VISIBLE' = 0 .
+  CALL METHOD OF go_excel 'WORKBOOKS' = go_workbooks .
+
   gv_sheet1_name = '1' .
   gv_sheet2_name = '2' .
   gv_sheet3_name = 'Production Performance' .
-  lcl_xlsx_writer=>clear_all( ).
-  lcl_xlsx_writer=>init_sheet( 'DPR' ).
+
+  CALL METHOD OF go_workbooks 'ADD' = go_workbook .
+  GET PROPERTY OF go_workbook 'Application' = go_application .
+  CALL METHOD OF go_excel 'WORKSHEETS' = go_worksheet3
+  EXPORTING
+    #1 =  1.
+  GET PROPERTY OF go_excel 'Sheets' = go_sheets .
+  CALL METHOD OF go_sheets 'Add' = go_worksheet2 .
+  CALL METHOD OF go_sheets 'Add' = go_worksheet .
+  SET PROPERTY OF go_worksheet  'Name' = gv_sheet1_name .
+  SET PROPERTY OF go_worksheet2 'Name' = gv_sheet2_name .
+  SET PROPERTY OF go_worksheet3 'Name' = gv_sheet3_name .
+
+  CALL METHOD OF go_worksheet 'ACTIVATE'.
+  SET PROPERTY OF go_excel 'PrintCommunication' = abap_false.
+  CALL METHOD OF go_worksheet 'PAGESETUP' = go_pagesetup .
+  SET PROPERTY OF go_pagesetup 'FitToPagesWide' = 1 .
+  SET PROPERTY OF go_pagesetup 'FitToPagesTall' = 0 .
+  SET PROPERTY OF go_pagesetup 'Orientation' = 2 .
+  SET PROPERTY OF go_excel 'PrintCommunication' = abap_true.
+
+  SET PROPERTY OF go_excel 'PrintCommunication' = abap_false.
+  CALL METHOD OF go_worksheet3 'PAGESETUP' = go_pagesetup .
+  SET PROPERTY OF go_pagesetup 'FitToPagesWide' = 1 .
+  SET PROPERTY OF go_pagesetup 'FitToPagesTall' = 0 .
+  SET PROPERTY OF go_pagesetup 'Orientation' = 2 .
+  SET PROPERTY OF go_excel 'PrintCommunication' = abap_true.
+
+
   gv_row = 1 .
 ENDFORM.
 FORM display_section1_header .
   PERFORM display_logo .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM display_report_date .
   PERFORM display_product_names .
   PERFORM display_asset_names .
@@ -1900,8 +2196,10 @@ FORM display_section1_header .
   PERFORM display_consortium_level .
   PERFORM display_units .
   PERFORM join_header_total_cells .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM join_header1_column_1_2 .
   PERFORM set_section1_header_colors .
+  IF p_full IS INITIAL. RETURN. ENDIF.
 ENDFORM.
 FORM display_section1_data .
   DATA : lv_lines TYPE sy-tabix,
@@ -1917,9 +2215,13 @@ FORM display_section1_data .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
   PERFORM colour_alternate_rows .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM colour_yellow_cells .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM colour_dates .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM colour_sec1_data_totals .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   gv_row = gv_e_row .
   gv_sec2_start_row = gv_row + 1.
 
@@ -1929,66 +2231,149 @@ FORM display_section1_data .
 ENDFORM.
 FORM formatting_section1 .
   PERFORM merge_col_1_2_section1 .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM format_sec1_header .
+  IF p_full IS INITIAL. RETURN. ENDIF.
   PERFORM format_sec1_data_col_1_2 .
+  IF p_full IS INITIAL. RETURN. ENDIF.
 ENDFORM .
 FORM select_cell  USING    p_row
                            p_col.
-  "S4: track current cell position for subsequent set_cell calls
+  "S4: always track xlsx position
   gv_xlsx_cell_row = p_row. gv_xlsx_cell_col = p_col.
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  CALL METHOD OF go_excel 'Cells' = go_cell
+                         EXPORTING #1 = p_row #2 = p_col.
 ENDFORM.
 FORM set_cell  USING    p_cell_value
                         p_wraptext  .
-  "S4: write to tracked cell position via XLSX writer
+  "S4: always write to xlsx writer
   DATA lv_v TYPE string.
   lv_v = p_cell_value.
   IF lv_v IS NOT INITIAL.
     lcl_xlsx_writer=>add_cell( iv_row = gv_xlsx_cell_row iv_col = gv_xlsx_cell_col iv_value = lv_v ).
   ENDIF.
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  SET PROPERTY OF go_cell 'Value' = p_cell_value .
+  SET PROPERTY OF go_cell 'WrapText' = p_wraptext .
 ENDFORM.
 
 FORM select_range  USING    p_s_row
                             p_s_col
                             p_e_row
                             p_e_col .
-  "S4: track range positions (used by set_range and paste_data)
+  "S4: always track xlsx range positions
   gv_s_row = p_s_row . gv_s_col = p_s_col .
   gv_e_row = p_e_row . gv_e_col = p_e_col .
   gv_xlsx_cell_row = p_s_row . gv_xlsx_cell_col = p_s_col .
-ENDFORM.
+  IF p_full IS INITIAL. RETURN. ENDIF.
 
+  CALL METHOD OF go_excel 'Cells' = go_cell_from
+   EXPORTING
+   #1 = p_s_row
+   #2 = p_s_col .
+
+  CALL METHOD OF go_excel 'Cells' = go_cell_to
+   EXPORTING
+   #1 = p_e_row
+   #2 = p_e_col .
+
+  CALL METHOD OF go_excel 'Range' = go_range
+    EXPORTING
+    #1 = go_cell_from
+    #2 = go_cell_to.
+
+  CALL METHOD OF go_range 'Select' .
+
+ENDFORM.
 FORM set_range  USING    p_cell_value
                         p_wraptext  .
-  "S4: write header/label text to top-left of selected range
+  "S4: always write top-left of range to xlsx writer
   DATA lv_v TYPE string.
   lv_v = p_cell_value.
   IF lv_v IS NOT INITIAL.
     lcl_xlsx_writer=>add_cell( iv_row = gv_s_row iv_col = gv_s_col iv_value = lv_v ).
   ENDIF.
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  SET PROPERTY OF go_range 'Value' = p_cell_value .
+  SET PROPERTY OF go_range 'WrapText' = p_wraptext .
 ENDFORM.
 FORM set_range_font  USING    p_size
                               p_bold.
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  GET PROPERTY OF go_range 'FONT' = go_font .
+  SET PROPERTY OF go_font  'BOLD' = p_bold .
+  SET PROPERTY OF go_font  'Size' = p_size .
 ENDFORM.
 
 FORM set_range_formatting USING p_wraptext
                                 p_horizontal
                                 p_vertical .
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  SET PROPERTY OF go_range 'WrapText' = p_wraptext .
+  IF p_horizontal EQ 'C'.
+    SET PROPERTY OF go_range 'HorizontalAlignment' =  -4108 .
+  ELSEIF  p_horizontal EQ 'L'.
+    SET PROPERTY OF go_range 'HorizontalAlignment' =  -4131 .
+  ELSEIF  p_horizontal EQ 'R'.
+    SET PROPERTY OF go_range 'HorizontalAlignment' =  -4152 .
+  ENDIF.
+  IF p_vertical EQ 'C' .
+    SET PROPERTY OF go_range 'VerticalAlignment' = -4108 .
+  ELSEIF p_vertical EQ 'T' .
+    SET PROPERTY OF go_range 'VerticalAlignment' = -4160 .
+  ELSEIF p_vertical EQ 'B' .
+    SET PROPERTY OF go_range 'VerticalAlignment' = -4107 .
+  ENDIF.
+
 ENDFORM .
 FORM set_thin_border   USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  IF p_left EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
+    SET PROPERTY OF go_border 'LineStyle' = '1'  .
+  ENDIF.
+  IF p_right EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
+    SET PROPERTY OF go_border 'LineStyle' = '1' .
+  ENDIF.
+  IF p_top EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '8'.
+    SET PROPERTY OF go_border 'LineStyle' = '1' .
+  ENDIF.
+  IF p_bottom EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '9'.
+    SET PROPERTY OF go_border 'LineStyle' = '1' .
+  ENDIF.
 ENDFORM.
 
 FORM row_height  USING  p_row
                         p_height .
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  CALL METHOD OF go_excel 'ROWS' = go_row
+    EXPORTING
+      #1 = p_row .
+*CALL METHOD OF go_row 'Select' .
+  SET PROPERTY OF go_row 'Rowheight' = p_height.
+
 ENDFORM.
 FORM merge_col_1_2_section1 .
-  "S4: formatting not applicable for server-side XLSX
+  DATA lv_row TYPE sy-tabix .
+  PERFORM select_range USING gv_sec1_h_start_row 1 gv_sec1_h_start_row 2 .
+  go_range0 = go_range .
+  CALL METHOD OF go_range0 'Copy' .
+  lv_row = gv_sec1_h_start_row + 1 .
+  PERFORM select_range USING lv_row 1 gv_row 2 .
+  CALL METHOD OF go_range 'PasteSpecial'
+    EXPORTING
+      #1 = -4122.
+
+  PERFORM select_range USING lv_row 1 gv_row 2  .
+  PERFORM set_numberformat USING 'dd-mmm-yyyy'.
+
 ENDFORM.
 FORM format_sec1_header .
   DATA : lv_row  TYPE sy-tabix .
@@ -2566,78 +2951,198 @@ FORM fill_null_values_with_previous .
   UNASSIGN : <lfs_dyn_line> .
 ENDFORM.
 FORM paste_data .
-  "S4: Write gt_paste rows directly to XLSX writer (replaces clipboard+OLE2 paste)
-  DATA: lv_row   TYPE i,
-        lv_col   TYPE i,
-        lv_val   TYPE string,
-        lt_vals  TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-  lv_row = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lv_col = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lv_val.
-      IF lv_val IS NOT INITIAL.
-        lcl_xlsx_writer=>add_cell( iv_row = lv_row iv_col = lv_col iv_value = lv_val ).
-      ENDIF.
-      lv_col = lv_col + 1.
-    ENDLOOP.
-    lv_row = lv_row + 1.
-  ENDLOOP.
+  DO 10 TIMES .
+    CALL METHOD cl_gui_frontend_services=>clipboard_export
+      IMPORTING
+        data         = gt_paste
+      CHANGING
+        rc           = gv_rc
+      EXCEPTIONS
+        cntl_error   = 1
+        error_no_gui = 2
+        OTHERS       = 4.
+    IF sy-subrc IS INITIAL AND gv_rc IS INITIAL.
+      EXIT .
+    ENDIF.
+  ENDDO.
+  DO 10 TIMES .
+    CALL METHOD OF go_worksheet 'Paste'.
+    IF sy-subrc IS INITIAL.
+      EXIT.
+    ENDIF.
+  ENDDO.
 ENDFORM.
 FORM paste_data_sheet3 .
-  "S4: Write gt_paste rows directly to XLSX writer (same sheet — replaces clipboard+OLE2 paste)
-  DATA: lv_row   TYPE i,
-        lv_col   TYPE i,
-        lv_val   TYPE string,
-        lt_vals  TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-  lv_row = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lv_col = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lv_val.
-      IF lv_val IS NOT INITIAL.
-        lcl_xlsx_writer=>add_cell( iv_row = lv_row iv_col = lv_col iv_value = lv_val ).
-      ENDIF.
-      lv_col = lv_col + 1.
-    ENDLOOP.
-    lv_row = lv_row + 1.
-  ENDLOOP.
+  DO 10 TIMES .
+    CALL METHOD cl_gui_frontend_services=>clipboard_export
+      IMPORTING
+        data         = gt_paste
+      CHANGING
+        rc           = gv_rc
+      EXCEPTIONS
+        cntl_error   = 1
+        error_no_gui = 2
+        OTHERS       = 4.
+    IF sy-subrc IS INITIAL AND gv_rc IS INITIAL.
+      EXIT .
+    ENDIF.
+  ENDDO.
+  DO 10 TIMES .
+    CALL METHOD OF go_worksheet3 'Paste'.
+    IF sy-subrc IS INITIAL.
+      EXIT.
+    ENDIF.
+  ENDDO.
+
 ENDFORM.
 FORM paste_data_sheet2 .
-  "S4: Write gt_paste rows directly to XLSX writer (same sheet — replaces clipboard+OLE2 paste)
-  DATA: lv_row   TYPE i,
-        lv_col   TYPE i,
-        lv_val   TYPE string,
-        lt_vals  TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
-  lv_row = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lv_col = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lv_val.
-      IF lv_val IS NOT INITIAL.
-        lcl_xlsx_writer=>add_cell( iv_row = lv_row iv_col = lv_col iv_value = lv_val ).
-      ENDIF.
-      lv_col = lv_col + 1.
-    ENDLOOP.
-    lv_row = lv_row + 1.
-  ENDLOOP.
+  DO 10 TIMES .
+    CALL METHOD cl_gui_frontend_services=>clipboard_export
+      IMPORTING
+        data         = gt_paste
+      CHANGING
+        rc           = gv_rc
+      EXCEPTIONS
+        cntl_error   = 1
+        error_no_gui = 2
+        OTHERS       = 4.
+    IF sy-subrc IS INITIAL AND gv_rc IS INITIAL.
+      EXIT .
+    ENDIF.
+  ENDDO.
+  DO 10 TIMES .
+    CALL METHOD OF go_worksheet2 'Paste'.
+    IF sy-subrc IS INITIAL.
+      EXIT.
+    ENDIF.
+  ENDDO.
 ENDFORM.
 FORM colour_yellow_cells .
-  "S4: formatting not applicable for server-side XLSX
+  DATA : lv_row TYPE sy-tabix .
+  LOOP AT gt_copied_cells INTO gs_copied_cells.
+    lv_row = gv_row + gs_copied_cells-row - 1 .
+    CALL METHOD OF go_excel 'Cells' = go_cell
+     EXPORTING
+     #1 = lv_row
+     #2 = gs_copied_cells-col .
+
+    GET PROPERTY OF go_cell 'interior' = go_interior .
+    SET PROPERTY OF go_interior 'Color' = 65535 .
+
+    GET PROPERTY OF go_cell 'FONT' = go_font .
+    SET PROPERTY OF go_font 'COLOR' = '-16776961' .
+  ENDLOOP.
 ENDFORM.
 FORM display_logo .
-  "S4: logo embedding skipped for server-side XLSX — increment row counter only
-  gv_row = gv_row + 2.
+  PERFORM download_image .
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  PERFORM display_image  .
+  PERFORM delete_image   .
+
   PERFORM show_progress USING '0' .
 ENDFORM.
 FORM download_image .
-  "S4: logo download not needed for server-side XLSX
+
+  DATA : l_bytecount TYPE i,
+         l_tdbtype   LIKE stxbitmaps-tdbtype,
+         l_content   TYPE STANDARD TABLE OF bapiconten INITIAL SIZE 0.
+
+  DATA: graphic_size TYPE i.
+
+  DATA: BEGIN OF graphic_table OCCURS 0,
+          line(255) TYPE x,
+        END OF graphic_table.
+
+  CONCATENATE p_fname '\' sy-datum sy-uzeit '.bmp' INTO gv_image_name .
+  CALL FUNCTION 'SAPSCRIPT_GET_GRAPHIC_BDS'
+    EXPORTING
+      i_object       = 'GRAPHICS'
+      i_name         = 'OVL_FULL'
+      i_id           = 'BMAP'
+      i_btype        = 'BCOL'
+    IMPORTING
+      e_bytecount    = l_bytecount
+    TABLES
+      content        = l_content
+    EXCEPTIONS
+      not_found      = 1
+      bds_get_failed = 2
+      bds_no_content = 3
+      OTHERS         = 4.
+
+  CALL FUNCTION 'SAPSCRIPT_CONVERT_BITMAP'
+    EXPORTING
+      old_format               = 'BDS'
+      new_format               = 'BMP'
+      bitmap_file_bytecount_in = l_bytecount
+    IMPORTING
+      bitmap_file_bytecount    = graphic_size
+    TABLES
+      bds_bitmap_file          = l_content
+      bitmap_file              = graphic_table
+    EXCEPTIONS
+      OTHERS                   = 1.
+
+  CALL FUNCTION 'WS_DOWNLOAD'
+    EXPORTING
+      bin_filesize            = graphic_size
+      filename                = gv_image_name
+      filetype                = 'BIN'
+    TABLES
+      data_tab                = graphic_table
+    EXCEPTIONS
+      invalid_filesize        = 1
+      invalid_table_width     = 2
+      invalid_type            = 3
+      no_batch                = 4
+      unknown_error           = 5
+      gui_refuse_filetransfer = 6.
+
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
 ENDFORM.
 FORM display_image .
-  "S4: image display not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  DATA lo_shapes TYPE ole2_object .
+
+
+  GET PROPERTY OF go_worksheet 'Shapes' = lo_shapes.
+
+  CALL METHOD OF lo_shapes 'AddPicture'
+    EXPORTING
+      #1 = gv_image_name "image file name on presentation server
+      #2 = '1'
+      #3 = '1'
+      #4 = 1      "left
+      #5 = 1      "top
+      #6 = 390    "right
+      #7 = 45.    "bottom
+
+  gv_row = gv_row + 2 .
 ENDFORM.
 FORM delete_image .
-  "S4: no temp image file to delete for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  DATA : lv_file TYPE string,
+         lv_rc   TYPE i.
+  lv_file = gv_image_name .
+
+  CALL METHOD cl_gui_frontend_services=>file_delete
+    EXPORTING
+      filename             = lv_file
+    CHANGING
+      rc                   = lv_rc
+    EXCEPTIONS
+      file_delete_failed   = 1
+      cntl_error           = 2
+      error_no_gui         = 3
+      file_not_found       = 4
+      access_denied        = 5
+      unknown_error        = 6
+      not_supported_by_gui = 7
+      wrong_parameter      = 8
+      OTHERS               = 9.
 ENDFORM.
 FORM display_report_date .
   DATA : lv_date    TYPE char50,
@@ -2654,8 +3159,13 @@ FORM display_report_date .
 
   gv_row = gv_row + 1 .
   PERFORM select_range USING gv_row 1 gv_row 5  .
-  "S4: merge/formatting not applicable for server-side XLSX
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING lv_heading 0.
+
+  PERFORM set_range_formatting USING  1 'L' 'C' .
+  PERFORM set_range_interior USING gv_header_colour .
+  GET PROPERTY OF go_range 'FONT' = go_font .
+  SET PROPERTY OF go_font  'BOLD' = 1 .
 
 ENDFORM.
 FORM display_product_names .
@@ -2952,8 +3462,9 @@ FORM display_consortium_level .
     gv_s_col = gs_product_col-s_col .
     gv_e_col = gs_product_col-e_col - 1 .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-    "S4: merge not applicable for server-side XLSX
+    CALL METHOD OF go_range 'Merge' .
     PERFORM set_range USING lv_consortium_txt 0.
+    PERFORM set_range_formatting USING 0 'C' 'C' .
 
     gv_s_col = gs_product_col-e_col .
     gv_e_col = gv_s_col .
@@ -2992,7 +3503,7 @@ FORM display_units .
     gv_s_col = gs_product_col-s_col .
     gv_e_col = gs_product_col-e_col - 1 .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-    "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+    CALL METHOD OF go_range 'Merge' .
 
     PERFORM get_unit_desc USING gs_product_col-product CHANGING lv_ind_unit lv_total_unit .
 
@@ -3151,7 +3662,7 @@ FORM write_product_name  USING    p_product.
     gv_col   = gv_e_col .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 
-    "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+    CALL METHOD OF go_range 'Merge' .
     PERFORM set_range USING gv_txt 0.
     gv_col   = gv_col + 1 .
     gs_product_col-product = p_product .
@@ -3164,17 +3675,53 @@ FORM write_product_name  USING    p_product.
 
 ENDFORM.
 FORM colour_alternate_rows .
-  "S4: formatting not applicable for server-side XLSX
+  DATA : lv_lines       TYPE sy-tabix,
+         lv_switch_flag TYPE c.
+  DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines .
+  DO lv_lines TIMES.
+    IF lv_switch_flag EQ 'X'.
+      CLEAR lv_switch_flag .
+      gv_s_row = gv_s_row + 1 .
+      CONTINUE .
+    ENDIF.
+    PERFORM select_range USING gv_s_row gv_s_col gv_s_row gv_e_col  .
+    PERFORM set_range_interior USING 14540253 .
+    lv_switch_flag = 'X'.
+    gv_s_row = gv_s_row + 1 .
+  ENDDO.
 ENDFORM.
 FORM set_range_interior  USING    p_color.
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = p_color .
 ENDFORM.
 FORM set_numberformat USING p_format.
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  SET PROPERTY OF go_range 'NumberFormat' = p_format .
 ENDFORM.
 
 FORM set_section1_header_colors .
-  "S4: formatting not applicable for server-side XLSX
+  DATA lv_color TYPE sy-tabix .
+  PERFORM select_range USING gv_start_row 1 gv_row 2 .
+  PERFORM set_range_interior USING gv_dates_colour .
+
+  LOOP AT gt_product_col INTO gs_product_col.
+    PERFORM select_range USING gv_start_row gs_product_col-s_col gv_row gs_product_col-e_col .
+    CASE  gs_product_col-product.
+      WHEN '722000001'.
+        lv_color = gv_header_oil_colour .
+      WHEN '722000003'.
+        lv_color = gv_header_cond_colour .
+      WHEN '722000005'.
+        lv_color = gv_header_lng_colour .
+      WHEN '722000004'.
+        lv_color = gv_header_gas_colour .
+      WHEN OTHERS.
+    ENDCASE.
+    PERFORM set_range_interior USING lv_color .
+  ENDLOOP.
+  PERFORM select_range USING gv_start_row gv_table_columns gv_row gv_table_columns .
+  PERFORM set_range_interior USING gv_header_gt_colour .
 ENDFORM.
 FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
   DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
@@ -4065,25 +4612,92 @@ FORM get_constorium_multipliers_2a2 USING p_table.
   ENDIF.
 ENDFORM.
 FORM set_columns_width .
-  "S4: formatting not applicable for server-side XLSX
+  DATA lv_end_col TYPE sy-tabix .
+  lv_end_col = gv_table_columns - 1 .
+  PERFORM col_width USING 1 1 '25'  .
+  PERFORM col_width USING 2 2 '11.15'  .
+  PERFORM col_width USING 3 lv_end_col '11.5'  .
+  LOOP AT gt_product_col INTO gs_product_col.
+    PERFORM col_width USING gs_product_col-e_col gs_product_col-e_col '12'  .
+  ENDLOOP.
+  PERFORM col_width USING gv_table_columns gv_table_columns '12'  .
+
 ENDFORM.
 FORM col_width  USING p_col_start
                       p_col_end
                       p_width.
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+*CALL METHOD OF go_excel 'Columns' = go_column
+*  EXPORTING
+*    #1 = p_col.
+
+  PERFORM select_range USING 1 p_col_start 1 p_col_end  .
+  SET PROPERTY OF go_range 'ColumnWidth' = p_width.
+
+* PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
+
 ENDFORM.
 FORM colour_dates .
-  "S4: formatting not applicable for server-side XLSX
+  DATA : lv_lines   TYPE sy-tabix,
+         lv_end_row TYPE sy-tabix.
+  DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines .
+
+  lv_end_row = gv_sec1_data_start_row + lv_lines - 1 .
+
+  PERFORM select_range USING gv_sec1_data_start_row 1 lv_end_row 2  .
+
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_dates_colour .
+
 ENDFORM.
 FORM join_header_total_cells .
-  "S4: formatting not applicable for server-side XLSX
+  DATA : lv_end_row   TYPE sy-tabix .
+  lv_end_row = gv_sec1_h_start_row + 1 .
+  LOOP AT gt_product_col INTO gs_product_col.
+    PERFORM select_range USING gv_sec1_h_start_row gs_product_col-e_col lv_end_row gs_product_col-e_col .
+    CALL METHOD OF go_range 'Merge' .
+  ENDLOOP.
+* Grand Total
+  gs_product_col-e_col = gs_product_col-e_col + 1.
+  PERFORM select_range USING gv_sec1_h_start_row gs_product_col-e_col lv_end_row gs_product_col-e_col .
+  CALL METHOD OF go_range 'Merge' .
+
 ENDFORM.
 FORM join_header1_column_1_2.
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  PERFORM select_range USING gv_sec1_h_start_row 1 gv_sec1_h_start_row 2 .
+  CALL METHOD OF go_range 'Merge' .
 ENDFORM .
 
 FORM colour_sec1_data_totals .
-  "S4: formatting not applicable for server-side XLSX
+
+  DATA : lv_end_row TYPE sy-tabix,
+         lv_color   TYPE sy-tabix,
+         lv_lines   TYPE sy-tabix.
+
+  DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines .
+
+  lv_end_row = gv_sec1_data_start_row + lv_lines - 1 .
+
+  LOOP AT gt_product_col INTO gs_product_col.
+    PERFORM select_range USING gv_sec1_data_start_row gs_product_col-e_col  lv_end_row gs_product_col-e_col.
+    CASE  gs_product_col-product.
+      WHEN '722000001'.
+        lv_color = gv_header_oil_colour .
+      WHEN '722000003'.
+        lv_color = gv_header_cond_colour .
+      WHEN '722000005'.
+        lv_color = gv_header_lng_colour .
+      WHEN '722000004'.
+        lv_color = gv_header_gas_colour .
+      WHEN OTHERS.
+    ENDCASE.
+    PERFORM set_range_interior USING lv_color .
+  ENDLOOP.
+  gs_product_col-e_col = gs_product_col-e_col + 1.
+  PERFORM select_range USING gv_sec1_data_start_row gs_product_col-e_col lv_end_row gs_product_col-e_col .
+  PERFORM set_range_interior USING gv_header_gt_colour .
+
 ENDFORM.
 FORM process_sec2a_data .
   SORT gt_zpra_t_mrec_prd BY product ASCENDING asset ASCENDING block ASCENDING prd_vl_type ASCENDING  gjahr DESCENDING monat DESCENDING .
@@ -4982,12 +5596,12 @@ FORM display_sec2a_targets .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
 
-  "S4-SKIP: GET PROPERTY OF go_range 'interior' = go_interior .
-  "S4-SKIP: SET PROPERTY OF go_interior 'Color' = gv_colour .
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_colour .
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING gv_txt 0.
 
 
@@ -6394,51 +7008,48 @@ FORM convert_mrec_gas_per_day_units  USING    p_days
   ENDIF.
 ENDFORM.
 FORM finalize_worksheet .
-  "S4: server-side XLSX generation and download (replaces OLE2 Excel save/PDF)
-  DATA: lv_xstr      TYPE xstring,
-        lt_bin       TYPE STANDARD TABLE OF x255 WITH DEFAULT KEY,
-        lv_xlen      TYPE i,
-        lv_fname     TYPE string,
-        lv_datum_ext TYPE char10,
-        lv_uzeit_ext TYPE char8.
-
+  DATA: lv_sheet_name TYPE char50,
+        lv_uzeit_ext  TYPE char8,
+        lv_datum_ext  TYPE char10.
   CONCATENATE sy-uzeit(2) '-' sy-uzeit+2(2) '-' sy-uzeit+4(2) INTO lv_uzeit_ext .
   CONCATENATE sy-datum+6(2) '-' sy-datum+4(2) '-' sy-datum(4) INTO lv_datum_ext .
-  IF p_fname IS NOT INITIAL.
-    CONCATENATE p_fname '\DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx'
-      INTO lv_fname .
-  ELSE.
-    CONCATENATE 'DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx'
-      INTO lv_fname .
-  ENDIF.
 
   PERFORM free_clipboard .
+  PERFORM lock_xls .
+  IF p_full IS INITIAL. RETURN. ENDIF.
 
-  lv_xstr = lcl_xlsx_writer=>get_xlsx( ).
-  "Use SAP kernel call — far faster than a manual WHILE loop
-  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+  CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
     EXPORTING
-      buffer        = lv_xstr
+      input  = gv_rep_date
     IMPORTING
-      output_length = lv_xlen
-    TABLES
-      binary_tab    = lt_bin.
-
-  CALL FUNCTION 'GUI_DOWNLOAD'
-    EXPORTING
-      filename              = lv_fname
-      filetype              = 'BIN'
-      bin_filesize          = lv_xlen
-    TABLES
-      data_tab              = lt_bin
-    EXCEPTIONS
-      file_write_error      = 1
-      OTHERS                = 2.
-  IF sy-subrc IS INITIAL.
-    MESSAGE 'Report downloaded successfully' TYPE 'S'.
-  ELSE.
-    MESSAGE 'Error downloading report' TYPE 'E'.
+      output = lv_sheet_name.
+  IF sy-subrc <> 0.
+    MESSAGE 'Unexpteced Internal Error' TYPE 'E' .
   ENDIF.
+
+  REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
+  CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
+  SET PROPERTY OF go_worksheet 'Name' = lv_sheet_name.
+  SET PROPERTY OF go_excel 'VISIBLE' = 1 .
+  SET PROPERTY OF go_worksheet2 'Visible' = 0 .
+  PERFORM select_range USING 1 1 1 1 .
+  .
+  CONCATENATE p_fname '\DPR -' gv_repdate_e '-' 'On -' lv_datum_ext '-' lv_uzeit_ext '.PDF' INTO p_fname .
+* CONCATENATE p_fname '\DPR -' gv_repdate_e '-' 'Extracted On -' lv_datum_ext '-' lv_uzeit_ext '.PDF' INTO p_fname .
+
+  CALL METHOD OF go_workbook 'ExportAsFixedFormat'
+    EXPORTING
+      #1 = 0
+      #2 = p_fname
+      #3 = 0
+      #4 = 1.
+
+*CALL METHOD OF go_workbook 'Close'
+*EXPORTING #1 = 0 .
+*CALL METHOD OF go_workbook 'Quit'.
+*  PERFORM delete_image   .
+  EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME' .
+  MESSAGE 'Report downloaded sucessfully' TYPE 'S' .
 ENDFORM.
 FORM lock_xls .
 
@@ -7996,7 +8607,7 @@ FORM display_section3_header_1 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 
-  "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'Consortium Level' 0.
 
   gv_s_row = gv_row .
@@ -8006,16 +8617,16 @@ FORM display_section3_header_1 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 
-  "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'ONGC Videsh' 0.
 
   PERFORM select_range USING gv_s_row 1 gv_e_row gv_e_col  .
 
-  "S4-SKIP: GET PROPERTY OF go_range 'interior' = go_interior .
-  "S4-SKIP: SET PROPERTY OF go_interior 'Color' = gv_sec3h_colour .
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3h_colour .
 
-  "S4-SKIP: GET PROPERTY OF go_range 'FONT' = go_font .
-  "S4-SKIP: SET PROPERTY OF go_font  'BOLD' = 1 .
+  GET PROPERTY OF go_range 'FONT' = go_font .
+  SET PROPERTY OF go_font  'BOLD' = 1 .
 
 ENDFORM.
 FORM display_section3_header_2 .
@@ -8031,14 +8642,14 @@ FORM display_section3_header_2 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
 
-  "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+  CALL METHOD OF go_range 'Merge' .
   PERFORM set_range USING 'Unit' 0.
 
   LOOP AT gt_product_col INTO gs_product_col.
     gv_s_col = gs_product_col-s_col .
     gv_e_col = gs_product_col-e_col .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-    "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+    CALL METHOD OF go_range 'Merge' .
     IF gs_product_col-product EQ c_prod_gas.
       gv_txt = 'BCM' .
     ELSE.
@@ -8055,11 +8666,11 @@ FORM display_section3_header_2 .
 
   PERFORM select_range USING gv_sec3_h_start_row 1 gv_e_row gv_e_col  .
 
-  "S4-SKIP: GET PROPERTY OF go_range 'interior' = go_interior .
-  "S4-SKIP: SET PROPERTY OF go_interior 'Color' = gv_sec3h_colour .
+  GET PROPERTY OF go_range 'interior' = go_interior .
+  SET PROPERTY OF go_interior 'Color' = gv_sec3h_colour .
 
-  "S4-SKIP: GET PROPERTY OF go_range 'FONT' = go_font .
-  "S4-SKIP: SET PROPERTY OF go_font  'BOLD' = 1 .
+  GET PROPERTY OF go_range 'FONT' = go_font .
+  SET PROPERTY OF go_font  'BOLD' = 1 .
 
 ENDFORM.
 
@@ -9298,10 +9909,44 @@ FORM set_border_range  USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  IF p_left EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
+    SET PROPERTY OF go_border 'LineStyle' = '1'  .
+  ENDIF.
+  IF p_right EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
+    SET PROPERTY OF go_border 'LineStyle' = '1' .
+  ENDIF.
+  IF p_top EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '8'.
+    SET PROPERTY OF go_border 'LineStyle' = '1' .
+  ENDIF.
+  IF p_bottom EQ 1 .
+    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '9'.
+    SET PROPERTY OF go_border 'LineStyle' = '1' .
+  ENDIF.
 ENDFORM.
 FORM set_all_borders_range  .
-  "S4: formatting not applicable for server-side XLSX
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
+  SET PROPERTY OF go_border 'LineStyle' = '1'  .
+
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '8'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '9'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '11'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+
+  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
+  SET PROPERTY OF go_border 'LineStyle' = '1' .
+
 ENDFORM.
 FORM clear_variables .
 
@@ -9485,8 +10130,34 @@ FORM clear_variables .
             gv_sheet2_name               ,
             gv_sheet3_name               .
 
-  "S4: OLE2 object cleanup removed — server-side XLSX writer has no COM objects to free
-  lcl_xlsx_writer=>clear_all( ).
+  FREE OBJECT:  go_excel                 ,
+                go_workbooks             ,
+                go_workbook              ,
+                go_workbook2             ,
+                go_sheets                ,
+                go_worksheet             ,
+                go_worksheet2            ,
+                go_worksheet3            ,
+                go_application           ,
+                go_pagesetup             ,
+                go_cell                  ,
+                go_font                  ,
+                go_border                ,
+                go_range0                ,
+                go_range                 ,
+                go_column                ,
+                go_row                   ,
+                go_cell_from             ,
+                go_cell_to               ,
+                go_interior              ,
+                go_charts                ,
+                go_chart                 ,
+                go_chartobjects          ,
+                go_title                 ,
+                go_titlechar             ,
+                go_axes                  ,
+                go_axestitle             ,
+                go_legend                .
 
 
 ENDFORM.
@@ -9584,8 +10255,18 @@ FORM get_target_start_date  USING    p_index
 
 ENDFORM.
 FORM free_clipboard .
-  "S4: no clipboard to clear — just reset the paste table
   REFRESH gt_paste .
+  IF p_full IS INITIAL. RETURN. ENDIF.
+  CALL METHOD cl_gui_frontend_services=>clipboard_export
+    IMPORTING
+      data         = gt_paste
+    CHANGING
+      rc           = gv_rc
+    EXCEPTIONS
+      cntl_error   = 1
+      error_no_gui = 2
+      OTHERS       = 4.
+
 ENDFORM.
 FORM populate_no_data_entries  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
@@ -9662,7 +10343,7 @@ FORM display_run_date_time .
   gv_e_col = 5.
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  "S4-SKIP: CALL METHOD OF go_range 'Merge' .
+  CALL METHOD OF go_range 'Merge' .
 
   PERFORM set_range USING gv_txt 0.
   PERFORM set_range_formatting USING  0 'L' 'C' .
