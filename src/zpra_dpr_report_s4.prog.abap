@@ -3,7 +3,7 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) — S/4HANA Edition
-*& VERSION : 2.0  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
+*& VERSION : 2.1  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
 *& Based on: ZPRA_DPR_REPORT v1.9 (100% business logic preserved)
 *&
 *& S/4HANA changes vs original:
@@ -490,8 +490,8 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
     ENDDO.
   ENDMETHOD.
   METHOD to_xs.
-    cl_abap_conv_codepage=>create_out( codepage = `UTF-8` )->convert(
-      EXPORTING data = iv_xml IMPORTING buffer = rv_xs ).
+    "S4: convert( source ) returns xstring — no named EXPORTING/IMPORTING needed
+    rv_xs = cl_abap_conv_codepage=>create_out( codepage = `UTF-8` )->convert( iv_xml ).
   ENDMETHOD.
   METHOD sheet_xml.
     DATA lt_s TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
@@ -571,7 +571,8 @@ CLASS lcl_xlsx_writer IMPLEMENTATION.
     lo_zip->add( name = 'xl/workbook.xml'           content = to_xs( wb_xml( ) ) ).
     lo_zip->add( name = 'xl/styles.xml'             content = to_xs( sty_xml( ) ) ).
     lo_zip->add( name = 'xl/worksheets/sheet1.xml'  content = to_xs( sheet_xml( ) ) ).
-    lo_zip->save( IMPORTING data = rv_xs ).
+    "S4: cl_abap_zip->save() returns xstring directly
+    rv_xs = lo_zip->save( ).
   ENDMETHOD.
 ENDCLASS.
 
