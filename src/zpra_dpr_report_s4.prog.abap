@@ -3,7 +3,7 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) — S/4HANA Edition
-*& VERSION : 2.1  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
+*& VERSION : 2.2  |  Branch: claude/zpra-dpr-program-VfvlH  |  07-MAY-2026
 *& Based on: ZPRA_DPR_REPORT v1.9 (100% business logic preserved)
 *&
 *& S/4HANA changes vs original:
@@ -410,7 +410,9 @@ SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE text-004 .
                p_t_pc TYPE char1 AS CHECKBOX ,
                p_t_re TYPE char1 AS CHECKBOX .
 SELECTION-SCREEN END OF BLOCK   b4 .
-"S4: p_fname directory parameter removed — XLSX downloaded server-side
+SELECTION-SCREEN BEGIN OF BLOCK b5 WITH FRAME TITLE text-005 .
+  PARAMETERS : p_fname TYPE string .
+SELECTION-SCREEN END OF BLOCK   b5 .
 
 AT SELECTION-SCREEN .
   IF p_t_be IS INITIAL AND
@@ -424,7 +426,17 @@ AT SELECTION-SCREEN .
   IF p_date GT sy-datum.
     MESSAGE 'DPR cannot be run for future dates' TYPE 'E' .
   ENDIF.
-"S4: directory browse for p_fname removed — not needed for server-side XLSX download
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
+  CALL METHOD cl_gui_frontend_services=>directory_browse
+    EXPORTING
+      window_title         = 'Select Download Folder'
+    CHANGING
+      selected_folder      = p_fname
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
 *&---------------------------------------------------------------------*
 
 START-OF-SELECTION .
@@ -1897,8 +1909,10 @@ ENDFORM.
 FORM set_cell  USING    p_cell_value
                         p_wraptext  .
   "S4: write to tracked cell position via XLSX writer
-  IF p_cell_value IS NOT INITIAL.
-    lcl_xlsx_writer=>add_cell( iv_row = gv_xlsx_cell_row iv_col = gv_xlsx_cell_col iv_value = p_cell_value ).
+  DATA lv_v TYPE string.
+  lv_v = p_cell_value.
+  IF lv_v IS NOT INITIAL.
+    lcl_xlsx_writer=>add_cell( iv_row = gv_xlsx_cell_row iv_col = gv_xlsx_cell_col iv_value = lv_v ).
   ENDIF.
 ENDFORM.
 
@@ -1915,8 +1929,10 @@ ENDFORM.
 FORM set_range  USING    p_cell_value
                         p_wraptext  .
   "S4: write header/label text to top-left of selected range
-  IF p_cell_value IS NOT INITIAL.
-    lcl_xlsx_writer=>add_cell( iv_row = gv_s_row iv_col = gv_s_col iv_value = p_cell_value ).
+  DATA lv_v TYPE string.
+  lv_v = p_cell_value.
+  IF lv_v IS NOT INITIAL.
+    lcl_xlsx_writer=>add_cell( iv_row = gv_s_row iv_col = gv_s_col iv_value = lv_v ).
   ENDIF.
 ENDFORM.
 FORM set_range_font  USING    p_size
@@ -6359,8 +6375,13 @@ FORM finalize_worksheet .
 
   CONCATENATE sy-uzeit(2) '-' sy-uzeit+2(2) '-' sy-uzeit+4(2) INTO lv_uzeit_ext .
   CONCATENATE sy-datum+6(2) '-' sy-datum+4(2) '-' sy-datum(4) INTO lv_datum_ext .
-  CONCATENATE 'DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx'
-    INTO lv_fname .
+  IF p_fname IS NOT INITIAL.
+    CONCATENATE p_fname '\DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx'
+      INTO lv_fname .
+  ELSE.
+    CONCATENATE 'DPR-' gv_repdate_e '-On-' lv_datum_ext '-' lv_uzeit_ext '.xlsx'
+      INTO lv_fname .
+  ENDIF.
 
   PERFORM free_clipboard .
 
