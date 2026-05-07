@@ -1831,16 +1831,33 @@ FORM display_section3e .
 ENDFORM.
 
 FORM start_excel .
+  DATA: lv_t1 TYPE c LENGTH 31,
+        lv_t2 TYPE c LENGTH 31,
+        lv_t3 TYPE c LENGTH 31.
+
   go_xlsx = NEW zcl_excel( ).
   go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
-  DATA lv_t1 TYPE c LENGTH 31. lv_t1 = gv_sheet1_name. go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
   go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
-  DATA lv_t2 TYPE c LENGTH 31. lv_t2 = gv_sheet2_name. go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
   go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
-  DATA lv_t3 TYPE c LENGTH 31. lv_t3 = gv_sheet3_name. go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
-  go_xlsx_active = go_xlsx_sheet1.
-  " Page setup equivalent: landscape, fit to 1 page wide
 
+  " Excel rejects pure-numeric / duplicate / empty sheet names — use safe titles.
+  lv_t1 = 'DPR'.
+  lv_t2 = 'DPR_2'.
+  lv_t3 = 'Production_Performance'.
+  TRY.
+      go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
+    CATCH zcx_excel.
+  ENDTRY.
+  TRY.
+      go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
+    CATCH zcx_excel.
+  ENDTRY.
+  TRY.
+      go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
+    CATCH zcx_excel.
+  ENDTRY.
+
+  go_xlsx_active = go_xlsx_sheet1.
   gv_row = 1 .
 ENDFORM.
 FORM display_section1_header .
@@ -6616,7 +6633,14 @@ FORM finalize_worksheet .
 
   REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
   CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
-  DATA lv_t_fin TYPE c LENGTH 31. lv_t_fin = lv_sheet_name. go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
+  DATA lv_t_fin TYPE c LENGTH 31.
+  lv_t_fin = lv_sheet_name.
+  " sanitize: replace invalid chars
+  REPLACE ALL OCCURRENCES OF REGEX '[\\\\/\\?*\\[\\]:]' IN lv_t_fin WITH '_'.
+  TRY.
+      go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
+    CATCH zcx_excel.
+  ENDTRY.
   " Build filename
   CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
 
