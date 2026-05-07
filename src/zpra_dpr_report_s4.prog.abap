@@ -357,34 +357,13 @@ FIELD-SYMBOLS: <gfs_dyn_table>      TYPE STANDARD TABLE,
                <gfs_field2>     ,
                <gfs_field3>     .
 
-DATA: go_excel                      TYPE ole2_object,
-      go_workbooks                  TYPE ole2_object,
-      go_workbook                   TYPE ole2_object,
-      go_workbook2                  TYPE ole2_object,
-      go_sheets                     TYPE ole2_object,
-      go_worksheet                  TYPE ole2_object,
-      go_worksheet2                 TYPE ole2_object,
-      go_worksheet3                 TYPE ole2_object,
-      go_application                TYPE ole2_object ,
-      go_pagesetup                  TYPE ole2_object ,
-      go_cell                       TYPE ole2_object,
-      go_font                       TYPE ole2_object,
-      go_border                     TYPE ole2_object,
-      go_range0                     TYPE ole2_object,
-      go_range                      TYPE ole2_object,
-      go_column                     TYPE ole2_object,
-      go_row                        TYPE ole2_object,
-      go_cell_from                  TYPE ole2_object,
-      go_cell_to                    TYPE ole2_object,
-      go_interior                   TYPE ole2_object,
-      go_charts                     TYPE ole2_object,
-      go_chart                      TYPE ole2_object,
-      go_chartobjects               TYPE ole2_object ,
-      go_title                      TYPE ole2_object ,
-      go_titlechar                  TYPE ole2_object ,
-      go_axes                       TYPE ole2_object ,
-      go_axestitle                  TYPE ole2_object ,
-      go_legend                     TYPE ole2_object .
+" abap2xlsx objects (replaces OLE2)
+DATA: go_xlsx         TYPE REF TO zcl_excel,
+      go_xlsx_sheet1  TYPE REF TO zcl_excel_worksheet,
+      go_xlsx_sheet2  TYPE REF TO zcl_excel_worksheet,
+      go_xlsx_sheet3  TYPE REF TO zcl_excel_worksheet,
+      go_xlsx_active  TYPE REF TO zcl_excel_worksheet,
+      go_xlsx_writer  TYPE REF TO zif_excel_writer.
 
 DATA: gv_row                        TYPE sy-tabix   ,
       gv_col                        TYPE sy-tabix   ,
@@ -492,6 +471,44 @@ START-OF-SELECTION .
   PERFORM fetch_data .
   PERFORM process_gas_records  .
   PERFORM process_data .
+
+
+*&---------------------------------------------------------------------*
+*& abap2xlsx helper forms
+*&---------------------------------------------------------------------*
+FORM get_range_string CHANGING pv_range TYPE string.
+  DATA: lv_fc TYPE string, lv_tc TYPE string.
+  lv_fc = zcl_excel_common=>convert_column2alpha( gv_s_col ).
+  lv_tc = zcl_excel_common=>convert_column2alpha( gv_e_col ).
+  pv_range = |{ lv_fc }{ gv_s_row }:{ lv_tc }{ gv_e_row }|.
+ENDFORM.
+
+FORM merge_range .
+  go_xlsx_active->set_merge(
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_to_row    = gv_e_row
+    ip_to_column = gv_e_col ).
+ENDFORM.
+
+FORM set_fill_color USING p_ole2_color TYPE i.
+  DATA: lo_style TYPE REF TO zcl_excel_style,
+        lv_r     TYPE i,  lv_g TYPE i,  lv_b TYPE i,
+        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1.
+  lv_r  = p_ole2_color MOD 256.
+  lv_g  = ( p_ole2_color DIV 256 ) MOD 256.
+  lv_b  = ( p_ole2_color DIV 65536 ) MOD 256.
+  lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
+  lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  go_xlsx_active->set_area_style(
+    ip_style     = lo_style
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_to = gv_e_col ).
+ENDFORM.
 
 *--- Form Routines ---*
 *&---------------------------------------------------------------------*
@@ -960,14 +977,12 @@ FORM process_data .
   PERFORM process_sec3_data .
 
   PERFORM process_sec4_data .
-
-  CALL METHOD OF go_worksheet2 'ACTIVATE'.
+  go_xlsx_active = go_xlsx_sheet2.
 
   PERFORM process_sec5_data .
 
   PERFORM process_sec6_data .
-
-  CALL METHOD OF go_worksheet 'ACTIVATE'.
+  go_xlsx_active = go_xlsx_sheet1.
 
   PERFORM set_columns_width .
 
@@ -1313,16 +1328,14 @@ FORM display_section2a2 .
   PERFORM prepare_paste_data TABLES <gfs_sec2a2_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec2a2_colour .
+  PERFORM set_fill_color USING gv_sec2a2_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 2 gv_e_row 2  .
   PERFORM set_numberformat USING 'mmm yyyy'.
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'Prod. : MTD Actual'  0.
 
 ENDFORM.
@@ -1337,9 +1350,7 @@ FORM display_section2a3 .
   PERFORM prepare_paste_data TABLES <gfs_sec2a3_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec2a3_colour .
+  PERFORM set_fill_color USING gv_sec2a3_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_row 2 gv_row 2  .
@@ -1361,16 +1372,14 @@ FORM display_section2d .
   PERFORM prepare_paste_data TABLES <gfs_sec2d_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec2d_colour .
+  PERFORM set_fill_color USING gv_sec2d_colour.
   gv_row = gv_e_row .
 
 *  PERFORM select_range USING gv_row 2 gv_row 2  .
 *  PERFORM set_numberformat USING 'mmmm yyyy'.
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'YTD Actual Prod.' 0.
 ENDFORM.
 FORM display_section2f .
@@ -1385,9 +1394,7 @@ FORM display_section2f .
   PERFORM prepare_paste_data TABLES <gfs_sec2f_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec2f_colour .
+  PERFORM set_fill_color USING gv_sec2f_colour.
   gv_row = gv_e_row .
   gv_sec2_end_row = gv_row .
 *  PERFORM select_range USING gv_row 2 gv_row 2  .
@@ -1415,13 +1422,11 @@ FORM display_section3a .
     PERFORM paste_data .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3a_colour .
+  PERFORM set_fill_color USING gv_sec3a_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   CONCATENATE 'Target :' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM set_range USING gv_txt 0.
 
@@ -1448,13 +1453,11 @@ FORM display_section3b .
     PERFORM paste_data .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3b_colour .
+  PERFORM set_fill_color USING gv_sec3b_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   CONCATENATE 'YTD Target :' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM set_range USING gv_txt 0.
 
@@ -1481,16 +1484,14 @@ FORM display_section2e .
     PERFORM paste_data .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904754--------------------*
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec2e_colour .
+  PERFORM set_fill_color USING gv_sec2e_colour.
   gv_row = gv_e_row .
 
 *  PERFORM select_range USING gv_row 2 gv_row 2  .
 *  PERFORM set_numberformat USING 'mmmm yyyy'.
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   CONCATENATE 'Asking Rate :' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO lv_txt SEPARATED BY space.
   PERFORM set_range USING lv_txt 1.
 
@@ -1507,9 +1508,7 @@ FORM display_section3c .
   PERFORM prepare_paste_data TABLES <gfs_sec3c_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3c_colour .
+  PERFORM set_fill_color USING gv_sec3c_colour.
   gv_row = gv_e_row .
 
 ENDFORM.
@@ -1520,14 +1519,14 @@ FORM display_section4a .
   gv_row   = gv_row + 2 .
   gv_sec4_start_row = gv_row .
   PERFORM select_range USING gv_row 1 gv_row 2  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'Gas Production (YTD)' 0.
 
   PERFORM set_range_interior USING gv_header_gas_colour.
 
   gv_row   = gv_row + 1 .
   PERFORM select_range USING gv_row 1 gv_row 2  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'Unit of Measurement: MMSCM' 0.
 
   PERFORM set_range_interior USING gv_header_gas_colour.
@@ -1568,7 +1567,7 @@ FORM display_section4b .
   PERFORM set_range USING 'Date' 0.
 
   PERFORM select_range USING gv_row 3 gv_row 9  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'Comments' 0.
 
   PERFORM select_range USING gv_row 1 gv_row 9  .
@@ -1589,10 +1588,7 @@ FORM display_section4b .
 
   PERFORM select_range USING gv_s_row 3 gv_e_row 9  .
   PERFORM set_thin_border USING 1 1 1 1 .
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
+  PERFORM set_border_range USING 0 1 0 0.
 
 
   gv_row = gv_e_row .
@@ -1620,61 +1616,47 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
-  DATA : lv_chart_title TYPE char50,
-         lv_unit        TYPE char10.
+  DATA: lo_graph  TYPE REF TO zcl_excel_graph,
+        lo_series TYPE REF TO zcl_excel_graph_series,
+        lv_unit   TYPE char10,
+        lv_title  TYPE char100,
+        lv_cats   TYPE string,
+        lv_vals   TYPE string,
+        lv_fc     TYPE string,
+        lv_last_col TYPE string.
+
   CASE abap_true.
-    WHEN p_bb.
-      lv_unit   = 'BOE' .
-    WHEN p_bbd.
-      lv_unit   = 'BOEPD' .
-    WHEN p_tm.
-      lv_unit   = 'TOE' .
-    WHEN p_tmd.
-      lv_unit   = 'TOEPD' .
-    WHEN p_mb.
-      lv_unit   = 'MMTOE' .
-    WHEN p_bmd.
-      lv_unit   = 'BOEPD' .
-    WHEN OTHERS.
+    WHEN p_bb.  lv_unit = 'BOE' .
+    WHEN p_bbd. lv_unit = 'BOEPD' .
+    WHEN p_tm.  lv_unit = 'TOE' .
+    WHEN p_tmd. lv_unit = 'TOEPD' .
+    WHEN p_mb.  lv_unit = 'MMTOE' .
+    WHEN p_bmd. lv_unit = 'BOEPD' .
   ENDCASE.
-  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr INTO lv_chart_title SEPARATED BY space .
-  GET PROPERTY OF go_application 'Charts' = go_charts .
-  CALL METHOD OF go_charts 'Add' = go_chart .
-  CALL METHOD OF go_chart 'Activate' .
-  SET PROPERTY OF go_chart 'HasTitle' = 1.
-  GET PROPERTY OF go_chart 'ChartTitle' = go_title.
-  GET PROPERTY OF go_title 'Characters' = go_titlechar.
-  SET PROPERTY OF go_titlechar 'Text' = lv_chart_title.
+  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr
+    INTO lv_title SEPARATED BY space .
 
-  CALL METHOD OF go_chart 'Axes' = go_axes
-    EXPORTING    #2 = 2.
-  SET PROPERTY OF go_axes 'HasTitle' = 1.
-  GET PROPERTY OF go_axes 'AxisTitle' = go_axestitle.
-  GET PROPERTY OF go_axestitle 'Characters' = go_axestitle.
-  SET PROPERTY OF go_axestitle 'Text' = lv_unit.
+  " Build chart on sheet3 using the data range that was selected before this call
+  lv_fc      = zcl_excel_common=>convert_column2alpha( 1 ).
+  lv_last_col= zcl_excel_common=>convert_column2alpha( gv_e_col ).
+  lv_cats = |'{ gv_sheet1_name }'!${ lv_fc }${ gv_s_row }:${ lv_fc }${ gv_e_row }|.
+  lv_vals = |'{ gv_sheet1_name }'!${ lv_last_col }${ gv_s_row }:${ lv_last_col }${ gv_e_row }|.
 
-  SET PROPERTY OF go_chart 'HasLegend' = 1.
-  GET PROPERTY OF go_chart 'Legend'  = go_legend.
-  CALL METHOD OF go_legend 'Select'.
-  SET PROPERTY OF go_legend 'Position'  =  '-4160'.
+  lo_graph = go_xlsx_sheet3->add_new_graph( ).
+  lo_graph->set_type( zcl_excel_graph=>c_type_bar ).
+  lo_graph->title-formula = lv_title.
+  lo_graph->graph_position-from_row    = 2.
+  lo_graph->graph_position-from_col    = 1.
+  lo_graph->graph_position-to_row      = 35.
+  lo_graph->graph_position-to_col      = 14.
+  lo_graph->y_axis_label               = lv_unit.
 
-  SET PROPERTY OF go_chart 'ChartType' = '65' .
-  CALL METHOD OF go_chart 'SetSourceData'
-    EXPORTING
-      #1 = go_range
-      #2 = 1.
-  CALL METHOD OF go_worksheet3 'ACTIVATE'.
+  lo_series = lo_graph->add_new_series( ).
+  lo_series->categories_formula = lv_cats.
+  lo_series->values_formula     = lv_vals.
+  lo_series->title              = lv_unit.
 
-  CALL METHOD OF go_chart 'Location'
-    EXPORTING
-      #1 = 2
-      #2 = gv_sheet3_name.
-  CALL METHOD OF go_worksheet3 'ChartObjects' = go_chartobjects .
-  SET PROPERTY OF go_chartobjects 'Left' = 1 .
-  SET PROPERTY OF go_chartobjects 'Top' = 30 .
-  SET PROPERTY OF go_chartobjects 'Height' = 600 .
-  SET PROPERTY OF go_chartobjects 'Width' = 1000 .
-
+  go_xlsx_active = go_xlsx_sheet3.
 ENDFORM.
 FORM display_section6 .
   DATA lv_lines TYPE sy-tabix .
@@ -1698,7 +1680,7 @@ FORM display_section6 .
   CONCATENATE 'ONGC Videsh' gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING gv_txt 0.
 
   gv_e_row = gv_s_row .
@@ -1708,7 +1690,7 @@ FORM display_section6 .
   PERFORM get_unit_desc USING c_prod_oil CHANGING lv_ind_unit lv_total_unit .
   CONCATENATE 'Oil, LNG & Condensate (' lv_ind_unit ')' INTO gv_txt SEPARATED BY space.
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING gv_txt 0.
 
   gv_e_row = gv_s_row .
@@ -1718,7 +1700,7 @@ FORM display_section6 .
   PERFORM get_unit_desc USING c_prod_gas CHANGING lv_ind_unit lv_total_unit .
   CONCATENATE 'Gas (' lv_ind_unit ')' INTO gv_txt SEPARATED BY space.
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING gv_txt 0.
 
   CASE abap_true.
@@ -1743,7 +1725,7 @@ FORM display_section6 .
 
   CONCATENATE 'Total (O+OEG) (' lv_gt_unit ')' INTO gv_txt SEPARATED BY space.
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING gv_txt 0.
 
   gv_s_row = gv_s_row + 1 .
@@ -1780,10 +1762,9 @@ FORM display_section6 .
 
   PERFORM select_range USING gv_row 1 gv_e_row gv_e_col  .
   PERFORM set_range_font  USING 13 1 .
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = 12611584 .
-  GET PROPERTY OF go_range 'FONT' = go_font .
-  SET PROPERTY OF go_font 'COLOR' = '-460552' .
+  PERFORM set_fill_color USING 12611584.
+* S4-SKIP(OLE2): GET PROPERTY OF go_range 'FONT' = go_font .
+* S4-SKIP(OLE2): SET PROPERTY OF go_font 'COLOR' = '-460552' .
   PERFORM set_range_formatting USING  0 'C' 'C' .
   PERFORM set_all_borders_range .
 
@@ -1796,11 +1777,7 @@ FORM display_section6 .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data_sheet3 .
   PERFORM set_all_borders_range .
-
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
+  PERFORM set_border_range USING 0 1 0 0.
 
   gv_row = gv_e_row .
   gv_s_col = gv_s_col + 1 .
@@ -1826,13 +1803,11 @@ FORM display_section3f .
   PERFORM prepare_paste_data TABLES <gfs_sec3f_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3f_colour .
+  PERFORM set_fill_color USING gv_sec3f_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   gv_txt = 'Actual Production'.
   PERFORM set_range USING gv_txt 1.
 
@@ -1850,13 +1825,11 @@ FORM display_section3d .
   PERFORM prepare_paste_data TABLES <gfs_sec3d_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3d_colour .
+  PERFORM set_fill_color USING gv_sec3d_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   gv_txt = '% Achiev. wrt YTD Target' .
   PERFORM set_range USING gv_txt 1.
 
@@ -1873,13 +1846,11 @@ FORM display_section3e .
   PERFORM prepare_paste_data TABLES <gfs_sec3e_table> .
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3e_colour .
+  PERFORM set_fill_color USING gv_sec3e_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   gv_txt = '% Achiev. wrt Yearly Target' .
   PERFORM set_range USING gv_txt 1.
 
@@ -1887,42 +1858,17 @@ FORM display_section3e .
 ENDFORM.
 
 FORM start_excel .
-  CREATE OBJECT go_excel 'excel.application' .
-  SET PROPERTY OF go_excel 'VISIBLE' = 0 .
-  CALL METHOD OF go_excel 'WORKBOOKS' = go_workbooks .
-
-  gv_sheet1_name = '1' .
-  gv_sheet2_name = '2' .
-  gv_sheet3_name = 'Production Performance' .
-
-  CALL METHOD OF go_workbooks 'ADD' = go_workbook .
-  GET PROPERTY OF go_workbook 'Application' = go_application .
-  CALL METHOD OF go_excel 'WORKSHEETS' = go_worksheet3
-  EXPORTING
-    #1 =  1.
-  GET PROPERTY OF go_excel 'Sheets' = go_sheets .
-  CALL METHOD OF go_sheets 'Add' = go_worksheet2 .
-  CALL METHOD OF go_sheets 'Add' = go_worksheet .
-  SET PROPERTY OF go_worksheet  'Name' = gv_sheet1_name .
-  SET PROPERTY OF go_worksheet2 'Name' = gv_sheet2_name .
-  SET PROPERTY OF go_worksheet3 'Name' = gv_sheet3_name .
-
-  CALL METHOD OF go_worksheet 'ACTIVATE'.
-  SET PROPERTY OF go_excel 'PrintCommunication' = abap_false.
-  CALL METHOD OF go_worksheet 'PAGESETUP' = go_pagesetup .
-  SET PROPERTY OF go_pagesetup 'FitToPagesWide' = 1 .
-  SET PROPERTY OF go_pagesetup 'FitToPagesTall' = 0 .
-  SET PROPERTY OF go_pagesetup 'Orientation' = 2 .
-  SET PROPERTY OF go_excel 'PrintCommunication' = abap_true.
-
-  SET PROPERTY OF go_excel 'PrintCommunication' = abap_false.
-  CALL METHOD OF go_worksheet3 'PAGESETUP' = go_pagesetup .
-  SET PROPERTY OF go_pagesetup 'FitToPagesWide' = 1 .
-  SET PROPERTY OF go_pagesetup 'FitToPagesTall' = 0 .
-  SET PROPERTY OF go_pagesetup 'Orientation' = 2 .
-  SET PROPERTY OF go_excel 'PrintCommunication' = abap_true.
-
-
+  go_xlsx = NEW zcl_excel( ).
+  go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
+  go_xlsx_sheet1->set_title( ip_title = gv_sheet1_name ).
+  go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
+  go_xlsx_sheet2->set_title( ip_title = gv_sheet2_name ).
+  go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
+  go_xlsx_sheet3->set_title( ip_title = gv_sheet3_name ).
+  go_xlsx_active = go_xlsx_sheet1.
+  " Page setup equivalent: landscape, fit to 1 page wide
+  go_xlsx_sheet1->set_print_fittopage( ip_fittopage = abap_true ).
+  go_xlsx_sheet3->set_print_fittopage( ip_fittopage = abap_true ).
   gv_row = 1 .
 ENDFORM.
 FORM display_section1_header .
@@ -1969,109 +1915,94 @@ FORM formatting_section1 .
 ENDFORM .
 FORM select_cell  USING    p_row
                            p_col.
-  CALL METHOD OF go_excel 'Cells' = go_cell
-                         EXPORTING #1 = p_row #2 = p_col.
+  gv_s_row = p_row.
+  gv_s_col = p_col.
+  gv_e_row = p_row.
+  gv_e_col = p_col.
 ENDFORM.
 FORM set_cell  USING    p_cell_value
                         p_wraptext  .
-  SET PROPERTY OF go_cell 'Value' = p_cell_value .
-  SET PROPERTY OF go_cell 'WrapText' = p_wraptext .
+  DATA lv_v TYPE string.
+  lv_v = p_cell_value.
+  IF lv_v IS NOT INITIAL.
+    go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ).
+  ENDIF.
 ENDFORM.
 
 FORM select_range  USING    p_s_row
                             p_s_col
                             p_e_row
                             p_e_col .
-
-  CALL METHOD OF go_excel 'Cells' = go_cell_from
-   EXPORTING
-   #1 = p_s_row
-   #2 = p_s_col .
-
-  CALL METHOD OF go_excel 'Cells' = go_cell_to
-   EXPORTING
-   #1 = p_e_row
-   #2 = p_e_col .
-
-  CALL METHOD OF go_excel 'Range' = go_range
-    EXPORTING
-    #1 = go_cell_from
-    #2 = go_cell_to.
-
-  CALL METHOD OF go_range 'Select' .
-
+  gv_s_row = p_s_row.
+  gv_s_col = p_s_col.
+  gv_e_row = p_e_row.
+  gv_e_col = p_e_col.
 ENDFORM.
 FORM set_range  USING    p_cell_value
                         p_wraptext  .
-  SET PROPERTY OF go_range 'Value' = p_cell_value .
-  SET PROPERTY OF go_range 'WrapText' = p_wraptext .
+  DATA lv_v TYPE string.
+  lv_v = p_cell_value.
+  IF lv_v IS NOT INITIAL.
+    go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ).
+  ENDIF.
 ENDFORM.
 FORM set_range_font  USING    p_size
                               p_bold.
-  GET PROPERTY OF go_range 'FONT' = go_font .
-  SET PROPERTY OF go_font  'BOLD' = p_bold .
-  SET PROPERTY OF go_font  'Size' = p_size .
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->font->size = p_size.
+  IF p_bold = 1. lo_style->font->bold = abap_true. ENDIF.
+  go_xlsx_active->set_area_style(
+    ip_style     = lo_style
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_to = gv_e_col ).
 ENDFORM.
 
 FORM set_range_formatting USING p_wraptext
                                 p_horizontal
                                 p_vertical .
-  SET PROPERTY OF go_range 'WrapText' = p_wraptext .
-  IF p_horizontal EQ 'C'.
-    SET PROPERTY OF go_range 'HorizontalAlignment' =  -4108 .
-  ELSEIF  p_horizontal EQ 'L'.
-    SET PROPERTY OF go_range 'HorizontalAlignment' =  -4131 .
-  ELSEIF  p_horizontal EQ 'R'.
-    SET PROPERTY OF go_range 'HorizontalAlignment' =  -4152 .
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  IF p_wraptext = 1.
+    lo_style->alignment->wrap_text = abap_true.
   ENDIF.
-  IF p_vertical EQ 'C' .
-    SET PROPERTY OF go_range 'VerticalAlignment' = -4108 .
-  ELSEIF p_vertical EQ 'T' .
-    SET PROPERTY OF go_range 'VerticalAlignment' = -4160 .
-  ELSEIF p_vertical EQ 'B' .
-    SET PROPERTY OF go_range 'VerticalAlignment' = -4107 .
-  ENDIF.
-
+  CASE p_horizontal.
+    WHEN 'C'. lo_style->alignment->horizontal = zcl_excel_style_alignment=>c_horizontal_center.
+    WHEN 'L'. lo_style->alignment->horizontal = zcl_excel_style_alignment=>c_horizontal_left.
+    WHEN 'R'. lo_style->alignment->horizontal = zcl_excel_style_alignment=>c_horizontal_right.
+  ENDCASE.
+  CASE p_vertical.
+    WHEN 'C'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_center.
+    WHEN 'T'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_top.
+    WHEN 'B'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_bottom.
+  ENDCASE.
+  go_xlsx_active->set_area_style(
+    ip_style     = lo_style
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_to = gv_e_col ).
 ENDFORM .
 FORM set_thin_border   USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  IF p_left EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
-    SET PROPERTY OF go_border 'LineStyle' = '1'  .
-  ENDIF.
-  IF p_right EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
-    SET PROPERTY OF go_border 'LineStyle' = '1' .
-  ENDIF.
-  IF p_top EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '8'.
-    SET PROPERTY OF go_border 'LineStyle' = '1' .
-  ENDIF.
-  IF p_bottom EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '9'.
-    SET PROPERTY OF go_border 'LineStyle' = '1' .
-  ENDIF.
+  PERFORM set_border_range USING p_left p_right p_top p_bottom.
 ENDFORM.
 
 FORM row_height  USING  p_row
                         p_height .
-  CALL METHOD OF go_excel 'ROWS' = go_row
-    EXPORTING
-      #1 = p_row .
-*CALL METHOD OF go_row 'Select' .
-  SET PROPERTY OF go_row 'Rowheight' = p_height.
-
+  go_xlsx_active->set_row_height( ip_row = p_row ip_row_height = p_height ).
 ENDFORM.
 FORM merge_col_1_2_section1 .
   DATA lv_row TYPE sy-tabix .
   PERFORM select_range USING gv_sec1_h_start_row 1 gv_sec1_h_start_row 2 .
-  go_range0 = go_range .
-  CALL METHOD OF go_range0 'Copy' .
+* S4-SKIP(OLE2): CALL METHOD OF go_range0 'Copy' .
   lv_row = gv_sec1_h_start_row + 1 .
   PERFORM select_range USING lv_row 1 gv_row 2 .
-  CALL METHOD OF go_range 'PasteSpecial'
+* S4-SKIP(OLE2): CALL METHOD OF go_range 'PasteSpecial'
     EXPORTING
       #1 = -4122.
 
@@ -2655,86 +2586,71 @@ FORM fill_null_values_with_previous .
   UNASSIGN : <lfs_dyn_line> .
 ENDFORM.
 FORM paste_data .
-  DO 10 TIMES .
-    CALL METHOD cl_gui_frontend_services=>clipboard_export
-      IMPORTING
-        data         = gt_paste
-      CHANGING
-        rc           = gv_rc
-      EXCEPTIONS
-        cntl_error   = 1
-        error_no_gui = 2
-        OTHERS       = 4.
-    IF sy-subrc IS INITIAL AND gv_rc IS INITIAL.
-      EXIT .
-    ENDIF.
-  ENDDO.
-  DO 10 TIMES .
-    CALL METHOD OF go_worksheet 'Paste'.
-    IF sy-subrc IS INITIAL.
-      EXIT.
-    ENDIF.
-  ENDDO.
+  DATA: lv_row TYPE i, lv_col TYPE i,
+        lv_val TYPE string,
+        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+  lv_row = gv_s_row.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      IF lv_val IS NOT INITIAL.
+        go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+      ENDIF.
+      lv_col = lv_col + 1.
+    ENDLOOP.
+    lv_row = lv_row + 1.
+  ENDLOOP.
+  CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet3 .
-  DO 10 TIMES .
-    CALL METHOD cl_gui_frontend_services=>clipboard_export
-      IMPORTING
-        data         = gt_paste
-      CHANGING
-        rc           = gv_rc
-      EXCEPTIONS
-        cntl_error   = 1
-        error_no_gui = 2
-        OTHERS       = 4.
-    IF sy-subrc IS INITIAL AND gv_rc IS INITIAL.
-      EXIT .
-    ENDIF.
-  ENDDO.
-  DO 10 TIMES .
-    CALL METHOD OF go_worksheet3 'Paste'.
-    IF sy-subrc IS INITIAL.
-      EXIT.
-    ENDIF.
-  ENDDO.
-
+  DATA: lv_row TYPE i, lv_col TYPE i,
+        lv_val TYPE string,
+        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+  lv_row = gv_s_row.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      IF lv_val IS NOT INITIAL.
+        go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+      ENDIF.
+      lv_col = lv_col + 1.
+    ENDLOOP.
+    lv_row = lv_row + 1.
+  ENDLOOP.
+  CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet2 .
-  DO 10 TIMES .
-    CALL METHOD cl_gui_frontend_services=>clipboard_export
-      IMPORTING
-        data         = gt_paste
-      CHANGING
-        rc           = gv_rc
-      EXCEPTIONS
-        cntl_error   = 1
-        error_no_gui = 2
-        OTHERS       = 4.
-    IF sy-subrc IS INITIAL AND gv_rc IS INITIAL.
-      EXIT .
-    ENDIF.
-  ENDDO.
-  DO 10 TIMES .
-    CALL METHOD OF go_worksheet2 'Paste'.
-    IF sy-subrc IS INITIAL.
-      EXIT.
-    ENDIF.
-  ENDDO.
+  DATA: lv_row TYPE i, lv_col TYPE i,
+        lv_val TYPE string,
+        lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+  lv_row = gv_s_row.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      IF lv_val IS NOT INITIAL.
+        go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+      ENDIF.
+      lv_col = lv_col + 1.
+    ENDLOOP.
+    lv_row = lv_row + 1.
+  ENDLOOP.
+  CLEAR gt_paste[].
 ENDFORM.
 FORM colour_yellow_cells .
   DATA : lv_row TYPE sy-tabix .
   LOOP AT gt_copied_cells INTO gs_copied_cells.
     lv_row = gv_row + gs_copied_cells-row - 1 .
-    CALL METHOD OF go_excel 'Cells' = go_cell
+* S4-SKIP(OLE2): CALL METHOD OF go_excel 'Cells' = go_cell
      EXPORTING
      #1 = lv_row
      #2 = gs_copied_cells-col .
-
-    GET PROPERTY OF go_cell 'interior' = go_interior .
-    SET PROPERTY OF go_interior 'Color' = 65535 .
-
-    GET PROPERTY OF go_cell 'FONT' = go_font .
-    SET PROPERTY OF go_font 'COLOR' = '-16776961' .
+* S4-SKIP(OLE2): GET PROPERTY OF go_cell 'interior' = go_interior .
+* S4-SKIP(OLE2): SET PROPERTY OF go_interior 'Color' = 65535 .
+* S4-SKIP(OLE2): GET PROPERTY OF go_cell 'FONT' = go_font .
+* S4-SKIP(OLE2): SET PROPERTY OF go_font 'COLOR' = '-16776961' .
   ENDLOOP.
 ENDFORM.
 FORM display_logo .
@@ -2808,12 +2724,9 @@ FORM download_image .
   ENDIF.
 ENDFORM.
 FORM display_image .
-  DATA lo_shapes TYPE ole2_object .
-
-
-  GET PROPERTY OF go_worksheet 'Shapes' = lo_shapes.
-
-  CALL METHOD OF lo_shapes 'AddPicture'
+  DATA lo_shapes TYPE REF TO object . " abap2xlsx: unused, shapes not supported
+* S4-SKIP(OLE2): GET PROPERTY OF go_worksheet 'Shapes' = lo_shapes.
+* S4-SKIP(OLE2): CALL METHOD OF lo_shapes 'AddPicture'
     EXPORTING
       #1 = gv_image_name "image file name on presentation server
       #2 = '1'
@@ -2861,13 +2774,12 @@ FORM display_report_date .
 
   gv_row = gv_row + 1 .
   PERFORM select_range USING gv_row 1 gv_row 5  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING lv_heading 0.
 
   PERFORM set_range_formatting USING  1 'L' 'C' .
   PERFORM set_range_interior USING gv_header_colour .
-  GET PROPERTY OF go_range 'FONT' = go_font .
-  SET PROPERTY OF go_font  'BOLD' = 1 .
+  PERFORM set_range_font USING 11 1.
 
 ENDFORM.
 FORM display_product_names .
@@ -3164,7 +3076,7 @@ FORM display_consortium_level .
     gv_s_col = gs_product_col-s_col .
     gv_e_col = gs_product_col-e_col - 1 .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-    CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
     PERFORM set_range USING lv_consortium_txt 0.
     PERFORM set_range_formatting USING 0 'C' 'C' .
 
@@ -3205,7 +3117,7 @@ FORM display_units .
     gv_s_col = gs_product_col-s_col .
     gv_e_col = gs_product_col-e_col - 1 .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-    CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
 
     PERFORM get_unit_desc USING gs_product_col-product CHANGING lv_ind_unit lv_total_unit .
 
@@ -3363,8 +3275,7 @@ FORM write_product_name  USING    p_product.
     gv_e_col = gv_col + lv_col_count - 1 .
     gv_col   = gv_e_col .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-
-    CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
     PERFORM set_range USING gv_txt 0.
     gv_col   = gv_col + 1 .
     gs_product_col-product = p_product .
@@ -3393,11 +3304,18 @@ FORM colour_alternate_rows .
   ENDDO.
 ENDFORM.
 FORM set_range_interior  USING    p_color.
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = p_color .
+  PERFORM set_fill_color USING p_color.
 ENDFORM.
 FORM set_numberformat USING p_format.
-  SET PROPERTY OF go_range 'NumberFormat' = p_format .
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->number_format->format_code = p_format.
+  go_xlsx_active->set_area_style(
+    ip_style     = lo_style
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_to = gv_e_col ).
 ENDFORM.
 
 FORM set_section1_header_colors .
@@ -4326,15 +4244,10 @@ ENDFORM.
 FORM col_width  USING p_col_start
                       p_col_end
                       p_width.
-*CALL METHOD OF go_excel 'Columns' = go_column
-*  EXPORTING
-*    #1 = p_col.
-
-  PERFORM select_range USING 1 p_col_start 1 p_col_end  .
-  SET PROPERTY OF go_range 'ColumnWidth' = p_width.
-
-* PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-
+  go_xlsx_active->set_column_width(
+    ip_column_start = p_col_start
+    ip_column_end   = p_col_end
+    ip_width        = p_width ).
 ENDFORM.
 FORM colour_dates .
   DATA : lv_lines   TYPE sy-tabix,
@@ -4344,9 +4257,7 @@ FORM colour_dates .
   lv_end_row = gv_sec1_data_start_row + lv_lines - 1 .
 
   PERFORM select_range USING gv_sec1_data_start_row 1 lv_end_row 2  .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_dates_colour .
+  PERFORM set_fill_color USING gv_dates_colour.
 
 ENDFORM.
 FORM join_header_total_cells .
@@ -4354,17 +4265,17 @@ FORM join_header_total_cells .
   lv_end_row = gv_sec1_h_start_row + 1 .
   LOOP AT gt_product_col INTO gs_product_col.
     PERFORM select_range USING gv_sec1_h_start_row gs_product_col-e_col lv_end_row gs_product_col-e_col .
-    CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   ENDLOOP.
 * Grand Total
   gs_product_col-e_col = gs_product_col-e_col + 1.
   PERFORM select_range USING gv_sec1_h_start_row gs_product_col-e_col lv_end_row gs_product_col-e_col .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
 
 ENDFORM.
 FORM join_header1_column_1_2.
   PERFORM select_range USING gv_sec1_h_start_row 1 gv_sec1_h_start_row 2 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
 ENDFORM .
 
 FORM colour_sec1_data_totals .
@@ -5293,13 +5204,11 @@ FORM display_sec2a_targets .
     PERFORM paste_data .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_colour .
+  PERFORM set_fill_color USING gv_colour.
   gv_row = gv_e_row .
 
   PERFORM select_range USING gv_s_row 1 gv_e_row 1 .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING gv_txt 0.
 
 
@@ -6707,54 +6616,52 @@ ENDFORM.
 FORM finalize_worksheet .
   DATA: lv_sheet_name TYPE char50,
         lv_uzeit_ext  TYPE char8,
-        lv_datum_ext  TYPE char10.
+        lv_datum_ext  TYPE char10,
+        lv_fname      TYPE string,
+        lv_xstr       TYPE xstring,
+        lt_bin        TYPE STANDARD TABLE OF x255,
+        lv_size       TYPE i.
+
   CONCATENATE sy-uzeit(2) '-' sy-uzeit+2(2) '-' sy-uzeit+4(2) INTO lv_uzeit_ext .
   CONCATENATE sy-datum+6(2) '-' sy-datum+4(2) '-' sy-datum(4) INTO lv_datum_ext .
 
-  PERFORM free_clipboard .
-  PERFORM lock_xls .
-
   CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
-    EXPORTING
-      input  = gv_rep_date
-    IMPORTING
-      output = lv_sheet_name.
+    EXPORTING  input  = gv_rep_date
+    IMPORTING  output = lv_sheet_name.
   IF sy-subrc <> 0.
-    MESSAGE 'Unexpteced Internal Error' TYPE 'E' .
+    MESSAGE 'Unexpected Internal Error' TYPE 'E' .
   ENDIF.
 
   REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
   CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
-  SET PROPERTY OF go_worksheet 'Name' = lv_sheet_name.
-  SET PROPERTY OF go_excel 'VISIBLE' = 1 .
-  SET PROPERTY OF go_worksheet2 'Visible' = 0 .
-  PERFORM select_range USING 1 1 1 1 .
-  .
-  CONCATENATE p_fname '\DPR -' gv_repdate_e '-' 'On -' lv_datum_ext '-' lv_uzeit_ext '.PDF' INTO p_fname .
-* CONCATENATE p_fname '\DPR -' gv_repdate_e '-' 'Extracted On -' lv_datum_ext '-' lv_uzeit_ext '.PDF' INTO p_fname .
+  go_xlsx_sheet1->set_title( ip_title = lv_sheet_name ).
+  go_xlsx_sheet2->set_visible( ip_visible = zcl_excel_worksheet=>c_xlsheetvishidden ).
 
-  CALL METHOD OF go_workbook 'ExportAsFixedFormat'
+  " Build filename
+  CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
+
+  " Write XLSX
+  go_xlsx_writer = NEW zcl_excel_writer_2007( ).
+  lv_xstr = go_xlsx_writer->write_file( go_xlsx ).
+
+  CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+    EXPORTING  buffer        = lv_xstr
+    IMPORTING  output_length = lv_size
+    TABLES     binary_tab    = lt_bin.
+
+  cl_gui_frontend_services=>gui_download(
     EXPORTING
-      #1 = 0
-      #2 = p_fname
-      #3 = 0
-      #4 = 1.
+      filename     = lv_fname
+      filetype     = 'BIN'
+      bin_filesize = lv_size
+    CHANGING
+      data_tab     = lt_bin ).
 
-*CALL METHOD OF go_workbook 'Close'
-*EXPORTING #1 = 0 .
-*CALL METHOD OF go_workbook 'Quit'.
-*  PERFORM delete_image   .
   EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME' .
-  MESSAGE 'Report downloaded sucessfully' TYPE 'S' .
+  MESSAGE 'Report downloaded successfully' TYPE 'S' .
 ENDFORM.
 FORM lock_xls .
-
-  DATA : lv_uuid_16    TYPE sysuuid_x16 .
-
-* lv_uuid_16 = cl_system_uuid=>create_uuid_x16_static( ).
-*  CALL METHOD OF go_worksheet 'PROTECT'
-*    EXPORTING #1 = lv_uuid_16.
-
+  " Sheet protection not implemented in this version.
 ENDFORM.
 
 FORM fill_dynamic_table_sec2d .
@@ -8302,8 +8209,7 @@ FORM display_section3_header_1 .
   gv_e_col = 2 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'Consortium Level' 0.
 
   gv_s_row = gv_row .
@@ -8312,17 +8218,12 @@ FORM display_section3_header_1 .
   gv_e_col = gv_table_columns .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'ONGC Videsh' 0.
 
   PERFORM select_range USING gv_s_row 1 gv_e_row gv_e_col  .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3h_colour .
-
-  GET PROPERTY OF go_range 'FONT' = go_font .
-  SET PROPERTY OF go_font  'BOLD' = 1 .
+  PERFORM set_fill_color USING gv_sec3h_colour.
+  PERFORM set_range_font USING 11 1.
 
 ENDFORM.
 FORM display_section3_header_2 .
@@ -8337,15 +8238,14 @@ FORM display_section3_header_2 .
   gv_e_col = 2 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
   PERFORM set_range USING 'Unit' 0.
 
   LOOP AT gt_product_col INTO gs_product_col.
     gv_s_col = gs_product_col-s_col .
     gv_e_col = gs_product_col-e_col .
     PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-    CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
     IF gs_product_col-product EQ c_prod_gas.
       gv_txt = 'BCM' .
     ELSE.
@@ -8361,12 +8261,8 @@ FORM display_section3_header_2 .
   PERFORM set_range USING 'MMTOE' 0.
 
   PERFORM select_range USING gv_sec3_h_start_row 1 gv_e_row gv_e_col  .
-
-  GET PROPERTY OF go_range 'interior' = go_interior .
-  SET PROPERTY OF go_interior 'Color' = gv_sec3h_colour .
-
-  GET PROPERTY OF go_range 'FONT' = go_font .
-  SET PROPERTY OF go_font  'BOLD' = 1 .
+  PERFORM set_fill_color USING gv_sec3h_colour.
+  PERFORM set_range_font USING 11 1.
 
 ENDFORM.
 
@@ -9605,42 +9501,32 @@ FORM set_border_range  USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  IF p_left EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
-    SET PROPERTY OF go_border 'LineStyle' = '1'  .
-  ENDIF.
-  IF p_right EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
-    SET PROPERTY OF go_border 'LineStyle' = '1' .
-  ENDIF.
-  IF p_top EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '8'.
-    SET PROPERTY OF go_border 'LineStyle' = '1' .
-  ENDIF.
-  IF p_bottom EQ 1 .
-    CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '9'.
-    SET PROPERTY OF go_border 'LineStyle' = '1' .
-  ENDIF.
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  IF p_left   = 1. lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin. ENDIF.
+  IF p_right  = 1. lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin. ENDIF.
+  IF p_top    = 1. lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin. ENDIF.
+  IF p_bottom = 1. lo_style->borders->bottom->border_style = zcl_excel_style_border=>c_border_thin. ENDIF.
+  go_xlsx_active->set_area_style(
+    ip_style     = lo_style
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_to = gv_e_col ).
 ENDFORM.
 FORM set_all_borders_range  .
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '7' .
-  SET PROPERTY OF go_border 'LineStyle' = '1'  .
-
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '8'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '9'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '10'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '11'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-
-  CALL METHOD OF go_range 'Borders' = go_border EXPORTING #1 = '12'.
-  SET PROPERTY OF go_border 'LineStyle' = '1' .
-
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->bottom->border_style = zcl_excel_style_border=>c_border_thin.
+  go_xlsx_active->set_area_style(
+    ip_style     = lo_style
+    ip_row       = gv_s_row
+    ip_column    = gv_s_col
+    ip_row_to    = gv_e_row
+    ip_column_to = gv_e_col ).
 ENDFORM.
 FORM clear_variables .
 
@@ -9775,34 +9661,7 @@ FORM clear_variables .
             gv_sheet2_name               ,
             gv_sheet3_name               .
 
-  FREE OBJECT:  go_excel                 ,
-                go_workbooks             ,
-                go_workbook              ,
-                go_workbook2             ,
-                go_sheets                ,
-                go_worksheet             ,
-                go_worksheet2            ,
-                go_worksheet3            ,
-                go_application           ,
-                go_pagesetup             ,
-                go_cell                  ,
-                go_font                  ,
-                go_border                ,
-                go_range0                ,
-                go_range                 ,
-                go_column                ,
-                go_row                   ,
-                go_cell_from             ,
-                go_cell_to               ,
-                go_interior              ,
-                go_charts                ,
-                go_chart                 ,
-                go_chartobjects          ,
-                go_title                 ,
-                go_titlechar             ,
-                go_axes                  ,
-                go_axestitle             ,
-                go_legend                .
+  FREE: go_xlsx, go_xlsx_sheet1, go_xlsx_sheet2, go_xlsx_sheet3.
 
 
 ENDFORM.
@@ -9901,16 +9760,6 @@ FORM get_target_start_date  USING    p_index
 ENDFORM.
 FORM free_clipboard .
   CLEAR gt_paste[].
-  CALL METHOD cl_gui_frontend_services=>clipboard_export
-    IMPORTING
-      data         = gt_paste
-    CHANGING
-      rc           = gv_rc
-    EXCEPTIONS
-      cntl_error   = 1
-      error_no_gui = 2
-      OTHERS       = 4.
-
 ENDFORM.
 FORM populate_no_data_entries  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
@@ -9987,7 +9836,7 @@ FORM display_run_date_time .
   gv_e_col = 5.
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
-  CALL METHOD OF go_range 'Merge' .
+  PERFORM merge_range.
 
   PERFORM set_range USING gv_txt 0.
   PERFORM set_range_formatting USING  0 'L' 'C' .
