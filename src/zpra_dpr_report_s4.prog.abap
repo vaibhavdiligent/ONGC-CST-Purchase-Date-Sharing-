@@ -1638,7 +1638,7 @@ FORM create_chart .
         lv_idx     TYPE i,
         lv_title   TYPE zexcel_sheet_title,
         lv_chart_r TYPE zexcel_cell_row,
-        lv_chart_a TYPE zexcel_cell_column_alpha,
+        lv_chart_a TYPE zexcel_cell_column_alpha.
 
   go_xlsx_active = go_xlsx_sheet3.
 
