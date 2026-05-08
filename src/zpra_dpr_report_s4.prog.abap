@@ -9500,14 +9500,29 @@ FORM set_border_range  USING    p_left
                                 p_bottom .
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
-  IF p_left   = 1. lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_right  = 1. lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_top    = 1. lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_bottom = 1. lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin. ENDIF.
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  IF p_left = 1.
+    lo_style->borders->left = NEW zcl_excel_style_border( ).
+    lo_style->borders->left->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_right = 1.
+    lo_style->borders->right = NEW zcl_excel_style_border( ).
+    lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_top = 1.
+    lo_style->borders->top = NEW zcl_excel_style_border( ).
+    lo_style->borders->top->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_bottom = 1.
+    lo_style->borders->down = NEW zcl_excel_style_border( ).
+    lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style     = lo_style
-    ip_row       = gv_s_row
+    ip_style        = lo_style
+    ip_row          = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
@@ -9517,14 +9532,21 @@ ENDFORM.
 FORM set_all_borders_range  .
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
-  lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin.
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style     = lo_style
-    ip_row       = gv_s_row
+    ip_style        = lo_style
+    ip_row          = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
     ip_column_end   = gv_e_col ).
