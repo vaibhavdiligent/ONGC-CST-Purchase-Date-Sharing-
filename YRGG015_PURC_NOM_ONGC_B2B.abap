@@ -24,22 +24,40 @@ TYPES: BEGIN OF ty_pur,
        END OF ty_pur.
 
 TYPES: BEGIN OF ty_main,
-         tsyst  TYPE char4,
-         vbeln  TYPE ebeln,
-         date   TYPE aedat,
-         locid  TYPE oij_locid,
-         matnr  TYPE matnr,
-         menge  TYPE p LENGTH 13 DECIMALS 3,
-         unit   TYPE meins,
-         charg  TYPE charg_d,
-         rank   TYPE i,
-         ancv   TYPE char10,
-         agcv   TYPE char10,
-         nomtk  TYPE char20,
-         nomit  TYPE char10,
-         msg    TYPE char220,
-         msgty  TYPE msgty,
+         tsyst       TYPE oij_tsyst,
+         vbeln       TYPE vbeln,
+         date        TYPE sy-datum,
+         locid       TYPE oij_locid,
+         matnr       TYPE matnr,
+         menge       TYPE oij_menge,
+         unit        TYPE oij_uniti,
+         charg       TYPE charg_d,
+         rank        TYPE i,
+         ancv        TYPE yyncv,
+         agcv        TYPE yygcv,
+         nomtk       TYPE oij_nomtk,
+         nomit       TYPE oij_item,
+         st_qty      TYPE oijnomi-yyoij_dpimb_qty,
+         del_ind     TYPE char1,
+         flag        TYPE char1,
+         post_status TYPE char30,
+         ticketnr    TYPE oij_tktnr,
+         ticket_key  TYPE oij_el_tkt_key,
+         ticket_item TYPE oij_el_tkt_posnr,
+         color(4),
+         error_msg(170) TYPE c,
        END OF ty_main.
+
+" Error log structure — must match ty_log in YRXR036_PURC_NOM_G1
+TYPES: BEGIN OF ty_log,
+         tsyst    TYPE oij_tsyst,
+         ebeln    TYPE ekpo-ebeln,
+         date     TYPE sy-datum,
+         locid    TYPE oij_locid,
+         matnr    TYPE matnr,
+         charg    TYPE charg_d,
+         message(100),
+       END OF ty_log.
 
 TYPES: BEGIN OF ty_display,
          sel         TYPE char1,
@@ -66,6 +84,7 @@ TYPES: BEGIN OF ty_batch_vals,
        END OF ty_batch_vals.
 
 TYPES: tt_main    TYPE STANDARD TABLE OF ty_main.
+TYPES: tt_log     TYPE STANDARD TABLE OF ty_log.
 TYPES: tt_display TYPE STANDARD TABLE OF ty_display.
 
 TYPES: BEGIN OF ty_batch_assign,
@@ -121,6 +140,7 @@ DATA: gt_mot_c   TYPE STANDARD TABLE OF ty_mot_cache,
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
+           gc_call_flag  TYPE char30 VALUE 'YRGG015_CALL_FLAG',
            gc_role_core  TYPE char30 VALUE 'ZC_GMS_CORE_TEAM',
            gc_excl_state TYPE char2  VALUE 'GJ',
            gc_deleted    TYPE char1  VALUE 'X',
@@ -1052,7 +1072,7 @@ FORM handle_create_nomination.
         ls_disp     TYPE ty_display,
         lt_main     TYPE tt_main,
         ls_main     TYPE ty_main,
-        lt_errors   TYPE tt_main,
+        lt_errors   TYPE tt_log,
         i_rspartab  TYPE STANDARD TABLE OF rsparams,
         wa_rspartab LIKE LINE OF i_rspartab,
         ls_sdate    LIKE LINE OF s_date,
@@ -1095,10 +1115,12 @@ FORM handle_create_nomination.
     APPEND ls_main TO lt_main.
   ENDLOOP.
 
-  " Export i_main so YRXR036_PURC_NOM_G1 imports it at START-OF-SELECTION
+  " Export nomination data and call flag so YRXR036 skips Excel read and uses this data
   EXPORT lt_main TO MEMORY ID gc_memory_id.
+  DATA: lv_call_flag TYPE char1 VALUE 'X'.
+  EXPORT lv_call_flag TO MEMORY ID gc_call_flag.
 
-  " R_EXCEL = 'X' triggers batch_validate -> get_nomination -> createfromdata in YRGR040
+  " R_EXCEL = 'X' triggers batch_validate -> get_nomination -> createfromdata in YRXR036
   CLEAR wa_rspartab.
   wa_rspartab-selname = 'R_EXCEL'.
   wa_rspartab-kind    = 'P'.
@@ -1147,27 +1169,29 @@ ENDFORM.
 *----------------------------------------------------------------------*
 * FORM display_nomination_errors
 *----------------------------------------------------------------------*
-FORM display_nomination_errors USING it_errors TYPE tt_main.
+FORM display_nomination_errors USING it_errors TYPE tt_log.
   DATA: lt_fcat   TYPE lvc_t_fcat,
         ls_fcat   TYPE lvc_s_fcat,
         ls_layout TYPE lvc_s_layo,
-        ls_e      TYPE ty_main.
+        ls_e      TYPE ty_log.
 
-  ls_fcat-fieldname = 'LOCID'. ls_fcat-coltext = 'Location'. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
-  ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
-  ls_fcat-fieldname = 'DATE'.  ls_fcat-coltext = 'Date'.     APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
-  ls_fcat-fieldname = 'VBELN'. ls_fcat-coltext = 'OA'.       APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
-  ls_fcat-fieldname = 'MSG'.   ls_fcat-coltext = 'Message'.  ls_fcat-outputlen = 80. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'LOCID'.   ls_fcat-coltext = 'Location'. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'MATNR'.   ls_fcat-coltext = 'Material'. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'DATE'.    ls_fcat-coltext = 'Date'.     APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'EBELN'.   ls_fcat-coltext = 'PO/OA'.   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'CHARG'.   ls_fcat-coltext = 'Batch'.   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'MESSAGE'. ls_fcat-coltext = 'Message'.
+  ls_fcat-outputlen = 100. APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
 
   ls_layout-cwidth_opt = abap_true.
   DATA: lo_popup TYPE REF TO cl_gui_dialogbox_container,
         lo_aerr  TYPE REF TO cl_gui_alv_grid.
   CREATE OBJECT lo_popup
-    EXPORTING caption = 'Nomination Errors' top = 10 left = 10 width = 500 height = 300
+    EXPORTING caption = 'Nomination Errors' top = 10 left = 10 width = 600 height = 350
     EXCEPTIONS OTHERS = 1.
   IF sy-subrc <> 0.
-    LOOP AT it_errors INTO ls_e WHERE msgty = 'E' OR msgty = 'A'.
-      MESSAGE ls_e-msg TYPE 'S' DISPLAY LIKE 'E'.
+    LOOP AT it_errors INTO ls_e.
+      MESSAGE ls_e-message TYPE 'S' DISPLAY LIKE 'E'.
     ENDLOOP.
     RETURN.
   ENDIF.
@@ -1325,6 +1349,8 @@ FORM create_all_nominations_bg.
   IF lt_main IS INITIAL. RETURN. ENDIF.
 
   EXPORT lt_main TO MEMORY ID gc_memory_id.
+  DATA: lv_bg_flag TYPE char1 VALUE 'X'.
+  EXPORT lv_bg_flag TO MEMORY ID gc_call_flag.
 
   CLEAR wa_rspartab.
   wa_rspartab-selname = 'R_EXCEL'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
