@@ -2556,14 +2556,14 @@ FORM calculated_wtd_cf .
     IF sy-subrc IS NOT INITIAL.
       CLEAR lv_count .
       CLEAR gs_wtd_cf .
-      LOOP AT gt_zpra_t_tar_cf INTO gs_zpra_t_tar_cf WHERE   gjahr EQ gv_current_gjahr
-                                                       AND product EQ gs_zpra_c_prd_prof-product
-                                                       AND   asset EQ gs_zpra_c_prd_prof-asset
-                                                       AND   block EQ gs_zpra_c_prd_prof-block .
+      LOOP AT gt_cf INTO gs_cf WHERE gjahr   EQ gv_current_gjahr
+                                AND product EQ gs_zpra_c_prd_prof-product
+                                AND   asset EQ gs_zpra_c_prd_prof-asset
+                                AND   block EQ gs_zpra_c_prd_prof-block .
         lv_count = lv_count + 1 .
         gs_wtd_cf-product = gs_zpra_c_prd_prof-product .
         gs_wtd_cf-asset   = gs_zpra_c_prd_prof-asset   .
-        gs_wtd_cf-cf      = gs_wtd_cf-cf + gs_zpra_t_tar_cf-conv_factor .
+        gs_wtd_cf-cf      = gs_wtd_cf-cf + gs_cf-conv_factor .
       ENDLOOP .
       IF lv_count IS NOT INITIAL.
         gs_wtd_cf-cf = gs_wtd_cf-cf / lv_count .
