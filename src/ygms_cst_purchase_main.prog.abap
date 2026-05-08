@@ -5252,8 +5252,8 @@ FORM fetch_saved_data.
       AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
     SORT lt_cst_pur BY created_date DESCENDING created_time DESCENDING.
-    DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material state_code.
-    SORT lt_cst_pur BY gas_day location material state_code.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material ongc_mater state_code.
+    SORT lt_cst_pur BY gas_day location material ongc_mater state_code.
     LOOP AT lt_cst_pur INTO DATA(wa_pur).
       CLEAR ls_daily.
       ls_daily-gas_day    = wa_pur-gas_day.
@@ -5309,8 +5309,8 @@ FORM fetch_saved_data.
         answer         = lv_answer.
     IF lv_answer = 'J'.
       SORT lt_cst_pur BY created_date DESCENDING created_time DESCENDING.
-      DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material state_code.
-      SORT lt_cst_pur BY gas_day location material state_code.
+      DELETE ADJACENT DUPLICATES FROM lt_cst_pur COMPARING gas_day location material ongc_mater state_code.
+      SORT lt_cst_pur BY gas_day location material ongc_mater state_code.
       LOOP AT lt_cst_pur INTO wa_pur.
         CLEAR ls_daily.
         ls_daily-gas_day    = wa_pur-gas_day.
@@ -5359,8 +5359,8 @@ FORM fetch_saved_data.
       AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
     SORT lt_cst_fnt BY created_date DESCENDING created_time DESCENDING.
-    DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material state_code.
-    SORT lt_cst_fnt BY date_from location material state_code.
+    DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material ongc_mater state_code.
+    SORT lt_cst_fnt BY date_from location material ongc_mater state_code.
     LOOP AT lt_cst_fnt INTO DATA(wa_fnt).
       CLEAR ls_fnt.
       ls_fnt-date_from  = wa_fnt-date_from.
@@ -5406,8 +5406,8 @@ FORM fetch_saved_data.
      AND location IN @s_loc AND deleted = 'X'.
     IF sy-subrc = 0.
       SORT lt_cst_fnt BY created_date DESCENDING created_time DESCENDING.
-      DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material state_code.
-      SORT lt_cst_fnt BY date_from location material state_code.
+      DELETE ADJACENT DUPLICATES FROM lt_cst_fnt COMPARING date_from date_to location material ongc_mater state_code.
+      SORT lt_cst_fnt BY date_from location material ongc_mater state_code.
       LOOP AT lt_cst_fnt INTO wa_fnt.
         CLEAR ls_fnt.
         ls_fnt-date_from  = wa_fnt-date_from.
