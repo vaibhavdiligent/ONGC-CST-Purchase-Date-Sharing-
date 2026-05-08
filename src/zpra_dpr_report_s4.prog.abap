@@ -1626,54 +1626,10 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
-  DATA: lo_graph    TYPE REF TO zcl_excel_graph,
-        lo_series   TYPE REF TO zcl_excel_graph_series,
-        lv_unit     TYPE char10,
-        lv_title    TYPE char100,
-        lv_cats     TYPE string,
-        lv_vals     TYPE string,
-        lv_fc       TYPE string,
-        lv_last_col TYPE string.
-
-  CASE abap_true.
-    WHEN p_bb.  lv_unit = 'BOE'.
-    WHEN p_bbd. lv_unit = 'BOEPD'.
-    WHEN p_tm.  lv_unit = 'TOE'.
-    WHEN p_tmd. lv_unit = 'TOEPD'.
-    WHEN p_mb.  lv_unit = 'MMTOE'.
-    WHEN p_bmd. lv_unit = 'BOEPD'.
-    WHEN OTHERS. lv_unit = 'MT'.
-  ENDCASE.
-  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr
-    INTO lv_title SEPARATED BY space.
-
-  TRY.
-    lv_fc       = zcl_excel_common=>convert_column2alpha( 1 ).
-    lv_last_col = zcl_excel_common=>convert_column2alpha( gv_e_col ).
-  CATCH zcx_excel.
-    lv_fc = 'A'. lv_last_col = 'B'.
-  ENDTRY.
-
-  lv_cats = |'{ gv_sheet1_name }'!${ lv_fc }${ gv_s_row }:${ lv_fc }${ gv_e_row }|.
-  lv_vals = |'{ gv_sheet1_name }'!${ lv_last_col }${ gv_s_row }:${ lv_last_col }${ gv_e_row }|.
-
-  TRY.
-    lo_graph = go_xlsx_sheet3->add_new_graph( ).
-    lo_graph->set_type( zcl_excel_graph=>c_type_bar ).
-    lo_graph->title-formula            = lv_title.
-    lo_graph->graph_position-from_row  = 2.
-    lo_graph->graph_position-from_col  = 1.
-    lo_graph->graph_position-to_row    = 35.
-    lo_graph->graph_position-to_col    = 14.
-    lo_graph->y_axis_label             = lv_unit.
-
-    lo_series = lo_graph->add_new_series( ).
-    lo_series->categories_formula = lv_cats.
-    lo_series->values_formula     = lv_vals.
-    lo_series->title              = lv_unit.
-  CATCH cx_root.
-  ENDTRY.
-
+  " Chart classes (ZCL_EXCEL_GRAPH / ZCL_EXCEL_GRAPH_SERIES) are not
+  " available in this abap2xlsx installation. The Production_Performance
+  " sheet still contains the source data; users can insert a chart in
+  " Excel after download, or install a chart-enabled abap2xlsx fork.
   go_xlsx_active = go_xlsx_sheet3.
 ENDFORM.
 FORM display_section6 .
