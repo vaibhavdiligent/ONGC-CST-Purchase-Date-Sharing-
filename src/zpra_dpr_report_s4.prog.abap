@@ -511,7 +511,7 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
@@ -1981,7 +1981,7 @@ FORM set_range_font  USING    p_size
   IF p_bold = 1. lo_style->font->bold = abap_true. ENDIF.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
@@ -2010,7 +2010,7 @@ FORM set_range_formatting USING p_wraptext
   ENDCASE.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
@@ -3357,7 +3357,7 @@ FORM colour_alternate_rows .
     ENDIF.
     TRY.
       go_xlsx_active->set_area_style(
-        ip_style        = lo_style
+        ip_style        = lo_style->get_guid( )
         ip_row          = gv_s_row
         ip_column_start = gv_s_col
         ip_row_to       = gv_s_row
@@ -3377,7 +3377,7 @@ FORM set_numberformat USING p_format.
   lo_style->number_format->format_code = p_format.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
@@ -9622,7 +9622,7 @@ FORM set_border_range  USING    p_left
   ENDIF.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style        = lo_style
+    ip_style        = lo_style->get_guid( )
     ip_row          = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
@@ -9646,7 +9646,7 @@ FORM set_all_borders_range  .
   lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
       go_xlsx_active->set_area_style(
-    ip_style        = lo_style
+    ip_style        = lo_style->get_guid( )
     ip_row          = gv_s_row
     ip_column_start = gv_s_col
     ip_row_to       = gv_e_row
