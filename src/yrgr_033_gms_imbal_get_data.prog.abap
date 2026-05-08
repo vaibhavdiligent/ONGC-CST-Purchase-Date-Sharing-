@@ -211,7 +211,7 @@ FORM send_email_posted.
         lv_partnr    TYPE string,
         lo_send_req  TYPE REF TO cl_bcs,
         lo_document  TYPE REF TO cl_document_bcs,
-        lo_sender    TYPE REF TO cl_cam_address_bcs,
+        lo_sender_sap TYPE REF TO cl_sapuser_bcs,
         lo_recipient TYPE REF TO cl_cam_address_bcs.
 
   " Collect unique sales offices for Posted records
@@ -351,10 +351,8 @@ FORM send_email_posted.
         i_text    = lt_soli ).
       lo_send_req->set_document( lo_document ).
 
-      lo_sender = cl_cam_address_bcs=>create_internet_address(
-        i_address_string = |{ sy-uname }|
-        i_address_name   = 'GAIL PARTNER CARE GMS' ).
-      lo_send_req->set_sender( i_sender = lo_sender ).
+      lo_sender_sap = cl_sapuser_bcs=>create( sy-uname ).
+      lo_send_req->set_sender( i_sender = lo_sender_sap ).
 
       LOOP AT lt_to_email INTO lv_ep_email.
         lo_recipient = cl_cam_address_bcs=>create_internet_address(
@@ -375,7 +373,7 @@ FORM send_email_posted.
       lo_send_req->send( i_with_error_screen = abap_false ).
       COMMIT WORK.
     CATCH cx_bcs INTO DATA(lx_bcs_ep).
-      " Log error and continue with next office
+      MESSAGE lx_bcs_ep->get_text( ) TYPE 'W'.
     ENDTRY.
 
     CLEAR: lt_ep_cont, lt_ep_pernr.
@@ -423,7 +421,7 @@ FORM send_email_not_posted.
         lv_locid_disp  TYPE string,
         lo_send_req    TYPE REF TO cl_bcs,
         lo_document    TYPE REF TO cl_document_bcs,
-        lo_sender      TYPE REF TO cl_cam_address_bcs,
+        lo_sender_sap  TYPE REF TO cl_sapuser_bcs,
         lo_recipient   TYPE REF TO cl_cam_address_bcs.
 
   " Collect unique business locations for Not Posted records
@@ -648,10 +646,8 @@ FORM send_email_not_posted.
         i_text    = lt_soli ).
       lo_send_req->set_document( lo_document ).
 
-      lo_sender = cl_cam_address_bcs=>create_internet_address(
-        i_address_string = |{ sy-uname }|
-        i_address_name   = 'GAIL PARTNER CARE GMS' ).
-      lo_send_req->set_sender( i_sender = lo_sender ).
+      lo_sender_sap = cl_sapuser_bcs=>create( sy-uname ).
+      lo_send_req->set_sender( i_sender = lo_sender_sap ).
 
       LOOP AT lt_to_email INTO lv_np_email.
         lo_recipient = cl_cam_address_bcs=>create_internet_address(
@@ -672,7 +668,7 @@ FORM send_email_not_posted.
       lo_send_req->send( i_with_error_screen = abap_false ).
       COMMIT WORK.
     CATCH cx_bcs INTO DATA(lx_bcs_np).
-      " Log error and continue with next location
+      MESSAGE lx_bcs_np->get_text( ) TYPE 'W'.
     ENDTRY.
 
     CLEAR: lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr.
