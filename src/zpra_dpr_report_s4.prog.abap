@@ -3,13 +3,13 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.5 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
-*& v4.5 - Landscape PDF fix: abap2xlsx does not expose page_setup attribute in
-*&        this installed version (compile error "Field PAGE_SETUP is unknown").
-*&        Page orientation is now set via OLE2 inside export_pdf_via_ole2:
-*&        Worksheets(1) and Worksheets(3) get Orientation=2/xlLandscape,
-*&        FitToPagesWide=1, FitToPagesTall=0 before ExportAsFixedFormat.
-*&        OLD PDF = 792x612 landscape 2pp; NEW was 612x792 portrait 46pp.
+*& VERSION : 4.6 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.6 - PDF chart fix: export_pdf_via_ole2 now hides sheet2 via OLE2 (matches
+*&        original Visible=0), selects all visible sheets (1+3) using
+*&        Sheets.Select before ExportAsFixedFormat so chart on sheet3
+*&        (Production Performance) is included in the PDF output.
+*& v4.5 - Landscape PDF: orientation set via OLE2 PageSetup in export_pdf_via_ole2
+*&        (abap2xlsx page_setup attribute not available in this installed version).
 *& v4.4 - Border fix: set_numberformat and set_range_formatting now include thin
 *&        borders in their area styles so empty cells in non-fill rows still get
 *&        borders. Previously alignment/numfmt area styles (registered after
@@ -6917,13 +6917,18 @@ ENDFORM.
 FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
                                p_datum_ext  TYPE char10
                                p_uzeit_ext  TYPE char8.
-  " Open the saved XLSX in Excel via OLE2, apply landscape page setup on
-  " sheet1 and sheet3, then export as PDF - matching original OLE2 behaviour.
+  " Open saved XLSX in Excel via OLE2:
+  "  1. Hide sheet2 (data-source sheet, same as OLE2 original: Visible=0)
+  "  2. Set landscape page setup on sheet1 and sheet3
+  "  3. Select sheet1+sheet3 together then export as PDF
   DATA: lo_app     TYPE ole2_object,
         lo_wkbooks TYPE ole2_object,
         lo_wkbook  TYPE ole2_object,
-        lo_ws      TYPE ole2_object,
+        lo_ws1     TYPE ole2_object,
+        lo_ws2     TYPE ole2_object,
+        lo_ws3     TYPE ole2_object,
         lo_ps      TYPE ole2_object,
+        lo_sheets  TYPE ole2_object,
         lv_pdf     TYPE string.
 
   CONCATENATE p_fname '\DPR -' gv_repdate_e ' - On -' p_datum_ext '-' p_uzeit_ext '.PDF'
@@ -6937,28 +6942,39 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
 
   SET PROPERTY OF lo_app 'Visible' = 0.
   CALL METHOD OF lo_app 'Workbooks' = lo_wkbooks.
-  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook
-    EXPORTING
-      #1 = p_xlsx_fname.
+  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook EXPORTING #1 = p_xlsx_fname.
+
+  " Get worksheet references
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws1 EXPORTING #1 = 1.
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws2 EXPORTING #1 = 2.
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws3 EXPORTING #1 = 3.
+
+  " Hide sheet2 (chart data source) - matches OLE2 original Visible=0
+  SET PROPERTY OF lo_ws2 'Visible' = 0.
 
   " Set landscape + fit-to-1-page-wide on sheet1 (DPR)
   SET PROPERTY OF lo_app 'PrintCommunication' = 0.
-  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws EXPORTING #1 = 1.
-  CALL METHOD OF lo_ws 'PageSetup' = lo_ps.
-  SET PROPERTY OF lo_ps 'Orientation'    = 2.  " 2 = xlLandscape
+  CALL METHOD OF lo_ws1 'PageSetup' = lo_ps.
+  SET PROPERTY OF lo_ps 'Orientation'    = 2.   " 2 = xlLandscape
   SET PROPERTY OF lo_ps 'FitToPagesWide' = 1.
   SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
   SET PROPERTY OF lo_app 'PrintCommunication' = 1.
 
   " Set landscape + fit-to-1-page-wide on sheet3 (Production Performance)
   SET PROPERTY OF lo_app 'PrintCommunication' = 0.
-  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws EXPORTING #1 = 3.
-  CALL METHOD OF lo_ws 'PageSetup' = lo_ps.
+  CALL METHOD OF lo_ws3 'PageSetup' = lo_ps.
   SET PROPERTY OF lo_ps 'Orientation'    = 2.
   SET PROPERTY OF lo_ps 'FitToPagesWide' = 1.
   SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
   SET PROPERTY OF lo_app 'PrintCommunication' = 1.
 
+  " Activate sheet1, then select sheet1+sheet3 together so ExportAsFixedFormat
+  " includes the chart (sheet3) in the PDF output.
+  CALL METHOD OF lo_ws1 'Activate'.
+  CALL METHOD OF lo_wkbook 'Sheets' = lo_sheets.
+  CALL METHOD OF lo_sheets 'Select'.   " select all visible sheets (1 and 3)
+
+  " Export selected sheets as PDF
   CALL METHOD OF lo_wkbook 'ExportAsFixedFormat'
     EXPORTING
       #1 = 0          " xlTypePDF
@@ -6968,6 +6984,9 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
 
   CALL METHOD OF lo_wkbook 'Close' EXPORTING #1 = 0.
   CALL METHOD OF lo_app 'Quit'.
+  FREE OBJECT lo_ws1.
+  FREE OBJECT lo_ws2.
+  FREE OBJECT lo_ws3.
   FREE OBJECT lo_wkbook.
   FREE OBJECT lo_wkbooks.
   FREE OBJECT lo_app.
