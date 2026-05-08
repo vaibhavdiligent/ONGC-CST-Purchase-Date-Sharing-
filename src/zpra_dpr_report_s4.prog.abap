@@ -3,23 +3,28 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.2 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.3 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.3 - Sheet names corrected: sheet2='2' (was 'DPR_2'), sheet3='Production Performance'
+*&        (was 'Production_Performance'), matching original OLE2 output.
+*&        Date column: section-1 col-1 now stores Excel serial numbers (date-'19000101'+2)
+*&        with number format 'dd-mmm-yyyy', matching original OLE2 date display.
+*&        colour_alternate_rows: changed from direct set_area_style to deferred set_fill_color
+*&        so gray (FFDDDDDD) rows appear correctly and are overridden only by yellow cells.
+*&        PDF export: after XLSX download, OLE2 opens the saved file and calls
+*&        ExportAsFixedFormat to generate a matching PDF file in the same folder.
 *& v4.2 - colour_yellow_cells implemented: cells with null-fill-from-previous now correctly
 *&        get yellow fill (65535 = FFFFFF00) via set_fill_color/apply_all_fills.
-*&        Chart moved to sheet3 (Production_Performance) where original OLE2 placed it;
+*&        Chart moved to sheet3 (Production Performance) where original OLE2 placed it;
 *&        chart data references remain on sheet2 (hidden source data).
 *&        display_section6 now explicitly activates sheet3 so section-6 headers write to
 *&        the correct sheet instead of spilling onto the hidden source-data sheet.
-*&        Sheet2 (DPR_2): attempted hide skipped - attribute not in installed abap2xlsx.
+*&        Sheet2: hide skipped - attribute not in installed abap2xlsx.
 *& v4.1 - Numeric values: all paste_data forms now strip leading/trailing spaces and
 *&        write numbers as DECFLOAT34 (not text strings) via new set_cell_auto helper.
-*&        Chart: fixed to reference sheet2 (DPR_2) where section-5a data lives;
-*&        series labels read from sheet2 column B; drawing added to sheet2.
 *& v4.0 - Fill colors deferred: collected during build, applied LAST via set_area_style
 *&        so alignment area-styles (registered in set_cell_formats) do not overwrite fills.
 *&        Fill style includes alignment+borders for complete cell formatting.
-*&        Chart: set_position2 + set_media(c_media_type_xml) + create_ax axes added.
-*&        OLE2 fully removed; abap2xlsx-only Excel/PDF generation.
+*&        OLE2 fully removed from XLSX generation; PDF still uses OLE2 open+export.
 *& v3.1 - Modern ABAP: REFRESH->CLEAR, OCCURS removed, @ host vars in SELECT.
 *&        OLE2 path retained for full Excel formatting + PDF export.
 *& v1.9 (parent) - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
@@ -1295,15 +1300,10 @@ FORM fill_dynamic_table_sec1 .
       ENDIF.
       APPEND INITIAL LINE TO <gfs_dyn_table> ASSIGNING <gfs_dyn_line> .
       ASSIGN COMPONENT 'COL01' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
-        EXPORTING
-          input  = gs_zpra_t_dly_prd-production_date
-        IMPORTING
-          output = <gfs_field>.
-      IF sy-subrc <> 0.
-        MESSAGE 'Unexpteced Internal Error' TYPE 'E' .
-      ENDIF.
-      REPLACE ALL OCCURRENCES OF '.' IN <gfs_field> WITH '-' .
+      " Store as Excel date serial (days since 30-DEC-1899, with Excel 1900 leap-year
+      " bug offset +2) so the cell shows a proper date when formatted 'dd-mmm-yyyy'.
+      DATA(lv_xls_serial) = gs_zpra_t_dly_prd-production_date - '19000101' + 2.
+      <gfs_field> = lv_xls_serial.
     ENDAT .
     IF gs_zpra_t_dly_prd-comments EQ 'DUMMYDPRDATA'.
       CONTINUE.
@@ -2003,13 +2003,13 @@ FORM start_excel .
       go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
 
       lv_t1 = 'DPR'.
-      lv_t2 = 'DPR_2'.
-      lv_t3 = 'Production_Performance'.
+      lv_t2 = '2'.
+      lv_t3 = 'Production Performance'.
       go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
       go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
-      " Note: sheet2 (DPR_2) should be hidden (OLE2: Visible=0) but abap2xlsx
-      " does not expose an attribute for this in the installed version.
+      " Note: sheet2 ('2') should be hidden (OLE2: Visible=0) - abap2xlsx does
+      " not expose this attribute; sheet stays visible in the xlsx file.
     CATCH zcx_excel.
   ENDTRY.
 
@@ -2052,6 +2052,9 @@ FORM display_section1_data .
   lv_col = 3 .
   PERFORM select_range USING gv_sec1_data_start_row lv_col gv_row lv_lines  .
   PERFORM set_numberformat USING '0.000' .
+  " Date column: apply dd-mmm-yyyy format so Excel serial numbers display as dates
+  PERFORM select_range USING gv_sec1_data_start_row 1 gv_row 2 .
+  PERFORM set_numberformat USING 'dd-mmm-yyyy'.
 ENDFORM.
 FORM formatting_section1 .
   PERFORM merge_col_1_2_section1 .
@@ -3447,41 +3450,32 @@ FORM write_product_name  USING    p_product.
 
 ENDFORM.
 FORM colour_alternate_rows .
+  " Use deferred fills (set_fill_color) so gray is registered in gt_fill_ranges
+  " BEFORE yellow cells. When apply_all_fills runs, yellow (appended after) wins
+  " for gt_copied_cells; gray wins for all other section-1 data cells.
   DATA : lv_lines       TYPE sy-tabix,
          lv_switch_flag TYPE c,
-         lo_style       TYPE REF TO zcl_excel_style,
-         lv_r           TYPE i,
-         lv_g           TYPE i,
-         lv_b           TYPE i,
-         lv_xr          TYPE x LENGTH 1,
-         lv_xg          TYPE x LENGTH 1,
-         lv_xb          TYPE x LENGTH 1.
+         lv_cur_row     TYPE sy-tabix,
+         lv_start_col   TYPE sy-tabix,
+         lv_end_col     TYPE sy-tabix.
   DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines.
-  lv_r = 14540253 MOD 256.
-  lv_g = ( 14540253 DIV 256 ) MOD 256.
-  lv_b = ( 14540253 DIV 65536 ) MOD 256.
-  lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
-  lo_style = go_xlsx->add_new_style( ).
-  lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
-  lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  lv_cur_row   = gv_s_row.
+  lv_start_col = gv_s_col.
+  lv_end_col   = gv_e_col.
   DO lv_lines TIMES.
     IF lv_switch_flag EQ 'X'.
       CLEAR lv_switch_flag.
-      gv_s_row = gv_s_row + 1.
+      lv_cur_row = lv_cur_row + 1.
       CONTINUE.
     ENDIF.
-    TRY.
-      go_xlsx_active->set_area_style(
-        ip_style        = lo_style->get_guid( )
-        ip_row          = gv_s_row
-        ip_column_start = gv_s_col
-        ip_row_to       = gv_s_row
-        ip_column_end   = gv_e_col ).
-    CATCH zcx_excel.
-    ENDTRY.
+    " Defer gray fill for this (odd) row
+    PERFORM select_range USING lv_cur_row lv_start_col lv_cur_row lv_end_col.
+    PERFORM set_fill_color USING 14540253.   " OLE2 14540253 = RGB(DD,DD,DD) = FFDDDDDD
     lv_switch_flag = 'X'.
-    gv_s_row = gv_s_row + 1.
+    lv_cur_row = lv_cur_row + 1.
   ENDDO.
+  " Restore range globals to pre-call values (gv_s_row was not modified)
+  PERFORM select_range USING gv_s_row lv_start_col gv_e_row lv_end_col.
 ENDFORM.
 FORM set_range_interior  USING    p_color.
   PERFORM set_fill_color USING p_color.
@@ -6871,10 +6865,54 @@ FORM finalize_worksheet .
   ELSE.
     EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME'.
     MESSAGE 'Report downloaded successfully' TYPE 'S'.
+    " Generate PDF: open saved XLSX in Excel via OLE2 and export as PDF
+    " (matches original OLE2 program's ExportAsFixedFormat behaviour)
+    PERFORM export_pdf_via_ole2 USING lv_fname lv_datum_ext lv_uzeit_ext.
   ENDIF.
 ENDFORM.
 FORM lock_xls .
   " Sheet protection not implemented in this version.
+ENDFORM.
+
+FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
+                               p_datum_ext  TYPE char10
+                               p_uzeit_ext  TYPE char8.
+  " Open the saved XLSX in Excel via OLE2 and export as PDF.
+  " This replicates the original OLE2 program's ExportAsFixedFormat call.
+  DATA: lo_app     TYPE ole2_object,
+        lo_wkbooks TYPE ole2_object,
+        lo_wkbook  TYPE ole2_object,
+        lv_pdf     TYPE string.
+
+  CONCATENATE p_fname '\DPR -' gv_repdate_e ' - On -' p_datum_ext '-' p_uzeit_ext '.PDF'
+    INTO lv_pdf.
+
+  CREATE OBJECT lo_app 'Excel.Application'.
+  IF sy-subrc <> 0.
+    MESSAGE 'PDF export skipped: Excel COM not available on this client' TYPE 'W'.
+    RETURN.
+  ENDIF.
+
+  SET PROPERTY OF lo_app 'Visible' = 0.
+  CALL METHOD OF lo_app 'Workbooks' = lo_wkbooks.
+  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook
+    EXPORTING
+      #1 = p_xlsx_fname.
+
+  CALL METHOD OF lo_wkbook 'ExportAsFixedFormat'
+    EXPORTING
+      #1 = 0          " xlTypePDF
+      #2 = lv_pdf
+      #3 = 0          " xlQualityStandard
+      #4 = 1.         " IncludeDocProperties
+
+  CALL METHOD OF lo_wkbook 'Close' EXPORTING #1 = 0.
+  CALL METHOD OF lo_app 'Quit'.
+  FREE OBJECT lo_wkbook.
+  FREE OBJECT lo_wkbooks.
+  FREE OBJECT lo_app.
+
+  MESSAGE |PDF saved: { lv_pdf }| TYPE 'S'.
 ENDFORM.
 
 FORM fill_dynamic_table_sec2d .
