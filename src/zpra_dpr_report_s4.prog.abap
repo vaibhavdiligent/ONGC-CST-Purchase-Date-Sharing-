@@ -3,7 +3,11 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.0 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.1 - Numeric values: all paste_data forms now strip leading/trailing spaces and
+*&        write numbers as DECFLOAT34 (not text strings) via new set_cell_auto helper.
+*&        Chart: fixed to reference sheet2 (DPR_2) where section-5a data lives;
+*&        series labels read from sheet2 column B; drawing added to sheet2.
 *& v4.0 - Fill colors deferred: collected during build, applied LAST via set_area_style
 *&        so alignment area-styles (registered in set_cell_formats) do not overwrite fills.
 *&        Fill style includes alignment+borders for complete cell formatting.
@@ -1694,7 +1698,9 @@ FORM create_chart .
         ls_ch_from  TYPE zexcel_drawing_location,
         ls_ch_to    TYPE zexcel_drawing_location.
 
-  go_xlsx_active = go_xlsx_sheet3.
+  " Section 5a data is written to sheet2 (DPR_2) by paste_data_sheet2.
+  " Chart must reference sheet2 for data and be added to sheet2.
+  go_xlsx_active = go_xlsx_sheet2.
 
   IF gv_5a_rows IS INITIAL OR gv_5a_cols IS INITIAL OR gv_5a_cols < 2.
     RETURN.
@@ -1712,7 +1718,8 @@ FORM create_chart .
       lv_to_a   = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_e ).
       lv_lbl_a  = zcl_excel_common=>convert_column2alpha( ip_column = lv_lbl_c ).
 
-      lv_title = go_xlsx_sheet3->get_title( ).
+      " Use sheet2 title for data references (section 5a data is on sheet2)
+      lv_title = go_xlsx_sheet2->get_title( ).
 
       CREATE OBJECT lo_graph.
       lo_graph->set_title( ip_value = 'Production Performance' ).
@@ -1725,12 +1732,14 @@ FORM create_chart .
         lv_idx   = lv_idx + 1.
         CLEAR: lv_cval, lv_sername.
         TRY.
-            go_xlsx_sheet3->get_cell(
+            " Read series label from sheet2 (label column = col B)
+            go_xlsx_sheet2->get_cell(
               EXPORTING ip_column = lv_lbl_c ip_row = lv_row
               IMPORTING ep_value  = lv_cval ).
             lv_sername = lv_cval.
           CATCH zcx_excel.
         ENDTRY.
+        CONDENSE lv_sername.
         IF lv_sername IS INITIAL.
           lv_sername = |Series { lv_idx }|.
         ENDIF.
@@ -1751,14 +1760,14 @@ FORM create_chart .
       lo_graph->create_ax( ip_type = zcl_excel_graph_line=>c_catax ).
       lo_graph->create_ax( ip_type = zcl_excel_graph_line=>c_valax ).
 
-      " Create drawing via factory and assign graph — matches abap2xlsx demo pattern
+      " Create drawing and add to sheet2 (where the data lives)
       lo_drawing = go_xlsx->add_new_drawing(
                        ip_type  = zcl_excel_drawing=>type_chart
                        ip_title = 'Production Performance' ).
       lo_drawing->graph      = lo_graph.
       lo_drawing->graph_type = zcl_excel_drawing=>c_graph_line.
 
-      " Position chart below data using set_position2 (anchor 2 cells)
+      " Position chart below data
       ls_ch_from-row = gv_e_row + 2.
       ls_ch_from-col = lv_lbl_c.
       ls_ch_to-row   = gv_e_row + 20.
@@ -1766,7 +1775,7 @@ FORM create_chart .
       lo_drawing->set_position2( ip_from = ls_ch_from ip_to = ls_ch_to ).
       lo_drawing->set_media( zcl_excel_drawing=>c_media_type_xml ).
 
-      go_xlsx_sheet3->add_drawing( ip_drawing = lo_drawing ).
+      go_xlsx_sheet2->add_drawing( ip_drawing = lo_drawing ).
 
     CATCH cx_root.
   ENDTRY.
@@ -2712,25 +2721,38 @@ FORM fill_null_values_with_previous .
   ENDDO.
   UNASSIGN : <lfs_dyn_line> .
 ENDFORM.
+FORM set_cell_auto USING p_ws TYPE REF TO zcl_excel_worksheet
+                         p_row TYPE i p_col TYPE i p_val TYPE string.
+  " Strip leading/trailing spaces then write as number if possible, else as text.
+  DATA: lv_v   TYPE string,
+        lv_num TYPE decfloat34.
+  lv_v = p_val.
+  CONDENSE lv_v.
+  IF lv_v IS INITIAL. RETURN. ENDIF.
+  TRY.
+    lv_num = lv_v.
+    p_ws->set_cell( ip_row = p_row ip_column = p_col ip_value = lv_num ).
+  CATCH cx_root.
+    TRY.
+      p_ws->set_cell( ip_row = p_row ip_column = p_col ip_value = lv_v ).
+    CATCH zcx_excel. ENDTRY.
+  ENDTRY.
+ENDFORM.
+
 FORM paste_data .
   DATA: lv_row TYPE i, lv_col TYPE i,
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  TRY.
-    LOOP AT gt_paste INTO gs_paste.
-      lv_col = gv_s_col.
-      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-      LOOP AT lt_vals INTO lv_val.
-        IF lv_val IS NOT INITIAL.
-          go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-        ENDIF.
-        lv_col = lv_col + 1.
-      ENDLOOP.
-      lv_row = lv_row + 1.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      PERFORM set_cell_auto USING go_xlsx_sheet1 lv_row lv_col lv_val.
+      lv_col = lv_col + 1.
     ENDLOOP.
-  CATCH zcx_excel.
-  ENDTRY.
+    lv_row = lv_row + 1.
+  ENDLOOP.
   CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet3 .
@@ -2738,20 +2760,15 @@ FORM paste_data_sheet3 .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  TRY.
-    LOOP AT gt_paste INTO gs_paste.
-      lv_col = gv_s_col.
-      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-      LOOP AT lt_vals INTO lv_val.
-        IF lv_val IS NOT INITIAL.
-          go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-        ENDIF.
-        lv_col = lv_col + 1.
-      ENDLOOP.
-      lv_row = lv_row + 1.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      PERFORM set_cell_auto USING go_xlsx_sheet3 lv_row lv_col lv_val.
+      lv_col = lv_col + 1.
     ENDLOOP.
-  CATCH zcx_excel.
-  ENDTRY.
+    lv_row = lv_row + 1.
+  ENDLOOP.
   CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet2 .
@@ -2759,20 +2776,15 @@ FORM paste_data_sheet2 .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  TRY.
-    LOOP AT gt_paste INTO gs_paste.
-      lv_col = gv_s_col.
-      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-      LOOP AT lt_vals INTO lv_val.
-        IF lv_val IS NOT INITIAL.
-          go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-        ENDIF.
-        lv_col = lv_col + 1.
-      ENDLOOP.
-      lv_row = lv_row + 1.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      PERFORM set_cell_auto USING go_xlsx_sheet2 lv_row lv_col lv_val.
+      lv_col = lv_col + 1.
     ENDLOOP.
-  CATCH zcx_excel.
-  ENDTRY.
+    lv_row = lv_row + 1.
+  ENDLOOP.
   CLEAR gt_paste[].
 ENDFORM.
 FORM colour_yellow_cells .
