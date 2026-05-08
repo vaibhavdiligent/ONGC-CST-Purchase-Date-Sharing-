@@ -3,7 +3,10 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.6 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.7 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.7 - Border fix: display_section4b (Remarks section) now applies a full-width
+*&        thin border covering cols 1..gv_table_columns for all Remarks rows, so
+*&        empty cells in cols 10+ get borders matching the main DPR table above.
 *& v4.6 - PDF chart fix: export_pdf_via_ole2 hides sheet2 via OLE2 (Visible=0)
 *&        then calls workbook-level ExportAsFixedFormat which exports all
 *&        visible sheets (sheet1 DPR + sheet3 chart). Removed Sheets.Select
