@@ -1639,8 +1639,6 @@ FORM create_chart .
         lv_title   TYPE zexcel_sheet_title,
         lv_chart_r TYPE zexcel_cell_row,
         lv_chart_a TYPE zexcel_cell_column_alpha,
-        lv_anchor2 TYPE zexcel_cell_column_alpha,
-        lv_row2    TYPE zexcel_cell_row.
 
   go_xlsx_active = go_xlsx_sheet3.
 
@@ -1702,12 +1700,6 @@ FORM create_chart .
       lo_drawing->set_position(
         ip_from_row = lv_chart_r
         ip_from_col = lv_chart_a ).
-
-      lv_row2    = lv_chart_r + 18.
-      lv_anchor2 = lv_to_a.
-      lo_drawing->set_position2(
-        ip_from_row = lv_row2
-        ip_from_col = lv_anchor2 ).
 
       go_xlsx_sheet3->add_drawing( ip_drawing = lo_drawing ).
 
