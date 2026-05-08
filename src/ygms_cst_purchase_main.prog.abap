@@ -1611,6 +1611,9 @@ FORM handle_allocate.
       IF <fs_alv_sales>-exclude = 'X'.
         " Excluded rows: display 0 for both sales columns
         <fs_alv_sales>-total_sales_mbg = 0.
+      ELSEIF <fs_alv_sales>-static_flag = 'X'.
+        " Static material rows: sales = allocation (no separate entry in it_final_main)
+        <fs_alv_sales>-total_sales_mbg = <fs_alv_sales>-total_mbg.
       ELSE.
         IF <fs_alv_sales>-state_code <> 'GJ'.
           READ TABLE it_final_main INTO DATA(ls_fin_row)
