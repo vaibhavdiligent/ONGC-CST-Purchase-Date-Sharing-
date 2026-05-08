@@ -506,8 +506,7 @@ FORM set_fill_color USING p_ole2_color TYPE i.
         lv_col   TYPE zexcel_cell_column,
         lv_val   TYPE zexcel_cell_value,
         lv_rc    TYPE sysubrc,
-        lv_str   TYPE string,
-        lv_guid  TYPE zexcel_cell_style.
+        lv_str   TYPE string.
   lv_r  = p_ole2_color MOD 256.
   lv_g  = ( p_ole2_color DIV 256 ) MOD 256.
   lv_b  = ( p_ole2_color DIV 65536 ) MOD 256.
@@ -516,35 +515,41 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
   lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
   lo_style->fill->bgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
-  lv_guid = lo_style->get_guid( ).
-  TRY.
-      lv_row = gv_s_row.
-      WHILE lv_row <= gv_e_row.
-        lv_col = gv_s_col.
-        WHILE lv_col <= gv_e_col.
-          CLEAR: lv_val, lv_rc, lv_str.
-          TRY.
-              go_xlsx_active->get_cell(
-                EXPORTING ip_column = lv_col ip_row = lv_row
-                IMPORTING ep_value  = lv_val ep_rc = lv_rc ).
-            CATCH zcx_excel.
-          ENDTRY.
-          IF lv_rc = 0 AND lv_val IS NOT INITIAL.
-            lv_str = lv_val.
-          ELSE.
-            lv_str = ' '.
-          ENDIF.
-          go_xlsx_active->set_cell(
-            ip_column = lv_col
-            ip_row    = lv_row
-            ip_value  = lv_str
-            ip_style  = lv_guid ).
-          lv_col = lv_col + 1.
-        ENDWHILE.
-        lv_row = lv_row + 1.
-      ENDWHILE.
-    CATCH zcx_excel.
-  ENDTRY.
+  lv_row = gv_s_row.
+  WHILE lv_row <= gv_e_row.
+    lv_col = gv_s_col.
+    WHILE lv_col <= gv_e_col.
+      CLEAR: lv_val, lv_rc, lv_str.
+      TRY.
+          go_xlsx_active->get_cell(
+            EXPORTING ip_column = lv_col ip_row = lv_row
+            IMPORTING ep_value  = lv_val ep_rc = lv_rc ).
+        CATCH zcx_excel.
+      ENDTRY.
+      IF lv_rc = 0 AND lv_val IS NOT INITIAL.
+        lv_str = lv_val.
+        TRY.
+            go_xlsx_active->set_cell_style(
+              ip_column = lv_col
+              ip_row    = lv_row
+              ip_style  = lo_style ).
+          CATCH zcx_excel.
+        ENDTRY.
+      ELSE.
+        lv_str = ' '.
+        TRY.
+            go_xlsx_active->set_cell(
+              ip_column = lv_col
+              ip_row    = lv_row
+              ip_value  = lv_str
+              ip_style  = lo_style ).
+          CATCH zcx_excel.
+        ENDTRY.
+      ENDIF.
+      lv_col = lv_col + 1.
+    ENDWHILE.
+    lv_row = lv_row + 1.
+  ENDWHILE.
 ENDFORM.
 
 *--- Form Routines ---*
