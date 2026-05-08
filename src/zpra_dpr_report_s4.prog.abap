@@ -3,7 +3,11 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 3.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 07-MAY-2026
+*& VERSION : 3.5 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v3.5 - Fill colors via per-cell set_cell_style with style object;
+*&        per-cell TRY/CATCH so single-cell failures do not abort range.
+*&        Production_Performance line chart via ZCL_EXCEL_GRAPH_LINE.
+*&        OLE2 fully removed; abap2xlsx-only Excel/PDF generation.
 *& v3.1 - Modern ABAP: REFRESH->CLEAR, OCCURS removed, @ host vars in SELECT.
 *&        OLE2 path retained for full Excel formatting + PDF export.
 *& v1.9 (parent) - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
