@@ -3,7 +3,12 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.3 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.4 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.4 - Border fix: set_numberformat and set_range_formatting now include thin
+*&        borders in their area styles so empty cells in non-fill rows still get
+*&        borders. Previously alignment/numfmt area styles (registered after
+*&        border_cells) were stripping borders under last-wins rule, leaving
+*&        rows 12, 14, ... (no-fill alternating rows) with missing cell borders.
 *& v4.3 - Sheet names corrected: sheet2='2' (was 'DPR_2'), sheet3='Production Performance'
 *&        (was 'Production_Performance'), matching original OLE2 output.
 *&        Date column: section-1 col-1 now stores Excel serial numbers (date-'19000101'+2)
@@ -2114,6 +2119,8 @@ ENDFORM.
 FORM set_range_formatting USING p_wraptext
                                 p_horizontal
                                 p_vertical .
+  " Style includes thin borders so alignment area-style preserves cell borders
+  " when registered after border_cells (last-wins rule on area styles).
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   IF p_wraptext = 1.
@@ -2129,6 +2136,17 @@ FORM set_range_formatting USING p_wraptext
     WHEN 'T'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_top.
     WHEN 'B'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_bottom.
   ENDCASE.
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
       go_xlsx_active->set_area_style(
     ip_style     = lo_style->get_guid( )
@@ -3481,9 +3499,22 @@ FORM set_range_interior  USING    p_color.
   PERFORM set_fill_color USING p_color.
 ENDFORM.
 FORM set_numberformat USING p_format.
+  " Style includes thin borders so this area-style does not strip borders
+  " from cells when it is registered after border_cells (last-wins rule).
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->number_format->format_code = p_format.
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
       go_xlsx_active->set_area_style(
     ip_style     = lo_style->get_guid( )
