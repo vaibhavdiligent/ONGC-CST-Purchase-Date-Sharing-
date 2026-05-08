@@ -1631,9 +1631,11 @@ FORM display_section4a .
 
 ENDFORM.
 FORM display_section4b .
-  DATA lv_lines TYPE sy-tabix .
+  DATA lv_lines    TYPE sy-tabix .
+  DATA lv_hdr_row  TYPE sy-tabix .   " first row of Remarks block
 
   gv_row   = gv_row + 2 .
+  lv_hdr_row = gv_row .              " capture for full-width border at end
   PERFORM select_range USING gv_row 1 gv_row 1  .
   PERFORM set_range USING 'Remarks' 0.
   PERFORM set_range_font  USING 13 1 .
@@ -1673,6 +1675,10 @@ FORM display_section4b .
   PERFORM set_thin_border USING 1 1 1 1 .
   PERFORM set_border_range USING 0 1 0 0.
 
+  " Full-width thin border covering all Remarks rows (cols 1..gv_table_columns)
+  " so empty cells in cols 10+ get borders matching the main DPR table above.
+  PERFORM select_range USING lv_hdr_row 1 gv_e_row gv_table_columns.
+  PERFORM set_all_borders_range.
 
   gv_row = gv_e_row .
 
