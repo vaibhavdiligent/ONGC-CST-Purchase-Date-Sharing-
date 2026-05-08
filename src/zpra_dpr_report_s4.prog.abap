@@ -3,7 +3,14 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.2 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.2 - colour_yellow_cells implemented: cells with null-fill-from-previous now correctly
+*&        get yellow fill (65535 = FFFFFF00) via set_fill_color/apply_all_fills.
+*&        Chart moved to sheet3 (Production_Performance) where original OLE2 placed it;
+*&        chart data references remain on sheet2 (hidden source data).
+*&        display_section6 now explicitly activates sheet3 so section-6 headers write to
+*&        the correct sheet instead of spilling onto the hidden source-data sheet.
+*&        Sheet2 (DPR_2) hidden: iv_sheet_visible set to 'hidden'.
 *& v4.1 - Numeric values: all paste_data forms now strip leading/trailing spaces and
 *&        write numbers as DECFLOAT34 (not text strings) via new set_cell_auto helper.
 *&        Chart: fixed to reference sheet2 (DPR_2) where section-5a data lives;
@@ -1698,9 +1705,9 @@ FORM create_chart .
         ls_ch_from  TYPE zexcel_drawing_location,
         ls_ch_to    TYPE zexcel_drawing_location.
 
-  " Section 5a data is written to sheet2 (DPR_2) by paste_data_sheet2.
-  " Chart must reference sheet2 for data and be added to sheet2.
-  go_xlsx_active = go_xlsx_sheet2.
+  " Section 5a data is on sheet2 (hidden source data). Chart goes on sheet3
+  " (Production_Performance) - matching original OLE2 layout.
+  go_xlsx_active = go_xlsx_sheet3.
 
   IF gv_5a_rows IS INITIAL OR gv_5a_cols IS INITIAL OR gv_5a_cols < 2.
     RETURN.
@@ -1718,7 +1725,7 @@ FORM create_chart .
       lv_to_a   = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_e ).
       lv_lbl_a  = zcl_excel_common=>convert_column2alpha( ip_column = lv_lbl_c ).
 
-      " Use sheet2 title for data references (section 5a data is on sheet2)
+      " Data references always point to sheet2 (hidden source data)
       lv_title = go_xlsx_sheet2->get_title( ).
 
       CREATE OBJECT lo_graph.
@@ -1760,22 +1767,22 @@ FORM create_chart .
       lo_graph->create_ax( ip_type = zcl_excel_graph_line=>c_catax ).
       lo_graph->create_ax( ip_type = zcl_excel_graph_line=>c_valax ).
 
-      " Create drawing and add to sheet2 (where the data lives)
+      " Chart placed on sheet3 (Production_Performance) - original OLE2 behaviour
       lo_drawing = go_xlsx->add_new_drawing(
                        ip_type  = zcl_excel_drawing=>type_chart
                        ip_title = 'Production Performance' ).
       lo_drawing->graph      = lo_graph.
       lo_drawing->graph_type = zcl_excel_drawing=>c_graph_line.
 
-      " Position chart below data
-      ls_ch_from-row = gv_e_row + 2.
-      ls_ch_from-col = lv_lbl_c.
-      ls_ch_to-row   = gv_e_row + 20.
-      ls_ch_to-col   = lv_lbl_c + 12.
+      " Position chart at top of sheet3 (row 1, spanning ~30 rows)
+      ls_ch_from-row = 1.
+      ls_ch_from-col = 1.
+      ls_ch_to-row   = 30.
+      ls_ch_to-col   = 13.
       lo_drawing->set_position2( ip_from = ls_ch_from ip_to = ls_ch_to ).
       lo_drawing->set_media( zcl_excel_drawing=>c_media_type_xml ).
 
-      go_xlsx_sheet2->add_drawing( ip_drawing = lo_drawing ).
+      go_xlsx_sheet3->add_drawing( ip_drawing = lo_drawing ).
 
     CATCH cx_root.
   ENDTRY.
@@ -1785,6 +1792,11 @@ FORM display_section6 .
   DATA : lv_ind_unit   TYPE char50,
          lv_total_unit TYPE char50,
          lv_gt_unit    TYPE char50 . "grand total
+
+  " Section 6 output goes to sheet3 (Production_Performance), same as OLE2.
+  " Explicitly activate sheet3 because create_chart may have left go_xlsx_active on sheet3
+  " but any early RETURN in create_chart could leave it on sheet2.
+  go_xlsx_active = go_xlsx_sheet3.
 
   gv_row   = 44 .
   gv_col   = 1  .
@@ -1996,6 +2008,8 @@ FORM start_excel .
       go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
       go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
+      " Hide sheet2 - it is source data for chart only (original OLE2: Visible=0)
+      go_xlsx_sheet2->iv_sheet_visible = 'hidden'.
     CATCH zcx_excel.
   ENDTRY.
 
@@ -2791,14 +2805,8 @@ FORM colour_yellow_cells .
   DATA : lv_row TYPE sy-tabix .
   LOOP AT gt_copied_cells INTO gs_copied_cells.
     lv_row = gv_row + gs_copied_cells-row - 1 .
-* S4-SKIP(OLE2): CALL METHOD OF go_excel 'Cells' = go_cell
-*     EXPORTING
-*     #1 = lv_row
-*     #2 = gs_copied_cells-col .
-* S4-SKIP(OLE2): GET PROPERTY OF go_cell 'interior' = go_interior .
-* S4-SKIP(OLE2): SET PROPERTY OF go_interior 'Color' = 65535 .
-* S4-SKIP(OLE2): GET PROPERTY OF go_cell 'FONT' = go_font .
-* S4-SKIP(OLE2): SET PROPERTY OF go_font 'COLOR' = '-16776961' .
+    PERFORM select_range USING lv_row gs_copied_cells-col lv_row gs_copied_cells-col.
+    PERFORM set_fill_color USING 65535.   " bright yellow = FFFF00 (OLE2 Color = 65535)
   ENDLOOP.
 ENDFORM.
 FORM display_logo .
