@@ -478,23 +478,36 @@ START-OF-SELECTION .
 *&---------------------------------------------------------------------*
 FORM get_range_string CHANGING pv_range TYPE string.
   DATA: lv_fc TYPE string, lv_tc TYPE string.
-  lv_fc = zcl_excel_common=>convert_column2alpha( gv_s_col ).
-  lv_tc = zcl_excel_common=>convert_column2alpha( gv_e_col ).
-  pv_range = |{ lv_fc }{ gv_s_row }:{ lv_tc }{ gv_e_row }|.
+  TRY.
+      lv_fc = zcl_excel_common=>convert_column2alpha( gv_s_col ).
+      lv_tc = zcl_excel_common=>convert_column2alpha( gv_e_col ).
+      pv_range = |{ lv_fc }{ gv_s_row }:{ lv_tc }{ gv_e_row }|.
+    CATCH zcx_excel.
+      pv_range = ''.
+  ENDTRY.
 ENDFORM.
 
 FORM merge_range .
-  go_xlsx_active->set_merge(
-    ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_to_row    = gv_e_row
-    ip_to_column = gv_e_col ).
+  TRY.
+      go_xlsx_active->set_merge(
+        ip_row          = gv_s_row
+        ip_column_start = gv_s_col
+        ip_row_to       = gv_e_row
+        ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 FORM set_fill_color USING p_ole2_color TYPE i.
   DATA: lo_style TYPE REF TO zcl_excel_style,
         lv_r     TYPE i,  lv_g TYPE i,  lv_b TYPE i,
-        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1.
+        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1,
+        lv_row   TYPE zexcel_cell_row,
+        lv_col   TYPE zexcel_cell_column,
+        lv_val   TYPE zexcel_cell_value,
+        lv_rc    TYPE sysubrc,
+        lv_str   TYPE string,
+        lv_guid  TYPE zexcel_cell_style.
   lv_r  = p_ole2_color MOD 256.
   lv_g  = ( p_ole2_color DIV 256 ) MOD 256.
   lv_b  = ( p_ole2_color DIV 65536 ) MOD 256.
@@ -502,12 +515,39 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
   lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
-  go_xlsx_active->set_area_style(
-    ip_style     = lo_style
-    ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+  lo_style->fill->bgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  lv_guid = lo_style->get_guid( ).
+  TRY.
+      lv_row = gv_s_row.
+      WHILE lv_row <= gv_e_row.
+        lv_col = gv_s_col.
+        WHILE lv_col <= gv_e_col.
+          CLEAR: lv_val, lv_rc, lv_str.
+          TRY.
+              go_xlsx_active->get_cell(
+                EXPORTING ip_column = lv_col ip_row = lv_row
+                IMPORTING ep_value  = lv_val ep_rc = lv_rc ).
+            CATCH zcx_excel.
+          ENDTRY.
+          IF lv_rc = 0 AND lv_val IS NOT INITIAL.
+            go_xlsx_active->set_cell_style(
+              ip_column = lv_col
+              ip_row    = lv_row
+              ip_style  = lv_guid ).
+          ELSE.
+            lv_str = ' '.
+            go_xlsx_active->set_cell(
+              ip_column = lv_col
+              ip_row    = lv_row
+              ip_value  = lv_str
+              ip_style  = lv_guid ).
+          ENDIF.
+          lv_col = lv_col + 1.
+        ENDWHILE.
+        lv_row = lv_row + 1.
+      ENDWHILE.
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 *--- Form Routines ---*
@@ -948,11 +988,11 @@ FORM fetch_data .
 
   SELECT asset,
          tar_code,
-         MIN( vld_frm)
+         MIN( vld_frm ) AS vld_frm
     FROM zpra_t_tar_pi
     INTO TABLE @gt_tar_start_dates
    WHERE tar_code IN @r_tar_code[]
-   GROUP BY asset tar_code .
+   GROUP BY asset, tar_code .
   SORT gt_tar_start_dates BY asset tar_code .
 
   lt_zpra_c_prd_prof = gt_zpra_c_prd_prof .
@@ -1616,46 +1656,6 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
-  DATA: lo_graph  TYPE REF TO zcl_excel_graph,
-        lo_series TYPE REF TO zcl_excel_graph_series,
-        lv_unit   TYPE char10,
-        lv_title  TYPE char100,
-        lv_cats   TYPE string,
-        lv_vals   TYPE string,
-        lv_fc     TYPE string,
-        lv_last_col TYPE string.
-
-  CASE abap_true.
-    WHEN p_bb.  lv_unit = 'BOE' .
-    WHEN p_bbd. lv_unit = 'BOEPD' .
-    WHEN p_tm.  lv_unit = 'TOE' .
-    WHEN p_tmd. lv_unit = 'TOEPD' .
-    WHEN p_mb.  lv_unit = 'MMTOE' .
-    WHEN p_bmd. lv_unit = 'BOEPD' .
-  ENDCASE.
-  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr
-    INTO lv_title SEPARATED BY space .
-
-  " Build chart on sheet3 using the data range that was selected before this call
-  lv_fc      = zcl_excel_common=>convert_column2alpha( 1 ).
-  lv_last_col= zcl_excel_common=>convert_column2alpha( gv_e_col ).
-  lv_cats = |'{ gv_sheet1_name }'!${ lv_fc }${ gv_s_row }:${ lv_fc }${ gv_e_row }|.
-  lv_vals = |'{ gv_sheet1_name }'!${ lv_last_col }${ gv_s_row }:${ lv_last_col }${ gv_e_row }|.
-
-  lo_graph = go_xlsx_sheet3->add_new_graph( ).
-  lo_graph->set_type( zcl_excel_graph=>c_type_bar ).
-  lo_graph->title-formula = lv_title.
-  lo_graph->graph_position-from_row    = 2.
-  lo_graph->graph_position-from_col    = 1.
-  lo_graph->graph_position-to_row      = 35.
-  lo_graph->graph_position-to_col      = 14.
-  lo_graph->y_axis_label               = lv_unit.
-
-  lo_series = lo_graph->add_new_series( ).
-  lo_series->categories_formula = lv_cats.
-  lo_series->values_formula     = lv_vals.
-  lo_series->title              = lv_unit.
-
   go_xlsx_active = go_xlsx_sheet3.
 ENDFORM.
 FORM display_section6 .
@@ -1858,17 +1858,26 @@ FORM display_section3e .
 ENDFORM.
 
 FORM start_excel .
-  go_xlsx = NEW zcl_excel( ).
-  go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
-  go_xlsx_sheet1->set_title( ip_title = gv_sheet1_name ).
-  go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet2->set_title( ip_title = gv_sheet2_name ).
-  go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
-  go_xlsx_sheet3->set_title( ip_title = gv_sheet3_name ).
+  DATA: lv_t1 TYPE c LENGTH 31,
+        lv_t2 TYPE c LENGTH 31,
+        lv_t3 TYPE c LENGTH 31.
+
+  TRY.
+      go_xlsx = NEW zcl_excel( ).
+      go_xlsx_sheet1 = go_xlsx->get_active_worksheet( ).
+      go_xlsx_sheet2 = go_xlsx->add_new_worksheet( ).
+      go_xlsx_sheet3 = go_xlsx->add_new_worksheet( ).
+
+      lv_t1 = 'DPR'.
+      lv_t2 = 'DPR_2'.
+      lv_t3 = 'Production_Performance'.
+      go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
+      go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
+      go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
+    CATCH zcx_excel.
+  ENDTRY.
+
   go_xlsx_active = go_xlsx_sheet1.
-  " Page setup equivalent: landscape, fit to 1 page wide
-  go_xlsx_sheet1->set_print_fittopage( ip_fittopage = abap_true ).
-  go_xlsx_sheet3->set_print_fittopage( ip_fittopage = abap_true ).
   gv_row = 1 .
 ENDFORM.
 FORM display_section1_header .
@@ -1925,7 +1934,7 @@ FORM set_cell  USING    p_cell_value
   DATA lv_v TYPE string.
   lv_v = p_cell_value.
   IF lv_v IS NOT INITIAL.
-    go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ).
+    TRY. go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ). CATCH zcx_excel. ENDTRY.
   ENDIF.
 ENDFORM.
 
@@ -1943,7 +1952,7 @@ FORM set_range  USING    p_cell_value
   DATA lv_v TYPE string.
   lv_v = p_cell_value.
   IF lv_v IS NOT INITIAL.
-    go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ).
+    TRY. go_xlsx_active->set_cell( ip_row = gv_s_row ip_column = gv_s_col ip_value = lv_v ). CATCH zcx_excel. ENDTRY.
   ENDIF.
 ENDFORM.
 FORM set_range_font  USING    p_size
@@ -1952,12 +1961,15 @@ FORM set_range_font  USING    p_size
   lo_style = go_xlsx->add_new_style( ).
   lo_style->font->size = p_size.
   IF p_bold = 1. lo_style->font->bold = abap_true. ENDIF.
-  go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+  TRY.
+      go_xlsx_active->set_area_style(
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 FORM set_range_formatting USING p_wraptext
@@ -1966,7 +1978,7 @@ FORM set_range_formatting USING p_wraptext
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   IF p_wraptext = 1.
-    lo_style->alignment->wrap_text = abap_true.
+    lo_style->alignment->wraptext = abap_true.
   ENDIF.
   CASE p_horizontal.
     WHEN 'C'. lo_style->alignment->horizontal = zcl_excel_style_alignment=>c_horizontal_center.
@@ -1978,12 +1990,15 @@ FORM set_range_formatting USING p_wraptext
     WHEN 'T'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_top.
     WHEN 'B'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_bottom.
   ENDCASE.
-  go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+  TRY.
+      go_xlsx_active->set_area_style(
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM .
 FORM set_thin_border   USING    p_left
                                 p_right
@@ -1994,7 +2009,7 @@ ENDFORM.
 
 FORM row_height  USING  p_row
                         p_height .
-  go_xlsx_active->set_row_height( ip_row = p_row ip_row_height = p_height ).
+  " abap2xlsx: row height API not available in this version (no-op).
 ENDFORM.
 FORM merge_col_1_2_section1 .
   DATA lv_row TYPE sy-tabix .
@@ -2003,9 +2018,8 @@ FORM merge_col_1_2_section1 .
   lv_row = gv_sec1_h_start_row + 1 .
   PERFORM select_range USING lv_row 1 gv_row 2 .
 * S4-SKIP(OLE2): CALL METHOD OF go_range 'PasteSpecial'
-    EXPORTING
-      #1 = -4122.
-
+*    EXPORTING
+*      #1 = -4122.
   PERFORM select_range USING lv_row 1 gv_row 2  .
   PERFORM set_numberformat USING 'dd-mmm-yyyy'.
 
@@ -2590,17 +2604,20 @@ FORM paste_data .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lv_col = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lv_val.
-      IF lv_val IS NOT INITIAL.
-        go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-      ENDIF.
-      lv_col = lv_col + 1.
+  TRY.
+    LOOP AT gt_paste INTO gs_paste.
+      lv_col = gv_s_col.
+      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+      LOOP AT lt_vals INTO lv_val.
+        IF lv_val IS NOT INITIAL.
+          go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+        ENDIF.
+        lv_col = lv_col + 1.
+      ENDLOOP.
+      lv_row = lv_row + 1.
     ENDLOOP.
-    lv_row = lv_row + 1.
-  ENDLOOP.
+  CATCH zcx_excel.
+  ENDTRY.
   CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet3 .
@@ -2608,17 +2625,20 @@ FORM paste_data_sheet3 .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lv_col = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lv_val.
-      IF lv_val IS NOT INITIAL.
-        go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-      ENDIF.
-      lv_col = lv_col + 1.
+  TRY.
+    LOOP AT gt_paste INTO gs_paste.
+      lv_col = gv_s_col.
+      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+      LOOP AT lt_vals INTO lv_val.
+        IF lv_val IS NOT INITIAL.
+          go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+        ENDIF.
+        lv_col = lv_col + 1.
+      ENDLOOP.
+      lv_row = lv_row + 1.
     ENDLOOP.
-    lv_row = lv_row + 1.
-  ENDLOOP.
+  CATCH zcx_excel.
+  ENDTRY.
   CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet2 .
@@ -2626,17 +2646,20 @@ FORM paste_data_sheet2 .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  LOOP AT gt_paste INTO gs_paste.
-    lv_col = gv_s_col.
-    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-    LOOP AT lt_vals INTO lv_val.
-      IF lv_val IS NOT INITIAL.
-        go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-      ENDIF.
-      lv_col = lv_col + 1.
+  TRY.
+    LOOP AT gt_paste INTO gs_paste.
+      lv_col = gv_s_col.
+      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+      LOOP AT lt_vals INTO lv_val.
+        IF lv_val IS NOT INITIAL.
+          go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
+        ENDIF.
+        lv_col = lv_col + 1.
+      ENDLOOP.
+      lv_row = lv_row + 1.
     ENDLOOP.
-    lv_row = lv_row + 1.
-  ENDLOOP.
+  CATCH zcx_excel.
+  ENDTRY.
   CLEAR gt_paste[].
 ENDFORM.
 FORM colour_yellow_cells .
@@ -2644,9 +2667,9 @@ FORM colour_yellow_cells .
   LOOP AT gt_copied_cells INTO gs_copied_cells.
     lv_row = gv_row + gs_copied_cells-row - 1 .
 * S4-SKIP(OLE2): CALL METHOD OF go_excel 'Cells' = go_cell
-     EXPORTING
-     #1 = lv_row
-     #2 = gs_copied_cells-col .
+*     EXPORTING
+*     #1 = lv_row
+*     #2 = gs_copied_cells-col .
 * S4-SKIP(OLE2): GET PROPERTY OF go_cell 'interior' = go_interior .
 * S4-SKIP(OLE2): SET PROPERTY OF go_interior 'Color' = 65535 .
 * S4-SKIP(OLE2): GET PROPERTY OF go_cell 'FONT' = go_font .
@@ -2724,17 +2747,17 @@ FORM download_image .
   ENDIF.
 ENDFORM.
 FORM display_image .
-  DATA lo_shapes TYPE REF TO object . " abap2xlsx: unused, shapes not supported
+  " abap2xlsx: lo_shapes (Excel shapes) not supported in this version
 * S4-SKIP(OLE2): GET PROPERTY OF go_worksheet 'Shapes' = lo_shapes.
 * S4-SKIP(OLE2): CALL METHOD OF lo_shapes 'AddPicture'
-    EXPORTING
-      #1 = gv_image_name "image file name on presentation server
-      #2 = '1'
-      #3 = '1'
-      #4 = 1      "left
-      #5 = 1      "top
-      #6 = 390    "right
-      #7 = 45.    "bottom
+*    EXPORTING
+*      #1 = gv_image_name "image file name on presentation server
+*      #2 = '1'
+*      #3 = '1'
+*      #4 = 1      "left
+*      #5 = 1      "top
+*      #6 = 390    "right
+*      #7 = 45.    "bottom
 
   gv_row = gv_row + 2 .
 ENDFORM.
@@ -2962,18 +2985,20 @@ FORM display_pi .
     ELSE .
       SPLIT gs_dyn_fcat-fieldname AT '-' INTO lv_product lv_asset .
       IF lv_asset NE 'COMBINE'.
-        CLEAR gs_wtd_pi .
+        CLEAR gs_wtd_pi.
         READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
-                                                     asset   = lv_asset .
+                                                     asset   = lv_asset BINARY SEARCH.
         IF sy-subrc IS INITIAL.
-          lv_pi = gs_wtd_pi-pi .
+          WRITE gs_wtd_pi-pi TO lv_pi DECIMALS 3 LEFT-JUSTIFIED.
+          CONDENSE lv_pi NO-GAPS.
         ENDIF.
       ELSE.
-        CLEAR gs_wtd_pi .
+        CLEAR gs_wtd_pi.
         READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
-                                                     asset   = 'COMBINE' .
+                                                     asset   = 'COMBINE' BINARY SEARCH.
         IF sy-subrc IS INITIAL.
-          lv_pi = gs_wtd_pi-pi .
+          WRITE gs_wtd_pi-pi TO lv_pi DECIMALS 3 LEFT-JUSTIFIED.
+          CONDENSE lv_pi NO-GAPS.
         ENDIF.
       ENDIF.
     ENDIF.
@@ -3022,7 +3047,8 @@ FORM display_cf .
         READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = lv_product
                                                            asset   = lv_asset BINARY SEARCH .
         IF sy-subrc IS INITIAL.
-          lv_cf = gs_wtd_cf-cf .
+          WRITE gs_wtd_cf-cf TO lv_cf DECIMALS 3 LEFT-JUSTIFIED.
+          CONDENSE lv_cf NO-GAPS.
         ENDIF.
       ENDIF.
     ENDIF.
@@ -3289,18 +3315,39 @@ FORM write_product_name  USING    p_product.
 ENDFORM.
 FORM colour_alternate_rows .
   DATA : lv_lines       TYPE sy-tabix,
-         lv_switch_flag TYPE c.
-  DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines .
+         lv_switch_flag TYPE c,
+         lo_style       TYPE REF TO zcl_excel_style,
+         lv_r           TYPE i,
+         lv_g           TYPE i,
+         lv_b           TYPE i,
+         lv_xr          TYPE x LENGTH 1,
+         lv_xg          TYPE x LENGTH 1,
+         lv_xb          TYPE x LENGTH 1.
+  DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines.
+  lv_r = 14540253 MOD 256.
+  lv_g = ( 14540253 DIV 256 ) MOD 256.
+  lv_b = ( 14540253 DIV 65536 ) MOD 256.
+  lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
+  lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
   DO lv_lines TIMES.
     IF lv_switch_flag EQ 'X'.
-      CLEAR lv_switch_flag .
-      gv_s_row = gv_s_row + 1 .
-      CONTINUE .
+      CLEAR lv_switch_flag.
+      gv_s_row = gv_s_row + 1.
+      CONTINUE.
     ENDIF.
-    PERFORM select_range USING gv_s_row gv_s_col gv_s_row gv_e_col  .
-    PERFORM set_range_interior USING 14540253 .
+    TRY.
+      go_xlsx_active->set_area_style(
+        ip_style        = lo_style->get_guid( )
+        ip_row          = gv_s_row
+        ip_column_start = gv_s_col
+        ip_row_to       = gv_s_row
+        ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+    ENDTRY.
     lv_switch_flag = 'X'.
-    gv_s_row = gv_s_row + 1 .
+    gv_s_row = gv_s_row + 1.
   ENDDO.
 ENDFORM.
 FORM set_range_interior  USING    p_color.
@@ -3310,12 +3357,15 @@ FORM set_numberformat USING p_format.
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->number_format->format_code = p_format.
-  go_xlsx_active->set_area_style(
-    ip_style     = lo_style
+  TRY.
+      go_xlsx_active->set_area_style(
+    ip_style     = lo_style->get_guid( )
     ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 
 FORM set_section1_header_colors .
@@ -4244,10 +4294,12 @@ ENDFORM.
 FORM col_width  USING p_col_start
                       p_col_end
                       p_width.
-  go_xlsx_active->set_column_width(
-    ip_column_start = p_col_start
-    ip_column_end   = p_col_end
-    ip_width        = p_width ).
+  DATA lv_c TYPE i.
+  lv_c = p_col_start.
+  WHILE lv_c <= p_col_end.
+    go_xlsx_active->set_column_width( ip_column = lv_c ip_width_fix = p_width ).
+    lv_c = lv_c + 1.
+  ENDWHILE.
 ENDFORM.
 FORM colour_dates .
   DATA : lv_lines   TYPE sy-tabix,
@@ -6634,11 +6686,16 @@ FORM finalize_worksheet .
 
   REPLACE ALL OCCURRENCES OF '.' IN lv_sheet_name WITH '-' .
   CONCATENATE 'DPR (' lv_sheet_name ')' INTO lv_sheet_name SEPARATED BY space .
-  go_xlsx_sheet1->set_title( ip_title = lv_sheet_name ).
-  go_xlsx_sheet2->set_visible( ip_visible = zcl_excel_worksheet=>c_xlsheetvishidden ).
-
-  " Build filename
-  CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
+  DATA lv_t_fin TYPE c LENGTH 31.
+  lv_t_fin = lv_sheet_name.
+  " sanitize: replace invalid chars
+  TRANSLATE lv_t_fin USING '\_/_?_*_[_]_:_'.
+  TRY.
+      go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
+    CATCH zcx_excel.
+  ENDTRY.
+  " Build filename — join folder path and filename with backslash
+  CONCATENATE p_fname '\' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
 
   " Write XLSX
   go_xlsx_writer = NEW zcl_excel_writer_2007( ).
@@ -6649,16 +6706,39 @@ FORM finalize_worksheet .
     IMPORTING  output_length = lv_size
     TABLES     binary_tab    = lt_bin.
 
-  cl_gui_frontend_services=>gui_download(
+  CALL METHOD cl_gui_frontend_services=>gui_download
     EXPORTING
-      filename     = lv_fname
-      filetype     = 'BIN'
-      bin_filesize = lv_size
+      filename                = lv_fname
+      filetype                = 'BIN'
+      bin_filesize            = lv_size
     CHANGING
-      data_tab     = lt_bin ).
-
-  EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME' .
-  MESSAGE 'Report downloaded successfully' TYPE 'S' .
+      data_tab                = lt_bin
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      OTHERS                  = 99.
+  IF sy-subrc <> 0.
+    MESSAGE |Download failed (rc={ sy-subrc }). Check folder path: { p_fname }| TYPE 'W'.
+  ELSE.
+    EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME'.
+    MESSAGE 'Report downloaded successfully' TYPE 'S'.
+  ENDIF.
 ENDFORM.
 FORM lock_xls .
   " Sheet protection not implemented in this version.
@@ -9503,30 +9583,58 @@ FORM set_border_range  USING    p_left
                                 p_bottom .
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
-  IF p_left   = 1. lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_right  = 1. lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_top    = 1. lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin. ENDIF.
-  IF p_bottom = 1. lo_style->borders->bottom->border_style = zcl_excel_style_border=>c_border_thin. ENDIF.
-  go_xlsx_active->set_area_style(
-    ip_style     = lo_style
-    ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  IF p_left = 1.
+    lo_style->borders->left = NEW zcl_excel_style_border( ).
+    lo_style->borders->left->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_right = 1.
+    lo_style->borders->right = NEW zcl_excel_style_border( ).
+    lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_top = 1.
+    lo_style->borders->top = NEW zcl_excel_style_border( ).
+    lo_style->borders->top->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_bottom = 1.
+    lo_style->borders->down = NEW zcl_excel_style_border( ).
+    lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  TRY.
+      go_xlsx_active->set_area_style(
+    ip_style        = lo_style->get_guid( )
+    ip_row          = gv_s_row
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 FORM set_all_borders_range  .
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
-  lo_style->borders->left->border_style   = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->right->border_style  = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->top->border_style    = zcl_excel_style_border=>c_border_thin.
-  lo_style->borders->bottom->border_style = zcl_excel_style_border=>c_border_thin.
-  go_xlsx_active->set_area_style(
-    ip_style     = lo_style
-    ip_row       = gv_s_row
-    ip_column    = gv_s_col
-    ip_row_to    = gv_e_row
-    ip_column_to = gv_e_col ).
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
+  TRY.
+      go_xlsx_active->set_area_style(
+    ip_style        = lo_style->get_guid( )
+    ip_row          = gv_s_row
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 FORM clear_variables .
 
@@ -9764,55 +9872,60 @@ ENDFORM.
 FORM populate_no_data_entries  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
 
-  DATA : lt_zpra_c_prd_prof   TYPE STANDARD TABLE OF ty_zpra_c_prd_prof .
-  DATA : ls_zpra_c_prd_prof TYPE                   ty_zpra_c_prd_prof,
-         ls_zpra_t_dly_prd  TYPE                   zpra_t_dly_prd,
-         ls_zpra_t_dly_prd2 TYPE                   zpra_t_dly_prd.
-  DATA : lv_date  TYPE                   sy-datum,
-         lv_date2 TYPE                   sy-datum,
-         lv_index TYPE                   sy-tabix.
+  DATA : lt_zpra_c_prd_prof TYPE STANDARD TABLE OF ty_zpra_c_prd_prof.
+  DATA : ls_zpra_c_prd_prof TYPE ty_zpra_c_prd_prof,
+         ls_zpra_t_dly_prd  TYPE zpra_t_dly_prd.
+  DATA : lv_date       TYPE sy-datum,
+         lv_date2      TYPE sy-datum,
+         lv_index      TYPE sy-tabix,
+         lv_insert_pos TYPE sy-tabix.
 
-  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof .
-  SORT lt_zpra_c_prd_prof BY product asset block .
-  DELETE ADJACENT DUPLICATES FROM  lt_zpra_c_prd_prof COMPARING product asset .
+  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof.
+  SORT lt_zpra_c_prd_prof BY product asset block.
+  DELETE ADJACENT DUPLICATES FROM lt_zpra_c_prd_prof COMPARING product asset.
 
   SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
 
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
-    lv_date = p_from_date .
-    DO .
+    lv_date = p_from_date.
+    DO.
       IF lv_date GT p_to_date.
-        EXIT .
+        EXIT.
       ENDIF.
-      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                  asset           = ls_zpra_c_prd_prof-asset
-                                                                  production_date = lv_date BINARY SEARCH .
+      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+        WITH KEY product         = ls_zpra_c_prd_prof-product
+                 asset           = ls_zpra_c_prd_prof-asset
+                 production_date = lv_date BINARY SEARCH.
       IF sy-subrc IS NOT INITIAL.
+        lv_insert_pos = sy-tabix.   " position where date D entries belong
         lv_date2 = lv_date - 1.
-        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                    asset           = ls_zpra_c_prd_prof-asset
-                                                                    production_date = lv_date2 BINARY SEARCH .
-        IF sy-subrc IS INITIAL .
-          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                      asset           = ls_zpra_c_prd_prof-asset
-                                                                      production_date = lv_date2
-                                                                      block           = ls_zpra_c_prd_prof-block .
+        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+          WITH KEY product         = ls_zpra_c_prd_prof-product
+                   asset           = ls_zpra_c_prd_prof-asset
+                   production_date = lv_date2 BINARY SEARCH.
+        IF sy-subrc IS INITIAL.
+          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+            WITH KEY product         = ls_zpra_c_prd_prof-product
+                     asset           = ls_zpra_c_prd_prof-asset
+                     production_date = lv_date2
+                     block           = ls_zpra_c_prd_prof-block.
           IF sy-subrc IS INITIAL.
-            lv_index = sy-tabix .
+            lv_index = sy-tabix.
             LOOP AT p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd FROM lv_index.
-              IF ls_zpra_t_dly_prd-product          NE ls_zpra_c_prd_prof-product OR
-                 ls_zpra_t_dly_prd-asset            NE ls_zpra_c_prd_prof-asset   OR
-                 ls_zpra_t_dly_prd-production_date  NE lv_date2                   .
-                EXIT .
+              IF ls_zpra_t_dly_prd-product         NE ls_zpra_c_prd_prof-product OR
+                 ls_zpra_t_dly_prd-asset           NE ls_zpra_c_prd_prof-asset   OR
+                 ls_zpra_t_dly_prd-production_date NE lv_date2.
+                EXIT.
               ENDIF.
-              ls_zpra_t_dly_prd-production_date = lv_date .
-              APPEND ls_zpra_t_dly_prd TO p_zpra_t_dly_prd .
+              ls_zpra_t_dly_prd-production_date = lv_date.
+              " INSERT at sorted position — no re-sort needed, keeps binary search valid
+              INSERT ls_zpra_t_dly_prd INTO p_zpra_t_dly_prd INDEX lv_insert_pos.
+              lv_insert_pos = lv_insert_pos + 1.
             ENDLOOP.
-            SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
           ENDIF.
         ENDIF.
       ENDIF.
-      lv_date = lv_date + 1 .
+      lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
 ENDFORM.
@@ -10009,64 +10122,69 @@ ENDFORM.
 FORM POPULATE_NO_DATA_ENTRIES_3F  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
 
-   DATA : lt_zpra_c_prd_prof   TYPE STANDARD TABLE OF ty_zpra_c_prd_prof .
-  DATA : ls_zpra_c_prd_prof TYPE                   ty_zpra_c_prd_prof,
-         ls_zpra_t_dly_prd  TYPE                   zpra_t_dly_prd,
-         ls_zpra_t_dly_prd2 TYPE                   zpra_t_dly_prd.
-  DATA : lv_date  TYPE                   sy-datum,
-         lv_date2 TYPE                   sy-datum,
-         lv_index TYPE                   sy-tabix.
+  DATA : lt_zpra_c_prd_prof TYPE STANDARD TABLE OF ty_zpra_c_prd_prof.
+  DATA : ls_zpra_c_prd_prof TYPE ty_zpra_c_prd_prof,
+         ls_zpra_t_dly_prd  TYPE zpra_t_dly_prd.
+  DATA : lv_date       TYPE sy-datum,
+         lv_date2      TYPE sy-datum,
+         lv_index      TYPE sy-tabix,
+         lv_insert_pos TYPE sy-tabix.
 
-  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof .
-  SORT lt_zpra_c_prd_prof BY product asset block .
-  DELETE ADJACENT DUPLICATES FROM  lt_zpra_c_prd_prof COMPARING product asset .
+  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof.
+  SORT lt_zpra_c_prd_prof BY product asset block.
+  DELETE ADJACENT DUPLICATES FROM lt_zpra_c_prd_prof COMPARING product asset.
 
   SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
 
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
-    clear GS_ZPRA_T_PRD_PI.
-    READ TABLE GT_ZPRA_T_PRD_PI_3F INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = ls_zpra_c_prd_prof-asset
-                                                                block = ls_zpra_c_prd_prof-block .
-    IF SY-SUBRC = 0.
-     IF GS_ZPRA_T_PRD_PI-PROD_START_DATE gt p_from_date .
-      CONTINUE.
-     ENDIF.
-    ENDIF.
-    lv_date = p_from_date .
-    DO .
-      IF lv_date GT p_to_date.
-        EXIT .
+    CLEAR gs_zpra_t_prd_pi.
+    READ TABLE gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+      WITH KEY asset = ls_zpra_c_prd_prof-asset
+               block = ls_zpra_c_prd_prof-block.
+    IF sy-subrc = 0.
+      IF gs_zpra_t_prd_pi-prod_start_date GT p_from_date.
+        CONTINUE.
       ENDIF.
-      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                  asset           = ls_zpra_c_prd_prof-asset
-                                                                  production_date = lv_date BINARY SEARCH .
+    ENDIF.
+    lv_date = p_from_date.
+    DO.
+      IF lv_date GT p_to_date.
+        EXIT.
+      ENDIF.
+      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+        WITH KEY product         = ls_zpra_c_prd_prof-product
+                 asset           = ls_zpra_c_prd_prof-asset
+                 production_date = lv_date BINARY SEARCH.
       IF sy-subrc IS NOT INITIAL.
+        lv_insert_pos = sy-tabix.
         lv_date2 = lv_date - 1.
-        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                    asset           = ls_zpra_c_prd_prof-asset
-                                                                    production_date = lv_date2 BINARY SEARCH .
-        IF sy-subrc IS INITIAL .
-          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                      asset           = ls_zpra_c_prd_prof-asset
-                                                                      production_date = lv_date2
-                                                                      block           = ls_zpra_c_prd_prof-block .
+        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+          WITH KEY product         = ls_zpra_c_prd_prof-product
+                   asset           = ls_zpra_c_prd_prof-asset
+                   production_date = lv_date2 BINARY SEARCH.
+        IF sy-subrc IS INITIAL.
+          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+            WITH KEY product         = ls_zpra_c_prd_prof-product
+                     asset           = ls_zpra_c_prd_prof-asset
+                     production_date = lv_date2
+                     block           = ls_zpra_c_prd_prof-block.
           IF sy-subrc IS INITIAL.
-            lv_index = sy-tabix .
+            lv_index = sy-tabix.
             LOOP AT p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd FROM lv_index.
-              IF ls_zpra_t_dly_prd-product          NE ls_zpra_c_prd_prof-product OR
-                 ls_zpra_t_dly_prd-asset            NE ls_zpra_c_prd_prof-asset   OR
-                 ls_zpra_t_dly_prd-production_date  NE lv_date2                   .
-                EXIT .
+              IF ls_zpra_t_dly_prd-product         NE ls_zpra_c_prd_prof-product OR
+                 ls_zpra_t_dly_prd-asset           NE ls_zpra_c_prd_prof-asset   OR
+                 ls_zpra_t_dly_prd-production_date NE lv_date2.
+                EXIT.
               ENDIF.
-              ls_zpra_t_dly_prd-production_date = lv_date .
-              APPEND ls_zpra_t_dly_prd TO p_zpra_t_dly_prd .
-              insert ZPRA_DLY_PRD_ND FROM ls_zpra_t_dly_prd.
+              ls_zpra_t_dly_prd-production_date = lv_date.
+              INSERT ls_zpra_t_dly_prd INTO p_zpra_t_dly_prd INDEX lv_insert_pos.
+              lv_insert_pos = lv_insert_pos + 1.
+              INSERT zpra_dly_prd_nd FROM ls_zpra_t_dly_prd.
             ENDLOOP.
-            SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
           ENDIF.
         ENDIF.
       ENDIF.
-      lv_date = lv_date + 1 .
+      lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
 
