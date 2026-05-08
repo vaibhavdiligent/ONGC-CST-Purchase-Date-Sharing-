@@ -499,30 +499,23 @@ FORM merge_range .
 ENDFORM.
 
 FORM set_fill_color USING p_ole2_color TYPE i.
-  DATA: lv_r   TYPE i, lv_g TYPE i, lv_b TYPE i,
-        lv_xr  TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1,
-        lv_rgb TYPE zexcel_style_color_argb,
-        lv_row TYPE zexcel_cell_row,
-        lv_col TYPE zexcel_cell_column.
+  DATA: lo_style TYPE REF TO zcl_excel_style,
+        lv_r     TYPE i,  lv_g TYPE i,  lv_b TYPE i,
+        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1.
   lv_r  = p_ole2_color MOD 256.
   lv_g  = ( p_ole2_color DIV 256 ) MOD 256.
   lv_b  = ( p_ole2_color DIV 65536 ) MOD 256.
   lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
-  lv_rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
+  lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
   TRY.
-      lv_row = gv_s_row.
-      WHILE lv_row <= gv_e_row.
-        lv_col = gv_s_col.
-        WHILE lv_col <= gv_e_col.
-          go_xlsx_active->change_cell_style(
-            ip_column           = lv_col
-            ip_row              = lv_row
-            ip_fill_filltype    = zcl_excel_style_fill=>c_fill_solid
-            ip_fill_fgcolor_rgb = lv_rgb ).
-          lv_col = lv_col + 1.
-        ENDWHILE.
-        lv_row = lv_row + 1.
-      ENDWHILE.
+      go_xlsx_active->set_area_style(
+    ip_style     = lo_style->get_guid( )
+    ip_row       = gv_s_row
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
     CATCH zcx_excel.
   ENDTRY.
 ENDFORM.
@@ -1678,24 +1671,11 @@ FORM create_chart .
 
       lv_order = 0.
       lv_idx   = 0.
-      DATA: lv_row     TYPE zexcel_cell_row,
-            lv_sername TYPE string,
-            lv_cval    TYPE zexcel_cell_value.
+      DATA lv_row TYPE zexcel_cell_row.
       lv_row = gv_s_row + 1.
       WHILE lv_row <= gv_e_row.
         lv_order = lv_order + 1.
         lv_idx   = lv_idx + 1.
-        CLEAR: lv_cval, lv_sername.
-        TRY.
-            go_xlsx_sheet3->get_cell(
-              EXPORTING ip_column = lv_lbl_c ip_row = lv_row
-              IMPORTING ep_value  = lv_cval ).
-            lv_sername = lv_cval.
-          CATCH zcx_excel.
-        ENDTRY.
-        IF lv_sername IS INITIAL.
-          lv_sername = |Series { lv_idx }|.
-        ENDIF.
         lo_graph->create_serie(
           ip_idx          = lv_idx
           ip_order        = lv_order
@@ -1708,7 +1688,7 @@ FORM create_chart .
           ip_ref_from_row = lv_row
           ip_ref_to_col   = lv_to_a
           ip_ref_to_row   = lv_row
-          ip_sername      = lv_sername
+          ip_sername      = ' '
           ip_sheet        = lv_title ).
         lv_row = lv_row + 1.
       ENDWHILE.
@@ -3384,16 +3364,21 @@ ENDFORM.
 FORM colour_alternate_rows .
   DATA : lv_lines       TYPE sy-tabix,
          lv_switch_flag TYPE c,
+         lo_style       TYPE REF TO zcl_excel_style,
+         lv_r           TYPE i,
+         lv_g           TYPE i,
+         lv_b           TYPE i,
          lv_xr          TYPE x LENGTH 1,
          lv_xg          TYPE x LENGTH 1,
-         lv_xb          TYPE x LENGTH 1,
-         lv_rgb         TYPE zexcel_style_color_argb,
-         lv_col         TYPE zexcel_cell_column.
+         lv_xb          TYPE x LENGTH 1.
   DESCRIBE TABLE <gfs_dyn_table> LINES lv_lines.
-  lv_xr = 14540253 MOD 256.
-  lv_xg = ( 14540253 DIV 256 ) MOD 256.
-  lv_xb = ( 14540253 DIV 65536 ) MOD 256.
-  lv_rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  lv_r = 14540253 MOD 256.
+  lv_g = ( 14540253 DIV 256 ) MOD 256.
+  lv_b = ( 14540253 DIV 65536 ) MOD 256.
+  lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
+  lo_style = go_xlsx->add_new_style( ).
+  lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
+  lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
   DO lv_lines TIMES.
     IF lv_switch_flag EQ 'X'.
       CLEAR lv_switch_flag.
@@ -3401,16 +3386,13 @@ FORM colour_alternate_rows .
       CONTINUE.
     ENDIF.
     TRY.
-        lv_col = gv_s_col.
-        WHILE lv_col <= gv_e_col.
-          go_xlsx_active->change_cell_style(
-            ip_column           = lv_col
-            ip_row              = gv_s_row
-            ip_fill_filltype    = zcl_excel_style_fill=>c_fill_solid
-            ip_fill_fgcolor_rgb = lv_rgb ).
-          lv_col = lv_col + 1.
-        ENDWHILE.
-      CATCH zcx_excel.
+      go_xlsx_active->set_area_style(
+        ip_style        = lo_style->get_guid( )
+        ip_row          = gv_s_row
+        ip_column_start = gv_s_col
+        ip_row_to       = gv_s_row
+        ip_column_end   = gv_e_col ).
+    CATCH zcx_excel.
     ENDTRY.
     lv_switch_flag = 'X'.
     gv_s_row = gv_s_row + 1.
@@ -9647,50 +9629,58 @@ FORM set_border_range  USING    p_left
                                 p_right
                                 p_top
                                 p_bottom .
-  DATA: lv_row TYPE zexcel_cell_row,
-        lv_col TYPE zexcel_cell_column,
-        lv_thin TYPE zexcel_border.
-  lv_thin = zcl_excel_style_border=>c_border_thin.
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  IF p_left = 1.
+    lo_style->borders->left = NEW zcl_excel_style_border( ).
+    lo_style->borders->left->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_right = 1.
+    lo_style->borders->right = NEW zcl_excel_style_border( ).
+    lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_top = 1.
+    lo_style->borders->top = NEW zcl_excel_style_border( ).
+    lo_style->borders->top->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
+  IF p_bottom = 1.
+    lo_style->borders->down = NEW zcl_excel_style_border( ).
+    lo_style->borders->down->border_style = zcl_excel_style_border=>c_border_thin.
+  ENDIF.
   TRY.
-      lv_row = gv_s_row.
-      WHILE lv_row <= gv_e_row.
-        lv_col = gv_s_col.
-        WHILE lv_col <= gv_e_col.
-          go_xlsx_active->change_cell_style(
-            ip_column           = lv_col
-            ip_row              = lv_row
-            ip_borders_left_style  = COND #( WHEN p_left   = 1 THEN lv_thin )
-            ip_borders_right_style = COND #( WHEN p_right  = 1 THEN lv_thin )
-            ip_borders_top_style   = COND #( WHEN p_top    = 1 THEN lv_thin )
-            ip_borders_down_style  = COND #( WHEN p_bottom = 1 THEN lv_thin ) ).
-          lv_col = lv_col + 1.
-        ENDWHILE.
-        lv_row = lv_row + 1.
-      ENDWHILE.
+      go_xlsx_active->set_area_style(
+    ip_style        = lo_style->get_guid( )
+    ip_row          = gv_s_row
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
     CATCH zcx_excel.
   ENDTRY.
 ENDFORM.
 FORM set_all_borders_range  .
-  DATA: lv_row TYPE zexcel_cell_row,
-        lv_col TYPE zexcel_cell_column,
-        lv_thin TYPE zexcel_border.
-  lv_thin = zcl_excel_style_border=>c_border_thin.
+  DATA lo_style TYPE REF TO zcl_excel_style.
+  lo_style = go_xlsx->add_new_style( ).
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
-      lv_row = gv_s_row.
-      WHILE lv_row <= gv_e_row.
-        lv_col = gv_s_col.
-        WHILE lv_col <= gv_e_col.
-          go_xlsx_active->change_cell_style(
-            ip_column              = lv_col
-            ip_row                 = lv_row
-            ip_borders_left_style  = lv_thin
-            ip_borders_right_style = lv_thin
-            ip_borders_top_style   = lv_thin
-            ip_borders_down_style  = lv_thin ).
-          lv_col = lv_col + 1.
-        ENDWHILE.
-        lv_row = lv_row + 1.
-      ENDWHILE.
+      go_xlsx_active->set_area_style(
+    ip_style        = lo_style->get_guid( )
+    ip_row          = gv_s_row
+    ip_column_start = gv_s_col
+    ip_row_to       = gv_e_row
+    ip_column_end   = gv_e_col ).
     CATCH zcx_excel.
   ENDTRY.
 ENDFORM.
