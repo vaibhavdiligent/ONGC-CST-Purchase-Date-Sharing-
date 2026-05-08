@@ -6942,10 +6942,18 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
     RETURN.
   ENDIF.
 
-  SET PROPERTY OF lo_app 'Visible' = 0.
+  " Suppress all Excel dialogs - prevents prompts from blocking OLE2 and
+  " leaving Excel open with a file lock on the XLSX.
+  SET PROPERTY OF lo_app 'Visible'        = 0.
+  SET PROPERTY OF lo_app 'DisplayAlerts'  = 0.
+  SET PROPERTY OF lo_app 'AskToUpdateLinks' = 0.
+
   CALL METHOD OF lo_app 'Workbooks' = lo_wkbooks.
-  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook EXPORTING #1 = p_xlsx_fname.
+  " Open with UpdateLinks=0 (no link prompts), ReadOnly=False (need page-setup write)
+  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook
+    EXPORTING #1 = p_xlsx_fname #2 = 0.
   IF sy-subrc <> 0.
+    SET PROPERTY OF lo_app 'DisplayAlerts' = 1.
     CALL METHOD OF lo_app 'Quit'.
     MESSAGE 'PDF export skipped: could not open XLSX in Excel' TYPE 'W'.
     RETURN.
@@ -6991,6 +6999,7 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
 
   " Always close workbook and quit Excel regardless of export outcome
   CALL METHOD OF lo_wkbook 'Close' EXPORTING #1 = 0.
+  SET PROPERTY OF lo_app 'DisplayAlerts' = 1.
   CALL METHOD OF lo_app 'Quit'.
   FREE OBJECT lo_ws1.
   FREE OBJECT lo_ws2.
