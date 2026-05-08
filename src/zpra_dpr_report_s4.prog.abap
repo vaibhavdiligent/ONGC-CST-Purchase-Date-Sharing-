@@ -3,7 +3,23 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 3.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 07-MAY-2026
+*& VERSION : 4.2 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.2 - colour_yellow_cells implemented: cells with null-fill-from-previous now correctly
+*&        get yellow fill (65535 = FFFFFF00) via set_fill_color/apply_all_fills.
+*&        Chart moved to sheet3 (Production_Performance) where original OLE2 placed it;
+*&        chart data references remain on sheet2 (hidden source data).
+*&        display_section6 now explicitly activates sheet3 so section-6 headers write to
+*&        the correct sheet instead of spilling onto the hidden source-data sheet.
+*&        Sheet2 (DPR_2): attempted hide skipped - attribute not in installed abap2xlsx.
+*& v4.1 - Numeric values: all paste_data forms now strip leading/trailing spaces and
+*&        write numbers as DECFLOAT34 (not text strings) via new set_cell_auto helper.
+*&        Chart: fixed to reference sheet2 (DPR_2) where section-5a data lives;
+*&        series labels read from sheet2 column B; drawing added to sheet2.
+*& v4.0 - Fill colors deferred: collected during build, applied LAST via set_area_style
+*&        so alignment area-styles (registered in set_cell_formats) do not overwrite fills.
+*&        Fill style includes alignment+borders for complete cell formatting.
+*&        Chart: set_position2 + set_media(c_media_type_xml) + create_ax axes added.
+*&        OLE2 fully removed; abap2xlsx-only Excel/PDF generation.
 *& v3.1 - Modern ABAP: REFRESH->CLEAR, OCCURS removed, @ host vars in SELECT.
 *&        OLE2 path retained for full Excel formatting + PDF export.
 *& v1.9 (parent) - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
@@ -392,6 +408,18 @@ DATA: gv_row                        TYPE sy-tabix   ,
       gv_sheet2_name                TYPE char50  ,
       gv_sheet3_name                TYPE char50  .
 DATA gs_temp TYPE zoiu_pr_dn .
+
+" Fill-color deferred table — collected during build, applied last via set_area_style
+TYPES: BEGIN OF ty_fill_range,
+         worksheet TYPE REF TO zcl_excel_worksheet,
+         s_row     TYPE zexcel_cell_row,
+         e_row     TYPE zexcel_cell_row,
+         s_col     TYPE zexcel_cell_column,
+         e_col     TYPE zexcel_cell_column,
+         ole2_col  TYPE i,
+       END OF ty_fill_range.
+DATA: gt_fill_ranges TYPE STANDARD TABLE OF ty_fill_range,
+      gs_fill_range  TYPE ty_fill_range.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001 .
   PARAMETERS : p_date TYPE sy-datum OBLIGATORY.
 SELECTION-SCREEN END   OF BLOCK b1 .
@@ -499,55 +527,56 @@ FORM merge_range .
 ENDFORM.
 
 FORM set_fill_color USING p_ole2_color TYPE i.
-  DATA: lo_style TYPE REF TO zcl_excel_style,
-        lv_r     TYPE i,  lv_g TYPE i,  lv_b TYPE i,
-        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1,
-        lv_row   TYPE zexcel_cell_row,
-        lv_col   TYPE zexcel_cell_column,
-        lv_val   TYPE zexcel_cell_value,
-        lv_rc    TYPE sysubrc,
-        lv_str   TYPE string,
-        lv_guid  TYPE zexcel_cell_style.
-  lv_r  = p_ole2_color MOD 256.
-  lv_g  = ( p_ole2_color DIV 256 ) MOD 256.
-  lv_b  = ( p_ole2_color DIV 65536 ) MOD 256.
-  lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
-  lo_style = go_xlsx->add_new_style( ).
-  lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
-  lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
-  lo_style->fill->bgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
-  lv_guid = lo_style->get_guid( ).
-  TRY.
-      lv_row = gv_s_row.
-      WHILE lv_row <= gv_e_row.
-        lv_col = gv_s_col.
-        WHILE lv_col <= gv_e_col.
-          CLEAR: lv_val, lv_rc, lv_str.
-          TRY.
-              go_xlsx_active->get_cell(
-                EXPORTING ip_column = lv_col ip_row = lv_row
-                IMPORTING ep_value  = lv_val ep_rc = lv_rc ).
-            CATCH zcx_excel.
-          ENDTRY.
-          IF lv_rc = 0 AND lv_val IS NOT INITIAL.
-            go_xlsx_active->set_cell_style(
-              ip_column = lv_col
-              ip_row    = lv_row
-              ip_style  = lv_guid ).
-          ELSE.
-            lv_str = ' '.
-            go_xlsx_active->set_cell(
-              ip_column = lv_col
-              ip_row    = lv_row
-              ip_value  = lv_str
-              ip_style  = lv_guid ).
-          ENDIF.
-          lv_col = lv_col + 1.
-        ENDWHILE.
-        lv_row = lv_row + 1.
-      ENDWHILE.
-    CATCH zcx_excel.
-  ENDTRY.
+  " Defer fill: collect range now, apply AFTER all set_area_style calls in apply_all_fills.
+  " This ensures fill area-styles are registered last and win over alignment area-styles.
+  gs_fill_range-worksheet = go_xlsx_active.
+  gs_fill_range-s_row     = gv_s_row.
+  gs_fill_range-e_row     = gv_e_row.
+  gs_fill_range-s_col     = gv_s_col.
+  gs_fill_range-e_col     = gv_e_col.
+  gs_fill_range-ole2_col  = p_ole2_color.
+  APPEND gs_fill_range TO gt_fill_ranges.
+ENDFORM.
+
+FORM apply_all_fills.
+  " Apply all deferred fill-color ranges as area styles (registered last → win at write time).
+  " Each fill style also includes center+wrap alignment and thin borders so the cell
+  " receives a complete style and area-style merging produces the correct s= attribute.
+  DATA: lo_style  TYPE REF TO zcl_excel_style,
+        lo_border TYPE REF TO zcl_excel_style_border,
+        lv_r      TYPE i, lv_g TYPE i, lv_b TYPE i,
+        lv_xr     TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1.
+  LOOP AT gt_fill_ranges INTO gs_fill_range.
+    lv_r  = gs_fill_range-ole2_col MOD 256.
+    lv_g  = ( gs_fill_range-ole2_col DIV 256 ) MOD 256.
+    lv_b  = ( gs_fill_range-ole2_col DIV 65536 ) MOD 256.
+    lv_xr = lv_r. lv_xg = lv_g. lv_xb = lv_b.
+    lo_style = go_xlsx->add_new_style( ).
+    lo_style->fill->filltype    = zcl_excel_style_fill=>c_fill_solid.
+    lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+    lo_style->fill->bgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+    lo_style->alignment->wraptext   = abap_true.
+    lo_style->alignment->horizontal = zcl_excel_style_alignment=>c_horizontal_center.
+    lo_style->alignment->vertical   = zcl_excel_style_alignment=>c_vertical_center.
+    IF lo_style->borders IS NOT BOUND.
+      lo_style->borders = NEW zcl_excel_style_borders( ).
+    ENDIF.
+    CREATE OBJECT lo_border.
+    lo_border->border_style = zcl_excel_style_border=>c_border_thin.
+    lo_style->borders->left  = lo_border.
+    lo_style->borders->right = lo_border.
+    lo_style->borders->top   = lo_border.
+    lo_style->borders->down  = lo_border.
+    TRY.
+        gs_fill_range-worksheet->set_area_style(
+          ip_style        = lo_style->get_guid( )
+          ip_row          = gs_fill_range-s_row
+          ip_column_start = gs_fill_range-s_col
+          ip_row_to       = gs_fill_range-e_row
+          ip_column_end   = gs_fill_range-e_col ).
+      CATCH zcx_excel.
+    ENDTRY.
+  ENDLOOP.
 ENDFORM.
 
 *--- Form Routines ---*
@@ -1028,6 +1057,7 @@ FORM process_data .
 
   PERFORM border_cells .
   PERFORM set_cell_formats .
+  PERFORM apply_all_fills .
   PERFORM finalize_worksheet .
 ENDFORM.
 FORM process_sec1_data .
@@ -1656,13 +1686,117 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
+  DATA: lo_drawing  TYPE REF TO zcl_excel_drawing,
+        lo_graph    TYPE REF TO zcl_excel_graph_line,
+        lv_from_a   TYPE zexcel_cell_column_alpha,
+        lv_to_a     TYPE zexcel_cell_column_alpha,
+        lv_lbl_a    TYPE zexcel_cell_column_alpha,
+        lv_data_s   TYPE zexcel_cell_column,
+        lv_data_e   TYPE zexcel_cell_column,
+        lv_lbl_c    TYPE zexcel_cell_column,
+        lv_order    TYPE i,
+        lv_idx      TYPE i,
+        lv_title    TYPE zexcel_sheet_title,
+        lv_row      TYPE zexcel_cell_row,
+        lv_sername  TYPE string,
+        lv_cval     TYPE zexcel_cell_value,
+        lv_lbl_ref  TYPE string,
+        lv_dat_ref  TYPE string,
+        ls_ch_from  TYPE zexcel_drawing_location,
+        ls_ch_to    TYPE zexcel_drawing_location.
+
+  " Section 5a data is on sheet2 (hidden source data). Chart goes on sheet3
+  " (Production_Performance) - matching original OLE2 layout.
   go_xlsx_active = go_xlsx_sheet3.
+
+  IF gv_5a_rows IS INITIAL OR gv_5a_cols IS INITIAL OR gv_5a_cols < 2.
+    RETURN.
+  ENDIF.
+  IF gv_e_col <= gv_s_col OR gv_e_row <= gv_s_row.
+    RETURN.
+  ENDIF.
+
+  TRY.
+      lv_data_s = gv_s_col + 1.
+      lv_data_e = gv_e_col.
+      lv_lbl_c  = gv_s_col.
+
+      lv_from_a = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_s ).
+      lv_to_a   = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_e ).
+      lv_lbl_a  = zcl_excel_common=>convert_column2alpha( ip_column = lv_lbl_c ).
+
+      " Data references always point to sheet2 (hidden source data)
+      lv_title = go_xlsx_sheet2->get_title( ).
+
+      CREATE OBJECT lo_graph.
+      lo_graph->set_title( ip_value = 'Production Performance' ).
+
+      lv_order = 0.
+      lv_idx   = 0.
+      lv_row   = gv_s_row + 1.
+      WHILE lv_row <= gv_e_row.
+        lv_order = lv_order + 1.
+        lv_idx   = lv_idx + 1.
+        CLEAR: lv_cval, lv_sername.
+        TRY.
+            " Read series label from sheet2 (label column = col B)
+            go_xlsx_sheet2->get_cell(
+              EXPORTING ip_column = lv_lbl_c ip_row = lv_row
+              IMPORTING ep_value  = lv_cval ).
+            lv_sername = lv_cval.
+          CATCH zcx_excel.
+        ENDTRY.
+        CONDENSE lv_sername.
+        IF lv_sername IS INITIAL.
+          lv_sername = |Series { lv_idx }|.
+        ENDIF.
+        " Range strings: SheetName!$ColFrom$RowFrom:$ColTo$RowTo
+        lv_lbl_ref = |{ lv_title }!${ lv_from_a }${ gv_s_row }:${ lv_to_a }${ gv_s_row }|.
+        lv_dat_ref = |{ lv_title }!${ lv_from_a }${ lv_row }:${ lv_to_a }${ lv_row }|.
+        lo_graph->create_serie(
+          ip_order   = lv_order
+          ip_symbol  = zcl_excel_graph_line=>c_symbol_auto
+          ip_smooth  = zcl_excel_graph_line=>c_show_false
+          ip_lbl     = lv_lbl_ref
+          ip_ref     = lv_dat_ref
+          ip_sername = lv_sername ).
+        lv_row = lv_row + 1.
+      ENDWHILE.
+
+      " Add category and value axes
+      lo_graph->create_ax( ip_type = zcl_excel_graph_line=>c_catax ).
+      lo_graph->create_ax( ip_type = zcl_excel_graph_line=>c_valax ).
+
+      " Chart placed on sheet3 (Production_Performance) - original OLE2 behaviour
+      lo_drawing = go_xlsx->add_new_drawing(
+                       ip_type  = zcl_excel_drawing=>type_chart
+                       ip_title = 'Production Performance' ).
+      lo_drawing->graph      = lo_graph.
+      lo_drawing->graph_type = zcl_excel_drawing=>c_graph_line.
+
+      " Position chart at top of sheet3 (row 1, spanning ~30 rows)
+      ls_ch_from-row = 1.
+      ls_ch_from-col = 1.
+      ls_ch_to-row   = 30.
+      ls_ch_to-col   = 13.
+      lo_drawing->set_position2( ip_from = ls_ch_from ip_to = ls_ch_to ).
+      lo_drawing->set_media( zcl_excel_drawing=>c_media_type_xml ).
+
+      go_xlsx_sheet3->add_drawing( ip_drawing = lo_drawing ).
+
+    CATCH cx_root.
+  ENDTRY.
 ENDFORM.
 FORM display_section6 .
   DATA lv_lines TYPE sy-tabix .
   DATA : lv_ind_unit   TYPE char50,
          lv_total_unit TYPE char50,
          lv_gt_unit    TYPE char50 . "grand total
+
+  " Section 6 output goes to sheet3 (Production_Performance), same as OLE2.
+  " Explicitly activate sheet3 because create_chart may have left go_xlsx_active on sheet3
+  " but any early RETURN in create_chart could leave it on sheet2.
+  go_xlsx_active = go_xlsx_sheet3.
 
   gv_row   = 44 .
   gv_col   = 1  .
@@ -1874,6 +2008,8 @@ FORM start_excel .
       go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
       go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
+      " Note: sheet2 (DPR_2) should be hidden (OLE2: Visible=0) but abap2xlsx
+      " does not expose an attribute for this in the installed version.
     CATCH zcx_excel.
   ENDTRY.
 
@@ -2599,25 +2735,38 @@ FORM fill_null_values_with_previous .
   ENDDO.
   UNASSIGN : <lfs_dyn_line> .
 ENDFORM.
+FORM set_cell_auto USING p_ws TYPE REF TO zcl_excel_worksheet
+                         p_row TYPE i p_col TYPE i p_val TYPE string.
+  " Strip leading/trailing spaces then write as number if possible, else as text.
+  DATA: lv_v   TYPE string,
+        lv_num TYPE decfloat34.
+  lv_v = p_val.
+  CONDENSE lv_v.
+  IF lv_v IS INITIAL. RETURN. ENDIF.
+  TRY.
+    lv_num = lv_v.
+    p_ws->set_cell( ip_row = p_row ip_column = p_col ip_value = lv_num ).
+  CATCH cx_root.
+    TRY.
+      p_ws->set_cell( ip_row = p_row ip_column = p_col ip_value = lv_v ).
+    CATCH zcx_excel. ENDTRY.
+  ENDTRY.
+ENDFORM.
+
 FORM paste_data .
   DATA: lv_row TYPE i, lv_col TYPE i,
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  TRY.
-    LOOP AT gt_paste INTO gs_paste.
-      lv_col = gv_s_col.
-      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-      LOOP AT lt_vals INTO lv_val.
-        IF lv_val IS NOT INITIAL.
-          go_xlsx_sheet1->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-        ENDIF.
-        lv_col = lv_col + 1.
-      ENDLOOP.
-      lv_row = lv_row + 1.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      PERFORM set_cell_auto USING go_xlsx_sheet1 lv_row lv_col lv_val.
+      lv_col = lv_col + 1.
     ENDLOOP.
-  CATCH zcx_excel.
-  ENDTRY.
+    lv_row = lv_row + 1.
+  ENDLOOP.
   CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet3 .
@@ -2625,20 +2774,15 @@ FORM paste_data_sheet3 .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  TRY.
-    LOOP AT gt_paste INTO gs_paste.
-      lv_col = gv_s_col.
-      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-      LOOP AT lt_vals INTO lv_val.
-        IF lv_val IS NOT INITIAL.
-          go_xlsx_sheet3->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-        ENDIF.
-        lv_col = lv_col + 1.
-      ENDLOOP.
-      lv_row = lv_row + 1.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      PERFORM set_cell_auto USING go_xlsx_sheet3 lv_row lv_col lv_val.
+      lv_col = lv_col + 1.
     ENDLOOP.
-  CATCH zcx_excel.
-  ENDTRY.
+    lv_row = lv_row + 1.
+  ENDLOOP.
   CLEAR gt_paste[].
 ENDFORM.
 FORM paste_data_sheet2 .
@@ -2646,34 +2790,23 @@ FORM paste_data_sheet2 .
         lv_val TYPE string,
         lt_vals TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
   lv_row = gv_s_row.
-  TRY.
-    LOOP AT gt_paste INTO gs_paste.
-      lv_col = gv_s_col.
-      SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
-      LOOP AT lt_vals INTO lv_val.
-        IF lv_val IS NOT INITIAL.
-          go_xlsx_sheet2->set_cell( ip_row = lv_row ip_column = lv_col ip_value = lv_val ).
-        ENDIF.
-        lv_col = lv_col + 1.
-      ENDLOOP.
-      lv_row = lv_row + 1.
+  LOOP AT gt_paste INTO gs_paste.
+    lv_col = gv_s_col.
+    SPLIT gs_paste-lv_data AT cl_abap_char_utilities=>horizontal_tab INTO TABLE lt_vals.
+    LOOP AT lt_vals INTO lv_val.
+      PERFORM set_cell_auto USING go_xlsx_sheet2 lv_row lv_col lv_val.
+      lv_col = lv_col + 1.
     ENDLOOP.
-  CATCH zcx_excel.
-  ENDTRY.
+    lv_row = lv_row + 1.
+  ENDLOOP.
   CLEAR gt_paste[].
 ENDFORM.
 FORM colour_yellow_cells .
   DATA : lv_row TYPE sy-tabix .
   LOOP AT gt_copied_cells INTO gs_copied_cells.
     lv_row = gv_row + gs_copied_cells-row - 1 .
-* S4-SKIP(OLE2): CALL METHOD OF go_excel 'Cells' = go_cell
-*     EXPORTING
-*     #1 = lv_row
-*     #2 = gs_copied_cells-col .
-* S4-SKIP(OLE2): GET PROPERTY OF go_cell 'interior' = go_interior .
-* S4-SKIP(OLE2): SET PROPERTY OF go_interior 'Color' = 65535 .
-* S4-SKIP(OLE2): GET PROPERTY OF go_cell 'FONT' = go_font .
-* S4-SKIP(OLE2): SET PROPERTY OF go_font 'COLOR' = '-16776961' .
+    PERFORM select_range USING lv_row gs_copied_cells-col lv_row gs_copied_cells-col.
+    PERFORM set_fill_color USING 65535.   " bright yellow = FFFF00 (OLE2 Color = 65535)
   ENDLOOP.
 ENDFORM.
 FORM display_logo .
