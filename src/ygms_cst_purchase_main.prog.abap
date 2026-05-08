@@ -1604,6 +1604,8 @@ FORM handle_allocate.
     ENDLOOP.
     lr_grid_alloc->set_frontend_fieldcatalog( EXPORTING it_fieldcatalog = lt_fcat_alloc ).
     SORT gt_alv_display BY location_id state_code material ASCENDING.
+    " Run static allocation first so static rows have correct totals before coloring
+    PERFORM handle_static_allocation.
     " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_sales>).
       IF <fs_alv_sales>-exclude = 'X'.
@@ -1643,8 +1645,6 @@ FORM handle_allocate.
     ENDLOOP.
     lr_grid_alloc->refresh_table_display( ).
   ENDIF.
-  " Static Material Allocation: run after non-static allocation is complete
-  PERFORM handle_static_allocation.
   " Set allocation flag and refresh PF-STATUS to show Validate/Edit/Send buttons
   gv_allocated = abap_true.
   PERFORM refresh_pf_status.
