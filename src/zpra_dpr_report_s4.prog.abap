@@ -4,10 +4,12 @@
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
 *& VERSION : 4.6 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
-*& v4.6 - PDF chart fix: export_pdf_via_ole2 now hides sheet2 via OLE2 (matches
-*&        original Visible=0), selects all visible sheets (1+3) using
-*&        Sheets.Select before ExportAsFixedFormat so chart on sheet3
-*&        (Production Performance) is included in the PDF output.
+*& v4.6 - PDF chart fix: export_pdf_via_ole2 hides sheet2 via OLE2 (Visible=0)
+*&        then calls workbook-level ExportAsFixedFormat which exports all
+*&        visible sheets (sheet1 DPR + sheet3 chart). Removed Sheets.Select
+*&        which was crashing Excel, leaving it with a file lock on the XLSX
+*&        (causing 0 KB on the next run). Added sy-subrc check after Open and
+*&        always-close logic so Excel is freed even if export fails.
 *& v4.5 - Landscape PDF: orientation set via OLE2 PageSetup in export_pdf_via_ole2
 *&        (abap2xlsx page_setup attribute not available in this installed version).
 *& v4.4 - Border fix: set_numberformat and set_range_formatting now include thin
@@ -6918,9 +6920,9 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
                                p_datum_ext  TYPE char10
                                p_uzeit_ext  TYPE char8.
   " Open saved XLSX in Excel via OLE2:
-  "  1. Hide sheet2 (data-source sheet, same as OLE2 original: Visible=0)
+  "  1. Hide sheet2 (data-source, matches original Visible=0)
   "  2. Set landscape page setup on sheet1 and sheet3
-  "  3. Select sheet1+sheet3 together then export as PDF
+  "  3. Export workbook as PDF (all visible sheets = sheet1 + sheet3 with chart)
   DATA: lo_app     TYPE ole2_object,
         lo_wkbooks TYPE ole2_object,
         lo_wkbook  TYPE ole2_object,
@@ -6928,8 +6930,8 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
         lo_ws2     TYPE ole2_object,
         lo_ws3     TYPE ole2_object,
         lo_ps      TYPE ole2_object,
-        lo_sheets  TYPE ole2_object,
-        lv_pdf     TYPE string.
+        lv_pdf     TYPE string,
+        lv_rc      TYPE i.
 
   CONCATENATE p_fname '\DPR -' gv_repdate_e ' - On -' p_datum_ext '-' p_uzeit_ext '.PDF'
     INTO lv_pdf.
@@ -6943,13 +6945,19 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
   SET PROPERTY OF lo_app 'Visible' = 0.
   CALL METHOD OF lo_app 'Workbooks' = lo_wkbooks.
   CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook EXPORTING #1 = p_xlsx_fname.
+  IF sy-subrc <> 0.
+    CALL METHOD OF lo_app 'Quit'.
+    MESSAGE 'PDF export skipped: could not open XLSX in Excel' TYPE 'W'.
+    RETURN.
+  ENDIF.
 
   " Get worksheet references
   CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws1 EXPORTING #1 = 1.
   CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws2 EXPORTING #1 = 2.
   CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws3 EXPORTING #1 = 3.
 
-  " Hide sheet2 (chart data source) - matches OLE2 original Visible=0
+  " Hide sheet2 (chart data source) - matches original OLE2: Visible=0
+  " Must do this BEFORE page-setup calls to avoid touching a hidden sheet later
   SET PROPERTY OF lo_ws2 'Visible' = 0.
 
   " Set landscape + fit-to-1-page-wide on sheet1 (DPR)
@@ -6968,20 +6976,20 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
   SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
   SET PROPERTY OF lo_app 'PrintCommunication' = 1.
 
-  " Activate sheet1, then select sheet1+sheet3 together so ExportAsFixedFormat
-  " includes the chart (sheet3) in the PDF output.
+  " Activate sheet1 so workbook export starts from the first sheet
   CALL METHOD OF lo_ws1 'Activate'.
-  CALL METHOD OF lo_wkbook 'Sheets' = lo_sheets.
-  CALL METHOD OF lo_sheets 'Select'.   " select all visible sheets (1 and 3)
 
-  " Export selected sheets as PDF
+  " Export the workbook as PDF - workbook-level export includes all VISIBLE
+  " sheets (sheet2 is now hidden so only sheet1 DPR + sheet3 chart are exported)
   CALL METHOD OF lo_wkbook 'ExportAsFixedFormat'
     EXPORTING
       #1 = 0          " xlTypePDF
       #2 = lv_pdf
       #3 = 0          " xlQualityStandard
       #4 = 1.         " IncludeDocProperties
+  lv_rc = sy-subrc.
 
+  " Always close workbook and quit Excel regardless of export outcome
   CALL METHOD OF lo_wkbook 'Close' EXPORTING #1 = 0.
   CALL METHOD OF lo_app 'Quit'.
   FREE OBJECT lo_ws1.
@@ -6991,7 +6999,11 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
   FREE OBJECT lo_wkbooks.
   FREE OBJECT lo_app.
 
-  MESSAGE |PDF saved: { lv_pdf }| TYPE 'S'.
+  IF lv_rc = 0.
+    MESSAGE |PDF saved: { lv_pdf }| TYPE 'S'.
+  ELSE.
+    MESSAGE |PDF export failed (rc={ lv_rc }). XLSX saved OK.| TYPE 'W'.
+  ENDIF.
 ENDFORM.
 
 FORM fill_dynamic_table_sec2d .
