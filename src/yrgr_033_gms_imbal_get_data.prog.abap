@@ -188,7 +188,7 @@ ENDFORM.
 *& CC  : YSD_WF_AGENT YLEVEL=4 + ngmc@gail.co.in
 *& From: GAIL PARTNER CARE GMS
 *& Body: HTML table; all columns including Posted Imbalance
-*& Subject: Expired Contracts with finite Imbalance_Sales Office [VKBUR]
+*& Subject: Expired Contracts with finite Imbalance_SO [VKBUR]
 *&---------------------------------------------------------------------*
 FORM send_email_posted.
   TYPES: BEGIN OF ty_ep_vkbur, vkbur   TYPE vkbur,  END OF ty_ep_vkbur.
@@ -201,15 +201,18 @@ FORM send_email_posted.
         lt_to_email  TYPE TABLE OF ad_smtpadr,
         lt_cc_email  TYPE TABLE OF ad_smtpadr,
         lv_ep_email  TYPE ad_smtpadr,
-        lt_body      TYPE TABLE OF solisti1,       ls_body      TYPE solisti1,
-        lt_receivers TYPE TABLE OF somlreci1,      ls_receiver  TYPE somlreci1,
-        ls_doc_data  TYPE sodocchgi1,
-        lv_subject   TYPE c LENGTH 150,
+        lv_subject   TYPE c LENGTH 50,
+        lv_html_body TYPE string,
+        lt_soli      TYPE soli_tab,
         lv_ct_start  TYPE char10,
         lv_ct_end    TYPE char10,
         lv_po_str    TYPE c LENGTH 20,
         lv_ne_str    TYPE c LENGTH 20,
-        lv_partnr    TYPE string.
+        lv_partnr    TYPE string,
+        lo_send_req  TYPE REF TO cl_bcs,
+        lo_document  TYPE REF TO cl_document_bcs,
+        lo_sender    TYPE REF TO cl_cam_address_bcs,
+        lo_recipient TYPE REF TO cl_cam_address_bcs.
 
   " Collect unique sales offices for Posted records
   LOOP AT lt_final INTO ls_final WHERE stat = 'Posted'.
@@ -219,8 +222,8 @@ FORM send_email_posted.
   SORT lt_ep_vkbur BY vkbur. DELETE ADJACENT DUPLICATES FROM lt_ep_vkbur COMPARING vkbur.
 
   LOOP AT lt_ep_vkbur INTO ls_ep_vkbur.
-    CLEAR: lt_to_email, lt_cc_email, lt_body, lt_receivers, ls_doc_data,
-           lt_ep_cont, lt_ep_pernr, lv_subject.
+    CLEAR: lt_to_email, lt_cc_email, lt_ep_cont, lt_ep_pernr,
+           lv_subject, lv_html_body, lt_soli.
 
     LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
       ls_ep_cont-cont_id = ls_final-docnr.
@@ -284,23 +287,16 @@ FORM send_email_posted.
       DELETE lt_cc_email WHERE table_line = lv_ep_email.
     ENDLOOP.
 
-    " Subject: 'Sales Office' before vkbur number; no extra 'for' prefix
-    CONCATENATE 'Expired Contracts with finite Imbalance_Sales Office '
-                ls_ep_vkbur-vkbur
-                INTO lv_subject.
+    " Subject: SO [vkbur]
+    lv_subject = |Expired Contracts with finite Imbalance_SO { ls_ep_vkbur-vkbur }|.
 
-    " Body: HTML table (ref YRGR091 style)
-    ls_body-line = '<html><body style="font-family:Arial,sans-serif;font-size:12px;">'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<p>Dear Ma''am/ Sir,</p>'. APPEND ls_body TO lt_body. CLEAR ls_body.
-    " Intro: 'for Sales Office [vkbur]' – no bare 'for[number]'
-    CONCATENATE '<p>Please find below instances of Finite Imbalances in Expired Contracts '
-      'for Sales Office ' ls_ep_vkbur-vkbur
-      '. Please take necessary action in this regard.</p>'
-      INTO ls_body-line.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    " HTML table header (all columns retained for Posted status)
-    ls_body-line =
+    " Body: HTML table (ref YRGR091 style), all columns retained for Posted
+    lv_html_body =
+      '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&
+      '<p>Dear Ma''am/ Sir,</p>' &&
+      |<p>Please find below instances of Finite Imbalances in Expired Contracts | &&
+      |for Sales Office { ls_ep_vkbur-vkbur }. | &&
+      |Please take necessary action in this regard.</p>| &&
       '<table border="1" cellspacing="0" cellpadding="4" ' &&
       'style="border-collapse:collapse;font-size:12px;">' &&
       '<tr style="background-color:#c0c0c0;font-weight:bold;">' &&
@@ -313,7 +309,6 @@ FORM send_email_posted.
       '<td>Posted Imbalance</td>' &&
       '<td>Posted Negative Imbalance</td>' &&
       '</tr>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
 
     LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
       " Date format: DD.MM.YYYY
@@ -324,65 +319,64 @@ FORM send_email_posted.
       SHIFT lv_partnr LEFT DELETING LEADING '0'.
       WRITE ls_final-po_imbal TO lv_po_str LEFT-JUSTIFIED.
       WRITE ls_final-ne_imbal TO lv_ne_str LEFT-JUSTIFIED.
-      CONCATENATE '<tr>'
-        '<td>' ls_final-docnr '</td>'
-        '<td>Sales Office ' ls_final-vkbur '</td>'
-        '<td>' ls_final-locid '</td>'
-        '<td>' lv_partnr '</td>'
-        '<td>' lv_ct_start '</td>'
-        '<td>' lv_ct_end '</td>'
-        '<td align="right">' lv_po_str '</td>'
-        '<td align="right">' lv_ne_str '</td>'
-        '</tr>'
-        INTO ls_body-line.
-      APPEND ls_body TO lt_body. CLEAR ls_body.
+      lv_html_body = lv_html_body &&
+        |<tr>| &&
+        |<td>{ ls_final-docnr }</td>| &&
+        |<td>Sales Office { ls_final-vkbur }</td>| &&
+        |<td>{ ls_final-locid }</td>| &&
+        |<td>{ lv_partnr }</td>| &&
+        |<td>{ lv_ct_start }</td>| &&
+        |<td>{ lv_ct_end }</td>| &&
+        |<td align="right">{ lv_po_str }</td>| &&
+        |<td align="right">{ lv_ne_str }</td>| &&
+        |</tr>|.
     ENDLOOP.
 
-    ls_body-line = '</table>'. APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<p>For more details, please execute T-code YRGR105 with the required input.</p>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<p>With warm regards,<br/>GAIL (INDIA) LTD.</p>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<hr/><p>This is a system generated mail. Please do not reply.</p><hr/>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    CONCATENATE '<p>Source: ' sy-repid '.' sy-datum '.' sy-uzeit '</p></body></html>'
-      INTO ls_body-line.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
+    lv_html_body = lv_html_body &&
+      '</table>' &&
+      '<p>For more details, please execute T-code YRGR105 with the required input.</p>' &&
+      '<p>With warm regards,<br/>GAIL (INDIA) LTD.</p>' &&
+      '<hr/><p>This is a system generated mail. Please do not reply.</p><hr/>' &&
+      |<p>Source: { sy-repid }.{ sy-datum }.{ sy-uzeit }</p>| &&
+      '</body></html>'.
 
-    " Send as HTML via SAP Business Workplace
-    ls_doc_data-obj_descr = lv_subject.
-    ls_doc_data-obj_name  = 'HTM'.    " HTML format
-    " Sender: GAIL PARTNER CARE GMS (same as YRGI001)
-    ls_doc_data-from_name = 'GAIL PARTNER CARE GMS'.
+    " Send via CL_BCS for proper HTML rendering and sender display name
+    TRY.
+      lo_send_req = cl_bcs=>create_persistent( ).
 
-    LOOP AT lt_to_email INTO lv_ep_email.
-      CLEAR ls_receiver. ls_receiver-receiver = lv_ep_email.
-      ls_receiver-rec_type = 'U'. ls_receiver-express = 'X'.
-      APPEND ls_receiver TO lt_receivers.
-    ENDLOOP.
-    LOOP AT lt_cc_email INTO lv_ep_email.
-      CLEAR ls_receiver. ls_receiver-receiver = lv_ep_email.
-      ls_receiver-rec_type = 'U'. ls_receiver-express = space.
-      APPEND ls_receiver TO lt_receivers.
-    ENDLOOP.
+      lt_soli = cl_document_bcs=>string_to_soli( ip_string = lv_html_body ).
+      lo_document = cl_document_bcs=>create_document(
+        i_type    = 'HTM'
+        i_subject = lv_subject
+        i_text    = lt_soli ).
+      lo_send_req->set_document( lo_document ).
 
-    CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
-      EXPORTING
-        document_data = ls_doc_data
-        put_in_outbox = 'X'
-        commit_work   = 'X'
-      TABLES
-        object_content = lt_body
-        receivers      = lt_receivers
-      EXCEPTIONS
-        too_many_receivers       = 1
-        document_not_sent        = 2
-        document_type_not_exist  = 3
-        operation_no_authorization = 4
-        parameter_error          = 5
-        x_error                  = 6
-        enqueue_error            = 7
-        OTHERS                   = 8.
+      lo_sender = cl_cam_address_bcs=>create_internet_address(
+        i_address_string = |{ sy-uname }|
+        i_address_name   = 'GAIL PARTNER CARE GMS' ).
+      lo_send_req->set_sender( i_sender = lo_sender ).
+
+      LOOP AT lt_to_email INTO lv_ep_email.
+        lo_recipient = cl_cam_address_bcs=>create_internet_address(
+          i_address_string = lv_ep_email ).
+        lo_send_req->add_recipient(
+          i_recipient = lo_recipient
+          i_express   = abap_true ).
+      ENDLOOP.
+
+      LOOP AT lt_cc_email INTO lv_ep_email.
+        lo_recipient = cl_cam_address_bcs=>create_internet_address(
+          i_address_string = lv_ep_email ).
+        lo_send_req->add_recipient(
+          i_recipient = lo_recipient
+          i_copy      = abap_true ).
+      ENDLOOP.
+
+      lo_send_req->send( i_with_error_screen = abap_false ).
+      COMMIT WORK.
+    CATCH cx_bcs INTO DATA(lx_bcs_ep).
+      " Log error and continue with next office
+    ENDTRY.
 
     CLEAR: lt_ep_cont, lt_ep_pernr.
   ENDLOOP.
@@ -397,7 +391,7 @@ ENDFORM.
 *&        + YSD_WF_AGENT YLEVEL=1 + ngmc@gail.co.in
 *& From: GAIL PARTNER CARE GMS
 *& Body: HTML table; last two imbalance columns OMITTED (Not Posted)
-*& Subject: IMB Posting Pending [LOCID]_Expired Contracts
+*& Subject: IMB Posting Pending [LOCID without C prefix]_Expired Contracts
 *&---------------------------------------------------------------------*
 FORM send_email_not_posted.
   TYPES: BEGIN OF ty_np_locid, locid   TYPE oijnomi-locid, END OF ty_np_locid.
@@ -419,14 +413,18 @@ FORM send_email_not_posted.
         lt_to_email    TYPE TABLE OF ad_smtpadr,
         lt_cc_email    TYPE TABLE OF ad_smtpadr,
         lv_np_email    TYPE ad_smtpadr,
-        lt_body        TYPE TABLE OF solisti1,     ls_body        TYPE solisti1,
-        lt_receivers   TYPE TABLE OF somlreci1,    ls_receiver    TYPE somlreci1,
-        ls_doc_data    TYPE sodocchgi1,
-        lv_subject     TYPE c LENGTH 150,
+        lv_subject     TYPE c LENGTH 50,
+        lv_html_body   TYPE string,
+        lt_soli        TYPE soli_tab,
         lv_ct_start    TYPE char10,
         lv_ct_end      TYPE char10,
         lv_np_vkbur    TYPE vkbur,
-        lv_partnr      TYPE string.
+        lv_partnr      TYPE string,
+        lv_locid_disp  TYPE string,
+        lo_send_req    TYPE REF TO cl_bcs,
+        lo_document    TYPE REF TO cl_document_bcs,
+        lo_sender      TYPE REF TO cl_cam_address_bcs,
+        lo_recipient   TYPE REF TO cl_cam_address_bcs.
 
   " Collect unique business locations for Not Posted records
   LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted'.
@@ -436,9 +434,9 @@ FORM send_email_not_posted.
   SORT lt_np_locid BY locid. DELETE ADJACENT DUPLICATES FROM lt_np_locid COMPARING locid.
 
   LOOP AT lt_np_locid INTO ls_np_locid.
-    CLEAR: lt_to_email, lt_cc_email, lt_body, lt_receivers, ls_doc_data,
-           lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr,
-           lv_subject, lv_np_vkbur.
+    CLEAR: lt_to_email, lt_cc_email, lt_np_cont, lt_np_ernam, lt_np_pernr,
+           lt_cc_rep, lt_wf_np_pernr, lv_subject, lv_html_body, lt_soli,
+           lv_np_vkbur, lv_locid_disp, lv_partnr.
 
     LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted' AND locid = ls_np_locid-locid.
       ls_np_cont-cont_id = ls_final-docnr.
@@ -585,26 +583,23 @@ FORM send_email_not_posted.
       DELETE lt_cc_email WHERE table_line = lv_np_email.
     ENDLOOP.
 
-    " Subject: no 'for' prefix before locid
-    CONCATENATE 'IMB Posting Pending ' ls_np_locid-locid '_Expired Contracts'
-      INTO lv_subject.
+    " Subject: strip leading 'C' from locid (C10551 -> 10551)
+    lv_locid_disp = ls_np_locid-locid.
+    SHIFT lv_locid_disp LEFT DELETING LEADING 'C'.
+    lv_subject = |IMB Posting Pending { lv_locid_disp }_Expired Contracts|.
+
+    " Get customer for body intro (strip leading zeros)
+    READ TABLE lt_final INTO ls_final WITH KEY locid = ls_np_locid-locid
+                                               stat  = 'Not Posted'.
+    lv_partnr = ls_final-partnr.
+    SHIFT lv_partnr LEFT DELETING LEADING '0'.
 
     " Body: HTML table – last two columns (Posted Imbalance cols) OMITTED
-    ls_body-line = '<html><body style="font-family:Arial,sans-serif;font-size:12px;">'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<p>Dear Ma''am/ Sir,</p>'. APPEND ls_body TO lt_body. CLEAR ls_body.
-
-    " Intro: remove extraneous 'for' before partnr; strip leading zeros
-    READ TABLE lt_final INTO ls_final WITH KEY locid = ls_np_locid-locid.
-    lv_partnr = ls_final-partnr. SHIFT lv_partnr LEFT DELETING LEADING '0'.
-    CONCATENATE '<p>Please find below instances of missed Imbalances posting '
-      'for Expired Contracts ' lv_partnr
-      '. Please take necessary action in this regard.</p>'
-      INTO ls_body-line.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-
-    " HTML table header – NO Posted Imbalance / Posted Negative Imbalance cols
-    ls_body-line =
+    lv_html_body =
+      '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&
+      '<p>Dear Ma''am/ Sir,</p>' &&
+      |<p>Please find below instances of missed Imbalances posting for Expired Contracts | &&
+      |for Customer { lv_partnr }. Please take necessary action in this regard.</p>| &&
       '<table border="1" cellspacing="0" cellpadding="4" ' &&
       'style="border-collapse:collapse;font-size:12px;">' &&
       '<tr style="background-color:#c0c0c0;font-weight:bold;">' &&
@@ -615,71 +610,70 @@ FORM send_email_not_posted.
       '<td>CT Start Date</td>' &&
       '<td>CT End Date</td>' &&
       '</tr>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
 
     LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted' AND locid = ls_np_locid-locid.
       " Date format: DD.MM.YYYY
       lv_ct_start = |{ ls_final-vbegdat+6(2) }.{ ls_final-vbegdat+4(2) }.{ ls_final-vbegdat(4) }|.
       lv_ct_end   = |{ ls_final-venddat+6(2) }.{ ls_final-venddat+4(2) }.{ ls_final-venddat(4) }|.
       " Strip leading zeros from customer
-      lv_partnr = ls_final-partnr. SHIFT lv_partnr LEFT DELETING LEADING '0'.
-      CONCATENATE '<tr>'
-        '<td>' ls_final-docnr '</td>'
-        '<td>Sales Office ' ls_final-vkbur '</td>'
-        '<td>' ls_final-locid '</td>'
-        '<td>' lv_partnr '</td>'
-        '<td>' lv_ct_start '</td>'
-        '<td>' lv_ct_end '</td>'
-        '</tr>'
-        INTO ls_body-line.
-      APPEND ls_body TO lt_body. CLEAR ls_body.
+      lv_partnr = ls_final-partnr.
+      SHIFT lv_partnr LEFT DELETING LEADING '0'.
+      lv_html_body = lv_html_body &&
+        |<tr>| &&
+        |<td>{ ls_final-docnr }</td>| &&
+        |<td>Sales Office { ls_final-vkbur }</td>| &&
+        |<td>{ ls_final-locid }</td>| &&
+        |<td>{ lv_partnr }</td>| &&
+        |<td>{ lv_ct_start }</td>| &&
+        |<td>{ lv_ct_end }</td>| &&
+        |</tr>|.
     ENDLOOP.
 
-    ls_body-line = '</table>'. APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line =
-      '<p>For more details, please execute T-code YRGR105/ YRGR102 with the required input.</p>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<p>With warm regards,<br/>GAIL (INDIA) LTD.</p>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<hr/><p>This is a system generated mail. Please do not reply.</p><hr/>'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    CONCATENATE '<p>Source: ' sy-repid '.' sy-datum '.' sy-uzeit '</p></body></html>'
-      INTO ls_body-line.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
+    lv_html_body = lv_html_body &&
+      '</table>' &&
+      '<p>For more details, please execute T-code YRGR105/ YRGR102 with the required input.</p>' &&
+      '<p>With warm regards,<br/>GAIL (INDIA) LTD.</p>' &&
+      '<hr/><p>This is a system generated mail. Please do not reply.</p><hr/>' &&
+      |<p>Source: { sy-repid }.{ sy-datum }.{ sy-uzeit }</p>| &&
+      '</body></html>'.
 
-    " Send as HTML; sender display name = GAIL PARTNER CARE GMS (ref YRGI001)
-    ls_doc_data-obj_descr = lv_subject.
-    ls_doc_data-obj_name  = 'HTM'.
-    ls_doc_data-from_name = 'GAIL PARTNER CARE GMS'.
+    " Send via CL_BCS for proper HTML rendering and sender display name
+    TRY.
+      lo_send_req = cl_bcs=>create_persistent( ).
 
-    LOOP AT lt_to_email INTO lv_np_email.
-      CLEAR ls_receiver. ls_receiver-receiver = lv_np_email.
-      ls_receiver-rec_type = 'U'. ls_receiver-express = 'X'.
-      APPEND ls_receiver TO lt_receivers.
-    ENDLOOP.
-    LOOP AT lt_cc_email INTO lv_np_email.
-      CLEAR ls_receiver. ls_receiver-receiver = lv_np_email.
-      ls_receiver-rec_type = 'U'. ls_receiver-express = space.
-      APPEND ls_receiver TO lt_receivers.
-    ENDLOOP.
+      lt_soli = cl_document_bcs=>string_to_soli( ip_string = lv_html_body ).
+      lo_document = cl_document_bcs=>create_document(
+        i_type    = 'HTM'
+        i_subject = lv_subject
+        i_text    = lt_soli ).
+      lo_send_req->set_document( lo_document ).
 
-    CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
-      EXPORTING
-        document_data = ls_doc_data
-        put_in_outbox = 'X'
-        commit_work   = 'X'
-      TABLES
-        object_content = lt_body
-        receivers      = lt_receivers
-      EXCEPTIONS
-        too_many_receivers       = 1
-        document_not_sent        = 2
-        document_type_not_exist  = 3
-        operation_no_authorization = 4
-        parameter_error          = 5
-        x_error                  = 6
-        enqueue_error            = 7
-        OTHERS                   = 8.
+      lo_sender = cl_cam_address_bcs=>create_internet_address(
+        i_address_string = |{ sy-uname }|
+        i_address_name   = 'GAIL PARTNER CARE GMS' ).
+      lo_send_req->set_sender( i_sender = lo_sender ).
+
+      LOOP AT lt_to_email INTO lv_np_email.
+        lo_recipient = cl_cam_address_bcs=>create_internet_address(
+          i_address_string = lv_np_email ).
+        lo_send_req->add_recipient(
+          i_recipient = lo_recipient
+          i_express   = abap_true ).
+      ENDLOOP.
+
+      LOOP AT lt_cc_email INTO lv_np_email.
+        lo_recipient = cl_cam_address_bcs=>create_internet_address(
+          i_address_string = lv_np_email ).
+        lo_send_req->add_recipient(
+          i_recipient = lo_recipient
+          i_copy      = abap_true ).
+      ENDLOOP.
+
+      lo_send_req->send( i_with_error_screen = abap_false ).
+      COMMIT WORK.
+    CATCH cx_bcs INTO DATA(lx_bcs_np).
+      " Log error and continue with next location
+    ENDTRY.
 
     CLEAR: lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr.
   ENDLOOP.
