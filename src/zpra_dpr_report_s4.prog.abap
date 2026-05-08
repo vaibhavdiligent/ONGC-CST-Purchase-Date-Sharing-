@@ -6664,8 +6664,8 @@ FORM finalize_worksheet .
       go_xlsx_sheet1->set_title( ip_title = lv_t_fin ).
     CATCH zcx_excel.
   ENDTRY.
-  " Build filename
-  CONCATENATE p_fname '|' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
+  " Build filename — join folder path and filename with backslash
+  CONCATENATE p_fname '\' 'DPR -' gv_repdate_e ' - On -' lv_datum_ext '-' lv_uzeit_ext '.xlsx' INTO lv_fname.
 
   " Write XLSX
   go_xlsx_writer = NEW zcl_excel_writer_2007( ).
@@ -6676,16 +6676,39 @@ FORM finalize_worksheet .
     IMPORTING  output_length = lv_size
     TABLES     binary_tab    = lt_bin.
 
-  cl_gui_frontend_services=>gui_download(
+  CALL METHOD cl_gui_frontend_services=>gui_download
     EXPORTING
-      filename     = lv_fname
-      filetype     = 'BIN'
-      bin_filesize = lv_size
+      filename                = lv_fname
+      filetype                = 'BIN'
+      bin_filesize            = lv_size
     CHANGING
-      data_tab     = lt_bin ).
-
-  EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME' .
-  MESSAGE 'Report downloaded successfully' TYPE 'S' .
+      data_tab                = lt_bin
+    EXCEPTIONS
+      file_write_error        = 1
+      no_batch                = 2
+      gui_refuse_filetransfer = 3
+      invalid_type            = 4
+      no_authority            = 5
+      unknown_error           = 6
+      header_not_allowed      = 7
+      separator_not_allowed   = 8
+      filesize_not_allowed    = 9
+      header_too_long         = 10
+      dp_error_create         = 11
+      dp_error_send           = 12
+      dp_error_write          = 13
+      unknown_dp_error        = 14
+      access_denied           = 15
+      dp_out_of_memory        = 16
+      disk_full               = 17
+      dp_timeout              = 18
+      OTHERS                  = 99.
+  IF sy-subrc <> 0.
+    MESSAGE |Download failed (rc={ sy-subrc }). Check folder path: { p_fname }| TYPE 'W'.
+  ELSE.
+    EXPORT p_fname TO MEMORY ID 'DPR_FILE_NAME'.
+    MESSAGE 'Report downloaded successfully' TYPE 'S'.
+  ENDIF.
 ENDFORM.
 FORM lock_xls .
   " Sheet protection not implemented in this version.
