@@ -501,7 +501,13 @@ ENDFORM.
 FORM set_fill_color USING p_ole2_color TYPE i.
   DATA: lo_style TYPE REF TO zcl_excel_style,
         lv_r     TYPE i,  lv_g TYPE i,  lv_b TYPE i,
-        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1.
+        lv_xr    TYPE x LENGTH 1, lv_xg TYPE x LENGTH 1, lv_xb TYPE x LENGTH 1,
+        lv_row   TYPE zexcel_cell_row,
+        lv_col   TYPE zexcel_cell_column,
+        lv_val   TYPE zexcel_cell_value,
+        lv_rc    TYPE sysubrc,
+        lv_str   TYPE string,
+        lv_guid  TYPE zexcel_cell_style.
   lv_r  = p_ole2_color MOD 256.
   lv_g  = ( p_ole2_color DIV 256 ) MOD 256.
   lv_b  = ( p_ole2_color DIV 65536 ) MOD 256.
@@ -509,13 +515,29 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
   lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  lv_guid = lo_style->get_guid( ).
   TRY.
-      go_xlsx_active->set_area_style(
-    ip_style     = lo_style->get_guid( )
-    ip_row       = gv_s_row
-    ip_column_start = gv_s_col
-    ip_row_to       = gv_e_row
-    ip_column_end   = gv_e_col ).
+      lv_row = gv_s_row.
+      WHILE lv_row <= gv_e_row.
+        lv_col = gv_s_col.
+        WHILE lv_col <= gv_e_col.
+          CLEAR: lv_val, lv_rc, lv_str.
+          TRY.
+              go_xlsx_active->get_cell(
+                EXPORTING ip_column = lv_col ip_row = lv_row
+                IMPORTING ep_value  = lv_val ep_rc = lv_rc ).
+            CATCH zcx_excel.
+          ENDTRY.
+          lv_str = lv_val.
+          go_xlsx_active->set_cell(
+            ip_column = lv_col
+            ip_row    = lv_row
+            ip_value  = lv_str
+            ip_style  = lv_guid ).
+          lv_col = lv_col + 1.
+        ENDWHILE.
+        lv_row = lv_row + 1.
+      ENDWHILE.
     CATCH zcx_excel.
   ENDTRY.
 ENDFORM.
