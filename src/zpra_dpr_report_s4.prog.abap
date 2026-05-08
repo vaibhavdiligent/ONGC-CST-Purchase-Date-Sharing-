@@ -9842,55 +9842,60 @@ ENDFORM.
 FORM populate_no_data_entries  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
 
-  DATA : lt_zpra_c_prd_prof   TYPE STANDARD TABLE OF ty_zpra_c_prd_prof .
-  DATA : ls_zpra_c_prd_prof TYPE                   ty_zpra_c_prd_prof,
-         ls_zpra_t_dly_prd  TYPE                   zpra_t_dly_prd,
-         ls_zpra_t_dly_prd2 TYPE                   zpra_t_dly_prd.
-  DATA : lv_date  TYPE                   sy-datum,
-         lv_date2 TYPE                   sy-datum,
-         lv_index TYPE                   sy-tabix.
+  DATA : lt_zpra_c_prd_prof TYPE STANDARD TABLE OF ty_zpra_c_prd_prof.
+  DATA : ls_zpra_c_prd_prof TYPE ty_zpra_c_prd_prof,
+         ls_zpra_t_dly_prd  TYPE zpra_t_dly_prd.
+  DATA : lv_date       TYPE sy-datum,
+         lv_date2      TYPE sy-datum,
+         lv_index      TYPE sy-tabix,
+         lv_insert_pos TYPE sy-tabix.
 
-  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof .
-  SORT lt_zpra_c_prd_prof BY product asset block .
-  DELETE ADJACENT DUPLICATES FROM  lt_zpra_c_prd_prof COMPARING product asset .
+  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof.
+  SORT lt_zpra_c_prd_prof BY product asset block.
+  DELETE ADJACENT DUPLICATES FROM lt_zpra_c_prd_prof COMPARING product asset.
 
   SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
 
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
-    lv_date = p_from_date .
-    DO .
+    lv_date = p_from_date.
+    DO.
       IF lv_date GT p_to_date.
-        EXIT .
+        EXIT.
       ENDIF.
-      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                  asset           = ls_zpra_c_prd_prof-asset
-                                                                  production_date = lv_date BINARY SEARCH .
+      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+        WITH KEY product         = ls_zpra_c_prd_prof-product
+                 asset           = ls_zpra_c_prd_prof-asset
+                 production_date = lv_date BINARY SEARCH.
       IF sy-subrc IS NOT INITIAL.
+        lv_insert_pos = sy-tabix.   " position where date D entries belong
         lv_date2 = lv_date - 1.
-        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                    asset           = ls_zpra_c_prd_prof-asset
-                                                                    production_date = lv_date2 BINARY SEARCH .
-        IF sy-subrc IS INITIAL .
-          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                      asset           = ls_zpra_c_prd_prof-asset
-                                                                      production_date = lv_date2
-                                                                      block           = ls_zpra_c_prd_prof-block .
+        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+          WITH KEY product         = ls_zpra_c_prd_prof-product
+                   asset           = ls_zpra_c_prd_prof-asset
+                   production_date = lv_date2 BINARY SEARCH.
+        IF sy-subrc IS INITIAL.
+          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+            WITH KEY product         = ls_zpra_c_prd_prof-product
+                     asset           = ls_zpra_c_prd_prof-asset
+                     production_date = lv_date2
+                     block           = ls_zpra_c_prd_prof-block.
           IF sy-subrc IS INITIAL.
-            lv_index = sy-tabix .
+            lv_index = sy-tabix.
             LOOP AT p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd FROM lv_index.
-              IF ls_zpra_t_dly_prd-product          NE ls_zpra_c_prd_prof-product OR
-                 ls_zpra_t_dly_prd-asset            NE ls_zpra_c_prd_prof-asset   OR
-                 ls_zpra_t_dly_prd-production_date  NE lv_date2                   .
-                EXIT .
+              IF ls_zpra_t_dly_prd-product         NE ls_zpra_c_prd_prof-product OR
+                 ls_zpra_t_dly_prd-asset           NE ls_zpra_c_prd_prof-asset   OR
+                 ls_zpra_t_dly_prd-production_date NE lv_date2.
+                EXIT.
               ENDIF.
-              ls_zpra_t_dly_prd-production_date = lv_date .
-              APPEND ls_zpra_t_dly_prd TO p_zpra_t_dly_prd .
+              ls_zpra_t_dly_prd-production_date = lv_date.
+              " INSERT at sorted position — no re-sort needed, keeps binary search valid
+              INSERT ls_zpra_t_dly_prd INTO p_zpra_t_dly_prd INDEX lv_insert_pos.
+              lv_insert_pos = lv_insert_pos + 1.
             ENDLOOP.
-            SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
           ENDIF.
         ENDIF.
       ENDIF.
-      lv_date = lv_date + 1 .
+      lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
 ENDFORM.
@@ -10087,64 +10092,69 @@ ENDFORM.
 FORM POPULATE_NO_DATA_ENTRIES_3F  TABLES p_zpra_t_dly_prd STRUCTURE zpra_t_dly_prd
                                USING  p_from_date p_to_date.
 
-   DATA : lt_zpra_c_prd_prof   TYPE STANDARD TABLE OF ty_zpra_c_prd_prof .
-  DATA : ls_zpra_c_prd_prof TYPE                   ty_zpra_c_prd_prof,
-         ls_zpra_t_dly_prd  TYPE                   zpra_t_dly_prd,
-         ls_zpra_t_dly_prd2 TYPE                   zpra_t_dly_prd.
-  DATA : lv_date  TYPE                   sy-datum,
-         lv_date2 TYPE                   sy-datum,
-         lv_index TYPE                   sy-tabix.
+  DATA : lt_zpra_c_prd_prof TYPE STANDARD TABLE OF ty_zpra_c_prd_prof.
+  DATA : ls_zpra_c_prd_prof TYPE ty_zpra_c_prd_prof,
+         ls_zpra_t_dly_prd  TYPE zpra_t_dly_prd.
+  DATA : lv_date       TYPE sy-datum,
+         lv_date2      TYPE sy-datum,
+         lv_index      TYPE sy-tabix,
+         lv_insert_pos TYPE sy-tabix.
 
-  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof .
-  SORT lt_zpra_c_prd_prof BY product asset block .
-  DELETE ADJACENT DUPLICATES FROM  lt_zpra_c_prd_prof COMPARING product asset .
+  lt_zpra_c_prd_prof = gt_zpra_c_prd_prof.
+  SORT lt_zpra_c_prd_prof BY product asset block.
+  DELETE ADJACENT DUPLICATES FROM lt_zpra_c_prd_prof COMPARING product asset.
 
   SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
 
   LOOP AT lt_zpra_c_prd_prof INTO ls_zpra_c_prd_prof.
-    clear GS_ZPRA_T_PRD_PI.
-    READ TABLE GT_ZPRA_T_PRD_PI_3F INTO GS_ZPRA_T_PRD_PI WITH KEY  asset = ls_zpra_c_prd_prof-asset
-                                                                block = ls_zpra_c_prd_prof-block .
-    IF SY-SUBRC = 0.
-     IF GS_ZPRA_T_PRD_PI-PROD_START_DATE gt p_from_date .
-      CONTINUE.
-     ENDIF.
-    ENDIF.
-    lv_date = p_from_date .
-    DO .
-      IF lv_date GT p_to_date.
-        EXIT .
+    CLEAR gs_zpra_t_prd_pi.
+    READ TABLE gt_zpra_t_prd_pi_3f INTO gs_zpra_t_prd_pi
+      WITH KEY asset = ls_zpra_c_prd_prof-asset
+               block = ls_zpra_c_prd_prof-block.
+    IF sy-subrc = 0.
+      IF gs_zpra_t_prd_pi-prod_start_date GT p_from_date.
+        CONTINUE.
       ENDIF.
-      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                  asset           = ls_zpra_c_prd_prof-asset
-                                                                  production_date = lv_date BINARY SEARCH .
+    ENDIF.
+    lv_date = p_from_date.
+    DO.
+      IF lv_date GT p_to_date.
+        EXIT.
+      ENDIF.
+      READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+        WITH KEY product         = ls_zpra_c_prd_prof-product
+                 asset           = ls_zpra_c_prd_prof-asset
+                 production_date = lv_date BINARY SEARCH.
       IF sy-subrc IS NOT INITIAL.
+        lv_insert_pos = sy-tabix.
         lv_date2 = lv_date - 1.
-        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                    asset           = ls_zpra_c_prd_prof-asset
-                                                                    production_date = lv_date2 BINARY SEARCH .
-        IF sy-subrc IS INITIAL .
-          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd WITH KEY product         = ls_zpra_c_prd_prof-product
-                                                                      asset           = ls_zpra_c_prd_prof-asset
-                                                                      production_date = lv_date2
-                                                                      block           = ls_zpra_c_prd_prof-block .
+        READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+          WITH KEY product         = ls_zpra_c_prd_prof-product
+                   asset           = ls_zpra_c_prd_prof-asset
+                   production_date = lv_date2 BINARY SEARCH.
+        IF sy-subrc IS INITIAL.
+          READ TABLE p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd
+            WITH KEY product         = ls_zpra_c_prd_prof-product
+                     asset           = ls_zpra_c_prd_prof-asset
+                     production_date = lv_date2
+                     block           = ls_zpra_c_prd_prof-block.
           IF sy-subrc IS INITIAL.
-            lv_index = sy-tabix .
+            lv_index = sy-tabix.
             LOOP AT p_zpra_t_dly_prd INTO ls_zpra_t_dly_prd FROM lv_index.
-              IF ls_zpra_t_dly_prd-product          NE ls_zpra_c_prd_prof-product OR
-                 ls_zpra_t_dly_prd-asset            NE ls_zpra_c_prd_prof-asset   OR
-                 ls_zpra_t_dly_prd-production_date  NE lv_date2                   .
-                EXIT .
+              IF ls_zpra_t_dly_prd-product         NE ls_zpra_c_prd_prof-product OR
+                 ls_zpra_t_dly_prd-asset           NE ls_zpra_c_prd_prof-asset   OR
+                 ls_zpra_t_dly_prd-production_date NE lv_date2.
+                EXIT.
               ENDIF.
-              ls_zpra_t_dly_prd-production_date = lv_date .
-              APPEND ls_zpra_t_dly_prd TO p_zpra_t_dly_prd .
-              insert ZPRA_DLY_PRD_ND FROM ls_zpra_t_dly_prd.
+              ls_zpra_t_dly_prd-production_date = lv_date.
+              INSERT ls_zpra_t_dly_prd INTO p_zpra_t_dly_prd INDEX lv_insert_pos.
+              lv_insert_pos = lv_insert_pos + 1.
+              INSERT zpra_dly_prd_nd FROM ls_zpra_t_dly_prd.
             ENDLOOP.
-            SORT p_zpra_t_dly_prd BY product asset production_date block prd_vl_type DESCENDING.
           ENDIF.
         ENDIF.
       ENDIF.
-      lv_date = lv_date + 1 .
+      lv_date = lv_date + 1.
     ENDDO.
   ENDLOOP.
 
