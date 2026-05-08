@@ -2332,10 +2332,11 @@ FORM save_data_to_db.
   LOOP AT lt_gail_id_map INTO ls_gail_id_map.
     CLEAR: lv_total_vol, lv_sum_vol_gcv, lv_sum_vol_ncv, lv_total_mbg, lv_total_scm.
     CLEAR ls_cst_fnt.
-    " Sum quantities and calculate weighted averages for this Location-Material-State
+    " Sum quantities and calculate weighted averages for this Location-Material-ONGC Material-State
     LOOP AT lt_cst_pur INTO ls_cst_pur
       WHERE location     = ls_gail_id_map-location_id
         AND material     = ls_gail_id_map-material
+        AND ongc_mater   = ls_gail_id_map-ongc_material
         AND state_code   = ls_gail_id_map-state_code
         AND exclude      IS INITIAL.
       " Accumulate totals
@@ -2355,18 +2356,20 @@ FORM save_data_to_db.
     " Fallback: if CTP still not set, get from gas receipt directly
     IF ls_cst_fnt-ctp IS INITIAL.
       READ TABLE gt_alv_display INTO gs_alv_display
-        WITH KEY location_id = ls_gail_id_map-location_id
-                 material    = ls_gail_id_map-material
-                 state_code  = ls_gail_id_map-state_code.
+        WITH KEY location_id  = ls_gail_id_map-location_id
+                 material     = ls_gail_id_map-material
+                 ongc_material = ls_gail_id_map-ongc_material
+                 state_code   = ls_gail_id_map-state_code.
       IF sy-subrc = 0.
         READ TABLE gt_gas_receipt INTO DATA(ls_fnt_receipt)
           WITH KEY location_id   = ls_gail_id_map-location_id
                    material      = ls_gail_id_map-material
-                   ongc_material = gs_alv_display-ongc_material.
+                   ongc_material = ls_gail_id_map-ongc_material.
       ELSE.
         READ TABLE gt_gas_receipt INTO ls_fnt_receipt
-          WITH KEY location_id = ls_gail_id_map-location_id
-                   material    = ls_gail_id_map-material.
+          WITH KEY location_id   = ls_gail_id_map-location_id
+                   material      = ls_gail_id_map-material
+                   ongc_material = ls_gail_id_map-ongc_material.
       ENDIF.
       IF sy-subrc = 0.
         ls_cst_fnt-ctp        = ls_fnt_receipt-ctp_id.
@@ -2376,18 +2379,20 @@ FORM save_data_to_db.
     " Get state description from ALV display if not yet set
     IF ls_cst_fnt-state IS INITIAL.
       READ TABLE gt_alv_display INTO gs_alv_display
-        WITH KEY location_id = ls_gail_id_map-location_id
-                 material    = ls_gail_id_map-material
-                 state_code  = ls_gail_id_map-state_code.
+        WITH KEY location_id  = ls_gail_id_map-location_id
+                 material     = ls_gail_id_map-material
+                 ongc_material = ls_gail_id_map-ongc_material
+                 state_code   = ls_gail_id_map-state_code.
       IF sy-subrc = 0.
         ls_cst_fnt-state = gs_alv_display-state.
       ENDIF.
     ENDIF.
     " Get GCV/NCV/MBG from ALV display to match what user sees on screen
     READ TABLE gt_alv_display INTO gs_alv_display
-      WITH KEY location_id = ls_gail_id_map-location_id
-               material    = ls_gail_id_map-material
-               state_code  = ls_gail_id_map-state_code.
+      WITH KEY location_id  = ls_gail_id_map-location_id
+               material     = ls_gail_id_map-material
+               ongc_material = ls_gail_id_map-ongc_material
+               state_code   = ls_gail_id_map-state_code.
     IF sy-subrc = 0.
       lv_avg_gcv   = gs_alv_display-gcv.
       lv_avg_ncv   = gs_alv_display-ncv.
@@ -2399,6 +2404,9 @@ FORM save_data_to_db.
       ENDIF.
     ENDIF.
     " Populate fortnightly record
+    IF ls_cst_fnt-ongc_mater IS INITIAL.
+      ls_cst_fnt-ongc_mater = ls_gail_id_map-ongc_material.
+    ENDIF.
     ls_cst_fnt-date_from    = gv_date_from.
     ls_cst_fnt-date_to      = gv_date_to.
     ls_cst_fnt-location     = ls_gail_id_map-location_id.
