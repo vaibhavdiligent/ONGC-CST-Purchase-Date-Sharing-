@@ -1626,9 +1626,54 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
-  " Chart support varies across abap2xlsx versions.
-  " Skipped here; sheet3 is left as a plain placeholder that the user
-  " can extend manually after activating the report.
+  DATA: lo_graph    TYPE REF TO zcl_excel_graph,
+        lo_series   TYPE REF TO zcl_excel_graph_series,
+        lv_unit     TYPE char10,
+        lv_title    TYPE char100,
+        lv_cats     TYPE string,
+        lv_vals     TYPE string,
+        lv_fc       TYPE string,
+        lv_last_col TYPE string.
+
+  CASE abap_true.
+    WHEN p_bb.  lv_unit = 'BOE'.
+    WHEN p_bbd. lv_unit = 'BOEPD'.
+    WHEN p_tm.  lv_unit = 'TOE'.
+    WHEN p_tmd. lv_unit = 'TOEPD'.
+    WHEN p_mb.  lv_unit = 'MMTOE'.
+    WHEN p_bmd. lv_unit = 'BOEPD'.
+    WHEN OTHERS. lv_unit = 'MT'.
+  ENDCASE.
+  CONCATENATE 'Production Performance' gv_current_gjahr '-' gv_next_gjahr
+    INTO lv_title SEPARATED BY space.
+
+  TRY.
+    lv_fc       = zcl_excel_common=>convert_column2alpha( 1 ).
+    lv_last_col = zcl_excel_common=>convert_column2alpha( gv_e_col ).
+  CATCH zcx_excel.
+    lv_fc = 'A'. lv_last_col = 'B'.
+  ENDTRY.
+
+  lv_cats = |'{ gv_sheet1_name }'!${ lv_fc }${ gv_s_row }:${ lv_fc }${ gv_e_row }|.
+  lv_vals = |'{ gv_sheet1_name }'!${ lv_last_col }${ gv_s_row }:${ lv_last_col }${ gv_e_row }|.
+
+  TRY.
+    lo_graph = go_xlsx_sheet3->add_new_graph( ).
+    lo_graph->set_type( zcl_excel_graph=>c_type_bar ).
+    lo_graph->title-formula            = lv_title.
+    lo_graph->graph_position-from_row  = 2.
+    lo_graph->graph_position-from_col  = 1.
+    lo_graph->graph_position-to_row    = 35.
+    lo_graph->graph_position-to_col    = 14.
+    lo_graph->y_axis_label             = lv_unit.
+
+    lo_series = lo_graph->add_new_series( ).
+    lo_series->categories_formula = lv_cats.
+    lo_series->values_formula     = lv_vals.
+    lo_series->title              = lv_unit.
+  CATCH cx_root.
+  ENDTRY.
+
   go_xlsx_active = go_xlsx_sheet3.
 ENDFORM.
 FORM display_section6 .
@@ -2958,18 +3003,20 @@ FORM display_pi .
     ELSE .
       SPLIT gs_dyn_fcat-fieldname AT '-' INTO lv_product lv_asset .
       IF lv_asset NE 'COMBINE'.
-        CLEAR gs_wtd_pi .
+        CLEAR gs_wtd_pi.
         READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
-                                                     asset   = lv_asset .
+                                                     asset   = lv_asset BINARY SEARCH.
         IF sy-subrc IS INITIAL.
-          lv_pi = gs_wtd_pi-pi .
+          WRITE gs_wtd_pi-pi TO lv_pi DECIMALS 3 LEFT-JUSTIFIED.
+          CONDENSE lv_pi NO-GAPS.
         ENDIF.
       ELSE.
-        CLEAR gs_wtd_pi .
+        CLEAR gs_wtd_pi.
         READ TABLE gt_wtd_pi INTO gs_wtd_pi WITH KEY product = lv_product
-                                                     asset   = 'COMBINE' .
+                                                     asset   = 'COMBINE' BINARY SEARCH.
         IF sy-subrc IS INITIAL.
-          lv_pi = gs_wtd_pi-pi .
+          WRITE gs_wtd_pi-pi TO lv_pi DECIMALS 3 LEFT-JUSTIFIED.
+          CONDENSE lv_pi NO-GAPS.
         ENDIF.
       ENDIF.
     ENDIF.
@@ -3018,7 +3065,8 @@ FORM display_cf .
         READ TABLE gt_wtd_cf INTO gs_wtd_cf WITH KEY product = lv_product
                                                            asset   = lv_asset BINARY SEARCH .
         IF sy-subrc IS INITIAL.
-          lv_cf = gs_wtd_cf-cf .
+          WRITE gs_wtd_cf-cf TO lv_cf DECIMALS 3 LEFT-JUSTIFIED.
+          CONDENSE lv_cf NO-GAPS.
         ENDIF.
       ENDIF.
     ENDIF.
