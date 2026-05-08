@@ -10,7 +10,7 @@
 *&        chart data references remain on sheet2 (hidden source data).
 *&        display_section6 now explicitly activates sheet3 so section-6 headers write to
 *&        the correct sheet instead of spilling onto the hidden source-data sheet.
-*&        Sheet2 (DPR_2) hidden: iv_sheet_visible set to 'hidden'.
+*&        Sheet2 (DPR_2): attempted hide skipped - attribute not in installed abap2xlsx.
 *& v4.1 - Numeric values: all paste_data forms now strip leading/trailing spaces and
 *&        write numbers as DECFLOAT34 (not text strings) via new set_cell_auto helper.
 *&        Chart: fixed to reference sheet2 (DPR_2) where section-5a data lives;
@@ -2008,8 +2008,8 @@ FORM start_excel .
       go_xlsx_sheet1->set_title( ip_title = lv_t1 ).
       go_xlsx_sheet2->set_title( ip_title = lv_t2 ).
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
-      " Hide sheet2 - it is source data for chart only (original OLE2: Visible=0)
-      go_xlsx_sheet2->iv_sheet_visible = 'hidden'.
+      " Note: sheet2 (DPR_2) should be hidden (OLE2: Visible=0) but abap2xlsx
+      " does not expose an attribute for this in the installed version.
     CATCH zcx_excel.
   ENDTRY.
 
