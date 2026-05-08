@@ -4,11 +4,12 @@
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
 *& VERSION : 4.5 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
-*& v4.5 - Page setup: sheet1 (DPR) and sheet3 (Production Performance) set to
-*&        landscape orientation with fit_to_width=1 / fit_to_height=0 / scale=0,
-*&        matching original OLE2 PageSetup (Orientation=2/xlLandscape,
-*&        FitToPagesWide=1, FitToPagesTall=0). OLD PDF = 792x612 landscape 2pp;
-*&        NEW PDF was 612x792 portrait 46pp - now fixed to landscape.
+*& v4.5 - Landscape PDF fix: abap2xlsx does not expose page_setup attribute in
+*&        this installed version (compile error "Field PAGE_SETUP is unknown").
+*&        Page orientation is now set via OLE2 inside export_pdf_via_ole2:
+*&        Worksheets(1) and Worksheets(3) get Orientation=2/xlLandscape,
+*&        FitToPagesWide=1, FitToPagesTall=0 before ExportAsFixedFormat.
+*&        OLD PDF = 792x612 landscape 2pp; NEW was 612x792 portrait 46pp.
 *& v4.4 - Border fix: set_numberformat and set_range_formatting now include thin
 *&        borders in their area styles so empty cells in non-fill rows still get
 *&        borders. Previously alignment/numfmt area styles (registered after
@@ -2020,17 +2021,9 @@ FORM start_excel .
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
       " Note: sheet2 ('2') should be hidden (OLE2: Visible=0) - abap2xlsx does
       " not expose this attribute; sheet stays visible in the xlsx file.
-
-      " Page setup: landscape + fit-to-1-page-wide (matches OLE2 PageSetup:
-      " Orientation=2/xlLandscape, FitToPagesWide=1, FitToPagesTall=0)
-      go_xlsx_sheet1->page_setup->orientation  = 'landscape'.
-      go_xlsx_sheet1->page_setup->fit_to_width  = 1.
-      go_xlsx_sheet1->page_setup->fit_to_height = 0.
-      go_xlsx_sheet1->page_setup->scale         = 0.
-      go_xlsx_sheet3->page_setup->orientation  = 'landscape'.
-      go_xlsx_sheet3->page_setup->fit_to_width  = 1.
-      go_xlsx_sheet3->page_setup->fit_to_height = 0.
-      go_xlsx_sheet3->page_setup->scale         = 0.
+      " Note: page orientation (landscape) is set via OLE2 inside
+      " export_pdf_via_ole2 because abap2xlsx does not expose page_setup
+      " in this installed version.
     CATCH zcx_excel.
   ENDTRY.
 
@@ -6924,11 +6917,13 @@ ENDFORM.
 FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
                                p_datum_ext  TYPE char10
                                p_uzeit_ext  TYPE char8.
-  " Open the saved XLSX in Excel via OLE2 and export as PDF.
-  " This replicates the original OLE2 program's ExportAsFixedFormat call.
+  " Open the saved XLSX in Excel via OLE2, apply landscape page setup on
+  " sheet1 and sheet3, then export as PDF - matching original OLE2 behaviour.
   DATA: lo_app     TYPE ole2_object,
         lo_wkbooks TYPE ole2_object,
         lo_wkbook  TYPE ole2_object,
+        lo_ws      TYPE ole2_object,
+        lo_ps      TYPE ole2_object,
         lv_pdf     TYPE string.
 
   CONCATENATE p_fname '\DPR -' gv_repdate_e ' - On -' p_datum_ext '-' p_uzeit_ext '.PDF'
@@ -6945,6 +6940,24 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
   CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook
     EXPORTING
       #1 = p_xlsx_fname.
+
+  " Set landscape + fit-to-1-page-wide on sheet1 (DPR)
+  SET PROPERTY OF lo_app 'PrintCommunication' = 0.
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws EXPORTING #1 = 1.
+  CALL METHOD OF lo_ws 'PageSetup' = lo_ps.
+  SET PROPERTY OF lo_ps 'Orientation'    = 2.  " 2 = xlLandscape
+  SET PROPERTY OF lo_ps 'FitToPagesWide' = 1.
+  SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
+  SET PROPERTY OF lo_app 'PrintCommunication' = 1.
+
+  " Set landscape + fit-to-1-page-wide on sheet3 (Production Performance)
+  SET PROPERTY OF lo_app 'PrintCommunication' = 0.
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws EXPORTING #1 = 3.
+  CALL METHOD OF lo_ws 'PageSetup' = lo_ps.
+  SET PROPERTY OF lo_ps 'Orientation'    = 2.
+  SET PROPERTY OF lo_ps 'FitToPagesWide' = 1.
+  SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
+  SET PROPERTY OF lo_app 'PrintCommunication' = 1.
 
   CALL METHOD OF lo_wkbook 'ExportAsFixedFormat'
     EXPORTING
