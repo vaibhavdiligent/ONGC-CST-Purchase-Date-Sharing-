@@ -385,13 +385,16 @@ CLASS lcl_event_handler IMPLEMENTATION.
   ENDMETHOD.
   METHOD handle_data_changed.
     DATA: ls_mod_cell TYPE lvc_s_modi.
+    DATA: lv_clean_val TYPE string.
     " First apply the changed values to gt_alv_display
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod_cell.
       READ TABLE gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_row>) INDEX ls_mod_cell-row_id.
       IF sy-subrc = 0.
         ASSIGN COMPONENT ls_mod_cell-fieldname OF STRUCTURE <fs_row> TO FIELD-SYMBOL(<fs_field>).
         IF sy-subrc = 0.
-          <fs_field> = ls_mod_cell-value.
+          lv_clean_val = ls_mod_cell-value.
+          REPLACE ALL OCCURRENCES OF ',' IN lv_clean_val WITH ''.
+          <fs_field> = lv_clean_val.
         ENDIF.
         " Exclude checkbox is now read-only - controlled by YRGA_CST_EXCLUDE master table
       ENDIF.
@@ -494,6 +497,16 @@ START-OF-SELECTION.
       PERFORM build_alv_display_table.
       " Apply exclusion logic from YRGA_CST_EXCLUDE master (Feature 1)
       PERFORM apply_exclusion_from_master.
+      IF gt_alv_display IS INITIAL.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'No Data'
+            txt1  = 'No allocation data found.'
+            txt2  = ''
+            txt3  = ''
+            txt4  = ''.
+        RETURN.
+      ENDIF.
     ELSE.
       " View -> Allocation Details: same as existing view logic
       PERFORM build_alv_display_table_view.
@@ -2130,10 +2143,11 @@ ENDFORM.
 FORM save_data_to_db.
   " Type for GAIL ID mapping
   TYPES: BEGIN OF ty_gail_id_map,
-           location_id TYPE ygms_de_loc_id,
-           material    TYPE ygms_de_gail_mat,
-           state_code  TYPE regio,
-           gail_id     TYPE c LENGTH 14,
+           location_id   TYPE ygms_de_loc_id,
+           material      TYPE ygms_de_gail_mat,
+           ongc_material TYPE ygms_de_ongc_mat,
+           state_code    TYPE regio,
+           gail_id       TYPE c LENGTH 14,
          END OF ty_gail_id_map.
   " Type for error log
   TYPES: BEGIN OF ty_error_log,
@@ -2194,12 +2208,13 @@ FORM save_data_to_db.
   CONCATENATE 'GA' gv_date_from+2(2) gv_date_from+4(2) lv_fortnight INTO lv_gail_prefix.
   " Initialize error flag
   lv_error_found = abap_false.
-  " First pass: Generate unique GAIL_IDs for each Location-Material-State combination
+  " First pass: Generate unique GAIL_IDs for each Location-Material-ONGC Material-State combination
   LOOP AT gt_alv_display INTO gs_alv_display.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
-      WITH KEY location_id = gs_alv_display-location_id
-               material    = gs_alv_display-material
-               state_code  = gs_alv_display-state_code.
+      WITH KEY location_id   = gs_alv_display-location_id
+               material      = gs_alv_display-material
+               ongc_material = gs_alv_display-ongc_material
+               state_code    = gs_alv_display-state_code.
     IF sy-subrc <> 0.
       " Get next number from number range
       CALL FUNCTION 'NUMBER_GET_NEXT'
@@ -2211,9 +2226,10 @@ FORM save_data_to_db.
           returncode  = lv_return_code.
       IF lv_return_code IS INITIAL OR lv_return_code = '1'.
         CLEAR ls_gail_id_map.
-        ls_gail_id_map-location_id = gs_alv_display-location_id.
-        ls_gail_id_map-material    = gs_alv_display-material.
-        ls_gail_id_map-state_code  = gs_alv_display-state_code.
+        ls_gail_id_map-location_id   = gs_alv_display-location_id.
+        ls_gail_id_map-material      = gs_alv_display-material.
+        ls_gail_id_map-ongc_material = gs_alv_display-ongc_material.
+        ls_gail_id_map-state_code    = gs_alv_display-state_code.
         CONCATENATE lv_gail_prefix lv_seq_number INTO ls_gail_id_map-gail_id.
         APPEND ls_gail_id_map TO lt_gail_id_map.
       ENDIF.
@@ -2222,9 +2238,10 @@ FORM save_data_to_db.
   " Second pass: Create daily records for YRGA_CST_PUR (include excluded rows too)
   LOOP AT gt_alv_display INTO gs_alv_display.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
-      WITH KEY location_id = gs_alv_display-location_id
-               material    = gs_alv_display-material
-               state_code  = gs_alv_display-state_code.
+      WITH KEY location_id   = gs_alv_display-location_id
+               material      = gs_alv_display-material
+               ongc_material = gs_alv_display-ongc_material
+               state_code    = gs_alv_display-state_code.
     lv_date = gv_date_from.
     DATA lv_save_days TYPE i.
     lv_save_days = gv_date_to - gv_date_from + 1.
@@ -2409,6 +2426,7 @@ FORM save_data_to_db.
       INTO TABLE lt_gail_ids
       WHERE location    = ls_gail_id_map-location_id
         AND material    = ls_gail_id_map-material
+        AND ongc_mater  = ls_gail_id_map-ongc_material
         AND state_code  = ls_gail_id_map-state_code
         AND gas_day    BETWEEN gv_date_from AND gv_date_to
       AND deleted = ' '.
@@ -3011,8 +3029,8 @@ ENDFORM.
 *& Send email with PDF and/or Excel attachments using CL_BCS
 *&---------------------------------------------------------------------*
 FORM send_email USING pt_emails   TYPE string_table
-                      pt_data     TYPE TABLE OF yrga_cst_pur
-                      pt_fnt_data TYPE TABLE OF yrga_cst_fn_data
+                      pt_data     LIKE lt_send_data
+                      pt_fnt_data LIKE lt_send_data_fn
                       pv_send_pdf TYPE c
                       pv_send_xls TYPE c.
   DATA: lo_send_request TYPE REF TO cl_bcs,
@@ -3710,7 +3728,7 @@ FORM build_pdf_attachment USING pt_data    TYPE STANDARD TABLE
       ASSIGN COMPONENT lv_comp_nm OF STRUCTURE ls_piv_mbg TO <fs_cell>.
       IF sy-subrc = 0.
         IF lv_read_rc = 0.
-          WRITE ls_pur-qty_in_mbg TO lv_val14 DECIMALS 3.
+          WRITE ls_pur-qty_in_scm TO lv_val14 DECIMALS 3.
           CONDENSE lv_val14.
           <fs_cell> = lv_val14.
         ELSE.
@@ -4970,11 +4988,11 @@ FORM build_alv_display_table_view .
       AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
     SORT it_yrga_cst_pur BY created_date DESCENDING created_time DESCENDING.
-    DELETE ADJACENT DUPLICATES FROM it_yrga_cst_pur COMPARING gas_day location material state_code.
+    DELETE ADJACENT DUPLICATES FROM it_yrga_cst_pur COMPARING gas_day location material ongc_mater state_code.
     MOVE it_yrga_cst_pur[] TO it_cst_pur_temp[].
-    SORT it_cst_pur_temp BY location material state_code.
-    DELETE ADJACENT DUPLICATES FROM it_cst_pur_temp COMPARING location material state_code.
-    SORT it_yrga_cst_pur BY gas_day location material state_code.
+    SORT it_cst_pur_temp BY location material ongc_mater state_code.
+    DELETE ADJACENT DUPLICATES FROM it_cst_pur_temp COMPARING location material ongc_mater state_code.
+    SORT it_yrga_cst_pur BY gas_day location material ongc_mater state_code.
     LOOP AT it_cst_pur_temp INTO DATA(wa_csr_pur_temp).
       ls_alv-state_code  = wa_csr_pur_temp-state_code.
       ls_alv-state       = wa_csr_pur_temp-state.
@@ -4986,6 +5004,7 @@ FORM build_alv_display_table_view .
       LOOP AT it_yrga_cst_pur INTO DATA(wa_yrga_cst_pur)
         WHERE location   = wa_csr_pur_temp-location
           AND material   = wa_csr_pur_temp-material
+          AND ongc_mater = wa_csr_pur_temp-ongc_mater
           AND state_code = wa_csr_pur_temp-state_code.
         l_index = l_index + 1.
         CLEAR l_day.
@@ -5682,11 +5701,6 @@ FORM display_saved_daily_alv.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED'.
-    ls_fieldcat-seltext_l = 'Deletion flag'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
   ELSE.
     " View Saved Data: show all YRGA_CST_PUR columns except timestamp
     " Layout matches YRGA_CST_PUR table field order
@@ -5822,36 +5836,6 @@ FORM display_saved_daily_alv.
     ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED'.
-    ls_fieldcat-seltext_l = 'Deletion flag'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED_BY'.
-    ls_fieldcat-seltext_l = 'Deleted By'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED_ON'.
-    ls_fieldcat-seltext_l = 'Deletion date'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETE_AT'.
-    ls_fieldcat-seltext_l = 'Deleted At'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED_RESON'.
-    ls_fieldcat-seltext_l = 'Deletion Reason'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 17.
-    APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
@@ -5969,11 +5953,6 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-outputlen = 8.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED'.
-    ls_fieldcat-seltext_l = 'Deletion flag'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
   ELSE.
     " View Saved Data: show all YRGA_CST_FN_DATA columns except timestamp
     " Layout matches YRGA_CST_FN_DATA table field order
@@ -6103,35 +6082,6 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED'.
-    ls_fieldcat-seltext_l = 'Deletion flag'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED_BY'.
-    ls_fieldcat-seltext_l = 'Deleted By'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED_ON'.
-    ls_fieldcat-seltext_l = 'Deletion date'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETE_AT'.
-    ls_fieldcat-seltext_l = 'Deleted At'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
-    lv_col = lv_col + 1. CLEAR ls_fieldcat.
-    ls_fieldcat-fieldname = 'DELETED_RESON'.
-    ls_fieldcat-seltext_l = 'Deletion Reason'.
-    ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 17.
-    APPEND ls_fieldcat TO lt_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
@@ -6718,21 +6668,32 @@ FORM check_missing_locations.
     ENDIF.
   ENDLOOP.
   IF lt_missing IS NOT INITIAL.
-    CLEAR lv_msg.
+    DATA: lt_popup_text TYPE TABLE OF tline,
+          ls_popup_line TYPE tline.
+    ls_popup_line-tdformat = '*'.
+    ls_popup_line-tdline   = 'Receipt data not present for Location IDs:'.
+    APPEND ls_popup_line TO lt_popup_text.
     LOOP AT lt_missing INTO lv_loc.
-      IF lv_msg IS INITIAL.
-        lv_msg = lv_loc.
-      ELSE.
-        CONCATENATE lv_msg ',' lv_loc INTO lv_msg SEPARATED BY space.
-      ENDIF.
+      CLEAR ls_popup_line.
+      ls_popup_line-tdformat = ' '.
+      ls_popup_line-tdline   = lv_loc.
+      APPEND ls_popup_line TO lt_popup_text.
     ENDLOOP.
-    CALL FUNCTION 'POPUP_TO_INFORM'
+    CLEAR ls_popup_line.
+    ls_popup_line-tdformat = ' '.
+    ls_popup_line-tdline   = ' '.
+    APPEND ls_popup_line TO lt_popup_text.
+    CLEAR ls_popup_line.
+    ls_popup_line-tdformat = '*'.
+    ls_popup_line-tdline   = 'Program cannot proceed.'.
+    APPEND ls_popup_line TO lt_popup_text.
+    CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
       EXPORTING
-        titel = 'Missing Receipt Data'
-        txt1  = 'Receipt data not present for a few Location IDs.'
-        txt2  = lv_msg
-        txt3  = 'Program cannot proceed.'
-        txt4  = ''.
+        titel    = 'Missing Receipt Data'
+        start_column = 20
+        start_row    = 5
+      TABLES
+        text_tab = lt_popup_text.
     CLEAR gt_gas_receipt.
   ENDIF.
 ENDFORM.
