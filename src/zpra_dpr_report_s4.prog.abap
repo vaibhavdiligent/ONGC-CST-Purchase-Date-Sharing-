@@ -3,7 +3,12 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.4 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.5 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.5 - Page setup: sheet1 (DPR) and sheet3 (Production Performance) set to
+*&        landscape orientation with fit_to_width=1 / fit_to_height=0 / scale=0,
+*&        matching original OLE2 PageSetup (Orientation=2/xlLandscape,
+*&        FitToPagesWide=1, FitToPagesTall=0). OLD PDF = 792x612 landscape 2pp;
+*&        NEW PDF was 612x792 portrait 46pp - now fixed to landscape.
 *& v4.4 - Border fix: set_numberformat and set_range_formatting now include thin
 *&        borders in their area styles so empty cells in non-fill rows still get
 *&        borders. Previously alignment/numfmt area styles (registered after
@@ -2015,6 +2020,17 @@ FORM start_excel .
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
       " Note: sheet2 ('2') should be hidden (OLE2: Visible=0) - abap2xlsx does
       " not expose this attribute; sheet stays visible in the xlsx file.
+
+      " Page setup: landscape + fit-to-1-page-wide (matches OLE2 PageSetup:
+      " Orientation=2/xlLandscape, FitToPagesWide=1, FitToPagesTall=0)
+      go_xlsx_sheet1->page_setup->orientation  = 'landscape'.
+      go_xlsx_sheet1->page_setup->fit_to_width  = 1.
+      go_xlsx_sheet1->page_setup->fit_to_height = 0.
+      go_xlsx_sheet1->page_setup->scale         = 0.
+      go_xlsx_sheet3->page_setup->orientation  = 'landscape'.
+      go_xlsx_sheet3->page_setup->fit_to_width  = 1.
+      go_xlsx_sheet3->page_setup->fit_to_height = 0.
+      go_xlsx_sheet3->page_setup->scale         = 0.
     CATCH zcx_excel.
   ENDTRY.
 
