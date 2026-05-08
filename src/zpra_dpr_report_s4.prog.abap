@@ -3,7 +3,23 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.3 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.7 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& v4.7 - Border fix: display_section4b (Remarks section) now applies a full-width
+*&        thin border covering cols 1..gv_table_columns for all Remarks rows, so
+*&        empty cells in cols 10+ get borders matching the main DPR table above.
+*& v4.6 - PDF chart fix: export_pdf_via_ole2 hides sheet2 via OLE2 (Visible=0)
+*&        then calls workbook-level ExportAsFixedFormat which exports all
+*&        visible sheets (sheet1 DPR + sheet3 chart). Removed Sheets.Select
+*&        which was crashing Excel, leaving it with a file lock on the XLSX
+*&        (causing 0 KB on the next run). Added sy-subrc check after Open and
+*&        always-close logic so Excel is freed even if export fails.
+*& v4.5 - Landscape PDF: orientation set via OLE2 PageSetup in export_pdf_via_ole2
+*&        (abap2xlsx page_setup attribute not available in this installed version).
+*& v4.4 - Border fix: set_numberformat and set_range_formatting now include thin
+*&        borders in their area styles so empty cells in non-fill rows still get
+*&        borders. Previously alignment/numfmt area styles (registered after
+*&        border_cells) were stripping borders under last-wins rule, leaving
+*&        rows 12, 14, ... (no-fill alternating rows) with missing cell borders.
 *& v4.3 - Sheet names corrected: sheet2='2' (was 'DPR_2'), sheet3='Production Performance'
 *&        (was 'Production_Performance'), matching original OLE2 output.
 *&        Date column: section-1 col-1 now stores Excel serial numbers (date-'19000101'+2)
@@ -1618,9 +1634,11 @@ FORM display_section4a .
 
 ENDFORM.
 FORM display_section4b .
-  DATA lv_lines TYPE sy-tabix .
+  DATA lv_lines    TYPE sy-tabix .
+  DATA lv_hdr_row  TYPE sy-tabix .   " first row of Remarks block
 
   gv_row   = gv_row + 2 .
+  lv_hdr_row = gv_row .              " capture for full-width border at end
   PERFORM select_range USING gv_row 1 gv_row 1  .
   PERFORM set_range USING 'Remarks' 0.
   PERFORM set_range_font  USING 13 1 .
@@ -1660,6 +1678,10 @@ FORM display_section4b .
   PERFORM set_thin_border USING 1 1 1 1 .
   PERFORM set_border_range USING 0 1 0 0.
 
+  " Full-width thin border covering all Remarks rows (cols 1..gv_table_columns)
+  " so empty cells in cols 10+ get borders matching the main DPR table above.
+  PERFORM select_range USING lv_hdr_row 1 gv_e_row gv_table_columns.
+  PERFORM set_all_borders_range.
 
   gv_row = gv_e_row .
 
@@ -2010,6 +2032,9 @@ FORM start_excel .
       go_xlsx_sheet3->set_title( ip_title = lv_t3 ).
       " Note: sheet2 ('2') should be hidden (OLE2: Visible=0) - abap2xlsx does
       " not expose this attribute; sheet stays visible in the xlsx file.
+      " Note: page orientation (landscape) is set via OLE2 inside
+      " export_pdf_via_ole2 because abap2xlsx does not expose page_setup
+      " in this installed version.
     CATCH zcx_excel.
   ENDTRY.
 
@@ -2114,6 +2139,8 @@ ENDFORM.
 FORM set_range_formatting USING p_wraptext
                                 p_horizontal
                                 p_vertical .
+  " Style includes thin borders so alignment area-style preserves cell borders
+  " when registered after border_cells (last-wins rule on area styles).
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   IF p_wraptext = 1.
@@ -2129,6 +2156,17 @@ FORM set_range_formatting USING p_wraptext
     WHEN 'T'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_top.
     WHEN 'B'. lo_style->alignment->vertical = zcl_excel_style_alignment=>c_vertical_bottom.
   ENDCASE.
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
       go_xlsx_active->set_area_style(
     ip_style     = lo_style->get_guid( )
@@ -3481,9 +3519,22 @@ FORM set_range_interior  USING    p_color.
   PERFORM set_fill_color USING p_color.
 ENDFORM.
 FORM set_numberformat USING p_format.
+  " Style includes thin borders so this area-style does not strip borders
+  " from cells when it is registered after border_cells (last-wins rule).
   DATA lo_style TYPE REF TO zcl_excel_style.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->number_format->format_code = p_format.
+  IF lo_style->borders IS NOT BOUND.
+    lo_style->borders = NEW zcl_excel_style_borders( ).
+  ENDIF.
+  lo_style->borders->left  = NEW zcl_excel_style_border( ).
+  lo_style->borders->right = NEW zcl_excel_style_border( ).
+  lo_style->borders->top   = NEW zcl_excel_style_border( ).
+  lo_style->borders->down  = NEW zcl_excel_style_border( ).
+  lo_style->borders->left->border_style  = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->right->border_style = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->top->border_style   = zcl_excel_style_border=>c_border_thin.
+  lo_style->borders->down->border_style  = zcl_excel_style_border=>c_border_thin.
   TRY.
       go_xlsx_active->set_area_style(
     ip_style     = lo_style->get_guid( )
@@ -6877,12 +6928,19 @@ ENDFORM.
 FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
                                p_datum_ext  TYPE char10
                                p_uzeit_ext  TYPE char8.
-  " Open the saved XLSX in Excel via OLE2 and export as PDF.
-  " This replicates the original OLE2 program's ExportAsFixedFormat call.
+  " Open saved XLSX in Excel via OLE2:
+  "  1. Hide sheet2 (data-source, matches original Visible=0)
+  "  2. Set landscape page setup on sheet1 and sheet3
+  "  3. Export workbook as PDF (all visible sheets = sheet1 + sheet3 with chart)
   DATA: lo_app     TYPE ole2_object,
         lo_wkbooks TYPE ole2_object,
         lo_wkbook  TYPE ole2_object,
-        lv_pdf     TYPE string.
+        lo_ws1     TYPE ole2_object,
+        lo_ws2     TYPE ole2_object,
+        lo_ws3     TYPE ole2_object,
+        lo_ps      TYPE ole2_object,
+        lv_pdf     TYPE string,
+        lv_rc      TYPE i.
 
   CONCATENATE p_fname '\DPR -' gv_repdate_e ' - On -' p_datum_ext '-' p_uzeit_ext '.PDF'
     INTO lv_pdf.
@@ -6893,26 +6951,77 @@ FORM export_pdf_via_ole2 USING p_xlsx_fname TYPE string
     RETURN.
   ENDIF.
 
-  SET PROPERTY OF lo_app 'Visible' = 0.
-  CALL METHOD OF lo_app 'Workbooks' = lo_wkbooks.
-  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook
-    EXPORTING
-      #1 = p_xlsx_fname.
+  " Suppress all Excel dialogs - prevents prompts from blocking OLE2 and
+  " leaving Excel open with a file lock on the XLSX.
+  SET PROPERTY OF lo_app 'Visible'        = 0.
+  SET PROPERTY OF lo_app 'DisplayAlerts'  = 0.
+  SET PROPERTY OF lo_app 'AskToUpdateLinks' = 0.
 
+  CALL METHOD OF lo_app 'Workbooks' = lo_wkbooks.
+  " Open with UpdateLinks=0 (no link prompts), ReadOnly=False (need page-setup write)
+  CALL METHOD OF lo_wkbooks 'Open' = lo_wkbook
+    EXPORTING #1 = p_xlsx_fname #2 = 0.
+  IF sy-subrc <> 0.
+    SET PROPERTY OF lo_app 'DisplayAlerts' = 1.
+    CALL METHOD OF lo_app 'Quit'.
+    MESSAGE 'PDF export skipped: could not open XLSX in Excel' TYPE 'W'.
+    RETURN.
+  ENDIF.
+
+  " Get worksheet references
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws1 EXPORTING #1 = 1.
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws2 EXPORTING #1 = 2.
+  CALL METHOD OF lo_wkbook 'Worksheets' = lo_ws3 EXPORTING #1 = 3.
+
+  " Hide sheet2 (chart data source) - matches original OLE2: Visible=0
+  " Must do this BEFORE page-setup calls to avoid touching a hidden sheet later
+  SET PROPERTY OF lo_ws2 'Visible' = 0.
+
+  " Set landscape + fit-to-1-page-wide on sheet1 (DPR)
+  SET PROPERTY OF lo_app 'PrintCommunication' = 0.
+  CALL METHOD OF lo_ws1 'PageSetup' = lo_ps.
+  SET PROPERTY OF lo_ps 'Orientation'    = 2.   " 2 = xlLandscape
+  SET PROPERTY OF lo_ps 'FitToPagesWide' = 1.
+  SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
+  SET PROPERTY OF lo_app 'PrintCommunication' = 1.
+
+  " Set landscape + fit-to-1-page-wide on sheet3 (Production Performance)
+  SET PROPERTY OF lo_app 'PrintCommunication' = 0.
+  CALL METHOD OF lo_ws3 'PageSetup' = lo_ps.
+  SET PROPERTY OF lo_ps 'Orientation'    = 2.
+  SET PROPERTY OF lo_ps 'FitToPagesWide' = 1.
+  SET PROPERTY OF lo_ps 'FitToPagesTall' = 0.
+  SET PROPERTY OF lo_app 'PrintCommunication' = 1.
+
+  " Activate sheet1 so workbook export starts from the first sheet
+  CALL METHOD OF lo_ws1 'Activate'.
+
+  " Export the workbook as PDF - workbook-level export includes all VISIBLE
+  " sheets (sheet2 is now hidden so only sheet1 DPR + sheet3 chart are exported)
   CALL METHOD OF lo_wkbook 'ExportAsFixedFormat'
     EXPORTING
       #1 = 0          " xlTypePDF
       #2 = lv_pdf
       #3 = 0          " xlQualityStandard
       #4 = 1.         " IncludeDocProperties
+  lv_rc = sy-subrc.
 
+  " Always close workbook and quit Excel regardless of export outcome
   CALL METHOD OF lo_wkbook 'Close' EXPORTING #1 = 0.
+  SET PROPERTY OF lo_app 'DisplayAlerts' = 1.
   CALL METHOD OF lo_app 'Quit'.
+  FREE OBJECT lo_ws1.
+  FREE OBJECT lo_ws2.
+  FREE OBJECT lo_ws3.
   FREE OBJECT lo_wkbook.
   FREE OBJECT lo_wkbooks.
   FREE OBJECT lo_app.
 
-  MESSAGE |PDF saved: { lv_pdf }| TYPE 'S'.
+  IF lv_rc = 0.
+    MESSAGE |PDF saved: { lv_pdf }| TYPE 'S'.
+  ELSE.
+    MESSAGE |PDF export failed (rc={ lv_rc }). XLSX saved OK.| TYPE 'W'.
+  ENDIF.
 ENDFORM.
 
 FORM fill_dynamic_table_sec2d .
