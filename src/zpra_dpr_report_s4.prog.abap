@@ -1653,7 +1653,97 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
+  DATA: lo_drawing TYPE REF TO zcl_excel_drawing,
+        lo_graph   TYPE REF TO zcl_excel_graph_line,
+        lv_from_a  TYPE zexcel_cell_column_alpha,
+        lv_to_a    TYPE zexcel_cell_column_alpha,
+        lv_lbl_a   TYPE zexcel_cell_column_alpha,
+        lv_data_s  TYPE zexcel_cell_column,
+        lv_data_e  TYPE zexcel_cell_column,
+        lv_lbl_c   TYPE zexcel_cell_column,
+        lv_order   TYPE i,
+        lv_idx     TYPE i,
+        lv_title   TYPE zexcel_sheet_title,
+        lv_chart_r TYPE zexcel_cell_row,
+        lv_chart_a TYPE zexcel_cell_column_alpha,
+        lv_row     TYPE zexcel_cell_row,
+        lv_sername TYPE string,
+        lv_cval    TYPE zexcel_cell_value.
+
   go_xlsx_active = go_xlsx_sheet3.
+
+  IF gv_5a_rows IS INITIAL OR gv_5a_cols IS INITIAL OR gv_5a_cols < 2.
+    RETURN.
+  ENDIF.
+  IF gv_e_col <= gv_s_col OR gv_e_row <= gv_s_row.
+    RETURN.
+  ENDIF.
+
+  TRY.
+      lv_data_s = gv_s_col + 1.
+      lv_data_e = gv_e_col.
+      lv_lbl_c  = gv_s_col.
+
+      lv_from_a = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_s ).
+      lv_to_a   = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_e ).
+      lv_lbl_a  = zcl_excel_common=>convert_column2alpha( ip_column = lv_lbl_c ).
+
+      lv_title = 'Production_Performance'.
+
+      CREATE OBJECT lo_drawing
+        EXPORTING
+          ip_type  = zcl_excel_drawing=>type_chart
+          ip_title = 'Production Performance'.
+      lo_drawing->graph_type = zcl_excel_drawing=>c_graph_line.
+
+      CREATE OBJECT lo_graph.
+      lo_graph->set_title( ip_value = 'Production Performance' ).
+
+      lv_order = 0.
+      lv_idx   = 0.
+      lv_row   = gv_s_row + 1.
+      WHILE lv_row <= gv_e_row.
+        lv_order = lv_order + 1.
+        lv_idx   = lv_idx + 1.
+        CLEAR: lv_cval, lv_sername.
+        TRY.
+            go_xlsx_sheet3->get_cell(
+              EXPORTING ip_column = lv_lbl_c ip_row = lv_row
+              IMPORTING ep_value  = lv_cval ).
+            lv_sername = lv_cval.
+          CATCH zcx_excel.
+        ENDTRY.
+        IF lv_sername IS INITIAL.
+          lv_sername = |Series { lv_idx }|.
+        ENDIF.
+        lo_graph->create_serie(
+          ip_idx          = lv_idx
+          ip_order        = lv_order
+          ip_lbl_from_col = lv_from_a
+          ip_lbl_from_row = gv_s_row
+          ip_lbl_to_col   = lv_to_a
+          ip_lbl_to_row   = gv_s_row
+          ip_ref_from_col = lv_from_a
+          ip_ref_from_row = lv_row
+          ip_ref_to_col   = lv_to_a
+          ip_ref_to_row   = lv_row
+          ip_sername      = lv_sername
+          ip_sheet        = lv_title ).
+        lv_row = lv_row + 1.
+      ENDWHILE.
+
+      lo_drawing->graph = lo_graph.
+
+      lv_chart_r = gv_e_row + 2.
+      lv_chart_a = lv_lbl_a.
+      lo_drawing->set_position(
+        ip_from_row = lv_chart_r
+        ip_from_col = lv_chart_a ).
+
+      go_xlsx_sheet3->add_drawing( ip_drawing = lo_drawing ).
+
+    CATCH cx_root.
+  ENDTRY.
 ENDFORM.
 FORM display_section6 .
   DATA lv_lines TYPE sy-tabix .
