@@ -532,23 +532,23 @@ FORM fetch_pur_data.
       CLEAR ls_styl.
       ls_styl-fieldname = 'SEL'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
-      APPEND ls_styl TO ls_disp-celltab.
+      INSERT ls_styl INTO TABLE ls_disp-celltab.
       ls_styl-fieldname = 'CHARG'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
-      APPEND ls_styl TO ls_disp-celltab.
+      INSERT ls_styl INTO TABLE ls_disp-celltab.
       " Light grey row background for visual distinction
       CLEAR ls_col.
       ls_col-fname     = 'EXCLUDE'.
       ls_col-color-col = 7.
       ls_col-color-int = 0.
-      APPEND ls_col TO ls_disp-t_color.
+      INSERT ls_col INTO TABLE ls_disp-t_color.
     ELSE.
       ls_disp-exclude = ' '.
       ls_disp-sel     = ' '.
       CLEAR ls_styl.
       ls_styl-fieldname = 'CHARG'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
-      APPEND ls_styl TO ls_disp-celltab.
+      INSERT ls_styl INTO TABLE ls_disp-celltab.
 
       PERFORM derive_outline_agreement
         USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
@@ -561,7 +561,7 @@ FORM fetch_pur_data.
         ls_col-fname     = 'OUTLINE_AGR'.
         ls_col-color-col = 6.
         ls_col-color-int = 1.
-        APPEND ls_col TO ls_disp-t_color.
+        INSERT ls_col INTO TABLE ls_disp-t_color.
       ENDIF.
     ENDIF.
 
