@@ -515,6 +515,7 @@ FORM set_fill_color USING p_ole2_color TYPE i.
   lo_style = go_xlsx->add_new_style( ).
   lo_style->fill->filltype = zcl_excel_style_fill=>c_fill_solid.
   lo_style->fill->fgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
+  lo_style->fill->bgcolor-rgb = |FF{ lv_xr }{ lv_xg }{ lv_xb }|.
   lv_guid = lo_style->get_guid( ).
   TRY.
       lv_row = gv_s_row.
@@ -528,12 +529,19 @@ FORM set_fill_color USING p_ole2_color TYPE i.
                 IMPORTING ep_value  = lv_val ep_rc = lv_rc ).
             CATCH zcx_excel.
           ENDTRY.
-          lv_str = lv_val.
-          go_xlsx_active->set_cell(
-            ip_column = lv_col
-            ip_row    = lv_row
-            ip_value  = lv_str
-            ip_style  = lv_guid ).
+          IF lv_rc = 0 AND lv_val IS NOT INITIAL.
+            go_xlsx_active->set_cell_style(
+              ip_column = lv_col
+              ip_row    = lv_row
+              ip_style  = lv_guid ).
+          ELSE.
+            lv_str = ' '.
+            go_xlsx_active->set_cell(
+              ip_column = lv_col
+              ip_row    = lv_row
+              ip_value  = lv_str
+              ip_style  = lv_guid ).
+          ENDIF.
           lv_col = lv_col + 1.
         ENDWHILE.
         lv_row = lv_row + 1.
@@ -1648,85 +1656,7 @@ FORM display_section5a .
 
 ENDFORM.
 FORM create_chart .
-  DATA: lo_drawing TYPE REF TO zcl_excel_drawing,
-        lo_graph   TYPE REF TO zcl_excel_graph_line,
-        lv_from_a  TYPE zexcel_cell_column_alpha,
-        lv_to_a    TYPE zexcel_cell_column_alpha,
-        lv_lbl_a   TYPE zexcel_cell_column_alpha,
-        lv_data_s  TYPE zexcel_cell_column,
-        lv_data_e  TYPE zexcel_cell_column,
-        lv_lbl_c   TYPE zexcel_cell_column,
-        lv_order   TYPE i,
-        lv_idx     TYPE i,
-        lv_title   TYPE zexcel_sheet_title,
-        lv_chart_r TYPE zexcel_cell_row,
-        lv_chart_a TYPE zexcel_cell_column_alpha.
-
   go_xlsx_active = go_xlsx_sheet3.
-
-  IF gv_5a_rows IS INITIAL OR gv_5a_cols IS INITIAL OR gv_5a_cols < 2.
-    RETURN.
-  ENDIF.
-
-  TRY.
-      lv_data_s = gv_s_col + 1.
-      lv_data_e = gv_e_col.
-      lv_lbl_c  = gv_s_col.
-
-      lv_from_a = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_s ).
-      lv_to_a   = zcl_excel_common=>convert_column2alpha( ip_column = lv_data_e ).
-      lv_lbl_a  = zcl_excel_common=>convert_column2alpha( ip_column = lv_lbl_c ).
-
-      lv_title = gv_sheet3_name.
-      IF lv_title IS INITIAL.
-        lv_title = 'Production_Performance'.
-      ENDIF.
-
-      CREATE OBJECT lo_drawing
-        EXPORTING
-          ip_type  = zcl_excel_drawing=>type_chart
-          ip_title = 'Production Performance'.
-      lo_drawing->graph_type = zcl_excel_drawing=>c_graph_line.
-
-      CREATE OBJECT lo_graph.
-      lo_graph->set_title( ip_value = 'Production Performance' ).
-
-      lv_order = 0.
-      lv_idx   = 0.
-      DATA lv_row TYPE zexcel_cell_row.
-      lv_row = gv_s_row + 1.
-      WHILE lv_row <= gv_e_row.
-        lv_order = lv_order + 1.
-        lv_idx   = lv_idx + 1.
-        lo_graph->create_serie(
-          ip_idx          = lv_idx
-          ip_order        = lv_order
-          ip_smooth       = ' '
-          ip_lbl_from_col = lv_from_a
-          ip_lbl_from_row = gv_s_row
-          ip_lbl_to_col   = lv_to_a
-          ip_lbl_to_row   = gv_s_row
-          ip_ref_from_col = lv_from_a
-          ip_ref_from_row = lv_row
-          ip_ref_to_col   = lv_to_a
-          ip_ref_to_row   = lv_row
-          ip_sername      = ' '
-          ip_sheet        = lv_title ).
-        lv_row = lv_row + 1.
-      ENDWHILE.
-
-      lo_drawing->graph = lo_graph.
-
-      lv_chart_r = gv_e_row + 2.
-      lv_chart_a = lv_lbl_a.
-      lo_drawing->set_position(
-        ip_from_row = lv_chart_r
-        ip_from_col = lv_chart_a ).
-
-      go_xlsx_sheet3->add_drawing( ip_drawing = lo_drawing ).
-
-    CATCH cx_root.
-  ENDTRY.
 ENDFORM.
 FORM display_section6 .
   DATA lv_lines TYPE sy-tabix .
