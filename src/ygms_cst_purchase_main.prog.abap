@@ -576,9 +576,33 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    CONCATENATE 'No receipt data available for' s_loc-low 'for the entered period'
-          INTO DATA(l_error) SEPARATED BY space.
-    MESSAGE s000(ygms_msg) WITH l_error.
+    " Show wide popup listing all Location IDs with no receipt data
+    DATA: lt_no_data_text TYPE TABLE OF tline,
+          ls_no_data_line TYPE tline.
+    ls_no_data_line-tdformat = '*'.
+    ls_no_data_line-tdline   = 'Receipt data not found for a few Location IDs:'.
+    APPEND ls_no_data_line TO lt_no_data_text.
+    LOOP AT s_loc.
+      CLEAR ls_no_data_line.
+      ls_no_data_line-tdformat = ' '.
+      ls_no_data_line-tdline   = s_loc-low.
+      APPEND ls_no_data_line TO lt_no_data_text.
+    ENDLOOP.
+    CLEAR ls_no_data_line.
+    ls_no_data_line-tdformat = ' '.
+    ls_no_data_line-tdline   = ' '.
+    APPEND ls_no_data_line TO lt_no_data_text.
+    CLEAR ls_no_data_line.
+    ls_no_data_line-tdformat = '*'.
+    ls_no_data_line-tdline   = 'Program cannot proceed.'.
+    APPEND ls_no_data_line TO lt_no_data_text.
+    CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
+      EXPORTING
+        titel        = 'Missing Receipt Data'
+        start_column = 20
+        start_row    = 5
+      TABLES
+        text_tab     = lt_no_data_text.
     RETURN.
   ENDIF.
   IF lt_b2b_data[] IS NOT INITIAL.
@@ -741,12 +765,10 @@ FORM build_alv_display_table.
     ls_alv-state      = wa_final_main-regio_desc.
     ls_alv-material   = wa_final_main-matnr.
     ls_alv-location_id = wa_final_main-empst.
-    READ TABLE gt_gas_receipt INTO DATA(ls_rcpt_ongc)
-      WITH KEY location_id = wa_final_main-empst
-               material    = wa_final_main-matnr.
-    IF sy-subrc = 0.
-      ls_alv-ongc_material = ls_rcpt_ongc-ongc_material.
-    ENDIF.
+    " Leave ongc_material initial here; the static-aware loop below
+    " (around "Populate ONGC Material for all rows") will fill it
+    " using the correct state-aware filter so static ONGC materials
+    " are not assigned to states they are not mapped to.
     APPEND ls_alv TO gt_alv_display.
     CLEAR ls_alv.
   ENDLOOP.
@@ -1746,6 +1768,26 @@ FORM handle_validate.
   IF sy-subrc = 0.
     SORT lt_cst BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
     DELETE ADJACENT DUPLICATES FROM lt_cst COMPARING ctp_id gas_day ongc_material.
+    " If allocation has already been saved for this selection, restrict the
+    " "new data" popup to records uploaded AFTER that save timestamp; this
+    " avoids re-listing data the user already incorporated before save.
+    DATA: lv_val_save_ts   TYPE timestamp,
+          lv_val_save_date TYPE datum,
+          lv_val_save_time TYPE uzeit.
+    CLEAR: lv_val_save_ts, lv_val_save_date, lv_val_save_time.
+    SELECT created_date created_time FROM yrga_cst_pur
+      INTO @DATA(ls_val_pur_ts)
+      WHERE gas_day BETWEEN @gv_date_from AND @gv_date_to
+        AND location IN @s_loc AND deleted = ' '.
+      IF ls_val_pur_ts-created_date > lv_val_save_date
+         OR ( ls_val_pur_ts-created_date = lv_val_save_date AND ls_val_pur_ts-created_time > lv_val_save_time ).
+        lv_val_save_date = ls_val_pur_ts-created_date.
+        lv_val_save_time = ls_val_pur_ts-created_time.
+      ENDIF.
+    ENDSELECT.
+    IF lv_val_save_date IS NOT INITIAL.
+      CONVERT DATE lv_val_save_date TIME lv_val_save_time INTO TIME STAMP lv_val_save_ts TIME ZONE 'INDIA'.
+    ENDIF.
     CLEAR gt_new_receipt_data.
     LOOP AT lt_cst INTO DATA(ls_cst).
       READ TABLE gt_cst_b2b_1 INTO DATA(ls_cst_g) WITH KEY
@@ -1754,9 +1796,14 @@ FORM handle_validate.
         ongc_material = ls_cst-ongc_material.
       IF sy-subrc = 0.
         IF ls_cst_g-time_stamp <> ls_cst-time_stamp.
+          " If a save has happened, only flag records uploaded after it
+          IF lv_val_save_ts IS NOT INITIAL AND ls_cst-time_stamp <= lv_val_save_ts.
+            CONTINUE.
+          ENDIF.
           l_error = 'X'.
           MOVE-CORRESPONDING ls_cst TO gs_new_receipt_data.
-          CONVERT TIME STAMP gs_new_receipt_data-time_stamp TIME ZONE 'UTC'
+          " Convert UTC timestamp to IST for display
+          CONVERT TIME STAMP gs_new_receipt_data-time_stamp TIME ZONE 'INDIA'
             INTO DATE gs_new_receipt_data-date TIME gs_new_receipt_data-time.
           APPEND gs_new_receipt_data TO gt_new_receipt_data.
         ENDIF.
@@ -2857,6 +2904,24 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
     WHERE gas_day BETWEEN gv_date_from AND gv_date_to
       AND location IN s_loc AND deleted = ' '.
 
+  " Compute the latest save timestamp so we only flag receipt records
+  " uploaded AFTER allocation save (not the entire receipt history).
+  DATA: lv_save_ts_char TYPE timestamp,
+        lv_save_date    TYPE datum,
+        lv_save_time    TYPE uzeit.
+  CLEAR: lv_save_ts_char, lv_save_date, lv_save_time.
+  LOOP AT lt_cst_pur INTO DATA(ls_save_ts).
+    IF ls_save_ts-created_date > lv_save_date
+       OR ( ls_save_ts-created_date = lv_save_date AND ls_save_ts-created_time > lv_save_time ).
+      lv_save_date = ls_save_ts-created_date.
+      lv_save_time = ls_save_ts-created_time.
+    ENDIF.
+  ENDLOOP.
+  IF lv_save_date IS NOT INITIAL.
+    " Save time is in IST (sy-uzeit at save was system time, treated as IST)
+    CONVERT DATE lv_save_date TIME lv_save_time INTO TIME STAMP lv_save_ts_char TIME ZONE 'INDIA'.
+  ENDIF.
+
   " 1.2.3: Pick all ONGC IDs appearing in receipt data and check if they
   " appear in the saved data. Even if one ONGC ID is not found, block send.
   CLEAR gt_new_receipt_data.
@@ -2877,13 +2942,24 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
         CONTINUE.
       ENDIF.
     ENDIF.
+    " Two ways to qualify as new data:
+    "  a) ONGC ID not in saved data (brand new ONGC ID), OR
+    "  b) Receipt time_stamp is AFTER the last save timestamp (record was
+    "     re-uploaded with newer time_stamp after allocation was saved)
+    DATA lv_is_new TYPE abap_bool.
+    lv_is_new = abap_false.
     READ TABLE lt_cst_pur TRANSPORTING NO FIELDS
       WITH KEY ongc_id = ls_b2b-ongc_id.
     IF sy-subrc <> 0.
-      " ONGC ID not found in saved data - new receipt data received
+      lv_is_new = abap_true.
+    ELSEIF lv_save_ts_char IS NOT INITIAL AND ls_b2b-time_stamp > lv_save_ts_char.
+      lv_is_new = abap_true.
+    ENDIF.
+    IF lv_is_new = abap_true.
       lv_new_found = abap_true.
       MOVE-CORRESPONDING ls_b2b TO gs_new_receipt_data.
-      CONVERT TIME STAMP gs_new_receipt_data-time_stamp TIME ZONE 'UTC'
+      " Convert UTC timestamp to IST for display
+      CONVERT TIME STAMP gs_new_receipt_data-time_stamp TIME ZONE 'INDIA'
     INTO DATE gs_new_receipt_data-date TIME gs_new_receipt_data-time.
       READ TABLE gt_loc_ctp_map INTO DATA(ls_map_vld) WITH KEY ongc_ctp_id = gs_new_receipt_data-ctp_id.
       IF sy-subrc = 0.
@@ -5847,6 +5923,36 @@ FORM display_saved_daily_alv.
     ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deleted'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED_BY'.
+    ls_fieldcat-seltext_l = 'Deleted By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED_ON'.
+    ls_fieldcat-seltext_l = 'Deletion Date'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETE_AT'.
+    ls_fieldcat-seltext_l = 'Deleted At'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED_RESON'.
+    ls_fieldcat-seltext_l = 'Deletion Reason'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 17.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
   ENDIF.
   ls_layout-colwidth_optimize = abap_true.
   ls_layout-zebra             = abap_true.
@@ -6091,6 +6197,36 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-seltext_l = 'Sent Via'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED'.
+    ls_fieldcat-seltext_l = 'Deleted'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED_BY'.
+    ls_fieldcat-seltext_l = 'Deleted By'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 12.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED_ON'.
+    ls_fieldcat-seltext_l = 'Deletion Date'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 10.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETE_AT'.
+    ls_fieldcat-seltext_l = 'Deleted At'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 8.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    lv_col = lv_col + 1. CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'DELETED_RESON'.
+    ls_fieldcat-seltext_l = 'Deletion Reason'.
+    ls_fieldcat-col_pos   = lv_col.
+    ls_fieldcat-outputlen = 17.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
   ENDIF.
