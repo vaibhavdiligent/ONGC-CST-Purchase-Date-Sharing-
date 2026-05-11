@@ -666,6 +666,8 @@ FORM send_email.
   DATA: lo_recipient     TYPE REF TO if_recipient_bcs.
   DATA: lt_email_recip   TYPE STANDARD TABLE OF ty_email_recip.
   DATA: wa_email_recip   TYPE ty_email_recip.
+  DATA: lt_sal_offices   TYPE TABLE OF vkbur.
+  DATA: lv_sal_office    TYPE vkbur.
 
   " Format date range for display
   CONCATENATE s_date-low+6(2)  '.' s_date-low+4(2)  '.' s_date-low+0(4)  INTO lv_date_from.
@@ -815,11 +817,11 @@ FORM send_email.
 
     " Table header
     APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
-    APPEND 'Contract ID     |Cumulative Ovr  |Chargeable Ovr  |Posted Ovr      |Sales Order     |Invoice' TO lt_body.
+    APPEND 'Contract ID|Sales Office|Cumulative Ovr|Chargeable Ovr|Posted Ovr|Sales Order|Invoice' TO lt_body.
     APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
 
     " CSV header for attachment
-    lv_csv_str = 'Contract ID,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
+    lv_csv_str = 'Contract ID,Sales Office,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
 
     " Table rows for this customer
     LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr.
@@ -835,6 +837,7 @@ FORM send_email.
       CONDENSE: lv_cum_c, lv_char_c, lv_posted_c.
 
       CONCATENATE wa_row-cont_id         '|'
+                  wa_row-sal_office      '|'
                   lv_cum_c               '|'
                   lv_char_c              '|'
                   lv_posted_c            '|'
@@ -846,7 +849,8 @@ FORM send_email.
       " CSV row for attachment
       DATA: lv_csv_row TYPE string.
       CONCATENATE lv_csv_str cl_abap_char_utilities=>newline
-                  wa_row-cont_id ',' lv_cum_c ',' lv_char_c ','
+                  wa_row-cont_id ',' wa_row-sal_office ','
+                  lv_cum_c ',' lv_char_c ','
                   lv_posted_c ',' wa_row-sal_order ',' wa_row-invoice
                   INTO lv_csv_str.
     ENDLOOP.
@@ -913,7 +917,7 @@ FORM send_email.
         lo_send_request->set_sender(
           EXPORTING i_sender = lo_sender ).
 
-        " Add all recipients
+        " Add all recipients (TO)
         LOOP AT lt_email_recip INTO wa_email_recip.
           lo_recipient = cl_cam_address_bcs=>create_internet_address(
                            wa_email_recip-smtp_addr ).
@@ -922,6 +926,100 @@ FORM send_email.
               i_recipient = lo_recipient
               i_express   = 'X' ).
         ENDLOOP.
+
+        " 7c: CC from yrva_con_wf_log (yy_level=0) -> PA0105 email
+        TYPES: BEGIN OF ty_cc_cont,
+                 cont_id TYPE oijnomi-docnr,
+               END OF ty_cc_cont.
+        DATA: lt_cc_cont_ids  TYPE STANDARD TABLE OF ty_cc_cont,
+              ls_cc_cont      TYPE ty_cc_cont.
+        LOOP AT it_final INTO DATA(wa_cc_row) WHERE customer = wa_cust_em-kunnr.
+          IF wa_cc_row-cont_id IS NOT INITIAL.
+            ls_cc_cont-cont_id = wa_cc_row-cont_id.
+            READ TABLE lt_cc_cont_ids WITH KEY cont_id = ls_cc_cont-cont_id
+                                      TRANSPORTING NO FIELDS.
+            IF sy-subrc NE 0.
+              APPEND ls_cc_cont TO lt_cc_cont_ids.
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+
+        IF lt_cc_cont_ids IS NOT INITIAL.
+          SELECT changed_by
+            FROM yrva_con_wf_log
+            INTO TABLE @DATA(lt_wf_log)
+            FOR ALL ENTRIES IN @lt_cc_cont_ids
+            WHERE vbeln    = @lt_cc_cont_ids-cont_id
+              AND yy_level = 0.
+
+          IF lt_wf_log IS NOT INITIAL.
+            TYPES: BEGIN OF ty_pernr_wfcc,
+                     pernr TYPE pa0105-pernr,
+                   END OF ty_pernr_wfcc.
+            DATA: lt_pernr_wfcc  TYPE STANDARD TABLE OF ty_pernr_wfcc,
+                  ls_pernr_wfcc  TYPE ty_pernr_wfcc.
+            LOOP AT lt_wf_log INTO DATA(ls_wflog).
+              ls_pernr_wfcc-pernr = ls_wflog-changed_by.
+              READ TABLE lt_pernr_wfcc WITH KEY pernr = ls_pernr_wfcc-pernr
+                                        TRANSPORTING NO FIELDS.
+              IF sy-subrc NE 0.
+                APPEND ls_pernr_wfcc TO lt_pernr_wfcc.
+              ENDIF.
+            ENDLOOP.
+
+            SELECT usrid_long
+              FROM pa0105
+              INTO TABLE @DATA(lt_cc_pa0105)
+              FOR ALL ENTRIES IN @lt_pernr_wfcc
+              WHERE pernr = @lt_pernr_wfcc-pernr
+                AND subty = '0010'
+                AND endda = '99991231'.
+
+            LOOP AT lt_cc_pa0105 INTO DATA(ls_cc_pa0105).
+              IF ls_cc_pa0105-usrid_long IS NOT INITIAL.
+                lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                                 ls_cc_pa0105-usrid_long ).
+                lo_send_request->add_recipient(
+                  EXPORTING
+                    i_recipient = lo_recipient
+                    i_copy      = 'X' ).
+              ENDIF.
+            ENDLOOP.
+          ENDIF.
+        ENDIF.
+
+        " 7d: CC from YSD_WF_AGENT (vkbur=sales_office, ylevel=1)
+        CLEAR: lt_sal_offices.
+        LOOP AT it_final INTO DATA(wa_so_row) WHERE customer = wa_cust_em-kunnr.
+          IF wa_so_row-sal_office IS NOT INITIAL.
+            lv_sal_office = wa_so_row-sal_office.
+            READ TABLE lt_sal_offices WITH KEY table_line = lv_sal_office
+                                      TRANSPORTING NO FIELDS.
+            IF sy-subrc NE 0.
+              APPEND lv_sal_office TO lt_sal_offices.
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+
+        IF lt_sal_offices IS NOT INITIAL.
+          SELECT email
+            FROM ysd_wf_agent
+            INTO TABLE @DATA(lt_wf_agent_em)
+            FOR ALL ENTRIES IN @lt_sal_offices
+            WHERE vkbur  = @lt_sal_offices-table_line
+              AND ylevel = 1.
+
+          LOOP AT lt_wf_agent_em INTO DATA(ls_wf_agent_em).
+            IF ls_wf_agent_em-email IS NOT INITIAL.
+              lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                               ls_wf_agent_em-email ).
+              lo_send_request->add_recipient(
+                EXPORTING
+                  i_recipient = lo_recipient
+                  i_copy      = 'X' ).
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
 
         lo_send_request->send(
           EXPORTING
