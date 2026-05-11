@@ -1785,16 +1785,18 @@ FORM handle_validate.
     " avoids re-listing data the user already incorporated before save.
     DATA: lv_val_save_ts   TYPE timestamp,
           lv_val_save_date TYPE datum,
-          lv_val_save_time TYPE uzeit.
+          lv_val_save_time TYPE uzeit,
+          lv_vcrt_date     TYPE datum,
+          lv_vcrt_time     TYPE uzeit.
     CLEAR: lv_val_save_ts, lv_val_save_date, lv_val_save_time.
     SELECT created_date created_time FROM yrga_cst_pur
-      INTO @DATA(ls_val_pur_ts)
-      WHERE gas_day BETWEEN @gv_date_from AND @gv_date_to
-        AND location IN @s_loc AND deleted = ' '.
-      IF ls_val_pur_ts-created_date > lv_val_save_date
-         OR ( ls_val_pur_ts-created_date = lv_val_save_date AND ls_val_pur_ts-created_time > lv_val_save_time ).
-        lv_val_save_date = ls_val_pur_ts-created_date.
-        lv_val_save_time = ls_val_pur_ts-created_time.
+      INTO (lv_vcrt_date, lv_vcrt_time)
+      WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+        AND location IN s_loc AND deleted = ' '.
+      IF lv_vcrt_date > lv_val_save_date
+         OR ( lv_vcrt_date = lv_val_save_date AND lv_vcrt_time > lv_val_save_time ).
+        lv_val_save_date = lv_vcrt_date.
+        lv_val_save_time = lv_vcrt_time.
       ENDIF.
     ENDSELECT.
     IF lv_val_save_date IS NOT INITIAL.
@@ -3614,9 +3616,11 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
   DATA(lv_s2) = 'CTP'.
   DATA(lv_s3) = 'ONGC_MATER'.
   DATA(lv_s4) = 'STATE_CODE'.
-  SORT pt_data BY (lv_s1) (lv_s2) (lv_s3) (lv_s4).
+  DATA lt_pt_data LIKE pt_data.
+  lt_pt_data = pt_data.
+  SORT lt_pt_data BY (lv_s1) (lv_s2) (lv_s3) (lv_s4).
   " Data rows
-  LOOP AT pt_data INTO ls_pur.
+  LOOP AT lt_pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
