@@ -193,7 +193,7 @@ FORM get_data .
 
 
   SORT it_zcon BY yyvbeln ASCENDING yyclause_id ASCENDING.
-  *SORT IT_YCUM by .
+  "SORT IT_YCUM by .
   "BREAK-POINT.
   DATA(it_yrvt) = it_yrvt1[].
   SORT it_yrvt BY vbeln.
@@ -1105,7 +1105,7 @@ FORM email_pending_postings.
         FROM ysd_wf_agent
         INTO TABLE @DATA(lt_wf_agent_email)
         FOR ALL ENTRIES IN @lt_sal_offices
-        WHERE vbkur  = @lt_sal_offices-table_line
+        WHERE vkbur  = @lt_sal_offices-table_line
           AND ylevel = 1.
 
       LOOP AT lt_wf_agent_email INTO DATA(ls_wf_agent_email).
@@ -1143,7 +1143,11 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table header - full column names
-    ls_body-line = 'Contract ID|Sales Office|Calc Cumulative Imbalance|Calc Positive Chargeable Imbalance|Calc Negative Chargeable Imbalance|Posted Cumulative Imbalance|Posted Positive Chargeable Imbalance|Posted Negative Chargeable Imbalance|Sales Order|Invoice'.
+    CONCATENATE 'Contract ID|Sales Office|Calc Cumulative Imbalance|Calc Positive Chargeable Imbalance'
+                '|Calc Negative Chargeable Imbalance|Posted Cumulative Imbalance'
+                '|Posted Positive Chargeable Imbalance|Posted Negative Chargeable Imbalance'
+                '|Sales Order|Invoice'
+      INTO ls_body-line.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
