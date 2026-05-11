@@ -1833,8 +1833,8 @@ FORM handle_validate.
     " Point 5: Show popup with View Details option for new receipt data
     CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
       EXPORTING
-        textline1      = 'Validation unsuccessful as new receipt data has been received from ONGC.'
-        textline2      = 'Please run allocation again. Click Yes to view new data details.'
+        textline1      = 'Validation unsuccessful. New receipt data received from ONGC.'
+        textline2      = 'Please run allocation again. Click Yes to view details.'
         titel          = 'Validation Unsuccessful'
         cancel_display = ' '
       IMPORTING
@@ -2982,7 +2982,7 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
     " Show popup: Cannot send data as new receipt data from ONGC has been received
     CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
       EXPORTING
-        textline1      = 'Cannot send data as new receipt data from ONGC has been received.'
+        textline1      = 'Cannot send. New receipt data received from ONGC.'
         textline2      = 'Please run allocation again. Click Yes to view details.'
         titel          = 'Cannot Send Data'
         cancel_display = ' '
@@ -5297,13 +5297,13 @@ FORM display_new_receipt_data.
   ls_fieldcat-fieldname = 'DATE'.
   ls_fieldcat-seltext_l = 'Creation date'.
   ls_fieldcat-col_pos   = 8.
-  ls_fieldcat-outputlen = 10.
+  ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TIME'.
   ls_fieldcat-seltext_l = 'Creation time'.
   ls_fieldcat-col_pos   = 9.
-  ls_fieldcat-outputlen = 10.
+  ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
