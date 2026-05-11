@@ -162,7 +162,7 @@ TYPES: BEGIN OF ty_saved_daily,
          deleted_by    TYPE	ecmuserd,
          deleted_on    TYPE bb_liqdat,
          delete_at     TYPE /scwm/de_epd_deleted_time,
-         deleted_reson TYPE c LENGTH 15,
+         deleted_reson TYPE c LENGTH 20,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from     TYPE datum,
@@ -189,7 +189,7 @@ TYPES: BEGIN OF ty_saved_fnt,
          deleted_by    TYPE	ecmuserd,
          deleted_on    TYPE bb_liqdat,
          delete_at     TYPE /scwm/de_epd_deleted_time,
-         deleted_reson TYPE c LENGTH 15,
+         deleted_reson TYPE c LENGTH 20,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -465,7 +465,7 @@ START-OF-SELECTION.
   CHECK gt_loc_ctp_map IS NOT INITIAL.
   IF p_send IS NOT INITIAL.
     " Direct Send mode - bypass ALV, go straight to send flow
-    PERFORM handle_send_direct.
+    PERFORM handle_send.
   ELSEIF p_downld IS NOT INITIAL.
     " Download mode - download files to local computer
     PERFORM handle_download.
@@ -515,6 +515,25 @@ START-OF-SELECTION.
           EXPORTING
             titel = 'No Data'
             txt1  = 'No allocation data found.'
+            txt2  = ''
+            txt3  = ''
+            txt4  = ''.
+        RETURN.
+      ENDIF.
+      " Also treat all-zero rows as no data (no receipts for selected criteria)
+      DATA lv_has_nonzero TYPE abap_bool.
+      lv_has_nonzero = abap_false.
+      LOOP AT gt_alv_display INTO gs_alv_display.
+        IF gs_alv_display-total_scm <> 0 OR gs_alv_display-total_mbg <> 0.
+          lv_has_nonzero = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_has_nonzero = abap_false.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'No Data'
+            txt1  = 'No allocation data found for the selected criteria.'
             txt2  = ''
             txt3  = ''
             txt4  = ''.
@@ -576,33 +595,21 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    " Show wide popup listing all Location IDs with no receipt data
-    DATA: lt_no_data_text TYPE TABLE OF tline,
-          ls_no_data_line TYPE tline.
-    ls_no_data_line-tdformat = '*'.
-    ls_no_data_line-tdline   = 'Receipt data not found for a few Location IDs:'.
-    APPEND ls_no_data_line TO lt_no_data_text.
+    DATA lv_loc_list TYPE string.
     LOOP AT s_loc.
-      CLEAR ls_no_data_line.
-      ls_no_data_line-tdformat = ' '.
-      ls_no_data_line-tdline   = s_loc-low.
-      APPEND ls_no_data_line TO lt_no_data_text.
+      IF lv_loc_list IS INITIAL.
+        lv_loc_list = s_loc-low.
+      ELSE.
+        CONCATENATE lv_loc_list ', ' s_loc-low INTO lv_loc_list.
+      ENDIF.
     ENDLOOP.
-    CLEAR ls_no_data_line.
-    ls_no_data_line-tdformat = ' '.
-    ls_no_data_line-tdline   = ' '.
-    APPEND ls_no_data_line TO lt_no_data_text.
-    CLEAR ls_no_data_line.
-    ls_no_data_line-tdformat = '*'.
-    ls_no_data_line-tdline   = 'Program cannot proceed.'.
-    APPEND ls_no_data_line TO lt_no_data_text.
-    CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
+    CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
-        titel        = 'Missing Receipt Data'
-        start_column = 20
-        start_row    = 5
-      TABLES
-        text_tab     = lt_no_data_text.
+        titel = 'Missing Receipt Data'
+        txt1  = 'Receipt data not found for Location IDs:'
+        txt2  = lv_loc_list
+        txt3  = 'Program cannot proceed.'
+        txt4  = ''.
     RETURN.
   ENDIF.
   IF lt_b2b_data[] IS NOT INITIAL.
@@ -1168,8 +1175,6 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
     IMPORTING
       e_grid = lr_grid.
   lr_grid->check_changed_data( ).
-  " Debug: Show which function code was triggered (can be removed later)
-  MESSAGE s000(ygms_msg) WITH 'Function code:' r_ucomm.
   CASE r_ucomm.
     WHEN 'ALLOCATION' OR 'REALLOCATE'.
       DATA: lr_grid1        TYPE REF TO cl_gui_alv_grid,
@@ -1785,16 +1790,18 @@ FORM handle_validate.
     " avoids re-listing data the user already incorporated before save.
     DATA: lv_val_save_ts   TYPE timestamp,
           lv_val_save_date TYPE datum,
-          lv_val_save_time TYPE uzeit.
+          lv_val_save_time TYPE uzeit,
+          lv_vcrt_date     TYPE datum,
+          lv_vcrt_time     TYPE uzeit.
     CLEAR: lv_val_save_ts, lv_val_save_date, lv_val_save_time.
     SELECT created_date created_time FROM yrga_cst_pur
-      INTO @DATA(ls_val_pur_ts)
-      WHERE gas_day BETWEEN @gv_date_from AND @gv_date_to
-        AND location IN @s_loc AND deleted = ' '.
-      IF ls_val_pur_ts-created_date > lv_val_save_date
-         OR ( ls_val_pur_ts-created_date = lv_val_save_date AND ls_val_pur_ts-created_time > lv_val_save_time ).
-        lv_val_save_date = ls_val_pur_ts-created_date.
-        lv_val_save_time = ls_val_pur_ts-created_time.
+      INTO (lv_vcrt_date, lv_vcrt_time)
+      WHERE gas_day BETWEEN gv_date_from AND gv_date_to
+        AND location IN s_loc AND deleted = ' '.
+      IF lv_vcrt_date > lv_val_save_date
+         OR ( lv_vcrt_date = lv_val_save_date AND lv_vcrt_time > lv_val_save_time ).
+        lv_val_save_date = lv_vcrt_date.
+        lv_val_save_time = lv_vcrt_time.
       ENDIF.
     ENDSELECT.
     IF lv_val_save_date IS NOT INITIAL.
@@ -1826,8 +1833,8 @@ FORM handle_validate.
     " Point 5: Show popup with View Details option for new receipt data
     CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
       EXPORTING
-        textline1      = 'Validation unsuccessful as new receipt data has been received from ONGC.'
-        textline2      = 'Please run allocation again. Click Yes to view new data details.'
+        textline1      = 'Validation unsuccessful. New receipt data received from ONGC.'
+        textline2      = 'Please run allocation again. Click Yes to view details.'
         titel          = 'Validation Unsuccessful'
         cancel_display = ' '
       IMPORTING
@@ -1941,7 +1948,8 @@ ENDFORM.
 *& Form BUILD_VALIDATION_DATA
 *&---------------------------------------------------------------------*
 FORM build_validation_data.
-  DATA: ls_validation TYPE ty_validation.
+  DATA: ls_validation TYPE ty_validation,
+        ls_receipt    TYPE ty_gas_receipt.
   CLEAR gt_validation.
   DATA: BEGIN OF ls_key,
           location_id   TYPE ygms_de_loc_id,
@@ -1968,17 +1976,13 @@ FORM build_validation_data.
       ls_validation-allocated_scm = ls_validation-allocated_scm + gs_alv_display-total_scm.
       ls_validation-allocated_mbg = ls_validation-allocated_mbg + gs_alv_display-total_mbg.
     ENDLOOP.
-    READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
-      WITH KEY location_id   = ls_key-location_id
-               material      = ls_key-material
-               ongc_material = ls_key-ongc_material.
-    IF sy-subrc = 0.
-      ls_validation-ctp_id = ls_receipt-ctp_id.
-    ENDIF.
     LOOP AT gt_gas_receipt INTO ls_receipt
       WHERE location_id   = ls_key-location_id
         AND material      = ls_key-material
         AND ongc_material = ls_key-ongc_material.
+      IF ls_validation-ctp_id IS INITIAL.
+        ls_validation-ctp_id = ls_receipt-ctp_id.
+      ENDIF.
       ls_validation-supply_scm = ls_validation-supply_scm + round( val = ls_receipt-qty_scm dec = 3 ).
       ls_validation-supply_mbg = ls_validation-supply_mbg + round( val = ls_receipt-qty_mbg dec = 3 ).
     ENDLOOP.
@@ -2683,20 +2687,6 @@ FORM handle_reset.
   MESSAGE s000(ygms_msg) WITH 'Data reset to original values'.
 ENDFORM.
 *&---------------------------------------------------------------------*
-*& Form HANDLE_SEND_DIRECT
-*& Direct send from selection screen - same flow as ALV Send button
-*&---------------------------------------------------------------------*
-FORM handle_send_direct.
-  DATA: lv_valid TYPE abap_bool.
-  " Validate before send (check for new ONGC receipt data)
-  PERFORM validate_before_send CHANGING lv_valid.
-  IF lv_valid = abap_false.
-    RETURN.
-  ENDIF.
-  " Show data preview with daily/fortnightly toggle, then send mode popup
-  PERFORM display_send_preview.
-ENDFORM.
-*&---------------------------------------------------------------------*
 *& Form HANDLE_DOWNLOAD
 *& Download saved data as Excel or PDF to local computer
 *&---------------------------------------------------------------------*
@@ -2992,7 +2982,7 @@ FORM validate_before_send CHANGING cv_valid TYPE abap_bool.
     " Show popup: Cannot send data as new receipt data from ONGC has been received
     CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
       EXPORTING
-        textline1      = 'Cannot send data as new receipt data from ONGC has been received.'
+        textline1      = 'Cannot send. New receipt data received from ONGC.'
         textline2      = 'Please run allocation again. Click Yes to view details.'
         titel          = 'Cannot Send Data'
         cancel_display = ' '
@@ -5117,8 +5107,10 @@ FORM build_alv_display_table_view .
           l_ncv = ( <fs_day> * wa_yrga_cst_pur-ncv ) + l_ncv.
         ENDIF.
       ENDLOOP.
-      ls_alv-gcv = l_gcv / ls_alv-total_scm.
-      ls_alv-ncv = l_ncv / ls_alv-total_scm.
+      IF ls_alv-total_scm > 0.
+        ls_alv-gcv = l_gcv / ls_alv-total_scm.
+        ls_alv-ncv = l_ncv / ls_alv-total_scm.
+      ENDIF.
       APPEND ls_alv TO gt_alv_display.
       CLEAR: ls_alv, l_gcv, l_ncv.
     ENDLOOP.
@@ -5260,16 +5252,19 @@ FORM display_new_receipt_data.
   ls_fieldcat-fieldname = 'GAS_DAY'.
   ls_fieldcat-seltext_l = 'Gas Day'.
   ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 10.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'CTP_ID'.
   ls_fieldcat-seltext_l = 'CTP ID'.
   ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
   ls_fieldcat-seltext_l = 'ONGC Material'.
   ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 18.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'QTY_SCM'.
@@ -5283,27 +5278,32 @@ FORM display_new_receipt_data.
   ls_fieldcat-seltext_l = 'GCV'.
   ls_fieldcat-col_pos   = 5.
   ls_fieldcat-decimals_out = 3.
+  ls_fieldcat-outputlen = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
   ls_fieldcat-seltext_l = 'NCV'.
   ls_fieldcat-col_pos   = 6.
   ls_fieldcat-decimals_out = 3.
+  ls_fieldcat-outputlen = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_ID'.
   ls_fieldcat-seltext_l = 'ONGC ID'.
   ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DATE'.
   ls_fieldcat-seltext_l = 'Creation date'.
   ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TIME'.
   ls_fieldcat-seltext_l = 'Creation time'.
   ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
@@ -5727,7 +5727,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -5739,7 +5739,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -5773,13 +5773,13 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_ID'.
     ls_fieldcat-seltext_l = 'ONGC ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 10.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
@@ -5819,7 +5819,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -5831,7 +5831,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -5865,13 +5865,13 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_ID'.
     ls_fieldcat-seltext_l = 'ONGC ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 10.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'LOCATION'.
@@ -5962,7 +5962,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'DELETED_RESON'.
     ls_fieldcat-seltext_l = 'Deletion Reason'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 17.
+    ls_fieldcat-outputlen = 40.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
   ENDIF.
@@ -6015,7 +6015,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6027,7 +6027,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -6061,7 +6061,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
@@ -6107,7 +6107,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6119,7 +6119,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -6153,7 +6153,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'LOCATION'.
@@ -6184,7 +6184,6 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-seltext_l = 'Created Time'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
@@ -6238,7 +6237,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'DELETED_RESON'.
     ls_fieldcat-seltext_l = 'Deletion Reason'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 17.
+    ls_fieldcat-outputlen = 40.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
   ENDIF.
@@ -6827,32 +6826,21 @@ FORM check_missing_locations.
     ENDIF.
   ENDLOOP.
   IF lt_missing IS NOT INITIAL.
-    DATA: lt_popup_text TYPE TABLE OF tline,
-          ls_popup_line TYPE tline.
-    ls_popup_line-tdformat = '*'.
-    ls_popup_line-tdline   = 'Receipt data not present for Location IDs:'.
-    APPEND ls_popup_line TO lt_popup_text.
+    DATA lv_missing_locs TYPE string.
     LOOP AT lt_missing INTO lv_loc.
-      CLEAR ls_popup_line.
-      ls_popup_line-tdformat = ' '.
-      ls_popup_line-tdline   = lv_loc.
-      APPEND ls_popup_line TO lt_popup_text.
+      IF lv_missing_locs IS INITIAL.
+        lv_missing_locs = lv_loc.
+      ELSE.
+        CONCATENATE lv_missing_locs ', ' lv_loc INTO lv_missing_locs.
+      ENDIF.
     ENDLOOP.
-    CLEAR ls_popup_line.
-    ls_popup_line-tdformat = ' '.
-    ls_popup_line-tdline   = ' '.
-    APPEND ls_popup_line TO lt_popup_text.
-    CLEAR ls_popup_line.
-    ls_popup_line-tdformat = '*'.
-    ls_popup_line-tdline   = 'Program cannot proceed.'.
-    APPEND ls_popup_line TO lt_popup_text.
-    CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
+    CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
-        titel    = 'Missing Receipt Data'
-        start_column = 20
-        start_row    = 5
-      TABLES
-        text_tab = lt_popup_text.
+        titel = 'Missing Receipt Data'
+        txt1  = 'Receipt data not present for Location IDs:'
+        txt2  = lv_missing_locs
+        txt3  = 'Program cannot proceed.'
+        txt4  = ''.
     CLEAR gt_gas_receipt.
   ENDIF.
 ENDFORM.
