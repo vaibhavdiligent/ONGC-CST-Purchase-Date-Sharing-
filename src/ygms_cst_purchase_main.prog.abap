@@ -5731,7 +5731,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -5743,7 +5743,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -5777,13 +5777,13 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_ID'.
     ls_fieldcat-seltext_l = 'ONGC ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 10.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
@@ -5823,7 +5823,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -5835,7 +5835,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -5869,13 +5869,13 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_ID'.
     ls_fieldcat-seltext_l = 'ONGC ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 10.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'LOCATION'.
@@ -6019,7 +6019,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6031,7 +6031,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -6065,7 +6065,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
@@ -6111,7 +6111,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 18.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6123,7 +6123,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'STATE'.
     ls_fieldcat-seltext_l = 'State'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'QTY_IN_SCM'.
@@ -6157,7 +6157,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'GAIL_ID'.
     ls_fieldcat-seltext_l = 'GAIL ID'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 15.
+    ls_fieldcat-outputlen = 20.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'LOCATION'.
@@ -6188,7 +6188,6 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-seltext_l = 'Created Time'.
     ls_fieldcat-col_pos   = lv_col.
     ls_fieldcat-outputlen = 8.
-    APPEND ls_fieldcat TO lt_fieldcat.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'SENT_BY'.
