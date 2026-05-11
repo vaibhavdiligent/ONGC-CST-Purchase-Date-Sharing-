@@ -465,7 +465,7 @@ START-OF-SELECTION.
   CHECK gt_loc_ctp_map IS NOT INITIAL.
   IF p_send IS NOT INITIAL.
     " Direct Send mode - bypass ALV, go straight to send flow
-    PERFORM handle_send_direct.
+    PERFORM handle_send.
   ELSEIF p_downld IS NOT INITIAL.
     " Download mode - download files to local computer
     PERFORM handle_download.
@@ -1943,7 +1943,8 @@ ENDFORM.
 *& Form BUILD_VALIDATION_DATA
 *&---------------------------------------------------------------------*
 FORM build_validation_data.
-  DATA: ls_validation TYPE ty_validation.
+  DATA: ls_validation TYPE ty_validation,
+        ls_receipt    TYPE ty_gas_receipt.
   CLEAR gt_validation.
   DATA: BEGIN OF ls_key,
           location_id   TYPE ygms_de_loc_id,
@@ -1970,17 +1971,13 @@ FORM build_validation_data.
       ls_validation-allocated_scm = ls_validation-allocated_scm + gs_alv_display-total_scm.
       ls_validation-allocated_mbg = ls_validation-allocated_mbg + gs_alv_display-total_mbg.
     ENDLOOP.
-    READ TABLE gt_gas_receipt INTO DATA(ls_receipt)
-      WITH KEY location_id   = ls_key-location_id
-               material      = ls_key-material
-               ongc_material = ls_key-ongc_material.
-    IF sy-subrc = 0.
-      ls_validation-ctp_id = ls_receipt-ctp_id.
-    ENDIF.
     LOOP AT gt_gas_receipt INTO ls_receipt
       WHERE location_id   = ls_key-location_id
         AND material      = ls_key-material
         AND ongc_material = ls_key-ongc_material.
+      IF ls_validation-ctp_id IS INITIAL.
+        ls_validation-ctp_id = ls_receipt-ctp_id.
+      ENDIF.
       ls_validation-supply_scm = ls_validation-supply_scm + round( val = ls_receipt-qty_scm dec = 3 ).
       ls_validation-supply_mbg = ls_validation-supply_mbg + round( val = ls_receipt-qty_mbg dec = 3 ).
     ENDLOOP.
@@ -2683,20 +2680,6 @@ FORM handle_reset.
   gv_save_enabled = abap_false.
   PERFORM refresh_pf_status.
   MESSAGE s000(ygms_msg) WITH 'Data reset to original values'.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form HANDLE_SEND_DIRECT
-*& Direct send from selection screen - same flow as ALV Send button
-*&---------------------------------------------------------------------*
-FORM handle_send_direct.
-  DATA: lv_valid TYPE abap_bool.
-  " Validate before send (check for new ONGC receipt data)
-  PERFORM validate_before_send CHANGING lv_valid.
-  IF lv_valid = abap_false.
-    RETURN.
-  ENDIF.
-  " Show data preview with daily/fortnightly toggle, then send mode popup
-  PERFORM display_send_preview.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form HANDLE_DOWNLOAD
