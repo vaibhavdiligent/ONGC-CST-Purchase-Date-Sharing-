@@ -162,7 +162,7 @@ TYPES: BEGIN OF ty_saved_daily,
          deleted_by    TYPE	ecmuserd,
          deleted_on    TYPE bb_liqdat,
          delete_at     TYPE /scwm/de_epd_deleted_time,
-         deleted_reson TYPE c LENGTH 15,
+         deleted_reson TYPE c LENGTH 20,
        END OF ty_saved_daily.
 TYPES: BEGIN OF ty_saved_fnt,
          date_from     TYPE datum,
@@ -189,7 +189,7 @@ TYPES: BEGIN OF ty_saved_fnt,
          deleted_by    TYPE	ecmuserd,
          deleted_on    TYPE bb_liqdat,
          delete_at     TYPE /scwm/de_epd_deleted_time,
-         deleted_reson TYPE c LENGTH 15,
+         deleted_reson TYPE c LENGTH 20,
        END OF ty_saved_fnt.
 DATA:     wa_final_daily TYPE ty_data_daily.
 DATA: BEGIN OF ty_final_daily,
@@ -515,6 +515,25 @@ START-OF-SELECTION.
           EXPORTING
             titel = 'No Data'
             txt1  = 'No allocation data found.'
+            txt2  = ''
+            txt3  = ''
+            txt4  = ''.
+        RETURN.
+      ENDIF.
+      " Also treat all-zero rows as no data (no receipts for selected criteria)
+      DATA lv_has_nonzero TYPE abap_bool.
+      lv_has_nonzero = abap_false.
+      LOOP AT gt_alv_display INTO gs_alv_display.
+        IF gs_alv_display-total_scm <> 0 OR gs_alv_display-total_mbg <> 0.
+          lv_has_nonzero = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_has_nonzero = abap_false.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'No Data'
+            txt1  = 'No allocation data found for the selected criteria.'
             txt2  = ''
             txt3  = ''
             txt4  = ''.
@@ -6813,32 +6832,21 @@ FORM check_missing_locations.
     ENDIF.
   ENDLOOP.
   IF lt_missing IS NOT INITIAL.
-    DATA: lt_popup_text TYPE TABLE OF tline,
-          ls_popup_line TYPE tline.
-    ls_popup_line-tdformat = '*'.
-    ls_popup_line-tdline   = 'Receipt data not present for Location IDs:'.
-    APPEND ls_popup_line TO lt_popup_text.
+    DATA lv_missing_locs TYPE string.
     LOOP AT lt_missing INTO lv_loc.
-      CLEAR ls_popup_line.
-      ls_popup_line-tdformat = ' '.
-      ls_popup_line-tdline   = lv_loc.
-      APPEND ls_popup_line TO lt_popup_text.
+      IF lv_missing_locs IS INITIAL.
+        lv_missing_locs = lv_loc.
+      ELSE.
+        CONCATENATE lv_missing_locs ', ' lv_loc INTO lv_missing_locs.
+      ENDIF.
     ENDLOOP.
-    CLEAR ls_popup_line.
-    ls_popup_line-tdformat = ' '.
-    ls_popup_line-tdline   = ' '.
-    APPEND ls_popup_line TO lt_popup_text.
-    CLEAR ls_popup_line.
-    ls_popup_line-tdformat = '*'.
-    ls_popup_line-tdline   = 'Program cannot proceed.'.
-    APPEND ls_popup_line TO lt_popup_text.
-    CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
+    CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
-        titel    = 'Missing Receipt Data'
-        start_column = 20
-        start_row    = 5
-      TABLES
-        text_tab = lt_popup_text.
+        titel = 'Missing Receipt Data'
+        txt1  = 'Receipt data not present for Location IDs:'
+        txt2  = lv_missing_locs
+        txt3  = 'Program cannot proceed.'
+        txt4  = ''.
     CLEAR gt_gas_receipt.
   ENDIF.
 ENDFORM.
