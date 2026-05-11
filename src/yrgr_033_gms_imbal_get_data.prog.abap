@@ -470,32 +470,89 @@ FORM send_email_not_posted.
     ENDIF.
     SORT lt_np_ernam BY ernam. DELETE ADJACENT DUPLICATES FROM lt_np_ernam COMPARING ernam.
 
-    " TO: Step 1 – ERNAM/AENAM (user ID) → PA0105 subty 0001 → PERNR
-    "     Step 2 – PERNR → PA0105 subty 0010 → internet email (USRID_LONG)
+    " TO email derivation:
+    " Step 1 - fill temp table with ernam as pernr (type conversion CHAR->NUMC),
+    "           query PA0105 subty 0010 directly using those PERNRs
+    " Step 2 - for ernam values not found in step 1, fallback:
+    "           PA0105 usrid=ernam subty 0001 -> PERNR -> PA0105 subty 0010 -> email
     IF lt_np_ernam IS NOT INITIAL.
-      SELECT pernr FROM pa0105
-        INTO TABLE @DATA(lt_uid_pernr)
-        FOR ALL ENTRIES IN @lt_np_ernam
-        WHERE usrid = @lt_np_ernam-ernam AND subty = '0001'
-          AND begda LE @sy-datum AND endda GE @sy-datum.
-      IF lt_uid_pernr IS NOT INITIAL.
-        SELECT usrid_long FROM pa0105
-          INTO TABLE @DATA(lt_pa_np_to)
-          FOR ALL ENTRIES IN @lt_uid_pernr
-          WHERE pernr = @lt_uid_pernr-pernr AND subty = '0010' AND endda = '99991231'.
-        LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
-          IF ls_pa_np_to-usrid_long IS NOT INITIAL.
-            lv_np_email = ls_pa_np_to-usrid_long.
+      " Fill temp PERNR table from ernam (implicit CHAR12->NUMC8 conversion)
+      DATA: lt_try_pernr   TYPE TABLE OF ty_np_pernr,
+            ls_try_pernr   TYPE ty_np_pernr,
+            lt_found_pernr TYPE TABLE OF ty_np_pernr,
+            ls_found_pernr TYPE ty_np_pernr,
+            lt_np_ernam_rem TYPE TABLE OF ty_np_ernam,
+            ls_np_ernam_rem TYPE ty_np_ernam.
+
+      LOOP AT lt_np_ernam INTO DATA(ls_en_try).
+        ls_try_pernr-pernr = ls_en_try-ernam.
+        APPEND ls_try_pernr TO lt_try_pernr. CLEAR ls_try_pernr.
+      ENDLOOP.
+
+      " Step 1: query PA0105 subty 0010 using ernam as PERNR directly
+      IF lt_try_pernr IS NOT INITIAL.
+        SELECT pernr, usrid_long FROM pa0105
+          INTO TABLE @DATA(lt_s1_result)
+          FOR ALL ENTRIES IN @lt_try_pernr
+          WHERE pernr = @lt_try_pernr-pernr AND subty = '0010' AND endda = '99991231'.
+        LOOP AT lt_s1_result INTO DATA(ls_s1).
+          IF ls_s1-usrid_long IS NOT INITIAL.
+            lv_np_email = ls_s1-usrid_long.
             APPEND lv_np_email TO lt_to_email.
           ENDIF.
+          ls_found_pernr-pernr = ls_s1-pernr.
+          APPEND ls_found_pernr TO lt_found_pernr. CLEAR ls_found_pernr.
         ENDLOOP.
-        SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
+        SORT lt_found_pernr. DELETE ADJACENT DUPLICATES FROM lt_found_pernr COMPARING pernr.
 
-        " CC: PA0034 -> PA0001 (lowest PERSK E7/E8/E9) -> PA0105
-        LOOP AT lt_uid_pernr INTO DATA(ls_uid_p).
-          ls_np_pernr-pernr = ls_uid_p-pernr.
-          APPEND ls_np_pernr TO lt_np_pernr.
+        " Identify ernam values NOT resolved in step 1
+        LOOP AT lt_np_ernam INTO DATA(ls_en_rem).
+          DATA(lv_try_pernr) TYPE persno.
+          lv_try_pernr = ls_en_rem-ernam.
+          READ TABLE lt_found_pernr TRANSPORTING NO FIELDS WITH KEY pernr = lv_try_pernr.
+          IF sy-subrc NE 0.
+            ls_np_ernam_rem-ernam = ls_en_rem-ernam.
+            APPEND ls_np_ernam_rem TO lt_np_ernam_rem. CLEAR ls_np_ernam_rem.
+          ENDIF.
         ENDLOOP.
+      ENDIF.
+
+      " Step 2: fallback for remaining – usrid=ernam -> PERNR -> email
+      IF lt_np_ernam_rem IS NOT INITIAL.
+        SELECT pernr FROM pa0105
+          INTO TABLE @DATA(lt_uid_pernr)
+          FOR ALL ENTRIES IN @lt_np_ernam_rem
+          WHERE usrid = @lt_np_ernam_rem-ernam AND subty = '0001'
+            AND begda LE @sy-datum AND endda GE @sy-datum.
+        IF lt_uid_pernr IS NOT INITIAL.
+          SELECT usrid_long FROM pa0105
+            INTO TABLE @DATA(lt_pa_np_to)
+            FOR ALL ENTRIES IN @lt_uid_pernr
+            WHERE pernr = @lt_uid_pernr-pernr AND subty = '0010' AND endda = '99991231'.
+          LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
+            IF ls_pa_np_to-usrid_long IS NOT INITIAL.
+              lv_np_email = ls_pa_np_to-usrid_long.
+              APPEND lv_np_email TO lt_to_email.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+
+      SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
+
+      " CC supervisor chain: combine PERNRs from step 1 (lt_found_pernr)
+      "                      and step 2 (lt_uid_pernr)
+      LOOP AT lt_found_pernr INTO DATA(ls_fp).
+        ls_np_pernr-pernr = ls_fp-pernr.
+        APPEND ls_np_pernr TO lt_np_pernr.
+      ENDLOOP.
+      LOOP AT lt_uid_pernr INTO DATA(ls_uid_p).
+        ls_np_pernr-pernr = ls_uid_p-pernr.
+        APPEND ls_np_pernr TO lt_np_pernr.
+      ENDLOOP.
+      SORT lt_np_pernr. DELETE ADJACENT DUPLICATES FROM lt_np_pernr COMPARING pernr.
+
+      " CC: PA0034 -> PA0001 (lowest PERSK E7/E8/E9) -> PA0105
       IF lt_np_pernr IS NOT INITIAL.
         SELECT pernr AS orig_pernr, yy_pernr_rep FROM pa0034
           INTO TABLE @DATA(lt_pa0034_np)
@@ -536,7 +593,6 @@ FORM send_email_not_posted.
           ENDIF.
         ENDIF.
       ENDIF.
-      ENDIF.   " lt_uid_pernr
     ENDIF.     " lt_np_ernam
 
     IF lt_to_email IS INITIAL. CONTINUE. ENDIF.
