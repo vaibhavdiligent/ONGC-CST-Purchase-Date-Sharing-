@@ -322,7 +322,7 @@ FORM send_email_posted.
       lv_html_body = lv_html_body &&
         |<tr>| &&
         |<td>{ ls_final-docnr }</td>| &&
-        |<td>Sales Office { ls_final-vkbur }</td>| &&
+        |<td>{ ls_final-vkbur }</td>| &&
         |<td>{ ls_final-locid }</td>| &&
         |<td>{ lv_partnr }</td>| &&
         |<td>{ lv_ct_start }</td>| &&
@@ -337,7 +337,7 @@ FORM send_email_posted.
       '<p>For more details, please execute T-code YRGR105 with the required input.</p>' &&
       '<p>With warm regards,<br/>GAIL (INDIA) LTD.</p>' &&
       '<hr/><p>This is a system generated mail. Please do not reply.</p><hr/>' &&
-      |<p>Source: { sy-repid }.{ sy-datum }.{ sy-uzeit }</p>| &&
+      |<p>Source: YRGR105.{ sy-uname }.{ sy-datum }.{ sy-uzeit }</p>| &&
       '</body></html>'.
 
     " Send via CL_BCS for proper HTML rendering and sender display name
@@ -619,7 +619,7 @@ FORM send_email_not_posted.
       lv_html_body = lv_html_body &&
         |<tr>| &&
         |<td>{ ls_final-docnr }</td>| &&
-        |<td>Sales Office { ls_final-vkbur }</td>| &&
+        |<td>{ ls_final-vkbur }</td>| &&
         |<td>{ ls_final-locid }</td>| &&
         |<td>{ lv_partnr }</td>| &&
         |<td>{ lv_ct_start }</td>| &&
@@ -632,7 +632,7 @@ FORM send_email_not_posted.
       '<p>For more details, please execute T-code YRGR105/ YRGR102 with the required input.</p>' &&
       '<p>With warm regards,<br/>GAIL (INDIA) LTD.</p>' &&
       '<hr/><p>This is a system generated mail. Please do not reply.</p><hr/>' &&
-      |<p>Source: { sy-repid }.{ sy-datum }.{ sy-uzeit }</p>| &&
+      |<p>Source: YRGR105.{ sy-uname }.{ sy-datum }.{ sy-uzeit }</p>| &&
       '</body></html>'.
 
     " Send via CL_BCS for proper HTML rendering and sender display name
