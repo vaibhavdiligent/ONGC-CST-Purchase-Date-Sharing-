@@ -837,7 +837,7 @@ FORM build_alv_display_table.
     ENDLOOP.
     gt_alv_display = lt_alv_keep.
     " Populate ONGC Material for all rows from gas receipt or mat map
-    " Skip gas receipts whose ongc_material is static for a different state
+    " Skip static ONGC materials from gas receipts; static rows are added separately below
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ongc_pop>)
       WHERE ongc_material IS INITIAL.
       DATA lv_ongc_found TYPE abap_bool.
@@ -852,9 +852,7 @@ FORM build_alv_display_table.
             AND gail_material = ls_ongc_rcpt-material
             AND ongc_material = ls_ongc_rcpt-ongc_material
             AND static        = 'X'.
-          IF ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
-            lv_skip_static = abap_true.
-          ENDIF.
+          lv_skip_static = abap_true.
         ENDLOOP.
         IF lv_skip_static = abap_true.
           CONTINUE.
@@ -864,15 +862,29 @@ FORM build_alv_display_table.
         EXIT.
       ENDLOOP.
       IF lv_ongc_found = abap_false.
+        " First pass: prefer non-static ONGC materials from mat_map
         LOOP AT lt_valid_map INTO ls_vmap_chk
           WHERE location_id   = <fs_ongc_pop>-location_id
             AND gail_material = <fs_ongc_pop>-material.
-          IF ls_vmap_chk-static = 'X' AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+          IF ls_vmap_chk-static = 'X'.
             CONTINUE.
           ENDIF.
           <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
+          lv_ongc_found = abap_true.
           EXIT.
         ENDLOOP.
+        " Second pass: if no non-static found, use state-aware static from mat_map
+        IF lv_ongc_found = abap_false.
+          LOOP AT lt_valid_map INTO ls_vmap_chk
+            WHERE location_id   = <fs_ongc_pop>-location_id
+              AND gail_material = <fs_ongc_pop>-material.
+            IF ls_vmap_chk-static = 'X' AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+              CONTINUE.
+            ENDIF.
+            <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
+            EXIT.
+          ENDLOOP.
+        ENDIF.
       ENDIF.
     ENDLOOP.
     DELETE gt_alv_display WHERE ongc_material IS INITIAL.
