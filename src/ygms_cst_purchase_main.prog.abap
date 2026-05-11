@@ -2275,7 +2275,7 @@ FORM save_data_to_db.
   " Initialize error flag
   lv_error_found = abap_false.
   " First pass: Generate unique GAIL_IDs for each Location-Material-ONGC Material-State combination
-  LOOP AT gt_alv_display INTO gs_alv_display.
+  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id   = gs_alv_display-location_id
                material      = gs_alv_display-material
@@ -2722,9 +2722,11 @@ FORM handle_download.
 
   SELECT * FROM yrga_cst_fn_data
     INTO TABLE lt_all_fnt
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc AND deleted = ' '.
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
 
   " Get unique Location IDs
   LOOP AT lt_all_daily INTO DATA(ls_pur_loc).
@@ -3106,9 +3108,11 @@ FORM handle_send_email.
   DATA lt_fnt_data TYPE TABLE OF yrga_cst_fn_data.
   SELECT * FROM yrga_cst_fn_data
     INTO TABLE lt_fnt_data
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc AND deleted = ' '.
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
 
   " Send email with PDF and/or Excel attachments (daily + fortnightly)
   PERFORM send_email USING lt_emails lt_send_data lt_fnt_data lv_send_pdf lv_send_excel.
@@ -4284,9 +4288,12 @@ FORM handle_send_b2b.
       AND location IN s_loc
       AND exclude <> 'X' AND deleted = ' '.
   SELECT * FROM yrga_cst_fn_data
-  INTO TABLE lt_send_data_fn
-  WHERE date_from = gv_date_from AND date_to = gv_date_to
-    AND location IN s_loc AND deleted = ' '.
+    INTO TABLE lt_send_data_fn
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
   IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
@@ -4685,9 +4692,11 @@ FORM display_send_preview.
   " Fetch fortnightly data from YRGA_CST_FN_DATA
   SELECT * FROM yrga_cst_fn_data
     INTO TABLE lt_cst_fnt
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc AND deleted = ' '.
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
 
   " Build fortnightly preview data
   LOOP AT lt_cst_fnt INTO DATA(ls_fnt_db).
