@@ -3616,11 +3616,9 @@ FORM build_excel_attachment USING pt_data    TYPE STANDARD TABLE
   DATA(lv_s2) = 'CTP'.
   DATA(lv_s3) = 'ONGC_MATER'.
   DATA(lv_s4) = 'STATE_CODE'.
-  DATA lt_pt_data LIKE pt_data.
-  lt_pt_data = pt_data.
-  SORT lt_pt_data BY (lv_s1) (lv_s2) (lv_s3) (lv_s4).
+  SORT pt_data BY (lv_s1) (lv_s2) (lv_s3) (lv_s4).
   " Data rows
-  LOOP AT lt_pt_data INTO ls_pur.
+  LOOP AT pt_data INTO ls_pur.
     WRITE ls_pur-gas_day TO lv_gas_day DD/MM/YYYY.
     WRITE ls_pur-gcv TO lv_gcv DECIMALS 3.
     WRITE ls_pur-ncv TO lv_ncv DECIMALS 3.
