@@ -1175,8 +1175,6 @@ FORM user_command USING r_ucomm     TYPE sy-ucomm
     IMPORTING
       e_grid = lr_grid.
   lr_grid->check_changed_data( ).
-  " Debug: Show which function code was triggered (can be removed later)
-  MESSAGE s000(ygms_msg) WITH 'Function code:' r_ucomm.
   CASE r_ucomm.
     WHEN 'ALLOCATION' OR 'REALLOCATE'.
       DATA: lr_grid1        TYPE REF TO cl_gui_alv_grid,
@@ -5254,16 +5252,19 @@ FORM display_new_receipt_data.
   ls_fieldcat-fieldname = 'GAS_DAY'.
   ls_fieldcat-seltext_l = 'Gas Day'.
   ls_fieldcat-col_pos   = 1.
+  ls_fieldcat-outputlen = 10.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'CTP_ID'.
   ls_fieldcat-seltext_l = 'CTP ID'.
   ls_fieldcat-col_pos   = 2.
+  ls_fieldcat-outputlen = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_MATERIAL'.
   ls_fieldcat-seltext_l = 'ONGC Material'.
   ls_fieldcat-col_pos   = 3.
+  ls_fieldcat-outputlen = 18.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'QTY_SCM'.
@@ -5277,27 +5278,32 @@ FORM display_new_receipt_data.
   ls_fieldcat-seltext_l = 'GCV'.
   ls_fieldcat-col_pos   = 5.
   ls_fieldcat-decimals_out = 3.
+  ls_fieldcat-outputlen = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'NCV'.
   ls_fieldcat-seltext_l = 'NCV'.
   ls_fieldcat-col_pos   = 6.
   ls_fieldcat-decimals_out = 3.
+  ls_fieldcat-outputlen = 12.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'ONGC_ID'.
   ls_fieldcat-seltext_l = 'ONGC ID'.
   ls_fieldcat-col_pos   = 7.
+  ls_fieldcat-outputlen = 20.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'DATE'.
   ls_fieldcat-seltext_l = 'Creation date'.
   ls_fieldcat-col_pos   = 8.
+  ls_fieldcat-outputlen = 10.
   APPEND ls_fieldcat TO lt_fieldcat.
   CLEAR ls_fieldcat.
   ls_fieldcat-fieldname = 'TIME'.
   ls_fieldcat-seltext_l = 'Creation time'.
   ls_fieldcat-col_pos   = 9.
+  ls_fieldcat-outputlen = 10.
   APPEND ls_fieldcat TO lt_fieldcat.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
