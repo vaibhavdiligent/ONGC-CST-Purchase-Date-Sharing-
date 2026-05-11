@@ -835,7 +835,9 @@ FORM email_pending_postings.
         lv_neg_so        TYPE char20,
         ls_doc_data      TYPE sodocchgi1,
         lt_receivers     TYPE STANDARD TABLE OF somlreci1,
-        ls_receiver      TYPE somlreci1.
+        ls_receiver      TYPE somlreci1,
+        lt_sal_offices   TYPE TABLE OF vkbur,
+        lv_sal_office    TYPE vkbur.
 
   " Step 1: Filter entries - Indicator = N or any Diff column NE 0
   LOOP AT it_final INTO ls_pending.
@@ -1055,7 +1057,7 @@ FORM email_pending_postings.
         INTO TABLE @DATA(lt_wf_log)
         FOR ALL ENTRIES IN @lt_cont_ids
         WHERE vbeln    = @lt_cont_ids-cont_id
-          AND yy_level = 1.
+          AND yy_level = 0.
 
       " Keep only first (latest) entry per contract
       SORT lt_wf_log BY cont_id ASCENDING changed_on DESCENDING changed_time DESCENDING.
@@ -1082,6 +1084,36 @@ FORM email_pending_postings.
           ENDIF.
         ENDLOOP.
       ENDIF.
+    ENDIF.
+
+    " 7d: Get EMAIL from YSD_WF_AGENT (VBKUR = sales office, YLEVEL = 1)
+    CLEAR: lt_sal_offices.
+    LOOP AT lt_pending INTO ls_pending.
+      IF ( ls_pending-m_mas_cust IS INITIAL AND ls_pending-customer = ls_email_cust-customer )
+        OR ls_pending-m_mas_cust = ls_email_cust-customer.
+        IF ls_pending-sal_office IS NOT INITIAL.
+          lv_sal_office = ls_pending-sal_office.
+          APPEND lv_sal_office TO lt_sal_offices.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    SORT lt_sal_offices.
+    DELETE ADJACENT DUPLICATES FROM lt_sal_offices.
+
+    IF lt_sal_offices IS NOT INITIAL.
+      SELECT email
+        FROM ysd_wf_agent
+        INTO TABLE @DATA(lt_wf_agent_email)
+        FOR ALL ENTRIES IN @lt_sal_offices
+        WHERE vbkur  = @lt_sal_offices-table_line
+          AND ylevel = 1.
+
+      LOOP AT lt_wf_agent_email INTO DATA(ls_wf_agent_email).
+        IF ls_wf_agent_email-email IS NOT INITIAL.
+          lv_email = ls_wf_agent_email-email.
+          APPEND lv_email TO lt_cc_email_ids.
+        ENDIF.
+      ENDLOOP.
     ENDIF.
 
     " Deduplicate CC, remove any already in TO
@@ -1111,7 +1143,7 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table header - full column names
-    ls_body-line = 'Contract ID|Calc Cumulative Imbalance|Calc Positive Chargeable Imbalance|Calc Negative Chargeable Imbalance|Posted Cumulative Imbalance|Posted Positive Chargeable Imbalance|Posted Negative Chargeable Imbalance|Sales Order|Invoice'.
+    ls_body-line = 'Contract ID|Sales Office|Calc Cumulative Imbalance|Calc Positive Chargeable Imbalance|Calc Negative Chargeable Imbalance|Posted Cumulative Imbalance|Posted Positive Chargeable Imbalance|Posted Negative Chargeable Imbalance|Sales Order|Invoice'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1124,14 +1156,15 @@ FORM email_pending_postings.
         WRITE ls_pending-cum_bal_mbg_cal_so  TO lv_cum_so   LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal_so TO lv_char_so  LEFT-JUSTIFIED.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
-        CONCATENATE ls_pending-cont_id '|'
-                    lv_cum_cal         '|'
-                    lv_char_cal        '|'
-                    lv_neg_cal         '|'
-                    lv_cum_so          '|'
-                    lv_char_so         '|'
-                    lv_neg_so          '|'
-                    ls_pending-sal_order '|'
+        CONCATENATE ls_pending-cont_id      '|'
+                    ls_pending-sal_office    '|'
+                    lv_cum_cal               '|'
+                    lv_char_cal              '|'
+                    lv_neg_cal               '|'
+                    lv_cum_so                '|'
+                    lv_char_so               '|'
+                    lv_neg_so                '|'
+                    ls_pending-sal_order     '|'
                     ls_pending-invoice
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
