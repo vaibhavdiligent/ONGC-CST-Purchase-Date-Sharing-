@@ -477,12 +477,13 @@ FORM send_email_not_posted.
     "           PA0105 usrid=ernam subty 0001 -> PERNR -> PA0105 subty 0010 -> email
     IF lt_np_ernam IS NOT INITIAL.
       " Fill temp PERNR table from ernam (implicit CHAR12->NUMC8 conversion)
-      DATA: lt_try_pernr   TYPE TABLE OF ty_np_pernr,
-            ls_try_pernr   TYPE ty_np_pernr,
-            lt_found_pernr TYPE TABLE OF ty_np_pernr,
-            ls_found_pernr TYPE ty_np_pernr,
+      DATA: lt_try_pernr    TYPE TABLE OF ty_np_pernr,
+            ls_try_pernr    TYPE ty_np_pernr,
+            lt_found_pernr  TYPE TABLE OF ty_np_pernr,
+            ls_found_pernr  TYPE ty_np_pernr,
             lt_np_ernam_rem TYPE TABLE OF ty_np_ernam,
-            ls_np_ernam_rem TYPE ty_np_ernam.
+            ls_np_ernam_rem TYPE ty_np_ernam,
+            lv_try_pernr    TYPE persno.
 
       LOOP AT lt_np_ernam INTO DATA(ls_en_try).
         ls_try_pernr-pernr = ls_en_try-ernam.
@@ -507,7 +508,6 @@ FORM send_email_not_posted.
 
         " Identify ernam values NOT resolved in step 1
         LOOP AT lt_np_ernam INTO DATA(ls_en_rem).
-          DATA(lv_try_pernr) TYPE persno.
           lv_try_pernr = ls_en_rem-ernam.
           READ TABLE lt_found_pernr TRANSPORTING NO FIELDS WITH KEY pernr = lv_try_pernr.
           IF sy-subrc NE 0.
