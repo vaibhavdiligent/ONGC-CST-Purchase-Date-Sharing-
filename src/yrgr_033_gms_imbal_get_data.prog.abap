@@ -470,26 +470,32 @@ FORM send_email_not_posted.
     ENDIF.
     SORT lt_np_ernam BY ernam. DELETE ADJACENT DUPLICATES FROM lt_np_ernam COMPARING ernam.
 
-    " TO: ERNAM/AENAM is the PERNR – get email directly from PA0105 subty 0010
+    " TO: Step 1 – ERNAM/AENAM (user ID) → PA0105 subty 0001 → PERNR
+    "     Step 2 – PERNR → PA0105 subty 0010 → internet email (USRID_LONG)
     IF lt_np_ernam IS NOT INITIAL.
-      SELECT usrid_long FROM pa0105
-        INTO TABLE @DATA(lt_pa_np_to)
+      SELECT pernr FROM pa0105
+        INTO TABLE @DATA(lt_uid_pernr)
         FOR ALL ENTRIES IN @lt_np_ernam
-        WHERE pernr = @lt_np_ernam-ernam AND subty = '0010' AND endda = '99991231'.
-      LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
-        IF ls_pa_np_to-usrid_long IS NOT INITIAL.
-          lv_np_email = ls_pa_np_to-usrid_long.
-          APPEND lv_np_email TO lt_to_email.
-        ENDIF.
-      ENDLOOP.
-      SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
+        WHERE usrid = @lt_np_ernam-ernam AND subty = '0001'
+          AND begda LE @sy-datum AND endda GE @sy-datum.
+      IF lt_uid_pernr IS NOT INITIAL.
+        SELECT usrid_long FROM pa0105
+          INTO TABLE @DATA(lt_pa_np_to)
+          FOR ALL ENTRIES IN @lt_uid_pernr
+          WHERE pernr = @lt_uid_pernr-pernr AND subty = '0010' AND endda = '99991231'.
+        LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
+          IF ls_pa_np_to-usrid_long IS NOT INITIAL.
+            lv_np_email = ls_pa_np_to-usrid_long.
+            APPEND lv_np_email TO lt_to_email.
+          ENDIF.
+        ENDLOOP.
+        SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
 
-      " CC: PA0034 -> PA0001 (lowest PERSK E7/E8/E9) -> PA0105
-      " ERNAM/AENAM is used directly as PERNR for supervisor lookup
-      LOOP AT lt_np_ernam INTO DATA(ls_en_pernr).
-        ls_np_pernr-pernr = ls_en_pernr-ernam.
-        APPEND ls_np_pernr TO lt_np_pernr.
-      ENDLOOP.
+        " CC: PA0034 -> PA0001 (lowest PERSK E7/E8/E9) -> PA0105
+        LOOP AT lt_uid_pernr INTO DATA(ls_uid_p).
+          ls_np_pernr-pernr = ls_uid_p-pernr.
+          APPEND ls_np_pernr TO lt_np_pernr.
+        ENDLOOP.
       IF lt_np_pernr IS NOT INITIAL.
         SELECT pernr AS orig_pernr, yy_pernr_rep FROM pa0034
           INTO TABLE @DATA(lt_pa0034_np)
@@ -530,7 +536,8 @@ FORM send_email_not_posted.
           ENDIF.
         ENDIF.
       ENDIF.
-    ENDIF.
+      ENDIF.   " lt_uid_pernr
+    ENDIF.     " lt_np_ernam
 
     IF lt_to_email IS INITIAL. CONTINUE. ENDIF.
 
