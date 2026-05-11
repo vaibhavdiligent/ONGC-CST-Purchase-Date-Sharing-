@@ -595,33 +595,21 @@ FORM fetch_b2b_data.
         AND qty_scm > 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
-    " Show wide popup listing all Location IDs with no receipt data
-    DATA: lt_no_data_text TYPE TABLE OF tline,
-          ls_no_data_line TYPE tline.
-    ls_no_data_line-tdformat = '*'.
-    ls_no_data_line-tdline   = 'Receipt data not found for a few Location IDs:'.
-    APPEND ls_no_data_line TO lt_no_data_text.
+    DATA lv_loc_list TYPE string.
     LOOP AT s_loc.
-      CLEAR ls_no_data_line.
-      ls_no_data_line-tdformat = ' '.
-      ls_no_data_line-tdline   = s_loc-low.
-      APPEND ls_no_data_line TO lt_no_data_text.
+      IF lv_loc_list IS INITIAL.
+        lv_loc_list = s_loc-low.
+      ELSE.
+        CONCATENATE lv_loc_list ', ' s_loc-low INTO lv_loc_list.
+      ENDIF.
     ENDLOOP.
-    CLEAR ls_no_data_line.
-    ls_no_data_line-tdformat = ' '.
-    ls_no_data_line-tdline   = ' '.
-    APPEND ls_no_data_line TO lt_no_data_text.
-    CLEAR ls_no_data_line.
-    ls_no_data_line-tdformat = '*'.
-    ls_no_data_line-tdline   = 'Program cannot proceed.'.
-    APPEND ls_no_data_line TO lt_no_data_text.
-    CALL FUNCTION 'POPUP_TO_DISPLAY_TEXT'
+    CALL FUNCTION 'POPUP_TO_INFORM'
       EXPORTING
-        titel        = 'Missing Receipt Data'
-        start_column = 20
-        start_row    = 5
-      TABLES
-        text_tab     = lt_no_data_text.
+        titel = 'Missing Receipt Data'
+        txt1  = 'Receipt data not found for Location IDs:'
+        txt2  = lv_loc_list
+        txt3  = 'Program cannot proceed.'
+        txt4  = ''.
     RETURN.
   ENDIF.
   IF lt_b2b_data[] IS NOT INITIAL.
