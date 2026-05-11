@@ -5119,8 +5119,10 @@ FORM build_alv_display_table_view .
           l_ncv = ( <fs_day> * wa_yrga_cst_pur-ncv ) + l_ncv.
         ENDIF.
       ENDLOOP.
-      ls_alv-gcv = l_gcv / ls_alv-total_scm.
-      ls_alv-ncv = l_ncv / ls_alv-total_scm.
+      IF ls_alv-total_scm > 0.
+        ls_alv-gcv = l_gcv / ls_alv-total_scm.
+        ls_alv-ncv = l_ncv / ls_alv-total_scm.
+      ENDIF.
       APPEND ls_alv TO gt_alv_display.
       CLEAR: ls_alv, l_gcv, l_ncv.
     ENDLOOP.
@@ -5964,7 +5966,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'DELETED_RESON'.
     ls_fieldcat-seltext_l = 'Deletion Reason'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 17.
+    ls_fieldcat-outputlen = 40.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
   ENDIF.
@@ -6240,7 +6242,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'DELETED_RESON'.
     ls_fieldcat-seltext_l = 'Deletion Reason'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 17.
+    ls_fieldcat-outputlen = 40.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
   ENDIF.
