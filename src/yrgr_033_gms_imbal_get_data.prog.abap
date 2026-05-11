@@ -470,68 +470,63 @@ FORM send_email_not_posted.
     ENDIF.
     SORT lt_np_ernam BY ernam. DELETE ADJACENT DUPLICATES FROM lt_np_ernam COMPARING ernam.
 
+    " TO: ERNAM/AENAM is the PERNR – get email directly from PA0105 subty 0010
     IF lt_np_ernam IS NOT INITIAL.
-      SELECT pernr FROM pa0105
-        INTO TABLE @DATA(lt_uid_pernr)
+      SELECT usrid_long FROM pa0105
+        INTO TABLE @DATA(lt_pa_np_to)
         FOR ALL ENTRIES IN @lt_np_ernam
-        WHERE usrid = @lt_np_ernam-ernam AND subty = '0001'
-          AND begda LE @sy-datum AND endda GE @sy-datum.
-      IF lt_uid_pernr IS NOT INITIAL.
-        SELECT usrid_long FROM pa0105
-          INTO TABLE @DATA(lt_pa_np_to)
-          FOR ALL ENTRIES IN @lt_uid_pernr
-          WHERE pernr = @lt_uid_pernr-pernr AND subty = '0010' AND endda = '99991231'.
-        LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
-          IF ls_pa_np_to-usrid_long IS NOT INITIAL.
-            lv_np_email = ls_pa_np_to-usrid_long.
-            APPEND lv_np_email TO lt_to_email.
-          ENDIF.
-        ENDLOOP.
-        SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
+        WHERE pernr = @lt_np_ernam-ernam AND subty = '0010' AND endda = '99991231'.
+      LOOP AT lt_pa_np_to INTO DATA(ls_pa_np_to).
+        IF ls_pa_np_to-usrid_long IS NOT INITIAL.
+          lv_np_email = ls_pa_np_to-usrid_long.
+          APPEND lv_np_email TO lt_to_email.
+        ENDIF.
+      ENDLOOP.
+      SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
 
-        " CC: PA0034 -> PA0001 (lowest PERSK E7/E8/E9) -> PA0105
-        LOOP AT lt_uid_pernr INTO DATA(ls_uid_p).
-          ls_np_pernr-pernr = ls_uid_p-pernr.
-          APPEND ls_np_pernr TO lt_np_pernr.
-        ENDLOOP.
-        IF lt_np_pernr IS NOT INITIAL.
-          SELECT pernr AS orig_pernr, yy_pernr_rep FROM pa0034
-            INTO TABLE @DATA(lt_pa0034_np)
-            FOR ALL ENTRIES IN @lt_np_pernr
-            WHERE pernr  = @lt_np_pernr-pernr
-              AND subty IN ('9001', '9002', '9003', '9113', '9114')
+      " CC: PA0034 -> PA0001 (lowest PERSK E7/E8/E9) -> PA0105
+      " ERNAM/AENAM is used directly as PERNR for supervisor lookup
+      LOOP AT lt_np_ernam INTO DATA(ls_en_pernr).
+        ls_np_pernr-pernr = ls_en_pernr-ernam.
+        APPEND ls_np_pernr TO lt_np_pernr.
+      ENDLOOP.
+      IF lt_np_pernr IS NOT INITIAL.
+        SELECT pernr AS orig_pernr, yy_pernr_rep FROM pa0034
+          INTO TABLE @DATA(lt_pa0034_np)
+          FOR ALL ENTRIES IN @lt_np_pernr
+          WHERE pernr  = @lt_np_pernr-pernr
+            AND subty IN ('9001', '9002', '9003', '9113', '9114')
+            AND begda LE @sy-datum AND endda GE @sy-datum.
+        IF lt_pa0034_np IS NOT INITIAL.
+          SELECT pernr, persk FROM pa0001
+            INTO TABLE @DATA(lt_pa0001_np)
+            FOR ALL ENTRIES IN @lt_pa0034_np
+            WHERE pernr  = @lt_pa0034_np-yy_pernr_rep
+              AND persk IN ('E7', 'E8', 'E9')
               AND begda LE @sy-datum AND endda GE @sy-datum.
-          IF lt_pa0034_np IS NOT INITIAL.
-            SELECT pernr, persk FROM pa0001
-              INTO TABLE @DATA(lt_pa0001_np)
-              FOR ALL ENTRIES IN @lt_pa0034_np
-              WHERE pernr  = @lt_pa0034_np-yy_pernr_rep
-                AND persk IN ('E7', 'E8', 'E9')
-                AND begda LE @sy-datum AND endda GE @sy-datum.
-            LOOP AT lt_pa0034_np INTO DATA(ls_pa0034_np).
-              READ TABLE lt_pa0001_np INTO DATA(ls_pa0001_np)
-                WITH KEY pernr = ls_pa0034_np-yy_pernr_rep.
-              IF sy-subrc = 0.
-                ls_cc_rep-orig_pernr   = ls_pa0034_np-orig_pernr.
-                ls_cc_rep-yy_pernr_rep = ls_pa0034_np-yy_pernr_rep.
-                ls_cc_rep-persk        = ls_pa0001_np-persk.
-                APPEND ls_cc_rep TO lt_cc_rep. CLEAR ls_cc_rep.
+          LOOP AT lt_pa0034_np INTO DATA(ls_pa0034_np).
+            READ TABLE lt_pa0001_np INTO DATA(ls_pa0001_np)
+              WITH KEY pernr = ls_pa0034_np-yy_pernr_rep.
+            IF sy-subrc = 0.
+              ls_cc_rep-orig_pernr   = ls_pa0034_np-orig_pernr.
+              ls_cc_rep-yy_pernr_rep = ls_pa0034_np-yy_pernr_rep.
+              ls_cc_rep-persk        = ls_pa0001_np-persk.
+              APPEND ls_cc_rep TO lt_cc_rep. CLEAR ls_cc_rep.
+            ENDIF.
+          ENDLOOP.
+          " Keep lowest grade per original PERNR
+          SORT lt_cc_rep BY orig_pernr ASCENDING persk ASCENDING.
+          DELETE ADJACENT DUPLICATES FROM lt_cc_rep COMPARING orig_pernr.
+          IF lt_cc_rep IS NOT INITIAL.
+            SELECT usrid_long FROM pa0105
+              INTO TABLE @DATA(lt_cc_rep_email)
+              FOR ALL ENTRIES IN @lt_cc_rep
+              WHERE pernr = @lt_cc_rep-yy_pernr_rep AND subty = '0010' AND endda = '99991231'.
+            LOOP AT lt_cc_rep_email INTO DATA(ls_cc_rep_em).
+              IF ls_cc_rep_em-usrid_long IS NOT INITIAL.
+                lv_np_email = ls_cc_rep_em-usrid_long. APPEND lv_np_email TO lt_cc_email.
               ENDIF.
             ENDLOOP.
-            " Keep lowest grade per original PERNR
-            SORT lt_cc_rep BY orig_pernr ASCENDING persk ASCENDING.
-            DELETE ADJACENT DUPLICATES FROM lt_cc_rep COMPARING orig_pernr.
-            IF lt_cc_rep IS NOT INITIAL.
-              SELECT usrid_long FROM pa0105
-                INTO TABLE @DATA(lt_cc_rep_email)
-                FOR ALL ENTRIES IN @lt_cc_rep
-                WHERE pernr = @lt_cc_rep-yy_pernr_rep AND subty = '0010' AND endda = '99991231'.
-              LOOP AT lt_cc_rep_email INTO DATA(ls_cc_rep_em).
-                IF ls_cc_rep_em-usrid_long IS NOT INITIAL.
-                  lv_np_email = ls_cc_rep_em-usrid_long. APPEND lv_np_email TO lt_cc_email.
-                ENDIF.
-              ENDLOOP.
-            ENDIF.
           ENDIF.
         ENDIF.
       ENDIF.
