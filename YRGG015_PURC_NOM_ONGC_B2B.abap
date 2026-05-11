@@ -242,7 +242,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     IF gv_toolbar_done = abap_true. RETURN. ENDIF.
     CLEAR ls_tb.
     ls_tb-function  = 'BCMASS'.
-    ls_tb-icon      = '@B7@'.
+    ls_tb-icon      = '@EJ@'.
     ls_tb-quickinfo = 'Batch Change in Mass'.
     ls_tb-text      = 'Batch Change'.
     INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
@@ -251,7 +251,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
     CLEAR ls_tb.
     ls_tb-function  = 'CRENOM'.
-    ls_tb-icon      = '@00@'.
+    ls_tb-icon      = '@15@'.
     ls_tb-quickinfo = 'Create Nomination'.
     ls_tb-text      = 'Create Nomination'.
     INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
@@ -996,7 +996,7 @@ FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
   IF gv_toolbar_done = abap_true. RETURN. ENDIF.
   CLEAR ls_tb.
   ls_tb-function  = 'BCMASS'.
-  ls_tb-icon      = '@B7@'.
+  ls_tb-icon      = '@EJ@'.
   ls_tb-quickinfo = 'Batch Change in Mass'.
   ls_tb-text      = 'Batch Change'.
   INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
@@ -1005,7 +1005,7 @@ FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
   INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
   CLEAR ls_tb.
   ls_tb-function  = 'CRENOM'.
-  ls_tb-icon      = '@00@'.
+  ls_tb-icon      = '@15@'.
   ls_tb-quickinfo = 'Create Nomination'.
   ls_tb-text      = 'Create Nomination'.
   INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
