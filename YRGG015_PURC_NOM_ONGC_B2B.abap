@@ -9,6 +9,8 @@ REPORT yrgg015_purc_nom_ongc_b2b MESSAGE-ID oo
 
 TABLES: oijnomi.
 
+TYPE-POOLS: icon.
+
 *----------------------------------------------------------------------*
 * TYPE DECLARATIONS
 *----------------------------------------------------------------------*
@@ -658,7 +660,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
       FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
       INTO CORRESPONDING FIELDS OF TABLE gt_ekoa_c
       WHERE ekko~ebeln IN lr_vbeln
-        AND ekpo~lvorm <> 'X'
+        AND ekpo~loekz <> 'X'
         AND ekpo~mwskz =  'DQ'
         AND ekko~loekz =  ' '.
     SORT gt_ekoa_c BY ebeln werks.
@@ -669,7 +671,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   IF lr_matnr IS NOT INITIAL.
     SELECT matnr werks charg ersda FROM mcha
       INTO CORRESPONDING FIELDS OF TABLE gt_mcha_c
-      WHERE matnr IN lr_matnr AND lvorm = ' '.
+      WHERE matnr IN lr_matnr.
     SORT gt_mcha_c BY matnr ersda DESCENDING.
   ENDIF.
 ENDFORM.
@@ -776,14 +778,14 @@ FORM get_valid_batches_for_material
   IF lt_werks IS NOT INITIAL.
     SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
     LOOP AT lt_werks INTO lv_werks.
-      SELECT matnr werks charg ersda lvorm FROM mcha
+      SELECT matnr werks charg ersda FROM mcha
         APPENDING CORRESPONDING FIELDS OF TABLE lt_mcha
-        WHERE matnr = iv_matnr AND werks = lv_werks AND lvorm = ' '.
+        WHERE matnr = iv_matnr AND werks = lv_werks.
     ENDLOOP.
   ELSE.
-    SELECT matnr werks charg ersda lvorm FROM mcha
+    SELECT matnr werks charg ersda FROM mcha
       INTO CORRESPONDING FIELDS OF TABLE lt_mcha
-      WHERE matnr = iv_matnr AND lvorm = ' '.
+      WHERE matnr = iv_matnr.
   ENDIF.
   SORT lt_mcha BY ersda DESCENDING.
   LOOP AT lt_mcha INTO ls_mcha.
