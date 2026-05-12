@@ -532,7 +532,7 @@ START-OF-SELECTION.
           IF lv_miss_str IS INITIAL.
             lv_miss_str = lv_miss_view.
           ELSE.
-            CONCATENATE lv_miss_str ', ' lv_miss_view INTO lv_miss_str.
+            CONCATENATE lv_miss_str ' , ' lv_miss_view INTO lv_miss_str.
           ENDIF.
         ENDLOOP.
         CALL FUNCTION 'POPUP_TO_INFORM'
