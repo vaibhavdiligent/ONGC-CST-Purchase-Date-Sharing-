@@ -2855,6 +2855,12 @@ ENDFORM.
 FORM handle_send.
   DATA: lv_valid TYPE abap_bool.
 
+  " Check that saved allocation data exists for all selected locations
+  PERFORM check_saved_data_before_send CHANGING lv_valid.
+  IF lv_valid = abap_false.
+    RETURN.
+  ENDIF.
+
   " Step 1.2: Data validation before initiating data transfer
   " Check if any new receipt data has been received from ONGC
   PERFORM validate_before_send CHANGING lv_valid.
@@ -2865,6 +2871,41 @@ FORM handle_send.
   " Step 1.2.4: If no new data, display data preview with daily/fortnightly toggle
   " Then show Send mode selection popup
   PERFORM display_send_preview.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CHECK_SAVED_DATA_BEFORE_SEND
+*& Verify saved allocation data exists in YRGA_CST_PUR for every
+*& selected location before attempting to send
+*&---------------------------------------------------------------------*
+FORM check_saved_data_before_send CHANGING cv_valid TYPE abap_bool.
+  DATA: lv_missing_locs TYPE string,
+        lv_loc_found    TYPE ygms_de_loc_id.
+  cv_valid = abap_true.
+  LOOP AT s_loc.
+    SELECT SINGLE location FROM yrga_cst_pur
+      INTO @lv_loc_found
+      WHERE gas_day  BETWEEN @gv_date_from AND @gv_date_to
+        AND location = @s_loc-low
+        AND exclude  <> 'X'
+        AND deleted  = ' '.
+    IF sy-subrc <> 0.
+      IF lv_missing_locs IS INITIAL.
+        lv_missing_locs = s_loc-low.
+      ELSE.
+        CONCATENATE lv_missing_locs ', ' s_loc-low INTO lv_missing_locs.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+  IF lv_missing_locs IS NOT INITIAL.
+    cv_valid = abap_false.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'No Saved Data'
+        txt1  = 'No allocation data found for Location IDs:'
+        txt2  = lv_missing_locs
+        txt3  = 'Please run allocation and save before sending.'
+        txt4  = ''.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form VALIDATE_BEFORE_SEND
@@ -5314,6 +5355,7 @@ FORM display_new_receipt_data.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
+  SORT gt_new_receipt_data BY gas_day ASCENDING ctp_id ASCENDING ongc_material ASCENDING date DESCENDING time DESCENDING.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
       i_title               = 'New Receipt Data from ONGC'
