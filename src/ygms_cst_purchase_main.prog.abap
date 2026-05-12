@@ -532,7 +532,8 @@ START-OF-SELECTION.
           IF lv_miss_str IS INITIAL.
             lv_miss_str = lv_miss_view.
           ELSE.
-            CONCATENATE lv_miss_str ' , ' lv_miss_view INTO lv_miss_str.
+            CONCATENATE lv_miss_str ' , ' lv_miss_view INTO lv_miss_str
+            SEPARATED BY space.
           ENDIF.
         ENDLOOP.
         CALL FUNCTION 'POPUP_TO_INFORM'
@@ -615,7 +616,8 @@ FORM fetch_b2b_data.
       IF lv_loc_list IS INITIAL.
         lv_loc_list = s_loc-low.
       ELSE.
-        CONCATENATE lv_loc_list ', ' s_loc-low INTO lv_loc_list.
+        CONCATENATE lv_loc_list ', ' s_loc-low INTO lv_loc_list
+        SEPARATED BY space..
       ENDIF.
     ENDLOOP.
     CALL FUNCTION 'POPUP_TO_INFORM'
@@ -2907,7 +2909,8 @@ FORM check_saved_data_before_send CHANGING cv_valid TYPE abap_bool.
       IF lv_missing_locs IS INITIAL.
         lv_missing_locs = s_loc-low.
       ELSE.
-        CONCATENATE lv_missing_locs ', ' s_loc-low INTO lv_missing_locs.
+        CONCATENATE lv_missing_locs ', ' s_loc-low INTO lv_missing_locs
+        SEPARATED BY space..
       ENDIF.
     ENDIF.
   ENDLOOP.
@@ -6919,7 +6922,8 @@ FORM check_missing_locations.
       IF lv_missing_locs IS INITIAL.
         lv_missing_locs = lv_loc.
       ELSE.
-        CONCATENATE lv_missing_locs ', ' lv_loc INTO lv_missing_locs.
+        CONCATENATE lv_missing_locs ', ' lv_loc INTO lv_missing_locs
+        SEPARATED BY space..
       ENDIF.
     ENDLOOP.
     CALL FUNCTION 'POPUP_TO_INFORM'
