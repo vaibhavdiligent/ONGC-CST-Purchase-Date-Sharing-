@@ -1193,8 +1193,7 @@ FORM email_pending_postings.
     " Step 9: Send email
     " Note: Sender 'GAIL PARTNER CARE GMS' requires execution under background user BKG_GMS
     ls_doc_data-obj_descr = lv_subject.
-    ls_doc_data-obj_name  = 'IMB_PEND'.
-    ls_doc_data-obj_type  = 'HTM'.
+    ls_doc_data-obj_name  = 'HTM'.
 
     " TO recipients (express = X)
     LOOP AT lt_email_ids INTO lv_email.
