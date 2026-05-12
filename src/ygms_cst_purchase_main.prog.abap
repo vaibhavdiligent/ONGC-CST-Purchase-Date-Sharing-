@@ -206,6 +206,8 @@ START-OF-SELECTION.
   CHECK gt_gas_receipt IS NOT INITIAL.
   PERFORM map_location_ids.
   PERFORM map_material_names.
+  PERFORM check_missing_location_data.
+  CHECK gt_gas_receipt IS NOT INITIAL.
   PERFORM fetch_data_yrxr098.
   PERFORM build_alv_display_table.
   PERFORM display_editable_alv.
@@ -352,6 +354,79 @@ FORM map_material_names.
     SORT gt_gas_receipt BY material.
     DELETE gt_gas_receipt WHERE material NOT IN r_matnr.
   ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CHECK_MISSING_LOCATION_DATA
+*&---------------------------------------------------------------------*
+FORM check_missing_location_data.
+  TYPES: BEGIN OF lty_missing_loc,
+           location_id TYPE ygms_de_loc_id,
+           message     TYPE char80,
+         END OF lty_missing_loc.
+  DATA: lt_receipt_locs TYPE TABLE OF ygms_de_loc_id,
+        lt_input_locs   TYPE TABLE OF ygms_de_loc_id,
+        lt_missing_locs TYPE TABLE OF lty_missing_loc,
+        ls_missing      TYPE lty_missing_loc,
+        lv_answer       TYPE c.
+  DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv.
+  LOOP AT gt_gas_receipt INTO DATA(ls_receipt).
+    COLLECT ls_receipt-location_id INTO lt_receipt_locs.
+  ENDLOOP.
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_map).
+    COLLECT ls_map-gail_loc_id INTO lt_input_locs.
+  ENDLOOP.
+  LOOP AT lt_input_locs INTO DATA(lv_input_loc).
+    READ TABLE lt_receipt_locs TRANSPORTING NO FIELDS
+      WITH KEY table_line = lv_input_loc.
+    IF sy-subrc <> 0.
+      CLEAR ls_missing.
+      ls_missing-location_id = lv_input_loc.
+      ls_missing-message = 'No receipt/allocation data found'.
+      APPEND ls_missing TO lt_missing_locs.
+    ENDIF.
+  ENDLOOP.
+  CHECK lt_missing_locs IS NOT INITIAL.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'Error - Missing Location Data'
+      text_question         = 'No receipt/allocation data found for some Location IDs. Click Details to view.'
+      text_button_1         = 'Details'
+      text_button_2         = 'Close'
+      default_button        = '1'
+      display_cancel_button = ''
+    IMPORTING
+      answer                = lv_answer.
+  IF lv_answer = '1'.
+    CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'LOCATION_ID'.
+    ls_fieldcat-seltext_l = 'Location ID'.
+    ls_fieldcat-col_pos   = 1.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    CLEAR ls_fieldcat.
+    ls_fieldcat-fieldname = 'MESSAGE'.
+    ls_fieldcat-seltext_l = 'Error Message'.
+    ls_fieldcat-col_pos   = 2.
+    ls_fieldcat-outputlen = 50.
+    APPEND ls_fieldcat TO lt_fieldcat.
+    CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
+      EXPORTING
+        i_title               = 'Locations Without Receipt Data'
+        i_selection           = ' '
+        i_zebra               = abap_true
+        i_screen_start_column = 10
+        i_screen_start_line   = 5
+        i_screen_end_column   = 100
+        i_screen_end_line     = 20
+        i_tabname             = 'LT_MISSING_LOCS'
+        it_fieldcat           = lt_fieldcat
+      TABLES
+        t_outtab              = lt_missing_locs
+      EXCEPTIONS
+        program_error         = 1
+        OTHERS                = 2.
+  ENDIF.
+  CLEAR gt_gas_receipt.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form FETCH_DATA_YRXR098
