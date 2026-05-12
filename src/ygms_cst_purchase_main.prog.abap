@@ -5355,7 +5355,7 @@ FORM display_new_receipt_data.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
-  SORT gt_new_receipt_data BY gas_day ASCENDING ctp_id ASCENDING ongc_material ASCENDING date DESCENDING time DESCENDING.
+  SORT gt_new_receipt_data BY gas_day ASCENDING ctp_id ASCENDING ongc_material ASCENDING received_on DESCENDING received_at DESCENDING.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
       i_title               = 'New Receipt Data from ONGC'
