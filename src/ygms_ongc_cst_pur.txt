@@ -266,6 +266,11 @@ FORM process_view.
     MESSAGE s000(ygms_msg) WITH 'No data found for selection criteria'.
     RETURN.
   ENDIF.
+  SORT gt_view_data BY gas_day ASCENDING
+                       ctp_id ASCENDING
+                       ongc_material ASCENDING
+                       received_on DESCENDING
+                       received_at DESCENDING.
   PERFORM display_view_alv.
 ENDFORM.
 *&---------------------------------------------------------------------*
