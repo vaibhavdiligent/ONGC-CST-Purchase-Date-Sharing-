@@ -1130,24 +1130,24 @@ FORM email_pending_postings.
     CONCATENATE 'Pending IMB Posting_' lv_customer_disp '_' lv_date_l ' - ' lv_date_h
       INTO lv_subject.
 
-    ls_body-line = 'Dear Ma''am/ Sir,'.
+    ls_body-line = '<html><body>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = ' '.
+    ls_body-line = '<p>Dear Ma''am/ Sir,</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    CONCATENATE 'Please find below instances pertaining to the pending Imbalance'
-                'posting for' lv_customer_disp 'for' lv_date_l 'to' lv_date_h
-                '. Please take necessary action in this regard.'
-      INTO ls_body-line SEPARATED BY space.
+    CONCATENATE '<p>Please find below instances pertaining to the pending Imbalance posting for '
+                lv_customer_disp ' for ' lv_date_l ' to ' lv_date_h
+                '. Please take necessary action in this regard.</p>'
+      INTO ls_body-line.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = ' '.
+    ls_body-line = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-
-    " Table header
-    ls_body-line = '-----------+------------+-------------+-------------+-----------+------------+------------+------------+-----------+-------'.
+    ls_body-line = '<tr style="background-color:#4472C4;color:white;font-weight:bold">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = 'Contract ID|Sales Office|Cum Imbalance|Chg Imbalance|Neg Chg Imb|Post Cum Imb|Post Chg Imb|Post Neg Imb|Sales Order|Invoice'.
+    ls_body-line = '<th>Contract ID</th><th>Sales Office</th><th>Cum Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '-----------+------------+-------------+-------------+-----------+------------+------------+------------+-----------+-------'.
+    ls_body-line = '<th>Chg Imbalance</th><th>Neg Chg Imb</th><th>Post Cum Imb</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th>Post Chg Imb</th><th>Post Neg Imb</th><th>Sales Order</th><th>Invoice</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1160,48 +1160,41 @@ FORM email_pending_postings.
         WRITE ls_pending-cum_bal_mbg_cal_so  TO lv_cum_so   LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal_so TO lv_char_so  LEFT-JUSTIFIED.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
-        CONCATENATE ls_pending-cont_id      '|'
-                    ls_pending-sal_office    '|'
-                    lv_cum_cal               '|'
-                    lv_char_cal              '|'
-                    lv_neg_cal               '|'
-                    lv_cum_so                '|'
-                    lv_char_so               '|'
-                    lv_neg_so                '|'
-                    ls_pending-sal_order     '|'
-                    ls_pending-invoice
+        ls_body-line = '<tr>'.
+        APPEND ls_body TO lt_body. CLEAR ls_body.
+        CONCATENATE '<td>' ls_pending-cont_id '</td><td>' ls_pending-sal_office '</td>'
+          INTO ls_body-line.
+        APPEND ls_body TO lt_body. CLEAR ls_body.
+        CONCATENATE '<td>' lv_cum_cal '</td><td>' lv_char_cal '</td><td>' lv_neg_cal '</td>'
+          INTO ls_body-line.
+        APPEND ls_body TO lt_body. CLEAR ls_body.
+        CONCATENATE '<td>' lv_cum_so '</td><td>' lv_char_so '</td><td>' lv_neg_so '</td>'
+          INTO ls_body-line.
+        APPEND ls_body TO lt_body. CLEAR ls_body.
+        CONCATENATE '<td>' ls_pending-sal_order '</td><td>' ls_pending-invoice '</td></tr>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
       ENDIF.
     ENDLOOP.
-    ls_body-line = '-----------+------------+-------------+-------------+-----------+------------+------------+------------+-----------+-------'.
+    ls_body-line = '</table>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
-    ls_body-line = ' '.
+    ls_body-line = '<p>For more details, please execute T-code YRG011N/ YRGR102 with the required input.</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = 'For more details, please execute T-code YRG011N/ YRGR102 with the required input.'.
+    ls_body-line = '<p>Regards,<br>BIS Admin</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = ' '.
+    ls_body-line = '<hr><p><em>This is system generated mail, Please do not reply.</em></p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = 'Regards,'.
+    CONCATENATE '<p>Source: ' lv_source '</p>' INTO ls_body-line.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = 'BIS Admin'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = ' '.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '********************************************************************************'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = 'This is system generated mail, Please do not reply.'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '********************************************************************************'.
-    APPEND ls_body TO lt_body. CLEAR ls_body.
-    CONCATENATE 'Source:' lv_source INTO ls_body-line.
+    ls_body-line = '</body></html>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Step 9: Send email
     " Note: Sender 'GAIL PARTNER CARE GMS' requires execution under background user BKG_GMS
     ls_doc_data-obj_descr = lv_subject.
     ls_doc_data-obj_name  = 'IMB_PEND'.
+    ls_doc_data-obj_type  = 'HTM'.
 
     " TO recipients (express = X)
     LOOP AT lt_email_ids INTO lv_email.

@@ -805,20 +805,18 @@ FORM send_email.
     " Build attachment name (same as subject, truncated to field length)
     lv_att_name = lv_subject.
 
-    " Build email body
-    APPEND 'Dear Ma''am/ Sir,' TO lt_body.
-    APPEND '' TO lt_body.
-    CONCATENATE 'Please find below instances pertaining to the pending Overrun posting for'
-                lv_kunnr_disp 'for' lv_date_range
-                '. Please take necessary action in this regard.'
-                INTO lv_body_line SEPARATED BY space.
+    " Build HTML email body
+    APPEND '<html><body>' TO lt_body.
+    APPEND '<p>Dear Ma''am/ Sir,</p>' TO lt_body.
+    CONCATENATE '<p>Please find below instances pertaining to the pending Overrun posting for '
+                lv_kunnr_disp ' for ' lv_date_range
+                '. Please take necessary action in this regard.</p>'
+                INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
-    APPEND '' TO lt_body.
-
-    " Table header
-    APPEND '-----------+------------+--------------+--------------+----------+-----------+-------' TO lt_body.
-    APPEND 'Contract ID|Sales Office|Cumulative Ovr|Chargeable Ovr|Posted Ovr|Sales Order|Invoice' TO lt_body.
-    APPEND '-----------+------------+--------------+--------------+----------+-----------+-------' TO lt_body.
+    APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
+    APPEND '<tr style="background-color:#4472C4;color:white;font-weight:bold">' TO lt_body.
+    APPEND '<th>Contract ID</th><th>Sales Office</th><th>Cumulative Ovr</th>' TO lt_body.
+    APPEND '<th>Chargeable Ovr</th><th>Posted Ovr</th><th>Sales Order</th><th>Invoice</th></tr>' TO lt_body.
 
     " CSV header for attachment
     lv_csv_str = 'Contract ID,Sales Office,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
@@ -828,7 +826,6 @@ FORM send_email.
       DATA: lv_cum_c(15)     TYPE c.
       DATA: lv_char_c(15)    TYPE c.
       DATA: lv_posted_c(15)  TYPE c.
-      DATA: lv_table_row     TYPE so_text255.
 
       WRITE wa_row-cum_bal_mbg_cal    TO lv_cum_c    DECIMALS 3.
       WRITE wa_row-char_bal_mbg_cal   TO lv_char_c   DECIMALS 3.
@@ -836,15 +833,17 @@ FORM send_email.
 
       CONDENSE: lv_cum_c, lv_char_c, lv_posted_c.
 
-      CONCATENATE wa_row-cont_id         '|'
-                  wa_row-sal_office      '|'
-                  lv_cum_c               '|'
-                  lv_char_c              '|'
-                  lv_posted_c            '|'
-                  wa_row-sal_order       '|'
-                  wa_row-invoice
-                  INTO lv_table_row.
-      APPEND lv_table_row TO lt_body.
+      APPEND '<tr>' TO lt_body.
+      CONCATENATE '<td>' wa_row-cont_id '</td><td>' wa_row-sal_office '</td>'
+        INTO lv_body_line.
+      APPEND lv_body_line TO lt_body.
+      CONCATENATE '<td>' lv_cum_c '</td><td>' lv_char_c '</td>'
+                  '<td>' lv_posted_c '</td>'
+        INTO lv_body_line.
+      APPEND lv_body_line TO lt_body.
+      CONCATENATE '<td>' wa_row-sal_order '</td><td>' wa_row-invoice '</td></tr>'
+        INTO lv_body_line.
+      APPEND lv_body_line TO lt_body.
 
       " CSV row for attachment
       DATA: lv_csv_row TYPE string.
@@ -855,11 +854,13 @@ FORM send_email.
                   INTO lv_csv_str.
     ENDLOOP.
 
-    APPEND '-----------+------------+--------------+--------------+----------+-----------+-------' TO lt_body.
-    APPEND '' TO lt_body.
-    APPEND 'For more details, please execute T-code YRG011N/ YRGR102 with the required input' TO lt_body.
-    APPEND '' TO lt_body.
-    APPEND lv_source TO lt_body.
+    APPEND '</table>' TO lt_body.
+    APPEND '<p>For more details, please execute T-code YRG011N/ YRGR102 with the required input.</p>' TO lt_body.
+    APPEND '<p>Regards,<br>BIS Admin</p>' TO lt_body.
+    APPEND '<hr><p><em>This is system generated mail, Please do not reply.</em></p>' TO lt_body.
+    CONCATENATE '<p>Source: ' lv_source '</p>' INTO lv_body_line.
+    APPEND lv_body_line TO lt_body.
+    APPEND '</body></html>' TO lt_body.
 
     " Convert CSV string to SOLIX for attachment
     CALL FUNCTION 'SCMS_STRING_TO_XSTRING'
@@ -888,7 +889,7 @@ FORM send_email.
 
     TRY.
         lo_document = cl_document_bcs=>create_document(
-                        i_type    = 'RAW'
+                        i_type    = 'HTM'
                         i_text    = lt_body
                         i_subject = lv_subject ).
       CATCH cx_document_bcs.
