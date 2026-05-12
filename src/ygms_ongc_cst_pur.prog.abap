@@ -1902,6 +1902,15 @@ FORM display_new_receipt_data.
   ls_fieldcat-seltext_l = 'Time Stamp'.
   ls_fieldcat-col_pos   = 8.
   APPEND ls_fieldcat TO lt_fieldcat.
+  SORT gt_new_receipt_data BY gas_day ASCENDING ongc_material ASCENDING time_stamp DESCENDING.
+  DATA: lt_sort TYPE slis_t_sortinfo_alv,
+        ls_sort TYPE slis_sortinfo_alv.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'GAS_DAY'.       ls_sort-up = abap_true.   ls_sort-spos = 1. APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'ONGC_MATERIAL'. ls_sort-up = abap_true.   ls_sort-spos = 2. APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'TIME_STAMP'.    ls_sort-down = abap_true. ls_sort-spos = 3. APPEND ls_sort TO lt_sort.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
       i_title               = 'New Receipt Data from ONGC'
@@ -1913,6 +1922,7 @@ FORM display_new_receipt_data.
       i_screen_end_line     = 25
       i_tabname             = 'GT_NEW_RECEIPT_DATA'
       it_fieldcat           = lt_fieldcat
+      it_sort               = lt_sort
     TABLES
       t_outtab              = gt_new_receipt_data
     EXCEPTIONS
