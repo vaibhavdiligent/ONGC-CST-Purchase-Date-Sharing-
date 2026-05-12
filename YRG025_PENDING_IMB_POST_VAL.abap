@@ -1142,12 +1142,12 @@ FORM email_pending_postings.
     ls_body-line = ' '.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
-    " Table header - full column names
-    CONCATENATE 'Contract ID|Sales Office|Calc Cumulative Imbalance|Calc Positive Chargeable Imbalance'
-                '|Calc Negative Chargeable Imbalance|Posted Cumulative Imbalance'
-                '|Posted Positive Chargeable Imbalance|Posted Negative Chargeable Imbalance'
-                '|Sales Order|Invoice'
-      INTO ls_body-line.
+    " Table header
+    ls_body-line = '-----------+------------+-------------+-------------+-----------+------------+------------+------------+-----------+-------'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = 'Contract ID|Sales Office|Cum Imbalance|Chg Imbalance|Neg Chg Imb|Post Cum Imb|Post Chg Imb|Post Neg Imb|Sales Order|Invoice'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '-----------+------------+-------------+-------------+-----------+------------+------------+------------+-----------+-------'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1174,6 +1174,8 @@ FORM email_pending_postings.
         APPEND ls_body TO lt_body. CLEAR ls_body.
       ENDIF.
     ENDLOOP.
+    ls_body-line = '-----------+------------+-------------+-------------+-----------+------------+------------+------------+-----------+-------'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
 
     ls_body-line = ' '.
     APPEND ls_body TO lt_body. CLEAR ls_body.

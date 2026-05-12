@@ -816,9 +816,9 @@ FORM send_email.
     APPEND '' TO lt_body.
 
     " Table header
-    APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
+    APPEND '-----------+------------+--------------+--------------+----------+-----------+-------' TO lt_body.
     APPEND 'Contract ID|Sales Office|Cumulative Ovr|Chargeable Ovr|Posted Ovr|Sales Order|Invoice' TO lt_body.
-    APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
+    APPEND '-----------+------------+--------------+--------------+----------+-----------+-------' TO lt_body.
 
     " CSV header for attachment
     lv_csv_str = 'Contract ID,Sales Office,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
@@ -855,7 +855,7 @@ FORM send_email.
                   INTO lv_csv_str.
     ENDLOOP.
 
-    APPEND '-----------------------------------------------------------------------------------------------------' TO lt_body.
+    APPEND '-----------+------------+--------------+--------------+----------+-----------+-------' TO lt_body.
     APPEND '' TO lt_body.
     APPEND 'For more details, please execute T-code YRG011N/ YRGR102 with the required input' TO lt_body.
     APPEND '' TO lt_body.
