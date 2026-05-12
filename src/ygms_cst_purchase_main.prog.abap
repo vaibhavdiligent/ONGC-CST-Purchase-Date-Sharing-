@@ -2275,7 +2275,7 @@ FORM save_data_to_db.
   " Initialize error flag
   lv_error_found = abap_false.
   " First pass: Generate unique GAIL_IDs for each Location-Material-ONGC Material-State combination
-  LOOP AT gt_alv_display INTO gs_alv_display.
+  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id   = gs_alv_display-location_id
                material      = gs_alv_display-material
@@ -2722,9 +2722,11 @@ FORM handle_download.
 
   SELECT * FROM yrga_cst_fn_data
     INTO TABLE lt_all_fnt
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc AND deleted = ' '.
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
 
   " Get unique Location IDs
   LOOP AT lt_all_daily INTO DATA(ls_pur_loc).
@@ -2853,6 +2855,12 @@ ENDFORM.
 FORM handle_send.
   DATA: lv_valid TYPE abap_bool.
 
+  " Check that saved allocation data exists for all selected locations
+  PERFORM check_saved_data_before_send CHANGING lv_valid.
+  IF lv_valid = abap_false.
+    RETURN.
+  ENDIF.
+
   " Step 1.2: Data validation before initiating data transfer
   " Check if any new receipt data has been received from ONGC
   PERFORM validate_before_send CHANGING lv_valid.
@@ -2863,6 +2871,41 @@ FORM handle_send.
   " Step 1.2.4: If no new data, display data preview with daily/fortnightly toggle
   " Then show Send mode selection popup
   PERFORM display_send_preview.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CHECK_SAVED_DATA_BEFORE_SEND
+*& Verify saved allocation data exists in YRGA_CST_PUR for every
+*& selected location before attempting to send
+*&---------------------------------------------------------------------*
+FORM check_saved_data_before_send CHANGING cv_valid TYPE abap_bool.
+  DATA: lv_missing_locs TYPE string,
+        lv_loc_found    TYPE ygms_de_loc_id.
+  cv_valid = abap_true.
+  LOOP AT s_loc.
+    SELECT SINGLE location FROM yrga_cst_pur
+      INTO @lv_loc_found
+      WHERE gas_day  BETWEEN @gv_date_from AND @gv_date_to
+        AND location = @s_loc-low
+        AND exclude  <> 'X'
+        AND deleted  = ' '.
+    IF sy-subrc <> 0.
+      IF lv_missing_locs IS INITIAL.
+        lv_missing_locs = s_loc-low.
+      ELSE.
+        CONCATENATE lv_missing_locs ', ' s_loc-low INTO lv_missing_locs.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+  IF lv_missing_locs IS NOT INITIAL.
+    cv_valid = abap_false.
+    CALL FUNCTION 'POPUP_TO_INFORM'
+      EXPORTING
+        titel = 'No Saved Data'
+        txt1  = 'No allocation data found for Location IDs:'
+        txt2  = lv_missing_locs
+        txt3  = 'Please run allocation and save before sending.'
+        txt4  = ''.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form VALIDATE_BEFORE_SEND
@@ -3106,9 +3149,11 @@ FORM handle_send_email.
   DATA lt_fnt_data TYPE TABLE OF yrga_cst_fn_data.
   SELECT * FROM yrga_cst_fn_data
     INTO TABLE lt_fnt_data
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc AND deleted = ' '.
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
 
   " Send email with PDF and/or Excel attachments (daily + fortnightly)
   PERFORM send_email USING lt_emails lt_send_data lt_fnt_data lv_send_pdf lv_send_excel.
@@ -4284,9 +4329,12 @@ FORM handle_send_b2b.
       AND location IN s_loc
       AND exclude <> 'X' AND deleted = ' '.
   SELECT * FROM yrga_cst_fn_data
-  INTO TABLE lt_send_data_fn
-  WHERE date_from = gv_date_from AND date_to = gv_date_to
-    AND location IN s_loc AND deleted = ' '.
+    INTO TABLE lt_send_data_fn
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
   IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
@@ -4685,9 +4733,11 @@ FORM display_send_preview.
   " Fetch fortnightly data from YRGA_CST_FN_DATA
   SELECT * FROM yrga_cst_fn_data
     INTO TABLE lt_cst_fnt
-    WHERE date_from = gv_date_from
-      AND date_to   = gv_date_to
-      AND location  IN s_loc AND deleted = ' '.
+    WHERE date_from  = gv_date_from
+      AND date_to    = gv_date_to
+      AND location   IN s_loc
+      AND deleted    = ' '
+      AND qty_in_scm > 0.
 
   " Build fortnightly preview data
   LOOP AT lt_cst_fnt INTO DATA(ls_fnt_db).
@@ -5305,6 +5355,7 @@ FORM display_new_receipt_data.
   ls_fieldcat-col_pos   = 9.
   ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
+  SORT gt_new_receipt_data BY gas_day ASCENDING ctp_id ASCENDING ongc_material ASCENDING date DESCENDING time DESCENDING.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
       i_title               = 'New Receipt Data from ONGC'
