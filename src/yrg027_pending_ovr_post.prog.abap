@@ -24,7 +24,7 @@ START-OF-SELECTION.
   PERFORM:get_data.
   PERFORM:comment_build USING gt_list_top_of_page[].
   PERFORM get_fieldcat.
-  PERFORM:alv_display.
   IF p_email = 'X'.
     PERFORM send_email.
   ENDIF.
+  PERFORM:alv_display.
