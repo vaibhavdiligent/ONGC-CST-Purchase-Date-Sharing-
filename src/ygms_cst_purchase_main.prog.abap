@@ -510,30 +510,45 @@ START-OF-SELECTION.
     ELSE.
       " View -> Allocation Details: same as existing view logic
       PERFORM build_alv_display_table_view.
+      " Check per location whether allocation data exists
+      DATA: lt_miss_view  TYPE TABLE OF string,
+            lv_miss_view  TYPE string,
+            lv_found_view TYPE abap_bool.
+      LOOP AT s_loc.
+        lv_found_view = abap_false.
+        LOOP AT gt_alv_display INTO gs_alv_display
+          WHERE location_id = s_loc-low.
+          lv_found_view = abap_true.
+          EXIT.
+        ENDLOOP.
+        IF lv_found_view = abap_false.
+          lv_miss_view = s_loc-low.
+          APPEND lv_miss_view TO lt_miss_view.
+        ENDIF.
+      ENDLOOP.
+      IF lt_miss_view IS NOT INITIAL.
+        DATA lv_miss_str TYPE string.
+        LOOP AT lt_miss_view INTO lv_miss_view.
+          IF lv_miss_str IS INITIAL.
+            lv_miss_str = lv_miss_view.
+          ELSE.
+            CONCATENATE lv_miss_str ' , ' lv_miss_view INTO lv_miss_str.
+          ENDIF.
+        ENDLOOP.
+        CALL FUNCTION 'POPUP_TO_INFORM'
+          EXPORTING
+            titel = 'No Allocation Data'
+            txt1  = 'No allocation data found for Location IDs:'
+            txt2  = lv_miss_str
+            txt3  = 'Please run allocation for these locations first.'
+            txt4  = ''.
+        RETURN.
+      ENDIF.
       IF gt_alv_display IS INITIAL.
         CALL FUNCTION 'POPUP_TO_INFORM'
           EXPORTING
             titel = 'No Data'
             txt1  = 'No allocation data found.'
-            txt2  = ''
-            txt3  = ''
-            txt4  = ''.
-        RETURN.
-      ENDIF.
-      " Also treat all-zero rows as no data (no receipts for selected criteria)
-      DATA lv_has_nonzero TYPE abap_bool.
-      lv_has_nonzero = abap_false.
-      LOOP AT gt_alv_display INTO gs_alv_display.
-        IF gs_alv_display-total_scm <> 0 OR gs_alv_display-total_mbg <> 0.
-          lv_has_nonzero = abap_true.
-          EXIT.
-        ENDIF.
-      ENDLOOP.
-      IF lv_has_nonzero = abap_false.
-        CALL FUNCTION 'POPUP_TO_INFORM'
-          EXPORTING
-            titel = 'No Data'
-            txt1  = 'No allocation data found for the selected criteria.'
             txt2  = ''
             txt3  = ''
             txt4  = ''.
@@ -5167,6 +5182,11 @@ FORM build_alv_display_table_view .
     CLEAR: ls_alv.
     CLEAR: l_gcv, l_ncv.
   ENDIF.
+  " Collect locations that have saved allocation data
+  DATA lt_locs_with_data TYPE TABLE OF ygms_de_loc_id.
+  LOOP AT it_cst_pur_temp INTO DATA(wa_loc_data).
+    COLLECT wa_loc_data-location INTO lt_locs_with_data.
+  ENDLOOP.
   " Fetch static material map for filtering
   DATA: lt_static_view TYPE TABLE OF yrga_cst_mat_map.
   SELECT location_id ongc_material gail_material static state
@@ -5208,6 +5228,12 @@ FORM build_alv_display_table_view .
       ENDIF.
     ENDLOOP.
     IF lv_all_static_v = abap_true.
+      CONTINUE.
+    ENDIF.
+    " Only add GJ row if location has saved allocation data in yrga_cst_pur
+    READ TABLE lt_locs_with_data TRANSPORTING NO FIELDS
+      WITH KEY table_line = wa_gas_temp-location_id.
+    IF sy-subrc <> 0.
       CONTINUE.
     ENDIF.
     READ TABLE gt_alv_display TRANSPORTING NO FIELDS
