@@ -5356,6 +5356,18 @@ FORM display_new_receipt_data.
   ls_fieldcat-outputlen = 14.
   APPEND ls_fieldcat TO lt_fieldcat.
   SORT gt_new_receipt_data BY gas_day ASCENDING ctp_id ASCENDING ongc_material ASCENDING received_on DESCENDING received_at DESCENDING.
+  DATA: lt_sort     TYPE slis_t_sortinfo_alv,
+        ls_sort     TYPE slis_sortinfo_alv.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'GAS_DAY'.      ls_sort-up = abap_true.  ls_sort-spos = 1. APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'CTP_ID'.       ls_sort-up = abap_true.  ls_sort-spos = 2. APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'ONGC_MATERIAL'. ls_sort-up = abap_true.  ls_sort-spos = 3. APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'RECEIVED_ON'.  ls_sort-down = abap_true. ls_sort-spos = 4. APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'RECEIVED_AT'.  ls_sort-down = abap_true. ls_sort-spos = 5. APPEND ls_sort TO lt_sort.
   CALL FUNCTION 'REUSE_ALV_POPUP_TO_SELECT'
     EXPORTING
       i_title               = 'New Receipt Data from ONGC'
@@ -5367,6 +5379,7 @@ FORM display_new_receipt_data.
       i_screen_end_line     = 25
       i_tabname             = 'GT_NEW_RECEIPT_DATA'
       it_fieldcat           = lt_fieldcat
+      it_sort               = lt_sort
     TABLES
       t_outtab              = gt_new_receipt_data
     EXCEPTIONS
