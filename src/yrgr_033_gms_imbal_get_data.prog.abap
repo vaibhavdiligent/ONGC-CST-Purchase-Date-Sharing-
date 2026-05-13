@@ -48,6 +48,11 @@ FORM fill_fieldcat.
   fcat 'PUR_RET'  '10' 'Purchase Return (Pur Rtrn)'  'Pur_Ret'    'X'.
   fcat 'PO'       '10' 'PO'                           'PO'         'X'.
   fcat 'GR'       '10' 'GR'                           'GR'         'X'.
+
+  " Allow mixed-case filter on Status field (values are 'Posted'/'Not Posted')
+  LOOP AT gt_fieldcat ASSIGNING FIELD-SYMBOL(<fs_stat>) WHERE fieldname = 'STAT'.
+    <fs_stat>-lowercase = 'X'.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
