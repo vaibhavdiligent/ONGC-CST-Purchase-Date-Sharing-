@@ -837,7 +837,12 @@ FORM email_pending_postings.
         lt_receivers     TYPE STANDARD TABLE OF somlreci1,
         ls_receiver      TYPE somlreci1,
         lt_sal_offices   TYPE TABLE OF vkbur,
-        lv_sal_office    TYPE vkbur.
+        lv_sal_office    TYPE vkbur,
+        lo_send_request  TYPE REF TO cl_bcs,
+        lo_document      TYPE REF TO cl_document_bcs,
+        lo_sender        TYPE REF TO if_sender_bcs,
+        lo_recipient     TYPE REF TO if_recipient_bcs,
+        lv_sent_to_all   TYPE c.
 
   " Step 1: Filter entries - Indicator = N or any Diff column NE 0
   LOOP AT it_final INTO ls_pending.
@@ -1190,49 +1195,65 @@ FORM email_pending_postings.
     ls_body-line = '</body></html>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
-    " Step 9: Send email
-    " Note: Sender 'GAIL PARTNER CARE GMS' requires execution under background user BKG_GMS
-    ls_doc_data-obj_descr = lv_subject.
-    ls_doc_data-obj_name  = 'HTM'.
+    " Step 9: Send email via cl_bcs with HTML body
+    TRY.
+        lo_send_request = cl_bcs=>create_persistent( ).
+      CATCH cx_send_req_bcs.
+        CONTINUE.
+    ENDTRY.
 
-    " TO recipients (express = X)
-    LOOP AT lt_email_ids INTO lv_email.
-      CLEAR ls_receiver.
-      ls_receiver-receiver = lv_email.
-      ls_receiver-rec_type = 'U'.
-      ls_receiver-express  = 'X'.
-      APPEND ls_receiver TO lt_receivers.
-    ENDLOOP.
+    TRY.
+        lo_document = cl_document_bcs=>create_document(
+                        i_type    = 'HTM'
+                        i_text    = lt_body
+                        i_subject = lv_subject ).
+      CATCH cx_document_bcs.
+        CONTINUE.
+    ENDTRY.
 
-    " CC recipients (express = space)
-    LOOP AT lt_cc_email_ids INTO lv_email.
-      CLEAR ls_receiver.
-      ls_receiver-receiver = lv_email.
-      ls_receiver-rec_type = 'U'.
-      ls_receiver-express  = space.
-      APPEND ls_receiver TO lt_receivers.
-    ENDLOOP.
+    TRY.
+        lo_send_request->set_document( lo_document ).
 
-    CALL FUNCTION 'SO_NEW_DOCUMENT_SEND_API1'
-      EXPORTING
-        document_data              = ls_doc_data
-        put_in_outbox              = 'X'
-        commit_work                = 'X'
-      TABLES
-        object_content             = lt_body
-        receivers                  = lt_receivers
-      EXCEPTIONS
-        too_many_receivers         = 1
-        document_not_sent          = 2
-        document_type_not_exist    = 3
-        operation_no_authorization = 4
-        parameter_error            = 5
-        x_error                    = 6
-        enqueue_error              = 7
-        OTHERS                     = 8.
+        lo_sender = cl_cam_address_bcs=>create_internet_address(
+                      i_address_string = 'gailpartcare@gail.co.in' ).
+        lo_send_request->set_sender(
+          EXPORTING i_sender = lo_sender ).
+
+        " TO recipients
+        LOOP AT lt_email_ids INTO lv_email.
+          lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                           lv_email ).
+          lo_send_request->add_recipient(
+            EXPORTING
+              i_recipient = lo_recipient
+              i_express   = 'X' ).
+        ENDLOOP.
+
+        " CC recipients
+        LOOP AT lt_cc_email_ids INTO lv_email.
+          lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                           lv_email ).
+          lo_send_request->add_recipient(
+            EXPORTING
+              i_recipient = lo_recipient
+              i_copy      = 'X' ).
+        ENDLOOP.
+
+        lo_send_request->send(
+          EXPORTING
+            i_with_error_screen = 'X'
+          RECEIVING
+            result              = lv_sent_to_all ).
+        COMMIT WORK.
+
+      CATCH cx_address_bcs
+            cx_send_req_bcs
+            cx_bcs.
+        MESSAGE 'Error sending email for customer.' TYPE 'I'.
+    ENDTRY.
 
     CLEAR: ls_email_cust, lt_locid, lt_ernam, lt_email_ids, lt_cc_email_ids,
-           lt_body, lt_receivers, ls_doc_data, lt_cont_ids, lt_wf_pernr_cc, lt_cc_rep,
+           lt_body, lt_cont_ids, lt_wf_pernr_cc, lt_cc_rep,
            lv_prev_cont, lv_cum_cal, lv_char_cal, lv_neg_cal,
            lv_cum_so, lv_char_so, lv_neg_so.
   ENDLOOP.
