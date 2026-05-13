@@ -1696,7 +1696,7 @@ FORM handle_allocate.
       ENDIF.
       <fs_alv_sales>-alloc_sales_mbg = <fs_alv_sales>-total_mbg - <fs_alv_sales>-total_sales_mbg.
       IF <fs_alv_sales>-state_code <> 'GJ' AND
-       ( <fs_alv_sales>-alloc_sales_mbg < 0 OR <fs_alv_sales>-alloc_sales_mbg > 1 ).
+       ( <fs_alv_sales>-alloc_sales_mbg < -1 OR <fs_alv_sales>-alloc_sales_mbg > 1 ).
         <fs_alv_sales>-row_color = 'C600'. " Red
       ELSE.
         CLEAR <fs_alv_sales>-row_color.
@@ -5112,7 +5112,7 @@ FORM recalculate_totals.
     " Recalculate Alloc. - Sales MBG and row colour after day edits
     <fs_alv>-alloc_sales_mbg = <fs_alv>-total_mbg - <fs_alv>-total_sales_mbg.
     IF <fs_alv>-state_code <> 'GJ' AND
-     ( <fs_alv>-alloc_sales_mbg < 0 OR <fs_alv>-alloc_sales_mbg > 1 ).
+     ( <fs_alv>-alloc_sales_mbg < -1 OR <fs_alv>-alloc_sales_mbg > 1 ).
       <fs_alv>-row_color = 'C600'. " Red
     ELSE.
       CLEAR <fs_alv>-row_color.
@@ -5315,7 +5315,7 @@ FORM build_alv_display_table_view .
     ENDIF.
     <fs_alv_view>-alloc_sales_mbg = <fs_alv_view>-total_mbg - <fs_alv_view>-total_sales_mbg.
     IF <fs_alv_view>-state_code <> 'GJ' AND
-     ( <fs_alv_view>-alloc_sales_mbg < 0 OR <fs_alv_view>-alloc_sales_mbg > 1 ).
+     ( <fs_alv_view>-alloc_sales_mbg < -1 OR <fs_alv_view>-alloc_sales_mbg > 1 ).
       <fs_alv_view>-row_color = 'C600'.
     ELSE.
       CLEAR <fs_alv_view>-row_color.
