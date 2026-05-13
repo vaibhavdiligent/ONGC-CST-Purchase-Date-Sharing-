@@ -49,6 +49,7 @@ TYPES:BEGIN OF ty_final,
         rgmc_mail           TYPE char50,                  "Rgmc mail
         oic_mail            TYPE char50,                  "oic mail
         indicator           TYPE char1,                   "indicator.
+        line_color(4)       TYPE c,                       "Row color for ALV
       END OF ty_final.
 
 DATA:it_final    TYPE STANDARD TABLE OF ty_final,

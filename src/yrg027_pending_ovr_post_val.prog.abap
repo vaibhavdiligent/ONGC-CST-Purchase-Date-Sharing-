@@ -608,6 +608,15 @@ ENDFORM.
 FORM alv_display .
 
   w_layout-colwidth_optimize = 'X'.
+  w_layout-info_fieldname    = 'LINE_COLOR'.
+
+  " Set red row color where Diff Chargeable Ovr is not zero
+  LOOP AT it_final INTO wa_final.
+    IF wa_final-diff_char_ovr NE 0.
+      wa_final-line_color = 'C610'.
+      MODIFY it_final FROM wa_final.
+    ENDIF.
+  ENDLOOP.
 
   DATA: v_repid TYPE sy-repid.
   v_repid = sy-repid.
