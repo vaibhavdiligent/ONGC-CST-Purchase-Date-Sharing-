@@ -814,7 +814,7 @@ FORM send_email.
                 INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
-    APPEND '<tr style="font-weight:bold">' TO lt_body.
+    APPEND '<tr style="background-color:#D3D3D3;font-weight:bold">' TO lt_body.
     APPEND '<th>Contract ID</th><th>Sales Office</th><th>Cumulative Ovr</th>' TO lt_body.
     APPEND '<th>Chargeable Ovr</th><th>Posted Ovr</th><th>Sales Order</th><th>Invoice</th></tr>' TO lt_body.
 

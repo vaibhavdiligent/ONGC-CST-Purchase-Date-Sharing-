@@ -1146,7 +1146,7 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<tr style="font-weight:bold;white-space:nowrap">'.
+    ls_body-line = '<tr style="background-color:#D3D3D3;font-weight:bold;white-space:nowrap">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<th>Contract ID</th><th>Sales Office</th><th>Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
