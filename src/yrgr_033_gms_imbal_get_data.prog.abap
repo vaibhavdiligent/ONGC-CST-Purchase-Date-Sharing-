@@ -422,7 +422,24 @@ FORM send_email_not_posted.
         lo_send_req    TYPE REF TO cl_bcs,
         lo_document    TYPE REF TO cl_document_bcs,
         lo_sender_sap  TYPE REF TO cl_sapuser_bcs,
-        lo_recipient   TYPE REF TO cl_cam_address_bcs.
+        lo_recipient   TYPE REF TO cl_cam_address_bcs,
+        lv_np_calc_dt  TYPE sy-datum,
+        lv_np_st_date  TYPE sy-datum,
+        lv_np_ed_date  TYPE sy-datum,
+        lr_np_date     TYPE RANGE OF sy-datum,
+        ls_np_date     LIKE LINE OF lr_np_date.
+
+  " Calculate previous FN date range: system date - 3 -> YRX_PRVS_DATE_FM
+  lv_np_calc_dt = sy-datum - 3.
+  CALL FUNCTION 'YRX_PRVS_DATE_FM'
+    EXPORTING s_date  = lv_np_calc_dt
+    IMPORTING st_date = lv_np_st_date
+              ed_date = lv_np_ed_date.
+  ls_np_date-sign   = 'I'.
+  ls_np_date-option = 'BT'.
+  ls_np_date-low    = lv_np_st_date.
+  ls_np_date-high   = lv_np_ed_date.
+  APPEND ls_np_date TO lr_np_date.
 
   " Collect unique business locations for Not Posted records
   LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted'.
@@ -447,7 +464,7 @@ FORM send_email_not_posted.
     SELECT DISTINCT ernam FROM oij_el_ticket_i
       INTO TABLE @DATA(lt_ticket_en)
       WHERE locid          = @ls_np_locid-locid
-        AND budat         IN @s_date
+        AND budat         IN @lr_np_date
         AND ticket_purpose = '1'
         AND status         = 'C'
         AND substatus      = '6'
@@ -461,7 +478,7 @@ FORM send_email_not_posted.
       SELECT DISTINCT aenam FROM oijnomi
         INTO TABLE @DATA(lt_nomi_en)
         WHERE locid  = @ls_np_locid-locid
-          AND idate IN @s_date
+          AND idate IN @lr_np_date
           AND delind NE 'X'.
       LOOP AT lt_nomi_en INTO DATA(ls_nomi_en).
         ls_np_ernam-ernam = ls_nomi_en-aenam.
