@@ -3,8 +3,12 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.9  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
-*& Changes : v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
+*& VERSION : 2.0  |  Git: claude/zpra-dpr-program-VfvlH  |  Date: 13-MAY-2026
+*& Changes : v2.0 - Fix target rows (42/46/47) showing 0 for BRA_BC2 and other new assets.
+*&           Root cause: convert_sec2a/2b/2c_to_jvl sets tar_qty=0 when ZPRA_T_TAR_PI
+*&           has no entry for the asset/block/tar_code. Added fallback to use production
+*&           PI (gt_zpra_t_prd_pi) when target PI is missing.
+*&           v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
 *&           line 3444 (lv_qty * 6290 assignment to prod_vl_qty1).
 *&           Removed * 6290 from convert_gas_units (p_bb/p_bbd/p_bmd) and
 *&           convert_mrec_gas_units to align with convert_gas_units2 which
@@ -4420,7 +4424,10 @@ FORM process_sec2a_data .
 ENDFORM.
 FORM convert_sec2a_to_jvl .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
-  DATA:  lv_numerator                   TYPE ty_zpra_t_prd_tar-tar_qty .
+  DATA: lv_numerator TYPE ty_zpra_t_prd_tar-tar_qty,
+        lv_pi_numer  TYPE p LENGTH 16 DECIMALS 9,
+        lv_pi_frm    TYPE sy-datum,
+        lv_pi_to     TYPE sy-datum.
   LOOP AT gt_zpra_t_prd_tar ASSIGNING <lfs_zpra_t_prd_tar>.
     CLEAR lv_numerator .
     <lfs_zpra_t_prd_tar>-tar_qty2 = <lfs_zpra_t_prd_tar>-tar_qty .
@@ -4438,15 +4445,38 @@ FORM convert_sec2a_to_jvl .
           lv_numerator = lv_numerator + ( gs_zpra_t_tar_pi-vld_to - gs_zpra_t_tar_pi-vld_frm + 1 ) / gs_zpra_t_tar_pi-pi  .
         ENDIF.
       ENDLOOP.
-      <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_numerator * 100 / gv_current_month_days .
+      IF lv_numerator IS INITIAL.
+        CLEAR lv_pi_numer.
+        LOOP AT gt_zpra_t_prd_pi INTO gs_zpra_t_prd_pi
+          WHERE asset   EQ <lfs_zpra_t_prd_tar>-asset
+            AND block   EQ <lfs_zpra_t_prd_tar>-block
+            AND vld_frm LE gv_month_end_datum
+            AND vld_to  GE gv_month_begin_datum .
+          lv_pi_frm = gs_zpra_t_prd_pi-vld_frm.
+          lv_pi_to  = gs_zpra_t_prd_pi-vld_to.
+          IF lv_pi_frm LT gv_month_begin_datum. lv_pi_frm = gv_month_begin_datum. ENDIF.
+          IF lv_pi_to  GT gv_month_end_datum.   lv_pi_to  = gv_month_end_datum.   ENDIF.
+          IF gs_zpra_t_prd_pi-pi IS NOT INITIAL.
+            lv_pi_numer = lv_pi_numer + ( lv_pi_to - lv_pi_frm + 1 ) * gs_zpra_t_prd_pi-pi .
+          ENDIF.
+        ENDLOOP.
+        IF lv_pi_numer IS NOT INITIAL.
+          <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_pi_numer / ( gv_current_month_days * 100 ) .
+        ENDIF.
+      ELSE.
+        <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_numerator * 100 / gv_current_month_days .
+      ENDIF.
     ENDIF.
   ENDLOOP.
 ENDFORM.
 FORM convert_sec2b_to_jvl .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
-  DATA :lv_numerator TYPE                   p LENGTH 16 DECIMALS 9,
-        lv_first_day TYPE                   sy-datum,
-        lv_last_day  TYPE                   sy-datum.
+  DATA: lv_numerator TYPE p LENGTH 16 DECIMALS 9,
+        lv_first_day TYPE sy-datum,
+        lv_last_day  TYPE sy-datum,
+        lv_pi_numer  TYPE p LENGTH 16 DECIMALS 9,
+        lv_pi_frm    TYPE sy-datum,
+        lv_pi_to     TYPE sy-datum.
 
   LOOP AT gt_zpra_t_prd_tar ASSIGNING <lfs_zpra_t_prd_tar>.
     CLEAR lv_numerator .
@@ -4488,15 +4518,38 @@ FORM convert_sec2b_to_jvl .
           lv_numerator = lv_numerator + ( gs_zpra_t_tar_pi-vld_to - gs_zpra_t_tar_pi-vld_frm + 1 ) / gs_zpra_t_tar_pi-pi  .
         ENDIF.
       ENDLOOP.
-      <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_numerator * 100 / ( lv_last_day - lv_first_day + 1 ) .
+      IF lv_numerator IS INITIAL.
+        CLEAR lv_pi_numer.
+        LOOP AT gt_zpra_t_prd_pi INTO gs_zpra_t_prd_pi
+          WHERE asset   EQ <lfs_zpra_t_prd_tar>-asset
+            AND block   EQ <lfs_zpra_t_prd_tar>-block
+            AND vld_frm LE lv_last_day
+            AND vld_to  GE lv_first_day .
+          lv_pi_frm = gs_zpra_t_prd_pi-vld_frm.
+          lv_pi_to  = gs_zpra_t_prd_pi-vld_to.
+          IF lv_pi_frm LT lv_first_day. lv_pi_frm = lv_first_day. ENDIF.
+          IF lv_pi_to  GT lv_last_day.  lv_pi_to  = lv_last_day.  ENDIF.
+          IF gs_zpra_t_prd_pi-pi IS NOT INITIAL.
+            lv_pi_numer = lv_pi_numer + ( lv_pi_to - lv_pi_frm + 1 ) * gs_zpra_t_prd_pi-pi .
+          ENDIF.
+        ENDLOOP.
+        IF lv_pi_numer IS NOT INITIAL.
+          <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_pi_numer / ( ( lv_last_day - lv_first_day + 1 ) * 100 ) .
+        ENDIF.
+      ELSE.
+        <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_numerator * 100 / ( lv_last_day - lv_first_day + 1 ) .
+      ENDIF.
     ENDIF.
   ENDLOOP.
 ENDFORM.
 FORM convert_sec2c_to_jvl .
   FIELD-SYMBOLS : <lfs_zpra_t_prd_tar> TYPE ty_zpra_t_prd_tar .
-  DATA :lv_numerator TYPE                   p LENGTH 16 DECIMALS 9,
-        lv_first_day TYPE                   sy-datum,
-        lv_last_day  TYPE                   sy-datum.
+  DATA: lv_numerator TYPE p LENGTH 16 DECIMALS 9,
+        lv_first_day TYPE sy-datum,
+        lv_last_day  TYPE sy-datum,
+        lv_pi_numer  TYPE p LENGTH 16 DECIMALS 9,
+        lv_pi_frm    TYPE sy-datum,
+        lv_pi_to     TYPE sy-datum.
   LOOP AT gt_zpra_t_prd_tar_2c ASSIGNING <lfs_zpra_t_prd_tar>.
     CLEAR lv_numerator .
 
@@ -4543,7 +4596,27 @@ FORM convert_sec2c_to_jvl .
           lv_numerator = lv_numerator + ( gs_zpra_t_tar_pi-vld_to - gs_zpra_t_tar_pi-vld_frm + 1 ) / gs_zpra_t_tar_pi-pi  .
         ENDIF.
       ENDLOOP.
-      <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_numerator * 100 / ( lv_last_day - lv_first_day + 1 ) .
+      IF lv_numerator IS INITIAL.
+        CLEAR lv_pi_numer.
+        LOOP AT gt_zpra_t_prd_pi INTO gs_zpra_t_prd_pi
+          WHERE asset   EQ <lfs_zpra_t_prd_tar>-asset
+            AND block   EQ <lfs_zpra_t_prd_tar>-block
+            AND vld_frm LE lv_last_day
+            AND vld_to  GE lv_first_day .
+          lv_pi_frm = gs_zpra_t_prd_pi-vld_frm.
+          lv_pi_to  = gs_zpra_t_prd_pi-vld_to.
+          IF lv_pi_frm LT lv_first_day. lv_pi_frm = lv_first_day. ENDIF.
+          IF lv_pi_to  GT lv_last_day.  lv_pi_to  = lv_last_day.  ENDIF.
+          IF gs_zpra_t_prd_pi-pi IS NOT INITIAL.
+            lv_pi_numer = lv_pi_numer + ( lv_pi_to - lv_pi_frm + 1 ) * gs_zpra_t_prd_pi-pi .
+          ENDIF.
+        ENDLOOP.
+        IF lv_pi_numer IS NOT INITIAL.
+          <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_pi_numer / ( ( lv_last_day - lv_first_day + 1 ) * 100 ) .
+        ENDIF.
+      ELSE.
+        <lfs_zpra_t_prd_tar>-tar_qty = <lfs_zpra_t_prd_tar>-tar_qty * lv_numerator * 100 / ( lv_last_day - lv_first_day + 1 ) .
+      ENDIF.
     ENDIF.
   ENDLOOP.
 ENDFORM.
