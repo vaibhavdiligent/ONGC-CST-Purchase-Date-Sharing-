@@ -789,9 +789,7 @@ FORM get_data .
               budat IN s_dt AND
       rbstat NE 2.
 
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
-    ENDIF. "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+    ENDIF.
 
 
 
@@ -803,10 +801,8 @@ FORM get_data .
         APPEND wa_rbkp TO it_rbkp3.
       ENDIF.
     ENDLOOP.
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
 
-    CLEAR : it_rbkp. "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+    CLEAR : it_rbkp.
     APPEND LINES OF it_rbkp3 TO  it_rbkp.
 
     CLEAR:  it_rbkp3.
@@ -816,9 +812,7 @@ FORM get_data .
       READ TABLE it_rbkp1 INTO wa_rbkp1 WITH KEY belnr = wa_rbkp-stblg  gjahr = wa_rbkp-stjah BINARY SEARCH.
       IF sy-subrc NE 0.
         APPEND wa_rbkp TO it_rbkp3.
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
-      ENDIF. "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+      ENDIF.
 
     ENDLOOP.
 
@@ -1915,10 +1909,18 @@ FORM get_data_fb60 .
 *        tcode
 *        stjah
 *      bktxt
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
+*        usnam
+**        ZINVTYP
+**        ZPRTCD
+**        ZBOENO
+**        ZBOEDT
+*   INTO CORRESPONDING FIELDS OF TABLE it_bkpf
+*   FROM bkpf
+*   WHERE tcode IN ('FB60','FB65','FBVB','FB01') AND
+*         bldat IN s_dct AND
+*         blart IN ('KM','KJ','KC', 'KR', 'KS', 'SA') AND
 *    bstat NE 'V'.
-* "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+*
 *  ELSEIF s_dct IS NOT INITIAL AND s_dt IS NOT INITIAL.
 *
 *    SELECT belnr
@@ -1935,10 +1937,16 @@ FORM get_data_fb60 .
 * usnam
 ** ZINVTYP
 ** ZPRTCD
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
+** ZBOENO
+** ZBOEDT
+*INTO CORRESPONDING FIELDS OF TABLE it_bkpf
+*FROM bkpf
+*WHERE tcode IN ('FB60','FB65','FBVB', 'FB01') AND
+*  budat IN s_dt AND
+*  bldat IN s_dct AND
+*  blart IN ('KM','KJ','KC', 'KR', 'KS', 'SA') AND
 *    bstat NE 'V'.
-* "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+*
 
   ENDIF.
 
@@ -1961,9 +1969,7 @@ FORM get_data_fb60 .
     LOOP AT it_bkpf INTO wa_bkpf.
       CLEAR : wa_bkpf2.
       READ TABLE it_bkpf2 INTO wa_bkpf2 WITH KEY belnr = wa_bkpf-stblg gjahr = wa_bkpf-stjah BINARY SEARCH.
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
-      IF sy-subrc NE 0. "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+      IF sy-subrc NE 0.
         APPEND wa_bkpf TO it_bkpf3.
       ENDIF.
 
@@ -2256,9 +2262,7 @@ SORT IT_BSEG1 .
 
 
       CLEAR :wa_bseg1.
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
-      READ TABLE it_bseg1 INTO wa_bseg1 WITH KEY belnr = wa_bseg-belnr gjahr = wa_bseg-gjahr koart = 'K' . "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+      READ TABLE it_bseg1 INTO wa_bseg1 WITH KEY belnr = wa_bseg-belnr gjahr = wa_bseg-gjahr koart = 'K' .
       IF sy-subrc EQ 0.
         CLEAR : wa_lfa1.
         IF wa_bseg1-gst_part IS INITIAL.
@@ -2760,12 +2764,10 @@ SORT *wa_final1-total_invoice_val BY *wa_final1-total_invoice_val .
 ************************************ End of changes on 29.10.2018 **********************************
 
             ENDIF.
-" " testing **BEGIN OF CHANGE BY SAPOSS 14.05.2026  FOR ATC
 
 
 
-          ENDIF. "#EC CI_DB_OPERATION_OK[2431747]
-" " testing * *END OF CHANGE BY SAPOSS 14.05.2026 FOR ATC
+          ENDIF.
 
           wa_final1-tax_rate = igst_rate / 10 + cgst_rate / 10 + sgst_rate / 10 + ugst_rate / 10.
           wa_final1-igst_rate = igst_rate / 10.
