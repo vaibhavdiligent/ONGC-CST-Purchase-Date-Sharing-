@@ -1146,13 +1146,13 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<tr style="background-color:#D3D3D3;font-weight:bold;white-space:nowrap">'.
+    ls_body-line = '<tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th>Contract ID</th><th>Sales Office</th><th>Cum Imb (MBG)</th>'.
+    ls_body-line = '<th style="background-color:#D3D3D3">Contract ID</th><th style="background-color:#D3D3D3">Sales Office</th><th style="background-color:#D3D3D3">Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th>Chg Imb (MBG)</th><th>Neg Chg Imb (MBG)</th><th>Post Cum Imb (MBG)</th>'.
+    ls_body-line = '<th style="background-color:#D3D3D3">Chg Imb (MBG)</th><th style="background-color:#D3D3D3">Neg Chg Imb (MBG)</th><th style="background-color:#D3D3D3">Post Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th>Post Chg Imb (MBG)</th><th>Post Neg Imb (MBG)</th><th>Sales Order</th><th>Invoice</th></tr>'.
+    ls_body-line = '<th style="background-color:#D3D3D3">Post Chg Imb (MBG)</th><th style="background-color:#D3D3D3">Post Neg Imb (MBG)</th><th style="background-color:#D3D3D3">Sales Order</th><th style="background-color:#D3D3D3">Invoice</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
