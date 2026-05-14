@@ -823,9 +823,9 @@ FORM send_email.
                 INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
-    APPEND '<tr>' TO lt_body.
-    APPEND '<th style="background-color:#D3D3D3">Contract ID</th><th style="background-color:#D3D3D3">Sales Office</th><th style="background-color:#D3D3D3">Cumulative Ovr</th>' TO lt_body.
-    APPEND '<th style="background-color:#D3D3D3">Chargeable Ovr</th><th style="background-color:#D3D3D3">Posted Ovr</th><th style="background-color:#D3D3D3">Sales Order</th><th style="background-color:#D3D3D3">Invoice</th></tr>' TO lt_body.
+    APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
 
     " CSV header for attachment
     lv_csv_str = 'Contract ID,Sales Office,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
