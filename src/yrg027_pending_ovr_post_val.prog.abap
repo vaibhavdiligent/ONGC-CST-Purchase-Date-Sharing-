@@ -699,8 +699,7 @@ FORM send_email.
   " Process each customer
   LOOP AT lt_cust_email INTO DATA(wa_cust_em).
 
-    REFRESH: lt_email_recip, lt_body, lt_att_hex.
-    CLEAR: lv_csv_str.
+    REFRESH: lt_email_recip, lt_body.
 
     " Step 1: Get LOCIDs for the customer from OIJRRA
     SELECT DISTINCT locid FROM oijrra INTO TABLE @DATA(lt_locids)
