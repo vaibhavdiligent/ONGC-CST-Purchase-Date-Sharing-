@@ -2342,7 +2342,7 @@ FORM process_read.
       l_line1 = l_line1+sy-fdpos(l_len).
     ENDIF.
     CONDENSE l_line1.
-    REPLACE ALL OCCURRENCES OF 'KEY' IN l_line1 WITH space IGNORING CASE.
+    REPLACE FIRST OCCURRENCE OF 'KEY' IN l_line1 WITH space IGNORING CASE.
     IF l_line1 IS NOT INITIAL.
       DO.
         IF l_line1 CS '='.
