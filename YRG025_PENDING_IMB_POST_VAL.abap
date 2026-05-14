@@ -1139,10 +1139,17 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<p>Dear Ma''am/ Sir,</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    CONCATENATE '<p>Please find below instances pertaining to the pending Imbalance posting for '
-                lv_customer_disp ' for ' lv_date_l ' to ' lv_date_h
-                '. Please take necessary action in this regard.</p>'
-      INTO ls_body-line.
+    DATA: lv_intro  TYPE string,
+          lv_cust_s TYPE string,
+          lv_dl_s   TYPE string,
+          lv_dh_s   TYPE string.
+    lv_cust_s = lv_customer_disp. CONDENSE lv_cust_s.
+    lv_dl_s   = lv_date_l.        CONDENSE lv_dl_s.
+    lv_dh_s   = lv_date_h.        CONDENSE lv_dh_s.
+    lv_intro = |<p>Please find below instances pertaining to the pending | &&
+               |Imbalance posting for { lv_cust_s } for { lv_dl_s } to | &&
+               |{ lv_dh_s }. Please take necessary action in this regard.</p>|.
+    ls_body-line = lv_intro.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
