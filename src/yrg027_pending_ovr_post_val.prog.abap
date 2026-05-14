@@ -662,12 +662,8 @@ FORM send_email.
   DATA: lv_source        TYPE string.
   DATA: lv_kunnr_disp    TYPE string.
   DATA: lv_subject       TYPE so_obj_des.
-  DATA: lv_att_name      TYPE so_obj_des.
   DATA: lt_body          TYPE bcsy_text.
   DATA: lv_body_line     TYPE so_text255.
-  DATA: lv_csv_str       TYPE string.
-  DATA: lv_xstring       TYPE xstring.
-  DATA: lt_att_hex       TYPE solix_tab.
   DATA: lv_sent_to_all   TYPE c.
   DATA: lo_send_request  TYPE REF TO cl_bcs.
   DATA: lo_document      TYPE REF TO cl_document_bcs.
@@ -811,9 +807,6 @@ FORM send_email.
                 'for' lv_date_range
                 INTO lv_subject SEPARATED BY space.
 
-    " Build attachment name (same as subject, truncated to field length)
-    lv_att_name = lv_subject.
-
     " Build HTML email body
     APPEND '<html><body>' TO lt_body.
     APPEND '<p>Dear Ma''am/ Sir,</p>' TO lt_body.
@@ -826,9 +819,6 @@ FORM send_email.
     APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
-
-    " CSV header for attachment
-    lv_csv_str = 'Contract ID,Sales Office,Cumulative Overrun (MBG),Chargeable Overrun (MBG),Posted Chargeable Ovr (MBG),Sales Order,Invoice'.
 
     " Table rows for this customer
     LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr.
@@ -854,13 +844,6 @@ FORM send_email.
         INTO lv_body_line.
       APPEND lv_body_line TO lt_body.
 
-      " CSV row for attachment
-      DATA: lv_csv_row TYPE string.
-      CONCATENATE lv_csv_str cl_abap_char_utilities=>newline
-                  wa_row-cont_id ',' wa_row-sal_office ','
-                  lv_cum_c ',' lv_char_c ','
-                  lv_posted_c ',' wa_row-sal_order ',' wa_row-invoice
-                  INTO lv_csv_str.
     ENDLOOP.
 
     APPEND '</table>' TO lt_body.
@@ -870,24 +853,6 @@ FORM send_email.
     CONCATENATE '<p>Source: ' lv_source '</p>' INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '</body></html>' TO lt_body.
-
-    " Convert CSV string to SOLIX for attachment
-    CALL FUNCTION 'SCMS_STRING_TO_XSTRING'
-      EXPORTING
-        text  = lv_csv_str
-      IMPORTING
-        buffer = lv_xstring
-      EXCEPTIONS
-        failed = 1
-        OTHERS = 2.
-
-    IF sy-subrc = 0.
-      CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
-        EXPORTING
-          buffer     = lv_xstring
-        TABLES
-          binary_tab = lt_att_hex.
-    ENDIF.
 
     " Send email via cl_bcs
     TRY.
@@ -904,19 +869,6 @@ FORM send_email.
       CATCH cx_document_bcs.
         CONTINUE.
     ENDTRY.
-
-    " Add CSV attachment
-    IF lt_att_hex IS NOT INITIAL.
-      TRY.
-          lo_document->add_attachment(
-            EXPORTING
-              i_attachment_type    = 'CSV'
-              i_attachment_subject = lv_att_name
-              i_att_content_hex    = lt_att_hex ).
-        CATCH cx_document_bcs.
-          " Attachment failed - continue without it
-      ENDTRY.
-    ENDIF.
 
     TRY.
         lo_send_request->set_document( lo_document ).
