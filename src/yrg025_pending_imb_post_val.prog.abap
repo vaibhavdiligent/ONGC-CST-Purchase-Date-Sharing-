@@ -222,7 +222,7 @@ FORM get_data .
   SORT it_cust BY kunnr.
   DELETE ADJACENT DUPLICATES FROM it_cust COMPARING kunnr.
 *SOC - Replace SUBMIT with local fetch_imbalance_data
-  IF ch1 EQ 'X'.
+  IF ch1 EQ 'X' OR p_email EQ 'X'.
     LOOP AT it_cust INTO wa_cust.
       REFRESH it_display1[].
       PERFORM fetch_imbalance_data USING wa_cust-kunnr.

@@ -221,7 +221,7 @@ FORM get_data .
 
   SORT it_cust BY kunnr.
   DELETE ADJACENT DUPLICATES FROM it_cust COMPARING kunnr.
-  IF ch1 EQ 'X'.
+  IF ch1 EQ 'X' OR p_email EQ 'X'.
     LOOP AT it_cust INTO wa_cust.
 
       wa_rspartab-selname = 'S_DATE'.
@@ -1159,7 +1159,7 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<th bgcolor="#D3D3D3">Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Neg Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Post Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Neg Imb (MBG)</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Post Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Neg Imb (MBG)</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1183,7 +1183,10 @@ FORM email_pending_postings.
         CONCATENATE '<td>' lv_cum_so '</td><td>' lv_char_so '</td><td>' lv_neg_so '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-sal_order '</td><td>' ls_pending-invoice '</td></tr>'
+        CONCATENATE '<td>' ls_pending-sal_order '</td><td>' ls_pending-invoice '</td>'
+          INTO ls_body-line.
+        APPEND ls_body TO lt_body. CLEAR ls_body.
+        CONCATENATE '<td>' ls_pending-m_cont_id '</td><td>' ls_pending-m_mas_cust '</td></tr>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
       ENDIF.
