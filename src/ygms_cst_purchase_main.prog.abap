@@ -838,7 +838,8 @@ FORM build_alv_display_table.
     LOOP AT gt_alv_display INTO ls_alv_chk.
       READ TABLE lt_valid_map INTO ls_vmap_chk
         WITH KEY location_id   = ls_alv_chk-location_id
-                 gail_material = ls_alv_chk-material.
+                 gail_material = ls_alv_chk-material
+                 ongc_material = ls_alv_chk-ongc_material.
       IF sy-subrc = 0 AND ls_vmap_chk-ncst <> 'X'.
         APPEND ls_alv_chk TO lt_alv_keep.
       ENDIF.
@@ -1316,7 +1317,7 @@ FORM handle_allocate.
     wa_state-matnr      = wa_final_main-matnr.
     COLLECT wa_state INTO it_state.
   ENDLOOP.
-  " Collect supply data per location + material (skip static gas receipts)
+  " Collect supply data per location + material (skip static and NCST gas receipts)
   LOOP AT gt_gas_receipt INTO DATA(wa_gas_receipt).
     READ TABLE gt_alv_display TRANSPORTING NO FIELDS
       WITH KEY location_id   = wa_gas_receipt-location_id
@@ -1324,6 +1325,17 @@ FORM handle_allocate.
                ongc_material = wa_gas_receipt-ongc_material
                static_flag   = 'X'.
     IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
+    SELECT SINGLE ncst FROM yrga_cst_mat_map
+      INTO @DATA(lv_ncst_alloc)
+      WHERE location_id   = @wa_gas_receipt-location_id
+        AND gail_material = @wa_gas_receipt-material
+        AND ongc_material = @wa_gas_receipt-ongc_material
+        AND valid_from   <= @gv_date_from
+        AND valid_to     >= @gv_date_to
+        AND deleted      = ' '.
+    IF sy-subrc = 0 AND lv_ncst_alloc = 'X'.
       CONTINUE.
     ENDIF.
     wa_sales-empst          = wa_gas_receipt-location_id.
