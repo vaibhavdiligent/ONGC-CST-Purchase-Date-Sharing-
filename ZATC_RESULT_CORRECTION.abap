@@ -2323,7 +2323,9 @@ FORM process_read.
   DATA l_table    TYPE char100.
   DATA l_line_new TYPE text255.
   DATA l_fp       TYPE i.
-  DATA l_read     TYPE flag.
+  DATA l_read      TYPE flag.
+  DATA l_key_fdpos TYPE i.
+  DATA l_key_found TYPE flag.
   DATA(l_line1) = wa_repos_tab-line.
   CONDENSE l_line1.
   CLEAR l_read.
@@ -2336,10 +2338,18 @@ FORM process_read.
     l_line1 = wa_repos_read-line.
     CONDENSE l_line1.
     DATA(l_len) = strlen( l_line1 ).
-    IF l_line1 CS 'KEY' OR l_line1 CS 'key'.
-      l_len = l_len - sy-fdpos.
+    CLEAR: l_key_fdpos, l_key_found.
+    IF l_line1 CS 'KEY'.
+      l_key_fdpos = sy-fdpos.
+      l_key_found = 'X'.
+    ELSEIF l_line1 CS 'key'.
+      l_key_fdpos = sy-fdpos.
+      l_key_found = 'X'.
+    ENDIF.
+    IF l_key_found = 'X'.
+      l_len = l_len - l_key_fdpos.
       l_read = 'X'.
-      l_line1 = l_line1+sy-fdpos(l_len).
+      l_line1 = l_line1+l_key_fdpos(l_len).
     ENDIF.
     CONDENSE l_line1.
     REPLACE FIRST OCCURRENCE OF 'KEY' IN l_line1 WITH space IGNORING CASE.
