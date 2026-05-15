@@ -890,8 +890,10 @@ START-OF-SELECTION.
                         ELSE.
                           l_n = strlen( wa_repos_tab-line ).
                         ENDIF.
-                        REPLACE ALL OCCURRENCES OF wa_final-param2 IN wa_repos_tab-line+l_dy(l_n)
-                          WITH wa_zatc_process_all-correction_value IGNORING CASE.
+                        IF l_n > 0.
+                          REPLACE ALL OCCURRENCES OF wa_final-param2 IN wa_repos_tab-line+l_dy(l_n)
+                            WITH wa_zatc_process_all-correction_value IGNORING CASE.
+                        ENDIF.
                         APPEND wa_repos_tab TO repos_tab_new.
                         CLEAR wa_blank.
                         CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
