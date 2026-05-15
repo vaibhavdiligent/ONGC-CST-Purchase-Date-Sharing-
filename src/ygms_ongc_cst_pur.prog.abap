@@ -8,10 +8,11 @@ REPORT ygms_ongc_cst_pur.
 * Type Definitions
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_excel_data,
-         gas_day     TYPE datum,
-         location_id TYPE ygms_de_loc_id,
-         material    TYPE ygms_de_gail_mat,
-         qty_scm     TYPE ygms_de_qty_scm,
+         gas_day       TYPE datum,
+         location_id   TYPE ygms_de_loc_id,
+         material      TYPE ygms_de_gail_mat,
+         ongc_material TYPE ygms_de_ongc_mat,
+         qty_scm       TYPE ygms_de_qty_scm,
        END OF ty_excel_data.
 TYPES: BEGIN OF ty_upload_data,
          gas_day       TYPE datum,
@@ -58,11 +59,19 @@ TYPES: BEGIN OF ty_gcv_error,
          message     TYPE char80,
        END OF ty_gcv_error.
 TYPES: BEGIN OF ty_gail_val_error,
-         location_id TYPE ygms_de_loc_id,
-         material    TYPE ygms_de_gail_mat,
-         error_type  TYPE c LENGTH 1,
-         message     TYPE char80,
+         location_id   TYPE ygms_de_loc_id,
+         material      TYPE ygms_de_gail_mat,
+         ongc_material TYPE ygms_de_ongc_mat,
+         error_type    TYPE c LENGTH 1,
+         message       TYPE char80,
        END OF ty_gail_val_error.
+TYPES: BEGIN OF ty_dup_row_error,
+         row_number    TYPE i,
+         gas_day       TYPE datum,
+         location_id   TYPE ygms_de_loc_id,
+         material      TYPE ygms_de_gail_mat,
+         ongc_material TYPE ygms_de_ongc_mat,
+       END OF ty_dup_row_error.
 *----------------------------------------------------------------------*
 * Selection Screen Reference Variables
 *----------------------------------------------------------------------*
@@ -98,6 +107,7 @@ DATA: gt_excel_data  TYPE TABLE OF ty_excel_data,
       gt_mat_errors  TYPE TABLE OF ty_mat_error,
       gt_gcv_errors  TYPE TABLE OF ty_gcv_error,
       gt_gail_val_errors TYPE TABLE OF ty_gail_val_error,
+      gt_dup_row_errors  TYPE TABLE OF ty_dup_row_error,
       gv_fn_start    TYPE datum,
       gv_fn_end      TYPE datum,
       gv_records     TYPE i,
@@ -280,7 +290,7 @@ FORM read_excel_file.
   DATA: lv_start_row TYPE i VALUE 2,
         lv_start_col TYPE i VALUE 1,
         lv_end_row   TYPE i VALUE 9999,
-        lv_end_col   TYPE i VALUE 4.
+        lv_end_col   TYPE i VALUE 5.
   CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
     EXPORTING
       filename                = p_file
@@ -331,6 +341,9 @@ FORM parse_excel_data.
             ls_excel-material = ls_alsmex-value.
             CONDENSE ls_excel-material.
           WHEN 4.
+            ls_excel-ongc_material = ls_alsmex-value.
+            CONDENSE ls_excel-ongc_material.
+          WHEN 5.
             lv_qty_str = ls_alsmex-value.
             REPLACE ALL OCCURRENCES OF ',' IN lv_qty_str WITH '.'.
             ls_excel-qty_scm = lv_qty_str.
@@ -437,18 +450,37 @@ FORM validate_gail_entries.
         ls_gail_err   TYPE ty_gail_val_error,
         lv_loc_err    TYPE abap_bool,
         lv_mat_err    TYPE abap_bool,
+        lv_dup_err    TYPE abap_bool,
         lv_answer     TYPE c.
   DATA: BEGIN OF ls_loc_mat,
-          location_id TYPE ygms_de_loc_id,
-          material    TYPE ygms_de_gail_mat,
+          location_id   TYPE ygms_de_loc_id,
+          material      TYPE ygms_de_gail_mat,
+          ongc_material TYPE ygms_de_ongc_mat,
         END OF ls_loc_mat,
         lt_loc_mat LIKE TABLE OF ls_loc_mat.
-  CLEAR: gt_gail_val_errors, gv_errors.
+  DATA: BEGIN OF ls_row_key,
+          gas_day       TYPE datum,
+          location_id   TYPE ygms_de_loc_id,
+          material      TYPE ygms_de_gail_mat,
+          ongc_material TYPE ygms_de_ongc_mat,
+          count         TYPE i,
+        END OF ls_row_key,
+        lt_row_keys LIKE TABLE OF ls_row_key.
+  DATA: ls_dup_err TYPE ty_dup_row_error,
+        lv_row     TYPE i.
+  CLEAR: gt_gail_val_errors, gt_dup_row_errors, gv_errors.
   LOOP AT gt_excel_data INTO DATA(ls_excel).
     COLLECT ls_excel-location_id INTO lt_locations.
-    ls_loc_mat-location_id = ls_excel-location_id.
-    ls_loc_mat-material    = ls_excel-material.
+    ls_loc_mat-location_id   = ls_excel-location_id.
+    ls_loc_mat-material      = ls_excel-material.
+    ls_loc_mat-ongc_material = ls_excel-ongc_material.
     COLLECT ls_loc_mat INTO lt_loc_mat.
+    ls_row_key-gas_day       = ls_excel-gas_day.
+    ls_row_key-location_id   = ls_excel-location_id.
+    ls_row_key-material      = ls_excel-material.
+    ls_row_key-ongc_material = ls_excel-ongc_material.
+    ls_row_key-count         = 1.
+    COLLECT ls_row_key INTO lt_row_keys.
   ENDLOOP.
   IF lt_locations IS NOT INITIAL.
     SELECT * FROM yrga_cst_loc_map
@@ -475,20 +507,42 @@ FORM validate_gail_entries.
       FOR ALL ENTRIES IN lt_loc_mat
       WHERE location_id   = lt_loc_mat-location_id
         AND gail_material = lt_loc_mat-material
+        AND ongc_material = lt_loc_mat-ongc_material
         AND deleted       = ' '.
   ENDIF.
   LOOP AT lt_loc_mat INTO ls_loc_mat.
     READ TABLE lt_mat_check TRANSPORTING NO FIELDS
       WITH KEY location_id   = ls_loc_mat-location_id
-               gail_material = ls_loc_mat-material.
+               gail_material = ls_loc_mat-material
+               ongc_material = ls_loc_mat-ongc_material.
     IF sy-subrc <> 0.
       CLEAR ls_gail_err.
-      ls_gail_err-location_id = ls_loc_mat-location_id.
-      ls_gail_err-material    = ls_loc_mat-material.
-      ls_gail_err-error_type  = 'M'.
-      ls_gail_err-message     = 'GAIL Material not maintained in Material Mapping'.
+      ls_gail_err-location_id   = ls_loc_mat-location_id.
+      ls_gail_err-material      = ls_loc_mat-material.
+      ls_gail_err-ongc_material = ls_loc_mat-ongc_material.
+      ls_gail_err-error_type    = 'M'.
+      ls_gail_err-message       = 'Material mapping not found in YRGA_CST_MAT_MAP'.
       APPEND ls_gail_err TO gt_gail_val_errors.
       lv_mat_err = abap_true.
+    ENDIF.
+  ENDLOOP.
+  lv_row = 0.
+  LOOP AT gt_excel_data INTO ls_excel.
+    lv_row = lv_row + 1.
+    READ TABLE lt_row_keys INTO ls_row_key
+      WITH KEY gas_day       = ls_excel-gas_day
+               location_id   = ls_excel-location_id
+               material      = ls_excel-material
+               ongc_material = ls_excel-ongc_material.
+    IF sy-subrc = 0 AND ls_row_key-count > 1.
+      CLEAR ls_dup_err.
+      ls_dup_err-row_number    = lv_row + 1.
+      ls_dup_err-gas_day       = ls_excel-gas_day.
+      ls_dup_err-location_id   = ls_excel-location_id.
+      ls_dup_err-material      = ls_excel-material.
+      ls_dup_err-ongc_material = ls_excel-ongc_material.
+      APPEND ls_dup_err TO gt_dup_row_errors.
+      lv_dup_err = abap_true.
     ENDIF.
   ENDLOOP.
   IF lv_loc_err = abap_true.
@@ -511,7 +565,7 @@ FORM validate_gail_entries.
     CALL FUNCTION 'POPUP_TO_CONFIRM'
       EXPORTING
         titlebar              = 'Error'
-        text_question         = 'GAIL Material(s) not found in Material Mapping table.'
+        text_question         = 'Material mapping not found in YRGA_CST_MAT_MAP.'
         text_button_1         = 'Details'
         text_button_2         = 'Close'
         default_button        = '1'
@@ -520,6 +574,22 @@ FORM validate_gail_entries.
         answer                = lv_answer.
     IF lv_answer = '1'.
       PERFORM display_gail_val_error_popup USING 'M'.
+    ENDIF.
+    gv_errors = gv_errors + 1.
+  ENDIF.
+  IF lv_dup_err = abap_true.
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = 'Error'
+        text_question         = 'Multiple entries found for the same key combinations.'
+        text_button_1         = 'Details'
+        text_button_2         = 'Close'
+        default_button        = '1'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+    IF lv_answer = '1'.
+      PERFORM display_dup_row_error_popup.
     ENDIF.
     gv_errors = gv_errors + 1.
   ENDIF.
@@ -564,6 +634,12 @@ FORM display_gail_val_error_popup USING pv_error_type TYPE c.
         CATCH cx_salv_not_found.
       ENDTRY.
       TRY.
+          lo_column = lo_columns->get_column( 'ONGC_MATERIAL' ).
+          lo_column->set_short_text( 'ONGC Mat' ).
+          lo_column->set_medium_text( 'ONGC Material' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
           lo_column = lo_columns->get_column( 'MESSAGE' ).
           lo_column->set_short_text( 'Message' ).
           lo_column->set_medium_text( 'Error Message' ).
@@ -572,6 +648,63 @@ FORM display_gail_val_error_popup USING pv_error_type TYPE c.
       TRY.
           lo_column = lo_columns->get_column( 'ERROR_TYPE' ).
           lo_column->set_visible( abap_false ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      lo_alv->display( ).
+    CATCH cx_salv_msg INTO DATA(lx_salv).
+      MESSAGE lx_salv TYPE 'I'.
+  ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_DUP_ROW_ERROR_POPUP
+*&---------------------------------------------------------------------*
+FORM display_dup_row_error_popup.
+  DATA: lo_alv     TYPE REF TO cl_salv_table,
+        lo_columns TYPE REF TO cl_salv_columns_table,
+        lo_column  TYPE REF TO cl_salv_column.
+  CHECK gt_dup_row_errors IS NOT INITIAL.
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_dup_row_errors
+      ).
+      lo_alv->set_screen_popup(
+        start_column = 10
+        end_column   = 130
+        start_line   = 5
+        end_line     = 25
+      ).
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( abap_true ).
+      TRY.
+          lo_column = lo_columns->get_column( 'ROW_NUMBER' ).
+          lo_column->set_short_text( 'Row No' ).
+          lo_column->set_medium_text( 'Row Number' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'GAS_DAY' ).
+          lo_column->set_short_text( 'Gas Day' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'LOCATION_ID' ).
+          lo_column->set_short_text( 'Location' ).
+          lo_column->set_medium_text( 'Location ID' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'MATERIAL' ).
+          lo_column->set_short_text( 'GAIL Mat' ).
+          lo_column->set_medium_text( 'GAIL Material' ).
+        CATCH cx_salv_not_found.
+      ENDTRY.
+      TRY.
+          lo_column = lo_columns->get_column( 'ONGC_MATERIAL' ).
+          lo_column->set_short_text( 'ONGC Mat' ).
+          lo_column->set_medium_text( 'ONGC Material' ).
         CATCH cx_salv_not_found.
       ENDTRY.
       lo_alv->display( ).
@@ -667,8 +800,9 @@ FORM map_location_to_ctp.
     CLEAR ls_upload.
     ls_upload-gas_day     = ls_excel-gas_day.
     ls_upload-location_id = ls_excel-location_id.
-    ls_upload-material    = ls_excel-material.
-    ls_upload-qty_scm     = ls_excel-qty_scm.
+    ls_upload-material      = ls_excel-material.
+    ls_upload-ongc_material = ls_excel-ongc_material.
+    ls_upload-qty_scm       = ls_excel-qty_scm.
     READ TABLE lt_loc_map INTO DATA(ls_loc)
       WITH KEY gail_loc_id = ls_excel-location_id.
     IF sy-subrc = 0.
@@ -781,7 +915,8 @@ FORM map_material_to_ongc.
   LOOP AT gt_upload_data ASSIGNING FIELD-SYMBOL(<fs_upload>).
     READ TABLE lt_mat_map INTO DATA(ls_mat)
       WITH KEY location_id   = <fs_upload>-location_id
-               gail_material = <fs_upload>-material.
+               gail_material = <fs_upload>-material
+               ongc_material = <fs_upload>-ongc_material.
     IF sy-subrc = 0.
       <fs_upload>-ongc_material = ls_mat-ongc_material.
     ENDIF.
