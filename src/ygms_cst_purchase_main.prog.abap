@@ -836,11 +836,18 @@ FORM build_alv_display_table.
     DATA ls_alv_chk LIKE LINE OF gt_alv_display.
     DATA ls_vmap_chk LIKE LINE OF lt_valid_map.
     LOOP AT gt_alv_display INTO ls_alv_chk.
-      READ TABLE lt_valid_map INTO ls_vmap_chk
-        WITH KEY location_id   = ls_alv_chk-location_id
-                 gail_material = ls_alv_chk-material
-                 ongc_material = ls_alv_chk-ongc_material.
-      IF sy-subrc = 0 AND ls_vmap_chk-ncst <> 'X'.
+      " Keep row only if at least one non-NCST mapping exists for location+material
+      DATA lv_non_ncst TYPE abap_bool.
+      lv_non_ncst = abap_false.
+      LOOP AT lt_valid_map INTO ls_vmap_chk
+        WHERE location_id   = ls_alv_chk-location_id
+          AND gail_material = ls_alv_chk-material.
+        IF ls_vmap_chk-ncst <> 'X'.
+          lv_non_ncst = abap_true.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
+      IF lv_non_ncst = abap_true.
         APPEND ls_alv_chk TO lt_alv_keep.
       ENDIF.
     ENDLOOP.
