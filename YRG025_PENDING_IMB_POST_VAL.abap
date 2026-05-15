@@ -1159,7 +1159,9 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<th bgcolor="#D3D3D3">Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Neg Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Post Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Neg Imb (MBG)</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Post Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Neg Imb (MBG)</th><th bgcolor="#D3D3D3">Sales Order</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
