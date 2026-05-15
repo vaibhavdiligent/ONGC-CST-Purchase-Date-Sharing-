@@ -507,14 +507,19 @@ FORM validate_gail_entries.
       FOR ALL ENTRIES IN lt_loc_mat
       WHERE location_id   = lt_loc_mat-location_id
         AND gail_material = lt_loc_mat-material
-        AND ongc_material = lt_loc_mat-ongc_material
         AND deleted       = ' '.
   ENDIF.
   LOOP AT lt_loc_mat INTO ls_loc_mat.
-    READ TABLE lt_mat_check TRANSPORTING NO FIELDS
-      WITH KEY location_id   = ls_loc_mat-location_id
-               gail_material = ls_loc_mat-material
-               ongc_material = ls_loc_mat-ongc_material.
+    IF ls_loc_mat-ongc_material IS NOT INITIAL.
+      READ TABLE lt_mat_check TRANSPORTING NO FIELDS
+        WITH KEY location_id   = ls_loc_mat-location_id
+                 gail_material = ls_loc_mat-material
+                 ongc_material = ls_loc_mat-ongc_material.
+    ELSE.
+      READ TABLE lt_mat_check TRANSPORTING NO FIELDS
+        WITH KEY location_id   = ls_loc_mat-location_id
+                 gail_material = ls_loc_mat-material.
+    ENDIF.
     IF sy-subrc <> 0.
       CLEAR ls_gail_err.
       ls_gail_err-location_id   = ls_loc_mat-location_id.
@@ -913,10 +918,16 @@ FORM map_material_to_ongc.
   ENDIF.
   CHECK gv_errors = 0.
   LOOP AT gt_upload_data ASSIGNING FIELD-SYMBOL(<fs_upload>).
-    READ TABLE lt_mat_map INTO DATA(ls_mat)
-      WITH KEY location_id   = <fs_upload>-location_id
-               gail_material = <fs_upload>-material
-               ongc_material = <fs_upload>-ongc_material.
+    IF <fs_upload>-ongc_material IS NOT INITIAL.
+      READ TABLE lt_mat_map INTO DATA(ls_mat)
+        WITH KEY location_id   = <fs_upload>-location_id
+                 gail_material = <fs_upload>-material
+                 ongc_material = <fs_upload>-ongc_material.
+    ELSE.
+      READ TABLE lt_mat_map INTO ls_mat
+        WITH KEY location_id   = <fs_upload>-location_id
+                 gail_material = <fs_upload>-material.
+    ENDIF.
     IF sy-subrc = 0.
       <fs_upload>-ongc_material = ls_mat-ongc_material.
     ENDIF.
