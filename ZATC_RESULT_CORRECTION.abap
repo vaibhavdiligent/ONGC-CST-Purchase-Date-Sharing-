@@ -2039,7 +2039,7 @@ FORM change_table.
         CATCH cx_dd_ddl_read.
       ENDTRY.
     ENDIF.
-    CLEAR l_query. CLEAR l_q.
+    CLEAR l_query. CLEAR l_q. REFRESH it_value.
     l_q1 = 1.
     LOOP AT it_table INTO wa_table WHERE value CS 'SELECT' OR value CS 'SINGLE'.
       l_q1 = l_q1 + 1.
@@ -2063,11 +2063,19 @@ FORM change_table.
       ELSE.
         READ TABLE it_fields_new INTO DATA(wa_fn5) WITH KEY base_field = wa_table-value.
         IF sy-subrc = 0.
+          CLEAR l_tab_i.
+          READ TABLE it_value INTO wa_value WITH KEY value = wa_table-value.
+          IF sy-subrc = 0. l_tab_i = sy-tabix. CONCATENATE wa_table-value l_tab_i INTO wa_table-value. ENDIF.
           CONCATENATE l_query l_q wa_fn5-element_name 'AS' wa_table-value INTO l_query SEPARATED BY space.
+          wa_value = wa_table-value. APPEND wa_value TO it_value.
         ELSE.
           LOOP AT it_fields_new INTO DATA(wa_fn6) WHERE base_field CS wa_table-value. EXIT. ENDLOOP.
           IF sy-subrc = 0.
+            CLEAR l_tab_i.
+            READ TABLE it_value INTO wa_value WITH KEY value = wa_table-value.
+            IF sy-subrc = 0. l_tab_i = sy-tabix. CONCATENATE wa_table-value l_tab_i INTO wa_table-value. ENDIF.
             CONCATENATE l_query l_q wa_fn6-element_name 'AS' wa_table-value INTO l_query SEPARATED BY space.
+            wa_value = wa_table-value. APPEND wa_value TO it_value.
           ELSE.
             MOVE it_query[] TO it_query_new[]. l_exit = 'X'.
           ENDIF.
