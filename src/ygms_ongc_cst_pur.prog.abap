@@ -345,7 +345,7 @@ FORM parse_excel_data.
             CONDENSE ls_excel-ongc_material.
           WHEN 5.
             lv_qty_str = ls_alsmex-value.
-            REPLACE ALL OCCURRENCES OF ',' IN lv_qty_str WITH '.'.
+            REPLACE ALL OCCURRENCES OF ',' IN lv_qty_str WITH ''.
             ls_excel-qty_scm = lv_qty_str.
         ENDCASE.
       CATCH cx_root.
