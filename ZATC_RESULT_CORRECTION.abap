@@ -2605,6 +2605,13 @@ FORM endat.
   DATA l_tab      TYPE sy-index.
   DATA l_cont     TYPE i.
   l_line1 = wa_repos_tab-line.
+  " AT FIRST / AT LAST have no field reference - generate SORT without BY clause
+  DATA l_no_by TYPE flag.
+  DATA(l_upper) = wa_repos_tab-line.
+  TRANSLATE l_upper TO UPPER CASE.
+  IF l_upper CS 'AT FIRST' OR l_upper CS 'AT LAST'.
+    l_no_by = abap_true.
+  ENDIF.
   REPLACE ALL OCCURRENCES OF 'AT NEW' IN l_line1 WITH space IGNORING CASE.
   REPLACE ALL OCCURRENCES OF 'AT END OF' IN l_line1 WITH space IGNORING CASE.
   REPLACE ALL OCCURRENCES OF '.' IN l_line1 WITH space.
@@ -2643,7 +2650,11 @@ FORM endat.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
-  CONCATENATE 'SORT' l_table 'BY' l_field INTO l_line_new SEPARATED BY space.
+  IF l_no_by = abap_true.
+    CONCATENATE 'SORT' l_table INTO l_line_new SEPARATED BY space.
+  ELSE.
+    CONCATENATE 'SORT' l_table 'BY' l_field INTO l_line_new SEPARATED BY space.
+  ENDIF.
   CONCATENATE l_line_new '.' INTO l_line_new.
   " Skip if a SORT for the same table was already inserted just above
   " the LOOP - prevents duplicates when AT NEW / AT END combine with
