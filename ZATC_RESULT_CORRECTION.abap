@@ -2233,6 +2233,9 @@ FORM change_single.
   DATA l_into   TYPE i.
   DATA l_value  TYPE char1.
   DATA l_value2 TYPE char2.
+  DATA lt_pk     TYPE TABLE OF dd03l.
+  DATA wa_pk     TYPE dd03l.
+  DATA l_orderby TYPE string.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
     CONCATENATE l_string wa_q-str INTO l_string.
@@ -2307,7 +2310,27 @@ FORM change_single.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
   ENDIF.
-  CONCATENATE l_query ' ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
+  CLEAR l_orderby.
+  SELECT * FROM dd03l INTO TABLE lt_pk
+    WHERE tabname = l_table
+      AND keyflag = 'X'
+    ORDER BY position.
+  IF sy-subrc = 0.
+    LOOP AT lt_pk INTO wa_pk.
+      IF l_orderby IS INITIAL.
+        l_orderby = wa_pk-fieldname.
+      ELSE.
+        CONCATENATE l_orderby wa_pk-fieldname INTO l_orderby SEPARATED BY space.
+      ENDIF.
+    ENDLOOP.
+    IF l_orderby IS NOT INITIAL.
+      CONCATENATE l_query 'ORDER BY' l_orderby '.' INTO l_query SEPARATED BY space.
+    ELSE.
+      CONCATENATE l_query 'ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
+    ENDIF.
+  ELSE.
+    CONCATENATE l_query 'ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
+  ENDIF.
   CONCATENATE l_query '  ENDSELECT.' INTO l_query SEPARATED BY space.
   PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
 ENDFORM.
