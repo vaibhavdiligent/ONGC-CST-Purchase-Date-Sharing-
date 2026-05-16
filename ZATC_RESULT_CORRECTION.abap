@@ -559,13 +559,48 @@ START-OF-SELECTION.
                             IF sy-subrc <> 0.
                               APPEND wa_repos_tab_d TO repos_tab_new.
                             ELSE.
+                              " Apply @ to host vars if WHERE is on the same FROM line
+                              DATA l_uc_d_kv TYPE string.
+                              l_uc_d_kv = wa_repos_tab_d-line.
+                              TRANSLATE l_uc_d_kv TO UPPER CASE.
+                              IF l_uc_d_kv CS 'WHERE'.
+                                PERFORM add_at_hostvars
+                                  USING    wa_repos_tab_d-line
+                                  CHANGING wa_repos_tab_d-line.
+                              ENDIF.
                               APPEND wa_repos_tab_d TO repos_tab_new.
                               EXIT.
                             ENDIF.
                           ENDLOOP.
                         ELSE.
+                          " Apply @ to host vars if WHERE is on the same FROM line
+                          DATA l_uc_kv TYPE string.
+                          l_uc_kv = wa_repos_tab-line.
+                          TRANSLATE l_uc_kv TO UPPER CASE.
+                          IF l_uc_kv CS 'WHERE'.
+                            PERFORM add_at_hostvars
+                              USING    wa_repos_tab-line
+                              CHANGING wa_repos_tab-line.
+                          ENDIF.
                           APPEND wa_repos_tab TO repos_tab_new.
                         ENDIF.
+                        " Apply @ prefix to host vars in continuation WHERE lines.
+                        DATA l_whr_idx TYPE i.
+                        l_whr_idx = l_tabix + 1.
+                        DO 30 TIMES.
+                          READ TABLE repos_tab INTO DATA(wa_whr_scan) INDEX l_whr_idx.
+                          IF sy-subrc <> 0. EXIT. ENDIF.
+                          IF strlen( wa_whr_scan-line ) > 0
+                            AND wa_whr_scan-line(1) = '*'.
+                            l_whr_idx = l_whr_idx + 1. CONTINUE.
+                          ENDIF.
+                          PERFORM add_at_hostvars
+                            USING    wa_whr_scan-line
+                            CHANGING wa_whr_scan-line.
+                          MODIFY repos_tab FROM wa_whr_scan INDEX l_whr_idx.
+                          IF wa_whr_scan-line CS '.'. EXIT. ENDIF.
+                          l_whr_idx = l_whr_idx + 1.
+                        ENDDO.
                         CLEAR wa_blank.
                         CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
                           INTO wa_blank-line SEPARATED BY space.
@@ -4092,4 +4127,82 @@ FORM smartform_procee.
   wa_output-status       = 'Success'.
   APPEND wa_output TO it_output.
   CLEAR wa_output.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form add_at_hostvars
+*&---------------------------------------------------------------------*
+" Adds @ prefix to host variable tokens in a WHERE-clause line.
+" State machine:  X = before WHERE  W = after WHERE/AND/OR (expect column)
+"                 C = after column (expect operator)  O = after op (add @)
+FORM add_at_hostvars USING    p_line TYPE string
+                     CHANGING p_out  TYPE string.
+  DATA: lt_tok  TYPE TABLE OF string,
+        lv_tok  TYPE string,
+        lv_uc   TYPE string,
+        lv_out  TYPE string,
+        lv_st   TYPE c,
+        lv_c1   TYPE c,
+        lv_cpos TYPE i,
+        lv_len  TYPE i,
+        lv_char TYPE c,
+        lv_ind  TYPE string.
+  " Preserve leading indentation
+  lv_len  = strlen( p_line ).
+  lv_cpos = 0.
+  WHILE lv_cpos < lv_len.
+    lv_char = p_line+lv_cpos(1).
+    IF lv_char <> ' '. EXIT. ENDIF.
+    lv_cpos = lv_cpos + 1.
+  ENDWHILE.
+  IF lv_cpos > 0. lv_ind = p_line(lv_cpos). ENDIF.
+  " Tokenize and walk state machine
+  lv_st = 'X'.
+  SPLIT p_line AT space INTO TABLE lt_tok.
+  LOOP AT lt_tok INTO lv_tok.
+    IF lv_tok IS INITIAL. CONTINUE. ENDIF.
+    lv_uc = lv_tok.
+    TRANSLATE lv_uc TO UPPER CASE.
+    CASE lv_uc.
+      WHEN 'WHERE'.
+        lv_st = 'W'.
+      WHEN 'AND' OR 'OR'.
+        lv_st = 'W'.
+      WHEN 'NOT'.
+        " NOT keeps state — column or another keyword follows
+      WHEN '=' OR '<>' OR '<' OR '>' OR '<=' OR '>=' OR
+           'EQ' OR 'NE' OR 'LT' OR 'GT' OR 'LE' OR 'GE' OR
+           'LIKE' OR 'BETWEEN' OR 'IN'.
+        IF lv_st = 'C'. lv_st = 'O'. ENDIF.
+      WHEN 'INTO' OR 'APPENDING' OR 'ORDER' OR 'GROUP' OR
+           'HAVING' OR 'UNION' OR 'UP'.
+        lv_st = 'X'.
+      WHEN OTHERS.
+        lv_c1 = lv_tok(1).
+        IF lv_st = 'X'.
+          " Before WHERE — leave token unchanged
+        ELSEIF lv_c1 = ''''.
+          lv_st = 'W'.
+        ELSEIF lv_c1 >= '0' AND lv_c1 <= '9'.
+          lv_st = 'W'.
+        ELSEIF lv_c1 = '@'.
+          lv_st = 'W'.
+        ELSEIF lv_c1 = '(' OR lv_c1 = ')' OR lv_c1 = ','.
+          " parens/commas — do not change state
+        ELSEIF lv_c1 = '.'.
+          " period — end of statement, do not change state
+        ELSEIF lv_st = 'W'.
+          lv_st = 'C'.
+        ELSEIF lv_st = 'O'.
+          CONCATENATE '@' lv_tok INTO lv_tok.
+          lv_st = 'W'.
+        ENDIF.
+    ENDCASE.
+    IF lv_out IS INITIAL.
+      lv_out = lv_tok.
+    ELSE.
+      CONCATENATE lv_out ' ' lv_tok INTO lv_out.
+    ENDIF.
+  ENDLOOP.
+  CONCATENATE lv_ind lv_out INTO p_out.
 ENDFORM.
