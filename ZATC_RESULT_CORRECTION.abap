@@ -1424,29 +1424,6 @@ START-OF-SELECTION.
             WHEN OTHERS.
               APPEND wa_repos_tab TO repos_tab_new.
           ENDCASE.
-          " Handle additional findings on the same line.  READ TABLE above only
-          " retrieves the first match (highest priority); a single source line can
-          " carry multiple findings (e.g., WRITE ISSUE plus WRITE IN LOOP).  The
-          " first finding's handler has already commented/transformed the line, so
-          " here we only run handlers that are additive and don't re-touch the
-          " source line itself - currently just SORT insertion via loop_exit.
-          DATA wa_extra TYPE ty_final.
-          DATA l_extra_count TYPE i.
-          CLEAR l_extra_count.
-          LOOP AT it_final INTO wa_extra WHERE
-            program_name = wa_final_p-program_name
-            AND sobjname = wa_final_p-sobjname
-            AND line = l_tabix.
-            l_extra_count = l_extra_count + 1.
-            IF l_extra_count = 1. CONTINUE. ENDIF.
-            DATA(l_extra_msg) = wa_extra-check_message.
-            TRANSLATE l_extra_msg TO UPPER CASE.
-            IF l_extra_msg CS 'WRITE IN LOOP'
-              OR l_extra_msg CS 'LOOP AT ITAB. EXIT'
-              OR l_extra_msg CS 'LOOP AT EMPTY ITAB'.
-              PERFORM loop_exit.
-            ENDIF.
-          ENDLOOP.
         ENDIF.
       ENDLOOP.
     ENDIF.
