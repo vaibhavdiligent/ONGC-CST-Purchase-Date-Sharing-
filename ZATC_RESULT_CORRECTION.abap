@@ -579,16 +579,20 @@ START-OF-SELECTION.
                               wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fypos).
                             ENDIF.
                           ENDIF.
+                          " Skip ABAP comment lines ('*' in column 1) entirely - their
+                          " content (including any '.') must NOT be treated as part of
+                          " the SELECT statement.
+                          IF wa_repos_tab_d-line(1) = '*'.
+                            CONTINUE.
+                          ENDIF.
                           IF wa_repos_tab_d-line CS '.'.
                             l_tab = sy-tabix + 1.
                             wa_query-str = wa_repos_tab_d-line.
                             APPEND wa_query TO it_query.
                             EXIT.
                           ELSE.
-                            IF wa_repos_tab_d-line(1) <> '*'.
-                              wa_query-str = wa_repos_tab_d-line.
-                              APPEND wa_query TO it_query.
-                            ENDIF.
+                            wa_query-str = wa_repos_tab_d-line.
+                            APPEND wa_query TO it_query.
                           ENDIF.
                         ENDLOOP.
                         IF it_query[] IS NOT INITIAL.
