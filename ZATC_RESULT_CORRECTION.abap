@@ -669,6 +669,24 @@ START-OF-SELECTION.
                         IF it_query[] IS NOT INITIAL.
                           PERFORM change_table.
                         ENDIF.
+                        " Defensive guard: if change_table did not populate
+                        " it_query_new (e.g. the statement is UPDATE / DELETE /
+                        " INSERT / MODIFY, which the SELECT-oriented FORM
+                        " cannot rewrite), preserve the original lines so the
+                        " statement is not silently dropped from the output.
+                        IF it_query_new[] IS INITIAL AND it_query[] IS NOT INITIAL.
+                          DATA l_pres_idx TYPE i.
+                          DATA wa_pres    TYPE abaptxt255.
+                          l_pres_idx = l_tabix.
+                          DO.
+                            IF l_tab IS NOT INITIAL AND l_pres_idx >= l_tab. EXIT. ENDIF.
+                            READ TABLE repos_tab INTO wa_pres INDEX l_pres_idx.
+                            IF sy-subrc <> 0. EXIT. ENDIF.
+                            APPEND wa_pres TO repos_tab_new.
+                            IF l_tab IS INITIAL AND wa_pres-line CS '.'. EXIT. ENDIF.
+                            l_pres_idx = l_pres_idx + 1.
+                          ENDDO.
+                        ENDIF.
                         IF it_query_new[] IS NOT INITIAL.
                           IF it_query_new[] = it_query[].
                             " No table replacement found.  The earlier deletion
