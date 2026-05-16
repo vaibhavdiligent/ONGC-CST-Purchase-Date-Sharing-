@@ -1103,7 +1103,8 @@ START-OF-SELECTION.
                   REPLACE ALL OCCURRENCES OF '.' IN l_table WITH space.
                   CONDENSE l_table.
                   IF l_where IS INITIAL OR l_where CS 'ALL FIELDS'.
-                    CONCATENATE 'SORT' l_table '.' INTO l_new SEPARATED BY space.
+                    CONCATENATE 'SORT' l_table INTO l_new SEPARATED BY space.
+                    CONCATENATE l_new '.' INTO l_new.
                   ELSE.
                     CONCATENATE 'SORT' l_table 'BY' l_where INTO l_new SEPARATED BY space.
                   ENDIF.
@@ -1388,7 +1389,8 @@ START-OF-SELECTION.
                         INTO wa_blank-line SEPARATED BY space.
                       APPEND wa_blank TO repos_tab_new.
                       CLEAR wa_blank.
-                      CONCATENATE 'SORT ' l_alv '.' INTO wa_blank-line SEPARATED BY space.
+                      CONCATENATE 'SORT' l_alv INTO wa_blank-line SEPARATED BY space.
+                      CONCATENATE wa_blank-line '.' INTO wa_blank-line.
                       APPEND wa_blank TO repos_tab_new.
                       CLEAR wa_blank.
                       CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
@@ -2407,7 +2409,7 @@ FORM process_read.
   l_len = strlen( l_line1 ).
   DO l_len TIMES.
     DATA(l_value) = l_line1+l_tab2(1).
-    IF l_value = ' '. EXIT.
+    IF l_value = ' ' OR l_value = '.'. EXIT.
     ELSE. CONCATENATE l_table l_value INTO l_table.
     ENDIF.
     l_tab2 = l_tab2 + 1.
@@ -2416,7 +2418,7 @@ FORM process_read.
   LOOP AT it_table INTO wa_table.
     CONCATENATE l_line_new wa_table-value INTO l_line_new SEPARATED BY space.
   ENDLOOP.
-  CONCATENATE l_line_new '.' INTO l_line_new SEPARATED BY space.
+  CONCATENATE l_line_new '.' INTO l_line_new.
   CLEAR l_tab2.
   DESCRIBE TABLE repos_tab_new LINES DATA(l_ind).
   l_fp = l_ind.
@@ -2518,11 +2520,11 @@ FORM process_change_loop.
   ENDDO.
   CLEAR: l_tab,l_value.
   REPLACE ALL OCCURRENCES OF 'LOOP AT' IN wa_rep-line WITH space IGNORING CASE.
-  CONDENSE wa_rep.
+  CONDENSE wa_rep-line.
   l_len = strlen( wa_rep-line ).
   DO l_len TIMES.
     l_value = wa_rep-line+l_tab(1).
-    IF l_value = ' '. EXIT.
+    IF l_value = ' ' OR l_value = '.'. EXIT.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
@@ -2530,7 +2532,7 @@ FORM process_change_loop.
   LOOP AT it_table INTO wa_table.
     CONCATENATE l_line_new wa_table-value INTO l_line_new SEPARATED BY space.
   ENDLOOP.
-  CONCATENATE l_line_new '.' INTO l_line_new SEPARATED BY space.
+  CONCATENATE l_line_new '.' INTO l_line_new.
   " Skip if a SORT for the same table was already inserted just above
   " the LOOP - prevents duplicates when both ON CHANGE OF and another
   " same-loop finding (AT NEW / AT END / EXIT) trigger sorting.
@@ -2616,15 +2618,16 @@ FORM endat.
   ENDDO.
   CLEAR: l_tab,l_value.
   REPLACE ALL OCCURRENCES OF 'LOOP AT' IN wa_rep-line WITH space IGNORING CASE.
-  CONDENSE wa_rep.
+  CONDENSE wa_rep-line.
   l_len = strlen( wa_rep-line ).
   DO l_len TIMES.
     l_value = wa_rep-line+l_tab(1).
-    IF l_value = ' '. EXIT.
+    IF l_value = ' ' OR l_value = '.'. EXIT.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
-  CONCATENATE 'SORT' l_table 'BY' l_field '.' INTO l_line_new SEPARATED BY space.
+  CONCATENATE 'SORT' l_table 'BY' l_field INTO l_line_new SEPARATED BY space.
+  CONCATENATE l_line_new '.' INTO l_line_new.
   " Skip if a SORT for the same table was already inserted just above
   " the LOOP - prevents duplicates when AT NEW / AT END combine with
   " other same-loop ATC findings.
@@ -2694,15 +2697,16 @@ FORM loop_exit.
   ENDDO.
   CLEAR: l_tab,l_value.
   REPLACE ALL OCCURRENCES OF 'LOOP AT' IN wa_rep-line WITH space IGNORING CASE.
-  CONDENSE wa_rep.
+  CONDENSE wa_rep-line.
   DATA(l_len) = strlen( wa_rep-line ).
   DO l_len TIMES.
     l_value = wa_rep-line+l_tab(1).
-    IF l_value = ' '. EXIT.
+    IF l_value = ' ' OR l_value = '.'. EXIT.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
-  CONCATENATE 'SORT' l_table '.' INTO l_line_new SEPARATED BY space.
+  CONCATENATE 'SORT' l_table INTO l_line_new SEPARATED BY space.
+  CONCATENATE l_line_new '.' INTO l_line_new.
   DATA(l_fp1) = l_fp - 1.
   DO 30 TIMES.
     READ TABLE repos_tab_new INTO wa_rep INDEX l_fp1.
