@@ -2657,6 +2657,11 @@ FORM process_read.
     ENDIF.
     l_tab2 = l_tab2 + 1.
   ENDDO.
+  " Do not emit SORT if the iterable name could not be extracted.
+  IF l_table IS INITIAL
+    OR l_table(1) = '*' OR l_table(1) = '"' OR l_table(1) = '''' OR l_table(1) = '.'.
+    RETURN.
+  ENDIF.
   CONCATENATE 'SORT' l_table 'BY' INTO l_line_new SEPARATED BY space.
   LOOP AT it_table INTO wa_table.
     CONCATENATE l_line_new wa_table-value INTO l_line_new SEPARATED BY space.
@@ -2748,9 +2753,18 @@ FORM process_change_loop.
   CLEAR l_ind.
   DESCRIBE TABLE repos_tab_new LINES l_ind.
   l_fp = l_ind.
+  DATA l_chk_blank TYPE string.
   DO l_ind TIMES.
     READ TABLE repos_tab_new INTO DATA(wa_rep) INDEX l_fp.
     IF sy-subrc = 0.
+      " Skip comment-only lines (otherwise 'loop at' inside a comment is
+      " mistaken for the actual enclosing LOOP statement).
+      l_chk_blank = wa_rep-line.
+      CONDENSE l_chk_blank.
+      IF l_chk_blank IS NOT INITIAL
+        AND ( l_chk_blank(1) = '*' OR l_chk_blank(1) = '"' ).
+        l_fp = l_fp - 1. CONTINUE.
+      ENDIF.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. l_cont1 = l_cont1 + 1. l_fp = l_fp - 1. CONTINUE. ENDIF.
       IF wa_rep-line CS 'LOOP AT'.
@@ -2761,6 +2775,8 @@ FORM process_change_loop.
     ENDIF.
     l_fp = l_fp - 1.
   ENDDO.
+  " Abort SORT generation if no LOOP AT was located above.
+  IF wa_rep-line NS 'LOOP AT'. RETURN. ENDIF.
   CLEAR: l_tab,l_value.
   REPLACE ALL OCCURRENCES OF 'LOOP AT' IN wa_rep-line WITH space IGNORING CASE.
   CONDENSE wa_rep-line.
@@ -2771,6 +2787,10 @@ FORM process_change_loop.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
+  IF l_table IS INITIAL
+    OR l_table(1) = '*' OR l_table(1) = '"' OR l_table(1) = '''' OR l_table(1) = '.'.
+    RETURN.
+  ENDIF.
   CONCATENATE 'SORT' l_table 'BY' INTO l_line_new SEPARATED BY space.
   LOOP AT it_table INTO wa_table.
     CONCATENATE l_line_new wa_table-value INTO l_line_new SEPARATED BY space.
@@ -2855,9 +2875,19 @@ FORM endat.
   CLEAR: l_tab,l_value. CLEAR l_ind.
   DESCRIBE TABLE repos_tab_new LINES l_ind.
   l_fp = l_ind.
+  DATA l_chk_blank TYPE string.
   DO l_ind TIMES.
     READ TABLE repos_tab_new INTO DATA(wa_rep) INDEX l_fp.
     IF sy-subrc = 0.
+      " Skip comment-only lines so that text containing 'LOOP AT' inside a
+      " comment (e.g. "* before loop at iafvgd ...") does not get matched
+      " as the enclosing LOOP statement.
+      l_chk_blank = wa_rep-line.
+      CONDENSE l_chk_blank.
+      IF l_chk_blank IS NOT INITIAL
+        AND ( l_chk_blank(1) = '*' OR l_chk_blank(1) = '"' ).
+        l_fp = l_fp - 1. CONTINUE.
+      ENDIF.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. l_cont = l_cont + 1. l_fp = l_fp - 1. CONTINUE. ENDIF.
       IF wa_rep-line CS 'LOOP AT'.
@@ -2868,6 +2898,8 @@ FORM endat.
     ENDIF.
     l_fp = l_fp - 1.
   ENDDO.
+  " If the backward scan did not locate a LOOP AT, do not emit SORT.
+  IF wa_rep-line NS 'LOOP AT'. RETURN. ENDIF.
   CLEAR: l_tab,l_value.
   REPLACE ALL OCCURRENCES OF 'LOOP AT' IN wa_rep-line WITH space IGNORING CASE.
   CONDENSE wa_rep-line.
@@ -2878,6 +2910,12 @@ FORM endat.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
+  " Guard against an unusable table name (extraction yielded nothing
+  " usable - e.g. comment punctuation or empty string).
+  IF l_table IS INITIAL
+    OR l_table(1) = '*' OR l_table(1) = '"' OR l_table(1) = '''' OR l_table(1) = '.'.
+    RETURN.
+  ENDIF.
   IF l_no_by = abap_true.
     CONCATENATE 'SORT' l_table INTO l_line_new SEPARATED BY space.
   ELSE.
@@ -2938,9 +2976,18 @@ FORM loop_exit.
   CLEAR l_fp.
   DESCRIBE TABLE repos_tab_new LINES DATA(l_ind).
   l_fp = l_ind.
+  DATA l_chk_blank TYPE string.
   DO l_ind TIMES.
     READ TABLE repos_tab_new INTO DATA(wa_rep) INDEX l_fp.
     IF sy-subrc = 0.
+      " Skip comment-only lines so 'loop at' in a comment is not picked
+      " up as the enclosing LOOP statement.
+      l_chk_blank = wa_rep-line.
+      CONDENSE l_chk_blank.
+      IF l_chk_blank IS NOT INITIAL
+        AND ( l_chk_blank(1) = '*' OR l_chk_blank(1) = '"' ).
+        l_fp = l_fp - 1. CONTINUE.
+      ENDIF.
       TRANSLATE wa_rep-line TO UPPER CASE.
       IF wa_rep-line CS 'ENDLOOP'. l_cont1 = l_cont1 + 1. l_fp = l_fp - 1. CONTINUE. ENDIF.
       IF wa_rep-line CS 'LOOP AT'.
@@ -2951,6 +2998,7 @@ FORM loop_exit.
     ENDIF.
     l_fp = l_fp - 1.
   ENDDO.
+  IF wa_rep-line NS 'LOOP AT'. RETURN. ENDIF.
   CLEAR: l_tab,l_value.
   REPLACE ALL OCCURRENCES OF 'LOOP AT' IN wa_rep-line WITH space IGNORING CASE.
   CONDENSE wa_rep-line.
@@ -2961,6 +3009,10 @@ FORM loop_exit.
     ELSE. CONCATENATE l_table l_value INTO l_table. ENDIF.
     l_tab = l_tab + 1.
   ENDDO.
+  IF l_table IS INITIAL
+    OR l_table(1) = '*' OR l_table(1) = '"' OR l_table(1) = '''' OR l_table(1) = '.'.
+    RETURN.
+  ENDIF.
   CONCATENATE 'SORT' l_table INTO l_line_new SEPARATED BY space.
   CONCATENATE l_line_new '.' INTO l_line_new.
   DATA(l_fp1) = l_fp - 1.
