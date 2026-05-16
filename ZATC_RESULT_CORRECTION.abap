@@ -812,28 +812,84 @@ START-OF-SELECTION.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
                 WHEN 'IMPORT ISSUE'.
-                  CLEAR wa_blank.
-                  CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
-                    INTO wa_blank-line SEPARATED BY space.
-                  APPEND wa_blank TO repos_tab_new.
-                  CLEAR wa_blank.
-                  CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line SEPARATED BY space.
-                  APPEND wa_blank TO repos_tab_new.
-                  CLEAR wa_blank.
-                  IF wa_repos_tab-line CS '"'.
-                    DATA(l_import_fdpos) = sy-fdpos - 1.
-                    wa_repos_tab-line = wa_repos_tab-line(l_import_fdpos).
+                  " A single IMPORT statement may span multiple source lines
+                  " (e.g.   IMPORT a TO b
+                  "                c TO d.).
+                  " The ATC engine flags every line of the statement, so we
+                  " must:
+                  "   1. Only act on the line that actually contains the
+                  "      IMPORT keyword (the start of the statement).
+                  "   2. Scan ahead to the '.' terminator, collapsing all the
+                  "      lines into a single statement.
+                  "   3. Comment out every original line of the statement.
+                  "   4. Emit ONE new statement ending with ACCEPTING PADDING.
+                  "   5. Set l_tab so the outer LOOP skips the continuation
+                  "      lines we have already commented out.
+                  DATA l_uc_imp TYPE string.
+                  l_uc_imp = wa_repos_tab-line.
+                  TRANSLATE l_uc_imp TO UPPER CASE.
+                  IF l_uc_imp NS 'IMPORT'.
+                    " Continuation line whose IMPORT-start was not flagged
+                    " — keep the original line as-is.
+                    APPEND wa_repos_tab TO repos_tab_new.
+                  ELSE.
+                    CLEAR wa_blank.
+                    CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
+                      INTO wa_blank-line SEPARATED BY space.
+                    APPEND wa_blank TO repos_tab_new.
+                    CLEAR wa_blank.
+                    DATA l_imp_full  TYPE string.
+                    DATA l_imp_part  TYPE string.
+                    DATA l_imp_idx   TYPE i.
+                    DATA l_imp_end   TYPE flag.
+                    DATA wa_imp_line TYPE abaptxt255.
+                    CLEAR l_imp_full.
+                    CLEAR l_imp_end.
+                    l_imp_idx = l_tabix.
+                    DO 50 TIMES.
+                      READ TABLE repos_tab INTO wa_imp_line INDEX l_imp_idx.
+                      IF sy-subrc <> 0. EXIT. ENDIF.
+                      " Comment out the original line.
+                      CLEAR wa_blank.
+                      CONCATENATE '*' wa_imp_line-line
+                        INTO wa_blank-line SEPARATED BY space.
+                      APPEND wa_blank TO repos_tab_new.
+                      CLEAR wa_blank.
+                      " Strip inline comment (everything from " onwards).
+                      l_imp_part = wa_imp_line-line.
+                      IF l_imp_part CS '"'.
+                        DATA(l_imp_q) = sy-fdpos.
+                        l_imp_part = l_imp_part(l_imp_q).
+                      ENDIF.
+                      CONDENSE l_imp_part.
+                      " Detect end of statement (period).
+                      IF l_imp_part CS '.'.
+                        DATA(l_imp_dot) = sy-fdpos.
+                        l_imp_part = l_imp_part(l_imp_dot).
+                        l_imp_end = abap_true.
+                      ENDIF.
+                      IF l_imp_full IS INITIAL.
+                        l_imp_full = l_imp_part.
+                      ELSE.
+                        CONCATENATE l_imp_full l_imp_part
+                          INTO l_imp_full SEPARATED BY space.
+                      ENDIF.
+                      IF l_imp_end = abap_true. EXIT. ENDIF.
+                      l_imp_idx = l_imp_idx + 1.
+                    ENDDO.
+                    CONDENSE l_imp_full.
+                    CLEAR wa_blank.
+                    CONCATENATE l_imp_full 'ACCEPTING PADDING .'
+                      INTO wa_blank-line SEPARATED BY space.
+                    APPEND wa_blank TO repos_tab_new.
+                    CLEAR wa_blank.
+                    CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+                      INTO wa_blank-line SEPARATED BY space.
+                    APPEND wa_blank TO repos_tab_new.
+                    CLEAR wa_blank.
+                    " Skip the continuation lines that we already handled.
+                    l_tab = l_imp_idx + 1.
                   ENDIF.
-                  REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab-line WITH space.
-                  CONDENSE wa_repos_tab-line.
-                  CONCATENATE wa_repos_tab-line ' accepting padding .'
-                    INTO wa_blank-line SEPARATED BY space.
-                  APPEND wa_blank TO repos_tab_new.
-                  CLEAR wa_blank.
-                  CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
-                    INTO wa_blank-line SEPARATED BY space.
-                  APPEND wa_blank TO repos_tab_new.
-                  CLEAR wa_blank.
                 WHEN 'OLD ARITHMETIC TYPE CONFLICT'.
                   CLEAR wa_blank.
                   CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
