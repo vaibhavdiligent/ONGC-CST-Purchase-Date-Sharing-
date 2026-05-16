@@ -510,10 +510,44 @@ START-OF-SELECTION.
                           INTO wa_blank-line SEPARATED BY space.
                         APPEND wa_blank TO repos_tab_new.
                         CLEAR wa_blank.
+                        " Detect whether the multi-line SELECT statement already has
+                        " an INTO / APPENDING clause. If not, the FROM-replacement
+                        " must also inject @DATA(<table>) so the generated SELECT
+                        " against the CDS view compiles (header-line style is not
+                        " valid for CDS view targets).
+                        DATA l_has_into_kv TYPE flag.
+                        CLEAR l_has_into_kv.
+                        DATA l_scan_idx_kv TYPE i.
+                        l_scan_idx_kv = l_tabix.
+                        DO 50 TIMES.
+                          READ TABLE repos_tab INTO DATA(wa_scan_kv) INDEX l_scan_idx_kv.
+                          IF sy-subrc <> 0. EXIT. ENDIF.
+                          IF strlen( wa_scan_kv-line ) > 0 AND wa_scan_kv-line(1) = '*'.
+                            l_scan_idx_kv = l_scan_idx_kv + 1. CONTINUE.
+                          ENDIF.
+                          DATA(l_upper_kv) = wa_scan_kv-line.
+                          TRANSLATE l_upper_kv TO UPPER CASE.
+                          IF l_upper_kv CS 'INTO' OR l_upper_kv CS 'APPENDING'.
+                            l_has_into_kv = abap_true. EXIT.
+                          ENDIF.
+                          IF l_upper_kv CS '.'. EXIT. ENDIF.
+                          l_scan_idx_kv = l_scan_idx_kv + 1.
+                        ENDDO.
+                        " Save the original table name (lowercased) before param1 is prefixed.
+                        DATA l_lc_orig_kv TYPE string.
+                        l_lc_orig_kv = wa_final-param1.
+                        TRANSLATE l_lc_orig_kv TO LOWER CASE.
                         CONCATENATE 'FROM' wa_final-param1
                           INTO wa_final-param1 SEPARATED BY space.
-                        CONCATENATE 'FROM' wa_zatc_process1-correction_value
-                          INTO wa_zatc_process1-correction_value SEPARATED BY space.
+                        IF l_has_into_kv = abap_true.
+                          CONCATENATE 'FROM' wa_zatc_process1-correction_value
+                            INTO wa_zatc_process1-correction_value SEPARATED BY space.
+                        ELSE.
+                          CONCATENATE 'FROM' wa_zatc_process1-correction_value 'INTO @DATA('
+                            INTO wa_zatc_process1-correction_value SEPARATED BY space.
+                          CONCATENATE wa_zatc_process1-correction_value l_lc_orig_kv ')'
+                            INTO wa_zatc_process1-correction_value.
+                        ENDIF.
                         REPLACE ALL OCCURRENCES OF wa_final-param1 IN wa_repos_tab-line
                           WITH wa_zatc_process1-correction_value IGNORING CASE.
                         IF sy-subrc <> 0.
@@ -2013,9 +2047,12 @@ FORM change_table.
       ENDLOOP.
     ELSE.
       " Original SELECT had no INTO clause (header-line style). For new ABAP Open
-      " SQL on CDS views the INTO target is mandatory - inject @DATA(ls_<table>).
-      DATA l_into_tg_jn TYPE string.
-      CONCATENATE '@DATA(ls_' l_table ')' INTO l_into_tg_jn.
+      " SQL on CDS views the INTO target is mandatory - inject @DATA(<table>).
+      DATA l_into_tg_jn  TYPE string.
+      DATA l_lc_table_jn TYPE string.
+      l_lc_table_jn = l_table.
+      TRANSLATE l_lc_table_jn TO LOWER CASE.
+      CONCATENATE '@DATA(' l_lc_table_jn ')' INTO l_into_tg_jn.
       CONCATENATE l_query l_into_tg_jn INTO l_query SEPARATED BY space.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
@@ -2232,9 +2269,12 @@ FORM change_table.
       ENDLOOP.
     ELSE.
       " Original SELECT had no INTO clause (header-line style). For new ABAP Open
-      " SQL on CDS views the INTO target is mandatory - inject @DATA(ls_<table>).
-      DATA l_into_tg_nj TYPE string.
-      CONCATENATE '@DATA(ls_' l_table ')' INTO l_into_tg_nj.
+      " SQL on CDS views the INTO target is mandatory - inject @DATA(<table>).
+      DATA l_into_tg_nj  TYPE string.
+      DATA l_lc_table_nj TYPE string.
+      l_lc_table_nj = l_table.
+      TRANSLATE l_lc_table_nj TO LOWER CASE.
+      CONCATENATE '@DATA(' l_lc_table_nj ')' INTO l_into_tg_nj.
       CONCATENATE l_query l_into_tg_nj INTO l_query SEPARATED BY space.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
