@@ -988,14 +988,18 @@ START-OF-SELECTION.
                     OR 'FUNCTIONALITY UNAVAILABLE'
                     OR 'FUNCTIONALITY NOT AVAILABLE: FUNCTIONAL EQUIVALENT AVAILABLE'.
                     IF wa_final-param3 = 'TRAN'.
-                      CLEAR wa_blank.
-                      CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
-                        INTO wa_blank-line SEPARATED BY space.
-                      APPEND wa_blank TO repos_tab_new.
-                      CLEAR wa_blank.
-                      CLEAR l_note.
-                      CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
-                      IF wa_repos_tab-line CS wa_final-param2.
+                      " Only act on '<param2>' inside string literals - never on a
+                      " substring that happens to match a variable / identifier name.
+                      DATA l_search_q TYPE string.
+                      CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO l_search_q.
+                      IF wa_repos_tab-line CS l_search_q.
+                        CLEAR wa_blank.
+                        CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
+                          INTO wa_blank-line SEPARATED BY space.
+                        APPEND wa_blank TO repos_tab_new.
+                        CLEAR wa_blank.
+                        CLEAR l_note.
+                        CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
                         DATA(l_method)  = sy-fdpos.
                         DATA(l_method1) = strlen( wa_repos_tab-line ).
                         DATA l_method3 TYPE char100.
@@ -1015,12 +1019,14 @@ START-OF-SELECTION.
                         APPEND wa_blank TO repos_tab_new.
                         CLEAR wa_blank.
                         CLEAR l_method3.
+                        CLEAR wa_blank.
+                        CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+                          INTO wa_blank-line SEPARATED BY space.
+                        APPEND wa_blank TO repos_tab_new.
+                        CLEAR wa_blank.
+                      ELSE.
+                        APPEND wa_repos_tab TO repos_tab_new.
                       ENDIF.
-                      CLEAR wa_blank.
-                      CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
-                        INTO wa_blank-line SEPARATED BY space.
-                      APPEND wa_blank TO repos_tab_new.
-                      CLEAR wa_blank.
                     ELSE.
                       APPEND wa_repos_tab TO repos_tab_new.
                     ENDIF.
