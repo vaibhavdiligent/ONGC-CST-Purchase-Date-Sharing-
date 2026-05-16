@@ -2235,9 +2235,10 @@ FORM change_single.
   DATA l_into   TYPE i.
   DATA l_value  TYPE char1.
   DATA l_value2 TYPE char2.
-  DATA lt_pk     TYPE TABLE OF dd03l.
-  DATA wa_pk     TYPE dd03l.
-  DATA l_orderby TYPE string.
+  DATA lt_pk      TYPE TABLE OF dd03l.
+  DATA wa_pk      TYPE dd03l.
+  DATA l_orderby  TYPE string.
+  DATA l_tabclass TYPE dd02l-tabclass.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
     CONCATENATE l_string wa_q-str INTO l_string SEPARATED BY space.
@@ -2312,29 +2313,45 @@ FORM change_single.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
   ENDIF.
-  CLEAR l_orderby.
-  SELECT * FROM dd03l INTO TABLE lt_pk
-    WHERE tabname = l_table
-      AND keyflag = 'X'
-    ORDER BY position.
-  IF sy-subrc = 0.
-    LOOP AT lt_pk INTO wa_pk.
-      IF l_orderby IS INITIAL.
-        l_orderby = wa_pk-fieldname.
+  SELECT SINGLE tabclass FROM dd02l INTO l_tabclass WHERE tabname = l_table.
+  IF l_tabclass = 'POOL' OR l_tabclass = 'CLUSTER'.
+    " Pool/cluster tables: ORDER BY PRIMARY KEY causes a compiler error.
+    " End the SELECT without ORDER BY and suppress CI_NOORDER via pseudo-comment.
+    CONCATENATE l_query '.' INTO l_query SEPARATED BY space.
+    CONCATENATE l_query '  ENDSELECT.' INTO l_query SEPARATED BY space.
+    PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
+    " Append "#EC CI_NOORDER on the line that carries the period (before ENDSELECT).
+    DESCRIBE TABLE it_query_new LINES DATA(l_li).
+    l_li = l_li - 1.
+    READ TABLE it_query_new INTO DATA(wa_noorder) INDEX l_li.
+    CONCATENATE wa_noorder-str '  "#EC CI_NOORDER' INTO wa_noorder-str.
+    MODIFY it_query_new FROM wa_noorder INDEX l_li.
+  ELSE.
+    " Transparent / view / unknown: look up actual primary key fields from DD03L.
+    CLEAR l_orderby.
+    SELECT * FROM dd03l INTO TABLE lt_pk
+      WHERE tabname = l_table
+        AND keyflag = 'X'
+      ORDER BY position.
+    IF sy-subrc = 0.
+      LOOP AT lt_pk INTO wa_pk.
+        IF l_orderby IS INITIAL.
+          l_orderby = wa_pk-fieldname.
+        ELSE.
+          CONCATENATE l_orderby wa_pk-fieldname INTO l_orderby SEPARATED BY space.
+        ENDIF.
+      ENDLOOP.
+      IF l_orderby IS NOT INITIAL.
+        CONCATENATE l_query 'ORDER BY' l_orderby '.' INTO l_query SEPARATED BY space.
       ELSE.
-        CONCATENATE l_orderby wa_pk-fieldname INTO l_orderby SEPARATED BY space.
+        CONCATENATE l_query 'ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
       ENDIF.
-    ENDLOOP.
-    IF l_orderby IS NOT INITIAL.
-      CONCATENATE l_query 'ORDER BY' l_orderby '.' INTO l_query SEPARATED BY space.
     ELSE.
       CONCATENATE l_query 'ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
     ENDIF.
-  ELSE.
-    CONCATENATE l_query 'ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
+    CONCATENATE l_query '  ENDSELECT.' INTO l_query SEPARATED BY space.
+    PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
   ENDIF.
-  CONCATENATE l_query '  ENDSELECT.' INTO l_query SEPARATED BY space.
-  PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form process_read
