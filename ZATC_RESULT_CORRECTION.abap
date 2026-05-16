@@ -472,11 +472,7 @@ START-OF-SELECTION.
           TRANSLATE wa_final-message1 TO UPPER CASE.
           CASE wa_final-check_title.
             WHEN 'S/4HANA: SEARCH FOR DATABASE OPERATIONS'.
-              IF wa_final-message1 = 'DB OPERATION OPEN CURSOR FOUND'
-                OR wa_final-message1 = 'DB OPERATION FETCH NEXT CURSOR FOUND'
-                OR wa_final-message1 = 'DB OPERATION CLOSE CURSOR FOUND'.
-                APPEND wa_repos_tab TO repos_tab_new.
-              ELSEIF wa_final-message1 = 'DB OPERATION SELECT FOUND'
+              IF wa_final-message1 = 'DB OPERATION SELECT FOUND'
                 OR wa_final-message1 = 'DB OPERATION JOIN FOUND'.
                 CLEAR wa_zatc_process1.
                 SELECT SINGLE * INTO @DATA(l_ars_api_succssr1)
