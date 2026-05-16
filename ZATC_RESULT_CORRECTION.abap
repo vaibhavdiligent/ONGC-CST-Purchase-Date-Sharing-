@@ -2799,7 +2799,8 @@ FORM split_string
     max_component_length = 100.
   ENDIF.
   IF terminating_separators IS INITIAL.
-    terminating_separators = ' >=)].,;:?!'.
+    " '>' excluded: it terminates field symbols (<FS>) which must not be split from -FIELD.
+    terminating_separators = ' =)].,;:?!'.
   ENDIF.
   IF opening_separators IS INITIAL.
     opening_separators = '<(['.
