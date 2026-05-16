@@ -689,6 +689,8 @@ START-OF-SELECTION.
                 ELSE.
                   APPEND wa_repos_tab TO repos_tab_new.
                 ENDIF.
+              ELSE.
+                APPEND wa_repos_tab TO repos_tab_new.
               ENDIF.
               REFRESH : it_query,it_query_new.
             WHEN 'S/4HANA: FIELD LENGTH EXTENSIONS'.
