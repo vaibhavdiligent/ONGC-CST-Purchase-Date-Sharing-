@@ -2611,17 +2611,19 @@ FORM endat.
   DATA l_tab      TYPE sy-index.
   DATA l_cont     TYPE i.
   l_line1 = wa_repos_tab-line.
-  " AT FIRST / AT LAST have no field reference - generate SORT without BY clause
-  DATA l_no_by TYPE flag.
-  DATA(l_upper) = wa_repos_tab-line.
-  TRANSLATE l_upper TO UPPER CASE.
-  IF l_upper CS 'AT FIRST' OR l_upper CS 'AT LAST'.
-    l_no_by = abap_true.
-  ENDIF.
   REPLACE ALL OCCURRENCES OF 'AT NEW' IN l_line1 WITH space IGNORING CASE.
   REPLACE ALL OCCURRENCES OF 'AT END OF' IN l_line1 WITH space IGNORING CASE.
+  REPLACE ALL OCCURRENCES OF 'AT FIRST' IN l_line1 WITH space IGNORING CASE.
+  REPLACE ALL OCCURRENCES OF 'AT LAST' IN l_line1 WITH space IGNORING CASE.
   REPLACE ALL OCCURRENCES OF '.' IN l_line1 WITH space.
   CONDENSE l_line1.
+  " If anything remains after stripping the AT keyword, that's the field
+  " for the BY clause. If nothing remains (AT FIRST. / AT LAST. with no
+  " field reference), generate SORT without BY.
+  DATA l_no_by TYPE flag.
+  IF l_line1 IS INITIAL.
+    l_no_by = abap_true.
+  ENDIF.
   CLEAR: l_tab,l_value.
   DATA(l_len) = strlen( l_line1 ).
   DO l_len TIMES.
