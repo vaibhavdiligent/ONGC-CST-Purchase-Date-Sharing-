@@ -2011,6 +2011,12 @@ FORM change_table.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
         ENDIF.
       ENDLOOP.
+    ELSE.
+      " Original SELECT had no INTO clause (header-line style). For new ABAP Open
+      " SQL on CDS views the INTO target is mandatory - inject @DATA(ls_<table>).
+      DATA l_into_tg_jn TYPE string.
+      CONCATENATE '@DATA(ls_' l_table ')' INTO l_into_tg_jn.
+      CONCATENATE l_query l_into_tg_jn INTO l_query SEPARATED BY space.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
     PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
@@ -2224,6 +2230,12 @@ FORM change_table.
           CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
         ENDIF.
       ENDLOOP.
+    ELSE.
+      " Original SELECT had no INTO clause (header-line style). For new ABAP Open
+      " SQL on CDS views the INTO target is mandatory - inject @DATA(ls_<table>).
+      DATA l_into_tg_nj TYPE string.
+      CONCATENATE '@DATA(ls_' l_table ')' INTO l_into_tg_nj.
+      CONCATENATE l_query l_into_tg_nj INTO l_query SEPARATED BY space.
     ENDIF.
     CONCATENATE l_query '.' INTO l_query.
     PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
