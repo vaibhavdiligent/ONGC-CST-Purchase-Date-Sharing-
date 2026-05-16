@@ -559,11 +559,12 @@ START-OF-SELECTION.
                             IF sy-subrc <> 0.
                               APPEND wa_repos_tab_d TO repos_tab_new.
                             ELSE.
-                              " Apply @ to host vars if WHERE is on the same FROM line
+                              " Apply @ to host vars / INTO target on the FROM line
                               DATA l_uc_d_kv TYPE string.
                               l_uc_d_kv = wa_repos_tab_d-line.
                               TRANSLATE l_uc_d_kv TO UPPER CASE.
-                              IF l_uc_d_kv CS 'WHERE'.
+                              IF l_uc_d_kv CS 'WHERE' OR l_uc_d_kv CS 'INTO'
+                                OR l_uc_d_kv CS 'APPENDING'.
                                 PERFORM add_at_hostvars
                                   USING    wa_repos_tab_d-line
                                   CHANGING wa_repos_tab_d-line.
@@ -573,11 +574,12 @@ START-OF-SELECTION.
                             ENDIF.
                           ENDLOOP.
                         ELSE.
-                          " Apply @ to host vars if WHERE is on the same FROM line
+                          " Apply @ to host vars / INTO target on the FROM line
                           DATA l_uc_kv TYPE string.
                           l_uc_kv = wa_repos_tab-line.
                           TRANSLATE l_uc_kv TO UPPER CASE.
-                          IF l_uc_kv CS 'WHERE'.
+                          IF l_uc_kv CS 'WHERE' OR l_uc_kv CS 'INTO'
+                            OR l_uc_kv CS 'APPENDING'.
                             PERFORM add_at_hostvars
                               USING    wa_repos_tab-line
                               CHANGING wa_repos_tab-line.
@@ -4188,9 +4190,15 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form add_at_hostvars
 *&---------------------------------------------------------------------*
-" Adds @ prefix to host variable tokens in a WHERE-clause line.
-" State machine:  X = before WHERE  W = after WHERE/AND/OR (expect column)
-"                 C = after column (expect operator)  O = after op (add @)
+" Adds @ prefix to host variable tokens in a SELECT statement line.
+" State machine:
+"   X = neutral (before WHERE / after consumed INTO target)
+"   W = after WHERE/AND/OR (expect column name)
+"   C = after column name (expect comparison operator)
+"   O = after comparison operator (next identifier is host var → add @)
+"   I = after INTO/APPENDING (expect target work area → add @)
+" In state I, sub-keywords (TABLE, CORRESPONDING, FIELDS, OF, NEW, LINE)
+" are passed through without consuming the target slot.
 FORM add_at_hostvars USING    p_line TYPE string
                      CHANGING p_out  TYPE string.
   DATA: lt_tok  TYPE TABLE OF string,
@@ -4230,23 +4238,36 @@ FORM add_at_hostvars USING    p_line TYPE string
            'EQ' OR 'NE' OR 'LT' OR 'GT' OR 'LE' OR 'GE' OR
            'LIKE' OR 'BETWEEN' OR 'IN'.
         IF lv_st = 'C'. lv_st = 'O'. ENDIF.
-      WHEN 'INTO' OR 'APPENDING' OR 'ORDER' OR 'GROUP' OR
-           'HAVING' OR 'UNION' OR 'UP'.
+      WHEN 'INTO' OR 'APPENDING'.
+        lv_st = 'I'.
+      WHEN 'TABLE' OR 'CORRESPONDING' OR 'FIELDS' OR 'OF' OR
+           'NEW' OR 'LINE' OR 'INITIAL'.
+        " sub-keywords inside INTO clause — keep state
+      WHEN 'ORDER' OR 'GROUP' OR 'HAVING' OR 'UNION' OR 'UP'.
         lv_st = 'X'.
       WHEN OTHERS.
         lv_c1 = lv_tok(1).
-        IF lv_st = 'X'.
-          " Before WHERE — leave token unchanged
+        IF lv_c1 = '@'.
+          " Already @-prefixed — consume target / value slot
+          IF lv_st = 'I' OR lv_st = 'O'.
+            lv_st = 'X'.
+          ELSEIF lv_st = 'W'.
+            lv_st = 'W'.
+          ENDIF.
+        ELSEIF lv_st = 'X'.
+          " Neutral — leave token unchanged
         ELSEIF lv_c1 = ''''.
-          lv_st = 'W'.
+          IF lv_st = 'O' OR lv_st = 'I'. lv_st = 'W'. ENDIF.
         ELSEIF lv_c1 >= '0' AND lv_c1 <= '9'.
-          lv_st = 'W'.
-        ELSEIF lv_c1 = '@'.
-          lv_st = 'W'.
+          IF lv_st = 'O' OR lv_st = 'I'. lv_st = 'W'. ENDIF.
         ELSEIF lv_c1 = '(' OR lv_c1 = ')' OR lv_c1 = ','.
-          " parens/commas — do not change state
+          " parens/commas — keep state
         ELSEIF lv_c1 = '.'.
-          " period — end of statement, do not change state
+          " period — keep state
+        ELSEIF lv_st = 'I'.
+          " INTO target work area — add @
+          CONCATENATE '@' lv_tok INTO lv_tok.
+          lv_st = 'X'.
         ELSEIF lv_st = 'W'.
           lv_st = 'C'.
         ELSEIF lv_st = 'O'.
