@@ -2251,8 +2251,7 @@ FORM change_single.
           l_i = l_i + 1. CONTINUE.
         ENDIF.
       ELSEIF l_value = '('.
-        l_value2 = l_string+l_i(2).
-        IF l_value2+1(1) <> ' '.
+        IF wa_table-value IS NOT INITIAL.
           CONCATENATE wa_table-value l_value INTO wa_table-value.
           l_i = l_i + 1. CONTINUE.
         ENDIF.
