@@ -1121,8 +1121,12 @@ START-OF-SELECTION.
                     IF wa_final-param3 = 'TRAN'.
                       " Only act on '<param2>' inside string literals - never on a
                       " substring that happens to match a variable / identifier name.
+                      " Use a hard-coded single-quote literal because the program's
+                      " TEXT-001 text symbol is not guaranteed to be a quote (in this
+                      " program it is empty, which made the previous TEXT-001-based
+                      " wrap a no-op and reintroduced the substring-match bug).
                       DATA l_search_q TYPE string.
-                      CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO l_search_q.
+                      CONCATENATE '''' wa_final-param2 '''' INTO l_search_q.
                       IF wa_repos_tab-line CS l_search_q.
                         CLEAR wa_blank.
                         CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -1141,7 +1145,7 @@ START-OF-SELECTION.
                         APPEND wa_blank TO repos_tab_new.
                         CLEAR wa_blank.
                         l_method3 = wa_repos_tab-line+l_method(l_method1).
-                        CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO wa_blank-line.
+                        CONCATENATE '''' wa_final-param2 '''' INTO wa_blank-line.
                         REPLACE ALL OCCURRENCES OF wa_blank-line IN l_method3 WITH space IGNORING CASE.
                         CONCATENATE wa_blank-line l_note INTO wa_blank-line SEPARATED BY space.
                         APPEND wa_blank TO repos_tab_new.
