@@ -817,24 +817,82 @@ START-OF-SELECTION.
                   " A single IMPORT statement may span multiple source lines
                   " (e.g.   IMPORT a TO b
                   "                c TO d.).
-                  " The ATC engine flags every line of the statement, so we
-                  " must:
-                  "   1. Only act on the line that actually contains the
-                  "      IMPORT keyword (the start of the statement).
-                  "   2. Scan ahead to the '.' terminator, collapsing all the
-                  "      lines into a single statement.
-                  "   3. Comment out every original line of the statement.
+                  " The ATC engine sometimes flags only the continuation
+                  " lines (not the line carrying the IMPORT keyword).  We
+                  " therefore:
+                  "   1. If the flagged line itself contains IMPORT, use
+                  "      that as the statement start.
+                  "   2. Otherwise scan backward through repos_tab until we
+                  "      find the IMPORT keyword line.  Delete from
+                  "      repos_tab_new the unchanged lines the outer LOOP
+                  "      had already appended for the statement.
+                  "   3. Scan forward from the IMPORT line to the '.'
+                  "      terminator, commenting out every original line
+                  "      and collapsing them into one statement.
                   "   4. Emit ONE new statement ending with ACCEPTING PADDING.
                   "   5. Set l_tab so the outer LOOP skips the continuation
                   "      lines we have already commented out.
-                  DATA l_uc_imp TYPE string.
+                  DATA l_uc_imp        TYPE string.
+                  DATA l_imp_start_idx TYPE i.
+                  DATA l_back_idx      TYPE i.
+                  DATA wa_back         TYPE abaptxt255.
+                  DATA l_back_uc       TYPE string.
+                  DATA l_back_trim     TYPE string.
+                  DATA l_lines_to_del  TYPE i.
                   l_uc_imp = wa_repos_tab-line.
                   TRANSLATE l_uc_imp TO UPPER CASE.
-                  IF l_uc_imp NS 'IMPORT'.
-                    " Continuation line whose IMPORT-start was not flagged
-                    " — keep the original line as-is.
+                  CLEAR l_imp_start_idx.
+                  IF l_uc_imp CS 'IMPORT'.
+                    l_imp_start_idx = l_tabix.
+                  ELSE.
+                    l_back_idx = l_tabix - 1.
+                    DO 30 TIMES.
+                      IF l_back_idx < 1. EXIT. ENDIF.
+                      READ TABLE repos_tab INTO wa_back INDEX l_back_idx.
+                      IF sy-subrc <> 0. EXIT. ENDIF.
+                      l_back_trim = wa_back-line.
+                      CONDENSE l_back_trim.
+                      " Skip blank / full-line comment / '"'-only lines
+                      IF l_back_trim IS INITIAL.
+                        l_back_idx = l_back_idx - 1. CONTINUE.
+                      ENDIF.
+                      IF l_back_trim(1) = '*' OR l_back_trim(1) = '"'.
+                        l_back_idx = l_back_idx - 1. CONTINUE.
+                      ENDIF.
+                      " Strip inline comment then uppercase for keyword test
+                      l_back_uc = wa_back-line.
+                      IF l_back_uc CS '"'.
+                        l_back_uc = l_back_uc(sy-fdpos).
+                      ENDIF.
+                      TRANSLATE l_back_uc TO UPPER CASE.
+                      IF l_back_uc CS 'IMPORT'.
+                        l_imp_start_idx = l_back_idx.
+                        EXIT.
+                      ENDIF.
+                      " A '.' before IMPORT means a previous statement
+                      " ended here - we are not inside an IMPORT block.
+                      IF l_back_uc CS '.'.
+                        EXIT.
+                      ENDIF.
+                      l_back_idx = l_back_idx - 1.
+                    ENDDO.
+                  ENDIF.
+                  IF l_imp_start_idx = 0.
+                    " IMPORT keyword not found in scan range — preserve
+                    " original line rather than emit broken syntax.
                     APPEND wa_repos_tab TO repos_tab_new.
                   ELSE.
+                    " Roll back the lines the outer LOOP already appended
+                    " for the IMPORT-start through l_tabix-1 (unchanged
+                    " because they carried no ATC finding of their own).
+                    l_lines_to_del = l_tabix - l_imp_start_idx.
+                    IF l_lines_to_del > 0.
+                      DESCRIBE TABLE repos_tab_new LINES DATA(l_last_rt).
+                      DO l_lines_to_del TIMES.
+                        DELETE repos_tab_new INDEX l_last_rt.
+                        l_last_rt = l_last_rt - 1.
+                      ENDDO.
+                    ENDIF.
                     CLEAR wa_blank.
                     CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
                       INTO wa_blank-line SEPARATED BY space.
@@ -844,10 +902,11 @@ START-OF-SELECTION.
                     DATA l_imp_part  TYPE string.
                     DATA l_imp_idx   TYPE i.
                     DATA l_imp_end   TYPE flag.
+                    DATA l_imp_chk   TYPE string.
                     DATA wa_imp_line TYPE abaptxt255.
                     CLEAR l_imp_full.
                     CLEAR l_imp_end.
-                    l_imp_idx = l_tabix.
+                    l_imp_idx = l_imp_start_idx.
                     DO 50 TIMES.
                       READ TABLE repos_tab INTO wa_imp_line INDEX l_imp_idx.
                       IF sy-subrc <> 0. EXIT. ENDIF.
@@ -857,6 +916,15 @@ START-OF-SELECTION.
                         INTO wa_blank-line SEPARATED BY space.
                       APPEND wa_blank TO repos_tab_new.
                       CLEAR wa_blank.
+                      " Skip blank / comment lines when building the
+                      " collapsed statement (they are already commented
+                      " above and must not become part of the IMPORT).
+                      l_imp_chk = wa_imp_line-line.
+                      CONDENSE l_imp_chk.
+                      IF l_imp_chk IS INITIAL
+                        OR l_imp_chk(1) = '*' OR l_imp_chk(1) = '"'.
+                        l_imp_idx = l_imp_idx + 1. CONTINUE.
+                      ENDIF.
                       " Strip inline comment (everything from " onwards).
                       l_imp_part = wa_imp_line-line.
                       IF l_imp_part CS '"'.
@@ -1121,12 +1189,11 @@ START-OF-SELECTION.
                     IF wa_final-param3 = 'TRAN'.
                       " Only act on '<param2>' inside string literals - never on a
                       " substring that happens to match a variable / identifier name.
-                      " Use a hard-coded single-quote literal because the program's
-                      " TEXT-001 text symbol is not guaranteed to be a quote (in this
-                      " program it is empty, which made the previous TEXT-001-based
-                      " wrap a no-op and reintroduced the substring-match bug).
+                      " TEXT-001 is maintained in the program's text pool as a
+                      " single quote (the source cannot carry '' directly through
+                      " upload/transport here), so wrapping with it yields '<code>'.
                       DATA l_search_q TYPE string.
-                      CONCATENATE '''' wa_final-param2 '''' INTO l_search_q.
+                      CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO l_search_q.
                       IF wa_repos_tab-line CS l_search_q.
                         CLEAR wa_blank.
                         CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -1145,7 +1212,7 @@ START-OF-SELECTION.
                         APPEND wa_blank TO repos_tab_new.
                         CLEAR wa_blank.
                         l_method3 = wa_repos_tab-line+l_method(l_method1).
-                        CONCATENATE '''' wa_final-param2 '''' INTO wa_blank-line.
+                        CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO wa_blank-line.
                         REPLACE ALL OCCURRENCES OF wa_blank-line IN l_method3 WITH space IGNORING CASE.
                         CONCATENATE wa_blank-line l_note INTO wa_blank-line SEPARATED BY space.
                         APPEND wa_blank TO repos_tab_new.
