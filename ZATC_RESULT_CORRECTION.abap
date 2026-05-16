@@ -2238,7 +2238,7 @@ FORM change_single.
   DATA l_orderby TYPE string.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
-    CONCATENATE l_string wa_q-str INTO l_string.
+    CONCATENATE l_string wa_q-str INTO l_string SEPARATED BY space.
   ENDLOOP.
   TRANSLATE l_string TO UPPER CASE.
   l_len = strlen( l_string ).
