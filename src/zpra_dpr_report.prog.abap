@@ -3,12 +3,17 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 1.9  |  Git: bcd-overflow-fix  |  Date: 06-MAY-2026
-*& Changes : v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
+*& VERSION : 2.0  |  Git: bcd-overflow-fix  |  Date: 18-MAY-2026
+*& Changes : v2.0 - Fix near-zero MMSCMD values in columns S-AD (BMD mode).
+*&           v1.9 incorrectly removed * 6290 from convert_gas_units and
+*&           convert_mrec_gas_units while display-end / 6290 remained,
+*&           causing near-zero output. Fix: restore * 6290 via packed
+*&           intermediate lv_qty2 (TYPE p LENGTH 16 DECIMALS 7) to avoid
+*&           COMPUTE_BCD_OVERFLOW. Affects p_bb, p_bbd, p_bmd cases.
+*&           v1.9 - Final fix for COMPUTE_BCD_OVERFLOW at convert_gas_units
 *&           line 3444 (lv_qty * 6290 assignment to prod_vl_qty1).
 *&           Removed * 6290 from convert_gas_units (p_bb/p_bbd/p_bmd) and
-*&           convert_mrec_gas_units to align with convert_gas_units2 which
-*&           was already corrected. The * 6290 BOE conversion overflowed
+*&           convert_mrec_gas_units. The * 6290 BOE conversion overflowed
 *&           the DB field's precision for large gas quantities.
 *&           v1.8 - Route app_vl_qty * 1000000 through lv_qty packed
 *&           intermediate in 6 forms (sec2a3, sec2d, sec2f, sec3c, sec3f,
@@ -3420,7 +3425,8 @@ FORM set_section1_header_colors .
   PERFORM set_range_interior USING gv_header_gt_colour .
 ENDFORM.
 FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty  TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty2 TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3436,9 +3442,11 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_bbd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_tm.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3446,7 +3454,8 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
     WHEN p_mb.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty2 .
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
@@ -3537,7 +3546,8 @@ FORM convert_gas_units_to_mmscm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 ENDFORM.
 
 FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
-  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty  TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty2 TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_mrec_prd-prod_vl_uom1 .
@@ -3553,9 +3563,11 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_bbd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_tm.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3563,7 +3575,8 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
     WHEN p_mb.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty2 .
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
