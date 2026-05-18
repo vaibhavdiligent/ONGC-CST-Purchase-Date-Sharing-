@@ -1841,6 +1841,7 @@ START-OF-SELECTION.
   lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM' )->set_long_text( 'New Program Name' ).
   lo_table->get_columns( )->get_column( columnname = 'BACKUP' )->set_long_text( 'Back Up Program Name' ).
   lo_table->get_columns( )->get_column( columnname = 'STATUS' )->set_long_text( 'Status' ).
+  lo_table->get_functions( )->set_all( abap_true ).
   lo_table->display( ).
 
 *&---------------------------------------------------------------------*
