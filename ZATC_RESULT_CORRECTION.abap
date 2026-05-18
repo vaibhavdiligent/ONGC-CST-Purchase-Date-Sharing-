@@ -565,9 +565,13 @@ START-OF-SELECTION.
                               TRANSLATE l_uc_d_kv TO UPPER CASE.
                               IF l_uc_d_kv CS 'WHERE' OR l_uc_d_kv CS 'INTO'
                                 OR l_uc_d_kv CS 'APPENDING'.
+                                DATA l_at_src_d TYPE string.
+                                DATA l_at_res_d TYPE string.
+                                l_at_src_d = wa_repos_tab_d-line.
                                 PERFORM add_at_hostvars
-                                  USING    wa_repos_tab_d-line
-                                  CHANGING wa_repos_tab_d-line.
+                                  USING    l_at_src_d
+                                  CHANGING l_at_res_d.
+                                wa_repos_tab_d-line = l_at_res_d.
                               ENDIF.
                               APPEND wa_repos_tab_d TO repos_tab_new.
                               EXIT.
@@ -580,9 +584,13 @@ START-OF-SELECTION.
                           TRANSLATE l_uc_kv TO UPPER CASE.
                           IF l_uc_kv CS 'WHERE' OR l_uc_kv CS 'INTO'
                             OR l_uc_kv CS 'APPENDING'.
+                            DATA l_at_src_kv TYPE string.
+                            DATA l_at_res_kv TYPE string.
+                            l_at_src_kv = wa_repos_tab-line.
                             PERFORM add_at_hostvars
-                              USING    wa_repos_tab-line
-                              CHANGING wa_repos_tab-line.
+                              USING    l_at_src_kv
+                              CHANGING l_at_res_kv.
+                            wa_repos_tab-line = l_at_res_kv.
                           ENDIF.
                           APPEND wa_repos_tab TO repos_tab_new.
                         ENDIF.
@@ -596,9 +604,13 @@ START-OF-SELECTION.
                             AND wa_whr_scan-line(1) = '*'.
                             l_whr_idx = l_whr_idx + 1. CONTINUE.
                           ENDIF.
+                          DATA l_at_src_w TYPE string.
+                          DATA l_at_res_w TYPE string.
+                          l_at_src_w = wa_whr_scan-line.
                           PERFORM add_at_hostvars
-                            USING    wa_whr_scan-line
-                            CHANGING wa_whr_scan-line.
+                            USING    l_at_src_w
+                            CHANGING l_at_res_w.
+                          wa_whr_scan-line = l_at_res_w.
                           MODIFY repos_tab FROM wa_whr_scan INDEX l_whr_idx.
                           IF wa_whr_scan-line CS '.'. EXIT. ENDIF.
                           l_whr_idx = l_whr_idx + 1.
