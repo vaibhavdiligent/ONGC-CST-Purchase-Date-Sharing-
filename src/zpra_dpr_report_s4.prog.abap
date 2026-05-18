@@ -3,7 +3,10 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.7 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 08-MAY-2026
+*& VERSION : 4.8 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 18-MAY-2026
+*& v4.8 - Fix near-zero MMSCMD values in columns S-AD (BMD mode). Restore
+*&        * 6290 in convert_gas_units and convert_mrec_gas_units (p_bb/p_bbd/p_bmd)
+*&        via packed intermediate lv_qty2 to avoid COMPUTE_BCD_OVERFLOW.
 *& v4.7 - Border fix: display_section4b (Remarks section) now applies a full-width
 *&        thin border covering cols 1..gv_table_columns for all Remarks rows, so
 *&        empty cells in cols 10+ get borders matching the main DPR table above.
@@ -3570,7 +3573,8 @@ FORM set_section1_header_colors .
   PERFORM set_range_interior USING gv_header_gt_colour .
 ENDFORM.
 FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
-  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty  TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty2 TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_dly_prd-prod_vl_uom1 .
@@ -3586,9 +3590,11 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_bbd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_tm.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3596,7 +3602,8 @@ FORM convert_gas_units  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
     WHEN p_mb.
       p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_dly_prd-prod_vl_qty1 = lv_qty2 .
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
@@ -3687,7 +3694,8 @@ FORM convert_gas_units_to_mmscm  CHANGING p_zpra_t_dly_prd TYPE zpra_t_dly_prd.
 ENDFORM.
 
 FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
-  DATA : lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty  TYPE p LENGTH 16 DECIMALS 7 .
+  DATA : lv_qty2 TYPE p LENGTH 16 DECIMALS 7 .
 * First Convert to MCM
 
   CASE p_zpra_t_mrec_prd-prod_vl_uom1 .
@@ -3703,9 +3711,11 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
 * Convert to display UoM
   CASE abap_true.
     WHEN p_bb.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_bbd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty2 .
     WHEN p_tm.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_tmd.
@@ -3713,7 +3723,8 @@ FORM convert_mrec_gas_units  CHANGING p_zpra_t_mrec_prd TYPE ty_zpra_t_mrec_prd.
     WHEN p_mb.
       p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty * 1000 .
     WHEN p_bmd.
-      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty .              "v1.9: was * 6290 - overflow on narrow DB field
+      lv_qty2 = lv_qty * 6290.
+      p_zpra_t_mrec_prd-prod_vl_qty1 = lv_qty2 .
     WHEN OTHERS.
   ENDCASE.
 ENDFORM.
