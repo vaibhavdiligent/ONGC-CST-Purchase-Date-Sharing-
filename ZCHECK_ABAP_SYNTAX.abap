@@ -63,12 +63,26 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
-  PARAMETERS:
-    rb_auto TYPE c RADIOBUTTON GROUP grp DEFAULT 'X',
-    rb_prog TYPE c RADIOBUTTON GROUP grp,
-    rb_fugr TYPE c RADIOBUTTON GROUP grp,
-    rb_clas TYPE c RADIOBUTTON GROUP grp,
-    rb_intf TYPE c RADIOBUTTON GROUP grp.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_auto TYPE c RADIOBUTTON GROUP grp DEFAULT 'X'.
+    SELECTION-SCREEN COMMENT 3(50) text-010 FOR FIELD rb_auto.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_prog TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(50) text-011 FOR FIELD rb_prog.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_fugr TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(50) text-012 FOR FIELD rb_fugr.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_clas TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(50) text-013 FOR FIELD rb_clas.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_intf TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(50) text-014 FOR FIELD rb_intf.
+  SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b2.
 
 *======================================================================*
@@ -77,21 +91,11 @@ SELECTION-SCREEN END OF BLOCK b2.
 INITIALIZATION.
   text-001 = 'Object Name Selection'.
   text-002 = 'Object Type Filter'.
-
-*======================================================================*
-*  AT SELECTION-SCREEN OUTPUT  – radio-button labels
-*======================================================================*
-AT SELECTION-SCREEN OUTPUT.
-  LOOP AT SCREEN.
-    CASE screen-name.
-      WHEN 'RB_AUTO'. screen-text = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
-      WHEN 'RB_PROG'. screen-text = 'Programs / Reports / Includes  (PROG)'.
-      WHEN 'RB_FUGR'. screen-text = 'Function Groups                (FUGR)'.
-      WHEN 'RB_CLAS'. screen-text = 'ABAP OO Classes                (CLAS)'.
-      WHEN 'RB_INTF'. screen-text = 'ABAP OO Interfaces             (INTF)'.
-    ENDCASE.
-    MODIFY SCREEN.
-  ENDLOOP.
+  text-010 = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
+  text-011 = 'Programs / Reports / Includes  (PROG)'.
+  text-012 = 'Function Groups                (FUGR)'.
+  text-013 = 'ABAP OO Classes                (CLAS)'.
+  text-014 = 'ABAP OO Interfaces             (INTF)'.
 
 *======================================================================*
 *  AT SELECTION-SCREEN  – mandatory validation
@@ -293,7 +297,7 @@ FORM display_alv.
     lo_sorts  TYPE REF TO cl_salv_sorts,
     lv_ok     TYPE i VALUE 0,
     lv_err    TYPE i VALUE 0,
-    lv_hdr    TYPE string.
+    lv_hdr    TYPE lvc_title.
 
   " Build summary counts for the header
   LOOP AT gt_result INTO DATA(ls_r).
@@ -331,7 +335,7 @@ FORM display_alv.
           lo_col->set_long_text(   'Syntax Result' ).
           lo_col->set_medium_text( 'Result' ).
           lo_col->set_short_text(  'Status' ).
-          lo_col->set_cell_type( if_salv_c_cell_type=>traffic_light ).
+          lo_col->set_cell_type( 'TRAFFICLIGHT' ).
         CATCH cx_salv_not_found. "#EC NO_HANDLER
       ENDTRY.
 
@@ -357,8 +361,7 @@ FORM display_alv.
       "----------------------------------------------------------------
       lo_sorts = lo_alv->get_sorts( ).
       TRY.
-          lo_sorts->add_sort( columnname = 'TRAFFIC'
-                              sortorder  = if_salv_c_sort_order=>ascending ).
+          lo_sorts->add_sort( columnname = 'TRAFFIC' ).
         CATCH cx_salv_not_found
               cx_salv_existing
               cx_salv_data_error. "#EC NO_HANDLER
@@ -367,10 +370,15 @@ FORM display_alv.
       "----------------------------------------------------------------
       " ALV header
       "----------------------------------------------------------------
-      lv_hdr = |ABAP Mass Syntax Check   |
-            && |Total: { lines( gt_result ) }   |
-            && |OK: { lv_ok }   |
-            && |Errors: { lv_err }|.
+      DATA: lv_tot TYPE c LENGTH 6,
+            lv_ok2 TYPE c LENGTH 6,
+            lv_er2 TYPE c LENGTH 6.
+      lv_tot = lines( gt_result ).
+      lv_ok2 = lv_ok.
+      lv_er2 = lv_err.
+      CONCATENATE 'ABAP Mass Syntax Check  Total:' lv_tot
+                  '  OK:' lv_ok2 '  Errors:' lv_er2
+                  INTO lv_hdr.
 
       lo_disp = lo_alv->get_display_settings( ).
       lo_disp->set_list_header( lv_hdr ).
@@ -388,10 +396,10 @@ ENDFORM.
 *& Form SET_COL  – helper: set long/medium/short text on a column
 *&---------------------------------------------------------------------*
 FORM set_col USING io_cols  TYPE REF TO cl_salv_columns_table
-                   iv_fname TYPE string
-                   iv_long  TYPE string
-                   iv_med   TYPE string
-                   iv_short TYPE string.
+                   iv_fname TYPE lvc_fname
+                   iv_long  TYPE scrtext_l
+                   iv_med   TYPE scrtext_m
+                   iv_short TYPE scrtext_s.
   TRY.
       DATA lo_col TYPE REF TO cl_salv_column_table.
       lo_col ?= io_cols->get_column( iv_fname ).
