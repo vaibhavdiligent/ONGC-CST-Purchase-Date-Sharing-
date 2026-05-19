@@ -43,9 +43,7 @@ TYPES:
     chk_prog TYPE c LENGTH 40,    " Program / include actually checked
     status   TYPE c LENGTH 10,    " OK / ERROR
     err_line TYPE i,
-    err_off  TYPE i,
     err_msg  TYPE c LENGTH 220,
-    err_inc  TYPE c LENGTH 40,
   END OF ty_result.
 
 *======================================================================*
@@ -185,15 +183,11 @@ FORM check_one_object
     lv_prog     TYPE c LENGTH 40,
     lv_subrc    TYPE sy-subrc,
     lv_line     TYPE i,
-    lv_off      TYPE i,
-    lv_msg      TYPE string,
-    lv_inc      TYPE c LENGTH 40,
     lv_plen     TYPE i,
     lv_pad      TYPE string,
     lv_cnt      TYPE i,
-    lv_navigate TYPE c LENGTH 1,   " RS_SYNTAX_CHECK: navigation flag output
-    lv_cancel   TYPE c LENGTH 1,   " RS_SYNTAX_CHECK: cancel flag output
-    lt_source   TYPE TABLE OF abaptxt255.  " empty = FM reads from repository
+    lv_chk_msg  TYPE c LENGTH 220,
+    lv_chk_word TYPE c LENGTH 72.
 
   ls_result-objname = iv_objname.
   ls_result-objtype = iv_objtype.
@@ -245,47 +239,33 @@ FORM check_one_object
   ls_result-chk_prog = lv_prog.
 
   "--------------------------------------------------------------------
-  " Call RS_SYNTAX_CHECK (Function Group S38E, program SAPLS38E)
-  " Available in all standard SAP releases (ECC 6.x and S/4HANA).
-  " I_WITH_DIALOG = ' '  suppresses any popup or screen navigation.
+  " Native ABAP SYNTAX-CHECK FOR PROGRAM
+  " Works correctly for ALL program types:
+  "   E  Executable (REPORT)    F  Function Group
+  "   K  Class Pool             J  Interface Pool
+  "   I  Include
+  " RS_SYNTAX_CHECK was replaced because passing empty i_source caused
+  " it to check empty code and return "REPORT/PROGRAM missing" for all
+  " object types, instead of reading from the repository.
   "--------------------------------------------------------------------
-  CALL FUNCTION 'RS_SYNTAX_CHECK'
-    EXPORTING
-      i_program         = lv_prog
-      i_with_dialog     = ' '
-    IMPORTING
-      o_error_subrc     = lv_subrc
-      o_error_line      = lv_line
-      o_error_offset    = lv_off
-      o_error_message   = lv_msg
-      o_error_include   = lv_inc
-      o_navigate        = lv_navigate
-      cancel            = lv_cancel
-    TABLES
-      i_source          = lt_source
-    EXCEPTIONS
-      OTHERS            = 1.
+  SYNTAX-CHECK FOR PROGRAM lv_prog
+    MESSAGE lv_chk_msg
+    LINE    lv_line
+    WORD    lv_chk_word.
 
-  IF sy-subrc <> 0 AND lv_subrc = 0.
-    " FM itself failed (e.g. program not in repository) – mark as error
-    lv_subrc = 4.
-    CONCATENATE 'RS_SYNTAX_CHECK exception for:' lv_prog INTO lv_msg
-      SEPARATED BY ' '.
-  ENDIF.
+  lv_subrc = sy-subrc.
 
   "--------------------------------------------------------------------
   " Build result row
   "--------------------------------------------------------------------
   IF lv_subrc = 0.
-    ls_result-traffic = '3'.   " Green  – syntax OK
+    ls_result-traffic = '3'.
     ls_result-status  = 'OK'.
   ELSE.
-    ls_result-traffic  = '1'.  " Red    – syntax error
+    ls_result-traffic  = '1'.
     ls_result-status   = 'ERROR'.
     ls_result-err_line = lv_line.
-    ls_result-err_off  = lv_off.
-    ls_result-err_msg  = lv_msg.
-    ls_result-err_inc  = lv_inc.
+    ls_result-err_msg  = lv_chk_msg.
   ENDIF.
 
   APPEND ls_result TO ct_result.
@@ -355,12 +335,8 @@ FORM display_alv.
                             'Syntax Status' 'Status'.
       PERFORM set_col USING lo_cols 'ERR_LINE' 'Error Line Number'
                             'Error Line'    'ErrLine'.
-      PERFORM set_col USING lo_cols 'ERR_OFF'  'Error Column Offset'
-                            'Error Offset'  'ErrOff'.
       PERFORM set_col USING lo_cols 'ERR_MSG'  'Error Message'
                             'Error Message' 'Err Msg'.
-      PERFORM set_col USING lo_cols 'ERR_INC'  'Error in Include'
-                            'Error Include' 'ErrInc'.
 
       "----------------------------------------------------------------
       " Default sort: errors (traffic = 1) appear before OK (traffic = 3)
