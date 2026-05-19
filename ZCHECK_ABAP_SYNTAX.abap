@@ -53,15 +53,8 @@ TYPES:
 *======================================================================*
 DATA:
   gt_result  TYPE TABLE OF ty_result,
-  gv_objname TYPE tadir-obj_name,   " reference field for SELECT-OPTIONS
-  " Selection-screen label variables (text-xxx is read-only in this release)
-  gv_blk1   TYPE c LENGTH 55,
-  gv_blk2   TYPE c LENGTH 55,
-  gv_t010   TYPE c LENGTH 55,
-  gv_t011   TYPE c LENGTH 55,
-  gv_t012   TYPE c LENGTH 55,
-  gv_t013   TYPE c LENGTH 55,
-  gv_t014   TYPE c LENGTH 55.
+  gv_objname TYPE tadir-obj_name.   " reference field for SELECT-OPTIONS
+" Note: gv_blk1/2 and gv_t010-014 are auto-declared by SELECTION-SCREEN
 
 *======================================================================*
 *  SELECTION SCREEN
