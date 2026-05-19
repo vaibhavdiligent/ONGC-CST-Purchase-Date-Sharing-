@@ -440,7 +440,7 @@ FORM get_data .
 *-> "*EOC CHARM ID :4000009078 TECHICAL : RAVINDER SINGH FUNCTIONAL : SHREYOSI DT:02.01.2025
 
 *SOC Email Pending Postings - Calculate diff columns and set row color when ch1 checked
-  IF ch1 EQ 'X'.
+  IF ch1 EQ 'X' OR p_email EQ 'X'.
     LOOP AT it_final INTO wa_final.
       wa_final-diff_cum_imb     = wa_final-cum_bal_mbg_cal  - wa_final-cum_bal_mbg_cal_so.
       wa_final-diff_neg_chg_imb = wa_final-neg_bal_mbg_cal  - wa_final-neg_bal_mbg_cal_so.
@@ -859,18 +859,19 @@ FORM email_pending_postings.
     RETURN.
   ENDIF.
 
-  " Step 2: Build customer list (refer YRXR023 logic)
-  " Keep entries where master customer = blank.
-  " For entries with master customer, keep only where master customer = customer.
+  " Step 2: Build customer list
+  " For entries with no master customer, email to customer directly.
+  " For entries with a master customer, email to the master customer.
   LOOP AT lt_pending INTO ls_pending.
     CLEAR ls_email_cust.
-    ls_email_cust-customer   = ls_pending-customer.
-    ls_email_cust-m_mas_cust = ls_pending-m_mas_cust.
     IF ls_pending-m_mas_cust IS INITIAL.
-      APPEND ls_email_cust TO lt_email_cust.
-    ELSEIF ls_pending-m_mas_cust = ls_pending-customer.
-      APPEND ls_email_cust TO lt_email_cust.
+      ls_email_cust-customer   = ls_pending-customer.
+      ls_email_cust-m_mas_cust = ls_pending-m_mas_cust.
+    ELSE.
+      ls_email_cust-customer   = ls_pending-m_mas_cust.
+      ls_email_cust-m_mas_cust = ls_pending-m_mas_cust.
     ENDIF.
+    APPEND ls_email_cust TO lt_email_cust.
     CLEAR ls_email_cust.
   ENDLOOP.
   SORT lt_email_cust BY customer.
@@ -894,6 +895,11 @@ FORM email_pending_postings.
       EXPORTING input  = ls_email_cust-customer
       IMPORTING output = lv_customer_disp.
     CONDENSE lv_customer_disp NO-GAPS.
+
+    " Fetch customer name from KNA1
+    DATA: lv_cust_name TYPE kna1-name1.
+    SELECT SINGLE name1 FROM kna1 INTO @lv_cust_name
+      WHERE kunnr = @ls_email_cust-customer.
 
     " Step 3: Find LOCIDs from OIJRRA (KUNNR = customer, DELIND NE X, BLOIND NE X)
     SELECT locid
@@ -1057,12 +1063,23 @@ FORM email_pending_postings.
     DELETE ADJACENT DUPLICATES FROM lt_cont_ids COMPARING cont_id.
 
     IF lt_cont_ids IS NOT INITIAL.
+      DATA(lv_3months_ago) = sy-datum.
+      CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+        EXPORTING
+          date      = sy-datum
+          days      = 0
+          months    = 3
+          signum    = '-'
+          years     = 0
+        IMPORTING
+          calc_date = lv_3months_ago.
       SELECT vbeln AS cont_id, changed_by, changed_on, changed_time
         FROM yrva_con_wf_log
         INTO TABLE @DATA(lt_wf_log)
         FOR ALL ENTRIES IN @lt_cont_ids
-        WHERE vbeln    = @lt_cont_ids-cont_id
-          AND yy_level = 0.
+        WHERE vbeln      = @lt_cont_ids-cont_id
+          AND yy_level   = 0
+          AND changed_on >= @lv_3months_ago.
 
       " Keep only first (latest) entry per contract
       SORT lt_wf_log BY cont_id ASCENDING changed_on DESCENDING changed_time DESCENDING.
@@ -1146,16 +1163,19 @@ FORM email_pending_postings.
     lv_cust_s = lv_customer_disp. CONDENSE lv_cust_s.
     lv_dl_s   = lv_date_l.        CONDENSE lv_dl_s.
     lv_dh_s   = lv_date_h.        CONDENSE lv_dh_s.
+    DATA: lv_cust_name_s TYPE string.
+    lv_cust_name_s = lv_cust_name. CONDENSE lv_cust_name_s.
     lv_intro = |<p>Please find below instances pertaining to the pending | &&
-               |Imbalance posting for { lv_cust_s } for { lv_dl_s } to | &&
-               |{ lv_dh_s }. Please take necessary action in this regard.</p>|.
+               |Imbalance posting for Customer { lv_cust_s } ({ lv_cust_name_s })| &&
+               | for { lv_dl_s } to { lv_dh_s }.| &&
+               | Please take necessary action in this regard.</p>|.
     ls_body-line = lv_intro.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<tr bgcolor="#D3D3D3">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cum Imb (MBG)</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<th bgcolor="#D3D3D3">Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Neg Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Cum Imb (MBG)</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -1176,7 +1196,7 @@ FORM email_pending_postings.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
         ls_body-line = '<tr>'.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-cont_id '</td><td>' ls_pending-sal_office '</td>'
+        CONCATENATE '<td>' ls_pending-blocation '</td><td>' ls_pending-cont_id '</td><td>' ls_pending-sal_office '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
         CONCATENATE '<td>' lv_cum_cal '</td><td>' lv_char_cal '</td><td>' lv_neg_cal '</td>'
@@ -1197,6 +1217,14 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     ls_body-line = '<p>For more details, please execute T-code YRG011N/ YRGR102 with the required input.</p>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<p><b>Note to ZO:</b> You are requested not to modify any imbalance clauses with'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' retrospective effect, as the same may impact already posted imbalances.'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' Further, it may please be ensured that any imbalance shifting, wherever applicable,'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = ' is completed prior to closure of the corresponding fortnight.</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<p>Regards,<br>BIS Admin</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
@@ -1250,6 +1278,14 @@ FORM email_pending_postings.
               i_recipient = lo_recipient
               i_copy      = 'X' ).
         ENDLOOP.
+
+        " Fixed CC: Ngmc@gail.co.in
+        lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                         'Ngmc@gail.co.in' ).
+        lo_send_request->add_recipient(
+          EXPORTING
+            i_recipient = lo_recipient
+            i_copy      = 'X' ).
 
         lo_send_request->send(
           EXPORTING
