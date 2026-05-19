@@ -181,16 +181,19 @@ FORM check_one_object
      CHANGING ct_result  TYPE TABLE.   " table of ty_result
 
   DATA:
-    ls_result TYPE ty_result,
-    lv_prog   TYPE c LENGTH 40,
-    lv_subrc  TYPE sy-subrc,
-    lv_line   TYPE i,
-    lv_off    TYPE i,
-    lv_msg    TYPE string,
-    lv_inc    TYPE c LENGTH 40,
-    lv_plen   TYPE i,
-    lv_pad    TYPE string,
-    lv_cnt    TYPE i.
+    ls_result   TYPE ty_result,
+    lv_prog     TYPE c LENGTH 40,
+    lv_subrc    TYPE sy-subrc,
+    lv_line     TYPE i,
+    lv_off      TYPE i,
+    lv_msg      TYPE string,
+    lv_inc      TYPE c LENGTH 40,
+    lv_plen     TYPE i,
+    lv_pad      TYPE string,
+    lv_cnt      TYPE i,
+    lv_navigate TYPE c LENGTH 1,   " RS_SYNTAX_CHECK: navigation flag output
+    lv_cancel   TYPE c LENGTH 1,   " RS_SYNTAX_CHECK: cancel flag output
+    lt_source   TYPE TABLE OF abaptxt255.  " empty = FM reads from repository
 
   ls_result-objname = iv_objname.
   ls_result-objtype = iv_objtype.
@@ -256,13 +259,18 @@ FORM check_one_object
       o_error_offset    = lv_off
       o_error_message   = lv_msg
       o_error_include   = lv_inc
+      o_navigate        = lv_navigate
+      cancel            = lv_cancel
+    TABLES
+      i_source          = lt_source
     EXCEPTIONS
       OTHERS            = 1.
 
   IF sy-subrc <> 0 AND lv_subrc = 0.
     " FM itself failed (e.g. program not in repository) – mark as error
     lv_subrc = 4.
-    lv_msg   = |RS_SYNTAX_CHECK raised exception for '{ lv_prog }'|.
+    CONCATENATE 'RS_SYNTAX_CHECK exception for:' lv_prog INTO lv_msg
+      SEPARATED BY ' '.
   ENDIF.
 
   "--------------------------------------------------------------------
