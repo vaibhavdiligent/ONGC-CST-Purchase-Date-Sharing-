@@ -801,6 +801,11 @@ FORM send_email.
     lv_kunnr_disp = wa_cust_em-kunnr.
     SHIFT lv_kunnr_disp LEFT DELETING LEADING '0'.
 
+    " Fetch customer name from KNA1
+    DATA: lv_cust_name027 TYPE kna1-name1.
+    SELECT SINGLE name1 FROM kna1 INTO @lv_cust_name027
+      WHERE kunnr = @wa_cust_em-kunnr.
+
     " Build email subject
     CONCATENATE 'Overrun Posting Pending for' lv_kunnr_disp
                 'for' lv_date_range
@@ -809,14 +814,16 @@ FORM send_email.
     " Build HTML email body
     APPEND '<html><body>' TO lt_body.
     APPEND '<p>Dear Ma''am/ Sir,</p>' TO lt_body.
-    CONCATENATE '<p>Please find below instances pertaining to the pending Overrun posting for '
-                lv_kunnr_disp ' for ' lv_date_range
+    DATA: lv_cust_name_s027 TYPE string.
+    lv_cust_name_s027 = lv_cust_name027. CONDENSE lv_cust_name_s027.
+    CONCATENATE '<p>Please find below instances pertaining to the pending Overrun posting for Customer '
+                lv_kunnr_disp ' (' lv_cust_name_s027 ') for ' lv_date_range
                 '. Please take necessary action in this regard.</p>'
                 INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
     APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
-    APPEND '<th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
 
     " Table rows for this customer
@@ -832,7 +839,7 @@ FORM send_email.
       CONDENSE: lv_cum_c, lv_char_c, lv_posted_c.
 
       APPEND '<tr>' TO lt_body.
-      CONCATENATE '<td>' wa_row-cont_id '</td><td>' wa_row-sal_office '</td>'
+      CONCATENATE '<td>' wa_row-blocation '</td><td>' wa_row-cont_id '</td><td>' wa_row-sal_office '</td>'
         INTO lv_body_line.
       APPEND lv_body_line TO lt_body.
       CONCATENATE '<td>' lv_cum_c '</td><td>' lv_char_c '</td>'
