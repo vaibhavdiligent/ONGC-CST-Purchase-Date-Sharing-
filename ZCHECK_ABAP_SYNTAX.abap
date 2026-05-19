@@ -53,35 +53,43 @@ TYPES:
 *======================================================================*
 DATA:
   gt_result  TYPE TABLE OF ty_result,
-  gv_objname TYPE tadir-obj_name.   " reference field for SELECT-OPTIONS
+  gv_objname TYPE tadir-obj_name,   " reference field for SELECT-OPTIONS
+  " Selection-screen label variables (text-xxx is read-only in this release)
+  gv_blk1   TYPE c LENGTH 55,
+  gv_blk2   TYPE c LENGTH 55,
+  gv_t010   TYPE c LENGTH 55,
+  gv_t011   TYPE c LENGTH 55,
+  gv_t012   TYPE c LENGTH 55,
+  gv_t013   TYPE c LENGTH 55,
+  gv_t014   TYPE c LENGTH 55.
 
 *======================================================================*
 *  SELECTION SCREEN
 *======================================================================*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE gv_blk1.
   SELECT-OPTIONS s_obj FOR gv_objname.
 SELECTION-SCREEN END OF BLOCK b1.
 
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE gv_blk2.
   SELECTION-SCREEN BEGIN OF LINE.
     PARAMETERS rb_auto TYPE c RADIOBUTTON GROUP grp DEFAULT 'X'.
-    SELECTION-SCREEN COMMENT 3(50) text-010 FOR FIELD rb_auto.
+    SELECTION-SCREEN COMMENT 3(52) gv_t010 FOR FIELD rb_auto.
   SELECTION-SCREEN END OF LINE.
   SELECTION-SCREEN BEGIN OF LINE.
     PARAMETERS rb_prog TYPE c RADIOBUTTON GROUP grp.
-    SELECTION-SCREEN COMMENT 3(50) text-011 FOR FIELD rb_prog.
+    SELECTION-SCREEN COMMENT 3(52) gv_t011 FOR FIELD rb_prog.
   SELECTION-SCREEN END OF LINE.
   SELECTION-SCREEN BEGIN OF LINE.
     PARAMETERS rb_fugr TYPE c RADIOBUTTON GROUP grp.
-    SELECTION-SCREEN COMMENT 3(50) text-012 FOR FIELD rb_fugr.
+    SELECTION-SCREEN COMMENT 3(52) gv_t012 FOR FIELD rb_fugr.
   SELECTION-SCREEN END OF LINE.
   SELECTION-SCREEN BEGIN OF LINE.
     PARAMETERS rb_clas TYPE c RADIOBUTTON GROUP grp.
-    SELECTION-SCREEN COMMENT 3(50) text-013 FOR FIELD rb_clas.
+    SELECTION-SCREEN COMMENT 3(52) gv_t013 FOR FIELD rb_clas.
   SELECTION-SCREEN END OF LINE.
   SELECTION-SCREEN BEGIN OF LINE.
     PARAMETERS rb_intf TYPE c RADIOBUTTON GROUP grp.
-    SELECTION-SCREEN COMMENT 3(50) text-014 FOR FIELD rb_intf.
+    SELECTION-SCREEN COMMENT 3(52) gv_t014 FOR FIELD rb_intf.
   SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b2.
 
@@ -89,13 +97,13 @@ SELECTION-SCREEN END OF BLOCK b2.
 *  INITIALIZATION
 *======================================================================*
 INITIALIZATION.
-  text-001 = 'Object Name Selection'.
-  text-002 = 'Object Type Filter'.
-  text-010 = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
-  text-011 = 'Programs / Reports / Includes  (PROG)'.
-  text-012 = 'Function Groups                (FUGR)'.
-  text-013 = 'ABAP OO Classes                (CLAS)'.
-  text-014 = 'ABAP OO Interfaces             (INTF)'.
+  gv_blk1 = 'Object Name Selection'.
+  gv_blk2 = 'Object Type Filter'.
+  gv_t010 = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
+  gv_t011 = 'Programs / Reports / Includes  (PROG)'.
+  gv_t012 = 'Function Groups                (FUGR)'.
+  gv_t013 = 'ABAP OO Classes                (CLAS)'.
+  gv_t014 = 'ABAP OO Interfaces             (INTF)'.
 
 *======================================================================*
 *  AT SELECTION-SCREEN  – mandatory validation
@@ -329,13 +337,10 @@ FORM display_alv.
       lo_cols = lo_alv->get_columns( ).
       lo_cols->set_optimize( abap_true ).
 
-      " Traffic-light column (values: 1=red, 2=yellow, 3=green)
+      " TRAFFIC field (1/3) is internal only – hide it; STATUS shows OK/ERROR
       TRY.
           lo_col ?= lo_cols->get_column( 'TRAFFIC' ).
-          lo_col->set_long_text(   'Syntax Result' ).
-          lo_col->set_medium_text( 'Result' ).
-          lo_col->set_short_text(  'Status' ).
-          lo_col->set_cell_type( 'TRAFFICLIGHT' ).
+          lo_col->set_technical( abap_true ).
         CATCH cx_salv_not_found. "#EC NO_HANDLER
       ENDTRY.
 
