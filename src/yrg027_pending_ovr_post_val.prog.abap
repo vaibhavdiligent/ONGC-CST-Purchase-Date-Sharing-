@@ -913,12 +913,23 @@ FORM send_email.
         ENDLOOP.
 
         IF lt_cc_cont_ids IS NOT INITIAL.
+          DATA(lv_3months_ago027) = sy-datum.
+          CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+            EXPORTING
+              date      = sy-datum
+              days      = 0
+              months    = 3
+              signum    = '-'
+              years     = 0
+            IMPORTING
+              calc_date = lv_3months_ago027.
           SELECT changed_by
             FROM yrva_con_wf_log
             INTO TABLE @DATA(lt_wf_log)
             FOR ALL ENTRIES IN @lt_cc_cont_ids
-            WHERE vbeln    = @lt_cc_cont_ids-cont_id
-              AND yy_level = 0.
+            WHERE vbeln      = @lt_cc_cont_ids-cont_id
+              AND yy_level   = 0
+              AND changed_on >= @lv_3months_ago027.
 
           IF lt_wf_log IS NOT INITIAL.
             TYPES: BEGIN OF ty_pernr_wfcc,
@@ -988,6 +999,14 @@ FORM send_email.
             ENDIF.
           ENDLOOP.
         ENDIF.
+
+        " Fixed CC: Ngmc@gail.co.in
+        lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                         'Ngmc@gail.co.in' ).
+        lo_send_request->add_recipient(
+          EXPORTING
+            i_recipient = lo_recipient
+            i_copy      = 'X' ).
 
         lo_send_request->send(
           EXPORTING
