@@ -5335,6 +5335,29 @@ FORM build_alv_display_table_view .
     ENDIF.
   ENDLOOP.
   DELETE gt_alv_display WHERE ongc_material = '##DELETE##'.
+  " Remove NCST combinations from view (ongc_material is populated here so direct check is possible)
+  DATA lt_ncst_map_v TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id gail_material ongc_material
+    FROM yrga_cst_mat_map
+    INTO CORRESPONDING FIELDS OF TABLE lt_ncst_map_v
+    WHERE location_id IN s_loc
+      AND ncst       = 'X'
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    = ' '.
+  IF lt_ncst_map_v IS NOT INITIAL.
+    SORT lt_ncst_map_v BY location_id gail_material ongc_material.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ncst_v>).
+      READ TABLE lt_ncst_map_v TRANSPORTING NO FIELDS
+        WITH KEY location_id   = <fs_ncst_v>-location_id
+                 gail_material = <fs_ncst_v>-material
+                 ongc_material = <fs_ncst_v>-ongc_material.
+      IF sy-subrc = 0.
+        <fs_ncst_v>-ongc_material = '##NCST##'.
+      ENDIF.
+    ENDLOOP.
+    DELETE gt_alv_display WHERE ongc_material = '##NCST##'.
+  ENDIF.
   " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_view>).
     IF <fs_alv_view>-exclude = 'X'.
