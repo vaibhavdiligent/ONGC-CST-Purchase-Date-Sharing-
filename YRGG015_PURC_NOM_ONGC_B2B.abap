@@ -500,7 +500,7 @@ FORM validate_selection_screen.
     lv_fn_end+6(2) = '15'.
   ELSE.
     CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
-      EXPORTING month_date        = lv_today
+      EXPORTING day_in            = lv_today
       IMPORTING last_day_of_month = lv_fn_end.
   ENDIF.
 
