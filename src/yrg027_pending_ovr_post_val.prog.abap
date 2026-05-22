@@ -836,11 +836,10 @@ FORM send_email.
                   | Please take necessary action in this regard.</p>|.
     lv_body_line = lv_intro027.
     APPEND lv_body_line TO lt_body.
-    APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
+    APPEND '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">' TO lt_body.
     APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
-    APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th>' TO lt_body.
-    APPEND '<th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
 
     " Table rows for this customer
     LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr.
@@ -862,10 +861,7 @@ FORM send_email.
                   '<td>' lv_posted_c '</td>'
         INTO lv_body_line.
       APPEND lv_body_line TO lt_body.
-      CONCATENATE '<td>' wa_row-sal_order '</td><td>' wa_row-invoice '</td>'
-        INTO lv_body_line.
-      APPEND lv_body_line TO lt_body.
-      CONCATENATE '<td>' wa_row-m_cont_id '</td><td>' wa_row-m_mas_cust '</td></tr>'
+      CONCATENATE '<td>' wa_row-sal_order '</td><td>' wa_row-invoice '</td></tr>'
         INTO lv_body_line.
       APPEND lv_body_line TO lt_body.
 
@@ -873,13 +869,9 @@ FORM send_email.
 
     APPEND '</table>' TO lt_body.
     APPEND '<p>For more details, please execute T-code YRG011N/ YRGR109 with the required input.</p>' TO lt_body.
-    APPEND '<p><b>Note to ZO:</b> You are requested not to modify any imbalance clauses with' TO lt_body.
-    APPEND ' retrospective effect, as the same may impact already posted imbalances.' TO lt_body.
-    APPEND ' Further, it may please be ensured that any imbalance shifting, wherever applicable,' TO lt_body.
-    APPEND ' is completed prior to closure of the corresponding fortnight.</p>' TO lt_body.
     APPEND '<p>Regards,<br>BIS Admin</p>' TO lt_body.
     APPEND '<hr><p><em>This is system generated mail, Please do not reply.</em></p>' TO lt_body.
-    CONCATENATE '<p>Source: ' lv_source '</p>' INTO lv_body_line.
+    CONCATENATE '<p>' lv_source '</p>' INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '</body></html>' TO lt_body.
 
