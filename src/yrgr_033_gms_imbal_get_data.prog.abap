@@ -183,7 +183,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM send_emails.
   PERFORM send_email_posted.
-  PERFORM send_email_not_posted.
+* PERFORM send_email_not_posted.   " Commented as per NGMC confirmation
 ENDFORM.
 
 *&---------------------------------------------------------------------*
