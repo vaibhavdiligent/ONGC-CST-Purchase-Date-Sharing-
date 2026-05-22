@@ -983,56 +983,57 @@ FORM send_email.
                     i_copy      = 'X' ).
               ENDIF.
             ENDLOOP.
+          ENDIF. " lt_wf_log IS NOT INITIAL
+        ENDIF. " lt_cc_cont_ids IS NOT INITIAL
 
-            " 7c2: CC reporting officer of TO recipients via PA0034 -> PA0001
-            TYPES: BEGIN OF ty_rep_pernr,
-                     pernr TYPE pa0034-pernr,
-                   END OF ty_rep_pernr.
-            DATA: lt_rep_pernr TYPE STANDARD TABLE OF ty_rep_pernr.
-            CLEAR lt_rep_pernr.
-            IF lt_to_pernr IS NOT INITIAL.
-            SELECT yy_pernr_rep FROM pa0034
-              INTO TABLE @DATA(lt_pa0034_rep)
-              FOR ALL ENTRIES IN @lt_to_pernr
-              WHERE pernr  = @lt_to_pernr-pernr
+        " 7c2: CC reporting officer of TO recipients via PA0034 -> PA0001
+        " Runs independently of wf_log - based only on TO recipient pernrs
+        IF lt_to_pernr IS NOT INITIAL.
+          TYPES: BEGIN OF ty_rep_pernr,
+                   pernr TYPE pa0034-pernr,
+                 END OF ty_rep_pernr.
+          DATA: lt_rep_pernr TYPE STANDARD TABLE OF ty_rep_pernr.
+          CLEAR lt_rep_pernr.
+          SELECT yy_pernr_rep FROM pa0034
+            INTO TABLE @DATA(lt_pa0034_rep)
+            FOR ALL ENTRIES IN @lt_to_pernr
+            WHERE pernr  = @lt_to_pernr-pernr
+              AND begda LE @sy-datum
+              AND endda GE @sy-datum
+              AND subty IN ( '9001', '9002', '9003', '9113', '9114' ).
+          LOOP AT lt_pa0034_rep INTO DATA(ls_pa0034_rep).
+            APPEND VALUE ty_rep_pernr( pernr = ls_pa0034_rep-yy_pernr_rep )
+              TO lt_rep_pernr.
+          ENDLOOP.
+          SORT lt_rep_pernr BY pernr.
+          DELETE ADJACENT DUPLICATES FROM lt_rep_pernr COMPARING pernr.
+
+          IF lt_rep_pernr IS NOT INITIAL.
+            SELECT pernr, persk FROM pa0001
+              INTO TABLE @DATA(lt_pa0001_rep)
+              FOR ALL ENTRIES IN @lt_rep_pernr
+              WHERE pernr  = @lt_rep_pernr-pernr
                 AND begda LE @sy-datum
-                AND endda GE @sy-datum
-                AND subty IN ( '9001', '9002', '9003', '9113', '9114' ).
-            LOOP AT lt_pa0034_rep INTO DATA(ls_pa0034_rep).
-              APPEND VALUE ty_rep_pernr( pernr = ls_pa0034_rep-yy_pernr_rep )
-                TO lt_rep_pernr.
-            ENDLOOP.
-            SORT lt_rep_pernr BY pernr.
-            DELETE ADJACENT DUPLICATES FROM lt_rep_pernr COMPARING pernr.
-
-            IF lt_rep_pernr IS NOT INITIAL.
-              SELECT pernr, persk FROM pa0001
-                INTO TABLE @DATA(lt_pa0001_rep)
-                FOR ALL ENTRIES IN @lt_rep_pernr
-                WHERE pernr  = @lt_rep_pernr-pernr
-                  AND begda LE @sy-datum
-                  AND endda GE @sy-datum.
-              SORT lt_pa0001_rep BY persk ASCENDING.
-              READ TABLE lt_pa0001_rep INTO DATA(ls_pa0001_rep) INDEX 1.
-              IF sy-subrc = 0.
-                SELECT SINGLE usrid_long FROM pa0105
-                  INTO @DATA(lv_rep_email)
-                  WHERE pernr = @ls_pa0001_rep-pernr
-                    AND subty = '0010'
-                    AND endda = '99991231'.
-                IF lv_rep_email IS NOT INITIAL.
-                  lo_recipient = cl_cam_address_bcs=>create_internet_address(
-                                   lv_rep_email ).
-                  lo_send_request->add_recipient(
-                    EXPORTING
-                      i_recipient = lo_recipient
-                      i_copy      = 'X' ).
-                ENDIF.
+                AND endda GE @sy-datum.
+            SORT lt_pa0001_rep BY persk ASCENDING.
+            READ TABLE lt_pa0001_rep INTO DATA(ls_pa0001_rep) INDEX 1.
+            IF sy-subrc = 0.
+              SELECT SINGLE usrid_long FROM pa0105
+                INTO @DATA(lv_rep_email)
+                WHERE pernr = @ls_pa0001_rep-pernr
+                  AND subty = '0010'
+                  AND endda = '99991231'.
+              IF lv_rep_email IS NOT INITIAL.
+                lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                                 lv_rep_email ).
+                lo_send_request->add_recipient(
+                  EXPORTING
+                    i_recipient = lo_recipient
+                    i_copy      = 'X' ).
               ENDIF.
             ENDIF.
-            ENDIF. " lt_to_pernr IS NOT INITIAL
           ENDIF.
-        ENDIF.
+        ENDIF. " lt_to_pernr IS NOT INITIAL
 
         " 7d: CC from YSD_WF_AGENT (vkbur=sales_office, ylevel=1)
         CLEAR: lt_sal_offices.
