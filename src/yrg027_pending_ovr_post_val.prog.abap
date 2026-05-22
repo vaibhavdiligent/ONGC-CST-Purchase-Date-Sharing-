@@ -330,8 +330,8 @@ FORM get_data .
   ENDIF.
 * > "*EOC CHARM ID :4000009078 TECHICAL : RAVINDER SINGH FUNCTIONAL : SHREYOSI DT:02.01.2025
 
-* Filter entries where Diff (Chargeable Ovr) is zero - these are already fully posted
-  DELETE it_final WHERE diff_char_ovr EQ 0.
+* Do not delete diff=0 entries - show all in ALV, only colour diff NE 0 red
+*  DELETE it_final WHERE diff_char_ovr EQ 0.
 
 ENDFORM.
 *&---------------------------------------------------------------------*
@@ -679,9 +679,8 @@ FORM send_email.
   CONCATENATE s_date-high+6(2) '.' s_date-high+4(2) '.' s_date-high+0(4) INTO lv_date_to.
   CONCATENATE lv_date_from ' to ' lv_date_to INTO lv_date_range.
 
-  " Source line following YRGR091 pattern: SOURCE: GR102.UNAME.DATE.TIME
   CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO lv_w_date.
-  CONCATENATE 'SOURCE: GR102.' sy-uname '.' lv_w_date '.' sy-uzeit INTO lv_source.
+  CONCATENATE 'YRGR109.' sy-uname '.' lv_w_date '.' sy-uzeit INTO lv_source.
 
   " Collect unique customers from filtered final table (Diff NE 0)
   LOOP AT it_final INTO DATA(wa_fe).
@@ -807,19 +806,20 @@ FORM send_email.
       WHERE kunnr = @wa_cust_em-kunnr.
 
     " Build email subject
-    CONCATENATE 'Overrun Posting Pending for' lv_kunnr_disp
-                'for' lv_date_range
-                INTO lv_subject SEPARATED BY space.
+    CONCATENATE 'Ovr Posting Pending_' lv_kunnr_disp '_' lv_date_from ' to ' lv_date_to
+                INTO lv_subject.
 
     " Build HTML email body
     APPEND '<html><body>' TO lt_body.
     APPEND '<p>Dear Ma''am/ Sir,</p>' TO lt_body.
     DATA: lv_cust_name_s027 TYPE string.
+    DATA: lv_intro027       TYPE string.
     lv_cust_name_s027 = lv_cust_name027. CONDENSE lv_cust_name_s027.
-    CONCATENATE '<p>Please find below instances pertaining to the pending Overrun posting for Customer '
-                lv_kunnr_disp ' (' lv_cust_name_s027 ') for ' lv_date_range
-                '. Please take necessary action in this regard.</p>'
-                INTO lv_body_line.
+    lv_intro027 = |<p>Please find below instances pertaining to the pending Overrun posting | &&
+                  |for Customer { lv_kunnr_disp } ({ lv_cust_name_s027 })| &&
+                  | for { lv_date_from } to { lv_date_to }.| &&
+                  | Please take necessary action in this regard.</p>|.
+    lv_body_line = lv_intro027.
     APPEND lv_body_line TO lt_body.
     APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
     APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
@@ -853,10 +853,10 @@ FORM send_email.
     ENDLOOP.
 
     APPEND '</table>' TO lt_body.
-    APPEND '<p>For more details, please execute T-code YRG011N/ YRGR102 with the required input.</p>' TO lt_body.
+    APPEND '<p>For more details, please execute T-code YRG011N/ YRGR109 with the required input.</p>' TO lt_body.
     APPEND '<p>Regards,<br>BIS Admin</p>' TO lt_body.
     APPEND '<hr><p><em>This is system generated mail, Please do not reply.</em></p>' TO lt_body.
-    CONCATENATE '<p>Source: ' lv_source '</p>' INTO lv_body_line.
+    CONCATENATE '<p>' lv_source '</p>' INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '</body></html>' TO lt_body.
 
@@ -923,13 +923,17 @@ FORM send_email.
               years     = 0
             IMPORTING
               calc_date = lv_3months_ago027.
-          SELECT changed_by
+          SELECT vbeln AS cont_id, changed_by, changed_on, changed_time
             FROM yrva_con_wf_log
             INTO TABLE @DATA(lt_wf_log)
             FOR ALL ENTRIES IN @lt_cc_cont_ids
             WHERE vbeln      = @lt_cc_cont_ids-cont_id
               AND yy_level   = 0
               AND changed_on >= @lv_3months_ago027.
+
+          " Keep only the latest change per contract
+          SORT lt_wf_log BY cont_id ASCENDING changed_on DESCENDING changed_time DESCENDING.
+          DELETE ADJACENT DUPLICATES FROM lt_wf_log COMPARING cont_id.
 
           IF lt_wf_log IS NOT INITIAL.
             TYPES: BEGIN OF ty_pernr_wfcc,
@@ -964,6 +968,52 @@ FORM send_email.
                     i_copy      = 'X' ).
               ENDIF.
             ENDLOOP.
+
+            " 7c2: CC reporting officer via PA0034 -> PA0001
+            TYPES: BEGIN OF ty_rep_pernr,
+                     pernr TYPE pa0034-pernr,
+                   END OF ty_rep_pernr.
+            DATA: lt_rep_pernr TYPE STANDARD TABLE OF ty_rep_pernr.
+            CLEAR lt_rep_pernr.
+            SELECT yy_pernr_rep FROM pa0034
+              INTO TABLE @DATA(lt_pa0034_rep)
+              FOR ALL ENTRIES IN @lt_pernr_wfcc
+              WHERE pernr  = @lt_pernr_wfcc-pernr
+                AND begda LE @sy-datum
+                AND endda GE @sy-datum
+                AND subty IN ( '9001', '9002', '9003', '9113', '9114' ).
+            LOOP AT lt_pa0034_rep INTO DATA(ls_pa0034_rep).
+              APPEND VALUE ty_rep_pernr( pernr = ls_pa0034_rep-yy_pernr_rep )
+                TO lt_rep_pernr.
+            ENDLOOP.
+            SORT lt_rep_pernr BY pernr.
+            DELETE ADJACENT DUPLICATES FROM lt_rep_pernr COMPARING pernr.
+
+            IF lt_rep_pernr IS NOT INITIAL.
+              SELECT pernr, persk FROM pa0001
+                INTO TABLE @DATA(lt_pa0001_rep)
+                FOR ALL ENTRIES IN @lt_rep_pernr
+                WHERE pernr  = @lt_rep_pernr-pernr
+                  AND begda LE @sy-datum
+                  AND endda GE @sy-datum.
+              SORT lt_pa0001_rep BY persk ASCENDING.
+              READ TABLE lt_pa0001_rep INTO DATA(ls_pa0001_rep) INDEX 1.
+              IF sy-subrc = 0.
+                SELECT SINGLE usrid_long FROM pa0105
+                  INTO @DATA(lv_rep_email)
+                  WHERE pernr = @ls_pa0001_rep-pernr
+                    AND subty = '0010'
+                    AND endda = '99991231'.
+                IF lv_rep_email IS NOT INITIAL.
+                  lo_recipient = cl_cam_address_bcs=>create_internet_address(
+                                   lv_rep_email ).
+                  lo_send_request->add_recipient(
+                    EXPORTING
+                      i_recipient = lo_recipient
+                      i_copy      = 'X' ).
+                ENDIF.
+              ENDIF.
+            ENDIF.
           ENDIF.
         ENDIF.
 
