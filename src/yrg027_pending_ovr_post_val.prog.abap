@@ -661,6 +661,10 @@ FORM send_email.
   DATA: lv_w_date(10)    TYPE c.
   DATA: lv_source        TYPE string.
   DATA: lv_kunnr_disp    TYPE string.
+  TYPES: BEGIN OF ty_to_pernr,
+           pernr TYPE pa0105-pernr,
+         END OF ty_to_pernr.
+  DATA: lt_to_pernr TYPE STANDARD TABLE OF ty_to_pernr.
   DATA: lv_subject       TYPE so_obj_des.
   DATA: lt_body          TYPE bcsy_text.
   DATA: lv_body_line     TYPE so_text255.
@@ -733,6 +737,11 @@ FORM send_email.
       ENDLOOP.
       SORT lt_pernr_tkt BY pernr.
       DELETE ADJACENT DUPLICATES FROM lt_pernr_tkt COMPARING pernr.
+      " Store TO pernrs for reporting officer CC
+      CLEAR lt_to_pernr.
+      LOOP AT lt_pernr_tkt INTO DATA(wa_tp_tkt).
+        APPEND VALUE ty_to_pernr( pernr = wa_tp_tkt-pernr ) TO lt_to_pernr.
+      ENDLOOP.
 
       " Find email from ERNAM via PA0105 (ERNAM used as PERNR - ref YRGR095)
       SELECT usrid_long FROM pa0105
@@ -772,6 +781,11 @@ FORM send_email.
         ENDLOOP.
         SORT lt_pernr_nom BY pernr.
         DELETE ADJACENT DUPLICATES FROM lt_pernr_nom COMPARING pernr.
+        " Store TO pernrs for reporting officer CC
+        CLEAR lt_to_pernr.
+        LOOP AT lt_pernr_nom INTO DATA(wa_tp_nom).
+          APPEND VALUE ty_to_pernr( pernr = wa_tp_nom-pernr ) TO lt_to_pernr.
+        ENDLOOP.
 
         " Find email from AENAM via PA0105 (AENAM used as PERNR - ref YRGR095)
         SELECT usrid_long FROM pa0105
@@ -806,8 +820,9 @@ FORM send_email.
       WHERE kunnr = @wa_cust_em-kunnr.
 
     " Build email subject
-    CONCATENATE 'Ovr Posting Pending_' lv_kunnr_disp '_' lv_date_from ' to ' lv_date_to
-                INTO lv_subject.
+    DATA: lv_subj_str TYPE string.
+    lv_subj_str = |Ovr Posting Pending_{ lv_kunnr_disp }_{ lv_date_from } to { lv_date_to }|.
+    lv_subject = lv_subj_str.
 
     " Build HTML email body
     APPEND '<html><body>' TO lt_body.
@@ -824,7 +839,8 @@ FORM send_email.
     APPEND '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse">' TO lt_body.
     APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
-    APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>' TO lt_body.
 
     " Table rows for this customer
     LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr.
@@ -846,7 +862,10 @@ FORM send_email.
                   '<td>' lv_posted_c '</td>'
         INTO lv_body_line.
       APPEND lv_body_line TO lt_body.
-      CONCATENATE '<td>' wa_row-sal_order '</td><td>' wa_row-invoice '</td></tr>'
+      CONCATENATE '<td>' wa_row-sal_order '</td><td>' wa_row-invoice '</td>'
+        INTO lv_body_line.
+      APPEND lv_body_line TO lt_body.
+      CONCATENATE '<td>' wa_row-m_cont_id '</td><td>' wa_row-m_mas_cust '</td></tr>'
         INTO lv_body_line.
       APPEND lv_body_line TO lt_body.
 
@@ -854,9 +873,13 @@ FORM send_email.
 
     APPEND '</table>' TO lt_body.
     APPEND '<p>For more details, please execute T-code YRG011N/ YRGR109 with the required input.</p>' TO lt_body.
+    APPEND '<p><b>Note to ZO:</b> You are requested not to modify any imbalance clauses with' TO lt_body.
+    APPEND ' retrospective effect, as the same may impact already posted imbalances.' TO lt_body.
+    APPEND ' Further, it may please be ensured that any imbalance shifting, wherever applicable,' TO lt_body.
+    APPEND ' is completed prior to closure of the corresponding fortnight.</p>' TO lt_body.
     APPEND '<p>Regards,<br>BIS Admin</p>' TO lt_body.
     APPEND '<hr><p><em>This is system generated mail, Please do not reply.</em></p>' TO lt_body.
-    CONCATENATE '<p>' lv_source '</p>' INTO lv_body_line.
+    CONCATENATE '<p>Source: ' lv_source '</p>' INTO lv_body_line.
     APPEND lv_body_line TO lt_body.
     APPEND '</body></html>' TO lt_body.
 
@@ -969,16 +992,17 @@ FORM send_email.
               ENDIF.
             ENDLOOP.
 
-            " 7c2: CC reporting officer via PA0034 -> PA0001
+            " 7c2: CC reporting officer of TO recipients via PA0034 -> PA0001
             TYPES: BEGIN OF ty_rep_pernr,
                      pernr TYPE pa0034-pernr,
                    END OF ty_rep_pernr.
             DATA: lt_rep_pernr TYPE STANDARD TABLE OF ty_rep_pernr.
             CLEAR lt_rep_pernr.
+            IF lt_to_pernr IS NOT INITIAL.
             SELECT yy_pernr_rep FROM pa0034
               INTO TABLE @DATA(lt_pa0034_rep)
-              FOR ALL ENTRIES IN @lt_pernr_wfcc
-              WHERE pernr  = @lt_pernr_wfcc-pernr
+              FOR ALL ENTRIES IN @lt_to_pernr
+              WHERE pernr  = @lt_to_pernr-pernr
                 AND begda LE @sy-datum
                 AND endda GE @sy-datum
                 AND subty IN ( '9001', '9002', '9003', '9113', '9114' ).
@@ -1014,6 +1038,7 @@ FORM send_email.
                 ENDIF.
               ENDIF.
             ENDIF.
+            ENDIF. " lt_to_pernr IS NOT INITIAL
           ENDIF.
         ENDIF.
 
