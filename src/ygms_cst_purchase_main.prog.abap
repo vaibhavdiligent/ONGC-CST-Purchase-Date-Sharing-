@@ -2322,8 +2322,8 @@ FORM save_data_to_db.
   CONCATENATE 'GA' gv_date_from+2(2) gv_date_from+4(2) lv_fortnight INTO lv_gail_prefix.
   " Initialize error flag
   lv_error_found = abap_false.
-  " First pass: Generate unique GAIL_IDs for each Location-Material-ONGC Material-State combination
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  " First pass: Generate unique GAIL_IDs for ALL combinations (including excluded rows)
+  LOOP AT gt_alv_display INTO gs_alv_display.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id   = gs_alv_display-location_id
                material      = gs_alv_display-material
@@ -5335,25 +5335,50 @@ FORM build_alv_display_table_view .
     ENDIF.
   ENDLOOP.
   DELETE gt_alv_display WHERE ongc_material = '##DELETE##'.
-  " Remove NCST combinations from view (ongc_material is populated here so direct check is possible)
-  DATA lt_ncst_map_v TYPE TABLE OF yrga_cst_mat_map.
-  SELECT location_id gail_material ongc_material
+  " Remove NCST combinations from view.
+  " GJ placeholder rows have ongc_material = '' so a direct key lookup fails for them;
+  " fetch the full valid map and handle both cases.
+  DATA lt_full_map_v TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id gail_material ongc_material ncst
     FROM yrga_cst_mat_map
-    INTO CORRESPONDING FIELDS OF TABLE lt_ncst_map_v
+    INTO CORRESPONDING FIELDS OF TABLE lt_full_map_v
     WHERE location_id IN s_loc
-      AND ncst       = 'X'
       AND valid_from <= gv_date_from
       AND valid_to   >= gv_date_to
       AND deleted    = ' '.
-  IF lt_ncst_map_v IS NOT INITIAL.
-    SORT lt_ncst_map_v BY location_id gail_material ongc_material.
+  IF lt_full_map_v IS NOT INITIAL.
+    SORT lt_full_map_v BY location_id gail_material ongc_material.
     LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ncst_v>).
-      READ TABLE lt_ncst_map_v TRANSPORTING NO FIELDS
-        WITH KEY location_id   = <fs_ncst_v>-location_id
-                 gail_material = <fs_ncst_v>-material
-                 ongc_material = <fs_ncst_v>-ongc_material.
-      IF sy-subrc = 0.
-        <fs_ncst_v>-ongc_material = '##NCST##'.
+      IF <fs_ncst_v>-ongc_material IS NOT INITIAL.
+        " Specific combination known — delete only if that combination is NCST
+        READ TABLE lt_full_map_v INTO DATA(ls_fmap_v)
+          WITH KEY location_id   = <fs_ncst_v>-location_id
+                   gail_material = <fs_ncst_v>-material
+                   ongc_material = <fs_ncst_v>-ongc_material.
+        IF sy-subrc = 0 AND ls_fmap_v-ncst = 'X'.
+          <fs_ncst_v>-ongc_material = '##NCST##'.
+        ENDIF.
+      ELSE.
+        " GJ placeholder row: ongc_material is empty.
+        " Delete if every mapping for this loc+gail_material is NCST.
+        DATA lv_non_ncst_vw TYPE abap_bool.
+        lv_non_ncst_vw = abap_false.
+        LOOP AT lt_full_map_v INTO DATA(ls_fmap_vw)
+          WHERE location_id   = <fs_ncst_v>-location_id
+            AND gail_material = <fs_ncst_v>-material.
+          IF ls_fmap_vw-ncst <> 'X'.
+            lv_non_ncst_vw = abap_true.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+        IF lv_non_ncst_vw = abap_false.
+          READ TABLE lt_full_map_v TRANSPORTING NO FIELDS
+            WITH KEY location_id   = <fs_ncst_v>-location_id
+                     gail_material = <fs_ncst_v>-material.
+          IF sy-subrc = 0.
+            <fs_ncst_v>-ongc_material = '##NCST##'.
+          ENDIF.
+        ENDIF.
       ENDIF.
     ENDLOOP.
     DELETE gt_alv_display WHERE ongc_material = '##NCST##'.
