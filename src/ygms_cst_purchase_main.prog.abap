@@ -2351,6 +2351,7 @@ FORM save_data_to_db.
   ENDLOOP.
   " Second pass: Create daily records for YRGA_CST_PUR (include excluded rows too)
   LOOP AT gt_alv_display INTO gs_alv_display.
+    CLEAR ls_gail_id_map.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id   = gs_alv_display-location_id
                material      = gs_alv_display-material
@@ -4618,6 +4619,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM call_api.
   CLEAR g_error_api.
+  CLEAR: lv_token_url, lv_api_get, lv_client_id, lv_client_secret.
 ****  Added by Aishwarya/ Abhisheik for ONGC b2b API 03.03.2026
   IF sy-subrc = 0.
     lv_token_url     = lv_api_dt-yy_token_url.
@@ -5195,7 +5197,8 @@ FORM build_alv_display_table_view .
     WHERE gas_day IN @s_date
       AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
-    SORT it_yrga_cst_pur BY created_date DESCENDING created_time DESCENDING.
+    SORT it_yrga_cst_pur BY gas_day location material ongc_mater state_code
+                            created_date DESCENDING created_time DESCENDING.
     DELETE ADJACENT DUPLICATES FROM it_yrga_cst_pur COMPARING gas_day location material ongc_mater state_code.
     MOVE it_yrga_cst_pur[] TO it_cst_pur_temp[].
     SORT it_cst_pur_temp BY location material ongc_mater state_code.
