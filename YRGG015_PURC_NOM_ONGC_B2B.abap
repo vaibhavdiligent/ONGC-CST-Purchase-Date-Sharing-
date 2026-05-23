@@ -22,6 +22,7 @@ TYPES: BEGIN OF ty_pur,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
          gail_id     TYPE char20,
          ongc_id     TYPE char20,
+         ongc_matr   TYPE char20,
          deleted     TYPE char1,
        END OF ty_pur.
 
@@ -71,6 +72,7 @@ TYPES: BEGIN OF ty_display,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
          gail_id     TYPE char20,
          ongc_id     TYPE char20,
+         ongc_matr   TYPE char20,
          outline_agr TYPE ebeln,
          charg       TYPE charg_d,
          oa_missing  TYPE char1,
@@ -103,6 +105,7 @@ TYPES: BEGIN OF ty_mot_cache,
          locid    TYPE char10,
          fromdate TYPE d,
          todate   TYPE d,
+         vbtyp    TYPE char1,
        END OF ty_mot_cache.
 TYPES: BEGIN OF ty_ekoa_cache,
          ebeln TYPE ebeln,
@@ -119,6 +122,10 @@ TYPES: BEGIN OF ty_mcha_cache,
          charg TYPE charg_d,
          ersda TYPE d,
        END OF ty_mcha_cache.
+TYPES: BEGIN OF ty_mara_cache,
+         matnr TYPE matnr,
+         xchpf TYPE xchpf,
+       END OF ty_mara_cache.
 
 *----------------------------------------------------------------------*
 * DATA DECLARATIONS
@@ -138,7 +145,8 @@ DATA: gt_display      TYPE tt_display,
 DATA: gt_mot_c   TYPE STANDARD TABLE OF ty_mot_cache,
       gt_ekoa_c  TYPE STANDARD TABLE OF ty_ekoa_cache,
       gt_t001w_c TYPE STANDARD TABLE OF ty_t001w_cache,
-      gt_mcha_c  TYPE STANDARD TABLE OF ty_mcha_cache.
+      gt_mcha_c  TYPE STANDARD TABLE OF ty_mcha_cache,
+      gt_mara_c  TYPE STANDARD TABLE OF ty_mara_cache.
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
@@ -241,20 +249,35 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     DATA: ls_tb TYPE stb_button.
     IF gv_toolbar_done = abap_true. RETURN. ENDIF.
     CLEAR ls_tb.
+    ls_tb-function  = 'SELALL'.
+    ls_tb-icon      = '@2V@'.
+    ls_tb-quickinfo = 'Select All'.
+    ls_tb-text      = 'Select All'.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+    CLEAR ls_tb.
+    ls_tb-function  = 'DSLALL'.
+    ls_tb-icon      = '@2W@'.
+    ls_tb-quickinfo = 'Deselect All'.
+    ls_tb-text      = 'Deselect All'.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
+    CLEAR ls_tb.
+    ls_tb-butn_type = 3.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
+    CLEAR ls_tb.
     ls_tb-function  = 'BCMASS'.
     ls_tb-icon      = '@EJ@'.
     ls_tb-quickinfo = 'Batch Change in Mass'.
     ls_tb-text      = 'Batch Change'.
-    INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 4.
     CLEAR ls_tb.
     ls_tb-butn_type = 3.
-    INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 5.
     CLEAR ls_tb.
     ls_tb-function  = 'CRENOM'.
     ls_tb-icon      = '@15@'.
     ls_tb-quickinfo = 'Create Nomination'.
     ls_tb-text      = 'Create Nomination'.
-    INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 6.
     gv_toolbar_done = abap_true.
   ENDMETHOD.
 
@@ -524,7 +547,7 @@ FORM fetch_pur_data.
         ls_col  TYPE lvc_s_scol.
 
   SELECT gas_day location AS locid material state_code
-         qty_in_scm AS qty_scm gail_id ongc_id deleted
+         qty_in_scm AS qty_scm gail_id ongc_id ongc_matr deleted
     FROM yrga_cst_pur
     INTO CORRESPONDING FIELDS OF TABLE lt_pur
     WHERE gas_day  IN s_date
@@ -545,12 +568,18 @@ FORM fetch_pur_data.
     ls_disp-qty_scm    = ls_pur-qty_scm.
     ls_disp-gail_id    = ls_pur-gail_id.
     ls_disp-ongc_id    = ls_pur-ongc_id.
+    ls_disp-ongc_matr  = ls_pur-ongc_matr.
+
+    " Derive Outline Agreement for ALL rows (including zero qty and GJ)
+    PERFORM derive_outline_agreement
+      USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
+      CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
     " Determine if row is excluded from nomination (GJ state or zero qty)
     IF ls_pur-state_code = gc_excl_state OR ls_pur-qty_scm = 0.
       ls_disp-exclude = 'X'.
       ls_disp-sel     = ' '.
-      " Disable both SEL checkbox and CHARG edit for excluded rows
+      " Disable SEL checkbox and CHARG edit — visually grey out the row
       CLEAR ls_styl.
       ls_styl-fieldname = 'SEL'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
@@ -558,7 +587,7 @@ FORM fetch_pur_data.
       ls_styl-fieldname = 'CHARG'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
       INSERT ls_styl INTO TABLE ls_disp-celltab.
-      " Light grey row background for visual distinction
+      " Grey row background for visual distinction
       CLEAR ls_col.
       ls_col-fname     = 'EXCLUDE'.
       ls_col-color-col = 7.
@@ -567,16 +596,23 @@ FORM fetch_pur_data.
     ELSE.
       ls_disp-exclude = ' '.
       ls_disp-sel     = ' '.
+      " Batch editable only for batch-managed materials (xchpf = 'X')
+      DATA(lv_xchpf_r) = VALUE xchpf( ).
+      READ TABLE gt_mara_c INTO DATA(ls_mara_r) WITH KEY matnr = ls_pur-material.
+      IF sy-subrc = 0. lv_xchpf_r = ls_mara_r-xchpf. ENDIF.
       CLEAR ls_styl.
       ls_styl-fieldname = 'CHARG'.
-      ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
+      IF lv_xchpf_r = 'X'.
+        ls_styl-style = cl_gui_alv_grid=>mc_style_enabled.
+      ELSE.
+        ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+      ENDIF.
       INSERT ls_styl INTO TABLE ls_disp-celltab.
 
-      PERFORM derive_outline_agreement
-        USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
-        CHANGING ls_disp-outline_agr ls_disp-oa_missing.
-
-      PERFORM derive_batch USING ls_pur-material ls_pur-state_code CHANGING ls_disp-charg.
+      IF lv_xchpf_r = 'X'.
+        PERFORM derive_batch USING ls_pur-material ls_pur-state_code
+                             CHANGING ls_disp-charg.
+      ENDIF.
 
       IF ls_disp-oa_missing = abap_true.
         CLEAR ls_col.
@@ -630,19 +666,21 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
     ENDIF.
   ENDLOOP.
 
-  " 1. T001W: all relevant plants by state
+  " 1. T001W: plants for relevant states, WERKS range 2000-2999 (FS fix)
   REFRESH gt_t001w_c.
   SELECT werks regio FROM t001w INTO CORRESPONDING FIELDS OF TABLE gt_t001w_c
-    WHERE regio IN lr_state AND werks LIKE '2%'.
+    WHERE regio IN lr_state AND werks BETWEEN '2000' AND '2999'.
   SORT gt_t001w_c BY regio werks.
 
-  " 2. OIJ_EL_DOC_MOT: all OAs overlapping the selected date range
+  " 2. OIJ_EL_DOC_MOT: OAs overlapping date range, VBTYP=K, filtered by input locations (FS fix)
   REFRESH gt_mot_c.
-  SELECT vbeln matnr locid fromdate todate FROM oij_el_doc_mot
+  SELECT vbeln matnr locid fromdate todate vbtyp FROM oij_el_doc_mot
     INTO CORRESPONDING FIELDS OF TABLE gt_mot_c
-    WHERE delind    <> 'X'
-      AND fromdate  <= lv_max_dt
-      AND todate    >= lv_min_dt.
+    WHERE delind   <> 'X'
+      AND vbtyp    =  'K'
+      AND locid    IN s_locid
+      AND fromdate <= lv_max_dt
+      AND todate   >= lv_min_dt.
   SORT gt_mot_c BY matnr locid.
 
   " 3. Build VBELN range from MOT results
@@ -666,13 +704,22 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
     SORT gt_ekoa_c BY ebeln werks.
   ENDIF.
 
-  " 5. MCHA: all batches for relevant materials (not marked for deletion)
+  " 5. MCHA: all batches for relevant materials
   REFRESH gt_mcha_c.
   IF lr_matnr IS NOT INITIAL.
     SELECT matnr werks charg ersda FROM mcha
       INTO CORRESPONDING FIELDS OF TABLE gt_mcha_c
       WHERE matnr IN lr_matnr.
     SORT gt_mcha_c BY matnr ersda DESCENDING.
+  ENDIF.
+
+  " 6. MARA: batch management flag (xchpf) per material (FS fix: GMS_NG-Z not editable)
+  REFRESH gt_mara_c.
+  IF lr_matnr IS NOT INITIAL.
+    SELECT matnr xchpf FROM mara
+      INTO CORRESPONDING FIELDS OF TABLE gt_mara_c
+      WHERE matnr IN lr_matnr.
+    SORT gt_mara_c BY matnr.
   ENDIF.
 ENDFORM.
 
@@ -774,7 +821,7 @@ FORM get_valid_batches_for_material
         lv_werks TYPE werks_d.
   REFRESH ct_batch.
   SELECT werks FROM t001w INTO TABLE lt_werks
-    WHERE werks LIKE '2%' AND regio = iv_state.
+    WHERE regio = iv_state AND werks BETWEEN '2000' AND '2999'.
   IF lt_werks IS NOT INITIAL.
     SORT lt_werks. DELETE ADJACENT DUPLICATES FROM lt_werks.
     LOOP AT lt_werks INTO lv_werks.
@@ -863,7 +910,9 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     CREATE OBJECT go_alv_handler.
     SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
     SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
+    SET HANDLER go_alv_handler->on_alv_toolbar        FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+    go_alv->set_toolbar_interactive( ).
   ENDIF.
 ENDFORM.
 
@@ -950,6 +999,14 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
+  " ONGC_MATR
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'ONGC_MATR'.
+  ls_fcat-coltext   = 'ONGC Material'.
+  ls_fcat-seltext   = 'ONGC Material'.
+  ls_fcat-outputlen = 22.
+  APPEND ls_fcat TO gt_fcat.
+
   " OUTLINE_AGR
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'OUTLINE_AGR'.
@@ -995,20 +1052,35 @@ FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
   DATA: ls_tb TYPE stb_button.
   IF gv_toolbar_done = abap_true. RETURN. ENDIF.
   CLEAR ls_tb.
+  ls_tb-function  = 'SELALL'.
+  ls_tb-icon      = '@2V@'.
+  ls_tb-quickinfo = 'Select All'.
+  ls_tb-text      = 'Select All'.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+  CLEAR ls_tb.
+  ls_tb-function  = 'DSLALL'.
+  ls_tb-icon      = '@2W@'.
+  ls_tb-quickinfo = 'Deselect All'.
+  ls_tb-text      = 'Deselect All'.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
+  CLEAR ls_tb.
+  ls_tb-butn_type = 3.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
+  CLEAR ls_tb.
   ls_tb-function  = 'BCMASS'.
   ls_tb-icon      = '@EJ@'.
   ls_tb-quickinfo = 'Batch Change in Mass'.
   ls_tb-text      = 'Batch Change'.
-  INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 4.
   CLEAR ls_tb.
   ls_tb-butn_type = 3.
-  INSERT ls_tb INTO e_object->mt_toolbar INDEX 2.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 5.
   CLEAR ls_tb.
   ls_tb-function  = 'CRENOM'.
   ls_tb-icon      = '@15@'.
   ls_tb-quickinfo = 'Create Nomination'.
   ls_tb-text      = 'Create Nomination'.
-  INSERT ls_tb INTO e_object->mt_toolbar INDEX 3.
+  INSERT ls_tb INTO e_object->mt_toolbar INDEX 6.
   gv_toolbar_done = abap_true.
 ENDFORM.
 
@@ -1027,6 +1099,16 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
   CASE r_ucomm.
     WHEN 'BCMASS'. PERFORM handle_batch_mass_change.
     WHEN 'CRENOM'. PERFORM handle_create_nomination.
+    WHEN 'SELALL'.
+      LOOP AT gt_display INTO DATA(ls_sa) WHERE exclude <> 'X'.
+        ls_sa-sel = abap_true.
+        MODIFY gt_display FROM ls_sa.
+      ENDLOOP.
+    WHEN 'DSLALL'.
+      LOOP AT gt_display INTO DATA(ls_da).
+        CLEAR ls_da-sel.
+        MODIFY gt_display FROM ls_da.
+      ENDLOOP.
     WHEN '&IC1'.
       IF rs_selfield-fieldname = 'SEL'.
         PERFORM toggle_sel_for_row USING rs_selfield-tabindex.
@@ -1222,12 +1304,14 @@ FORM handle_batch_mass_change.
   REFRESH gt_batch_assign.
   lv_rows_sel = 0.
 
-  LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
+  " Row selection is NOT mandatory — collect all batch-managed materials from all non-excluded rows
+  LOOP AT gt_display INTO ls_disp WHERE exclude <> 'X'.
     ADD 1 TO lv_rows_sel.
     READ TABLE gt_batch_assign WITH KEY matnr = ls_disp-material TRANSPORTING NO FIELDS.
     IF sy-subrc <> 0.
-      SELECT SINGLE xchpf FROM mara INTO lv_xchpf WHERE matnr = ls_disp-material.
-      IF sy-subrc = 0 AND lv_xchpf = 'X'.
+      READ TABLE gt_mara_c INTO DATA(ls_mara_b) WITH KEY matnr = ls_disp-material.
+      lv_xchpf = COND #( WHEN sy-subrc = 0 THEN ls_mara_b-xchpf ELSE space ).
+      IF lv_xchpf = 'X'.
         CLEAR ls_assign.
         ls_assign-matnr      = ls_disp-material.
         ls_assign-state_code = ls_disp-state_code.
@@ -1238,11 +1322,8 @@ FORM handle_batch_mass_change.
     ENDIF.
   ENDLOOP.
 
-  IF lv_rows_sel = 0.
-    MESSAGE 'Select rows first.' TYPE 'S' DISPLAY LIKE 'W'. RETURN.
-  ENDIF.
   IF gt_batch_assign IS INITIAL.
-    MESSAGE 'No batch-managed materials found in selected rows.' TYPE 'S'
+    MESSAGE 'No batch-managed materials found in the list.' TYPE 'S'
             DISPLAY LIKE 'W'. RETURN.
   ENDIF.
 
