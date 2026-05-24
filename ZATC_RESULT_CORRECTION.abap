@@ -127,11 +127,15 @@ TYPES: BEGIN OF ty_final ,
 DATA : it_final TYPE TABLE OF ty_final,
        wa_final TYPE ty_final.
 TYPES : BEGIN OF ty_output,
+          traffic      TYPE c LENGTH 1,
           program_name TYPE char40,
           subobj       TYPE char40,
           new_program  TYPE char40,
           backup       TYPE char40,
           status       TYPE char10,
+          err_line     TYPE i,
+          err_msg      TYPE c LENGTH 220,
+          err_inc      TYPE c LENGTH 40,
         END OF ty_output.
 DATA it_output TYPE TABLE OF ty_output.
 DATA wa_output TYPE ty_output.
@@ -1716,7 +1720,11 @@ START-OF-SELECTION.
             wa_output-new_program = wa_final_p-sobjname.
             CLEAR it_error_table.
             PERFORM syntax_check USING wa_final_p-objname wa_final_p-objtype
-                                 CHANGING it_error_table.
+                                 CHANGING it_error_table
+                                          wa_output-traffic
+                                          wa_output-err_line
+                                          wa_output-err_msg
+                                          wa_output-err_inc.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
@@ -1756,7 +1764,11 @@ START-OF-SELECTION.
             COMMIT WORK.
             wa_output-new_program = wa_includes-incname.
             PERFORM syntax_check USING wa_final_p-objname wa_final_p-objtype
-                                 CHANGING it_error_table.
+                                 CHANGING it_error_table
+                                          wa_output-traffic
+                                          wa_output-err_line
+                                          wa_output-err_msg
+                                          wa_output-err_inc.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
@@ -1821,6 +1833,12 @@ START-OF-SELECTION.
         REFRESH repos_tab_new.
         wa_output-new_program = wa_final_p-enhname.
         CLEAR it_error_table.
+        PERFORM syntax_check USING wa_final_p-enhname 'ENHO'
+                             CHANGING it_error_table
+                                      wa_output-traffic
+                                      wa_output-err_line
+                                      wa_output-err_msg
+                                      wa_output-err_inc.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
@@ -1836,11 +1854,35 @@ START-OF-SELECTION.
   ENDLOOP.
   cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_table)
                           CHANGING  t_table      = it_output ).
-  lo_table->get_columns( )->get_column( columnname = 'PROGRAM_NAME' )->set_long_text( 'Main Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'SUBOBJ' )->set_long_text( 'Sub Object Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM' )->set_long_text( 'New Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'BACKUP' )->set_long_text( 'Back Up Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'STATUS' )->set_long_text( 'Status' ).
+  DATA(lo_cols) = lo_table->get_columns( ).
+  lo_cols->set_optimize( abap_true ).
+  " Traffic-light column: 1=Red(error), 3=Green(ok)
+  TRY.
+      DATA(lo_tl) = CAST cl_salv_column_table(
+                      lo_cols->get_column( 'TRAFFIC' ) ).
+      lo_tl->set_long_text(   'Syntax Result' ).
+      lo_tl->set_medium_text( 'Result' ).
+      lo_tl->set_short_text(  'Status' ).
+      lo_tl->set_cell_type( if_salv_c_cell_type=>traffic_light ).
+    CATCH cx_salv_not_found. "#EC NO_HANDLER
+  ENDTRY.
+  lo_cols->get_column( 'PROGRAM_NAME' )->set_long_text( 'Main Program Name' ).
+  lo_cols->get_column( 'SUBOBJ' )->set_long_text( 'Sub Object Name' ).
+  lo_cols->get_column( 'NEW_PROGRAM' )->set_long_text( 'New Program Name' ).
+  lo_cols->get_column( 'BACKUP' )->set_long_text( 'Back Up Program Name' ).
+  lo_cols->get_column( 'STATUS' )->set_long_text( 'Status' ).
+  TRY.
+      CAST cl_salv_column_table( lo_cols->get_column( 'ERR_LINE' ) )->set_long_text( 'Error Line' ).
+      CAST cl_salv_column_table( lo_cols->get_column( 'ERR_MSG'  ) )->set_long_text( 'Error Message' ).
+      CAST cl_salv_column_table( lo_cols->get_column( 'ERR_INC'  ) )->set_long_text( 'Error Include' ).
+    CATCH cx_salv_not_found. "#EC NO_HANDLER
+  ENDTRY.
+  " Default sort: errors (traffic=1) before successes (traffic=3)
+  TRY.
+      lo_table->get_sorts( )->add_sort( columnname = 'TRAFFIC'
+                                        sortorder  = if_salv_c_sort_order=>ascending ).
+    CATCH cx_salv_not_found cx_salv_existing cx_salv_data_error. "#EC NO_HANDLER
+  ENDTRY.
   lo_table->get_functions( )->set_all( abap_true ).
   lo_table->display( ).
 
@@ -3171,7 +3213,11 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM syntax_check USING    program    TYPE program
                            objecttype TYPE trobjtype
-                  CHANGING error_table TYPE syn_error.
+                  CHANGING error_table TYPE syn_error
+                           ev_traffic  TYPE c
+                           ev_err_line TYPE i
+                           ev_err_msg  TYPE c
+                           ev_err_inc  TYPE c.
   DATA: lv_classname TYPE char32,
         lv_msg       TYPE string,
         lv_line      TYPE i,
@@ -3235,6 +3281,38 @@ FORM syntax_check USING    program    TYPE program
       ENDIF.
     WHEN OTHERS.
   ENDCASE.
+  " Detailed error info via RS_SYNTAX_CHECK (as used in ZCHECK_ABAP_SYNTAX)
+  DATA lv_syn_subrc TYPE sy-subrc.
+  DATA lv_syn_line  TYPE i.
+  DATA lv_syn_off   TYPE i.
+  DATA lv_syn_msg   TYPE string.
+  DATA lv_syn_inc   TYPE c LENGTH 40.
+  DATA lv_chk_prog  TYPE c LENGTH 40.
+  IF objecttype = 'ENHO' AND lv_enh_main_prog IS NOT INITIAL.
+    lv_chk_prog = lv_enh_main_prog.
+  ELSE.
+    lv_chk_prog = program.
+  ENDIF.
+  CALL FUNCTION 'RS_SYNTAX_CHECK'
+    EXPORTING
+      i_program       = lv_chk_prog
+      i_with_dialog   = ' '
+    IMPORTING
+      o_error_subrc   = lv_syn_subrc
+      o_error_line    = lv_syn_line
+      o_error_offset  = lv_syn_off
+      o_error_message = lv_syn_msg
+      o_error_include = lv_syn_inc
+    EXCEPTIONS
+      OTHERS          = 1.
+  IF lv_syn_subrc = 0.
+    ev_traffic  = '3'.
+  ELSE.
+    ev_traffic  = '1'.
+    ev_err_line = lv_syn_line.
+    ev_err_msg  = lv_syn_msg.
+    ev_err_inc  = lv_syn_inc.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form amount_conv
@@ -3852,7 +3930,12 @@ FORM adobe_form_procee.
   wa_output-subobj       = lv_fpname.
   CLEAR it_error_table.
   lv_prog = lv_fpname.
-  PERFORM syntax_check USING lv_prog 'SFPF' CHANGING it_error_table.
+  PERFORM syntax_check USING lv_prog 'SFPF'
+                       CHANGING it_error_table
+                                wa_output-traffic
+                                wa_output-err_line
+                                wa_output-err_msg
+                                wa_output-err_inc.
   IF it_error_table IS INITIAL.
     wa_output-status = 'Success'.
   ELSE.
@@ -4337,6 +4420,7 @@ FORM smartform_procee.
   wa_output-subobj       = lv_formname.
   wa_output-new_program  = lv_formname.
   wa_output-status       = 'Success'.
+  wa_output-traffic      = '3'.
   APPEND wa_output TO it_output.
   CLEAR wa_output.
 ENDFORM.
