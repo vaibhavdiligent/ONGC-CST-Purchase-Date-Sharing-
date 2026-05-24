@@ -309,7 +309,8 @@ DATA: gt_fieldcat_slis TYPE slis_t_fieldcat_alv WITH HEADER LINE,
       it_final_main    TYPE TABLE OF ty_final1,
       it_final_main_gj TYPE TABLE OF ty_final1,
       wa_final_main    TYPE ty_final1.
-DATA gt_cst_b2b_1 TYPE TABLE OF yrga_cst_b2b_1.
+DATA gt_cst_b2b_1    TYPE TABLE OF yrga_cst_b2b_1.
+DATA gt_cst_b2b_zero TYPE TABLE OF yrga_cst_b2b_1.
 * Flags for button visibility and state
 DATA: gv_allocated    TYPE abap_bool VALUE abap_false,  " Allocation done flag
       gv_validated    TYPE abap_bool VALUE abap_false,  " Validation done flag
@@ -609,6 +610,13 @@ FORM fetch_b2b_data.
       WHERE ctp_id  = lt_ctp_ids-table_line
         AND gas_day BETWEEN gv_date_from AND gv_date_to
         AND qty_scm > 0.
+    CLEAR gt_cst_b2b_zero.
+    SELECT * FROM yrga_cst_b2b_1
+      INTO TABLE gt_cst_b2b_zero
+      FOR ALL ENTRIES IN lt_ctp_ids
+      WHERE ctp_id  = lt_ctp_ids-table_line
+        AND gas_day BETWEEN gv_date_from AND gv_date_to
+        AND qty_scm <= 0.
   ENDIF.
   IF lt_b2b_data IS INITIAL.
     DATA lv_loc_list TYPE string.
@@ -632,6 +640,10 @@ FORM fetch_b2b_data.
   IF lt_b2b_data[] IS NOT INITIAL.
     SORT lt_b2b_data BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
     DELETE ADJACENT DUPLICATES FROM lt_b2b_data COMPARING ctp_id gas_day ongc_material.
+  ENDIF.
+  IF gt_cst_b2b_zero IS NOT INITIAL.
+    SORT gt_cst_b2b_zero BY ctp_id gas_day ongc_material ASCENDING time_stamp DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM gt_cst_b2b_zero COMPARING ctp_id gas_day ongc_material.
   ENDIF.
   LOOP AT lt_b2b_data INTO DATA(ls_b2b).
     DATA(ls_receipt) = VALUE ty_gas_receipt(
@@ -2310,8 +2322,8 @@ FORM save_data_to_db.
   CONCATENATE 'GA' gv_date_from+2(2) gv_date_from+4(2) lv_fortnight INTO lv_gail_prefix.
   " Initialize error flag
   lv_error_found = abap_false.
-  " First pass: Generate unique GAIL_IDs for each Location-Material-ONGC Material-State combination
-  LOOP AT gt_alv_display INTO gs_alv_display WHERE exclude IS INITIAL.
+  " First pass: Generate unique GAIL_IDs for ALL combinations (including excluded rows)
+  LOOP AT gt_alv_display INTO gs_alv_display.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id   = gs_alv_display-location_id
                material      = gs_alv_display-material
@@ -2339,6 +2351,7 @@ FORM save_data_to_db.
   ENDLOOP.
   " Second pass: Create daily records for YRGA_CST_PUR (include excluded rows too)
   LOOP AT gt_alv_display INTO gs_alv_display.
+    CLEAR ls_gail_id_map.
     READ TABLE lt_gail_id_map INTO ls_gail_id_map
       WITH KEY location_id   = gs_alv_display-location_id
                material      = gs_alv_display-material
@@ -2393,6 +2406,26 @@ FORM save_data_to_db.
         IF sy-subrc = 0.
           ls_cst_pur-ctp         = ls_receipt-ctp_id.
           ls_cst_pur-ongc_mater  = ls_receipt-ongc_material.
+        ENDIF.
+        " Check zero-volume B2B records for ONGC ID / GCV / NCV on this gas day
+        IF ls_cst_pur-ongc_id IS INITIAL AND gt_cst_b2b_zero IS NOT INITIAL.
+          DATA(lv_ctp_zero) = VALUE ygms_de_ongc_ctp( ).
+          READ TABLE gt_loc_ctp_map INTO DATA(ls_map_zero)
+            WITH KEY gail_loc_id = gs_alv_display-location_id.
+          IF sy-subrc = 0.
+            lv_ctp_zero = ls_map_zero-ongc_ctp_id.
+          ENDIF.
+          IF lv_ctp_zero IS NOT INITIAL.
+            READ TABLE gt_cst_b2b_zero INTO DATA(ls_b2b_zero)
+              WITH KEY ctp_id        = lv_ctp_zero
+                       gas_day       = lv_date
+                       ongc_material = gs_alv_display-ongc_material.
+            IF sy-subrc = 0.
+              ls_cst_pur-ongc_id = ls_b2b_zero-ongc_id.
+              ls_cst_pur-gcv     = ls_b2b_zero-gcv.
+              ls_cst_pur-ncv     = ls_b2b_zero-ncv.
+            ENDIF.
+          ENDIF.
         ENDIF.
       ENDIF.
       ls_cst_pur-time_stamp   = lv_ts_char.
@@ -4586,6 +4619,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM call_api.
   CLEAR g_error_api.
+  CLEAR: lv_token_url, lv_api_get, lv_client_id, lv_client_secret.
 ****  Added by Aishwarya/ Abhisheik for ONGC b2b API 03.03.2026
   IF sy-subrc = 0.
     lv_token_url     = lv_api_dt-yy_token_url.
@@ -5163,7 +5197,8 @@ FORM build_alv_display_table_view .
     WHERE gas_day IN @s_date
       AND location IN @s_loc AND deleted = ' '.
   IF sy-subrc = 0.
-    SORT it_yrga_cst_pur BY created_date DESCENDING created_time DESCENDING.
+    SORT it_yrga_cst_pur BY gas_day location material ongc_mater state_code
+                            created_date DESCENDING created_time DESCENDING.
     DELETE ADJACENT DUPLICATES FROM it_yrga_cst_pur COMPARING gas_day location material ongc_mater state_code.
     MOVE it_yrga_cst_pur[] TO it_cst_pur_temp[].
     SORT it_cst_pur_temp BY location material ongc_mater state_code.
@@ -5303,6 +5338,54 @@ FORM build_alv_display_table_view .
     ENDIF.
   ENDLOOP.
   DELETE gt_alv_display WHERE ongc_material = '##DELETE##'.
+  " Remove NCST combinations from view.
+  " GJ placeholder rows have ongc_material = '' so a direct key lookup fails for them;
+  " fetch the full valid map and handle both cases.
+  DATA lt_full_map_v TYPE TABLE OF yrga_cst_mat_map.
+  SELECT location_id gail_material ongc_material ncst
+    FROM yrga_cst_mat_map
+    INTO CORRESPONDING FIELDS OF TABLE lt_full_map_v
+    WHERE location_id IN s_loc
+      AND valid_from <= gv_date_from
+      AND valid_to   >= gv_date_to
+      AND deleted    = ' '.
+  IF lt_full_map_v IS NOT INITIAL.
+    SORT lt_full_map_v BY location_id gail_material ongc_material.
+    LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_ncst_v>).
+      IF <fs_ncst_v>-ongc_material IS NOT INITIAL.
+        " Specific combination known — delete only if that combination is NCST
+        READ TABLE lt_full_map_v INTO DATA(ls_fmap_v)
+          WITH KEY location_id   = <fs_ncst_v>-location_id
+                   gail_material = <fs_ncst_v>-material
+                   ongc_material = <fs_ncst_v>-ongc_material.
+        IF sy-subrc = 0 AND ls_fmap_v-ncst = 'X'.
+          <fs_ncst_v>-ongc_material = '##NCST##'.
+        ENDIF.
+      ELSE.
+        " GJ placeholder row: ongc_material is empty.
+        " Delete if every mapping for this loc+gail_material is NCST.
+        DATA lv_non_ncst_vw TYPE abap_bool.
+        lv_non_ncst_vw = abap_false.
+        LOOP AT lt_full_map_v INTO DATA(ls_fmap_vw)
+          WHERE location_id   = <fs_ncst_v>-location_id
+            AND gail_material = <fs_ncst_v>-material.
+          IF ls_fmap_vw-ncst <> 'X'.
+            lv_non_ncst_vw = abap_true.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+        IF lv_non_ncst_vw = abap_false.
+          READ TABLE lt_full_map_v TRANSPORTING NO FIELDS
+            WITH KEY location_id   = <fs_ncst_v>-location_id
+                     gail_material = <fs_ncst_v>-material.
+          IF sy-subrc = 0.
+            <fs_ncst_v>-ongc_material = '##NCST##'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    DELETE gt_alv_display WHERE ongc_material = '##NCST##'.
+  ENDIF.
   " Populate Total Sales MBG from IT_FINAL_MAIN and calculate Alloc. - Sales MBG
   LOOP AT gt_alv_display ASSIGNING FIELD-SYMBOL(<fs_alv_view>).
     IF <fs_alv_view>-exclude = 'X'.
@@ -5731,10 +5814,23 @@ FORM fetch_sent_data.
 *  ENDIF.
   " --- 2. Fallback: fetch from YRGA_CST_B2B_2 / B2B_3 ---
 *  IF lv_found = abap_false.
-  " Fetch latest daily records from YRGA_CST_B2B_2
+  " Fetch latest daily records from YRGA_CST_B2B_2 filtered by selected locations via CTP IDs
+  DATA lt_sent_ctp_ids TYPE TABLE OF ygms_de_ongc_ctp.
+  LOOP AT gt_loc_ctp_map INTO DATA(ls_sent_map).
+    IF s_loc IS INITIAL.
+      COLLECT ls_sent_map-ongc_ctp_id INTO lt_sent_ctp_ids.
+    ELSE.
+      LOOP AT s_loc WHERE low = ls_sent_map-gail_loc_id OR high = ls_sent_map-gail_loc_id.
+        COLLECT ls_sent_map-ongc_ctp_id INTO lt_sent_ctp_ids.
+        EXIT.
+      ENDLOOP.
+    ENDIF.
+  ENDLOOP.
   SELECT * INTO TABLE @DATA(lt_b2b_2)
     FROM yrga_cst_b2b_2
-    WHERE gas_day IN @s_date.
+    FOR ALL ENTRIES IN @lt_sent_ctp_ids
+    WHERE ctp_id  = @lt_sent_ctp_ids-table_line
+      AND gas_day IN @s_date.
   IF sy-subrc = 0.
     SORT lt_b2b_2 BY time_stamp DESCENDING.
 *      DELETE ADJACENT DUPLICATES FROM lt_b2b_2 COMPARING gas_day ctp_id ongc_material state_code.
@@ -5758,10 +5854,12 @@ FORM fetch_sent_data.
       APPEND ls_daily TO gt_saved_daily.
     ENDLOOP.
   ENDIF.
-  " Fetch latest fortnightly records from YRGA_CST_B2B_3
+  " Fetch latest fortnightly records from YRGA_CST_B2B_3 filtered by selected locations via CTP IDs
   SELECT * INTO TABLE @DATA(lt_b2b_3)
     FROM yrga_cst_b2b_3
-    WHERE date_from IN @s_date.
+    FOR ALL ENTRIES IN @lt_sent_ctp_ids
+    WHERE ctp   = @lt_sent_ctp_ids-table_line
+      AND date_from IN @s_date.
   IF sy-subrc = 0.
     SORT lt_b2b_3 BY time_stamp DESCENDING.
 *      DELETE ADJACENT DUPLICATES FROM lt_b2b_3 COMPARING date_from date_to ctp ongc_material state_code.
