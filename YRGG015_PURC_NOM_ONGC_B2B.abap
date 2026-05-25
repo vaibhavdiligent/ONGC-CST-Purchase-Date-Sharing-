@@ -65,6 +65,7 @@ TYPES: BEGIN OF ty_log,
 TYPES: BEGIN OF ty_display,
          sel         TYPE char1,
          exclude     TYPE char1,
+         row_color   TYPE char4,
          gas_day     TYPE aedat,
          locid       TYPE char10,
          material    TYPE char30,
@@ -478,14 +479,15 @@ ENDFORM.
 * FORM validate_selection_screen
 *----------------------------------------------------------------------*
 FORM validate_selection_screen.
-  DATA: ls_locid   LIKE LINE OF s_locid,
-        ls_date    LIKE LINE OF s_date,
-        lv_day_lo  TYPE i,
-        lv_day_hi  TYPE i,
-        lv_loc     TYPE oij_locid,
-        lv_today   TYPE d,
-        lv_fn_end  TYPE d,
-        lv_fn_day  TYPE i.
+  DATA: ls_locid      LIKE LINE OF s_locid,
+        ls_date       LIKE LINE OF s_date,
+        lv_day_lo     TYPE i,
+        lv_day_hi     TYPE i,
+        lv_loc        TYPE oij_locid,
+        lv_today      TYPE d,
+        lv_fn_end     TYPE d,
+        lv_fn_day     TYPE i,
+        lv_fn_end_low TYPE d.
 
   LOOP AT s_locid INTO ls_locid WHERE sign = 'I' AND option = 'EQ'.
     SELECT SINGLE GAIL_LOC_ID FROM yrga_cst_loc_map INTO lv_loc
@@ -512,6 +514,20 @@ FORM validate_selection_screen.
     ENDIF.
     IF lv_day_hi <> 15 AND lv_day_hi < 28.
       MESSAGE e000(oo) WITH 'Date range must end on 15th or last day of month' ' ' ' ' ' '.
+    ENDIF.
+    " Compute FN end for the FROM date and ensure TO is within the same fortnight
+    CLEAR lv_fn_end_low.
+    IF lv_day_lo <= 15.
+      lv_fn_end_low      = ls_date-low.
+      lv_fn_end_low+6(2) = '15'.
+    ELSE.
+      CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
+        EXPORTING day_in            = ls_date-low
+        IMPORTING last_day_of_month = lv_fn_end_low.
+    ENDIF.
+    IF ls_date-high > lv_fn_end_low.
+      MESSAGE e000(oo) WITH 'Date range cannot span more than one fortnight.'
+                             'Max To date:' lv_fn_end_low ' '.
     ENDIF.
   ENDLOOP.
 
@@ -577,9 +593,10 @@ FORM fetch_pur_data.
 
     " Determine if row is excluded from nomination (GJ state or zero qty)
     IF ls_pur-state_code = gc_excl_state OR ls_pur-qty_scm = 0.
-      ls_disp-exclude = 'X'.
-      ls_disp-sel     = ' '.
-      " Disable SEL checkbox and CHARG edit — visually grey out the row
+      ls_disp-exclude   = 'X'.
+      ls_disp-sel       = ' '.
+      ls_disp-row_color = 'C700'.   " grey entire row
+      " Disable SEL checkbox and CHARG edit
       CLEAR ls_styl.
       ls_styl-fieldname = 'SEL'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
@@ -587,12 +604,6 @@ FORM fetch_pur_data.
       ls_styl-fieldname = 'CHARG'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
       INSERT ls_styl INTO TABLE ls_disp-celltab.
-      " Grey row background for visual distinction
-      CLEAR ls_col.
-      ls_col-fname     = 'EXCLUDE'.
-      ls_col-color-col = 7.
-      ls_col-color-int = 0.
-      INSERT ls_col INTO TABLE ls_disp-t_color.
     ELSE.
       ls_disp-exclude = ' '.
       ls_disp-sel     = ' '.
@@ -1027,6 +1038,8 @@ FORM build_fieldcat.
 
   " Technical fields (hidden)
   CLEAR ls_fcat.
+  ls_fcat-fieldname = 'ROW_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
+  CLEAR ls_fcat.
   ls_fcat-fieldname = 'T_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'CELLTAB'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
@@ -1038,9 +1051,9 @@ ENDFORM.
 FORM set_alv_layout.
   gs_layout-cwidth_opt  = abap_true.
   gs_layout-zebra       = abap_true.
-  gs_layout-edit        = abap_true.
   gs_layout-ctab_fname  = 'T_COLOR'.
   gs_layout-stylefname  = 'CELLTAB'.
+  gs_layout-info_fname  = 'ROW_COLOR'.
   gs_layout-no_rowmark  = abap_true.
 ENDFORM.
 
