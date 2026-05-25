@@ -2,33 +2,17 @@
 *& Report  : ZCHECK_ABAP_SYNTAX
 *& Title   : Mass ABAP Object Syntax Checker with ALV Output
 *&
-*& Description
-*&   Enter multiple object names on the selection screen.
-*&   The program detects each object's type from TADIR and runs a
-*&   syntax check.  Results appear in an ALV grid with traffic lights.
-*&
 *& Supported object types
-*&   PROG  Programs, reports, includes        → checked as-is
-*&   FUGR  Function groups                    → checks SAPL<fugr>
-*&   CLAS  Global ABAP classes                → checks class pool
-*&   INTF  Global ABAP interfaces             → checks interface pool
+*&   PROG  Programs / Reports / Includes   → checked as-is
+*&   FUGR  Function Groups                 → checks SAPL<fugr>
+*&   CLAS  Global ABAP Classes             → checks class pool
+*&   INTF  Global ABAP Interfaces          → checks interface pool
+*&   TRAN  Transaction Codes               → looks up program in TSTC,
+*&                                           then checks that program
 *&
-*& Syntax-check mechanism
-*&   Primary  : FM  RS_SYNTAX_CHECK
-*&              Function Group S38E  (SAPLS38E)  – available in all
-*&              standard SAP releases (ECC 6.x, S/4HANA).
-*&              Confirmed interface (SE37):
-*&                EXPORTING
-*&                  I_PROGRAM      LIKE SY-REPID   (char 40)
-*&                  I_WITH_DIALOG  TYPE C          (' ' = no popup)
-*&                IMPORTING
-*&                  O_ERROR_SUBRC  LIKE SY-SUBRC   (I)
-*&                  O_ERROR_LINE   LIKE SY-INDEX   (I)
-*&                  O_ERROR_OFFSET LIKE SY-TABIX   (I)
-*&                  O_ERROR_MESSAGE TYPE STRING
-*&                  O_ERROR_INCLUDE LIKE SY-REPID  (char 40)
-*&   Fallback : Native ABAP statement SYNTAX-CHECK FOR PROGRAM
-*&              (used when FM call raises an unexpected exception)
+*& Syntax-check mechanism: native ABAP SYNTAX-CHECK FOR PROGRAM statement
+*&   Reads source directly from the repository; handles all program
+*&   types (E, F, K, J, I) without requiring source to be supplied.
 *&---------------------------------------------------------------------*
 REPORT zcheck_abap_syntax.
 
@@ -43,9 +27,7 @@ TYPES:
     chk_prog TYPE c LENGTH 40,    " Program / include actually checked
     status   TYPE c LENGTH 10,    " OK / ERROR
     err_line TYPE i,
-    err_off  TYPE i,
     err_msg  TYPE c LENGTH 220,
-    err_inc  TYPE c LENGTH 40,
   END OF ty_result.
 
 *======================================================================*
@@ -54,44 +36,54 @@ TYPES:
 DATA:
   gt_result  TYPE TABLE OF ty_result,
   gv_objname TYPE tadir-obj_name.   " reference field for SELECT-OPTIONS
+" Note: gv_blk1/2 and gv_t010-014 are auto-declared by SELECTION-SCREEN
 
 *======================================================================*
 *  SELECTION SCREEN
 *======================================================================*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE gv_blk1.
   SELECT-OPTIONS s_obj FOR gv_objname.
 SELECTION-SCREEN END OF BLOCK b1.
 
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
-  PARAMETERS:
-    rb_auto TYPE c RADIOBUTTON GROUP grp DEFAULT 'X',
-    rb_prog TYPE c RADIOBUTTON GROUP grp,
-    rb_fugr TYPE c RADIOBUTTON GROUP grp,
-    rb_clas TYPE c RADIOBUTTON GROUP grp,
-    rb_intf TYPE c RADIOBUTTON GROUP grp.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE gv_blk2.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_auto TYPE c RADIOBUTTON GROUP grp DEFAULT 'X'.
+    SELECTION-SCREEN COMMENT 3(52) gv_t010 FOR FIELD rb_auto.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_prog TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(52) gv_t011 FOR FIELD rb_prog.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_fugr TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(52) gv_t012 FOR FIELD rb_fugr.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_clas TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(52) gv_t013 FOR FIELD rb_clas.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_intf TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(52) gv_t014 FOR FIELD rb_intf.
+  SELECTION-SCREEN END OF LINE.
+  SELECTION-SCREEN BEGIN OF LINE.
+    PARAMETERS rb_tran TYPE c RADIOBUTTON GROUP grp.
+    SELECTION-SCREEN COMMENT 3(52) gv_t015 FOR FIELD rb_tran.
+  SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b2.
 
 *======================================================================*
 *  INITIALIZATION
 *======================================================================*
 INITIALIZATION.
-  text-001 = 'Object Name Selection'.
-  text-002 = 'Object Type Filter'.
-
-*======================================================================*
-*  AT SELECTION-SCREEN OUTPUT  – radio-button labels
-*======================================================================*
-AT SELECTION-SCREEN OUTPUT.
-  LOOP AT SCREEN.
-    CASE screen-name.
-      WHEN 'RB_AUTO'. screen-text = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
-      WHEN 'RB_PROG'. screen-text = 'Programs / Reports / Includes  (PROG)'.
-      WHEN 'RB_FUGR'. screen-text = 'Function Groups                (FUGR)'.
-      WHEN 'RB_CLAS'. screen-text = 'ABAP OO Classes                (CLAS)'.
-      WHEN 'RB_INTF'. screen-text = 'ABAP OO Interfaces             (INTF)'.
-    ENDCASE.
-    MODIFY SCREEN.
-  ENDLOOP.
+  gv_blk1 = 'Object Name Selection'.
+  gv_blk2 = 'Object Type Filter'.
+  gv_t010 = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
+  gv_t011 = 'Programs / Reports / Includes  (PROG)'.
+  gv_t012 = 'Function Groups                (FUGR)'.
+  gv_t013 = 'ABAP OO Classes                (CLAS)'.
+  gv_t014 = 'ABAP OO Interfaces             (INTF)'.
+  gv_t015 = 'Transaction Codes              (TRAN)'.
 
 *======================================================================*
 *  AT SELECTION-SCREEN  – mandatory validation
@@ -108,50 +100,74 @@ START-OF-SELECTION.
 
   DATA:
     lt_tadir TYPE TABLE OF tadir,
-    lt_types TYPE RANGE OF tadir-object.
+    lt_types TYPE RANGE OF tadir-object,
+    lt_tstc  TYPE TABLE OF tstc,
+    ls_tstc  TYPE tstc.
 
   "--------------------------------------------------------------------
-  " Build object-type range for TADIR query
+  " TRAN: look up program behind each transaction code in TSTC
   "--------------------------------------------------------------------
-  IF rb_auto = abap_true.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'PROG' ) TO lt_types.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'FUGR' ) TO lt_types.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'CLAS' ) TO lt_types.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'INTF' ) TO lt_types.
-  ELSEIF rb_prog = abap_true.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'PROG' ) TO lt_types.
-  ELSEIF rb_fugr = abap_true.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'FUGR' ) TO lt_types.
-  ELSEIF rb_clas = abap_true.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'CLAS' ) TO lt_types.
-  ELSEIF rb_intf = abap_true.
-    APPEND VALUE #( sign = 'I' option = 'EQ' low = 'INTF' ) TO lt_types.
+  IF rb_tran = abap_true.
+    SELECT tcode pgmna
+      FROM tstc
+      INTO CORRESPONDING FIELDS OF TABLE lt_tstc
+      WHERE tcode IN s_obj.
+
+    IF sy-subrc <> 0 OR lt_tstc IS INITIAL.
+      MESSAGE 'No matching transaction codes found in TSTC.' TYPE 'I'.
+      RETURN.
+    ENDIF.
+
+    LOOP AT lt_tstc INTO ls_tstc.
+      IF ls_tstc-pgmna IS INITIAL.
+        " Skip tcodes with no program (e.g. parameter transactions)
+        CONTINUE.
+      ENDIF.
+      PERFORM check_one_object USING    ls_tstc-tcode
+                                        'TRAN'
+                                        ls_tstc-pgmna
+                               CHANGING gt_result.
+    ENDLOOP.
+
+  ELSE.
+    "--------------------------------------------------------------------
+    " PROG / FUGR / CLAS / INTF: build type range and query TADIR
+    "--------------------------------------------------------------------
+    IF rb_auto = abap_true.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'PROG' ) TO lt_types.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'FUGR' ) TO lt_types.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'CLAS' ) TO lt_types.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'INTF' ) TO lt_types.
+    ELSEIF rb_prog = abap_true.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'PROG' ) TO lt_types.
+    ELSEIF rb_fugr = abap_true.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'FUGR' ) TO lt_types.
+    ELSEIF rb_clas = abap_true.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'CLAS' ) TO lt_types.
+    ELSEIF rb_intf = abap_true.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = 'INTF' ) TO lt_types.
+    ENDIF.
+
+    SELECT *
+      FROM tadir
+      INTO TABLE lt_tadir
+      WHERE pgmid    = 'R3TR'
+        AND object   IN lt_types
+        AND obj_name IN s_obj.
+
+    IF sy-subrc <> 0 OR lt_tadir IS INITIAL.
+      MESSAGE 'No matching objects found in TADIR for the given selection.'
+        TYPE 'I'.
+      RETURN.
+    ENDIF.
+
+    LOOP AT lt_tadir INTO DATA(ls_tadir).
+      PERFORM check_one_object USING    ls_tadir-obj_name
+                                        ls_tadir-object
+                                        ''
+                               CHANGING gt_result.
+    ENDLOOP.
   ENDIF.
-
-  "--------------------------------------------------------------------
-  " Fetch matching objects from TADIR (repository catalog)
-  "--------------------------------------------------------------------
-  SELECT *
-    FROM tadir
-    INTO TABLE lt_tadir
-    WHERE pgmid    = 'R3TR'
-      AND object   IN lt_types
-      AND obj_name IN s_obj.
-
-  IF sy-subrc <> 0 OR lt_tadir IS INITIAL.
-    MESSAGE 'No matching objects found in TADIR for the given selection.'
-      TYPE 'I'.
-    RETURN.
-  ENDIF.
-
-  "--------------------------------------------------------------------
-  " Syntax-check each object
-  "--------------------------------------------------------------------
-  LOOP AT lt_tadir INTO DATA(ls_tadir).
-    PERFORM check_one_object USING    ls_tadir-obj_name
-                                      ls_tadir-object
-                             CHANGING gt_result.
-  ENDLOOP.
 
 *======================================================================*
 *  END-OF-SELECTION  – display ALV
@@ -171,21 +187,21 @@ END-OF-SELECTION.
 *&   calls RS_SYNTAX_CHECK, and appends one row to the result table.
 *&---------------------------------------------------------------------*
 FORM check_one_object
-     USING    iv_objname TYPE tadir-obj_name
-              iv_objtype TYPE tadir-object
-     CHANGING ct_result  TYPE TABLE.   " table of ty_result
+     USING    iv_objname TYPE tadir-obj_name  " Object name shown in result
+              iv_objtype TYPE tadir-object    " PROG/FUGR/CLAS/INTF/TRAN
+              iv_prog    TYPE c               " Program to check (TRAN only)
+     CHANGING ct_result  TYPE TABLE.          " table of ty_result
 
   DATA:
-    ls_result TYPE ty_result,
-    lv_prog   TYPE c LENGTH 40,
-    lv_subrc  TYPE sy-subrc,
-    lv_line   TYPE i,
-    lv_off    TYPE i,
-    lv_msg    TYPE string,
-    lv_inc    TYPE c LENGTH 40,
-    lv_plen   TYPE i,
-    lv_pad    TYPE string,
-    lv_cnt    TYPE i.
+    ls_result   TYPE ty_result,
+    lv_prog     TYPE c LENGTH 40,
+    lv_subrc    TYPE sy-subrc,
+    lv_line     TYPE i,
+    lv_plen     TYPE i,
+    lv_pad      TYPE string,
+    lv_cnt      TYPE i,
+    lv_chk_msg  TYPE c LENGTH 220,
+    lv_chk_word TYPE c LENGTH 72.
 
   ls_result-objname = iv_objname.
   ls_result-objtype = iv_objtype.
@@ -203,6 +219,10 @@ FORM check_one_object
   "   Result is always 32 characters (max object name = 30 chars in SAP).
   "--------------------------------------------------------------------
   CASE iv_objtype.
+
+    WHEN 'TRAN'.
+      " Program name comes directly from TSTC-PGMNA (passed as iv_prog)
+      lv_prog = iv_prog.
 
     WHEN 'PROG'.
       lv_prog = iv_objname.
@@ -237,42 +257,33 @@ FORM check_one_object
   ls_result-chk_prog = lv_prog.
 
   "--------------------------------------------------------------------
-  " Call RS_SYNTAX_CHECK (Function Group S38E, program SAPLS38E)
-  " Available in all standard SAP releases (ECC 6.x and S/4HANA).
-  " I_WITH_DIALOG = ' '  suppresses any popup or screen navigation.
+  " Native ABAP SYNTAX-CHECK FOR PROGRAM
+  " Works correctly for ALL program types:
+  "   E  Executable (REPORT)    F  Function Group
+  "   K  Class Pool             J  Interface Pool
+  "   I  Include
+  " RS_SYNTAX_CHECK was replaced because passing empty i_source caused
+  " it to check empty code and return "REPORT/PROGRAM missing" for all
+  " object types, instead of reading from the repository.
   "--------------------------------------------------------------------
-  CALL FUNCTION 'RS_SYNTAX_CHECK'
-    EXPORTING
-      i_program         = lv_prog
-      i_with_dialog     = ' '
-    IMPORTING
-      o_error_subrc     = lv_subrc
-      o_error_line      = lv_line
-      o_error_offset    = lv_off
-      o_error_message   = lv_msg
-      o_error_include   = lv_inc
-    EXCEPTIONS
-      OTHERS            = 1.
+  SYNTAX-CHECK FOR PROGRAM lv_prog
+    MESSAGE lv_chk_msg
+    LINE    lv_line
+    WORD    lv_chk_word.
 
-  IF sy-subrc <> 0 AND lv_subrc = 0.
-    " FM itself failed (e.g. program not in repository) – mark as error
-    lv_subrc = 4.
-    lv_msg   = |RS_SYNTAX_CHECK raised exception for '{ lv_prog }'|.
-  ENDIF.
+  lv_subrc = sy-subrc.
 
   "--------------------------------------------------------------------
   " Build result row
   "--------------------------------------------------------------------
   IF lv_subrc = 0.
-    ls_result-traffic = '3'.   " Green  – syntax OK
+    ls_result-traffic = '3'.
     ls_result-status  = 'OK'.
   ELSE.
-    ls_result-traffic  = '1'.  " Red    – syntax error
+    ls_result-traffic  = '1'.
     ls_result-status   = 'ERROR'.
     ls_result-err_line = lv_line.
-    ls_result-err_off  = lv_off.
-    ls_result-err_msg  = lv_msg.
-    ls_result-err_inc  = lv_inc.
+    ls_result-err_msg  = lv_chk_msg.
   ENDIF.
 
   APPEND ls_result TO ct_result.
@@ -293,7 +304,7 @@ FORM display_alv.
     lo_sorts  TYPE REF TO cl_salv_sorts,
     lv_ok     TYPE i VALUE 0,
     lv_err    TYPE i VALUE 0,
-    lv_hdr    TYPE string.
+    lv_hdr    TYPE lvc_title.
 
   " Build summary counts for the header
   LOOP AT gt_result INTO DATA(ls_r).
@@ -325,13 +336,10 @@ FORM display_alv.
       lo_cols = lo_alv->get_columns( ).
       lo_cols->set_optimize( abap_true ).
 
-      " Traffic-light column (values: 1=red, 2=yellow, 3=green)
+      " TRAFFIC field (1/3) is internal only – hide it; STATUS shows OK/ERROR
       TRY.
           lo_col ?= lo_cols->get_column( 'TRAFFIC' ).
-          lo_col->set_long_text(   'Syntax Result' ).
-          lo_col->set_medium_text( 'Result' ).
-          lo_col->set_short_text(  'Status' ).
-          lo_col->set_cell_type( if_salv_c_cell_type=>traffic_light ).
+          lo_col->set_technical( abap_true ).
         CATCH cx_salv_not_found. "#EC NO_HANDLER
       ENDTRY.
 
@@ -345,20 +353,15 @@ FORM display_alv.
                             'Syntax Status' 'Status'.
       PERFORM set_col USING lo_cols 'ERR_LINE' 'Error Line Number'
                             'Error Line'    'ErrLine'.
-      PERFORM set_col USING lo_cols 'ERR_OFF'  'Error Column Offset'
-                            'Error Offset'  'ErrOff'.
       PERFORM set_col USING lo_cols 'ERR_MSG'  'Error Message'
                             'Error Message' 'Err Msg'.
-      PERFORM set_col USING lo_cols 'ERR_INC'  'Error in Include'
-                            'Error Include' 'ErrInc'.
 
       "----------------------------------------------------------------
       " Default sort: errors (traffic = 1) appear before OK (traffic = 3)
       "----------------------------------------------------------------
       lo_sorts = lo_alv->get_sorts( ).
       TRY.
-          lo_sorts->add_sort( columnname = 'TRAFFIC'
-                              sortorder  = if_salv_c_sort_order=>ascending ).
+          lo_sorts->add_sort( columnname = 'TRAFFIC' ).
         CATCH cx_salv_not_found
               cx_salv_existing
               cx_salv_data_error. "#EC NO_HANDLER
@@ -367,10 +370,15 @@ FORM display_alv.
       "----------------------------------------------------------------
       " ALV header
       "----------------------------------------------------------------
-      lv_hdr = |ABAP Mass Syntax Check   |
-            && |Total: { lines( gt_result ) }   |
-            && |OK: { lv_ok }   |
-            && |Errors: { lv_err }|.
+      DATA: lv_tot TYPE c LENGTH 6,
+            lv_ok2 TYPE c LENGTH 6,
+            lv_er2 TYPE c LENGTH 6.
+      lv_tot = lines( gt_result ).
+      lv_ok2 = lv_ok.
+      lv_er2 = lv_err.
+      CONCATENATE 'ABAP Mass Syntax Check  Total:' lv_tot
+                  '  OK:' lv_ok2 '  Errors:' lv_er2
+                  INTO lv_hdr.
 
       lo_disp = lo_alv->get_display_settings( ).
       lo_disp->set_list_header( lv_hdr ).
@@ -388,10 +396,10 @@ ENDFORM.
 *& Form SET_COL  – helper: set long/medium/short text on a column
 *&---------------------------------------------------------------------*
 FORM set_col USING io_cols  TYPE REF TO cl_salv_columns_table
-                   iv_fname TYPE string
-                   iv_long  TYPE string
-                   iv_med   TYPE string
-                   iv_short TYPE string.
+                   iv_fname TYPE lvc_fname
+                   iv_long  TYPE scrtext_l
+                   iv_med   TYPE scrtext_m
+                   iv_short TYPE scrtext_s.
   TRY.
       DATA lo_col TYPE REF TO cl_salv_column_table.
       lo_col ?= io_cols->get_column( iv_fname ).
