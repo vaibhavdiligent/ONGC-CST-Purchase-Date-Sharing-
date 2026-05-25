@@ -3,8 +3,14 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 2.0  |  Git: bcd-overflow-fix  |  Date: 18-MAY-2026
-*& Changes : v2.0 - Fix near-zero MMSCMD values in columns S-AD (BMD mode).
+*& VERSION : 2.1  |  Git: bcd-overflow-fix  |  Date: 25-MAY-2026
+*& Changes : v2.1 - Fix Production Performance table and chart (section 6/5a):
+*&           1. Annual column now shows 2025-26 full year actual (INDEX 2 from
+*&              sec2d_table) instead of same YTD 2026-27 value.
+*&           2. Chart gas actuals use convert_gas_units_to_bopd (always BOPD)
+*&              instead of convert_gas_units + /6290 (was MMSCMD in BMD mode).
+*&           3. Chart gas BE target in BMD mode multiplied by 6290 to give BOPD.
+*&           v2.0 - Fix near-zero MMSCMD values in columns S-AD (BMD mode).
 *&           v1.9 incorrectly removed * 6290 from convert_gas_units and
 *&           convert_mrec_gas_units while display-end / 6290 remained,
 *&           causing near-zero output. Fix: restore * 6290 via packed
@@ -9179,7 +9185,11 @@ FORM fill_dynamic_table_sec5a .
 
       lv_col_name = gs_zpra_t_prd_tar-tar_code .
       ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 / lv_days .
+      IF gs_zpra_t_prd_tar-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+        <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 * 6290 / lv_days .
+      ELSE.
+        <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 / lv_days .
+      ENDIF.
       UNASSIGN <gfs_field> .
 
     ENDLOOP.
@@ -9200,6 +9210,7 @@ ENDFORM .
 FORM fill_dynamic_table_sec6a .
   DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
 
+  " YTD = current FY actual (INDEX 1 = 2026-27)
   READ TABLE <gfs_sec2d_table> ASSIGNING <gfs_dyn_line> INDEX 1 .
   IF sy-subrc IS INITIAL.
     UNASSIGN <gfs_field>.
@@ -9213,23 +9224,15 @@ FORM fill_dynamic_table_sec6a .
       lv_qty = lv_qty + <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-
     ASSIGN COMPONENT '722000003-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
     IF <gfs_field> IS ASSIGNED .
       lv_qty = lv_qty + <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-
     ASSIGN COMPONENT '722000005-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
     IF <gfs_field> IS ASSIGNED .
       lv_qty = lv_qty + <gfs_field> .
       UNASSIGN <gfs_field> .
-    ENDIF.
-*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
-    ASSIGN COMPONENT 'OIL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
-    IF <gfs_field2> IS ASSIGNED.
-      <gfs_field2> = lv_qty .
-      UNASSIGN <gfs_field2> .
     ENDIF.
     ASSIGN COMPONENT 'OIL_YTD' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
@@ -9243,12 +9246,6 @@ FORM fill_dynamic_table_sec6a .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
-    ASSIGN COMPONENT 'GAS_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
-    IF <gfs_field2> IS ASSIGNED.
-      <gfs_field2> = lv_qty .
-      UNASSIGN <gfs_field2> .
-    ENDIF.
     ASSIGN COMPONENT 'GAS_YTD' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
@@ -9261,18 +9258,61 @@ FORM fill_dynamic_table_sec6a .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
     ENDIF.
-*   SHIFT lv_qty LEFT DELETING LEADING space . " v1.7: not needed - lv_qty now packed
-    ASSIGN COMPONENT 'TOTAL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
-    IF <gfs_field2> IS ASSIGNED.
-      <gfs_field2> = lv_qty .
-      UNASSIGN <gfs_field2> .
-    ENDIF.
     ASSIGN COMPONENT 'TOTAL_YTD' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
     IF <gfs_field2> IS ASSIGNED.
       <gfs_field2> = lv_qty .
       UNASSIGN <gfs_field2> .
     ENDIF.
+  ENDIF.
 
+  " Annual = previous FY actual (INDEX 2 = 2025-26 full year)
+  READ TABLE <gfs_sec2d_table> ASSIGNING <gfs_dyn_line> INDEX 2 .
+  IF sy-subrc IS INITIAL.
+    CLEAR lv_qty .
+    ASSIGN COMPONENT '722000001-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    IF <gfs_field> IS ASSIGNED .
+      lv_qty = lv_qty + <gfs_field> .
+      UNASSIGN <gfs_field> .
+    ENDIF.
+    ASSIGN COMPONENT '722000003-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    IF <gfs_field> IS ASSIGNED .
+      lv_qty = lv_qty + <gfs_field> .
+      UNASSIGN <gfs_field> .
+    ENDIF.
+    ASSIGN COMPONENT '722000005-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    IF <gfs_field> IS ASSIGNED .
+      lv_qty = lv_qty + <gfs_field> .
+      UNASSIGN <gfs_field> .
+    ENDIF.
+    ASSIGN COMPONENT 'OIL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
+    IF <gfs_field2> IS ASSIGNED.
+      <gfs_field2> = lv_qty .
+      UNASSIGN <gfs_field2> .
+    ENDIF.
+
+    CLEAR lv_qty .
+    ASSIGN COMPONENT '722000004-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    IF <gfs_field> IS ASSIGNED .
+      lv_qty =  <gfs_field> .
+      UNASSIGN <gfs_field> .
+    ENDIF.
+    ASSIGN COMPONENT 'GAS_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
+    IF <gfs_field2> IS ASSIGNED.
+      <gfs_field2> = lv_qty .
+      UNASSIGN <gfs_field2> .
+    ENDIF.
+
+    CLEAR lv_qty .
+    ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    IF <gfs_field> IS ASSIGNED .
+      lv_qty =  <gfs_field> .
+      UNASSIGN <gfs_field> .
+    ENDIF.
+    ASSIGN COMPONENT 'TOTAL_ANNUAL' OF STRUCTURE  <gfs_dyn_line2> TO <gfs_field2> .
+    IF <gfs_field2> IS ASSIGNED.
+      <gfs_field2> = lv_qty .
+      UNASSIGN <gfs_field2> .
+    ENDIF.
   ENDIF.
 ENDFORM .
 FORM fill_dynamic_table_sec6b .
@@ -9541,11 +9581,8 @@ FORM process_gas_records_5a .
       <fs_dly_prd>-prod_vl_uom1    = ls_zpra_t_dly_prd-prod_vl_uom1 .
       <fs_dly_prd>-prd_vl_type     = 'NET_PROD' .
     ENDIF.
-*   PERFORM convert_gas_units_to_bopd CHANGING ls_zpra_t_dly_prd.
-    PERFORM convert_gas_units CHANGING ls_zpra_t_dly_prd.
-    IF p_bmd IS NOT INITIAL.
-      ls_zpra_t_dly_prd-prod_vl_qty1 = ls_zpra_t_dly_prd-prod_vl_qty1 / 6290 .
-    ENDIF.
+    PERFORM convert_gas_units_to_bopd CHANGING ls_zpra_t_dly_prd.
+*   PERFORM convert_gas_units CHANGING ls_zpra_t_dly_prd.  " v2.1: use _to_bopd so chart shows BOEPD
     IF ls_zpra_t_dly_prd-prd_vl_type EQ 'GAS_INJ' .
       ls_zpra_t_dly_prd-prod_vl_qty1 = ls_zpra_t_dly_prd-prod_vl_qty1 * -1 .
     ENDIF.
