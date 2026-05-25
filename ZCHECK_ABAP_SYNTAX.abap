@@ -78,7 +78,7 @@ SELECTION-SCREEN END OF BLOCK b2.
 INITIALIZATION.
   gv_blk1 = 'Object Name Selection'.
   gv_blk2 = 'Object Type Filter'.
-  gv_t010 = 'Auto Detect (PROG / FUGR / CLAS / INTF)'.
+  gv_t010 = 'Auto Detect (PROG/FUGR/CLAS/INTF/TRAN)'.
   gv_t011 = 'Programs / Reports / Includes  (PROG)'.
   gv_t012 = 'Function Groups                (FUGR)'.
   gv_t013 = 'ABAP OO Classes                (CLAS)'.
@@ -104,8 +104,10 @@ START-OF-SELECTION.
     lt_tstc  TYPE TABLE OF tstc,
     ls_tstc  TYPE tstc.
 
+  DATA: lv_tcode TYPE tadir-obj_name.
+
   "--------------------------------------------------------------------
-  " TRAN: look up program behind each transaction code in TSTC
+  " TRAN only: search TSTC exclusively
   "--------------------------------------------------------------------
   IF rb_tran = abap_true.
     SELECT tcode pgmna
@@ -118,21 +120,12 @@ START-OF-SELECTION.
       RETURN.
     ENDIF.
 
-    DATA: lv_tcode TYPE tadir-obj_name.
-    LOOP AT lt_tstc INTO ls_tstc.
-      IF ls_tstc-pgmna IS INITIAL.
-        CONTINUE.
-      ENDIF.
-      lv_tcode = ls_tstc-tcode.   " CHAR20 → CHAR40 (compatible assignment)
-      PERFORM check_one_object USING    lv_tcode
-                                        'TRAN'
-                                        ls_tstc-pgmna
-                               CHANGING gt_result.
-    ENDLOOP.
+    PERFORM process_tstc_results USING lt_tstc CHANGING gt_result.
 
   ELSE.
     "--------------------------------------------------------------------
-    " PROG / FUGR / CLAS / INTF: build type range and query TADIR
+    " PROG / FUGR / CLAS / INTF: query TADIR
+    " AUTO: also searches TSTC so transaction codes are detected too
     "--------------------------------------------------------------------
     IF rb_auto = abap_true.
       APPEND VALUE #( sign = 'I' option = 'EQ' low = 'PROG' ) TO lt_types.
@@ -156,18 +149,29 @@ START-OF-SELECTION.
         AND object   IN lt_types
         AND obj_name IN s_obj.
 
-    IF sy-subrc <> 0 OR lt_tadir IS INITIAL.
-      MESSAGE 'No matching objects found in TADIR for the given selection.'
-        TYPE 'I'.
-      RETURN.
-    ENDIF.
-
     LOOP AT lt_tadir INTO DATA(ls_tadir).
       PERFORM check_one_object USING    ls_tadir-obj_name
                                         ls_tadir-object
                                         ''
                                CHANGING gt_result.
     ENDLOOP.
+
+    " AUTO: additionally search TSTC for any transaction codes in s_obj
+    IF rb_auto = abap_true.
+      SELECT tcode pgmna
+        FROM tstc
+        INTO CORRESPONDING FIELDS OF TABLE lt_tstc
+        WHERE tcode IN s_obj.
+
+      IF sy-subrc = 0 AND lt_tstc IS NOT INITIAL.
+        PERFORM process_tstc_results USING lt_tstc CHANGING gt_result.
+      ENDIF.
+    ENDIF.
+
+    IF gt_result IS INITIAL.
+      MESSAGE 'No matching objects found for the given selection.' TYPE 'I'.
+      RETURN.
+    ENDIF.
   ENDIF.
 
 *======================================================================*
@@ -183,9 +187,33 @@ END-OF-SELECTION.
   PERFORM display_alv.
 
 *&---------------------------------------------------------------------*
+*& Form PROCESS_TSTC_RESULTS
+*&   Loops over TSTC results and calls CHECK_ONE_OBJECT for each tcode.
+*&   Shared by both rb_tran and rb_auto paths.
+*&---------------------------------------------------------------------*
+FORM process_tstc_results
+     USING    it_tstc    TYPE TABLE
+     CHANGING ct_result  TYPE TABLE.
+
+  DATA: ls_row   TYPE tstc,
+        lv_tcode TYPE tadir-obj_name.
+
+  LOOP AT it_tstc INTO ls_row.
+    IF ls_row-pgmna IS INITIAL.
+      CONTINUE.
+    ENDIF.
+    lv_tcode = ls_row-tcode.   " CHAR20 → CHAR40
+    PERFORM check_one_object USING    lv_tcode
+                                      'TRAN'
+                                      ls_row-pgmna
+                             CHANGING ct_result.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
 *& Form CHECK_ONE_OBJECT
 *&   Builds the correct program/include name for the given object type,
-*&   calls RS_SYNTAX_CHECK, and appends one row to the result table.
+*&   calls SYNTAX-CHECK FOR PROGRAM, and appends one row to the result.
 *&---------------------------------------------------------------------*
 FORM check_one_object
      USING    iv_objname TYPE tadir-obj_name  " Object name shown in result
