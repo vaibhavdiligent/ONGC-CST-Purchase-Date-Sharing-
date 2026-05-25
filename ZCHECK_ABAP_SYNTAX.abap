@@ -118,12 +118,13 @@ START-OF-SELECTION.
       RETURN.
     ENDIF.
 
+    DATA: lv_tcode TYPE tadir-obj_name.
     LOOP AT lt_tstc INTO ls_tstc.
       IF ls_tstc-pgmna IS INITIAL.
-        " Skip tcodes with no program (e.g. parameter transactions)
         CONTINUE.
       ENDIF.
-      PERFORM check_one_object USING    ls_tstc-tcode
+      lv_tcode = ls_tstc-tcode.   " CHAR20 → CHAR40 (compatible assignment)
+      PERFORM check_one_object USING    lv_tcode
                                         'TRAN'
                                         ls_tstc-pgmna
                                CHANGING gt_result.
