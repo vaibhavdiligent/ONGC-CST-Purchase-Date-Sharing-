@@ -17,12 +17,12 @@ TYPE-POOLS: icon.
 TYPES: BEGIN OF ty_pur,
          gas_day     TYPE aedat,
          locid       TYPE char10,
-         material    TYPE matnr,
-         state_code  TYPE char2,
+         material    TYPE char30,
+         state_code  TYPE regio,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
-         gail_id     TYPE char20,
+         gail_id     TYPE char14,
          ongc_id     TYPE char20,
-         ongc_matr   TYPE char20,
+         ongc_mater  TYPE char30,
          deleted     TYPE char1,
        END OF ty_pur.
 
@@ -67,12 +67,12 @@ TYPES: BEGIN OF ty_display,
          exclude     TYPE char1,
          gas_day     TYPE aedat,
          locid       TYPE char10,
-         material    TYPE matnr,
-         state_code  TYPE char2,
+         material    TYPE char30,
+         state_code  TYPE regio,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
-         gail_id     TYPE char20,
+         gail_id     TYPE char14,
          ongc_id     TYPE char20,
-         ongc_matr   TYPE char20,
+         ongc_mater  TYPE char30,
          outline_agr TYPE ebeln,
          charg       TYPE charg_d,
          oa_missing  TYPE char1,
@@ -82,7 +82,7 @@ TYPES: BEGIN OF ty_display,
 
 TYPES: BEGIN OF ty_batch_vals,
          charg TYPE charg_d,
-         matnr TYPE matnr,
+         matnr TYPE char30,
          werks TYPE werks_d,
          ersda TYPE ersda,
        END OF ty_batch_vals.
@@ -92,8 +92,8 @@ TYPES: tt_log     TYPE STANDARD TABLE OF ty_log.
 TYPES: tt_display TYPE STANDARD TABLE OF ty_display.
 
 TYPES: BEGIN OF ty_batch_assign,
-         matnr      TYPE matnr,
-         state_code TYPE char2,
+         matnr      TYPE char30,
+         state_code TYPE regio,
          charg      TYPE charg_d,
        END OF ty_batch_assign.
 TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
@@ -101,7 +101,7 @@ TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
 " Cache types for bulk pre-fetch (performance)
 TYPES: BEGIN OF ty_mot_cache,
          vbeln    TYPE ebeln,
-         matnr    TYPE matnr,
+         matnr    TYPE char30,
          locid    TYPE char10,
          fromdate TYPE d,
          todate   TYPE d,
@@ -117,13 +117,13 @@ TYPES: BEGIN OF ty_t001w_cache,
          regio TYPE regio,
        END OF ty_t001w_cache.
 TYPES: BEGIN OF ty_mcha_cache,
-         matnr TYPE matnr,
+         matnr TYPE char30,
          werks TYPE werks_d,
          charg TYPE charg_d,
          ersda TYPE d,
        END OF ty_mcha_cache.
 TYPES: BEGIN OF ty_mara_cache,
-         matnr TYPE matnr,
+         matnr TYPE char30,
          xchpf TYPE xchpf,
        END OF ty_mara_cache.
 
@@ -152,7 +152,7 @@ CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
            gc_call_flag  TYPE char30 VALUE 'YRGG015_CALL_FLAG',
            gc_role_core  TYPE char30 VALUE 'ZC_GMS_CORE_TEAM',
-           gc_excl_state TYPE char2  VALUE 'GJ',
+           gc_excl_state TYPE regio  VALUE 'GJ',
            gc_deleted    TYPE char1  VALUE 'X',
            gc_sm3        TYPE meins  VALUE 'SM3'.
 
@@ -547,7 +547,7 @@ FORM fetch_pur_data.
         ls_col  TYPE lvc_s_scol.
 
   SELECT gas_day location AS locid material state_code
-         qty_in_scm AS qty_scm gail_id ongc_id ongc_matr deleted
+         qty_in_scm AS qty_scm gail_id ongc_id ongc_mater deleted
     FROM yrga_cst_pur
     INTO CORRESPONDING FIELDS OF TABLE lt_pur
     WHERE gas_day  IN s_date
@@ -568,7 +568,7 @@ FORM fetch_pur_data.
     ls_disp-qty_scm    = ls_pur-qty_scm.
     ls_disp-gail_id    = ls_pur-gail_id.
     ls_disp-ongc_id    = ls_pur-ongc_id.
-    ls_disp-ongc_matr  = ls_pur-ongc_matr.
+    ls_disp-ongc_mater = ls_pur-ongc_mater.
 
     " Derive Outline Agreement for ALL rows (including zero qty and GJ)
     PERFORM derive_outline_agreement
@@ -728,9 +728,9 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM derive_outline_agreement
   USING    iv_locid   TYPE char10
-           iv_matnr   TYPE matnr
+           iv_matnr   TYPE char30
            iv_date    TYPE aedat
-           iv_state   TYPE char2
+           iv_state   TYPE regio
   CHANGING cv_vbeln   TYPE ebeln
            cv_missing TYPE char1.
 
@@ -783,8 +783,8 @@ ENDFORM.
 * FORM derive_batch — uses pre-fetched MCHA cache (no DB calls)
 *----------------------------------------------------------------------*
 FORM derive_batch
-  USING    iv_matnr TYPE matnr
-           iv_state TYPE char2
+  USING    iv_matnr TYPE char30
+           iv_state TYPE regio
   CHANGING cv_charg TYPE charg_d.
   DATA: ls_t001w TYPE ty_t001w_cache,
         ls_mcha  TYPE ty_mcha_cache,
@@ -811,8 +811,8 @@ ENDFORM.
 * FORM get_valid_batches_for_material  - for F4 dropdown
 *----------------------------------------------------------------------*
 FORM get_valid_batches_for_material
-  USING    iv_matnr  TYPE matnr
-           iv_state  TYPE char2
+  USING    iv_matnr  TYPE char30
+           iv_state  TYPE regio
   CHANGING ct_batch  TYPE STANDARD TABLE.
   DATA: lt_mcha  TYPE STANDARD TABLE OF mcha,
         ls_mcha  TYPE mcha,
@@ -999,9 +999,9 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
-  " ONGC_MATR
+  " ONGC_MATER
   CLEAR ls_fcat.
-  ls_fcat-fieldname = 'ONGC_MATR'.
+  ls_fcat-fieldname = 'ONGC_MATER'.
   ls_fcat-coltext   = 'ONGC Material'.
   ls_fcat-seltext   = 'ONGC Material'.
   ls_fcat-outputlen = 22.
