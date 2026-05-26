@@ -865,10 +865,26 @@ FORM display_alv_grid.
         ls_sloc    LIKE LINE OF s_locid,
         ls_sdate   LIKE LINE OF s_date,
         lv_locid   TYPE char40,
-        lv_dates   TYPE char40.
+        lv_dates   TYPE char40,
+        lt_sort    TYPE lvc_t_sort,
+        ls_sort    TYPE lvc_s_sort.
 
   PERFORM build_fieldcat.
   PERFORM set_alv_layout.
+
+  " Sort data by Location / Gas Day / Material as per FS
+  SORT gt_display BY locid gas_day material.
+
+  " Also pass sort to ALV so it shows sort indicators in column headers
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'LOCID'.    ls_sort-up = abap_true. ls_sort-spos = 1.
+  APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'GAS_DAY'.  ls_sort-up = abap_true. ls_sort-spos = 2.
+  APPEND ls_sort TO lt_sort.
+  CLEAR ls_sort.
+  ls_sort-fieldname = 'MATERIAL'. ls_sort-up = abap_true. ls_sort-spos = 3.
+  APPEND ls_sort TO lt_sort.
 
   " Build grid title with selected location/date info
   READ TABLE s_locid INDEX 1 INTO ls_sloc.
@@ -893,6 +909,7 @@ FORM display_alv_grid.
       i_grid_title             = lv_title
       is_layout_lvc            = gs_layout
       it_fieldcat_lvc          = gt_fcat
+      it_sort_lvc              = lt_sort
       i_save                   = 'A'
       is_variant               = ls_variant
     TABLES
@@ -1190,9 +1207,13 @@ FORM handle_create_nomination.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
     ENDIF.
-    IF ls_disp-charg IS INITIAL.
-      MESSAGE |Batch missing for { ls_disp-material }. Assign before creating nomination.| TYPE 'S' DISPLAY LIKE 'E'.
-      RETURN.
+    " Batch is required only for batch-managed materials (MARA-XCHPF = 'X')
+    READ TABLE gt_mara_c INTO DATA(ls_mara_chk) WITH KEY matnr = ls_disp-material.
+    IF sy-subrc = 0 AND ls_mara_chk-xchpf = 'X'.
+      IF ls_disp-charg IS INITIAL.
+        MESSAGE |Batch missing for { ls_disp-material }. Assign before creating nomination.| TYPE 'S' DISPLAY LIKE 'E'.
+        RETURN.
+      ENDIF.
     ENDIF.
   ENDLOOP.
 
