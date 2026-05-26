@@ -894,8 +894,8 @@ FORM display_alv_grid.
     CONCATENATE ls_sdate-low '-' ls_sdate-high INTO lv_dates.
   ENDIF.
   CONCATENATE 'Purchase Nomination - ONGC B2B'
-              '  |  Location:' lv_locid
-              '  |  Period:' lv_dates
+              '| Location:' lv_locid
+              '| Period:' lv_dates
               INTO lv_title SEPARATED BY ' '.
   CONDENSE lv_title.
 
