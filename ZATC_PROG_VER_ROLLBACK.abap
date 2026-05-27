@@ -64,7 +64,7 @@ START-OF-SELECTION.
   DATA: lv_versno_reps TYPE vrsd-versno,
         lt_source      TYPE STANDARD TABLE OF abaptxt255.
 
-  PERFORM get_latest_version USING p_prog 'REPS'
+  PERFORM get_latest_version USING lv_obj_name 'REPS'
                              CHANGING lv_versno_reps.
 
   IF lv_versno_reps IS NOT INITIAL.
@@ -117,7 +117,7 @@ START-OF-SELECTION.
   DATA: lv_versno_rept TYPE vrsd-versno,
         lt_textpool    TYPE STANDARD TABLE OF textpool.
 
-  PERFORM get_latest_version USING p_prog 'REPT'
+  PERFORM get_latest_version USING lv_obj_name 'REPT'
                              CHANGING lv_versno_rept.
 
   IF lv_versno_rept IS NOT INITIAL.
