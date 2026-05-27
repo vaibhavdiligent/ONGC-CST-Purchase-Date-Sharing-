@@ -62,36 +62,25 @@ START-OF-SELECTION.
   DATA: lt_init_src TYPE STANDARD TABLE OF abaptxt255,
         wa_init_src TYPE abaptxt255.
 
-  CONCATENATE 'REPORT ' p_prog '.' INTO wa_init_src-line SEPARATED BY space.
-  APPEND wa_init_src TO lt_init_src.
+  " Check if program already exists
+  SELECT SINGLE name INTO @DATA(lv_existing)
+    FROM trdir WHERE name = @p_prog.
 
-  CALL FUNCTION 'RPY_PROGRAM_INSERT'
-    EXPORTING
-      program_name     = p_prog
-      program_type     = '1'
-      title            = p_prog
-      language         = sy-langu
-      transport_number = lv_req
-    TABLES
-      source_extended  = lt_init_src
-    EXCEPTIONS
-      already_exists   = 1
-      permission_error = 2
-      OTHERS           = 3.
-
-  CASE sy-subrc.
-    WHEN 0.
+  IF sy-subrc <> 0.
+    " Program does not exist – create it with a minimal stub
+    CONCATENATE 'REPORT ' p_prog '.' INTO wa_init_src-line SEPARATED BY space.
+    APPEND wa_init_src TO lt_init_src.
+    INSERT REPORT p_prog FROM lt_init_src.
+    IF sy-subrc = 0.
       COMMIT WORK AND WAIT.
       WRITE: / |Program { p_prog } created successfully.|.
-    WHEN 1.
-      WRITE: / |Program { p_prog } already exists – skipping creation.|.
-    WHEN 2.
-      WRITE: / |ERROR: Permission denied creating { p_prog }.|.
+    ELSE.
+      WRITE: / |ERROR: INSERT REPORT failed (SY-SUBRC: { sy-subrc }).|.
       STOP.
-    WHEN OTHERS.
-      WRITE: / |ERROR: RPY_PROGRAM_INSERT failed (SY-SUBRC: { sy-subrc }).|.
-      STOP.
-  ENDCASE.
+    ENDIF.
+  ELSE.
+    WRITE: / |Program { p_prog } already exists – skipping creation.|.
+  ENDIF.
 
   SKIP.
 
