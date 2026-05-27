@@ -15,7 +15,10 @@ PARAMETERS: lv_req TYPE trkorr   OBLIGATORY.
 * F4 help for program name
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_prog.
-  DATA lt_prog_list TYPE TABLE OF rspoplist.
+  TYPES: BEGIN OF ty_prog,
+           name TYPE trdir-name,
+         END OF ty_prog.
+  DATA lt_prog_list TYPE STANDARD TABLE OF ty_prog.
   SELECT name INTO CORRESPONDING FIELDS OF TABLE @lt_prog_list
     FROM trdir WHERE name LIKE 'Z%' OR name LIKE 'Y%'.
   CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
