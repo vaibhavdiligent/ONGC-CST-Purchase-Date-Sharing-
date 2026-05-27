@@ -62,12 +62,13 @@ START-OF-SELECTION.
   ULINE.
 
   DATA: lv_versno_reps TYPE vrsd-versno,
-        lt_source      TYPE STANDARD TABLE OF abaptxt255.
+        lt_source      TYPE STANDARD TABLE OF abaptxt255,
+        lv_found_reps  TYPE abap_bool.
 
   PERFORM get_latest_version USING lv_obj_name 'REPS'
-                             CHANGING lv_versno_reps.
+                             CHANGING lv_versno_reps lv_found_reps.
 
-  IF lv_versno_reps IS NOT INITIAL.
+  IF lv_found_reps = abap_true.
     CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
       EXPORTING
         object_name           = lv_obj_name
@@ -115,12 +116,13 @@ START-OF-SELECTION.
   ULINE.
 
   DATA: lv_versno_rept TYPE vrsd-versno,
-        lt_textpool    TYPE STANDARD TABLE OF textpool.
+        lt_textpool    TYPE STANDARD TABLE OF textpool,
+        lv_found_rept  TYPE abap_bool.
 
   PERFORM get_latest_version USING lv_obj_name 'REPT'
-                             CHANGING lv_versno_rept.
+                             CHANGING lv_versno_rept lv_found_rept.
 
-  IF lv_versno_rept IS NOT INITIAL.
+  IF lv_found_rept = abap_true.
     CALL FUNCTION 'SVRS_GET_VERSION_REPT_40'
       EXPORTING
         object_name           = lv_obj_name
@@ -159,12 +161,13 @@ START-OF-SELECTION.
 *&---------------------------------------------------------------------*
 FORM get_latest_version USING    p_objname TYPE vrsd-objname
                                  p_objtype TYPE vrsd-objtype
-                        CHANGING p_versno  TYPE vrsd-versno.
+                        CHANGING p_versno  TYPE vrsd-versno
+                                 p_found   TYPE abap_bool.
 
   DATA: lt_vers TYPE TABLE OF vrsd,
         wa_vers TYPE vrsd.
 
-  CLEAR p_versno.
+  CLEAR: p_versno, p_found.
 
   SELECT *
     INTO TABLE @lt_vers
@@ -178,6 +181,7 @@ FORM get_latest_version USING    p_objname TYPE vrsd-objname
     SORT lt_vers BY datum DESCENDING zeit DESCENDING.
     READ TABLE lt_vers INTO wa_vers INDEX 1.
     p_versno = wa_vers-versno.
+    p_found  = abap_true.
     WRITE: / |{ p_objtype }: latest version { wa_vers-versno } | &&
              |dated { wa_vers-datum } { wa_vers-zeit } by { wa_vers-author }|.
   ELSE.
@@ -190,6 +194,7 @@ FORM get_latest_version USING    p_objname TYPE vrsd-objname
         AND versno  = '00000'.
     IF sy-subrc = 0.
       p_versno = '00000'.
+      p_found  = abap_true.
       WRITE: / |{ p_objtype }: no numbered version – using 00000 | &&
                |dated { wa_vers-datum } { wa_vers-zeit } by { wa_vers-author }|.
     ENDIF.
