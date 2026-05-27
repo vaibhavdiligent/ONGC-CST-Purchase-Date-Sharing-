@@ -41,47 +41,64 @@ START-OF-SELECTION.
         wa_version   TYPE vrsd,
         lt_source    TYPE STANDARD TABLE OF abaptxt255,
         lv_obj_name  TYPE vrsd-objname,
+        lv_obj_type  TYPE vrsd-objtype,
         lv_prog_name TYPE programm.
 
   " ----------------------------------------------------------------
-  " Step 1: Read all versions from VRSD for the program
+  " Step 1: Determine object type from VRSD for this program
+  " ----------------------------------------------------------------
+  SELECT SINGLE objtype
+    INTO @lv_obj_type
+    FROM vrsd
+    WHERE objname = @p_prog.
+
+  IF sy-subrc <> 0.
+    WRITE: / |ERROR: { p_prog } not found in VRSD at all.|.
+    STOP.
+  ENDIF.
+
+  WRITE: / |Object type from VRSD: { lv_obj_type }|.
+
+  " ----------------------------------------------------------------
+  " Step 2: Read all numbered versions from VRSD using fetched objtype
   " ----------------------------------------------------------------
   SELECT *
     INTO TABLE @lt_versions
     FROM vrsd
     WHERE objname = @p_prog
-      AND objtype = 'REPS'
+      AND objtype = @lv_obj_type
       AND versno  <> '00000'.
 
   IF sy-subrc <> 0 OR lt_versions IS INITIAL.
-    " No numbered versions found – fall back to active version 00000
-    WRITE: / |No numbered versions found for { p_prog } – falling back to version 00000.|.
+    " No numbered versions – fall back to version 00000
+    WRITE: / |No numbered versions found – falling back to version 00000.|.
 
     SELECT SINGLE *
       INTO @wa_version
       FROM vrsd
       WHERE objname = @p_prog
-        AND objtype = 'REPS'
+        AND objtype = @lv_obj_type
         AND versno  = '00000'.
 
     IF sy-subrc <> 0.
-      WRITE: / |ERROR: No version data found at all in VRSD for { p_prog }.|.
+      WRITE: / |ERROR: No version data found in VRSD for { p_prog }.|.
       STOP.
     ENDIF.
   ELSE.
-    " Sort descending by date and time – index 1 = latest version
+    " Sort descending – index 1 = latest version
     SORT lt_versions BY datum DESCENDING zeit DESCENDING.
     READ TABLE lt_versions INTO wa_version INDEX 1.
   ENDIF.
 
-  WRITE: / |Program  : { p_prog }|.
-  WRITE: / |Version  : { wa_version-versno }|.
-  WRITE: / |Date/Time: { wa_version-datum } { wa_version-zeit }|.
-  WRITE: / |Author   : { wa_version-author }|.
+  WRITE: / |Program    : { p_prog }|.
+  WRITE: / |Object Type: { wa_version-objtype }|.
+  WRITE: / |Version    : { wa_version-versno }|.
+  WRITE: / |Date/Time  : { wa_version-datum } { wa_version-zeit }|.
+  WRITE: / |Author     : { wa_version-author }|.
   SKIP.
 
   " ----------------------------------------------------------------
-  " Step 2: Fetch source code of the latest version
+  " Step 3: Fetch source code of the selected version
   " ----------------------------------------------------------------
   lv_obj_name = p_prog.
 
@@ -112,7 +129,7 @@ START-OF-SELECTION.
   SKIP.
 
   " ----------------------------------------------------------------
-  " Step 3: Insert source into the program and link to transport
+  " Step 4: Insert source into the program and link to transport
   " ----------------------------------------------------------------
   SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @p_prog.
   lv_prog_name = p_prog.
@@ -132,7 +149,7 @@ START-OF-SELECTION.
 
   IF sy-subrc = 0.
     COMMIT WORK AND WAIT.
-    WRITE: / |SUCCESS: { p_prog } updated from version { wa_version-versno } and linked to { lv_req }.|.
+    WRITE: / |SUCCESS: { p_prog } (type: { wa_version-objtype }) updated from version { wa_version-versno } and linked to { lv_req }.|.
 
     " Syntax check
     DATA: lt_errors TYPE syn_error,
