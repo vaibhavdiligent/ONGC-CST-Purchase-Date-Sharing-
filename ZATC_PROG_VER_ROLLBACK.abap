@@ -1,7 +1,14 @@
 *&---------------------------------------------------------------------*
 *& Report ZATC_PROG_VER_ROLLBACK
 *&---------------------------------------------------------------------*
-REPORT zatc_prog_ver_rollback.
+*& Restores a program from version management (table VRSD):
+*&   - REPS objtype : program source code  -> RPY_PROGRAM_UPDATE
+*&   - REPT objtype : text elements/pool   -> INSERT TEXTPOOL
+*& For each objtype the latest version is taken (falling back to 00000
+*& when no numbered version exists) and re-applied to the program,
+*& linked to the supplied transport request.
+*&---------------------------------------------------------------------*
+REPORT zatc_program_rollback.
 
 TABLES: trdir.
 
@@ -40,149 +47,177 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_prog.
 START-OF-SELECTION.
 *======================================================================*
 
-  DATA: lt_versions  TYPE TABLE OF vrsd,
-        wa_version   TYPE vrsd,
-        lt_source    TYPE STANDARD TABLE OF abaptxt255,
-        lv_obj_name  TYPE vrsd-objname,
-        lv_obj_type  TYPE vrsd-objtype,
+  DATA: lv_obj_name  TYPE vrsd-objname,
         lv_prog_name TYPE programm.
 
-  " ----------------------------------------------------------------
-  " Step 1: Determine object type from VRSD for this program
-  " ----------------------------------------------------------------
-  SELECT SINGLE objtype
-    INTO @lv_obj_type
-    FROM vrsd
-    WHERE objname = @p_prog.
-
-  IF sy-subrc <> 0.
-    WRITE: / |ERROR: { p_prog } not found in VRSD at all.|.
-    STOP.
-  ENDIF.
-
-  WRITE: / |Object type from VRSD: { lv_obj_type }|.
-
-  " ----------------------------------------------------------------
-  " Step 2: Read all numbered versions from VRSD using fetched objtype
-  " ----------------------------------------------------------------
-  SELECT *
-    INTO TABLE @lt_versions
-    FROM vrsd
-    WHERE objname = @p_prog
-      AND objtype = @lv_obj_type
-      AND versno  <> '00000'.
-
-  IF sy-subrc <> 0 OR lt_versions IS INITIAL.
-    " No numbered versions – fall back to version 00000
-    WRITE: / |No numbered versions found – falling back to version 00000.|.
-
-    SELECT SINGLE *
-      INTO @wa_version
-      FROM vrsd
-      WHERE objname = @p_prog
-        AND objtype = @lv_obj_type
-        AND versno  = '00000'.
-
-    IF sy-subrc <> 0.
-      WRITE: / |ERROR: No version data found in VRSD for { p_prog }.|.
-      STOP.
-    ENDIF.
-  ELSE.
-    " Sort descending – index 1 = latest version
-    SORT lt_versions BY datum DESCENDING zeit DESCENDING.
-    READ TABLE lt_versions INTO wa_version INDEX 1.
-  ENDIF.
-
-  WRITE: / |Program    : { p_prog }|.
-  WRITE: / |Object Type: { wa_version-objtype }|.
-  WRITE: / |Version    : { wa_version-versno }|.
-  WRITE: / |Date/Time  : { wa_version-datum } { wa_version-zeit }|.
-  WRITE: / |Author     : { wa_version-author }|.
-  SKIP.
-
-  " ----------------------------------------------------------------
-  " Step 3: Fetch source code of the selected version
-  " ----------------------------------------------------------------
-  lv_obj_name = p_prog.
-
-  CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-    EXPORTING
-      object_name           = lv_obj_name
-      versno                = wa_version-versno
-    TABLES
-      repos_tab             = lt_source
-    EXCEPTIONS
-      no_version            = 1
-      system_failure        = 2
-      communication_failure = 3.
-
-  IF sy-subrc <> 0.
-    WRITE: / |ERROR: Could not fetch version { wa_version-versno } (SY-SUBRC: { sy-subrc }).|.
-    STOP.
-  ENDIF.
-
-  IF lt_source IS INITIAL.
-    WRITE: / |ERROR: Version { wa_version-versno } returned empty source.|.
-    STOP.
-  ENDIF.
-
-  DATA lv_lines TYPE i.
-  DESCRIBE TABLE lt_source LINES lv_lines.
-  WRITE: / |Source lines fetched: { lv_lines }|.
-  SKIP.
-
-  " ----------------------------------------------------------------
-  " Step 4: Insert source into the program and link to transport
-  " ----------------------------------------------------------------
-  SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @p_prog.
+  lv_obj_name  = p_prog.
   lv_prog_name = p_prog.
 
-  CALL FUNCTION 'RPY_PROGRAM_UPDATE'
-    EXPORTING
-      program_name     = lv_prog_name
-      program_type     = l_trdir-subc
-      transport_number = lv_req
-    TABLES
-      source_extended  = lt_source
-    EXCEPTIONS
-      cancelled        = 1
-      permission_error = 2
-      not_found        = 3
-      OTHERS           = 4.
+  SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @p_prog.
 
-  IF sy-subrc = 0.
-    COMMIT WORK AND WAIT.
-    WRITE: / |SUCCESS: { p_prog } (type: { wa_version-objtype }) updated from version { wa_version-versno } and linked to { lv_req }.|.
+  " ----------------------------------------------------------------
+  " Part A: Restore REPS (program source code)
+  " ----------------------------------------------------------------
+  WRITE: / '=== REPS (Source Code) ==='.
+  ULINE.
 
-    " Syntax check
-    DATA: lt_errors TYPE syn_error,
-          wa_error  TYPE syner_str.
+  DATA: lv_versno_reps TYPE vrsd-versno,
+        lt_source      TYPE STANDARD TABLE OF abaptxt255.
 
-    CALL FUNCTION 'RS_PROGRAM_CHECK_SYNTAX'
+  PERFORM get_latest_version USING p_prog 'REPS'
+                             CHANGING lv_versno_reps.
+
+  IF lv_versno_reps IS NOT INITIAL.
+    CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
       EXPORTING
-        program_name = lv_prog_name
-        program_type = l_trdir-subc
+        object_name           = lv_obj_name
+        versno                = lv_versno_reps
       TABLES
-        error_table  = lt_errors
+        repos_tab             = lt_source
       EXCEPTIONS
-        OTHERS       = 0.
+        no_version            = 1
+        system_failure        = 2
+        communication_failure = 3.
 
-    SKIP.
-    IF lt_errors IS INITIAL.
-      WRITE: / 'Syntax check: PASSED'.
+    IF sy-subrc = 0 AND lt_source IS NOT INITIAL.
+      CALL FUNCTION 'RPY_PROGRAM_UPDATE'
+        EXPORTING
+          program_name     = lv_prog_name
+          program_type     = l_trdir-subc
+          transport_number = lv_req
+        TABLES
+          source_extended  = lt_source
+        EXCEPTIONS
+          cancelled        = 1
+          permission_error = 2
+          not_found        = 3
+          OTHERS           = 4.
+
+      IF sy-subrc = 0.
+        COMMIT WORK AND WAIT.
+        WRITE: / |REPS restored from version { lv_versno_reps } and linked to { lv_req }.|.
+      ELSE.
+        WRITE: / |ERROR: RPY_PROGRAM_UPDATE failed (SY-SUBRC: { sy-subrc }).|.
+      ENDIF.
     ELSE.
-      WRITE: / 'Syntax check: ERRORS found – review before activating!'.
-      LOOP AT lt_errors INTO wa_error.
-        WRITE: /5 'Line:', wa_error-zeile, '|', wa_error-mtext.
-      ENDLOOP.
+      WRITE: / |ERROR: Could not fetch REPS version { lv_versno_reps } (SY-SUBRC: { sy-subrc }).|.
     ENDIF.
-
   ELSE.
-    WRITE: / |ERROR: RPY_PROGRAM_UPDATE failed (SY-SUBRC: { sy-subrc })|.
-    CASE sy-subrc.
-      WHEN 1. WRITE: / 'Reason: Cancelled by user.'.
-      WHEN 2. WRITE: / 'Reason: Permission error – check authorization.'.
-      WHEN 3. WRITE: / 'Reason: Program not found.'.
-      WHEN OTHERS. WRITE: / 'Reason: Unknown error.'.
-    ENDCASE.
+    WRITE: / |No REPS version found in VRSD for { p_prog }.|.
   ENDIF.
+
+  SKIP.
+
+  " ----------------------------------------------------------------
+  " Part B: Restore REPT (text elements / text pool)
+  " ----------------------------------------------------------------
+  WRITE: / '=== REPT (Text Elements) ==='.
+  ULINE.
+
+  DATA: lv_versno_rept TYPE vrsd-versno,
+        lt_textpool    TYPE STANDARD TABLE OF textpool.
+
+  PERFORM get_latest_version USING p_prog 'REPT'
+                             CHANGING lv_versno_rept.
+
+  IF lv_versno_rept IS NOT INITIAL.
+    CALL FUNCTION 'SVRS_GET_VERSION_REPT_40'
+      EXPORTING
+        object_name           = lv_obj_name
+        versno                = lv_versno_rept
+      TABLES
+        ptab                  = lt_textpool
+      EXCEPTIONS
+        no_version            = 1
+        system_failure        = 2
+        communication_failure = 3.
+
+    IF sy-subrc = 0 AND lt_textpool IS NOT INITIAL.
+      INSERT TEXTPOOL lv_prog_name FROM lt_textpool LANGUAGE sy-langu.
+      IF sy-subrc = 0.
+        COMMIT WORK AND WAIT.
+        WRITE: / |REPT (text pool) restored from version { lv_versno_rept }.|.
+      ELSE.
+        WRITE: / |ERROR: INSERT TEXTPOOL failed (SY-SUBRC: { sy-subrc }).|.
+      ENDIF.
+    ELSE.
+      WRITE: / |No text-pool data fetched for REPT version { lv_versno_rept } (SY-SUBRC: { sy-subrc }).|.
+    ENDIF.
+  ELSE.
+    WRITE: / |No REPT version found in VRSD for { p_prog }.|.
+  ENDIF.
+
+  SKIP.
+
+  " ----------------------------------------------------------------
+  " Syntax check on the restored program
+  " ----------------------------------------------------------------
+  WRITE: / '=== Syntax Check ==='.
+  ULINE.
+
+  DATA: lt_errors TYPE syn_error,
+        wa_error  TYPE syner_str.
+
+  CALL FUNCTION 'RS_PROGRAM_CHECK_SYNTAX'
+    EXPORTING
+      program_name = lv_prog_name
+      program_type = l_trdir-subc
+    TABLES
+      error_table  = lt_errors
+    EXCEPTIONS
+      OTHERS       = 0.
+
+  IF lt_errors IS INITIAL.
+    WRITE: / 'Syntax check: PASSED'.
+  ELSE.
+    WRITE: / 'Syntax check: ERRORS found – review before activating!'.
+    LOOP AT lt_errors INTO wa_error.
+      WRITE: /5 'Line:', wa_error-zeile, '|', wa_error-mtext.
+    ENDLOOP.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*& Form get_latest_version
+*&  Returns the latest version number for the given objname/objtype.
+*&  Falls back to '00000' when no numbered versions exist.
+*&  Returns blank versno when the objtype is not present at all.
+*&---------------------------------------------------------------------*
+FORM get_latest_version USING    p_objname TYPE vrsd-objname
+                                 p_objtype TYPE vrsd-objtype
+                        CHANGING p_versno  TYPE vrsd-versno.
+
+  DATA: lt_vers TYPE TABLE OF vrsd,
+        wa_vers TYPE vrsd.
+
+  CLEAR p_versno.
+
+  SELECT *
+    INTO TABLE @lt_vers
+    FROM vrsd
+    WHERE objname = @p_objname
+      AND objtype = @p_objtype
+      AND versno  <> '00000'.
+
+  IF sy-subrc = 0 AND lt_vers IS NOT INITIAL.
+    " Numbered versions exist – take the most recent
+    SORT lt_vers BY datum DESCENDING zeit DESCENDING.
+    READ TABLE lt_vers INTO wa_vers INDEX 1.
+    p_versno = wa_vers-versno.
+    WRITE: / |{ p_objtype }: latest version { wa_vers-versno } | &&
+             |dated { wa_vers-datum } { wa_vers-zeit } by { wa_vers-author }|.
+  ELSE.
+    " No numbered version – fall back to 00000 if it exists
+    SELECT SINGLE *
+      INTO @wa_vers
+      FROM vrsd
+      WHERE objname = @p_objname
+        AND objtype = @p_objtype
+        AND versno  = '00000'.
+    IF sy-subrc = 0.
+      p_versno = '00000'.
+      WRITE: / |{ p_objtype }: no numbered version – using 00000 | &&
+               |dated { wa_vers-datum } { wa_vers-zeit } by { wa_vers-author }|.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
