@@ -196,48 +196,56 @@ START-OF-SELECTION.
 
 *&---------------------------------------------------------------------*
 *& Form get_latest_version
-*&  Returns the latest version number for the given objname/objtype.
-*&  Falls back to '00000' when no numbered versions exist.
-*&  Returns blank versno when the objtype is not present at all.
+*&  Uses SVRS_GET_VERSION_DIRECTORY_40 to fetch all versions.
+*&  Sorts by date/time descending and returns INDEX 2 (latest-1).
+*&  Falls back to INDEX 1 if fewer than 2 versions exist.
 *&---------------------------------------------------------------------*
 FORM get_latest_version USING    p_objname TYPE vrsd-objname
                                  p_objtype TYPE vrsd-objtype
                         CHANGING p_versno  TYPE vrsd-versno
                                  p_found   TYPE abap_bool.
 
-  DATA: lt_vers TYPE TABLE OF vrsd,
-        wa_vers TYPE vrsd.
+  DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd_40a,
+        lt_lversno_list  TYPE STANDARD TABLE OF vrsn,
+        wa_version       TYPE vrsd_40a.
 
   CLEAR: p_versno, p_found.
 
-  SELECT *
-    INTO TABLE @lt_vers
-    FROM vrsd
-    WHERE objname = @p_objname
-      AND objtype = @p_objtype
-      AND versno  <> '00000'.
+  CALL FUNCTION 'SVRS_GET_VERSION_DIRECTORY_40'
+    EXPORTING
+      objname               = p_objname
+      objtype               = p_objtype
+    TABLES
+      lversno_list          = lt_lversno_list
+      version_list          = lt_version_list
+    EXCEPTIONS
+      no_entry              = 1
+      communication_failure = 2
+      system_failure        = 3.
 
-  IF sy-subrc = 0 AND lt_vers IS NOT INITIAL.
-    " Numbered versions exist – take the most recent
-    SORT lt_vers BY datum DESCENDING zeit DESCENDING.
-    READ TABLE lt_vers INTO wa_vers INDEX 1.
-    p_versno = wa_vers-versno.
+  IF sy-subrc <> 0 OR lt_version_list IS INITIAL.
+    WRITE: / |{ p_objtype }: no versions found in version directory.|.
+    RETURN.
+  ENDIF.
+
+  " Sort most recent first
+  SORT lt_version_list BY datum DESCENDING zeit DESCENDING.
+
+  " Take index 2 (latest - 1)
+  READ TABLE lt_version_list INTO wa_version INDEX 2.
+  IF sy-subrc = 0.
+    p_versno = wa_version-versno.
     p_found  = abap_true.
-    WRITE: / |{ p_objtype }: latest version { wa_vers-versno } | &&
-             |dated { wa_vers-datum } { wa_vers-zeit } by { wa_vers-author }|.
+    WRITE: / |{ p_objtype }: version { wa_version-versno } | &&
+             |dated { wa_version-datum } { wa_version-zeit } by { wa_version-author }|.
   ELSE.
-    " No numbered version – fall back to 00000 if it exists
-    SELECT SINGLE *
-      INTO @wa_vers
-      FROM vrsd
-      WHERE objname = @p_objname
-        AND objtype = @p_objtype
-        AND versno  = '00000'.
+    " Only 1 version exists – fall back to index 1
+    READ TABLE lt_version_list INTO wa_version INDEX 1.
     IF sy-subrc = 0.
-      p_versno = '00000'.
+      p_versno = wa_version-versno.
       p_found  = abap_true.
-      WRITE: / |{ p_objtype }: no numbered version – using 00000 | &&
-               |dated { wa_vers-datum } { wa_vers-zeit } by { wa_vers-author }|.
+      WRITE: / |{ p_objtype }: only 1 version found – using { wa_version-versno } | &&
+               |dated { wa_version-datum } { wa_version-zeit } by { wa_version-author }|.
     ENDIF.
   ENDIF.
 
