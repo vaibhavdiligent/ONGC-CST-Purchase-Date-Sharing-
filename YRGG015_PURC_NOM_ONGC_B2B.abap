@@ -704,6 +704,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   SELECT werks regio FROM t001w INTO CORRESPONDING FIELDS OF TABLE gt_t001w_c
     WHERE regio IN lr_state AND werks BETWEEN '2000' AND '2999'.
   SORT gt_t001w_c BY regio werks.
+  DELETE gt_t001w_c WHERE werks CA 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.
 
   " 2. OIJ_EL_DOC_MOT: OAs overlapping date range, VBTYP=K, filtered by input locations (FS fix)
   REFRESH gt_mot_c.
