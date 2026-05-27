@@ -53,6 +53,48 @@ START-OF-SELECTION.
   lv_obj_name  = p_prog.
   lv_prog_name = p_prog.
 
+  " ----------------------------------------------------------------
+  " Step 1: Create the program (if it does not already exist)
+  " ----------------------------------------------------------------
+  WRITE: / '=== STEP 1: CREATE PROGRAM ==='.
+  ULINE.
+
+  DATA: lt_init_src TYPE STANDARD TABLE OF abaptxt255,
+        wa_init_src TYPE abaptxt255.
+
+  CONCATENATE 'REPORT ' p_prog '.' INTO wa_init_src-line SEPARATED BY space.
+  APPEND wa_init_src TO lt_init_src.
+
+  CALL FUNCTION 'RPY_PROGRAM_INSERT'
+    EXPORTING
+      program_name     = p_prog
+      program_type     = '1'
+      title            = p_prog
+      language         = sy-langu
+      transport_number = lv_req
+    TABLES
+      source_extended  = lt_init_src
+    EXCEPTIONS
+      already_exists   = 1
+      permission_error = 2
+      OTHERS           = 3.
+
+  CASE sy-subrc.
+    WHEN 0.
+      COMMIT WORK AND WAIT.
+      WRITE: / |Program { p_prog } created successfully.|.
+    WHEN 1.
+      WRITE: / |Program { p_prog } already exists – skipping creation.|.
+    WHEN 2.
+      WRITE: / |ERROR: Permission denied creating { p_prog }.|.
+      STOP.
+    WHEN OTHERS.
+      WRITE: / |ERROR: RPY_PROGRAM_INSERT failed (SY-SUBRC: { sy-subrc }).|.
+      STOP.
+  ENDCASE.
+
+  SKIP.
+
   SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @p_prog.
 
   " ----------------------------------------------------------------
