@@ -205,18 +205,22 @@ FORM get_latest_version USING    p_objname TYPE vrsd-objname
                         CHANGING p_versno  TYPE vrsd-versno
                                  p_found   TYPE abap_bool.
 
-  DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd_40a,
-        lt_lversno_list  TYPE STANDARD TABLE OF vrsn,
-        wa_version       TYPE vrsd_40a.
+  DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd,
+        wa_version       TYPE vrsd,
+        lv_objname       TYPE vrsd_40a-objname,
+        lv_objtype       TYPE vrsd_40a-objtype.
 
   CLEAR: p_versno, p_found.
 
+  " Assign to vrsd_40a-typed locals – FM expects these exact types
+  lv_objname = p_objname.
+  lv_objtype = p_objtype.
+
   CALL FUNCTION 'SVRS_GET_VERSION_DIRECTORY_40'
     EXPORTING
-      objname               = p_objname
-      objtype               = p_objtype
+      objname               = lv_objname
+      objtype               = lv_objtype
     TABLES
-      lversno_list          = lt_lversno_list
       version_list          = lt_version_list
     EXCEPTIONS
       no_entry              = 1
