@@ -54,14 +54,25 @@ START-OF-SELECTION.
       AND versno  <> '00000'.
 
   IF sy-subrc <> 0 OR lt_versions IS INITIAL.
-    WRITE: / |No version history found in VRSD for program: { p_prog }|.
-    STOP.
+    " No numbered versions found – fall back to active version 00000
+    WRITE: / |No numbered versions found for { p_prog } – falling back to version 00000.|.
+
+    SELECT SINGLE *
+      INTO @wa_version
+      FROM vrsd
+      WHERE objname = @p_prog
+        AND objtype = 'REPS'
+        AND versno  = '00000'.
+
+    IF sy-subrc <> 0.
+      WRITE: / |ERROR: No version data found at all in VRSD for { p_prog }.|.
+      STOP.
+    ENDIF.
+  ELSE.
+    " Sort descending by date and time – index 1 = latest version
+    SORT lt_versions BY datum DESCENDING zeit DESCENDING.
+    READ TABLE lt_versions INTO wa_version INDEX 1.
   ENDIF.
-
-  " Sort descending by date and time – index 1 = latest version
-  SORT lt_versions BY datum DESCENDING zeit DESCENDING.
-
-  READ TABLE lt_versions INTO wa_version INDEX 1.
 
   WRITE: / |Program  : { p_prog }|.
   WRITE: / |Version  : { wa_version-versno }|.
