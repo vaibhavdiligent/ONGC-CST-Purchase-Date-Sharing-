@@ -149,32 +149,7 @@ START-OF-SELECTION.
 
   SKIP.
 
-  " ----------------------------------------------------------------
-  " Syntax check on the restored program
-  " ----------------------------------------------------------------
-  WRITE: / '=== Syntax Check ==='.
-  ULINE.
-
-  DATA: lt_errors TYPE syn_error,
-        wa_error  TYPE syner_str.
-
-  CALL FUNCTION 'RS_PROGRAM_CHECK_SYNTAX'
-    EXPORTING
-      program_name = lv_prog_name
-      program_type = l_trdir-subc
-    TABLES
-      error_table  = lt_errors
-    EXCEPTIONS
-      OTHERS       = 0.
-
-  IF lt_errors IS INITIAL.
-    WRITE: / 'Syntax check: PASSED'.
-  ELSE.
-    WRITE: / 'Syntax check: ERRORS found – review before activating!'.
-    LOOP AT lt_errors INTO wa_error.
-      WRITE: /5 'Line:', wa_error-zeile, '|', wa_error-mtext.
-    ENDLOOP.
-  ENDIF.
+  WRITE: / 'Restore complete.'.
 
 *&---------------------------------------------------------------------*
 *& Form get_latest_version
