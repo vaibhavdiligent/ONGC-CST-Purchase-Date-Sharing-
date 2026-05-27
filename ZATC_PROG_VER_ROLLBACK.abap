@@ -158,7 +158,7 @@ START-OF-SELECTION.
   ULINE.
 
   DATA: lv_versno_rept TYPE vrsd-versno,
-        lt_textpool    TYPE STANDARD TABLE OF textpool,
+        lt_textpool    TYPE STANDARD TABLE OF textpoolt,
         lv_found_rept  TYPE abap_bool.
 
   PERFORM get_latest_version USING lv_obj_name 'REPT'
@@ -170,7 +170,7 @@ START-OF-SELECTION.
         object_name           = lv_obj_name
         versno                = lv_versno_rept
       TABLES
-        ptab                  = lt_textpool
+        repot_tab             = lt_textpool
       EXCEPTIONS
         no_version            = 1
         system_failure        = 2
