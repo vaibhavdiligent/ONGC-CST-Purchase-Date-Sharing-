@@ -207,14 +207,19 @@ FORM get_latest_version USING    p_objname LIKE vrsd-objname
 
   DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd,
         lt_lversno_list  TYPE STANDARD TABLE OF vrsn,
-        wa_version       TYPE vrsd.
+        wa_version       TYPE vrsd,
+        lv_fm_objname    LIKE vrsd_40a-objname,
+        lv_fm_objtype    LIKE vrsd_40a-objtype.
 
   CLEAR: p_versno, p_found.
 
+  lv_fm_objname = p_objname.
+  lv_fm_objtype = p_objtype.
+
   CALL FUNCTION 'SVRS_GET_VERSION_DIRECTORY_40'
     EXPORTING
-      objname               = p_objname
-      objtype               = p_objtype
+      objname               = lv_fm_objname
+      objtype               = lv_fm_objtype
     TABLES
       lversno_list          = lt_lversno_list
       version_list          = lt_version_list
