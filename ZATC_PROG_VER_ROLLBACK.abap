@@ -157,9 +157,12 @@ START-OF-SELECTION.
   WRITE: / '=== REPT (Text Elements) ==='.
   ULINE.
 
-  DATA: lv_versno_rept TYPE vrsd-versno,
-        lt_textpool    TYPE STANDARD TABLE OF textpoolt,
-        lv_found_rept  TYPE abap_bool.
+  DATA: lv_versno_rept  TYPE vrsd-versno,
+        lt_textpoolt    TYPE STANDARD TABLE OF textpoolt,
+        lt_textpool     TYPE STANDARD TABLE OF textpool,
+        wa_textpoolt    TYPE textpoolt,
+        wa_textpool     TYPE textpool,
+        lv_found_rept   TYPE abap_bool.
 
   PERFORM get_latest_version USING lv_obj_name 'REPT'
                              CHANGING lv_versno_rept lv_found_rept.
@@ -170,13 +173,20 @@ START-OF-SELECTION.
         object_name           = lv_obj_name
         versno                = lv_versno_rept
       TABLES
-        repot_tab             = lt_textpool
+        repot_tab             = lt_textpoolt
       EXCEPTIONS
         no_version            = 1
         system_failure        = 2
         communication_failure = 3.
 
-    IF sy-subrc = 0 AND lt_textpool IS NOT INITIAL.
+    IF sy-subrc = 0 AND lt_textpoolt IS NOT INITIAL.
+      " Convert TEXTPOOLT -> TEXTPOOL (INSERT TEXTPOOL requires TEXTPOOL type)
+      REFRESH lt_textpool.
+      LOOP AT lt_textpoolt INTO wa_textpoolt.
+        MOVE-CORRESPONDING wa_textpoolt TO wa_textpool.
+        APPEND wa_textpool TO lt_textpool.
+        CLEAR wa_textpool.
+      ENDLOOP.
       INSERT TEXTPOOL lv_prog_name FROM lt_textpool LANGUAGE sy-langu.
       IF sy-subrc = 0.
         COMMIT WORK AND WAIT.
