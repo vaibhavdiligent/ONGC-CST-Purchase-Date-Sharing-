@@ -200,27 +200,23 @@ START-OF-SELECTION.
 *&  Sorts by date/time descending and returns INDEX 2 (latest-1).
 *&  Falls back to INDEX 1 if fewer than 2 versions exist.
 *&---------------------------------------------------------------------*
-FORM get_latest_version USING    p_objname TYPE vrsd-objname
-                                 p_objtype TYPE vrsd-objtype
-                        CHANGING p_versno  TYPE vrsd-versno
+FORM get_latest_version USING    p_objname LIKE vrsd-objname
+                                 p_objtype LIKE vrsd-objtype
+                        CHANGING p_versno  LIKE vrsd-versno
                                  p_found   TYPE abap_bool.
 
   DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd,
-        wa_version       TYPE vrsd,
-        lv_objname       TYPE vrsd_40a-objname,
-        lv_objtype       TYPE vrsd_40a-objtype.
+        lt_lversno_list  TYPE STANDARD TABLE OF vrsn,
+        wa_version       TYPE vrsd.
 
   CLEAR: p_versno, p_found.
 
-  " Assign to vrsd_40a-typed locals – FM expects these exact types
-  lv_objname = p_objname.
-  lv_objtype = p_objtype.
-
   CALL FUNCTION 'SVRS_GET_VERSION_DIRECTORY_40'
     EXPORTING
-      objname               = lv_objname
-      objtype               = lv_objtype
+      objname               = p_objname
+      objtype               = p_objtype
     TABLES
+      lversno_list          = lt_lversno_list
       version_list          = lt_version_list
     EXCEPTIONS
       no_entry              = 1
