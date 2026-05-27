@@ -205,9 +205,9 @@ FORM get_latest_version USING    p_objname LIKE vrsd-objname
                         CHANGING p_versno  LIKE vrsd-versno
                                  p_found   TYPE abap_bool.
 
-  DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd,
+  DATA: lt_version_list  TYPE STANDARD TABLE OF vrsd_40a,
         lt_lversno_list  TYPE STANDARD TABLE OF vrsn,
-        wa_version       TYPE vrsd,
+        wa_version       TYPE vrsd_40a,
         lv_fm_objname    LIKE vrsd_40a-objname,
         lv_fm_objtype    LIKE vrsd_40a-objtype.
 
