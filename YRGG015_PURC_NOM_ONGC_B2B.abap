@@ -287,7 +287,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     DATA: ls_mod  TYPE lvc_s_modi,
           ls_disp TYPE ty_display.
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
-      IF ls_mod-fieldname = 'CHARG'.
+      IF ls_mod-fieldname = 'CHARG' AND ls_mod-value IS NOT INITIAL.
         READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
         IF sy-subrc = 0.
           ls_disp-charg = ls_mod-value.
@@ -353,7 +353,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
       MODIFY gt_display INDEX es_row_no-row_id FROM ls_disp.
       IF go_alv IS NOT INITIAL.
         ls_stable-row = abap_true. ls_stable-col = abap_true.
-        go_alv->refresh_table_display( is_stable = ls_stable i_soft_refresh = abap_true ).
+        go_alv->refresh_table_display( is_stable = ls_stable ).
       ENDIF.
     ENDIF.
     er_event_data->m_event_handled = abap_true.
@@ -437,7 +437,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
       MODIFY gt_batch_assign INDEX es_row_no-row_id FROM ls_assign.
       IF go_batch_alv IS NOT INITIAL.
         ls_stable-row = abap_true. ls_stable-col = abap_true.
-        go_batch_alv->refresh_table_display( is_stable = ls_stable i_soft_refresh = abap_true ).
+        go_batch_alv->refresh_table_display( is_stable = ls_stable ).
       ENDIF.
     ENDIF.
     er_event_data->m_event_handled = abap_true.
@@ -975,9 +975,9 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
     " Register CHARG for the onf4 event so on_main_f4 actually fires
     CLEAR ls_f4.
-    ls_f4-fieldname = 'CHARG'.
-    ls_f4-register  = abap_true.
-    ls_f4-chngeafter = abap_true.
+    ls_f4-fieldname  = 'CHARG'.
+    ls_f4-register   = abap_true.
+    ls_f4-chngeafter = abap_false.   " prevent data_changed firing after F4 (would overwrite)
     INSERT ls_f4 INTO TABLE lt_f4.
     go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
@@ -1466,7 +1466,7 @@ FORM handle_batch_mass_change.
   CLEAR ls_f4b.
   ls_f4b-fieldname  = 'CHARG'.
   ls_f4b-register   = abap_true.
-  ls_f4b-chngeafter = abap_true.
+  ls_f4b-chngeafter = abap_false.
   INSERT ls_f4b INTO TABLE lt_f4b.
   go_batch_alv->register_f4_for_fields( it_f4 = lt_f4b ).
   go_batch_alv->set_toolbar_interactive( ).
