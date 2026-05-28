@@ -316,9 +316,10 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           ls_mcha   TYPE ty_mcha_cache,
           ls_t001w  TYPE ty_t001w_cache,
           lt_werks  TYPE STANDARD TABLE OF werks_d,
-          lt_f4vals TYPE STANDARD TABLE OF ddshretval,
+          lt_f4vals TYPE STANDARD TABLE OF charg_d,
+          lt_fldtab TYPE STANDARD TABLE OF dfies,
+          ls_fldtab TYPE dfies,
           lt_return TYPE STANDARD TABLE OF ddshretval,
-          ls_f4val  TYPE ddshretval,
           ls_return TYPE ddshretval,
           ls_stable TYPE lvc_s_stbl.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
@@ -332,18 +333,30 @@ CLASS lcl_alv_handler IMPLEMENTATION.
         READ TABLE lt_werks WITH KEY table_line = ls_mcha-werks TRANSPORTING NO FIELDS.
         IF sy-subrc <> 0. CONTINUE. ENDIF.
       ENDIF.
-      ls_f4val-fieldname = 'CHARG'. ls_f4val-fieldval = ls_mcha-charg.
-      APPEND ls_f4val TO lt_f4vals. CLEAR ls_f4val.
+      APPEND ls_mcha-charg TO lt_f4vals.
     ENDLOOP.
     IF lt_f4vals IS INITIAL.
       MESSAGE 'No valid batches found for this material.' TYPE 'S' DISPLAY LIKE 'W'.
       er_event_data->m_event_handled = abap_true. RETURN.
     ENDIF.
+    " Field catalog so retfield 'CHARG' matches a real column in value_tab
+    CLEAR ls_fldtab.
+    ls_fldtab-tabname   = 'MCHA'.
+    ls_fldtab-fieldname = 'CHARG'.
+    ls_fldtab-position  = 1.
+    ls_fldtab-datatype  = 'CHAR'.
+    ls_fldtab-inttype   = 'C'.
+    ls_fldtab-leng      = 10.
+    ls_fldtab-intlen    = 10.
+    ls_fldtab-outputlen = 10.
+    ls_fldtab-fieldtext = 'Batch'.
+    APPEND ls_fldtab TO lt_fldtab.
     " Use return_tab — avoids screen step-loop placement issues in ALV context
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
       EXPORTING retfield        = 'CHARG'
                 value_org       = 'S'
       TABLES    value_tab       = lt_f4vals
+                field_tab       = lt_fldtab
                 return_tab      = lt_return
       EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
     " Write selected value directly back into gt_display
@@ -402,9 +415,10 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           ls_mcha   TYPE ty_mcha_cache,
           ls_t001w  TYPE ty_t001w_cache,
           lt_werks  TYPE STANDARD TABLE OF werks_d,
-          lt_f4vals TYPE STANDARD TABLE OF ddshretval,
+          lt_f4vals TYPE STANDARD TABLE OF charg_d,
+          lt_fldtab TYPE STANDARD TABLE OF dfies,
+          ls_fldtab TYPE dfies,
           lt_return TYPE STANDARD TABLE OF ddshretval,
-          ls_f4val  TYPE ddshretval,
           ls_return TYPE ddshretval,
           ls_stable TYPE lvc_s_stbl.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
@@ -418,17 +432,29 @@ CLASS lcl_alv_handler IMPLEMENTATION.
         READ TABLE lt_werks WITH KEY table_line = ls_mcha-werks TRANSPORTING NO FIELDS.
         IF sy-subrc <> 0. CONTINUE. ENDIF.
       ENDIF.
-      ls_f4val-fieldname = 'CHARG'. ls_f4val-fieldval = ls_mcha-charg.
-      APPEND ls_f4val TO lt_f4vals. CLEAR ls_f4val.
+      APPEND ls_mcha-charg TO lt_f4vals.
     ENDLOOP.
     IF lt_f4vals IS INITIAL.
       MESSAGE 'No valid batches for this material.' TYPE 'S' DISPLAY LIKE 'W'.
       er_event_data->m_event_handled = abap_true. RETURN.
     ENDIF.
+    " Field catalog so retfield 'CHARG' matches a real column in value_tab
+    CLEAR ls_fldtab.
+    ls_fldtab-tabname   = 'MCHA'.
+    ls_fldtab-fieldname = 'CHARG'.
+    ls_fldtab-position  = 1.
+    ls_fldtab-datatype  = 'CHAR'.
+    ls_fldtab-inttype   = 'C'.
+    ls_fldtab-leng      = 10.
+    ls_fldtab-intlen    = 10.
+    ls_fldtab-outputlen = 10.
+    ls_fldtab-fieldtext = 'Batch'.
+    APPEND ls_fldtab TO lt_fldtab.
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
       EXPORTING retfield        = 'CHARG'
                 value_org       = 'S'
       TABLES    value_tab       = lt_f4vals
+                field_tab       = lt_fldtab
                 return_tab      = lt_return
       EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
     READ TABLE lt_return INTO ls_return INDEX 1.
