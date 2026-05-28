@@ -268,6 +268,26 @@ START-OF-SELECTION.
     ENDIF.
 
     SKIP.
+
+    " ----------------------------------------------------------------
+    " Final Step: Clear TADIR deletion flag
+    " ----------------------------------------------------------------
+    WRITE: / '=== TADIR Deletion Flag ==='.
+    ULINE.
+
+    UPDATE tadir SET delfag = space
+      WHERE pgmid   = 'R3TR'
+        AND obj_name = lv_obj_name
+        AND delfag   = 'X'.
+
+    IF sy-subrc = 0.
+      COMMIT WORK AND WAIT.
+      WRITE: / |TADIR deletion flag cleared for { lv_obj_name }.|.
+    ELSE.
+      WRITE: / |TADIR: no deletion flag found or already cleared for { lv_obj_name }.|.
+    ENDIF.
+
+    SKIP.
     WRITE: / |Restore complete for { lv_obj_name }.|.
     ULINE.
     SKIP.
