@@ -1,12 +1,13 @@
 *&---------------------------------------------------------------------*
 *& Report ZATC_PROG_VER_ROLLBACK
 *&---------------------------------------------------------------------*
-*& Restores a program from version management (table VRSD):
+*& Restores programs from version management (table VRSD):
 *&   - REPS objtype : program source code  -> RPY_PROGRAM_UPDATE
 *&   - REPT objtype : text elements/pool   -> INSERT TEXTPOOL
-*& For each objtype the latest version is taken (falling back to 00000
-*& when no numbered version exists) and re-applied to the program,
+*& For each objtype the latest version is taken (falling back to INDEX 1
+*& when fewer than 2 versions exist) and re-applied to the program,
 *& linked to the supplied transport request.
+*& SELECT-OPTIONS s_prog allows multiple programs in one run.
 *&---------------------------------------------------------------------*
 REPORT zatc_program_rollback.
 
@@ -15,184 +16,186 @@ TABLES: trdir.
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
-PARAMETERS: p_prog TYPE programm OBLIGATORY.
-PARAMETERS: lv_req TYPE trkorr   OBLIGATORY.
-
-*----------------------------------------------------------------------*
-* F4 help for program name
-*----------------------------------------------------------------------*
-AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_prog.
-  TYPES: BEGIN OF ty_prog,
-           name TYPE trdir-name,
-         END OF ty_prog.
-  DATA lt_prog_list TYPE STANDARD TABLE OF ty_prog.
-  SELECT name INTO CORRESPONDING FIELDS OF TABLE @lt_prog_list
-    FROM trdir WHERE name LIKE 'Z%' OR name LIKE 'Y%'.
-  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
-    EXPORTING
-      retfield        = 'NAME'
-      dynpprog        = sy-cprog
-      dynpnr          = sy-dynnr
-      dynprofield     = 'P_PROG'
-      stepl           = 0
-      value_org       = 'S'
-    TABLES
-      value_tab       = lt_prog_list
-    EXCEPTIONS
-      parameter_error = 1
-      no_values_found = 2
-      OTHERS          = 3.
+SELECT-OPTIONS: s_prog FOR trdir-name OBLIGATORY.
+PARAMETERS:     lv_req TYPE trkorr OBLIGATORY.
 
 *======================================================================*
 START-OF-SELECTION.
 *======================================================================*
 
-  DATA: lv_obj_name  TYPE vrsd-objname,
-        lv_prog_name TYPE programm.
+  DATA: lt_prog_sel TYPE STANDARD TABLE OF trdir,
+        wa_prog_sel TYPE trdir.
 
-  lv_obj_name  = p_prog.
-  lv_prog_name = p_prog.
+  " Fetch all matching programs from TRDIR
+  SELECT * INTO CORRESPONDING FIELDS OF TABLE @lt_prog_sel
+    FROM trdir WHERE name IN @s_prog.
 
-  " ----------------------------------------------------------------
-  " Step 1: Create the program (if it does not already exist)
-  " ----------------------------------------------------------------
-  WRITE: / '=== STEP 1: CREATE PROGRAM ==='.
-  ULINE.
-
-  DATA: lt_init_src TYPE STANDARD TABLE OF abaptxt255,
-        wa_init_src TYPE abaptxt255.
-
-  " Check if program already exists
-  SELECT SINGLE name INTO @DATA(lv_existing)
-    FROM trdir WHERE name = @p_prog.
-
-  IF sy-subrc <> 0.
-    " Program does not exist – create it with a minimal stub
-    CONCATENATE 'REPORT ' p_prog '.' INTO wa_init_src-line SEPARATED BY space.
-    APPEND wa_init_src TO lt_init_src.
-    INSERT REPORT p_prog FROM lt_init_src.
-    IF sy-subrc = 0.
-      COMMIT WORK AND WAIT.
-      WRITE: / |Program { p_prog } created successfully.|.
-    ELSE.
-      WRITE: / |ERROR: INSERT REPORT failed (SY-SUBRC: { sy-subrc }).|.
-      STOP.
-    ENDIF.
-  ELSE.
-    WRITE: / |Program { p_prog } already exists – skipping creation.|.
+  IF lt_prog_sel IS INITIAL.
+    WRITE: / 'No programs found matching selection.'.
+    STOP.
   ENDIF.
 
-  SKIP.
+  LOOP AT lt_prog_sel INTO wa_prog_sel.
 
-  SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @p_prog.
+    DATA: lv_obj_name  TYPE vrsd-objname,
+          lv_prog_name TYPE programm.
 
-  " ----------------------------------------------------------------
-  " Part A: Restore REPS (program source code)
-  " ----------------------------------------------------------------
-  WRITE: / '=== REPS (Source Code) ==='.
-  ULINE.
+    lv_obj_name  = wa_prog_sel-name.
+    lv_prog_name = wa_prog_sel-name.
 
-  DATA: lv_versno_reps TYPE vrsd-versno,
-        lt_source      TYPE STANDARD TABLE OF abaptxt255,
-        lv_found_reps  TYPE abap_bool.
+    WRITE: / '======================================================'.
+    WRITE: / |Processing program: { lv_prog_name }|.
+    WRITE: / '======================================================'.
+    ULINE.
 
-  PERFORM get_latest_version USING lv_obj_name 'REPS'
-                             CHANGING lv_versno_reps lv_found_reps.
+    " ----------------------------------------------------------------
+    " Step 1: Create the program (if it does not already exist)
+    " ----------------------------------------------------------------
+    WRITE: / '=== STEP 1: CREATE PROGRAM ==='.
+    ULINE.
 
-  IF lv_found_reps = abap_true.
-    CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-      EXPORTING
-        object_name           = lv_obj_name
-        versno                = lv_versno_reps
-      TABLES
-        repos_tab             = lt_source
-      EXCEPTIONS
-        no_version            = 1
-        system_failure        = 2
-        communication_failure = 3.
+    DATA: lt_init_src TYPE STANDARD TABLE OF abaptxt255,
+          wa_init_src TYPE abaptxt255.
 
-    IF sy-subrc = 0 AND lt_source IS NOT INITIAL.
-      CALL FUNCTION 'RPY_PROGRAM_UPDATE'
+    CLEAR: lt_init_src, wa_init_src.
+
+    SELECT SINGLE name INTO @DATA(lv_existing)
+      FROM trdir WHERE name = @lv_prog_name.
+
+    IF sy-subrc <> 0.
+      CONCATENATE 'REPORT ' lv_prog_name '.' INTO wa_init_src-line SEPARATED BY space.
+      APPEND wa_init_src TO lt_init_src.
+      INSERT REPORT lv_prog_name FROM lt_init_src.
+      IF sy-subrc = 0.
+        COMMIT WORK AND WAIT.
+        WRITE: / |Program { lv_prog_name } created successfully.|.
+      ELSE.
+        WRITE: / |ERROR: INSERT REPORT failed (SY-SUBRC: { sy-subrc }) – skipping { lv_prog_name }.|.
+        CONTINUE.
+      ENDIF.
+    ELSE.
+      WRITE: / |Program { lv_prog_name } already exists – skipping creation.|.
+    ENDIF.
+
+    SKIP.
+
+    SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @lv_prog_name.
+
+    " ----------------------------------------------------------------
+    " Part A: Restore REPS (program source code)
+    " ----------------------------------------------------------------
+    WRITE: / '=== REPS (Source Code) ==='.
+    ULINE.
+
+    DATA: lv_versno_reps TYPE vrsd-versno,
+          lt_source      TYPE STANDARD TABLE OF abaptxt255,
+          lv_found_reps  TYPE abap_bool.
+
+    CLEAR: lv_versno_reps, lt_source, lv_found_reps.
+
+    PERFORM get_latest_version USING lv_obj_name 'REPS'
+                               CHANGING lv_versno_reps lv_found_reps.
+
+    IF lv_found_reps = abap_true.
+      CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
         EXPORTING
-          program_name     = lv_prog_name
-          program_type     = l_trdir-subc
-          transport_number = lv_req
+          object_name           = lv_obj_name
+          versno                = lv_versno_reps
         TABLES
-          source_extended  = lt_source
+          repos_tab             = lt_source
         EXCEPTIONS
-          cancelled        = 1
-          permission_error = 2
-          not_found        = 3
-          OTHERS           = 4.
+          no_version            = 1
+          system_failure        = 2
+          communication_failure = 3.
 
-      IF sy-subrc = 0.
-        COMMIT WORK AND WAIT.
-        WRITE: / |REPS restored from version { lv_versno_reps } and linked to { lv_req }.|.
+      IF sy-subrc = 0 AND lt_source IS NOT INITIAL.
+        CALL FUNCTION 'RPY_PROGRAM_UPDATE'
+          EXPORTING
+            program_name     = lv_prog_name
+            program_type     = l_trdir-subc
+            transport_number = lv_req
+          TABLES
+            source_extended  = lt_source
+          EXCEPTIONS
+            cancelled        = 1
+            permission_error = 2
+            not_found        = 3
+            OTHERS           = 4.
+
+        IF sy-subrc = 0.
+          COMMIT WORK AND WAIT.
+          WRITE: / |REPS restored from version { lv_versno_reps } and linked to { lv_req }.|.
+        ELSE.
+          WRITE: / |ERROR: RPY_PROGRAM_UPDATE failed (SY-SUBRC: { sy-subrc }).|.
+        ENDIF.
       ELSE.
-        WRITE: / |ERROR: RPY_PROGRAM_UPDATE failed (SY-SUBRC: { sy-subrc }).|.
+        WRITE: / |ERROR: Could not fetch REPS version { lv_versno_reps } (SY-SUBRC: { sy-subrc }).|.
       ENDIF.
     ELSE.
-      WRITE: / |ERROR: Could not fetch REPS version { lv_versno_reps } (SY-SUBRC: { sy-subrc }).|.
+      WRITE: / |No REPS version found in VRSD for { lv_prog_name }.|.
     ENDIF.
-  ELSE.
-    WRITE: / |No REPS version found in VRSD for { p_prog }.|.
-  ENDIF.
 
-  SKIP.
+    SKIP.
 
-  " ----------------------------------------------------------------
-  " Part B: Restore REPT (text elements / text pool)
-  " ----------------------------------------------------------------
-  WRITE: / '=== REPT (Text Elements) ==='.
-  ULINE.
+    " ----------------------------------------------------------------
+    " Part B: Restore REPT (text elements / text pool)
+    " ----------------------------------------------------------------
+    WRITE: / '=== REPT (Text Elements) ==='.
+    ULINE.
 
-  DATA: lv_versno_rept  TYPE vrsd-versno,
-        lt_textpoolt    TYPE STANDARD TABLE OF textpoolt,
-        lt_textpool     TYPE STANDARD TABLE OF textpool,
-        wa_textpoolt    TYPE textpoolt,
-        wa_textpool     TYPE textpool,
-        lv_found_rept   TYPE abap_bool.
+    DATA: lv_versno_rept TYPE vrsd-versno,
+          lt_textpoolt   TYPE STANDARD TABLE OF textpoolt,
+          lt_textpool    TYPE STANDARD TABLE OF textpool,
+          wa_textpoolt   TYPE textpoolt,
+          wa_textpool    TYPE textpool,
+          lv_found_rept  TYPE abap_bool.
 
-  PERFORM get_latest_version USING lv_obj_name 'REPT'
-                             CHANGING lv_versno_rept lv_found_rept.
+    CLEAR: lv_versno_rept, lt_textpoolt, lt_textpool, lv_found_rept.
 
-  IF lv_found_rept = abap_true.
-    CALL FUNCTION 'SVRS_GET_VERSION_REPT_40'
-      EXPORTING
-        object_name           = lv_obj_name
-        versno                = lv_versno_rept
-      TABLES
-        repot_tab             = lt_textpoolt
-      EXCEPTIONS
-        no_version            = 1
-        system_failure        = 2
-        communication_failure = 3.
+    PERFORM get_latest_version USING lv_obj_name 'REPT'
+                               CHANGING lv_versno_rept lv_found_rept.
 
-    IF sy-subrc = 0 AND lt_textpoolt IS NOT INITIAL.
-      " Convert TEXTPOOLT -> TEXTPOOL (INSERT TEXTPOOL requires TEXTPOOL type)
-      REFRESH lt_textpool.
-      LOOP AT lt_textpoolt INTO wa_textpoolt.
-        MOVE-CORRESPONDING wa_textpoolt TO wa_textpool.
-        APPEND wa_textpool TO lt_textpool.
-        CLEAR wa_textpool.
-      ENDLOOP.
-      INSERT TEXTPOOL lv_prog_name FROM lt_textpool LANGUAGE sy-langu.
-      IF sy-subrc = 0.
-        COMMIT WORK AND WAIT.
-        WRITE: / |REPT (text pool) restored from version { lv_versno_rept }.|.
+    IF lv_found_rept = abap_true.
+      CALL FUNCTION 'SVRS_GET_VERSION_REPT_40'
+        EXPORTING
+          object_name           = lv_obj_name
+          versno                = lv_versno_rept
+        TABLES
+          repot_tab             = lt_textpoolt
+        EXCEPTIONS
+          no_version            = 1
+          system_failure        = 2
+          communication_failure = 3.
+
+      IF sy-subrc = 0 AND lt_textpoolt IS NOT INITIAL.
+        REFRESH lt_textpool.
+        LOOP AT lt_textpoolt INTO wa_textpoolt.
+          MOVE-CORRESPONDING wa_textpoolt TO wa_textpool.
+          APPEND wa_textpool TO lt_textpool.
+          CLEAR wa_textpool.
+        ENDLOOP.
+        INSERT TEXTPOOL lv_prog_name FROM lt_textpool LANGUAGE sy-langu.
+        IF sy-subrc = 0.
+          COMMIT WORK AND WAIT.
+          WRITE: / |REPT (text pool) restored from version { lv_versno_rept }.|.
+        ELSE.
+          WRITE: / |ERROR: INSERT TEXTPOOL failed (SY-SUBRC: { sy-subrc }).|.
+        ENDIF.
       ELSE.
-        WRITE: / |ERROR: INSERT TEXTPOOL failed (SY-SUBRC: { sy-subrc }).|.
+        WRITE: / |No text-pool data fetched for REPT version { lv_versno_rept } (SY-SUBRC: { sy-subrc }).|.
       ENDIF.
     ELSE.
-      WRITE: / |No text-pool data fetched for REPT version { lv_versno_rept } (SY-SUBRC: { sy-subrc }).|.
+      WRITE: / |No REPT version found in VRSD for { lv_prog_name }.|.
     ENDIF.
-  ELSE.
-    WRITE: / |No REPT version found in VRSD for { p_prog }.|.
-  ENDIF.
 
-  SKIP.
+    SKIP.
+    WRITE: / |Restore complete for { lv_prog_name }.|.
+    ULINE.
+    SKIP.
 
-  WRITE: / 'Restore complete.'.
+  ENDLOOP.
+
+  WRITE: / 'All selected programs processed.'.
 
 *&---------------------------------------------------------------------*
 *& Form get_latest_version
