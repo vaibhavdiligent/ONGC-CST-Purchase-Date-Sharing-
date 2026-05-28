@@ -1,13 +1,13 @@
 *&---------------------------------------------------------------------*
 *& Report ZATC_PROG_VER_ROLLBACK
 *&---------------------------------------------------------------------*
-*& Restores programs from version management (table VRSD):
+*& Restores objects from version management (table VRSD):
 *&   - REPS objtype : program source code  -> RPY_PROGRAM_UPDATE
 *&   - REPT objtype : text elements/pool   -> INSERT TEXTPOOL
+*&   - TRAN objtype : transaction code     -> RPY_TRANSACTION_UPDATE
 *& For each objtype the latest version is taken (falling back to INDEX 1
-*& when fewer than 2 versions exist) and re-applied to the program,
-*& linked to the supplied transport request.
-*& SELECT-OPTIONS s_prog allows multiple programs in one run.
+*& when fewer than 2 versions exist) and re-applied, linked to transport.
+*& Loops over distinct object names found in VRSD – no TRDIR dependency.
 *&---------------------------------------------------------------------*
 REPORT zatc_program_rollback.
 
@@ -23,63 +23,34 @@ PARAMETERS:     lv_req TYPE trkorr OBLIGATORY.
 START-OF-SELECTION.
 *======================================================================*
 
-  DATA: lt_prog_sel TYPE STANDARD TABLE OF trdir,
-        wa_prog_sel TYPE trdir.
+  TYPES: BEGIN OF ty_obj,
+           objname TYPE vrsd-objname,
+         END OF ty_obj.
 
-  " Fetch all matching programs from TRDIR
-  SELECT * INTO CORRESPONDING FIELDS OF TABLE @lt_prog_sel
-    FROM trdir WHERE name IN @s_prog.
+  DATA: lt_objects TYPE STANDARD TABLE OF ty_obj,
+        wa_obj     TYPE ty_obj.
 
-  IF lt_prog_sel IS INITIAL.
-    WRITE: / 'No programs found matching selection.'.
+  " Fetch all distinct object names that have any version in VRSD
+  SELECT DISTINCT objname INTO CORRESPONDING FIELDS OF TABLE @lt_objects
+    FROM vrsd WHERE objname IN @s_prog.
+
+  IF lt_objects IS INITIAL.
+    WRITE: / 'No version history found in VRSD for selected objects.'.
     STOP.
   ENDIF.
 
-  LOOP AT lt_prog_sel INTO wa_prog_sel.
+  LOOP AT lt_objects INTO wa_obj.
 
     DATA: lv_obj_name  TYPE vrsd-objname,
           lv_prog_name TYPE programm.
 
-    lv_obj_name  = wa_prog_sel-name.
-    lv_prog_name = wa_prog_sel-name.
+    lv_obj_name  = wa_obj-objname.
+    lv_prog_name = wa_obj-objname.
 
     WRITE: / '======================================================'.
-    WRITE: / |Processing program: { lv_prog_name }|.
+    WRITE: / |Processing: { lv_obj_name }|.
     WRITE: / '======================================================'.
     ULINE.
-
-    " ----------------------------------------------------------------
-    " Step 1: Create the program (if it does not already exist)
-    " ----------------------------------------------------------------
-    WRITE: / '=== STEP 1: CREATE PROGRAM ==='.
-    ULINE.
-
-    DATA: lt_init_src TYPE STANDARD TABLE OF abaptxt255,
-          wa_init_src TYPE abaptxt255.
-
-    CLEAR: lt_init_src, wa_init_src.
-
-    SELECT SINGLE name INTO @DATA(lv_existing)
-      FROM trdir WHERE name = @lv_prog_name.
-
-    IF sy-subrc <> 0.
-      CONCATENATE 'REPORT ' lv_prog_name '.' INTO wa_init_src-line SEPARATED BY space.
-      APPEND wa_init_src TO lt_init_src.
-      INSERT REPORT lv_prog_name FROM lt_init_src.
-      IF sy-subrc = 0.
-        COMMIT WORK AND WAIT.
-        WRITE: / |Program { lv_prog_name } created successfully.|.
-      ELSE.
-        WRITE: / |ERROR: INSERT REPORT failed (SY-SUBRC: { sy-subrc }) – skipping { lv_prog_name }.|.
-        CONTINUE.
-      ENDIF.
-    ELSE.
-      WRITE: / |Program { lv_prog_name } already exists – skipping creation.|.
-    ENDIF.
-
-    SKIP.
-
-    SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @lv_prog_name.
 
     " ----------------------------------------------------------------
     " Part A: Restore REPS (program source code)
@@ -97,6 +68,32 @@ START-OF-SELECTION.
                                CHANGING lv_versno_reps lv_found_reps.
 
     IF lv_found_reps = abap_true.
+
+      " Create program if it does not already exist
+      SELECT SINGLE name INTO @DATA(lv_existing)
+        FROM trdir WHERE name = @lv_prog_name.
+
+      IF sy-subrc <> 0.
+        DATA: lt_init_src TYPE STANDARD TABLE OF abaptxt255,
+              wa_init_src TYPE abaptxt255.
+        CLEAR: lt_init_src, wa_init_src.
+        CONCATENATE 'REPORT ' lv_prog_name '.' INTO wa_init_src-line SEPARATED BY space.
+        APPEND wa_init_src TO lt_init_src.
+        INSERT REPORT lv_prog_name FROM lt_init_src.
+        IF sy-subrc = 0.
+          COMMIT WORK AND WAIT.
+          WRITE: / |Program { lv_prog_name } created successfully.|.
+        ELSE.
+          WRITE: / |ERROR: INSERT REPORT failed (SY-SUBRC: { sy-subrc }) – skipping REPS.|.
+          CLEAR lv_found_reps.
+        ENDIF.
+      ELSE.
+        WRITE: / |Program { lv_prog_name } already exists – skipping creation.|.
+      ENDIF.
+
+    ENDIF.
+
+    IF lv_found_reps = abap_true.
       CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
         EXPORTING
           object_name           = lv_obj_name
@@ -109,6 +106,7 @@ START-OF-SELECTION.
           communication_failure = 3.
 
       IF sy-subrc = 0 AND lt_source IS NOT INITIAL.
+        SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @lv_prog_name.
         CALL FUNCTION 'RPY_PROGRAM_UPDATE'
           EXPORTING
             program_name     = lv_prog_name
@@ -132,7 +130,7 @@ START-OF-SELECTION.
         WRITE: / |ERROR: Could not fetch REPS version { lv_versno_reps } (SY-SUBRC: { sy-subrc }).|.
       ENDIF.
     ELSE.
-      WRITE: / |No REPS version found in VRSD for { lv_prog_name }.|.
+      WRITE: / |No REPS version found in VRSD for { lv_obj_name }.|.
     ENDIF.
 
     SKIP.
@@ -185,17 +183,75 @@ START-OF-SELECTION.
         WRITE: / |No text-pool data fetched for REPT version { lv_versno_rept } (SY-SUBRC: { sy-subrc }).|.
       ENDIF.
     ELSE.
-      WRITE: / |No REPT version found in VRSD for { lv_prog_name }.|.
+      WRITE: / |No REPT version found in VRSD for { lv_obj_name }.|.
     ENDIF.
 
     SKIP.
-    WRITE: / |Restore complete for { lv_prog_name }.|.
+
+    " ----------------------------------------------------------------
+    " Part C: Restore TRAN (transaction code)
+    " ----------------------------------------------------------------
+    WRITE: / '=== TRAN (Transaction Code) ==='.
+    ULINE.
+
+    DATA: lv_versno_tran TYPE vrsd-versno,
+          lv_found_tran  TYPE abap_bool,
+          lt_tran_source TYPE STANDARD TABLE OF abaptxt255,
+          lv_fm_tran     LIKE vrsd_40a-objname.
+
+    CLEAR: lv_versno_tran, lv_found_tran, lt_tran_source.
+
+    PERFORM get_latest_version USING lv_obj_name 'TRAN'
+                               CHANGING lv_versno_tran lv_found_tran.
+
+    IF lv_found_tran = abap_true.
+      lv_fm_tran = lv_obj_name.
+
+      CALL FUNCTION 'SVRS_GET_VERSION_TRAN_40'
+        EXPORTING
+          object_name           = lv_fm_tran
+          versno                = lv_versno_tran
+        TABLES
+          tran_tab              = lt_tran_source
+        EXCEPTIONS
+          no_version            = 1
+          system_failure        = 2
+          communication_failure = 3.
+
+      IF sy-subrc = 0 AND lt_tran_source IS NOT INITIAL.
+        CALL FUNCTION 'RPY_TRANSACTION_UPDATE'
+          EXPORTING
+            transaction      = lv_obj_name
+            transport_number = lv_req
+          TABLES
+            tran_tab         = lt_tran_source
+          EXCEPTIONS
+            cancelled        = 1
+            permission_error = 2
+            not_found        = 3
+            OTHERS           = 4.
+
+        IF sy-subrc = 0.
+          COMMIT WORK AND WAIT.
+          WRITE: / |TRAN restored from version { lv_versno_tran } and linked to { lv_req }.|.
+        ELSE.
+          WRITE: / |ERROR: RPY_TRANSACTION_UPDATE failed (SY-SUBRC: { sy-subrc }).|.
+        ENDIF.
+      ELSE.
+        WRITE: / |No TRAN data fetched for version { lv_versno_tran } (SY-SUBRC: { sy-subrc }).|.
+      ENDIF.
+    ELSE.
+      WRITE: / |No TRAN version found in VRSD for { lv_obj_name }.|.
+    ENDIF.
+
+    SKIP.
+    WRITE: / |Restore complete for { lv_obj_name }.|.
     ULINE.
     SKIP.
 
   ENDLOOP.
 
-  WRITE: / 'All selected programs processed.'.
+  WRITE: / 'All objects processed.'.
 
 *&---------------------------------------------------------------------*
 *& Form get_latest_version
