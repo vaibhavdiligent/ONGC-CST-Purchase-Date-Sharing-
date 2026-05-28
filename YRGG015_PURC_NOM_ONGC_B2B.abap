@@ -319,7 +319,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           lt_f4vals TYPE STANDARD TABLE OF ddshretval,
           lt_return TYPE STANDARD TABLE OF ddshretval,
           ls_f4val  TYPE ddshretval,
-          ls_return TYPE ddshretval.
+          ls_return TYPE ddshretval,
+          ls_stable TYPE lvc_s_stbl.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
     READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
     IF sy-subrc <> 0 OR ls_disp-exclude = 'X'. RETURN. ENDIF.
@@ -351,7 +352,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
       ls_disp-charg = ls_return-fieldval.
       MODIFY gt_display INDEX es_row_no-row_id FROM ls_disp.
       IF go_alv IS NOT INITIAL.
-        go_alv->refresh_table_display( i_soft_refresh = abap_true ).
+        ls_stable-row = abap_true. ls_stable-col = abap_true.
+        go_alv->refresh_table_display( is_stable = ls_stable i_soft_refresh = abap_true ).
       ENDIF.
     ENDIF.
     er_event_data->m_event_handled = abap_true.
@@ -369,7 +371,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
 
   METHOD on_batch_cmd.
     DATA: ls_assign TYPE ty_batch_assign,
-          ls_disp   TYPE ty_display.
+          ls_disp   TYPE ty_display,
+          ls_stable TYPE lvc_s_stbl.
     IF e_ucomm <> 'BATCH_OK'. RETURN. ENDIF.
     IF go_batch_alv IS NOT INITIAL.
       go_batch_alv->check_changed_data( ).
@@ -389,7 +392,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
       go_batch_popup->free( ). CLEAR go_batch_popup.
     ENDIF.
     IF go_alv IS NOT INITIAL.
-      go_alv->refresh_table_display( i_soft_refresh = abap_true ).
+      ls_stable-row = abap_true. ls_stable-col = abap_true.
+      go_alv->refresh_table_display( is_stable = ls_stable i_soft_refresh = abap_true ).
     ENDIF.
   ENDMETHOD.
 
@@ -401,7 +405,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           lt_f4vals TYPE STANDARD TABLE OF ddshretval,
           lt_return TYPE STANDARD TABLE OF ddshretval,
           ls_f4val  TYPE ddshretval,
-          ls_return TYPE ddshretval.
+          ls_return TYPE ddshretval,
+          ls_stable TYPE lvc_s_stbl.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
     READ TABLE gt_batch_assign INDEX es_row_no-row_id INTO ls_assign.
     IF sy-subrc <> 0. RETURN. ENDIF.
@@ -431,7 +436,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
       ls_assign-charg = ls_return-fieldval.
       MODIFY gt_batch_assign INDEX es_row_no-row_id FROM ls_assign.
       IF go_batch_alv IS NOT INITIAL.
-        go_batch_alv->refresh_table_display( i_soft_refresh = abap_true ).
+        ls_stable-row = abap_true. ls_stable-col = abap_true.
+        go_batch_alv->refresh_table_display( is_stable = ls_stable i_soft_refresh = abap_true ).
       ENDIF.
     ENDIF.
     er_event_data->m_event_handled = abap_true.
@@ -960,11 +966,20 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
       IMPORTING e_grid = go_alv.
   ENDIF.
   IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
+    DATA: lt_f4 TYPE lvc_t_f4,
+          ls_f4 TYPE lvc_s_f4.
     CREATE OBJECT go_alv_handler.
     SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
     SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
     SET HANDLER go_alv_handler->on_alv_toolbar        FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+    " Register CHARG for the onf4 event so on_main_f4 actually fires
+    CLEAR ls_f4.
+    ls_f4-fieldname = 'CHARG'.
+    ls_f4-register  = abap_true.
+    ls_f4-chngeafter = abap_true.
+    INSERT ls_f4 INTO TABLE lt_f4.
+    go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
   ENDIF.
 ENDFORM.
@@ -1183,7 +1198,8 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
   DATA: ls_disp   TYPE ty_display,
         lv_locid  TYPE char10,
         lv_date   TYPE aedat,
-        lv_newsel TYPE char1.
+        lv_newsel TYPE char1,
+        ls_stable TYPE lvc_s_stbl.
   READ TABLE gt_display INDEX iv_index INTO ls_disp.
   IF sy-subrc <> 0. RETURN. ENDIF.
   IF ls_disp-exclude = 'X'. RETURN. ENDIF.   " excluded rows cannot be selected
@@ -1202,7 +1218,9 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
     ENDIF.
   ENDLOOP.
   IF go_alv IS NOT INITIAL.
-    go_alv->refresh_table_display( i_soft_refresh = abap_true ).
+    " is_stable row+col keeps the current scroll position (no jump to top)
+    ls_stable-row = abap_true. ls_stable-col = abap_true.
+    go_alv->refresh_table_display( is_stable = ls_stable i_soft_refresh = abap_true ).
   ENDIF.
 ENDFORM.
 
@@ -1442,6 +1460,15 @@ FORM handle_batch_mass_change.
     EXCEPTIONS OTHERS = 1 ).
 
   go_batch_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+  " Register CHARG for onf4 so on_batch_f4 actually fires in the popup
+  DATA: lt_f4b TYPE lvc_t_f4,
+        ls_f4b TYPE lvc_s_f4.
+  CLEAR ls_f4b.
+  ls_f4b-fieldname  = 'CHARG'.
+  ls_f4b-register   = abap_true.
+  ls_f4b-chngeafter = abap_true.
+  INSERT ls_f4b INTO TABLE lt_f4b.
+  go_batch_alv->register_f4_for_fields( it_f4 = lt_f4b ).
   go_batch_alv->set_toolbar_interactive( ).
 ENDFORM.
 
