@@ -1230,7 +1230,7 @@ ENDFORM.
 FORM handle_create_nomination.
   DATA: lt_sel      TYPE tt_display,
         ls_disp     TYPE ty_display,
-        lt_main     TYPE tt_main,
+        i_main      TYPE tt_main,
         ls_main     TYPE ty_main,
         lt_errors   TYPE tt_log,
         i_rspartab  TYPE STANDARD TABLE OF rsparams,
@@ -1276,13 +1276,13 @@ FORM handle_create_nomination.
     ls_main-unit  = gc_sm3.
     ls_main-charg = ls_disp-charg.
     ls_main-rank  = 1.
-    APPEND ls_main TO lt_main.
+    APPEND ls_main TO i_main.
   ENDLOOP.
 
   " Export nomination data and call flag so YRXR036 skips Excel read and uses this data
-  EXPORT lt_main TO MEMORY ID gc_memory_id.
-  DATA: lv_call_flag TYPE char1 VALUE 'X'.
-  EXPORT lv_call_flag TO MEMORY ID gc_call_flag.
+  EXPORT i_main[] TO MEMORY ID gc_memory_id.
+  DATA: lv_yrgg015 TYPE char1 VALUE 'X'.
+  EXPORT lv_yrgg015 = lv_yrgg015 TO MEMORY ID gc_call_flag.
 
   " R_EXCEL = 'X' triggers batch_validate -> get_nomination -> createfromdata in YRXR036
   CLEAR wa_rspartab.
