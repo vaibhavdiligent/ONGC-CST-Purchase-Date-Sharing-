@@ -172,6 +172,8 @@ START-OF-SELECTION.
           APPEND wa_textpool TO lt_textpool.
           CLEAR wa_textpool.
         ENDLOOP.
+        " Delete existing text pool first so INSERT overwrites, not skips
+        DELETE TEXTPOOL lv_prog_name LANGUAGE sy-langu.
         INSERT TEXTPOOL lv_prog_name FROM lt_textpool LANGUAGE sy-langu.
         IF sy-subrc = 0.
           COMMIT WORK AND WAIT.
