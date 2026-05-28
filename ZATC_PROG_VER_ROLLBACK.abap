@@ -237,7 +237,6 @@ START-OF-SELECTION.
             dynpro           = wa_tstc-dypno
             language         = sy-langu
             transport_number = lv_req
-            transaction_type = wa_tstc-trtype
             shorttext        = wa_tstct-ttext
           EXCEPTIONS
             cancelled        = 1
