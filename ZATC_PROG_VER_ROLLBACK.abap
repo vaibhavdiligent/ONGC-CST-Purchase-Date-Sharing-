@@ -199,21 +199,24 @@ START-OF-SELECTION.
           lt_tcodes      TYPE STANDARD TABLE OF tstc,
           lt_gui_attr    TYPE STANDARD TABLE OF tstcc,
           wa_tstc        TYPE tstc,
-          wa_tstct       TYPE tstct.
+          wa_tstct       TYPE tstct,
+          lv_tcode       TYPE tstc-tcode.
 
-    CLEAR: lv_versno_tran, lv_found_tran, lt_tcodes, lt_gui_attr.
+    CLEAR: lv_versno_tran, lv_found_tran, lt_tcodes, lt_gui_attr, lv_tcode.
 
     PERFORM get_latest_version USING lv_obj_name 'TRAN'
                                CHANGING lv_versno_tran lv_found_tran.
 
     IF lv_found_tran = abap_true.
 
+      lv_tcode = lv_obj_name.
+
       " Read current transaction definition
       CALL FUNCTION 'RPY_TRANSACTION_READ'
         EXPORTING
-          transaction  = lv_obj_name
+          transaction    = lv_tcode
         TABLES
-          tcodes       = lt_tcodes
+          tcodes         = lt_tcodes
           gui_attributes = lt_gui_attr
         EXCEPTIONS
           permission_error = 1
@@ -227,12 +230,12 @@ START-OF-SELECTION.
 
         " Read transaction short text
         SELECT SINGLE * INTO @wa_tstct FROM tstct
-          WHERE sprsl = @sy-langu AND tcode = @lv_obj_name.
+          WHERE sprsl = @sy-langu AND tcode = @lv_tcode.
 
         " Re-insert transaction linked to transport request
         CALL FUNCTION 'RPY_TRANSACTION_INSERT'
           EXPORTING
-            transaction      = lv_obj_name
+            transaction      = lv_tcode
             program          = wa_tstc-pgmna
             dynpro           = wa_tstc-dypno
             language         = sy-langu
