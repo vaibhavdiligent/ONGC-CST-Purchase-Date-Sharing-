@@ -463,13 +463,13 @@ FORM set_default_fn_dates.
   lv_day   = lv_today+6(2).
   lv_low   = lv_today.
   lv_high  = lv_today.
-  IF lv_day <= 14.
-    " Current FN is FN1: 01 to 14 of this month
+  IF lv_day <= 15.
+    " Current FN is FN1: 01 to 15 of this month
     lv_low+6(2)  = '01'.
-    lv_high+6(2) = '14'.
+    lv_high+6(2) = '15'.
   ELSE.
-    " Current FN is FN2: 15 to end of this month
-    lv_low+6(2) = '15'.
+    " Current FN is FN2: 16 to end of this month
+    lv_low+6(2) = '16'.
     CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
       EXPORTING day_in            = lv_today
       IMPORTING last_day_of_month = lv_high.
@@ -506,7 +506,7 @@ ENDFORM.
 * FORM validate_selection_screen
 *----------------------------------------------------------------------*
 FORM validate_selection_screen.
-  " FN definition: FN1 = 1st-14th, FN2 = 15th-end of month
+  " FN definition: FN1 = 1st-15th, FN2 = 16th-end of month
   DATA: ls_locid      LIKE LINE OF s_locid,
         ls_date       LIKE LINE OF s_date,
         lv_day_lo     TYPE i,
@@ -535,13 +535,13 @@ FORM validate_selection_screen.
       MESSAGE e000(oo) WITH 'Gas Day from date is mandatory' ' ' ' ' ' '.
     ENDIF.
     " Determine FN end for the FROM date
-    " FN1: days 1-14  →  FN end = 14th of same month
-    " FN2: days 15-31 →  FN end = last day of same month
+    " FN1: days 1-15  →  FN end = 15th of same month
+    " FN2: days 16-31 →  FN end = last day of same month
     lv_day_lo = ls_date-low+6(2).
     CLEAR lv_fn_end_low.
-    IF lv_day_lo <= 14.
+    IF lv_day_lo <= 15.
       lv_fn_end_low      = ls_date-low.
-      lv_fn_end_low+6(2) = '14'.
+      lv_fn_end_low+6(2) = '15'.
     ELSE.
       CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
         EXPORTING day_in            = ls_date-low
@@ -556,9 +556,9 @@ FORM validate_selection_screen.
   " Validate selected dates do not exceed current fortnight end date
   lv_today  = sy-datum.
   lv_fn_day = lv_today+6(2).
-  IF lv_fn_day <= 14.
+  IF lv_fn_day <= 15.
     lv_fn_end      = lv_today.
-    lv_fn_end+6(2) = '14'.
+    lv_fn_end+6(2) = '15'.
   ELSE.
     CALL FUNCTION 'RP_LAST_DAY_OF_MONTHS'
       EXPORTING day_in            = lv_today
