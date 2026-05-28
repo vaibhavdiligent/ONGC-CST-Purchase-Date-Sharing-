@@ -196,49 +196,73 @@ START-OF-SELECTION.
 
     DATA: lv_versno_tran TYPE vrsd-versno,
           lv_found_tran  TYPE abap_bool,
-          lt_tran_source TYPE STANDARD TABLE OF abaptxt255,
-          lv_fm_tran     LIKE vrsd_40a-objname.
+          lt_tcodes      TYPE STANDARD TABLE OF tstc,
+          lt_gui_attr    TYPE STANDARD TABLE OF tstcc,
+          wa_tstc        TYPE tstc,
+          wa_tstct       TYPE tstct.
 
-    CLEAR: lv_versno_tran, lv_found_tran, lt_tran_source.
+    CLEAR: lv_versno_tran, lv_found_tran, lt_tcodes, lt_gui_attr.
 
     PERFORM get_latest_version USING lv_obj_name 'TRAN'
                                CHANGING lv_versno_tran lv_found_tran.
 
     IF lv_found_tran = abap_true.
-      lv_fm_tran = lv_obj_name.
 
-      CALL FUNCTION 'SVRS_GET_VERSION_TRAN_40'
+      " Read current transaction definition
+      CALL FUNCTION 'RPY_TRANSACTION_READ'
         EXPORTING
-          object_name           = lv_fm_tran
-          versno                = lv_versno_tran
+          transaction  = lv_obj_name
         TABLES
-          tran_tab              = lt_tran_source
+          tcodes       = lt_tcodes
+          gui_attributes = lt_gui_attr
         EXCEPTIONS
-          no_version            = 1
-          system_failure        = 2
-          communication_failure = 3.
+          permission_error = 1
+          cancelled        = 2
+          not_found        = 3
+          object_not_found = 4
+          OTHERS           = 5.
 
-      IF sy-subrc = 0 AND lt_tran_source IS NOT INITIAL.
-        CALL FUNCTION 'RPY_TRANSACTION_UPDATE'
+      IF sy-subrc = 0 AND lt_tcodes IS NOT INITIAL.
+        READ TABLE lt_tcodes INTO wa_tstc INDEX 1.
+
+        " Read transaction short text
+        SELECT SINGLE * INTO @wa_tstct FROM tstct
+          WHERE sprsl = @sy-langu AND tcode = @lv_obj_name.
+
+        " Re-insert transaction linked to transport request
+        CALL FUNCTION 'RPY_TRANSACTION_INSERT'
           EXPORTING
             transaction      = lv_obj_name
+            program          = wa_tstc-pgmna
+            dynpro           = wa_tstc-dypno
+            language         = sy-langu
             transport_number = lv_req
-          TABLES
-            tran_tab         = lt_tran_source
+            transaction_type = wa_tstc-trtype
+            shorttext        = wa_tstct-ttext
           EXCEPTIONS
             cancelled        = 1
-            permission_error = 2
-            not_found        = 3
-            OTHERS           = 4.
+            already_exist    = 2
+            permission_error = 3
+            name_not_allowed = 4
+            name_conflict    = 5
+            illegal_type     = 6
+            object_inconsistent = 7
+            db_access_error  = 8
+            OTHERS           = 9.
 
-        IF sy-subrc = 0.
+        IF sy-subrc = 0 OR sy-subrc = 2.
           COMMIT WORK AND WAIT.
-          WRITE: / |TRAN restored from version { lv_versno_tran } and linked to { lv_req }.|.
+          IF sy-subrc = 2.
+            WRITE: / |TRAN { lv_obj_name } already exists – linked to transport { lv_req }.|.
+          ELSE.
+            WRITE: / |TRAN { lv_obj_name } inserted and linked to { lv_req }.|.
+          ENDIF.
+          WRITE: / |  (Version info: { lv_versno_tran } found in VRSD)|.
         ELSE.
-          WRITE: / |ERROR: RPY_TRANSACTION_UPDATE failed (SY-SUBRC: { sy-subrc }).|.
+          WRITE: / |ERROR: RPY_TRANSACTION_INSERT failed (SY-SUBRC: { sy-subrc }).|.
         ENDIF.
       ELSE.
-        WRITE: / |No TRAN data fetched for version { lv_versno_tran } (SY-SUBRC: { sy-subrc }).|.
+        WRITE: / |ERROR: RPY_TRANSACTION_READ failed (SY-SUBRC: { sy-subrc }).|.
       ENDIF.
     ELSE.
       WRITE: / |No TRAN version found in VRSD for { lv_obj_name }.|.
