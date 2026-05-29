@@ -70,6 +70,33 @@ DATA: lt_data     TYPE STANDARD TABLE OF ty_log,
 FIELD-SYMBOLS: <fs> TYPE ty_log.
 
 *----------------------------------------------------------------------*
+* F4 help for output file path
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_path.
+  DATA: lv_f4_file TYPE string,
+        lv_f4_path TYPE string,
+        lv_f4_full TYPE string.
+
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      window_title      = 'Select output file'
+      default_file_name = 'ZWHERE_USED_LOG_EXPORT.txt'
+      default_extension = 'txt'
+      file_filter       = 'Text Files (*.txt)|*.txt|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*|'
+    CHANGING
+      filename          = lv_f4_file
+      path              = lv_f4_path
+      fullpath          = lv_f4_full
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+  IF sy-subrc = 0 AND lv_f4_full IS NOT INITIAL.
+    p_path = lv_f4_full.
+  ENDIF.
+
+*----------------------------------------------------------------------*
 * Macro to build delimited line (classic, ECC-safe)
 *----------------------------------------------------------------------*
 DEFINE _append_field.
@@ -109,6 +136,13 @@ START-OF-SELECTION.
     lv_file = lv_fullpath.
   ELSE.
     lv_file = p_path.
+  ENDIF.
+
+* Safeguard: if a folder was given (ends with \ or /), append a filename
+  DATA: lv_last TYPE c.
+  lv_last = lv_file+( strlen( lv_file ) - 1 )(1).
+  IF lv_last = '\' OR lv_last = '/'.
+    CONCATENATE lv_file 'ZWHERE_USED_LOG_EXPORT.txt' INTO lv_file.
   ENDIF.
 
 * Count matching records first (for progress display)
