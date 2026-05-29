@@ -51,14 +51,14 @@ TYPES: BEGIN OF ty_log,
        END OF ty_log.
 
 DATA: lt_data     TYPE TABLE OF ty_log,
-      ls_data     TYPE ty_log,
       lt_output   TYPE TABLE OF string,
       lv_line     TYPE string,
       lv_file     TYPE string,
+      lv_path     TYPE string,
+      lv_fullpath TYPE string,
       lv_total    TYPE i,
       lv_fetched  TYPE i,
-      lv_pct      TYPE i,
-      lv_msg      TYPE string.
+      lv_pct      TYPE i.
 
 FIELD-SYMBOLS: <fs> TYPE ty_log.
 
@@ -87,12 +87,18 @@ START-OF-SELECTION.
         file_filter       = 'Text Files (*.txt)|*.txt|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*|'
       CHANGING
         filename          = lv_file
+        path              = lv_path
+        fullpath          = lv_fullpath
       EXCEPTIONS
-        OTHERS            = 1 ).
-    IF sy-subrc <> 0 OR lv_file IS INITIAL.
+        cntl_error        = 1
+        error_no_gui      = 2
+        not_supported_by_gui = 3
+        OTHERS            = 4 ).
+    IF sy-subrc <> 0 OR lv_fullpath IS INITIAL.
       MESSAGE 'No file selected. Program cancelled.' TYPE 'I'.
       LEAVE PROGRAM.
     ENDIF.
+    lv_file = lv_fullpath.
   ELSE.
     lv_file = p_path.
   ENDIF.
