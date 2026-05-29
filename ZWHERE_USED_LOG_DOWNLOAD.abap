@@ -65,6 +65,9 @@ DATA: lt_data     TYPE STANDARD TABLE OF ty_log,
       lv_bom      TYPE c,
       lv_cursor   TYPE cursor,
       lv_count    TYPE i,
+      lv_last     TYPE c,
+      lv_len      TYPE i,
+      lv_off      TYPE i,
       lv_msg      TYPE string.
 
 FIELD-SYMBOLS: <fs> TYPE ty_log.
@@ -139,10 +142,13 @@ START-OF-SELECTION.
   ENDIF.
 
 * Safeguard: if a folder was given (ends with \ or /), append a filename
-  DATA: lv_last TYPE c.
-  lv_last = lv_file+( strlen( lv_file ) - 1 )(1).
-  IF lv_last = '\' OR lv_last = '/'.
-    CONCATENATE lv_file 'ZWHERE_USED_LOG_EXPORT.txt' INTO lv_file.
+  lv_len = strlen( lv_file ).
+  IF lv_len > 0.
+    lv_off = lv_len - 1.
+    lv_last = lv_file+lv_off(1).
+    IF lv_last = '\' OR lv_last = '/'.
+      CONCATENATE lv_file 'ZWHERE_USED_LOG_EXPORT.txt' INTO lv_file.
+    ENDIF.
   ENDIF.
 
 * Count matching records first (for progress display)
