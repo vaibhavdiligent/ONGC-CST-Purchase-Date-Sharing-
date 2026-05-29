@@ -1,8 +1,19 @@
 *&---------------------------------------------------------------------*
 *& Program: ZWHERE_USED_LOG_DOWNLOAD
-*& Purpose: Download high-volume data from ZWHERE_USED_LOG to local file
-*&          Handles 3M+ records via chunked SELECT with package cursor
-*&          Written in classic ABAP syntax for ECC 6.0 compatibility
+*& Purpose: Download high-volume data from ZWHERE_USED_LOG.
+*&          Handles 3M+ records via package cursor + OPEN DATASET.
+*&          Classic ABAP syntax for ECC 6.0 compatibility.
+*&
+*& IMPORTANT - why OPEN DATASET (not GUI_DOWNLOAD):
+*&   GUI_DOWNLOAD opens an RFC connection to the SAP GUI frontend.
+*&   That roundtrip triggers an IMPLICIT DATABASE COMMIT, which
+*&   invalidates an open cursor -> runtime error DBIF_RSQL_INVALID_CURSOR.
+*&   OPEN DATASET / TRANSFER write to the application server WITHOUT any
+*&   commit, so the cursor stays valid across all FETCH packages.
+*&
+*& OUTPUT: A file on the SAP application server. Retrieve it afterwards
+*&         with transaction CG3Y (server -> PC) or view via AL11.
+*&         Best run in background (SM36 / F9) for this data volume.
 *&---------------------------------------------------------------------*
 REPORT zwhere_used_log_download.
 
@@ -23,10 +34,11 @@ SELECTION-SCREEN BEGIN OF BLOCK sel WITH FRAME TITLE text-001.
 SELECTION-SCREEN END OF BLOCK sel.
 
 SELECTION-SCREEN BEGIN OF BLOCK opt WITH FRAME TITLE text-002.
-  PARAMETERS: p_pkg    TYPE i DEFAULT 50000  OBLIGATORY,  " Package size per fetch
-              p_path   TYPE string LOWER CASE,             " File path (blank = dialog)
-              p_delim  TYPE c DEFAULT '|',                 " Field delimiter
-              p_head   AS CHECKBOX DEFAULT 'X'.            " Include header row
+  PARAMETERS: p_file  TYPE string LOWER CASE OBLIGATORY
+                      DEFAULT '/tmp/ZWHERE_USED_LOG_EXPORT.txt',
+              p_pkg   TYPE i DEFAULT 50000 OBLIGATORY,  " Package size per fetch
+              p_delim TYPE c DEFAULT '|',               " Field delimiter
+              p_head  AS CHECKBOX DEFAULT 'X'.          " Include header row
 SELECTION-SCREEN END OF BLOCK opt.
 
 *----------------------------------------------------------------------*
@@ -51,53 +63,17 @@ TYPES: BEGIN OF ty_log,
          message             TYPE zwhere_used_log-message,
        END OF ty_log.
 
-DATA: lt_data     TYPE STANDARD TABLE OF ty_log,
-      lt_output   TYPE STANDARD TABLE OF string,
-      lv_line     TYPE string,
-      lv_field    TYPE string,
-      lv_file     TYPE string,
-      lv_path     TYPE string,
-      lv_fullpath TYPE string,
-      lv_total    TYPE i,
-      lv_fetched  TYPE i,
-      lv_pct      TYPE i,
-      lv_append   TYPE c,
-      lv_bom      TYPE c,
-      lv_cursor   TYPE cursor,
-      lv_count    TYPE i,
-      lv_last     TYPE c,
-      lv_len      TYPE i,
-      lv_off      TYPE i,
-      lv_msg      TYPE string.
+DATA: lt_data    TYPE STANDARD TABLE OF ty_log,
+      lv_line    TYPE string,
+      lv_field   TYPE string,
+      lv_total   TYPE i,
+      lv_fetched TYPE i,
+      lv_pct     TYPE i,
+      lv_cursor  TYPE cursor,
+      lv_count   TYPE i,
+      lv_msg     TYPE string.
 
 FIELD-SYMBOLS: <fs> TYPE ty_log.
-
-*----------------------------------------------------------------------*
-* F4 help for output file path
-*----------------------------------------------------------------------*
-AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_path.
-  DATA: lv_f4_file TYPE string,
-        lv_f4_path TYPE string,
-        lv_f4_full TYPE string.
-
-  CALL METHOD cl_gui_frontend_services=>file_save_dialog
-    EXPORTING
-      window_title      = 'Select output file'
-      default_file_name = 'ZWHERE_USED_LOG_EXPORT.txt'
-      default_extension = 'txt'
-      file_filter       = 'Text Files (*.txt)|*.txt|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*|'
-    CHANGING
-      filename          = lv_f4_file
-      path              = lv_f4_path
-      fullpath          = lv_f4_full
-    EXCEPTIONS
-      cntl_error           = 1
-      error_no_gui         = 2
-      not_supported_by_gui = 3
-      OTHERS               = 4.
-  IF sy-subrc = 0 AND lv_f4_full IS NOT INITIAL.
-    p_path = lv_f4_full.
-  ENDIF.
 
 *----------------------------------------------------------------------*
 * Macro to build delimited line (classic, ECC-safe)
@@ -116,42 +92,17 @@ END-OF-DEFINITION.
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
 
-* Determine output file path
-  IF p_path IS INITIAL.
-    CALL METHOD cl_gui_frontend_services=>file_save_dialog
-      EXPORTING
-        default_file_name = 'ZWHERE_USED_LOG_EXPORT.txt'
-        default_extension = 'txt'
-        file_filter       = 'Text Files (*.txt)|*.txt|CSV Files (*.csv)|*.csv|All Files (*.*)|*.*|'
-      CHANGING
-        filename          = lv_file
-        path              = lv_path
-        fullpath          = lv_fullpath
-      EXCEPTIONS
-        cntl_error           = 1
-        error_no_gui         = 2
-        not_supported_by_gui = 3
-        OTHERS               = 4.
-    IF sy-subrc <> 0 OR lv_fullpath IS INITIAL.
-      MESSAGE 'No file selected. Program cancelled.' TYPE 'I'.
-      LEAVE PROGRAM.
-    ENDIF.
-    lv_file = lv_fullpath.
-  ELSE.
-    lv_file = p_path.
+* Open the application-server file for output (text mode, UTF-8).
+* OPEN DATASET does NOT cause a database commit -> cursor stays valid.
+  OPEN DATASET p_file FOR OUTPUT IN TEXT MODE ENCODING UTF-8.
+  IF sy-subrc <> 0.
+    CONCATENATE 'Cannot open file on application server:' p_file
+                INTO lv_msg SEPARATED BY space.
+    MESSAGE lv_msg TYPE 'E'.
   ENDIF.
 
-* Safeguard: if a folder was given (ends with \ or /), append a filename
-  lv_len = strlen( lv_file ).
-  IF lv_len > 0.
-    lv_off = lv_len - 1.
-    lv_last = lv_file+lv_off(1).
-    IF lv_last = '\' OR lv_last = '/'.
-      CONCATENATE lv_file 'ZWHERE_USED_LOG_EXPORT.txt' INTO lv_file.
-    ENDIF.
-  ENDIF.
-
-* Count matching records first (for progress display)
+* Count matching records first (for progress display).
+* This SELECT completes fully before the cursor is opened, so no conflict.
   SELECT COUNT(*) INTO lv_total
     FROM zwhere_used_log
     WHERE src_obj_name     IN s_objnm
@@ -164,12 +115,10 @@ START-OF-SELECTION.
       AND status           IN s_status.
 
   IF lv_total = 0.
+    CLOSE DATASET p_file.
     MESSAGE 'No records found matching selection criteria.' TYPE 'I'.
     LEAVE PROGRAM.
   ENDIF.
-
-  WRITE: / 'Total records to export:', lv_total.
-  ULINE.
 
 * Write header row
   IF p_head = 'X'.
@@ -190,10 +139,10 @@ START-OF-SELECTION.
     _append_field 'ERNAM'.
     _append_field 'STATUS'.
     _append_field 'MESSAGE'.
-    APPEND lv_line TO lt_output.
+    TRANSFER lv_line TO p_file.
   ENDIF.
 
-* Fetch data in packages using cursor to avoid memory overflow
+* Fetch data in packages using a cursor to avoid memory overflow.
   lv_fetched = 0.
 
   OPEN CURSOR WITH HOLD lv_cursor FOR
@@ -208,8 +157,7 @@ START-OF-SELECTION.
         AND used_in_obj_type IN s_uobjtp
         AND erdat            IN s_erdat
         AND ernam            IN s_ernam
-        AND status           IN s_status
-      ORDER BY src_obj_name src_obj_type erdat.
+        AND status           IN s_status.
 
   DO.
     CLEAR lt_data.
@@ -221,7 +169,8 @@ START-OF-SELECTION.
       EXIT.
     ENDIF.
 
-*   Convert internal table to delimited strings
+*   Convert each row to a delimited line and transfer to the dataset.
+*   TRANSFER does not commit, so the cursor remains valid.
     LOOP AT lt_data ASSIGNING <fs>.
       CLEAR lv_line.
       _append_field <fs>-src_obj_name.
@@ -240,57 +189,28 @@ START-OF-SELECTION.
       _append_field <fs>-ernam.
       _append_field <fs>-status.
       _append_field <fs>-message.
-      APPEND lv_line TO lt_output.
+      TRANSFER lv_line TO p_file.
     ENDLOOP.
 
     lv_count = lines( lt_data ).
     lv_fetched = lv_fetched + lv_count.
 
-*   Determine append / BOM flags (first write creates file, rest append)
-    IF lv_fetched > lv_count.
-      lv_append = 'X'.
-      lv_bom    = ' '.
-    ELSE.
-      lv_append = ' '.
-      lv_bom    = 'X'.
-    ENDIF.
-
-*   Flush buffer to file every package to control memory usage
-    CALL METHOD cl_gui_frontend_services=>gui_download
-      EXPORTING
-        filename         = lv_file
-        filetype         = 'ASC'
-        append           = lv_append
-        codepage         = '4110'    " UTF-8
-        write_bom        = lv_bom
-      CHANGING
-        data_tab         = lt_output
-      EXCEPTIONS
-        file_write_error = 1
-        OTHERS           = 2.
-
-    IF sy-subrc <> 0.
-      CLOSE CURSOR lv_cursor.
-      CONCATENATE 'File write error at record' lv_fetched 'Path:' lv_file
-                  INTO lv_msg SEPARATED BY space.
-      MESSAGE lv_msg TYPE 'E'.
-    ENDIF.
-
-    CLEAR lt_output.
-
-*   Progress indicator
+*   Progress indicator (safe: no DB / RFC interruption of the cursor).
     lv_pct = ( lv_fetched * 100 ) / lv_total.
     WRITE: / 'Exported', lv_fetched, '/', lv_total, 'records (', lv_pct, '% )'.
 
-    IF sy-subrc <> 0.   " FETCH returned non-zero = end of data
+    IF lv_count < p_pkg.   " last (partial) package -> done
       EXIT.
     ENDIF.
   ENDDO.
 
   CLOSE CURSOR lv_cursor.
+  CLOSE DATASET p_file.
 
   ULINE.
-  WRITE: / 'Export complete.', lv_fetched, 'records written to:', lv_file.
-  CONCATENATE 'Export complete.' lv_fetched 'records written.'
+  WRITE: / 'Export complete.', lv_fetched, 'records written to server file:'.
+  WRITE: / p_file.
+  WRITE: / 'Retrieve it with transaction CG3Y (or view via AL11).'.
+  CONCATENATE 'Export complete.' lv_fetched 'records written to' p_file
               INTO lv_msg SEPARATED BY space.
   MESSAGE lv_msg TYPE 'S'.
