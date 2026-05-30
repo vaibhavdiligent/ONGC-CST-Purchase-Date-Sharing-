@@ -3,7 +3,17 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 4.9 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 25-MAY-2026
+*& VERSION : 5.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 30-MAY-2026
+*& v5.1 - Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam in Section 3F:
+*&        Removes Vietnam entries from gt_zpra_t_dly_prd_nd after SELECT using
+*&        asset description lookup (CS 'Vietnam' in gt_asset_desc). Also skips
+*&        populate_no_data_entries_3f for Vietnam (form was non-existent; call
+*&        commented out).
+*& v5.0 - Chart (fill_dynamic_table_sec5a) now reads BOEPD directly from
+*&        GRAND-TOTAL (col AG) of main DPR table (<gfs_dyn_table>) for actuals,
+*&        and from <gfs_sec2b_table> INDEX 1 GRAND-TOTAL for BE target flat line.
+*&        Replaces per-product raw computation — graph now always consistent
+*&        with what the main DPR table displays.
 *& v4.9 - Fix Production Performance table and chart (section 6/5a):
 *&        1. Annual column shows 2025-26 full year actual (INDEX 2 from
 *&           sec2d_table) instead of same YTD 2026-27 value.
@@ -8924,7 +8934,8 @@ FORM fetch_data_section3f .
          lv_month_end_date   TYPE                   sy-datum,
          lv_poper            TYPE                   t009b-poper,
          lv_count            TYPE                   sy-tabix,
-         lv_flagnd.
+         lv_flagnd,
+         ls_viet_desc        TYPE                   ty_asset_desc.
 
   SELECT gjahr,
          monat,
@@ -9104,10 +9115,18 @@ FORM fetch_data_section3f .
 *    clear lv_flagnd.
 *    ENDLOOP.
 
-      if gt_zpra_t_dly_prd_nd[] is INITIAL.
-      LOOP AT r_production_date.
-      PERFORM populate_no_data_entries_3f TABLES gt_zpra_t_dly_prd_3f USING r_production_date-low r_production_date-high .
+      " Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam — ND data not maintained for Vietnam
+      LOOP AT gt_asset_desc INTO ls_viet_desc.
+        IF ls_viet_desc-desc CS 'Vietnam'.
+          DELETE gt_zpra_t_dly_prd_nd WHERE asset EQ ls_viet_desc-asset.
+        ENDIF.
       ENDLOOP.
+
+      if gt_zpra_t_dly_prd_nd[] is INITIAL.
+*     populate_no_data_entries_3f skipped — Vietnam excluded from ND; not applicable
+*     LOOP AT r_production_date.
+*     PERFORM populate_no_data_entries_3f TABLES gt_zpra_t_dly_prd_3f USING r_production_date-low r_production_date-high .
+*     ENDLOOP.
       else.
       APPEND LINES OF gt_zpra_t_dly_prd_nd to gt_zpra_t_dly_prd_3f.
       endif.
@@ -9347,118 +9366,62 @@ FORM prepare_dynamic_table_sec6 .
   ENDIF.
 ENDFORM.
 FORM fill_dynamic_table_sec5a .
-  DATA : lv_date         TYPE sy-datum,
-         lv_monat_3digit TYPE t009b-poper,
-         lv_monat_2digit TYPE bkpf-monat,
-         lv_gjahr        TYPE bkpf-gjahr,
-         lv_first_day    TYPE sy-datum,
-         lv_last_day     TYPE sy-datum,
-         lv_days         TYPE sy-tabix,
-         lv_col_name     TYPE lvc_fname.
+  DATA : lv_date           TYPE sy-datum,
+         lv_grand_total_be TYPE p LENGTH 16 DECIMALS 7,
+         lv_index          TYPE sy-tabix.
 
-  lv_date =  gv_year_start_date.
-  DO .
-    IF lv_date GT p_date.
-      EXIT .
-    ENDIF.
-    APPEND INITIAL LINE TO <gfs_sec5a_table> ASSIGNING <gfs_dyn_line> .
-    ASSIGN COMPONENT 'PRODUCTION_DATE' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-    CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
-      EXPORTING
-        input  = lv_date
-      IMPORTING
-        output = <gfs_field>.
-    IF sy-subrc <> 0.
-      MESSAGE 'Unexpteced Internal Error' TYPE 'E' .
-    ENDIF.
-    IF lv_date+6(2) EQ '01'.
-      CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
-        EXPORTING
-          i_date         = lv_date
-        " I_MONMIT       = 00
-          i_periv        = gv_periv
-        IMPORTING
-          e_buper        = lv_monat_3digit
-          e_gjahr        = lv_gjahr
-        EXCEPTIONS
-          input_false    = 01
-          t009_notfound  = 02
-          t009b_notfound = 03.
-
-      IF sy-subrc <> 0.
-        MESSAGE 'Error getting Period' TYPE 'E' .
-      ENDIF.
-      lv_monat_2digit = lv_monat_3digit+1(2) .
-      CALL FUNCTION 'PERIOD_DAY_DETERMINE'
-        EXPORTING
-          i_gjahr              = lv_gjahr
-          i_monat              = lv_monat_2digit
-          i_periv              = gv_periv
-        IMPORTING
-          e_fday               = lv_first_day
-          e_lday               = lv_last_day
-*         E_SPERIOD            =
-        EXCEPTIONS
-          error_period         = 1
-          error_period_version = 2
-          firstday_not_defined = 3
-          period_not_defined   = 4
-          year_invalid         = 5
-          OTHERS               = 6.
-      IF sy-subrc <> 0.
-        MESSAGE 'Internal Date error' TYPE 'E' .
-      ENDIF.
-      lv_days = lv_last_day - lv_first_day + 1 .
-    ENDIF.
-    ASSIGN COMPONENT 2 OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+  " Read daily BOEPD BE target from sec2b INDEX 1 (TAR_BE row = col AG of BE row)
+  READ TABLE <gfs_sec2b_table> ASSIGNING <gfs_dyn_line> INDEX 1.
+  IF sy-subrc IS INITIAL.
+    ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field>.
     IF <gfs_field> IS ASSIGNED.
-      LOOP AT gt_zpra_t_dly_prd_5a INTO gs_zpra_t_dly_prd WHERE production_date EQ lv_date.
-        PERFORM convert_non_gas_units_5a CHANGING gs_zpra_t_dly_prd.
-        LOOP AT gt_zpra_t_prd_pi_5a INTO gs_zpra_t_prd_pi WHERE asset EQ gs_zpra_t_dly_prd-asset
-                                                            AND block EQ gs_zpra_t_dly_prd-block
-                                                            AND vld_frm LE lv_date
-                                                            AND vld_to  GE lv_date.
-          EXIT .
-        ENDLOOP.
-        gs_zpra_t_dly_prd-prod_vl_qty1 = gs_zpra_t_dly_prd-prod_vl_qty1 * gs_zpra_t_prd_pi-pi / 100 .
-        <gfs_field> = <gfs_field> + gs_zpra_t_dly_prd-prod_vl_qty1 .
-      ENDLOOP.
-      UNASSIGN <gfs_field> .
+      lv_grand_total_be = <gfs_field>.
+      UNASSIGN <gfs_field>.
     ENDIF.
-    LOOP AT gt_zpra_t_prd_tar_5a INTO gs_zpra_t_prd_tar WHERE gjahr EQ lv_gjahr
-                                                          AND monat EQ lv_monat_2digit.
-***     IF gs_zpra_t_prd_tar-product EQ c_prod_gas .
-***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 * 1000 * 6290.
-***     ELSE.
-***      CLEAR gs_zpra_t_tar_cf .
-***      READ TABLE gt_zpra_t_tar_cf_5a INTO gs_zpra_t_tar_cf WITH KEY gjahr   = lv_gjahr
-***                                                                    product = gs_zpra_t_prd_tar-product
-***                                                                    asset   = gs_zpra_t_prd_tar-asset
-***                                                                    block   = gs_zpra_t_prd_tar-block BINARY SEARCH .
-***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 *   gs_zpra_t_tar_cf-conv_factor .
-***      gs_zpra_t_prd_tar-tar_qty2 = gs_zpra_t_prd_tar-tar_qty2 * 1000000 .
-***     ENDIF.
-      PERFORM convert_target_units CHANGING gs_zpra_t_prd_tar.
-
-      lv_col_name = gs_zpra_t_prd_tar-tar_code .
-      ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      IF gs_zpra_t_prd_tar-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
-        <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 * 6290 / lv_days .
-      ELSE.
-        <gfs_field> = <gfs_field> + gs_zpra_t_prd_tar-tar_qty2 / lv_days .
-      ENDIF.
-      UNASSIGN <gfs_field> .
-
-    ENDLOOP.
-
-    lv_date = lv_date + 1 .
-  ENDDO.
-  IF p_mb IS NOT INITIAL.
-    LOOP AT <gfs_sec5a_table> ASSIGNING <gfs_dyn_line> .
-      ASSIGN COMPONENT 'ACT_PRODUCTION' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
-      <gfs_field> = <gfs_field> / 1000000 .
-    ENDLOOP.
   ENDIF.
+
+  " One chart row per date - read GRAND-TOTAL (col AG = BOEPD) from main DPR table
+  lv_date  = gv_year_start_date.
+  lv_index = 0.
+  DO.
+    IF lv_date GT p_date.
+      EXIT.
+    ENDIF.
+    lv_index = lv_index + 1.
+
+    APPEND INITIAL LINE TO <gfs_sec5a_table> ASSIGNING <gfs_dyn_line2>.
+
+    ASSIGN COMPONENT 'PRODUCTION_DATE' OF STRUCTURE <gfs_dyn_line2> TO <gfs_field2>.
+    CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
+      EXPORTING  input  = lv_date
+      IMPORTING  output = <gfs_field2>.
+    UNASSIGN <gfs_field2>.
+
+    " Actual BOEPD = col AG (GRAND-TOTAL) of this date row in the main DPR table
+    READ TABLE <gfs_dyn_table> ASSIGNING <gfs_dyn_line> INDEX lv_index.
+    IF sy-subrc IS INITIAL.
+      ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field>.
+      IF <gfs_field> IS ASSIGNED.
+        ASSIGN COMPONENT 'ACT_PRODUCTION' OF STRUCTURE <gfs_dyn_line2> TO <gfs_field2>.
+        IF <gfs_field2> IS ASSIGNED.
+          <gfs_field2> = <gfs_field>.
+          UNASSIGN <gfs_field2>.
+        ENDIF.
+        UNASSIGN <gfs_field>.
+      ENDIF.
+    ENDIF.
+
+    " BE Target = col AG of BE row in sec2b (flat daily BOEPD line)
+    IF p_t_be IS NOT INITIAL.
+      ASSIGN COMPONENT 'TAR_BE' OF STRUCTURE <gfs_dyn_line2> TO <gfs_field2>.
+      IF <gfs_field2> IS ASSIGNED.
+        <gfs_field2> = lv_grand_total_be.
+        UNASSIGN <gfs_field2>.
+      ENDIF.
+    ENDIF.
+
+    lv_date = lv_date + 1.
+  ENDDO.
 ENDFORM.
 FORM fill_dynamic_table_sec6 .
   PERFORM fill_dynamic_table_sec6a .
