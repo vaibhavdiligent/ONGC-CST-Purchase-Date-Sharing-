@@ -3,8 +3,13 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 2.2  |  Git: bcd-overflow-fix  |  Date: 29-MAY-2026
-*& Changes : v2.2 - Chart (fill_dynamic_table_sec5a) now reads BOEPD directly
+*& VERSION : 2.3  |  Git: bcd-overflow-fix  |  Date: 30-MAY-2026
+*& Changes : v2.3 - Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam in Section 3F:
+*&           Removes Vietnam entries from gt_zpra_t_dly_prd_nd after SELECT using
+*&           asset description lookup (CS 'Vietnam' in gt_asset_desc). Also skips
+*&           populate_no_data_entries_3f for Vietnam (form was non-existent; call
+*&           commented out).
+*&           v2.2 - Chart (fill_dynamic_table_sec5a) now reads BOEPD directly
 *&           from GRAND-TOTAL (col AG) of main DPR table (<gfs_dyn_table>) for
 *&           actuals, and from <gfs_sec2b_table> INDEX 1 GRAND-TOTAL for BE
 *&           target flat line. Replaces per-product raw computation.
@@ -8671,7 +8676,8 @@ FORM fetch_data_section3f .
          lv_month_end_date   TYPE                   sy-datum,
          lv_poper            TYPE                   t009b-poper,
          lv_count            TYPE                   sy-tabix,
-         lv_flagnd.
+         lv_flagnd,
+         ls_viet_desc        TYPE                   ty_asset_desc.
 
   SELECT gjahr
          monat
@@ -8851,10 +8857,18 @@ FORM fetch_data_section3f .
 *    clear lv_flagnd.
 *    ENDLOOP.
 
-      if gt_zpra_t_dly_prd_nd[] is INITIAL.
-      LOOP AT r_production_date.
-      PERFORM populate_no_data_entries_3f TABLES gt_zpra_t_dly_prd_3f USING r_production_date-low r_production_date-high .
+      " Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam — ND data not maintained for Vietnam
+      LOOP AT gt_asset_desc INTO ls_viet_desc.
+        IF ls_viet_desc-desc CS 'Vietnam'.
+          DELETE gt_zpra_t_dly_prd_nd WHERE asset EQ ls_viet_desc-asset.
+        ENDIF.
       ENDLOOP.
+
+      if gt_zpra_t_dly_prd_nd[] is INITIAL.
+*     populate_no_data_entries_3f skipped — Vietnam excluded from ND; not applicable
+*     LOOP AT r_production_date.
+*     PERFORM populate_no_data_entries_3f TABLES gt_zpra_t_dly_prd_3f USING r_production_date-low r_production_date-high .
+*     ENDLOOP.
       else.
       APPEND LINES OF gt_zpra_t_dly_prd_nd to gt_zpra_t_dly_prd_3f.
       endif.
