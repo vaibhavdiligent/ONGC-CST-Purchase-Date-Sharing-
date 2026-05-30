@@ -76,6 +76,8 @@ TYPES: BEGIN OF ty_display,
          ongc_mater  TYPE char30,
          outline_agr TYPE ebeln,
          charg       TYPE charg_d,
+         nomtk       TYPE oij_nomtk,
+         nomit       TYPE oij_item,
          oa_missing  TYPE char1,
          celltab     TYPE lvc_t_styl,
          t_color     TYPE lvc_t_scol,
@@ -678,6 +680,73 @@ FORM fetch_pur_data.
 
     APPEND ls_disp TO gt_display.
   ENDLOOP.
+
+  PERFORM fetch_nomination_status.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM fetch_nomination_status — bulk lookup in OIJNOMI, populate
+* nomtk/nomit on display rows; grey SEL for locid+day with nominations
+*----------------------------------------------------------------------*
+FORM fetch_nomination_status.
+  DATA: ls_disp   TYPE ty_display,
+        ls_nomi   TYPE oijnomi,
+        lt_nomi   TYPE STANDARD TABLE OF oijnomi,
+        ls_styl   TYPE lvc_s_styl,
+        lr_docnr  TYPE RANGE OF ebeln,
+        ls_rdocnr LIKE LINE OF lr_docnr,
+        lr_idate  TYPE RANGE OF sy-datum,
+        ls_ridate LIKE LINE OF lr_idate.
+
+  " Build ranges from non-excluded rows that have an OA
+  LOOP AT gt_display INTO ls_disp WHERE exclude <> 'X' AND outline_agr IS NOT INITIAL.
+    ls_rdocnr-sign = 'I'. ls_rdocnr-option = 'EQ'.
+    ls_rdocnr-low  = ls_disp-outline_agr.
+    APPEND ls_rdocnr TO lr_docnr.
+    ls_ridate-sign = 'I'. ls_ridate-option = 'EQ'.
+    ls_ridate-low  = ls_disp-gas_day.
+    APPEND ls_ridate TO lr_idate.
+  ENDLOOP.
+  SORT lr_docnr BY low. DELETE ADJACENT DUPLICATES FROM lr_docnr COMPARING low.
+  SORT lr_idate BY low. DELETE ADJACENT DUPLICATES FROM lr_idate COMPARING low.
+  IF lr_docnr IS INITIAL. RETURN. ENDIF.
+
+  SELECT nomtk nomit docnr idate FROM oijnomi
+    INTO CORRESPONDING FIELDS OF TABLE lt_nomi
+    WHERE docnr  IN lr_docnr
+      AND idate  IN lr_idate
+      AND delind <> 'X'.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  SORT lt_nomi BY docnr idate.
+
+  " Populate nomtk/nomit on matching display rows
+  LOOP AT gt_display INTO ls_disp.
+    IF ls_disp-outline_agr IS INITIAL. CONTINUE. ENDIF.
+    READ TABLE lt_nomi INTO ls_nomi
+      WITH KEY docnr = ls_disp-outline_agr idate = ls_disp-gas_day
+      BINARY SEARCH.
+    IF sy-subrc = 0.
+      ls_disp-nomtk = ls_nomi-nomtk.
+      ls_disp-nomit = ls_nomi-nomit.
+      MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+    ENDIF.
+  ENDLOOP.
+
+  " Disable SEL for ALL rows of any locid+gas_day that has any nomination
+  LOOP AT gt_display INTO ls_disp WHERE nomtk IS NOT INITIAL AND exclude <> 'X'.
+    DATA(lv_locid) = ls_disp-locid.
+    DATA(lv_day)   = ls_disp-gas_day.
+    " Disable SEL on ALL rows with same locid+gas_day
+    LOOP AT gt_display INTO ls_disp WHERE locid = lv_locid AND gas_day = lv_day AND exclude <> 'X'.
+      ls_disp-sel = ' '.
+      DELETE ls_disp-celltab WHERE fieldname = 'SEL'.
+      CLEAR ls_styl.
+      ls_styl-fieldname = 'SEL'.
+      ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
+      INSERT ls_styl INTO TABLE ls_disp-celltab.
+      MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+    ENDLOOP.
+  ENDLOOP.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1096,6 +1165,24 @@ FORM build_fieldcat.
   ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
+  " NOMTK - Nomination Key (output only)
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'NOMTK'.
+  ls_fcat-coltext   = 'Nomination Key'.
+  ls_fcat-seltext   = 'Nomination Key'.
+  ls_fcat-outputlen = 12.
+  ls_fcat-no_zero   = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  " NOMIT - Nomination Item (output only)
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'NOMIT'.
+  ls_fcat-coltext   = 'Nom. Item'.
+  ls_fcat-seltext   = 'Nomination Item'.
+  ls_fcat-outputlen = 6.
+  ls_fcat-no_zero   = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
   " Technical fields (hidden)
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'ROW_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
@@ -1250,6 +1337,11 @@ FORM handle_create_nomination.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
     ENDIF.
+    " Block if a nomination already exists for this location+gas day
+    IF ls_disp-nomtk IS NOT INITIAL.
+      MESSAGE |Nomination already exists for { ls_disp-locid } on { ls_disp-gas_day }.| TYPE 'S' DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
     " Batch is required only for batch-managed materials (MARA-XCHPF = 'X')
     READ TABLE gt_mara_c INTO DATA(ls_mara_chk) WITH KEY matnr = ls_disp-material.
     IF sy-subrc = 0 AND ls_mara_chk-xchpf = 'X'.
@@ -1322,8 +1414,8 @@ FORM handle_create_nomination.
   IF lt_errors IS NOT INITIAL.
     PERFORM display_nomination_errors USING lt_errors.
   ENDIF.
-  " Always refresh — don't show success message as we cannot distinguish
-  " between successful creation and user pressing Back in YRXR036
+  " Re-fetch nomination status so nomtk/nomit columns and SEL greyout update
+  PERFORM fetch_nomination_status.
   IF go_alv IS NOT INITIAL.
     go_alv->refresh_table_display( ).
   ENDIF.
