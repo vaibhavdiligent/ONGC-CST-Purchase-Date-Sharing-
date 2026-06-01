@@ -410,18 +410,28 @@ DATA: go_event_handler TYPE REF TO lcl_event_handler.
 *----------------------------------------------------------------------*
 INITIALIZATION.
   DATA: lv_first_day TYPE datum,
-        lv_last_day  TYPE datum.
+        lv_last_day  TYPE datum,
+        lv_next_m    TYPE numc2,
+        lv_next_y    TYPE numc4.
   IF sy-datum+6(2) > '15'.
+    " Current fortnight: 16th to end of month
+    lv_first_day = sy-datum.
+    lv_first_day+6(2) = '16'.
+    lv_next_m = sy-datum+4(2).
+    lv_next_y = sy-datum+0(4).
+    ADD 1 TO lv_next_m.
+    IF lv_next_m > 12.
+      lv_next_m = 1.
+      ADD 1 TO lv_next_y.
+    ENDIF.
+    CONCATENATE lv_next_y lv_next_m '01' INTO lv_last_day.
+    lv_last_day = lv_last_day - 1.
+  ELSE.
+    " Current fortnight: 1st to 15th
     lv_first_day = sy-datum.
     lv_first_day+6(2) = '01'.
     lv_last_day = sy-datum.
     lv_last_day+6(2) = '15'.
-  ELSE.
-    lv_last_day = sy-datum.
-    lv_last_day+6(2) = '01'.
-    lv_last_day = lv_last_day - 1.
-    lv_first_day = lv_last_day.
-    lv_first_day+6(2) = '16'.
   ENDIF.
   s_date-sign   = 'I'.
   s_date-option = 'BT'.
@@ -455,6 +465,28 @@ AT SELECTION-SCREEN OUTPUT.
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN ON RADIOBUTTON GROUP r1.
   " Triggers AT SELECTION-SCREEN OUTPUT to show/hide View sub-options
+*----------------------------------------------------------------------*
+* Fortnight Validation - restrict to current month/year, single fortnight
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+  DATA: lv_val_low  TYPE datum,
+        lv_val_high TYPE datum.
+  READ TABLE s_date INTO DATA(ls_val) INDEX 1.
+  IF sy-subrc = 0.
+    lv_val_low  = ls_val-low.
+    lv_val_high = ls_val-high.
+    " Dates must be in current month and year
+    IF lv_val_low+0(6) <> sy-datum+0(6) OR lv_val_high+0(6) <> sy-datum+0(6).
+      MESSAGE 'Date range must be within the current month and year' TYPE 'E'.
+    ENDIF.
+    " Dates must not cross fortnight boundary (1-15 vs 16-end)
+    IF lv_val_low+6(2) <= '15' AND lv_val_high+6(2) > '15'.
+      MESSAGE 'Date range must be within a single fortnight (1-15 or 16-end)' TYPE 'E'.
+    ENDIF.
+    IF lv_val_low+6(2) > '15' AND lv_val_high+6(2) <= '15'.
+      MESSAGE 'Date range must be within a single fortnight (1-15 or 16-end)' TYPE 'E'.
+    ENDIF.
+  ENDIF.
 *----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
