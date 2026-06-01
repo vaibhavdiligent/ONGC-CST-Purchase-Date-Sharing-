@@ -2828,8 +2828,23 @@ FORM handle_download.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
+
+  " Remove rows where Location-Material-ONGC Material-State Code is excluded
+  DATA lv_fnt_excl4 TYPE c LENGTH 1.
+  LOOP AT lt_all_fnt INTO DATA(ls_fnt_chk4).
+    CLEAR lv_fnt_excl4.
+    SELECT SINGLE exclude FROM yrga_cst_pur
+      INTO lv_fnt_excl4
+      WHERE location   = ls_fnt_chk4-location
+        AND material   = ls_fnt_chk4-material
+        AND ongc_mater = ls_fnt_chk4-ongc_mater
+        AND state_code = ls_fnt_chk4-state_code
+        AND exclude    = 'X'.
+    IF sy-subrc = 0.
+      DELETE lt_all_fnt.
+    ENDIF.
+  ENDLOOP.
 
   " Get unique Location IDs
   LOOP AT lt_all_daily INTO DATA(ls_pur_loc).
@@ -3256,8 +3271,23 @@ FORM handle_send_email.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
+
+  " Remove rows where Location-Material-ONGC Material-State Code is excluded
+  DATA lv_fnt_excl2 TYPE c LENGTH 1.
+  LOOP AT lt_fnt_data INTO DATA(ls_fnt_chk2).
+    CLEAR lv_fnt_excl2.
+    SELECT SINGLE exclude FROM yrga_cst_pur
+      INTO lv_fnt_excl2
+      WHERE location   = ls_fnt_chk2-location
+        AND material   = ls_fnt_chk2-material
+        AND ongc_mater = ls_fnt_chk2-ongc_mater
+        AND state_code = ls_fnt_chk2-state_code
+        AND exclude    = 'X'.
+    IF sy-subrc = 0.
+      DELETE lt_fnt_data.
+    ENDIF.
+  ENDLOOP.
 
   " Send email with PDF and/or Excel attachments (daily + fortnightly)
   PERFORM send_email USING lt_emails lt_send_data lt_fnt_data lv_send_pdf lv_send_excel.
@@ -4437,8 +4467,23 @@ FORM handle_send_b2b.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
+
+  " Remove rows where Location-Material-ONGC Material-State Code is excluded
+  DATA lv_fnt_excl3 TYPE c LENGTH 1.
+  LOOP AT lt_send_data_fn INTO DATA(ls_fnt_chk3).
+    CLEAR lv_fnt_excl3.
+    SELECT SINGLE exclude FROM yrga_cst_pur
+      INTO lv_fnt_excl3
+      WHERE location   = ls_fnt_chk3-location
+        AND material   = ls_fnt_chk3-material
+        AND ongc_mater = ls_fnt_chk3-ongc_mater
+        AND state_code = ls_fnt_chk3-state_code
+        AND exclude    = 'X'.
+    IF sy-subrc = 0.
+      DELETE lt_send_data_fn.
+    ENDIF.
+  ENDLOOP.
   IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
@@ -4841,8 +4886,23 @@ FORM display_send_preview.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
+
+  " Remove rows where Location-Material-ONGC Material-State Code is excluded
+  DATA lv_fnt_excl TYPE c LENGTH 1.
+  LOOP AT lt_cst_fnt INTO DATA(ls_fnt_chk).
+    CLEAR lv_fnt_excl.
+    SELECT SINGLE exclude FROM yrga_cst_pur
+      INTO lv_fnt_excl
+      WHERE location   = ls_fnt_chk-location
+        AND material   = ls_fnt_chk-material
+        AND ongc_mater = ls_fnt_chk-ongc_mater
+        AND state_code = ls_fnt_chk-state_code
+        AND exclude    = 'X'.
+    IF sy-subrc = 0.
+      DELETE lt_cst_fnt.
+    ENDIF.
+  ENDLOOP.
 
   " Build fortnightly preview data
   LOOP AT lt_cst_fnt INTO DATA(ls_fnt_db).
