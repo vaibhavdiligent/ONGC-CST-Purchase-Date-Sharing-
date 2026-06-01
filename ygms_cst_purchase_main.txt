@@ -5082,8 +5082,9 @@ ENDFORM.
 *& Also validates receipt volumes (YRGA_CST_B2B_1) against measurement
 *& volumes (YYCUM_VOL from YRXA_CMDATA) for each CTP ID and Gas Day.
 *& Shows mismatch popup if GCV/NCV values differ. Program does not
-*& proceed until CV validation is cleared. Volume mismatch is informational.
-*& Returns: cv_valid = abap_true if CV validation passed, abap_false if not
+*& proceed until CV validation is cleared. Volume mismatch also blocks
+*& the allocation process if mismatches are detected.
+*& Returns: cv_valid = abap_true if all validation passed, abap_false if not
 *&---------------------------------------------------------------------*
 FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
   " Local type matching YRXA_CMDATA actual field names:
@@ -5356,13 +5357,14 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
     ENDIF.
   ENDLOOP.
 
-  " V.3: If volume mismatch found, show popup
+  " V.3: If volume mismatch found, show popup and block allocation
   IF lt_vol_mismatch IS NOT INITIAL.
+    cv_valid = abap_false.
     CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
       EXPORTING
-        textline1      = 'Mismatch in volumes detected'
-        textline2      = 'Click Yes to view details, No to continue'
-        titel          = 'Volume Mismatch'
+        textline1      = 'Volume mismatch detected. Allocation cannot proceed.'
+        textline2      = 'Click Yes to view details, No to go back'
+        titel          = 'Volume Mismatch - Allocation Blocked'
         cancel_display = ' '
       IMPORTING
         answer         = lv_vol_answer.
@@ -5417,5 +5419,7 @@ FORM validate_cv_data CHANGING cv_valid TYPE abap_bool.
           program_error = 1
           OTHERS        = 2.
     ENDIF.
+    " Volume mismatch blocks the allocation process - do not continue
+    RETURN.
   ENDIF.
 ENDFORM.
