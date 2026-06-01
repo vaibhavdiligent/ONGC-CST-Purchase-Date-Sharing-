@@ -686,11 +686,13 @@ FORM send_email.
   CONCATENATE sy-datum+6(2) '.' sy-datum+4(2) '.' sy-datum+0(4) INTO lv_w_date.
   CONCATENATE 'YRGR109.' sy-uname '.' lv_w_date '.' sy-uzeit INTO lv_source.
 
-  " Collect unique customers from filtered final table (Diff NE 0)
+  " Collect unique customers where at least one entry has Diff NE 0
   LOOP AT it_final INTO DATA(wa_fe).
-    READ TABLE lt_cust_email WITH KEY kunnr = wa_fe-customer TRANSPORTING NO FIELDS.
-    IF sy-subrc NE 0.
-      APPEND VALUE #( kunnr = wa_fe-customer ) TO lt_cust_email.
+    IF wa_fe-diff_char_ovr NE 0.
+      READ TABLE lt_cust_email WITH KEY kunnr = wa_fe-customer TRANSPORTING NO FIELDS.
+      IF sy-subrc NE 0.
+        APPEND VALUE #( kunnr = wa_fe-customer ) TO lt_cust_email.
+      ENDIF.
     ENDIF.
   ENDLOOP.
 
