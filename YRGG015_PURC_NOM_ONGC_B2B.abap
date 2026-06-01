@@ -693,9 +693,11 @@ FORM fetch_nomination_status.
         ls_nomi   TYPE oijnomi,
         lt_nomi   TYPE STANDARD TABLE OF oijnomi,
         ls_styl   TYPE lvc_s_styl,
-        lr_docnr  TYPE RANGE OF ebeln,
+        lv_locid  TYPE char10,
+        lv_day    TYPE aedat,
+        lr_docnr  TYPE RANGE OF oijnomi-docnr,
         ls_rdocnr LIKE LINE OF lr_docnr,
-        lr_idate  TYPE RANGE OF sy-datum,
+        lr_idate  TYPE RANGE OF oijnomi-idate,
         ls_ridate LIKE LINE OF lr_idate.
 
   " Build ranges from non-excluded rows that have an OA
@@ -734,8 +736,8 @@ FORM fetch_nomination_status.
 
   " Disable SEL for ALL rows of any locid+gas_day that has any nomination
   LOOP AT gt_display INTO ls_disp WHERE nomtk IS NOT INITIAL AND exclude <> 'X'.
-    DATA(lv_locid) = ls_disp-locid.
-    DATA(lv_day)   = ls_disp-gas_day.
+    lv_locid = ls_disp-locid.
+    lv_day   = ls_disp-gas_day.
     " Disable SEL on ALL rows with same locid+gas_day
     LOOP AT gt_display INTO ls_disp WHERE locid = lv_locid AND gas_day = lv_day AND exclude <> 'X'.
       ls_disp-sel = ' '.
