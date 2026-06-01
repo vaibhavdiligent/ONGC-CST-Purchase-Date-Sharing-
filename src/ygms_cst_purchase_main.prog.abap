@@ -194,27 +194,6 @@ INITIALIZATION.
   s_date-high   = sy-datum.
   APPEND s_date.
 *----------------------------------------------------------------------*
-* Fortnight Validation
-*----------------------------------------------------------------------*
-AT SELECTION-SCREEN.
-  CHECK sy-ucomm = 'ONLI'.
-  DATA: lv_fn_low  TYPE datum,
-        lv_fn_high TYPE datum.
-  READ TABLE s_date INTO DATA(ls_dt) INDEX 1.
-  IF sy-subrc = 0.
-    lv_fn_low  = ls_dt-low.
-    lv_fn_high = ls_dt-high.
-    IF lv_fn_low+0(6) <> lv_fn_high+0(6).
-      MESSAGE 'Date range must be within the same month' TYPE 'E'.
-    ENDIF.
-    IF lv_fn_low+6(2) <= '15' AND lv_fn_high+6(2) > '15'.
-      MESSAGE 'Date range must be within a single fortnight (1-15 or 16-end)' TYPE 'E'.
-    ENDIF.
-    IF lv_fn_low+6(2) > '15' AND lv_fn_high+6(2) <= '15'.
-      MESSAGE 'Date range must be within a single fortnight (1-15 or 16-end)' TYPE 'E'.
-    ENDIF.
-  ENDIF.
-*----------------------------------------------------------------------*
 * Start of Selection
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
