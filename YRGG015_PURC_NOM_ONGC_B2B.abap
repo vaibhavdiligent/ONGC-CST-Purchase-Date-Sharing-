@@ -545,14 +545,8 @@ FORM validate_selection_screen.
       MESSAGE e000(oo) WITH 'Gas Day from date is mandatory' ' ' ' ' ' '.
     ENDIF.
     lv_day_lo = ls_date-low+6(2).
-    lv_day_hi = ls_date-high+6(2).
-    IF lv_day_lo <> 1 AND lv_day_lo <> 16.
-      MESSAGE e000(oo) WITH 'Date range must start on 1st or 16th of month' ' ' ' ' ' '.
-    ENDIF.
-    IF lv_day_hi <> 15 AND lv_day_hi < 28.
-      MESSAGE e000(oo) WITH 'Date range must end on 15th or last day of month' ' ' ' ' ' '.
-    ENDIF.
-    " Compute FN end for the FROM date and ensure TO is within the same fortnight
+    " Compute the end of the fortnight that contains the FROM date
+    " FN1 = 1st-15th, FN2 = 16th-last day of month
     CLEAR lv_fn_end_low.
     IF lv_day_lo <= 15.
       lv_fn_end_low      = ls_date-low.
