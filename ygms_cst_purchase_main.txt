@@ -475,9 +475,11 @@ AT SELECTION-SCREEN.
   IF sy-subrc = 0.
     lv_val_low  = ls_val-low.
     lv_val_high = ls_val-high.
-    " Dates must be in current month and year
-    IF lv_val_low+0(6) <> sy-datum+0(6) OR lv_val_high+0(6) <> sy-datum+0(6).
-      MESSAGE 'Date range must be within the current month and year' TYPE 'E'.
+    " Current month/year check only for Allocation and Send Data modes
+    IF p_alloc IS NOT INITIAL OR p_send IS NOT INITIAL.
+      IF lv_val_low+0(6) <> sy-datum+0(6) OR lv_val_high+0(6) <> sy-datum+0(6).
+        MESSAGE 'Date range must be within the current month and year' TYPE 'E'.
+      ENDIF.
     ENDIF.
     " Dates must not cross fortnight boundary (1-15 vs 16-end)
     IF lv_val_low+6(2) <= '15' AND lv_val_high+6(2) > '15'.
