@@ -76,6 +76,8 @@ TYPES: BEGIN OF ty_display,
          ongc_mater  TYPE char30,
          outline_agr TYPE ebeln,
          charg       TYPE charg_d,
+         nomtk       TYPE oij_nomtk,
+         nomit       TYPE oij_item,
          oa_missing  TYPE char1,
          celltab     TYPE lvc_t_styl,
          t_color     TYPE lvc_t_scol,
@@ -288,7 +290,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     DATA: ls_mod  TYPE lvc_s_modi,
           ls_disp TYPE ty_display.
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
-      IF ls_mod-fieldname = 'CHARG'.
+      IF ls_mod-fieldname = 'CHARG' AND ls_mod-value IS NOT INITIAL.
         READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
         IF sy-subrc = 0.
           ls_disp-charg = ls_mod-value.
@@ -543,14 +545,8 @@ FORM validate_selection_screen.
       MESSAGE e000(oo) WITH 'Gas Day from date is mandatory' ' ' ' ' ' '.
     ENDIF.
     lv_day_lo = ls_date-low+6(2).
-    lv_day_hi = ls_date-high+6(2).
-    IF lv_day_lo <> 1 AND lv_day_lo <> 16.
-      MESSAGE e000(oo) WITH 'Date range must start on 1st or 16th of month' ' ' ' ' ' '.
-    ENDIF.
-    IF lv_day_hi <> 15 AND lv_day_hi < 28.
-      MESSAGE e000(oo) WITH 'Date range must end on 15th or last day of month' ' ' ' ' ' '.
-    ENDIF.
-    " Compute FN end for the FROM date and ensure TO is within the same fortnight
+    " Compute the end of the fortnight that contains the FROM date
+    " FN1 = 1st-15th, FN2 = 16th-last day of month
     CLEAR lv_fn_end_low.
     IF lv_day_lo <= 15.
       lv_fn_end_low      = ls_date-low.
@@ -678,6 +674,75 @@ FORM fetch_pur_data.
 
     APPEND ls_disp TO gt_display.
   ENDLOOP.
+
+  PERFORM fetch_nomination_status.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM fetch_nomination_status — bulk lookup in OIJNOMI, populate
+* nomtk/nomit on display rows; grey SEL for locid+day with nominations
+*----------------------------------------------------------------------*
+FORM fetch_nomination_status.
+  DATA: ls_disp   TYPE ty_display,
+        ls_nomi   TYPE oijnomi,
+        lt_nomi   TYPE STANDARD TABLE OF oijnomi,
+        ls_styl   TYPE lvc_s_styl,
+        lv_locid  TYPE char10,
+        lv_day    TYPE aedat,
+        lr_docnr  TYPE RANGE OF oijnomi-docnr,
+        ls_rdocnr LIKE LINE OF lr_docnr,
+        lr_idate  TYPE RANGE OF oijnomi-idate,
+        ls_ridate LIKE LINE OF lr_idate.
+
+  " Build ranges from non-excluded rows that have an OA
+  LOOP AT gt_display INTO ls_disp WHERE exclude <> 'X' AND outline_agr IS NOT INITIAL.
+    ls_rdocnr-sign = 'I'. ls_rdocnr-option = 'EQ'.
+    ls_rdocnr-low  = ls_disp-outline_agr.
+    APPEND ls_rdocnr TO lr_docnr.
+    ls_ridate-sign = 'I'. ls_ridate-option = 'EQ'.
+    ls_ridate-low  = ls_disp-gas_day.
+    APPEND ls_ridate TO lr_idate.
+  ENDLOOP.
+  SORT lr_docnr BY low. DELETE ADJACENT DUPLICATES FROM lr_docnr COMPARING low.
+  SORT lr_idate BY low. DELETE ADJACENT DUPLICATES FROM lr_idate COMPARING low.
+  IF lr_docnr IS INITIAL. RETURN. ENDIF.
+
+  SELECT nomtk nomit docnr idate FROM oijnomi
+    INTO CORRESPONDING FIELDS OF TABLE lt_nomi
+    WHERE docnr  IN lr_docnr
+      AND idate  IN lr_idate
+      AND delind <> 'X'.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  SORT lt_nomi BY docnr idate.
+
+  " Populate nomtk/nomit on matching display rows
+  LOOP AT gt_display INTO ls_disp.
+    IF ls_disp-outline_agr IS INITIAL. CONTINUE. ENDIF.
+    READ TABLE lt_nomi INTO ls_nomi
+      WITH KEY docnr = ls_disp-outline_agr idate = ls_disp-gas_day
+      BINARY SEARCH.
+    IF sy-subrc = 0.
+      ls_disp-nomtk = ls_nomi-nomtk.
+      ls_disp-nomit = ls_nomi-nomit.
+      MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+    ENDIF.
+  ENDLOOP.
+
+  " Disable SEL for ALL rows of any locid+gas_day that has any nomination
+  LOOP AT gt_display INTO ls_disp WHERE nomtk IS NOT INITIAL AND exclude <> 'X'.
+    lv_locid = ls_disp-locid.
+    lv_day   = ls_disp-gas_day.
+    " Disable SEL on ALL rows with same locid+gas_day
+    LOOP AT gt_display INTO ls_disp WHERE locid = lv_locid AND gas_day = lv_day AND exclude <> 'X'.
+      ls_disp-sel = ' '.
+      DELETE ls_disp-celltab WHERE fieldname = 'SEL'.
+      CLEAR ls_styl.
+      ls_styl-fieldname = 'SEL'.
+      ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
+      INSERT ls_styl INTO TABLE ls_disp-celltab.
+      MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+    ENDLOOP.
+  ENDLOOP.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -723,6 +788,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   REFRESH gt_t001w_c.
   SELECT werks regio FROM t001w INTO CORRESPONDING FIELDS OF TABLE gt_t001w_c
     WHERE regio IN lr_state AND werks BETWEEN '2000' AND '2999'.
+  DELETE gt_t001w_c WHERE werks CA 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.
   SORT gt_t001w_c BY regio werks.
 
   " 2. OIJ_EL_DOC_MOT: OAs overlapping date range, VBTYP=K, filtered by input locations (FS fix)
@@ -903,13 +969,13 @@ ENDFORM.
 * FORM display_alv_grid  — REUSE_ALV_GRID_DISPLAY_LVC, no screen painter
 *----------------------------------------------------------------------*
 FORM display_alv_grid.
-  DATA: lv_title   TYPE lvc_title,
-        ls_variant TYPE disvariant,
-        ls_sloc    LIKE LINE OF s_locid,
-        ls_sdate   LIKE LINE OF s_date,
-        lv_locid   TYPE char40,
-        lv_dates   TYPE char40,
-        lt_sort    TYPE lvc_t_sort,
+  DATA: lv_title    TYPE lvc_title,
+        ls_variant  TYPE disvariant,
+        ls_sdate    LIKE LINE OF s_date,
+        lv_date_lo  TYPE char10,
+        lv_date_hi  TYPE char10,
+        lv_dates    TYPE char40,
+        lt_sort     TYPE lvc_t_sort,
         ls_sort    TYPE lvc_s_sort.
 
   PERFORM build_fieldcat.
@@ -929,15 +995,17 @@ FORM display_alv_grid.
   ls_sort-fieldname = 'MATERIAL'. ls_sort-up = abap_true. ls_sort-spos = 3.
   APPEND ls_sort TO lt_sort.
 
-  " Build grid title with selected location/date info
-  READ TABLE s_locid INDEX 1 INTO ls_sloc.
-  IF sy-subrc = 0. lv_locid = ls_sloc-low. ENDIF.
-  READ TABLE s_date  INDEX 1 INTO ls_sdate.
+  " Build grid title: no location; dates in DD.MM.YYYY format
+  CLEAR gv_toolbar_done.
+  READ TABLE s_date INDEX 1 INTO ls_sdate.
   IF sy-subrc = 0.
-    CONCATENATE ls_sdate-low '-' ls_sdate-high INTO lv_dates.
+    CONCATENATE ls_sdate-low+6(2) '.' ls_sdate-low+4(2) '.' ls_sdate-low(4)
+                INTO lv_date_lo.
+    CONCATENATE ls_sdate-high+6(2) '.' ls_sdate-high+4(2) '.' ls_sdate-high(4)
+                INTO lv_date_hi.
+    CONCATENATE lv_date_lo ' -' lv_date_hi INTO lv_dates.
   ENDIF.
   CONCATENATE 'Purchase Nomination - ONGC B2B'
-              '| Location:' lv_locid
               '| Period:' lv_dates
               INTO lv_title SEPARATED BY ' '.
   CONDENSE lv_title.
@@ -983,6 +1051,15 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
     SET HANDLER go_alv_handler->on_alv_toolbar        FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+    " Register CHARG F4 so on_main_f4 fires; chngeafter=false prevents
+    " data_changed from firing with empty value after F4 popup closes
+    DATA: lt_f4 TYPE lvc_t_f4, ls_f4 TYPE lvc_s_f4.
+    CLEAR ls_f4.
+    ls_f4-fieldname  = 'CHARG'.
+    ls_f4-register   = abap_true.
+    ls_f4-chngeafter = abap_false.
+    INSERT ls_f4 INTO TABLE lt_f4.
+    go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
   ENDIF.
 ENDFORM.
@@ -1094,6 +1171,24 @@ FORM build_fieldcat.
   ls_fcat-outputlen  = 12.
   ls_fcat-edit       = abap_true.
   ls_fcat-f4availabl = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  " NOMTK - Nomination Key (output only)
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'NOMTK'.
+  ls_fcat-coltext   = 'Nomination Key'.
+  ls_fcat-seltext   = 'Nomination Key'.
+  ls_fcat-outputlen = 12.
+  ls_fcat-no_zero   = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  " NOMIT - Nomination Item (output only)
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'NOMIT'.
+  ls_fcat-coltext   = 'Nom. Item'.
+  ls_fcat-seltext   = 'Nomination Item'.
+  ls_fcat-outputlen = 6.
+  ls_fcat-no_zero   = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
   " Technical fields (hidden)
@@ -1250,6 +1345,11 @@ FORM handle_create_nomination.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
     ENDIF.
+    " Block if a nomination already exists for this location+gas day
+    IF ls_disp-nomtk IS NOT INITIAL.
+      MESSAGE |Nomination already exists for { ls_disp-locid } on { ls_disp-gas_day }.| TYPE 'S' DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
     " Batch is required only for batch-managed materials (MARA-XCHPF = 'X')
     READ TABLE gt_mara_c INTO DATA(ls_mara_chk) WITH KEY matnr = ls_disp-material.
     IF sy-subrc = 0 AND ls_mara_chk-xchpf = 'X'.
@@ -1322,8 +1422,8 @@ FORM handle_create_nomination.
   IF lt_errors IS NOT INITIAL.
     PERFORM display_nomination_errors USING lt_errors.
   ENDIF.
-  " Always refresh — don't show success message as we cannot distinguish
-  " between successful creation and user pressing Back in YRXR036
+  " Re-fetch nomination status so nomtk/nomit columns and SEL greyout update
+  PERFORM fetch_nomination_status.
   IF go_alv IS NOT INITIAL.
     go_alv->refresh_table_display( ).
   ENDIF.
@@ -1434,15 +1534,18 @@ FORM handle_batch_mass_change.
   SET HANDLER go_alv_handler->on_batch_cmd           FOR go_batch_alv.
   SET HANDLER go_alv_handler->on_batch_f4            FOR go_batch_alv.
 
+  " MATNR: no edit flag → read-only (ls_layout-edit NOT set globally)
   ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. ls_fcat-outputlen = 18.
+  ls_fcat-no_out    = abap_false.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  " CHARG: editable, F4-enabled
   ls_fcat-fieldname  = 'CHARG'. ls_fcat-coltext = 'Batch'. ls_fcat-outputlen = 10.
   ls_fcat-edit       = abap_true.
   ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
 
   ls_layout-cwidth_opt = abap_true.
-  ls_layout-edit       = abap_true.
+  " Do NOT set ls_layout-edit = abap_true: that would make ALL cols editable
 
   go_batch_alv->set_table_for_first_display(
     EXPORTING is_layout       = ls_layout
@@ -1451,6 +1554,14 @@ FORM handle_batch_mass_change.
     EXCEPTIONS OTHERS = 1 ).
 
   go_batch_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+  " Register CHARG F4; chngeafter=false so popup close doesn't overwrite value
+  DATA: lt_f4b TYPE lvc_t_f4, ls_f4b TYPE lvc_s_f4.
+  CLEAR ls_f4b.
+  ls_f4b-fieldname  = 'CHARG'.
+  ls_f4b-register   = abap_true.
+  ls_f4b-chngeafter = abap_false.
+  INSERT ls_f4b INTO TABLE lt_f4b.
+  go_batch_alv->register_f4_for_fields( it_f4 = lt_f4b ).
   go_batch_alv->set_toolbar_interactive( ).
 ENDFORM.
 
