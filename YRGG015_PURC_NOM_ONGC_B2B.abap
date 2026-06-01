@@ -290,7 +290,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     DATA: ls_mod  TYPE lvc_s_modi,
           ls_disp TYPE ty_display.
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
-      IF ls_mod-fieldname = 'CHARG'.
+      IF ls_mod-fieldname = 'CHARG' AND ls_mod-value IS NOT INITIAL.
         READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
         IF sy-subrc = 0.
           ls_disp-charg = ls_mod-value.
@@ -788,6 +788,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   REFRESH gt_t001w_c.
   SELECT werks regio FROM t001w INTO CORRESPONDING FIELDS OF TABLE gt_t001w_c
     WHERE regio IN lr_state AND werks BETWEEN '2000' AND '2999'.
+  DELETE gt_t001w_c WHERE werks CA 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.
   SORT gt_t001w_c BY regio werks.
 
   " 2. OIJ_EL_DOC_MOT: OAs overlapping date range, VBTYP=K, filtered by input locations (FS fix)
@@ -968,13 +969,13 @@ ENDFORM.
 * FORM display_alv_grid  — REUSE_ALV_GRID_DISPLAY_LVC, no screen painter
 *----------------------------------------------------------------------*
 FORM display_alv_grid.
-  DATA: lv_title   TYPE lvc_title,
-        ls_variant TYPE disvariant,
-        ls_sloc    LIKE LINE OF s_locid,
-        ls_sdate   LIKE LINE OF s_date,
-        lv_locid   TYPE char40,
-        lv_dates   TYPE char40,
-        lt_sort    TYPE lvc_t_sort,
+  DATA: lv_title    TYPE lvc_title,
+        ls_variant  TYPE disvariant,
+        ls_sdate    LIKE LINE OF s_date,
+        lv_date_lo  TYPE char10,
+        lv_date_hi  TYPE char10,
+        lv_dates    TYPE char40,
+        lt_sort     TYPE lvc_t_sort,
         ls_sort    TYPE lvc_s_sort.
 
   PERFORM build_fieldcat.
@@ -994,15 +995,17 @@ FORM display_alv_grid.
   ls_sort-fieldname = 'MATERIAL'. ls_sort-up = abap_true. ls_sort-spos = 3.
   APPEND ls_sort TO lt_sort.
 
-  " Build grid title with selected location/date info
-  READ TABLE s_locid INDEX 1 INTO ls_sloc.
-  IF sy-subrc = 0. lv_locid = ls_sloc-low. ENDIF.
-  READ TABLE s_date  INDEX 1 INTO ls_sdate.
+  " Build grid title: no location; dates in DD.MM.YYYY format
+  CLEAR gv_toolbar_done.
+  READ TABLE s_date INDEX 1 INTO ls_sdate.
   IF sy-subrc = 0.
-    CONCATENATE ls_sdate-low '-' ls_sdate-high INTO lv_dates.
+    CONCATENATE ls_sdate-low+6(2) '.' ls_sdate-low+4(2) '.' ls_sdate-low(4)
+                INTO lv_date_lo.
+    CONCATENATE ls_sdate-high+6(2) '.' ls_sdate-high+4(2) '.' ls_sdate-high(4)
+                INTO lv_date_hi.
+    CONCATENATE lv_date_lo ' -' lv_date_hi INTO lv_dates.
   ENDIF.
   CONCATENATE 'Purchase Nomination - ONGC B2B'
-              '| Location:' lv_locid
               '| Period:' lv_dates
               INTO lv_title SEPARATED BY ' '.
   CONDENSE lv_title.
@@ -1048,6 +1051,15 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
     SET HANDLER go_alv_handler->on_alv_toolbar        FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+    " Register CHARG F4 so on_main_f4 fires; chngeafter=false prevents
+    " data_changed from firing with empty value after F4 popup closes
+    DATA: lt_f4 TYPE lvc_t_f4, ls_f4 TYPE lvc_s_f4.
+    CLEAR ls_f4.
+    ls_f4-fieldname  = 'CHARG'.
+    ls_f4-register   = abap_true.
+    ls_f4-chngeafter = abap_false.
+    INSERT ls_f4 INTO TABLE lt_f4.
+    go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
   ENDIF.
 ENDFORM.
@@ -1522,15 +1534,18 @@ FORM handle_batch_mass_change.
   SET HANDLER go_alv_handler->on_batch_cmd           FOR go_batch_alv.
   SET HANDLER go_alv_handler->on_batch_f4            FOR go_batch_alv.
 
+  " MATNR: no edit flag → read-only (ls_layout-edit NOT set globally)
   ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. ls_fcat-outputlen = 18.
+  ls_fcat-no_out    = abap_false.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  " CHARG: editable, F4-enabled
   ls_fcat-fieldname  = 'CHARG'. ls_fcat-coltext = 'Batch'. ls_fcat-outputlen = 10.
   ls_fcat-edit       = abap_true.
   ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
 
   ls_layout-cwidth_opt = abap_true.
-  ls_layout-edit       = abap_true.
+  " Do NOT set ls_layout-edit = abap_true: that would make ALL cols editable
 
   go_batch_alv->set_table_for_first_display(
     EXPORTING is_layout       = ls_layout
@@ -1539,6 +1554,14 @@ FORM handle_batch_mass_change.
     EXCEPTIONS OTHERS = 1 ).
 
   go_batch_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+  " Register CHARG F4; chngeafter=false so popup close doesn't overwrite value
+  DATA: lt_f4b TYPE lvc_t_f4, ls_f4b TYPE lvc_s_f4.
+  CLEAR ls_f4b.
+  ls_f4b-fieldname  = 'CHARG'.
+  ls_f4b-register   = abap_true.
+  ls_f4b-chngeafter = abap_false.
+  INSERT ls_f4b INTO TABLE lt_f4b.
+  go_batch_alv->register_f4_for_fields( it_f4 = lt_f4b ).
   go_batch_alv->set_toolbar_interactive( ).
 ENDFORM.
 
