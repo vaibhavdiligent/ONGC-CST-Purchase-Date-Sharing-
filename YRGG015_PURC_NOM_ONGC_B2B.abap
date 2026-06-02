@@ -604,9 +604,10 @@ FORM fetch_pur_data.
 
   IF sy-subrc <> 0 OR lt_pur IS INITIAL. RETURN. ENDIF.
 
-  " Remove duplicates: keep first record per gas_day+locid+material combination
-  SORT lt_pur BY gas_day locid material.
-  DELETE ADJACENT DUPLICATES FROM lt_pur COMPARING gas_day locid material.
+  " Remove genuine duplicates only: same gas_day+locid+material+state_code
+  " (same material for different states are NOT duplicates and must stay)
+  SORT lt_pur BY gas_day locid material state_code.
+  DELETE ADJACENT DUPLICATES FROM lt_pur COMPARING gas_day locid material state_code.
 
   " Bulk pre-fetch all reference data (5 SELECTs instead of N*M)
   PERFORM prefetch_reference_data USING lt_pur.
