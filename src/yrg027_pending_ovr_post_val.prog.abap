@@ -872,10 +872,8 @@ FORM send_email.
 
     APPEND '</table>' TO lt_body.
     APPEND '<p>For more details, please execute T-code YRG011N/ YRGR109 with the required input.</p>' TO lt_body.
-    APPEND '<p><b>Note to ZO:</b> You are requested not to modify any imbalance clauses with' TO lt_body.
-    APPEND ' retrospective effect, as the same may impact already posted imbalances.' TO lt_body.
-    APPEND ' Further, it may please be ensured that any imbalance shifting, wherever applicable,' TO lt_body.
-    APPEND ' is completed prior to closure of the corresponding fortnight.</p>' TO lt_body.
+    APPEND '<p><b>Note to ZO:</b> You are requested not to modify any Overrun clauses with' TO lt_body.
+    APPEND ' retrospective effect, as the same may impact already posted Overrun.</p>' TO lt_body.
     APPEND '<p>Regards,<br>BIS Admin</p>' TO lt_body.
     APPEND '<hr><p><em>This is system generated mail, Please do not reply.</em></p>' TO lt_body.
     CONCATENATE '<p>Source: ' lv_source '</p>' INTO lv_body_line.
