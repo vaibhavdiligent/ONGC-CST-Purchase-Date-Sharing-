@@ -65,7 +65,8 @@ TYPES: BEGIN OF ty_log,
 
 TYPES: BEGIN OF ty_display,
          sel         TYPE char1,
-         exclude     TYPE char1,
+         exclude     TYPE char1,   " display: mirrors YRGA_CST_PUR exclude flag
+         is_excl     TYPE char1,   " logic:   'X' for any excluded row (state or flag)
          row_color   TYPE char4,
          gas_day     TYPE aedat,
          locid       TYPE char10,
@@ -329,7 +330,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     DATA lt_f4vals LIKE TABLE OF ls_f4val.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
     READ TABLE gt_display INDEX es_row_no-row_id INTO ls_disp.
-    IF sy-subrc <> 0 OR ls_disp-exclude = 'X'. RETURN. ENDIF.
+    IF sy-subrc <> 0 OR ls_disp-is_excl = 'X'. RETURN. ENDIF.
     " Get plants from EKPO of the OA
     LOOP AT gt_ekoa_c INTO ls_ek WHERE ebeln = ls_disp-outline_agr.
       APPEND ls_ek-werks TO lt_werks.
@@ -383,7 +384,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
       go_batch_alv->check_changed_data( ).
     ENDIF.
     LOOP AT gt_batch_assign INTO ls_assign WHERE charg IS NOT INITIAL.
-      LOOP AT gt_display INTO ls_disp WHERE material = ls_assign-matnr AND exclude <> 'X'.
+      LOOP AT gt_display INTO ls_disp WHERE material = ls_assign-matnr AND is_excl <> 'X'.
         ls_disp-charg = ls_assign-charg.
         MODIFY gt_display INDEX sy-tabix FROM ls_disp.
       ENDLOOP.
@@ -630,7 +631,8 @@ FORM fetch_pur_data.
 
     " Excluded from nomination: GJ state OR Exclude flag set in YRGA_CST_PUR
     IF ls_pur-state_code = gc_excl_state OR ls_pur-exclude = 'X'.
-      ls_disp-exclude   = 'X'.
+      ls_disp-is_excl   = 'X'.          " logic flag: used in all WHERE/IF
+      ls_disp-exclude   = ls_pur-exclude." display: tick only if TABLE has exclude='X'
       ls_disp-sel       = ' '.
       ls_disp-row_color = 'C700'.   " grey entire row
       " Disable SEL checkbox and CHARG edit
@@ -701,7 +703,7 @@ FORM fetch_nomination_status.
         ls_ridate LIKE LINE OF lr_idate.
 
   " Build ranges from non-excluded rows that have an OA
-  LOOP AT gt_display INTO ls_disp WHERE exclude <> 'X' AND outline_agr IS NOT INITIAL.
+  LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X' AND outline_agr IS NOT INITIAL.
     ls_rdocnr-sign = 'I'. ls_rdocnr-option = 'EQ'.
     ls_rdocnr-low  = ls_disp-outline_agr.
     APPEND ls_rdocnr TO lr_docnr.
@@ -735,11 +737,11 @@ FORM fetch_nomination_status.
   ENDLOOP.
 
   " Disable SEL for ALL rows of any locid+gas_day that has any nomination
-  LOOP AT gt_display INTO ls_disp WHERE nomtk IS NOT INITIAL AND exclude <> 'X'.
+  LOOP AT gt_display INTO ls_disp WHERE nomtk IS NOT INITIAL AND is_excl <> 'X'.
     lv_locid = ls_disp-locid.
     lv_day   = ls_disp-gas_day.
     " Disable SEL on ALL rows with same locid+gas_day
-    LOOP AT gt_display INTO ls_disp WHERE locid = lv_locid AND gas_day = lv_day AND exclude <> 'X'.
+    LOOP AT gt_display INTO ls_disp WHERE locid = lv_locid AND gas_day = lv_day AND is_excl <> 'X'.
       ls_disp-sel = ' '.
       DELETE ls_disp-celltab WHERE fieldname = 'SEL'.
       CLEAR ls_styl.
@@ -1199,6 +1201,8 @@ FORM build_fieldcat.
 
   " Technical fields (hidden)
   CLEAR ls_fcat.
+  ls_fcat-fieldname = 'IS_EXCL'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
+  CLEAR ls_fcat.
   ls_fcat-fieldname = 'ROW_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'T_COLOR'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
@@ -1274,7 +1278,7 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
     WHEN 'BCMASS'. PERFORM handle_batch_mass_change.
     WHEN 'CRENOM'. PERFORM handle_create_nomination.
     WHEN 'SELALL'.
-      LOOP AT gt_display INTO DATA(ls_sa) WHERE exclude <> 'X'.
+      LOOP AT gt_display INTO DATA(ls_sa) WHERE is_excl <> 'X'.
         ls_sa-sel = abap_true.
         MODIFY gt_display FROM ls_sa.
       ENDLOOP.
@@ -1302,7 +1306,7 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
         lv_newsel TYPE char1.
   READ TABLE gt_display INDEX iv_index INTO ls_disp.
   IF sy-subrc <> 0. RETURN. ENDIF.
-  IF ls_disp-exclude = 'X'. RETURN. ENDIF.   " excluded rows cannot be selected
+  IF ls_disp-is_excl = 'X'. RETURN. ENDIF.   " excluded rows cannot be selected
   IF ls_disp-sel = abap_true.
     lv_newsel = ' '.
   ELSE.
@@ -1312,7 +1316,7 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
   lv_date  = ls_disp-gas_day.
   LOOP AT gt_display INTO ls_disp.
     IF ls_disp-locid = lv_locid AND ls_disp-gas_day = lv_date
-       AND ls_disp-exclude <> 'X'.
+       AND ls_disp-is_excl <> 'X'.
       ls_disp-sel = lv_newsel.
       MODIFY gt_display FROM ls_disp.
     ENDIF.
@@ -1493,7 +1497,7 @@ FORM handle_batch_mass_change.
   lv_rows_sel = 0.
 
   " Row selection is NOT mandatory — collect all batch-managed materials from all non-excluded rows
-  LOOP AT gt_display INTO ls_disp WHERE exclude <> 'X'.
+  LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X'.
     ADD 1 TO lv_rows_sel.
     READ TABLE gt_batch_assign WITH KEY matnr = ls_disp-material TRANSPORTING NO FIELDS.
     IF sy-subrc <> 0.
