@@ -466,7 +466,7 @@ AT SELECTION-SCREEN OUTPUT.
 AT SELECTION-SCREEN ON RADIOBUTTON GROUP r1.
   " Triggers AT SELECTION-SCREEN OUTPUT to show/hide View sub-options
 *----------------------------------------------------------------------*
-* Fortnight Validation - restrict to current month/year, single fortnight
+* Fortnight Validation - dates must be in same month and same fortnight
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
   DATA: lv_val_low  TYPE datum,
@@ -475,11 +475,9 @@ AT SELECTION-SCREEN.
   IF sy-subrc = 0.
     lv_val_low  = ls_val-low.
     lv_val_high = ls_val-high.
-    " Current month/year check only for Allocation and Send Data modes
-    IF p_alloc IS NOT INITIAL OR p_send IS NOT INITIAL.
-      IF lv_val_low+0(6) <> sy-datum+0(6) OR lv_val_high+0(6) <> sy-datum+0(6).
-        MESSAGE 'Date range must be within the current month and year' TYPE 'E'.
-      ENDIF.
+    " Both dates must be in the same month and year
+    IF lv_val_low+0(6) <> lv_val_high+0(6).
+      MESSAGE 'Date range must be within the same month and year' TYPE 'E'.
     ENDIF.
     " Dates must not cross fortnight boundary (1-15 vs 16-end)
     IF lv_val_low+6(2) <= '15' AND lv_val_high+6(2) > '15'.
