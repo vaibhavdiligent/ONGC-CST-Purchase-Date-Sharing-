@@ -24,6 +24,7 @@ TYPES: BEGIN OF ty_pur,
          ongc_id     TYPE char20,
          ongc_mater  TYPE char30,
          deleted     TYPE char1,
+         exclude     TYPE char1,
        END OF ty_pur.
 
 TYPES: BEGIN OF ty_main,
@@ -594,7 +595,7 @@ FORM fetch_pur_data.
         ls_col  TYPE lvc_s_scol.
 
   SELECT gas_day location AS locid material state_code
-         qty_in_scm AS qty_scm gail_id ongc_id ongc_mater deleted
+         qty_in_scm AS qty_scm gail_id ongc_id ongc_mater deleted exclude
     FROM yrga_cst_pur
     INTO CORRESPONDING FIELDS OF TABLE lt_pur
     WHERE gas_day  IN s_date
@@ -602,6 +603,10 @@ FORM fetch_pur_data.
       AND deleted <> gc_deleted.
 
   IF sy-subrc <> 0 OR lt_pur IS INITIAL. RETURN. ENDIF.
+
+  " Remove duplicates: keep first record per gas_day+locid+material combination
+  SORT lt_pur BY gas_day locid material.
+  DELETE ADJACENT DUPLICATES FROM lt_pur COMPARING gas_day locid material.
 
   " Bulk pre-fetch all reference data (5 SELECTs instead of N*M)
   PERFORM prefetch_reference_data USING lt_pur.
@@ -622,8 +627,8 @@ FORM fetch_pur_data.
       USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
-    " Excluded from nomination: GJ state only
-    IF ls_pur-state_code = gc_excl_state.
+    " Excluded from nomination: GJ state OR Exclude flag set in YRGA_CST_PUR
+    IF ls_pur-state_code = gc_excl_state OR ls_pur-exclude = 'X'.
       ls_disp-exclude   = 'X'.
       ls_disp-sel       = ' '.
       ls_disp-row_color = 'C700'.   " grey entire row
@@ -1328,7 +1333,8 @@ FORM handle_create_nomination.
         i_rspartab  TYPE STANDARD TABLE OF rsparams,
         wa_rspartab LIKE LINE OF i_rspartab,
         ls_sdate    LIKE LINE OF s_date,
-        ls_slocid   LIKE LINE OF s_locid.
+        ls_slocid   LIKE LINE OF s_locid,
+        lv_dtext    TYPE char10.
 
   " Collect selected rows
   LOOP AT gt_display INTO ls_disp WHERE sel = abap_true.
@@ -1347,7 +1353,9 @@ FORM handle_create_nomination.
     ENDIF.
     " Block if a nomination already exists for this location+gas day
     IF ls_disp-nomtk IS NOT INITIAL.
-      MESSAGE |Nomination already exists for { ls_disp-locid } on { ls_disp-gas_day }.| TYPE 'S' DISPLAY LIKE 'E'.
+      CONCATENATE ls_disp-gas_day+6(2) '.' ls_disp-gas_day+4(2) '.' ls_disp-gas_day(4)
+                  INTO lv_dtext.
+      MESSAGE |Nomination already exists for { ls_disp-locid } on { lv_dtext }.| TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
     ENDIF.
     " Batch is required only for batch-managed materials (MARA-XCHPF = 'X')
