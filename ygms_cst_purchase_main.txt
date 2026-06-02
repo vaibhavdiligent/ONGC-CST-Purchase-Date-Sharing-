@@ -466,11 +466,14 @@ AT SELECTION-SCREEN OUTPUT.
 AT SELECTION-SCREEN ON RADIOBUTTON GROUP r1.
   " Triggers AT SELECTION-SCREEN OUTPUT to show/hide View sub-options
 *----------------------------------------------------------------------*
-* Fortnight Validation - dates must be in same month and same fortnight
+* Fortnight Validation - only full fortnights: 1-15 or 16-end of month
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
   DATA: lv_val_low  TYPE datum,
-        lv_val_high TYPE datum.
+        lv_val_high TYPE datum,
+        lv_val_m    TYPE numc2,
+        lv_val_y    TYPE numc4,
+        lv_last_day TYPE datum.
   READ TABLE s_date INTO DATA(ls_val) INDEX 1.
   IF sy-subrc = 0.
     lv_val_low  = ls_val-low.
@@ -479,12 +482,25 @@ AT SELECTION-SCREEN.
     IF lv_val_low+0(6) <> lv_val_high+0(6).
       MESSAGE 'Date range must be within the same month and year' TYPE 'E'.
     ENDIF.
-    " Dates must not cross fortnight boundary (1-15 vs 16-end)
-    IF lv_val_low+6(2) <= '15' AND lv_val_high+6(2) > '15'.
-      MESSAGE 'Date range must be within a single fortnight (1-15 or 16-end)' TYPE 'E'.
+    " Calculate last day of the selected month
+    lv_val_m = lv_val_low+4(2).
+    lv_val_y = lv_val_low+0(4).
+    ADD 1 TO lv_val_m.
+    IF lv_val_m > 12.
+      lv_val_m = 1.
+      ADD 1 TO lv_val_y.
     ENDIF.
-    IF lv_val_low+6(2) > '15' AND lv_val_high+6(2) <= '15'.
-      MESSAGE 'Date range must be within a single fortnight (1-15 or 16-end)' TYPE 'E'.
+    CONCATENATE lv_val_y lv_val_m '01' INTO lv_last_day.
+    lv_last_day = lv_last_day - 1.
+    " Only allow exact fortnights: 1-15 or 16-end of month
+    IF lv_val_low+6(2) <= '15'.
+      IF lv_val_low+6(2) <> '01' OR lv_val_high+6(2) <> '15'.
+        MESSAGE 'First fortnight must be from 1st to 15th of the month' TYPE 'E'.
+      ENDIF.
+    ELSE.
+      IF lv_val_low+6(2) <> '16' OR lv_val_high <> lv_last_day.
+        MESSAGE 'Second fortnight must be from 16th to end of month' TYPE 'E'.
+      ENDIF.
     ENDIF.
   ENDIF.
 *----------------------------------------------------------------------*
