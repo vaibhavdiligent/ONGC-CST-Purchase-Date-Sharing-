@@ -843,8 +843,9 @@ FORM send_email.
     APPEND '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
 
-    " Table rows for this customer
-    LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr.
+    " Table rows - only entries where Diff NE 0
+    LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr
+                                        AND diff_char_ovr NE 0.
       DATA: lv_cum_c(15)     TYPE c.
       DATA: lv_char_c(15)    TYPE c.
       DATA: lv_posted_c(15)  TYPE c.
