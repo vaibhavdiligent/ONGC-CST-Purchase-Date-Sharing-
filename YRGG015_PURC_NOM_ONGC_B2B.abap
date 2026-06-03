@@ -643,6 +643,12 @@ FORM fetch_pur_data.
       ls_styl-fieldname = 'CHARG'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
       INSERT ls_styl INTO TABLE ls_disp-celltab.
+      " Match SEL cell colour to row grey so checkbox visually appears greyed
+      CLEAR ls_col.
+      ls_col-fname      = 'SEL'.
+      ls_col-color-col  = 7.
+      ls_col-color-int  = 0.
+      INSERT ls_col INTO TABLE ls_disp-t_color.
     ELSE.
       ls_disp-exclude = ' '.
       ls_disp-sel     = ' '.
