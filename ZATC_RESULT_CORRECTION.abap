@@ -2062,11 +2062,12 @@ FORM change_single.
   DATA lt_pk_flds TYPE STANDARD TABLE OF dd03l.
   DATA l_order_by TYPE string.
   CLEAR l_order_by.
-  SELECT fieldname FROM dd03l INTO CORRESPONDING FIELDS OF TABLE @lt_pk_flds
+  SELECT fieldname datatype FROM dd03l INTO CORRESPONDING FIELDS OF TABLE @lt_pk_flds
     WHERE tabname = @l_table AND keyflag = 'X'
     ORDER BY position.
   LOOP AT lt_pk_flds INTO DATA(wa_pk_fld).
     IF wa_pk_fld-fieldname = 'MANDT'. CONTINUE. ENDIF.
+    IF wa_pk_fld-datatype = 'CLNT'. CONTINUE. ENDIF.
     IF wa_pk_fld-fieldname IS INITIAL. CONTINUE. ENDIF.
     IF wa_pk_fld-fieldname(1) = '.'. CONTINUE. ENDIF.
     CONCATENATE l_order_by wa_pk_fld-fieldname INTO l_order_by SEPARATED BY space.
