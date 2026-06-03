@@ -1129,11 +1129,18 @@ START-OF-SELECTION.
                   LOOP AT repos_tab INTO wa_repos_tab1 FROM l_tabix1.
                     IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'. l_for = 'X'. ENDIF.
                     IF wa_repos_tab1-line CS '.' AND l_for IS INITIAL.
+                      " If line has inline comment, truncate at comment to avoid
+                      " appending ORDER BY inside the comment text
+                      IF wa_repos_tab1-line CS '"'.
+                        DATA(l_cmt_pos) = sy-fdpos.
+                        wa_repos_tab1-line = wa_repos_tab1-line(l_cmt_pos).
+                      ENDIF.
                       REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab1-line WITH space IGNORING CASE.
                       CONDENSE wa_repos_tab1-line.
-                      CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
-                        INTO wa_repos_tab1-line SEPARATED BY space.
                       APPEND wa_repos_tab1 TO repos_tab_new.
+                      wa_blank-line = '      ORDER BY PRIMARY KEY.'.
+                      APPEND wa_blank TO repos_tab_new.
+                      CLEAR wa_blank.
                       l_tab = l_tab + 1.
                       EXIT.
                     ELSEIF l_for = 'X' AND wa_repos_tab1-line CS '.'.
