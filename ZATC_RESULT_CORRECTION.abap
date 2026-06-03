@@ -696,6 +696,13 @@ START-OF-SELECTION.
                 ELSE.
                   APPEND wa_repos_tab TO repos_tab_new.
                 ENDIF.
+              ELSE.
+                " Non-SELECT DB operation (UPDATE / MODIFY / INSERT / DELETE,
+                " dynamic SET (...) etc.): change_table only handles SELECT, so
+                " these must never be rewritten. Append the line unchanged -
+                " otherwise the statement keyword (e.g. UPDATE knvv) is dropped,
+                " leaving an orphaned 'SET (lv_setexp2)' that cannot be parsed.
+                APPEND wa_repos_tab TO repos_tab_new.
               ENDIF.
               REFRESH : it_query,it_query_new.
             WHEN 'S/4HANA: FIELD LENGTH EXTENSIONS'.
