@@ -3,7 +3,7 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 5.1 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 30-MAY-2026
+*& VERSION : 5.2 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 03-JUN-2026
 *& v5.1 - Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam in Section 3F:
 *&        Removes Vietnam entries from gt_zpra_t_dly_prd_nd after SELECT using
 *&        asset description lookup (CS 'Vietnam' in gt_asset_desc). Also skips
@@ -9368,7 +9368,7 @@ ENDFORM.
 FORM fill_dynamic_table_sec5a .
   DATA : lv_date           TYPE sy-datum,
          lv_grand_total_be TYPE p LENGTH 16 DECIMALS 7,
-         lv_index          TYPE sy-tabix.
+         lv_index          TYPE i.
 
   " Read daily BOEPD BE target from sec2b INDEX 1 (TAR_BE row = col AG of BE row)
   READ TABLE <gfs_sec2b_table> ASSIGNING <gfs_dyn_line> INDEX 1.
@@ -9381,13 +9381,13 @@ FORM fill_dynamic_table_sec5a .
   ENDIF.
 
   " One chart row per date - read GRAND-TOTAL (col AG = BOEPD) from main DPR table
+  " <gfs_dyn_table> starts at gv_month_back_datum so index = lv_date - gv_month_back_datum + 1
   lv_date  = gv_year_start_date.
-  lv_index = 0.
   DO.
     IF lv_date GT p_date.
       EXIT.
     ENDIF.
-    lv_index = lv_index + 1.
+    lv_index = lv_date - gv_month_back_datum + 1.
 
     APPEND INITIAL LINE TO <gfs_sec5a_table> ASSIGNING <gfs_dyn_line2>.
 
@@ -9398,16 +9398,18 @@ FORM fill_dynamic_table_sec5a .
     UNASSIGN <gfs_field2>.
 
     " Actual BOEPD = col AG (GRAND-TOTAL) of this date row in the main DPR table
-    READ TABLE <gfs_dyn_table> ASSIGNING <gfs_dyn_line> INDEX lv_index.
-    IF sy-subrc IS INITIAL.
-      ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field>.
-      IF <gfs_field> IS ASSIGNED.
-        ASSIGN COMPONENT 'ACT_PRODUCTION' OF STRUCTURE <gfs_dyn_line2> TO <gfs_field2>.
-        IF <gfs_field2> IS ASSIGNED.
-          <gfs_field2> = <gfs_field>.
-          UNASSIGN <gfs_field2>.
+    IF lv_index GT 0.
+      READ TABLE <gfs_dyn_table> ASSIGNING <gfs_dyn_line> INDEX lv_index.
+      IF sy-subrc IS INITIAL.
+        ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field>.
+        IF <gfs_field> IS ASSIGNED.
+          ASSIGN COMPONENT 'ACT_PRODUCTION' OF STRUCTURE <gfs_dyn_line2> TO <gfs_field2>.
+          IF <gfs_field2> IS ASSIGNED.
+            <gfs_field2> = <gfs_field>.
+            UNASSIGN <gfs_field2>.
+          ENDIF.
+          UNASSIGN <gfs_field>.
         ENDIF.
-        UNASSIGN <gfs_field>.
       ENDIF.
     ENDIF.
 
