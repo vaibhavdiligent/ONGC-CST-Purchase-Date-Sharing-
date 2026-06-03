@@ -548,6 +548,21 @@ START-OF-SELECTION.
                         CLEAR wa_blank.
                         l_tabix1 = l_tabix + 1.
                       ELSE.
+                        " Skip OPEN CURSOR/FETCH NEXT patterns — cursor-based SELECTs cannot be auto-converted
+                        DATA l_skip_open_cursor TYPE abap_bool.
+                        CLEAR l_skip_open_cursor.
+                        READ TABLE repos_tab INTO wa_repos_tab_d INDEX l_tabix.
+                        IF wa_repos_tab_d-line CS 'OPEN CURSOR'.
+                          l_skip_open_cursor = abap_true.
+                        ELSE.
+                          READ TABLE repos_tab INTO wa_repos_tab_d INDEX l_tabix - 1.
+                          IF sy-subrc = 0 AND wa_repos_tab_d-line CS 'OPEN CURSOR'.
+                            l_skip_open_cursor = abap_true.
+                          ENDIF.
+                        ENDIF.
+                        IF l_skip_open_cursor = abap_true.
+                          APPEND wa_repos_tab TO repos_tab_new.
+                        ELSE.
                         REFRESH it_query.
                         REFRESH it_query_new.
                         DATA l_table_string TYPE string.
@@ -647,6 +662,7 @@ START-OF-SELECTION.
                             CLEAR wa_blank.
                           ENDIF.
                         ENDIF.
+                        ENDIF. "l_skip_open_cursor
                       ENDIF.
                     ELSE.
                       APPEND wa_repos_tab TO repos_tab_new.
