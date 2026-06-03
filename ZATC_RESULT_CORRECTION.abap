@@ -81,11 +81,28 @@ TYPES : BEGIN OF ty_zatc_process1,
           solution         TYPE  char1,
           correction_value TYPE char30,
         END OF ty_zatc_process1.
+TYPES : BEGIN OF ty_zatc_process_dte,
+          mandt            TYPE mandt,
+          sno(8)           TYPE n,
+          priority         TYPE char3,
+          description      TYPE char255,
+          check_title      TYPE char255,
+          note(10)         TYPE c,
+          srch_tem         TYPE char35,
+          ref_obj_type     TYPE char4,
+          message          TYPE char120,
+          look             TYPE char50,
+          look2            TYPE char50,
+          zcomment         TYPE char80,
+          fix_by           TYPE char120,
+          solution         TYPE char1,
+          correction_value TYPE char30,
+        END OF ty_zatc_process_dte.
 DATA it_zatc_process_all TYPE TABLE OF ty_zatc_process_all.
-DATA it_zatc_process_dte TYPE TABLE OF ty_zatc_process_all.
+DATA it_zatc_process_dte TYPE TABLE OF ty_zatc_process_dte.
 DATA it_zatc_process1 TYPE TABLE OF ty_zatc_process1.
 DATA wa_zatc_process_all TYPE  ty_zatc_process_all.
-DATA wa_zatc_process_dte TYPE  ty_zatc_process_all.
+DATA wa_zatc_process_dte TYPE  ty_zatc_process_dte.
 DATA wa_zatc_process1 TYPE  ty_zatc_process1.
 DATA l_repid(5) TYPE n.
 DATA it_rt_base_fields TYPE tt_base_fields.
