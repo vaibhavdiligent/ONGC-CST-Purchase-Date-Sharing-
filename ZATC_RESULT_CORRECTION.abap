@@ -954,10 +954,24 @@ START-OF-SELECTION.
                   REPLACE ALL OCCURRENCES OF 'COMPARING' IN l_text WITH space IGNORING CASE.
                   CONDENSE l_text.
                   l_where = l_text.
-                  IF l_where CS 'ALL FIELDS'.
+                  " Strip inline comment (everything from '"' onwards)
+                  IF l_where CS '"'.
+                    IF sy-fdpos > 0.
+                      l_where = l_where(sy-fdpos).
+                    ELSE.
+                      CLEAR l_where.
+                    ENDIF.
+                    CONDENSE l_where.
+                  ENDIF.
+                  " Strip dots absorbed into field list or table name
+                  REPLACE ALL OCCURRENCES OF '.' IN l_where WITH space.
+                  CONDENSE l_where.
+                  REPLACE ALL OCCURRENCES OF '.' IN l_table WITH space.
+                  CONDENSE l_table.
+                  IF l_where IS INITIAL OR l_where CS 'ALL FIELDS'.
                     CONCATENATE 'SORT' l_table '.' INTO l_new SEPARATED BY space.
                   ELSE.
-                    CONCATENATE 'SORT' l_table 'BY' l_where INTO l_new SEPARATED BY space.
+                    CONCATENATE 'SORT' l_table 'BY' l_where '.' INTO l_new SEPARATED BY space.
                   ENDIF.
                   CLEAR wa_blank.
                   CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -1741,7 +1755,23 @@ FORM change_single.
       CONCATENATE l_query wa_table-value INTO l_query SEPARATED BY space.
     ENDLOOP.
   ENDIF.
-  CONCATENATE l_query ' ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
+  " Build ORDER BY from DD03L primary key, excluding MANDT and pseudo-fields (e.g. .INCLUDE)
+  DATA lt_pk_flds TYPE STANDARD TABLE OF dd03l.
+  DATA l_order_by TYPE string.
+  SELECT fieldname FROM dd03l INTO CORRESPONDING FIELDS OF TABLE @lt_pk_flds
+    WHERE tabname = @l_table AND keyflag = 'X'
+    ORDER BY position.
+  LOOP AT lt_pk_flds INTO DATA(wa_pk_fld).
+    IF wa_pk_fld-fieldname = 'MANDT'. CONTINUE. ENDIF.
+    IF wa_pk_fld-fieldname IS INITIAL. CONTINUE. ENDIF.
+    IF wa_pk_fld-fieldname(1) = '.'. CONTINUE. ENDIF.
+    CONCATENATE l_order_by wa_pk_fld-fieldname INTO l_order_by SEPARATED BY space.
+  ENDLOOP.
+  IF l_order_by IS NOT INITIAL.
+    CONCATENATE l_query ' ORDER BY' l_order_by '.' INTO l_query SEPARATED BY space.
+  ELSE.
+    CONCATENATE l_query ' ORDER BY PRIMARY KEY.' INTO l_query SEPARATED BY space.
+  ENDIF.
   CONCATENATE l_query '  ENDSELECT.' INTO l_query SEPARATED BY space.
   PERFORM split_string USING l_query '72' ' ' ' ' CHANGING it_query_new.
 ENDFORM.
