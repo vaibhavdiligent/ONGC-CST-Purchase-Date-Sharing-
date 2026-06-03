@@ -2221,6 +2221,7 @@ FORM process_read.
       DO.
         IF l_line1 CS '='.
           DATA(l_fdpos) = sy-fdpos.
+          IF l_fdpos = 0. EXIT. ENDIF.
           wa_table-value = l_line1(l_fdpos).
           REPLACE ALL OCCURRENCES OF '@' IN wa_table-value WITH space.
           CONDENSE wa_table-value.
