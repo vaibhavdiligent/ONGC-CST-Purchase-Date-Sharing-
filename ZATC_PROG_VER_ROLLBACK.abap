@@ -106,6 +106,11 @@ START-OF-SELECTION.
           communication_failure = 3.
 
       IF sy-subrc = 0 AND lt_source IS NOT INITIAL.
+        " Repair broken "SORT <tab> BY" statements left by S/4 ATC
+        " remediation (sort fields stripped, period swallowed into a
+        " comment) which otherwise leave the SORT statement unterminated.
+        PERFORM fix_broken_sort CHANGING lt_source.
+
         SELECT SINGLE * INTO @DATA(l_trdir) FROM trdir WHERE name = @lv_prog_name.
         CALL FUNCTION 'RPY_PROGRAM_UPDATE'
           EXPORTING
@@ -360,5 +365,78 @@ FORM get_latest_version USING    p_objname LIKE vrsd-objname
                |dated { wa_version-datum } { wa_version-zeit } by { wa_version-author }|.
     ENDIF.
   ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form fix_broken_sort
+*&  Repairs "SORT <tab> BY" statements that the S/4 ATC remediation
+*&  tool left broken: the sort fields were stripped and the closing
+*&  period was swallowed into a trailing comment (e.g.
+*&        SORT L_I_PAY BY "Update.
+*&  which leaves the SORT statement unterminated and causes the parser
+*&  to consume the following lines (LOOP / IF / FORM) as sort fields.
+*&  Such lines are rewritten to: <indent>SORT <tab>.
+*&---------------------------------------------------------------------*
+FORM fix_broken_sort CHANGING ct_source TYPE STANDARD TABLE.
+
+  FIELD-SYMBOLS <ls_line> TYPE abaptxt255.
+
+  DATA: lv_code   TYPE string,
+        lv_chk    TYPE string,
+        lv_indent TYPE string,
+        lv_tab    TYPE string,
+        lv_w1     TYPE string,
+        lv_rest   TYPE string,
+        lv_pos    TYPE i,
+        lv_off    TYPE i.
+
+  LOOP AT ct_source ASSIGNING <ls_line>.
+
+    " Skip full-line comments
+    IF <ls_line>-line(1) = '*'.
+      CONTINUE.
+    ENDIF.
+
+    " A broken remediation line has the period swallowed in a comment,
+    " so it must contain a '"' quote
+    FIND '"' IN <ls_line>-line MATCH OFFSET lv_pos.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+
+    " Code portion before the comment
+    lv_code = <ls_line>-line(lv_pos).
+
+    " Normalise for checking
+    lv_chk = lv_code.
+    CONDENSE lv_chk.
+    TRANSLATE lv_chk TO UPPER CASE.
+
+    " Match: SORT <name> BY  with nothing (no fields) after BY
+    FIND REGEX '^SORT\s+(\S+)\s+BY$' IN lv_chk.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+
+    " Second token = the internal table name
+    SPLIT lv_chk AT space INTO lv_w1 lv_tab lv_rest.
+
+    " Preserve original leading indentation
+    lv_off = 0.
+    WHILE lv_off < strlen( <ls_line>-line )
+      AND <ls_line>-line+lv_off(1) = space.
+      lv_off = lv_off + 1.
+    ENDWHILE.
+    IF lv_off > 0.
+      lv_indent = <ls_line>-line(lv_off).
+    ELSE.
+      CLEAR lv_indent.
+    ENDIF.
+
+    " Rebuild as: <indent>SORT <table>.
+    <ls_line>-line = lv_indent && 'SORT ' && lv_tab && '.'.
+
+  ENDLOOP.
 
 ENDFORM.
