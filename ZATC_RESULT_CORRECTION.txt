@@ -1464,6 +1464,7 @@ FORM change_table.
   DATA it_fields_new_t TYPE tt_base_fields.
   DATA l_cl_dd_ddl_field_tracker TYPE REF TO cl_dd_ddl_field_tracker.
   DATA l_star TYPE flag.
+  DATA l_after_op TYPE flag.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
     IF wa_q-str CS '"'. wa_q-str = wa_q-str(sy-fdpos). ENDIF.
@@ -1710,7 +1711,7 @@ FORM change_table.
       ENDLOOP.
     ENDIF.
     " Append WHERE clause with CDS field name mapping and @ for host variables
-    CLEAR l_in_paren. CLEAR l_paren_prev.
+    CLEAR l_in_paren. CLEAR l_paren_prev. CLEAR l_after_op.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
         IF wa_table-value = 'INTO' OR wa_table-value = 'ORDER' OR wa_table-value = 'ENDSELECT'. EXIT. ENDIF.
@@ -1725,7 +1726,7 @@ FORM change_table.
               base_field = l_wfld_w base_object = wa_table_q-value.
             IF sy-subrc = 0. CONCATENATE l_wsym_w wa_fn_w-element_name INTO wa_table-value. ENDIF.
           ENDIF.
-          CLEAR l_paren_prev.
+          CLEAR l_paren_prev. CLEAR l_after_op.
         ELSEIF wa_table-value <> 'WHERE' AND wa_table-value <> 'AND' AND wa_table-value <> 'OR'
           AND wa_table-value <> 'NOT' AND wa_table-value <> 'IN' AND wa_table-value <> 'BETWEEN'
           AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
@@ -1734,22 +1735,37 @@ FORM change_table.
           AND wa_table-value <> 'EQ' AND wa_table-value <> 'NE' AND wa_table-value <> 'GT'
           AND wa_table-value <> 'LT' AND wa_table-value <> 'GE' AND wa_table-value <> 'LE'
           AND wa_table-value <> '(' AND wa_table-value <> ')'.
+          DATA l_was_after_op TYPE flag.
+          l_was_after_op = l_after_op. CLEAR l_after_op.
           IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
             AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            DATA(l_bare_found) = abap_false.
-            LOOP AT it_table_q INTO DATA(wa_tq_jw).
-              READ TABLE it_fields_new INTO DATA(wa_fn_jw) WITH KEY
-                base_field = wa_table-value base_object = wa_tq_jw-value.
-              IF sy-subrc = 0.
-                CONCATENATE wa_tq_jw-symbol wa_fn_jw-element_name INTO wa_table-value.
-                l_bare_found = abap_true.
-                EXIT.
-              ENDIF.
-            ENDLOOP.
-            IF l_bare_found = abap_false.
+            IF l_was_after_op = abap_true.
+              " Right-hand side of comparison: host variable, never a CDS field
               CONCATENATE '@' wa_table-value INTO wa_table-value.
+            ELSE.
+              DATA(l_bare_found) = abap_false.
+              LOOP AT it_table_q INTO DATA(wa_tq_jw).
+                READ TABLE it_fields_new INTO DATA(wa_fn_jw) WITH KEY
+                  base_field = wa_table-value base_object = wa_tq_jw-value.
+                IF sy-subrc = 0.
+                  CONCATENATE wa_tq_jw-symbol wa_fn_jw-element_name INTO wa_table-value.
+                  l_bare_found = abap_true.
+                  EXIT.
+                ENDIF.
+              ENDLOOP.
+              IF l_bare_found = abap_false.
+                CONCATENATE '@' wa_table-value INTO wa_table-value.
+              ENDIF.
             ENDIF.
           ENDIF.
+        ENDIF.
+        " After processing, mark that next token is right-hand side of comparison
+        IF wa_table-value = '=' OR wa_table-value = '<>' OR wa_table-value = '>='
+          OR wa_table-value = '<=' OR wa_table-value = '>' OR wa_table-value = '<'
+          OR wa_table-value = 'EQ' OR wa_table-value = 'NE' OR wa_table-value = 'GT'
+          OR wa_table-value = 'LT' OR wa_table-value = 'GE' OR wa_table-value = 'LE'
+          OR wa_table-value = 'BETWEEN' OR wa_table-value = 'LIKE'.
+          l_after_op = abap_true.
         ENDIF.
         " Restore commas lost by tokenizer inside IN ( ... ) lists
         IF wa_table-value = '('.
@@ -1903,7 +1919,7 @@ FORM change_table.
       ENDLOOP.
     ENDIF.
     " Append WHERE clause with CDS field name mapping and @ for host variables
-    CLEAR l_in_paren. CLEAR l_paren_prev.
+    CLEAR l_in_paren. CLEAR l_paren_prev. CLEAR l_after_op.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
         IF wa_table-value = 'INTO' OR wa_table-value = 'ORDER' OR wa_table-value = 'ENDSELECT'. EXIT. ENDIF.
@@ -1914,7 +1930,7 @@ FORM change_table.
           REPLACE l_wsym_w2 IN l_wfld_w2 WITH '' IGNORING CASE. CONDENSE l_wfld_w2.
           READ TABLE it_fields_new INTO DATA(wa_fn_w2) WITH KEY base_field = l_wfld_w2.
           IF sy-subrc = 0. CONCATENATE l_wsym_w2 wa_fn_w2-element_name INTO wa_table-value. ENDIF.
-          CLEAR l_paren_prev.
+          CLEAR l_paren_prev. CLEAR l_after_op.
         ELSEIF wa_table-value <> 'WHERE' AND wa_table-value <> 'AND' AND wa_table-value <> 'OR'
           AND wa_table-value <> 'NOT' AND wa_table-value <> 'IN' AND wa_table-value <> 'BETWEEN'
           AND wa_table-value <> '=' AND wa_table-value <> '<>' AND wa_table-value <> '>='
@@ -1923,13 +1939,29 @@ FORM change_table.
           AND wa_table-value <> 'EQ' AND wa_table-value <> 'NE' AND wa_table-value <> 'GT'
           AND wa_table-value <> 'LT' AND wa_table-value <> 'GE' AND wa_table-value <> 'LE'
           AND wa_table-value <> '(' AND wa_table-value <> ')'.
-          READ TABLE it_fields_new INTO DATA(wa_fn_nj_w) WITH KEY base_field = wa_table-value.
-          IF sy-subrc = 0.
-            wa_table-value = wa_fn_nj_w-element_name.
-          ELSEIF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
+          DATA l_was_after_op2 TYPE flag.
+          l_was_after_op2 = l_after_op. CLEAR l_after_op.
+          IF wa_table-value(1) <> '@' AND wa_table-value(1) <> ''''
             AND NOT ( wa_table-value(1) >= '0' AND wa_table-value(1) <= '9' ).
-            CONCATENATE '@' wa_table-value INTO wa_table-value.
+            IF l_was_after_op2 = abap_true.
+              CONCATENATE '@' wa_table-value INTO wa_table-value.
+            ELSE.
+              READ TABLE it_fields_new INTO DATA(wa_fn_nj_w) WITH KEY base_field = wa_table-value.
+              IF sy-subrc = 0.
+                wa_table-value = wa_fn_nj_w-element_name.
+              ELSE.
+                CONCATENATE '@' wa_table-value INTO wa_table-value.
+              ENDIF.
+            ENDIF.
           ENDIF.
+        ENDIF.
+        " After processing, mark that next token is right-hand side of comparison
+        IF wa_table-value = '=' OR wa_table-value = '<>' OR wa_table-value = '>='
+          OR wa_table-value = '<=' OR wa_table-value = '>' OR wa_table-value = '<'
+          OR wa_table-value = 'EQ' OR wa_table-value = 'NE' OR wa_table-value = 'GT'
+          OR wa_table-value = 'LT' OR wa_table-value = 'GE' OR wa_table-value = 'LE'
+          OR wa_table-value = 'BETWEEN' OR wa_table-value = 'LIKE'.
+          l_after_op = abap_true.
         ENDIF.
         " Restore commas lost by tokenizer inside IN ( ... ) lists
         IF wa_table-value = '('.
