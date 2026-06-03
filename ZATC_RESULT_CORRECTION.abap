@@ -2062,7 +2062,7 @@ FORM change_single.
   DATA lt_pk_flds TYPE STANDARD TABLE OF dd03l.
   DATA l_order_by TYPE string.
   CLEAR l_order_by.
-  SELECT fieldname rollname FROM dd03l INTO CORRESPONDING FIELDS OF TABLE @lt_pk_flds
+  SELECT fieldname, rollname FROM dd03l INTO CORRESPONDING FIELDS OF TABLE @lt_pk_flds
     WHERE tabname = @l_table AND keyflag = 'X'
     ORDER BY position.
   LOOP AT lt_pk_flds INTO DATA(wa_pk_fld).
