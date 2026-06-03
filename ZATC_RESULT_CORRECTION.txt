@@ -479,6 +479,16 @@ START-OF-SELECTION.
           TRANSLATE wa_final-check_message TO UPPER CASE.
           TRANSLATE wa_final-check_title TO UPPER CASE.
           TRANSLATE wa_final-message1 TO UPPER CASE.
+          " Global guard: never auto-correct any line that belongs to a cursor
+          " read loop (OPEN CURSOR ... FOR SELECT / FETCH NEXT CURSOR / CLOSE
+          " CURSOR). These constructs cannot be converted, and any partial edit
+          " by ANY handler corrupts them (dropped INTO / orphaned APPENDING /
+          " broken nesting). Pass the line through untouched before dispatching.
+          DATA l_is_cursor_line TYPE abap_bool.
+          PERFORM check_cursor_line USING l_tabix CHANGING l_is_cursor_line.
+          IF l_is_cursor_line = abap_true.
+            APPEND wa_repos_tab TO repos_tab_new.
+          ELSE.
           CASE wa_final-check_title.
             WHEN 'S/4HANA: SEARCH FOR DATABASE OPERATIONS'.
               IF wa_final-message1 = 'DB OPERATION SELECT FOUND'
@@ -548,6 +558,41 @@ START-OF-SELECTION.
                         CLEAR wa_blank.
                         l_tabix1 = l_tabix + 1.
                       ELSE.
+                        " Skip cursor-based SELECTs (OPEN CURSOR ... FOR SELECT / FETCH NEXT / CLOSE
+                        " CURSOR). These span multiple statements and cannot be auto-converted to CDS.
+                        " The finding may land on the OPEN CURSOR line, on the SELECT/FROM/WHERE body
+                        " of the cursor, or on the FETCH/CLOSE CURSOR statements - detect all of them.
+                        DATA l_skip_open_cursor TYPE abap_bool.
+                        DATA l_cur_scan TYPE sy-tabix.
+                        DATA l_cur_line TYPE string.
+                        CLEAR l_skip_open_cursor.
+                        " (a) the flagged line is itself a cursor statement
+                        IF wa_repos_tab-line CS 'OPEN CURSOR'
+                          OR wa_repos_tab-line CS 'CLOSE CURSOR'
+                          OR ( wa_repos_tab-line CS 'FETCH' AND wa_repos_tab-line CS 'CURSOR' ).
+                          l_skip_open_cursor = abap_true.
+                        ELSE.
+                          " (b) the SELECT this finding belongs to is the body of an OPEN CURSOR.
+                          " Scan backward to the start of the current statement; if OPEN CURSOR is
+                          " reached before the previous statement's terminating '.', it is a cursor.
+                          l_cur_scan = l_tabix.
+                          DO 20 TIMES.
+                            READ TABLE repos_tab INTO wa_repos_tab_d INDEX l_cur_scan.
+                            IF sy-subrc <> 0. EXIT. ENDIF.
+                            IF wa_repos_tab_d-line CS 'OPEN CURSOR'.
+                              l_skip_open_cursor = abap_true. EXIT.
+                            ENDIF.
+                            l_cur_line = wa_repos_tab_d-line.
+                            IF l_cur_line CS '"'. l_cur_line = l_cur_line(sy-fdpos). ENDIF.
+                            CONDENSE l_cur_line.
+                            " previous statement boundary reached (a line above the finding ending in '.')
+                            IF l_cur_scan < l_tabix AND l_cur_line CS '.'. EXIT. ENDIF.
+                            l_cur_scan = l_cur_scan - 1.
+                          ENDDO.
+                        ENDIF.
+                        IF l_skip_open_cursor = abap_true.
+                          APPEND wa_repos_tab TO repos_tab_new.
+                        ELSE.
                         REFRESH it_query.
                         REFRESH it_query_new.
                         DATA l_table_string TYPE string.
@@ -647,6 +692,7 @@ START-OF-SELECTION.
                             CLEAR wa_blank.
                           ENDIF.
                         ENDIF.
+                        ENDIF. "l_skip_open_cursor
                       ENDIF.
                     ELSE.
                       APPEND wa_repos_tab TO repos_tab_new.
@@ -657,6 +703,11 @@ START-OF-SELECTION.
                 ELSE.
                   APPEND wa_repos_tab TO repos_tab_new.
                 ENDIF.
+              ELSE.
+                " Non-SELECT/JOIN DB operations (OPEN CURSOR / FETCH NEXT CURSOR /
+                " CLOSE CURSOR / UPDATE / INSERT / MODIFY / DELETE) are not auto-
+                " converted here - keep the original line instead of dropping it.
+                APPEND wa_repos_tab TO repos_tab_new.
               ENDIF.
               REFRESH : it_query,it_query_new.
             WHEN 'S/4HANA: FIELD LENGTH EXTENSIONS'.
@@ -1241,6 +1292,7 @@ START-OF-SELECTION.
             WHEN OTHERS.
               APPEND wa_repos_tab TO repos_tab_new.
           ENDCASE.
+          ENDIF. "l_is_cursor_line guard
         ENDIF.
       ENDLOOP.
     ENDIF.
@@ -1420,6 +1472,46 @@ START-OF-SELECTION.
   lo_table->get_columns( )->get_column( columnname = 'STATUS' )->set_long_text( 'Status' ).
   lo_table->display( ).
 
+*&---------------------------------------------------------------------*
+*& Form check_cursor_line
+*& Returns abap_true if the source line at p_tabix belongs to a cursor
+*& read loop - i.e. it is an OPEN CURSOR / FETCH NEXT CURSOR / CLOSE CURSOR
+*& statement, or it is part of the SELECT body inside OPEN CURSOR ... FOR.
+*& Such constructs cannot be auto-converted, so the caller passes the line
+*& through unchanged instead of letting any handler edit (and break) it.
+*&---------------------------------------------------------------------*
+FORM check_cursor_line USING    p_tabix     TYPE sy-tabix
+                       CHANGING p_is_cursor TYPE abap_bool.
+  DATA l_scan TYPE sy-tabix.
+  DATA l_ln   TYPE string.
+  DATA wa_c   TYPE abaptxt255.
+  CLEAR p_is_cursor.
+  READ TABLE repos_tab INTO wa_c INDEX p_tabix.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  " (a) the flagged line is itself a cursor statement
+  IF wa_c-line CS 'OPEN CURSOR'
+    OR wa_c-line CS 'CLOSE CURSOR'
+    OR ( wa_c-line CS 'FETCH' AND wa_c-line CS 'CURSOR' ).
+    p_is_cursor = abap_true.
+    RETURN.
+  ENDIF.
+  " (b) the flagged line is part of the SELECT body inside OPEN CURSOR ... FOR.
+  " Scan backward to the start of the current statement; if OPEN CURSOR is
+  " reached before the previous statement's terminating '.', it is a cursor.
+  l_scan = p_tabix.
+  DO 25 TIMES.
+    READ TABLE repos_tab INTO wa_c INDEX l_scan.
+    IF sy-subrc <> 0. EXIT. ENDIF.
+    IF wa_c-line CS 'OPEN CURSOR'.
+      p_is_cursor = abap_true. EXIT.
+    ENDIF.
+    l_ln = wa_c-line.
+    IF l_ln CS '"'. l_ln = l_ln(sy-fdpos). ENDIF.
+    CONDENSE l_ln.
+    IF l_scan < p_tabix AND l_ln CS '.'. EXIT. ENDIF.
+    l_scan = l_scan - 1.
+  ENDDO.
+ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form change_table
 *&---------------------------------------------------------------------*
