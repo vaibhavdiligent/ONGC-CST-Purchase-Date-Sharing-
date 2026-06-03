@@ -1690,7 +1690,7 @@ FORM change_table.
     CLEAR l_in_paren. CLEAR l_paren_prev.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
-        IF wa_table-value = 'INTO'. EXIT. ENDIF.
+        IF wa_table-value = 'INTO' OR wa_table-value = 'ORDER' OR wa_table-value = 'ENDSELECT'. EXIT. ENDIF.
         IF wa_table-value CS '~'.
           DATA(l_wsym_w) = substring( val = wa_table-value len = sy-fdpos ).
           DATA(l_wfld_w) = wa_table-value.
@@ -1876,7 +1876,7 @@ FORM change_table.
     CLEAR l_in_paren. CLEAR l_paren_prev.
     IF l_where > 0.
       LOOP AT it_table INTO wa_table FROM l_where.
-        IF wa_table-value = 'INTO'. EXIT. ENDIF.
+        IF wa_table-value = 'INTO' OR wa_table-value = 'ORDER' OR wa_table-value = 'ENDSELECT'. EXIT. ENDIF.
         IF wa_table-value CS '~'.
           DATA(l_wsym_w2) = substring( val = wa_table-value len = sy-fdpos ).
           DATA(l_wfld_w2) = wa_table-value.
