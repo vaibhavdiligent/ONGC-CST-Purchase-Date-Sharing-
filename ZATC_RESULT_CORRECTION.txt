@@ -191,11 +191,21 @@ START-OF-SELECTION.
   DATA : e_findings            TYPE scit_rest,
          e_findings_extension TYPE satc_ci_findings_extension,
          e_ext_field_list     TYPE satc_ci_finding_ext_field_list.
-  SELECT SINGLE display_id INTO i_result_id
-    FROM satc_ac_resulth
-    WHERE run_series_name = p_id.
-  IF sy-subrc <> 0.
-    MESSAGE 'Wrong ATC Variant Selected' TYPE 'E'.
+  select * into TABLE @data(it_SATC_AC_RESULTH)
+    from SATC_AC_RESULTH
+        WHERE RUN_SERIES_NAME = @P_ID.
+  if sy-subrc = 0.
+    sort it_SATC_AC_RESULTH by UPDATE_ON DESCENDING.
+    READ TABLE it_SATC_AC_RESULTH into data(wa_SATC_AC_RESULTH) index 1.
+    if sy-subrc = 0.
+      i_result_id = wa_SATC_AC_RESULTH-display_id.
+    endif.
+  else.
+*   SELECT SINGLE DISPLAY_ID INTO I_RESULT_ID
+*       FROM SATC_AC_RESULTH
+*       WHER,E RUN_SERIES_NAME = P_ID.
+*   IF SY-SUBRC <> 0.
+      MESSAGE 'WRONG ATC VARIANT SELECTED' TYPE 'E'.
   ENDIF.
   SELECT SINGLE * INTO @DATA(l_e070)
     FROM e070
