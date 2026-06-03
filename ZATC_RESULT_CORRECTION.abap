@@ -1106,6 +1106,10 @@ START-OF-SELECTION.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
                 WHEN 'SELECT SINGLE IS POSSIBLY NOT UNIQUE'.
+                  " Start from a clean slate: it_query may still hold a leftover
+                  " line from a previously processed statement. Without this the
+                  " leftover gets prepended and change_single emits a doubled SELECT.
+                  REFRESH : it_query,it_query_new.
                   LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
                     IF wa_repos_tab_d-line CS '"'.
                       DATA(l_fdpos) = sy-fdpos.
