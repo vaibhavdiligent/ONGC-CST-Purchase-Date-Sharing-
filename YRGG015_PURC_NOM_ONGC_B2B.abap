@@ -711,7 +711,8 @@ FORM fetch_nomination_status.
         lr_docnr  TYPE RANGE OF oijnomi-docnr,
         ls_rdocnr LIKE LINE OF lr_docnr,
         lr_idate  TYPE RANGE OF oijnomi-idate,
-        ls_ridate LIKE LINE OF lr_idate.
+        ls_ridate LIKE LINE OF lr_idate,
+        l_tabix   TYPE sy-tabix.
 
   " Build ranges from non-excluded rows that have an OA
   LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X' AND outline_agr IS NOT INITIAL.
@@ -736,6 +737,7 @@ FORM fetch_nomination_status.
 
   " Populate nomtk/nomit on matching display rows
   LOOP AT gt_display INTO ls_disp.
+    l_tabix = sy-tabix.
     IF ls_disp-outline_agr IS INITIAL. CONTINUE. ENDIF.
     READ TABLE lt_nomi INTO ls_nomi
       WITH KEY docnr = ls_disp-outline_agr idate = ls_disp-gas_day
@@ -743,7 +745,7 @@ FORM fetch_nomination_status.
     IF sy-subrc = 0.
       ls_disp-nomtk = ls_nomi-nomtk.
       ls_disp-nomit = ls_nomi-nomit.
-      MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+      MODIFY gt_display INDEX l_tabix FROM ls_disp.
     ENDIF.
   ENDLOOP.
 
@@ -753,13 +755,14 @@ FORM fetch_nomination_status.
     lv_day   = ls_disp-gas_day.
     " Disable SEL on ALL rows with same locid+gas_day
     LOOP AT gt_display INTO ls_disp WHERE locid = lv_locid AND gas_day = lv_day AND is_excl <> 'X'.
+      l_tabix = sy-tabix.
       ls_disp-sel = ' '.
       DELETE ls_disp-celltab WHERE fieldname = 'SEL'.
       CLEAR ls_styl.
       ls_styl-fieldname = 'SEL'.
       ls_styl-style     = cl_gui_alv_grid=>mc_style_disabled.
       INSERT ls_styl INTO TABLE ls_disp-celltab.
-      MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+      MODIFY gt_display INDEX l_tabix FROM ls_disp.
     ENDLOOP.
   ENDLOOP.
 ENDFORM.
