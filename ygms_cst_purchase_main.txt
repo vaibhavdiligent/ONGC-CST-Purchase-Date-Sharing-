@@ -2586,6 +2586,16 @@ FORM save_data_to_db.
         lv_avg_ncv = lv_sum_vol_ncv / lv_total_vol.
       ENDIF.
     ENDIF.
+    " Skip excluded combinations - do not save to fortnightly table
+    READ TABLE lt_cst_pur TRANSPORTING NO FIELDS
+      WITH KEY location   = ls_gail_id_map-location_id
+               material   = ls_gail_id_map-material
+               ongc_mater = ls_gail_id_map-ongc_material
+               state_code = ls_gail_id_map-state_code
+               exclude    = 'X'.
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
     " Populate fortnightly record
     IF ls_cst_fnt-ongc_mater IS INITIAL.
       ls_cst_fnt-ongc_mater = ls_gail_id_map-ongc_material.
