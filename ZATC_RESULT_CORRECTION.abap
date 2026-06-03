@@ -2584,7 +2584,16 @@ FORM split_string
     component_length = max_component_length.
     WHILE search_position >= current_offset.
       current_char = input_string+search_position(1).
-      IF terminating_separators CA current_char. EXIT. ENDIF.
+      IF terminating_separators CA current_char.
+        " Do not break right before a component selector '-' (e.g. <fs>-comp
+        " or namespaced <fs>-/ccc/...). Starting the next line with '-...' is a
+        " syntax error ("'-' is not allowed here. '.' is expected."). Keep
+        " scanning back to an earlier separator so the whole token stays intact.
+        l_curr = search_position + 1.
+        IF l_curr >= total_length OR input_string+l_curr(1) <> '-'.
+          EXIT.
+        ENDIF.
+      ENDIF.
       SUBTRACT 1 FROM component_length.
       IF ( opening_separators CA current_char ).
         l_curr = search_position + 1.
