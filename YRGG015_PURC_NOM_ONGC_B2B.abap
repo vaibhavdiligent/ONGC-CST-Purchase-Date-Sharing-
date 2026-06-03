@@ -634,7 +634,7 @@ FORM fetch_pur_data.
       ls_disp-is_excl   = 'X'.          " logic flag: used in all WHERE/IF
       ls_disp-exclude   = ls_pur-exclude." display: tick only if TABLE has exclude='X'
       ls_disp-sel       = ' '.
-      ls_disp-row_color = 'C600'.   " red entire row (excluded)
+      ls_disp-row_color = 'C700'.   " grey entire row (excluded)
       " Disable SEL checkbox and CHARG edit
       CLEAR ls_styl.
       ls_styl-fieldname = 'SEL'.
