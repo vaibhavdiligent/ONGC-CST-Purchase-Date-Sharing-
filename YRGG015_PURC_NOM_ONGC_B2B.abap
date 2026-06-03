@@ -292,13 +292,18 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     DATA: ls_mod  TYPE lvc_s_modi,
           ls_disp TYPE ty_display.
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
-      IF ls_mod-fieldname = 'CHARG' AND ls_mod-value IS NOT INITIAL.
-        READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
-        IF sy-subrc = 0.
-          ls_disp-charg = ls_mod-value.
+      READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
+      IF sy-subrc <> 0. CONTINUE. ENDIF.
+      CASE ls_mod-fieldname.
+        WHEN 'CHARG'.
+          IF ls_mod-value IS NOT INITIAL.
+            ls_disp-charg = ls_mod-value.
+            MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
+          ENDIF.
+        WHEN 'OUTLINE_AGR'.
+          ls_disp-outline_agr = ls_mod-value.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
-        ENDIF.
-      ENDIF.
+      ENDCASE.
     ENDLOOP.
   ENDMETHOD.
 
@@ -1169,12 +1174,13 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
-  " OUTLINE_AGR
+  " OUTLINE_AGR - editable so user can manually enter/correct OA
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'OUTLINE_AGR'.
   ls_fcat-coltext   = 'Outline Agreement'.
   ls_fcat-seltext   = 'Outline Agreement'.
   ls_fcat-outputlen = 14.
+  ls_fcat-edit      = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
   " CHARG - editable batch field
