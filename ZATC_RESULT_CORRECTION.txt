@@ -1076,14 +1076,20 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
+                  " Pass 1: comment out the entire original SELECT block
+                  CLEAR l_for.
                   LOOP AT repos_tab INTO DATA(wa_repos_tab1) FROM l_tabix1.
                     l_tab = sy-tabix.
-                    IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'.
-                      l_for = 'X'.
-                    ENDIF.
+                    IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'. l_for = 'X'. ENDIF.
+                    CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
+                    APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
+                    IF wa_repos_tab1-line CS '.'. EXIT. ENDIF.
+                  ENDLOOP.
+                  " Pass 2: write new SELECT block, modifying only the last line
+                  CLEAR l_for.
+                  LOOP AT repos_tab INTO wa_repos_tab1 FROM l_tabix1.
+                    IF wa_repos_tab1-line CS 'FOR ALL ENTRIES'. l_for = 'X'. ENDIF.
                     IF wa_repos_tab1-line CS '.' AND l_for IS INITIAL.
-                      CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
-                      APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
                       REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab1-line WITH space IGNORING CASE.
                       CONDENSE wa_repos_tab1-line.
                       CONCATENATE wa_repos_tab1-line 'ORDER BY PRIMARY KEY.'
@@ -1091,20 +1097,14 @@ START-OF-SELECTION.
                       APPEND wa_repos_tab1 TO repos_tab_new.
                       l_tab = l_tab + 1.
                       EXIT.
+                    ELSEIF l_for = 'X' AND wa_repos_tab1-line CS '.'.
+                      CONCATENATE wa_repos_tab1-line '"#EC CI_NOORDER'
+                        INTO wa_repos_tab1-line SEPARATED BY space.
+                      APPEND wa_repos_tab1 TO repos_tab_new.
+                      l_tab = l_tab + 1.
+                      EXIT.
                     ELSE.
-                      IF l_for = 'X' AND wa_repos_tab1-line CS '.'.
-                        CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
-                        APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
-                        CONCATENATE wa_repos_tab1-line '"#EC CI_NOORDER'
-                          INTO wa_repos_tab1-line SEPARATED BY space.
-                        APPEND wa_repos_tab1 TO repos_tab_new.
-                        l_tab = l_tab + 1.
-                        EXIT.
-                      ELSE.
-                        CONCATENATE '*' wa_repos_tab1-line INTO wa_blank-line.
-                        APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
-                        APPEND wa_repos_tab1 TO repos_tab_new.
-                      ENDIF.
+                      APPEND wa_repos_tab1 TO repos_tab_new.
                     ENDIF.
                   ENDLOOP.
                   CLEAR wa_blank.
