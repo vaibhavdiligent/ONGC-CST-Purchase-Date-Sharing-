@@ -1463,6 +1463,7 @@ FORM change_table.
   DATA it_fields_new   TYPE tt_base_fields.
   DATA it_fields_new_t TYPE tt_base_fields.
   DATA l_cl_dd_ddl_field_tracker TYPE REF TO cl_dd_ddl_field_tracker.
+  DATA l_star TYPE flag.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
     IF wa_q-str CS '"'. wa_q-str = wa_q-str(sy-fdpos). ENDIF.
@@ -1579,6 +1580,7 @@ FORM change_table.
       ENDIF.
       IF wa_table-value = '*'.
         IF l_table <> 'BSEG' AND l_table <> 'SKA1' AND l_table <> 'SKB1'.
+          l_star = abap_true.
           LOOP AT it_fields_new INTO DATA(wa_fn) WHERE is_calculated IS INITIAL.
             IF wa_fn-base_field = 'MANDT'. CONTINUE. ENDIF.
             CONCATENATE l_query l_q wa_fn-element_name 'AS' wa_fn-base_field
@@ -1749,6 +1751,13 @@ FORM change_table.
     ENDIF.
     " INTO TABLE must come after WHERE in S/4HANA Open SQL syntax
     CONCATENATE l_query 'INTO' INTO l_query SEPARATED BY space.
+    " If SELECT * was used, ensure INTO CORRESPONDING FIELDS OF TABLE is generated
+    IF l_star = abap_true.
+      READ TABLE it_table TRANSPORTING NO FIELDS WITH KEY value = 'CORRESPONDING'.
+      IF sy-subrc <> 0.
+        CONCATENATE l_query 'CORRESPONDING FIELDS OF' INTO l_query SEPARATED BY space.
+      ENDIF.
+    ENDIF.
     IF l_into > 0.
       CLEAR l_bras. CLEAR l_prev_at_tok. CLEAR l_at_paren_depth.
       DATA l_nosp TYPE flag.
