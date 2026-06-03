@@ -2256,6 +2256,7 @@ FORM process_read.
     ENDIF.
     l_tab2 = l_tab2 + 1.
   ENDDO.
+  IF it_table IS INITIAL. RETURN. ENDIF.
   CONCATENATE 'SORT' l_table 'BY' INTO l_line_new SEPARATED BY space.
   LOOP AT it_table INTO wa_table.
     CONCATENATE l_line_new wa_table-value INTO l_line_new SEPARATED BY space.
