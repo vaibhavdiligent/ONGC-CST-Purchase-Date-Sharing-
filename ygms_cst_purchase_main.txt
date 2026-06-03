@@ -2842,8 +2842,7 @@ FORM handle_download.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
 
   " Get unique Location IDs
   LOOP AT lt_all_daily INTO DATA(ls_pur_loc).
@@ -3270,8 +3269,7 @@ FORM handle_send_email.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
 
   " Send email with PDF and/or Excel attachments (daily + fortnightly)
   PERFORM send_email USING lt_emails lt_send_data lt_fnt_data lv_send_pdf lv_send_excel.
@@ -4451,8 +4449,7 @@ FORM handle_send_b2b.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
   IF lt_send_data IS INITIAL .
     MESSAGE s000(ygms_msg) WITH 'No data found to send for the selected period'.
     RETURN.
@@ -4855,8 +4852,7 @@ FORM display_send_preview.
     WHERE date_from  = gv_date_from
       AND date_to    = gv_date_to
       AND location   IN s_loc
-      AND deleted    = ' '
-      AND qty_in_scm > 0.
+      AND deleted    = ' '.
 
   " Build fortnightly preview data
   LOOP AT lt_cst_fnt INTO DATA(ls_fnt_db).
