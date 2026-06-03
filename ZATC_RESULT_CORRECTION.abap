@@ -1582,6 +1582,7 @@ FORM change_table.
           LOOP AT it_fields_new INTO DATA(wa_fn) WHERE is_calculated IS INITIAL.
             CONCATENATE l_query l_q wa_fn-element_name 'AS' wa_fn-base_field
               INTO l_query SEPARATED BY space.
+            l_q = ','.
           ENDLOOP.
         ELSE.
           MOVE it_query[] TO it_query_new[]. l_exit = 'X'. EXIT.
