@@ -3,7 +3,7 @@
 *&---------------------------------------------------------------------*
 REPORT zatc_result_correction.
 TYPE-POOLS seop.
-TABLES : tadir.
+TABLES : tadir,SCIREST_AD.
 TYPES: ty_swastrtab TYPE TABLE OF   swastrtab.
 DATA : lt_recording_entries TYPE cts_recording_entries,
        ls_recording_entry   TYPE cts_recording_entry.
@@ -146,6 +146,7 @@ CLASS lcl_main DEFINITION FINAL.
 ENDCLASS.
 PARAMETERS  p_id TYPE satc_d_ac_title.
 SELECT-OPTIONS s_obj FOR tadir-obj_name.
+SELECT-OPTIONS s_name for SCIREST_AD-sobjname OBLIGATORY.
 PARAMETERS p_rem TYPE char50.
 PARAMETERS lv_req TYPE trkorr OBLIGATORY.
 PARAMETERS p_begin TYPE char50 DEFAULT '**begin of change by'.
@@ -313,7 +314,8 @@ START-OF-SELECTION.
   DATA lv_total_objects TYPE i.
   DESCRIBE TABLE it_final_p LINES lv_total_objects.
   LOOP AT it_final_p INTO DATA(wa_final_p)
-     WHERE ( sobjname(1) = 'Z' OR sobjname(1) = 'Y' ).
+     where sobjname in s_name.
+*      WHERE ( sobjname(1) = 'Z' OR sobjname(1) = 'Y' ).
     l_repid = l_repid + 1.
     " Point 3: Progress indicator so SAP GUI does not appear frozen
     DATA(lv_pct) = CONV i( l_repid * 100 / lv_total_objects ).
