@@ -2114,13 +2114,15 @@ FORM process_read.
     l_line1 = wa_repos_read-line.
     CONDENSE l_line1.
     DATA(l_len) = strlen( l_line1 ).
-    IF l_line1 CS 'KEY' OR l_line1 CS 'key'.
+    IF l_read IS INITIAL AND ( l_line1 CS 'KEY' OR l_line1 CS 'key' ).
       l_len = l_len - sy-fdpos.
       l_read = 'X'.
       l_line1 = l_line1+sy-fdpos(l_len).
+      CONDENSE l_line1.
+      REPLACE FIRST OCCURRENCE OF 'KEY' IN l_line1 WITH space IGNORING CASE.
+    ELSE.
+      CONDENSE l_line1.
     ENDIF.
-    CONDENSE l_line1.
-    REPLACE ALL OCCURRENCES OF 'KEY' IN l_line1 WITH space IGNORING CASE.
     IF l_line1 IS NOT INITIAL.
       DO.
         IF l_line1 CS '='.
