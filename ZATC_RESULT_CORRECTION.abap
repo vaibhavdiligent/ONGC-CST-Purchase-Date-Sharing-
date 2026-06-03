@@ -937,26 +937,19 @@ START-OF-SELECTION.
                       CLEAR wa_blank.
                       CLEAR l_note.
                       CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
-                      IF wa_repos_tab-line CS wa_final-param2.
-                        DATA(l_method)  = sy-fdpos.
-                        DATA(l_method1) = strlen( wa_repos_tab-line ).
-                        DATA l_method3 TYPE char100.
-                        l_method  = l_method - 1.
-                        l_method1 = l_method1 - l_method.
-                        CLEAR wa_blank.
-                        wa_blank-line = wa_repos_tab-line(l_method).
+                      " Search for the quoted literal to avoid matching identifiers that contain the param value
+                      DATA l_lit_with_quotes TYPE string.
+                      CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO l_lit_with_quotes.
+                      IF wa_repos_tab-line CS l_lit_with_quotes.
+                        CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line.
                         APPEND wa_blank TO repos_tab_new.
                         CLEAR wa_blank.
-                        l_method3 = wa_repos_tab-line+l_method(l_method1).
-                        CONCATENATE TEXT-001 wa_final-param2 TEXT-001 INTO wa_blank-line.
-                        REPLACE ALL OCCURRENCES OF wa_blank-line IN l_method3 WITH space IGNORING CASE.
-                        CONCATENATE wa_blank-line l_note INTO wa_blank-line SEPARATED BY space.
-                        APPEND wa_blank TO repos_tab_new.
-                        CLEAR wa_blank.
-                        wa_blank-line = l_method3.
-                        APPEND wa_blank TO repos_tab_new.
-                        CLEAR wa_blank.
-                        CLEAR l_method3.
+                        IF wa_repos_tab-line CS '"'.
+                          wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+                          CONDENSE wa_repos_tab-line.
+                        ENDIF.
+                        CONCATENATE wa_repos_tab-line l_note INTO wa_repos_tab-line SEPARATED BY space.
+                        APPEND wa_repos_tab TO repos_tab_new.
                       ENDIF.
                       CLEAR wa_blank.
                       CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
