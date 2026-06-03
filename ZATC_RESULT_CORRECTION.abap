@@ -481,7 +481,46 @@ START-OF-SELECTION.
           TRANSLATE wa_final-message1 TO UPPER CASE.
           CASE wa_final-check_title.
             WHEN 'S/4HANA: SEARCH FOR DATABASE OPERATIONS'.
-              IF wa_final-message1 = 'DB OPERATION SELECT FOUND'
+              " Bulletproof guard: never touch cursor-based SELECTs (OPEN CURSOR ...
+              " FOR SELECT / FETCH NEXT CURSOR / CLOSE CURSOR). Stripping or replacing
+              " any cursor keyword breaks the statement (SELECT without INTO, orphaned
+              " APPENDING, cascading nesting errors). This guard runs BEFORE either
+              " correction branch so neither the table-replace path nor change_table
+              " can damage a cursor block. The finding may land on the OPEN CURSOR line,
+              " on the SELECT/FROM/WHERE body of the cursor, or on FETCH/CLOSE CURSOR.
+              DATA l_skip_open_cursor TYPE abap_bool.
+              DATA l_cur_scan TYPE sy-tabix.
+              DATA l_cur_line TYPE string.
+              DATA wa_cur_chk TYPE abaptxt255.
+              CLEAR l_skip_open_cursor.
+              " (a) the flagged line is itself a cursor statement
+              IF wa_repos_tab-line CS 'OPEN CURSOR'
+                OR wa_repos_tab-line CS 'CLOSE CURSOR'
+                OR ( wa_repos_tab-line CS 'FETCH' AND wa_repos_tab-line CS 'CURSOR' ).
+                l_skip_open_cursor = abap_true.
+              ELSE.
+                " (b) the SELECT this finding belongs to is the body of an OPEN CURSOR.
+                " Scan backward; if OPEN CURSOR is reached before the previous
+                " statement's terminating '.', the finding sits in a cursor body.
+                l_cur_scan = l_tabix.
+                DO 40 TIMES.
+                  READ TABLE repos_tab INTO wa_cur_chk INDEX l_cur_scan.
+                  IF sy-subrc <> 0. EXIT. ENDIF.
+                  IF wa_cur_chk-line CS 'OPEN CURSOR'.
+                    l_skip_open_cursor = abap_true. EXIT.
+                  ENDIF.
+                  l_cur_line = wa_cur_chk-line.
+                  IF l_cur_line CS '"'. l_cur_line = l_cur_line(sy-fdpos). ENDIF.
+                  CONDENSE l_cur_line.
+                  IF l_cur_scan < l_tabix AND l_cur_line CS '.'
+                    AND l_cur_line NS 'OPEN CURSOR'. EXIT.
+                  ENDIF.
+                  l_cur_scan = l_cur_scan - 1.
+                ENDDO.
+              ENDIF.
+              IF l_skip_open_cursor = abap_true.
+                APPEND wa_repos_tab TO repos_tab_new.
+              ELSEIF wa_final-message1 = 'DB OPERATION SELECT FOUND'
                 OR wa_final-message1 = 'DB OPERATION JOIN FOUND'.
                 CLEAR wa_zatc_process1.
                 SELECT SINGLE * INTO @DATA(l_ars_api_succssr1)
@@ -548,44 +587,6 @@ START-OF-SELECTION.
                         CLEAR wa_blank.
                         l_tabix1 = l_tabix + 1.
                       ELSE.
-                        " Skip cursor-based SELECTs (OPEN CURSOR ... FOR SELECT / FETCH NEXT /
-                        " CLOSE CURSOR). These span multiple statements; change_table cannot
-                        " convert them to CDS without stripping the cursor keywords, which
-                        " produces "SELECT without INTO" and orphaned "APPENDING" syntax errors.
-                        " The finding may land on the OPEN CURSOR line, on the SELECT/FROM/WHERE
-                        " body of the cursor, or on the FETCH/CLOSE CURSOR statements.
-                        DATA l_skip_open_cursor TYPE abap_bool.
-                        DATA l_cur_scan TYPE sy-tabix.
-                        DATA l_cur_line TYPE string.
-                        CLEAR l_skip_open_cursor.
-                        " (a) the flagged line is itself a cursor statement
-                        IF wa_repos_tab-line CS 'OPEN CURSOR'
-                          OR wa_repos_tab-line CS 'CLOSE CURSOR'
-                          OR ( wa_repos_tab-line CS 'FETCH' AND wa_repos_tab-line CS 'CURSOR' ).
-                          l_skip_open_cursor = abap_true.
-                        ELSE.
-                          " (b) the SELECT this finding belongs to is the body of an OPEN CURSOR.
-                          " Scan backward; if OPEN CURSOR is reached before the previous
-                          " statement's terminating '.', it is a cursor body.
-                          l_cur_scan = l_tabix.
-                          DO 30 TIMES.
-                            READ TABLE repos_tab INTO wa_repos_tab_d INDEX l_cur_scan.
-                            IF sy-subrc <> 0. EXIT. ENDIF.
-                            IF wa_repos_tab_d-line CS 'OPEN CURSOR'.
-                              l_skip_open_cursor = abap_true. EXIT.
-                            ENDIF.
-                            l_cur_line = wa_repos_tab_d-line.
-                            IF l_cur_line CS '"'. l_cur_line = l_cur_line(sy-fdpos). ENDIF.
-                            CONDENSE l_cur_line.
-                            IF l_cur_scan < l_tabix AND l_cur_line CS '.'
-                              AND l_cur_line NS 'OPEN CURSOR'. EXIT.
-                            ENDIF.
-                            l_cur_scan = l_cur_scan - 1.
-                          ENDDO.
-                        ENDIF.
-                        IF l_skip_open_cursor = abap_true.
-                          APPEND wa_repos_tab TO repos_tab_new.
-                        ELSE.
                         REFRESH it_query.
                         REFRESH it_query_new.
                         DATA l_table_string TYPE string.
@@ -685,7 +686,6 @@ START-OF-SELECTION.
                             CLEAR wa_blank.
                           ENDIF.
                         ENDIF.
-                        ENDIF. "l_skip_open_cursor
                       ENDIF.
                     ELSE.
                       APPEND wa_repos_tab TO repos_tab_new.
