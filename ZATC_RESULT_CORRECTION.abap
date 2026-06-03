@@ -1518,7 +1518,7 @@ FORM change_table.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
     IF wa_q-str CS '"'. wa_q-str = wa_q-str(sy-fdpos). ENDIF.
-    CONCATENATE l_string wa_q-str INTO l_string.
+    CONCATENATE l_string wa_q-str INTO l_string SEPARATED BY space.
   ENDLOOP.
   TRANSLATE l_string TO UPPER CASE.
   l_len = strlen( l_string ).
@@ -2097,7 +2097,7 @@ FORM change_single.
   DATA l_value2 TYPE char2.
   CLEAR l_string.
   LOOP AT it_query INTO DATA(wa_q).
-    CONCATENATE l_string wa_q-str INTO l_string.
+    CONCATENATE l_string wa_q-str INTO l_string SEPARATED BY space.
   ENDLOOP.
   TRANSLATE l_string TO UPPER CASE.
   l_len = strlen( l_string ).
