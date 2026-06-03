@@ -1580,13 +1580,32 @@ FORM change_table.
       ENDIF.
       IF wa_table-value = '*'.
         IF l_table <> 'BSEG' AND l_table <> 'SKA1' AND l_table <> 'SKB1'.
-          l_star = abap_true.
-          LOOP AT it_fields_new INTO DATA(wa_fn) WHERE is_calculated IS INITIAL.
-            IF wa_fn-base_field = 'MANDT'. CONTINUE. ENDIF.
-            CONCATENATE l_query l_q wa_fn-element_name 'AS' wa_fn-base_field
-              INTO l_query SEPARATED BY space.
-            l_q = ','.
+          " Verify every DB table field is covered by the CDS view
+          DATA lt_tab_flds TYPE TABLE OF dd03l.
+          DATA l_all_mapped TYPE flag.
+          l_all_mapped = abap_true.
+          SELECT fieldname FROM dd03l INTO CORRESPONDING FIELDS OF TABLE @lt_tab_flds
+            WHERE tabname = @l_table.
+          LOOP AT lt_tab_flds INTO DATA(wa_tf).
+            IF wa_tf-fieldname = 'MANDT'. CONTINUE. ENDIF.
+            IF wa_tf-fieldname IS INITIAL OR wa_tf-fieldname(1) = '.'. CONTINUE. ENDIF.
+            READ TABLE it_fields_new TRANSPORTING NO FIELDS
+              WITH KEY base_field = wa_tf-fieldname base_object = l_table.
+            IF sy-subrc <> 0.
+              l_all_mapped = abap_false. EXIT.
+            ENDIF.
           ENDLOOP.
+          IF l_all_mapped = abap_true.
+            l_star = abap_true.
+            LOOP AT it_fields_new INTO DATA(wa_fn) WHERE is_calculated IS INITIAL.
+              IF wa_fn-base_field = 'MANDT'. CONTINUE. ENDIF.
+              CONCATENATE l_query l_q wa_fn-element_name 'AS' wa_fn-base_field
+                INTO l_query SEPARATED BY space.
+              l_q = ','.
+            ENDLOOP.
+          ELSE.
+            MOVE it_query[] TO it_query_new[]. l_exit = 'X'. EXIT.
+          ENDIF.
         ELSE.
           MOVE it_query[] TO it_query_new[]. l_exit = 'X'. EXIT.
         ENDIF.
