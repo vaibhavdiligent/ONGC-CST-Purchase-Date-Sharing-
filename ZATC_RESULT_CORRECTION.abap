@@ -619,6 +619,10 @@ START-OF-SELECTION.
                           ENDIF.
                         ENDIF.
                         LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
+                          " Skip comment lines before period detection so that a '*'
+                          " or '**' line containing '.' does not prematurely end the
+                          " SELECT block (e.g. ** AND buzei = val+1(3).)
+                          IF wa_repos_tab_d-line(1) = '*'. CONTINUE. ENDIF.
                           IF wa_repos_tab_d-line CS '"'.
                             DATA(l_fypos) = sy-fdpos.
                             wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fypos).
@@ -629,10 +633,8 @@ START-OF-SELECTION.
                             APPEND wa_query TO it_query.
                             EXIT.
                           ELSE.
-                            IF wa_repos_tab_d-line(1) <> '*'.
-                              wa_query-str = wa_repos_tab_d-line.
-                              APPEND wa_query TO it_query.
-                            ENDIF.
+                            wa_query-str = wa_repos_tab_d-line.
+                            APPEND wa_query TO it_query.
                           ENDIF.
                         ENDLOOP.
                         IF it_query[] IS NOT INITIAL.
