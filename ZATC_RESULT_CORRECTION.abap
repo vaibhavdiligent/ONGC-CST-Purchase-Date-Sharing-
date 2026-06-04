@@ -755,18 +755,40 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
-                  CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line SEPARATED BY space.
-                  APPEND wa_blank TO repos_tab_new.
-                  CLEAR wa_blank.
-                  IF wa_repos_tab-line CS '"'.
-                    DATA(l_import_fdpos) = sy-fdpos - 1.
-                    wa_repos_tab-line = wa_repos_tab-line(l_import_fdpos).
-                  ENDIF.
-                  REPLACE ALL OCCURRENCES OF '.' IN wa_repos_tab-line WITH space.
-                  CONDENSE wa_repos_tab-line.
-                  CONCATENATE wa_repos_tab-line ' accepting padding .'
-                    INTO wa_blank-line SEPARATED BY space.
-                  APPEND wa_blank TO repos_tab_new.
+                  " Comment out all lines of the multi-line IMPORT statement
+                  DATA l_imp_scan TYPE sy-tabix.
+                  l_imp_scan = l_tabix.
+                  DO 20 TIMES.
+                    READ TABLE repos_tab INTO DATA(wa_imp_line) INDEX l_imp_scan.
+                    IF sy-subrc <> 0. EXIT. ENDIF.
+                    CONCATENATE '*' wa_imp_line-line INTO wa_blank-line.
+                    APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
+                    IF wa_imp_line-line CS '.'. EXIT. ENDIF.
+                    l_imp_scan = l_imp_scan + 1.
+                  ENDDO.
+                  " Re-emit all lines, last one gets ACCEPTING PADDING before '.'
+                  l_imp_scan = l_tabix.
+                  DO 20 TIMES.
+                    READ TABLE repos_tab INTO wa_imp_line INDEX l_imp_scan.
+                    IF sy-subrc <> 0. EXIT. ENDIF.
+                    IF wa_imp_line-line CS '.'.
+                      " Strip inline comment if present
+                      IF wa_imp_line-line CS '"'.
+                        DATA(l_imp_cmt) = sy-fdpos.
+                        wa_imp_line-line = wa_imp_line-line(l_imp_cmt).
+                      ENDIF.
+                      REPLACE ALL OCCURRENCES OF '.' IN wa_imp_line-line WITH space.
+                      CONDENSE wa_imp_line-line.
+                      CONCATENATE wa_imp_line-line ' ACCEPTING PADDING .'
+                        INTO wa_blank-line SEPARATED BY space.
+                      APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
+                      EXIT.
+                    ELSE.
+                      wa_blank-line = wa_imp_line-line.
+                      APPEND wa_blank TO repos_tab_new. CLEAR wa_blank.
+                    ENDIF.
+                    l_imp_scan = l_imp_scan + 1.
+                  ENDDO.
                   CLEAR wa_blank.
                   CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
                     INTO wa_blank-line SEPARATED BY space.
