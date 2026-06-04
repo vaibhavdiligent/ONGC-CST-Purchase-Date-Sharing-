@@ -2998,7 +2998,7 @@ ENDFORM.
 *& Form replace_bp
 *&---------------------------------------------------------------------*
 FORM replace_bp.
-  DATA l_value TYPE char30.
+  DATA l_value TYPE tparat-paramid.
   DESCRIBE TABLE repos_tab_new LINES DATA(l_line).
   DATA(l_line1) = l_line.
   DO 10 TIMES.
