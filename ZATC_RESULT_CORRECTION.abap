@@ -1031,7 +1031,9 @@ START-OF-SELECTION.
                     l_v = l_v + 1.
                   ENDDO.
                   CONDENSE l_table.
-                  REPLACE ALL OCCURRENCES OF l_table IN l_text WITH space IGNORING CASE.
+                  IF l_table IS NOT INITIAL.
+                    REPLACE ALL OCCURRENCES OF l_table IN l_text WITH space IGNORING CASE.
+                  ENDIF.
                   REPLACE ALL OCCURRENCES OF 'COMPARING' IN l_text WITH space IGNORING CASE.
                   CONDENSE l_text.
                   l_where = l_text.
