@@ -1260,6 +1260,26 @@ START-OF-SELECTION.
                     INTO wa_blank-line SEPARATED BY space.
                   APPEND wa_blank TO repos_tab_new.
                   CLEAR wa_blank.
+                WHEN 'DELETE ... FROM/TO FOR RESULT OF STATEMENT AT ... LINE ...'.
+                  CLEAR wa_blank.
+                  CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
+                    INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line.
+                  APPEND wa_blank TO repos_tab_new.
+                  CLEAR wa_blank.
+                  IF wa_repos_tab-line CS '"'.
+                    wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+                    CONDENSE wa_repos_tab-line.
+                  ENDIF.
+                  CONCATENATE wa_repos_tab-line '"#EC CI_NOORDER'
+                    INTO wa_repos_tab-line SEPARATED BY space.
+                  APPEND wa_repos_tab TO repos_tab_new.
+                  CLEAR wa_blank.
+                  CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
+                    INTO wa_blank-line SEPARATED BY space.
+                  APPEND wa_blank TO repos_tab_new.
+                  CLEAR wa_blank.
                 WHEN 'ALV CALL AT ... LINE ...'.
                   IF wa_repos_tab-line CS 'CALL METHOD cl_salv_table=>factory'.
                     CLEAR l_alv.
