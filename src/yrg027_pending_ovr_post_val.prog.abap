@@ -763,49 +763,17 @@ FORM send_email.
       ENDLOOP.
 
     ELSE.
-      " Step 3: No ticket found - get AENAMs from OIJNOMI
-      SELECT DISTINCT aenam FROM oijnomi
-             INTO TABLE @DATA(lt_aenam)
-             FOR ALL ENTRIES IN @lt_locids
-             WHERE locid  = @lt_locids-locid
-             AND   idate  IN @s_date
-             AND   delind NE 'X'.
-
-      IF lt_aenam IS NOT INITIAL.
-        " Convert AENAM (CHAR12) to PERNR type (NUMC8) for PA0105 lookup
-        TYPES: BEGIN OF ty_pernr_nom,
-                 pernr TYPE pa0105-pernr,
-               END OF ty_pernr_nom.
-        DATA: lt_pernr_nom TYPE STANDARD TABLE OF ty_pernr_nom.
-        CLEAR lt_pernr_nom.
-        LOOP AT lt_aenam INTO DATA(wa_aen_pn).
-          APPEND VALUE ty_pernr_nom( pernr = wa_aen_pn-aenam ) TO lt_pernr_nom.
-        ENDLOOP.
-        SORT lt_pernr_nom BY pernr.
-        DELETE ADJACENT DUPLICATES FROM lt_pernr_nom COMPARING pernr.
-        " Store TO pernrs for reporting officer CC
-        CLEAR lt_to_pernr.
-        LOOP AT lt_pernr_nom INTO DATA(wa_tp_nom).
-          APPEND VALUE ty_to_pernr( pernr = wa_tp_nom-pernr ) TO lt_to_pernr.
-        ENDLOOP.
-
-        " Find email from AENAM via PA0105 (AENAM used as PERNR - ref YRGR095)
-        SELECT usrid_long FROM pa0105
-               INTO TABLE @DATA(lt_emails_nom)
-               FOR ALL ENTRIES IN @lt_pernr_nom
-               WHERE pernr = @lt_pernr_nom-pernr
-               AND   subty = '0010'
-               AND   endda = '99991231'.
-
-        LOOP AT lt_emails_nom INTO DATA(wa_enom).
-          IF wa_enom-usrid_long IS NOT INITIAL.
-            READ TABLE lt_email_recip WITH KEY smtp_addr = wa_enom-usrid_long TRANSPORTING NO FIELDS.
-            IF sy-subrc NE 0.
-              APPEND VALUE #( smtp_addr = wa_enom-usrid_long ) TO lt_email_recip.
-            ENDIF.
+      " Step 3: No ticket found - use RGMC Mail from pending entries as TO email
+      CLEAR lt_to_pernr.
+      LOOP AT it_final INTO DATA(wa_rgmc_mail)
+        WHERE customer = wa_cust_em-kunnr AND diff_char_ovr NE 0.
+        IF wa_rgmc_mail-rgmc_mail IS NOT INITIAL.
+          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_rgmc_mail-rgmc_mail TRANSPORTING NO FIELDS.
+          IF sy-subrc NE 0.
+            APPEND VALUE #( smtp_addr = wa_rgmc_mail-rgmc_mail ) TO lt_email_recip.
           ENDIF.
-        ENDLOOP.
-      ENDIF.
+        ENDIF.
+      ENDLOOP.
     ENDIF.
 
     IF lt_email_recip IS INITIAL.

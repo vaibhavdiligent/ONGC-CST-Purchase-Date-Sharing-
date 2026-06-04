@@ -961,26 +961,20 @@ FORM email_pending_postings.
           AND begda LE @sy-datum
           AND endda GE @sy-datum.
 
-      " Step 6b: Get email address (SUBTY 0010, ENDDA = 99991231)
-      IF lt_pernr IS NOT INITIAL.
-        SELECT usrid_long
-          FROM pa0105
-          INTO TABLE @DATA(lt_pa_email)
-          FOR ALL ENTRIES IN @lt_pernr
-          WHERE pernr = @lt_pernr-pernr
-            AND subty = '0010'
-            AND endda = '99991231'.
-
-        LOOP AT lt_pa_email INTO DATA(ls_pa_email).
-          IF ls_pa_email-usrid_long IS NOT INITIAL.
-            lv_email = ls_pa_email-usrid_long.
-            APPEND lv_email TO lt_email_ids.
-          ENDIF.
-        ENDLOOP.
-        SORT lt_email_ids.
-        DELETE ADJACENT DUPLICATES FROM lt_email_ids.
-      ENDIF.
     ENDIF.
+
+    " Step 6b: Use RGMC Mail field as TO email address
+    LOOP AT lt_pending INTO DATA(ls_pend_mail).
+      IF ( ls_pend_mail-m_mas_cust IS INITIAL AND ls_pend_mail-customer = ls_email_cust-customer )
+        OR ls_pend_mail-m_mas_cust = ls_email_cust-customer.
+        IF ls_pend_mail-rgmc_mail IS NOT INITIAL.
+          lv_email = ls_pend_mail-rgmc_mail.
+          APPEND lv_email TO lt_email_ids.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    SORT lt_email_ids.
+    DELETE ADJACENT DUPLICATES FROM lt_email_ids.
 
     IF lt_email_ids IS INITIAL.
       CLEAR ls_email_cust.
@@ -1175,13 +1169,15 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<tr bgcolor="#D3D3D3">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cum Imb (MBG)</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Neg Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Cum Imb (MBG)</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Calculated Cumulative Imbalance</th><th bgcolor="#D3D3D3">Calculated Positive Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Post Chg Imb (MBG)</th><th bgcolor="#D3D3D3">Post Neg Imb (MBG)</th><th bgcolor="#D3D3D3">Sales Order</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Calculated Negative Chargeable Imbalance</th><th bgcolor="#D3D3D3">Posted Cumulative Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Posted Positive Chargeable Imbalance</th><th bgcolor="#D3D3D3">Posted Negative Chargeable Imbalance</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1208,7 +1204,7 @@ FORM email_pending_postings.
         CONCATENATE '<td>' ls_pending-sal_order '</td><td>' ls_pending-invoice '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-m_cont_id '</td><td>' ls_pending-m_mas_cust '</td></tr>'
+        CONCATENATE '<td>' ls_pending-m_cont_id '</td></tr>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
       ENDIF.
