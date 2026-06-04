@@ -640,7 +640,8 @@ START-OF-SELECTION.
                         ENDIF.
                         IF it_query_new[] IS NOT INITIAL.
                           IF it_query_new[] = it_query[].
-                            CLEAR l_tab.
+                            " Keep l_tab so the main loop skips the SELECT tail lines
+                            " we are about to re-append from it_query below.
                             CLEAR wa_blank.
                             CONCATENATE '"' '"' p_rem p_begin sy-uname l_datum ' for ATC '
                               INTO wa_blank-line SEPARATED BY space.
@@ -648,9 +649,21 @@ START-OF-SELECTION.
                             CLEAR l_note.
                             CONCATENATE '"#EC CI_DB_OPERATION_OK[' wa_final-note ']'
                               INTO l_note.
-                            CONCATENATE wa_repos_tab-line l_note
-                              INTO wa_repos_tab-line SEPARATED BY space.
-                            APPEND wa_repos_tab TO repos_tab_new.
+                            " Re-append the complete SELECT block from it_query.
+                            " Add the #EC pragma to the SELECT keyword line only so
+                            " it does not truncate a mid-statement line via ABAP comment.
+                            DATA(l_ec_sel_done) = abap_false.
+                            LOOP AT it_query INTO DATA(wa_q_unmod).
+                              IF l_ec_sel_done = abap_false
+                                AND wa_q_unmod-str CS 'SELECT'.
+                                CONCATENATE wa_q_unmod-str l_note
+                                  INTO wa_q_unmod-str SEPARATED BY space.
+                                l_ec_sel_done = abap_true.
+                              ENDIF.
+                              wa_blank-line = wa_q_unmod-str.
+                              APPEND wa_blank TO repos_tab_new.
+                              CLEAR wa_blank.
+                            ENDLOOP.
                             CLEAR wa_blank.
                             CONCATENATE '"' '"' p_rem p_end sy-uname l_datum 'for ATC'
                               INTO wa_blank-line SEPARATED BY space.
