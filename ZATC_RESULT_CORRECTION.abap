@@ -2774,7 +2774,7 @@ FORM amount_conv.
                   IF l_v = '='.
                     CONCATENATE l_param l_v INTO l_param SEPARATED BY space.
                     CONCATENATE l_param 'CONV' INTO l_param SEPARATED BY space.
-                    CONCATENATE wa_dd03l-domname '(' INTO wa_dd03l-fieldname.
+                    CONCATENATE wa_dd03l-rollname '(' INTO wa_dd03l-fieldname.
                     CONCATENATE l_param wa_dd03l-fieldname INTO l_param SEPARATED BY space.
                     DO.
                       l_t = l_t + 1. l_v = l_repos1-line+l_t(1).
@@ -2902,7 +2902,7 @@ FORM material_conv.
                   IF l_v = '='.
                     CONCATENATE l_param l_v INTO l_param SEPARATED BY space.
                     CONCATENATE l_param 'CONV' INTO l_param SEPARATED BY space.
-                    CONCATENATE wa_dd03l-domname '(' INTO wa_dd03l-fieldname.
+                    CONCATENATE wa_dd03l-rollname '(' INTO wa_dd03l-fieldname.
                     CONCATENATE l_param wa_dd03l-fieldname INTO l_param SEPARATED BY space.
                     DO.
                       l_t = l_t + 1. l_v = l_repos1-line+l_t(1).
