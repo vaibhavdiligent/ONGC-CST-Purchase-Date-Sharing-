@@ -1177,7 +1177,7 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<th bgcolor="#D3D3D3">Posted Positive Chargeable Imbalance</th><th bgcolor="#D3D3D3">Posted Negative Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th></tr>'.
+    ls_body-line = '<th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1204,12 +1204,14 @@ FORM email_pending_postings.
         CONCATENATE '<td>' ls_pending-sal_order '</td><td>' ls_pending-invoice '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-m_cont_id '</td></tr>'
+        CONCATENATE '<td>' ls_pending-m_cont_id '</td><td>' ls_pending-m_mas_cust '</td></tr>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
       ENDIF.
     ENDLOOP.
     ls_body-line = '</table>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<p>**All qty are in MBG</p>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     ls_body-line = '<p>For more details, please execute T-code YRG011N/ YRGR102 with the required input.</p>'.

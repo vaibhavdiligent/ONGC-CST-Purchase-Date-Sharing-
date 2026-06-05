@@ -728,7 +728,7 @@ FORM send_email.
            AND   tktsubrc  NE '1A'.
 
     IF lt_tkt IS NOT INITIAL.
-      " Convert ERNAM (CHAR12) to PERNR type (NUMC8) for PA0105 lookup
+      " Keep ERNAM pernrs for reporting officer CC only
       TYPES: BEGIN OF ty_pernr_tkt,
                pernr TYPE pa0105-pernr,
              END OF ty_pernr_tkt.
@@ -739,25 +739,18 @@ FORM send_email.
       ENDLOOP.
       SORT lt_pernr_tkt BY pernr.
       DELETE ADJACENT DUPLICATES FROM lt_pernr_tkt COMPARING pernr.
-      " Store TO pernrs for reporting officer CC
       CLEAR lt_to_pernr.
       LOOP AT lt_pernr_tkt INTO DATA(wa_tp_tkt).
         APPEND VALUE ty_to_pernr( pernr = wa_tp_tkt-pernr ) TO lt_to_pernr.
       ENDLOOP.
 
-      " Find email from ERNAM via PA0105 (ERNAM used as PERNR - ref YRGR095)
-      SELECT usrid_long FROM pa0105
-             INTO TABLE @DATA(lt_emails_tkt)
-             FOR ALL ENTRIES IN @lt_pernr_tkt
-             WHERE pernr  = @lt_pernr_tkt-pernr
-             AND   subty  = '0010'
-             AND   endda  = '99991231'.
-
-      LOOP AT lt_emails_tkt INTO DATA(wa_etkt).
-        IF wa_etkt-usrid_long IS NOT INITIAL.
-          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_etkt-usrid_long TRANSPORTING NO FIELDS.
+      " Use RGMC Mail as TO email
+      LOOP AT it_final INTO DATA(wa_tkt_mail)
+        WHERE customer = wa_cust_em-kunnr AND diff_char_ovr NE 0.
+        IF wa_tkt_mail-rgmc_mail IS NOT INITIAL.
+          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_tkt_mail-rgmc_mail TRANSPORTING NO FIELDS.
           IF sy-subrc NE 0.
-            APPEND VALUE #( smtp_addr = wa_etkt-usrid_long ) TO lt_email_recip.
+            APPEND VALUE #( smtp_addr = wa_tkt_mail-rgmc_mail ) TO lt_email_recip.
           ENDIF.
         ENDIF.
       ENDLOOP.
@@ -839,6 +832,7 @@ FORM send_email.
     ENDLOOP.
 
     APPEND '</table>' TO lt_body.
+    APPEND '<p>**All qty are in MBG</p>' TO lt_body.
     APPEND '<p>For more details, please execute T-code YRG011N/ YRGR109 with the required input.</p>' TO lt_body.
     APPEND '<p><b>Note to ZO:</b> You are requested not to modify any Overrun clauses with' TO lt_body.
     APPEND ' retrospective effect, as the same may impact already posted Overrun.</p>' TO lt_body.
