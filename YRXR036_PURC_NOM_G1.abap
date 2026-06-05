@@ -471,15 +471,6 @@ FORM batch_validate.
 
       IF <fs_main> IS ASSIGNED.
 
-*&------>BUG FIX: Skip zero or negative qty rows silently.
-*&       RFC_TSW_NOM_CREATEFROMDATA defaults to OA contractual qty when nominatedquantity=0.
-*&       Do NOT add to lt_log - that would block all valid rows in the same upload.
-*&       del_ind='X' rows are removed by DELETE i_main WHERE del_ind IS NOT INITIAL below.
-        IF <fs_main>-menge <= 0.
-          <fs_main>-del_ind = 'X'.
-          CONTINUE.
-        ENDIF.
-*&------>END BUG FIX
 
         SELECT SINGLE ebeln FROM ekko INTO @DATA(ebeln) WHERE ebeln = @<fs_main>-vbeln.
         IF ebeln IS INITIAL.
@@ -1033,12 +1024,6 @@ FORM createfromdata .
   LOOP AT i_main_tyst INTO wa_main_tyst .
 
     LOOP AT  i_main INTO wa_main WHERE tsyst = wa_main_tyst-tsyst AND locid = wa_main_tyst-locid AND date = wa_main_tyst-date.
-
-*&------>BUG FIX: Final guard - do not call nomination FM with zero quantity
-      IF wa_main-menge <= 0.
-        CONTINUE.
-      ENDIF.
-*&------>END BUG FIX
 
       READ TABLE it_oijts INTO wa_oijts WITH KEY tsyst = wa_main-tsyst.
       IF sy-subrc = 0.
@@ -1717,7 +1702,12 @@ FORM nomination_update .
       CLEAR l_tabix.
       LOOP AT lt_nom_item INTO ls_nom_item.
         l_tabix = sy-tabix.
-        ls_nom_item-yyoij_cnom_qty = ls_nom_item-menge.
+*&------>BUG FIX: Use original Excel qty (wa_main-menge) not the SAP-returned menge.
+*&       RFC_TSW_NOM_CREATEFROMDATA defaults to OA contractual qty when nominatedquantity=0,
+*&       so ls_nom_item-menge read back from SAP would be wrong for zero-qty rows.
+*&       wa_main-menge is preserved from i_main_check and always holds the Excel value.
+        ls_nom_item-yyoij_cnom_qty = wa_main-menge.
+*&------>END BUG FIX
         ls_nom_item-yyoij_cnom_uom = ls_nom_item-unit_i.
         ls_nom_item-ga_rank = wa_main-rank.
         ls_nom_item-menge = '1.000'.
