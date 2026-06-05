@@ -9,7 +9,7 @@ REPORT yrgg015_purc_nom_ongc_b2b MESSAGE-ID oo
 
 TABLES: oijnomi.
 
-TYPE-POOLS: icon.
+TYPE-POOLS: icon, slis.
 
 *----------------------------------------------------------------------*
 * TYPE DECLARATIONS
@@ -20,6 +20,7 @@ TYPES: BEGIN OF ty_pur,
          material    TYPE char30,
          state_code  TYPE regio,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
+         qty_mbg     TYPE p LENGTH 13 DECIMALS 3,
          gail_id     TYPE char14,
          ongc_id     TYPE char20,
          ongc_mater  TYPE char30,
@@ -73,6 +74,7 @@ TYPES: BEGIN OF ty_display,
          material    TYPE char30,
          state_code  TYPE regio,
          qty_scm     TYPE p LENGTH 13 DECIMALS 3,
+         qty_mbg     TYPE p LENGTH 13 DECIMALS 3,
          gail_id     TYPE char14,
          ongc_id     TYPE char20,
          ongc_mater  TYPE char30,
@@ -513,7 +515,10 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM control_screen_fields.
   CLEAR gv_auth_bg.
-  AUTHORITY-CHECK OBJECT 'S_TCODE' ID 'TCD' FIELD gc_role_core.
+  " Show Background checkbox only to users with role ZO_CC_EHS.GMS_ROLE
+  SELECT SINGLE uname FROM agr_users INTO @DATA(lv_chk_user)
+    WHERE uname    = @sy-uname
+      AND agr_name = 'ZO_CC_EHS.GMS_ROLE'.
   IF sy-subrc = 0. gv_auth_bg = abap_true. ENDIF.
   LOOP AT SCREEN.
     IF screen-group1 = 'BG'.
@@ -611,7 +616,8 @@ FORM fetch_pur_data.
         ls_col  TYPE lvc_s_scol.
 
   SELECT gas_day location AS locid material state_code
-         qty_in_scm AS qty_scm gail_id ongc_id ongc_mater deleted exclude
+         qty_in_scm AS qty_scm qty_in_mbg AS qty_mbg
+         gail_id ongc_id ongc_mater deleted exclude
     FROM yrga_cst_pur
     INTO CORRESPONDING FIELDS OF TABLE lt_pur
     WHERE gas_day  IN s_date
@@ -635,6 +641,7 @@ FORM fetch_pur_data.
     ls_disp-material   = ls_pur-material.
     ls_disp-state_code = ls_pur-state_code.
     ls_disp-qty_scm    = ls_pur-qty_scm.
+    ls_disp-qty_mbg    = ls_pur-qty_mbg.
     ls_disp-gail_id    = ls_pur-gail_id.
     ls_disp-ongc_id    = ls_pur-ongc_id.
     ls_disp-ongc_mater = ls_pur-ongc_mater.
@@ -1049,6 +1056,7 @@ FORM display_alv_grid.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_PF_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
+      i_callback_top_of_list   = 'ALV_TOP_OF_LIST'
       i_grid_title             = lv_title
       is_layout_lvc            = gs_layout
       it_fieldcat_lvc          = gt_fcat
@@ -1094,6 +1102,35 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
   ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM alv_top_of_list — header commentary above the ALV grid
+*----------------------------------------------------------------------*
+FORM alv_top_of_list.
+  DATA: lt_top TYPE slis_t_listheader,
+        ls_top TYPE slis_listheader.
+
+  " Section header
+  ls_top-typ  = 'S'.
+  ls_top-key  = 'Note:'.
+  ls_top-info = 'Nomination will not be created for line items with State ''GJ'''.
+  APPEND ls_top TO lt_top.
+
+  CLEAR ls_top.
+  ls_top-typ  = 'S'.
+  ls_top-key  = ''.
+  ls_top-info = 'Nomination will not be created for the Materials excluded for Allocation'.
+  APPEND ls_top TO lt_top.
+
+  CLEAR ls_top.
+  ls_top-typ  = 'S'.
+  ls_top-key  = ''.
+  ls_top-info = 'Nominations will be created in SM3'.
+  APPEND ls_top TO lt_top.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING it_list_commentary = lt_top.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1158,6 +1195,16 @@ FORM build_fieldcat.
   ls_fcat-fieldname = 'QTY_SCM'.
   ls_fcat-coltext   = 'Qty (SCM)'.
   ls_fcat-seltext   = 'Quantity SCM'.
+  ls_fcat-outputlen = 16.
+  ls_fcat-datatype  = 'QUAN'.
+  ls_fcat-no_sign   = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  " QTY_MBG - quantity in MBG
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'QTY_MBG'.
+  ls_fcat-coltext   = 'Qty (MBG)'.
+  ls_fcat-seltext   = 'Quantity MBG'.
   ls_fcat-outputlen = 16.
   ls_fcat-datatype  = 'QUAN'.
   ls_fcat-no_sign   = abap_true.
@@ -1649,8 +1696,11 @@ FORM create_all_nominations_bg.
         ls_sdate    LIKE LINE OF s_date,
         ls_slocid   LIKE LINE OF s_locid.
 
-  LOOP AT gt_display INTO ls_disp.
-    IF ls_disp-outline_agr IS INITIAL OR ls_disp-charg IS INITIAL. CONTINUE. ENDIF.
+  LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X'.
+    IF ls_disp-outline_agr IS INITIAL. CONTINUE. ENDIF.
+    " Batch required only for batch-managed materials
+    READ TABLE gt_mara_c INTO DATA(ls_mara_bg) WITH KEY matnr = ls_disp-material.
+    IF sy-subrc = 0 AND ls_mara_bg-xchpf = 'X' AND ls_disp-charg IS INITIAL. CONTINUE. ENDIF.
     CLEAR ls_main.
     ls_main-vbeln = ls_disp-outline_agr.
     ls_main-date  = ls_disp-gas_day.
