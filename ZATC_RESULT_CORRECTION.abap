@@ -625,7 +625,11 @@ START-OF-SELECTION.
                           IF wa_repos_tab_d-line(1) = '*'. CONTINUE. ENDIF.
                           IF wa_repos_tab_d-line CS '"'.
                             DATA(l_fypos) = sy-fdpos.
-                            wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fypos).
+                            IF l_fypos = 0.
+                              CLEAR wa_repos_tab_d-line.
+                            ELSE.
+                              wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fypos).
+                            ENDIF.
                           ENDIF.
                           IF wa_repos_tab_d-line CS '.'.
                             l_tab = sy-tabix + 1.
@@ -1183,7 +1187,11 @@ START-OF-SELECTION.
                   LOOP AT repos_tab INTO wa_repos_tab_d FROM l_tabix.
                     IF wa_repos_tab_d-line CS '"'.
                       DATA(l_fdpos) = sy-fdpos.
-                      wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fdpos).
+                      IF l_fdpos = 0.
+                        CLEAR wa_repos_tab_d-line.
+                      ELSE.
+                        wa_repos_tab_d-line = wa_repos_tab_d-line+0(l_fdpos).
+                      ENDIF.
                     ENDIF.
                     IF wa_repos_tab_d-line(1) = '*'.
                       CONTINUE.
