@@ -29,6 +29,12 @@
      <ENTRY>Allocate Quantities to State</ENTRY>
      <LENGTH>28</LENGTH>
     </item>
+    <item>
+     <ID>I</ID>
+     <KEY>003</KEY>
+     <ENTRY>Create Nomination Data</ENTRY>
+     <LENGTH>22</LENGTH>
+    </item>
    </TPOOL>
   </asx:values>
  </asx:abap>

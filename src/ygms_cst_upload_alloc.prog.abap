@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_CST_UPLOAD_ALLOC
-*& Description: Combined screen for ONGC Receipt Data Upload and
-*&              State-wise Allocation
+*& Description: Combined screen for ONGC Receipt Data Upload,
+*&              State-wise Allocation and Nomination Data Creation
 *& Transaction: YRGG015
 *&---------------------------------------------------------------------*
 REPORT ygms_cst_upload_alloc.
@@ -23,14 +23,22 @@ SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   SELECTION-SCREEN PUSHBUTTON /1(40) btn2 USER-COMMAND alloc.
 SELECTION-SCREEN END OF BLOCK b2.
 
+* Section 3: Create Nomination Data
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
+  SELECTION-SCREEN COMMENT /1(55) c_txt3.
+  SELECTION-SCREEN PUSHBUTTON /1(40) btn3 USER-COMMAND nomin.
+SELECTION-SCREEN END OF BLOCK b3.
+
 *----------------------------------------------------------------------*
 * INITIALIZATION
 *----------------------------------------------------------------------*
 INITIALIZATION.
   btn1   = '@48@ Upload/View Receipt Data'.
   btn2   = '@48@ Run Allocation'.
+  btn3   = '@48@ Create Nomination Data'.
   c_txt1 = 'Click here to upload/view receipt data'.
   c_txt2 = 'Allocate receipt quantities to states'.
+  c_txt3 = 'Create nomination data for ONGC B2B'.
 
 *----------------------------------------------------------------------*
 * AT SELECTION-SCREEN
@@ -41,4 +49,6 @@ AT SELECTION-SCREEN.
       SUBMIT ygms_ongc_cst_pur VIA SELECTION-SCREEN AND RETURN.
     WHEN 'ALLOC'.
       SUBMIT ygms_cst_purchase_main VIA SELECTION-SCREEN AND RETURN.
+    WHEN 'NOMIN'.
+      SUBMIT yrgg015_purc_nom_ongc_b2b VIA SELECTION-SCREEN AND RETURN.
   ENDCASE.
