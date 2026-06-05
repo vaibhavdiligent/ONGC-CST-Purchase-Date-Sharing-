@@ -368,14 +368,16 @@ FORM arrange_data.
     ENDIF.
     lv_col = ls_tab-col.
     CASE lv_col.
-      WHEN 1.  ls_main-date  = ls_tab-value.
-      WHEN 2.  ls_main-locid = ls_tab-value.
-      WHEN 3.  ls_main-matnr = ls_tab-value.
-      WHEN 4.  ls_main-menge = ls_tab-value.
-      WHEN 5.  ls_main-unit  = ls_tab-value.
-      WHEN 6.  ls_main-charg = ls_tab-value.
-      WHEN 7.  ls_main-tsyst = ls_tab-value.
-      WHEN 8.  ls_main-vbeln = ls_tab-value.
+      WHEN 1.  " Description — skip
+      WHEN 2.  ls_main-tsyst = ls_tab-value.
+      WHEN 3.  ls_main-vbeln = ls_tab-value.
+      WHEN 4.  ls_main-date  = ls_tab-value.
+      WHEN 5.  ls_main-locid = ls_tab-value.
+      WHEN 6.  ls_main-matnr = ls_tab-value.
+      WHEN 7.  ls_main-menge = ls_tab-value.
+      WHEN 8.  ls_main-unit  = ls_tab-value.
+      WHEN 9.  ls_main-charg = ls_tab-value.
+      WHEN 10. ls_main-rank  = ls_tab-value.
     ENDCASE.
     lv_row_prev = ls_tab-row.
   ENDLOOP.
@@ -406,7 +408,7 @@ FORM batch_validate.
       ls_main-flag        = 'E'.
       ls_main-post_status = 'Error: Date missing'.
       ls_main-color       = 'C60'.
-      MODIFY gt_main FROM ls_main.
+      MODIFY gt_main FROM ls_main INDEX sy-tabix.
       CONTINUE.
     ENDIF.
 
@@ -419,7 +421,7 @@ FORM batch_validate.
       ls_main-flag        = 'E'.
       ls_main-post_status = 'Error: Location missing'.
       ls_main-color       = 'C60'.
-      MODIFY gt_main FROM ls_main.
+      MODIFY gt_main FROM ls_main INDEX sy-tabix.
       CONTINUE.
     ENDIF.
 
@@ -432,27 +434,27 @@ FORM batch_validate.
       ls_main-flag        = 'E'.
       ls_main-post_status = 'Error: Material missing'.
       ls_main-color       = 'C60'.
-      MODIFY gt_main FROM ls_main.
+      MODIFY gt_main FROM ls_main INDEX sy-tabix.
       CONTINUE.
     ENDIF.
 
-    " Validate quantity
-    IF ls_main-menge IS INITIAL.
+    " Validate quantity — reject zero explicitly (not just initial)
+    IF ls_main-menge <= 0.
       ls_log-date    = ls_main-date.
       ls_log-locid   = ls_main-locid.
       ls_log-matnr   = ls_main-matnr.
-      ls_log-message = 'Quantity is missing'.
+      ls_log-message = 'Nominated quantity is zero or negative — row skipped'.
       APPEND ls_log TO i_error.
       ls_main-flag        = 'E'.
-      ls_main-post_status = 'Error: Quantity missing'.
+      ls_main-post_status = 'Skipped: Zero Qty'.
       ls_main-color       = 'C60'.
-      MODIFY gt_main FROM ls_main.
+      MODIFY gt_main FROM ls_main INDEX sy-tabix.
       CONTINUE.
     ENDIF.
 
     ls_main-flag  = 'V'.
     ls_main-color = 'C32'.
-    MODIFY gt_main FROM ls_main.
+    MODIFY gt_main FROM ls_main INDEX sy-tabix.
   ENDLOOP.
 ENDFORM.
 
@@ -493,7 +495,7 @@ FORM createfromdata.
         lv_nomtk      TYPE oij_nomtk,
         lv_errmsg     TYPE char200.
 
-  LOOP AT gt_main INTO ls_main WHERE flag = 'V'.
+  LOOP AT gt_main INTO ls_main WHERE flag = 'V' AND menge > 0.
     CLEAR: i_nom_item, i_return.
     CLEAR ls_nom_item.
 
