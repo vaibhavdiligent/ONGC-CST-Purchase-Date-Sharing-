@@ -471,16 +471,11 @@ FORM batch_validate.
 
       IF <fs_main> IS ASSIGNED.
 
-*&------>BUG FIX: Skip zero or negative nominated quantity rows before any other validation.
+*&------>BUG FIX: Skip zero or negative qty rows silently.
 *&       RFC_TSW_NOM_CREATEFROMDATA defaults to OA contractual qty when nominatedquantity=0.
+*&       Do NOT add to lt_log - that would block all valid rows in the same upload.
+*&       del_ind='X' rows are removed by DELETE i_main WHERE del_ind IS NOT INITIAL below.
         IF <fs_main>-menge <= 0.
-          APPEND VALUE #( tsyst   = <fs_main>-tsyst
-                          ebeln   = <fs_main>-vbeln
-                          date    = <fs_main>-date
-                          locid   = <fs_main>-locid
-                          matnr   = <fs_main>-matnr
-                          charg   = <fs_main>-charg
-                          message = 'Nominated quantity is zero or negative - row skipped' ) TO lt_log.
           <fs_main>-del_ind = 'X'.
           CONTINUE.
         ENDIF.
