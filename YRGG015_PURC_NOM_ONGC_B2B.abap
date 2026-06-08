@@ -9,7 +9,7 @@ REPORT yrgg015_purc_nom_ongc_b2b MESSAGE-ID oo
 
 TABLES: oijnomi.
 
-TYPE-POOLS: icon, slis.
+TYPE-POOLS: icon.
 
 *----------------------------------------------------------------------*
 * TYPE DECLARATIONS
@@ -1056,7 +1056,6 @@ FORM display_alv_grid.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_PF_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
-      i_callback_top_of_list   = 'ALV_TOP_OF_LIST'
       i_grid_title             = lv_title
       is_layout_lvc            = gs_layout
       it_fieldcat_lvc          = gt_fcat
@@ -1102,35 +1101,6 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
   ENDIF.
-ENDFORM.
-
-*----------------------------------------------------------------------*
-* FORM alv_top_of_list — header commentary above the ALV grid
-*----------------------------------------------------------------------*
-FORM alv_top_of_list.
-  DATA: lt_top TYPE slis_t_listheader,
-        ls_top TYPE slis_listheader.
-
-  " Section header
-  ls_top-typ  = 'S'.
-  ls_top-key  = 'Note:'.
-  ls_top-info = 'Nomination will not be created for line items with State ''GJ'''.
-  APPEND ls_top TO lt_top.
-
-  CLEAR ls_top.
-  ls_top-typ  = 'S'.
-  ls_top-key  = ''.
-  ls_top-info = 'Nomination will not be created for the Materials excluded for Allocation'.
-  APPEND ls_top TO lt_top.
-
-  CLEAR ls_top.
-  ls_top-typ  = 'S'.
-  ls_top-key  = ''.
-  ls_top-info = 'Nominations will be created in SM3'.
-  APPEND ls_top TO lt_top.
-
-  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
-    EXPORTING it_list_commentary = lt_top.
 ENDFORM.
 
 *----------------------------------------------------------------------*
