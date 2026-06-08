@@ -260,6 +260,16 @@ START-OF-SELECTION.
   ENDIF.
 
 *----------------------------------------------------------------------*
+* TOP-OF-PAGE
+*----------------------------------------------------------------------*
+TOP-OF-PAGE.
+  FORMAT COLOR 5 INTENSIFIED OFF.
+  WRITE: / 'Note: Nomination will not be created for line items with State ''GJ'''.
+  WRITE: / '      Nomination will not be created for the Materials excluded for Allocation'.
+  WRITE: / '      Nominations will be created in SM3'.
+  FORMAT COLOR OFF.
+
+*----------------------------------------------------------------------*
 * ALV EVENT HANDLER - IMPLEMENTATION
 *----------------------------------------------------------------------*
 CLASS lcl_alv_handler IMPLEMENTATION.
@@ -1050,13 +1060,6 @@ FORM display_alv_grid.
   CONDENSE lv_title.
 
   ls_variant-report = sy-repid.
-
-  " Notes header above the ALV grid
-  FORMAT COLOR 5 INTENSIFIED OFF.
-  WRITE: / 'Note: Nomination will not be created for line items with State ''GJ'''.
-  WRITE: / '      Nomination will not be created for the Materials excluded for Allocation'.
-  WRITE: / '      Nominations will be created in SM3'.
-  FORMAT COLOR OFF.
 
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
     EXPORTING
