@@ -9,7 +9,7 @@ REPORT yrgg015_purc_nom_ongc_b2b MESSAGE-ID oo
 
 TABLES: oijnomi.
 
-TYPE-POOLS: icon.
+TYPE-POOLS: icon, slis.
 
 *----------------------------------------------------------------------*
 * TYPE DECLARATIONS
@@ -258,6 +258,7 @@ START-OF-SELECTION.
   ELSE.
     PERFORM display_alv_grid.
   ENDIF.
+
 
 *----------------------------------------------------------------------*
 * ALV EVENT HANDLER - IMPLEMENTATION
@@ -1056,6 +1057,7 @@ FORM display_alv_grid.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_PF_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
+      i_callback_top_of_page   = 'TOP_OF_PAGE'
       i_grid_title             = lv_title
       is_layout_lvc            = gs_layout
       it_fieldcat_lvc          = gt_fcat
@@ -1101,6 +1103,43 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     go_alv->register_f4_for_fields( it_f4 = lt_f4 ).
     go_alv->set_toolbar_interactive( ).
   ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM top_of_page — header printed above the ALV grid
+*----------------------------------------------------------------------*
+FORM top_of_page.
+  DATA: lt_header TYPE slis_t_listheader,
+        ls_line   TYPE slis_listheader.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = 'Note:'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '1. Nomination will not be created for line items with State GJ'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '2. Nomination will not be created for Materials excluded for'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '   Allocation'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '3. Nominations will be created in SM3'.
+  APPEND ls_line TO lt_header.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = lt_header.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1659,7 +1698,7 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM create_all_nominations_bg.
   DATA: ls_disp     TYPE ty_display,
-        lt_main     TYPE tt_main,
+        i_main      TYPE tt_main,
         ls_main     TYPE ty_main,
         i_rspartab  TYPE STANDARD TABLE OF rsparams,
         wa_rspartab LIKE LINE OF i_rspartab,
@@ -1680,14 +1719,14 @@ FORM create_all_nominations_bg.
     ls_main-unit  = gc_sm3.
     ls_main-charg = ls_disp-charg.
     ls_main-rank  = 1.
-    APPEND ls_main TO lt_main.
+    APPEND ls_main TO i_main.
   ENDLOOP.
 
-  IF lt_main IS INITIAL. RETURN. ENDIF.
+  IF i_main IS INITIAL. RETURN. ENDIF.
 
-  EXPORT lt_main TO MEMORY ID gc_memory_id.
-  DATA: lv_bg_flag TYPE char1 VALUE 'X'.
-  EXPORT lv_bg_flag TO MEMORY ID gc_call_flag.
+  EXPORT i_main[] TO MEMORY ID gc_memory_id.
+  DATA: lv_yrgg015 TYPE char1 VALUE 'X'.
+  EXPORT lv_yrgg015 = lv_yrgg015 TO MEMORY ID gc_call_flag.
 
   CLEAR wa_rspartab.
   wa_rspartab-selname = 'R_EXCEL'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
