@@ -1149,17 +1149,25 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" bordercolor="black" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<tr bgcolor="#D3D3D3">'.
+    ls_body-line = '<tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th>'.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Location ID</th><th style="border:1px solid black;background-color:#D3D3D3">Contract ID</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Calculated Cumulative Imbalance</th><th bgcolor="#D3D3D3">Calculated Positive Chargeable Imbalance</th>'.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Sales Office</th><th style="border:1px solid black;background-color:#D3D3D3">Calculated Cumulative Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Calculated Negative Chargeable Imbalance</th><th bgcolor="#D3D3D3">Posted Cumulative Imbalance</th>'.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Calculated Positive Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Posted Positive Chargeable Imbalance</th><th bgcolor="#D3D3D3">Posted Negative Chargeable Imbalance</th>'.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Calculated Negative Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th><th bgcolor="#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3">Master Customer ID</th></tr>'.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Posted Cumulative Imbalance</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Posted Positive Chargeable Imbalance</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Posted Negative Chargeable Imbalance</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Sales Order</th><th style="border:1px solid black;background-color:#D3D3D3">Invoice</th>'.
+    APPEND ls_body TO lt_body. CLEAR ls_body.
+    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Master Contract ID</th><th style="border:1px solid black;background-color:#D3D3D3">Master Customer ID</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
@@ -1174,19 +1182,27 @@ FORM email_pending_postings.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
         ls_body-line = '<tr>'.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-blocation '</td><td>' ls_pending-cont_id '</td><td>' ls_pending-sal_office '</td>'
+        CONCATENATE '<td style="border:1px solid black">' ls_pending-blocation
+                    '</td><td style="border:1px solid black">' ls_pending-cont_id
+                    '</td><td style="border:1px solid black">' ls_pending-sal_office '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' lv_cum_cal '</td><td>' lv_char_cal '</td><td>' lv_neg_cal '</td>'
+        CONCATENATE '<td style="border:1px solid black">' lv_cum_cal
+                    '</td><td style="border:1px solid black">' lv_char_cal
+                    '</td><td style="border:1px solid black">' lv_neg_cal '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' lv_cum_so '</td><td>' lv_char_so '</td><td>' lv_neg_so '</td>'
+        CONCATENATE '<td style="border:1px solid black">' lv_cum_so
+                    '</td><td style="border:1px solid black">' lv_char_so
+                    '</td><td style="border:1px solid black">' lv_neg_so '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-sal_order '</td><td>' ls_pending-invoice '</td>'
+        CONCATENATE '<td style="border:1px solid black">' ls_pending-sal_order
+                    '</td><td style="border:1px solid black">' ls_pending-invoice '</td>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
-        CONCATENATE '<td>' ls_pending-m_cont_id '</td><td>' ls_pending-m_mas_cust '</td></tr>'
+        CONCATENATE '<td style="border:1px solid black">' ls_pending-m_cont_id
+                    '</td><td style="border:1px solid black">' ls_pending-m_mas_cust '</td></tr>'
           INTO ls_body-line.
         APPEND ls_body TO lt_body. CLEAR ls_body.
       ENDIF.
