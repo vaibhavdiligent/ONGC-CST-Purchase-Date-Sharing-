@@ -800,11 +800,11 @@ FORM send_email.
     lv_body_line = lv_intro027.
     APPEND lv_body_line TO lt_body.
     APPEND '<table border="1" cellpadding="3" cellspacing="0" bordercolor="black" style="border-collapse:collapse;font-size:12px">' TO lt_body.
-    APPEND '<tr>' TO lt_body.
-    APPEND '<th style="border:1px solid black;background-color:#D3D3D3">Location ID</th><th style="border:1px solid black;background-color:#D3D3D3">Contract ID</th>' TO lt_body.
-    APPEND '<th style="border:1px solid black;background-color:#D3D3D3">Sales Office</th><th style="border:1px solid black;background-color:#D3D3D3">Cumulative Ovr</th>' TO lt_body.
-    APPEND '<th style="border:1px solid black;background-color:#D3D3D3">Chargeable Ovr</th><th style="border:1px solid black;background-color:#D3D3D3">Posted Ovr</th>' TO lt_body.
-    APPEND '<th style="border:1px solid black;background-color:#D3D3D3">Sales Order</th><th style="border:1px solid black;background-color:#D3D3D3">Invoice</th></tr>' TO lt_body.
+    APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Location ID</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Contract ID</th>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Cumulative Ovr</th>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Posted Ovr</th>' TO lt_body.
+    APPEND '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Invoice</th></tr>' TO lt_body.
 
     " Table rows - only entries where Diff NE 0
     LOOP AT it_final INTO DATA(wa_row) WHERE customer = wa_cust_em-kunnr

@@ -1149,25 +1149,25 @@ FORM email_pending_postings.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" bordercolor="black" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<tr>'.
+    ls_body-line = '<tr bgcolor="#D3D3D3">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Location ID</th><th style="border:1px solid black;background-color:#D3D3D3">Contract ID</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Location ID</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Contract ID</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Sales Office</th><th style="border:1px solid black;background-color:#D3D3D3">Calculated Cumulative Imbalance</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Calculated Cumulative Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Calculated Positive Chargeable Imbalance</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Calculated Positive Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Calculated Negative Chargeable Imbalance</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Calculated Negative Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Posted Cumulative Imbalance</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Posted Cumulative Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Posted Positive Chargeable Imbalance</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Posted Positive Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Posted Negative Chargeable Imbalance</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Posted Negative Chargeable Imbalance</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Sales Order</th><th style="border:1px solid black;background-color:#D3D3D3">Invoice</th>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Invoice</th>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<th style="border:1px solid black;background-color:#D3D3D3">Master Contract ID</th><th style="border:1px solid black;background-color:#D3D3D3">Master Customer ID</th></tr>'.
+    ls_body-line = '<th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Master Contract ID</th><th bgcolor="#D3D3D3" style="border:1px solid black;background-color:#D3D3D3">Master Customer ID</th></tr>'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
 
     " Table data rows
