@@ -1165,7 +1165,7 @@ FORM email_pending_postings.
                | Please take necessary action in this regard.</p>|.
     ls_body-line = lv_intro.
     APPEND ls_body TO lt_body. CLEAR ls_body.
-    ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">'.
+    ls_body-line = '<table border="1" cellpadding="3" cellspacing="0" bordercolor="black" style="border-collapse:collapse;font-size:12px">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.
     ls_body-line = '<tr bgcolor="#D3D3D3">'.
     APPEND ls_body TO lt_body. CLEAR ls_body.

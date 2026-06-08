@@ -799,7 +799,7 @@ FORM send_email.
                   | Please take necessary action in this regard.</p>|.
     lv_body_line = lv_intro027.
     APPEND lv_body_line TO lt_body.
-    APPEND '<table border="1" cellpadding="3" cellspacing="0" style="border-collapse:collapse;font-size:12px">' TO lt_body.
+    APPEND '<table border="1" cellpadding="3" cellspacing="0" bordercolor="black" style="border-collapse:collapse;font-size:12px">' TO lt_body.
     APPEND '<tr bgcolor="#D3D3D3">' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Location ID</th><th bgcolor="#D3D3D3">Contract ID</th><th bgcolor="#D3D3D3">Sales Office</th><th bgcolor="#D3D3D3">Cumulative Ovr</th>' TO lt_body.
     APPEND '<th bgcolor="#D3D3D3">Chargeable Ovr</th><th bgcolor="#D3D3D3">Posted Ovr</th><th bgcolor="#D3D3D3">Sales Order</th><th bgcolor="#D3D3D3">Invoice</th></tr>' TO lt_body.
