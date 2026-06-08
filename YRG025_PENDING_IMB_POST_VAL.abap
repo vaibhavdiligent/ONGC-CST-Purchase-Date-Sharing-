@@ -931,24 +931,6 @@ FORM email_pending_postings.
       DELETE ADJACENT DUPLICATES FROM lt_ernam COMPARING ernam.
     ENDIF.
 
-    " Step 5: Fallback - if no ticket found, get AENAMs from OIJNOMI
-    IF lt_ernam IS INITIAL AND lt_locid IS NOT INITIAL.
-      SELECT aenam
-        FROM oijnomi
-        INTO TABLE @DATA(lt_oij_aenam)
-        FOR ALL ENTRIES IN @lt_locid
-        WHERE locid  = @lt_locid-locid
-          AND idate  IN @s_date
-          AND delind NE 'X'.
-
-      LOOP AT lt_oij_aenam INTO DATA(ls_oij_ae).
-        ls_ernam-ernam = ls_oij_ae-aenam.
-        APPEND ls_ernam TO lt_ernam.
-      ENDLOOP.
-      SORT lt_ernam BY ernam.
-      DELETE ADJACENT DUPLICATES FROM lt_ernam COMPARING ernam.
-    ENDIF.
-
     " Step 6: Find email IDs from PA0105 (refer YRGR095 logic)
     " Step 6a: Resolve PERNR from SAP username (SUBTY 0001)
     IF lt_ernam IS NOT INITIAL.
