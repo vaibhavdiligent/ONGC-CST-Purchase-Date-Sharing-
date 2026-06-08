@@ -1685,9 +1685,9 @@ FORM create_all_nominations_bg.
 
   IF lt_main IS INITIAL. RETURN. ENDIF.
 
-  EXPORT lt_main TO MEMORY ID gc_memory_id.
-  DATA: lv_bg_flag TYPE char1 VALUE 'X'.
-  EXPORT lv_bg_flag TO MEMORY ID gc_call_flag.
+  EXPORT i_main = lt_main TO MEMORY ID gc_memory_id.
+  DATA: lv_yrgg015 TYPE char1 VALUE 'X'.
+  EXPORT lv_yrgg015 = lv_yrgg015 TO MEMORY ID gc_call_flag.
 
   CLEAR wa_rspartab.
   wa_rspartab-selname = 'R_EXCEL'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
