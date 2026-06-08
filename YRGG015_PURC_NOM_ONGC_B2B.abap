@@ -1659,7 +1659,7 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM create_all_nominations_bg.
   DATA: ls_disp     TYPE ty_display,
-        lt_main     TYPE tt_main,
+        i_main      TYPE tt_main,
         ls_main     TYPE ty_main,
         i_rspartab  TYPE STANDARD TABLE OF rsparams,
         wa_rspartab LIKE LINE OF i_rspartab,
@@ -1680,12 +1680,12 @@ FORM create_all_nominations_bg.
     ls_main-unit  = gc_sm3.
     ls_main-charg = ls_disp-charg.
     ls_main-rank  = 1.
-    APPEND ls_main TO lt_main.
+    APPEND ls_main TO i_main.
   ENDLOOP.
 
-  IF lt_main IS INITIAL. RETURN. ENDIF.
+  IF i_main IS INITIAL. RETURN. ENDIF.
 
-  EXPORT i_main = lt_main TO MEMORY ID gc_memory_id.
+  EXPORT i_main[] TO MEMORY ID gc_memory_id.
   DATA: lv_yrgg015 TYPE char1 VALUE 'X'.
   EXPORT lv_yrgg015 = lv_yrgg015 TO MEMORY ID gc_call_flag.
 
