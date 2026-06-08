@@ -1113,21 +1113,28 @@ FORM top_of_page.
         ls_line   TYPE slis_listheader.
 
   CLEAR ls_line.
-  ls_line-typ  = 'S'.
-  ls_line-key  = 'Note:'.
-  ls_line-info = 'Nomination will not be created for line items with State ''GJ'''.
+  ls_line-typ  = 'A'.
+  ls_line-info = 'Note:'.
   APPEND ls_line TO lt_header.
 
   CLEAR ls_line.
-  ls_line-typ  = 'S'.
-  ls_line-key  = ''.
-  ls_line-info = 'Nomination will not be created for the Materials excluded for Allocation'.
+  ls_line-typ  = 'A'.
+  ls_line-info = '1. Nomination will not be created for line items with State GJ'.
   APPEND ls_line TO lt_header.
 
   CLEAR ls_line.
-  ls_line-typ  = 'S'.
-  ls_line-key  = ''.
-  ls_line-info = 'Nominations will be created in SM3'.
+  ls_line-typ  = 'A'.
+  ls_line-info = '2. Nomination will not be created for Materials excluded for'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '   Allocation'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '3. Nominations will be created in SM3'.
   APPEND ls_line TO lt_header.
 
   CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
