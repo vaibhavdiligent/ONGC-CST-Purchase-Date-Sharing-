@@ -1236,7 +1236,12 @@ FORM top_of_page.
 
   CLEAR ls_line.
   ls_line-typ  = 'A'.
-  ls_line-info = '1. Nomination will not be created for line items with State GJ'.
+  ls_line-info = '1. Nomination will not be created for line items'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '   with State GJ'.
   APPEND ls_line TO lt_header.
 
   CLEAR ls_line.
