@@ -1675,6 +1675,11 @@ FORM create_all_nominations_bg.
   wa_rspartab-selname = 'R_EXCEL'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
   APPEND wa_rspartab TO i_rspartab.
 
+  " Pass background flag so YRXR036 BATCH_VALIDATE checks p_bgrun instead of sy-batch
+  CLEAR wa_rspartab.
+  wa_rspartab-selname = 'P_BGRUN'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
+  APPEND wa_rspartab TO i_rspartab.
+
   LOOP AT s_date INTO ls_sdate.
     CLEAR wa_rspartab.
     wa_rspartab-selname = 'S_DATE'. wa_rspartab-kind    = 'S'.
