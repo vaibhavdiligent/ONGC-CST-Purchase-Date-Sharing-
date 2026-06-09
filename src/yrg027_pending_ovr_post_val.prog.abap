@@ -728,52 +728,52 @@ FORM send_email.
            AND   tktsubrc  NE '1A'.
 
     IF lt_tkt IS NOT INITIAL.
-      " Keep ERNAM pernrs for reporting officer CC only
-      TYPES: BEGIN OF ty_pernr_tkt,
-               pernr TYPE pa0105-pernr,
-             END OF ty_pernr_tkt.
-      DATA: lt_pernr_tkt TYPE STANDARD TABLE OF ty_pernr_tkt.
-      CLEAR lt_pernr_tkt.
+      " Ticket found: resolve ERNAM (username) -> PERNR via PA0105 subty 0001
+      " PERNRs stored in lt_to_pernr for reporting officer CC chain only
+      TYPES: BEGIN OF ty_ernam_tkt,
+               ernam TYPE oij_el_ticket_i-ernam,
+             END OF ty_ernam_tkt.
+      DATA: lt_ernam_tkt TYPE STANDARD TABLE OF ty_ernam_tkt.
+      CLEAR lt_ernam_tkt.
       LOOP AT lt_tkt INTO DATA(wa_tkt_pn).
-        APPEND VALUE ty_pernr_tkt( pernr = wa_tkt_pn-ernam ) TO lt_pernr_tkt.
-      ENDLOOP.
-      SORT lt_pernr_tkt BY pernr.
-      DELETE ADJACENT DUPLICATES FROM lt_pernr_tkt COMPARING pernr.
-      CLEAR lt_to_pernr.
-      LOOP AT lt_pernr_tkt INTO DATA(wa_tp_tkt).
-        APPEND VALUE ty_to_pernr( pernr = wa_tp_tkt-pernr ) TO lt_to_pernr.
-      ENDLOOP.
-
-      " Find email from ERNAM via PA0105 (ERNAM used as PERNR - ref YRGR095)
-      SELECT usrid_long FROM pa0105
-             INTO TABLE @DATA(lt_emails_tkt)
-             FOR ALL ENTRIES IN @lt_pernr_tkt
-             WHERE pernr  = @lt_pernr_tkt-pernr
-             AND   subty  = '0010'
-             AND   endda  = '99991231'.
-
-      LOOP AT lt_emails_tkt INTO DATA(wa_etkt).
-        IF wa_etkt-usrid_long IS NOT INITIAL.
-          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_etkt-usrid_long TRANSPORTING NO FIELDS.
-          IF sy-subrc NE 0.
-            APPEND VALUE #( smtp_addr = wa_etkt-usrid_long ) TO lt_email_recip.
-          ENDIF.
+        READ TABLE lt_ernam_tkt WITH KEY ernam = wa_tkt_pn-ernam TRANSPORTING NO FIELDS.
+        IF sy-subrc NE 0.
+          APPEND VALUE ty_ernam_tkt( ernam = wa_tkt_pn-ernam ) TO lt_ernam_tkt.
         ENDIF.
       ENDLOOP.
-
+      CLEAR lt_to_pernr.
+      IF lt_ernam_tkt IS NOT INITIAL.
+        SELECT pernr FROM pa0105
+          INTO TABLE @DATA(lt_pernr_res027)
+          FOR ALL ENTRIES IN @lt_ernam_tkt
+          WHERE usrid = @lt_ernam_tkt-ernam
+            AND subty = '0001'
+            AND begda LE @sy-datum
+            AND endda GE @sy-datum.
+        LOOP AT lt_pernr_res027 INTO DATA(wa_pernr_res027).
+          READ TABLE lt_to_pernr WITH KEY pernr = wa_pernr_res027-pernr
+                                   TRANSPORTING NO FIELDS.
+          IF sy-subrc NE 0.
+            APPEND VALUE ty_to_pernr( pernr = wa_pernr_res027-pernr ) TO lt_to_pernr.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
     ELSE.
-      " Step 3: No ticket found - use RGMC Mail from pending entries as TO email
+      " No ticket found: clear lt_to_pernr (no reporting officer CC)
       CLEAR lt_to_pernr.
-      LOOP AT it_final INTO DATA(wa_rgmc_mail)
-        WHERE customer = wa_cust_em-kunnr AND diff_char_ovr NE 0.
-        IF wa_rgmc_mail-rgmc_mail IS NOT INITIAL.
-          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_rgmc_mail-rgmc_mail TRANSPORTING NO FIELDS.
-          IF sy-subrc NE 0.
-            APPEND VALUE #( smtp_addr = wa_rgmc_mail-rgmc_mail ) TO lt_email_recip.
-          ENDIF.
-        ENDIF.
-      ENDLOOP.
     ENDIF.
+
+    " TO email: always use RGMC Mail - same logic as YRGR102
+    LOOP AT it_final INTO DATA(wa_rgmc_mail)
+      WHERE customer = wa_cust_em-kunnr AND diff_char_ovr NE 0.
+      IF wa_rgmc_mail-rgmc_mail IS NOT INITIAL.
+        READ TABLE lt_email_recip WITH KEY smtp_addr = wa_rgmc_mail-rgmc_mail
+                                   TRANSPORTING NO FIELDS.
+        IF sy-subrc NE 0.
+          APPEND VALUE #( smtp_addr = wa_rgmc_mail-rgmc_mail ) TO lt_email_recip.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
 
     IF lt_email_recip IS INITIAL.
       CONTINUE.
