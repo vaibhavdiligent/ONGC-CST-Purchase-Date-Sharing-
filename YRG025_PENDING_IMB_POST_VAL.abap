@@ -331,7 +331,7 @@ FORM get_data .
       IF sy-subrc EQ 0.
         IF lv_abrvw-abrvw = 'Z01' AND wa_final-m_cont_id IS NOT INITIAL.
           wa_final-char_bal_mbg_cal = ls_dis-totalpic.
-          wa_final-neg_bal_mbg_cal  = ls_dis-totalnic.
+          wa_final-neg_bal_mbg_cal  = ABS( ls_dis-totalnic ).
           wa_final-cum_mst_imb      = ls_dis-totalcumi.
 
         ELSEIF lv_abrvw-abrvw = '' AND wa_final-m_cont_id IS NOT INITIAL.
@@ -341,7 +341,7 @@ FORM get_data .
         ENDIF.
       ELSE.
         wa_final-char_bal_mbg_cal = dis-totalpic." wa_final-char_bal_mbg_cal + dis-totalpic.
-        wa_final-neg_bal_mbg_cal  = dis-totalnic."wa_final-neg_bal_mbg_cal + dis-totalnic.
+        wa_final-neg_bal_mbg_cal  = ABS( dis-totalnic )."wa_final-neg_bal_mbg_cal + dis-totalnic.
       ENDIF.
 
     ENDIF.
@@ -1176,7 +1176,7 @@ FORM email_pending_postings.
         OR ls_pending-m_mas_cust = ls_email_cust-customer.
         WRITE ls_pending-cum_bal_mbg_cal     TO lv_cum_cal  LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal    TO lv_char_cal LEFT-JUSTIFIED.
-        WRITE ABS( ls_pending-neg_bal_mbg_cal ) TO lv_neg_cal LEFT-JUSTIFIED.
+        WRITE ls_pending-neg_bal_mbg_cal     TO lv_neg_cal  LEFT-JUSTIFIED.
         WRITE ls_pending-cum_bal_mbg_cal_so  TO lv_cum_so   LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal_so TO lv_char_so  LEFT-JUSTIFIED.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.

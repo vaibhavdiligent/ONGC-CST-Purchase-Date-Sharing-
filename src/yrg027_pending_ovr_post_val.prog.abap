@@ -744,13 +744,19 @@ FORM send_email.
         APPEND VALUE ty_to_pernr( pernr = wa_tp_tkt-pernr ) TO lt_to_pernr.
       ENDLOOP.
 
-      " Use RGMC Mail as TO email
-      LOOP AT it_final INTO DATA(wa_tkt_mail)
-        WHERE customer = wa_cust_em-kunnr AND diff_char_ovr NE 0.
-        IF wa_tkt_mail-rgmc_mail IS NOT INITIAL.
-          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_tkt_mail-rgmc_mail TRANSPORTING NO FIELDS.
+      " Find email from ERNAM via PA0105 (ERNAM used as PERNR - ref YRGR095)
+      SELECT usrid_long FROM pa0105
+             INTO TABLE @DATA(lt_emails_tkt)
+             FOR ALL ENTRIES IN @lt_pernr_tkt
+             WHERE pernr  = @lt_pernr_tkt-pernr
+             AND   subty  = '0010'
+             AND   endda  = '99991231'.
+
+      LOOP AT lt_emails_tkt INTO DATA(wa_etkt).
+        IF wa_etkt-usrid_long IS NOT INITIAL.
+          READ TABLE lt_email_recip WITH KEY smtp_addr = wa_etkt-usrid_long TRANSPORTING NO FIELDS.
           IF sy-subrc NE 0.
-            APPEND VALUE #( smtp_addr = wa_tkt_mail-rgmc_mail ) TO lt_email_recip.
+            APPEND VALUE #( smtp_addr = wa_etkt-usrid_long ) TO lt_email_recip.
           ENDIF.
         ENDIF.
       ENDLOOP.
