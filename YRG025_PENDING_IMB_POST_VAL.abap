@@ -945,16 +945,33 @@ FORM email_pending_postings.
 
     ENDIF.
 
-    " Step 6b: Use RGMC Mail field as TO email address
-    LOOP AT lt_pending INTO DATA(ls_pend_mail).
-      IF ( ls_pend_mail-m_mas_cust IS INITIAL AND ls_pend_mail-customer = ls_email_cust-customer )
-        OR ls_pend_mail-m_mas_cust = ls_email_cust-customer.
-        IF ls_pend_mail-rgmc_mail IS NOT INITIAL.
-          lv_email = ls_pend_mail-rgmc_mail.
+    " Step 6b: TO email - ticket found -> PA0105 email of creator; else -> RGMC mail
+    IF lt_pernr IS NOT INITIAL.
+      SELECT usrid_long FROM pa0105
+        INTO TABLE @DATA(lt_to_email025)
+        FOR ALL ENTRIES IN @lt_pernr
+        WHERE pernr = @lt_pernr-pernr
+          AND subty = '0010'
+          AND begda LE @sy-datum
+          AND endda GE @sy-datum.
+      LOOP AT lt_to_email025 INTO DATA(ls_to_email025).
+        IF ls_to_email025-usrid_long IS NOT INITIAL.
+          lv_email = ls_to_email025-usrid_long.
           APPEND lv_email TO lt_email_ids.
         ENDIF.
-      ENDIF.
-    ENDLOOP.
+      ENDLOOP.
+    ELSE.
+      " No ticket found - use RGMC Mail
+      LOOP AT lt_pending INTO DATA(ls_pend_mail).
+        IF ( ls_pend_mail-m_mas_cust IS INITIAL AND ls_pend_mail-customer = ls_email_cust-customer )
+          OR ls_pend_mail-m_mas_cust = ls_email_cust-customer.
+          IF ls_pend_mail-rgmc_mail IS NOT INITIAL.
+            lv_email = ls_pend_mail-rgmc_mail.
+            APPEND lv_email TO lt_email_ids.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
     SORT lt_email_ids.
     DELETE ADJACENT DUPLICATES FROM lt_email_ids.
 
