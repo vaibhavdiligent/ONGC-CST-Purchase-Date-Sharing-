@@ -79,6 +79,10 @@ TYPES: BEGIN OF ty_display,
          ongc_id     TYPE char20,
          ongc_mater  TYPE char30,
          outline_agr TYPE ebeln,
+         oa_locid    TYPE char10,
+         oa_werks    TYPE werks_d,
+         oa_matnr    TYPE char30,
+         oa_desc     TYPE char40,
          charg       TYPE charg_d,
          nomtk       TYPE oij_nomtk,
          nomit       TYPE oij_item,
@@ -119,6 +123,8 @@ TYPES: BEGIN OF ty_ekoa_cache,
          ebeln TYPE ebeln,
          bedat TYPE d,
          werks TYPE werks_d,
+         matnr TYPE char30,
+         txz01 TYPE char40,
        END OF ty_ekoa_cache.
 TYPES: BEGIN OF ty_t001w_cache,
          werks TYPE werks_d,
@@ -305,6 +311,9 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           ENDIF.
         WHEN 'OUTLINE_AGR'.
           ls_disp-outline_agr = ls_mod-value.
+          PERFORM derive_oa_fields_from_oa
+            USING    ls_mod-value
+            CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
       ENDCASE.
     ENDLOOP.
@@ -642,6 +651,11 @@ FORM fetch_pur_data.
       USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
+    " Populate OA detail columns from pre-fetched cache
+    PERFORM derive_oa_display_fields
+      USING    ls_disp-outline_agr
+      CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc.
+
     " Excluded from nomination: GJ state OR Exclude flag set in YRGA_CST_PUR
     IF ls_pur-state_code = gc_excl_state OR ls_pur-exclude = 'X'.
       ls_disp-is_excl   = 'X'.          " logic flag: used in all WHERE/IF
@@ -698,6 +712,14 @@ FORM fetch_pur_data.
         INSERT ls_col INTO TABLE ls_disp-t_color.
       ENDIF.
     ENDIF.
+
+    " Colour OA columns (col=5, green) on all rows for visual distinction
+    CLEAR ls_col.
+    ls_col-color-col = 5. ls_col-color-int = 0.
+    ls_col-fname = 'OA_LOCID'. INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_WERKS'. INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_MATNR'. INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_DESC'.  INSERT ls_col INTO TABLE ls_disp-t_color.
 
     APPEND ls_disp TO gt_display.
   ENDLOOP.
@@ -843,7 +865,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   " 4. EKKO+EKPO: all relevant OA lines (DQ tax, not deleted)
   REFRESH gt_ekoa_c.
   IF lr_vbeln IS NOT INITIAL AND gt_t001w_c IS NOT INITIAL.
-    SELECT ekko~ebeln ekko~bedat ekpo~werks
+    SELECT ekko~ebeln ekko~bedat ekpo~werks ekpo~matnr ekpo~txz01
       FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
       INTO CORRESPONDING FIELDS OF TABLE gt_ekoa_c
       WHERE ekko~ebeln IN lr_vbeln
@@ -955,6 +977,63 @@ FORM derive_batch
       cv_charg = ls_mcha-charg. RETURN.
     ENDIF.
   ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM derive_oa_display_fields — OA Location/Plant/Material/Desc from cache
+*----------------------------------------------------------------------*
+FORM derive_oa_display_fields
+  USING    iv_vbeln TYPE ebeln
+  CHANGING cv_locid TYPE char10
+           cv_werks TYPE werks_d
+           cv_matnr TYPE char30
+           cv_desc  TYPE char40.
+  DATA: ls_mot TYPE ty_mot_cache,
+        ls_ek  TYPE ty_ekoa_cache.
+  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc.
+  IF iv_vbeln IS INITIAL. RETURN. ENDIF.
+  " OA Location: first LOCID found for this OA in MOT cache
+  LOOP AT gt_mot_c INTO ls_mot WHERE vbeln = iv_vbeln.
+    cv_locid = ls_mot-locid. EXIT.
+  ENDLOOP.
+  " OA Plant / Material / Description: first EKPO line for this OA
+  READ TABLE gt_ekoa_c INTO ls_ek WITH KEY ebeln = iv_vbeln BINARY SEARCH.
+  IF sy-subrc = 0.
+    cv_werks = ls_ek-werks.
+    cv_matnr = ls_ek-matnr.
+    cv_desc  = ls_ek-txz01.
+  ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM derive_oa_fields_from_oa — for OA change on screen: cache + DB fallback
+*----------------------------------------------------------------------*
+FORM derive_oa_fields_from_oa
+  USING    iv_vbeln TYPE ebeln
+  CHANGING cv_locid TYPE char10
+           cv_werks TYPE werks_d
+           cv_matnr TYPE char30
+           cv_desc  TYPE char40.
+  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc.
+  IF iv_vbeln IS INITIAL. RETURN. ENDIF.
+  " Try pre-fetched cache first
+  PERFORM derive_oa_display_fields
+    USING    iv_vbeln
+    CHANGING cv_locid cv_werks cv_matnr cv_desc.
+  " Fallback: DB selects for a manually entered OA not in cache
+  IF cv_locid IS INITIAL.
+    SELECT SINGLE locid FROM oij_el_doc_mot INTO cv_locid
+      WHERE vbeln = iv_vbeln AND delind <> 'X'.
+  ENDIF.
+  IF cv_werks IS INITIAL.
+    SELECT SINGLE ekpo~werks ekpo~matnr ekpo~txz01
+      FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
+      INTO (@cv_werks, @cv_matnr, @cv_desc)
+      WHERE ekko~ebeln = @iv_vbeln
+        AND ekko~loekz = ' '
+        AND ekpo~loekz <> 'X'
+        AND ekpo~mwskz = 'DQ'.
+  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1224,6 +1303,34 @@ FORM build_fieldcat.
   ls_fcat-seltext   = 'Outline Agreement'.
   ls_fcat-outputlen = 14.
   ls_fcat-edit      = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_LOCID'.
+  ls_fcat-coltext   = 'OA Location'.
+  ls_fcat-seltext   = 'OA Location'.
+  ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_WERKS'.
+  ls_fcat-coltext   = 'OA Plant'.
+  ls_fcat-seltext   = 'OA Plant'.
+  ls_fcat-outputlen = 8.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_MATNR'.
+  ls_fcat-coltext   = 'OA Material'.
+  ls_fcat-seltext   = 'OA Material'.
+  ls_fcat-outputlen = 18.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_DESC'.
+  ls_fcat-coltext   = 'OA Description'.
+  ls_fcat-seltext   = 'OA Description'.
+  ls_fcat-outputlen = 25.
   APPEND ls_fcat TO gt_fcat.
 
   CLEAR ls_fcat.
