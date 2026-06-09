@@ -83,6 +83,8 @@ TYPES: BEGIN OF ty_display,
          oa_werks    TYPE werks_d,
          oa_matnr    TYPE char30,
          oa_desc     TYPE char40,
+         oa_tsyst    TYPE oij_tsyst,
+         oa_batch    TYPE charg_d,
          charg       TYPE charg_d,
          nomtk       TYPE oij_nomtk,
          nomit       TYPE oij_item,
@@ -115,6 +117,7 @@ TYPES: BEGIN OF ty_mot_cache,
          vbeln    TYPE ebeln,
          matnr    TYPE char30,
          locid    TYPE char10,
+         tsyst    TYPE oij_tsyst,
          fromdate TYPE d,
          todate   TYPE d,
          vbtyp    TYPE char1,
@@ -141,6 +144,10 @@ TYPES: BEGIN OF ty_mara_cache,
          matnr TYPE char30,
          xchpf TYPE xchpf,
        END OF ty_mara_cache.
+TYPES: BEGIN OF ty_ekbe_cache,
+         ebeln TYPE ebeln,
+         charg TYPE charg_d,
+       END OF ty_ekbe_cache.
 
 *----------------------------------------------------------------------*
 * DATA DECLARATIONS
@@ -161,7 +168,8 @@ DATA: gt_mot_c   TYPE STANDARD TABLE OF ty_mot_cache,
       gt_ekoa_c  TYPE STANDARD TABLE OF ty_ekoa_cache,
       gt_t001w_c TYPE STANDARD TABLE OF ty_t001w_cache,
       gt_mcha_c  TYPE STANDARD TABLE OF ty_mcha_cache,
-      gt_mara_c  TYPE STANDARD TABLE OF ty_mara_cache.
+      gt_mara_c  TYPE STANDARD TABLE OF ty_mara_cache,
+      gt_ekbe_c  TYPE STANDARD TABLE OF ty_ekbe_cache.
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
@@ -183,6 +191,9 @@ CLASS lcl_alv_handler DEFINITION.
       on_main_data_changed
         FOR EVENT data_changed OF cl_gui_alv_grid
         IMPORTING er_data_changed,
+      on_main_data_changed_finished
+        FOR EVENT data_changed_finished OF cl_gui_alv_grid
+        IMPORTING e_modified,
       on_main_f4
         FOR EVENT onf4 OF cl_gui_alv_grid
         IMPORTING e_fieldname es_row_no er_event_data et_bad_cells e_display,
@@ -315,10 +326,19 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           ls_disp-outline_agr = lv_vbeln.
           PERFORM derive_oa_fields_from_oa
             USING    lv_vbeln
-            CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc.
+            CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
+                     ls_disp-oa_tsyst ls_disp-oa_batch.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
       ENDCASE.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD on_main_data_changed_finished.
+    DATA: ls_stbl TYPE lvc_s_stbl.
+    IF e_modified = abap_true AND go_alv IS NOT INITIAL.
+      ls_stbl-row = abap_true. ls_stbl-col = abap_true.
+      go_alv->refresh_table_display( is_stable = ls_stbl ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD on_batch_data_changed.
@@ -656,7 +676,8 @@ FORM fetch_pur_data.
     " Populate OA detail columns from pre-fetched cache
     PERFORM derive_oa_display_fields
       USING    ls_disp-outline_agr
-      CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc.
+      CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
+               ls_disp-oa_tsyst ls_disp-oa_batch.
 
     " Excluded from nomination: GJ state OR Exclude flag set in YRGA_CST_PUR
     IF ls_pur-state_code = gc_excl_state OR ls_pur-exclude = 'X'.
@@ -715,13 +736,15 @@ FORM fetch_pur_data.
       ENDIF.
     ENDIF.
 
-    " Colour OA columns (col=5, green) on all rows for visual distinction
+    " Colour all OA columns (col=5, green) on all rows for visual distinction
     CLEAR ls_col.
     ls_col-color-col = 5. ls_col-color-int = 0.
-    ls_col-fname = 'OA_LOCID'. INSERT ls_col INTO TABLE ls_disp-t_color.
-    ls_col-fname = 'OA_WERKS'. INSERT ls_col INTO TABLE ls_disp-t_color.
-    ls_col-fname = 'OA_MATNR'. INSERT ls_col INTO TABLE ls_disp-t_color.
-    ls_col-fname = 'OA_DESC'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_LOCID'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_WERKS'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_MATNR'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_DESC'.   INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_TSYST'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_BATCH'.  INSERT ls_col INTO TABLE ls_disp-t_color.
 
     APPEND ls_disp TO gt_display.
   ENDLOOP.
@@ -847,7 +870,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
 
   " 2. OIJ_EL_DOC_MOT: OAs overlapping date range, VBTYP=K, filtered by input locations (FS fix)
   REFRESH gt_mot_c.
-  SELECT vbeln matnr locid fromdate todate vbtyp FROM oij_el_doc_mot
+  SELECT vbeln matnr locid tsyst fromdate todate vbtyp FROM oij_el_doc_mot
     INTO CORRESPONDING FIELDS OF TABLE gt_mot_c
     WHERE delind   <> 'X'
       AND vbtyp    =  'K'
@@ -894,6 +917,17 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
       INTO CORRESPONDING FIELDS OF TABLE gt_mara_c
       WHERE matnr IN lr_matnr.
     SORT gt_mara_c BY matnr.
+  ENDIF.
+
+  " 7. EKBE: OA batch from purchasing document history
+  REFRESH gt_ekbe_c.
+  IF lr_vbeln IS NOT INITIAL.
+    SELECT ebeln charg FROM ekbe
+      INTO CORRESPONDING FIELDS OF TABLE gt_ekbe_c
+      WHERE ebeln IN lr_vbeln
+        AND charg <> ' '.
+    SORT gt_ekbe_c BY ebeln.
+    DELETE ADJACENT DUPLICATES FROM gt_ekbe_c COMPARING ebeln.
   ENDIF.
 ENDFORM.
 
@@ -982,21 +1016,26 @@ FORM derive_batch
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM derive_oa_display_fields — OA Location/Plant/Material/Desc from cache
+* FORM derive_oa_display_fields — OA fields from pre-fetched cache
 *----------------------------------------------------------------------*
 FORM derive_oa_display_fields
   USING    iv_vbeln TYPE ebeln
   CHANGING cv_locid TYPE char10
            cv_werks TYPE werks_d
            cv_matnr TYPE char30
-           cv_desc  TYPE char40.
+           cv_desc  TYPE char40
+           cv_tsyst TYPE oij_tsyst
+           cv_batch TYPE charg_d.
   DATA: ls_mot TYPE ty_mot_cache,
-        ls_ek  TYPE ty_ekoa_cache.
-  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc.
+        ls_ek  TYPE ty_ekoa_cache,
+        ls_eb  TYPE ty_ekbe_cache.
+  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc, cv_tsyst, cv_batch.
   IF iv_vbeln IS INITIAL. RETURN. ENDIF.
-  " OA Location: first LOCID found for this OA in MOT cache
+  " OA Location + Transport System: first MOT entry for this OA
   LOOP AT gt_mot_c INTO ls_mot WHERE vbeln = iv_vbeln.
-    cv_locid = ls_mot-locid. EXIT.
+    cv_locid = ls_mot-locid.
+    cv_tsyst = ls_mot-tsyst.
+    EXIT.
   ENDLOOP.
   " OA Plant / Material / Description: first EKPO line for this OA
   READ TABLE gt_ekoa_c INTO ls_ek WITH KEY ebeln = iv_vbeln BINARY SEARCH.
@@ -1005,27 +1044,33 @@ FORM derive_oa_display_fields
     cv_matnr = ls_ek-matnr.
     cv_desc  = ls_ek-txz01.
   ENDIF.
+  " OA Batch: from EKBE history
+  READ TABLE gt_ekbe_c INTO ls_eb WITH KEY ebeln = iv_vbeln BINARY SEARCH.
+  IF sy-subrc = 0. cv_batch = ls_eb-charg. ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM derive_oa_fields_from_oa — for OA change on screen: cache + DB fallback
+* FORM derive_oa_fields_from_oa — OA change on screen: cache + DB fallback
 *----------------------------------------------------------------------*
 FORM derive_oa_fields_from_oa
   USING    iv_vbeln TYPE ebeln
   CHANGING cv_locid TYPE char10
            cv_werks TYPE werks_d
            cv_matnr TYPE char30
-           cv_desc  TYPE char40.
-  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc.
+           cv_desc  TYPE char40
+           cv_tsyst TYPE oij_tsyst
+           cv_batch TYPE charg_d.
+  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc, cv_tsyst, cv_batch.
   IF iv_vbeln IS INITIAL. RETURN. ENDIF.
   " Try pre-fetched cache first
   PERFORM derive_oa_display_fields
     USING    iv_vbeln
-    CHANGING cv_locid cv_werks cv_matnr cv_desc.
+    CHANGING cv_locid cv_werks cv_matnr cv_desc cv_tsyst cv_batch.
   " Fallback: DB selects for a manually entered OA not in cache
   IF cv_locid IS INITIAL.
-    SELECT SINGLE locid FROM oij_el_doc_mot INTO cv_locid
-      WHERE vbeln = iv_vbeln AND delind <> 'X'.
+    SELECT SINGLE locid tsyst FROM oij_el_doc_mot
+      INTO (@cv_locid, @cv_tsyst)
+      WHERE vbeln = @iv_vbeln AND delind <> 'X'.
   ENDIF.
   IF cv_werks IS INITIAL.
     SELECT SINGLE ekpo~werks ekpo~matnr ekpo~txz01
@@ -1035,6 +1080,10 @@ FORM derive_oa_fields_from_oa
         AND ekko~loekz = ' '
         AND ekpo~loekz <> 'X'
         AND ekpo~mwskz = 'DQ'.
+  ENDIF.
+  IF cv_batch IS INITIAL.
+    SELECT SINGLE charg FROM ekbe INTO cv_batch
+      WHERE ebeln = iv_vbeln AND charg <> ' '.
   ENDIF.
 ENDFORM.
 
@@ -1157,9 +1206,10 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   ENDIF.
   IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
     CREATE OBJECT go_alv_handler.
-    SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
-    SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
-    SET HANDLER go_alv_handler->on_alv_toolbar        FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_data_changed          FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_data_changed_finished FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_f4                    FOR go_alv.
+    SET HANDLER go_alv_handler->on_alv_toolbar                FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
     DATA: lt_f4 TYPE lvc_t_f4, ls_f4 TYPE lvc_s_f4.
     CLEAR ls_f4.
@@ -1308,6 +1358,15 @@ FORM build_fieldcat.
   APPEND ls_fcat TO gt_fcat.
 
   CLEAR ls_fcat.
+  ls_fcat-fieldname  = 'CHARG'.
+  ls_fcat-coltext    = 'Batch'.
+  ls_fcat-seltext    = 'Batch Number'.
+  ls_fcat-outputlen  = 12.
+  ls_fcat-edit       = abap_true.
+  ls_fcat-f4availabl = abap_true.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
   ls_fcat-fieldname = 'OA_LOCID'.
   ls_fcat-coltext   = 'OA Location'.
   ls_fcat-seltext   = 'OA Location'.
@@ -1336,12 +1395,17 @@ FORM build_fieldcat.
   APPEND ls_fcat TO gt_fcat.
 
   CLEAR ls_fcat.
-  ls_fcat-fieldname  = 'CHARG'.
-  ls_fcat-coltext    = 'Batch'.
-  ls_fcat-seltext    = 'Batch Number'.
-  ls_fcat-outputlen  = 12.
-  ls_fcat-edit       = abap_true.
-  ls_fcat-f4availabl = abap_true.
+  ls_fcat-fieldname = 'OA_BATCH'.
+  ls_fcat-coltext   = 'OA Batch'.
+  ls_fcat-seltext   = 'OA Batch'.
+  ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_TSYST'.
+  ls_fcat-coltext   = 'OA Trans.Sys'.
+  ls_fcat-seltext   = 'OA Transport System'.
+  ls_fcat-outputlen = 14.
   APPEND ls_fcat TO gt_fcat.
 
   CLEAR ls_fcat.
