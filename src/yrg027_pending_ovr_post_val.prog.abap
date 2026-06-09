@@ -731,7 +731,7 @@ FORM send_email.
       " Ticket found: resolve ERNAM (username) -> PERNR via PA0105 subty 0001
       " PERNRs stored in lt_to_pernr for reporting officer CC chain only
       TYPES: BEGIN OF ty_ernam_tkt,
-               ernam TYPE oij_el_ticket_i-ernam,
+               ernam TYPE pa0105-usrid,
              END OF ty_ernam_tkt.
       DATA: lt_ernam_tkt TYPE STANDARD TABLE OF ty_ernam_tkt.
       CLEAR lt_ernam_tkt.
