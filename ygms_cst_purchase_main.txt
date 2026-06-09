@@ -2421,7 +2421,7 @@ FORM handle_save.
         CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
           EXPORTING
             i_callback_program = sy-repid
-            i_title            = 'CST Nomination Details'
+            i_grid_title       = 'CST Nomination Details'
             it_fieldcat        = lt_nom_fcat
             i_screen_start_column = 10
             i_screen_start_line   = 5
