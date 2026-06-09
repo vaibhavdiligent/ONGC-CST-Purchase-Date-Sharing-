@@ -1176,7 +1176,7 @@ FORM email_pending_postings.
         OR ls_pending-m_mas_cust = ls_email_cust-customer.
         WRITE ls_pending-cum_bal_mbg_cal     TO lv_cum_cal  LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal    TO lv_char_cal LEFT-JUSTIFIED.
-        WRITE ls_pending-neg_bal_mbg_cal     TO lv_neg_cal  LEFT-JUSTIFIED.
+        WRITE ABS( ls_pending-neg_bal_mbg_cal ) TO lv_neg_cal LEFT-JUSTIFIED.
         WRITE ls_pending-cum_bal_mbg_cal_so  TO lv_cum_so   LEFT-JUSTIFIED.
         WRITE ls_pending-char_bal_mbg_cal_so TO lv_char_so  LEFT-JUSTIFIED.
         WRITE ls_pending-neg_bal_mbg_cal_so  TO lv_neg_so   LEFT-JUSTIFIED.
