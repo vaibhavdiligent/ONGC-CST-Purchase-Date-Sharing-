@@ -2269,6 +2269,173 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM handle_save.
   DATA: lv_answer TYPE c LENGTH 1.
+
+  " --- Nomination validation: check if CST nominations already exist ---
+  TYPES: BEGIN OF ty_loc_mat,
+           location_id TYPE ygms_de_loc_id,
+           material    TYPE ygms_de_gail_mat,
+         END OF ty_loc_mat.
+  TYPES: BEGIN OF ty_nom_detail,
+           idate     TYPE oijnomi-idate,
+           locid     TYPE oijnomi-locid,
+           s_matnr_i TYPE oijnomi-s_matnr_i,
+           menge     TYPE oijnomi-menge,
+           unit_i    TYPE oijnomi-unit_i,
+           docnr     TYPE oijnomi-docnr,
+         END OF ty_nom_detail.
+  DATA: lt_loc_mat    TYPE TABLE OF ty_loc_mat,
+        ls_loc_mat    TYPE ty_loc_mat,
+        lt_nom_data   TYPE TABLE OF oijnomi,
+        lt_nom_detail TYPE TABLE OF ty_nom_detail,
+        ls_nom_detail TYPE ty_nom_detail,
+        lt_docnr      TYPE TABLE OF oijnomi-docnr,
+        lv_docnr      TYPE oijnomi-docnr,
+        lt_r_idate    TYPE RANGE OF oijnomi-idate,
+        ls_r_idate    LIKE LINE OF lt_r_idate,
+        lv_nom_found  TYPE abap_bool.
+
+  " Step 1: Get unique Location ID - GAIL Material (exclude ticked rows and GJ)
+  LOOP AT gt_alv_display INTO gs_alv_display
+    WHERE exclude    IS INITIAL
+      AND state_code <> 'GJ'.
+    ls_loc_mat-location_id = gs_alv_display-location_id.
+    ls_loc_mat-material    = gs_alv_display-material.
+    COLLECT ls_loc_mat INTO lt_loc_mat.
+  ENDLOOP.
+
+  " Build date range for OIJNOMI query
+  ls_r_idate-sign   = 'I'.
+  ls_r_idate-option = 'BT'.
+  ls_r_idate-low    = gv_date_from.
+  ls_r_idate-high   = gv_date_to.
+  APPEND ls_r_idate TO lt_r_idate.
+
+  " Step 2: For each Location-Material, fetch OIJNOMI records
+  LOOP AT lt_loc_mat INTO ls_loc_mat.
+    SELECT * FROM oijnomi
+      APPENDING TABLE lt_nom_data
+      WHERE locid     = ls_loc_mat-location_id
+        AND s_matnr_i = ls_loc_mat-material
+        AND idate     IN lt_r_idate
+        AND sityp     = 'OU'
+        AND docind    = 'K'
+        AND delind    NE 'X'.
+  ENDLOOP.
+
+  IF lt_nom_data IS NOT INITIAL.
+    " Step 3: Get unique DOCNRs and check EKPO for MWSKZ = DQ
+    LOOP AT lt_nom_data INTO DATA(ls_nom).
+      COLLECT ls_nom-docnr INTO lt_docnr.
+    ENDLOOP.
+
+    DATA: lt_r_ebeln TYPE RANGE OF ekpo-ebeln,
+          ls_r_ebeln LIKE LINE OF lt_r_ebeln,
+          lv_ekpo_count TYPE i.
+
+    LOOP AT lt_docnr INTO lv_docnr.
+      ls_r_ebeln-sign   = 'I'.
+      ls_r_ebeln-option = 'EQ'.
+      ls_r_ebeln-low    = lv_docnr.
+      APPEND ls_r_ebeln TO lt_r_ebeln.
+    ENDLOOP.
+
+    SELECT COUNT(*) FROM ekpo INTO lv_ekpo_count
+      WHERE ebeln IN lt_r_ebeln
+        AND mwskz = 'DQ'.
+
+    " Step 4: If any EKPO record found, block save
+    IF lv_ekpo_count > 0.
+      lv_nom_found = abap_true.
+
+      " Step 5: Build detail data for View Details popup
+      " Filter lt_nom_data to only DOCNRs that exist in EKPO with MWSKZ=DQ
+      DATA: lt_ekpo_ebeln TYPE TABLE OF ekpo-ebeln.
+      SELECT ebeln FROM ekpo
+        INTO TABLE lt_ekpo_ebeln
+        WHERE ebeln IN lt_r_ebeln
+          AND mwskz = 'DQ'.
+      SORT lt_ekpo_ebeln.
+      DELETE ADJACENT DUPLICATES FROM lt_ekpo_ebeln.
+
+      LOOP AT lt_nom_data INTO ls_nom.
+        READ TABLE lt_ekpo_ebeln TRANSPORTING NO FIELDS
+          WITH KEY table_line = ls_nom-docnr BINARY SEARCH.
+        IF sy-subrc = 0.
+          ls_nom_detail-idate     = ls_nom-idate.
+          ls_nom_detail-locid     = ls_nom-locid.
+          ls_nom_detail-s_matnr_i = ls_nom-s_matnr_i.
+          ls_nom_detail-menge     = ls_nom-menge.
+          ls_nom_detail-unit_i    = ls_nom-unit_i.
+          ls_nom_detail-docnr     = ls_nom-docnr.
+          APPEND ls_nom_detail TO lt_nom_detail.
+        ENDIF.
+      ENDLOOP.
+
+      " Show popup with View Details button
+      DATA lv_nom_answer TYPE c LENGTH 1.
+      CALL FUNCTION 'POPUP_TO_CONFIRM'
+        EXPORTING
+          titlebar       = 'Nomination Exists'
+          text_question  = 'Cannot save the data as CST based nominations have already been created'
+          text_button_1  = 'View Details'
+          text_button_2  = 'Cancel'
+          default_button = '2'
+        IMPORTING
+          answer         = lv_nom_answer.
+
+      IF lv_nom_answer = '1'.
+        " Show nomination details ALV
+        DATA: lt_nom_fcat TYPE slis_t_fieldcat_alv,
+              ls_nom_fcat TYPE slis_fieldcat_alv.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'IDATE'.
+        ls_nom_fcat-seltext_l = 'Gas Day'.
+        ls_nom_fcat-col_pos   = 1.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'LOCID'.
+        ls_nom_fcat-seltext_l = 'Location ID'.
+        ls_nom_fcat-col_pos   = 2.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'S_MATNR_I'.
+        ls_nom_fcat-seltext_l = 'Material'.
+        ls_nom_fcat-col_pos   = 3.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'MENGE'.
+        ls_nom_fcat-seltext_l = 'Quantity'.
+        ls_nom_fcat-col_pos   = 4.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'UNIT_I'.
+        ls_nom_fcat-seltext_l = 'UoM'.
+        ls_nom_fcat-col_pos   = 5.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'DOCNR'.
+        ls_nom_fcat-seltext_l = 'Reference Document'.
+        ls_nom_fcat-col_pos   = 6.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+
+        CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+          EXPORTING
+            i_callback_program = sy-repid
+            i_title            = 'CST Nomination Details'
+            it_fieldcat        = lt_nom_fcat
+            i_screen_start_column = 10
+            i_screen_start_line   = 5
+            i_screen_end_column   = 120
+            i_screen_end_line     = 20
+          TABLES
+            t_outtab           = lt_nom_detail.
+      ENDIF.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " --- End nomination validation ---
+
   " Confirm with user before saving using POPUP_TO_CONFIRM_STEP
   CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
     EXPORTING
