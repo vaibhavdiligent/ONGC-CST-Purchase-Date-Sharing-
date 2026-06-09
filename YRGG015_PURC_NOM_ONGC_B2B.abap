@@ -98,16 +98,6 @@ TYPES: tt_main    TYPE STANDARD TABLE OF ty_main.
 TYPES: tt_log     TYPE STANDARD TABLE OF ty_log.
 TYPES: tt_display TYPE STANDARD TABLE OF ty_display.
 
-TYPES: BEGIN OF ty_nomi_chk,
-         locid     TYPE oij_locid,
-         s_matnr_i TYPE oijnomi-s_matnr_i,
-         idate     TYPE oijnomi-idate,
-         menge     TYPE oijnomi-menge,
-         unit_i    TYPE oijnomi-unit_i,
-         docnr     TYPE oijnomi-docnr,
-       END OF ty_nomi_chk.
-TYPES: tt_nomi_chk TYPE STANDARD TABLE OF ty_nomi_chk.
-
 TYPES: BEGIN OF ty_batch_assign,
          matnr       TYPE char30,
          state_code  TYPE regio,
@@ -1431,11 +1421,6 @@ FORM handle_create_nomination.
     RETURN.
   ENDIF.
 
-  " CST nomination existence check — block save if CST-based noms already exist
-  DATA lv_cst_block TYPE char1.
-  PERFORM perform_cst_nomination_check CHANGING lv_cst_block.
-  IF lv_cst_block = 'X'. RETURN. ENDIF.
-
   " Pre-flight checks
   LOOP AT lt_sel INTO ls_disp.
     IF ls_disp-outline_agr IS INITIAL.
@@ -1755,152 +1740,4 @@ FORM create_all_nominations_bg.
   FREE MEMORY ID gc_memory_id.
 ENDFORM.
 
-*----------------------------------------------------------------------*
-* FORM perform_cst_nomination_check
-*   cv_block = 'X' means caller should not proceed with save
-*----------------------------------------------------------------------*
-FORM perform_cst_nomination_check CHANGING cv_block TYPE char1.
-  TYPES: BEGIN OF ty_loc_mat,
-           locid     TYPE oij_locid,
-           s_matnr_i TYPE oijnomi-s_matnr_i,
-         END OF ty_loc_mat.
-
-  DATA: lt_loc_mat  TYPE STANDARD TABLE OF ty_loc_mat,
-        ls_loc_mat  TYPE ty_loc_mat,
-        lt_nomi_res TYPE tt_nomi_chk,
-        ls_nomi_res TYPE ty_nomi_chk,
-        ls_disp     TYPE ty_display,
-        lr_ebeln    TYPE RANGE OF ekpo-ebeln,
-        ls_rebeln   LIKE LINE OF lr_ebeln,
-        lt_ekpo_cst TYPE STANDARD TABLE OF ekpo-ebeln,
-        lv_ebeln    TYPE ekpo-ebeln,
-        lt_details  TYPE tt_nomi_chk,
-        ls_answer   TYPE char1.
-
-  cv_block = ' '.
-
-  " Step 1: collect unique locid + GAIL material for non-excluded rows
-  LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X'.
-    ls_loc_mat-locid     = ls_disp-locid.
-    ls_loc_mat-s_matnr_i = ls_disp-material.
-    APPEND ls_loc_mat TO lt_loc_mat.
-  ENDLOOP.
-  IF lt_loc_mat IS INITIAL. RETURN. ENDIF.
-  SORT lt_loc_mat BY locid s_matnr_i.
-  DELETE ADJACENT DUPLICATES FROM lt_loc_mat COMPARING locid s_matnr_i.
-
-  " Step 2: fetch OIJNOMI records for those loc+material combinations and input date range
-  SELECT locid s_matnr_i idate menge unit_i docnr
-    FROM oijnomi
-    INTO CORRESPONDING FIELDS OF TABLE lt_nomi_res
-    FOR ALL ENTRIES IN lt_loc_mat
-    WHERE locid     = lt_loc_mat-locid
-      AND s_matnr_i = lt_loc_mat-s_matnr_i
-      AND idate     IN s_date
-      AND sityp     = 'OU'
-      AND docind    = 'K'
-      AND delind    <> 'X'.
-
-  IF lt_nomi_res IS INITIAL. RETURN. ENDIF.
-
-  " Step 3: build range of DOCNRs and check EKPO for CST (MWSKZ = 'DQ')
-  LOOP AT lt_nomi_res INTO ls_nomi_res.
-    ls_rebeln-sign   = 'I'.
-    ls_rebeln-option = 'EQ'.
-    ls_rebeln-low    = ls_nomi_res-docnr.
-    APPEND ls_rebeln TO lr_ebeln.
-  ENDLOOP.
-  SORT lr_ebeln BY low.
-  DELETE ADJACENT DUPLICATES FROM lr_ebeln COMPARING low.
-
-  SELECT DISTINCT ebeln
-    FROM ekpo
-    INTO TABLE lt_ekpo_cst
-    WHERE ebeln IN lr_ebeln
-      AND mwskz = 'DQ'.
-
-  " Step 4: if any CST-based nominations exist, block and show popup
-  IF lt_ekpo_cst IS INITIAL. RETURN. ENDIF.
-
-  cv_block = 'X'.
-
-  CALL FUNCTION 'POPUP_TO_DECIDE'
-    EXPORTING
-      textline1       = 'Cannot save the data as CST based nominations'
-      textline2       = 'have already been created.'
-      text_option1    = 'Close'
-      text_option2    = 'View Details'
-      titel           = 'CST Nomination Check'
-      icon_text_yes   = 'ICON_OKAY'
-      icon_text_no    = 'ICON_DETAIL'
-    IMPORTING
-      answer          = ls_answer.
-
-  " Step 5: if user clicked View Details (answer = '2')
-  IF ls_answer = '2'.
-    " Filter nomi results to only rows whose DOCNR appears in EKPO CST result
-    LOOP AT lt_nomi_res INTO ls_nomi_res.
-      READ TABLE lt_ekpo_cst WITH KEY table_line = ls_nomi_res-docnr TRANSPORTING NO FIELDS.
-      IF sy-subrc = 0.
-        APPEND ls_nomi_res TO lt_details.
-      ENDIF.
-    ENDLOOP.
-    PERFORM show_cst_nom_details USING lt_details.
-  ENDIF.
-ENDFORM.
-
-*----------------------------------------------------------------------*
-* FORM show_cst_nom_details
-*   Shows a popup ALV with Gas Day, Location, Material, Qty, UoM, Doc
-*----------------------------------------------------------------------*
-FORM show_cst_nom_details USING it_details TYPE tt_nomi_chk.
-  DATA: lt_fcat   TYPE lvc_t_fcat,
-        ls_fcat   TYPE lvc_s_fcat,
-        lo_cont   TYPE REF TO cl_gui_dialogbox_container,
-        lo_alv    TYPE REF TO cl_gui_alv_grid,
-        ls_layout TYPE lvc_s_layo.
-
-  CREATE OBJECT lo_cont
-    EXPORTING
-      caption        = 'CST Nomination Details'
-      top            = 5
-      left           = 5
-      width          = 600
-      height         = 300.
-
-  " Build field catalogue
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'IDATE'.    ls_fcat-coltext = 'Gas Day'.
-  ls_fcat-outputlen = 10.         APPEND ls_fcat TO lt_fcat.
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'LOCID'.    ls_fcat-coltext = 'Location ID'.
-  ls_fcat-outputlen = 12.         APPEND ls_fcat TO lt_fcat.
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'S_MATNR_I'. ls_fcat-coltext = 'Material'.
-  ls_fcat-outputlen = 20.          APPEND ls_fcat TO lt_fcat.
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'MENGE'.    ls_fcat-coltext = 'Quantity'.
-  ls_fcat-outputlen = 14.
-  ls_fcat-datatype  = 'QUAN'.     APPEND ls_fcat TO lt_fcat.
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'UNIT_I'.   ls_fcat-coltext = 'UoM'.
-  ls_fcat-outputlen = 6.          APPEND ls_fcat TO lt_fcat.
-  CLEAR ls_fcat.
-  ls_fcat-fieldname = 'DOCNR'.    ls_fcat-coltext = 'Reference Document'.
-  ls_fcat-outputlen = 12.         APPEND ls_fcat TO lt_fcat.
-
-  ls_layout-zebra      = abap_true.
-  ls_layout-cwidth_opt = abap_true.
-
-  CREATE OBJECT lo_alv
-    EXPORTING
-      i_parent = lo_cont.
-
-  CALL METHOD lo_alv->set_table_for_first_display
-    EXPORTING
-      is_layout       = ls_layout
-    CHANGING
-      it_outtab       = it_details
-      it_fieldcatalog = lt_fcat.
-ENDFORM.
 
