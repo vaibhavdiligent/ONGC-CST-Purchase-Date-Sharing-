@@ -79,6 +79,12 @@ TYPES: BEGIN OF ty_display,
          ongc_id     TYPE char20,
          ongc_mater  TYPE char30,
          outline_agr TYPE ebeln,
+         oa_locid    TYPE char10,
+         oa_werks    TYPE werks_d,
+         oa_matnr    TYPE char30,
+         oa_desc     TYPE char40,
+         oa_tsyst    TYPE oij_tsyst,
+         oa_batch    TYPE charg_d,
          charg       TYPE charg_d,
          nomtk       TYPE oij_nomtk,
          nomit       TYPE oij_item,
@@ -111,6 +117,7 @@ TYPES: BEGIN OF ty_mot_cache,
          vbeln    TYPE ebeln,
          matnr    TYPE char30,
          locid    TYPE char10,
+         tsyst    TYPE oij_tsyst,
          fromdate TYPE d,
          todate   TYPE d,
          vbtyp    TYPE char1,
@@ -119,6 +126,8 @@ TYPES: BEGIN OF ty_ekoa_cache,
          ebeln TYPE ebeln,
          bedat TYPE d,
          werks TYPE werks_d,
+         matnr TYPE char30,
+         txz01 TYPE char40,
        END OF ty_ekoa_cache.
 TYPES: BEGIN OF ty_t001w_cache,
          werks TYPE werks_d,
@@ -135,6 +144,10 @@ TYPES: BEGIN OF ty_mara_cache,
          matnr TYPE char30,
          xchpf TYPE xchpf,
        END OF ty_mara_cache.
+TYPES: BEGIN OF ty_ekbe_cache,
+         ebeln TYPE ebeln,
+         charg TYPE charg_d,
+       END OF ty_ekbe_cache.
 
 *----------------------------------------------------------------------*
 * DATA DECLARATIONS
@@ -155,7 +168,8 @@ DATA: gt_mot_c   TYPE STANDARD TABLE OF ty_mot_cache,
       gt_ekoa_c  TYPE STANDARD TABLE OF ty_ekoa_cache,
       gt_t001w_c TYPE STANDARD TABLE OF ty_t001w_cache,
       gt_mcha_c  TYPE STANDARD TABLE OF ty_mcha_cache,
-      gt_mara_c  TYPE STANDARD TABLE OF ty_mara_cache.
+      gt_mara_c  TYPE STANDARD TABLE OF ty_mara_cache,
+      gt_ekbe_c  TYPE STANDARD TABLE OF ty_ekbe_cache.
 
 CONSTANTS: gc_memory_id  TYPE char30 VALUE 'YRGG015_NOM_DATA',
            gc_err_mem_id TYPE char30 VALUE 'YRGG015_NOM_ERRORS',
@@ -177,6 +191,9 @@ CLASS lcl_alv_handler DEFINITION.
       on_main_data_changed
         FOR EVENT data_changed OF cl_gui_alv_grid
         IMPORTING er_data_changed,
+      on_main_data_changed_finished
+        FOR EVENT data_changed_finished OF cl_gui_alv_grid
+        IMPORTING e_modified,
       on_main_f4
         FOR EVENT onf4 OF cl_gui_alv_grid
         IMPORTING e_fieldname es_row_no er_event_data et_bad_cells e_display,
@@ -292,8 +309,9 @@ CLASS lcl_alv_handler IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD on_main_data_changed.
-    DATA: ls_mod  TYPE lvc_s_modi,
-          ls_disp TYPE ty_display.
+    DATA: ls_mod   TYPE lvc_s_modi,
+          ls_disp  TYPE ty_display,
+          lv_vbeln TYPE ebeln.
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
       READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
       IF sy-subrc <> 0. CONTINUE. ENDIF.
@@ -304,10 +322,23 @@ CLASS lcl_alv_handler IMPLEMENTATION.
             MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
           ENDIF.
         WHEN 'OUTLINE_AGR'.
-          ls_disp-outline_agr = ls_mod-value.
+          lv_vbeln = ls_mod-value.
+          ls_disp-outline_agr = lv_vbeln.
+          PERFORM derive_oa_fields_from_oa
+            USING    lv_vbeln
+            CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
+                     ls_disp-oa_tsyst ls_disp-oa_batch.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
       ENDCASE.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD on_main_data_changed_finished.
+    DATA: ls_stbl TYPE lvc_s_stbl.
+    IF e_modified = abap_true AND go_alv IS NOT INITIAL.
+      ls_stbl-row = abap_true. ls_stbl-col = abap_true.
+      go_alv->refresh_table_display( is_stable = ls_stbl ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD on_batch_data_changed.
@@ -642,6 +673,12 @@ FORM fetch_pur_data.
       USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
+    " Populate OA detail columns from pre-fetched cache
+    PERFORM derive_oa_display_fields
+      USING    ls_disp-outline_agr
+      CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
+               ls_disp-oa_tsyst ls_disp-oa_batch.
+
     " Excluded from nomination: GJ state OR Exclude flag set in YRGA_CST_PUR
     IF ls_pur-state_code = gc_excl_state OR ls_pur-exclude = 'X'.
       ls_disp-is_excl   = 'X'.          " logic flag: used in all WHERE/IF
@@ -698,6 +735,16 @@ FORM fetch_pur_data.
         INSERT ls_col INTO TABLE ls_disp-t_color.
       ENDIF.
     ENDIF.
+
+    " Colour all OA columns (col=5, green) on all rows for visual distinction
+    CLEAR ls_col.
+    ls_col-color-col = 5. ls_col-color-int = 0.
+    ls_col-fname = 'OA_LOCID'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_WERKS'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_MATNR'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_DESC'.   INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_TSYST'.  INSERT ls_col INTO TABLE ls_disp-t_color.
+    ls_col-fname = 'OA_BATCH'.  INSERT ls_col INTO TABLE ls_disp-t_color.
 
     APPEND ls_disp TO gt_display.
   ENDLOOP.
@@ -823,7 +870,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
 
   " 2. OIJ_EL_DOC_MOT: OAs overlapping date range, VBTYP=K, filtered by input locations (FS fix)
   REFRESH gt_mot_c.
-  SELECT vbeln matnr locid fromdate todate vbtyp FROM oij_el_doc_mot
+  SELECT vbeln matnr locid tsyst fromdate todate vbtyp FROM oij_el_doc_mot
     INTO CORRESPONDING FIELDS OF TABLE gt_mot_c
     WHERE delind   <> 'X'
       AND vbtyp    =  'K'
@@ -843,7 +890,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   " 4. EKKO+EKPO: all relevant OA lines (DQ tax, not deleted)
   REFRESH gt_ekoa_c.
   IF lr_vbeln IS NOT INITIAL AND gt_t001w_c IS NOT INITIAL.
-    SELECT ekko~ebeln ekko~bedat ekpo~werks
+    SELECT ekko~ebeln ekko~bedat ekpo~werks ekpo~matnr ekpo~txz01
       FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
       INTO CORRESPONDING FIELDS OF TABLE gt_ekoa_c
       WHERE ekko~ebeln IN lr_vbeln
@@ -870,6 +917,17 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
       INTO CORRESPONDING FIELDS OF TABLE gt_mara_c
       WHERE matnr IN lr_matnr.
     SORT gt_mara_c BY matnr.
+  ENDIF.
+
+  " 7. EKBE: OA batch from purchasing document history
+  REFRESH gt_ekbe_c.
+  IF lr_vbeln IS NOT INITIAL.
+    SELECT ebeln charg FROM ekbe
+      INTO CORRESPONDING FIELDS OF TABLE gt_ekbe_c
+      WHERE ebeln IN lr_vbeln
+        AND charg <> ' '.
+    SORT gt_ekbe_c BY ebeln.
+    DELETE ADJACENT DUPLICATES FROM gt_ekbe_c COMPARING ebeln.
   ENDIF.
 ENDFORM.
 
@@ -955,6 +1013,78 @@ FORM derive_batch
       cv_charg = ls_mcha-charg. RETURN.
     ENDIF.
   ENDLOOP.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM derive_oa_display_fields — OA fields from pre-fetched cache
+*----------------------------------------------------------------------*
+FORM derive_oa_display_fields
+  USING    iv_vbeln TYPE ebeln
+  CHANGING cv_locid TYPE char10
+           cv_werks TYPE werks_d
+           cv_matnr TYPE char30
+           cv_desc  TYPE char40
+           cv_tsyst TYPE oij_tsyst
+           cv_batch TYPE charg_d.
+  DATA: ls_mot TYPE ty_mot_cache,
+        ls_ek  TYPE ty_ekoa_cache,
+        ls_eb  TYPE ty_ekbe_cache.
+  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc, cv_tsyst, cv_batch.
+  IF iv_vbeln IS INITIAL. RETURN. ENDIF.
+  " OA Location + Transport System: first MOT entry for this OA
+  LOOP AT gt_mot_c INTO ls_mot WHERE vbeln = iv_vbeln.
+    cv_locid = ls_mot-locid.
+    cv_tsyst = ls_mot-tsyst.
+    EXIT.
+  ENDLOOP.
+  " OA Plant / Material / Description: first EKPO line for this OA
+  READ TABLE gt_ekoa_c INTO ls_ek WITH KEY ebeln = iv_vbeln BINARY SEARCH.
+  IF sy-subrc = 0.
+    cv_werks = ls_ek-werks.
+    cv_matnr = ls_ek-matnr.
+    cv_desc  = ls_ek-txz01.
+  ENDIF.
+  " OA Batch: from EKBE history
+  READ TABLE gt_ekbe_c INTO ls_eb WITH KEY ebeln = iv_vbeln BINARY SEARCH.
+  IF sy-subrc = 0. cv_batch = ls_eb-charg. ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM derive_oa_fields_from_oa — OA change on screen: cache + DB fallback
+*----------------------------------------------------------------------*
+FORM derive_oa_fields_from_oa
+  USING    iv_vbeln TYPE ebeln
+  CHANGING cv_locid TYPE char10
+           cv_werks TYPE werks_d
+           cv_matnr TYPE char30
+           cv_desc  TYPE char40
+           cv_tsyst TYPE oij_tsyst
+           cv_batch TYPE charg_d.
+  CLEAR: cv_locid, cv_werks, cv_matnr, cv_desc, cv_tsyst, cv_batch.
+  IF iv_vbeln IS INITIAL. RETURN. ENDIF.
+  " Try pre-fetched cache first
+  PERFORM derive_oa_display_fields
+    USING    iv_vbeln
+    CHANGING cv_locid cv_werks cv_matnr cv_desc cv_tsyst cv_batch.
+  " Fallback: DB selects for a manually entered OA not in cache
+  IF cv_locid IS INITIAL.
+    SELECT SINGLE locid tsyst FROM oij_el_doc_mot
+      INTO (@cv_locid, @cv_tsyst)
+      WHERE vbeln = @iv_vbeln AND delind <> 'X'.
+  ENDIF.
+  IF cv_werks IS INITIAL.
+    SELECT SINGLE ekpo~werks ekpo~matnr ekpo~txz01
+      FROM ekko INNER JOIN ekpo ON ekpo~ebeln = ekko~ebeln
+      INTO (@cv_werks, @cv_matnr, @cv_desc)
+      WHERE ekko~ebeln = @iv_vbeln
+        AND ekko~loekz = ' '
+        AND ekpo~loekz <> 'X'
+        AND ekpo~mwskz = 'DQ'.
+  ENDIF.
+  IF cv_batch IS INITIAL.
+    SELECT SINGLE charg FROM ekbe INTO cv_batch
+      WHERE ebeln = iv_vbeln AND charg <> ' '.
+  ENDIF.
 ENDFORM.
 
 *----------------------------------------------------------------------*
@@ -1066,8 +1196,6 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM set_pf_status — sets PF status with custom buttons
-* Requires PF status 'YRGG015' created in SE41 for this program,
-* copied from SAPLSLVC_FULLSCREEN/STANDARD_FULLSCREEN with BCMASS+CRENOM
 *----------------------------------------------------------------------*
 FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   SET PF-STATUS 'YRGG015' EXCLUDING rt_extab.
@@ -1078,12 +1206,11 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   ENDIF.
   IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
     CREATE OBJECT go_alv_handler.
-    SET HANDLER go_alv_handler->on_main_data_changed FOR go_alv.
-    SET HANDLER go_alv_handler->on_main_f4            FOR go_alv.
-    SET HANDLER go_alv_handler->on_alv_toolbar        FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_data_changed          FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_data_changed_finished FOR go_alv.
+    SET HANDLER go_alv_handler->on_main_f4                    FOR go_alv.
+    SET HANDLER go_alv_handler->on_alv_toolbar                FOR go_alv.
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
-    " Register CHARG F4 so on_main_f4 fires; chngeafter=false prevents
-    " data_changed from firing with empty value after F4 popup closes
     DATA: lt_f4 TYPE lvc_t_f4, ls_f4 TYPE lvc_s_f4.
     CLEAR ls_f4.
     ls_f4-fieldname  = 'CHARG'.
@@ -1109,7 +1236,12 @@ FORM top_of_page.
 
   CLEAR ls_line.
   ls_line-typ  = 'A'.
-  ls_line-info = '1. Nomination will not be created for line items with State GJ'.
+  ls_line-info = '1. Nomination will not be created for line items'.
+  APPEND ls_line TO lt_header.
+
+  CLEAR ls_line.
+  ls_line-typ  = 'A'.
+  ls_line-info = '   with State GJ'.
   APPEND ls_line TO lt_header.
 
   CLEAR ls_line.
@@ -1138,7 +1270,6 @@ ENDFORM.
 FORM build_fieldcat.
   DATA: ls_fcat TYPE lvc_s_fcat.
 
-  " SEL - checkbox with hotspot for group toggle
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'SEL'.
   ls_fcat-coltext   = 'Sel'.
@@ -1148,7 +1279,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 4.
   APPEND ls_fcat TO gt_fcat.
 
-  " EXCLUDE - marks rows not eligible for nomination (GJ state or zero qty)
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'EXCLUDE'.
   ls_fcat-coltext   = 'Exclude'.
@@ -1157,7 +1287,6 @@ FORM build_fieldcat.
   ls_fcat-checkbox  = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " GAS_DAY
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'GAS_DAY'.
   ls_fcat-coltext   = 'Gas Day'.
@@ -1165,7 +1294,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 12.
   APPEND ls_fcat TO gt_fcat.
 
-  " LOCID
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'LOCID'.
   ls_fcat-coltext   = 'Location'.
@@ -1173,7 +1301,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 12.
   APPEND ls_fcat TO gt_fcat.
 
-  " MATERIAL
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'MATERIAL'.
   ls_fcat-coltext   = 'Material'.
@@ -1181,7 +1308,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 20.
   APPEND ls_fcat TO gt_fcat.
 
-  " STATE_CODE
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'STATE_CODE'.
   ls_fcat-coltext   = 'State'.
@@ -1189,7 +1315,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 6.
   APPEND ls_fcat TO gt_fcat.
 
-  " QTY_SCM - right-aligned quantity
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'QTY_SCM'.
   ls_fcat-coltext   = 'Qty (SCM)'.
@@ -1199,7 +1324,6 @@ FORM build_fieldcat.
   ls_fcat-no_sign   = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " QTY_MBG - quantity in MBG
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'QTY_MBG'.
   ls_fcat-coltext   = 'Qty (MBG)'.
@@ -1209,7 +1333,6 @@ FORM build_fieldcat.
   ls_fcat-no_sign   = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " GAIL_ID
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'GAIL_ID'.
   ls_fcat-coltext   = 'GAIL ID'.
@@ -1217,7 +1340,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
-  " ONGC_ID
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'ONGC_ID'.
   ls_fcat-coltext   = 'ONGC ID'.
@@ -1225,7 +1347,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
-  " ONGC_MATER
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'ONGC_MATER'.
   ls_fcat-coltext   = 'ONGC Material'.
@@ -1233,7 +1354,6 @@ FORM build_fieldcat.
   ls_fcat-outputlen = 22.
   APPEND ls_fcat TO gt_fcat.
 
-  " OUTLINE_AGR - editable so user can manually enter/correct OA
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'OUTLINE_AGR'.
   ls_fcat-coltext   = 'Outline Agreement'.
@@ -1242,7 +1362,6 @@ FORM build_fieldcat.
   ls_fcat-edit      = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " CHARG - editable batch field
   CLEAR ls_fcat.
   ls_fcat-fieldname  = 'CHARG'.
   ls_fcat-coltext    = 'Batch'.
@@ -1252,7 +1371,48 @@ FORM build_fieldcat.
   ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " NOMTK - Nomination Key (output only)
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_LOCID'.
+  ls_fcat-coltext   = 'OA Location'.
+  ls_fcat-seltext   = 'OA Location'.
+  ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_WERKS'.
+  ls_fcat-coltext   = 'OA Plant'.
+  ls_fcat-seltext   = 'OA Plant'.
+  ls_fcat-outputlen = 8.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_MATNR'.
+  ls_fcat-coltext   = 'OA Material'.
+  ls_fcat-seltext   = 'OA Material'.
+  ls_fcat-outputlen = 18.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_DESC'.
+  ls_fcat-coltext   = 'OA Description'.
+  ls_fcat-seltext   = 'OA Description'.
+  ls_fcat-outputlen = 25.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_BATCH'.
+  ls_fcat-coltext   = 'OA Batch'.
+  ls_fcat-seltext   = 'OA Batch'.
+  ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO gt_fcat.
+
+  CLEAR ls_fcat.
+  ls_fcat-fieldname = 'OA_TSYST'.
+  ls_fcat-coltext   = 'OA Trans.Sys'.
+  ls_fcat-seltext   = 'OA Transport System'.
+  ls_fcat-outputlen = 14.
+  APPEND ls_fcat TO gt_fcat.
+
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'NOMTK'.
   ls_fcat-coltext   = 'Nomination Key'.
@@ -1261,7 +1421,6 @@ FORM build_fieldcat.
   ls_fcat-no_zero   = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " NOMIT - Nomination Item (output only)
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'NOMIT'.
   ls_fcat-coltext   = 'Nom. Item'.
@@ -1270,7 +1429,6 @@ FORM build_fieldcat.
   ls_fcat-no_zero   = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
-  " Technical fields (hidden)
   CLEAR ls_fcat.
   ls_fcat-fieldname = 'IS_EXCL'. ls_fcat-tech = abap_true. APPEND ls_fcat TO gt_fcat.
   CLEAR ls_fcat.
@@ -1294,7 +1452,7 @@ FORM set_alv_layout.
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM alv_toolbar  — adds BCMASS and CRENOM buttons to ALV toolbar
+* FORM alv_toolbar
 *----------------------------------------------------------------------*
 FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
                         e_interactive TYPE char1.
@@ -1334,7 +1492,7 @@ FORM alv_toolbar USING e_object      TYPE REF TO cl_alv_event_toolbar_set
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM user_command  — handles toolbar buttons and hotspot clicks
+* FORM user_command
 *----------------------------------------------------------------------*
 FORM user_command USING r_ucomm    TYPE sy-ucomm
                         rs_selfield TYPE slis_selfield.
@@ -1366,9 +1524,8 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
   rs_selfield-refresh = abap_true.
 ENDFORM.
 
-
 *----------------------------------------------------------------------*
-* FORM toggle_sel_for_row  — toggle SEL for all rows sharing locid+date
+* FORM toggle_sel_for_row
 *----------------------------------------------------------------------*
 FORM toggle_sel_for_row USING iv_index TYPE i.
   DATA: ls_disp   TYPE ty_display,
@@ -1377,7 +1534,7 @@ FORM toggle_sel_for_row USING iv_index TYPE i.
         lv_newsel TYPE char1.
   READ TABLE gt_display INDEX iv_index INTO ls_disp.
   IF sy-subrc <> 0. RETURN. ENDIF.
-  IF ls_disp-is_excl = 'X'. RETURN. ENDIF.   " excluded rows cannot be selected
+  IF ls_disp-is_excl = 'X'. RETURN. ENDIF.
   IF ls_disp-sel = abap_true.
     lv_newsel = ' '.
   ELSE.
@@ -1427,14 +1584,12 @@ FORM handle_create_nomination.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
     ENDIF.
-    " Block if a nomination already exists for this location+gas day
     IF ls_disp-nomtk IS NOT INITIAL.
       CONCATENATE ls_disp-gas_day+6(2) '.' ls_disp-gas_day+4(2) '.' ls_disp-gas_day(4)
                   INTO lv_dtext.
       MESSAGE |Nomination already exists for { ls_disp-locid } on { lv_dtext }.| TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
     ENDIF.
-    " Batch is required only for batch-managed materials (MARA-XCHPF = 'X')
     READ TABLE gt_mara_c INTO DATA(ls_mara_chk) WITH KEY matnr = ls_disp-material.
     IF sy-subrc = 0 AND ls_mara_chk-xchpf = 'X'.
       IF ls_disp-charg IS INITIAL.
@@ -1444,8 +1599,6 @@ FORM handle_create_nomination.
     ENDIF.
   ENDLOOP.
 
-  " Build i_main: tsyst blank (batch_validate fills from oij_el_doc_mot),
-  " rank = 1 for all rows (equal priority in ONGC B2B purchase)
   LOOP AT lt_sel INTO ls_disp.
     CLEAR ls_main.
     ls_main-tsyst = ''.
@@ -1460,19 +1613,16 @@ FORM handle_create_nomination.
     APPEND ls_main TO i_main.
   ENDLOOP.
 
-  " Export nomination data and call flag so YRXR036 skips Excel read and uses this data
   EXPORT i_main[] TO MEMORY ID gc_memory_id.
   DATA: lv_yrgg015 TYPE char1 VALUE 'X'.
   EXPORT lv_yrgg015 = lv_yrgg015 TO MEMORY ID gc_call_flag.
 
-  " R_EXCEL = 'X' triggers batch_validate -> get_nomination -> createfromdata in YRXR036
   CLEAR wa_rspartab.
   wa_rspartab-selname = 'R_EXCEL'.
   wa_rspartab-kind    = 'P'.
   wa_rspartab-low     = abap_true.
   APPEND wa_rspartab TO i_rspartab.
 
-  " Pass S_DATE range so YRGR040 filters nominations by the same fortnight
   LOOP AT s_date INTO ls_sdate.
     CLEAR wa_rspartab.
     wa_rspartab-selname = 'S_DATE'.
@@ -1484,7 +1634,6 @@ FORM handle_create_nomination.
     APPEND wa_rspartab TO i_rspartab.
   ENDLOOP.
 
-  " Pass P_LOCID1 for each location selected on YRGG015 selection screen
   LOOP AT s_locid INTO ls_slocid WHERE sign = 'I' AND option = 'EQ'.
     CLEAR wa_rspartab.
     wa_rspartab-selname = 'P_LOCID1'.
@@ -1498,7 +1647,6 @@ FORM handle_create_nomination.
     WITH SELECTION-TABLE i_rspartab
     AND RETURN.
 
-  " Retrieve any errors YRGR040 exported back
   IMPORT lt_errors FROM MEMORY ID gc_err_mem_id.
   FREE MEMORY ID gc_memory_id.
   FREE MEMORY ID gc_err_mem_id.
@@ -1506,7 +1654,6 @@ FORM handle_create_nomination.
   IF lt_errors IS NOT INITIAL.
     PERFORM display_nomination_errors USING lt_errors.
   ENDIF.
-  " Re-fetch nomination status so nomtk/nomit columns and SEL greyout update
   PERFORM fetch_nomination_status.
   IF go_alv IS NOT INITIAL.
     go_alv->refresh_table_display( ).
@@ -1552,8 +1699,6 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM handle_batch_mass_change
-* Gap 2: distinct messages for "nothing selected" vs "no batch-managed"
-* Gap 3: single combined dialog for all materials instead of sequential popups
 *----------------------------------------------------------------------*
 FORM handle_batch_mass_change.
   DATA: ls_disp     TYPE ty_display,
@@ -1567,7 +1712,6 @@ FORM handle_batch_mass_change.
   REFRESH gt_batch_assign.
   lv_rows_sel = 0.
 
-  " Row selection is NOT mandatory — collect all batch-managed materials from all non-excluded rows
   LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X'.
     ADD 1 TO lv_rows_sel.
     READ TABLE gt_batch_assign WITH KEY matnr = ls_disp-material TRANSPORTING NO FIELDS.
@@ -1591,7 +1735,6 @@ FORM handle_batch_mass_change.
             DISPLAY LIKE 'W'. RETURN.
   ENDIF.
 
-  " Single batch assignment dialog showing all materials at once (FSD Point 6)
   IF go_alv_handler IS INITIAL.
     CREATE OBJECT go_alv_handler.
   ENDIF.
@@ -1618,18 +1761,15 @@ FORM handle_batch_mass_change.
   SET HANDLER go_alv_handler->on_batch_cmd           FOR go_batch_alv.
   SET HANDLER go_alv_handler->on_batch_f4            FOR go_batch_alv.
 
-  " MATNR: no edit flag → read-only (ls_layout-edit NOT set globally)
   ls_fcat-fieldname = 'MATNR'. ls_fcat-coltext = 'Material'. ls_fcat-outputlen = 18.
   ls_fcat-no_out    = abap_false.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
-  " CHARG: editable, F4-enabled
   ls_fcat-fieldname  = 'CHARG'. ls_fcat-coltext = 'Batch'. ls_fcat-outputlen = 10.
   ls_fcat-edit       = abap_true.
   ls_fcat-f4availabl = abap_true.
   APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
 
   ls_layout-cwidth_opt = abap_true.
-  " Do NOT set ls_layout-edit = abap_true: that would make ALL cols editable
 
   go_batch_alv->set_table_for_first_display(
     EXPORTING is_layout       = ls_layout
@@ -1638,7 +1778,6 @@ FORM handle_batch_mass_change.
     EXCEPTIONS OTHERS = 1 ).
 
   go_batch_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
-  " Register CHARG F4; chngeafter=false so popup close doesn't overwrite value
   DATA: lt_f4b TYPE lvc_t_f4, ls_f4b TYPE lvc_s_f4.
   CLEAR ls_f4b.
   ls_f4b-fieldname  = 'CHARG'.
@@ -1650,7 +1789,7 @@ FORM handle_batch_mass_change.
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM schedule_background_job  (ZC_GMS_CORE_TEAM only)
+* FORM schedule_background_job
 *----------------------------------------------------------------------*
 FORM schedule_background_job.
   DATA: lv_jobname  TYPE tbtcjob-jobname VALUE 'YRGG015_PURC_NOM_ONGC_B2B',
@@ -1678,8 +1817,6 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * FORM create_all_nominations_bg
-* Called when sy-batch='X': builds nominations for ALL valid display rows
-* and SUBMITs YRGR040 without any GUI interaction (FSD Point 14)
 *----------------------------------------------------------------------*
 FORM create_all_nominations_bg.
   DATA: ls_disp     TYPE ty_display,
@@ -1692,7 +1829,6 @@ FORM create_all_nominations_bg.
 
   LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X'.
     IF ls_disp-outline_agr IS INITIAL. CONTINUE. ENDIF.
-    " Batch required only for batch-managed materials
     READ TABLE gt_mara_c INTO DATA(ls_mara_bg) WITH KEY matnr = ls_disp-material.
     IF sy-subrc = 0 AND ls_mara_bg-xchpf = 'X' AND ls_disp-charg IS INITIAL. CONTINUE. ENDIF.
     CLEAR ls_main.
@@ -1717,6 +1853,11 @@ FORM create_all_nominations_bg.
   wa_rspartab-selname = 'R_EXCEL'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
   APPEND wa_rspartab TO i_rspartab.
 
+  " Pass background flag so YRXR036 BATCH_VALIDATE checks p_bgrun instead of sy-batch
+  CLEAR wa_rspartab.
+  wa_rspartab-selname = 'P_BGRUN'. wa_rspartab-kind = 'P'. wa_rspartab-low = abap_true.
+  APPEND wa_rspartab TO i_rspartab.
+
   LOOP AT s_date INTO ls_sdate.
     CLEAR wa_rspartab.
     wa_rspartab-selname = 'S_DATE'. wa_rspartab-kind    = 'S'.
@@ -1739,5 +1880,3 @@ FORM create_all_nominations_bg.
 
   FREE MEMORY ID gc_memory_id.
 ENDFORM.
-
-
