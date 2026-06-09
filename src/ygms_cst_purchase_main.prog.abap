@@ -243,7 +243,7 @@ DATA:
 *----------------------------------------------------------------------*
 DATA: gv_loc_id TYPE ygms_de_loc_id.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  SELECT-OPTIONS: s_loc  FOR gv_loc_id OBLIGATORY,
+  SELECT-OPTIONS: s_loc  FOR gv_loc_id  no INTERVALS OBLIGATORY,
                   s_date FOR sy-datum OBLIGATORY,
                   s_matnr FOR yrga_cst_pur-material NO-DISPLAY.
   PARAMETERS: p_alloc  TYPE char1 RADIOBUTTON GROUP r1 USER-COMMAND uc1,
