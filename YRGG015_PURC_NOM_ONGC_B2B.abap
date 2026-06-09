@@ -1831,8 +1831,6 @@ FORM perform_cst_nomination_check CHANGING cv_block TYPE char1.
       text_option1    = 'Close'
       text_option2    = 'View Details'
       titel           = 'CST Nomination Check'
-      icon_text_yes   = 'ICON_OKAY'
-      icon_text_no    = 'ICON_DETAIL'
     IMPORTING
       answer          = ls_answer.
 
