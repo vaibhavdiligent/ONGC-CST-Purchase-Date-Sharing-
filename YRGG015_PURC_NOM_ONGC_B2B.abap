@@ -298,8 +298,9 @@ CLASS lcl_alv_handler IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD on_main_data_changed.
-    DATA: ls_mod  TYPE lvc_s_modi,
-          ls_disp TYPE ty_display.
+    DATA: ls_mod   TYPE lvc_s_modi,
+          ls_disp  TYPE ty_display,
+          lv_vbeln TYPE ebeln.
     LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
       READ TABLE gt_display INDEX ls_mod-row_id INTO ls_disp.
       IF sy-subrc <> 0. CONTINUE. ENDIF.
@@ -310,9 +311,10 @@ CLASS lcl_alv_handler IMPLEMENTATION.
             MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
           ENDIF.
         WHEN 'OUTLINE_AGR'.
-          ls_disp-outline_agr = ls_mod-value.
+          lv_vbeln = ls_mod-value.
+          ls_disp-outline_agr = lv_vbeln.
           PERFORM derive_oa_fields_from_oa
-            USING    ls_mod-value
+            USING    lv_vbeln
             CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
       ENDCASE.
