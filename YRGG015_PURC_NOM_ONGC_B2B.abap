@@ -328,14 +328,22 @@ CLASS lcl_alv_handler IMPLEMENTATION.
             USING    lv_vbeln
             CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
                      ls_disp-oa_tsyst ls_disp-oa_batch.
+          PERFORM apply_oa_mismatch_color CHANGING ls_disp.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
+          " Push derived values into grid cell buffer so they render without waiting for refresh
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_LOCID'  i_value = ls_disp-oa_locid ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_WERKS'  i_value = ls_disp-oa_werks ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_MATNR'  i_value = ls_disp-oa_matnr ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_DESC'   i_value = ls_disp-oa_desc ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_TSYST'  i_value = ls_disp-oa_tsyst ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_BATCH'  i_value = ls_disp-oa_batch ).
       ENDCASE.
     ENDLOOP.
   ENDMETHOD.
 
   METHOD on_main_data_changed_finished.
     DATA: ls_stbl TYPE lvc_s_stbl.
-    IF e_modified = abap_true AND go_alv IS NOT INITIAL.
+    IF go_alv IS NOT INITIAL.
       ls_stbl-row = abap_true. ls_stbl-col = abap_true.
       go_alv->refresh_table_display( is_stable = ls_stbl ).
     ENDIF.
@@ -736,6 +744,9 @@ FORM fetch_pur_data.
       ENDIF.
     ENDIF.
 
+    " Red row if Location or Material mismatches the derived OA values
+    PERFORM apply_oa_mismatch_color CHANGING ls_disp.
+
     " Colour all OA columns (col=5, green) on all rows for visual distinction
     CLEAR ls_col.
     ls_col-color-col = 5. ls_col-color-int = 0.
@@ -1084,6 +1095,19 @@ FORM derive_oa_fields_from_oa
   IF cv_batch IS INITIAL.
     SELECT SINGLE charg FROM ekbe INTO cv_batch
       WHERE ebeln = iv_vbeln AND charg <> ' '.
+  ENDIF.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM apply_oa_mismatch_color — red row if Location or Material mismatch
+*----------------------------------------------------------------------*
+FORM apply_oa_mismatch_color CHANGING cs_disp TYPE ty_display.
+  IF cs_disp-is_excl = 'X'. RETURN. ENDIF.
+  IF ( cs_disp-oa_locid IS NOT INITIAL AND cs_disp-locid <> cs_disp-oa_locid ) OR
+     ( cs_disp-oa_matnr IS NOT INITIAL AND cs_disp-material <> cs_disp-oa_matnr ).
+    cs_disp-row_color = 'C610'.
+  ELSE.
+    IF cs_disp-row_color = 'C610'. CLEAR cs_disp-row_color. ENDIF.
   ENDIF.
 ENDFORM.
 
@@ -1580,6 +1604,11 @@ FORM handle_create_nomination.
 
   " Pre-flight checks
   LOOP AT lt_sel INTO ls_disp.
+    IF ( ls_disp-oa_locid IS NOT INITIAL AND ls_disp-locid <> ls_disp-oa_locid ) OR
+       ( ls_disp-oa_matnr IS NOT INITIAL AND ls_disp-material <> ls_disp-oa_matnr ).
+      MESSAGE 'Location, OA Location and/ or Material, OA Material Mismatch for some line items.' TYPE 'S' DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
     IF ls_disp-outline_agr IS INITIAL.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
