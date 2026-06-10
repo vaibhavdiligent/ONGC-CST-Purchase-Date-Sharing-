@@ -2398,6 +2398,7 @@ FORM handle_save.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'NOMTK'.
         ls_nom_fcat-seltext_l = 'Nomination Key'.
+        ls_nom_fcat-outputlen = 20.
         ls_nom_fcat-col_pos   = 1.
         APPEND ls_nom_fcat TO lt_nom_fcat.
         CLEAR ls_nom_fcat.
@@ -2418,6 +2419,7 @@ FORM handle_save.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'S_MATNR_I'.
         ls_nom_fcat-seltext_l = 'Material'.
+        ls_nom_fcat-outputlen = 25.
         ls_nom_fcat-col_pos   = 5.
         APPEND ls_nom_fcat TO lt_nom_fcat.
         CLEAR ls_nom_fcat.
@@ -2433,6 +2435,7 @@ FORM handle_save.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'DOCNR'.
         ls_nom_fcat-seltext_l = 'Reference Document'.
+        ls_nom_fcat-outputlen = 20.
         ls_nom_fcat-col_pos   = 8.
         APPEND ls_nom_fcat TO lt_nom_fcat.
 
@@ -2441,9 +2444,9 @@ FORM handle_save.
             i_callback_program = sy-repid
             i_grid_title       = 'CST Nomination Details'
             it_fieldcat        = lt_nom_fcat
-            i_screen_start_column = 10
+            i_screen_start_column = 5
             i_screen_start_line   = 5
-            i_screen_end_column   = 120
+            i_screen_end_column   = 160
             i_screen_end_line     = 20
           TABLES
             t_outtab           = lt_nom_detail.
