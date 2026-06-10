@@ -808,12 +808,20 @@ START-OF-SELECTION.
                       CLEAR wa_blank.
                       l_i = l_i - l_fpos.
                       CLEAR: l_v1,l_v2,l_v3.
-                      l_v1 = wa_repos_tab-line+0(l_fpos).
-                      l_v2 = wa_repos_tab-line+l_fpos(l_i).
+                      IF l_fpos > 0.
+                        l_v1 = wa_repos_tab-line+0(l_fpos).
+                      ENDIF.
+                      IF l_i > 0.
+                        l_v2 = wa_repos_tab-line+l_fpos(l_i).
+                      ENDIF.
                       CONDENSE l_v1. CONDENSE l_v2.
                       IF l_v2 CS '"'.
                         l_fpos = sy-fdpos.
-                        l_v2 = l_v2+0(l_fpos).
+                        IF l_fpos > 0.
+                          l_v2 = l_v2+0(l_fpos).
+                        ELSE.
+                          CLEAR l_v2.
+                        ENDIF.
                       ENDIF.
                       REPLACE ALL OCCURRENCES OF '.' IN l_v2 WITH space.
                       CONDENSE l_v2.
@@ -2785,7 +2793,9 @@ FORM amount_conv.
                     CONCATENATE wa_dd03l-rollname '(' INTO wa_dd03l-fieldname.
                     CONCATENATE l_param wa_dd03l-fieldname INTO l_param SEPARATED BY space.
                     DO.
-                      l_t = l_t + 1. l_v = l_repos1-line+l_t(1).
+                      l_t = l_t + 1.
+                      IF l_t >= l_line. EXIT. ENDIF.
+                      l_v = l_repos1-line+l_t(1).
                       CONCATENATE l_param l_v INTO l_param SEPARATED BY space.
                       IF l_v <> ' '. EXIT. ENDIF.
                     ENDDO.
@@ -2913,7 +2923,9 @@ FORM material_conv.
                     CONCATENATE wa_dd03l-rollname '(' INTO wa_dd03l-fieldname.
                     CONCATENATE l_param wa_dd03l-fieldname INTO l_param SEPARATED BY space.
                     DO.
-                      l_t = l_t + 1. l_v = l_repos1-line+l_t(1).
+                      l_t = l_t + 1.
+                      IF l_t >= l_line. EXIT. ENDIF.
+                      l_v = l_repos1-line+l_t(1).
                       CONCATENATE l_param l_v INTO l_param SEPARATED BY space.
                       IF l_v <> ' '. EXIT. ENDIF.
                     ENDDO.
