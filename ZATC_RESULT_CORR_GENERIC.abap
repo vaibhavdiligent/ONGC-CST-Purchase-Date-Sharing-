@@ -450,9 +450,16 @@ START-OF-SELECTION.
           ENDIF.
 
           IF lv_is_target = abap_true.
-            " Only S/4HANA: Field Length Extensions is handled -> CI_FLDEXT_OK
+            " Pragma depends on check_title
             CLEAR l_note.
-            CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
+            DATA(lv_title_up) = wa_final-check_title.
+            TRANSLATE lv_title_up TO UPPER CASE.
+            IF lv_title_up CS 'SIMPLIFIED OBJECTS'.
+              CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
+            ELSE.
+              " S/4HANA: Field Length Extensions
+              CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
+            ENDIF.
             " BEGIN marker
             CLEAR wa_blank.
             CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -666,6 +673,11 @@ FORM check_target_msg
   lv_up = iv_msg.
   TRANSLATE lv_up TO UPPER CASE.
 
+  " S/4HANA: Search for Usages of Simplified Objects ---------------
+  IF lv_up CS 'NON-STRATEGIC-FUNCTION'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+
   " S/4HANA: Field Length Extensions – 49 check messages -----------
   IF lv_up CS 'ARITHMETIC OPERATION'.
     cv_match = abap_true. RETURN.
@@ -830,8 +842,12 @@ FORM check_target_title
   lv_up = iv_title.
   TRANSLATE lv_up TO UPPER CASE.
 
-  " Only S/4HANA: Field Length Extensions is handled by this program.
+  " S/4HANA: Field Length Extensions
   IF lv_up CS 'FIELD LENGTH EXTENSIONS'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " S/4HANA: Search for Usages of Simplified Objects
+  IF lv_up CS 'SIMPLIFIED OBJECTS'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
