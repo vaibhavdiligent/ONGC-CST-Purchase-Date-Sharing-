@@ -438,12 +438,15 @@ START-OF-SELECTION.
             lv_msg = wa_final-message1.
           ENDIF.
 
-          " Determine if this finding is one of the target check messages.
-          " Covers all P3 field-length/generic messages and P2 non-strategic.
+          " Both check_title AND check_message must match before any change.
           DATA(lv_is_target) = abap_false.
-          PERFORM check_target_msg USING lv_msg CHANGING lv_is_target.
-          IF lv_is_target = abap_false.
-            PERFORM check_target_msg USING wa_final-message1 CHANGING lv_is_target.
+          DATA(lv_title_match) = abap_false.
+          PERFORM check_target_title USING wa_final-check_title CHANGING lv_title_match.
+          IF lv_title_match = abap_true.
+            PERFORM check_target_msg USING lv_msg CHANGING lv_is_target.
+            IF lv_is_target = abap_false.
+              PERFORM check_target_msg USING wa_final-message1 CHANGING lv_is_target.
+            ENDIF.
           ENDIF.
 
           IF lv_is_target = abap_true.
@@ -840,6 +843,45 @@ FORM check_target_msg
 
   " P3 – NO IMPLEMENTATION -------------------------------------------
   IF lv_up CS 'NO IMPLEMENTATION FOR CURRENT STATEMENT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form check_target_title
+*& Returns abap_true if check_title is one of the ATC categories
+*& handled by this program.
+*&---------------------------------------------------------------------*
+FORM check_target_title
+  USING    iv_title   TYPE string
+  CHANGING cv_match   TYPE abap_bool.
+
+  DATA lv_up TYPE string.
+  lv_up = iv_title.
+  TRANSLATE lv_up TO UPPER CASE.
+
+  " S/4HANA: Search for Usages of Simplified Objects
+  IF lv_up CS 'SIMPLIFIED OBJECTS'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " S/4HANA: Field Length Extensions
+  IF lv_up CS 'FIELD LENGTH EXTENSIONS'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " S/4HANA: Search for Database Operations
+  IF lv_up CS 'DATABASE OPERATIONS'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " Use of ADBC Interface
+  IF lv_up CS 'ADBC'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " SELECT without ORDER BY
+  IF lv_up CS 'ORDER BY' OR lv_up CS 'WITHOUT ORDER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " Non-strategic-function (P2)
+  IF lv_up CS 'NON-STRATEGIC'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
