@@ -159,7 +159,6 @@ DATA: gt_display      TYPE tt_display,
       gt_fcat         TYPE lvc_t_fcat,
       gv_auth_bg      TYPE char1,
       gv_toolbar_done TYPE char1,
-      gv_oa_changed   TYPE char1,
       go_batch_popup  TYPE REF TO cl_gui_dialogbox_container,
       go_batch_alv    TYPE REF TO cl_gui_alv_grid,
       gt_batch_assign TYPE tt_batch_assign.
@@ -331,13 +330,23 @@ CLASS lcl_alv_handler IMPLEMENTATION.
                      ls_disp-oa_tsyst ls_disp-oa_batch.
           PERFORM apply_oa_mismatch_color CHANGING ls_disp.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
-          gv_oa_changed = abap_true.
+          " Push derived values into grid cell buffer so they render without waiting for refresh
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_LOCID'  i_value = ls_disp-oa_locid ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_WERKS'  i_value = ls_disp-oa_werks ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_MATNR'  i_value = ls_disp-oa_matnr ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_DESC'   i_value = ls_disp-oa_desc ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_TSYST'  i_value = ls_disp-oa_tsyst ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_BATCH'  i_value = ls_disp-oa_batch ).
       ENDCASE.
     ENDLOOP.
   ENDMETHOD.
 
   METHOD on_main_data_changed_finished.
-    " Refresh is handled via gv_oa_changed flag in SET_PF_STATUS (PBO cycle)
+    DATA: ls_stbl TYPE lvc_s_stbl.
+    IF go_alv IS NOT INITIAL.
+      ls_stbl-row = abap_true. ls_stbl-col = abap_true.
+      go_alv->refresh_table_display( is_stable = ls_stbl ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD on_batch_data_changed.
@@ -1218,13 +1227,6 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
   IF go_alv IS INITIAL.
     CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
       IMPORTING e_grid = go_alv.
-  ENDIF.
-  " PBO-based refresh: fires reliably after each PAI cycle
-  IF gv_oa_changed = abap_true AND go_alv IS NOT INITIAL.
-    DATA: ls_stbl TYPE lvc_s_stbl.
-    CLEAR gv_oa_changed.
-    ls_stbl-row = abap_true. ls_stbl-col = abap_true.
-    go_alv->refresh_table_display( is_stable = ls_stbl ).
   ENDIF.
   IF go_alv IS NOT INITIAL AND go_alv_handler IS INITIAL.
     CREATE OBJECT go_alv_handler.
