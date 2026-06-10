@@ -450,23 +450,9 @@ START-OF-SELECTION.
           ENDIF.
 
           IF lv_is_target = abap_true.
-            " Choose the correct #EC pragma based on check_title,
-            " matching the same logic used in ZATC_RESULT_CORRECTION.
+            " Only S/4HANA: Field Length Extensions is handled -> CI_FLDEXT_OK
             CLEAR l_note.
-            DATA(lv_title_up) = wa_final-check_title.
-            TRANSLATE lv_title_up TO UPPER CASE.
-            IF lv_title_up CS 'FIELD LENGTH EXTENSIONS'.
-              CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
-            ELSEIF lv_title_up CS 'DATABASE OPERATIONS'.
-              CONCATENATE '"#EC CI_DB_OPERATION_OK[' wa_final-note ']' INTO l_note.
-            ELSEIF lv_title_up CS 'ADBC'.
-              CONCATENATE '"#EC CI_ADBC_US[' wa_final-note ']' INTO l_note.
-            ELSEIF lv_title_up CS 'ORDER BY' OR lv_title_up CS 'WITHOUT ORDER'.
-              CONCATENATE '"#EC CI_NOORDER[' wa_final-note ']' INTO l_note.
-            ELSE.
-              " Default: CI_USAGE_OK (covers simplified objects, non-strategic etc.)
-              CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
-            ENDIF.
+            CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
             " BEGIN marker
             CLEAR wa_blank.
             CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
@@ -680,52 +666,11 @@ FORM check_target_msg
   lv_up = iv_msg.
   TRANSLATE lv_up TO UPPER CASE.
 
-  " P2 ---------------------------------------------------------------
-  IF lv_up CS 'NON-STRATEGIC-FUNCTION'.
+  " S/4HANA: Field Length Extensions – 49 check messages -----------
+  IF lv_up CS 'ARITHMETIC OPERATION'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – ASSIGN ------------------------------------------------------
-  IF lv_up CS 'ASSIGN COMPONENT'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'ASSIGN GENERIC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'DYNAMIC ASSIGN'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – CALL FUNCTION / CALL METHOD --------------------------------
-  IF lv_up CS 'CALL FUNCTION GENERIC OPERAND'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'CALL FUNCTION GENERIC PARAMETER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'CALL METHOD GENERIC OPERAND'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'CALL METHOD GENERIC PARAMETER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – PERFORM -----------------------------------------------------
-  IF lv_up CS 'PERFORM GENERIC OPERAND'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'PERFORM GENERIC PARAMETER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – CASTING / COMPARE / CONCATENATE ----------------------------
-  IF lv_up CS 'CASTING FROM'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'COMPARE <-> GENERIC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'COMPARE LENGTH CONFLICT'.
+  IF lv_up CS 'COMPARE LENGTH CONFLICT' AND NOT lv_up CS 'OLD COMPARE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD COMPARE LENGTH CONFLICT'.
@@ -734,44 +679,32 @@ FORM check_target_msg
   IF lv_up CS 'OLD COMPARE TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'CONCATENATION DETECTED'.
+  IF lv_up CS 'COMPARE <-> GENERIC'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'CONCATENATE LENGTH CONFLICT'.
+  IF lv_up CS 'CONCATENATE LENGTH CONFLICT' AND NOT lv_up CS 'OLD CONCATENATE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD CONCATENATE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'CONSTANT COMPARE CONFLICT'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'OLD CONSTANT COMPARE CONFLICT'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – DESCRIBE / IS-INITIAL / ARITHMETIC -------------------------
-  IF lv_up CS 'DESCRIBE FIELD ISSUE'.
+  IF lv_up CS 'CONCATENATION DETECTED'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'IS-INITIAL-CHECK FOR TYPE'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT'.
+  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT' AND NOT lv_up CS 'CLEARED FIELD'
+                                               AND NOT lv_up CS 'OPTIONAL PARAMETER'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'ARITHMETIC OPERATION'.
+  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT' AND lv_up CS 'CLEARED FIELD'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – MOVE --------------------------------------------------------
-  IF lv_up CS 'MOVE LENGTH CONFLICT'.
+  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT' AND lv_up CS 'OPTIONAL PARAMETER'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'MOVE -> GENERIC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'MOVE GENERIC ->'.
+  IF lv_up CS 'MOVE LENGTH CONFLICT' AND NOT lv_up CS 'OLD MOVE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD MOVE LENGTH CONFLICT'.
@@ -780,23 +713,25 @@ FORM check_target_msg
   IF lv_up CS 'OLD MOVE TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – STRUCTURE-COMPONENT ----------------------------------------
-  IF lv_up CS 'STRUCTURE-COMPONENT LENGTH CONFLICT'.
+  IF lv_up CS 'MOVE -> GENERIC'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'STRUCTURE-COMPONENT TYPE CONFLICT'.
+  IF lv_up CS 'MOVE GENERIC ->'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'STRUCTURE-COMPONENT LENGTH CONFLICT' AND NOT lv_up CS 'OLD STRUCTURE-COMPONENT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD STRUCTURE-COMPONENT LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – SELECT / TYPE -----------------------------------------------
+  IF lv_up CS 'STRUCTURE-COMPONENT TYPE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'SELECT TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'TYPE-CONFLICT'.
+  IF lv_up CS 'TYPE-CONFLICT' AND NOT lv_up CS 'OLD TYPE-CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD TYPE-CONFLICT'.
@@ -808,24 +743,52 @@ FORM check_target_msg
   IF lv_up CS 'TYPE COMPONENT' AND lv_up CS 'RFC-FUNCTION PARAMETER'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – OFFSET / TRANSFER / WRITE / EXPORT / IMPORT / GENERIC ------
   IF lv_up CS 'OFFSET/LENGTH-ACCESS'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'TRANSFER ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'WRITE ISSUE'.
+  IF lv_up CS 'WRITE ISSUE' AND NOT lv_up CS 'OLD WRITE-LENGTH ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD WRITE-LENGTH ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'EXPORT ISSUE'.
+  IF lv_up CS 'ASSIGN COMPONENT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'IMPORT ISSUE'.
+  IF lv_up CS 'ASSIGN GENERIC'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'DYNAMIC ASSIGN'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CASTING FROM'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL FUNCTION GENERIC PARAMETER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL FUNCTION GENERIC OPERAND'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL METHOD GENERIC PARAMETER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL METHOD GENERIC OPERAND'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CONSTANT COMPARE CONFLICT' AND NOT lv_up CS 'OLD CONSTANT COMPARE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'OLD CONSTANT COMPARE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'DESCRIBE FIELD ISSUE'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'EXPORT ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'GENERIC SOURCE CODE ISSUE'.
@@ -834,15 +797,22 @@ FORM check_target_msg
   IF lv_up CS 'GENERIC DESTINATION CODE ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
+  IF lv_up CS 'IMPORT ISSUE'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'OLD MESSAGE-INTO LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'OLD SPLIT LENGTH CONFLICT'.
+  IF lv_up CS 'NO IMPLEMENTATION FOR CURRENT STATEMENT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – NO IMPLEMENTATION -------------------------------------------
-  IF lv_up CS 'NO IMPLEMENTATION FOR CURRENT STATEMENT'.
+  IF lv_up CS 'PERFORM GENERIC PARAMETER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'PERFORM GENERIC OPERAND'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'OLD SPLIT LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
@@ -860,28 +830,8 @@ FORM check_target_title
   lv_up = iv_title.
   TRANSLATE lv_up TO UPPER CASE.
 
-  " S/4HANA: Search for Usages of Simplified Objects
-  IF lv_up CS 'SIMPLIFIED OBJECTS'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  " S/4HANA: Field Length Extensions
+  " Only S/4HANA: Field Length Extensions is handled by this program.
   IF lv_up CS 'FIELD LENGTH EXTENSIONS'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  " S/4HANA: Search for Database Operations
-  IF lv_up CS 'DATABASE OPERATIONS'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  " Use of ADBC Interface
-  IF lv_up CS 'ADBC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  " SELECT without ORDER BY
-  IF lv_up CS 'ORDER BY' OR lv_up CS 'WITHOUT ORDER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  " Non-strategic-function (P2)
-  IF lv_up CS 'NON-STRATEGIC'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
