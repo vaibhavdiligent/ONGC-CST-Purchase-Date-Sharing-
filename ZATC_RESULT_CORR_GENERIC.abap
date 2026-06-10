@@ -353,9 +353,6 @@ START-OF-SELECTION.
   DELETE ADJACENT DUPLICATES FROM it_final_p COMPARING program_name sobjname.
   SORT it_final BY priority line ASCENDING.
   DELETE ADJACENT DUPLICATES FROM it_final COMPARING line objname sobjname.
-  PERFORM zatc_process_all.
-  PERFORM zatc_process_dte.
-  PERFORM zatc_process1.
   REFRESH it_output.
   CLEAR l_repid.
   DATA lv_total_objects TYPE i.
@@ -920,24 +917,6 @@ FORM check_target_title
     cv_match = abap_true. RETURN.
   ENDIF.
 
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form zatc_process_all
-*&---------------------------------------------------------------------*
-FORM zatc_process_all.
-  SELECT * INTO TABLE it_zatc_process_all FROM zatc_process_all.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form zatc_process_dte
-*&---------------------------------------------------------------------*
-FORM zatc_process_dte.
-  SELECT * INTO TABLE it_zatc_process_dte FROM zatc_process_dte.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form zatc_process1
-*&---------------------------------------------------------------------*
-FORM zatc_process1.
-  SELECT * INTO TABLE it_zatc_process1 FROM zatc_process1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form syntax_check
