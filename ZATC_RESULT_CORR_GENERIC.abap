@@ -41,62 +41,6 @@ DATA : lt_source          TYPE seop_source,
 DATA l_datum TYPE char10.
 DATA l_note TYPE char40.
 DATA it_error_table TYPE syn_error.
-TYPES : BEGIN OF ty_zatc_process_all,
-          mandt            TYPE mandt,
-          sno              TYPE int4,
-          priority         TYPE char3,
-          description      TYPE   char255,
-          check_title      TYPE   char255,
-          note(10)         TYPE c,
-          srch_tem         TYPE  char35,
-          ref_obj_type     TYPE  char4,
-          message          TYPE   char120,
-          look             TYPE  char50,
-          look2            TYPE   char50,
-          zcomment         TYPE  char80,
-          fix_by           TYPE  char120,
-          solution         TYPE  char1,
-          correction_value TYPE char30,
-        END OF ty_zatc_process_all.
-TYPES : BEGIN OF ty_zatc_process1,
-          mandt            TYPE mandt,
-          priority         TYPE char3,
-          description      TYPE   char255,
-          check_title      TYPE   char255,
-          note(10)         TYPE c,
-          srch_tem         TYPE  char35,
-          ref_obj_type     TYPE  char4,
-          message          TYPE   char120,
-          look             TYPE  char50,
-          look2            TYPE   char50,
-          zcomment         TYPE  char80,
-          fix_by           TYPE  char120,
-          solution         TYPE  char1,
-          correction_value TYPE char30,
-        END OF ty_zatc_process1.
-TYPES : BEGIN OF ty_zatc_process_dte,
-          mandt            TYPE mandt,
-          sno(8)           TYPE n,
-          priority         TYPE char3,
-          description      TYPE char255,
-          check_title      TYPE char255,
-          note(10)         TYPE c,
-          srch_tem         TYPE char35,
-          ref_obj_type     TYPE char4,
-          message          TYPE char120,
-          look             TYPE char50,
-          look2            TYPE char50,
-          zcomment         TYPE char80,
-          fix_by           TYPE char120,
-          solution         TYPE char1,
-          correction_value TYPE char30,
-        END OF ty_zatc_process_dte.
-DATA it_zatc_process_all TYPE TABLE OF ty_zatc_process_all.
-DATA it_zatc_process_dte TYPE TABLE OF ty_zatc_process_dte.
-DATA it_zatc_process1 TYPE TABLE OF ty_zatc_process1.
-DATA wa_zatc_process_all TYPE ty_zatc_process_all.
-DATA wa_zatc_process_dte TYPE ty_zatc_process_dte.
-DATA wa_zatc_process1 TYPE ty_zatc_process1.
 DATA l_repid(5) TYPE n.
 TYPES: BEGIN OF ty_final ,
          priority      TYPE char3,
@@ -967,19 +911,4 @@ FORM syntax_check USING    program    TYPE program
       ENDIF.
     WHEN OTHERS.
   ENDCASE.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form bdc_transaction
-*&---------------------------------------------------------------------*
-FORM bdc_transaction USING p_tcode TYPE any.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form bdc_dynpro
-*&---------------------------------------------------------------------*
-FORM bdc_dynpro USING p_program TYPE any p_dynpro TYPE any.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form bdc_field
-*&---------------------------------------------------------------------*
-FORM bdc_field USING p_fnam TYPE any p_fval TYPE any.
 ENDFORM.
