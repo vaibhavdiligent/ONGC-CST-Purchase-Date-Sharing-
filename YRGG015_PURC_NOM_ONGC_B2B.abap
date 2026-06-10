@@ -330,13 +330,20 @@ CLASS lcl_alv_handler IMPLEMENTATION.
                      ls_disp-oa_tsyst ls_disp-oa_batch.
           PERFORM apply_oa_mismatch_color CHANGING ls_disp.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
+          " Push derived values into grid cell buffer so they render without waiting for refresh
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_LOCID'  i_value = ls_disp-oa_locid ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_WERKS'  i_value = ls_disp-oa_werks ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_MATNR'  i_value = ls_disp-oa_matnr ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_DESC'   i_value = ls_disp-oa_desc ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_TSYST'  i_value = ls_disp-oa_tsyst ).
+          er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_BATCH'  i_value = ls_disp-oa_batch ).
       ENDCASE.
     ENDLOOP.
   ENDMETHOD.
 
   METHOD on_main_data_changed_finished.
     DATA: ls_stbl TYPE lvc_s_stbl.
-    IF e_modified = abap_true AND go_alv IS NOT INITIAL.
+    IF go_alv IS NOT INITIAL.
       ls_stbl-row = abap_true. ls_stbl-col = abap_true.
       go_alv->refresh_table_display( is_stable = ls_stbl ).
     ENDIF.
