@@ -305,7 +305,7 @@ START-OF-SELECTION.
   DATA lv_total_objects TYPE i.
   DESCRIBE TABLE it_final_p LINES lv_total_objects.
   LOOP AT it_final_p INTO DATA(wa_final_p)
-     WHERE sobjname IN s_name.
+     WHERE sobjname IN s_name OR objname IN s_name.
     l_repid = l_repid + 1.
     DATA(lv_pct) = CONV i( l_repid * 100 / lv_total_objects ).
     CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
