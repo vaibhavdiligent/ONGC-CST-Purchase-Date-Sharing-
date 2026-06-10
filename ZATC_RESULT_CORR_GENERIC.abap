@@ -155,6 +155,69 @@ CLASS lcl_main DEFINITION FINAL.
     CLASS-METHODS write_trace
       IMPORTING p_trctab TYPE syn_trctab.
 ENDCLASS.
+CLASS lcl_main IMPLEMENTATION.
+  METHOD start.
+    DATA: l_include_names TYPE scr_programs,
+          l_includes       TYPE sreptab,
+          l_trctab         TYPE syn_trctab,
+          l_error          TYPE cl_abap_error_analyze=>t_error,
+          l_exp            TYPE REF TO cx_abap_error_analyze,
+          l_incl_dates     TYPE cl_abap_error_analyze=>t_dates,
+          l_incl_date      LIKE LINE OF l_incl_dates.
+    IF p_src_includes IS NOT INITIAL.
+      SELECT name FROM trdir INTO TABLE l_include_names
+        WHERE name IN p_src_includes ORDER BY name.
+    ENDIF.
+    IF p_incl_date IS NOT INITIAL.
+      l_incl_date-low    = p_incl_date.
+      l_incl_date-option = 'GE'.
+      l_incl_date-sign   = 'I'.
+      APPEND l_incl_date TO l_incl_dates.
+    ENDIF.
+    TRY.
+      CATCH cx_abap_error_analyze INTO l_exp.
+    ENDTRY.
+  ENDMETHOD.
+  METHOD write_error.
+    WRITE  / 'Error Message:' COLOR COL_HEADING.
+    WRITE: / 'KEYWORD = ', p_error-error-keyword,
+           / 'MESSAGE = ', p_error-error-message,
+           / 'INCLUDE = ', p_error-error-incname,
+           / 'LINE    = ', p_error-error-line.
+  ENDMETHOD.
+  METHOD write_source.
+    FIELD-SYMBOLS: <l_reptab> LIKE LINE OF p_includes,
+                   <l_source> LIKE LINE OF <l_reptab>-source->*.
+    LOOP AT p_includes ASSIGNING <l_reptab>.
+      WRITE / <l_reptab>-name COLOR COL_GROUP.
+      LOOP AT <l_reptab>-source->* ASSIGNING <l_source>.
+        WRITE / <l_source>.
+      ENDLOOP.
+    ENDLOOP.
+  ENDMETHOD.
+  METHOD write_trace.
+    DATA: l_incl  TYPE sychar01,
+          l_dummy TYPE string ##NEEDED,
+          l_skip  TYPE abap_bool.
+    SET BLANK LINES OFF.
+    WRITE / 'Syntax Trace' COLOR COL_HEADING.
+    LOOP AT p_trctab ASSIGNING FIELD-SYMBOL(<l_trcwa>).
+      NEW-LINE.
+      l_incl = ' '.
+      CASE <l_trcwa>-cc(1).
+        WHEN '#'. WRITE /.
+        WHEN '$'. l_incl = 'X'. SPLIT <l_trcwa>-line AT ' ' INTO include l_dummy.
+                  l_skip = abap_false.
+        WHEN space. CHECK l_skip = abap_false.
+        WHEN OTHERS. l_skip = abap_false.
+      ENDCASE.
+      IF l_incl = 'X'. FORMAT INTENSIFIED ON COLOR OFF.
+      ELSE.            FORMAT INTENSIFIED OFF COLOR OFF.
+      ENDIF.
+      WRITE : / <l_trcwa>-cc, <l_trcwa>-ex, <l_trcwa>-line.
+    ENDLOOP.
+  ENDMETHOD.
+ENDCLASS.
 PARAMETERS  p_id TYPE satc_d_ac_title.
 SELECT-OPTIONS s_obj FOR tadir-obj_name.
 SELECT-OPTIONS s_name FOR SCIREST_AD-sobjname OBLIGATORY.
@@ -548,7 +611,7 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syntax error'.
+              wa_output-status = 'Syn.error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
@@ -588,7 +651,7 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syntax error'.
+              wa_output-status = 'Syn.error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
@@ -646,7 +709,7 @@ START-OF-SELECTION.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
-          wa_output-status = 'Syntax error'.
+          wa_output-status = 'Syn.error'.
         ENDIF.
         APPEND wa_output TO it_output.
         CLEAR wa_output.
