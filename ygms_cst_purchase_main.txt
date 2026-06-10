@@ -2276,12 +2276,14 @@ FORM handle_save.
            material    TYPE ygms_de_gail_mat,
          END OF ty_loc_mat.
   TYPES: BEGIN OF ty_nom_detail,
-           idate     TYPE oijnomi-idate,
-           locid     TYPE oijnomi-locid,
-           s_matnr_i TYPE oijnomi-s_matnr_i,
-           menge     TYPE oijnomi-menge,
-           unit_i    TYPE oijnomi-unit_i,
-           docnr     TYPE oijnomi-docnr,
+           nomtk          TYPE oijnomi-nomtk,
+           nomit          TYPE oijnomi-nomit,
+           idate          TYPE oijnomi-idate,
+           locid          TYPE oijnomi-locid,
+           s_matnr_i      TYPE oijnomi-s_matnr_i,
+           yyoij_cnom_qty TYPE oijnomi-yyoij_cnom_qty,
+           yyoij_cnom_uom TYPE oijnomi-yyoij_cnom_uom,
+           docnr          TYPE oijnomi-docnr,
          END OF ty_nom_detail.
   DATA: lt_loc_mat    TYPE TABLE OF ty_loc_mat,
         ls_loc_mat    TYPE ty_loc_mat,
@@ -2361,61 +2363,77 @@ FORM handle_save.
         READ TABLE lt_ekpo_ebeln TRANSPORTING NO FIELDS
           WITH KEY table_line = ls_nom-docnr BINARY SEARCH.
         IF sy-subrc = 0.
-          ls_nom_detail-idate     = ls_nom-idate.
-          ls_nom_detail-locid     = ls_nom-locid.
-          ls_nom_detail-s_matnr_i = ls_nom-s_matnr_i.
-          ls_nom_detail-menge     = ls_nom-menge.
-          ls_nom_detail-unit_i    = ls_nom-unit_i.
-          ls_nom_detail-docnr     = ls_nom-docnr.
+          ls_nom_detail-nomtk          = ls_nom-nomtk.
+          ls_nom_detail-nomit          = ls_nom-nomit.
+          ls_nom_detail-idate          = ls_nom-idate.
+          ls_nom_detail-locid          = ls_nom-locid.
+          ls_nom_detail-s_matnr_i      = ls_nom-s_matnr_i.
+          ls_nom_detail-yyoij_cnom_qty = ls_nom-yyoij_cnom_qty.
+          ls_nom_detail-yyoij_cnom_uom = ls_nom-yyoij_cnom_uom.
+          ls_nom_detail-docnr          = ls_nom-docnr.
           APPEND ls_nom_detail TO lt_nom_detail.
         ENDIF.
       ENDLOOP.
+
+      " Sort detail data by Gas Day, Location ID, Material
+      SORT lt_nom_detail BY idate locid s_matnr_i.
 
       " Show popup with View Details button
       DATA lv_nom_answer TYPE c LENGTH 1.
       CALL FUNCTION 'POPUP_TO_CONFIRM'
         EXPORTING
-          titlebar       = 'Nomination Exists'
-          text_question  = 'Cannot save the data as CST based nominations have already been created'
-          text_button_1  = 'View Details'
-          text_button_2  = 'Cancel'
-          default_button = '2'
+          titlebar              = 'Nomination Exists'
+          text_question         = 'Cannot save the data as CST based nominations have already been created'
+          text_button_1         = 'View Details'
+          text_button_2         = 'Cancel'
+          default_button        = '2'
+          display_cancel_button = ' '
         IMPORTING
-          answer         = lv_nom_answer.
+          answer                = lv_nom_answer.
 
       IF lv_nom_answer = '1'.
         " Show nomination details ALV
         DATA: lt_nom_fcat TYPE slis_t_fieldcat_alv,
               ls_nom_fcat TYPE slis_fieldcat_alv.
         CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'NOMTK'.
+        ls_nom_fcat-seltext_l = 'Nomination Key'.
+        ls_nom_fcat-col_pos   = 1.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'NOMIT'.
+        ls_nom_fcat-seltext_l = 'Item'.
+        ls_nom_fcat-col_pos   = 2.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'IDATE'.
         ls_nom_fcat-seltext_l = 'Gas Day'.
-        ls_nom_fcat-col_pos   = 1.
+        ls_nom_fcat-col_pos   = 3.
         APPEND ls_nom_fcat TO lt_nom_fcat.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'LOCID'.
         ls_nom_fcat-seltext_l = 'Location ID'.
-        ls_nom_fcat-col_pos   = 2.
+        ls_nom_fcat-col_pos   = 4.
         APPEND ls_nom_fcat TO lt_nom_fcat.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'S_MATNR_I'.
         ls_nom_fcat-seltext_l = 'Material'.
-        ls_nom_fcat-col_pos   = 3.
-        APPEND ls_nom_fcat TO lt_nom_fcat.
-        CLEAR ls_nom_fcat.
-        ls_nom_fcat-fieldname = 'MENGE'.
-        ls_nom_fcat-seltext_l = 'Quantity'.
-        ls_nom_fcat-col_pos   = 4.
-        APPEND ls_nom_fcat TO lt_nom_fcat.
-        CLEAR ls_nom_fcat.
-        ls_nom_fcat-fieldname = 'UNIT_I'.
-        ls_nom_fcat-seltext_l = 'UoM'.
         ls_nom_fcat-col_pos   = 5.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'YYOIJ_CNOM_QTY'.
+        ls_nom_fcat-seltext_l = 'Quantity'.
+        ls_nom_fcat-col_pos   = 6.
+        APPEND ls_nom_fcat TO lt_nom_fcat.
+        CLEAR ls_nom_fcat.
+        ls_nom_fcat-fieldname = 'YYOIJ_CNOM_UOM'.
+        ls_nom_fcat-seltext_l = 'UoM'.
+        ls_nom_fcat-col_pos   = 7.
         APPEND ls_nom_fcat TO lt_nom_fcat.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'DOCNR'.
         ls_nom_fcat-seltext_l = 'Reference Document'.
-        ls_nom_fcat-col_pos   = 6.
+        ls_nom_fcat-col_pos   = 8.
         APPEND ls_nom_fcat TO lt_nom_fcat.
 
         CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
