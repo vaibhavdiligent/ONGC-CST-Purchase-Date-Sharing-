@@ -452,6 +452,11 @@ START-OF-SELECTION.
           ENDIF.
 
           IF lv_is_target = abap_true.
+            " Skip if note number is blank - cannot build valid pragma
+            IF wa_final-note IS INITIAL.
+              APPEND wa_repos_tab TO repos_tab_new.
+              CONTINUE.
+            ENDIF.
             " Track this finding for output
             wa_output-program_name  = wa_final-objname.
             wa_output-subobj        = wa_final-program_name.
