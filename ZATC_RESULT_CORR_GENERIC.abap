@@ -155,6 +155,69 @@ CLASS lcl_main DEFINITION FINAL.
     CLASS-METHODS write_trace
       IMPORTING p_trctab TYPE syn_trctab.
 ENDCLASS.
+CLASS lcl_main IMPLEMENTATION.
+  METHOD start.
+    DATA: l_include_names TYPE scr_programs,
+          l_includes       TYPE sreptab,
+          l_trctab         TYPE syn_trctab,
+          l_error          TYPE cl_abap_error_analyze=>t_error,
+          l_exp            TYPE REF TO cx_abap_error_analyze,
+          l_incl_dates     TYPE cl_abap_error_analyze=>t_dates,
+          l_incl_date      LIKE LINE OF l_incl_dates.
+    IF p_src_includes IS NOT INITIAL.
+      SELECT name FROM trdir INTO TABLE l_include_names
+        WHERE name IN p_src_includes ORDER BY name.
+    ENDIF.
+    IF p_incl_date IS NOT INITIAL.
+      l_incl_date-low    = p_incl_date.
+      l_incl_date-option = 'GE'.
+      l_incl_date-sign   = 'I'.
+      APPEND l_incl_date TO l_incl_dates.
+    ENDIF.
+    TRY.
+      CATCH cx_abap_error_analyze INTO l_exp.
+    ENDTRY.
+  ENDMETHOD.
+  METHOD write_error.
+    WRITE  / 'Error Message:' COLOR COL_HEADING.
+    WRITE: / 'KEYWORD = ', p_error-error-keyword,
+           / 'MESSAGE = ', p_error-error-message,
+           / 'INCLUDE = ', p_error-error-incname,
+           / 'LINE    = ', p_error-error-line.
+  ENDMETHOD.
+  METHOD write_source.
+    FIELD-SYMBOLS: <l_reptab> LIKE LINE OF p_includes,
+                   <l_source> LIKE LINE OF <l_reptab>-source->*.
+    LOOP AT p_includes ASSIGNING <l_reptab>.
+      WRITE / <l_reptab>-name COLOR COL_GROUP.
+      LOOP AT <l_reptab>-source->* ASSIGNING <l_source>.
+        WRITE / <l_source>.
+      ENDLOOP.
+    ENDLOOP.
+  ENDMETHOD.
+  METHOD write_trace.
+    DATA: l_incl  TYPE sychar01,
+          l_dummy TYPE string ##NEEDED,
+          l_skip  TYPE abap_bool.
+    SET BLANK LINES OFF.
+    WRITE / 'Syntax Trace' COLOR COL_HEADING.
+    LOOP AT p_trctab ASSIGNING FIELD-SYMBOL(<l_trcwa>).
+      NEW-LINE.
+      l_incl = ' '.
+      CASE <l_trcwa>-cc(1).
+        WHEN '#'. WRITE /.
+        WHEN '$'. l_incl = 'X'. SPLIT <l_trcwa>-line AT ' ' INTO include l_dummy.
+                  l_skip = abap_false.
+        WHEN space. CHECK l_skip = abap_false.
+        WHEN OTHERS. l_skip = abap_false.
+      ENDCASE.
+      IF l_incl = 'X'. FORMAT INTENSIFIED ON COLOR OFF.
+      ELSE.            FORMAT INTENSIFIED OFF COLOR OFF.
+      ENDIF.
+      WRITE : / <l_trcwa>-cc, <l_trcwa>-ex, <l_trcwa>-line.
+    ENDLOOP.
+  ENDMETHOD.
+ENDCLASS.
 PARAMETERS  p_id TYPE satc_d_ac_title.
 SELECT-OPTIONS s_obj FOR tadir-obj_name.
 SELECT-OPTIONS s_name FOR SCIREST_AD-sobjname OBLIGATORY.
@@ -290,9 +353,6 @@ START-OF-SELECTION.
   DELETE ADJACENT DUPLICATES FROM it_final_p COMPARING program_name sobjname.
   SORT it_final BY priority line ASCENDING.
   DELETE ADJACENT DUPLICATES FROM it_final COMPARING line objname sobjname.
-  PERFORM zatc_process_all.
-  PERFORM zatc_process_dte.
-  PERFORM zatc_process1.
   REFRESH it_output.
   CLEAR l_repid.
   DATA lv_total_objects TYPE i.
@@ -308,19 +368,7 @@ START-OF-SELECTION.
     REFRESH repos_tab.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
-      WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF'.
-        object_name = wa_final_p-sobjname.
-        CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-          EXPORTING
-            object_name           = object_name
-            versno                = '00000'
-          TABLES
-            repos_tab             = repos_tab
-          EXCEPTIONS
-            no_version            = 1
-            system_failure        = 2
-            communication_failure = 3.
-      WHEN 'SSFO'.
+      WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
         object_name = wa_final_p-sobjname.
         CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
           EXPORTING
@@ -438,31 +486,33 @@ START-OF-SELECTION.
             lv_msg = wa_final-message1.
           ENDIF.
 
-          " Determine if this finding is one of the target check messages.
-          " Covers all P3 field-length/generic messages and P2 non-strategic.
+          " Only process priority 2 and 3 findings.
+          IF wa_final-priority <> '2' AND wa_final-priority <> '3'.
+            APPEND wa_repos_tab TO repos_tab_new.
+            CONTINUE.
+          ENDIF.
+
+          " Both check_title AND check_message must match before any change.
           DATA(lv_is_target) = abap_false.
-          PERFORM check_target_msg USING lv_msg CHANGING lv_is_target.
-          IF lv_is_target = abap_false.
-            PERFORM check_target_msg USING wa_final-message1 CHANGING lv_is_target.
+          DATA(lv_title_match) = abap_false.
+          PERFORM check_target_title USING wa_final-check_title CHANGING lv_title_match.
+          IF lv_title_match = abap_true.
+            PERFORM check_target_msg USING lv_msg CHANGING lv_is_target.
+            IF lv_is_target = abap_false.
+              PERFORM check_target_msg USING wa_final-message1 CHANGING lv_is_target.
+            ENDIF.
           ENDIF.
 
           IF lv_is_target = abap_true.
-            " Choose the correct #EC pragma based on check_title,
-            " matching the same logic used in ZATC_RESULT_CORRECTION.
+            " Pragma depends on check_title
             CLEAR l_note.
             DATA(lv_title_up) = wa_final-check_title.
             TRANSLATE lv_title_up TO UPPER CASE.
-            IF lv_title_up CS 'FIELD LENGTH EXTENSIONS'.
-              CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
-            ELSEIF lv_title_up CS 'DATABASE OPERATIONS'.
-              CONCATENATE '"#EC CI_DB_OPERATION_OK[' wa_final-note ']' INTO l_note.
-            ELSEIF lv_title_up CS 'ADBC'.
-              CONCATENATE '"#EC CI_ADBC_US[' wa_final-note ']' INTO l_note.
-            ELSEIF lv_title_up CS 'ORDER BY' OR lv_title_up CS 'WITHOUT ORDER'.
-              CONCATENATE '"#EC CI_NOORDER[' wa_final-note ']' INTO l_note.
-            ELSE.
-              " Default: CI_USAGE_OK (covers simplified objects, non-strategic etc.)
+            IF lv_title_up CS 'SIMPLIFIED OBJECTS'.
               CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
+            ELSE.
+              " S/4HANA: Field Length Extensions
+              CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
             ENDIF.
             " BEGIN marker
             CLEAR wa_blank.
@@ -499,8 +549,6 @@ START-OF-SELECTION.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
-          WHEN 'SFPF'.
-            PERFORM adobe_form_procee.
           WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
             SELECT SINGLE * INTO @DATA(l_trdir)
               FROM trdir WHERE name = @wa_final_p-sobjname.
@@ -546,7 +594,7 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syntax error'.
+              wa_output-status = 'Syn.error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
@@ -586,12 +634,10 @@ START-OF-SELECTION.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
-              wa_output-status = 'Syntax error'.
+              wa_output-status = 'Syn.error'.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
-          WHEN 'SSFO'.
-            PERFORM smartform_procee.
         ENDCASE.
       ELSE.
         DATA l_enh_tool  TYPE REF TO if_enh_tool.
@@ -644,7 +690,7 @@ START-OF-SELECTION.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
-          wa_output-status = 'Syntax error'.
+          wa_output-status = 'Syn.error'.
         ENDIF.
         APPEND wa_output TO it_output.
         CLEAR wa_output.
@@ -677,52 +723,16 @@ FORM check_target_msg
   lv_up = iv_msg.
   TRANSLATE lv_up TO UPPER CASE.
 
-  " P2 ---------------------------------------------------------------
+  " S/4HANA: Search for Usages of Simplified Objects ---------------
   IF lv_up CS 'NON-STRATEGIC-FUNCTION'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
-  " P3 – ASSIGN ------------------------------------------------------
-  IF lv_up CS 'ASSIGN COMPONENT'.
+  " S/4HANA: Field Length Extensions – 49 check messages -----------
+  IF lv_up CS 'ARITHMETIC OPERATION'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'ASSIGN GENERIC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'DYNAMIC ASSIGN'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – CALL FUNCTION / CALL METHOD --------------------------------
-  IF lv_up CS 'CALL FUNCTION GENERIC OPERAND'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'CALL FUNCTION GENERIC PARAMETER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'CALL METHOD GENERIC OPERAND'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'CALL METHOD GENERIC PARAMETER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – PERFORM -----------------------------------------------------
-  IF lv_up CS 'PERFORM GENERIC OPERAND'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'PERFORM GENERIC PARAMETER'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – CASTING / COMPARE / CONCATENATE ----------------------------
-  IF lv_up CS 'CASTING FROM'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'COMPARE <-> GENERIC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'COMPARE LENGTH CONFLICT'.
+  IF lv_up CS 'COMPARE LENGTH CONFLICT' AND NOT lv_up CS 'OLD COMPARE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD COMPARE LENGTH CONFLICT'.
@@ -731,44 +741,32 @@ FORM check_target_msg
   IF lv_up CS 'OLD COMPARE TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'CONCATENATION DETECTED'.
+  IF lv_up CS 'COMPARE <-> GENERIC'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'CONCATENATE LENGTH CONFLICT'.
+  IF lv_up CS 'CONCATENATE LENGTH CONFLICT' AND NOT lv_up CS 'OLD CONCATENATE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD CONCATENATE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'CONSTANT COMPARE CONFLICT'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'OLD CONSTANT COMPARE CONFLICT'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-
-  " P3 – DESCRIBE / IS-INITIAL / ARITHMETIC -------------------------
-  IF lv_up CS 'DESCRIBE FIELD ISSUE'.
+  IF lv_up CS 'CONCATENATION DETECTED'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'IS-INITIAL-CHECK FOR TYPE'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT'.
+  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT' AND NOT lv_up CS 'CLEARED FIELD'
+                                               AND NOT lv_up CS 'OPTIONAL PARAMETER'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'ARITHMETIC OPERATION'.
+  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT' AND lv_up CS 'CLEARED FIELD'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – MOVE --------------------------------------------------------
-  IF lv_up CS 'MOVE LENGTH CONFLICT'.
+  IF lv_up CS 'IS-INITIAL-CHECK FOR COMPONENT' AND lv_up CS 'OPTIONAL PARAMETER'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'MOVE -> GENERIC'.
-    cv_match = abap_true. RETURN.
-  ENDIF.
-  IF lv_up CS 'MOVE GENERIC ->'.
+  IF lv_up CS 'MOVE LENGTH CONFLICT' AND NOT lv_up CS 'OLD MOVE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD MOVE LENGTH CONFLICT'.
@@ -777,23 +775,25 @@ FORM check_target_msg
   IF lv_up CS 'OLD MOVE TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – STRUCTURE-COMPONENT ----------------------------------------
-  IF lv_up CS 'STRUCTURE-COMPONENT LENGTH CONFLICT'.
+  IF lv_up CS 'MOVE -> GENERIC'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'STRUCTURE-COMPONENT TYPE CONFLICT'.
+  IF lv_up CS 'MOVE GENERIC ->'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'STRUCTURE-COMPONENT LENGTH CONFLICT' AND NOT lv_up CS 'OLD STRUCTURE-COMPONENT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD STRUCTURE-COMPONENT LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – SELECT / TYPE -----------------------------------------------
+  IF lv_up CS 'STRUCTURE-COMPONENT TYPE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'SELECT TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'TYPE-CONFLICT'.
+  IF lv_up CS 'TYPE-CONFLICT' AND NOT lv_up CS 'OLD TYPE-CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD TYPE-CONFLICT'.
@@ -805,24 +805,52 @@ FORM check_target_msg
   IF lv_up CS 'TYPE COMPONENT' AND lv_up CS 'RFC-FUNCTION PARAMETER'.
     cv_match = abap_true. RETURN.
   ENDIF.
-
-  " P3 – OFFSET / TRANSFER / WRITE / EXPORT / IMPORT / GENERIC ------
   IF lv_up CS 'OFFSET/LENGTH-ACCESS'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'TRANSFER ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'WRITE ISSUE'.
+  IF lv_up CS 'WRITE ISSUE' AND NOT lv_up CS 'OLD WRITE-LENGTH ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD WRITE-LENGTH ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'EXPORT ISSUE'.
+  IF lv_up CS 'ASSIGN COMPONENT'.
     cv_match = abap_true. RETURN.
   ENDIF.
-  IF lv_up CS 'IMPORT ISSUE'.
+  IF lv_up CS 'ASSIGN GENERIC'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'DYNAMIC ASSIGN'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CASTING FROM'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL FUNCTION GENERIC PARAMETER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL FUNCTION GENERIC OPERAND'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL METHOD GENERIC PARAMETER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CALL METHOD GENERIC OPERAND'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'CONSTANT COMPARE CONFLICT' AND NOT lv_up CS 'OLD CONSTANT COMPARE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'OLD CONSTANT COMPARE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'DESCRIBE FIELD ISSUE'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'EXPORT ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'GENERIC SOURCE CODE ISSUE'.
@@ -831,36 +859,48 @@ FORM check_target_msg
   IF lv_up CS 'GENERIC DESTINATION CODE ISSUE'.
     cv_match = abap_true. RETURN.
   ENDIF.
+  IF lv_up CS 'IMPORT ISSUE'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'OLD MESSAGE-INTO LENGTH CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'NO IMPLEMENTATION FOR CURRENT STATEMENT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'PERFORM GENERIC PARAMETER'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'PERFORM GENERIC OPERAND'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'OLD SPLIT LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
-  " P3 – NO IMPLEMENTATION -------------------------------------------
-  IF lv_up CS 'NO IMPLEMENTATION FOR CURRENT STATEMENT'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form check_target_title
+*& Returns abap_true if check_title is one of the ATC categories
+*& handled by this program.
+*&---------------------------------------------------------------------*
+FORM check_target_title
+  USING    iv_title   TYPE string
+  CHANGING cv_match   TYPE abap_bool.
+
+  DATA lv_up TYPE string.
+  lv_up = iv_title.
+  TRANSLATE lv_up TO UPPER CASE.
+
+  " S/4HANA: Field Length Extensions
+  IF lv_up CS 'FIELD LENGTH EXTENSIONS'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  " S/4HANA: Search for Usages of Simplified Objects
+  IF lv_up CS 'SIMPLIFIED OBJECTS'.
     cv_match = abap_true. RETURN.
   ENDIF.
 
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form zatc_process_all
-*&---------------------------------------------------------------------*
-FORM zatc_process_all.
-  SELECT * INTO TABLE it_zatc_process_all FROM zatc_process_all.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form zatc_process_dte
-*&---------------------------------------------------------------------*
-FORM zatc_process_dte.
-  SELECT * INTO TABLE it_zatc_process_dte FROM zatc_process_dte.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form zatc_process1
-*&---------------------------------------------------------------------*
-FORM zatc_process1.
-  SELECT * INTO TABLE it_zatc_process1 FROM zatc_process1.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form syntax_check
@@ -893,14 +933,10 @@ FORM syntax_check USING    program    TYPE program
         TRANSLATE program USING ' ='.
         program+30 = 'E'.
       ENDIF.
-    WHEN 'SFPF'.
-      SELECT SINGLE master FROM d010inc
-        WHERE include = @program INTO @DATA(lv_prog).
-      IF sy-subrc = 0. program = lv_prog. ENDIF.
     WHEN OTHERS.
   ENDCASE.
   CASE objecttype.
-    WHEN 'PROG' OR 'CLASS' OR 'SFPF' OR 'FUGR'.
+    WHEN 'PROG' OR 'CLASS' OR 'FUGR'.
       CALL FUNCTION 'RS_ABAP_SYNTAX_CHECK_E'
         EXPORTING
           p_program  = program
@@ -931,107 +967,6 @@ FORM syntax_check USING    program    TYPE program
       ENDIF.
     WHEN OTHERS.
   ENDCASE.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form adobe_form_procee
-*& Permanently updates Adobe Form (SFPF) ABAP code sections.
-*&---------------------------------------------------------------------*
-FORM adobe_form_procee.
-  DATA: lv_fpname    TYPE fpname,
-        lv_fm_name   TYPE rs38l_fnam,
-        lv_prog      TYPE program,
-        lv_fugr_name TYPE rs38l_fnam,
-        lv_incl_top  TYPE program,
-        lv_incl_init TYPE program,
-        lv_incl_form TYPE program,
-        lv_changed   TYPE flag.
-  lv_fpname = wa_final_p-objname.
-  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
-    EXPORTING
-      i_name     = lv_fpname
-    IMPORTING
-      e_funcname = lv_fm_name
-    EXCEPTIONS
-      not_found  = 1
-      OTHERS     = 2.
-  IF sy-subrc <> 0. RETURN. ENDIF.
-  lv_fugr_name = lv_fm_name.
-  lv_prog = 'SAPL' && lv_fugr_name(26).
-  CALL FUNCTION 'SEO_FUGR_INCLUDE_GET'
-    EXPORTING
-      fugrname  = lv_fugr_name(26)
-    IMPORTING
-      top_incl  = lv_incl_top
-      init_incl = lv_incl_init
-      form_incl = lv_incl_form
-    EXCEPTIONS
-      OTHERS    = 1.
-  DATA: lv_incl   TYPE program,
-        lt_source_afpf TYPE STANDARD TABLE OF abaptxt255,
-        lt_repos_new   TYPE STANDARD TABLE OF abaptxt255.
-  LOOP AT repos_tab_new INTO DATA(wa_rn).
-    APPEND wa_rn TO lt_repos_new.
-  ENDLOOP.
-  DO 3 TIMES.
-    CASE sy-index.
-      WHEN 1. lv_incl = lv_incl_top.
-      WHEN 2. lv_incl = lv_incl_init.
-      WHEN 3. lv_incl = lv_incl_form.
-    ENDCASE.
-    IF lv_incl IS INITIAL. CONTINUE. ENDIF.
-    REFRESH lt_source_afpf.
-    CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-      EXPORTING
-        object_name = lv_incl
-        versno      = '00000'
-      TABLES
-        repos_tab   = lt_source_afpf
-      EXCEPTIONS
-        OTHERS      = 1.
-    IF sy-subrc <> 0. CONTINUE. ENDIF.
-    lv_changed = abap_false.
-    DATA lt_merged TYPE STANDARD TABLE OF abaptxt255.
-    REFRESH lt_merged.
-    LOOP AT lt_source_afpf INTO DATA(wa_orig_afpf).
-      READ TABLE lt_repos_new INTO DATA(wa_rn2) INDEX sy-tabix.
-      IF sy-subrc = 0 AND wa_orig_afpf-line <> wa_rn2-line.
-        APPEND wa_rn2 TO lt_merged.
-        lv_changed = abap_true.
-      ELSE.
-        APPEND wa_orig_afpf TO lt_merged.
-      ENDIF.
-    ENDLOOP.
-    IF lv_changed = abap_true.
-      DATA lv_trdir_afpf TYPE trdir.
-      SELECT SINGLE * INTO @lv_trdir_afpf FROM trdir WHERE name = @lv_incl.
-      CALL FUNCTION 'RPY_PROGRAM_UPDATE'
-        EXPORTING
-          program_name     = lv_incl
-          program_type     = lv_trdir_afpf-subc
-          transport_number = lv_req
-        TABLES
-          source_extended  = lt_merged
-        EXCEPTIONS
-          OTHERS           = 1.
-      IF sy-subrc = 0. COMMIT WORK AND WAIT. ENDIF.
-    ENDIF.
-  ENDDO.
-  DATA lv_sfpf_fm TYPE rs38l_fnam.
-  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
-    EXPORTING
-      i_name     = lv_fpname
-    IMPORTING
-      e_funcname = lv_sfpf_fm
-    EXCEPTIONS
-      OTHERS     = 1.
-  IF sy-subrc = 0.
-    CALL FUNCTION 'SAPSCRIPT_GENERATE'
-      EXPORTING
-        object   = lv_fpname
-        language = sy-langu
-      EXCEPTIONS
-        OTHERS   = 1.
-  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form bdc_transaction
