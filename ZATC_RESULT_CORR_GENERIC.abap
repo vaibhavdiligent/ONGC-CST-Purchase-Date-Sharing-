@@ -368,19 +368,7 @@ START-OF-SELECTION.
     REFRESH repos_tab.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
-      WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF'.
-        object_name = wa_final_p-sobjname.
-        CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-          EXPORTING
-            object_name           = object_name
-            versno                = '00000'
-          TABLES
-            repos_tab             = repos_tab
-          EXCEPTIONS
-            no_version            = 1
-            system_failure        = 2
-            communication_failure = 3.
-      WHEN 'SSFO'.
+      WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
         object_name = wa_final_p-sobjname.
         CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
           EXPORTING
@@ -561,8 +549,6 @@ START-OF-SELECTION.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
-          WHEN 'SFPF'.
-            PERFORM adobe_form_procee.
           WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
             SELECT SINGLE * INTO @DATA(l_trdir)
               FROM trdir WHERE name = @wa_final_p-sobjname.
@@ -652,8 +638,6 @@ START-OF-SELECTION.
             ENDIF.
             APPEND wa_output TO it_output.
             CLEAR wa_output.
-          WHEN 'SSFO'.
-            PERFORM smartform_procee.
         ENDCASE.
       ELSE.
         DATA l_enh_tool  TYPE REF TO if_enh_tool.
@@ -949,14 +933,10 @@ FORM syntax_check USING    program    TYPE program
         TRANSLATE program USING ' ='.
         program+30 = 'E'.
       ENDIF.
-    WHEN 'SFPF'.
-      SELECT SINGLE master FROM d010inc
-        WHERE include = @program INTO @DATA(lv_prog).
-      IF sy-subrc = 0. program = lv_prog. ENDIF.
     WHEN OTHERS.
   ENDCASE.
   CASE objecttype.
-    WHEN 'PROG' OR 'CLASS' OR 'SFPF' OR 'FUGR'.
+    WHEN 'PROG' OR 'CLASS' OR 'FUGR'.
       CALL FUNCTION 'RS_ABAP_SYNTAX_CHECK_E'
         EXPORTING
           p_program  = program
@@ -987,107 +967,6 @@ FORM syntax_check USING    program    TYPE program
       ENDIF.
     WHEN OTHERS.
   ENDCASE.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*& Form adobe_form_procee
-*& Permanently updates Adobe Form (SFPF) ABAP code sections.
-*&---------------------------------------------------------------------*
-FORM adobe_form_procee.
-  DATA: lv_fpname    TYPE fpname,
-        lv_fm_name   TYPE rs38l_fnam,
-        lv_prog      TYPE program,
-        lv_fugr_name TYPE rs38l_fnam,
-        lv_incl_top  TYPE program,
-        lv_incl_init TYPE program,
-        lv_incl_form TYPE program,
-        lv_changed   TYPE flag.
-  lv_fpname = wa_final_p-objname.
-  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
-    EXPORTING
-      i_name     = lv_fpname
-    IMPORTING
-      e_funcname = lv_fm_name
-    EXCEPTIONS
-      not_found  = 1
-      OTHERS     = 2.
-  IF sy-subrc <> 0. RETURN. ENDIF.
-  lv_fugr_name = lv_fm_name.
-  lv_prog = 'SAPL' && lv_fugr_name(26).
-  CALL FUNCTION 'SEO_FUGR_INCLUDE_GET'
-    EXPORTING
-      fugrname  = lv_fugr_name(26)
-    IMPORTING
-      top_incl  = lv_incl_top
-      init_incl = lv_incl_init
-      form_incl = lv_incl_form
-    EXCEPTIONS
-      OTHERS    = 1.
-  DATA: lv_incl   TYPE program,
-        lt_source_afpf TYPE STANDARD TABLE OF abaptxt255,
-        lt_repos_new   TYPE STANDARD TABLE OF abaptxt255.
-  LOOP AT repos_tab_new INTO DATA(wa_rn).
-    APPEND wa_rn TO lt_repos_new.
-  ENDLOOP.
-  DO 3 TIMES.
-    CASE sy-index.
-      WHEN 1. lv_incl = lv_incl_top.
-      WHEN 2. lv_incl = lv_incl_init.
-      WHEN 3. lv_incl = lv_incl_form.
-    ENDCASE.
-    IF lv_incl IS INITIAL. CONTINUE. ENDIF.
-    REFRESH lt_source_afpf.
-    CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
-      EXPORTING
-        object_name = lv_incl
-        versno      = '00000'
-      TABLES
-        repos_tab   = lt_source_afpf
-      EXCEPTIONS
-        OTHERS      = 1.
-    IF sy-subrc <> 0. CONTINUE. ENDIF.
-    lv_changed = abap_false.
-    DATA lt_merged TYPE STANDARD TABLE OF abaptxt255.
-    REFRESH lt_merged.
-    LOOP AT lt_source_afpf INTO DATA(wa_orig_afpf).
-      READ TABLE lt_repos_new INTO DATA(wa_rn2) INDEX sy-tabix.
-      IF sy-subrc = 0 AND wa_orig_afpf-line <> wa_rn2-line.
-        APPEND wa_rn2 TO lt_merged.
-        lv_changed = abap_true.
-      ELSE.
-        APPEND wa_orig_afpf TO lt_merged.
-      ENDIF.
-    ENDLOOP.
-    IF lv_changed = abap_true.
-      DATA lv_trdir_afpf TYPE trdir.
-      SELECT SINGLE * INTO @lv_trdir_afpf FROM trdir WHERE name = @lv_incl.
-      CALL FUNCTION 'RPY_PROGRAM_UPDATE'
-        EXPORTING
-          program_name     = lv_incl
-          program_type     = lv_trdir_afpf-subc
-          transport_number = lv_req
-        TABLES
-          source_extended  = lt_merged
-        EXCEPTIONS
-          OTHERS           = 1.
-      IF sy-subrc = 0. COMMIT WORK AND WAIT. ENDIF.
-    ENDIF.
-  ENDDO.
-  DATA lv_sfpf_fm TYPE rs38l_fnam.
-  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
-    EXPORTING
-      i_name     = lv_fpname
-    IMPORTING
-      e_funcname = lv_sfpf_fm
-    EXCEPTIONS
-      OTHERS     = 1.
-  IF sy-subrc = 0.
-    CALL FUNCTION 'SAPSCRIPT_GENERATE'
-      EXPORTING
-        object   = lv_fpname
-        language = sy-langu
-      EXCEPTIONS
-        OTHERS   = 1.
-  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form bdc_transaction
