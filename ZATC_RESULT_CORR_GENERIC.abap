@@ -313,6 +313,7 @@ START-OF-SELECTION.
         percentage = lv_pct
         text       = wa_final_p-sobjname.
     REFRESH repos_tab.
+    REFRESH repos_tab_new.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
       WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
@@ -538,13 +539,11 @@ START-OF-SELECTION.
                   OTHERS           = 4.
               IF sy-subrc = 0.
                 COMMIT WORK AND WAIT.
-                IF p_sim IS INITIAL.
-                  CLEAR wa_output-backup.
-                  CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
-                  INSERT REPORT wa_output-backup FROM repos_tab.
-                  REFRESH repos_tab.
-                  COMMIT WORK.
-                ENDIF.
+                CLEAR wa_output-backup.
+                CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
+                INSERT REPORT wa_output-backup FROM repos_tab.
+                REFRESH repos_tab.
+                COMMIT WORK.
               ENDIF.
             ENDIF.
             REFRESH repos_tab_new.
