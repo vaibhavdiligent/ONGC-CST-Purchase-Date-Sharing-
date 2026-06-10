@@ -898,7 +898,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   ENDLOOP.
   SORT lr_vbeln BY low. DELETE ADJACENT DUPLICATES FROM lr_vbeln COMPARING low.
 
-  " 4. EKKO+EKPO: all relevant OA lines (DQ tax, not deleted)
+  " 4. EKKO+EKPO: all relevant OA lines (not deleted)
   REFRESH gt_ekoa_c.
   IF lr_vbeln IS NOT INITIAL AND gt_t001w_c IS NOT INITIAL.
     SELECT ekko~ebeln ekko~bedat ekpo~werks ekpo~matnr ekpo~txz01
@@ -906,7 +906,6 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
       INTO CORRESPONDING FIELDS OF TABLE gt_ekoa_c
       WHERE ekko~ebeln IN lr_vbeln
         AND ekpo~loekz <> 'X'
-        AND ekpo~mwskz =  'DQ'
         AND ekko~loekz =  ' '.
     SORT gt_ekoa_c BY ebeln werks.
   ENDIF.
@@ -1089,8 +1088,7 @@ FORM derive_oa_fields_from_oa
       INTO (@cv_werks, @cv_matnr, @cv_desc)
       WHERE ekko~ebeln = @iv_vbeln
         AND ekko~loekz = ' '
-        AND ekpo~loekz <> 'X'
-        AND ekpo~mwskz = 'DQ'.
+        AND ekpo~loekz <> 'X'.
   ENDIF.
   IF cv_batch IS INITIAL.
     SELECT SINGLE charg FROM ekbe INTO cv_batch
@@ -1234,6 +1232,7 @@ FORM set_pf_status USING rt_extab TYPE slis_t_extab.
     SET HANDLER go_alv_handler->on_main_data_changed_finished FOR go_alv.
     SET HANDLER go_alv_handler->on_main_f4                    FOR go_alv.
     SET HANDLER go_alv_handler->on_alv_toolbar                FOR go_alv.
+    go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_enter ).
     go_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
     DATA: lt_f4 TYPE lvc_t_f4, ls_f4 TYPE lvc_s_f4.
     CLEAR ls_f4.
@@ -1428,6 +1427,7 @@ FORM build_fieldcat.
   ls_fcat-coltext   = 'OA Batch'.
   ls_fcat-seltext   = 'OA Batch'.
   ls_fcat-outputlen = 12.
+  ls_fcat-no_out    = abap_true.
   APPEND ls_fcat TO gt_fcat.
 
   CLEAR ls_fcat.
