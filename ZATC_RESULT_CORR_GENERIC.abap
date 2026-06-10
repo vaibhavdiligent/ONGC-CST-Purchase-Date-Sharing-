@@ -696,6 +696,9 @@ FORM check_target_msg
   IF lv_up CS 'ARITHMETIC OPERATION'.
     cv_match = abap_true. RETURN.
   ENDIF.
+  IF lv_up CS 'OLD ARITHMETIC TYPE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'COMPARE LENGTH CONFLICT' AND NOT lv_up CS 'OLD COMPARE LENGTH CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
@@ -757,6 +760,12 @@ FORM check_target_msg
   IF lv_up CS 'SELECT TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
+  IF lv_up CS 'OLD SELECT TYPE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'SET PARAMETER ISSUE'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'TYPE-CONFLICT' AND NOT lv_up CS 'OLD TYPE-CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
@@ -788,6 +797,9 @@ FORM check_target_msg
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'DYNAMIC ASSIGN'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'DYNAMIC DB-ACCESS'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'CASTING FROM'.
