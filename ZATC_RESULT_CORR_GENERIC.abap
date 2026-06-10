@@ -447,22 +447,34 @@ START-OF-SELECTION.
           ENDIF.
 
           IF lv_is_target = abap_true.
-            " Same pattern as CI_USAGE_OK in ZATC_RESULT_CORRECTION:
-            "   BEGIN marker
-            "   * original line  (star-commented)
-            "   original line stripped of existing inline comment + "#EC CI_USAGE_OK[note]
-            "   END marker
+            " Choose the correct #EC pragma based on check_title,
+            " matching the same logic used in ZATC_RESULT_CORRECTION.
+            CLEAR l_note.
+            DATA(lv_title_up) = wa_final-check_title.
+            TRANSLATE lv_title_up TO UPPER CASE.
+            IF lv_title_up CS 'FIELD LENGTH EXTENSIONS'.
+              CONCATENATE '"#EC CI_FLDEXT_OK[' wa_final-note ']' INTO l_note.
+            ELSEIF lv_title_up CS 'DATABASE OPERATIONS'.
+              CONCATENATE '"#EC CI_DB_OPERATION_OK[' wa_final-note ']' INTO l_note.
+            ELSEIF lv_title_up CS 'ADBC'.
+              CONCATENATE '"#EC CI_ADBC_US[' wa_final-note ']' INTO l_note.
+            ELSEIF lv_title_up CS 'ORDER BY' OR lv_title_up CS 'WITHOUT ORDER'.
+              CONCATENATE '"#EC CI_NOORDER[' wa_final-note ']' INTO l_note.
+            ELSE.
+              " Default: CI_USAGE_OK (covers simplified objects, non-strategic etc.)
+              CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
+            ENDIF.
+            " BEGIN marker
             CLEAR wa_blank.
             CONCATENATE '"' p_rem p_begin sy-uname l_datum ' for ATC '
               INTO wa_blank-line SEPARATED BY space.
             APPEND wa_blank TO repos_tab_new.
             CLEAR wa_blank.
-            CLEAR l_note.
-            CONCATENATE '"#EC CI_USAGE_OK[' wa_final-note ']' INTO l_note.
+            " Star-comment the original line
             CONCATENATE '*' wa_repos_tab-line INTO wa_blank-line SEPARATED BY space.
             APPEND wa_blank TO repos_tab_new.
             CLEAR wa_blank.
-            " Strip any existing inline comment from the line before appending pragma
+            " Strip any existing inline comment before appending pragma
             IF wa_repos_tab-line CS '"'.
               wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
               REPLACE ALL OCCURRENCES OF '"' IN wa_repos_tab-line WITH space.
@@ -471,6 +483,7 @@ START-OF-SELECTION.
             CONCATENATE wa_repos_tab-line l_note INTO wa_repos_tab-line SEPARATED BY space.
             APPEND wa_repos_tab TO repos_tab_new.
             CLEAR wa_blank.
+            " END marker
             CONCATENATE '"' p_rem p_end sy-uname l_datum 'for ATC'
               INTO wa_blank-line SEPARATED BY space.
             APPEND wa_blank TO repos_tab_new.
