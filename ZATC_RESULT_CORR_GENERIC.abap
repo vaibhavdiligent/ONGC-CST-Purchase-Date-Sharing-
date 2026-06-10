@@ -63,11 +63,14 @@ TYPES: BEGIN OF ty_final ,
 DATA : it_final TYPE TABLE OF ty_final,
        wa_final TYPE ty_final.
 TYPES : BEGIN OF ty_output,
-          program_name TYPE char40,
-          subobj       TYPE char40,
-          new_program  TYPE char40,
-          backup       TYPE char40,
-          status       TYPE char10,
+          program_name  TYPE char40,
+          subobj        TYPE char40,
+          check_title   TYPE char100,
+          check_message TYPE char100,
+          line          TYPE char6,
+          new_program   TYPE char40,
+          backup        TYPE char40,
+          status        TYPE char10,
         END OF ty_output.
 DATA it_output TYPE TABLE OF ty_output.
 DATA wa_output TYPE ty_output.
@@ -448,6 +451,12 @@ START-OF-SELECTION.
           ENDIF.
 
           IF lv_is_target = abap_true.
+            " Track this finding for output
+            wa_output-program_name  = wa_final-objname.
+            wa_output-subobj        = wa_final-program_name.
+            wa_output-check_title   = wa_final-check_title.
+            wa_output-check_message = wa_final-check_message.
+            wa_output-line          = wa_final-line.
             " Pragma depends on check_title
             CLEAR l_note.
             DATA(lv_title_up) = wa_final-check_title.
@@ -490,6 +499,14 @@ START-OF-SELECTION.
     ENDIF.
     DESCRIBE TABLE repos_tab LINES DATA(l_repos_old).
     DESCRIBE TABLE repos_tab_new LINES DATA(l_repos_new).
+    IF wa_output-program_name IS INITIAL AND wa_output-check_title IS INITIAL.
+      " No matching finding for this object — skip output
+    ELSEIF repos_tab_new[] IS INITIAL OR l_repos_old = l_repos_new.
+      " Matching finding but source unchanged (pragma already present)
+      wa_output-status = 'No change'.
+      APPEND wa_output TO it_output.
+      CLEAR wa_output.
+    ENDIF.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
@@ -646,11 +663,14 @@ START-OF-SELECTION.
   ENDLOOP.
   cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_table)
                           CHANGING  t_table      = it_output ).
-  lo_table->get_columns( )->get_column( columnname = 'PROGRAM_NAME' )->set_long_text( 'Main Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'SUBOBJ' )->set_long_text( 'Sub Object Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM' )->set_long_text( 'New Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'BACKUP' )->set_long_text( 'Back Up Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'STATUS' )->set_long_text( 'Status' ).
+  lo_table->get_columns( )->get_column( columnname = 'PROGRAM_NAME'  )->set_long_text( 'Main Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'SUBOBJ'        )->set_long_text( 'Sub Object Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'CHECK_TITLE'   )->set_long_text( 'Check Title' ).
+  lo_table->get_columns( )->get_column( columnname = 'CHECK_MESSAGE' )->set_long_text( 'Check Message' ).
+  lo_table->get_columns( )->get_column( columnname = 'LINE'          )->set_long_text( 'Line No' ).
+  lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM'   )->set_long_text( 'New Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'BACKUP'        )->set_long_text( 'Back Up Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'STATUS'        )->set_long_text( 'Status' ).
   lo_table->display( ).
 
 *&---------------------------------------------------------------------*
