@@ -438,6 +438,12 @@ START-OF-SELECTION.
             lv_msg = wa_final-message1.
           ENDIF.
 
+          " Only process priority 2 and 3 findings.
+          IF wa_final-priority <> '2' AND wa_final-priority <> '3'.
+            APPEND wa_repos_tab TO repos_tab_new.
+            CONTINUE.
+          ENDIF.
+
           " Both check_title AND check_message must match before any change.
           DATA(lv_is_target) = abap_false.
           DATA(lv_title_match) = abap_false.
