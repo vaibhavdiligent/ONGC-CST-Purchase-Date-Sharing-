@@ -898,7 +898,7 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
   ENDLOOP.
   SORT lr_vbeln BY low. DELETE ADJACENT DUPLICATES FROM lr_vbeln COMPARING low.
 
-  " 4. EKKO+EKPO: all relevant OA lines (DQ tax, not deleted)
+  " 4. EKKO+EKPO: all relevant OA lines (not deleted)
   REFRESH gt_ekoa_c.
   IF lr_vbeln IS NOT INITIAL AND gt_t001w_c IS NOT INITIAL.
     SELECT ekko~ebeln ekko~bedat ekpo~werks ekpo~matnr ekpo~txz01
@@ -906,7 +906,6 @@ FORM prefetch_reference_data USING it_pur TYPE STANDARD TABLE.
       INTO CORRESPONDING FIELDS OF TABLE gt_ekoa_c
       WHERE ekko~ebeln IN lr_vbeln
         AND ekpo~loekz <> 'X'
-        AND ekpo~mwskz =  'DQ'
         AND ekko~loekz =  ' '.
     SORT gt_ekoa_c BY ebeln werks.
   ENDIF.
@@ -1089,8 +1088,7 @@ FORM derive_oa_fields_from_oa
       INTO (@cv_werks, @cv_matnr, @cv_desc)
       WHERE ekko~ebeln = @iv_vbeln
         AND ekko~loekz = ' '
-        AND ekpo~loekz <> 'X'
-        AND ekpo~mwskz = 'DQ'.
+        AND ekpo~loekz <> 'X'.
   ENDIF.
   IF cv_batch IS INITIAL.
     SELECT SINGLE charg FROM ekbe INTO cv_batch
