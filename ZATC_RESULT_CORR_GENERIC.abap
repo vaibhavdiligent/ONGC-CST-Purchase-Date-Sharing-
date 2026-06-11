@@ -63,11 +63,15 @@ TYPES: BEGIN OF ty_final ,
 DATA : it_final TYPE TABLE OF ty_final,
        wa_final TYPE ty_final.
 TYPES : BEGIN OF ty_output,
-          program_name TYPE char40,
-          subobj       TYPE char40,
-          new_program  TYPE char40,
-          backup       TYPE char40,
-          status       TYPE char10,
+          program_name  TYPE char40,
+          subobj        TYPE char40,
+          check_title   TYPE char100,
+          check_message TYPE char100,
+          line          TYPE char6,
+          new_program   TYPE char40,
+          backup        TYPE char40,
+          run_status    TYPE char15,
+          status        TYPE char10,
         END OF ty_output.
 DATA it_output TYPE TABLE OF ty_output.
 DATA wa_output TYPE ty_output.
@@ -283,6 +287,26 @@ START-OF-SELECTION.
     wa_final-message      = message.
     wa_final-sobjname     = finding-sobjname.
     wa_final-enhname      = finding-enhname.
+    " Extract note number from param1 if note is not already set.
+    " param1 contains text like "see Note(s): 0002270199" - keep digits only.
+    IF wa_final-note IS INITIAL AND finding-param1 IS NOT INITIAL.
+      DATA lv_p1 TYPE string.
+      DATA lv_note_extracted TYPE string.
+      lv_p1 = finding-param1.
+      CLEAR lv_note_extracted.
+      DO strlen( lv_p1 ) TIMES.
+        DATA(lv_idx) = sy-index - 1.
+        DATA(lv_char) = lv_p1+lv_idx(1).
+        IF lv_char CA '0123456789'.
+          CONCATENATE lv_note_extracted lv_char INTO lv_note_extracted.
+        ENDIF.
+      ENDDO.
+      " Remove leading zeros to get the SAP note number
+      lv_note_extracted = condense( val = lv_note_extracted ).
+      IF lv_note_extracted IS NOT INITIAL.
+        wa_final-note = lv_note_extracted.
+      ENDIF.
+    ENDIF.
     APPEND wa_final TO it_final.
   ENDLOOP.
   DATA l_text TYPE char255.
@@ -302,7 +326,7 @@ START-OF-SELECTION.
   DATA lv_total_objects TYPE i.
   DESCRIBE TABLE it_final_p LINES lv_total_objects.
   LOOP AT it_final_p INTO DATA(wa_final_p)
-     WHERE sobjname IN s_name.
+     WHERE sobjname IN s_name OR objname IN s_name.
     l_repid = l_repid + 1.
     DATA(lv_pct) = CONV i( l_repid * 100 / lv_total_objects ).
     CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
@@ -310,6 +334,7 @@ START-OF-SELECTION.
         percentage = lv_pct
         text       = wa_final_p-sobjname.
     REFRESH repos_tab.
+    REFRESH repos_tab_new.
     object_name = wa_final_p-sobjname.
     CASE wa_final_p-objtype.
       WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
@@ -448,6 +473,17 @@ START-OF-SELECTION.
           ENDIF.
 
           IF lv_is_target = abap_true.
+            " Skip if note number is blank - cannot build valid pragma
+            IF wa_final-note IS INITIAL.
+              APPEND wa_repos_tab TO repos_tab_new.
+              CONTINUE.
+            ENDIF.
+            " Track this finding for output
+            wa_output-program_name  = wa_final-objname.
+            wa_output-subobj        = wa_final-program_name.
+            wa_output-check_title   = wa_final-check_title.
+            wa_output-check_message = wa_final-check_message.
+            wa_output-line          = wa_final-line.
             " Pragma depends on check_title
             CLEAR l_note.
             DATA(lv_title_up) = wa_final-check_title.
@@ -470,7 +506,11 @@ START-OF-SELECTION.
             CLEAR wa_blank.
             " Strip any existing inline comment before appending pragma
             IF wa_repos_tab-line CS '"'.
-              wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+              IF sy-fdpos = 0.
+                CLEAR wa_repos_tab-line.
+              ELSE.
+                wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+              ENDIF.
               REPLACE ALL OCCURRENCES OF '"' IN wa_repos_tab-line WITH space.
               CONDENSE wa_repos_tab-line.
             ENDIF.
@@ -490,6 +530,20 @@ START-OF-SELECTION.
     ENDIF.
     DESCRIBE TABLE repos_tab LINES DATA(l_repos_old).
     DESCRIBE TABLE repos_tab_new LINES DATA(l_repos_new).
+    IF wa_output-program_name IS INITIAL AND wa_output-check_title IS INITIAL.
+      " No matching finding for this object - mark as Not processed
+      wa_output-program_name = wa_final_p-objname.
+      wa_output-subobj       = wa_final_p-sobjname.
+      wa_output-run_status   = 'Not processed'.
+      APPEND wa_output TO it_output.
+      CLEAR wa_output.
+    ELSEIF repos_tab_new[] IS INITIAL OR l_repos_old = l_repos_new.
+      " Matching finding but source unchanged (pragma already present)
+      wa_output-run_status = 'Processed'.
+      wa_output-status     = 'No change'.
+      APPEND wa_output TO it_output.
+      CLEAR wa_output.
+    ENDIF.
     IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
@@ -521,13 +575,11 @@ START-OF-SELECTION.
                   OTHERS           = 4.
               IF sy-subrc = 0.
                 COMMIT WORK AND WAIT.
-                IF p_sim IS INITIAL.
-                  CLEAR wa_output-backup.
-                  CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
-                  INSERT REPORT wa_output-backup FROM repos_tab.
-                  REFRESH repos_tab.
-                  COMMIT WORK.
-                ENDIF.
+                CLEAR wa_output-backup.
+                CONCATENATE 'ZTEST_CHECK' l_repid '_' sy-uname INTO wa_output-backup.
+                INSERT REPORT wa_output-backup FROM repos_tab.
+                REFRESH repos_tab.
+                COMMIT WORK.
               ENDIF.
             ENDIF.
             REFRESH repos_tab_new.
@@ -535,6 +587,7 @@ START-OF-SELECTION.
             CLEAR it_error_table.
             PERFORM syntax_check USING wa_final_p-objname wa_final_p-objtype
                                  CHANGING it_error_table.
+            wa_output-run_status = 'Processed'.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
@@ -575,6 +628,7 @@ START-OF-SELECTION.
             wa_output-new_program = wa_includes-incname.
             PERFORM syntax_check USING wa_final_p-objname wa_final_p-objtype
                                  CHANGING it_error_table.
+            wa_output-run_status = 'Processed'.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
@@ -631,6 +685,7 @@ START-OF-SELECTION.
         REFRESH repos_tab_new.
         wa_output-new_program = wa_final_p-enhname.
         CLEAR it_error_table.
+        wa_output-run_status = 'Processed'.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
@@ -646,11 +701,15 @@ START-OF-SELECTION.
   ENDLOOP.
   cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_table)
                           CHANGING  t_table      = it_output ).
-  lo_table->get_columns( )->get_column( columnname = 'PROGRAM_NAME' )->set_long_text( 'Main Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'SUBOBJ' )->set_long_text( 'Sub Object Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM' )->set_long_text( 'New Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'BACKUP' )->set_long_text( 'Back Up Program Name' ).
-  lo_table->get_columns( )->get_column( columnname = 'STATUS' )->set_long_text( 'Status' ).
+  lo_table->get_columns( )->get_column( columnname = 'PROGRAM_NAME'  )->set_long_text( 'Main Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'SUBOBJ'        )->set_long_text( 'Sub Object Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'CHECK_TITLE'   )->set_long_text( 'Check Title' ).
+  lo_table->get_columns( )->get_column( columnname = 'CHECK_MESSAGE' )->set_long_text( 'Check Message' ).
+  lo_table->get_columns( )->get_column( columnname = 'LINE'          )->set_long_text( 'Line No' ).
+  lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM'   )->set_long_text( 'New Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'BACKUP'        )->set_long_text( 'Back Up Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'RUN_STATUS'    )->set_long_text( 'Run Status' ).
+  lo_table->get_columns( )->get_column( columnname = 'STATUS'        )->set_long_text( 'Status' ).
   lo_table->display( ).
 
 *&---------------------------------------------------------------------*
@@ -674,6 +733,9 @@ FORM check_target_msg
 
   " S/4HANA: Field Length Extensions – 49 check messages -----------
   IF lv_up CS 'ARITHMETIC OPERATION'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'OLD ARITHMETIC TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'COMPARE LENGTH CONFLICT' AND NOT lv_up CS 'OLD COMPARE LENGTH CONFLICT'.
@@ -737,6 +799,12 @@ FORM check_target_msg
   IF lv_up CS 'SELECT TYPE CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
+  IF lv_up CS 'OLD SELECT TYPE CONFLICT'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'SET PARAMETER ISSUE'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
   IF lv_up CS 'TYPE-CONFLICT' AND NOT lv_up CS 'OLD TYPE-CONFLICT'.
     cv_match = abap_true. RETURN.
   ENDIF.
@@ -768,6 +836,9 @@ FORM check_target_msg
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'DYNAMIC ASSIGN'.
+    cv_match = abap_true. RETURN.
+  ENDIF.
+  IF lv_up CS 'DYNAMIC DB-ACCESS'.
     cv_match = abap_true. RETURN.
   ENDIF.
   IF lv_up CS 'CASTING FROM'.
