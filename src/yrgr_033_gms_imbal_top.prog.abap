@@ -5,7 +5,7 @@
 
 TABLES: oijnomi, veda.
 
-TYPE-POOLS: slis.
+TYPE-POOLS: slis, icon.
 
 *----------------------------------------------------------------------*
 * Global Data
@@ -63,7 +63,7 @@ DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 TYPES: BEGIN OF ty_action_cols,
          at_chkbox  TYPE c LENGTH 1,   " Action Taken flag (X = action done)
          at_sal_ord TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
-         at_qty     TYPE menge,         " Quantity   (from YRG_IMB_ACTION)
+         at_qty     TYPE char20,         " Quantity   (from YRG_IMB_ACTION)
          at_remarks TYPE char100,       " Remarks    (from YRG_IMB_ACTION)
        END OF ty_action_cols.
 
