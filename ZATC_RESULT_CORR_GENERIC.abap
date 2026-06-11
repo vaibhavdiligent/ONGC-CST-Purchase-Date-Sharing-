@@ -319,7 +319,8 @@ START-OF-SELECTION.
   DATA(it_final_p) = it_final.
   SORT it_final_p BY program_name sobjname.
   DELETE ADJACENT DUPLICATES FROM it_final_p COMPARING program_name sobjname.
-  SORT it_final BY priority line ASCENDING.
+  " Sort it_final by program_name sobjname line so READ TABLE key lookup is reliable.
+  SORT it_final BY program_name sobjname line ASCENDING.
   DELETE ADJACENT DUPLICATES FROM it_final COMPARING line objname sobjname.
   REFRESH it_output.
   CLEAR l_repid.
@@ -333,6 +334,8 @@ START-OF-SELECTION.
       EXPORTING
         percentage = lv_pct
         text       = wa_final_p-sobjname.
+    CLEAR wa_output.
+    CLEAR l_tab.
     REFRESH repos_tab.
     REFRESH repos_tab_new.
     object_name = wa_final_p-sobjname.
@@ -441,7 +444,8 @@ START-OF-SELECTION.
         READ TABLE it_final INTO wa_final WITH KEY
           program_name = wa_final_p-program_name
           sobjname     = wa_final_p-sobjname
-          line         = l_tabix.
+          line         = l_tabix
+          BINARY SEARCH.
         IF sy-subrc <> 0.
           APPEND wa_repos_tab TO repos_tab_new.
         ELSE.
