@@ -70,6 +70,7 @@ TYPES : BEGIN OF ty_output,
           line          TYPE char6,
           new_program   TYPE char40,
           backup        TYPE char40,
+          run_status    TYPE char15,
           status        TYPE char10,
         END OF ty_output.
 DATA it_output TYPE TABLE OF ty_output.
@@ -526,10 +527,16 @@ START-OF-SELECTION.
     DESCRIBE TABLE repos_tab LINES DATA(l_repos_old).
     DESCRIBE TABLE repos_tab_new LINES DATA(l_repos_new).
     IF wa_output-program_name IS INITIAL AND wa_output-check_title IS INITIAL.
-      " No matching finding for this object — skip output
+      " No matching finding for this object - mark as Not processed
+      wa_output-program_name = wa_final_p-objname.
+      wa_output-subobj       = wa_final_p-sobjname.
+      wa_output-run_status   = 'Not processed'.
+      APPEND wa_output TO it_output.
+      CLEAR wa_output.
     ELSEIF repos_tab_new[] IS INITIAL OR l_repos_old = l_repos_new.
       " Matching finding but source unchanged (pragma already present)
-      wa_output-status = 'No change'.
+      wa_output-run_status = 'Processed'.
+      wa_output-status     = 'No change'.
       APPEND wa_output TO it_output.
       CLEAR wa_output.
     ENDIF.
@@ -576,6 +583,7 @@ START-OF-SELECTION.
             CLEAR it_error_table.
             PERFORM syntax_check USING wa_final_p-objname wa_final_p-objtype
                                  CHANGING it_error_table.
+            wa_output-run_status = 'Processed'.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
@@ -616,6 +624,7 @@ START-OF-SELECTION.
             wa_output-new_program = wa_includes-incname.
             PERFORM syntax_check USING wa_final_p-objname wa_final_p-objtype
                                  CHANGING it_error_table.
+            wa_output-run_status = 'Processed'.
             IF it_error_table IS INITIAL.
               wa_output-status = 'Success'.
             ELSE.
@@ -672,6 +681,7 @@ START-OF-SELECTION.
         REFRESH repos_tab_new.
         wa_output-new_program = wa_final_p-enhname.
         CLEAR it_error_table.
+        wa_output-run_status = 'Processed'.
         IF it_error_table IS INITIAL.
           wa_output-status = 'Success'.
         ELSE.
@@ -694,6 +704,7 @@ START-OF-SELECTION.
   lo_table->get_columns( )->get_column( columnname = 'LINE'          )->set_long_text( 'Line No' ).
   lo_table->get_columns( )->get_column( columnname = 'NEW_PROGRAM'   )->set_long_text( 'New Program Name' ).
   lo_table->get_columns( )->get_column( columnname = 'BACKUP'        )->set_long_text( 'Back Up Program Name' ).
+  lo_table->get_columns( )->get_column( columnname = 'RUN_STATUS'    )->set_long_text( 'Run Status' ).
   lo_table->get_columns( )->get_column( columnname = 'STATUS'        )->set_long_text( 'Status' ).
   lo_table->display( ).
 
