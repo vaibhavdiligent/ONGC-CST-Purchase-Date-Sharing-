@@ -329,6 +329,18 @@ CLASS lcl_alv_handler IMPLEMENTATION.
             CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
                      ls_disp-oa_tsyst ls_disp-oa_batch.
           PERFORM apply_oa_mismatch_color CHANGING ls_disp.
+          " Refresh green OA cell colours for the changed row
+          DATA: ls_col2 TYPE lvc_s_scol.
+          DELETE ls_disp-t_color WHERE fname = 'OA_LOCID' OR fname = 'OA_WERKS'
+                                    OR fname = 'OA_MATNR' OR fname = 'OA_DESC'
+                                    OR fname = 'OA_TSYST' OR fname = 'OA_BATCH'.
+          CLEAR ls_col2. ls_col2-color-col = 5. ls_col2-color-int = 0.
+          ls_col2-fname = 'OA_LOCID'. INSERT ls_col2 INTO TABLE ls_disp-t_color.
+          ls_col2-fname = 'OA_WERKS'. INSERT ls_col2 INTO TABLE ls_disp-t_color.
+          ls_col2-fname = 'OA_MATNR'. INSERT ls_col2 INTO TABLE ls_disp-t_color.
+          ls_col2-fname = 'OA_DESC'.  INSERT ls_col2 INTO TABLE ls_disp-t_color.
+          ls_col2-fname = 'OA_TSYST'. INSERT ls_col2 INTO TABLE ls_disp-t_color.
+          ls_col2-fname = 'OA_BATCH'. INSERT ls_col2 INTO TABLE ls_disp-t_color.
           MODIFY gt_display INDEX ls_mod-row_id FROM ls_disp.
           " Push derived values into grid cell buffer so they render without waiting for refresh
           er_data_changed->modify_cell( i_row_id = ls_mod-row_id i_fieldname = 'OA_LOCID'  i_value = ls_disp-oa_locid ).
@@ -342,10 +354,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD on_main_data_changed_finished.
-    DATA: ls_stbl TYPE lvc_s_stbl.
     IF go_alv IS NOT INITIAL.
-      ls_stbl-row = abap_true. ls_stbl-col = abap_true.
-      go_alv->refresh_table_display( is_stable = ls_stbl ).
+      go_alv->refresh_table_display( ).
     ENDIF.
   ENDMETHOD.
 
