@@ -15,6 +15,16 @@ TYPES: BEGIN OF ty_successor,
          successor_tadir_obj_na  TYPE ars_api_successor-successor_tadir_obj_na,
        END OF ty_successor.
 
+TYPES: BEGIN OF ts_base_field,
+         entity_name   TYPE dd_cds_entity_name,
+         element_name  TYPE fieldname,
+         base_object   TYPE objectname,
+         base_field    TYPE fieldname,
+         is_calculated TYPE dd_cds_calculated,
+       END OF ts_base_field.
+TYPES: tt_base_fields TYPE SORTED TABLE OF ts_base_field
+                      WITH UNIQUE KEY entity_name element_name.
+
 TYPES: BEGIN OF ty_output,
          ddl_name      TYPE viewname,
          entity_name   TYPE dd_cds_entity_name,
