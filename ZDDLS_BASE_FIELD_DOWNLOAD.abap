@@ -11,8 +11,8 @@ REPORT zddls_base_field_download.
 * Data Declarations
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_successor,
-         tadir_obj_name          TYPE ars_api_successor-tadir_obj_name,
-         successor_tadir_obj_na  TYPE ars_api_successor-successor_tadir_obj_na,
+         tadir_obj_name         TYPE ars_api_successor-tadir_obj_name,
+         successor_tadir_obj_na TYPE ars_api_successor-successor_tadir_obj_name,
        END OF ty_successor.
 
 TYPES: BEGIN OF ts_base_field,
@@ -43,10 +43,12 @@ DATA: lt_successor  TYPE STANDARD TABLE OF ty_successor,
       lv_file        TYPE string,
       lv_path        TYPE string,
       lv_fullpath    TYPE string,
-      lv_ddlname     TYPE viewname,
+      lv_ddlname     TYPE c LENGTH 40,
       lv_total       TYPE i,
       lv_processed   TYPE i,
-      lv_msg         TYPE string.
+      lv_count       TYPE i,
+      lv_msg         TYPE string,
+      lv_err_text    TYPE string.
 
 DATA: l_cl_ddl TYPE REF TO cl_dd_ddl_field_tracker.
 
@@ -120,10 +122,10 @@ START-OF-SELECTION.
 
 * Fetch all rows from ARS_API_SUCCESSOR where TADIR_OBJECT = 'TABL'
 * and SUCCESSOR_TADIR_OBJECT = 'DDLS'
-  SELECT tadir_obj_name
+  SELECT tadir_obj_name,
          successor_tadir_obj_na
-    INTO TABLE lt_successor
     FROM ars_api_successor
+    INTO CORRESPONDING FIELDS OF TABLE @lt_successor
     WHERE tadir_object           = 'TABL'
       AND successor_tadir_object = 'DDLS'.
 
@@ -168,7 +170,8 @@ START-OF-SELECTION.
         ENDLOOP.
 
       CATCH cx_dd_ddl_read INTO DATA(lx_read).
-        WRITE: / 'Warning: Could not read DDL', lv_ddlname, '-', lx_read->get_text( ).
+        lv_err_text = lx_read->get_text( ).
+        WRITE: / 'Warning: Could not read DDL', lv_ddlname, '-', lv_err_text.
     ENDTRY.
 
     lv_processed = lv_processed + 1.
@@ -210,8 +213,8 @@ START-OF-SELECTION.
     CONCATENATE 'File write error. Path:' lv_file INTO lv_msg SEPARATED BY space.
     MESSAGE lv_msg TYPE 'E'.
   ELSE.
-    CONCATENATE 'Download complete.' lines( lt_all_output )
-                'records written to:' lv_file
+    lv_count = lines( lt_all_output ).
+    CONCATENATE 'Download complete.' lv_count 'records written to:' lv_file
            INTO lv_msg SEPARATED BY space.
     MESSAGE lv_msg TYPE 'S'.
     WRITE: / lv_msg.
