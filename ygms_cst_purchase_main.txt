@@ -2409,6 +2409,7 @@ FORM handle_save.
         CLEAR ls_nom_fcat.
         ls_nom_fcat-fieldname = 'IDATE'.
         ls_nom_fcat-seltext_l = 'Gas Day'.
+        ls_nom_fcat-outputlen = 12.
         ls_nom_fcat-col_pos   = 3.
         APPEND ls_nom_fcat TO lt_nom_fcat.
         CLEAR ls_nom_fcat.
