@@ -43,7 +43,7 @@ FORM get_data.
       INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
             @lv_at_qty,              @ls_final_ext-at_remarks)
       WHERE docnr = @ls_final-docnr
-      ORDER BY saved_on DESCENDING saved_at DESCENDING.
+      ORDER BY saved_on DESCENDING, saved_at DESCENDING.
       ls_final_ext-at_qty = lv_at_qty.
       EXIT.
     ENDSELECT.
