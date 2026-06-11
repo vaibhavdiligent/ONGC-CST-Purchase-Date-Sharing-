@@ -506,7 +506,11 @@ START-OF-SELECTION.
             CLEAR wa_blank.
             " Strip any existing inline comment before appending pragma
             IF wa_repos_tab-line CS '"'.
-              wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+              IF sy-fdpos = 0.
+                CLEAR wa_repos_tab-line.
+              ELSE.
+                wa_repos_tab-line = wa_repos_tab-line(sy-fdpos).
+              ENDIF.
               REPLACE ALL OCCURRENCES OF '"' IN wa_repos_tab-line WITH space.
               CONDENSE wa_repos_tab-line.
             ENDIF.
