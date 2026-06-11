@@ -294,7 +294,8 @@ START-OF-SELECTION.
       lv_p1 = finding-param1.
       CLEAR lv_note_extracted.
       DO strlen( lv_p1 ) TIMES.
-        DATA(lv_char) = lv_p1+sy-index(1).
+        DATA(lv_idx) = sy-index - 1.
+        DATA(lv_char) = lv_p1+lv_idx(1).
         IF lv_char CA '0123456789'.
           CONCATENATE lv_note_extracted lv_char INTO lv_note_extracted.
         ENDIF.
