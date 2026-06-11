@@ -354,7 +354,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD on_main_data_changed_finished.
-    IF go_alv IS NOT INITIAL.
+    IF e_modified = abap_true AND go_alv IS NOT INITIAL.
       go_alv->refresh_table_display( ).
     ENDIF.
   ENDMETHOD.
@@ -1107,12 +1107,21 @@ FORM derive_oa_fields_from_oa
 ENDFORM.
 
 *----------------------------------------------------------------------*
-* FORM apply_oa_mismatch_color — red row if Location or Material mismatch
+* FORM apply_oa_mismatch_color — red row if any OA mismatch detected
 *----------------------------------------------------------------------*
 FORM apply_oa_mismatch_color CHANGING cs_disp TYPE ty_display.
+  DATA: lv_plant_bad TYPE char1.
   IF cs_disp-is_excl = 'X'. RETURN. ENDIF.
+  " Check OA Plant belongs to the row's State in T001W
+  IF cs_disp-oa_werks IS NOT INITIAL.
+    READ TABLE gt_t001w_c TRANSPORTING NO FIELDS
+        WITH KEY regio = cs_disp-state_code werks = cs_disp-oa_werks
+        BINARY SEARCH.
+    IF sy-subrc <> 0. lv_plant_bad = abap_true. ENDIF.
+  ENDIF.
   IF ( cs_disp-oa_locid IS NOT INITIAL AND cs_disp-locid <> cs_disp-oa_locid ) OR
-     ( cs_disp-oa_matnr IS NOT INITIAL AND cs_disp-material <> cs_disp-oa_matnr ).
+     ( cs_disp-oa_matnr IS NOT INITIAL AND cs_disp-material <> cs_disp-oa_matnr ) OR
+     lv_plant_bad = abap_true.
     cs_disp-row_color = 'C610'.
   ELSE.
     IF cs_disp-row_color = 'C610'. CLEAR cs_disp-row_color. ENDIF.
@@ -1618,6 +1627,15 @@ FORM handle_create_nomination.
        ( ls_disp-oa_matnr IS NOT INITIAL AND ls_disp-material <> ls_disp-oa_matnr ).
       MESSAGE 'Location, OA Location and/ or Material, OA Material Mismatch for some line items.' TYPE 'S' DISPLAY LIKE 'E'.
       RETURN.
+    ENDIF.
+    IF ls_disp-oa_werks IS NOT INITIAL.
+      READ TABLE gt_t001w_c TRANSPORTING NO FIELDS
+          WITH KEY regio = ls_disp-state_code werks = ls_disp-oa_werks
+          BINARY SEARCH.
+      IF sy-subrc <> 0.
+        MESSAGE 'OA Plant doesn''t belong to State for some line items.' TYPE 'S' DISPLAY LIKE 'E'.
+        RETURN.
+      ENDIF.
     ENDIF.
     IF ls_disp-outline_agr IS INITIAL.
       MESSAGE 'Selected row(s) have no Outline Agreement.' TYPE 'S' DISPLAY LIKE 'E'.
