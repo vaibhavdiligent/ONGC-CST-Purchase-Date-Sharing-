@@ -286,6 +286,25 @@ START-OF-SELECTION.
     wa_final-message      = message.
     wa_final-sobjname     = finding-sobjname.
     wa_final-enhname      = finding-enhname.
+    " Extract note number from param1 if note is not already set.
+    " param1 contains text like "see Note(s): 0002270199" - keep digits only.
+    IF wa_final-note IS INITIAL AND finding-param1 IS NOT INITIAL.
+      DATA lv_p1 TYPE string.
+      DATA lv_note_extracted TYPE string.
+      lv_p1 = finding-param1.
+      CLEAR lv_note_extracted.
+      DO strlen( lv_p1 ) TIMES.
+        DATA(lv_char) = lv_p1+sy-index(1).
+        IF lv_char CA '0123456789'.
+          CONCATENATE lv_note_extracted lv_char INTO lv_note_extracted.
+        ENDIF.
+      ENDDO.
+      " Remove leading zeros to get the SAP note number
+      lv_note_extracted = condense( val = lv_note_extracted ).
+      IF lv_note_extracted IS NOT INITIAL.
+        wa_final-note = lv_note_extracted.
+      ENDIF.
+    ENDIF.
     APPEND wa_final TO it_final.
   ENDLOOP.
   DATA l_text TYPE char255.
