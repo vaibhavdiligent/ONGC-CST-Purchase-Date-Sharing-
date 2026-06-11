@@ -64,7 +64,7 @@ TYPES: BEGIN OF ty_action_cols,
          at_chkbox  TYPE c LENGTH 1,   " Action Taken flag (X = action done)
          at_sal_ord TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
          at_qty     TYPE char20,         " Quantity   (from YRG_IMB_ACTION)
-         at_remarks TYPE char100,       " Remarks    (from YRG_IMB_ACTION)
+         at_remarks TYPE char255,       " Remarks    (from YRG_IMB_ACTION)
        END OF ty_action_cols.
 
 TYPES: BEGIN OF ty_final_ext.
