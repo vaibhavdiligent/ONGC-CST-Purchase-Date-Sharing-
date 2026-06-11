@@ -1,19 +1,54 @@
 *&---------------------------------------------------------------------*
 *& Include  YRGR_033_GMS_IMBAL_GET_DATA
 *& Forms: get_data, fill_fieldcat, display, top_of_page,
-*&        send_emails, send_email_posted, send_email_not_posted
+*&        send_emails, send_email_posted, send_email_not_posted,
+*&        display_action_taken (r4), save_action_taken,
+*&        handle_data_changed
 *&---------------------------------------------------------------------*
 
 *&---------------------------------------------------------------------*
 *& Form GET_DATA
+*& Calls FM, filters by s_vkbur, populates lt_final_ext + action data
 *&---------------------------------------------------------------------*
 FORM get_data.
+  REFRESH: lt_final, lt_final_ext.
+
   CALL FUNCTION 'YRX_IMB_SETTLE_QTY_FM'
     EXPORTING
       st_date  = s_date-low
       ed_date  = s_date-high
     TABLES
       lt_final = lt_final.
+
+  " Apply Sales Office filter (s_vkbur for r1/r3, s_vk4 for r4)
+  IF r4 EQ 'X'.
+    IF s_vk4 IS NOT INITIAL.
+      DELETE lt_final WHERE vkbur NOT IN s_vk4.
+    ENDIF.
+  ELSE.
+    IF s_vkbur IS NOT INITIAL.
+      DELETE lt_final WHERE vkbur NOT IN s_vkbur.
+    ENDIF.
+  ENDIF.
+
+  " Copy lt_final into lt_final_ext and augment with Action Taken data
+  LOOP AT lt_final INTO ls_final.
+    CLEAR ls_final_ext.
+    MOVE-CORRESPONDING ls_final TO ls_final_ext.
+
+    " Read latest Action Taken entry from YRG_IMB_ACTION for this contract
+    " NOTE: YRG_IMB_ACTION must be created in SE11 before uncommenting below
+    " TABLES: yrg_imb_action.
+    " SELECT SINGLE at_chkbox, at_sal_ord, at_qty, at_remarks
+    "   FROM yrg_imb_action
+    "   INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
+    "         @ls_final_ext-at_qty,    @ls_final_ext-at_remarks)
+    "   WHERE docnr = @ls_final-docnr
+    "   ORDER BY saved_on DESCENDING saved_at DESCENDING.
+    " TODO: activate above SELECT once YRG_IMB_ACTION table exists in SE11.
+
+    APPEND ls_final_ext TO lt_final_ext.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -22,7 +57,7 @@ ENDFORM.
 FORM fill_fieldcat.
   DEFINE fcat.
     CLEAR gs_fieldcat.
-    gs_fieldcat-fieldname = &1. gs_fieldcat-tabname   = 'LT_FINAL'.
+    gs_fieldcat-fieldname = &1. gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
     gs_fieldcat-outputlen = &2. gs_fieldcat-scrtext_l = &3.
     gs_fieldcat-scrtext_m = &3. gs_fieldcat-scrtext_s = &4.
     gs_fieldcat-no_out    = &5.
@@ -48,6 +83,36 @@ FORM fill_fieldcat.
   fcat 'PUR_RET'  '10' 'Purchase Return (Pur Rtrn)'  'Pur_Ret'    'X'.
   fcat 'PO'       '10' 'PO'                           'PO'         'X'.
   fcat 'GR'       '10' 'GR'                           'GR'         'X'.
+
+  " Action Taken columns: editable in r4 mode, read-only in r1/r3
+  CLEAR gs_fieldcat.
+  gs_fieldcat-fieldname = 'AT_CHKBOX'.  gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
+  gs_fieldcat-outputlen = '3'.          gs_fieldcat-scrtext_l = 'Action Taken'.
+  gs_fieldcat-scrtext_m = 'Act Taken'.  gs_fieldcat-scrtext_s = 'AT'.
+  gs_fieldcat-checkbox  = 'X'.
+  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  CLEAR gs_fieldcat.
+  gs_fieldcat-fieldname = 'AT_SAL_ORD'. gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
+  gs_fieldcat-outputlen = '10'.          gs_fieldcat-scrtext_l = 'Action Sales Ord'.
+  gs_fieldcat-scrtext_m = 'Act SO'.      gs_fieldcat-scrtext_s = 'SO'.
+  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  CLEAR gs_fieldcat.
+  gs_fieldcat-fieldname = 'AT_QTY'.     gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
+  gs_fieldcat-outputlen = '15'.          gs_fieldcat-scrtext_l = 'Action Qty'.
+  gs_fieldcat-scrtext_m = 'Act Qty'.     gs_fieldcat-scrtext_s = 'Qty'.
+  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
+  APPEND gs_fieldcat TO gt_fieldcat.
+
+  CLEAR gs_fieldcat.
+  gs_fieldcat-fieldname = 'AT_REMARKS'. gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
+  gs_fieldcat-outputlen = '30'.          gs_fieldcat-scrtext_l = 'Remarks'.
+  gs_fieldcat-scrtext_m = 'Remarks'.     gs_fieldcat-scrtext_s = 'Rem'.
+  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
+  APPEND gs_fieldcat TO gt_fieldcat.
 
   " Allow mixed-case filter on Status field (values are 'Posted'/'Not Posted')
   LOOP AT gt_fieldcat ASSIGNING FIELD-SYMBOL(<fs_stat>) WHERE fieldname = 'STAT'.
@@ -77,14 +142,23 @@ FORM display.
     CREATE OBJECT grid EXPORTING i_parent = dg_parent_grid.
     gs_layout-stylefname = 'CELL'.
     SET HANDLER lcl_event_handler=>top_of_page FOR grid.
+    SET HANDLER lcl_event_handler=>toolbar      FOR grid.
+    SET HANDLER lcl_event_handler=>user_command FOR grid.
+    SET HANDLER lcl_event_handler=>data_changed FOR grid.
     CALL METHOD grid->set_table_for_first_display
       EXPORTING
         it_toolbar_excluding = lt_exclude
         is_layout            = gs_layout
       CHANGING
         it_fieldcatalog = gt_fieldcat
-        it_outtab       = lt_final[].
+        it_outtab       = lt_final_ext[].
   ENDIF.
+
+  " Enable edit mode when Action Taken (r4) is selected
+  IF r4 EQ 'X'.
+    CALL METHOD grid->set_ready_for_input( EXPORTING i_ready_for_input = 1 ).
+  ENDIF.
+
   CREATE OBJECT dg_dyndoc_id EXPORTING style = 'ALV_GRID'.
   CALL METHOD dg_dyndoc_id->initialize_document.
   CALL METHOD grid->list_processing_events
@@ -106,6 +180,8 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
     dl_text = 'Report For Closing Imbalance Of Expired Contracts'.
   ELSEIF r3 EQ 'X'.
     dl_text = 'Report For Closing Imbalance Of Expired Contracts - Till Date'.
+  ELSEIF r4 EQ 'X'.
+    dl_text = 'Action Taken - Closing Imbalance Of Expired Contracts'.
   ELSEIF r2 EQ 'X'.
     dl_text = 'SOP Due for Invoicing'.
   ENDIF.
@@ -145,7 +221,7 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
   CALL METHOD p_dyndoc_id->new_line.
   CLEAR dl_text.
 
-  IF r1 EQ 'X' OR r3 EQ 'X'.
+  IF r1 EQ 'X' OR r3 EQ 'X' OR r4 EQ 'X'.
     dl_text = 'Note:'.
     CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>strong.
     CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 6.
@@ -156,6 +232,20 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
     CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
     CLEAR dl_text.
     dl_text = '2. Contracts for which imbalance has been shifted are not displayed'.
+    CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
+    CALL METHOD p_dyndoc_id->new_line.
+    CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
+    CLEAR dl_text.
+    dl_text = '3. Contracts which are linked to master contracts are not displayed'.
+    CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
+    CALL METHOD p_dyndoc_id->new_line.
+    CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
+    CLEAR dl_text.
+    IF r3 EQ 'X' OR r4 EQ 'X'.
+      dl_text = '4. The list is from effect from 01.09.2025, post 2UoM Migration.'.
+    ELSE.
+      dl_text = '4. The list is from effect from 01.01.2022, post Implementation of Single Material Code for Transmission of Shippers'' Gas.'.
+    ENDIF.
     CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
     CALL METHOD p_dyndoc_id->new_line.
     CLEAR dl_text.
@@ -183,22 +273,26 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM send_emails.
   PERFORM send_email_posted.
-  PERFORM send_email_not_posted.
+* PERFORM send_email_not_posted.   " Commented as per NGMC confirmation
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form SEND_EMAIL_POSTED
 *& Emails for Status = Posted (finite imbalance), grouped by Sales Office
 *& TO  : Last Changed-by from YRVA_CON_WF_LOG (YY_LEVEL=0) via PA0105
-*& CC  : YSD_WF_AGENT YLEVEL=4 + ngmc@gail.co.in
-*& From: GAIL PARTNER CARE GMS
-*& Body: HTML table; all columns including Posted Imbalance
+*& CC  : YSD_WF_AGENT YLEVEL=4 + s_cceml entries (replaces hardcoded ngmc)
+*& From: sender's SAP user internet address
+*& Body: HTML table; all columns incl. Posted Imbalance
 *& Subject: Expired Contracts with finite Imbalance_SO [VKBUR]
 *&---------------------------------------------------------------------*
 FORM send_email_posted.
   TYPES: BEGIN OF ty_ep_vkbur, vkbur   TYPE vkbur,  END OF ty_ep_vkbur.
   TYPES: BEGIN OF ty_ep_cont,  cont_id TYPE vbeln,   END OF ty_ep_cont.
   TYPES: BEGIN OF ty_ep_pernr, pernr   TYPE persno,  END OF ty_ep_pernr.
+  TYPES: BEGIN OF ty_sort_imbal,
+           sort_key TYPE p DECIMALS 3,
+           docnr    TYPE vbeln,
+         END OF ty_sort_imbal.
 
   DATA: lt_ep_vkbur  TYPE TABLE OF ty_ep_vkbur,  ls_ep_vkbur  TYPE ty_ep_vkbur,
         lt_ep_cont   TYPE TABLE OF ty_ep_cont,    ls_ep_cont   TYPE ty_ep_cont,
@@ -217,7 +311,12 @@ FORM send_email_posted.
         lo_send_req  TYPE REF TO cl_bcs,
         lo_document  TYPE REF TO cl_document_bcs,
         lo_sender_sap TYPE REF TO cl_sapuser_bcs,
-        lo_recipient TYPE REF TO cl_cam_address_bcs.
+        lo_recipient TYPE REF TO cl_cam_address_bcs,
+        lt_sort_imbal TYPE TABLE OF ty_sort_imbal,
+        ls_sort_imbal TYPE ty_sort_imbal,
+        lt_posted_sorted TYPE TABLE OF yrx_imb_settle_qty,
+        lv_abs_po    TYPE p DECIMALS 3,
+        lv_abs_ne    TYPE p DECIMALS 3.
 
   " Collect unique sales offices for Posted records
   LOOP AT lt_final INTO ls_final WHERE stat = 'Posted'.
@@ -228,7 +327,8 @@ FORM send_email_posted.
 
   LOOP AT lt_ep_vkbur INTO ls_ep_vkbur.
     CLEAR: lt_to_email, lt_cc_email, lt_ep_cont, lt_ep_pernr,
-           lv_subject, lv_html_body, lt_soli.
+           lv_subject, lv_html_body, lt_soli,
+           lt_sort_imbal, lt_posted_sorted.
 
     LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
       ls_ep_cont-cont_id = ls_final-docnr.
@@ -278,7 +378,7 @@ FORM send_email_posted.
     SORT lt_to_email. DELETE ADJACENT DUPLICATES FROM lt_to_email.
     IF lt_to_email IS INITIAL. CONTINUE. ENDIF.
 
-    " CC: YSD_WF_AGENT YLEVEL=4 + fixed ngmc address
+    " CC: YSD_WF_AGENT YLEVEL=4
     SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_ep_cc)
       WHERE vkbur = @ls_ep_vkbur-vkbur AND ylevel = 4.
     LOOP AT lt_agt_ep_cc INTO DATA(ls_agt_ep_cc).
@@ -286,7 +386,14 @@ FORM send_email_posted.
         lv_ep_email = ls_agt_ep_cc-email. APPEND lv_ep_email TO lt_cc_email.
       ENDIF.
     ENDLOOP.
-    lv_ep_email = 'ngmc@gail.co.in'. APPEND lv_ep_email TO lt_cc_email.
+
+    " CC: s_cceml user-provided email addresses (replaces hardcoded ngmc@gail.co.in)
+    LOOP AT s_cceml INTO DATA(ls_cceml).
+      IF ls_cceml-low IS NOT INITIAL.
+        lv_ep_email = ls_cceml-low. APPEND lv_ep_email TO lt_cc_email.
+      ENDIF.
+    ENDLOOP.
+
     SORT lt_cc_email. DELETE ADJACENT DUPLICATES FROM lt_cc_email.
     LOOP AT lt_to_email INTO lv_ep_email.
       DELETE lt_cc_email WHERE table_line = lv_ep_email.
@@ -295,45 +402,63 @@ FORM send_email_posted.
     " Subject: SO [vkbur]
     lv_subject = |Expired Contracts with finite Imbalance_SO { ls_ep_vkbur-vkbur }|.
 
-    " Body: HTML table (ref YRGR091 style), all columns retained for Posted
+    " Sort Posted rows for this SO by absolute imbalance descending
+    LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
+      " Exclude contracts where Action Taken is checked
+      " NOTE: Uncomment when YRG_IMB_ACTION table exists in SE11
+      " READ TABLE lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_at>) WITH KEY docnr = ls_final-docnr.
+      " IF sy-subrc = 0 AND <fs_at>-at_chkbox = 'X'. CONTINUE. ENDIF.
+
+      CLEAR: ls_sort_imbal, lv_abs_po, lv_abs_ne.
+      lv_abs_po = ls_final-po_imbal. IF lv_abs_po < 0. lv_abs_po = lv_abs_po * -1. ENDIF.
+      lv_abs_ne = ls_final-ne_imbal. IF lv_abs_ne < 0. lv_abs_ne = lv_abs_ne * -1. ENDIF.
+      ls_sort_imbal-sort_key = lv_abs_po + lv_abs_ne.
+      ls_sort_imbal-docnr    = ls_final-docnr.
+      APPEND ls_sort_imbal TO lt_sort_imbal.
+      APPEND ls_final TO lt_posted_sorted.
+    ENDLOOP.
+    SORT lt_sort_imbal BY sort_key DESCENDING.
+
+    " Body: HTML table
     lv_html_body =
       '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&
       '<p>Dear Ma''am/ Sir,</p>' &&
       |<p>Please find below instances of Finite Imbalances in Expired Contracts | &&
-      |for Sales Office { ls_ep_vkbur-vkbur }. | &&
-      |Please take necessary action in this regard.</p>| &&
+      |(as on date w.e.f 01.09.2025, post 2UoM Migration) | &&
+      |for Sales Office { ls_ep_vkbur-vkbur }, | &&
+      |which have not been shifted or cured in System</p>| &&
       '<table border="1" cellspacing="0" cellpadding="4" ' &&
-      'style="border-collapse:collapse;font-size:12px;">' &&
+      'style="border-collapse:collapse;font-size:12px;border:1px solid black;">' &&
       '<tr style="background-color:#c0c0c0;font-weight:bold;">' &&
-      '<td>Contract ID</td>' &&
-      '<td>Sales Office</td>' &&
-      '<td>Business Location</td>' &&
-      '<td>Customer</td>' &&
-      '<td>CT Start Date</td>' &&
-      '<td>CT End Date</td>' &&
-      '<td>Posted Imbalance</td>' &&
-      '<td>Posted Negative Imbalance</td>' &&
+      '<td style="border:1px solid black;">Contract ID</td>' &&
+      '<td style="border:1px solid black;">Sales Office</td>' &&
+      '<td style="border:1px solid black;">Business Location</td>' &&
+      '<td style="border:1px solid black;">Customer</td>' &&
+      '<td style="border:1px solid black;">CT Start Date</td>' &&
+      '<td style="border:1px solid black;">CT End Date</td>' &&
+      '<td style="border:1px solid black;">Posted Positive Imbalance</td>' &&
+      '<td style="border:1px solid black;">Posted Negative Imbalance</td>' &&
       '</tr>'.
 
-    LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
-      " Date format: DD.MM.YYYY
+    " Write rows in sorted order (descending absolute imbalance)
+    LOOP AT lt_sort_imbal INTO ls_sort_imbal.
+      READ TABLE lt_posted_sorted INTO ls_final WITH KEY docnr = ls_sort_imbal-docnr.
+      IF sy-subrc <> 0. CONTINUE. ENDIF.
       lv_ct_start = |{ ls_final-vbegdat+6(2) }.{ ls_final-vbegdat+4(2) }.{ ls_final-vbegdat(4) }|.
       lv_ct_end   = |{ ls_final-venddat+6(2) }.{ ls_final-venddat+4(2) }.{ ls_final-venddat(4) }|.
-      " Strip leading zeros from customer
-      lv_partnr = ls_final-partnr.
-      SHIFT lv_partnr LEFT DELETING LEADING '0'.
+      lv_partnr = ls_final-partnr. SHIFT lv_partnr LEFT DELETING LEADING '0'.
       WRITE ls_final-po_imbal TO lv_po_str LEFT-JUSTIFIED.
       WRITE ls_final-ne_imbal TO lv_ne_str LEFT-JUSTIFIED.
       lv_html_body = lv_html_body &&
         |<tr>| &&
-        |<td>{ ls_final-docnr }</td>| &&
-        |<td>{ ls_final-vkbur }</td>| &&
-        |<td>{ ls_final-locid }</td>| &&
-        |<td>{ lv_partnr }</td>| &&
-        |<td>{ lv_ct_start }</td>| &&
-        |<td>{ lv_ct_end }</td>| &&
-        |<td align="right">{ lv_po_str }</td>| &&
-        |<td align="right">{ lv_ne_str }</td>| &&
+        |<td style="border:1px solid black;">{ ls_final-docnr }</td>| &&
+        |<td style="border:1px solid black;">{ ls_final-vkbur }</td>| &&
+        |<td style="border:1px solid black;">{ ls_final-locid }</td>| &&
+        |<td style="border:1px solid black;">{ lv_partnr }</td>| &&
+        |<td style="border:1px solid black;">{ lv_ct_start }</td>| &&
+        |<td style="border:1px solid black;">{ lv_ct_end }</td>| &&
+        |<td align="right" style="border:1px solid black;">{ lv_po_str }</td>| &&
+        |<td align="right" style="border:1px solid black;">{ lv_ne_str }</td>| &&
         |</tr>|.
     ENDLOOP.
 
@@ -345,7 +470,7 @@ FORM send_email_posted.
       |<p>Source: YRGR105.{ sy-uname }.{ sy-datum }.{ sy-uzeit }</p>| &&
       '</body></html>'.
 
-    " Send via CL_BCS for proper HTML rendering and sender display name
+    " Send via CL_BCS for proper HTML rendering
     TRY.
       lo_send_req = cl_bcs=>create_persistent( ).
 
@@ -391,8 +516,8 @@ ENDFORM.
 *& TO  : ERNAM from OIJ_EL_TICKET_I / OIJNOMI AENAM -> PA0105
 *& CC  : PA0034/PA0001 (PERSK E7/E8/E9) + last Changed-by via
 *&        YRVA_CON_WF_LOG (YY_LEVEL=0, same sort+dedup as Posted)
-*&        + YSD_WF_AGENT YLEVEL=1 + ngmc@gail.co.in
-*& From: GAIL PARTNER CARE GMS
+*&        + YSD_WF_AGENT YLEVEL=1 + s_cceml entries
+*& From: sender's SAP user internet address
 *& Body: HTML table; last two imbalance columns OMITTED (Not Posted)
 *& Subject: IMB Posting Pending [LOCID without C prefix]_Expired Contracts
 *&---------------------------------------------------------------------*
@@ -620,7 +745,6 @@ FORM send_email_not_posted.
     IF lt_to_email IS INITIAL. CONTINUE. ENDIF.
 
     " CC: latest CHANGED_BY from YRVA_CON_WF_LOG (YY_LEVEL=0) -> PA0105
-    " Same sort+dedup logic as SEND_EMAIL_POSTED to keep last Changed-by entry
     IF lt_np_cont IS NOT INITIAL.
       SELECT vbeln, changed_by, changed_on, changed_time FROM yrva_con_wf_log
         INTO TABLE @DATA(lt_wf_np)
@@ -647,7 +771,7 @@ FORM send_email_not_posted.
       ENDIF.
     ENDIF.
 
-    " CC: YSD_WF_AGENT YLEVEL=1 (sales office of this location) + fixed address
+    " CC: YSD_WF_AGENT YLEVEL=1 (sales office of this location)
     SELECT email FROM ysd_wf_agent INTO TABLE @DATA(lt_agt_np)
       WHERE vkbur = @lv_np_vkbur AND ylevel = 1.
     LOOP AT lt_agt_np INTO DATA(ls_agt_np).
@@ -655,7 +779,14 @@ FORM send_email_not_posted.
         lv_np_email = ls_agt_np-email. APPEND lv_np_email TO lt_cc_email.
       ENDIF.
     ENDLOOP.
-    lv_np_email = 'ngmc@gail.co.in'. APPEND lv_np_email TO lt_cc_email.
+
+    " CC: s_cceml user-provided email addresses (replaces hardcoded ngmc@gail.co.in)
+    LOOP AT s_cceml INTO DATA(ls_np_cceml).
+      IF ls_np_cceml-low IS NOT INITIAL.
+        lv_np_email = ls_np_cceml-low. APPEND lv_np_email TO lt_cc_email.
+      ENDIF.
+    ENDLOOP.
+
     SORT lt_cc_email. DELETE ADJACENT DUPLICATES FROM lt_cc_email.
     LOOP AT lt_to_email INTO lv_np_email.
       DELETE lt_cc_email WHERE table_line = lv_np_email.
@@ -672,38 +803,35 @@ FORM send_email_not_posted.
     lv_partnr = ls_final-partnr.
     SHIFT lv_partnr LEFT DELETING LEADING '0'.
 
-    " Body: HTML table – last two columns (Posted Imbalance cols) OMITTED
+    " Body: HTML table – Posted Imbalance cols OMITTED for Not Posted
     lv_html_body =
       '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&
       '<p>Dear Ma''am/ Sir,</p>' &&
       |<p>Please find below instances of missed Imbalances posting for Expired Contracts | &&
       |for Customer { lv_partnr }. Please take necessary action in this regard.</p>| &&
       '<table border="1" cellspacing="0" cellpadding="4" ' &&
-      'style="border-collapse:collapse;font-size:12px;">' &&
+      'style="border-collapse:collapse;font-size:12px;border:1px solid black;">' &&
       '<tr style="background-color:#c0c0c0;font-weight:bold;">' &&
-      '<td>Contract ID</td>' &&
-      '<td>Sales Office</td>' &&
-      '<td>Business Location</td>' &&
-      '<td>Customer</td>' &&
-      '<td>CT Start Date</td>' &&
-      '<td>CT End Date</td>' &&
+      '<td style="border:1px solid black;">Contract ID</td>' &&
+      '<td style="border:1px solid black;">Sales Office</td>' &&
+      '<td style="border:1px solid black;">Business Location</td>' &&
+      '<td style="border:1px solid black;">Customer</td>' &&
+      '<td style="border:1px solid black;">CT Start Date</td>' &&
+      '<td style="border:1px solid black;">CT End Date</td>' &&
       '</tr>'.
 
     LOOP AT lt_final INTO ls_final WHERE stat = 'Not Posted' AND locid = ls_np_locid-locid.
-      " Date format: DD.MM.YYYY
       lv_ct_start = |{ ls_final-vbegdat+6(2) }.{ ls_final-vbegdat+4(2) }.{ ls_final-vbegdat(4) }|.
       lv_ct_end   = |{ ls_final-venddat+6(2) }.{ ls_final-venddat+4(2) }.{ ls_final-venddat(4) }|.
-      " Strip leading zeros from customer
-      lv_partnr = ls_final-partnr.
-      SHIFT lv_partnr LEFT DELETING LEADING '0'.
+      lv_partnr = ls_final-partnr. SHIFT lv_partnr LEFT DELETING LEADING '0'.
       lv_html_body = lv_html_body &&
         |<tr>| &&
-        |<td>{ ls_final-docnr }</td>| &&
-        |<td>{ ls_final-vkbur }</td>| &&
-        |<td>{ ls_final-locid }</td>| &&
-        |<td>{ lv_partnr }</td>| &&
-        |<td>{ lv_ct_start }</td>| &&
-        |<td>{ lv_ct_end }</td>| &&
+        |<td style="border:1px solid black;">{ ls_final-docnr }</td>| &&
+        |<td style="border:1px solid black;">{ ls_final-vkbur }</td>| &&
+        |<td style="border:1px solid black;">{ ls_final-locid }</td>| &&
+        |<td style="border:1px solid black;">{ lv_partnr }</td>| &&
+        |<td style="border:1px solid black;">{ lv_ct_start }</td>| &&
+        |<td style="border:1px solid black;">{ lv_ct_end }</td>| &&
         |</tr>|.
     ENDLOOP.
 
@@ -715,7 +843,7 @@ FORM send_email_not_posted.
       |<p>Source: YRGR105.{ sy-uname }.{ sy-datum }.{ sy-uzeit }</p>| &&
       '</body></html>'.
 
-    " Send via CL_BCS for proper HTML rendering and sender display name
+    " Send via CL_BCS for proper HTML rendering
     TRY.
       lo_send_req = cl_bcs=>create_persistent( ).
 
@@ -753,4 +881,78 @@ FORM send_email_not_posted.
 
     CLEAR: lt_np_cont, lt_np_ernam, lt_np_pernr, lt_cc_rep, lt_wf_np_pernr.
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form SAVE_ACTION_TAKEN
+*& Saves Action Taken data from lt_final_ext to YRG_IMB_ACTION.
+*& NOTE: YRG_IMB_ACTION table must be created in SE11 first.
+*& Table fields: MANDT(key) DOCNR(key) CPF_ID SAVED_ON SAVED_AT
+*&               CHKBOX AT_SAL_ORD AT_QTY AT_REMARKS
+*& Activate the INSERT statements below after SE11 table creation.
+*&---------------------------------------------------------------------*
+FORM save_action_taken.
+  DATA: lv_saved_count TYPE i VALUE 0.
+
+  " First collect all current data from the ALV grid
+  CALL METHOD grid->check_changed_data.
+
+  LOOP AT lt_final_ext INTO ls_final_ext.
+    " TODO: Uncomment after SE11 table YRG_IMB_ACTION is created
+    " DATA: ls_imb_action TYPE yrg_imb_action.
+    " CLEAR ls_imb_action.
+    " ls_imb_action-docnr     = ls_final_ext-docnr.
+    " ls_imb_action-cpf_id    = sy-uname.
+    " ls_imb_action-saved_on  = sy-datum.
+    " ls_imb_action-saved_at  = sy-uzeit.
+    " ls_imb_action-chkbox    = ls_final_ext-at_chkbox.
+    " IF ls_final_ext-at_chkbox = 'X'.
+    "   ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
+    "   ls_imb_action-at_qty     = ls_final_ext-at_qty.
+    "   ls_imb_action-at_remarks = ls_final_ext-at_remarks.
+    " ENDIF.
+    " INSERT yrg_imb_action FROM ls_imb_action.
+
+    IF ls_final_ext-at_chkbox = 'X'.
+      lv_saved_count = lv_saved_count + 1.
+    ENDIF.
+  ENDLOOP.
+
+  IF lv_saved_count = 0.
+    MESSAGE 'Please select at least one checkbox before saving' TYPE 'W'.
+    RETURN.
+  ENDIF.
+
+  " COMMIT WORK.   " Uncomment after activating INSERT statements above
+  MESSAGE |Action Taken saved for { lv_saved_count } contract(s). [Activate DB write in SE38 after SE11 table creation]| TYPE 'S'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form HANDLE_DATA_CHANGED
+*& Handles cell edits in Action Taken ALV (r4 mode)
+*&---------------------------------------------------------------------*
+FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_protocol.
+  DATA: lv_row_idx TYPE i.
+
+  LOOP AT p_data_changed->mt_mod_cells INTO DATA(ls_mod).
+    lv_row_idx = ls_mod-row_id.
+    READ TABLE lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_ext>) INDEX lv_row_idx.
+    IF sy-subrc <> 0. CONTINUE. ENDIF.
+
+    CASE ls_mod-fieldname.
+      WHEN 'AT_CHKBOX'.  <fs_ext>-at_chkbox  = ls_mod-value.
+        " If unchecked, clear the related fields
+        IF <fs_ext>-at_chkbox <> 'X'.
+          CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
+        ENDIF.
+      WHEN 'AT_SAL_ORD'. <fs_ext>-at_sal_ord = ls_mod-value.
+      WHEN 'AT_QTY'.     <fs_ext>-at_qty     = ls_mod-value.
+      WHEN 'AT_REMARKS'. <fs_ext>-at_remarks = ls_mod-value.
+    ENDCASE.
+  ENDLOOP.
+
+  " Refresh the display to reflect cleared fields if checkbox was unchecked
+  IF p_data_changed->mt_mod_cells IS NOT INITIAL.
+    CALL METHOD grid->refresh_table_display.
+  ENDIF.
 ENDFORM.

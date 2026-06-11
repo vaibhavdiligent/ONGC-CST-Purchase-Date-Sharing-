@@ -25,6 +25,16 @@
 *                                    Last Changed-by (YRVA_CON_WF_LOG
 *                                    sort+dedup) same for Posted and
 *                                    Not Posted
+* 11.06.2026  DEVELOPER              Add Sales Office (s_vkbur) selection
+*                                    Add CC email input (s_cceml) replacing
+*                                    hardcoded ngmc@gail.co.in
+*                                    Add Action Taken radio button (r4)
+*                                    Validate r1 start date >= 01.01.2022
+*                                    Add notes 3 & 4 to ALV header
+*                                    Email: black border, column rename,
+*                                    updated intro text, sort by abs imbal
+*                                    Action Taken cols in ALV (r1/r3 r-o)
+*                                    NOTE: YRG_IMB_ACTION needs SE11
 *&---------------------------------------------------------------------*
 REPORT yrgr_033_gms_imbal.
 
@@ -54,14 +64,61 @@ INITIALIZATION.
   IF sy-subrc EQ 0. lv_has_role = 'X'. ENDIF.
 
 *----------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+  " Validate R1 date: from date must be >= 01.01.2022
+  IF r1 EQ 'X'.
+    READ TABLE s_date INTO DATA(ls_sd_chk) INDEX 1.
+    IF sy-subrc = 0 AND ls_sd_chk-low IS NOT INITIAL.
+      IF ls_sd_chk-low LT '20220101'.
+        MESSAGE 'From date should be after 01.01.2022' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+*----------------------------------------------------------------------*
 AT SELECTION-SCREEN OUTPUT.
   LOOP AT SCREEN.
     " Always hide r2 radio button
     IF screen-name = 'R2'.
       screen-active = 0.
       MODIFY SCREEN.
+      CONTINUE.
     ENDIF.
-    " Hide Send Email checkbox unless user has role and Till Date selected
+
+    " Hide Gas Day (s_date / m2) when Till Date (r3) or Action Taken (r4)
+    IF screen-group1 = 'M2'.
+      IF r3 EQ 'X' OR r4 EQ 'X'.
+        screen-active = 0.
+      ELSE.
+        screen-active = 1.
+      ENDIF.
+      MODIFY SCREEN.
+      CONTINUE.
+    ENDIF.
+
+    " Sales Office s_vkbur (m6): shown for r1/r3, hidden for r4
+    IF screen-group1 = 'M6'.
+      IF r4 EQ 'X'.
+        screen-active = 0.
+      ELSE.
+        screen-active = 1.
+      ENDIF.
+      MODIFY SCREEN.
+      CONTINUE.
+    ENDIF.
+
+    " R4-specific inputs s_dat4/s_vk4 (m7): shown only for r4
+    IF screen-group1 = 'M7'.
+      IF r4 EQ 'X'.
+        screen-active = 1.
+      ELSE.
+        screen-active = 0.
+      ENDIF.
+      MODIFY SCREEN.
+      CONTINUE.
+    ENDIF.
+
+    " Send Email checkbox (m3): show only when user has role and r3 is selected
     IF screen-name = 'P_EMAIL'.
       IF lv_has_role NE 'X' OR r3 NE 'X'.
         screen-active = 0.
@@ -69,16 +126,18 @@ AT SELECTION-SCREEN OUTPUT.
         screen-active = 1.
       ENDIF.
       MODIFY SCREEN.
+      CONTINUE.
     ENDIF.
-    " Hide Gas Day (s_date) label and fields when Till Date (r3) is selected
-    " MODIF ID m2 covers both the select-option fields and its text label
-    IF screen-group1 = 'M2'.
-      IF r3 EQ 'X'.
+
+    " CC Email Addresses s_cceml (m4): shown when p_email checked + r3 + role
+    IF screen-group1 = 'M4'.
+      IF p_email IS INITIAL OR lv_has_role NE 'X' OR r3 NE 'X'.
         screen-active = 0.
       ELSE.
         screen-active = 1.
       ENDIF.
       MODIFY SCREEN.
+      CONTINUE.
     ENDIF.
   ENDLOOP.
 
@@ -110,6 +169,32 @@ START-OF-SELECTION.
         MESSAGE 'Emails sent successfully' TYPE 'S'.
       ENDIF.
     ENDIF.
+
+  ELSEIF r4 EQ 'X'.
+    " Action Taken mode: use s_dat4/s_vk4 as date/sales-office input
+    REFRESH: s_date[].
+    IF s_dat4 IS NOT INITIAL.
+      LOOP AT s_dat4 INTO DATA(ls_dat4).
+        s_date-sign   = ls_dat4-sign.
+        s_date-option = ls_dat4-option.
+        s_date-low    = ls_dat4-low.
+        s_date-high   = ls_dat4-high.
+        APPEND s_date.
+        CLEAR s_date.
+      ENDLOOP.
+    ELSE.
+      " Default to last full fortnight if no date entered
+      lv_date = sy-datum - 3.
+      CALL FUNCTION 'YRX_PRVS_DATE_FM'
+        EXPORTING s_date = lv_date
+        IMPORTING st_date = st_date ed_date = ed_date.
+      s_date-low = st_date. s_date-high = ed_date. APPEND s_date.
+    ENDIF.
+    DATA: obj_r4 TYPE REF TO lcl_event_handler.
+    CREATE OBJECT obj_r4.
+    obj_r4->get_data( ).
+    PERFORM fill_fieldcat.
+    PERFORM display.
   ENDIF.
 
 *----------------------------------------------------------------------*
