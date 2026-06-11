@@ -2440,17 +2440,24 @@ FORM handle_save.
         ls_nom_fcat-col_pos   = 8.
         APPEND ls_nom_fcat TO lt_nom_fcat.
 
+        DATA: ls_nom_layout TYPE slis_layout_alv.
+        ls_nom_layout-zebra             = 'X'.
+        ls_nom_layout-colwidth_optimize = 'X'.
         CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
           EXPORTING
-            i_callback_program = sy-repid
-            i_grid_title       = 'CST Nomination Details'
-            it_fieldcat        = lt_nom_fcat
+            i_callback_program    = sy-repid
+            i_grid_title          = 'CST Nomination Details'
+            is_layout             = ls_nom_layout
+            it_fieldcat           = lt_nom_fcat
             i_screen_start_column = 5
             i_screen_start_line   = 5
             i_screen_end_column   = 160
             i_screen_end_line     = 20
           TABLES
-            t_outtab           = lt_nom_detail.
+            t_outtab              = lt_nom_detail
+          EXCEPTIONS
+            program_error         = 1
+            OTHERS                = 2.
       ENDIF.
       RETURN.
     ENDIF.
@@ -6166,7 +6173,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'GAS_DAY'.
     ls_fieldcat-seltext_l = 'Gas Day'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 10.
+    ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'CTP'.
@@ -6178,7 +6185,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 18.
+    ls_fieldcat-outputlen = 25.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6258,7 +6265,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'GAS_DAY'.
     ls_fieldcat-seltext_l = 'Gas Day'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 10.
+    ls_fieldcat-outputlen = 12.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'CTP'.
@@ -6270,7 +6277,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 18.
+    ls_fieldcat-outputlen = 25.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6334,7 +6341,7 @@ FORM display_saved_daily_alv.
     ls_fieldcat-fieldname = 'MATERIAL'.
     ls_fieldcat-seltext_l = 'Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 18.
+    ls_fieldcat-outputlen = 25.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'EXCLUDE'.
@@ -6466,7 +6473,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 18.
+    ls_fieldcat-outputlen = 25.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6558,7 +6565,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'ONGC_MATER'.
     ls_fieldcat-seltext_l = 'ONGC Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 18.
+    ls_fieldcat-outputlen = 25.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'STATE_CODE'.
@@ -6616,7 +6623,7 @@ FORM display_saved_fnt_alv.
     ls_fieldcat-fieldname = 'MATERIAL'.
     ls_fieldcat-seltext_l = 'Material'.
     ls_fieldcat-col_pos   = lv_col.
-    ls_fieldcat-outputlen = 18.
+    ls_fieldcat-outputlen = 25.
     APPEND ls_fieldcat TO lt_fieldcat.
     lv_col = lv_col + 1. CLEAR ls_fieldcat.
     ls_fieldcat-fieldname = 'CREATED_BY'.
