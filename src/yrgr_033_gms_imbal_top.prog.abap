@@ -68,9 +68,9 @@ TYPES: BEGIN OF ty_action_cols,
        END OF ty_action_cols.
 
 TYPES: BEGIN OF ty_final_ext.
-         INCLUDE TYPE yrx_imb_settle_qty AS base.
-         INCLUDE TYPE ty_action_cols     AS action.
-       END OF ty_final_ext.
+  INCLUDE TYPE yrx_imb_settle_qty AS base.
+  INCLUDE TYPE ty_action_cols     AS action.
+TYPES: END OF ty_final_ext.
 
 DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext WITH DEFAULT KEY,
       ls_final_ext TYPE ty_final_ext.
