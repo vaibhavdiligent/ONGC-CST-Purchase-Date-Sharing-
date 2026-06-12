@@ -383,6 +383,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           ls_stbl  TYPE lvc_s_stbl.
     DATA: BEGIN OF ls_f4val,
             charg TYPE charg_d,
+            werks TYPE werks_d,
+            ersda TYPE ersda,
           END OF ls_f4val.
     DATA lt_f4vals LIKE TABLE OF ls_f4val.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
@@ -398,6 +400,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
         IF sy-subrc <> 0. CONTINUE. ENDIF.
       ENDIF.
       ls_f4val-charg = ls_mcha-charg.
+      ls_f4val-werks = ls_mcha-werks.
+      ls_f4val-ersda = ls_mcha-ersda.
       APPEND ls_f4val TO lt_f4vals.
     ENDLOOP.
     IF lt_f4vals IS INITIAL.
@@ -407,6 +411,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
       EXPORTING retfield        = 'CHARG'
                 value_org       = 'S'
+                window_title    = 'Select Batch'
       TABLES    value_tab       = lt_f4vals
                 return_tab      = lt_ret
       EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
@@ -468,6 +473,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
           ls_stbl   TYPE lvc_s_stbl.
     DATA: BEGIN OF ls_f4val,
             charg TYPE charg_d,
+            werks TYPE werks_d,
+            ersda TYPE ersda,
           END OF ls_f4val.
     DATA lt_f4vals LIKE TABLE OF ls_f4val.
     IF e_fieldname <> 'CHARG'. RETURN. ENDIF.
@@ -483,6 +490,8 @@ CLASS lcl_alv_handler IMPLEMENTATION.
         IF sy-subrc <> 0. CONTINUE. ENDIF.
       ENDIF.
       ls_f4val-charg = ls_mcha-charg.
+      ls_f4val-werks = ls_mcha-werks.
+      ls_f4val-ersda = ls_mcha-ersda.
       APPEND ls_f4val TO lt_f4vals.
     ENDLOOP.
     IF lt_f4vals IS INITIAL.
@@ -492,6 +501,7 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
       EXPORTING retfield        = 'CHARG'
                 value_org       = 'S'
+                window_title    = 'Select Batch'
       TABLES    value_tab       = lt_f4vals
                 return_tab      = lt_ret
       EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
@@ -740,10 +750,7 @@ FORM fetch_pur_data.
       ENDIF.
       INSERT ls_styl INTO TABLE ls_disp-celltab.
 
-      IF lv_xchpf_r = 'X' AND ls_disp-outline_agr IS NOT INITIAL.
-        PERFORM derive_batch USING ls_pur-material ls_disp-outline_agr
-                             CHANGING ls_disp-charg.
-      ENDIF.
+      " Batch (CHARG) left blank - user fills manually
 
       IF ls_disp-oa_missing = abap_true.
         CLEAR ls_col.
@@ -1780,8 +1787,7 @@ FORM handle_batch_mass_change.
         ls_assign-matnr       = ls_disp-material.
         ls_assign-state_code  = ls_disp-state_code.
         ls_assign-outline_agr = ls_disp-outline_agr.
-        PERFORM derive_batch USING ls_disp-material ls_disp-outline_agr
-                             CHANGING ls_assign-charg.
+        CLEAR ls_assign-charg.
         APPEND ls_assign TO gt_batch_assign.
       ENDIF.
     ENDIF.
