@@ -1678,18 +1678,18 @@ FORM edit_9100 .
            ProductDocumentVersion  AS zeivr,
            ProductGroup            AS matkl,
            ProductType             AS mtart,
-           TotalShelfLife          AS mhdhb,
            IsMarkedForDeletion     AS lvorm
       INTO TABLE @i_jscale
       FROM I_Product
       FOR ALL ENTRIES IN @it_9100
      WHERE Product = @it_9100-matnr.
-* /scl/psize, /scl/ptype, /scl/cal は I_Product 未対応のため個別取得
+* /scl/psize, /scl/ptype, /scl/cal, mhdhb は I_Product 未対応のため個別取得
     IF i_jscale IS NOT INITIAL.
       SELECT matnr AS matnr,
              /scl/psize AS /scl/psize,
              /scl/ptype AS /scl/ptype,
-             /scl/cal   AS /scl/cal
+             /scl/cal   AS /scl/cal,
+             mhdhb      AS mhdhb
         INTO TABLE @DATA(lt_mara_scl1)
         FROM mara
         FOR ALL ENTRIES IN @i_jscale
@@ -1703,6 +1703,7 @@ FORM edit_9100 .
             <ls_jscale1>-/scl/psize = <ls_scl1>-/scl/psize.
             <ls_jscale1>-/scl/ptype = <ls_scl1>-/scl/ptype.
             <ls_jscale1>-/scl/cal   = <ls_scl1>-/scl/cal.
+            <ls_jscale1>-mhdhb      = <ls_scl1>-mhdhb.
           ENDIF.
         ENDLOOP.
       ENDIF.
@@ -1750,18 +1751,18 @@ FORM edit_9100 .
            ProductDocumentVersion  AS zeivr,
            ProductGroup            AS matkl,
            ProductType             AS mtart,
-           TotalShelfLife          AS mhdhb,
            IsMarkedForDeletion     AS lvorm
       INTO TABLE @i_jscale
       FROM I_Product
       FOR ALL ENTRIES IN @it_9100
      WHERE ProductOldId = @it_9100-jscale_code.
-* /scl/psize, /scl/ptype, /scl/cal は I_Product 未対応のため個別取得
+* /scl/psize, /scl/ptype, /scl/cal, mhdhb は I_Product 未対応のため個別取得
     IF i_jscale IS NOT INITIAL.
       SELECT matnr AS matnr,
              /scl/psize AS /scl/psize,
              /scl/ptype AS /scl/ptype,
-             /scl/cal   AS /scl/cal
+             /scl/cal   AS /scl/cal,
+             mhdhb      AS mhdhb
         INTO TABLE @DATA(lt_mara_scl2)
         FROM mara
         FOR ALL ENTRIES IN @i_jscale
@@ -1775,6 +1776,7 @@ FORM edit_9100 .
             <ls_jscale2>-/scl/psize = <ls_scl2>-/scl/psize.
             <ls_jscale2>-/scl/ptype = <ls_scl2>-/scl/ptype.
             <ls_jscale2>-/scl/cal   = <ls_scl2>-/scl/cal.
+            <ls_jscale2>-mhdhb      = <ls_scl2>-mhdhb.
           ENDIF.
         ENDLOOP.
       ENDIF.
@@ -2895,7 +2897,7 @@ FORM select_lips .
        AND dlvdoc~DeliveryDocumentType IN @rng_lfart        "出荷伝票タイプ
        AND dlvitem~StorageLocation     IN @rng_lgort        "保管場所
        AND dlvdoc~SdDocumentCategory   =  @c_vbtyp_j       "伝票カテゴリ
-       AND dlvdoc~OverallGoodsMvtStatus IN ( @space, @c_wbstk_a, @c_wbstk_b ) "在庫移動ステータス
+       AND dlvdoc~OverallGoodsMovementStatus IN ( @space, @c_wbstk_a, @c_wbstk_b ) "在庫移動ステータス
        AND dlvitem~GoodsMovementStatus  IN ( @space, @c_wbsta_a, @c_wbsta_b ). "明細在庫移動ステータス
 * abstk/absta/vbobj は CDS 未対応のため ABAP で後フィルタ
 * /lot/tempkz, /scl/atwrt は LIPS から個別取得
