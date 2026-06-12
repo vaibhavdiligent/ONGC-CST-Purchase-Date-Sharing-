@@ -888,15 +888,18 @@ FORM select_vbak .
     SORT l_it_vbak_0 BY vbeln.
     DELETE ADJACENT DUPLICATES FROM l_it_vbak_0 COMPARING vbeln.
 
-    SELECT vbeln
-      FROM vbuk
-      INTO TABLE l_it_vbuk
-       FOR ALL ENTRIES IN l_it_vbak_0
-     WHERE   vbeln = l_it_vbak_0-vbeln
-       AND  "gbstk = c_gbstk_a.
-      ( gbstk = space OR           "全伝票明細の拒否ステータス
-             gbstk = c_gbstk_a OR
-             gbstk = c_gbstk_b ).
+*****Code Remediation changes S4 2025_1 Conversion **begin of change by EJX9007359 2026.05.22  for ATC
+*    SELECT vbeln FROM vbuk INTO TABLE l_it_vbuk
+*     FOR ALL ENTRIES IN l_it_vbak_0 WHERE vbeln = l_it_vbak_0-vbeln
+*       AND ( gbstk = space OR gbstk = c_gbstk_a OR gbstk = c_gbstk_b ).
+    SELECT vbeln AS vbeln,              "販売管理伝票番号
+           gbstk AS gbstk               "全体処理ステータス
+      INTO TABLE @l_it_vbuk
+      FROM V_VBUK_S4
+      FOR ALL ENTRIES IN @l_it_vbak_0
+     WHERE vbeln = @l_it_vbak_0-vbeln
+       AND gbstk IN ( @space, @c_gbstk_a, @c_gbstk_b ).
+*****Code Remediation changes S4 2025_1 Conversion **End of change by EJX9007359 2026.05.22  for ATC
 
     IF l_it_vbuk[] IS NOT INITIAL.
       SORT l_it_vbuk BY vbeln.
@@ -20828,22 +20831,29 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
   DELETE ADJACENT DUPLICATES FROM l_it_h COMPARING vbeln.
   IF lines( l_it_h ) > 0.
 
-    SELECT vbeln   "販売管理伝票番号
-      FROM vbuk
-      INTO TABLE o_it_vbuk
-       FOR ALL ENTRIES IN l_it_h
-     WHERE vbeln  =   l_it_h-vbeln    "販売管理伝票番号
-       AND vbtyp  =   c_vbtyp_j     "販売管理伝票カテゴリ
-       AND wbstk  IN (c_wbstk_a,    "合計在庫移動ステータス
-                      c_wbstk_b)
-       AND abstk  IN (space,          "全伝票明細の拒否ステータス
-                      c_abstk_a,
-                      c_abstk_b)
-       AND vbobj  =   c_vbobj_l.    "販売管理伝票対象
+*****Code Remediation changes S4 2025_1 Conversion **begin of change by EJX9007359 2026.05.22  for ATC
+*    SELECT vbeln FROM vbuk INTO TABLE o_it_vbuk
+*     FOR ALL ENTRIES IN l_it_h WHERE vbeln = l_it_h-vbeln
+*       AND vbtyp = c_vbtyp_j AND wbstk IN (c_wbstk_a, c_wbstk_b)
+*       AND abstk IN (space, c_abstk_a, c_abstk_b) AND vbobj = c_vbobj_l.
+    SELECT vbeln AS vbeln,              "販売管理伝票番号
+           vbtyp AS vbtyp,              "販売管理伝票カテゴリ
+           wbstk AS wbstk,              "合計在庫移動ステータス
+           abstk AS abstk,              "全伝票明細の拒否ステータス
+           vbobj AS vbobj               "販売管理伝票対象
+      INTO TABLE @o_it_vbuk
+      FROM V_VBUK_S4
+      FOR ALL ENTRIES IN @l_it_h
+     WHERE vbeln  =   @l_it_h-vbeln
+       AND vbtyp  =   @c_vbtyp_j
+       AND wbstk  IN ( @c_wbstk_a, @c_wbstk_b )
+       AND abstk  IN ( @space, @c_abstk_a, @c_abstk_b )
+       AND vbobj  =   @c_vbobj_l.
     IF sy-subrc = 0.
       SORT o_it_vbuk BY vbeln.
     ENDIF.
   ENDIF.
+*****Code Remediation changes S4 2025_1 Conversion **End of change by EJX9007359 2026.05.22  for ATC
 
 * 販売伝票: 明細ステータスの取得
   l_it_m[] = i_it_in[].
@@ -20851,22 +20861,27 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
   DELETE ADJACENT DUPLICATES FROM l_it_m COMPARING vbeln posnr.
   IF lines( l_it_m ) > 0.
 
-    SELECT vbeln   "販売管理伝票番号
-           posnr   "明細番号(販売管理伝票)
-      FROM vbup
-      INTO TABLE o_it_vbup
-       FOR ALL ENTRIES IN l_it_m
-     WHERE vbeln =  l_it_m-vbeln        "販売管理伝票番号
-       AND posnr =  l_it_m-posnr        "明細番号 (販売管理伝票)
-       AND wbsta IN (c_wbsta_a,       "在庫移動ステータス
-                     c_wbsta_b)
-       AND absta IN (space,             "販売伝票明細の拒否ステータス
-                     c_absta_a,
-                     c_absta_b).
+*****Code Remediation changes S4 2025_1 Conversion **begin of change by EJX9007359 2026.05.22  for ATC
+*    SELECT vbeln posnr FROM vbup INTO TABLE o_it_vbup
+*     FOR ALL ENTRIES IN l_it_m WHERE vbeln = l_it_m-vbeln
+*       AND posnr = l_it_m-posnr AND wbsta IN (c_wbsta_a, c_wbsta_b)
+*       AND absta IN (space, c_absta_a, c_absta_b).
+    SELECT vbeln AS vbeln,              "販売管理伝票番号
+           posnr AS posnr,              "明細番号(販売管理伝票)
+           wbsta AS wbsta,              "在庫移動ステータス
+           absta AS absta               "明細の拒否ステータス
+      INTO TABLE @o_it_vbup
+      FROM V_VBUP_S4
+      FOR ALL ENTRIES IN @l_it_m
+     WHERE vbeln =  @l_it_m-vbeln
+       AND posnr =  @l_it_m-posnr
+       AND wbsta IN ( @c_wbsta_a, @c_wbsta_b )
+       AND absta IN ( @space, @c_absta_a, @c_absta_b ).
     IF sy-subrc = 0.
       SORT o_it_vbup BY vbeln posnr.
     ENDIF.
   ENDIF.
+*****Code Remediation changes S4 2025_1 Conversion **End of change by EJX9007359 2026.05.22  for ATC
 
 ENDFORM.                    " F_GET_VBUKP
 
