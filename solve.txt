@@ -893,7 +893,7 @@ FORM select_vbak .
 *     FOR ALL ENTRIES IN l_it_vbak_0 WHERE vbeln = l_it_vbak_0-vbeln
 *       AND ( gbstk = space OR gbstk = c_gbstk_a OR gbstk = c_gbstk_b ).
     SELECT vbeln AS vbeln,              "販売管理伝票番号
-           gbstk AS gbstk               "全体処理ステータス
+           gbstk                        "全体処理ステータス
       INTO TABLE @l_it_vbuk
       FROM V_VBUK_S4
       FOR ALL ENTRIES IN @l_it_vbak_0
@@ -20837,10 +20837,10 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
 *       AND vbtyp = c_vbtyp_j AND wbstk IN (c_wbstk_a, c_wbstk_b)
 *       AND abstk IN (space, c_abstk_a, c_abstk_b) AND vbobj = c_vbobj_l.
     SELECT vbeln AS vbeln,              "販売管理伝票番号
-           vbtyp AS vbtyp,              "販売管理伝票カテゴリ
-           wbstk AS wbstk,              "合計在庫移動ステータス
-           abstk AS abstk,              "全伝票明細の拒否ステータス
-           vbobj AS vbobj               "販売管理伝票対象
+           vbtyp                        "販売管理伝票カテゴリ
+           wbstk                        "合計在庫移動ステータス
+           abstk                        "全伝票明細の拒否ステータス
+           vbobj                        "販売管理伝票対象
       INTO TABLE @o_it_vbuk
       FROM V_VBUK_S4
       FOR ALL ENTRIES IN @l_it_h
@@ -20867,9 +20867,9 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
 *       AND posnr = l_it_m-posnr AND wbsta IN (c_wbsta_a, c_wbsta_b)
 *       AND absta IN (space, c_absta_a, c_absta_b).
     SELECT vbeln AS vbeln,              "販売管理伝票番号
-           posnr AS posnr,              "明細番号(販売管理伝票)
-           wbsta AS wbsta,              "在庫移動ステータス
-           absta AS absta               "明細の拒否ステータス
+           posnr                        "明細番号(販売管理伝票)
+           wbsta                        "在庫移動ステータス
+           absta                        "明細の拒否ステータス
       INTO TABLE @o_it_vbup
       FROM V_VBUP_S4
       FOR ALL ENTRIES IN @l_it_m
