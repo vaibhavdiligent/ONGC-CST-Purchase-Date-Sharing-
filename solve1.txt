@@ -2826,13 +2826,31 @@ FORM select_lips .
       FROM I_DeliveryDocument
      WHERE SdDocumentCategory            =  @c_vbtyp_j
        AND OverallGoodsMovementStatus    IN ( @space, @c_wbstk_a, @c_wbstk_b ).
-* abstk/vbobj は CDS 未対応のため ABAP フィルタで代替
+* abstk/vbobj は I_DeliveryDocument 未対応のため VBUK から個別取得
+    IF it_vbuk IS NOT INITIAL.
+      SELECT vbeln AS vbeln,
+             abstk AS abstk,
+             vbobj AS vbobj
+        INTO TABLE @DATA(lt_vbuk_ext4)
+        FROM vbuk
+        FOR ALL ENTRIES IN @it_vbuk
+       WHERE vbeln = @it_vbuk-vbeln.
+      IF sy-subrc = 0.
+        SORT lt_vbuk_ext4 BY vbeln.
+        LOOP AT it_vbuk ASSIGNING FIELD-SYMBOL(<ls_vbuk4>).
+          READ TABLE lt_vbuk_ext4
+            WITH KEY vbeln = <ls_vbuk4>-vbeln
+            BINARY SEARCH
+            ASSIGNING FIELD-SYMBOL(<ls_vbuk_ext4>).
+          IF sy-subrc = 0.
+            <ls_vbuk4>-abstk = <ls_vbuk_ext4>-abstk.
+            <ls_vbuk4>-vbobj = <ls_vbuk_ext4>-vbobj.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
     DELETE it_vbuk WHERE abstk = c_abstk_c.
     DELETE it_vbuk WHERE vbobj <> c_vbobj_l.
-*    SELECT vbeln posnr wbsta INTO TABLE it_vbup
-*    FROM vbup FOR ALL ENTRIES IN it_vbuk
-*    WHERE vbeln = it_vbuk-vbeln AND absta IN (space, c_absta_a, c_absta_b).
-*    DELETE it_vbup WHERE wbsta = c_wbsta_c.
     SELECT DeliveryDocument          AS vbeln,
            DeliveryDocumentItem      AS posnr,
            GoodsMovementStatus       AS wbsta
@@ -2840,7 +2858,30 @@ FORM select_lips .
       FROM I_DeliveryDocumentItem
       FOR ALL ENTRIES IN @it_vbuk
      WHERE DeliveryDocument = @it_vbuk-vbeln.
-* absta は CDS 未対応のため ABAP フィルタで代替
+* absta は I_DeliveryDocumentItem 未対応のため VBUP から個別取得
+    IF it_vbup IS NOT INITIAL.
+      SELECT vbeln AS vbeln,
+             posnr AS posnr,
+             absta AS absta
+        INTO TABLE @DATA(lt_vbup_ext4)
+        FROM vbup
+        FOR ALL ENTRIES IN @it_vbup
+       WHERE vbeln = @it_vbup-vbeln
+         AND posnr = @it_vbup-posnr.
+      IF sy-subrc = 0.
+        SORT lt_vbup_ext4 BY vbeln posnr.
+        LOOP AT it_vbup ASSIGNING FIELD-SYMBOL(<ls_vbup4>).
+          READ TABLE lt_vbup_ext4
+            WITH KEY vbeln = <ls_vbup4>-vbeln
+                     posnr = <ls_vbup4>-posnr
+            BINARY SEARCH
+            ASSIGNING FIELD-SYMBOL(<ls_vbup_ext4>).
+          IF sy-subrc = 0.
+            <ls_vbup4>-absta = <ls_vbup_ext4>-absta.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
     DELETE it_vbup WHERE wbsta = c_wbsta_c.
 *****Code Remediation changes S4 2025_1 Conversion **End of change by EJX9007359 2026.05.22  for ATC
 
@@ -21058,7 +21099,31 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
      WHERE DeliveryDocument             =  @l_it_h-vbeln
        AND SdDocumentCategory           =  @c_vbtyp_j
        AND OverallGoodsMovementStatus   IN ( @c_wbstk_a, @c_wbstk_b ).
-* abstk/vbobj は CDS 未対応のため条件対象外
+* abstk/vbobj は I_DeliveryDocument 未対応のため VBUK から個別取得
+    IF o_it_vbuk IS NOT INITIAL.
+      SELECT vbeln AS vbeln,
+             abstk AS abstk,
+             vbobj AS vbobj
+        INTO TABLE @DATA(lt_vbuk_ext5)
+        FROM vbuk
+        FOR ALL ENTRIES IN @o_it_vbuk
+       WHERE vbeln = @o_it_vbuk-vbeln.
+      IF sy-subrc = 0.
+        SORT lt_vbuk_ext5 BY vbeln.
+        LOOP AT o_it_vbuk ASSIGNING FIELD-SYMBOL(<ls_vbuk5>).
+          READ TABLE lt_vbuk_ext5
+            WITH KEY vbeln = <ls_vbuk5>-vbeln
+            BINARY SEARCH
+            ASSIGNING FIELD-SYMBOL(<ls_vbuk_ext5>).
+          IF sy-subrc = 0.
+            <ls_vbuk5>-abstk = <ls_vbuk_ext5>-abstk.
+            <ls_vbuk5>-vbobj = <ls_vbuk_ext5>-vbobj.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+      DELETE o_it_vbuk WHERE abstk NOT IN ( @space, @c_abstk_a, @c_abstk_b ).
+      DELETE o_it_vbuk WHERE vbobj <> c_vbobj_l.
+    ENDIF.
     IF sy-subrc = 0.
       SORT o_it_vbuk BY vbeln.
     ENDIF.
@@ -21083,7 +21148,31 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
      WHERE DeliveryDocument      =  @l_it_m-vbeln
        AND DeliveryDocumentItem  =  @l_it_m-posnr
        AND GoodsMovementStatus   IN ( @c_wbsta_a, @c_wbsta_b ).
-* absta は CDS 未対応のため条件対象外
+* absta は I_DeliveryDocumentItem 未対応のため VBUP から個別取得
+    IF o_it_vbup IS NOT INITIAL.
+      SELECT vbeln AS vbeln,
+             posnr AS posnr,
+             absta AS absta
+        INTO TABLE @DATA(lt_vbup_ext5)
+        FROM vbup
+        FOR ALL ENTRIES IN @o_it_vbup
+       WHERE vbeln = @o_it_vbup-vbeln
+         AND posnr = @o_it_vbup-posnr.
+      IF sy-subrc = 0.
+        SORT lt_vbup_ext5 BY vbeln posnr.
+        LOOP AT o_it_vbup ASSIGNING FIELD-SYMBOL(<ls_vbup5>).
+          READ TABLE lt_vbup_ext5
+            WITH KEY vbeln = <ls_vbup5>-vbeln
+                     posnr = <ls_vbup5>-posnr
+            BINARY SEARCH
+            ASSIGNING FIELD-SYMBOL(<ls_vbup_ext5>).
+          IF sy-subrc = 0.
+            <ls_vbup5>-absta = <ls_vbup_ext5>-absta.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+      DELETE o_it_vbup WHERE absta NOT IN ( @space, @c_absta_a, @c_absta_b ).
+    ENDIF.
     IF sy-subrc = 0.
       SORT o_it_vbup BY vbeln posnr.
     ENDIF.
