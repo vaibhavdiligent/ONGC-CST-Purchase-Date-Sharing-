@@ -475,6 +475,9 @@ START-OF-SELECTION.
             IF sy-subrc = 0.
               CONCATENATE wa_repos_tab(l_find) text-001 wa_final-note_corr INTO wa_repos_tab
                 SEPARATED BY space.
+              APPEND wa_repos_tab TO repos_tab_new.
+            ELSE.
+              APPEND wa_repos_tab TO repos_tab_new.
             ENDIF.
           ELSE.
             CONCATENATE wa_repos_tab-line text-001 wa_final-note_corr INTO wa_repos_tab-line SEPARATED BY space.
