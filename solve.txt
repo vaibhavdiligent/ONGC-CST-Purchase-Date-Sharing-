@@ -208,17 +208,17 @@ FORM select_eban .
 *     AND frgkz <> space
 *     AND flief IN s_lifnr
 *     AND ebeln =  space.
-  SELECT PurchaseRequisition      AS banfn   "購買依頼番号
-         PurchaseRequisitionItem  AS bnfpo   "購買依頼の明細番号
-         CreationDate             AS badat   "購買依頼日/要求日
-         PurchaseRequisitionItemText AS txz01 "テキスト(短)
-         Material                 AS matnr   "品目コード
-         Plant                    AS werks   "プラント
-         StorageLocation          AS lgort   "保管場所
-         SupplyingPlant           AS reswk   "供給プラント
-         RequestedQuantity        AS menge   "購買依頼数量
-         BaseUnit                 AS meins   "購買依頼数量単位
-         DeliveryDate             AS lfdat   "明細納入期日
+  SELECT PurchaseRequisition      AS banfn,   "購買依頼番号
+         PurchaseRequisitionItem  AS bnfpo,   "購買依頼の明細番号
+         CreationDate             AS badat,   "購買依頼日/要求日
+         PurchaseRequisitionItemText AS txz01, "テキスト(短)
+         Material                 AS matnr,   "品目コード
+         Plant                    AS werks,   "プラント
+         StorageLocation          AS lgort,   "保管場所
+         SupplyingPlant           AS reswk,   "供給プラント
+         RequestedQuantity        AS menge,   "購買依頼数量
+         BaseUnit                 AS meins,   "購買依頼数量単位
+         DeliveryDate             AS lfdat,   "明細納入期日
          FixedSupplier            AS flief   "固定仕入先
     INTO TABLE @it_eban
     FROM I_PurchaseRequisitionItemAPI01
@@ -232,8 +232,8 @@ FORM select_eban .
      AND PurchasingDocument      =  @space.     "購買発注番号
 * beswk(調達元プラント) は I_PurchaseRequisitionItemAPI01 に未対応のため個別取得
   IF it_eban IS NOT INITIAL.
-    SELECT banfn AS banfn
-           bnfpo AS bnfpo
+    SELECT banfn AS banfn,
+           bnfpo AS bnfpo,
            beswk AS beswk
       INTO TABLE @DATA(lt_eban_ext)
       FROM eban
@@ -344,7 +344,7 @@ FORM select_mara_9200 .
 *      INTO TABLE it_mara_9200
 *      FOR ALL ENTRIES IN l_it_taihi
 *     WHERE matnr = l_it_taihi-matnr.
-    SELECT Product  AS matnr   "品目コード
+    SELECT Product  AS matnr,   "品目コード
            BaseUnit AS meins   "基本数量単位
       INTO TABLE @it_mara_9200
       FROM I_Product
@@ -1029,7 +1029,7 @@ FORM select_vbap .
          sditem~StorageLocation            AS lgort  , "保管場所
          sditem~Material                   AS matnr  , "品目コード
          sditem~TargetToBaseQuantityNmrtr  AS umziz  , "販売単位から基本単位への換算係数(分子)
-         sditem~TargetToBaseQuantityDnmntr AS umzin  ,"販売単位から基本単位への換算係数(分母)
+         sditem~TargetToBaseQuantityDnmntr AS umzin  ,"販売単位から基本単位への換算係数(分母),
          sditem~BaseUnit                   AS meins  , "基本数量単位
          sditem~OrderQuantity              AS kwmeng , "累積受注数量(販売単位)
          sditem~OrderQuantityUnit          AS vrkme  , "販売単位
@@ -1111,7 +1111,7 @@ FORM select_vbfa .
 *   WHERE vbelv   = it_vbap-vbeln
 *     AND posnv   = it_vbap-posnr
 *     AND vbtyp_n = c_vbtyp_j.
-  SELECT PrecedingDocument     AS vbelv   "先行販売管理伝票
+  SELECT PrecedingDocument     AS vbelv,   "先行販売管理伝票
          PrecedingDocumentItem AS posnv   "販売管理伝票前明細
     INTO TABLE @it_vbfa
     FROM I_SDDocumentMultiLevelProcFlow
@@ -1245,9 +1245,9 @@ FORM select_ekko .
 *     AND ebeln IN   s_ebeln
 *     AND bsart IN   s_bst_k
 *     AND bedat IN   s_aedat.
-  SELECT PurchaseOrder     AS ebeln   "購買伝票番号
-         CreationDate      AS aedat   "レコード登録日
-         PurchaseOrderType AS bsart   "購買伝票タイプ
+  SELECT PurchaseOrder     AS ebeln,   "購買伝票番号
+         CreationDate      AS aedat,   "レコード登録日
+         PurchaseOrderType AS bsart,   "購買伝票タイプ
          SupplyingPlant    AS reswk   "供給(出庫)プラント
     INTO TABLE @it_ekko
     FROM I_PurchaseOrderAPI01
@@ -1672,13 +1672,13 @@ FORM edit_9100 .
 *      FROM mara INTO TABLE i_jscale
 *      FOR ALL ENTRIES IN it_9100
 *      WHERE matnr = it_9100-matnr.
-    SELECT ProductOldId            AS bismt
-           IndustryStandardName    AS normt
-           Product                 AS matnr
-           ProductDocumentVersion  AS zeivr
-           ProductGroup            AS matkl
-           ProductType             AS mtart
-           TotalShelfLife          AS mhdhb
+    SELECT ProductOldId            AS bismt,
+           IndustryStandardName    AS normt,
+           Product                 AS matnr,
+           ProductDocumentVersion  AS zeivr,
+           ProductGroup            AS matkl,
+           ProductType             AS mtart,
+           TotalShelfLife          AS mhdhb,
            IsMarkedForDeletion     AS lvorm
       INTO TABLE @i_jscale
       FROM I_Product
@@ -1686,9 +1686,9 @@ FORM edit_9100 .
      WHERE Product = @it_9100-matnr.
 * /scl/psize, /scl/ptype, /scl/cal は I_Product 未対応のため個別取得
     IF i_jscale IS NOT INITIAL.
-      SELECT matnr AS matnr
-             /scl/psize AS /scl/psize
-             /scl/ptype AS /scl/ptype
+      SELECT matnr AS matnr,
+             /scl/psize AS /scl/psize,
+             /scl/ptype AS /scl/ptype,
              /scl/cal   AS /scl/cal
         INTO TABLE @DATA(lt_mara_scl1)
         FROM mara
@@ -1744,13 +1744,13 @@ FORM edit_9100 .
 *      FROM mara INTO TABLE i_jscale
 *      FOR ALL ENTRIES IN it_9100
 *      WHERE bismt = it_9100-jscale_code.
-    SELECT ProductOldId            AS bismt
-           IndustryStandardName    AS normt
-           Product                 AS matnr
-           ProductDocumentVersion  AS zeivr
-           ProductGroup            AS matkl
-           ProductType             AS mtart
-           TotalShelfLife          AS mhdhb
+    SELECT ProductOldId            AS bismt,
+           IndustryStandardName    AS normt,
+           Product                 AS matnr,
+           ProductDocumentVersion  AS zeivr,
+           ProductGroup            AS matkl,
+           ProductType             AS mtart,
+           TotalShelfLife          AS mhdhb,
            IsMarkedForDeletion     AS lvorm
       INTO TABLE @i_jscale
       FROM I_Product
@@ -1758,9 +1758,9 @@ FORM edit_9100 .
      WHERE ProductOldId = @it_9100-jscale_code.
 * /scl/psize, /scl/ptype, /scl/cal は I_Product 未対応のため個別取得
     IF i_jscale IS NOT INITIAL.
-      SELECT matnr AS matnr
-             /scl/psize AS /scl/psize
-             /scl/ptype AS /scl/ptype
+      SELECT matnr AS matnr,
+             /scl/psize AS /scl/psize,
+             /scl/ptype AS /scl/ptype,
              /scl/cal   AS /scl/cal
         INTO TABLE @DATA(lt_mara_scl2)
         FROM mara
@@ -1854,7 +1854,7 @@ FORM select_ekbe .
 *     AND ebelp =  it_ekpo-ebelp
 *     AND vgabe =  c_vgabe_8
 *     AND menge <> 0.
-  SELECT PurchaseOrder     AS ebeln   "購買伝票番号
+  SELECT PurchaseOrder     AS ebeln,   "購買伝票番号
          PurchaseOrderItem AS ebelp   "購買伝票の明細番号
     INTO TABLE @it_ekbe
     FROM I_PurchaseOrderHistoryAPI01
@@ -1944,8 +1944,8 @@ FORM select_marc .
 *      FOR ALL ENTRIES IN l_it_taihi
 *     WHERE matnr = l_it_taihi-matnr
 *       AND werks  IN s_werks.
-    SELECT Product                  AS matnr   "品目コード
-           Plant                    AS werks   "プラント
+    SELECT Product                  AS matnr,   "品目コード
+           Plant                    AS werks,   "プラント
            IsBatchManagementRequired AS xchpf  "ロット管理所要量区分
       INTO TABLE @it_marc
       FROM I_ProductPlantBasic
@@ -2087,8 +2087,8 @@ FORM select_mard .
 *    FOR ALL ENTRIES IN it_marc_non
 *   WHERE matnr = it_marc_non-matnr
 *    AND werks = it_marc_non-werks.
-  SELECT Product         AS matnr   "品目コード
-         Plant           AS werks   "プラント
+  SELECT Product         AS matnr,   "品目コード
+         Plant           AS werks,   "プラント
          StorageLocation AS lgort   "保管場所
     INTO TABLE @it_mard
     FROM I_ProductStorageLocationBasic
@@ -2097,9 +2097,9 @@ FORM select_mard .
      AND Plant   = @it_marc_non-werks.  "プラント
 * labst(利用可能評価在庫) は I_ProductStorageLocationBasic 未対応のため個別取得
   IF it_mard IS NOT INITIAL.
-    SELECT matnr AS matnr
-           werks AS werks
-           lgort AS lgort
+    SELECT matnr AS matnr,
+           werks AS werks,
+           lgort AS lgort,
            labst AS labst
       INTO TABLE @DATA(lt_mard_ext)
       FROM mard
@@ -2870,22 +2870,22 @@ FORM select_lips .
 *       AND vbuk~vbobj = c_vbobj_l
 *       AND vbup~wbsta IN (space,c_wbsta_a,c_wbsta_b)
 *       AND vbup~absta IN (space,c_absta_a,c_absta_b).
-    SELECT dlvitem~DeliveryDocument          AS vbeln   "出荷伝票
-           dlvitem~DeliveryDocumentItem      AS posnr   "出荷明細
-           dlvitem~Material                  AS matnr   "品目コード
-           dlvitem~Plant                     AS werks   "プラント
-           dlvitem~StorageLocation           AS lgort   "保管場所
-           dlvitem~ActualDeliveredQtyInBaseUnit AS lfimg "出荷数量実績(在庫単位)
-           dlvitem~BaseUnit                  AS meins   "基本数量単位
-           dlvitem~DeliveryQuantityUnit      AS vrkme   "販売単位
-           dlvitem~DeliveryToBaseQuantityNmrtr AS umvkz "分子
-           dlvitem~DeliveryToBaseQuantityDnmntr AS umvkn "分母
-           dlvitem~ReferenceSDDocument       AS vgbel   "参照伝票
-           dlvitem~ReferenceSDDocumentItem   AS vgpos   "参照明細
-           dlvitem~ReferenceSDDocumentCategory AS vgtyp "伝票カテゴリ
-           dlvitem~ShelfLifeExpirationDate   AS vfdat   "賞味期限日
-           dlvdoc~PlannedGoodsIssueDate      AS wadat   "出庫予定日付
-           dlvdoc~DeliveryDate               AS lfdat   "納入日
+    SELECT dlvitem~DeliveryDocument          AS vbeln,   "出荷伝票
+           dlvitem~DeliveryDocumentItem      AS posnr,   "出荷明細
+           dlvitem~Material                  AS matnr,   "品目コード
+           dlvitem~Plant                     AS werks,   "プラント
+           dlvitem~StorageLocation           AS lgort,   "保管場所
+           dlvitem~ActualDeliveredQtyInBaseUnit AS lfimg, "出荷数量実績(在庫単位)
+           dlvitem~BaseUnit                  AS meins,   "基本数量単位
+           dlvitem~DeliveryQuantityUnit      AS vrkme,   "販売単位
+           dlvitem~DeliveryToBaseQuantityNmrtr AS umvkz, "分子
+           dlvitem~DeliveryToBaseQuantityDnmntr AS umvkn, "分母
+           dlvitem~ReferenceSDDocument       AS vgbel,   "参照伝票
+           dlvitem~ReferenceSDDocumentItem   AS vgpos,   "参照明細
+           dlvitem~ReferenceSDDocumentCategory AS vgtyp, "伝票カテゴリ
+           dlvitem~ShelfLifeExpirationDate   AS vfdat,   "賞味期限日
+           dlvdoc~PlannedGoodsIssueDate      AS wadat,   "出庫予定日付
+           dlvdoc~DeliveryDate               AS lfdat,   "納入日
            dlvdoc~ShipToParty               AS kunnr   "得意先
       APPENDING CORRESPONDING FIELDS OF TABLE @it_lips
       FROM I_DeliveryDocumentItem AS dlvitem
@@ -2900,9 +2900,9 @@ FORM select_lips .
 * abstk/absta/vbobj は CDS 未対応のため ABAP で後フィルタ
 * /lot/tempkz, /scl/atwrt は LIPS から個別取得
     IF it_lips IS NOT INITIAL.
-      SELECT vbeln AS vbeln
-             posnr AS posnr
-             /lot/tempkz AS /lot/tempkz
+      SELECT vbeln AS vbeln,
+             posnr AS posnr,
+             /lot/tempkz AS /lot/tempkz,
              /scl/atwrt  AS /scl/atwrt
         INTO TABLE @DATA(lt_lips_ext)
         FROM lips
@@ -3290,7 +3290,7 @@ FORM select_kna1 .
 *      INTO TABLE it_kna1
 *      FOR ALL ENTRIES IN l_it_taihi
 *     WHERE kunnr = l_it_taihi-kunnr2.
-    SELECT Customer           AS kunnr   "得意先コード
+    SELECT Customer           AS kunnr,   "得意先コード
            OrganizationBPName1 AS name1  "名称1
       INTO TABLE @it_kna1
       FROM I_Customer
@@ -3383,10 +3383,10 @@ FORM select_mara_9100 .
 *      FROM mara INTO TABLE it_mara_9100
 *      FOR ALL ENTRIES IN l_it_9100
 *     WHERE matnr = l_it_9100-matnr.
-    SELECT Product               AS matnr   "品目コード
-           BaseUnit              AS meins   "基本数量単位
-           ProductGroup          AS matkl   "品目グループ
-           PackingReferenceProduct AS rmatp "参照品目
+    SELECT Product               AS matnr,   "品目コード
+           BaseUnit              AS meins,   "基本数量単位
+           ProductGroup          AS matkl,   "品目グループ
+           PackingReferenceProduct AS rmatp, "参照品目
            PackagingMaterialGroup AS magrv  "品目グループ:梱包材
       INTO TABLE @it_mara_9100
       FROM I_Product
@@ -4078,8 +4078,8 @@ FORM separate_marc_wm .
 *       FOR ALL ENTRIES IN l_i_temp
 *     WHERE matnr = l_i_temp-matnr
 *       AND charg = l_i_temp-charg.
-    SELECT Material                   AS matnr   "品目コード
-           Batch                      AS charg   "ロット番号
+    SELECT Material                   AS matnr,   "品目コード
+           Batch                      AS charg,   "ロット番号
            MatlBatchAvailabilityDate  AS verab    "ロット有効開始日
       INTO TABLE @l_i_avail
       FROM I_Batch
