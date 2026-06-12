@@ -2814,43 +2814,87 @@ FORM select_lips .
 
     IF sy-subrc IS INITIAL.
 
-      SELECT vbuk~vbeln
-             lips~posnr
-             lips~matnr
-             lips~werks
-             lips~lgort
-             lips~charg
-             lips~lgmng AS lfimg
-             lips~meins
-             lips~vrkme
-             lips~umvkz
-             lips~umvkn
-             lips~vgbel
-             lips~vgpos
-             lips~vgtyp
-             lips~vfdat
-             lips~/lot/tempkz
-             lips~/scl/atwrt
-             likp~wadat
-             likp~lfdat
-             likp~kunnr
-   APPENDING CORRESPONDING FIELDS OF TABLE it_lips
-        FROM vbuk
-       INNER JOIN vbup ON vbup~vbeln = vbuk~vbeln
-       INNER JOIN lips ON lips~vbeln = vbup~vbeln
-                      AND lips~posnr = vbup~posnr
-       INNER JOIN likp ON likp~vbeln = vbuk~vbeln
-         FOR ALL ENTRIES IN l_i_open
-       WHERE vbuk~vbeln = l_i_open-vbeln
-         AND likp~lfart IN rng_lfart                           " MOD-040 +
-         AND lips~werks IN s_werks
-         AND lips~lgort IN rng_lgort
-         AND vbuk~wbstk IN (space, c_wbstk_a, c_wbstk_b)
-         AND vbuk~abstk IN (space, c_abstk_a, c_abstk_b)
-         AND vbuk~vbtyp  =  c_vbtyp_j
-         AND vbuk~vbobj  =  c_vbobj_l
-         AND vbup~wbsta IN (space, c_wbsta_a, c_wbsta_b)
-         AND vbup~absta IN (space, c_absta_a, c_absta_b).
+*****Code Remediation changes S4 2025_1 Conversion **begin of change by EJX9007359 2026.05.22  for ATC
+*      SELECT vbuk~vbeln lips~posnr lips~matnr lips~werks lips~lgort
+*             lips~charg lips~lgmng AS lfimg lips~meins lips~vrkme
+*             lips~umvkz lips~umvkn lips~vgbel lips~vgpos lips~vgtyp
+*             lips~vfdat lips~/lot/tempkz lips~/scl/atwrt
+*             likp~wadat likp~lfdat likp~kunnr
+*   APPENDING CORRESPONDING FIELDS OF TABLE it_lips
+*        FROM vbuk
+*       INNER JOIN vbup ON vbup~vbeln = vbuk~vbeln
+*       INNER JOIN lips ON lips~vbeln = vbup~vbeln
+*                      AND lips~posnr = vbup~posnr
+*       INNER JOIN likp ON likp~vbeln = vbuk~vbeln
+*         FOR ALL ENTRIES IN l_i_open
+*       WHERE vbuk~vbeln = l_i_open-vbeln
+*         AND likp~lfart IN rng_lfart
+*         AND lips~werks IN s_werks
+*         AND lips~lgort IN rng_lgort
+*         AND vbuk~wbstk IN (space, c_wbstk_a, c_wbstk_b)
+*         AND vbuk~abstk IN (space, c_abstk_a, c_abstk_b)
+*         AND vbuk~vbtyp  =  c_vbtyp_j
+*         AND vbuk~vbobj  =  c_vbobj_l
+*         AND vbup~wbsta IN (space, c_wbsta_a, c_wbsta_b)
+*         AND vbup~absta IN (space, c_absta_a, c_absta_b).
+      SELECT dlvitem2~DeliveryDocument          AS vbeln,   "出荷伝票
+             dlvitem2~DeliveryDocumentItem      AS posnr,   "出荷明細
+             dlvitem2~Material                  AS matnr,   "品目コード
+             dlvitem2~Plant                     AS werks,   "プラント
+             dlvitem2~StorageLocation           AS lgort,   "保管場所
+             dlvitem2~Batch                     AS charg,   "ロット番号
+             dlvitem2~ActualDeliveredQtyInBaseUnit AS lfimg, "出荷数量実績(在庫単位)
+             dlvitem2~BaseUnit                  AS meins,   "基本数量単位
+             dlvitem2~DeliveryQuantityUnit      AS vrkme,   "販売単位
+             dlvitem2~DeliveryToBaseQuantityNmrtr AS umvkz, "分子
+             dlvitem2~DeliveryToBaseQuantityDnmntr AS umvkn, "分母
+             dlvitem2~ReferenceSDDocument       AS vgbel,   "参照伝票
+             dlvitem2~ReferenceSDDocumentItem   AS vgpos,   "参照明細
+             dlvitem2~ReferenceSDDocumentCategory AS vgtyp, "伝票カテゴリ
+             dlvitem2~ShelfLifeExpirationDate   AS vfdat,   "賞味期限日
+             dlvdoc2~PlannedGoodsIssueDate      AS wadat,   "出庫予定日付
+             dlvdoc2~DeliveryDate               AS lfdat,   "納入日
+             dlvdoc2~ShipToParty                AS kunnr   "得意先
+   APPENDING CORRESPONDING FIELDS OF TABLE @it_lips
+        FROM I_DeliveryDocumentItem AS dlvitem2
+       INNER JOIN I_DeliveryDocument AS dlvdoc2
+          ON dlvitem2~DeliveryDocument = dlvdoc2~DeliveryDocument
+         FOR ALL ENTRIES IN @l_i_open
+       WHERE dlvdoc2~DeliveryDocument      =  @l_i_open-vbeln
+         AND dlvdoc2~DeliveryDocumentType  IN @rng_lfart      " MOD-040 +
+         AND dlvitem2~Plant                IN @s_werks
+         AND dlvitem2~StorageLocation      IN @rng_lgort
+         AND dlvdoc2~SdDocumentCategory    =  @c_vbtyp_j
+         AND dlvdoc2~OverallGoodsMovementStatus IN ( @space, @c_wbstk_a, @c_wbstk_b )
+         AND dlvitem2~GoodsMovementStatus       IN ( @space, @c_wbsta_a, @c_wbsta_b ).
+* abstk/absta/vbobj は CDS 未対応のため条件対象外
+* /lot/tempkz, /scl/atwrt は LIPS から個別取得
+      IF it_lips IS NOT INITIAL.
+        SELECT vbeln AS vbeln,
+               posnr AS posnr,
+               /lot/tempkz AS /lot/tempkz,
+               /scl/atwrt  AS /scl/atwrt
+          INTO TABLE @DATA(lt_lips_ext2)
+          FROM lips
+          FOR ALL ENTRIES IN @it_lips
+         WHERE vbeln = @it_lips-vbeln
+           AND posnr = @it_lips-posnr.
+        IF sy-subrc = 0.
+          SORT lt_lips_ext2 BY vbeln posnr.
+          LOOP AT it_lips ASSIGNING FIELD-SYMBOL(<ls_lips2>).
+            READ TABLE lt_lips_ext2
+              WITH KEY vbeln = <ls_lips2>-vbeln
+                       posnr = <ls_lips2>-posnr
+              BINARY SEARCH
+              ASSIGNING FIELD-SYMBOL(<ls_lips_ext2>).
+            IF sy-subrc = 0.
+              <ls_lips2>-/lot/tempkz = <ls_lips_ext2>-/lot/tempkz.
+              <ls_lips2>-/scl/atwrt  = <ls_lips_ext2>-/scl/atwrt.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+*****Code Remediation changes S4 2025_1 Conversion **End of change by EJX9007359 2026.05.22  for ATC
     ENDIF.
   ELSE.
     " EOC | MOD-039 | S420011 | Gap 1000002261
