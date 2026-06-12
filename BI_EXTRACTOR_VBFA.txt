@@ -1,0 +1,241 @@
+FUNCTION /ccej/bi_extractor_vbfa.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(I_REQUNR) TYPE  SRSC_S_IF_SIMPLE-REQUNR
+*"     VALUE(I_DSOURCE) TYPE  SRSC_S_IF_SIMPLE-DSOURCE OPTIONAL
+*"     VALUE(I_MAXSIZE) TYPE  SRSC_S_IF_SIMPLE-MAXSIZE OPTIONAL
+*"     VALUE(I_INITFLAG) TYPE  SRSC_S_IF_SIMPLE-INITFLAG OPTIONAL
+*"     VALUE(I_READ_ONLY) TYPE  SRSC_S_IF_SIMPLE-READONLY OPTIONAL
+*"     VALUE(I_REMOTE_CALL) TYPE  SBIWA_FLAG DEFAULT SBIWA_C_FLAG_OFF
+*"  TABLES
+*"      I_T_SELECT TYPE  SRSC_S_IF_SIMPLE-T_SELECT OPTIONAL
+*"      I_T_FIELDS TYPE  SRSC_S_IF_SIMPLE-T_FIELDS OPTIONAL
+*"      E_T_DATA STRUCTURE  /CCEJ/BIS_VBFA OPTIONAL
+*"  EXCEPTIONS
+*"      NO_MORE_DATA
+*"      ERROR_PASSED_TO_MESS_HANDLER
+*"----------------------------------------------------------------------
+************************************************************************
+* Program Name      : /CCEJ/BI_EXTRACTOR_VBFA                     *
+* Program Type      : Function Module                                *
+* Program Desc.     : Extractor FM Data Source : ZJFMVBFA *
+* Date              : 15 June 2014                                      *
+* Author            : S180177                                          *
+* Transport Number  : MCRK962576
+
+* Auxiliary Selection criteria structure
+  DATA: l_wa_select TYPE srsc_s_select.
+
+* Maximum number of lines for DB table
+  STATICS: l_s_if     TYPE srsc_s_if_simple,
+* counter
+  l_s_counter_datapakid TYPE sy-tabix,
+* cursor
+  l_s_cursor            TYPE cursor.
+
+* Maximum number of lines for DB table
+  STATICS: s_s_if TYPE srsc_s_if_simple.
+
+  CONSTANTS : l_c_erdat  TYPE rsfieldnm                   VALUE 'ERDAT',
+              l_c_aedat  TYPE rsfieldnm                   VALUE 'AEDAT',
+              l_c_vbelv  TYPE rsfieldnm                   VALUE 'VBELV',
+              l_c_vbeln  TYPE rsfieldnm                   VALUE 'VBELN',
+              l_c_delta  TYPE rsfieldnm                   VALUE 'DELTA_DATE',
+              l_c_ds     TYPE srsc_s_if_simple-dsource    VALUE 'ZJFMVBFA',
+              l_c_msgno  TYPE char3                       VALUE '009',
+              l_c_msgtyp TYPE c                           VALUE 'E',
+              l_c_msgcls TYPE char2                       VALUE 'R3'.
+
+  DATA : l_v_erdat TYPE char10,
+         l_v_aedat TYPE char10,
+         l_v_delta TYPE char10.
+
+  RANGES : l_r_erdat FOR l_v_erdat,
+           l_r_aedat FOR l_v_aedat,
+           l_r_vbeln FOR vbfa-vbeln,
+           l_r_vbelv FOR vbfa-vbelv,
+           l_r_delta FOR l_v_delta.
+
+  DATA : l_i_data TYPE STANDARD TABLE OF vbfa.
+
+  FIELD-SYMBOLS : <l_fs_select>  TYPE sbiwa_s_select,
+                  <l_fs_data>    TYPE vbfa.
+
+  DATA : l_wa_data TYPE /ccej/bis_vbfa.
+
+* Records in data packet
+  l_s_if-maxsize   = i_maxsize.
+
+* Initialization mode (first call by SAPI) or data transfer mode
+* (following calls) ?
+  IF i_initflag = sbiwa_c_flag_on.
+
+* Check DataSource validity
+    CASE i_dsource.
+      WHEN l_c_ds.
+      WHEN OTHERS.
+        IF 1 = 2. MESSAGE e009(r3). ENDIF.
+* this is a typical log call. Please write every error message like this
+        log_write l_c_msgtyp                  "message type
+                  l_c_msgcls                 "message class
+                  l_c_msgno                "message number
+                  i_dsource   "message variable 1
+                  ' '.                 "message variable 2
+        RAISE error_passed_to_mess_handler.
+    ENDCASE.
+
+    APPEND LINES OF i_t_select TO s_s_if-t_select.
+
+* Fill parameter buffer for data extraction calls
+    s_s_if-requnr    = i_requnr.
+    s_s_if-dsource = i_dsource.
+    s_s_if-maxsize   = i_maxsize.
+
+* Fill field list table for an optimized select statement
+* (in case that there is no 1:1 relation between InfoSource fields
+* and database table fields this may be far from beeing trivial)
+    APPEND LINES OF i_t_fields TO s_s_if-t_fields.
+
+
+  ELSE."Initialization mode or data extraction ?
+
+    IF l_s_counter_datapakid = 0.
+
+      REFRESH : l_r_erdat , l_r_aedat,
+                l_r_vbeln , l_r_vbelv.
+
+* Fill range tables BW will only pass down simple selection criteria
+* of the type SIGN = 'I' and OPTION = 'EQ' or OPTION = 'BT'.
+      LOOP AT i_t_select ASSIGNING <l_fs_select>.
+
+        CASE <l_fs_select>-fieldnm.
+          WHEN l_c_erdat.
+
+            l_r_erdat-sign   = <l_fs_select>-sign.
+            l_r_erdat-option = <l_fs_select>-option.
+            l_r_erdat-low    = <l_fs_select>-low.
+            l_r_erdat-high   = <l_fs_select>-high.
+            APPEND l_r_erdat.
+
+          WHEN l_c_aedat.
+
+            l_r_aedat-sign   = <l_fs_select>-sign.
+            l_r_aedat-option = <l_fs_select>-option.
+            l_r_aedat-low    = <l_fs_select>-low.
+            l_r_aedat-high   = <l_fs_select>-high.
+            APPEND l_r_aedat.
+
+          WHEN l_c_vbelv.
+
+            l_r_vbelv-sign   = <l_fs_select>-sign.
+            l_r_vbelv-option = <l_fs_select>-option.
+            l_r_vbelv-low    = <l_fs_select>-low.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = l_r_vbelv-low
+              IMPORTING
+                output = l_r_vbelv-low.
+
+            l_r_vbelv-high   = <l_fs_select>-high.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = l_r_vbelv-high
+              IMPORTING
+                output = l_r_vbelv-high.
+
+            APPEND l_r_vbelv.
+
+          WHEN l_c_vbeln.
+
+            l_r_vbeln-sign   = <l_fs_select>-sign.
+            l_r_vbeln-option = <l_fs_select>-option.
+            l_r_vbeln-low    = <l_fs_select>-low.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = l_r_vbeln-low
+              IMPORTING
+                output = l_r_vbeln-low.
+
+            l_r_vbeln-high   = <l_fs_select>-high.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = l_r_vbeln-high
+              IMPORTING
+                output = l_r_vbeln-high.
+
+            APPEND l_r_vbeln.
+
+          WHEN l_c_delta.
+
+            l_r_delta-sign   = <l_fs_select>-sign.
+            l_r_delta-option = <l_fs_select>-option.
+            l_r_delta-low    = <l_fs_select>-low.
+            l_r_delta-high   = <l_fs_select>-high.
+            APPEND l_r_delta.
+
+          WHEN OTHERS.
+        ENDCASE.
+      ENDLOOP.
+
+      IF l_r_delta IS INITIAL.
+        " Full Load
+        OPEN CURSOR WITH HOLD l_s_cursor FOR
+              SELECT * FROM vbfa
+              WHERE vbelv IN l_r_vbelv
+              AND   vbeln IN l_r_vbeln
+              AND   erdat IN l_r_erdat
+              AND   aedat IN l_r_aedat.
+
+      ELSE.
+
+        " Delta Load
+        OPEN CURSOR WITH HOLD l_s_cursor FOR
+              SELECT * FROM vbfa
+              WHERE erdat IN l_r_delta
+              OR    aedat IN l_r_delta.
+
+      ENDIF.
+    ENDIF.
+* Fetch data from the table until 'SY-SUBRC' ne 0
+    FETCH NEXT CURSOR l_s_cursor
+               INTO CORRESPONDING FIELDS
+               OF TABLE l_i_data"e_t_data
+               PACKAGE SIZE l_s_if-maxsize.
+
+    IF  sy-subrc NE 0.
+*Close cursor
+      CLOSE CURSOR l_s_cursor.
+      RAISE no_more_data.
+
+    ELSE.
+
+* Data packet counter
+      l_s_counter_datapakid = l_s_counter_datapakid + 1.
+
+      " passing data to final table
+      LOOP AT l_i_data ASSIGNING <l_fs_data>.
+
+        MOVE-CORRESPONDING <l_fs_data> TO l_wa_data .
+
+        " pass change date if it has some value
+        IF  <l_fs_data>-aedat IS NOT INITIAL.
+          l_wa_data-delta_date = <l_fs_data>-aedat.
+        ELSE. " else pass creation date
+          l_wa_data-delta_date = <l_fs_data>-erdat.
+        ENDIF.
+
+        APPEND l_wa_data TO e_t_data.
+        CLEAR : l_wa_data.
+
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDIF.
+
+ENDFUNCTION.
