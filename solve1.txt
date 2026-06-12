@@ -2821,10 +2821,8 @@ FORM select_lips .
 *    WHERE vbtyp = c_vbtyp_j AND wbstk IN (space, c_wbstk_a, c_wbstk_b).
 *    DELETE it_vbuk WHERE abstk = c_abstk_c.
 *    DELETE it_vbuk WHERE vbobj <> c_vbobj_l.
-    SELECT vbeln AS vbeln,
-           vbtyp                        "販売管理伝票カテゴリ
-           wbstk                        "合計在庫移動ステータス
-           abstk                        "全伝票明細の拒否ステータス
+    SELECT vbeln,
+           abstk,                       "全伝票明細の拒否ステータス
            vbobj                        "販売管理伝票対象
       INTO TABLE @it_vbuk
       FROM V_VBUK_S4
@@ -2832,14 +2830,14 @@ FORM select_lips .
        AND wbstk  IN ( @space, @c_wbstk_a, @c_wbstk_b ).
     DELETE it_vbuk WHERE abstk = c_abstk_c.
     DELETE it_vbuk WHERE vbobj <> c_vbobj_l.
-    SELECT vbeln AS vbeln,
-           posnr AS posnr,
+    SELECT vbeln,
+           posnr,
            wbsta                        "在庫移動ステータス
-           absta                        "明細の拒否ステータス
       INTO TABLE @it_vbup
       FROM V_VBUP_S4
       FOR ALL ENTRIES IN @it_vbuk
-     WHERE vbeln = @it_vbuk-vbeln.
+     WHERE vbeln  = @it_vbuk-vbeln
+       AND absta IN ( @space, @c_absta_a, @c_absta_b ).
     DELETE it_vbup WHERE wbsta = c_wbsta_c.
 *****Code Remediation changes S4 2025_1 Conversion **End of change by EJX9007359 2026.05.22  for ATC
 
@@ -21050,11 +21048,7 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
 *     FOR ALL ENTRIES IN l_it_h WHERE vbeln = l_it_h-vbeln
 *       AND vbtyp = c_vbtyp_j AND wbstk IN (c_wbstk_a, c_wbstk_b)
 *       AND abstk IN (space, c_abstk_a, c_abstk_b) AND vbobj = c_vbobj_l.
-    SELECT vbeln AS vbeln,              "販売管理伝票番号
-           vbtyp                        "販売管理伝票カテゴリ
-           wbstk                        "合計在庫移動ステータス
-           abstk                        "全伝票明細の拒否ステータス
-           vbobj                        "販売管理伝票対象
+    SELECT vbeln                        "販売管理伝票番号
       INTO TABLE @o_it_vbuk
       FROM V_VBUK_S4
       FOR ALL ENTRIES IN @l_it_h
@@ -21078,10 +21072,8 @@ FORM f_get_vbukp  USING    i_it_in    TYPE ty_it_vbup
 *     FOR ALL ENTRIES IN l_it_m WHERE vbeln = l_it_m-vbeln
 *       AND posnr = l_it_m-posnr AND wbsta IN (c_wbsta_a, c_wbsta_b)
 *       AND absta IN (space, c_absta_a, c_absta_b).
-    SELECT vbeln AS vbeln,              "販売管理伝票番号
+    SELECT vbeln,                       "販売管理伝票番号
            posnr                        "明細番号(販売管理伝票)
-           wbsta                        "在庫移動ステータス
-           absta                        "明細の拒否ステータス
       INTO TABLE @o_it_vbup
       FROM V_VBUP_S4
       FOR ALL ENTRIES IN @l_it_m
