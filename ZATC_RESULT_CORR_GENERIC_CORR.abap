@@ -424,11 +424,49 @@ START-OF-SELECTION.
     IF repos_tab[] IS NOT INITIAL.
       LOOP AT repos_tab INTO DATA(wa_repos_tab).
         l_tabix = sy-tabix.
+        IF p_rem IS NOT INITIAL.
+          IF wa_repos_tab-line CS p_rem.
+            REFRESH repos_tab_new.
+            EXIT.
+          ENDIF.
+        ENDIF.
+        IF l_tab IS NOT INITIAL.
+          IF l_tabix < l_tab.
+            CONTINUE.
+          ELSEIF l_tabix = l_tab.
+            CLEAR l_tab.
+          ENDIF.
+        ENDIF.
         READ TABLE it_final INTO wa_final WITH KEY
           program_name = wa_final_p-program_name
           sobjname     = wa_final_p-sobjname
           line         = l_tabix.
-        IF sy-subrc = 0.
+        IF sy-subrc <> 0.
+          APPEND wa_repos_tab TO repos_tab_new.
+        ELSE.
+          TRANSLATE wa_final-check_message TO UPPER CASE.
+          TRANSLATE wa_final-message1 TO UPPER CASE.
+          DATA(lv_msg) = wa_final-check_message.
+          IF lv_msg IS INITIAL.
+            lv_msg = wa_final-message1.
+          ENDIF.
+          IF wa_final-priority <> '2' AND wa_final-priority <> '3'.
+            APPEND wa_repos_tab TO repos_tab_new.
+            CONTINUE.
+          ENDIF.
+          DATA(lv_is_target) = abap_false.
+          DATA(lv_title_match) = abap_false.
+          PERFORM check_target_title USING wa_final-check_title CHANGING lv_title_match.
+          IF lv_title_match = abap_true.
+            PERFORM check_target_msg USING lv_msg CHANGING lv_is_target.
+            IF lv_is_target = abap_false.
+              PERFORM check_target_msg USING wa_final-message1 CHANGING lv_is_target.
+            ENDIF.
+          ENDIF.
+          IF lv_is_target = abap_false.
+            APPEND wa_repos_tab TO repos_tab_new.
+            CONTINUE.
+          ENDIF.
           CLEAR : l_find , l_find1.
           IF ( wa_repos_tab CS '"#EC CI_USAGE_OK[' OR wa_repos_tab CS '"#EC CI_FLDEXT_OK[' ) AND wa_repos_tab(1) <> '*'.
             l_find = sy-fdpos.
@@ -448,24 +486,24 @@ START-OF-SELECTION.
             CONCATENATE wa_repos_tab-line text-001 wa_final-note_corr INTO wa_repos_tab-line SEPARATED BY space.
             APPEND wa_repos_tab TO repos_tab_new.
           ENDIF.
-        ELSE.
-          APPEND wa_repos_tab TO repos_tab_new.
         ENDIF.
       ENDLOOP.
     ENDIF.
+    DESCRIBE TABLE repos_tab LINES DATA(l_repos_old).
+    DESCRIBE TABLE repos_tab_new LINES DATA(l_repos_new).
     IF wa_output-program_name IS INITIAL AND wa_output-check_title IS INITIAL.
       wa_output-program_name = wa_final_p-objname.
       wa_output-subobj       = wa_final_p-sobjname.
       wa_output-run_status   = 'Not processed'.
       APPEND wa_output TO it_output.
       CLEAR wa_output.
-    ELSEIF repos_tab_new[] IS INITIAL.
+    ELSEIF repos_tab_new[] IS INITIAL OR l_repos_old = l_repos_new.
       wa_output-run_status = 'Processed'.
       wa_output-status     = 'No change'.
       APPEND wa_output TO it_output.
       CLEAR wa_output.
     ENDIF.
-    IF repos_tab_new[] IS NOT INITIAL.
+    IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
           WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
@@ -618,6 +656,7 @@ START-OF-SELECTION.
     ENDIF.
     REFRESH repos_tab_new.
     REFRESH repos_tab.
+    CLEAR : l_repos_new,l_repos_old.
   ENDLOOP.
   cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_table)
                           CHANGING  t_table      = it_output ).
