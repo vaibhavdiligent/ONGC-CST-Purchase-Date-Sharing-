@@ -239,12 +239,16 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM get_namespace USING pv_name TYPE clike
                    CHANGING pv_nsp TYPE trnspace-namespace.
+  DATA: l_off TYPE i,
+        l_len TYPE i,
+        l_rest TYPE string.
   CLEAR pv_nsp.
   IF strlen( pv_name ) > 1 AND pv_name(1) = '/'.
-    DATA(l_rest) = CONV string( pv_name+1 ).
-    FIND FIRST OCCURRENCE OF '/' IN l_rest MATCH OFFSET DATA(l_o).
+    l_rest = pv_name+1.
+    FIND FIRST OCCURRENCE OF '/' IN l_rest MATCH OFFSET l_off.
     IF sy-subrc = 0.
-      pv_nsp = pv_name(l_o + 2).        " include both leading and trailing '/'
+      l_len = l_off + 2.                " include both leading and trailing '/'
+      pv_nsp = pv_name(l_len).
     ENDIF.
   ENDIF.
 ENDFORM.
@@ -423,7 +427,7 @@ ENDFORM.
 FORM write_manifest.
 
   TYPES: BEGIN OF ty_flat,
-           objtype  TYPE c LENGTH 10,
+           objtype  TYPE c LENGTH 12,
            objname  TYPE c LENGTH 40,
            sobjname TYPE c LENGTH 40,
            filename TYPE c LENGTH 128,
