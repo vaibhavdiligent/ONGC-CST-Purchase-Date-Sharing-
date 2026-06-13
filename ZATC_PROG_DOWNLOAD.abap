@@ -169,12 +169,16 @@ FORM collect_findings.
     i_result_id = wa_resulth-display_id.
   ENDIF.
 
-  DATA(result_access) = NEW cl_satc_api_factory( )->create_result_access( i_result_id ).
-  result_access->get_findings(
-    IMPORTING
-      e_findings           = DATA(findings)
-      e_findings_extension = e_findings_extension
-      e_ext_field_list     = e_ext_field_list ).
+  TRY.
+      DATA(result_access) = NEW cl_satc_api_factory( )->create_result_access( i_result_id ).
+      result_access->get_findings(
+        IMPORTING
+          e_findings           = DATA(findings)
+          e_findings_extension = e_findings_extension
+          e_ext_field_list     = e_ext_field_list ).
+    CATCH cx_satc_failure INTO DATA(lx_satc).
+      MESSAGE lx_satc->get_text( ) TYPE 'E'.
+  ENDTRY.
 
   DATA gs_obj TYPE ty_obj.
   LOOP AT findings INTO DATA(finding)
@@ -314,7 +318,7 @@ FORM read_source USING ps_obj TYPE ty_obj.
           ENDIF.
         ELSE.
           " Not a method include -> try the class sections (public/protected/private).
-          DATA l_limu TYPE seop_include_ext.
+          DATA l_limu TYPE c LENGTH 4.
           DO 3 TIMES.
             CASE sy-index.
               WHEN 1. l_limu = 'CPUB'.
