@@ -25,7 +25,7 @@
 *&---------------------------------------------------------------------*
 REPORT zatc_prog_download.
 
-TABLES: tadir, scirest_ad.
+TABLES tadir.
 
 *----------------------------------------------------------------------*
 * Types
@@ -77,11 +77,9 @@ DATA: repos_tab          TYPE STANDARD TABLE OF abaptxt255,
 * Selection screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
-  PARAMETERS     p_id   TYPE satc_d_ac_title OBLIGATORY.       " ATC result name
-  SELECT-OPTIONS s_obj  FOR tadir-obj_name.                    " object filter
-  SELECT-OPTIONS s_name FOR scirest_ad-sobjname.               " sub-object filter
-  PARAMETERS     p_dir  TYPE string OBLIGATORY.                " target folder
-  PARAMETERS     p_man  TYPE flag AS CHECKBOX DEFAULT 'X'.     " write manifest
+  PARAMETERS     p_id  TYPE satc_d_ac_title OBLIGATORY.        " ATC result name
+  SELECT-OPTIONS s_obj FOR tadir-obj_name.                     " object filter
+  PARAMETERS     p_dir TYPE string OBLIGATORY.                 " target folder
 SELECTION-SCREEN END OF BLOCK b1.
 
 *----------------------------------------------------------------------*
@@ -141,7 +139,7 @@ START-OF-SELECTION.
     PERFORM download_subobject USING gs_obj.
   ENDLOOP.
 
-  IF p_man = 'X' AND gt_manifest IS NOT INITIAL.
+  IF gt_manifest IS NOT INITIAL.
     PERFORM write_manifest.
   ENDIF.
 
@@ -191,8 +189,7 @@ FORM collect_findings.
     APPEND gs_obj TO gt_obj.
   ENDLOOP.
 
-  " Keep one entry per unique sub-object, honour the optional filter.
-  DELETE gt_obj WHERE sobjname NOT IN s_name.
+  " Keep one entry per unique sub-object (sub-objects come from the ATC findings).
   SORT gt_obj BY objname sobjname.
   DELETE ADJACENT DUPLICATES FROM gt_obj COMPARING objname sobjname.
 
