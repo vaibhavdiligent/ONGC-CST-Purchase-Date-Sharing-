@@ -188,7 +188,7 @@ FORM collect_findings.
   SELECT * INTO TABLE @DATA(it_cmmmt) FROM satc_ac_cmm_msgt_ddlv.
 
   DATA gs_obj TYPE ty_obj.
-  DATA lv_nsp TYPE trnspace-namespace.
+  DATA lv_ok  TYPE abap_bool.
   LOOP AT findings INTO DATA(finding)
        WHERE objname IN s_obj OR enhname IN s_obj.
 
@@ -214,11 +214,15 @@ FORM collect_findings.
       gs_obj-sobjname = finding-objname.   " fall back to the object itself
     ENDIF.
 
-    " Namespace filter: when namespaces are entered, download only the
-    " sub-objects that belong to one of them (excludes standard SAP code).
+    " Namespace filter: when namespaces / prefixes are entered, download
+    " only sub-objects whose name matches one of them at the FIRST or the
+    " SECOND character. The second-character check allows function-group
+    " and module-pool includes whose generated prefix letter (e.g. 'L' or
+    " 'M') pushes the namespace/customer prefix to position 2 - e.g.
+    " 'MZMMCODU' belongs to prefix 'Z'. Excludes standard SAP code.
     IF s_nsp[] IS NOT INITIAL.
-      PERFORM get_namespace USING gs_obj-sobjname CHANGING lv_nsp.
-      IF lv_nsp NOT IN s_nsp.
+      PERFORM in_namespace USING gs_obj-sobjname CHANGING lv_ok.
+      IF lv_ok = abap_false.
         CONTINUE.
       ENDIF.
     ENDIF.
@@ -233,24 +237,31 @@ FORM collect_findings.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form get_namespace
-*&  Returns the namespace of an object name, e.g. '/SCL/RDOTC...' -> '/SCL/'.
-*&  Non-namespaced names (standard SAP, customer Z/Y) return blank.
+*& Form in_namespace
+*&  Returns 'X' if the object name matches one of the selected namespaces
+*&  / prefixes (s_nsp) at the FIRST or the SECOND character. The second
+*&  position covers function-group / module-pool includes whose generated
+*&  prefix letter precedes the customer prefix (e.g. 'MZMMCODU' -> 'Z').
 *&---------------------------------------------------------------------*
-FORM get_namespace USING pv_name TYPE clike
-                   CHANGING pv_nsp TYPE trnspace-namespace.
-  DATA: l_off TYPE i,
-        l_len TYPE i,
-        l_rest TYPE string.
-  CLEAR pv_nsp.
-  IF strlen( pv_name ) > 1 AND pv_name(1) = '/'.
-    l_rest = pv_name+1.
-    FIND FIRST OCCURRENCE OF '/' IN l_rest MATCH OFFSET l_off.
-    IF sy-subrc = 0.
-      l_len = l_off + 2.                " include both leading and trailing '/'
-      pv_nsp = pv_name(l_len).
+FORM in_namespace USING pv_name TYPE clike
+                  CHANGING pv_ok TYPE abap_bool.
+  DATA: lv_low TYPE string,
+        lv_pat TYPE string,
+        lv_2nd TYPE string.
+  pv_ok = abap_false.
+  lv_2nd = pv_name+1.
+  LOOP AT s_nsp INTO DATA(ls_nsp).
+    lv_low = ls_nsp-low.
+    CONDENSE lv_low.
+    IF lv_low IS INITIAL.
+      CONTINUE.
     ENDIF.
-  ENDIF.
+    lv_pat = |{ lv_low }*|.
+    IF pv_name CP lv_pat OR lv_2nd CP lv_pat.
+      pv_ok = abap_true.
+      RETURN.
+    ENDIF.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
