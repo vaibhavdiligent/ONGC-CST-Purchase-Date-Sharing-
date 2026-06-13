@@ -25,7 +25,7 @@
 *&---------------------------------------------------------------------*
 REPORT zatc_prog_download.
 
-TABLES tadir.
+TABLES: tadir, trnspace.
 
 *----------------------------------------------------------------------*
 * Types
@@ -79,6 +79,7 @@ DATA: repos_tab          TYPE STANDARD TABLE OF abaptxt255,
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
   PARAMETERS     p_id  TYPE satc_d_ac_title OBLIGATORY.        " ATC result name
   SELECT-OPTIONS s_obj FOR tadir-obj_name.                     " object filter
+  SELECT-OPTIONS s_nsp FOR trnspace-namespace.                 " namespace filter
   PARAMETERS     p_dir TYPE string OBLIGATORY.                 " target folder
 SELECTION-SCREEN END OF BLOCK b1.
 
@@ -187,6 +188,7 @@ FORM collect_findings.
   SELECT * INTO TABLE @DATA(it_cmmmt) FROM satc_ac_cmm_msgt_ddlv.
 
   DATA gs_obj TYPE ty_obj.
+  DATA lv_nsp TYPE trnspace-namespace.
   LOOP AT findings INTO DATA(finding)
        WHERE objname IN s_obj OR enhname IN s_obj.
 
@@ -211,6 +213,16 @@ FORM collect_findings.
     IF gs_obj-sobjname IS INITIAL.
       gs_obj-sobjname = finding-objname.   " fall back to the object itself
     ENDIF.
+
+    " Namespace filter: when namespaces are entered, download only the
+    " sub-objects that belong to one of them (excludes standard SAP code).
+    IF s_nsp[] IS NOT INITIAL.
+      PERFORM get_namespace USING gs_obj-sobjname CHANGING lv_nsp.
+      IF lv_nsp NOT IN s_nsp.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
     APPEND gs_obj TO gt_obj.
   ENDLOOP.
 
@@ -218,6 +230,23 @@ FORM collect_findings.
   SORT gt_obj BY objname sobjname.
   DELETE ADJACENT DUPLICATES FROM gt_obj COMPARING objname sobjname.
 
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form get_namespace
+*&  Returns the namespace of an object name, e.g. '/SCL/RDOTC...' -> '/SCL/'.
+*&  Non-namespaced names (standard SAP, customer Z/Y) return blank.
+*&---------------------------------------------------------------------*
+FORM get_namespace USING pv_name TYPE clike
+                   CHANGING pv_nsp TYPE trnspace-namespace.
+  CLEAR pv_nsp.
+  IF strlen( pv_name ) > 1 AND pv_name(1) = '/'.
+    DATA(l_rest) = CONV string( pv_name+1 ).
+    FIND FIRST OCCURRENCE OF '/' IN l_rest MATCH OFFSET DATA(l_o).
+    IF sy-subrc = 0.
+      pv_nsp = pv_name(l_o + 2).        " include both leading and trailing '/'
+    ENDIF.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
