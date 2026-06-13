@@ -382,7 +382,7 @@ FORM write_manifest.
   DATA: lt_flat  TYPE STANDARD TABLE OF ty_flat,
         ls_flat  TYPE ty_flat,
         lv_file  TYPE string,
-        lv_full  TYPE string,
+        lv_full  TYPE rlgrap-filename,   " FM I_FILENAME needs fixed-length char
         lv_stamp TYPE char14.
 
   " Header row (skipped on upload via i_line_header = 'X').
