@@ -180,9 +180,30 @@ FORM collect_findings.
       MESSAGE lx_satc->get_text( ) TYPE 'E'.
   ENDTRY.
 
+  " Check titles / message texts (same source the correction program uses)
+  " - needed to recognise the "Prerequisites for the test / Syntax error"
+  "   pseudo-findings, which must NOT be downloaded.
+  SELECT * INTO TABLE @DATA(it_chmmt) FROM satc_ac_chm_msgt_ddlv.
+  SELECT * INTO TABLE @DATA(it_cmmmt) FROM satc_ac_cmm_msgt_ddlv.
+
   DATA gs_obj TYPE ty_obj.
   LOOP AT findings INTO DATA(finding)
        WHERE objname IN s_obj OR enhname IN s_obj.
+
+    " Skip pseudo-findings raised when the test could not run because the
+    " object has a syntax error ("Prerequisites for the test"). There is
+    " nothing to correct, so nothing to download. A sub-object that only
+    " has such findings is therefore never collected; one that also has a
+    " real finding is still downloaded via that finding.
+    READ TABLE it_chmmt INTO DATA(wa_chmmt) WITH KEY ci_id = finding-test.
+    IF sy-subrc = 0 AND wa_chmmt-title CS 'Prerequisites for the test'.
+      CONTINUE.
+    ENDIF.
+    READ TABLE it_cmmmt INTO DATA(wa_cmmmt) WITH KEY message_id = finding-code.
+    IF sy-subrc = 0 AND wa_cmmmt-title CS 'Syntax error'.
+      CONTINUE.
+    ENDIF.
+
     CLEAR gs_obj.
     gs_obj-objtype  = finding-objtype.
     gs_obj-objname  = finding-objname.
