@@ -1,38 +1,48 @@
 *&---------------------------------------------------------------------*
 *& Report  ZATC_PROG_UPLOAD
 *&---------------------------------------------------------------------*
-*& Program Title : Upload object source from text files using a manifest
+*& Program Title : Upload ATC sub-object source from text files using a
+*&                 manifest, into a transport request
 *&
 *& Description   : Companion uploader for ZATC_PROG_DOWNLOAD.
 *&                 Reads the Excel manifest produced by the download
-*&                 program (Object Name | Object Type | File Name), then
-*&                 for every entry reads the matching .txt file from the
-*&                 chosen folder and writes the source back into the
-*&                 object, recording it in the transport request given on
-*&                 the selection screen.
+*&                 program (Object Type | Object Name | Sub Object |
+*&                 File Name). For every entry it reads the matching .txt
+*&                 file from the chosen folder and writes the source back
+*&                 into the EXACT sub-object that was downloaded - a
+*&                 program / function / form include, or a class method
+*&                 include - recording the object in the transport
+*&                 request given on the selection screen.
 *&
 *&                 Excel is read with the standard FM
 *&                 TEXT_CONVERT_XLS_TO_SAP, the .txt files with the
-*&                 standard FM GUI_UPLOAD, and the source is updated with
-*&                 RPY_PROGRAM_UPDATE (same API used by
-*&                 ZATC_RESULT_CORRECTION).
+*&                 standard FM GUI_UPLOAD.
+*&                 - Program / FUGR / FUGS / SFPF / SSFO includes are
+*&                   written with RPY_PROGRAM_UPDATE (auto records + activates).
+*&                 - Class method includes are written with INSERT REPORT
+*&                   and the class is recorded via CTS_WBO_API_INSERT_OBJECTS
+*&                   (same approach as ZATC_RESULT_CORRECTION).
 *&---------------------------------------------------------------------*
 REPORT zatc_prog_upload.
+
+TABLES tadir.
 
 *----------------------------------------------------------------------*
 * Types
 *----------------------------------------------------------------------*
-" Flat structure matching the manifest columns. The columns are read by
-" position, so the field order here must match the download program.
+" Flat structure matching the manifest columns, read by position. The
+" field order MUST match the download program's manifest.
 TYPES: BEGIN OF ty_manifest,
-         objname  TYPE c LENGTH 40,
          objtype  TYPE c LENGTH 10,
+         objname  TYPE c LENGTH 40,
+         sobjname TYPE c LENGTH 40,
          filename TYPE c LENGTH 128,
        END OF ty_manifest.
 
 TYPES: BEGIN OF ty_log,
-         objname  TYPE c LENGTH 40,
          objtype  TYPE c LENGTH 10,
+         objname  TYPE c LENGTH 40,
+         sobjname TYPE c LENGTH 40,
          filename TYPE c LENGTH 128,
          status   TYPE char10,           " Success / Error / Skipped
          message  TYPE char120,
@@ -46,14 +56,17 @@ DATA: gt_manifest TYPE STANDARD TABLE OF ty_manifest,
       gt_log      TYPE STANDARD TABLE OF ty_log,
       gv_sep      TYPE c LENGTH 1.
 
+DATA: lt_recording_entries TYPE cts_recording_entries,
+      ls_recording_entry   TYPE cts_recording_entry.
+
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
-  PARAMETERS p_dir TYPE string OBLIGATORY.            " folder with .txt files
-  PARAMETERS p_xls TYPE string OBLIGATORY.            " manifest Excel file
-  PARAMETERS p_req TYPE trkorr OBLIGATORY.            " transport request
-  PARAMETERS p_test TYPE flag AS CHECKBOX DEFAULT 'X'." simulate (no update)
+  PARAMETERS p_dir  TYPE string OBLIGATORY.            " folder with .txt files
+  PARAMETERS p_xls  TYPE string OBLIGATORY.            " manifest Excel file
+  PARAMETERS p_req  TYPE trkorr OBLIGATORY.            " transport request
+  PARAMETERS p_test TYPE flag AS CHECKBOX DEFAULT 'X'. " simulate (no update)
 SELECTION-SCREEN END OF BLOCK b1.
 
 *----------------------------------------------------------------------*
@@ -96,8 +109,8 @@ START-OF-SELECTION.
 
   LOOP AT gt_manifest INTO DATA(ls_man).
     lv_done = lv_done + 1.
-    PERFORM progress USING lv_done lv_total ls_man-objname.
-    PERFORM upload_object USING ls_man.
+    PERFORM progress USING lv_done lv_total ls_man-sobjname.
+    PERFORM upload_subobject USING ls_man.
   ENDLOOP.
 
   PERFORM show_log.
@@ -106,8 +119,8 @@ START-OF-SELECTION.
 *& Form read_manifest  (standard FM TEXT_CONVERT_XLS_TO_SAP)
 *&---------------------------------------------------------------------*
 FORM read_manifest.
-  DATA: lt_raw   TYPE truxs_t_text_data,
-        lv_file  TYPE rlgrap-filename.
+  DATA: lt_raw  TYPE truxs_t_text_data,
+        lv_file TYPE rlgrap-filename.
 
   lv_file = p_xls.
   CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
@@ -125,27 +138,26 @@ FORM read_manifest.
     MESSAGE 'Could not read the manifest Excel file' TYPE 'E'.
   ENDIF.
 
-  " Drop blank rows.
-  DELETE gt_manifest WHERE objname IS INITIAL AND filename IS INITIAL.
+  DELETE gt_manifest WHERE sobjname IS INITIAL AND filename IS INITIAL.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form upload_object
+*& Form upload_subobject
 *&---------------------------------------------------------------------*
-FORM upload_object USING ps_man TYPE ty_manifest.
+FORM upload_subobject USING ps_man TYPE ty_manifest.
 
   DATA: ls_log      TYPE ty_log,
         lv_fullpath TYPE string,
-        lv_name     TYPE programm,
-        lv_exists   TYPE abap_bool.
+        lv_name     TYPE programm.
 
-  ls_log-objname  = ps_man-objname.
   ls_log-objtype  = ps_man-objtype.
+  ls_log-objname  = ps_man-objname.
+  ls_log-sobjname = ps_man-sobjname.
   ls_log-filename = ps_man-filename.
 
-  IF ps_man-filename IS INITIAL.
+  IF ps_man-filename IS INITIAL OR ps_man-sobjname IS INITIAL.
     ls_log-status  = 'Skipped'.
-    ls_log-message = 'No file name in manifest'.
+    ls_log-message = 'Missing sub-object or file name in manifest'.
     APPEND ls_log TO gt_log.
     RETURN.
   ENDIF.
@@ -168,18 +180,6 @@ FORM upload_object USING ps_man TYPE ty_manifest.
     RETURN.
   ENDIF.
 
-  lv_name = ps_man-objname.
-
-  " Object must already exist (we update, we do not create).
-  SELECT SINGLE name FROM trdir INTO @DATA(lv_dummy) WHERE name = @lv_name.
-  lv_exists = boolc( sy-subrc = 0 ).
-  IF lv_exists = abap_false.
-    ls_log-status  = 'Skipped'.
-    ls_log-message = 'Object does not exist in this system'.
-    APPEND ls_log TO gt_log.
-    RETURN.
-  ENDIF.
-
   IF p_test = 'X'.
     ls_log-status  = 'Success'.
     ls_log-message = |Simulation: { lines( gt_source ) } lines ready to upload|.
@@ -187,13 +187,34 @@ FORM upload_object USING ps_man TYPE ty_manifest.
     RETURN.
   ENDIF.
 
-  " Determine the program type (subc) and write the source back, recording
-  " the change in the transport request.
-  SELECT SINGLE subc FROM trdir INTO @DATA(lv_subc) WHERE name = @lv_name.
+  " Write the source back into the exact sub-object.
+  IF ps_man-objtype = 'CLAS'.
+    PERFORM update_class_include USING ps_man CHANGING ls_log.
+  ELSE.
+    lv_name = ps_man-sobjname.
+    PERFORM update_program USING lv_name CHANGING ls_log.
+  ENDIF.
+
+  APPEND ls_log TO gt_log.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form update_program  - PROG / FUGR / FUGS / SFPF / SSFO includes
+*&---------------------------------------------------------------------*
+FORM update_program USING pv_name TYPE programm
+                    CHANGING ps_log TYPE ty_log.
+
+  SELECT SINGLE subc FROM trdir INTO @DATA(lv_subc) WHERE name = @pv_name.
+  IF sy-subrc <> 0.
+    ps_log-status  = 'Skipped'.
+    ps_log-message = 'Include / program does not exist in this system'.
+    RETURN.
+  ENDIF.
 
   CALL FUNCTION 'RPY_PROGRAM_UPDATE'
     EXPORTING
-      program_name     = lv_name
+      program_name     = pv_name
       program_type     = lv_subc
       transport_number = p_req
     TABLES
@@ -205,13 +226,58 @@ FORM upload_object USING ps_man TYPE ty_manifest.
       OTHERS           = 4.
   IF sy-subrc = 0.
     COMMIT WORK AND WAIT.
-    ls_log-status  = 'Success'.
-    ls_log-message = |Uploaded to { p_req }|.
+    ps_log-status  = 'Success'.
+    ps_log-message = |Uploaded to { p_req }|.
   ELSE.
-    ls_log-status  = 'Error'.
-    ls_log-message = |RPY_PROGRAM_UPDATE failed (subrc { sy-subrc })|.
+    ps_log-status  = 'Error'.
+    ps_log-message = |RPY_PROGRAM_UPDATE failed (subrc { sy-subrc })|.
   ENDIF.
-  APPEND ls_log TO gt_log.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form update_class_include  - class method include
+*&  Writes the include with INSERT REPORT and records the class object
+*&  in the transport, mirroring ZATC_RESULT_CORRECTION. The class should
+*&  be activated afterwards (e.g. via SE24 / mass activation).
+*&---------------------------------------------------------------------*
+FORM update_class_include USING ps_man TYPE ty_manifest
+                          CHANGING ps_log TYPE ty_log.
+
+  DATA: lv_incl TYPE programm,
+        lv_obj  TYPE vrsd-objname.
+
+  lv_incl = ps_man-sobjname.
+  lv_obj  = ps_man-objname.
+
+  SELECT SINGLE * FROM tadir INTO @DATA(wa_tadir)
+    WHERE pgmid = 'R3TR' AND object = 'CLAS' AND obj_name = @lv_obj.
+  IF sy-subrc <> 0.
+    ps_log-status  = 'Skipped'.
+    ps_log-message = 'Class does not exist in this system'.
+    RETURN.
+  ENDIF.
+
+  INSERT REPORT lv_incl FROM gt_source.
+  COMMIT WORK AND WAIT.
+
+  REFRESH lt_recording_entries.
+  ls_recording_entry-object_entry-object_key-pgmid    = 'R3TR'.
+  ls_recording_entry-object_entry-object_key-object   = wa_tadir-object.
+  ls_recording_entry-object_entry-object_key-obj_name = lv_obj.
+  ls_recording_entry-author     = wa_tadir-author.
+  ls_recording_entry-devclass   = wa_tadir-devclass.
+  ls_recording_entry-masterlang = wa_tadir-masterlang.
+  APPEND ls_recording_entry TO lt_recording_entries.
+
+  CALL FUNCTION 'CTS_WBO_API_INSERT_OBJECTS'
+    EXPORTING
+      recording_entries = lt_recording_entries
+      trkorr            = p_req.
+  COMMIT WORK.
+
+  ps_log-status  = 'Success'.
+  ps_log-message = |Method include written, class recorded in { p_req } (activate manually)|.
 
 ENDFORM.
 
@@ -224,12 +290,10 @@ FORM validate_transport.
   IF sy-subrc <> 0.
     MESSAGE 'Transport request does not exist' TYPE 'E'.
   ENDIF.
-  " Customizing (W/T) or other non-workbench types are rejected.
   IF ls_e070-trfunction = 'W' OR ls_e070-trfunction = 'T'
      OR ls_e070-trfunction = 'G' OR ls_e070-trfunction = 'R'.
     MESSAGE 'Please select a Workbench transport request' TYPE 'E'.
   ENDIF.
-  " Status must be modifiable (D = modifiable, L = modifiable protected).
   IF ls_e070-trstatus <> 'D' AND ls_e070-trstatus <> 'L'.
     MESSAGE 'Transport request is already released / not modifiable' TYPE 'E'.
   ENDIF.

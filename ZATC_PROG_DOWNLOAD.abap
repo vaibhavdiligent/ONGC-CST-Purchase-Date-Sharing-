@@ -1,37 +1,52 @@
 *&---------------------------------------------------------------------*
 *& Report  ZATC_PROG_DOWNLOAD
 *&---------------------------------------------------------------------*
-*& Program Title : Download object source as text files + manifest Excel
+*& Program Title : Download the exact ATC-flagged sub-objects as text
+*&                 files + an Excel manifest
 *&
 *& Description   : Companion downloader for ZATC_RESULT_CORRECTION.
-*&                 For every object entered on the selection screen the
-*&                 active source is read and written to the chosen folder
-*&                 as a .txt file (one file per object). After all objects
-*&                 are downloaded an Excel manifest is written to the same
-*&                 folder containing  Object Name | Object Type | File Name.
-*&                 The manifest is the input for the upload program
-*&                 ZATC_PROG_UPLOAD, which restores the source and records
-*&                 the objects in a transport request.
+*&                 The user supplies an ATC result (run series) name on
+*&                 the selection screen. The program reads the ATC
+*&                 findings and, exactly like the correction program,
+*&                 resolves each finding to the precise sub-object that
+*&                 carries the code (finding-sobjname): a program include,
+*&                 a class method include, or a function-group include.
+*&                 Only those sub-objects are downloaded - one .txt file
+*&                 each - into the chosen folder.
 *&
-*& Object types  : PROG / INCLUDE / FUGR-includes (anything readable via
-*&                 READ REPORT). Other types are reported as skipped.
+*&                 After all downloads an Excel manifest is written with
+*&                 Object Type | Object Name | Sub Object | File Name,
+*&                 using the standard FM SAP_CONVERT_TO_XLS_FORMAT. The
+*&                 manifest is the input for ZATC_PROG_UPLOAD.
+*&
+*& Source read   : PROG / FUGR / FUGS / SFPF / SSFO -> SVRS_GET_VERSION_REPS_40
+*&                 CLAS                              -> SEO method/section source
+*&                 (identical to ZATC_RESULT_CORRECTION).
 *&---------------------------------------------------------------------*
 REPORT zatc_prog_download.
 
-TABLES: trdir, tadir.
+TABLES: tadir, scirest_ad.
 
 *----------------------------------------------------------------------*
 * Types
 *----------------------------------------------------------------------*
+TYPES: BEGIN OF ty_obj,
+         objtype  TYPE char4,    " PROG / CLAS / FUGR / SSFO ...
+         objname  TYPE char40,   " main object (program / class / fgr)
+         sobjname TYPE char40,   " exact include / method / function include
+       END OF ty_obj.
+
 TYPES: BEGIN OF ty_manifest,
-         objname  TYPE tadir-obj_name,   " object / program / include name
-         objtype  TYPE tadir-object,     " R3TR object type (PROG, FUGR, ...)
-         filename TYPE string,           " name of the downloaded .txt file
+         objtype  TYPE char4,
+         objname  TYPE char40,
+         sobjname TYPE char40,
+         filename TYPE string,
        END OF ty_manifest.
 
 TYPES: BEGIN OF ty_log,
-         objname  TYPE tadir-obj_name,
-         objtype  TYPE tadir-object,
+         objtype  TYPE char4,
+         objname  TYPE char40,
+         sobjname TYPE char40,
          filename TYPE string,
          status   TYPE char10,           " Success / Skipped / Error
          message  TYPE char100,
@@ -40,22 +55,59 @@ TYPES: BEGIN OF ty_log,
 *----------------------------------------------------------------------*
 * Global data
 *----------------------------------------------------------------------*
-DATA: gt_source   TYPE STANDARD TABLE OF abaptxt255,
+DATA: gt_obj      TYPE STANDARD TABLE OF ty_obj,
       gt_manifest TYPE STANDARD TABLE OF ty_manifest,
       gt_log      TYPE STANDARD TABLE OF ty_log,
       gv_sep      TYPE c LENGTH 1.
+
+" Source read work areas (same kinds the correction program uses)
+DATA: repos_tab          TYPE STANDARD TABLE OF abaptxt255,
+      wa_blank           TYPE abaptxt255,
+      object_name        TYPE vrsd-objname,
+      l_seoclskey        TYPE seoclskey,
+      it_includes        TYPE seop_methods_w_include,
+      ls_mtdkey          TYPE seocpdkey,
+      lt_source          TYPE seop_source,
+      ex_source_code_tab TYPE seop_source_string,
+      lt_source_seo      TYPE seo_section_source,
+      l_program_sec      TYPE program,
+      l_clkey            TYPE seoclskey.
 
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
-  SELECT-OPTIONS s_obj FOR trdir-name OBLIGATORY.          " objects to download
-  PARAMETERS     p_dir TYPE string OBLIGATORY.             " target folder
-  PARAMETERS     p_man TYPE flag AS CHECKBOX DEFAULT 'X'.  " also write manifest
+  PARAMETERS     p_id   TYPE satc_d_ac_title OBLIGATORY.       " ATC result name
+  SELECT-OPTIONS s_obj  FOR tadir-obj_name.                    " object filter
+  SELECT-OPTIONS s_name FOR scirest_ad-sobjname.               " sub-object filter
+  PARAMETERS     p_dir  TYPE string OBLIGATORY.                " target folder
+  PARAMETERS     p_man  TYPE flag AS CHECKBOX DEFAULT 'X'.     " write manifest
 SELECTION-SCREEN END OF BLOCK b1.
 
 *----------------------------------------------------------------------*
-* F4 help for the folder
+* F4 help: ATC result (run series) name
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_id.
+  SELECT DISTINCT run_series_name INTO TABLE @DATA(it_run_series_name)
+    FROM satc_ac_resulth.
+  IF sy-subrc = 0.
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING
+        retfield        = 'RUN_SERIES_NAME'
+        dynpprog        = sy-cprog
+        dynpnr          = sy-dynnr
+        dynprofield     = 'P_ID'
+        value_org       = 'S'
+      TABLES
+        value_tab       = it_run_series_name
+      EXCEPTIONS
+        parameter_error = 1
+        no_values_found = 2
+        OTHERS          = 3.
+  ENDIF.
+
+*----------------------------------------------------------------------*
+* F4 help: target folder
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_dir.
   PERFORM f4_folder CHANGING p_dir.
@@ -74,24 +126,21 @@ START-OF-SELECTION.
   PERFORM run_in_gui.
   PERFORM normalize_folder CHANGING p_dir.
 
+  PERFORM collect_findings.
+  IF gt_obj IS INITIAL.
+    MESSAGE 'No matching ATC findings / sub-objects found' TYPE 'E'.
+  ENDIF.
+
   DATA lv_total TYPE i.
   DATA lv_done  TYPE i.
+  lv_total = lines( gt_obj ).
 
-  " Resolve the list of object names from the select-options.
-  DATA gt_names TYPE STANDARD TABLE OF trdir-name.
-  SELECT name FROM trdir INTO TABLE @gt_names WHERE name IN @s_obj.
-  IF gt_names IS INITIAL.
-    MESSAGE 'No objects found for the given selection' TYPE 'E'.
-  ENDIF.
-  lv_total = lines( gt_names ).
-
-  LOOP AT gt_names INTO DATA(lv_name).
+  LOOP AT gt_obj INTO DATA(gs_obj).
     lv_done = lv_done + 1.
-    PERFORM progress USING lv_done lv_total lv_name.
-    PERFORM download_object USING lv_name.
+    PERFORM progress USING lv_done lv_total gs_obj-sobjname.
+    PERFORM download_subobject USING gs_obj.
   ENDLOOP.
 
-  " Write the Excel manifest once all objects are downloaded.
   IF p_man = 'X' AND gt_manifest IS NOT INITIAL.
     PERFORM write_manifest.
   ENDIF.
@@ -99,33 +148,84 @@ START-OF-SELECTION.
   PERFORM show_log.
 
 *&---------------------------------------------------------------------*
-*& Form download_object
+*& Form collect_findings
+*&  Reads the ATC result and builds the unique list of sub-objects to
+*&  download (object type / object name / sub-object name).
 *&---------------------------------------------------------------------*
-FORM download_object USING pv_name TYPE trdir-name.
+FORM collect_findings.
+
+  DATA: i_result_id          TYPE satc_d_ac_display_id,
+        e_findings_extension TYPE satc_ci_findings_extension,
+        e_ext_field_list     TYPE satc_ci_finding_ext_field_list.
+
+  " Resolve the latest display id for the given run series name.
+  SELECT * INTO TABLE @DATA(it_resulth)
+    FROM satc_ac_resulth
+    WHERE run_series_name = @p_id.
+  IF sy-subrc <> 0.
+    MESSAGE 'Wrong ATC variant / result name selected' TYPE 'E'.
+  ENDIF.
+  SORT it_resulth BY update_on DESCENDING.
+  READ TABLE it_resulth INTO DATA(wa_resulth) INDEX 1.
+  IF sy-subrc = 0.
+    i_result_id = wa_resulth-display_id.
+  ENDIF.
+
+  DATA(result_access) = NEW cl_satc_api_factory( )->create_result_access( i_result_id ).
+  result_access->get_findings(
+    IMPORTING
+      e_findings           = DATA(findings)
+      e_findings_extension = e_findings_extension
+      e_ext_field_list     = e_ext_field_list ).
+
+  DATA gs_obj TYPE ty_obj.
+  LOOP AT findings INTO DATA(finding)
+       WHERE objname IN s_obj OR enhname IN s_obj.
+    CLEAR gs_obj.
+    gs_obj-objtype  = finding-objtype.
+    gs_obj-objname  = finding-objname.
+    gs_obj-sobjname = finding-sobjname.
+    IF gs_obj-sobjname IS INITIAL.
+      gs_obj-sobjname = finding-objname.   " fall back to the object itself
+    ENDIF.
+    APPEND gs_obj TO gt_obj.
+  ENDLOOP.
+
+  " Keep one entry per unique sub-object, honour the optional filter.
+  DELETE gt_obj WHERE sobjname NOT IN s_name.
+  SORT gt_obj BY objname sobjname.
+  DELETE ADJACENT DUPLICATES FROM gt_obj COMPARING objname sobjname.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form download_subobject
+*&  Reads the source of one sub-object (per object type) and downloads
+*&  it as a .txt file. Mirrors the read logic of ZATC_RESULT_CORRECTION.
+*&---------------------------------------------------------------------*
+FORM download_subobject USING ps_obj TYPE ty_obj.
 
   DATA: ls_log      TYPE ty_log,
         ls_manifest TYPE ty_manifest,
-        lv_type     TYPE tadir-object,
         lv_file     TYPE string,
-        lv_fullpath TYPE string,
-        lv_subrc    TYPE sy-subrc.
+        lv_fullpath TYPE string.
 
-  ls_log-objname = pv_name.
+  ls_log-objtype  = ps_obj-objtype.
+  ls_log-objname  = ps_obj-objname.
+  ls_log-sobjname = ps_obj-sobjname.
 
-  " Read the active source.
-  REFRESH gt_source.
-  READ REPORT pv_name INTO gt_source STATE 'A'.
-  IF sy-subrc <> 0 OR gt_source IS INITIAL.
+  REFRESH repos_tab.
+  PERFORM read_source USING ps_obj.
+
+  IF repos_tab IS INITIAL.
     ls_log-status  = 'Skipped'.
-    ls_log-message = 'No active source found (not a program/include)'.
+    ls_log-message = 'No source could be read for this sub-object'.
     APPEND ls_log TO gt_log.
     RETURN.
   ENDIF.
 
-  PERFORM get_obj_type USING pv_name CHANGING lv_type.
-
-  " Build a file-system safe file name (namespace '/' -> '#').
-  lv_file = pv_name.
+  " File name from the sub-object (namespace '/' -> '#').
+  lv_file = ps_obj-sobjname.
   REPLACE ALL OCCURRENCES OF '/' IN lv_file WITH '#'.
   CONCATENATE lv_file '.txt' INTO lv_file.
   CONCATENATE p_dir lv_file INTO lv_fullpath.
@@ -135,18 +235,16 @@ FORM download_object USING pv_name TYPE trdir-name.
       filename = lv_fullpath
       filetype = 'ASC'
     TABLES
-      data_tab = gt_source
+      data_tab = repos_tab
     EXCEPTIONS
       OTHERS   = 1.
-  lv_subrc = sy-subrc.
-
-  ls_log-objtype  = lv_type.
-  ls_log-filename = lv_file.
-  IF lv_subrc = 0.
-    ls_log-status  = 'Success'.
-    ls_log-message = 'Downloaded'.
-    ls_manifest-objname  = pv_name.
-    ls_manifest-objtype  = lv_type.
+  IF sy-subrc = 0.
+    ls_log-filename = lv_file.
+    ls_log-status   = 'Success'.
+    ls_log-message  = 'Downloaded'.
+    ls_manifest-objtype  = ps_obj-objtype.
+    ls_manifest-objname  = ps_obj-objname.
+    ls_manifest-sobjname = ps_obj-sobjname.
     ls_manifest-filename = lv_file.
     APPEND ls_manifest TO gt_manifest.
   ELSE.
@@ -158,40 +256,125 @@ FORM download_object USING pv_name TYPE trdir-name.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form get_obj_type
-*&  Returns the R3TR object type from TADIR; falls back to the TRDIR
-*&  program class (executable -> PROG, otherwise INCLUDE).
+*& Form read_source  - fills REPOS_TAB for one sub-object
 *&---------------------------------------------------------------------*
-FORM get_obj_type USING pv_name TYPE trdir-name
-                  CHANGING pv_type TYPE tadir-object.
+FORM read_source USING ps_obj TYPE ty_obj.
 
-  CLEAR pv_type.
-  SELECT SINGLE object FROM tadir INTO pv_type
-    WHERE pgmid = 'R3TR' AND obj_name = pv_name.
-  IF sy-subrc = 0 AND pv_type IS NOT INITIAL.
-    RETURN.
-  ENDIF.
+  CASE ps_obj-objtype.
+    WHEN 'PROG' OR 'FUGR' OR 'FUGS' OR 'SFPF' OR 'SSFO'.
+      " Program / function-group / form includes: read the include directly.
+      object_name = ps_obj-sobjname.
+      CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
+        EXPORTING
+          object_name           = object_name
+          versno                = '00000'
+        TABLES
+          repos_tab             = repos_tab
+        EXCEPTIONS
+          no_version            = 1
+          system_failure        = 2
+          communication_failure = 3.
 
-  SELECT SINGLE subc FROM trdir INTO @DATA(lv_subc) WHERE name = @pv_name.
-  IF sy-subrc = 0 AND lv_subc = '1'.
-    pv_type = 'PROG'.
-  ELSE.
-    pv_type = 'INCL'.
-  ENDIF.
+    WHEN 'CLAS'.
+      " Class: resolve the method include and read its source.
+      CLEAR l_seoclskey.
+      l_seoclskey = ps_obj-objname.
+      CALL FUNCTION 'SEO_CLASS_GET_METHOD_INCLUDES'
+        EXPORTING
+          clskey                       = l_seoclskey
+        IMPORTING
+          includes                     = it_includes
+        EXCEPTIONS
+          _internal_class_not_existing = 1
+          OTHERS                       = 2.
+      IF sy-subrc = 0.
+        READ TABLE it_includes INTO DATA(wa_includes)
+          WITH KEY incname = ps_obj-sobjname.
+        IF sy-subrc = 0.
+          CLEAR ls_mtdkey.
+          REFRESH ex_source_code_tab.
+          ls_mtdkey-clsname = wa_includes-cpdkey-clsname.
+          ls_mtdkey-cpdname = wa_includes-cpdkey-cpdname.
+          CALL FUNCTION 'SEO_METHOD_GET_SOURCE'
+            EXPORTING
+              mtdkey                        = ls_mtdkey
+            IMPORTING
+              source                        = lt_source
+              source_expanded               = ex_source_code_tab
+            EXCEPTIONS
+              _internal_method_not_existing = 1
+              _internal_class_not_existing  = 2
+              version_not_existing          = 3
+              inactive_new                  = 4
+              inactive_deleted              = 5
+              OTHERS                        = 6.
+          IF sy-subrc = 0.
+            LOOP AT ex_source_code_tab INTO DATA(ls_source).
+              wa_blank-line = ls_source.
+              APPEND wa_blank TO repos_tab.
+              CLEAR wa_blank.
+            ENDLOOP.
+          ENDIF.
+        ELSE.
+          " Not a method include -> try the class sections (public/protected/private).
+          DATA l_limu TYPE seop_include_ext.
+          DO 3 TIMES.
+            CASE sy-index.
+              WHEN 1. l_limu = 'CPUB'.
+              WHEN 2. l_limu = 'CPRO'.
+              WHEN 3. l_limu = 'CPRI'.
+            ENDCASE.
+            l_clkey-clsname = ps_obj-objname.
+            CALL FUNCTION 'SEO_SECTION_GET_SOURCE'
+              EXPORTING
+                cifkey               = l_clkey
+                limu                 = l_limu
+                state                = 'A'
+              IMPORTING
+                source               = lt_source_seo
+                incname              = l_program_sec
+              EXCEPTIONS
+                class_not_existing   = 1
+                version_not_existing = 2
+                OTHERS               = 3.
+            IF lt_source_seo[] IS NOT INITIAL AND l_program_sec = ps_obj-sobjname.
+              LOOP AT lt_source_seo INTO DATA(ls_seo).
+                wa_blank-line = ls_seo.
+                APPEND wa_blank TO repos_tab.
+                CLEAR wa_blank.
+              ENDLOOP.
+              EXIT.
+            ENDIF.
+          ENDDO.
+        ENDIF.
+      ENDIF.
+
+    WHEN OTHERS.
+      " Fallback: try reading the sub-object as a plain include/report.
+      object_name = ps_obj-sobjname.
+      CALL FUNCTION 'SVRS_GET_VERSION_REPS_40'
+        EXPORTING
+          object_name           = object_name
+          versno                = '00000'
+        TABLES
+          repos_tab             = repos_tab
+        EXCEPTIONS
+          no_version            = 1
+          system_failure        = 2
+          communication_failure = 3.
+  ENDCASE.
 
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form write_manifest
-*&  Writes the manifest as a real Excel file using the standard function
-*&  module SAP_CONVERT_TO_XLS_FORMAT. The first row is a header that the
-*&  upload program skips (TEXT_CONVERT_XLS_TO_SAP with i_line_header = 'X').
+*& Form write_manifest  (standard FM SAP_CONVERT_TO_XLS_FORMAT)
 *&---------------------------------------------------------------------*
 FORM write_manifest.
 
   TYPES: BEGIN OF ty_flat,
-           objname  TYPE c LENGTH 40,
            objtype  TYPE c LENGTH 10,
+           objname  TYPE c LENGTH 40,
+           sobjname TYPE c LENGTH 40,
            filename TYPE c LENGTH 128,
          END OF ty_flat.
 
@@ -201,16 +384,18 @@ FORM write_manifest.
         lv_full  TYPE string,
         lv_stamp TYPE char14.
 
-  " Header row (skipped on upload).
-  ls_flat-objname  = 'Object Name'.
+  " Header row (skipped on upload via i_line_header = 'X').
   ls_flat-objtype  = 'Object Type'.
+  ls_flat-objname  = 'Object Name'.
+  ls_flat-sobjname = 'Sub Object'.
   ls_flat-filename = 'File Name'.
   APPEND ls_flat TO lt_flat.
 
   LOOP AT gt_manifest INTO DATA(ls_man).
     CLEAR ls_flat.
-    ls_flat-objname  = ls_man-objname.
     ls_flat-objtype  = ls_man-objtype.
+    ls_flat-objname  = ls_man-objname.
+    ls_flat-sobjname = ls_man-sobjname.
     ls_flat-filename = ls_man-filename.
     APPEND ls_flat TO lt_flat.
   ENDLOOP.
@@ -265,7 +450,7 @@ FORM normalize_folder CHANGING pv_dir TYPE string.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form run_in_gui  - this tool only works in SAP GUI (frontend services)
+*& Form run_in_gui
 *&---------------------------------------------------------------------*
 FORM run_in_gui.
   DATA l_url TYPE string.
@@ -280,7 +465,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form progress
 *&---------------------------------------------------------------------*
-FORM progress USING pv_done TYPE i pv_total TYPE i pv_text TYPE trdir-name.
+FORM progress USING pv_done TYPE i pv_total TYPE i pv_text TYPE clike.
   DATA(lv_pct) = COND i( WHEN pv_total > 0 THEN pv_done * 100 / pv_total ELSE 0 ).
   CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
     EXPORTING
