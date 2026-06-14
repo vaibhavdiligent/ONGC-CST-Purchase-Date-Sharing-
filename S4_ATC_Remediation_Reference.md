@@ -285,7 +285,72 @@ SELECT * FROM <cds_view>
 
 ---
 
-## 13. FILES CONVERTED (branch: claude/exciting-darwin-rrmfvz)
+## 13. SPECIAL CASES & EDGE RULES
+
+### 13a. MANDT as a data column (not a WHERE filter)
+CDS views do not expose MANDT as a selectable data column. If original code selected MANDT as data:
+```abap
+" OLD — VBFA~MANDT selected as data field and used in GROUP BY:
+SELECT vbfa~mandt, vbfa~vbeln, COUNT(*) AS cnt
+  FROM vbfa
+  GROUP BY vbfa~mandt, vbfa~vbeln.
+
+" NEW — replace with @sy-mandt, remove from GROUP BY:
+SELECT @sy-mandt AS mandt,
+       SubsequentDocument AS vbeln,
+       COUNT(*) AS cnt
+  FROM I_SDDocumentMultiLevelProcFlow
+  GROUP BY SubsequentDocument.
+```
+
+### 13b. QALS client field exception
+QALS uses `MANDANT` (not `MANDT`) as its client field. When converting to `I_InspectionLot`:
+- Remove `WHERE ... MANDT EQ @MANDT1` completely — do NOT rename to MANDANT
+- CDS handles the client filter implicitly
+- Error if left in: *"Unknown column MANDT in I_InspectionLot"*
+
+### 13c. V_VBUK_S4 and V_VBUP_S4 — CDS views, not DB tables
+Despite the naming convention that looks like a table name, these are CDS views:
+- Field names are identical to the original VBUK/VBUP tables — no CamelCase aliases needed
+- `CLIENT SPECIFIED` and `USING CLIENT` must NOT be used (same as all CDS)
+- `OPEN CURSOR`, `SELECT INTO TABLE` etc. all work on them normally
+
+### 13d. BW Extractor — keep OPEN CURSOR, do not rewrite to SELECT INTO TABLE
+BW extractor function modules call `FETCH NEXT CURSOR PACKAGE SIZE` across multiple FM calls.
+The `STATICS l_s_cursor` keeps the cursor alive between calls. This pattern MUST be preserved:
+```abap
+" CORRECT for BW extractor — cursor stays, just point at CDS view:
+OPEN CURSOR WITH HOLD l_s_cursor FOR
+      SELECT PrecedingDocument AS vbelv, ...
+      FROM I_SDDocumentMultiLevelProcFlow
+      WHERE ...
+
+FETCH NEXT CURSOR l_s_cursor
+  INTO CORRESPONDING FIELDS OF TABLE l_i_data
+  PACKAGE SIZE l_s_if-maxsize.
+```
+Never replace this with a plain `SELECT ... INTO TABLE` — it breaks the packetised extraction contract.
+
+### 13e. Comma after every field (common copy-paste error)
+Modern ABAP Open SQL requires a comma after every field in the SELECT list except the last.
+This is the most common error when writing converted code manually:
+```abap
+" WRONG (missing commas):
+SELECT SalesDocument AS vbeln
+       SalesDocumentItem AS posnr
+       Material AS matnr
+  FROM I_SalesDocumentItem ...
+
+" CORRECT:
+SELECT SalesDocument AS vbeln,
+       SalesDocumentItem AS posnr,
+       Material AS matnr
+  FROM I_SalesDocumentItem ...
+```
+
+---
+
+## 14. FILES CONVERTED (branch: claude/exciting-darwin-rrmfvz)
 
 | File | Program | What was done |
 |---|---|---|
@@ -293,4 +358,5 @@ SELECT * FROM <cds_view>
 | `solve1.txt` | `/CCEJ/RUOSD_ATP_STK_F01_NEW` | Same tables + F_GET_VBUKP form; V_VBUK_S4 / V_VBUP_S4 used |
 | `solve2.txt` | `/CCC/RDTBCR_1BRBES2RIA_PGM1` | 86 tables with successors from ARS; 30 converted; CLIENT SPECIFIED removed; duplicate alias fix; QALS MANDANT fix; VBFA MANDT as @sy-mandt |
 | `RDOTCSLSR_CCCIL_PRICNG_S5.txt` | `/CCC/RDOTCSLSR_CCCIL_PRICNG_S5` | 109×2 CI_NOORDER (DELETE/EXIT) + 154 CI_FLDEXT_OK[2438131]; no CDS conversions (no successors for pricing tables) |
+| `BI_EXTRACTOR_VBFA.txt` | `/CCEJ/BI_EXTRACTOR_VBFA` | VBFA BW extractor — NOT converted; CDS only has 26/43 fields; recommended CI_USAGE_OK suppression |
 
