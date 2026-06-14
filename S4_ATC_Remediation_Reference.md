@@ -102,10 +102,36 @@ WHERE ebeln = @ls_ekko-ebeln
 ```
 
 **Never use:**
-- `SELECT * FROM <cds_view>` if internal table has fewer fields
+- `SELECT * FROM <cds_view>` — always list fields explicitly (CDS ≠ original table structure)
 - `USING CLIENT @mandt1` with CDS views
 - `CLIENT SPECIFIED` with CDS views
 - `MANDT EQ @MANDT1` in WHERE clause for CDS views (except where CDS explicitly exposes MANDT as data)
+
+**RULE: Only SELECT fields that exist in the internal table TYPE definition**
+
+CDS views often have more or fewer elements than the internal table. Selecting a field that the internal table doesn't have causes:
+- Syntax error: *"Work area L_IT_VBUK has fewer fields than selected"*
+- Syntax error: *"WBSTK is invalid here (due to grammar)"*
+
+Check the internal table's TYPE before writing the SELECT:
+- Fields in SELECT list → must exist in internal table TYPE
+- Fields only in WHERE clause → keep in WHERE, do NOT add to SELECT list
+
+```abap
+" WRONG — if l_it_vbuk is typed with only vbeln:
+SELECT vbeln, gbstk FROM V_VBUK_S4 INTO TABLE @l_it_vbuk WHERE ...
+
+" CORRECT — gbstk only in WHERE, only vbeln selected:
+SELECT vbeln FROM V_VBUK_S4 INTO TABLE @l_it_vbuk WHERE gbstk = 'C'.
+```
+
+**RULE: Fields missing from CDS → use supplementary fetch-back (see section 8)**
+
+If a field you need is in the internal table but NOT in the CDS view (verified via DDLS_BASE_FIELDS.txt):
+- Do the main SELECT from CDS for available fields
+- Then SELECT the missing fields from the original table using FOR ALL ENTRIES
+- Fill back into the internal table via FIELD-SYMBOL loop + BINARY SEARCH
+- If fetch-back is impractical (e.g. BW extractor, SELECT *), suppress with `"#EC CI_USAGE_OK` instead
 
 ---
 
