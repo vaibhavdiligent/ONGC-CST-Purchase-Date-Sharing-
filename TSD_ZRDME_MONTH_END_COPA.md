@@ -86,15 +86,20 @@ The contract management backend is migrated from ECC Rebate Management
 
 ---
 
-## 5. GL determination (FS 4.2.2 / 9.3)
+## 5. GL determination (FS 4.2.2 / 9.3) — updated per client (B1)
 
-`ZDME_GL_MAPPING` is read by `BOART` + `KVSL1`:
+**Client decision (B1):** a separate Account-Based CO-PA GL mapping is *not*
+yet confirmed. Until it is, GLs are read from the **existing** `/CCBJI/T_DME_GL`
+table and the **same GL is used for CB and AB** CO-PA.
 
-* `SAKN1` → CB CO-PA debit GL (`gv_dbgl`)
+`/CCBJI/T_DME_GL` is read by `BOART` + `KVSL1`:
+
+* `SAKN1` → CB CO-PA debit GL (`gv_dbgl`) **and** AB CO-PA GL (`gv_abgl`) — interim
 * `VFIELD` → CB CO-PA value field
-* **`GL_ACCT_ACCTBSD` (NEW column)** → Account-Based CO-PA GL (`gv_abgl`)
 
-> **Action (Finance/CO):** populate `GL_ACCT_ACCTBSD` for every mapping row.
+The `GL_ACCT_ACCTBSD` field is retained (reserved) in the data model. When a
+separate AB GL mapping is confirmed, point the GL read at `ZDME_GL_MAPPING`
+and `gv_abgl` automatically switches to the new column.
 
 ---
 
@@ -120,7 +125,8 @@ commits via `BAPI_TRANSACTION_COMMIT` (rollback on error).
 
 The AS-IS `1.01` write-back to `CE2JP00` (`F_DUMMY_SALES`) is **removed**. When
 no actual sales exist for a contract, a single allocation line on the **dummy
-material** (`DME_DUMMY`) carries the full contract amount.
+material `9651030000`** (confirmed by client — B2) carries the full contract
+amount.
 
 ---
 
@@ -132,20 +138,26 @@ material** (`DME_DUMMY`) carries the full contract amount.
 | 8.2 | Add custom characteristics (`VKAUS`, `WW228`, `WW229`, `KUNWE`) to the AB operating concern; `CI_ACDOCA` extension fields | CO / Basis |
 | 8.3 | Extend `ZDME_GL_MAPPING` with `GL_ACCT_ACCTBSD` and maintain values | Finance/CO |
 | 8.4 | Review `KEDR` derivation + `COPA0002` exits write to ACDOCA extension fields | CO |
-| 8.5 | Create CDS view `ZC_DME_SALES_COPA`; adjust ACDOCA extension field names | Dev |
+| 8.5 | Create CDS view `ZC_DME_SALES_COPA` (parameter `p_cutover`); adjust ACDOCA extension field names | Dev |
 | 8.6 | Create transaction code for `ZRDME_MONTH_END_COPA` | Dev |
+| 8.7 | Maintain TVARVC `/CCBJI/DME_ACDOCA_FROM` = cut-over period (test `2026001`, prod `2027012`) — F3 | Functional/Basis |
 
 ---
 
-## 9. Open / feasibility items (FS section 11) — flagged `TODO-FS` in code
+## 9. Open / feasibility items — status after client response (16-Jun-2026)
 
-1. **CRITICAL** — Confirm `BAPI_ACC_DOCUMENT_POST` posts both CB and AB CO-PA
-   in a single call when both types are active on JP00. If not, a second
-   posting path (or `BAPI_COPAACTUALS_POSTCOSTDATA` for CB) is required.
-2. Confirm the custom CO-PA characteristics are passable via `CRITERIA` and
-   are validated by `KEDR` simulation before go-live.
-3. Confirm the ACDOCA → CO-PA characteristic mapping in the CDS view (field
-   names depend on the customer `CI_ACDOCA` append).
+Full responses are tracked in `OPEN_QUESTIONS_DME_COPA_FC.docx`.
+
+| Ref | Item | Client response | Dev action |
+|---|---|---|---|
+| B1 | Separate AB GL accounts | Not confirmed — use `/CCBJI/T_DME_GL` (same GL for CB+AB) for now | ✅ Implemented |
+| B2 | Dummy material | `9651030000` | ✅ Implemented |
+| B3 | Cross-territory scope | In scope — test case `5000442076` | ⏳ Phase-1 parity backlog |
+| F1 | `BAPI_ACC_DOCUMENT_POST` dual CB+AB posting | Assumed yes; validate in sandbox with CO (test cases shared) | ✅ Coded; **pending sandbox** |
+| F2 | Custom characteristics in AB op. concern | Assumed AS-IS; **pending Gaurav-san** | ✅ Coded as assumed |
+| F3 | CE2JP00 → ACDOCA cut-over | Test: ACDOCA from Jan-2026; Prod: CE2 till Nov-2027 / ACDOCA from Dec-2027 | ✅ Made configurable (TVARVC + CDS param) |
+| T1 | WCOCOH append field names | **Pending Pankaj-san** | ⏳ Placeholder retained |
+| T2 | CI_ACDOCA append field names | Assumed unchanged; **pending Gaurav-san** | ⏳ Placeholder retained |
 
 ---
 

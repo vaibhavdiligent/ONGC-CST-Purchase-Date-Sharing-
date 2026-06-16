@@ -9,11 +9,16 @@
 *&---------------------------------------------------------------------*
 *& Purpose : Single normalised sales/profitability source for the DME
 *&           month-end CO-PA program (ZRDME_MONTH_END_COPA).
-*&           Implements the FS source switch (section 3 / 4.2.4):
-*&             - CE2JP00  : periods up to Nov-2027  (parallel-run window)
-*&             - ACDOCA   : periods from Dec-2027   (target state)
-*&           The two branches are UNIONed and selected by PERIO so the
-*&           consuming program stays source-agnostic.
+*&           Implements the FS source switch (section 3 / 4.2.4), made
+*&           configurable per CLIENT DECISION (F3) via parameter
+*&           p_cutover (period YYYY0PP):
+*&             - CE2JP00  : periods  <  p_cutover  (parallel-run window)
+*&             - ACDOCA   : periods >=  p_cutover  (target state)
+*&           Production : p_cutover = 2027012 (CE2 till Nov-2027 / ACDOCA
+*&                        from Dec-2027).  Testing : p_cutover = 2026001
+*&                        (ACDOCA from Jan-2026, per Gaurav-san).
+*&           The two branches are UNIONed so the consumer stays
+*&           source-agnostic; the program supplies p_cutover from TVARVC.
 *&
 *& NOTE    : The ACDOCA branch must read the operating-concern
 *&           profitability characteristics. Where ACDOCA does not carry a
@@ -26,6 +31,8 @@
 
 // ---- Branch 1: CE2JP00 (summarised plan/expense table) -------------
 define view ZC_DME_SALES_COPA
+  with parameters
+    p_cutover : jahrper          // CE2JP00 -> ACDOCA switch period (F3)
   as select from ce2jp00 as ce
 {
   key ce.gjahr                       as gjahr,
@@ -54,7 +61,7 @@ define view ZC_DME_SALES_COPA
 where ce.paledger = '01'
   and ce.vrgar    = '5'                 // plan record type (expense, AS-IS)
   and ce.versi    = '101'
-  and ce.perbl   <= '2027011'           // up to Nov-2027
+  and ce.perbl    < :p_cutover          // before the cut-over period (F3)
 
 union all
 
@@ -84,6 +91,6 @@ select from acdoca as ad
       ad.vv506                       as vv506,
       ad.vv507                       as vv507
 }
-where ad.rldnr  = '0L'                  // leading ledger
-  and ad.poper >= '012'                 // (combined with year filter below)
-  and ad.gjahr >= '2027'                // from Dec-2027 onwards
+where ad.rldnr = '0L'                   // leading ledger
+  // from the cut-over period onwards (F3)
+  and concat( ad.gjahr, concat( '0', substring( ad.poper, 2, 2 ) ) ) >= :p_cutover

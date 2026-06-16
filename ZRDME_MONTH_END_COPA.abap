@@ -252,13 +252,17 @@ CONSTANTS: c_i      TYPE char1            VALUE 'I',
            c_activity TYPE xufield        VALUE 'ACTVT',
            c_bukv     TYPE xufield        VALUE 'BUKRS',
            c_act01    TYPE activ_auth     VALUE '01',
-           c_dummy_mat TYPE matnr         VALUE 'DME_DUMMY',  "FS 4.2.5 / 3.1
+           c_dummy_mat TYPE matnr         VALUE '9651030000', "B2: dummy mat.
            c_gltv   TYPE tvarvc-name      VALUE '/CCBJI/RTR_DME_CRGL',
            c_type   TYPE rsscr_kind       VALUE 'P',
            c_numb   TYPE tvarv_numb       VALUE '0000',
-*  Switch-over period for sales source (CE2JP00 -> ACDOCA). The CDS view
-*  applies the same boundary internally; kept here for documentation.
-           c_acdoca_from TYPE jahrper     VALUE '2027012'.   "Dec-2027
+*  Switch-over period CE2JP00 -> ACDOCA for the sales source (F3).
+*  Production rule: CE2JP00 till Nov-2027, ACDOCA from Dec-2027 ('2027012').
+*  Testing  rule  : ACDOCA from Jan-2026 ('2026001') per Gaurav-san.
+*  The active boundary is read from TVARVC c_acdoca_tvar (fallback below)
+*  and passed to the CDS view so test/prod use the same code.
+           c_acdoca_from TYPE jahrper     VALUE '2027012',   "prod default
+           c_acdoca_tvar TYPE tvarvc-name VALUE '/CCBJI/DME_ACDOCA_FROM'.
 
 *&---------------------------------------------------------------------*
 *&  SELECTION SCREEN  (mirrors include /CCBJI/RUFIAPR_DME_SEL)
@@ -461,11 +465,15 @@ FORM f_get_data.
   ENDIF.
 
 * =====================================================================
-* Step 4: GL account mapping from ZDME_GL_MAPPING (extended with the AB
-*  CO-PA GL account column GL_ACCT_ACCTBSD - FS 4.2.2 / 9.3).
+* Step 4: GL account determination.
+*  CLIENT DECISION (B1): a separate Account-Based CO-PA GL mapping is NOT
+*  yet confirmed. Until it is, read the existing DME GL master table
+*  /CCBJI/T_DME_GL and use the SAME GL accounts for CB and AB CO-PA.
+*  The ZDME_GL_MAPPING extension / GL_ACCT_ACCTBSD column (FS 9.3) is
+*  retained in the data model as a reserved field for the future split.
 * =====================================================================
-  SELECT ktopl bukrs boart kvsl1 sakn1 sakn3 mwskz vfield gl_acct_acctbsd
-    FROM zdme_gl_mapping
+  SELECT ktopl bukrs boart kvsl1 sakn1 sakn3 mwskz vfield
+    FROM /ccbji/t_dme_gl
     INTO CORRESPONDING FIELDS OF TABLE gt_dmegl
     WHERE bukrs = p_bukrs.
   SORT gt_dmegl BY boart kvsl1.
@@ -498,22 +506,35 @@ ENDFORM.
 *&  Form  F_GET_SALES  (Step 6 detail - CDS based)
 *&---------------------------------------------------------------------*
 FORM f_get_sales.
-  DATA: lv_perio TYPE jahrper.
+  DATA: lv_perio   TYPE jahrper,
+        lv_cutover TYPE jahrper.
 
   CONCATENATE p_gjahr c_zero p_monat INTO lv_perio.   "YYYY0PP
 
+* CLIENT DECISION (F3): the CE2JP00 -> ACDOCA cut-over period is
+* configurable. Production uses Dec-2027; testing uses Jan-2026. The
+* active value is taken from TVARVC c_acdoca_tvar; if not maintained,
+* the production default c_acdoca_from applies.
+  SELECT SINGLE low FROM tvarvc INTO lv_cutover
+    WHERE name = c_acdoca_tvar AND type = c_type AND numb = c_numb.
+  IF sy-subrc <> 0 OR lv_cutover IS INITIAL.
+    lv_cutover = c_acdoca_from.
+  ENDIF.
+
 * The CDS view ZC_DME_SALES_COPA exposes a normalised profitability set
-* sourced from CE2JP00 or ACDOCA depending on the period. Selection by
+* sourced from CE2JP00 (before the cut-over) or ACDOCA (from the
+* cut-over). The boundary is passed as a CDS parameter. Selection by
 * contract (WW228) plus dealer / bottler is applied here.
-  SELECT gjahr perde bukrs kndnr artnr werks vkorg vtweg spart prctr
-         kunwe kmvkbu ww207 ww214 vkaus ww228 ww229 erlos vv506 vv507
-    FROM zc_dme_sales_copa
-    INTO CORRESPONDING FIELDS OF TABLE gt_sales
-    FOR ALL ENTRIES IN gt_dhdr
-    WHERE perio  = lv_perio
-      AND bukrs  = p_bukrs
-      AND kmvkbu IN s_vkbur
-      AND ww228  = gt_dhdr-knuma.                  "#EC CI_NOFIELD
+  SELECT gjahr, perde, bukrs, kndnr, artnr, werks, vkorg, vtweg, spart,
+         prctr, kunwe, kmvkbu, ww207, ww214, vkaus, ww228, ww229,
+         erlos, vv506, vv507
+    FROM zc_dme_sales_copa( p_cutover = @lv_cutover )
+    FOR ALL ENTRIES IN @gt_dhdr
+    WHERE perio  = @lv_perio
+      AND bukrs  = @p_bukrs
+      AND kmvkbu IN @s_vkbur
+      AND ww228  = @gt_dhdr-knuma
+    INTO CORRESPONDING FIELDS OF TABLE @gt_sales.   "#EC CI_NOFIELD
   SORT gt_sales BY ww228 kndnr artnr.
 ENDFORM.
 
@@ -596,11 +617,14 @@ FORM f_process_spdata.
     IF sy-subrc = 0.
       gv_dbgl   = <ls_dmegl>-sakn1.
       gv_vfield = <ls_dmegl>-vfield.
-      gv_abgl   = <ls_dmegl>-gl_acct_acctbsd.      "NEW (FS 9.3)
+*     CLIENT DECISION (B1): AB CO-PA uses the same GL as CB until a
+*     separate account-based GL mapping is confirmed. When the
+*     GL_ACCT_ACCTBSD column is populated, switch gv_abgl to it.
+      gv_abgl   = COND #( WHEN <ls_dmegl>-gl_acct_acctbsd IS NOT INITIAL
+                          THEN <ls_dmegl>-gl_acct_acctbsd
+                          ELSE <ls_dmegl>-sakn1 ).
       PERFORM f_conversion CHANGING gv_dbgl.
-      IF gv_abgl IS NOT INITIAL.
-        PERFORM f_conversion CHANGING gv_abgl.
-      ENDIF.
+      PERFORM f_conversion CHANGING gv_abgl.
     ENDIF.
 
 *   ---- FI document reference + tax code from item (FS 4.2.3) ---------
