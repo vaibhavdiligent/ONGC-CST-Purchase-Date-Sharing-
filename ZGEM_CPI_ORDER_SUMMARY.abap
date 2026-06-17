@@ -166,9 +166,17 @@ START-OF-SELECTION.
     name  = 'Content-Type'
     value = 'application/json' ).
 
-  lo_client->request->set_header_field(
-    name  = 'authorization'
-    value = |Bearer { p_token }| ).
+*  NOTE on authentication:
+*  The SM59 destination "CPI" already carries the logon data (Basic auth =
+*  CPI client id/secret) and create_by_destination applies it automatically.
+*  Only set an explicit Authorization header when a token is supplied -
+*  otherwise we would OVERWRITE the destination's Basic-auth header with an
+*  empty/invalid value and CPI returns HTTP 401 Unauthorized.
+  IF p_token IS NOT INITIAL.
+    lo_client->request->set_header_field(
+      name  = 'authorization'
+      value = |Bearer { p_token }| ).
+  ENDIF.
 
 *--- 4a. CPI routing header: CPI reads CamelHttpPath to route the request
 *    to the correct interface (e.g. the Teams-posting iFlow).
