@@ -4,7 +4,8 @@
 *& Calls SAP CPI via the SM59 HTTP (type G) RFC destination CPI_HTTP_GEM.
 *&
 *& - Host / SSL / proxy / authentication are taken from the SM59 destination.
-*& - CamelHttpPath header = OrderSummary -> CPI routes the interface.
+*& - Path /http/GEM/Sync/OrderSummary -> CPI derives CamelHttpPath = OrderSummary
+*&   from the URL (the sender endpoint address must end with /*).
 *& - Request method POST, body = JSON payload (orderSummary).
 *& - Response is parsed and shown on screen as an ALV grid.
 *&---------------------------------------------------------------------*
