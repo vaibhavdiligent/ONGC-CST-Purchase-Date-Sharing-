@@ -20,7 +20,8 @@ PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
             p_path  TYPE string LOWER CASE             " full path -> CPI fills CamelHttpPath from it
-              DEFAULT '/http/GEM/Sync/OrderSummary'.
+              DEFAULT '/http/GEM/Sync/OrderSummary',
+            p_token TYPE string LOWER CASE.            " SEK token sent as header 'token' = Bearer <token>
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
@@ -170,6 +171,13 @@ START-OF-SELECTION.
   lo_client->request->set_header_field(
     name  = 'Content-Type'
     value = 'application/json' ).
+
+*   SEK token: the iFlow expects a custom header named 'token' = Bearer <token>
+  IF p_token IS NOT INITIAL.
+    lo_client->request->set_header_field(
+      name  = 'token'
+      value = |Bearer { p_token }| ).
+  ENDIF.
 
 *--- 5. Set the JSON body (Section 3.2.3)
   lo_client->request->set_cdata( lv_json ).
