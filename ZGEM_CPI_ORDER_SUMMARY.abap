@@ -18,7 +18,8 @@ PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
-            p_cpath TYPE string LOWER CASE DEFAULT 'OrderSummary'. " CamelHttpPath routing
+            p_path  TYPE string LOWER CASE             " full path -> CPI fills CamelHttpPath from it
+              DEFAULT '/http/GEM/Sync/OrderSummary'.
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
@@ -149,21 +150,25 @@ START-OF-SELECTION.
     RETURN.
   ENDIF.
 
-*--- 3. Suppress logon popup and set the request method
+*--- 3. Suppress logon popup, set the request path and method
   lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+
+*   Set the FULL request path. CPI derives CamelHttpPath from the part of the
+*   URL after the iFlow sender endpoint address (which must end with /*).
+*   e.g. address /GEM/Sync/* called with /http/GEM/Sync/OrderSummary
+*        -> CamelHttpPath = OrderSummary.
+*   NOTE: keep the SM59 destination CPI_HTTP_GEM Path Prefix EMPTY so the
+*   path here is not duplicated.
+  cl_http_utility=>set_request_uri(
+    request = lo_client->request
+    uri     = p_path ).
+
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
 
 *--- 4. Request headers
   lo_client->request->set_header_field(
     name  = 'Content-Type'
     value = 'application/json' ).
-
-*   CamelHttpPath -> CPI routes the interface from this value
-  IF p_cpath IS NOT INITIAL.
-    lo_client->request->set_header_field(
-      name  = 'CamelHttpPath'
-      value = p_cpath ).
-  ENDIF.
 
 *--- 5. Set the JSON body (Section 3.2.3)
   lo_client->request->set_cdata( lv_json ).
