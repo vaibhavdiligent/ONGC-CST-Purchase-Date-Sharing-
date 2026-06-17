@@ -20,8 +20,8 @@ PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
             p_token TYPE string LOWER CASE,   " Authentication SEK token (optional)
-            p_cpath TYPE string LOWER CASE      " CamelHttpPath - CPI routes the interface from this
-              DEFAULT '/OrderSummary'.          " just the path suffix, not the full URL
+            p_path  TYPE string LOWER CASE       " request path -> CPI derives CamelHttpPath from it
+              DEFAULT '/http/S4/GEM/OrderSummary'.
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
@@ -155,8 +155,17 @@ START-OF-SELECTION.
 *--- 3. Suppress logon popup and set the request line
   lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
 
-*   The base endpoint comes from the SM59 destination (path prefix). The
-*   actual interface is routed by the CamelHttpPath header set in step 4a.
+*   Set the request path. CPI routes the interface by deriving the internal
+*   CamelHttpPath header from the URL path after the sender endpoint address
+*   (e.g. address /http/S4/GEM/* called with /http/S4/GEM/OrderSummary ->
+*   CamelHttpPath = OrderSummary). CamelHttpPath is a reserved Camel header
+*   and is NOT honoured if sent as an HTTP request header - it must come
+*   from the URL. Keep the SM59 destination Path Prefix EMPTY to avoid
+*   duplicating the path.
+  cl_http_utility=>set_request_uri(
+    request = lo_client->request
+    uri     = p_path ).
+
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
 
 *--- 4. Request headers (Section 3.2.2)
@@ -174,14 +183,6 @@ START-OF-SELECTION.
     lo_client->request->set_header_field(
       name  = 'authorization'
       value = |Bearer { p_token }| ).
-  ENDIF.
-
-*--- 4a. CPI routing: the iFlow reads CamelHttpPath to route the interface.
-*    Call the base SM59 destination and pass the path suffix (e.g. /OrderSummary).
-  IF p_cpath IS NOT INITIAL.
-    lo_client->request->set_header_field(
-      name  = 'CamelHttpPath'
-      value = p_cpath ).
   ENDIF.
 
 *--- 5. Set the JSON body (Section 3.2.3)
