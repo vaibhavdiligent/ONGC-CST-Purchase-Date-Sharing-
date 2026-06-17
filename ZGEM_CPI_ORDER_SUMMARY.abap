@@ -177,7 +177,7 @@ START-OF-SELECTION.
   ENDIF.
 
 *--- 4a. CPI routing: the iFlow reads CamelHttpPath to route the interface.
-*    We call the base SM59 destination and pass the full target URL here.
+*    Call the base SM59 destination and pass the path suffix (e.g. /OrderSummary).
   IF p_cpath IS NOT INITIAL.
     lo_client->request->set_header_field(
       name  = 'CamelHttpPath'
