@@ -13,15 +13,6 @@ REPORT zgem_cpi_order_summary.
 
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI'.
 
-*--- OAuth2 (client credentials) details for the CPI runtime (hardcoded)
-CONSTANTS:
-  c_clientid TYPE string VALUE
-    'sb-d50facfd-958c-4c12-8e8a-522fef205ada!b41507|it-rt-ovl-subaccount-non-prod-zmmj4s8r!b148',
-  c_clientsecret TYPE string VALUE
-    '23bbd1bb-96bc-440a-a418-54073f7ced3a$AnHre5W4lVFCSgmJxVXtw6S54yUB2RX9vfuCu-NoxDs=',
-  c_tokenurl TYPE string VALUE
-    'https://ovl-subaccount-non-prod-zmmj4s8r.authentication.in30.hana.ondemand.com/oauth/token'.
-
 *--- Selection screen so the values from the spec can be entered/changed
 PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
@@ -29,8 +20,8 @@ PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
             p_token TYPE string LOWER CASE,   " Authentication SEK token (optional)
-            p_cpath TYPE string LOWER CASE    " CamelHttpPath - CPI routes the interface from this
-              DEFAULT 'https://ovl-subaccount-non-prod-zmmj4s8r.it-cpi021-rt.cfapps.in30.hana.ondemand.com/http/S4/GEM/OrderSummary'.
+            p_cpath TYPE string LOWER CASE      " CamelHttpPath - CPI routes the interface from this
+              DEFAULT '/OrderSummary'.          " just the path suffix, not the full URL
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
