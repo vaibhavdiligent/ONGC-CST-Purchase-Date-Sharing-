@@ -20,7 +20,8 @@ PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
-            p_token TYPE string LOWER CASE.   " Authentication SEK token
+            p_token TYPE string LOWER CASE,   " Authentication SEK token
+            p_cpath TYPE string LOWER CASE.   " CamelHttpPath - CPI interface routing
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
@@ -168,6 +169,14 @@ START-OF-SELECTION.
   lo_client->request->set_header_field(
     name  = 'authorization'
     value = |Bearer { p_token }| ).
+
+*--- 4a. CPI routing header: CPI reads CamelHttpPath to route the request
+*    to the correct interface (e.g. the Teams-posting iFlow).
+  IF p_cpath IS NOT INITIAL.
+    lo_client->request->set_header_field(
+      name  = 'CamelHttpPath'
+      value = p_cpath ).
+  ENDIF.
 
 *--- 5. Set the JSON body (Section 3.2.3)
   lo_client->request->set_cdata( lv_json ).
