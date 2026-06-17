@@ -16,10 +16,10 @@ CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI',
 
 *--- Selection screen so the values from the spec can be entered/changed
 PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-            p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',
-            p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12',
-            p_from  TYPE string LOWER CASE DEFAULT '2023-05-24',
-            p_to    TYPE string LOWER CASE DEFAULT '2024-05-25',
+            p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
+            p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
+            p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
+            p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
             p_token TYPE string LOWER CASE.   " Authentication SEK token
 
 *--- Structure that mirrors the request payload from the spec
@@ -32,8 +32,43 @@ TYPES: BEGIN OF ty_request,
          to_date      TYPE string,
        END OF ty_request.
 
+*--- Structures that mirror the response payload (Section 3.2.5)
+*   Body
+*     |- Status, Iat
+*     |- data (parent)
+*          |- Sub, Aud, Iss
+*          |- data (child)
+*               |- Date, Count
+*               |- orderIds [ { orderId } ]
+TYPES: BEGIN OF ty_order,
+         orderid TYPE string,            " ordereId (max 100)
+       END OF ty_order,
+       tt_order TYPE STANDARD TABLE OF ty_order WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_data_child,
+         date     TYPE string,           " Date orders are requested
+         count    TYPE i,                " Total number of orders
+         orderids TYPE tt_order,         " All order ids per the count
+       END OF ty_data_child.
+
+TYPES: BEGIN OF ty_data_parent,
+         sub  TYPE string,               " Service name
+         aud  TYPE string,               " Entity name
+         iss  TYPE string,               " Source identification (e.g. GeM)
+         data TYPE ty_data_child,
+       END OF ty_data_parent.
+
+TYPES: BEGIN OF ty_response,
+         status TYPE string,             " Succ / Fail
+         iat    TYPE p LENGTH 8 DECIMALS 0, " Response timestamp (epoch)
+         data   TYPE ty_data_parent,
+       END OF ty_response.
+
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
+      ls_response TYPE ty_response,
+      ls_order    TYPE ty_order,
+      lt_maps     TYPE /ui2/cl_json=>name_mappings,
       lv_json     TYPE string,
       lv_response TYPE string,
       lv_code     TYPE i,
@@ -41,16 +76,45 @@ DATA: lo_client   TYPE REF TO if_http_client,
 
 START-OF-SELECTION.
 
-*--- 1. Build the JSON payload exactly as per the spec
+*--- 1. Build the JSON payload per the spec (Section 3.2.4)
+*   Mutually exclusive date selection:
+*     - as_on  -> single date. from_date/to_date must NOT be sent.
+*     - from_date/to_date -> range. as_on must NOT be sent.
+*       to_date does not work without from_date.
+*   buyer_user_id is optional.
+*   Empty fields are dropped from the JSON via compress = abap_true.
+  IF p_ason IS NOT INITIAL AND ( p_from IS NOT INITIAL OR p_to IS NOT INITIAL ).
+    WRITE: / 'Error: provide either as_on (single date) OR from_date/to_date (range), not both.'.
+    RETURN.
+  ENDIF.
+  IF p_ason IS INITIAL AND p_from IS INITIAL.
+    WRITE: / 'Error: provide as_on, or from_date (with to_date).'.
+    RETURN.
+  ENDIF.
+  IF p_from IS NOT INITIAL AND p_to IS INITIAL.
+    WRITE: / 'Error: to_date is mandatory when from_date is set.'.
+    RETURN.
+  ENDIF.
+  IF p_to IS NOT INITIAL AND p_from IS INITIAL.
+    WRITE: / 'Error: to_date does not work without from_date.'.
+    RETURN.
+  ENDIF.
+
+  CLEAR ls_request.
   ls_request-user          = p_user.
   ls_request-method        = 'orderSummary'.
-  ls_request-buyer_user_id = p_buyer.
-  ls_request-as_on         = p_ason.
-  ls_request-from_date     = p_from.
-  ls_request-to_date       = p_to.
+  ls_request-buyer_user_id = p_buyer.   " optional - omitted if blank
+
+  IF p_ason IS NOT INITIAL.
+    ls_request-as_on = p_ason.          " single-date mode
+  ELSE.
+    ls_request-from_date = p_from.      " range mode
+    ls_request-to_date   = p_to.
+  ENDIF.
 
   lv_json = /ui2/cl_json=>serialize(
               data        = ls_request
+              compress    = abap_true   " drop empty/initial fields
               pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
 *--- 2. Create the HTTP client from the SM59 RFC destination "CPI"
@@ -133,10 +197,51 @@ START-OF-SELECTION.
 
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 9. Output
+*--- 9. Capture / parse the response payload (Section 3.2.5)
+*   Map the mixed-case JSON keys onto the ABAP component names.
+*   (One mapping per distinct name; applied at every nesting level.)
+  lt_maps = VALUE #(
+    ( abap = 'STATUS'   json = 'Status' )
+    ( abap = 'IAT'      json = 'Iat' )
+    ( abap = 'DATA'     json = 'data' )
+    ( abap = 'SUB'      json = 'Sub' )
+    ( abap = 'AUD'      json = 'Aud' )
+    ( abap = 'ISS'      json = 'Iss' )
+    ( abap = 'DATE'     json = 'Date' )
+    ( abap = 'COUNT'    json = 'Count' )
+    ( abap = 'ORDERIDS' json = 'orderIds' )
+    ( abap = 'ORDERID'  json = 'orderId' ) ).
+
+  /ui2/cl_json=>deserialize(
+    EXPORTING
+      json          = lv_response
+      name_mappings = lt_maps
+    CHANGING
+      data          = ls_response ).
+
+*--- 10. Output
   WRITE: / 'HTTP Status :', lv_code, lv_reason.
   WRITE: / 'Request body:'.
   WRITE: / lv_json.
   SKIP.
-  WRITE: / 'Response    :'.
+  WRITE: / 'Raw response:'.
   WRITE: / lv_response.
+  SKIP.
+
+  WRITE: / '--- Parsed response ---'.
+  WRITE: / 'Status      :', ls_response-status.
+  WRITE: / 'Iat         :', ls_response-iat.
+  WRITE: / 'Sub         :', ls_response-data-sub.
+  WRITE: / 'Aud         :', ls_response-data-aud.
+  WRITE: / 'Iss         :', ls_response-data-iss.
+  WRITE: / 'Date        :', ls_response-data-data-date.
+  WRITE: / 'Count       :', ls_response-data-data-count.
+  WRITE: / 'Order IDs   :'.
+  LOOP AT ls_response-data-data-orderids INTO ls_order.
+    WRITE: /5 ls_order-orderid.
+  ENDLOOP.
+
+*--- Optional: treat Fail status as an error
+  IF ls_response-status <> 'Succ'.
+    WRITE: / 'API reported a non-success status:', ls_response-status.
+  ENDIF.
