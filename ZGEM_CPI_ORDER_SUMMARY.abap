@@ -64,11 +64,27 @@ TYPES: BEGIN OF ty_response,
          data   TYPE ty_data_parent,
        END OF ty_response.
 
+*--- Flat structure for display on screen (one row per order id)
+TYPES: BEGIN OF ty_display,
+         status  TYPE string,
+         sub     TYPE string,
+         aud     TYPE string,
+         iss     TYPE string,
+         date    TYPE string,
+         count   TYPE i,
+         orderid TYPE string,
+       END OF ty_display,
+       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
+
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
       ls_response TYPE ty_response,
       ls_order    TYPE ty_order,
       lt_maps     TYPE /ui2/cl_json=>name_mappings,
+      lt_display  TYPE tt_display,
+      ls_display  TYPE ty_display,
+      lo_alv      TYPE REF TO cl_salv_table,
+      lx_salv     TYPE REF TO cx_salv_msg,
       lv_json     TYPE string,
       lv_response TYPE string,
       lv_code     TYPE i,
@@ -219,29 +235,43 @@ START-OF-SELECTION.
     CHANGING
       data          = ls_response ).
 
-*--- 10. Output
-  WRITE: / 'HTTP Status :', lv_code, lv_reason.
-  WRITE: / 'Request body:'.
-  WRITE: / lv_json.
-  SKIP.
-  WRITE: / 'Raw response:'.
-  WRITE: / lv_response.
-  SKIP.
-
-  WRITE: / '--- Parsed response ---'.
-  WRITE: / 'Status      :', ls_response-status.
-  WRITE: / 'Iat         :', ls_response-iat.
-  WRITE: / 'Sub         :', ls_response-data-sub.
-  WRITE: / 'Aud         :', ls_response-data-aud.
-  WRITE: / 'Iss         :', ls_response-data-iss.
-  WRITE: / 'Date        :', ls_response-data-data-date.
-  WRITE: / 'Count       :', ls_response-data-data-count.
-  WRITE: / 'Order IDs   :'.
+*--- 10. Move parsed response into a flat internal table (one row per order id)
+  CLEAR lt_display.
   LOOP AT ls_response-data-data-orderids INTO ls_order.
-    WRITE: /5 ls_order-orderid.
+    CLEAR ls_display.
+    ls_display-status  = ls_response-status.
+    ls_display-sub     = ls_response-data-sub.
+    ls_display-aud     = ls_response-data-aud.
+    ls_display-iss     = ls_response-data-iss.
+    ls_display-date    = ls_response-data-data-date.
+    ls_display-count   = ls_response-data-data-count.
+    ls_display-orderid = ls_order-orderid.
+    APPEND ls_display TO lt_display.
   ENDLOOP.
 
-*--- Optional: treat Fail status as an error
-  IF ls_response-status <> 'Succ'.
-    WRITE: / 'API reported a non-success status:', ls_response-status.
+*--- 11. Display the internal table on screen as an ALV grid
+  IF lt_display IS NOT INITIAL.
+    TRY.
+        cl_salv_table=>factory(
+          IMPORTING
+            r_salv_table = lo_alv
+          CHANGING
+            t_table      = lt_display ).
+
+        " Optimized column widths + standard ALV functions (sort, filter, export)
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_display_settings( )->set_list_header(
+          |orderSummary - { ls_response-status } - Count { ls_response-data-data-count }| ).
+
+        lo_alv->display( ).
+      CATCH cx_salv_msg INTO lx_salv.
+        WRITE: / 'ALV display error:', lx_salv->get_text( ).
+    ENDTRY.
+  ELSE.
+    " Nothing to tabulate - show status / raw payload for diagnosis
+    WRITE: / 'HTTP Status :', lv_code, lv_reason.
+    WRITE: / 'API Status  :', ls_response-status.
+    WRITE: / 'No order ids returned. Raw response:'.
+    WRITE: / lv_response.
   ENDIF.
