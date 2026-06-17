@@ -11,17 +11,17 @@
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_order_summary.
 
-CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI',
-           c_path TYPE string  VALUE '/http/GEM/Test'.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI'.
 
 *--- Selection screen so the values from the spec can be entered/changed
-PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
+PARAMETERS: p_path  TYPE string LOWER CASE
+                      DEFAULT '/http/S4/GEM/OrderSummary', " request path -> CPI routing
+            p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
             p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
-            p_token TYPE string LOWER CASE,   " Authentication SEK token
-            p_cpath TYPE string LOWER CASE.   " CamelHttpPath - CPI interface routing
+            p_token TYPE string LOWER CASE.   " Authentication SEK token (optional)
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
@@ -155,9 +155,12 @@ START-OF-SELECTION.
 *--- 3. Suppress logon popup and set the request line
   lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
 
+*   The full path after the host (e.g. /http/S4/GEM/OrderSummary) goes here.
+*   CPI routes the interface from this URL path - it derives the internal
+*   CamelHttpPath header itself; it is NOT something we send as a header.
   cl_http_utility=>set_request_uri(
     request = lo_client->request
-    uri     = c_path ).
+    uri     = p_path ).
 
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
 
@@ -176,14 +179,6 @@ START-OF-SELECTION.
     lo_client->request->set_header_field(
       name  = 'authorization'
       value = |Bearer { p_token }| ).
-  ENDIF.
-
-*--- 4a. CPI routing header: CPI reads CamelHttpPath to route the request
-*    to the correct interface (e.g. the Teams-posting iFlow).
-  IF p_cpath IS NOT INITIAL.
-    lo_client->request->set_header_field(
-      name  = 'CamelHttpPath'
-      value = p_cpath ).
   ENDIF.
 
 *--- 5. Set the JSON body (Section 3.2.3)
