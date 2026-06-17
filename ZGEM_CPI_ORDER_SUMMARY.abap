@@ -5,13 +5,27 @@
 *& SM59 HTTP (type G) RFC destination "CPI".
 *&
 *& - The host / SSL / proxy settings are taken from SM59 destination CPI.
-*& - The relative path /http/GEM/Test is appended via set_uri.
+*& - Auth: an OAuth2 Bearer token is fetched (client credentials) from the
+*&   XSUAA token endpoint and sent on the CPI call (SM59 Basic auth alone
+*&   returns 401 against the OAuth-protected runtime).
+*& - The path (e.g. /http/S4/GEM/OrderSummary) is set via set_request_uri;
+*&   CPI derives CamelHttpPath from the URL path to route the interface.
 *& - Request method POST, body = JSON payload (orderSummary).
-*& - Headers: Content-Type application/json, authorization Bearer + SEK token.
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_order_summary.
 
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI'.
+
+*--- OAuth2 (client credentials) details for the CPI runtime (hardcoded)
+*   The CPI HTTPS sender adapter is protected by OAuth2; we fetch a Bearer
+*   token from the XSUAA token endpoint and send it on the CPI call.
+CONSTANTS:
+  c_clientid TYPE string VALUE
+    'sb-d50facfd-958c-4c12-8e8a-522fef205ada!b41507|it-rt-ovl-subaccount-non-prod-zmmj4s8r!b148',
+  c_clientsecret TYPE string VALUE
+    '23bbd1bb-96bc-440a-a418-54073f7ced3a$AnHre5W4lVFCSgmJxVXtw6S54yUB2RX9vfuCu-NoxDs=',
+  c_tokenurl TYPE string VALUE
+    'https://ovl-subaccount-non-prod-zmmj4s8r.authentication.in30.hana.ondemand.com/oauth/token'.
 
 *--- Selection screen so the values from the spec can be entered/changed
 PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
@@ -89,7 +103,8 @@ DATA: lo_client   TYPE REF TO if_http_client,
       lv_json     TYPE string,
       lv_response TYPE string,
       lv_code     TYPE i,
-      lv_reason   TYPE string.
+      lv_reason   TYPE string,
+      lv_token    TYPE string.   " OAuth2 access token fetched at runtime
 
 START-OF-SELECTION.
 
@@ -134,6 +149,13 @@ START-OF-SELECTION.
               compress    = abap_true   " drop empty/initial fields
               pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
+*--- 1b. Fetch the OAuth2 Bearer token (client credentials grant)
+  PERFORM get_oauth_token CHANGING lv_token.
+  IF lv_token IS INITIAL.
+    WRITE: / 'Error: could not obtain OAuth token from', c_tokenurl.
+    RETURN.
+  ENDIF.
+
 *--- 2. Create the HTTP client from the SM59 RFC destination "CPI"
   cl_http_client=>create_by_destination(
     EXPORTING
@@ -173,17 +195,14 @@ START-OF-SELECTION.
     name  = 'Content-Type'
     value = 'application/json' ).
 
-*  NOTE on authentication:
-*  The SM59 destination "CPI" already carries the logon data (Basic auth =
-*  CPI client id/secret) and create_by_destination applies it automatically.
-*  Only set an explicit Authorization header when a token is supplied -
-*  otherwise we would OVERWRITE the destination's Basic-auth header with an
-*  empty/invalid value and CPI returns HTTP 401 Unauthorized.
+*  Authentication: send the OAuth2 Bearer token fetched in step 1b.
+*  (A manual p_token, if supplied, overrides the fetched one.)
   IF p_token IS NOT INITIAL.
-    lo_client->request->set_header_field(
-      name  = 'authorization'
-      value = |Bearer { p_token }| ).
+    lv_token = p_token.
   ENDIF.
+  lo_client->request->set_header_field(
+    name  = 'Authorization'
+    value = |Bearer { lv_token }| ).
 
 *--- 5. Set the JSON body (Section 3.2.3)
   lo_client->request->set_cdata( lv_json ).
@@ -291,3 +310,89 @@ START-OF-SELECTION.
     WRITE: / 'No order ids returned. Raw response:'.
     WRITE: / lv_response.
   ENDIF.
+
+*&---------------------------------------------------------------------*
+*& Form GET_OAUTH_TOKEN
+*& Fetches an OAuth2 access token via client_credentials grant from the
+*& XSUAA token endpoint. Client id/secret are passed as HTTP Basic auth
+*& (recommended for XSUAA) and grant_type in the form body.
+*&---------------------------------------------------------------------*
+FORM get_oauth_token CHANGING cv_token TYPE string.
+
+  DATA: lo_tok    TYPE REF TO if_http_client,
+        lv_basic  TYPE string,
+        lv_b64    TYPE string,
+        lv_resp   TYPE string,
+        lv_code   TYPE i,
+        lv_reason TYPE string.
+
+  CLEAR cv_token.
+
+*--- Token endpoint is on a different host than CPI -> create by URL
+  cl_http_client=>create_by_url(
+    EXPORTING
+      url                = c_tokenurl
+    IMPORTING
+      client             = lo_tok
+    EXCEPTIONS
+      argument_not_found = 1
+      plugin_not_active  = 2
+      internal_error     = 3
+      OTHERS             = 4 ).
+  IF sy-subrc <> 0.
+    WRITE: / 'Error creating HTTP client for token endpoint'.
+    RETURN.
+  ENDIF.
+
+  lo_tok->propertytype_logon_popup = if_http_client=>co_disabled.
+
+*--- HTTP Basic auth header = base64( clientid:clientsecret )
+  lv_basic = |{ c_clientid }:{ c_clientsecret }|.
+  lv_b64   = cl_http_utility=>encode_base64( unencoded = lv_basic ).
+
+  lo_tok->request->set_method( if_http_request=>co_request_method_post ).
+  lo_tok->request->set_header_field(
+    name = 'Content-Type' value = 'application/x-www-form-urlencoded' ).
+  lo_tok->request->set_header_field(
+    name = 'Accept' value = 'application/json' ).
+  lo_tok->request->set_header_field(
+    name = 'Authorization' value = |Basic { lv_b64 }| ).
+  lo_tok->request->set_cdata( 'grant_type=client_credentials' ).
+
+  lo_tok->send( EXCEPTIONS http_communication_failure = 1
+                           http_invalid_state         = 2
+                           http_processing_failed     = 3
+                           OTHERS                     = 4 ).
+  IF sy-subrc <> 0.
+    WRITE: / 'Error sending token request'.
+    lo_tok->close( EXCEPTIONS OTHERS = 0 ).
+    RETURN.
+  ENDIF.
+
+  lo_tok->receive( EXCEPTIONS http_communication_failure = 1
+                              http_invalid_state         = 2
+                              http_processing_failed     = 3
+                              OTHERS                     = 4 ).
+  lo_tok->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+  lv_resp = lo_tok->response->get_cdata( ).
+  lo_tok->close( EXCEPTIONS OTHERS = 0 ).
+
+  IF lv_code <> 200.
+    WRITE: / 'Token endpoint returned HTTP', lv_code, lv_reason.
+    WRITE: / lv_resp.
+    RETURN.
+  ENDIF.
+
+*--- Parse access_token from the JSON response
+  DATA: BEGIN OF ls_tok,
+          access_token TYPE string,
+          token_type   TYPE string,
+          expires_in   TYPE i,
+        END OF ls_tok.
+  /ui2/cl_json=>deserialize(
+    EXPORTING json = lv_resp
+    CHANGING  data = ls_tok ).
+
+  cv_token = ls_tok-access_token.
+
+ENDFORM.
