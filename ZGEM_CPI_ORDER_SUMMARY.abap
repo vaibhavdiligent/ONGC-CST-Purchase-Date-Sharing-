@@ -23,6 +23,13 @@ PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
               DEFAULT '/http/GEM/Sync/OrderSummary',
             p_token TYPE string LOWER CASE.            " SEK token sent as header 'token' = Bearer <token>
 
+
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA: err_string       TYPE string.
+
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
          user         TYPE string,
@@ -116,6 +123,27 @@ START-OF-SELECTION.
     WRITE: / 'Error: to_date does not work without from_date.'.
     RETURN.
   ENDIF.
+
+*--- 1a. Generate the SEK security token via the CPI token proxy
+*   (consumer proxy ZGEM_TOKENCO_SI_SECURITY_TOKEN -> CPI security token iFlow).
+*   This is the standard token-generation pattern for CPI integrations.
+  proxy_data-mt_security_token_sender-username  = 'ONGCVIDESH'."'GEM23012020'.
+  proxy_data-mt_security_token_sender-password  = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'."'R2VtT2YzQ1M3cRnQ='.
+
+  TRY.
+    CREATE OBJECT: lo_gem_token.
+      CALL METHOD lo_gem_token->si_security_token_ob
+        EXPORTING
+          output = proxy_data
+        IMPORTING
+          input  = lt_input.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault .
+  ENDTRY.
+
+  p_token = lt_input-mt_security_token_receiver-token.
+
 
   CLEAR ls_request.
   ls_request-user          = p_user.
