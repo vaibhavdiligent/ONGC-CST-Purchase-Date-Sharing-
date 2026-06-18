@@ -3,8 +3,16 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 2.6  |  Git: bcd-overflow-fix  |  Date: 04-JUN-2026
-*& Changes : v2.3 - Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam in Section 3F:
+*& VERSION : 2.7  |  Git: bcd-overflow-fix  |  Date: 18-JUN-2026
+*& Changes : v2.7 - Graph now starts from gv_month_back_datum (first date of DPR
+*&           tab 1) instead of gv_year_start_date. Fixes chart x-axis to align
+*&           with the DPR sheet date range.
+*&           Fix GRAND-TOTAL hyphen bug (silent ASSIGN COMPONENT failure) in
+*&           sec6 Production Performance table: fill_dynamic_table_sec6a,
+*&           get_annual_targets_6b, get_ytd_targets_6b now use lv_col_name
+*&           variable with CONCATENATE 'GRAND' '-' 'TOTAL' instead of literal.
+*&           This fixes 0 values for Total BOEPD Annual/YTD columns.
+*&           v2.3 - Skip Priority 3b (ZPRA_DLY_PRD_ND) for Vietnam in Section 3F:
 *&           Removes Vietnam entries from gt_zpra_t_dly_prd_nd after SELECT using
 *&           asset description lookup (CS 'Vietnam' in gt_asset_desc). Also skips
 *&           populate_no_data_entries_3f for Vietnam (form was non-existent; call
@@ -9128,9 +9136,9 @@ FORM fill_dynamic_table_sec5a .
     ENDIF.
   ENDIF.
 
-  " One chart row per date from FY start to p_date
+  " One chart row per date from DPR tab-1 start (gv_month_back_datum) to p_date
   " <gfs_dyn_table> rows start at gv_month_back_datum; index = date - gv_month_back_datum + 1
-  lv_date = gv_year_start_date.
+  lv_date = gv_month_back_datum.
   DO.
     IF lv_date GT p_date.
       EXIT.
@@ -9177,7 +9185,9 @@ FORM fill_dynamic_table_sec6 .
   PERFORM fill_dynamic_table_sec6b .
 ENDFORM .
 FORM fill_dynamic_table_sec6a .
-  DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA lv_qty      TYPE p LENGTH 16 DECIMALS 7 .
+  DATA lv_col_name TYPE lvc_fname.
+  CONCATENATE 'GRAND' '-' 'TOTAL' INTO lv_col_name.
 
   " YTD = current FY actual (INDEX 1 = 2026-27)
   READ TABLE <gfs_sec2d_table> ASSIGNING <gfs_dyn_line> INDEX 1 .
@@ -9222,7 +9232,7 @@ FORM fill_dynamic_table_sec6a .
     ENDIF.
 
     CLEAR lv_qty .
-    ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
     IF <gfs_field> IS ASSIGNED .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
@@ -9272,7 +9282,7 @@ FORM fill_dynamic_table_sec6a .
     ENDIF.
 
     CLEAR lv_qty .
-    ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+    ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
     IF <gfs_field> IS ASSIGNED .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
@@ -9302,7 +9312,9 @@ FORM fill_dynamic_table_sec6b .
   ENDLOOP.
 ENDFORM .
 FORM get_annual_targets_6b .
-  DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA lv_qty      TYPE p LENGTH 16 DECIMALS 7 .
+  DATA lv_col_name TYPE lvc_fname.
+  CONCATENATE 'GRAND' '-' 'TOTAL' INTO lv_col_name.
   ASSIGN COMPONENT '722000001-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
   IF <gfs_field> IS ASSIGNED .
     lv_qty = lv_qty + <gfs_field> .
@@ -9341,7 +9353,7 @@ FORM get_annual_targets_6b .
   ENDIF.
 
   CLEAR lv_qty .
-  ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
+  ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
   IF <gfs_field> IS ASSIGNED .
     lv_qty =  <gfs_field> .
     UNASSIGN <gfs_field> .
@@ -9354,9 +9366,11 @@ FORM get_annual_targets_6b .
   ENDIF.
 ENDFORM .
 FORM get_ytd_targets_6b .
-  DATA lv_qty TYPE p LENGTH 16 DECIMALS 7 .
+  DATA lv_qty      TYPE p LENGTH 16 DECIMALS 7 .
+  DATA lv_col_name TYPE lvc_fname.
   FIELD-SYMBOLS : <lfs_field1> ,
                   <lfs_field2> .
+  CONCATENATE 'GRAND' '-' 'TOTAL' INTO lv_col_name.
   LOOP AT <gfs_sec2c_table> ASSIGNING <gfs_dyn_line3> .
     ASSIGN COMPONENT 'COL02' OF STRUCTURE <gfs_dyn_line> TO <lfs_field1>.
     ASSIGN COMPONENT 'COL02' OF STRUCTURE <gfs_dyn_line3> TO <lfs_field2>.
@@ -9401,7 +9415,7 @@ FORM get_ytd_targets_6b .
     ENDIF.
 
     CLEAR lv_qty .
-    ASSIGN COMPONENT 'GRAND-TOTAL' OF STRUCTURE <gfs_dyn_line3> TO <gfs_field> .
+    ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line3> TO <gfs_field> .
     IF <gfs_field> IS ASSIGNED .
       lv_qty =  <gfs_field> .
       UNASSIGN <gfs_field> .
