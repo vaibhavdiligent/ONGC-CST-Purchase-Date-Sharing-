@@ -451,6 +451,7 @@ DATA: gv_row                        TYPE sy-tabix   ,
       gv_sec3_end_row               TYPE sy-tabix ,
       gv_sec2a_tgt_start_row        TYPE sy-tabix ,
       gv_sec2b_start_row            TYPE sy-tabix ,
+      gv_sec2c_start_row            TYPE sy-tabix ,
       gv_sec1_lines                 TYPE sy-tabix  ,
       gv_rc                         TYPE sy-subrc   ,
       gv_txt                        TYPE char50     ,
@@ -2010,9 +2011,9 @@ FORM write_sec6_formulas USING p_actual_row .
 
   lv_target_row = p_actual_row + 1 .
 
-  lv_r_act    = gv_sec2d_start_row .  " YTD Actual Prod (current FY) row
-  lv_r_tgt_an = gv_sec3a_start_row .  " Target 2026-27 (annual BE) row
-  lv_r_tgt_yt = gv_sec3b_start_row .  " YTD Target 2026-27 row
+  lv_r_act    = gv_sec2d_start_row .  " YTD Actual Prod (current FY) row - Book2 row 48 (BOPD)
+  lv_r_tgt_an = gv_sec2b_start_row .  " Annual BE Target row          - Book2 row 46 (BOPD)
+  lv_r_tgt_yt = gv_sec2c_start_row .  " YTD BE Target row             - Book2 row 47 (BOPD)
   CONDENSE : lv_r_act, lv_r_tgt_an, lv_r_tgt_yt .
 
   " Actual row: Annual & YTD both point at the YTD Actual line (Book2 P48/AF48/AG48)
@@ -5807,6 +5808,9 @@ FORM process_sec2b_data .
   gv_colour = gv_sec2b_colour .
   CONCATENATE 'Target :'  gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM display_section2a1 .
+* Capture the DPR-sheet row of the Annual BE Target line (BOPD units) so the
+* Production Performance table (sheet 3) can reference it (Book2 row 46).
+  gv_sec2b_start_row = gv_sec2a_tgt_start_row .
   <gfs_sec2b_table> = <gfs_sec2_table> .
   PERFORM show_progress USING '10' .
 
@@ -5818,6 +5822,9 @@ FORM process_sec2c_data .
   gv_colour = gv_sec2c_colour .
   CONCATENATE 'YTD Target :'  gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM display_section2a1 .
+* Capture the DPR-sheet row of the YTD BE Target line (BOPD units) so the
+* Production Performance table (sheet 3) can reference it (Book2 row 47).
+  gv_sec2c_start_row = gv_sec2a_tgt_start_row .
   <gfs_sec2c_table> = <gfs_sec2_table> .
 ENDFORM.
 FORM process_sec3b_data .
@@ -10143,6 +10150,7 @@ FORM clear_variables .
             gv_sec3_end_row              ,
             gv_sec2a_tgt_start_row       ,
             gv_sec2b_start_row           ,
+            gv_sec2c_start_row           ,
             gv_sec1_lines                ,
             gv_rc                        ,
             gv_txt                       ,
