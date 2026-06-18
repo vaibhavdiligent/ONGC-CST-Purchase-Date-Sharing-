@@ -6,6 +6,10 @@
 *& VERSION : 5.5 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 18-JUN-2026
 *& v5.5 - Graph now starts from gv_month_back_datum (first date of DPR tab 1)
 *&        instead of gv_year_start_date. Fixes chart x-axis alignment.
+*&        Production Performance table (sheet 3): Actual and BE Target rows
+*&        now written as live Excel formulas referencing the DPR sheet
+*&        (=DPR!P/AF/AG of YTD-Actual / Target / YTD-Target rows), matching
+*&        the customer Book2.xlsx. See write_sec6_formulas / set_sheet3_formula.
 *&        Fix GRAND-TOTAL hyphen bug in sec6 Production Performance table:
 *&        fill_dynamic_table_sec6a, get_annual_targets_6b, get_ytd_targets_6b
 *&        now use lv_col_name variable with CONCATENATE instead of literal string.
@@ -437,6 +441,7 @@ DATA: gv_row                        TYPE sy-tabix   ,
       gv_sec1_h_start_row           TYPE sy-tabix ,
       gv_sec3_h_start_row           TYPE sy-tabix ,
       gv_sec3a_start_row            TYPE sy-tabix ,
+      gv_sec3b_start_row            TYPE sy-tabix ,
       gv_sec4_start_row             TYPE sy-tabix ,
       gv_sec4_end_row               TYPE sy-tabix ,
       gv_sec2_start_row             TYPE sy-tabix ,
@@ -1553,6 +1558,7 @@ FORM display_section3b .
   ENDIF.
 *----------------End of changes by Abhishek----------TR OCDK904738--------------------*
   gv_row   = gv_row + 1 .
+  gv_sec3b_start_row = gv_row .
   gv_s_row = gv_row .
   gv_s_col = 1 .
   gv_e_row = gv_s_row + lv_lines - 1 .
@@ -1957,6 +1963,10 @@ FORM display_section6 .
 
   PERFORM select_range USING gv_s_row gv_s_col gv_e_row gv_e_col  .
   PERFORM paste_data_sheet3 .
+*--- Replace Actual / BE Target cell values with live formulas that reference
+*    the DPR sheet (matching Book2.xlsx). gv_s_row = "Actual" row,
+*    gv_s_row + 1 = "BE Target" row. Columns 2..7 = Oil/Gas/Total (Annual,YTD).
+  PERFORM write_sec6_formulas USING gv_s_row .
   PERFORM set_all_borders_range .
   PERFORM set_border_range USING 0 1 0 0.
 
@@ -1971,6 +1981,68 @@ FORM display_section6 .
 
   PERFORM select_range USING 1 1 1 1  .
 
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form  WRITE_SEC6_FORMULAS  (S/4 abap2xlsx)
+*& Writes live Excel formulas into the Production Performance table
+*& (sheet 3) so the Actual and BE Target rows reference the DPR sheet
+*& summary lines directly, matching the customer's Book2.xlsx layout.
+*&   Actual   row : Oil/Gas/Total (Annual & YTD) = DPR!{P/AF/AG}{YTD Actual row}
+*&   BE Target row: Annual = DPR!{..}{Target 2026-27 row}
+*&                  YTD    = DPR!{..}{YTD Target row}
+*& abap2xlsx writes the formula string straight into the file, so the
+*& reference must use the FINAL DPR sheet name ('DPR ( <date> )').
+*&---------------------------------------------------------------------*
+FORM write_sec6_formulas USING p_actual_row .
+  DATA : lv_dpr_name   TYPE string,
+         lv_name_raw   TYPE char50,
+         lv_target_row TYPE sy-tabix,
+         lv_r_act      TYPE char10,
+         lv_r_tgt_an   TYPE char10,
+         lv_r_tgt_yt   TYPE char10.
+
+  " Rebuild the final DPR sheet name (same logic as the XLSX export step).
+  CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
+    EXPORTING  input  = gv_rep_date
+    IMPORTING  output = lv_name_raw.
+  REPLACE ALL OCCURRENCES OF '.' IN lv_name_raw WITH '-' .
+  CONCATENATE 'DPR (' lv_name_raw ')' INTO lv_dpr_name SEPARATED BY space .
+
+  lv_target_row = p_actual_row + 1 .
+
+  lv_r_act    = gv_sec2d_start_row .  " YTD Actual Prod (current FY) row
+  lv_r_tgt_an = gv_sec3a_start_row .  " Target 2026-27 (annual BE) row
+  lv_r_tgt_yt = gv_sec3b_start_row .  " YTD Target 2026-27 row
+  CONDENSE : lv_r_act, lv_r_tgt_an, lv_r_tgt_yt .
+
+  " Actual row: Annual & YTD both point at the YTD Actual line (Book2 P48/AF48/AG48)
+  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 3 lv_dpr_name 'P'  lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 5 lv_dpr_name 'AF' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 7 lv_dpr_name 'AG' lv_r_act .
+
+  " BE Target row: Annual = Target 2026-27 line, YTD = YTD Target line
+  PERFORM set_sheet3_formula USING lv_target_row 2 lv_dpr_name 'P'  lv_r_tgt_an .
+  PERFORM set_sheet3_formula USING lv_target_row 3 lv_dpr_name 'P'  lv_r_tgt_yt .
+  PERFORM set_sheet3_formula USING lv_target_row 4 lv_dpr_name 'AF' lv_r_tgt_an .
+  PERFORM set_sheet3_formula USING lv_target_row 5 lv_dpr_name 'AF' lv_r_tgt_yt .
+  PERFORM set_sheet3_formula USING lv_target_row 6 lv_dpr_name 'AG' lv_r_tgt_an .
+  PERFORM set_sheet3_formula USING lv_target_row 7 lv_dpr_name 'AG' lv_r_tgt_yt .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form  SET_SHEET3_FORMULA  (S/4 abap2xlsx)
+*& Writes '<sheet>'!<col><row> as a formula into one cell of sheet 3.
+*& abap2xlsx expects the formula WITHOUT a leading '='.
+*&---------------------------------------------------------------------*
+FORM set_sheet3_formula USING p_row p_col p_sheet p_colltr p_rownum .
+  DATA lv_formula TYPE string.
+  CONCATENATE '''' p_sheet '''!' p_colltr p_rownum INTO lv_formula .
+  TRY.
+      go_xlsx_sheet3->set_cell( ip_row = p_row ip_column = p_col ip_formula = lv_formula ).
+    CATCH zcx_excel.
+  ENDTRY.
 ENDFORM.
 FORM display_section3f .
   DATA lv_lines TYPE sy-tabix .
