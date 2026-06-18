@@ -1,26 +1,34 @@
 *&---------------------------------------------------------------------*
 *& Report ZGEM_CPI_ORDER_SUMMARY
 *&---------------------------------------------------------------------*
-*& Calls the SAP CPI iFlow endpoint /http/GEM/Test using the
-*& SM59 HTTP (type G) RFC destination "CPI".
+*& Calls SAP CPI via the SM59 HTTP (type G) RFC destination CPI_HTTP_GEM.
 *&
-*& - The host / SSL / proxy settings are taken from SM59 destination CPI.
-*& - The relative path /http/GEM/Test is appended via set_uri.
+*& - Host / SSL / proxy / authentication are taken from the SM59 destination.
+*& - Path /http/GEM/Sync/OrderSummary -> CPI derives CamelHttpPath = OrderSummary
+*&   from the URL (the sender endpoint address must end with /*).
 *& - Request method POST, body = JSON payload (orderSummary).
-*& - Headers: Content-Type application/json, authorization Bearer + SEK token.
+*& - Response is parsed and shown on screen as an ALV grid.
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_order_summary.
 
-CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI',
-           c_path TYPE string  VALUE '/http/GEM/Test'.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 *--- Selection screen so the values from the spec can be entered/changed
 PARAMETERS: p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-            p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',
-            p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12',
-            p_from  TYPE string LOWER CASE DEFAULT '2023-05-24',
-            p_to    TYPE string LOWER CASE DEFAULT '2024-05-25',
-            p_token TYPE string LOWER CASE.   " Authentication SEK token
+            p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
+            p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
+            p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
+            p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
+            p_path  TYPE string LOWER CASE             " full path -> CPI fills CamelHttpPath from it
+              DEFAULT '/http/GEM/Sync/OrderSummary',
+            p_token TYPE string LOWER CASE.            " SEK token sent as header 'token' = Bearer <token>
+
+
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA: err_string       TYPE string.
 
 *--- Structure that mirrors the request payload from the spec
 TYPES: BEGIN OF ty_request,
@@ -32,8 +40,59 @@ TYPES: BEGIN OF ty_request,
          to_date      TYPE string,
        END OF ty_request.
 
+*--- Structures that mirror the response payload (Section 3.2.5)
+*   Body
+*     |- Status, Iat
+*     |- data (parent)
+*          |- Sub, Aud, Iss
+*          |- data (child)
+*               |- Date, Count
+*               |- orderIds [ { orderId } ]
+TYPES: BEGIN OF ty_order,
+         orderid TYPE string,            " ordereId (max 100)
+       END OF ty_order,
+       tt_order TYPE STANDARD TABLE OF ty_order WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_data_child,
+         date     TYPE string,           " Date orders are requested
+         count    TYPE i,                " Total number of orders
+         orderids TYPE tt_order,         " All order ids per the count
+       END OF ty_data_child.
+
+TYPES: BEGIN OF ty_data_parent,
+         sub  TYPE string,               " Service name
+         aud  TYPE string,               " Entity name
+         iss  TYPE string,               " Source identification (e.g. GeM)
+         data TYPE ty_data_child,
+       END OF ty_data_parent.
+
+TYPES: BEGIN OF ty_response,
+         status TYPE string,             " Succ / Fail
+         iat    TYPE p LENGTH 8 DECIMALS 0, " Response timestamp (epoch)
+         data   TYPE ty_data_parent,
+       END OF ty_response.
+
+*--- Flat structure for display on screen (one row per order id)
+TYPES: BEGIN OF ty_display,
+         status  TYPE string,
+         sub     TYPE string,
+         aud     TYPE string,
+         iss     TYPE string,
+         date    TYPE string,
+         count   TYPE i,
+         orderid TYPE string,
+       END OF ty_display,
+       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
+
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
+      ls_response TYPE ty_response,
+      ls_order    TYPE ty_order,
+      lt_maps     TYPE /ui2/cl_json=>name_mappings,
+      lt_display  TYPE tt_display,
+      ls_display  TYPE ty_display,
+      lo_alv      TYPE REF TO cl_salv_table,
+      lx_salv     TYPE REF TO cx_salv_msg,
       lv_json     TYPE string,
       lv_response TYPE string,
       lv_code     TYPE i,
@@ -41,19 +100,69 @@ DATA: lo_client   TYPE REF TO if_http_client,
 
 START-OF-SELECTION.
 
-*--- 1. Build the JSON payload exactly as per the spec
+*--- 1. Build the JSON payload per the spec (Section 3.2.4)
+*   Mutually exclusive date selection:
+*     - as_on  -> single date. from_date/to_date must NOT be sent.
+*     - from_date/to_date -> range. as_on must NOT be sent.
+*       to_date does not work without from_date.
+*   buyer_user_id is optional.
+*   Empty fields are dropped from the JSON via compress = abap_true.
+  IF p_ason IS NOT INITIAL AND ( p_from IS NOT INITIAL OR p_to IS NOT INITIAL ).
+    WRITE: / 'Error: provide either as_on (single date) OR from_date/to_date (range), not both.'.
+    RETURN.
+  ENDIF.
+  IF p_ason IS INITIAL AND p_from IS INITIAL.
+    WRITE: / 'Error: provide as_on, or from_date (with to_date).'.
+    RETURN.
+  ENDIF.
+  IF p_from IS NOT INITIAL AND p_to IS INITIAL.
+    WRITE: / 'Error: to_date is mandatory when from_date is set.'.
+    RETURN.
+  ENDIF.
+  IF p_to IS NOT INITIAL AND p_from IS INITIAL.
+    WRITE: / 'Error: to_date does not work without from_date.'.
+    RETURN.
+  ENDIF.
+
+*--- 1a. Generate the SEK security token via the CPI token proxy
+*   (consumer proxy ZGEM_TOKENCO_SI_SECURITY_TOKEN -> CPI security token iFlow).
+*   This is the standard token-generation pattern for CPI integrations.
+  proxy_data-mt_security_token_sender-username  = 'ONGCVIDESH'."'GEM23012020'.
+  proxy_data-mt_security_token_sender-password  = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'."'R2VtT2YzQ1M3cRnQ='.
+
+  TRY.
+    CREATE OBJECT: lo_gem_token.
+      CALL METHOD lo_gem_token->si_security_token_ob
+        EXPORTING
+          output = proxy_data
+        IMPORTING
+          input  = lt_input.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault .
+  ENDTRY.
+
+  p_token = lt_input-mt_security_token_receiver-token.
+
+
+  CLEAR ls_request.
   ls_request-user          = p_user.
   ls_request-method        = 'orderSummary'.
-  ls_request-buyer_user_id = p_buyer.
-  ls_request-as_on         = p_ason.
-  ls_request-from_date     = p_from.
-  ls_request-to_date       = p_to.
+  ls_request-buyer_user_id = p_buyer.   " optional - omitted if blank
+
+  IF p_ason IS NOT INITIAL.
+    ls_request-as_on = p_ason.          " single-date mode
+  ELSE.
+    ls_request-from_date = p_from.      " range mode
+    ls_request-to_date   = p_to.
+  ENDIF.
 
   lv_json = /ui2/cl_json=>serialize(
               data        = ls_request
+              compress    = abap_true   " drop empty/initial fields
               pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
-*--- 2. Create the HTTP client from the SM59 RFC destination "CPI"
+*--- 2. Create the HTTP client from the SM59 RFC destination
   cl_http_client=>create_by_destination(
     EXPORTING
       destination              = c_dest
@@ -71,23 +180,32 @@ START-OF-SELECTION.
     RETURN.
   ENDIF.
 
-*--- 3. Suppress logon popup and set the request line
+*--- 3. Suppress logon popup, set the request path and method
   lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
 
+*   Set the FULL request path. CPI derives CamelHttpPath from the part of the
+*   URL after the iFlow sender endpoint address (which must end with /*).
+*   e.g. address /GEM/Sync/* called with /http/GEM/Sync/OrderSummary
+*        -> CamelHttpPath = OrderSummary.
+*   NOTE: keep the SM59 destination CPI_HTTP_GEM Path Prefix EMPTY so the
+*   path here is not duplicated.
   cl_http_utility=>set_request_uri(
     request = lo_client->request
-    uri     = c_path ).
+    uri     = p_path ).
 
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
 
-*--- 4. Request headers (Section 3.2.2)
+*--- 4. Request headers
   lo_client->request->set_header_field(
     name  = 'Content-Type'
     value = 'application/json' ).
 
-  lo_client->request->set_header_field(
-    name  = 'authorization'
-    value = |Bearer { p_token }| ).
+*   SEK token: the iFlow expects a custom header named 'token' = Bearer <token>
+  IF p_token IS NOT INITIAL.
+    lo_client->request->set_header_field(
+      name  = 'token'
+      value = |Bearer { p_token }| ).
+  ENDIF.
 
 *--- 5. Set the JSON body (Section 3.2.3)
   lo_client->request->set_cdata( lv_json ).
@@ -113,7 +231,6 @@ START-OF-SELECTION.
       http_processing_failed     = 3
       OTHERS                     = 4 ).
   IF sy-subrc <> 0.
-    " Even on HTTP error status receive may raise; read status anyway
     lo_client->response->get_status(
       IMPORTING
         code   = lv_code
@@ -133,10 +250,62 @@ START-OF-SELECTION.
 
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 9. Output
-  WRITE: / 'HTTP Status :', lv_code, lv_reason.
-  WRITE: / 'Request body:'.
-  WRITE: / lv_json.
-  SKIP.
-  WRITE: / 'Response    :'.
-  WRITE: / lv_response.
+*--- 9. Capture / parse the response payload (Section 3.2.5)
+  lt_maps = VALUE #(
+    ( abap = 'STATUS'   json = 'Status' )
+    ( abap = 'IAT'      json = 'Iat' )
+    ( abap = 'DATA'     json = 'data' )
+    ( abap = 'SUB'      json = 'Sub' )
+    ( abap = 'AUD'      json = 'Aud' )
+    ( abap = 'ISS'      json = 'Iss' )
+    ( abap = 'DATE'     json = 'Date' )
+    ( abap = 'COUNT'    json = 'Count' )
+    ( abap = 'ORDERIDS' json = 'orderIds' )
+    ( abap = 'ORDERID'  json = 'orderId' ) ).
+
+  /ui2/cl_json=>deserialize(
+    EXPORTING
+      json          = lv_response
+      name_mappings = lt_maps
+    CHANGING
+      data          = ls_response ).
+
+*--- 10. Move parsed response into a flat internal table (one row per order id)
+  CLEAR lt_display.
+  LOOP AT ls_response-data-data-orderids INTO ls_order.
+    CLEAR ls_display.
+    ls_display-status  = ls_response-status.
+    ls_display-sub     = ls_response-data-sub.
+    ls_display-aud     = ls_response-data-aud.
+    ls_display-iss     = ls_response-data-iss.
+    ls_display-date    = ls_response-data-data-date.
+    ls_display-count   = ls_response-data-data-count.
+    ls_display-orderid = ls_order-orderid.
+    APPEND ls_display TO lt_display.
+  ENDLOOP.
+
+*--- 11. Display the internal table on screen as an ALV grid
+  IF lt_display IS NOT INITIAL.
+    TRY.
+        cl_salv_table=>factory(
+          IMPORTING
+            r_salv_table = lo_alv
+          CHANGING
+            t_table      = lt_display ).
+
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_display_settings( )->set_list_header(
+          |orderSummary - { ls_response-status } - Count { ls_response-data-data-count }| ).
+
+        lo_alv->display( ).
+      CATCH cx_salv_msg INTO lx_salv.
+        WRITE: / 'ALV display error:', lx_salv->get_text( ).
+    ENDTRY.
+  ELSE.
+    " Nothing to tabulate - show status / raw payload for diagnosis
+    WRITE: / 'HTTP Status :', lv_code, lv_reason.
+    WRITE: / 'API Status  :', ls_response-status.
+    WRITE: / 'No order ids returned. Raw response:'.
+    WRITE: / lv_response.
+  ENDIF.
