@@ -15,7 +15,7 @@ REPORT zgem_cpi_order_details.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head  TYPE string LOWER CASE DEFAULT 'Get Order Details (3.3)', " ALV list header (editable)
+            p_head  TYPE char70 LOWER CASE DEFAULT 'Get Order Details (3.3)', " ALV list header (editable)
             p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
             p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode

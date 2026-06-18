@@ -15,7 +15,7 @@ REPORT zgem_cpi_invoice_details.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head  TYPE string LOWER CASE DEFAULT 'Invoice Details (3.5)', " ALV list header (editable)
+            p_head  TYPE char70 LOWER CASE DEFAULT 'Invoice Details (3.5)', " ALV list header (editable)
             p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)

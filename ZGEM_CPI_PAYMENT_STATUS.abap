@@ -15,7 +15,7 @@ REPORT zgem_cpi_payment_status.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head  TYPE string LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
+            p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
             p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_paydat TYPE string LOWER CASE, " encrypted paydata blob
             p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.

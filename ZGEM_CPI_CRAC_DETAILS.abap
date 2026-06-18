@@ -15,7 +15,7 @@ REPORT zgem_cpi_crac_details.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head  TYPE string LOWER CASE DEFAULT 'CRAC Details (3.8)', " ALV list header (editable)
+            p_head  TYPE char70 LOWER CASE DEFAULT 'CRAC Details (3.8)', " ALV list header (editable)
             p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
