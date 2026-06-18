@@ -34,6 +34,20 @@
 *&     (VKAUS, WW228, WW229, KUNWE) - FS section 9.2.
 *&   - Finance/CO to provide AB GL accounts for ZDME_GL_MAPPING - FS 9.3.
 *&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& EXTERNAL FIELD-NAME MAPPING  —  SINGLE EDIT POINT (T1 / T2)
+*&---------------------------------------------------------------------*
+*& The following customer-append field names are NOT yet confirmed and
+*& are the only items that block activation. When confirmed, change them
+*& here (program) and in ZC_DME_SALES_COPA (CDS) — both files carry a
+*& matching banner. Nothing else needs to change.
+*&
+*&  T1 - WCOCOH append (confirm with Pankaj-san) — used in F_GET_DATA:
+*&         bottler account : WCOCOH-ZZBOTACC      <-- edit in SELECT
+*&         dealer / owner  : WCOCOH-CUST_OWNER    <-- edit in SELECT
+*&  T2 - CI_ACDOCA append (confirm with Gaurav-san) — used in CDS view:
+*&         WW207 / WW214 / WW228 / WW229 / VKAUS  <-- edit in CDS branch 2
+*&---------------------------------------------------------------------*
 REPORT zrdme_month_end_copa MESSAGE-ID /ccbji/rtr.
 
 *&---------------------------------------------------------------------*
@@ -219,7 +233,8 @@ DATA: gv_knuma  TYPE knuma,
       gv_vfield TYPE rke_wrtfld,                       "CB value field
       gv_mwskz  TYPE mwskz,
       gv_eflag  TYPE char1,                            "error flag
-      gr_stat   TYPE RANGE OF /ccbji/dme_access.
+      gr_stat   TYPE RANGE OF /ccbji/dme_access,
+      gr_bukrs  TYPE RANGE OF bukrs.                   "B3: main + sub company
 
 * ---- ALV object references -------------------------------------------
 DATA: go_table   TYPE REF TO cl_salv_table,
@@ -324,7 +339,7 @@ END-OF-SELECTION.
 FORM f_clear.
   CLEAR: gt_dhdr, gt_ditem, gt_ccm, gt_dmegl, gt_bseg, gt_sales,
          gt_sfinal, gv_last, gv_dbgl, gv_crgl, gv_abgl, gv_vfield,
-         gv_mwskz, gv_eflag, gr_stat.
+         gv_mwskz, gv_eflag, gr_stat, gr_bukrs.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -430,8 +445,8 @@ FORM f_get_data.
 * Step 3c: CCM condition contract header (TO-BE: replaces KONA read).
 *  Sales office / bottler account / dealer now come from WCOCOH and are
 *  honoured against the s_vkbur / s_botacc / s_dealer ranges (FS 2.1).
-*  NOTE: field list reflects the FS mapping; adjust to the customer
-*  WCOCOH append structure (ZZBOTACC / CUST_OWNER) at build time.
+*  >>> T1 EDIT POINT: confirm ZZBOTACC / CUST_OWNER append names with
+*      Pankaj-san. These two columns are the only activation blocker here.
 * =====================================================================
   SELECT num        AS knuma,
          vkorg      AS vkorg,
@@ -493,6 +508,21 @@ FORM f_get_data.
   ENDIF.
 
 * =====================================================================
+* B3 - Cross-territory / cross-company: build the company-code range that
+*  sales must be read for. Always includes the run company P_BUKRS, plus
+*  the SUB_BUKRS of every cross-territory contract (CROSS_IND set).
+*  Test case 5000442076.
+* =====================================================================
+  gr_bukrs = VALUE #( sign = 'I' option = 'EQ' ( low = p_bukrs ) ).
+  LOOP AT gt_dhdr ASSIGNING FIELD-SYMBOL(<ls_cross>)
+       WHERE cross_ind IS NOT INITIAL AND sub_bukrs IS NOT INITIAL.
+    IF NOT line_exists( gr_bukrs[ low = <ls_cross>-sub_bukrs ] ).
+      APPEND VALUE #( sign = 'I' option = 'EQ'
+                      low = <ls_cross>-sub_bukrs ) TO gr_bukrs.
+    ENDIF.
+  ENDLOOP.
+
+* =====================================================================
 * Step 6: Sales data via CDS view ZC_DME_SALES_COPA.
 *  The CDS view encapsulates the CE2JP00 (<=Nov-2027) / ACDOCA (>=Dec-2027)
 *  source switch, replacing the direct CE1JP00 / CE2JP00 SELECT.
@@ -531,7 +561,7 @@ FORM f_get_sales.
     FROM zc_dme_sales_copa( p_cutover = @lv_cutover )
     FOR ALL ENTRIES IN @gt_dhdr
     WHERE perio  = @lv_perio
-      AND bukrs  = @p_bukrs
+      AND bukrs  IN @gr_bukrs                       "B3: main + cross company
       AND kmvkbu IN @s_vkbur
       AND ww228  = @gt_dhdr-knuma
     INTO CORRESPONDING FIELDS OF TABLE @gt_sales.   "#EC CI_NOFIELD
@@ -672,17 +702,14 @@ FORM f_process_spdata.
 *   No actual sales -> allocate the full contract amount to a single
 *   dummy-material profitability segment (replaces the old 1.01 write).
     IF lt_copa IS INITIAL.
-      CLEAR lwa_copa.
-      lwa_copa-ww228  = <ls_dhdr>-knuma.
-      lwa_copa-bukrs  = <ls_dhdr>-bukrs.
-      lwa_copa-artnr  = c_dummy_mat.               "dummy material
-      lwa_copa-kndnr  = <ls_ccm>-cust_owner.
-      lwa_copa-kmvkbu = <ls_ccm>-vkbur.
-      lwa_copa-vkorg  = <ls_ccm>-vkorg.
-      lwa_copa-vtweg  = <ls_ccm>-vtweg.
-      lwa_copa-spart  = <ls_ccm>-spart.
-      lwa_copa-vv506  = 1.                          "weight = 1
-      APPEND lwa_copa TO lt_copa.
+      PERFORM f_add_dummy USING <ls_dhdr> <ls_ccm> <ls_dhdr>-bukrs
+                       CHANGING lt_copa.
+*     B3: cross-company -> add a dummy allocation line for the sub company
+      IF <ls_dhdr>-cross_ind IS NOT INITIAL
+         AND <ls_dhdr>-sub_bukrs IS NOT INITIAL.
+        PERFORM f_add_dummy USING <ls_dhdr> <ls_ccm> <ls_dhdr>-sub_bukrs
+                         CHANGING lt_copa.
+      ENDIF.
     ENDIF.
 
 *   ---- Prorate CO-PA amount across the allocation basis -------------
@@ -749,6 +776,29 @@ FORM f_get_fi_ref USING    ps_dhdr  TYPE ty_dhdr
       pv_bstax = pv_bstax + <ls_bseg>-wrbtr.
     ENDIF.
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&  Form  F_ADD_DUMMY   (B3 / FS 4.2.5)
+*&  Appends one dummy-material allocation line for the given company code
+*&  (weight 1). Called once for the main company and again for the sub
+*&  company in cross-territory contracts.
+*&---------------------------------------------------------------------*
+FORM f_add_dummy USING ps_dhdr TYPE ty_dhdr
+                       ps_ccm  TYPE ty_ccm
+                       pv_bukrs TYPE bukrs
+              CHANGING pt_copa TYPE STANDARD TABLE.
+  DATA lwa_copa TYPE ty_copa.
+  lwa_copa-ww228  = ps_dhdr-knuma.
+  lwa_copa-bukrs  = pv_bukrs.
+  lwa_copa-artnr  = c_dummy_mat.                   "dummy material 9651030000
+  lwa_copa-kndnr  = ps_ccm-cust_owner.
+  lwa_copa-kmvkbu = ps_ccm-vkbur.
+  lwa_copa-vkorg  = ps_ccm-vkorg.
+  lwa_copa-vtweg  = ps_ccm-vtweg.
+  lwa_copa-spart  = ps_ccm-spart.
+  lwa_copa-vv506  = 1.                             "weight = 1
+  APPEND lwa_copa TO pt_copa.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
