@@ -1865,6 +1865,7 @@ FORM write_sec6_formulas USING p_actual_row .
   DATA : lv_dpr_name   TYPE string,
          lv_target_row TYPE sy-tabix,
          lv_r_act      TYPE char10,
+         lv_r_act_an   TYPE char10,
          lv_r_tgt_an   TYPE char10,
          lv_r_tgt_yt   TYPE char10.
 
@@ -1874,17 +1875,18 @@ FORM write_sec6_formulas USING p_actual_row .
 
   lv_target_row = p_actual_row + 1 .
 
-  lv_r_act    = gv_sec2d_start_row .  " YTD Actual Prod (current FY) row - Book2 row 48 (BOPD)
-  lv_r_tgt_an = gv_sec2b_start_row .  " Annual BE Target row          - Book2 row 46 (BOPD)
-  lv_r_tgt_yt = gv_sec2c_start_row .  " YTD BE Target row             - Book2 row 47 (BOPD)
-  CONDENSE : lv_r_act, lv_r_tgt_an, lv_r_tgt_yt .
+  lv_r_act    = gv_sec2d_start_row .       " YTD Actual current FY (sec2d INDEX 1) - BOPD
+  lv_r_act_an = gv_sec2d_start_row + 1 .   " Annual Actual prev FY (sec2d INDEX 2) - BOPD
+  lv_r_tgt_an = gv_sec2b_start_row .       " Annual BE Target row - BOPD
+  lv_r_tgt_yt = gv_sec2c_start_row .       " YTD BE Target row    - BOPD
+  CONDENSE : lv_r_act, lv_r_act_an, lv_r_tgt_an, lv_r_tgt_yt .
 
-  " Actual row: Annual & YTD both point at the YTD Actual line (Book2 P48/AF48/AG48)
-  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act .
+  " Actual row: Annual col → prev-year YTD (sec2d INDEX 2), YTD col → current-year YTD (sec2d INDEX 1)
+  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act_an .
   PERFORM set_sheet3_formula USING p_actual_row 3 lv_dpr_name 'P'  lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act_an .
   PERFORM set_sheet3_formula USING p_actual_row 5 lv_dpr_name 'AF' lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act_an .
   PERFORM set_sheet3_formula USING p_actual_row 7 lv_dpr_name 'AG' lv_r_act .
 
   " BE Target row: Annual = Target 2026-27 line, YTD = YTD Target line
