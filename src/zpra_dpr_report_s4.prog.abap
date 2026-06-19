@@ -451,6 +451,7 @@ DATA: gv_row                        TYPE sy-tabix   ,
       gv_sec3_end_row               TYPE sy-tabix ,
       gv_sec2a_tgt_start_row        TYPE sy-tabix ,
       gv_sec2b_start_row            TYPE sy-tabix ,
+      gv_sec2c_start_row            TYPE sy-tabix ,
       gv_sec1_lines                 TYPE sy-tabix  ,
       gv_rc                         TYPE sy-subrc   ,
       gv_txt                        TYPE char50     ,
@@ -1998,6 +1999,7 @@ FORM write_sec6_formulas USING p_actual_row .
          lv_name_raw   TYPE char50,
          lv_target_row TYPE sy-tabix,
          lv_r_act      TYPE char10,
+         lv_r_act_an   TYPE char10,
          lv_r_tgt_an   TYPE char10,
          lv_r_tgt_yt   TYPE char10.
 
@@ -2010,17 +2012,18 @@ FORM write_sec6_formulas USING p_actual_row .
 
   lv_target_row = p_actual_row + 1 .
 
-  lv_r_act    = gv_sec2d_start_row .  " YTD Actual Prod (current FY) row
-  lv_r_tgt_an = gv_sec3a_start_row .  " Target 2026-27 (annual BE) row
-  lv_r_tgt_yt = gv_sec3b_start_row .  " YTD Target 2026-27 row
-  CONDENSE : lv_r_act, lv_r_tgt_an, lv_r_tgt_yt .
+  lv_r_act    = gv_sec2d_start_row .       " YTD Actual current FY (sec2d INDEX 1) - BOPD
+  lv_r_act_an = gv_sec2d_start_row + 1 .   " Annual Actual prev FY (sec2d INDEX 2) - BOPD
+  lv_r_tgt_an = gv_sec2b_start_row .       " Annual BE Target row - BOPD
+  lv_r_tgt_yt = gv_sec2c_start_row .       " YTD BE Target row    - BOPD
+  CONDENSE : lv_r_act, lv_r_act_an, lv_r_tgt_an, lv_r_tgt_yt .
 
-  " Actual row: Annual & YTD both point at the YTD Actual line (Book2 P48/AF48/AG48)
-  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act .
+  " Actual row: Annual col → prev-year YTD (sec2d INDEX 2), YTD col → current-year YTD (sec2d INDEX 1)
+  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act_an .
   PERFORM set_sheet3_formula USING p_actual_row 3 lv_dpr_name 'P'  lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act_an .
   PERFORM set_sheet3_formula USING p_actual_row 5 lv_dpr_name 'AF' lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act .
+  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act_an .
   PERFORM set_sheet3_formula USING p_actual_row 7 lv_dpr_name 'AG' lv_r_act .
 
   " BE Target row: Annual = Target 2026-27 line, YTD = YTD Target line
@@ -5807,6 +5810,9 @@ FORM process_sec2b_data .
   gv_colour = gv_sec2b_colour .
   CONCATENATE 'Target :'  gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM display_section2a1 .
+* Capture the DPR-sheet row of the Annual BE Target line (BOPD units) so the
+* Production Performance table (sheet 3) can reference it (Book2 row 46).
+  gv_sec2b_start_row = gv_sec2a_tgt_start_row .
   <gfs_sec2b_table> = <gfs_sec2_table> .
   PERFORM show_progress USING '10' .
 
@@ -5818,6 +5824,9 @@ FORM process_sec2c_data .
   gv_colour = gv_sec2c_colour .
   CONCATENATE 'YTD Target :'  gv_current_gjahr '-' gv_next_gjahr+2(2) INTO gv_txt SEPARATED BY space .
   PERFORM display_section2a1 .
+* Capture the DPR-sheet row of the YTD BE Target line (BOPD units) so the
+* Production Performance table (sheet 3) can reference it (Book2 row 47).
+  gv_sec2c_start_row = gv_sec2a_tgt_start_row .
   <gfs_sec2c_table> = <gfs_sec2_table> .
 ENDFORM.
 FORM process_sec3b_data .
@@ -10143,6 +10152,7 @@ FORM clear_variables .
             gv_sec3_end_row              ,
             gv_sec2a_tgt_start_row       ,
             gv_sec2b_start_row           ,
+            gv_sec2c_start_row           ,
             gv_sec1_lines                ,
             gv_rc                        ,
             gv_txt                       ,
