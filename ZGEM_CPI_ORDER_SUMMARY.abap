@@ -40,41 +40,30 @@ TYPES: BEGIN OF ty_request,
          to_date      TYPE string,
        END OF ty_request.
 
-*--- Structures that mirror the response payload (Section 3.2.5)
-*   Body
-*     |- Status, Iat
-*     |- data (parent)
-*          |- Sub, Aud, Iss
-*          |- data (child)
-*               |- Date, Count
-*               |- orderIds [ { orderId } ]
+*--- Structures that mirror the ACTUAL response payload
+*   {"sub":..,"aud":..,"iss":..,
+*    "data":[ {"date":..,"count":..,"orderIds":[ {"orderId":..} ]}, ... ]}
 TYPES: BEGIN OF ty_order,
-         orderid TYPE string,            " ordereId (max 100)
+         orderid TYPE string,            " orderId (max 100)
        END OF ty_order,
        tt_order TYPE STANDARD TABLE OF ty_order WITH DEFAULT KEY.
 
-TYPES: BEGIN OF ty_data_child,
+TYPES: BEGIN OF ty_data_block,
          date     TYPE string,           " Date orders are requested
-         count    TYPE i,                " Total number of orders
-         orderids TYPE tt_order,         " All order ids per the count
-       END OF ty_data_child.
-
-TYPES: BEGIN OF ty_data_parent,
-         sub  TYPE string,               " Service name
-         aud  TYPE string,               " Entity name
-         iss  TYPE string,               " Source identification (e.g. GeM)
-         data TYPE ty_data_child,
-       END OF ty_data_parent.
+         count    TYPE i,                " Number of orders for that date
+         orderids TYPE tt_order,         " orderIds array for that date
+       END OF ty_data_block,
+       tt_data TYPE STANDARD TABLE OF ty_data_block WITH DEFAULT KEY.
 
 TYPES: BEGIN OF ty_response,
-         status TYPE string,             " Succ / Fail
-         iat    TYPE p LENGTH 8 DECIMALS 0, " Response timestamp (epoch)
-         data   TYPE ty_data_parent,
+         sub  TYPE string,               " Service name (e.g. Order Summary)
+         aud  TYPE string,               " Entity name (e.g. ONGCVIDESH)
+         iss  TYPE string,               " Source identification (e.g. GeM)
+         data TYPE tt_data,              " one block per date
        END OF ty_response.
 
 *--- Flat structure for display on screen (one row per order id)
 TYPES: BEGIN OF ty_display,
-         status  TYPE string,
          sub     TYPE string,
          aud     TYPE string,
          iss     TYPE string,
@@ -87,8 +76,8 @@ TYPES: BEGIN OF ty_display,
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
       ls_response TYPE ty_response,
+      ls_block    TYPE ty_data_block,
       ls_order    TYPE ty_order,
-      lt_maps     TYPE /ui2/cl_json=>name_mappings,
       lt_display  TYPE tt_display,
       ls_display  TYPE ty_display,
       lo_alv      TYPE REF TO cl_salv_table,
@@ -250,38 +239,27 @@ START-OF-SELECTION.
 
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 9. Capture / parse the response payload (Section 3.2.5)
-  lt_maps = VALUE #(
-    ( abap = 'STATUS'   json = 'Status' )
-    ( abap = 'IAT'      json = 'Iat' )
-    ( abap = 'DATA'     json = 'data' )
-    ( abap = 'SUB'      json = 'Sub' )
-    ( abap = 'AUD'      json = 'Aud' )
-    ( abap = 'ISS'      json = 'Iss' )
-    ( abap = 'DATE'     json = 'Date' )
-    ( abap = 'COUNT'    json = 'Count' )
-    ( abap = 'ORDERIDS' json = 'orderIds' )
-    ( abap = 'ORDERID'  json = 'orderId' ) ).
-
+*--- 9. Parse the response payload (sub/aud/iss + data[ {date,count,orderIds[]} ]).
+*   Keys are matched case-insensitively, so no name_mappings are needed.
   /ui2/cl_json=>deserialize(
     EXPORTING
-      json          = lv_response
-      name_mappings = lt_maps
+      json = lv_response
     CHANGING
-      data          = ls_response ).
+      data = ls_response ).
 
-*--- 10. Move parsed response into a flat internal table (one row per order id)
+*--- 10. Flatten into a display table (one row per order id, per date block)
   CLEAR lt_display.
-  LOOP AT ls_response-data-data-orderids INTO ls_order.
-    CLEAR ls_display.
-    ls_display-status  = ls_response-status.
-    ls_display-sub     = ls_response-data-sub.
-    ls_display-aud     = ls_response-data-aud.
-    ls_display-iss     = ls_response-data-iss.
-    ls_display-date    = ls_response-data-data-date.
-    ls_display-count   = ls_response-data-data-count.
-    ls_display-orderid = ls_order-orderid.
-    APPEND ls_display TO lt_display.
+  LOOP AT ls_response-data INTO ls_block.
+    LOOP AT ls_block-orderids INTO ls_order.
+      CLEAR ls_display.
+      ls_display-sub     = ls_response-sub.
+      ls_display-aud     = ls_response-aud.
+      ls_display-iss     = ls_response-iss.
+      ls_display-date    = ls_block-date.
+      ls_display-count   = ls_block-count.
+      ls_display-orderid = ls_order-orderid.
+      APPEND ls_display TO lt_display.
+    ENDLOOP.
   ENDLOOP.
 
 *--- 11. Display the internal table on screen as an ALV grid
@@ -296,7 +274,7 @@ START-OF-SELECTION.
         lo_alv->get_columns( )->set_optimize( abap_true ).
         lo_alv->get_functions( )->set_all( abap_true ).
         lo_alv->get_display_settings( )->set_list_header(
-          |orderSummary - { ls_response-status } - Count { ls_response-data-data-count }| ).
+          |{ ls_response-sub } - { ls_response-aud } - { ls_response-iss } - { lines( lt_display ) } order(s)| ).
 
         lo_alv->display( ).
       CATCH cx_salv_msg INTO lx_salv.
@@ -305,7 +283,6 @@ START-OF-SELECTION.
   ELSE.
     " Nothing to tabulate - show status / raw payload for diagnosis
     WRITE: / 'HTTP Status :', lv_code, lv_reason.
-    WRITE: / 'API Status  :', ls_response-status.
     WRITE: / 'No order ids returned. Raw response:'.
     WRITE: / lv_response.
   ENDIF.
