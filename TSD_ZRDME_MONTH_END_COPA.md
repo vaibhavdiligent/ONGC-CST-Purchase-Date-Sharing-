@@ -154,10 +154,10 @@ Full responses are tracked in `OPEN_QUESTIONS_DME_COPA_FC.docx`.
 | B2 | Dummy material | `9651030000` | ✅ Implemented |
 | B3 | Cross-territory scope | In scope — test case `5000442076` | ✅ Core coded (company range + per-company dummy + cost-centre split); customer include/exclude split (F7) backlog |
 | F1 | `BAPI_ACC_DOCUMENT_POST` dual CB+AB posting | Assumed yes; validate in sandbox with CO (test cases shared) | ✅ Coded; **pending sandbox** |
-| F2 | Custom characteristics in AB op. concern | Assumed AS-IS; **pending Gaurav-san** | ✅ Coded as assumed |
-| F3 | CE2JP00 → ACDOCA cut-over | Test: ACDOCA from Jan-2026; Prod: CE2 till Nov-2027 / ACDOCA from Dec-2027 | ✅ Made configurable (TVARVC + CDS param) |
-| T1 | WCOCOH append field names | **Pending Pankaj-san** | ⏳ Placeholder retained |
-| T2 | CI_ACDOCA append field names | Assumed unchanged; **pending Gaurav-san** | ⏳ Placeholder retained |
+| F2 | Custom characteristics in AB op. concern | **Confirmed** — remain AS-IS, available & passable | ✅ Done |
+| F3 | CE2JP00 → ACDOCA cut-over | **Both CB+AB CO-PA active from 2026**; sales-source cut-over independent & configurable (test 2026001 / prod 2027012) | ✅ Configurable |
+| T1 | WCOCOH append field names | **Pending Pankaj-san** (only remaining activation blocker) | ⏳ Placeholder retained |
+| T2 | CI_ACDOCA append field names | **Confirmed** — all characteristics present in ACDOCA | ✅ Done |
 
 ---
 

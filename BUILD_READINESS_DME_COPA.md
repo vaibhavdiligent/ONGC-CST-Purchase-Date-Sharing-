@@ -11,8 +11,8 @@ Legend: 🔴 blocks activation · 🟠 blocks correct/production posting (not ac
 
 | ✔ | Item | Owner | Where to fix |
 |---|---|---|---|
-| ☐ | **T1** — confirm WCOCOH append names `ZZBOTACC` / `CUST_OWNER` | Pankaj-san | `ZRDME_MONTH_END_COPA` → `F_GET_DATA` "T1 EDIT POINT" |
-| ☐ | **T2** — confirm CI_ACDOCA append names `WW207/WW214/WW228/WW229/VKAUS` | Gaurav-san | `ZC_DME_SALES_COPA` → "T2 EDIT POINT" |
+| ☐ | **T1** — confirm WCOCOH append names `ZZBOTACC` / `CUST_OWNER` **(only remaining blocker)** | Pankaj-san | `ZRDME_MONTH_END_COPA` → `F_GET_DATA` "T1 EDIT POINT" |
+| ✅ | **T2** — CI_ACDOCA characteristics `WW207/WW214/WW228/WW229/VKAUS` — **CONFIRMED present in ACDOCA** (16-Jun-2026) | Functional | no change needed |
 | ☐ | DDIC objects present in target: `/CCBJI/T_DME_GL`, `/CCBJI/T_DME_HDR`, `/CCBJI/T_DME_ITM`, `WCOCOH`, `CE2JP00`, `ACDOCA`, message class `/CCBJI/RTR` | Basis | system import |
 | ☐ | Create CDS view `ZC_DME_SALES_COPA` (parameter `p_cutover`) | Dev | new object |
 | ☐ | Create report `ZRDME_MONTH_END_COPA` + text symbols (text-001/002/012/016/027) | Dev | new object |
@@ -42,7 +42,7 @@ Run with **RB_TEST = X** (uses `BAPI_ACC_DOCUMENT_CHECK`, no DB update).
 | ✔ | Ref | Item | Owner |
 |---|---|---|---|
 | ☐ | **F1** | Sandbox proof that `BAPI_ACC_DOCUMENT_POST` writes **both** CB + AB CO-PA on JP00 | CO |
-| ☐ | **F2** | Custom characteristics active in AB operating concern + KEDR simulation | Gaurav-san / CO |
+| ✅ | **F2** | Custom characteristics in AB operating concern — **CONFIRMED available & passable** (16-Jun-2026) | — |
 | ☐ | **F4** | CCM vs DME-Z-header status mapping (Approved 05 / Calculated 06) | Functional |
 | ☐ | **F5** | DME Z-table vs CCM data-ownership split confirmed | Functional |
 | ☐ | **F6** | RB_SALE/RB_OTHR record-type split still required? | Functional |
@@ -65,9 +65,9 @@ Run with **RB_TEST = X** (uses `BAPI_ACC_DOCUMENT_CHECK`, no DB update).
 
 ---
 
-## 5. Verdict
+## 5. Verdict (updated 16-Jun-2026, round 2)
 
-- **Build + activate in DEV:** ready as soon as **T1 + T2** are confirmed (one-line edits each).
+- **Build + activate in DEV:** ready as soon as **T1** is confirmed (single one-line edit; T2 now confirmed).
 - **Test runs:** ready once section 2 config is in place.
-- **Production posting:** gated on **F1 + F2** (the CRITICAL feasibility items) and the F4–F9 functional confirmations.
-- **Still on the backlog:** B3 fine-grained cross-territory customer include/exclude split (F7), reversal (E1/E2), Phase-2 payment types (F10).
+- **Production posting:** gated on **F1** sandbox proof (F2 now confirmed) plus the F4–F9 functional confirmations.
+- **Still on the backlog:** fine-grained cross-territory customer include/exclude split (F7), reversal (E1/E2), Phase-2 payment types (F10).

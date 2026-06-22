@@ -37,16 +37,16 @@
 *&---------------------------------------------------------------------*
 *& EXTERNAL FIELD-NAME MAPPING  —  SINGLE EDIT POINT (T1 / T2)
 *&---------------------------------------------------------------------*
-*& The following customer-append field names are NOT yet confirmed and
-*& are the only items that block activation. When confirmed, change them
-*& here (program) and in ZC_DME_SALES_COPA (CDS) — both files carry a
-*& matching banner. Nothing else needs to change.
+*& The WCOCOH append field names (T1) are the only item still to be
+*& confirmed and the only remaining activation blocker. When confirmed,
+*& change them here (program). The CI_ACDOCA characteristics (T2) are
+*& CONFIRMED present in account-based CO-PA (ACDOCA) — no change needed.
 *&
-*&  T1 - WCOCOH append (confirm with Pankaj-san) — used in F_GET_DATA:
+*&  T1 - WCOCOH append (PENDING — confirm with Pankaj-san) — F_GET_DATA:
 *&         bottler account : WCOCOH-ZZBOTACC      <-- edit in SELECT
 *&         dealer / owner  : WCOCOH-CUST_OWNER    <-- edit in SELECT
-*&  T2 - CI_ACDOCA append (confirm with Gaurav-san) — used in CDS view:
-*&         WW207 / WW214 / WW228 / WW229 / VKAUS  <-- edit in CDS branch 2
+*&  T2 - CI_ACDOCA append (CONFIRMED in ACDOCA) — used in CDS view:
+*&         WW207 / WW214 / WW228 / WW229 / VKAUS
 *&---------------------------------------------------------------------*
 REPORT zrdme_month_end_copa MESSAGE-ID /ccbji/rtr.
 
@@ -271,10 +271,13 @@ CONSTANTS: c_i      TYPE char1            VALUE 'I',
            c_gltv   TYPE tvarvc-name      VALUE '/CCBJI/RTR_DME_CRGL',
            c_type   TYPE rsscr_kind       VALUE 'P',
            c_numb   TYPE tvarv_numb       VALUE '0000',
-*  Switch-over period CE2JP00 -> ACDOCA for the sales source (F3).
-*  Production rule: CE2JP00 till Nov-2027, ACDOCA from Dec-2027 ('2027012').
-*  Testing  rule  : ACDOCA from Jan-2026 ('2026001') per Gaurav-san.
-*  The active boundary is read from TVARVC c_acdoca_tvar (fallback below)
+*  Switch-over period CE2JP00 -> ACDOCA for the SALES SOURCE read (F3).
+*  Note (functional, 16-Jun-2026): both Costing-Based and Account-Based
+*  CO-PA are active from Year 2026, so the dual posting below applies to
+*  2026+ data. The sales-source read cut-over is independent and stays
+*  configurable: production CE2 till Nov-2027 / ACDOCA from Dec-2027
+*  ('2027012'); testing ACDOCA from Jan-2026 ('2026001').
+*  Active boundary is read from TVARVC c_acdoca_tvar (fallback below)
 *  and passed to the CDS view so test/prod use the same code.
            c_acdoca_from TYPE jahrper     VALUE '2027012',   "prod default
            c_acdoca_tvar TYPE tvarvc-name VALUE '/CCBJI/DME_ACDOCA_FROM'.
@@ -914,7 +917,7 @@ FORM f_post_copa_acc USING    ps_dhdr TYPE ty_dhdr
     PERFORM f_add_crit USING lv_item 'VTWEG'  <ls_copa>-vtweg  CHANGING lt_crit.
     PERFORM f_add_crit USING lv_item 'PRCTR'  <ls_copa>-prctr  CHANGING lt_crit.
     PERFORM f_add_crit USING lv_item 'KMVKBU' <ls_copa>-kmvkbu CHANGING lt_crit.
-*   Custom characteristics - must exist in the AB op. concern (FS 9.2)
+*   Custom characteristics - CONFIRMED available in AB op. concern (F2, FS 9.2)
     PERFORM f_add_crit USING lv_item 'VKAUS'  <ls_copa>-vkaus  CHANGING lt_crit.
     PERFORM f_add_crit USING lv_item 'WW228'  <ls_copa>-ww228  CHANGING lt_crit.
     PERFORM f_add_crit USING lv_item 'WW229'  <ls_copa>-ww229  CHANGING lt_crit.

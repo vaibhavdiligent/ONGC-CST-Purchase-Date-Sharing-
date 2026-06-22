@@ -81,9 +81,8 @@ select from acdoca as ad
       ad.prctr                       as prctr,
       ad.kunwe                       as kunwe,
       ad.vkbur                       as kmvkbu,
-      // >>> T2 EDIT POINT: confirm CI_ACDOCA append field names with
-      //     Gaurav-san. These five characteristics are the only
-      //     activation blocker for this view.
+      // >>> T2 CONFIRMED: all these characteristics exist in account-based
+      //     CO-PA (ACDOCA) per functional team (16-Jun-2026). No change.
       ad.ww207                       as ww207,
       ad.ww214                       as ww214,
       ad.vkaus                       as vkaus,

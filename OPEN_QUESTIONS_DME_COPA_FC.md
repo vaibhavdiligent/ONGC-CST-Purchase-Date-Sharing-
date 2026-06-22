@@ -66,19 +66,20 @@ Respond per row: **Confirm** / **Clarify** / **Provide value**. The 🔴 rows (*
 
 ---
 
-## 4. CLIENT RESPONSES & RESOLUTION (received 16-Jun-2026)
+## 4. CLIENT RESPONSES & RESOLUTION (updated 16-Jun-2026, round 2)
 
-| # | Client response | Dev action | Status |
+| # | Client / functional response | Dev action | Status |
 |---|---|---|---|
 | B1 | No separate AB GL yet. Use the same GLs maintained in `/CCBJI/T_DME_GL` until a separate account-based mapping is confirmed. | GL read switched to `/CCBJI/T_DME_GL`; AB GL = CB GL (`SAKN1`). `GL_ACCT_ACCTBSD` kept reserved. | ✅ Implemented |
 | B2 | Dummy material = **9651030000**. | `c_dummy_mat = '9651030000'`. | ✅ Implemented |
 | B3 | In scope — test case **5000442076**. | Cross-territory core built: company-code range (main+sub), per-company dummy lines, cost-centre split. Customer include/exclude split (F7) still backlog. | ✅ Core coded |
 | F1 | Assume single BAPI call posts both CB + AB; must be validated in sandbox with CO (test cases shared). | Design retained. | ✅ Coded · pending sandbox |
-| F2 | Assume AS-IS; custom chars expected available. To be confirmed by **Gaurav-san**. | CRITERIA passes VKAUS/WW228/WW229/KUNWE. | ✅ Coded · pending confirm |
-| F3 | **Testing:** ACDOCA from Jan-2026. **Production:** CE2JP00 till Nov-2027, ACDOCA from Dec-2027. | Cut-over made configurable: TVARVC `/CCBJI/DME_ACDOCA_FROM` → CDS parameter `p_cutover`. | ✅ Implemented |
+| F2 | **CONFIRMED** — all characteristics remain AS-IS; VKAUS/WW228/WW229/KUNWE available & passable. | CRITERIA passes them. | ✅ Confirmed |
+| F3 | **Both Costing and Account-Based CO-PA are active in Year 2026.** (Sales-source CE2→ACDOCA read cut-over independent.) | Dual posting applies 2026+; sales-source cut-over kept configurable (TVARVC `/CCBJI/DME_ACDOCA_FROM` → CDS `p_cutover`). | ✅ Implemented |
 | F4–F11 | Not yet answered. | Current assumptions retained. | ⏳ Open |
-| T1 | WCOCOH append field names to be confirmed with **Pankaj-san**. | Placeholders `ZZBOTACC` / `CUST_OWNER` retained. | ⏳ Pending |
-| T2 | Assume CI_ACDOCA field names unchanged; confirm with **Gaurav-san**. | Placeholders retained in CDS. | ⏳ Pending |
+| T1 | WCOCOH append field names still to be confirmed with **Pankaj-san**. | Placeholders `ZZBOTACC` / `CUST_OWNER` retained. | ⏳ Pending (only activation blocker) |
+| T2 | **CONFIRMED** — all characteristics are in account-based CO-PA (ACDOCA). | CDS ACDOCA field names validated; no change. | ✅ Confirmed |
 | T3–T7 | Not yet answered. | Current assumptions retained. | ⏳ Open |
 
-**Remaining blockers before production posting:** F1 sandbox validation (CO), F2 + T2 (Gaurav-san), T1 (Pankaj-san).
+**Remaining blocker to ACTIVATE:** T1 (WCOCOH append names — Pankaj-san).
+**Remaining blocker to PRODUCTION post:** F1 sandbox validation (CO).
