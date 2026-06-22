@@ -47,20 +47,179 @@ TYPES: BEGIN OF ty_request,
          limit         TYPE string,
        END OF ty_request.
 
-*--- Common response envelope (Status / Iat / data: Sub,Aud,Iss + inner data).
-*   The inner "data" varies per API, so it is captured as raw JSON for display.
+*--- Response structures matching the ACTUAL payload.
+*   {"sub":..,"aud":..,"iss":..,"data":[ order ]}
+*   order -> consignmentDetails[] -> products[]
+*   Component names equal the JSON keys (case-insensitive match), so no
+*   pretty_name / name_mappings are needed on deserialize.
+TYPES: BEGIN OF ty_product,
+         totalvalue           TYPE p LENGTH 13 DECIMALS 2,
+         unitprice            TYPE p LENGTH 13 DECIMALS 2,
+         expecteddeliverydate TYPE string,
+         productbrand         TYPE string,
+         quantityordered      TYPE i,
+         productname          TYPE string,
+         productcode          TYPE string,
+         quantityunittype     TYPE string,
+         materialnumber       TYPE string,
+         order_item_id        TYPE string,
+         offering_type        TYPE string,
+         tdsundergst          TYPE string,
+         tdsunderincometax    TYPE string,
+       END OF ty_product,
+       tt_product TYPE STANDARD TABLE OF ty_product WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_consignment,
+         consigneestate    TYPE string,
+         consigneelastname TYPE string,
+         consigneepostid   TYPE string,
+         consigneemobile   TYPE string,
+         consigneefname    TYPE string,
+         consigneedistrict TYPE string,
+         consigneepin      TYPE string,
+         consigneeaddress  TYPE string,
+         products          TYPE tt_product,
+       END OF ty_consignment,
+       tt_consignment TYPE STANDARD TABLE OF ty_consignment WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_order,
+         pgmode               TYPE string,
+         orderid              TYPE string,
+         orderdate            TYPE string,
+         accepteddate         TYPE string,
+         orderamount          TYPE string,
+         demandid             TYPE string,
+         buyerorg             TYPE string,
+         buyername            TYPE string,
+         buyeremail           TYPE string,
+         buyermobile          TYPE string,
+         buyeraddress         TYPE string,
+         buyerpincode         TYPE string,
+         buyerdistrict        TYPE string,
+         buyerstate           TYPE string,
+         buyergstn            TYPE string,
+         vendorname           TYPE string,
+         vendoraddress        TYPE string,
+         vendorcode           TYPE string,
+         vendordistrict       TYPE string,
+         vendorstate          TYPE string,
+         vendorpin            TYPE string,
+         vendorbankaccountno  TYPE string,
+         vendorbankifsccode   TYPE string,
+         vendorpan            TYPE string,
+         vendorgstn           TYPE string,
+         vendoruniqueid       TYPE string,
+         sellerid             TYPE string,
+         supplyorderno        TYPE string,
+         supplyorderdate      TYPE string,
+         designationfinancial TYPE string,
+         ifdconcurrance       TYPE string,
+         ifddiaryno           TYPE string,
+         ifddiarydate         TYPE string,
+         consignmentdetails   TYPE tt_consignment,
+         contractfile         TYPE string,
+         amendedstatus        TYPE string,
+         parentorderid        TYPE string,
+         ismsmeverified       TYPE string,
+         msesocialcategory    TYPE string,
+         msegender            TYPE string,
+         udyamnumber          TYPE string,
+         buyeruserid          TYPE string,
+         buyerdep             TYPE string,
+         buyermin             TYPE string,
+         buyeroffice          TYPE string,
+         buyerorgtype         TYPE string,
+         prnumber             TYPE string,
+         prdate               TYPE string,
+       END OF ty_order,
+       tt_order TYPE STANDARD TABLE OF ty_order WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_response,
+         sub  TYPE string,
+         aud  TYPE string,
+         iss  TYPE string,
+         data TYPE tt_order,
+       END OF ty_response.
+
+*--- Flat display: one row per product (order x consignment x product)
 TYPES: BEGIN OF ty_display,
-         status  TYPE string,
-         iat     TYPE string,
-         sub     TYPE string,
-         aud     TYPE string,
-         iss     TYPE string,
-         data    TYPE string,   " raw inner data JSON
+         sub                  TYPE string,
+         aud                  TYPE string,
+         iss                  TYPE string,
+         pgmode               TYPE string,
+         orderid              TYPE string,
+         orderdate            TYPE string,
+         accepteddate         TYPE string,
+         orderamount          TYPE string,
+         demandid             TYPE string,
+         buyerorg             TYPE string,
+         buyername            TYPE string,
+         buyeremail           TYPE string,
+         buyermobile          TYPE string,
+         buyeraddress         TYPE string,
+         buyerpincode         TYPE string,
+         buyerdistrict        TYPE string,
+         buyerstate           TYPE string,
+         buyergstn            TYPE string,
+         vendorname           TYPE string,
+         vendoraddress        TYPE string,
+         vendorcode           TYPE string,
+         vendordistrict       TYPE string,
+         vendorstate          TYPE string,
+         vendorpin            TYPE string,
+         vendorbankaccountno  TYPE string,
+         vendorbankifsccode   TYPE string,
+         vendorpan            TYPE string,
+         vendorgstn           TYPE string,
+         vendoruniqueid       TYPE string,
+         sellerid             TYPE string,
+         supplyorderno        TYPE string,
+         supplyorderdate      TYPE string,
+         designationfinancial TYPE string,
+         ifdconcurrance       TYPE string,
+         ifddiaryno           TYPE string,
+         ifddiarydate         TYPE string,
+         contractfile         TYPE string,
+         amendedstatus        TYPE string,
+         parentorderid        TYPE string,
+         ismsmeverified       TYPE string,
+         buyeruserid          TYPE string,
+         buyerdep             TYPE string,
+         buyermin             TYPE string,
+         buyeroffice          TYPE string,
+         buyerorgtype         TYPE string,
+         prnumber             TYPE string,
+         prdate               TYPE string,
+         consigneestate       TYPE string,
+         consigneefname       TYPE string,
+         consigneelastname    TYPE string,
+         consigneemobile      TYPE string,
+         consigneedistrict    TYPE string,
+         consigneepin         TYPE string,
+         consigneeaddress     TYPE string,
+         consigneepostid      TYPE string,
+         productname          TYPE string,
+         productbrand         TYPE string,
+         productcode          TYPE string,
+         quantityordered      TYPE i,
+         quantityunittype     TYPE string,
+         unitprice            TYPE p LENGTH 13 DECIMALS 2,
+         totalvalue           TYPE p LENGTH 13 DECIMALS 2,
+         expecteddeliverydate TYPE string,
+         materialnumber       TYPE string,
+         order_item_id        TYPE string,
+         offering_type        TYPE string,
+         tdsundergst          TYPE string,
+         tdsunderincometax    TYPE string,
        END OF ty_display,
        tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
 
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
+      ls_response TYPE ty_response,
+      ls_order    TYPE ty_order,
+      ls_cons     TYPE ty_consignment,
+      ls_prod     TYPE ty_product,
       lv_json     TYPE string,
       lv_response TYPE string,
       lv_code     TYPE i,
@@ -152,43 +311,103 @@ START-OF-SELECTION.
   lv_response = lo_client->response->get_cdata( ).
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 6. Parse the common envelope (Status/Iat/data.Sub/Aud/Iss) for display.
-*   Inner data kept raw; tighten with a typed structure once the exact
-*   response fields for this API are confirmed.
-  TYPES: BEGIN OF ty_env_data,
-           sub TYPE string, aud TYPE string, iss TYPE string,
-         END OF ty_env_data.
-  TYPES: BEGIN OF ty_env,
-           status TYPE string, iat TYPE string, data TYPE ty_env_data,
-         END OF ty_env.
-  DATA ls_env TYPE ty_env.
-  DATA lt_maps TYPE /ui2/cl_json=>name_mappings.
-  lt_maps = VALUE #(
-    ( abap = 'STATUS' json = 'Status' ) ( abap = 'IAT' json = 'Iat' )
-    ( abap = 'DATA'   json = 'data' )   ( abap = 'SUB' json = 'Sub' )
-    ( abap = 'AUD'    json = 'Aud' )    ( abap = 'ISS' json = 'Iss' ) ).
-  /ui2/cl_json=>deserialize( EXPORTING json = lv_response name_mappings = lt_maps
-                             CHANGING data = ls_env ).
+*--- 6. Parse the full response into typed structures
+  /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                             CHANGING  data = ls_response ).
 
-  CLEAR ls_display.
-  ls_display-status = ls_env-status.
-  ls_display-iat    = ls_env-iat.
-  ls_display-sub    = ls_env-data-sub.
-  ls_display-aud    = ls_env-data-aud.
-  ls_display-iss    = ls_env-data-iss.
-  ls_display-data   = lv_response.   " full raw response for reference
-  APPEND ls_display TO lt_display.
+*--- 6a. Flatten to one row per product (order -> consignment -> product)
+  CLEAR lt_display.
+  LOOP AT ls_response-data INTO ls_order.
+    LOOP AT ls_order-consignmentdetails INTO ls_cons.
+      LOOP AT ls_cons-products INTO ls_prod.
+        CLEAR ls_display.
+        ls_display-sub                  = ls_response-sub.
+        ls_display-aud                  = ls_response-aud.
+        ls_display-iss                  = ls_response-iss.
+        ls_display-pgmode               = ls_order-pgmode.
+        ls_display-orderid              = ls_order-orderid.
+        ls_display-orderdate            = ls_order-orderdate.
+        ls_display-accepteddate         = ls_order-accepteddate.
+        ls_display-orderamount          = ls_order-orderamount.
+        ls_display-demandid             = ls_order-demandid.
+        ls_display-buyerorg             = ls_order-buyerorg.
+        ls_display-buyername            = ls_order-buyername.
+        ls_display-buyeremail           = ls_order-buyeremail.
+        ls_display-buyermobile          = ls_order-buyermobile.
+        ls_display-buyeraddress         = ls_order-buyeraddress.
+        ls_display-buyerpincode         = ls_order-buyerpincode.
+        ls_display-buyerdistrict        = ls_order-buyerdistrict.
+        ls_display-buyerstate           = ls_order-buyerstate.
+        ls_display-buyergstn            = ls_order-buyergstn.
+        ls_display-vendorname           = ls_order-vendorname.
+        ls_display-vendoraddress        = ls_order-vendoraddress.
+        ls_display-vendorcode           = ls_order-vendorcode.
+        ls_display-vendordistrict       = ls_order-vendordistrict.
+        ls_display-vendorstate          = ls_order-vendorstate.
+        ls_display-vendorpin            = ls_order-vendorpin.
+        ls_display-vendorbankaccountno  = ls_order-vendorbankaccountno.
+        ls_display-vendorbankifsccode   = ls_order-vendorbankifsccode.
+        ls_display-vendorpan            = ls_order-vendorpan.
+        ls_display-vendorgstn           = ls_order-vendorgstn.
+        ls_display-vendoruniqueid       = ls_order-vendoruniqueid.
+        ls_display-sellerid             = ls_order-sellerid.
+        ls_display-supplyorderno        = ls_order-supplyorderno.
+        ls_display-supplyorderdate      = ls_order-supplyorderdate.
+        ls_display-designationfinancial = ls_order-designationfinancial.
+        ls_display-ifdconcurrance       = ls_order-ifdconcurrance.
+        ls_display-ifddiaryno           = ls_order-ifddiaryno.
+        ls_display-ifddiarydate         = ls_order-ifddiarydate.
+        ls_display-contractfile         = ls_order-contractfile.
+        ls_display-amendedstatus        = ls_order-amendedstatus.
+        ls_display-parentorderid        = ls_order-parentorderid.
+        ls_display-ismsmeverified       = ls_order-ismsmeverified.
+        ls_display-buyeruserid          = ls_order-buyeruserid.
+        ls_display-buyerdep             = ls_order-buyerdep.
+        ls_display-buyermin             = ls_order-buyermin.
+        ls_display-buyeroffice          = ls_order-buyeroffice.
+        ls_display-buyerorgtype         = ls_order-buyerorgtype.
+        ls_display-prnumber             = ls_order-prnumber.
+        ls_display-prdate               = ls_order-prdate.
+        ls_display-consigneestate       = ls_cons-consigneestate.
+        ls_display-consigneefname       = ls_cons-consigneefname.
+        ls_display-consigneelastname    = ls_cons-consigneelastname.
+        ls_display-consigneemobile      = ls_cons-consigneemobile.
+        ls_display-consigneedistrict    = ls_cons-consigneedistrict.
+        ls_display-consigneepin         = ls_cons-consigneepin.
+        ls_display-consigneeaddress     = ls_cons-consigneeaddress.
+        ls_display-consigneepostid      = ls_cons-consigneepostid.
+        ls_display-productname          = ls_prod-productname.
+        ls_display-productbrand         = ls_prod-productbrand.
+        ls_display-productcode          = ls_prod-productcode.
+        ls_display-quantityordered      = ls_prod-quantityordered.
+        ls_display-quantityunittype     = ls_prod-quantityunittype.
+        ls_display-unitprice            = ls_prod-unitprice.
+        ls_display-totalvalue           = ls_prod-totalvalue.
+        ls_display-expecteddeliverydate = ls_prod-expecteddeliverydate.
+        ls_display-materialnumber       = ls_prod-materialnumber.
+        ls_display-order_item_id        = ls_prod-order_item_id.
+        ls_display-offering_type        = ls_prod-offering_type.
+        ls_display-tdsundergst          = ls_prod-tdsundergst.
+        ls_display-tdsunderincometax    = ls_prod-tdsunderincometax.
+        APPEND ls_display TO lt_display.
+      ENDLOOP.
+    ENDLOOP.
+  ENDLOOP.
 
 *--- 7. Display as ALV grid with the (editable) list header from p_head
-  TRY.
-      cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
-                              CHANGING  t_table      = lt_display ).
-      lo_alv->get_columns( )->set_optimize( abap_true ).
-      lo_alv->get_functions( )->set_all( abap_true ).
-      lo_alv->get_display_settings( )->set_list_header( p_head ).
-      lo_alv->display( ).
-    CATCH cx_salv_msg INTO lx_salv.
-      WRITE: / 'ALV error:', lx_salv->get_text( ).
-      WRITE: / 'HTTP', lv_code, lv_reason.
-      WRITE: / lv_response.
-  ENDTRY.
+  IF lt_display IS NOT INITIAL.
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                                CHANGING  t_table      = lt_display ).
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_display_settings( )->set_list_header( p_head ).
+        lo_alv->display( ).
+      CATCH cx_salv_msg INTO lx_salv.
+        WRITE: / 'ALV error:', lx_salv->get_text( ).
+    ENDTRY.
+  ELSE.
+    WRITE: / 'HTTP', lv_code, lv_reason.
+    WRITE: / 'No order rows returned. Raw response:'.
+    WRITE: / lv_response.
+  ENDIF.
