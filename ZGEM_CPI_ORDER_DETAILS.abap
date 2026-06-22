@@ -18,6 +18,7 @@ PARAMETERS:
             p_head  TYPE char70 LOWER CASE DEFAULT 'Get Order Details (3.3)', " ALV list header (editable)
             p_user  TYPE string LOWER CASE DEFAULT 'clientname',
             p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
+            p_oid   TYPE string LOWER CASE,                      " single order id (disables date params)
             p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
             p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
             p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
@@ -37,6 +38,7 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
 TYPES: BEGIN OF ty_request,
          user          TYPE string,
          method        TYPE string,
+         o_id          TYPE string,    " single order id (optional)
          buyer_user_id TYPE string,
          as_on         TYPE string,
          from_date     TYPE string,
@@ -71,14 +73,18 @@ DATA: lo_client   TYPE REF TO if_http_client,
 START-OF-SELECTION.
 
 *--- 1. Validate input
-  IF p_ason IS NOT INITIAL AND ( p_from IS NOT INITIAL OR p_to IS NOT INITIAL ).
-    WRITE: / 'Error: provide either as_on OR from_date/to_date, not both.'. RETURN.
-  ENDIF.
-  IF p_ason IS INITIAL AND p_from IS INITIAL.
-    WRITE: / 'Error: provide as_on, or from_date (with to_date).'. RETURN.
-  ENDIF.
-  IF p_from IS NOT INITIAL AND p_to IS INITIAL.
-    WRITE: / 'Error: to_date is mandatory when from_date is set.'. RETURN.
+*   o_id (single order) disables as_on / date-range; only validate dates
+*   when o_id is not supplied.
+  IF p_oid IS INITIAL.
+    IF p_ason IS NOT INITIAL AND ( p_from IS NOT INITIAL OR p_to IS NOT INITIAL ).
+      WRITE: / 'Error: provide either as_on OR from_date/to_date, not both.'. RETURN.
+    ENDIF.
+    IF p_ason IS INITIAL AND p_from IS INITIAL.
+      WRITE: / 'Error: provide o_id, as_on, or from_date (with to_date).'. RETURN.
+    ENDIF.
+    IF p_from IS NOT INITIAL AND p_to IS INITIAL.
+      WRITE: / 'Error: to_date is mandatory when from_date is set.'. RETURN.
+    ENDIF.
   ENDIF.
 
 *--- 1a. Generate the SEK security token via the CPI token proxy
@@ -100,7 +106,9 @@ START-OF-SELECTION.
   ls_request-user   = p_user.
   ls_request-method = 'getOrders'.
   ls_request-buyer_user_id = p_buyer.
-  IF p_ason IS NOT INITIAL.
+  IF p_oid IS NOT INITIAL.
+    ls_request-o_id = p_oid.            " single-order mode (dates ignored)
+  ELSEIF p_ason IS NOT INITIAL.
     ls_request-as_on = p_ason.
   ELSE.
     ls_request-from_date = p_from.
