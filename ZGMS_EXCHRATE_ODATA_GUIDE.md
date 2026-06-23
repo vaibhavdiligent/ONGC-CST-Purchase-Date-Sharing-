@@ -129,20 +129,104 @@ CPI configuration notes:
 
 ---
 
-## 6. SEGW alternative (graphical modeler)
+## 6. SEGW step-by-step (graphical modeler)
 
-If you prefer SEGW instead of the code-based model:
-1. SEGW → create project `ZGMS_EXCHRATE`.
-2. Import the XSD or create entity types `ExchangeRates` (key `REQUEST_ID`) and
-   `ExchangeRate` (keys `RATE_TYPE/FROM_CURR/TO_CURRNCY/VALID_FROM`, plus the
-   value + optional `_V` properties, all `Edm.String`).
-3. Create an Association `ExchangeRates → ExchangeRate` (1 : 0..n) and the
-   navigation property `ExchangeRate`.
-4. Generate runtime objects → SEGW creates `..._MPC/_MPC_EXT/_DPC/_DPC_EXT`.
-5. In `..._DPC_EXT` redefine `CREATE_DEEP_ENTITY` and paste the body from
-   `ZCL_GMS_EXCHRATE_DPC.abap` (adjust the deep-structure type name to the
-   SEGW-generated one).
-6. Register/activate via `/IWFND/MAINT_SERVICE` as in Step 3.
+Use this if you want to build the service with the Gateway Service Builder
+instead of the code-based classes in Section 2. The end result is the same
+model; you only hand-code the `CREATE_DEEP_ENTITY` body.
 
-The code-based classes in this repo already do everything SEGW would
-generate, so Section 2 is the faster route.
+### 6.1 Create the project
+1. Transaction **`SEGW`**.
+2. **Create Project** (the white-page icon).
+   - Project: `ZGMS_EXCHRATE`
+   - Description: `Inbound Exchange Rate upload from CPI`
+   - Type: `Service with SAP Annotations` (default)
+   - Assign package (e.g. `ZGMS`) + transport.
+   - The tree appears: **Data Model / Service Implementation / Runtime
+     Artifacts / Service Maintenance**.
+
+### 6.2 Create the ITEM entity type `ExchangeRate`
+1. Right-click **Data Model → Create → Entity Type**.
+   - Name: `ExchangeRate`
+   - Tick **Create Related Entity Set** → set name `ExchangeRateSet`.
+2. Expand `ExchangeRate` → right-click **Properties → Create** (or use
+   "Create" repeatedly) and add these, all **Edm.String**:
+
+   | Property | Is Key | Nullable | MaxLength |
+   |----------|:------:|:--------:|:---------:|
+   | `RATE_TYPE`     | ✔ | – | 4 |
+   | `FROM_CURR`     | ✔ | – | 5 |
+   | `TO_CURRNCY`    | ✔ | – | 5 |
+   | `VALID_FROM`    | ✔ | – | 8 |
+   | `EXCH_RATE`     | – | – | 30 |
+   | `FROM_FACTOR`   | – | – | 10 |
+   | `TO_FACTOR`     | – | – | 10 |
+   | `EXCH_RATE_V`   | – | ✔ | 30 |
+   | `FROM_FACTOR_V` | – | ✔ | 10 |
+   | `TO_FACTOR_V`   | – | ✔ | 10 |
+
+   (For each property double-click it → set Edm Core Type = `Edm.String`,
+   Maxlength, and the **Key**/**Nullable** flags. Uncheck *Nullable* on the
+   seven mandatory fields.)
+
+   > Tip: instead of typing each property, you can **import the XSD** —
+   > right-click `ExchangeRate` → *Import → Data Model from File* and pick the
+   > XSD. Review the generated properties against the table above afterwards.
+
+### 6.3 Create the HEADER entity type `ExchangeRates`
+1. Right-click **Data Model → Create → Entity Type**.
+   - Name: `ExchangeRates`
+   - Tick **Create Related Entity Set** → `ExchangeRatesSet`.
+2. Add one property: `REQUEST_ID` — `Edm.String`, **Key = ✔**, MaxLength 32,
+   Nullable ✔ (the server can generate it).
+
+### 6.4 Create the association + navigation
+1. Right-click **Data Model → Create → Association**.
+   - Association Name: `ExchangeRates_ExchangeRate`
+   - Principal Entity: `ExchangeRates`, Cardinality **1**
+   - Dependent Entity: `ExchangeRate`, Cardinality **0..n** (`*`)
+   - Navigation Property Name (created on `ExchangeRates`): **`ExchangeRate`**
+     ← this name must match the JSON array key CPI sends.
+2. Finish the wizard. On the "referential constraint" step you can leave it
+   empty (the header `REQUEST_ID` is not a foreign key in the items) — just
+   confirm/continue. SEGW also auto-creates the Association Set.
+
+### 6.5 Generate runtime objects
+1. Click **Generate Runtime Objects** (the red/black "lorry" / generate icon).
+2. Accept the proposed class/model names (or rename), assign transport:
+   - Model Provider: `ZCL_ZGMS_EXCHRATE_MPC` + `..._MPC_EXT`
+   - Data Provider:  `ZCL_ZGMS_EXCHRATE_DPC` + `..._DPC_EXT`
+   - Technical Model + Technical Service names.
+3. SEGW generates and activates the four classes.
+
+### 6.6 Implement the deep insert
+1. In SEGW tree → **Service Implementation** → expand `ExchangeRatesSet` →
+   right-click **CreateDeepEntity → Go to ABAP Workbench** (opens the
+   `..._DPC_EXT` class).
+   *(If CreateDeepEntity is not listed, open `..._DPC_EXT` in SE24, →
+   Redefine the method `/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_DEEP_ENTITY`.)*
+2. Paste the method body from `ZCL_GMS_EXCHRATE_DPC.abap`, with these
+   adjustments to the SEGW-generated names:
+   - The deep structure: SEGW generates a structure for the deep type. Either
+     declare your own local types (as in the repo class) **or** use the
+     generated `..._MPC=>TS_*` / deep type. Simplest: copy the
+     `TY_EXCHANGE_RATE` / `TY_DEEP` `TYPES` from `ZCL_GMS_EXCHRATE_MPC.abap`
+     into your `..._DPC_EXT` (or a type pool) and keep the body unchanged.
+   - Keep the BAPI call, validation, commit/rollback exactly as provided.
+3. Activate the class.
+
+> Why a deep structure is still needed: SEGW models the navigation, but the
+> `read_entry_data( )` target must be a flat ABAP structure containing the
+> header fields **and** an internal table named after the navigation property
+> (`EXCHANGERATE`). The `TY_DEEP` type in the repo already matches this.
+
+### 6.7 Register & activate the service
+Same as Section 2, Step 3: **`/IWFND/MAINT_SERVICE`** → Add Service → pick
+`ZGMS_EXCHRATE_SRV` (it appears once generated) → activate. Then test per
+Sections 4–5.
+
+---
+
+Either path (Section 2 code-based, or Section 6 SEGW) produces the identical
+OData V2 service. Section 2 is faster to transport; Section 6 is friendlier if
+your team maintains models in the SEGW modeler.
