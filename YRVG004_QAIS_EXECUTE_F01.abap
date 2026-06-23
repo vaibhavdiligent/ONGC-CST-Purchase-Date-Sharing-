@@ -340,34 +340,57 @@ FORM get_data.
     wa_yrva_mstr_waiver-annual_min = 85 .
     wa_yrva_mstr_waiver-annual_max = 125 .
   ENDIF.
-*** SOC : CIS 2026-27 scheme change (period-gated) ***
-*   Commitment Incentive Scheme 2026-27. Applicable to Monthly and Annual
-*   schemes only; Quarterly % unchanged. Gated by the s_sptag period so
-*   earlier scheme years keep the old 80/85 % when the report is re-run.
-*
-*   Monthly run : s_sptag is entered as a single scheme month. Scheme
-*   months run from Jun'2026 to Mar'2027 -> Monthly min % 80 -> 75.
+*** SOC : CIS lifting % change (period-gated) ***
+*   Commitment Incentive Scheme. Monthly min % 80 -> 75, Annual min %
+*   85 -> 80. Applies to Monthly and Annual schemes only; Quarterly %
+*   unchanged. Gated by the s_sptag period so other years are untouched.
+*   ------------------------------------------------------------------
+*   PRODUCTION : CIS 2026-27 (this is the live scheme year).
+*   Monthly run = single scheme month Jun'2026 - Mar'2027.
   IF s_sptag-low GE '20260601' AND s_sptag-high LE '20270331'.
-    wa_yrva_mstr_waiver-min_perc_m1  = 75.
-    wa_yrva_mstr_waiver-min_perc_m2  = 75.
-    wa_yrva_mstr_waiver-min_perc_m3  = 75.
-    wa_yrva_mstr_waiver-min_perc_m4  = 75.
-    wa_yrva_mstr_waiver-min_perc_m5  = 75.
-    wa_yrva_mstr_waiver-min_perc_m6  = 75.
-    wa_yrva_mstr_waiver-min_perc_m7  = 75.
-    wa_yrva_mstr_waiver-min_perc_m8  = 75.
-    wa_yrva_mstr_waiver-min_perc_m9  = 75.
-    wa_yrva_mstr_waiver-min_perc_m10 = 75.
-    wa_yrva_mstr_waiver-min_perc_m11 = 75.
-    wa_yrva_mstr_waiver-min_perc_m12 = 75.
+    wa_yrva_mstr_waiver-min_perc_m1   = 75.
+    wa_yrva_mstr_waiver-min_perc_m2   = 75.
+    wa_yrva_mstr_waiver-min_perc_m3   = 75.
+    wa_yrva_mstr_waiver-min_perc_m4   = 75.
+    wa_yrva_mstr_waiver-min_perc_m5   = 75.
+    wa_yrva_mstr_waiver-min_perc_m6   = 75.
+    wa_yrva_mstr_waiver-min_perc_m7   = 75.
+    wa_yrva_mstr_waiver-min_perc_m8   = 75.
+    wa_yrva_mstr_waiver-min_perc_m9   = 75.
+    wa_yrva_mstr_waiver-min_perc_m10  = 75.
+    wa_yrva_mstr_waiver-min_perc_m11  = 75.
+    wa_yrva_mstr_waiver-min_perc_m12  = 75.
   ENDIF.
-*   Annual run : s_sptag is entered as the fiscal year 01.04 - 31.03
-*   (enforced by the screen validation). FY 2026-27 = 20260401-20270331
-*   -> Annual min % 85 -> 80.
+*   Annual run = fiscal year 01.04.2026 - 31.03.2027.
   IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
     wa_yrva_mstr_waiver-annual_min   = 80.
   ENDIF.
-*** EOC : CIS 2026-27 scheme change (period-gated) ***
+*** SOC : TEST ONLY - CIS 2025-26 - REMOVE before running PRODUCTION only ***
+*   Test data is available only for FY 2025-26, so the same new logic is
+*   enabled for 2025-26 to allow testing. DELETE this whole TEST ONLY
+*   block (down to its EOC marker) when the program is to run for the
+*   live 2026-27 scheme only.
+*   Monthly test run = single scheme month Jun'2025 - Mar'2026.
+  IF s_sptag-low GE '20250601' AND s_sptag-high LE '20260331'.
+    wa_yrva_mstr_waiver-min_perc_m1   = 75.
+    wa_yrva_mstr_waiver-min_perc_m2   = 75.
+    wa_yrva_mstr_waiver-min_perc_m3   = 75.
+    wa_yrva_mstr_waiver-min_perc_m4   = 75.
+    wa_yrva_mstr_waiver-min_perc_m5   = 75.
+    wa_yrva_mstr_waiver-min_perc_m6   = 75.
+    wa_yrva_mstr_waiver-min_perc_m7   = 75.
+    wa_yrva_mstr_waiver-min_perc_m8   = 75.
+    wa_yrva_mstr_waiver-min_perc_m9   = 75.
+    wa_yrva_mstr_waiver-min_perc_m10  = 75.
+    wa_yrva_mstr_waiver-min_perc_m11  = 75.
+    wa_yrva_mstr_waiver-min_perc_m12  = 75.
+  ENDIF.
+*   Annual test run = fiscal year 01.04.2025 - 31.03.2026.
+  IF s_sptag-low EQ '20250401' AND s_sptag-high EQ '20260331'.
+    wa_yrva_mstr_waiver-annual_min   = 80.
+  ENDIF.
+*** EOC : TEST ONLY - CIS 2025-26 ***
+*** EOC : CIS lifting % change (period-gated) ***
   MOVE-CORRESPONDING wa_yrva_mstr_waiver TO wa_yrva_mstr_waiver_temp.
 
   CLEAR wa_where_tab.
