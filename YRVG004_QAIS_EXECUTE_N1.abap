@@ -758,17 +758,17 @@ INITIALIZATION.
 ** EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 
 *&===== F01 : form routines (was INCLUDE yrvg004_qais_execute_f01) =====
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&  Include           YRVG004_QAIS_EXECUTE_F01
-*&                                                                     *
-*&                                                                     *
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
 *&      Form  VALIDATION
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM validation .
   DATA: w_check_date TYPE d.
   DATA : lv_percent TYPE char17 .
@@ -843,7 +843,7 @@ FORM validation .
 
 ******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *    ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ
+    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 
@@ -985,14 +985,14 @@ FORM validation .
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
 
 ENDFORM.                    " VALIDATION
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  GET_DATA
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM get_data.
   DATA lv_fname TYPE char20.
   DATA lv_index1 TYPE sy-tabix.
@@ -1782,7 +1782,7 @@ FORM get_data.
               WHILE lv_qmonth LE'3'.
                 CONCATENATE 'AND' 'MON_SO_M' INTO wa_where_tab SEPARATED BY space.
                 CONCATENATE wa_where_tab lv_qmonth INTO wa_where_tab .
-                CONCATENATE wa_where_tab 'NE' 'Co_NULL' INTO wa_where_ta
+                CONCATENATE wa_where_tab 'NE' 'Co_NULL' INTO wa_where_tab SEPARATED BY space.
                 APPEND wa_where_tab TO it_where_tab2.
                 lv_qmonth = lv_qmonth + 1.
                 SHIFT lv_qmonth LEFT DELETING LEADING '0'.
@@ -2120,7 +2120,7 @@ INTO TABLE @DATA(lt_lldpe) .
         SORT lt_lldpe BY kondm.
         SELECT * FROM s922
 **INTO CORRESPONDING FIELDS OF TABLE it_s922_n" ** SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000971
-INTO CORRESPONDING FIELDS OF TABLE it_s922 " ** SOC by Chilukuri Tripura
+INTO CORRESPONDING FIELDS OF TABLE it_s922 " ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000971
   FOR ALL ENTRIES IN lt_lldpe
 WHERE sptag IN s_sptag
 *        AND PKUNAG = IT_YRVA_QAIS_DATA-KUNNR
@@ -2302,14 +2302,14 @@ INTO TABLE lt_tota.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008707
   ENDIF.
 ENDFORM.                    " GET_DATA
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  GET_CUST_NAME
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM get_cust_name .
   IF r_quater = 'X' .
     IF it_data_quater[] IS NOT INITIAL .
@@ -2397,14 +2397,14 @@ FORM get_cust_name .
     ENDIF.
   ENDIF.
 ENDFORM.                    " GET_CUST_NAME
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  CALCULATE_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM calculate_discount .
 **R_RPD & R_MONTH1 logic is not being used as the radio button are disabled on the selection screen.
   IF r_quater = 'X' .
@@ -2437,14 +2437,14 @@ FORM calculate_discount .
     PERFORM annual_disc_for_new_cust.
   ENDIF.
 ENDFORM.                    " CALCULATE_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM format_data .
 
   IF w_q1 = 'X' .
@@ -2495,12 +2495,12 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '56' AND wa_s922-kondm NE  '60'
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'
-*              AND wa_s922-kondm NE  'G7' AND wa_s922-kondm NE  'I1' AND
+*              AND wa_s922-kondm NE  'G7' AND wa_s922-kondm NE  'I1' AND wa_s922-kondm NE  'K2' .
               CONTINUE.
 
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '14'  AND wa_s922-kondm NE  '21' AND
-*"Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+*"Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *               wa_s922-kondm NE  '27' AND wa_s922-kondm NE  'G7' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
               CONTINUE.
@@ -2557,7 +2557,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -2599,7 +2599,7 @@ FORM format_data .
           AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *Begin of change by Suyash Goyal for QAIS Monthly logic.
 *       consider only selected material in case of Pipe and ducting sector and roto sector.
-*          IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X' AND WA_S922-KONDM NE  '
+*          IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X' AND WA_S922-KONDM NE  '09' AND
 *            WA_S922-KONDM NE  '34'  AND WA_S922-KONDM NE  '20'
 *            AND WA_S922-KONDM NE  '56' AND WA_S922-KONDM NE  '60'
 *            AND WA_S922-KONDM NE  '43' AND WA_S922-KONDM NE  '44'
@@ -2614,7 +2614,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -2685,7 +2685,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 * SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R.
 * EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
@@ -2744,14 +2744,14 @@ FORM format_data .
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
             IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-              IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-
+              IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
 *                AND wa_s922-kondm NE  '56' AND wa_s922-kondm NE  '60'
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'   AND wa_s922-kondm NE  'H3'.
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '21' AND
@@ -2790,7 +2790,7 @@ FORM format_data .
         w_begda = wa_yrva_qais_data_temp-mou_begda.
       ENDIF.
       IF w_begda LT w_endda.
-        LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_t
+        LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -2813,7 +2813,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '21' AND
@@ -2882,8 +2882,8 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
-            ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kon
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
+            ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
               CONTINUE.
@@ -2936,9 +2936,9 @@ FORM format_data .
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
 *              AND wa_s922-kondm NE  '56' AND wa_s922-kondm NE  '60'
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
-*              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND
+*              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -2994,7 +2994,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3041,7 +3041,7 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
-          LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w
+          LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
 *Begin of change by Suyash Goyal for QAIS Monthly logic.
@@ -3063,7 +3063,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '21' AND
@@ -3125,9 +3125,9 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'   .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-              ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s
+              ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '21' AND
 *                wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
                 CONTINUE.
@@ -3187,7 +3187,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '21' AND
@@ -3256,7 +3256,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3312,7 +3312,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3368,7 +3368,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3427,7 +3427,7 @@ FORM format_data .
 *              AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *              CONTINUE.
 *            ENDIF.
-*            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Ch
+*            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
             IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
@@ -3437,7 +3437,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '21' AND
@@ -3499,7 +3499,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '21' AND
@@ -3561,7 +3561,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 *              ELSEIF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'R' AND WA_S922-KONDM NOT IN RANGE_R." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '21' AND
@@ -3629,7 +3629,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *               NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3685,7 +3685,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3741,7 +3741,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *              NE  '21' AND
 *              wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -3810,7 +3810,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 **              ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '21' AND
@@ -3855,7 +3855,7 @@ FORM format_data .
             AND kvgr2 = wa_kunnr-kvgr2.
 *Begin of change by Suyash Goyal for QAIS Monthly logic.
 *       consider only selected material in case of Pipe and ducting sector and roto sector.
-*            IF WA_YRVA_QAIS_DATA_TEMP-P_D_SECTOR = 'X' AND WA_S922-KOND
+*            IF WA_YRVA_QAIS_DATA_TEMP-P_D_SECTOR = 'X' AND WA_S922-KONDM NE  '09' AND
 *              WA_S922-KONDM NE  '34'  AND WA_S922-KONDM NE  '20'
 *              AND WA_S922-KONDM NE  '56' AND WA_S922-KONDM NE  '60'
 *              AND WA_S922-KONDM NE  '43' AND WA_S922-KONDM NE  '44'
@@ -3872,7 +3872,7 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 **              ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '21' AND
@@ -3934,13 +3934,13 @@ FORM format_data .
 *                AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                 CONTINUE.
-                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 **              ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '21' AND
 *                wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
                 CONTINUE.
-**              ELSEIF wa_yrva_qais_data-p_r_indicator = 'S' AND wa_s922
+**              ELSEIF wa_yrva_qais_data-p_r_indicator = 'S' AND wa_s922-kondm NOT IN range_s." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'S' AND wa_s922-kondm NOT IN range_s." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
                 CONTINUE.
               ENDIF.
@@ -3958,14 +3958,14 @@ FORM format_data .
     ENDLOOP.
   ENDIF.
 ENDFORM.                    " FORMAT_DATA
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA_MONTH
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM format_data_month .
 
   IF w_q1 = 'X' .
@@ -4005,7 +4005,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'   .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4042,9 +4042,9 @@ FORM format_data_month .
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
 *                  AND wa_s922-kondm NE  '56' AND wa_s922-kondm NE  '60'
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
-*                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'
+*                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3' .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4083,7 +4083,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                   NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4161,7 +4161,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29'AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4225,7 +4225,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'   .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4288,7 +4288,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3'  .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4304,7 +4304,7 @@ FORM format_data_month .
 *****SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *                IF R_MONTH1 NE 'X'  AND R_RHD NE 'X' AND R_RLLD NE 'X' AND R_RPD NE 'X' AND C_MAINT NE 'X'. " SOC Commnted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
                 IF r_month1 NE 'X'  AND r_rhd NE 'X' AND r_rlld NE 'X' AND r_rpd NE 'X' AND c_maint NE 'X' AND c_maint1 NE 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-*                IF r_month1 NE 'X'  AND r_rhd NE 'X' AND r_rlld NE 'X'
+*                IF r_month1 NE 'X'  AND r_rhd NE 'X' AND r_rlld NE 'X' AND r_rpd NE 'X'.
 *****EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *           IF r_month1 NE 'X'AND r_rpd NE 'X'.
@@ -4366,7 +4366,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'   .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4405,7 +4405,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4443,7 +4443,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3'  .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                   NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4523,7 +4523,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4540,7 +4540,7 @@ FORM format_data_month .
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *                IF R_MONTH1 NE 'X'  AND R_RHD NE 'X' AND R_RLLD NE 'X' AND R_RPD NE 'X' AND C_MAINT NE 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
                 IF r_month1 NE 'X'  AND r_rhd NE 'X' AND r_rlld NE 'X' AND r_rpd NE 'X' AND c_maint NE 'X' AND c_maint1 NE 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-*                IF r_month1 NE 'X'  AND r_rhd NE 'X' AND r_rlld NE 'X'
+*                IF r_month1 NE 'X'  AND r_rhd NE 'X' AND r_rlld NE 'X' AND r_rpd NE 'X'.
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *           IF r_month1 NE 'X'AND r_rpd NE 'X'.
@@ -4591,7 +4591,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4664,7 +4664,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4741,7 +4741,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4787,7 +4787,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4833,7 +4833,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4908,14 +4908,14 @@ FORM format_data_month .
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
                 IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
-                  IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s
+                  IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
 *                    AND wa_s922-kondm NE  '56' AND wa_s922-kondm NE  '60'
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'   .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -4996,7 +4996,7 @@ FORM format_data_month .
 **                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
 **eoc BY UJJWAL/priyanka on charm 400003180 on 01-12-2020 to exclude some MPG as per indivisul liftted qty
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
 **soc BY UJJWAL/priyanka on charm 400003180 on 01-12-2020 to exclude some MPG as per indivisul liftted qty
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 **                    wa_s922-kondm NE  '21' AND
@@ -5075,7 +5075,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5160,7 +5160,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'   AND wa_s922-kondm NE  'H3'.
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5198,7 +5198,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5236,7 +5236,7 @@ FORM format_data_month .
 *                  AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                  AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                   CONTINUE.
-                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                  "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                 ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                  NE  '21' AND
 *                  wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5315,7 +5315,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38' AND wa_s922-kondm NE  'H3'  .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priya
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5379,7 +5379,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5442,7 +5442,7 @@ FORM format_data_month .
 *                    AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
 *                    AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'  AND wa_s922-kondm NE  'H3' .
                     CONTINUE.
-                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+                    "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
                   ELSEIF wa_yrva_qais_data_temp-p_r_indicator = 'R' AND wa_s922-kondm NOT IN range_r.
 *                    NE  '21' AND
 *                    wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'H9' AND wa_s922-kondm NE  'K6'.
@@ -5481,14 +5481,14 @@ FORM format_data_month .
 ****EOC BY ujjwal & PRIYANKA and madan sir ON 24.07.2019 ; Correcting invalid code et group lifted quantity
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  QUARTER_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM quarter_discount .
 *    calculate the rate
 
@@ -5577,14 +5577,14 @@ FORM quarter_discount .
     ENDIF.
   ENDLOOP.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q1_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text.
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text.
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q1_discount .
   IF wa_yrva_mstr_waiver-max_perc_q1 IS NOT INITIAL.
     IF wa_yrva_qais_data-p_d_sector = 'X'.
@@ -5644,10 +5644,10 @@ FORM q1_discount .
                                  wa_yrva_qais_data-commited_qty_m2 +
                                  wa_yrva_qais_data-commited_qty_m3  ) * wa_yrva_mstr_waiver-max_perc_q1 / 100.
     ELSE.
-*  SOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 08/04/2019
       CLEAR w_open_max_flag.
       w_open_max_flag = 'X'.
-*  EOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 08/04/2019
       w_quater_max = ( wa_yrva_qais_data-ind_lift_qty_m1 +
                                  wa_yrva_qais_data-ind_lift_qty_m2 +
                                  wa_yrva_qais_data-ind_lift_qty_m3  ).
@@ -5712,7 +5712,7 @@ FORM q1_discount .
   PERFORM q1_june.
 
 *      GET THE TOTAL ELIGIBLE QUANTITY OF QUATER
-  it_data_quater-ind_elgl_qty_m3 = it_data_quater-ind_elgl_qty_m3 - lv_m
+  it_data_quater-ind_elgl_qty_m3 = it_data_quater-ind_elgl_qty_m3 - lv_m3.
   IF it_data_quater-ind_elgl_qty_m3 < 0.
     it_data_quater-ind_elgl_qty_m3 = 0.
   ENDIF.
@@ -5745,12 +5745,12 @@ FORM q1_discount .
       it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
       it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 ).
     ELSEIF  w_tot_qty_quater GT w_quater_max.
-*  SOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 08/04/2019
       IF w_open_max_flag = 'X'.
         it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
                                         it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
       ELSE.
-*  EOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 08/04/2019
         it_data_quater-tot_elgl_qty =  ( ( it_data_quater-ind_lift_qty_m1 +
         it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 ) / w_tot_qty_quater ) * w_quater_max .
       ENDIF.
@@ -5782,14 +5782,14 @@ FORM q1_discount .
   wa_yrva_qais_data-grp_lift_qty_m2   = it_data_quater-grp_lift_qty_m2 .
   wa_yrva_qais_data-grp_lift_qty_m3   = it_data_quater-grp_lift_qty_m3 .
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q1_APRIL
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q1_april .
 *    month 1
   CLEAR: w_month_max_perc.
@@ -5809,7 +5809,7 @@ FORM q1_april .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = 'APR' OR
       wa_yrva_mstr_waiver-ms_waiver2 = 'APR' OR w_waive_month_1 = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
-  OR   wa_yrva_mstr_waiver-ms_waiver3 = 'APR' OR wa_yrva_mstr_waiver-ms_
+  OR   wa_yrva_mstr_waiver-ms_waiver3 = 'APR' OR wa_yrva_mstr_waiver-ms_waiver4 = 'APR'.
 **    EOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
     w_month_min  =  0 .
   ELSE.
@@ -5860,14 +5860,14 @@ FORM q1_april .
     it_data_quater-ind_elgl_qty_m1 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q1_MAY
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q1_may .
 
 *    month 2
@@ -5938,14 +5938,14 @@ FORM q1_may .
     it_data_quater-ind_elgl_qty_m2 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q1_JUNE
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q1_june .
 *    month 3
   CLEAR: w_month_max_perc.
@@ -6011,14 +6011,14 @@ FORM q1_june .
        * it_data_quater-grp_lift_qty_m3 .
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q2_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q2_discount .
   IF wa_yrva_mstr_waiver-max_perc_q2 IS NOT INITIAL.
     IF wa_yrva_qais_data-p_d_sector = 'X'.
@@ -6065,10 +6065,10 @@ FORM q2_discount .
                                  wa_yrva_qais_data-commited_qty_m5 +
                                  wa_yrva_qais_data-commited_qty_m6  ) * wa_yrva_mstr_waiver-max_perc_q2 / 100.
     ELSE.
-*  SOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 08/04/2019
       CLEAR w_open_max_flag.
       w_open_max_flag = 'X'.
-*  EOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 08/04/2019
       w_quater_max = ( wa_yrva_qais_data-ind_lift_qty_m4 +
                                  wa_yrva_qais_data-ind_lift_qty_m5 +
                                  wa_yrva_qais_data-ind_lift_qty_m6  ).
@@ -6078,7 +6078,7 @@ FORM q2_discount .
 ** SOC by ujjwal/priyanka on charm 4000002394 on 10-08-2020 on special MQAIS scheme for 2020-2021
 **    w_quater_min = wa_yrva_qais_data-commited_qty_m6  * 3  * wa_yrva_mstr_waiver-min_perc_q2 / 100 . " '.80'.
 *    W_QUATER_MIN = WA_YRVA_QAIS_DATA-COMMITED_QTY_M6  * 2  * WA_YRVA_MSTR_WAIVER-MIN_PERC_Q2 / 100 . " '.80'.
-** EOC by ujjwal/priyanka on charm 4000002394 on 10-08-2020 on special M
+** EOC by ujjwal/priyanka on charm 4000002394 on 10-08-2020 on special MQAIS scheme for 2020-2021
     IF wa_yrva_mstr_waiver-max_perc_q2 IS NOT INITIAL.
       w_quater_max = wa_yrva_qais_data-commited_qty_m6  * 3  * wa_yrva_mstr_waiver-max_perc_q2 / 100 . " '1.25'.
 ** SOC by ujjwal/priyanka on charm 4000002394 on 10-08-2020 on special MQAIS scheme for 2020-2021
@@ -6123,14 +6123,14 @@ FORM q2_discount .
                         + it_data_quater-grp_lift_qty_m3 .
     IF w_tot_qty_quater GE w_quater_min AND w_tot_qty_quater LE w_quater_max.
       it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
-      it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )
+      it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
     ELSEIF  w_tot_qty_quater GT w_quater_max.
-*  SOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 08/04/2019
       IF w_open_max_flag = 'X'.
         it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
                                         it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
       ELSE.
-*  EOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 08/04/2019
         it_data_quater-tot_elgl_qty =  ( ( it_data_quater-ind_lift_qty_m1 +
                                            it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 ) / w_tot_qty_quater ) * w_quater_max .
       ENDIF.
@@ -6161,14 +6161,14 @@ FORM q2_discount .
   wa_yrva_qais_data-grp_lift_qty_m5   = it_data_quater-grp_lift_qty_m2 .
   wa_yrva_qais_data-grp_lift_qty_m6   = it_data_quater-grp_lift_qty_m3 .
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q2_JULY
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q2_july .
 *    month 4
   CLEAR: w_month_max_perc.
@@ -6256,14 +6256,14 @@ FORM q2_july .
   ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007230 data: 17/10/2023
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q2_AUG
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q2_aug .
 *month 5
   CLEAR: w_month_max_perc.
@@ -6333,14 +6333,14 @@ FORM q2_aug .
     it_data_quater-ind_elgl_qty_m2 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q2_SEP
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q2_sep .
 *    month 6
   CLEAR: w_month_max_perc.
@@ -6372,7 +6372,7 @@ FORM q2_sep .
   ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
   IF w_month_max_perc  IS NOT INITIAL.
-    w_month_max  =  wa_yrva_qais_data-commited_qty_m6 * w_month_max_perc
+    w_month_max  =  wa_yrva_qais_data-commited_qty_m6 * w_month_max_perc . "'1.25' .
   ELSE.
     w_month_max  =  wa_yrva_qais_data-ind_lift_qty_m6.
   ENDIF.
@@ -6411,14 +6411,14 @@ FORM q2_sep .
     it_data_quater-ind_elgl_qty_m3 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q3_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q3_discount .
   IF wa_yrva_mstr_waiver-max_perc_q3 IS NOT INITIAL.
     IF wa_yrva_qais_data-p_d_sector = 'X'.
@@ -6490,10 +6490,10 @@ FORM q3_discount .
                                  wa_yrva_qais_data-commited_qty_m8 +
                                  wa_yrva_qais_data-commited_qty_m9  ) * wa_yrva_mstr_waiver-max_perc_q3 / 100.
     ELSE.
-*  SOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 08/04/2019
       CLEAR w_open_max_flag.
       w_open_max_flag = 'X'.
-*  EOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 08/04/2019
       w_quater_max = ( wa_yrva_qais_data-ind_lift_qty_m7 +
                                  wa_yrva_qais_data-ind_lift_qty_m8 +
                                  wa_yrva_qais_data-ind_lift_qty_m9  ).
@@ -6539,12 +6539,12 @@ FORM q3_discount .
       it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
       it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
     ELSEIF  w_tot_qty_quater GT w_quater_max.
-*  SOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 08/04/2019
       IF w_open_max_flag = 'X'.
         it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
                                         it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
       ELSE.
-*  EOC by Kunal/Priyanka for open max discounts on 08/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 08/04/2019
         it_data_quater-tot_elgl_qty =  ( ( it_data_quater-ind_lift_qty_m1 +
         it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 ) / w_tot_qty_quater ) * w_quater_max .
       ENDIF.
@@ -6587,14 +6587,14 @@ FORM q3_discount .
   wa_yrva_qais_data-grp_lift_qty_m8   = it_data_quater-grp_lift_qty_m2 .
   wa_yrva_qais_data-grp_lift_qty_m9   = it_data_quater-grp_lift_qty_m3 .
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q3_OCT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q3_oct .
 
 *    month 7
@@ -6665,14 +6665,14 @@ FORM q3_oct .
     it_data_quater-ind_elgl_qty_m1 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q3_NOV
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q3_nov .
 
 *    month 8
@@ -6743,14 +6743,14 @@ FORM q3_nov .
     it_data_quater-ind_elgl_qty_m2 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q3_DEC
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q3_dec .
 *    month 9
   CLEAR: w_month_max_perc.
@@ -6820,14 +6820,14 @@ FORM q3_dec .
     it_data_quater-ind_elgl_qty_m3 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q4_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q4_discount .
 
 ****SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Quarter and Annual not allowed from Feb and March.
@@ -6885,10 +6885,10 @@ FORM q4_discount .
                                  wa_yrva_qais_data-commited_qty_m11 +
                                  wa_yrva_qais_data-commited_qty_m12  ) * wa_yrva_mstr_waiver-max_perc_q4 / 100.
     ELSE.
-*  SOC by Kunal/Priyanka for open max discounts on 05/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 05/04/2019
       CLEAR w_open_max_flag.
       w_open_max_flag = 'X'.
-*  EOC by Kunal/Priyanka for open max discounts on 05/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 05/04/2019
       w_quater_max = ( wa_yrva_qais_data-ind_lift_qty_m10 +
                                  wa_yrva_qais_data-ind_lift_qty_m11 +
                                  wa_yrva_qais_data-ind_lift_qty_m12  ).
@@ -6919,21 +6919,21 @@ FORM q4_discount .
   ELSE.
     w_tot_qty_quater = it_data_quater-grp_lift_qty_m1 + it_data_quater-grp_lift_qty_m2
                         + it_data_quater-grp_lift_qty_m3 .
-*  SOC by Kunal/Priyanka for open max discounts on 05/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 05/04/2019
 *    w_open_max_value  = ( wa_yrva_qais_data-ind_lift_qty_m10 +
 *                                 wa_yrva_qais_data-ind_lift_qty_m11 +
 *                                 wa_yrva_qais_data-ind_lift_qty_m12  ).
-*  EOC by Kunal/Priyanka for open max discounts on 05/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 05/04/2019
     IF w_tot_qty_quater GE w_quater_min AND w_tot_qty_quater LE w_quater_max.
       it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
       it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
     ELSEIF  w_tot_qty_quater GT w_quater_max.
-*  SOC by Kunal/Priyanka for open max discounts on 05/04/2019
+*--SOC by Kunal/Priyanka for open max discounts on 05/04/2019
       IF w_open_max_flag = 'X'.
         it_data_quater-tot_elgl_qty =  ( it_data_quater-ind_lift_qty_m1 +
                                         it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 )  .
       ELSE.
-*  EOC by Kunal/Priyanka for open max discounts on 05/04/2019
+*--EOC by Kunal/Priyanka for open max discounts on 05/04/2019
         it_data_quater-tot_elgl_qty =  ( ( it_data_quater-ind_lift_qty_m1 +
                                        it_data_quater-ind_lift_qty_m2 + it_data_quater-ind_lift_qty_m3 ) / w_tot_qty_quater ) * w_quater_max .
       ENDIF.
@@ -6966,14 +6966,14 @@ FORM q4_discount .
   wa_yrva_qais_data-grp_lift_qty_m11   = it_data_quater-grp_lift_qty_m2 .
   wa_yrva_qais_data-grp_lift_qty_m12   = it_data_quater-grp_lift_qty_m3 .
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q4_JAN
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q4_jan .
 *    month 10
   CLEAR: w_month_max_perc.
@@ -7043,14 +7043,14 @@ FORM q4_jan .
     it_data_quater-ind_elgl_qty_m1 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q4_FEB
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q4_feb .
 *    month 11
   CLEAR: w_month_max_perc.
@@ -7120,14 +7120,14 @@ FORM q4_feb .
     it_data_quater-ind_elgl_qty_m2 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  Q4_MAR
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM q4_mar .
 *    month 12
   CLEAR: w_month_max_perc.
@@ -7197,14 +7197,14 @@ FORM q4_mar .
     it_data_quater-ind_elgl_qty_m3 = 0.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  ANNUAL_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM annual_discount .
   DATA  lv_fact_pro_annual TYPE p DECIMALS 3.
 *    calculate the rate
@@ -7286,21 +7286,21 @@ FORM annual_discount .
     ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
     IF wa_yrva_qais_data-p_d_sector = 'X'.
-*  SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
       IF wa_yrva_mstr_waiver-pd_roto_max IS INITIAL.
         lv_pd_annual_max_flag = 'X'.
       ELSE.
         w_year_max = wa_yrva_qais_data-mou_qty * ( wa_yrva_mstr_waiver-pd_roto_max / 100 ).
       ENDIF.
-*  EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
     ELSE.
-*  SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
       IF wa_yrva_mstr_waiver-annual_max IS INITIAL.
         lv_annual_max_flag = 'X'.
       ELSE.
         w_year_max = wa_yrva_qais_data-mou_qty * wa_yrva_mstr_waiver-annual_max / 100 .
       ENDIF.
-*  EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
     ENDIF.
     it_data_annual-kunnr = wa_yrva_qais_data-kunnr.
     it_data_annual-kvgr2 = wa_yrva_qais_data-kvgr2.
@@ -7321,7 +7321,7 @@ FORM annual_discount .
             AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
             AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'   .
             CONTINUE.
-            "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+            "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
           ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NE  '21' AND
             wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'K6'.
             CONTINUE.
@@ -7342,7 +7342,7 @@ FORM annual_discount .
               AND wa_s922-kondm NE  '43' AND wa_s922-kondm NE  '44'
               AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'   .
               CONTINUE.
-              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a   >mpg k6
+              "Added ( AND wa_s922-kondm NE  'K6' ) by Kunal/Priyanka on 13/02/2018  for r36u050u a -->mpg k6
             ELSEIF wa_yrva_qais_data-p_r_indicator = 'R' AND wa_s922-kondm NE  '21' AND
               wa_s922-kondm NE  '29' AND wa_s922-kondm NE  'K6'.
               CONTINUE.
@@ -7365,17 +7365,17 @@ FORM annual_discount .
       it_data_annual-ind_lift_qty = wa_yrva_qais_data-ind_lift_qty_m1 + wa_yrva_qais_data-ind_lift_qty_m2 +
                                     wa_yrva_qais_data-ind_lift_qty_m3 + wa_yrva_qais_data-ind_lift_qty_m4 +
                                     wa_yrva_qais_data-ind_lift_qty_m5 + wa_yrva_qais_data-ind_lift_qty_m6 +
-                                    wa_yrva_qais_data-ind_lift_qty_m7 +
+                                    wa_yrva_qais_data-ind_lift_qty_m7 + wa_yrva_qais_data-ind_lift_qty_m8 +
                                     wa_yrva_qais_data-ind_lift_qty_m9 + wa_yrva_qais_data-ind_lift_qty_m10 +
                                     wa_yrva_qais_data-ind_lift_qty_m11 + wa_yrva_qais_data-ind_lift_qty_m12 .
     ENDIF.
 
     IF it_data_annual-grp_lift_qty GT w_year_max .
-*  SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
       IF ( lv_pd_annual_max_flag = 'X' OR lv_annual_max_flag = 'X' ) AND it_data_annual-grp_lift_qty GE w_year_min."Added by Kunal/Priyanka on 16/04/2019
         it_data_annual-tot_elgl_qty = ( it_data_annual-ind_lift_qty / it_data_annual-grp_lift_qty )
                                        * it_data_annual-grp_lift_qty .
-*  EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
       ELSE.
         it_data_annual-tot_elgl_qty = ( it_data_annual-ind_lift_qty / it_data_annual-grp_lift_qty )
                                        * w_year_max .
@@ -7485,14 +7485,14 @@ FORM annual_discount .
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
   ENDLOOP.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTHLY_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM monthly_discount .
   CLEAR lv_mth.
   CASE s_sptag-low+4(2).
@@ -7686,7 +7686,7 @@ FORM monthly_discount .
   ENDLOOP.
   SORT it_yrva_qais_data_new BY yytimestamp DESCENDING.
   DELETE ADJACENT DUPLICATES FROM it_yrva_qais_data_new COMPARING  kunnr."QAIS_NO YYTIMESTAMP
-** EOC by Chilukuri Tripura Reddy/Archana/Vishal (on 16/06/2023) Charm D
+** EOC by Chilukuri Tripura Reddy/Archana/Vishal (on 16/06/2023) Charm DVRK9A12U8.
   LOOP AT it_yrva_qais_data INTO wa_yrva_qais_data.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
     CLEAR : lv_revival_m, wa_yrva_revival_fai.
@@ -8103,7 +8103,7 @@ FORM monthly_discount .
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *          IF r_month1 EQ 'X'.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
-        it_data_monthly-ind_lift_qty = it_data_monthly-ind_lift_qty - wa
+        it_data_monthly-ind_lift_qty = it_data_monthly-ind_lift_qty - wa_yrva_qais_data-lv_no_dis_qty.
 *      IF it_data_monthly-ind_lift_qty LE 200.
 *SOC by Kunal/Priyanka on 30/11/2018 for additional monthly discount based on capping from report YRVR147
 ** SOC commented by Chilukuri Tripura Reddy/Archana/Vishal (on 16/06/2023) Charm DVRK9A12U8.
@@ -8273,7 +8273,7 @@ FORM monthly_discount .
                     it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr .
                   ELSE.
                     it_data_monthly-ind_elgl_qty = it_data_monthly-ind_elgl_qty * 0.
-                    it_data_monthly-value        = it_data_monthly-ind_e
+                    it_data_monthly-value        = it_data_monthly-ind_elgl_qty * 0.
                   ENDIF.
                 ELSE.
                   it_data_monthly-ind_elgl_qty = it_data_monthly-ind_elgl_qty * 0.
@@ -8315,7 +8315,7 @@ FORM monthly_discount .
           ENDIF.
 * EOC by Chilukuri Tripura Reddy/Archana/Vishal  (05/07/2023) Charm 4000006698 TR DVRK9A13B9.
 * SOC by Chilukuri Tripura Reddy/Archana/Vishal  (30/08/2023) Charm 4000007010 TR DVRK9A14I9.
-          IF s_sptag-low+4(2) = '8' AND r_month1 EQ 'X' AND s_sptag-low+
+          IF s_sptag-low+4(2) = '8' AND r_month1 EQ 'X' AND s_sptag-low+0(4) = '2023'.
             DATA : gt_yrva_qais_data2 TYPE STANDARD TABLE OF yrva_qais_data.
             SELECT yytimestamp
                    kunnr
@@ -8435,14 +8435,14 @@ FORM monthly_discount .
   ENDLOOP.
 
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_JAN
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_jan .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Quarter 3 when not processed.
@@ -8530,14 +8530,14 @@ FORM month_jan .
   ENDIF.
 **EOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_FEB
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_feb .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 
@@ -8549,7 +8549,7 @@ FORM month_feb .
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Jan Not Processed.
-**  IF wa_yrva_qais_data_m-mon_so_m10 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20240201'." SOC Commeneted by Chilukuri Tripura Reddy/Archn
+**  IF wa_yrva_qais_data_m-mon_so_m10 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20240201'." SOC Commeneted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
    IF wa_yrva_qais_data_m-mon_so_m10 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
     lv_flag123 = 'X'.
     EXIT. "1
@@ -8608,14 +8608,14 @@ FORM month_feb .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_MAR
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_mar .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 
@@ -8690,14 +8690,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_APR
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_apr .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 
@@ -8751,14 +8751,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_MAY
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_may .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
   w_month_min_perc = wa_yrva_mstr_waiver-min_perc_m2.
@@ -8794,7 +8794,7 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
-  OR   wa_yrva_mstr_waiver-ms_waiver3 = lv_mth OR wa_yrva_mstr_waiver-ms
+  OR   wa_yrva_mstr_waiver-ms_waiver3 = lv_mth OR wa_yrva_mstr_waiver-ms_waiver4 = lv_mth.
 **    EOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
     w_month_min  =  0 .
     lv_flag2 = 'X'.
@@ -8827,14 +8827,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_JUN
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_jun .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
@@ -8901,14 +8901,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_JUL
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_jul .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
@@ -8946,7 +8946,7 @@ FORM month_jul .
   w_month_min_perc = wa_yrva_mstr_waiver-min_perc_m4.
   IF wa_yrva_mstr_waiver-max_perc_m4 IS NOT INITIAL OR wa_yrva_mstr_waiver-pd_perc_m4 IS NOT INITIAL.
     IF wa_yrva_qais_data-p_d_sector = 'X'.
-      w_month_max_perc =  wa_yrva_mstr_waiver-pd_perc_m4 / 100. "'1.50'
+      w_month_max_perc =  wa_yrva_mstr_waiver-pd_perc_m4 / 100. "'1.50' .
     ELSE.
       w_month_max_perc = wa_yrva_mstr_waiver-max_perc_m4 / 100.
     ENDIF.
@@ -8993,14 +8993,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_AUG
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_aug .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 
@@ -9076,14 +9076,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_SEP
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_sep .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 **SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Aug Not Processed.
@@ -9153,14 +9153,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_OCT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_oct .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 
@@ -9254,14 +9254,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_NOV
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_nov .
   CLEAR: w_month_max_perc, w_month_min_perc,lv_flag2.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
@@ -9338,14 +9338,14 @@ OR wa_yrva_qais_data-waiver_3 = lv_mth .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  MONTH_DEC
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM month_dec .
   CLEAR: w_month_max_perc, w_month_min_perc, lv_flag2.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
@@ -9419,14 +9419,14 @@ FORM month_dec .
   ENDIF.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  REPEAT_PERFORMANCE_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM repeat_performance_discount .
 *   CLEAR lv_mth.
 *    CASE s_sptag-low+4(2).
@@ -9807,7 +9807,7 @@ FORM repeat_performance_discount .
 *            CLEAR: w_month_min_perc, w_month_min_perc1.
 *            IF wa_yrva_mstr_waiver-rpd_m2 EQ lv_mth AND wa_yrva_mstr_waiver-rpd_m1 EQ lv_mth1.
 *              w_month_min_perc = wa_yrva_mstr_waiver-rpd_perc_m1 / 100.
-*              w_month_min_perc1 = wa_yrva_mstr_waiver-rpd_perc_m2 / 100
+*              w_month_min_perc1 = wa_yrva_mstr_waiver-rpd_perc_m2 / 100.
 *
 *              w_month_min   =  wa_yrva_qais_data-commited_qty_m7  * w_month_min_perc.
 *              w_month_min1  =  wa_yrva_qais_data-commited_qty_m6  * w_month_min_perc1 .
@@ -9949,7 +9949,7 @@ FORM repeat_performance_discount .
 *          it_data_monthly-ind_lift_qty   = wa_yrva_qais_data-ind_lift_qty_m4.
 *        ELSEIF s_sptag-high+4(2) = '08' .
 *          lv_mon =  'AUGUST'.
-*          it_data_monthly-commited_qty   = wa_yrva_qais_data-commited_q
+*          it_data_monthly-commited_qty   = wa_yrva_qais_data-commited_qty_m5.
 *          it_data_monthly-grp_lift_qty   = wa_yrva_qais_data-grp_lift_qty_m5.
 *          it_data_monthly-ind_lift_qty   = wa_yrva_qais_data-ind_lift_qty_m5..
 *        ELSEIF s_sptag-high+4(2) = '09' .
@@ -10065,11 +10065,11 @@ FORM repeat_performance_discount .
 *    ENDLOOP.
 ENDFORM.
 
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *&      Form  CREATE_FIELD_CATALOG
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *       text
-*                                                                     *
+*---------------------------------------------------------------------*
 FORM create_field_catalog .
   DATA: w_sr TYPE i.
   w_sr = 1 .
@@ -10737,7 +10737,7 @@ FORM create_field_catalog .
     gt_fieldcat-seltext_l  = 'Addnl.CIS Linked PSD Dec 24'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 4000009005
   ELSEIF r_rpd = 'X'.
     gt_fieldcat-seltext_m  = 'RPD.Monthly Discount'.
-**EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create ne
+**EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
   ELSEIF r_newcus = 'X' . "vivek
     gt_fieldcat-seltext_m  = 'Annual Discount'.
 
@@ -10824,14 +10824,14 @@ FORM create_field_catalog .
   APPEND i_events.
   CLEAR i_events.
 ENDFORM.                    " CREATE_FIELD_CATALOG
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  QAIS_REMARKS
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM qais_remarks .
   IF r_quater = 'X' .
     CONCATENATE 'CIS' w_fiscal INTO w_remarks SEPARATED BY space.
@@ -10880,25 +10880,25 @@ FORM qais_remarks .
   ENDIF.
   CONDENSE w_remarks .
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  TOP_OF_PAGE
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM top_of_page .
 
 ENDFORM.                    " TOP_OF_PAGE
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *&      Form  on_selection
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *       text
-*                                                                     *
-*        >R_UCOMM    text
-*        >RS_SELFIELDtext
-*                                                                     *
+*---------------------------------------------------------------------*
+*      -->R_UCOMM    text
+*      -->RS_SELFIELDtext
+*---------------------------------------------------------------------*
 FORM on_selection USING r_ucomm LIKE sy-ucomm
                         rs_selfield TYPE slis_selfield.
   DATA: itab TYPE TABLE OF sy-ucomm,
@@ -11187,14 +11187,14 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 
   ENDCASE.
 ENDFORM.                    "on_selection
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM display_list .
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
@@ -11303,14 +11303,14 @@ FORM display_list .
   ENDIF.
 
 ENDFORM.                    " DISPLAY_LIST
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  CREATE_SALE_ORDER
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM create_sale_order .
   DATA: l_tabix   TYPE sy-tabix,
         l_tabix1  TYPE sy-tabix,
@@ -11654,7 +11654,7 @@ FORM create_sale_order .
             wa_yrva_qais_data-grp_lift_qty_m11 = it_data_quater-grp_lift_qty_m2 .
             wa_yrva_qais_data-ind_elgl_qty_m11 = it_data_quater-ind_elgl_qty_m2 .
             wa_yrva_qais_data-grp_lift_qty_m12 = it_data_quater-grp_lift_qty_m3 .
-            wa_yrva_qais_data-ind_elgl_qty_m12 = it_data_quater-ind_elgl
+            wa_yrva_qais_data-ind_elgl_qty_m12 = it_data_quater-ind_elgl_qty_m3 .
             wa_yrva_qais_data-tot_elgl_qty_q4 = it_data_quater-tot_elgl_qty .
             wa_yrva_qais_data-value_q4        = it_data_quater-value .
             wa_yrva_qais_data-sale_order_q4   = it_data_quater-sale_order .
@@ -12424,7 +12424,7 @@ FORM create_sale_order .
             ELSEIF s_sptag-high+4(2) = '12' .
               wa_yrva_qais_data-ind_elgl_qty_m9  = it_data_monthly-tot_elgl_qty.
               wa_yrva_qais_data_m-ind_elgl_qty_m9  = it_data_monthly-tot_elgl_qty.
-              wa_yrva_qais_data_m-mon_value_m9     = it_data_monthly-val
+              wa_yrva_qais_data_m-mon_value_m9     = it_data_monthly-value.
               wa_yrva_qais_data_m-mon_so_m9        = it_data_monthly-sale_order.
               wa_yrva_qais_data_m-mon_remarks_m9   = it_data_monthly-remarks.
             ELSEIF s_sptag-high+4(2) = '01' .
@@ -12536,7 +12536,7 @@ FORM create_sale_order .
               wa_yrva_qais_data_s-mon_so_m7        = it_data_monthly-sale_order.
               wa_yrva_qais_data_s-mon_remarks_m7   = it_data_monthly-remarks.
             ELSEIF s_sptag-high+4(2) = '11' .
-              wa_yrva_qais_data-ind_elgl_qty_m8  = it_data_monthly-tot_e
+              wa_yrva_qais_data-ind_elgl_qty_m8  = it_data_monthly-tot_elgl_qty.
               wa_yrva_qais_data_s-ind_elgl_qty_m8  = it_data_monthly-tot_elgl_qty.
               wa_yrva_qais_data_s-mon_value_m8     = it_data_monthly-value.
               wa_yrva_qais_data_s-mon_so_m8        = it_data_monthly-sale_order.
@@ -12570,7 +12570,7 @@ FORM create_sale_order .
 **********************BOC by Sachin Kaul ORO Atul Singhal on 5/9/16********************
             MODIFY  it_yrva_qais_data FROM wa_yrva_qais_data INDEX l_tabix.
             IF l_tabix1 IS NOT  INITIAL.
-              MODIFY  it_yrva_qais_data_s FROM wa_yrva_qais_data_s INDEX
+              MODIFY  it_yrva_qais_data_s FROM wa_yrva_qais_data_s INDEX l_tabix1 .
             ELSE.
               APPEND wa_yrva_qais_data_s TO it_yrva_qais_data_s.
             ENDIF.
@@ -12922,14 +12922,14 @@ FORM create_sale_order .
   COMMIT WORK.
 *End of change by Suyash Goyal for QAIS Monthly Logic.
 ENDFORM.                    " CREATE_SALE_ORDER.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  ANNUAL_DISC_FOR_NEW_CUST
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM annual_disc_for_new_cust .
   DATA  lv_fact_pro_annual TYPE p DECIMALS 3.
   DATA : lv_percent TYPE char17 .
@@ -12994,14 +12994,14 @@ FORM annual_disc_for_new_cust .
     ENDLOOP.
   ENDIF.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      Form  ANNUAL_CONSIS_DISCOUNT
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       text
-*                                                                      *
-*    >  p1        text
-*  <    p2        text
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
 FORM annual_consis_discount .
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
   LOOP AT it_yrva_qais_data INTO wa_yrva_qais_data.
@@ -13091,7 +13091,7 @@ FORM annual_consis_discount .
                                       wa_yrva_qais_data-grp_lift_qty_m5 + wa_yrva_qais_data-grp_lift_qty_m6 +
                                       wa_yrva_qais_data-grp_lift_qty_m7 + wa_yrva_qais_data-grp_lift_qty_m8 +
                                       wa_yrva_qais_data-grp_lift_qty_m9 + wa_yrva_qais_data-grp_lift_qty_m10 +
-                                      wa_yrva_qais_data-grp_lift_qty_m11
+                                      wa_yrva_qais_data-grp_lift_qty_m11 + wa_yrva_qais_data-grp_lift_qty_m12 .
 
       it_annual_consis-ind_lift_qty = wa_yrva_qais_data-ind_lift_qty_m1 + wa_yrva_qais_data-ind_lift_qty_m2 +
                                       wa_yrva_qais_data-ind_lift_qty_m3 + wa_yrva_qais_data-ind_lift_qty_m4 +
@@ -13120,11 +13120,11 @@ FORM annual_consis_discount .
 
 ************
     IF it_annual_consis-grp_lift_qty GT w_year_max .
-*  SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--SOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
       IF ( lv_pd_annual_max_flag = 'X' OR lv_annual_max_flag = 'X' ) AND it_annual_consis-grp_lift_qty GE w_year_min."Added by Kunal/Priyanka on 16/04/2019
         it_annual_consis-tot_elgl_qty = ( it_annual_consis-ind_lift_qty / it_annual_consis-grp_lift_qty )
                                        * it_annual_consis-grp_lift_qty .
-*  EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
+*--EOC by Kunal/Priyanka  on 09/04/2018 for open upper limit in Annual discount
       ELSE.
         it_annual_consis-tot_elgl_qty = ( it_annual_consis-ind_lift_qty / it_annual_consis-grp_lift_qty )
                                        * w_year_max .
@@ -13190,14 +13190,14 @@ FORM annual_consis_discount .
     CLEAR : wa_yrva_qais_data.
   ENDLOOP.
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&   Form DYNAMIC_MONTH
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *    text
-*                                                                      *
-*     >P_LS_DATE text
-*     >P_LS_MONTHN text
-*                                                                      *
+*----------------------------------------------------------------------*
+*   -->P_LS_DATE text
+*   -->P_LS_MONTHN text
+*----------------------------------------------------------------------*
 FORM dynamic_month  USING p_ls_date
                           p_ls_monthn.
   CALL FUNCTION 'MONTH_PLUS_DETERMINE'
