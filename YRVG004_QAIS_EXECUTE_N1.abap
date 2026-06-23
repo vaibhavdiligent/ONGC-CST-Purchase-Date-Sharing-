@@ -2,7 +2,7 @@
 *& Report  YRVG004_QAIS_EXECUTE_N1
 *&  Standalone (single-program) build of YRVG004_QAIS_EXECUTE.
 *&  All includes (TOP / SEL / F01) merged in include-expansion order.
-*&  CIS lifting % change: Monthly 80->75, Annual 85->80.
+*&  CIS lifting % change: Monthly 80->75, Quarterly 85->80, Annual 85->80.
 *&  PRODUCTION = 2026-27; plus a clearly marked TEST ONLY 2025-26 block.
 *&---------------------------------------------------------------------*
 REPORT  yrvg004_qais_execute_n1 MESSAGE-ID yv01.
@@ -1102,9 +1102,13 @@ FORM get_data.
     wa_yrva_mstr_waiver-annual_max = 125 .
   ENDIF.
 *** SOC : CIS lifting % change (period-gated) ***
-*   Commitment Incentive Scheme. Monthly min % 80 -> 75, Annual min %
-*   85 -> 80. Applies to Monthly and Annual schemes only; Quarterly %
-*   unchanged. Gated by the s_sptag period so other years are untouched.
+*   Commitment Incentive Scheme. New minimum lifting % applied to ALL
+*   THREE schemes:
+*     Monthly   min %  80 -> 75   (min_perc_m1..m12)
+*     Quarterly min %  85 -> 80   (min_perc_q1..q4)
+*     Annual    min %  85 -> 80   (annual_min)
+*   Max % (125) unchanged. Gated by the s_sptag period so other scheme
+*   years are untouched.
 *   ------------------------------------------------------------------
 *   PRODUCTION : CIS 2026-27 (this is the live scheme year).
 *   Monthly run = single scheme month Jun'2026 - Mar'2027.
@@ -1121,6 +1125,13 @@ FORM get_data.
     wa_yrva_mstr_waiver-min_perc_m10  = 75.
     wa_yrva_mstr_waiver-min_perc_m11  = 75.
     wa_yrva_mstr_waiver-min_perc_m12  = 75.
+  ENDIF.
+*   Quarterly run = a quarter within FY 01.04.2026 - 31.03.2027.
+  IF s_sptag-low GE '20260401' AND s_sptag-high LE '20270331'.
+    wa_yrva_mstr_waiver-min_perc_q1   = 80.
+    wa_yrva_mstr_waiver-min_perc_q2   = 80.
+    wa_yrva_mstr_waiver-min_perc_q3   = 80.
+    wa_yrva_mstr_waiver-min_perc_q4   = 80.
   ENDIF.
 *   Annual run = fiscal year 01.04.2026 - 31.03.2027.
   IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
@@ -1145,6 +1156,13 @@ FORM get_data.
     wa_yrva_mstr_waiver-min_perc_m10  = 75.
     wa_yrva_mstr_waiver-min_perc_m11  = 75.
     wa_yrva_mstr_waiver-min_perc_m12  = 75.
+  ENDIF.
+*   Quarterly test run = a quarter within FY 01.04.2025 - 31.03.2026.
+  IF s_sptag-low GE '20250401' AND s_sptag-high LE '20260331'.
+    wa_yrva_mstr_waiver-min_perc_q1   = 80.
+    wa_yrva_mstr_waiver-min_perc_q2   = 80.
+    wa_yrva_mstr_waiver-min_perc_q3   = 80.
+    wa_yrva_mstr_waiver-min_perc_q4   = 80.
   ENDIF.
 *   Annual test run = fiscal year 01.04.2025 - 31.03.2026.
   IF s_sptag-low EQ '20250401' AND s_sptag-high EQ '20260331'.
