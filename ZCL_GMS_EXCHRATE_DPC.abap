@@ -17,8 +17,12 @@
 *&     ]
 *&   }
 *&
-*& The whole batch lands in ONE call in CREATE_DEEP_ENTITY below.
-*& >>> Add your SAP update logic in the marked section. <<<
+*& The whole batch lands in ONE call in CREATE_DEEP_ENTITY and is written
+*& to TCURR with BAPI_EXCHANGERATE_CREATEMULTIPLE in a single call
+*& (all-or-nothing: any error rolls the whole batch back).
+*&
+*& The ABAP item field names match BAPI1093_0 1:1, so MOVE-CORRESPONDING
+*& fills the BAPI table directly.
 *&
 *& Extends /IWBEP/CL_MGW_PUSH_ABS_DATA. Register together with
 *& ZCL_GMS_EXCHRATE_MPC via /IWFND/MAINT_SERVICE (service
@@ -33,9 +37,8 @@ CLASS zcl_gms_exchrate_dpc DEFINITION
     METHODS /iwbep/if_mgw_appl_srv_runtime~create_deep_entity REDEFINITION.
 
   PROTECTED SECTION.
-    "! Per-item processing - returns a BAPIRET2 message for the item.
-    "! Put the actual SAP table/BAPI update for ONE rate here.
-    METHODS process_rate
+    "! Mandatory-field check for one item. Returns an E message or empty.
+    METHODS validate_rate
       IMPORTING
         is_rate          TYPE zcl_gms_exchrate_mpc=>ty_exchange_rate
       RETURNING
@@ -48,8 +51,10 @@ CLASS zcl_gms_exchrate_dpc IMPLEMENTATION.
   METHOD /iwbep/if_mgw_appl_srv_runtime~create_deep_entity.
 
     DATA: ls_deep    TYPE zcl_gms_exchrate_mpc=>ty_deep,
-          ls_return  TYPE bapiret2,
+          lt_list    TYPE STANDARD TABLE OF bapi1093_0,   " BAPI input table
+          ls_list    TYPE bapi1093_0,
           lt_return  TYPE bapiret2_t,
+          ls_return  TYPE bapiret2,
           lv_errors  TYPE i.
 
     FIELD-SYMBOLS <ls_rate> TYPE zcl_gms_exchrate_mpc=>ty_exchange_rate.
@@ -67,31 +72,54 @@ CLASS zcl_gms_exchrate_dpc IMPLEMENTATION.
       ENDTRY.
     ENDIF.
 
-    "--- 3. Process every exchange-rate item ---------------------------
-    "*******************************************************************
-    "*  >>> WRITE YOUR SAP UPDATE LOGIC INSIDE process_rate( ) <<<     *
-    "*  e.g. BAPI_EXCHANGERATE_CREATEMULTIPLE / TCURR update / your    *
-    "*       custom Z table. Each item is one rate from CPI.           *
-    "*******************************************************************
+    "--- 3. Validate + map items into the BAPI table -------------------
+    "    Field names of TY_EXCHANGE_RATE match BAPI1093_0 1:1, so a
+    "    MOVE-CORRESPONDING transfers every field (RATE_TYPE, FROM_CURR,
+    "    TO_CURRNCY, VALID_FROM, EXCH_RATE, FROM_FACTOR, TO_FACTOR and
+    "    the optional *_V fields).
+    "    Note: VALID_FROM is expected as YYYYMMDD from CPI.
     LOOP AT ls_deep-exchangerate ASSIGNING <ls_rate>.
-      ls_return = me->process_rate( <ls_rate> ).
-      APPEND ls_return TO lt_return.
-      IF ls_return-type CA 'EAX'.
+      ls_return = me->validate_rate( <ls_rate> ).
+      IF ls_return IS NOT INITIAL.
+        APPEND ls_return TO lt_return.
         lv_errors = lv_errors + 1.
+        CONTINUE.
       ENDIF.
+
+      CLEAR ls_list.
+      MOVE-CORRESPONDING <ls_rate> TO ls_list.
+      APPEND ls_list TO lt_list.
     ENDLOOP.
 
-    "--- 4. Roll back the whole batch on any error ---------------------
+    "--- 4. Post the whole batch in one BAPI call ----------------------
+    IF lv_errors = 0 AND lt_list IS NOT INITIAL.
+      CALL FUNCTION 'BAPI_EXCHANGERATE_CREATEMULTIPLE'
+        EXPORTING
+          upd_allowed    = abap_true     " update existing TCURR entries too
+        TABLES
+          exch_rate_list = lt_list
+          return         = lt_return.
+
+      LOOP AT lt_return INTO ls_return WHERE type CA 'EAX'.
+        lv_errors = lv_errors + 1.
+      ENDLOOP.
+    ENDIF.
+
+    "--- 5. Commit or roll back the whole batch ------------------------
     IF lv_errors > 0.
-      " surface the collected messages to CPI as the OData error body
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
       DATA(lo_msg_container) = mo_context->get_message_container( ).
       lo_msg_container->add_messages_from_bapi( it_bapi_messages = lt_return ).
       RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
         EXPORTING
           message_container = lo_msg_container.
+    ELSE.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = abap_true.
     ENDIF.
 
-    "--- 5. Echo the processed header back to the caller ---------------
+    "--- 6. Echo the processed header back to the caller ---------------
     DATA ls_head TYPE zcl_gms_exchrate_mpc=>ty_exchange_rates.
     ls_head-request_id = ls_deep-request_id.
     copy_data_to_ref( EXPORTING is_data = ls_head
@@ -99,20 +127,7 @@ CLASS zcl_gms_exchrate_dpc IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD process_rate.
-    "*******************************************************************
-    "* TODO (you): replace the body below with the real SAP update.   *
-    "* Currently it only validates and returns a success message so   *
-    "* the service is callable end-to-end from CPI before the update  *
-    "* logic is wired in.                                              *
-    "*                                                                 *
-    "* Available fields (string based, as per the CPI XSD):           *
-    "*   is_rate-rate_type / from_curr / to_currncy / valid_from      *
-    "*   is_rate-exch_rate / from_factor / to_factor                  *
-    "*   is_rate-exch_rate_v / from_factor_v / to_factor_v (optional) *
-    "*******************************************************************
-
-    " minimal mandatory-field validation
+  METHOD validate_rate.
     IF is_rate-rate_type  IS INITIAL OR is_rate-from_curr   IS INITIAL OR
        is_rate-to_currncy IS INITIAL OR is_rate-valid_from  IS INITIAL OR
        is_rate-exch_rate  IS INITIAL OR is_rate-from_factor IS INITIAL OR
@@ -120,16 +135,8 @@ CLASS zcl_gms_exchrate_dpc IMPLEMENTATION.
       rs_return-type    = 'E'.
       rs_return-id      = 'ZGMS'.
       rs_return-number  = '000'.
-      rs_return-message = |Mandatory field missing for { is_rate-from_curr }/{ is_rate-to_currncy }|.
-      RETURN.
+      rs_return-message = |Mandatory field missing for { is_rate-from_curr }/{ is_rate-to_currncy } { is_rate-valid_from }|.
     ENDIF.
-
-    " <<< INSERT TCURR / BAPI_EXCHANGERATE_CREATEMULTIPLE UPDATE HERE >>>
-
-    rs_return-type    = 'S'.
-    rs_return-id      = 'ZGMS'.
-    rs_return-number  = '001'.
-    rs_return-message = |Rate { is_rate-from_curr }/{ is_rate-to_currncy } { is_rate-valid_from } accepted|.
   ENDMETHOD.
 
 ENDCLASS.
