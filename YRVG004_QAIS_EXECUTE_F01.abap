@@ -341,11 +341,12 @@ FORM get_data.
     wa_yrva_mstr_waiver-annual_max = 125 .
   ENDIF.
 *** SOC : CIS 2026-27 scheme change (period-gated) ***
-*   Commitment Incentive Scheme 2026-27 (01.06.2026 - 31.03.2027):
-*     - Monthly lifting min % : 80 -> 75  (Monthly CIS discount / disqualification)
-*     - Annual  lifting min % : 85 -> 80  (Annual  CIS discount / disqualification)
-*   Applicable to Monthly and Annual schemes only. Quarterly % unchanged.
-*   Gated to the 2026-27 scheme period so earlier schemes keep 80/85 on re-run.
+*   Commitment Incentive Scheme 2026-27. Applicable to Monthly and Annual
+*   schemes only; Quarterly % unchanged. Gated by the s_sptag period so
+*   earlier scheme years keep the old 80/85 % when the report is re-run.
+*
+*   Monthly run : s_sptag is entered as a single scheme month. Scheme
+*   months run from Jun'2026 to Mar'2027 -> Monthly min % 80 -> 75.
   IF s_sptag-low GE '20260601' AND s_sptag-high LE '20270331'.
     wa_yrva_mstr_waiver-min_perc_m1  = 75.
     wa_yrva_mstr_waiver-min_perc_m2  = 75.
@@ -359,6 +360,11 @@ FORM get_data.
     wa_yrva_mstr_waiver-min_perc_m10 = 75.
     wa_yrva_mstr_waiver-min_perc_m11 = 75.
     wa_yrva_mstr_waiver-min_perc_m12 = 75.
+  ENDIF.
+*   Annual run : s_sptag is entered as the fiscal year 01.04 - 31.03
+*   (enforced by the screen validation). FY 2026-27 = 20260401-20270331
+*   -> Annual min % 85 -> 80.
+  IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
     wa_yrva_mstr_waiver-annual_min   = 80.
   ENDIF.
 *** EOC : CIS 2026-27 scheme change (period-gated) ***
