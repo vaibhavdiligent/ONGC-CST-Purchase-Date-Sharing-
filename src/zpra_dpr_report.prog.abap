@@ -18,6 +18,10 @@
 *&           And added a dly_prd fallback for gas in sec2d: when an asset has
 *&           no/zero reconciled (rprd) gas, the YTD now sources gas from raw
 *&           daily (ZPRA_T_DLY_PRD) - so BC-10/BC-60/MECL gas flows MTD->YTD.
+*&           Production Performance sheet: Actual "Annual" cols now show "-"
+*&           (no full-year actual yet) instead of prev-FY values; "% Achv"
+*&           Annual cols left blank, YTD % retained. (write_sec6_formulas +
+*&           get_achievement_6c; new helper set_sheet3_text.)
 *&           v2.7 - Graph now starts from gv_month_back_datum (first date of DPR
 *&           tab 1) instead of gv_year_start_date. Fixes chart x-axis to align
 *&           with the DPR sheet date range.
@@ -1895,12 +1899,13 @@ FORM write_sec6_formulas USING p_actual_row .
   lv_r_tgt_yt = gv_sec2c_start_row .       " YTD BE Target row    - BOPD
   CONDENSE : lv_r_act, lv_r_act_an, lv_r_tgt_an, lv_r_tgt_yt .
 
-  " Actual row: Annual col → prev-year YTD (sec2d INDEX 2), YTD col → current-year YTD (sec2d INDEX 1)
-  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act_an .
+  " Actual row: Annual col → "-" (no full-year actual yet for the current FY),
+  " YTD col → current-year YTD (sec2d INDEX 1). v2.8: was prev-year YTD (INDEX 2).
+  PERFORM set_sheet3_text    USING p_actual_row 2 '-' .
   PERFORM set_sheet3_formula USING p_actual_row 3 lv_dpr_name 'P'  lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act_an .
+  PERFORM set_sheet3_text    USING p_actual_row 4 '-' .
   PERFORM set_sheet3_formula USING p_actual_row 5 lv_dpr_name 'AF' lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act_an .
+  PERFORM set_sheet3_text    USING p_actual_row 6 '-' .
   PERFORM set_sheet3_formula USING p_actual_row 7 lv_dpr_name 'AG' lv_r_act .
 
   " BE Target row: Annual = Target 2026-27 line, YTD = YTD Target line
@@ -1923,6 +1928,16 @@ FORM set_sheet3_formula USING p_row p_col p_sheet p_colltr p_rownum .
   CALL METHOD OF go_worksheet3 'Cells' = lo_cell
     EXPORTING #1 = p_row #2 = p_col .
   SET PROPERTY OF lo_cell 'Formula' = lv_formula .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form  SET_SHEET3_TEXT
+*& Writes a literal text value into a single cell of sheet 3 (e.g. "-")
+*&---------------------------------------------------------------------*
+FORM set_sheet3_text USING p_row p_col p_text .
+  DATA lo_cell TYPE ole2_object.
+  CALL METHOD OF go_worksheet3 'Cells' = lo_cell
+    EXPORTING #1 = p_row #2 = p_col .
+  SET PROPERTY OF lo_cell 'Value' = p_text .
 ENDFORM.
 FORM display_section3f .
   DATA lv_lines TYPE sy-tabix .
@@ -9556,6 +9571,9 @@ FORM get_achievement_6c .
     lv_index = sy-index .
     ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line3> TO <lfs_field3> .
     IF lv_index = 1.
+    ELSEIF lv_index = 2 OR lv_index = 4 OR lv_index = 6.
+*     v2.8: Annual % Achv left blank - no full-year actual yet for current FY
+      CLEAR <lfs_field3> .
     ELSE.
       ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line1> TO <lfs_field1> .
 * Begin of changes by Arnav on 24.03.2026
