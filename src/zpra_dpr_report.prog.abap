@@ -13,6 +13,11 @@
 *&           display /6290 cancels and MMSCMD values are correct again.
 *&           Same fix applied to fill_dynamic_table_sec2f ("Actual Prod." annual
 *&           actual row), which shared the identical near-zero gas defect.
+*&           Also re-enabled gas *6290 in the GRAND-TOTAL of sec2d/sec2f so the
+*&           YTD/annual BOEPD (col AG) includes the gas oil-equivalent like AG44.
+*&           And added a dly_prd fallback for gas in sec2d: when an asset has
+*&           no/zero reconciled (rprd) gas, the YTD now sources gas from raw
+*&           daily (ZPRA_T_DLY_PRD) - so BC-10/BC-60/MECL gas flows MTD->YTD.
 *&           v2.7 - Graph now starts from gv_month_back_datum (first date of DPR
 *&           tab 1) instead of gv_year_start_date. Fixes chart x-axis to align
 *&           with the DPR sheet date range.
@@ -7011,21 +7016,25 @@ FORM fill_dynamic_table_sec2d .
           IF lv_monat EQ gv_current_monat.
             CONCATENATE gv_search_end_datum(4) p_date+4(4) INTO gv_search_end_datum .
           ENDIF.
-          READ TABLE gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WITH KEY product = gs_zpra_c_prd_prof-product
-                                                                              asset = gs_zpra_c_prd_prof-asset
-                                                                              block = gs_zpra_c_prd_prof-block
-                                                                    production_date = gv_search_begin_datum BINARY SEARCH .
-          IF sy-subrc IS NOT INITIAL.
-            LOOP AT gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WHERE product         EQ gs_zpra_c_prd_prof-product
-                                                                    AND asset           EQ gs_zpra_c_prd_prof-asset
-                                                                    AND block           EQ gs_zpra_c_prd_prof-block
-                                                                    AND production_date GE gv_search_begin_datum
-                                                                    AND production_date LE gv_search_end_datum .
+*         v2.8: Pick first usable rprd row. For GAS, skip rows whose reconciled
+*         qty is zero, so an empty/zero reprocessed gas falls through to the
+*         dly_prd branch below (raw daily/MTD gas then flows into YTD).
+          CLEAR lv_rprd_index .
+          LOOP AT gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WHERE product         EQ gs_zpra_c_prd_prof-product
+                                                                  AND asset           EQ gs_zpra_c_prd_prof-asset
+                                                                  AND block           EQ gs_zpra_c_prd_prof-block
+                                                                  AND production_date GE gv_search_begin_datum
+                                                                  AND production_date LE gv_search_end_datum .
+            IF gs_zpra_c_prd_prof-product NE c_prod_gas
+            OR gs_zpra_t_dly_rprd-jv_rcn_vl_qty2  IS NOT INITIAL
+            OR gs_zpra_t_dly_rprd-ovl_rcn_vl_qty2 IS NOT INITIAL
+            OR gs_zpra_t_dly_rprd-jv_rcn_vl_qty3  IS NOT INITIAL
+            OR gs_zpra_t_dly_rprd-ovl_rcn_vl_qty3 IS NOT INITIAL .
+              lv_rprd_index = sy-tabix .
               EXIT .
-            ENDLOOP .
-          ENDIF.
-          IF sy-subrc IS INITIAL.
-            lv_rprd_index = sy-tabix .
+            ENDIF.
+          ENDLOOP .
+          IF lv_rprd_index IS NOT INITIAL.
             LOOP AT gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd FROM lv_rprd_index .
               IF gs_zpra_t_dly_rprd-product EQ gs_zpra_c_prd_prof-product      AND
                  gs_zpra_t_dly_rprd-asset   EQ gs_zpra_c_prd_prof-asset        AND
