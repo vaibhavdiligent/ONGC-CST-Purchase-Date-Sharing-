@@ -235,16 +235,27 @@ FORM collect_findings.
     ENDIF.
 
     APPEND gs_obj TO gt_obj.
-
-    " Keep the complete ATC finding row (all fields: test, code, kind,
-    " note, line, col, param1-4, objtype/objname/sobjname, ...) for the
-    " result export.
-    APPEND finding TO gt_findings_full.
   ENDLOOP.
 
   " Keep one entry per unique sub-object (sub-objects come from the ATC findings).
   SORT gt_obj BY objname sobjname.
   DELETE ADJACENT DUPLICATES FROM gt_obj COMPARING objname sobjname.
+
+  " Export ALL findings of the sub-objects that are actually downloaded:
+  " every finding row (all fields - note, line, col, params, ...) whose
+  " sub-object is in the downloaded set.
+  LOOP AT findings INTO finding
+       WHERE objname IN s_obj OR enhname IN s_obj.
+    DATA(lv_sobj) = finding-sobjname.
+    IF lv_sobj IS INITIAL.
+      lv_sobj = finding-objname.
+    ENDIF.
+    READ TABLE gt_obj TRANSPORTING NO FIELDS
+      WITH KEY objname = finding-objname sobjname = lv_sobj.
+    IF sy-subrc = 0.
+      APPEND finding TO gt_findings_full.
+    ENDIF.
+  ENDLOOP.
 
 ENDFORM.
 
