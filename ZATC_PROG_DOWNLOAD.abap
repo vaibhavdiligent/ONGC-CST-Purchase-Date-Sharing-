@@ -55,10 +55,11 @@ TYPES: BEGIN OF ty_log,
 *----------------------------------------------------------------------*
 * Global data
 *----------------------------------------------------------------------*
-DATA: gt_obj      TYPE STANDARD TABLE OF ty_obj,
-      gt_manifest TYPE STANDARD TABLE OF ty_manifest,
-      gt_log      TYPE STANDARD TABLE OF ty_log,
-      gv_sep      TYPE c LENGTH 1.
+DATA: gt_obj           TYPE STANDARD TABLE OF ty_obj,
+      gt_manifest      TYPE STANDARD TABLE OF ty_manifest,
+      gt_findings_full TYPE scit_rest,    " full ATC findings (all fields)
+      gt_log           TYPE STANDARD TABLE OF ty_log,
+      gv_sep           TYPE c LENGTH 1.
 
 " Source read work areas (same kinds the correction program uses)
 DATA: repos_tab          TYPE STANDARD TABLE OF abaptxt255,
@@ -144,6 +145,11 @@ START-OF-SELECTION.
     PERFORM write_manifest.
   ENDIF.
 
+  " Export the full ATC findings (all fields) as a separate Excel file.
+  IF gt_findings_full IS NOT INITIAL.
+    PERFORM write_atc_result.
+  ENDIF.
+
   PERFORM show_log.
 
 *&---------------------------------------------------------------------*
@@ -197,6 +203,7 @@ FORM collect_findings.
     " nothing to correct, so nothing to download. A sub-object that only
     " has such findings is therefore never collected; one that also has a
     " real finding is still downloaded via that finding.
+    CLEAR: wa_chmmt, wa_cmmmt.
     READ TABLE it_chmmt INTO DATA(wa_chmmt) WITH KEY ci_id = finding-test.
     IF sy-subrc = 0 AND wa_chmmt-title CS 'Prerequisites for the test'.
       CONTINUE.
@@ -228,6 +235,11 @@ FORM collect_findings.
     ENDIF.
 
     APPEND gs_obj TO gt_obj.
+
+    " Keep the complete ATC finding row (all fields: test, code, kind,
+    " note, line, col, param1-4, objtype/objname/sobjname, ...) for the
+    " result export.
+    APPEND finding TO gt_findings_full.
   ENDLOOP.
 
   " Keep one entry per unique sub-object (sub-objects come from the ATC findings).
@@ -482,6 +494,39 @@ FORM write_manifest.
     MESSAGE |Manifest written: { lv_file }| TYPE 'S'.
   ELSE.
     MESSAGE 'Manifest download failed' TYPE 'I'.
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form write_atc_result
+*&  Downloads the COMPLETE ATC findings table (every field captured by
+*&  the result access - priority/kind, note, line, col, params, check
+*&  test/code, object/sub-object, ...) as an Excel file via the standard
+*&  FM SAP_CONVERT_TO_XLS_FORMAT.
+*&---------------------------------------------------------------------*
+FORM write_atc_result.
+
+  DATA: lv_file  TYPE string,
+        lv_full  TYPE rlgrap-filename,   " FM I_FILENAME needs fixed-length char
+        lv_stamp TYPE char14.
+
+  CONCATENATE sy-datum sy-uzeit INTO lv_stamp.
+  CONCATENATE 'ZATC_RESULT_' lv_stamp '.xls' INTO lv_file.
+  CONCATENATE p_dir lv_file INTO lv_full.
+
+  CALL FUNCTION 'SAP_CONVERT_TO_XLS_FORMAT'
+    EXPORTING
+      i_filename        = lv_full
+    TABLES
+      i_tab_sap_data    = gt_findings_full
+    EXCEPTIONS
+      conversion_failed = 1
+      OTHERS            = 2.
+  IF sy-subrc = 0.
+    MESSAGE |ATC result written: { lv_file }| TYPE 'S'.
+  ELSE.
+    MESSAGE 'ATC result download failed' TYPE 'I'.
   ENDIF.
 
 ENDFORM.
