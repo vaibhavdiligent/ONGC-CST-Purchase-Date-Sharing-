@@ -7079,7 +7079,7 @@ FORM fill_dynamic_table_sec2d .
               IF <gfs_field> IS ASSIGNED.
                 lv_mmscmd_mul = 1 .
                 IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
-*                  lv_mmscmd_mul = 6290 .
+                  lv_mmscmd_mul = 6290 .   "v2.8: add gas BOE to YTD GRAND-TOTAL (AG) - was missing, AG49 undercounted vs AG44
                 ENDIF.
                 <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ).
                 UNASSIGN <gfs_field> .
@@ -7420,7 +7420,7 @@ FORM fill_dynamic_table_sec2f .
             IF <gfs_field> IS ASSIGNED.
               lv_mmscmd_mul = 1 .
               IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
-*                  lv_mmscmd_mul = 6290 .
+                lv_mmscmd_mul = 6290 .   "v2.8: add gas BOE to annual GRAND-TOTAL (AG) - was missing
               ENDIF.
               <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ).
               UNASSIGN <gfs_field> .
