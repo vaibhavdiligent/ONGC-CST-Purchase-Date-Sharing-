@@ -3,8 +3,17 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 2.7  |  Git: bcd-overflow-fix  |  Date: 18-JUN-2026
-*& Changes : v2.7 - Graph now starts from gv_month_back_datum (first date of DPR
+*& VERSION : 2.8  |  Git: bcd-overflow-fix  |  Date: 24-JUN-2026
+*& Changes : v2.8 - Fix near-zero YTD Actual gas values (rows "YTD Actual Prod."
+*&           current & prior FY) in fill_dynamic_table_sec2d. The rprd branch
+*&           stored gas (jv/ovl_prd_vl_qty1) without *6290 while the BMD display
+*&           loop still divides gas columns by 6290 (~line 7199), giving near-zero
+*&           S..AE/AF. Restored *6290 at the individual & product-total assignment
+*&           (into the wide dynamic field, so no narrow-DB-field overflow), so the
+*&           display /6290 cancels and MMSCMD values are correct again.
+*&           Same fix applied to fill_dynamic_table_sec2f ("Actual Prod." annual
+*&           actual row), which shared the identical near-zero gas defect.
+*&           v2.7 - Graph now starts from gv_month_back_datum (first date of DPR
 *&           tab 1) instead of gv_year_start_date. Fixes chart x-axis to align
 *&           with the DPR sheet date range.
 *&           Production Performance table (sheet 3): Actual and BE Target rows
@@ -7046,14 +7055,22 @@ FORM fill_dynamic_table_sec2d .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-jv_prd_vl_qty1.
+                lv_mmscmd_mul = 1 .
+                IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                  lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 (line ~7199) cancels - was near-zero YTD gas
+                ENDIF.
+                <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-jv_prd_vl_qty1 * lv_mmscmd_mul ).
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
               CONCATENATE gs_zpra_t_dly_rprd-product(gv_len) '-' 'TOTAL'                   INTO lv_col_name .
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> +  gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 .
+                lv_mmscmd_mul = 1 .
+                IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                  lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 cancels - was near-zero YTD gas
+                ENDIF.
+                <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ) .
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Grand Total
@@ -7379,14 +7396,22 @@ FORM fill_dynamic_table_sec2f .
             ENDIF.
             ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
             IF <gfs_field> IS ASSIGNED.
-              <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-jv_prd_vl_qty1.
+              lv_mmscmd_mul = 1 .
+              IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 cancels - was near-zero annual-actual gas
+              ENDIF.
+              <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-jv_prd_vl_qty1 * lv_mmscmd_mul ).
               UNASSIGN <gfs_field> .
             ENDIF.
 *           Product Total..
             CONCATENATE gs_zpra_t_dly_rprd-product(gv_len) '-' 'TOTAL'                   INTO lv_col_name .
             ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
             IF <gfs_field> IS ASSIGNED.
-              <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
+              lv_mmscmd_mul = 1 .
+              IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 cancels - was near-zero annual-actual gas
+              ENDIF.
+              <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ) .
               UNASSIGN <gfs_field> .
             ENDIF.
 *           Grand Total
