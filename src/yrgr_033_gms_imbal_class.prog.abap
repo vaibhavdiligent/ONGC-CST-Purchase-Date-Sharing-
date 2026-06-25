@@ -32,8 +32,11 @@ CLASS lcl_event_handler IMPLEMENTATION.
     " Add Save button to ALV toolbar when Action Taken (r4) mode is active
     IF r4 EQ 'X'.
       DATA: ls_toolbar TYPE stb_button.
+      DATA: lv_icon TYPE icon_d.
+      " Look up save icon from SAP ICON table (avoids TYPE-POOLS icon constant issues)
+      SELECT SINGLE id FROM icon INTO lv_icon WHERE name = 'ICON_SAVE'.
       ls_toolbar-function  = 'SAVE_ACT'.
-      ls_toolbar-icon      = icon_save.
+      ls_toolbar-icon      = lv_icon.
       ls_toolbar-text      = 'Save'.
       ls_toolbar-butn_type = 0.
       APPEND ls_toolbar TO e_object->mt_toolbar.

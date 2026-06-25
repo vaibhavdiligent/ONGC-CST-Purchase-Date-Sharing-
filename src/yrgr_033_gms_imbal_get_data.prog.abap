@@ -36,16 +36,17 @@ FORM get_data.
     CLEAR ls_final_ext.
     MOVE-CORRESPONDING ls_final TO ls_final_ext.
 
-    " Read latest Action Taken entry from YRG_IMB_ACTION for this contract
-    " NOTE: YRG_IMB_ACTION must be created in SE11 before uncommenting below
-    " TABLES: yrg_imb_action.
-    " SELECT SINGLE at_chkbox, at_sal_ord, at_qty, at_remarks
-    "   FROM yrg_imb_action
-    "   INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
-    "         @ls_final_ext-at_qty,    @ls_final_ext-at_remarks)
-    "   WHERE docnr = @ls_final-docnr
-    "   ORDER BY saved_on DESCENDING saved_at DESCENDING.
-    " TODO: activate above SELECT once YRG_IMB_ACTION table exists in SE11.
+    " Read latest Action Taken entry from YRG_IMB_ACTION (most recent by date+time)
+    DATA: lv_at_qty TYPE char20.
+    SELECT at_chkbox at_sal_ord at_qty at_remarks
+      FROM yrg_imb_action
+      INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
+            @lv_at_qty,              @ls_final_ext-at_remarks)
+      WHERE docnr = @ls_final-docnr
+      ORDER BY saved_on DESCENDING, saved_at DESCENDING.
+      ls_final_ext-at_qty = lv_at_qty.
+      EXIT.
+    ENDSELECT.
 
     APPEND ls_final_ext TO lt_final_ext.
   ENDLOOP.
@@ -404,10 +405,9 @@ FORM send_email_posted.
 
     " Sort Posted rows for this SO by absolute imbalance descending
     LOOP AT lt_final INTO ls_final WHERE stat = 'Posted' AND vkbur = ls_ep_vkbur-vkbur.
-      " Exclude contracts where Action Taken is checked
-      " NOTE: Uncomment when YRG_IMB_ACTION table exists in SE11
-      " READ TABLE lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_at>) WITH KEY docnr = ls_final-docnr.
-      " IF sy-subrc = 0 AND <fs_at>-at_chkbox = 'X'. CONTINUE. ENDIF.
+      " Exclude contracts where Action Taken is checked in YRG_IMB_ACTION
+      READ TABLE lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_at>) WITH KEY docnr = ls_final-docnr.
+      IF sy-subrc = 0 AND <fs_at>-at_chkbox = 'X'. CONTINUE. ENDIF.
 
       CLEAR: ls_sort_imbal, lv_abs_po, lv_abs_ne.
       lv_abs_po = ls_final-po_imbal. IF lv_abs_po < 0. lv_abs_po = lv_abs_po * -1. ENDIF.
@@ -897,21 +897,21 @@ FORM save_action_taken.
   " First collect all current data from the ALV grid
   CALL METHOD grid->check_changed_data.
 
+  DATA: ls_imb_action TYPE yrg_imb_action.
+
   LOOP AT lt_final_ext INTO ls_final_ext.
-    " TODO: Uncomment after SE11 table YRG_IMB_ACTION is created
-    " DATA: ls_imb_action TYPE yrg_imb_action.
-    " CLEAR ls_imb_action.
-    " ls_imb_action-docnr     = ls_final_ext-docnr.
-    " ls_imb_action-cpf_id    = sy-uname.
-    " ls_imb_action-saved_on  = sy-datum.
-    " ls_imb_action-saved_at  = sy-uzeit.
-    " ls_imb_action-chkbox    = ls_final_ext-at_chkbox.
-    " IF ls_final_ext-at_chkbox = 'X'.
-    "   ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
-    "   ls_imb_action-at_qty     = ls_final_ext-at_qty.
-    "   ls_imb_action-at_remarks = ls_final_ext-at_remarks.
-    " ENDIF.
-    " INSERT yrg_imb_action FROM ls_imb_action.
+    CLEAR ls_imb_action.
+    ls_imb_action-docnr    = ls_final_ext-docnr.
+    ls_imb_action-cpf_id   = sy-uname.
+    ls_imb_action-saved_on = sy-datum.
+    ls_imb_action-saved_at = sy-uzeit.
+    ls_imb_action-chkbox   = ls_final_ext-at_chkbox.
+    IF ls_final_ext-at_chkbox = 'X'.
+      ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
+      ls_imb_action-at_qty     = ls_final_ext-at_qty.    " CHAR20 -> QUAN implicit
+      ls_imb_action-at_remarks = ls_final_ext-at_remarks.
+    ENDIF.
+    INSERT yrg_imb_action FROM ls_imb_action.
 
     IF ls_final_ext-at_chkbox = 'X'.
       lv_saved_count = lv_saved_count + 1.
@@ -923,8 +923,8 @@ FORM save_action_taken.
     RETURN.
   ENDIF.
 
-  " COMMIT WORK.   " Uncomment after activating INSERT statements above
-  MESSAGE |Action Taken saved for { lv_saved_count } contract(s). [Activate DB write in SE38 after SE11 table creation]| TYPE 'S'.
+  COMMIT WORK.
+  MESSAGE |Action Taken saved for { lv_saved_count } contract(s).| TYPE 'S'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

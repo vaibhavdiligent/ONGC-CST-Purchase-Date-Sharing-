@@ -5,7 +5,7 @@
 
 TABLES: oijnomi, veda.
 
-TYPE-POOLS: slis.
+TYPE-POOLS: slis, icon.
 
 *----------------------------------------------------------------------*
 * Global Data
@@ -55,6 +55,11 @@ DATA: lv_has_role TYPE c LENGTH 1.
 
 DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 
+DATA: lv_fn_from_day TYPE c LENGTH 2,
+      lv_fn_to_day   TYPE c LENGTH 2,
+      lv_fn_next_day TYPE sy-datum,
+      lv_fn_is_last  TYPE c LENGTH 1.
+
 *----------------------------------------------------------------------*
 * Extended final type: yrx_imb_settle_qty + Action Taken columns
 * NOTE: YRG_IMB_ACTION table must be created in SE11 before
@@ -63,32 +68,32 @@ DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 TYPES: BEGIN OF ty_action_cols,
          at_chkbox  TYPE c LENGTH 1,   " Action Taken flag (X = action done)
          at_sal_ord TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
-         at_qty     TYPE menge,         " Quantity   (from YRG_IMB_ACTION)
-         at_remarks TYPE char100,       " Remarks    (from YRG_IMB_ACTION)
+         at_qty     TYPE char20,         " Quantity   (from YRG_IMB_ACTION)
+         at_remarks TYPE char255,       " Remarks    (from YRG_IMB_ACTION)
        END OF ty_action_cols.
 
 TYPES: BEGIN OF ty_final_ext.
-         INCLUDE TYPE yrx_imb_settle_qty AS base.
-         INCLUDE TYPE ty_action_cols     AS action.
-       END OF ty_final_ext.
+  INCLUDE TYPE yrx_imb_settle_qty AS base.
+  INCLUDE TYPE ty_action_cols     AS action.
+TYPES: END OF ty_final_ext.
 
 DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext WITH DEFAULT KEY,
       ls_final_ext TYPE ty_final_ext.
 
 *----------------------------------------------------------------------*
-* Selection Screen
-* r1 = Report for Closing Imbalance (uses s_date date range)
-*      SE38 text element for R1: 'Report for Closing Imbalance'
-* r2 = (reserved – always hidden)
-* r3 = Till Date (auto-calculates date range; hides Gas Day s_date)
-*      SE38 text element for R3: 'Till Date'
-* r4 = Action Taken (new radio button)
-*      SE38 text element for R4: 'Action Taken'
+* Selection Screen Layout (top to bottom on screen):
+*   r1  = Report for Closing Imbalance  [SE38 text: keep short; long desc in Note 4]
+*   s_date / s_vkbur  (m2/m6) – Gas Day + Sales Office, hidden for r3/r4
+*   r2  = (always hidden, m5)
+*   r3  = Till Date (with effect after 2UoM Migration)  [SE38 text: update to full label]
+*   p_email / s_cceml (m3/m4) – Send Mail + CC, shown directly below r3 when active
+*   r4  = Action Taken  [SE38 text: 'Action Taken'] — last radio button
+*   s_dat4 / s_vk4 (m7) – date + sales office for r4 mode
 *
 * MODIF IDs:
 *   m1 = radio buttons (r1, r2, r3, r4)
 *   m2 = Gas Day s_date (hidden for r3/r4)
-*   m3 = p_email Send Mail checkbox
+*   m3 = p_email Send Mail checkbox (shown for r3 + role; positioned below r3)
 *   m4 = s_cceml CC emails (shown when p_email checked + r3 + role)
 *   m5 = r2 (always hidden)
 *   m6 = s_vkbur Sales Office for r1/r3 (hidden for r4)
@@ -99,10 +104,10 @@ SELECTION-SCREEN BEGIN OF BLOCK b WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_date  FOR oijnomi-idate MODIF ID m2 OBLIGATORY.
   SELECT-OPTIONS: s_vkbur FOR lv_vkbur      MODIF ID m6.
   PARAMETERS:    r2 RADIOBUTTON GROUP r1 MODIF ID m5.          " Always hidden
-  PARAMETERS:    r3 RADIOBUTTON GROUP r1 MODIF ID m1.          " Till Date
-  PARAMETERS:    r4 RADIOBUTTON GROUP r1 MODIF ID m1.          " Action Taken
-  SELECT-OPTIONS: s_dat4  FOR oijnomi-idate MODIF ID m7.
-  SELECT-OPTIONS: s_vk4   FOR lv_vkbur      MODIF ID m7.
+  PARAMETERS:    r3 RADIOBUTTON GROUP r1 MODIF ID m1.          " Till Date (2UoM)
   PARAMETERS:    p_email AS CHECKBOX MODIF ID m3 USER-COMMAND eml.
   SELECT-OPTIONS: s_cceml FOR lv_cceml NO INTERVALS MODIF ID m4.
+  PARAMETERS:    r4 RADIOBUTTON GROUP r1 MODIF ID m1.          " Action Taken (last)
+  SELECT-OPTIONS: s_dat4  FOR oijnomi-idate MODIF ID m7.
+  SELECT-OPTIONS: s_vk4   FOR lv_vkbur      MODIF ID m7.
 SELECTION-SCREEN END OF BLOCK b.
