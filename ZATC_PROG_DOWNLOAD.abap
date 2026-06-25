@@ -52,14 +52,31 @@ TYPES: BEGIN OF ty_log,
          message  TYPE char100,
        END OF ty_log.
 
+" ATC correction worklist (one row per finding of a downloaded object):
+" tells WHERE (line / object / sub-object) and WHAT pseudo-code (#EC) is
+" to be placed, mirroring the it_final table of
+" ZATC_RESULT_CORR_GENERIC_CORR.
+TYPES: BEGIN OF ty_final,
+         priority      TYPE char3,
+         check_title   TYPE string,
+         check_message TYPE string,
+         note          TYPE char20,      " note number
+         pseudo_code   TYPE char40,      " #EC pragma to insert
+         objtype       TYPE char4,
+         objname       TYPE char40,
+         sobjname      TYPE char40,
+         line          TYPE n LENGTH 6,
+         message       TYPE string,
+       END OF ty_final.
+
 *----------------------------------------------------------------------*
 * Global data
 *----------------------------------------------------------------------*
-DATA: gt_obj           TYPE STANDARD TABLE OF ty_obj,
-      gt_manifest      TYPE STANDARD TABLE OF ty_manifest,
-      gt_findings_full TYPE scit_rest,    " full ATC findings (all fields)
-      gt_log           TYPE STANDARD TABLE OF ty_log,
-      gv_sep           TYPE c LENGTH 1.
+DATA: gt_obj      TYPE STANDARD TABLE OF ty_obj,
+      gt_manifest TYPE STANDARD TABLE OF ty_manifest,
+      gt_final    TYPE STANDARD TABLE OF ty_final,
+      gt_log      TYPE STANDARD TABLE OF ty_log,
+      gv_sep      TYPE c LENGTH 1.
 
 " Source read work areas (same kinds the correction program uses)
 DATA: repos_tab          TYPE STANDARD TABLE OF abaptxt255,
@@ -145,8 +162,8 @@ START-OF-SELECTION.
     PERFORM write_manifest.
   ENDIF.
 
-  " Export the full ATC findings (all fields) as a separate Excel file.
-  IF gt_findings_full IS NOT INITIAL.
+  " Export the ATC correction worklist (line / check / note / pseudo-code).
+  IF gt_final IS NOT INITIAL.
     PERFORM write_atc_result.
   ENDIF.
 
@@ -243,9 +260,13 @@ FORM collect_findings.
   SORT gt_obj BY objname sobjname.
   DELETE ADJACENT DUPLICATES FROM gt_obj COMPARING objname sobjname.
 
-  " Export ALL findings of the sub-objects that are actually downloaded:
-  " every finding row (all fields - note, line, col, params, ...) whose
-  " sub-object is in the downloaded set.
+  " Build the correction worklist for the sub-objects that are actually
+  " downloaded: one row per finding telling WHERE (line / object) and WHAT
+  " pseudo-code (#EC pragma) to place. Mirrors ZATC_RESULT_CORR_GENERIC_CORR.
+  DATA: gs_final TYPE ty_final,
+        test     TYPE REF TO cl_ci_test_root,
+        l_fpos   TYPE i,
+        l_len    TYPE i.
   LOOP AT findings INTO finding
        WHERE objname IN s_obj OR enhname IN s_obj.
     DATA(lv_sobj) = finding-sobjname.
@@ -254,9 +275,75 @@ FORM collect_findings.
     ENDIF.
     READ TABLE gt_obj TRANSPORTING NO FIELDS
       WITH KEY objname = finding-objname sobjname = lv_sobj.
-    IF sy-subrc = 0.
-      APPEND finding TO gt_findings_full.
+    IF sy-subrc <> 0.
+      CONTINUE.
     ENDIF.
+
+    CLEAR gs_final.
+
+    " Pseudo-code (#EC pragma) from the finding's description lines.
+    READ TABLE e_findings_extension INTO DATA(finding_ext) INDEX sy-tabix.
+    IF sy-subrc = 0.
+      LOOP AT finding_ext-description_lines INTO DATA(wa_desc).
+        IF wa_desc CS '#EC'.
+          l_fpos = sy-fdpos.
+          l_len  = strlen( wa_desc ) - l_fpos.
+          gs_final-pseudo_code = wa_desc+l_fpos(l_len).
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    " Priority.
+    CASE finding-kind.
+      WHEN 'E'. gs_final-priority = '1'.
+      WHEN 'W'. gs_final-priority = '2'.
+      WHEN 'N'. gs_final-priority = '3'.
+      WHEN OTHERS. gs_final-priority = finding-kind.
+    ENDCASE.
+
+    " Check title / message.
+    READ TABLE it_chmmt INTO wa_chmmt WITH KEY ci_id = finding-test.
+    IF sy-subrc = 0.
+      gs_final-check_title = wa_chmmt-title.
+    ENDIF.
+    READ TABLE it_cmmmt INTO wa_cmmmt WITH KEY message_id = finding-code.
+    IF sy-subrc = 0.
+      gs_final-check_message = wa_cmmmt-title.
+    ENDIF.
+
+    " Note number: digits extracted from param1.
+    IF finding-param1 IS NOT INITIAL.
+      DATA lv_p1   TYPE string.
+      DATA lv_note TYPE string.
+      lv_p1 = finding-param1.
+      CLEAR lv_note.
+      DO strlen( lv_p1 ) TIMES.
+        DATA(lv_i) = sy-index - 1.
+        IF lv_p1+lv_i(1) CA '0123456789'.
+          CONCATENATE lv_note lv_p1+lv_i(1) INTO lv_note.
+        ENDIF.
+      ENDDO.
+      gs_final-note = condense( val = lv_note ).
+    ENDIF.
+
+    " Resolved message text (best effort - placeholders filled with params).
+    TRY.
+        CREATE OBJECT test TYPE (finding-test).
+        DATA(lv_msg) = test->scimessages[ test = finding-test code = finding-code ]-text.
+        lv_msg = replace( val = lv_msg sub = '&1' with = finding-param1 ).
+        lv_msg = replace( val = lv_msg sub = '&2' with = finding-param2 ).
+        lv_msg = replace( val = lv_msg sub = '&3' with = finding-param3 ).
+        lv_msg = replace( val = lv_msg sub = '&4' with = finding-param4 ).
+        gs_final-message = lv_msg.
+      CATCH cx_root.
+        gs_final-message = gs_final-check_message.
+    ENDTRY.
+
+    gs_final-objtype  = finding-objtype.
+    gs_final-objname  = finding-objname.
+    gs_final-sobjname = lv_sobj.
+    gs_final-line     = finding-line.
+    APPEND gs_final TO gt_final.
   ENDLOOP.
 
 ENDFORM.
@@ -513,13 +600,12 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form write_atc_result
-*&  Downloads the COMPLETE ATC findings table (every field captured by
-*&  the result access - priority/kind, note, line, col, params, check
-*&  test/code, object/sub-object, ...). The raw findings structure is too
-*&  complex for SAP_CONVERT_TO_XLS_FORMAT (it crashes the GUI), so the
-*&  rows are flattened generically (RTTI) into a tab-delimited file with a
-*&  header row and written with the robust standard FM GUI_DOWNLOAD. The
-*&  .xls file opens directly in Excel as columns.
+*&  Downloads the ATC correction worklist (priority, check title/message,
+*&  note number, pseudo-code #EC pragma, object/sub-object, line, resolved
+*&  message). The rows are flattened generically (RTTI) into a tab-delimited
+*&  file with a header row and written with the robust standard FM
+*&  GUI_DOWNLOAD (SAP_CONVERT_TO_XLS_FORMAT crashes the GUI on complex
+*&  structures). The .xls file opens directly in Excel as columns.
 *&---------------------------------------------------------------------*
 FORM write_atc_result.
 
@@ -532,7 +618,7 @@ FORM write_atc_result.
         lv_tab   TYPE c LENGTH 1,
         lv_idx   TYPE i.
   DATA: lo_struct TYPE REF TO cl_abap_structdescr,
-        ls_find   LIKE LINE OF gt_findings_full.
+        ls_find   LIKE LINE OF gt_final.
   FIELD-SYMBOLS: <row> TYPE any,
                  <val> TYPE any.
 
@@ -550,7 +636,7 @@ FORM write_atc_result.
   APPEND lv_line TO lt_out.
 
   " Data rows: every component converted to character, tab-separated.
-  LOOP AT gt_findings_full ASSIGNING <row>.
+  LOOP AT gt_final ASSIGNING <row>.
     CLEAR lv_line.
     LOOP AT lo_struct->components INTO ls_comp.
       lv_idx = sy-tabix.
@@ -573,7 +659,7 @@ FORM write_atc_result.
   ENDLOOP.
 
   CONCATENATE sy-datum sy-uzeit INTO lv_stamp.
-  CONCATENATE 'ZATC_RESULT_' lv_stamp '.xls' INTO lv_file.
+  CONCATENATE 'ZATC_CORR_WORKLIST_' lv_stamp '.xls' INTO lv_file.
   CONCATENATE p_dir lv_file INTO lv_full.
 
   CALL FUNCTION 'GUI_DOWNLOAD'
