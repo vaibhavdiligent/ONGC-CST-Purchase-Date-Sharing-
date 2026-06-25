@@ -515,27 +515,75 @@ ENDFORM.
 *& Form write_atc_result
 *&  Downloads the COMPLETE ATC findings table (every field captured by
 *&  the result access - priority/kind, note, line, col, params, check
-*&  test/code, object/sub-object, ...) as an Excel file via the standard
-*&  FM SAP_CONVERT_TO_XLS_FORMAT.
+*&  test/code, object/sub-object, ...). The raw findings structure is too
+*&  complex for SAP_CONVERT_TO_XLS_FORMAT (it crashes the GUI), so the
+*&  rows are flattened generically (RTTI) into a tab-delimited file with a
+*&  header row and written with the robust standard FM GUI_DOWNLOAD. The
+*&  .xls file opens directly in Excel as columns.
 *&---------------------------------------------------------------------*
 FORM write_atc_result.
 
-  DATA: lv_file  TYPE string,
-        lv_full  TYPE rlgrap-filename,   " FM I_FILENAME needs fixed-length char
-        lv_stamp TYPE char14.
+  DATA: lt_out   TYPE STANDARD TABLE OF string,
+        lv_line  TYPE string,
+        lv_val   TYPE string,
+        lv_file  TYPE string,
+        lv_full  TYPE string,
+        lv_stamp TYPE char14,
+        lv_tab   TYPE c LENGTH 1,
+        lv_idx   TYPE i.
+  DATA: lo_struct TYPE REF TO cl_abap_structdescr,
+        ls_find   LIKE LINE OF gt_findings_full.
+  FIELD-SYMBOLS: <row> TYPE any,
+                 <val> TYPE any.
+
+  lv_tab    = cl_abap_char_utilities=>horizontal_tab.
+  lo_struct ?= cl_abap_typedescr=>describe_by_data( ls_find ).
+
+  " Header row: field names of the findings structure.
+  CLEAR lv_line.
+  LOOP AT lo_struct->components INTO DATA(ls_comp).
+    IF sy-tabix > 1.
+      CONCATENATE lv_line lv_tab INTO lv_line.
+    ENDIF.
+    CONCATENATE lv_line ls_comp-name INTO lv_line.
+  ENDLOOP.
+  APPEND lv_line TO lt_out.
+
+  " Data rows: every component converted to character, tab-separated.
+  LOOP AT gt_findings_full ASSIGNING <row>.
+    CLEAR lv_line.
+    LOOP AT lo_struct->components INTO ls_comp.
+      lv_idx = sy-tabix.
+      CLEAR lv_val.
+      " Skip complex components (structure / table / reference / xstring).
+      IF ls_comp-type_kind CA 'uvhrly'.
+        CLEAR lv_val.
+      ELSE.
+        ASSIGN COMPONENT lv_idx OF STRUCTURE <row> TO <val>.
+        IF sy-subrc = 0.
+          lv_val = <val>.
+        ENDIF.
+      ENDIF.
+      IF lv_idx > 1.
+        CONCATENATE lv_line lv_tab INTO lv_line.
+      ENDIF.
+      CONCATENATE lv_line lv_val INTO lv_line.
+    ENDLOOP.
+    APPEND lv_line TO lt_out.
+  ENDLOOP.
 
   CONCATENATE sy-datum sy-uzeit INTO lv_stamp.
   CONCATENATE 'ZATC_RESULT_' lv_stamp '.xls' INTO lv_file.
   CONCATENATE p_dir lv_file INTO lv_full.
 
-  CALL FUNCTION 'SAP_CONVERT_TO_XLS_FORMAT'
+  CALL FUNCTION 'GUI_DOWNLOAD'
     EXPORTING
-      i_filename        = lv_full
+      filename = lv_full
+      filetype = 'ASC'
     TABLES
-      i_tab_sap_data    = gt_findings_full
+      data_tab = lt_out
     EXCEPTIONS
-      conversion_failed = 1
-      OTHERS            = 2.
+      OTHERS   = 1.
   IF sy-subrc = 0.
     MESSAGE |ATC result written: { lv_file }| TYPE 'S'.
   ELSE.
