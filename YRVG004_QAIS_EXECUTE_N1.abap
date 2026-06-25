@@ -7882,8 +7882,12 @@ FORM monthly_discount .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
               it_data_monthly-ind_elgl_qty =  it_data_monthly-ind_lift_qty.
             ELSE.
+              IF it_data_monthly-grp_lift_qty NE 0.
               it_data_monthly-ind_elgl_qty = ( it_data_monthly-ind_lift_qty / it_data_monthly-grp_lift_qty )
              * w_month_max .
+              ELSE.
+                it_data_monthly-ind_elgl_qty = 0.
+              ENDIF.
             ENDIF.
           ELSE.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
@@ -7920,8 +7924,12 @@ FORM monthly_discount .
         ENDIF.
       ELSEIF it_data_monthly-grp_lift_qty GE w_month_min     AND
              it_data_monthly-grp_lift_qty LE w_month_max .
+        IF it_data_monthly-grp_lift_qty NE 0.
         it_data_monthly-ind_elgl_qty = ( it_data_monthly-ind_lift_qty / it_data_monthly-grp_lift_qty )
            * it_data_monthly-grp_lift_qty.
+        ELSE.
+          it_data_monthly-ind_elgl_qty = 0.
+        ENDIF.
       ENDIF.
 
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000971
@@ -8005,7 +8013,11 @@ FORM monthly_discount .
       SORT i_cond BY kstbm DESCENDING.
       IF r_month EQ 'X'.
         LOOP AT i_cond WHERE kstbm <= wa_yrva_qais_data-mou_qty . "IT_DATA_ANNUAL-TOT_ELGL_QTY.
+          IF it_data_monthly-commited_qty NE 0.
           lv_fact = ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+          ELSE.
+            lv_fact = 0.
+          ENDIF.
           IF lv_fact GE w_month_min_perc OR w_waive_month EQ 'X' OR lv_flag1 EQ 'X' OR lv_flag2 EQ 'X'.
             w_kbetr = i_cond-kbetr.
           ELSE.
@@ -8028,14 +8040,26 @@ FORM monthly_discount .
         IF ls_psdq = 'X'.
           IF it_data_monthly-kvgr2 IS INITIAL.
             READ TABLE it_yrva_qais_data_n INTO wa_yrva_qais_data_n WITH KEY kunnr = it_data_monthly-kunnr.
+            IF it_data_monthly-commited_qty NE 0.
             lv_fact = ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+            ELSE.
+              lv_fact = 0.
+            ENDIF.
           ELSE.
             READ TABLE it_yrva_qais_data_n_temp INTO wa_yrva_qais_data_n_temp WITH KEY kvgr2 =  it_data_monthly-kvgr2.
+            IF it_data_monthly-commited_qty NE 0.
             lv_fact = ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+            ELSE.
+              lv_fact = 0.
+            ENDIF.
           ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008707
         ELSE.
+          IF it_data_monthly-commited_qty NE 0.
           lv_fact = ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+          ELSE.
+            lv_fact = 0.
+          ENDIF.
         ENDIF." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008707
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000924
 **        IF s_sptag-low+4(2) = 10 AND r_rlld = 'X' AND s_sptag-low+0(4) = '2024'.
@@ -8043,10 +8067,18 @@ FORM monthly_discount .
         IF ls_psdq = 'X'.
           IF it_data_monthly-kvgr2 IS INITIAL.
             READ TABLE it_yrva_qais_data_n INTO wa_yrva_qais_data_n WITH KEY kunnr = it_data_monthly-kunnr.
+            IF it_data_monthly-commited_qty NE 0.
             lv_fact = ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+            ELSE.
+              lv_fact = 0.
+            ENDIF.
           ELSE.
             READ TABLE it_yrva_qais_data_n_temp INTO wa_yrva_qais_data_n_temp WITH KEY kvgr2 =  it_data_monthly-kvgr2.
+            IF it_data_monthly-commited_qty NE 0.
             lv_fact = ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+            ELSE.
+              lv_fact = 0.
+            ENDIF.
           ENDIF.
         ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000924
@@ -8186,7 +8218,11 @@ FORM monthly_discount .
           DATA lv_per TYPE p DECIMALS 3.
           IF it_data_monthly-kvgr2 = ' '.
             IF wa_yrva_qais_data_new3-commited_qty_m12 IS NOT INITIAL.
+              IF wa_yrva_qais_data_new3-commited_qty_m12 NE 0.
               lv_per   =  ( it_data_monthly-ind_lift_qty / wa_yrva_qais_data_new3-commited_qty_m12 ) * 100.
+              ELSE.
+                lv_per = 0.
+              ENDIF.
               IF lv_per IS NOT INITIAL.
                 IF lv_per >= 90 AND lv_per < 100.
                   it_data_monthly-value =  it_data_monthly-ind_elgl_qty * 1200.
@@ -8202,7 +8238,11 @@ FORM monthly_discount .
               IF  wa_yrva_qais_data-yy_cusclass = 'TRADER'.
                 it_data_monthly-value = it_data_monthly-ind_elgl_qty * 0.
               ELSE.
+                IF it_data_monthly-commited_qty NE 0.
                 lv_per   =  ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+                ELSE.
+                  lv_per = 0.
+                ENDIF.
                 IF lv_per IS NOT INITIAL.
                   IF lv_per >= 90 AND lv_per < 100.
                     it_data_monthly-value =  it_data_monthly-ind_elgl_qty * 1200.
@@ -8225,7 +8265,11 @@ FORM monthly_discount .
             ENDIF.
           ELSE.
             IF wa_yrva_qais_data_new3-commited_qty_m12 IS NOT INITIAL.
+              IF wa_yrva_qais_data_new3-commited_qty_m12 NE 0.
               lv_per   =  ( it_data_monthly-grp_lift_qty / wa_yrva_qais_data_new3-commited_qty_m12 ) * 100.
+              ELSE.
+                lv_per = 0.
+              ENDIF.
               IF lv_per IS NOT INITIAL.
                 IF lv_per >= 90 AND lv_per < 100.
                   it_data_monthly-value =  it_data_monthly-ind_elgl_qty * 1200.
@@ -8241,7 +8285,11 @@ FORM monthly_discount .
               IF  wa_yrva_qais_data-yy_cusclass = 'TRADER'.
                 it_data_monthly-value = it_data_monthly-ind_elgl_qty * 0.
               ELSE.
+                IF it_data_monthly-commited_qty NE 0.
                 lv_per   =  ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+                ELSE.
+                  lv_per = 0.
+                ENDIF.
                 IF lv_per IS NOT INITIAL.
                   IF lv_per >= 90 AND lv_per < 100.
                     it_data_monthly-value =  it_data_monthly-ind_elgl_qty * 1200.
@@ -8310,7 +8358,11 @@ FORM monthly_discount .
               IF  wa_yrva_qais_data-yy_cusclass = 'TRADER'.
                 IF it_data_monthly-commited_qty >= 400.
                   DATA lv_per1 TYPE p DECIMALS 3.
+                  IF it_data_monthly-commited_qty NE 0.
                   lv_per1   =  ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+                  ELSE.
+                    lv_per1 = 0.
+                  ENDIF.
                   IF lv_per1 >= 150.
                     it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr .
                   ELSE.
@@ -8322,7 +8374,11 @@ FORM monthly_discount .
                   it_data_monthly-value        = it_data_monthly-ind_elgl_qty * 0.
                 ENDIF.
               ELSE.
+                IF it_data_monthly-commited_qty NE 0.
                 lv_per1   =  ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+                ELSE.
+                  lv_per1 = 0.
+                ENDIF.
                 IF lv_per1 >= 150.
                   it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr .
                 ELSE.
@@ -8333,7 +8389,11 @@ FORM monthly_discount .
             ELSE.
               IF  wa_yrva_qais_data-yy_cusclass = 'TRADER'.
                 IF it_data_monthly-commited_qty >= 400.
+                  IF it_data_monthly-commited_qty NE 0.
                   lv_per1   =  ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+                  ELSE.
+                    lv_per1 = 0.
+                  ENDIF.
                   IF lv_per1 >= 150.
                     it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr.
                   ELSE.
@@ -8345,7 +8405,11 @@ FORM monthly_discount .
                   it_data_monthly-value        = it_data_monthly-ind_elgl_qty * 0.
                 ENDIF.
               ELSE.
+                IF it_data_monthly-commited_qty NE 0.
                 lv_per1   =  ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+                ELSE.
+                  lv_per1 = 0.
+                ENDIF.
                 IF lv_per1 >= 150.
                   it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr .
                 ELSE.
@@ -8379,7 +8443,11 @@ FORM monthly_discount .
               IF  wa_yrva_qais_data-yy_cusclass = 'TRADER'.
                 IF it_data_monthly-commited_qty >= 400.
                   DATA lv_per2 TYPE p DECIMALS 3.
+                  IF it_data_monthly-commited_qty NE 0.
                   lv_per2   =  ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+                  ELSE.
+                    lv_per2 = 0.
+                  ENDIF.
                   IF lv_per2 >= 150.
                     it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr1 .
                   ELSE.
@@ -8391,7 +8459,11 @@ FORM monthly_discount .
                   it_data_monthly-value        = it_data_monthly-ind_elgl_qty * 0.
                 ENDIF.
               ELSE.
+                IF it_data_monthly-commited_qty NE 0.
                 lv_per2   =  ( it_data_monthly-ind_lift_qty / it_data_monthly-commited_qty ) * 100.
+                ELSE.
+                  lv_per2 = 0.
+                ENDIF.
                 IF lv_per2 >= 150.
                   it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr1.
                 ELSE.
@@ -8402,7 +8474,11 @@ FORM monthly_discount .
             ELSE.
               IF  wa_yrva_qais_data-yy_cusclass = 'TRADER'.
                 IF it_data_monthly-commited_qty >= 400.
+                  IF it_data_monthly-commited_qty NE 0.
                   lv_per2   =  ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+                  ELSE.
+                    lv_per2 = 0.
+                  ENDIF.
                   IF lv_per2 >= 150.
                     it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr1.
                   ELSE.
@@ -8414,7 +8490,11 @@ FORM monthly_discount .
                   it_data_monthly-value        = it_data_monthly-ind_elgl_qty * 0.
                 ENDIF.
               ELSE.
+                IF it_data_monthly-commited_qty NE 0.
                 lv_per2   =  ( it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty ) * 100.
+                ELSE.
+                  lv_per2 = 0.
+                ENDIF.
                 IF lv_per2 >= 150.
                   it_data_monthly-value   = it_data_monthly-ind_elgl_qty * lv_kbetr1 .
                 ELSE.
