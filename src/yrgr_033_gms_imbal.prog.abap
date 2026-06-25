@@ -65,12 +65,33 @@ INITIALIZATION.
 
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
-  " Validate R1 date: from date must be >= 01.01.2022
-  IF r1 EQ 'X'.
+  " Skip all field-level validation during USER-COMMAND events
+  " (radio button clicks 'ABC', Send Mail checkbox 'EML') –
+  " validate only when user presses Execute / Schedule Job.
+  IF sy-ucomm EQ 'ABC' OR sy-ucomm EQ 'EML'.
+    " Screen refresh only – no validation
+  ELSEIF r1 EQ 'X' AND s_date IS NOT INITIAL.
     READ TABLE s_date INTO DATA(ls_sd_chk) INDEX 1.
     IF sy-subrc = 0 AND ls_sd_chk-low IS NOT INITIAL.
+      " 1. Validate from date is on or after 01.01.2022
       IF ls_sd_chk-low LT '20220101'.
-        MESSAGE 'From date should be after 01.01.2022' TYPE 'E'.
+        MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
+      ENDIF.
+      " 2. FN date validation: From Date must be 1st or 16th of month
+      lv_fn_from_day = ls_sd_chk-low+6(2).
+      IF lv_fn_from_day NE '01' AND lv_fn_from_day NE '16'.
+        MESSAGE 'From date must be 1st or 16th of the month (FN start date)' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+    " 3. FN date validation: To Date must be 15th or last day of month
+    IF sy-subrc = 0 AND ls_sd_chk-high IS NOT INITIAL.
+      lv_fn_to_day   = ls_sd_chk-high+6(2).
+      lv_fn_next_day = ls_sd_chk-high + 1.
+      CLEAR lv_fn_is_last.
+      " If the next day falls in a different month, high is the last day
+      IF lv_fn_next_day(6) NE ls_sd_chk-high(6). lv_fn_is_last = 'X'. ENDIF.
+      IF lv_fn_to_day NE '15' AND lv_fn_is_last IS INITIAL.
+        MESSAGE 'To date must be 15th or last day of the month (FN end date)' TYPE 'E'.
       ENDIF.
     ENDIF.
   ENDIF.
@@ -171,23 +192,27 @@ START-OF-SELECTION.
     ENDIF.
 
   ELSEIF r4 EQ 'X'.
-    " Action Taken mode: use s_dat4/s_vk4 as date/sales-office input
+    " Action Taken mode: use s_dat4/s_vk4 as date/sales-office input.
+    " Shows the same contract list as R1, filtered by the user-provided date range.
     REFRESH: s_date[].
     IF s_dat4 IS NOT INITIAL.
       LOOP AT s_dat4 INTO DATA(ls_dat4).
+        CLEAR s_date.                   " clear at start so header stays set after APPEND
         s_date-sign   = ls_dat4-sign.
         s_date-option = ls_dat4-option.
         s_date-low    = ls_dat4-low.
         s_date-high   = ls_dat4-high.
         APPEND s_date.
-        CLEAR s_date.
       ENDLOOP.
+      " After loop the header line retains the last entry's low/high,
+      " which get_data reads via s_date-low / s_date-high.
     ELSE.
-      " Default to last full fortnight if no date entered
+      " Default: last full fortnight when no date entered
       lv_date = sy-datum - 3.
       CALL FUNCTION 'YRX_PRVS_DATE_FM'
         EXPORTING s_date = lv_date
         IMPORTING st_date = st_date ed_date = ed_date.
+      CLEAR s_date.
       s_date-low = st_date. s_date-high = ed_date. APPEND s_date.
     ENDIF.
     DATA: obj_r4 TYPE REF TO lcl_event_handler.
