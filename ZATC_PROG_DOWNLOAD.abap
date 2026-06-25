@@ -192,6 +192,8 @@ FORM collect_findings.
   "   pseudo-findings, which must NOT be downloaded.
   SELECT * INTO TABLE @DATA(it_chmmt) FROM satc_ac_chm_msgt_ddlv.
   SELECT * INTO TABLE @DATA(it_cmmmt) FROM satc_ac_cmm_msgt_ddlv.
+  DATA wa_chmmt LIKE LINE OF it_chmmt.
+  DATA wa_cmmmt LIKE LINE OF it_cmmmt.
 
   DATA gs_obj TYPE ty_obj.
   DATA lv_ok  TYPE abap_bool.
@@ -204,11 +206,11 @@ FORM collect_findings.
     " has such findings is therefore never collected; one that also has a
     " real finding is still downloaded via that finding.
     CLEAR: wa_chmmt, wa_cmmmt.
-    READ TABLE it_chmmt INTO DATA(wa_chmmt) WITH KEY ci_id = finding-test.
+    READ TABLE it_chmmt INTO wa_chmmt WITH KEY ci_id = finding-test.
     IF sy-subrc = 0 AND wa_chmmt-title CS 'Prerequisites for the test'.
       CONTINUE.
     ENDIF.
-    READ TABLE it_cmmmt INTO DATA(wa_cmmmt) WITH KEY message_id = finding-code.
+    READ TABLE it_cmmmt INTO wa_cmmmt WITH KEY message_id = finding-code.
     IF sy-subrc = 0 AND wa_cmmmt-title CS 'Syntax error'.
       CONTINUE.
     ENDIF.
