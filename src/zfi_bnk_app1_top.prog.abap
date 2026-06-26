@@ -7,7 +7,7 @@ PROGRAM ZFI_BNK_APP1.
 
 TYPES : BEGIN OF ty_final,
           sel              type c,
-          guid             TYPE bnk_com_btch_guid,
+          guid             TYPE sysuuid_c,          "Replaced BNK_BATCH_HEADER-GUID(RAW16) with REGUT-GUID(CHAR32) - new unique key
           batch_no         TYPE bnk_com_btch_no,
           rule_id          TYPE bnk_com_btch_rule_id,
           item_cnt         TYPE bnk_com_btch_ctr,
@@ -20,7 +20,7 @@ TYPES : BEGIN OF ty_final,
           batch_sum        TYPE bnk_com_btch_amount,
           batch_curr       TYPE bnk_com_btch_curr,
           max_pay_amt      TYPE bnk_com_max_paymnt_amount,
-          status           TYPE bnk_com_btch_status_id,
+          status           TYPE epic_regut_status,   "REGUT-STATUS(CHAR3) - avoids MOVE-CORRESPONDING type clash
           crusr            TYPE bnk_com_create_user,
           crtime           TYPE bnk_com_create_time,
           crdate           TYPE bnk_com_create_date,
@@ -41,13 +41,13 @@ TYPES : BEGIN OF ty_final,
         end of ty_final.
 
 DATA : gt_paym          TYPE STANDARD TABLE OF zfi_paym_file,
-       gt_batch_header  TYPE STANDARD TABLE OF bnk_batch_header,
+       gt_batch_header  TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
        gt_batch_sign    TYPE STANDARD TABLE OF zfi_batch_sign ,
        gt_paym2         TYPE STANDARD TABLE OF zfi_paym_file,
-       gt_batch_header2 TYPE STANDARD TABLE OF bnk_batch_header,
+       gt_batch_header2 TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
        gt_batch_sign2   TYPE STANDARD TABLE OF zfi_batch_sign ,
        gt_paym3         TYPE STANDARD TABLE OF zfi_paym_file,
-       gt_batch_header3 TYPE STANDARD TABLE OF bnk_batch_header,
+       gt_batch_header3 TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
        gt_batch_sign3   TYPE STANDARD TABLE OF zfi_batch_sign ,
        gt_final         TYPE STANDARD TABLE OF ty_final,
        gt_final2        TYPE STANDARD TABLE OF ty_final,

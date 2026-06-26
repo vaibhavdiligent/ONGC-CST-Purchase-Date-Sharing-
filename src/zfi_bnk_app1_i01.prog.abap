@@ -141,8 +141,8 @@ MODULE get_selected_row_tab1 INPUT.
             ENDIF.
 
             CLEAR gs_paym.
-            READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi_f
-                                                     laufd = gs_final-laufd_f.
+            READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+                                                     laufd = gs_final-laufd.
             IF sy-subrc = 0.
               gs_paym-file_data_sent = doc_sig.
               MODIFY zfi_paym_file FROM gs_paym.
@@ -151,10 +151,10 @@ MODULE get_selected_row_tab1 INPUT.
 
 ***** modify record in table ZFI_BATCH_SIGN
             CLEAR : gs_batch_sign.
-            READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_final-batch_no
+            READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY guid = gs_final-guid
                                                                  signer = sy-uname.
             IF sy-subrc = 0.
-              gs_batch_sign-batch_no    = gs_final-batch_no.
+              gs_batch_sign-guid        = gs_final-guid.
               gs_batch_sign-signer      = sy-uname.
               gs_batch_sign-digitl_sign = 'X'.
               gs_batch_sign-cdate1      = sy-datum.
@@ -307,8 +307,8 @@ MODULE get_selected_row_tab2 INPUT.
             ENDIF.
 
             CLEAR gs_paym2.
-            READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufi = gs_final2-laufi_f
-                                                       laufd = gs_final2-laufd_f.
+            READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufi = gs_final2-laufi
+                                                       laufd = gs_final2-laufd.
             IF sy-subrc = 0.
               IF gs_paym2-sent <> ' '.
                 MESSAGE 'Can not be sent' TYPE 'I'.
@@ -344,10 +344,10 @@ MODULE get_selected_row_tab2 INPUT.
                 ENDIF.
 ***** insert record in table ZFI_BATCH_SIGN
                 CLEAR : gs_batch_sign2.
-                READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_final2-batch_no
+                READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY guid = gs_final2-guid
                                                                        signer   = sy-uname.
                 IF sy-subrc = 0.
-                  gs_batch_sign2-batch_no    = gs_final2-batch_no.
+                  gs_batch_sign2-guid        = gs_final2-guid.
                   gs_batch_sign2-signer      = sy-uname.
                   gs_batch_sign2-digitl_sign = 'X'.
                   gs_batch_sign2-cdate1      = sy-datum.
