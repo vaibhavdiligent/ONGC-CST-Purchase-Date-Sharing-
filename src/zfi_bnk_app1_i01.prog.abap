@@ -151,10 +151,10 @@ MODULE get_selected_row_tab1 INPUT.
 
 ***** modify record in table ZFI_BATCH_SIGN
             CLEAR : gs_batch_sign.
-            READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY guid = gs_final-guid
+            READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_final-guid
                                                                  signer = sy-uname.
             IF sy-subrc = 0.
-              gs_batch_sign-guid        = gs_final-guid.
+              gs_batch_sign-batch_no    = gs_final-guid.   "BATCH_NO widened to hold REGUT-GUID
               gs_batch_sign-signer      = sy-uname.
               gs_batch_sign-digitl_sign = 'X'.
               gs_batch_sign-cdate1      = sy-datum.
@@ -344,10 +344,10 @@ MODULE get_selected_row_tab2 INPUT.
                 ENDIF.
 ***** insert record in table ZFI_BATCH_SIGN
                 CLEAR : gs_batch_sign2.
-                READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY guid = gs_final2-guid
+                READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_final2-guid
                                                                        signer   = sy-uname.
                 IF sy-subrc = 0.
-                  gs_batch_sign2-guid        = gs_final2-guid.
+                  gs_batch_sign2-batch_no    = gs_final2-guid.   "BATCH_NO widened to hold REGUT-GUID
                   gs_batch_sign2-signer      = sy-uname.
                   gs_batch_sign2-digitl_sign = 'X'.
                   gs_batch_sign2-cdate1      = sy-datum.

@@ -31,14 +31,14 @@ FORM f_prepare_op_tab1 .
     IF gt_batch_header IS NOT INITIAL.
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
         FOR ALL ENTRIES IN gt_batch_header
-        WHERE guid = gt_batch_header-guid
+        WHERE batch_no = gt_batch_header-guid   "BATCH_NO widened to hold REGUT-GUID
         AND   signer = sy-uname
         and   snro = '1'.
 
 
       sort gt_batch_sign by CDATE1 CTIME1.
       LOOP AT gt_batch_header INTO gs_batch_header.
-        READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY guid = gs_batch_header-guid
+        READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_batch_header-guid
                                                              signer = sy-uname
                                                              snro = '1'.
         IF sy-subrc EQ 0 .
@@ -249,7 +249,7 @@ FORM f_prepare_op_tab2 .
     IF gt_batch_header2 IS NOT INITIAL.
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign2
         FOR ALL ENTRIES IN gt_batch_header2
-        WHERE guid = gt_batch_header2-guid
+        WHERE batch_no = gt_batch_header2-guid   "BATCH_NO widened to hold REGUT-GUID
         AND   DIGITL_SIGN = ' '
         AND   signer eq sy-uname
         and   snro = '2'.
@@ -258,7 +258,7 @@ FORM f_prepare_op_tab2 .
 
       LOOP AT gt_batch_header2 INTO gs_batch_header2.
 
-        READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY guid = gs_batch_header2-guid
+        READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_batch_header2-guid
                                                               signer = sy-uname
                                                               snro = '2'.
 *       IF sy-subrc <> 0.
@@ -512,14 +512,14 @@ FORM f_prepare_op_tab3 .
     IF gt_batch_header3 IS NOT INITIAL.
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign3
         FOR ALL ENTRIES IN gt_batch_header3
-        WHERE guid = gt_batch_header3-guid
+        WHERE batch_no = gt_batch_header3-guid   "BATCH_NO widened to hold REGUT-GUID
         AND   signer EQ sy-uname.
     ENDIF.
   ENDIF.
 
   LOOP AT gt_batch_header3 INTO gs_batch_header3.
 
-    READ TABLE gt_batch_sign3 INTO gs_batch_sign3 WITH KEY guid = gs_batch_header3-guid
+    READ TABLE gt_batch_sign3 INTO gs_batch_sign3 WITH KEY batch_no = gs_batch_header3-guid
                                                           signer = sy-uname.
     IF sy-subrc EQ 0.
       MOVE-CORRESPONDING gs_batch_header3 TO gs_final3.
