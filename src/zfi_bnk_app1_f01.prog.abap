@@ -1,0 +1,1148 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFI_BNK_APP1_F01
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  F_PREPARE_OP_TAB1
+*&---------------------------------------------------------------------*
+FORM f_prepare_op_tab1 .
+
+  REFRESH : gt_paym, gt_batch_header,gt_batch_sign,gt_final.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym.
+
+  DELETE gt_paym WHERE file_data_sent IS NOT INITIAL.
+  DELETE gt_paym WHERE raw_data IS INITIAL.
+
+  IF gt_paym IS NOT INITIAL.
+    SELECT * FROM bnk_batch_header INTO TABLE gt_batch_header
+      FOR ALL ENTRIES IN gt_paym
+      WHERE laufi_f = gt_paym-laufi
+      AND   laufd_f = gt_paym-laufd.
+
+    IF gt_batch_header IS NOT INITIAL.
+      SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
+        FOR ALL ENTRIES IN gt_batch_header
+        WHERE batch_no = gt_batch_header-batch_no
+        AND   signer = sy-uname
+        and   snro = '1'.
+
+
+      sort gt_batch_sign by CDATE1 CTIME1.
+      LOOP AT gt_batch_header INTO gs_batch_header.
+        READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_batch_header-batch_no
+                                                             signer = sy-uname
+                                                             snro = '1'.
+        IF sy-subrc EQ 0 .
+*    if gs_batch_sign-signer = sy-uname   and gs_batch_sign-digitl_sign = ' '.
+          MOVE-CORRESPONDING gs_batch_header TO gs_final.
+          READ TABLE gt_paym INTO gs_paym WITH KEY laufd = gs_batch_header-laufd_f
+                                                   laufi = gs_batch_header-laufi_f.
+          IF sy-subrc = 0.
+            gs_final-raw_data = gs_paym-raw_data.
+          ENDIF.
+          APPEND gs_final TO gt_final.
+        ENDIF.
+*    endif.
+        CLEAR : gs_batch_header,gs_batch_sign,gs_final.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " F_PREPARE_OP_TAB1
+
+*&---------------------------------------------------------------------*
+*&      Form  F_ALV_BUILD_FIELDCAT1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_alv_build_fieldcat1 .
+  DATA lv_fldcat1 TYPE lvc_s_fcat.
+  DATA: lv_index1 TYPE sy-index.
+  REFRESH : it_fcat1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'BATCH_NO'.
+  lv_fldcat1-scrtext_m = 'Batch no.'.
+  lv_fldcat1-outputlen = '10'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'RULE_ID'.
+  lv_fldcat1-scrtext_m = 'Rule Id'.
+  lv_fldcat1-outputlen = '10'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'ITEM_CNT'.
+  lv_fldcat1-scrtext_m = 'No. of Payment'.
+  lv_fldcat1-outputlen = '14'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'LAUFD'.
+  lv_fldcat1-scrtext_m = 'Merger date'.
+  lv_fldcat1-outputlen = '11'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'LAUFI'.
+  lv_fldcat1-scrtext_m = 'Merge Id'.
+  lv_fldcat1-outputlen = '8'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'LAUFD_F'.
+  lv_fldcat1-scrtext_m = 'File Date'.
+  lv_fldcat1-outputlen = '9'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'LAUFI_F'.
+  lv_fldcat1-scrtext_m = 'File Id'.
+  lv_fldcat1-outputlen = '7'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'BATCH_SUM'.
+  lv_fldcat1-scrtext_m = 'Batch Amount'.
+  lv_fldcat1-outputlen = '15'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+*  lv_index1 = lv_index1 + 1.
+*  CLEAR lv_fldcat1.
+*  lv_fldcat1-tabname   = 'GT_FINAL'.
+*  lv_fldcat1-fieldname = 'MAX_PAY_AMT'.
+*  lv_fldcat1-scrtext_m = 'Maximum payment'.
+*  lv_fldcat1-outputlen = '15'.
+**  lv_fldcat1-row_pos   = '1'.
+*  lv_fldcat1-col_pos   = lv_index1.
+*  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'CRUSR'.
+  lv_fldcat1-scrtext_m = 'Create User'.
+  lv_fldcat1-outputlen = '12'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'CRTIME'.
+  lv_fldcat1-scrtext_m = 'Create Time'.
+  lv_fldcat1-outputlen = '11'.
+  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'CRDATE'.
+  lv_fldcat1-scrtext_m = 'Create Date'.
+  lv_fldcat1-outputlen = '11'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'CHUSR'.
+  lv_fldcat1-scrtext_m = 'Change User'.
+  lv_fldcat1-outputlen = '12'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'CHTIME'.
+  lv_fldcat1-scrtext_m = 'Change Time'.
+  lv_fldcat1-outputlen = '11'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'CHDATE'.
+  lv_fldcat1-scrtext_m = 'Change Date'.
+  lv_fldcat1-outputlen = '11'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'ZBUKR'.
+  lv_fldcat1-scrtext_m = 'Paying company code'.
+  lv_fldcat1-outputlen = '19'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+
+*  lv_index1 = lv_index1 + 1.
+*   CLEAR lv_fldcat1.
+*  lv_fldcat1-tabname   = 'GT_FINAL'.
+*  lv_fldcat1-fieldname = 'HBKID'.
+*  lv_fldcat1-scrtext_m = 'Short Key for a House Bank'.
+*  lv_fldcat1-outputlen = '26'.
+**  lv_fldcat1-row_pos   = '1'.
+*  lv_fldcat1-col_pos   = lv_index1.
+*  APPEND lv_fldcat1 TO it_fcat1.
+
+  lv_index1 = lv_index1 + 1.
+  CLEAR lv_fldcat1.
+  lv_fldcat1-tabname   = 'GT_FINAL'.
+  lv_fldcat1-fieldname = 'TOT_BTCH_AMT'.
+  lv_fldcat1-scrtext_m = 'Total batch amount'.
+  lv_fldcat1-outputlen = '18'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat1-col_pos   = lv_index1.
+  APPEND lv_fldcat1 TO it_fcat1.
+*
+*  lv_index1 = lv_index1 + 1.
+*   CLEAR lv_fldcat1.
+*  lv_fldcat1-tabname   = 'GT_FINAL'.
+*  lv_fldcat1-fieldname = 'MAXPAYAMT_RULECU'.
+*  lv_fldcat1-scrtext_m = 'Maximum payment Amount'.
+*  lv_fldcat1-outputlen = '22'.
+*  lv_fldcat1-row_pos   = '1'.
+*  lv_fldcat1-col_pos   = lv_index1.
+*  APPEND lv_fldcat1 TO it_fcat1.
+
+*   lv_index1 = lv_index1 + 1.
+*   CLEAR lv_fldcat1.
+*  lv_fldcat1-tabname   = 'GT_FINAL'.
+*  lv_fldcat1-fieldname = 'GRP_FIELD1_VALUE'.
+*  lv_fldcat1-scrtext_m = 'Grouping field val1'.
+*  lv_fldcat1-outputlen = '30'.
+*  lv_fldcat1-row_pos   = '1'.
+*  lv_fldcat1-col_pos   = lv_index1.
+*  APPEND lv_fldcat1 TO it_fcat1.
+*
+*   lv_index1 = lv_index1 + 1.
+*   CLEAR lv_fldcat1.
+*  lv_fldcat1-tabname   = 'GT_FINAL'.
+*  lv_fldcat1-fieldname = 'GRP_FIELD2_VALUE'.
+*  lv_fldcat1-scrtext_m = 'Grouping field val2'.
+*  lv_fldcat1-outputlen = '30'.
+*  lv_fldcat1-row_pos   = '1'.
+*  lv_fldcat1-col_pos   = lv_index1.
+*  APPEND lv_fldcat1 TO it_fcat1.
+
+ENDFORM.                    " F_ALV_BUILD_FIELDCAT1
+*&---------------------------------------------------------------------*
+*&      Form  F_ALV_REPORT_LAYOUT1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_alv_report_layout1 .
+  CLEAR : it_layout1.
+  it_layout1-cwidth_opt = 'X'.
+  it_layout1-sel_mode   = 'A'.
+ENDFORM.                    " F_ALV_REPORT_LAYOUT1
+*&---------------------------------------------------------------------*
+*&      Form  F_PREPARE_OP_TAB2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_prepare_op_tab2 .
+*  BREAK sab_vaibhav.
+  REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
+
+  DELETE gt_paym2 WHERE file_data_sent IS INITIAL.
+
+  IF gt_paym2 IS NOT INITIAL.
+    SELECT * FROM bnk_batch_header INTO TABLE gt_batch_header2
+      FOR ALL ENTRIES IN gt_paym2
+      WHERE laufi_f = gt_paym2-laufi
+      AND   laufd_f = gt_paym2-laufd.
+
+    IF gt_batch_header2 IS NOT INITIAL.
+      SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign2
+        FOR ALL ENTRIES IN gt_batch_header2
+        WHERE batch_no = gt_batch_header2-batch_no
+        AND   DIGITL_SIGN = ' '
+        AND   signer eq sy-uname
+        and   snro = '2'.
+
+*sort gt_batch_sign by CDATE1 CTIME1.
+
+      LOOP AT gt_batch_header2 INTO gs_batch_header2.
+
+        READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_batch_header2-batch_no
+                                                              signer = sy-uname
+                                                              snro = '2'.
+*       IF sy-subrc <> 0.
+        IF sy-subrc EQ 0.
+          MOVE-CORRESPONDING gs_batch_header2 TO gs_final2.
+          READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufd = gs_batch_header2-laufd_f
+                                                     laufi = gs_batch_header2-laufi_f.
+          IF sy-subrc = 0.
+            gs_final2-raw_data = gs_paym2-raw_data.
+            gs_final2-file_data_sent = gs_paym2-file_data_sent.
+          ENDIF.
+          APPEND gs_final2 TO gt_final2.
+        ENDIF.
+*    endif.
+        CLEAR : gs_batch_header2,gs_batch_sign2,gs_final2.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+ENDFORM.                    " F_PREPARE_OP_TAB2
+*&---------------------------------------------------------------------*
+*&      Form  F_ALV_BUILD_FIELDCAT2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_alv_build_fieldcat2 .
+  DATA lv_fldcat2 TYPE lvc_s_fcat.
+  DATA: lv_index2 TYPE sy-index.
+  REFRESH : it_fcat2.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'BATCH_NO'.
+  lv_fldcat2-scrtext_m = 'Batch no.'.
+  lv_fldcat2-outputlen = '10'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'RULE_ID'.
+  lv_fldcat2-scrtext_m = 'Rule Id'.
+  lv_fldcat2-outputlen = '10'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'ITEM_CNT'.
+  lv_fldcat2-scrtext_m = 'No. of Payment'.
+  lv_fldcat2-outputlen = '14'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'LAUFD'.
+  lv_fldcat2-scrtext_m = 'Merger date'.
+  lv_fldcat2-outputlen = '11'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'LAUFI'.
+  lv_fldcat2-scrtext_m = 'Merge Id'.
+  lv_fldcat2-outputlen = '8'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'LAUFD_F'.
+  lv_fldcat2-scrtext_m = 'File Date'.
+  lv_fldcat2-outputlen = '9'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'LAUFI_F'.
+  lv_fldcat2-scrtext_m = 'File Id'.
+  lv_fldcat2-outputlen = '7'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'BATCH_SUM'.
+  lv_fldcat2-scrtext_m = 'Batch Amount'.
+  lv_fldcat2-outputlen = '15'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+*
+*  lv_index2 = lv_index2 + 1.
+*  CLEAR lv_fldcat2.
+*  lv_fldcat2-tabname   = 'GT_FINAL2'.
+*  lv_fldcat2-fieldname = 'MAX_PAY_AMT'.
+*  lv_fldcat2-scrtext_m = 'Maximum payment'.
+*  lv_fldcat2-outputlen = '15'.
+**  lv_fldcat2-row_pos   = '1'.
+*  lv_fldcat2-col_pos   = lv_index2.
+*  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'CRUSR'.
+  lv_fldcat2-scrtext_m = 'Create User'.
+  lv_fldcat2-outputlen = '12'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'CRTIME'.
+  lv_fldcat2-scrtext_m = 'Create Time'.
+  lv_fldcat2-outputlen = '11'.
+  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'CRDATE'.
+  lv_fldcat2-scrtext_m = 'Create Date'.
+  lv_fldcat2-outputlen = '11'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'CHUSR'.
+  lv_fldcat2-scrtext_m = 'Change User'.
+  lv_fldcat2-outputlen = '12'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'CHTIME'.
+  lv_fldcat2-scrtext_m = 'Change Time'.
+  lv_fldcat2-outputlen = '11'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'CHDATE'.
+  lv_fldcat2-scrtext_m = 'Change Date'.
+  lv_fldcat2-outputlen = '11'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'ZBUKR'.
+  lv_fldcat2-scrtext_m = 'Paying company code'.
+  lv_fldcat2-outputlen = '19'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+*  lv_index2 = lv_index2 + 1.
+*  CLEAR lv_fldcat2.
+*  lv_fldcat2-tabname   = 'GT_FINAL2'.
+*  lv_fldcat2-fieldname = 'HBKID'.
+*  lv_fldcat2-scrtext_m = 'Short Key for a House Bank'.
+*  lv_fldcat2-outputlen = '26'.
+**  lv_fldcat2-row_pos   = '1'.
+*  lv_fldcat2-col_pos   = lv_index2.
+*  APPEND lv_fldcat2 TO it_fcat2.
+
+  lv_index2 = lv_index2 + 1.
+  CLEAR lv_fldcat2.
+  lv_fldcat2-tabname   = 'GT_FINAL2'.
+  lv_fldcat2-fieldname = 'TOT_BTCH_AMT'.
+  lv_fldcat2-scrtext_m = 'Total batch amount'.
+  lv_fldcat2-outputlen = '18'.
+*  lv_fldcat2-row_pos   = '1'.
+  lv_fldcat2-col_pos   = lv_index2.
+  APPEND lv_fldcat2 TO it_fcat2.
+
+*  lv_index2 = lv_index2 + 1.
+*  CLEAR lv_fldcat2.
+*  lv_fldcat2-tabname   = 'GT_FINAL2'.
+*  lv_fldcat2-fieldname = 'MAXPAYAMT_RULECU'.
+*  lv_fldcat2-scrtext_m = 'Maximum payment Amount'.
+*  lv_fldcat2-outputlen = '22'.
+*  lv_fldcat2-row_pos   = '1'.
+*  lv_fldcat2-col_pos   = lv_index2.
+*  APPEND lv_fldcat2 TO it_fcat2.
+
+*  lv_index2 = lv_index2 + 1.
+*  CLEAR lv_fldcat2.
+*  lv_fldcat2-tabname   = 'GT_FINAL2'.
+*  lv_fldcat2-fieldname = 'GRP_FIELD1_VALUE'.
+*  lv_fldcat2-scrtext_m = 'Grouping field val1'.
+*  lv_fldcat2-outputlen = '30'.
+*  lv_fldcat2-row_pos   = '1'.
+*  lv_fldcat2-col_pos   = lv_index2.
+*  APPEND lv_fldcat2 TO it_fcat2.
+*
+*  lv_index2 = lv_index2 + 1.
+*  CLEAR lv_fldcat2.
+*  lv_fldcat2-tabname   = 'GT_FINAL2'.
+*  lv_fldcat2-fieldname = 'GRP_FIELD2_VALUE'.
+*  lv_fldcat2-scrtext_m = 'Grouping field val2'.
+*  lv_fldcat2-outputlen = '30'.
+*  lv_fldcat2-row_pos   = '1'.
+*  lv_fldcat2-col_pos   = lv_index2.
+*  APPEND lv_fldcat2 TO it_fcat2.
+
+
+ENDFORM.                    " F_ALV_BUILD_FIELDCAT2
+*&---------------------------------------------------------------------*
+*&      Form  F_ALV_REPORT_LAYOUT2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_alv_report_layout2 .
+  CLEAR: it_layout2.
+  it_layout2-cwidth_opt = 'X'.
+  it_layout2-sel_mode   = 'A'.
+
+ENDFORM.                    " F_ALV_REPORT_LAYOUT2
+*&---------------------------------------------------------------------*
+*&      Form  FREE_OBJECTS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM free_objects1 .
+
+  CALL METHOD c_alvgd1->free
+    EXCEPTIONS
+      cntl_error        = 1
+      cntl_system_error = 2
+      OTHERS            = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+  CALL METHOD c_ccont1->free
+    EXCEPTIONS
+      cntl_error        = 1
+      cntl_system_error = 2
+      OTHERS            = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.                    " FREE_OBJECTS
+*&---------------------------------------------------------------------*
+*&      Form  FREE_OBJECTS2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM free_objects2 .
+  CALL METHOD c_alvgd2->free
+    EXCEPTIONS
+      cntl_error        = 1
+      cntl_system_error = 2
+      OTHERS            = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+  CALL METHOD c_ccont2->free
+    EXCEPTIONS
+      cntl_error        = 1
+      cntl_system_error = 2
+      OTHERS            = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+
+ENDFORM.                    " FREE_OBJECTS2
+*&---------------------------------------------------------------------*
+*&      Form  F_PREPARE_OP_TAB3
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_prepare_op_tab3 .
+  REFRESH : gt_paym3, gt_batch_header3,gt_final3, gt_batch_sign3.
+*break sab_vaibhav.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym3 WHERE sent = 'X'.
+
+*DELETE gt_paym3 WHERE file_data_sent IS INITIAL.
+
+  IF gt_paym3 IS NOT INITIAL.
+    SELECT * FROM bnk_batch_header INTO TABLE gt_batch_header3
+      FOR ALL ENTRIES IN gt_paym3
+      WHERE laufi_f = gt_paym3-laufi
+      AND   laufd_f = gt_paym3-laufd.
+
+    IF gt_batch_header3 IS NOT INITIAL.
+      SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign3
+        FOR ALL ENTRIES IN gt_batch_header3
+        WHERE batch_no = gt_batch_header3-batch_no
+        AND   signer EQ sy-uname.
+    ENDIF.
+  ENDIF.
+
+  LOOP AT gt_batch_header3 INTO gs_batch_header3.
+
+    READ TABLE gt_batch_sign3 INTO gs_batch_sign3 WITH KEY batch_no = gs_batch_header3-batch_no
+                                                          signer = sy-uname.
+    IF sy-subrc EQ 0.
+      MOVE-CORRESPONDING gs_batch_header3 TO gs_final3.
+      READ TABLE gt_paym3 INTO gs_paym3 WITH KEY laufd = gs_batch_header3-laufd_f
+                                                 laufi = gs_batch_header3-laufi_f.
+      IF sy-subrc = 0.
+        gs_final3-raw_data       = gs_paym3-raw_data.
+        gs_final3-file_data_sent = gs_paym3-file_data_sent.
+        gs_final3-error_flag     = gs_paym3-sent_error.
+      ENDIF.
+      APPEND gs_final3 TO gt_final3.
+    ENDIF.
+*    endif.
+    CLEAR : gs_batch_header3,gs_batch_sign3,gs_final3.
+  ENDLOOP.
+
+ENDFORM.                    " F_PREPARE_OP_TAB3
+
+*&---------------------------------------------------------------------*
+*&      Form  F_ALV_BUILD_FIELDCAT3
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_alv_build_fieldcat3 .
+  DATA lv_fldcat3 TYPE lvc_s_fcat.
+  DATA: lv_index3 TYPE sy-index.
+  REFRESH : it_fcat3.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'BATCH_NO'.
+  lv_fldcat3-scrtext_m = 'Batch no.'.
+  lv_fldcat3-outputlen = '10'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'RULE_ID'.
+  lv_fldcat3-scrtext_m = 'Rule Id'.
+  lv_fldcat3-outputlen = '10'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'ITEM_CNT'.
+  lv_fldcat3-scrtext_m = 'No. of Payment'.
+  lv_fldcat3-outputlen = '14'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'LAUFD'.
+  lv_fldcat3-scrtext_m = 'Merger date'.
+  lv_fldcat3-outputlen = '11'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'LAUFI'.
+  lv_fldcat3-scrtext_m = 'Merge Id'.
+  lv_fldcat3-outputlen = '8'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'LAUFD_F'.
+  lv_fldcat3-scrtext_m = 'File Date'.
+  lv_fldcat3-outputlen = '9'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'LAUFI_F'.
+  lv_fldcat3-scrtext_m = 'File Id'.
+  lv_fldcat3-outputlen = '7'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'ERROR_FLAG'.
+  lv_fldcat3-scrtext_m = 'Error Flag'.
+  lv_fldcat3-outputlen = '10'.
+*  lv_fldcat1-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'BATCH_SUM'.
+  lv_fldcat3-scrtext_m = 'Batch Amount'.
+  lv_fldcat3-outputlen = '15'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+*
+*  lv_index3 = lv_index3 + 1.
+*  CLEAR lv_fldcat3.
+*  lv_fldcat3-tabname   = 'GT_FINAL3'.
+*  lv_fldcat3-fieldname = 'MAX_PAY_AMT'.
+*  lv_fldcat3-scrtext_m = 'Maximum payment'.
+*  lv_fldcat3-outputlen = '15'.
+**  lv_fldcat3-row_pos   = '1'.
+*  lv_fldcat3-col_pos   = lv_index3.
+*  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'CRUSR'.
+  lv_fldcat3-scrtext_m = 'Create User'.
+  lv_fldcat3-outputlen = '12'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'CRTIME'.
+  lv_fldcat3-scrtext_m = 'Create Time'.
+  lv_fldcat3-outputlen = '11'.
+  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'CRDATE'.
+  lv_fldcat3-scrtext_m = 'Create Date'.
+  lv_fldcat3-outputlen = '11'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'CHUSR'.
+  lv_fldcat3-scrtext_m = 'Change User'.
+  lv_fldcat3-outputlen = '12'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'CHTIME'.
+  lv_fldcat3-scrtext_m = 'Change Time'.
+  lv_fldcat3-outputlen = '11'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'CHDATE'.
+  lv_fldcat3-scrtext_m = 'Change Date'.
+  lv_fldcat3-outputlen = '11'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'ZBUKR'.
+  lv_fldcat3-scrtext_m = 'Paying company code'.
+  lv_fldcat3-outputlen = '19'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+*  lv_index3 = lv_index3 + 1.
+*   CLEAR lv_fldcat3.
+*  lv_fldcat3-tabname   = 'GT_FINAL3'.
+*  lv_fldcat3-fieldname = 'HBKID'.
+*  lv_fldcat3-scrtext_m = 'Short Key for a House Bank'.
+*  lv_fldcat3-outputlen = '26'.
+**  lv_fldcat3-row_pos   = '1'.
+*  lv_fldcat3-col_pos   = lv_index3.
+*  APPEND lv_fldcat3 TO it_fcat3.
+
+  lv_index3 = lv_index3 + 1.
+  CLEAR lv_fldcat3.
+  lv_fldcat3-tabname   = 'GT_FINAL3'.
+  lv_fldcat3-fieldname = 'TOT_BTCH_AMT'.
+  lv_fldcat3-scrtext_m = 'Total batch amount'.
+  lv_fldcat3-outputlen = '18'.
+*  lv_fldcat3-row_pos   = '1'.
+  lv_fldcat3-col_pos   = lv_index3.
+  APPEND lv_fldcat3 TO it_fcat3.
+
+*  lv_index3 = lv_index3 + 1.
+*   CLEAR lv_fldcat3.
+*  lv_fldcat3-tabname   = 'GT_FINAL3'.
+*  lv_fldcat3-fieldname = 'MAXPAYAMT_RULECU'.
+*  lv_fldcat3-scrtext_m = 'Maximum payment Amount'.
+*  lv_fldcat3-outputlen = '22'.
+**  lv_fldcat3-row_pos   = '1'.
+*  lv_fldcat3-col_pos   = lv_index3.
+*  APPEND lv_fldcat3 TO it_fcat3.
+
+*  lv_index3 = lv_index3 + 1.
+*   CLEAR lv_fldcat3.
+*  lv_fldcat3-tabname   = 'GT_FINAL3'.
+*  lv_fldcat3-fieldname = 'GRP_FIELD1_VALUE'.
+*  lv_fldcat3-scrtext_m = 'Grouping field val1'.
+*  lv_fldcat3-outputlen = '30'.
+**  lv_fldcat3-row_pos   = '1'.
+*  lv_fldcat3-col_pos   = lv_index3.
+*  APPEND lv_fldcat3 TO it_fcat3.
+*
+*  lv_index3 = lv_index3 + 1.
+*  CLEAR lv_fldcat3.
+*  lv_fldcat3-tabname   = 'GT_FINAL3'.
+*  lv_fldcat3-fieldname = 'GRP_FIELD2_VALUE'.
+*  lv_fldcat3-scrtext_m = 'Grouping field val2'.
+*  lv_fldcat3-outputlen = '30'.
+**  lv_fldcat3-row_pos   = '1'.
+*  lv_fldcat3-col_pos   = lv_index3.
+*  APPEND lv_fldcat3 TO it_fcat3.
+
+
+ENDFORM.                    " F_ALV_BUILD_FIELDCAT3
+
+*&---------------------------------------------------------------------*
+*&      Form  F_ALV_REPORT_LAYOUT3
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM f_alv_report_layout3 .
+  CLEAR: it_layout3.
+  it_layout3-cwidth_opt = 'X'.
+  it_layout3-sel_mode   = 'A'.
+ENDFORM.                    " F_ALV_REPORT_LAYOUT3
+*&---------------------------------------------------------------------*
+*&      Form  DOWNLOAD_SENT_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM download_sent_data .
+  DATA: lv_lines TYPE i.
+  DATA: fileleng TYPE i,
+        flen     TYPE i,
+        lv_filename TYPE string,
+        enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+
+  CALL METHOD c_alvgd3->get_selected_rows
+    IMPORTING
+      et_index_rows = gt_selected_rows3.
+
+  CLEAR : lv_lines.
+  DESCRIBE TABLE gt_selected_rows3 LINES lv_lines.
+  IF lv_lines EQ 0.
+    MESSAGE 'Please select one record' TYPE 'E'.
+  ELSEIF lv_lines > 1.
+    MESSAGE 'Please select only single record' TYPE 'E'.
+  ENDIF.
+
+  IF gt_selected_rows3 IS NOT INITIAL.
+    READ TABLE gt_selected_rows3 INTO gs_selected_rows3 INDEX 1.
+    IF sy-subrc = 0.
+      READ TABLE gt_final3 INTO gs_final3 INDEX gs_selected_rows3-index.
+      IF sy-subrc = 0.
+        CLEAR gs_paym3.
+        READ TABLE gt_paym3 INTO gs_paym3 WITH KEY laufi = gs_final3-laufi_f
+                                                   laufd = gs_final3-laufd_f.
+        IF sy-subrc EQ 0.
+          CLEAR lv_filename.
+          CONCATENATE 'C:\BCM\' gs_paym3-file_name '.TXT' INTO lv_filename.
+
+          CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+            EXPORTING
+              im_xstring = gs_final3-file_data_sent
+            IMPORTING
+              ex_data    = enh_version_management_hex_tb
+              ex_leng    = flen.
+
+          CALL FUNCTION 'GUI_DOWNLOAD'
+            EXPORTING
+              bin_filesize            = flen          "ostr_updated_signed_data_l
+              filename                = lv_filename    "'C:\TEST\TESTV1.TXT'
+              filetype                = 'BIN'
+*             APPEND                  = ' '
+*             WRITE_FIELD_SEPARATOR   = ' '
+*             HEADER                  = '00'
+*             TRUNC_TRAILING_BLANKS   = ' '
+            IMPORTING
+              filelength              = fileleng
+            TABLES
+              data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+            EXCEPTIONS
+              file_write_error        = 1
+              no_batch                = 2
+              gui_refuse_filetransfer = 3
+              invalid_type            = 4
+              no_authority            = 5
+              unknown_error           = 6
+              header_not_allowed      = 7
+              separator_not_allowed   = 8
+              filesize_not_allowed    = 9
+              header_too_long         = 10
+              dp_error_create         = 11
+              dp_error_send           = 12
+              dp_error_write          = 13
+              unknown_dp_error        = 14
+              access_denied           = 15
+              dp_out_of_memory        = 16
+              disk_full               = 17
+              dp_timeout              = 18
+              file_not_found          = 19
+              dataprovider_exception  = 20
+              control_flush_error     = 21
+              OTHERS                  = 22.
+          IF sy-subrc NE 0.
+*            MESSAGE E206(1S) WITH FILE.
+          ENDIF.
+          CLEAR :fileleng,flen.
+          REFRESH : enh_version_management_hex_tb.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " DOWNLOAD_SENT_DATA
+
+*&---------------------------------------------------------------------*
+*&      Form  DOWNLOAD_RAW_DATA
+*&---------------------------------------------------------------------*
+
+FORM download_raw_data .
+  DATA : lv_lines TYPE i.
+  DATA: fileleng TYPE i,
+        flen     TYPE i,
+        lv_filename TYPE string,
+        enh_version_management_hex_tb TYPE enh_version_management_hex_tb.
+
+  CALL METHOD c_alvgd3->get_selected_rows
+    IMPORTING
+      et_index_rows = gt_selected_rows3.
+
+  CLEAR : lv_lines.
+  DESCRIBE TABLE gt_selected_rows3 LINES lv_lines.
+  IF lv_lines EQ 0.
+    MESSAGE 'Please select one record' TYPE 'E'.
+  ELSEIF lv_lines > 1.
+    MESSAGE 'Please select only single record' TYPE 'E'.
+  ENDIF.
+
+  IF gt_selected_rows3 IS NOT INITIAL.
+    READ TABLE gt_selected_rows3 INTO gs_selected_rows3 INDEX 1.
+    IF sy-subrc = 0.
+      READ TABLE gt_final3 INTO gs_final3 INDEX gs_selected_rows3-index.
+      IF sy-subrc = 0.
+        CLEAR gs_paym3.
+        READ TABLE gt_paym3 INTO gs_paym3 WITH KEY laufi = gs_final3-laufi_f
+                                                   laufd = gs_final3-laufd_f.
+        IF sy-subrc EQ 0.
+          CLEAR lv_filename.
+          CONCATENATE 'C:\BCM\' gs_paym3-file_name '.TXT' INTO lv_filename.
+
+          CALL FUNCTION 'ENH_XSTRING_TO_TAB'
+            EXPORTING
+              im_xstring = gs_final3-raw_data
+            IMPORTING
+              ex_data    = enh_version_management_hex_tb
+              ex_leng    = flen.
+
+          CALL FUNCTION 'GUI_DOWNLOAD'
+            EXPORTING
+              bin_filesize            = flen          "ostr_updated_signed_data_l
+              filename                = lv_filename    "'C:\TEST\TESTV1.TXT'
+              filetype                = 'BIN'
+*             APPEND                  = ' '
+*             WRITE_FIELD_SEPARATOR   = ' '
+*             HEADER                  = '00'
+*             TRUNC_TRAILING_BLANKS   = ' '
+            IMPORTING
+              filelength              = fileleng
+            TABLES
+              data_tab                = enh_version_management_hex_tb "OUT_DATA_TABLE
+            EXCEPTIONS
+              file_write_error        = 1
+              no_batch                = 2
+              gui_refuse_filetransfer = 3
+              invalid_type            = 4
+              no_authority            = 5
+              unknown_error           = 6
+              header_not_allowed      = 7
+              separator_not_allowed   = 8
+              filesize_not_allowed    = 9
+              header_too_long         = 10
+              dp_error_create         = 11
+              dp_error_send           = 12
+              dp_error_write          = 13
+              unknown_dp_error        = 14
+              access_denied           = 15
+              dp_out_of_memory        = 16
+              disk_full               = 17
+              dp_timeout              = 18
+              file_not_found          = 19
+              dataprovider_exception  = 20
+              control_flush_error     = 21
+              OTHERS                  = 22.
+          IF sy-subrc NE 0.
+*            MESSAGE E206(1S) WITH FILE.
+          ENDIF.
+          CLEAR : fileleng,flen.
+          REFRESH : enh_version_management_hex_tb.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " DOWNLOAD_RAW_DATA
+*&---------------------------------------------------------------------*
+*&      Form  FREE_OBJECTS3
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P1        text
+*      <--P2        text
+*----------------------------------------------------------------------*
+FORM free_objects3 .
+  CALL METHOD c_alvgd3->free
+    EXCEPTIONS
+      cntl_error        = 1
+      cntl_system_error = 2
+      OTHERS            = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+  CALL METHOD c_ccont3->free
+    EXCEPTIONS
+      cntl_error        = 1
+      cntl_system_error = 2
+      OTHERS            = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+
+ENDFORM.                    " FREE_OBJECTS3
