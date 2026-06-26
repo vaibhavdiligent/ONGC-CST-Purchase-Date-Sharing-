@@ -88,23 +88,23 @@ FORM fill_fieldcat.
   " Action Taken columns: editable in r4 mode, read-only in r1/r3
   CLEAR gs_fieldcat.
   gs_fieldcat-fieldname = 'AT_CHKBOX'.  gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '3'.          gs_fieldcat-scrtext_l = 'Action Taken'.
-  gs_fieldcat-scrtext_m = 'Act Taken'.  gs_fieldcat-scrtext_s = 'AT'.
+  gs_fieldcat-outputlen = '3'.          gs_fieldcat-scrtext_l = 'AT'.
+  gs_fieldcat-scrtext_m = 'AT'.         gs_fieldcat-scrtext_s = 'AT'.
   gs_fieldcat-checkbox  = 'X'.
   IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
   APPEND gs_fieldcat TO gt_fieldcat.
 
   CLEAR gs_fieldcat.
   gs_fieldcat-fieldname = 'AT_SAL_ORD'. gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '10'.          gs_fieldcat-scrtext_l = 'Action Sales Ord'.
-  gs_fieldcat-scrtext_m = 'Act SO'.      gs_fieldcat-scrtext_s = 'SO'.
+  gs_fieldcat-outputlen = '10'.          gs_fieldcat-scrtext_l = 'SO'.
+  gs_fieldcat-scrtext_m = 'SO'.          gs_fieldcat-scrtext_s = 'SO'.
   IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
   APPEND gs_fieldcat TO gt_fieldcat.
 
   CLEAR gs_fieldcat.
   gs_fieldcat-fieldname = 'AT_QTY'.     gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '15'.          gs_fieldcat-scrtext_l = 'Action Qty'.
-  gs_fieldcat-scrtext_m = 'Act Qty'.     gs_fieldcat-scrtext_s = 'Qty'.
+  gs_fieldcat-outputlen = '15'.          gs_fieldcat-scrtext_l = 'Qty'.
+  gs_fieldcat-scrtext_m = 'Qty'.         gs_fieldcat-scrtext_s = 'Qty'.
   IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
   APPEND gs_fieldcat TO gt_fieldcat.
 
@@ -242,11 +242,17 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
     CALL METHOD p_dyndoc_id->new_line.
     CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
     CLEAR dl_text.
-    IF r3 EQ 'X' OR r4 EQ 'X'.
-      dl_text = '4. The list is from effect from 01.09.2025, post 2UoM Migration.'.
+    " Note 4: data effectivity date – R1 shows post-2UoM data; R3/R4 show from 01.01.2022
+    IF r1 EQ 'X'.
+      dl_text = '4. The List is w.e.f. 01.09.2025, after 2UoM Migration'.
     ELSE.
-      dl_text = '4. The list is from effect from 01.01.2022, post Implementation of Single Material Code for Transmission of Shippers'' Gas.'.
+      dl_text = '4. The List is w.e.f. 01.01.2022, after Implementation of Single Material Code for Transmission of Shippers'' Gas'.
     ENDIF.
+    CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
+    CALL METHOD p_dyndoc_id->new_line.
+    CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
+    CLEAR dl_text.
+    dl_text = '5. AT: Action Taken'.
     CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
     CALL METHOD p_dyndoc_id->new_line.
     CLEAR dl_text.

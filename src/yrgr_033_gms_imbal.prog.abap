@@ -65,31 +65,26 @@ INITIALIZATION.
 
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
-  " Skip all field-level validation during USER-COMMAND events
-  " (radio button clicks 'ABC', Send Mail checkbox 'EML') –
-  " validate only when user presses Execute / Schedule Job.
+  " Skip all validation during USER-COMMAND events
+  " (radio button click 'ABC', Send Mail checkbox 'EML').
   IF sy-ucomm EQ 'ABC' OR sy-ucomm EQ 'EML'.
     " Screen refresh only – no validation
-  ELSEIF r1 EQ 'X' AND s_date IS NOT INITIAL.
-    READ TABLE s_date INTO DATA(ls_sd_chk) INDEX 1.
-    IF sy-subrc = 0 AND ls_sd_chk-low IS NOT INITIAL.
-      " 1. Validate from date is on or after 01.01.2022
-      IF ls_sd_chk-low LT '20220101'.
-        MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
-      ENDIF.
-      " 2. FN date validation: From Date must be 1st or 16th of month
-      lv_fn_from_day = ls_sd_chk-low+6(2).
+
+  " FN date validation for Action Taken (R4) – applied to s_dat4 inputs.
+  " R1 has no date validation; R3 dates are auto-calculated.
+  ELSEIF r4 EQ 'X' AND s_dat4 IS NOT INITIAL.
+    READ TABLE s_dat4 INTO DATA(ls_dat4_chk) INDEX 1.
+    IF sy-subrc = 0 AND ls_dat4_chk-low IS NOT INITIAL.
+      lv_fn_from_day = ls_dat4_chk-low+6(2).
       IF lv_fn_from_day NE '01' AND lv_fn_from_day NE '16'.
         MESSAGE 'From date must be 1st or 16th of the month (FN start date)' TYPE 'E'.
       ENDIF.
     ENDIF.
-    " 3. FN date validation: To Date must be 15th or last day of month
-    IF sy-subrc = 0 AND ls_sd_chk-high IS NOT INITIAL.
-      lv_fn_to_day   = ls_sd_chk-high+6(2).
-      lv_fn_next_day = ls_sd_chk-high + 1.
+    IF sy-subrc = 0 AND ls_dat4_chk-high IS NOT INITIAL.
+      lv_fn_to_day   = ls_dat4_chk-high+6(2).
+      lv_fn_next_day = ls_dat4_chk-high + 1.
       CLEAR lv_fn_is_last.
-      " If the next day falls in a different month, high is the last day
-      IF lv_fn_next_day(6) NE ls_sd_chk-high(6). lv_fn_is_last = 'X'. ENDIF.
+      IF lv_fn_next_day(6) NE ls_dat4_chk-high(6). lv_fn_is_last = 'X'. ENDIF.
       IF lv_fn_to_day NE '15' AND lv_fn_is_last IS INITIAL.
         MESSAGE 'To date must be 15th or last day of the month (FN end date)' TYPE 'E'.
       ENDIF.
