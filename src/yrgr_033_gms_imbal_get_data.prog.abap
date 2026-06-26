@@ -38,7 +38,7 @@ FORM get_data.
 
     " Read latest Action Taken entry from YRG_IMB_ACTION (most recent by date+time)
     DATA: lv_at_qty TYPE menge_d.   " QUAN to match AT_QTY column in YRG_IMB_ACTION
-    SELECT at_chkbox at_sal_ord at_qty at_remarks
+    SELECT chkbox at_sal_ord at_qty at_remarks
       FROM yrg_imb_action
       INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
             @lv_at_qty,              @ls_final_ext-at_remarks)
