@@ -7242,6 +7242,59 @@ FORM fill_dynamic_table_sec2d .
     ENDLOOP.
   ENDIF.
 
+* v2.9: Robust current-FY YTD = average of the daily sheet (<gfs_dyn_table>).
+*   When the DPR daily tab spans the whole current FY (early-FY reports), the
+*   YTD Actual row (sec2d INDEX 1) is recomputed as the per-column average of the
+*   FY days in the daily sheet, so YTD matches MTD / the daily sheet for every
+*   asset (oil & gas) and bypasses the rprd / 2d-pipeline day-drops & double
+*   counts. Guard: only when the daily tab starts on/before the FY start, so the
+*   last N_fy daily rows are exactly the FY days. Prior-FY row (INDEX 2) and
+*   later-FY reports (daily tab shorter than YTD) keep the existing computation.
+  IF gv_month_back_datum LE gv_year_start_date.
+    DATA: lv_nfy     TYPE i,
+          lv_dtot    TYPE i,
+          lv_rowfrom TYPE i,
+          lv_ccol    TYPE i,
+          lv_rr      TYPE i,
+          lv_acc     TYPE p LENGTH 16 DECIMALS 7.
+    FIELD-SYMBOLS: <fs_ytd_line> TYPE any,
+                   <fs_day_line> TYPE any,
+                   <fs_ytd_fld>  TYPE any,
+                   <fs_day_fld>  TYPE any.
+    lv_nfy = p_date - gv_year_start_date + 1.
+    DESCRIBE TABLE <gfs_dyn_table> LINES lv_dtot.
+    IF lv_nfy GT 0 AND lv_nfy LE lv_dtot.
+      READ TABLE <gfs_sec2d_table> INDEX 1 ASSIGNING <fs_ytd_line>.
+      IF sy-subrc EQ 0.
+        lv_rowfrom = lv_dtot - lv_nfy + 1.
+        lv_ccol = 2.
+        DO.
+          lv_ccol = lv_ccol + 1.
+          IF lv_ccol GT gv_table_columns.
+            EXIT.
+          ENDIF.
+          ASSIGN COMPONENT lv_ccol OF STRUCTURE <fs_ytd_line> TO <fs_ytd_fld>.
+          IF sy-subrc NE 0.
+            EXIT.
+          ENDIF.
+          CLEAR lv_acc.
+          lv_rr = lv_rowfrom - 1.
+          DO lv_nfy TIMES.
+            lv_rr = lv_rr + 1.
+            READ TABLE <gfs_dyn_table> INDEX lv_rr ASSIGNING <fs_day_line>.
+            IF sy-subrc EQ 0.
+              ASSIGN COMPONENT lv_ccol OF STRUCTURE <fs_day_line> TO <fs_day_fld>.
+              IF sy-subrc EQ 0.
+                lv_acc = lv_acc + <fs_day_fld>.
+              ENDIF.
+            ENDIF.
+          ENDDO.
+          <fs_ytd_fld> = lv_acc / lv_nfy.
+        ENDDO.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
 ENDFORM.
 FORM fill_dynamic_table_sec2f .
 
