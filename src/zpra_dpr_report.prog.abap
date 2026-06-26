@@ -3,7 +3,14 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 2.8  |  Git: bcd-overflow-fix  |  Date: 24-JUN-2026
+*& VERSION : 2.9  |  Git: bcd-overflow-fix  |  Date: 25-JUN-2026
+*& Changes : v2.9 - YTD Actual (sec2d, current-FY row) now sourced from RAW DAILY
+*&           (ZPRA_T_DLY_PRD) instead of reconciled (rprd). The rprd branch is
+*&           bypassed (lv_rprd_index forced empty) so YTD matches the MTD/daily
+*&           figures. Fixes BC-60 oil YTD (~2x from rprd double-count), MECL gas
+*&           spurious value, and the ~1% pink deviations (reconciled vs raw).
+*&           MREC_APP still serves fully-reconciled prior-FY months (row 50).
+*&           VERSION : 2.8  |  Date: 24-JUN-2026
 *& Changes : v2.8 - Fix near-zero YTD Actual gas values (rows "YTD Actual Prod."
 *&           current & prior FY) in fill_dynamic_table_sec2d. The rprd branch
 *&           stored gas (jv/ovl_prd_vl_qty1) without *6290 while the BMD display
@@ -7031,24 +7038,13 @@ FORM fill_dynamic_table_sec2d .
           IF lv_monat EQ gv_current_monat.
             CONCATENATE gv_search_end_datum(4) p_date+4(4) INTO gv_search_end_datum .
           ENDIF.
-*         v2.8: Pick first usable rprd row. For GAS, skip rows whose reconciled
-*         qty is zero, so an empty/zero reprocessed gas falls through to the
-*         dly_prd branch below (raw daily/MTD gas then flows into YTD).
+*         v2.9: YTD Actual now sourced from RAW DAILY (ZPRA_T_DLY_PRD) to match
+*         the MTD / daily-sheet figures (per requirement). The reconciled (rprd)
+*         branch is bypassed because rprd values double-counted / deviated from
+*         raw daily for new assets (e.g. BC-60 oil ~2x, ~1% deviations elsewhere).
+*         Keeping lv_rprd_index cleared forces the dly_prd branch below. MREC_APP
+*         (above) still serves fully-reconciled prior-FY months.
           CLEAR lv_rprd_index .
-          LOOP AT gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd WHERE product         EQ gs_zpra_c_prd_prof-product
-                                                                  AND asset           EQ gs_zpra_c_prd_prof-asset
-                                                                  AND block           EQ gs_zpra_c_prd_prof-block
-                                                                  AND production_date GE gv_search_begin_datum
-                                                                  AND production_date LE gv_search_end_datum .
-            IF gs_zpra_c_prd_prof-product NE c_prod_gas
-            OR gs_zpra_t_dly_rprd-jv_rcn_vl_qty2  IS NOT INITIAL
-            OR gs_zpra_t_dly_rprd-ovl_rcn_vl_qty2 IS NOT INITIAL
-            OR gs_zpra_t_dly_rprd-jv_rcn_vl_qty3  IS NOT INITIAL
-            OR gs_zpra_t_dly_rprd-ovl_rcn_vl_qty3 IS NOT INITIAL .
-              lv_rprd_index = sy-tabix .
-              EXIT .
-            ENDIF.
-          ENDLOOP .
           IF lv_rprd_index IS NOT INITIAL.
             LOOP AT gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd FROM lv_rprd_index .
               IF gs_zpra_t_dly_rprd-product EQ gs_zpra_c_prd_prof-product      AND
