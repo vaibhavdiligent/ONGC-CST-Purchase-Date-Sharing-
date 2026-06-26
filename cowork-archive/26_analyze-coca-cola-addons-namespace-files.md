@@ -1,0 +1,107 @@
+# Analyze Coca Cola AddOns Namespace Files
+Session ID: local_17b1b3f6-1b83-4453-b79e-bad7936f3fac
+Exported: 2026-06-24
+---
+
+Session "Analyze Coca Cola AddOns Namespace Files": idle
+
+[user] read all files in folder C:\Games\coca cola\06_AddOns_Namespaces analysis all files and give me summary for all of them
+[assistant] (called ToolSearch)
+[assistant] (called mcp__workspace__bash)
+[assistant] (called Glob)
+[assistant] (called mcp__workspace__bash)
+[assistant] (called mcp__workspace__bash)
+[assistant] (called mcp__workspace__bash)
+[assistant] I have noted both updates with the additional data. Yes, I've captured all of it:
+
+- SNP -> /SNP/
+- WINSHTLQ -> /WINSHTLQ/
+- Readsoft -> /COCKPIT/
+- MLS -> /MLSBASIS/, /MLSV2/
+- OID -> No namespace
+- B2WISE -> /B2WISE/
+
+Let me try reading the files now.
+[assistant] (called mcp__workspace__bash) x13
+[user] Continue from where you left off.
+[assistant] No response requested.
+[user] is it done
+[assistant] Not yet -- the Linux sandbox kept timing out, so I couldn't open the Excel files to extract their contents. Let me retry now.
+[assistant] (called mcp__workspace__bash)
+[assistant] Good, the workspace is up now. Let me inspect each file.
+[assistant] (called mcp__workspace__bash) x13
+[assistant] (called Read)
+[assistant] Here's a summary of all 10 files in 06_AddOns_Namespaces:
+
+1. Application_used_16_months.xlsx -- Small list (36 rows) mapping SAP technical service names to descriptions (e.g., FTD_WORK_ORDER_CREATE_SRV -> Work Order creation, MD_ROUTE_SRV -> MD Route Application). Tracks Fiori/OData services used by the business in the last 16 months.
+
+2. SIR_ADDONS_v1.xlsx -- Three sheets summarizing the SIR (ABAP) system landscape:
+- Uninstall: add-ons incompatible with S/4HANA 2023 but uninstallable (ODTFINCC SuccessFactors EC Payroll, POA SBC Access Control, etc., with SAP Note references).
+- Third Party: 3rd-party components -- COCKPIT 310 (ReadSoft), Movilizer suite (MOVIAPP/MOVIBASE/MOVIGEN/MOVIPRX/MOVIPRXC), PBS archive add-ons (PBSCCO, PBSCFI, PBSCSD, PBSCSL, PBSNSP, etc.).
+- Compatible: SAP add-ons certified for S/4HANA (Plug-in BASIS 7.31, ERP Invoice Integration, SuccessFactors HCM Integration, etc.).
+
+3. Add-ons Analysis in C0.xlsx -- The largest working file (14 MB). Master "Add-on List" lists 25 third-party software components with SJR/PJR status (Splunk Deleted, others "Not Yet"). Per-addon detail tabs hold defect/transport tracking (SJRK/Q4RK numbers) and full object usage lists for PBS Object List (184 used objects), TJC (412 rows), movilizer Object List (3,958 objects), PCM S4 objects (1,208 enhancement usages), plus tabs for WINSHTLQ, SNP, TRILLIUM, HOAG, LOT, PCM2, MLS, Ortec S4, and readsoft.
+
+4. Namespace_Analysis.xlsx -- Compact pivot listing the 15 unique namespaces found across the C0 analysis sheets and which add-on / source sheet each maps to: /3521259/, /CCBJI/, /CCC/, /CCEJ/, /FARSIDE/, /HOAG/, /LOT/, /MOVI/, /ORTEC/, /PBS/, /PCM/, /PCM2/, /SCL/, /TJC/, /TRILLIUM/.
+
+5. name_space.xls -- Actually a 17 MB UTF-16 SAP dynamic-list export (TADIR-style), 109,627 lines / ~104,500 objects with PGMID, OBJECT type, OBJ_NAME, source system, author, dev class, component, release, etc. Namespace-wise object counts:
+/CCC/ 23,803 | /CCBJI/ 4,882 | /SCL/ 16,264 | /PCM2/ 3,400 | /LOT/ 11,214 | /ORTEC/ 2,076 | /MOVI/ 11,097 | /FARSIDE/ 2,002 | /HOAG/ 10,360 | /TJC/ 1,749 | /CCEJ/ 8,969 | /PCM/ 360 | /PBS/ 7,913 | /TRILLIUM/ 357
+
+6. Final_Addons_Analysis.xlsx -- The consolidated deliverable (3 sheets):
+- Addons Summary: 14 add-ons with description, pre/post/during-conversion work, objects referenced, in-use status, CCBJI dependency, C0/C1 action, and namespace-found flag (PBS, Movilizer, TJC, TRILLIUM, HOAG, LOT, PCM Found; SNP, readsoft, WINSHTLQ, MLS, OID, B2Wise, SAP Add-ons Not Found in the namespace export).
+- Namespace Objects: 104,446 raw records (PGMID, Obj Type, Object Name, Namespace, Add-on, Src System, Author, Dev Class, Component, Release, Created On).
+- Addon-Source Summary: object counts per add-on x source system (Grand Total 104,446 across 14 add-ons; e.g., CCBJI=4,882 mostly DJR; SCL=16,264 mostly DCR; HOAG=10,360 all DV8; Movilizer=11,097 across SAP/MED/DCR).
+
+7. add on image.png -- Screenshot of the same Addons Summary table from file 6.
+
+8. CCBJI_Namespaces.xlsx -- Master CCBJI namespace registry, 258 namespaces with role (P/C), license key, SSCR popup flag, SAP-standard-delivery flag, generated-objects-only flag, author, date, short text, owner (e.g., /0SJ3X/ Movilizer / Movilitas Solutions, /0SJ7L/ Recycling Administration / SAP SI).
+
+9. Q4R_Movilizer_C1.XLSX -- Quality-for-Release usage scan on C1 for Movilizer: 3,959 rows of Object Used -> Using Object -> Component -> Author -> "Usage has to be removed; change the using object!". Shows every CCBJI/CCC/MOVI custom object still referencing Movilizer add-on objects.
+
+10. Q4R_PBS_C1.XLSX -- Same Q4R format for PBS: 47 rows of remaining usages of /PBS/* objects from CCC and PBS namespace programs (CCSM forms, CCOPALAUFFILEDEL, MKCB/RKDBAT* programs).
+
+Confirmed -- additional namespace data captured:
+SNP /SNP/ | WINSHTLQ /WINSHTLQ/ | Readsoft /COCKPIT/ | MLS /MLSBASIS/ /MLSV2/ | OID No namespace | B2WISE /B2WISE/
+
+This fills in the namespaces for exactly the 6 add-ons that were marked "Not Found" in Final_Addons_Analysis.xlsx -> Addons Summary (SNP, readsoft, WINSHTLQ, MLS, OID, B2Wise). Want me to update Final_Addons_Analysis.xlsx (or Namespace_Analysis.xlsx) with a new "Namespace" column populated from this list?
+[user] i need a summary of all the add ons in the system , what was step taken to delete each add on and what were the issues faced then find me data on add ons which have been ussed in ccbji name space and if they have been corrected or not and if yes what action was taken and giv me other details , need a word file for this or any other document which can give me details
+[assistant] Let me dig deeper into the add-on detail sheets and CCBJI-specific data, then prepare the Word document.
+[assistant] (called mcp__workspace__bash) x7
+[assistant] I now have enough data. Let me read the docx skill and then build the document.
+[assistant] (called Read)
+[assistant] (called mcp__workspace__bash) x4
+[assistant] (called Write)
+[assistant] (called mcp__workspace__bash) x3
+[assistant] Done. The document is saved in your selected folder.
+
+[View your Add-Ons & Namespaces Analysis](computer://C%3A%5CGames%5Ccoca%20cola%5CAddOns_Namespaces_Analysis.docx)
+
+The Word document is organised into 7 sections:
+1. Executive Summary with the key numbers (14 add-ons, 104,446 objects, 7 uninstalled, 7 retained).
+2. Master Inventory of all add-ons with their namespaces, descriptions, in-use status, CCBJI dependency and action taken -- incorporating the namespace mappings you provided.
+3. Object counts per add-on broken down by source system (Grand Total 104,446).
+4. Per-add-on detail for each of the 14 add-ons covering namespace, business use, action taken, transports/defects, issues faced, and number of /CCBJI/ hits.
+5. CCBJI namespace cross-reference -- which CCBJI custom objects reference each add-on, what the references are, and the corrective action taken: 1 Movilizer reference (cleaned), 95 PCM2 references across 16 unique CCBJI programs (cleanup in progress), 9 TJC references (cleaned), 0 PBS/TRILLIUM/HOAG/SNP/WINSHTLQ/Readsoft references.
+6. Consolidated issues & open risks (PBS COPA-activation issue, Movilizer RC8 import failure, OID/B2Wise TBD, namespace-export gaps, etc.).
+7. Source files used for the analysis.
+[user] is ortec covered in ppt
+[assistant] I made a Word doc (.docx), not a PPT -- but yes, Ortec is covered in detail. The Ortec product family appears across four add-on entries plus a dedicated namespace row:
+- LOT (Ortec -- Loading Optimizer) -- Section 4 detail card. 11,214 objects in /LOT/, 1,891 in-use; status "Kept (S/4-compatible)". CCBJI exposure flagged as indirect via the PCM2 cleanup rows /CCBJI/ORTEC_IM_EWM_DATA and /CCBJI/ORTEC_IM_EWMDATACL.
+- MLS (Ortec -- MLS) -- Section 4 detail card. 99 objects, namespaces /MLSBASIS/ + /MLSV2/ (added from your manual mapping); status "Kept".
+- PCM / PCM2 (Ortec -- Pallet & Container Management) -- Section 4 detail card AND the largest /CCBJI/ remediation block in Section 5.2, with all 16 CCBJI using-objects, the 52 unique PCM/PCM2 objects they reference, owners (S420011, S404353, S180184, S219945, S235964) and status.
+- OID (Ortec -- OID) -- Section 4 detail card. "No namespace, dependency TBD, kept."
+- /ORTEC/ namespace itself -- appears in Section 3 (Object Counts) at 2,076 objects (E13 2,073 / SD6 3) and in the Master Inventory table.
+
+So in the .docx everything Ortec-related (LOT, MLS, PCM, PCM2, OID, /ORTEC/) is covered. If you'd like, I can also produce a PowerPoint (.pptx) version. Want me to build that?
+[user] was this file creatted by you C:\Games\coca cola\add on clean\Add On clean up\Namespace_Cleaned.xlsx
+[assistant] No, I didn't create that file. Let me verify by checking the file.
+[assistant] (called mcp__workspace__bash) x2
+[assistant] No, I did not create Namespace_Cleaned.xlsx. The timestamps confirm it:
+- Namespace_Cleaned.xlsx -- modified 14-May-2026 06:12 (existed before this session)
+- The folder itself was last modified 25-May-2026 11:46 (with a ~$Namespace_Cleaned.xlsx lock file, meaning it was recently opened in Excel)
+
+In this session I only created two files:
+- C:\Users\...\outputs\build_doc.js -- the Node.js generator script (in my temporary outputs folder, not visible to you)
+- C:\Games\coca cola\AddOns_Namespaces_Analysis.docx -- the Word document I shared with you a moment ago
+
+Namespace_Cleaned.xlsx was already in your add on clean\Add On clean up\ folder before I started, and at 45 MB it looks like a cleaned/filtered version of the 204 MB Namespace.xlsx sitting next to it. Would you like me to open and analyse it?
