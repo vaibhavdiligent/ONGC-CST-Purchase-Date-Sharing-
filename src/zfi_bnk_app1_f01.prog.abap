@@ -2,8 +2,12 @@
 *& Include          ZFI_BNK_APP1_F01
 *&---------------------------------------------------------------------*
 *& Data source changed from BNK_BATCH_HEADER to REGUT.
-*& New unique key = REGUT-GUID (CHAR32) - used in place of BATCH_NO when
-*& linking to the signature table ZFI_BATCH_SIGN.
+*& REGUT-GUID is not populated, so the new unique key is the concatenated
+*& REGUT primary key:
+*&   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR  (41 chars,
+*&   built with RESPECTING BLANKS so field positions are fixed/unique).
+*& This concatenated key is carried in GT_FINAL-GUID and stored in
+*& ZFI_BATCH_SIGN-BATCH_NO (which must be widened to CHAR 45).
 *& REGUT is joined to ZFI_PAYM_FILE on LAUFD / LAUFI.
 *& REGUT field mapping used for the output structure GT_FINAL:
 *&   RBETR -> BATCH_SUM   WAERS -> BATCH_CURR
@@ -15,6 +19,7 @@
 *&      Form  F_PREPARE_OP_TAB1
 *&---------------------------------------------------------------------*
 FORM f_prepare_op_tab1 .
+  DATA: lv_key TYPE c LENGTH 45.
 
   REFRESH : gt_paym, gt_batch_header,gt_batch_sign,gt_final.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym.
@@ -29,21 +34,29 @@ FORM f_prepare_op_tab1 .
       AND   laufd = gt_paym-laufd.
 
     IF gt_batch_header IS NOT INITIAL.
+*     Read this user's level-1 signature assignments
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
-        FOR ALL ENTRIES IN gt_batch_header
-        WHERE batch_no = gt_batch_header-guid   "BATCH_NO widened to hold REGUT-GUID
-        AND   signer = sy-uname
-        and   snro = '1'.
+        WHERE signer = sy-uname
+        and   snro   = '1'.
 
 
       sort gt_batch_sign by CDATE1 CTIME1.
       LOOP AT gt_batch_header INTO gs_batch_header.
-        READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_batch_header-guid
+*       Build unique key from the REGUT primary key fields
+        CLEAR lv_key.
+        CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
+                    gs_batch_header-laufd gs_batch_header-laufi
+                    gs_batch_header-xvorl gs_batch_header-dtkey
+                    gs_batch_header-lfdnr
+               INTO lv_key RESPECTING BLANKS.
+
+        READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = lv_key
                                                              signer = sy-uname
                                                              snro = '1'.
         IF sy-subrc EQ 0 .
 *    if gs_batch_sign-signer = sy-uname   and gs_batch_sign-digitl_sign = ' '.
           MOVE-CORRESPONDING gs_batch_header TO gs_final.
+          gs_final-guid       = lv_key.
           gs_final-batch_sum  = gs_batch_header-rbetr.
           gs_final-batch_curr = gs_batch_header-waers.
           gs_final-crusr      = gs_batch_header-tsusr.
@@ -82,30 +95,13 @@ FORM f_alv_build_fieldcat1 .
   CLEAR lv_fldcat1.
   lv_fldcat1-tabname   = 'GT_FINAL'.
   lv_fldcat1-fieldname = 'GUID'.
-  lv_fldcat1-scrtext_m = 'Batch GUID'.
-  lv_fldcat1-outputlen = '32'.
+  lv_fldcat1-scrtext_m = 'Batch Key'.
+  lv_fldcat1-outputlen = '45'.
 *  lv_fldcat1-row_pos   = '1'.
   lv_fldcat1-col_pos   = lv_index1.
   APPEND lv_fldcat1 TO it_fcat1.
 
 * RULE_ID / ITEM_CNT not available in REGUT - column removed
-*  lv_index1 = lv_index1 + 1.
-*  CLEAR lv_fldcat1.
-*  lv_fldcat1-tabname   = 'GT_FINAL'.
-*  lv_fldcat1-fieldname = 'RULE_ID'.
-*  lv_fldcat1-scrtext_m = 'Rule Id'.
-*  lv_fldcat1-outputlen = '10'.
-*  lv_fldcat1-col_pos   = lv_index1.
-*  APPEND lv_fldcat1 TO it_fcat1.
-*
-*  lv_index1 = lv_index1 + 1.
-*  CLEAR lv_fldcat1.
-*  lv_fldcat1-tabname   = 'GT_FINAL'.
-*  lv_fldcat1-fieldname = 'ITEM_CNT'.
-*  lv_fldcat1-scrtext_m = 'No. of Payment'.
-*  lv_fldcat1-outputlen = '14'.
-*  lv_fldcat1-col_pos   = lv_index1.
-*  APPEND lv_fldcat1 TO it_fcat1.
 
   lv_index1 = lv_index1 + 1.
   CLEAR lv_fldcat1.
@@ -234,8 +230,9 @@ ENDFORM.                    " F_ALV_REPORT_LAYOUT1
 *      <--P2        text
 *----------------------------------------------------------------------*
 FORM f_prepare_op_tab2 .
+  DATA: lv_key TYPE c LENGTH 45.
 *  BREAK sab_vaibhav.
-  REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign.
+  REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign2.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
 
   DELETE gt_paym2 WHERE file_data_sent IS INITIAL.
@@ -247,23 +244,27 @@ FORM f_prepare_op_tab2 .
       AND   laufd = gt_paym2-laufd.
 
     IF gt_batch_header2 IS NOT INITIAL.
+*     Read this user's open level-2 signature assignments
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign2
-        FOR ALL ENTRIES IN gt_batch_header2
-        WHERE batch_no = gt_batch_header2-guid   "BATCH_NO widened to hold REGUT-GUID
-        AND   DIGITL_SIGN = ' '
+        WHERE DIGITL_SIGN = ' '
         AND   signer eq sy-uname
         and   snro = '2'.
 
-*sort gt_batch_sign by CDATE1 CTIME1.
-
       LOOP AT gt_batch_header2 INTO gs_batch_header2.
+        CLEAR lv_key.
+        CONCATENATE gs_batch_header2-zbukr gs_batch_header2-banks
+                    gs_batch_header2-laufd gs_batch_header2-laufi
+                    gs_batch_header2-xvorl gs_batch_header2-dtkey
+                    gs_batch_header2-lfdnr
+               INTO lv_key RESPECTING BLANKS.
 
-        READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_batch_header2-guid
+        READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = lv_key
                                                               signer = sy-uname
                                                               snro = '2'.
 *       IF sy-subrc <> 0.
         IF sy-subrc EQ 0.
           MOVE-CORRESPONDING gs_batch_header2 TO gs_final2.
+          gs_final2-guid       = lv_key.
           gs_final2-batch_sum  = gs_batch_header2-rbetr.
           gs_final2-batch_curr = gs_batch_header2-waers.
           gs_final2-crusr      = gs_batch_header2-tsusr.
@@ -301,8 +302,8 @@ FORM f_alv_build_fieldcat2 .
   CLEAR lv_fldcat2.
   lv_fldcat2-tabname   = 'GT_FINAL2'.
   lv_fldcat2-fieldname = 'GUID'.
-  lv_fldcat2-scrtext_m = 'Batch GUID'.
-  lv_fldcat2-outputlen = '32'.
+  lv_fldcat2-scrtext_m = 'Batch Key'.
+  lv_fldcat2-outputlen = '45'.
 *  lv_fldcat2-row_pos   = '1'.
   lv_fldcat2-col_pos   = lv_index2.
   APPEND lv_fldcat2 TO it_fcat2.
@@ -497,6 +498,7 @@ ENDFORM.                    " FREE_OBJECTS2
 *      <--P2        text
 *----------------------------------------------------------------------*
 FORM f_prepare_op_tab3 .
+  DATA: lv_key TYPE c LENGTH 45.
   REFRESH : gt_paym3, gt_batch_header3,gt_final3, gt_batch_sign3.
 *break sab_vaibhav.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym3 WHERE sent = 'X'.
@@ -511,18 +513,23 @@ FORM f_prepare_op_tab3 .
 
     IF gt_batch_header3 IS NOT INITIAL.
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign3
-        FOR ALL ENTRIES IN gt_batch_header3
-        WHERE batch_no = gt_batch_header3-guid   "BATCH_NO widened to hold REGUT-GUID
-        AND   signer EQ sy-uname.
+        WHERE signer EQ sy-uname.
     ENDIF.
   ENDIF.
 
   LOOP AT gt_batch_header3 INTO gs_batch_header3.
+    CLEAR lv_key.
+    CONCATENATE gs_batch_header3-zbukr gs_batch_header3-banks
+                gs_batch_header3-laufd gs_batch_header3-laufi
+                gs_batch_header3-xvorl gs_batch_header3-dtkey
+                gs_batch_header3-lfdnr
+           INTO lv_key RESPECTING BLANKS.
 
-    READ TABLE gt_batch_sign3 INTO gs_batch_sign3 WITH KEY batch_no = gs_batch_header3-guid
+    READ TABLE gt_batch_sign3 INTO gs_batch_sign3 WITH KEY batch_no = lv_key
                                                           signer = sy-uname.
     IF sy-subrc EQ 0.
       MOVE-CORRESPONDING gs_batch_header3 TO gs_final3.
+      gs_final3-guid       = lv_key.
       gs_final3-batch_sum  = gs_batch_header3-rbetr.
       gs_final3-batch_curr = gs_batch_header3-waers.
       gs_final3-crusr      = gs_batch_header3-tsusr.
@@ -561,8 +568,8 @@ FORM f_alv_build_fieldcat3 .
   CLEAR lv_fldcat3.
   lv_fldcat3-tabname   = 'GT_FINAL3'.
   lv_fldcat3-fieldname = 'GUID'.
-  lv_fldcat3-scrtext_m = 'Batch GUID'.
-  lv_fldcat3-outputlen = '32'.
+  lv_fldcat3-scrtext_m = 'Batch Key'.
+  lv_fldcat3-outputlen = '45'.
 *  lv_fldcat3-row_pos   = '1'.
   lv_fldcat3-col_pos   = lv_index3.
   APPEND lv_fldcat3 TO it_fcat3.

@@ -7,7 +7,7 @@ PROGRAM ZFI_BNK_APP1.
 
 TYPES : BEGIN OF ty_final,
           sel              type c,
-          guid             TYPE sysuuid_c,          "Replaced BNK_BATCH_HEADER-GUID(RAW16) with REGUT-GUID(CHAR32) - new unique key
+          guid             TYPE c LENGTH 45,        "Holds concatenated REGUT primary key (ZBUKR+BANKS+LAUFD+LAUFI+XVORL+DTKEY+LFDNR = 41 chars) - unique key in place of BATCH_NO
           batch_no         TYPE bnk_com_btch_no,
           rule_id          TYPE bnk_com_btch_rule_id,
           item_cnt         TYPE bnk_com_btch_ctr,
