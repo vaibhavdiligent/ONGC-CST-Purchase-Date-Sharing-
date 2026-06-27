@@ -509,6 +509,17 @@ AT SELECTION-SCREEN OUTPUT.
       screen-invisible = 1.
       MODIFY SCREEN.
     ENDIF.
+*** SOC : CIS 2026-27 - remove Quarterly & Annual-Consistency radio buttons ***
+*   Per GAIL observation (RE: Mapping of CIS Scheme 2026-27): the new scheme
+*   has no Quarterly discount and no Annual Consistency discount, so these
+*   two radio buttons are removed from the selection screen.
+    IF screen-name = 'R_QUATER' OR screen-name = 'R_CONSIS'.
+      screen-active   = 0.
+      screen-input    = 0.
+      screen-invisible = 1.
+      MODIFY SCREEN.
+    ENDIF.
+*** EOC : CIS 2026-27 - remove Quarterly & Annual-Consistency radio buttons ***
 "$$
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000971
 ** EOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008973
@@ -851,10 +862,10 @@ FORM validation .
 *    ELSEIF r_month = 'X' OR r_month1 = 'X' OR r_rpd EQ 'X'.
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
       IF s_sptag-low+4(2) NE s_sptag-high+4(2).
-        MESSAGE 'Please Enter Single Month Period' TYPE 'E'.
+        MESSAGE 'Please enter the correct month for CIS 2026-27' TYPE 'E'.
       ELSE.
         IF s_sptag-low+6(2) NE '01'.
-          MESSAGE 'Please Enter Correct Month Period' TYPE 'E'.
+          MESSAGE 'Please enter the correct month for CIS 2026-27' TYPE 'E'.
         ELSE.
           CALL FUNCTION 'BKK_GET_MONTH_LASTDAY'
             EXPORTING
@@ -863,7 +874,7 @@ FORM validation .
               e_date = lv_date1.
           IF s_sptag-high NE lv_date1.
             IF lv_siml NE 'X'.
-              MESSAGE 'Please Enter Correct Month Period' TYPE 'E'.
+              MESSAGE 'Please enter the correct month for CIS 2026-27' TYPE 'E'.
             ENDIF.
           ENDIF.
         ENDIF.
