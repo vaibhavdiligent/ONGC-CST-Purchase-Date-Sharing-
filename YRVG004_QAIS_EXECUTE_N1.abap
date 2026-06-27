@@ -11241,7 +11241,7 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 
 *Execute Select All
     WHEN 'SALL'.
-      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVG004_QAIS_EXECUTE'.
+      SET PF-STATUS 'STANDARD'.
       IF r_quater = 'X' .
         LOOP AT it_data_quater .
           it_data_quater-check = 'X' .
@@ -11274,7 +11274,7 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 
 *Execute deselect All
     WHEN 'DSAL'.
-      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVG004_QAIS_EXECUTE'.
+      SET PF-STATUS 'STANDARD'.
       IF r_quater = 'X' .
         LOOP AT it_data_quater .
           CLEAR  it_data_quater-check  .
@@ -11307,6 +11307,17 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
   ENDCASE.
 ENDFORM.                    "on_selection
 *&---------------------------------------------------------------------*
+*&      Form  pf_status_set
+*&---------------------------------------------------------------------*
+*   ALV PF-STATUS callback (i_callback_pf_status_set = 'PF_STATUS_SET').
+*   Sets the GUI status 'STANDARD' of THIS program. The GUI status object
+*   'STANDARD' must exist in this program (copy it from the original
+*   program YRVG004_QAIS_EXECUTE via SE41 - Menu Painter).
+*&---------------------------------------------------------------------*
+FORM pf_status_set USING rt_extab TYPE slis_t_extab.            "#EC CALLED
+  SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
+ENDFORM.                    "pf_status_set
+*&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*
 *       text
@@ -11318,7 +11329,7 @@ FORM display_list .
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11336,7 +11347,7 @@ FORM display_list .
   ELSEIF r_annual = 'X'.
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11358,7 +11369,7 @@ FORM display_list .
   ELSEIF r_consis = 'X'.
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11385,7 +11396,7 @@ FORM display_list .
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11403,7 +11414,7 @@ FORM display_list .
   ELSEIF r_newcus = 'X' . "Vivek
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
