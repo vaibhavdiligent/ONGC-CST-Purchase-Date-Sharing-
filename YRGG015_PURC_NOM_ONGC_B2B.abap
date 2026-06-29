@@ -112,6 +112,15 @@ TYPES: BEGIN OF ty_batch_assign,
        END OF ty_batch_assign.
 TYPES: tt_batch_assign TYPE STANDARD TABLE OF ty_batch_assign.
 
+TYPES: BEGIN OF ty_oa_assign,
+         locid       TYPE char10,
+         matnr       TYPE char30,
+         ongc_mater  TYPE char30,
+         state_code  TYPE regio,
+         outline_agr TYPE ebeln,
+       END OF ty_oa_assign.
+TYPES: tt_oa_assign TYPE STANDARD TABLE OF ty_oa_assign.
+
 " Cache types for bulk pre-fetch (performance)
 TYPES: BEGIN OF ty_mot_cache,
          vbeln    TYPE ebeln,
@@ -161,7 +170,10 @@ DATA: gt_display      TYPE tt_display,
       gv_toolbar_done TYPE char1,
       go_batch_popup  TYPE REF TO cl_gui_dialogbox_container,
       go_batch_alv    TYPE REF TO cl_gui_alv_grid,
-      gt_batch_assign TYPE tt_batch_assign.
+      gt_batch_assign TYPE tt_batch_assign,
+      go_oa_popup     TYPE REF TO cl_gui_dialogbox_container,
+      go_oa_alv       TYPE REF TO cl_gui_alv_grid,
+      gt_oa_assign    TYPE tt_oa_assign.
 
 " Reference data cache (populated once in fetch_pur_data for performance)
 DATA: gt_mot_c   TYPE STANDARD TABLE OF ty_mot_cache,
@@ -210,6 +222,20 @@ CLASS lcl_alv_handler DEFINITION.
         FOR EVENT onf4 OF cl_gui_alv_grid
         IMPORTING e_fieldname es_row_no er_event_data et_bad_cells e_display,
       on_batch_dlg_close
+        FOR EVENT close OF cl_gui_dialogbox_container,
+      on_oa_data_changed
+        FOR EVENT data_changed OF cl_gui_alv_grid
+        IMPORTING er_data_changed,
+      on_oa_toolbar
+        FOR EVENT toolbar OF cl_gui_alv_grid
+        IMPORTING e_object e_interactive,
+      on_oa_cmd
+        FOR EVENT user_command OF cl_gui_alv_grid
+        IMPORTING e_ucomm,
+      on_oa_f4
+        FOR EVENT onf4 OF cl_gui_alv_grid
+        IMPORTING e_fieldname es_row_no er_event_data et_bad_cells e_display,
+      on_oa_dlg_close
         FOR EVENT close OF cl_gui_dialogbox_container.
 ENDCLASS.
 
@@ -297,14 +323,20 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     ls_tb-text      = 'Batch Change'.
     INSERT ls_tb INTO e_object->mt_toolbar INDEX 4.
     CLEAR ls_tb.
-    ls_tb-butn_type = 3.
+    ls_tb-function  = 'OACMASS'.
+    ls_tb-icon      = '@EJ@'.
+    ls_tb-quickinfo = 'OA Change in Mass'.
+    ls_tb-text      = 'OA Change'.
     INSERT ls_tb INTO e_object->mt_toolbar INDEX 5.
+    CLEAR ls_tb.
+    ls_tb-butn_type = 3.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 6.
     CLEAR ls_tb.
     ls_tb-function  = 'CRENOM'.
     ls_tb-icon      = '@15@'.
     ls_tb-quickinfo = 'Create Nomination'.
     ls_tb-text      = 'Create Nomination'.
-    INSERT ls_tb INTO e_object->mt_toolbar INDEX 6.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 7.
     gv_toolbar_done = abap_true.
   ENDMETHOD.
 
@@ -527,6 +559,157 @@ CLASS lcl_alv_handler IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD on_oa_data_changed.
+    DATA: ls_mod    TYPE lvc_s_modi,
+          ls_assign TYPE ty_oa_assign.
+    LOOP AT er_data_changed->mt_mod_cells INTO ls_mod.
+      IF ls_mod-fieldname = 'OUTLINE_AGR'.
+        READ TABLE gt_oa_assign INDEX ls_mod-row_id INTO ls_assign.
+        IF sy-subrc = 0.
+          ls_assign-outline_agr = ls_mod-value.
+          MODIFY gt_oa_assign INDEX ls_mod-row_id FROM ls_assign.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD on_oa_toolbar.
+    DATA: ls_tb TYPE stb_button.
+    CLEAR ls_tb.
+    ls_tb-function  = 'OA_OK'.
+    ls_tb-text      = 'Apply OA'.
+    ls_tb-quickinfo = 'Apply OA to matching rows'.
+    ls_tb-icon      = '@01@'.
+    INSERT ls_tb INTO e_object->mt_toolbar INDEX 1.
+  ENDMETHOD.
+
+  METHOD on_oa_cmd.
+    DATA: ls_assign TYPE ty_oa_assign,
+          ls_disp   TYPE ty_display,
+          ls_stbl   TYPE lvc_s_stbl.
+    IF e_ucomm <> 'OA_OK'. RETURN. ENDIF.
+    IF go_oa_alv IS NOT INITIAL.
+      go_oa_alv->check_changed_data( ).
+    ENDIF.
+    LOOP AT gt_oa_assign INTO ls_assign WHERE outline_agr IS NOT INITIAL.
+      LOOP AT gt_display INTO ls_disp
+          WHERE locid       = ls_assign-locid
+            AND material    = ls_assign-matnr
+            AND ongc_mater  = ls_assign-ongc_mater
+            AND state_code  = ls_assign-state_code
+            AND is_excl    <> 'X'.
+        ls_disp-outline_agr = ls_assign-outline_agr.
+        PERFORM derive_oa_fields_from_oa
+          USING    ls_assign-outline_agr
+          CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
+                   ls_disp-oa_tsyst ls_disp-oa_batch.
+        PERFORM apply_oa_mismatch_color CHANGING ls_disp.
+        MODIFY gt_display INDEX sy-tabix FROM ls_disp.
+      ENDLOOP.
+    ENDLOOP.
+    IF go_oa_alv IS NOT INITIAL.
+      go_oa_alv->free( ). CLEAR go_oa_alv.
+    ENDIF.
+    IF go_oa_popup IS NOT INITIAL.
+      go_oa_popup->free( ). CLEAR go_oa_popup.
+    ENDIF.
+    IF go_alv IS NOT INITIAL.
+      ls_stbl-row = abap_true. ls_stbl-col = abap_true.
+      go_alv->refresh_table_display( is_stable = ls_stbl ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD on_oa_f4.
+    DATA: ls_assign TYPE ty_oa_assign,
+          ls_mot    TYPE ty_mot_cache,
+          ls_t001w  TYPE ty_t001w_cache,
+          ls_ek     TYPE ty_ekoa_cache,
+          lt_cand   TYPE STANDARD TABLE OF ebeln,
+          lt_werks  TYPE STANDARD TABLE OF werks_d,
+          lv_vbeln  TYPE ebeln,
+          lv_werks  TYPE werks_d,
+          lv_c2c3   TYPE char1,
+          lt_ret    TYPE STANDARD TABLE OF ddshretval,
+          ls_ret    TYPE ddshretval,
+          ls_stbl   TYPE lvc_s_stbl,
+          ls_sdate  LIKE LINE OF s_date,
+          lv_min_dt TYPE d,
+          lv_max_dt TYPE d.
+    DATA: BEGIN OF ls_f4val,
+            ebeln TYPE ebeln,
+            werks TYPE werks_d,
+            txz01 TYPE char40,
+            bedat TYPE d,
+          END OF ls_f4val.
+    DATA lt_f4vals LIKE TABLE OF ls_f4val.
+    IF e_fieldname <> 'OUTLINE_AGR'. RETURN. ENDIF.
+    READ TABLE gt_oa_assign INDEX es_row_no-row_id INTO ls_assign.
+    IF sy-subrc <> 0. RETURN. ENDIF.
+    IF ls_assign-state_code = 'GJ' AND ls_assign-ongc_mater CS 'C2C3'.
+      lv_c2c3 = abap_true.
+    ENDIF.
+    " Compute date range from selection screen
+    LOOP AT s_date INTO ls_sdate WHERE sign = 'I'.
+      IF lv_min_dt IS INITIAL OR ls_sdate-low < lv_min_dt. lv_min_dt = ls_sdate-low. ENDIF.
+      IF ls_sdate-high > lv_max_dt. lv_max_dt = ls_sdate-high. ENDIF.
+      IF ls_sdate-option = 'EQ' AND ls_sdate-low > lv_max_dt. lv_max_dt = ls_sdate-low. ENDIF.
+    ENDLOOP.
+    " Candidate OAs from MOT
+    LOOP AT gt_mot_c INTO ls_mot WHERE matnr = ls_assign-matnr AND locid = ls_assign-locid.
+      IF ls_mot-fromdate <= lv_max_dt AND ls_mot-todate >= lv_min_dt.
+        APPEND ls_mot-vbeln TO lt_cand.
+      ENDIF.
+    ENDLOOP.
+    " Plants for state
+    LOOP AT gt_t001w_c INTO ls_t001w WHERE regio = ls_assign-state_code.
+      APPEND ls_t001w-werks TO lt_werks.
+    ENDLOOP.
+    " Build F4 list from EKOA cache restricted to candidates + plants
+    LOOP AT lt_cand INTO lv_vbeln.
+      LOOP AT lt_werks INTO lv_werks.
+        LOOP AT gt_ekoa_c INTO ls_ek WHERE ebeln = lv_vbeln AND werks = lv_werks.
+          IF lv_c2c3 = abap_true AND ls_ek-txz01 NS 'C2C3'. CONTINUE. ENDIF.
+          ls_f4val-ebeln = ls_ek-ebeln.
+          ls_f4val-werks = ls_ek-werks.
+          ls_f4val-txz01 = ls_ek-txz01.
+          ls_f4val-bedat = ls_ek-bedat.
+          APPEND ls_f4val TO lt_f4vals.
+        ENDLOOP.
+      ENDLOOP.
+    ENDLOOP.
+    SORT lt_f4vals BY ebeln. DELETE ADJACENT DUPLICATES FROM lt_f4vals COMPARING ebeln.
+    IF lt_f4vals IS INITIAL.
+      MESSAGE 'No valid Outline Agreements found.' TYPE 'S' DISPLAY LIKE 'W'.
+      er_event_data->m_event_handled = abap_true. RETURN.
+    ENDIF.
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING retfield        = 'EBELN'
+                value_org       = 'S'
+                window_title    = 'Select Outline Agreement'
+      TABLES    value_tab       = lt_f4vals
+                return_tab      = lt_ret
+      EXCEPTIONS parameter_error = 1 no_values_found = 2 OTHERS = 3.
+    READ TABLE lt_ret INTO ls_ret INDEX 1.
+    IF sy-subrc = 0 AND ls_ret-fieldval IS NOT INITIAL.
+      ls_assign-outline_agr = ls_ret-fieldval.
+      MODIFY gt_oa_assign INDEX es_row_no-row_id FROM ls_assign.
+      IF go_oa_alv IS NOT INITIAL.
+        ls_stbl-row = abap_true. ls_stbl-col = abap_true.
+        go_oa_alv->refresh_table_display( is_stable = ls_stbl ).
+      ENDIF.
+    ENDIF.
+    er_event_data->m_event_handled = abap_true.
+  ENDMETHOD.
+
+  METHOD on_oa_dlg_close.
+    IF go_oa_alv IS NOT INITIAL.
+      go_oa_alv->free( ). CLEAR go_oa_alv.
+    ENDIF.
+    IF go_oa_popup IS NOT INITIAL.
+      go_oa_popup->free( ). CLEAR go_oa_popup.
+    ENDIF.
+  ENDMETHOD.
+
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -699,6 +882,7 @@ FORM fetch_pur_data.
     " Derive Outline Agreement for ALL rows (including zero qty and GJ)
     PERFORM derive_outline_agreement
       USING    ls_pur-locid ls_pur-material ls_pur-gas_day ls_pur-state_code
+               ls_pur-ongc_mater
       CHANGING ls_disp-outline_agr ls_disp-oa_missing.
 
     " Populate OA detail columns from pre-fetched cache
@@ -707,8 +891,8 @@ FORM fetch_pur_data.
       CHANGING ls_disp-oa_locid ls_disp-oa_werks ls_disp-oa_matnr ls_disp-oa_desc
                ls_disp-oa_tsyst ls_disp-oa_batch.
 
-    " Excluded from nomination: GJ state OR Exclude flag set in YRGA_CST_PUR
-    IF ls_pur-state_code = gc_excl_state OR ls_pur-exclude = 'X'.
+    " Excluded from nomination: Exclude flag set in YRGA_CST_PUR (GJ now allowed)
+    IF ls_pur-exclude = 'X'.
       ls_disp-is_excl   = 'X'.          " logic flag: used in all WHERE/IF
       ls_disp-exclude   = ls_pur-exclude." display: tick only if TABLE has exclude='X'
       ls_disp-sel       = ' '.
@@ -962,12 +1146,13 @@ ENDFORM.
 * FORM derive_outline_agreement — uses pre-fetched cache (no DB calls)
 *----------------------------------------------------------------------*
 FORM derive_outline_agreement
-  USING    iv_locid   TYPE char10
-           iv_matnr   TYPE char30
-           iv_date    TYPE aedat
-           iv_state   TYPE regio
-  CHANGING cv_vbeln   TYPE ebeln
-           cv_missing TYPE char1.
+  USING    iv_locid      TYPE char10
+           iv_matnr      TYPE char30
+           iv_date       TYPE aedat
+           iv_state      TYPE regio
+           iv_ongc_mater TYPE char30
+  CHANGING cv_vbeln      TYPE ebeln
+           cv_missing    TYPE char1.
 
   DATA: ls_mot        TYPE ty_mot_cache,
         ls_t001w      TYPE ty_t001w_cache,
@@ -977,9 +1162,15 @@ FORM derive_outline_agreement
         lv_vbeln      TYPE ebeln,
         lv_werks      TYPE werks_d,
         lv_best_vbeln TYPE ebeln,
-        lv_best_bedat TYPE d.
+        lv_best_bedat TYPE d,
+        lv_c2c3       TYPE char1.
 
   CLEAR: cv_vbeln, cv_missing.
+
+  " GJ + ONGC Material C2C3: filter OA list by EKPO-TXZ01 containing 'C2C3'
+  IF iv_state = 'GJ' AND iv_ongc_mater CS 'C2C3'.
+    lv_c2c3 = abap_true.
+  ENDIF.
 
   " 5a: find candidate OAs from pre-fetched MOT data (in memory)
   LOOP AT gt_mot_c INTO ls_mot WHERE matnr = iv_matnr AND locid = iv_locid.
@@ -999,6 +1190,8 @@ FORM derive_outline_agreement
   LOOP AT lt_cand INTO lv_vbeln.
     LOOP AT lt_werks INTO lv_werks.
       LOOP AT gt_ekoa_c INTO ls_ek WHERE ebeln = lv_vbeln AND werks = lv_werks.
+        " For GJ + C2C3 require EKPO description to contain 'C2C3'
+        IF lv_c2c3 = abap_true AND ls_ek-txz01 NS 'C2C3'. CONTINUE. ENDIF.
         IF ls_ek-bedat > lv_best_bedat.
           lv_best_bedat = ls_ek-bedat.
           lv_best_vbeln = ls_ek-ebeln.
@@ -1285,17 +1478,7 @@ FORM top_of_page.
 
   CLEAR ls_line.
   ls_line-typ  = 'A'.
-  ls_line-info = '1. Nomination will not be created for line items'.
-  APPEND ls_line TO lt_header.
-
-  CLEAR ls_line.
-  ls_line-typ  = 'A'.
-  ls_line-info = '   with State GJ'.
-  APPEND ls_line TO lt_header.
-
-  CLEAR ls_line.
-  ls_line-typ  = 'A'.
-  ls_line-info = '2. Nomination will not be created for Materials excluded for'.
+  ls_line-info = '1. Nomination will not be created for Materials excluded for'.
   APPEND ls_line TO lt_header.
 
   CLEAR ls_line.
@@ -1305,7 +1488,7 @@ FORM top_of_page.
 
   CLEAR ls_line.
   ls_line-typ  = 'A'.
-  ls_line-info = '3. Nominations will be created in SM3'.
+  ls_line-info = '2. Nominations will be created in SM3'.
   APPEND ls_line TO lt_header.
 
   CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
@@ -1554,8 +1737,9 @@ FORM user_command USING r_ucomm    TYPE sy-ucomm
     go_alv->check_changed_data( ).
   ENDIF.
   CASE r_ucomm.
-    WHEN 'BCMASS'. PERFORM handle_batch_mass_change.
-    WHEN 'CRENOM'. PERFORM handle_create_nomination.
+    WHEN 'BCMASS'.  PERFORM handle_batch_mass_change.
+    WHEN 'OACMASS'. PERFORM handle_oa_mass_change.
+    WHEN 'CRENOM'.  PERFORM handle_create_nomination.
     WHEN 'SELALL'.
       LOOP AT gt_display INTO DATA(ls_sa) WHERE is_excl <> 'X'.
         ls_sa-sel = abap_true.
@@ -1849,6 +2033,100 @@ FORM handle_batch_mass_change.
   INSERT ls_f4b INTO TABLE lt_f4b.
   go_batch_alv->register_f4_for_fields( it_f4 = lt_f4b ).
   go_batch_alv->set_toolbar_interactive( ).
+ENDFORM.
+
+*----------------------------------------------------------------------*
+* FORM handle_oa_mass_change — popup for changing Outline Agreement in mass
+*----------------------------------------------------------------------*
+FORM handle_oa_mass_change.
+  DATA: ls_disp   TYPE ty_display,
+        ls_assign TYPE ty_oa_assign,
+        lt_fcat   TYPE lvc_t_fcat,
+        ls_fcat   TYPE lvc_s_fcat,
+        ls_layout TYPE lvc_s_layo.
+
+  REFRESH gt_oa_assign.
+
+  " Build one row per Location + Material + ONGC Material + State combination
+  LOOP AT gt_display INTO ls_disp WHERE is_excl <> 'X'.
+    READ TABLE gt_oa_assign TRANSPORTING NO FIELDS
+        WITH KEY locid      = ls_disp-locid
+                 matnr      = ls_disp-material
+                 ongc_mater = ls_disp-ongc_mater
+                 state_code = ls_disp-state_code.
+    IF sy-subrc <> 0.
+      CLEAR ls_assign.
+      ls_assign-locid       = ls_disp-locid.
+      ls_assign-matnr       = ls_disp-material.
+      ls_assign-ongc_mater  = ls_disp-ongc_mater.
+      ls_assign-state_code  = ls_disp-state_code.
+      ls_assign-outline_agr = ls_disp-outline_agr.
+      APPEND ls_assign TO gt_oa_assign.
+    ENDIF.
+  ENDLOOP.
+
+  IF gt_oa_assign IS INITIAL.
+    MESSAGE 'No line items available for OA change.' TYPE 'S'
+            DISPLAY LIKE 'W'. RETURN.
+  ENDIF.
+
+  IF go_alv_handler IS INITIAL.
+    CREATE OBJECT go_alv_handler.
+  ENDIF.
+  CREATE OBJECT go_oa_popup
+    EXPORTING
+      caption    = 'OA Change'
+      top        = 5
+      left       = 5
+      width      = 750
+      height     = 350
+    EXCEPTIONS OTHERS = 1.
+  IF sy-subrc <> 0.
+    MESSAGE 'Error opening OA change dialog.' TYPE 'S' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+  SET HANDLER go_alv_handler->on_oa_dlg_close FOR go_oa_popup.
+
+  CREATE OBJECT go_oa_alv
+    EXPORTING i_parent = go_oa_popup
+    EXCEPTIONS OTHERS = 1.
+  IF sy-subrc <> 0. RETURN. ENDIF.
+  SET HANDLER go_alv_handler->on_oa_data_changed FOR go_oa_alv.
+  SET HANDLER go_alv_handler->on_oa_toolbar      FOR go_oa_alv.
+  SET HANDLER go_alv_handler->on_oa_cmd          FOR go_oa_alv.
+  SET HANDLER go_alv_handler->on_oa_f4           FOR go_oa_alv.
+
+  ls_fcat-fieldname = 'LOCID'.       ls_fcat-coltext = 'Location'.        ls_fcat-outputlen = 12.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'MATNR'.       ls_fcat-coltext = 'Material'.        ls_fcat-outputlen = 20.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'ONGC_MATER'.  ls_fcat-coltext = 'ONGC Material'.   ls_fcat-outputlen = 18.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname = 'STATE_CODE'.  ls_fcat-coltext = 'State'.           ls_fcat-outputlen = 6.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+  ls_fcat-fieldname  = 'OUTLINE_AGR'. ls_fcat-coltext = 'Outline Agreement'. ls_fcat-outputlen = 14.
+  ls_fcat-edit       = abap_true.
+  ls_fcat-f4availabl = abap_true.
+  APPEND ls_fcat TO lt_fcat. CLEAR ls_fcat.
+
+  ls_layout-cwidth_opt = abap_true.
+
+  go_oa_alv->set_table_for_first_display(
+    EXPORTING is_layout       = ls_layout
+    CHANGING  it_outtab       = gt_oa_assign
+              it_fieldcatalog = lt_fcat
+    EXCEPTIONS OTHERS = 1 ).
+
+  go_oa_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_modified ).
+  go_oa_alv->register_edit_event( i_event_id = cl_gui_alv_grid=>mc_evt_enter ).
+  DATA: lt_f4o TYPE lvc_t_f4, ls_f4o TYPE lvc_s_f4.
+  CLEAR ls_f4o.
+  ls_f4o-fieldname  = 'OUTLINE_AGR'.
+  ls_f4o-register   = abap_true.
+  ls_f4o-chngeafter = abap_false.
+  INSERT ls_f4o INTO TABLE lt_f4o.
+  go_oa_alv->register_f4_for_fields( it_f4 = lt_f4o ).
+  go_oa_alv->set_toolbar_interactive( ).
 ENDFORM.
 
 *----------------------------------------------------------------------*
