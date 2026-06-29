@@ -1,0 +1,147 @@
+FUNCTION zfi_paymedium_dmee_20.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     VALUE(I_FPAYH) LIKE  FPAYH STRUCTURE  FPAYH
+*"     VALUE(I_FPAYHX) LIKE  FPAYHX STRUCTURE  FPAYHX
+*"     VALUE(I_FORMAT_PARAMS) LIKE  FPM_SELPAR-PARAM
+*"     VALUE(I_FILENAME) LIKE  REGUT-FSNAM
+*"     VALUE(I_XFILESYSTEM) TYPE  DFILESYST
+*"  TABLES
+*"      T_FILE_OUTPUT STRUCTURE  FPM_FILE
+*"  CHANGING
+*"     REFERENCE(C_FILENAME) LIKE  REGUT-FSNAM
+*"----------------------------------------------------------------------
+*data: bla(1) type n.
+  DATA: wa_item  TYPE dmee_paym_if_type,
+        params   TYPE fpm_selpar-param.
+  DATA: error_output   TYPE STANDARD TABLE OF fimsg.
+  data: it_fpm_fields  type standard table of dmee_fpm_fields.
+
+  DATA: x_filesheet_tab TYPE xfeld,      "sum tablel for filesheet
+        x_filesheet     TYPE xfeld.      "create filesheet
+  data : p_treeid type fpayhx-formi.
+
+  data : g_constant(1) type c value 'T',
+         g_date(10),
+         g_sdate(10),
+         g_time(06),
+         g_filename     type REGUT-FSNAM,
+         wa_zfi_path    type zfi_path,
+         g_ztxn        type zfi_s2s_txn-ztxn,
+         wa_zfi_s2s_txn type zfi_s2s_txn.
+
+* List of sheet key fields
+  DATA: int_sheet_keys TYPE TABLE OF dmee_tree_sheet.
+
+  params  = i_format_params.
+  wa_item-fpayh  = i_fpayh.
+  wa_item-fpayhx = i_fpayhx.
+* wa_dmee_paym_if_param-****  = I_FORMAT_PARAMS
+
+  CALL FUNCTION 'DMEE_START'
+    EXPORTING
+      i_tree_type = 'PAYM'
+      i_tree_id   = i_fpayhx-formi
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 10.06.2026  for ATC
+*       item        = wa_item
+      item        = wa_item "#EC CI_FLDEXT_OK[2610650]
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 10.06.2026 for ATC
+      uparam      = i_format_params
+    TABLES
+      file_output = t_file_output.
+
+  DATA: lwa_dmee_head TYPE dmee_tree_head.
+
+  p_treeid = i_fpayhx-formi.
+  SELECT SINGLE * FROM dmee_tree_head INTO lwa_dmee_head
+    WHERE tree_type = 'PAYM'
+    AND   tree_id   = p_treeid
+    AND   version   = '000'.           "active version
+
+
+* Quick Fix Replace this statement by a SELECT statement with ORDER BY
+* 08.06.2026 14:10:20 SAP_ABAP
+* Transport OCQK901318 SAP - ATC Correction 01.06.2026
+* Replaced Code:
+*  select single * from zfi_s2s_txn into wa_zfi_s2s_txn where rzawe = i_fpayh-rzawe.
+
+SELECT * FROM ZFI_S2S_TXN INTO WA_ZFI_S2S_TXN UP TO 1 ROWS WHERE RZAWE = I_FPAYH-RZAWE
+ ORDER BY PRIMARY KEY .
+ ENDSELECT.
+* End of Quick Fix
+
+  if sy-subrc = 0.
+
+    g_ztxn = wa_zfi_s2s_txn-ztxn.
+    write i_fpayh-laufd to g_date DDMMYY.
+    write sy-datum to g_sdate DD/MM/YYYY.
+    replace all occurences of '.' in g_sdate with '' .
+    condense g_sdate.
+    g_time = sy-uzeit.
+* Begin of <RD1K976705> on 21062011
+*    if i_fpayh-zbukr = 'MUM' and i_fpayh-hbkid = 'HB_21'.
+*      concatenate g_ztxn '.' g_sdate '.' '94427' g_date i_fpayh-laufi g_time into g_filename.
+*
+*    elseif i_fpayh-zbukr = 'DDN' and i_fpayh-hbkid = 'HB_10'.
+*      concatenate g_ztxn '.' g_sdate '.' '93128' g_date i_fpayh-laufi g_time into g_filename.
+*
+*    endif.
+
+
+* Quick Fix Replace this statement by a SELECT statement with ORDER BY
+* 08.06.2026 14:10:20 SAP_ABAP
+* Transport OCQK901318 SAP - ATC Correction 01.06.2026
+* Replaced Code:
+*    select single * from zfi_path into wa_zfi_path where sysid = syst-sysid
+*                                                     and zbukr = i_fpayh-zbukr
+*                                                     and hbkid = i_fpayh-hbkid.
+
+SELECT * FROM ZFI_PATH INTO WA_ZFI_PATH UP TO 1 ROWS WHERE SYSID = SYST-SYSID
+ AND ZBUKR = I_FPAYH-ZBUKR AND HBKID = I_FPAYH-HBKID
+ ORDER BY PRIMARY KEY .
+ ENDSELECT.
+* End of Quick Fix
+
+    if sy-subrc = 0.
+* Begin of <RD1K973468>
+      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi g_time into g_filename.
+* End of <RD1K976705> on 21062011
+      concatenate wa_zfi_path-fsnam g_filename '.txt' into g_filename.
+*     concatenate wa_zfi_path-fsnam g_filename  into g_filename.
+* End of <RD1K973468>
+    endif.
+*  concatenate '/usr/sap/RQ1/epay/' g_filename '.txt' into g_filename.
+*  concatenate '/usr/sap/RD1/DigSignApp/data/output/signed/' g_filename '.txt' into g_filename.
+
+    C_FILENAME = g_filename.  "'SPAN'.
+
+  endif.
+
+* -- simple file sheet
+  IF lwa_dmee_head-filesheet = '1'.
+    x_filesheet     = 'X'.
+    x_filesheet_tab = space.
+* -- file sheet with sums
+  ELSEIF lwa_dmee_head-filesheet = '2'.
+    x_filesheet     = 'X'.
+    x_filesheet_tab = 'X'.
+*   determine list of key fiels
+    SELECT * FROM dmee_tree_sheet INTO TABLE int_sheet_keys
+      WHERE tree_type = 'PAYM'
+      AND   tree_id   = p_treeid
+      AND   version   = '000'
+      AND   x_key     = 'X'.           "key field
+* -- no file sheet
+  ELSE.
+    x_filesheet     = space.
+    x_filesheet_tab = space.
+  ENDIF.
+
+
+
+
+*BREAK-POINT.
+*  PERFORM init_filesheet_keys USING i_fpayhx-formi.
+
+ENDFUNCTION.
