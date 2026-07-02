@@ -244,8 +244,10 @@ ENHANCEMENT 1  YDVRFI_EBS.    "active version
 * Transport Request No  : DVRK9A09UN                                   *
 * Initiated by          : Gaurav Sharma / Mr. Khichi                   *
 * Developed by          : Bipin Shukla                                 *
-* Version No            : V 1.1  (skip fix)                            *
+* Version No            : V 1.1  (skip fix by Vaibhav 02.07.2026)      *
 * Program Description   : EBS Payment Enh                              *
+* Change Remark         : Logic-skip fix - changed by Vaibhav on       *
+*                         02.07.2026 (see marked block near end)       *
 *----------------------------------------------------------------------*
 DATA :lw_swift TYPE char256.
 DATA : BEGIN OF lw_referenz,
@@ -394,11 +396,11 @@ IF lw_swift CS '//'.
 ENDIF.
 
 *XFEBEP
-*** -> BEGIN OF SKIP FIX -----------------------------------------------
-* Derive the assignment value (ZUONR) FIRST, then decide whether to
-* store it. The old code tested STRLEN( REFERENZ ) GT 7 but, for NCOL,
-* stored LW_REFERENZ-ZUONR - i.e. it checked the wrong field and
-* dropped valid NCOL items.
+*** -> BEGIN CHANGE BY VAIBHAV ON 02.07.2026 (LOGIC-SKIP FIX) -----------
+* REMARK (VAIBHAV 02.07.2026): Derive the assignment value (ZUONR) FIRST,
+* then decide whether to store it. The old code tested
+* STRLEN( REFERENZ ) GT 7 but, for NCOL, stored LW_REFERENZ-ZUONR -
+* i.e. it checked the wrong field and dropped valid NCOL items.
 CLEAR lw_referenz.
 lw_referenz-kukey = xfebep-kukey.
 lw_referenz-esnum = xfebep-esnum.
@@ -435,7 +437,7 @@ IF strlen( lw_referenz-zuonr ) GT 7.
 
   EXPORT li_referenz TO DATABASE indx(st) ID indexkey.
 ENDIF.
-*** <- END OF SKIP FIX -------------------------------------------------
+*** <- END CHANGE BY VAIBHAV ON 02.07.2026 (LOGIC-SKIP FIX) -------------
 
 CLEAR: lw_swift,lw_referenz,li_referenz[],lv_overwrite,lv_str1,lv_str2,lv_str1_right,lv_str1_left,lv_length,lv_offset.
 ENDIF.
