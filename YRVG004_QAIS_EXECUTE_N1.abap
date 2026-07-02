@@ -391,7 +391,8 @@ DATA: it_zcis_cust_type  TYPE STANDARD TABLE OF zcis_cust_type,
       lv_cust_type       TYPE zcis_cust_type-cust_type,   " A=AU, T=AUT/Trader
       lv_wv_floor        TYPE p DECIMALS 3,                " 0.250 / 0.500
       lv_wv_allowed      TYPE i,                           " waivers allowed for the CIS
-      lv_wv_used_qtr     TYPE i.                           " waivers used in current quarter
+      lv_wv_maxqtr       TYPE i,                           " max waivers per quarter (default 1)
+      lv_wv_ok           TYPE char1.                       " current month waiver allowed?
 *** EOC : CIS 2026-27 - customer-type waiver (R1) declarations ***
 
 *** SOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
@@ -8697,8 +8698,8 @@ FORM month_jan .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-      OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m10 * lv_wv_floor .
@@ -8778,8 +8779,8 @@ FORM month_feb .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-      OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m11 * lv_wv_floor .
@@ -8861,8 +8862,8 @@ FORM month_mar .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m12 * lv_wv_floor .
@@ -8923,8 +8924,8 @@ FORM month_apr .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m1 * lv_wv_floor .
@@ -9000,8 +9001,8 @@ IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT l
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m2 * lv_wv_floor .
@@ -9075,8 +9076,8 @@ FORM month_jun .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m3 * lv_wv_floor .
@@ -9168,8 +9169,8 @@ FORM month_jul .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m4 * lv_wv_floor .
@@ -9245,8 +9246,8 @@ FORM month_aug .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m5 * lv_wv_floor .
@@ -9330,8 +9331,8 @@ FORM month_sep .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m6 * lv_wv_floor .
@@ -9425,8 +9426,8 @@ FORM month_oct .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m7 * lv_wv_floor .
@@ -9508,8 +9509,8 @@ FORM month_nov .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m8 * lv_wv_floor .
@@ -9593,8 +9594,8 @@ FORM month_dec .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
- OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
     w_month_min  =  wa_yrva_qais_data-commited_qty_m9 * lv_wv_floor .
@@ -11453,12 +11454,14 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
   lv_signmon = p_begda+4(2).
 
 *  3) waiver rule: match customer type + signing-month band
+  CLEAR: lv_wv_allowed, lv_wv_maxqtr.
   LOOP AT it_zcis_waiver_rule INTO wa_zcis_waiver_rule
        WHERE cust_type = lv_cust_type
          AND sign_from LE lv_signmon
          AND sign_to   GE lv_signmon.
     lv_wv_floor   = wa_zcis_waiver_rule-min_lift_perc / 100.
     lv_wv_allowed = wa_zcis_waiver_rule-wv_count.
+    lv_wv_maxqtr  = wa_zcis_waiver_rule-max_per_qtr.
     EXIT.
   ENDLOOP.
 
@@ -11466,7 +11469,91 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
   IF lv_wv_floor IS INITIAL.
     lv_wv_floor = '0.25'.
   ENDIF.
+  IF lv_wv_maxqtr IS INITIAL.
+    lv_wv_maxqtr = 1.
+  ENDIF.
 ENDFORM.                    "get_cust_wv_floor
+*&---------------------------------------------------------------------*
+*&      Form  month_fy_order   (CIS 2026-27 - R1 helper)
+*&---------------------------------------------------------------------*
+*   Maps a QAIS month abbreviation (APR..MAR) to its fiscal-year order
+*   (APR=1 .. MAR=12) and quarter (Q1=Apr-Jun .. Q4=Jan-Mar).
+*&---------------------------------------------------------------------*
+FORM month_fy_order USING p_mth TYPE yy_qais_month
+                 CHANGING p_ord TYPE i
+                          p_qtr TYPE i.
+  CLEAR: p_ord, p_qtr.
+  CASE p_mth.
+    WHEN 'APR'. p_ord = 1.  WHEN 'MAY'. p_ord = 2.  WHEN 'JUN'. p_ord = 3.
+    WHEN 'JUL'. p_ord = 4.  WHEN 'AUG'. p_ord = 5.  WHEN 'SEP'. p_ord = 6.
+    WHEN 'OCT'. p_ord = 7.  WHEN 'NOV'. p_ord = 8.  WHEN 'DEC'. p_ord = 9.
+    WHEN 'JAN'. p_ord = 10. WHEN 'FEB'. p_ord = 11. WHEN 'MAR'. p_ord = 12.
+    WHEN OTHERS. p_ord = 0.
+  ENDCASE.
+  IF p_ord > 0.
+    p_qtr = ( ( p_ord - 1 ) DIV 3 ) + 1.
+  ENDIF.
+ENDFORM.                    "month_fy_order
+*&---------------------------------------------------------------------*
+*&      Form  check_monthly_waiver   (CIS 2026-27 - R1 / Clause 8)
+*&---------------------------------------------------------------------*
+*   Decides whether the customer's monthly waiver may be applied for the
+*   current month (p_curmth). The customer's chosen waiver months
+*   (waiver_1/2/3) are honoured only:
+*     - up to lv_wv_allowed in total (by CIS signing month), and
+*     - max lv_wv_maxqtr (=1) per fiscal quarter.
+*   Chronological (FY) order is used so the earliest waivers are granted
+*   first. Returns p_ok = 'X' if the current month's waiver is granted.
+*&---------------------------------------------------------------------*
+FORM check_monthly_waiver USING p_curmth TYPE yy_qais_month
+                       CHANGING p_ok     TYPE char1.
+  DATA: BEGIN OF ls_wv,
+          mth TYPE yy_qais_month,
+          ord TYPE i,
+          qtr TYPE i,
+        END OF ls_wv,
+        lt_wv    LIKE STANDARD TABLE OF ls_wv,
+        lt_qused TYPE STANDARD TABLE OF i,
+        lv_cnt   TYPE i.
+  CLEAR p_ok.
+*  resolve floor + allowed count/quarter cap for this customer
+  PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr
+                                  wa_yrva_qais_data-mou_begda.
+*  collect the customer's chosen waiver months
+  IF wa_yrva_qais_data-waiver_1 IS NOT INITIAL.
+    ls_wv-mth = wa_yrva_qais_data-waiver_1.
+    PERFORM month_fy_order USING ls_wv-mth CHANGING ls_wv-ord ls_wv-qtr.
+    APPEND ls_wv TO lt_wv.
+  ENDIF.
+  IF wa_yrva_qais_data-waiver_2 IS NOT INITIAL.
+    ls_wv-mth = wa_yrva_qais_data-waiver_2.
+    PERFORM month_fy_order USING ls_wv-mth CHANGING ls_wv-ord ls_wv-qtr.
+    APPEND ls_wv TO lt_wv.
+  ENDIF.
+  IF wa_yrva_qais_data-waiver_3 IS NOT INITIAL.
+    ls_wv-mth = wa_yrva_qais_data-waiver_3.
+    PERFORM month_fy_order USING ls_wv-mth CHANGING ls_wv-ord ls_wv-qtr.
+    APPEND ls_wv TO lt_wv.
+  ENDIF.
+  SORT lt_wv BY ord.
+*  grant waivers in FY order, within total count and 1/quarter cap
+  lv_cnt = 0.
+  LOOP AT lt_wv INTO ls_wv.
+    READ TABLE lt_qused TRANSPORTING NO FIELDS
+         WITH KEY table_line = ls_wv-qtr.
+    IF sy-subrc = 0.
+      CONTINUE.                     " already a waiver this quarter (max/qtr)
+    ENDIF.
+    IF lv_cnt GE lv_wv_allowed.
+      EXIT.                         " total waiver count exhausted
+    ENDIF.
+    lv_cnt = lv_cnt + 1.
+    APPEND ls_wv-qtr TO lt_qused.
+    IF ls_wv-mth = p_curmth.
+      p_ok = 'X'.                   " current month waiver is granted
+    ENDIF.
+  ENDLOOP.
+ENDFORM.                    "check_monthly_waiver
 *&---------------------------------------------------------------------*
 *&      Form  get_group_mle_members   (CIS 2026-27 - R3)
 *&---------------------------------------------------------------------*
