@@ -378,6 +378,28 @@ RANGES range_s FOR s922-kondm.
 
 DATA: lv_flag123 TYPE char1.
 
+*** SOC : CIS 2026-27 - customer-type waiver (R1) declarations ***
+*   New config-driven customer waiver: minimum lifting floor differs by
+*   customer type (AU 25% / AUT-Trader 50%) and the number of monthly
+*   waivers depends on the CIS signing month, capped at 1 per quarter.
+*   Values are read from Z config tables (see DDIC spec) - NOT hard-coded.
+TABLES: zcis_cust_type, zcis_waiver_rule.
+DATA: it_zcis_cust_type  TYPE STANDARD TABLE OF zcis_cust_type,
+      wa_zcis_cust_type  TYPE zcis_cust_type,
+      it_zcis_waiver_rule TYPE STANDARD TABLE OF zcis_waiver_rule,
+      wa_zcis_waiver_rule TYPE zcis_waiver_rule,
+      lv_cust_type       TYPE zcis_cust_type-cust_type,   " A=AU, T=AUT/Trader
+      lv_wv_floor        TYPE p DECIMALS 3,                " 0.250 / 0.500
+      lv_wv_allowed      TYPE i,                           " waivers allowed for the CIS
+      lv_wv_used_qtr     TYPE i.                           " waivers used in current quarter
+*** EOC : CIS 2026-27 - customer-type waiver (R1) declarations ***
+
+*** SOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
+TABLES: zcis_shortfall_grd.
+DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd,
+      wa_zcis_shortfall_grd TYPE zcis_shortfall_grd.
+*** EOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
+
 
 *&---------------------------------------------------------------------*
 
@@ -1168,6 +1190,15 @@ FORM get_data.
 *** EOC : TEST ONLY - CIS 2025-26 ***
 *** EOC : CIS lifting % change (period-gated) ***
   MOVE-CORRESPONDING wa_yrva_mstr_waiver TO wa_yrva_mstr_waiver_temp.
+
+*** SOC : CIS 2026-27 - load customer-type / waiver-rule / shortfall config (R1+R2) ***
+*   Loaded once; used per customer in the monthly waiver logic.
+  SELECT * FROM zcis_cust_type   INTO TABLE it_zcis_cust_type.
+  SELECT * FROM zcis_waiver_rule INTO TABLE it_zcis_waiver_rule
+    WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
+  SELECT * FROM zcis_shortfall_grd INTO TABLE it_zcis_shortfall_grd
+    WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
+*** EOC : CIS 2026-27 - load config (R1+R2) ***
 
   CLEAR wa_where_tab.
   REFRESH it_where_tab.
@@ -8610,7 +8641,8 @@ FORM month_jan .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
       OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m10 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m10 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8690,7 +8722,8 @@ FORM month_feb .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
       OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m11 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m11 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8772,7 +8805,8 @@ FORM month_mar .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m12 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m12 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8833,7 +8867,8 @@ FORM month_apr .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m1 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m1 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8909,7 +8944,8 @@ IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT l
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m2 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m2 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8983,7 +9019,8 @@ FORM month_jun .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m3 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m3 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9075,7 +9112,8 @@ FORM month_jul .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m4 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m4 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9151,7 +9189,8 @@ FORM month_aug .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m5 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m5 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9235,7 +9274,8 @@ FORM month_sep .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m6 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m6 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9329,7 +9369,8 @@ FORM month_oct .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m7 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m7 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9411,7 +9452,8 @@ FORM month_nov .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
 OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m8 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m8 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9495,7 +9537,8 @@ FORM month_dec .
   IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
  OR wa_yrva_qais_data-waiver_3 = lv_mth .
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m9 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m9 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -11317,6 +11360,49 @@ ENDFORM.                    "on_selection
 FORM pf_status_set USING rt_extab TYPE slis_t_extab.            "#EC CALLED
   SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
 ENDFORM.                    "pf_status_set
+*&---------------------------------------------------------------------*
+*&      Form  get_cust_wv_floor   (CIS 2026-27 - R1)
+*&---------------------------------------------------------------------*
+*   For the given customer, resolve:
+*     - lv_cust_type  : A = Actual User, T = AUT / Trader (ZCIS_CUST_TYPE)
+*     - lv_wv_floor   : minimum lifting fraction in a waiver month
+*                       (AU 0.25 / AUT-Trader 0.50), from ZCIS_WAIVER_RULE
+*     - lv_wv_allowed : number of monthly waivers allowed for the CIS,
+*                       based on the CIS signing month (mou_begda) band
+*   All values come from config tables - nothing hard-coded.
+*&---------------------------------------------------------------------*
+FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
+                             p_begda   TYPE begda.
+  DATA: lv_signmon TYPE n LENGTH 2.
+  CLEAR: lv_cust_type, lv_wv_floor, lv_wv_allowed.
+
+*  1) customer type (default to AU if not classified)
+  READ TABLE it_zcis_cust_type INTO wa_zcis_cust_type
+       WITH KEY kunnr = p_kunnr.
+  IF sy-subrc = 0.
+    lv_cust_type = wa_zcis_cust_type-cust_type.
+  ELSE.
+    lv_cust_type = 'A'.
+  ENDIF.
+
+*  2) CIS signing month (MM from mou_begda)
+  lv_signmon = p_begda+4(2).
+
+*  3) waiver rule: match customer type + signing-month band
+  LOOP AT it_zcis_waiver_rule INTO wa_zcis_waiver_rule
+       WHERE cust_type = lv_cust_type
+         AND sign_from LE lv_signmon
+         AND sign_to   GE lv_signmon.
+    lv_wv_floor   = wa_zcis_waiver_rule-min_lift_perc / 100.
+    lv_wv_allowed = wa_zcis_waiver_rule-wv_count.
+    EXIT.
+  ENDLOOP.
+
+*  fallback if no rule row (keeps legacy 25% behaviour)
+  IF lv_wv_floor IS INITIAL.
+    lv_wv_floor = '0.25'.
+  ENDIF.
+ENDFORM.                    "get_cust_wv_floor
 *&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*

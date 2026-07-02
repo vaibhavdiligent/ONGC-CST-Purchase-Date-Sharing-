@@ -1,0 +1,96 @@
+# CIS 2026-27 — DDIC / Repository Objects to Create in SAP
+
+These objects must be **created in the SAP system (SE11 / SE80 / SE93)** before the
+enhanced `YRVG004_QAIS_EXECUTE_N1` and the new programs can be activated.
+The ABAP code already references these exact table and field names.
+
+> Naming (`ZCIS_*`) is a proposal — align with GAIL standards, and if you rename a
+> table/field, tell me and I'll update the code to match.
+
+---
+
+## R1 — Customer Waiver
+
+### Table `ZCIS_CUST_TYPE` (transparent, master)
+Customer → type classification (Actual User vs AUT/Trader).
+
+| Field | Key | Data element / type | Description |
+|---|---|---|---|
+| `MANDT` | ✔ | MANDT | Client |
+| `KUNNR` | ✔ | KUNNR | Customer |
+| `CUST_TYPE` |   | `ZCIS_CUST_TYPE` (CHAR1) | `A` = Actual User, `T` = AUT/Trader |
+
+*Data element `ZCIS_CUST_TYPE` — domain CHAR1, fixed values A / T.*
+⚠️ If customer type is already derivable from an existing field (e.g. `KNVV-KDGRP`,
+a `KVGR*`, or a BP role), this table can be replaced by that field — please confirm.
+
+### Table `ZCIS_WAIVER_RULE` (transparent, config)
+Waiver rule by customer type and CIS signing-month band.
+
+| Field | Key | Data element / type | Description |
+|---|---|---|---|
+| `MANDT` | ✔ | MANDT | Client |
+| `SCHEME_YEAR` | ✔ | `ZCIS_YEAR` (CHAR7, e.g. 2026-27) | Scheme year |
+| `CUST_TYPE` | ✔ | `ZCIS_CUST_TYPE` | A / T |
+| `SIGN_FROM` | ✔ | `ZCIS_MONTH` (NUMC2) | Signing month band from (MM, 01–12) |
+| `SIGN_TO` |   | `ZCIS_MONTH` (NUMC2) | Signing month band to (MM) |
+| `MIN_LIFT_PERC` |   | `ZCIS_PERC` (DEC3) | Min lifting % in a waiver month (25 / 50) |
+| `WV_COUNT` |   | INT1 | No. of monthly waivers allowed |
+| `MAX_PER_QTR` |   | INT1 | Max waivers per quarter (default 1) |
+| `VALID_FROM` |   | BEGDA (DATS) | Rule valid from |
+| `VALID_TO` |   | ENDDA (DATS) | Rule valid to |
+
+**Seed data for 2026-27:**
+| SCHEME_YEAR | CUST_TYPE | SIGN_FROM | SIGN_TO | MIN_LIFT_PERC | WV_COUNT | MAX_PER_QTR |
+|---|---|---|---|---|---|---|
+| 2026-27 | A | 06 | 07 | 25 | 2 | 1 |
+| 2026-27 | A | 08 | 09 | 25 | 1 | 1 |
+| 2026-27 | A | 10 | 03 | 25 | 0 | 0 |
+| 2026-27 | T | 06 | 09 | 50 | 1 | 1 |
+| 2026-27 | T | 10 | 03 | 50 | 0 | 0 |
+
+*(“10–03” = Oct→Mar; maintain as two rows 10–12 and 01–03 if wrap-around is not desired.)*
+
+---
+
+## R2 — Shortfall Grade Waivers
+
+### Table `ZCIS_SHORTFALL_GRD` (transparent, config)
+Month/period-wise grades declared shortfall by the process owner.
+
+| Field | Key | Data element / type | Description |
+|---|---|---|---|
+| `MANDT` | ✔ | MANDT | Client |
+| `PERIOD_FROM` | ✔ | BEGDA (DATS) | Period from (month start) |
+| `PERIOD_TO` | ✔ | ENDDA (DATS) | Period to (month end) |
+| `GRADE` | ✔ | `YY_GRADE` (as in YRVA_PRS_GRADES) | Grade declared shortfall |
+| `PRS_IND` |   | CHAR1 | P / R / S indicator (optional) |
+| `CREATED_BY` |   | UNAME | Process owner |
+| `CREATED_ON` |   | DATS | Entry date |
+
+### Maintenance transaction (R2 T-code)
+- Generate **table maintenance (SM30)** for `ZCIS_SHORTFALL_GRD` (SE11 → Utilities → Table Maintenance Generator, one-step, function group `ZCIS`).
+- Create a **parameter transaction** (SE93) e.g. `ZCIS_SHORTFALL` → calls `SM30` with `VIEWNAME = ZCIS_SHORTFALL_GRD`, `UPDATE = X` (skip first screen).
+- Add an **authorization group** so only the process owner can maintain it.
+
+*(A custom module-pool screen can replace SM30 if a richer UI is required — advise if needed.)*
+
+---
+
+## R5 — Rebate Order Report
+
+### Program `ZCIS_REBATE_REPORT` (already written — file `ZCIS_REBATE_REPORT.abap`)
+- Create executable program `ZCIS_REBATE_REPORT` (SE38), paste the source.
+- Create transaction (SE93) e.g. `ZCIS_REBATE_RPT` → program `ZCIS_REBATE_REPORT`.
+- ⚠️ Adjust default `p_auart` to the actual CIS credit-memo-request document type.
+
+---
+
+## R3 — Group / MLE  *(on hold)*
+Awaiting logic from **Mr. Pankaj Wadhwa**. No objects created yet.
+Likely: BP relationship/grouping + a resolver FM `ZCIS_GET_GROUP`. Will finalize on receipt.
+
+---
+
+## R4 — Workflow  *(excluded from this build, per instruction)*
+Objects listed in `CIS_2026_27_Change_Plan.docx`; not built here.
