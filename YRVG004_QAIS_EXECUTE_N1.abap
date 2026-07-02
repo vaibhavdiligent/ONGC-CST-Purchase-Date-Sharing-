@@ -11416,8 +11416,13 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
   CLEAR: lv_cust_type, lv_wv_floor, lv_wv_allowed.
 
 *  1) customer type (default to AU if not classified)
+*  Customer type is derived from KNA1-KATR2 (Attribute 2), confirmed by
+*  GAIL 02.07.2026. The KATR2 value is mapped to A (Actual User) / T
+*  (AUT / Trader) via ZCIS_CUST_TYPE (key = KATR2). Default A if not mapped.
+  DATA: lv_katr2 TYPE kna1-katr2.
+  SELECT SINGLE katr2 FROM kna1 INTO lv_katr2 WHERE kunnr = p_kunnr.
   READ TABLE it_zcis_cust_type INTO wa_zcis_cust_type
-       WITH KEY kunnr = p_kunnr.
+       WITH KEY katr2 = lv_katr2.
   IF sy-subrc = 0.
     lv_cust_type = wa_zcis_cust_type-cust_type.
   ELSE.

@@ -11,18 +11,19 @@ The ABAP code already references these exact table and field names.
 
 ## R1 — Customer Waiver
 
-### Table `ZCIS_CUST_TYPE` (transparent, master)
-Customer → type classification (Actual User vs AUT/Trader).
+### Table `ZCIS_CUST_TYPE` (transparent, config)
+**Customer type is read from `KNA1-KATR2` (Attribute 2)** — confirmed by GAIL 02.07.2026.
+This small table just maps each KATR2 value to A (Actual User) / T (AUT/Trader).
 
 | Field | Key | Data element / type | Description |
 |---|---|---|---|
 | `MANDT` | ✔ | MANDT | Client |
-| `KUNNR` | ✔ | KUNNR | Customer |
+| `KATR2` | ✔ | KATR2 | Customer Attribute 2 (from KNA1) |
 | `CUST_TYPE` |   | `ZCIS_CUST_TYPE` (CHAR1) | `A` = Actual User, `T` = AUT/Trader |
 
 *Data element `ZCIS_CUST_TYPE` — domain CHAR1, fixed values A / T.*
-⚠️ If customer type is already derivable from an existing field (e.g. `KNVV-KDGRP`,
-a `KVGR*`, or a BP role), this table can be replaced by that field — please confirm.
+⚠️ **Still needed from GAIL:** which **KATR2 values** correspond to AU vs AUT/Trader
+(so the mapping rows can be maintained).
 
 ### Table `ZCIS_WAIVER_RULE` (transparent, config)
 Waiver rule by customer type and CIS signing-month band.
