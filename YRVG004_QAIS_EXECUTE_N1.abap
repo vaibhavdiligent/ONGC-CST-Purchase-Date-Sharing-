@@ -418,6 +418,12 @@ DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_zcis_param    TYPE zcis_scheme_param,
       lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
+*   CIS (qais_no) that have at least one signed grade declared shortfall
+*   for the period -> eligible for monthly shortfall waiver (Clause 8).
+DATA: BEGIN OF wa_cis_shortfall,
+        qais_no TYPE yrva_qais_data-qais_no,
+      END OF wa_cis_shortfall,
+      it_cis_shortfall LIKE STANDARD TABLE OF wa_cis_shortfall.
 *** EOC : CIS 2026-27 - Group/MLE, cap, non-discount grades ***
 
 
@@ -1229,6 +1235,8 @@ FORM get_data.
     APPEND r_nodisc.
   ENDLOOP.
   SELECT * FROM zcis_scheme_param INTO TABLE it_zcis_param.
+*   Clause 8: build the list of CIS whose signed grade is declared shortfall
+  PERFORM build_cis_shortfall.
 *   Trader/AUT monthly cap (MTM) - default 200 if not configured
   CLEAR lv_trader_cap_mt.
   READ TABLE it_zcis_param INTO wa_zcis_param WITH KEY param_key = 'TRADER_CAP_MT'.
@@ -7813,6 +7821,17 @@ FORM monthly_discount .
     IF sy-subrc EQ  0 .
       w_waive_month = 'X' .
     ENDIF.
+*** SOC : CIS 2026-27 - auto monthly shortfall waiver (Clause 8 / R2) ***
+*   If the CIS signed grade is declared shortfall for the period, grant
+*   the monthly shortfall waiver automatically (replaces manual YRVG018).
+*   It only binds when monthly lifting < 75% MCQ (otherwise the customer
+*   meets the minimum anyway), which matches Clause 8(e).
+    READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
+         WITH KEY qais_no = wa_yrva_qais_data-qais_no.
+    IF sy-subrc EQ 0.
+      w_waive_month = 'X' .
+    ENDIF.
+*** EOC : CIS 2026-27 - auto monthly shortfall waiver (Clause 8 / R2) ***
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
     CLEAR : lv_revival_m.
     READ TABLE it_yrva_revival_fai INTO wa_yrva_revival_fai
@@ -11501,6 +11520,36 @@ FORM is_shortfall_grade USING p_grade TYPE yy_grade
     p_flag = 'X'.
   ENDIF.
 ENDFORM.                    "is_shortfall_grade
+*&---------------------------------------------------------------------*
+*&      Form  build_cis_shortfall   (CIS 2026-27 - R2 / Clause 8)
+*&---------------------------------------------------------------------*
+*   Builds it_cis_shortfall = the CIS numbers (qais_no) whose signed
+*   grade (from YRVA_QAIS_TNTLFT - the grade-wise monthly lifting plan)
+*   is declared shortfall for the period (ZCIS_SHORTFALL_GRD).
+*   Such CIS become eligible for the monthly shortfall waiver (Clause 8),
+*   replacing the manual YRVG018 / YRVA_QAIS_ADD_WV step.
+*
+*   >>> VERIFY: field name of the signed grade on YRVA_QAIS_TNTLFT.
+*       Assumed 'grade' below - adjust to the actual DDIC field if it
+*       differs (single-line change, isolated to this form).
+*&---------------------------------------------------------------------*
+FORM build_cis_shortfall.
+  DATA: lv_flag TYPE char1.
+  REFRESH it_cis_shortfall.
+  CHECK it_zcis_shortfall_grd[] IS NOT INITIAL.
+  SELECT qais_no grade FROM yrva_qais_tntlft
+    INTO TABLE @DATA(lt_tnt).                       "#EC CI_NOWHERE
+  LOOP AT lt_tnt INTO DATA(ls_tnt).
+    CLEAR lv_flag.
+    PERFORM is_shortfall_grade USING ls_tnt-grade CHANGING lv_flag.
+    IF lv_flag = 'X'.
+      wa_cis_shortfall-qais_no = ls_tnt-qais_no.
+      APPEND wa_cis_shortfall TO it_cis_shortfall.
+    ENDIF.
+  ENDLOOP.
+  SORT it_cis_shortfall BY qais_no.
+  DELETE ADJACENT DUPLICATES FROM it_cis_shortfall COMPARING qais_no.
+ENDFORM.                    "build_cis_shortfall
 *&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*
