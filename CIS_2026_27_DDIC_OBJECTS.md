@@ -97,6 +97,24 @@ Grades that count for eligibility / MCQ but receive **no** monthly/annual discou
 | `KONDM` | ✔ | KONDM | Material pricing group / grade (S922-KONDM) |
 | `DESCR` |   | CHAR40 | Description (PS / GS / Powder / Polyfines) |
 
+**Seed data (confirmed by GAIL, mail 02.07.2026):**
+| KONDM | Description |
+|---|---|
+| I2 | PS GLN HDPE |
+| I3 | PS GLN LLDPE |
+| I4 | PS GLX HDPE |
+| I5 | PS GLX HDPE-2 |
+| I6 | PS HDPE PC-II |
+| I7 | PS LLDPE PC-II |
+| I8 | GS GLN HDPE |
+| I9 | GS GLN LLDPE |
+| J0 | GS GLX HDPE |
+| J1 | GS GLX HDPE-2 |
+| J2 | GS HDPE PC-II |
+| J3 | GS LLDPE PC-II |
+| 74 | Poly Fine GL / Poly Fine GL PC-II |
+| 75 | Powder GLX / GLX-2 / HDPE PC-II / LLDPE PC-II |
+
 ### Table `ZCIS_SCHEME_PARAM` (transparent, config)
 Generic scheme numeric parameters (avoids hard-coding, e.g. 200 MTM cap).
 

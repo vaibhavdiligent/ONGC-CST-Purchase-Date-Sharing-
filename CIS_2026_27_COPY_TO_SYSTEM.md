@@ -44,7 +44,7 @@ Generate SM30 maintenance (function group `ZCIS`) for:
 |---|---|---|
 | 1 | Waiver rules (seed table in DDIC doc) | `ZCIS_WAIVER_RULE` |
 | 2 | Customer type A/T per customer | `ZCIS_CUST_TYPE` |
-| 3 | Non-discount grades (PS/GS/Powder/Polyfines KONDM) | `ZCIS_NODISC_GRADE` |
+| 3 | Non-discount grades (PS/GS/Powder/Polyfines) — KONDM: **I2,I3,I4,I5,I6,I7 (PS), I8,I9,J0,J1,J2,J3 (GS), 74 (Polyfine), 75 (Powder)** [confirmed by GAIL 02.07.2026] | `ZCIS_NODISC_GRADE` |
 | 4 | `TRADER_CAP_MT = 200` | `ZCIS_SCHEME_PARAM` |
 | 5 | New seasonal grade **B63HM0003** (+ existing seasonal grades) | `YRVA_PRS_GRADES` (indicator S) |
 | 6 | Group / MLE relationships (`TZGPGRP` / `TZGPMLL`, role `ZCUSBPX`) | **BP** per BP User Manual |
