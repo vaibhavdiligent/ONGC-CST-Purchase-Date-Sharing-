@@ -2,25 +2,49 @@
 *& Report ZGEM_CPI_PAYMENT_STATUS
 *&---------------------------------------------------------------------*
 *& Payment Status (3.11) - GeM CPI integration.
-*& Same approach as ZGEM_CPI_ORDER_SUMMARY:
 *&   1. Generate SEK token via proxy ZGEM_TOKENCO_SI_SECURITY_TOKEN.
 *&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
 *&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
 *&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
-*&   5. Parse the common response envelope and show it as an ALV grid.
-*&      (ALV list header is taken from selection-screen field p_head.)
+*&   5. CPI encrypts paydata (AES/ECB/PKCS5Padding) before forwarding to GeM.
+*&   6. Parse response and display raw output (tighten once real shape confirmed).
+*&
+*& Request shape:
+*&   {"user":..,"method":"payments","paydata":{
+*&     "transactionID":..,"status":..,"paymentBy":..,"contractNo":..,
+*&     "gemInvoiceNo":..,"invoiceNo":..,"billNo":..,"billAmountPaid":..,
+*&     "transactionDate":..,"deductedAmount":..,"deductionType":..,"bankName":..
+*&     "chequeNumber":..,"bankTransactionNo":..,"demandDraftNo":..
+*&     "sanctions":..,"sanctionDate":..
+*&   }}
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_payment_status.
 
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
-            p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-            p_paydat TYPE string LOWER CASE, " encrypted paydata blob
-            p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.
+  p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)',
+  p_user  TYPE string LOWER CASE DEFAULT 'clientname',
+  p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus',
+  p_txnid TYPE string LOWER CASE,   " transactionID  (40, Numeric)
+  p_stat  TYPE string LOWER CASE,   " status         (Success/Fail)
+  p_pyby  TYPE string LOWER CASE,   " paymentBy      (payment mode)
+  p_cntno TYPE string LOWER CASE,   " contractNo     (GeM order no)
+  p_ginvno TYPE string LOWER CASE,  " gemInvoiceNo
+  p_invno TYPE string LOWER CASE,   " invoiceNo
+  p_billno TYPE string LOWER CASE,  " billNo
+  p_billamt TYPE string LOWER CASE, " billAmountPaid (INT)
+  p_txndt TYPE string LOWER CASE,   " transactionDate (YYYY-MM-DD)
+  p_dedamt TYPE string LOWER CASE,  " deductedAmount (INT)
+  p_dedtyp TYPE string LOWER CASE,  " deductionType  (LD / NA)
+  p_bkname TYPE string LOWER CASE,  " bankName
+  p_chqno TYPE string LOWER CASE,   " chequeNumber
+  p_bktnno TYPE string LOWER CASE,  " bankTransactionNo
+  p_ddno  TYPE string LOWER CASE,   " demandDraftNo
+  p_sanct TYPE string LOWER CASE,   " sanctions
+  p_sancdt TYPE string LOWER CASE.  " sanctionDate   (YYYY-MM-DD)
 
-*--- Token proxy objects (same pattern as the summary program)
+*--- Token proxy objects
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       proxy_data       TYPE zgem_tokenmt_security_token_se,
       lt_input         TYPE zgem_tokenmt_security_token_re,
@@ -28,41 +52,64 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       err_string       TYPE string,
       gv_token         TYPE string.
 
-*--- Request payload (Section Payment Status (3.11))
-TYPES: BEGIN OF ty_request,
-         user          TYPE string,
-         method        TYPE string,
-         paydata       TYPE string,
-       END OF ty_request.
+*--- paydata nested object (CPI encrypts before sending to GeM)
+TYPES: BEGIN OF ty_paydata,
+         transactionid     TYPE string,   " transactionID
+         status            TYPE string,
+         paymentby         TYPE string,   " paymentBy
+         contractno        TYPE string,   " contractNo
+         geminvoiceno      TYPE string,   " gemInvoiceNo
+         invoiceno         TYPE string,   " invoiceNo
+         billno            TYPE string,   " billNo
+         billamountpaid    TYPE string,   " billAmountPaid (INT in spec; string avoids decimal suffix)
+         transactiondate   TYPE string,   " transactionDate YYYY-MM-DD
+         deductedamount    TYPE string,   " deductedAmount  (INT in spec)
+         deductiontype     TYPE string,   " deductionType
+         bankname          TYPE string,   " bankName
+         chequenumber      TYPE string,   " chequeNumber
+         banktransactionno TYPE string,   " bankTransactionNo
+         demanddraftno     TYPE string,   " demandDraftNo
+         sanctions         TYPE string,
+         sanctiondate      TYPE string,   " sanctionDate YYYY-MM-DD
+       END OF ty_paydata.
 
-*--- Common response envelope (Status / Iat / data: Sub,Aud,Iss + inner data).
-*   The inner "data" varies per API, so it is captured as raw JSON for display.
-TYPES: BEGIN OF ty_display,
-         status  TYPE string,
-         iat     TYPE string,
-         sub     TYPE string,
-         aud     TYPE string,
-         iss     TYPE string,
-         data    TYPE string,   " raw inner data JSON
-       END OF ty_display,
-       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
+*--- Top-level request
+TYPES: BEGIN OF ty_request,
+         user    TYPE string,
+         method  TYPE string,
+         paydata TYPE ty_paydata,
+       END OF ty_request.
 
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
+      ls_paydata  TYPE ty_paydata,
       lv_json     TYPE string,
       lv_response TYPE string,
       lv_code     TYPE i,
       lv_reason   TYPE string,
-      lt_display  TYPE tt_display,
-      ls_display  TYPE ty_display,
       lo_alv      TYPE REF TO cl_salv_table,
       lx_salv     TYPE REF TO cx_salv_msg.
 
+*--- Generic single-row display (tighten once real response shape is confirmed)
+TYPES: BEGIN OF ty_display,
+         http_code TYPE i,
+         reason    TYPE string,
+         response  TYPE string,
+       END OF ty_display,
+       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
+DATA: lt_display TYPE tt_display,
+      ls_display TYPE ty_display.
+
 START-OF-SELECTION.
 
-*--- 1. Validate input
-  IF p_paydat IS INITIAL.
-    WRITE: / 'Error: paydata is mandatory.'. RETURN.
+*--- 1. Validate: all paydata fields are mandatory
+  IF p_txnid  IS INITIAL OR p_stat   IS INITIAL OR p_pyby   IS INITIAL OR
+     p_cntno  IS INITIAL OR p_ginvno IS INITIAL OR p_invno  IS INITIAL OR
+     p_billno IS INITIAL OR p_billamt IS INITIAL OR p_txndt  IS INITIAL OR
+     p_dedamt IS INITIAL OR p_dedtyp IS INITIAL OR p_bkname IS INITIAL OR
+     p_chqno  IS INITIAL OR p_bktnno IS INITIAL OR p_ddno   IS INITIAL OR
+     p_sanct  IS INITIAL OR p_sancdt IS INITIAL.
+    WRITE: / 'Error: all paydata fields are mandatory.'. RETURN.
   ENDIF.
 
 *--- 1a. Generate the SEK security token via the CPI token proxy
@@ -80,10 +127,29 @@ START-OF-SELECTION.
   gv_token = lt_input-mt_security_token_receiver-token.
 
 *--- 2. Build the JSON request payload
+  CLEAR ls_paydata.
+  ls_paydata-transactionid     = p_txnid.
+  ls_paydata-status            = p_stat.
+  ls_paydata-paymentby         = p_pyby.
+  ls_paydata-contractno        = p_cntno.
+  ls_paydata-geminvoiceno      = p_ginvno.
+  ls_paydata-invoiceno         = p_invno.
+  ls_paydata-billno            = p_billno.
+  ls_paydata-billamountpaid    = p_billamt.
+  ls_paydata-transactiondate   = p_txndt.
+  ls_paydata-deductedamount    = p_dedamt.
+  ls_paydata-deductiontype     = p_dedtyp.
+  ls_paydata-bankname          = p_bkname.
+  ls_paydata-chequenumber      = p_chqno.
+  ls_paydata-banktransactionno = p_bktnno.
+  ls_paydata-demanddraftno     = p_ddno.
+  ls_paydata-sanctions         = p_sanct.
+  ls_paydata-sanctiondate      = p_sancdt.
+
   CLEAR ls_request.
-  ls_request-user   = p_user.
-  ls_request-method = 'payments'.
-  ls_request-paydata = p_paydat.
+  ls_request-user    = p_user.
+  ls_request-method  = 'payments'.
+  ls_request-paydata = ls_paydata.
 
   lv_json = /ui2/cl_json=>serialize(
               data        = ls_request
@@ -120,34 +186,14 @@ START-OF-SELECTION.
   lv_response = lo_client->response->get_cdata( ).
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 6. Parse the common envelope (Status/Iat/data.Sub/Aud/Iss) for display.
-*   Inner data kept raw; tighten with a typed structure once the exact
-*   response fields for this API are confirmed.
-  TYPES: BEGIN OF ty_env_data,
-           sub TYPE string, aud TYPE string, iss TYPE string,
-         END OF ty_env_data.
-  TYPES: BEGIN OF ty_env,
-           status TYPE string, iat TYPE string, data TYPE ty_env_data,
-         END OF ty_env.
-  DATA ls_env TYPE ty_env.
-  DATA lt_maps TYPE /ui2/cl_json=>name_mappings.
-  lt_maps = VALUE #(
-    ( abap = 'STATUS' json = 'Status' ) ( abap = 'IAT' json = 'Iat' )
-    ( abap = 'DATA'   json = 'data' )   ( abap = 'SUB' json = 'Sub' )
-    ( abap = 'AUD'    json = 'Aud' )    ( abap = 'ISS' json = 'Iss' ) ).
-  /ui2/cl_json=>deserialize( EXPORTING json = lv_response name_mappings = lt_maps
-                             CHANGING data = ls_env ).
-
+*--- 6. Display raw response (tighten with typed structures once real shape is known)
   CLEAR ls_display.
-  ls_display-status = ls_env-status.
-  ls_display-iat    = ls_env-iat.
-  ls_display-sub    = ls_env-data-sub.
-  ls_display-aud    = ls_env-data-aud.
-  ls_display-iss    = ls_env-data-iss.
-  ls_display-data   = lv_response.   " full raw response for reference
+  ls_display-http_code = lv_code.
+  ls_display-reason    = lv_reason.
+  ls_display-response  = lv_response.
   APPEND ls_display TO lt_display.
 
-*--- 7. Display as ALV grid with the (editable) list header from p_head
+*--- 7. Show as ALV
   TRY.
       cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
                               CHANGING  t_table      = lt_display ).
