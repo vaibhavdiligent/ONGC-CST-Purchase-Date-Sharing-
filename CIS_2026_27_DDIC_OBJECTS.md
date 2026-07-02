@@ -130,15 +130,21 @@ Generic scheme numeric parameters (avoids hard-coding, e.g. 200 MTM cap).
 
 ---
 
-## R3 — Group / MLE  *(logic received — BP User Manual)*
-No new **table** needed — mapping is standard **BP relationships**, read from **`BUT050`**:
-- Group  → relationship category **`TZGPGRP`** ("Has Group Customer")
-- MLE    → relationship category **`TZGPMLL`** ("Has Multi Location Entity")
-- BP role **`ZCUSBPX`**, with Valid-From / Valid-To.
+## R3 — Group / MLE  *(logic confirmed — Mr. Pankaj Wadhwa)*
+No new **table** needed — all standard CVI / BP tables. Relationship categories:
+- Group → **`ZGPGRP`**  ("Has Group Customer")
+- MLE   → **`ZGPMLL`**  ("Has Multi Location Entity")
 
-Code side: `FORM get_group_mle_members` (added to `N1`) reads `BUT050` for the flagship
-BP and returns members valid on the scheme date. **Action for business:** maintain the
-Group/MLE relationships in BP as per the User Manual.
+**Derivation (flagship customer code → member customer codes):**
+1. `CVI_CUST_LINK-CUSTOMER` = flagship KUNNR → `CVI_CUST_LINK-PARTNER_GUID`
+2. `BUT000-PARTNER_GUID` = that GUID → `BUT000-PARTNER` (BP number)
+3. `BUT050-PARTNER1` = BP number, `RELTYP = ZGPGRP` / `ZGPMLL` → `BUT050-PARTNER2` (member BPs), valid on scheme date (`DATE_FROM`/`DATE_TO`)
+4. For each member BP: `BUT000-PARTNER` → `PARTNER_GUID` → `CVI_CUST_LINK-CUSTOMER` (member KUNNR)
+
+Code side: `FORM get_group_mle_members` (in `N1`) implements exactly this and returns the
+member customer codes (flagship included). **Action for business:** maintain Group/MLE
+relationships in BP (T-code BP, role `ZCUSBPX`) per the User Manual, with validity dates —
+quantity clubbing is governed by the relationship validity period.
 
 ---
 

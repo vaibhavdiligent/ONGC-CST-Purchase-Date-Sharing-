@@ -47,7 +47,7 @@ Generate SM30 maintenance (function group `ZCIS`) for:
 | 3 | Non-discount grades (PS/GS/Powder/Polyfines) — KONDM: **I2,I3,I4,I5,I6,I7 (PS), I8,I9,J0,J1,J2,J3 (GS), 74 (Polyfine), 75 (Powder)** [confirmed by GAIL 02.07.2026] | `ZCIS_NODISC_GRADE` |
 | 4 | `TRADER_CAP_MT = 200` | `ZCIS_SCHEME_PARAM` |
 | 5 | New seasonal grade **B63HM0003** (+ existing seasonal grades) | `YRVA_PRS_GRADES` (indicator S) |
-| 6 | Group / MLE relationships (`TZGPGRP` / `TZGPMLL`, role `ZCUSBPX`) | **BP** per BP User Manual |
+| 6 | Group / MLE relationships (`ZGPGRP` / `ZGPMLL`, role `ZCUSBPX`) | **BP** per BP User Manual |
 
 ---
 
@@ -89,4 +89,4 @@ call is staged (helper ready) rather than wired blind:
 2. **Clause 11** (discount structure) & **clause 8.I/8.II** (waiver) text.
 3. **PS/GS/Powder/Polyfines** grade identification (`KONDM` values).
 4. **Tentative-lifting** field for MCQ/ACQ.
-5. Confirm `BUT050` `TZGPGRP` / `TZGPMLL` are the correct relationship categories.
+5. Confirm `BUT050` `ZGPGRP` / `ZGPMLL` are the correct relationship categories.

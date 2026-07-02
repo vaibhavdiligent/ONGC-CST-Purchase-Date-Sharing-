@@ -402,7 +402,8 @@ DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd,
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
 *   Group / MLE membership is read from BP relationships (table BUT050):
-*     RELTYP 'TZGPGRP' = Has Group Customer, 'TZGPMLL' = Has MLE.
+*     RELTYP 'ZGPGRP' = Has Group Customer, 'ZGPMLL' = Has MLE.
+*     Derived via CVI_CUST_LINK + BUT000 (see get_group_mle_members).
 *   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
 *   receive no monthly/annual discount -> ZCIS_NODISC_GRADE.
 *   Scheme numeric parameters (e.g. Trader/AUT 200 MTM monthly cap) ->
@@ -410,8 +411,8 @@ DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd,
 TABLES: zcis_nodisc_grade, zcis_scheme_param.
 DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_but050        TYPE but050,
-      it_grp_members   TYPE STANDARD TABLE OF bu_partner,   " group/MLE members
-      wa_grp_member    TYPE bu_partner,
+      it_grp_members   TYPE STANDARD TABLE OF kunnr,        " group/MLE member customer codes
+      wa_grp_member    TYPE kunnr,
       it_zcis_nodisc   TYPE STANDARD TABLE OF zcis_nodisc_grade,
       wa_zcis_nodisc   TYPE zcis_nodisc_grade,
       it_zcis_param    TYPE STANDARD TABLE OF zcis_scheme_param,
@@ -11469,22 +11470,50 @@ ENDFORM.                    "get_cust_wv_floor
 *&---------------------------------------------------------------------*
 *&      Form  get_group_mle_members   (CIS 2026-27 - R3)
 *&---------------------------------------------------------------------*
-*   Returns the Group / MLE member BPs for a flagship customer, read from
-*   BP relationships (BUT050):
-*     RELTYP 'TZGPGRP' = Group,  'TZGPMLL' = Multi-Location Entity.
-*   Only relationships valid on the scheme date (s_sptag-low) are returned.
-*   The flagship itself is included in the member list.
+*   Returns the Group / MLE member CUSTOMER CODES for a flagship customer,
+*   per the derivation logic provided by Mr. Pankaj Wadhwa:
+*     1. Flagship KUNNR -> CVI_CUST_LINK-CUSTOMER -> PARTNER_GUID
+*     2. PARTNER_GUID  -> BUT000-PARTNER_GUID     -> BUT000-PARTNER (BP no.)
+*     3. BP no.        -> BUT050-PARTNER1, RELTYP  = ZGPGRP (Group)
+*                                          RELTYP  = ZGPMLL (MLE)
+*                      -> BUT050-PARTNER2 (member BP numbers)
+*     4. member BP     -> BUT000-PARTNER_GUID      -> CVI_CUST_LINK-CUSTOMER
+*   Only relationships valid on the scheme date (s_sptag-low) are used
+*   (quantity clubbing is governed by the relationship validity period).
+*   The flagship customer itself is included in the member list.
 *&---------------------------------------------------------------------*
-FORM get_group_mle_members USING p_flagship TYPE bu_partner.
+FORM get_group_mle_members USING p_flagship TYPE kunnr.
+  DATA: lv_guid      TYPE but000-partner_guid,
+        lv_bp        TYPE but000-partner,
+        lv_mem_guid  TYPE but000-partner_guid,
+        lv_mem_kunnr TYPE kunnr.
   REFRESH it_grp_members.
   APPEND p_flagship TO it_grp_members.
+*  1) flagship customer code -> partner GUID
+  SELECT SINGLE partner_guid FROM cvi_cust_link INTO lv_guid
+    WHERE customer = p_flagship.
+  CHECK sy-subrc = 0.
+*  2) partner GUID -> BP number
+  SELECT SINGLE partner FROM but000 INTO lv_bp
+    WHERE partner_guid = lv_guid.
+  CHECK sy-subrc = 0.
+*  3) flagship BP -> member BPs (Group ZGPGRP / MLE ZGPMLL), valid on date
   SELECT * FROM but050 INTO TABLE it_but050
-    WHERE partner1 = p_flagship
-      AND ( reltyp = 'TZGPGRP' OR reltyp = 'TZGPMLL' )
+    WHERE partner1 = lv_bp
+      AND ( reltyp = 'ZGPGRP' OR reltyp = 'ZGPMLL' )
       AND date_to   GE s_sptag-low
       AND date_from LE s_sptag-low.
   LOOP AT it_but050 INTO wa_but050.
-    APPEND wa_but050-partner2 TO it_grp_members.
+*    4) member BP -> GUID -> member customer code
+    CLEAR: lv_mem_guid, lv_mem_kunnr.
+    SELECT SINGLE partner_guid FROM but000 INTO lv_mem_guid
+      WHERE partner = wa_but050-partner2.
+    CHECK sy-subrc = 0.
+    SELECT SINGLE customer FROM cvi_cust_link INTO lv_mem_kunnr
+      WHERE partner_guid = lv_mem_guid.
+    IF sy-subrc = 0.
+      APPEND lv_mem_kunnr TO it_grp_members.
+    ENDIF.
   ENDLOOP.
   SORT it_grp_members. DELETE ADJACENT DUPLICATES FROM it_grp_members.
 ENDFORM.                    "get_group_mle_members

@@ -13,8 +13,8 @@ Legend: ✅ Done · 🟡 Partly done · 🔴 Not started / pending · ⚪ Exclud
 | 7 | **Customer / Shortfall Waiver** – clause 8.I & II (AU 25% / Trader-AUT 50%; waiver counts by signing month; max 1/qtr) | 🟡 | R1: floor 25/50 config-driven **done**; **waiver-count + max-1/quarter enforcement pending** |
 | 8 | **CIS Discount Structure** – clause 11 | 🔴 | Need clause-11 detail from circular to confirm rates/structure |
 | 9 | **Tentative lifting** of grade linked to **MCQ & ACQ** calc (incl upward revision) | 🔴 | New calc rule — not yet implemented |
-| 10 | **Multi-Location Entity** (single entity) → **combined lifting** across units | 🔴 | Logic now available (BP `TZGPMLL`); implement aggregation |
-| 11 | **Group entity**: CIS 2025-26 mapping prevails; new CIS from date of **group approval** | 🔴 | Logic available (BP `TZGPGRP`); implement group aggregation + date rule |
+| 10 | **Multi-Location Entity** (single entity) → **combined lifting** across units | 🔴 | Logic now available (BP `ZGPMLL`); implement aggregation |
+| 11 | **Group entity**: CIS 2025-26 mapping prevails; new CIS from date of **group approval** | 🔴 | Logic available (BP `ZGPGRP`); implement group aggregation + date rule |
 | 12 | Shortfall grade waiver **automation** (replace manual YRVG018; PMG enters monthly/annual shortfall grades; auto-apply where lifting <75%/<80%) | 🟡 | R2: table `ZCIS_SHORTFALL_GRD` + load **done**; **auto-application into waiver flow pending** |
 | 13 | **Zonal checking + CPC processing** of CIS output | ⚪ | R4 workflow — excluded from current build by instruction |
 | 14 | **Report** of CIS checking / rebate order details | 🟡 | R5 `ZCIS_REBATE_REPORT` created; refine once workflow/doc-type confirmed |
@@ -25,12 +25,12 @@ Legend: ✅ Done · 🟡 Partly done · 🔴 Not started / pending · ⚪ Exclud
 ## R3 — Group / MLE mapping logic (from the BP User Manual)
 Now unblocked. Mapping is maintained in **BP** (T-code BP, role **`ZCUSBPX`**, tab Relationships):
 
-- **Group customers** → relationship category **`TZGPGRP` – "Has Group Customer"** (flagship BP → member BPs, Valid From/To).
-- **Multi-Location Entity (MLE)** → relationship category **`TZGPMLL` – "Has Multi Location Entity"** (flagship BP → member BPs, Valid From/To).
+- **Group customers** → relationship category **`ZGPGRP` – "Has Group Customer"** (flagship BP → member BPs, Valid From/To).
+- **Multi-Location Entity (MLE)** → relationship category **`ZGPMLL` – "Has Multi Location Entity"** (flagship BP → member BPs, Valid From/To).
 - Group/MLE codes still created by BIS; mapping in BP by zones (existing SOP).
 
 **Implementation approach for `N1`:**
-- Read BP relationships from **`BUT050`** (`RELTYP = 'TZGPGRP' / 'TZGPMLL'`, `PARTNER1` = flagship, `PARTNER2` = member, valid on scheme date) to build group/MLE membership.
+- Read BP relationships from **`BUT050`** (`RELTYP = 'ZGPGRP' / 'ZGPMLL'`, `PARTNER1` = flagship, `PARTNER2` = member, valid on scheme date) to build group/MLE membership.
 - Aggregate lifting across members (like the current `KVGR2` group logic, but sourced from BP).
 - Group: retain CIS 2025-26 mapping; apply new CIS from group-approval date.
 - MLE: treat approved units as a single entity for combined lifting/eligibility.
@@ -49,4 +49,4 @@ Now unblocked. Mapping is maintained in **BP** (T-code BP, role **`ZCUSBPX`**, t
 2. Source of **customer type** AU vs Trader/AUT (for #3 cap and #7 floor).
 3. How **PS/GS/Powder/Polyfines** grades are identified (via `YRVA_PRS_GRADES` indicator?) for the #5 no-discount rule.
 4. **Tentative vs firm** lifting fields for #9.
-5. Confirm `BUT050` relationship categories `TZGPGRP` / `TZGPMLL` for #10/#11.
+5. Confirm `BUT050` relationship categories `ZGPGRP` / `ZGPMLL` for #10/#11.
