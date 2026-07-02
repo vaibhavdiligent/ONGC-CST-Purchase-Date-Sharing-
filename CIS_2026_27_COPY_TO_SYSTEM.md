@@ -72,7 +72,7 @@ call is staged (helper ready) rather than wired blind:
 | ~~Non-discount grades no discount (pt.5)~~ **DONE** | via `r_nodisc` range | wired into existing `lv_no_dis_qty` exclusion (40 blocks) | KONDM list confirmed 02.07.2026 |
 | ~~R2 shortfall auto-apply~~ **DONE** | `build_cis_shortfall` + `it_cis_shortfall` | wired at the monthly `w_waive_month` set (line ~7829) | ⚠️ verify `YRVA_QAIS_TNTLFT` grade field name |
 | R1 waiver-count / max-1-per-qtr | `lv_wv_allowed` | monthly waiver grant point | confirm counter reset per quarter |
-| R3 Group/MLE combined lifting | `get_group_mle_members` | group aggregation (currently `KVGR2`) | confirm replace vs add to KVGR2 |
+| R3 Group/MLE clubbing | — | **NO aggregation code change** — clubbing stays on `KVGR2` (Pankaj: "not going to replace KVGR2"). BP Group/MLE (`ZGPGRP`/`ZGPMLL`) is the governance/validity layer; BIS keeps the group's `KVGR2` per SOP. `get_group_mle_members` retained for reporting/validation only. | ⚠️ confirm no cross-KVGR2 clubbing required in the program |
 
 ### Not started — needs external input (🔴)
 - Tentative lifting → MCQ/ACQ link (dev-form pt.9) — needs field definition.
