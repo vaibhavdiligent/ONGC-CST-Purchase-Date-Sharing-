@@ -400,6 +400,25 @@ DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd,
       wa_zcis_shortfall_grd TYPE zcis_shortfall_grd.
 *** EOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
 
+*** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
+*   Group / MLE membership is read from BP relationships (table BUT050):
+*     RELTYP 'TZGPGRP' = Has Group Customer, 'TZGPMLL' = Has MLE.
+*   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
+*   receive no monthly/annual discount -> ZCIS_NODISC_GRADE.
+*   Scheme numeric parameters (e.g. Trader/AUT 200 MTM monthly cap) ->
+*     ZCIS_SCHEME_PARAM (key -> value), nothing hard-coded.
+TABLES: zcis_nodisc_grade, zcis_scheme_param.
+DATA: it_but050        TYPE STANDARD TABLE OF but050,
+      wa_but050        TYPE but050,
+      it_grp_members   TYPE STANDARD TABLE OF bu_partner,   " group/MLE members
+      wa_grp_member    TYPE bu_partner,
+      it_zcis_nodisc   TYPE STANDARD TABLE OF zcis_nodisc_grade,
+      wa_zcis_nodisc   TYPE zcis_nodisc_grade,
+      it_zcis_param    TYPE STANDARD TABLE OF zcis_scheme_param,
+      wa_zcis_param    TYPE zcis_scheme_param,
+      lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
+*** EOC : CIS 2026-27 - Group/MLE, cap, non-discount grades ***
+
 
 *&---------------------------------------------------------------------*
 
@@ -1198,6 +1217,16 @@ FORM get_data.
     WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
   SELECT * FROM zcis_shortfall_grd INTO TABLE it_zcis_shortfall_grd
     WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
+  SELECT * FROM zcis_nodisc_grade INTO TABLE it_zcis_nodisc.
+  SELECT * FROM zcis_scheme_param INTO TABLE it_zcis_param.
+*   Trader/AUT monthly cap (MTM) - default 200 if not configured
+  CLEAR lv_trader_cap_mt.
+  READ TABLE it_zcis_param INTO wa_zcis_param WITH KEY param_key = 'TRADER_CAP_MT'.
+  IF sy-subrc = 0.
+    lv_trader_cap_mt = wa_zcis_param-param_val.
+  ELSE.
+    lv_trader_cap_mt = 200.
+  ENDIF.
 *** EOC : CIS 2026-27 - load config (R1+R2) ***
 
   CLEAR wa_where_tab.
@@ -11403,6 +11432,60 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
     lv_wv_floor = '0.25'.
   ENDIF.
 ENDFORM.                    "get_cust_wv_floor
+*&---------------------------------------------------------------------*
+*&      Form  get_group_mle_members   (CIS 2026-27 - R3)
+*&---------------------------------------------------------------------*
+*   Returns the Group / MLE member BPs for a flagship customer, read from
+*   BP relationships (BUT050):
+*     RELTYP 'TZGPGRP' = Group,  'TZGPMLL' = Multi-Location Entity.
+*   Only relationships valid on the scheme date (s_sptag-low) are returned.
+*   The flagship itself is included in the member list.
+*&---------------------------------------------------------------------*
+FORM get_group_mle_members USING p_flagship TYPE bu_partner.
+  REFRESH it_grp_members.
+  APPEND p_flagship TO it_grp_members.
+  SELECT * FROM but050 INTO TABLE it_but050
+    WHERE partner1 = p_flagship
+      AND ( reltyp = 'TZGPGRP' OR reltyp = 'TZGPMLL' )
+      AND date_to   GE s_sptag-low
+      AND date_from LE s_sptag-low.
+  LOOP AT it_but050 INTO wa_but050.
+    APPEND wa_but050-partner2 TO it_grp_members.
+  ENDLOOP.
+  SORT it_grp_members. DELETE ADJACENT DUPLICATES FROM it_grp_members.
+ENDFORM.                    "get_group_mle_members
+*&---------------------------------------------------------------------*
+*&      Form  is_nodisc_grade   (CIS 2026-27 - R5 dev-form pt.5)
+*&---------------------------------------------------------------------*
+*   Returns p_flag = 'X' when the grade (S922-KONDM) is a non-discount
+*   grade (PS / GS / Powder / Polyfines): it counts for eligibility / MCQ
+*   but must NOT receive monthly or annual discount. Driven by
+*   ZCIS_NODISC_GRADE - nothing hard-coded.
+*&---------------------------------------------------------------------*
+FORM is_nodisc_grade USING p_kondm TYPE kondm
+                  CHANGING p_flag  TYPE char1.
+  CLEAR p_flag.
+  READ TABLE it_zcis_nodisc INTO wa_zcis_nodisc WITH KEY kondm = p_kondm.
+  IF sy-subrc = 0.
+    p_flag = 'X'.
+  ENDIF.
+ENDFORM.                    "is_nodisc_grade
+*&---------------------------------------------------------------------*
+*&      Form  is_shortfall_grade   (CIS 2026-27 - R2)
+*&---------------------------------------------------------------------*
+*   Returns p_flag = 'X' when the grade is declared shortfall for the
+*   scheme period (ZCIS_SHORTFALL_GRD, maintained by PMG). Used to
+*   auto-apply the shortfall waiver instead of the manual YRVG018 step.
+*&---------------------------------------------------------------------*
+FORM is_shortfall_grade USING p_grade TYPE yy_grade
+                     CHANGING p_flag  TYPE char1.
+  CLEAR p_flag.
+  READ TABLE it_zcis_shortfall_grd INTO wa_zcis_shortfall_grd
+       WITH KEY grade = p_grade.
+  IF sy-subrc = 0.
+    p_flag = 'X'.
+  ENDIF.
+ENDFORM.                    "is_shortfall_grade
 *&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*

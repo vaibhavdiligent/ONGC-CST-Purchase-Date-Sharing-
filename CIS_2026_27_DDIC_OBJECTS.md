@@ -86,9 +86,40 @@ Month/period-wise grades declared shortfall by the process owner.
 
 ---
 
-## R3 — Group / MLE  *(on hold)*
-Awaiting logic from **Mr. Pankaj Wadhwa**. No objects created yet.
-Likely: BP relationship/grouping + a resolver FM `ZCIS_GET_GROUP`. Will finalize on receipt.
+## Dev-Form point 5 — Non-discount grades (PS / GS / Powder / Polyfines)
+
+### Table `ZCIS_NODISC_GRADE` (transparent, config)
+Grades that count for eligibility / MCQ but receive **no** monthly/annual discount.
+
+| Field | Key | Data element / type | Description |
+|---|---|---|---|
+| `MANDT` | ✔ | MANDT | Client |
+| `KONDM` | ✔ | KONDM | Material pricing group / grade (S922-KONDM) |
+| `DESCR` |   | CHAR40 | Description (PS / GS / Powder / Polyfines) |
+
+### Table `ZCIS_SCHEME_PARAM` (transparent, config)
+Generic scheme numeric parameters (avoids hard-coding, e.g. 200 MTM cap).
+
+| Field | Key | Data element / type | Description |
+|---|---|---|---|
+| `MANDT` | ✔ | MANDT | Client |
+| `PARAM_KEY` | ✔ | CHAR20 | e.g. `TRADER_CAP_MT` |
+| `PARAM_VAL` |   | DEC15.3 | Value (e.g. 200) |
+| `DESCR` |   | CHAR40 | Description |
+
+**Seed:** `TRADER_CAP_MT = 200` (Trader/AUT monthly cap in MT).
+
+---
+
+## R3 — Group / MLE  *(logic received — BP User Manual)*
+No new **table** needed — mapping is standard **BP relationships**, read from **`BUT050`**:
+- Group  → relationship category **`TZGPGRP`** ("Has Group Customer")
+- MLE    → relationship category **`TZGPMLL`** ("Has Multi Location Entity")
+- BP role **`ZCUSBPX`**, with Valid-From / Valid-To.
+
+Code side: `FORM get_group_mle_members` (added to `N1`) reads `BUT050` for the flagship
+BP and returns members valid on the scheme date. **Action for business:** maintain the
+Group/MLE relationships in BP as per the User Manual.
 
 ---
 
