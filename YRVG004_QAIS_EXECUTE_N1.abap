@@ -417,6 +417,7 @@ DATA: it_but050        TYPE STANDARD TABLE OF but050,
       it_zcis_param    TYPE STANDARD TABLE OF zcis_scheme_param,
       wa_zcis_param    TYPE zcis_scheme_param,
       lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
+RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *** EOC : CIS 2026-27 - Group/MLE, cap, non-discount grades ***
 
 
@@ -1218,6 +1219,15 @@ FORM get_data.
   SELECT * FROM zcis_shortfall_grd INTO TABLE it_zcis_shortfall_grd
     WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
   SELECT * FROM zcis_nodisc_grade INTO TABLE it_zcis_nodisc.
+*   Build the non-discount grade range (PS/GS/Powder/Polyfines) used to
+*   exclude these grades from the discountable qty (they still count for
+*   lifting eligibility) - reuses the existing lv_no_dis_qty mechanism.
+  REFRESH r_nodisc.
+  LOOP AT it_zcis_nodisc INTO wa_zcis_nodisc.
+    r_nodisc-sign = 'I'. r_nodisc-option = 'EQ'.
+    r_nodisc-low  = wa_zcis_nodisc-kondm.
+    APPEND r_nodisc.
+  ENDLOOP.
   SELECT * FROM zcis_scheme_param INTO TABLE it_zcis_param.
 *   Trader/AUT monthly cap (MTM) - default 200 if not configured
   CLEAR lv_trader_cap_mt.
@@ -2802,7 +2812,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m1 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -2864,7 +2874,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m2 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -2926,7 +2936,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m3 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3176,7 +3186,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m4 = wa_yrva_qais_data_temp-grp_lift_qty_m4 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3238,7 +3248,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m5 = wa_yrva_qais_data_temp-grp_lift_qty_m5 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3300,7 +3310,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m6 = wa_yrva_qais_data_temp-grp_lift_qty_m6 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3550,7 +3560,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m7 = wa_yrva_qais_data_temp-grp_lift_qty_m7 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3612,7 +3622,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m8 = wa_yrva_qais_data_temp-grp_lift_qty_m8 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3674,7 +3684,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m9 = wa_yrva_qais_data_temp-grp_lift_qty_m9 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3923,7 +3933,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m10 = wa_yrva_qais_data_temp-grp_lift_qty_m10 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3985,7 +3995,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m11 = wa_yrva_qais_data_temp-grp_lift_qty_m11 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -4047,7 +4057,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m12 = wa_yrva_qais_data_temp-grp_lift_qty_m12 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -4118,7 +4128,7 @@ FORM format_data_month .
 
               wa_yrva_qais_data-ind_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m1 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4156,7 +4166,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m2 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4195,7 +4205,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m3 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4283,7 +4293,7 @@ FORM format_data_month .
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m1 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4347,7 +4357,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m2 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4411,7 +4421,7 @@ FORM format_data_month .
 
                   wa_yrva_qais_data_temp-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m3 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4478,7 +4488,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m4 = wa_yrva_qais_data-ind_lift_qty_m4 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4517,7 +4527,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m5 = wa_yrva_qais_data-ind_lift_qty_m5 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4555,7 +4565,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m6 = wa_yrva_qais_data-ind_lift_qty_m6 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4646,7 +4656,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m4 = wa_yrva_qais_data_temp-grp_lift_qty_m4 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4705,7 +4715,7 @@ FORM format_data_month .
                 IF ls_psdq = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m5 = wa_yrva_qais_data_temp-grp_lift_qty_m5 +
                  wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4722,7 +4732,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m5 = wa_yrva_qais_data_temp-grp_lift_qty_m5 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4788,7 +4798,7 @@ FORM format_data_month .
 
                   wa_yrva_qais_data_temp-grp_lift_qty_m6 = wa_yrva_qais_data_temp-grp_lift_qty_m6 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4861,7 +4871,7 @@ FORM format_data_month .
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 4000008973
               wa_yrva_qais_data-ind_lift_qty_m7 = wa_yrva_qais_data-ind_lift_qty_m7 +
                wa_s922-ummenge.
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4907,7 +4917,7 @@ FORM format_data_month .
 *** Eoc by Vaishnavi/Pawan Charm : 4000009111
               wa_yrva_qais_data-ind_lift_qty_m8 = wa_yrva_qais_data-ind_lift_qty_m8 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4945,7 +4955,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m9 = wa_yrva_qais_data-ind_lift_qty_m9 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5029,7 +5039,7 @@ FORM format_data_month .
                 IF ls_psdq = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m7 = wa_yrva_qais_data_temp-grp_lift_qty_m7 +
                  wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5046,7 +5056,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m7 = wa_yrva_qais_data_temp-grp_lift_qty_m7 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5114,7 +5124,7 @@ FORM format_data_month .
                 IF ls_psdq = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m8 = wa_yrva_qais_data_temp-grp_lift_qty_m8 +
                  wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5130,7 +5140,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m8 = wa_yrva_qais_data_temp-grp_lift_qty_m8 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5190,7 +5200,7 @@ FORM format_data_month .
                 IF r_rlld = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m9 = wa_yrva_qais_data_temp-grp_lift_qty_m9 +
                           wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5205,7 +5215,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m9 = wa_yrva_qais_data_temp-grp_lift_qty_m9 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5272,7 +5282,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m10 = wa_yrva_qais_data-ind_lift_qty_m10 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5310,7 +5320,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m11 = wa_yrva_qais_data-ind_lift_qty_m11 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5348,7 +5358,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m12 = wa_yrva_qais_data-ind_lift_qty_m12 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5437,7 +5447,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m10 = wa_yrva_qais_data_temp-grp_lift_qty_m10 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5501,7 +5511,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m11 = wa_yrva_qais_data_temp-grp_lift_qty_m11 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5564,7 +5574,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m12 = wa_yrva_qais_data_temp-grp_lift_qty_m12 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.

@@ -69,7 +69,7 @@ call is staged (helper ready) rather than wired blind:
 | Item | Helper to call | Where to place | Needs |
 |---|---|---|---|
 | 200 MTM cap (Trader/AUT) | use `lv_trader_cap_mt` + `lv_cust_type` | where monthly MCQ / `w_month_max` is set | confirm cap applies to MCQ |
-| Non-discount grades no discount (pt.5) | `is_nodisc_grade` | grade-level value calc (`it_data_monthly-value`) | confirm KONDM list |
+| ~~Non-discount grades no discount (pt.5)~~ **DONE** | via `r_nodisc` range | wired into existing `lv_no_dis_qty` exclusion (40 blocks) | KONDM list confirmed 02.07.2026 |
 | R2 shortfall auto-apply | `is_shortfall_grade` | shortfall/waiver decision (near `yrva_qais_add_wv` read) | confirm apply <75%/<80% |
 | R1 waiver-count / max-1-per-qtr | `lv_wv_allowed` | monthly waiver grant point | confirm counter reset per quarter |
 | R3 Group/MLE combined lifting | `get_group_mle_members` | group aggregation (currently `KVGR2`) | confirm replace vs add to KVGR2 |
