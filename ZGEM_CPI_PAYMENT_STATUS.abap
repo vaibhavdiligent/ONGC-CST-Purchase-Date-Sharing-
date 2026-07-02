@@ -24,25 +24,25 @@ CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
   p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)',
-  p_user  TYPE string LOWER CASE DEFAULT 'clientname',
+  p_user  TYPE string LOWER CASE DEFAULT 'CLIENT_NAME',
   p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus',
-  p_txnid TYPE string LOWER CASE,   " transactionID  (40, Numeric)
-  p_stat  TYPE string LOWER CASE,   " status         (Success/Fail)
-  p_pyby  TYPE string LOWER CASE,   " paymentBy      (payment mode)
-  p_cntno TYPE string LOWER CASE,   " contractNo     (GeM order no)
-  p_ginvno TYPE string LOWER CASE,  " gemInvoiceNo
-  p_invno TYPE string LOWER CASE,   " invoiceNo
-  p_billno TYPE string LOWER CASE,  " billNo
-  p_bilamt TYPE string LOWER CASE,  " billAmountPaid (INT)
-  p_txndt TYPE string LOWER CASE,   " transactionDate (YYYY-MM-DD)
-  p_dedamt TYPE string LOWER CASE,  " deductedAmount (INT)
-  p_dedtyp TYPE string LOWER CASE,  " deductionType  (LD / NA)
-  p_bkname TYPE string LOWER CASE,  " bankName
-  p_chqno TYPE string LOWER CASE,   " chequeNumber
-  p_bktnno TYPE string LOWER CASE,  " bankTransactionNo
-  p_ddno  TYPE string LOWER CASE,   " demandDraftNo
-  p_sanct TYPE string LOWER CASE,   " sanctions
-  p_sancdt TYPE string LOWER CASE.  " sanctionDate   (YYYY-MM-DD)
+  p_txnid TYPE string LOWER CASE DEFAULT '173200477772237507927',   " transactionID  (40, Numeric)
+  p_stat  TYPE string LOWER CASE DEFAULT 'Success',                 " status         (Success/Fail)
+  p_pyby  TYPE string LOWER CASE DEFAULT 'NEFT',                    " paymentBy      (payment mode)
+  p_cntno TYPE string LOWER CASE DEFAULT 'GEMC-511687737507927',    " contractNo     (GeM order no)
+  p_ginvno TYPE string LOWER CASE DEFAULT 'GEM-950165',             " gemInvoiceNo
+  p_invno TYPE string LOWER CASE DEFAULT 'sdf578',                  " invoiceNo
+  p_billno TYPE string LOWER CASE DEFAULT '511687737507927-2B1',    " billNo
+  p_bilamt TYPE string LOWER CASE DEFAULT '10',                     " billAmountPaid (INT)
+  p_txndt TYPE string LOWER CASE DEFAULT '2025-01-02',              " transactionDate (YYYY-MM-DD)
+  p_dedamt TYPE string LOWER CASE,                                  " deductedAmount (INT)
+  p_dedtyp TYPE string LOWER CASE DEFAULT 'NA',                     " deductionType  (LD / NA)
+  p_bkname TYPE string LOWER CASE DEFAULT 'ICICI BANK',             " bankName
+  p_chqno TYPE string LOWER CASE,                                   " chequeNumber
+  p_bktnno TYPE string LOWER CASE DEFAULT 'UTI657454690',           " bankTransactionNo
+  p_ddno  TYPE string LOWER CASE,                                   " demandDraftNo
+  p_sanct TYPE string LOWER CASE DEFAULT '10.00',                   " sanctions
+  p_sancdt TYPE string LOWER CASE DEFAULT '2024-11-19'.             " sanctionDate   (YYYY-MM-DD)
 
 *--- Token proxy objects
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
