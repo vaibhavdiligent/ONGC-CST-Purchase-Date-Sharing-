@@ -33,7 +33,7 @@ PARAMETERS:
   p_ginvno TYPE string LOWER CASE,  " gemInvoiceNo
   p_invno TYPE string LOWER CASE,   " invoiceNo
   p_billno TYPE string LOWER CASE,  " billNo
-  p_billamt TYPE string LOWER CASE, " billAmountPaid (INT)
+  p_bilamt TYPE string LOWER CASE,  " billAmountPaid (INT)
   p_txndt TYPE string LOWER CASE,   " transactionDate (YYYY-MM-DD)
   p_dedamt TYPE string LOWER CASE,  " deductedAmount (INT)
   p_dedtyp TYPE string LOWER CASE,  " deductionType  (LD / NA)
@@ -105,7 +105,7 @@ START-OF-SELECTION.
 *--- 1. Validate: all paydata fields are mandatory
   IF p_txnid  IS INITIAL OR p_stat   IS INITIAL OR p_pyby   IS INITIAL OR
      p_cntno  IS INITIAL OR p_ginvno IS INITIAL OR p_invno  IS INITIAL OR
-     p_billno IS INITIAL OR p_billamt IS INITIAL OR p_txndt  IS INITIAL OR
+     p_billno IS INITIAL OR p_bilamt  IS INITIAL OR p_txndt  IS INITIAL OR
      p_dedamt IS INITIAL OR p_dedtyp IS INITIAL OR p_bkname IS INITIAL OR
      p_chqno  IS INITIAL OR p_bktnno IS INITIAL OR p_ddno   IS INITIAL OR
      p_sanct  IS INITIAL OR p_sancdt IS INITIAL.
@@ -135,7 +135,7 @@ START-OF-SELECTION.
   ls_paydata-geminvoiceno      = p_ginvno.
   ls_paydata-invoiceno         = p_invno.
   ls_paydata-billno            = p_billno.
-  ls_paydata-billamountpaid    = p_billamt.
+  ls_paydata-billamountpaid    = p_bilamt.
   ls_paydata-transactiondate   = p_txndt.
   ls_paydata-deductedamount    = p_dedamt.
   ls_paydata-deductiontype     = p_dedtyp.
