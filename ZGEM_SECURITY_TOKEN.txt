@@ -1,0 +1,182 @@
+*&---------------------------------------------------------------------*
+*& Report ZGEM_SECURITY_TOKEN
+*&---------------------------------------------------------------------*
+*& Bill Count - GeM CPI integration.
+*&   Updated from old sproxy approach to new CPI HTTP approach.
+*&   1. Generate SEK token via proxy ZGEM_TOKENCO_SI_SECURITY_TOKEN.
+*&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
+*&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
+*&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
+*&   5. Display raw response (tighten once real response shape confirmed).
+*&---------------------------------------------------------------------*
+REPORT zgem_security_token.
+
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
+
+PARAMETERS:
+  p_head  TYPE char70 LOWER CASE DEFAULT 'Bill Count',
+  p_user  TYPE string LOWER CASE DEFAULT 'clientname',
+  p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',
+  p_from  TYPE string LOWER CASE,
+  p_to    TYPE string LOWER CASE,
+  p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/BillCount'.
+
+*--- Token proxy objects
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault,
+      err_string       TYPE string,
+      gv_token         TYPE string.
+
+*--- Request payload
+TYPES: BEGIN OF ty_request,
+         user          TYPE string,
+         method        TYPE string,
+         buyer_user_id TYPE string,
+         from_date     TYPE string,
+         to_date       TYPE string,
+       END OF ty_request.
+
+DATA: lo_client   TYPE REF TO if_http_client,
+      ls_request  TYPE ty_request,
+      lv_json     TYPE string,
+      lv_response TYPE string,
+      lv_code     TYPE i,
+      lv_reason   TYPE string,
+      lo_alv      TYPE REF TO cl_salv_table,
+      lx_salv     TYPE REF TO cx_salv_msg.
+
+TYPES: BEGIN OF ty_display,
+         http_code TYPE i,
+         reason    TYPE string,
+         response  TYPE string,
+       END OF ty_display,
+       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
+DATA: lt_display TYPE tt_display,
+      ls_display TYPE ty_display.
+
+START-OF-SELECTION.
+
+*--- 1. Validate input
+  IF p_from IS INITIAL OR p_to IS INITIAL.
+    WRITE: / 'Error: from_date and to_date are both mandatory.'. RETURN.
+  ENDIF.
+
+*--- 1a. Generate the SEK security token via the CPI token proxy
+  proxy_data-mt_security_token_sender-username = 'ONGCVIDESH'.
+  proxy_data-mt_security_token_sender-password = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'.
+  TRY.
+      CREATE OBJECT lo_gem_token.
+      CALL METHOD lo_gem_token->si_security_token_ob
+        EXPORTING output = proxy_data
+        IMPORTING input  = lt_input.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault.
+  ENDTRY.
+  gv_token = lt_input-mt_security_token_receiver-token.
+
+*--- 2. Build the JSON request payload
+  CLEAR ls_request.
+  ls_request-user          = p_user.
+  ls_request-method        = 'billCount'.
+  ls_request-buyer_user_id = p_buyer.
+  ls_request-from_date     = p_from.
+  ls_request-to_date       = p_to.
+
+  lv_json = /ui2/cl_json=>serialize(
+              data        = ls_request
+              compress    = abap_true
+              pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
+
+*--- 3. Create HTTP client from SM59 destination and set path/method
+  cl_http_client=>create_by_destination(
+    EXPORTING destination = c_dest
+    IMPORTING client      = lo_client
+    EXCEPTIONS OTHERS     = 1 ).
+  IF sy-subrc <> 0.
+    WRITE: / 'Error creating HTTP client for destination', c_dest. RETURN.
+  ENDIF.
+
+  lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+  cl_http_utility=>set_request_uri( request = lo_client->request uri = p_path ).
+  lo_client->request->set_method( if_http_request=>co_request_method_post ).
+
+*--- 4. Headers: Content-Type + SEK token header 'token' = Bearer <token>
+  lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+  IF gv_token IS NOT INITIAL.
+    lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
+  ENDIF.
+
+*--- 5. Body + send + receive
+  lo_client->request->set_cdata( lv_json ).
+  lo_client->send( EXCEPTIONS OTHERS = 1 ).
+  IF sy-subrc <> 0.
+    WRITE: / 'Error sending request to CPI'. lo_client->close( EXCEPTIONS OTHERS = 0 ). RETURN.
+  ENDIF.
+  lo_client->receive( EXCEPTIONS OTHERS = 1 ).
+  lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+  lv_response = lo_client->response->get_cdata( ).
+  lo_client->close( EXCEPTIONS OTHERS = 0 ).
+
+*--- 6. Display raw response (tighten with typed structures once real shape is known)
+  CLEAR ls_display.
+  ls_display-http_code = lv_code.
+  ls_display-reason    = lv_reason.
+  ls_display-response  = lv_response.
+  APPEND ls_display TO lt_display.
+
+*--- 7. Show as ALV
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                              CHANGING  t_table      = lt_display ).
+      lo_alv->get_columns( )->set_optimize( abap_true ).
+      lo_alv->get_functions( )->set_all( abap_true ).
+      lo_alv->get_display_settings( )->set_list_header( p_head ).
+      lo_alv->display( ).
+    CATCH cx_salv_msg INTO lx_salv.
+      WRITE: / 'ALV error:', lx_salv->get_text( ).
+      WRITE: / 'HTTP', lv_code, lv_reason.
+      WRITE: / lv_response.
+  ENDTRY.
+
+
+*&=====================================================================*
+*& OLD CODE - COMMENTED OUT (original sproxy-based approach)
+*&=====================================================================*
+* PARAMETERS : datefrom TYPE sy-datum,
+*              dateto TYPE sy-datum.
+* DATA: lo_gem_billcount TYPE REF TO ZGEM_BILLCOUNTCO_SI_BILLING_CO,
+*       bill_count       TYPE ZGEM_BILLCOUNTMT_BILLING_COUN1,
+*       bill_output      TYPE ZGEM_BILLCOUNTMT_BILLING_COUNT,
+*       token TYPE string.
+* DATA: it_billcount TYPE TABLE OF zgem_billcount,
+*       wa_billcount TYPE zgem_billcount,
+*       it_count TYPE TABLE OF ZGEM_BILLCOUNTDT_BILLING_COUNT,
+*       wa_count TYPE  ZGEM_BILLCOUNTDT_BILLING_COUNT.
+* CREATE OBJECT lo_gem_token.
+* CREATE OBJECT lo_gem_billcount.
+* proxy_data-mt_security_token_sender-username  = 'GEM23012020'.
+* proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
+* TRY. CALL METHOD lo_gem_token->SI_SECURITY_TOKEN_OB ... ENDTRY.
+* token = LT_INPUT-mt_security_token_receiver-token.
+* IF token is NOT INITIAL.
+*   bill_count-mt_billing_count_s_req-client_code = 'ONGCVIDESH'.
+*   bill_count-mt_billing_count_s_req-requesttype = 'BILLCOUNT'.
+*   bill_count-mt_billing_count_s_req-userid = 'OVLMM'.
+*   bill_count-mt_billing_count_s_req-datefrom = datefrom.
+*   bill_count-mt_billing_count_s_req-dateto = dateto.
+*   bill_count-mt_billing_count_s_req-token = token.
+*   TRY. CALL METHOD lo_gem_billcount->si_billing_count_ob ... ENDTRY.
+*   wa_billcount-client_code = bill_output-mt_billing_count_s_resp-client_code.
+*   wa_billcount-fetchdate   = bill_output-mt_billing_count_s_resp-fetchdate.
+*   wa_billcount-requesttype = bill_output-mt_billing_count_s_resp-requesttype.
+*   it_count = bill_output-mt_billing_count_s_resp-response_data.
+*   LOOP AT it_count INTO wa_count.
+*     MOVE-CORRESPONDING wa_count to wa_billcount.
+*     wa_billcount-billcount = wa_count-count.
+*     MODIFY zgem_billcount FROM wa_billcount.
+*   ENDLOOP.
+*   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY' ...
+* ENDIF.
