@@ -250,7 +250,7 @@ FIELD-SYMBOLS:    <fs1> TYPE any,
                   <fs2> TYPE any.
 
 
-*--- CPI HTTP integration (replaces the direct sproxy data fetch) -----*
+*--- CPI HTTP integration + CPI response structures (from ZGEM_CPI_ORDER_DETAILS) ---*
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 DATA: lo_http        TYPE REF TO if_http_client,
       lv_json_req    TYPE string,
@@ -266,7 +266,96 @@ TYPES: BEGIN OF ty_cpi_req,
          offset        TYPE string,
          limit         TYPE string,
        END OF ty_cpi_req.
-DATA: ls_cpi_req TYPE ty_cpi_req.
+TYPES: BEGIN OF ty_cpi_product,
+         totalvalue           TYPE string,
+         unitprice            TYPE string,
+         expecteddeliverydate TYPE string,
+         productbrand         TYPE string,
+         quantityordered      TYPE string,
+         productname          TYPE string,
+         productcode          TYPE string,
+         quantityunittype     TYPE string,
+         materialnumber       TYPE string,
+         order_item_id        TYPE string,
+         offering_type        TYPE string,
+         tdsundergst          TYPE string,
+         tdsunderincometax    TYPE string,
+       END OF ty_cpi_product,
+       tt_cpi_product TYPE STANDARD TABLE OF ty_cpi_product WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_cpi_consignment,
+         consigneestate    TYPE string,
+         consigneelastname TYPE string,
+         consigneepostid   TYPE string,
+         consigneemobile   TYPE string,
+         consigneefname    TYPE string,
+         consigneedistrict TYPE string,
+         consigneepin      TYPE string,
+         consigneeaddress  TYPE string,
+         products          TYPE tt_cpi_product,
+       END OF ty_cpi_consignment,
+       tt_cpi_consignment TYPE STANDARD TABLE OF ty_cpi_consignment WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_cpi_order,
+         pgmode               TYPE string,
+         orderid              TYPE string,
+         orderdate            TYPE string,
+         accepteddate         TYPE string,
+         orderamount          TYPE string,
+         demandid             TYPE string,
+         buyerorg             TYPE string,
+         buyername            TYPE string,
+         buyeremail           TYPE string,
+         buyermobile          TYPE string,
+         buyeraddress         TYPE string,
+         buyerpincode         TYPE string,
+         buyerdistrict        TYPE string,
+         buyerstate           TYPE string,
+         buyergstn            TYPE string,
+         vendorname           TYPE string,
+         vendoraddress        TYPE string,
+         vendorcode           TYPE string,
+         vendordistrict       TYPE string,
+         vendorstate          TYPE string,
+         vendorpin            TYPE string,
+         vendorbankaccountno  TYPE string,
+         vendorbankifsccode   TYPE string,
+         vendorpan            TYPE string,
+         vendorgstn           TYPE string,
+         vendoruniqueid       TYPE string,
+         sellerid             TYPE string,
+         supplyorderno        TYPE string,
+         supplyorderdate      TYPE string,
+         designationfinancial TYPE string,
+         ifdconcurrance       TYPE string,
+         ifddiaryno           TYPE string,
+         ifddiarydate         TYPE string,
+         consignmentdetails   TYPE tt_cpi_consignment,
+         contractfile         TYPE string,
+         amendedstatus        TYPE string,
+         parentorderid        TYPE string,
+         ismsmeverified       TYPE string,
+         msesocialcategory    TYPE string,
+         msegender            TYPE string,
+         udyamnumber          TYPE string,
+         buyeruserid          TYPE string,
+         buyerdep             TYPE string,
+         buyermin             TYPE string,
+         buyeroffice          TYPE string,
+         buyerorgtype         TYPE string,
+         prnumber             TYPE string,
+         prdate               TYPE string,
+       END OF ty_cpi_order,
+       tt_cpi_order TYPE STANDARD TABLE OF ty_cpi_order WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_cpi_response,
+         sub  TYPE string,
+         aud  TYPE string,
+         iss  TYPE string,
+         data TYPE tt_cpi_order,
+       END OF ty_cpi_response.
+DATA: ls_cpi_req   TYPE ty_cpi_req,
+      ls_cpi_resp  TYPE ty_cpi_response,
+      ls_cpi_order TYPE ty_cpi_order,
+      ls_cpi_cons  TYPE ty_cpi_consignment,
+      ls_cpi_prod  TYPE ty_cpi_product.
 
 CREATE OBJECT: lo_gem_token,
                lo_gem_ordersumm.
@@ -318,19 +407,14 @@ IF r1 = 'X'.
 
     APPEND order_summary TO order_summ-mt_order_summary_s_req-order_summary.
     """"""""""""""""""""""""""" Call GeM order API"""""""""""""""""""""""""""""
-*--- Fetch data from CPI over HTTP (was: sproxy call si_order_summary_ob) ---*
-*  Map the sproxy request fields to the CPI/GeM API JSON request:
-*    sproxy client_code -> api user           (integration/client account)
-*    sproxy userid      -> api buyer_user_id  (buyer GeM user id)
-*    sproxy datefrom    -> api from_date       (reformatted YYYYMMDD -> YYYY-MM-DD)
-*    sproxy dateto      -> api to_date         (reformatted YYYYMMDD -> YYYY-MM-DD)
-*    sproxy offset      -> api offset
-*    sproxy limit       -> api limit
-*    sproxy requesttype -> replaced by api method
-*    sproxy token       -> sent as HTTP header (Bearer), not in body
+*--- Fetch order details from CPI over HTTP (was: sproxy si_order_summary_ob) ---*
+*  Map sproxy request fields -> CPI/GeM API JSON (method getOrders):
+*    client_code -> user, userid -> buyer_user_id,
+*    datefrom/dateto -> from_date/to_date (YYYYMMDD -> YYYY-MM-DD),
+*    offset/limit -> offset/limit, token -> HTTP header (Bearer).
     CLEAR ls_cpi_req.
     ls_cpi_req-user          = order_summary-client_code.
-    ls_cpi_req-method        = 'orderSummary'.
+    ls_cpi_req-method        = 'getOrders'.
     ls_cpi_req-buyer_user_id = order_summary-userid.
     CONCATENATE order_summary-datefrom+0(4) order_summary-datefrom+4(2) order_summary-datefrom+6(2)
                 INTO ls_cpi_req-from_date SEPARATED BY '-'.
@@ -342,11 +426,10 @@ IF r1 = 'X'.
                                            pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
     cl_http_client=>create_by_destination( EXPORTING destination = c_dest
-                                            IMPORTING client      = lo_http
-                                            EXCEPTIONS OTHERS      = 1 ).
+                                            IMPORTING client = lo_http EXCEPTIONS OTHERS = 1 ).
     IF sy-subrc = 0.
       lo_http->propertytype_logon_popup = if_http_client=>co_disabled.
-      cl_http_utility=>set_request_uri( request = lo_http->request uri = '/http/GEM/Sync/OrderSummary' ).
+      cl_http_utility=>set_request_uri( request = lo_http->request uri = '/http/GEM/Sync/OrderDetails' ).
       lo_http->request->set_method( if_http_request=>co_request_method_post ).
       lo_http->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
       lo_http->request->set_header_field( name = 'token' value = |Bearer { token }| ).
@@ -359,98 +442,69 @@ IF r1 = 'X'.
       ENDIF.
       lo_http->close( EXCEPTIONS OTHERS = 0 ).
     ENDIF.
-
-*  Fill the OLD output structure from the CPI JSON response so the
-*  deserialize/processing/ALV display below stays unchanged.
-    /ui2/cl_json=>deserialize( EXPORTING json = lv_json_res
-                               CHANGING  data = order_output-mt_order_summary_resp ).
     """"""""""""""""""""""""""" Call GeM order API"""""""""""""""""""""""""""""
 
+    CLEAR ls_cpi_resp.
+    /ui2/cl_json=>deserialize( EXPORTING json = lv_json_res
+                               CHANGING  data = ls_cpi_resp ).
 
-    it_detail = order_output-mt_order_summary_resp-response_data.
-
-*   Deserialize data and save it to custom table
-
-    LOOP AT it_detail INTO wa_detail.
-
-      REFRESH: it_goods,it_consignee.
-*Deserialization of goods order
-      FIND FIRST OCCURRENCE OF '"offering_type":"goods"' IN wa_detail-consignment_details.
-      IF sy-subrc = 0.
-        /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-consignment_details
-                                 CHANGING data = it_goods ).
-        LOOP AT it_goods INTO wa_goods.
-          it_prod_goods =  wa_goods-products.
-          LOOP AT it_prod_goods INTO wa_prod_goods.
-
-            IF wa_prod_goods-totalvalue CA sy-abcde.
-              wa_prod_goods-totalvalue = wa_detail-order_amount.
-            ENDIF.
-            " added by abapuser 01 30/08/2024
-            IF wa_prod_goods-unitprice CA sy-abcde.
-              wa_prod_goods-unitprice = wa_detail-order_amount.
-            ENDIF.
-
-            " end of change by abapuser 01 30/08/2024
-            MOVE-CORRESPONDING wa_prod_goods TO wa_final.
-            MOVE-CORRESPONDING wa_goods TO wa_final.
-            MOVE-CORRESPONDING wa_detail TO wa_final.
-            TRANSLATE wa_final-vendor_pan TO UPPER CASE.
-            TRANSLATE wa_final-vendor_gstn TO UPPER CASE.
-            APPEND wa_final TO it_final.
-            CLEAR: wa_final , wa_products, wa_prod_goods.
-          ENDLOOP.
-
-          CLEAR: wa_final , wa_consignee, wa_products.
-          REFRESH: it_prod_goods[].
+*   Build it_final directly from the CPI response - the same ty_final work
+*   area the old proxy-parse produced, so ALL downstream (ZGEM_ORDERDET save,
+*   vendor-code enrichment, ALV) is unchanged. MOVE-CORRESPONDING fills
+*   product-/consignee-level fields; order-level are mapped explicitly.
+    LOOP AT ls_cpi_resp-data INTO ls_cpi_order.
+      LOOP AT ls_cpi_order-consignmentdetails INTO ls_cpi_cons.
+        LOOP AT ls_cpi_cons-products INTO ls_cpi_prod.
+          CLEAR wa_final.
+          MOVE-CORRESPONDING ls_cpi_prod TO wa_final.   " product-level fields
+          MOVE-CORRESPONDING ls_cpi_cons TO wa_final.   " consignee-level fields
+          wa_final-product_category_name  = ls_cpi_prod-productname.
+*         order-level fields (proxy filled these via wa_detail):
+          wa_final-order_id               = ls_cpi_order-orderid.
+          wa_final-buyer_email            = ls_cpi_order-buyeremail.
+          wa_final-ifd_diary_no           = ls_cpi_order-ifddiaryno.
+          wa_final-vendor_state           = ls_cpi_order-vendorstate.
+          wa_final-designation_financial  = ls_cpi_order-designationfinancial.
+          wa_final-supply_order_no        = ls_cpi_order-supplyorderno.
+          wa_final-mse_gender             = ls_cpi_order-msegender.
+          wa_final-vendor_code            = ls_cpi_order-vendorcode.
+          wa_final-buyer_pincode          = ls_cpi_order-buyerpincode.
+          wa_final-buyer_address          = ls_cpi_order-buyeraddress.
+          wa_final-vendor_gstn            = ls_cpi_order-vendorgstn.
+          wa_final-demand_id              = ls_cpi_order-demandid.
+          wa_final-order_amount           = ls_cpi_order-orderamount.
+          wa_final-seller_id              = ls_cpi_order-sellerid.
+          wa_final-supply_order_date      = ls_cpi_order-supplyorderdate.
+          wa_final-pg_mode                = ls_cpi_order-pgmode.
+          wa_final-parent_order_id        = ls_cpi_order-parentorderid.
+          wa_final-buyer_district         = ls_cpi_order-buyerdistrict.
+          wa_final-mse_socail_category    = ls_cpi_order-msesocialcategory.
+          wa_final-vendor_bank_account_no = ls_cpi_order-vendorbankaccountno.
+          wa_final-buyer_org              = ls_cpi_order-buyerorg.
+          wa_final-buyer_org_type         = ls_cpi_order-buyerorgtype.
+          wa_final-buyer_office           = ls_cpi_order-buyeroffice.
+          wa_final-vendor_pin_code        = ls_cpi_order-vendorpin.
+          wa_final-amended_status         = ls_cpi_order-amendedstatus.
+          wa_final-buyer_state            = ls_cpi_order-buyerstate.
+          wa_final-ifd_concurrance        = ls_cpi_order-ifdconcurrance.
+          wa_final-ifd_diary_date         = ls_cpi_order-ifddiarydate.
+          wa_final-buyer_name             = ls_cpi_order-buyername.
+          wa_final-vendor_name            = ls_cpi_order-vendorname.
+          wa_final-vendor_pan             = ls_cpi_order-vendorpan.
+          wa_final-buyer_min              = ls_cpi_order-buyermin.
+          wa_final-vendor_bank_ifsc_code  = ls_cpi_order-vendorbankifsccode.
+          wa_final-buyer_dep              = ls_cpi_order-buyerdep.
+          wa_final-buyer_mobile           = ls_cpi_order-buyermobile.
+          wa_final-is_msme_verified       = ls_cpi_order-ismsmeverified.
+          wa_final-order_date             = ls_cpi_order-orderdate.
+          wa_final-vendor_address         = ls_cpi_order-vendoraddress.
+          wa_final-vendor_unique_id       = ls_cpi_order-vendoruniqueid.
+          TRANSLATE wa_final-vendor_pan TO UPPER CASE.
+          TRANSLATE wa_final-vendor_gstn TO UPPER CASE.
+          APPEND wa_final TO it_final.
+          CLEAR wa_final.
         ENDLOOP.
-
-      ELSE.
-*  *Deserialization of service order
-*         DATA FIND_STRING TYPE STRING.
-*         DATA FIND_STRING2 TYPE STRING.
-*         FIND_STRING = ':"21.00"'.
-*         FIND_STRING2 = ':"14819620"'.
-*         FIND FIRST OCCURRENCE OF FIND_STRING IN wa_detail-consignment_details.
-*         IF sy-subrc = 0.
-*           REPLACE ALL OCCURRENCES OF FIND_STRING IN wa_detail-consignment_details WITH FIND_STRING2.
-*         ENDIF.
-
-        /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-consignment_details
-                                   CHANGING data = it_consignee ).
-        LOOP AT it_consignee INTO wa_consignee.
-          it_products =  wa_consignee-products.
-          LOOP AT it_products INTO wa_products.
-
-            IF wa_products-total-value CA sy-abcde.      " soc by rohit on 13/03/2025
-              wa_products-total-value = wa_detail-order_amount.
-            ENDIF.
-
-            IF wa_products-unit_price_for_contract_period-value CA sy-abcde.
-              wa_products-unit_price_for_contract_period-value = wa_detail-order_amount.
-            ENDIF.
-            "EOC BY ROHIT.
-            MOVE-CORRESPONDING wa_products TO wa_final.
-            wa_final-quantityordered = wa_products-quantity .
-            wa_final-totalvalue = wa_products-total-value.
-            wa_final-unitprice = wa_products-unit_price_for_contract_period-value.
-            MOVE-CORRESPONDING wa_consignee TO wa_final.
-            MOVE-CORRESPONDING wa_detail TO wa_final.
-            TRANSLATE wa_final-vendor_pan TO UPPER CASE.
-            TRANSLATE wa_final-vendor_gstn TO UPPER CASE.
-            APPEND wa_final TO it_final.
-            CLEAR: wa_final , wa_products.
-          ENDLOOP.
-
-          CLEAR: wa_final , wa_consignee, wa_products.
-        ENDLOOP.
-
-      ENDIF.
-
-      REFRESH: it_consignee , it_products, it_goods, it_prod_goods[]
-      .
-
-      CLEAR: wa_final, wa_consignee , wa_detail, wa_products, wa_goods-products.
+      ENDLOOP.
     ENDLOOP.
 
     IF it_final IS NOT INITIAL.

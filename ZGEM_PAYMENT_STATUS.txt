@@ -41,13 +41,39 @@ DATA: err_string1 TYPE string,
 DATA :it_fcat TYPE  slis_t_fieldcat_alv.
 DATA :wa_fcat TYPE  slis_fieldcat_alv.
 
-*--- CPI HTTP integration (replaces the direct sproxy data fetch) -----*
+*--- CPI HTTP integration + CPI request structures (from ZGEM_CPI_PAYMENT_STATUS) ---*
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 DATA: lo_http        TYPE REF TO if_http_client,
       lv_json_req    TYPE string,
       lv_json_res    TYPE string,
       lv_http_code   TYPE i,
       lv_http_reason TYPE string.
+TYPES: BEGIN OF ty_cpi_paydata,
+         transactionid     TYPE string,
+         status            TYPE string,
+         paymentby         TYPE string,
+         contractno        TYPE string,
+         geminvoiceno      TYPE string,
+         invoiceno         TYPE string,
+         billno            TYPE string,
+         billamountpaid    TYPE string,
+         transactiondate   TYPE string,
+         deductedamount    TYPE string,
+         deductiontype     TYPE string,
+         bankname          TYPE string,
+         chequenumber      TYPE string,
+         banktransactionno TYPE string,
+         demanddraftno     TYPE string,
+         sanctions         TYPE string,
+         sanctiondate      TYPE string,
+       END OF ty_cpi_paydata.
+TYPES: BEGIN OF ty_cpi_req,
+         user    TYPE string,
+         method  TYPE string,
+         paydata TYPE ty_cpi_paydata,
+       END OF ty_cpi_req.
+DATA: ls_cpi_req     TYPE ty_cpi_req,
+      ls_cpi_paydata TYPE ty_cpi_paydata.
 
 CREATE OBJECT: lo_gem_token,
                lo_gem_pay.
@@ -296,19 +322,34 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
           pay_input-mt_payment_status_s_req-method = 'payments'.
           pay_input-mt_payment_status_s_req-user = 'ONGCVIDESH'.
 
-*--- Fetch data from CPI over HTTP (was: sproxy call si_payment_status_ob) --*
-*  The request already carries user / method / paydata in the sproxy request
-*  node mt_payment_status_s_req, so it is serialized as-is to the CPI JSON body:
-*    { "user":.., "method":"payments", "paydata":{ ..the built pay_stat fields.. } }
-*  CPI encrypts paydata (AES/ECB/PKCS5Padding) before forwarding to GeM.
-*    sproxy token -> sent as HTTP header (Bearer), not in body.
-          lv_json_req = /ui2/cl_json=>serialize( data = pay_input-mt_payment_status_s_req
-                                                 compress = abap_true
+*--- Fetch payment status from CPI over HTTP (was: sproxy si_payment_status_ob) ---*
+*  Map the sproxy paydata (pay_stat, snake_case) -> CPI/GeM API paydata
+*  (camelCase keys). CPI encrypts paydata (AES/ECB/PKCS5Padding) before
+*  forwarding to GeM. token -> HTTP header (Bearer).
+          CLEAR ls_cpi_paydata.
+          ls_cpi_paydata-transactionid     = pay_stat-transaction_id.
+          ls_cpi_paydata-status            = pay_stat-status.
+          ls_cpi_paydata-paymentby         = pay_stat-payment_by.
+          ls_cpi_paydata-contractno        = pay_stat-contract_no.
+          ls_cpi_paydata-geminvoiceno      = pay_stat-gem_invoice_no.
+          ls_cpi_paydata-invoiceno         = pay_stat-invoice_no.
+          ls_cpi_paydata-billno            = pay_stat-bill_no.
+          ls_cpi_paydata-billamountpaid    = pay_stat-bill_amount_paid.
+          ls_cpi_paydata-transactiondate   = pay_stat-transaction_date.
+          ls_cpi_paydata-deductedamount    = pay_stat-deducted_amount.
+          ls_cpi_paydata-bankname          = pay_stat-bank_name.
+          ls_cpi_paydata-chequenumber      = pay_stat-cheque_number.
+          ls_cpi_paydata-banktransactionno = pay_stat-bank_transaction_no.
+
+          CLEAR ls_cpi_req.
+          ls_cpi_req-user    = 'ONGCVIDESH'.
+          ls_cpi_req-method  = 'payments'.
+          ls_cpi_req-paydata = ls_cpi_paydata.
+          lv_json_req = /ui2/cl_json=>serialize( data = ls_cpi_req compress = abap_true
                                                  pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
           cl_http_client=>create_by_destination( EXPORTING destination = c_dest
-                                                  IMPORTING client      = lo_http
-                                                  EXCEPTIONS OTHERS      = 1 ).
+                                                  IMPORTING client = lo_http EXCEPTIONS OTHERS = 1 ).
           IF sy-subrc = 0.
             lo_http->propertytype_logon_popup = if_http_client=>co_disabled.
             cl_http_utility=>set_request_uri( request = lo_http->request uri = '/http/GEM/Sync/PaymentStatus' ).
@@ -325,8 +366,8 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
             lo_http->close( EXCEPTIONS OTHERS = 0 ).
           ENDIF.
 
-*  Fill the OLD output structure from the CPI JSON response so the
-*  wa_status mapping / ZGEM_BILL update / ALV display below stays unchanged.
+*  Fill the OLD response structure the proxy was filling, so the wa_status
+*  mapping / MODIFY zgem_bill / ALV below stay unchanged.
           /ui2/cl_json=>deserialize( EXPORTING json = lv_json_res
                                      CHANGING  data = pay_output-mt_payment_status_resp ).
 

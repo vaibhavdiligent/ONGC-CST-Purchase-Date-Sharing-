@@ -82,7 +82,7 @@ DATA: gs_layout              TYPE slis_layout_alv.
 
 
 
-*--- CPI HTTP integration (replaces the direct sproxy data fetch) -----*
+*--- CPI HTTP integration + CPI response structures (from ZGEM_CPI_CRAC_DETAILS) ---*
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 DATA: lo_http        TYPE REF TO if_http_client,
       lv_json_req    TYPE string,
@@ -95,10 +95,69 @@ TYPES: BEGIN OF ty_cpi_req,
          buyer_user_id TYPE string,
          from_date     TYPE string,
          to_date       TYPE string,
-         offset        TYPE string,
-         limit         TYPE string,
        END OF ty_cpi_req.
-DATA: ls_cpi_req TYPE ty_cpi_req.
+TYPES: BEGIN OF ty_cpi_freight,
+         currency TYPE string,
+         value    TYPE string,
+       END OF ty_cpi_freight.
+TYPES: BEGIN OF ty_cpi_ship,
+         order_item_id      TYPE string,
+         reason             TYPE string,
+         receivedqty        TYPE string,
+         agency_name        TYPE string,
+         acceptedqty        TYPE string,
+         inspected_by       TYPE string,
+         shipmentitemid     TYPE string,
+         inspection_cert_no TYPE string,
+         rejectedqty        TYPE string,
+         freightcharge      TYPE ty_cpi_freight,
+         productname        TYPE string,
+       END OF ty_cpi_ship,
+       tt_cpi_ship TYPE STANDARD TABLE OF ty_cpi_ship WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_cpi_prc,
+         order_item_id TYPE string,
+         reason        TYPE string,
+         receivedqty   TYPE string,
+         rejectedqty   TYPE string,
+         productname   TYPE string,
+       END OF ty_cpi_prc,
+       tt_cpi_prc TYPE STANDARD TABLE OF ty_cpi_prc WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_cpi_crac,
+         consigneeaddress     TYPE string,
+         consigneedistrict    TYPE string,
+         consigneename        TYPE string,
+         consigneelastname    TYPE string,
+         consigneemobile      TYPE string,
+         consigneepin         TYPE string,
+         consigneestate       TYPE string,
+         consignmentamount    TYPE string,
+         consignmentcurrency  TYPE string,
+         autocracflag         TYPE string,
+         cracamount           TYPE string,
+         craccurrency         TYPE string,
+         cracdocurl           TYPE string,
+         cracnumber           TYPE string,
+         cracshipmentitems    TYPE tt_cpi_ship,
+         cracverificationdate TYPE string,
+         craccreateddate      TYPE string,
+         demandid             TYPE string,
+         invoicenumber        TYPE string,
+         orderid              TYPE string,
+         prcreceiveddate      TYPE string,
+         prcshipmentitems     TYPE tt_cpi_prc,
+       END OF ty_cpi_crac,
+       tt_cpi_crac TYPE STANDARD TABLE OF ty_cpi_crac WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_cpi_response,
+         sub  TYPE string,
+         aud  TYPE string,
+         iss  TYPE string,
+         data TYPE tt_cpi_crac,
+       END OF ty_cpi_response.
+DATA: ls_cpi_req   TYPE ty_cpi_req,
+      ls_cpi_resp  TYPE ty_cpi_response,
+      ls_cpi_crac  TYPE ty_cpi_crac,
+      ls_cpi_ship  TYPE ty_cpi_ship,
+      ls_cpi_prc   TYPE ty_cpi_prc.
 
 CREATE OBJECT: lo_gem_token,
                lo_gem_cracsumm.
@@ -149,35 +208,27 @@ IF token IS NOT INITIAL.
 
   APPEND crac_summary TO crac_summ-MT_CRACSUMMARY_S_REQ-CRACSUMMARY.
 
-*--- Fetch data from CPI over HTTP (was: sproxy call si_cracsummary_ob) ---*
-*  Map the sproxy request fields to the CPI/GeM API JSON request:
-*    sproxy client_code -> api user           (integration/client account)
-*    sproxy userid      -> api buyer_user_id  (buyer GeM user id)
-*    sproxy datefrom    -> api from_date       (reformatted YYYYMMDD -> YYYY-MM-DD)
-*    sproxy dateto      -> api to_date         (reformatted YYYYMMDD -> YYYY-MM-DD)
-*    sproxy offset      -> api offset
-*    sproxy limit       -> api limit
-*    sproxy requesttype -> replaced by api method
-*    sproxy token       -> sent as HTTP header (Bearer), not in body
+*--- Fetch CRAC details from CPI over HTTP (was: sproxy si_cracsummary_ob) ---*
+*  Map sproxy request fields -> CPI/GeM API JSON (method getCrac):
+*    client_code -> user, userid -> buyer_user_id,
+*    datefrom/dateto -> from_date/to_date (YYYYMMDD -> YYYY-MM-DD),
+*    token -> HTTP header (Bearer).
   CLEAR ls_cpi_req.
   ls_cpi_req-user          = crac_summary-client_code.
-  ls_cpi_req-method        = 'cracSummary'.
+  ls_cpi_req-method        = 'getCrac'.
   ls_cpi_req-buyer_user_id = crac_summary-userid.
   CONCATENATE crac_summary-datefrom+0(4) crac_summary-datefrom+4(2) crac_summary-datefrom+6(2)
               INTO ls_cpi_req-from_date SEPARATED BY '-'.
   CONCATENATE crac_summary-dateto+0(4) crac_summary-dateto+4(2) crac_summary-dateto+6(2)
               INTO ls_cpi_req-to_date SEPARATED BY '-'.
-  ls_cpi_req-offset = crac_summary-offset.
-  ls_cpi_req-limit  = crac_summary-limit.
   lv_json_req = /ui2/cl_json=>serialize( data = ls_cpi_req compress = abap_true
                                          pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
   cl_http_client=>create_by_destination( EXPORTING destination = c_dest
-                                          IMPORTING client      = lo_http
-                                          EXCEPTIONS OTHERS      = 1 ).
+                                          IMPORTING client = lo_http EXCEPTIONS OTHERS = 1 ).
   IF sy-subrc = 0.
     lo_http->propertytype_logon_popup = if_http_client=>co_disabled.
-    cl_http_utility=>set_request_uri( request = lo_http->request uri = '/http/GEM/Sync/CracSummary' ).
+    cl_http_utility=>set_request_uri( request = lo_http->request uri = '/http/GEM/Sync/CracDetails' ).
     lo_http->request->set_method( if_http_request=>co_request_method_post ).
     lo_http->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
     lo_http->request->set_header_field( name = 'token' value = |Bearer { token }| ).
@@ -190,44 +241,35 @@ IF token IS NOT INITIAL.
     ENDIF.
     lo_http->close( EXCEPTIONS OTHERS = 0 ).
   ENDIF.
-
-*  Fill the OLD output structure from the CPI JSON response so the
-*  deserialize/processing/ALV display below stays unchanged.
-  /ui2/cl_json=>deserialize( EXPORTING json = lv_json_res
-                             CHANGING  data = crac_output-mt_cracsummary_resp ).
 *  BREAK-POINT.
-  it_detail = crac_output-MT_CRACSUMMARY_RESP-RESPONSE_DATA.
-  DATA : obj TYPE REF TO cl_trex_json_deserializer.
-  CREATE OBJECT obj.
-  LOOP AT it_detail INTO wa_detail.
-*
-  REFRESH: it_CRACSHIP[] , it_PRCSHIP[].
+  CLEAR ls_cpi_resp.
+  /ui2/cl_json=>deserialize( EXPORTING json = lv_json_res
+                             CHANGING  data = ls_cpi_resp ).
 
-     /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-CRAC_SHIPMENTITEMS
-                               CHANGING data = it_CRACSHIP ).
-
-     /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-PRC_SHIPMENTITEMS
-                               CHANGING data = it_prcSHIP ).
-
-
-     LOOP AT it_CRACSHIP INTO wa_cracship.
-       MOVE-CORRESPONDING wa_cracship to wa_final.
-       READ TABLE it_prcSHIP INTO wa_prcship WITH KEY order_item_id = wa_cracship-ORDER_ITEM_ID.
-       IF sy-subrc = 0.
-        wa_final-prc_ORDER_ITEM_ID = wa_prcship-ORDER_ITEM_ID.
-        wa_final-prc_REASON        = wa_prcship-REASON.
-        wa_final-prc_RECEIVEDQTY   = wa_prcship-RECEIVEDQTY.
-        wa_final-prc_PRODUCTNAME   = wa_prcship-PRODUCTNAME.
-        wa_final-prc_REJECTEDQTY   = wa_prcship-REJECTEDQTY .
-       ENDIF.
-       MOVE-CORRESPONDING wa_detail to wa_final.
-       APPEND wa_final to it_final.
-       clear: wa_final,  wa_cracship, wa_prcship.
-     ENDLOOP.
-
-clear: wa_Detail,wa_final.
-
+*  Build it_final directly from the CPI response - the same ZGEM_CRACDET
+*  work area the old proxy-parse produced, so the MODIFY zgem_cracdet and
+*  ALV below stay unchanged. Shipment-item and CRAC-level fields carry the
+*  same names -> MOVE-CORRESPONDING; PRC items mapped explicitly (as before).
+  LOOP AT ls_cpi_resp-data INTO ls_cpi_crac.
+    LOOP AT ls_cpi_crac-cracshipmentitems INTO ls_cpi_ship.
+      CLEAR wa_final.
+      MOVE-CORRESPONDING ls_cpi_ship TO wa_final.        " order_item_id, reason, receivedqty, agency_name, acceptedqty, shipmentitemid, inspected_by, inspection_cert_no, rejectedqty, productname
+      wa_final-currency = ls_cpi_ship-freightcharge-currency.
+      wa_final-value    = ls_cpi_ship-freightcharge-value.
+      READ TABLE ls_cpi_crac-prcshipmentitems INTO ls_cpi_prc
+           WITH KEY order_item_id = ls_cpi_ship-order_item_id.
+      IF sy-subrc = 0.
+        wa_final-prc_ORDER_ITEM_ID = ls_cpi_prc-order_item_id.
+        wa_final-prc_REASON        = ls_cpi_prc-reason.
+        wa_final-prc_RECEIVEDQTY   = ls_cpi_prc-receivedqty.
+        wa_final-prc_PRODUCTNAME   = ls_cpi_prc-productname.
+        wa_final-prc_REJECTEDQTY   = ls_cpi_prc-rejectedqty.
+      ENDIF.
+      MOVE-CORRESPONDING ls_cpi_crac TO wa_final.         " CRAC-level fields (cracnumber, orderid, demandid, invoicenumber, consignee*, cracamount, etc.)
+      APPEND wa_final TO it_final.
+      CLEAR: wa_final, ls_cpi_ship, ls_cpi_prc.
     ENDLOOP.
+  ENDLOOP.
 
 
  MODIFY zgem_cracdet from TABLE it_final.
