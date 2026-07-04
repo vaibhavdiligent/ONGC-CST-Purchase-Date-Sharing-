@@ -1,0 +1,736 @@
+*&---------------------------------------------------------------------*
+*& Report  ZGEM_BILL_SUMMARY
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zgem_bill_summary.
+
+PARAMETERS : datefrom TYPE sy-datum,
+             dateto   TYPE sy-datum.
+*             offset TYPE i,
+*             limit  TYPE i.
+
+PARAMETERS : r1 RADIOBUTTON GROUP b1,
+             r2 RADIOBUTTON GROUP b1.
+
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA: err_string       TYPE string.
+
+
+DATA: lo_gem_billsumm   TYPE REF TO zbillsummco_si_billing_summary,
+      bill_summ         TYPE zbillsummmt_billing_summary_s,
+      bill_output       TYPE zbillsummmt_billing_summary_re,
+      lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
+      bill_summary      TYPE zbillsummdt_billing_summary_s1,
+      token             TYPE string,
+      it_detail         TYPE zbillsummdt_billing_summar_tab,
+      wa_detail         LIKE LINE OF it_detail.
+DATA: err_string1       TYPE string.
+FIELD-SYMBOLS :   <out_structure> TYPE any.
+DATA: lr_alv TYPE REF TO cl_salv_table.
+DATA: lr_colums TYPE REF TO cl_salv_columns_table.
+
+TYPES : BEGIN OF ty_prod,
+          totalvalue           TYPE string,
+          unitprice            TYPE string,
+          sgst                 TYPE string,
+          actualdeliverydate   TYPE string,
+          hsncode              TYPE string,
+          freightcgst          TYPE string,
+          freightutgst         TYPE string,
+          expecteddeliverydate TYPE string,
+          productbrand         TYPE string,
+          suppliedquantity     TYPE string,
+          quantityordered      TYPE string,
+          freightsgst          TYPE string,
+          cgst                 TYPE string,
+          freightigst          TYPE string,
+          cess                 TYPE string,
+          productname          TYPE string,
+          igst                 TYPE string,
+          utgst                TYPE string,
+          freightcess          TYPE string,
+          productcode          TYPE string,
+          acceptedquantity     TYPE string,
+          offering_type        TYPE string,
+          frieghtcharge        TYPE string,
+          quantityunittype     TYPE string,
+
+
+        END OF ty_prod.
+
+
+
+
+
+TYPES : BEGIN OF ty_ded,
+          reason            TYPE string,
+          amount            TYPE string,
+          name              TYPE string,
+          additionaldetails TYPE string,
+          type              TYPE string,
+        END OF ty_ded.
+
+TYPES : BEGIN OF ty_billcycle,
+          unit  TYPE string,
+          value TYPE string,
+        END OF ty_billcycle.
+
+TYPES : BEGIN OF ty_service,
+          sgst                  TYPE string,
+          product_category_name TYPE string,
+          hsncode               TYPE string,
+          offering_type         TYPE string,
+          billing_cycle_details TYPE ty_billcycle,
+          cgst                  TYPE string,
+          cess                  TYPE string,
+          igst                  TYPE string,
+          utgst                 TYPE string,
+          product_category_id   TYPE string,
+
+
+        END OF ty_service.
+
+
+TYPES : BEGIN OF ty_consignee,
+          consigneestate    TYPE string,
+          consigneelastname TYPE string,
+          consigneemobile   TYPE string,
+          consigneefname    TYPE string,
+          consigneepin      TYPE string,
+          products          TYPE TABLE OF ty_prod WITH NON-UNIQUE DEFAULT KEY,
+          consigneedistrict TYPE string,
+          consigneeaddress  TYPE string,
+        END OF ty_consignee.
+
+TYPES : BEGIN OF ty_consignees,
+          consigneestate    TYPE string,
+          consigneelastname TYPE string,
+          consigneemobile   TYPE string,
+          consigneefname    TYPE string,
+          consigneepin      TYPE string,
+          products          TYPE TABLE OF ty_service WITH NON-UNIQUE DEFAULT KEY,
+          consigneedistrict TYPE string,
+          consigneeaddress  TYPE string,
+        END OF ty_consignees.
+
+DATA: it_consignee  TYPE TABLE OF ty_consignee,
+      wa_consignee  TYPE ty_consignee,
+      it_consignees TYPE TABLE OF ty_consignees,
+      wa_consignees TYPE ty_consignees,
+      it_products   TYPE TABLE OF ty_prod,
+      wa_products   TYPE ty_prod,
+      it_deductions TYPE TABLE OF ty_ded,
+      wa_deductions TYPE ty_ded,
+      it_service    TYPE TABLE OF ty_service,
+      wa_service    TYPE ty_service.
+
+TYPES: BEGIN OF ty_final,
+         gem_invoice_no         TYPE string,
+         id_days                TYPE string,
+         order_id               TYPE string,
+         buyer_email            TYPE string,
+         ifd_diary_no           TYPE string,
+
+         consigneestate         TYPE string,
+         consigneelastname      TYPE string,
+         consigneemobile        TYPE string,
+         consigneefname         TYPE string,
+         consigneepin           TYPE string,
+         offering_type          TYPE string,
+         totalvalue             TYPE string,
+         unitprice              TYPE string,
+         sgst                   TYPE string,
+         actualdeliverydate     TYPE string,
+         hsncode                TYPE string,
+         freightcgst            TYPE string,
+         freightutgst           TYPE string,
+         expecteddeliverydate   TYPE string,
+         productbrand           TYPE string,
+         suppliedquantity       TYPE string,
+         quantityordered        TYPE string,
+         freightsgst            TYPE string,
+         cgst                   TYPE string,
+         freightigst            TYPE string,
+         cess                   TYPE string,
+         productname            TYPE string,
+         igst                   TYPE string,
+         utgst                  TYPE string,
+         freightcess            TYPE string,
+         productcode            TYPE string,
+         acceptedquantity       TYPE string,
+         frieghtcharge          TYPE string,
+         quantityunittype       TYPE string,
+         consigneedistrict      TYPE string,
+         consigneeaddress       TYPE string,
+         vendor_state           TYPE string,
+*        deductions             TYPE string,
+         reason                 TYPE string,
+         amount                 TYPE string,
+         name                   TYPE string,
+         additionaldetails      TYPE string,
+         type                   TYPE string,
+         contract_file          TYPE string,
+         designation_financial  TYPE string,
+         supply_order_no        TYPE string,
+         vendor_code            TYPE string,
+         buyer_pincode          TYPE string,
+         fa_file                TYPE string,
+         invoice_file           TYPE string,
+         bill_amount            TYPE string,
+         buyer_address          TYPE string,
+         vendor_gstn            TYPE string,
+         demand_id              TYPE string,
+         order_amount           TYPE string,
+         seller_id              TYPE string,
+         supply_order_date      TYPE string,
+         crac_file              TYPE string,
+         buyer_district         TYPE string,
+         vendor_bank_account_no TYPE string,
+         id                     TYPE string,
+         buyer_org              TYPE string,
+         invoice_no             TYPE string,
+         bill_no                TYPE string,
+         bill_file              TYPE string,
+         vendor_pin_code        TYPE string,
+         receipt_date           TYPE string,
+         buyer_state            TYPE string,
+         ifd_concurrance        TYPE string,
+         ifd_diary_date         TYPE string,
+         bill_date              TYPE string,
+         crac_date              TYPE string,
+         buyer_name             TYPE string,
+         invoice_date           TYPE string,
+         vendor_name            TYPE string,
+         vendor_pan             TYPE string,
+         vendor_bank_ifsc_code  TYPE string,
+         buyer_mobile           TYPE string,
+         receipt_no             TYPE string,
+         id_amount              TYPE string,
+         order_date             TYPE string,
+         vendor_address         TYPE string,
+
+       END OF ty_final.
+DATA : ls_data  TYPE ty_final,
+       it_final TYPE TABLE OF ty_final,
+       wa_final TYPE ty_final,
+       it_inv   TYPE TABLE OF zgem_billdet,
+       wa_inv   TYPE zgem_billdet,
+       it_bill  TYPE zgem_bill,
+       wa_bill  TYPE zgem_bill,
+       inv      TYPE zgem_billdet-gem_invoice_no,
+       cnt      TYPE sy-index.
+
+DATA: lv_bill_amount TYPE decfloat34. "--------> Declared by Aparna on 15.12.2024
+
+
+DATA: parsee TYPE REF TO cl_gis_json_parser.
+DATA: out1 TYPE REF TO data.
+DATA :it_fcat TYPE  slis_t_fieldcat_alv.
+DATA :wa_fcat TYPE  slis_fieldcat_alv.
+FIELD-SYMBOLS:    <fs1> TYPE any,
+                  <fs2> TYPE any.
+CREATE OBJECT: lo_gem_token,
+               lo_gem_billsumm.
+
+
+
+IF r1 = 'X'.
+
+  proxy_data-mt_security_token_sender-username  = 'GEM23012020'.
+  proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
+
+
+* """"""""""""" UAT ID PASSWORD""""""""""""""""""
+*  proxy_data-mt_security_token_sender-username  = 'SAHAY29062020'.
+*  proxy_data-mt_security_token_sender-password  = 'Test@29062020'.
+*  """""""""""" UAT ID PASSWORD""""""""""""""""""
+
+*  proxy_data-mt_security_token_sender-username  = 'Alex123'.
+*  proxy_data-mt_security_token_sender-password  = 'password'.
+  TRY.
+      CALL METHOD lo_gem_token->si_security_token_ob
+        EXPORTING
+          output = proxy_data
+        IMPORTING
+          input  = lt_input.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault .
+  ENDTRY.
+
+  token = lt_input-mt_security_token_receiver-token.
+
+  IF token IS NOT INITIAL.
+    bill_summary-client_code = 'ONGCVIDESH'.
+    bill_summary-requesttype = 'BILLSUMMARY'.
+    bill_summary-userid = 'OVLMM'.
+*    bill_summary-userid = 'xyz@gmail.com'.
+    bill_summary-datefrom = datefrom   .
+    bill_summary-dateto = dateto   .
+    bill_summary-offset = '0'.
+    bill_summary-limit = '12'.
+    bill_summary-token = token.
+  ENDIF.
+
+  APPEND bill_summary TO bill_summ-mt_billing_summary_s_req-billing_summary.
+
+  TRY.
+      CALL METHOD lo_gem_billsumm->si_billing_summary_ob
+        EXPORTING
+          output = bill_summ
+        IMPORTING
+          input  = bill_output.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault .
+  ENDTRY.
+
+  it_detail = bill_output-mt_billing_summary_resp-response_data.
+
+
+  DATA lv_bill_amt TYPE string.
+
+  LOOP AT it_detail INTO wa_detail.
+
+
+    /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-deductions
+                               CHANGING data = it_deductions ).
+    FIND FIRST OCCURRENCE OF '"offering_type":"goods"' IN wa_detail-consignment_details.
+    FIND FIRST OCCURRENCE OF '"bill_amount"' IN wa_detail-consignment_details .
+    IF sy-subrc = 0.
+      /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-consignment_details
+                                 CHANGING data = it_consignee ).
+
+      LOOP AT it_consignee INTO wa_consignee.
+        it_products =  wa_consignee-products.
+        LOOP AT it_products INTO wa_products.
+
+          IF wa_products-totalvalue CA sy-abcde.
+            wa_products-totalvalue = wa_detail-bill_amount.
+          ENDIF.
+
+          MOVE-CORRESPONDING wa_products TO wa_final.
+          MOVE-CORRESPONDING wa_consignee TO wa_final.
+          MOVE-CORRESPONDING wa_detail TO wa_final.
+          LOOP AT it_deductions INTO wa_deductions.
+            MOVE-CORRESPONDING wa_deductions TO wa_final.
+          ENDLOOP.
+          APPEND wa_final TO it_final.
+          CLEAR :wa_final , wa_products , wa_deductions.
+        ENDLOOP.
+
+
+        CLEAR: wa_final , wa_consignee, wa_products , wa_deductions.
+      ENDLOOP.
+    ELSE.
+      /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-consignment_details
+                                 CHANGING data = it_consignees ).
+
+      LOOP AT it_consignees INTO wa_consignees.
+        it_service =  wa_consignees-products.
+        LOOP AT it_service INTO wa_service.
+
+          IF wa_service-billing_cycle_details-value CA sy-abcde.
+            wa_service-billing_cycle_details-value = wa_detail-bill_amount.
+          ENDIF.
+
+          MOVE-CORRESPONDING wa_service TO wa_final.
+          wa_final-productname = wa_service-product_category_name.
+          MOVE-CORRESPONDING wa_consignees TO wa_final.
+          MOVE-CORRESPONDING wa_detail TO wa_final.
+          LOOP AT it_deductions INTO wa_deductions.
+            MOVE-CORRESPONDING wa_deductions TO wa_final.
+          ENDLOOP.
+          APPEND wa_final TO it_final.
+          CLEAR :wa_final , wa_service , wa_deductions.
+        ENDLOOP.
+        CLEAR: wa_final , wa_consignees, wa_service, wa_deductions.
+      ENDLOOP.
+
+    ENDIF.
+    REFRESH: it_consignee , it_consignees, it_deductions , it_products, it_service.
+
+    CLEAR: wa_final, wa_consignee , wa_consignees, wa_detail, wa_products , wa_deductions, wa_service.
+  ENDLOOP.
+*
+*
+
+*BREAK-POINT.
+  LOOP AT it_final INTO wa_final.
+*--------------------------------" Changes begins by Aparna on 15.12.2024 "---------------------------*
+    IF wa_final-bill_amount CA sy-abcde.
+      CLEAR lv_bill_amt.
+*      lv_bill_amount = wa_final-bill_amount.
+      lv_bill_amount = wa_final-order_amount.   " add by rohit  on 06-06-2025
+      CLEAR wa_final-bill_amount.
+      wa_final-bill_amount = lv_bill_amount.
+    ENDIF.
+*--------------------------------" Changes ended by Aparna on 15.12.2024 "---------------------------*
+" Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 09.06.2026  FOR ATC
+*     MOVE-CORRESPONDING wa_final TO wa_inv.
+    MOVE-CORRESPONDING wa_final TO wa_inv. "#EC CI_FLDEXT_OK[2610650]
+" Code Remediation changes S4 2025_1_A Conversion **END OF CHANGE BY SAP_ABAP 09.06.2026 FOR ATC
+    IF inv <> wa_inv-gem_invoice_no.
+      CLEAR: cnt.
+      inv = wa_inv-gem_invoice_no.
+    ENDIF.
+    cnt = cnt + 1.
+    wa_inv-inv_id = cnt.
+    MODIFY zgem_billdet FROM wa_inv.
+    APPEND wa_inv TO it_inv.
+
+    MOVE-CORRESPONDING wa_inv TO wa_bill.
+    MODIFY zgem_bill FROM wa_bill.
+  ENDLOOP.
+
+  LOOP AT it_inv INTO wa_inv.
+    ON CHANGE OF wa_inv-gem_invoice_no.
+
+      SELECT * FROM EKKO INTO @DATA(WA_EKKO) UP TO 1 ROWS
+ WHERE ZGEMPO = @WA_INV-ORDER_ID
+ ORDER BY PRIMARY KEY .
+ ENDSELECT.
+      IF wa_ekko-ebeln IS NOT INITIAL.
+        SELECT *
+ FROM ZMM_IMS INTO @DATA(WA_IMS) UP TO 1 ROWS WHERE TRACKTYP IN ( 'M' , 'S' ) AND EBELN = @WA_EKKO-EBELN
+ ORDER BY PRIMARY KEY .
+ ENDSELECT.
+
+        IF wa_ims-trackno IS NOT INITIAL.
+          UPDATE zmm_ims SET gem_invoice_no = wa_inv-gem_invoice_no
+          WHERE trackno = wa_ims-trackno.
+          PERFORM send_mail.
+        ENDIF.
+
+      ENDIF.
+
+    ENDON.
+
+  ENDLOOP.
+
+
+ELSE.
+
+  SELECT * FROM zgem_billdet INTO TABLE it_inv.
+
+ENDIF.
+
+
+
+
+CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+  EXPORTING
+    i_program_name         = sy-repid
+*   I_INTERNAL_TABNAME     = 'IT_FINAL'
+    i_structure_name       = 'ZGEM_BILLDET'
+    i_client_never_display = 'X'
+*   I_INCLNAME             =
+*   I_BYPASSING_BUFFER     =
+*   I_BUFFER_ACTIVE        =
+  CHANGING
+    ct_fieldcat            = it_fcat
+*     EXCEPTIONS
+*   INCONSISTENT_INTERFACE = 1
+*   PROGRAM_ERROR          = 2
+*   OTHERS                 = 3
+  .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+LOOP AT it_fcat INTO wa_fcat.
+*  IF wa_fcat-seltext_m is INITIAL.
+  wa_fcat-seltext_l = wa_fcat-fieldname.
+  wa_fcat-seltext_m = wa_fcat-fieldname.
+  wa_fcat-seltext_s = wa_fcat-fieldname.
+  wa_fcat-reptext_ddic = wa_fcat-fieldname.
+  MODIFY it_fcat FROM wa_fcat.
+*  ENDIF.
+
+ENDLOOP.
+
+
+
+CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+  EXPORTING
+*   I_BUFFER_ACTIVE    =
+*   I_INTERFACE_CHECK  = ' '
+    i_callback_program = sy-repid
+*   I_CALLBACK_PF_STATUS_SET    = ' '
+*   I_CALLBACK_USER_COMMAND     = ' '
+*   I_CALLBACK_TOP_OF_PAGE      = ' '
+*   I_CALLBACK_HTML_TOP_OF_PAGE = ' '
+*   I_CALLBACK_HTML_END_OF_LIST = ' '
+*   I_STRUCTURE_NAME   = alv_tab
+*   I_BACKGROUND_ID    = ' '
+*   i_grid_title       = title
+*   I_GRID_SETTINGS    = grid
+*   IS_LAYOUT          =
+    it_fieldcat        = it_fcat[]
+*   IT_EXCLUDING       =
+*   IT_SPECIAL_GROUPS  =
+*   IT_SORT            =
+*   IT_FILTER          =
+*   IS_SEL_HIDE        =
+*   I_DEFAULT          = 'X'
+*   I_SAVE             = ' '
+*   IS_VARIANT         =
+*   IT_EVENTS          =
+*   IT_EVENT_EXIT      =
+*   IS_PRINT           =
+*   IS_REPREP_ID       =
+*   I_SCREEN_START_COLUMN       = 0
+*   I_SCREEN_START_LINE         = 0
+*   I_SCREEN_END_COLUMN         = 0
+*   I_SCREEN_END_LINE  = 0
+*    IMPORTING
+*   E_EXIT_CAUSED_BY_CALLER     =
+*   ES_EXIT_CAUSED_BY_USER      =
+  TABLES
+    t_outtab           = it_inv
+  EXCEPTIONS
+    program_error      = 1
+    OTHERS             = 2.
+IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+ENDIF.
+
+
+
+
+
+
+*    call METHOD cl_salv_table=>factory
+**    EXPORTING
+**      LIST_DISPLAY   = IF_SALV_C_BOOL_SAP=>FALSE
+**      R_CONTAINER    =
+**      CONTAINER_NAME =
+*  IMPORTING
+*    R_SALV_TABLE = LR_ALV
+*  CHANGING
+*    T_TABLE      = IT_inv.
+*
+**  TRY.
+*  CALL METHOD lr_alv->get_columns
+*    RECEIVING
+*      value  = lr_colums
+*      .
+*
+*   LR_alv->display( ).
+
+*  DATA(out) = cl_demo_output=>new(
+*     )->begin_section( `Order-Data` ).
+*  out->write_data( it_final ).
+*  out->display( ).
+
+
+
+*ENDIF.
+
+*DATA(out) = cl_demo_output=>new(
+*     )->begin_section( `Bill-Data` ).
+*  out->write_data( it_final ).
+*  out->display( ).
+*&---------------------------------------------------------------------*
+*&      Form  SEND_MAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM send_mail .
+
+  DATA : i_text          TYPE bcsy_text. "Table for body
+  DATA : w_text          LIKE LINE OF i_text.
+  DATA : i_receivers TYPE TABLE OF somlreci1 WITH HEADER LINE,
+         i_record    LIKE solisti1 OCCURS 0 WITH HEADER LINE.
+  DATA : lo_document     TYPE REF TO cl_document_bcs VALUE IS INITIAL. "document object
+
+  DATA : p_sub TYPE char50. "email subject
+  DATA : lo_send_request TYPE REF TO cl_bcs VALUE IS INITIAL.
+  DATA : lv_data_string TYPE string.
+  DATA : lv_len_in    LIKE sood-objlen.
+  DATA : lv_filesize TYPE so_obj_len.
+
+  DATA : l_attsubject TYPE sood-objdes.
+  DATA : lo_sender       TYPE REF TO if_sender_bcs VALUE IS INITIAL. "sender
+  DATA : lo_recipient    TYPE REF TO if_recipient_bcs VALUE IS INITIAL. "recipient
+  DATA : p_email       TYPE adr6-smtp_addr,
+         email_address TYPE adr6-smtp_addr,
+         subrc         TYPE  sy-subrc,
+         error_table   TYPE TABLE OF rpbenerr..
+
+  DATA: t_header  TYPE STANDARD TABLE OF w3head WITH HEADER LINE, "Header
+        t_fields  TYPE STANDARD TABLE OF w3fields WITH HEADER LINE, "Fields
+        t_html    TYPE STANDARD TABLE OF w3html WITH HEADER LINE, "Html
+        t_html1   TYPE STANDARD TABLE OF w3html WITH HEADER LINE, "Html
+        wa_header TYPE w3head,
+        w_head    TYPE w3head.
+
+  CLEAR: p_sub, lo_send_request.
+  p_sub = 'Post GeM Invoice'.
+  lo_send_request = cl_bcs=>create_persistent( ).
+
+  REFRESH t_html.
+  CLEAR t_html.
+
+  t_html-line = '<table>'.
+  APPEND t_html.
+  CLEAR t_html.
+*t_html-line = '<thead>'.
+* APPEND t_html.
+* CLEAR t_html.
+  t_html-line = '<tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<td>Dear Sir/Madam,</td></tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<tr></tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<td><p>The GeM Invoice for the below Gem PO has been created. Please post Invoice.<p></td>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<tr></tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<tr></tr></table>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+  t_html-line = '<table border = "1">'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+*    LOOP AT it_fcat.
+  CONCATENATE '<th bgcolor = "#F0D086" fgcolor = "black">'
+  'GeM PO Number'
+  '</th>' INTO t_html-line.
+  APPEND t_html.
+  CLEAR t_html.
+
+  t_html-line = '</tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+*   LOOP AT it_mail_buy INTO wa_mail_buy.
+  t_html-line = '<tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+  t_html-line = '<td>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = wa_inv-order_id.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '</td>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+  t_html-line = '</tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+*   ENDLOOP.
+
+  t_html-line = '</table>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+  t_html-line = '<table>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = ' <tr></tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<tr></tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+  t_html-line = '<tr><p>Regards<p></tr>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+*   t_html-line = '<tr><p>SAP Team - ONGC Videsh<p></tr>'.
+*   APPEND t_html.
+*   CLEAR t_html.
+  t_html-line = '<tr><td></td></tr></table>'.
+  APPEND t_html.
+  CLEAR t_html.
+
+  REFRESH i_text[].
+  APPEND LINES OF t_html TO i_text.
+  lo_document = cl_document_bcs=>create_document( "create document
+  i_type = 'HTM' "Type of document HTM, TXT etc
+  i_text =  i_text "email body internal table
+  i_subject = p_sub ). "email subject here p_sub input parameter
+* Pass the document to send request
+  lo_send_request->set_document( lo_document ).
+
+  TRY.
+      lo_sender = cl_sapuser_bcs=>create( sy-uname ). "sender is the logged in user
+* Set sender to send request
+      lo_send_request->set_sender(
+      EXPORTING
+      i_sender = lo_sender ).
+*    CATCH CX_ADDRESS_BCS.
+****Catch exception here
+  ENDTRY.
+
+  SELECT * FROM ZGEM_INT_LOG INTO @DATA(WA_GINV) UP TO 1 ROWS
+ WHERE GEMPO = @WA_INV-ORDER_ID
+ ORDER BY PRIMARY KEY .
+ ENDSELECT.
+  CHECK sy-subrc = 0.
+  IF wa_ginv-payau IS NOT INITIAL.
+    CALL FUNCTION 'HR_FBN_GET_USER_EMAIL_ADDRESS'
+      EXPORTING
+        user_id       = wa_ginv-payau
+        reaction      = ' '
+      IMPORTING
+        email_address = email_address
+        subrc         = subrc
+      TABLES
+        error_table   = error_table.
+    p_email = email_address.
+    IF p_email IS NOT INITIAL.
+      lo_recipient = cl_cam_address_bcs=>create_internet_address( p_email ). "Here Recipient is email input p_email
+      TRY.
+          lo_send_request->add_recipient(
+              EXPORTING
+              i_recipient = lo_recipient
+              i_express = 'X' ).
+*  CATCH CX_SEND_REQ_BCS INTO BCS_EXCEPTION .
+**Catch exception here
+      ENDTRY.
+
+      CLEAR : p_email.
+
+
+
+      TRY.
+** Send email
+          lo_send_request->send(
+          EXPORTING
+          i_with_error_screen = 'X' ).
+          COMMIT WORK.
+          IF sy-subrc = 0. "mail sent successfully
+*        CLEAR : WA_FINAL.
+            MESSAGE 'Mail Sent Successfully' TYPE 'S'.
+          ENDIF.
+*    CATCH CX_SEND_REQ_BCS INTO BCS_EXCEPTION .
+*catch exception here
+      ENDTRY.
+    ENDIF.
+  ENDIF.
+ENDFORM.

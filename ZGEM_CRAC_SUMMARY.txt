@@ -1,0 +1,286 @@
+*&---------------------------------------------------------------------*
+*& Report  ZGEM_ORDER_SUMMARY
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zgem_crac_summary.
+
+PARAMETERS : datefrom TYPE sy-datum DEFAULT sy-datum,
+             dateto TYPE sy-datum DEFAULT sy-datum.
+*             offset TYPE i,
+*             limit  TYPE i.
+*             token
+PARAMETERS : r1 RADIOBUTTON GROUP b1,
+             r2 RADIOBUTTON GROUP b1.
+
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA: err_string       TYPE string.
+
+TYPES : BEGIN OF TY_FRT,
+        CURRENCY TYPE ZGEM_CRACDET-CURRENCY,
+        VALUE    TYPE ZGEM_CRACDET-VALUE,
+        END OF TY_FRT.
+
+
+TYPES: BEGIN OF TY_CRACsHIP,
+        ORDER_ITEM_ID TYPE ZGEM_CRACDET-ORDER_ITEM_ID,
+        REASON TYPE ZGEM_CRACDET-REASON,
+        RECEIVEDQTY TYPE ZGEM_CRACDET-RECEIVEDQTY,
+        AGENCY_NAME TYPE ZGEM_CRACDET-AGENCY_NAME,
+        ACCEPTEDQTY TYPE ZGEM_CRACDET-ACCEPTEDQTY,
+        SHIPMENTITEMID TYPE ZGEM_CRACDET-SHIPMENTITEMID,
+        INSPECTED_BY TYPE ZGEM_CRACDET-INSPECTED_BY,
+        PRODUCTNAME TYPE ZGEM_CRACDET-PRODUCTNAME,
+        INSPECTION_CERT_NO TYPE ZGEM_CRACDET-INSPECTION_CERT_NO,
+        REJECTEDQTY TYPE ZGEM_CRACDET-REJECTEDQTY,
+        FREIGHTcharges TYPE TY_FRT,
+      END OF TY_CRACSHIP.
+
+      TYPES: BEGIN OF TY_PRCSHIP,
+              ORDER_ITEM_ID TYPE ZGEM_CRACDET-PRC_ORDER_ITEM_ID,
+              REASON        TYPE ZGEM_CRACDET-PRC_REASON,
+              RECEIVEDQTY TYPE ZGEM_CRACDET-PRC_RECEIVEDQTY,
+              PRODUCTNAME TYPE ZGEM_CRACDET-PRC_PRODUCTNAME,
+              REJECTEDQTY TYPE ZGEM_CRACDET-PRC_REJECTEDQTY,
+            END OF TY_PRCSHIP.
+
+
+
+DATA: lo_gem_cracsumm  TYPE REF TO ZCRACSUMMARYCO_SI_CRACSUMMARY,
+      crac_summ        TYPE ZCRACSUMMARYMT_CRACSUMMARY_S_R,
+      crac_output      TYPE ZCRACSUMMARYMT_CRACSUMMARY_RES,
+      lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
+      crac_summary     TYPE ZCRACSUMMARYDT_CRACSUMMARY_S_1,
+      token             TYPE string,
+      it_detail         TYPE ZCRACSUMMARYDT_CRACSUMMARY_TAB,
+      wa_detail         LIKE LINE OF it_detail,
+      IT_CRACSHIP      TYPE TABLE OF TY_CRACSHIP,
+      wa_cracship      TYPE TY_CRACSHIP,
+      IT_prcSHIP      TYPE TABLE OF TY_prcSHIP,
+      wa_prcship      TYPE TY_prCSHIP,
+      it_final       type TABLE OF ZGEM_CRACDET,
+      wa_final       TYPE zgem_cracdet.
+DATA: err_string1       TYPE string.
+FIELD-SYMBOLS :   <out_structure> TYPE any.
+ dATA: LR_ALV TYPE REF TO cl_salv_table.
+ Data: LR_colums type REF TO cl_salv_columns_table.
+
+DATA :it_fcat TYPE  slis_t_fieldcat_alv.
+DATA :wa_fcat TYPE  slis_fieldcat_alv.
+DATA: g_save  TYPE c VALUE 'A'.
+DATA: gs_layout              TYPE slis_layout_alv.
+
+
+
+
+
+
+
+
+CREATE OBJECT: lo_gem_token,
+               lo_gem_cracsumm.
+
+if r1 = 'X'.
+
+
+*proxy_data-mt_security_token_sender-username  = 'GEM23012020'.
+*proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
+
+ """"""""""""" UAT ID PASSWORD""""""""""""""""""
+  proxy_data-mt_security_token_sender-username  = 'SAHAY29062020'.
+  proxy_data-mt_security_token_sender-password  = 'Test@29062020'.
+  """""""""""" UAT ID PASSWORD""""""""""""""""""
+*proxy_data-mt_security_token_sender-username  = 'Alex123'.
+*proxy_data-mt_security_token_sender-password  = 'password'.
+TRY.
+    CALL METHOD lo_gem_token->si_security_token_ob
+      EXPORTING
+        output = proxy_data
+      IMPORTING
+        input  = lt_input.
+  CATCH cx_ai_system_fault INTO lo_sys_exception.
+    err_string = lo_sys_exception->get_text( ).
+  CATCH cx_ai_application_fault .
+ENDTRY.
+
+token = lt_input-mt_security_token_receiver-token.
+
+IF token IS NOT INITIAL.
+*      order_summ-mt_order_summary_s_req  =   'EIL'.
+  crac_summary-client_code = 'ONGCVIDESH'.
+  crac_summary-requesttype = 'CRACSUMMARY'.
+  crac_summary-userid = 'OVLMM'.
+*  crac_summary-userid = 'xyz@gmail.com'.
+*  order_summary-datefrom = '20200115'.
+*  order_summary-dateto = '20200115'.
+*  order_summary-offset = '0'.
+*  order_summary-limit = '12'.
+   crac_summary-datefrom = datefrom.
+   crac_summary-dateto =   dateto .
+   crac_summary-offset =   '0'.
+   crac_summary-limit =    '20' .
+
+  crac_summary-token = token.
+
+  APPEND crac_summary TO crac_summ-MT_CRACSUMMARY_S_REQ-CRACSUMMARY.
+
+  TRY.
+      CALL METHOD lo_gem_cracsumm->SI_CRACSUMMARY_OB
+        EXPORTING
+          output = crac_summ
+        IMPORTING
+          input  = crac_output.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault .
+  ENDTRY.
+*  BREAK-POINT.
+  it_detail = crac_output-MT_CRACSUMMARY_RESP-RESPONSE_DATA.
+  DATA : obj TYPE REF TO cl_trex_json_deserializer.
+  CREATE OBJECT obj.
+  LOOP AT it_detail INTO wa_detail.
+*
+  REFRESH: it_CRACSHIP[] , it_PRCSHIP[].
+
+     /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-CRAC_SHIPMENTITEMS
+                               CHANGING data = it_CRACSHIP ).
+
+     /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-PRC_SHIPMENTITEMS
+                               CHANGING data = it_prcSHIP ).
+
+
+     LOOP AT it_CRACSHIP INTO wa_cracship.
+       MOVE-CORRESPONDING wa_cracship to wa_final.
+       READ TABLE it_prcSHIP INTO wa_prcship WITH KEY order_item_id = wa_cracship-ORDER_ITEM_ID.
+       IF sy-subrc = 0.
+        wa_final-prc_ORDER_ITEM_ID = wa_prcship-ORDER_ITEM_ID.
+        wa_final-prc_REASON        = wa_prcship-REASON.
+        wa_final-prc_RECEIVEDQTY   = wa_prcship-RECEIVEDQTY.
+        wa_final-prc_PRODUCTNAME   = wa_prcship-PRODUCTNAME.
+        wa_final-prc_REJECTEDQTY   = wa_prcship-REJECTEDQTY .
+       ENDIF.
+       MOVE-CORRESPONDING wa_detail to wa_final.
+       APPEND wa_final to it_final.
+       clear: wa_final,  wa_cracship, wa_prcship.
+     ENDLOOP.
+
+clear: wa_Detail,wa_final.
+
+    ENDLOOP.
+
+
+ MODIFY zgem_cracdet from TABLE it_final.
+
+
+
+
+
+
+
+
+
+
+
+
+
+ENDIF.
+
+
+
+else.
+
+
+    SELECT * FROM zgem_cracdet INTO TABLE it_final.
+
+  ENDIF.
+
+
+
+   CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+     EXPORTING
+       I_PROGRAM_NAME               = sy-repid
+*       I_INTERNAL_TABNAME           = 'IT_FINAL'
+       I_STRUCTURE_NAME             = 'ZGEM_CRACDET'
+       I_CLIENT_NEVER_DISPLAY       = 'X'
+*       I_INCLNAME                   =
+*       I_BYPASSING_BUFFER           =
+*       I_BUFFER_ACTIVE              =
+      CHANGING
+        ct_fieldcat                  = it_fcat
+     EXCEPTIONS
+       INCONSISTENT_INTERFACE       = 1
+       PROGRAM_ERROR                = 2
+       OTHERS                       = 3
+              .
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    LOOP AT it_fcat INTO wa_fcat.
+*  IF wa_fcat-seltext_m is INITIAL.
+wa_fcat-seltext_l = wa_fcat-fieldname.
+wa_fcat-seltext_m = wa_fcat-fieldname.
+wa_fcat-seltext_s = wa_fcat-fieldname.
+wa_fcat-REPTEXT_DDIC = wa_fcat-fieldname.
+MODIFY it_fcat from wa_fcat.
+*  ENDIF.
+
+    ENDLOOP.
+
+
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_BUFFER_ACTIVE             =
+*     I_INTERFACE_CHECK           = ' '
+     I_CALLBACK_PROGRAM          = sy-repid
+*     I_CALLBACK_PF_STATUS_SET    = ' '
+*     I_CALLBACK_USER_COMMAND     = ' '
+*     I_CALLBACK_TOP_OF_PAGE      = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE = ' '
+*     I_CALLBACK_HTML_END_OF_LIST = ' '
+*     I_STRUCTURE_NAME            = alv_tab
+*     I_BACKGROUND_ID             = ' '
+*      i_grid_title  = title
+*     I_GRID_SETTINGS             = grid
+      IS_LAYOUT     = gs_layout
+      it_fieldcat   = it_fcat[]
+*     IT_EXCLUDING  =
+*     IT_SPECIAL_GROUPS           =
+*     IT_SORT       =
+*     IT_FILTER     =
+*     IS_SEL_HIDE   =
+*     I_DEFAULT     = 'X'
+     I_SAVE        = g_save
+*     IS_VARIANT    =
+*     IT_EVENTS     =
+*     IT_EVENT_EXIT =
+*     IS_PRINT      =
+*     IS_REPREP_ID  =
+*     I_SCREEN_START_COLUMN       = 0
+*     I_SCREEN_START_LINE         = 0
+*     I_SCREEN_END_COLUMN         = 0
+*     I_SCREEN_END_LINE           = 0
+*    IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER     =
+*     ES_EXIT_CAUSED_BY_USER      =
+    TABLES
+      t_outtab      = it_final[]
+    EXCEPTIONS
+      program_error = 1
+      OTHERS        = 2.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+*
+*
+*
+*
+*
