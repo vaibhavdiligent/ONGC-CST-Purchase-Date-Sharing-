@@ -1,171 +1,235 @@
 *&---------------------------------------------------------------------*
-*& Report ZGEM_CRAC_COUNT
+*& Report  ZGEM_ORDER_COUNT
+*&
 *&---------------------------------------------------------------------*
-*& CRAC Count - GeM CPI integration.
-*&   Updated from old sproxy approach to new CPI HTTP approach.
-*&   1. Generate SEK token via proxy ZGEM_TOKENCO_SI_SECURITY_TOKEN.
-*&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
-*&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
-*&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
-*&   5. Display raw response (tighten once real response shape confirmed).
+*&
+*&
 *&---------------------------------------------------------------------*
-REPORT zgem_crac_count.
+REPORT ZGEM_CRAC_COUNT.
 
-CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
+PARAMETERS : datefrom TYPE sy-datum,
+             dateto TYPE sy-datum.
 
-PARAMETERS:
-  p_head  TYPE char70 LOWER CASE DEFAULT 'CRAC Count',
-  p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-  p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',
-  p_from  TYPE string LOWER CASE,
-  p_to    TYPE string LOWER CASE,
-  p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/CracCount'.
-
-*--- Token proxy objects
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       proxy_data       TYPE zgem_tokenmt_security_token_se,
       lt_input         TYPE zgem_tokenmt_security_token_re,
-      lo_sys_exception TYPE REF TO cx_ai_system_fault,
-      err_string       TYPE string,
-      gv_token         TYPE string.
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA:  err_string       TYPE string.
 
-*--- Request payload
-TYPES: BEGIN OF ty_request,
+
+DATA: lo_gem_craccount TYPE REF TO ZCRACSUMMCO_SI_CRACCOUNT_OB,
+      crac_count        TYPE ZCRACSUMMMT_CRACCOUNT_S_REQ,
+      crac_output      TYPE ZCRACCNTMT_CRACCOUNT_RESP,
+      lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
+      token TYPE string,
+      it_orderc TYPE TABLE OF ZGEM_ORDERCOUNT,
+      wa_orderc TYPE ZGEM_ORDERCOUNT,
+      it_count type TABLE OF ZORDERCOUNTDT_ORDER_COUNT_S_RE,
+      wa_count TYPE  ZORDERCOUNTDT_ORDER_COUNT_S_RE.
+DATA:  err_string1       TYPE string,
+       odate(8) TYPE c.
+
+ DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv.
+
+*--- CPI HTTP integration (replaces the direct sproxy data fetch) -----*
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
+DATA: lo_http        TYPE REF TO if_http_client,
+      lv_json_req    TYPE string,
+      lv_json_res    TYPE string,
+      lv_http_code   TYPE i,
+      lv_http_reason TYPE string.
+TYPES: BEGIN OF ty_cpi_req,
          user          TYPE string,
          method        TYPE string,
          buyer_user_id TYPE string,
          from_date     TYPE string,
          to_date       TYPE string,
-       END OF ty_request.
-
-DATA: lo_client   TYPE REF TO if_http_client,
-      ls_request  TYPE ty_request,
-      lv_json     TYPE string,
-      lv_response TYPE string,
-      lv_code     TYPE i,
-      lv_reason   TYPE string,
-      lo_alv      TYPE REF TO cl_salv_table,
-      lx_salv     TYPE REF TO cx_salv_msg.
-
-TYPES: BEGIN OF ty_display,
-         http_code TYPE i,
-         reason    TYPE string,
-         response  TYPE string,
-       END OF ty_display,
-       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
-DATA: lt_display TYPE tt_display,
-      ls_display TYPE ty_display.
-
-START-OF-SELECTION.
-
-*--- 1. Validate input
-  IF p_from IS INITIAL OR p_to IS INITIAL.
-    WRITE: / 'Error: from_date and to_date are both mandatory.'. RETURN.
-  ENDIF.
-
-*--- 1a. Generate the SEK security token via the CPI token proxy
-  proxy_data-mt_security_token_sender-username = 'ONGCVIDESH'.
-  proxy_data-mt_security_token_sender-password = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'.
-  TRY.
-      CREATE OBJECT lo_gem_token.
-      CALL METHOD lo_gem_token->si_security_token_ob
-        EXPORTING output = proxy_data
-        IMPORTING input  = lt_input.
-    CATCH cx_ai_system_fault INTO lo_sys_exception.
-      err_string = lo_sys_exception->get_text( ).
-    CATCH cx_ai_application_fault.
-  ENDTRY.
-  gv_token = lt_input-mt_security_token_receiver-token.
-
-*--- 2. Build the JSON request payload
-  CLEAR ls_request.
-  ls_request-user          = p_user.
-  ls_request-method        = 'cracCount'.
-  ls_request-buyer_user_id = p_buyer.
-  ls_request-from_date     = p_from.
-  ls_request-to_date       = p_to.
-
-  lv_json = /ui2/cl_json=>serialize(
-              data        = ls_request
-              compress    = abap_true
-              pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
-
-*--- 3. Create HTTP client from SM59 destination and set path/method
-  cl_http_client=>create_by_destination(
-    EXPORTING destination = c_dest
-    IMPORTING client      = lo_client
-    EXCEPTIONS OTHERS     = 1 ).
-  IF sy-subrc <> 0.
-    WRITE: / 'Error creating HTTP client for destination', c_dest. RETURN.
-  ENDIF.
-
-  lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
-  cl_http_utility=>set_request_uri( request = lo_client->request uri = p_path ).
-  lo_client->request->set_method( if_http_request=>co_request_method_post ).
-
-*--- 4. Headers: Content-Type + SEK token header 'token' = Bearer <token>
-  lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
-  IF gv_token IS NOT INITIAL.
-    lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
-  ENDIF.
-
-*--- 5. Body + send + receive
-  lo_client->request->set_cdata( lv_json ).
-  lo_client->send( EXCEPTIONS OTHERS = 1 ).
-  IF sy-subrc <> 0.
-    WRITE: / 'Error sending request to CPI'. lo_client->close( EXCEPTIONS OTHERS = 0 ). RETURN.
-  ENDIF.
-  lo_client->receive( EXCEPTIONS OTHERS = 1 ).
-  lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
-  lv_response = lo_client->response->get_cdata( ).
-  lo_client->close( EXCEPTIONS OTHERS = 0 ).
-
-*--- 6. Display raw response (tighten with typed structures once real shape is known)
-  CLEAR ls_display.
-  ls_display-http_code = lv_code.
-  ls_display-reason    = lv_reason.
-  ls_display-response  = lv_response.
-  APPEND ls_display TO lt_display.
-
-*--- 7. Show as ALV
-  TRY.
-      cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
-                              CHANGING  t_table      = lt_display ).
-      lo_alv->get_columns( )->set_optimize( abap_true ).
-      lo_alv->get_functions( )->set_all( abap_true ).
-      lo_alv->get_display_settings( )->set_list_header( p_head ).
-      lo_alv->display( ).
-    CATCH cx_salv_msg INTO lx_salv.
-      WRITE: / 'ALV error:', lx_salv->get_text( ).
-      WRITE: / 'HTTP', lv_code, lv_reason.
-      WRITE: / lv_response.
-  ENDTRY.
+       END OF ty_cpi_req.
+DATA: ls_cpi_req TYPE ty_cpi_req.
 
 
-*&=====================================================================*
-*& OLD CODE - COMMENTED OUT (original sproxy-based approach)
-*&=====================================================================*
-* PARAMETERS : datefrom TYPE sy-datum,
-*              dateto TYPE sy-datum.
-* DATA: lo_gem_craccount TYPE REF TO ZCRACSUMMCO_SI_CRACCOUNT_OB,
-*       crac_count        TYPE ZCRACSUMMMT_CRACCOUNT_S_REQ,
-*       crac_output      TYPE ZCRACCNTMT_CRACCOUNT_RESP,
-*       token TYPE string,
-*       it_orderc TYPE TABLE OF ZGEM_ORDERCOUNT,
-*       wa_orderc TYPE ZGEM_ORDERCOUNT.
-* CREATE OBJECT: lo_gem_token, lo_gem_craccount.
-* proxy_data-mt_security_token_sender-username  = 'GEM23012020'.
-* proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
-* TRY. CALL METHOD lo_gem_token->SI_SECURITY_TOKEN_OB ... ENDTRY.
-* token = LT_INPUT-mt_security_token_receiver-token.
-* IF token is NOT INITIAL.
-*   crac_count-MT_CRACCOUNT_S_REQ-client_code = 'ONGCVIDESH'.
-*   crac_count-MT_CRACCOUNT_S_REQ-requesttype = 'CRACCOUNT'.
-*   crac_count-MT_CRACCOUNT_S_REQ-userid = 'OVLMM'.
-*   crac_count-MT_CRACCOUNT_S_REQ-datefrom = datefrom.
-*   crac_count-MT_CRACCOUNT_S_REQ-dateto = dateto.
-*   crac_count-MT_CRACCOUNT_S_REQ-token = token.
-*   TRY. CALL METHOD lo_gem_craccount->SI_CRACCOUNT_OB ... ENDTRY.
-*   BREAK-POINT.
-*   (all display code was commented out in original)
+CREATE OBJECT :lo_gem_token,
+               lo_gem_craccount
+               .
+
+
+
+*proxy_data-mt_security_token_sender-username  = 'Alex123'.
+*proxy_data-mt_security_token_sender-password  = 'password'.
+
+proxy_data-mt_security_token_sender-username  = 'ONGCVIDESH'.
+proxy_data-mt_security_token_sender-password  = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'.
+                TRY.
+                    CALL METHOD lo_gem_token->SI_SECURITY_TOKEN_OB
+                      EXPORTING
+                        output = proxy_data
+                      IMPORTING
+                        input  = lt_input.
+                  CATCH cx_ai_system_fault INTO lo_sys_exception.
+                    err_string = lo_sys_exception->get_text( ).
+                  CATCH cx_ai_application_fault .
+                ENDTRY.
+
+     token = LT_INPUT-mt_security_token_receiver-token.
+
+     IF token is NOT INITIAL.
+
+crac_count-MT_CRACCOUNT_S_REQ-client_code = 'ONGCVIDESH'.
+crac_count-MT_CRACCOUNT_S_REQ-requesttype = 'CRACCOUNT'.
+*crac_count-MT_CRACCOUNT_S_REQ-userid = 'xyz@gmail.com'.
+crac_count-MT_CRACCOUNT_S_REQ-userid = 'OVLMM'.
+crac_count-MT_CRACCOUNT_S_REQ-datefrom = datefrom.
+crac_count-MT_CRACCOUNT_S_REQ-dateto = dateto.
+crac_count-MT_CRACCOUNT_S_REQ-token = token.
+
+
+*--- Fetch data from CPI over HTTP (was: sproxy call si_craccount_ob) ---*
+*  Map the sproxy request fields to the CPI/GeM API JSON request:
+*    sproxy client_code -> api user           (integration/client account)
+*    sproxy userid      -> api buyer_user_id  (buyer GeM user id)
+*    sproxy datefrom    -> api from_date       (reformatted YYYYMMDD -> YYYY-MM-DD)
+*    sproxy dateto      -> api to_date         (reformatted YYYYMMDD -> YYYY-MM-DD)
+*    sproxy requesttype -> replaced by api method
+*    sproxy token       -> sent as HTTP header (Bearer), not in body
+      CLEAR ls_cpi_req.
+      ls_cpi_req-user          = crac_count-mt_craccount_s_req-client_code.
+      ls_cpi_req-method        = 'cracCount'.
+      ls_cpi_req-buyer_user_id = crac_count-mt_craccount_s_req-userid.
+      CONCATENATE crac_count-mt_craccount_s_req-datefrom+0(4)
+                  crac_count-mt_craccount_s_req-datefrom+4(2)
+                  crac_count-mt_craccount_s_req-datefrom+6(2)
+                  INTO ls_cpi_req-from_date SEPARATED BY '-'.
+      CONCATENATE crac_count-mt_craccount_s_req-dateto+0(4)
+                  crac_count-mt_craccount_s_req-dateto+4(2)
+                  crac_count-mt_craccount_s_req-dateto+6(2)
+                  INTO ls_cpi_req-to_date SEPARATED BY '-'.
+      lv_json_req = /ui2/cl_json=>serialize( data = ls_cpi_req compress = abap_true
+                                             pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
+
+      cl_http_client=>create_by_destination( EXPORTING destination = c_dest
+                                              IMPORTING client      = lo_http
+                                              EXCEPTIONS OTHERS      = 1 ).
+      IF sy-subrc = 0.
+        lo_http->propertytype_logon_popup = if_http_client=>co_disabled.
+        cl_http_utility=>set_request_uri( request = lo_http->request uri = '/http/GEM/Sync/CracCount' ).
+        lo_http->request->set_method( if_http_request=>co_request_method_post ).
+        lo_http->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+        lo_http->request->set_header_field( name = 'token' value = |Bearer { token }| ).
+        lo_http->request->set_cdata( lv_json_req ).
+        lo_http->send( EXCEPTIONS OTHERS = 1 ).
+        IF sy-subrc = 0.
+          lo_http->receive( EXCEPTIONS OTHERS = 1 ).
+          lo_http->response->get_status( IMPORTING code = lv_http_code reason = lv_http_reason ).
+          lv_json_res = lo_http->response->get_cdata( ).
+        ENDIF.
+        lo_http->close( EXCEPTIONS OTHERS = 0 ).
+      ENDIF.
+
+*  Fill the OLD output structure from the CPI JSON response.
+      /ui2/cl_json=>deserialize( EXPORTING json = lv_json_res
+                                 CHANGING  data = crac_output ).
+
+                BREAK-POINT.
+
+*      it_count = order_output-MT_ORDER_COUNT_S_RESP-RESPONSE_DATA.
+*
+*      wa_orderc-client_code = order_output-MT_ORDER_COUNT_S_RESP-CLIENT_CODE.
+*      wa_orderc-fetchdate = order_output-MT_ORDER_COUNT_S_RESP-FETCHDATE.
+*      wa_orderc-requesttype = order_output-MT_ORDER_COUNT_S_RESP-REQUESTTYPE.
+*      wa_orderc-responsecode = order_output-MT_ORDER_COUNT_S_RESP-responsecode.
+*
+* LOOP AT it_count INTO wa_count.
+*MOVE-CORRESPONDING wa_count to wa_orderc.
+*CONCATENATE wa_count-ORDER_DATE+0(4) wa_count-ORDER_DATE+5(2) wa_count-ORDER_DATE+8(2)  INTO odate.
+**wa_orderc-ORDER_DATE = odate.
+*move odate to wa_orderc-ORDER_DATE .
+**wa_billcount-billcount = wa_count-count .
+*append wa_orderc to it_orderc.
+*MODIFY zgem_ordercount FROM wa_orderc.
+*ENDLOOP.
+*
+*
+*ls_fieldcat-fieldname = 'ORDER_DATE'.
+*ls_fieldcat-seltext_l = 'order Date'.
+*APPEND ls_fieldcat to lt_fieldcat.
+*
+*ls_fieldcat-fieldname = 'CLIENT_CODE'.
+*ls_fieldcat-seltext_l = 'Client code'.
+*APPEND ls_fieldcat to lt_fieldcat.
+*
+*ls_fieldcat-fieldname = 'ORDER_COUNT'.
+*ls_fieldcat-seltext_l = 'Bill count'.
+*APPEND ls_fieldcat to lt_fieldcat.
+*
+*
+*
+* CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+*  EXPORTING
+**    I_INTERFACE_CHECK                 = ' '
+**    I_BYPASSING_BUFFER                = ' '
+**    I_BUFFER_ACTIVE                   = ' '
+*    I_CALLBACK_PROGRAM                = sy-repid
+**    I_CALLBACK_PF_STATUS_SET          = ' '
+**    I_CALLBACK_USER_COMMAND           = ' '
+**    I_CALLBACK_TOP_OF_PAGE            = ' '
+**    I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+**    I_CALLBACK_HTML_END_OF_LIST       = ' '
+**    I_STRUCTURE_NAME                  =
+**    I_BACKGROUND_ID                   = ' '
+**    I_GRID_TITLE                      =
+**    I_GRID_SETTINGS                   =
+**    IS_LAYOUT                         =
+*    IT_FIELDCAT                       =  lt_fieldcat
+**    IT_EXCLUDING                      =
+**    IT_SPECIAL_GROUPS                 =
+**    IT_SORT                           =
+**    IT_FILTER                         =
+**    IS_SEL_HIDE                       =
+**    I_DEFAULT                         = 'X'
+**    I_SAVE                            = ' '
+**    IS_VARIANT                        =
+**    IT_EVENTS                         =
+**    IT_EVENT_EXIT                     =
+**    IS_PRINT                          =
+**    IS_REPREP_ID                      =
+**    I_SCREEN_START_COLUMN             = 0
+**    I_SCREEN_START_LINE               = 0
+**    I_SCREEN_END_COLUMN               = 0
+**    I_SCREEN_END_LINE                 = 0
+**    I_HTML_HEIGHT_TOP                 = 0
+**    I_HTML_HEIGHT_END                 = 0
+**    IT_ALV_GRAPHICS                   =
+**    IT_HYPERLINK                      =
+**    IT_ADD_FIELDCAT                   =
+**    IT_EXCEPT_QINFO                   =
+**    IR_SALV_FULLSCREEN_ADAPTER        =
+**  IMPORTING
+**    E_EXIT_CAUSED_BY_CALLER           =
+**    ES_EXIT_CAUSED_BY_USER            =
+*   TABLES
+*     t_outtab                          = it_orderc.
+**  EXCEPTIONS
+**    PROGRAM_ERROR                     = 1
+**    OTHERS                            = 2
+*           .
+* IF sy-subrc <> 0.
+** Implement suitable error handling here
 * ENDIF.
+
+
+*        BREAK-POINT.
+
+
+
+
+
+
+
+
+
+
+
+
+
+     ENDIF.
