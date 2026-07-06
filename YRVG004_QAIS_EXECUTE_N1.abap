@@ -2,7 +2,7 @@
 *& Report  YRVG004_QAIS_EXECUTE_N1
 *&  Standalone (single-program) build of YRVG004_QAIS_EXECUTE.
 *&  All includes (TOP / SEL / F01) merged in include-expansion order.
-*&  CIS lifting % change: Monthly 80->75, Quarterly 85->80, Annual 85->80.
+*&  CIS lifting % change: Monthly 80->75, Annual 85->80.
 *&  PRODUCTION = 2026-27; plus a clearly marked TEST ONLY 2025-26 block.
 *&---------------------------------------------------------------------*
 REPORT  yrvg004_qais_execute_n1 MESSAGE-ID yv01.
@@ -378,6 +378,56 @@ RANGES range_s FOR s922-kondm.
 
 DATA: lv_flag123 TYPE char1.
 
+*** SOC : CIS 2026-27 - customer-type waiver (R1) declarations ***
+*   New config-driven customer waiver: minimum lifting floor differs by
+*   customer type (AU 25% / AUT-Trader 50%) and the number of monthly
+*   waivers depends on the CIS signing month, capped at 1 per quarter.
+*   Values are read from Z config tables (see DDIC spec) - NOT hard-coded.
+TABLES: zcis_cust_type, zcis_waiver_rule.
+DATA: it_zcis_cust_type  TYPE STANDARD TABLE OF zcis_cust_type,
+      wa_zcis_cust_type  TYPE zcis_cust_type,
+      it_zcis_waiver_rule TYPE STANDARD TABLE OF zcis_waiver_rule,
+      wa_zcis_waiver_rule TYPE zcis_waiver_rule,
+      lv_cust_type       TYPE zcis_cust_type-cust_type,   " A=AU, T=AUT/Trader
+      lv_wv_floor        TYPE p DECIMALS 3,                " 0.250 / 0.500
+      lv_wv_allowed      TYPE i,                           " waivers allowed for the CIS
+      lv_wv_maxqtr       TYPE i,                           " max waivers per quarter (default 1)
+      lv_wv_ok           TYPE char1.                       " current month waiver allowed?
+*** EOC : CIS 2026-27 - customer-type waiver (R1) declarations ***
+
+*** SOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
+TABLES: zcis_shortfall_grd.
+DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd,
+      wa_zcis_shortfall_grd TYPE zcis_shortfall_grd.
+*** EOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
+
+*** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
+*   Group / MLE membership is read from BP relationships (table BUT050):
+*     RELTYP 'ZGPGRP' = Has Group Customer, 'ZGPMLL' = Has MLE.
+*     Derived via CVI_CUST_LINK + BUT000 (see get_group_mle_members).
+*   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
+*   receive no monthly/annual discount -> ZCIS_NODISC_GRADE.
+*   Scheme numeric parameters (e.g. Trader/AUT 200 MTM monthly cap) ->
+*     ZCIS_SCHEME_PARAM (key -> value), nothing hard-coded.
+TABLES: zcis_nodisc_grade, zcis_scheme_param.
+DATA: it_but050        TYPE STANDARD TABLE OF but050,
+      wa_but050        TYPE but050,
+      it_grp_members   TYPE STANDARD TABLE OF kunnr,        " group/MLE member customer codes
+      wa_grp_member    TYPE kunnr,
+      it_zcis_nodisc   TYPE STANDARD TABLE OF zcis_nodisc_grade,
+      wa_zcis_nodisc   TYPE zcis_nodisc_grade,
+      it_zcis_param    TYPE STANDARD TABLE OF zcis_scheme_param,
+      wa_zcis_param    TYPE zcis_scheme_param,
+      lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
+RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
+*   CIS (qais_no) that have at least one signed grade declared shortfall
+*   for the period -> eligible for monthly shortfall waiver (Clause 8).
+DATA: BEGIN OF wa_cis_shortfall,
+        qais_no TYPE yrva_qais_data-qais_no,
+      END OF wa_cis_shortfall,
+      it_cis_shortfall LIKE STANDARD TABLE OF wa_cis_shortfall.
+*** EOC : CIS 2026-27 - Group/MLE, cap, non-discount grades ***
+
 
 *&---------------------------------------------------------------------*
 
@@ -509,6 +559,17 @@ AT SELECTION-SCREEN OUTPUT.
       screen-invisible = 1.
       MODIFY SCREEN.
     ENDIF.
+*** SOC : CIS 2026-27 - remove Quarterly & Annual-Consistency radio buttons ***
+*   Per GAIL observation (RE: Mapping of CIS Scheme 2026-27): the new scheme
+*   has no Quarterly discount and no Annual Consistency discount, so these
+*   two radio buttons are removed from the selection screen.
+    IF screen-name = 'R_QUATER' OR screen-name = 'R_CONSIS'.
+      screen-active   = 0.
+      screen-input    = 0.
+      screen-invisible = 1.
+      MODIFY SCREEN.
+    ENDIF.
+*** EOC : CIS 2026-27 - remove Quarterly & Annual-Consistency radio buttons ***
 "$$
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000971
 ** EOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008973
@@ -851,10 +912,10 @@ FORM validation .
 *    ELSEIF r_month = 'X' OR r_month1 = 'X' OR r_rpd EQ 'X'.
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
       IF s_sptag-low+4(2) NE s_sptag-high+4(2).
-        MESSAGE 'Please Enter Single Month Period' TYPE 'E'.
+        MESSAGE 'Please enter the correct month for CIS 2026-27' TYPE 'E'.
       ELSE.
         IF s_sptag-low+6(2) NE '01'.
-          MESSAGE 'Please Enter Correct Month Period' TYPE 'E'.
+          MESSAGE 'Please enter the correct month for CIS 2026-27' TYPE 'E'.
         ELSE.
           CALL FUNCTION 'BKK_GET_MONTH_LASTDAY'
             EXPORTING
@@ -863,7 +924,7 @@ FORM validation .
               e_date = lv_date1.
           IF s_sptag-high NE lv_date1.
             IF lv_siml NE 'X'.
-              MESSAGE 'Please Enter Correct Month Period' TYPE 'E'.
+              MESSAGE 'Please enter the correct month for CIS 2026-27' TYPE 'E'.
             ENDIF.
           ENDIF.
         ENDIF.
@@ -1102,11 +1163,11 @@ FORM get_data.
     wa_yrva_mstr_waiver-annual_max = 125 .
   ENDIF.
 *** SOC : CIS lifting % change (period-gated) ***
-*   Commitment Incentive Scheme. New minimum lifting % applied to ALL
-*   THREE schemes:
+*   Commitment Incentive Scheme. New minimum lifting % applied to:
 *     Monthly   min %  80 -> 75   (min_perc_m1..m12)
-*     Quarterly min %  85 -> 80   (min_perc_q1..q4)
 *     Annual    min %  85 -> 80   (annual_min)
+*   (No quarterly change - CIS 2026-27 has no quarterly discount; the
+*    quarterly radio button is removed on the selection screen.)
 *   Max % (125) unchanged. Gated by the s_sptag period so other scheme
 *   years are untouched.
 *   ------------------------------------------------------------------
@@ -1125,13 +1186,6 @@ FORM get_data.
     wa_yrva_mstr_waiver-min_perc_m10  = 75.
     wa_yrva_mstr_waiver-min_perc_m11  = 75.
     wa_yrva_mstr_waiver-min_perc_m12  = 75.
-  ENDIF.
-*   Quarterly run = a quarter within FY 01.04.2026 - 31.03.2027.
-  IF s_sptag-low GE '20260401' AND s_sptag-high LE '20270331'.
-    wa_yrva_mstr_waiver-min_perc_q1   = 80.
-    wa_yrva_mstr_waiver-min_perc_q2   = 80.
-    wa_yrva_mstr_waiver-min_perc_q3   = 80.
-    wa_yrva_mstr_waiver-min_perc_q4   = 80.
   ENDIF.
 *   Annual run = fiscal year 01.04.2026 - 31.03.2027.
   IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
@@ -1157,13 +1211,6 @@ FORM get_data.
     wa_yrva_mstr_waiver-min_perc_m11  = 75.
     wa_yrva_mstr_waiver-min_perc_m12  = 75.
   ENDIF.
-*   Quarterly test run = a quarter within FY 01.04.2025 - 31.03.2026.
-  IF s_sptag-low GE '20250401' AND s_sptag-high LE '20260331'.
-    wa_yrva_mstr_waiver-min_perc_q1   = 80.
-    wa_yrva_mstr_waiver-min_perc_q2   = 80.
-    wa_yrva_mstr_waiver-min_perc_q3   = 80.
-    wa_yrva_mstr_waiver-min_perc_q4   = 80.
-  ENDIF.
 *   Annual test run = fiscal year 01.04.2025 - 31.03.2026.
   IF s_sptag-low EQ '20250401' AND s_sptag-high EQ '20260331'.
     wa_yrva_mstr_waiver-annual_min   = 80.
@@ -1171,6 +1218,36 @@ FORM get_data.
 *** EOC : TEST ONLY - CIS 2025-26 ***
 *** EOC : CIS lifting % change (period-gated) ***
   MOVE-CORRESPONDING wa_yrva_mstr_waiver TO wa_yrva_mstr_waiver_temp.
+
+*** SOC : CIS 2026-27 - load customer-type / waiver-rule / shortfall config (R1+R2) ***
+*   Loaded once; used per customer in the monthly waiver logic.
+  SELECT * FROM zcis_cust_type   INTO TABLE it_zcis_cust_type.
+  SELECT * FROM zcis_waiver_rule INTO TABLE it_zcis_waiver_rule
+    WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
+  SELECT * FROM zcis_shortfall_grd INTO TABLE it_zcis_shortfall_grd
+    WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
+  SELECT * FROM zcis_nodisc_grade INTO TABLE it_zcis_nodisc.
+*   Build the non-discount grade range (PS/GS/Powder/Polyfines) used to
+*   exclude these grades from the discountable qty (they still count for
+*   lifting eligibility) - reuses the existing lv_no_dis_qty mechanism.
+  REFRESH r_nodisc.
+  LOOP AT it_zcis_nodisc INTO wa_zcis_nodisc.
+    r_nodisc-sign = 'I'. r_nodisc-option = 'EQ'.
+    r_nodisc-low  = wa_zcis_nodisc-kondm.
+    APPEND r_nodisc.
+  ENDLOOP.
+  SELECT * FROM zcis_scheme_param INTO TABLE it_zcis_param.
+*   Clause 8: build the list of CIS whose signed grade is declared shortfall
+  PERFORM build_cis_shortfall.
+*   Trader/AUT monthly cap (MTM) - default 200 if not configured
+  CLEAR lv_trader_cap_mt.
+  READ TABLE it_zcis_param INTO wa_zcis_param WITH KEY param_key = 'TRADER_CAP_MT'.
+  IF sy-subrc = 0.
+    lv_trader_cap_mt = wa_zcis_param-param_val.
+  ELSE.
+    lv_trader_cap_mt = 200.
+  ENDIF.
+*** EOC : CIS 2026-27 - load config (R1+R2) ***
 
   CLEAR wa_where_tab.
   REFRESH it_where_tab.
@@ -2745,7 +2822,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m1 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -2807,7 +2884,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m2 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -2869,7 +2946,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m3 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3119,7 +3196,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m4 = wa_yrva_qais_data_temp-grp_lift_qty_m4 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3181,7 +3258,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m5 = wa_yrva_qais_data_temp-grp_lift_qty_m5 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3243,7 +3320,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m6 = wa_yrva_qais_data_temp-grp_lift_qty_m6 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3493,7 +3570,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m7 = wa_yrva_qais_data_temp-grp_lift_qty_m7 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3555,7 +3632,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m8 = wa_yrva_qais_data_temp-grp_lift_qty_m8 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3617,7 +3694,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m9 = wa_yrva_qais_data_temp-grp_lift_qty_m9 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3866,7 +3943,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m10 = wa_yrva_qais_data_temp-grp_lift_qty_m10 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3928,7 +4005,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m11 = wa_yrva_qais_data_temp-grp_lift_qty_m11 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -3990,7 +4067,7 @@ FORM format_data .
 *End of change by Suyash Goyal for QAIS Monthly logic.
             wa_yrva_qais_data_temp-grp_lift_qty_m12 = wa_yrva_qais_data_temp-grp_lift_qty_m12 +
              wa_s922-ummenge .
-            IF wa_s922-vtweg = '60'.
+            IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
               wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
             ENDIF.
           ENDLOOP.
@@ -4061,7 +4138,7 @@ FORM format_data_month .
 
               wa_yrva_qais_data-ind_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m1 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4099,7 +4176,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m2 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4138,7 +4215,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m3 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4226,7 +4303,7 @@ FORM format_data_month .
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m1 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4290,7 +4367,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m2 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4354,7 +4431,7 @@ FORM format_data_month .
 
                   wa_yrva_qais_data_temp-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m3 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4421,7 +4498,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m4 = wa_yrva_qais_data-ind_lift_qty_m4 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4460,7 +4537,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m5 = wa_yrva_qais_data-ind_lift_qty_m5 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4498,7 +4575,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m6 = wa_yrva_qais_data-ind_lift_qty_m6 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4589,7 +4666,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m4 = wa_yrva_qais_data_temp-grp_lift_qty_m4 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4648,7 +4725,7 @@ FORM format_data_month .
                 IF ls_psdq = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m5 = wa_yrva_qais_data_temp-grp_lift_qty_m5 +
                  wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4665,7 +4742,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m5 = wa_yrva_qais_data_temp-grp_lift_qty_m5 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4731,7 +4808,7 @@ FORM format_data_month .
 
                   wa_yrva_qais_data_temp-grp_lift_qty_m6 = wa_yrva_qais_data_temp-grp_lift_qty_m6 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4804,7 +4881,7 @@ FORM format_data_month .
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 4000008973
               wa_yrva_qais_data-ind_lift_qty_m7 = wa_yrva_qais_data-ind_lift_qty_m7 +
                wa_s922-ummenge.
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4850,7 +4927,7 @@ FORM format_data_month .
 *** Eoc by Vaishnavi/Pawan Charm : 4000009111
               wa_yrva_qais_data-ind_lift_qty_m8 = wa_yrva_qais_data-ind_lift_qty_m8 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4888,7 +4965,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m9 = wa_yrva_qais_data-ind_lift_qty_m9 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -4972,7 +5049,7 @@ FORM format_data_month .
                 IF ls_psdq = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m7 = wa_yrva_qais_data_temp-grp_lift_qty_m7 +
                  wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -4989,7 +5066,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m7 = wa_yrva_qais_data_temp-grp_lift_qty_m7 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5057,7 +5134,7 @@ FORM format_data_month .
                 IF ls_psdq = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m8 = wa_yrva_qais_data_temp-grp_lift_qty_m8 +
                  wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5073,7 +5150,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m8 = wa_yrva_qais_data_temp-grp_lift_qty_m8 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5133,7 +5210,7 @@ FORM format_data_month .
                 IF r_rlld = 'X'.
                   wa_yrva_qais_data_temp-grp_lift_qty_m9 = wa_yrva_qais_data_temp-grp_lift_qty_m9 +
                           wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5148,7 +5225,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m9 = wa_yrva_qais_data_temp-grp_lift_qty_m9 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5215,7 +5292,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m10 = wa_yrva_qais_data-ind_lift_qty_m10 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5253,7 +5330,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m11 = wa_yrva_qais_data-ind_lift_qty_m11 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5291,7 +5368,7 @@ FORM format_data_month .
               ENDIF.
               wa_yrva_qais_data-ind_lift_qty_m12 = wa_yrva_qais_data-ind_lift_qty_m12 +
                wa_s922-ummenge .
-              IF wa_s922-vtweg = '60'.
+              IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                 wa_yrva_qais_data-lv_no_dis_qty = wa_yrva_qais_data-lv_no_dis_qty + wa_s922-ummenge.
               ENDIF.
             ENDLOOP.
@@ -5380,7 +5457,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m10 = wa_yrva_qais_data_temp-grp_lift_qty_m10 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5444,7 +5521,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m11 = wa_yrva_qais_data_temp-grp_lift_qty_m11 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -5507,7 +5584,7 @@ FORM format_data_month .
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
                   wa_yrva_qais_data_temp-grp_lift_qty_m12 = wa_yrva_qais_data_temp-grp_lift_qty_m12 +
                    wa_s922-ummenge .
-                  IF wa_s922-vtweg = '60'.
+                  IF wa_s922-vtweg = '60' OR wa_s922-kondm IN r_nodisc.  "CIS 2026-27 non-disc grade
                     wa_yrva_qais_data_temp-lv_no_dis_qty = wa_yrva_qais_data_temp-lv_no_dis_qty + wa_s922-ummenge.
                   ENDIF.
                 ENDIF.
@@ -7746,6 +7823,17 @@ FORM monthly_discount .
     IF sy-subrc EQ  0 .
       w_waive_month = 'X' .
     ENDIF.
+*** SOC : CIS 2026-27 - auto monthly shortfall waiver (Clause 8 / R2) ***
+*   If the CIS signed grade is declared shortfall for the period, grant
+*   the monthly shortfall waiver automatically (replaces manual YRVG018).
+*   It only binds when monthly lifting < 75% MCQ (otherwise the customer
+*   meets the minimum anyway), which matches Clause 8(e).
+    READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
+         WITH KEY qais_no = wa_yrva_qais_data-qais_no.
+    IF sy-subrc EQ 0.
+      w_waive_month = 'X' .
+    ENDIF.
+*** EOC : CIS 2026-27 - auto monthly shortfall waiver (Clause 8 / R2) ***
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
     CLEAR : lv_revival_m.
     READ TABLE it_yrva_revival_fai INTO wa_yrva_revival_fai
@@ -8610,10 +8698,11 @@ FORM month_jan .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-      OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m10 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m10 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8690,10 +8779,11 @@ FORM month_feb .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-      OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m11 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m11 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8772,10 +8862,11 @@ FORM month_mar .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m12 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m12 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8833,10 +8924,11 @@ FORM month_apr .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m1 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m1 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8909,10 +9001,11 @@ IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT l
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m2 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m2 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -8983,10 +9076,11 @@ FORM month_jun .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m3 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m3 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9075,10 +9169,11 @@ FORM month_jul .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m4 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m4 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9151,10 +9246,11 @@ FORM month_aug .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m5 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m5 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9235,10 +9331,11 @@ FORM month_sep .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m6 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m6 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9329,10 +9426,11 @@ FORM month_oct .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m7 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m7 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9411,10 +9509,11 @@ FORM month_nov .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
-OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m8 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m8 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -9495,10 +9594,11 @@ FORM month_dec .
   ELSE.
     CLEAR w_month_max_perc.
   ENDIF.
-  IF wa_yrva_qais_data-waiver_1 = lv_mth OR wa_yrva_qais_data-waiver_2 = lv_mth
- OR wa_yrva_qais_data-waiver_3 = lv_mth .
+  PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+  IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
-    w_month_min  =  wa_yrva_qais_data-commited_qty_m9 * '.25' .
+    PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
+    w_month_min  =  wa_yrva_qais_data-commited_qty_m9 * lv_wv_floor .
   ELSEIF  wa_yrva_mstr_waiver-ms_waiver1 = lv_mth OR
       wa_yrva_mstr_waiver-ms_waiver2 = lv_mth OR w_waive_month = 'X'
 **    SOC by ujjwal/priynka on 23-03-2020 on charm 40000001877 to add mstr waiver 3 and mstr waiver 4
@@ -11244,7 +11344,7 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 
 *Execute Select All
     WHEN 'SALL'.
-      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVG004_QAIS_EXECUTE'.
+      SET PF-STATUS 'STANDARD'.
       IF r_quater = 'X' .
         LOOP AT it_data_quater .
           it_data_quater-check = 'X' .
@@ -11277,7 +11377,7 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 
 *Execute deselect All
     WHEN 'DSAL'.
-      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVG004_QAIS_EXECUTE'.
+      SET PF-STATUS 'STANDARD'.
       IF r_quater = 'X' .
         LOOP AT it_data_quater .
           CLEAR  it_data_quater-check  .
@@ -11310,6 +11410,263 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
   ENDCASE.
 ENDFORM.                    "on_selection
 *&---------------------------------------------------------------------*
+*&      Form  pf_status_set
+*&---------------------------------------------------------------------*
+*   ALV PF-STATUS callback (i_callback_pf_status_set = 'PF_STATUS_SET').
+*   Sets the GUI status 'STANDARD' of THIS program. The GUI status object
+*   'STANDARD' must exist in this program (copy it from the original
+*   program YRVG004_QAIS_EXECUTE via SE41 - Menu Painter).
+*&---------------------------------------------------------------------*
+FORM pf_status_set USING rt_extab TYPE slis_t_extab.            "#EC CALLED
+  SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
+ENDFORM.                    "pf_status_set
+*&---------------------------------------------------------------------*
+*&      Form  get_cust_wv_floor   (CIS 2026-27 - R1)
+*&---------------------------------------------------------------------*
+*   For the given customer, resolve:
+*     - lv_cust_type  : A = Actual User, T = AUT / Trader (ZCIS_CUST_TYPE)
+*     - lv_wv_floor   : minimum lifting fraction in a waiver month
+*                       (AU 0.25 / AUT-Trader 0.50), from ZCIS_WAIVER_RULE
+*     - lv_wv_allowed : number of monthly waivers allowed for the CIS,
+*                       based on the CIS signing month (mou_begda) band
+*   All values come from config tables - nothing hard-coded.
+*&---------------------------------------------------------------------*
+FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
+                             p_begda   TYPE begda.
+  DATA: lv_signmon TYPE n LENGTH 2.
+  CLEAR: lv_cust_type, lv_wv_floor, lv_wv_allowed.
+
+*  1) customer type (default to AU if not classified)
+*  Customer type is derived from KNA1-KATR2 (Attribute 2), confirmed by
+*  GAIL 02.07.2026. The KATR2 value is mapped to A (Actual User) / T
+*  (AUT / Trader) via ZCIS_CUST_TYPE (key = KATR2). Default A if not mapped.
+  DATA: lv_katr2 TYPE kna1-katr2.
+  SELECT SINGLE katr2 FROM kna1 INTO lv_katr2 WHERE kunnr = p_kunnr.
+  READ TABLE it_zcis_cust_type INTO wa_zcis_cust_type
+       WITH KEY katr2 = lv_katr2.
+  IF sy-subrc = 0.
+    lv_cust_type = wa_zcis_cust_type-cust_type.
+  ELSE.
+    lv_cust_type = 'A'.
+  ENDIF.
+
+*  2) CIS signing month (MM from mou_begda)
+  lv_signmon = p_begda+4(2).
+
+*  3) waiver rule: match customer type + signing-month band
+  CLEAR: lv_wv_allowed, lv_wv_maxqtr.
+  LOOP AT it_zcis_waiver_rule INTO wa_zcis_waiver_rule
+       WHERE cust_type = lv_cust_type
+         AND sign_from LE lv_signmon
+         AND sign_to   GE lv_signmon.
+    lv_wv_floor   = wa_zcis_waiver_rule-min_lift_perc / 100.
+    lv_wv_allowed = wa_zcis_waiver_rule-wv_count.
+    lv_wv_maxqtr  = wa_zcis_waiver_rule-max_per_qtr.
+    EXIT.
+  ENDLOOP.
+
+*  fallback if no rule row (keeps legacy 25% behaviour)
+  IF lv_wv_floor IS INITIAL.
+    lv_wv_floor = '0.25'.
+  ENDIF.
+  IF lv_wv_maxqtr IS INITIAL.
+    lv_wv_maxqtr = 1.
+  ENDIF.
+ENDFORM.                    "get_cust_wv_floor
+*&---------------------------------------------------------------------*
+*&      Form  month_fy_order   (CIS 2026-27 - R1 helper)
+*&---------------------------------------------------------------------*
+*   Maps a QAIS month abbreviation (APR..MAR) to its fiscal-year order
+*   (APR=1 .. MAR=12) and quarter (Q1=Apr-Jun .. Q4=Jan-Mar).
+*&---------------------------------------------------------------------*
+FORM month_fy_order USING p_mth TYPE yy_qais_month
+                 CHANGING p_ord TYPE i
+                          p_qtr TYPE i.
+  CLEAR: p_ord, p_qtr.
+  CASE p_mth.
+    WHEN 'APR'. p_ord = 1.  WHEN 'MAY'. p_ord = 2.  WHEN 'JUN'. p_ord = 3.
+    WHEN 'JUL'. p_ord = 4.  WHEN 'AUG'. p_ord = 5.  WHEN 'SEP'. p_ord = 6.
+    WHEN 'OCT'. p_ord = 7.  WHEN 'NOV'. p_ord = 8.  WHEN 'DEC'. p_ord = 9.
+    WHEN 'JAN'. p_ord = 10. WHEN 'FEB'. p_ord = 11. WHEN 'MAR'. p_ord = 12.
+    WHEN OTHERS. p_ord = 0.
+  ENDCASE.
+  IF p_ord > 0.
+    p_qtr = ( ( p_ord - 1 ) DIV 3 ) + 1.
+  ENDIF.
+ENDFORM.                    "month_fy_order
+*&---------------------------------------------------------------------*
+*&      Form  check_monthly_waiver   (CIS 2026-27 - R1 / Clause 8)
+*&---------------------------------------------------------------------*
+*   Decides whether the customer's monthly waiver may be applied for the
+*   current month (p_curmth). The customer's chosen waiver months
+*   (waiver_1/2/3) are honoured only:
+*     - up to lv_wv_allowed in total (by CIS signing month), and
+*     - max lv_wv_maxqtr (=1) per fiscal quarter.
+*   Chronological (FY) order is used so the earliest waivers are granted
+*   first. Returns p_ok = 'X' if the current month's waiver is granted.
+*&---------------------------------------------------------------------*
+FORM check_monthly_waiver USING p_curmth TYPE yy_qais_month
+                       CHANGING p_ok     TYPE char1.
+  DATA: BEGIN OF ls_wv,
+          mth TYPE yy_qais_month,
+          ord TYPE i,
+          qtr TYPE i,
+        END OF ls_wv,
+        lt_wv    LIKE STANDARD TABLE OF ls_wv,
+        lt_qused TYPE STANDARD TABLE OF i,
+        lv_cnt   TYPE i.
+  CLEAR p_ok.
+*  resolve floor + allowed count/quarter cap for this customer
+  PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr
+                                  wa_yrva_qais_data-mou_begda.
+*  collect the customer's chosen waiver months
+  IF wa_yrva_qais_data-waiver_1 IS NOT INITIAL.
+    ls_wv-mth = wa_yrva_qais_data-waiver_1.
+    PERFORM month_fy_order USING ls_wv-mth CHANGING ls_wv-ord ls_wv-qtr.
+    APPEND ls_wv TO lt_wv.
+  ENDIF.
+  IF wa_yrva_qais_data-waiver_2 IS NOT INITIAL.
+    ls_wv-mth = wa_yrva_qais_data-waiver_2.
+    PERFORM month_fy_order USING ls_wv-mth CHANGING ls_wv-ord ls_wv-qtr.
+    APPEND ls_wv TO lt_wv.
+  ENDIF.
+  IF wa_yrva_qais_data-waiver_3 IS NOT INITIAL.
+    ls_wv-mth = wa_yrva_qais_data-waiver_3.
+    PERFORM month_fy_order USING ls_wv-mth CHANGING ls_wv-ord ls_wv-qtr.
+    APPEND ls_wv TO lt_wv.
+  ENDIF.
+  SORT lt_wv BY ord.
+*  grant waivers in FY order, within total count and 1/quarter cap
+  lv_cnt = 0.
+  LOOP AT lt_wv INTO ls_wv.
+    READ TABLE lt_qused TRANSPORTING NO FIELDS
+         WITH KEY table_line = ls_wv-qtr.
+    IF sy-subrc = 0.
+      CONTINUE.                     " already a waiver this quarter (max/qtr)
+    ENDIF.
+    IF lv_cnt GE lv_wv_allowed.
+      EXIT.                         " total waiver count exhausted
+    ENDIF.
+    lv_cnt = lv_cnt + 1.
+    APPEND ls_wv-qtr TO lt_qused.
+    IF ls_wv-mth = p_curmth.
+      p_ok = 'X'.                   " current month waiver is granted
+    ENDIF.
+  ENDLOOP.
+ENDFORM.                    "check_monthly_waiver
+*&---------------------------------------------------------------------*
+*&      Form  get_group_mle_members   (CIS 2026-27 - R3)
+*&---------------------------------------------------------------------*
+*   Returns the Group / MLE member CUSTOMER CODES for a flagship customer,
+*   per the derivation logic provided by Mr. Pankaj Wadhwa:
+*     1. Flagship KUNNR -> CVI_CUST_LINK-CUSTOMER -> PARTNER_GUID
+*     2. PARTNER_GUID  -> BUT000-PARTNER_GUID     -> BUT000-PARTNER (BP no.)
+*     3. BP no.        -> BUT050-PARTNER1, RELTYP  = ZGPGRP (Group)
+*                                          RELTYP  = ZGPMLL (MLE)
+*                      -> BUT050-PARTNER2 (member BP numbers)
+*     4. member BP     -> BUT000-PARTNER_GUID      -> CVI_CUST_LINK-CUSTOMER
+*   Only relationships valid on the scheme date (s_sptag-low) are used
+*   (quantity clubbing is governed by the relationship validity period).
+*   The flagship customer itself is included in the member list.
+*&---------------------------------------------------------------------*
+FORM get_group_mle_members USING p_flagship TYPE kunnr.
+  DATA: lv_guid      TYPE but000-partner_guid,
+        lv_bp        TYPE but000-partner,
+        lv_mem_guid  TYPE but000-partner_guid,
+        lv_mem_kunnr TYPE kunnr.
+  REFRESH it_grp_members.
+  APPEND p_flagship TO it_grp_members.
+*  1) flagship customer code -> partner GUID
+  SELECT SINGLE partner_guid FROM cvi_cust_link INTO lv_guid
+    WHERE customer = p_flagship.
+  CHECK sy-subrc = 0.
+*  2) partner GUID -> BP number
+  SELECT SINGLE partner FROM but000 INTO lv_bp
+    WHERE partner_guid = lv_guid.
+  CHECK sy-subrc = 0.
+*  3) flagship BP -> member BPs (Group ZGPGRP / MLE ZGPMLL), valid on date
+  SELECT * FROM but050 INTO TABLE it_but050
+    WHERE partner1 = lv_bp
+      AND ( reltyp = 'ZGPGRP' OR reltyp = 'ZGPMLL' )
+      AND date_to   GE s_sptag-low
+      AND date_from LE s_sptag-low.
+  LOOP AT it_but050 INTO wa_but050.
+*    4) member BP -> GUID -> member customer code
+    CLEAR: lv_mem_guid, lv_mem_kunnr.
+    SELECT SINGLE partner_guid FROM but000 INTO lv_mem_guid
+      WHERE partner = wa_but050-partner2.
+    CHECK sy-subrc = 0.
+    SELECT SINGLE customer FROM cvi_cust_link INTO lv_mem_kunnr
+      WHERE partner_guid = lv_mem_guid.
+    IF sy-subrc = 0.
+      APPEND lv_mem_kunnr TO it_grp_members.
+    ENDIF.
+  ENDLOOP.
+  SORT it_grp_members. DELETE ADJACENT DUPLICATES FROM it_grp_members.
+ENDFORM.                    "get_group_mle_members
+*&---------------------------------------------------------------------*
+*&      Form  is_nodisc_grade   (CIS 2026-27 - R5 dev-form pt.5)
+*&---------------------------------------------------------------------*
+*   Returns p_flag = 'X' when the grade (S922-KONDM) is a non-discount
+*   grade (PS / GS / Powder / Polyfines): it counts for eligibility / MCQ
+*   but must NOT receive monthly or annual discount. Driven by
+*   ZCIS_NODISC_GRADE - nothing hard-coded.
+*&---------------------------------------------------------------------*
+FORM is_nodisc_grade USING p_kondm TYPE kondm
+                  CHANGING p_flag  TYPE char1.
+  CLEAR p_flag.
+  READ TABLE it_zcis_nodisc INTO wa_zcis_nodisc WITH KEY kondm = p_kondm.
+  IF sy-subrc = 0.
+    p_flag = 'X'.
+  ENDIF.
+ENDFORM.                    "is_nodisc_grade
+*&---------------------------------------------------------------------*
+*&      Form  is_shortfall_grade   (CIS 2026-27 - R2)
+*&---------------------------------------------------------------------*
+*   Returns p_flag = 'X' when the grade is declared shortfall for the
+*   scheme period (ZCIS_SHORTFALL_GRD, maintained by PMG). Used to
+*   auto-apply the shortfall waiver instead of the manual YRVG018 step.
+*&---------------------------------------------------------------------*
+FORM is_shortfall_grade USING p_grade TYPE yy_grade
+                     CHANGING p_flag  TYPE char1.
+  CLEAR p_flag.
+  READ TABLE it_zcis_shortfall_grd INTO wa_zcis_shortfall_grd
+       WITH KEY grade = p_grade.
+  IF sy-subrc = 0.
+    p_flag = 'X'.
+  ENDIF.
+ENDFORM.                    "is_shortfall_grade
+*&---------------------------------------------------------------------*
+*&      Form  build_cis_shortfall   (CIS 2026-27 - R2 / Clause 8)
+*&---------------------------------------------------------------------*
+*   Builds it_cis_shortfall = the CIS numbers (qais_no) whose signed
+*   grade (from YRVA_QAIS_TNTLFT - the grade-wise monthly lifting plan)
+*   is declared shortfall for the period (ZCIS_SHORTFALL_GRD).
+*   Such CIS become eligible for the monthly shortfall waiver (Clause 8),
+*   replacing the manual YRVG018 / YRVA_QAIS_ADD_WV step.
+*
+*   >>> VERIFY: field name of the signed grade on YRVA_QAIS_TNTLFT.
+*       Assumed 'grade' below - adjust to the actual DDIC field if it
+*       differs (single-line change, isolated to this form).
+*&---------------------------------------------------------------------*
+FORM build_cis_shortfall.
+  DATA: lv_flag TYPE char1.
+  REFRESH it_cis_shortfall.
+  CHECK it_zcis_shortfall_grd[] IS NOT INITIAL.
+  SELECT qais_no grade FROM yrva_qais_tntlft
+    INTO TABLE @DATA(lt_tnt).                       "#EC CI_NOWHERE
+  LOOP AT lt_tnt INTO DATA(ls_tnt).
+    CLEAR lv_flag.
+    PERFORM is_shortfall_grade USING ls_tnt-grade CHANGING lv_flag.
+    IF lv_flag = 'X'.
+      wa_cis_shortfall-qais_no = ls_tnt-qais_no.
+      APPEND wa_cis_shortfall TO it_cis_shortfall.
+    ENDIF.
+  ENDLOOP.
+  SORT it_cis_shortfall BY qais_no.
+  DELETE ADJACENT DUPLICATES FROM it_cis_shortfall COMPARING qais_no.
+ENDFORM.                    "build_cis_shortfall
+*&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*
 *       text
@@ -11321,7 +11678,7 @@ FORM display_list .
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11339,7 +11696,7 @@ FORM display_list .
   ELSEIF r_annual = 'X'.
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11361,7 +11718,7 @@ FORM display_list .
   ELSEIF r_consis = 'X'.
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11388,7 +11745,7 @@ FORM display_list .
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
@@ -11406,7 +11763,7 @@ FORM display_list .
   ELSEIF r_newcus = 'X' . "Vivek
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
-        i_callback_program       = 'YRVG004_QAIS_EXECUTE'
+        i_callback_program       = 'YRVG004_QAIS_EXECUTE_N1'
         i_callback_pf_status_set = 'PF_STATUS_SET'
         is_layout                = i_layout
         it_fieldcat              = gt_fieldcat[]
