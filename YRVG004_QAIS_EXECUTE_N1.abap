@@ -397,8 +397,7 @@ DATA: it_zcis_cust_type  TYPE STANDARD TABLE OF zcis_cust_type,
 
 *** SOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
 TABLES: zcis_shortfall_grd.
-DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd,
-      wa_zcis_shortfall_grd TYPE zcis_shortfall_grd.
+DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd.
 *** EOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -420,7 +419,7 @@ DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_zcis_param    TYPE zcis_scheme_param,
       lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
-*   CIS (qais_no) that have at least one signed grade declared shortfall
+*   CIS (qais_no) that have at least one signed material declared shortfall
 *   for the period -> eligible for monthly shortfall waiver (Clause 8).
 DATA: BEGIN OF wa_cis_shortfall,
         qais_no TYPE yrva_qais_data-qais_no,
@@ -1237,7 +1236,7 @@ FORM get_data.
     APPEND r_nodisc.
   ENDLOOP.
   SELECT * FROM zcis_scheme_param INTO TABLE it_zcis_param.
-*   Clause 8: build the list of CIS whose signed grade is declared shortfall
+*   Clause 8: build the list of CIS whose signed material is declared shortfall
   PERFORM build_cis_shortfall.
 *   Trader/AUT monthly cap (MTM) - default 200 if not configured
   CLEAR lv_trader_cap_mt.
@@ -11621,47 +11620,30 @@ FORM is_nodisc_grade USING p_kondm TYPE kondm
   ENDIF.
 ENDFORM.                    "is_nodisc_grade
 *&---------------------------------------------------------------------*
-*&      Form  is_shortfall_grade   (CIS 2026-27 - R2)
-*&---------------------------------------------------------------------*
-*   Returns p_flag = 'X' when the grade is declared shortfall for the
-*   scheme period (ZCIS_SHORTFALL_GRD, maintained by PMG). Used to
-*   auto-apply the shortfall waiver instead of the manual YRVG018 step.
-*&---------------------------------------------------------------------*
-FORM is_shortfall_grade USING p_grade TYPE yy_grade
-                     CHANGING p_flag  TYPE char1.
-  CLEAR p_flag.
-  READ TABLE it_zcis_shortfall_grd INTO wa_zcis_shortfall_grd
-       WITH KEY grade = p_grade.
-  IF sy-subrc = 0.
-    p_flag = 'X'.
-  ENDIF.
-ENDFORM.                    "is_shortfall_grade
-*&---------------------------------------------------------------------*
 *&      Form  build_cis_shortfall   (CIS 2026-27 - R2 / Clause 8)
 *&---------------------------------------------------------------------*
 *   Builds it_cis_shortfall = the CIS numbers (qais_no) whose signed
-*   grade (from YRVA_QAIS_TNTLFT - the grade-wise monthly lifting plan)
-*   is declared shortfall for the period (ZCIS_SHORTFALL_GRD).
+*   material (YRVA_QAIS_TNTLFT-MATNR - the tentative-lifting record) is
+*   declared shortfall for the period (ZCIS_SHORTFALL_GRD-MATNR).
 *   Such CIS become eligible for the monthly shortfall waiver (Clause 8),
 *   replacing the manual YRVG018 / YRVA_QAIS_ADD_WV step.
 *
-*   >>> VERIFY: field name of the signed grade on YRVA_QAIS_TNTLFT.
-*       Assumed 'grade' below - adjust to the actual DDIC field if it
-*       differs (single-line change, isolated to this form).
+*   Match is by material number: YRVA_QAIS_TNTLFT stores the signed item
+*   as MATNR (confirmed from DDIC), so shortfall is declared at material
+*   level in ZCIS_SHORTFALL_GRD-MATNR and matched directly here.
 *&---------------------------------------------------------------------*
 FORM build_cis_shortfall.
-  DATA: lv_flag TYPE char1.
   REFRESH it_cis_shortfall.
   CHECK it_zcis_shortfall_grd[] IS NOT INITIAL.
-  SELECT qais_no grade FROM yrva_qais_tntlft
-    INTO TABLE @DATA(lt_tnt).                       "#EC CI_NOWHERE
+*   Only the CIS whose signed material appears in the declared-shortfall
+*   list; FOR ALL ENTRIES on the (small) config table avoids a full scan.
+  SELECT qais_no FROM yrva_qais_tntlft
+    INTO TABLE @DATA(lt_tnt)
+    FOR ALL ENTRIES IN @it_zcis_shortfall_grd
+    WHERE matnr = @it_zcis_shortfall_grd-matnr.
   LOOP AT lt_tnt INTO DATA(ls_tnt).
-    CLEAR lv_flag.
-    PERFORM is_shortfall_grade USING ls_tnt-grade CHANGING lv_flag.
-    IF lv_flag = 'X'.
-      wa_cis_shortfall-qais_no = ls_tnt-qais_no.
-      APPEND wa_cis_shortfall TO it_cis_shortfall.
-    ENDIF.
+    wa_cis_shortfall-qais_no = ls_tnt-qais_no.
+    APPEND wa_cis_shortfall TO it_cis_shortfall.
   ENDLOOP.
   SORT it_cis_shortfall BY qais_no.
   DELETE ADJACENT DUPLICATES FROM it_cis_shortfall COMPARING qais_no.

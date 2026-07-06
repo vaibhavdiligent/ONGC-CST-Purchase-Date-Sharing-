@@ -54,18 +54,22 @@ Waiver rule by customer type and CIS signing-month band.
 
 ---
 
-## R2 — Shortfall Grade Waivers
+## R2 — Shortfall Waivers (declared by material)
 
 ### Table `ZCIS_SHORTFALL_GRD` (transparent, config)
-Month/period-wise grades declared shortfall by the process owner.
+Month/period-wise **materials** declared shortfall by the process owner.
+
+> **Key field is `MATNR` (material number), not a grade code.** The signed-grade
+> table `YRVA_QAIS_TNTLFT` stores the signed item as `MATNR` (CHAR 40) — confirmed
+> from DDIC 06.07.2026 — so shortfall is declared and matched at material level.
+> (Original plan used a grade/KONDM field; changed to `MATNR` per customer approval.)
 
 | Field | Key | Data element / type | Description |
 |---|---|---|---|
 | `MANDT` | ✔ | MANDT | Client |
 | `PERIOD_FROM` | ✔ | BEGDA (DATS) | Period from (month start) |
 | `PERIOD_TO` | ✔ | ENDDA (DATS) | Period to (month end) |
-| `GRADE` | ✔ | `YY_GRADE` (as in YRVA_PRS_GRADES) | Grade declared shortfall |
-| `PRS_IND` |   | CHAR1 | P / R / S indicator (optional) |
+| `MATNR` | ✔ | MATNR (CHAR 40) | Material declared shortfall (matches YRVA_QAIS_TNTLFT-MATNR) |
 | `CREATED_BY` |   | UNAME | Process owner |
 | `CREATED_ON` |   | DATS | Entry date |
 

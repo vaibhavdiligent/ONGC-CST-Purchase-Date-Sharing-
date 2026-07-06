@@ -60,7 +60,7 @@ Generate SM30 maintenance (function group `ZCIS`) for:
 - R1 waiver **floor 25%/50%** — config-driven, applied in all 12 monthly forms.
 - Config loads for all Z tables; scheme param 200 MT read.
 - Helper forms added & ready: `get_cust_wv_floor`, `get_group_mle_members`,
-  `is_nodisc_grade`, `is_shortfall_grade`.
+  `is_nodisc_grade`, `build_cis_shortfall`.
 
 ### Built as helpers — integration point to be placed & TESTED by developer (⚠️)
 These affect financial calculations and/or depend on fields to be confirmed, so the
