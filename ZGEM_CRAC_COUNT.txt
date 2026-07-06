@@ -16,16 +16,48 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       lo_sys_exception TYPE REF TO cx_ai_system_fault.
 DATA:  err_string       TYPE string.
 
+*--- NOTE: CracCount has no confirmed CPI/REST reference in this codebase
+*    (unlike BillSummary/CracSummary/OrderSummary/PaymentStatus). The path,
+*    method name and response shape below are a BEST GUESS following the
+*    sibling "Sync" APIs' convention and MUST be verified against a real
+*    GeM CPI response before this is relied on.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
+           c_path TYPE string VALUE '/http/GEM/Sync/CracCount'.  " unverified
 
-DATA: lo_gem_craccount TYPE REF TO ZCRACSUMMCO_SI_CRACCOUNT_OB,
-      crac_count        TYPE ZCRACSUMMMT_CRACCOUNT_S_REQ,
-      crac_output      TYPE ZCRACCNTMT_CRACCOUNT_RESP,
-      lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
+TYPES: BEGIN OF ty_request,
+         user     TYPE string,
+         method   TYPE string,
+         datefrom TYPE string,
+         dateto   TYPE string,
+       END OF ty_request.
+
+*--- Guessed response shape (same date/count pattern as BillSummary/CracSummary):
+*    {"sub":..,"aud":..,"iss":..,"data":[{"date":..,"count":..}]}
+TYPES: BEGIN OF ty_count_block,
+         date  TYPE string,
+         count TYPE i,
+       END OF ty_count_block,
+       tt_count_block TYPE STANDARD TABLE OF ty_count_block WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_response,
+         sub  TYPE string,
+         aud  TYPE string,
+         iss  TYPE string,
+         data TYPE tt_count_block,
+       END OF ty_response.
+
+DATA: lo_client   TYPE REF TO if_http_client,
+      ls_request  TYPE ty_request,
+      ls_response TYPE ty_response,
+      ls_block    TYPE ty_count_block,
+      lv_json     TYPE string,
+      lv_response TYPE string,
+      lv_code     TYPE i,
+      lv_reason   TYPE string,
+      gv_token    TYPE string,
       token TYPE string,
       it_orderc TYPE TABLE OF ZGEM_ORDERCOUNT,
-      wa_orderc TYPE ZGEM_ORDERCOUNT,
-      it_count type TABLE OF ZORDERCOUNTDT_ORDER_COUNT_S_RE,
-      wa_count TYPE  ZORDERCOUNTDT_ORDER_COUNT_S_RE.
+      wa_orderc TYPE ZGEM_ORDERCOUNT.
 DATA:  err_string1       TYPE string,
        odate(8) TYPE c.
 
@@ -33,9 +65,7 @@ DATA:  err_string1       TYPE string,
         ls_fieldcat TYPE slis_fieldcat_alv.
 
 
-CREATE OBJECT :lo_gem_token,
-               lo_gem_craccount
-               .
+CREATE OBJECT :lo_gem_token.
 
 
 
@@ -56,29 +86,53 @@ proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
                 ENDTRY.
 
      token = LT_INPUT-mt_security_token_receiver-token.
+     gv_token = token.
 
      IF token is NOT INITIAL.
 
-crac_count-MT_CRACCOUNT_S_REQ-client_code = 'ONGCVIDESH'.
-crac_count-MT_CRACCOUNT_S_REQ-requesttype = 'CRACCOUNT'.
-*crac_count-MT_CRACCOUNT_S_REQ-userid = 'xyz@gmail.com'.
-crac_count-MT_CRACCOUNT_S_REQ-userid = 'OVLMM'.
-crac_count-MT_CRACCOUNT_S_REQ-datefrom = datefrom.
-crac_count-MT_CRACCOUNT_S_REQ-dateto = dateto.
-crac_count-MT_CRACCOUNT_S_REQ-token = token.
+*--- Build the JSON request payload and call CPI directly (was: proxy call
+*    to lo_gem_craccount->SI_CRACCOUNT_OB).
+ls_request-user     = 'ONGCVIDESH'.
+ls_request-method   = 'cracCount'.                        " unverified
+ls_request-datefrom = datefrom.
+ls_request-dateto   = dateto.
 
+lv_json = /ui2/cl_json=>serialize(
+            data        = ls_request
+            compress    = abap_true
+            pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
-              TRY.
-           CALL METHOD lo_gem_craccount->SI_CRACCOUNT_OB
-                      EXPORTING
-                        output = crac_count
-                      IMPORTING
-                        input  = crac_output.
-                  CATCH cx_ai_system_fault INTO lo_sys_exception.
-                    err_string1 = lo_sys_exception->get_text( ).
-                  CATCH cx_ai_application_fault .
-                ENDTRY.
-                BREAK-POINT.
+cl_http_client=>create_by_destination(
+  EXPORTING destination = c_dest
+  IMPORTING client      = lo_client
+  EXCEPTIONS OTHERS     = 1 ).
+IF sy-subrc <> 0.
+  WRITE: / 'Error creating HTTP client for destination', c_dest.
+ELSE.
+  lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+  cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
+  lo_client->request->set_method( if_http_request=>co_request_method_post ).
+  lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+  IF gv_token IS NOT INITIAL.
+    lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
+  ENDIF.
+
+  lo_client->request->set_cdata( lv_json ).
+  lo_client->send( EXCEPTIONS OTHERS = 1 ).
+  IF sy-subrc <> 0.
+    WRITE: / 'Error sending request to CPI'.
+    lo_client->close( EXCEPTIONS OTHERS = 0 ).
+  ELSE.
+    lo_client->receive( EXCEPTIONS OTHERS = 1 ).
+    lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+    lv_response = lo_client->response->get_cdata( ).
+    lo_client->close( EXCEPTIONS OTHERS = 0 ).
+
+    /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                               CHANGING  data = ls_response ).
+    BREAK-POINT.
+  ENDIF.
+ENDIF.
 
 *      it_count = order_output-MT_ORDER_COUNT_S_RESP-RESPONSE_DATA.
 *
@@ -87,12 +141,15 @@ crac_count-MT_CRACCOUNT_S_REQ-token = token.
 *      wa_orderc-requesttype = order_output-MT_ORDER_COUNT_S_RESP-REQUESTTYPE.
 *      wa_orderc-responsecode = order_output-MT_ORDER_COUNT_S_RESP-responsecode.
 *
-* LOOP AT it_count INTO wa_count.
-*MOVE-CORRESPONDING wa_count to wa_orderc.
-*CONCATENATE wa_count-ORDER_DATE+0(4) wa_count-ORDER_DATE+5(2) wa_count-ORDER_DATE+8(2)  INTO odate.
-**wa_orderc-ORDER_DATE = odate.
+* LOOP AT ls_response-data INTO ls_block.
+*CLEAR wa_orderc.
+*wa_orderc-client_code  = 'ONGCVIDESH'.
+*wa_orderc-requesttype  = 'CRACCOUNT'.
+*wa_orderc-responsecode = |{ lv_code }|.
+*wa_orderc-fetchdate    = sy-datum.
+*CONCATENATE ls_block-date+0(4) ls_block-date+5(2) ls_block-date+8(2) INTO odate.
 *move odate to wa_orderc-ORDER_DATE .
-**wa_billcount-billcount = wa_count-count .
+*wa_orderc-ORDER_COUNT = ls_block-count.
 *append wa_orderc to it_orderc.
 *MODIFY zgem_ordercount FROM wa_orderc.
 *ENDLOOP.
@@ -167,17 +224,5 @@ crac_count-MT_CRACCOUNT_S_REQ-token = token.
 
 
 *        BREAK-POINT.
-
-
-
-
-
-
-
-
-
-
-
-
 
      ENDIF.

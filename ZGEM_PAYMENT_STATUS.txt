@@ -20,13 +20,51 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       lo_sys_exception TYPE REF TO cx_ai_system_fault.
 DATA: err_string       TYPE string.
 
-DATA: lo_gem_pay        TYPE REF TO zpaystatusco_si_payment_status,
-      pay_input         TYPE zpaystatusmt_payment_status_s,
-      pay_output        TYPE zpaystatusmt_payment_status_re,
-      lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
+DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
       pay_stat          TYPE zpaystatusdt_payment_status_s,
       token             TYPE string,
       v_hkont           TYPE bsak-hkont VALUE '0000190101'.
+
+*--- Payment Status (3.11) via CPI - replaces the old SI_PAYMENT_STATUS_OB
+*    proxy call. UNVERIFIED: ZGEM_CPI_PAYMENT_STATUS.abap (the only CPI
+*    reference for this API) treats "paydata" as an opaque pre-built string
+*    and never confirmed its real response field names against a live call.
+*    Best guess used here: paydata = plain JSON of the same pay_stat fields
+*    the old proxy request carried, and the response is parsed using the
+*    field names this program already expected from the SOAP proxy
+*    (service_validation, validationstatus, response_code, response_message,
+*    response_status). CONFIRM against a real GeM CPI response before relying
+*    on this in production.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
+           c_path TYPE string VALUE '/http/GEM/Sync/PaymentStatus'.
+
+TYPES: BEGIN OF ty_cpi_request,
+         user    TYPE string,
+         method  TYPE string,
+         paydata TYPE zpaystatusdt_payment_status_s,
+       END OF ty_cpi_request.
+
+TYPES: BEGIN OF ty_cpi_service_controller,
+         service_validation TYPE string,
+         validationstatus   TYPE string,
+         response_code      TYPE string,
+       END OF ty_cpi_service_controller.
+
+TYPES: BEGIN OF ty_cpi_response,
+         service_controller TYPE ty_cpi_service_controller,
+         response_message   TYPE string,
+         response_status    TYPE string,
+         response_code      TYPE string,
+       END OF ty_cpi_response.
+
+DATA: lo_client      TYPE REF TO if_http_client,
+      ls_cpi_request TYPE ty_cpi_request,
+      ls_cpi_resp    TYPE ty_cpi_response,
+      lv_json        TYPE string,
+      lv_response    TYPE string,
+      lv_code        TYPE i,
+      lv_reason      TYPE string,
+      gv_token       TYPE string.
 
 DATA: err_string1 TYPE string,
       it_bill     TYPE TABLE OF zgem_billdet,
@@ -41,8 +79,7 @@ DATA: err_string1 TYPE string,
 DATA :it_fcat TYPE  slis_t_fieldcat_alv.
 DATA :wa_fcat TYPE  slis_fieldcat_alv.
 
-CREATE OBJECT: lo_gem_token,
-               lo_gem_pay.
+CREATE OBJECT: lo_gem_token.
 
 
 
@@ -277,36 +314,63 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
             ENDTRY.
 
             token = lt_input-mt_security_token_receiver-token.
+            gv_token = token.
             pay_stat-token                 = token.
             pay_stat-status                = 'SUCCESS'.
 *            pay_stat-transaction_date      = sy-datum.
 *            pay_stat-transaction_id        = wa_bseg-sgtxt.
           ENDIF.
 
-          MOVE pay_stat TO pay_input-mt_payment_status_s_req-paydata.
+*--- Build the JSON request payload and call CPI directly (was: proxy call
+*    to lo_gem_pay->si_payment_status_ob). See UNVERIFIED note above.
+          ls_cpi_request-user    = 'ONGCVIDESH'.
+          ls_cpi_request-method  = 'payments'.
+          ls_cpi_request-paydata = pay_stat.
 
-          pay_input-mt_payment_status_s_req-method = 'payments'.
-          pay_input-mt_payment_status_s_req-user = 'ONGCVIDESH'.
+          lv_json = /ui2/cl_json=>serialize(
+                      data        = ls_cpi_request
+                      compress    = abap_true
+                      pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
-          TRY.
-              CALL METHOD lo_gem_pay->si_payment_status_ob
-                EXPORTING
-                  output = pay_input
-                IMPORTING
-                  input  = pay_output.
-            CATCH cx_ai_system_fault INTO lo_sys_exception.
-              err_string1 = lo_sys_exception1->get_text( ).
-            CATCH cx_ai_application_fault .
-          ENDTRY.
+          cl_http_client=>create_by_destination(
+            EXPORTING destination = c_dest
+            IMPORTING client      = lo_client
+            EXCEPTIONS OTHERS     = 1 ).
+          IF sy-subrc <> 0.
+            WRITE: / 'Error creating HTTP client for destination', c_dest.
+          ELSE.
+            lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+            cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
+            lo_client->request->set_method( if_http_request=>co_request_method_post ).
+            lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+            IF gv_token IS NOT INITIAL.
+              lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
+            ENDIF.
+
+            lo_client->request->set_cdata( lv_json ).
+            lo_client->send( EXCEPTIONS OTHERS = 1 ).
+            IF sy-subrc <> 0.
+              WRITE: / 'Error sending request to CPI'.
+              lo_client->close( EXCEPTIONS OTHERS = 0 ).
+            ELSE.
+              lo_client->receive( EXCEPTIONS OTHERS = 1 ).
+              lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+              lv_response = lo_client->response->get_cdata( ).
+              lo_client->close( EXCEPTIONS OTHERS = 0 ).
+
+              /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                                         CHANGING  data = ls_cpi_resp ).
+            ENDIF.
+          ENDIF.
 
           MOVE-CORRESPONDING wa_bill TO wa_status.
 
-          wa_status-service_validation = pay_output-mt_payment_status_resp-service_controller-service_validation.
-          wa_status-validationstatus   = pay_output-mt_payment_status_resp-service_controller-validationstatus.
-          wa_status-response_code1     = pay_output-mt_payment_status_resp-service_controller-response_code.
-          wa_status-response_message   = pay_output-mt_payment_status_resp-response_message.
-          wa_status-response_status    = pay_output-mt_payment_status_resp-response_status.
-          wa_status-response_code      = pay_output-mt_payment_status_resp-response_code.
+          wa_status-service_validation = ls_cpi_resp-service_controller-service_validation.
+          wa_status-validationstatus   = ls_cpi_resp-service_controller-validationstatus.
+          wa_status-response_code1     = ls_cpi_resp-service_controller-response_code.
+          wa_status-response_message   = ls_cpi_resp-response_message.
+          wa_status-response_status    = ls_cpi_resp-response_status.
+          wa_status-response_code      = ls_cpi_resp-response_code.
 
 
           wa_status-deduction_amount = deduct_amt. " add by rohit on 09.04.2025
@@ -338,7 +402,7 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 
 
       ENDIF.
-      CLEAR: diff , wa_ims , wa_bseg , wa_bill , wa_stat , wa_status , pay_input , pay_output , pay_stat, wa_bsak , wa_bkpf,deduct_amt.
+      CLEAR: diff , wa_ims , wa_bseg , wa_bill , wa_stat , wa_status , ls_cpi_request , ls_cpi_resp , pay_stat, wa_bsak , wa_bkpf,deduct_amt.
       REFRESH: it_bseg[],it_bkpf[],it_bsak[].
     ENDLOOP.
   ENDIF.
