@@ -142,8 +142,6 @@ ELSE.
   ENDIF.
 ENDIF.
 
-IF token IS NOT INITIAL.
-
 ls_fieldcat-fieldname = 'ORDER_DATE'.
 ls_fieldcat-seltext_l = 'order Date'.
 APPEND ls_fieldcat to lt_fieldcat.
