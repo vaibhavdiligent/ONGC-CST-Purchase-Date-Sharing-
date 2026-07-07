@@ -7,8 +7,16 @@
 *&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
 *&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
 *&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
-*&   5. Parse the common response envelope and show it as an ALV grid.
+*&   5. Parse response and show it as an ALV grid.
 *&      (ALV list header is taken from selection-screen field p_head.)
+*&
+*& Real response shape (confirmed from a live GeM call, 2026-07-07):
+*&   {"transactionID":null,"status":"fail","paymentMode":null,"message":"Invalid transactionID"}
+*&   - a FLAT object, NOT the generic Status/Iat/data{Sub,Aud,Iss} envelope
+*&   used by the other Sync APIs. Field names are camelCase.
+*&
+*& STILL UNVERIFIED: the exact field names GeM expects INSIDE "paydata" for
+*& the request (p_paydat below is passed through as an opaque string).
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_payment_status.
 
@@ -35,15 +43,14 @@ TYPES: BEGIN OF ty_request,
          paydata       TYPE string,
        END OF ty_request.
 
-*--- Common response envelope (Status / Iat / data: Sub,Aud,Iss + inner data).
-*   The inner "data" varies per API, so it is captured as raw JSON for display.
+*--- Response structure matching the ACTUAL payload (confirmed real response).
+*   Component names equal JSON keys (case-insensitive match) -> no name_mappings.
 TYPES: BEGIN OF ty_display,
-         status  TYPE string,
-         iat     TYPE string,
-         sub     TYPE string,
-         aud     TYPE string,
-         iss     TYPE string,
-         data    TYPE string,   " raw inner data JSON
+         transactionid TYPE string,
+         status        TYPE string,
+         paymentmode   TYPE string,
+         message       TYPE string,
+         raw_response  TYPE string,   " full raw response, kept for diagnosis
        END OF ty_display,
        tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
 
@@ -120,31 +127,11 @@ START-OF-SELECTION.
   lv_response = lo_client->response->get_cdata( ).
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 6. Parse the common envelope (Status/Iat/data.Sub/Aud/Iss) for display.
-*   Inner data kept raw; tighten with a typed structure once the exact
-*   response fields for this API are confirmed.
-  TYPES: BEGIN OF ty_env_data,
-           sub TYPE string, aud TYPE string, iss TYPE string,
-         END OF ty_env_data.
-  TYPES: BEGIN OF ty_env,
-           status TYPE string, iat TYPE string, data TYPE ty_env_data,
-         END OF ty_env.
-  DATA ls_env TYPE ty_env.
-  DATA lt_maps TYPE /ui2/cl_json=>name_mappings.
-  lt_maps = VALUE #(
-    ( abap = 'STATUS' json = 'Status' ) ( abap = 'IAT' json = 'Iat' )
-    ( abap = 'DATA'   json = 'data' )   ( abap = 'SUB' json = 'Sub' )
-    ( abap = 'AUD'    json = 'Aud' )    ( abap = 'ISS' json = 'Iss' ) ).
-  /ui2/cl_json=>deserialize( EXPORTING json = lv_response name_mappings = lt_maps
-                             CHANGING data = ls_env ).
-
+*--- 6. Parse the confirmed flat response into typed fields
   CLEAR ls_display.
-  ls_display-status = ls_env-status.
-  ls_display-iat    = ls_env-iat.
-  ls_display-sub    = ls_env-data-sub.
-  ls_display-aud    = ls_env-data-aud.
-  ls_display-iss    = ls_env-data-iss.
-  ls_display-data   = lv_response.   " full raw response for reference
+  /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                             CHANGING  data = ls_display ).
+  ls_display-raw_response = lv_response.   " full raw response for reference
   APPEND ls_display TO lt_display.
 
 *--- 7. Display as ALV grid with the (editable) list header from p_head
