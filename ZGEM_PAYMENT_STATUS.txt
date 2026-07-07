@@ -32,20 +32,54 @@ DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
 *    - a flat object, NOT the nested service_controller envelope originally
 *    guessed. response_code/response_code1/service_validation/validationstatus
 *    have no equivalent in this real response and are left unset below.
-*    STILL UNVERIFIED: the exact field names GeM expects INSIDE "paydata" for
-*    the request. It is currently built by JSON-serializing the old SOAP-era
-*    pay_stat structure (bank_name, payment_by, transaction_id, ...) as-is.
-*    The "Invalid transactionID" response suggests GeM may expect a
-*    differently-named field (e.g. "transactionID") than what pay_stat sends -
-*    CONFIRM the real paydata request schema (GeM API doc / Postman capture)
-*    before relying on this in production.
+*
+*    REQUEST SCHEMA CONFIRMED from the GeM API spec (2026-07-07):
+*    "paydata" is JSON(Encrypted) - AES/ECB/PKCS5Padding "With Secret Key" -
+*    containing: transactionID, status, paymentBy, contractNo, gemInvoiceNo,
+*    invoiceNo, billNo, billAmountPaid, transactionDate, deductedAmount,
+*    deductionType, bankName, chequeNumber, bankTransactionNo, demandDraftNo,
+*    sanctions, sanctionDate (all mandatory per the spec).
+*
+*    STILL BLOCKED: the actual AES secret key and the ABAP-side encryption
+*    routine are NOT available in this codebase - no AES/PKCS5 utility class
+*    was found anywhere in this repo. lv_paydata_plain below is built with the
+*    correct field names/shapes but is sent UNENCRYPTED as a placeholder -
+*    GeM will very likely reject it until real encryption is wired in.
+*    NEEDED to finish this: (1) the secret key value, (2) confirmation of
+*    which crypto class/function module this system already uses for
+*    AES/ECB/PKCS5Padding (check with Basis/security team - GeM integrations
+*    elsewhere in this landscape may already have one), then replace the
+*    TODO block below with a real call to it.
+*    Fields with no current source in this program's logic (deductionType,
+*    demandDraftNo, sanctions, sanctionDate) are defaulted/blank below and
+*    need business confirmation of real values.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
            c_path TYPE string VALUE '/http/GEM/Sync/PaymentStatus'.
+
+TYPES: BEGIN OF ty_cpi_paydata,
+         transactionid     TYPE string,
+         status            TYPE string,
+         paymentby         TYPE string,
+         contractno        TYPE string,
+         geminvoiceno      TYPE string,
+         invoiceno         TYPE string,
+         billno            TYPE string,
+         billamountpaid    TYPE p LENGTH 9 DECIMALS 0,
+         transactiondate   TYPE string,
+         deductedamount    TYPE p LENGTH 9 DECIMALS 0,
+         deductiontype     TYPE string,
+         bankname          TYPE string,
+         chequenumber      TYPE string,
+         banktransactionno TYPE string,
+         demanddraftno     TYPE string,
+         sanctions         TYPE string,
+         sanctiondate      TYPE string,
+       END OF ty_cpi_paydata.
 
 TYPES: BEGIN OF ty_cpi_request,
          user    TYPE string,
          method  TYPE string,
-         paydata TYPE string,   " sent as a JSON string, per ZGEM_CPI_PAYMENT_STATUS.abap's p_paydat contract
+         paydata TYPE string,   " AES/ECB/PKCS5Padding-encrypted JSON of ty_cpi_paydata
        END OF ty_cpi_request.
 
 TYPES: BEGIN OF ty_cpi_response,
@@ -55,14 +89,17 @@ TYPES: BEGIN OF ty_cpi_response,
          message       TYPE string,
        END OF ty_cpi_response.
 
-DATA: lo_client      TYPE REF TO if_http_client,
-      ls_cpi_request TYPE ty_cpi_request,
-      ls_cpi_resp    TYPE ty_cpi_response,
-      lv_json        TYPE string,
-      lv_response    TYPE string,
-      lv_code        TYPE i,
-      lv_reason      TYPE string,
-      gv_token       TYPE string.
+DATA: lo_client        TYPE REF TO if_http_client,
+      ls_cpi_request   TYPE ty_cpi_request,
+      ls_cpi_paydata   TYPE ty_cpi_paydata,
+      lv_paydata_plain TYPE string,
+      ls_cpi_resp      TYPE ty_cpi_response,
+      lv_json          TYPE string,
+      lv_response      TYPE string,
+      lv_code          TYPE i,
+      lv_reason        TYPE string,
+      gv_token         TYPE string,
+      lt_paydata_maps  TYPE /ui2/cl_json=>name_mappings.
 
 DATA: err_string1 TYPE string,
       it_bill     TYPE TABLE OF zgem_billdet,
@@ -319,14 +356,56 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 *            pay_stat-transaction_id        = wa_bseg-sgtxt.
           ENDIF.
 
-*--- Build the JSON request payload and call CPI directly (was: proxy call
-*    to lo_gem_pay->si_payment_status_ob). See UNVERIFIED note above.
+*--- Build the paydata payload (real field names/shape per GeM API spec) and
+*    call CPI directly (was: proxy call to lo_gem_pay->si_payment_status_ob).
+          CLEAR ls_cpi_paydata.
+          ls_cpi_paydata-transactionid  = pay_stat-transaction_id.
+          ls_cpi_paydata-status         = 'Success'.
+          ls_cpi_paydata-paymentby      = pay_stat-payment_by.
+          ls_cpi_paydata-contractno     = pay_stat-contract_no.
+          ls_cpi_paydata-geminvoiceno   = pay_stat-gem_invoice_no.
+          ls_cpi_paydata-invoiceno      = pay_stat-invoice_no.
+          ls_cpi_paydata-billno         = pay_stat-bill_no.
+          ls_cpi_paydata-billamountpaid = pay_stat-bill_amount_paid.
+          IF pay_stat-transaction_date IS NOT INITIAL.
+            ls_cpi_paydata-transactiondate = |{ pay_stat-transaction_date+0(4) }-{ pay_stat-transaction_date+4(2) }-{ pay_stat-transaction_date+6(2) }|.
+          ENDIF.
+          ls_cpi_paydata-deductedamount    = deduct_amt.
+          ls_cpi_paydata-deductiontype     = 'NA'.  " TODO: no source in current logic - confirm real value with business
+          ls_cpi_paydata-bankname          = pay_stat-bank_name.
+          ls_cpi_paydata-chequenumber      = pay_stat-cheque_number.
+          ls_cpi_paydata-banktransactionno = pay_stat-bank_transaction_no.
+*         demanddraftno, sanctions, sanctiondate: TODO - no source in current logic, confirm with business.
+
+          lt_paydata_maps = VALUE #(
+            ( abap = 'TRANSACTIONID'     json = 'transactionID' )
+            ( abap = 'PAYMENTBY'         json = 'paymentBy' )
+            ( abap = 'CONTRACTNO'        json = 'contractNo' )
+            ( abap = 'GEMINVOICENO'      json = 'gemInvoiceNo' )
+            ( abap = 'INVOICENO'         json = 'invoiceNo' )
+            ( abap = 'BILLNO'            json = 'billNo' )
+            ( abap = 'BILLAMOUNTPAID'    json = 'billAmountPaid' )
+            ( abap = 'TRANSACTIONDATE'   json = 'transactionDate' )
+            ( abap = 'DEDUCTEDAMOUNT'    json = 'deductedAmount' )
+            ( abap = 'DEDUCTIONTYPE'     json = 'deductionType' )
+            ( abap = 'BANKNAME'          json = 'bankName' )
+            ( abap = 'CHEQUENUMBER'      json = 'chequeNumber' )
+            ( abap = 'BANKTRANSACTIONNO' json = 'bankTransactionNo' )
+            ( abap = 'DEMANDDRAFTNO'     json = 'demandDraftNo' )
+            ( abap = 'SANCTIONDATE'      json = 'sanctionDate' ) ).
+
+          lv_paydata_plain = /ui2/cl_json=>serialize(
+                                data          = ls_cpi_paydata
+                                compress      = abap_true
+                                name_mappings = lt_paydata_maps ).
+
+*         TODO: lv_paydata_plain must be AES/ECB/PKCS5Padding-encrypted with
+*         the GeM secret key before being sent - NOT done here (no key/crypto
+*         utility available). Sending it unencrypted as a placeholder; GeM
+*         will very likely reject this until real encryption is wired in.
           ls_cpi_request-user    = 'ONGCVIDESH'.
           ls_cpi_request-method  = 'payments'.
-          ls_cpi_request-paydata = /ui2/cl_json=>serialize(
-                                      data        = pay_stat
-                                      compress    = abap_true
-                                      pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
+          ls_cpi_request-paydata = lv_paydata_plain.
 
           lv_json = /ui2/cl_json=>serialize(
                       data        = ls_cpi_request

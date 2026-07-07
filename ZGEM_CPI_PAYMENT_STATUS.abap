@@ -15,8 +15,17 @@
 *&   - a FLAT object, NOT the generic Status/Iat/data{Sub,Aud,Iss} envelope
 *&   used by the other Sync APIs. Field names are camelCase.
 *&
-*& STILL UNVERIFIED: the exact field names GeM expects INSIDE "paydata" for
-*& the request (p_paydat below is passed through as an opaque string).
+*& Request "paydata" schema confirmed from the GeM API spec (2026-07-07):
+*&   paydata itself is JSON(Encrypted) - AES/ECB/PKCS5Padding "With Secret
+*&   Key" - a base64/string blob. The JSON object it wraps (before
+*&   encryption) has these fields, all mandatory:
+*&     transactionID, status (Success/Fail), paymentBy, contractNo,
+*&     gemInvoiceNo, invoiceNo, billNo, billAmountPaid, transactionDate
+*&     (YYYY-MM-DD), deductedAmount, deductionType, bankName, chequeNumber,
+*&     bankTransactionNo, demandDraftNo, sanctions, sanctionDate.
+*&   p_paydat below is passed straight through, so paste an ALREADY-ENCRYPTED
+*&   blob (built + encrypted elsewhere) when testing this program - this
+*&   report does not build or encrypt paydata itself.
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_payment_status.
 
@@ -25,7 +34,7 @@ CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 PARAMETERS:
             p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
             p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-            p_paydat TYPE string LOWER CASE, " encrypted paydata blob
+            p_paydat TYPE string LOWER CASE, " already-AES-encrypted paydata blob (see header comment)
             p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.
 
 *--- Token proxy objects (same pattern as the summary program)
