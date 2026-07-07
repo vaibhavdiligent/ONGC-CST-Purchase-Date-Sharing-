@@ -10,18 +10,18 @@ Field-level details are in `CIS_2026_27_DDIC_OBJECTS.md`.
 
 | # | Object | Type | Requirement |
 |---|---|---|---|
-| 1 | `ZCIS_CUST_TYPE` | Transparent table (KUNNR → A/T) | R1 waiver, 200 MT cap |
-| 2 | `ZCIS_WAIVER_RULE` | Transparent table (+ seed rows) | R1 waiver counts/floor |
-| 3 | `ZCIS_SHORTFALL_GRD` | Transparent table | R2 shortfall auto |
-| 4 | `ZCIS_NODISC_GRADE` | Transparent table | Non-discount grades (PS/GS/Powder/Polyfines) |
-| 5 | `ZCIS_SCHEME_PARAM` | Transparent table (+ seed `TRADER_CAP_MT=200`) | 200 MT cap & scheme params |
-| 6 | Data elements/domains | `ZCIS_CUST_TYPE, ZCIS_YEAR, ZCIS_MONTH, ZCIS_PERC` | typing |
+| 1 | `YCIS_CUST_TYPE` | Transparent table (KUNNR → A/T) | R1 waiver, 200 MT cap |
+| 2 | `YCIS_WAIVER_RULE` | Transparent table (+ seed rows) | R1 waiver counts/floor |
+| 3 | `YCIS_SHORTFALL` | Transparent table | R2 shortfall auto |
+| 4 | `YCIS_NODISC_GRD` | Transparent table | Non-discount grades (PS/GS/Powder/Polyfines) |
+| 5 | `YCIS_SCH_PARAM` | Transparent table (+ seed `TRADER_CAP_MT=200`) | 200 MT cap & scheme params |
+| 6 | Data elements/domains | `YCIS_CUST_TYPE, YCIS_YEAR, YCIS_MONTH, YCIS_PERC` | typing |
 
 ## STEP 2 — Create program source (SE38)
 | # | Program | Action |
 |---|---|---|
 | 1 | `YRVG004_QAIS_EXECUTE_N1` | Create (if not already) and paste `YRVG004_QAIS_EXECUTE_N1.abap` |
-| 2 | `ZCIS_REBATE_REPORT` | Create and paste `ZCIS_REBATE_REPORT.abap` (R5 report) |
+| 2 | `YCIS_REBATE_REPORT` | Create and paste `YCIS_REBATE_REPORT.abap` (R5 report) |
 
 ## STEP 3 — GUI status (SE41)
 | # | Object | Action |
@@ -31,21 +31,21 @@ Field-level details are in `CIS_2026_27_DDIC_OBJECTS.md`.
 ## STEP 4 — Transactions (SE93)
 | # | T-code | Target |
 |---|---|---|
-| 1 | e.g. `ZCIS_EXECUTE` | Program `YRVG004_QAIS_EXECUTE_N1` |
-| 2 | e.g. `ZCIS_SHORTFALL` | Parameter txn → `SM30`, view `ZCIS_SHORTFALL_GRD`, Update=X |
-| 3 | e.g. `ZCIS_REBATE_RPT` | Program `ZCIS_REBATE_REPORT` |
+| 1 | e.g. `YCIS_EXECUTE` | Program `YRVG004_QAIS_EXECUTE_N1` |
+| 2 | e.g. `YCIS_SHORTFALL` | Parameter txn → `SM30`, view `YCIS_SHORTFALL`, Update=X |
+| 3 | e.g. `YCIS_REBATE_RPT` | Program `YCIS_REBATE_REPORT` |
 
 ## STEP 5 — Table maintenance generators (SE11 → Utilities)
-Generate SM30 maintenance (function group `ZCIS`) for:
-`ZCIS_CUST_TYPE`, `ZCIS_WAIVER_RULE`, `ZCIS_SHORTFALL_GRD`, `ZCIS_NODISC_GRADE`, `ZCIS_SCHEME_PARAM`.
+Generate SM30 maintenance (function group `YCIS`) for:
+`YCIS_CUST_TYPE`, `YCIS_WAIVER_RULE`, `YCIS_SHORTFALL`, `YCIS_NODISC_GRD`, `YCIS_SCH_PARAM`.
 
 ## STEP 6 — Master / config data
 | # | Data | Where |
 |---|---|---|
-| 1 | Waiver rules (seed table in DDIC doc) | `ZCIS_WAIVER_RULE` |
-| 2 | Customer type A/T per customer | `ZCIS_CUST_TYPE` |
-| 3 | Non-discount grades (PS/GS/Powder/Polyfines) — KONDM: **I2,I3,I4,I5,I6,I7 (PS), I8,I9,J0,J1,J2,J3 (GS), 74 (Polyfine), 75 (Powder)** [confirmed by GAIL 02.07.2026] | `ZCIS_NODISC_GRADE` |
-| 4 | `TRADER_CAP_MT = 200` | `ZCIS_SCHEME_PARAM` |
+| 1 | Waiver rules (seed table in DDIC doc) | `YCIS_WAIVER_RULE` |
+| 2 | Customer type A/T per customer | `YCIS_CUST_TYPE` |
+| 3 | Non-discount grades (PS/GS/Powder/Polyfines) — KONDM: **I2,I3,I4,I5,I6,I7 (PS), I8,I9,J0,J1,J2,J3 (GS), 74 (Polyfine), 75 (Powder)** [confirmed by GAIL 02.07.2026] | `YCIS_NODISC_GRD` |
+| 4 | `TRADER_CAP_MT = 200` | `YCIS_SCH_PARAM` |
 | 5 | New seasonal grade **B63HM0003** (+ existing seasonal grades) | `YRVA_PRS_GRADES` (indicator S) |
 | 6 | Group / MLE relationships (`ZGPGRP` / `ZGPMLL`, role `ZCUSBPX`) | **BP** per BP User Manual |
 
@@ -85,7 +85,7 @@ call is staged (helper ready) rather than wired blind:
 ---
 
 ## Confirmations still required from GAIL
-1. **Customer type** (AU / Trader-AUT) source — new `ZCIS_CUST_TYPE`, or an existing field (`KDGRP`/`KVGR*`/BP role)?
+1. **Customer type** (AU / Trader-AUT) source — new `YCIS_CUST_TYPE`, or an existing field (`KDGRP`/`KVGR*`/BP role)?
 2. **Clause 11** (discount structure) & **clause 8.I/8.II** (waiver) text.
 3. **PS/GS/Powder/Polyfines** grade identification (`KONDM` values).
 4. **Tentative-lifting** field for MCQ/ACQ.

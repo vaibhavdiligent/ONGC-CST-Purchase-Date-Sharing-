@@ -29,7 +29,7 @@ add-on in some waiver paths — to be reconciled against the "500 MIS" component
   **AND** customer **monthly lifting < 75% of MCQ**.
 
 **Mapping in SAP (R2 auto-apply):**
-- PMG enters shortfall grades per month in `ZCIS_SHORTFALL_GRD` (YRVG018 obsolete).
+- PMG enters shortfall grades per month in `YCIS_SHORTFALL` (YRVG018 obsolete).
 - Program auto-determines the monthly shortfall waiver for a CIS when:
   `is_shortfall_grade(signed grade) = X` **AND** `monthly lifting < 75% MCQ`
   **AND** grade-wise lifting plan exists (Annexure III / `YRVA_QAIS_TNTLFT`).

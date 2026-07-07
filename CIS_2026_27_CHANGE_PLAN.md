@@ -42,10 +42,10 @@
 ### New objects
 | # | Type | Proposed name | Purpose |
 |---|---|---|---|
-| 1 | 🔴 Z-Table (config) | `ZCIS_WAIVER_RULE` | Keyed by scheme year + customer type + signing-month range → min-lifting %, no. of monthly waivers, max waiver per quarter |
-| 2 | 🔴 Table maint. gen. + T-code | `ZCIS_WAIVER_RULE` (SM30) | Business maintenance of the above |
-| 3 | 🔴 Customer-type source | field on BP / `ZCIS_CUST_TYPE` map | AU / AUT / Trader classification per customer ⚠️ |
-| 4 | 🔴 Data element / domain | `ZCIS_CUST_TYPE`, `ZCIS_WV_COUNT` | Typing for the above |
+| 1 | 🔴 Z-Table (config) | `YCIS_WAIVER_RULE` | Keyed by scheme year + customer type + signing-month range → min-lifting %, no. of monthly waivers, max waiver per quarter |
+| 2 | 🔴 Table maint. gen. + T-code | `YCIS_WAIVER_RULE` (SM30) | Business maintenance of the above |
+| 3 | 🔴 Customer-type source | field on BP / `YCIS_CUST_TYPE` map | AU / AUT / Trader classification per customer ⚠️ |
+| 4 | 🔴 Data element / domain | `YCIS_CUST_TYPE`, `YCIS_WV_COUNT` | Typing for the above |
 | 5 | 🟢→ enhance | `YRVG004..._N1` (`get_data`, `monthly_discount`) | Apply type-wise min %, waiver count, per-quarter cap |
 
 ### ⚠️ Open points
@@ -71,10 +71,10 @@
 ### New objects
 | # | Type | Proposed name | Purpose |
 |---|---|---|---|
-| 1 | 🔴 Z-Table | `ZCIS_SHORTFALL_GRD` | Month/period + grade (+ P/R/S) declared shortfall |
-| 2 | 🔴 Maintenance program + T-code | `ZCIS_SHORTFALL_MAINT` / `YRVG0xx` | Process owner enters shortfall grades per month (validation, authorization) |
+| 1 | 🔴 Z-Table | `YCIS_SHORTFALL_GRD` | Month/period + grade (+ P/R/S) declared shortfall |
+| 2 | 🔴 Maintenance program + T-code | `YCIS_SHORTFALL_MAINT` / `YRVG0xx` | Process owner enters shortfall grades per month (validation, authorization) |
 | 3 | 🟢 reuse | `YRVA_QAIS_TNTLFT`, `YRVA_QAIS_ADD_WV` | Signed grades / existing waiver capture |
-| 4 | 🟢→ enhance | `YRVG004..._N1` | Auto-derive shortfall from `ZCIS_SHORTFALL_GRD` (new logic block) |
+| 4 | 🟢→ enhance | `YRVG004..._N1` | Auto-derive shortfall from `YCIS_SHORTFALL_GRD` (new logic block) |
 
 ### ⚠️ Open points
 - Keep writing to `YRVA_QAIS_ADD_WV` (compatibility) or read the new table directly at runtime?
@@ -96,7 +96,7 @@
 | # | Type | Proposed name | Purpose |
 |---|---|---|---|
 | 1 | ⚠️ TBD | BP config / relationship | Group & MLE definition in BP |
-| 2 | 🔴 (likely) helper | `ZCIS_GET_GROUP` (FM/method) | Resolve group/MLE for a customer at runtime |
+| 2 | 🔴 (likely) helper | `YCIS_GET_GROUP` (FM/method) | Resolve group/MLE for a customer at runtime |
 | 3 | 🟢→ enhance | `YRVG004..._N1` grouping (`KVGR2` logic) | Use BP-based group instead of/along with `KVGR2` |
 
 ### ⚠️ Open point
@@ -119,10 +119,10 @@
 ### New objects
 | # | Type | Proposed name | Purpose |
 |---|---|---|---|
-| 1 | 🔴 Z-Table | `ZCIS_APPROVAL` | CIS no. + period → status, maker, checker, timestamps, remarks |
-| 2 | 🔴 Data element/domain | `ZCIS_APPR_STATUS` | Status values (Draft/Submitted/Approved/Rejected/Order-created) |
+| 1 | 🔴 Z-Table | `YCIS_APPROVAL` | CIS no. + period → status, maker, checker, timestamps, remarks |
+| 2 | 🔴 Data element/domain | `YCIS_APPR_STATUS` | Status values (Draft/Submitted/Approved/Rejected/Order-created) |
 | 3 | 🔴 Class / FM | `ZCL_CIS_EMAIL` (uses `CL_BCS`) | Build & send emails to PC Head / CPC |
-| 4 | 🔴 Config table | `ZCIS_APPR_RECIPIENT` | PC Head / CPC email or org-role mapping (no hard-coded IDs) |
+| 4 | 🔴 Config table | `YCIS_APPR_RECIPIENT` | PC Head / CPC email or org-role mapping (no hard-coded IDs) |
 | 5 | 🔴 Authorization object | `Z_CIS_ROLE` | Distinguish PC Executive / PC Head / CPC actions |
 | 6 | 🔴 GUI status functions | on `YRVG004..._N1` STANDARD status | New buttons: Submit, Approve, Reject |
 | 7 | 🟢→ enhance | `YRVG004..._N1` (`on_selection`, `create_sale_order`) | Save→submit, approval gate before order creation |
@@ -146,8 +146,8 @@
 ### New objects
 | # | Type | Proposed name | Purpose |
 |---|---|---|---|
-| 1 | 🔴 Report program + T-code | `ZCIS_REBATE_REPORT` / `YRVG0xx` | ALV: customer, material, qty, rebate amount, status |
-| 2 | 🟢 reuse | `VBAK/VBAP` (or `VBRK/VBRP`), `ZCIS_APPROVAL` | Rebate order data + approval status |
+| 1 | 🔴 Report program + T-code | `YCIS_REBATE_REPORT` / `YRVG0xx` | ALV: customer, material, qty, rebate amount, status |
+| 2 | 🟢 reuse | `VBAK/VBAP` (or `VBRK/VBRP`), `YCIS_APPROVAL` | Rebate order data + approval status |
 | 3 | 🔴 GUI status/title | for the new report | ALV toolbar |
 
 ### ⚠️ Open point
@@ -159,11 +159,11 @@
 
 | Area | New tables | New programs/T-codes | Classes/FM | Workflow/Auth | Data elements |
 |---|---|---|---|---|---|
-| 1 Waiver | `ZCIS_WAIVER_RULE`, (cust-type map) | SM30 maint. | – | – | `ZCIS_CUST_TYPE`, `ZCIS_WV_COUNT` |
-| 2 Shortfall | `ZCIS_SHORTFALL_GRD` | `ZCIS_SHORTFALL_MAINT` + T-code | – | auth check | – |
-| 3 Group/MLE | (BP config) ⚠️ | – | `ZCIS_GET_GROUP` | – | – |
-| 4 Workflow | `ZCIS_APPROVAL`, `ZCIS_APPR_RECIPIENT` | GUI functions on N1 | `ZCL_CIS_EMAIL` | `Z_CIS_ROLE` (+opt. WF) | `ZCIS_APPR_STATUS` |
-| 5 Report | – | `ZCIS_REBATE_REPORT` + T-code | – | – | – |
+| 1 Waiver | `YCIS_WAIVER_RULE`, (cust-type map) | SM30 maint. | – | – | `YCIS_CUST_TYPE`, `YCIS_WV_COUNT` |
+| 2 Shortfall | `YCIS_SHORTFALL_GRD` | `YCIS_SHORTFALL_MAINT` + T-code | – | auth check | – |
+| 3 Group/MLE | (BP config) ⚠️ | – | `YCIS_GET_GROUP` | – | – |
+| 4 Workflow | `YCIS_APPROVAL`, `YCIS_APPR_RECIPIENT` | GUI functions on N1 | `ZCL_CIS_EMAIL` | `Z_CIS_ROLE` (+opt. WF) | `YCIS_APPR_STATUS` |
+| 5 Report | – | `YCIS_REBATE_REPORT` + T-code | – | – | – |
 
 **Enhancements to existing program `YRVG004_QAIS_EXECUTE_N1`:** waiver logic (R1), auto-shortfall (R2), BP group (R3), approval gate + Submit/Approve buttons (R4).
 

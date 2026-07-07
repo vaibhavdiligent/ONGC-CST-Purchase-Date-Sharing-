@@ -15,9 +15,9 @@ Legend: ✅ Done · 🟡 Partly done · 🔴 Not started / pending · ⚪ Exclud
 | 9 | **Tentative lifting** of grade linked to **MCQ & ACQ** calc (incl upward revision) | 🔴 | New calc rule — not yet implemented |
 | 10 | **Multi-Location Entity** (single entity) → **combined lifting** across units | 🔴 | Logic now available (BP `ZGPMLL`); implement aggregation |
 | 11 | **Group entity**: CIS 2025-26 mapping prevails; new CIS from date of **group approval** | 🔴 | Logic available (BP `ZGPGRP`); implement group aggregation + date rule |
-| 12 | Shortfall grade waiver **automation** (replace manual YRVG018; PMG enters monthly/annual shortfall grades; auto-apply where lifting <75%/<80%) | 🟡 | R2: table `ZCIS_SHORTFALL_GRD` + load **done**; **auto-application into waiver flow pending** |
+| 12 | Shortfall grade waiver **automation** (replace manual YRVG018; PMG enters monthly/annual shortfall grades; auto-apply where lifting <75%/<80%) | 🟡 | R2: table `YCIS_SHORTFALL` + load **done**; **auto-application into waiver flow pending** |
 | 13 | **Zonal checking + CPC processing** of CIS output | ⚪ | R4 workflow — excluded from current build by instruction |
-| 14 | **Report** of CIS checking / rebate order details | 🟡 | R5 `ZCIS_REBATE_REPORT` created; refine once workflow/doc-type confirmed |
+| 14 | **Report** of CIS checking / rebate order details | 🟡 | R5 `YCIS_REBATE_REPORT` created; refine once workflow/doc-type confirmed |
 | 15 | **PP grades** mapping after PP plant production starts | 🔴 | Future phase (Phase 2) |
 
 ---

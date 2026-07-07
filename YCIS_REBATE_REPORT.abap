@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*& Report  ZCIS_REBATE_REPORT
+*& Report  YCIS_REBATE_REPORT
 *&---------------------------------------------------------------------*
 *& CIS 2026-27 - Requirement 5
 *& Report to capture rebate order details created from the CIS program:
@@ -10,7 +10,7 @@
 *& document type is read from parameter p_auart below - adjust the default
 *& to the actual CIS credit-memo-request document type before go-live.
 *&---------------------------------------------------------------------*
-REPORT  zcis_rebate_report.
+REPORT  ycis_rebate_report.
 
 TYPE-POOLS: slis.
 

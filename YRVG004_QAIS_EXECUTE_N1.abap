@@ -383,12 +383,12 @@ DATA: lv_flag123 TYPE char1.
 *   customer type (AU 25% / AUT-Trader 50%) and the number of monthly
 *   waivers depends on the CIS signing month, capped at 1 per quarter.
 *   Values are read from Z config tables (see DDIC spec) - NOT hard-coded.
-TABLES: zcis_cust_type, zcis_waiver_rule.
-DATA: it_zcis_cust_type  TYPE STANDARD TABLE OF zcis_cust_type,
-      wa_zcis_cust_type  TYPE zcis_cust_type,
-      it_zcis_waiver_rule TYPE STANDARD TABLE OF zcis_waiver_rule,
-      wa_zcis_waiver_rule TYPE zcis_waiver_rule,
-      lv_cust_type       TYPE zcis_cust_type-cust_type,   " A=AU, T=AUT/Trader
+TABLES: ycis_cust_type, ycis_waiver_rule.
+DATA: it_ycis_cust_type  TYPE STANDARD TABLE OF ycis_cust_type,
+      wa_ycis_cust_type  TYPE ycis_cust_type,
+      it_ycis_waiver_rule TYPE STANDARD TABLE OF ycis_waiver_rule,
+      wa_ycis_waiver_rule TYPE ycis_waiver_rule,
+      lv_cust_type       TYPE ycis_cust_type-cust_type,   " A=AU, T=AUT/Trader
       lv_wv_floor        TYPE p DECIMALS 3,                " 0.250 / 0.500
       lv_wv_allowed      TYPE i,                           " waivers allowed for the CIS
       lv_wv_maxqtr       TYPE i,                           " max waivers per quarter (default 1)
@@ -396,8 +396,8 @@ DATA: it_zcis_cust_type  TYPE STANDARD TABLE OF zcis_cust_type,
 *** EOC : CIS 2026-27 - customer-type waiver (R1) declarations ***
 
 *** SOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
-TABLES: zcis_shortfall_grd.
-DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd.
+TABLES: ycis_shortfall.
+DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 *** EOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -405,18 +405,18 @@ DATA: it_zcis_shortfall_grd TYPE STANDARD TABLE OF zcis_shortfall_grd.
 *     RELTYP 'ZGPGRP' = Has Group Customer, 'ZGPMLL' = Has MLE.
 *     Derived via CVI_CUST_LINK + BUT000 (see get_group_mle_members).
 *   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
-*   receive no monthly/annual discount -> ZCIS_NODISC_GRADE.
+*   receive no monthly/annual discount -> YCIS_NODISC_GRD.
 *   Scheme numeric parameters (e.g. Trader/AUT 200 MTM monthly cap) ->
-*     ZCIS_SCHEME_PARAM (key -> value), nothing hard-coded.
-TABLES: zcis_nodisc_grade, zcis_scheme_param.
+*     YCIS_SCH_PARAM (key -> value), nothing hard-coded.
+TABLES: ycis_nodisc_grd, ycis_sch_param.
 DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_but050        TYPE but050,
       it_grp_members   TYPE STANDARD TABLE OF kunnr,        " group/MLE member customer codes
       wa_grp_member    TYPE kunnr,
-      it_zcis_nodisc   TYPE STANDARD TABLE OF zcis_nodisc_grade,
-      wa_zcis_nodisc   TYPE zcis_nodisc_grade,
-      it_zcis_param    TYPE STANDARD TABLE OF zcis_scheme_param,
-      wa_zcis_param    TYPE zcis_scheme_param,
+      it_ycis_nodisc   TYPE STANDARD TABLE OF ycis_nodisc_grd,
+      wa_ycis_nodisc   TYPE ycis_nodisc_grd,
+      it_ycis_param    TYPE STANDARD TABLE OF ycis_sch_param,
+      wa_ycis_param    TYPE ycis_sch_param,
       lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *   CIS (qais_no) that have at least one signed material declared shortfall
@@ -1220,29 +1220,29 @@ FORM get_data.
 
 *** SOC : CIS 2026-27 - load customer-type / waiver-rule / shortfall config (R1+R2) ***
 *   Loaded once; used per customer in the monthly waiver logic.
-  SELECT * FROM zcis_cust_type   INTO TABLE it_zcis_cust_type.
-  SELECT * FROM zcis_waiver_rule INTO TABLE it_zcis_waiver_rule
+  SELECT * FROM ycis_cust_type   INTO TABLE it_ycis_cust_type.
+  SELECT * FROM ycis_waiver_rule INTO TABLE it_ycis_waiver_rule
     WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
-  SELECT * FROM zcis_shortfall_grd INTO TABLE it_zcis_shortfall_grd
+  SELECT * FROM ycis_shortfall INTO TABLE it_ycis_shortfall
     WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
-  SELECT * FROM zcis_nodisc_grade INTO TABLE it_zcis_nodisc.
+  SELECT * FROM ycis_nodisc_grd INTO TABLE it_ycis_nodisc.
 *   Build the non-discount grade range (PS/GS/Powder/Polyfines) used to
 *   exclude these grades from the discountable qty (they still count for
 *   lifting eligibility) - reuses the existing lv_no_dis_qty mechanism.
   REFRESH r_nodisc.
-  LOOP AT it_zcis_nodisc INTO wa_zcis_nodisc.
+  LOOP AT it_ycis_nodisc INTO wa_ycis_nodisc.
     r_nodisc-sign = 'I'. r_nodisc-option = 'EQ'.
-    r_nodisc-low  = wa_zcis_nodisc-kondm.
+    r_nodisc-low  = wa_ycis_nodisc-kondm.
     APPEND r_nodisc.
   ENDLOOP.
-  SELECT * FROM zcis_scheme_param INTO TABLE it_zcis_param.
+  SELECT * FROM ycis_sch_param INTO TABLE it_ycis_param.
 *   Clause 8: build the list of CIS whose signed material is declared shortfall
   PERFORM build_cis_shortfall.
 *   Trader/AUT monthly cap (MTM) - default 200 if not configured
   CLEAR lv_trader_cap_mt.
-  READ TABLE it_zcis_param INTO wa_zcis_param WITH KEY param_key = 'TRADER_CAP_MT'.
+  READ TABLE it_ycis_param INTO wa_ycis_param WITH KEY param_key = 'TRADER_CAP_MT'.
   IF sy-subrc = 0.
-    lv_trader_cap_mt = wa_zcis_param-param_val.
+    lv_trader_cap_mt = wa_ycis_param-param_val.
   ELSE.
     lv_trader_cap_mt = 200.
   ENDIF.
@@ -11423,9 +11423,9 @@ ENDFORM.                    "pf_status_set
 *&      Form  get_cust_wv_floor   (CIS 2026-27 - R1)
 *&---------------------------------------------------------------------*
 *   For the given customer, resolve:
-*     - lv_cust_type  : A = Actual User, T = AUT / Trader (ZCIS_CUST_TYPE)
+*     - lv_cust_type  : A = Actual User, T = AUT / Trader (YCIS_CUST_TYPE)
 *     - lv_wv_floor   : minimum lifting fraction in a waiver month
-*                       (AU 0.25 / AUT-Trader 0.50), from ZCIS_WAIVER_RULE
+*                       (AU 0.25 / AUT-Trader 0.50), from YCIS_WAIVER_RULE
 *     - lv_wv_allowed : number of monthly waivers allowed for the CIS,
 *                       based on the CIS signing month (mou_begda) band
 *   All values come from config tables - nothing hard-coded.
@@ -11438,13 +11438,13 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
 *  1) customer type (default to AU if not classified)
 *  Customer type is derived from KNA1-KATR2 (Attribute 2), confirmed by
 *  GAIL 02.07.2026. The KATR2 value is mapped to A (Actual User) / T
-*  (AUT / Trader) via ZCIS_CUST_TYPE (key = KATR2). Default A if not mapped.
+*  (AUT / Trader) via YCIS_CUST_TYPE (key = KATR2). Default A if not mapped.
   DATA: lv_katr2 TYPE kna1-katr2.
   SELECT SINGLE katr2 FROM kna1 INTO lv_katr2 WHERE kunnr = p_kunnr.
-  READ TABLE it_zcis_cust_type INTO wa_zcis_cust_type
+  READ TABLE it_ycis_cust_type INTO wa_ycis_cust_type
        WITH KEY katr2 = lv_katr2.
   IF sy-subrc = 0.
-    lv_cust_type = wa_zcis_cust_type-cust_type.
+    lv_cust_type = wa_ycis_cust_type-cust_type.
   ELSE.
     lv_cust_type = 'A'.
   ENDIF.
@@ -11454,13 +11454,13 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
 
 *  3) waiver rule: match customer type + signing-month band
   CLEAR: lv_wv_allowed, lv_wv_maxqtr.
-  LOOP AT it_zcis_waiver_rule INTO wa_zcis_waiver_rule
+  LOOP AT it_ycis_waiver_rule INTO wa_ycis_waiver_rule
        WHERE cust_type = lv_cust_type
          AND sign_from LE lv_signmon
          AND sign_to   GE lv_signmon.
-    lv_wv_floor   = wa_zcis_waiver_rule-min_lift_perc / 100.
-    lv_wv_allowed = wa_zcis_waiver_rule-wv_count.
-    lv_wv_maxqtr  = wa_zcis_waiver_rule-max_per_qtr.
+    lv_wv_floor   = wa_ycis_waiver_rule-min_lift_perc / 100.
+    lv_wv_allowed = wa_ycis_waiver_rule-wv_count.
+    lv_wv_maxqtr  = wa_ycis_waiver_rule-max_per_qtr.
     EXIT.
   ENDLOOP.
 
@@ -11609,12 +11609,12 @@ ENDFORM.                    "get_group_mle_members
 *   Returns p_flag = 'X' when the grade (S922-KONDM) is a non-discount
 *   grade (PS / GS / Powder / Polyfines): it counts for eligibility / MCQ
 *   but must NOT receive monthly or annual discount. Driven by
-*   ZCIS_NODISC_GRADE - nothing hard-coded.
+*   YCIS_NODISC_GRD - nothing hard-coded.
 *&---------------------------------------------------------------------*
 FORM is_nodisc_grade USING p_kondm TYPE kondm
                   CHANGING p_flag  TYPE char1.
   CLEAR p_flag.
-  READ TABLE it_zcis_nodisc INTO wa_zcis_nodisc WITH KEY kondm = p_kondm.
+  READ TABLE it_ycis_nodisc INTO wa_ycis_nodisc WITH KEY kondm = p_kondm.
   IF sy-subrc = 0.
     p_flag = 'X'.
   ENDIF.
@@ -11624,23 +11624,23 @@ ENDFORM.                    "is_nodisc_grade
 *&---------------------------------------------------------------------*
 *   Builds it_cis_shortfall = the CIS numbers (qais_no) whose signed
 *   material (YRVA_QAIS_TNTLFT-MATNR - the tentative-lifting record) is
-*   declared shortfall for the period (ZCIS_SHORTFALL_GRD-MATNR).
+*   declared shortfall for the period (YCIS_SHORTFALL-MATNR).
 *   Such CIS become eligible for the monthly shortfall waiver (Clause 8),
 *   replacing the manual YRVG018 / YRVA_QAIS_ADD_WV step.
 *
 *   Match is by material number: YRVA_QAIS_TNTLFT stores the signed item
 *   as MATNR (confirmed from DDIC), so shortfall is declared at material
-*   level in ZCIS_SHORTFALL_GRD-MATNR and matched directly here.
+*   level in YCIS_SHORTFALL-MATNR and matched directly here.
 *&---------------------------------------------------------------------*
 FORM build_cis_shortfall.
   REFRESH it_cis_shortfall.
-  CHECK it_zcis_shortfall_grd[] IS NOT INITIAL.
+  CHECK it_ycis_shortfall[] IS NOT INITIAL.
 *   Only the CIS whose signed material appears in the declared-shortfall
 *   list; FOR ALL ENTRIES on the (small) config table avoids a full scan.
   SELECT qais_no FROM yrva_qais_tntlft
     INTO TABLE @DATA(lt_tnt)
-    FOR ALL ENTRIES IN @it_zcis_shortfall_grd
-    WHERE matnr = @it_zcis_shortfall_grd-matnr.
+    FOR ALL ENTRIES IN @it_ycis_shortfall
+    WHERE matnr = @it_ycis_shortfall-matnr.
   LOOP AT lt_tnt INTO DATA(ls_tnt).
     wa_cis_shortfall-qais_no = ls_tnt-qais_no.
     APPEND wa_cis_shortfall TO it_cis_shortfall.

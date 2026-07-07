@@ -4,14 +4,14 @@ These objects must be **created in the SAP system (SE11 / SE80 / SE93)** before 
 enhanced `YRVG004_QAIS_EXECUTE_N1` and the new programs can be activated.
 The ABAP code already references these exact table and field names.
 
-> Naming (`ZCIS_*`) is a proposal — align with GAIL standards, and if you rename a
+> Naming (`YCIS_*`) is a proposal — align with GAIL standards, and if you rename a
 > table/field, tell me and I'll update the code to match.
 
 ---
 
 ## R1 — Customer Waiver
 
-### Table `ZCIS_CUST_TYPE` (transparent, config)
+### Table `YCIS_CUST_TYPE` (transparent, config)
 **Customer type is read from `KNA1-KATR2` (Attribute 2)** — confirmed by GAIL 02.07.2026.
 This small table just maps each KATR2 value to A (Actual User) / T (AUT/Trader).
 
@@ -19,23 +19,25 @@ This small table just maps each KATR2 value to A (Actual User) / T (AUT/Trader).
 |---|---|---|---|
 | `MANDT` | ✔ | MANDT | Client |
 | `KATR2` | ✔ | KATR2 | Customer Attribute 2 (from KNA1) |
-| `CUST_TYPE` |   | `ZCIS_CUST_TYPE` (CHAR1) | `A` = Actual User, `T` = AUT/Trader |
+| `CUST_TYPE` |   | `YCIS_CTYPE` (CHAR1) | `A` = Actual User, `T` = AUT/Trader |
 
-*Data element `ZCIS_CUST_TYPE` — domain CHAR1, fixed values A / T.*
+*Data element `YCIS_CTYPE` — domain `YCIS_CTYPE`, CHAR1, fixed values A / T.
+(Named `YCIS_CTYPE`, not `YCIS_CUST_TYPE`, because SAP does not allow a table and a
+data element to share the same name.)*
 ⚠️ **Still needed from GAIL:** which **KATR2 values** correspond to AU vs AUT/Trader
 (so the mapping rows can be maintained).
 
-### Table `ZCIS_WAIVER_RULE` (transparent, config)
+### Table `YCIS_WAIVER_RULE` (transparent, config)
 Waiver rule by customer type and CIS signing-month band.
 
 | Field | Key | Data element / type | Description |
 |---|---|---|---|
 | `MANDT` | ✔ | MANDT | Client |
-| `SCHEME_YEAR` | ✔ | `ZCIS_YEAR` (CHAR7, e.g. 2026-27) | Scheme year |
-| `CUST_TYPE` | ✔ | `ZCIS_CUST_TYPE` | A / T |
-| `SIGN_FROM` | ✔ | `ZCIS_MONTH` (NUMC2) | Signing month band from (MM, 01–12) |
-| `SIGN_TO` |   | `ZCIS_MONTH` (NUMC2) | Signing month band to (MM) |
-| `MIN_LIFT_PERC` |   | `ZCIS_PERC` (DEC3) | Min lifting % in a waiver month (25 / 50) |
+| `SCHEME_YEAR` | ✔ | `YCIS_YEAR` (CHAR7, e.g. 2026-27) | Scheme year |
+| `CUST_TYPE` | ✔ | `YCIS_CTYPE` | A / T |
+| `SIGN_FROM` | ✔ | `YCIS_MONTH` (NUMC2) | Signing month band from (MM, 01–12) |
+| `SIGN_TO` |   | `YCIS_MONTH` (NUMC2) | Signing month band to (MM) |
+| `MIN_LIFT_PERC` |   | `YCIS_PERC` (DEC3) | Min lifting % in a waiver month (25 / 50) |
 | `WV_COUNT` |   | INT1 | No. of monthly waivers allowed |
 | `MAX_PER_QTR` |   | INT1 | Max waivers per quarter (default 1) |
 | `VALID_FROM` |   | BEGDA (DATS) | Rule valid from |
@@ -56,7 +58,7 @@ Waiver rule by customer type and CIS signing-month band.
 
 ## R2 — Shortfall Waivers (declared by material)
 
-### Table `ZCIS_SHORTFALL_GRD` (transparent, config)
+### Table `YCIS_SHORTFALL` (transparent, config)
 Month/period-wise **materials** declared shortfall by the process owner.
 
 > **Key field is `MATNR` (material number), not a grade code.** The signed-grade
@@ -74,8 +76,8 @@ Month/period-wise **materials** declared shortfall by the process owner.
 | `CREATED_ON` |   | DATS | Entry date |
 
 ### Maintenance transaction (R2 T-code)
-- Generate **table maintenance (SM30)** for `ZCIS_SHORTFALL_GRD` (SE11 → Utilities → Table Maintenance Generator, one-step, function group `ZCIS`).
-- Create a **parameter transaction** (SE93) e.g. `ZCIS_SHORTFALL` → calls `SM30` with `VIEWNAME = ZCIS_SHORTFALL_GRD`, `UPDATE = X` (skip first screen).
+- Generate **table maintenance (SM30)** for `YCIS_SHORTFALL` (SE11 → Utilities → Table Maintenance Generator, one-step, function group `YCIS`).
+- Create a **parameter transaction** (SE93) e.g. `YCIS_SHORTFALL` → calls `SM30` with `VIEWNAME = YCIS_SHORTFALL`, `UPDATE = X` (skip first screen).
 - Add an **authorization group** so only the process owner can maintain it.
 
 *(A custom module-pool screen can replace SM30 if a richer UI is required — advise if needed.)*
@@ -84,16 +86,16 @@ Month/period-wise **materials** declared shortfall by the process owner.
 
 ## R5 — Rebate Order Report
 
-### Program `ZCIS_REBATE_REPORT` (already written — file `ZCIS_REBATE_REPORT.abap`)
-- Create executable program `ZCIS_REBATE_REPORT` (SE38), paste the source.
-- Create transaction (SE93) e.g. `ZCIS_REBATE_RPT` → program `ZCIS_REBATE_REPORT`.
+### Program `YCIS_REBATE_REPORT` (already written — file `YCIS_REBATE_REPORT.abap`)
+- Create executable program `YCIS_REBATE_REPORT` (SE38), paste the source.
+- Create transaction (SE93) e.g. `YCIS_REBATE_RPT` → program `YCIS_REBATE_REPORT`.
 - ⚠️ Adjust default `p_auart` to the actual CIS credit-memo-request document type.
 
 ---
 
 ## Dev-Form point 5 — Non-discount grades (PS / GS / Powder / Polyfines)
 
-### Table `ZCIS_NODISC_GRADE` (transparent, config)
+### Table `YCIS_NODISC_GRD` (transparent, config)
 Grades that count for eligibility / MCQ but receive **no** monthly/annual discount.
 
 | Field | Key | Data element / type | Description |
@@ -120,7 +122,7 @@ Grades that count for eligibility / MCQ but receive **no** monthly/annual discou
 | 74 | Poly Fine GL / Poly Fine GL PC-II |
 | 75 | Powder GLX / GLX-2 / HDPE PC-II / LLDPE PC-II |
 
-### Table `ZCIS_SCHEME_PARAM` (transparent, config)
+### Table `YCIS_SCH_PARAM` (transparent, config)
 Generic scheme numeric parameters (avoids hard-coding, e.g. 200 MTM cap).
 
 | Field | Key | Data element / type | Description |
