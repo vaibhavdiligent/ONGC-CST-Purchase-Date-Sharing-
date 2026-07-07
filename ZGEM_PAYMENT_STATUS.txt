@@ -26,15 +26,19 @@ DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
       v_hkont           TYPE bsak-hkont VALUE '0000190101'.
 
 *--- Payment Status (3.11) via CPI - replaces the old SI_PAYMENT_STATUS_OB
-*    proxy call. UNVERIFIED: ZGEM_CPI_PAYMENT_STATUS.abap (the only CPI
-*    reference for this API) treats "paydata" as an opaque pre-built string
-*    and never confirmed its real response field names against a live call.
-*    Best guess used here: paydata = plain JSON of the same pay_stat fields
-*    the old proxy request carried, and the response is parsed using the
-*    field names this program already expected from the SOAP proxy
-*    (service_validation, validationstatus, response_code, response_message,
-*    response_status). CONFIRM against a real GeM CPI response before relying
-*    on this in production.
+*    proxy call.
+*    RESPONSE SHAPE CONFIRMED from a real GeM call (2026-07-07):
+*      {"transactionID":null,"status":"fail","paymentMode":null,"message":"Invalid transactionID"}
+*    - a flat object, NOT the nested service_controller envelope originally
+*    guessed. response_code/response_code1/service_validation/validationstatus
+*    have no equivalent in this real response and are left unset below.
+*    STILL UNVERIFIED: the exact field names GeM expects INSIDE "paydata" for
+*    the request. It is currently built by JSON-serializing the old SOAP-era
+*    pay_stat structure (bank_name, payment_by, transaction_id, ...) as-is.
+*    The "Invalid transactionID" response suggests GeM may expect a
+*    differently-named field (e.g. "transactionID") than what pay_stat sends -
+*    CONFIRM the real paydata request schema (GeM API doc / Postman capture)
+*    before relying on this in production.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
            c_path TYPE string VALUE '/http/GEM/Sync/PaymentStatus'.
 
@@ -44,17 +48,11 @@ TYPES: BEGIN OF ty_cpi_request,
          paydata TYPE string,   " sent as a JSON string, per ZGEM_CPI_PAYMENT_STATUS.abap's p_paydat contract
        END OF ty_cpi_request.
 
-TYPES: BEGIN OF ty_cpi_service_controller,
-         service_validation TYPE string,
-         validationstatus   TYPE string,
-         response_code      TYPE string,
-       END OF ty_cpi_service_controller.
-
 TYPES: BEGIN OF ty_cpi_response,
-         service_controller TYPE ty_cpi_service_controller,
-         response_message   TYPE string,
-         response_status    TYPE string,
-         response_code      TYPE string,
+         transactionid TYPE string,
+         status        TYPE string,
+         paymentmode   TYPE string,
+         message       TYPE string,
        END OF ty_cpi_response.
 
 DATA: lo_client      TYPE REF TO if_http_client,
@@ -368,12 +366,12 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 
           MOVE-CORRESPONDING wa_bill TO wa_status.
 
-          wa_status-service_validation = ls_cpi_resp-service_controller-service_validation.
-          wa_status-validationstatus   = ls_cpi_resp-service_controller-validationstatus.
-          wa_status-response_code1     = ls_cpi_resp-service_controller-response_code.
-          wa_status-response_message   = ls_cpi_resp-response_message.
-          wa_status-response_status    = ls_cpi_resp-response_status.
-          wa_status-response_code      = ls_cpi_resp-response_code.
+*         Confirmed real fields:
+          wa_status-response_status    = ls_cpi_resp-status.
+          wa_status-response_message   = ls_cpi_resp-message.
+*         No equivalent in the confirmed real response - left unset:
+*         wa_status-service_validation, wa_status-validationstatus,
+*         wa_status-response_code1, wa_status-response_code.
 
 
           wa_status-deduction_amount = deduct_amt. " add by rohit on 09.04.2025
