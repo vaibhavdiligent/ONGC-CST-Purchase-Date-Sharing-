@@ -34,25 +34,14 @@ DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
 *    have no equivalent in this real response and are left unset below.
 *
 *    REQUEST SCHEMA CONFIRMED from the GeM API spec (2026-07-07):
-*    "paydata" is JSON(Encrypted) - AES/ECB/PKCS5Padding "With Secret Key" -
-*    containing: transactionID, status, paymentBy, contractNo, gemInvoiceNo,
-*    invoiceNo, billNo, billAmountPaid, transactionDate, deductedAmount,
-*    deductionType, bankName, chequeNumber, bankTransactionNo, demandDraftNo,
-*    sanctions, sanctionDate (all mandatory per the spec).
-*
-*    STILL BLOCKED: the actual AES secret key and the ABAP-side encryption
-*    routine are NOT available in this codebase - no AES/PKCS5 utility class
-*    was found anywhere in this repo. lv_paydata_plain below is built with the
-*    correct field names/shapes but is sent UNENCRYPTED as a placeholder -
-*    GeM will very likely reject it until real encryption is wired in.
-*    NEEDED to finish this: (1) the secret key value, (2) confirmation of
-*    which crypto class/function module this system already uses for
-*    AES/ECB/PKCS5Padding (check with Basis/security team - GeM integrations
-*    elsewhere in this landscape may already have one), then replace the
-*    TODO block below with a real call to it.
+*    "paydata" contains: transactionID, status, paymentBy, contractNo,
+*    gemInvoiceNo, invoiceNo, billNo, billAmountPaid, transactionDate,
+*    deductedAmount, deductionType, bankName, chequeNumber, bankTransactionNo,
+*    demandDraftNo, sanctions, sanctionDate. Sent as PLAIN JSON (no
+*    encryption), same as the other Sync APIs - per instruction.
 *    Fields with no current source in this program's logic (deductionType,
 *    demandDraftNo, sanctions, sanctionDate) are defaulted/blank below and
-*    need business confirmation of real values.
+*    may need business confirmation of real values.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
            c_path TYPE string VALUE '/http/GEM/Sync/PaymentStatus'.
 
@@ -79,7 +68,7 @@ TYPES: BEGIN OF ty_cpi_paydata,
 TYPES: BEGIN OF ty_cpi_request,
          user    TYPE string,
          method  TYPE string,
-         paydata TYPE string,   " AES/ECB/PKCS5Padding-encrypted JSON of ty_cpi_paydata
+         paydata TYPE string,   " plain (unencrypted) JSON of ty_cpi_paydata
        END OF ty_cpi_request.
 
 TYPES: BEGIN OF ty_cpi_response,
@@ -398,11 +387,6 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
                                 data          = ls_cpi_paydata
                                 compress      = abap_true
                                 name_mappings = lt_paydata_maps ).
-
-*         TODO: lv_paydata_plain must be AES/ECB/PKCS5Padding-encrypted with
-*         the GeM secret key before being sent - NOT done here (no key/crypto
-*         utility available). Sending it unencrypted as a placeholder; GeM
-*         will very likely reject this until real encryption is wired in.
           ls_cpi_request-user    = 'ONGCVIDESH'.
           ls_cpi_request-method  = 'payments'.
           ls_cpi_request-paydata = lv_paydata_plain.
