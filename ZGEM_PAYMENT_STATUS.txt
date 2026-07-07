@@ -26,45 +26,56 @@ DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
       v_hkont           TYPE bsak-hkont VALUE '0000190101'.
 
 *--- Payment Status (3.11) via CPI - replaces the old SI_PAYMENT_STATUS_OB
-*    proxy call. UNVERIFIED: ZGEM_CPI_PAYMENT_STATUS.abap (the only CPI
-*    reference for this API) treats "paydata" as an opaque pre-built string
-*    and never confirmed its real response field names against a live call.
-*    Best guess used here: paydata = plain JSON of the same pay_stat fields
-*    the old proxy request carried, and the response is parsed using the
-*    field names this program already expected from the SOAP proxy
-*    (service_validation, validationstatus, response_code, response_message,
-*    response_status). CONFIRM against a real GeM CPI response before relying
-*    on this in production.
+*    proxy call. Request/response shapes CONFIRMED against a live GeM call
+*    (via the ZGEM_CPI_PAYMENT_STATUS test program):
+*    - paydata is a plain JSON object; all values are JSON strings.
+*    - response is flat: {transactionID,status,paymentMode,message}.
+*    ty_cpi_paydata's component names mirror pay_stat's field names so the
+*    payload is filled with MOVE-CORRESPONDING; name_mappings then renames
+*    the JSON keys to the camelCase the API expects.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
            c_path TYPE string VALUE '/http/GEM/Sync/PaymentStatus'.
+
+TYPES: BEGIN OF ty_cpi_paydata,
+         transaction_id      TYPE string,
+         status              TYPE string,
+         payment_by          TYPE string,
+         contract_no         TYPE string,
+         gem_invoice_no      TYPE string,
+         invoice_no          TYPE string,
+         bill_no             TYPE string,
+         bill_amount_paid    TYPE string,
+         transaction_date    TYPE string,
+         deduction_type      TYPE string,
+         bank_name           TYPE string,
+         bank_transaction_no TYPE string,
+         sanctions           TYPE string,
+         sanction_date       TYPE string,
+       END OF ty_cpi_paydata.
 
 TYPES: BEGIN OF ty_cpi_request,
          user    TYPE string,
          method  TYPE string,
-         paydata TYPE zpaystatusdt_payment_status_s,
+         paydata TYPE ty_cpi_paydata,
        END OF ty_cpi_request.
 
-TYPES: BEGIN OF ty_cpi_service_controller,
-         service_validation TYPE string,
-         validationstatus   TYPE string,
-         response_code      TYPE string,
-       END OF ty_cpi_service_controller.
-
+*--- Flat response confirmed from a live GeM call
 TYPES: BEGIN OF ty_cpi_response,
-         service_controller TYPE ty_cpi_service_controller,
-         response_message   TYPE string,
-         response_status    TYPE string,
-         response_code      TYPE string,
+         transactionid TYPE string,
+         status        TYPE string,
+         paymentmode   TYPE string,
+         message       TYPE string,
        END OF ty_cpi_response.
 
-DATA: lo_client      TYPE REF TO if_http_client,
-      ls_cpi_request TYPE ty_cpi_request,
-      ls_cpi_resp    TYPE ty_cpi_response,
-      lv_json        TYPE string,
-      lv_response    TYPE string,
-      lv_code        TYPE i,
-      lv_reason      TYPE string,
-      gv_token       TYPE string.
+DATA: lo_client       TYPE REF TO if_http_client,
+      ls_cpi_request  TYPE ty_cpi_request,
+      ls_cpi_resp     TYPE ty_cpi_response,
+      lv_json         TYPE string,
+      lv_response     TYPE string,
+      lv_code         TYPE i,
+      lv_reason       TYPE string,
+      gv_token        TYPE string,
+      lt_paydata_maps TYPE /ui2/cl_json=>name_mappings.
 
 DATA: err_string1 TYPE string,
       it_bill     TYPE TABLE OF zgem_billdet,
@@ -321,16 +332,43 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 *            pay_stat-transaction_id        = wa_bseg-sgtxt.
           ENDIF.
 
-*--- Build the JSON request payload and call CPI directly (was: proxy call
-*    to lo_gem_pay->si_payment_status_ob). See UNVERIFIED note above.
+*--- Build the paydata payload from pay_stat via MOVE-CORRESPONDING (the
+*    ty_cpi_paydata component names match pay_stat's field names), then
+*    serialize with the camelCase JSON keys the GeM API expects.
+          CLEAR ls_cpi_request.
           ls_cpi_request-user    = 'ONGCVIDESH'.
           ls_cpi_request-method  = 'payments'.
-          ls_cpi_request-paydata = pay_stat.
+          MOVE-CORRESPONDING pay_stat TO ls_cpi_request-paydata.
+
+*         Reformat dates to YYYY-MM-DD if they arrived as YYYYMMDD
+          IF strlen( ls_cpi_request-paydata-transaction_date ) = 8.
+            ls_cpi_request-paydata-transaction_date =
+              |{ ls_cpi_request-paydata-transaction_date+0(4) }-{ ls_cpi_request-paydata-transaction_date+4(2) }-{ ls_cpi_request-paydata-transaction_date+6(2) }|.
+          ENDIF.
+          IF strlen( ls_cpi_request-paydata-sanction_date ) = 8.
+            ls_cpi_request-paydata-sanction_date =
+              |{ ls_cpi_request-paydata-sanction_date+0(4) }-{ ls_cpi_request-paydata-sanction_date+4(2) }-{ ls_cpi_request-paydata-sanction_date+6(2) }|.
+          ENDIF.
+
+          lt_paydata_maps = VALUE #(
+            ( abap = 'TRANSACTION_ID'      json = 'transactionID' )
+            ( abap = 'PAYMENT_BY'          json = 'paymentBy' )
+            ( abap = 'CONTRACT_NO'         json = 'contractNo' )
+            ( abap = 'GEM_INVOICE_NO'      json = 'gemInvoiceNo' )
+            ( abap = 'INVOICE_NO'          json = 'invoiceNo' )
+            ( abap = 'BILL_NO'             json = 'billNo' )
+            ( abap = 'BILL_AMOUNT_PAID'    json = 'billAmountPaid' )
+            ( abap = 'TRANSACTION_DATE'    json = 'transactionDate' )
+            ( abap = 'DEDUCTION_TYPE'      json = 'deductionType' )
+            ( abap = 'BANK_NAME'           json = 'bankName' )
+            ( abap = 'BANK_TRANSACTION_NO' json = 'bankTransactionNo' )
+            ( abap = 'SANCTION_DATE'       json = 'sanctionDate' ) ).
 
           lv_json = /ui2/cl_json=>serialize(
-                      data        = ls_cpi_request
-                      compress    = abap_true
-                      pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
+                      data          = ls_cpi_request
+                      compress      = abap_true
+                      pretty_name   = /ui2/cl_json=>pretty_mode-low_case
+                      name_mappings = lt_paydata_maps ).
 
           cl_http_client=>create_by_destination(
             EXPORTING destination = c_dest
@@ -365,12 +403,12 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 
           MOVE-CORRESPONDING wa_bill TO wa_status.
 
-          wa_status-service_validation = ls_cpi_resp-service_controller-service_validation.
-          wa_status-validationstatus   = ls_cpi_resp-service_controller-validationstatus.
-          wa_status-response_code1     = ls_cpi_resp-service_controller-response_code.
-          wa_status-response_message   = ls_cpi_resp-response_message.
-          wa_status-response_status    = ls_cpi_resp-response_status.
-          wa_status-response_code      = ls_cpi_resp-response_code.
+*         Map the confirmed flat response {transactionID,status,paymentMode,
+*         message} onto the display structure.
+          wa_status-response_status  = ls_cpi_resp-status.        " Success / fail
+          wa_status-response_message = ls_cpi_resp-message.       " e.g. "Already Exist"
+*         No equivalent in the confirmed real response - left unset:
+*         service_validation, validationstatus, response_code, response_code1.
 
 
           wa_status-deduction_amount = deduct_amt. " add by rohit on 09.04.2025
