@@ -41,7 +41,7 @@ CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
 TYPES: BEGIN OF ty_cpi_request,
          user    TYPE string,
          method  TYPE string,
-         paydata TYPE zpaystatusdt_payment_status_s,
+         paydata TYPE string,   " sent as a JSON string, per ZGEM_CPI_PAYMENT_STATUS.abap's p_paydat contract
        END OF ty_cpi_request.
 
 TYPES: BEGIN OF ty_cpi_service_controller,
@@ -325,7 +325,10 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 *    to lo_gem_pay->si_payment_status_ob). See UNVERIFIED note above.
           ls_cpi_request-user    = 'ONGCVIDESH'.
           ls_cpi_request-method  = 'payments'.
-          ls_cpi_request-paydata = pay_stat.
+          ls_cpi_request-paydata = /ui2/cl_json=>serialize(
+                                      data        = pay_stat
+                                      compress    = abap_true
+                                      pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
           lv_json = /ui2/cl_json=>serialize(
                       data        = ls_cpi_request
