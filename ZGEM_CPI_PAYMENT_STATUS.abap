@@ -7,51 +7,18 @@
 *&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
 *&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
 *&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
-*&   5. Parse response and show it as an ALV grid.
+*&   5. Parse the common response envelope and show it as an ALV grid.
 *&      (ALV list header is taken from selection-screen field p_head.)
-*&
-*& Real response shape (confirmed from a live GeM call, 2026-07-07):
-*&   {"transactionID":null,"status":"fail","paymentMode":null,"message":"Invalid transactionID"}
-*&   - a FLAT object, NOT the generic Status/Iat/data{Sub,Aud,Iss} envelope
-*&   used by the other Sync APIs. Field names are camelCase.
-*&
-*& Real request "paydata" shape confirmed from the GeM API spec (2026-07-07)
-*& and a live sample - sent as a PLAIN (unencrypted) JSON object, same as the
-*& other Sync APIs (no AES/encryption is applied here, per instruction):
-*&   {"transactionID":..,"status":"Success","paymentBy":"NEFT",
-*&    "contractNo":..,"gemInvoiceNo":..,"invoiceNo":..,"billNo":..,
-*&    "billAmountPaid":10,"transactionDate":"2025-01-02",
-*&    "deductionType":"NA","bankName":..,"bankTransactionNo":..,
-*&    "sanctions":"10.00","sanctionDate":"2024-11-19"}
-*&   deductedAmount/chequeNumber/demandDraftNo are also part of the spec but
-*&   were absent from the confirmed live sample (likely only sent when
-*&   applicable to the payment mode) - selection fields provided for them too.
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_payment_status.
 
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head   TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
-            p_user   TYPE string LOWER CASE DEFAULT 'CLIENT_NAME',
-            p_txnid  TYPE string LOWER CASE DEFAULT '173200477772237507927',
-            p_status TYPE string LOWER CASE DEFAULT 'Success',
-            p_paymby TYPE string LOWER CASE DEFAULT 'NEFT',
-            p_contno TYPE string LOWER CASE DEFAULT 'GEMC-511687737507927',
-            p_geminv TYPE string LOWER CASE DEFAULT 'GEM-950165',
-            p_invno  TYPE string LOWER CASE DEFAULT 'sdf578',
-            p_billno TYPE string LOWER CASE DEFAULT '511687737507927-2B1',
-            p_bamt   TYPE p LENGTH 9 DECIMALS 0 DEFAULT 10,
-            p_txndt  TYPE string LOWER CASE DEFAULT '2025-01-02',
-            p_dedamt TYPE p LENGTH 9 DECIMALS 0,
-            p_dedtyp TYPE string LOWER CASE DEFAULT 'NA',
-            p_bank   TYPE string LOWER CASE DEFAULT 'ICICI BANK',
-            p_chqno  TYPE string LOWER CASE,
-            p_bktxno TYPE string LOWER CASE DEFAULT 'UTI657454690',
-            p_ddno   TYPE string LOWER CASE,
-            p_sanc   TYPE string LOWER CASE DEFAULT '10.00',
-            p_sancdt TYPE string LOWER CASE DEFAULT '2024-11-19',
-            p_path   TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.
+            p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
+            p_user  TYPE string LOWER CASE DEFAULT 'clientname',
+            p_paydat TYPE string LOWER CASE, " encrypted paydata blob
+            p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.
 
 *--- Token proxy objects (same pattern as the summary program)
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
@@ -61,60 +28,44 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       err_string       TYPE string,
       gv_token         TYPE string.
 
-*--- paydata payload (Section Payment Status (3.11))
-TYPES: BEGIN OF ty_paydata,
-         transactionid     TYPE string,
-         status            TYPE string,
-         paymentby         TYPE string,
-         contractno        TYPE string,
-         geminvoiceno      TYPE string,
-         invoiceno         TYPE string,
-         billno            TYPE string,
-         billamountpaid    TYPE p LENGTH 9 DECIMALS 0,
-         transactiondate   TYPE string,
-         deductedamount    TYPE p LENGTH 9 DECIMALS 0,
-         deductiontype     TYPE string,
-         bankname          TYPE string,
-         chequenumber      TYPE string,
-         banktransactionno TYPE string,
-         demanddraftno     TYPE string,
-         sanctions         TYPE string,
-         sanctiondate      TYPE string,
-       END OF ty_paydata.
-
-*--- Request payload
+*--- Request payload (Section Payment Status (3.11))
 TYPES: BEGIN OF ty_request,
-         user    TYPE string,
-         method  TYPE string,
-         paydata TYPE ty_paydata,
+         user          TYPE string,
+         method        TYPE string,
+         paydata       TYPE string,
        END OF ty_request.
 
-*--- Response structure matching the ACTUAL payload (confirmed real response).
-*   Component names equal JSON keys (case-insensitive match) -> no name_mappings.
+*--- Common response envelope (Status / Iat / data: Sub,Aud,Iss + inner data).
+*   The inner "data" varies per API, so it is captured as raw JSON for display.
 TYPES: BEGIN OF ty_display,
-         transactionid TYPE string,
-         status        TYPE string,
-         paymentmode   TYPE string,
-         message       TYPE string,
-         raw_response  TYPE string,   " full raw response, kept for diagnosis
+         status  TYPE string,
+         iat     TYPE string,
+         sub     TYPE string,
+         aud     TYPE string,
+         iss     TYPE string,
+         data    TYPE string,   " raw inner data JSON
        END OF ty_display,
        tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
 
-DATA: lo_client    TYPE REF TO if_http_client,
-      ls_request   TYPE ty_request,
-      lv_json      TYPE string,
-      lv_response  TYPE string,
-      lv_code      TYPE i,
-      lv_reason    TYPE string,
-      lt_display   TYPE tt_display,
-      ls_display   TYPE ty_display,
-      lo_alv       TYPE REF TO cl_salv_table,
-      lx_salv      TYPE REF TO cx_salv_msg,
-      lt_name_maps TYPE /ui2/cl_json=>name_mappings.
+DATA: lo_client   TYPE REF TO if_http_client,
+      ls_request  TYPE ty_request,
+      lv_json     TYPE string,
+      lv_response TYPE string,
+      lv_code     TYPE i,
+      lv_reason   TYPE string,
+      lt_display  TYPE tt_display,
+      ls_display  TYPE ty_display,
+      lo_alv      TYPE REF TO cl_salv_table,
+      lx_salv     TYPE REF TO cx_salv_msg.
 
 START-OF-SELECTION.
 
-*--- 1. Generate the SEK security token via the CPI token proxy
+*--- 1. Validate input
+  IF p_paydat IS INITIAL.
+    WRITE: / 'Error: paydata is mandatory.'. RETURN.
+  ENDIF.
+
+*--- 1a. Generate the SEK security token via the CPI token proxy
   proxy_data-mt_security_token_sender-username = 'ONGCVIDESH'.
   proxy_data-mt_security_token_sender-password = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'.
   TRY.
@@ -128,52 +79,18 @@ START-OF-SELECTION.
   ENDTRY.
   gv_token = lt_input-mt_security_token_receiver-token.
 
-*--- 2. Build the paydata payload from selection-screen values
+*--- 2. Build the JSON request payload
   CLEAR ls_request.
   ls_request-user   = p_user.
   ls_request-method = 'payments'.
-  ls_request-paydata-transactionid     = p_txnid.
-  ls_request-paydata-status            = p_status.
-  ls_request-paydata-paymentby         = p_paymby.
-  ls_request-paydata-contractno        = p_contno.
-  ls_request-paydata-geminvoiceno      = p_geminv.
-  ls_request-paydata-invoiceno         = p_invno.
-  ls_request-paydata-billno            = p_billno.
-  ls_request-paydata-billamountpaid    = p_bamt.
-  ls_request-paydata-transactiondate   = p_txndt.
-  ls_request-paydata-deductedamount    = p_dedamt.
-  ls_request-paydata-deductiontype     = p_dedtyp.
-  ls_request-paydata-bankname          = p_bank.
-  ls_request-paydata-chequenumber      = p_chqno.
-  ls_request-paydata-banktransactionno = p_bktxno.
-  ls_request-paydata-demanddraftno     = p_ddno.
-  ls_request-paydata-sanctions         = p_sanc.
-  ls_request-paydata-sanctiondate      = p_sancdt.
-
-*--- 3. Serialize as plain JSON (no encryption) with the real camelCase keys
-  lt_name_maps = VALUE #(
-    ( abap = 'TRANSACTIONID'     json = 'transactionID' )
-    ( abap = 'PAYMENTBY'         json = 'paymentBy' )
-    ( abap = 'CONTRACTNO'        json = 'contractNo' )
-    ( abap = 'GEMINVOICENO'      json = 'gemInvoiceNo' )
-    ( abap = 'INVOICENO'         json = 'invoiceNo' )
-    ( abap = 'BILLNO'            json = 'billNo' )
-    ( abap = 'BILLAMOUNTPAID'    json = 'billAmountPaid' )
-    ( abap = 'TRANSACTIONDATE'   json = 'transactionDate' )
-    ( abap = 'DEDUCTEDAMOUNT'    json = 'deductedAmount' )
-    ( abap = 'DEDUCTIONTYPE'     json = 'deductionType' )
-    ( abap = 'BANKNAME'          json = 'bankName' )
-    ( abap = 'CHEQUENUMBER'      json = 'chequeNumber' )
-    ( abap = 'BANKTRANSACTIONNO' json = 'bankTransactionNo' )
-    ( abap = 'DEMANDDRAFTNO'     json = 'demandDraftNo' )
-    ( abap = 'SANCTIONDATE'      json = 'sanctionDate' ) ).
+  ls_request-paydata = p_paydat.
 
   lv_json = /ui2/cl_json=>serialize(
-              data          = ls_request
-              compress      = abap_true
-              name_mappings = lt_name_maps ).
+              data        = ls_request
+              compress    = abap_true
+              pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
-*--- 4. Create HTTP client from SM59 destination and set path/method
+*--- 3. Create HTTP client from SM59 destination and set path/method
   cl_http_client=>create_by_destination(
     EXPORTING destination = c_dest
     IMPORTING client      = lo_client
@@ -186,13 +103,13 @@ START-OF-SELECTION.
   cl_http_utility=>set_request_uri( request = lo_client->request uri = p_path ).
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
 
-*--- 5. Headers: Content-Type + SEK token header 'token' = Bearer <token>
+*--- 4. Headers: Content-Type + SEK token header 'token' = Bearer <token>
   lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
   IF gv_token IS NOT INITIAL.
     lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
   ENDIF.
 
-*--- 6. Body + send + receive
+*--- 5. Body + send + receive
   lo_client->request->set_cdata( lv_json ).
   lo_client->send( EXCEPTIONS OTHERS = 1 ).
   IF sy-subrc <> 0.
@@ -203,14 +120,34 @@ START-OF-SELECTION.
   lv_response = lo_client->response->get_cdata( ).
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 7. Parse the confirmed flat response into typed fields
+*--- 6. Parse the common envelope (Status/Iat/data.Sub/Aud/Iss) for display.
+*   Inner data kept raw; tighten with a typed structure once the exact
+*   response fields for this API are confirmed.
+  TYPES: BEGIN OF ty_env_data,
+           sub TYPE string, aud TYPE string, iss TYPE string,
+         END OF ty_env_data.
+  TYPES: BEGIN OF ty_env,
+           status TYPE string, iat TYPE string, data TYPE ty_env_data,
+         END OF ty_env.
+  DATA ls_env TYPE ty_env.
+  DATA lt_maps TYPE /ui2/cl_json=>name_mappings.
+  lt_maps = VALUE #(
+    ( abap = 'STATUS' json = 'Status' ) ( abap = 'IAT' json = 'Iat' )
+    ( abap = 'DATA'   json = 'data' )   ( abap = 'SUB' json = 'Sub' )
+    ( abap = 'AUD'    json = 'Aud' )    ( abap = 'ISS' json = 'Iss' ) ).
+  /ui2/cl_json=>deserialize( EXPORTING json = lv_response name_mappings = lt_maps
+                             CHANGING data = ls_env ).
+
   CLEAR ls_display.
-  /ui2/cl_json=>deserialize( EXPORTING json = lv_response
-                             CHANGING  data = ls_display ).
-  ls_display-raw_response = lv_response.   " full raw response for reference
+  ls_display-status = ls_env-status.
+  ls_display-iat    = ls_env-iat.
+  ls_display-sub    = ls_env-data-sub.
+  ls_display-aud    = ls_env-data-aud.
+  ls_display-iss    = ls_env-data-iss.
+  ls_display-data   = lv_response.   " full raw response for reference
   APPEND ls_display TO lt_display.
 
-*--- 8. Display as ALV grid with the (editable) list header from p_head
+*--- 7. Display as ALV grid with the (editable) list header from p_head
   TRY.
       cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
                               CHANGING  t_table      = lt_display ).
