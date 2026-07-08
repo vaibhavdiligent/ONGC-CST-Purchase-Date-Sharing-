@@ -7,29 +7,28 @@ imports the same way as any abapGit offline project.
 
 ---
 
-## What's inside (20 objects)
+## What's inside (15 objects)
 
 All objects are in the **`Y`** customer namespace.
 
-**Domains (7):** `YCIS_CTYPE` (fixed values A/T), `YCIS_YEAR`, `YCIS_MONTH`,
-`YCIS_PERC`, `YCIS_COUNT`, `YCIS_PARAM_KEY`, `YCIS_PARAM_VAL`
+**Domains (5):** `YCIS_CTYPE` (fixed values A/T), `YCIS_YEAR`, `YCIS_MONTH`,
+`YCIS_PERC`, `YCIS_COUNT`
 
-**Data elements (7):** same names as the domains above.
+**Data elements (5):** same names as the domains above.
 
-**Tables (5):**
+**Tables (3):**
 | Table | Key fields |
 |---|---|
-| `YCIS_CUST_TYPE` | MANDT, KATR2 |
 | `YCIS_WAIVER_RULE` | MANDT, SCHEME_YEAR, CUST_TYPE, SIGN_FROM |
 | `YCIS_SHORTFALL` | MANDT, PERIOD_FROM, PERIOD_TO, **MATNR** |
 | `YCIS_NODISC_GRD` | MANDT, KONDM |
-| `YCIS_SCH_PARAM` | MANDT, PARAM_KEY |
 
-**Program (1):** `YCIS_REBATE_REPORT`
+**Programs (2):** `YRVG004_QAIS_EXECUTE_N1`, `YCIS_REBATE_REPORT`
 
-> ⚠️ **`YRVG004_QAIS_EXECUTE_N1` is NOT in this ZIP** — it already exists in the
-> system, so it is copied in manually (paste the source from the repo file
-> `YRVG004_QAIS_EXECUTE_N1.abap`, which already references the new `YCIS_*` tables).
+> **Two tables dropped per GAIL feedback (07.07.2026):**
+> - `YCIS_CUST_TYPE` — customer type is read from the existing
+>   `YRVA_QAIS_DATA-YY_CUSCLASS` field (`'TRADER'` ⇒ T, else A), so no mapping table is needed.
+> - `YCIS_SCH_PARAM` — the 200 MT cap is already handled in `YRVG004` at CIS creation.
 
 > **Table names were shortened to fit SAP's 16-character limit.** Original (first
 > proposed) name → final table name now used in the ABAP source:
@@ -37,7 +36,6 @@ All objects are in the **`Y`** customer namespace.
 > |---|---|
 > | `ZCIS_SHORTFALL_GRD` (18) | `YCIS_SHORTFALL` (14) |
 > | `ZCIS_NODISC_GRADE` (17) | `YCIS_NODISC_GRD` (15) |
-> | `ZCIS_SCHEME_PARAM` (17) | `YCIS_SCH_PARAM` (14) |
 >
 > All objects were also moved from the `Z` to the `Y` namespace. The customer-type
 > **data element** is `YCIS_CTYPE` (not `YCIS_CUST_TYPE`) — SAP does not allow a
@@ -83,8 +81,6 @@ These cannot be carried in the ZIP and must be done in the system:
 4. **Seed data** (SM30/SE16) — see `CIS_2026_27_DDIC_OBJECTS.md` for the rows:
    - `YCIS_WAIVER_RULE` — 5 approved rows (2026-27).
    - `YCIS_NODISC_GRD` — KONDM I2–I7, I8–J3, 74, 75 (confirmed 02.07.2026).
-   - `YCIS_SCH_PARAM` — `TRADER_CAP_MT = 200`.
-   - `YCIS_CUST_TYPE` — KATR2 → A/T mapping (values to be confirmed by GAIL).
    - `YCIS_SHORTFALL` — **material numbers** declared shortfall per period.
 
 5. **`YCIS_REBATE_REPORT`** — set default `p_auart` to the actual CIS

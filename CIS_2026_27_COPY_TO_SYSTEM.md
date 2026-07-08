@@ -10,12 +10,13 @@ Field-level details are in `CIS_2026_27_DDIC_OBJECTS.md`.
 
 | # | Object | Type | Requirement |
 |---|---|---|---|
-| 1 | `YCIS_CUST_TYPE` | Transparent table (KUNNR → A/T) | R1 waiver, 200 MT cap |
-| 2 | `YCIS_WAIVER_RULE` | Transparent table (+ seed rows) | R1 waiver counts/floor |
-| 3 | `YCIS_SHORTFALL` | Transparent table | R2 shortfall auto |
-| 4 | `YCIS_NODISC_GRD` | Transparent table | Non-discount grades (PS/GS/Powder/Polyfines) |
-| 5 | `YCIS_SCH_PARAM` | Transparent table (+ seed `TRADER_CAP_MT=200`) | 200 MT cap & scheme params |
-| 6 | Data elements/domains | `YCIS_CUST_TYPE, YCIS_YEAR, YCIS_MONTH, YCIS_PERC` | typing |
+| 1 | `YCIS_WAIVER_RULE` | Transparent table (+ seed rows) | R1 waiver counts/floor |
+| 2 | `YCIS_SHORTFALL` | Transparent table | R2 shortfall auto |
+| 3 | `YCIS_NODISC_GRD` | Transparent table | Non-discount grades (PS/GS/Powder/Polyfines) |
+| 4 | Data elements/domains | `YCIS_CTYPE, YCIS_YEAR, YCIS_MONTH, YCIS_PERC, YCIS_COUNT` | typing |
+
+> Dropped per GAIL 07.07.2026: `YCIS_CUST_TYPE` (customer type read from existing
+> `YRVA_QAIS_DATA-YY_CUSCLASS`) and `YCIS_SCH_PARAM` (200 MT cap already in YRVG004).
 
 ## STEP 2 — Create program source (SE38)
 | # | Program | Action |
@@ -37,15 +38,15 @@ Field-level details are in `CIS_2026_27_DDIC_OBJECTS.md`.
 
 ## STEP 5 — Table maintenance generators (SE11 → Utilities)
 Generate SM30 maintenance (function group `YCIS`) for:
-`YCIS_CUST_TYPE`, `YCIS_WAIVER_RULE`, `YCIS_SHORTFALL`, `YCIS_NODISC_GRD`, `YCIS_SCH_PARAM`.
+`YCIS_WAIVER_RULE`, `YCIS_SHORTFALL`, `YCIS_NODISC_GRD`.
 
 ## STEP 6 — Master / config data
 | # | Data | Where |
 |---|---|---|
 | 1 | Waiver rules (seed table in DDIC doc) | `YCIS_WAIVER_RULE` |
-| 2 | Customer type A/T per customer | `YCIS_CUST_TYPE` |
+| 2 | Customer type A/T per customer | *existing field* `YRVA_QAIS_DATA-YY_CUSCLASS` (no new table) |
 | 3 | Non-discount grades (PS/GS/Powder/Polyfines) — KONDM: **I2,I3,I4,I5,I6,I7 (PS), I8,I9,J0,J1,J2,J3 (GS), 74 (Polyfine), 75 (Powder)** [confirmed by GAIL 02.07.2026] | `YCIS_NODISC_GRD` |
-| 4 | `TRADER_CAP_MT = 200` | `YCIS_SCH_PARAM` |
+| 4 | 200 MT cap | *already in `YRVG004` at CIS creation (no new table)* |
 | 5 | New seasonal grade **B63HM0003** (+ existing seasonal grades) | `YRVA_PRS_GRADES` (indicator S) |
 | 6 | Group / MLE relationships (`ZGPGRP` / `ZGPMLL`, role `ZCUSBPX`) | **BP** per BP User Manual |
 
@@ -58,7 +59,8 @@ Generate SM30 maintenance (function group `YCIS`) for:
 - Error messages; Quarterly & Annual-Consistency radio buttons removed.
 - Divide-by-zero guards; self-contained GUI status + `PF_STATUS_SET`.
 - R1 waiver **floor 25%/50%** — config-driven, applied in all 12 monthly forms.
-- Config loads for all Z tables; scheme param 200 MT read.
+- Customer type (A/T) read from existing `YRVA_QAIS_DATA-YY_CUSCLASS` (`'TRADER'` ⇒ T).
+- Config loads for the 3 `YCIS_*` tables.
 - Helper forms added & ready: `get_cust_wv_floor`, `get_group_mle_members`,
   `is_nodisc_grade`, `build_cis_shortfall`.
 
@@ -68,7 +70,7 @@ call is staged (helper ready) rather than wired blind:
 
 | Item | Helper to call | Where to place | Needs |
 |---|---|---|---|
-| 200 MTM cap (Trader/AUT) | use `lv_trader_cap_mt` + `lv_cust_type` | where monthly MCQ / `w_month_max` is set | confirm cap applies to MCQ |
+| ~~200 MTM cap (Trader/AUT)~~ **Not needed** | — | already handled in `YRVG004` at CIS creation (GAIL 07.07.2026) | — |
 | ~~Non-discount grades no discount (pt.5)~~ **DONE** | via `r_nodisc` range | wired into existing `lv_no_dis_qty` exclusion (40 blocks) | KONDM list confirmed 02.07.2026 |
 | ~~R2 shortfall auto-apply~~ **DONE** | `build_cis_shortfall` + `it_cis_shortfall` | wired at the monthly `w_waive_month` set (line ~7829) | ⚠️ verify `YRVA_QAIS_TNTLFT` grade field name |
 | R1 waiver-count / max-1-per-qtr | `lv_wv_allowed` | monthly waiver grant point | confirm counter reset per quarter |
@@ -85,7 +87,7 @@ call is staged (helper ready) rather than wired blind:
 ---
 
 ## Confirmations still required from GAIL
-1. **Customer type** (AU / Trader-AUT) source — new `YCIS_CUST_TYPE`, or an existing field (`KDGRP`/`KVGR*`/BP role)?
+1. ~~**Customer type** source~~ **Resolved 07.07.2026** — read from existing `YRVA_QAIS_DATA-YY_CUSCLASS` (`'TRADER'` ⇒ T, else A).
 2. **Clause 11** (discount structure) & **clause 8.I/8.II** (waiver) text.
 3. **PS/GS/Powder/Polyfines** grade identification (`KONDM` values).
 4. **Tentative-lifting** field for MCQ/ACQ.

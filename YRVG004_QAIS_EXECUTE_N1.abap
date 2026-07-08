@@ -383,12 +383,10 @@ DATA: lv_flag123 TYPE char1.
 *   customer type (AU 25% / AUT-Trader 50%) and the number of monthly
 *   waivers depends on the CIS signing month, capped at 1 per quarter.
 *   Values are read from Z config tables (see DDIC spec) - NOT hard-coded.
-TABLES: ycis_cust_type, ycis_waiver_rule.
-DATA: it_ycis_cust_type  TYPE STANDARD TABLE OF ycis_cust_type,
-      wa_ycis_cust_type  TYPE ycis_cust_type,
-      it_ycis_waiver_rule TYPE STANDARD TABLE OF ycis_waiver_rule,
+TABLES: ycis_waiver_rule.
+DATA: it_ycis_waiver_rule TYPE STANDARD TABLE OF ycis_waiver_rule,
       wa_ycis_waiver_rule TYPE ycis_waiver_rule,
-      lv_cust_type       TYPE ycis_cust_type-cust_type,   " A=AU, T=AUT/Trader
+      lv_cust_type       TYPE ycis_waiver_rule-cust_type,  " A=AU, T=AUT/Trader (from YY_CUSCLASS)
       lv_wv_floor        TYPE p DECIMALS 3,                " 0.250 / 0.500
       lv_wv_allowed      TYPE i,                           " waivers allowed for the CIS
       lv_wv_maxqtr       TYPE i,                           " max waivers per quarter (default 1)
@@ -406,18 +404,16 @@ DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 *     Derived via CVI_CUST_LINK + BUT000 (see get_group_mle_members).
 *   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
 *   receive no monthly/annual discount -> YCIS_NODISC_GRD.
-*   Scheme numeric parameters (e.g. Trader/AUT 200 MTM monthly cap) ->
-*     YCIS_SCH_PARAM (key -> value), nothing hard-coded.
-TABLES: ycis_nodisc_grd, ycis_sch_param.
+*   The 200 MT upper-capping is already handled inside YRVG004 at CIS
+*   creation (first radio button), confirmed by GAIL 07.07.2026 - so no
+*   scheme-parameter table is required here.
+TABLES: ycis_nodisc_grd.
 DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_but050        TYPE but050,
       it_grp_members   TYPE STANDARD TABLE OF kunnr,        " group/MLE member customer codes
       wa_grp_member    TYPE kunnr,
       it_ycis_nodisc   TYPE STANDARD TABLE OF ycis_nodisc_grd,
-      wa_ycis_nodisc   TYPE ycis_nodisc_grd,
-      it_ycis_param    TYPE STANDARD TABLE OF ycis_sch_param,
-      wa_ycis_param    TYPE ycis_sch_param,
-      lv_trader_cap_mt TYPE p DECIMALS 3.                   " 200 MTM for Trader/AUT
+      wa_ycis_nodisc   TYPE ycis_nodisc_grd.
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *   CIS (qais_no) that have at least one signed material declared shortfall
 *   for the period -> eligible for monthly shortfall waiver (Clause 8).
@@ -1220,7 +1216,6 @@ FORM get_data.
 
 *** SOC : CIS 2026-27 - load customer-type / waiver-rule / shortfall config (R1+R2) ***
 *   Loaded once; used per customer in the monthly waiver logic.
-  SELECT * FROM ycis_cust_type   INTO TABLE it_ycis_cust_type.
   SELECT * FROM ycis_waiver_rule INTO TABLE it_ycis_waiver_rule
     WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
   SELECT * FROM ycis_shortfall INTO TABLE it_ycis_shortfall
@@ -1235,17 +1230,8 @@ FORM get_data.
     r_nodisc-low  = wa_ycis_nodisc-kondm.
     APPEND r_nodisc.
   ENDLOOP.
-  SELECT * FROM ycis_sch_param INTO TABLE it_ycis_param.
 *   Clause 8: build the list of CIS whose signed material is declared shortfall
   PERFORM build_cis_shortfall.
-*   Trader/AUT monthly cap (MTM) - default 200 if not configured
-  CLEAR lv_trader_cap_mt.
-  READ TABLE it_ycis_param INTO wa_ycis_param WITH KEY param_key = 'TRADER_CAP_MT'.
-  IF sy-subrc = 0.
-    lv_trader_cap_mt = wa_ycis_param-param_val.
-  ELSE.
-    lv_trader_cap_mt = 200.
-  ENDIF.
 *** EOC : CIS 2026-27 - load config (R1+R2) ***
 
   CLEAR wa_where_tab.
@@ -11423,7 +11409,7 @@ ENDFORM.                    "pf_status_set
 *&      Form  get_cust_wv_floor   (CIS 2026-27 - R1)
 *&---------------------------------------------------------------------*
 *   For the given customer, resolve:
-*     - lv_cust_type  : A = Actual User, T = AUT / Trader (YCIS_CUST_TYPE)
+*     - lv_cust_type  : A = Actual User, T = AUT / Trader (from YRVA_QAIS_DATA-YY_CUSCLASS)
 *     - lv_wv_floor   : minimum lifting fraction in a waiver month
 *                       (AU 0.25 / AUT-Trader 0.50), from YCIS_WAIVER_RULE
 *     - lv_wv_allowed : number of monthly waivers allowed for the CIS,
@@ -11435,16 +11421,12 @@ FORM get_cust_wv_floor USING p_kunnr   TYPE kunnr
   DATA: lv_signmon TYPE n LENGTH 2.
   CLEAR: lv_cust_type, lv_wv_floor, lv_wv_allowed.
 
-*  1) customer type (default to AU if not classified)
-*  Customer type is derived from KNA1-KATR2 (Attribute 2), confirmed by
-*  GAIL 02.07.2026. The KATR2 value is mapped to A (Actual User) / T
-*  (AUT / Trader) via YCIS_CUST_TYPE (key = KATR2). Default A if not mapped.
-  DATA: lv_katr2 TYPE kna1-katr2.
-  SELECT SINGLE katr2 FROM kna1 INTO lv_katr2 WHERE kunnr = p_kunnr.
-  READ TABLE it_ycis_cust_type INTO wa_ycis_cust_type
-       WITH KEY katr2 = lv_katr2.
-  IF sy-subrc = 0.
-    lv_cust_type = wa_ycis_cust_type-cust_type.
+*  1) customer type - read from the existing CIS data field
+*  YRVA_QAIS_DATA-YY_CUSCLASS (Customer Classification), confirmed by GAIL
+*  07.07.2026. 'TRADER' => T (AUT / Trader); anything else => A (Actual
+*  User). No separate mapping table is needed.
+  IF wa_yrva_qais_data-yy_cusclass = 'TRADER'.
+    lv_cust_type = 'T'.
   ELSE.
     lv_cust_type = 'A'.
   ENDIF.

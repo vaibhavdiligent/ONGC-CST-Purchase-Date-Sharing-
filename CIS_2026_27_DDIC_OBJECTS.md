@@ -11,21 +11,13 @@ The ABAP code already references these exact table and field names.
 
 ## R1 — Customer Waiver
 
-### Table `YCIS_CUST_TYPE` (transparent, config)
-**Customer type is read from `KNA1-KATR2` (Attribute 2)** — confirmed by GAIL 02.07.2026.
-This small table just maps each KATR2 value to A (Actual User) / T (AUT/Trader).
-
-| Field | Key | Data element / type | Description |
-|---|---|---|---|
-| `MANDT` | ✔ | MANDT | Client |
-| `KATR2` | ✔ | KATR2 | Customer Attribute 2 (from KNA1) |
-| `CUST_TYPE` |   | `YCIS_CTYPE` (CHAR1) | `A` = Actual User, `T` = AUT/Trader |
-
-*Data element `YCIS_CTYPE` — domain `YCIS_CTYPE`, CHAR1, fixed values A / T.
-(Named `YCIS_CTYPE`, not `YCIS_CUST_TYPE`, because SAP does not allow a table and a
-data element to share the same name.)*
-⚠️ **Still needed from GAIL:** which **KATR2 values** correspond to AU vs AUT/Trader
-(so the mapping rows can be maintained).
+> **No customer-type mapping table is needed.** GAIL confirmed (07.07.2026) that the
+> customer classification is already captured in the existing CIS table
+> **`YRVA_QAIS_DATA-YY_CUSCLASS`** (Customer Classification). The program reads that
+> field directly: `YY_CUSCLASS = 'TRADER'` ⇒ **T** (AUT / Trader); anything else ⇒ **A**
+> (Actual User). *(The earlier `YCIS_CUST_TYPE` table is dropped.)*
+> The `YCIS_CTYPE` data element/domain (CHAR1, fixed values A/T) is retained because it
+> types the `CUST_TYPE` key of `YCIS_WAIVER_RULE` below.
 
 ### Table `YCIS_WAIVER_RULE` (transparent, config)
 Waiver rule by customer type and CIS signing-month band.
@@ -122,17 +114,10 @@ Grades that count for eligibility / MCQ but receive **no** monthly/annual discou
 | 74 | Poly Fine GL / Poly Fine GL PC-II |
 | 75 | Powder GLX / GLX-2 / HDPE PC-II / LLDPE PC-II |
 
-### Table `YCIS_SCH_PARAM` (transparent, config)
-Generic scheme numeric parameters (avoids hard-coding, e.g. 200 MTM cap).
-
-| Field | Key | Data element / type | Description |
-|---|---|---|---|
-| `MANDT` | ✔ | MANDT | Client |
-| `PARAM_KEY` | ✔ | CHAR20 | e.g. `TRADER_CAP_MT` |
-| `PARAM_VAL` |   | DEC15.3 | Value (e.g. 200) |
-| `DESCR` |   | CHAR40 | Description |
-
-**Seed:** `TRADER_CAP_MT = 200` (Trader/AUT monthly cap in MT).
+### ~~Table `YCIS_SCH_PARAM`~~ — not required
+> GAIL confirmed (07.07.2026) that the **200 MT upper-capping is already handled inside
+> `YRVG004` at CIS creation** (first radio button). No scheme-parameter table is needed,
+> so `YCIS_SCH_PARAM` (and the `YCIS_PARAM_KEY` / `YCIS_PARAM_VAL` data elements) are dropped.
 
 ---
 
