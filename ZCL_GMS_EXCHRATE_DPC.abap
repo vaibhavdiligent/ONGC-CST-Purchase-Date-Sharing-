@@ -3,26 +3,16 @@
 *&---------------------------------------------------------------------*
 *& Runtime for the inbound Exchange Rate upload service called by CPI.
 *&
-*& CPI performs ONE deep insert (POST) to the header entity set and
-*& embeds the ExchangeRate collection via the navigation property:
+*& FLAT model: CPI calls Create(POST) on ExchangeRateSet. Multiple rows
+*& are sent in ONE $batch call -> the framework runs CREATE_ENTITY once
+*& per row (each row is one exchange rate).
 *&
-*&   POST /sap/opu/odata/sap/ZGMS_EXCHRATE_SRV/ExchangeRatesSet
-*&   {
-*&     "REQUEST_ID": "",
-*&     "ExchangeRate": [
-*&       { "RATE_TYPE":"M","FROM_CURR":"USD","TO_CURRNCY":"INR",
-*&         "VALID_FROM":"20260623","EXCH_RATE":"83.25",
-*&         "FROM_FACTOR":"1","TO_FACTOR":"1" },
-*&       ...
-*&     ]
-*&   }
+*& Each row is written to TCURR with BAPI_EXCHANGERATE_CREATEMULTIPLE.
+*& VALID_FROM arrives as DD.MM.YYYY (e.g. 01.04.2025) and is converted
+*& to YYYYMMDD for the BAPI.
 *&
-*& The whole batch lands in ONE call in CREATE_DEEP_ENTITY and is written
-*& to TCURR with BAPI_EXCHANGERATE_CREATEMULTIPLE in a single call
-*& (all-or-nothing: any error rolls the whole batch back).
-*&
-*& The ABAP item field names match BAPI1093_0 1:1, so MOVE-CORRESPONDING
-*& fills the BAPI table directly.
+*& Field names of TS_EXCHANGERATE match BAPI1093_0 1:1, so
+*& MOVE-CORRESPONDING fills the BAPI table directly.
 *&
 *& Extends /IWBEP/CL_MGW_PUSH_ABS_DATA. Register together with
 *& ZCL_GMS_EXCHRATE_MPC via /IWFND/MAINT_SERVICE (service
@@ -34,109 +24,75 @@ CLASS zcl_gms_exchrate_dpc DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
-    METHODS /iwbep/if_mgw_appl_srv_runtime~create_deep_entity REDEFINITION.
-
-  PROTECTED SECTION.
-    "! Mandatory-field check for one item. Returns an E message or empty.
-    METHODS validate_rate
-      IMPORTING
-        is_rate          TYPE zcl_gms_exchrate_mpc=>ty_exchange_rate
-      RETURNING
-        VALUE(rs_return) TYPE bapiret2.
+    METHODS /iwbep/if_mgw_appl_srv_runtime~create_entity REDEFINITION.
 ENDCLASS.
 
 
 CLASS zcl_gms_exchrate_dpc IMPLEMENTATION.
 
-  METHOD /iwbep/if_mgw_appl_srv_runtime~create_deep_entity.
+  METHOD /iwbep/if_mgw_appl_srv_runtime~create_entity.
 
-    DATA: ls_deep    TYPE zcl_gms_exchrate_mpc=>ty_deep,
-          lt_list    TYPE STANDARD TABLE OF bapi1093_0,   " BAPI input table
-          ls_list    TYPE bapi1093_0,
-          lt_return  TYPE bapiret2_t,
-          ls_return  TYPE bapiret2,
-          lv_errors  TYPE i.
+    DATA: ls_rate   TYPE zcl_gms_exchrate_mpc=>ty_exchange_rate,
+          lt_list   TYPE STANDARD TABLE OF bapi1093_0,
+          ls_list   TYPE bapi1093_0,
+          lt_return TYPE bapiret2_t,
+          ls_return TYPE bapiret2,
+          lv_valid  TYPE c LENGTH 8.
 
-    FIELD-SYMBOLS <ls_rate> TYPE zcl_gms_exchrate_mpc=>ty_exchange_rate.
+    "--- 1. Read the single posted rate
+    io_data_provider->read_entry_data( IMPORTING es_data = ls_rate ).
 
-    "--- 1. Read the deep payload posted by CPI ------------------------
-    io_data_provider->read_entry_data( IMPORTING es_data = ls_deep ).
-
-    "--- 2. Generate a request id if CPI did not send one --------------
-    IF ls_deep-request_id IS INITIAL.
-      TRY.
-          ls_deep-request_id = cl_system_uuid=>create_uuid_c32_static( ).
-        CATCH cx_uuid_error.
-          GET TIME STAMP FIELD DATA(lv_ts).
-          ls_deep-request_id = lv_ts.
-      ENDTRY.
-    ENDIF.
-
-    "--- 3. Validate + map items into the BAPI table -------------------
-    "    Field names of TY_EXCHANGE_RATE match BAPI1093_0 1:1, so a
-    "    MOVE-CORRESPONDING transfers every field (RATE_TYPE, FROM_CURR,
-    "    TO_CURRNCY, VALID_FROM, EXCH_RATE, FROM_FACTOR, TO_FACTOR and
-    "    the optional *_V fields).
-    "    Note: VALID_FROM is expected as YYYYMMDD from CPI.
-    LOOP AT ls_deep-exchangerate ASSIGNING <ls_rate>.
-      ls_return = me->validate_rate( <ls_rate> ).
-      IF ls_return IS NOT INITIAL.
-        APPEND ls_return TO lt_return.
-        lv_errors = lv_errors + 1.
-        CONTINUE.
-      ENDIF.
-
-      CLEAR ls_list.
-      MOVE-CORRESPONDING <ls_rate> TO ls_list.
-      APPEND ls_list TO lt_list.
-    ENDLOOP.
-
-    "--- 4. Post the whole batch in one BAPI call ----------------------
-    IF lv_errors = 0 AND lt_list IS NOT INITIAL.
-      CALL FUNCTION 'BAPI_EXCHANGERATE_CREATEMULTIPLE'
-        EXPORTING
-          upd_allowed    = abap_true     " update existing TCURR entries too
-        TABLES
-          exch_rate_list = lt_list
-          return         = lt_return.
-
-      LOOP AT lt_return INTO ls_return WHERE type CA 'EAX'.
-        lv_errors = lv_errors + 1.
-      ENDLOOP.
-    ENDIF.
-
-    "--- 5. Commit or roll back the whole batch ------------------------
-    IF lv_errors > 0.
-      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
-      DATA(lo_msg_container) = mo_context->get_message_container( ).
-      lo_msg_container->add_messages_from_bapi( it_bapi_messages = lt_return ).
+    "--- 2. Mandatory-field check
+    IF ls_rate-rate_type  IS INITIAL OR ls_rate-from_curr   IS INITIAL OR
+       ls_rate-to_currncy IS INITIAL OR ls_rate-valid_from  IS INITIAL OR
+       ls_rate-exch_rate  IS INITIAL OR ls_rate-from_factor IS INITIAL OR
+       ls_rate-to_factor  IS INITIAL.
+      DATA(lv_msg1) = |Mandatory field missing for { ls_rate-from_curr }/{ ls_rate-to_currncy } { ls_rate-valid_from }|.
+      DATA(lo_mc1)  = mo_context->get_message_container( ).
+      lo_mc1->add_message_text_only( iv_msg_type = 'E' iv_msg_text = lv_msg1 ).
       RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
-        EXPORTING
-          message_container = lo_msg_container.
+        EXPORTING message_container = lo_mc1.
+    ENDIF.
+
+    "--- 3. Map to BAPI + convert VALID_FROM DD.MM.YYYY -> YYYYMMDD
+    MOVE-CORRESPONDING ls_rate TO ls_list.
+    IF ls_rate-valid_from CA '.'.
+      lv_valid = ls_rate-valid_from+6(4)   " YYYY
+              && ls_rate-valid_from+3(2)   " MM
+              && ls_rate-valid_from+0(2).  " DD
+    ELSE.
+      lv_valid = ls_rate-valid_from.       " already YYYYMMDD
+    ENDIF.
+    ls_list-valid_from = lv_valid.
+    APPEND ls_list TO lt_list.
+
+    "--- 4. Post to TCURR
+    CALL FUNCTION 'BAPI_EXCHANGERATE_CREATEMULTIPLE'
+      EXPORTING
+        upd_allowed    = abap_true
+      TABLES
+        exch_rate_list = lt_list
+        return         = lt_return.
+
+    "--- 5. Error handling / commit (per row within the $batch changeset)
+    READ TABLE lt_return INTO ls_return WITH KEY type = 'E'.
+    IF sy-subrc <> 0.
+      READ TABLE lt_return INTO ls_return WITH KEY type = 'A'.
+    ENDIF.
+    IF sy-subrc = 0.
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+      DATA(lo_mc2) = mo_context->get_message_container( ).
+      lo_mc2->add_messages_from_bapi( it_bapi_messages = lt_return ).
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING message_container = lo_mc2.
     ELSE.
       CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
-        EXPORTING
-          wait = abap_true.
+        EXPORTING wait = abap_true.
     ENDIF.
 
-    "--- 6. Echo the processed header back to the caller ---------------
-    DATA ls_head TYPE zcl_gms_exchrate_mpc=>ty_exchange_rates.
-    ls_head-request_id = ls_deep-request_id.
-    copy_data_to_ref( EXPORTING is_data = ls_head
-                      CHANGING  cr_data = er_deep_entity ).
-  ENDMETHOD.
-
-
-  METHOD validate_rate.
-    IF is_rate-rate_type  IS INITIAL OR is_rate-from_curr   IS INITIAL OR
-       is_rate-to_currncy IS INITIAL OR is_rate-valid_from  IS INITIAL OR
-       is_rate-exch_rate  IS INITIAL OR is_rate-from_factor IS INITIAL OR
-       is_rate-to_factor  IS INITIAL.
-      rs_return-type    = 'E'.
-      rs_return-id      = 'ZGMS'.
-      rs_return-number  = '000'.
-      rs_return-message = |Mandatory field missing for { is_rate-from_curr }/{ is_rate-to_currncy } { is_rate-valid_from }|.
-    ENDIF.
+    "--- 6. Echo the created entity back
+    copy_data_to_ref( EXPORTING is_data = ls_rate
+                      CHANGING  cr_data = er_entity ).
   ENDMETHOD.
 
 ENDCLASS.
