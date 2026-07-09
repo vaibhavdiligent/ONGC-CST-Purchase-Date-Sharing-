@@ -219,8 +219,6 @@ MODULE get_selected_row_tab2 INPUT.
   CREATE OBJECT lo_bnk_detail.
 
 
-  DATA: lv_paym_idx TYPE sy-tabix.
-
   IF ok_code2 = 'APPROVE2'.
     CALL METHOD c_alvgd2->get_selected_rows
       IMPORTING
@@ -229,149 +227,139 @@ MODULE get_selected_row_tab2 INPUT.
     CLEAR : lv_lines1.
     DESCRIBE TABLE gt_selected_rows2 LINES lv_lines1.
     IF lv_lines1 EQ 0.
-      MESSAGE 'Please select at least one record' TYPE 'I'.
+      MESSAGE 'Please select one record' TYPE 'I'.
+      EXIT.
+    ELSEIF lv_lines1 > 1.
+      MESSAGE 'Please select only single record' TYPE 'I'.
       EXIT.
     ENDIF.
 
-*   Process every selected batch. A payment file (keyed by LAUFD/LAUFI)
-*   carries the data of all its batches, so it is transmitted to the bank
-*   only ONCE even when several of its batches are selected; each selected
-*   batch is individually recorded as approved in ZFI_BATCH_SIGN.
     IF gt_selected_rows2 IS NOT INITIAL.
-      LOOP AT gt_selected_rows2 INTO gs_selected_rows2.
-        CLEAR : gs_final2, gs_paym2, gs_batch_sign2, lv_doc_sig, err_string.
+      READ TABLE gt_selected_rows2 INTO gs_selected_rows2 INDEX 1.
+      IF sy-subrc = 0.
         READ TABLE gt_final2 INTO gs_final2 INDEX gs_selected_rows2-index.
-        IF sy-subrc <> 0.
-          CONTINUE.
-        ENDIF.
-
-        CALL FUNCTION 'SSFS_CALL_CONTROL'
-          EXPORTING
-*           TXTDOCUMENT     = doc_tab
-            bindocument     = gs_final2-file_data_sent "doc_bin
-            doc_type        = 'TXT'
-          IMPORTING
-            crc             = lv_crc
-            signature       = lv_doc_sig
-          EXCEPTIONS
-            parameter_error = 1
-            conversion_error = 2
-            control_error   = 3
-            frontend_error  = 4
-            OTHERS          = 5.
-
-        IF lv_crc <> 0.
-          IF lv_crc = 2.
-            MESSAGE 'Please insert E-token' TYPE 'I'.
-          ENDIF.
-          CONTINUE.
-        ENDIF.
-
-        REFRESH sig_list1.
-        CALL FUNCTION 'SSFS_SERVER_VERIFY'
-          EXPORTING
-*           SSFAPPLIC       =
-            signature       = lv_doc_sig
-          IMPORTING
-            crc             = lv_crc
-            signerlist      = sig_list1
-            txtdocument_out = doc_tab1
-            bindocument_out = doc_ver1
-          EXCEPTIONS
-            kernel_error    = 1
-            parameter_error = 2
-            OTHERS          = 3.
-        IF lv_crc <> 0.
-          CONTINUE.
-        ENDIF.
-
-        go_file_verifier1 = lcl_file_verifier=>get_instance( ).
-        READ TABLE sig_list1 INTO l_sign1 INDEX 1.
         IF sy-subrc = 0.
-          CALL METHOD go_file_verifier1->get_signer_info
+          CALL FUNCTION 'SSFS_CALL_CONTROL'
             EXPORTING
-              is_signerlist = l_sign1
+*             TXTDOCUMENT     = doc_tab
+              bindocument     = gs_final2-file_data_sent "doc_bin
+              doc_type        = 'TXT'
+*             ssf_id          = 'CN=Kashyap Banaam Bhushan, SP=Delhi, postalCode=110092, OU=CID - 2923089, O=Oil and Natural Gas Corporation Ltd., C=IN'
             IMPORTING
-              ev_owner      = ev_owner1
-              ev_email      = ev_email1
-              ev_serial     = ev_serial1
-              ev_thumbprint = ev_thumbprint1
-              ev_validfrom  = ev_validfrom1
-              ev_validto    = ev_validto1
-              ev_issuer     = ev_issuer1
-              e_int         = e_int1.
-        ENDIF.
+              crc             = lv_crc
+              signature       = lv_doc_sig
+            EXCEPTIONS
+              parameter_error = 1
+              conversion_error = 2
+              control_error   = 3
+              frontend_error  = 4
+              OTHERS          = 5.
 
-        SELECT * INTO TABLE it_zuser_signer1
-          FROM zuser_signer WHERE  uname = sy-uname
-                            AND    active = 'X'.
-        IF sy-subrc = 0.
-          READ TABLE it_zuser_signer1 INTO wa_zuser_signer1 WITH KEY thumbprin = ev_thumbprint1.
-          IF sy-subrc <> 0.
-            MESSAGE 'Wrong Signature used for signing' TYPE 'I'.
-            EXIT.
-          ENDIF.
-        ELSE.
-          MESSAGE 'No Signature Maintained for user' TYPE 'I'.
-          EXIT.
-        ENDIF.
 
-        CLEAR gs_paym2.
-        READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufi = gs_final2-laufi
-                                                   laufd = gs_final2-laufd.
-        IF sy-subrc = 0.
-          lv_paym_idx = sy-tabix.
-*         Transmit the file to the bank only ONCE. It carries the data of
-*         all its batches, so if it has already been sent (in this run or
-*         earlier) we skip the send and only record this batch's approval.
-          IF gs_paym2-sent = ' '.
-            proxy_data-parameters-arg0  = gs_paym2-file_name.
-            proxy_data-parameters-arg1  = lv_doc_sig.
-            TRY.
-                CALL METHOD lo_bnk_detail->sios_bank_interface_encryption "sios_sbiwebservice_encryption "si_sbiwebservice_enc
+          IF lv_crc = 0.
+            REFRESH sig_list1.
+            CALL FUNCTION 'SSFS_SERVER_VERIFY'
+              EXPORTING
+*               SSFAPPLIC       =
+                signature       = lv_doc_sig
+              IMPORTING
+                crc             = lv_crc
+                signerlist      = sig_list1
+                txtdocument_out = doc_tab1
+                bindocument_out = doc_ver1
+              EXCEPTIONS
+                kernel_error    = 1
+                parameter_error = 2
+                OTHERS          = 3.
+*BREAK-POINT.
+            IF lv_crc = 0.
+              go_file_verifier1 = lcl_file_verifier=>get_instance( ).
+
+              READ TABLE sig_list1 INTO l_sign1 INDEX 1.
+              IF sy-subrc = 0.
+                CALL METHOD go_file_verifier1->get_signer_info
                   EXPORTING
-                    output = proxy_data
+                    is_signerlist = l_sign1
                   IMPORTING
-                    input  = lt_input.
-              CATCH cx_ai_system_fault INTO lo_sys_exception.
-                err_string = lo_sys_exception->get_text( ).
+                    ev_owner      = ev_owner1
+                    ev_email      = ev_email1
+                    ev_serial     = ev_serial1
+                    ev_thumbprint = ev_thumbprint1
+                    ev_validfrom  = ev_validfrom1
+                    ev_validto    = ev_validto1
+                    ev_issuer     = ev_issuer1
+                    e_int         = e_int1.
+              ENDIF.
 
-              CATCH cx_ai_application_fault .
-            ENDTRY.
-            IF err_string IS NOT INITIAL.
-              gs_paym2-file_data_sent = lv_doc_sig.
-              gs_paym2-sent_error     = 'X'.
-              gs_paym2-sent           = 'X'.
-              gs_paym2-sent_date      = sy-datum.
-              gs_paym2-sent_time      = sy-uzeit.
-              MODIFY zfi_paym_file FROM gs_paym2.
-              MODIFY gt_paym2 FROM gs_paym2 INDEX lv_paym_idx.
-              MESSAGE 'Error in sending' TYPE 'I'.
-            ELSE.
-              gs_paym2-file_data_sent = lv_doc_sig.
-              gs_paym2-sent           = 'X'.
-              gs_paym2-sent_date      = sy-datum.
-              gs_paym2-sent_time      = sy-uzeit.
-              MODIFY zfi_paym_file FROM gs_paym2.
-              MODIFY gt_paym2 FROM gs_paym2 INDEX lv_paym_idx.
+              SELECT * INTO TABLE it_zuser_signer1
+                FROM zuser_signer WHERE  uname = sy-uname
+                                  AND    active = 'X'.
+              IF sy-subrc = 0.
+                READ TABLE it_zuser_signer1 INTO wa_zuser_signer1 WITH KEY thumbprin = ev_thumbprint1.
+                IF sy-subrc <> 0.
+                  MESSAGE 'Wrong Signature used for signing' TYPE 'I'.
+                  EXIT.
+                ENDIF.
+              ELSE.
+                MESSAGE 'No Signature Maintained for user' TYPE 'I'.
+                EXIT.
+              ENDIF.
             ENDIF.
-            CLEAR : proxy_data.
-          ENDIF.
 
-***** record this batch's level-2 approval in ZFI_BATCH_SIGN
-          CLEAR : gs_batch_sign2.
-          READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_final2-guid
-                                                                 signer   = sy-uname.
-          IF sy-subrc = 0.
-            gs_batch_sign2-batch_no    = gs_final2-guid.   "BATCH_NO widened to hold REGUT-GUID
-            gs_batch_sign2-signer      = sy-uname.
-            gs_batch_sign2-digitl_sign = 'X'.
-            gs_batch_sign2-cdate1      = sy-datum.
-            gs_batch_sign2-ctime1      = sy-uzeit.
-            MODIFY zfi_batch_sign FROM gs_batch_sign2.
+            CLEAR gs_paym2.
+            READ TABLE gt_paym2 INTO gs_paym2 WITH KEY laufi = gs_final2-laufi
+                                                       laufd = gs_final2-laufd.
+            IF sy-subrc = 0.
+              IF gs_paym2-sent <> ' '.
+                MESSAGE 'Can not be sent' TYPE 'I'.
+                EXIT.
+              ELSE.
+                proxy_data-parameters-arg0  = gs_paym2-file_name.
+                proxy_data-parameters-arg1  = lv_doc_sig.
+                TRY.
+                    CALL METHOD lo_bnk_detail->sios_bank_interface_encryption "sios_sbiwebservice_encryption "si_sbiwebservice_enc
+                      EXPORTING
+                        output = proxy_data
+                      IMPORTING
+                        input  = lt_input.
+                  CATCH cx_ai_system_fault INTO lo_sys_exception.
+                    err_string = lo_sys_exception->get_text( ).
+
+                  CATCH cx_ai_application_fault .
+                ENDTRY.
+                IF err_string IS NOT INITIAL.
+                  gs_paym2-file_data_sent = lv_doc_sig.
+                  gs_paym2-sent_error     = 'X'.
+                  gs_paym2-sent           = 'X'.
+                  gs_paym2-sent_date      = sy-datum.
+                  gs_paym2-sent_time      = sy-uzeit.
+                  MODIFY zfi_paym_file FROM gs_paym2.
+                  MESSAGE 'Error in sending' TYPE 'I'.
+                ELSE.
+                  gs_paym2-file_data_sent = lv_doc_sig.
+                  gs_paym2-sent           = 'X'.
+                  gs_paym2-sent_date      = sy-datum.
+                  gs_paym2-sent_time      = sy-uzeit.
+                  MODIFY zfi_paym_file FROM gs_paym2.
+                ENDIF.
+***** insert record in table ZFI_BATCH_SIGN
+                CLEAR : gs_batch_sign2.
+                READ TABLE gt_batch_sign2 INTO gs_batch_sign2 WITH KEY batch_no = gs_final2-guid
+                                                                       signer   = sy-uname.
+                IF sy-subrc = 0.
+                  gs_batch_sign2-batch_no    = gs_final2-guid.   "BATCH_NO widened to hold REGUT-GUID
+                  gs_batch_sign2-signer      = sy-uname.
+                  gs_batch_sign2-digitl_sign = 'X'.
+                  gs_batch_sign2-cdate1      = sy-datum.
+                  gs_batch_sign2-ctime1      = sy-uzeit.
+                  MODIFY zfi_batch_sign FROM gs_batch_sign2.
+                  CLEAR : proxy_data.
+                ENDIF.
+              ENDIF.
+            ENDIF.
           ENDIF.
         ENDIF.
-      ENDLOOP.
+      ENDIF.
     ENDIF.
   ENDIF.
 ENDMODULE.                 " GET_SELECTED_ROW_TAB2  INPUT

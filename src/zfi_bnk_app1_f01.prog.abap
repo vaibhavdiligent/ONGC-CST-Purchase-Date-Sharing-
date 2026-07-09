@@ -237,10 +237,7 @@ FORM f_prepare_op_tab2 .
   DATA: lv_key TYPE c LENGTH 45.
 *  BREAK sab_vaibhav.
   REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign2.
-* Do NOT filter on the file-level SENT flag: one file holds many batches,
-* so hiding sent files would drop sibling batches still to be approved.
-* Approved batches are excluded per-batch via DIGITL_SIGN below instead.
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
 
   DELETE gt_paym2 WHERE file_data_sent IS INITIAL.
 
