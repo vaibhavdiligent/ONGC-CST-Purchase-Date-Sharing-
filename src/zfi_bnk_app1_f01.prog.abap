@@ -24,7 +24,10 @@ FORM f_prepare_op_tab1 .
   REFRESH : gt_paym, gt_batch_header,gt_batch_sign,gt_final.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym.
 
-  DELETE gt_paym WHERE file_data_sent IS NOT INITIAL.
+* Do NOT hide on the file-level flag: one file holds many batches, so this
+* would drop every batch of the file after only one batch is approved.
+* Approved batches are excluded per-batch via DIGITL_SIGN below instead.
+*  DELETE gt_paym WHERE file_data_sent IS NOT INITIAL.
   DELETE gt_paym WHERE raw_data IS INITIAL.
 
   IF gt_paym IS NOT INITIAL.
@@ -37,6 +40,7 @@ FORM f_prepare_op_tab1 .
 *     Read this user's level-1 signature assignments
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
         WHERE signer = sy-uname
+        AND   digitl_sign = ' '    "only batches not yet approved by this user (level 1)
         and   snro   = '1'.
 
 
