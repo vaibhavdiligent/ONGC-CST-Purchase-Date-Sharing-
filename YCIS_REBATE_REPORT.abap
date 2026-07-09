@@ -3,7 +3,14 @@
 *&---------------------------------------------------------------------*
 *& CIS 2026-27 - Requirement 5
 *& Report to capture rebate order details created from the CIS program:
-*&   Customer | Material | Quantity | Rebate amount (+ order / status)
+*&   Customer | Grade | Material | Discount Qty | Rebate amount | Reference
+*&
+*& GAIL observation 09.07.2026 (incorporated):
+*&   1. Grade - capture the grade (KONDM) on which the discount is given.
+*&   2. Qty   - capture the quantity on which the discount is given.
+*&   3. Reference no - to identify the discount head. The CIS program stores
+*&      it in the rebate order's Purchase-Order-Number (VBKD-BSTKD, from the
+*&      "remarks"); the discount condition type is ZCMU.
 *&
 *& NOTE (to confirm with GAIL): the rebate order is created as a
 *& credit-memo request from YRVG004 (PERFORM create_sale_order). The exact
@@ -23,11 +30,14 @@ TYPES: BEGIN OF ty_out,
          vbeln      TYPE vbeln_va,     " rebate order
          auart      TYPE auart,        " doc type
          erdat      TYPE erdat,        " created on
+         bstkd      TYPE bstkd,        " reference no (identifies the discount head)
          kunnr      TYPE kunnr,        " customer
          name1      TYPE name1_gp,     " customer name
+         kondm      TYPE kondm,        " grade (material pricing group)
+         kondm_txt  TYPE t178t-vtext,  " grade name
          matnr      TYPE matnr,        " material
          arktx      TYPE arktx,        " material description
-         kwmeng     TYPE kwmeng,       " quantity
+         kwmeng     TYPE kwmeng,       " discount quantity
          vrkme      TYPE vrkme,        " unit
          netwr      TYPE netwr,        " rebate amount (net value)
          waerk      TYPE waerk,        " currency
@@ -89,12 +99,22 @@ FORM get_data.
     gs_out-kunnr  = ls_vbak-kunnr.
     gs_out-matnr  = ls_vbap-matnr.
     gs_out-arktx  = ls_vbap-arktx.
-    gs_out-kwmeng = ls_vbap-kwmeng.
+    gs_out-kondm  = ls_vbap-kondm.          " grade on which discount given
+    gs_out-kwmeng = ls_vbap-kwmeng.         " discount quantity
     gs_out-vrkme  = ls_vbap-vrkme.
     gs_out-netwr  = ls_vbap-netwr.
     gs_out-waerk  = ls_vbak-waerk.
     SELECT SINGLE name1 FROM kna1 INTO gs_out-name1
       WHERE kunnr = gs_out-kunnr.
+*   grade name (material pricing group text)
+    IF ls_vbap-kondm IS NOT INITIAL.
+      SELECT SINGLE vtext FROM t178t INTO gs_out-kondm_txt
+        WHERE spras = sy-langu AND kondm = ls_vbap-kondm.
+    ENDIF.
+*   reference no that identifies the discount head - stored by YRVG004 in the
+*   rebate order's PO number (VBKD-BSTKD, header business data posnr 000000)
+    SELECT SINGLE bstkd FROM vbkd INTO gs_out-bstkd
+      WHERE vbeln = ls_vbap-vbeln AND posnr = '000000'.
     APPEND gs_out TO gt_out.
   ENDLOOP.
 ENDFORM.
@@ -110,17 +130,20 @@ FORM build_fieldcat.
     APPEND gs_fcat TO gt_fcat.
   END-OF-DEFINITION.
 
-  add_fc 'VBELN'  'Rebate Order'.
-  add_fc 'AUART'  'Doc Type'.
-  add_fc 'ERDAT'  'Created On'.
-  add_fc 'KUNNR'  'Customer'.
-  add_fc 'NAME1'  'Customer Name'.
-  add_fc 'MATNR'  'Material'.
-  add_fc 'ARKTX'  'Description'.
-  add_fc 'KWMENG' 'Quantity'.
-  add_fc 'VRKME'  'Unit'.
-  add_fc 'NETWR'  'Rebate Amount'.
-  add_fc 'WAERK'  'Currency'.
+  add_fc 'VBELN'    'Rebate Order'.
+  add_fc 'AUART'    'Doc Type'.
+  add_fc 'ERDAT'    'Created On'.
+  add_fc 'BSTKD'    'Reference No'.
+  add_fc 'KUNNR'    'Customer'.
+  add_fc 'NAME1'    'Customer Name'.
+  add_fc 'KONDM'    'Grade'.
+  add_fc 'KONDM_TXT' 'Grade Name'.
+  add_fc 'MATNR'    'Material'.
+  add_fc 'ARKTX'    'Description'.
+  add_fc 'KWMENG'   'Discount Qty'.
+  add_fc 'VRKME'    'Unit'.
+  add_fc 'NETWR'    'Rebate Amount'.
+  add_fc 'WAERK'    'Currency'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
