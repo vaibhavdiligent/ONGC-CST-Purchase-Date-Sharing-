@@ -1,207 +1,202 @@
-# ZGMS Exchange Rate – Inbound OData V2 Service (CPI → SAP)
+# ZGMS Exchange Rate – Inbound OData V2 Service (CPI → SAP) — DEEP model
 
-Inbound OData V2 service so **SAP CPI posts exchange rates into SAP**. CPI
-sends the headerless `ExchangeRates` → `ExchangeRate*` payload (per the agreed
-XSD); the service exposes a **flat `ExchangeRate` entity** and writes each row
-to **TCURR** via `BAPI_EXCHANGERATE_CREATEMULTIPLE`.
+Clean build for the inbound Exchange Rate upload service called by CPI.
 
-> Design: **flat** – no header entity, no `REQUEST_ID`. This matches the
-> headerless XSD 1:1. CPI sends all rows in one `$batch` POST; the framework
-> runs `CREATE_ENTITY` once per row.
-
----
-
-## 1. Artifacts
-
-| Object | Type | Purpose |
-|--------|------|---------|
-| `ZCL_GMS_EXCHRATE_MPC` (SEGW: `ZCL_ZGMS_EXCHRATE_MPC`) | Class (model) | Flat model: entity `ExchangeRate` / set `ExchangeRateSet`. |
-| `ZCL_GMS_EXCHRATE_DPC` (SEGW: `ZCL_ZGMS_EXCHRATE_DPC_EXT`) | Class (data) | `CREATE_ENTITY` maps one row → `BAPI1093_0` and calls the BAPI. |
-| `ZGMS_EXCHRATE_SRV` | Service | External (registered) service name. |
-
-The `.abap` files in this repo are the **code-based** reference (no SEGW
-project needed). If you build in SEGW instead, use Section 6 – the model is
-identical; only the class names differ (`ZCL_ZGMS_EXCHRATE_*`).
-
----
-
-## 2. Field & BAPI mapping
-
-OData `ExchangeRate` property names = XSD element names = `BAPI1093_0` field
-names (1:1), so the DPC fills the BAPI table with `MOVE-CORRESPONDING`.
-
-| OData / XSD field | BAPI1093_0 | Req. | Notes |
-|-------------------|------------|------|-------|
-| `RATE_TYPE`   | RATE_TYPE   | ✔ key | e.g. `M` |
-| `FROM_CURR`   | FROM_CURR   | ✔ key | source currency |
-| `TO_CURRNCY`  | TO_CURRNCY  | ✔ key | target currency |
-| `VALID_FROM`  | VALID_FROM  | ✔ key | **arrives `DD.MM.YYYY`, converted to `YYYYMMDD`** – model MaxLength **10** |
-| `EXCH_RATE`   | EXCH_RATE   | ✔ | indirect-quote rate |
-| `FROM_FACTOR` | FROM_FACTOR | ✔ | from ratio |
-| `TO_FACTOR`   | TO_FACTOR   | ✔ | to ratio |
-| `EXCH_RATE_V` | EXCH_RATE_V | – | direct-quote rate |
-| `FROM_FACTOR_V` | FROM_FACTOR_V | – | direct from ratio |
-| `TO_FACTOR_V` | TO_FACTOR_V | – | direct to ratio |
-
-BAPI options: `UPD_ALLOWED = 'X'` (existing TCURR entries are updated, not
-rejected). The DPC commits/rolls back per row inside the `$batch` changeset.
-
----
-
-## 3. Create the service (code-based)
-
-1. SE24 → `ZCL_GMS_EXCHRATE_MPC`, superclass `/IWBEP/CL_MGW_PUSH_ABS_MODEL`,
-   paste `ZCL_GMS_EXCHRATE_MPC.abap`, activate.
-2. SE24 → `ZCL_GMS_EXCHRATE_DPC`, superclass `/IWBEP/CL_MGW_PUSH_ABS_DATA`,
-   paste `ZCL_GMS_EXCHRATE_DPC.abap`, activate.
-3. `/IWFND/MAINT_SERVICE` → Add Service (alias `LOCAL`), MPC =
-   `ZCL_GMS_EXCHRATE_MPC`, DPC = `ZCL_GMS_EXCHRATE_DPC`, external name
-   `ZGMS_EXCHRATE_SRV`, activate.
-4. Verify: `GET /sap/opu/odata/sap/ZGMS_EXCHRATE_SRV/$metadata` – you should
-   see `ExchangeRateSet` (flat, no navigation).
-
----
-
-## 4. How CPI calls it
-
-CPI **OData V2 receiver** channel:
-- Address: `/sap/opu/odata/sap/ZGMS_EXCHRATE_SRV`
-- Resource Path / Entity Set: **`ExchangeRateSet`**
-- Operation: **Create (POST)**  ← must be POST, not Query(GET)
-- **Enable Batch Processing** → all rows go in one `$batch` HTTP call; the
-  service runs `CREATE_ENTITY` once per row.
-- CSRF: enable CSRF protection in the channel (it fetches the token then POSTs).
-- Mapping: flat 1:1, source `ExchangeRate` → `ExchangeRateSet`. **No
-  REQUEST_ID, no nesting.**
-
-Single-entry POST body:
-```json
-{ "RATE_TYPE":"M","FROM_CURR":"INR","TO_CURRNCY":"BRL","VALID_FROM":"01.04.2025",
-  "EXCH_RATE":"1.209","FROM_FACTOR":"1","TO_FACTOR":"1",
-  "EXCH_RATE_V":"0","FROM_FACTOR_V":"0","TO_FACTOR_V":"0" }
+Consumer payload (one call, parent wraps repeating line items):
+```xml
+<ExchangeRates>
+  <ExchangeRate>
+    <RATE_TYPE>M</RATE_TYPE><FROM_CURR>INR</FROM_CURR><TO_CURRNCY>BRL</TO_CURRNCY>
+    <VALID_FROM>01.04.2025</VALID_FROM><EXCH_RATE>1.209</EXCH_RATE>
+    <FROM_FACTOR>1</FROM_FACTOR><TO_FACTOR>1</TO_FACTOR>
+    <EXCH_RATE_V>0</EXCH_RATE_V><FROM_FACTOR_V>0</FROM_FACTOR_V><TO_FACTOR_V>0</TO_FACTOR_V>
+  </ExchangeRate>
+  <ExchangeRate> ... </ExchangeRate>
+</ExchangeRates>
 ```
 
-Response: the created entity is echoed back. Errors return HTTP 4xx/5xx with
-the BAPI messages in the OData error body (that row rolls back).
+Design = **deep entity**: header `ExchangeRates` (parent, technical key `REQUEST_ID`) →
+navigation `ExchangeRate` → child `ExchangeRate` (the 10 fields). All rows arrive in
+ONE `CREATE_DEEP_ENTITY` call and are written to `TCURR` via
+`BAPI_EXCHANGERATE_CREATEMULTIPLE` (all-or-nothing).
+
+Fields (per XSD): mandatory = RATE_TYPE, FROM_CURR, TO_CURRNCY, VALID_FROM,
+EXCH_RATE, FROM_FACTOR, TO_FACTOR; optional = EXCH_RATE_V, FROM_FACTOR_V, TO_FACTOR_V.
+`VALID_FROM` arrives as `DD.MM.YYYY` and is converted to `YYYYMMDD` for the BAPI.
 
 ---
 
-## 5. Test before wiring CPI
-- `/IWFND/GW_CLIENT`: POST to
-  `/sap/opu/odata/sap/ZGMS_EXCHRATE_SRV/ExchangeRateSet` with the JSON above
-  (the client handles CSRF). Confirm the rate in **TCURR** / transaction
-  `OB08`.
+## 0. Clean slate (avoid the `_1_` duplicate class problem)
+Before creating the new project, in SE24 delete any leftover classes so the names are free:
+`ZCL_ZGMS_EXCHRATE_MPC / _MPC_EXT / _DPC / _DPC_EXT` and any `ZCL_ZGMS_EXCHRATE_1_*`.
+Also delete old SEGW projects and the `/IWFND/MAINT_SERVICE` registration if still present.
 
----
+## 1. SEGW — create the project
+- `SEGW` → Create Project → name **`ZGMS_EXCHRATE`**, package `ZGMS` (+ transport).
 
-## 6. SEGW step-by-step (graphical modeler)
+## 2. Create the CHILD entity type `ExchangeRate`
+- Data Model → Create → Entity Type → `ExchangeRate`, tick **Create Related Entity Set** → `ExchangeRateSet`.
+- Add 10 properties. For EACH: set **Edm Core Type = Edm.String**, MaxLength, and tick
+  **Creatable + Updatable** (so metadata is `sap:creatable="true"` and CPI shows the fields).
 
-### 6.1 Create the project
-1. Transaction **`SEGW`** → **Create Project** `ZGMS_EXCHRATE`, assign
-   package/transport.
+  | Property | Key | Nullable | MaxLength |
+  |----------|:---:|:--------:|:---------:|
+  | RATE_TYPE     | ✔ | – | 4  |
+  | FROM_CURR     | ✔ | – | 5  |
+  | TO_CURRNCY    | ✔ | – | 5  |
+  | VALID_FROM    | ✔ | – | 10 |
+  | EXCH_RATE     | – | – | 30 |
+  | FROM_FACTOR   | – | – | 10 |
+  | TO_FACTOR     | – | – | 10 |
+  | EXCH_RATE_V   | – | ✔ | 30 |
+  | FROM_FACTOR_V | – | ✔ | 10 |
+  | TO_FACTOR_V   | – | ✔ | 10 |
 
-### 6.2 Create the entity type `ExchangeRate`
-1. Right-click **Data Model → Create → Entity Type**, name `ExchangeRate`,
-   tick **Create Related Entity Set** → `ExchangeRateSet`.
-2. Add the properties, all **Edm.String** — set the **Edm Core Type** on every
-   property (leaving it blank causes *"Property X must define a Data Type"* at
-   generation):
+## 3. Create the HEADER (parent) entity type `ExchangeRates`
+- Data Model → Create → Entity Type → `ExchangeRates`, tick Create Entity Set → `ExchangeRatesSet`.
+- Add ONE property **`REQUEST_ID`** — Edm.String, **Key ✔**, **Nullable ✔**, MaxLength 32,
+  Creatable ✔. (Technical key only; CPI leaves it blank, server generates it.)
 
-   | Property | Is Key | Nullable | MaxLength |
-   |----------|:------:|:--------:|:---------:|
-   | `RATE_TYPE`     | ✔ | – | 4 |
-   | `FROM_CURR`     | ✔ | – | 5 |
-   | `TO_CURRNCY`    | ✔ | – | 5 |
-   | `VALID_FROM`    | ✔ | – | **10** |
-   | `EXCH_RATE`     | – | – | 30 |
-   | `FROM_FACTOR`   | – | – | 10 |
-   | `TO_FACTOR`     | – | – | 10 |
-   | `EXCH_RATE_V`   | – | ✔ | 30 |
-   | `FROM_FACTOR_V` | – | ✔ | 10 |
-   | `TO_FACTOR_V`   | – | ✔ | 10 |
+## 4. Create the association + navigation
+- Data Model → Create → Association → `ExchangeRates_ExchangeRate`
+  - Principal: `ExchangeRates`, cardinality **1**
+  - Dependent: `ExchangeRate`, cardinality **0..n** (`*`)
+  - Navigation property (on `ExchangeRates`): **`ExchangeRate`**  ← must be this exact name
+  - Referential constraint: leave empty / continue. (Association Set auto-created.)
 
-   > `VALID_FROM` is length **10** to hold `DD.MM.YYYY`. No header entity,
-   > no association, no `REQUEST_ID` — the flat entity is all you need.
+## 5. Generate Runtime Objects
+- Generates `ZCL_ZGMS_EXCHRATE_MPC/_MPC_EXT/_DPC/_DPC_EXT`.
 
-### 6.3 Generate runtime objects
-Click **Generate Runtime Objects** → SEGW creates
-`ZCL_ZGMS_EXCHRATE_MPC/_MPC_EXT/_DPC/_DPC_EXT`.
-
-### 6.4 Implement `CREATE_ENTITY`
-1. SEGW → **Service Implementation** → `ExchangeRateSet` → right-click
-   **Create → Go to ABAP Workbench** (or open `ZCL_ZGMS_EXCHRATE_DPC_EXT` in
-   SE24 and redefine `/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_ENTITY`).
-2. Paste the method body below (SEGW type name is `ts_exchangerate`):
+## 6. DPC — redefine `CREATE_DEEP_ENTITY`
+`ZCL_ZGMS_EXCHRATE_DPC_EXT` → redefine `/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_DEEP_ENTITY`:
 
 ```abap
-METHOD /iwbep/if_mgw_appl_srv_runtime~create_entity.
+METHOD /iwbep/if_mgw_appl_srv_runtime~create_deep_entity.
 
-  DATA: ls_rate   TYPE zcl_zgms_exchrate_mpc=>ts_exchangerate,
+  TYPES: BEGIN OF ty_deep.
+           INCLUDE TYPE zcl_zgms_exchrate_mpc=>ts_exchangerates.
+  TYPES:   exchangerate TYPE STANDARD TABLE OF zcl_zgms_exchrate_mpc=>ts_exchangerate
+                          WITH DEFAULT KEY.
+  TYPES: END OF ty_deep.
+
+  DATA: ls_deep   TYPE ty_deep,
         lt_list   TYPE STANDARD TABLE OF bapi1093_0,
         ls_list   TYPE bapi1093_0,
         lt_return TYPE bapiret2_t,
         ls_return TYPE bapiret2,
-        lv_valid  TYPE c LENGTH 8.
+        lv_valid  TYPE c LENGTH 8,
+        lv_errors TYPE i.
 
-  io_data_provider->read_entry_data( IMPORTING es_data = ls_rate ).
+  FIELD-SYMBOLS <ls_rate> TYPE zcl_zgms_exchrate_mpc=>ts_exchangerate.
 
-  IF ls_rate-rate_type  IS INITIAL OR ls_rate-from_curr   IS INITIAL OR
-     ls_rate-to_currncy IS INITIAL OR ls_rate-valid_from  IS INITIAL OR
-     ls_rate-exch_rate  IS INITIAL OR ls_rate-from_factor IS INITIAL OR
-     ls_rate-to_factor  IS INITIAL.
-    DATA(lv_msg1) = |Mandatory field missing for { ls_rate-from_curr }/{ ls_rate-to_currncy } { ls_rate-valid_from }|.
-    DATA(lo_mc1)  = mo_context->get_message_container( ).
-    lo_mc1->add_message_text_only( iv_msg_type = 'E' iv_msg_text = lv_msg1 ).
-    RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
-      EXPORTING message_container = lo_mc1.
+  io_data_provider->read_entry_data( IMPORTING es_data = ls_deep ).
+
+  LOOP AT ls_deep-exchangerate ASSIGNING <ls_rate>.
+    IF <ls_rate>-rate_type  IS INITIAL OR <ls_rate>-from_curr   IS INITIAL OR
+       <ls_rate>-to_currncy IS INITIAL OR <ls_rate>-valid_from  IS INITIAL OR
+       <ls_rate>-exch_rate  IS INITIAL OR <ls_rate>-from_factor IS INITIAL OR
+       <ls_rate>-to_factor  IS INITIAL.
+      lv_errors = lv_errors + 1.
+      ls_return-type = 'E'. ls_return-id = 'ZGMS'. ls_return-number = '000'.
+      ls_return-message = |Mandatory field missing for { <ls_rate>-from_curr }/{ <ls_rate>-to_currncy } { <ls_rate>-valid_from }|.
+      APPEND ls_return TO lt_return.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR ls_list.
+    MOVE-CORRESPONDING <ls_rate> TO ls_list.
+    IF <ls_rate>-valid_from CA '.'.
+      lv_valid = <ls_rate>-valid_from+6(4) && <ls_rate>-valid_from+3(2) && <ls_rate>-valid_from+0(2).
+    ELSE.
+      lv_valid = <ls_rate>-valid_from.
+    ENDIF.
+    ls_list-valid_from = lv_valid.
+    APPEND ls_list TO lt_list.
+  ENDLOOP.
+
+  IF lv_errors = 0 AND lt_list IS NOT INITIAL.
+    CALL FUNCTION 'BAPI_EXCHANGERATE_CREATEMULTIPLE'
+      EXPORTING  upd_allowed    = abap_true
+      TABLES     exch_rate_list = lt_list
+                 return         = lt_return.
+    LOOP AT lt_return INTO ls_return WHERE type CA 'EAX'.
+      lv_errors = lv_errors + 1.
+    ENDLOOP.
   ENDIF.
 
-  MOVE-CORRESPONDING ls_rate TO ls_list.
-  IF ls_rate-valid_from CA '.'.
-    lv_valid = ls_rate-valid_from+6(4) && ls_rate-valid_from+3(2) && ls_rate-valid_from+0(2).
-  ELSE.
-    lv_valid = ls_rate-valid_from.
-  ENDIF.
-  ls_list-valid_from = lv_valid.
-  APPEND ls_list TO lt_list.
-
-  CALL FUNCTION 'BAPI_EXCHANGERATE_CREATEMULTIPLE'
-    EXPORTING
-      upd_allowed    = abap_true
-    TABLES
-      exch_rate_list = lt_list
-      return         = lt_return.
-
-  READ TABLE lt_return INTO ls_return WITH KEY type = 'E'.
-  IF sy-subrc <> 0.
-    READ TABLE lt_return INTO ls_return WITH KEY type = 'A'.
-  ENDIF.
-  IF sy-subrc = 0.
+  IF lv_errors > 0.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
-    DATA(lo_mc2) = mo_context->get_message_container( ).
-    lo_mc2->add_messages_from_bapi( it_bapi_messages = lt_return ).
+    DATA(lo_mc) = mo_context->get_message_container( ).
+    lo_mc->add_messages_from_bapi( it_bapi_messages = lt_return ).
     RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
-      EXPORTING message_container = lo_mc2.
+      EXPORTING message_container = lo_mc.
   ELSE.
     CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
   ENDIF.
 
-  copy_data_to_ref( EXPORTING is_data = ls_rate CHANGING cr_data = er_entity ).
+  DATA ls_head TYPE zcl_zgms_exchrate_mpc=>ts_exchangerates.
+  MOVE-CORRESPONDING ls_deep TO ls_head.
+  copy_data_to_ref( EXPORTING is_data = ls_head CHANGING cr_data = er_deep_entity ).
 
 ENDMETHOD.
 ```
+If `TS_EXCHANGERATE` doesn't exist yet, activate the MPC first, or adjust the class
+name to your generated MPC (check bind_structure in the base MPC's DEFINE).
 
-### 6.5 Register & activate
-`/IWFND/MAINT_SERVICE` → Add Service → `ZGMS_EXCHRATE_SRV` → activate. Test per
-Sections 4–5.
+## 7. MPC_EXT — force creatable on both entity sets
+`ZCL_ZGMS_EXCHRATE_MPC_EXT` → redefine `DEFINE`:
+```abap
+METHOD define.
+  super->define( ).
+  model->get_entity_set( iv_entity_set_name = 'ExchangeRatesSet' )->set_creatable( abap_true ).
+  model->get_entity_set( iv_entity_set_name = 'ExchangeRateSet'  )->set_creatable( abap_true ).
+ENDMETHOD.
+```
+(Only needed because SEGW hardcodes the entity-set flag to false. Property flags come
+from the Creatable checkboxes in step 2.)
+
+## 8. Register the service
+- `/IWFND/MAINT_SERVICE` → **Add Service** → alias `LOCAL` → filter `ZGMS_EXCHRATE_SRV`
+  → Get Services → select → **Add Selected Services** → package/Local Object → confirm.
+
+## 9. Cache + verify
+- `/IWBEP/CACHE_CLEANUP` + `/IWFND/CACHE_CLEANUP`
+- `/IWFND/MAINT_SERVICE` → select service → **Load Metadata**
+- Browser: `/sap/opu/odata/sap/ZGMS_EXCHRATE_SRV/$metadata?x=1`
+  - Two entity sets `ExchangeRatesSet`, `ExchangeRateSet`
+  - Navigation `ExchangeRate`
+  - Properties `sap:creatable="true"`
+
+## 10. Test in Gateway Client
+- `/IWFND/GW_CLIENT` → POST `/sap/opu/odata/sap/ZGMS_EXCHRATE_SRV/ExchangeRatesSet`
+  ```json
+  { "ExchangeRate": [
+      { "RATE_TYPE":"M","FROM_CURR":"INR","TO_CURRNCY":"BRL","VALID_FROM":"01.04.2025",
+        "EXCH_RATE":"1.209","FROM_FACTOR":"1","TO_FACTOR":"1",
+        "EXCH_RATE_V":"0","FROM_FACTOR_V":"0","TO_FACTOR_V":"0" } ] }
+  ```
+- Check `OB08` / `TCURR`.
+
+## 11. CPI receiver channel
+- Operation **Create (POST)**, Select Entity **`ExchangeRatesSet`**, **Sub Levels = 1**
+  (pulls in the nested `ExchangeRate` items → parent `ExchangeRates` + child `ExchangeRate`).
+- Enable CSRF. Map source `ExchangeRate` fields → nested child; leave `REQUEST_ID` unmapped.
+- POST URL: `/sap/opu/odata/sap/ZGMS_EXCHRATE_SRV/ExchangeRatesSet`
 
 ---
 
-## Notes
-- **VALID_FROM**: API sends `DD.MM.YYYY` (e.g. `01.04.2025`); the DPC converts
-  to `YYYYMMDD` for the BAPI. Model MaxLength must be **10**, else the date is
-  truncated.
-- **Batch atomicity**: with `$batch`, each row commits independently. If you
-  need strict all-or-nothing across the whole file, move the BAPI call/commit
-  into `CHANGESET_END` (deferred processing) instead of per-row `CREATE_ENTITY`
-  — ask and this can be added.
+## Checklist
+| # | Where | Action |
+|---|-------|--------|
+| 0 | SE24/SEGW | delete old ZCL_ZGMS_EXCHRATE(_1)_* classes, old project, old service |
+| 1 | SEGW | create project `ZGMS_EXCHRATE` |
+| 2 | SEGW | child `ExchangeRate` (10 props, Edm.String, Creatable+Updatable ticked) |
+| 3 | SEGW | header `ExchangeRates` (key `REQUEST_ID`, nullable) |
+| 4 | SEGW | association 1:0..n, nav prop `ExchangeRate` |
+| 5 | SEGW | Generate Runtime Objects |
+| 6 | DPC_EXT | redefine `CREATE_DEEP_ENTITY` (code above) |
+| 7 | MPC_EXT | redefine `DEFINE` → set both sets creatable |
+| 8 | /IWFND/MAINT_SERVICE | Add Service |
+| 9 | cache | `/IWBEP/` + `/IWFND/CACHE_CLEANUP` + Load Metadata, verify `$metadata?x=1` |
+| 10 | /IWFND/GW_CLIENT | POST test → check OB08 |
+| 11 | CPI | Create(POST), `ExchangeRatesSet`, Sub Levels 1, map, deploy |
