@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*& Class  YCL_YF01_EXCH_RATE_MPC   (Model Provider - code based, OData V2)
+*& Class  ZCL_YF01_EXCH_RATE_MPC   (Model Provider - code based, OData V2)
 *&---------------------------------------------------------------------*
 *& Service : YF01_EXCHANGE_RATE_SRV   (inbound Exchange Rate upload from CPI)
 *&
@@ -17,7 +17,7 @@
 *& (model YF01_EXCHANGE_RATE_MDL, service YF01_EXCHANGE_RATE_SRV) then add
 *& it in /IWFND/MAINT_SERVICE.
 *&---------------------------------------------------------------------*
-CLASS ycl_yf01_exch_rate_mpc DEFINITION
+CLASS zcl_yf01_exch_rate_mpc DEFINITION
   PUBLIC
   INHERITING FROM /iwbep/cl_mgw_push_abs_model
   CREATE PUBLIC.
@@ -53,7 +53,7 @@ CLASS ycl_yf01_exch_rate_mpc DEFINITION
 ENDCLASS.
 
 
-CLASS ycl_yf01_exch_rate_mpc IMPLEMENTATION.
+CLASS zcl_yf01_exch_rate_mpc IMPLEMENTATION.
 
   METHOD define.
     me->define_exchange_rate( ).
@@ -113,7 +113,7 @@ CLASS ycl_yf01_exch_rate_mpc IMPLEMENTATION.
     lo_property->set_type_edm_string( ). lo_property->set_maxlength( 10 ).
     lo_property->set_nullable( abap_true ). lo_property->set_creatable( abap_true ). lo_property->set_updatable( abap_true ).
 
-    lo_entity_type->bind_structure( iv_structure_name = 'YCL_YF01_EXCH_RATE_MPC=>TS_EXCHANGE_RATE' ).
+    lo_entity_type->bind_structure( iv_structure_name = 'ZCL_YF01_EXCH_RATE_MPC=>TS_EXCHANGE_RATE' ).
 
     lo_entity_set = lo_entity_type->create_entity_set( 'ExchangeRateSet' ).
     lo_entity_set->set_creatable( abap_true ).
@@ -136,7 +136,7 @@ CLASS ycl_yf01_exch_rate_mpc IMPLEMENTATION.
     lo_property->set_is_key( ). lo_property->set_type_edm_string( ). lo_property->set_maxlength( 32 ).
     lo_property->set_nullable( abap_true ). lo_property->set_creatable( abap_true ).
 
-    lo_entity_type->bind_structure( iv_structure_name = 'YCL_YF01_EXCH_RATE_MPC=>TS_EXCHANGE_RATES' ).
+    lo_entity_type->bind_structure( iv_structure_name = 'ZCL_YF01_EXCH_RATE_MPC=>TS_EXCHANGE_RATES' ).
 
     lo_entity_set = lo_entity_type->create_entity_set( 'ExchangeRatesSet' ).
     lo_entity_set->set_creatable( abap_true ).

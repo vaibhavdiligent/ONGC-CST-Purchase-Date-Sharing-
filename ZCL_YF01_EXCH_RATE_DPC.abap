@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*& Class  YCL_YF01_EXCH_RATE_DPC   (Data Provider - code based, OData V2)
+*& Class  ZCL_YF01_EXCH_RATE_DPC   (Data Provider - code based, OData V2)
 *&---------------------------------------------------------------------*
 *& Service : YF01_EXCHANGE_RATE_SRV
 *&
@@ -11,9 +11,9 @@
 *& arrives as DD.MM.YYYY and is converted to YYYYMMDD for the BAPI.
 *&
 *& Extends /IWBEP/CL_MGW_PUSH_ABS_DATA. Register together with
-*& YCL_YF01_EXCH_RATE_MPC.
+*& ZCL_YF01_EXCH_RATE_MPC.
 *&---------------------------------------------------------------------*
-CLASS ycl_yf01_exch_rate_dpc DEFINITION
+CLASS zcl_yf01_exch_rate_dpc DEFINITION
   PUBLIC
   INHERITING FROM /iwbep/cl_mgw_push_abs_data
   CREATE PUBLIC.
@@ -23,14 +23,14 @@ CLASS ycl_yf01_exch_rate_dpc DEFINITION
 ENDCLASS.
 
 
-CLASS ycl_yf01_exch_rate_dpc IMPLEMENTATION.
+CLASS zcl_yf01_exch_rate_dpc IMPLEMENTATION.
 
   METHOD /iwbep/if_mgw_appl_srv_runtime~create_deep_entity.
 
     " Deep structure = header fields + table named after the nav property 'ExchangeRate'
     TYPES: BEGIN OF ty_deep.
-             INCLUDE TYPE ycl_yf01_exch_rate_mpc=>ts_exchange_rates.
-    TYPES:   exchangerate TYPE STANDARD TABLE OF ycl_yf01_exch_rate_mpc=>ts_exchange_rate
+             INCLUDE TYPE zcl_yf01_exch_rate_mpc=>ts_exchange_rates.
+    TYPES:   exchangerate TYPE STANDARD TABLE OF zcl_yf01_exch_rate_mpc=>ts_exchange_rate
                             WITH DEFAULT KEY.
     TYPES: END OF ty_deep.
 
@@ -42,7 +42,7 @@ CLASS ycl_yf01_exch_rate_dpc IMPLEMENTATION.
           lv_valid  TYPE c LENGTH 8,
           lv_errors TYPE i.
 
-    FIELD-SYMBOLS <ls_rate> TYPE ycl_yf01_exch_rate_mpc=>ts_exchange_rate.
+    FIELD-SYMBOLS <ls_rate> TYPE zcl_yf01_exch_rate_mpc=>ts_exchange_rate.
 
     "--- 1. Read the deep payload posted by CPI
     io_data_provider->read_entry_data( IMPORTING es_data = ls_deep ).
@@ -99,7 +99,7 @@ CLASS ycl_yf01_exch_rate_dpc IMPLEMENTATION.
     ENDIF.
 
     "--- 5. Echo the header back to the caller
-    DATA ls_head TYPE ycl_yf01_exch_rate_mpc=>ts_exchange_rates.
+    DATA ls_head TYPE zcl_yf01_exch_rate_mpc=>ts_exchange_rates.
     MOVE-CORRESPONDING ls_deep TO ls_head.
     copy_data_to_ref( EXPORTING is_data = ls_head CHANGING cr_data = er_deep_entity ).
 
