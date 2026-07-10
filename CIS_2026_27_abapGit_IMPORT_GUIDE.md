@@ -7,23 +7,33 @@ imports the same way as any abapGit offline project.
 
 ---
 
-## What's inside (15 objects)
+## What's inside (29 objects)
 
 All objects are in the **`Y`** customer namespace.
 
-**Domains (5):** `YCIS_CTYPE` (fixed values A/T), `YCIS_YEAR`, `YCIS_MONTH`,
-`YCIS_PERC`, `YCIS_COUNT`
+**Domains (11):** `YCIS_CTYPE` (A/T), `YCIS_YEAR`, `YCIS_MONTH`, `YCIS_PERC`,
+`YCIS_COUNT`, and (maker/checker) `YCIS_QAIS`, `YCIS_STYPE`,
+`YCIS_STATUS` (P/A/R), `YCIS_AMT`, `YCIS_QTY`, `YCIS_REMARK`
 
-**Data elements (5):** same names as the domains above.
+**Data elements (11):** same names as the domains above.
 
-**Tables (3):**
+**Tables (4):**
 | Table | Key fields |
 |---|---|
 | `YCIS_WAIVER_RULE` | MANDT, SCHEME_YEAR, CUST_TYPE, SIGN_FROM |
 | `YCIS_SHORTFALL` | MANDT, PERIOD_FROM, PERIOD_TO, **MATNR** |
 | `YCIS_NODISC_GRD` | MANDT, KONDM |
+| `YCIS_APPRVL` | MANDT, QAIS_NO, SCHEME_TYPE, PERIOD_FROM, PERIOD_TO, KUNNR, KVGR2 |
 
-**Programs (2):** `YRVG004_QAIS_EXECUTE_N1`, `YCIS_REBATE_REPORT`
+**Programs (3):** `YRVG004_QAIS_EXECUTE_N1` (Maker), `YCIS_REBATE_REPORT`,
+`YCIS_APPROVE` (Checker)
+
+### Maker / Checker (R4) flow
+- **Maker** runs `YRVG004_QAIS_EXECUTE_N1`, reviews the ALV, and on "create order"
+  the computed rebates are **saved to `YCIS_APPRVL` as Pending** (no order created).
+- **Checker** runs `YCIS_APPROVE` with the same selection, sees the Pending rows and
+  **Approves** (creates the rebate order, marks `A` + order no.) or **Rejects** (marks `R`).
+- Generate **SM30** maintenance for `YCIS_APPRVL` too if you want to inspect/adjust rows.
 
 > **Two tables dropped per GAIL feedback (07.07.2026):**
 > - `YCIS_CUST_TYPE` — customer type is read from the existing

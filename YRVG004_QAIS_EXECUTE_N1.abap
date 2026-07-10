@@ -398,6 +398,14 @@ TABLES: ycis_shortfall.
 DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 *** EOC : CIS 2026-27 - auto shortfall grade (R2) declarations ***
 
+*** SOC : CIS 2026-27 - Maker/Checker (R4) : this program is the MAKER ***
+*   On "create order" the computed rebates are staged to YCIS_APPRVL with
+*   status 'P' (Pending) instead of creating the sales order. The CHECKER
+*   program YCIS_APPROVE approves the pending rows and creates the orders.
+TABLES: ycis_apprvl.
+DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
+*** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
+
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
 *   Group / MLE membership is read from BP relationships (table BUT050):
 *     RELTYP 'ZGPGRP' = Has Group Customer, 'ZGPMLL' = Has MLE.
@@ -11320,7 +11328,16 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 *        ENDLOOP.
 **EOC by Kunal/Priyanka on 06/12/2018 for Extend Group Issue
 *        IF lv_sales_order NE 'X'.
-        PERFORM create_sale_order.
+*** SOC : CIS 2026-27 - Maker/Checker (R4) ***
+*   Maker: stage the computed rebates for approval instead of creating the
+*   sales order directly. Direct creation (create_sale_order) is used only
+*   if maker mode is switched off.
+        IF gv_maker_mode = 'X'.
+          PERFORM stage_all_rebates.
+        ELSE.
+          PERFORM create_sale_order.
+        ENDIF.
+*** EOC : CIS 2026-27 - Maker/Checker (R4) ***
 *        ENDIF.
       ELSE.
         MESSAGE 'Credit Memo Request already created for some selected items' TYPE 'I' .
@@ -11630,6 +11647,98 @@ FORM build_cis_shortfall.
   SORT it_cis_shortfall BY qais_no.
   DELETE ADJACENT DUPLICATES FROM it_cis_shortfall COMPARING qais_no.
 ENDFORM.                    "build_cis_shortfall
+*&---------------------------------------------------------------------*
+*&      Form  stage_all_rebates   (CIS 2026-27 - Maker/Checker R4)
+*&---------------------------------------------------------------------*
+*   Maker action: save the computed rebate rows (from the result table of
+*   the chosen scheme) into YCIS_APPRVL with status 'P' (Pending). The
+*   payload mirrors what create_sale_order would have sent to the BAPI, so
+*   the checker (YCIS_APPROVE) can create the order after approval.
+*&---------------------------------------------------------------------*
+FORM stage_all_rebates.
+  DATA: lv_cnt TYPE i.
+  IF r_quater = 'X'.
+    LOOP AT it_data_quater.
+      PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
+              it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
+              it_data_quater-tot_elgl_qty it_data_quater-remarks.
+      lv_cnt = lv_cnt + 1.
+    ENDLOOP.
+  ELSEIF r_annual = 'X'.
+    LOOP AT it_data_annual.
+      PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
+              it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
+              it_data_annual-tot_elgl_qty it_data_annual-remarks.
+      lv_cnt = lv_cnt + 1.
+    ENDLOOP.
+  ELSEIF r_consis = 'X'.
+    LOOP AT it_annual_consis.
+      PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
+              it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
+              it_annual_consis-tot_elgl_qty it_annual_consis-remarks.
+      lv_cnt = lv_cnt + 1.
+    ENDLOOP.
+  ELSE.
+    LOOP AT it_data_monthly.
+      PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
+              it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
+              it_data_monthly-tot_elgl_qty it_data_monthly-remarks.
+      lv_cnt = lv_cnt + 1.
+    ENDLOOP.
+  ENDIF.
+  IF lv_cnt > 0.
+    MESSAGE |{ lv_cnt } record(s) submitted for approval (YCIS_APPRVL)| TYPE 'S'.
+  ELSE.
+    MESSAGE 'No records available to submit for approval' TYPE 'I'.
+  ENDIF.
+ENDFORM.                    "stage_all_rebates
+*&---------------------------------------------------------------------*
+*&      Form  stage_one   (CIS 2026-27 - Maker/Checker R4)
+*&---------------------------------------------------------------------*
+FORM stage_one USING p_stype   TYPE char1
+                     p_kunnr   TYPE kunnr
+                     p_name    TYPE name1_gp
+                     p_kvgr2   TYPE kvgr2
+                     p_vkbur   TYPE vkbur
+                     p_value   TYPE kbetr
+                     p_qty     TYPE p
+                     p_remarks TYPE any.
+  DATA: ls TYPE ycis_apprvl.
+  CLEAR ls.
+*   best-effort CIS number for traceability
+  READ TABLE it_yrva_qais_data INTO wa_yrva_qais_data
+       WITH KEY kunnr = p_kunnr.
+  IF sy-subrc = 0.
+    ls-qais_no = wa_yrva_qais_data-qais_no.
+  ENDIF.
+  ls-mandt       = sy-mandt.
+  ls-scheme_type = p_stype.
+  ls-period_from = s_sptag-low.
+  ls-period_to   = s_sptag-high.
+  ls-kunnr       = p_kunnr.
+  ls-cust_name   = p_name.
+  ls-kvgr2       = p_kvgr2.
+*   order payload (mirrors create_sale_order)
+  ls-doc_type    = 'ZP09'.
+  ls-sales_org   = '5000'.
+  ls-distr_chan  = '10'.
+  ls-division    = '20'.
+  ls-ord_reason  = 'G21'.
+  ls-sales_off   = p_vkbur.
+  ls-cd_type     = 'ZCMU'.
+  ls-cd_value    = p_value / 10.
+  ls-purch_no    = p_remarks.
+  ls-material    = 'REBATE(POLYMER)'.
+  ls-target_qty  = p_qty * 1000.
+  ls-elig_qty    = p_qty.
+  ls-rebate_val  = p_value.
+*   audit / status
+  ls-status      = 'P'.
+  ls-maker       = sy-uname.
+  ls-maker_date  = sy-datum.
+  ls-maker_time  = sy-uzeit.
+  MODIFY ycis_apprvl FROM ls.
+ENDFORM.                    "stage_one
 *&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*
