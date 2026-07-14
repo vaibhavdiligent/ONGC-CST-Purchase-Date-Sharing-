@@ -411,19 +411,29 @@ idempotency key (`MSG_REC_ID`, `Plant_Code`).
   known from SAP code (SAP never used one) — that must be confirmed with the WMS vendor and the
   TrackWise (Sparta/Honeywell) administrator.
 
-**Two viable target designs (recommend option A — no change on the external side):**
+**✅ CHOSEN DESIGN — Option A: CPI with the MS SQL Server JDBC adapter.**
 
-| | Option A — CPI JDBC (recommended) | Option B — native API on external side |
-|---|-----------------------------------|----------------------------------------|
-| Flow | ABAP → OData/REST → **CPI iFlow** → **JDBC adapter** → same SQL Server tables (`HOST_TO_WMS`, `ZTW_*`) | ABAP → OData/REST → CPI → **new REST/SOAP API the ASRS/TrackWise vendor builds** |
-| External system change | **None** — CPI writes the same rows SAP used to write | Vendor must build & host an API |
-| SAP change | Remove `EXEC SQL`, call CPI (clean-core ✅) | Same |
-| Best when | The external DBs stay as the integration point | The vendors already have / will build APIs |
+```
+  SAP (ABAP)  ──HTTPS: OData/REST──►  CPI iFlow  ──JDBC──►  same SQL Server tables
+                                                            (HOST_TO_WMS, ZTW_MAT_DET,
+  ◄── HTTP response (status/ack) ──                          ZTW_PROD_DET, ZTW_PLNT_DET)
+```
 
-> **Bottom line:** you do **not** need the ASRS/TrackWise vendors to build APIs to get SAP clean-core.
-> CPI's **MS SQL Server JDBC adapter** can perform the exact same inserts/reads into
-> `HOST_TO_WMS` / `ZTW_MAT_DET` / `ZTW_PROD_DET` / `ZTW_PLNT_DET`, so only the SAP↔CPI hop becomes an
-> API. Confirm with the CPI team which option the client prefers.
+| Aspect | Option A (chosen) |
+|--------|-------------------|
+| Flow | ABAP → OData/REST → **CPI iFlow** → **JDBC adapter** → the **same** SQL Server tables |
+| External (ASRS/TrackWise) change | **None** — CPI writes/reads exactly the rows SAP used to write/read |
+| SAP change | Remove all `EXEC SQL`; call the CPI endpoint instead (clean-core ✅) |
+| Per-plant routing | CPI JDBC receiver has one data-source per connection: `CON_1047`→CIG_EFAWMS, `CON_1048`→CIS_EFAWMS, `CON_MDM`→TW_SAP (mirrors today's `ZMM_DBCON_ASRS`/`ZCON_MDM` selection) |
+| Credentials | Move from `DBCON` (DB user/password) into the **CPI JDBC data-source / Security Material** — SAP no longer holds DB credentials |
+
+**What this means concretely for each API C-1…C-7:** the SAP↔CPI verb stays as listed (POST for
+inserts, GET for reads); inside CPI the iFlow ends in a **JDBC INSERT/SELECT against the identical
+table and columns** documented in §3. No schema change on the ASRS/TrackWise databases.
+
+> *Alternative (not chosen): Option B would have the ASRS/TrackWise vendors expose native REST/SOAP
+> APIs and CPI call those. Retained only as a fallback if the client later decides the external DBs
+> should no longer be written to directly.*
 
 ---
 
@@ -445,8 +455,8 @@ idempotency key (`MSG_REC_ID`, `Plant_Code`).
 - [x] ~~`ZMM_DBCON_ASRS` / `ZCON_MDM` / `DBCON` + entries~~ — ✅ received (§1); external DBs confirmed as **MS SQL Server**
 - [x] ~~`ZMM_PARAM`~~ — ✅ received (FIELD1 CHAR 300)
 - [x] ~~`ZTW_PLNT_DET`~~ — ✅ resolved: **not a SAP table** (external TrackWise DB only, §3.5d); SAP-side lengths known
-- [x] ~~Does an API already exist?~~ — ✅ answered from code (§4.1): **no — pure DB integration today**; recommend CPI JDBC (Option A)
-- [ ] **Decision:** Option A (CPI JDBC to the same SQL Server tables) vs Option B (vendor builds APIs) — §4.1
-- [ ] **S/4HANA target:** on-premise or Cloud (clean-core)? — decides the ABAP HTTP client
+- [x] ~~Does an API already exist?~~ — ✅ answered from code (§4.1): **no — pure DB integration today**
+- [x] ~~Decision: Option A vs B~~ — ✅ **Option A chosen** (CPI + JDBC to the same SQL Server tables; §4.1)
+- [ ] **S/4HANA target:** on-premise or Cloud (clean-core)? — decides the ABAP HTTP client (only outstanding item)
 
 *Send items above and I will replace every ⟨CONFIRM⟩ with exact type/length and reissue this document.*

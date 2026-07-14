@@ -29,6 +29,17 @@ These 10 interface programs exchange data between SAP and two external, non-SAP 
 is currently being `INSERT`ed into, or `SELECT`ed from, the external databases. SAP will call these
 APIs instead of touching the foreign DB directly.
 
+**✅ Chosen design — Option A (CPI + JDBC).** The external systems are Microsoft SQL Server databases
+and expose **no API today** (confirmed from code: 100% `EXEC SQL`). Rather than wait for the
+ASRS/TrackWise vendors to build APIs, **CPI uses its MS SQL Server JDBC adapter to write/read the same
+tables** (`HOST_TO_WMS`, `ZTW_MAT_DET`, `ZTW_PROD_DET`, `ZTW_PLNT_DET`) that SAP writes today:
+
+> `SAP (ABAP) ──HTTPS OData/REST──► CPI iFlow ──JDBC──► same SQL Server tables`
+
+So **only the SAP↔CPI hop becomes an API**; the ASRS/TrackWise databases are unchanged, and SAP
+becomes clean-core (no `EXEC SQL`, no DB credentials). Per-plant routing (`CON_1047` Goa,
+`CON_1048` Sikkim, `CON_MDM` TrackWise) is preserved by CPI JDBC data-sources.
+
 **Scale of change (all `EXEC SQL`, nothing else, needs to change):**
 
 | Metric | Count |
