@@ -444,4 +444,38 @@ INSERT/SELECT on the SQL Server table shown.
 **Target confirmed: SAP S/4HANA Private Cloud Edition (RISE with SAP).** The SAP-side consumer is standard
 managed ABAP — an HTTPS call to CPI via a destination / Communication Arrangement (recommended
 `if_web_http_client`). No open points remain on the SAP side; the CPI team's remaining task is the SQL Server
-connectivity (Cloud Connector / on-premise JDBC) and the seven iFlows in §7.
+connectivity (Cloud Connector / on-premise JDBC) and the interfaces below.
+
+# 8. Consolidating similar SQL into fewer APIs
+
+Several of the SQL operations are identical or closely related, so they do **not** each need a separate API.
+The seven operations reduce to **two CPI integration flows (one per external system)** and two operations
+genuinely merge into one:
+
+**8.1  Already merged — the 7 "push" programs → 1 API.**
+All seven `ZMM_SQL_ASRS_SAP_PUSH*` programs run the **identical** `INSERT INTO HOST_TO_WMS`, differing only by
+the transaction type (`COR / DIS / IN / MAT / OUT / PSCR / …`), which is just a **field value**. They
+therefore call the **same** API (C-1); the transaction type travels in the payload. **(7 → 1.)**
+
+**8.2  Merge plant "check + create" into one upsert call.**
+In `ZQM_TRACKWISE` the plant is handled as check-then-insert: `SELECT … FROM ZTW_PLNT_DET` (C-5) and, if
+absent, `INSERT INTO ZTW_PLNT_DET` (C-6). CPI can do both in a **single "Upsert Plant" operation** (existence
+check + insert, or a SQL `MERGE`). SAP sends `{Plant_Code, Plant_Name}` once. **(2 → 1.)**
+
+**8.3  Group the rest into two APIs, one per system.**
+Instead of seven standalone services, deploy two iFlows — each with one connection/credential set:
+
+| CPI API (iFlow) | Operations | External table(s) |
+|---|---|---|
+| **ASRS** | POST message · GET message status | HOST_TO_WMS |
+| **TrackWise** | POST material · POST material-detail · POST product-detail · Upsert plant | MARA, ZTW_MAT_DET, ZTW_PROD_DET, ZTW_PLNT_DET |
+
+→ **2 integration artifacts, 6 operations** (down from 7 separate APIs).
+
+**8.4  Optional — material-detail + product-detail.**
+These are two different tables with different fields (20 vs 15), so best kept as **two operations** under the
+TrackWise API for clarity. They *could* be merged into one generic "push detail" call with an object-type
+flag and a combined payload, but that reduces readability — not recommended unless the client prefers it.
+
+**Net result:** **2 CPI APIs / 6 operations** instead of 7 — with the 7 push programs already sharing one API,
+and the plant check+create genuinely collapsing 2 → 1.
