@@ -528,3 +528,60 @@ Upsert Plant** operation (§6).
 **Everything else is push-only** — there is no other fetch anywhere in the 10 programs. So of the 6 operations:
 **4 are push (POST)** and **2 involve a read (GET)** — one true cursor fetch (status monitor) and one
 existence check (plant upsert).
+
+# Appendix A — Program-wise SQL inventory (which program has which query)
+
+Every query, listed per program. **Keep** = Open SQL on SAP tables (no change). **Replace** = Native
+`EXEC SQL` on the external SQL Server DB → CPI interface.
+
+## A.1  The 7 ASRS push programs — identical queries
+
+These seven programs have the **exact same SQL** (verified in code: same `SELECT-OPTIONS s_type`, same
+`WHERE msg_trans_type IN s_type AND trf_status = 'N'`, same `INSERT INTO host_to_wms`, same `MODIFY`). They
+differ only by the transaction type chosen at run time (indicated by the program name). **All 7 → interface C-1.**
+
+Programs: `ZMM_SQL_ASRS_SAP_PUSH` · `…_COR` · `…_DISPENSE` · `…_IN` · `…_MAT` · `…_OUT` · `…_PARFULL`
+(intended for the `COR / DIS / IN / MAT / OUT / PSCR…` transaction types respectively).
+
+| # | SQL statement (each of the 7 programs) | Action | Interface |
+|---|---|---|---|
+| 1 | `SELECT * FROM zmm_dbcon_asrs INTO TABLE gt_con` | Keep | — |
+| 2 | `SELECT * FROM zmm_asrs … WHERE msg_trans_type IN s_type AND trf_status = 'N'` | Keep | — |
+| 3 | `EXEC SQL CONNECT / SET / GET / DISCONNECT :dbcon` | Replace | (destination) |
+| 4 | `EXEC SQL INSERT INTO host_to_wms ( 29 cols )` | **Replace** | **C-1** Push Message (POST) |
+| 5 | `MODIFY zmm_asrs FROM TABLE gt_asrs` (trf_status = 'Y') | Keep | — |
+
+## A.2  ZMM_ASRS_SAP_INTERFACE
+
+| # | SQL statement | Action | Interface |
+|---|---|---|---|
+| 1 | `SELECT … FROM zmm_asrs … WHERE msg_dt_def IN p_date AND plant = s_werks` | Keep | — |
+| 2 | `SELECT * FROM zmm_dbcon_asrs WHERE werks = s_werks` | Keep | — |
+| 3 | `EXEC SQL CONNECT / SET / DISCONNECT :dbcon` | Replace | (destination) |
+| 4 | `EXEC SQL OPEN dbcur FOR SELECT MSG_ERR, MSG_STAT FROM host_to_wms …` → `FETCH` → `CLOSE` | **Replace** | **C-2** Get Status (GET) |
+
+## A.3  ZMDM_RA_TRACKWISE
+
+| # | SQL statement | Action | Interface |
+|---|---|---|---|
+| 1 | `SELECT * FROM zcon_mdm … WHERE mandt = sy-mandt` | Keep | — |
+| 2 | `SELECT field1 FROM zmm_param … WHERE param_type = 'ZZ9'` | Keep | — |
+| 3 | `SELECT * FROM mara WHERE ersda IN s_ersda AND mtart = 'ZAPI' AND mstae NOT IN (g_field1)` | Keep | — |
+| 4 | `EXEC SQL CONNECT / GET / SET / DISCONNECT :dbcon` | Replace | (destination) |
+| 5 | `EXEC SQL INSERT INTO mara (MATNR)` | **Replace** | **C-3** Push Material (POST) |
+
+## A.4  ZQM_TRACKWISE
+
+| # | SQL statement | Action | Interface |
+|---|---|---|---|
+| 1 | `SELECT * FROM zcon_mdm …` (twice, L71 & L266) | Keep | — |
+| 2 | `SELECT SINGLE name1 FROM t001w WHERE werks = …` | Keep | — |
+| 3 | `INSERT ztw_prod_det FROM TABLE gt_prod_det` (SAP mirror) | Keep | — |
+| 4 | `INSERT ztw_mat_det FROM TABLE gt_mat_det` (SAP mirror) | Keep | — |
+| 5 | `EXEC SQL CONNECT / SET / GET / DISCONNECT :dbcon` (15 ops) | Replace | (destination) |
+| 6 | `EXEC SQL INSERT INTO ZTW_MAT_DET ( 20 cols )` (twice, L132 & L183) | **Replace** | **C-4** Push Material Detail (POST) |
+| 7 | `EXEC SQL SELECT Plant_Code, Plant_Name FROM ZTW_PLNT_DET WHERE Plant_Code = :gv_plant` | **Replace** | **C-5** Check Plant (GET) |
+| 8 | `EXEC SQL INSERT INTO ZTW_PLNT_DET (Plant_Code, Plant_Name)` | **Replace** | **C-6** Push Plant (POST) |
+| 9 | `EXEC SQL INSERT INTO ZTW_PROD_DET ( 15 cols )` (8 times, L411–L684) | **Replace** | **C-7** Push Product Detail (POST) |
+
+*(C-5 + C-6 together = the single "Upsert Plant" operation from §8.2.)*
