@@ -95,10 +95,19 @@ data element, type, length, decimals) of:
 - ~~`ZTW_MAT_DET`~~ — ✅ **RECEIVED** (§3.5c complete; `interface/DDIC_ZTW_MAT_DET.pdf`)
 - ~~`ZTW_PROD_DET`~~ — ✅ **RECEIVED** (§3.5e complete; `interface/DDIC_ZTW_PROD_DET.pdf`)
 - ~~`ZMM_DBCON_ASRS`, `ZCON_MDM`, `DBCON`~~ — ✅ **RECEIVED** (§1)
-- `ZTW_PLNT_DET` (2 fields — §3.5d) — **STILL NEEDED** (only to confirm `Plant_Name` length)
-- `ZMM_PARAM` (param read in ZMDM_RA_TRACKWISE) — **STILL NEEDED** (minor)
+- ~~`ZMM_PARAM`~~ — ✅ **RECEIVED**: `SRNO` NUMC 4 (key), `PARAM_TYPE` CHAR 100, `FIELD1..FIELD10` CHAR 300 each. → the `field1` read in ZMDM_RA_TRACKWISE is **CHAR 300**. (Open-SQL read; stays as-is.)
+- `ZTW_PLNT_DET` — **not a SAP table** (external TrackWise DB only; §3.5d). SAP-side source lengths are known; external column lengths are owned by TrackWise/CPI.
 
-**Almost everything is now filled.** Only two small structures remain (`ZTW_PLNT_DET`, `ZMM_PARAM`).
+**All SAP-side structures are now in.** Nothing further is needed to finalise the field lengths.
+
+### 2.1 Where each external table lives (important — do not hunt for these in SAP DDIC)
+| External table (via `EXEC SQL`) | Exists in SAP DDIC? | Structure source |
+|---------------------------------|:-------------------:|------------------|
+| `HOST_TO_WMS` (ASRS) | ❌ No | External ASRS/WMS SQL Server DB. SAP-side payload mirrors `ZMM_ASRS` (§3.1c). |
+| `MARA` (TrackWise side) | ❌ (this is the TW copy) | External TrackWise DB. SAP sends only `MATNR`. |
+| `ZTW_PLNT_DET` | ❌ No | External TrackWise DB only. |
+| `ZTW_MAT_DET` | ✅ Yes (also a SAP mirror) | SAP DDIC = payload source (§3.5c). |
+| `ZTW_PROD_DET` | ✅ Yes (also a SAP mirror) | SAP DDIC = payload source (§3.5e). |
 
 ---
 
@@ -336,16 +345,18 @@ Source: `gs_mat_det` (DDIC in `interface/DDIC_ZTW_MAT_DET.pdf`). The INSERT send
 > Both material-detail INSERT branches → **one** API C-4; send `Date_of_Supply` empty when blank.
 
 #### (d) Field structure — APIs **C-5 (check) / C-6 (create)** plant (`ZTW_PLNT_DET`, 2 fields)
-> Note: `gv_plant` is typed `ztw_prod_det-plant_code` in the code, i.e. **CHAR 5** (`CHAR5`), even
-> though the SAP plant `WERKS_D` is CHAR 4. Use CHAR 5 for the API `Plant_Code`. `ZTW_PLNT_DET` DDIC
-> not yet supplied — send it to confirm `Plant_Name` length (assumed 30 from `T001W-NAME1`).
+> ⚠️ **`ZTW_PLNT_DET` is NOT a SAP table** — it exists **only on the external TrackWise SQL Server
+> database**. The program reaches it exclusively via `EXEC SQL`. So its column lengths are owned by the
+> **TrackWise/CPI side**, not SAP DDIC. The **SAP-side source** lengths (what the program supplies) are
+> known and shown below: `Plant_Code` is typed `ztw_prod_det-plant_code` = **CHAR 5**; `Plant_Name`
+> comes from `T001W-NAME1` = **CHAR 30**.
 
-| API | Direction | Field | Source | Type | Length |
-|-----|-----------|-------|--------|------|--------|
+| API | Direction | Field | SAP source | Type | Length (SAP side) |
+|-----|-----------|-------|------------|------|-------------------|
 | C-5 | request | Plant_Code | gv_plant (ztw_prod_det-plant_code) | CHAR | 5 |
-| C-5 | response | Plant_Code / Plant_Name | wa_plant | CHAR | 5 / ⟨confirm ZTW_PLNT_DET⟩ |
+| C-5 | response | Plant_Code / Plant_Name | wa_plant | CHAR | 5 / (TrackWise-defined) |
 | C-6 | body | Plant_Code | gs_plnt_comb-werks | CHAR | 5 |
-| C-6 | body | Plant_Name | gv_Name (← T001W-NAME1) | CHAR | 30 (confirm) |
+| C-6 | body | Plant_Name | gv_Name (← T001W-NAME1) | CHAR | 30 |
 
 #### (e) Field structure — API **C-7 "Push Product Detail"** (`ZTW_PROD_DET`, **15 fields**) ✅ lengths final
 Source: `gs_prod_det` (DDIC in `interface/DDIC_ZTW_PROD_DET.pdf`). The INSERT sends 15 of the 22 fields
@@ -389,6 +400,31 @@ Source: `gs_prod_det` (DDIC in `interface/DDIC_ZTW_PROD_DET.pdf`). The INSERT se
 (Basic/OAuth2/cert), payload format (JSON/SOAP/OData), success/error response contract, and any
 idempotency key (`MSG_REC_ID`, `Plant_Code`).
 
+### 4.1 Does an API already exist on the ASRS / TrackWise side? (evidence from code)
+**From the SAP code: today there is NO API — the integration is pure database-level.** Verified:
+- The 10 programs contain **zero** HTTP/OData/REST/SOAP/RFC calls (no `cl_http*`, `if_web_http*`,
+  `CALL FUNCTION … DESTINATION`, proxy, etc.). 100% is `EXEC SQL` (see each program in §3).
+- The `DBCON` entries (§1) connect at the **raw MS SQL Server level**
+  (`MSSQL_SERVER=tcp:…, MSSQL_DBNAME=…`) — SAP writes directly into the external DB tables, which is
+  a classic "database-drop" integration, not an API integration.
+- Whether the ASRS/WMS and TrackWise **applications** *also* expose a REST/OData/SOAP API cannot be
+  known from SAP code (SAP never used one) — that must be confirmed with the WMS vendor and the
+  TrackWise (Sparta/Honeywell) administrator.
+
+**Two viable target designs (recommend option A — no change on the external side):**
+
+| | Option A — CPI JDBC (recommended) | Option B — native API on external side |
+|---|-----------------------------------|----------------------------------------|
+| Flow | ABAP → OData/REST → **CPI iFlow** → **JDBC adapter** → same SQL Server tables (`HOST_TO_WMS`, `ZTW_*`) | ABAP → OData/REST → CPI → **new REST/SOAP API the ASRS/TrackWise vendor builds** |
+| External system change | **None** — CPI writes the same rows SAP used to write | Vendor must build & host an API |
+| SAP change | Remove `EXEC SQL`, call CPI (clean-core ✅) | Same |
+| Best when | The external DBs stay as the integration point | The vendors already have / will build APIs |
+
+> **Bottom line:** you do **not** need the ASRS/TrackWise vendors to build APIs to get SAP clean-core.
+> CPI's **MS SQL Server JDBC adapter** can perform the exact same inserts/reads into
+> `HOST_TO_WMS` / `ZTW_MAT_DET` / `ZTW_PROD_DET` / `ZTW_PLNT_DET`, so only the SAP↔CPI hop becomes an
+> API. Confirm with the CPI team which option the client prefers.
+
 ---
 
 ## 5. Common conversion rules (apply to every program)
@@ -407,9 +443,10 @@ idempotency key (`MSG_REC_ID`, `Plant_Code`).
 - [x] ~~`ZTW_MAT_DET`~~ — ✅ received; §3.5c complete (`interface/DDIC_ZTW_MAT_DET.pdf`)
 - [x] ~~`ZTW_PROD_DET`~~ — ✅ received; §3.5e complete (`interface/DDIC_ZTW_PROD_DET.pdf`)
 - [x] ~~`ZMM_DBCON_ASRS` / `ZCON_MDM` / `DBCON` + entries~~ — ✅ received (§1); external DBs confirmed as **MS SQL Server**
-- [ ] **`ZTW_PLNT_DET`** (structure, 2 fields) — only to confirm `Plant_Name` length (§3.5d)
-- [ ] **`ZMM_PARAM`** (structure) — for ZMDM_RA_TRACKWISE param read (minor)
-- [ ] **External-system API details:** do the ASRS/WMS (CIG_EFAWMS, CIS_EFAWMS) and TrackWise (TW_SAP) systems expose REST/OData/SOAP APIs? endpoints, auth, payload format, error/idempotency contract
+- [x] ~~`ZMM_PARAM`~~ — ✅ received (FIELD1 CHAR 300)
+- [x] ~~`ZTW_PLNT_DET`~~ — ✅ resolved: **not a SAP table** (external TrackWise DB only, §3.5d); SAP-side lengths known
+- [x] ~~Does an API already exist?~~ — ✅ answered from code (§4.1): **no — pure DB integration today**; recommend CPI JDBC (Option A)
+- [ ] **Decision:** Option A (CPI JDBC to the same SQL Server tables) vs Option B (vendor builds APIs) — §4.1
 - [ ] **S/4HANA target:** on-premise or Cloud (clean-core)? — decides the ABAP HTTP client
 
 *Send items above and I will replace every ⟨CONFIRM⟩ with exact type/length and reissue this document.*
