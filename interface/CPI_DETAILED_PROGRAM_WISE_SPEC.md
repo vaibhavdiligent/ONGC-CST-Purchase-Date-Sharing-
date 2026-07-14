@@ -20,15 +20,68 @@ custom config table, then issue `EXEC SQL. CONNECT TO :dbcon`. That connection n
 **standard SAP `DBCON` table** (maintained via transaction **DBCO / SM59 secondary DB**). To convert
 this to an API layer, the CPI/BASIS team needs the contents of these:
 
-| Table | Type | Role in the SQL connection | Used by | What we need from you |
-|-------|------|----------------------------|---------|-----------------------|
-| **`ZMM_DBCON_ASRS`** | Custom Z-table | Holds the ASRS DB connection name **per plant (`WERKS`)**. Program reads `gs_con-DBCON` from it. | `ZMM_ASRS_SAP_INTERFACE`, all 7 `ZMM_SQL_ASRS_SAP_PUSH*` | Full field list + sample rows (WERKS → DBCON name) |
-| **`ZCON_MDM`** | Custom Z-table | Holds the TrackWise/MDM DB connection name. Program reads `gs_con-DBCON`. | `ZMDM_RA_TRACKWISE`, `ZQM_TRACKWISE` | Full field list + sample rows |
-| **`DBCON`** (standard) | SAP system table (DBCO) | The **actual** secondary-connection definition the name above points to: DB type, server, user, etc. | (referenced as `dbcon-con_name`) | The connection entries used (con name, DBMS, server/host) — these become the API endpoints/destinations |
+| Table | Type | Role in the SQL connection | Used by |
+|-------|------|----------------------------|---------|
+| **`ZMM_DBCON_ASRS`** | Custom Z-table | Holds the ASRS DB connection name **per plant (`WERKS`)**. Program reads `gs_con-DBCON`. | `ZMM_ASRS_SAP_INTERFACE`, all 7 `ZMM_SQL_ASRS_SAP_PUSH*` |
+| **`ZCON_MDM`** | Custom Z-table | Holds the TrackWise/MDM DB connection name. Program reads `gs_con-DBCON`. | `ZMDM_RA_TRACKWISE`, `ZQM_TRACKWISE` |
+| **`DBCON`** (standard) | SAP system table (DBCO) | The **actual** secondary-connection definition the name above points to: DB type, server, user, password. | (referenced as `dbcon-con_name`) |
 
-**In the target design these three tables are replaced by:** an **HTTP/RFC destination** (on-prem:
+> **✅ KEY FACT (from the DBCON entries below): the external systems are Microsoft SQL Server
+> databases (`DBMS = MSS`).** Today SAP writes directly into these SQL Server DBs via native SQL.
+> The API layer must front these same SQL Server databases.
+
+**1.1 `ZMM_DBCON_ASRS` — structure (received)** — *"SAP-ASRS VS Plant connection Table"*
+
+| Field | Key | Data element | Type | Len | Description |
+|-------|:---:|--------------|------|----:|-------------|
+| MANDT | ✔ | MANDT | CLNT | 3 | Client |
+| WERKS | ✔ | WERKS_D | CHAR | 4 | Plant |
+| DBCON | | DBCON_NAME | CHAR | 30 | Logical DB connection name (→ `DBCON.CON_NAME`) |
+| DESCRIPTION | | /GRCPI/GRIA_DESC | CHAR | 132 | Description |
+| VALUE1 | | CHAR50 | CHAR | 50 | Comment |
+| VALUE2 | | CHAR50 | CHAR | 50 | Comment |
+| ERFUSER / ERFDATE / ERFTIME | | UNAME/DATUM/UZEIT | CHAR/DATS/TIMS | 12/8/6 | Created-by (audit) |
+| AENUSER / AENDATE / AENTIME | | UNAME/DATUM/UZEIT | CHAR/DATS/TIMS | 12/8/6 | Changed-by (audit) |
+
+Sample rows: `1047 → CON_1047` (CIPLA/GOA-VII PD II/PHARMA – ASRS, prod plant) · `1048 → CON_1048` (Sikkim ASRS).
+
+**1.2 `ZCON_MDM` — structure (received)** — TrackWise/MDM connection (single connection, no plant key)
+
+| Field | Key | Data element | Type | Len | Description |
+|-------|:---:|--------------|------|----:|-------------|
+| MANDT | ✔ | MANDT | CLNT | 3 | Client |
+| DBCON | ✔ | DBCON_NAME | CHAR | 30 | Logical DB connection name (→ `DBCON.CON_NAME`) |
+| DESCRIPTION | | /GRCPI/GRIA_DESC | CHAR | 132 | Description |
+| VALUE1 / VALUE2 | | CHAR50 | CHAR | 50 | Comment |
+| ERFUSER…AENTIME | | (audit) | | | Created/Changed-by |
+
+Sample row: `CON_MDM` → "Database Connection name for RA TrackWise Master Integration".
+
+**1.3 `DBCON` (standard) — the actual connection definitions (received)**
+
+| Field | Key | Data element | Type | Len | Description |
+|-------|:---:|--------------|------|----:|-------------|
+| CON_NAME | ✔ | DBCON_NAME | CHAR | 30 | Logical DB connection name |
+| DBMS | | DBCON_DBMS | CHAR | 3 | Database system (**MSS** = MS SQL Server) |
+| USER_NAME | | DBCON_UID | CHAR | 64 | DB user |
+| PASSWORD | | DBCON_PWD | CHAR | 255 | DB password |
+| CON_ENV | | DBCON_ENV | CHAR | 1024 | Connection info (server / DB name / port) |
+| DB_RECO | | DBCON_RECO | CHAR | 1 | Availability type |
+| MAX_CONNECTIONS / OPT_CONNECTIONS | | INT1 | INT1 | 3 | Pool sizing |
+
+**Connection entries in use (→ become the API endpoints/destinations):**
+
+| CON_NAME | Plant | DBMS | SQL Server (host\instance,port) | Database | System |
+|----------|-------|------|----------------------------------|----------|--------|
+| CON_1047 | 1047 (Goa) | MSS | tcp:172.18.11.120 | CIG_EFAWMS | ASRS/WMS |
+| CON_1048 | 1048 (Sikkim) | MSS | tcp:10.27.1.27 | CIS_EFAWMS | ASRS/WMS |
+| CON_MDM | (all) | MSS | tcp:INCPLTWPRDDB01\TWPRD,55619 | TW_SAP | TrackWise |
+
+**In the target design these tables are replaced by:** an **HTTP/RFC destination** (on-prem:
 SM59 + `CL_HTTP_DESTINATION_PROVIDER`) or a **Communication Arrangement / Outbound Service**
-(S/4HANA Cloud), selected per plant exactly as `ZMM_DBCON_ASRS` selects per `WERKS` today.
+(S/4HANA Cloud). The **per-plant routing stays** — the program still reads `ZMM_DBCON_ASRS` by
+`WERKS`, but the value now resolves to a destination (e.g. `CON_1047` → ASRS-Goa endpoint) instead
+of a SQL Server connection. `ZCON_MDM` resolves to the single TrackWise endpoint.
 
 ---
 
@@ -38,11 +91,12 @@ Field lengths for **standard SAP** data elements are filled below. For **custom*
 field *names* from the code but not the DDIC type/length. Please send the DDIC structure (field,
 data element, type, length, decimals) of:
 
-- `ZMM_ASRS` (drives the ASRS `HOST_TO_WMS` payload — §3.1)
-- `ZTW_MAT_DET`, `ZTW_PROD_DET`, `ZTW_PLNT_DET` (TrackWise payloads — §3.4/§4)
-- `ZMM_DBCON_ASRS`, `ZCON_MDM`, `ZMM_PARAM` (config/connection — §1)
+- `ZMM_ASRS` (drives the ASRS `HOST_TO_WMS` payload — §3.1) — **STILL NEEDED**
+- `ZTW_MAT_DET`, `ZTW_PROD_DET`, `ZTW_PLNT_DET` (TrackWise payloads — §3.5) — **STILL NEEDED**
+- `ZMM_PARAM` (param read in ZMDM_RA_TRACKWISE) — **STILL NEEDED**
+- ~~`ZMM_DBCON_ASRS`, `ZCON_MDM`, `DBCON`~~ — ✅ **RECEIVED** (see §1)
 
-Once received I will replace every **⟨CONFIRM⟩** with the exact length and reissue this document.
+Once the remaining tables are received I will replace every **⟨CONFIRM⟩** with the exact length and reissue this document.
 
 ---
 
@@ -334,14 +388,13 @@ idempotency key (`MSG_REC_ID`, `Plant_Code`).
 ---
 
 ## 6. Checklist — tables/structures to send so I can finalise field lengths
-- [ ] `ZMM_ASRS` (structure) — completes §3.1c and §3.3c (ASRS payload)
-- [ ] `ZTW_MAT_DET` (structure) — completes §3.5c
-- [ ] `ZTW_PROD_DET` (structure) — completes §3.5e
-- [ ] `ZTW_PLNT_DET` (structure) — completes §3.5d
-- [ ] `ZMM_DBCON_ASRS` (structure + sample rows) — connection routing (§1)
-- [ ] `ZCON_MDM` (structure + sample rows) — connection routing (§1)
-- [ ] `ZMM_PARAM` (structure) — for ZMDM_RA_TRACKWISE param read
-- [ ] `DBCON` entries used (con name, DB type, server) — become the API destinations
-- [ ] External-system API details: endpoints, auth, format, error/idempotency contract
+- [ ] **`ZMM_ASRS`** (structure) — completes §3.1c and §3.3c (ASRS `HOST_TO_WMS` payload, 30 fields) ← **biggest remaining**
+- [ ] **`ZTW_MAT_DET`** (structure) — completes §3.5c (20 fields)
+- [ ] **`ZTW_PROD_DET`** (structure) — completes §3.5e (15 fields)
+- [ ] **`ZTW_PLNT_DET`** (structure) — completes §3.5d (2 fields)
+- [ ] **`ZMM_PARAM`** (structure) — for ZMDM_RA_TRACKWISE param read
+- [x] ~~`ZMM_DBCON_ASRS` / `ZCON_MDM` / `DBCON` + entries~~ — ✅ received (§1); external DBs confirmed as **MS SQL Server**
+- [ ] **External-system API details:** do the ASRS/WMS (CIG_EFAWMS, CIS_EFAWMS) and TrackWise (TW_SAP) systems expose REST/OData/SOAP APIs? endpoints, auth, payload format, error/idempotency contract
+- [ ] **S/4HANA target:** on-premise or Cloud (clean-core)? — decides the ABAP HTTP client
 
 *Send items above and I will replace every ⟨CONFIRM⟩ with exact type/length and reissue this document.*
