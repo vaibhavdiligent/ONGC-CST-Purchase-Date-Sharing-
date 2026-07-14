@@ -9,6 +9,7 @@
 | **Title** | ASRS & TrackWise Interfaces — SQL-to-API Migration |
 | **Purpose** | Program-by-program analysis of the existing SAP↔ASRS/TrackWise interfaces and the plan to replace direct database (`EXEC SQL`) access with API calls via SAP CPI |
 | **Audience** | Client IT / SAP team and CPI (SAP Integration Suite) consultant |
+| **Target system** | SAP S/4HANA **Private Cloud Edition (RISE with SAP)** |
 | **Scope** | 10 ABAP programs, 3 connection tables, 7 target interfaces |
 | **Status** | For review |
 | **Date** | 14 July 2026 |
@@ -20,11 +21,17 @@ warehouse and the **TrackWise** quality system — by opening a **direct connect
 Microsoft SQL Server databases** and running SQL against them (`EXEC SQL`). No API or web service is
 involved today.
 
-On **S/4HANA this direct-database approach is not permitted**, so each of these database calls must be
-replaced. The recommended and agreed approach (**Option A**) is to route them through **SAP CPI (Integration
-Suite)**: SAP calls a CPI interface over HTTPS, and CPI writes to / reads from the **same SQL Server tables**
-using its database (JDBC) adapter. This makes SAP compliant with no change required on the ASRS/TrackWise
-side.
+The target landscape is **SAP S/4HANA Private Cloud Edition (PCE) under RISE with SAP** — an SAP-managed
+system that follows the **clean-core** model. In this managed environment, **native-SQL secondary
+connections (`DBCON`/`EXEC SQL`) to external third-party databases are not part of the supported setup and
+conflict with clean core**, so each of these database calls must be replaced. The recommended and agreed
+approach (**Option A**) is to route them through **SAP Integration Suite (CPI)**: SAP calls a CPI interface
+over HTTPS, and CPI writes to / reads from the **same SQL Server tables** using its database (JDBC) adapter.
+This makes SAP compliant with **no change required on the ASRS/TrackWise side**.
+
+Because PCE is the S/4HANA on-premise stack (delivered as a managed private cloud), the **SAP-side outbound
+call is standard, supported ABAP** — an HTTP(S) call through a configured destination — so no Public-Cloud
+development restrictions apply to building the consumer programs.
 
 This document lists, **for each program**: what it does, the SQL it uses (what stays vs. what must be
 replaced), the SAP tables it reads (with sample data where available), and the structure of each table sent
@@ -41,8 +48,10 @@ Ten ABAP programs move data between SAP and two external, non-SAP systems:
 DBCON secondary connection — writing/reading rows *directly* in the external database. There is **no API**
 of any kind in the code.
 
-**Problem:** on S/4HANA a program may not open a direct connection to a foreign database and run SQL against
-it. So **every `EXEC SQL` block must be removed** and replaced by a call to an interface.
+**Problem:** the target system is **SAP S/4HANA Private Cloud Edition (RISE with SAP)** — SAP-managed and
+clean-core. Native-SQL secondary connections (`DBCON`/`EXEC SQL`) to external third-party databases are not
+supported in this managed landscape and are contrary to clean core. So **every `EXEC SQL` block must be
+removed** and replaced by a call to an interface.
 
 **Target design (Option A — chosen):**
 
@@ -51,6 +60,15 @@ it. So **every `EXEC SQL` block must be removed** and replaced by a call to an i
 CPI uses its **Microsoft SQL Server JDBC adapter** to write/read the very same tables SAP writes today
 (`HOST_TO_WMS`, `ZTW_MAT_DET`, `ZTW_PROD_DET`, `ZTW_PLNT_DET`, TrackWise `MARA`). Nothing changes on the
 ASRS/TrackWise side; only the SAP→CPI hop becomes an API, and SAP becomes clean-core.
+
+**Connectivity notes (RISE PCE):**
+
+- **SAP → CPI:** the ABAP programs call CPI over HTTPS through a configured **destination / Communication
+  Arrangement**. On PCE this uses the standard ABAP HTTP client (recommended: `if_web_http_client` with a
+  destination) — fully supported managed ABAP.
+- **CPI → SQL Server:** the ASRS/TrackWise SQL Servers sit on plant/on-premise networks
+  (e.g. `172.18.11.120`, `10.27.1.27`), so CPI reaches them via the **SAP Cloud Connector / on-premise JDBC**
+  connectivity. This is CPI-side configuration and needs no SAP application change.
 
 **What stays vs. what changes (rule for every program):**
 
@@ -423,5 +441,7 @@ INSERT/SELECT on the SQL Server table shown.
 | C-6 TrackWise Push Plant | POST | ZTW_PLNT_DET | 2 | ZQM_TRACKWISE |
 | C-7 TrackWise Push Product Detail | POST | ZTW_PROD_DET | 15 | ZQM_TRACKWISE |
 
-**Only open point:** confirm the target is S/4HANA **on-premise** or **Cloud** — this decides the ABAP HTTP
-client used to call CPI. Everything else in this document is final.
+**Target confirmed: SAP S/4HANA Private Cloud Edition (RISE with SAP).** The SAP-side consumer is standard
+managed ABAP — an HTTPS call to CPI via a destination / Communication Arrangement (recommended
+`if_web_http_client`). No open points remain on the SAP side; the CPI team's remaining task is the SQL Server
+connectivity (Cloud Connector / on-premise JDBC) and the seven iFlows in §7.
