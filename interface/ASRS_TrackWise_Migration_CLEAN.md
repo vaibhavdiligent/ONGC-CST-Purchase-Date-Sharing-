@@ -1,6 +1,34 @@
 % ASRS & TrackWise Interfaces — SQL-to-API Migration
-% Program-by-program specification for the CPI team
-%
+% Program-by-program specification (SAP → CPI)
+% 14 July 2026
+
+# Document control
+
+| | |
+|---|---|
+| **Title** | ASRS & TrackWise Interfaces — SQL-to-API Migration |
+| **Purpose** | Program-by-program analysis of the existing SAP↔ASRS/TrackWise interfaces and the plan to replace direct database (`EXEC SQL`) access with API calls via SAP CPI |
+| **Audience** | Client IT / SAP team and CPI (SAP Integration Suite) consultant |
+| **Scope** | 10 ABAP programs, 3 connection tables, 7 target interfaces |
+| **Status** | For review |
+| **Date** | 14 July 2026 |
+
+# Executive summary
+
+Ten SAP interface programs currently exchange data with two external systems — the **ASRS** automated
+warehouse and the **TrackWise** quality system — by opening a **direct connection to those systems'
+Microsoft SQL Server databases** and running SQL against them (`EXEC SQL`). No API or web service is
+involved today.
+
+On **S/4HANA this direct-database approach is not permitted**, so each of these database calls must be
+replaced. The recommended and agreed approach (**Option A**) is to route them through **SAP CPI (Integration
+Suite)**: SAP calls a CPI interface over HTTPS, and CPI writes to / reads from the **same SQL Server tables**
+using its database (JDBC) adapter. This makes SAP compliant with no change required on the ASRS/TrackWise
+side.
+
+This document lists, **for each program**: what it does, the SQL it uses (what stays vs. what must be
+replaced), the SAP tables it reads (with sample data where available), and the structure of each table sent
+to the external systems — everything the CPI team needs to build the interfaces.
 
 # 1. Overview
 
