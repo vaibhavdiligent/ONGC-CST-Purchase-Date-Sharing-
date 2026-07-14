@@ -91,12 +91,14 @@ Field lengths for **standard SAP** data elements are filled below. For **custom*
 field *names* from the code but not the DDIC type/length. Please send the DDIC structure (field,
 data element, type, length, decimals) of:
 
-- `ZMM_ASRS` (drives the ASRS `HOST_TO_WMS` payload — §3.1) — **STILL NEEDED**
-- `ZTW_MAT_DET`, `ZTW_PROD_DET`, `ZTW_PLNT_DET` (TrackWise payloads — §3.5) — **STILL NEEDED**
-- `ZMM_PARAM` (param read in ZMDM_RA_TRACKWISE) — **STILL NEEDED**
-- ~~`ZMM_DBCON_ASRS`, `ZCON_MDM`, `DBCON`~~ — ✅ **RECEIVED** (see §1)
+- ~~`ZMM_ASRS`~~ — ✅ **RECEIVED** (§3.1c complete; `interface/DDIC_ZMM_ASRS.pdf`)
+- ~~`ZTW_MAT_DET`~~ — ✅ **RECEIVED** (§3.5c complete; `interface/DDIC_ZTW_MAT_DET.pdf`)
+- ~~`ZTW_PROD_DET`~~ — ✅ **RECEIVED** (§3.5e complete; `interface/DDIC_ZTW_PROD_DET.pdf`)
+- ~~`ZMM_DBCON_ASRS`, `ZCON_MDM`, `DBCON`~~ — ✅ **RECEIVED** (§1)
+- `ZTW_PLNT_DET` (2 fields — §3.5d) — **STILL NEEDED** (only to confirm `Plant_Name` length)
+- `ZMM_PARAM` (param read in ZMDM_RA_TRACKWISE) — **STILL NEEDED** (minor)
 
-Once the remaining tables are received I will replace every **⟨CONFIRM⟩** with the exact length and reissue this document.
+**Almost everything is now filled.** Only two small structures remain (`ZTW_PLNT_DET`, `ZMM_PARAM`).
 
 ---
 
@@ -138,40 +140,47 @@ Each program below: purpose → connection used → **current SQL** → **conver
 On HTTP 2xx → set `trf_status = 'Y'`; on error → leave `'N'` for retry (today handled by
 `CATCH cx_sy_native_sql_error`).
 
-#### (c) Field structure — API C-1 payload (external table `HOST_TO_WMS`, 30 fields)
-SAP source structure: **`ZMM_ASRS`** (`gs_asrs`). Send exact lengths for the ⟨CONFIRM⟩ rows from `ZMM_ASRS`.
+#### (c) Field structure — API C-1 payload (external table `HOST_TO_WMS`, **29 fields**) ✅ lengths final
+SAP source structure: **`ZMM_ASRS`** (`gs_asrs`, DDIC in `interface/DDIC_ZMM_ASRS.pdf`). The INSERT
+sends 29 of the 32 `ZMM_ASRS` fields (excludes `MANDT`, `TRF_STATUS`, `DATUM` which are SAP-side only).
 
 | # | API field / ext column | SAP source | Data element | Type | Length | Notes |
 |---|------------------------|-----------|--------------|------|--------|-------|
-| 1 | MSG_SRC | gs_asrs-MSG_SRC | ZMSG_SRC | CHAR | ⟨CONFIRM⟩ | |
-| 2 | MSG_REC_ID | gs_asrs-MSG_REC_ID | ZMSG_REC_ID | CHAR | ⟨CONFIRM⟩ | **dedup / key** |
-| 3 | MSG_TRANS_TYPE | gs_asrs-MSG_TRANS_TYPE | ZMSG_TRANS_TYPE | CHAR | ⟨CONFIRM⟩ | |
-| 4 | MSG_ACTION | gs_asrs-MSG_ACTION | ZMSG_ACTION | CHAR | ⟨CONFIRM⟩ | |
-| 5 | MSG_RET_SRC | gs_asrs-MSG_RET_SRC | ZMSG_RET_SRC | CHAR | ⟨CONFIRM⟩ | |
-| 6 | MSG_RET_REC_ID | gs_asrs-MSG_RET_REC_ID | ZMSG_RET_REC_ID | CHAR | ⟨CONFIRM⟩ | |
-| 7 | MSG_RET_TRANS_ID | gs_asrs-MSG_RET_TRANS_ID | ZMSG_RET_TRANS_ID | CHAR | ⟨CONFIRM⟩ | |
-| 8 | MSG_DT_DEF | lv_date ← gs_asrs-MSG_DT_DEF | (char10) | CHAR | 10 | date `DD-MM-YYYY` string |
-| 9 | MSG_DT_TRM | lv_date1 ← gs_asrs-MSG_DT_TRM | (char10) | CHAR | 10 | date string; empty if blank |
-| 10 | MSG_ERR | gs_asrs-MSG_ERR | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ | |
-| 11 | MSG_ERR_DESC | gs_asrs-MSG_ERR_DESC | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ | |
-| 12 | MSG_STAT | gs_asrs-MSG_STAT | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ | |
-| 13 | GR_NO | gs_asrs-GR_NO | MBLNR | CHAR | 10 | material doc no. |
-| 14 | REQ_ID | gs_asrs-REQ_ID | ZREQ_ID | CHAR | ⟨CONFIRM⟩ | |
-| 15 | REQ_TYPE | gs_asrs-REQ_TYPE | ZREQ_TYPE | CHAR | ⟨CONFIRM⟩ | |
-| 16 | MAT_CODE | gs_asrs-MAT_CODE | MATNR | CHAR | 40 | (18 on ECC) |
-| 17 | DESCRIPTION | gs_asrs-DESCRIPTION | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ | |
-| 18 | UOM | gs_asrs-UOM | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ | likely UNIT 3 |
-| 19 | ITEM_TYPE | gs_asrs-ITEM_TYPE | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ | |
+| 1 | MSG_SRC | gs_asrs-MSG_SRC | ZMSG_SRC | CHAR | 20 | "HOST" |
+| 2 | MSG_REC_ID | gs_asrs-MSG_REC_ID | ZMSG_REC_ID | CHAR | 20 | **key / dedup — unique number** |
+| 3 | MSG_TRANS_TYPE | gs_asrs-MSG_TRANS_TYPE | ZMSG_TRANS_TYPE | CHAR | 20 | domain values ↓ |
+| 4 | MSG_ACTION | gs_asrs-MSG_ACTION | ZMSG_ACTION | CHAR | 3 | action |
+| 5 | MSG_RET_SRC | gs_asrs-MSG_RET_SRC | ZMSG_RET_SRC | CHAR | 20 | return source |
+| 6 | MSG_RET_REC_ID | gs_asrs-MSG_RET_REC_ID | ZMSG_RET_REC_ID | NUMC | 9 | numeric |
+| 7 | MSG_RET_TRANS_ID | gs_asrs-MSG_RET_TRANS_ID | ZMSG_RET_TRANS_ID | NUMC | 9 | numeric |
+| 8 | MSG_DT_DEF | lv_date ← gs_asrs-MSG_DT_DEF | DATUM (DATS 8) | CHAR | 10 | date sent as `DD-MM-YYYY` string |
+| 9 | MSG_DT_TRM | lv_date1 ← gs_asrs-MSG_DT_TRM | DATUM (DATS 8) | CHAR | 10 | date string; empty if blank |
+| 10 | MSG_ERR | gs_asrs-MSG_ERR | ZMSG_ERR | NUMC | 3 | numeric error code |
+| 11 | MSG_ERR_DESC | gs_asrs-MSG_ERR_DESC | ZMSG_ERR_DESC | CHAR | 80 | |
+| 12 | MSG_STAT | gs_asrs-MSG_STAT | ZMSG_STAT | CHAR | 3 | message state |
+| 13 | GR_NO | gs_asrs-GR_NO | MBLNR | CHAR | 10 | material doc no. (ALPHA) |
+| 14 | REQ_ID | gs_asrs-REQ_ID | ZREQ_ID | CHAR | 12 | |
+| 15 | REQ_TYPE | gs_asrs-REQ_TYPE | ZREQ_TYPE | CHAR | 50 | domain: F/H/M/O/P/R |
+| 16 | MAT_CODE | gs_asrs-MAT_CODE | MATNR | CHAR | 40 | material (MATN1) |
+| 17 | DESCRIPTION | gs_asrs-DESCRIPTION | CHAR200 | CHAR | 200 | |
+| 18 | UOM | gs_asrs-UOM | MEINS | UNIT | 3 | base UoM (CUNIT) |
+| 19 | ITEM_TYPE | gs_asrs-ITEM_TYPE | ZITEM_TYPE | CHAR | 3 | |
 | 20 | SAP_BATCH | gs_asrs-SAP_BATCH | CHARG_D | CHAR | 10 | batch |
-| 21 | QTY | gs_asrs-QTY | ERFMG | QUAN | 13 (3 dec) | quantity ⟨CONFIRM decimals⟩ |
-| 22 | STATUS | gs_asrs-STATUS | ZSTAT | CHAR | ⟨CONFIRM⟩ | |
-| 23 | TOTAL_PACK | gs_asrs-TOTAL_PACK | QANZGEB | QUAN | ⟨CONFIRM⟩ | no. of packages |
-| 24 | MFG_DATE | lv_date2 ← gs_asrs-MFG_DATE | (char10) | CHAR | 10 | date string |
-| 25 | MANUFACTURER | gs_asrs-MANUFACTURER | ZMANUFACTURER | CHAR | ⟨CONFIRM⟩ | |
-| 26 | MFG_BATCH | gs_asrs-MFG_BATCH | ZMFG_BATCH | CHAR | ⟨CONFIRM⟩ | |
+| 21 | QTY | gs_asrs-QTY | ERFMG | QUAN | 13 (3 dec) | qty in entry unit (ref field = UOM) |
+| 22 | STATUS | gs_asrs-STATUS | ZSTAT | CHAR | 30 | domain ZSTATS: APP/BLK/QUA |
+| 23 | TOTAL_PACK | gs_asrs-TOTAL_PACK | QANZGEB | QUAN | 6 (0 dec) | no. of containers |
+| 24 | MFG_DATE | lv_date2 ← gs_asrs-MFG_DATE | ZMFG_DATE (DATS 8) | CHAR | 10 | date string |
+| 25 | MANUFACTURER | gs_asrs-MANUFACTURER | ZMANUFACTURER | CHAR | 30 | |
+| 26 | MFG_BATCH | gs_asrs-MFG_BATCH | ZMFG_BATCH | CHAR | 30 | |
 | 27 | LINE_ITEM | gs_asrs-LINE_ITEM | MBLPO | NUMC | 4 | item no. |
 | 28 | PLANT | gs_asrs-PLANT | WERKS_D | CHAR | 4 | plant |
-| 29 | OLD_STATUS | gs_asrs-OLD_STATUS | ZOLD_STATUS | CHAR | ⟨CONFIRM⟩ | |
+| 29 | OLD_STATUS | gs_asrs-OLD_STATUS | ZOLD_STATUS | CHAR | 30 | domain ZSTATS: APP/BLK/QUA |
+
+> **`MSG_TRANS_TYPE` allowed values (domain `ZMSG_TRANS_TYPE`):** `COR` Correction · `DIS` Dispense ·
+> `FSCR` Full Status Change · `IN` Store IN · `MASTER` Master List · `OUT` Store OUT ·
+> `PSCR` Partial Status Change · `PSCR_IN` Partial Status Store In. **These map 1:1 to the
+> `ZMM_SQL_ASRS_SAP_PUSH*` variants** — the CPI API should accept/validate this enumerated set.
+> **`REQ_TYPE` domain `ZREQ_TYPE`:** F Full doc · H Partial doc · M Material doc · O OBD · P Process order · R Reservation.
 
 ---
 
@@ -223,12 +232,12 @@ Only the selected `MSG_TRANS_TYPE` and small field-mapping details differ.
 **Convert to:** `GET` **C-2** for each `MSG_REC_ID` in the loop; map the response back into
 `ls_asrs-MSG_ERR` / `ls_asrs-MSG_STAT`, then the existing ALV logic is unchanged.
 
-#### (c) Field structure — API C-2
+#### (c) Field structure — API C-2 ✅ lengths final
 | Direction | Field | SAP target | Data element | Type | Length |
 |-----------|-------|-----------|--------------|------|--------|
-| **Request** | MSG_REC_ID | ls_asrs-MSG_REC_ID | ZMSG_REC_ID | CHAR | ⟨CONFIRM⟩ |
-| **Response** | MSG_ERR | ls_asrs-MSG_ERR | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| **Response** | MSG_STAT | ls_asrs-MSG_STAT | (ZMM_ASRS) | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
+| **Request** | MSG_REC_ID | ls_asrs-MSG_REC_ID | ZMSG_REC_ID | CHAR | 20 |
+| **Response** | MSG_ERR | ls_asrs-MSG_ERR | ZMSG_ERR | NUMC | 3 |
+| **Response** | MSG_STAT | ls_asrs-MSG_STAT | ZMSG_STAT | CHAR | 3 |
 
 ---
 
@@ -297,62 +306,68 @@ Only the selected `MSG_TRANS_TYPE` and small field-mapping details differ.
     EXEC SQL. CONNECT TO / SET CONNECTION / GET CONNECTION / DISCONNECT :con ENDEXEC.
 ```
 
-#### (c) Field structure — API **C-4 "Push Material Detail"** (`ZTW_MAT_DET`, 20 fields)
-Source: `gs_mat_det`. Send `ZTW_MAT_DET` DDIC for all lengths.
+#### (c) Field structure — API **C-4 "Push Material Detail"** (`ZTW_MAT_DET`, **20 fields**) ✅ lengths final
+Source: `gs_mat_det` (DDIC in `interface/DDIC_ZTW_MAT_DET.pdf`). The INSERT sends 20 of the 26 fields
+(excludes `MANDT`, `SERIAL_NO` key, and `STATUS`/`CREATEDATE`/`CREATETIME`/`CREATEDBY` audit fields).
 
-| # | API field | Source field | Type | Length |
-|---|-----------|--------------|------|--------|
-| 1 | Mat_Code | gs_mat_det-Mat_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 2 | Mat_Desc | gs_mat_det-Mat_Desc | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 3 | Batch_No | gs_mat_det-Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 4 | Plant_Code | gs_mat_det-Plant_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 5 | Mfg_Batch_No | gs_mat_det-Mfg_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 6 | Ins_Lot_No | gs_mat_det-Ins_Lot_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 7 | AR_No | gs_mat_det-AR_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 8 | Vendor_Code | gs_mat_det-Vendor_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 9 | Vendor_Name | gs_mat_det-Vendor_Name | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 10 | Mfg_Code | gs_mat_det-Mfg_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 11 | Mfg_Name | gs_mat_det-Mfg_Name | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 12 | Date_of_Supply | lv_date (from gs_mat_det-Date_of_Supply) | CHAR | 10 (date string; empty when blank) |
-| 13 | Qty_Supplied | gs_mat_det-Qty_Supplied | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 14 | UoM | gs_mat_det-UoM | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 15 | Impacted_Prod_Code | gs_mat_det-Impacted_Prod_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 16 | Impa_Prod_Batch_No | gs_mat_det-Impa_Prod_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 17 | Impacted_Prod_Name | gs_mat_det-Impacted_Prod_Name | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 18 | Impa_Prod_Ver_No | gs_mat_det-Impa_Prod_Ver_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 19 | Impacted_Ref_Doc_No | gs_mat_det-Impacted_Ref_Doc_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 20 | Impa_Mfg_Batch_No | gs_mat_det-Impa_Mfg_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
+| # | API field | Source field | Data element | Type | Length |
+|---|-----------|--------------|--------------|------|--------|
+| 1 | Mat_Code | gs_mat_det-Mat_Code | MATNR | CHAR | 40 |
+| 2 | Mat_Desc | gs_mat_det-Mat_Desc | ZMAKTX | CHAR | 200 |
+| 3 | Batch_No | gs_mat_det-Batch_No | CHARG_D | CHAR | 10 |
+| 4 | Plant_Code | gs_mat_det-Plant_Code | CHAR5 | CHAR | 5 |
+| 5 | Mfg_Batch_No | gs_mat_det-Mfg_Batch_No | — | CHAR | 30 |
+| 6 | Ins_Lot_No | gs_mat_det-Ins_Lot_No | QPLOS | NUMC | 12 |
+| 7 | AR_No | gs_mat_det-AR_No | ZAR_NO | CHAR | 15 |
+| 8 | Vendor_Code | gs_mat_det-Vendor_Code | LIFNR | CHAR | 10 |
+| 9 | Vendor_Name | gs_mat_det-Vendor_Name | — | CHAR | 72 |
+| 10 | Mfg_Code | gs_mat_det-Mfg_Code | ZMANUFACTURER | CHAR | 30 |
+| 11 | Mfg_Name | gs_mat_det-Mfg_Name | — | CHAR | 72 |
+| 12 | Date_of_Supply | lv_date ← gs_mat_det-Date_of_Supply | CPUDT (DATS 8) | CHAR | 10 (date string; empty when blank) |
+| 13 | Qty_Supplied | gs_mat_det-Qty_Supplied | MENGE_D | QUAN | 13 (3 dec) |
+| 14 | UoM | gs_mat_det-UoM | MEINS | UNIT | 3 |
+| 15 | Impacted_Prod_Code | gs_mat_det-Impacted_Prod_Code | MATNR | CHAR | 40 |
+| 16 | Impa_Prod_Batch_No | gs_mat_det-Impa_Prod_Batch_No | — | CHAR | 30 |
+| 17 | Impacted_Prod_Name | gs_mat_det-Impacted_Prod_Name | ZMAKTX | CHAR | 200 |
+| 18 | Impa_Prod_Ver_No | gs_mat_det-Impa_Prod_Ver_No | VERID | CHAR | 4 |
+| 19 | Impacted_Ref_Doc_No | gs_mat_det-Impacted_Ref_Doc_No | — | CHAR | 300 |
+| 20 | Impa_Mfg_Batch_No | gs_mat_det-Impa_Mfg_Batch_No | — | CHAR | 30 |
 
 > Both material-detail INSERT branches → **one** API C-4; send `Date_of_Supply` empty when blank.
 
 #### (d) Field structure — APIs **C-5 (check) / C-6 (create)** plant (`ZTW_PLNT_DET`, 2 fields)
+> Note: `gv_plant` is typed `ztw_prod_det-plant_code` in the code, i.e. **CHAR 5** (`CHAR5`), even
+> though the SAP plant `WERKS_D` is CHAR 4. Use CHAR 5 for the API `Plant_Code`. `ZTW_PLNT_DET` DDIC
+> not yet supplied — send it to confirm `Plant_Name` length (assumed 30 from `T001W-NAME1`).
+
 | API | Direction | Field | Source | Type | Length |
 |-----|-----------|-------|--------|------|--------|
-| C-5 | request | Plant_Code | gv_plant (= p_plnt_comb-werks / WERKS_D) | CHAR | 4 |
-| C-5 | response | Plant_Code, Plant_Name | wa_plant | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| C-6 | body | Plant_Code | gs_plnt_comb-werks | WERKS_D CHAR | 4 |
-| C-6 | body | Plant_Name | gv_Name (← T001W-NAME1) | CHAR | 30 |
+| C-5 | request | Plant_Code | gv_plant (ztw_prod_det-plant_code) | CHAR | 5 |
+| C-5 | response | Plant_Code / Plant_Name | wa_plant | CHAR | 5 / ⟨confirm ZTW_PLNT_DET⟩ |
+| C-6 | body | Plant_Code | gs_plnt_comb-werks | CHAR | 5 |
+| C-6 | body | Plant_Name | gv_Name (← T001W-NAME1) | CHAR | 30 (confirm) |
 
-#### (e) Field structure — API **C-7 "Push Product Detail"** (`ZTW_PROD_DET`, 15 fields)
-Source: `gs_prod_det`. Send `ZTW_PROD_DET` DDIC for all lengths.
+#### (e) Field structure — API **C-7 "Push Product Detail"** (`ZTW_PROD_DET`, **15 fields**) ✅ lengths final
+Source: `gs_prod_det` (DDIC in `interface/DDIC_ZTW_PROD_DET.pdf`). The INSERT sends 15 of the 22 fields
+(excludes `MANDT`, `SERIAL_NO` key, `MFG_DATE`, and `STATUS`/`CREATEDATE`/`CREATETIME`/`CREATEDBY`).
 
-| # | API field | Source field | Type | Length |
-|---|-----------|--------------|------|--------|
-| 1 | Prod_Code | gs_prod_det-Prod_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 2 | Prod_Name | gs_prod_det-Prod_Name | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 3 | Prod_Batch_No | gs_prod_det-Prod_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 4 | Plant_Code | gs_prod_det-Plant_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 5 | Production_Ver_No | gs_prod_det-Production_Ver_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 6 | Ref_Doc_No | gs_prod_det-Ref_Doc_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 7 | Mfg_Batch_No | gs_prod_det-Mfg_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 8 | Expiry_Date | lv_date1 | CHAR | 10 (date string; empty when blank) |
-| 9 | Retest_Date | lv_date2 | CHAR | 10 (date string; empty when blank) |
-| 10 | Impacted_Mat_Code | gs_prod_det-Impacted_Mat_Code | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 11 | Impacted_Mat_Desc | gs_prod_det-Impacted_Mat_Desc | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 12 | Impacted_Batch_No | gs_prod_det-Impacted_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 13 | Impa_Mat_Insp_Lot | gs_prod_det-Impa_Mat_Insp_Lot | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 14 | Impa_Mfg_Batch_No | gs_prod_det-Impa_Mfg_Batch_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
-| 15 | Impacted_Mat_AR_No | gs_prod_det-Impacted_Mat_AR_No | ⟨CONFIRM⟩ | ⟨CONFIRM⟩ |
+| # | API field | Source field | Data element | Type | Length |
+|---|-----------|--------------|--------------|------|--------|
+| 1 | Prod_Code | gs_prod_det-Prod_Code | MATNR | CHAR | 40 |
+| 2 | Prod_Name | gs_prod_det-Prod_Name | ZMAKTX | CHAR | 200 |
+| 3 | Prod_Batch_No | gs_prod_det-Prod_Batch_No | CHARG_D | CHAR | 10 |
+| 4 | Plant_Code | gs_prod_det-Plant_Code | CHAR5 | CHAR | 5 |
+| 5 | Production_Ver_No | gs_prod_det-Production_Ver_No | VERID | CHAR | 4 |
+| 6 | Ref_Doc_No | gs_prod_det-Ref_Doc_No | — | CHAR | 300 |
+| 7 | Mfg_Batch_No | gs_prod_det-Mfg_Batch_No | — | CHAR | 30 |
+| 8 | Expiry_Date | lv_date1 ← Expiry_Date | VFDAT (DATS 8) | CHAR | 10 (date string; empty when blank) |
+| 9 | Retest_Date | lv_date2 ← Retest_Date | ZRETEST_TRACK_DATE | CHAR | 10 (already char; empty when blank) |
+| 10 | Impacted_Mat_Code | gs_prod_det-Impacted_Mat_Code | IDNRK | CHAR | 40 |
+| 11 | Impacted_Mat_Desc | gs_prod_det-Impacted_Mat_Desc | ZMAKTX | CHAR | 200 |
+| 12 | Impacted_Batch_No | gs_prod_det-Impacted_Batch_No | CHARG_D | CHAR | 10 |
+| 13 | Impa_Mat_Insp_Lot | gs_prod_det-Impa_Mat_Insp_Lot | QPLOS | NUMC | 12 |
+| 14 | Impa_Mfg_Batch_No | gs_prod_det-Impa_Mfg_Batch_No | — | CHAR | 30 |
+| 15 | Impacted_Mat_AR_No | gs_prod_det-Impacted_Mat_AR_No | ZAR_NO | CHAR | 15 |
 
 > All 8 product-detail INSERT branches → **one** API C-7; dates optional.
 
@@ -362,7 +377,7 @@ Source: `gs_prod_det`. Send `ZTW_PROD_DET` DDIC for all lengths.
 
 | API | Verb | Direction | External object | Payload (fields) | Called by |
 |-----|------|-----------|-----------------|------------------|-----------|
-| C-1 ASRS Push Message | POST | SAP → ASRS | HOST_TO_WMS | 30 (§3.1c) | 7 × ZMM_SQL_ASRS_SAP_PUSH* |
+| C-1 ASRS Push Message | POST | SAP → ASRS | HOST_TO_WMS | 29 (§3.1c) | 7 × ZMM_SQL_ASRS_SAP_PUSH* |
 | C-2 ASRS Get Msg Status | GET | ASRS → SAP | HOST_TO_WMS | 1 req / 2 resp (§3.3c) | ZMM_ASRS_SAP_INTERFACE |
 | C-3 TrackWise Push Material | POST | SAP → TrackWise | MARA (TW) | 1 (§3.4c) | ZMDM_RA_TRACKWISE |
 | C-4 TrackWise Push Material Detail | POST | SAP → TrackWise | ZTW_MAT_DET | 20 (§3.5c) | ZQM_TRACKWISE |
@@ -388,12 +403,12 @@ idempotency key (`MSG_REC_ID`, `Plant_Code`).
 ---
 
 ## 6. Checklist — tables/structures to send so I can finalise field lengths
-- [ ] **`ZMM_ASRS`** (structure) — completes §3.1c and §3.3c (ASRS `HOST_TO_WMS` payload, 30 fields) ← **biggest remaining**
-- [ ] **`ZTW_MAT_DET`** (structure) — completes §3.5c (20 fields)
-- [ ] **`ZTW_PROD_DET`** (structure) — completes §3.5e (15 fields)
-- [ ] **`ZTW_PLNT_DET`** (structure) — completes §3.5d (2 fields)
-- [ ] **`ZMM_PARAM`** (structure) — for ZMDM_RA_TRACKWISE param read
+- [x] ~~`ZMM_ASRS`~~ — ✅ received; §3.1c & §3.3c complete (`interface/DDIC_ZMM_ASRS.pdf`)
+- [x] ~~`ZTW_MAT_DET`~~ — ✅ received; §3.5c complete (`interface/DDIC_ZTW_MAT_DET.pdf`)
+- [x] ~~`ZTW_PROD_DET`~~ — ✅ received; §3.5e complete (`interface/DDIC_ZTW_PROD_DET.pdf`)
 - [x] ~~`ZMM_DBCON_ASRS` / `ZCON_MDM` / `DBCON` + entries~~ — ✅ received (§1); external DBs confirmed as **MS SQL Server**
+- [ ] **`ZTW_PLNT_DET`** (structure, 2 fields) — only to confirm `Plant_Name` length (§3.5d)
+- [ ] **`ZMM_PARAM`** (structure) — for ZMDM_RA_TRACKWISE param read (minor)
 - [ ] **External-system API details:** do the ASRS/WMS (CIG_EFAWMS, CIS_EFAWMS) and TrackWise (TW_SAP) systems expose REST/OData/SOAP APIs? endpoints, auth, payload format, error/idempotency contract
 - [ ] **S/4HANA target:** on-premise or Cloud (clean-core)? — decides the ABAP HTTP client
 

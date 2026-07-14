@@ -59,7 +59,7 @@ For each program: **"API/HTTP today?"** = does it already call any API (all say 
   | Line(s) | `EXEC SQL` today | Replace with |
   |---------|------------------|--------------|
   | 64–77 | `DISCONNECT` / `CONNECT TO` / `GET CONNECTION` / `SET CONNECTION` :DBCON | (removed — handled by destination) |
-  | 91–150 | `INSERT INTO host_to_wms (30 cols) VALUES (…)` | **POST** to *ASRS – Push Message* API (see C-1) |
+  | 91–150 | `INSERT INTO host_to_wms (29 cols) VALUES (…)` | **POST** to *ASRS – Push Message* API (see C-1) |
   | 167–169 | `DISCONNECT` | (removed) |
 
 > **Note — the 7 `ZMM_SQL_ASRS_SAP_PUSH*` variants are structurally identical.** `_COR`
@@ -140,7 +140,7 @@ These are the exact fields moved in each `EXEC SQL` statement, taken from the pr
 field maps to a SAP DDIC table, the SAP source is given so the client/CPI can pull the **exact data
 type & length** from that table. **Items marked "confirm" need the client to supply the DDIC type.**
 
-### D-1 — ASRS "Push Message" payload  *(external table `HOST_TO_WMS` — 30 fields)*
+### D-1 — ASRS "Push Message" payload  *(external table `HOST_TO_WMS` — 29 fields)*
 Source SAP staging table: **`ZMM_ASRS`** (structure `gs_asrs`). Types below are from the program's
 own type declaration; confirm final lengths against `ZMM_ASRS`.
 

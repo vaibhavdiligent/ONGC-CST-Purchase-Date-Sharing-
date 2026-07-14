@@ -56,7 +56,7 @@ They differ only by which `MSG_TRANS_TYPE` they select and minor field mapping; 
 | ~69–71 | **[NATIVE]** | `EXEC SQL. CONNECT TO :gs_con-DBCON` | ASRS DB — open connection |
 | ~72–74 | **[NATIVE]** | `EXEC SQL. GET CONNECTION :CON` | ASRS DB |
 | ~75–77 | **[NATIVE]** | `EXEC SQL. SET CONNECTION :gs_con-DBCON` | ASRS DB |
-| ~91–150 | **[NATIVE]** | `EXEC SQL. INSERT INTO host_to_wms ( … 30 columns … ) VALUES ( :gs_asrs-… )` | **ASRS DB — push message** ← main call |
+| ~91–150 | **[NATIVE]** | `EXEC SQL. INSERT INTO host_to_wms ( … 29 columns … ) VALUES ( :gs_asrs-… )` | **ASRS DB — push message** ← main call |
 | ~167–169 | **[NATIVE]** | `EXEC SQL. DISCONNECT :con` | ASRS DB |
 | ~158 | **[OPEN]** | `COMMIT WORK AND WAIT` | (LUW) |
 | ~171 | **[OPEN]** | `MODIFY zmm_asrs FROM TABLE gt_asrs` | SAP — write back `trf_status = 'Y'` |
@@ -66,7 +66,7 @@ MSG_RET_REC_ID, MSG_RET_TRANS_ID, MSG_DT_DEF, MSG_DT_TRM, MSG_ERR, MSG_ERR_DESC,
 GR_NO, REQ_ID, REQ_TYPE, MAT_CODE, DESCRIPTION, UOM, ITEM_TYPE, SAP_BATCH, QTY, STATUS,
 TOTAL_PACK, MFG_DATE, MANUFACTURER, MFG_BATCH, LINE_ITEM, PLANT, OLD_STATUS`.
 
-**→ API replacement:** `POST /asrs/host-to-wms` with a body carrying those 30 fields, once per
+**→ API replacement:** `POST /asrs/host-to-wms` with a body carrying those 29 fields, once per
 message. The connection loop (`CONNECT/SET/GET/DISCONNECT`) collapses into destination handling;
 `MODIFY zmm_asrs` (status write-back) stays as Open SQL after a successful API response.
 
