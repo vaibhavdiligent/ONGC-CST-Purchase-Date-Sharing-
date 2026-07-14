@@ -479,3 +479,52 @@ flag and a combined payload, but that reduces readability — not recommended un
 
 **Net result:** **2 CPI APIs / 6 operations** instead of 7 — with the 7 push programs already sharing one API,
 and the plant check+create genuinely collapsing 2 → 1.
+
+## 8.5  How many interfaces are the same
+
+The 10 programs need only **6 distinct operations**, because one group of programs is identical:
+
+| Interface (operation) | Direction | Programs that use it | # programs |
+|---|---|---|---|
+| ASRS Push Message | **push** (POST) | 7 × `ZMM_SQL_ASRS_SAP_PUSH*` | **7 (same)** |
+| ASRS Get Status | **read** (GET) | `ZMM_ASRS_SAP_INTERFACE` | 1 |
+| TrackWise Push Material | **push** (POST) | `ZMDM_RA_TRACKWISE` | 1 |
+| TrackWise Push Material Detail | **push** (POST) | `ZQM_TRACKWISE` | 1 |
+| TrackWise Push Product Detail | **push** (POST) | `ZQM_TRACKWISE` | 1 |
+| TrackWise Upsert Plant | read + push | `ZQM_TRACKWISE` | 1 |
+
+**Only one set is truly identical: the 7 ASRS "push" programs → 1 interface.** The other four programs each
+have their own operation. So: **10 programs → 6 operations → 2 CPI APIs (ASRS, TrackWise).**
+
+## 8.6  Reads (GET) vs. pushes (POST) — why a GET is needed, and where the fetch is
+
+Most operations only **send** data outward (INSERT → POST). **Two** operations **read** from the external
+system, which is why a GET is required (data flows external → SAP):
+
+**(1) `ZMM_ASRS_SAP_INTERFACE` — this program contains an actual fetch.** It is a status-monitor report: after
+messages are pushed, it opens a cursor and **fetches the result back** from the ASRS database:
+
+```abap
+EXEC SQL. OPEN dbcur FOR
+  SELECT MSG_ERR, MSG_STAT FROM host_to_wms WHERE MSG_REC_ID = :ls_asrs-MSG_REC_ID
+ENDEXEC.
+EXEC SQL. FETCH NEXT dbcur INTO :ls_asrs-MSG_ERR, :ls_asrs-MSG_STAT ENDEXEC.   "← the fetch
+EXEC SQL. CLOSE dbcur ENDEXEC.
+```
+
+The `FETCH NEXT … INTO …` reads the processing status (`MSG_ERR`, `MSG_STAT`) back so the ALV monitor can show
+"received / processed" per message. → replaced by the **GET** *ASRS Get Status* (§4).
+
+**(2) `ZQM_TRACKWISE` — plant existence check (a single-row read):**
+
+```abap
+EXEC SQL. SELECT Plant_Code, Plant_Name INTO :wa_plant
+  FROM ztw_plnt_det WHERE Plant_Code = :gv_plant ENDEXEC.
+```
+
+This reads one row to decide whether the plant already exists before inserting it → the **read half of the
+Upsert Plant** operation (§6).
+
+**Everything else is push-only** — there is no other fetch anywhere in the 10 programs. So of the 6 operations:
+**4 are push (POST)** and **2 involve a read (GET)** — one true cursor fetch (status monitor) and one
+existence check (plant upsert).
