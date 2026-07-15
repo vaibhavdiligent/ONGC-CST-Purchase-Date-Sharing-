@@ -60,6 +60,9 @@ DATA: lv_fn_from_day TYPE c LENGTH 2,
       lv_fn_next_day TYPE sy-datum,
       lv_fn_is_last  TYPE c LENGTH 1.
 
+DATA: lv_sc_note1 TYPE c LENGTH 83,
+      lv_sc_note2 TYPE c LENGTH 83.
+
 *----------------------------------------------------------------------*
 * Extended final type: yrx_imb_settle_qty + Action Taken columns
 * NOTE: YRG_IMB_ACTION table must be created in SE11 before
@@ -91,6 +94,7 @@ DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext WITH DEFAULT KEY,
 *   m5 = r2 (always hidden)
 *   m6 = s_vkbur Sales Office for r1/r3 (hidden for r4)
 *   m7 = s_dat4/s_vk4 inputs for r4 (hidden for r1/r3)
+*   m8 = Notes block lines (lv_sc_note1/2)
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b WITH FRAME TITLE TEXT-001.
   PARAMETERS:    r1 RADIOBUTTON GROUP r1 USER-COMMAND abc DEFAULT 'X' MODIF ID m1.
@@ -104,3 +108,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_dat4  FOR oijnomi-idate MODIF ID m7.
   SELECT-OPTIONS: s_vk4   FOR lv_vkbur      MODIF ID m7.
 SELECTION-SCREEN END OF BLOCK b.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  SELECTION-SCREEN COMMENT /1(83) lv_sc_note1 MODIF ID m8.
+  SELECTION-SCREEN COMMENT /1(83) lv_sc_note2 MODIF ID m8.
+SELECTION-SCREEN END OF BLOCK b2.

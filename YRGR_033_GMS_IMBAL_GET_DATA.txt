@@ -434,6 +434,9 @@ FORM send_email_posted.
     ENDLOOP.
     SORT lt_sort_imbal BY sort_key DESCENDING.
 
+    " Skip email when no Posted records exist for this sales office
+    IF lt_posted_sorted IS INITIAL. CONTINUE. ENDIF.
+
     " Body: HTML table
     lv_html_body =
       '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&

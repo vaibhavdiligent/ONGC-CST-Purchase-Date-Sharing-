@@ -35,6 +35,9 @@
 *                                    updated intro text, sort by abs imbal
 *                                    Action Taken cols in ALV (r1/r3 r-o)
 *                                    NOTE: YRG_IMB_ACTION needs SE11
+* 15.07.2026  DEVELOPER              Notes block on selection screen (b2)
+*                                    Remove '2 UOM Mig' from Till Date label
+*                                    Skip email when no Posted data
 *&---------------------------------------------------------------------*
 REPORT yrgr_033_gms_imbal.
 
@@ -62,6 +65,8 @@ INITIALIZATION.
     WHERE uname    = @sy-uname
     AND   agr_name = 'ZO_CC_EHS.GMS_ROLE'.
   IF sy-subrc EQ 0. lv_has_role = 'X'. ENDIF.
+  TEXT-002 = 'Note'.
+  TEXT-r03 = 'Till Date'.
 
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
@@ -165,6 +170,17 @@ AT SELECTION-SCREEN OUTPUT.
       CONTINUE.
     ENDIF.
   ENDLOOP.
+
+  " Update Notes block (b2) text based on active radio button
+  IF r1 EQ 'X'.
+    lv_sc_note1 = 'The List is w.e.f. 01.01.2022, after Implementation of Single'.
+    lv_sc_note2 = 'Material Code for Transmission of Shippers'' Gas'.
+  ELSEIF r3 EQ 'X'.
+    lv_sc_note1 = 'The List is w.e.f. 01.09.2025, after 2UoM Migration'.
+    CLEAR lv_sc_note2.
+  ELSE.
+    CLEAR: lv_sc_note1, lv_sc_note2.
+  ENDIF.
 
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
