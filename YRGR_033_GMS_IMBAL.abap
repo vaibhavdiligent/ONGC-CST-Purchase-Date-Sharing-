@@ -171,13 +171,13 @@ AT SELECTION-SCREEN OUTPUT.
 
   " Update Notes block (b2) text based on active radio button
   IF r1 EQ 'X'.
-    lv_sc_note1 = 'The List is w.e.f. 01.01.2022, after Implementation of Single'.
-    lv_sc_note2 = 'Material Code for Transmission of Shippers'' Gas'.
+    lv_note1 = 'The List is w.e.f. 01.01.2022, after Implementation of Single'.
+    lv_note2 = 'Material Code for Transmission of Shippers'' Gas'.
   ELSEIF r3 EQ 'X'.
-    lv_sc_note1 = 'The List is w.e.f. 01.09.2025, after 2UoM Migration'.
-    CLEAR lv_sc_note2.
+    lv_note1 = 'The List is w.e.f. 01.09.2025, after 2UoM Migration'.
+    CLEAR lv_note2.
   ELSE.
-    CLEAR: lv_sc_note1, lv_sc_note2.
+    CLEAR: lv_note1, lv_note2.
   ENDIF.
 
 *----------------------------------------------------------------------*
