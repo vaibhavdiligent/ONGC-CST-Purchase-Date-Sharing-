@@ -65,8 +65,6 @@ INITIALIZATION.
     WHERE uname    = @sy-uname
     AND   agr_name = 'ZO_CC_EHS.GMS_ROLE'.
   IF sy-subrc EQ 0. lv_has_role = 'X'. ENDIF.
-  TEXT-002 = 'Note'.
-  TEXT-r03 = 'Till Date'.
 
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
