@@ -38,6 +38,8 @@
 * 15.07.2026  DEVELOPER              Notes block on selection screen (b2)
 *                                    Remove '2 UOM Mig' from Till Date label
 *                                    Skip email when no Posted data
+*                                    Save only changed AT rows to YRG_IMB_ACTION
+*                                    SO validation: VBAK -> VBPA
 *&---------------------------------------------------------------------*
 REPORT yrgr_033_gms_imbal.
 

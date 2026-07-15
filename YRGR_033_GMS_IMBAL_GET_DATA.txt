@@ -903,33 +903,58 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM save_action_taken.
   DATA: lv_saved_count TYPE i VALUE 0.
+  DATA: ls_imb_action  TYPE yrg_imb_action.
+  DATA: lt_existing    TYPE TABLE OF yrg_imb_action,
+        ls_existing    TYPE yrg_imb_action.
 
-  " First collect all current data from the ALV grid
+  " Flush pending edits from ALV grid
   CALL METHOD grid->check_changed_data.
 
-  DATA: ls_imb_action TYPE yrg_imb_action.
+  " Load most-recent saved record per contract for comparison
+  IF lt_final_ext IS NOT INITIAL.
+    SELECT * FROM yrg_imb_action
+      INTO TABLE @lt_existing
+      FOR ALL ENTRIES IN @lt_final_ext
+      WHERE docnr = @lt_final_ext-docnr.
+    SORT lt_existing BY docnr ASCENDING saved_on DESCENDING saved_at DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_existing COMPARING docnr.
+  ENDIF.
 
   LOOP AT lt_final_ext INTO ls_final_ext.
-    CLEAR ls_imb_action.
-    ls_imb_action-docnr    = ls_final_ext-docnr.
-    ls_imb_action-cpf_id   = sy-uname.
-    ls_imb_action-saved_on = sy-datum.
-    ls_imb_action-saved_at = sy-uzeit.
-    ls_imb_action-chkbox   = ls_final_ext-at_chkbox.
-    IF ls_final_ext-at_chkbox = 'X'.
-      ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
-      ls_imb_action-at_qty     = ls_final_ext-at_qty.
-      ls_imb_action-at_remarks = ls_final_ext-at_remarks.
+    READ TABLE lt_existing INTO ls_existing WITH KEY docnr = ls_final_ext-docnr.
+    IF sy-subrc = 0.
+      " Existing record: skip if none of the 4 AT columns changed
+      IF ls_final_ext-at_chkbox  = ls_existing-chkbox     AND
+         ls_final_ext-at_sal_ord = ls_existing-at_sal_ord  AND
+         ls_final_ext-at_qty     = ls_existing-at_qty      AND
+         ls_final_ext-at_remarks = ls_existing-at_remarks.
+        CONTINUE.
+      ENDIF.
+    ELSE.
+      " No existing record: skip if all 4 AT columns are blank
+      IF ls_final_ext-at_chkbox  IS INITIAL AND
+         ls_final_ext-at_sal_ord IS INITIAL AND
+         ls_final_ext-at_qty     IS INITIAL AND
+         ls_final_ext-at_remarks IS INITIAL.
+        CONTINUE.
+      ENDIF.
     ENDIF.
-    INSERT yrg_imb_action FROM ls_imb_action.
 
-    IF ls_final_ext-at_chkbox = 'X'.
-      lv_saved_count = lv_saved_count + 1.
-    ENDIF.
+    CLEAR ls_imb_action.
+    ls_imb_action-docnr      = ls_final_ext-docnr.
+    ls_imb_action-cpf_id     = sy-uname.
+    ls_imb_action-saved_on   = sy-datum.
+    ls_imb_action-saved_at   = sy-uzeit.
+    ls_imb_action-chkbox     = ls_final_ext-at_chkbox.
+    ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
+    ls_imb_action-at_qty     = ls_final_ext-at_qty.
+    ls_imb_action-at_remarks = ls_final_ext-at_remarks.
+    INSERT yrg_imb_action FROM ls_imb_action.
+    lv_saved_count = lv_saved_count + 1.
   ENDLOOP.
 
   IF lv_saved_count = 0.
-    MESSAGE 'Please select at least one checkbox before saving' TYPE 'W'.
+    MESSAGE 'No changes detected to save' TYPE 'W'.
     RETURN.
   ENDIF.
 
@@ -957,7 +982,7 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
       WHEN 'AT_SAL_ORD'.
         <fs_ext>-at_sal_ord = ls_mod-value.
         IF ls_mod-value IS NOT INITIAL.
-          SELECT SINGLE vbeln FROM vbak INTO @DATA(lv_so_chk) WHERE vbeln = @ls_mod-value.
+          SELECT SINGLE vbeln FROM vbpa INTO @DATA(lv_so_chk) WHERE vbeln = @ls_mod-value.
           IF sy-subrc NE 0.
             p_data_changed->add_protocol_entry(
               i_msgid     = '00'
