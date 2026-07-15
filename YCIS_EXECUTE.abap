@@ -1,31 +1,24 @@
 *&---------------------------------------------------------------------*
-*& Report  YCIS_APPROVE
+*& Report  YCIS_EXECUTE
 *&---------------------------------------------------------------------*
-*& CIS 2026-27 - 3-level approval workflow : LEVEL 2 (PC MKTG-HOD).
+*& CIS 2026-27 - 3-level approval workflow : LEVEL 3 (CPC - Execution).
 *&
-*&   L1 (PC MKTG)      : runs YRVG004_QAIS_EXECUTE_N1, reviews the discount
-*&                       ALV and CONFIRMs -> rows saved to YCIS_APPRVL with
-*&                       WF_STATUS '20' (Pending L2); L2 users are e-mailed.
-*&   L2 (PC MKTG-HOD)  : THIS program. Lists the Pending-L2 rows for the
-*&                       user's sales office(s), select (checkbox / Select
-*&                       All) and:
-*&                         APPROVE -> WF_STATUS '30' (Pending L3), e-mail L3.
-*&                         REJECT  -> WF_STATUS '10' (back to L1), e-mail L1.
-*&   L3 (CPC)          : YCIS_EXECUTE - executes and creates the rebate order.
+*&   L3 (CPC) is central (maintained in YCIS_WF_APPR under sales office
+*&   '0001', level 3) and sees the Pending-L3 rows of ALL sales offices.
+*&     EXECUTE -> create the rebate order (credit-memo request) via BAPI,
+*&                WF_STATUS '40' (Completed), store the order number.
+*&     REJECT  -> WF_STATUS '20' (back to L2 - PC MKTG-HOD), e-mail L2.
 *&
-*& Approval hierarchy & e-mail recipients are read from table YCIS_WF_APPR
-*& (Sales Office / Department / Level / Sequence / User / E-mail), SM30.
-*&
-*& GUI status 'STANDARD' (with function codes APPR, REJ, SELALL, DESEL and
-*& BACK/EXIT) must exist in this program - create it in SE41 (see doc).
+*& GUI status 'STANDARD' (function codes EXEC, REJ, SELALL, DESEL, BACK,
+*& EXIT) must exist in this program - create it in SE41 (see doc).
 *&---------------------------------------------------------------------*
-REPORT  ycis_approve.
+REPORT  ycis_execute.
 
 TYPE-POOLS: slis.
 
 TABLES: ycis_apprvl, ycis_wf_appr.
 
-CONSTANTS: gc_level TYPE ycis_wlevel VALUE '2'.   " this program = Level 2
+CONSTANTS: gc_level TYPE ycis_wlevel VALUE '3'.
 
 TYPES: BEGIN OF ty_out,
          sel         TYPE flag,
@@ -38,8 +31,8 @@ TYPES: BEGIN OF ty_out,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
          purch_no    TYPE ycis_apprvl-purch_no,
-         wf_status   TYPE ycis_apprvl-wf_status,
-         l1_user     TYPE ycis_apprvl-l1_user,
+         l2_user     TYPE ycis_apprvl-l2_user,
+         order_no    TYPE ycis_apprvl-order_no,
          remarks     TYPE ycis_apprvl-remarks,
        END OF ty_out.
 
@@ -50,8 +43,7 @@ DATA: gt_appr  TYPE STANDARD TABLE OF ycis_apprvl,
       gt_fcat  TYPE slis_t_fieldcat_alv,
       gs_fcat  TYPE slis_fieldcat_alv,
       gs_layout TYPE slis_layout_alv,
-      gr_office TYPE RANGE OF vkbur,
-      gs_office LIKE LINE OF gr_office.
+      gv_isl3  TYPE flag.
 
 *--------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
@@ -63,14 +55,14 @@ SELECTION-SCREEN END OF BLOCK b1.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
-  PERFORM get_auth_offices.
-  IF gr_office IS INITIAL.
-    MESSAGE 'You are not maintained as a Level-2 approver (YCIS_WF_APPR)' TYPE 'I'.
+  PERFORM check_l3_auth.
+  IF gv_isl3 IS INITIAL.
+    MESSAGE 'You are not maintained as a Level-3 (CPC) executor (YCIS_WF_APPR)' TYPE 'I'.
     RETURN.
   ENDIF.
   PERFORM get_pending.
   IF gt_appr IS INITIAL.
-    MESSAGE 'No records pending your (L2) approval' TYPE 'I'.
+    MESSAGE 'No records pending L3 execution' TYPE 'I'.
     RETURN.
   ENDIF.
   PERFORM build_out.
@@ -78,37 +70,26 @@ START-OF-SELECTION.
   PERFORM display_alv.
 
 *&---------------------------------------------------------------------*
-*&      Form  get_auth_offices   (sales offices this user handles at L2)
-*&---------------------------------------------------------------------*
-FORM get_auth_offices.
-  DATA: lt_wf TYPE STANDARD TABLE OF ycis_wf_appr,
-        ls_wf TYPE ycis_wf_appr.
-  REFRESH gr_office.
-  SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
-    WHERE level  = gc_level
-      AND userid = sy-uname.
-  LOOP AT lt_wf INTO ls_wf.
-    gs_office-sign = 'I'. gs_office-option = 'EQ'.
-    gs_office-low  = ls_wf-sales_office.
-    APPEND gs_office TO gr_office.
-  ENDLOOP.
+FORM check_l3_auth.
+  DATA lv_cnt TYPE i.
+  SELECT COUNT(*) INTO lv_cnt FROM ycis_wf_appr
+    WHERE level = gc_level AND userid = sy-uname.
+  IF lv_cnt > 0.
+    gv_isl3 = 'X'.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  get_pending   (rows pending L2 for this user's offices)
-*&---------------------------------------------------------------------*
 FORM get_pending.
+*   CPC is central -> all offices' pending-L3 rows (narrowed by s_vkbur)
   SELECT * FROM ycis_apprvl INTO TABLE gt_appr
-    WHERE wf_status   = '20'
-      AND sales_off   IN gr_office
+    WHERE wf_status   = '30'
       AND sales_off   IN s_vkbur
       AND period_from IN s_sptag
       AND kunnr       IN s_kunnr
       AND kvgr2       IN s_kvgr2.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  build_out
 *&---------------------------------------------------------------------*
 FORM build_out.
   REFRESH gt_out.
@@ -119,8 +100,6 @@ FORM build_out.
   ENDLOOP.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  build_fieldcat
 *&---------------------------------------------------------------------*
 FORM build_fieldcat.
   DATA: lv_pos TYPE i.
@@ -137,26 +116,25 @@ FORM build_fieldcat.
     APPEND gs_fcat TO gt_fcat.
   END-OF-DEFINITION.
 
-  add_fc 'SEL'         'Select'        'X'.
-  add_fc 'QAIS_NO'     'CIS No.'       ''.
-  add_fc 'SCHEME_TYPE' 'Type'          ''.
-  add_fc 'KUNNR'       'Customer'      ''.
-  add_fc 'CUST_NAME'   'Customer Name' ''.
-  add_fc 'KVGR2'       'Cust Group'    ''.
-  add_fc 'SALES_OFF'   'Sales Office'  ''.
-  add_fc 'ELIG_QTY'    'Eligible Qty'  ''.
-  add_fc 'REBATE_VAL'  'Rebate Value'  ''.
-  add_fc 'PURCH_NO'    'Reference No'  ''.
-  add_fc 'L1_USER'     'L1 Confirmed By' ''.
-  add_fc 'REMARKS'     'Remarks'       ''.
+  add_fc 'SEL'         'Select'          'X'.
+  add_fc 'QAIS_NO'     'CIS No.'         ''.
+  add_fc 'SCHEME_TYPE' 'Type'            ''.
+  add_fc 'KUNNR'       'Customer'        ''.
+  add_fc 'CUST_NAME'   'Customer Name'   ''.
+  add_fc 'KVGR2'       'Cust Group'      ''.
+  add_fc 'SALES_OFF'   'Sales Office'    ''.
+  add_fc 'ELIG_QTY'    'Eligible Qty'    ''.
+  add_fc 'REBATE_VAL'  'Rebate Value'    ''.
+  add_fc 'PURCH_NO'    'Reference No'    ''.
+  add_fc 'L2_USER'     'L2 Approved By'  ''.
+  add_fc 'ORDER_NO'    'Rebate Order'    ''.
+  add_fc 'REMARKS'     'Remarks'         ''.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  display_alv
-*&---------------------------------------------------------------------*
 FORM display_alv.
-  gs_layout-zebra          = 'X'.
-  gs_layout-box_fieldname  = 'SEL'.
+  gs_layout-zebra         = 'X'.
+  gs_layout-box_fieldname = 'SEL'.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid
@@ -172,19 +150,14 @@ FORM display_alv.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  SET_STATUS  (ALV GUI status callback)
-*&---------------------------------------------------------------------*
 FORM set_status USING rt_extab TYPE slis_t_extab.            "#EC CALLED
   SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  USER_COMMAND
-*&---------------------------------------------------------------------*
 FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
                         rs_selfield TYPE slis_selfield.
   DATA: lr_grid TYPE REF TO cl_gui_alv_grid.
-*   sync the edited checkbox values back into gt_out
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
     IMPORTING
       e_grid = lr_grid.
@@ -193,8 +166,8 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
   ENDIF.
 
   CASE r_ucomm.
-    WHEN 'APPR'.
-      PERFORM process_selected USING 'A'.
+    WHEN 'EXEC'.
+      PERFORM process_selected USING 'E'.
       rs_selfield-refresh = 'X'.
     WHEN 'REJ'.
       PERFORM process_selected USING 'R'.
@@ -213,13 +186,15 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  process_selected   (A = approve, R = reject)
+*&      Form  process_selected   (E = execute/create order, R = reject)
 *&---------------------------------------------------------------------*
 FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
+        lv_err    TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
-        lv_off    TYPE vkbur.
+        lv_off    TYPE vkbur,
+        lv_vbeln  TYPE vbeln.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -242,43 +217,104 @@ FORM process_selected USING p_action TYPE char1.
                   kunnr       = gs_out-kunnr
                   kvgr2       = gs_out-kvgr2.
     CHECK sy-subrc = 0.
-    IF p_action = 'A'.
-      gs_appr-wf_status = '30'.        " pending L3
-      gs_appr-l2_user   = sy-uname.
-      gs_appr-l2_date   = sy-datum.
-      gs_appr-l2_time   = sy-uzeit.
-      gs_appr-remarks   = 'L2 approved'.
+
+    IF p_action = 'E'.
+      CLEAR lv_vbeln.
+      PERFORM create_order USING gs_appr CHANGING lv_vbeln.
+      IF lv_vbeln IS NOT INITIAL.
+        gs_appr-wf_status = '40'.
+        gs_appr-order_no  = lv_vbeln.
+        gs_appr-l3_user   = sy-uname.
+        gs_appr-l3_date   = sy-datum.
+        gs_appr-l3_time   = sy-uzeit.
+        gs_appr-remarks   = 'Executed - order created'.
+        MODIFY ycis_apprvl FROM gs_appr.
+        lv_cnt = lv_cnt + 1.
+      ELSE.
+        lv_err = lv_err + 1.
+      ENDIF.
     ELSE.
-      gs_appr-wf_status   = '10'.      " back to L1
+      gs_appr-wf_status   = '20'.     " back to L2
       gs_appr-rej_level   = gc_level.
       gs_appr-rej_by      = sy-uname.
       gs_appr-rej_date    = sy-datum.
       gs_appr-rej_time    = sy-uzeit.
       gs_appr-rej_remarks = lv_remark.
-      gs_appr-remarks     = 'Rejected by L2'.
+      gs_appr-remarks     = 'Rejected by L3'.
+      MODIFY ycis_apprvl FROM gs_appr.
+      COLLECT gs_appr-sales_off INTO lt_office.
+      lv_cnt = lv_cnt + 1.
     ENDIF.
-    MODIFY ycis_apprvl FROM gs_appr.
-    COLLECT gs_appr-sales_off INTO lt_office.
-    lv_cnt = lv_cnt + 1.
   ENDLOOP.
 
   IF lv_cnt > 0.
     COMMIT WORK.
-    LOOP AT lt_office INTO lv_off.
-      IF p_action = 'A'.
-        PERFORM send_mail USING '3' '0001' lv_off 'CIS rebates pending execution (L3/CPC)'.
-      ELSE.
-        PERFORM send_mail USING '1' lv_off lv_off 'CIS rebates rejected by L2 - please review (L1)'.
-      ENDIF.
-    ENDLOOP.
-    MESSAGE |{ lv_cnt } line(s) processed| TYPE 'S'.
-*   drop the processed lines from the current list
+    IF p_action = 'R'.
+      LOOP AT lt_office INTO lv_off.
+        PERFORM send_mail USING '2' lv_off lv_off 'CIS rebates rejected by L3 - please review (L2)'.
+      ENDLOOP.
+    ENDIF.
     DELETE gt_out WHERE sel = 'X'.
   ENDIF.
+  MESSAGE |Processed: { lv_cnt }  Failed: { lv_err }| TYPE 'I'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  get_reject_remark
+*&      Form  create_order   (build & post the rebate order from payload)
+*&---------------------------------------------------------------------*
+FORM create_order USING p_appr TYPE ycis_apprvl
+                  CHANGING p_vbeln TYPE vbeln.
+  DATA: x_header   TYPE bapisdhead,
+        i_items    TYPE STANDARD TABLE OF bapiitemin,
+        wa_item    TYPE bapiitemin,
+        i_partner  TYPE STANDARD TABLE OF bapipartnr,
+        wa_partner TYPE bapipartnr,
+        i_return   TYPE STANDARD TABLE OF bapireturn,
+        lv_sold    TYPE bapikna1-customer.
+
+  x_header-doc_type   = p_appr-doc_type.
+  x_header-sales_org  = p_appr-sales_org.
+  x_header-distr_chan = p_appr-distr_chan.
+  x_header-division   = p_appr-division.
+  x_header-ord_reason = p_appr-ord_reason.
+  x_header-sales_off  = p_appr-sales_off.
+  x_header-cd_type1   = p_appr-cd_type.
+  x_header-cd_value1  = p_appr-cd_value.
+  x_header-purch_no   = p_appr-purch_no.
+  IF p_appr-bill_block IS NOT INITIAL.
+    x_header-bill_block = p_appr-bill_block.
+  ENDIF.
+
+  wa_partner-partn_role = 'AG'.
+  wa_partner-partn_numb = p_appr-kunnr.
+  APPEND wa_partner TO i_partner.
+
+  wa_item-material   = p_appr-material.
+  wa_item-target_qty = p_appr-target_qty.
+  APPEND wa_item TO i_items.
+
+  CALL FUNCTION 'BAPI_SALESDOCU_CREATEFROMDATA'
+    EXPORTING
+      order_header_in = x_header
+      business_object = 'BUS2094'
+      without_commit  = ' '
+    IMPORTING
+      salesdocument   = p_vbeln
+      sold_to_party   = lv_sold
+    TABLES
+      order_items_in  = i_items
+      order_partners  = i_partner
+      return          = i_return.
+
+  IF p_vbeln IS NOT INITIAL.
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING
+        wait = 'X'.
+  ELSE.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+  ENDIF.
+ENDFORM.
+
 *&---------------------------------------------------------------------*
 FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
   DATA: lt_fields TYPE STANDARD TABLE OF sval,
@@ -305,11 +341,6 @@ FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  send_mail   (notify next/previous level from YCIS_WF_APPR)
-*&      p_level  = target level (1/2/3)
-*&      p_office = sales office to read recipients for ('0001' for CPC/L3)
-*&      p_ctxoff = the office the rebate belongs to (for the mail text)
-*&---------------------------------------------------------------------*
 FORM send_mail USING p_level  TYPE ycis_wlevel
                      p_office  TYPE vkbur
                      p_ctxoff  TYPE vkbur
@@ -331,15 +362,13 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text = |CIS 2026-27 : { p_subject }|.        APPEND ls_text TO lt_text.
-      ls_text = |Sales Office : { p_ctxoff }|.         APPEND ls_text TO lt_text.
+      ls_text = |CIS 2026-27 : { p_subject }|.   APPEND ls_text TO lt_text.
+      ls_text = |Sales Office : { p_ctxoff }|.    APPEND ls_text TO lt_text.
       ls_text = |Please open the relevant transaction to action the pending records.|.
       APPEND ls_text TO lt_text.
       lv_sub = p_subject.
       lo_doc = cl_document_bcs=>create_document(
-                 i_type    = 'RAW'
-                 i_text    = lt_text
-                 i_subject = lv_sub ).
+                 i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
       LOOP AT lt_wf INTO ls_wf.
         CHECK ls_wf-email IS NOT INITIAL.
@@ -350,6 +379,5 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
       lo_send->send( ).
       COMMIT WORK.
     CATCH cx_bcs.
-*     mail failure must not block the approval; log silently
   ENDTRY.
 ENDFORM.

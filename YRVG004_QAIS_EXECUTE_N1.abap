@@ -402,8 +402,9 @@ DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 *   On "create order" the computed rebates are staged to YCIS_APPRVL with
 *   status 'P' (Pending) instead of creating the sales order. The CHECKER
 *   program YCIS_APPROVE approves the pending rows and creates the orders.
-TABLES: ycis_apprvl.
+TABLES: ycis_apprvl, ycis_wf_appr.
 DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
+DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 *** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -11656,7 +11657,8 @@ ENDFORM.                    "build_cis_shortfall
 *   the checker (YCIS_APPROVE) can create the order after approval.
 *&---------------------------------------------------------------------*
 FORM stage_all_rebates.
-  DATA: lv_cnt TYPE i.
+  DATA: lv_cnt TYPE i, lv_off TYPE vkbur.
+  REFRESH gt_stg_office.
   IF r_quater = 'X'.
     LOOP AT it_data_quater.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
@@ -11687,11 +11689,57 @@ FORM stage_all_rebates.
     ENDLOOP.
   ENDIF.
   IF lv_cnt > 0.
-    MESSAGE |{ lv_cnt } record(s) submitted for approval (YCIS_APPRVL)| TYPE 'S'.
+    COMMIT WORK.
+*   notify the Level-2 (PC MKTG-HOD) approvers of each office
+    LOOP AT gt_stg_office INTO lv_off.
+      PERFORM send_wf_mail USING '2' lv_off
+              'CIS rebates confirmed by L1 - pending your approval (L2)'.
+    ENDLOOP.
+    MESSAGE |{ lv_cnt } record(s) submitted for L2 approval (YCIS_APPRVL)| TYPE 'S'.
   ELSE.
     MESSAGE 'No records available to submit for approval' TYPE 'I'.
   ENDIF.
 ENDFORM.                    "stage_all_rebates
+*&---------------------------------------------------------------------*
+*&      Form  send_wf_mail   (CIS 2026-27 - L1 -> L2 notification)
+*&---------------------------------------------------------------------*
+FORM send_wf_mail USING p_level   TYPE ycis_wlevel
+                        p_office   TYPE vkbur
+                        p_subject  TYPE string.
+  DATA: lt_wf   TYPE STANDARD TABLE OF ycis_wf_appr,
+        ls_wf   TYPE ycis_wf_appr,
+        lo_send TYPE REF TO cl_bcs,
+        lo_doc  TYPE REF TO cl_document_bcs,
+        lo_rec  TYPE REF TO if_recipient_bcs,
+        lt_text TYPE bcsy_text,
+        ls_text TYPE soli,
+        lv_addr TYPE ad_smtpadr,
+        lv_sub  TYPE so_obj_des.
+  SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
+    WHERE level = p_level AND sales_office = p_office.
+  CHECK lt_wf IS NOT INITIAL.
+  TRY.
+      lo_send = cl_bcs=>create_persistent( ).
+      CLEAR lt_text.
+      ls_text = |CIS 2026-27 : { p_subject }|.  APPEND ls_text TO lt_text.
+      ls_text = |Sales Office : { p_office }|.    APPEND ls_text TO lt_text.
+      ls_text = |Please open the L2 approval transaction to action the records.|.
+      APPEND ls_text TO lt_text.
+      lv_sub = p_subject.
+      lo_doc = cl_document_bcs=>create_document(
+                 i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
+      lo_send->set_document( lo_doc ).
+      LOOP AT lt_wf INTO ls_wf.
+        CHECK ls_wf-email IS NOT INITIAL.
+        lv_addr = ls_wf-email.
+        lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
+        lo_send->add_recipient( i_recipient = lo_rec ).
+      ENDLOOP.
+      lo_send->send( ).
+      COMMIT WORK.
+    CATCH cx_bcs.
+  ENDTRY.
+ENDFORM.                    "send_wf_mail
 *&---------------------------------------------------------------------*
 *&      Form  stage_one   (CIS 2026-27 - Maker/Checker R4)
 *&---------------------------------------------------------------------*
@@ -11732,12 +11780,17 @@ FORM stage_one USING p_stype   TYPE char1
   ls-target_qty  = p_qty * 1000.
   ls-elig_qty    = p_qty.
   ls-rebate_val  = p_value.
-*   audit / status
+*   audit / status  (L1 confirm -> pending L2)
   ls-status      = 'P'.
   ls-maker       = sy-uname.
   ls-maker_date  = sy-datum.
   ls-maker_time  = sy-uzeit.
+  ls-wf_status   = '20'.                 " Pending L2 (L1 confirmed)
+  ls-l1_user     = sy-uname.
+  ls-l1_date     = sy-datum.
+  ls-l1_time     = sy-uzeit.
   MODIFY ycis_apprvl FROM ls.
+  COLLECT p_vkbur INTO gt_stg_office.       " for the L2 notification
 ENDFORM.                    "stage_one
 *&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST

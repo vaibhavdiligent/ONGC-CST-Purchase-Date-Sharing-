@@ -7,33 +7,45 @@ imports the same way as any abapGit offline project.
 
 ---
 
-## What's inside (29 objects)
+## What's inside (39 objects)
 
 All objects are in the **`Y`** customer namespace.
 
-**Domains (11):** `YCIS_CTYPE` (A/T), `YCIS_YEAR`, `YCIS_MONTH`, `YCIS_PERC`,
-`YCIS_COUNT`, and (maker/checker) `YCIS_QAIS`, `YCIS_STYPE`,
-`YCIS_STATUS` (P/A/R), `YCIS_AMT`, `YCIS_QTY`, `YCIS_REMARK`
+**Domains (15):** `YCIS_CTYPE`, `YCIS_YEAR`, `YCIS_MONTH`, `YCIS_PERC`, `YCIS_COUNT`,
+`YCIS_QAIS`, `YCIS_STYPE`, `YCIS_STATUS`, `YCIS_AMT`, `YCIS_QTY`, `YCIS_REMARK`,
+and (3-level workflow) `YCIS_WFSTAT`, `YCIS_DEPT`, `YCIS_WLEVEL`, `YCIS_SEQNO`
 
-**Data elements (11):** same names as the domains above.
+**Data elements (15):** same names as the domains above.
 
-**Tables (4):**
+**Tables (5):**
 | Table | Key fields |
 |---|---|
 | `YCIS_WAIVER_RULE` | MANDT, SCHEME_YEAR, CUST_TYPE, SIGN_FROM |
 | `YCIS_SHORTFALL` | MANDT, PERIOD_FROM, PERIOD_TO, **MATNR** |
 | `YCIS_NODISC_GRD` | MANDT, KONDM |
-| `YCIS_APPRVL` | MANDT, QAIS_NO, SCHEME_TYPE, PERIOD_FROM, PERIOD_TO, KUNNR, KVGR2 |
+| `YCIS_APPRVL` | MANDT, QAIS_NO, SCHEME_TYPE, PERIOD_FROM, PERIOD_TO, KUNNR, KVGR2 (+ workflow status/audit) |
+| `YCIS_WF_APPR` | MANDT, SALES_OFFICE, LEVEL, SEQUENCE (approval hierarchy) |
 
-**Programs (3):** `YRVG004_QAIS_EXECUTE_N1` (Maker), `YCIS_REBATE_REPORT`,
-`YCIS_APPROVE` (Checker)
+**Programs (4):** `YRVG004_QAIS_EXECUTE_N1` (L1), `YCIS_REBATE_REPORT`,
+`YCIS_APPROVE` (L2), `YCIS_EXECUTE` (L3)
 
-### Maker / Checker (R4) flow
-- **Maker** runs `YRVG004_QAIS_EXECUTE_N1`, reviews the ALV, and on "create order"
-  the computed rebates are **saved to `YCIS_APPRVL` as Pending** (no order created).
-- **Checker** runs `YCIS_APPROVE` with the same selection, sees the Pending rows and
-  **Approves** (creates the rebate order, marks `A` + order no.) or **Rejects** (marks `R`).
-- Generate **SM30** maintenance for `YCIS_APPRVL` too if you want to inspect/adjust rows.
+### 3-level approval workflow (R4)
+- **L1 – PC MKTG** runs `YRVG004_QAIS_EXECUTE_N1`, reviews the ALV, and **Confirm** saves the
+  computed rebates to `YCIS_APPRVL` as **Pending-L2** (no order) and e-mails L2.
+- **L2 – PC MKTG-HOD** runs `YCIS_APPROVE`, sees Pending-L2 rows for their office, **Approve**
+  (→ Pending-L3, e-mail L3) or **Reject** (→ back to L1, e-mail L1).
+- **L3 – CPC** runs `YCIS_EXECUTE`, sees Pending-L3 rows (all offices), **Execute** (creates the
+  rebate order, status Completed) or **Reject** (→ back to L2, e-mail L2).
+- Hierarchy & e-mail recipients are maintained in **`YCIS_WF_APPR`** (SM30). See
+  `CIS_2026_27_Approval_Workflow.docx` for the full design and config sample.
+
+### Extra manual steps for the workflow
+- **GUI status `STANDARD`** in `YCIS_APPROVE` (fn codes `APPR`,`REJ`,`SELALL`,`DESEL`,Back,Exit)
+  and in `YCIS_EXECUTE` (`EXEC`,`REJ`,`SELALL`,`DESEL`,Back,Exit) — small SE41 status per program.
+- **SM30** generators for `YCIS_WF_APPR` and `YCIS_APPRVL`.
+- **Transactions (SE93):** `YCIS_L1` → `YRVG004_QAIS_EXECUTE_N1`, `YCIS_L2` → `YCIS_APPROVE`,
+  `YCIS_L3` → `YCIS_EXECUTE`.
+- **SCOT/SMTP** configured for the e-mail notifications.
 
 > **Two tables dropped per GAIL feedback (07.07.2026):**
 > - `YCIS_CUST_TYPE` — customer type is read from the existing
