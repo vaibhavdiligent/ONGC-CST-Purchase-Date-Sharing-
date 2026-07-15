@@ -169,19 +169,6 @@ FORM display.
   CALL SCREEN 100.
 ENDFORM.
 
-MODULE status_0100 OUTPUT.
-  SET PF-STATUS 'SALV_STANDARD'. SET TITLEBAR 'GMS_TITLE'.
-ENDMODULE.
-
-MODULE user_command_0100 INPUT.
-  CASE sy-ucomm.
-    WHEN '&F03' OR '&F12' OR '&F15'. SET SCREEN 0.
-    WHEN 'SAVE'.
-      PERFORM save_action_taken.
-    WHEN OTHERS.
-  ENDCASE.
-ENDMODULE.
-
 *&---------------------------------------------------------------------*
 *& Form TOP_OF_PAGE
 *&---------------------------------------------------------------------*
