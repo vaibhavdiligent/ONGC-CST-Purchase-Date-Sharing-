@@ -70,8 +70,17 @@ AT SELECTION-SCREEN.
   IF sy-ucomm EQ 'ABC' OR sy-ucomm EQ 'EML'.
     " Screen refresh only - no validation
 
+  " R1: start date must be on or after 01.01.2022
+  ELSEIF r1 EQ 'X' AND s_date IS NOT INITIAL.
+    READ TABLE s_date INTO DATA(ls_date_chk) INDEX 1.
+    IF sy-subrc = 0 AND ls_date_chk-low IS NOT INITIAL.
+      IF ls_date_chk-low < '20220101'.
+        MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
+      ENDIF.
+    ENDIF.
+
   " FN date validation for Action Taken (R4) - applied to s_dat4 inputs.
-  " R1 has no date validation; R3 dates are auto-calculated.
+  " R3 dates are auto-calculated, no validation needed.
   ELSEIF r4 EQ 'X' AND s_dat4 IS NOT INITIAL.
     READ TABLE s_dat4 INTO DATA(ls_dat4_chk) INDEX 1.
     IF sy-subrc = 0 AND ls_dat4_chk-low IS NOT INITIAL.

@@ -20,14 +20,14 @@ FORM get_data.
     TABLES
       lt_final = lt_final.
 
-  " Apply Sales Office filter (s_vkbur for r1/r3, s_vk4 for r4)
-  IF r4 EQ 'X'.
-    IF s_vk4 IS NOT INITIAL.
-      DELETE lt_final WHERE vkbur NOT IN s_vk4.
-    ENDIF.
-  ELSE.
+  " Apply Sales Office filter: s_vkbur only for r1, s_vk4 only for r4, r3 = no filter
+  IF r1 EQ 'X'.
     IF s_vkbur IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vkbur.
+    ENDIF.
+  ELSEIF r4 EQ 'X'.
+    IF s_vk4 IS NOT INITIAL.
+      DELETE lt_final WHERE vkbur NOT IN s_vk4.
     ENDIF.
   ENDIF.
 
@@ -47,6 +47,16 @@ FORM get_data.
       ls_final_ext-at_qty = lv_at_qty.
       EXIT.
     ENDSELECT.
+
+    " R4 mode: Not Posted rows are read-only (disable AT columns via cell style)
+    IF r4 EQ 'X' AND ls_final_ext-stat = 'Not Posted'.
+      DATA: ls_styl TYPE lvc_s_styl.
+      ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+      ls_styl-fieldname = 'AT_CHKBOX'.  APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_SAL_ORD'. APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_QTY'.     APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_REMARKS'. APPEND ls_styl TO ls_final_ext-cell.
+    ENDIF.
 
     APPEND ls_final_ext TO lt_final_ext.
   ENDLOOP.
@@ -243,9 +253,9 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
     CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
     CLEAR dl_text.
     IF r1 EQ 'X'.
-      dl_text = '4. The List is w.e.f. 01.09.2025, after 2UoM Migration'.
-    ELSE.
       dl_text = '4. The List is w.e.f. 01.01.2022, after Implementation of Single Material Code for Transmission of Shippers'' Gas'.
+    ELSE.
+      dl_text = '4. The List is w.e.f. 01.09.2025, after 2UoM Migration'.
     ENDIF.
     CALL METHOD p_dyndoc_id->add_text EXPORTING text = dl_text sap_emphasis = cl_dd_area=>heading.
     CALL METHOD p_dyndoc_id->new_line.
@@ -941,7 +951,20 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
         IF <fs_ext>-at_chkbox <> 'X'.
           CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
         ENDIF.
-      WHEN 'AT_SAL_ORD'. <fs_ext>-at_sal_ord = ls_mod-value.
+      WHEN 'AT_SAL_ORD'.
+        <fs_ext>-at_sal_ord = ls_mod-value.
+        IF ls_mod-value IS NOT INITIAL.
+          SELECT SINGLE vbeln FROM vbak INTO @DATA(lv_so_chk) WHERE vbeln = @ls_mod-value.
+          IF sy-subrc NE 0.
+            p_data_changed->add_protocol_entry(
+              i_msgid     = '00'
+              i_msgno     = '001'
+              i_msgty     = 'E'
+              i_msgv1     = 'SO not valid'
+              i_fieldname = 'AT_SAL_ORD'
+              i_row_id    = ls_mod-row_id ).
+          ENDIF.
+        ENDIF.
       WHEN 'AT_QTY'.     <fs_ext>-at_qty     = ls_mod-value.
       WHEN 'AT_REMARKS'. <fs_ext>-at_remarks = ls_mod-value.
     ENDCASE.

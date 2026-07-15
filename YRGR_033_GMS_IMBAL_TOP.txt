@@ -70,6 +70,7 @@ TYPES: BEGIN OF ty_action_cols,
          at_sal_ord TYPE vbeln,
          at_qty     TYPE char20,
          at_remarks TYPE char255,
+         cell       TYPE lvc_t_styl,
        END OF ty_action_cols.
 
 TYPES: BEGIN OF ty_final_ext.
