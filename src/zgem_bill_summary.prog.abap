@@ -29,7 +29,7 @@ DATA: err_string1       TYPE string.
 *--- Bill Details (3.10) via CPI - real response shape confirmed by
 *    ZGEM_CPI_BILL_DETAILS.abap. Replaces the old SI_BILLING_SUMMARY_OB proxy call.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
-           c_path TYPE string VALUE '/http/GEM/Sync/BillDetails'.
+           c_path TYPE string VALUE '/http/GEM/Sync/BillSummary'.
 
 TYPES: BEGIN OF ty_cpi_request,
          user          TYPE string,
@@ -412,7 +412,7 @@ IF r1 = 'X'.
 
   IF token IS NOT INITIAL.
     ls_cpi_request-user          = 'ONGCVIDESH'.
-    ls_cpi_request-method        = 'getbills'.
+    ls_cpi_request-method        = 'billSummary'.
     ls_cpi_request-buyer_user_id = 'OVLMM'.
     ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
     ls_cpi_request-to_date       = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.

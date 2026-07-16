@@ -30,7 +30,7 @@ DATA: err_string1       TYPE string.
 *--- Order Details (3.3) via CPI - real response shape confirmed by
 *    ZGEM_CPI_ORDER_DETAILS.abap. Replaces the old SI_ORDER_SUMMARY_OB proxy call.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
-           c_path TYPE string VALUE '/http/GEM/Sync/OrderDetails'.
+           c_path TYPE string VALUE '/http/GEM/Sync/OrderSummary'.
 
 TYPES: BEGIN OF ty_cpi_request,
          user          TYPE string,
@@ -398,7 +398,7 @@ IF r1 = 'X'.
 *--- Build the JSON request payload and call CPI directly (was: proxy call
 *    to lo_gem_ordersumm->si_order_summary_ob). Path/shape per ZGEM_CPI_ORDER_DETAILS.
     ls_cpi_request-user          = 'ONGCVIDESH'.
-    ls_cpi_request-method        = 'getOrders'.
+    ls_cpi_request-method        = 'orderSummary'.
     ls_cpi_request-buyer_user_id = 'OVLMM'.
     ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
     ls_cpi_request-to_date       = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.

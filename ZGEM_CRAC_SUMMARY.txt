@@ -66,7 +66,7 @@ DATA: err_string1       TYPE string.
 *--- CRAC Details (3.8) via CPI - real response shape confirmed by
 *    ZGEM_CPI_CRAC_DETAILS.abap. Replaces the old SI_CRACSUMMARY_OB proxy call.
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
-           c_path TYPE string VALUE '/http/GEM/Sync/CracDetails'.
+           c_path TYPE string VALUE '/http/GEM/Sync/CracSummary'.
 
 TYPES: BEGIN OF ty_cpi_request,
          user          TYPE string,
@@ -196,7 +196,7 @@ IF token IS NOT INITIAL.
 *--- Build the JSON request payload and call CPI directly (was: proxy call
 *    to lo_gem_cracsumm->SI_CRACSUMMARY_OB). Path/shape per ZGEM_CPI_CRAC_DETAILS.
   ls_cpi_request-user          = 'ONGCVIDESH'.
-  ls_cpi_request-method        = 'getCrac'.
+  ls_cpi_request-method        = 'cracSummary'.
   ls_cpi_request-buyer_user_id = 'OVLMM'.
   ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
   ls_cpi_request-to_date       = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.
