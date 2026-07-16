@@ -270,7 +270,7 @@ FORM create_order USING p_appr TYPE ycis_apprvl
         i_partner  TYPE STANDARD TABLE OF bapipartnr,
         wa_partner TYPE bapipartnr,
         i_return   TYPE STANDARD TABLE OF bapireturn,
-        lv_sold    TYPE bapikna1-customer.
+        lv_sold    TYPE kunnr.
 
   x_header-doc_type   = p_appr-doc_type.
   x_header-sales_org  = p_appr-sales_org.
@@ -362,9 +362,9 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text = |CIS 2026-27 : { p_subject }|.   APPEND ls_text TO lt_text.
-      ls_text = |Sales Office : { p_ctxoff }|.    APPEND ls_text TO lt_text.
-      ls_text = |Please open the relevant transaction to action the pending records.|.
+      ls_text-line = |CIS 2026-27 : { p_subject }|.   APPEND ls_text TO lt_text.
+      ls_text-line = |Sales Office : { p_ctxoff }|.    APPEND ls_text TO lt_text.
+      ls_text-line = |Please open the relevant transaction to action the pending records.|.
       APPEND ls_text TO lt_text.
       lv_sub = p_subject.
       lo_doc = cl_document_bcs=>create_document(

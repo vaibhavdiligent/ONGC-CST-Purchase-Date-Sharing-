@@ -11721,9 +11721,9 @@ FORM send_wf_mail USING p_level   TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text = |CIS 2026-27 : { p_subject }|.  APPEND ls_text TO lt_text.
-      ls_text = |Sales Office : { p_office }|.    APPEND ls_text TO lt_text.
-      ls_text = |Please open the L2 approval transaction to action the records.|.
+      ls_text-line = |CIS 2026-27 : { p_subject }|.  APPEND ls_text TO lt_text.
+      ls_text-line = |Sales Office : { p_office }|.    APPEND ls_text TO lt_text.
+      ls_text-line = |Please open the L2 approval transaction to action the records.|.
       APPEND ls_text TO lt_text.
       lv_sub = p_subject.
       lo_doc = cl_document_bcs=>create_document(
