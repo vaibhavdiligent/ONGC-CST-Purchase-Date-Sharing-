@@ -2,7 +2,17 @@
 *& Report  ZCST_CURR_FIELD_CHECK
 *&---------------------------------------------------------------------*
 *& Validate a DECFLOAT34 input and move it safely into a currency
-*& field (data element KSTBW - CURR, 2 decimals).
+*& field (data element KSTBW - CURR 15,2).
+*&
+*& NOTE : this program does NOT have the "Fixed Point Arithmetic"
+*&        attribute ticked. With that switch OFF, ABAP ignores the
+*&        decimal places of packed/CURR fields in arithmetic and in
+*&        numeric assignments - so a direct  ev_amount = decfloat_value
+*&        would lose the .90 . Therefore:
+*&          - all math is done in DECFLOAT34 ( not affected by the flag )
+*&          - the final move into KSTBW goes THROUGH A CHARACTER STRING,
+*&            because assignments FROM character fields still honour the
+*&            target decimals even when Fixed Point Arithmetic is off.
 *&
 *& Example : input DECFLOAT34 = 1.9  ->  output KSTBW = 1.90  (1.9)
 *&---------------------------------------------------------------------*
@@ -30,7 +40,8 @@ FORM check_curr_field
 
   DATA: lv_decimals TYPE i VALUE 2,          " default currency decimals
         lv_rounded  TYPE decfloat34,
-        lv_max      TYPE decfloat34.
+        lv_max      TYPE decfloat34,
+        lv_char     TYPE c LENGTH 25.        " bridge: number -> char -> CURR
 
   CLEAR: ev_amount, ev_valid, ev_msg.
 
@@ -62,8 +73,13 @@ FORM check_curr_field
     RETURN.
   ENDIF.
 
-* 5) safe assignment to the currency field
-  ev_amount = lv_rounded.
+* 5) safe assignment to the currency field.
+*    Fixed Point Arithmetic is OFF, so DO NOT move decfloat straight into
+*    the CURR field ( decimals would be ignored ). Go via a character
+*    string - char -> CURR conversion evaluates the '.' and keeps 2 dec.
+  lv_char = lv_rounded.            " e.g. 1.9 -> '1.9'
+  CONDENSE lv_char NO-GAPS.
+  ev_amount = lv_char.             " '1.9' -> KSTBW 1.90  ( decimals kept )
   ev_valid  = abap_true.
 
 ENDFORM.
