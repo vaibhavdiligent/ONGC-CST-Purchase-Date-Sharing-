@@ -3,7 +3,7 @@
 *&---------------------------------------------------------------------*
 *& CRAC Details (3.8) - GeM CPI integration (customer version).
 *& Selection screen: from-date / to-date only. All other request fields
-*& are hard-coded. Fetched rows are saved to ZGEM_CRACDET and shown in ALV.
+*& are hard-coded. Fetched rows are saved to ZGEMC_CRACDET and shown in ALV.
 *&---------------------------------------------------------------------*
 REPORT zgem_crac_details.
 
@@ -68,8 +68,8 @@ DATA: lo_client   TYPE REF TO if_http_client,
       lv_code     TYPE i,
       lv_reason   TYPE string,
       lv_item     TYPE posnr,
-      it_out      TYPE STANDARD TABLE OF zgem_cracdet,
-      wa_out      TYPE zgem_cracdet,
+      it_out      TYPE STANDARD TABLE OF zgemc_cracdet,
+      wa_out      TYPE zgemc_cracdet,
       lo_alv      TYPE REF TO cl_salv_table,
       lx_salv     TYPE REF TO cx_salv_msg.
 
@@ -154,7 +154,7 @@ START-OF-SELECTION.
       wa_out-dateto            = dateto.
       wa_out-ernam             = sy-uname.
       wa_out-erdat             = sy-datum.
-      MODIFY zgem_cracdet FROM wa_out.
+      MODIFY zgemc_cracdet FROM wa_out.
       APPEND wa_out TO it_out.
     ENDLOOP.
   ENDLOOP.

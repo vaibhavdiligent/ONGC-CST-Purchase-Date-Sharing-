@@ -3,7 +3,7 @@
 *&---------------------------------------------------------------------*
 *& Invoice Summary - GeM CPI integration (customer version).
 *& Selection screen: from-date / to-date only. All other request fields
-*& are hard-coded. Fetched rows are saved to ZGEM_INVSUMM and shown in ALV.
+*& are hard-coded. Fetched rows are saved to ZGEMC_INVSUMM and shown in ALV.
 *&---------------------------------------------------------------------*
 REPORT zgem_invoice_summary.
 
@@ -56,8 +56,8 @@ DATA: lo_client   TYPE REF TO if_http_client,
       lv_response TYPE string,
       lv_code     TYPE i,
       lv_reason   TYPE string,
-      it_out      TYPE STANDARD TABLE OF zgem_invsumm,
-      wa_out      TYPE zgem_invsumm,
+      it_out      TYPE STANDARD TABLE OF zgemc_invsumm,
+      wa_out      TYPE zgemc_invsumm,
       lo_alv      TYPE REF TO cl_salv_table,
       lx_salv     TYPE REF TO cx_salv_msg.
 
@@ -128,7 +128,7 @@ START-OF-SELECTION.
       wa_out-dateto         = dateto.
       wa_out-ernam          = sy-uname.
       wa_out-erdat          = sy-datum.
-      MODIFY zgem_invsumm FROM wa_out.
+      MODIFY zgemc_invsumm FROM wa_out.
       APPEND wa_out TO it_out.
     ENDLOOP.
   ENDLOOP.
