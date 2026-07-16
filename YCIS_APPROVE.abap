@@ -85,7 +85,7 @@ FORM get_auth_offices.
         ls_wf TYPE ycis_wf_appr.
   REFRESH gr_office.
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
-    WHERE level  = gc_level
+    WHERE wf_level  = gc_level
       AND userid = sy-uname.
   LOOP AT lt_wf INTO ls_wf.
     gs_office-sign = 'I'. gs_office-option = 'EQ'.
@@ -325,7 +325,7 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lv_sub  TYPE so_obj_des.
 
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
-    WHERE level = p_level AND sales_office = p_office.
+    WHERE wf_level = p_level AND sales_office = p_office.
   CHECK lt_wf IS NOT INITIAL.
 
   TRY.

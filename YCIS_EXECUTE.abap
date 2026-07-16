@@ -73,7 +73,7 @@ START-OF-SELECTION.
 FORM check_l3_auth.
   DATA lv_cnt TYPE i.
   SELECT COUNT(*) INTO lv_cnt FROM ycis_wf_appr
-    WHERE level = gc_level AND userid = sy-uname.
+    WHERE wf_level = gc_level AND userid = sy-uname.
   IF lv_cnt > 0.
     gv_isl3 = 'X'.
   ENDIF.
@@ -356,7 +356,7 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lv_sub  TYPE so_obj_des.
 
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
-    WHERE level = p_level AND sales_office = p_office.
+    WHERE wf_level = p_level AND sales_office = p_office.
   CHECK lt_wf IS NOT INITIAL.
 
   TRY.

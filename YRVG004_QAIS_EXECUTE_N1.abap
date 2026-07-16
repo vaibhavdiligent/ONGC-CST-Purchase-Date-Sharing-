@@ -11716,7 +11716,7 @@ FORM send_wf_mail USING p_level   TYPE ycis_wlevel
         lv_addr TYPE ad_smtpadr,
         lv_sub  TYPE so_obj_des.
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
-    WHERE level = p_level AND sales_office = p_office.
+    WHERE wf_level = p_level AND sales_office = p_office.
   CHECK lt_wf IS NOT INITIAL.
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
