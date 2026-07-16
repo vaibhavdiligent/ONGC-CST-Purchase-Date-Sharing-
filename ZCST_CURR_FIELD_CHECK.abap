@@ -53,9 +53,10 @@ FORM check_curr_field
 *    DECFLOAT34 keeps 1.9 exact, so 1.9 -> 1.90 -> 1.9 ( no float noise )
   lv_rounded = round( val = iv_value dec = lv_decimals mode = cl_abap_math=>round_half_up ).
 
-* 4) overflow check against the CURR field capacity ( KSTBW = CURR 13,2 )
-*    max value that fits = 99999999999.99
-  lv_max = '99999999999.99'.
+* 4) overflow check against the CURR field capacity ( KSTBW = CURR 15,2 )
+*    15 total digits, 2 decimals -> 13 integer digits
+*    max value that fits = 9999999999999.99
+  lv_max = '9999999999999.99'.
   IF abs( lv_rounded ) > lv_max.
     ev_msg = 'Amount exceeds currency field capacity'.
     RETURN.
