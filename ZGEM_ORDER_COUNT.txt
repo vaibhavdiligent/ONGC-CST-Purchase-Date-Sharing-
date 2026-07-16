@@ -68,8 +68,8 @@ DATA:  err_string1       TYPE string,
 CREATE OBJECT :lo_gem_token.
 
 
-proxy_data-mt_security_token_sender-username  = 'Alex123'.
-proxy_data-mt_security_token_sender-password  = 'password'.
+proxy_data-mt_security_token_sender-username  = 'NBCCServices'.
+proxy_data-mt_security_token_sender-password  = '823090987ez07u8maz0z8789qn5a4a62'.
                 TRY.
                     CALL METHOD lo_gem_token->SI_SECURITY_TOKEN_OB
                       EXPORTING

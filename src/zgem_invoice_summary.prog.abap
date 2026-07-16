@@ -63,8 +63,8 @@ DATA: lo_client   TYPE REF TO if_http_client,
 
 START-OF-SELECTION.
 
-  proxy_data-mt_security_token_sender-username = 'ONGCVIDESH'.
-  proxy_data-mt_security_token_sender-password = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'.
+  proxy_data-mt_security_token_sender-username = 'NBCCServices'.
+  proxy_data-mt_security_token_sender-password = '823090987ez07u8maz0z8789qn5a4a62'.
   TRY.
       CREATE OBJECT lo_gem_token.
       CALL METHOD lo_gem_token->si_security_token_ob

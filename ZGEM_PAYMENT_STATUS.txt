@@ -310,8 +310,8 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 *            proxy_data-mt_security_token_sender-password  = 'Test@29062020'.
 *            """""""""""" UAT ID PASSWORD""""""""""""""""""
 
-            proxy_data-mt_security_token_sender-username  = 'GEM23012020'.
-            proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
+            proxy_data-mt_security_token_sender-username  = 'NBCCServices'.
+            proxy_data-mt_security_token_sender-password  = '823090987ez07u8maz0z8789qn5a4a62'.
 
             TRY.
                 CALL METHOD lo_gem_token->si_security_token_ob
