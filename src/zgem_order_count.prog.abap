@@ -1,0 +1,215 @@
+*&---------------------------------------------------------------------*
+*& Report  ZGEM_ORDER_COUNT
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT ZGEM_ORDER_COUNT.
+
+PARAMETERS : datefrom TYPE sy-datum,
+             dateto TYPE sy-datum.
+
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA:  err_string       TYPE string.
+
+*--- NOTE: OrderCount has no confirmed CPI/REST reference in this codebase
+*    (unlike BillSummary/CracSummary/OrderSummary/PaymentStatus). The path,
+*    method name and response shape below are a BEST GUESS following the
+*    sibling "Sync" APIs' convention and MUST be verified against a real
+*    GeM CPI response before this is relied on.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
+           c_path TYPE string VALUE '/http/GEM/Sync/OrderCount'.  " unverified
+
+TYPES: BEGIN OF ty_request,
+         user     TYPE string,
+         method   TYPE string,
+         datefrom TYPE string,
+         dateto   TYPE string,
+       END OF ty_request.
+
+*--- Guessed response shape (same date/count pattern as BillSummary/CracSummary):
+*    {"sub":..,"aud":..,"iss":..,"data":[{"date":..,"count":..}]}
+TYPES: BEGIN OF ty_count_block,
+         date  TYPE string,
+         count TYPE i,
+       END OF ty_count_block,
+       tt_count_block TYPE STANDARD TABLE OF ty_count_block WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_response,
+         sub  TYPE string,
+         aud  TYPE string,
+         iss  TYPE string,
+         data TYPE tt_count_block,
+       END OF ty_response.
+
+DATA: lo_client   TYPE REF TO if_http_client,
+      ls_request  TYPE ty_request,
+      ls_response TYPE ty_response,
+      ls_block    TYPE ty_count_block,
+      lv_json     TYPE string,
+      lv_response TYPE string,
+      lv_code     TYPE i,
+      lv_reason   TYPE string,
+      gv_token    TYPE string,
+      token       TYPE string,
+      it_orderc   TYPE TABLE OF ZGEM_ORDERCOUNT,
+      wa_orderc   TYPE ZGEM_ORDERCOUNT.
+DATA:  err_string1       TYPE string,
+       odate(8) TYPE c.
+
+ DATA: lt_fieldcat TYPE slis_t_fieldcat_alv,
+        ls_fieldcat TYPE slis_fieldcat_alv.
+
+
+CREATE OBJECT :lo_gem_token.
+
+
+proxy_data-mt_security_token_sender-username  = 'NBCCServices'.
+proxy_data-mt_security_token_sender-password  = '823090987ez07u8maz0z8789qn5a4a62'.
+                TRY.
+                    CALL METHOD lo_gem_token->SI_SECURITY_TOKEN_OB
+                      EXPORTING
+                        output = proxy_data
+                      IMPORTING
+                        input  = lt_input.
+                  CATCH cx_ai_system_fault INTO lo_sys_exception.
+                    err_string = lo_sys_exception->get_text( ).
+                  CATCH cx_ai_application_fault .
+                ENDTRY.
+
+     token = LT_INPUT-mt_security_token_receiver-token.
+     gv_token = token.
+
+     IF token is NOT INITIAL.
+
+*--- Build the JSON request payload and call CPI directly (was: proxy call
+*    to lo_gem_ordercount->si_order_count_ob).
+ls_request-user     = 'ONGCVIDESH'.
+ls_request-method   = 'orderCount'.                       " unverified
+ls_request-datefrom = datefrom.
+ls_request-dateto   = dateto.
+
+lv_json = /ui2/cl_json=>serialize(
+            data        = ls_request
+            compress    = abap_true
+            pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
+
+cl_http_client=>create_by_destination(
+  EXPORTING destination = c_dest
+  IMPORTING client      = lo_client
+  EXCEPTIONS OTHERS     = 1 ).
+IF sy-subrc <> 0.
+  WRITE: / 'Error creating HTTP client for destination', c_dest.
+ELSE.
+  lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+  cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
+  lo_client->request->set_method( if_http_request=>co_request_method_post ).
+  lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+  IF gv_token IS NOT INITIAL.
+    lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
+  ENDIF.
+
+  lo_client->request->set_cdata( lv_json ).
+  lo_client->send( EXCEPTIONS OTHERS = 1 ).
+  IF sy-subrc <> 0.
+    WRITE: / 'Error sending request to CPI'.
+    lo_client->close( EXCEPTIONS OTHERS = 0 ).
+  ELSE.
+    lo_client->receive( EXCEPTIONS OTHERS = 1 ).
+    lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+    lv_response = lo_client->response->get_cdata( ).
+    lo_client->close( EXCEPTIONS OTHERS = 0 ).
+
+    /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                               CHANGING  data = ls_response ).
+
+    LOOP AT ls_response-data INTO ls_block.
+      CLEAR wa_orderc.
+      wa_orderc-client_code  = 'ONGCVIDESH'.
+      wa_orderc-requesttype  = 'ORDERCOUNT'.
+      wa_orderc-responsecode = |{ lv_code }|.
+      wa_orderc-fetchdate    = sy-datum.  " no fetchdate in the guessed response; using current date
+      CONCATENATE ls_block-date+0(4) ls_block-date+5(2) ls_block-date+8(2) INTO odate.
+      MOVE odate TO wa_orderc-ORDER_DATE.
+      wa_orderc-ORDER_COUNT = ls_block-count.
+      APPEND wa_orderc TO it_orderc.
+      MODIFY zgem_ordercount FROM wa_orderc.
+    ENDLOOP.
+  ENDIF.
+ENDIF.
+
+ls_fieldcat-fieldname = 'ORDER_DATE'.
+ls_fieldcat-seltext_l = 'order Date'.
+APPEND ls_fieldcat to lt_fieldcat.
+
+ls_fieldcat-fieldname = 'CLIENT_CODE'.
+ls_fieldcat-seltext_l = 'Client code'.
+APPEND ls_fieldcat to lt_fieldcat.
+
+ls_fieldcat-fieldname = 'ORDER_COUNT'.
+ls_fieldcat-seltext_l = 'Bill count'.
+APPEND ls_fieldcat to lt_fieldcat.
+
+
+
+ CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+  EXPORTING
+*    I_INTERFACE_CHECK                 = ' '
+*    I_BYPASSING_BUFFER                = ' '
+*    I_BUFFER_ACTIVE                   = ' '
+    I_CALLBACK_PROGRAM                = sy-repid
+*    I_CALLBACK_PF_STATUS_SET          = ' '
+*    I_CALLBACK_USER_COMMAND           = ' '
+*    I_CALLBACK_TOP_OF_PAGE            = ' '
+*    I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*    I_CALLBACK_HTML_END_OF_LIST       = ' '
+*    I_STRUCTURE_NAME                  =
+*    I_BACKGROUND_ID                   = ' '
+*    I_GRID_TITLE                      =
+*    I_GRID_SETTINGS                   =
+*    IS_LAYOUT                         =
+    IT_FIELDCAT                       =  lt_fieldcat
+*    IT_EXCLUDING                      =
+*    IT_SPECIAL_GROUPS                 =
+*    IT_SORT                           =
+*    IT_FILTER                         =
+*    IS_SEL_HIDE                       =
+*    I_DEFAULT                         = 'X'
+*    I_SAVE                            = ' '
+*    IS_VARIANT                        =
+*    IT_EVENTS                         =
+*    IT_EVENT_EXIT                     =
+*    IS_PRINT                          =
+*    IS_REPREP_ID                      =
+*    I_SCREEN_START_COLUMN             = 0
+*    I_SCREEN_START_LINE               = 0
+*    I_SCREEN_END_COLUMN               = 0
+*    I_SCREEN_END_LINE                 = 0
+*    I_HTML_HEIGHT_TOP                 = 0
+*    I_HTML_HEIGHT_END                 = 0
+*    IT_ALV_GRAPHICS                   =
+*    IT_HYPERLINK                      =
+*    IT_ADD_FIELDCAT                   =
+*    IT_EXCEPT_QINFO                   =
+*    IR_SALV_FULLSCREEN_ADAPTER        =
+*  IMPORTING
+*    E_EXIT_CAUSED_BY_CALLER           =
+*    ES_EXIT_CAUSED_BY_USER            =
+   TABLES
+     t_outtab                          = it_orderc.
+*  EXCEPTIONS
+*    PROGRAM_ERROR                     = 1
+*    OTHERS                            = 2
+           .
+ IF sy-subrc <> 0.
+* Implement suitable error handling here
+ ENDIF.
+
+
+*        BREAK-POINT.
+
+     ENDIF.
