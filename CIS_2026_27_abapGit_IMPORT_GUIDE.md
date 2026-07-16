@@ -43,8 +43,8 @@ and (3-level workflow) `YCIS_WFSTAT`, `YCIS_DEPT`, `YCIS_WLEVEL`, `YCIS_SEQNO`
 - **GUI status `STANDARD`** in `YCIS_APPROVE` (fn codes `APPR`,`REJ`,`SELALL`,`DESEL`,Back,Exit)
   and in `YCIS_EXECUTE` (`EXEC`,`REJ`,`SELALL`,`DESEL`,Back,Exit) — small SE41 status per program.
 - **SM30** generators for `YCIS_WF_APPR` and `YCIS_APPRVL`.
-- **Transactions (SE93):** `YCIS_L1` → `YRVG004_QAIS_EXECUTE_N1`, `YCIS_L2` → `YCIS_APPROVE`,
-  `YCIS_L3` → `YCIS_EXECUTE`.
+- **Transactions (SE93):** `YRVG005` → `YRVG004_QAIS_EXECUTE_N1` (L1), `YRVR005_A` → `YCIS_APPROVE` (L2),
+  `YRVR005_E` → `YCIS_EXECUTE` (L3).
 - **SCOT/SMTP** configured for the e-mail notifications.
 
 > **Two tables dropped per GAIL feedback (07.07.2026):**
