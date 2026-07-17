@@ -9,6 +9,7 @@
 *&            DTEL - Data element
 *&            FUGR - Function group
 *&            INTF - Interface
+*&            PROG - Program / Report (REPS source is removed with it)
 *&            SHLP - Search help
 *&            TABL - Table / Structure
 *&            TTYP - Table type
@@ -27,6 +28,7 @@
 *&            SEO_CLASS_DELETE_COMPLETE     CLAS
 *&            SEO_INTERFACE_DELETE_COMPLETE INTF
 *&            RS_FUNCTION_POOL_DELETE       FUGR
+*&            RS_DELETE_PROGRAM             PROG
 *&
 *&          Written in classic ABAP syntax for ECC 6.0 compatibility.
 *&---------------------------------------------------------------------*
@@ -49,6 +51,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-t02.
               p_dtel AS CHECKBOX DEFAULT 'X',             " DTEL - Data element
               p_fugr AS CHECKBOX DEFAULT 'X',             " FUGR - Function group
               p_intf AS CHECKBOX DEFAULT 'X',             " INTF - Interface
+              p_prog AS CHECKBOX DEFAULT 'X',             " PROG - Program / Report (REPS)
               p_shlp AS CHECKBOX DEFAULT 'X',             " SHLP - Search help
               p_tabl AS CHECKBOX DEFAULT 'X',             " TABL - Table / Structure
               p_ttyp AS CHECKBOX DEFAULT 'X'.             " TTYP - Table type
@@ -153,6 +156,7 @@ FORM build_type_range.
   IF p_dtel = 'X'. gs_type-low = 'DTEL'. APPEND gs_type TO gr_type. ENDIF.
   IF p_fugr = 'X'. gs_type-low = 'FUGR'. APPEND gs_type TO gr_type. ENDIF.
   IF p_intf = 'X'. gs_type-low = 'INTF'. APPEND gs_type TO gr_type. ENDIF.
+  IF p_prog = 'X'. gs_type-low = 'PROG'. APPEND gs_type TO gr_type. ENDIF.
   IF p_shlp = 'X'. gs_type-low = 'SHLP'. APPEND gs_type TO gr_type. ENDIF.
   IF p_tabl = 'X'. gs_type-low = 'TABL'. APPEND gs_type TO gr_type. ENDIF.
   IF p_ttyp = 'X'. gs_type-low = 'TTYP'. APPEND gs_type TO gr_type. ENDIF.
@@ -239,6 +243,8 @@ FORM process_objects.
         PERFORM delete_class USING gs_obj 'INTF' CHANGING gs_log.
       WHEN 'FUGR'.
         PERFORM delete_fugr USING gs_obj CHANGING gs_log.
+      WHEN 'PROG'.
+        PERFORM delete_prog USING gs_obj CHANGING gs_log.
       WHEN OTHERS.
         gs_log-status  = 'SKIPPED'.
         gs_log-message = 'Object type not supported'.
@@ -363,6 +369,38 @@ FORM delete_fugr USING us_obj TYPE ty_obj
       suppress_popups = 'X'
     EXCEPTIONS
       OTHERS          = 1.
+
+  PERFORM set_result USING sy-subrc CHANGING cs_log.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DELETE_PROG
+*&   Deletes a program / report (PROG) via RS_DELETE_PROGRAM. This also
+*&   removes the report source (REPS) plus its text pool, screens, GUI
+*&   status and documentation.
+*&---------------------------------------------------------------------*
+FORM delete_prog USING us_obj TYPE ty_obj
+                 CHANGING cs_log TYPE ty_log.
+
+  DATA: lv_prog LIKE trdir-name.        " program name (matches FM formal)
+
+  lv_prog = us_obj-obj_name.
+
+* CORRNUMBER records the deletion in the request; SUPPRESS_POPUP avoids the
+* interactive confirmation. The WITH_* flags also delete the program's own
+* text pool, screens, CUA status, documentation and includes.
+  CALL FUNCTION 'RS_DELETE_PROGRAM'
+    EXPORTING
+      program            = lv_prog
+      corrnumber         = p_trkorr
+      suppress_popup     = 'X'
+      with_includes      = 'X'
+      with_textpool      = 'X'
+      with_dynpro        = 'X'
+      with_documentation = 'X'
+      with_variants      = 'X'
+    EXCEPTIONS
+      OTHERS             = 1.
 
   PERFORM set_result USING sy-subrc CHANGING cs_log.
 ENDFORM.
