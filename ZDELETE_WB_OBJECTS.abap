@@ -32,6 +32,8 @@
 *&---------------------------------------------------------------------*
 REPORT zdelete_wb_objects.
 
+TYPE-POOLS: slis.                                         " ALV grid types
+
 TABLES: tadir.                                            " for SELECT-OPTIONS reference
 
 *----------------------------------------------------------------------*
@@ -70,7 +72,7 @@ TYPES: BEGIN OF ty_log,
          object   TYPE e071-object,
          obj_name TYPE e071-obj_name,
          status   TYPE char10,      " OK / SKIPPED / ERROR / TEST
-         message  TYPE string,
+         message  TYPE char255,     " char (not STRING) so ALV can display it
        END OF ty_log.
 
 DATA: gt_obj    TYPE STANDARD TABLE OF ty_obj,
@@ -373,22 +375,20 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form DISPLAY_LOG
-*&   Simple list output with a summary footer.
+*&   Shows the result log as an ALV grid (REUSE_ALV_GRID_DISPLAY) with a
+*&   header (request / mode / summary) via the TOP_OF_PAGE callback.
 *&---------------------------------------------------------------------*
 FORM display_log.
 
+  DATA: lt_fcat  TYPE slis_t_fieldcat_alv,
+        ls_layo  TYPE slis_layout_alv,
+        lv_repid TYPE sy-repid.
+
+  lv_repid = sy-repid.
+
+* Summary counters (also shown in the header)
   CLEAR: gv_ok, gv_err, gv_skip.
-
-  WRITE: / 'Object deletion log for request', p_trkorr.
-  IF p_test = 'X'.
-    WRITE: '   (TEST RUN - nothing was deleted)'.
-  ENDIF.
-  ULINE.
-  WRITE: /(4) 'Type', 42 'Object name', 84 'Status', 95 'Message'.
-  ULINE.
-
   LOOP AT gt_log INTO gs_log.
-
     IF     gs_log-status = 'OK'.
       gv_ok = gv_ok + 1.
     ELSEIF gs_log-status = 'ERROR'.
@@ -396,15 +396,100 @@ FORM display_log.
     ELSE.
       gv_skip = gv_skip + 1.
     ENDIF.
-
-    WRITE: /(4) gs_log-object,
-            6(36) gs_log-obj_name,
-            84(10) gs_log-status,
-            95     gs_log-message.
   ENDLOOP.
 
-  ULINE.
-  WRITE: / 'Deleted:', gv_ok,
-         / 'Errors :', gv_err,
-         / 'Other  :', gv_skip.
+* Field catalog
+  PERFORM add_fcat USING 'OBJECT'   'Type'        4  CHANGING lt_fcat.
+  PERFORM add_fcat USING 'OBJ_NAME' 'Object name' 40 CHANGING lt_fcat.
+  PERFORM add_fcat USING 'STATUS'   'Status'      10 CHANGING lt_fcat.
+  PERFORM add_fcat USING 'MESSAGE'  'Message'     60 CHANGING lt_fcat.
+
+  ls_layo-zebra             = 'X'.
+  ls_layo-colwidth_optimize = 'X'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program     = lv_repid
+      i_callback_top_of_page = 'TOP_OF_PAGE'
+      is_layout              = ls_layo
+      it_fieldcat            = lt_fcat
+      i_save                 = 'A'
+    TABLES
+      t_outtab               = gt_log
+    EXCEPTIONS
+      program_error          = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+    MESSAGE 'ALV display error' TYPE 'S' DISPLAY LIKE 'E'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form ADD_FCAT
+*&   Appends one column definition to the ALV field catalog.
+*&---------------------------------------------------------------------*
+FORM add_fcat USING uv_field TYPE c
+                    uv_text  TYPE c
+                    uv_len   TYPE i
+              CHANGING ct_fcat TYPE slis_t_fieldcat_alv.
+
+  DATA: ls_fcat TYPE slis_fieldcat_alv.
+
+  ls_fcat-fieldname    = uv_field.
+  ls_fcat-seltext_l    = uv_text.
+  ls_fcat-seltext_m    = uv_text.
+  ls_fcat-seltext_s    = uv_text.
+  ls_fcat-reptext_ddic = uv_text.
+  ls_fcat-outputlen    = uv_len.
+  APPEND ls_fcat TO ct_fcat.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form TOP_OF_PAGE  (ALV callback)
+*&   Header block: request, run mode and result summary.
+*&---------------------------------------------------------------------*
+FORM top_of_page.
+
+  DATA: lt_head TYPE slis_t_listheader,
+        ls_head TYPE slis_listheader,
+        lv_ok   TYPE char10,
+        lv_err  TYPE char10,
+        lv_skip TYPE char10,
+        lv_sum  TYPE char60.
+
+  ls_head-typ  = 'H'.
+  ls_head-info = 'Workbench Object Deletion Log'.
+  APPEND ls_head TO lt_head.
+
+  CLEAR ls_head.
+  ls_head-typ  = 'S'.
+  ls_head-key  = 'Request:'.
+  ls_head-info = p_trkorr.
+  APPEND ls_head TO lt_head.
+
+  CLEAR ls_head.
+  ls_head-typ  = 'S'.
+  ls_head-key  = 'Mode:'.
+  IF p_test = 'X'.
+    ls_head-info = 'TEST RUN - nothing was deleted'.
+  ELSE.
+    ls_head-info = 'PRODUCTIVE - objects deleted'.
+  ENDIF.
+  APPEND ls_head TO lt_head.
+
+  WRITE gv_ok   TO lv_ok   LEFT-JUSTIFIED.
+  WRITE gv_err  TO lv_err  LEFT-JUSTIFIED.
+  WRITE gv_skip TO lv_skip LEFT-JUSTIFIED.
+  CONCATENATE 'Deleted' lv_ok '/ Errors' lv_err '/ Other' lv_skip
+         INTO lv_sum SEPARATED BY space.
+
+  CLEAR ls_head.
+  ls_head-typ  = 'S'.
+  ls_head-key  = 'Summary:'.
+  ls_head-info = lv_sum.
+  APPEND ls_head TO lt_head.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = lt_head.
 ENDFORM.
