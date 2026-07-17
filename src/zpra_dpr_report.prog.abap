@@ -3,8 +3,12 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 2.9  |  Git: bcd-overflow-fix  |  Date: 25-JUN-2026
-*& Changes : v2.9 - YTD Actual (sec2d, current-FY row) now sourced from RAW DAILY
+*& VERSION : 3.0  |  Git: bcd-overflow-fix  |  Date: 17-JUL-2026
+*& Changes : v3.0 - Remarks section: relinquishment remarks now only appear when
+*&           the asset was relinquished within the period shown on the report
+*&           (gv_month_back_datum..p_date). Previously every past relinquishment
+*&           (2019/2021/2024...) reappeared on every report. See ~line 5530.
+*&           v2.9 - YTD Actual (sec2d, current-FY row) now sourced from RAW DAILY
 *&           (ZPRA_T_DLY_PRD) instead of reconciled (rprd). The rprd branch is
 *&           bypassed (lv_rprd_index forced empty) so YTD matches the MTD/daily
 *&           figures. Fixes BC-60 oil YTD (~2x from rprd double-count), MECL gas
@@ -5527,7 +5531,12 @@ FORM prepare_section4b_paste_data .
 
 ***********************************end of Changes by hrishikesh nikam on 23.05.22**********
     LOOP AT lt_exp_asset INTO ls_exp_asset.
-      if ls_exp_asset-liscense_exp_dt LT p_date.                    ""changes by hrishikesh nikam
+*     v3.0: only show a relinquishment remark if the asset was relinquished
+*     WITHIN the period shown on the report (gv_month_back_datum..p_date), i.e.
+*     on one of the dates in the Excel output. Previously any past relinquishment
+*     (liscense_exp_dt LT p_date) appeared on every report - old assets kept showing.
+      if ls_exp_asset-liscense_exp_dt GE gv_month_back_datum
+     AND ls_exp_asset-liscense_exp_dt LE p_date.                    ""changes by hrishikesh nikam
 
          CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
       EXPORTING
