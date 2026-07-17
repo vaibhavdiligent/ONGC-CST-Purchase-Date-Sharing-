@@ -262,7 +262,7 @@ FORM delete_ddic USING us_obj TYPE ty_obj
 * RSEDD0-DDOBJTYPE) to avoid CALL_FUNCTION_CONFLICT_TYPE.
   DATA: lv_ddtype LIKE rsedd0-ddobjtype,    " DDIC object type code
         lv_name   LIKE rsedd0-ddobjname,    " DDIC object name
-        lv_corr   TYPE trkorr.
+        lv_corr   LIKE e070-trkorr.         " matches CHANGING CORRNUM exactly
 
   lv_name = us_obj-obj_name.
   lv_corr = p_trkorr.
