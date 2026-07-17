@@ -302,24 +302,25 @@ FORM delete_class USING us_obj  TYPE ty_obj
   ls_clskey-clsname = us_obj-obj_name.
   lv_corr           = p_trkorr.
 
+* Only the mandatory key + the (classic) CHANGING CORRNR are passed.
+* SUPPRESS_DIALOG does NOT exist in these FMs on ECC 6.0 and must not be
+* supplied (it caused CALL_FUNCTION_PARM_UNKNOWN).
   IF uv_kind = 'INTF'.
     CALL FUNCTION 'SEO_INTERFACE_DELETE_COMPLETE'
       EXPORTING
-        intkey          = ls_clskey
-        suppress_dialog = 'X'
+        intkey = ls_clskey
       CHANGING
-        corrnr          = lv_corr
+        corrnr = lv_corr
       EXCEPTIONS
-        OTHERS          = 1.
+        OTHERS = 1.
   ELSE.
     CALL FUNCTION 'SEO_CLASS_DELETE_COMPLETE'
       EXPORTING
-        clskey          = ls_clskey
-        suppress_dialog = 'X'
+        clskey = ls_clskey
       CHANGING
-        corrnr          = lv_corr
+        corrnr = lv_corr
       EXCEPTIONS
-        OTHERS          = 1.
+        OTHERS = 1.
   ENDIF.
 
   PERFORM set_result USING sy-subrc CHANGING cs_log.
@@ -336,18 +337,17 @@ FORM delete_fugr USING us_obj TYPE ty_obj
 
   lv_area = us_obj-obj_name.
 
-* The function group name is passed via AREA (not FUNCTION_POOL);
-* CORRNUM records the deletion in the request, WITH_KORR forces the
-* correction entry and SUPPRESS_POPUPS runs it without dialogs.
+* The function group name is passed via AREA (not FUNCTION_POOL) and
+* CORRNUM records the deletion in the request. Only these two - both
+* present on ECC 6.0 - are supplied; WITH_KORR / SUPPRESS_POPUPS /
+* SKIP_PROGRESS_IND are newer optional parameters and are omitted to
+* avoid CALL_FUNCTION_PARM_UNKNOWN.
   CALL FUNCTION 'RS_FUNCTION_POOL_DELETE'
     EXPORTING
-      area              = lv_area
-      corrnum           = p_trkorr
-      with_korr         = 'X'
-      suppress_popups   = 'X'
-      skip_progress_ind = 'X'
+      area    = lv_area
+      corrnum = p_trkorr
     EXCEPTIONS
-      OTHERS            = 1.
+      OTHERS  = 1.
 
   PERFORM set_result USING sy-subrc CHANGING cs_log.
 ENDFORM.
