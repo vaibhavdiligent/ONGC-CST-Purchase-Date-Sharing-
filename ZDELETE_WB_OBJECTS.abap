@@ -23,11 +23,14 @@
 *&---------------------------------------------------------------------*
 REPORT zdelete_wb_objects.
 
+TABLES: e071.                                             " for SELECT-OPTIONS reference
+
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-t01.
-  PARAMETERS: p_trkorr TYPE e070-trkorr OBLIGATORY.       " Request / Task no.
+  PARAMETERS:     p_trkorr TYPE e070-trkorr OBLIGATORY.   " Request / Task no.
+  SELECT-OPTIONS: s_objnm  FOR  e071-obj_name.            " Object name (blank = all in request)
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-t02.
@@ -154,9 +157,10 @@ FORM collect_objects.
          FROM e071
          INTO TABLE gt_obj
          FOR ALL ENTRIES IN gt_req
-         WHERE trkorr = gt_req-table_line
-           AND pgmid  = 'R3TR'
-           AND object IN gr_type.
+         WHERE trkorr   = gt_req-table_line
+           AND pgmid    = 'R3TR'
+           AND object   IN gr_type
+           AND obj_name IN s_objnm.        " blank = no restriction
 
 * Remove duplicates (an object may appear in several tasks)
   SORT gt_obj BY object obj_name.
