@@ -16,13 +16,14 @@
 *& The OData MODEL is static (two fixed entity types); only the CONTENT
 *& is dynamic, so a single service serves every table.
 *&
-*& Fully code based -> extends /IWBEP/CL_MGW_PUSH_ABS_MODEL, no SEGW
+*& Fully code based -> extends /IWBEP/CL_MGW_ABS_MODEL (the standard
+*& code-based model base, same one SEGW-generated MPCs use), no SEGW
 *& project required. Register with /IWFND/MAINT_SERVICE using this class
 *& as the Model Provider and ZCL_ZTABLE_META_DPC as the Data Provider.
 *&---------------------------------------------------------------------*
 CLASS zcl_ztable_meta_mpc DEFINITION
   PUBLIC
-  INHERITING FROM /iwbep/cl_mgw_push_abs_model
+  INHERITING FROM /iwbep/cl_mgw_abs_model
   CREATE PUBLIC.
 
   PUBLIC SECTION.

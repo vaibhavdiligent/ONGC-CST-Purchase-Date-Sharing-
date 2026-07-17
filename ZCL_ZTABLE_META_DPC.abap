@@ -19,12 +19,16 @@
 *&              /ui2/cl_json=>serialize.
 *& Security   : AUTHORITY-CHECK on S_TABU_NAM (display) before any read.
 *&
-*& Fully code based -> extends /IWBEP/CL_MGW_PUSH_ABS_DATA. Register with
-*& /IWFND/MAINT_SERVICE together with ZCL_ZTABLE_META_MPC.
+*& Fully code based -> extends /IWBEP/CL_MGW_ABS_DATA (the standard
+*& code-based data base, same one SEGW-generated DPCs use). The "push"
+*& base /IWBEP/CL_MGW_PUSH_ABS_DATA is NOT used because it declares
+*& abstract subscription methods that a plain read service must not have
+*& to implement. Register with /IWFND/MAINT_SERVICE together with
+*& ZCL_ZTABLE_META_MPC.
 *&---------------------------------------------------------------------*
 CLASS zcl_ztable_meta_dpc DEFINITION
   PUBLIC
-  INHERITING FROM /iwbep/cl_mgw_push_abs_data
+  INHERITING FROM /iwbep/cl_mgw_abs_data
   CREATE PUBLIC.
 
   PUBLIC SECTION.
