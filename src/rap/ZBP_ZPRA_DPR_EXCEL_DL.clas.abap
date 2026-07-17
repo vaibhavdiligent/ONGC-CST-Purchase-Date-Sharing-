@@ -24,6 +24,11 @@ CLASS lhc_dpr_excel DEFINITION INHERITING FROM cl_abap_behavior_handler.
         IMPORTING it_action_import FOR ACTION
                   dprexceldownload~downloadtargets RESULT et_action_result,
 
+      "! Excel — DPR-style summary export (Oil/Gas MMSCMD/BOEPD + YTD average)
+      download_dpr_summary FOR MODIFY
+        IMPORTING it_action_import FOR ACTION
+                  dprexceldownload~downloaddprsummary RESULT et_action_result,
+
       "! PDF — daily production export
       download_pdf_production FOR MODIFY
         IMPORTING it_action_import FOR ACTION
@@ -106,6 +111,42 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
       CATCH cx_ai_system_error INTO DATA(lx_targets).
         RAISE SHORTDUMP TYPE cx_rap_query_provider
           MESSAGE e001(00) WITH lx_targets->get_text( ).
+    ENDTRY.
+  ENDMETHOD.
+
+
+  "-------------------------------------------------------------------------
+  " Excel: DPR-style summary (Oil BOPD / Gas MMSCMD / Total BOEPD + YTD avg)
+  "-------------------------------------------------------------------------
+  METHOD download_dpr_summary.
+    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zpra_i_dpr_excel_dl~downloadDprSummary,
+          lv_xdata  TYPE xstring,
+          lv_b64    TYPE string.
+
+    READ TABLE it_action_import INTO DATA(ls_param) INDEX 1.
+    IF sy-subrc <> 0.
+      RAISE SHORTDUMP TYPE cx_rap_query_provider
+        MESSAGE e001(00) WITH 'No parameters provided'.
+    ENDIF.
+
+    TRY.
+        lv_xdata = zcl_zpra_dpr_excel=>fetch_and_export_dpr_summary(
+          iv_date_from = ls_param-%param-date_from
+          iv_date_to   = ls_param-%param-date_to
+        ).
+
+        lv_b64 = cl_http_utility=>encode_x_base64( lv_xdata ).
+
+        ls_result-%param-excel_base64 = lv_b64.
+        ls_result-%param-file_name    =
+          |DPR_Summary_{ ls_param-%param-date_from }_{ ls_param-%param-date_to }.xlsx|.
+        ls_result-%param-mime_type    = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'.
+        ls_result-%param-message      = 'DPR summary Excel generated successfully'.
+        APPEND ls_result TO et_action_result.
+
+      CATCH cx_ai_system_error INTO DATA(lx_summary).
+        RAISE SHORTDUMP TYPE cx_rap_query_provider
+          MESSAGE e001(00) WITH lx_summary->get_text( ).
     ENDTRY.
   ENDMETHOD.
 

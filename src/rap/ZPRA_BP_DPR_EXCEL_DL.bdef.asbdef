@@ -39,6 +39,12 @@ define behavior for ZPRA_I_DPR_EXCEL_DL alias DPRExcelDownload
     parameter ZPRA_A_DPR_TAR_PARAM
     result   [1] ZPRA_A_DPR_EXCEL_RESULT;
 
+  /* DPR-style summary: per-day Oil(BOPD)/Gas(MMSCMD)/Total(BOEPD) at JV & OVL
+     plus a YTD (average) row - matches the classic report's fixed figures. */
+  static action downloadDprSummary
+    parameter ZPRA_A_DPR_PROD_PARAM
+    result   [1] ZPRA_A_DPR_EXCEL_RESULT;
+
   /* ── PDF actions  ──────────────────────────────────────────────────── */
 
   static action downloadPdfProduction

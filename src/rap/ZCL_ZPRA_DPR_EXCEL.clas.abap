@@ -81,9 +81,42 @@ CLASS zcl_zpra_dpr_excel DEFINITION
         RETURNING
           VALUE(rv_xdata) TYPE xstring
         RAISING
+          cx_ai_system_error,
+
+      "! Fetch daily production and return a DPR-style SUMMARY Excel:
+      "! one row per day with Oil (BOPD), Gas (MMSCMD) and Total (BOEPD) at both
+      "! JV and OVL (ONGC-Videsh share) level, followed by a "YTD (Average)" row
+      "! that is the mean of the daily rows. Ports the classic report's fixes:
+      "! gas -> MMSCMD conversion (no near-zero values), BOEPD grand total that
+      "! includes the gas oil-equivalent (gas MMSCMD * 6290), and the YTD figure
+      "! computed as the daily average so it matches the MTD figure.
+      fetch_and_export_dpr_summary
+        IMPORTING
+          iv_date_from    TYPE sy-datum
+          iv_date_to      TYPE sy-datum
+        RETURNING
+          VALUE(rv_xdata) TYPE xstring
+        RAISING
           cx_ai_system_error.
 
   PRIVATE SECTION.
+
+    " BOE conversion factor: 1 MMSCMD gas == 6290 BOEPD (as in the classic DPR)
+    CONSTANTS c_boe_factor TYPE i VALUE 6290.
+
+    TYPES ty_qty TYPE p LENGTH 16 DECIMALS 7.
+
+    TYPES:
+      BEGIN OF ty_dpr_day,
+        production_date TYPE zpra_t_dly_prd-production_date,
+        oil_jv          TYPE ty_qty,   " Oil + Condensate + LNG, JV level, BOPD
+        gas_jv          TYPE ty_qty,   " Gas, JV level, MMSCMD
+        boepd_jv        TYPE ty_qty,   " Total O+OEG, JV level, BOEPD
+        oil_ovl         TYPE ty_qty,   " Oil + Condensate + LNG, OVL share, BOPD
+        gas_ovl         TYPE ty_qty,   " Gas, OVL share, MMSCMD
+        boepd_ovl       TYPE ty_qty,   " Total O+OEG, OVL share, BOEPD
+      END OF ty_dpr_day,
+      tt_dpr_day TYPE SORTED TABLE OF ty_dpr_day WITH UNIQUE KEY production_date.
 
     CONSTANTS:
       c_prod_oil TYPE zpra_t_dly_prd-product VALUE '722000001',
@@ -108,7 +141,14 @@ CLASS zcl_zpra_dpr_excel DEFINITION
         RETURNING
           VALUE(rv_xdata) TYPE xstring
         RAISING
-          cx_ai_system_error.
+          cx_ai_system_error,
+
+      "! Convert a gas quantity in its native UoM to MMSCMD.
+      "! MCM -> as-is (MCM == MMSCM here), MCF -> /35.3, M3 -> /1,000,000.
+      gas_to_mmscmd
+        IMPORTING iv_qty        TYPE zpra_t_dly_prd-prod_vl_qty1
+                  iv_uom        TYPE zpra_t_dly_prd-prod_vl_uom1
+        RETURNING VALUE(rv_qty) TYPE ty_qty.
 
 ENDCLASS.
 
@@ -451,6 +491,150 @@ CLASS zcl_zpra_dpr_excel IMPLEMENTATION.
       WHEN 'TAR_PC' THEN 'Physical Control'
       WHEN 'TAR_RE' THEN 'Revised Estimate'
       ELSE               iv_tar_code ).
+  ENDMETHOD.
+
+
+  METHOD gas_to_mmscmd.
+    " Port of convert_gas_units_to_mmscm from the classic DPR program.
+    CASE iv_uom.
+      WHEN 'MCM'.  rv_qty = iv_qty.                 " MCM == MMSCM here
+      WHEN 'MCF'.  rv_qty = iv_qty / '35.3'.        " 1 MMSCM ~= 35.3 MMCF
+      WHEN 'M3'.   rv_qty = iv_qty / 1000000.       " m3 -> million m3
+      WHEN OTHERS. rv_qty = iv_qty.
+    ENDCASE.
+  ENDMETHOD.
+
+
+  METHOD fetch_and_export_dpr_summary.
+    DATA: lt_days TYPE tt_dpr_day,
+          ls_day  TYPE ty_dpr_day,
+          lv_pi   TYPE zpra_t_prd_pi-pi,
+          lv_gas  TYPE ty_qty,
+          lv_ovl  TYPE ty_qty.
+
+    " ── Daily net production for the range ───────────────────────────────────
+    SELECT production_date, product, asset, block,
+           prd_vl_type, prod_vl_qty1, prod_vl_uom1
+      FROM zpra_t_dly_prd
+      INTO TABLE @DATA(lt_dly)
+     WHERE production_date BETWEEN @iv_date_from AND @iv_date_to
+       AND prd_vl_type = 'NET_PROD'.
+    IF sy-subrc <> 0.
+      RAISE EXCEPTION TYPE cx_ai_system_error
+        MESSAGE e001(00) WITH 'No production data found for date range'.
+    ENDIF.
+
+    " ── PI (participating interest) ──────────────────────────────────────────
+    SELECT * FROM zpra_t_prd_pi
+      INTO TABLE @DATA(lt_pi)
+       FOR ALL ENTRIES IN @lt_dly
+     WHERE asset   = @lt_dly-asset
+       AND block   = @lt_dly-block
+       AND vld_frm <= @iv_date_to
+       AND vld_to  >= @iv_date_from.
+
+    " ── Aggregate per day: Oil/Cond/LNG as BOPD, Gas as MMSCMD, at JV & OVL ──
+    LOOP AT lt_dly INTO DATA(ls_dly).
+      " PI valid for this asset/block/date
+      CLEAR lv_pi.
+      LOOP AT lt_pi INTO DATA(ls_pi)
+        WHERE asset   = ls_dly-asset
+          AND block   = ls_dly-block
+          AND vld_frm <= ls_dly-production_date
+          AND vld_to  >= ls_dly-production_date.
+        lv_pi = ls_pi-pi.
+        EXIT.
+      ENDLOOP.
+
+      READ TABLE lt_days INTO ls_day
+        WITH KEY production_date = ls_dly-production_date.
+      IF sy-subrc <> 0.
+        CLEAR ls_day.
+        ls_day-production_date = ls_dly-production_date.
+      ENDIF.
+
+      IF ls_dly-product = c_prod_gas.
+        lv_gas = gas_to_mmscmd( iv_qty = ls_dly-prod_vl_qty1
+                                iv_uom = ls_dly-prod_vl_uom1 ).
+        ls_day-gas_jv = ls_day-gas_jv + lv_gas.
+        IF lv_pi > 0.
+          lv_ovl = lv_gas * lv_pi / 100.
+        ELSE.
+          lv_ovl = lv_gas.
+        ENDIF.
+        ls_day-gas_ovl = ls_day-gas_ovl + lv_ovl.
+      ELSE.
+        " Oil / Condensate / LNG -> BOPD (native qty1)
+        ls_day-oil_jv = ls_day-oil_jv + ls_dly-prod_vl_qty1.
+        IF lv_pi > 0.
+          lv_ovl = ls_dly-prod_vl_qty1 * lv_pi / 100.
+        ELSE.
+          lv_ovl = ls_dly-prod_vl_qty1.
+        ENDIF.
+        ls_day-oil_ovl = ls_day-oil_ovl + lv_ovl.
+      ENDIF.
+
+      " Total (O + OEG) BOEPD = oil BOPD + gas MMSCMD * 6290
+      ls_day-boepd_jv  = ls_day-oil_jv  + ls_day-gas_jv  * c_boe_factor.
+      ls_day-boepd_ovl = ls_day-oil_ovl + ls_day-gas_ovl * c_boe_factor.
+
+      MODIFY TABLE lt_days FROM ls_day.
+      IF sy-subrc <> 0.
+        INSERT ls_day INTO TABLE lt_days.
+      ENDIF.
+    ENDLOOP.
+
+    " ── Build rows: daily + "YTD (Average)" = mean of the daily rows ─────────
+    DATA: lt_headers TYPE string_table,
+          lt_rows    TYPE string_table,
+          lv_row     TYPE string,
+          lv_n       TYPE i,
+          ls_avg     TYPE ty_dpr_day.
+
+    APPEND 'Date'              TO lt_headers.
+    APPEND 'Oil JV (BOPD)'     TO lt_headers.
+    APPEND 'Gas JV (MMSCMD)'   TO lt_headers.
+    APPEND 'Total JV (BOEPD)'  TO lt_headers.
+    APPEND 'Oil OVL (BOPD)'    TO lt_headers.
+    APPEND 'Gas OVL (MMSCMD)'  TO lt_headers.
+    APPEND 'Total OVL (BOEPD)' TO lt_headers.
+
+    LOOP AT lt_days INTO ls_day.
+      CLEAR lv_row.
+      CONCATENATE ls_day-production_date '|'
+                  ls_day-oil_jv  '|' ls_day-gas_jv  '|' ls_day-boepd_jv  '|'
+                  ls_day-oil_ovl '|' ls_day-gas_ovl '|' ls_day-boepd_ovl
+             INTO lv_row.
+      APPEND lv_row TO lt_rows.
+      ls_avg-oil_jv    = ls_avg-oil_jv    + ls_day-oil_jv.
+      ls_avg-gas_jv    = ls_avg-gas_jv    + ls_day-gas_jv.
+      ls_avg-boepd_jv  = ls_avg-boepd_jv  + ls_day-boepd_jv.
+      ls_avg-oil_ovl   = ls_avg-oil_ovl   + ls_day-oil_ovl.
+      ls_avg-gas_ovl   = ls_avg-gas_ovl   + ls_day-gas_ovl.
+      ls_avg-boepd_ovl = ls_avg-boepd_ovl + ls_day-boepd_ovl.
+    ENDLOOP.
+
+    lv_n = lines( lt_days ).
+    IF lv_n > 0.
+      ls_avg-oil_jv    = ls_avg-oil_jv    / lv_n.
+      ls_avg-gas_jv    = ls_avg-gas_jv    / lv_n.
+      ls_avg-boepd_jv  = ls_avg-boepd_jv  / lv_n.
+      ls_avg-oil_ovl   = ls_avg-oil_ovl   / lv_n.
+      ls_avg-gas_ovl   = ls_avg-gas_ovl   / lv_n.
+      ls_avg-boepd_ovl = ls_avg-boepd_ovl / lv_n.
+    ENDIF.
+
+    CLEAR lv_row.
+    CONCATENATE 'YTD (Average)' '|'
+                ls_avg-oil_jv  '|' ls_avg-gas_jv  '|' ls_avg-boepd_jv  '|'
+                ls_avg-oil_ovl '|' ls_avg-gas_ovl '|' ls_avg-boepd_ovl
+           INTO lv_row.
+    APPEND lv_row TO lt_rows.
+
+    rv_xdata = build_excel_from_rows(
+      it_headers    = lt_headers
+      it_rows       = lt_rows
+      iv_sheet_name = |DPR Summary { iv_date_from } to { iv_date_to }| ).
   ENDMETHOD.
 
 ENDCLASS.

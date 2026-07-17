@@ -108,6 +108,37 @@ define view entity ZPRA_C_DPR_CUBE
   cast(
     Daily.ProdQty2 * PI.pi / cast( 100 as abap.dec(5,2) )
     as abap.dec(23,3)
-  )                                               as OvlShareQty2
+  )                                               as OvlShareQty2,
+
+  /* ── Gas in MMSCMD (port of convert_gas_units_to_mmscm) ───────────────── */
+  /* MCM -> as-is (MCM == MMSCM here), MCF -> /35.3, M3 -> /1,000,000.       */
+  @EndUserText.label: 'Gas (MMSCMD)'
+  @Aggregation.default: #SUM
+  cast(
+    case Daily.Product
+      when '722000004' then
+        case Daily.ProdUom1
+          when 'MCF' then Daily.ProdQty1 / cast( '35.3' as abap.dec( 4, 1 ) )
+          when 'M3'  then Daily.ProdQty1 / cast( 1000000 as abap.dec( 10, 0 ) )
+          else            Daily.ProdQty1
+        end
+      else cast( 0 as abap.dec( 23, 7 ) )
+    end as abap.dec( 23, 7 )
+  )                                               as GasMmscmd,
+
+  /* ── Total (O+OEG) BOEPD: oil/cond BOPD + gas MMSCMD * 6290 (v2.8) ─────── */
+  @EndUserText.label: 'Total O+OEG (BOEPD)'
+  @Aggregation.default: #SUM
+  cast(
+    case Daily.Product
+      when '722000004' then
+        ( case Daily.ProdUom1
+            when 'MCF' then Daily.ProdQty1 / cast( '35.3' as abap.dec( 4, 1 ) )
+            when 'M3'  then Daily.ProdQty1 / cast( 1000000 as abap.dec( 10, 0 ) )
+            else            Daily.ProdQty1
+          end ) * cast( 6290 as abap.dec( 5, 0 ) )
+      else Daily.ProdQty1
+    end as abap.dec( 23, 3 )
+  )                                               as BoepdQty
 }
 where Daily.VolumeType = 'NET_PROD'   /* Default: Net Production only */

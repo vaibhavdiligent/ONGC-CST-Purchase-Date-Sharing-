@@ -3,7 +3,20 @@
 *&
 *&---------------------------------------------------------------------*
 *& Daily Production Report (DPR) - Single flat program without includes
-*& VERSION : 5.5 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 18-JUN-2026
+*& VERSION : 5.7 (S/4HANA modern syntax) | Branch: claude/zpra-dpr-program-VfvlH | 17-JUL-2026
+*& v5.7 - Remarks: relinquishment remarks only shown when the asset was
+*&        relinquished within the reported period (gv_month_back_datum..p_date).
+*& v5.6 - YTD Actual accuracy fixes (ports classic v2.8/v2.9):
+*&        1. YTD Actual now sourced from raw daily (fill_dynamic_table_sec2d
+*&           bypasses the rprd branch) and, for early-FY reports, recomputed as
+*&           the per-column average of the daily sheet (<gfs_dyn_table>), so YTD
+*&           matches MTD / the daily sheet for every asset (oil & gas).
+*&        2. Near-zero YTD/annual gas fixed by restoring *6290 on the gas
+*&           individual + product-total columns in sec2d and sec2f (so the later
+*&           /6290 display cancels), and gas BOE added to the GRAND-TOTAL (AG).
+*&        3. Production Performance (sheet 3): PP Actual Annual columns now show
+*&           "-" (no full-year actual yet for the current FY) via set_sheet3_text;
+*&           Annual % Achv columns left blank in get_achievement_6c.
 *& v5.5 - Graph now starts from gv_month_back_datum (first date of DPR tab 1)
 *&        instead of gv_year_start_date. Fixes chart x-axis alignment.
 *&        Production Performance table (sheet 3): Actual and BE Target rows
@@ -2018,12 +2031,13 @@ FORM write_sec6_formulas USING p_actual_row .
   lv_r_tgt_yt = gv_sec2c_start_row .       " YTD BE Target row    - BOPD
   CONDENSE : lv_r_act, lv_r_act_an, lv_r_tgt_an, lv_r_tgt_yt .
 
-  " Actual row: Annual col → prev-year YTD (sec2d INDEX 2), YTD col → current-year YTD (sec2d INDEX 1)
-  PERFORM set_sheet3_formula USING p_actual_row 2 lv_dpr_name 'P'  lv_r_act_an .
+  " Actual row: Annual col → "-" (no full-year actual yet for the current FY),
+  " YTD col → current-year YTD (sec2d INDEX 1). v2.8: was prev-year YTD (INDEX 2).
+  PERFORM set_sheet3_text    USING p_actual_row 2 '-' .
   PERFORM set_sheet3_formula USING p_actual_row 3 lv_dpr_name 'P'  lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 4 lv_dpr_name 'AF' lv_r_act_an .
+  PERFORM set_sheet3_text    USING p_actual_row 4 '-' .
   PERFORM set_sheet3_formula USING p_actual_row 5 lv_dpr_name 'AF' lv_r_act .
-  PERFORM set_sheet3_formula USING p_actual_row 6 lv_dpr_name 'AG' lv_r_act_an .
+  PERFORM set_sheet3_text    USING p_actual_row 6 '-' .
   PERFORM set_sheet3_formula USING p_actual_row 7 lv_dpr_name 'AG' lv_r_act .
 
   " BE Target row: Annual = Target 2026-27 line, YTD = YTD Target line
@@ -2044,6 +2058,16 @@ FORM set_sheet3_formula USING p_row p_col p_sheet p_colltr p_rownum .
   CONCATENATE '''' p_sheet '''!' p_colltr p_rownum INTO lv_formula .
   TRY.
       go_xlsx_sheet3->set_cell( ip_row = p_row ip_column = p_col ip_formula = lv_formula ).
+    CATCH zcx_excel.
+  ENDTRY.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form  SET_SHEET3_TEXT
+*& Writes a literal text value into a single cell of sheet 3 (e.g. "-")
+*&---------------------------------------------------------------------*
+FORM set_sheet3_text USING p_row p_col p_text .
+  TRY.
+      go_xlsx_sheet3->set_cell( ip_row = p_row ip_column = p_col ip_value = p_text ).
     CATCH zcx_excel.
   ENDTRY.
 ENDFORM.
@@ -5635,7 +5659,12 @@ FORM prepare_section4b_paste_data .
 
 ***********************************end of Changes by hrishikesh nikam on 23.05.22**********
     LOOP AT lt_exp_asset INTO ls_exp_asset.
-      if ls_exp_asset-liscense_exp_dt LT p_date.                    ""changes by hrishikesh nikam
+*     v5.7: only show a relinquishment remark if the asset was relinquished
+*     WITHIN the period shown on the report (gv_month_back_datum..p_date), i.e.
+*     on one of the dates in the Excel output. Previously any past relinquishment
+*     (liscense_exp_dt LT p_date) appeared on every report - old assets kept showing.
+      if ls_exp_asset-liscense_exp_dt GE gv_month_back_datum
+     AND ls_exp_asset-liscense_exp_dt LE p_date.                    ""changes by hrishikesh nikam
 
          CALL FUNCTION 'CONVERSION_EXIT_SDATE_OUTPUT'
       EXPORTING
@@ -7286,8 +7315,14 @@ FORM fill_dynamic_table_sec2d .
               EXIT .
             ENDLOOP .
           ENDIF.
-          IF sy-subrc IS INITIAL.
-            lv_rprd_index = sy-tabix .
+*         v2.9: YTD Actual now sourced from RAW DAILY (ZPRA_T_DLY_PRD) to match
+*         the MTD / daily-sheet figures (per requirement). The reconciled (rprd)
+*         branch is bypassed because rprd values double-counted / deviated from
+*         raw daily for new assets (e.g. BC-60 oil ~2x, ~1% deviations elsewhere).
+*         Keeping lv_rprd_index cleared forces the dly_prd branch below. MREC_APP
+*         (above) still serves fully-reconciled prior-FY months.
+          CLEAR lv_rprd_index .
+          IF lv_rprd_index IS NOT INITIAL.
             LOOP AT gt_zpra_t_dly_rprd_2d INTO gs_zpra_t_dly_rprd FROM lv_rprd_index .
               IF gs_zpra_t_dly_rprd-product EQ gs_zpra_c_prd_prof-product      AND
                  gs_zpra_t_dly_rprd-asset   EQ gs_zpra_c_prd_prof-asset        AND
@@ -7317,14 +7352,22 @@ FORM fill_dynamic_table_sec2d .
               ENDIF.
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-jv_prd_vl_qty1.
+                lv_mmscmd_mul = 1 .
+                IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                  lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 (line ~7199) cancels - was near-zero YTD gas
+                ENDIF.
+                <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-jv_prd_vl_qty1 * lv_mmscmd_mul ).
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Product Total..
               CONCATENATE gs_zpra_t_dly_rprd-product(gv_len) '-' 'TOTAL'                   INTO lv_col_name .
               ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
               IF <gfs_field> IS ASSIGNED.
-                <gfs_field> = <gfs_field> +  gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 .
+                lv_mmscmd_mul = 1 .
+                IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                  lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 cancels - was near-zero YTD gas
+                ENDIF.
+                <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ) .
                 UNASSIGN <gfs_field> .
               ENDIF.
 *           Grand Total
@@ -7333,7 +7376,7 @@ FORM fill_dynamic_table_sec2d .
               IF <gfs_field> IS ASSIGNED.
                 lv_mmscmd_mul = 1 .
                 IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
-*                  lv_mmscmd_mul = 6290 .
+                  lv_mmscmd_mul = 6290 .   "v2.8: add gas BOE to YTD GRAND-TOTAL (AG) - was missing, AG49 undercounted vs AG44
                 ENDIF.
                 <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ).
                 UNASSIGN <gfs_field> .
@@ -7474,6 +7517,59 @@ FORM fill_dynamic_table_sec2d .
         ENDIF.
       ENDDO.
     ENDLOOP.
+  ENDIF.
+
+* v2.9: Robust current-FY YTD = average of the daily sheet (<gfs_dyn_table>).
+*   When the DPR daily tab spans the whole current FY (early-FY reports), the
+*   YTD Actual row (sec2d INDEX 1) is recomputed as the per-column average of the
+*   FY days in the daily sheet, so YTD matches MTD / the daily sheet for every
+*   asset (oil & gas) and bypasses the rprd / 2d-pipeline day-drops & double
+*   counts. Guard: only when the daily tab starts on/before the FY start, so the
+*   last N_fy daily rows are exactly the FY days. Prior-FY row (INDEX 2) and
+*   later-FY reports (daily tab shorter than YTD) keep the existing computation.
+  IF gv_month_back_datum LE gv_year_start_date.
+    DATA: lv_nfy     TYPE i,
+          lv_dtot    TYPE i,
+          lv_rowfrom TYPE i,
+          lv_ccol    TYPE i,
+          lv_rr      TYPE i,
+          lv_acc     TYPE p LENGTH 16 DECIMALS 7.
+    FIELD-SYMBOLS: <fs_ytd_line> TYPE any,
+                   <fs_day_line> TYPE any,
+                   <fs_ytd_fld>  TYPE any,
+                   <fs_day_fld>  TYPE any.
+    lv_nfy = p_date - gv_year_start_date + 1.
+    DESCRIBE TABLE <gfs_dyn_table> LINES lv_dtot.
+    IF lv_nfy GT 0 AND lv_nfy LE lv_dtot.
+      READ TABLE <gfs_sec2d_table> INDEX 1 ASSIGNING <fs_ytd_line>.
+      IF sy-subrc EQ 0.
+        lv_rowfrom = lv_dtot - lv_nfy + 1.
+        lv_ccol = 2.
+        DO.
+          lv_ccol = lv_ccol + 1.
+          IF lv_ccol GT gv_table_columns.
+            EXIT.
+          ENDIF.
+          ASSIGN COMPONENT lv_ccol OF STRUCTURE <fs_ytd_line> TO <fs_ytd_fld>.
+          IF sy-subrc NE 0.
+            EXIT.
+          ENDIF.
+          CLEAR lv_acc.
+          lv_rr = lv_rowfrom - 1.
+          DO lv_nfy TIMES.
+            lv_rr = lv_rr + 1.
+            READ TABLE <gfs_dyn_table> INDEX lv_rr ASSIGNING <fs_day_line>.
+            IF sy-subrc EQ 0.
+              ASSIGN COMPONENT lv_ccol OF STRUCTURE <fs_day_line> TO <fs_day_fld>.
+              IF sy-subrc EQ 0.
+                lv_acc = lv_acc + <fs_day_fld>.
+              ENDIF.
+            ENDIF.
+          ENDDO.
+          <fs_ytd_fld> = lv_acc / lv_nfy.
+        ENDDO.
+      ENDIF.
+    ENDIF.
   ENDIF.
 
 ENDFORM.
@@ -7650,14 +7746,22 @@ FORM fill_dynamic_table_sec2f .
             ENDIF.
             ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
             IF <gfs_field> IS ASSIGNED.
-              <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-jv_prd_vl_qty1.
+              lv_mmscmd_mul = 1 .
+              IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 cancels - was near-zero annual-actual gas
+              ENDIF.
+              <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-jv_prd_vl_qty1 * lv_mmscmd_mul ).
               UNASSIGN <gfs_field> .
             ENDIF.
 *           Product Total..
             CONCATENATE gs_zpra_t_dly_rprd-product(gv_len) '-' 'TOTAL'                   INTO lv_col_name .
             ASSIGN COMPONENT lv_col_name OF STRUCTURE <gfs_dyn_line> TO <gfs_field> .
             IF <gfs_field> IS ASSIGNED.
-              <gfs_field> = <gfs_field> + gs_zpra_t_dly_rprd-ovl_prd_vl_qty1.
+              lv_mmscmd_mul = 1 .
+              IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
+                lv_mmscmd_mul = 6290 .   "v2.8: restore *6290 so display /6290 cancels - was near-zero annual-actual gas
+              ENDIF.
+              <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ) .
               UNASSIGN <gfs_field> .
             ENDIF.
 *           Grand Total
@@ -7666,7 +7770,7 @@ FORM fill_dynamic_table_sec2f .
             IF <gfs_field> IS ASSIGNED.
               lv_mmscmd_mul = 1 .
               IF gs_zpra_t_dly_rprd-product EQ c_prod_gas AND p_bmd IS NOT INITIAL.
-*                  lv_mmscmd_mul = 6290 .
+                lv_mmscmd_mul = 6290 .   "v2.8: add gas BOE to annual GRAND-TOTAL (AG) - was missing
               ENDIF.
               <gfs_field> = <gfs_field> + ( gs_zpra_t_dly_rprd-ovl_prd_vl_qty1 * lv_mmscmd_mul ).
               UNASSIGN <gfs_field> .
@@ -9782,6 +9886,9 @@ FORM get_achievement_6c .
     lv_index = sy-index .
     ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line3> TO <lfs_field3> .
     IF lv_index = 1.
+    ELSEIF lv_index = 2 OR lv_index = 4 OR lv_index = 6.
+*     v2.8: Annual % Achv left blank - no full-year actual yet for current FY
+      CLEAR <lfs_field3> .
     ELSE.
       ASSIGN COMPONENT lv_index OF STRUCTURE <gfs_dyn_line1> TO <lfs_field1> .
 * Begin of changes by Arnav on 24.03.2026
