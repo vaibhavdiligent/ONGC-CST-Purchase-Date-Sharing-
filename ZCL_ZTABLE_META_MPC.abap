@@ -26,10 +26,14 @@ CLASS zcl_ztable_meta_mpc DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
-    CONSTANTS gc_model_name    TYPE /iwbep/med_model_name VALUE 'ZTABLE_META_MDL'.
-    CONSTANTS gc_model_version TYPE /iwbep/med_version     VALUE '0001'.
+    " Typed as plain text on purpose: the /IWBEP/ DDIC data elements
+    " (/IWBEP/MED_MODEL_NAME, /IWBEP/MED_VERSION) are not present on every
+    " Gateway release. The inherited GET_MODEL exporting parameters convert
+    " these literals to their own type automatically.
+    CONSTANTS gc_model_name    TYPE string VALUE 'ZTABLE_META_MDL'.
+    CONSTANTS gc_model_version TYPE string VALUE '0001'.
 
-    "! One field of the requested table (mirrors DFIES characteristics).
+    " One field of the requested table (mirrors DFIES characteristics).
     TYPES: BEGIN OF ty_field_info,
              tabname    TYPE dfies-tabname,     " table / view name
              fieldname  TYPE dfies-fieldname,   " field name
@@ -53,7 +57,7 @@ CLASS zcl_ztable_meta_mpc DEFINITION
            END OF ty_field_info.
     TYPES tt_field_info TYPE STANDARD TABLE OF ty_field_info WITH DEFAULT KEY.
 
-    "! One record of the requested table, serialised to JSON.
+    " One record of the requested table, serialised to JSON.
     TYPES: BEGIN OF ty_table_row,
              tabname  TYPE dfies-tabname,   " table / view name (key)
              row_no   TYPE i,               " 1-based record number (key)

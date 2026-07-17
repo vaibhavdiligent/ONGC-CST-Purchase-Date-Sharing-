@@ -34,33 +34,33 @@ CLASS zcl_ztable_meta_dpc DEFINITION
     CONSTANTS gc_default_max_rows TYPE i VALUE 1000.   " cap when no $top sent
     CONSTANTS gc_hard_max_rows    TYPE i VALUE 50000.  " absolute ceiling
 
-    "! Extract the requested table name from the $filter select options.
+    " Extract the requested table name from the $filter select options.
     METHODS get_tabname_from_filter
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
       RETURNING VALUE(rv_tabname)        TYPE tabname.
 
-    "! Extract the optional WhereClause filter (Open SQL restriction).
+    " Extract the optional WhereClause filter (Open SQL restriction).
     METHODS get_where_from_filter
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
       RETURNING VALUE(rv_where)          TYPE string.
 
-    "! Raise a business exception with a single message text.
+    " Raise a business exception with a single message text.
     METHODS raise_error
       IMPORTING iv_text TYPE string
       RAISING   /iwbep/cx_mgw_busi_exception.
 
-    "! Check display authorisation for the table (S_TABU_NAM).
+    " Check display authorisation for the table (S_TABU_NAM).
     METHODS check_table_authority
       IMPORTING iv_tabname TYPE tabname
       RAISING   /iwbep/cx_mgw_busi_exception.
 
-    "! Read DDIC field metadata for the table.
+    " Read DDIC field metadata for the table.
     METHODS read_structure
       IMPORTING iv_tabname       TYPE tabname
       RETURNING VALUE(rt_fields) TYPE zcl_ztable_meta_mpc=>tt_field_info
       RAISING   /iwbep/cx_mgw_busi_exception.
 
-    "! Read table data dynamically and serialise each row to JSON.
+    " Read table data dynamically and serialise each row to JSON.
     METHODS read_data
       IMPORTING iv_tabname     TYPE tabname
                 iv_top         TYPE i
