@@ -26,13 +26,6 @@ CLASS zcl_ztable_meta_mpc DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
-    " Typed as plain text on purpose: the /IWBEP/ DDIC data elements
-    " (/IWBEP/MED_MODEL_NAME, /IWBEP/MED_VERSION) are not present on every
-    " Gateway release. The inherited GET_MODEL exporting parameters convert
-    " these literals to their own type automatically.
-    CONSTANTS gc_model_name    TYPE string VALUE 'ZTABLE_META_MDL'.
-    CONSTANTS gc_model_version TYPE string VALUE '0001'.
-
     " One field of the requested table (mirrors DFIES characteristics).
     TYPES: BEGIN OF ty_field_info,
              tabname    TYPE dfies-tabname,     " table / view name
@@ -65,8 +58,11 @@ CLASS zcl_ztable_meta_mpc DEFINITION
            END OF ty_table_row.
     TYPES tt_table_row TYPE STANDARD TABLE OF ty_table_row WITH DEFAULT KEY.
 
-    METHODS /iwbep/if_mgw_odata_fw_model~get_model REDEFINITION.
-    METHODS define                                  REDEFINITION.
+    " Code-based push model: only DEFINE must be redefined. The model
+    " name/version are supplied at service registration (/IWBEP/REG_SERVICE),
+    " so GET_MODEL is intentionally NOT redefined (its owning interface name
+    " differs across Gateway releases/landscapes).
+    METHODS define REDEFINITION.
 
   PROTECTED SECTION.
     METHODS define_structure_entity.
@@ -75,12 +71,6 @@ ENDCLASS.
 
 
 CLASS zcl_ztable_meta_mpc IMPLEMENTATION.
-
-  METHOD /iwbep/if_mgw_odata_fw_model~get_model.
-    model_name    = gc_model_name.
-    model_version = gc_model_version.
-  ENDMETHOD.
-
 
   METHOD define.
     me->define_structure_entity( ).
