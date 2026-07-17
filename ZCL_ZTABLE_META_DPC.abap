@@ -288,9 +288,13 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
 
   METHOD raise_error.
+    " iv_msg_text is typed C(220) (BAPI_MSG) in the message container API,
+    " so convert the string into a fixed-length field before passing it.
+    DATA lv_msg TYPE bapi_msg.
+    lv_msg = iv_text.
     DATA(lo_mc) = mo_context->get_message_container( ).
     lo_mc->add_message_text_only( iv_msg_type = 'E'
-                                  iv_msg_text = iv_text ).
+                                  iv_msg_text = lv_msg ).
     RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
       EXPORTING message_container = lo_mc.
   ENDMETHOD.
