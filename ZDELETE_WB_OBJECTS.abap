@@ -257,9 +257,12 @@ ENDFORM.
 FORM delete_ddic USING us_obj TYPE ty_obj
                  CHANGING cs_log TYPE ty_log.
 
-  DATA: lv_ddtype(4)  TYPE c,          " DDIC object type code (4 char)
-        lv_name(30)   TYPE c,          " DDIC object name
-        lv_corr       TYPE trkorr.
+* Type the fields LIKE the exact table fields the FM expects
+* (RS_DD_DELETE_OBJ: OBJNAME LIKE RSEDD0-DDOBJNAME, OBJTYPE LIKE
+* RSEDD0-DDOBJTYPE) to avoid CALL_FUNCTION_CONFLICT_TYPE.
+  DATA: lv_ddtype LIKE rsedd0-ddobjtype,    " DDIC object type code
+        lv_name   LIKE rsedd0-ddobjname,    " DDIC object name
+        lv_corr   TYPE trkorr.
 
   lv_name = us_obj-obj_name.
   lv_corr = p_trkorr.
