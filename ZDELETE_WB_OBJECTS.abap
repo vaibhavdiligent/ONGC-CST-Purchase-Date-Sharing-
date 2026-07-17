@@ -70,8 +70,8 @@ TYPES: BEGIN OF ty_obj,
 TYPES: BEGIN OF ty_log,
          object   TYPE e071-object,
          obj_name TYPE e071-obj_name,
-         status   TYPE char10,      " OK / SKIPPED / ERROR / TEST
-         message  TYPE char255,     " char (not STRING) so ALV can display it
+         status   TYPE c LENGTH 10,   " OK / SKIPPED / ERROR / TEST
+         message  TYPE c LENGTH 255,  " char (not STRING) so ALV can display it
        END OF ty_log.
 
 DATA: gt_obj    TYPE STANDARD TABLE OF ty_obj,
@@ -293,7 +293,7 @@ ENDFORM.
 *&   Deletes classes (CLAS) and interfaces (INTF) via the SEO API.
 *&---------------------------------------------------------------------*
 FORM delete_class USING us_obj  TYPE ty_obj
-                        uv_kind TYPE char4
+                        uv_kind TYPE c
                   CHANGING cs_log TYPE ty_log.
 
   DATA: ls_clskey TYPE seoclskey,
@@ -453,10 +453,10 @@ FORM top_of_page.
 
   DATA: lt_head TYPE slis_t_listheader,
         ls_head TYPE slis_listheader,
-        lv_ok   TYPE char10,
-        lv_err  TYPE char10,
-        lv_skip TYPE char10,
-        lv_sum  TYPE char60.
+        lv_ok   TYPE c LENGTH 10,
+        lv_err  TYPE c LENGTH 10,
+        lv_skip TYPE c LENGTH 10,
+        lv_sum  TYPE c LENGTH 60.
 
   ls_head-typ  = 'H'.
   ls_head-info = 'Workbench Object Deletion Log'.
