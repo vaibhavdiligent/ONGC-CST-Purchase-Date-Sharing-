@@ -1,8 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Program: ZDELETE_WB_OBJECTS
-*& Purpose: Mass-delete Workbench / DDIC objects that are contained in a
-*&          given transport request, restricted to the object types the
-*&          user selects on the selection screen.
+*& Purpose: Mass-delete Workbench / DDIC objects entered on the selection
+*&          screen and record every deletion in a given transport request.
 *&
 *&          Supported object types:
 *&            CLAS - Class
@@ -15,22 +14,24 @@
 *&            TTYP - Table type
 *&
 *&          Inputs (selection screen):
+*&            * Object name(s) to delete (select-option, supports ranges
+*&              and patterns; resolved against TADIR for the ticked types)
 *&            * One checkbox per object type (process only the ticked ones)
-*&            * Transport request number (the object list is read from it)
+*&            * Transport request number - the deletions are SAVED /
+*&              recorded in this request
 *&            * Test run flag (simulation, ON by default for safety)
 *&
 *&          Written in classic ABAP syntax for ECC 6.0 compatibility.
 *&---------------------------------------------------------------------*
 REPORT zdelete_wb_objects.
 
-TABLES: e071.                                             " for SELECT-OPTIONS reference
+TABLES: tadir.                                            " for SELECT-OPTIONS reference
 
 *----------------------------------------------------------------------*
 * Selection Screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-t01.
-  PARAMETERS:     p_trkorr TYPE e070-trkorr OBLIGATORY.   " Request / Task no.
-  SELECT-OPTIONS: s_objnm  FOR  e071-obj_name.            " Object name (blank = all in request)
+  SELECT-OPTIONS: s_objnm  FOR  tadir-obj_name.           " Object name(s) to delete
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-t02.
@@ -45,7 +46,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-t02.
 SELECTION-SCREEN END OF BLOCK b2.
 
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-t03.
-  PARAMETERS: p_test AS CHECKBOX DEFAULT 'X'.             " Test run (no deletion)
+  PARAMETERS: p_trkorr TYPE e070-trkorr OBLIGATORY,       " Request to save deletions in
+              p_test   AS CHECKBOX DEFAULT 'X'.           " Test run (no deletion)
 SELECTION-SCREEN END OF BLOCK b3.
 
 *----------------------------------------------------------------------*
@@ -64,8 +66,7 @@ TYPES: BEGIN OF ty_log,
          message  TYPE string,
        END OF ty_log.
 
-DATA: gt_req    TYPE STANDARD TABLE OF trkorr,
-      gt_obj    TYPE STANDARD TABLE OF ty_obj,
+DATA: gt_obj    TYPE STANDARD TABLE OF ty_obj,
       gt_log    TYPE STANDARD TABLE OF ty_log,
       gs_obj    TYPE ty_obj,
       gs_log    TYPE ty_log,
@@ -101,10 +102,18 @@ START-OF-SELECTION.
     RETURN.
   ENDIF.
 
+* Object name is the primary input - never allow an unrestricted run,
+* otherwise every object of the selected types would be deleted.
+  IF s_objnm[] IS INITIAL.
+    MESSAGE 'Please enter at least one object name' TYPE 'S'
+            DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+
   PERFORM collect_objects.
 
   IF gt_obj IS INITIAL.
-    MESSAGE 'No objects of the selected types found in the request'
+    MESSAGE 'No matching objects found for the selected names/types'
             TYPE 'S' DISPLAY LIKE 'E'.
     RETURN.
   ENDIF.
@@ -143,26 +152,20 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form COLLECT_OBJECTS
-*&   Reads the object list of the request + all of its tasks (E070/E071)
-*&   and keeps only R3TR entries whose type is in the selected range.
+*&   Resolves the object name selection against TADIR, keeping only the
+*&   R3TR objects whose type is in the selected range and that actually
+*&   exist in the system (not already flagged for deletion).
 *&---------------------------------------------------------------------*
 FORM collect_objects.
 
-* The request itself plus every task that belongs to it
-  APPEND p_trkorr TO gt_req.
-  SELECT trkorr FROM e070 APPENDING TABLE gt_req
-         WHERE strkorr = p_trkorr.
-
-  SELECT pgmid object obj_name
-         FROM e071
-         INTO TABLE gt_obj
-         FOR ALL ENTRIES IN gt_req
-         WHERE trkorr   = gt_req-table_line
-           AND pgmid    = 'R3TR'
+  SELECT object obj_name
+         FROM tadir
+         INTO CORRESPONDING FIELDS OF TABLE gt_obj
+         WHERE pgmid    = 'R3TR'
            AND object   IN gr_type
-           AND obj_name IN s_objnm.        " blank = no restriction
+           AND obj_name IN s_objnm
+           AND delflag  = space.
 
-* Remove duplicates (an object may appear in several tasks)
   SORT gt_obj BY object obj_name.
   DELETE ADJACENT DUPLICATES FROM gt_obj COMPARING object obj_name.
 ENDFORM.
@@ -217,6 +220,14 @@ FORM process_objects.
       CONTINUE.
     ENDIF.
 
+*   Lock the object in the target request first, so the deletion is
+*   recorded / saved in P_TRKORR.
+    PERFORM record_in_request USING gs_obj CHANGING gs_log.
+    IF gs_log-status = 'ERROR'.
+      APPEND gs_log TO gt_log.
+      CONTINUE.
+    ENDIF.
+
     CASE gs_obj-object.
       WHEN 'DOMA' OR 'DTEL' OR 'TABL' OR 'TTYP' OR 'SHLP'.
         PERFORM delete_ddic USING gs_obj CHANGING gs_log.
@@ -234,6 +245,40 @@ FORM process_objects.
     APPEND gs_log TO gt_log.
 
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form RECORD_IN_REQUEST
+*&   Registers (locks) the object in the target transport request via
+*&   RS_CORR_INSERT so that the subsequent deletion is saved in P_TRKORR.
+*&---------------------------------------------------------------------*
+FORM record_in_request USING us_obj TYPE ty_obj
+                       CHANGING cs_log TYPE ty_log.
+
+  CALL FUNCTION 'RS_CORR_INSERT'
+    EXPORTING
+      object              = us_obj-obj_name
+      object_class        = us_obj-object
+      korrnum             = p_trkorr
+      master_language     = sy-langu
+      global_lock         = 'X'
+      mode                = 'I'
+    EXCEPTIONS
+      cancelled           = 1
+      permission_failure  = 2
+      unknown_objectclass = 3
+      OTHERS              = 4.
+
+  IF sy-subrc <> 0.
+    cs_log-status = 'ERROR'.
+    IF sy-msgid IS NOT INITIAL.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
+              INTO cs_log-message.
+    ELSE.
+      cs_log-message = 'Could not record object in request'.
+    ENDIF.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
