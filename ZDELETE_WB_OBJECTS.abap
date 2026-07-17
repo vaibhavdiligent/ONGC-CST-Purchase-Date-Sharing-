@@ -18,8 +18,15 @@
 *&              and patterns; resolved against TADIR for the ticked types)
 *&            * One checkbox per object type (process only the ticked ones)
 *&            * Transport request number - the deletions are SAVED /
-*&              recorded in this request
+*&              recorded in this request (passed to each delete FM via
+*&              its own CORRNUM / CORRNR parameter)
 *&            * Test run flag (simulation, ON by default for safety)
+*&
+*&          Delete APIs used (verified to exist):
+*&            RS_DD_DELETE_OBJ              DOMA/DTEL/TABL/TTYP/SHLP
+*&            SEO_CLASS_DELETE_COMPLETE     CLAS
+*&            SEO_INTERFACE_DELETE_COMPLETE INTF
+*&            RS_FUNCTION_POOL_DELETE       FUGR
 *&
 *&          Written in classic ABAP syntax for ECC 6.0 compatibility.
 *&---------------------------------------------------------------------*
@@ -220,14 +227,6 @@ FORM process_objects.
       CONTINUE.
     ENDIF.
 
-*   Lock the object in the target request first, so the deletion is
-*   recorded / saved in P_TRKORR.
-    PERFORM record_in_request USING gs_obj CHANGING gs_log.
-    IF gs_log-status = 'ERROR'.
-      APPEND gs_log TO gt_log.
-      CONTINUE.
-    ENDIF.
-
     CASE gs_obj-object.
       WHEN 'DOMA' OR 'DTEL' OR 'TABL' OR 'TTYP' OR 'SHLP'.
         PERFORM delete_ddic USING gs_obj CHANGING gs_log.
@@ -248,40 +247,6 @@ FORM process_objects.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form RECORD_IN_REQUEST
-*&   Registers (locks) the object in the target transport request via
-*&   RS_CORR_INSERT so that the subsequent deletion is saved in P_TRKORR.
-*&---------------------------------------------------------------------*
-FORM record_in_request USING us_obj TYPE ty_obj
-                       CHANGING cs_log TYPE ty_log.
-
-  CALL FUNCTION 'RS_CORR_INSERT'
-    EXPORTING
-      object              = us_obj-obj_name
-      object_class        = us_obj-object
-      korrnum             = p_trkorr
-      master_language     = sy-langu
-      global_lock         = 'X'
-      mode                = 'I'
-    EXCEPTIONS
-      cancelled           = 1
-      permission_failure  = 2
-      unknown_objectclass = 3
-      OTHERS              = 4.
-
-  IF sy-subrc <> 0.
-    cs_log-status = 'ERROR'.
-    IF sy-msgid IS NOT INITIAL.
-      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
-              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
-              INTO cs_log-message.
-    ELSE.
-      cs_log-message = 'Could not record object in request'.
-    ENDIF.
-  ENDIF.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
 *& Form DELETE_DDIC
 *&   Deletes DDIC objects (DOMA, DTEL, TABL, TTYP, SHLP) via
 *&   RS_DD_DELETE_OBJ. The object is recorded in the supplied request.
@@ -290,11 +255,13 @@ FORM delete_ddic USING us_obj TYPE ty_obj
                  CHANGING cs_log TYPE ty_log.
 
   DATA: lv_ddtype TYPE ddobjtype,
-        lv_name   TYPE ddobjname.
+        lv_name   TYPE ddobjname,
+        lv_corr   TYPE trkorr.
 
   lv_name = us_obj-obj_name.
+  lv_corr = p_trkorr.
 
-* Map the transport object type to the internal DDIC type code
+* DDIC type code (DDOBJTYPE) matches the transport object type 1:1
   CASE us_obj-object.
     WHEN 'DOMA'. lv_ddtype = 'DOMA'.
     WHEN 'DTEL'. lv_ddtype = 'DTEL'.
@@ -303,16 +270,15 @@ FORM delete_ddic USING us_obj TYPE ty_obj
     WHEN 'SHLP'. lv_ddtype = 'SHLP'.
   ENDCASE.
 
-* NOTE: RS_DD_DELETE_OBJ suppresses the transport popup with NO_ASK = 'X'.
-*       The object is already contained in P_TRKORR (that is where the
-*       list was read from), so the deletion is recorded in that request.
-*       If your release rejects a parameter/exception below, verify the
-*       signature in SE37 and adjust.
+* NO_ASK = 'X' suppresses the transport popup; the deletion is recorded
+* in the request passed via the CHANGING parameter CORRNUM (= P_TRKORR).
   CALL FUNCTION 'RS_DD_DELETE_OBJ'
     EXPORTING
       objname = lv_name
       objtype = lv_ddtype
       no_ask  = 'X'
+    CHANGING
+      corrnum = lv_corr
     EXCEPTIONS
       OTHERS  = 1.
 
@@ -327,22 +293,30 @@ FORM delete_class USING us_obj  TYPE ty_obj
                         uv_kind TYPE char4
                   CHANGING cs_log TYPE ty_log.
 
-  DATA: ls_clskey TYPE seoclskey.
+  DATA: ls_clskey TYPE seoclskey,
+        lv_corr   TYPE trkorr.
 
   ls_clskey-clsname = us_obj-obj_name.
+  lv_corr           = p_trkorr.
 
   IF uv_kind = 'INTF'.
     CALL FUNCTION 'SEO_INTERFACE_DELETE_COMPLETE'
       EXPORTING
-        intkey = ls_clskey
+        intkey          = ls_clskey
+        suppress_dialog = 'X'
+      CHANGING
+        corrnr          = lv_corr
       EXCEPTIONS
-        OTHERS = 1.
+        OTHERS          = 1.
   ELSE.
     CALL FUNCTION 'SEO_CLASS_DELETE_COMPLETE'
       EXPORTING
-        clskey = ls_clskey
+        clskey          = ls_clskey
+        suppress_dialog = 'X'
+      CHANGING
+        corrnr          = lv_corr
       EXCEPTIONS
-        OTHERS = 1.
+        OTHERS          = 1.
   ENDIF.
 
   PERFORM set_result USING sy-subrc CHANGING cs_log.
@@ -359,12 +333,18 @@ FORM delete_fugr USING us_obj TYPE ty_obj
 
   lv_area = us_obj-obj_name.
 
+* The function group name is passed via AREA (not FUNCTION_POOL);
+* CORRNUM records the deletion in the request, WITH_KORR forces the
+* correction entry and SUPPRESS_POPUPS runs it without dialogs.
   CALL FUNCTION 'RS_FUNCTION_POOL_DELETE'
     EXPORTING
-      function_pool = lv_area
-      corrnum       = p_trkorr
+      area              = lv_area
+      corrnum           = p_trkorr
+      with_korr         = 'X'
+      suppress_popups   = 'X'
+      skip_progress_ind = 'X'
     EXCEPTIONS
-      OTHERS        = 1.
+      OTHERS            = 1.
 
   PERFORM set_result USING sy-subrc CHANGING cs_log.
 ENDFORM.
