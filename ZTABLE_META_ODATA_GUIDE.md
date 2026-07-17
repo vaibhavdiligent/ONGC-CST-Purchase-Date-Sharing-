@@ -12,9 +12,9 @@ any transparent table or DDIC view) and it returns:
 The OData **model is fixed** (two entity types); only the **content is dynamic**,
 so one service covers every table – no new development per table.
 
-Fully **code based** (same pattern as `ZGMS_EXCHRATE`): a Model Provider class
-extending `/IWBEP/CL_MGW_ABS_MODEL` and a Data Provider class extending
-`/IWBEP/CL_MGW_PUSH_ABS_DATA`. **No SEGW project required.**
+Fully **code based**: a Model Provider class extending `/IWBEP/CL_MGW_ABS_MODEL`
+and a Data Provider class extending `/IWBEP/CL_MGW_ABS_DATA` (the standard
+code-based bases SEGW-generated MPC/DPC use). **No SEGW project required.**
 
 | Object | Name |
 |--------|------|
