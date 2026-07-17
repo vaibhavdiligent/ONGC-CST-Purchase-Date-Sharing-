@@ -63,7 +63,6 @@ SELECTION-SCREEN END OF BLOCK b3.
 * Data Declarations
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_obj,
-         pgmid    TYPE e071-pgmid,
          object   TYPE e071-object,
          obj_name TYPE e071-obj_name,
        END OF ty_obj.
@@ -184,10 +183,12 @@ ENDFORM.
 *&   Popup safety confirmation before real deletion.
 *&---------------------------------------------------------------------*
 FORM confirm_deletion CHANGING cv_answer TYPE c.
-  DATA: lv_count TYPE i,
+  DATA: lv_lines TYPE i,
+        lv_count TYPE n LENGTH 10,     " char-numeric so it can be concatenated
         lv_text  TYPE string.
 
-  DESCRIBE TABLE gt_obj LINES lv_count.
+  DESCRIBE TABLE gt_obj LINES lv_lines.
+  lv_count = lv_lines.
   CONCATENATE 'You are about to DELETE' lv_count
               'object(s). This is irreversible. Continue?'
          INTO lv_text SEPARATED BY space.
@@ -256,9 +257,9 @@ ENDFORM.
 FORM delete_ddic USING us_obj TYPE ty_obj
                  CHANGING cs_log TYPE ty_log.
 
-  DATA: lv_ddtype TYPE ddobjtype,
-        lv_name   TYPE ddobjname,
-        lv_corr   TYPE trkorr.
+  DATA: lv_ddtype(4)  TYPE c,          " DDIC object type code (4 char)
+        lv_name(30)   TYPE c,          " DDIC object name
+        lv_corr       TYPE trkorr.
 
   lv_name = us_obj-obj_name.
   lv_corr = p_trkorr.
