@@ -7,23 +7,45 @@ imports the same way as any abapGit offline project.
 
 ---
 
-## What's inside (15 objects)
+## What's inside (39 objects)
 
 All objects are in the **`Y`** customer namespace.
 
-**Domains (5):** `YCIS_CTYPE` (fixed values A/T), `YCIS_YEAR`, `YCIS_MONTH`,
-`YCIS_PERC`, `YCIS_COUNT`
+**Domains (15):** `YCIS_CTYPE`, `YCIS_YEAR`, `YCIS_MONTH`, `YCIS_PERC`, `YCIS_COUNT`,
+`YCIS_QAIS`, `YCIS_STYPE`, `YCIS_STATUS`, `YCIS_AMT`, `YCIS_QTY`, `YCIS_REMARK`,
+and (3-level workflow) `YCIS_WFSTAT`, `YCIS_DEPT`, `YCIS_WLEVEL`, `YCIS_SEQNO`
 
-**Data elements (5):** same names as the domains above.
+**Data elements (15):** same names as the domains above.
 
-**Tables (3):**
+**Tables (5):**
 | Table | Key fields |
 |---|---|
 | `YCIS_WAIVER_RULE` | MANDT, SCHEME_YEAR, CUST_TYPE, SIGN_FROM |
 | `YCIS_SHORTFALL` | MANDT, PERIOD_FROM, PERIOD_TO, **MATNR** |
 | `YCIS_NODISC_GRD` | MANDT, KONDM |
+| `YCIS_APPRVL` | MANDT, QAIS_NO, SCHEME_TYPE, PERIOD_FROM, PERIOD_TO, KUNNR, KVGR2 (+ workflow status/audit) |
+| `YCIS_WF_APPR` | MANDT, SALES_OFFICE, LEVEL, SEQUENCE (approval hierarchy) |
 
-**Programs (2):** `YRVG004_QAIS_EXECUTE_N1`, `YCIS_REBATE_REPORT`
+**Programs (4):** `YRVG004_QAIS_EXECUTE_N1` (L1), `YCIS_REBATE_REPORT`,
+`YCIS_APPROVE` (L2), `YCIS_EXECUTE` (L3)
+
+### 3-level approval workflow (R4)
+- **L1 – PC MKTG** runs `YRVG004_QAIS_EXECUTE_N1`, reviews the ALV, and **Confirm** saves the
+  computed rebates to `YCIS_APPRVL` as **Pending-L2** (no order) and e-mails L2.
+- **L2 – PC MKTG-HOD** runs `YCIS_APPROVE`, sees Pending-L2 rows for their office, **Approve**
+  (→ Pending-L3, e-mail L3) or **Reject** (→ back to L1, e-mail L1).
+- **L3 – CPC** runs `YCIS_EXECUTE`, sees Pending-L3 rows (all offices), **Execute** (creates the
+  rebate order, status Completed) or **Reject** (→ back to L2, e-mail L2).
+- Hierarchy & e-mail recipients are maintained in **`YCIS_WF_APPR`** (SM30). See
+  `CIS_2026_27_Approval_Workflow.docx` for the full design and config sample.
+
+### Extra manual steps for the workflow
+- **GUI status `STANDARD`** in `YCIS_APPROVE` (fn codes `APPR`,`REJ`,`SELALL`,`DESEL`,Back,Exit)
+  and in `YCIS_EXECUTE` (`EXEC`,`REJ`,`SELALL`,`DESEL`,Back,Exit) — small SE41 status per program.
+- **SM30** generators for `YCIS_WF_APPR` and `YCIS_APPRVL`.
+- **Transactions (SE93):** `YRVG005` → `YRVG004_QAIS_EXECUTE_N1` (L1), `YRVR005_A` → `YCIS_APPROVE` (L2),
+  `YRVR005_E` → `YCIS_EXECUTE` (L3).
+- **SCOT/SMTP** configured for the e-mail notifications.
 
 > **Two tables dropped per GAIL feedback (07.07.2026):**
 > - `YCIS_CUST_TYPE` — customer type is read from the existing
