@@ -260,20 +260,33 @@ FORM delete_ddic USING us_obj TYPE ty_obj
 * Type the fields LIKE the exact table fields the FM expects
 * (RS_DD_DELETE_OBJ: OBJNAME LIKE RSEDD0-DDOBJNAME, OBJTYPE LIKE
 * RSEDD0-DDOBJTYPE) to avoid CALL_FUNCTION_CONFLICT_TYPE.
-  DATA: lv_ddtype LIKE rsedd0-ddobjtype,    " DDIC object type code
+  DATA: lv_ddtype LIKE rsedd0-ddobjtype,    " DDIC object type code (1 char)
         lv_name   LIKE rsedd0-ddobjname,    " DDIC object name
-        lv_corr   LIKE e070-trkorr.         " matches CHANGING CORRNUM exactly
+        lv_corr   LIKE e070-trkorr,         " matches CHANGING CORRNUM exactly
+        lv_tabcls TYPE dd02l-tabclass.      " table class (transp. vs structure)
 
   lv_name = us_obj-obj_name.
   lv_corr = p_trkorr.
 
-* DDIC type code (DDOBJTYPE) matches the transport object type 1:1
+* OBJTYPE is a SINGLE-CHARACTER code (domain DDEUTYPE), NOT the 4-char
+* transport type. Map each transport object type to its DDEUTYPE code:
+*   D = Domain   E = Data element   A = Table type   H = Search help
+*   T = Transparent table   S = Internal structure
   CASE us_obj-object.
-    WHEN 'DOMA'. lv_ddtype = 'DOMA'.
-    WHEN 'DTEL'. lv_ddtype = 'DTEL'.
-    WHEN 'TABL'. lv_ddtype = 'TABL'.
-    WHEN 'TTYP'. lv_ddtype = 'TTYP'.
-    WHEN 'SHLP'. lv_ddtype = 'SHLP'.
+    WHEN 'DOMA'. lv_ddtype = 'D'.
+    WHEN 'DTEL'. lv_ddtype = 'E'.
+    WHEN 'TTYP'. lv_ddtype = 'A'.
+    WHEN 'SHLP'. lv_ddtype = 'H'.
+    WHEN 'TABL'.
+*     A TABL entry can be a table or a structure - pick the right code
+      CLEAR lv_tabcls.
+      SELECT SINGLE tabclass FROM dd02l INTO lv_tabcls
+             WHERE tabname = lv_name.
+      IF lv_tabcls = 'INTTAB'.
+        lv_ddtype = 'S'.                    " internal structure
+      ELSE.
+        lv_ddtype = 'T'.                    " transparent / pool / cluster table
+      ENDIF.
   ENDCASE.
 
 * NO_ASK = 'X' suppresses the transport popup; the deletion is recorded
