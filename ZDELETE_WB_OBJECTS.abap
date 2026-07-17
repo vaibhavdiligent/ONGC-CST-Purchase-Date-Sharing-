@@ -337,17 +337,16 @@ FORM delete_fugr USING us_obj TYPE ty_obj
 
   lv_area = us_obj-obj_name.
 
-* The function group name is passed via AREA (not FUNCTION_POOL) and
-* CORRNUM records the deletion in the request. Only these two - both
-* present on ECC 6.0 - are supplied; WITH_KORR / SUPPRESS_POPUPS /
-* SKIP_PROGRESS_IND are newer optional parameters and are omitted to
-* avoid CALL_FUNCTION_PARM_UNKNOWN.
+* AREA + CORRNUM are both IMPORTING (verified in SE37); WITH_KORR defaults
+* to 'X' so the deletion is recorded in the request, and SUPPRESS_POPUPS
+* runs it without an interactive confirmation dialog.
   CALL FUNCTION 'RS_FUNCTION_POOL_DELETE'
     EXPORTING
-      area    = lv_area
-      corrnum = p_trkorr
+      area            = lv_area
+      corrnum         = p_trkorr
+      suppress_popups = 'X'
     EXCEPTIONS
-      OTHERS  = 1.
+      OTHERS          = 1.
 
   PERFORM set_result USING sy-subrc CHANGING cs_log.
 ENDFORM.
