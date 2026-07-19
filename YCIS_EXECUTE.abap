@@ -410,7 +410,10 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
       ENDLOOP.
-      lo_send->send( ).
+*     force immediate delivery (do not leave the mail waiting in the
+*     SAPconnect / SOST queue) - GAIL 17.07.2026 "mail not going".
+      lo_send->set_send_immediately( 'X' ).
+      lo_send->send( i_with_error_screen = 'X' ).
       COMMIT WORK.
     CATCH cx_bcs.
   ENDTRY.
