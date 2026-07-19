@@ -11721,11 +11721,22 @@ FORM send_wf_mail USING p_level   TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text-line = |CIS 2026-27 : { p_subject }|.  APPEND ls_text TO lt_text.
-      ls_text-line = |Sales Office : { p_office }|.    APPEND ls_text TO lt_text.
-      ls_text-line = |Please open the L2 approval transaction to action the records.|.
+*     Exact L2 notification wording requested by GAIL (17.07.2026).
+      ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |The rebates under the CIS 2026-27 Scheme have been successfully verified|.
       APPEND ls_text TO lt_text.
-      lv_sub = p_subject.
+      ls_text-line = |and submitted by L1.|.                        APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |Please log in to T-Code YRVG004_A and complete the required approval process.|.
+      APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |With warm regards,|.                          APPEND ls_text TO lt_text.
+      ls_text-line = |GAIL (INDIA) LTD.|.                           APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |This is a system generated mail. Please do not reply.|.
+      APPEND ls_text TO lt_text.
+      lv_sub = 'CIS Scheme - Rebates reviewed & submitted by L1'.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
@@ -11789,6 +11800,7 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_user     = sy-uname.
   ls-l1_date     = sy-datum.
   ls-l1_time     = sy-uzeit.
+  ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
   MODIFY ycis_apprvl FROM ls.
   COLLECT p_vkbur INTO gt_stg_office.       " for the L2 notification
 ENDFORM.                    "stage_one
@@ -13818,6 +13830,13 @@ INITIALIZATION.
   GET PARAMETER ID 'ZFL' FIELD lv_siml.
   IF lv_siml EQ 'X'.
     MESSAGE 'This option is for getting a snapshot of CIS status as on date when performed. Please use this option diligently.' TYPE 'I'.
+  ENDIF.
+* CIS 2026-27 starts JUNE 2026 : reject Apr/May 2026 on the input screen
+* (GAIL 17.07.2026, point 1).
+AT SELECTION-SCREEN.
+  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR
+     s_sptag-high(6) = '202604' OR s_sptag-high(6) = '202605'.
+    MESSAGE 'CIS START MONTH IS JUNE 2026' TYPE 'E'.
   ENDIF.
 * START OF SELECTION---------------------------------------------------*
 START-OF-SELECTION.

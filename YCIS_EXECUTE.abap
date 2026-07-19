@@ -24,6 +24,7 @@ TYPES: BEGIN OF ty_out,
          sel         TYPE flag,
          qais_no     TYPE ycis_apprvl-qais_no,
          scheme_type TYPE ycis_apprvl-scheme_type,
+         stype_txt   TYPE char20,
          kunnr       TYPE ycis_apprvl-kunnr,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
@@ -96,8 +97,22 @@ FORM build_out.
   LOOP AT gt_appr INTO gs_appr.
     CLEAR gs_out.
     MOVE-CORRESPONDING gs_appr TO gs_out.
+    PERFORM scheme_text USING gs_appr-scheme_type CHANGING gs_out-stype_txt.
     APPEND gs_out TO gt_out.
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  scheme_text   (readable CIS scheme type - GAIL 17.07.2026)
+*&---------------------------------------------------------------------*
+FORM scheme_text USING p_code TYPE any CHANGING p_txt TYPE char20.
+  CASE p_code.
+    WHEN 'M'. p_txt = 'Monthly'.
+    WHEN 'Q'. p_txt = 'Quarterly'.
+    WHEN 'A'. p_txt = 'Annual'.
+    WHEN 'C'. p_txt = 'Annual Consistency'.
+    WHEN OTHERS. p_txt = p_code.
+  ENDCASE.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -118,7 +133,7 @@ FORM build_fieldcat.
 
   add_fc 'SEL'         'Select'          'X'.
   add_fc 'QAIS_NO'     'CIS No.'         ''.
-  add_fc 'SCHEME_TYPE' 'Type'            ''.
+  add_fc 'STYPE_TXT'   'Scheme Type'     ''.
   add_fc 'KUNNR'       'Customer'        ''.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
@@ -264,13 +279,18 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM create_order USING p_appr TYPE ycis_apprvl
                   CHANGING p_vbeln TYPE vbeln.
-  DATA: x_header   TYPE bapisdhead,
-        i_items    TYPE STANDARD TABLE OF bapiitemin,
-        wa_item    TYPE bapiitemin,
-        i_partner  TYPE STANDARD TABLE OF bapipartnr,
-        wa_partner TYPE bapipartnr,
-        i_return   TYPE STANDARD TABLE OF bapireturn,
-        lv_sold    TYPE kunnr.
+*   Interface types mirror the production create_sale_order in
+*   YRVG004_QAIS_EXECUTE : SOLD_TO_PARTY is a structure (BAPISOLDTO) and
+*   RETURN is a single IMPORTING structure (BAPIRETURN1) - NOT a table.
+*   Passing a CHAR field / a table here caused the CALL_FUNCTION_CONFLICT_LENG
+*   (CX_SY_DYN_CALL_ILLEGAL_TYPE) runtime error.
+  DATA: x_header    LIKE bapisdhead,
+        i_items     LIKE bapiitemin  OCCURS 0 WITH HEADER LINE,
+        i_partner   LIKE bapipartnr  OCCURS 0 WITH HEADER LINE,
+        x_sold_to   LIKE bapisoldto,
+        x_return    LIKE bapireturn1,
+        w_objtype   LIKE bapiusw01-objtype,
+        w_vbeln     LIKE bapivbeln-vbeln.
 
   x_header-doc_type   = p_appr-doc_type.
   x_header-sales_org  = p_appr-sales_org.
@@ -285,28 +305,33 @@ FORM create_order USING p_appr TYPE ycis_apprvl
     x_header-bill_block = p_appr-bill_block.
   ENDIF.
 
-  wa_partner-partn_role = 'AG'.
-  wa_partner-partn_numb = p_appr-kunnr.
-  APPEND wa_partner TO i_partner.
+  CLEAR i_partner. REFRESH i_partner.
+  i_partner-partn_role = 'AG'.
+  i_partner-partn_numb = p_appr-kunnr.
+  APPEND i_partner.
 
-  wa_item-material   = p_appr-material.
-  wa_item-target_qty = p_appr-target_qty.
-  APPEND wa_item TO i_items.
+  CLEAR i_items. REFRESH i_items.
+  i_items-material   = p_appr-material.
+  i_items-target_qty = p_appr-target_qty.
+  APPEND i_items.
+
+  w_objtype = 'BUS2094'.
 
   CALL FUNCTION 'BAPI_SALESDOCU_CREATEFROMDATA'
     EXPORTING
       order_header_in = x_header
-      business_object = 'BUS2094'
+      business_object = w_objtype
       without_commit  = ' '
     IMPORTING
-      salesdocument   = p_vbeln
-      sold_to_party   = lv_sold
+      salesdocument   = w_vbeln
+      sold_to_party   = x_sold_to
+      return          = x_return
     TABLES
       order_items_in  = i_items
-      order_partners  = i_partner
-      return          = i_return.
+      order_partners  = i_partner.
 
-  IF p_vbeln IS NOT INITIAL.
+  IF w_vbeln IS NOT INITIAL.
+    p_vbeln = w_vbeln.
     CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
       EXPORTING
         wait = 'X'.
@@ -362,11 +387,20 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text-line = |CIS 2026-27 : { p_subject }|.   APPEND ls_text TO lt_text.
-      ls_text-line = |Sales Office : { p_ctxoff }|.    APPEND ls_text TO lt_text.
-      ls_text-line = |Please open the relevant transaction to action the pending records.|.
+*     L3 (CPC) reject -> back to L2 (PC MKTG-HOD)
+      ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
       APPEND ls_text TO lt_text.
-      lv_sub = p_subject.
+      ls_text-line = |for your review. Please log in to T-Code YRVG004_A and re-check the records.|.
+      APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |With warm regards,|.                          APPEND ls_text TO lt_text.
+      ls_text-line = |GAIL (INDIA) LTD.|.                           APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |This is a system generated mail. Please do not reply.|.
+      APPEND ls_text TO lt_text.
+      lv_sub = 'CIS Scheme - Rebates returned by L3 for review'.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
