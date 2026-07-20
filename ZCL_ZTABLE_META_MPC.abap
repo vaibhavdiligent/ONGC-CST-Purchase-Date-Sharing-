@@ -53,9 +53,10 @@ CLASS zcl_ztable_meta_mpc DEFINITION
 
     " One record of the requested table, serialised to JSON.
     TYPES: BEGIN OF ty_table_row,
-             tabname  TYPE dfies-tabname,   " table / view name (key)
-             row_no   TYPE i,               " 1-based record number (key)
-             data_json TYPE string,         " whole record as JSON
+             tabname     TYPE dfies-tabname,  " table / view name (key)
+             row_no      TYPE i,              " 1-based record number (key)
+             data_json   TYPE string,         " whole record as JSON
+             whereclause TYPE string,         " Open SQL WHERE applied (echo)
            END OF ty_table_row.
     TYPES tt_table_row TYPE STANDARD TABLE OF ty_table_row WITH DEFAULT KEY.
 
@@ -221,6 +222,17 @@ CLASS zcl_ztable_meta_mpc IMPLEMENTATION.
                                                    iv_abap_fieldname = 'DATA_JSON' ).
     lo_property->set_type_edm_string( ).
     lo_property->set_nullable( abap_true ).
+
+    " Dynamic per-table row filter. The caller passes a raw Open SQL
+    " condition in this property via $filter, e.g.
+    "   $filter=Tabname eq 'MARA' and WhereClause eq 'MTART = ''FERT'''
+    " It must be a declared, filterable property or the framework rejects
+    " it during $filter validation. It is echoed back in the response.
+    lo_property = lo_entity_type->create_property( iv_property_name  = 'WhereClause'
+                                                   iv_abap_fieldname = 'WHERECLAUSE' ).
+    lo_property->set_type_edm_string( ).
+    lo_property->set_nullable( abap_true ).
+    lo_property->set_filterable( abap_true ).
 
     lo_entity_type->bind_structure( iv_structure_name = 'ZCL_ZTABLE_META_MPC=>TY_TABLE_ROW' ).
 
