@@ -24,6 +24,7 @@ TYPES: BEGIN OF ty_out,
          sel         TYPE flag,
          qais_no     TYPE ycis_apprvl-qais_no,
          scheme_type TYPE ycis_apprvl-scheme_type,
+         stype_txt   TYPE char20,
          kunnr       TYPE ycis_apprvl-kunnr,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
@@ -96,8 +97,22 @@ FORM build_out.
   LOOP AT gt_appr INTO gs_appr.
     CLEAR gs_out.
     MOVE-CORRESPONDING gs_appr TO gs_out.
+    PERFORM scheme_text USING gs_appr-scheme_type CHANGING gs_out-stype_txt.
     APPEND gs_out TO gt_out.
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  scheme_text   (readable CIS scheme type - GAIL 17.07.2026)
+*&---------------------------------------------------------------------*
+FORM scheme_text USING p_code TYPE any CHANGING p_txt TYPE char20.
+  CASE p_code.
+    WHEN 'M'. p_txt = 'Monthly'.
+    WHEN 'Q'. p_txt = 'Quarterly'.
+    WHEN 'A'. p_txt = 'Annual'.
+    WHEN 'C'. p_txt = 'Annual Consistency'.
+    WHEN OTHERS. p_txt = p_code.
+  ENDCASE.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -118,7 +133,7 @@ FORM build_fieldcat.
 
   add_fc 'SEL'         'Select'          'X'.
   add_fc 'QAIS_NO'     'CIS No.'         ''.
-  add_fc 'SCHEME_TYPE' 'Type'            ''.
+  add_fc 'STYPE_TXT'   'Scheme Type'     ''.
   add_fc 'KUNNR'       'Customer'        ''.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
@@ -264,13 +279,18 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM create_order USING p_appr TYPE ycis_apprvl
                   CHANGING p_vbeln TYPE vbeln.
-  DATA: x_header   TYPE bapisdhead,
-        i_items    TYPE STANDARD TABLE OF bapiitemin,
-        wa_item    TYPE bapiitemin,
-        i_partner  TYPE STANDARD TABLE OF bapipartnr,
-        wa_partner TYPE bapipartnr,
-        i_return   TYPE STANDARD TABLE OF bapireturn,
-        lv_sold    TYPE kunnr.
+*   Interface types mirror the production create_sale_order in
+*   YRVG004_QAIS_EXECUTE : SOLD_TO_PARTY is a structure (BAPISOLDTO) and
+*   RETURN is a single IMPORTING structure (BAPIRETURN1) - NOT a table.
+*   Passing a CHAR field / a table here caused the CALL_FUNCTION_CONFLICT_LENG
+*   (CX_SY_DYN_CALL_ILLEGAL_TYPE) runtime error.
+  DATA: x_header    LIKE bapisdhead,
+        i_items     LIKE bapiitemin  OCCURS 0 WITH HEADER LINE,
+        i_partner   LIKE bapipartnr  OCCURS 0 WITH HEADER LINE,
+        x_sold_to   LIKE bapisoldto,
+        x_return    LIKE bapireturn1,
+        w_objtype   LIKE bapiusw01-objtype,
+        w_vbeln     LIKE bapivbeln-vbeln.
 
   x_header-doc_type   = p_appr-doc_type.
   x_header-sales_org  = p_appr-sales_org.
@@ -285,34 +305,204 @@ FORM create_order USING p_appr TYPE ycis_apprvl
     x_header-bill_block = p_appr-bill_block.
   ENDIF.
 
-  wa_partner-partn_role = 'AG'.
-  wa_partner-partn_numb = p_appr-kunnr.
-  APPEND wa_partner TO i_partner.
+  CLEAR i_partner. REFRESH i_partner.
+  i_partner-partn_role = 'AG'.
+  i_partner-partn_numb = p_appr-kunnr.
+  APPEND i_partner.
 
-  wa_item-material   = p_appr-material.
-  wa_item-target_qty = p_appr-target_qty.
-  APPEND wa_item TO i_items.
+  CLEAR i_items. REFRESH i_items.
+  i_items-material   = p_appr-material.
+  i_items-target_qty = p_appr-target_qty.
+  APPEND i_items.
+
+  w_objtype = 'BUS2094'.
 
   CALL FUNCTION 'BAPI_SALESDOCU_CREATEFROMDATA'
     EXPORTING
       order_header_in = x_header
-      business_object = 'BUS2094'
+      business_object = w_objtype
       without_commit  = ' '
     IMPORTING
-      salesdocument   = p_vbeln
-      sold_to_party   = lv_sold
+      salesdocument   = w_vbeln
+      sold_to_party   = x_sold_to
+      return          = x_return
     TABLES
       order_items_in  = i_items
-      order_partners  = i_partner
-      return          = i_return.
+      order_partners  = i_partner.
 
-  IF p_vbeln IS NOT INITIAL.
+  IF w_vbeln IS NOT INITIAL.
+    p_vbeln = w_vbeln.
     CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
       EXPORTING
         wait = 'X'.
+*   Post-order updates that the original YRVG004 did after order creation:
+*   stamp the CIS period on the order (VBKD), log the rebate (YRVA_REBATE)
+*   and write the sale order back into the CIS master (YRVA_QAIS_DATA / _M).
+    PERFORM post_order_update USING p_appr w_vbeln.
+    PERFORM post_master_update USING p_appr w_vbeln.
   ELSE.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
   ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  post_order_update
+*&      Mirrors the YRVG004 post-processing: set the CIS period dates on
+*&      the created order (VBKD-BSTDK / BSTDK_E) and write the rebate log
+*&      table YRVA_REBATE. In the maker/checker flow this happens here, at
+*&      the final (L3 / CPC) approval - only after the order is created.
+*&---------------------------------------------------------------------*
+FORM post_order_update USING p_appr TYPE ycis_apprvl
+                             p_vbeln TYPE vbeln.
+  DATA: ls_reb TYPE yrva_rebate.
+
+* CIS period on the order document (reference dates)
+  UPDATE vbkd SET bstdk   = p_appr-period_from
+                  bstdk_e = p_appr-period_to
+            WHERE vbeln = p_vbeln.
+  COMMIT WORK AND WAIT.
+
+* rebate log
+  CLEAR ls_reb.
+  ls_reb-vbeln        = p_vbeln.
+  ls_reb-kunnr        = p_appr-kunnr.
+  ls_reb-vkbur        = p_appr-sales_off.
+  ls_reb-lft_qty      = p_appr-lft_qty.
+  ls_reb-rev_qty      = p_appr-elig_qty.
+  ls_reb-reb_cond     = p_appr-reb_cond.
+  ls_reb-ord_cond     = 'ZCMU'.
+  ls_reb-value        = p_appr-rebate_val.
+  ls_reb-yy_per_start = p_appr-period_from.
+  ls_reb-yy_per_end   = p_appr-period_to.
+  SELECT SINGLE kukla FROM kna1 INTO ls_reb-kukla
+    WHERE kunnr = p_appr-kunnr.
+  MODIFY yrva_rebate FROM ls_reb.
+  COMMIT WORK AND WAIT.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  post_master_update
+*&      Write the created sale order back into the CIS master, mirroring
+*&      the original YRVG004:
+*&        Q -> YRVA_QAIS_DATA-SALE_ORDER_Qn      (n from the period)
+*&        A -> YRVA_QAIS_DATA-SO_ANNUAL
+*&        C -> YRVA_QAIS_DATA-SO_ANNUAL_CONSIT
+*&        M -> YRVA_QAIS_DATA-IND_ELGL_QTY_Mn and YRVA_QAIS_DATA_M
+*&             (MON_SO_Mn / MON_VALUE_Mn / IND_ELGL_QTY_Mn / MON_REMARKS_Mn)
+*&      Read-modify-write on the full row keeps every other field intact.
+*&      Quarter / month index are derived from the stored period, exactly
+*&      as the original derived them from the selection-screen period.
+*&---------------------------------------------------------------------*
+FORM post_master_update USING p_appr TYPE ycis_apprvl
+                              p_vbeln TYPE vbeln.
+  DATA: ls_q    TYPE yrva_qais_data,
+        ls_qm   TYPE yrva_qais_data_m,
+        lv_mm   TYPE i,
+        lv_idx  TYPE i,
+        lv_fld  TYPE string,
+        lv_ok   TYPE flag.
+  FIELD-SYMBOLS: <any> TYPE any.
+
+* locate the CIS master row (same business key the original used)
+  CLEAR: ls_q, lv_ok.
+  IF p_appr-qais_no IS NOT INITIAL.
+    SELECT SINGLE * FROM yrva_qais_data INTO ls_q
+      WHERE qais_no = p_appr-qais_no.
+    IF sy-subrc = 0.
+      lv_ok = 'X'.
+    ENDIF.
+  ENDIF.
+  IF lv_ok IS INITIAL.
+    SELECT SINGLE * FROM yrva_qais_data INTO ls_q
+      WHERE kunnr = p_appr-kunnr
+        AND kvgr2 = p_appr-kvgr2
+        AND vkbur = p_appr-sales_off.
+    IF sy-subrc = 0.
+      lv_ok = 'X'.
+    ENDIF.
+  ENDIF.
+  CHECK lv_ok = 'X'.
+
+  CASE p_appr-scheme_type.
+    WHEN 'Q'.
+      CASE p_appr-period_from+4(2).
+        WHEN '04'. lv_fld = 'SALE_ORDER_Q1'.
+        WHEN '07'. lv_fld = 'SALE_ORDER_Q2'.
+        WHEN '10'. lv_fld = 'SALE_ORDER_Q3'.
+        WHEN '01'. lv_fld = 'SALE_ORDER_Q4'.
+      ENDCASE.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+
+    WHEN 'A'.
+      ASSIGN COMPONENT 'SO_ANNUAL' OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+
+    WHEN 'C'.
+      ASSIGN COMPONENT 'SO_ANNUAL_CONSIT' OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+
+    WHEN 'M'.
+*     financial-year month index (Apr=1 ... Jun=3 ... Mar=12)
+      lv_mm = p_appr-period_to+4(2).
+      IF lv_mm >= 4.
+        lv_idx = lv_mm - 3.
+      ELSE.
+        lv_idx = lv_mm + 9.
+      ENDIF.
+*     main table : eligible qty for the month
+      lv_fld = |IND_ELGL_QTY_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-elig_qty.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+*     detail table _M : order / value / qty / remarks for the month
+      CLEAR ls_qm.
+      SELECT SINGLE * FROM yrva_qais_data_m INTO ls_qm
+        WHERE kunnr = p_appr-kunnr
+          AND kvgr2 = p_appr-kvgr2
+          AND vkbur = p_appr-sales_off.
+      IF sy-subrc <> 0.
+        CLEAR ls_qm.
+        ls_qm-mandt   = sy-mandt.
+        ls_qm-qais_no = p_appr-qais_no.
+        ls_qm-kunnr   = p_appr-kunnr.
+        ls_qm-kvgr2   = p_appr-kvgr2.
+        ls_qm-vkbur   = p_appr-sales_off.
+      ENDIF.
+      lv_fld = |MON_SO_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      lv_fld = |MON_VALUE_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-rebate_val.
+      ENDIF.
+      lv_fld = |IND_ELGL_QTY_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-elig_qty.
+      ENDIF.
+      lv_fld = |MON_REMARKS_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-purch_no.
+      ENDIF.
+      MODIFY yrva_qais_data_m FROM ls_qm.
+  ENDCASE.
+  COMMIT WORK AND WAIT.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -362,11 +552,20 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text-line = |CIS 2026-27 : { p_subject }|.   APPEND ls_text TO lt_text.
-      ls_text-line = |Sales Office : { p_ctxoff }|.    APPEND ls_text TO lt_text.
-      ls_text-line = |Please open the relevant transaction to action the pending records.|.
+*     L3 (CPC) reject -> back to L2 (PC MKTG-HOD)
+      ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
       APPEND ls_text TO lt_text.
-      lv_sub = p_subject.
+      ls_text-line = |for your review. Please log in to T-Code YRVG004_A and re-check the records.|.
+      APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |With warm regards,|.                          APPEND ls_text TO lt_text.
+      ls_text-line = |GAIL (INDIA) LTD.|.                           APPEND ls_text TO lt_text.
+      ls_text-line = ||.                                            APPEND ls_text TO lt_text.
+      ls_text-line = |This is a system generated mail. Please do not reply.|.
+      APPEND ls_text TO lt_text.
+      lv_sub = 'CIS Scheme - Rebates returned by L3 for review'.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
@@ -376,7 +575,10 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
       ENDLOOP.
-      lo_send->send( ).
+*     force immediate delivery (do not leave the mail waiting in the
+*     SAPconnect / SOST queue) - GAIL 17.07.2026 "mail not going".
+      lo_send->set_send_immediately( 'X' ).
+      lo_send->send( i_with_error_screen = 'X' ).
       COMMIT WORK.
     CATCH cx_bcs.
   ENDTRY.
