@@ -245,8 +245,16 @@ FORM process_selected USING p_action TYPE char1.
         gs_appr-remarks   = 'Executed - order created'.
         MODIFY ycis_apprvl FROM gs_appr.
         lv_cnt = lv_cnt + 1.
+*       keep the row on the main grid and show the created rebate order
+        gs_out-order_no = lv_vbeln.
+        gs_out-remarks  = 'Executed - order created'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
       ELSE.
         lv_err = lv_err + 1.
+        gs_out-remarks = 'Order creation failed'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
       ENDIF.
     ELSE.
       gs_appr-wf_status   = '20'.     " back to L2
@@ -268,10 +276,17 @@ FORM process_selected USING p_action TYPE char1.
       LOOP AT lt_office INTO lv_off.
         PERFORM send_mail USING '2' lv_off lv_off 'CIS rebates rejected by L3 - please review (L2)'.
       ENDLOOP.
+*     rejected rows leave L3 - remove them from the grid
+      DELETE gt_out WHERE sel = 'X'.
     ENDIF.
-    DELETE gt_out WHERE sel = 'X'.
   ENDIF.
-  MESSAGE |Processed: { lv_cnt }  Failed: { lv_err }| TYPE 'I'.
+* executed rows stay on the main grid with their Rebate Order number, so the
+* CPC user sees the full rebate-order list right after execution (visibility).
+  IF p_action = 'E'.
+    MESSAGE |{ lv_cnt } rebate order(s) created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
+  ELSE.
+    MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
