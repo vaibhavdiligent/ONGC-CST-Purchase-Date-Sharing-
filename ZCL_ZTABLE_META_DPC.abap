@@ -280,12 +280,13 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       CLEAR ls_row.
-      ls_row-tabname   = iv_tabname.
-      ls_row-row_no    = lv_rowno.
-      ls_row-data_json = /ui2/cl_json=>serialize(
-                           data        = <ls_data>
-                           compress    = abap_false
-                           pretty_name = /ui2/cl_json=>pretty_mode-none ).
+      ls_row-tabname     = iv_tabname.
+      ls_row-row_no      = lv_rowno.
+      ls_row-whereclause = iv_where.          " echo the applied filter
+      ls_row-data_json   = /ui2/cl_json=>serialize(
+                             data        = <ls_data>
+                             compress    = abap_false
+                             pretty_name = /ui2/cl_json=>pretty_mode-none ).
       APPEND ls_row TO rt_rows.
     ENDLOOP.
   ENDMETHOD.
