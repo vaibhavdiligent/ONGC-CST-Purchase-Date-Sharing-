@@ -335,9 +335,47 @@ FORM create_order USING p_appr TYPE ycis_apprvl
     CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
       EXPORTING
         wait = 'X'.
+*   Post-order updates that the original YRVG004 did after order creation:
+*   stamp the CIS period on the order (VBKD) and log the rebate (YRVA_REBATE).
+    PERFORM post_order_update USING p_appr w_vbeln.
   ELSE.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
   ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  post_order_update
+*&      Mirrors the YRVG004 post-processing: set the CIS period dates on
+*&      the created order (VBKD-BSTDK / BSTDK_E) and write the rebate log
+*&      table YRVA_REBATE. In the maker/checker flow this happens here, at
+*&      the final (L3 / CPC) approval - only after the order is created.
+*&---------------------------------------------------------------------*
+FORM post_order_update USING p_appr TYPE ycis_apprvl
+                             p_vbeln TYPE vbeln.
+  DATA: ls_reb TYPE yrva_rebate.
+
+* CIS period on the order document (reference dates)
+  UPDATE vbkd SET bstdk   = p_appr-period_from
+                  bstdk_e = p_appr-period_to
+            WHERE vbeln = p_vbeln.
+  COMMIT WORK AND WAIT.
+
+* rebate log
+  CLEAR ls_reb.
+  ls_reb-vbeln        = p_vbeln.
+  ls_reb-kunnr        = p_appr-kunnr.
+  ls_reb-vkbur        = p_appr-sales_off.
+  ls_reb-lft_qty      = p_appr-lft_qty.
+  ls_reb-rev_qty      = p_appr-elig_qty.
+  ls_reb-reb_cond     = p_appr-reb_cond.
+  ls_reb-ord_cond     = 'ZCMU'.
+  ls_reb-value        = p_appr-rebate_val.
+  ls_reb-yy_per_start = p_appr-period_from.
+  ls_reb-yy_per_end   = p_appr-period_to.
+  SELECT SINGLE kukla FROM kna1 INTO ls_reb-kukla
+    WHERE kunnr = p_appr-kunnr.
+  MODIFY yrva_rebate FROM ls_reb.
+  COMMIT WORK AND WAIT.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

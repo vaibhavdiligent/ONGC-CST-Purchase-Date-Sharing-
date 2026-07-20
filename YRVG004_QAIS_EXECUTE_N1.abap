@@ -11663,28 +11663,32 @@ FORM stage_all_rebates.
     LOOP AT it_data_quater.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
               it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
-              it_data_quater-tot_elgl_qty it_data_quater-remarks.
+              it_data_quater-tot_elgl_qty it_data_quater-remarks
+              it_data_quater-tot_grp_lift_qty 'ZQIS'.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_annual = 'X'.
     LOOP AT it_data_annual.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
               it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
-              it_data_annual-tot_elgl_qty it_data_annual-remarks.
+              it_data_annual-tot_elgl_qty it_data_annual-remarks
+              it_data_annual-grp_lift_qty 'ZAIS'.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_consis = 'X'.
     LOOP AT it_annual_consis.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
               it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
-              it_annual_consis-tot_elgl_qty it_annual_consis-remarks.
+              it_annual_consis-tot_elgl_qty it_annual_consis-remarks
+              it_annual_consis-grp_lift_qty 'ZACD'.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
     LOOP AT it_data_monthly.
       PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
-              it_data_monthly-tot_elgl_qty it_data_monthly-remarks.
+              it_data_monthly-tot_elgl_qty it_data_monthly-remarks
+              it_data_monthly-grp_lift_qty 'ZMIS'.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
@@ -11764,7 +11768,9 @@ FORM stage_one USING p_stype   TYPE char1
                      p_vkbur   TYPE vkbur
                      p_value   TYPE kbetr
                      p_qty     TYPE p
-                     p_remarks TYPE any.
+                     p_remarks TYPE any
+                     p_lift    TYPE p
+                     p_rebcond TYPE any.
   DATA: ls TYPE ycis_apprvl.
   CLEAR ls.
 *   best-effort CIS number for traceability
@@ -11794,6 +11800,8 @@ FORM stage_one USING p_stype   TYPE char1
   ls-target_qty  = p_qty * 1000.
   ls-elig_qty    = p_qty.
   ls-rebate_val  = p_value.
+  ls-lft_qty     = p_lift.               " lifted qty -> YRVA_REBATE at L3
+  ls-reb_cond    = p_rebcond.            " rebate condition -> YRVA_REBATE at L3
 *   audit / status  (L1 confirm -> pending L2)
   ls-status      = 'P'.
   ls-maker       = sy-uname.
