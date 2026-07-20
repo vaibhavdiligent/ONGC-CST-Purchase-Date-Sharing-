@@ -336,8 +336,10 @@ FORM create_order USING p_appr TYPE ycis_apprvl
       EXPORTING
         wait = 'X'.
 *   Post-order updates that the original YRVG004 did after order creation:
-*   stamp the CIS period on the order (VBKD) and log the rebate (YRVA_REBATE).
+*   stamp the CIS period on the order (VBKD), log the rebate (YRVA_REBATE)
+*   and write the sale order back into the CIS master (YRVA_QAIS_DATA / _M).
     PERFORM post_order_update USING p_appr w_vbeln.
+    PERFORM post_master_update USING p_appr w_vbeln.
   ELSE.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
   ENDIF.
@@ -375,6 +377,131 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
   SELECT SINGLE kukla FROM kna1 INTO ls_reb-kukla
     WHERE kunnr = p_appr-kunnr.
   MODIFY yrva_rebate FROM ls_reb.
+  COMMIT WORK AND WAIT.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  post_master_update
+*&      Write the created sale order back into the CIS master, mirroring
+*&      the original YRVG004:
+*&        Q -> YRVA_QAIS_DATA-SALE_ORDER_Qn      (n from the period)
+*&        A -> YRVA_QAIS_DATA-SO_ANNUAL
+*&        C -> YRVA_QAIS_DATA-SO_ANNUAL_CONSIT
+*&        M -> YRVA_QAIS_DATA-IND_ELGL_QTY_Mn and YRVA_QAIS_DATA_M
+*&             (MON_SO_Mn / MON_VALUE_Mn / IND_ELGL_QTY_Mn / MON_REMARKS_Mn)
+*&      Read-modify-write on the full row keeps every other field intact.
+*&      Quarter / month index are derived from the stored period, exactly
+*&      as the original derived them from the selection-screen period.
+*&---------------------------------------------------------------------*
+FORM post_master_update USING p_appr TYPE ycis_apprvl
+                              p_vbeln TYPE vbeln.
+  DATA: ls_q    TYPE yrva_qais_data,
+        ls_qm   TYPE yrva_qais_data_m,
+        lv_mm   TYPE i,
+        lv_idx  TYPE i,
+        lv_fld  TYPE string,
+        lv_ok   TYPE flag.
+  FIELD-SYMBOLS: <any> TYPE any.
+
+* locate the CIS master row (same business key the original used)
+  CLEAR: ls_q, lv_ok.
+  IF p_appr-qais_no IS NOT INITIAL.
+    SELECT SINGLE * FROM yrva_qais_data INTO ls_q
+      WHERE qais_no = p_appr-qais_no.
+    IF sy-subrc = 0.
+      lv_ok = 'X'.
+    ENDIF.
+  ENDIF.
+  IF lv_ok IS INITIAL.
+    SELECT SINGLE * FROM yrva_qais_data INTO ls_q
+      WHERE kunnr = p_appr-kunnr
+        AND kvgr2 = p_appr-kvgr2
+        AND vkbur = p_appr-sales_off.
+    IF sy-subrc = 0.
+      lv_ok = 'X'.
+    ENDIF.
+  ENDIF.
+  CHECK lv_ok = 'X'.
+
+  CASE p_appr-scheme_type.
+    WHEN 'Q'.
+      CASE p_appr-period_from+4(2).
+        WHEN '04'. lv_fld = 'SALE_ORDER_Q1'.
+        WHEN '07'. lv_fld = 'SALE_ORDER_Q2'.
+        WHEN '10'. lv_fld = 'SALE_ORDER_Q3'.
+        WHEN '01'. lv_fld = 'SALE_ORDER_Q4'.
+      ENDCASE.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+
+    WHEN 'A'.
+      ASSIGN COMPONENT 'SO_ANNUAL' OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+
+    WHEN 'C'.
+      ASSIGN COMPONENT 'SO_ANNUAL_CONSIT' OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+
+    WHEN 'M'.
+*     financial-year month index (Apr=1 ... Jun=3 ... Mar=12)
+      lv_mm = p_appr-period_to+4(2).
+      IF lv_mm >= 4.
+        lv_idx = lv_mm - 3.
+      ELSE.
+        lv_idx = lv_mm + 9.
+      ENDIF.
+*     main table : eligible qty for the month
+      lv_fld = |IND_ELGL_QTY_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_q TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-elig_qty.
+      ENDIF.
+      MODIFY yrva_qais_data FROM ls_q.
+*     detail table _M : order / value / qty / remarks for the month
+      CLEAR ls_qm.
+      SELECT SINGLE * FROM yrva_qais_data_m INTO ls_qm
+        WHERE kunnr = p_appr-kunnr
+          AND kvgr2 = p_appr-kvgr2
+          AND vkbur = p_appr-sales_off.
+      IF sy-subrc <> 0.
+        CLEAR ls_qm.
+        ls_qm-mandt   = sy-mandt.
+        ls_qm-qais_no = p_appr-qais_no.
+        ls_qm-kunnr   = p_appr-kunnr.
+        ls_qm-kvgr2   = p_appr-kvgr2.
+        ls_qm-vkbur   = p_appr-sales_off.
+      ENDIF.
+      lv_fld = |MON_SO_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_vbeln.
+      ENDIF.
+      lv_fld = |MON_VALUE_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-rebate_val.
+      ENDIF.
+      lv_fld = |IND_ELGL_QTY_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-elig_qty.
+      ENDIF.
+      lv_fld = |MON_REMARKS_M{ lv_idx }|.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_qm TO <any>.
+      IF sy-subrc = 0.
+        <any> = p_appr-purch_no.
+      ENDIF.
+      MODIFY yrva_qais_data_m FROM ls_qm.
+  ENDCASE.
   COMMIT WORK AND WAIT.
 ENDFORM.
 
