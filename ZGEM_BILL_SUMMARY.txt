@@ -411,7 +411,7 @@ IF r1 = 'X'.
   gv_token = token.
 
   IF token IS NOT INITIAL.
-    ls_cpi_request-user          = 'ONGCVIDESH'.
+    ls_cpi_request-user          = 'NBCCServices'.
     ls_cpi_request-method        = 'billSummary'.
     ls_cpi_request-buyer_user_id = 'OVLMM'.
     ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.

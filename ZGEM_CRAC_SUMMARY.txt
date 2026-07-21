@@ -195,7 +195,7 @@ gv_token = token.
 IF token IS NOT INITIAL.
 *--- Build the JSON request payload and call CPI directly (was: proxy call
 *    to lo_gem_cracsumm->SI_CRACSUMMARY_OB). Path/shape per ZGEM_CPI_CRAC_DETAILS.
-  ls_cpi_request-user          = 'ONGCVIDESH'.
+  ls_cpi_request-user          = 'NBCCServices'.
   ls_cpi_request-method        = 'cracSummary'.
   ls_cpi_request-buyer_user_id = 'OVLMM'.
   ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.

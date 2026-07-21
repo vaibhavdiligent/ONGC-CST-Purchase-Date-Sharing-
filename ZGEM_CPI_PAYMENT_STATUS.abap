@@ -25,7 +25,7 @@ CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
             p_head   TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
-            p_user   TYPE string LOWER CASE DEFAULT 'ONGCVIDESH',
+            p_user   TYPE string LOWER CASE DEFAULT 'NBCCServices',
             p_txnid  TYPE string LOWER CASE DEFAULT '173200477772237507927',  " transactionID
             p_status TYPE string LOWER CASE DEFAULT 'Success',
             p_paymby TYPE string LOWER CASE DEFAULT 'NEFT',                    " paymentBy

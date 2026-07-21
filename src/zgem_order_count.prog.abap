@@ -88,7 +88,7 @@ proxy_data-mt_security_token_sender-password  = '823090987ez07u8maz0z8789qn5a4a6
 
 *--- Build the JSON request payload and call CPI directly (was: proxy call
 *    to lo_gem_ordercount->si_order_count_ob).
-ls_request-user     = 'ONGCVIDESH'.
+ls_request-user     = 'NBCCServices'.
 ls_request-method   = 'orderCount'.                       " unverified
 ls_request-datefrom = datefrom.
 ls_request-dateto   = dateto.

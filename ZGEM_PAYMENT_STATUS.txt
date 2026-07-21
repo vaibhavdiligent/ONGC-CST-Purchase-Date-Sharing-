@@ -336,7 +336,7 @@ GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
 *    ty_cpi_paydata component names match pay_stat's field names), then
 *    serialize with the camelCase JSON keys the GeM API expects.
           CLEAR ls_cpi_request.
-          ls_cpi_request-user    = 'ONGCVIDESH'.
+          ls_cpi_request-user    = 'NBCCServices'.
           ls_cpi_request-method  = 'payments'.
           MOVE-CORRESPONDING pay_stat TO ls_cpi_request-paydata.
 

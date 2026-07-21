@@ -78,7 +78,7 @@ START-OF-SELECTION.
   gv_token = lt_input-mt_security_token_receiver-token.
 
   CLEAR ls_request.
-  ls_request-user          = 'ONGCVIDESH'.
+  ls_request-user          = 'NBCCServices'.
   ls_request-method        = 'cracServiceSummary'.
   ls_request-buyer_user_id = 'OVLMM'.
   ls_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
