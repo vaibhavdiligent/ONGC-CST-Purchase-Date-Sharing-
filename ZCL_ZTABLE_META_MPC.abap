@@ -55,8 +55,9 @@ CLASS zcl_ztable_meta_mpc DEFINITION
     TYPES: BEGIN OF ty_table_row,
              tabname     TYPE dfies-tabname,  " table / view name (key)
              row_no      TYPE i,              " 1-based record number (key)
-             data_json   TYPE string,         " whole record as JSON
+             data_json   TYPE string,         " selected record as JSON
              whereclause TYPE string,         " Open SQL WHERE applied (echo)
+             fields      TYPE string,         " selected field list (echo)
            END OF ty_table_row.
     TYPES tt_table_row TYPE STANDARD TABLE OF ty_table_row WITH DEFAULT KEY.
 
@@ -230,6 +231,18 @@ CLASS zcl_ztable_meta_mpc IMPLEMENTATION.
     " it during $filter validation. It is echoed back in the response.
     lo_property = lo_entity_type->create_property( iv_property_name  = 'WhereClause'
                                                    iv_abap_fieldname = 'WHERECLAUSE' ).
+    lo_property->set_type_edm_string( ).
+    lo_property->set_nullable( abap_true ).
+    lo_property->set_filterable( abap_true ).
+
+    " Optional column projection. The caller passes a comma-separated list
+    " of the table's own field names in this property via $filter, e.g.
+    "   $filter=Tabname eq 'MARA' and Fields eq 'MATNR,MTART,MEINS'
+    " Only those columns are selected and returned in DataJson. Field names
+    " are validated against the table's DDIC columns. Omit to return all
+    " columns (SELECT *). It is echoed back in the response.
+    lo_property = lo_entity_type->create_property( iv_property_name  = 'Fields'
+                                                   iv_abap_fieldname = 'FIELDS' ).
     lo_property->set_type_edm_string( ).
     lo_property->set_nullable( abap_true ).
     lo_property->set_filterable( abap_true ).
