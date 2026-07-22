@@ -80,12 +80,12 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
 
     " Item structure for the smartform - unchanged DDIC structure
     TYPES: BEGIN OF ty_item.
-             INCLUDE STRUCTURE zmseg2.
+             INCLUDE TYPE zmseg2.
     TYPES: END OF ty_item.
 
     " Created-by information for the smartform - unchanged DDIC structure
     TYPES: BEGIN OF ty_crea.
-             INCLUDE STRUCTURE znames.
+             INCLUDE TYPE znames.
     TYPES: END OF ty_crea.
 
     TYPES: BEGIN OF ty_mseg,
