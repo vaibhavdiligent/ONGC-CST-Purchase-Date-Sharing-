@@ -155,20 +155,52 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
              grtxt TYPE grtxt,
            END OF ty_t157e.
 
+    " Posting date lookup per document (hashed - O(1) access)
+    TYPES: BEGIN OF ty_doc_date,
+             mblnr TYPE mblnr,
+             mjahr TYPE mjahr,
+             budat TYPE budat,
+           END OF ty_doc_date.
+
+    " Buffer for batch classification - VB_BATCH_GET_DETAIL is executed
+    " only once per distinct material/batch instead of per item row
+    TYPES: BEGIN OF ty_batch_class,
+             matnr        TYPE matnr,
+             charg        TYPE charg_d,
+             atwtb        TYPE zmseg2-atwtb,
+             zretest_date TYPE zmseg2-zretest_date,
+             hersteller   TYPE zmseg2-hersteller,
+           END OF ty_batch_class.
+
     CONSTANTS gc_langu_en TYPE spras VALUE 'E'.  "kept from old program ('EN')
 
-    CLASS-DATA: gt_header   TYPE STANDARD TABLE OF ty_header,
-                gt_item     TYPE STANDARD TABLE OF ty_item,
-                gt_crea     TYPE STANDARD TABLE OF ty_crea,
-                gt_mseg     TYPE STANDARD TABLE OF ty_mseg,
-                gt_qals     TYPE STANDARD TABLE OF ty_qals,
-                gt_lifnr    TYPE STANDARD TABLE OF ty_supplier_batch,
-                gt_name1    TYPE STANDARD TABLE OF ty_name1,
-                gt_user     TYPE STANDARD TABLE OF ty_user,
-                gt_makt     TYPE STANDARD TABLE OF ty_makt,
-                gt_stor     TYPE STANDARD TABLE OF ty_stor,
-                gt_t156t    TYPE STANDARD TABLE OF ty_t156t,
-                gt_t157e    TYPE STANDARD TABLE OF ty_t157e.
+    CLASS-DATA: gt_header TYPE STANDARD TABLE OF ty_header,
+                gt_item   TYPE STANDARD TABLE OF ty_item,
+                gt_crea   TYPE STANDARD TABLE OF ty_crea,
+                gt_mseg   TYPE STANDARD TABLE OF ty_mseg.
+
+    " Lookup tables are SORTED/HASHED so every read in the item loop is
+    " O(log n)/O(1) instead of a full table scan
+    CLASS-DATA: gt_budat       TYPE HASHED TABLE OF ty_doc_date
+                                    WITH UNIQUE KEY mblnr mjahr,
+                gt_qals        TYPE SORTED TABLE OF ty_qals
+                                    WITH NON-UNIQUE KEY matnr charg,
+                gt_lifnr       TYPE SORTED TABLE OF ty_supplier_batch
+                                    WITH NON-UNIQUE KEY matnr charg,
+                gt_name1       TYPE SORTED TABLE OF ty_name1
+                                    WITH NON-UNIQUE KEY lifnr,
+                gt_user        TYPE SORTED TABLE OF ty_user
+                                    WITH NON-UNIQUE KEY bname,
+                gt_makt        TYPE SORTED TABLE OF ty_makt
+                                    WITH NON-UNIQUE KEY matnr,
+                gt_stor        TYPE SORTED TABLE OF ty_stor
+                                    WITH NON-UNIQUE KEY lgort,
+                gt_t156t       TYPE SORTED TABLE OF ty_t156t
+                                    WITH NON-UNIQUE KEY bwart,
+                gt_t157e       TYPE SORTED TABLE OF ty_t157e
+                                    WITH NON-UNIQUE KEY bwart grund,
+                gt_batch_class TYPE HASHED TABLE OF ty_batch_class
+                                    WITH UNIQUE KEY matnr charg.
 
     CLASS-METHODS:
       fetch_header,
@@ -242,6 +274,12 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
 
     " One header line per material document (as in the old program)
     DELETE ADJACENT DUPLICATES FROM gt_header COMPARING mblnr mjahr.
+
+    " Hashed posting-date lookup for the item loop
+    gt_budat = VALUE #( FOR ls_header IN gt_header
+                        ( mblnr = ls_header-mblnr
+                          mjahr = ls_header-mjahr
+                          budat = ls_header-budat ) ).
   ENDMETHOD.
 
 
@@ -341,9 +379,6 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
       WHERE lot~material = @gt_mseg-matnr
         AND lot~batch    = @gt_mseg-charg
       INTO TABLE @gt_qals.
-
-    " Latest inspection lot first (evaluated against posting date later)
-    SORT gt_qals BY enstehdat DESCENDING.
   ENDMETHOD.
 
 
@@ -410,32 +445,36 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
         WHERE supplier = @gt_qals-hersteller
         APPENDING TABLE @gt_name1.
     ENDIF.
-
-    SORT gt_name1 BY lifnr.
-    DELETE ADJACENT DUPLICATES FROM gt_name1 COMPARING lifnr.
   ENDMETHOD.
 
 
   METHOD build_items.
+    DATA lv_best_date TYPE qals-enstehdat.
+
     LOOP AT gt_mseg ASSIGNING FIELD-SYMBOL(<ls_mseg>).
       DATA(ls_item) = VALUE ty_item( ).
       MOVE-CORRESPONDING <ls_mseg> TO ls_item.
 
-      " Goods receipt vendor for the batch
+      " Goods receipt vendor for the batch (keyed read)
       ls_item-lifnr = VALUE #( gt_lifnr[ matnr = <ls_mseg>-matnr
                                          charg = <ls_mseg>-charg ]-lifnr
                                DEFAULT ls_item-lifnr ).
 
-      " AR number: latest inspection lot created on/before posting date
-      DATA(lv_budat) = VALUE budat( gt_header[ mblnr = <ls_mseg>-mblnr
-                                               mjahr = <ls_mseg>-mjahr ]-budat
+      " AR number: latest inspection lot created on/before posting date.
+      " gt_qals is keyed by matnr/charg, so only the few lots of this
+      " batch are touched instead of scanning the whole table.
+      DATA(lv_budat) = VALUE budat( gt_budat[ mblnr = <ls_mseg>-mblnr
+                                              mjahr = <ls_mseg>-mjahr ]-budat
                                     OPTIONAL ).
+      CLEAR lv_best_date.
       LOOP AT gt_qals ASSIGNING FIELD-SYMBOL(<ls_qals>)
-           WHERE enstehdat <= lv_budat
-             AND matnr      = <ls_mseg>-matnr
-             AND charg      = <ls_mseg>-charg.
-        ls_item-ar_no = <ls_qals>-ar_no.
-        EXIT.
+           WHERE matnr      = <ls_mseg>-matnr
+             AND charg      = <ls_mseg>-charg
+             AND enstehdat <= lv_budat.
+        IF <ls_qals>-enstehdat >= lv_best_date.
+          lv_best_date  = <ls_qals>-enstehdat.
+          ls_item-ar_no = <ls_qals>-ar_no.
+        ENDIF.
       ENDLOOP.
 
       " Rate with division-by-zero guard (old program dumped on qty 0)
@@ -477,36 +516,55 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
   METHOD read_batch_classification.
     DATA lt_batch TYPE STANDARD TABLE OF clbatch.
 
-    " VB_BATCH_GET_DETAIL is still the supported way to read batch
-    " classification data in S/4HANA on-premise.
-    CALL FUNCTION 'VB_BATCH_GET_DETAIL'
-      EXPORTING
-        matnr              = iv_matnr
-        charg              = iv_charg
-        get_classification = 'X'
-      TABLES
-        char_of_batch      = lt_batch
-      EXCEPTIONS
-        no_material        = 1
-        no_batch           = 2
-        no_plant           = 3
-        material_not_found = 4
-        plant_not_found    = 5
-        no_authority       = 6
-        batch_not_exist    = 7
-        lock_on_batch      = 8
-        OTHERS             = 9.
-    IF sy-subrc <> 0.
+    " Items without batch cannot have classification data - skip the FM
+    IF iv_charg IS INITIAL.
       RETURN.
     ENDIF.
 
-    cs_item-atwtb =
-      VALUE #( lt_batch[ atnam = 'ZMANUFACTURER_BATCH' ]-atwtb OPTIONAL ).
-    " conversion CHAR -> date type as in the ATC-remediated original
-    cs_item-zretest_date =
-      VALUE #( lt_batch[ atnam = 'ZRETEST_DATE' ]-atwtb OPTIONAL ).
-    cs_item-hersteller =
-      VALUE #( lt_batch[ atnam = 'ZMANUFACTURER' ]-atwtb OPTIONAL ).
+    " Buffered: the FM is called only once per distinct material/batch.
+    " The old program called it for every item row (incl. empty batches)
+    " which was the main runtime driver of the item loop.
+    READ TABLE gt_batch_class ASSIGNING FIELD-SYMBOL(<ls_cache>)
+         WITH TABLE KEY matnr = iv_matnr
+                        charg = iv_charg.
+    IF sy-subrc <> 0.
+      DATA(ls_cache) = VALUE ty_batch_class( matnr = iv_matnr
+                                             charg = iv_charg ).
+
+      " VB_BATCH_GET_DETAIL is still the supported way to read batch
+      " classification data in S/4HANA on-premise.
+      CALL FUNCTION 'VB_BATCH_GET_DETAIL'
+        EXPORTING
+          matnr              = iv_matnr
+          charg              = iv_charg
+          get_classification = 'X'
+        TABLES
+          char_of_batch      = lt_batch
+        EXCEPTIONS
+          no_material        = 1
+          no_batch           = 2
+          no_plant           = 3
+          material_not_found = 4
+          plant_not_found    = 5
+          no_authority       = 6
+          batch_not_exist    = 7
+          lock_on_batch      = 8
+          OTHERS             = 9.
+      IF sy-subrc = 0.
+        ls_cache-atwtb =
+          VALUE #( lt_batch[ atnam = 'ZMANUFACTURER_BATCH' ]-atwtb OPTIONAL ).
+        " conversion CHAR -> date type as in the ATC-remediated original
+        ls_cache-zretest_date =
+          VALUE #( lt_batch[ atnam = 'ZRETEST_DATE' ]-atwtb OPTIONAL ).
+        ls_cache-hersteller =
+          VALUE #( lt_batch[ atnam = 'ZMANUFACTURER' ]-atwtb OPTIONAL ).
+      ENDIF.
+      INSERT ls_cache INTO TABLE gt_batch_class ASSIGNING <ls_cache>.
+    ENDIF.
+
+    cs_item-atwtb        = <ls_cache>-atwtb.
+    cs_item-zretest_date = <ls_cache>-zretest_date.
+    cs_item-hersteller   = <ls_cache>-hersteller.
   ENDMETHOD.
 
 
