@@ -48,7 +48,7 @@ FORM get_data.
       EXIT.
     ENDSELECT.
 
-    APPEND ls_final_ext TO lt_final_ext.
+    INSERT ls_final_ext INTO TABLE lt_final_ext.
   ENDLOOP.
 ENDFORM.
 

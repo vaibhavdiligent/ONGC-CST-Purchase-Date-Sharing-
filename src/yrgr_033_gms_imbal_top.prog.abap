@@ -77,7 +77,7 @@ TYPES: BEGIN OF ty_final_ext.
   INCLUDE TYPE ty_action_cols     AS action.
 TYPES: END OF ty_final_ext.
 
-DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext WITH DEFAULT KEY,
+DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext,
       ls_final_ext TYPE ty_final_ext.
 
 *----------------------------------------------------------------------*
