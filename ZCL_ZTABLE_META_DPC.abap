@@ -123,7 +123,11 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     CASE iv_entity_set_name.
 
       WHEN 'TableStructureSet'.
-        DATA(lt_fields) = me->read_structure( lv_tabname ).
+        " read_structure expects a single table name (C30); the structure
+        " endpoint is always a single table, so convert from the string.
+        DATA lv_struct_tab TYPE tabname.
+        lv_struct_tab = lv_tabname.
+        DATA(lt_fields) = me->read_structure( lv_struct_tab ).
         copy_data_to_ref( EXPORTING is_data = lt_fields
                           CHANGING  cr_data = er_entityset ).
 
