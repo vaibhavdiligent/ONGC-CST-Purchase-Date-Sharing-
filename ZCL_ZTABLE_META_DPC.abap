@@ -38,10 +38,10 @@ CLASS zcl_ztable_meta_dpc DEFINITION
     CONSTANTS gc_default_max_rows TYPE i VALUE 1000.   " cap when no $top sent
     CONSTANTS gc_hard_max_rows    TYPE i VALUE 50000.  " absolute ceiling
 
-    " Extract the requested table name from the $filter select options.
+    " Extract the requested table name (or comma list) from $filter.
     METHODS get_tabname_from_filter
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
-      RETURNING VALUE(rv_tabname)        TYPE tabname.
+      RETURNING VALUE(rv_tabname)        TYPE string.
 
     " Extract the optional WhereClause filter (Open SQL restriction).
     METHODS get_where_from_filter
@@ -53,6 +53,11 @@ CLASS zcl_ztable_meta_dpc DEFINITION
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
       RETURNING VALUE(rv_fields)         TYPE string.
 
+    " Extract the optional Join filter (join FROM expression).
+    METHODS get_join_from_filter
+      IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
+      RETURNING VALUE(rv_join)           TYPE string.
+
     " Build a reduced internal table containing only the requested fields
     " (validated against the table's DDIC columns) plus the column list.
     METHODS build_field_projection
@@ -62,14 +67,23 @@ CLASS zcl_ztable_meta_dpc DEFINITION
                 er_table   TYPE REF TO data
       RAISING   /iwbep/cx_mgw_busi_exception.
 
+    " Build the result table for a join from qualified TAB~FIELD AS ALIAS
+    " specs, resolving each field's type from its source table's DDIC.
+    METHODS build_join_projection
+      IMPORTING iv_tables TYPE string
+                iv_fields TYPE string
+      EXPORTING et_cols   TYPE string_table
+                er_table  TYPE REF TO data
+      RAISING   /iwbep/cx_mgw_busi_exception.
+
     " Raise a business exception with a single message text.
     METHODS raise_error
       IMPORTING iv_text TYPE string
       RAISING   /iwbep/cx_mgw_busi_exception.
 
-    " Check display authorisation for the table (S_TABU_NAM).
+    " Check display authorisation for each table in the (comma) list.
     METHODS check_table_authority
-      IMPORTING iv_tabname TYPE tabname
+      IMPORTING iv_tables TYPE string
       RAISING   /iwbep/cx_mgw_busi_exception.
 
     " Read DDIC field metadata for the table.
@@ -80,11 +94,12 @@ CLASS zcl_ztable_meta_dpc DEFINITION
 
     " Read table data dynamically and serialise each row to JSON.
     METHODS read_data
-      IMPORTING iv_tabname     TYPE tabname
+      IMPORTING iv_tabname     TYPE string
                 iv_top         TYPE i
                 iv_skip        TYPE i
                 iv_where       TYPE string OPTIONAL
                 iv_fields      TYPE string OPTIONAL
+                iv_join        TYPE string OPTIONAL
       RETURNING VALUE(rt_rows) TYPE zcl_ztable_meta_mpc=>tt_table_row
       RAISING   /iwbep/cx_mgw_busi_exception.
 ENDCLASS.
@@ -125,12 +140,14 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
         DATA(lv_where)  = me->get_where_from_filter( it_filter_select_options ).
         DATA(lv_fields) = me->get_fields_from_filter( it_filter_select_options ).
+        DATA(lv_join)   = me->get_join_from_filter( it_filter_select_options ).
 
         DATA(lt_rows) = me->read_data( iv_tabname = lv_tabname
                                        iv_top     = lv_top
                                        iv_skip    = lv_skip
                                        iv_where   = lv_where
-                                       iv_fields  = lv_fields ).
+                                       iv_fields  = lv_fields
+                                       iv_join    = lv_join ).
         copy_data_to_ref( EXPORTING is_data = lt_rows
                           CHANGING  cr_data = er_entityset ).
 
@@ -228,13 +245,140 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD check_table_authority.
-    AUTHORITY-CHECK OBJECT 'S_TABU_NAM'
-      ID 'ACTVT' FIELD '03'
-      ID 'TABLE' FIELD iv_tabname.
-    IF sy-subrc <> 0.
-      me->raise_error( |No display authorisation (S_TABU_NAM) for table { iv_tabname }.| ).
+  METHOD get_join_from_filter.
+    " Optional property Join carries the join FROM expression, e.g.
+    " Join eq 'VBAK INNER JOIN VBAP ON VBAK~VBELN = VBAP~VBELN'.
+    LOOP AT it_filter_select_options ASSIGNING FIELD-SYMBOL(<ls_filter>).
+      IF <ls_filter>-property = 'JOIN' OR <ls_filter>-property = 'Join'.
+        READ TABLE <ls_filter>-select_options ASSIGNING FIELD-SYMBOL(<ls_range>) INDEX 1.
+        IF sy-subrc = 0.
+          rv_join = <ls_range>-low.
+          RETURN.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD build_join_projection.
+    " Fields are qualified specs: TAB~FIELD [AS ALIAS], comma separated.
+    " Every referenced table must be in the Tabname list; every field must
+    " exist in its table. Build a flat result structure keyed by the alias.
+    DATA lt_specs   TYPE STANDARD TABLE OF string.
+    DATA lt_allowed TYPE STANDARD TABLE OF string.
+    DATA lt_comp    TYPE cl_abap_structdescr=>component_table.
+    DATA ls_comp    TYPE abap_componentdescr.
+    DATA lo_struct  TYPE REF TO cl_abap_structdescr.
+    DATA lv_tabname TYPE tabname.
+    DATA lv_off     TYPE i.
+
+    SPLIT iv_tables AT ',' INTO TABLE lt_allowed.
+    LOOP AT lt_allowed ASSIGNING FIELD-SYMBOL(<lv_a>).
+      CONDENSE <lv_a>.
+      <lv_a> = to_upper( <lv_a> ).
+    ENDLOOP.
+
+    SPLIT iv_fields AT ',' INTO TABLE lt_specs.
+    LOOP AT lt_specs INTO DATA(lv_spec).
+      CONDENSE lv_spec.
+      IF lv_spec IS INITIAL.
+        CONTINUE.
+      ENDIF.
+
+      " Separate the optional  ' AS <alias>'  suffix.
+      DATA lv_src   TYPE string.
+      DATA lv_alias TYPE string.
+      CLEAR: lv_src, lv_alias.
+      DATA(lv_up) = to_upper( lv_spec ).
+      FIND FIRST OCCURRENCE OF ` AS ` IN lv_up MATCH OFFSET lv_off.
+      IF sy-subrc = 0.
+        lv_src   = lv_spec(lv_off).
+        lv_alias = lv_spec+lv_off.
+        SHIFT lv_alias LEFT BY 4 PLACES.       " drop ' AS '
+      ELSE.
+        lv_src = lv_spec.
+      ENDIF.
+      CONDENSE lv_src.
+      CONDENSE lv_alias.
+
+      " Split TAB~FIELD.
+      DATA lv_tab   TYPE string.
+      DATA lv_field TYPE string.
+      IF lv_src CS '~'.
+        SPLIT lv_src AT '~' INTO lv_tab lv_field.
+        CONDENSE lv_tab.
+        CONDENSE lv_field.
+      ELSE.
+        me->raise_error( |Join field '{ lv_spec }' must be qualified as TABLE~FIELD.| ).
+      ENDIF.
+
+      " Table must be one of the declared (authorised) tables.
+      DATA(lv_tab_up) = to_upper( lv_tab ).
+      READ TABLE lt_allowed TRANSPORTING NO FIELDS WITH KEY table_line = lv_tab_up.
+      IF sy-subrc <> 0.
+        me->raise_error( |Table { lv_tab } (field { lv_field }) is not in the Tabname list.| ).
+      ENDIF.
+
+      " Resolve the field's type from its table.
+      lv_tabname = lv_tab_up.
+      TRY.
+          lo_struct ?= cl_abap_typedescr=>describe_by_name( lv_tabname ).
+        CATCH cx_root.
+          me->raise_error( |Cannot describe table { lv_tab }.| ).
+      ENDTRY.
+      DATA(lt_all) = lo_struct->get_components( ).
+      DATA lv_fld_cn TYPE abap_compname.
+      lv_fld_cn = to_upper( lv_field ).
+      READ TABLE lt_all WITH KEY name = lv_fld_cn INTO DATA(ls_src).
+      IF sy-subrc <> 0.
+        me->raise_error( |Field { lv_field } does not exist in { lv_tab }.| ).
+      ENDIF.
+
+      IF lv_alias IS INITIAL.
+        lv_alias = lv_field.
+      ENDIF.
+      DATA(lv_alias_up) = to_upper( lv_alias ).
+
+      CLEAR ls_comp.
+      ls_comp-name = lv_alias_up.
+      ls_comp-type = ls_src-type.
+      APPEND ls_comp TO lt_comp.
+
+      APPEND |{ lv_tab }~{ lv_field } AS { lv_alias_up }| TO et_cols.
+    ENDLOOP.
+
+    IF lt_comp IS INITIAL.
+      me->raise_error( |No valid fields supplied for the join.| ).
     ENDIF.
+
+    TRY.
+        DATA(lo_row_struct) = cl_abap_structdescr=>get( lt_comp ).
+        DATA(lo_row_table)  = cl_abap_tabledescr=>create( lo_row_struct ).
+        CREATE DATA er_table TYPE HANDLE lo_row_table.
+      CATCH cx_root.
+        me->raise_error( |Cannot build the join result (duplicate alias in Fields?).| ).
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD check_table_authority.
+    " iv_tables may be a single table or a comma-separated list (join).
+    DATA lt_tab TYPE STANDARD TABLE OF string.
+    SPLIT iv_tables AT ',' INTO TABLE lt_tab.
+    LOOP AT lt_tab INTO DATA(lv_t).
+      CONDENSE lv_t.
+      IF lv_t IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      DATA lv_tabnam TYPE tabname.
+      lv_tabnam = to_upper( lv_t ).
+      AUTHORITY-CHECK OBJECT 'S_TABU_NAM'
+        ID 'ACTVT' FIELD '03'
+        ID 'TABLE' FIELD lv_tabnam.
+      IF sy-subrc <> 0.
+        me->raise_error( |No display authorisation (S_TABU_NAM) for table { lv_tabnam }.| ).
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
 
@@ -291,43 +435,10 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE,
                    <ls_data> TYPE any.
 
-    " Make sure the object exists and is readable via Open SQL
-    " (transparent / pooled / cluster table or a DDIC view).
-    SELECT SINGLE tabname FROM dd02l INTO @DATA(lv_dummy)
-      WHERE tabname  = @iv_tabname
-        AND tabclass IN ( 'TRANSP', 'POOL', 'CLUSTER', 'VIEW' ).
-    IF sy-subrc <> 0.
-      SELECT SINGLE viewname FROM dd25l INTO @DATA(lv_vdummy)
-        WHERE viewname = @iv_tabname.
-      IF sy-subrc <> 0.
-        me->raise_error( |{ iv_tabname } is not a selectable table or view.| ).
-      ENDIF.
-    ENDIF.
-
-    " Build the target internal table. With a Fields projection it holds
-    " only the requested columns; otherwise it is the full table row type.
-    DATA lt_cols TYPE string_table.        " selected column list (empty = all)
-    IF iv_fields IS NOT INITIAL.
-      me->build_field_projection(
-        EXPORTING iv_tabname = iv_tabname
-                  iv_fields  = iv_fields
-        IMPORTING et_cols    = lt_cols
-                  er_table   = lr_table ).
-    ELSE.
-      TRY.
-          CREATE DATA lr_table TYPE STANDARD TABLE OF (iv_tabname).
-        CATCH cx_sy_create_data_error.
-          me->raise_error( |Cannot build a work area for { iv_tabname }.| ).
-      ENDTRY.
-    ENDIF.
-
-    ASSIGN lr_table->* TO <lt_data>.
-
-    " Dynamic read with paging. UP TO n ROWS caps the result set;
-    " skipping is done in ABAP after fetch (portable across DBs).
+    " Paging cap. UP TO n ROWS caps the result set; skipping is done in
+    " ABAP after fetch (portable across DBs).
     DATA lv_fetch TYPE i.
     lv_fetch = iv_top + iv_skip.
-    " Never fetch more than the hard ceiling in a single call.
     IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
       lv_fetch = gc_hard_max_rows.
     ENDIF.
@@ -339,16 +450,61 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
       APPEND iv_where TO lt_where.
     ENDIF.
 
-    " An empty column list in SELECT (lt_cols) reads all columns (SELECT *).
-    " INTO CORRESPONDING FIELDS maps the selected columns to same-named
-    " components of the (reduced or full) target structure.
+    DATA lt_cols TYPE string_table.   " selected column list (empty = all)
+    DATA lv_from TYPE string.         " single table OR the join expression
+
+    IF iv_join IS NOT INITIAL.
+      "--- JOIN mode: Fields is mandatory and must be TAB~FIELD [AS ALIAS];
+      "    the join expression itself becomes the dynamic FROM clause.
+      IF iv_fields IS INITIAL.
+        me->raise_error( |Fields (qualified TAB~FIELD AS ALIAS) is mandatory for a join.| ).
+      ENDIF.
+      me->build_join_projection(
+        EXPORTING iv_tables = iv_tabname
+                  iv_fields = iv_fields
+        IMPORTING et_cols   = lt_cols
+                  er_table  = lr_table ).
+      lv_from = iv_join.
+    ELSE.
+      "--- Single-table mode (behaviour unchanged).
+      DATA lv_single TYPE tabname.
+      lv_single = iv_tabname.
+      SELECT SINGLE tabname FROM dd02l INTO @DATA(lv_dummy)
+        WHERE tabname  = @lv_single
+          AND tabclass IN ( 'TRANSP', 'POOL', 'CLUSTER', 'VIEW' ).
+      IF sy-subrc <> 0.
+        SELECT SINGLE viewname FROM dd25l INTO @DATA(lv_vdummy)
+          WHERE viewname = @lv_single.
+        IF sy-subrc <> 0.
+          me->raise_error( |{ lv_single } is not a selectable table or view.| ).
+        ENDIF.
+      ENDIF.
+      IF iv_fields IS NOT INITIAL.
+        me->build_field_projection(
+          EXPORTING iv_tabname = lv_single
+                    iv_fields  = iv_fields
+          IMPORTING et_cols    = lt_cols
+                    er_table   = lr_table ).
+      ELSE.
+        TRY.
+            CREATE DATA lr_table TYPE STANDARD TABLE OF (lv_single).
+          CATCH cx_sy_create_data_error.
+            me->raise_error( |Cannot build a work area for { lv_single }.| ).
+        ENDTRY.
+      ENDIF.
+      lv_from = lv_single.
+    ENDIF.
+
+    ASSIGN lr_table->* TO <lt_data>.
+
+    " Dynamic read. Empty lt_cols = all columns; empty lt_where = all rows.
     TRY.
-        SELECT (lt_cols) FROM (iv_tabname)
+        SELECT (lt_cols) FROM (lv_from)
           INTO CORRESPONDING FIELDS OF TABLE <lt_data>
           UP TO lv_fetch ROWS
           WHERE (lt_where).
       CATCH cx_sy_dynamic_osql_error INTO DATA(lx_sql).
-        me->raise_error( |Read failed for { iv_tabname }: { lx_sql->get_text( ) }| ).
+        me->raise_error( |Read failed: { lx_sql->get_text( ) }| ).
     ENDTRY.
 
     LOOP AT <lt_data> ASSIGNING <ls_data>.
@@ -362,6 +518,7 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
       ls_row-row_no      = lv_rowno.
       ls_row-whereclause = iv_where.          " echo the applied filter
       ls_row-fields      = iv_fields.         " echo the selected fields
+      ls_row-join        = iv_join.           " echo the join expression
       ls_row-data_json   = /ui2/cl_json=>serialize(
                              data        = <ls_data>
                              compress    = abap_false
