@@ -66,15 +66,23 @@ DATA: lv_fn_from_day TYPE c LENGTH 2,
 *       the Action Taken save/read logic can be activated.
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_action_cols,
-         at_chkbox  TYPE c LENGTH 1,   " Action Taken flag (X = action done)
-         at_sal_ord TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
-         at_qty     TYPE char20,         " Quantity   (from YRG_IMB_ACTION)
-         at_remarks TYPE char255,       " Remarks    (from YRG_IMB_ACTION)
+         at_chkbox   TYPE c LENGTH 1,   " Action Taken flag (X = action done)
+         at_sal_ord  TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
+         at_qty      TYPE char20,        " Quantity   (from YRG_IMB_ACTION)
+         at_remarks  TYPE char255,       " Remarks    (from YRG_IMB_ACTION)
+         at_changed  TYPE c LENGTH 1,   " 'X' = row was edited in R4 mode
        END OF ty_action_cols.
+
+" Display-only fields: cell style (editability) + cell colour (SO error)
+TYPES: BEGIN OF ty_display_cols,
+         cell      TYPE lvc_t_styl,     " stylefname='CELL': Not Posted rows disabled
+         cellcolor TYPE lvc_t_scol,     " ctab_fname='CELLCOLOR': SO error in red
+       END OF ty_display_cols.
 
 TYPES: BEGIN OF ty_final_ext.
   INCLUDE TYPE yrx_imb_settle_qty AS base.
   INCLUDE TYPE ty_action_cols     AS action.
+  INCLUDE TYPE ty_display_cols    AS disp.
 TYPES: END OF ty_final_ext.
 
 DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext,

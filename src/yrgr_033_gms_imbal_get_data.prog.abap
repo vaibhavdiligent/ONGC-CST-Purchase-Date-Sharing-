@@ -32,12 +32,14 @@ FORM get_data.
   ENDIF.
 
   " Copy lt_final into lt_final_ext and augment with Action Taken data
+  DATA: lv_at_qty TYPE menge_d,     " QUAN to match AT_QTY in YRG_IMB_ACTION
+        ls_styl   TYPE lvc_s_styl.  " Cell style work area
+
   LOOP AT lt_final INTO ls_final.
     CLEAR ls_final_ext.
     MOVE-CORRESPONDING ls_final TO ls_final_ext.
 
-    " Read latest Action Taken entry from YRG_IMB_ACTION (most recent by date+time)
-    DATA: lv_at_qty TYPE menge_d.   " QUAN to match AT_QTY column in YRG_IMB_ACTION
+    " Read latest Action Taken entry (most recent by date+time)
     SELECT chkbox at_sal_ord at_qty at_remarks
       FROM yrg_imb_action
       INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
@@ -47,6 +49,15 @@ FORM get_data.
       ls_final_ext-at_qty = lv_at_qty.
       EXIT.
     ENDSELECT.
+
+    " R4 mode: disable AT columns for 'Not Posted' rows (no action possible)
+    IF r4 EQ 'X' AND ls_final-stat = 'Not Posted'.
+      ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+      ls_styl-fieldname = 'AT_CHKBOX'.  APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_SAL_ORD'. APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_QTY'.     APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_REMARKS'. APPEND ls_styl TO ls_final_ext-cell.
+    ENDIF.
 
     INSERT ls_final_ext INTO TABLE lt_final_ext.
   ENDLOOP.
@@ -142,6 +153,7 @@ FORM display.
       EXPORTING id = 1 height = 24.
     CREATE OBJECT grid EXPORTING i_parent = dg_parent_grid.
     gs_layout-stylefname = 'CELL'.
+    gs_layout-ctab_fname = 'CELLCOLOR'.
     SET HANDLER lcl_event_handler=>top_of_page FOR grid.
     SET HANDLER lcl_event_handler=>toolbar      FOR grid.
     SET HANDLER lcl_event_handler=>user_command FOR grid.
@@ -898,30 +910,59 @@ ENDFORM.
 *& Activate the INSERT statements below after SE11 table creation.
 *&---------------------------------------------------------------------*
 FORM save_action_taken.
-  DATA: lv_saved_count TYPE i VALUE 0.
+  DATA: lv_saved_count TYPE i VALUE 0,
+        lv_error_count TYPE i VALUE 0,
+        ls_imb_action  TYPE yrg_imb_action,
+        ls_scol        TYPE lvc_s_scol.
 
-  " First collect all current data from the ALV grid
+  " Sync any pending ALV cell edits to the internal table
   CALL METHOD grid->check_changed_data.
 
-  DATA: ls_imb_action TYPE yrg_imb_action.
+  " --- Pass 1: SO validation -----------------------------------------------
+  " Clear previous error highlights; for changed rows with a filled SO,
+  " verify the SO exists in VBPA. Mark invalid cells red and count errors.
+  LOOP AT lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_val>).
+    DELETE <fs_val>-cellcolor WHERE fname = 'AT_SAL_ORD'.  " clear old highlight
 
-  LOOP AT lt_final_ext INTO ls_final_ext.
+    CHECK <fs_val>-at_changed EQ 'X'.           " only validate edited rows
+    CHECK <fs_val>-at_sal_ord IS NOT INITIAL.   " only if SO was entered
+
+    SELECT SINGLE vbeln FROM vbpa
+      INTO @DATA(lv_dummy_vbpa)
+      WHERE vbeln = @<fs_val>-at_sal_ord.
+    IF sy-subrc NE 0.
+      CLEAR ls_scol.
+      ls_scol-fname     = 'AT_SAL_ORD'.
+      ls_scol-color-col = 6.  " Red
+      ls_scol-color-int = 1.
+      ls_scol-color-inv = 0.
+      APPEND ls_scol TO <fs_val>-cellcolor.
+      lv_error_count = lv_error_count + 1.
+    ENDIF.
+  ENDLOOP.
+
+  IF lv_error_count > 0.
+    CALL METHOD grid->refresh_table_display.
+    MESSAGE |SO not valid for { lv_error_count } row(s) – invalid cells marked red.| TYPE 'W'.
+    RETURN.
+  ENDIF.
+
+  " --- Pass 2: Save only changed rows ---------------------------------------
+  LOOP AT lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_sav>) WHERE at_changed = 'X'.
     CLEAR ls_imb_action.
-    ls_imb_action-docnr    = ls_final_ext-docnr.
+    ls_imb_action-docnr    = <fs_sav>-docnr.
     ls_imb_action-cpf_id   = sy-uname.
     ls_imb_action-saved_on = sy-datum.
     ls_imb_action-saved_at = sy-uzeit.
-    ls_imb_action-chkbox   = ls_final_ext-at_chkbox.
-    IF ls_final_ext-at_chkbox = 'X'.
-      ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
-      ls_imb_action-at_qty     = ls_final_ext-at_qty.    " CHAR20 -> QUAN implicit
-      ls_imb_action-at_remarks = ls_final_ext-at_remarks.
+    ls_imb_action-chkbox   = <fs_sav>-at_chkbox.
+    IF <fs_sav>-at_chkbox = 'X'.
+      ls_imb_action-at_sal_ord = <fs_sav>-at_sal_ord.
+      ls_imb_action-at_qty     = <fs_sav>-at_qty.
+      ls_imb_action-at_remarks = <fs_sav>-at_remarks.
     ENDIF.
     INSERT yrg_imb_action FROM ls_imb_action.
-
-    IF ls_final_ext-at_chkbox = 'X'.
-      lv_saved_count = lv_saved_count + 1.
-    ENDIF.
+    IF <fs_sav>-at_chkbox = 'X'. lv_saved_count = lv_saved_count + 1. ENDIF.
+    <fs_sav>-at_changed = ' '.   " clear flag so re-save doesn't duplicate
   ENDLOOP.
 
   IF lv_saved_count = 0.
@@ -946,14 +987,23 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
     IF sy-subrc <> 0. CONTINUE. ENDIF.
 
     CASE ls_mod-fieldname.
-      WHEN 'AT_CHKBOX'.  <fs_ext>-at_chkbox  = ls_mod-value.
-        " If unchecked, clear the related fields
+      WHEN 'AT_CHKBOX'.
+        <fs_ext>-at_chkbox  = ls_mod-value.
+        <fs_ext>-at_changed = 'X'.
         IF <fs_ext>-at_chkbox <> 'X'.
           CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
         ENDIF.
-      WHEN 'AT_SAL_ORD'. <fs_ext>-at_sal_ord = ls_mod-value.
-      WHEN 'AT_QTY'.     <fs_ext>-at_qty     = ls_mod-value.
-      WHEN 'AT_REMARKS'. <fs_ext>-at_remarks = ls_mod-value.
+      WHEN 'AT_SAL_ORD'.
+        <fs_ext>-at_sal_ord = ls_mod-value.
+        <fs_ext>-at_changed = 'X'.
+        " Clear previous SO validation error when user edits this cell
+        DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
+      WHEN 'AT_QTY'.
+        <fs_ext>-at_qty     = ls_mod-value.
+        <fs_ext>-at_changed = 'X'.
+      WHEN 'AT_REMARKS'.
+        <fs_ext>-at_remarks = ls_mod-value.
+        <fs_ext>-at_changed = 'X'.
     ENDCASE.
   ENDLOOP.
 
