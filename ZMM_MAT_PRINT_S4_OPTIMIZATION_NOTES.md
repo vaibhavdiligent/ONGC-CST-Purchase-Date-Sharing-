@@ -53,6 +53,27 @@ that read `MATDOC` directly.
 - Selection screen names (`S_MBLNR1`, `S_MJAHR1`) kept identical; year default is now
   the current year instead of hard-coded `2015`.
 
+## Performance tuning of the item loop (build_items)
+
+The runtime driver of the old program was inside the item loop. Fixes applied:
+
+1. **Bulk prefetch of batch classification** (`prefetch_batch_classification`):
+   the three characteristics `ZMANUFACTURER_BATCH`, `ZRETEST_DATE`, `ZMANUFACTURER`
+   are read for ALL batches of the selection in 4 set-based selects
+   (CABN → MCH1/MCHA `CUOBJ_BM` → AUSP) before the loop starts.
+   `VB_BATCH_GET_DETAIL` (previously called once per item row!) only remains as a
+   fallback for batches not found by the prefetch, and its result is cached per
+   material/batch. Items without a batch skip classification completely.
+2. **Keyed lookup tables**: all text/lookup buffers are `SORTED`/`HASHED` tables,
+   so every read inside the loop is a binary/hash key access instead of a full scan.
+3. **AR-number lookup**: `gt_qals` is keyed by `matnr, charg, enstehdat` — the kernel
+   binary-searches to the batch's lots, walks them in ascending date order and stops
+   at the posting date; the last visited row is the latest lot (no comparisons).
+4. **No SELECT inside the loop**: manufacturer names that only become known through
+   classification are resolved with one select after the loop
+   (`complete_manufacturer_names`) — the old program did a `SELECT SINGLE` on LFA1
+   per item row.
+
 ## Follow-up actions in the SAP system
 
 1. Create program `ZMM_MAT_PRINT_S4` from `ZMM_MAT_PRINT_S4.abap` (package `ZMM`),

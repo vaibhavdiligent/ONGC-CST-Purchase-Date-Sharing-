@@ -94,6 +94,7 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
              zeile TYPE mblpo,
              bwart TYPE bwart,
              matnr TYPE matnr,
+             werks TYPE werks_d,
              lgort TYPE lgort_d,
              charg TYPE charg_d,
              lifnr TYPE lifnr,
@@ -107,6 +108,21 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
              vfdat TYPE vfdat,
              hsdat TYPE hsdat,
            END OF ty_mseg.
+
+    " Distinct material/plant/batch combinations for the bulk
+    " classification prefetch
+    TYPES: BEGIN OF ty_batch_key,
+             matnr TYPE matnr,
+             charg TYPE charg_d,
+             werks TYPE werks_d,
+           END OF ty_batch_key.
+
+    " Classification object number -> material/batch
+    TYPES: BEGIN OF ty_clf_obj,
+             objek TYPE ausp-objek,
+             matnr TYPE matnr,
+             charg TYPE charg_d,
+           END OF ty_clf_obj.
 
     TYPES: BEGIN OF ty_qals,
              enstehdat  TYPE qals-enstehdat,
@@ -174,6 +190,11 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
 
     CONSTANTS gc_langu_en TYPE spras VALUE 'E'.  "kept from old program ('EN')
 
+    " Batch characteristics evaluated by the smartform
+    CONSTANTS: gc_charc_mfr_batch TYPE atnam VALUE 'ZMANUFACTURER_BATCH',
+               gc_charc_retest    TYPE atnam VALUE 'ZRETEST_DATE',
+               gc_charc_mfr       TYPE atnam VALUE 'ZMANUFACTURER'.
+
     CLASS-DATA: gt_header TYPE STANDARD TABLE OF ty_header,
                 gt_item   TYPE STANDARD TABLE OF ty_item,
                 gt_crea   TYPE STANDARD TABLE OF ty_crea,
@@ -184,7 +205,7 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
     CLASS-DATA: gt_budat       TYPE HASHED TABLE OF ty_doc_date
                                     WITH UNIQUE KEY mblnr mjahr,
                 gt_qals        TYPE SORTED TABLE OF ty_qals
-                                    WITH NON-UNIQUE KEY matnr charg,
+                                    WITH NON-UNIQUE KEY matnr charg enstehdat,
                 gt_lifnr       TYPE SORTED TABLE OF ty_supplier_batch
                                     WITH NON-UNIQUE KEY matnr charg,
                 gt_name1       TYPE SORTED TABLE OF ty_name1
@@ -209,11 +230,13 @@ CLASS lcl_mat_doc_print DEFINITION FINAL CREATE PRIVATE.
       build_created_by,
       fetch_items,
       fetch_item_texts,
+      prefetch_batch_classification,
       build_items,
       read_batch_classification
         IMPORTING iv_matnr TYPE matnr
                   iv_charg TYPE charg_d
         CHANGING  cs_item  TYPE ty_item,
+      complete_manufacturer_names,
       call_smartform.
 
 ENDCLASS.
@@ -235,7 +258,9 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
     build_created_by( ).
     fetch_items( ).
     fetch_item_texts( ).
+    prefetch_batch_classification( ).
     build_items( ).
+    complete_manufacturer_names( ).
     call_smartform( ).
   ENDMETHOD.
 
@@ -330,6 +355,7 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
              materialdocumentitem     AS zeile,
              goodsmovementtype        AS bwart,
              material                 AS matnr,
+             plant                    AS werks,
              storagelocation          AS lgort,
              batch                    AS charg,
              supplier                 AS lifnr,
@@ -448,9 +474,135 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD build_items.
-    DATA lv_best_date TYPE qals-enstehdat.
+  METHOD prefetch_batch_classification.
+    " Reads the three batch characteristics for ALL batches of the
+    " selection in a handful of set-based selects (CABN -> MCH1/MCHA
+    " internal classification object -> AUSP values) and fills the
+    " classification cache. VB_BATCH_GET_DETAIL then only runs as a
+    " fallback for batches that are not found here.
+    DATA: lt_keys   TYPE SORTED TABLE OF ty_batch_key
+                         WITH UNIQUE KEY matnr charg werks,
+          lt_objmap TYPE SORTED TABLE OF ty_clf_obj
+                         WITH NON-UNIQUE KEY objek,
+          lr_atinn  TYPE RANGE OF atinn.
 
+    DATA: lv_atinn_mfr_batch TYPE atinn,
+          lv_atinn_retest    TYPE atinn,
+          lv_atinn_mfr       TYPE atinn.
+
+    " Distinct material/batch/plant combinations
+    LOOP AT gt_mseg ASSIGNING FIELD-SYMBOL(<ls_mseg>)
+         WHERE charg IS NOT INITIAL.
+      INSERT VALUE #( matnr = <ls_mseg>-matnr
+                      charg = <ls_mseg>-charg
+                      werks = <ls_mseg>-werks ) INTO TABLE lt_keys.
+    ENDLOOP.
+    IF lt_keys IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " Internal characteristic numbers
+    SELECT atinn, atnam
+      FROM cabn
+      WHERE atnam IN ( @gc_charc_mfr_batch, @gc_charc_retest,
+                       @gc_charc_mfr )
+      INTO TABLE @DATA(lt_cabn).
+    IF lt_cabn IS INITIAL.
+      RETURN.
+    ENDIF.
+    LOOP AT lt_cabn INTO DATA(ls_cabn).
+      CASE ls_cabn-atnam.
+        WHEN gc_charc_mfr_batch. lv_atinn_mfr_batch = ls_cabn-atinn.
+        WHEN gc_charc_retest.    lv_atinn_retest    = ls_cabn-atinn.
+        WHEN gc_charc_mfr.       lv_atinn_mfr       = ls_cabn-atinn.
+      ENDCASE.
+    ENDLOOP.
+    lr_atinn = VALUE #( FOR ls_c IN lt_cabn
+                        ( sign = 'I' option = 'EQ' low = ls_c-atinn ) ).
+
+    " Classification object numbers - batch level material (MCH1,
+    " class type 023) and batch level plant (MCHA, class type 022)
+    SELECT matnr, charg, cuobj_bm
+      FROM mch1
+      FOR ALL ENTRIES IN @lt_keys
+      WHERE matnr = @lt_keys-matnr
+        AND charg = @lt_keys-charg
+      INTO TABLE @DATA(lt_mch1).
+    LOOP AT lt_mch1 ASSIGNING FIELD-SYMBOL(<ls_mch1>)
+         WHERE cuobj_bm IS NOT INITIAL.
+      INSERT VALUE #( objek = <ls_mch1>-cuobj_bm
+                      matnr = <ls_mch1>-matnr
+                      charg = <ls_mch1>-charg ) INTO TABLE lt_objmap.
+    ENDLOOP.
+
+    SELECT matnr, werks, charg, cuobj_bm
+      FROM mcha
+      FOR ALL ENTRIES IN @lt_keys
+      WHERE matnr = @lt_keys-matnr
+        AND werks = @lt_keys-werks
+        AND charg = @lt_keys-charg
+      INTO TABLE @DATA(lt_mcha).
+    LOOP AT lt_mcha ASSIGNING FIELD-SYMBOL(<ls_mcha>)
+         WHERE cuobj_bm IS NOT INITIAL.
+      INSERT VALUE #( objek = <ls_mcha>-cuobj_bm
+                      matnr = <ls_mcha>-matnr
+                      charg = <ls_mcha>-charg ) INTO TABLE lt_objmap.
+    ENDLOOP.
+
+    IF lt_objmap IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " Seed the cache for every classified batch so the item loop never
+    " falls back to the FM for them (even if all values are empty)
+    LOOP AT lt_objmap ASSIGNING FIELD-SYMBOL(<ls_obj>).
+      INSERT VALUE ty_batch_class( matnr = <ls_obj>-matnr
+                                   charg = <ls_obj>-charg )
+             INTO TABLE gt_batch_class.
+    ENDLOOP.
+
+    " Characteristic values for all batches in one select
+    SELECT objek, atinn, atwrt, atflv
+      FROM ausp
+      FOR ALL ENTRIES IN @lt_objmap
+      WHERE objek  = @lt_objmap-objek
+        AND atinn IN @lr_atinn
+        AND mafid  = 'O'
+        AND klart IN ( '022', '023' )
+      INTO TABLE @DATA(lt_ausp).
+
+    LOOP AT lt_ausp ASSIGNING FIELD-SYMBOL(<ls_ausp>).
+      LOOP AT lt_objmap ASSIGNING <ls_obj>
+           WHERE objek = <ls_ausp>-objek.
+        READ TABLE gt_batch_class ASSIGNING FIELD-SYMBOL(<ls_cache>)
+             WITH TABLE KEY matnr = <ls_obj>-matnr
+                            charg = <ls_obj>-charg.
+        CHECK sy-subrc = 0.
+        CASE <ls_ausp>-atinn.
+          WHEN lv_atinn_mfr_batch.
+            IF <ls_cache>-atwtb IS INITIAL.
+              <ls_cache>-atwtb = <ls_ausp>-atwrt.
+            ENDIF.
+          WHEN lv_atinn_retest.
+            IF <ls_cache>-zretest_date IS INITIAL.
+              IF <ls_ausp>-atwrt IS NOT INITIAL.
+                <ls_cache>-zretest_date = <ls_ausp>-atwrt.
+              ELSEIF <ls_ausp>-atflv <> 0.
+                " date characteristics store the value numerically
+                <ls_cache>-zretest_date = |{ CONV i( <ls_ausp>-atflv ) }|.
+              ENDIF.
+            ENDIF.
+          WHEN lv_atinn_mfr.
+            IF <ls_cache>-hersteller IS INITIAL.
+              <ls_cache>-hersteller = <ls_ausp>-atwrt.
+            ENDIF.
+        ENDCASE.
+      ENDLOOP.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD build_items.
     LOOP AT gt_mseg ASSIGNING FIELD-SYMBOL(<ls_mseg>).
       DATA(ls_item) = VALUE ty_item( ).
       MOVE-CORRESPONDING <ls_mseg> TO ls_item.
@@ -461,20 +613,18 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
                                DEFAULT ls_item-lifnr ).
 
       " AR number: latest inspection lot created on/before posting date.
-      " gt_qals is keyed by matnr/charg, so only the few lots of this
-      " batch are touched instead of scanning the whole table.
+      " gt_qals is keyed by matnr/charg/enstehdat: the kernel positions
+      " with a binary search, iterates the batch's lots in ascending
+      " date order and stops at the first date > budat - the last row
+      " visited is therefore the latest lot, no comparison needed.
       DATA(lv_budat) = VALUE budat( gt_budat[ mblnr = <ls_mseg>-mblnr
                                               mjahr = <ls_mseg>-mjahr ]-budat
                                     OPTIONAL ).
-      CLEAR lv_best_date.
       LOOP AT gt_qals ASSIGNING FIELD-SYMBOL(<ls_qals>)
            WHERE matnr      = <ls_mseg>-matnr
              AND charg      = <ls_mseg>-charg
              AND enstehdat <= lv_budat.
-        IF <ls_qals>-enstehdat >= lv_best_date.
-          lv_best_date  = <ls_qals>-enstehdat.
-          ls_item-ar_no = <ls_qals>-ar_no.
-        ENDIF.
+        ls_item-ar_no = <ls_qals>-ar_no.
       ENDLOOP.
 
       " Rate with division-by-zero guard (old program dumped on qty 0)
@@ -565,6 +715,36 @@ CLASS lcl_mat_doc_print IMPLEMENTATION.
     cs_item-atwtb        = <ls_cache>-atwtb.
     cs_item-zretest_date = <ls_cache>-zretest_date.
     cs_item-hersteller   = <ls_cache>-hersteller.
+  ENDMETHOD.
+
+
+  METHOD complete_manufacturer_names.
+    " Manufacturer numbers coming from batch classification may not be
+    " part of the gt_name1 buffer (which is built from the inspection
+    " lots). Resolve the missing names with ONE select after the loop -
+    " the old program did a SELECT SINGLE on LFA1 per item row instead.
+    DATA lt_lifnr TYPE SORTED TABLE OF lifnr WITH UNIQUE KEY table_line.
+
+    LOOP AT gt_item ASSIGNING FIELD-SYMBOL(<ls_item>)
+         WHERE name1 IS INITIAL AND hersteller IS NOT INITIAL.
+      INSERT CONV lifnr( <ls_item>-hersteller ) INTO TABLE lt_lifnr.
+    ENDLOOP.
+    IF lt_lifnr IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT FROM i_supplier
+      FIELDS supplier            AS lifnr,
+             organizationbpname1 AS name1
+      FOR ALL ENTRIES IN @lt_lifnr
+      WHERE supplier = @lt_lifnr-table_line
+      APPENDING TABLE @gt_name1.
+
+    LOOP AT gt_item ASSIGNING <ls_item>
+         WHERE name1 IS INITIAL AND hersteller IS NOT INITIAL.
+      <ls_item>-name1 = VALUE #( gt_name1[ lifnr = <ls_item>-hersteller ]-name1
+                                 OPTIONAL ).
+    ENDLOOP.
   ENDMETHOD.
 
 
