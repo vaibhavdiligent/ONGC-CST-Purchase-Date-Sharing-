@@ -399,7 +399,7 @@ IF r1 = 'X'.
 *    to lo_gem_ordersumm->si_order_summary_ob). Path/shape per ZGEM_CPI_ORDER_DETAILS.
     ls_cpi_request-user          = 'NBCCServices'.
     ls_cpi_request-method        = 'orderSummary'.
-    ls_cpi_request-buyer_user_id = 'OVLMM'.
+* buyer_user_id is OPTIONAL per GeM - intentionally omitted so GeM does not filter by an OVL buyer. Set a value here only if GeM requires it.
     ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
     ls_cpi_request-to_date       = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.
     ls_cpi_request-offset        = '0'.
