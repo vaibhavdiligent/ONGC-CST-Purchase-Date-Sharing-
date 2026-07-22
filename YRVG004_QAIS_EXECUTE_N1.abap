@@ -980,9 +980,11 @@ FORM validation .
         ENDIF.
       ENDIF.
       IF lv_siml NE 'X'.
-        IF s_sptag-high GT sy-datum.
-          MESSAGE 'End date can not be Future date' TYPE 'E' .
-        ENDIF.
+*       TESTING (GAIL UAT): future end-date check disabled on request.
+*       Restore the block below to re-enable it before go-live.
+*        IF s_sptag-high GT sy-datum.
+*          MESSAGE 'End date can not be Future date' TYPE 'E' .
+*        ENDIF.
       ENDIF.
     ELSEIF r_newcus = 'X' AND   "Vivek
         ( s_sptag-low+4(4) NE '0801' OR  s_sptag-high+4(4) NE '0331' ) .
