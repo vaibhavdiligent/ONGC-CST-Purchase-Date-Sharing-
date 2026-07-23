@@ -448,9 +448,18 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
     " Optional dynamic WHERE (table form avoids length limits). An empty
     " table means no restriction (all rows).
+    " Convenience: a double quote (") is accepted as the string-literal
+    " delimiter and translated to a single quote, so the caller can write
+    "   WhereClause eq 'MANDT = "100"'
+    " instead of doubling single quotes for OData
+    "   WhereClause eq 'MANDT = ''100'''
+    " (the doubled form still works - single quotes are left untouched).
     DATA lt_where TYPE STANDARD TABLE OF string.
     IF iv_where IS NOT INITIAL.
-      APPEND iv_where TO lt_where.
+      DATA lv_where TYPE string.
+      lv_where = iv_where.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_where WITH ''''.
+      APPEND lv_where TO lt_where.
     ENDIF.
 
     DATA lt_cols TYPE string_table.   " selected column list (empty = all)
@@ -468,6 +477,8 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         IMPORTING et_cols   = lt_cols
                   er_table  = lr_table ).
       lv_from = iv_join.
+      " Same convenience: allow " as string-literal delimiter in the join.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_from WITH ''''.
     ELSE.
       "--- Single-table mode (behaviour unchanged).
       DATA lv_single TYPE tabname.
