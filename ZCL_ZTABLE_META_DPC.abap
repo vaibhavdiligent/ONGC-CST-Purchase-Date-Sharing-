@@ -209,20 +209,18 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
 
   METHOD build_field_projection.
-    " Describe the table and validate every requested field against its
-    " real DDIC columns (whitelist -> no injection). Build a reduced
-    " structure/table containing only those fields, in the requested order.
-    DATA lo_struct TYPE REF TO cl_abap_structdescr.
-    DATA lt_names  TYPE STANDARD TABLE OF string.
-    DATA lt_comp   TYPE cl_abap_structdescr=>component_table.
-    DATA lv_cname  TYPE abap_compname.
+    " Validate every requested field and resolve its type through DDIC via
+    " 'TABLE-FIELD'. This also resolves fields that come from a .INCLUDE or
+    " append structure (which get_components does NOT flatten). Build a
+    " reduced result table with just those fields, in the requested order.
+    DATA lt_names TYPE STANDARD TABLE OF string.
+    DATA lt_comp  TYPE cl_abap_structdescr=>component_table.
+    DATA ls_comp  TYPE abap_componentdescr.
+    DATA lo_type  TYPE REF TO cl_abap_datadescr.
 
-    TRY.
-        lo_struct ?= cl_abap_typedescr=>describe_by_name( iv_tabname ).
-      CATCH cx_root.
-        me->raise_error( |Cannot describe structure of { iv_tabname }.| ).
-    ENDTRY.
-    DATA(lt_all) = lo_struct->get_components( ).
+    DATA lv_tab TYPE string.
+    lv_tab = iv_tabname.
+    CONDENSE lv_tab.
 
     SPLIT iv_fields AT ',' INTO TABLE lt_names.
     LOOP AT lt_names INTO DATA(lv_name).
@@ -230,22 +228,30 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
       IF lv_name IS INITIAL.
         CONTINUE.
       ENDIF.
-      lv_cname = to_upper( lv_name ).
-      READ TABLE lt_all WITH KEY name = lv_cname INTO DATA(ls_comp).
-      IF sy-subrc <> 0.
-        me->raise_error( |Field { lv_name } does not exist in { iv_tabname }.| ).
-      ENDIF.
+      DATA(lv_up) = to_upper( lv_name ).
+      TRY.
+          lo_type ?= cl_abap_typedescr=>describe_by_name( |{ lv_tab }-{ lv_up }| ).
+        CATCH cx_root.
+          me->raise_error( |Field { lv_name } does not exist in { iv_tabname }.| ).
+      ENDTRY.
+      CLEAR ls_comp.
+      ls_comp-name = lv_up.
+      ls_comp-type = lo_type.
       APPEND ls_comp TO lt_comp.
-      APPEND |{ ls_comp-name }| TO et_cols.
+      APPEND lv_up TO et_cols.
     ENDLOOP.
 
     IF lt_comp IS INITIAL.
       me->raise_error( |No valid fields supplied in the Fields parameter.| ).
     ENDIF.
 
-    DATA(lo_row_struct) = cl_abap_structdescr=>get( lt_comp ).
-    DATA(lo_row_table)  = cl_abap_tabledescr=>create( lo_row_struct ).
-    CREATE DATA er_table TYPE HANDLE lo_row_table.
+    TRY.
+        DATA(lo_row_struct) = cl_abap_structdescr=>get( lt_comp ).
+        DATA(lo_row_table)  = cl_abap_tabledescr=>create( lo_row_struct ).
+        CREATE DATA er_table TYPE HANDLE lo_row_table.
+      CATCH cx_root.
+        me->raise_error( |Cannot build the projection (duplicate field?).| ).
+    ENDTRY.
   ENDMETHOD.
 
 
@@ -272,8 +278,6 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     DATA lt_allowed TYPE STANDARD TABLE OF string.
     DATA lt_comp    TYPE cl_abap_structdescr=>component_table.
     DATA ls_comp    TYPE abap_componentdescr.
-    DATA lo_struct  TYPE REF TO cl_abap_structdescr.
-    DATA lv_tabname TYPE tabname.
     DATA lv_off     TYPE i.
 
     SPLIT iv_tables AT ',' INTO TABLE lt_allowed.
@@ -323,20 +327,15 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         me->raise_error( |Table { lv_tab } (field { lv_field }) is not in the Tabname list.| ).
       ENDIF.
 
-      " Resolve the field's type from its table.
-      lv_tabname = lv_tab_up.
+      " Resolve the field's type through DDIC via TABLE-FIELD (also resolves
+      " .INCLUDE / append fields, which get_components does not flatten).
+      DATA(lv_field_up) = to_upper( lv_field ).
+      DATA lo_ftype TYPE REF TO cl_abap_datadescr.
       TRY.
-          lo_struct ?= cl_abap_typedescr=>describe_by_name( lv_tabname ).
+          lo_ftype ?= cl_abap_typedescr=>describe_by_name( |{ lv_tab_up }-{ lv_field_up }| ).
         CATCH cx_root.
-          me->raise_error( |Cannot describe table { lv_tab }.| ).
+          me->raise_error( |Field { lv_field } does not exist in { lv_tab }.| ).
       ENDTRY.
-      DATA(lt_all) = lo_struct->get_components( ).
-      DATA lv_fld_cn TYPE abap_compname.
-      lv_fld_cn = to_upper( lv_field ).
-      READ TABLE lt_all WITH KEY name = lv_fld_cn INTO DATA(ls_src).
-      IF sy-subrc <> 0.
-        me->raise_error( |Field { lv_field } does not exist in { lv_tab }.| ).
-      ENDIF.
 
       IF lv_alias IS INITIAL.
         lv_alias = lv_field.
@@ -345,7 +344,7 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
       CLEAR ls_comp.
       ls_comp-name = lv_alias_up.
-      ls_comp-type = ls_src-type.
+      ls_comp-type = lo_ftype.
       APPEND ls_comp TO lt_comp.
 
       APPEND |{ lv_tab }~{ lv_field } AS { lv_alias_up }| TO et_cols.
