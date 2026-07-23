@@ -7,8 +7,13 @@ define service ZPRA_SD_DPR_ANALYTICS {
   expose ZPRA_Q_DPR_TARGET_QUERY as DPRTargetQuery;
   expose ZPRA_Q_DPR_DAILY_TREND  as DPRDailyTrend;
 
-  /* ── Analytical cube ──────────────────────────────────────────────── */
+  /* ── DPR Excel replica (tab 2 graph + tab 3 Production Performance) ─ */
+  expose ZPRA_Q_DPR_BOEPD_TREND  as DPRBoepdTrend;
+  expose ZPRA_Q_DPR_PROD_PERF    as DPRProductionPerformance;
+
+  /* ── Analytical cubes ─────────────────────────────────────────────── */
   expose ZPRA_C_DPR_CUBE         as DPRProductionCube;
+  expose ZPRA_C_DPR_BOEPD_DAY    as DPRBoepdDayCube;
 
   /* ── Interface views ──────────────────────────────────────────────── */
   expose ZPRA_I_DPR_DAILY        as DPRDailyProduction;

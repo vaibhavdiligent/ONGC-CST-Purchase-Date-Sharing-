@@ -1,0 +1,84 @@
+@Metadata.layer: #CORE
+
+/*
+ * Metadata Extension for ZPRA_Q_DPR_PROD_PERF.
+ * Renders the DPR Excel tab-3 "Production Performance" block:
+ *   table  : Scope x Product group with Actual / BE Target / % Achv
+ *   chart  : Actual vs BE Target BOEPD by product group
+ *   KPI    : % Achv with red/amber/green criticality
+ */
+annotate view ZPRA_Q_DPR_PROD_PERF with
+{
+
+  @UI.headerInfo: {
+    typeName:       'Production Performance',
+    typeNamePlural: 'Production Performance',
+    title:          { type: #STANDARD, value: 'ProductGroupText' },
+    description:    { type: #STANDARD, value: 'ScopeText' }
+  }
+
+  /* ── Table (mirrors the Excel tab-3 matrix) ─────────────────────────── */
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Scope' }]
+  ScopeText;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
+  ProductGroupText;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH, label: 'Actual (BOPD / MMSCMD)' }]
+  ActualPerDay;
+
+  @UI.lineItem: [{ position: 40, importance: #HIGH, label: 'BE Target (BOPD / MMSCMD)' }]
+  TargetPerDay;
+
+  @UI.lineItem: [{ position: 50, importance: #HIGH, label: 'Actual Total (BOEPD)' }]
+  ActualBoepdPerDay;
+
+  @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'BE Target Total (BOEPD)' }]
+  TargetBoepdPerDay;
+
+  @UI.lineItem: [{ position: 70, importance: #HIGH, label: '% Achv w.r.t. BE Target',
+                   criticality: 'AchievementCriticality' }]
+  AchievementPct;
+
+  /* ── % Achv KPI with thresholds (green >= 100, amber >= 90, red below) ─ */
+  @UI.dataPoint: {
+    title: '% Achv w.r.t. BE Target',
+    criticalityCalculation: {
+      improvementDirection:    #TARGET,
+      deviationRangeLowValue:  90,
+      toleranceRangeLowValue:  100,
+      toleranceRangeHighValue: 999,
+      deviationRangeHighValue: 9999
+    }
+  }
+  AchievementPct;
+
+  /* ── Chart: Actual vs BE Target BOEPD by product group ──────────────── */
+  @UI.chart: [{
+    qualifier:  'PerfByGroup',
+    title:      'Actual vs BE Target (BOEPD)',
+    chartType:  #COLUMN,
+    dimensions: ['ProductGroupText', 'ScopeText'],
+    measures:   ['ActualBoepdPerDay', 'TargetBoepdPerDay'],
+    measureAttributes: [
+      { measure: 'ActualBoepdPerDay', role: #AXIS_1, asDataPoint: true },
+      { measure: 'TargetBoepdPerDay', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductGroupText', role: #CATEGORY },
+      { dimension: 'ScopeText',        role: #SERIES   }
+    ]
+  }]
+  ActualBoepdPerDay;
+
+  @UI.presentationVariant: [{
+    qualifier:      'Default',
+    visualizations: [
+      { type: #AS_CHART, qualifier: 'PerfByGroup' },
+      { type: #AS_LINEITEM }
+    ],
+    sortOrder:      [{ by: 'ScopeType', direction: #DESC }]   /* YTD first */
+  }]
+  ScopeType;
+
+}

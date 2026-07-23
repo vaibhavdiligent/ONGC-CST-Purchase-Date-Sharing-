@@ -1,0 +1,76 @@
+@Metadata.layer: #CORE
+
+/*
+ * Metadata Extension for ZPRA_Q_DPR_BOEPD_TREND.
+ * Renders the DPR Excel tab-2 graph 1:1 in Fiori ALP:
+ *   line chart, X = date, two series = Actual Production vs BE Target,
+ *   table of the same rows underneath (native Export to Spreadsheet).
+ */
+annotate view ZPRA_Q_DPR_BOEPD_TREND with
+{
+
+  @UI.headerInfo: {
+    typeName:       'BOEPD Trend',
+    typeNamePlural: 'BOEPD Trend',
+    title:          { type: #STANDARD, value: 'ProductionDate' }
+  }
+
+  /* ── Filters ────────────────────────────────────────────────────────── */
+  @UI.selectionField: [{ position: 10 }]
+  ProductionDate;
+
+  @UI.selectionField: [{ position: 20 }]
+  Asset;
+
+  @UI.selectionField: [{ position: 30 }]
+  ProductGroup;
+
+  /* ── Table columns ──────────────────────────────────────────────────── */
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Production Date' }]
+  ProductionDate;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Actual Production (BOEPD)' }]
+  ActualBoepdOvl;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH, label: 'BE Target (BOEPD)' }]
+  TargetBoepd;
+
+  @UI.lineItem: [{ position: 40, importance: #MEDIUM, label: 'Actual BOEPD (JV)' }]
+  ActualBoepdJv;
+
+  /* ── The Excel tab-2 chart: Actual vs BE Target lines over dates ────── */
+  @UI.chart: [{
+    qualifier:  'BoepdVsTarget',
+    title:      'Actual Production vs BE Target (BOEPD)',
+    chartType:  #LINE,
+    dimensions: ['ProductionDate'],
+    measures:   ['ActualBoepdOvl', 'TargetBoepd'],
+    measureAttributes: [
+      { measure: 'ActualBoepdOvl', role: #AXIS_1, asDataPoint: true },
+      { measure: 'TargetBoepd',    role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductionDate', role: #CATEGORY }
+    ]
+  }]
+  ActualBoepdOvl;
+
+  /* ── KPI tiles ──────────────────────────────────────────────────────── */
+  @UI.dataPoint: { title: 'Actual Production (BOEPD)', criticality: #NEUTRAL }
+  ActualBoepdOvl;
+
+  @UI.dataPoint: { title: 'BE Target (BOEPD)', criticality: #NEUTRAL }
+  TargetBoepd;
+
+  /* Chart on top, table below - like the Excel graph tab */
+  @UI.presentationVariant: [{
+    qualifier:      'Default',
+    visualizations: [
+      { type: #AS_CHART, qualifier: 'BoepdVsTarget' },
+      { type: #AS_LINEITEM }
+    ],
+    sortOrder:      [{ by: 'ProductionDate', direction: #ASC }]
+  }]
+  ProductionDate;
+
+}
