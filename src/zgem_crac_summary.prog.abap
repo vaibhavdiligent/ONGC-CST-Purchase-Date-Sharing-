@@ -1,208 +1,94 @@
 *&---------------------------------------------------------------------*
-*& Report  ZGEM_ORDER_SUMMARY
-*&
+*& Report ZGEM_CRAC_SUMMARY
 *&---------------------------------------------------------------------*
+*& CRAC Summary - GeM CPI integration (customer version).
+*& Selection screen: from-date / to-date only. All other request fields
+*& are hard-coded. Fetched rows are saved to ZGEMC_CRACSUMM and shown in ALV.
 *&
-*&
+*& Real response shape (confirmed):
+*&   {"sub":..,"aud":..,"iss":..,"data":[
+*&     {"date":..,"count":..,"cracNumbers":[{"cracNumber":..}]}]}
 *&---------------------------------------------------------------------*
 REPORT zgem_crac_summary.
 
-PARAMETERS : datefrom TYPE sy-datum DEFAULT sy-datum,
-             dateto TYPE sy-datum DEFAULT sy-datum.
-*             offset TYPE i,
-*             limit  TYPE i.
-*             token
-PARAMETERS : r1 RADIOBUTTON GROUP b1,
-             r2 RADIOBUTTON GROUP b1.
+PARAMETERS: datefrom TYPE sy-datum DEFAULT sy-datum,
+            dateto   TYPE sy-datum DEFAULT sy-datum.
+
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
+           c_path TYPE string   VALUE '/http/GEM/Sync/CracSummary'.
 
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       proxy_data       TYPE zgem_tokenmt_security_token_se,
       lt_input         TYPE zgem_tokenmt_security_token_re,
-      lo_sys_exception TYPE REF TO cx_ai_system_fault.
-DATA: err_string       TYPE string.
+      lo_sys_exception TYPE REF TO cx_ai_system_fault,
+      err_string       TYPE string,
+      gv_token         TYPE string.
 
-TYPES : BEGIN OF TY_FRT,
-        CURRENCY TYPE ZGEM_CRACDET-CURRENCY,
-        VALUE    TYPE ZGEM_CRACDET-VALUE,
-        END OF TY_FRT.
-
-
-TYPES: BEGIN OF TY_CRACsHIP,
-        ORDER_ITEM_ID TYPE ZGEM_CRACDET-ORDER_ITEM_ID,
-        REASON TYPE ZGEM_CRACDET-REASON,
-        RECEIVEDQTY TYPE ZGEM_CRACDET-RECEIVEDQTY,
-        AGENCY_NAME TYPE ZGEM_CRACDET-AGENCY_NAME,
-        ACCEPTEDQTY TYPE ZGEM_CRACDET-ACCEPTEDQTY,
-        SHIPMENTITEMID TYPE ZGEM_CRACDET-SHIPMENTITEMID,
-        INSPECTED_BY TYPE ZGEM_CRACDET-INSPECTED_BY,
-        PRODUCTNAME TYPE ZGEM_CRACDET-PRODUCTNAME,
-        INSPECTION_CERT_NO TYPE ZGEM_CRACDET-INSPECTION_CERT_NO,
-        REJECTEDQTY TYPE ZGEM_CRACDET-REJECTEDQTY,
-        FREIGHTcharges TYPE TY_FRT,
-      END OF TY_CRACSHIP.
-
-      TYPES: BEGIN OF TY_PRCSHIP,
-              ORDER_ITEM_ID TYPE ZGEM_CRACDET-PRC_ORDER_ITEM_ID,
-              REASON        TYPE ZGEM_CRACDET-PRC_REASON,
-              RECEIVEDQTY TYPE ZGEM_CRACDET-PRC_RECEIVEDQTY,
-              PRODUCTNAME TYPE ZGEM_CRACDET-PRC_PRODUCTNAME,
-              REJECTEDQTY TYPE ZGEM_CRACDET-PRC_REJECTEDQTY,
-            END OF TY_PRCSHIP.
-
-
-
-DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
-      token             TYPE string,
-      it_detail         TYPE ZCRACSUMMARYDT_CRACSUMMARY_TAB,
-      wa_detail         LIKE LINE OF it_detail,
-      IT_CRACSHIP      TYPE TABLE OF TY_CRACSHIP,
-      wa_cracship      TYPE TY_CRACSHIP,
-      IT_prcSHIP      TYPE TABLE OF TY_prcSHIP,
-      wa_prcship      TYPE TY_prCSHIP,
-      it_final       type TABLE OF ZGEM_CRACDET,
-      wa_final       TYPE zgem_cracdet.
-DATA: err_string1       TYPE string.
-
-*--- CRAC Details (3.8) via CPI - real response shape confirmed by
-*    ZGEM_CPI_CRAC_DETAILS.abap. Replaces the old SI_CRACSUMMARY_OB proxy call.
-CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
-           c_path TYPE string VALUE '/http/GEM/Sync/CracSummary'.
-
-TYPES: BEGIN OF ty_cpi_request,
+TYPES: BEGIN OF ty_request,
          user          TYPE string,
          method        TYPE string,
          buyer_user_id TYPE string,
          from_date     TYPE string,
          to_date       TYPE string,
-       END OF ty_cpi_request.
+       END OF ty_request.
 
-TYPES: BEGIN OF ty_cpi_freight,
-         currency TYPE string,
-         value    TYPE p LENGTH 10 DECIMALS 2,
-       END OF ty_cpi_freight.
+TYPES: BEGIN OF ty_crac,
+         cracnumber TYPE string,       " cracNumber
+       END OF ty_crac,
+       tt_crac TYPE STANDARD TABLE OF ty_crac WITH DEFAULT KEY.
 
-TYPES: BEGIN OF ty_cpi_shipitem,
-         order_item_id      TYPE i,
-         reason             TYPE string,
-         receivedqty        TYPE i,
-         agency_name        TYPE string,
-         acceptedqty        TYPE i,
-         inspected_by       TYPE string,
-         shipmentitemid     TYPE i,
-         inspection_cert_no TYPE string,
-         rejectedqty        TYPE i,
-         freightcharge      TYPE ty_cpi_freight,
-         productname        TYPE string,
-       END OF ty_cpi_shipitem,
-       tt_cpi_shipitem TYPE STANDARD TABLE OF ty_cpi_shipitem WITH DEFAULT KEY.
+TYPES: BEGIN OF ty_data_block,
+         date        TYPE string,
+         count       TYPE i,
+         cracnumbers TYPE tt_crac,      " cracNumbers array
+       END OF ty_data_block,
+       tt_data TYPE STANDARD TABLE OF ty_data_block WITH DEFAULT KEY.
 
-TYPES: BEGIN OF ty_cpi_prcitem,
-         order_item_id TYPE i,
-         reason        TYPE string,
-         receivedqty   TYPE i,
-         rejectedqty   TYPE i,
-         productname   TYPE string,
-       END OF ty_cpi_prcitem,
-       tt_cpi_prcitem TYPE STANDARD TABLE OF ty_cpi_prcitem WITH DEFAULT KEY.
-
-TYPES: BEGIN OF ty_cpi_crac,
-         consigneeaddress     TYPE string,
-         consigneedistrict    TYPE string,
-         consigneename        TYPE string,
-         consigneelastname    TYPE string,
-         consigneemobile      TYPE string,
-         consigneepin         TYPE string,
-         consigneestate       TYPE string,
-         consignmentamount    TYPE string,
-         consignmentcurrency  TYPE string,
-         autocracflag         TYPE string,
-         cracamount           TYPE string,
-         craccurrency         TYPE string,
-         cracdocurl           TYPE string,
-         cracnumber           TYPE string,
-         cracshipmentitems    TYPE tt_cpi_shipitem,
-         cracverificationdate TYPE string,
-         craccreateddate      TYPE string,
-         demandid             TYPE string,
-         invoicenumber        TYPE string,
-         orderid              TYPE string,
-         prcreceiveddate      TYPE string,
-         prcshipmentitems     TYPE tt_cpi_prcitem,
-       END OF ty_cpi_crac,
-       tt_cpi_crac TYPE STANDARD TABLE OF ty_cpi_crac WITH DEFAULT KEY.
-
-TYPES: BEGIN OF ty_cpi_response,
+TYPES: BEGIN OF ty_response,
          sub  TYPE string,
          aud  TYPE string,
          iss  TYPE string,
-         data TYPE tt_cpi_crac,
-       END OF ty_cpi_response.
+         data TYPE tt_data,
+       END OF ty_response.
 
-DATA: lo_client      TYPE REF TO if_http_client,
-      ls_cpi_request TYPE ty_cpi_request,
-      ls_cpi_resp    TYPE ty_cpi_response,
-      ls_cpi_crac    TYPE ty_cpi_crac,
-      lv_json        TYPE string,
-      lv_response    TYPE string,
-      lv_code        TYPE i,
-      lv_reason      TYPE string,
-      gv_token       TYPE string,
-      lt_name_maps   TYPE /ui2/cl_json=>name_mappings.
-FIELD-SYMBOLS :   <out_structure> TYPE any.
- dATA: LR_ALV TYPE REF TO cl_salv_table.
- Data: LR_colums type REF TO cl_salv_columns_table.
+DATA: lo_client   TYPE REF TO if_http_client,
+      ls_request  TYPE ty_request,
+      ls_response TYPE ty_response,
+      ls_block    TYPE ty_data_block,
+      ls_crac     TYPE ty_crac,
+      lv_json     TYPE string,
+      lv_response TYPE string,
+      lv_code     TYPE i,
+      lv_reason   TYPE string,
+      it_out      TYPE STANDARD TABLE OF zgemc_cracsumm,
+      wa_out      TYPE zgemc_cracsumm,
+      lo_alv      TYPE REF TO cl_salv_table,
+      lx_salv     TYPE REF TO cx_salv_msg.
 
-DATA :it_fcat TYPE  slis_t_fieldcat_alv.
-DATA :wa_fcat TYPE  slis_fieldcat_alv.
-DATA: g_save  TYPE c VALUE 'A'.
-DATA: gs_layout              TYPE slis_layout_alv.
+START-OF-SELECTION.
 
+  proxy_data-mt_security_token_sender-username = 'NBCCServices'.
+  proxy_data-mt_security_token_sender-password = '823090987ez07u8maz0z8789qn5a4a62'.
+  TRY.
+      CREATE OBJECT lo_gem_token.
+      CALL METHOD lo_gem_token->si_security_token_ob
+        EXPORTING output = proxy_data
+        IMPORTING input  = lt_input.
+    CATCH cx_ai_system_fault INTO lo_sys_exception.
+      err_string = lo_sys_exception->get_text( ).
+    CATCH cx_ai_application_fault.
+  ENDTRY.
+  gv_token = lt_input-mt_security_token_receiver-token.
 
-
-
-
-
-
-
-CREATE OBJECT: lo_gem_token.
-
-if r1 = 'X'.
-
-
-*proxy_data-mt_security_token_sender-username  = 'GEM23012020'.
-*proxy_data-mt_security_token_sender-password  = 'R2VtT2YzQ1M3cRnQ='.
-
- """"""""""""" UAT ID PASSWORD""""""""""""""""""
-  proxy_data-mt_security_token_sender-username  = 'NBCCServices'.
-  proxy_data-mt_security_token_sender-password  = '823090987ez07u8maz0z8789qn5a4a62'.
-  """""""""""" UAT ID PASSWORD""""""""""""""""""
-*proxy_data-mt_security_token_sender-username  = 'Alex123'.
-*proxy_data-mt_security_token_sender-password  = 'password'.
-TRY.
-    CALL METHOD lo_gem_token->si_security_token_ob
-      EXPORTING
-        output = proxy_data
-      IMPORTING
-        input  = lt_input.
-  CATCH cx_ai_system_fault INTO lo_sys_exception.
-    err_string = lo_sys_exception->get_text( ).
-  CATCH cx_ai_application_fault .
-ENDTRY.
-
-token = lt_input-mt_security_token_receiver-token.
-gv_token = token.
-
-IF token IS NOT INITIAL.
-*--- Build the JSON request payload and call CPI directly (was: proxy call
-*    to lo_gem_cracsumm->SI_CRACSUMMARY_OB). Path/shape per ZGEM_CPI_CRAC_DETAILS.
-  ls_cpi_request-user          = 'NBCCServices'.
-  ls_cpi_request-method        = 'cracSummary'.
+  CLEAR ls_request.
+  ls_request-user   = 'NBCCServices'.
+  ls_request-method = 'cracSummary'.
 * buyer_user_id is OPTIONAL per GeM - intentionally omitted so GeM does not filter by an OVL buyer. Set a value here only if GeM requires it.
-  ls_cpi_request-from_date     = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
-  ls_cpi_request-to_date       = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.
+  ls_request-from_date = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
+  ls_request-to_date   = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.
 
   lv_json = /ui2/cl_json=>serialize(
-              data        = ls_cpi_request
+              data        = ls_request
               compress    = abap_true
               pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
@@ -211,193 +97,61 @@ IF token IS NOT INITIAL.
     IMPORTING client      = lo_client
     EXCEPTIONS OTHERS     = 1 ).
   IF sy-subrc <> 0.
-    WRITE: / 'Error creating HTTP client for destination', c_dest.
-  ELSE.
-    lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
-    cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
-    lo_client->request->set_method( if_http_request=>co_request_method_post ).
-    lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
-    IF gv_token IS NOT INITIAL.
-      lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
-    ENDIF.
-
-    lo_client->request->set_cdata( lv_json ).
-    lo_client->send( EXCEPTIONS OTHERS = 1 ).
-    IF sy-subrc <> 0.
-      WRITE: / 'Error sending request to CPI'.
-      lo_client->close( EXCEPTIONS OTHERS = 0 ).
-    ELSE.
-      lo_client->receive( EXCEPTIONS OTHERS = 1 ).
-      lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
-      lv_response = lo_client->response->get_cdata( ).
-      lo_client->close( EXCEPTIONS OTHERS = 0 ).
-
-      /ui2/cl_json=>deserialize( EXPORTING json = lv_response
-                                 CHANGING  data = ls_cpi_resp ).
-
-*--- Re-hydrate it_detail (old proxy-typed table) so all downstream parsing,
-*    ALV display and DB-update logic below stays exactly as before.
-*    CRAC_SHIPMENTITEMS/PRC_SHIPMENTITEMS are re-serialized to the raw JSON
-*    string shape the existing deserialize-based loop already expects.
-*    (name_mappings renames "freightcharge" -> "FREIGHTcharges" so it still
-*    matches this file's existing TY_CRACSHIP field name.)
-      lt_name_maps = VALUE #( ( abap = 'FREIGHTCHARGES' json = 'freightcharge' ) ).
-      REFRESH it_detail.
-      LOOP AT ls_cpi_resp-data INTO ls_cpi_crac.
-        CLEAR wa_detail.
-        MOVE-CORRESPONDING ls_cpi_crac TO wa_detail.
-        wa_detail-crac_shipmentitems = /ui2/cl_json=>serialize(
-                                          data          = ls_cpi_crac-cracshipmentitems
-                                          compress      = abap_true
-                                          name_mappings = lt_name_maps ).
-        wa_detail-prc_shipmentitems  = /ui2/cl_json=>serialize(
-                                          data        = ls_cpi_crac-prcshipmentitems
-                                          compress    = abap_true
-                                          pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
-        APPEND wa_detail TO it_detail.
-      ENDLOOP.
-    ENDIF.
-  ENDIF.
-  DATA : obj TYPE REF TO cl_trex_json_deserializer.
-  CREATE OBJECT obj.
-  LOOP AT it_detail INTO wa_detail.
-*
-  REFRESH: it_CRACSHIP[] , it_PRCSHIP[].
-
-     /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-CRAC_SHIPMENTITEMS
-                               CHANGING data = it_CRACSHIP ).
-
-     /ui2/cl_json=>deserialize( EXPORTING json = wa_detail-PRC_SHIPMENTITEMS
-                               CHANGING data = it_prcSHIP ).
-
-
-     LOOP AT it_CRACSHIP INTO wa_cracship.
-       MOVE-CORRESPONDING wa_cracship to wa_final.
-       READ TABLE it_prcSHIP INTO wa_prcship WITH KEY order_item_id = wa_cracship-ORDER_ITEM_ID.
-       IF sy-subrc = 0.
-        wa_final-prc_ORDER_ITEM_ID = wa_prcship-ORDER_ITEM_ID.
-        wa_final-prc_REASON        = wa_prcship-REASON.
-        wa_final-prc_RECEIVEDQTY   = wa_prcship-RECEIVEDQTY.
-        wa_final-prc_PRODUCTNAME   = wa_prcship-PRODUCTNAME.
-        wa_final-prc_REJECTEDQTY   = wa_prcship-REJECTEDQTY .
-       ENDIF.
-       MOVE-CORRESPONDING wa_detail to wa_final.
-       APPEND wa_final to it_final.
-       clear: wa_final,  wa_cracship, wa_prcship.
-     ENDLOOP.
-
-clear: wa_Detail,wa_final.
-
-    ENDLOOP.
-
-
- MODIFY zgem_cracdet from TABLE it_final.
-
-
-
-
-
-
-
-
-
-
-
-
-
-ENDIF.
-
-
-
-else.
-
-
-    SELECT * FROM zgem_cracdet INTO TABLE it_final.
-
+    WRITE: / 'Error creating HTTP client for destination', c_dest. RETURN.
   ENDIF.
 
+  lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+  cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
+  lo_client->request->set_method( if_http_request=>co_request_method_post ).
+  lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+  IF gv_token IS NOT INITIAL.
+    lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
+  ENDIF.
 
-
-   CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
-     EXPORTING
-       I_PROGRAM_NAME               = sy-repid
-*       I_INTERNAL_TABNAME           = 'IT_FINAL'
-       I_STRUCTURE_NAME             = 'ZGEM_CRACDET'
-       I_CLIENT_NEVER_DISPLAY       = 'X'
-*       I_INCLNAME                   =
-*       I_BYPASSING_BUFFER           =
-*       I_BUFFER_ACTIVE              =
-      CHANGING
-        ct_fieldcat                  = it_fcat
-     EXCEPTIONS
-       INCONSISTENT_INTERFACE       = 1
-       PROGRAM_ERROR                = 2
-       OTHERS                       = 3
-              .
-    IF sy-subrc <> 0.
-* Implement suitable error handling here
-    ENDIF.
-
-    LOOP AT it_fcat INTO wa_fcat.
-*  IF wa_fcat-seltext_m is INITIAL.
-wa_fcat-seltext_l = wa_fcat-fieldname.
-wa_fcat-seltext_m = wa_fcat-fieldname.
-wa_fcat-seltext_s = wa_fcat-fieldname.
-wa_fcat-REPTEXT_DDIC = wa_fcat-fieldname.
-MODIFY it_fcat from wa_fcat.
-*  ENDIF.
-
-    ENDLOOP.
-
-
-
-    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
-    EXPORTING
-*     I_BUFFER_ACTIVE             =
-*     I_INTERFACE_CHECK           = ' '
-     I_CALLBACK_PROGRAM          = sy-repid
-*     I_CALLBACK_PF_STATUS_SET    = ' '
-*     I_CALLBACK_USER_COMMAND     = ' '
-*     I_CALLBACK_TOP_OF_PAGE      = ' '
-*     I_CALLBACK_HTML_TOP_OF_PAGE = ' '
-*     I_CALLBACK_HTML_END_OF_LIST = ' '
-*     I_STRUCTURE_NAME            = alv_tab
-*     I_BACKGROUND_ID             = ' '
-*      i_grid_title  = title
-*     I_GRID_SETTINGS             = grid
-      IS_LAYOUT     = gs_layout
-      it_fieldcat   = it_fcat[]
-*     IT_EXCLUDING  =
-*     IT_SPECIAL_GROUPS           =
-*     IT_SORT       =
-*     IT_FILTER     =
-*     IS_SEL_HIDE   =
-*     I_DEFAULT     = 'X'
-     I_SAVE        = g_save
-*     IS_VARIANT    =
-*     IT_EVENTS     =
-*     IT_EVENT_EXIT =
-*     IS_PRINT      =
-*     IS_REPREP_ID  =
-*     I_SCREEN_START_COLUMN       = 0
-*     I_SCREEN_START_LINE         = 0
-*     I_SCREEN_END_COLUMN         = 0
-*     I_SCREEN_END_LINE           = 0
-*    IMPORTING
-*     E_EXIT_CAUSED_BY_CALLER     =
-*     ES_EXIT_CAUSED_BY_USER      =
-    TABLES
-      t_outtab      = it_final[]
-    EXCEPTIONS
-      program_error = 1
-      OTHERS        = 2.
+  lo_client->request->set_cdata( lv_json ).
+  lo_client->send( EXCEPTIONS OTHERS = 1 ).
   IF sy-subrc <> 0.
-* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
-*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    WRITE: / 'Error sending request to CPI'. lo_client->close( EXCEPTIONS OTHERS = 0 ). RETURN.
   ENDIF.
+  lo_client->receive( EXCEPTIONS OTHERS = 1 ).
+  lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+  lv_response = lo_client->response->get_cdata( ).
+  lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*
-*
-*
-*
-*
+  /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                             CHANGING  data = ls_response ).
+
+*--- Flatten to one row per cracNumber, save to ZGEMC_CRACSUMM, collect for ALV
+  CLEAR it_out.
+  LOOP AT ls_response-data INTO ls_block.
+    LOOP AT ls_block-cracnumbers INTO ls_crac.
+      CLEAR wa_out.
+      wa_out-crac_number = ls_crac-cracnumber.
+      wa_out-sdate       = ls_block-date.
+      wa_out-scount      = ls_block-count.
+      wa_out-datefrom    = datefrom.
+      wa_out-dateto      = dateto.
+      wa_out-ernam       = sy-uname.
+      wa_out-erdat       = sy-datum.
+      MODIFY zgemc_cracsumm FROM wa_out.
+      APPEND wa_out TO it_out.
+    ENDLOOP.
+  ENDLOOP.
+
+  IF it_out IS NOT INITIAL.
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                                CHANGING  t_table      = it_out ).
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_display_settings( )->set_list_header(
+          |GeM CRAC Summary - { lines( it_out ) } CRAC(s)| ).
+        lo_alv->display( ).
+      CATCH cx_salv_msg INTO lx_salv.
+        WRITE: / 'ALV error:', lx_salv->get_text( ).
+    ENDTRY.
+  ELSE.
+    WRITE: / 'HTTP', lv_code, lv_reason.
+    WRITE: / 'No CRAC rows returned. Raw response:'.
+    WRITE: / lv_response.
+  ENDIF.
