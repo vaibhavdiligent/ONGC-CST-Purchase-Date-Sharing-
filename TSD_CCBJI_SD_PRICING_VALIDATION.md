@@ -88,8 +88,8 @@ All amounts are converted to external format before comparison:
 |---|---|
 | `OK` | Values identical |
 | `MISMATCH` | S/4 pricing deviates from the ECC result — config/record defect candidate |
-| `MISSING_S4` | Condition on X not re-determined on Y → missing/wrong condition record or access sequence |
-| `NEW_IN_S4` | Condition determined on Y but absent on X |
+| `MISSING_S4` | Condition on X not re-determined on Y → missing/wrong condition record or access sequence. **Red** only if X carried a rate/value ≠ 0; **yellow** when both are zero (no impact on the pricing outcome) |
+| `NEW_IN_S4` | Condition determined on Y but absent on X. **Red** only if Y carries a rate/value ≠ 0; **yellow** when zero |
 | `MANUAL` | Manually entered on X (`KHERK = 'C'` / `KMPRS = 'X'`) — cannot be re-derived by repricing; info only |
 | `ERROR` | Y could not be created (BAPI messages shown in remark) |
 

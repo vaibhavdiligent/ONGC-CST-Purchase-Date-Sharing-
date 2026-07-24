@@ -43,8 +43,11 @@
 *&   OK          rate/value identical
 *&   MISMATCH    values differ -> S/4 pricing deviates from ECC result
 *&   MISSING_S4  condition exists on X but was not re-determined on Y
-*&               (missing/wrong condition record or access sequence)
-*&   NEW_IN_S4   condition determined on Y but absent on X
+*&               (missing/wrong condition record or access sequence);
+*&               red only if X carried a value <> 0, otherwise yellow
+*&               (zero value = no impact on the pricing outcome)
+*&   NEW_IN_S4   condition determined on Y but absent on X; red only
+*&               if Y carries a value <> 0, otherwise yellow
 *&   MANUAL      manually entered condition on X (KHERK 'C' / KMPRS) -
 *&               not re-derivable by repricing, reported for info only
 *&   ERROR       order Y could not be created (BAPI messages)
@@ -510,8 +513,14 @@ CLASS lcl_app IMPLEMENTATION.
       IF sy-subrc <> 0.
         ms_stat-missing = ms_stat-missing + 1.
         ls_res-status = c_miss.
-        ls_res-remark =
-          'Condition not determined in S/4 - check condition record/access'(r02).
+        IF ls_x-rate = 0 AND ls_x-kwert = 0.
+          " zero-value condition: no impact on the pricing outcome
+          ls_res-remark =
+            'Not determined in S/4, but zero value on X - no impact'(r07).
+        ELSE.
+          ls_res-remark =
+            'Condition not determined in S/4 - check condition record/access'(r02).
+        ENDIF.
         add_result( ls_res ).
         CONTINUE.
       ENDIF.
@@ -681,12 +690,35 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA(ls_result) = is_result.
 
+    " red only when the pricing outcome is affected:
+    "  - MISMATCH / ERROR
+    "  - condition with a real value missing in S/4
+    "  - new S/4 condition carrying a real value
+    " zero-value missing/new conditions are warnings (yellow) only
     CASE ls_result-status.
-      WHEN c_diff OR c_miss OR c_error.
+      WHEN c_diff OR c_error.
         ls_result-color = VALUE #( ( fname = 'STATUS'
                                      color-col = col_negative
                                      color-int = 1 ) ).
-      WHEN c_new OR c_manual.
+      WHEN c_miss.
+        IF ls_result-rate_old = 0 AND ls_result-kwert_old = 0.
+          ls_result-color = VALUE #( ( fname = 'STATUS'
+                                       color-col = col_total ) ).
+        ELSE.
+          ls_result-color = VALUE #( ( fname = 'STATUS'
+                                       color-col = col_negative
+                                       color-int = 1 ) ).
+        ENDIF.
+      WHEN c_new.
+        IF ls_result-rate_new = 0 AND ls_result-kwert_new = 0.
+          ls_result-color = VALUE #( ( fname = 'STATUS'
+                                       color-col = col_total ) ).
+        ELSE.
+          ls_result-color = VALUE #( ( fname = 'STATUS'
+                                       color-col = col_negative
+                                       color-int = 1 ) ).
+        ENDIF.
+      WHEN c_manual.
         ls_result-color = VALUE #( ( fname = 'STATUS'
                                      color-col = col_total ) ).
       WHEN c_ok.
