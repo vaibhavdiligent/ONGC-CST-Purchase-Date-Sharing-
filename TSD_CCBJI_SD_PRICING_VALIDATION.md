@@ -1,10 +1,10 @@
-# TSD — ZSD_PRICING_VALIDATION
+# TSD — /CCBJI/SD_PRICING_VALIDATION
 
 **CCBJI (Coca-Cola Bottlers Japan) — Pricing regression validation after ECC → S/4HANA migration**
 
 | | |
 |---|---|
-| Program | `ZSD_PRICING_VALIDATION` (executable report, SE38) |
+| Program | `/CCBJI/SD_PRICING_VALIDATION` (executable report, SE38, customer namespace /CCBJI/) |
 | Module | SD — Pricing |
 | System | S/4HANA (post ECC migration) |
 | Author | Diligent Consulting |
@@ -132,6 +132,9 @@ manual counts).
 
 ## 7. Setup / transport notes
 
+- The program lives in the customer namespace **/CCBJI/** — the namespace must
+  exist in the system with a valid developer license key (SE03 → Administration
+  → Display/Change Namespaces) and the target package must allow it.
 - Maintain text elements: `TEXT-001…004` (block titles), selection texts, and
   the message/remark text symbols (`M01/M02`, `R01…R06`).
 - A dedicated rejection reason (e.g. `ZP` — "pricing validation copy") should

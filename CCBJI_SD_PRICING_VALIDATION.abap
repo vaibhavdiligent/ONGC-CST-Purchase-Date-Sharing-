@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*& Report  ZSD_PRICING_VALIDATION
+*& Report  /CCBJI/SD_PRICING_VALIDATION
 *&---------------------------------------------------------------------*
 *& CCBJI - Pricing regression validation after ECC -> S/4HANA migration
 *&
@@ -58,7 +58,7 @@
 *&   TEXT-003  Pricing date for order Y
 *&   TEXT-004  Comparison settings
 *&---------------------------------------------------------------------*
-REPORT zsd_pricing_validation.
+REPORT /ccbji/sd_pricing_validation.
 
 TABLES: vbak.
 
