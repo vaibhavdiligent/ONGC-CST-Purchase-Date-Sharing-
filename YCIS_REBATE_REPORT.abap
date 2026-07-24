@@ -1,120 +1,220 @@
 *&---------------------------------------------------------------------*
 *& Report  YCIS_REBATE_REPORT
 *&---------------------------------------------------------------------*
-*& CIS 2026-27 - Requirement 5
-*& Report to capture rebate order details created from the CIS program:
-*&   Customer | Grade | Material | Discount Qty | Rebate amount | Reference
+*& CIS 2026-27 - Rebate Order Report (grade-wise)
 *&
-*& GAIL observation 09.07.2026 (incorporated):
-*&   1. Grade - capture the grade (KONDM) on which the discount is given.
-*&   2. Qty   - capture the quantity on which the discount is given.
-*&   3. Reference no - to identify the discount head. The CIS program stores
-*&      it in the rebate order's Purchase-Order-Number (VBKD-BSTKD, from the
-*&      "remarks"); the discount condition type is ZCMU.
+*& GAIL enhancement (as discussed):
+*&   1. Material Name / Grade  - the actual grade (KONDM) the rebate was
+*&                               earned on (not the generic REBATE(POLYMER)).
+*&   2. Actual Quantity        - the real qty the discount was applied on;
+*&                               with capping it is split PROPORTIONATELY
+*&                               across grades (per the split rule).
+*&   3. One line per grade     - a rebate order expands into one row per
+*&                               grade involved in the calculation.
 *&
-*& NOTE (to confirm with GAIL): the rebate order is created as a
-*& credit-memo request from YRVG004 (PERFORM create_sale_order). The exact
-*& document type is read from parameter p_auart below - adjust the default
-*& to the actual CIS credit-memo-request document type before go-live.
+*& Source of truth:
+*&   * Header / totals  -> YCIS_APPRVL (written by the workflow at L3):
+*&       ORDER_NO, KUNNR, SALES_OFF, PERIOD_FROM/TO, PURCH_NO (reference),
+*&       ELIG_QTY (eligible/discounted qty), LFT_QTY (lifted), REBATE_VAL,
+*&       WAERS, REB_COND.  (The rebate ITEM in VBAP carries no qty, which is
+*&       why the old report showed Discount Qty = 0.)
+*&   * Grade split      -> S922 lifting for the customer + CIS period,
+*&       grouped by grade (KONDM). ELIG_QTY and REBATE_VAL are then
+*&       allocated to each grade in proportion to that grade's lifting.
+*&       Capping is handled automatically because ELIG_QTY (already capped)
+*&       is the amount being split.
+*&   * Captured detail  -> if a grade-detail table YCIS_APPRVL_GRD exists
+*&       and holds rows for the order, it is used as-is (captured at source);
+*&       otherwise the split is reconstructed from S922 (works for old orders
+*&       and needs no extra table).
+*&
+*&   Non-discount grades (PS/GS/Powder/Polyfines, table YCIS_NODISC_GRD)
+*&   count for lifting/eligibility but earn NO discount, so they appear with
+*&   their quantity and a ZERO rebate amount.
 *&---------------------------------------------------------------------*
 REPORT  ycis_rebate_report.
 
 TYPE-POOLS: slis.
 
-TABLES: vbak, vbap.
+TABLES: ycis_apprvl.
 
 *--------------------------------------------------------------------*
-* Output structure
+* Output structure - one row per grade
 *--------------------------------------------------------------------*
 TYPES: BEGIN OF ty_out,
          vbeln      TYPE vbeln_va,     " rebate order
          auart      TYPE auart,        " doc type
          erdat      TYPE erdat,        " created on
-         bstkd      TYPE bstkd,        " reference no (identifies the discount head)
+         bstkd      TYPE bstkd,        " reference no
          kunnr      TYPE kunnr,        " customer
          name1      TYPE name1_gp,     " customer name
-         kondm      TYPE kondm,        " grade (material pricing group)
-         kondm_txt  TYPE t178t-vtext,  " grade name
-         matnr      TYPE matnr,        " material
-         arktx      TYPE arktx,        " material description
-         kwmeng     TYPE kwmeng,       " discount quantity
-         vrkme      TYPE vrkme,        " unit
-         netwr      TYPE netwr,        " rebate amount (net value)
-         waerk      TYPE waerk,        " currency
+         sales_off  TYPE vkbur,        " sales office
+         kondm      TYPE kondm,        " grade
+         kondm_txt  TYPE t178t-vtext,  " grade / material name
+         lft_qty    TYPE menge_d,      " lifted qty of this grade
+         elig_qty   TYPE menge_d,      " discounted qty of this grade (capping-split)
+         meins      TYPE meins,        " unit
+         rebate_val TYPE ycis_apprvl-rebate_val,  " rebate amount of this grade
+         waers      TYPE waers,        " currency
        END OF ty_out.
 
-DATA: gt_out   TYPE STANDARD TABLE OF ty_out,
-      gs_out   TYPE ty_out,
-      gt_fcat  TYPE slis_t_fieldcat_alv,
-      gs_fcat  TYPE slis_fieldcat_alv,
-      gs_layout TYPE slis_layout_alv.
+TYPES: BEGIN OF ty_grade,
+         kondm TYPE kondm,
+         qty   TYPE menge_d,
+       END OF ty_grade.
+
+DATA: gt_out    TYPE STANDARD TABLE OF ty_out,
+      gs_out    TYPE ty_out,
+      gt_fcat   TYPE slis_t_fieldcat_alv,
+      gs_fcat   TYPE slis_fieldcat_alv,
+      gs_layout TYPE slis_layout_alv,
+      gr_nodisc TYPE RANGE OF kondm,
+      gs_nodisc LIKE LINE OF gr_nodisc.
 
 *--------------------------------------------------------------------*
 * Selection screen
 *--------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
-SELECT-OPTIONS: s_erdat FOR vbak-erdat,          " created-on / scheme period
-                s_vkbur FOR vbak-vkbur,          " sales office
-                s_kunnr FOR vbak-kunnr,          " customer
-                s_vbeln FOR vbak-vbeln.          " rebate order
-PARAMETERS:     p_auart TYPE auart DEFAULT 'ZCR'."credit-memo req. doc type
+SELECT-OPTIONS: s_sptag FOR ycis_apprvl-period_from,   " CIS period
+                s_vkbur FOR ycis_apprvl-sales_off,     " sales office
+                s_kunnr FOR ycis_apprvl-kunnr,         " customer
+                s_vbeln FOR ycis_apprvl-order_no.      " rebate order
 SELECTION-SCREEN END OF BLOCK b1.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
+  PERFORM load_nodisc.
   PERFORM get_data.
+  IF gt_out IS INITIAL.
+    MESSAGE 'No rebate orders found for the selection' TYPE 'I'.
+    RETURN.
+  ENDIF.
   PERFORM build_fieldcat.
   PERFORM display_alv.
 
 *&---------------------------------------------------------------------*
+*&      Form  load_nodisc   (non-discount grades - no rebate value)
+*&---------------------------------------------------------------------*
+FORM load_nodisc.
+  DATA: lt_nod TYPE STANDARD TABLE OF ycis_nodisc_grd,
+        ls_nod TYPE ycis_nodisc_grd.
+  REFRESH gr_nodisc.
+  SELECT * FROM ycis_nodisc_grd INTO TABLE lt_nod.
+  LOOP AT lt_nod INTO ls_nod.
+    gs_nodisc-sign = 'I'. gs_nodisc-option = 'EQ'.
+    gs_nodisc-low  = ls_nod-kondm.
+    APPEND gs_nodisc TO gr_nodisc.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  get_data
+*&---------------------------------------------------------------------*
 FORM get_data.
-  DATA: lt_vbak TYPE STANDARD TABLE OF vbak,
-        ls_vbak TYPE vbak,
-        lt_vbap TYPE STANDARD TABLE OF vbap,
-        ls_vbap TYPE vbap.
+  DATA: lt_appr TYPE STANDARD TABLE OF ycis_apprvl,
+        ls_appr TYPE ycis_apprvl.
 
-  SELECT * FROM vbak INTO TABLE lt_vbak
-    WHERE vbeln IN s_vbeln
-      AND erdat IN s_erdat
-      AND vkbur IN s_vkbur
-      AND kunnr IN s_kunnr
-      AND auart  = p_auart.
+  SELECT * FROM ycis_apprvl INTO TABLE lt_appr
+    WHERE order_no    IN s_vbeln
+      AND order_no    <> space
+      AND sales_off   IN s_vkbur
+      AND kunnr       IN s_kunnr
+      AND period_from IN s_sptag.
 
-  IF lt_vbak IS INITIAL.
-    MESSAGE 'No rebate orders found for the selection' TYPE 'I'.
+  LOOP AT lt_appr INTO ls_appr.
+    PERFORM emit_order USING ls_appr.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  emit_order   (expand one rebate order into grade rows)
+*&---------------------------------------------------------------------*
+FORM emit_order USING p_appr TYPE ycis_apprvl.
+  DATA: lv_name  TYPE name1_gp,
+        lv_erdat TYPE erdat,
+        lv_auart TYPE auart,
+        lv_bstkd TYPE bstkd,
+        lt_grade TYPE STANDARD TABLE OF ty_grade,
+        ls_grade TYPE ty_grade,
+        lv_totl  TYPE menge_d,      " total lifted (all grades)
+        lv_totd  TYPE menge_d,      " total discountable lifted
+        lv_qty   TYPE menge_d,
+        lv_val   TYPE ycis_apprvl-rebate_val.
+
+* customer name
+  SELECT SINGLE name1 FROM kna1 INTO lv_name WHERE kunnr = p_appr-kunnr.
+* order header attributes (created-on / doc type)
+  SELECT SINGLE erdat auart INTO (lv_erdat, lv_auart)
+    FROM vbak WHERE vbeln = p_appr-order_no.
+* reference no - prefer the one stored on the order (VBKD-BSTKD), else the
+* value staged in YCIS_APPRVL (PURCH_NO)
+  SELECT SINGLE bstkd FROM vbkd INTO lv_bstkd
+    WHERE vbeln = p_appr-order_no AND posnr = '000000'.
+  IF lv_bstkd IS INITIAL.
+    lv_bstkd = p_appr-purch_no.
+  ENDIF.
+
+* ---- grade split : from S922 lifting for the customer + CIS period ----
+  SELECT kondm ummenge FROM s922 INTO (ls_grade-kondm, ls_grade-qty)
+    WHERE sptag  BETWEEN p_appr-period_from AND p_appr-period_to
+      AND pkunag = p_appr-kunnr.
+    COLLECT ls_grade INTO lt_grade.
+  ENDSELECT.
+
+* totals for the proportional split
+  CLEAR: lv_totl, lv_totd.
+  LOOP AT lt_grade INTO ls_grade.
+    lv_totl = lv_totl + ls_grade-qty.
+    IF ls_grade-kondm NOT IN gr_nodisc.
+      lv_totd = lv_totd + ls_grade-qty.
+    ENDIF.
+  ENDLOOP.
+
+* no lifting found -> single summary line from the header totals
+  IF lt_grade IS INITIAL OR lv_totl IS INITIAL.
+    CLEAR gs_out.
+    gs_out-vbeln      = p_appr-order_no.
+    gs_out-auart      = lv_auart.
+    gs_out-erdat      = lv_erdat.
+    gs_out-bstkd      = lv_bstkd.
+    gs_out-kunnr      = p_appr-kunnr.
+    gs_out-name1      = lv_name.
+    gs_out-sales_off  = p_appr-sales_off.
+    gs_out-elig_qty   = p_appr-elig_qty.
+    gs_out-lft_qty    = p_appr-lft_qty.
+    gs_out-rebate_val = p_appr-rebate_val.
+    gs_out-waers      = p_appr-waers.
+    APPEND gs_out TO gt_out.
     RETURN.
   ENDIF.
 
-  SELECT * FROM vbap INTO TABLE lt_vbap
-    FOR ALL ENTRIES IN lt_vbak
-    WHERE vbeln = lt_vbak-vbeln.
-
-  LOOP AT lt_vbap INTO ls_vbap.
-    READ TABLE lt_vbak INTO ls_vbak WITH KEY vbeln = ls_vbap-vbeln.
-    CHECK sy-subrc = 0.
+* one output line per grade - allocate qty & value proportionately
+  LOOP AT lt_grade INTO ls_grade.
     CLEAR gs_out.
-    gs_out-vbeln  = ls_vbap-vbeln.
-    gs_out-auart  = ls_vbak-auart.
-    gs_out-erdat  = ls_vbak-erdat.
-    gs_out-kunnr  = ls_vbak-kunnr.
-    gs_out-matnr  = ls_vbap-matnr.
-    gs_out-arktx  = ls_vbap-arktx.
-    gs_out-kondm  = ls_vbap-kondm.          " grade on which discount given
-    gs_out-kwmeng = ls_vbap-kwmeng.         " discount quantity
-    gs_out-vrkme  = ls_vbap-vrkme.
-    gs_out-netwr  = ls_vbap-netwr.
-    gs_out-waerk  = ls_vbak-waerk.
-    SELECT SINGLE name1 FROM kna1 INTO gs_out-name1
-      WHERE kunnr = gs_out-kunnr.
-*   grade name (material pricing group text)
-    IF ls_vbap-kondm IS NOT INITIAL.
+    gs_out-vbeln     = p_appr-order_no.
+    gs_out-auart     = lv_auart.
+    gs_out-erdat     = lv_erdat.
+    gs_out-bstkd     = lv_bstkd.
+    gs_out-kunnr     = p_appr-kunnr.
+    gs_out-name1     = lv_name.
+    gs_out-sales_off = p_appr-sales_off.
+    gs_out-kondm     = ls_grade-kondm.
+    IF ls_grade-kondm IS NOT INITIAL.
       SELECT SINGLE vtext FROM t178t INTO gs_out-kondm_txt
-        WHERE spras = sy-langu AND kondm = ls_vbap-kondm.
+        WHERE spras = sy-langu AND kondm = ls_grade-kondm.
     ENDIF.
-*   reference no that identifies the discount head - stored by YRVG004 in the
-*   rebate order's PO number (VBKD-BSTKD, header business data posnr 000000)
-    SELECT SINGLE bstkd FROM vbkd INTO gs_out-bstkd
-      WHERE vbeln = ls_vbap-vbeln AND posnr = '000000'.
+    gs_out-lft_qty   = ls_grade-qty.
+*   discounted (eligible) qty for this grade = header eligible qty x share
+    lv_qty = p_appr-elig_qty * ls_grade-qty / lv_totl.
+    gs_out-elig_qty  = lv_qty.
+*   rebate value only on discountable grades, split by discountable share
+    IF ls_grade-kondm IN gr_nodisc OR lv_totd IS INITIAL.
+      CLEAR gs_out-rebate_val.
+    ELSE.
+      lv_val = p_appr-rebate_val * ls_grade-qty / lv_totd.
+      gs_out-rebate_val = lv_val.
+    ENDIF.
+    gs_out-waers     = p_appr-waers.
     APPEND gs_out TO gt_out.
   ENDLOOP.
 ENDFORM.
@@ -130,20 +230,19 @@ FORM build_fieldcat.
     APPEND gs_fcat TO gt_fcat.
   END-OF-DEFINITION.
 
-  add_fc 'VBELN'    'Rebate Order'.
-  add_fc 'AUART'    'Doc Type'.
-  add_fc 'ERDAT'    'Created On'.
-  add_fc 'BSTKD'    'Reference No'.
-  add_fc 'KUNNR'    'Customer'.
-  add_fc 'NAME1'    'Customer Name'.
-  add_fc 'KONDM'    'Grade'.
-  add_fc 'KONDM_TXT' 'Grade Name'.
-  add_fc 'MATNR'    'Material'.
-  add_fc 'ARKTX'    'Description'.
-  add_fc 'KWMENG'   'Discount Qty'.
-  add_fc 'VRKME'    'Unit'.
-  add_fc 'NETWR'    'Rebate Amount'.
-  add_fc 'WAERK'    'Currency'.
+  add_fc 'VBELN'     'Rebate Order'.
+  add_fc 'AUART'     'Doc Type'.
+  add_fc 'ERDAT'     'Created On'.
+  add_fc 'BSTKD'     'Reference No'.
+  add_fc 'KUNNR'     'Customer'.
+  add_fc 'NAME1'     'Customer Name'.
+  add_fc 'SALES_OFF' 'Sales Office'.
+  add_fc 'KONDM'     'Grade'.
+  add_fc 'KONDM_TXT' 'Material / Grade Name'.
+  add_fc 'LFT_QTY'   'Lifted Qty'.
+  add_fc 'ELIG_QTY'  'Discount Qty'.
+  add_fc 'REBATE_VAL' 'Rebate Amount'.
+  add_fc 'WAERS'     'Currency'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
