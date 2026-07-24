@@ -1682,7 +1682,10 @@ FORM get_data.
               lv_index1 = sy-tabix.
               READ TABLE it_yrva_qais_data_m INTO wa_yrva_qais_data_m WITH KEY qais_no = wa_yrva_qais_data-qais_no.
               IF sy-subrc NE 0.
-                IF wa_yrva_qais_data-mou_begda NE s_sptag-low .
+*               keep a no-history customer if its MOU begins ANYWHERE within
+*               the run month (mid-month entrants), not only on the 1st.
+                IF wa_yrva_qais_data-mou_begda LT s_sptag-low
+                   OR wa_yrva_qais_data-mou_begda GT s_sptag-high .
                   DELETE it_yrva_qais_data INDEX lv_index1.
                   CLEAR lv_index1.
                   CONTINUE.
