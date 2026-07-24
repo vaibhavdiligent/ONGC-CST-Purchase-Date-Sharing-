@@ -9,22 +9,27 @@
 *& by the ECC pricing engine (now stored in PRCD_ELEMENTS after the
 *& KONV -> PRCD_ELEMENTS conversion). To prove that the S/4HANA pricing
 *& configuration (pricing procedure, condition records, VOFM routines)
-*& reproduces the ECC result, this program takes each sales order X of
-*& the selected document type and lets S/4HANA re-derive the pricing
-*& from scratch on a copy order Y:
+*& reproduces the ECC result, the program lets S/4HANA re-derive the
+*& pricing from scratch on a copy order Y.
+*&
+*& The user only enters document type and creation date range. The
+*& program automatically picks the order X with the HIGHEST net value
+*& (VBAK-NETWR) in that period; every other detail of X (org data,
+*& partners, items, quantities, pricing date, conditions) is read from
+*& the database (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
 *&
 *&   Mode 1 (default) - CREATE:   Y is really created with
 *&            BAPI_SALESORDER_CREATEFROMDAT2, LOGIC_SWITCH-PRICING = 'B'
 *&            (carry out new pricing). Y's conditions are read back from
-*&            PRCD_ELEMENTS and compared with X's conditions. Afterwards
-*&            all items of Y are rejected (reason P_ABGRU) via
-*&            BAPI_SALESORDER_CHANGE, unless P_NOREJ is set.
-*&            Y's PO number field is stamped 'PRCVAL-<X>' for tracing.
+*&            PRCD_ELEMENTS and compared with X's conditions. Y remains
+*&            in the system; its PO number field is stamped
+*&            'PRCVAL-<X>' so the test copies are easy to find (VA05 /
+*&            VBAK-BSTNK) and clean up.
 *&
 *&   Mode 2 - SIMULATE:  BAPI_SALESORDER_SIMULATE re-prices without
 *&            saving anything (no number range consumption, no ATP /
 *&            credit / output side effects). Y's conditions come from
-*&            ORDER_CONDITION_EX. Recommended for mass runs.
+*&            ORDER_CONDITION_EX.
 *&
 *& COMPARISON
 *& ----------
@@ -53,7 +58,7 @@
 *& items of X (ABGRU <> space) are skipped.
 *&
 *& TEXT ELEMENTS (maintain in SE38 -> Goto -> Text elements)
-*&   TEXT-001  Sales order selection (source order X)
+*&   TEXT-001  Document type and period (order X = highest net value)
 *&   TEXT-002  Processing mode (copy order Y)
 *&   TEXT-003  Pricing date for order Y
 *&   TEXT-004  Comparison settings
@@ -68,20 +73,13 @@ DATA gv_kschl TYPE kscha.
 * Selection screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  SELECT-OPTIONS: s_auart FOR vbak-auart OBLIGATORY,
-                  s_vkorg FOR vbak-vkorg,
-                  s_vtweg FOR vbak-vtweg,
-                  s_spart FOR vbak-spart,
-                  s_vbeln FOR vbak-vbeln,
-                  s_erdat FOR vbak-erdat.
-  PARAMETERS p_maxdoc TYPE i DEFAULT 100.        " max. no. of orders
+  SELECT-OPTIONS: s_auart FOR vbak-auart OBLIGATORY,   " document type
+                  s_erdat FOR vbak-erdat OBLIGATORY.   " creation period
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-  PARAMETERS: p_crt RADIOBUTTON GROUP md DEFAULT 'X',  " create Y + reject
+  PARAMETERS: p_crt RADIOBUTTON GROUP md DEFAULT 'X',  " create order Y
               p_sim RADIOBUTTON GROUP md.              " simulate only
-  PARAMETERS: p_abgru TYPE abgru_va,             " rejection reason for Y
-              p_norej AS CHECKBOX.               " keep Y (do not reject)
 SELECTION-SCREEN END OF BLOCK b2.
 
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
@@ -202,6 +200,7 @@ CLASS lcl_app DEFINITION FINAL.
 
     DATA: mt_result TYPE STANDARD TABLE OF ty_result,
           ms_stat   TYPE ty_stat,
+          mv_info   TYPE string,
           mt_tcurx  TYPE HASHED TABLE OF tcurx
                          WITH UNIQUE KEY currkey.
 
@@ -221,11 +220,6 @@ CLASS lcl_app DEFINITION FINAL.
                 et_cond    TYPE ty_t_cond
                 et_net     TYPE ty_t_net
                 ev_error   TYPE string.
-
-    METHODS reject_order_y
-      IMPORTING iv_vbeln_y TYPE vbeln_va
-                it_vbap    TYPE ty_t_vbap
-      RETURNING VALUE(rv_msg) TYPE string.
 
     METHODS simulate_order_y
       IMPORTING is_vbak  TYPE ty_vbak
@@ -278,23 +272,15 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD run.
 
-    " create mode needs a rejection reason (unless Y is kept on purpose)
-    IF p_crt = abap_true AND p_abgru IS INITIAL AND p_norej IS INITIAL.
-      MESSAGE 'Enter a rejection reason for order Y or tick "keep Y"'(m01)
-        TYPE 'E'.
-    ENDIF.
-
-    SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk, erdat
+    " pick the order with the highest net value in the selected period -
+    " all further details of X are read from VBAK/VBAP/VBPA/VBKD
+    SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk, erdat, netwr
       FROM vbak
       WHERE auart IN @s_auart
-        AND vkorg IN @s_vkorg
-        AND vtweg IN @s_vtweg
-        AND spart IN @s_spart
-        AND vbeln IN @s_vbeln
         AND erdat IN @s_erdat
-      ORDER BY vbeln
+      ORDER BY netwr DESCENDING, vbeln
       INTO TABLE @DATA(lt_vbak)
-      UP TO @p_maxdoc ROWS.
+      UP TO 1 ROWS.
 
     IF lt_vbak IS INITIAL.
       MESSAGE 'No sales orders found for the selection'(m02) TYPE 'S'
@@ -302,10 +288,12 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    LOOP AT lt_vbak INTO DATA(ls_vbak).
-      ms_stat-orders = ms_stat-orders + 1.
-      process_order( CORRESPONDING #( ls_vbak ) ).
-    ENDLOOP.
+    DATA(ls_vbak) = lt_vbak[ 1 ].
+    mv_info = |Highest-value order in period: { ls_vbak-vbeln } | &
+              |({ ls_vbak-netwr } { ls_vbak-waerk })|.
+
+    ms_stat-orders = 1.
+    process_order( CORRESPONDING #( ls_vbak ) ).
 
     display( ).
 
@@ -531,60 +519,6 @@ CLASS lcl_app IMPLEMENTATION.
           netwr = to_external( iv_amount = CONV #( ls_vbap_y-netwr )
                                iv_waers  = ls_vbak_y-waerk ) ) TO et_net.
     ENDLOOP.
-
-    " ------- reject Y so it does not stay open ------------------------
-    IF p_norej IS INITIAL.
-      DATA(lv_rejmsg) = reject_order_y( iv_vbeln_y = ev_vbeln_y
-                                        it_vbap    = it_vbap ).
-      IF lv_rejmsg IS NOT INITIAL.
-        add_result( VALUE #( vbeln_x = is_vbak-vbeln
-                             vbeln_y = ev_vbeln_y
-                             status  = c_error
-                             remark  = |Y NOT rejected - clean up manually: | &
-                                       |{ lv_rejmsg }| ) ).
-      ENDIF.
-    ENDIF.
-
-  ENDMETHOD.
-
-
-  METHOD reject_order_y.
-
-    DATA: ls_hdx    TYPE bapisdh1x,
-          lt_itm    TYPE STANDARD TABLE OF bapisditm,
-          lt_itmx   TYPE STANDARD TABLE OF bapisditmx,
-          lt_ret    TYPE bapiret2_t.
-
-    ls_hdx-updateflag = 'U'.
-
-    LOOP AT it_vbap INTO DATA(ls_vbap).
-      APPEND VALUE bapisditm( itm_number = ls_vbap-posnr
-                              reason_rej = p_abgru ) TO lt_itm.
-      APPEND VALUE bapisditmx( itm_number = ls_vbap-posnr
-                               updateflag = 'U'
-                               reason_rej = 'X' ) TO lt_itmx.
-    ENDLOOP.
-
-    CALL FUNCTION 'BAPI_SALESORDER_CHANGE'
-      EXPORTING
-        salesdocument    = iv_vbeln_y
-        order_header_inx = ls_hdx
-      TABLES
-        return           = lt_ret
-        order_item_in    = lt_itm
-        order_item_inx   = lt_itmx.
-
-    LOOP AT lt_ret TRANSPORTING NO FIELDS WHERE type CA 'EA'.
-      EXIT.
-    ENDLOOP.
-    IF sy-subrc = 0.
-      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
-      rv_msg = collect_messages( lt_ret ).
-    ELSE.
-      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
-        EXPORTING
-          wait = 'X'.
-    ENDIF.
 
   ENDMETHOD.
 
@@ -997,11 +931,13 @@ CLASS lcl_app IMPLEMENTATION.
         DATA(lo_grid) = NEW cl_salv_form_layout_grid( ).
         lo_grid->create_label( row = 1 column = 1
           text = |Pricing validation ECC -> S/4HANA  ({ COND string(
-                   WHEN p_crt = abap_true THEN 'create & reject Y'
+                   WHEN p_crt = abap_true THEN 'create order Y'
                    ELSE 'simulate Y' ) })| ).
         lo_grid->create_flow( row = 2 column = 1 )->create_text(
-          text = |Orders: { ms_stat-orders }  Errors: { ms_stat-errors }| ).
+          text = mv_info ).
         lo_grid->create_flow( row = 3 column = 1 )->create_text(
+          text = |Orders: { ms_stat-orders }  Errors: { ms_stat-errors }| ).
+        lo_grid->create_flow( row = 4 column = 1 )->create_text(
           text = |Conditions compared: { ms_stat-compared }  | &
                  |OK: { ms_stat-ok }  Mismatch: { ms_stat-mismatch }  | &
                  |Missing in S/4: { ms_stat-missing }  | &

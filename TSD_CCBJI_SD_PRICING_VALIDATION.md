@@ -18,14 +18,21 @@ moved to **PRCD_ELEMENTS** during conversion; KONV is obsolete/empty in S/4HANA)
 
 To prove that the S/4HANA pricing configuration (pricing procedure
 determination, condition records, access sequences, VOFM requirements/formulas)
-reproduces the ECC pricing result, the program takes each sales order **X** of a
-given document type, creates a copy order **Y** on which S/4HANA re-derives the
-pricing from scratch, and compares the pricing conditions of X and Y line by
-line. Any delta indicates a configuration or condition-record migration defect.
+reproduces the ECC pricing result, the user enters only a **document type and a
+creation date range**. The program automatically picks the sales order **X**
+with the **highest net value** (`VBAK-NETWR`) in that period, creates a copy
+order **Y** on which S/4HANA re-derives the pricing from scratch, and compares
+the pricing conditions of X and Y line by line. Any delta indicates a
+configuration or condition-record migration defect.
+
+All details of X (org data, partners, items, quantities, pricing date,
+conditions) are read from the database — `VBAK`, `VBAP`, `VBPA`, `VBKD` and
+`PRCD_ELEMENTS` (equivalent to what `BAPISDORDER_GETDETAILEDLIST` would
+return, but without the external-format conversions).
 
 ## 2. Processing modes
 
-### Mode 1 — Create & reject (default, chosen by CCBJI)
+### Mode 1 — Create order Y (default, chosen by CCBJI)
 
 1. Order Y is really created with `BAPI_SALESORDER_CREATEFROMDAT2`,
    `LOGIC_SWITCH-PRICING = 'B'` (carry out new pricing).
@@ -35,18 +42,16 @@ line. Any delta indicates a configuration or condition-record migration defect.
 3. After `BAPI_TRANSACTION_COMMIT` (wait), Y's freshly calculated conditions
    are read from **PRCD_ELEMENTS** via Y's `VBAK-KNUMV` — an
    internal-to-internal comparison against X's PRCD_ELEMENTS records.
-4. All items of Y are then **rejected** via `BAPI_SALESORDER_CHANGE` with the
-   rejection reason from parameter `P_ABGRU`, so Y does not remain an open
-   order (no delivery/billing follow-on, drops out of open-order reports).
-   Checkbox `P_NOREJ` keeps Y un-rejected for manual inspection in VA03.
-5. If rejection fails, an ERROR row *"Y NOT rejected — clean up manually"* is
-   written to the output.
+4. **Y remains in the system** (no rejection step, per CCBJI decision). The
+   `PRCVAL-*` PO number makes the test copies easy to find (VA05 /
+   `VBAK-BSTNK`) and clean up manually once the validation cycle is finished.
 
 > Note: create mode consumes number ranges and may trigger outputs / credit
-> checks / ATP depending on configuration. Run it in the QA client that holds
-> the migrated production data, not in production.
+> checks / ATP depending on configuration, and the Y orders stay open until
+> cleaned up. Run it in the QA client that holds the migrated production
+> data, not in production.
 
-### Mode 2 — Simulate (optional, for mass runs)
+### Mode 2 — Simulate (optional)
 
 `BAPI_SALESORDER_SIMULATE` re-prices without saving anything; the calculated
 conditions are returned in `ORDER_CONDITION_EX`. No number ranges, no
@@ -109,18 +114,16 @@ mismatch, since header distribution across items can legitimately differ.
 
 | Field | Description |
 |---|---|
-| `S_AUART` (obligatory) | Sales document type(s) to validate |
-| `S_VKORG/S_VTWEG/S_SPART` | Sales area |
-| `S_VBELN`, `S_ERDAT` | Order number / creation date restriction |
-| `P_MAXDOC` | Max. number of orders per run (default 100 — protects create mode) |
-| `P_CRT` / `P_SIM` | Mode: create & reject Y (default) / simulate |
-| `P_ABGRU` | Rejection reason for Y (mandatory in create mode unless `P_NOREJ`) |
-| `P_NOREJ` | Keep Y (no rejection) for manual inspection |
+| `S_AUART` (obligatory) | Sales document type(s) |
+| `S_ERDAT` (obligatory) | Creation date range — the order with the highest `VBAK-NETWR` in this period is selected as X |
+| `P_CRT` / `P_SIM` | Mode: create order Y (default) / simulate |
 | `P_DTOLD` / `P_DTTOD` | Pricing date for Y: X's PRSDT (default) / today |
 | `S_KSCHL` | Restrict condition types |
 | `P_TOL` | Absolute tolerance (default 0) |
 | `P_STAT` | Include statistical conditions |
 | `P_ONLYER` | Show differences only (default on) |
+
+The ALV header shows which order was picked as X and its net value.
 
 ## 6. Output
 
@@ -137,14 +140,14 @@ manual counts).
   → Display/Change Namespaces) and the target package must allow it.
 - Maintain text elements: `TEXT-001…004` (block titles), selection texts, and
   the message/remark text symbols (`M01/M02`, `R01…R06`).
-- A dedicated rejection reason (e.g. `ZP` — "pricing validation copy") should
-  be configured in OVAG and used for `P_ABGRU`, so Y orders are excluded from
-  sales reporting and cannot be delivered.
-- Authorization: standard checks of the BAPIs apply (VA01/VA02 equivalents);
-  run with a user authorized for order creation/change in the test client.
-- Recommended test sequence: run 5–10 orders per document type with
-  `P_MAXDOC = 10` and "differences only" off, review MANUAL/NEW noise, then
-  mass-run per document type.
+- Created Y orders are **not rejected automatically**. Plan a periodic manual
+  clean-up: find them via VA05 / `VBAK-BSTNK = PRCVAL-*` and reject or delete
+  them so they do not distort open-order reporting or get delivered.
+- Authorization: standard checks of the BAPIs apply (VA01 equivalent);
+  run with a user authorized for order creation in the test client.
+- Recommended test sequence: run one document type at a time with
+  "differences only" off first, review MANUAL/NEW noise, then repeat per
+  document type / period.
 
 ## 8. Known limitations
 
