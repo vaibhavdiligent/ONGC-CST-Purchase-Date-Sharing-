@@ -423,6 +423,16 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
   SELECT SINGLE kukla FROM kna1 INTO ls_reb-kukla
     WHERE kunnr = p_appr-kunnr.
   MODIFY yrva_rebate FROM ls_reb.
+
+* stamp the created order onto the grade-wise detail captured at L1
+  UPDATE ycis_apprvl_grd SET order_no = p_vbeln
+    WHERE qais_no     = p_appr-qais_no
+      AND scheme_type = p_appr-scheme_type
+      AND period_from = p_appr-period_from
+      AND period_to   = p_appr-period_to
+      AND kunnr       = p_appr-kunnr
+      AND kvgr2       = p_appr-kvgr2.
+
   COMMIT WORK AND WAIT.
 ENDFORM.
 
