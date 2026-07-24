@@ -35,8 +35,8 @@ CLASS zcl_ztable_meta_dpc DEFINITION
     METHODS /iwbep/if_mgw_appl_srv_runtime~get_entityset REDEFINITION.
 
   PROTECTED SECTION.
-    CONSTANTS gc_default_max_rows TYPE i VALUE 1000.   " cap when no $top sent
-    CONSTANTS gc_hard_max_rows    TYPE i VALUE 50000.  " absolute ceiling
+    CONSTANTS gc_default_max_rows TYPE i VALUE 1000.     " cap when no $top sent
+    CONSTANTS gc_hard_max_rows    TYPE i VALUE 1000000.  " absolute ceiling (backstop)
 
     " Extract the requested table name (or comma list) from $filter.
     METHODS get_tabname_from_filter
