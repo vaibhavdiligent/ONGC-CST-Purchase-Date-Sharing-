@@ -58,6 +58,14 @@ CLASS zcl_ztable_meta_dpc DEFINITION
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
       RETURNING VALUE(rv_join)           TYPE string.
 
+    " Decode a value that the caller Base64URL-encoded and prefixed 'B64:'.
+    " This lets a filter value hide SQL quotes/operators/spaces from CPI's
+    " OData adapter, which cannot parse them in $filter. Raw (unprefixed)
+    " values are returned unchanged.
+    METHODS decode_b64
+      IMPORTING iv_value        TYPE string
+      RETURNING VALUE(rv_value) TYPE string.
+
     " Build a reduced internal table containing only the requested fields
     " (validated against the table's DDIC columns) plus the column list.
     METHODS build_field_projection
@@ -109,7 +117,7 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
   METHOD /iwbep/if_mgw_appl_srv_runtime~get_entityset.
 
-    DATA(lv_tabname) = me->get_tabname_from_filter( it_filter_select_options ).
+    DATA(lv_tabname) = me->decode_b64( me->get_tabname_from_filter( it_filter_select_options ) ).
 
     IF lv_tabname IS INITIAL.
       me->raise_error( |Table name is mandatory. Use $filter=Tabname eq 'MARA'.| ).
@@ -142,9 +150,9 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
           lv_top = gc_default_max_rows.
         ENDIF.
 
-        DATA(lv_where)  = me->get_where_from_filter( it_filter_select_options ).
-        DATA(lv_fields) = me->get_fields_from_filter( it_filter_select_options ).
-        DATA(lv_join)   = me->get_join_from_filter( it_filter_select_options ).
+        DATA(lv_where)  = me->decode_b64( me->get_where_from_filter( it_filter_select_options ) ).
+        DATA(lv_fields) = me->decode_b64( me->get_fields_from_filter( it_filter_select_options ) ).
+        DATA(lv_join)   = me->decode_b64( me->get_join_from_filter( it_filter_select_options ) ).
 
         DATA(lt_rows) = me->read_data( iv_tabname = lv_tabname
                                        iv_top     = lv_top
@@ -267,6 +275,32 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         ENDIF.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD decode_b64.
+    " 'B64:<base64url>' -> decoded text. Base64URL uses - and _ and no
+    " padding; convert to standard Base64 and pad before decoding. This lets
+    " the caller pass a WhereClause/Join whose raw form (quotes, =, spaces)
+    " CPI's OData $filter parser would reject.
+    rv_value = iv_value.
+    IF iv_value NP 'B64:*'.
+      RETURN.
+    ENDIF.
+    DATA(lv_enc) = substring( val = iv_value off = 4 ).
+    REPLACE ALL OCCURRENCES OF '-' IN lv_enc WITH '+'.
+    REPLACE ALL OCCURRENCES OF '_' IN lv_enc WITH '/'.
+    DATA(lv_mod) = strlen( lv_enc ) MOD 4.
+    IF lv_mod = 2.
+      lv_enc = lv_enc && '=='.
+    ELSEIF lv_mod = 3.
+      lv_enc = lv_enc && '='.
+    ENDIF.
+    TRY.
+        rv_value = cl_http_utility=>decode_base64( encoded = lv_enc ).
+      CATCH cx_root.
+        rv_value = iv_value.       " leave as-is if it is not valid Base64
+    ENDTRY.
   ENDMETHOD.
 
 
