@@ -263,11 +263,12 @@ CLASS lcl_app IMPLEMENTATION.
           lv_error   TYPE string.
 
     " ------- items of X (skip fully rejected items) -------------------
+    DATA lt_vbap TYPE ty_t_vbap.
     SELECT posnr, matnr, werks, kwmeng, vrkme, netwr, abgru
       FROM vbap
       WHERE vbeln = @is_vbak-vbeln
       ORDER BY posnr
-      INTO TABLE @DATA(lt_vbap).
+      INTO CORRESPONDING FIELDS OF TABLE @lt_vbap.
 
     DELETE lt_vbap WHERE abgru IS NOT INITIAL.
     IF lt_vbap IS INITIAL.
