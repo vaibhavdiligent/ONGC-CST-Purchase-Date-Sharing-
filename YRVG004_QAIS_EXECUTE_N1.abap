@@ -1432,8 +1432,8 @@ FORM get_data.
           WHERE kunnr IN s_pkunag
           AND kvgr2 IN s_kvgr2
           AND vkbur IN s_vkbur
-          AND mou_begda LE s_sptag-high
-        AND mou_endda GE s_sptag-low
+          AND mou_begda LE s_sptag-low
+        AND mou_endda GE s_sptag-high
 ** SOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer
           AND module_identity = ''.
 ** EOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer             .
@@ -1444,8 +1444,8 @@ FORM get_data.
            WHERE kunnr IN s_pkunag
            AND kvgr2 IN s_kvgr2
            AND vkbur IN s_vkbur
-           AND mou_begda LE s_sptag-high
-           AND mou_endda GE s_sptag-low .
+           AND mou_begda LE s_sptag-low
+           AND mou_endda GE s_sptag-high .
             IF it_yrva_qais_data_m IS NOT INITIAL.
               LOOP AT it_yrva_qais_data_s INTO wa_yrva_qais_data_s.
                 READ TABLE it_yrva_qais_data INTO wa_yrva_qais_data WITH KEY kunnr = wa_yrva_qais_data_m-kunnr.
@@ -1461,8 +1461,8 @@ FORM get_data.
             WHERE kunnr IN s_pkunag
             AND kvgr2 IN s_kvgr2
             AND vkbur IN s_vkbur
-            AND mou_begda LE s_sptag-high
-            AND mou_endda GE s_sptag-low .
+            AND mou_begda LE s_sptag-low
+            AND mou_endda GE s_sptag-high .
             IF it_yrva_qais_data_m IS NOT INITIAL.
 *
 
@@ -1624,8 +1624,8 @@ FORM get_data.
         WHERE kunnr IN s_pkunag
         AND kvgr2 IN s_kvgr2
         AND vkbur IN s_vkbur
-        AND mou_begda LE s_sptag-high
-      AND mou_endda GE s_sptag-low
+        AND mou_begda LE s_sptag-low
+      AND mou_endda GE s_sptag-high
 ** SOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer
           AND module_identity = ''.
 ** EOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer
@@ -1684,10 +1684,9 @@ FORM get_data.
               IF sy-subrc NE 0.
 *               Drop a no-history customer only if its MOU is NOT active in the
 *               run month. Overlap-exclusion: begda after the month end, OR
-*               endda before the month start. (Earlier this wrongly tested
-*               begda against BOTH bounds, which dropped valid continuing
-*               customers whose MOU began in a prior month, e.g. a Feb entrant
-*               in the March run.)
+*               endda before the month start. (Was mou_begda NE s_sptag-low,
+*               which dropped valid continuing customers whose MOU began in a
+*               prior month, e.g. a Feb entrant in the March run.)
                 IF wa_yrva_qais_data-mou_begda GT s_sptag-high
                    OR wa_yrva_qais_data-mou_endda LT s_sptag-low .
                   DELETE it_yrva_qais_data INDEX lv_index1.
