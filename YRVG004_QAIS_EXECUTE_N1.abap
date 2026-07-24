@@ -11814,9 +11814,76 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_date     = sy-datum.
   ls-l1_time     = sy-uzeit.
   ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
+  ls-waers       = 'INR'.
   MODIFY ycis_apprvl FROM ls.
+*   grade-wise detail for the rebate report (captured at source)
+  PERFORM stage_grade_detail USING ls.
   COLLECT p_vkbur INTO gt_stg_office.       " for the L2 notification
 ENDFORM.                    "stage_one
+*&---------------------------------------------------------------------*
+*&      Form  stage_grade_detail   (CIS 2026-27 - grade-wise rebate detail)
+*&   Splits the rebate's eligible qty and value across the grades the
+*&   customer lifted (S922, grouped by KONDM) in proportion to each grade's
+*&   lifting, and stores one row per grade in YCIS_APPRVL_GRD. Non-discount
+*&   grades (r_nodisc) keep their qty but get zero value. The order number
+*&   is stamped later at L3 (create_order). Re-run safe (deletes first).
+*&---------------------------------------------------------------------*
+FORM stage_grade_detail USING p_hdr TYPE ycis_apprvl.
+  DATA: ls_grd TYPE ycis_apprvl_grd.
+  DATA: BEGIN OF ls_g,
+          kondm TYPE kondm,
+          qty   TYPE menge_d,
+        END OF ls_g.
+  DATA: lt_g LIKE STANDARD TABLE OF ls_g,
+        lv_totl TYPE menge_d,
+        lv_totd TYPE menge_d.
+
+  DELETE FROM ycis_apprvl_grd
+    WHERE qais_no     = p_hdr-qais_no
+      AND scheme_type = p_hdr-scheme_type
+      AND period_from = p_hdr-period_from
+      AND period_to   = p_hdr-period_to
+      AND kunnr       = p_hdr-kunnr
+      AND kvgr2       = p_hdr-kvgr2.
+
+  SELECT kondm ummenge FROM s922 INTO (ls_g-kondm, ls_g-qty)
+    WHERE sptag  BETWEEN p_hdr-period_from AND p_hdr-period_to
+      AND pkunag = p_hdr-kunnr.
+    COLLECT ls_g INTO lt_g.
+  ENDSELECT.
+  CHECK lt_g IS NOT INITIAL.
+
+  CLEAR: lv_totl, lv_totd.
+  LOOP AT lt_g INTO ls_g.
+    lv_totl = lv_totl + ls_g-qty.
+    IF ls_g-kondm NOT IN r_nodisc.
+      lv_totd = lv_totd + ls_g-qty.
+    ENDIF.
+  ENDLOOP.
+  CHECK lv_totl > 0.
+
+  LOOP AT lt_g INTO ls_g.
+    CLEAR ls_grd.
+    ls_grd-mandt       = sy-mandt.
+    ls_grd-qais_no     = p_hdr-qais_no.
+    ls_grd-scheme_type = p_hdr-scheme_type.
+    ls_grd-period_from = p_hdr-period_from.
+    ls_grd-period_to   = p_hdr-period_to.
+    ls_grd-kunnr       = p_hdr-kunnr.
+    ls_grd-kvgr2       = p_hdr-kvgr2.
+    ls_grd-kondm       = ls_g-kondm.
+    ls_grd-matnr       = p_hdr-material.
+    ls_grd-lft_qty     = ls_g-qty.
+    ls_grd-elig_qty    = p_hdr-elig_qty * ls_g-qty / lv_totl.
+    IF ls_g-kondm IN r_nodisc OR lv_totd IS INITIAL.
+      CLEAR ls_grd-rebate_val.
+    ELSE.
+      ls_grd-rebate_val = p_hdr-rebate_val * ls_g-qty / lv_totd.
+    ENDIF.
+    ls_grd-waers       = p_hdr-waers.
+    INSERT ycis_apprvl_grd FROM ls_grd.
+  ENDLOOP.
+ENDFORM.                    "stage_grade_detail
 *&---------------------------------------------------------------------*
 *&      Form  DISPLAY_LIST
 *&---------------------------------------------------------------------*

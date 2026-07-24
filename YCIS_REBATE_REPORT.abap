@@ -154,7 +154,36 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
     lv_bstkd = p_appr-purch_no.
   ENDIF.
 
-* ---- grade split : from S922 lifting for the customer + CIS period ----
+* ---- 1) grade detail captured at source (YCIS_APPRVL_GRD) ------------
+  DATA: lt_cap TYPE STANDARD TABLE OF ycis_apprvl_grd,
+        ls_cap TYPE ycis_apprvl_grd.
+  SELECT * FROM ycis_apprvl_grd INTO TABLE lt_cap
+    WHERE order_no = p_appr-order_no.
+  IF lt_cap IS NOT INITIAL.
+    LOOP AT lt_cap INTO ls_cap.
+      CLEAR gs_out.
+      gs_out-vbeln     = p_appr-order_no.
+      gs_out-auart     = lv_auart.
+      gs_out-erdat     = lv_erdat.
+      gs_out-bstkd     = lv_bstkd.
+      gs_out-kunnr     = p_appr-kunnr.
+      gs_out-name1     = lv_name.
+      gs_out-sales_off = p_appr-sales_off.
+      gs_out-kondm     = ls_cap-kondm.
+      IF ls_cap-kondm IS NOT INITIAL.
+        SELECT SINGLE vtext FROM t178t INTO gs_out-kondm_txt
+          WHERE spras = sy-langu AND kondm = ls_cap-kondm.
+      ENDIF.
+      gs_out-lft_qty    = ls_cap-lft_qty.
+      gs_out-elig_qty   = ls_cap-elig_qty.
+      gs_out-rebate_val = ls_cap-rebate_val.
+      gs_out-waers      = ls_cap-waers.
+      APPEND gs_out TO gt_out.
+    ENDLOOP.
+    RETURN.
+  ENDIF.
+
+* ---- 2) else reconstruct from S922 lifting (customer + CIS period) ----
   SELECT kondm ummenge FROM s922 INTO (ls_grade-kondm, ls_grade-qty)
     WHERE sptag  BETWEEN p_appr-period_from AND p_appr-period_to
       AND pkunag = p_appr-kunnr.
