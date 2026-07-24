@@ -206,10 +206,13 @@ ENDFORM.
 FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_err    TYPE i,
+        lv_dup    TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_off    TYPE vkbur,
-        lv_vbeln  TYPE vbeln.
+        lv_vbeln  TYPE vbeln,
+        lv_exord  TYPE ycis_apprvl-order_no,
+        lv_exstat TYPE ycis_apprvl-wf_status.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -234,6 +237,29 @@ FORM process_selected USING p_action TYPE char1.
     CHECK sy-subrc = 0.
 
     IF p_action = 'E'.
+*     Guard against a duplicate rebate order: re-read the current record
+*     from the database (the in-memory copy can be stale after an earlier
+*     Execute in the same session). If it already carries an order / is
+*     Completed, tell the user and skip - do NOT create a second order.
+      CLEAR: lv_exord, lv_exstat.
+      SELECT SINGLE order_no wf_status
+        INTO (lv_exord, lv_exstat)
+        FROM ycis_apprvl
+        WHERE qais_no     = gs_appr-qais_no
+          AND scheme_type = gs_appr-scheme_type
+          AND period_from = gs_appr-period_from
+          AND period_to   = gs_appr-period_to
+          AND kunnr       = gs_appr-kunnr
+          AND kvgr2       = gs_appr-kvgr2.
+      IF lv_exord IS NOT INITIAL OR lv_exstat = '40'.
+        lv_dup = lv_dup + 1.
+        gs_out-order_no = lv_exord.
+        gs_out-remarks  = |Rebate order { lv_exord } already created|.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
+        CONTINUE.
+      ENDIF.
+
       CLEAR lv_vbeln.
       PERFORM create_order USING gs_appr CHANGING lv_vbeln.
       IF lv_vbeln IS NOT INITIAL.
@@ -245,8 +271,16 @@ FORM process_selected USING p_action TYPE char1.
         gs_appr-remarks   = 'Executed - order created'.
         MODIFY ycis_apprvl FROM gs_appr.
         lv_cnt = lv_cnt + 1.
+*       keep the row on the main grid and show the created rebate order
+        gs_out-order_no = lv_vbeln.
+        gs_out-remarks  = 'Executed - order created'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
       ELSE.
         lv_err = lv_err + 1.
+        gs_out-remarks = 'Order creation failed'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
       ENDIF.
     ELSE.
       gs_appr-wf_status   = '20'.     " back to L2
@@ -268,10 +302,22 @@ FORM process_selected USING p_action TYPE char1.
       LOOP AT lt_office INTO lv_off.
         PERFORM send_mail USING '2' lv_off lv_off 'CIS rebates rejected by L3 - please review (L2)'.
       ENDLOOP.
+*     rejected rows leave L3 - remove them from the grid
+      DELETE gt_out WHERE sel = 'X'.
     ENDIF.
-    DELETE gt_out WHERE sel = 'X'.
   ENDIF.
-  MESSAGE |Processed: { lv_cnt }  Failed: { lv_err }| TYPE 'I'.
+* executed rows stay on the main grid with their Rebate Order number, so the
+* CPC user sees the full rebate-order list right after execution (visibility).
+  IF p_action = 'E'.
+    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0.
+*     only already-created lines were selected
+      MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
+    ELSE.
+      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
+    ENDIF.
+  ELSE.
+    MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
