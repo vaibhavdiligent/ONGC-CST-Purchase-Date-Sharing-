@@ -149,7 +149,7 @@ CLASS lcl_app DEFINITION FINAL.
         kwert_old  TYPE ty_amount,
         kwert_new  TYPE ty_amount,
         kwert_diff TYPE ty_amount,
-        remark     TYPE c LENGTH 100,
+        remark     TYPE c LENGTH 200,
         color      TYPE lvc_t_scol,
       END OF ty_result,
 
@@ -752,8 +752,16 @@ CLASS lcl_app IMPLEMENTATION.
 
         DATA(lo_cols) = lo_alv->get_columns( ).
         TRY.
-            lo_cols->get_column( 'VBELN_X' )->set_medium_text( 'Order X (ECC)' ).
-            lo_cols->get_column( 'VBELN_Y' )->set_medium_text( 'Order Y (S/4)' ).
+            " override all three DDIC texts, otherwise the ALV falls
+            " back to the data-element text ("Sales Document")
+            DATA(lo_col) = lo_cols->get_column( 'VBELN_X' ).
+            lo_col->set_short_text( 'SO Old' ).
+            lo_col->set_medium_text( 'Sales Order Old' ).
+            lo_col->set_long_text( 'Sales Order Old (ECC)' ).
+            lo_col = lo_cols->get_column( 'VBELN_Y' ).
+            lo_col->set_short_text( 'SO New' ).
+            lo_col->set_medium_text( 'Sales Order New' ).
+            lo_col->set_long_text( 'Sales Order New (S/4)' ).
             lo_cols->get_column( 'STATUS' )->set_medium_text( 'Status' ).
             lo_cols->get_column( 'RATE_OLD' )->set_medium_text( 'Rate X (ECC)' ).
             lo_cols->get_column( 'RATE_NEW' )->set_medium_text( 'Rate Y (S/4)' ).
