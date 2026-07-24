@@ -18,18 +18,14 @@
 *& partners, items, quantities, pricing date, conditions) is read from
 *& the database (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
 *&
-*&   Mode 1 (default) - CREATE:   Y is really created with
-*&            BAPI_SALESORDER_CREATEFROMDAT2, LOGIC_SWITCH-PRICING = 'B'
-*&            (carry out new pricing). Y's conditions are read back from
-*&            PRCD_ELEMENTS and compared with X's conditions. Y remains
-*&            in the system; its PO number field is stamped
-*&            'PRCVAL-<X>' so the test copies are easy to find (VA05 /
-*&            VBAK-BSTNK) and clean up.
-*&
-*&   Mode 2 - SIMULATE:  BAPI_SALESORDER_SIMULATE re-prices without
-*&            saving anything (no number range consumption, no ATP /
-*&            credit / output side effects). Y's conditions come from
-*&            ORDER_CONDITION_EX.
+*& Y is created with BAPI_SALESORDER_CREATEFROMDAT2 and
+*& LOGIC_SWITCH-PRICING = 'B' (carry out new pricing) using X's
+*& ORIGINAL pricing date (VBKD-PRSDT), so exactly the same
+*& condition-record validity periods apply as when X was priced in ECC
+*& - a true replication of X. Y's conditions are read back from
+*& PRCD_ELEMENTS and compared with X's conditions. Y remains in the
+*& system; its PO number field is stamped 'PRCVAL-<X>' so the test
+*& copies are easy to find (VA05 / VBAK-BSTNK) and clean up.
 *&
 *& COMPARISON
 *& ----------
@@ -44,30 +40,25 @@
 *& BAPI output amounts are already external (cf. SAP KBA 2333377).
 *&
 *& Classification:
-*&   OK          rate/value identical within tolerance P_TOL
+*&   OK          rate/value identical
 *&   MISMATCH    values differ -> S/4 pricing deviates from ECC result
 *&   MISSING_S4  condition exists on X but was not re-determined on Y
 *&               (missing/wrong condition record or access sequence)
 *&   NEW_IN_S4   condition determined on Y but absent on X
 *&   MANUAL      manually entered condition on X (KHERK 'C' / KMPRS) -
 *&               not re-derivable by repricing, reported for info only
-*&   ERROR       order could not be copied/simulated (BAPI messages)
+*&   ERROR       order Y could not be created (BAPI messages)
 *&
-*& Inactive condition lines (KINAK <> space) are ignored. Statistical
-*& lines (KSTAT = 'X') are ignored unless P_STAT is set. Fully rejected
-*& items of X (ABGRU <> space) are skipped.
+*& Inactive condition lines (KINAK <> space) and statistical lines
+*& (KSTAT = 'X') are ignored. Fully rejected items of X
+*& (ABGRU <> space) are skipped.
 *&
 *& TEXT ELEMENTS (maintain in SE38 -> Goto -> Text elements)
 *&   TEXT-001  Document type and period (order X = highest net value)
-*&   TEXT-002  Processing mode (copy order Y)
-*&   TEXT-003  Pricing date for order Y
-*&   TEXT-004  Comparison settings
 *&---------------------------------------------------------------------*
 REPORT /ccbji/sd_pricing_validation.
 
 TABLES: vbak.
-
-DATA gv_kschl TYPE kscha.
 
 *----------------------------------------------------------------------*
 * Selection screen
@@ -76,23 +67,6 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_auart FOR vbak-auart OBLIGATORY,   " document type
                   s_erdat FOR vbak-erdat OBLIGATORY.   " creation period
 SELECTION-SCREEN END OF BLOCK b1.
-
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-  PARAMETERS: p_crt RADIOBUTTON GROUP md DEFAULT 'X',  " create order Y
-              p_sim RADIOBUTTON GROUP md.              " simulate only
-SELECTION-SCREEN END OF BLOCK b2.
-
-SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
-  PARAMETERS: p_dtold RADIOBUTTON GROUP dt DEFAULT 'X', " X's pricing date
-              p_dttod RADIOBUTTON GROUP dt.             " today's date
-SELECTION-SCREEN END OF BLOCK b3.
-
-SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
-  SELECT-OPTIONS s_kschl FOR gv_kschl.           " restrict condition types
-  PARAMETERS: p_tol    TYPE p LENGTH 15 DECIMALS 3 DEFAULT 0, " tolerance
-              p_stat   AS CHECKBOX,              " include statistical
-              p_onlyer AS CHECKBOX DEFAULT 'X'.  " show differences only
-SELECTION-SCREEN END OF BLOCK b4.
 
 *----------------------------------------------------------------------*
 * Local class
@@ -140,7 +114,6 @@ CLASS lcl_app DEFINITION FINAL.
         kpein  TYPE kpein,
         kmein  TYPE kmein,
         kwert  TYPE ty_amount,        " KWERT, external
-        kwert_valid TYPE abap_bool,   " KWERT filled (create mode only)
         kstat  TYPE prcd_elements-kstat,
         kinak  TYPE prcd_elements-kinak,
         kherk  TYPE prcd_elements-kherk,
@@ -221,14 +194,6 @@ CLASS lcl_app DEFINITION FINAL.
                 et_net     TYPE ty_t_net
                 ev_error   TYPE string.
 
-    METHODS simulate_order_y
-      IMPORTING is_vbak  TYPE ty_vbak
-                it_vbap  TYPE ty_t_vbap
-                iv_prsdt TYPE prsdt
-      EXPORTING et_cond  TYPE ty_t_cond
-                et_net   TYPE ty_t_net
-                ev_error TYPE string.
-
     METHODS compare_conditions
       IMPORTING is_vbak    TYPE ty_vbak
                 iv_vbeln_y TYPE vbeln_va
@@ -245,16 +210,6 @@ CLASS lcl_app DEFINITION FINAL.
                 iv_waers      TYPE waers
                 iv_krech      TYPE clike OPTIONAL
       RETURNING VALUE(rv_ext) TYPE ty_amount.
-
-    METHODS get_num_component
-      IMPORTING is_struc      TYPE any
-                iv_name       TYPE string
-      RETURNING VALUE(rv_val) TYPE ty_amount.
-
-    METHODS get_chr_component
-      IMPORTING is_struc      TYPE any
-                iv_name       TYPE string
-      RETURNING VALUE(rv_val) TYPE string.
 
     METHODS collect_messages
       IMPORTING it_return     TYPE bapiret2_t
@@ -319,23 +274,21 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " ------- pricing date of X (VBKD header record) -------------------
+    " ------- pricing date = X's ORIGINAL pricing date -----------------
+    " Y must be priced on the same date as X so that identical
+    " condition-record validity periods apply (exact replication)
     DATA lv_prsdt TYPE prsdt.
-    IF p_dtold = abap_true.
+    SELECT SINGLE prsdt FROM vbkd
+      WHERE vbeln = @is_vbak-vbeln
+        AND posnr = '000000'
+      INTO @lv_prsdt.
+    IF lv_prsdt IS INITIAL.
       SELECT SINGLE prsdt FROM vbkd
         WHERE vbeln = @is_vbak-vbeln
-          AND posnr = '000000'
         INTO @lv_prsdt.
-      IF lv_prsdt IS INITIAL.
-        SELECT SINGLE prsdt FROM vbkd
-          WHERE vbeln = @is_vbak-vbeln
-          INTO @lv_prsdt.
-      ENDIF.
-      IF lv_prsdt IS INITIAL.
-        lv_prsdt = is_vbak-erdat.
-      ENDIF.
-    ELSE.
-      lv_prsdt = sy-datum.
+    ENDIF.
+    IF lv_prsdt IS INITIAL.
+      lv_prsdt = is_vbak-erdat.
     ENDIF.
 
     " ------- original (migrated ECC) pricing result of X --------------
@@ -343,22 +296,13 @@ CLASS lcl_app IMPLEMENTATION.
                                            iv_waerk = is_vbak-waerk ).
 
     " ------- re-derive pricing on copy order Y ------------------------
-    IF p_crt = abap_true.
-      create_order_y( EXPORTING is_vbak    = is_vbak
-                                it_vbap    = lt_vbap
-                                iv_prsdt   = lv_prsdt
-                      IMPORTING ev_vbeln_y = lv_vbeln_y
-                                et_cond    = lt_cond_y
-                                et_net     = lt_net_y
-                                ev_error   = lv_error ).
-    ELSE.
-      simulate_order_y( EXPORTING is_vbak  = is_vbak
-                                  it_vbap  = lt_vbap
-                                  iv_prsdt = lv_prsdt
-                        IMPORTING et_cond  = lt_cond_y
-                                  et_net   = lt_net_y
-                                  ev_error = lv_error ).
-    ENDIF.
+    create_order_y( EXPORTING is_vbak    = is_vbak
+                              it_vbap    = lt_vbap
+                              iv_prsdt   = lv_prsdt
+                    IMPORTING ev_vbeln_y = lv_vbeln_y
+                              et_cond    = lt_cond_y
+                              et_net     = lt_net_y
+                              ev_error   = lv_error ).
 
     IF lv_error IS NOT INITIAL.
       ms_stat-errors = ms_stat-errors + 1.
@@ -409,7 +353,6 @@ CLASS lcl_app IMPLEMENTATION.
           kmein = ls_prcd-kmein
           kwert = to_external( iv_amount = CONV #( ls_prcd-kwert )
                                iv_waers  = iv_waerk )
-          kwert_valid = abap_true
           kstat = ls_prcd-kstat
           kinak = ls_prcd-kinak
           kherk = ls_prcd-kherk
@@ -523,102 +466,6 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD simulate_order_y.
-
-    DATA: ls_hdr     TYPE bapisdhead,
-          lt_itm     TYPE STANDARD TABLE OF bapiitemin,
-          lt_prt     TYPE STANDARD TABLE OF bapipartnr,
-          lt_itm_out TYPE STANDARD TABLE OF bapiitemex,
-          lt_cond_ex TYPE STANDARD TABLE OF bapicond,
-          lt_msg     TYPE STANDARD TABLE OF bapiret2.
-
-    CLEAR: et_cond, et_net, ev_error.
-
-    ls_hdr-doc_type   = is_vbak-auart.
-    ls_hdr-sales_org  = is_vbak-vkorg.
-    ls_hdr-distr_chan = is_vbak-vtweg.
-    ls_hdr-division   = is_vbak-spart.
-    ls_hdr-price_date = iv_prsdt.
-    ls_hdr-purch_no   = |PRCVAL-{ is_vbak-vbeln }|.
-
-    SELECT parvw, kunnr FROM vbpa
-      WHERE vbeln = @is_vbak-vbeln
-        AND posnr = '000000'
-        AND parvw IN ('AG','WE')
-      INTO TABLE @DATA(lt_vbpa).
-    LOOP AT lt_vbpa INTO DATA(ls_vbpa).
-      APPEND VALUE bapipartnr( partn_role = ls_vbpa-parvw
-                               partn_numb = ls_vbpa-kunnr ) TO lt_prt.
-    ENDLOOP.
-
-    LOOP AT it_vbap INTO DATA(ls_vbap).
-      APPEND INITIAL LINE TO lt_itm ASSIGNING FIELD-SYMBOL(<ls_itm>).
-      <ls_itm>-itm_number = ls_vbap-posnr.
-      <ls_itm>-material   = ls_vbap-matnr.
-      <ls_itm>-plant      = ls_vbap-werks.
-      <ls_itm>-req_qty    = ls_vbap-kwmeng.
-      FIELD-SYMBOLS <lv_matl> TYPE any.
-      ASSIGN COMPONENT 'MATERIAL_LONG' OF STRUCTURE <ls_itm> TO <lv_matl>.
-      IF sy-subrc = 0.
-        <lv_matl> = ls_vbap-matnr.
-      ENDIF.
-    ENDLOOP.
-
-    CALL FUNCTION 'BAPI_SALESORDER_SIMULATE'
-      EXPORTING
-        order_header_in    = ls_hdr
-      TABLES
-        order_items_in     = lt_itm
-        order_partners     = lt_prt
-        order_items_out    = lt_itm_out
-        order_condition_ex = lt_cond_ex
-        messagetable       = lt_msg.
-
-    LOOP AT lt_msg TRANSPORTING NO FIELDS WHERE type CA 'EA'.
-      EXIT.
-    ENDLOOP.
-    IF sy-subrc = 0.
-      ev_error = |Simulation failed: { collect_messages( CONV #( lt_msg ) ) }|.
-      RETURN.
-    ENDIF.
-
-    " BAPI output is already in external format (KBA 2333377:
-    " percentage rates are returned divided by 10, i.e. as true percent)
-    SORT lt_cond_ex BY itm_number cond_st_no cond_count.
-    LOOP AT lt_cond_ex INTO DATA(ls_cond).
-      APPEND VALUE ty_cond(
-          posnr = ls_cond-itm_number
-          kschl = ls_cond-cond_type
-          rate  = ls_cond-cond_value
-          waers = ls_cond-currency
-          kpein = ls_cond-cond_p_unt
-          kmein = ls_cond-cond_unit
-          kwert_valid = abap_false
-          kinak = get_chr_component( is_struc = ls_cond
-                                     iv_name  = 'COND_INACT' )
-          kstat = get_chr_component( is_struc = ls_cond
-                                     iv_name  = 'COND_ISSTA' ) ) TO et_cond.
-    ENDLOOP.
-
-    set_occurrence( CHANGING ct_cond = et_cond ).
-
-    " item net value (field name differs between releases -> dynamic)
-    LOOP AT lt_itm_out INTO DATA(ls_itm_out).
-      DATA(lv_net) = get_num_component( is_struc = ls_itm_out
-                                        iv_name  = 'NET_VALUE1' ).
-      IF lv_net IS INITIAL.
-        lv_net = get_num_component( is_struc = ls_itm_out
-                                    iv_name  = 'NET_VALUE' ).
-      ENDIF.
-      IF lv_net IS NOT INITIAL.
-        APPEND VALUE ty_net( posnr = ls_itm_out-itm_number
-                             netwr = lv_net ) TO et_net.
-      ENDIF.
-    ENDLOOP.
-
-  ENDMETHOD.
-
-
   METHOD compare_conditions.
 
     DATA lt_y TYPE ty_t_cond.
@@ -626,14 +473,10 @@ CLASS lcl_app IMPLEMENTATION.
 
     LOOP AT it_x INTO DATA(ls_x).
 
-      " ignore inactive lines and (optionally) statistical lines
-      IF ls_x-kinak IS NOT INITIAL.
-        CONTINUE.
-      ENDIF.
-      IF ls_x-kstat = 'X' AND p_stat IS INITIAL.
-        CONTINUE.
-      ENDIF.
-      IF ls_x-kschl NOT IN s_kschl OR ls_x-kschl IS INITIAL.
+      " ignore inactive and statistical lines
+      IF ls_x-kinak IS NOT INITIAL
+         OR ls_x-kstat = 'X'
+         OR ls_x-kschl IS INITIAL.
         CONTINUE.
       ENDIF.
 
@@ -675,18 +518,15 @@ CLASS lcl_app IMPLEMENTATION.
       <ls_y>-used = abap_true.
       ms_stat-compared = ms_stat-compared + 1.
 
-      ls_res-rate_new  = <ls_y>-rate.
-      ls_res-rate_diff = <ls_y>-rate - ls_x-rate.
-      ls_res-kpein_new = <ls_y>-kpein.
-      ls_res-kmein_new = <ls_y>-kmein.
-      IF <ls_y>-kwert_valid = abap_true.
-        ls_res-kwert_new  = <ls_y>-kwert.
-        ls_res-kwert_diff = <ls_y>-kwert - ls_x-kwert.
-      ENDIF.
+      ls_res-rate_new   = <ls_y>-rate.
+      ls_res-rate_diff  = <ls_y>-rate - ls_x-rate.
+      ls_res-kpein_new  = <ls_y>-kpein.
+      ls_res-kmein_new  = <ls_y>-kmein.
+      ls_res-kwert_new  = <ls_y>-kwert.
+      ls_res-kwert_diff = <ls_y>-kwert - ls_x-kwert.
 
-      IF abs( ls_res-rate_diff ) > p_tol
-         OR ( <ls_y>-kwert_valid = abap_true
-              AND abs( ls_res-kwert_diff ) > p_tol )
+      IF ls_res-rate_diff <> 0
+         OR ls_res-kwert_diff <> 0
          OR ls_x-kpein <> <ls_y>-kpein
          OR ls_x-kmein <> <ls_y>-kmein.
         ms_stat-mismatch = ms_stat-mismatch + 1.
@@ -711,13 +551,9 @@ CLASS lcl_app IMPLEMENTATION.
 
     " conditions that only exist on the re-priced order Y
     LOOP AT lt_y INTO DATA(ls_y) WHERE used = abap_false.
-      IF ls_y-kinak IS NOT INITIAL.
-        CONTINUE.
-      ENDIF.
-      IF ls_y-kstat = 'X' AND p_stat IS INITIAL.
-        CONTINUE.
-      ENDIF.
-      IF ls_y-kschl NOT IN s_kschl OR ls_y-kschl IS INITIAL.
+      IF ls_y-kinak IS NOT INITIAL
+         OR ls_y-kstat = 'X'
+         OR ls_y-kschl IS INITIAL.
         CONTINUE.
       ENDIF.
       ms_stat-new_in_s4 = ms_stat-new_in_s4 + 1.
@@ -757,7 +593,7 @@ CLASS lcl_app IMPLEMENTATION.
           rate_new  = ls_net_y-netwr
           rate_diff = ls_net_y-netwr - lv_net_old
           remark    = 'Item net value (NETWR)'(r06) ).
-      IF abs( ls_netres-rate_diff ) > p_tol.
+      IF ls_netres-rate_diff <> 0.
         ms_stat-mismatch = ms_stat-mismatch + 1.
         ls_netres-status = c_diff.
       ELSE.
@@ -827,28 +663,6 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD get_num_component.
-    FIELD-SYMBOLS <lv_any> TYPE any.
-    ASSIGN COMPONENT iv_name OF STRUCTURE is_struc TO <lv_any>.
-    IF sy-subrc = 0.
-      TRY.
-          rv_val = <lv_any>.
-        CATCH cx_sy_conversion_error.
-          CLEAR rv_val.
-      ENDTRY.
-    ENDIF.
-  ENDMETHOD.
-
-
-  METHOD get_chr_component.
-    FIELD-SYMBOLS <lv_any> TYPE any.
-    ASSIGN COMPONENT iv_name OF STRUCTURE is_struc TO <lv_any>.
-    IF sy-subrc = 0.
-      rv_val = <lv_any>.
-    ENDIF.
-  ENDMETHOD.
-
-
   METHOD collect_messages.
     LOOP AT it_return INTO DATA(ls_ret) WHERE type CA 'EAX'.
       IF rv_msg IS NOT INITIAL.
@@ -878,11 +692,6 @@ CLASS lcl_app IMPLEMENTATION.
         ls_result-color = VALUE #( ( fname = 'STATUS'
                                      color-col = col_positive ) ).
     ENDCASE.
-
-    " with "differences only" suppress OK lines
-    IF p_onlyer = abap_true AND ls_result-status = c_ok.
-      RETURN.
-    ENDIF.
 
     APPEND ls_result TO mt_result.
 
@@ -930,9 +739,7 @@ CLASS lcl_app IMPLEMENTATION.
         " summary header
         DATA(lo_grid) = NEW cl_salv_form_layout_grid( ).
         lo_grid->create_label( row = 1 column = 1
-          text = |Pricing validation ECC -> S/4HANA  ({ COND string(
-                   WHEN p_crt = abap_true THEN 'create order Y'
-                   ELSE 'simulate Y' ) })| ).
+          text = 'Pricing validation ECC -> S/4HANA (copy order, original pricing date)' ).
         lo_grid->create_flow( row = 2 column = 1 )->create_text(
           text = mv_info ).
         lo_grid->create_flow( row = 3 column = 1 )->create_text(
