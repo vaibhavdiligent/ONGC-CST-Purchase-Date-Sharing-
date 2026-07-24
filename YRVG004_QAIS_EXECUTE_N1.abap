@@ -1682,14 +1682,14 @@ FORM get_data.
               lv_index1 = sy-tabix.
               READ TABLE it_yrva_qais_data_m INTO wa_yrva_qais_data_m WITH KEY qais_no = wa_yrva_qais_data-qais_no.
               IF sy-subrc NE 0.
-*               Legacy "must already have monthly history" check. In the
-*               maker-checker flow history (_m) is only written at L3 execute,
-*               so at L1 a valid new OR continuing customer legitimately has no
-*               _m row yet. Only apply this drop in the old (non-maker) flow.
-*               The get_data SELECT already guarantees the MOU overlaps the run
-*               month (mou_begda LE high AND mou_endda GE low), so no extra
-*               begda window check is needed here.
-                IF gv_maker_mode IS INITIAL.
+*               Drop a no-history customer only if its MOU is NOT active in the
+*               run month. Overlap-exclusion: begda after the month end, OR
+*               endda before the month start. (Earlier this wrongly tested
+*               begda against BOTH bounds, which dropped valid continuing
+*               customers whose MOU began in a prior month, e.g. a Feb entrant
+*               in the March run.)
+                IF wa_yrva_qais_data-mou_begda GT s_sptag-high
+                   OR wa_yrva_qais_data-mou_endda LT s_sptag-low .
                   DELETE it_yrva_qais_data INDEX lv_index1.
                   CLEAR lv_index1.
                   CONTINUE.
