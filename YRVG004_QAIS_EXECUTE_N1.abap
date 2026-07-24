@@ -1432,8 +1432,8 @@ FORM get_data.
           WHERE kunnr IN s_pkunag
           AND kvgr2 IN s_kvgr2
           AND vkbur IN s_vkbur
-          AND mou_begda LE s_sptag-low
-        AND mou_endda GE s_sptag-high
+          AND mou_begda LE s_sptag-high
+        AND mou_endda GE s_sptag-low
 ** SOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer
           AND module_identity = ''.
 ** EOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer             .
@@ -1444,8 +1444,8 @@ FORM get_data.
            WHERE kunnr IN s_pkunag
            AND kvgr2 IN s_kvgr2
            AND vkbur IN s_vkbur
-           AND mou_begda LE s_sptag-low
-           AND mou_endda GE s_sptag-high .
+           AND mou_begda LE s_sptag-high
+           AND mou_endda GE s_sptag-low .
             IF it_yrva_qais_data_m IS NOT INITIAL.
               LOOP AT it_yrva_qais_data_s INTO wa_yrva_qais_data_s.
                 READ TABLE it_yrva_qais_data INTO wa_yrva_qais_data WITH KEY kunnr = wa_yrva_qais_data_m-kunnr.
@@ -1461,8 +1461,8 @@ FORM get_data.
             WHERE kunnr IN s_pkunag
             AND kvgr2 IN s_kvgr2
             AND vkbur IN s_vkbur
-            AND mou_begda LE s_sptag-low
-            AND mou_endda GE s_sptag-high .
+            AND mou_begda LE s_sptag-high
+            AND mou_endda GE s_sptag-low .
             IF it_yrva_qais_data_m IS NOT INITIAL.
 *
 
@@ -1624,8 +1624,8 @@ FORM get_data.
         WHERE kunnr IN s_pkunag
         AND kvgr2 IN s_kvgr2
         AND vkbur IN s_vkbur
-        AND mou_begda LE s_sptag-low
-      AND mou_endda GE s_sptag-high
+        AND mou_begda LE s_sptag-high
+      AND mou_endda GE s_sptag-low
 ** SOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer
           AND module_identity = ''.
 ** EOC by ujjwal/priyanka on 08-10-2020 on charm 4000002898 to display only low value customer
