@@ -263,7 +263,8 @@ FORM process_selected USING p_action TYPE char1.
       CLEAR lv_vbeln.
       PERFORM create_order USING gs_appr CHANGING lv_vbeln.
       IF lv_vbeln IS NOT INITIAL.
-        gs_appr-wf_status = '40'.
+        gs_appr-wf_status = '40'.        " Completed
+        gs_appr-status    = 'A'.         " Approved - order created (clears 'P' Pending)
         gs_appr-order_no  = lv_vbeln.
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
