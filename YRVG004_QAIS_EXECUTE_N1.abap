@@ -11669,6 +11669,9 @@ FORM stage_all_rebates.
   REFRESH gt_stg_office.
   IF r_quater = 'X'.
     LOOP AT it_data_quater.
+      IF it_data_quater-value IS INITIAL.   " zero discount -> do not flow to L2
+        CONTINUE.
+      ENDIF.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
               it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
               it_data_quater-tot_elgl_qty it_data_quater-remarks
@@ -11677,6 +11680,9 @@ FORM stage_all_rebates.
     ENDLOOP.
   ELSEIF r_annual = 'X'.
     LOOP AT it_data_annual.
+      IF it_data_annual-value IS INITIAL.   " zero discount -> do not flow to L2
+        CONTINUE.
+      ENDIF.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
               it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
               it_data_annual-tot_elgl_qty it_data_annual-remarks
@@ -11685,6 +11691,9 @@ FORM stage_all_rebates.
     ENDLOOP.
   ELSEIF r_consis = 'X'.
     LOOP AT it_annual_consis.
+      IF it_annual_consis-value IS INITIAL.   " zero discount -> do not flow to L2
+        CONTINUE.
+      ENDIF.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
               it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
               it_annual_consis-tot_elgl_qty it_annual_consis-remarks
@@ -11693,6 +11702,9 @@ FORM stage_all_rebates.
     ENDLOOP.
   ELSE.
     LOOP AT it_data_monthly.
+      IF it_data_monthly-value IS INITIAL.   " zero discount -> do not flow to L2
+        CONTINUE.
+      ENDIF.
       PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
@@ -11781,6 +11793,8 @@ FORM stage_one USING p_stype   TYPE char1
                      p_rebcond TYPE any.
   DATA: ls TYPE ycis_apprvl.
   CLEAR ls.
+*   CIS 2026-27: a zero rebate/discount value must NOT flow to L2.
+  CHECK p_value IS NOT INITIAL.
 *   best-effort CIS number for traceability
   READ TABLE it_yrva_qais_data INTO wa_yrva_qais_data
        WITH KEY kunnr = p_kunnr.
