@@ -8660,7 +8660,7 @@ FORM month_jan .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Quarter 3 when not processed.
 **  IF wa_yrva_qais_data_m-mon_so_m9 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20240101'."* SOC Commeneted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
-  IF wa_yrva_qais_data_m-mon_so_m9 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
+  IF wa_yrva_qais_data_m-mon_so_m9 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -8757,7 +8757,7 @@ FORM month_feb .
 
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Jan Not Processed.
 **  IF wa_yrva_qais_data_m-mon_so_m10 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20240201'." SOC Commeneted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
-   IF wa_yrva_qais_data_m-mon_so_m10 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
+   IF wa_yrva_qais_data_m-mon_so_m10 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -8839,7 +8839,7 @@ FORM month_mar .
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 **  IF wa_yrva_qais_data_m-mon_so_m11 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20250301'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
 **  IF wa_yrva_qais_data_m-mon_so_m11 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20250301'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
-  IF wa_yrva_qais_data_m-mon_so_m11 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
+  IF wa_yrva_qais_data_m-mon_so_m11 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 
     lv_flag123 = 'X'.
     EXIT. "1
@@ -8982,7 +8982,7 @@ FORM month_may .
 
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Feb Not Processed.
 *  IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT '20240501'.
-IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
+IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
     lv_flag123 = 'X'.
     EXIT. "1
     MESSAGE 'List contain no records' TYPE 'E' .
@@ -9055,7 +9055,7 @@ FORM month_jun .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 ****SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month May Not Processed.
-  IF wa_yrva_qais_data_m-mon_so_m2 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+  IF wa_yrva_qais_data_m-mon_so_m2 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -9130,7 +9130,7 @@ FORM month_jul .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Jun Not Processed.
-  IF wa_yrva_qais_data_m-mon_so_m3 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+  IF wa_yrva_qais_data_m-mon_so_m3 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -9224,7 +9224,7 @@ FORM month_aug .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month July Not Processed.
-   IF wa_yrva_qais_data_m-mon_so_m4 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+   IF wa_yrva_qais_data_m-mon_so_m4 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -9308,7 +9308,7 @@ FORM month_sep .
   ls_date =  ls_yrva_cis_mstr-yy_start_date.
   PERFORM dynamic_month USING ls_date ls_monthn.
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Aug Not Processed.
-  IF wa_yrva_qais_data_m-mon_so_m5 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+  IF wa_yrva_qais_data_m-mon_so_m5 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -9389,7 +9389,7 @@ FORM month_oct .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Sep Not Processed.
- IF wa_yrva_qais_data_m-mon_so_m6 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+ IF wa_yrva_qais_data_m-mon_so_m6 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -9487,7 +9487,7 @@ FORM month_nov .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 ****SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Oct Not Processed.
-  IF wa_yrva_qais_data_m-mon_so_m7 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+  IF wa_yrva_qais_data_m-mon_so_m7 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
@@ -9572,7 +9572,7 @@ FORM month_dec .
   PERFORM dynamic_month USING ls_date ls_monthn.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
 ***SOC by ABHINAV JUYAL/PRIYANKA on CHARM: DVRK9A0VEE CHANGE Month Nov Not Processed.
-  IF wa_yrva_qais_data_m-mon_so_m8 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date.
+  IF wa_yrva_qais_data_m-mon_so_m8 IS INITIAL AND wa_yrva_qais_data-mou_begda LT ls_date AND gv_maker_mode IS INITIAL.
     lv_flag123 = 'X'.
     EXIT. "1
 
