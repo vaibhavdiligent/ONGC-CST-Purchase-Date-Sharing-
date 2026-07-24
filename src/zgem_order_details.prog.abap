@@ -364,6 +364,9 @@ START-OF-SELECTION.
       APPEND wa_order TO it_order.
       CLEAR wa_order.
     ENDLOOP.
+*   Persist immediately so the rows are on the database regardless of what
+*   happens later (do not rely on the implicit commit at screen display).
+    COMMIT WORK.
   ENDIF.
 
 *--- 7. Update vendor code (LIFNR) where a vendor with the same GSTIN or PAN

@@ -269,6 +269,9 @@ START-OF-SELECTION.
 
 *--- 5. Store into the standard ZGEM_CRACDET table
     MODIFY zgem_cracdet FROM TABLE it_final.
+*   Persist immediately so the rows are on the database regardless of what
+*   happens later (do not rely on the implicit commit at screen display).
+    COMMIT WORK.
 
   ENDIF.
 

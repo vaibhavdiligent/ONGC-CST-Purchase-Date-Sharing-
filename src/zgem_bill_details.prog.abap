@@ -441,6 +441,9 @@ START-OF-SELECTION.
     MOVE-CORRESPONDING wa_inv TO wa_bill.
     MODIFY zgem_bill FROM wa_bill.
   ENDLOOP.
+* Persist immediately so the rows are on the database regardless of what
+* happens later (do not rely on the implicit commit at screen display).
+  COMMIT WORK.
 
 *--- 6. Link the GeM invoice to the SAP PO tracking (ZMM_IMS) and notify
 *        the payment authorizer, exactly as the proven bill flow does.
