@@ -103,15 +103,28 @@ mismatch, since header distribution across items can legitimately differ.
 
 ## 5. Selection screen
 
+Two modes via radio buttons:
+
+**R1 — Automatic selection (default)**
+
 | Field | Description |
 |---|---|
-| `S_AUART` (obligatory) | Sales document type(s) |
-| `S_ERDAT` (obligatory) | Creation date range |
+| `S_AUART` (mandatory in R1) | Sales document type(s) |
+| `S_ERDAT` (mandatory in R1) | Creation date range |
 | `S_KUNNR` (optional) | Customer (sold-to) range — when filled, the top-N orders are determined **per customer** |
-| `P_TOPN` (obligatory, default 1) | How many orders to check: the N highest-value orders (`VBAK-NETWR` descending) overall, or per customer when `S_KUNNR` is filled |
+| `P_TOPN` (default 1) | How many orders to check: the N highest-value orders (`VBAK-NETWR` descending) overall, or per customer when `S_KUNNR` is filled |
 
 Example: 5 customers in `S_KUNNR` and `P_TOPN` = 5 → up to 25 orders are
 replicated and compared in one run.
+
+**R2 — Specific sales orders**
+
+| Field | Description |
+|---|---|
+| `S_VBELN` (mandatory in R2) | Sales order number(s) — every listed order is copied and compared, regardless of document type/date |
+
+Mandatory fields are validated at runtime per mode (R1 needs document type +
+date range; R2 needs at least one order number).
 
 Everything else is fixed: create-order mode, X's original pricing date, zero
 tolerance, statistical lines excluded, all comparison rows shown. The ALV

@@ -12,14 +12,22 @@
 *& reproduces the ECC result, the program lets S/4HANA re-derive the
 *& pricing from scratch on a copy order Y.
 *&
-*& The user enters document type and creation date range (mandatory),
-*& optionally a customer range, and how many orders to check (default
-*& 1). The program picks the top-N orders X with the HIGHEST net value
-*& (VBAK-NETWR) in that period - overall when no customer is entered,
-*& or per customer when a customer range is entered (e.g. 5 customers
-*& x top 5 orders = 25 copy orders). Every other detail of X (org
-*& data, partners, items, quantities, pricing date, conditions) is
-*& read from the database (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
+*& Two selection modes (radio buttons):
+*&
+*&   R1 AUTOMATIC (default): document type and creation date range are
+*&      mandatory; optionally a customer range and how many orders to
+*&      check (default 1). The program picks the top-N orders X with
+*&      the HIGHEST net value (VBAK-NETWR) in that period - overall
+*&      when no customer is entered, or per customer when a customer
+*&      range is entered (e.g. 5 customers x top 5 orders = 25 copy
+*&      orders).
+*&
+*&   R2 ORDER LIST: the user enters specific sales order numbers
+*&      (multiple selection); each listed order is copied and compared.
+*&
+*& Every other detail of X (org data, partners, items, quantities,
+*& pricing date, conditions) is read from the database
+*& (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
 *&
 *& Y is created with BAPI_SALESORDER_CREATEFROMDAT2 and
 *& LOGIC_SWITCH-PRICING = 'B' (carry out new pricing) using X's
@@ -60,7 +68,9 @@
 *& (ABGRU <> space) are skipped.
 *&
 *& TEXT ELEMENTS (maintain in SE38 -> Goto -> Text elements)
-*&   TEXT-001  Document type and period (order X = highest net value)
+*&   TEXT-001  Automatic selection (top orders by net value)
+*&   TEXT-002  Selection mode
+*&   TEXT-003  Specific sales orders
 *&---------------------------------------------------------------------*
 REPORT zsd_pricing_compare.
 
@@ -69,12 +79,23 @@ TABLES: vbak.
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_auto RADIOBUTTON GROUP md DEFAULT 'X', " R1 automatic top-N
+              p_list RADIOBUTTON GROUP md.             " R2 explicit orders
+SELECTION-SCREEN END OF BLOCK b0.
+
+* --- R1: automatic selection (doc type + period mandatory) ------------
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  SELECT-OPTIONS: s_auart FOR vbak-auart OBLIGATORY,   " document type
-                  s_erdat FOR vbak-erdat OBLIGATORY,   " creation period
+  SELECT-OPTIONS: s_auart FOR vbak-auart,              " document type
+                  s_erdat FOR vbak-erdat,              " creation period
                   s_kunnr FOR vbak-kunnr.              " customer (optional)
-  PARAMETERS p_topn TYPE i DEFAULT 1 OBLIGATORY.       " orders to check
+  PARAMETERS p_topn TYPE i DEFAULT 1.                  " orders to check
 SELECTION-SCREEN END OF BLOCK b1.
+
+* --- R2: user-specified sales orders ----------------------------------
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-003.
+  SELECT-OPTIONS s_vbeln FOR vbak-vbeln.               " order numbers
+SELECTION-SCREEN END OF BLOCK b2.
 
 *----------------------------------------------------------------------*
 * Local class
@@ -242,15 +263,37 @@ CLASS lcl_app IMPLEMENTATION.
     DATA: lt_vbak TYPE ty_t_vbak,
           lv_cust TYPE i.
 
-    IF p_topn < 1.
-      MESSAGE 'Number of orders to check must be at least 1'(m03) TYPE 'E'.
+    " ------- mode-dependent input validation --------------------------
+    IF p_auto = abap_true.
+      IF s_auart[] IS INITIAL OR s_erdat[] IS INITIAL.
+        MESSAGE 'Document type and date range are mandatory for automatic selection'(m04)
+          TYPE 'E'.
+      ENDIF.
+      IF p_topn < 1.
+        MESSAGE 'Number of orders to check must be at least 1'(m03) TYPE 'E'.
+      ENDIF.
+    ELSE.
+      IF s_vbeln[] IS INITIAL.
+        MESSAGE 'Enter at least one sales order number'(m05) TYPE 'E'.
+      ENDIF.
     ENDIF.
 
-    " pick the top-N highest-value orders in the selected period:
+    " ------- R2: user-specified order numbers -------------------------
+    IF p_list = abap_true.
+      SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
+             erdat, kunnr, netwr
+        FROM vbak
+        WHERE vbeln IN @s_vbeln
+        ORDER BY vbeln
+        INTO CORRESPONDING FIELDS OF TABLE @lt_vbak.
+
+      mv_info = |Order list: { lines( lt_vbak ) } order(s) selected|.
+
+    " ------- R1: pick the top-N highest-value orders ------------------
     "  - without customer restriction: N orders overall
     "  - with customer range: N orders PER customer
     " all further details of X are read from VBAK/VBAP/VBPA/VBKD
-    IF s_kunnr[] IS INITIAL.
+    ELSEIF s_kunnr[] IS INITIAL.
       SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
              erdat, kunnr, netwr
         FROM vbak
@@ -289,12 +332,14 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF s_kunnr[] IS INITIAL.
-      mv_info = |Top { p_topn } order(s) by net value: | &
-                |{ lines( lt_vbak ) } order(s) selected|.
-    ELSE.
-      mv_info = |Top { p_topn } order(s) per customer for { lv_cust } | &
-                |customer(s): { lines( lt_vbak ) } order(s) selected|.
+    IF p_auto = abap_true.
+      IF s_kunnr[] IS INITIAL.
+        mv_info = |Top { p_topn } order(s) by net value: | &
+                  |{ lines( lt_vbak ) } order(s) selected|.
+      ELSE.
+        mv_info = |Top { p_topn } order(s) per customer for { lv_cust } | &
+                  |customer(s): { lines( lt_vbak ) } order(s) selected|.
+      ENDIF.
     ENDIF.
 
     LOOP AT lt_vbak INTO DATA(ls_vbak).
