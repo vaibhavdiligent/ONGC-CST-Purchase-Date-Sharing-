@@ -30,6 +30,8 @@ TYPES: BEGIN OF ty_out,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
          mcq_qty     TYPE ycis_apprvl-mcq_qty,
+         lft_qty     TYPE ycis_apprvl-lft_qty,       " group lifted qty
+         ind_lft_qty TYPE ycis_apprvl-ind_lft_qty,   " individual lifted qty
          mcq_perc    TYPE ycis_apprvl-mcq_perc,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
@@ -139,10 +141,12 @@ FORM build_fieldcat.
   add_fc 'KUNNR'       'Customer'        ''.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
-  add_fc 'SALES_OFF'   'Sales Office'    ''.
-  add_fc 'MCQ_QTY'     'MCQ Qty'         ''.
-  add_fc 'MCQ_PERC'    'MCQ %'           ''.
-  add_fc 'ELIG_QTY'    'Eligible Qty'    ''.
+  add_fc 'SALES_OFF'   'Sales Office'         ''.
+  add_fc 'MCQ_QTY'     'Committed Qty'        ''.
+  add_fc 'LFT_QTY'     'Group Lifted Qty'     ''.
+  add_fc 'IND_LFT_QTY' 'Individual Lifted Qty' ''.
+  add_fc 'MCQ_PERC'    'MCQ %'                ''.
+  add_fc 'ELIG_QTY'    'Eligible Qty'         ''.
   add_fc 'REBATE_VAL'  'Rebate Value'    ''.
   add_fc 'PURCH_NO'    'Reference No'    ''.
   add_fc 'L2_USER'     'L2 Approved By'  ''.

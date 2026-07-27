@@ -11703,7 +11703,7 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
               it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
               it_data_quater-tot_elgl_qty it_data_quater-remarks
-              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero.
+              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero lv_zero.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_annual = 'X'.
@@ -11717,7 +11717,7 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
               it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
               it_data_annual-tot_elgl_qty it_data_annual-remarks
-              it_data_annual-grp_lift_qty 'ZAIS' lv_zero.
+              it_data_annual-grp_lift_qty 'ZAIS' lv_zero it_data_annual-ind_lift_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_consis = 'X'.
@@ -11731,7 +11731,7 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
               it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
               it_annual_consis-tot_elgl_qty it_annual_consis-remarks
-              it_annual_consis-grp_lift_qty 'ZACD' lv_zero.
+              it_annual_consis-grp_lift_qty 'ZACD' lv_zero it_annual_consis-ind_lift_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
@@ -11745,7 +11745,8 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
-              it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty.
+              it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty
+              it_data_monthly-ind_lift_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
@@ -11828,7 +11829,8 @@ FORM stage_one USING p_stype   TYPE char1
                      p_remarks TYPE any
                      p_lift    TYPE p
                      p_rebcond TYPE any
-                     p_mcq     TYPE p.
+                     p_mcq     TYPE p
+                     p_indlift TYPE p.
   DATA: ls TYPE ycis_apprvl.
   CLEAR ls.
 *   best-effort CIS number for traceability
@@ -11865,6 +11867,8 @@ FORM stage_one USING p_stype   TYPE char1
   IF p_mcq IS NOT INITIAL.
     ls-mcq_perc  = p_lift / p_mcq * 100.
   ENDIF.
+  ls-ind_lft_qty = p_indlift.            " individual lifted qty -> shown at L3
+*                                          (LFT_QTY already holds group lift)
 *   audit / status  (L1 confirm -> pending L2)
   ls-status      = 'P'.
   ls-maker       = sy-uname.
