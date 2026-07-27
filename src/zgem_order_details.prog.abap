@@ -220,7 +220,7 @@ DATA: it_final TYPE TABLE OF ty_final,
 
 DATA: v_regio TYPE t005u-bland,
       v_stcd3 TYPE lfa1-stcd3,
-      v_panno TYPE j_1imovend-j_1ipanno.
+      v_panno TYPE lfa1-j_1ipanno.   " PAN now lives on LFA1 (J_1IMOVEND is obsolete in S/4HANA)
 
 DATA: lo_alv  TYPE REF TO cl_salv_table,
       lx_salv TYPE REF TO cx_salv_msg.
@@ -377,9 +377,10 @@ START-OF-SELECTION.
   SORT it_ord BY order_id.
   DELETE ADJACENT DUPLICATES FROM it_ord COMPARING order_id.
 
-  SELECT l~lifnr, l~regio, l~ktokk, l~stcd3, j~j_1ipanno INTO TABLE @DATA(it_lfa1)
-    FROM lfa1 AS l INNER JOIN j_1imovend AS j
-    ON l~lifnr = j~lifnr
+* J_1IMOVEND is obsolete in S/4HANA - PAN (J_1IPANNO) and the tax fields are
+* now on LFA1 directly, so read them straight from LFA1 (no CIN join).
+  SELECT lifnr, regio, ktokk, stcd3, j_1ipanno INTO TABLE @DATA(it_lfa1)
+    FROM lfa1
     WHERE ktokk = 'GEMV'.
 
   LOOP AT it_ord INTO DATA(wa_ord).
