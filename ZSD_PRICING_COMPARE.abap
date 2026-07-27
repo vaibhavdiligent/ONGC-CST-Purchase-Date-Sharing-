@@ -260,13 +260,14 @@ CLASS lcl_app IMPLEMENTATION.
         INTO CORRESPONDING FIELDS OF TABLE @lt_vbak
         UP TO @p_topn ROWS.
     ELSE.
+      DATA lt_kunnr TYPE STANDARD TABLE OF vbak-kunnr.
       SELECT DISTINCT kunnr
         FROM vbak
         WHERE auart IN @s_auart
           AND erdat IN @s_erdat
           AND kunnr IN @s_kunnr
         ORDER BY kunnr
-        INTO TABLE @DATA(lt_kunnr).
+        INTO TABLE @lt_kunnr.
       lv_cust = lines( lt_kunnr ).
 
       LOOP AT lt_kunnr INTO DATA(lv_kunnr).
