@@ -102,13 +102,14 @@ CLASS zcl_ztable_meta_dpc DEFINITION
 
     " Read table data dynamically and serialise each row to JSON.
     METHODS read_data
-      IMPORTING iv_tabname     TYPE string
-                iv_top         TYPE i
-                iv_skip        TYPE i
-                iv_where       TYPE string OPTIONAL
-                iv_fields      TYPE string OPTIONAL
-                iv_join        TYPE string OPTIONAL
-      RETURNING VALUE(rt_rows) TYPE zcl_ztable_meta_mpc=>tt_table_row
+      IMPORTING iv_tabname  TYPE string
+                iv_top      TYPE i
+                iv_skip     TYPE i
+                iv_where    TYPE string OPTIONAL
+                iv_fields   TYPE string OPTIONAL
+                iv_join     TYPE string OPTIONAL
+      EXPORTING et_rows     TYPE zcl_ztable_meta_mpc=>tt_table_row
+                ev_has_more TYPE abap_bool
       RAISING   /iwbep/cx_mgw_busi_exception.
 ENDCLASS.
 
@@ -140,13 +141,28 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
                           CHANGING  cr_data = er_entityset ).
 
       WHEN 'TableDataSet'.
-        " Paging: honour $top / $skip, else apply the default cap.
+        " Paging - two modes, transparent to the caller:
+        "  * explicit $top / $skip (client-driven), and
+        "  * server-driven paging (CPI "Page Size" / "Process in Pages").
+        "    The skiptoken carries "offset_pagesize". When more rows remain
+        "    we hand back a skiptoken; the framework then adds a __next link,
+        "    which is what makes CPI's hasMoreRecords property become true.
         DATA lv_top  TYPE i.
         DATA lv_skip TYPE i.
-        lv_skip = is_paging-skip.
-        IF is_paging-top > 0.
-          lv_top = is_paging-top.
+        DATA(lv_skiptoken) = io_tech_request_context->get_skiptoken( ).
+        IF lv_skiptoken IS NOT INITIAL.
+          SPLIT lv_skiptoken AT '_' INTO DATA(lv_tok_off) DATA(lv_tok_siz).
+          lv_skip = lv_tok_off.
+          lv_top  = lv_tok_siz.
         ELSE.
+          lv_skip = is_paging-skip.
+          IF is_paging-top > 0.
+            lv_top = is_paging-top.
+          ELSE.
+            lv_top = gc_default_max_rows.
+          ENDIF.
+        ENDIF.
+        IF lv_top <= 0.
           lv_top = gc_default_max_rows.
         ENDIF.
 
@@ -154,12 +170,25 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         DATA(lv_fields) = me->decode_b64( me->get_fields_from_filter( it_filter_select_options ) ).
         DATA(lv_join)   = me->decode_b64( me->get_join_from_filter( it_filter_select_options ) ).
 
-        DATA(lt_rows) = me->read_data( iv_tabname = lv_tabname
-                                       iv_top     = lv_top
-                                       iv_skip    = lv_skip
-                                       iv_where   = lv_where
-                                       iv_fields  = lv_fields
-                                       iv_join    = lv_join ).
+        DATA lt_rows     TYPE zcl_ztable_meta_mpc=>tt_table_row.
+        DATA lv_has_more TYPE abap_bool.
+        me->read_data(
+          EXPORTING iv_tabname = lv_tabname
+                    iv_top     = lv_top
+                    iv_skip    = lv_skip
+                    iv_where   = lv_where
+                    iv_fields  = lv_fields
+                    iv_join    = lv_join
+          IMPORTING et_rows     = lt_rows
+                    ev_has_more = lv_has_more ).
+
+        " More rows remain -> return a skiptoken; the framework emits the
+        " __next link and CPI sets hasMoreRecords = true to loop again.
+        IF lv_has_more = abap_true.
+          DATA(lv_next_off) = lv_skip + lv_top.
+          es_response_context-skiptoken = |{ lv_next_off }_{ lv_top }|.
+        ENDIF.
+
         copy_data_to_ref( EXPORTING is_data = lt_rows
                           CHANGING  cr_data = er_entityset ).
 
@@ -473,9 +502,11 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
                    <ls_data> TYPE any.
 
     " Paging cap. UP TO n ROWS caps the result set; skipping is done in
-    " ABAP after fetch (portable across DBs).
+    " ABAP after fetch (portable across DBs). One extra row is fetched
+    " (iv_top + iv_skip + 1) so we can detect whether a further page exists
+    " and, if so, hand back a skiptoken (-> __next -> CPI hasMoreRecords).
     DATA lv_fetch TYPE i.
-    lv_fetch = iv_top + iv_skip.
+    lv_fetch = iv_top + iv_skip + 1.
     IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
       lv_fetch = gc_hard_max_rows.
     ENDIF.
@@ -555,11 +586,20 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         me->raise_error( |Read failed: { lx_sql->get_text( ) }| ).
     ENDTRY.
 
+    CLEAR ev_has_more.
+    DATA lv_taken TYPE i.
     LOOP AT <lt_data> ASSIGNING <ls_data>.
       lv_rowno = sy-tabix.
       " apply $skip
       IF lv_rowno <= iv_skip.
         CONTINUE.
+      ENDIF.
+      lv_taken = lv_taken + 1.
+      " The (iv_top + 1)-th row after the skip proves another page exists;
+      " flag it and stop without returning it.
+      IF lv_taken > iv_top.
+        ev_has_more = abap_true.
+        EXIT.
       ENDIF.
       CLEAR ls_row.
       ls_row-tabname     = iv_tabname.
@@ -571,7 +611,7 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
                              data        = <ls_data>
                              compress    = abap_false
                              pretty_name = /ui2/cl_json=>pretty_mode-none ).
-      APPEND ls_row TO rt_rows.
+      APPEND ls_row TO et_rows.
     ENDLOOP.
   ENDMETHOD.
 
