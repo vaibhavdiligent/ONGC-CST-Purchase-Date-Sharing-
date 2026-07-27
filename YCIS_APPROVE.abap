@@ -36,6 +36,8 @@ TYPES: BEGIN OF ty_out,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
+         mcq_qty     TYPE ycis_apprvl-mcq_qty,
+         mcq_perc    TYPE ycis_apprvl-mcq_perc,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
          purch_no    TYPE ycis_apprvl-purch_no,
@@ -159,6 +161,8 @@ FORM build_fieldcat.
   add_fc 'CUST_NAME'   'Customer Name' ''.
   add_fc 'KVGR2'       'Cust Group'    ''.
   add_fc 'SALES_OFF'   'Sales Office'  ''.
+  add_fc 'MCQ_QTY'     'MCQ Qty'       ''.
+  add_fc 'MCQ_PERC'    'MCQ %'         ''.
   add_fc 'ELIG_QTY'    'Eligible Qty'  ''.
   add_fc 'REBATE_VAL'  'Rebate Value'  ''.
   add_fc 'PURCH_NO'    'Reference No'  ''.
