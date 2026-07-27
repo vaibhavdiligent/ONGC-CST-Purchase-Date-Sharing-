@@ -181,6 +181,7 @@ FORM display_alv.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
+      i_callback_top_of_page   = 'TOP_OF_PAGE'
       is_layout                = gs_layout
       it_fieldcat              = gt_fcat
     TABLES
@@ -188,6 +189,32 @@ FORM display_alv.
     EXCEPTIONS
       program_error            = 1
       OTHERS                   = 2.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page   (confirmation statement header - L2)
+*&---------------------------------------------------------------------*
+FORM top_of_page.                                           "#EC CALLED
+  DATA: lt_hdr TYPE slis_t_listheader,
+        ls_hdr TYPE slis_listheader.
+  CLEAR ls_hdr. ls_hdr-typ = 'H'.
+  ls_hdr-info = 'CIS 2026-27 - Level-2 Approval. On approval you confirm:'.
+  APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'.
+  ls_hdr-info = 'Customer-wise, grade-wise sales quantities, along with'.
+  APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'.
+  ls_hdr-info = 'eligible PSD rates and amounts, have been verified and'.
+  APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'.
+  ls_hdr-info = 'confirmed after considering customer waivers, shortfall'.
+  APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'.
+  ls_hdr-info = 'waivers, sales return quantities, and Group/MLE details.'.
+  APPEND ls_hdr TO lt_hdr.
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = lt_hdr.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
