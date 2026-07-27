@@ -19,6 +19,17 @@ TYPE-POOLS: slis.
 TABLES: ycis_apprvl, ycis_wf_appr.
 
 CONSTANTS: gc_level TYPE ycis_wlevel VALUE '3'.
+*   Confirmation statement (verified & confirmed at L1 and L2), shown as the
+*   L3 report header for onward processing.
+CONSTANTS:
+  gc_stmt1 TYPE string VALUE
+    'Customer-wise, grade-wise sales quantities, along with',
+  gc_stmt2 TYPE string VALUE
+    'eligible PSD rates and amounts, have been verified and',
+  gc_stmt3 TYPE string VALUE
+    'confirmed after considering customer waivers, shortfall',
+  gc_stmt4 TYPE string VALUE
+    'waivers, sales return quantities, and Group/MLE details.'.
 
 TYPES: BEGIN OF ty_out,
          sel         TYPE flag,
@@ -30,11 +41,17 @@ TYPES: BEGIN OF ty_out,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
          mcq_qty     TYPE ycis_apprvl-mcq_qty,
+         lft_qty     TYPE ycis_apprvl-lft_qty,       " group lifted qty
+         ind_lft_qty TYPE ycis_apprvl-ind_lft_qty,   " individual lifted qty
          mcq_perc    TYPE ycis_apprvl-mcq_perc,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
          purch_no    TYPE ycis_apprvl-purch_no,
+*        L1 & L2 verification status captured for L3 onward processing
+         l1_user     TYPE ycis_apprvl-l1_user,
+         l1_date     TYPE ycis_apprvl-l1_date,
          l2_user     TYPE ycis_apprvl-l2_user,
+         l2_date     TYPE ycis_apprvl-l2_date,
          order_no    TYPE ycis_apprvl-order_no,
          remarks     TYPE ycis_apprvl-remarks,
        END OF ty_out.
@@ -139,13 +156,18 @@ FORM build_fieldcat.
   add_fc 'KUNNR'       'Customer'        ''.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
-  add_fc 'SALES_OFF'   'Sales Office'    ''.
-  add_fc 'MCQ_QTY'     'MCQ Qty'         ''.
-  add_fc 'MCQ_PERC'    'MCQ %'           ''.
-  add_fc 'ELIG_QTY'    'Eligible Qty'    ''.
+  add_fc 'SALES_OFF'   'Sales Office'         ''.
+  add_fc 'MCQ_QTY'     'Committed Qty'        ''.
+  add_fc 'LFT_QTY'     'Group Lifted Qty'     ''.
+  add_fc 'IND_LFT_QTY' 'Individual Lifted Qty' ''.
+  add_fc 'MCQ_PERC'    'MCQ %'                ''.
+  add_fc 'ELIG_QTY'    'Eligible Qty'         ''.
   add_fc 'REBATE_VAL'  'Rebate Value'    ''.
   add_fc 'PURCH_NO'    'Reference No'    ''.
-  add_fc 'L2_USER'     'L2 Approved By'  ''.
+  add_fc 'L1_USER'     'L1 Verified By'  ''.
+  add_fc 'L1_DATE'     'L1 Verified On'  ''.
+  add_fc 'L2_USER'     'L2 Verified By'  ''.
+  add_fc 'L2_DATE'     'L2 Verified On'  ''.
   add_fc 'ORDER_NO'    'Rebate Order'    ''.
   add_fc 'REMARKS'     'Remarks'         ''.
 ENDFORM.
@@ -159,6 +181,7 @@ FORM display_alv.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
+      i_callback_top_of_page   = 'TOP_OF_PAGE'
       is_layout                = gs_layout
       it_fieldcat              = gt_fcat
     TABLES
@@ -166,6 +189,24 @@ FORM display_alv.
     EXCEPTIONS
       program_error            = 1
       OTHERS                   = 2.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page   (confirmation statement header - L1/L2 verified)
+*&---------------------------------------------------------------------*
+FORM top_of_page.                                           "#EC CALLED
+  DATA: lt_hdr TYPE slis_t_listheader,
+        ls_hdr TYPE slis_listheader.
+  CLEAR ls_hdr. ls_hdr-typ = 'H'.
+  ls_hdr-info = 'CIS 2026-27 - Level-3 Execution (verified & confirmed at L1 and L2)'.
+  APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt1. APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt2. APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt3. APPEND ls_hdr TO lt_hdr.
+  CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt4. APPEND ls_hdr TO lt_hdr.
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = lt_hdr.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

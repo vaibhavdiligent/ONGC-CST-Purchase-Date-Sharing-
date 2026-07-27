@@ -56,6 +56,16 @@ TYPES: BEGIN OF ty_out,
          meins      TYPE meins,        " unit
          rebate_val TYPE ycis_apprvl-rebate_val,  " rebate amount of this grade
          waers      TYPE waers,        " currency
+*        approval trail - who approved at each level and when
+         l1_user    TYPE ycis_apprvl-l1_user,
+         l1_date    TYPE ycis_apprvl-l1_date,
+         l1_time    TYPE ycis_apprvl-l1_time,
+         l2_user    TYPE ycis_apprvl-l2_user,
+         l2_date    TYPE ycis_apprvl-l2_date,
+         l2_time    TYPE ycis_apprvl-l2_time,
+         l3_user    TYPE ycis_apprvl-l3_user,
+         l3_date    TYPE ycis_apprvl-l3_date,
+         l3_time    TYPE ycis_apprvl-l3_time,
        END OF ty_out.
 
 TYPES: BEGIN OF ty_grade,
@@ -178,6 +188,7 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
       gs_out-elig_qty   = ls_cap-elig_qty.
       gs_out-rebate_val = ls_cap-rebate_val.
       gs_out-waers      = ls_cap-waers.
+      PERFORM fill_appr_trail USING p_appr.
       APPEND gs_out TO gt_out.
     ENDLOOP.
     RETURN.
@@ -213,6 +224,7 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
     gs_out-lft_qty    = p_appr-lft_qty.
     gs_out-rebate_val = p_appr-rebate_val.
     gs_out-waers      = p_appr-waers.
+    PERFORM fill_appr_trail USING p_appr.
     APPEND gs_out TO gt_out.
     RETURN.
   ENDIF.
@@ -244,8 +256,23 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
       gs_out-rebate_val = lv_val.
     ENDIF.
     gs_out-waers     = p_appr-waers.
+    PERFORM fill_appr_trail USING p_appr.
     APPEND gs_out TO gt_out.
   ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  fill_appr_trail   (approval trail: who/when at L1/L2/L3)
+*&---------------------------------------------------------------------*
+FORM fill_appr_trail USING p_appr TYPE ycis_apprvl.
+  gs_out-l1_user = p_appr-l1_user.
+  gs_out-l1_date = p_appr-l1_date.
+  gs_out-l1_time = p_appr-l1_time.
+  gs_out-l2_user = p_appr-l2_user.
+  gs_out-l2_date = p_appr-l2_date.
+  gs_out-l2_time = p_appr-l2_time.
+  gs_out-l3_user = p_appr-l3_user.
+  gs_out-l3_date = p_appr-l3_date.
+  gs_out-l3_time = p_appr-l3_time.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -272,6 +299,15 @@ FORM build_fieldcat.
   add_fc 'ELIG_QTY'  'Discount Qty'.
   add_fc 'REBATE_VAL' 'Rebate Amount'.
   add_fc 'WAERS'     'Currency'.
+  add_fc 'L1_USER'   'L1 Approved By'.
+  add_fc 'L1_DATE'   'L1 Date'.
+  add_fc 'L1_TIME'   'L1 Time'.
+  add_fc 'L2_USER'   'L2 Approved By'.
+  add_fc 'L2_DATE'   'L2 Date'.
+  add_fc 'L2_TIME'   'L2 Time'.
+  add_fc 'L3_USER'   'L3 Executed By'.
+  add_fc 'L3_DATE'   'L3 Date'.
+  add_fc 'L3_TIME'   'L3 Time'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
