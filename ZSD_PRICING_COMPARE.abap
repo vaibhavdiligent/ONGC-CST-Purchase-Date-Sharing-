@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*& Report  /CCBJI/SD_PRICING_VALIDATION
+*& Report  ZSD_PRICING_COMPARE
 *&---------------------------------------------------------------------*
 *& CCBJI - Pricing regression validation after ECC -> S/4HANA migration
 *&
@@ -59,7 +59,7 @@
 *& TEXT ELEMENTS (maintain in SE38 -> Goto -> Text elements)
 *&   TEXT-001  Document type and period (order X = highest net value)
 *&---------------------------------------------------------------------*
-REPORT /ccbji/sd_pricing_validation.
+REPORT zsd_pricing_compare.
 
 TABLES: vbak.
 
