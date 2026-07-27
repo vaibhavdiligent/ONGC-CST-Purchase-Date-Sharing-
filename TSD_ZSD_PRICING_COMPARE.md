@@ -18,12 +18,15 @@ moved to **PRCD_ELEMENTS** during conversion; KONV is obsolete/empty in S/4HANA)
 
 To prove that the S/4HANA pricing configuration (pricing procedure
 determination, condition records, access sequences, VOFM requirements/formulas)
-reproduces the ECC pricing result, the user enters only a **document type and a
-creation date range**. The program automatically picks the sales order **X**
-with the **highest net value** (`VBAK-NETWR`) in that period, creates a copy
-order **Y** on which S/4HANA re-derives the pricing from scratch, and compares
-the pricing conditions of X and Y line by line. Any delta indicates a
-configuration or condition-record migration defect.
+reproduces the ECC pricing result, the user enters a **document type and a
+creation date range** (mandatory), optionally a **customer range**, and **how
+many orders to check** (default 1). The program picks the top-N sales orders
+**X** with the **highest net value** (`VBAK-NETWR`) in that period — overall
+when no customer is entered, or **per customer** when a customer range is
+entered (e.g. 5 customers × top 5 orders = 25 copy orders). For each X it
+creates a copy order **Y** on which S/4HANA re-derives the pricing from
+scratch and compares the pricing conditions of X and Y line by line. Any
+delta indicates a configuration or condition-record migration defect.
 
 All details of X (org data, partners, items, quantities, pricing date,
 conditions) are read from the database — `VBAK`, `VBAP`, `VBPA`, `VBKD` and
@@ -100,16 +103,22 @@ mismatch, since header distribution across items can legitimately differ.
 
 ## 5. Selection screen
 
-Only two fields, both obligatory:
-
 | Field | Description |
 |---|---|
-| `S_AUART` | Sales document type(s) |
-| `S_ERDAT` | Creation date range — the order with the highest `VBAK-NETWR` in this period is selected as X |
+| `S_AUART` (obligatory) | Sales document type(s) |
+| `S_ERDAT` (obligatory) | Creation date range |
+| `S_KUNNR` (optional) | Customer (sold-to) range — when filled, the top-N orders are determined **per customer** |
+| `P_TOPN` (obligatory, default 1) | How many orders to check: the N highest-value orders (`VBAK-NETWR` descending) overall, or per customer when `S_KUNNR` is filled |
+
+Example: 5 customers in `S_KUNNR` and `P_TOPN` = 5 → up to 25 orders are
+replicated and compared in one run.
 
 Everything else is fixed: create-order mode, X's original pricing date, zero
 tolerance, statistical lines excluded, all comparison rows shown. The ALV
-header shows which order was picked as X and its net value.
+header shows how many orders were selected; a Customer column identifies the
+sold-to party of each row. All BAPI input/output variables are cleared
+explicitly at the start of each order so no values carry over between the
+orders of one run.
 
 ## 6. Output
 
@@ -136,8 +145,8 @@ manual counts).
 - Manual conditions of X are not injected into Y — reported as `MANUAL`.
 - Group conditions / scale-based conditions may legitimately differ when Y's
   cumulative base differs from X's original document context.
-- One order (the highest-value one) is validated per run; run per document
-  type / period for coverage.
+- The N highest-value orders (overall or per customer) are validated per run;
+  vary document type / period / customers for broader coverage.
 
 ## 9. References
 

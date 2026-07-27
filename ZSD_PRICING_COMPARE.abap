@@ -12,11 +12,14 @@
 *& reproduces the ECC result, the program lets S/4HANA re-derive the
 *& pricing from scratch on a copy order Y.
 *&
-*& The user only enters document type and creation date range. The
-*& program automatically picks the order X with the HIGHEST net value
-*& (VBAK-NETWR) in that period; every other detail of X (org data,
-*& partners, items, quantities, pricing date, conditions) is read from
-*& the database (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
+*& The user enters document type and creation date range (mandatory),
+*& optionally a customer range, and how many orders to check (default
+*& 1). The program picks the top-N orders X with the HIGHEST net value
+*& (VBAK-NETWR) in that period - overall when no customer is entered,
+*& or per customer when a customer range is entered (e.g. 5 customers
+*& x top 5 orders = 25 copy orders). Every other detail of X (org
+*& data, partners, items, quantities, pricing date, conditions) is
+*& read from the database (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
 *&
 *& Y is created with BAPI_SALESORDER_CREATEFROMDAT2 and
 *& LOGIC_SWITCH-PRICING = 'B' (carry out new pricing) using X's
@@ -68,7 +71,9 @@ TABLES: vbak.
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_auart FOR vbak-auart OBLIGATORY,   " document type
-                  s_erdat FOR vbak-erdat OBLIGATORY.   " creation period
+                  s_erdat FOR vbak-erdat OBLIGATORY,   " creation period
+                  s_kunnr FOR vbak-kunnr.              " customer (optional)
+  PARAMETERS p_topn TYPE i DEFAULT 1 OBLIGATORY.       " orders to check
 SELECTION-SCREEN END OF BLOCK b1.
 
 *----------------------------------------------------------------------*
@@ -93,7 +98,10 @@ CLASS lcl_app DEFINITION FINAL.
         knumv TYPE vbak-knumv,
         waerk TYPE vbak-waerk,
         erdat TYPE vbak-erdat,
+        kunnr TYPE vbak-kunnr,
+        netwr TYPE vbak-netwr,
       END OF ty_vbak,
+      ty_t_vbak TYPE STANDARD TABLE OF ty_vbak WITH DEFAULT KEY,
 
       BEGIN OF ty_vbap,
         posnr  TYPE vbap-posnr,
@@ -134,6 +142,7 @@ CLASS lcl_app DEFINITION FINAL.
       BEGIN OF ty_result,
         vbeln_x    TYPE vbeln_va,
         vbeln_y    TYPE vbeln_va,
+        kunnr      TYPE kunnr,
         posnr      TYPE posnr_va,
         matnr      TYPE vbap-matnr,
         kschl      TYPE kscha,
@@ -230,15 +239,48 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD run.
 
-    " pick the order with the highest net value in the selected period -
+    DATA: lt_vbak TYPE ty_t_vbak,
+          lv_cust TYPE i.
+
+    IF p_topn < 1.
+      MESSAGE 'Number of orders to check must be at least 1'(m03) TYPE 'E'.
+    ENDIF.
+
+    " pick the top-N highest-value orders in the selected period:
+    "  - without customer restriction: N orders overall
+    "  - with customer range: N orders PER customer
     " all further details of X are read from VBAK/VBAP/VBPA/VBKD
-    SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk, erdat, netwr
-      FROM vbak
-      WHERE auart IN @s_auart
-        AND erdat IN @s_erdat
-      ORDER BY netwr DESCENDING, vbeln
-      INTO TABLE @DATA(lt_vbak)
-      UP TO 1 ROWS.
+    IF s_kunnr[] IS INITIAL.
+      SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
+             erdat, kunnr, netwr
+        FROM vbak
+        WHERE auart IN @s_auart
+          AND erdat IN @s_erdat
+        ORDER BY netwr DESCENDING, vbeln
+        INTO CORRESPONDING FIELDS OF TABLE @lt_vbak
+        UP TO @p_topn ROWS.
+    ELSE.
+      SELECT DISTINCT kunnr
+        FROM vbak
+        WHERE auart IN @s_auart
+          AND erdat IN @s_erdat
+          AND kunnr IN @s_kunnr
+        ORDER BY kunnr
+        INTO TABLE @DATA(lt_kunnr).
+      lv_cust = lines( lt_kunnr ).
+
+      LOOP AT lt_kunnr INTO DATA(lv_kunnr).
+        SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
+               erdat, kunnr, netwr
+          FROM vbak
+          WHERE auart IN @s_auart
+            AND erdat IN @s_erdat
+            AND kunnr = @lv_kunnr
+          ORDER BY netwr DESCENDING, vbeln
+          APPENDING CORRESPONDING FIELDS OF TABLE @lt_vbak
+          UP TO @p_topn ROWS.
+      ENDLOOP.
+    ENDIF.
 
     IF lt_vbak IS INITIAL.
       MESSAGE 'No sales orders found for the selection'(m02) TYPE 'S'
@@ -246,12 +288,18 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(ls_vbak) = lt_vbak[ 1 ].
-    mv_info = |Highest-value order in period: { ls_vbak-vbeln } | &
-              |({ ls_vbak-netwr } { ls_vbak-waerk })|.
+    IF s_kunnr[] IS INITIAL.
+      mv_info = |Top { p_topn } order(s) by net value: | &
+                |{ lines( lt_vbak ) } order(s) selected|.
+    ELSE.
+      mv_info = |Top { p_topn } order(s) per customer for { lv_cust } | &
+                |customer(s): { lines( lt_vbak ) } order(s) selected|.
+    ENDIF.
 
-    ms_stat-orders = 1.
-    process_order( CORRESPONDING #( ls_vbak ) ).
+    LOOP AT lt_vbak INTO DATA(ls_vbak).
+      ms_stat-orders = ms_stat-orders + 1.
+      process_order( ls_vbak ).
+    ENDLOOP.
 
     display( ).
 
@@ -265,8 +313,12 @@ CLASS lcl_app IMPLEMENTATION.
           lv_vbeln_y TYPE vbeln_va,
           lv_error   TYPE string.
 
+    " fresh work area per order (method runs once per selected order)
+    CLEAR: lt_cond_y[], lt_net_y[], lv_vbeln_y, lv_error.
+
     " ------- items of X (skip fully rejected items) -------------------
     DATA lt_vbap TYPE ty_t_vbap.
+    CLEAR lt_vbap[].
     SELECT posnr, matnr, werks, kwmeng, vrkme, netwr, abgru
       FROM vbap
       WHERE vbeln = @is_vbak-vbeln
@@ -312,6 +364,7 @@ CLASS lcl_app IMPLEMENTATION.
       ms_stat-errors = ms_stat-errors + 1.
       add_result( VALUE #( vbeln_x = is_vbak-vbeln
                            vbeln_y = lv_vbeln_y
+                           kunnr   = is_vbak-kunnr
                            kschl   = space
                            status  = c_error
                            remark  = lv_error ) ).
@@ -377,7 +430,12 @@ CLASS lcl_app IMPLEMENTATION.
           lt_sch TYPE STANDARD TABLE OF bapischdl,
           lt_ret TYPE bapiret2_t.
 
-    CLEAR: ev_vbeln_y, et_cond, et_net, ev_error.
+    " the method runs once per order X - clear every BAPI input/output
+    " and every exporting parameter explicitly so nothing carries over
+    " from the previous order in the loop
+    CLEAR: ev_vbeln_y, et_cond, et_net, ev_error,
+           ls_hdr, ls_ls.
+    CLEAR: lt_itm[], lt_prt[], lt_sch[], lt_ret[].
 
     " ------- header: copy org data of X, force new pricing ------------
     ls_hdr-doc_type   = is_vbak-auart.
@@ -487,6 +545,7 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(ls_res) = VALUE ty_result(
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
+          kunnr     = is_vbak-kunnr
           posnr     = ls_x-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_x-posnr ]-matnr
                                OPTIONAL )
@@ -570,6 +629,7 @@ CLASS lcl_app IMPLEMENTATION.
       add_result( VALUE #(
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
+          kunnr     = is_vbak-kunnr
           posnr     = ls_y-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_y-posnr ]-matnr
                                OPTIONAL )
@@ -595,6 +655,7 @@ CLASS lcl_app IMPLEMENTATION.
       DATA(ls_netres) = VALUE ty_result(
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
+          kunnr     = is_vbak-kunnr
           posnr     = ls_vbap-posnr
           matnr     = ls_vbap-matnr
           kschl     = c_netrow
@@ -735,7 +796,7 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-    SORT mt_result BY vbeln_x posnr kschl.
+    SORT mt_result BY kunnr vbeln_x posnr kschl.
 
     TRY.
         cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
