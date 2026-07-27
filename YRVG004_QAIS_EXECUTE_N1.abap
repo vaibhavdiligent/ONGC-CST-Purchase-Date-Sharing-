@@ -212,6 +212,7 @@ DATA: BEGIN OF it_data_monthly OCCURS 0 ,
         begda        TYPE d,
         endda        TYPE d,
         commited_qty TYPE p DECIMALS 3,
+        mcq_perc     TYPE p DECIMALS 2,   " MCQ achievement % (grp lift / MCQ)
         grp_lift_qty TYPE p DECIMALS 3,
         ind_lift_qty TYPE p DECIMALS 3,
         ind_elgl_qty TYPE p DECIMALS 3,
@@ -8633,6 +8634,12 @@ FORM monthly_discount .
       ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222 date: 12/10/2023
       it_data_monthly-remarks = w_remarks.
+*     MCQ achievement % (group lifted vs Monthly Committed Qty)
+      CLEAR it_data_monthly-mcq_perc.
+      IF it_data_monthly-commited_qty IS NOT INITIAL.
+        it_data_monthly-mcq_perc =
+          it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty * 100.
+      ENDIF.
       APPEND it_data_monthly .
       CLEAR: wa_yrva_qais_data-lv_no_dis_qty.
       MODIFY it_yrva_qais_data FROM  wa_yrva_qais_data.
@@ -10758,8 +10765,20 @@ FORM create_field_catalog .
     gt_fieldcat-outputlen    =  15.
     gt_fieldcat-just         =  'L' .
     gt_fieldcat-col_pos      =  w_sr.
-    gt_fieldcat-seltext_s    = 'Commited Qty'.
-    gt_fieldcat-seltext_m    = 'Commited Qty'.
+    gt_fieldcat-seltext_s    = 'MCQ Qty'.
+    gt_fieldcat-seltext_m    = 'MCQ / Commited Qty'.
+    gt_fieldcat-ddictxt      = 'M'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+
+    gt_fieldcat-fieldname = 'MCQ_PERC'.
+    gt_fieldcat-outputlen    =  10.
+    gt_fieldcat-just         =  'L' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'MCQ %'.
+    gt_fieldcat-seltext_m    = 'MCQ %'.
     gt_fieldcat-ddictxt      = 'M'.
     gt_fieldcat-do_sum       = space.
     APPEND gt_fieldcat.
@@ -11665,50 +11684,68 @@ ENDFORM.                    "build_cis_shortfall
 *   the checker (YCIS_APPROVE) can create the order after approval.
 *&---------------------------------------------------------------------*
 FORM stage_all_rebates.
-  DATA: lv_cnt TYPE i, lv_off TYPE vkbur.
+  DATA: lv_cnt  TYPE i,
+        lv_off  TYPE vkbur,
+        lv_flow TYPE abap_bool,
+        lv_qind TYPE p DECIMALS 3,
+        lv_zero TYPE p DECIMALS 3.       " MCQ only applies to monthly
   REFRESH gt_stg_office.
   IF r_quater = 'X'.
     LOOP AT it_data_quater.
-      IF it_data_quater-value IS INITIAL.   " zero discount -> do not flow to L2
+      lv_qind = it_data_quater-ind_lift_qty_m1 + it_data_quater-ind_lift_qty_m2
+              + it_data_quater-ind_lift_qty_m3.
+      PERFORM l1_row_may_flow USING it_data_quater-kunnr it_data_quater-kvgr2
+              it_data_quater-value lv_qind it_data_quater-tot_grp_lift_qty
+              CHANGING lv_flow.
+      IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
               it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
               it_data_quater-tot_elgl_qty it_data_quater-remarks
-              it_data_quater-tot_grp_lift_qty 'ZQIS'.
+              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_annual = 'X'.
     LOOP AT it_data_annual.
-      IF it_data_annual-value IS INITIAL.   " zero discount -> do not flow to L2
+      PERFORM l1_row_may_flow USING it_data_annual-kunnr it_data_annual-kvgr2
+              it_data_annual-value it_data_annual-ind_lift_qty it_data_annual-grp_lift_qty
+              CHANGING lv_flow.
+      IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
               it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
               it_data_annual-tot_elgl_qty it_data_annual-remarks
-              it_data_annual-grp_lift_qty 'ZAIS'.
+              it_data_annual-grp_lift_qty 'ZAIS' lv_zero.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_consis = 'X'.
     LOOP AT it_annual_consis.
-      IF it_annual_consis-value IS INITIAL.   " zero discount -> do not flow to L2
+      PERFORM l1_row_may_flow USING it_annual_consis-kunnr it_annual_consis-kvgr2
+              it_annual_consis-value it_annual_consis-ind_lift_qty it_annual_consis-grp_lift_qty
+              CHANGING lv_flow.
+      IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
               it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
               it_annual_consis-tot_elgl_qty it_annual_consis-remarks
-              it_annual_consis-grp_lift_qty 'ZACD'.
+              it_annual_consis-grp_lift_qty 'ZACD' lv_zero.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
     LOOP AT it_data_monthly.
-      IF it_data_monthly-value IS INITIAL.   " zero discount -> do not flow to L2
+      PERFORM l1_row_may_flow USING it_data_monthly-kunnr it_data_monthly-kvgr2
+              it_data_monthly-value it_data_monthly-ind_lift_qty it_data_monthly-grp_lift_qty
+              CHANGING lv_flow.
+      IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
-              it_data_monthly-grp_lift_qty 'ZMIS'.
+              it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
@@ -11790,11 +11827,10 @@ FORM stage_one USING p_stype   TYPE char1
                      p_qty     TYPE p
                      p_remarks TYPE any
                      p_lift    TYPE p
-                     p_rebcond TYPE any.
+                     p_rebcond TYPE any
+                     p_mcq     TYPE p.
   DATA: ls TYPE ycis_apprvl.
   CLEAR ls.
-*   CIS 2026-27: a zero rebate/discount value must NOT flow to L2.
-  CHECK p_value IS NOT INITIAL.
 *   best-effort CIS number for traceability
   READ TABLE it_yrva_qais_data INTO wa_yrva_qais_data
        WITH KEY kunnr = p_kunnr.
@@ -11824,6 +11860,11 @@ FORM stage_one USING p_stype   TYPE char1
   ls-rebate_val  = p_value.
   ls-lft_qty     = p_lift.               " lifted qty -> YRVA_REBATE at L3
   ls-reb_cond    = p_rebcond.            " rebate condition -> YRVA_REBATE at L3
+*   Monthly Committed Qty (MCQ) + achievement % -> shown at L1/L2/L3
+  ls-mcq_qty     = p_mcq.
+  IF p_mcq IS NOT INITIAL.
+    ls-mcq_perc  = p_lift / p_mcq * 100.
+  ENDIF.
 *   audit / status  (L1 confirm -> pending L2)
   ls-status      = 'P'.
   ls-maker       = sy-uname.
@@ -11840,6 +11881,50 @@ FORM stage_one USING p_stype   TYPE char1
   PERFORM stage_grade_detail USING ls.
   COLLECT p_vkbur INTO gt_stg_office.       " for the L2 notification
 ENDFORM.                    "stage_one
+*&---------------------------------------------------------------------*
+*&      Form  l1_row_may_flow   (CIS 2026-27 - L1 flow decision)
+*&---------------------------------------------------------------------*
+*   Decide whether an L1 result row may flow to L2:
+*     - discount value > 0                         -> OK, flow
+*     - zero value but S/F (shortfall) waiver       -> flow  (rule 1: SO
+*       carries the S/F waiver; qais_no is in the shortfall-waiver list)
+*     - zero value but GROUP code that lifted while
+*       this code lifted nothing                    -> flow  (rule 3:
+*       'Grp O.k' in the zero-lifting code)
+*     - otherwise (zero value, no waiver, no group
+*       lifting)                                     -> fail  (rule 2: do
+*       not flow to L2)
+*&---------------------------------------------------------------------*
+FORM l1_row_may_flow USING p_kunnr TYPE kunnr
+                           p_kvgr2 TYPE kvgr2
+                           p_value TYPE kbetr
+                           p_ind   TYPE p
+                           p_grp   TYPE p
+                     CHANGING p_flow TYPE abap_bool.
+  DATA: ls_q TYPE yrva_qais_data.
+  CLEAR p_flow.
+*   normal eligible row (non-zero discount)
+  IF p_value IS NOT INITIAL.
+    p_flow = 'X'.
+    RETURN.
+  ENDIF.
+*   zero discount - rescue only for S/F waiver or Grp O.k
+  READ TABLE it_yrva_qais_data INTO ls_q WITH KEY kunnr = p_kunnr.
+  IF sy-subrc = 0.
+    READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
+         WITH KEY qais_no = ls_q-qais_no.
+    IF sy-subrc = 0.
+      p_flow = 'X'.                 " S/F waiver (rule 1)
+      RETURN.
+    ENDIF.
+  ENDIF.
+  IF p_kvgr2 IS NOT INITIAL
+     AND p_grp IS NOT INITIAL       " group lifted in the period
+     AND p_ind IS INITIAL.          " this code lifted nothing
+    p_flow = 'X'.                   " Grp O.k (rule 3)
+    RETURN.
+  ENDIF.
+ENDFORM.                    "l1_row_may_flow
 *&---------------------------------------------------------------------*
 *&      Form  stage_grade_detail   (CIS 2026-27 - grade-wise rebate detail)
 *&   Splits the rebate's eligible qty and value across the grades the
