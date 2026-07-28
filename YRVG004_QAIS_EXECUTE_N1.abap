@@ -220,7 +220,7 @@ DATA: BEGIN OF it_data_monthly OCCURS 0 ,
 *        REMARKS(30)," SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222 date: 12/10/2023
         remarks(40), " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222 date: 12/10/2023
         value        TYPE kbetr,
-        sale_order   TYPE vbeln,
+        sale_order(15),   " order no OR L1 status: S/F Waiver / Month Waiver / Grp O.K.
         check(1),
       END OF it_data_monthly,
 *SOC by Kunal/Priyanka on 11/12/2018 for MQAIS Extend Group Change
@@ -8640,6 +8640,33 @@ FORM monthly_discount .
         it_data_monthly-mcq_perc =
           it_data_monthly-grp_lift_qty / it_data_monthly-commited_qty * 100.
       ENDIF.
+*     L1 status shown in the Sales Order column (GAIL 27.07.2026):
+*       S/F Waiver   - shortfall grade waiver applies to this CIS
+*       Month Waiver - customer monthly waiver applies in the run month
+*       Grp O.K.     - group code that lifted nothing while the group did lift
+      DATA lv_runmon TYPE char3.
+      CLEAR it_data_monthly-sale_order.
+      CASE s_sptag-low+4(2).
+        WHEN '04'. lv_runmon = 'APR'. WHEN '05'. lv_runmon = 'MAY'.
+        WHEN '06'. lv_runmon = 'JUN'. WHEN '07'. lv_runmon = 'JUL'.
+        WHEN '08'. lv_runmon = 'AUG'. WHEN '09'. lv_runmon = 'SEP'.
+        WHEN '10'. lv_runmon = 'OCT'. WHEN '11'. lv_runmon = 'NOV'.
+        WHEN '12'. lv_runmon = 'DEC'. WHEN '01'. lv_runmon = 'JAN'.
+        WHEN '02'. lv_runmon = 'FEB'. WHEN '03'. lv_runmon = 'MAR'.
+      ENDCASE.
+      READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
+           WITH KEY qais_no = wa_yrva_qais_data-qais_no.
+      IF sy-subrc = 0.
+        it_data_monthly-sale_order = 'S/F Waiver'.
+      ELSEIF wa_yrva_qais_data-waiver_1 = lv_runmon
+          OR wa_yrva_qais_data-waiver_2 = lv_runmon
+          OR wa_yrva_qais_data-waiver_3 = lv_runmon.
+        it_data_monthly-sale_order = 'Month Waiver'.
+      ELSEIF it_data_monthly-kvgr2 IS NOT INITIAL
+         AND it_data_monthly-grp_lift_qty IS NOT INITIAL
+         AND it_data_monthly-ind_lift_qty IS INITIAL.
+        it_data_monthly-sale_order = 'Grp O.K.'.
+      ENDIF.
       APPEND it_data_monthly .
       CLEAR: wa_yrva_qais_data-lv_no_dis_qty.
       MODIFY it_yrva_qais_data FROM  wa_yrva_qais_data.
@@ -11912,20 +11939,34 @@ FORM l1_row_may_flow USING p_kunnr TYPE kunnr
     p_flow = 'X'.
     RETURN.
   ENDIF.
-*   zero discount - rescue only for S/F waiver or Grp O.k
+*   zero discount - rescue only for S/F waiver, Month waiver or Grp O.k
+  DATA lv_runmon TYPE char3.
+  CASE s_sptag-low+4(2).
+    WHEN '04'. lv_runmon = 'APR'. WHEN '05'. lv_runmon = 'MAY'.
+    WHEN '06'. lv_runmon = 'JUN'. WHEN '07'. lv_runmon = 'JUL'.
+    WHEN '08'. lv_runmon = 'AUG'. WHEN '09'. lv_runmon = 'SEP'.
+    WHEN '10'. lv_runmon = 'OCT'. WHEN '11'. lv_runmon = 'NOV'.
+    WHEN '12'. lv_runmon = 'DEC'. WHEN '01'. lv_runmon = 'JAN'.
+    WHEN '02'. lv_runmon = 'FEB'. WHEN '03'. lv_runmon = 'MAR'.
+  ENDCASE.
   READ TABLE it_yrva_qais_data INTO ls_q WITH KEY kunnr = p_kunnr.
   IF sy-subrc = 0.
     READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
          WITH KEY qais_no = ls_q-qais_no.
     IF sy-subrc = 0.
-      p_flow = 'X'.                 " S/F waiver (rule 1)
+      p_flow = 'X'.                 " S/F waiver
+      RETURN.
+    ENDIF.
+    IF ls_q-waiver_1 = lv_runmon OR ls_q-waiver_2 = lv_runmon
+       OR ls_q-waiver_3 = lv_runmon.
+      p_flow = 'X'.                 " Month waiver
       RETURN.
     ENDIF.
   ENDIF.
   IF p_kvgr2 IS NOT INITIAL
      AND p_grp IS NOT INITIAL       " group lifted in the period
      AND p_ind IS INITIAL.          " this code lifted nothing
-    p_flow = 'X'.                   " Grp O.k (rule 3)
+    p_flow = 'X'.                   " Grp O.k
     RETURN.
   ENDIF.
 ENDFORM.                    "l1_row_may_flow

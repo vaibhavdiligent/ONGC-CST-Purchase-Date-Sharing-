@@ -50,8 +50,10 @@ TYPES: BEGIN OF ty_out,
 *        L1 & L2 verification status captured for L3 onward processing
          l1_user     TYPE ycis_apprvl-l1_user,
          l1_date     TYPE ycis_apprvl-l1_date,
+         l1_time     TYPE ycis_apprvl-l1_time,
          l2_user     TYPE ycis_apprvl-l2_user,
          l2_date     TYPE ycis_apprvl-l2_date,
+         l2_time     TYPE ycis_apprvl-l2_time,
          order_no    TYPE ycis_apprvl-order_no,
          remarks     TYPE ycis_apprvl-remarks,
        END OF ty_out.
@@ -166,8 +168,10 @@ FORM build_fieldcat.
   add_fc 'PURCH_NO'    'Reference No'    ''.
   add_fc 'L1_USER'     'L1 Verified By'  ''.
   add_fc 'L1_DATE'     'L1 Verified On'  ''.
+  add_fc 'L1_TIME'     'L1 Verified At'  ''.
   add_fc 'L2_USER'     'L2 Verified By'  ''.
   add_fc 'L2_DATE'     'L2 Verified On'  ''.
+  add_fc 'L2_TIME'     'L2 Verified At'  ''.
   add_fc 'ORDER_NO'    'Rebate Order'    ''.
   add_fc 'REMARKS'     'Remarks'         ''.
 ENDFORM.
@@ -361,9 +365,36 @@ FORM process_selected USING p_action TYPE char1.
     ELSE.
       MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
     ENDIF.
+*   confirmation pop-up after execution (GAIL 27.07.2026)
+    IF lv_cnt > 0.
+      PERFORM show_stmt_popup.
+    ENDIF.
   ELSE.
     MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
   ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  show_stmt_popup   (confirmation statement pop-up)
+*&---------------------------------------------------------------------*
+FORM show_stmt_popup.
+  DATA: lv_ans TYPE c.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
+      text_question         =
+        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
+        'rates and amounts, have been verified and confirmed after considering ' &&
+        'customer waivers, shortfall waivers, sales return quantities, and ' &&
+        'Group/MLE details.'
+      text_button_1         = 'OK'
+      icon_button_1         = 'ICON_OKAY'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = lv_ans
+    EXCEPTIONS
+      text_not_found        = 1
+      OTHERS                = 2.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
