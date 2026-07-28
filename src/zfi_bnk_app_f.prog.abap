@@ -10,6 +10,13 @@
 *      <--P2        text
 *----------------------------------------------------------------------*
 FORM f_prepare_op_tab .
+* Data source changed from BNK_BATCH_HEADER to REGUT. As REGUT-GUID is not
+* populated, BATCH_NO holds the concatenated REGUT primary key:
+*   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR (RESPECTING BLANKS)
+  DATA: lv_key  TYPE zfi_batch_sign-batch_no.
+  DATA: lt_keys TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
+        lv_k    TYPE zfi_batch_sign-batch_no.
+
   REFRESH : gt_paym, gt_batch_header,gt_final, gt_batch_sign.
 *break sab_vaibhav.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym
@@ -19,30 +26,62 @@ FORM f_prepare_op_tab .
   "                AND   sent = 'X'.
 
   IF gt_paym IS NOT INITIAL.
-    SELECT * FROM bnk_batch_header INTO TABLE gt_batch_header
+    SELECT * FROM regut INTO TABLE gt_batch_header
                         FOR ALL ENTRIES IN gt_paym
-                        WHERE laufi_f = gt_paym-laufi
-                        AND   laufd_f = gt_paym-laufd.
+                        WHERE laufi = gt_paym-laufi
+                        AND   laufd = gt_paym-laufd.
 
     IF gt_batch_header IS NOT INITIAL.
-      SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
-                      FOR ALL ENTRIES IN gt_batch_header
-                      WHERE batch_no = gt_batch_header-batch_no.
-*                     AND   signer EQ sy-uname.
+*     Build the concatenated REGUT key for every row, then read the
+*     matching signature records (ZFI_BATCH_SIGN-BATCH_NO holds that key).
+      REFRESH lt_keys.
+      LOOP AT gt_batch_header INTO gs_batch_header.
+        CLEAR lv_k.
+        CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
+                    gs_batch_header-laufd gs_batch_header-laufi
+                    gs_batch_header-xvorl gs_batch_header-dtkey
+                    gs_batch_header-lfdnr
+               INTO lv_k RESPECTING BLANKS.
+        APPEND lv_k TO lt_keys.
+        CLEAR gs_batch_header.
+      ENDLOOP.
+      SORT lt_keys.
+      DELETE ADJACENT DUPLICATES FROM lt_keys.
+      IF lt_keys IS NOT INITIAL.
+        SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
+                        FOR ALL ENTRIES IN lt_keys
+                        WHERE batch_no = lt_keys-table_line.
+      ENDIF.
     ENDIF.
   ENDIF.
 
   LOOP AT gt_batch_header INTO gs_batch_header.
 
-    READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = gs_batch_header-batch_no.
+    CLEAR lv_key.
+    CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
+                gs_batch_header-laufd gs_batch_header-laufi
+                gs_batch_header-xvorl gs_batch_header-dtkey
+                gs_batch_header-lfdnr
+           INTO lv_key RESPECTING BLANKS.
+
+    READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = lv_key.
 
     IF sy-subrc EQ 0.
       IF gs_batch_sign-digitl_sign = ' '.
         gs_final-pending_with = gs_batch_sign-signer.
       ENDIF.
       MOVE-CORRESPONDING gs_batch_header TO gs_final.
-      READ TABLE gt_paym INTO gs_paym WITH KEY laufd = gs_batch_header-laufd_f
-                                               laufi = gs_batch_header-laufi_f.
+      gs_final-guid       = lv_key.
+      gs_final-batch_sum  = gs_batch_header-rbetr.
+      gs_final-batch_curr = gs_batch_header-waers.
+      gs_final-crusr      = gs_batch_header-tsusr.
+      gs_final-crdate     = gs_batch_header-tsdat.
+      gs_final-crtime     = gs_batch_header-tstim.
+      gs_final-chusr      = gs_batch_header-dwusr.
+      gs_final-chdate     = gs_batch_header-dwdat.
+      gs_final-chtime     = gs_batch_header-dwtim.
+      READ TABLE gt_paym INTO gs_paym WITH KEY laufd = gs_batch_header-laufd
+                                               laufi = gs_batch_header-laufi.
       IF sy-subrc = 0.
         gs_final-raw_data           = gs_paym-raw_data.
         gs_final-file_data_sent     = gs_paym-file_data_sent.
@@ -58,7 +97,7 @@ FORM f_prepare_op_tab .
 *    endif.
     CLEAR : gs_batch_header,gs_batch_sign,gs_final.
   ENDLOOP.
-  SORT gt_final BY batch_no.
+  SORT gt_final BY guid.
 ENDFORM.                    " F_PREPARE_OP_TAB
 *&---------------------------------------------------------------------*
 *&      Form  F_ALV_BUILD_FIELDCAT
@@ -74,38 +113,20 @@ FORM f_alv_build_fieldcat .
   REFRESH : it_fcat.
   CLEAR lv_fldcat.
   lv_fldcat-tabname   = 'GT_FINAL'.
-  lv_fldcat-fieldname = 'BATCH_NO'.
-  lv_fldcat-scrtext_m = 'Batch no.'.
-  lv_fldcat-outputlen = '10'.
+  lv_fldcat-fieldname = 'GUID'.
+  lv_fldcat-scrtext_m = 'Batch Key'.
+  lv_fldcat-outputlen = '45'.
 *  lv_fldcat-row_pos   = '1'.
   lv_fldcat-col_pos   = lv_index.
   APPEND lv_fldcat TO it_fcat.
 
-  lv_index  = lv_index + 1.
-  CLEAR lv_fldcat.
-  lv_fldcat-tabname   = 'GT_FINAL'.
-  lv_fldcat-fieldname = 'RULE_ID'.
-  lv_fldcat-scrtext_m = 'Rule Id'.
-  lv_fldcat-outputlen = '10'.
-*  lv_fldcat-row_pos   = '1'.
-  lv_fldcat-col_pos   = lv_index.
-  APPEND lv_fldcat TO it_fcat.
-
-  lv_index  = lv_index + 1.
-  CLEAR lv_fldcat.
-  lv_fldcat-tabname   = 'GT_FINAL'.
-  lv_fldcat-fieldname = 'ITEM_CNT'.
-  lv_fldcat-scrtext_m = 'No. of Payment'.
-  lv_fldcat-outputlen = '14'.
-*  lv_fldcat-row_pos   = '1'.
-  lv_fldcat-col_pos   = lv_index.
-  APPEND lv_fldcat TO it_fcat.
+* RULE_ID / ITEM_CNT not available in REGUT - columns removed
 
   lv_index  = lv_index + 1.
   CLEAR lv_fldcat.
   lv_fldcat-tabname   = 'GT_FINAL'.
   lv_fldcat-fieldname = 'LAUFD'.
-  lv_fldcat-scrtext_m = 'Merger date'.
+  lv_fldcat-scrtext_m = 'Run Date'.
   lv_fldcat-outputlen = '11'.
 *  lv_fldcat-row_pos   = '1'.
   lv_fldcat-col_pos   = lv_index.
@@ -115,31 +136,13 @@ FORM f_alv_build_fieldcat .
   CLEAR lv_fldcat.
   lv_fldcat-tabname   = 'GT_FINAL'.
   lv_fldcat-fieldname = 'LAUFI'.
-  lv_fldcat-scrtext_m = 'Merge Id'.
+  lv_fldcat-scrtext_m = 'Run Id'.
   lv_fldcat-outputlen = '8'.
 *  lv_fldcat-row_pos   = '1'.
   lv_fldcat-col_pos   = lv_index.
   APPEND lv_fldcat TO it_fcat.
 
-  lv_index  = lv_index + 1.
-  CLEAR lv_fldcat.
-  lv_fldcat-tabname   = 'GT_FINAL'.
-  lv_fldcat-fieldname = 'LAUFD_F'.
-  lv_fldcat-scrtext_m = 'File Date'.
-  lv_fldcat-outputlen = '9'.
-*  lv_fldcat-row_pos   = '1'.
-  lv_fldcat-col_pos   = lv_index.
-  APPEND lv_fldcat TO it_fcat.
-
-  lv_index  = lv_index + 1.
-  CLEAR lv_fldcat.
-  lv_fldcat-tabname   = 'GT_FINAL'.
-  lv_fldcat-fieldname = 'LAUFI_F'.
-  lv_fldcat-scrtext_m = 'File Id'.
-  lv_fldcat-outputlen = '7'.
-*  lv_fldcat-row_pos   = '1'.
-  lv_fldcat-col_pos   = lv_index.
-  APPEND lv_fldcat TO it_fcat.
+* LAUFD_F / LAUFI_F (file date/id) not available in REGUT - columns removed
 
   lv_index  = lv_index + 1.
   CLEAR lv_fldcat.
@@ -271,15 +274,7 @@ FORM f_alv_build_fieldcat .
 *  lv_fldcat-col_pos   = lv_index.
 *  APPEND lv_fldcat TO it_fcat.
 
-  lv_index  = lv_index + 1.
-  CLEAR lv_fldcat.
-  lv_fldcat-tabname   = 'GT_FINAL'.
-  lv_fldcat-fieldname = 'TOT_BTCH_AMT'.
-  lv_fldcat-scrtext_m = 'Total batch amount'.
-  lv_fldcat-outputlen = '18'.
-*  lv_fldcat-row_pos   = '1'.
-  lv_fldcat-col_pos   = lv_index.
-  APPEND lv_fldcat TO it_fcat.
+* TOT_BTCH_AMT not available in REGUT - column removed
 
   lv_index  = lv_index + 1.
   CLEAR lv_fldcat.
@@ -381,8 +376,8 @@ FORM download_sent_data .
           EXIT.
         ELSE.
           CLEAR gs_paym.
-          READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi_f
-                                                   laufd = gs_final-laufd_f.
+          READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+                                                   laufd = gs_final-laufd.
           IF sy-subrc EQ 0.
             CLEAR file_name.
             file_name = gs_paym-file_name.
@@ -494,8 +489,8 @@ FORM download_raw_data .
       READ TABLE gt_final INTO gs_final INDEX gs_selected_rows-index.
       IF sy-subrc = 0.
         CLEAR gs_paym.
-        READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi_f
-                                                 laufd = gs_final-laufd_f.
+        READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+                                                 laufd = gs_final-laufd.
         IF sy-subrc EQ 0.
           CLEAR file_name.
           CONCATENATE 'R' gs_paym-file_name INTO file_name.
@@ -616,8 +611,8 @@ FORM download_rec_data .
           EXIT.
         ELSE.
           CLEAR gs_paym.
-          READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi_f
-                                                   laufd = gs_final-laufd_f.
+          READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+                                                   laufd = gs_final-laufd.
           IF sy-subrc EQ 0.
             CLEAR file_name.
             file_name = gs_paym-received_filename .
@@ -738,8 +733,8 @@ FORM f_resent .
       IF sy-subrc = 0.
 
         CLEAR gs_paym.
-        READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi_f
-                                                 laufd = gs_final-laufd_f.
+        READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
+                                                 laufd = gs_final-laufd.
         IF sy-subrc = 0.
           IF gs_paym-sent <> 'X'.
             MESSAGE 'Can not be resent' TYPE 'I'.

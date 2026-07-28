@@ -5,7 +5,7 @@
 
 TYPES : BEGIN OF ty_final,
           sel              TYPE c,
-          guid             TYPE bnk_com_btch_guid,
+          guid             TYPE c LENGTH 45,        "Holds concatenated REGUT primary key (ZBUKR+BANKS+LAUFD+LAUFI+XVORL+DTKEY+LFDNR = 41 chars) - unique key in place of BATCH_NO
           batch_no         TYPE bnk_com_btch_no,
           rule_id          TYPE bnk_com_btch_rule_id,
           item_cnt         TYPE bnk_com_btch_ctr,
@@ -20,7 +20,7 @@ TYPES : BEGIN OF ty_final,
           batch_sum        TYPE bnk_com_btch_amount,
           batch_curr       TYPE bnk_com_btch_curr,
           max_pay_amt      TYPE bnk_com_max_paymnt_amount,
-          status           TYPE bnk_com_btch_status_id,
+          status           TYPE epic_regut_status,   "REGUT-STATUS(CHAR3) - avoids MOVE-CORRESPONDING type clash
           crusr            TYPE bnk_com_create_user,
           crtime           TYPE bnk_com_create_time,
           crdate           TYPE bnk_com_create_date,
@@ -45,13 +45,13 @@ TYPES : BEGIN OF ty_final,
         END OF ty_final.
 
 DATA : gt_paym          TYPE STANDARD TABLE OF zfi_paym_file,
-       gt_batch_header  TYPE STANDARD TABLE OF bnk_batch_header,
+       gt_batch_header  TYPE STANDARD TABLE OF regut,   "Replaced BNK_BATCH_HEADER with REGUT
        gt_batch_sign    TYPE STANDARD TABLE OF zfi_batch_sign ,
        gt_final         TYPE STANDARD TABLE OF ty_final,
 
 
        gs_paym          TYPE zfi_paym_file,
-       gs_batch_header  TYPE bnk_batch_header,
+       gs_batch_header  TYPE regut,   "Replaced BNK_BATCH_HEADER with REGUT
        gs_batch_sign    TYPE zfi_batch_sign ,
        gs_final         TYPE ty_final,
 
