@@ -53,10 +53,10 @@ FORM get_data.
     " R4 mode: disable AT columns for 'Not Posted' rows (no action possible)
     IF r4 EQ 'X' AND ls_final-stat = 'Not Posted'.
       ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
-      ls_styl-fieldname = 'AT_CHKBOX'.  APPEND ls_styl TO ls_final_ext-cell.
-      ls_styl-fieldname = 'AT_SAL_ORD'. APPEND ls_styl TO ls_final_ext-cell.
-      ls_styl-fieldname = 'AT_QTY'.     APPEND ls_styl TO ls_final_ext-cell.
-      ls_styl-fieldname = 'AT_REMARKS'. APPEND ls_styl TO ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_CHKBOX'.  INSERT ls_styl INTO TABLE ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_SAL_ORD'. INSERT ls_styl INTO TABLE ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_QTY'.     INSERT ls_styl INTO TABLE ls_final_ext-cell.
+      ls_styl-fieldname = 'AT_REMARKS'. INSERT ls_styl INTO TABLE ls_final_ext-cell.
     ENDIF.
 
     INSERT ls_final_ext INTO TABLE lt_final_ext.
@@ -936,7 +936,7 @@ FORM save_action_taken.
       ls_scol-color-col = 6.  " Red
       ls_scol-color-int = 1.
       ls_scol-color-inv = 0.
-      APPEND ls_scol TO <fs_val>-cellcolor.
+      INSERT ls_scol INTO TABLE <fs_val>-cellcolor.
       lv_error_count = lv_error_count + 1.
     ENDIF.
   ENDLOOP.
