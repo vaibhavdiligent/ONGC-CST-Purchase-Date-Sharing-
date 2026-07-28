@@ -7,8 +7,8 @@
 | Transaction | `/CCBJI/RURGL_REPSUPP` (new, to be created in S/4) |
 | RICEF | GAP-1000002273 |
 | Company Code | 7827 (BJI); TVARVC also shows 7830 |
-| Based on | FS_SupportFee_S4HANA_v2.0.docx + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx |
-| Status | v1.0 — Design for review. No code written yet. |
+| Based on | FS_SupportFee_S4HANA_v2.0.docx + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx + ECC posting program /CCBJI/RUFIGLR_SUPPFI_POST |
+| Status | v1.1 — Design for review. No code written yet. v1.1: posting design aligned to actual ECC program (doc type YE confirmed; 1-debit-line structure; explicit tax lines; 400-line split; EXTENSION1/BAdI for XREF1_HD). |
 | Author | Claude (Diligent Consulting) — reviewed by Vaibhav Maheshwari |
 
 ---
@@ -63,6 +63,7 @@ Verified system facts driving this design:
 | 18 | `/CCBJI/RTR_TOT` | Data element | DEC 15 total (replaces Z_RTR_TOT) |
 | 19 | SM30 maintenance views/dialogs for tables 6–9 | TMG | User maintenance |
 | 20 | Number range object (reuse `Z_SUPP_FEE` copied to S/4, interval Z1 1000000001–1999999999) | SNRO | COPA doc grouping id |
+| 21 | BAdI implementation `ACC_DOCUMENT` (`/CCBJI/` impl.) | BAdI | Map EXTENSION1 row (XREF1_HD) to BKPF-XREF1_HD, as the ECC program did |
 
 TVARVC entries (STVARV, new in S/4): see §8.
 
@@ -238,7 +239,9 @@ Notes:
 | `/CCBJI/RTR_50PCT` | P | `50.00` | NEW (D-05: fixed rate configurable, not hardcoded) |
 | `/CCBJI/RTR_VENDPCT` | P | vending-channel % for CokeON GLs | NEW (value TBD by business; empty = rule inactive) |
 | `/CCBJI/RTR_DEFPC` | P | default profit center (optional) | NEW (D-04 step 4) |
-| `/CCEJ/RTR/HANA_CONN`, `/CCBJI/RTR_SFEE_AL11`, `RTR_BSCHL`, `RTR_COUNT`, `RTR_DEBITGL`, `RTR/POSTING_GL` | | | RETIRED (file/HANA-era; BSCHL replaced by DRCRK; others unmaintained in BW → confirmed unused) |
+| `/CCBJI/RTR_DEBITGL` | P | debit GL of the aggregated debit line | **RETAINED — value to be copied from ECC TVARVC** |
+| `/CCBJI/RTR_KOSTL` (ECC variant) | P/S | profit center for the debit line | **RETAINED — value to be copied from ECC TVARVC** (note: BW entry of same name = dummy cost center; ECC entry = debit-line PRCTR — two different meanings, ECC one is the posting-relevant one) |
+| `/CCEJ/RTR/HANA_CONN`, `/CCBJI/RTR_SFEE_AL11`, `RTR_BSCHL`, `RTR_COUNT`, `RTR/POSTING_GL`, `RTR_SFEE_TAXGL` | | | RETIRED (file/HANA-era; BSCHL replaced by DRCRK; TAXGL was dead code in ECC) |
 
 DECISION D-06 (cost center scope, Flow 2): **scope = `/CCBJI/T_SUP_FEE` itself** —
 a GL+PRCTR(/KOSTL-key) combination present in the incidence master is in scope;
@@ -257,30 +260,52 @@ Modeled on ZJRTR_RUCOPBR_HANA_ALLOC_UPLD (KAM_L4 branch) with the gaps fixed:
 
 ## 10. Posting Mode (RB_POST) & Simulation (RB_SIM)
 
-Replaces file generation entirely (`F_BAPI_PROCESS` → direct BAPI):
+Replaces the two-step file chain (BW `F_BAPI_PROCESS` file → ECC
+`/CCBJI/RUFIGLR_SUPPFI_POST`) with direct posting. The document construction
+below replicates the **actual ECC program** (analyzed from source, closing O-01):
 
-1. Result lines grouped by Credit GL (as legacy), split at **800 items** per
-   document (constant C_MAX800 retained).
-2. Per document: header BUS_ACT `RFBU`, DOC_TYPE `YE`, doc/posting date = last day
-   of period (`SN_LAST_DAY_OF_MONTH` → `LAST_DAY_OF_MONTHS` S/4 equivalent),
-   currency JPY. Debit = ACCURAL_GL_ACC (40), Credit = POSTING_GL_ACC (50) from
-   `/CCBJI/T_MAP_GL`; PRCTR + RCNTR on the P&L lines; XREF1_HD = docnr+bukrs+gjahr
-   (docnr from number range Z1/Z_SUPP_FEE for COPA source, = SOURCE for FI).
-   Tax: TAX_CODE passed on GL lines; no separate tax line (legacy file carried the
-   code only — sample YE doc from ECC (pending, point 2) will confirm; flagged
-   OPEN O-01).
+1. **Document type `YE` (confirmed — hard-coded in ECC program).** Header:
+   BUS_ACT blank (defaults RFBU), COMP_CODE = P_BUKRS, DOC_DATE = sy-datlo,
+   PSTNG_DATE = last day of selected period, FISC_YEAR/FIS_PERIOD from selection,
+   HEADER_TXT = "<JP support-fee text> YYYY/PP nn/NN", USERNAME = sy-uname,
+   CURRENCY_ISO `JPY` on every CURRENCYAMOUNT row.
+   **XREF1_HD** (= COPA docnr + BUKRS + GJAHR; docnr from number range
+   Z1/Z_SUPP_FEE for COPA source, = SOURCE literal for FI) passed via
+   **EXTENSION1 + `ACC_DOCUMENT` BAdI implementation** (object #21) — exactly as
+   ECC did. XBLNR stays empty (ECC parsed ref_doc_no but never mapped it).
+2. **Line structure (per ECC program, corrects FS §10):**
+   * ONE aggregated **debit line per document**: GL from TVARVC
+     `/CCBJI/RTR_DEBITGL`, PROFIT_CTR from TVARVC `/CCBJI/RTR_KOSTL`
+     (ECC meaning: debit-line profit center), amount = document gross total
+     (positive).
+   * One **credit line per result record**: POSTING_GL_ACC, PRCTR of the record,
+     TAX_CODE, ITEM_TEXT = fixed JP text + channel, amount = supp_fee × −1.
+     COSTCENTER filled only when the credit GL is a cost element (CSKB check,
+     JP00) and the cost center exists in CSKS — else the record errors (as ECC
+     MOD-002).
+   * **Tax lines — explicit, not BAPI auto-calc**: per credit record
+     `CALCULATE_TAX_FROM_NET_AMOUNT` (BUKRS, tax code, JPY, net fee), each
+     condition rounded via `J_1I6_ROUND_TO_NEAREST_AMT`; tax ≠ 0 → extra
+     CURRENCYAMOUNT row (tax × −1) + ACCOUNTTAX row (COND_KEY, ACCT_KEY,
+     tax code).
+   * Split at **400 ACCOUNTGL lines per document** (ECC MOD-001 limit; the 800
+     was only the BW file-record split and is obsolete).
 3. **Simulation (RB_SIM)**: identical build, `BAPI_ACC_DOCUMENT_CHECK` per
-   document, no commit; output = the would-be documents in ALV (doc count, per-doc
-   totals, per-line errors). Zero risk dry run for month-end.
-4. **Posting**: per document — CHECK, then POST, then `BAPI_TRANSACTION_COMMIT`
-   (WAIT). Error → collect in log, continue with next document (no all-or-nothing
-   across documents), summary ALV at end (success/fail per document + message).
-5. **Re-run protection (DECISION D-07)**: before posting, SELECT existing ACDOCA
-   docs with BLART `YE`, RBUKRS/RYEAR/POPER and our XREF1_HD pattern; if found,
-   hard stop with list unless user sets new checkbox P_FORCE ("repost anyway").
-6. COPA-source documents post with the profitability-segment CRITERIA table
-   (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUPFEE_CE` flag lookup),
-   fulfilling the account-based COPA posting — one BAPI for both flows (FS v2.0).
+   document, no commit; ALV of would-be documents (doc count, per-doc totals,
+   per-line messages). Mirrors the ECC program's own simulation radiobutton.
+4. **Posting**: per document — POST then `BAPI_TRANSACTION_COMMIT` (WAIT 'X'),
+   ROLLBACK on error; continue with next document; summary ALV at end. Amounts
+   passed verbatim (no ×100 scaling — confirmed in ECC code).
+5. **Re-run protection (DECISION D-07)**: ECC had NONE in-system (file archiving
+   only), which no longer exists → mandatory here: before posting, SELECT
+   existing BKPF/ACDOCA docs BLART `YE`, RBUKRS/RYEAR/POPER (+ XREF1_HD pattern);
+   if found, hard stop with list unless checkbox P_FORCE is set.
+6. COPA-source documents additionally carry the profitability-segment CRITERIA
+   table (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUPFEE_CE` flag
+   lookup) for account-based COPA — one BAPI for both flows (FS v2.0). Note the
+   ECC program posted NO profitability segment (COPA went via RKEVEXT3 in BW
+   era); this is the one deliberate functional addition — flag for CO functional
+   validation (O-08).
 
 ## 11. ALV Output
 
@@ -300,11 +325,14 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 
 | # | Item | Owner | Blocking? |
 |---|---|---|---|
-| O-01 | Sample legacy YE doc + ECC consumer program (validates BAPI field mapping & tax handling) | Vaibhav (point 2, pending) | No — design assumes FS §10; will adjust |
-| O-02 | Reconciliation extract from BW (run instructions provided separately) | Vaibhav (point 3) | Needed before go-live sign-off, not for build |
+| O-01 | ~~ECC consumer program field mapping~~ **CLOSED** — /CCBJI/RUFIGLR_SUPPFI_POST source analyzed; §10 updated | — | Closed |
+| O-02 | Reconciliation benchmark: migrated line-level history FY2024–2025 exists in ACDOCA (BA/SB docs, AWTYP=BKPFF). Export one month (RYEAR 2025, POPER 10, BLART BA, all RACCT) for the totals target | Vaibhav | Needed before go-live sign-off, not for build |
 | O-03 | Business values for `/CCBJI/T_GL_TYPE`, `/CCBJI/T_RPPCAT_TY`, `RTR_VENDPCT` | Functional | No — rules dormant until config filled (D-02/D-03) |
 | O-04 | Package name + transport | Basis | Before object creation |
 | O-05 | Confirm KOKRS value for CSKS reads (assumed JP00-equivalent controlling area) | Functional | Minor |
+| O-06 | Doc type: ECC program hard-codes YE, but migrated ACDOCA history shows BA/SB on the posting GLs — likely migration remapping or adjacent process. Verify one BA doc in FB03; design proceeds with YE | Vaibhav/Functional | No |
+| O-07 | Copy ECC TVARVC values `/CCBJI/RTR_DEBITGL` + `/CCBJI/RTR_KOSTL` (debit GL + debit-line profit center) from ECC STVARV | Vaibhav (ECC) | Before first posting test |
+| O-08 | ECC never posted a profitability segment; account-based COPA CRITERIA on credit lines is the S/4 addition per FS v2.0 — CO functional to validate characteristic list | CO Functional | Before posting go-live |
 
 ## 14. Decisions taken (for the record)
 
@@ -318,3 +346,4 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 * D-08 Parallelization: STARTING NEW TASK, default server group, user-selectable session count (P_PTASK); posting serialized in main task
 * D-09 P_SOURCE dropped; Simulation mode added (RB_SIM)
 * D-10 Packaging code = WW226_PA (FS §4.2 correction; WW223_PA is RPP Category)
+* D-11 FI document layout = replica of ECC /CCBJI/RUFIGLR_SUPPFI_POST: doc type YE, one aggregated debit line (TVARVC GL + PRCTR), per-record credit lines, explicit tax lines (CALCULATE_TAX_FROM_NET_AMOUNT + ACCOUNTTAX), 400-line split, EXTENSION1/BAdI for XREF1_HD, per-document commit
