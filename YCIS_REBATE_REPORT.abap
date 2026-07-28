@@ -180,10 +180,7 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
       gs_out-name1     = lv_name.
       gs_out-sales_off = p_appr-sales_off.
       gs_out-kondm     = ls_cap-kondm.
-      IF ls_cap-kondm IS NOT INITIAL.
-        SELECT SINGLE vtext FROM t178t INTO gs_out-kondm_txt
-          WHERE spras = sy-langu AND kondm = ls_cap-kondm.
-      ENDIF.
+      PERFORM grade_name USING ls_cap-kondm CHANGING gs_out-kondm_txt.
       gs_out-lft_qty    = ls_cap-lft_qty.
       gs_out-elig_qty   = ls_cap-elig_qty.
       gs_out-rebate_val = ls_cap-rebate_val.
@@ -240,10 +237,7 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
     gs_out-name1     = lv_name.
     gs_out-sales_off = p_appr-sales_off.
     gs_out-kondm     = ls_grade-kondm.
-    IF ls_grade-kondm IS NOT INITIAL.
-      SELECT SINGLE vtext FROM t178t INTO gs_out-kondm_txt
-        WHERE spras = sy-langu AND kondm = ls_grade-kondm.
-    ENDIF.
+    PERFORM grade_name USING ls_grade-kondm CHANGING gs_out-kondm_txt.
     gs_out-lft_qty   = ls_grade-qty.
 *   discounted (eligible) qty for this grade = header eligible qty x share
     lv_qty = p_appr-elig_qty * ls_grade-qty / lv_totl.
@@ -273,6 +267,27 @@ FORM fill_appr_trail USING p_appr TYPE ycis_apprvl.
   gs_out-l3_user = p_appr-l3_user.
   gs_out-l3_date = p_appr-l3_date.
   gs_out-l3_time = p_appr-l3_time.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  grade_name   (grade / material name for a KONDM)
+*&   Price-group text (T178T) first; if none, fall back to the material
+*&   mapped to this grade in YRVA_GRADE_CISD (YY_GRADE -> YY_MATNR), so
+*&   CIS grades with no T178T text (e.g. G7 / I1 / H3) still show a name.
+*&---------------------------------------------------------------------*
+FORM grade_name USING p_kondm TYPE kondm CHANGING p_txt TYPE any.
+  DATA: lv_matnr TYPE matnr.
+  CLEAR p_txt.
+  IF p_kondm IS INITIAL.
+    RETURN.
+  ENDIF.
+  SELECT SINGLE vtext FROM t178t INTO p_txt
+    WHERE spras = sy-langu AND kondm = p_kondm.
+  IF p_txt IS INITIAL.
+    SELECT yy_matnr UP TO 1 ROWS INTO lv_matnr
+      FROM yrva_grade_cisd WHERE yy_grade = p_kondm.
+    ENDSELECT.
+    p_txt = lv_matnr.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
