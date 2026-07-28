@@ -8644,15 +8644,21 @@ FORM monthly_discount .
 *       S/F Waiver   - shortfall grade waiver applies to this CIS
 *       Month Waiver - customer monthly waiver applies in the run month
 *       Grp O.K.     - group code that lifted nothing while the group did lift
-      DATA lv_runmon TYPE char3.
+      DATA: lv_runmon TYPE char3, lv_mondisp TYPE char3.
       CLEAR it_data_monthly-sale_order.
       CASE s_sptag-low+4(2).
-        WHEN '04'. lv_runmon = 'APR'. WHEN '05'. lv_runmon = 'MAY'.
-        WHEN '06'. lv_runmon = 'JUN'. WHEN '07'. lv_runmon = 'JUL'.
-        WHEN '08'. lv_runmon = 'AUG'. WHEN '09'. lv_runmon = 'SEP'.
-        WHEN '10'. lv_runmon = 'OCT'. WHEN '11'. lv_runmon = 'NOV'.
-        WHEN '12'. lv_runmon = 'DEC'. WHEN '01'. lv_runmon = 'JAN'.
-        WHEN '02'. lv_runmon = 'FEB'. WHEN '03'. lv_runmon = 'MAR'.
+        WHEN '04'. lv_runmon = 'APR'. lv_mondisp = 'Apr'.
+        WHEN '05'. lv_runmon = 'MAY'. lv_mondisp = 'May'.
+        WHEN '06'. lv_runmon = 'JUN'. lv_mondisp = 'Jun'.
+        WHEN '07'. lv_runmon = 'JUL'. lv_mondisp = 'Jul'.
+        WHEN '08'. lv_runmon = 'AUG'. lv_mondisp = 'Aug'.
+        WHEN '09'. lv_runmon = 'SEP'. lv_mondisp = 'Sep'.
+        WHEN '10'. lv_runmon = 'OCT'. lv_mondisp = 'Oct'.
+        WHEN '11'. lv_runmon = 'NOV'. lv_mondisp = 'Nov'.
+        WHEN '12'. lv_runmon = 'DEC'. lv_mondisp = 'Dec'.
+        WHEN '01'. lv_runmon = 'JAN'. lv_mondisp = 'Jan'.
+        WHEN '02'. lv_runmon = 'FEB'. lv_mondisp = 'Feb'.
+        WHEN '03'. lv_runmon = 'MAR'. lv_mondisp = 'Mar'.
       ENDCASE.
       READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
            WITH KEY qais_no = wa_yrva_qais_data-qais_no.
@@ -8661,7 +8667,9 @@ FORM monthly_discount .
       ELSEIF wa_yrva_qais_data-waiver_1 = lv_runmon
           OR wa_yrva_qais_data-waiver_2 = lv_runmon
           OR wa_yrva_qais_data-waiver_3 = lv_runmon.
-        it_data_monthly-sale_order = 'Month Waiver'.
+*       show the actual waiver month, e.g. 'Jun Waiver' (GAIL 28.07.2026)
+        CONCATENATE lv_mondisp 'Waiver'
+               INTO it_data_monthly-sale_order SEPARATED BY space.
       ELSEIF it_data_monthly-kvgr2 IS NOT INITIAL
          AND it_data_monthly-grp_lift_qty IS NOT INITIAL
          AND it_data_monthly-ind_lift_qty IS INITIAL.
@@ -11907,6 +11915,20 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_time     = sy-uzeit.
   ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
   ls-waers       = 'INR'.
+*   Prevent duplicate forwarding / duplicate L2 e-mail when L1 presses
+*   Execute again: if this CIS is already Pending-L2 / Pending-L3 / done,
+*   leave it as-is and do NOT re-stage or re-notify. (GAIL 28.07.2026)
+  DATA lv_wf TYPE ycis_apprvl-wf_status.
+  SELECT SINGLE wf_status INTO lv_wf FROM ycis_apprvl
+    WHERE qais_no     = ls-qais_no
+      AND scheme_type = ls-scheme_type
+      AND period_from = ls-period_from
+      AND period_to   = ls-period_to
+      AND kunnr       = ls-kunnr
+      AND kvgr2       = ls-kvgr2.
+  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40' ).
+    RETURN.                              " already forwarded - skip
+  ENDIF.
   MODIFY ycis_apprvl FROM ls.
 *   grade-wise detail for the rebate report (captured at source)
   PERFORM stage_grade_detail USING ls.
