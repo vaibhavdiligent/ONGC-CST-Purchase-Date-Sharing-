@@ -22,6 +22,8 @@ FORM get_data.
 
   " Apply Sales Office filter (s_vkbur for r1/r3, s_vk4 for r4)
   IF r4 EQ 'X'.
+    " Action Taken applies only to posted imbalances – drop 'Not Posted' rows
+    DELETE lt_final WHERE stat = 'Not Posted'.
     IF s_vk4 IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vk4.
     ENDIF.
@@ -32,8 +34,7 @@ FORM get_data.
   ENDIF.
 
   " Copy lt_final into lt_final_ext and augment with Action Taken data
-  DATA: lv_at_qty TYPE menge_d,     " QUAN to match AT_QTY in YRG_IMB_ACTION
-        ls_styl   TYPE lvc_s_styl.  " Cell style work area
+  DATA: lv_at_qty TYPE menge_d.     " QUAN to match AT_QTY in YRG_IMB_ACTION
 
   LOOP AT lt_final INTO ls_final.
     CLEAR ls_final_ext.
@@ -50,17 +51,40 @@ FORM get_data.
       EXIT.
     ENDSELECT.
 
-    " R4 mode: disable AT columns for 'Not Posted' rows (no action possible)
-    IF r4 EQ 'X' AND ls_final-stat = 'Not Posted'.
-      ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
-      ls_styl-fieldname = 'AT_CHKBOX'.  INSERT ls_styl INTO TABLE ls_final_ext-cell.
-      ls_styl-fieldname = 'AT_SAL_ORD'. INSERT ls_styl INTO TABLE ls_final_ext-cell.
-      ls_styl-fieldname = 'AT_QTY'.     INSERT ls_styl INTO TABLE ls_final_ext-cell.
-      ls_styl-fieldname = 'AT_REMARKS'. INSERT ls_styl INTO TABLE ls_final_ext-cell.
+    " R4 mode: SO / Qty / Remarks are only editable once AT is checked
+    IF r4 EQ 'X'.
+      PERFORM set_row_style CHANGING ls_final_ext.
     ENDIF.
 
     INSERT ls_final_ext INTO TABLE lt_final_ext.
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form SET_ROW_STYLE
+*& Enables SO / Qty / Remarks only when the AT checkbox is ticked.
+*& lvc_t_styl is a SORTED table – always use INSERT ... INTO TABLE,
+*& never APPEND (APPEND breaks the sort key -> ITAB_ILLEGAL_SORT_ORDER).
+*&---------------------------------------------------------------------*
+FORM set_row_style CHANGING ps_row TYPE ty_final_ext.
+  DATA: ls_styl TYPE lvc_s_styl.
+
+  REFRESH ps_row-cell.
+
+  IF ps_row-at_chkbox = 'X'.
+    ls_styl-style = cl_gui_alv_grid=>mc_style_enabled.
+  ELSE.
+    ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+  ENDIF.
+
+  ls_styl-fieldname = 'AT_SAL_ORD'. INSERT ls_styl INTO TABLE ps_row-cell.
+  ls_styl-fieldname = 'AT_QTY'.     INSERT ls_styl INTO TABLE ps_row-cell.
+  ls_styl-fieldname = 'AT_REMARKS'. INSERT ls_styl INTO TABLE ps_row-cell.
+
+  " The checkbox itself always stays editable
+  ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
+  ls_styl-fieldname = 'AT_CHKBOX'.
+  INSERT ls_styl INTO TABLE ps_row-cell.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -157,7 +181,9 @@ FORM display.
     SET HANDLER lcl_event_handler=>top_of_page FOR grid.
     SET HANDLER lcl_event_handler=>toolbar      FOR grid.
     SET HANDLER lcl_event_handler=>user_command FOR grid.
-    SET HANDLER lcl_event_handler=>data_changed FOR grid.
+    SET HANDLER lcl_event_handler=>data_changed          FOR grid.
+    SET HANDLER lcl_event_handler=>data_changed_finished FOR grid.
+    gs_stable-row = 'X'. gs_stable-col = 'X'.   " keep scroll position on refresh
     CALL METHOD grid->set_table_for_first_display
       EXPORTING
         it_toolbar_excluding = lt_exclude
@@ -170,6 +196,10 @@ FORM display.
   " Enable edit mode when Action Taken (r4) is selected
   IF r4 EQ 'X'.
     CALL METHOD grid->set_ready_for_input( EXPORTING i_ready_for_input = 1 ).
+    " Raise DATA_CHANGED as soon as a cell is modified, so ticking the AT
+    " checkbox activates SO / Qty / Remarks without leaving the row first
+    CALL METHOD grid->register_edit_event
+      EXPORTING i_event_id = cl_gui_alv_grid=>mc_evt_modified.
   ENDIF.
 
   CREATE OBJECT dg_dyndoc_id EXPORTING style = 'ALV_GRID'.
@@ -942,7 +972,10 @@ FORM save_action_taken.
   ENDLOOP.
 
   IF lv_error_count > 0.
-    CALL METHOD grid->refresh_table_display.
+    " Stable refresh keeps scroll position and rebinds the colour table so
+    " the red cells actually render (and scrolling afterwards does not dump)
+    CALL METHOD grid->refresh_table_display
+      EXPORTING is_stable = gs_stable.
     MESSAGE |SO not valid for { lv_error_count } row(s) – invalid cells marked red.| TYPE 'W'.
     RETURN.
   ENDIF.
@@ -961,12 +994,13 @@ FORM save_action_taken.
       ls_imb_action-at_remarks = <fs_sav>-at_remarks.
     ENDIF.
     INSERT yrg_imb_action FROM ls_imb_action.
-    IF <fs_sav>-at_chkbox = 'X'. lv_saved_count = lv_saved_count + 1. ENDIF.
+    " Count every changed row – unticking a box is a valid change to save
+    lv_saved_count = lv_saved_count + 1.
     <fs_sav>-at_changed = ' '.   " clear flag so re-save doesn't duplicate
   ENDLOOP.
 
   IF lv_saved_count = 0.
-    MESSAGE 'Please select at least one checkbox before saving' TYPE 'W'.
+    MESSAGE 'No changes to save' TYPE 'W'.
     RETURN.
   ENDIF.
 
@@ -992,7 +1026,11 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
         <fs_ext>-at_changed = 'X'.
         IF <fs_ext>-at_chkbox <> 'X'.
           CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
+          DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
         ENDIF.
+        " Ticking the box activates SO / Qty / Remarks, unticking disables them
+        PERFORM set_row_style CHANGING <fs_ext>.
+        gv_refresh_grid = 'X'.
       WHEN 'AT_SAL_ORD'.
         <fs_ext>-at_sal_ord = ls_mod-value.
         <fs_ext>-at_changed = 'X'.
@@ -1006,9 +1044,19 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
         <fs_ext>-at_changed = 'X'.
     ENDCASE.
   ENDLOOP.
+  " NOTE: never call refresh_table_display here. Refreshing inside the
+  " DATA_CHANGED event leaves the grid's data-provider unbound and dumps
+  " with OBJECTS_OBJREF_NOT_ASSIGNED_NO on the next scroll. The refresh is
+  " deferred to DATA_CHANGED_FINISHED via gv_refresh_grid.
+ENDFORM.
 
-  " Refresh the display to reflect cleared fields if checkbox was unchecked
-  IF p_data_changed->mt_mod_cells IS NOT INITIAL.
-    CALL METHOD grid->refresh_table_display.
-  ENDIF.
+*&---------------------------------------------------------------------*
+*& Form HANDLE_DATA_CHANGED_FINISHED
+*& Safe point to refresh the grid after cell edits are committed.
+*&---------------------------------------------------------------------*
+FORM handle_data_changed_finished.
+  CHECK gv_refresh_grid = 'X'.
+  CLEAR gv_refresh_grid.
+  CALL METHOD grid->refresh_table_display
+    EXPORTING is_stable = gs_stable.
 ENDFORM.

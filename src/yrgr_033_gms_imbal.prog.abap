@@ -75,6 +75,9 @@ AT SELECTION-SCREEN.
   ELSEIF r4 EQ 'X' AND s_dat4 IS NOT INITIAL.
     READ TABLE s_dat4 INTO DATA(ls_dat4_chk) INDEX 1.
     IF sy-subrc = 0 AND ls_dat4_chk-low IS NOT INITIAL.
+      IF ls_dat4_chk-low < '20220101'.
+        MESSAGE 'From date cannot be less than 01.01.2022' TYPE 'E'.
+      ENDIF.
       lv_fn_from_day = ls_dat4_chk-low+6(2).
       IF lv_fn_from_day NE '01' AND lv_fn_from_day NE '16'.
         MESSAGE 'From date must be 1st or 16th of the month (FN start date)' TYPE 'E'.
@@ -202,13 +205,12 @@ START-OF-SELECTION.
       " After loop the header line retains the last entry's low/high,
       " which get_data reads via s_date-low / s_date-high.
     ELSE.
-      " Default: last full fortnight when no date entered
-      lv_date = sy-datum - 3.
-      CALL FUNCTION 'YRX_PRVS_DATE_FM'
-        EXPORTING s_date = lv_date
-        IMPORTING st_date = st_date ed_date = ed_date.
+      " Default when no date entered: full range from 01.01.2022 to today
+      " (do NOT fall back to r1's fortnight – that gave a misleading short list)
       CLEAR s_date.
-      s_date-low = st_date. s_date-high = ed_date. APPEND s_date.
+      s_date-sign = 'I'. s_date-option = 'BT'.
+      s_date-low  = '20220101'. s_date-high = sy-datum.
+      APPEND s_date.
     ENDIF.
     DATA: obj_r4 TYPE REF TO lcl_event_handler.
     CREATE OBJECT obj_r4.

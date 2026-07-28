@@ -55,6 +55,11 @@ DATA: lv_has_role TYPE c LENGTH 1.
 
 DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 
+" Deferred grid refresh: set in DATA_CHANGED, consumed in DATA_CHANGED_FINISHED.
+" Refreshing inside DATA_CHANGED dumps with OBJECTS_OBJREF_NOT_ASSIGNED_NO.
+DATA: gv_refresh_grid TYPE c LENGTH 1,
+      gs_stable       TYPE lvc_s_stbl.
+
 DATA: lv_fn_from_day TYPE c LENGTH 2,
       lv_fn_to_day   TYPE c LENGTH 2,
       lv_fn_next_day TYPE sy-datum,
