@@ -308,7 +308,7 @@ FORM build_fieldcat.
   add_fc 'KUNNR'     'Customer'.
   add_fc 'NAME1'     'Customer Name'.
   add_fc 'SALES_OFF' 'Sales Office'.
-  add_fc 'KONDM'     'Grade'.
+  add_fc 'KONDM'     'MPG'.
   add_fc 'KONDM_TXT' 'Material / Grade Name'.
   add_fc 'LFT_QTY'   'Lifted Qty'.
   add_fc 'ELIG_QTY'  'Discount Qty'.
