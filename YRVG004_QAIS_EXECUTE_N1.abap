@@ -11720,6 +11720,7 @@ ENDFORM.                    "build_cis_shortfall
 *&---------------------------------------------------------------------*
 FORM stage_all_rebates.
   DATA: lv_cnt  TYPE i,
+        lv_skip TYPE i,                  " rows held back (zero disc / no waiver)
         lv_off  TYPE vkbur,
         lv_flow TYPE abap_bool,
         lv_qind TYPE p DECIMALS 3,
@@ -11733,6 +11734,7 @@ FORM stage_all_rebates.
               it_data_quater-value lv_qind it_data_quater-tot_grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
@@ -11747,6 +11749,7 @@ FORM stage_all_rebates.
               it_data_annual-value it_data_annual-ind_lift_qty it_data_annual-grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
@@ -11761,6 +11764,7 @@ FORM stage_all_rebates.
               it_annual_consis-value it_annual_consis-ind_lift_qty it_annual_consis-grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
@@ -11775,6 +11779,7 @@ FORM stage_all_rebates.
               it_data_monthly-value it_data_monthly-ind_lift_qty it_data_monthly-grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
@@ -11793,6 +11798,9 @@ FORM stage_all_rebates.
               'CIS rebates confirmed by L1 - pending your approval (L2)'.
     ENDLOOP.
     MESSAGE |{ lv_cnt } record(s) submitted for L2 approval (YCIS_APPRVL)| TYPE 'S'.
+  ELSEIF lv_skip > 0.
+*   rows were computed but every one was held back by the eligibility rule
+    MESSAGE |{ lv_skip } customer(s) not submitted: zero discount - no lifting/eligibility and no waiver applicable| TYPE 'I'.
   ELSE.
     MESSAGE 'No records available to submit for approval' TYPE 'I'.
   ENDIF.
