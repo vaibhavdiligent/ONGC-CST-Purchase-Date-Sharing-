@@ -1,4 +1,4 @@
-*&                                                                    *&
+*&--------------------------------------------------------------------*&
 *&  PROGRAM NAME          : YRVU001_REB_CALC_M2                       *&
 *&  TRANSACTION CODE      : YRVU015                                   *&
 *&  MODULE                : SD                                        *&
@@ -10,24 +10,25 @@
 *&  RECEIVED DATE         : 16.09.2019                                *&
 *&  FUN. SPECS RECIVED    : NO                                        *&
 *&  TRANSPORT REQ         : DVRK9A0GCG                                *&
-*&                                                                    *&
+*&--------------------------------------------------------------------*&
 *& CHANGE HISTORY : THIS PROGRAM IS COPY OF YRVU001_REB_CALC WITH
 *&                  ADDITIONAL CHANGES SUGGESTED BY PRIYANKA/ANURAG
 *                   YRVU016 IS FOR VARIANT RUN PROGRAM                *&
-*&                                                                     *
-*& CHANGE DATE   CHANGED BY   CHANGE ID   DESCRIPTION
-*&
-*&  10-02-2020   UJJWAL JAIN 400001548
-*&
+*&---------------------------------------------------------------------*
+*&|CHANGE DATE | CHANGED BY | CHANGE ID | DESCRIPTION                  |
+*&|------------|------------|------------------------------------------|
+*&| 10-02-2020 | UJJWAL JAIN|400001548  |                              |
+*&|------------|------------|-----------|------------------------------|
 * PROGRAM DESCRIPTION: FOR REBATE CALCULATIONS THE REBATE APPLICABLE IS
 *              CALCULATED BASED ON THE UPLIFTMENT QUANTITIES. THESE   *
 *              WILL BE GIVEN IN A REPORT AND ON EXECUTING THE         *
 *               CREDIT MEMOS WILL HAVE TO BE CREATED.                 *
-*                                                                     *
+*---------------------------------------------------------------------*
+
 REPORT yrvu001_reb_calc_m2  NO STANDARD PAGE HEADING
                MESSAGE-ID yv01 .
-*INCLUDES                                                             *
-*TABLES - SAP TABLES                                                  *
+*INCLUDES-------------------------------------------------------------*
+*TABLES - SAP TABLES--------------------------------------------------*
 TABLES : s925,
          vbak,                              "FOR REBATES
          kna1,
@@ -35,20 +36,26 @@ TABLES : s925,
          vbrp,
          konp,
          s922.
-*TABLES - CUSTOM TABLES                                               *
-*VIEWS                                                                *
-*STRUCTURES                                                           *
+*TABLES - CUSTOM TABLES-----------------------------------------------*
+*VIEWS----------------------------------------------------------------*
+
+*STRUCTURES-----------------------------------------------------------*
 DATA : x_order_header_in LIKE bapisdhead,
        x_return_commit   LIKE bapireturn1,
        x_sold_to_party   LIKE bapisoldto,
        x_bapisdhd1       LIKE bapisdhd1.
-*TYPES                                                                *
+
+*TYPES----------------------------------------------------------------*
 TYPE-POOLS : slis.
-*INTERNAL TABLES                                                      *
+
+*INTERNAL TABLES------------------------------------------------------*
 DATA: gt_fieldcat TYPE slis_t_fieldcat_alv WITH HEADER LINE.
+
 DATA : i_layout     TYPE slis_layout_alv,
        i_exit_event TYPE slis_t_event_exit WITH HEADER LINE.
+
 DATA: i_events TYPE slis_t_event WITH HEADER LINE.
+
 DATA: BEGIN OF i_reb1 OCCURS 0,
         name1    LIKE kna1-name1,
         pkunag   LIKE s925-pkunag,              "SOLD-TO PARTY
@@ -68,6 +75,7 @@ DATA: BEGIN OF i_reb1 OCCURS 0,
         page     LIKE sy-cpage,                 "PAGE NO
         check(1),                              "CHECK INDICATOR(X)
       END OF i_reb1.
+
 DATA: BEGIN OF i_reb_1 OCCURS 0,
         name1    LIKE kna1-name1,
         pkunag   LIKE s925-pkunag,              "SOLD-TO PARTY
@@ -88,6 +96,7 @@ DATA: BEGIN OF i_reb_1 OCCURS 0,
         check(1),                              "CHECK INDICATOR(X)
         ummenge_1  LIKE s925-ummenge,             "INVOICED QUANTITY
       END OF i_reb_1.
+
 DATA: BEGIN OF i_reb7 OCCURS 0,
         name1    LIKE kna1-name1,
         pkunag   LIKE s925-pkunag,              "SOLD-TO PARTY
@@ -107,6 +116,7 @@ DATA: BEGIN OF i_reb7 OCCURS 0,
         page     LIKE sy-cpage,                 "PAGE NO
         check(1),                              "CHECK INDICATOR(X)
       END OF i_reb7.
+
 DATA: BEGIN OF i_reb_kdgrp OCCURS 0,
         vkbur    LIKE s925-vkbur,               "SALES OFFICE
         vkorg    LIKE s925-vkorg,               "SALES ORGANIZATION
@@ -124,6 +134,7 @@ DATA: BEGIN OF i_reb_kdgrp OCCURS 0,
         check(1),                              "CHECK INDICATOR(X)
       END OF i_reb_kdgrp,
       i_reb3 LIKE STANDARD TABLE OF i_reb1 WITH HEADER LINE.
+
 DATA: BEGIN OF i_reb2 OCCURS 0,
         vkbur    LIKE s925-vkbur,               "SALES OFFICE
         kukla    TYPE kukla,
@@ -134,7 +145,7 @@ DATA: BEGIN OF i_reb2 OCCURS 0,
         werks    LIKE s925-werks,               "PLANT
         kvgr3    LIKE s922-kvgr3,               "LOCATION
         kdgrp    LIKE s925-kdgrp,               "CUSTOMER GROUP
-        kunnr    TYPE kunnr,     " SOC BY UJJWAL/PRIYANKA ON 10-02-2020
+        kunnr    TYPE kunnr,     " SOC BY UJJWAL/PRIYANKA ON 10-02-2020 ON CHRM 4000001548 TO DISPLAY CS
         ummenge  LIKE s925-ummenge,                  "INVOICED QUANTITY
         ummenge1 LIKE s925-ummenge,                  "INVOICED QUANTITY
         kbetr    LIKE konm-kbetr,
@@ -145,10 +156,11 @@ DATA: BEGIN OF i_reb2 OCCURS 0,
         check(1),
         rem(20),
         bezei    LIKE tvkbt-bezei, " ASHOK & M A KHAN 07.06.2007
-        " SOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 T
+        " SOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 TO DISPLAY REBATE ORDER
         vbeln    LIKE yrva_rebate-vbeln,
-        " EOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 T
+        " EOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 TO DISPLAY REBATE ORDER
       END OF i_reb2.
+
 DATA: BEGIN OF i_reb_2 OCCURS 0,
         vkbur    LIKE s925-vkbur,               "SALES OFFICE
         kukla    TYPE kukla,
@@ -159,7 +171,7 @@ DATA: BEGIN OF i_reb_2 OCCURS 0,
         werks    LIKE s925-werks,               "PLANT
         kvgr3    LIKE s922-kvgr3,               "LOCATION
         kdgrp    LIKE s925-kdgrp,               "CUSTOMER GROUP
-        kunnr    TYPE kunnr,     " SOC BY UJJWAL/PRIYANKA ON 10-02-2020
+        kunnr    TYPE kunnr,     " SOC BY UJJWAL/PRIYANKA ON 10-02-2020 ON CHRM 4000001548 TO DISPLAY CS
         ummenge  LIKE s925-ummenge,                  "INVOICED QUANTITY
         ummenge1 LIKE s925-ummenge,                  "INVOICED QUANTITY
         kbetr    LIKE konm-kbetr,
@@ -170,18 +182,21 @@ DATA: BEGIN OF i_reb_2 OCCURS 0,
         check(1),
         rem(20),
         bezei    LIKE tvkbt-bezei, " ASHOK & M A KHAN 07.06.2007
-        " SOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 T
+        " SOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 TO DISPLAY REBATE ORDER
         vbeln    LIKE yrva_rebate-vbeln,
-        " EOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 T
+        " EOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 TO DISPLAY REBATE ORDER
       END OF i_reb_2.
+
 DATA: BEGIN OF i_reb5 OCCURS 0,
         pkunag   LIKE s925-pkunag,
         ummenge1 LIKE s922-ummenge,
       END OF i_reb5,
+
       BEGIN OF i_reb6 OCCURS 0,
         pkunag   LIKE s925-pkunag,
         ummenge1 LIKE s922-ummenge,
       END OF i_reb6.
+
 DATA : BEGIN OF i_cond OCCURS 0,
          knumh LIKE konm-knumh,
          kbetr LIKE konm-kbetr,
@@ -191,7 +206,10 @@ DATA : BEGIN OF i_cond OCCURS 0,
          pkunag  LIKE s925-pkunag,
          ummenge LIKE s925-ummenge,                  "INVOICED QUANTITY
        END OF i_scmz.
+
+
 DATA : i_cond1 LIKE i_cond OCCURS 0 WITH HEADER LINE.
+
 DATA : BEGIN OF i_pkunag OCCURS 0,
          pkunag LIKE s925-pkunag,
        END OF i_pkunag.
@@ -207,6 +225,7 @@ DATA: BEGIN OF i_tvkbt OCCURS 0,
         bezei LIKE tvkbt-bezei,
       END OF i_tvkbt.
 * EOC ASHOK & M A KHAN 07.06.07
+
 * BOC ASHOK & M A KHAN 09.01.12
 DATA: BEGIN OF i_vbrk OCCURS 0,
         vbeln LIKE vbrk-vbeln,
@@ -238,12 +257,14 @@ DATA: lt_custclss TYPE STANDARD TABLE OF ty_data,
 DATA : i_a350 LIKE a350 OCCURS 0.
 DATA : i_a307 LIKE a307 OCCURS 0.
 DATA : flag      TYPE numc1,
-       lv_index  TYPE sy-tabix,  "ADDED BY KUNAL/PRIYANKA ON 05/02/2018
+       lv_index  TYPE sy-tabix,  "ADDED BY KUNAL/PRIYANKA ON 05/02/2018 FOR FREE SAMPLE RESTRICTION ON POLYMER DISCOUNT
        lv_index1 TYPE sy-tabix. "ADDED BY VAIBHAV
 DATA : WA_REC LIKE A350.
+
 DATA : i_order_partners LIKE bapipartnr  OCCURS 0 WITH HEADER LINE,
        i_order_items_in LIKE bapiitemin  OCCURS 0 WITH HEADER LINE.
-*VARIABLES                                                            *
+
+*VARIABLES------------------------------------------------------------*
 *   COUNTERS
 *   FLAGS
 *   SUMS
@@ -281,22 +302,22 @@ DATA: BEGIN OF i_reb_bkp OCCURS 0,
         page     LIKE sy-cpage,                 "PAGE NO
         check(1),                              "CHECK INDICATOR(X)
       END OF i_reb_bkp.
-*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020" CODE COMMENTED AS PER CHARM UPDATION
 DATA : gs_yrva_varientlog TYPE yrva_varientlog .
 DATA : gs_yrva_varientlog1 TYPE yrva_varientlog ."02.02.2021
 DATA : gv_ques TYPE string .
 DATA : gv_ans(1) .
-*EOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*EOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
 * END OF NEW CODE DECLARATION
-*CONSTANTS                                                            *
+*CONSTANTS------------------------------------------------------------*
 DATA: gd_line TYPE i.
 *SELECTION-SCREEN
 SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECTION-SCREEN SKIP.
-*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
   PARAMETERS :pc1 AS CHECKBOX ."
 * PARAMETERS : PREL TYPE DATUM . " COMMENTED ON 08.02.2021
-*EOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*EOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
   SELECT-OPTIONS  :
     s_sptag    FOR s925-sptag OBLIGATORY NO-EXTENSION,
     s_vkorg  FOR s925-vkorg  OBLIGATORY NO INTERVALS NO-EXTENSION,
@@ -304,7 +325,7 @@ SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
     s_pkunag FOR s925-pkunag NO INTERVALS, "NO-EXTENSION,
     s_auart FOR vbak-auart, " SOC by Vaishnavi/Archna TR: DVRK9A1OTG
     s_kukla  FOR kna1-mcod1 NO INTERVALS, "NO INTERVALS NO-EXTENSION,
-    s_kukla2  FOR kna1-kukla NO-DISPLAY, " SOC by Vaishnavi/Archna TR: D
+    s_kukla2  FOR kna1-kukla NO-DISPLAY, " SOC by Vaishnavi/Archna TR: DVRK9A1OTG
     s_kondm  FOR s925-kondm  OBLIGATORY,
     s_dist   FOR x_bapisdhd1-distr_chan OBLIGATORY,
                                       "DISTRIBUTATION CHANNAL
@@ -317,18 +338,22 @@ SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 *** CHNGE BY TCS:AM FUNC PRIYANKA DATED SEP 27, 2018.
     s_werks FOR vbrp-werks .
 *** CHNGE BY TCS:AM FUNC PRIYANKA DATED SEP 27, 2018.
-**SOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN
+**SOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN ORDER SEPRATELY
   PARAMETERS :  s_kvgr4 LIKE vbrp-kvgr4.
-**EOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN
+**EOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN ORDER SEPRATELY
   PARAMETERS : p_kschl  LIKE konp-kschl OBLIGATORY,
                p_kschl1 LIKE konp-kschl.
+
   SELECTION-SCREEN SKIP.
 SELECTION-SCREEN : END OF BLOCK b1.
-* AT SELECTION SCREEN                                                  *
+
+* AT SELECTION SCREEN--------------------------------------------------*
 ** SOC by Vaishnavi/Archna TR: DVRK9A1OTG
 INITIALIZATION.
+
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_kukla-low.
   PERFORM custclss.
+
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR s_kukla-high.
   PERFORM custclss.
 ** EOC by Vaishnavi/Archna TR: DVRK9A1OTG
@@ -345,6 +370,7 @@ AT SELECTION-SCREEN ON s_vkbur.
   ELSE.
     flag = 1.
   ENDIF.
+
 AT SELECTION-SCREEN ON s_kvgr2.
   IF s_kvgr2-low IS NOT INITIAL AND s_vkbur-low IS INITIAL.
     AUTHORITY-CHECK OBJECT 'YV_KVGR2'
@@ -353,16 +379,19 @@ AT SELECTION-SCREEN ON s_kvgr2.
       MESSAGE e061 WITH s_vkbur-low. "I_S925-VKBUR.
     ENDIF.
   ENDIF.
+
 AT SELECTION-SCREEN.
   IF s_vkbur-low IS INITIAL AND s_kvgr2-low IS INITIAL AND flag <> 1.
     MESSAGE e142.
 *  MESSAGE 'EITHER ENTER SALES OFFICE OR GROUP COMPANY' TYPE 'E'.
   ENDIF.
-* TOP OF PAGE                                                          *
+
+
+* TOP OF PAGE----------------------------------------------------------*
 TOP-OF-PAGE.
-* START OF SELECTION                                                   *
+* START OF SELECTION---------------------------------------------------*
 START-OF-SELECTION.
-*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
   IF pc1 IS NOT INITIAL .
     gv_ques = TEXT-005.
     CALL FUNCTION 'POPUP_TO_CONFIRM'
@@ -381,7 +410,7 @@ START-OF-SELECTION.
       gs_yrva_varientlog-variant = sy-slset.
       gs_yrva_varientlog-checkby = sy-uname.
       gs_yrva_varientlog-checkon = sy-datum.
-*                   GS_YRVA_VARIENTLOG-RELDAT  = PREL . COMMENTED ON 08.
+*                   GS_YRVA_VARIENTLOG-RELDAT  = PREL . COMMENTED ON 08.02.2021
       gs_yrva_varientlog-checkat = sy-uzeit.
       gs_yrva_varientlog-vkorg = s_vkorg-low.
       gs_yrva_varientlog-werks =  s_werks-low.
@@ -397,27 +426,30 @@ START-OF-SELECTION.
       ENDIF .
     ENDIF .
   ELSE ."
-*EOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
-**SOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN
+*EOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
+**SOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN ORDER SEPRATELY
     IF s_kvgr4 IS NOT INITIAL AND s_kvgr4 NE 'ZOP'.
-      MESSAGE 'CUSTOMER GROUP 4 SHOULD BE ZOP FOR ZOPN ORDER TYPE' TYPE
+      MESSAGE 'CUSTOMER GROUP 4 SHOULD BE ZOP FOR ZOPN ORDER TYPE' TYPE 'I' DISPLAY LIKE 'E'.
       LEAVE LIST-PROCESSING.
     ENDIF.
-**EOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN
+**EOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN ORDER SEPRATELY
 *  SET PF-STATUS 'PFSTAT'.
-    SET PF-STATUS 'STANDARD' EXCLUDING 'CALC'     ##STAT_UNDEF . " MODIF
+    SET PF-STATUS 'STANDARD' EXCLUDING 'CALC'     ##STAT_UNDEF . " MODIFIED BY SHWETA SONI TCS
+
 *CUSTOMER CLASSIFICATION
     SELECT kunnr kukla name1 FROM kna1
                        INTO TABLE i_kukla
                       WHERE kukla IN s_kukla
     AND kunnr IN s_pkunag.
-**SOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN
+**SOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN ORDER SEPRATELY
     IF s_kvgr4 IS INITIAL.
       PERFORM filter_data.
     ELSE.
       PERFORM filter_data_1.
     ENDIF.
-**EOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN
+
+
+**EOC BY UJJWAL/PRIYANKA ON CHARM 40000002943 ON 14-10-2020 TO GET ZOPN ORDER SEPRATELY
 **  IF I_REB1[] IS NOT INITIAL AND S_VKBUR-LOW IS NOT INITIAL.
 **    SELECT SPTAG VTWEG PKUNAG VKBUR VKORG KVGR2    KONDM
 **      KDGRP UMMENGE INTO CORRESPONDING FIELDS OF
@@ -449,46 +481,54 @@ START-OF-SELECTION.
 **    ENDLOOP.
 **  ENDIF.
 *  ENDIF.
+
     DELETE i_reb1 WHERE NOT kondm  IN s_kondm.
     DELETE i_reb1 WHERE NOT kdgrp  IN s_kdgrp.
+
     IF s_sptag-high IS NOT INITIAL.
       SELECT vbeln fkart fkdat kunag sfakn INTO TABLE i_vbrk
       FROM vbrk
       WHERE vkorg = '5000'
       AND ( fkart IN ('ZP07', 'ZI07') OR fkart = 'S1' )
-**SOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON C
+**SOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON CHARM 400001548 ON 24-01-2020
        AND  vtweg  IN s_dist
-**EOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON C
+**EOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON CHARM 400001548 ON 24-01-2020
       AND fkdat GE s_sptag-low AND fkdat LE s_sptag-high
 ** -> BEGIN OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
       AND vbrk~draft = space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
     ELSE.
       SELECT vbeln fkart fkdat kunag sfakn INTO TABLE i_vbrk
       FROM vbrk
       WHERE vkorg = '5000'
       AND ( fkart IN ('ZP07', 'ZI07') OR fkart = 'S1' )
-**SOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON C
+**SOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON CHARM 400001548 ON 24-01-2020
        AND  vtweg  IN s_dist
-**EOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON C
+**EOC BY UJJWAL/PRIYANKA TO GET DISTRIBUTION CHANNEL WISE BILL DATA ON CHARM 400001548 ON 24-01-2020
       AND fkdat EQ s_sptag-low
 ** -> BEGIN OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
       AND vbrk~draft = space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
     ENDIF.
     IF i_vbrk[] IS NOT INITIAL.
       i_vbrk_t[] = i_vbrk[].
+
       DELETE i_vbrk WHERE fkart = 'S1'.
       DELETE i_vbrk_t WHERE fkart = 'ZP07'.
       DELETE i_vbrk_t WHERE fkart = 'ZI07'.
+
       LOOP AT i_vbrk.
         READ TABLE i_vbrk_t WITH KEY sfakn = i_vbrk-vbeln.
         IF sy-subrc = 0.
           DELETE i_vbrk.
         ENDIF.
       ENDLOOP.
+
       IF i_vbrk[] IS NOT INITIAL.
-        SELECT vbeln fkimg kondm FROM vbrp INTO TABLE i_vbrp FOR ALL ENT
+        SELECT vbeln fkimg kondm FROM vbrp INTO TABLE i_vbrp FOR ALL ENTRIES IN i_vbrk WHERE vbeln = i_vbrk-vbeln.
+
         LOOP AT i_vbrp.
           READ TABLE i_vbrk WITH KEY vbeln = i_vbrp-vbeln.
           IF sy-subrc = 0.
@@ -506,18 +546,21 @@ START-OF-SELECTION.
         i_vbrp[] = i_vbrp_tmp[].
         IF i_vbrp[] IS NOT INITIAL.
           CLEAR w_kunag.
+
+
           BREAK xgail_ab2.
           LOOP AT i_reb1.
-*          READ TABLE I_VBRP WITH KEY KUNAG = I_REB1-PKUNAG KONDM = I_RE
-**  SOC BY KUNAL/PRIYANKA ON 05/02/2018 FOR FREE SAMPLE RESTRICTION ON P
+
+*          READ TABLE I_VBRP WITH KEY KUNAG = I_REB1-PKUNAG KONDM = I_REB1-KONDM . " RESTRICTING FREE SAMPLE TO MAT GROUP.
+**--SOC BY KUNAL/PRIYANKA ON 05/02/2018 FOR FREE SAMPLE RESTRICTION ON POLYMER DISCOUNT
 *          IF SY-SUBRC = 0.
 *            LV_INDEX = SY-TABIX.
 *            LOOP AT I_VBRP FROM LV_INDEX.
 *              LV_INDEX1 = SY-TABIX.
-*              IF I_VBRP-KUNAG <> I_REB1-PKUNAG AND I_VBRP-KONDM <> I_RE
+*              IF I_VBRP-KUNAG <> I_REB1-PKUNAG AND I_VBRP-KONDM <> I_REB1-KONDM .
 *                EXIT.
 *              ELSE.
-**  EOC BY KUNAL/PRIYANKA ON 05/02/2018 FOR FREE SAMPLE RESTRICTION ON P
+**--EOC BY KUNAL/PRIYANKA ON 05/02/2018 FOR FREE SAMPLE RESTRICTION ON POLYMER DISCOUNT
 *                IF W_KUNAG NE I_REB1-PKUNAG.
 *                  I_REB1-UMMENGE = I_REB1-UMMENGE - I_VBRP-FKIMG.
 *                  MODIFY I_REB1 TRANSPORTING UMMENGE.
@@ -528,16 +571,26 @@ START-OF-SELECTION.
 *              ENDIF.
 *            ENDLOOP.
 *          ENDIF.
-            LOOP AT i_vbrp WHERE kunag = i_reb1-pkunag AND kondm = i_reb
-SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
+
+
+
+
+            LOOP AT i_vbrp WHERE kunag = i_reb1-pkunag AND kondm = i_reb1-kondm. " ADDED BY ARU AND PRIYANKA ON DATE 05.04.2021 CHARM: 4000003710 SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
               lv_index = sy-tabix.
               i_reb1-ummenge = i_reb1-ummenge - i_vbrp-fkimg.
               MODIFY i_reb1 TRANSPORTING ummenge.
               DELETE i_vbrp INDEX lv_index.
             ENDLOOP.
+
+
+
+
+
           ENDLOOP.
         ENDIF.
+
       ENDIF.
+
     ENDIF.
 * EOC:LOGIC FOR EXCLUDING FREE SAMPLE BY ASHOK & KHAN 11.01.2012
     SORT i_kukla BY kunnr.
@@ -547,10 +600,12 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         DELETE i_reb1.
       ENDIF.
     ENDLOOP.
+
     IF i_reb1[] IS INITIAL.
       MESSAGE i025.
       LEAVE LIST-PROCESSING.
     ENDIF.
+
     SORT i_kukla BY kunnr.
     LOOP AT i_reb1.
       CLEAR i_kukla.
@@ -561,44 +616,50 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         MODIFY i_reb1 TRANSPORTING kukla name1.
       ENDIF.
     ENDLOOP.
+
 *CHECKING FOR INITIAL
     IF i_reb1[] IS INITIAL.
       MESSAGE i025.
       LEAVE LIST-PROCESSING.
     ENDIF.
+
+
 * SUMMATION FOR CUSTOMER GROUP
     SORT i_reb1 BY pkunag vkbur vkorg  kvgr2 kondm kdgrp.
+
 * CONDITION TYPE IS NOT EQUAL TO 'ZMOU'
     IF p_kschl <> 'ZMOU'.
       SELECT * INTO TABLE i_a350 FROM a350 WHERE kappl = 'V'      AND
                                                  kschl = p_kschl  AND
                                                  vkorg IN s_vkorg AND
                                                  kfrst = ''       AND
-*                                               DATBI GE SY-DATUM.    "
-                                                 datab LE s_sptag-high A
+*                                               DATBI GE SY-DATUM.    " ASHOK & KHAN 10.03.08
+                                                 datab LE s_sptag-high AND " ASHOK & KHAN 10.03.08
       datbi GE s_sptag-low.   " ASHOK & KHAN 10.03.08
 * CONDITION TYPES
       IF NOT i_a350[] IS INITIAL.
         SELECT konm~knumh konm~kbetr konm~kstbm INTO TABLE i_cond
                                        FROM konm
-                               INNER JOIN konp ON konp~knumh = konm~knum
+                               INNER JOIN konp ON konp~knumh = konm~knumh
                                   FOR ALL ENTRIES IN i_a350
                                   WHERE konp~knumh = i_a350-knumh AND
         konp~kschl = p_kschl.
       ENDIF.
+
 * CONDITION TYPE IS EQUAL TO 'ZMOU'
     ELSE.
+
 * CUSTOMER NO IS NOT INITIAL
       IF NOT s_pkunag IS INITIAL.
         IF NOT i_reb1[] IS INITIAL.
           SELECT * INTO TABLE i_a307 FROM a307 FOR ALL ENTRIES IN i_reb1
-                                          WHERE kappl = 'V'           AN
-                                                kschl = p_kschl       AN
-                                                vkorg IN s_vkorg      AN
+                                          WHERE kappl = 'V'           AND
+                                                kschl = p_kschl       AND
+                                                vkorg IN s_vkorg      AND
                                                 vtweg IN s_dist      AND
-                                                kunnr = i_reb1-pkunag AN
-*                                               DATBI GE SY-DATUM.    "
-                                                 datab LE s_sptag-high A
+                                                kunnr = i_reb1-pkunag AND
+*                                               DATBI GE SY-DATUM.    " ASHOK & KHAN 10.03.08
+                                                 datab LE s_sptag-high AND " ASHOK & KHAN 10.03.08
           datbi GE s_sptag-low.   " ASHOK & KHAN 10.03.08
         ENDIF.
 * CUSTOMER NO IS INITIAL
@@ -610,15 +671,17 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         ENDLOOP.
         SORT i_pkunag BY pkunag.
         DELETE ADJACENT DUPLICATES FROM i_pkunag COMPARING ALL FIELDS.
+
         SELECT * INTO TABLE i_a307 FROM a307 FOR ALL ENTRIES IN i_pkunag
-                                          WHERE kappl = 'V'           AN
-                                                kschl = p_kschl       AN
-                                                vkorg IN s_vkorg      AN
-                                                vtweg IN s_dist       AN
-                                                kunnr = i_pkunag-pkunag
-*                                               DATBI GE SY-DATUM.     "
-                                                 datab LE s_sptag-high A
+                                          WHERE kappl = 'V'           AND
+                                                kschl = p_kschl       AND
+                                                vkorg IN s_vkorg      AND
+                                                vtweg IN s_dist       AND
+                                                kunnr = i_pkunag-pkunag AND
+*                                               DATBI GE SY-DATUM.     " ASHOK & KHAN 10.03.08
+                                                 datab LE s_sptag-high AND " ASHOK & KHAN 10.03.08
         datbi GE s_sptag-low.   " ASHOK & KHAN 10.03.08
+
         IF NOT i_a307[] IS INITIAL.
           SELECT knumh kbetr kstbm INTO TABLE i_cond FROM konm
                                          FOR ALL ENTRIES IN i_a307
@@ -626,11 +689,13 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         ENDIF.
       ENDIF.
     ENDIF.
+
     DATA : w_kvgr3 LIKE s922-kvgr3,
            w_kdgrp LIKE s925-kdgrp,
            w_kukla TYPE kukla.
     DATA : fin_qty  LIKE s925-ummenge.
     DATA : comp_grp  LIKE s925-kvgr2.
+
     CLEAR : w_kvgr2, w_kvgr3, w_kdgrp, w_vkbur, w_kukla.
 *  BREAK-POINT.
     DATA: lv_kunnr TYPE kunnr,
@@ -638,11 +703,11 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
           lv_kdgrp TYPE kdgrp.
     i_reb7[] = i_reb1[].
     SORT i_reb7 BY  pkunag vkbur kvgr2 werks.
-*  DELETE ADJACENT DUPLICATES FROM I_REB7[] COMPARING PKUNAG VKBUR KVGR2
+*  DELETE ADJACENT DUPLICATES FROM I_REB7[] COMPARING PKUNAG VKBUR KVGR2 WERKS.
     DELETE ADJACENT DUPLICATES FROM i_reb7[] COMPARING pkunag.
     SORT i_reb1 BY pkunag vkbur kvgr2 werks.
 *  BREAK-POINT.
-****SOC BY UJJWAL/PRIYANKA ON CHARM 4000000157 ON 18-09-2019 TO DISPLAY
+****SOC BY UJJWAL/PRIYANKA ON CHARM 4000000157 ON 18-09-2019 TO DISPLAY SUM ON CUSTOMER BASIS
     LOOP AT i_reb7.
       LOOP AT i_reb1 WHERE pkunag = i_reb7-pkunag. "AND
 *                         VKBUR = I_REB7-VKBUR AND
@@ -667,13 +732,14 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
     LOOP AT i_reb2 ASSIGNING FIELD-SYMBOL(<lfs_reb2>).
       <lfs_reb2>-werks = '5010'.
     ENDLOOP.
-*  ****EOC BY UJJWAL/PRIYANKA ON CHARM 4000000157 ON 18-09-2019 TO DISPL
+*  ****EOC BY UJJWAL/PRIYANKA ON CHARM 4000000157 ON 18-09-2019 TO DISPLAY SUM ON CUSTOMER BASIS
 *  BREAK-POINT.
     SORT i_reb2 BY kvgr2.
 ** EOC
-*SUMMATION FOR  QUANTITY COMP. GROUPWISE   KAMAL 30-08-2005
+*SUMMATION FOR  QUANTITY COMP. GROUPWISE --KAMAL 30-08-2005
     DATA: l_flag TYPE c.
 *        FIN_QTY(16) TYPE P.
+
     DATA : BEGIN OF i_rebk OCCURS 0,
              kvgr2   LIKE i_reb2-kvgr2,
              ummenge LIKE i_reb2-ummenge,
@@ -685,6 +751,7 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
       APPEND i_rebk.
       CLEAR i_rebk.
     ENDLOOP.
+
 **************BOC BY NITIN DHAMIJA
     IF p_kschl <> 'ZMOU'.
       LOOP AT i_rebk WHERE kvgr2 IS NOT INITIAL.
@@ -692,6 +759,7 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
           l_flag = 'X'.
           CLEAR fin_qty.
         ENDAT.
+
         IF l_flag NE 'X'.
           fin_qty = fin_qty + i_rebk-ummenge.
           i_reb2-kvgr2 = i_rebk-kvgr2.
@@ -704,13 +772,14 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         CLEAR l_flag.
       ENDLOOP.
     ENDIF.
-*END OF SUMMATION FOR  QUANTITY COMP. GROUPWISE   KAMAL 30-08-2005
+*END OF SUMMATION FOR  QUANTITY COMP. GROUPWISE --KAMAL 30-08-2005
 ************END OF COMMENT BY NITIN DHAMIJA
 * LOGIC FOR SUMMATION OF QTY FOR SINGLE CUSTOMER MULTUIPLE ZONAL OFFICE.
     DATA: l_ummenge  TYPE s925-ummenge,
           o_pkunag   TYPE s925-pkunag,
           n_pkunag   TYPE s925-pkunag,
           l_count(2) TYPE c.
+
     SORT i_reb2 BY pkunag.
     LOOP AT i_reb2 WHERE kvgr2 IS INITIAL.
       n_pkunag = i_reb2-pkunag.
@@ -730,6 +799,7 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
       ENDIF.
       o_pkunag = n_pkunag.
     ENDLOOP.
+
     IF l_count GT '1'.
       i_scmz-ummenge = l_ummenge.
       i_scmz-pkunag = o_pkunag.
@@ -737,6 +807,7 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
       APPEND i_scmz.
       CLEAR i_scmz.
     ENDIF.
+
     LOOP AT i_reb2 WHERE kvgr2 IS INITIAL.
       READ TABLE i_scmz WITH KEY pkunag = i_reb2-pkunag.
       IF sy-subrc = 0.
@@ -744,10 +815,13 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         MODIFY i_reb2 TRANSPORTING ummenge.
       ENDIF.
     ENDLOOP.
+
 *CALCULATING VALUE W.R.T RATE
     LOOP AT i_reb2.
+
       REFRESH i_cond1[].
       CLEAR : i_cond1, w_kbetr.
+
 *IF P_KSCHL <> 'ZMOU'.
       IF p_kschl <> 'ZMOU'.
         SORT i_cond BY kstbm DESCENDING.
@@ -778,7 +852,7 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
     AND  vkbur IN s_vkbur.
 * EOC ASHOK & M A KHAN 07.06.2007
 * READING CHECK BOX AND UPDATING VALUE
-*  *    ** SOC BY UJJWAL/PRIYANKA ON 10-02-2020 ON CHRM 4000001548 TO DI
+*  *    ** SOC BY UJJWAL/PRIYANKA ON 10-02-2020 ON CHRM 4000001548 TO DISPLAY CS
     SELECT kunnr,
       lifnr
   FROM knvp
@@ -800,12 +874,12 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
       w_curr_lin =  sy-tabix.
       w_next_lin = w_curr_lin + 1.
 ** SOC BY UJJWAL/PRIYANKA ON 10-02-2020 ON CHRM 4000001548 TO DISPLAY CS
-      READ TABLE lt_knvp ASSIGNING FIELD-SYMBOL(<lfs_knvp>) WITH  KEY ku
+      READ TABLE lt_knvp ASSIGNING FIELD-SYMBOL(<lfs_knvp>) WITH  KEY kunnr = i_reb2-pkunag.
       IF sy-subrc IS  INITIAL.
         i_reb2-kunnr = <lfs_knvp>-lifnr.
       ENDIF.
 ** EOC BY UJJWAL/PRIYANKA ON 10-02-2020 ON CHRM 4000001548 TO DISPLAY CS
-** SOC BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHARM 4000002361 TO REBATE ORD
+** SOC BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHARM 4000002361 TO REBATE ORDER
       CLEAR w_vbeln1.
 *Begin of changes by of VIPUL on 20241030  for ATC
       SELECT vbeln INTO w_vbeln1 FROM yrva_rebate
@@ -829,7 +903,9 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         i_reb2-vbeln = w_vbeln1.
         CLEAR w_vbeln1.
       ENDIF.
-** EOC BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHARM 4000002361 TO REBATE ORD
+
+
+** EOC BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHARM 4000002361 TO REBATE ORDER
 *MAKING POSTIVE
       IF i_reb2-value < 0.
         i_reb2-value = 0 - i_reb2-value.
@@ -843,9 +919,10 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
       CLEAR i_reb2.
     ENDLOOP.
   ENDIF ."
+
 **SOC BY ABHINAV/ARCNA/VISHAL ON 05/06/2023 CHARM:4000006500.
   IF i_reb2[] IS NOT INITIAL.
-    READ TABLE i_reb2 ASSIGNING FIELD-SYMBOL(<w_reb22>) WITH KEY pkunag
+    READ TABLE i_reb2 ASSIGNING FIELD-SYMBOL(<w_reb22>) WITH KEY pkunag = '0000035157'.
     IF sy-subrc EQ 0.
       IF sy-slset EQ 'MAY23PPLLDPE'.
         <w_reb22>-ummenge = '11'.
@@ -856,7 +933,7 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
         <w_reb22>-value = '0'.
       ENDIF.
     ENDIF.
-    READ TABLE i_reb2 ASSIGNING FIELD-SYMBOL(<w_reb222>) WITH KEY pkunag
+    READ TABLE i_reb2 ASSIGNING FIELD-SYMBOL(<w_reb222>) WITH KEY pkunag = '0000022883'.
     IF sy-subrc EQ 0.
       IF sy-slset EQ 'MAY23PPLLDPE'.
         <w_reb222>-ummenge = '29.5'.
@@ -867,44 +944,47 @@ SD:BUGFIX FOR POLYMER DISCOUNT FREE SAMP
       ENDIF.
     ENDIF.
   ENDIF.
-** SOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851 DATE
+** SOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851 DATE: 01/08/2023
   IF sy-slset EQ 'MAY23PPLLDPE' OR  sy-slset EQ 'MAY23PPLLFILM'.
-** EOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851 DATE
+** EOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851 DATE: 01/08/2023
     DELETE i_reb2 WHERE value EQ '0' AND pkunag = '0000035157'.
 **EOC BY ABHINAV/ARCNA/VISHAL ON 05/06/2023 CHARM:4000006500
-** SOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851  DAT
+** SOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851  DATE: 01/08/2023
   ENDIF.
-** EOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851 DATE
-*END-OF-SELECTION                                                   *
+** EOC BY CHILUKURI TRIPURA REDDY/ARCHNA/VISHAL CHARM NO 4000006851 DATE: 01/08/2023
+*END-OF-SELECTION---------------------------------------------------*
 END-OF-SELECTION.
 *   ALV SPECIFIC ROUTINES
-*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
   IF pc1 IS INITIAL ."
-*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SING
+*BOC CHARM ID 4000003218 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 17.12.2020
     PERFORM create_field_catalog.
     PERFORM display_alv.
   ENDIF ."
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  SALES_ORDER
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       CALLING BAPI
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM sales_order.
+
 *Begin of changes by of VIPUL on 20241030  for ATC
   SELECT vbeln INTO w_vbeln1 FROM yrva_rebate
   UP TO 1 ROWS
   WHERE kunnr = i_reb2-pkunag AND
   reb_cond = p_kschl AND
-  vkbur = i_reb2-vkbur AND " ASHOK & KHAN 12 ORDER BY PRIMARY KEY .09 OR
+  vkbur = i_reb2-vkbur AND " ASHOK & KHAN 12 ORDER BY PRIMARY KEY .09 ORDER BY PRIMARY KEY .2011
               kukla        = i_reb2-kukla  AND
                              yy_per_start = s_sptag-low   AND
                              yy_per_end   = s_sptag-high AND
                              werks = i_reb2-werks ORDER BY PRIMARY KEY.
   ENDSELECT.
 * *End of changes by of VIPUL on 20241030  for ATC
+
+
 ***   SOC BY ABHINAV/ARCHANA GROUP PROBLEM
 *  IF I_REB2-PKUNAG EQ '0000035148'.
 *    IF SY-SUBRC = 1.
@@ -918,6 +998,8 @@ FORM sales_order.
     EXIT.
   ENDIF.
 *  ENDIF.
+
+
   CALL FUNCTION 'BAPI_SALESDOCU_CREATEFROMDATA'
     EXPORTING
       order_header_in = x_order_header_in
@@ -930,30 +1012,36 @@ FORM sales_order.
     TABLES
       order_items_in  = i_order_items_in
       order_partners  = i_order_partners.
+
   IF w_vbeln IS INITIAL.
     WRITE : / 'ERROR MESSAGE :',x_return_commit-message.
   ELSE.
+
     WRITE : / 'SALES ORDER HAS BEEN CREATED WITH :'(003), w_vbeln,
               'AND CUSTOMER NO :'(004), x_sold_to_party-sold_to.
     IF NOT w_vbeln IS INITIAL.
       PERFORM table_update.
     ENDIF.
   ENDIF.
+
   CLEAR :   w_vbeln, x_return_commit, x_order_header_in, w_objtype,
             x_sold_to_party.
+
   REFRESH :  i_order_partners, i_order_items_in .
 ENDFORM.                    " SALES_ORDER
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  DISPLAY_ALV
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       TEXT
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM display_alv .
+
 *FILTER AS PER CUSTOMER CLASSIFICATION
   DELETE i_reb2 WHERE NOT kukla IN s_kukla.
+
 ******ADDED BY NITIN DHAMIJA ON 25.06.2019*****************
   IF i_reb2[] IS NOT INITIAL.
     SORT i_reb2 BY kvgr2.
@@ -970,6 +1058,7 @@ FORM display_alv .
 *
   i_reb6[] = i_reb5[].
   REFRESH: i_reb5[].
+
   LOOP AT i_reb6.
     i_reb5-pkunag = i_reb6-pkunag.
     AT NEW pkunag.
@@ -979,6 +1068,8 @@ FORM display_alv .
       CLEAR: i_reb5.
     ENDAT.
   ENDLOOP.
+
+
   IF p_kschl1 IS NOT INITIAL.
     SELECT *  FROM a350 INTO TABLE @DATA(i_a350_1)
     WHERE kappl = 'V'
@@ -1001,6 +1092,7 @@ FORM display_alv .
     ENDIF.
     SORT i_cond_1 BY kstbm DESCENDING.
   ENDIF.
+
   if i_reb_2 is NOT INITIAL.
     DATA : BEGIN OF i_rebk_1 OCCURS 0,
              kvgr2   LIKE i_reb2-kvgr2,
@@ -1015,17 +1107,19 @@ FORM display_alv .
       APPEND i_rebk_1.
       CLEAR i_rebk_1.
     ENDLOOP.
+
     IF p_kschl <> 'ZMOU'.
       LOOP AT i_rebk_1 WHERE kvgr2 IS NOT INITIAL.
         AT NEW kvgr2.
           l_flag_1 = 'X'.
           CLEAR fin_qty_1.
         ENDAT.
+
         IF l_flag_1 NE 'X'.
           fin_qty_1 = fin_qty_1 + i_rebk_1-ummenge.
           i_reb_2-kvgr2 = i_rebk_1-kvgr2.
           i_reb_2-ummenge = fin_qty_1.
-          MODIFY i_reb_2 TRANSPORTING ummenge WHERE kvgr2 = i_reb_2-kvgr
+          MODIFY i_reb_2 TRANSPORTING ummenge WHERE kvgr2 = i_reb_2-kvgr2.
           CLEAR i_rebk_1.
         ELSE.
           fin_qty_1 = i_rebk_1-ummenge.
@@ -1033,13 +1127,16 @@ FORM display_alv .
         CLEAR l_flag_1.
       ENDLOOP.
     ENDIF.
+
     endif.
+
   IF i_cond_1 IS NOT INITIAL.
     LOOP AT i_reb2.
       lv_index = sy-tabix.
       LOOP AT i_cond WHERE kstbm <= i_reb2-ummenge.
         IF i_cond IS NOT INITIAL.
           i_reb2-value = i_cond-kbetr * i_reb2-ummenge1.
+
           IF i_reb2-value < 0.
             i_reb2-value = i_reb2-value * -1.
           ENDIF.
@@ -1053,23 +1150,28 @@ FORM display_alv .
       ENDLOOP.
       CLEAR: i_reb2, i_cond, lv_index , w_vbeln1.
     ENDLOOP.
+
     SORT i_reb_2 BY kvgr2.
     LOOP AT i_reb2.
       lv_index = sy-tabix.
     LOOP AT i_reb_2 INTO DATA(wa_reb_2) WHERE pkunag = i_reb2-pkunag.
       if wa_reb_2-ummenge <= i_reb2-ummenge.
-        LOOP AT i_cond_1 INTO DATA(wa_cond_1) WHERE kstbm <= wa_reb_2-um
+
+        LOOP AT i_cond_1 INTO DATA(wa_cond_1) WHERE kstbm <= wa_reb_2-ummenge.
             IF wa_cond_1-kbetr < 0.
               wa_cond_1-kbetr = wa_cond_1-kbetr * -1.
             ENDIF.
+
             IF i_reb2-kbetr <= wa_cond_1-kbetr.   ""700<800
-              SELECT SINGLE * FROM a350 INTO @wa_rec WHERE knumh = @wa_c
+              SELECT SINGLE * FROM a350 INTO @wa_rec WHERE knumh = @wa_cond_1-knumh.
               i_reb2-value = wa_cond_1-kbetr * i_reb2-ummenge1.
               i_reb2-kbetr = wa_cond_1-kbetr.
             ENDIF.
+
             IF i_reb2-value < 0.
               i_reb2-value = i_reb2-value * -1.
             ENDIF.
+
         MODIFY i_reb2 INDEX lv_index TRANSPORTING kbetr value.
           EXIT.
       ENDLOOP.
@@ -1077,13 +1179,17 @@ FORM display_alv .
       EXIT.
     ENDLOOP.
     ENDLOOP.
+
+
   ENDIF.
+
   IF p_kschl1 IS INITIAL.
     LOOP AT i_reb2.
       lv_index = sy-tabix.
       LOOP AT i_cond WHERE kstbm <= i_reb2-ummenge.
         IF i_cond IS NOT INITIAL.
           i_reb2-value = i_cond-kbetr * i_reb2-ummenge1.
+
           IF i_reb2-value < 0.
             i_reb2-value = i_reb2-value * -1.
           ENDIF.
@@ -1099,9 +1205,9 @@ FORM display_alv .
     ENDLOOP.
   ENDIF.
 ******END OF ADDITION BY NITIN DHAMIJA**********************
-**** BOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA
+**** BOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 08.03.2021
   IF sy-tcode = 'YRVU015' OR sy-tcode = 'YRVU016'.
-**** EOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA
+**** EOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 08.03.2021
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
         i_callback_program       = 'YRVU001_REB_CALC_M2'
@@ -1120,37 +1226,41 @@ FORM display_alv .
       MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
               WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
     ENDIF.
-**** BOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA
+**** BOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 08.03.2021
   ELSE .
 *    SUBMIT
     EXPORT i_reb2[] TO MEMORY ID 'M001' .
   ENDIF .
-**** EOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA
+**** EOC CHARM ID 2000000213 TECHNICAL VIKRAM BAJAJ FUNCTIONAL PRIYANKA SINGH DT 08.03.2021
+
 ENDFORM.                    " DISPLAY_ALV
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *&      FORM  ON_SELECTION
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *       TEXT
-*                                                                     *
-*        >R_UCOMM    TEXT
-*        >RS_SELFIELDTEXT
-*                                                                     *
+*---------------------------------------------------------------------*
+*      -->R_UCOMM    TEXT
+*      -->RS_SELFIELDTEXT
+*---------------------------------------------------------------------*
 FORM on_selection USING r_ucomm LIKE sy-ucomm
                         rs_selfield TYPE slis_selfield.
   DATA: itab TYPE TABLE OF sy-ucomm,
         w_ln TYPE i.
+
   APPEND 'CALC' TO itab.
   APPEND 'FCOD' TO itab.
   APPEND '&ALL' TO itab.
   APPEND '&SAL' TO itab.
+
   CASE r_ucomm.
     WHEN 'CALC'.
       SET PF-STATUS 'STANDARD'   ##STAT_UNDEF.
 *CALCULATING NEW VALUE AS PER QTY
 *CALCULATING VALUE W.R.T RATE
-*SUMMATION FOR  QUANTITY COMP. GROUPWISE   KAMAL 30-08-2005
+*SUMMATION FOR  QUANTITY COMP. GROUPWISE --KAMAL 30-08-2005
       DATA: l_flag TYPE c.
 *        FIN_QTY(16) TYPE P.
+
       DATA : BEGIN OF i_rebk OCCURS 0,
                kvgr2    LIKE i_reb2-kvgr2,
                ummenge1 LIKE i_reb2-ummenge1,
@@ -1162,10 +1272,13 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
         APPEND i_rebk.
         CLEAR i_rebk.
       ENDLOOP.
+
 *CALCULATING VALUE W.R.T RATE
       LOOP AT i_reb2.
+
         REFRESH i_cond1[].
         CLEAR : i_cond1, w_kbetr.
+
         IF p_kschl <> 'ZMOU'.
           SORT i_cond BY kstbm DESCENDING.
           DESCRIBE TABLE i_cond LINES w_ln.
@@ -1181,6 +1294,7 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
               EXIT.
             ENDLOOP.
           ELSEIF NOT i_reb2-kvgr2 IS INITIAL.
+
             LOOP AT i_cond WHERE kstbm <= i_reb2-ummenge.
               w_kbetr = i_cond-kbetr.
               i_reb2-value = i_reb2-ummenge1 * w_kbetr.
@@ -1190,14 +1304,17 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
         ENDIF.
         MODIFY i_reb2.
       ENDLOOP.
+
+
 *  I_REB_KDGRP[] = I_REB1[].
       LOOP AT i_reb1.
         MOVE-CORRESPONDING i_reb1 TO i_reb_kdgrp.
         APPEND i_reb_kdgrp.
         CLEAR i_reb_kdgrp.
       ENDLOOP.
-      DELETE ADJACENT DUPLICATES FROM i_reb1 COMPARING vkbur vkorg pkuna
+      DELETE ADJACENT DUPLICATES FROM i_reb1 COMPARING vkbur vkorg pkunag
       kvgr2  kondm kdgrp.
+
 *UPDATING VALUE
       LOOP AT i_reb2.
 *MAKING POSTIVE
@@ -1207,6 +1324,8 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
         MODIFY i_reb2.
         CLEAR i_reb2.
       ENDLOOP.
+
+
 *EXECUTE BUTTON
     WHEN 'FCOD'.
       SET PF-STATUS 'STANDARD' OF PROGRAM 'SAPLSALV'
@@ -1215,31 +1334,34 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
 *CALL BAPI
       PERFORM check.
       DELETE i_reb2 WHERE check <> 'X'.
+
 *EXECUTE SELECT ALL
     WHEN 'SALL'.
-      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVU001_REB_CALC_M2' EXCLUDIN
+      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVU001_REB_CALC_M2' EXCLUDING 'CALC'.  "MODIFIED BY SHWETA SONI TCS
       LOOP AT i_reb2.
         i_reb2-check = 'X'.
         MODIFY i_reb2.
       ENDLOOP.
+
 *EXECUTE DESELECT ALL
     WHEN 'DSAL'.
-      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVU001_REB_CALC_M2' EXCLUDIN
+      SET PF-STATUS 'STANDARD' OF PROGRAM 'YRVU001_REB_CALC_M2' EXCLUDING 'CALC'.  "  MODIFIED BY SHWETA SONI TCS
       LOOP AT i_reb2 WHERE check = 'X'.
         i_reb2-check = ''.
         MODIFY i_reb2.
       ENDLOOP.
     WHEN OTHERS.
+
   ENDCASE.
 ENDFORM.                    "ON_SELECTION
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  CHECK
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       TEXT
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM check .
 *BREAK-POINT.
   LOOP AT i_reb2 WHERE check = 'X'.
@@ -1249,16 +1371,19 @@ FORM check .
             x_order_header_in,
             i_order_partners,
             i_order_items_in.
+
     REFRESH : i_order_partners,
               i_order_items_in.
-    SELECT SINGLE * FROM YRVA_REBATE INTO @DATA(WA_REBATE) WHERE KUNNR =
+
+    SELECT SINGLE * FROM YRVA_REBATE INTO @DATA(WA_REBATE) WHERE KUNNR = @I_REB2-pkunag
       AND YY_PER_START eq @s_sptag-low
       AND YY_PER_END eq @s_sptag-high
-      AND VKBUR  EQ  @i_reb2-vkbur    """ ADD BY ABHRIAJ SINGH ON MON 13
+      AND VKBUR  EQ  @i_reb2-vkbur    """ ADD BY ABHRIAJ SINGH ON MON 13/07/2026
       AND ( REB_COND = @p_kschl or REB_COND = @p_kschl1 ).
         IF WA_REBATE IS NOT INITIAL.
-          MESSAGE 'Rebate order already created for this customer' TYPE
+          MESSAGE 'Rebate order already created for this customer' TYPE 'E'.
         ELSE.
+
 *    IF S_DIV-LOW = '20'.
 *   IF S_KONDM-LOW <> '70'.
 *    BREAK-POINT.
@@ -1268,6 +1393,7 @@ FORM check .
 *    W_AUART = 'ZI09'.
 *    W_MATNR = 'REBATE(POLYMER)'.
 *   ENDIF.
+
     IF i_reb2-check = 'X'.
 * NEW CODE ADDED ON 03.04.2014 FOR THE MATERIAL PRICING GROUP 70
       DATA: lv_quan  LIKE s925-ummenge,
@@ -1291,7 +1417,9 @@ FORM check .
         lv_value = lv_quan * lv_netpr.
         flag_70 = 'X'.
       ENDIF.
+
 * END OF NEW CODE ADDED ON 03.04.2014
+
 * HEADER DETAILS
       x_order_header_in-doc_type   = w_auart.
       x_order_header_in-sales_org  = s_vkorg-low.
@@ -1323,6 +1451,7 @@ FORM check .
          p_kschl = 'ZAD3' OR " ASHOK AND MA KHAN 30.09.08
          p_kschl = 'ZAD4' OR " ASHOK AND MA KHAN 30.09.08
          p_kschl = 'ZAD5' .  " ASHOK AND MA KHAN 07.11.08
+
         x_order_header_in-cd_type1   = 'ZAQT'.
         x_order_header_in-cd_value1    =  i_reb2-value / 10 .
       ENDIF.
@@ -1338,6 +1467,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
         x_order_header_in-cd_type1   = 'ZSQT'.
         x_order_header_in-cd_value1  =  i_reb2-value / 10 .
       ENDIF.
+
       IF ( p_kschl = 'ZPRT' OR p_kschl = 'ZPPT' OR  p_kschl = 'ZMQR' OR
            p_kschl = 'ZPP1' OR " ASHOK & KHAN 30.08.2008
            p_kschl = 'ZPP2' OR " ASHOK & KHAN 26.09.2008
@@ -1372,7 +1502,8 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
            p_kschl = 'ZP10' OR " ASHOK & KHAN 07.11.2008
            p_kschl = 'ZP11' OR " ASHOK & KHAN 07.11.2008
            p_kschl = 'ZP12' OR
-***************ADDED BY SACHIN KAUL ORO PRIYANKA SINGH ON 13/1/17*******
+
+***************ADDED BY SACHIN KAUL ORO PRIYANKA SINGH ON 13/1/17***************
             p_kschl = 'ZP13' OR
             p_kschl = 'ZP14' OR
             p_kschl = 'ZP15' OR
@@ -1401,6 +1532,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
         x_order_header_in-cd_type1   = 'ZAQT'.
         x_order_header_in-cd_value1    =  i_reb2-value / 10 .
       ENDIF.
+
 *REMARKS
       x_order_header_in-purch_no   = i_reb2-rem.
 *      BREAK-POINT.
@@ -1424,6 +1556,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
       i_order_items_in-material   = w_matnr.
       i_order_items_in-target_qty = i_reb2-ummenge1 * 1000.
       APPEND i_order_items_in.
+
       w_objtype = 'BUS2094'.
       IF x_order_header_in-cd_value1 IS NOT INITIAL AND
          i_order_items_in-target_qty IS NOT INITIAL.
@@ -1435,10 +1568,14 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
         x_order_header_in,
         i_order_partners,
         i_order_items_in.
+
         REFRESH : i_order_partners,
                   i_order_items_in.
       ENDIF.
-******************START OF NEW CODE ADDED ON 03.04.2014*****************
+
+
+
+******************START OF NEW CODE ADDED ON 03.04.2014*******************
 * NEW CMR CREATION IN CASE OF MATERIAL PRICING GROUP = '70'
       IF flag_70 = 'X' AND w_vbeln1 IS INITIAL.
         CLEAR : w_auart,
@@ -1447,6 +1584,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
                 x_order_header_in,
                 i_order_partners,
                 i_order_items_in.
+
         REFRESH : i_order_partners,
                   i_order_items_in.
         w_auart = 'ZI09'.
@@ -1477,22 +1615,24 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
            p_kschl = 'ZAD3' OR " ASHOK AND MA KHAN 30.09.08
            p_kschl = 'ZAD4' OR " ASHOK AND MA KHAN 30.09.08
            p_kschl = 'ZAD5' .  " ASHOK AND MA KHAN 07.11.08
+
           x_order_header_in-cd_type1   = 'ZAQT'.
           x_order_header_in-cd_value1    =  lv_value / 10 .
         ENDIF.
 *ZSQD
         IF ( p_kschl = 'ZSQD' ) OR ( p_kschl = 'ZBQD' ) OR ( p_kschl =
-  'ZPQD' ) OR ( p_kschl = 'ZIQD' ) OR ( p_kschl = 'ZEQD' ) OR ( p_kschl
+  'ZPQD' ) OR ( p_kschl = 'ZIQD' ) OR ( p_kschl = 'ZEQD' ) OR ( p_kschl =
   'ZQTR' )
   OR ( p_kschl = 'ZRQD' )  "ADDED BY ASHOK & KHAN 10.03/06
   OR ( p_kschl = 'ZMQR' )  "ADDED BY ASHOK & KHAN 29.08/06
   OR ( p_kschl = 'ZCQD' )  "ADDED BY ASHOK & KHAN 02.02.07
-  OR  ( p_kschl = 'ZPP9' ) " CHANGED BY SACHIN AND ATUL SIR ON  16.07.20
+  OR  ( p_kschl = 'ZPP9' ) " CHANGED BY SACHIN AND ATUL SIR ON  16.07.2014
   OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
           x_order_header_in-cd_type1   = 'ZSQT'.
           x_order_header_in-cd_value1  =  lv_value / 10 .
         ENDIF.
-        IF ( p_kschl = 'ZPRT' OR p_kschl = 'ZPPT' OR  p_kschl = 'ZMQR' O
+
+        IF ( p_kschl = 'ZPRT' OR p_kschl = 'ZPPT' OR  p_kschl = 'ZMQR' OR
              p_kschl = 'ZPP1' OR " ASHOK & KHAN 30.08.2008
              p_kschl = 'ZPP2' OR " ASHOK & KHAN 26.09.2008
              p_kschl = 'ZPP3' OR " ASHOK & KHAN 07.11.2008
@@ -1533,6 +1673,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
           x_order_header_in-cd_type1   = 'ZAQT'.
           x_order_header_in-cd_value1    =  lv_value / 10 .
         ENDIF.
+
 *REMARKS
         x_order_header_in-purch_no   = i_reb2-rem.
         x_order_header_in-ref_1 = lv_kunnr.
@@ -1551,6 +1692,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
           i_order_partners-partn_numb  = lv_kunnr.
           APPEND i_order_partners.
         ENDIF.
+
 * ITEM DETAILS
         i_order_items_in-material   = w_matnr.
         i_order_items_in-target_qty = lv_quan * 1000.
@@ -1560,6 +1702,7 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
         DATA : w_vbeln1 TYPE vbeln.
         IF x_order_header_in-cd_value1 IS NOT INITIAL AND
            i_order_items_in-target_qty IS NOT INITIAL.
+
           CALL FUNCTION 'BAPI_SALESDOCU_CREATEFROMDATA'
             EXPORTING
               order_header_in = x_order_header_in
@@ -1572,15 +1715,17 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
             TABLES
               order_items_in  = i_order_items_in
               order_partners  = i_order_partners.
+
           IF w_vbeln IS INITIAL.
             WRITE : / 'ERROR MESSAGE :',x_return_commit-message.
           ELSE.
-            WRITE : / 'SALES ORDER HAS BEEN CREATED WITH :'(003), w_vbel
+
+            WRITE : / 'SALES ORDER HAS BEEN CREATED WITH :'(003), w_vbeln,
                       'AND CUSTOMER NO :'(004), x_sold_to_party-sold_to.
             IF NOT w_vbeln IS INITIAL.
               CLEAR yrva_rebate.
               yrva_rebate-vbeln        = w_vbeln.
-              yrva_rebate-kunnr        = i_reb2-pkunag. "X_SOLD_TO_PARTY
+              yrva_rebate-kunnr        = i_reb2-pkunag. "X_SOLD_TO_PARTY-SOLD_TO.
               yrva_rebate-vkbur        = i_reb2-vkbur.
               yrva_rebate-lft_qty      = i_reb2-ummenge.
               yrva_rebate-werks        = i_reb2-werks.
@@ -1598,24 +1743,27 @@ OR ( p_kschl = 'ZQTY' ). "ADDED BY ASHOK & KHAN 10.03.2008
               INSERT yrva_rebate FROM yrva_rebate.
             ENDIF.
           ENDIF.
-          CLEAR :   w_vbeln, x_return_commit, x_order_header_in, w_objty
+
+          CLEAR :   w_vbeln, x_return_commit, x_order_header_in, w_objtype,
                     x_sold_to_party.
+
           REFRESH :  i_order_partners, i_order_items_in .
           CLEAR: flag_70.
         ENDIF.
       ENDIF.
-******************END OF NEW CODE ADDED ON 03.04.2014*******************
+******************END OF NEW CODE ADDED ON 03.04.2014*********************
     ENDIF.
     ENDIF.
     CLEAR wa_rebate.
   ENDLOOP.
 ENDFORM.                    " CHECK
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *&      FORM  CREATE_FIELD_CATALOG
-*&                                                                    *
+*&--------------------------------------------------------------------*
 *       TEXT
-*                                                                     *
+*---------------------------------------------------------------------*
 FORM create_field_catalog .
+
   IF sy-lsind <> 1.
     gt_fieldcat-fieldname = 'CHECK'.
     gt_fieldcat-outputlen    =  4.
@@ -1629,6 +1777,7 @@ FORM create_field_catalog .
     gt_fieldcat-edit         = 'X'.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
     gt_fieldcat-fieldname = 'PKUNAG'.
     gt_fieldcat-outputlen    =  10.
     gt_fieldcat-just         =  'C' .
@@ -1639,6 +1788,7 @@ FORM create_field_catalog .
     gt_fieldcat-do_sum       = space.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
     gt_fieldcat-fieldname = 'NAME1'.
     gt_fieldcat-outputlen    =  35.
     gt_fieldcat-just         =  'L' .
@@ -1649,6 +1799,7 @@ FORM create_field_catalog .
     gt_fieldcat-do_sum       = space.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
     gt_fieldcat-fieldname = 'KVGR2'.
     gt_fieldcat-outputlen    =  6.
     gt_fieldcat-just         =  'C' .
@@ -1659,7 +1810,7 @@ FORM create_field_catalog .
     gt_fieldcat-do_sum       = space.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
-** SOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO  COMMENT T
+** SOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO  COMMENT THE DISPLAY OF WERKS OR KDGRP
 **    GT_FIELDCAT-FIELDNAME = 'WERKS'.
 **    GT_FIELDCAT-OUTPUTLEN    =  35.
 **    GT_FIELDCAT-JUST         =  'L' .
@@ -1670,6 +1821,7 @@ FORM create_field_catalog .
 **    GT_FIELDCAT-DO_SUM       = SPACE.
 **    APPEND GT_FIELDCAT.
 **    CLEAR GT_FIELDCAT.
+
 **    GT_FIELDCAT-FIELDNAME = 'KDGRP'.
 **    GT_FIELDCAT-OUTPUTLEN    =  3.
 **    GT_FIELDCAT-JUST         =  'C' .
@@ -1680,7 +1832,7 @@ FORM create_field_catalog .
 **    GT_FIELDCAT-DO_SUM       = SPACE.
 **    APPEND GT_FIELDCAT.
 **    CLEAR GT_FIELDCAT.
-** EOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO COMMENT TH
+** EOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO COMMENT THE DISPLAY OF WERKS OR KDGRP
     gt_fieldcat-fieldname = 'KUNNR'.
     gt_fieldcat-outputlen    =  10.
     gt_fieldcat-just         =  'C' .
@@ -1701,6 +1853,7 @@ FORM create_field_catalog .
     gt_fieldcat-do_sum       = space.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
     gt_fieldcat-fieldname = 'UMMENGE1'.
     gt_fieldcat-outputlen    =  16.
     gt_fieldcat-just         =  'R' .
@@ -1711,6 +1864,7 @@ FORM create_field_catalog .
 *    GT_FIELDCAT-INPUT        = 'X'.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
     gt_fieldcat-fieldname = 'KBETR'.
     gt_fieldcat-outputlen    =  16.
     gt_fieldcat-just         =  'R' .
@@ -1721,6 +1875,7 @@ FORM create_field_catalog .
 *    GT_FIELDCAT-INPUT        = 'X'.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
     gt_fieldcat-fieldname = 'VALUE'.
     gt_fieldcat-outputlen    =  16.
     gt_fieldcat-just         =  'R' .
@@ -1732,6 +1887,7 @@ FORM create_field_catalog .
 *    GT_FIELDCAT-INPUT        = 'X'.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
+
 * BOC ASHOK & M A KHAN 07.06.07
     gt_fieldcat-fieldname = 'BEZEI'.
     gt_fieldcat-outputlen    =  35.
@@ -1744,6 +1900,7 @@ FORM create_field_catalog .
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
 * EOC ASHOK & M A KHAN 07.06.07
+
     gt_fieldcat-fieldname = 'REM'.
     gt_fieldcat-outputlen    =  20.
     gt_fieldcat-just         =  'L' .
@@ -1755,7 +1912,7 @@ FORM create_field_catalog .
     gt_fieldcat-input        = 'X'.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
-*        " SOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361
+*        " SOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 TO DISPLAY REBATE ORDER
     gt_fieldcat-fieldname = 'VBELN'.
     gt_fieldcat-outputlen    =  10.
     gt_fieldcat-just         =  'L' .
@@ -1766,7 +1923,7 @@ FORM create_field_catalog .
     gt_fieldcat-do_sum       = space.
     APPEND gt_fieldcat.
     CLEAR gt_fieldcat.
-*        " EOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361
+*        " EOC ADDED BY UJJWAL/PRIYANKA ON 7-07-2020 ON CHRM 4000002361 TO DISPLAY REBATE ORDER
   ENDIF.
 *
   i_exit_event-ucomm = 'FCOD'.
@@ -1774,34 +1931,38 @@ FORM create_field_catalog .
   i_exit_event-after = ''.
   APPEND i_exit_event.
   CLEAR i_exit_event.
+
   i_exit_event-ucomm = 'CALC'.
   i_exit_event-before = 'X'.
   i_exit_event-after = ''.
   APPEND i_exit_event.
   CLEAR i_exit_event.
+
   i_exit_event-ucomm = 'SALL'.
   i_exit_event-before = 'X'.
   i_exit_event-after = 'X'.
   APPEND i_exit_event.
   CLEAR i_exit_event.
+
   i_exit_event-ucomm = 'DSAL'.
   i_exit_event-before = 'X'.
   i_exit_event-after = 'X'.
   APPEND i_exit_event.
   CLEAR i_exit_event.
+
   i_events-name = 'USER_COMMAND'.
   i_events-form = 'ON_SELECTION'.
   APPEND i_events.
   CLEAR i_events.
 ENDFORM.                    " CREATE_FIELD_CATALOG
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  TOP_OF_PAGE
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       TEXT
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM top_of_page .
 **HEADING
   WRITE : /.
@@ -1822,14 +1983,14 @@ FORM top_of_page .
   WRITE : / 'CUSTOMER CLASSIFICATION :' COLOR COL_HEADING, s_kukla.
   ULINE.
 ENDFORM.                    " TOP_OF_PAGE
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  TABLE_UPDATE
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       TEXT
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM table_update .
   CLEAR yrva_rebate.
   yrva_rebate-vbeln        = w_vbeln.
@@ -1843,23 +2004,25 @@ FORM table_update .
   ELSE.
     yrva_rebate-reb_cond     = p_kschl.
   ENDIF.
+
   yrva_rebate-ord_cond     = x_order_header_in-cd_type1.
   yrva_rebate-value        = i_reb2-value.
   yrva_rebate-yy_per_start = s_sptag-low.
   yrva_rebate-yy_per_end   = s_sptag-high.
   yrva_rebate-kukla        = i_reb2-kukla.
   INSERT yrva_rebate FROM yrva_rebate.
+
 ENDFORM.                    " TABLE_UPDATE
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  FILTER_DATA
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       TEXT
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM filter_data .
-** SOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO SELECT THE
+** SOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO SELECT THE DATA FROM VBRK/VBRP INSTEAD OF S925 TABLE
   TYPES : BEGIN OF ty_vbrk,
             vbeln TYPE vbrk-vbeln,
             fkdat TYPE vbrk-fkdat,
@@ -1875,9 +2038,11 @@ FORM filter_data .
             kvgr3 TYPE vbrp-kvgr3,
             kondm TYPE vbrp-kondm,
           END OF ty_vbrk.
+
   DATA : lt_vbrk TYPE TABLE OF ty_vbrk,
          lw_vbrk TYPE ty_vbrk.
 *  IF NOT GT_S925[] IS INITIAL.
+
 ** FETCHING FOR FKART = 'RE'  AND VBTYP = 'O'
   SELECT a~vbeln,
          a~fkdat,
@@ -1913,10 +2078,13 @@ FORM filter_data .
         AND a~draft = @space
   AND b~draft = @space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
   IF sy-subrc IS INITIAL.
     SORT lt_vbrk_re BY vbeln fkdat kunag.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re COMPARING vbeln fkdat kun
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk_re WHERE werks NOT IN s_werks.
+
 ***    SORT LT_VBRK_RE BY VBELN.
 ***    SELECT VBELV,
 ***           VBELN
@@ -1937,9 +2105,9 @@ FORM filter_data .
 ***      IF SY-SUBRC IS INITIAL.
 ***        SORT LT_VBRK1 BY VBELN FKART.
 ***        LOOP AT LT_VBRK1 ASSIGNING FIELD-SYMBOL(<LFS_VBRK1>).
-***          READ TABLE LT_VBFA ASSIGNING FIELD-SYMBOL(<LFS_VBFA>) WITH
+***          READ TABLE LT_VBFA ASSIGNING FIELD-SYMBOL(<LFS_VBFA>) WITH KEY VBELV = <LFS_VBRK1>-VBELN.
 ***          IF SY-SUBRC IS INITIAL.
-***            READ TABLE LT_VBRK_RE ASSIGNING FIELD-SYMBOL(<LFS_VBRK_RE
+***            READ TABLE LT_VBRK_RE ASSIGNING FIELD-SYMBOL(<LFS_VBRK_RE>) WITH KEY VBELN = <LFS_VBFA>-VBELN.
 ***            IF SY-SUBRC IS INITIAL.
 ***                IF <LFS_VBRK_RE>-FKDAT+4(2) = <LFS_VBRK1>-FKART+4(2).
 ***
@@ -1950,6 +2118,7 @@ FORM filter_data .
 ***        ENDLOOP.
 ***      ENDIF.
 ***    ENDIF.
+
     CLEAR : lw_vbrk.
     LOOP AT lt_vbrk_re INTO lw_vbrk.
       i_reb1-pkunag = lw_vbrk-kunag.
@@ -1962,26 +2131,28 @@ FORM filter_data .
       i_reb1-ummenge = lw_vbrk-fkimg * -1.
       APPEND i_reb1.
       CLEAR i_reb1.
+
     ENDLOOP.
   ENDIF.
   SELECT * FROM tkukl INTO TABLE @DATA(lt_tkukl).
   REFRESH: s_kukla2[].
   LOOP AT s_kukla.
     IF s_kukla-low = 'Trader'.
-      APPEND VALUE #( sign = 'I' option = 'EQ' low = '14' high = '14' )
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = '14' high = '14' ) TO s_kukla2.
     ENDIF.
     IF s_kukla-low = 'AUT'.
-      APPEND VALUE #( sign = 'I' option = 'EQ' low = '29' high = '29' )
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = '29' high = '29' ) TO s_kukla2.
     ENDIF.
     IF s_kukla-low = 'Actual user'.
       LOOP AT lt_tkukl INTO DATA(ls_tkukl).
         IF ls_tkukl IS NOT INITIAL.
-          APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_tkukl-kukla
+          APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_tkukl-kukla high = ls_tkukl-kukla ) TO s_kukla2.
         ENDIF.
         CLEAR: ls_tkukl.
       ENDLOOP.
     ENDIF.
   ENDLOOP.
+
   SELECT a~vbeln,
          a~fkdat,
          a~vkorg,
@@ -2028,13 +2199,17 @@ INNER JOIN vbak AS so
          AND a~draft = @space
   AND b~draft = @space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
   IF sy-subrc IS INITIAL.
 **    SORT lt_vbrk BY fkdat kunag.
     SORT lt_vbrk BY vbeln fkdat kunag posnr werks.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk COMPARING vbeln fkdat kunag
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk WHERE werks NOT IN s_werks.
+
     SORT lt_vbrk.
     DELETE ADJACENT DUPLICATES FROM lt_vbrk COMPARING ALL FIELDS.
+
     CLEAR : lw_vbrk.
     LOOP AT lt_vbrk INTO lw_vbrk.
       i_reb1-pkunag = lw_vbrk-kunag.
@@ -2047,23 +2222,26 @@ INNER JOIN vbak AS so
       i_reb1-ummenge = lw_vbrk-fkimg.
       APPEND i_reb1.
       CLEAR i_reb1.
+
     ENDLOOP.
   ENDIF.
-** EOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO SELECT THE
-**                    B.O.C BY RG DATED ON 17.04.2026
+** EOC BY UJJWAL/PRIYANKA ON CHARM#400000157 ON 18-09-2019 TO SELECT THE DATA FROM VBRK/VBRP INSTEAD OF S925 TABLE
+
+**--------------------B.O.C BY RG DATED ON 17.04.2026                            .
+
   IF p_kschl1 IS NOT INITIAL.
     PERFORM second_slab.
   ENDIF.
-**                    E.O.C BY RG DATED ON 17.04.2026
+**--------------------E.O.C BY RG DATED ON 17.04.2026                            .
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *&      FORM  FILTER_DATA_1
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *       TEXT
-*                                                                      *
-*    >  P1        TEXT
-*  <    P2        TEXT
-*                                                                      *
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
 FORM filter_data_1 .
   TYPES : BEGIN OF ty_vbrk,
             vbeln TYPE vbrk-vbeln,
@@ -2080,9 +2258,11 @@ FORM filter_data_1 .
             kvgr3 TYPE vbrp-kvgr3,
             kondm TYPE vbrp-kondm,
           END OF ty_vbrk.
+
   DATA : lt_vbrk TYPE TABLE OF ty_vbrk,
          lw_vbrk TYPE ty_vbrk.
 *  IF NOT GT_S925[] IS INITIAL.
+
 ** FETCHING FOR FKART = 'RE'  AND VBTYP = 'O'
   SELECT a~vbeln,
          a~fkdat,
@@ -2134,7 +2314,8 @@ INNER JOIN vbak AS so
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
   IF sy-subrc IS INITIAL.
     SORT lt_vbrk_re BY vbeln fkdat kunag.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re COMPARING vbeln fkdat kun
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk_re WHERE werks NOT IN s_werks.
     CLEAR : lw_vbrk.
     LOOP AT lt_vbrk_re INTO lw_vbrk.
@@ -2148,21 +2329,22 @@ INNER JOIN vbak AS so
       i_reb1-ummenge = lw_vbrk-fkimg * -1.
       APPEND i_reb1.
       CLEAR i_reb1.
+
     ENDLOOP.
   ENDIF.
   SELECT * FROM tkukl INTO TABLE @DATA(lt_tkukl).
   REFRESH: s_kukla2[].
   LOOP AT s_kukla.
     IF s_kukla-low = 'Trader'.
-      APPEND VALUE #( sign = 'I' option = 'EQ' low = '14' high = '14' )
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = '14' high = '14' ) TO s_kukla2.
     ENDIF.
     IF s_kukla-low = 'AUT'.
-      APPEND VALUE #( sign = 'I' option = 'EQ' low = '29' high = '29' )
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = '29' high = '29' ) TO s_kukla2.
     ENDIF.
     IF s_kukla-low = 'Actual user'.
       LOOP AT lt_tkukl INTO DATA(ls_tkukl).
         IF ls_tkukl IS NOT INITIAL.
-          APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_tkukl-kukla
+          APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_tkukl-kukla high = ls_tkukl-kukla ) TO s_kukla2.
         ENDIF.
         CLEAR: ls_tkukl.
       ENDLOOP.
@@ -2202,10 +2384,13 @@ INNER JOIN vbak AS so
         AND b~draft = @space
   AND a~draft = @space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
   IF sy-subrc IS INITIAL.
     SORT lt_vbrk BY fkdat kunag.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk COMPARING vbeln fkdat kunag
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk WHERE werks NOT IN s_werks.
+
     CLEAR : lw_vbrk.
     LOOP AT lt_vbrk INTO lw_vbrk.
       i_reb1-pkunag = lw_vbrk-kunag.
@@ -2218,28 +2403,34 @@ INNER JOIN vbak AS so
       i_reb1-ummenge = lw_vbrk-fkimg.
       APPEND i_reb1.
       CLEAR i_reb1.
+
     ENDLOOP.
   ENDIF.
+
   IF p_kschl1 IS NOT INITIAL.
     PERFORM second_slab_1.
   ENDIF.
+
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *& Form CUSTCLSS
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *& text
-*&                                                                     *
-*&   >  p1        text
-*& <    p2        text
-*&                                                                     *
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
 FORM custclss.
   REFRESH: lt_custclss.
   ls_custclss-text = 'Actual user'.
   APPEND ls_custclss TO lt_custclss.
+
   ls_custclss-text = 'Trader'.
   APPEND ls_custclss TO lt_custclss.
+
   ls_custclss-text = 'AUT'.
   APPEND ls_custclss TO lt_custclss.
+
   CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
     EXPORTING
       retfield        = 'KUKLA'
@@ -2253,28 +2444,34 @@ FORM custclss.
       parameter_error = 1
       no_values_found = 2
       OTHERS          = 3.
+
+
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *& Form second_slab
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *& text
-*&                                                                     *
-*&   >  p1        text
-*& <    p2        text
-*&                                                                     *
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
 FORM second_slab .
+
   DATA : LV_MONTH TYPE CHAR2.
   TYPES : s_sptag_1 TYPE RANGE OF s925-sptag.
   DATA : lv_sptag TYPE s_sptag_1.
+
   IF s_sptag-high IS NOT INITIAL.
     LOOP AT s_sptag.
       LV_MONTH = s_sptag-high+4(2) - 1.
-      LV_MONTH =  { '0' && LV_MONTH } .
-      lv_sptag = VALUE s_sptag_1( ( sign = s_sptag-sign option = s_sptag
+      LV_MONTH = |{ '0' && LV_MONTH }|.
+      lv_sptag = VALUE s_sptag_1( ( sign = s_sptag-sign option = s_sptag-option
       low = s_sptag-low
-      high =  { s_sptag-high+0(4) && LV_MONTH &&  s_sptag-high+6(2) }  )
+      high = |{ s_sptag-high+0(4) && LV_MONTH &&  s_sptag-high+6(2) }| ) ).
     ENDLOOP.
+
   ENDIF.
+
 ** FETCHING FOR FKART = 'RE'  AND VBTYP = 'O'
   SELECT a~vbeln,
          a~fkdat,
@@ -2310,11 +2507,15 @@ FORM second_slab .
         AND a~draft = @space
   AND b~draft = @space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
   IF sy-subrc IS INITIAL.
     SORT lt_vbrk_re_1 BY vbeln fkdat kunag.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re_1 COMPARING vbeln fkdat k
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re_1 COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk_re_1 WHERE werks NOT IN s_werks.
+
     SORT LT_VBRK_RE_1 BY VBELN.
+
 *    CLEAR : lw_vbrk.
     LOOP AT lt_vbrk_re_1 INTO DATA(lw_vbrk_1).
       i_reb_1-pkunag = lw_vbrk_1-kunag.
@@ -2327,26 +2528,31 @@ FORM second_slab .
       i_reb_1-ummenge = lw_vbrk_1-fkimg * -1.
       APPEND i_reb_1.
       CLEAR i_reb_1.
+
     ENDLOOP.
   ENDIF.
 *  SELECT * FROM tkukl INTO TABLE @DATA(lt_tkukl).
 *  REFRESH: s_kukla2[].
 *  LOOP AT s_kukla.
 *    IF s_kukla-low = 'Trader'.
-*      APPEND VALUE #( sign = 'I' option = 'EQ' low = '14' high = '14' )
+*      APPEND VALUE #( sign = 'I' option = 'EQ' low = '14' high = '14' ) TO s_kukla2.
 *    ENDIF.
 *    IF s_kukla-low = 'AUT'.
-*      APPEND VALUE #( sign = 'I' option = 'EQ' low = '29' high = '29' )
+*      APPEND VALUE #( sign = 'I' option = 'EQ' low = '29' high = '29' ) TO s_kukla2.
 *    ENDIF.
 *    IF s_kukla-low = 'Actual user'.
 *      LOOP AT lt_tkukl INTO DATA(ls_tkukl).
 *        IF ls_tkukl IS NOT INITIAL.
-*          APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_tkukl-kukla
+*          APPEND VALUE #( sign = 'I' option = 'EQ' low = ls_tkukl-kukla high = ls_tkukl-kukla ) TO s_kukla2.
 *        ENDIF.
 *        CLEAR: ls_tkukl.
 *      ENDLOOP.
 *    ENDIF.
 *  ENDLOOP.
+
+
+
+
   SELECT a~vbeln,
          a~fkdat,
          a~vkorg,
@@ -2393,13 +2599,17 @@ INNER JOIN vbak AS so
          AND a~draft = @space
   AND b~draft = @space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
   IF sy-subrc IS INITIAL.
 **    SORT lt_vbrk BY fkdat kunag.
     SORT lt_vbrk_1 BY vbeln fkdat kunag posnr werks.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk_1 COMPARING vbeln fkdat kuna
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk_1 COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk_1 WHERE werks NOT IN s_werks.
+
     SORT lt_vbrk_1.
     DELETE ADJACENT DUPLICATES FROM lt_vbrk_1 COMPARING ALL FIELDS.
+
 *
 *    CLEAR : lw_vbrk.
     LOOP AT lt_vbrk_1 INTO DATA(lw_vbrk_2).
@@ -2413,8 +2623,10 @@ INNER JOIN vbak AS so
       i_reb_1-ummenge = lw_vbrk_2-fkimg.
       APPEND i_reb_1.
       CLEAR i_reb_1.
+
     ENDLOOP.
   ENDIF.
+
   DATA(i_reb_7) = i_reb_1[].
     SORT i_reb_7 BY  pkunag vkbur kvgr2 werks.
     DELETE ADJACENT DUPLICATES FROM i_reb_7[] COMPARING pkunag.
@@ -2437,28 +2649,33 @@ INNER JOIN vbak AS so
       ENDLOOP.
     ENDLOOP.
     SORT i_reb_2 BY kvgr2.
+
+
 ENDFORM.
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *& Form second_slab_1
-*&                                                                     *
+*&---------------------------------------------------------------------*
 *& text
-*&                                                                     *
-*&   >  p1        text
-*& <    p2        text
-*&                                                                     *
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
 FORM second_slab_1 .
+
   DATA : LV_MONTH TYPE CHAR2.
   TYPES : s_sptag_1 TYPE RANGE OF s925-sptag.
   DATA : lv_sptag TYPE s_sptag_1.
+
   IF s_sptag-high IS NOT INITIAL.
     LOOP AT s_sptag.
       LV_MONTH = s_sptag-high+4(2) - 1.
-      LV_MONTH =  { '0' && LV_MONTH } .
-      lv_sptag = VALUE s_sptag_1( ( sign = s_sptag-sign option = s_sptag
+      LV_MONTH = |{ '0' && LV_MONTH }|.
+      lv_sptag = VALUE s_sptag_1( ( sign = s_sptag-sign option = s_sptag-option
       low = s_sptag-low
-      high =  { s_sptag-high+0(4) && LV_MONTH &&  s_sptag-high+6(2) }  )
+      high = |{ s_sptag-high+0(4) && LV_MONTH &&  s_sptag-high+6(2) }| ) ).
     ENDLOOP.
   ENDIF.
+
 ** FETCHING FOR FKART = 'RE'  AND VBTYP = 'O'
   SELECT a~vbeln,
          a~fkdat,
@@ -2510,7 +2727,8 @@ INNER JOIN vbak AS so
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
   IF sy-subrc IS INITIAL.
     SORT lt_vbrk_re_1 BY vbeln fkdat kunag.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re_1 COMPARING vbeln fkdat k
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk_re_1 COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk_re_1 WHERE werks NOT IN s_werks.
 *    CLEAR : lw_vbrk.
     LOOP AT lt_vbrk_re_1 INTO DATA(lw_vbrk_1).
@@ -2524,8 +2742,10 @@ INNER JOIN vbak AS so
       i_reb_1-ummenge = lw_vbrk_1-fkimg * -1.
       APPEND i_reb_1.
       CLEAR i_reb_1.
+
     ENDLOOP.
   ENDIF.
+
   SELECT a~vbeln,
          a~fkdat,
          a~vkorg,
@@ -2560,10 +2780,13 @@ INNER JOIN vbak AS so
         AND b~draft = @space
   AND a~draft = @space.
 ** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
   IF sy-subrc IS INITIAL.
     SORT lt_vbrk_1 BY fkdat kunag.
-    DELETE ADJACENT DUPLICATES FROM lt_vbrk_1 COMPARING vbeln fkdat kuna
+
+    DELETE ADJACENT DUPLICATES FROM lt_vbrk_1 COMPARING vbeln fkdat kunag posnr werks.
     DELETE lt_vbrk_1 WHERE werks NOT IN s_werks.
+
 *    CLEAR : lw_vbrk.
     LOOP AT lt_vbrk_1 INTO DATA(lw_vbrk_2).
       i_reb_1-pkunag = lw_vbrk_2-kunag.
@@ -2576,8 +2799,10 @@ INNER JOIN vbak AS so
       i_reb_1-ummenge = lw_vbrk_2-fkimg.
       APPEND i_reb_1.
       CLEAR i_reb_1.
+
     ENDLOOP.
   ENDIF.
+
     DATA(i_reb_7) = i_reb_1[].
     SORT i_reb_7 BY  pkunag vkbur kvgr2 werks.
     DELETE ADJACENT DUPLICATES FROM i_reb_7[] COMPARING pkunag.
@@ -2600,11 +2825,7 @@ INNER JOIN vbak AS so
       ENDLOOP.
     ENDLOOP.
     SORT i_reb_2 BY kvgr2.
+
+
+
 ENDFORM.
- Selection Screen for Rebate Calculation
- Credit Memo Request already created
- Sales Order has been created with :
- and Customer No :
- Do you want to save varient
- Successfully saved
- Variant already saved
