@@ -435,6 +435,8 @@ PRIMARY KEY.   ENDSELECT.
     ls_cvis-partner-central_data-common-data-bp_control-category   = c_bp_categ.
     ls_cvis-partner-central_data-common-data-bp_control-grouping   = c_bp_group.
     ls_cvis-partner-central_data-common-data-bp_organization-name1 = wa_order-vendor_name.
+*   Search term on the BP -> CVI maps it to LFA1-SORTL (required entry field).
+    ls_cvis-partner-central_data-common-data-bp_centraldata-searchterm1 = wa_order-vendor_code.
 
 *   supplier role FLVN00
     APPEND INITIAL LINE TO ls_cvis-partner-central_data-role-roles
