@@ -454,6 +454,16 @@ PRIMARY KEY.   ENDSELECT.
     <fs_addr>-data-postal-data-region     = v_regio.
     <fs_addr>-data-postal-data-country    = 'IN'.
     <fs_addr>-data-postal-data-langu      = sy-langu.
+*   Standard address usage (XXDEFAULT) - required, otherwise the BP address
+*   time-dependency check (BUA_CHECK_ADDRESS_VALIDITY_ALL) aborts with
+*   R11 243 "check table is missing".
+    APPEND INITIAL LINE TO <fs_addr>-data-addr_usage-addr_usages
+      ASSIGNING FIELD-SYMBOL(<fs_ausage>).
+    <fs_ausage>-task                 = 'I'.
+    <fs_ausage>-data_key-addresstype = 'XXDEFAULT'.
+    <fs_ausage>-data_key-valid_to    = '99991231'.
+    <fs_ausage>-data-valid_from      = sy-datum.
+    <fs_ausage>-data-standard        = abap_true.
 
 *   ===== Vendor node (LFA1 data) - CVI gives it the same number as the BP ==
     ls_cvis-vendor-header-object_task = 'I'.
