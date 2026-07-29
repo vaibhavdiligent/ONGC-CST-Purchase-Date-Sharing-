@@ -406,272 +406,194 @@ DATA ls_purchasing TYPE vmds_ei_purchasing.
 DATA ls_vendors TYPE vmds_ei_extern.
 DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
 
-" --- Auto-mapped field assignments (via DD03L rollname) ---
-" RF02K-BUKRS -> IS_MASTER_DATA-BUKRS (BUKRS)
-ls_company-data_key-bukrs = 'OVL'.
-" RF02K-EKORG -> IS_MASTER_DATA-EKORG (EKORG)
-ls_purchasing-data_key-ekorg = 'PMAT'.
-" RF02K-EKORG -> IS_MASTER_DATA-EKORG (EKORG)
-ls_purchasing-data_key-ekorg = 'PSRV'.
-" RF02K-KTOKK -> IS_MASTER_DATA-KTOKK (KTOKK)
-ls_vendors-central_data-central-data-ktokk = 'GEMV'.
-ls_vendors-central_data-central-datax-ktokk = 'X'.
-" ADDR1_DATA-NAME1 -> IS_MASTER_DATA-NAME (AD_NAME1)
-ls_vendors-central_data-address-postal-data-name = wa_order-vendor_name.
-ls_vendors-central_data-address-postal-datax-name = 'X'.
-" ADDR1_DATA-POST_CODE1 -> IS_MASTER_DATA-POSTL_COD1 (AD_PSTCD1)
-ls_vendors-central_data-address-postal-data-postl_cod1 = wa_order-vendor_pin_code.
-ls_vendors-central_data-address-postal-datax-postl_cod1 = 'X'.
-" ADDR1_DATA-CITY1 -> IS_MASTER_DATA-CITY (AD_CITY1)
-ls_vendors-central_data-address-postal-data-city = wa_order-vendor_state.
-ls_vendors-central_data-address-postal-datax-city = 'X'.
+    DATA ls_wtax TYPE vmds_ei_wtax_type.
+    DATA lv_brsch TYPE brsch.
 
-" ADDR1_DATA-SORT1 -> IS_MASTER_DATA-SORT1
-ls_vendors-central_data-address-postal-data-SORT1 = wa_order-VENDOR_CODE.
-ls_vendors-central_data-address-postal-datax-SORT1 = 'X'.
+*   Refresh every loop pass: otherwise the previous vendor's data stays in the
+*   EI internal tables and the next MAINTAIN_BAPI mixes / rejects the data.
+    CLEAR: ls_is_master_data, ls_es_master_data_correct, ls_es_message_correct,
+           ls_es_master_data_defective, ls_es_message_defective,
+           ls_company, ls_purchasing, ls_vendors, ls_bankdetails, ls_wtax, lv_brsch.
 
-" ADDR1_DATA-COUNTRY -> IS_MASTER_DATA-COUNTRY (LAND1)
-ls_vendors-central_data-address-postal-data-country = 'IN'.
-ls_vendors-central_data-address-postal-datax-country = 'X'.
-" ADDR1_DATA-REGION -> IS_MASTER_DATA-REGION (REGIO)
-ls_vendors-central_data-address-postal-data-region = v_regio.
-ls_vendors-central_data-address-postal-datax-region = 'X'.
-" ADDR1_DATA-STR_SUPPL1 -> IS_MASTER_DATA-STR_SUPPL1 (AD_STRSPP1)
-ls_vendors-central_data-address-postal-data-str_suppl1 = street+40(40).
-ls_vendors-central_data-address-postal-datax-str_suppl1 = 'X'.
-" ADDR1_DATA-STREET -> IS_MASTER_DATA-STREET (AD_STREET)
-ls_vendors-central_data-address-postal-data-street = street+0(40).
-ls_vendors-central_data-address-postal-datax-street = 'X'.
-" LFA1-STCD3 -> IS_MASTER_DATA-STCD3 (STCD3)
-ls_vendors-central_data-central-data-stcd3 = wa_order-vendor_gstn.
-ls_vendors-central_data-central-datax-stcd3 = 'X'.
-" LFA1-BRSCH -> IS_MASTER_DATA-BRSCH (BRSCH)
-ls_vendors-central_data-central-data-brsch = 'VOTH'.
-ls_vendors-central_data-central-datax-brsch = 'X'.
-" LFA1-BRSCH -> IS_MASTER_DATA-BRSCH (BRSCH)
-ls_vendors-central_data-central-data-brsch = 'Z031'.
-ls_vendors-central_data-central-datax-brsch = 'X'.
-" LFA1-BRSCH -> IS_MASTER_DATA-BRSCH (BRSCH)
-ls_vendors-central_data-central-data-brsch = 'Z034'.
-ls_vendors-central_data-central-datax-brsch = 'X'.
-" LFA1-BRSCH -> IS_MASTER_DATA-BRSCH (BRSCH)
-ls_vendors-central_data-central-data-brsch = 'Z032'.
-ls_vendors-central_data-central-datax-brsch = 'X'.
-" LFA1-BRSCH -> IS_MASTER_DATA-BRSCH (BRSCH)
-ls_vendors-central_data-central-data-brsch = 'Z033'.
-ls_vendors-central_data-central-datax-brsch = 'X'.
-" LFA1-XZEMP -> IS_MASTER_DATA-XZEMP (XZEMP)
-ls_vendors-central_data-central-data-xzemp = 'X'.
-ls_vendors-central_data-central-datax-xzemp = 'X'.
-" LFBK-BANKS(01) -> IS_MASTER_DATA-BANKS (BANKS)
-ls_bankdetails-data_key-banks = 'IN'.
-" LFBK-BANKN(01) -> IS_MASTER_DATA-BANKN (BANKN)
-ls_bankdetails-data_key-bankn = wa_order-vendor_bank_account_no.
-ls_bankdetails-data_key-BANKL = wa_order-VENDOR_BANK_IFSC_CODE.
-" LFBK-KOINH(01) -> IS_MASTER_DATA-KOINH (KOINH_FI)
-ls_bankdetails-data-koinh = wa_order-vendor_name.
-ls_bankdetails-datax-koinh = 'X'.
-" LFA1-XZEMP -> IS_MASTER_DATA-XZEMP (XZEMP)
-ls_vendors-central_data-central-data-xzemp = 'X'.
-ls_vendors-central_data-central-datax-xzemp = 'X'.
-" LFB1-AKONT -> IS_MASTER_DATA-AKONT (AKONT)
-ls_company-data-akont = '190101'.
-ls_company-datax-akont = 'X'.
-" LFB1-ZUAWA -> IS_MASTER_DATA-ZUAWA (DZUAWA)
-ls_company-data-zuawa = '000'.
-ls_company-datax-zuawa = 'X'.
-" LFB1-FDGRV -> IS_MASTER_DATA-FDGRV (FDGRV)
-ls_company-data-fdgrv = 'DL'.
-ls_company-datax-fdgrv = 'X'.
-" LFB1-ZTERM -> IS_MASTER_DATA-ZTERM (DZTERM)
-ls_company-data-zterm = '0001'.
-ls_company-datax-zterm = 'X'.
-" LFB1-REPRF -> IS_MASTER_DATA-REPRF (REPRF)
-ls_company-data-reprf = 'X'.
-ls_company-datax-reprf = 'X'.
-" LFB1-ZWELS -> IS_MASTER_DATA-ZWELS (DZWELS)
-ls_company-data-zwels = '9'.
-ls_company-datax-zwels = 'X'.
-" LFB1-ZWELS -> IS_MASTER_DATA-ZWELS (DZWELS)
-ls_company-data-zwels = '8'.
-ls_company-datax-zwels = 'X'.
-" LFB1-QLAND -> IS_MASTER_DATA-QLAND (QLAND)
-ls_company-data-qland = 'IN'.
-ls_company-datax-qland = 'X'.
-" LFM1-WAERS -> IS_MASTER_DATA-WAERS (BSTWA)
-ls_purchasing-data-waers = 'INR'.
-ls_purchasing-datax-waers = 'X'.
-" LFM1-KALSK -> IS_MASTER_DATA-KALSK (KALSK)
-ls_purchasing-data-kalsk = '01'.
-ls_purchasing-datax-kalsk = 'X'.
-" LFM1-WEBRE -> IS_MASTER_DATA-WEBRE (WEBRE)
-ls_purchasing-data-webre = 'X'.
-ls_purchasing-datax-webre = 'X'.
+*   ---- header: I = insert (create). LIFNR left blank -> internal number ----
+    ls_vendors-header-object_task = 'I'.
 
-" --- APPEND stubs for internal table components (innermost first) ---
-APPEND ls_bankdetails TO ls_vendors-central_data-bankdetail-bankdetails.
-APPEND ls_purchasing TO ls_vendors-purchasing_data-purchasing.
-APPEND ls_company TO ls_vendors-company_data-company.
-APPEND ls_vendors TO ls_is_master_data-vendors.
+*   ---- central data: account group / address / GST / PAN ------------------
+    ls_vendors-central_data-central-data-ktokk  = 'GEMV'.
+    ls_vendors-central_data-central-datax-ktokk = 'X'.
 
-" --- TODO: Could not auto-map these fields ---
-" TODO: map USE_ZAV (val= 'X' roll=  )
-" TODO: map ADDR1_DATA-SORT1 (val= wa_order-vendor_code roll= AD_SORT1UL )
-" TODO: map LFBK-BANKL(01) (val= wa_order-vendor_bank_ifsc_code roll= BANKK )
+    ls_vendors-central_data-address-postal-data-name        = wa_order-vendor_name.
+    ls_vendors-central_data-address-postal-datax-name       = 'X'.
+    ls_vendors-central_data-address-postal-data-sort1       = wa_order-vendor_code.
+    ls_vendors-central_data-address-postal-datax-sort1      = 'X'.
+    ls_vendors-central_data-address-postal-data-postl_cod1  = wa_order-vendor_pin_code.
+    ls_vendors-central_data-address-postal-datax-postl_cod1 = 'X'.
+    ls_vendors-central_data-address-postal-data-city        = wa_order-vendor_state.
+    ls_vendors-central_data-address-postal-datax-city       = 'X'.
+    ls_vendors-central_data-address-postal-data-country     = 'IN'.
+    ls_vendors-central_data-address-postal-datax-country    = 'X'.
+    ls_vendors-central_data-address-postal-data-region      = v_regio.
+    ls_vendors-central_data-address-postal-datax-region     = 'X'.
+    ls_vendors-central_data-address-postal-data-str_suppl1  = street+40(40).
+    ls_vendors-central_data-address-postal-datax-str_suppl1 = 'X'.
+    ls_vendors-central_data-address-postal-data-street      = street+0(40).
+    ls_vendors-central_data-address-postal-datax-street     = 'X'.
 
-VMD_EI_API=>MAINTAIN_BAPI(
-  EXPORTING
-    IV_TEST_RUN = abap_false " TODO: fill value
-    IV_COLLECT_MESSAGES = abap_true" TODO: fill value
-    IS_MASTER_DATA = lS_IS_MASTER_DATA
-  IMPORTING
-    ES_MASTER_DATA_CORRECT = lS_ES_MASTER_DATA_CORRECT
-    ES_MESSAGE_CORRECT = lS_ES_MESSAGE_CORRECT
-    ES_MASTER_DATA_DEFECTIVE = lS_ES_MASTER_DATA_DEFECTIVE
-    ES_MESSAGE_DEFECTIVE = lS_ES_MESSAGE_DEFECTIVE
-).
+    ls_vendors-central_data-central-data-stcd3      = wa_order-vendor_gstn.
+    ls_vendors-central_data-central-datax-stcd3     = 'X'.
+    ls_vendors-central_data-central-data-j_1ipanno  = wa_order-vendor_pan.
+    ls_vendors-central_data-central-datax-j_1ipanno = 'X'.
+    ls_vendors-central_data-central-data-xzemp      = 'X'.
+    ls_vendors-central_data-central-datax-xzemp     = 'X'.
 
-" * *End of change by SAP_ABAP 28.04.2026
-*                    UPDATE 'S' MESSAGES INTO ist_xmessages.
+*   Industry key (BRSCH) by MSME status / gender / social category
+*   (restores the conditional logic of the original XK01 BDC).
+    TRANSLATE wa_order-is_msme_verified    TO UPPER CASE.
+    TRANSLATE wa_order-mse_gender          TO UPPER CASE.
+    TRANSLATE wa_order-mse_socail_category TO UPPER CASE.
+    IF wa_order-is_msme_verified = 'FALSE'.
+      lv_brsch = 'VOTH'.
+    ELSEIF wa_order-is_msme_verified = 'TRUE'.
+      IF wa_order-mse_gender = 'MALE' OR wa_order-mse_gender = ' '.
+        IF wa_order-mse_socail_category IS INITIAL.
+          lv_brsch = 'Z031'.
+        ELSE.
+          lv_brsch = 'Z033'.
+        ENDIF.
+      ELSEIF wa_order-mse_gender = 'FEMALE'.
+        IF wa_order-mse_socail_category IS NOT INITIAL.
+          lv_brsch = 'Z034'.
+        ELSE.
+          lv_brsch = 'Z032'.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    IF lv_brsch IS NOT INITIAL.
+      ls_vendors-central_data-central-data-brsch  = lv_brsch.
+      ls_vendors-central_data-central-datax-brsch = 'X'.
+    ENDIF.
+
+*   ---- company code data (OVL) -------------------------------------------
+    ls_company-task           = 'I'.
+    ls_company-data_key-bukrs = 'OVL'.
+    ls_company-data-akont     = '190101'.
+    ls_company-datax-akont    = 'X'.
+    ls_company-data-zuawa     = '000'.
+    ls_company-datax-zuawa    = 'X'.
+    ls_company-data-fdgrv     = 'DL'.
+    ls_company-datax-fdgrv    = 'X'.
+    ls_company-data-zterm     = '0001'.
+    ls_company-datax-zterm    = 'X'.
+    ls_company-data-reprf     = 'X'.
+    ls_company-datax-reprf    = 'X'.
+    ls_company-data-qland     = 'IN'.
+    ls_company-datax-qland    = 'X'.
+*   Payment method: '9' for SBI IFSC, else '8'
+    IF wa_order-vendor_bank_ifsc_code IS NOT INITIAL.
+      CONDENSE wa_order-vendor_bank_ifsc_code.
+      IF wa_order-vendor_bank_ifsc_code+0(3) = 'SBI'.
+        ls_company-data-zwels = '9'.
+      ELSE.
+        ls_company-data-zwels = '8'.
+      ENDIF.
+      ls_company-datax-zwels = 'X'.
+    ENDIF.
+*   Withholding tax type I0 (was the separate LFBW / J_1IMOVEND updates)
+    ls_wtax-task            = 'I'.
+    ls_wtax-data_key-witht  = 'I0'.
+    ls_wtax-data-wt_subjct  = 'X'.
+    ls_wtax-data-qsrec      = '00'.
+    ls_wtax-datax-wt_subjct = abap_true.
+    ls_wtax-datax-qsrec     = abap_true.
+    APPEND ls_wtax TO ls_company-wtax_type-wtax_type.
+    APPEND ls_company TO ls_vendors-company_data-company.
+
+*   ---- purchasing org data: PMAT (goods) / PSRV (services) ---------------
+    ls_purchasing-task = 'I'.
+    IF wa_order-offering_type = 'GOODS' OR wa_order-offering_type = 'goods'.
+      ls_purchasing-data_key-ekorg = 'PMAT'.
+    ELSEIF wa_order-offering_type = 'SERVICES' OR wa_order-offering_type = 'services'.
+      ls_purchasing-data_key-ekorg = 'PSRV'.
+    ENDIF.
+    ls_purchasing-data-waers  = 'INR'.
+    ls_purchasing-datax-waers = 'X'.
+    ls_purchasing-data-kalsk  = '01'.
+    ls_purchasing-datax-kalsk = 'X'.
+    ls_purchasing-data-webre  = 'X'.
+    ls_purchasing-datax-webre = 'X'.
+    APPEND ls_purchasing TO ls_vendors-purchasing_data-purchasing.
+
+*   ---- bank details -------------------------------------------------------
+    IF wa_order-vendor_bank_account_no IS NOT INITIAL.
+      ls_bankdetails-task           = 'I'.
+      ls_bankdetails-data_key-banks = 'IN'.
+      ls_bankdetails-data_key-bankl = wa_order-vendor_bank_ifsc_code.
+      ls_bankdetails-data_key-bankn = wa_order-vendor_bank_account_no.
+      ls_bankdetails-data-koinh     = wa_order-vendor_name.
+      ls_bankdetails-datax-koinh    = 'X'.
+      APPEND ls_bankdetails TO ls_vendors-central_data-bankdetail-bankdetails.
+    ENDIF.
+
+    APPEND ls_vendors TO ls_is_master_data-vendors.
+
+*   ---- call the vendor EI API (creates the BP via CVI) -------------------
+    CALL METHOD vmd_ei_api=>maintain_bapi
+      EXPORTING
+        iv_test_run              = abap_false
+        iv_collect_messages      = abap_true
+        is_master_data           = ls_is_master_data
+      IMPORTING
+        es_master_data_correct   = ls_es_master_data_correct
+        es_message_correct       = ls_es_message_correct
+        es_master_data_defective = ls_es_master_data_defective
+        es_message_defective     = ls_es_message_defective.
 
     REFRESH it_msg_mail.
-    CLEAR wa_msg_mail.
+    CLEAR: wa_msg_mail, v_vendor.
 
-
-
-    LOOP AT ist_xmessages.
-      IF ist_xmessages-msgtyp = 'S' AND
-         ist_xmessages-msgid  = 'F2' AND
-         ( ist_xmessages-msgnr  = '173' OR
-           ist_xmessages-msgnr  = '175' OR
-           ist_xmessages-msgnr  = '271' ) AND
-         ist_xmessages-msgv1 <> ' '.
-        v_vendor = ist_xmessages-msgv1.
-
-        SELECT SINGLE * FROM lfa1 INTO CORRESPONDING FIELDS OF wa_lfa1
-          WHERE lifnr = v_vendor.
-        IF sy-subrc = 0.
-
-" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 14.06.2026  for ATC
-* S/4 (BP/CVI): direct LFBW update replaced by vendor EI API VMD_EI_API=>MAINTAIN_BAPI
-*   withholding tax set via COMPANY_DATA-COMPANY-WTAX_TYPE-WTAX_TYPE (VMDS_EI_WTAX_TYPE):
-*   WITHT=I0 (DATA_KEY), WT_SUBJCT=X, QSREC=00 (DATA + DATAX); company OVL
-*          DATA:wa_lfbw TYPE lfbw.
-*          wa_lfbw-lifnr = v_vendor.    " soc by rohit on 15-05-2024.
-*          wa_lfbw-witht = 'I0'.
-*          wa_lfbw-wt_subjct = 'X'.
-*          wa_lfbw-qsrec = '00'.
-*          wa_lfbw-bukrs = 'OVL'.
-*          MODIFY lfbw FROM wa_lfbw.
-          DATA: ls_wt_main TYPE vmds_ei_main,
-                ls_wt_vend TYPE vmds_ei_extern,
-                ls_wt_comp TYPE vmds_ei_company,
-                ls_wt_wtax TYPE vmds_ei_wtax_type,
-                ls_wt_def  TYPE vmds_ei_main.
-          CLEAR: ls_wt_main, ls_wt_vend, ls_wt_comp, ls_wt_wtax, ls_wt_def.
-          ls_wt_vend-header-object_instance-lifnr = v_vendor.
-          ls_wt_vend-header-object_task = 'U'.
-          ls_wt_comp-task = 'U'.
-          ls_wt_comp-data_key-bukrs = 'OVL'.
-          ls_wt_wtax-task = 'M'.
-          ls_wt_wtax-data_key-witht = 'I0'.
-          ls_wt_wtax-data-wt_subjct = 'X'.
-          ls_wt_wtax-data-qsrec     = '00'.
-          ls_wt_wtax-datax-wt_subjct = abap_true.
-          ls_wt_wtax-datax-qsrec     = abap_true.
-          APPEND ls_wt_wtax TO ls_wt_comp-wtax_type-wtax_type.
-          APPEND ls_wt_comp TO ls_wt_vend-company_data-company.
-          APPEND ls_wt_vend TO ls_wt_main-vendors.
-          CALL METHOD vmd_ei_api=>maintain_bapi
-            EXPORTING
-              iv_test_run              = space
-              iv_collect_messages      = 'X'
-              is_master_data           = ls_wt_main
-            IMPORTING
-              es_master_data_defective = ls_wt_def.
-          IF ls_wt_def-vendors IS INITIAL.
-            COMMIT WORK.
-          ELSE.
-            ROLLBACK WORK.
-          ENDIF.
-" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 14.06.2026 for ATC
-          "eoc by rohit on 15-05-2024
-
-          v_panno = wa_order-vendor_pan.
-
-          UPDATE zgem_orderdet SET lifnr = v_vendor
-          WHERE vendor_pan = v_panno.
-          COMMIT WORK.
-
-" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 14.06.2026  for ATC
-* S/4: J_1IMOVEND obsolete - PAN written to the vendor (LFA1) via VMD_EI_API central node J_1IPANNO
-*          wa_vend-lifnr     = v_vendor.
-*          wa_vend-j_1ipanno =  v_panno.
-*          MODIFY j_1imovend FROM wa_vend.
-          DATA: ls_pan_main TYPE vmds_ei_main,
-                ls_pan_vend TYPE vmds_ei_extern,
-                ls_pan_def  TYPE vmds_ei_main.
-          CLEAR: ls_pan_main, ls_pan_vend, ls_pan_def.
-          ls_pan_vend-header-object_instance-lifnr = v_vendor.
-          ls_pan_vend-header-object_task = 'U'.
-          ls_pan_vend-central_data-central-data-j_1ipanno  = v_panno.
-          ls_pan_vend-central_data-central-datax-j_1ipanno = abap_true.
-          APPEND ls_pan_vend TO ls_pan_main-vendors.
-          CALL METHOD vmd_ei_api=>maintain_bapi
-            EXPORTING
-              iv_test_run              = space
-              iv_collect_messages      = 'X'
-              is_master_data           = ls_pan_main
-            IMPORTING
-              es_master_data_defective = ls_pan_def.
-          IF ls_pan_def-vendors IS INITIAL.
-            COMMIT WORK.
-          ELSE.
-            ROLLBACK WORK.
-          ENDIF.
-" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 14.06.2026 for ATC
-*    data(lv_text) = 'Vendor', v_ven
-          CONCATENATE 'Vendor' v_vendor 'Çreated.' INTO message SEPARATED BY space.
-*    WRITE :/ 'Vendor' , v_vendor, 'Created'.
-          WRITE : / message.
-* Send vendor mail if created
-          PERFORM vcs_mail.
-        ENDIF.
-*        ist_vend-vend-ass_flag = 'X'.
-*        MODIFY ist_vend .
-*      ELSE.
-*        CONCATENATE ist_xmessages-msgid ist_xmessages-msgnr INTO
-*        ist_vend-vend-rsn.
-*        MODIFY ist_vend.
+    IF ls_es_master_data_defective-vendors IS INITIAL.
+*     Success -> persist, then read back the generated vendor number.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'.
+      READ TABLE ls_es_master_data_correct-vendors INTO DATA(ls_corr_vend) INDEX 1.
+      IF sy-subrc = 0.
+        v_vendor = ls_corr_vend-header-object_instance-lifnr.
       ENDIF.
-    ENDLOOP.
-    IF v_vendor  IS  INITIAL.
-      LOOP AT ist_xmessages.
+*     Fallback: if the EI result did not carry the generated number,
+*     read it back by GSTIN / PAN (the vendor was just created as GEMV).
+      IF v_vendor IS INITIAL.
+        IF wa_order-vendor_gstn IS NOT INITIAL.
+          SELECT SINGLE lifnr FROM lfa1 INTO v_vendor
+            WHERE ktokk = 'GEMV' AND stcd3 = wa_order-vendor_gstn.
+        ELSEIF wa_order-vendor_pan IS NOT INITIAL.
+          SELECT SINGLE lifnr FROM lfa1 INTO v_vendor
+            WHERE ktokk = 'GEMV' AND j_1ipanno = wa_order-vendor_pan.
+        ENDIF.
+      ENDIF.
 
-*        MOVE-CORRESPONDING ist_xmessages TO: ist_bdcstatus, msg_log.
-*        ist_bdcstatus-reqno = l_reqno.
-        msg_log-msgno  = ist_xmessages-msgnr.
-        msg_log-msgty  = ist_xmessages-msgtyp.
-        MOVE-CORRESPONDING ist_xmessages TO msg_log.
+      IF v_vendor IS NOT INITIAL.
+        v_panno = wa_order-vendor_pan.
+        IF wa_order-vendor_gstn IS NOT INITIAL.
+          UPDATE zgem_orderdet SET lifnr = v_vendor
+            WHERE vendor_gstn = wa_order-vendor_gstn.
+        ELSEIF v_panno IS NOT INITIAL.
+          UPDATE zgem_orderdet SET lifnr = v_vendor
+            WHERE vendor_pan = v_panno.
+        ENDIF.
+        COMMIT WORK.
 
-        CALL FUNCTION 'MESSAGE_TEXTS_READ'
-          EXPORTING
-            msg_log_imp     = msg_log
-          IMPORTING
-            msg_text_exp    = msg_text_exp
-          TABLES
-            t_msg_texts_exp = ist_msg_text.
-*        LOOP AT ist_msg_text.
-*          ist_bdcstatus-indx = ist_msg_text-indx.
-*          ist_bdcstatus-msgtx = ist_msg_text-msgtx.
-*          APPEND ist_bdcstatus.
-*        ENDLOOP.
-        WRITE :/ msg_text_exp-msgtx.
-        wa_msg_mail-msgtxt = msg_text_exp-msgtx.
+        CONCATENATE 'Vendor' v_vendor 'created.' INTO message SEPARATED BY space.
+        WRITE : / message.
+        PERFORM vcs_mail.
+      ENDIF.
+    ELSE.
+*     Defective -> roll back and collect the messages for the error mail.
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+      LOOP AT ls_es_message_defective-messages INTO DATA(ls_msg_d).
+        WRITE :/ ls_msg_d-message.
+        wa_msg_mail-msgtxt = ls_msg_d-message.
         APPEND wa_msg_mail TO it_msg_mail.
-        CLEAR ist_msg_text.
-        REFRESH ist_msg_text.
-
       ENDLOOP.
     ENDIF.
 
@@ -1291,97 +1213,67 @@ FORM change_bnkdetails .
 *                              wa_order-vendor_name.
 *  CALL TRANSACTION 'XK02' USING ist_bdcdata MODE mode
 
-" --- Data declarations ---
-DATA ls_IS_MASTER_DATA TYPE VMDS_EI_MAIN.
-DATA ls_ES_MASTER_DATA_CORRECT TYPE VMDS_EI_MAIN.
-DATA ls_ES_MESSAGE_CORRECT TYPE CVIS_MESSAGE.
-DATA ls_ES_MASTER_DATA_DEFECTIVE TYPE VMDS_EI_MAIN.
-DATA ls_ES_MESSAGE_DEFECTIVE TYPE CVIS_MESSAGE.
-DATA ls_company TYPE vmds_ei_company.
-DATA ls_vendors TYPE vmds_ei_extern.
-DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
+" --- S/4 vendor bank/address change via VMD_EI_API=>MAINTAIN_BAPI ---
+  DATA ls_is_master_data           TYPE vmds_ei_main.
+  DATA ls_es_master_data_correct   TYPE vmds_ei_main.
+  DATA ls_es_message_correct       TYPE cvis_message.
+  DATA ls_es_master_data_defective TYPE vmds_ei_main.
+  DATA ls_es_message_defective     TYPE cvis_message.
+  DATA ls_vendors                  TYPE vmds_ei_extern.
+  DATA ls_bankdetails              TYPE cvis_ei_cvi_bankdetail.
 
-" --- Auto-mapped field assignments (via DD03L rollname) ---
-" RF02K-BUKRS -> IS_MASTER_DATA-BUKRS (BUKRS)
-ls_company-data_key-bukrs = 'OVL'.
-LS_VENDORS-HEADER-OBJECT_INSTANCE-LIFNR = WA_LFA1-LIFNR.
-" *** ADD THIS LINE - 'U' = Update mode ***
-LS_VENDORS-HEADER-OBJECT_TASK = 'U'.
+  CLEAR: ls_is_master_data, ls_es_master_data_correct, ls_es_message_correct,
+         ls_es_master_data_defective, ls_es_message_defective,
+         ls_vendors, ls_bankdetails.
 
-" ADDR1_DATA-STR_SUPPL1 -> IS_MASTER_DATA-STR_SUPPL1 (AD_STRSPP1)
-ls_vendors-central_data-address-postal-data-str_suppl1 = street+55(50).
-ls_vendors-central_data-address-postal-datax-str_suppl1 = 'X'.
-" ADDR1_DATA-STREET -> IS_MASTER_DATA-STREET (AD_STREET)
-ls_vendors-central_data-address-postal-data-street = street+0(55).
-ls_vendors-central_data-address-postal-datax-street = 'X'.
-" LFA1-XZEMP -> IS_MASTER_DATA-XZEMP (XZEMP)
-ls_vendors-central_data-central-data-xzemp = 'X'.
-ls_vendors-central_data-central-datax-xzemp = 'X'.
-" LFBK-BANKN(01) -> IS_MASTER_DATA-BANKN (BANKN)
-ls_bankdetails-data_key-bankn = wa_order-vendor_bank_account_no.
-ls_bankdetails-data_key-bankl = wa_order-VENDOR_BANK_IFSC_CODE.
-" LFBK-KOINH(01) -> IS_MASTER_DATA-KOINH (KOINH_FI)
-ls_bankdetails-data-koinh = wa_order-vendor_name.
-ls_bankdetails-datax-koinh = 'X'.
+*   header: U = update the existing vendor (LIFNR = wa_lfa1-lifnr)
+  ls_vendors-header-object_instance-lifnr = wa_lfa1-lifnr.
+  ls_vendors-header-object_task           = 'U'.
 
-" --- APPEND stubs for internal table components (innermost first) ---
-APPEND ls_bankdetails TO ls_vendors-central_data-bankdetail-bankdetails.
-APPEND ls_company TO ls_vendors-company_data-company.
-APPEND ls_vendors TO ls_is_master_data-vendors.
+*   updated street / address
+  ls_vendors-central_data-address-postal-data-str_suppl1  = street+55(50).
+  ls_vendors-central_data-address-postal-datax-str_suppl1 = 'X'.
+  ls_vendors-central_data-address-postal-data-street      = street+0(55).
+  ls_vendors-central_data-address-postal-datax-street     = 'X'.
+  ls_vendors-central_data-central-data-xzemp   = 'X'.
+  ls_vendors-central_data-central-datax-xzemp  = 'X'.
 
-" --- TODO: Could not auto-map these fields ---
-" TODO: map RF02K-LIFNR (val= wa_lfa1-lifnr roll= LIF16 )
-" TODO: map RF02K-D0110 (val= 'X' roll= XDYNP )
-" TODO: map RF02K-D0130 (val= 'X' roll= XDYNP )
-" TODO: map USE_ZAV (val= 'X' roll=  )
-" TODO: map LFBK-BANKL(01) (val= wa_order-vendor_bank_ifsc_code roll= BANKK )
+*   bank details (M = insert or update line 01)
+  ls_bankdetails-task           = 'M'.
+  ls_bankdetails-data_key-banks = 'IN'.
+  ls_bankdetails-data_key-bankl = wa_order-vendor_bank_ifsc_code.
+  ls_bankdetails-data_key-bankn = wa_order-vendor_bank_account_no.
+  ls_bankdetails-data-koinh     = wa_order-vendor_name.
+  ls_bankdetails-datax-koinh    = 'X'.
+  APPEND ls_bankdetails TO ls_vendors-central_data-bankdetail-bankdetails.
 
-VMD_EI_API=>MAINTAIN_BAPI(
-  EXPORTING
-    IV_TEST_RUN = abap_false " TODO: fill value
-    IV_COLLECT_MESSAGES = 'X' " TODO: fill value
-    IS_MASTER_DATA = ls_IS_MASTER_DATA
-  IMPORTING
-    ES_MASTER_DATA_CORRECT = ls_ES_MASTER_DATA_CORRECT
-    ES_MESSAGE_CORRECT = ls_ES_MESSAGE_CORRECT
-    ES_MASTER_DATA_DEFECTIVE = ls_ES_MASTER_DATA_DEFECTIVE
-    ES_MESSAGE_DEFECTIVE = ls_ES_MESSAGE_DEFECTIVE
-).
+  APPEND ls_vendors TO ls_is_master_data-vendors.
 
-" * *End of change by SAP_ABAP 28.04.2026
-*                   UPDATE 'S' MESSAGES INTO ist_xmessages.
+  CALL METHOD vmd_ei_api=>maintain_bapi
+    EXPORTING
+      iv_test_run              = abap_false
+      iv_collect_messages      = abap_true
+      is_master_data           = ls_is_master_data
+    IMPORTING
+      es_master_data_correct   = ls_es_master_data_correct
+      es_message_correct       = ls_es_message_correct
+      es_master_data_defective = ls_es_master_data_defective
+      es_message_defective     = ls_es_message_defective.
 
   REFRESH it_msg_mail.
   CLEAR wa_msg_mail.
-  LOOP AT ist_xmessages.
-    IF ist_xmessages-msgtyp = 'E'.
-
-
-*        MOVE-CORRESPONDING ist_xmessages TO: ist_bdcstatus, msg_log.
-*        ist_bdcstatus-reqno = l_reqno.
-      msg_log-msgno  = ist_xmessages-msgnr.
-      msg_log-msgty  = ist_xmessages-msgtyp.
-      MOVE-CORRESPONDING ist_xmessages TO msg_log.
-
-      CALL FUNCTION 'MESSAGE_TEXTS_READ'
-        EXPORTING
-          msg_log_imp     = msg_log
-        IMPORTING
-          msg_text_exp    = msg_text_exp
-        TABLES
-          t_msg_texts_exp = ist_msg_text.
-*        LOOP AT ist_msg_text.
-*          ist_bdcstatus-indx = ist_msg_text-indx.
-*          ist_bdcstatus-msgtx = ist_msg_text-msgtx.
-*          APPEND ist_bdcstatus.
-*        ENDLOOP.
-      WRITE :/ msg_text_exp-msgtx.
-      wa_msg_mail-msgtxt = msg_text_exp-msgtx.
+  IF ls_es_master_data_defective-vendors IS INITIAL.
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING
+        wait = 'X'.
+  ELSE.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    LOOP AT ls_es_message_defective-messages INTO DATA(ls_msg_d).
+      WRITE :/ ls_msg_d-message.
+      wa_msg_mail-msgtxt = ls_msg_d-message.
       APPEND wa_msg_mail TO it_msg_mail.
-      CLEAR ist_msg_text.
-      REFRESH ist_msg_text.
-    ENDIF.
-  ENDLOOP.
+    ENDLOOP.
+  ENDIF.
   IF it_msg_mail IS NOT INITIAL.
     PERFORM err_mail.
   ENDIF.
