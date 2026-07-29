@@ -395,56 +395,79 @@ PRIMARY KEY.   ENDSELECT.
 *                                  '=UPDA'.
 *    CALL TRANSACTION 'XK01' USING ist_bdcdata MODE mode
 
-" --- Data declarations ---
-DATA ls_IS_MASTER_DATA TYPE VMDS_EI_MAIN.
-DATA ls_ES_MASTER_DATA_CORRECT TYPE VMDS_EI_MAIN.
-DATA ls_ES_MESSAGE_CORRECT TYPE CVIS_MESSAGE.
-DATA ls_ES_MASTER_DATA_DEFECTIVE TYPE VMDS_EI_MAIN.
-DATA ls_ES_MESSAGE_DEFECTIVE TYPE CVIS_MESSAGE.
-DATA ls_company TYPE vmds_ei_company.
-DATA ls_purchasing TYPE vmds_ei_purchasing.
-DATA ls_vendors TYPE vmds_ei_extern.
-DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
+" --- BP-led create via CVI_EI_INBOUND_MAIN (Business Partner + vendor) ----
+*   GEMV vendor number range 21 is EXTERNAL (same number as the Business
+*   Partner), so the vendor cannot draw its own number - the BP must be
+*   created first (internal number from its grouping) and CVI copies that
+*   number to the vendor. We therefore build BOTH the partner (BP) node and
+*   the vendor node in one CVIS_EI_EXTERN and call CVI_EI_INBOUND_MAIN.
+    DATA ls_company     TYPE vmds_ei_company.
+    DATA ls_purchasing  TYPE vmds_ei_purchasing.
+    DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
+    DATA ls_wtax        TYPE vmds_ei_wtax_type.
+    DATA lv_brsch       TYPE brsch.
+    DATA lt_cvis        TYPE cvis_ei_extern_t.
+    DATA ls_cvis        TYPE cvis_ei_extern.
+    DATA lt_return      TYPE bapiretm.
+    DATA lv_bp_guid     TYPE bu_partner_guid.
+    DATA lv_bp          TYPE bu_partner.
+    DATA lv_err         TYPE flag.
 
-    DATA ls_wtax TYPE vmds_ei_wtax_type.
-    DATA lv_brsch TYPE brsch.
+*   *** SET c_bp_group to the GeM supplier BP grouping (BUCF) whose number
+*   *** range is INTERNAL - CVI copies that number to the external GEMV
+*   *** vendor. Replace 'ZGEM' with the customer's actual grouping.
+    CONSTANTS c_bp_group TYPE bu_group VALUE 'ZGEM'.
+    CONSTANTS c_bp_categ TYPE bu_type  VALUE '2'.   " 2 = Organization
 
-*   Refresh every loop pass: otherwise the previous vendor's data stays in the
-*   EI internal tables and the next MAINTAIN_BAPI mixes / rejects the data.
-    CLEAR: ls_is_master_data, ls_es_master_data_correct, ls_es_message_correct,
-           ls_es_master_data_defective, ls_es_message_defective,
-           ls_company, ls_purchasing, ls_vendors, ls_bankdetails, ls_wtax, lv_brsch.
+    CLEAR: lt_cvis, ls_cvis, lt_return, ls_company, ls_purchasing,
+           ls_bankdetails, ls_wtax, lv_brsch, lv_bp_guid, lv_bp, lv_err.
 
-*   ---- header: I = insert (create). LIFNR left blank -> internal number ----
-    ls_vendors-header-object_task = 'I'.
+    TRY.
+        lv_bp_guid = cl_system_uuid=>create_uuid_x16_static( ).
+      CATCH cx_uuid_error.
+    ENDTRY.
 
-*   ---- central data: account group / address / GST / PAN ------------------
-    ls_vendors-central_data-central-data-ktokk  = 'GEMV'.
-    ls_vendors-central_data-central-datax-ktokk = 'X'.
+*   ===== Business Partner (partner) node - created first, INTERNAL number ==
+    ls_cvis-partner-header-object      = 'BusinessPartner'.
+    ls_cvis-partner-header-object_task = 'I'.
+    ls_cvis-partner-header-object_instance-bpartnerguid = lv_bp_guid.
 
-    ls_vendors-central_data-address-postal-data-name        = wa_order-vendor_name.
-    ls_vendors-central_data-address-postal-datax-name       = 'X'.
-    ls_vendors-central_data-address-postal-data-sort1       = wa_order-vendor_code.
-    ls_vendors-central_data-address-postal-datax-sort1      = 'X'.
-    ls_vendors-central_data-address-postal-data-postl_cod1  = wa_order-vendor_pin_code.
-    ls_vendors-central_data-address-postal-datax-postl_cod1 = 'X'.
-    ls_vendors-central_data-address-postal-data-city        = wa_order-vendor_state.
-    ls_vendors-central_data-address-postal-datax-city       = 'X'.
-    ls_vendors-central_data-address-postal-data-country     = 'IN'.
-    ls_vendors-central_data-address-postal-datax-country    = 'X'.
-    ls_vendors-central_data-address-postal-data-region      = v_regio.
-    ls_vendors-central_data-address-postal-datax-region     = 'X'.
-    ls_vendors-central_data-address-postal-data-str_suppl1  = street+40(40).
-    ls_vendors-central_data-address-postal-datax-str_suppl1 = 'X'.
-    ls_vendors-central_data-address-postal-data-street      = street+0(40).
-    ls_vendors-central_data-address-postal-datax-street     = 'X'.
+    ls_cvis-partner-central_data-common-data-bp_control-category   = c_bp_categ.
+    ls_cvis-partner-central_data-common-data-bp_control-grouping   = c_bp_group.
+    ls_cvis-partner-central_data-common-data-bp_organization-name1 = wa_order-vendor_name.
 
-    ls_vendors-central_data-central-data-stcd3      = wa_order-vendor_gstn.
-    ls_vendors-central_data-central-datax-stcd3     = 'X'.
-    ls_vendors-central_data-central-data-j_1ipanno  = wa_order-vendor_pan.
-    ls_vendors-central_data-central-datax-j_1ipanno = 'X'.
-    ls_vendors-central_data-central-data-xzemp      = 'X'.
-    ls_vendors-central_data-central-datax-xzemp     = 'X'.
+*   supplier role FLVN00
+    APPEND INITIAL LINE TO ls_cvis-partner-central_data-role-roles
+      ASSIGNING FIELD-SYMBOL(<fs_role>).
+    <fs_role>-task              = 'I'.
+    <fs_role>-data_key          = 'FLVN00'.
+    <fs_role>-data-rolecategory = 'FLVN00'.
+
+*   BP address
+    APPEND INITIAL LINE TO ls_cvis-partner-central_data-address-addresses
+      ASSIGNING FIELD-SYMBOL(<fs_addr>).
+    <fs_addr>-task = 'I'.
+    <fs_addr>-data-postal-data-street     = street+0(40).
+    <fs_addr>-data-postal-data-str_suppl1 = street+40(40).
+    <fs_addr>-data-postal-data-city       = wa_order-vendor_state.
+    <fs_addr>-data-postal-data-postl_cod1 = wa_order-vendor_pin_code.
+    <fs_addr>-data-postal-data-region     = v_regio.
+    <fs_addr>-data-postal-data-country    = 'IN'.
+    <fs_addr>-data-postal-data-langu      = sy-langu.
+
+*   ===== Vendor node (LFA1 data) - CVI gives it the same number as the BP ==
+    ls_cvis-vendor-header-object_task = 'I'.
+
+    ls_cvis-vendor-central_data-central-data-ktokk      = 'GEMV'.
+    ls_cvis-vendor-central_data-central-datax-ktokk     = 'X'.
+    ls_cvis-vendor-central_data-central-data-stcd3      = wa_order-vendor_gstn.
+    ls_cvis-vendor-central_data-central-datax-stcd3     = 'X'.
+    ls_cvis-vendor-central_data-central-data-j_1ipanno  = wa_order-vendor_pan.
+    ls_cvis-vendor-central_data-central-datax-j_1ipanno = 'X'.
+    ls_cvis-vendor-central_data-central-data-xzemp      = 'X'.
+    ls_cvis-vendor-central_data-central-datax-xzemp     = 'X'.
+    ls_cvis-vendor-central_data-address-postal-data-sort1  = wa_order-vendor_code.
+    ls_cvis-vendor-central_data-address-postal-datax-sort1 = 'X'.
 
 *   Industry key (BRSCH) by MSME status / gender / social category
 *   (restores the conditional logic of the original XK01 BDC).
@@ -469,12 +492,12 @@ DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
       ENDIF.
     ENDIF.
     IF lv_brsch IS NOT INITIAL.
-      ls_vendors-central_data-central-data-brsch  = lv_brsch.
-      ls_vendors-central_data-central-datax-brsch = 'X'.
+      ls_cvis-vendor-central_data-central-data-brsch  = lv_brsch.
+      ls_cvis-vendor-central_data-central-datax-brsch = 'X'.
     ENDIF.
 
-*   ---- company code data (OVL) -------------------------------------------
-    ls_company-task           = 'I'.
+*   company code data (OVL)
+    ls_company-task           = 'M'.
     ls_company-data_key-bukrs = 'OVL'.
     ls_company-data-akont     = '190101'.
     ls_company-datax-akont    = 'X'.
@@ -499,17 +522,17 @@ DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
       ls_company-datax-zwels = 'X'.
     ENDIF.
 *   Withholding tax type I0 (was the separate LFBW / J_1IMOVEND updates)
-    ls_wtax-task            = 'I'.
+    ls_wtax-task            = 'M'.
     ls_wtax-data_key-witht  = 'I0'.
     ls_wtax-data-wt_subjct  = 'X'.
     ls_wtax-data-qsrec      = '00'.
     ls_wtax-datax-wt_subjct = abap_true.
     ls_wtax-datax-qsrec     = abap_true.
     APPEND ls_wtax TO ls_company-wtax_type-wtax_type.
-    APPEND ls_company TO ls_vendors-company_data-company.
+    APPEND ls_company TO ls_cvis-vendor-company_data-company.
 
-*   ---- purchasing org data: PMAT (goods) / PSRV (services) ---------------
-    ls_purchasing-task = 'I'.
+*   purchasing org data: PMAT (goods) / PSRV (services)
+    ls_purchasing-task = 'M'.
     IF wa_order-offering_type = 'GOODS' OR wa_order-offering_type = 'goods'.
       ls_purchasing-data_key-ekorg = 'PMAT'.
     ELSEIF wa_order-offering_type = 'SERVICES' OR wa_order-offering_type = 'services'.
@@ -521,47 +544,51 @@ DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
     ls_purchasing-datax-kalsk = 'X'.
     ls_purchasing-data-webre  = 'X'.
     ls_purchasing-datax-webre = 'X'.
-    APPEND ls_purchasing TO ls_vendors-purchasing_data-purchasing.
+    APPEND ls_purchasing TO ls_cvis-vendor-purchasing_data-purchasing.
 
-*   ---- bank details -------------------------------------------------------
+*   bank details
     IF wa_order-vendor_bank_account_no IS NOT INITIAL.
-      ls_bankdetails-task           = 'I'.
+      ls_bankdetails-task           = 'M'.
       ls_bankdetails-data_key-banks = 'IN'.
       ls_bankdetails-data_key-bankl = wa_order-vendor_bank_ifsc_code.
       ls_bankdetails-data_key-bankn = wa_order-vendor_bank_account_no.
       ls_bankdetails-data-koinh     = wa_order-vendor_name.
       ls_bankdetails-datax-koinh    = 'X'.
-      APPEND ls_bankdetails TO ls_vendors-central_data-bankdetail-bankdetails.
+      APPEND ls_bankdetails TO ls_cvis-vendor-central_data-bankdetail-bankdetails.
     ENDIF.
 
-    APPEND ls_vendors TO ls_is_master_data-vendors.
+    APPEND ls_cvis TO lt_cvis.
 
-*   ---- call the vendor EI API (creates the BP via CVI) -------------------
-    CALL METHOD vmd_ei_api=>maintain_bapi
+*   ===== create BP + vendor (same number) =================================
+    CALL FUNCTION 'CVI_EI_INBOUND_MAIN'
       EXPORTING
-        iv_test_run              = abap_false
-        iv_collect_messages      = abap_true
-        is_master_data           = ls_is_master_data
+        i_data   = lt_cvis
       IMPORTING
-        es_master_data_correct   = ls_es_master_data_correct
-        es_message_correct       = ls_es_message_correct
-        es_master_data_defective = ls_es_master_data_defective
-        es_message_defective     = ls_es_message_defective.
+        e_return = lt_return.
 
     REFRESH it_msg_mail.
-    CLEAR: wa_msg_mail, v_vendor.
+    CLEAR: wa_msg_mail, v_vendor, lv_err.
 
-    IF ls_es_master_data_defective-vendors IS INITIAL.
-*     Success -> persist, then read back the generated vendor number.
+    LOOP AT lt_return INTO DATA(ls_return).
+      LOOP AT ls_return-object_msg INTO DATA(ls_ob_msg).
+        IF ls_ob_msg-type = 'E' OR ls_ob_msg-type = 'A'.
+          lv_err = 'X'.
+          WRITE :/ ls_ob_msg-message.
+          wa_msg_mail-msgtxt = ls_ob_msg-message.
+          APPEND wa_msg_mail TO it_msg_mail.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+
+    IF lv_err IS INITIAL.
       CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
         EXPORTING
           wait = 'X'.
-      READ TABLE ls_es_master_data_correct-vendors INTO DATA(ls_corr_vend) INDEX 1.
-      IF sy-subrc = 0.
-        v_vendor = ls_corr_vend-header-object_instance-lifnr.
-      ENDIF.
-*     Fallback: if the EI result did not carry the generated number,
-*     read it back by GSTIN / PAN (the vendor was just created as GEMV).
+*     BP number = vendor number (same-number CVI); read it back by GUID.
+      SELECT SINGLE partner FROM but000 INTO lv_bp
+        WHERE partner_guid = lv_bp_guid.
+      v_vendor = lv_bp.
+*     Fallback: read the created GEMV vendor by GSTIN / PAN.
       IF v_vendor IS INITIAL.
         IF wa_order-vendor_gstn IS NOT INITIAL.
           SELECT SINGLE lifnr FROM lfa1 INTO v_vendor
@@ -588,13 +615,8 @@ DATA ls_bankdetails TYPE cvis_ei_cvi_bankdetail.
         PERFORM vcs_mail.
       ENDIF.
     ELSE.
-*     Defective -> roll back and collect the messages for the error mail.
+*     Errors -> roll back; the collected messages are mailed at the loop end.
       CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
-      LOOP AT ls_es_message_defective-messages INTO DATA(ls_msg_d).
-        WRITE :/ ls_msg_d-message.
-        wa_msg_mail-msgtxt = ls_msg_d-message.
-        APPEND wa_msg_mail TO it_msg_mail.
-      ENDLOOP.
     ENDIF.
 
     IF it_order2 IS NOT INITIAL.
