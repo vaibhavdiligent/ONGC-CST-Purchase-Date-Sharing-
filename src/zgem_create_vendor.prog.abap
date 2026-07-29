@@ -413,10 +413,10 @@ PRIMARY KEY.   ENDSELECT.
     DATA lv_bp          TYPE bu_partner.
     DATA lv_err         TYPE flag.
 
-*   *** SET c_bp_group to the GeM supplier BP grouping (BUCF) whose number
-*   *** range is INTERNAL - CVI copies that number to the external GEMV
-*   *** vendor. Replace 'ZGEM' with the customer's actual grouping.
-    CONSTANTS c_bp_group TYPE bu_group VALUE 'ZGEM'.
+*   GeM supplier BP grouping (TB001: GEMV = "Account Group - GeM Vendors",
+*   BP number range 21). The BP number range must be INTERNAL so CVI copies
+*   that number to the external GEMV (KREDITOR) vendor - confirm in BUCF.
+    CONSTANTS c_bp_group TYPE bu_group VALUE 'GEMV'.
     CONSTANTS c_bp_categ TYPE bu_type  VALUE '2'.   " 2 = Organization
 
     CLEAR: lt_cvis, ls_cvis, lt_return, ls_company, ls_purchasing,
