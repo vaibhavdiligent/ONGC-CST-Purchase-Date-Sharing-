@@ -1,43 +1,38 @@
 *&---------------------------------------------------------------------*
-*& Report  YCIS_APPROVE
+*& Report  YCIS_REB_APPROVE
 *&---------------------------------------------------------------------*
-*& CIS 2026-27 - 3-level approval workflow : LEVEL 2 (PC MKTG-HOD).
+*& Rebate (PSD / YRVU001) - 3-level approval workflow : LEVEL 2.
 *&
-*&   L1 (PC MKTG)      : runs YRVG004_QAIS_EXECUTE_N1, reviews the discount
-*&                       ALV and CONFIRMs -> rows saved to YCIS_APPRVL with
-*&                       WF_STATUS '20' (Pending L2); L2 users are e-mailed.
-*&   L2 (PC MKTG-HOD)  : THIS program. Lists the Pending-L2 rows for the
-*&                       user's sales office(s), select (checkbox / Select
-*&                       All) and:
-*&                         APPROVE -> WF_STATUS '30' (Pending L3), e-mail L3.
-*&                         REJECT  -> WF_STATUS '10' (back to L1), e-mail L1.
-*&   L3 (CPC)          : YCIS_EXECUTE - executes and creates the rebate order.
+*&   L1  : runs YRVU001_REB_CALC_M2_N1, reviews the rebate ALV and
+*&         EXECUTEs -> rows saved to YCIS_APPRVL with SCHEME_TYPE 'U'
+*&         (Upliftment Rebate) and WF_STATUS '20' (Pending L2); L2 mailed.
+*&   L2  : THIS program. Lists the Pending-L2 rebate rows for the user's
+*&         sales office(s); APPROVE -> WF_STATUS '30' (Pending L3), mail L3;
+*&         REJECT -> WF_STATUS '10' (back to L1), mail L1.
+*&   L3  : YCIS_REB_EXECUTE - creates the credit-memo request (BUS2094)
+*&         and writes YRVA_REBATE.
 *&
-*& Approval hierarchy & e-mail recipients are read from table YCIS_WF_APPR
-*& (Sales Office / Department / Level / Sequence / User / E-mail), SM30.
-*&
-*& GUI status 'STANDARD' (with function codes APPR, REJ, SELALL, DESEL and
-*& BACK/EXIT) must exist in this program - create it in SE41 (see doc).
+*& Reuses the shared approval infrastructure (YCIS_APPRVL / YCIS_WF_APPR),
+*& separated from the QAIS queue by SCHEME_TYPE = 'U'.
+*& GUI status 'STANDARD' (APPR, REJ, SELALL, DESEL, BACK/EXIT) - SE41.
 *&---------------------------------------------------------------------*
-REPORT  ycis_approve.
+REPORT  ycis_reb_approve.
 
 TYPE-POOLS: slis.
 
 TABLES: ycis_apprvl, ycis_wf_appr.
 
-CONSTANTS: gc_level TYPE ycis_wlevel VALUE '2'.   " this program = Level 2
+CONSTANTS: gc_level  TYPE ycis_wlevel VALUE '2',   " this program = Level 2
+           gc_scheme TYPE ycis_apprvl-scheme_type VALUE 'U'. " Upliftment Rebate
 
 TYPES: BEGIN OF ty_out,
          sel         TYPE flag,
-         qais_no     TYPE ycis_apprvl-qais_no,
-         scheme_type TYPE ycis_apprvl-scheme_type,
-         stype_txt   TYPE char20,
          kunnr       TYPE ycis_apprvl-kunnr,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
-         mcq_qty     TYPE ycis_apprvl-mcq_qty,
-         mcq_perc    TYPE ycis_apprvl-mcq_perc,
+         reb_cond    TYPE ycis_apprvl-reb_cond,
+         lft_qty     TYPE ycis_apprvl-lft_qty,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
          purch_no    TYPE ycis_apprvl-purch_no,
@@ -48,12 +43,12 @@ TYPES: BEGIN OF ty_out,
          remarks     TYPE ycis_apprvl-remarks,
        END OF ty_out.
 
-DATA: gt_appr  TYPE STANDARD TABLE OF ycis_apprvl,
-      gs_appr  TYPE ycis_apprvl,
-      gt_out   TYPE STANDARD TABLE OF ty_out,
-      gs_out   TYPE ty_out,
-      gt_fcat  TYPE slis_t_fieldcat_alv,
-      gs_fcat  TYPE slis_fieldcat_alv,
+DATA: gt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
+      gs_appr   TYPE ycis_apprvl,
+      gt_out    TYPE STANDARD TABLE OF ty_out,
+      gs_out    TYPE ty_out,
+      gt_fcat   TYPE slis_t_fieldcat_alv,
+      gs_fcat   TYPE slis_fieldcat_alv,
       gs_layout TYPE slis_layout_alv,
       gr_office TYPE RANGE OF vkbur,
       gs_office LIKE LINE OF gr_office.
@@ -75,7 +70,7 @@ START-OF-SELECTION.
   ENDIF.
   PERFORM get_pending.
   IF gt_appr IS INITIAL.
-    MESSAGE 'No records pending your (L2) approval' TYPE 'I'.
+    MESSAGE 'No rebate records pending your (L2) approval' TYPE 'I'.
     RETURN.
   ENDIF.
   PERFORM build_out.
@@ -83,15 +78,13 @@ START-OF-SELECTION.
   PERFORM display_alv.
 
 *&---------------------------------------------------------------------*
-*&      Form  get_auth_offices   (sales offices this user handles at L2)
-*&---------------------------------------------------------------------*
 FORM get_auth_offices.
   DATA: lt_wf TYPE STANDARD TABLE OF ycis_wf_appr,
         ls_wf TYPE ycis_wf_appr.
   REFRESH gr_office.
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
-    WHERE wf_level  = gc_level
-      AND userid = sy-uname.
+    WHERE wf_level = gc_level
+      AND userid   = sy-uname.
   LOOP AT lt_wf INTO ls_wf.
     gs_office-sign = 'I'. gs_office-option = 'EQ'.
     gs_office-low  = ls_wf-sales_office.
@@ -100,12 +93,10 @@ FORM get_auth_offices.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  get_pending   (rows pending L2 for this user's offices)
-*&---------------------------------------------------------------------*
 FORM get_pending.
   SELECT * FROM ycis_apprvl INTO TABLE gt_appr
-    WHERE wf_status    = '20'
-      AND scheme_type <> 'U'                    " exclude rebate (PSD) queue
+    WHERE wf_status   = '20'
+      AND scheme_type = gc_scheme            " rebate queue only
       AND sales_off   IN gr_office
       AND sales_off   IN s_vkbur
       AND period_from IN s_sptag
@@ -114,33 +105,15 @@ FORM get_pending.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  build_out
-*&---------------------------------------------------------------------*
 FORM build_out.
   REFRESH gt_out.
   LOOP AT gt_appr INTO gs_appr.
     CLEAR gs_out.
     MOVE-CORRESPONDING gs_appr TO gs_out.
-    PERFORM scheme_text USING gs_appr-scheme_type CHANGING gs_out-stype_txt.
     APPEND gs_out TO gt_out.
   ENDLOOP.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  scheme_text   (readable CIS scheme type - GAIL 17.07.2026)
-*&---------------------------------------------------------------------*
-FORM scheme_text USING p_code TYPE any CHANGING p_txt TYPE char20.
-  CASE p_code.
-    WHEN 'M'. p_txt = 'Monthly'.
-    WHEN 'Q'. p_txt = 'Quarterly'.
-    WHEN 'A'. p_txt = 'Annual'.
-    WHEN 'C'. p_txt = 'Annual Consistency'.
-    WHEN OTHERS. p_txt = p_code.
-  ENDCASE.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*&      Form  build_fieldcat
 *&---------------------------------------------------------------------*
 FORM build_fieldcat.
   DATA: lv_pos TYPE i.
@@ -157,26 +130,22 @@ FORM build_fieldcat.
     APPEND gs_fcat TO gt_fcat.
   END-OF-DEFINITION.
 
-  add_fc 'SEL'         'Select'        'X'.
-  add_fc 'QAIS_NO'     'CIS No.'       ''.
-  add_fc 'STYPE_TXT'   'Scheme Type'   ''.
-  add_fc 'KUNNR'       'Customer'      ''.
-  add_fc 'CUST_NAME'   'Customer Name' ''.
-  add_fc 'KVGR2'       'Cust Group'    ''.
-  add_fc 'SALES_OFF'   'Sales Office'  ''.
-  add_fc 'MCQ_QTY'     'MCQ Qty'       ''.
-  add_fc 'MCQ_PERC'    'MCQ %'         ''.
-  add_fc 'ELIG_QTY'    'Eligible Qty'  ''.
-  add_fc 'REBATE_VAL'  'Rebate Value'  ''.
-  add_fc 'PURCH_NO'    'Reference No'  ''.
-  add_fc 'L1_USER'     'L1 Approved By' ''.
-  add_fc 'L1_DATE'     'L1 Approved On' ''.
-  add_fc 'L1_TIME'     'L1 Approved At' ''.
-  add_fc 'REMARKS'     'Remarks'       ''.
+  add_fc 'SEL'         'Select'          'X'.
+  add_fc 'KUNNR'       'Customer'        ''.
+  add_fc 'CUST_NAME'   'Customer Name'   ''.
+  add_fc 'KVGR2'       'Grp Co.'         ''.
+  add_fc 'SALES_OFF'   'Sales Office'    ''.
+  add_fc 'REB_COND'    'Cond. Type'      ''.
+  add_fc 'LFT_QTY'     'Lifted Qty'      ''.
+  add_fc 'ELIG_QTY'    'Eligible Qty'    ''.
+  add_fc 'REBATE_VAL'  'Rebate Value'    ''.
+  add_fc 'PURCH_NO'    'Reference No'    ''.
+  add_fc 'L1_USER'     'L1 Approved By'  ''.
+  add_fc 'L1_DATE'     'L1 Approved On'  ''.
+  add_fc 'L1_TIME'     'L1 Approved At'  ''.
+  add_fc 'REMARKS'     'Remarks'         ''.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  display_alv
 *&---------------------------------------------------------------------*
 FORM display_alv.
   gs_layout-zebra          = 'X'.
@@ -186,7 +155,6 @@ FORM display_alv.
       i_callback_program       = sy-repid
       i_callback_pf_status_set = 'SET_STATUS'
       i_callback_user_command  = 'USER_COMMAND'
-      i_callback_top_of_page   = 'TOP_OF_PAGE'
       is_layout                = gs_layout
       it_fieldcat              = gt_fcat
     TABLES
@@ -197,68 +165,14 @@ FORM display_alv.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  show_stmt_popup   (confirmation statement pop-up after approve)
-*&---------------------------------------------------------------------*
-FORM show_stmt_popup.
-  DATA: lv_ans TYPE c.
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
-    EXPORTING
-      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
-      text_question         =
-        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
-        'rates and amounts, have been verified and confirmed after considering ' &&
-        'customer waivers, shortfall waivers, sales return quantities, and ' &&
-        'Group/MLE details.'
-      text_button_1         = 'OK'
-      icon_button_1         = 'ICON_OKAY'
-      display_cancel_button = ' '
-    IMPORTING
-      answer                = lv_ans
-    EXCEPTIONS
-      text_not_found        = 1
-      OTHERS                = 2.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*&      Form  top_of_page   (confirmation statement header - L2)
-*&---------------------------------------------------------------------*
-FORM top_of_page.                                           "#EC CALLED
-  DATA: lt_hdr TYPE slis_t_listheader,
-        ls_hdr TYPE slis_listheader.
-  CLEAR ls_hdr. ls_hdr-typ = 'H'.
-  ls_hdr-info = 'CIS 2026-27 - Level-2 Approval. On approval you confirm:'.
-  APPEND ls_hdr TO lt_hdr.
-  CLEAR ls_hdr. ls_hdr-typ = 'S'.
-  ls_hdr-info = 'Customer-wise, grade-wise sales quantities, along with'.
-  APPEND ls_hdr TO lt_hdr.
-  CLEAR ls_hdr. ls_hdr-typ = 'S'.
-  ls_hdr-info = 'eligible PSD rates and amounts, have been verified and'.
-  APPEND ls_hdr TO lt_hdr.
-  CLEAR ls_hdr. ls_hdr-typ = 'S'.
-  ls_hdr-info = 'confirmed after considering customer waivers, shortfall'.
-  APPEND ls_hdr TO lt_hdr.
-  CLEAR ls_hdr. ls_hdr-typ = 'S'.
-  ls_hdr-info = 'waivers, sales return quantities, and Group/MLE details.'.
-  APPEND ls_hdr TO lt_hdr.
-  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
-    EXPORTING
-      it_list_commentary = lt_hdr.
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*&      Form  SET_STATUS  (ALV GUI status callback)
-*&---------------------------------------------------------------------*
 FORM set_status USING rt_extab TYPE slis_t_extab.            "#EC CALLED
   SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  USER_COMMAND
-*&---------------------------------------------------------------------*
 FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
                         rs_selfield TYPE slis_selfield.
   DATA: lr_grid TYPE REF TO cl_gui_alv_grid.
-*   sync the edited checkbox values back into gt_out
   CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
     IMPORTING
       e_grid = lr_grid.
@@ -287,8 +201,6 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  process_selected   (A = approve, R = reject)
-*&---------------------------------------------------------------------*
 FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
@@ -311,10 +223,9 @@ FORM process_selected USING p_action TYPE char1.
 
   LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
     READ TABLE gt_appr INTO gs_appr
-         WITH KEY qais_no     = gs_out-qais_no
-                  scheme_type = gs_out-scheme_type
-                  kunnr       = gs_out-kunnr
-                  kvgr2       = gs_out-kvgr2.
+         WITH KEY kunnr     = gs_out-kunnr
+                  kvgr2     = gs_out-kvgr2
+                  sales_off = gs_out-sales_off.
     CHECK sy-subrc = 0.
     IF p_action = 'A'.
       gs_appr-wf_status = '30'.        " pending L3
@@ -340,23 +251,16 @@ FORM process_selected USING p_action TYPE char1.
     COMMIT WORK.
     LOOP AT lt_office INTO lv_off.
       IF p_action = 'A'.
-        PERFORM send_mail USING '3' '0001' lv_off 'CIS rebates pending execution (L3/CPC)'.
+        PERFORM send_mail USING '3' '0001' lv_off 'Rebate (PSD) pending execution (L3)'.
       ELSE.
-        PERFORM send_mail USING '1' lv_off lv_off 'CIS rebates rejected by L2 - please review (L1)'.
+        PERFORM send_mail USING '1' lv_off lv_off 'Rebate (PSD) rejected by L2 - please review (L1)'.
       ENDIF.
     ENDLOOP.
-    MESSAGE |{ lv_cnt } line(s) processed| TYPE 'S'.
-*   drop the processed lines from the current list
+    MESSAGE |{ lv_cnt } rebate line(s) processed| TYPE 'S'.
     DELETE gt_out WHERE sel = 'X'.
-*   confirmation pop-up after approval (GAIL 27.07.2026)
-    IF p_action = 'A'.
-      PERFORM show_stmt_popup.
-    ENDIF.
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  get_reject_remark
 *&---------------------------------------------------------------------*
 FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
   DATA: lt_fields TYPE STANDARD TABLE OF sval,
@@ -383,11 +287,6 @@ FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*&      Form  send_mail   (notify next/previous level from YCIS_WF_APPR)
-*&      p_level  = target level (1/2/3)
-*&      p_office = sales office to read recipients for ('0001' for CPC/L3)
-*&      p_ctxoff = the office the rebate belongs to (for the mail text)
-*&---------------------------------------------------------------------*
 FORM send_mail USING p_level  TYPE ycis_wlevel
                      p_office  TYPE vkbur
                      p_ctxoff  TYPE vkbur
@@ -410,37 +309,27 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
       IF p_level = '3'.
-*       L2 -> L3 (CPC) : exact wording requested by GAIL (17.07.2026)
         ls_text-line = |Dear Sir/Madam,|.                           APPEND ls_text TO lt_text.
         ls_text-line = ||.                                           APPEND ls_text TO lt_text.
-        ls_text-line = |The rebates under the CIS 2026-27 Scheme have been successfully verified|.
+        ls_text-line = |Rebate (PSD) lines have been verified and approved by L2.|.
         APPEND ls_text TO lt_text.
-        ls_text-line = |and approved by L2.|.                        APPEND ls_text TO lt_text.
-        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
-        ls_text-line = |Please log in to T-Code YRVG004_E and generate the rebate orders.|.
+        ls_text-line = |Please log in to T-Code YRVU015_E and generate the credit-memo requests.|.
         APPEND ls_text TO lt_text.
-        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
-        ls_text-line = |With warm regards,|.                         APPEND ls_text TO lt_text.
-        ls_text-line = |GAIL (INDIA) LTD.|.                          APPEND ls_text TO lt_text.
         ls_text-line = ||.                                           APPEND ls_text TO lt_text.
         ls_text-line = |This is a system generated mail. Please do not reply.|.
         APPEND ls_text TO lt_text.
-        lv_sub = 'CIS Scheme - Rebates reviewed & submitted by L2'.
+        lv_sub = 'Rebate (PSD) - approved by L2, pending L3 execution'.
       ELSE.
-*       L2 reject -> back to L1
         ls_text-line = |Dear Sir/Madam,|.                           APPEND ls_text TO lt_text.
         ls_text-line = ||.                                           APPEND ls_text TO lt_text.
-        ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L2|.
+        ls_text-line = |The rebate (PSD) lines for Sales Office { p_ctxoff } have been returned by L2|.
         APPEND ls_text TO lt_text.
-        ls_text-line = |for your review. Please log in to T-Code YRVG004 (Run CIS Scheme) and re-submit.|.
+        ls_text-line = |for your review. Please log in to T-Code YRVU015_A and re-submit.|.
         APPEND ls_text TO lt_text.
-        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
-        ls_text-line = |With warm regards,|.                         APPEND ls_text TO lt_text.
-        ls_text-line = |GAIL (INDIA) LTD.|.                          APPEND ls_text TO lt_text.
         ls_text-line = ||.                                           APPEND ls_text TO lt_text.
         ls_text-line = |This is a system generated mail. Please do not reply.|.
         APPEND ls_text TO lt_text.
-        lv_sub = 'CIS Scheme - Rebates returned by L2 for review'.
+        lv_sub = 'Rebate (PSD) - returned by L2 for review'.
       ENDIF.
       lo_doc = cl_document_bcs=>create_document(
                  i_type    = 'RAW'
@@ -453,12 +342,9 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
       ENDLOOP.
-*     force immediate delivery (do not leave the mail waiting in the
-*     SAPconnect / SOST queue) - GAIL 17.07.2026 "mail not going".
       lo_send->set_send_immediately( 'X' ).
       lo_send->send( i_with_error_screen = 'X' ).
       COMMIT WORK.
     CATCH cx_bcs.
-*     mail failure must not block the approval; log silently
   ENDTRY.
 ENDFORM.

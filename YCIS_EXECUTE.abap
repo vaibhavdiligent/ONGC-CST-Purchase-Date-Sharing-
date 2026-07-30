@@ -105,7 +105,8 @@ ENDFORM.
 FORM get_pending.
 *   CPC is central -> all offices' pending-L3 rows (narrowed by s_vkbur)
   SELECT * FROM ycis_apprvl INTO TABLE gt_appr
-    WHERE wf_status   = '30'
+    WHERE wf_status    = '30'
+      AND scheme_type <> 'U'                    " exclude rebate (PSD) queue
       AND sales_off   IN s_vkbur
       AND period_from IN s_sptag
       AND kunnr       IN s_kunnr
