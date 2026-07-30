@@ -321,6 +321,11 @@ FORM process_selected USING p_action TYPE char1.
         gs_appr-l3_time   = sy-uzeit.
         gs_appr-remarks   = 'Executed - order created'.
         MODIFY ycis_apprvl FROM gs_appr.
+*       one sync commit per row: persists this order's VBKD / YRVA_REBATE /
+*       YCIS_APPRVL_GRD / master + the YCIS_APPRVL stamp together, so the
+*       duplicate guard is crash-safe and group execution does 1 (not 3)
+*       extra COMMIT WORK AND WAIT per member.
+        COMMIT WORK AND WAIT.
         lv_cnt = lv_cnt + 1.
 *       keep the row on the main grid and show the created rebate order
         gs_out-order_no = lv_vbeln.
@@ -484,7 +489,13 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
   UPDATE vbkd SET bstdk   = p_appr-period_from
                   bstdk_e = p_appr-period_to
             WHERE vbeln = p_vbeln.
-  COMMIT WORK AND WAIT.
+*   Performance (GAIL 30.07.2026 - L3 slow for group customers): the
+*   per-form COMMIT WORK AND WAIT calls were removed. All direct-table
+*   updates for one row (VBKD / YRVA_REBATE / YCIS_APPRVL_GRD / master /
+*   YCIS_APPRVL) are now committed ONCE per row by the caller, so a group
+*   of N members needs 1 (not 3) extra sync commit per member. The sales
+*   order itself is already persisted by BAPI_TRANSACTION_COMMIT above,
+*   which is why the VBKD update here still finds the document.
 
 * rebate log
   CLEAR ls_reb.
@@ -510,8 +521,7 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
       AND period_to   = p_appr-period_to
       AND kunnr       = p_appr-kunnr
       AND kvgr2       = p_appr-kvgr2.
-
-  COMMIT WORK AND WAIT.
+* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -636,7 +646,7 @@ FORM post_master_update USING p_appr TYPE ycis_apprvl
       ENDIF.
       MODIFY yrva_qais_data_m FROM ls_qm.
   ENDCASE.
-  COMMIT WORK AND WAIT.
+* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
