@@ -49,10 +49,11 @@ INCLUDE yrgr_033_gms_imbal_get_data.
 *----------------------------------------------------------------------*
 INITIALIZATION.
   " Notes block on the selection screen (mail 30.07.2026, ref YRXR025N)
-  cmt1 = '1st Radio Button (Report for Closing Imbalance): The List is w.e.f. 01.01.2022,'.
-  cmt2 = '   after Implementation of Single Material Code for Transmission of Shippers'' Gas'.
-  cmt3 = '2nd Radio Button (Till Date): The List is w.e.f. 01.09.2025, after 2UoM Migration'.
-  CLEAR cmt4.
+  cmt1 = '1st Radio Button (Report for Closing Imbalance): The List is w.e.f.'.
+  cmt2 = '   01.01.2022, after Implementation of Single Material Code for'.
+  cmt3 = '   Transmission of Shippers'' Gas'.
+  cmt4 = '2nd Radio Button (Till Date): The List is w.e.f. 01.09.2025, after'.
+  cmt5 = '   2UoM Migration'.
 
   lv_date = sy-datum - 4.
   CALL FUNCTION 'YRX_PRVS_DATE_FM'

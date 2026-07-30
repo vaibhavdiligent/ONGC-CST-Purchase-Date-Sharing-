@@ -57,10 +57,12 @@ DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 
 " Comment fields for the Notes block on the selection screen (block b2).
 " Filled at INITIALIZATION so no SE38 text elements need maintaining.
-DATA: cmt1 TYPE c LENGTH 83,
-      cmt2 TYPE c LENGTH 83,
-      cmt3 TYPE c LENGTH 83,
-      cmt4 TYPE c LENGTH 83.
+" 79 is the maximum width of a SELECTION-SCREEN COMMENT.
+DATA: cmt1 TYPE c LENGTH 79,
+      cmt2 TYPE c LENGTH 79,
+      cmt3 TYPE c LENGTH 79,
+      cmt4 TYPE c LENGTH 79,
+      cmt5 TYPE c LENGTH 79.
 
 " Deferred grid refresh: set in DATA_CHANGED, consumed in DATA_CHANGED_FINISHED.
 " Refreshing inside DATA_CHANGED dumps with OBJECTS_OBJREF_NOT_ASSIGNED_NO.
@@ -142,8 +144,9 @@ SELECTION-SCREEN END OF BLOCK b.
 * Maintain TEXT-002 in SE38 -> Goto -> Text Elements as 'Notes'.
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-  SELECTION-SCREEN COMMENT /1(83) cmt1.
-  SELECTION-SCREEN COMMENT /1(83) cmt2.
-  SELECTION-SCREEN COMMENT /1(83) cmt3.
-  SELECTION-SCREEN COMMENT /1(83) cmt4.
+  SELECTION-SCREEN COMMENT /1(79) cmt1.
+  SELECTION-SCREEN COMMENT /1(79) cmt2.
+  SELECTION-SCREEN COMMENT /1(79) cmt3.
+  SELECTION-SCREEN COMMENT /1(79) cmt4.
+  SELECTION-SCREEN COMMENT /1(79) cmt5.
 SELECTION-SCREEN END OF BLOCK b2.
