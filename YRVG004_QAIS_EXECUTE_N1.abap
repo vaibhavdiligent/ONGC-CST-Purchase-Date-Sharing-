@@ -411,7 +411,7 @@ DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
 *   Group / MLE membership is read from BP relationships (table BUT050):
 *     RELTYP 'ZGPGRP' = Has Group Customer, 'ZGPMLL' = Has MLE.
-*     Derived via CVI_CUST_LINK + BUT000 (see get_group_mle_members).
+*     Derived via CVI_CUST_LINK + BUT000 (see build_bp_clusters).
 *   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
 *   receive no monthly/annual discount -> YCIS_NODISC_GRD.
 *   The 200 MT upper-capping is already handled inside YRVG004 at CIS
@@ -420,18 +420,31 @@ DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail
 TABLES: ycis_nodisc_grd.
 DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_but050        TYPE but050,
-      it_grp_members   TYPE STANDARD TABLE OF kunnr,        " group/MLE member customer codes
-      wa_grp_member    TYPE kunnr,
       it_ycis_nodisc   TYPE STANDARD TABLE OF ycis_nodisc_grd,
       wa_ycis_nodisc   TYPE ycis_nodisc_grd.
 *   Group-clubbing gate (CIS 2026-27 R3, GAIL 30.07.2026): quantities are
-*   clubbed across customers ONLY when a valid BP relationship (BUT050
-*   RELTYP 'ZGPGRP' Group / 'ZGPMLL' MLE) is maintained - sharing KVGR2 alone
-*   is no longer sufficient. it_grp_members is (re)built per flagship and
-*   cached so BUT050 is read once per flagship, not once per S922 line.
-DATA: gv_grp_flag  TYPE kunnr,     " flagship currently cached in it_grp_members
-      gv_grp_init  TYPE flag,      " X once a flagship's members are loaded
-      gv_ismem     TYPE flag.      " is_grp_member result
+*   clubbed across customers ONLY when a valid BP relationship (BUT050,
+*   Group / MLE relationship family - RELTYP contains 'ZGP', e.g. ZGPGRP /
+*   ZGPMLL, shown in BP as "Has Group Customer" / "Has Multi Location
+*   Entity") is maintained - sharing KVGR2 alone is no longer sufficient.
+*   Group/MLE relationships are STAR-shaped (one flagship BP linked to many
+*   members), so a per-row lookup cannot see the whole group. Instead we
+*   build BP CLUSTERS once: every customer connected (either direction,
+*   transitively) through a ZGP* relationship lands in the same cluster, and
+*   clubbing is allowed only within a cluster. A customer with no ZGP*
+*   relationship stays in its own singleton cluster (no clubbing).
+TYPES: BEGIN OF ty_bpcust,
+         kunnr TYPE kunnr,
+         bp    TYPE but000-partner,
+       END OF ty_bpcust,
+       BEGIN OF ty_clust,
+         kunnr   TYPE kunnr,
+         cluster TYPE kunnr,       " representative kunnr of the cluster
+       END OF ty_clust.
+DATA: it_bpcust      TYPE STANDARD TABLE OF ty_bpcust,
+      it_clust       TYPE SORTED TABLE OF ty_clust WITH UNIQUE KEY kunnr,
+      gv_clust_built TYPE flag,    " X once BP clusters have been built
+      gv_ismem       TYPE flag.    " is_grp_member result
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *   CIS (qais_no) that have at least one signed material declared shortfall
 *   for the period -> eligible for monthly shortfall waiver (Clause 8).
@@ -11786,76 +11799,141 @@ FORM check_monthly_waiver USING p_curmth TYPE yy_qais_month
   ENDLOOP.
 ENDFORM.                    "check_monthly_waiver
 *&---------------------------------------------------------------------*
-*&      Form  get_group_mle_members   (CIS 2026-27 - R3)
+*&      Form  build_bp_clusters   (CIS 2026-27 - R3, GAIL 30.07.2026)
 *&---------------------------------------------------------------------*
-*   Returns the Group / MLE member CUSTOMER CODES for a flagship customer,
-*   per the derivation logic provided by Mr. Pankaj Wadhwa:
-*     1. Flagship KUNNR -> CVI_CUST_LINK-CUSTOMER -> PARTNER_GUID
-*     2. PARTNER_GUID  -> BUT000-PARTNER_GUID     -> BUT000-PARTNER (BP no.)
-*     3. BP no.        -> BUT050-PARTNER1, RELTYP  = ZGPGRP (Group)
-*                                          RELTYP  = ZGPMLL (MLE)
-*                      -> BUT050-PARTNER2 (member BP numbers)
-*     4. member BP     -> BUT000-PARTNER_GUID      -> CVI_CUST_LINK-CUSTOMER
-*   Only relationships valid on the scheme date (s_sptag-low) are used
-*   (quantity clubbing is governed by the relationship validity period).
-*   The flagship customer itself is included in the member list.
+*   Builds it_clust = customer -> cluster, where a cluster is the set of
+*   customers connected through the BP Group / MLE relationship family
+*   (BUT050 whose RELTYP contains 'ZGP', e.g. ZGPGRP "Has Group Customer" /
+*   ZGPMLL "Has Multi Location Entity"). Relationships are STAR-shaped (one
+*   flagship BP linked to each member), so we UNION both partners of every
+*   relationship - regardless of direction - and take the transitive
+*   closure. All members of a group/MLE therefore share one cluster, while a
+*   customer with no ZGP* relationship stays alone.
+*     KUNNR <-> BP :  CVI_CUST_LINK (customer<->partner_guid) + BUT000
+*                     (partner_guid<->partner).
+*   Only relationships valid on the scheme date (s_sptag-low) are used.
+*   Built once (bulk selects) and reused for every clubbing decision.
 *&---------------------------------------------------------------------*
-FORM get_group_mle_members USING p_flagship TYPE kunnr.
-  DATA: lv_guid      TYPE but000-partner_guid,
-        lv_bp        TYPE but000-partner,
-        lv_mem_guid  TYPE but000-partner_guid,
-        lv_mem_kunnr TYPE kunnr.
-  REFRESH it_grp_members.
-  APPEND p_flagship TO it_grp_members.
-*  1) flagship customer code -> partner GUID
-  SELECT SINGLE partner_guid FROM cvi_cust_link INTO lv_guid
-    WHERE customer = p_flagship.
-  CHECK sy-subrc = 0.
-*  2) partner GUID -> BP number
-  SELECT SINGLE partner FROM but000 INTO lv_bp
-    WHERE partner_guid = lv_guid.
-  CHECK sy-subrc = 0.
-*  3) flagship BP -> member BPs (Group ZGPGRP / MLE ZGPMLL), valid on date
-  SELECT * FROM but050 INTO TABLE it_but050
-    WHERE partner1 = lv_bp
-      AND ( reltyp = 'ZGPGRP' OR reltyp = 'ZGPMLL' )
+FORM build_bp_clusters.
+  DATA: lt_link  TYPE STANDARD TABLE OF cvi_cust_link,
+        ls_link  TYPE cvi_cust_link,
+        lt_but00 TYPE STANDARD TABLE OF but000,
+        ls_but00 TYPE but000,
+        lt_rel   TYPE STANDARD TABLE OF but050,
+        lt_rel2  TYPE STANDARD TABLE OF but050,
+        ls_bpc   TYPE ty_bpcust,
+        ls_p1    TYPE ty_bpcust,
+        ls_p2    TYPE ty_bpcust,
+        ls_clust TYPE ty_clust,
+        lv_r1    TYPE kunnr,
+        lv_r2    TYPE kunnr.
+
+  REFRESH: it_clust, it_bpcust.
+  CHECK it_kunnr[] IS NOT INITIAL.
+
+* every customer starts in its own singleton cluster
+  LOOP AT it_kunnr INTO wa_kunnr.
+    ls_clust-kunnr   = wa_kunnr-kunnr.
+    ls_clust-cluster = wa_kunnr-kunnr.
+    INSERT ls_clust INTO TABLE it_clust.        "#EC CI_SORTSEQ (dup ignored)
+  ENDLOOP.
+
+* customer <-> BP number
+  SELECT customer partner_guid FROM cvi_cust_link
+    INTO CORRESPONDING FIELDS OF TABLE lt_link
+    FOR ALL ENTRIES IN it_kunnr
+    WHERE customer = it_kunnr-kunnr.
+  IF lt_link[] IS NOT INITIAL.
+    SELECT partner partner_guid FROM but000
+      INTO CORRESPONDING FIELDS OF TABLE lt_but00
+      FOR ALL ENTRIES IN lt_link
+      WHERE partner_guid = lt_link-partner_guid.
+  ENDIF.
+  LOOP AT lt_link INTO ls_link.
+    READ TABLE lt_but00 INTO ls_but00
+         WITH KEY partner_guid = ls_link-partner_guid.
+    CHECK sy-subrc = 0.
+    ls_bpc-kunnr = ls_link-customer.
+    ls_bpc-bp    = ls_but00-partner.
+    APPEND ls_bpc TO it_bpcust.
+  ENDLOOP.
+  SORT it_bpcust BY bp.
+  CHECK it_bpcust[] IS NOT INITIAL.
+
+* group/MLE relationships among our BPs (both directions), valid on date
+  SELECT * FROM but050 INTO TABLE lt_rel
+    FOR ALL ENTRIES IN it_bpcust
+    WHERE partner1  = it_bpcust-bp
       AND date_to   GE s_sptag-low
       AND date_from LE s_sptag-low.
-  LOOP AT it_but050 INTO wa_but050.
-*    4) member BP -> GUID -> member customer code
-    CLEAR: lv_mem_guid, lv_mem_kunnr.
-    SELECT SINGLE partner_guid FROM but000 INTO lv_mem_guid
-      WHERE partner = wa_but050-partner2.
+  SELECT * FROM but050 INTO TABLE lt_rel2
+    FOR ALL ENTRIES IN it_bpcust
+    WHERE partner2  = it_bpcust-bp
+      AND date_to   GE s_sptag-low
+      AND date_from LE s_sptag-low.
+  APPEND LINES OF lt_rel2 TO lt_rel.
+  SORT lt_rel BY partner1 partner2 reltyp.
+  DELETE ADJACENT DUPLICATES FROM lt_rel COMPARING partner1 partner2 reltyp.
+
+* union the two customers of every ZGP* (group/MLE) relationship
+  LOOP AT lt_rel INTO wa_but050.
+    CHECK wa_but050-reltyp CS 'ZGP'.            " group / MLE family only
+    READ TABLE it_bpcust INTO ls_p1
+         WITH KEY bp = wa_but050-partner1 BINARY SEARCH.
     CHECK sy-subrc = 0.
-    SELECT SINGLE customer FROM cvi_cust_link INTO lv_mem_kunnr
-      WHERE partner_guid = lv_mem_guid.
-    IF sy-subrc = 0.
-      APPEND lv_mem_kunnr TO it_grp_members.
+    READ TABLE it_bpcust INTO ls_p2
+         WITH KEY bp = wa_but050-partner2 BINARY SEARCH.
+    CHECK sy-subrc = 0.
+    PERFORM clust_of USING ls_p1-kunnr CHANGING lv_r1.
+    PERFORM clust_of USING ls_p2-kunnr CHANGING lv_r2.
+    IF lv_r1 <> lv_r2.
+*     merge cluster r2 into r1 (relabel every member of r2)
+      LOOP AT it_clust INTO ls_clust WHERE cluster = lv_r2.
+        ls_clust-cluster = lv_r1.
+        MODIFY it_clust FROM ls_clust.
+      ENDLOOP.
     ENDIF.
   ENDLOOP.
-  SORT it_grp_members. DELETE ADJACENT DUPLICATES FROM it_grp_members.
-ENDFORM.                    "get_group_mle_members
+ENDFORM.                    "build_bp_clusters
+*&---------------------------------------------------------------------*
+*&      Form  clust_of   (representative cluster of a customer)
+*&---------------------------------------------------------------------*
+FORM clust_of USING p_kunnr TYPE kunnr
+           CHANGING p_clust TYPE kunnr.
+  DATA ls TYPE ty_clust.
+  READ TABLE it_clust INTO ls WITH KEY kunnr = p_kunnr.
+  IF sy-subrc = 0.
+    p_clust = ls-cluster.
+  ELSE.
+    p_clust = p_kunnr.        " not in run set - treat as its own cluster
+  ENDIF.
+ENDFORM.                    "clust_of
 *&---------------------------------------------------------------------*
 *&      Form  is_grp_member   (CIS 2026-27 - R3 clubbing gate)
 *&---------------------------------------------------------------------*
-*   Returns p_ismem = 'X' when candidate p_member may be clubbed with the
-*   flagship p_flagship, i.e. it belongs to the flagship's BP-relationship
-*   group/MLE (BUT050 ZGPGRP/ZGPMLL). The flagship itself is always a member.
-*   The member list is rebuilt only when the flagship changes (cached), so a
-*   customer with NO BP relationship maintained clubs with itself only.
+*   Returns p_ismem = 'X' when candidate p_member may be clubbed with
+*   p_flagship, i.e. both belong to the same BP group/MLE cluster (or are
+*   the same customer). A customer with no ZGP* relationship forms its own
+*   cluster, so it clubs with itself only. Clusters are built once on first
+*   use.
 *&---------------------------------------------------------------------*
 FORM is_grp_member USING p_flagship TYPE kunnr
                          p_member   TYPE kunnr
                    CHANGING p_ismem TYPE flag.
+  DATA: lv_r1 TYPE kunnr,
+        lv_r2 TYPE kunnr.
   CLEAR p_ismem.
-  IF gv_grp_init IS INITIAL OR gv_grp_flag <> p_flagship.
-    PERFORM get_group_mle_members USING p_flagship.
-    gv_grp_flag = p_flagship.
-    gv_grp_init = 'X'.
+  IF gv_clust_built IS INITIAL.
+    PERFORM build_bp_clusters.
+    gv_clust_built = 'X'.
   ENDIF.
-  READ TABLE it_grp_members TRANSPORTING NO FIELDS
-       WITH KEY table_line = p_member.
-  IF sy-subrc = 0.
+  IF p_flagship = p_member.
+    p_ismem = 'X'.
+    RETURN.
+  ENDIF.
+  PERFORM clust_of USING p_flagship CHANGING lv_r1.
+  PERFORM clust_of USING p_member   CHANGING lv_r2.
+  IF lv_r1 = lv_r2.
     p_ismem = 'X'.
   ENDIF.
 ENDFORM.                    "is_grp_member
