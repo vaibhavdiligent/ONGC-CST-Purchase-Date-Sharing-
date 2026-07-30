@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ExchangeRates xsi:noNamespaceSchemaLocation="schema.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ <ExchangeRate>
+  <RATE_TYPE>M</RATE_TYPE>
+  <FROM_CURR>INR</FROM_CURR>
+  <TO_CURRNCY>BRL</TO_CURRNCY>
+  <VALID_FROM>01.04.2025</VALID_FROM>
+  <EXCH_RATE>1.209</EXCH_RATE>
+  <FROM_FACTOR>1</FROM_FACTOR>
+  <TO_FACTOR>1</TO_FACTOR>
+  <EXCH_RATE_V>0</EXCH_RATE_V>
+  <FROM_FACTOR_V>0</FROM_FACTOR_V>
+  <TO_FACTOR_V>0</TO_FACTOR_V>
+ </ExchangeRate>
+ <ExchangeRate>
+  <RATE_TYPE>M</RATE_TYPE>
+  <FROM_CURR>USD</FROM_CURR>
+  <TO_CURRNCY>INR</TO_CURRNCY>
+  <VALID_FROM>30.04.2026</VALID_FROM>
+  <EXCH_RATE>95.03</EXCH_RATE>
+  <FROM_FACTOR>1</FROM_FACTOR>
+  <TO_FACTOR>1</TO_FACTOR>
+  <EXCH_RATE_V>0</EXCH_RATE_V>
+  <FROM_FACTOR_V>0</FROM_FACTOR_V>
+  <TO_FACTOR_V>0</TO_FACTOR_V>
+ </ExchangeRate>
+</ExchangeRates>
