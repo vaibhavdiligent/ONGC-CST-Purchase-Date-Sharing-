@@ -70,8 +70,17 @@ AT SELECTION-SCREEN.
   IF sy-ucomm EQ 'ABC' OR sy-ucomm EQ 'EML'.
     " Screen refresh only – no validation
 
+  " R1: Gas Day start date must be on or after 01.01.2022 (Single Material
+  " Code implementation date). No FN restriction on R1 – only this floor.
+  ELSEIF r1 EQ 'X' AND s_date IS NOT INITIAL.
+    READ TABLE s_date INTO DATA(ls_sd_chk) INDEX 1.
+    IF sy-subrc = 0 AND ls_sd_chk-low IS NOT INITIAL
+       AND ls_sd_chk-low < '20220101'.
+      MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
+    ENDIF.
+
   " FN date validation for Action Taken (R4) – applied to s_dat4 inputs.
-  " R1 has no date validation; R3 dates are auto-calculated.
+  " R3 dates are auto-calculated, so nothing to validate there.
   ELSEIF r4 EQ 'X' AND s_dat4 IS NOT INITIAL.
     READ TABLE s_dat4 INTO DATA(ls_dat4_chk) INDEX 1.
     IF sy-subrc = 0 AND ls_dat4_chk-low IS NOT INITIAL.
@@ -115,12 +124,13 @@ AT SELECTION-SCREEN OUTPUT.
       CONTINUE.
     ENDIF.
 
-    " Sales Office s_vkbur (m6): shown for r1/r3, hidden for r4
+    " Sales Office s_vkbur (m6): shown for r1 only.
+    " Hidden for r3 (Till Date) and r4 (Action Taken, which has its own s_vk4).
     IF screen-group1 = 'M6'.
-      IF r4 EQ 'X'.
-        screen-active = 0.
-      ELSE.
+      IF r1 EQ 'X'.
         screen-active = 1.
+      ELSE.
+        screen-active = 0.
       ENDIF.
       MODIFY SCREEN.
       CONTINUE.
@@ -184,8 +194,13 @@ START-OF-SELECTION.
       PERFORM display.
     ELSE.
       IF r3 EQ 'X' AND p_email EQ 'X'.
+        CLEAR gv_mail_count.
         PERFORM send_emails.
-        MESSAGE 'Emails sent successfully' TYPE 'S'.
+        IF gv_mail_count > 0.
+          MESSAGE 'Emails sent successfully' TYPE 'S'.
+        ELSE.
+          MESSAGE 'No data to report – no email triggered' TYPE 'S'.
+        ENDIF.
       ENDIF.
     ENDIF.
 

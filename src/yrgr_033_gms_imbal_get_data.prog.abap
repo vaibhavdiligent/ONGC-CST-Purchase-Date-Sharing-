@@ -27,7 +27,8 @@ FORM get_data.
     IF s_vk4 IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vk4.
     ENDIF.
-  ELSE.
+  ELSEIF r1 EQ 'X'.
+    " s_vkbur belongs to r1 only – it must never filter the r3 (Till Date) list
     IF s_vkbur IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vkbur.
     ENDIF.
@@ -467,6 +468,12 @@ FORM send_email_posted.
     ENDLOOP.
     SORT lt_sort_imbal BY sort_key DESCENDING.
 
+    " Nothing to report for this sales office (e.g. every contract already
+    " has Action Taken ticked) – do not trigger an empty mail.
+    IF lt_sort_imbal IS INITIAL.
+      CONTINUE.
+    ENDIF.
+
     " Body: HTML table
     lv_html_body =
       '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&
@@ -550,6 +557,7 @@ FORM send_email_posted.
 
       lo_send_req->send( i_with_error_screen = abap_false ).
       COMMIT WORK.
+      gv_mail_count = gv_mail_count + 1.
     CATCH cx_bcs INTO DATA(lx_bcs_ep).
       MESSAGE lx_bcs_ep->get_text( ) TYPE 'W'.
     ENDTRY.
@@ -1013,7 +1021,8 @@ ENDFORM.
 *& Handles cell edits in Action Taken ALV (r4 mode)
 *&---------------------------------------------------------------------*
 FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_protocol.
-  DATA: lv_row_idx TYPE i.
+  DATA: lv_row_idx TYPE i,
+        lv_style   TYPE lvc_style.
 
   LOOP AT p_data_changed->mt_mod_cells INTO DATA(ls_mod).
     lv_row_idx = ls_mod-row_id.
@@ -1028,8 +1037,30 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
           CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
           DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
         ENDIF.
-        " Ticking the box activates SO / Qty / Remarks, unticking disables them
+        " Ticking the box activates SO / Qty / Remarks, unticking disables them.
+        " Update our own style table ...
         PERFORM set_row_style CHANGING <fs_ext>.
+        " ... and push the same change into the grid's style buffer via
+        " MODIFY_STYLE. This is the only supported way to re-enable cells
+        " from inside DATA_CHANGED; it takes effect without a refresh, so
+        " the cells become editable on the very same click.
+        IF <fs_ext>-at_chkbox = 'X'.
+          lv_style = cl_gui_alv_grid=>mc_style_enabled.
+        ELSE.
+          lv_style = cl_gui_alv_grid=>mc_style_disabled.
+        ENDIF.
+        CALL METHOD p_data_changed->modify_style
+          EXPORTING i_fieldname = 'AT_SAL_ORD'
+                    i_row_id    = lv_row_idx
+                    i_style     = lv_style.
+        CALL METHOD p_data_changed->modify_style
+          EXPORTING i_fieldname = 'AT_QTY'
+                    i_row_id    = lv_row_idx
+                    i_style     = lv_style.
+        CALL METHOD p_data_changed->modify_style
+          EXPORTING i_fieldname = 'AT_REMARKS'
+                    i_row_id    = lv_row_idx
+                    i_style     = lv_style.
         gv_refresh_grid = 'X'.
       WHEN 'AT_SAL_ORD'.
         <fs_ext>-at_sal_ord = ls_mod-value.

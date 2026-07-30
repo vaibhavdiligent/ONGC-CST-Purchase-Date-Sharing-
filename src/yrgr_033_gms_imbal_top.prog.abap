@@ -60,6 +60,10 @@ DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 DATA: gv_refresh_grid TYPE c LENGTH 1,
       gs_stable       TYPE lvc_s_stbl.
 
+" Number of alert mails actually sent – used to suppress the success
+" message when there was nothing to report.
+DATA: gv_mail_count TYPE i.
+
 DATA: lv_fn_from_day TYPE c LENGTH 2,
       lv_fn_to_day   TYPE c LENGTH 2,
       lv_fn_next_day TYPE sy-datum,
