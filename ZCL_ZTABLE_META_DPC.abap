@@ -12,7 +12,10 @@
 *& The table name is MANDATORY and is read from the $filter on Tabname.
 *& $top / $skip are honoured for paging; if no $top is given a safe
 *& default cap is applied to TableDataSet so a client cannot dump a
-*& whole large table by accident.
+*& whole large table by accident. Paging runs in the DATABASE
+*& (ORDER BY key columns + OFFSET), so deep pages cost the same as the
+*& first one; join pages are additionally capped server-side, with the
+*& remainder delivered via server-driven paging (__next).
 *&
 *& Structure  : function module DDIF_FIELDINFO_GET (DFIES characteristics).
 *& Data       : dynamic SELECT * FROM (tabname), each row -> JSON via
@@ -37,6 +40,9 @@ CLASS zcl_ztable_meta_dpc DEFINITION
   PROTECTED SECTION.
     CONSTANTS gc_default_max_rows TYPE i VALUE 1000.     " cap when no $top sent
     CONSTANTS gc_hard_max_rows    TYPE i VALUE 1000000.  " absolute ceiling (backstop)
+    CONSTANTS gc_join_page_cap    TYPE i VALUE 500.      " max page size for joins;
+                                                         " server-driven paging
+                                                         " (__next) serves the rest
 
     " Extract the requested table name (or comma list) from $filter.
     METHODS get_tabname_from_filter
@@ -94,6 +100,14 @@ CLASS zcl_ztable_meta_dpc DEFINITION
       IMPORTING iv_tables TYPE string
       RAISING   /iwbep/cx_mgw_busi_exception.
 
+    " Deterministic ORDER BY (key columns of every table in the list,
+    " client column excluded) so the database itself can page via OFFSET.
+    " Empty result -> caller falls back to in-memory skipping.
+    METHODS get_order_by
+      IMPORTING iv_tabname      TYPE string
+                iv_join         TYPE abap_bool
+      RETURNING VALUE(rv_order) TYPE string.
+
     " Read DDIC field metadata for the table.
     METHODS read_structure
       IMPORTING iv_tabname       TYPE tabname
@@ -147,6 +161,10 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         "    The skiptoken carries "offset_pagesize". When more rows remain
         "    we hand back a skiptoken; the framework then adds a __next link,
         "    which is what makes CPI's hasMoreRecords property become true.
+        DATA(lv_where)  = me->decode_b64( me->get_where_from_filter( it_filter_select_options ) ).
+        DATA(lv_fields) = me->decode_b64( me->get_fields_from_filter( it_filter_select_options ) ).
+        DATA(lv_join)   = me->decode_b64( me->get_join_from_filter( it_filter_select_options ) ).
+
         DATA lv_top  TYPE i.
         DATA lv_skip TYPE i.
         DATA(lv_skiptoken) = io_tech_request_context->get_skiptoken( ).
@@ -166,9 +184,13 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
           lv_top = gc_default_max_rows.
         ENDIF.
 
-        DATA(lv_where)  = me->decode_b64( me->get_where_from_filter( it_filter_select_options ) ).
-        DATA(lv_fields) = me->decode_b64( me->get_fields_from_filter( it_filter_select_options ) ).
-        DATA(lv_join)   = me->decode_b64( me->get_join_from_filter( it_filter_select_options ) ).
+        " Joins are the expensive path and the caller cannot know a safe
+        " page size in advance, so the server caps the page itself. The
+        " remaining rows flow through server-driven paging (__next /
+        " hasMoreRecords) - fully transparent to the caller's query.
+        IF lv_join IS NOT INITIAL AND lv_top > gc_join_page_cap.
+          lv_top = gc_join_page_cap.
+        ENDIF.
 
         DATA lt_rows     TYPE zcl_ztable_meta_mpc=>tt_table_row.
         DATA lv_has_more TYPE abap_bool.
@@ -448,6 +470,49 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD get_order_by.
+    " Collect the key columns of every table in the (comma) list, in list
+    " order. The client column (CLNT) is excluded - ABAP SQL forbids it
+    " under automatic client handling. For joins the columns are qualified
+    " as TAB~FIELD. An empty result tells the caller to fall back to the
+    " old in-memory skip (no OFFSET possible without ORDER BY).
+    DATA lt_tab   TYPE STANDARD TABLE OF string.
+    DATA lt_ord   TYPE STANDARD TABLE OF string.
+    DATA lt_dfies TYPE STANDARD TABLE OF dfies.
+
+    SPLIT iv_tabname AT ',' INTO TABLE lt_tab.
+    LOOP AT lt_tab INTO DATA(lv_t).
+      CONDENSE lv_t.
+      IF lv_t IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      DATA lv_tabnam TYPE tabname.
+      lv_tabnam = to_upper( lv_t ).
+      CLEAR lt_dfies.
+      CALL FUNCTION 'DDIF_FIELDINFO_GET'
+        EXPORTING
+          tabname   = lv_tabnam
+        TABLES
+          dfies_tab = lt_dfies
+        EXCEPTIONS
+          OTHERS    = 1.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      LOOP AT lt_dfies ASSIGNING FIELD-SYMBOL(<ls_f>)
+           WHERE keyflag = 'X' AND datatype <> 'CLNT'.
+        IF iv_join = abap_true.
+          APPEND |{ lv_tabnam }~{ <ls_f>-fieldname }| TO lt_ord.
+        ELSE.
+          APPEND |{ <ls_f>-fieldname }| TO lt_ord.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+
+    rv_order = concat_lines_of( table = lt_ord sep = `, ` ).
+  ENDMETHOD.
+
+
   METHOD read_structure.
     DATA: lt_dfies TYPE STANDARD TABLE OF dfies,
           ls_field TYPE zcl_ztable_meta_mpc=>ty_field_info.
@@ -501,12 +566,31 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE,
                    <ls_data> TYPE any.
 
-    " Paging cap. UP TO n ROWS caps the result set; skipping is done in
-    " ABAP after fetch (portable across DBs). One extra row is fetched
-    " (iv_top + iv_skip + 1) so we can detect whether a further page exists
-    " and, if so, hand back a skiptoken (-> __next -> CPI hasMoreRecords).
-    DATA lv_fetch TYPE i.
-    lv_fetch = iv_top + iv_skip + 1.
+    " Paging. Preferred: TRUE DATABASE PAGING - ORDER BY <key columns>
+    " with OFFSET <skip>, so a page costs the same however deep it lies.
+    " (The old approach fetched skip+top rows and discarded skip of them
+    " in ABAP; deep pages grew slower and slower until the gateway timed
+    " out - worst on joins.) One extra row (top + 1) is fetched to detect
+    " whether a further page exists and hand back a skiptoken
+    " (-> __next -> CPI hasMoreRecords).
+    " Fallback: if no key columns can be determined (or the OFFSET query
+    " is rejected), the old fetch-and-discard paging is used.
+    DATA lv_join_flag TYPE abap_bool.
+    IF iv_join IS NOT INITIAL.
+      lv_join_flag = abap_true.
+    ENDIF.
+    DATA(lv_order) = me->get_order_by( iv_tabname = iv_tabname
+                                       iv_join    = lv_join_flag ).
+
+    DATA lv_fetch  TYPE i.
+    DATA lv_offset TYPE i.
+    IF lv_order IS NOT INITIAL.
+      lv_fetch  = iv_top + 1.
+      lv_offset = iv_skip.
+    ELSE.
+      lv_fetch  = iv_top + iv_skip + 1.
+      lv_offset = 0.
+    ENDIF.
     IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
       lv_fetch = gc_hard_max_rows.
     ENDIF.
@@ -576,12 +660,39 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
     ASSIGN lr_table->* TO <lt_data>.
 
-    " Dynamic read. Empty lt_cols = all columns; empty lt_where = all rows.
+    " Dynamic read. Empty column list = all columns; empty lt_where = all
+    " rows. The OFFSET variant needs strict-mode syntax, i.e. a comma-
+    " separated select list, so join lt_cols into a single string for it.
+    DATA lv_cols TYPE string.
+    lv_cols = concat_lines_of( table = lt_cols sep = `, ` ).
+
     TRY.
-        SELECT (lt_cols) FROM (lv_from)
-          INTO CORRESPONDING FIELDS OF TABLE <lt_data>
-          UP TO lv_fetch ROWS
-          WHERE (lt_where).
+        IF lv_order IS NOT INITIAL.
+          TRY.
+              SELECT (lv_cols) FROM (lv_from)
+                WHERE (lt_where)
+                ORDER BY (lv_order)
+                INTO CORRESPONDING FIELDS OF TABLE @<lt_data>
+                UP TO @lv_fetch ROWS
+                OFFSET @lv_offset.
+            CATCH cx_sy_dynamic_osql_error.
+              " OFFSET query rejected (e.g. exotic view) -> legacy paging.
+              CLEAR: lv_order, <lt_data>.
+              lv_fetch  = iv_top + iv_skip + 1.
+              IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
+                lv_fetch = gc_hard_max_rows.
+              ENDIF.
+              SELECT (lt_cols) FROM (lv_from)
+                INTO CORRESPONDING FIELDS OF TABLE <lt_data>
+                UP TO lv_fetch ROWS
+                WHERE (lt_where).
+          ENDTRY.
+        ELSE.
+          SELECT (lt_cols) FROM (lv_from)
+            INTO CORRESPONDING FIELDS OF TABLE <lt_data>
+            UP TO lv_fetch ROWS
+            WHERE (lt_where).
+        ENDIF.
       CATCH cx_sy_dynamic_osql_error INTO DATA(lx_sql).
         me->raise_error( |Read failed: { lx_sql->get_text( ) }| ).
     ENDTRY.
@@ -589,9 +700,9 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     CLEAR ev_has_more.
     DATA lv_taken TYPE i.
     LOOP AT <lt_data> ASSIGNING <ls_data>.
-      lv_rowno = sy-tabix.
-      " apply $skip
-      IF lv_rowno <= iv_skip.
+      " Legacy path only: the skipped rows are part of the fetched set and
+      " are dropped here. With OFFSET the database already skipped them.
+      IF lv_order IS INITIAL AND sy-tabix <= iv_skip.
         CONTINUE.
       ENDIF.
       lv_taken = lv_taken + 1.
@@ -601,6 +712,8 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
         ev_has_more = abap_true.
         EXIT.
       ENDIF.
+      " Absolute row number across all pages (both paging paths).
+      lv_rowno = iv_skip + lv_taken.
       CLEAR ls_row.
       ls_row-tabname     = iv_tabname.
       ls_row-row_no      = lv_rowno.
