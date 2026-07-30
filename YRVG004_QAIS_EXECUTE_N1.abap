@@ -424,6 +424,14 @@ DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_grp_member    TYPE kunnr,
       it_ycis_nodisc   TYPE STANDARD TABLE OF ycis_nodisc_grd,
       wa_ycis_nodisc   TYPE ycis_nodisc_grd.
+*   Group-clubbing gate (CIS 2026-27 R3, GAIL 30.07.2026): quantities are
+*   clubbed across customers ONLY when a valid BP relationship (BUT050
+*   RELTYP 'ZGPGRP' Group / 'ZGPMLL' MLE) is maintained - sharing KVGR2 alone
+*   is no longer sufficient. it_grp_members is (re)built per flagship and
+*   cached so BUT050 is read once per flagship, not once per S922 line.
+DATA: gv_grp_flag  TYPE kunnr,     " flagship currently cached in it_grp_members
+      gv_grp_init  TYPE flag,      " X once a flagship's members are loaded
+      gv_ismem     TYPE flag.      " is_grp_member result
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *   CIS (qais_no) that have at least one signed material declared shortfall
 *   for the period -> eligible for monthly shortfall waiver (Clause 8).
@@ -2781,6 +2789,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -2851,6 +2865,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -2913,6 +2933,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3163,6 +3189,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3225,6 +3257,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3287,6 +3325,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3537,6 +3581,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3599,6 +3649,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3661,6 +3717,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3910,6 +3972,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3972,6 +4040,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -4034,6 +4108,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -4271,6 +4351,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -4335,6 +4421,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -4398,6 +4490,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -4633,6 +4731,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -4701,6 +4805,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -4774,6 +4884,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -5025,6 +5141,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -5103,6 +5225,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -5185,6 +5313,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -5425,6 +5559,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2..
@@ -5489,6 +5629,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -5552,6 +5698,12 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
@@ -11665,6 +11817,30 @@ FORM get_group_mle_members USING p_flagship TYPE kunnr.
   ENDLOOP.
   SORT it_grp_members. DELETE ADJACENT DUPLICATES FROM it_grp_members.
 ENDFORM.                    "get_group_mle_members
+*&---------------------------------------------------------------------*
+*&      Form  is_grp_member   (CIS 2026-27 - R3 clubbing gate)
+*&---------------------------------------------------------------------*
+*   Returns p_ismem = 'X' when candidate p_member may be clubbed with the
+*   flagship p_flagship, i.e. it belongs to the flagship's BP-relationship
+*   group/MLE (BUT050 ZGPGRP/ZGPMLL). The flagship itself is always a member.
+*   The member list is rebuilt only when the flagship changes (cached), so a
+*   customer with NO BP relationship maintained clubs with itself only.
+*&---------------------------------------------------------------------*
+FORM is_grp_member USING p_flagship TYPE kunnr
+                         p_member   TYPE kunnr
+                   CHANGING p_ismem TYPE flag.
+  CLEAR p_ismem.
+  IF gv_grp_init IS INITIAL OR gv_grp_flag <> p_flagship.
+    PERFORM get_group_mle_members USING p_flagship.
+    gv_grp_flag = p_flagship.
+    gv_grp_init = 'X'.
+  ENDIF.
+  READ TABLE it_grp_members TRANSPORTING NO FIELDS
+       WITH KEY table_line = p_member.
+  IF sy-subrc = 0.
+    p_ismem = 'X'.
+  ENDIF.
+ENDFORM.                    "is_grp_member
 *&---------------------------------------------------------------------*
 *&      Form  is_nodisc_grade   (CIS 2026-27 - R5 dev-form pt.5)
 *&---------------------------------------------------------------------*
