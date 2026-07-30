@@ -357,7 +357,7 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 | O-01 | ~~ECC consumer program field mapping~~ **CLOSED** — /CCBJI/RUFIGLR_SUPPFI_POST source analyzed; §10 updated | — | Closed |
 | O-02 | Reconciliation benchmark REVISED: FB03 check proved BA docs are CCMC-upload accrual transfers (TCode /CCEJ/RURCO_FI_UPLD), NOT the legacy support fee — the YE output was never migrated to S/4. Benchmark options: (a) export legacy YE docs from ECC for one month, or (b) functional sign-off of Simulation output in UAT | Vaibhav / Functional | Before go-live sign-off |
 | O-03 | Business values for `/CCBJI/T_GL_TYPE`, `/CCBJI/T_RPPCAT_TY`, `RTR_VENDPCT` | Functional | No — rules dormant until config filled (D-02/D-03) |
-| O-04 | ~~Package~~ **CLOSED**: new package will be created — proposed name `/CCBJI/SUPPFEE` (alt.: ZCCBJI_SUPPFEE if namespace packages are not wanted); all new objects go there | — | Closed |
+| O-04 | ~~Package~~ **CLOSED**: new package `/CCBJI/SUPPFEE` — client rule: EVERY object strictly in the /CCBJI/ namespace, no Z or Y names anywhere | — | Closed |
 | O-05 | ~~KOKRS~~ **CLOSED**: TKA02 7827 → JP00 | — | Closed |
 | O-06 | ~~BA doc type~~ **CLOSED**: FB03 on doc 0127744258 shows BA = CCMC upload (accrual transfer/reversal, /CCEJ/RURCO_FI_UPLD), unrelated to support fee. Design stays YE | — | Closed |
 | O-07 | ~~ECC TVARVC~~ **CLOSED**: RTR_DEBITGL = 0115103238; RTR_KOSTL (debit-line profit center): 7827 → 7827019901, 7830 → 7830010162 | — | Closed |
