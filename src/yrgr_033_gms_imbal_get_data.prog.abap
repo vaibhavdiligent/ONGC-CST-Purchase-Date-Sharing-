@@ -285,8 +285,10 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
     CALL METHOD p_dyndoc_id->new_line.
     CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
     CLEAR dl_text.
-    " Note 4: data effectivity date – R1 shows post-2UoM data; R3/R4 show from 01.01.2022
-    IF r1 EQ 'X'.
+    " Note 4: data effectivity date (mail 14.07.2026, reconfirmed 30.07.2026).
+    " R3 (Till Date) reads from 01.09.2025 -> 2UoM Migration text.
+    " R1 / R4 read from 01.01.2022      -> Single Material Code text.
+    IF r3 EQ 'X'.
       dl_text = '4. The List is w.e.f. 01.09.2025, after 2UoM Migration'.
     ELSE.
       dl_text = '4. The List is w.e.f. 01.01.2022, after Implementation of Single Material Code for Transmission of Shippers'' Gas'.
