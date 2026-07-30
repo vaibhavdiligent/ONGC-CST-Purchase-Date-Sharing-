@@ -355,16 +355,16 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 | # | Item | Owner | Blocking? |
 |---|---|---|---|
 | O-01 | ~~ECC consumer program field mapping~~ **CLOSED** — /CCBJI/RUFIGLR_SUPPFI_POST source analyzed; §10 updated | — | Closed |
-| O-02 | Reconciliation benchmark: migrated line-level history FY2024–2025 exists in ACDOCA (BA/SB docs, AWTYP=BKPFF). Export one month (RYEAR 2025, POPER 10, BLART BA, all RACCT) for the totals target | Vaibhav | Needed before go-live sign-off, not for build |
+| O-02 | Reconciliation benchmark REVISED: FB03 check proved BA docs are CCMC-upload accrual transfers (TCode /CCEJ/RURCO_FI_UPLD), NOT the legacy support fee — the YE output was never migrated to S/4. Benchmark options: (a) export legacy YE docs from ECC for one month, or (b) functional sign-off of Simulation output in UAT | Vaibhav / Functional | Before go-live sign-off |
 | O-03 | Business values for `/CCBJI/T_GL_TYPE`, `/CCBJI/T_RPPCAT_TY`, `RTR_VENDPCT` | Functional | No — rules dormant until config filled (D-02/D-03) |
 | O-04 | Package name + transport | Basis | Before object creation |
-| O-05 | Confirm KOKRS value for CSKS reads (assumed JP00-equivalent controlling area) | Functional | Minor |
-| O-06 | Doc type: ECC program hard-codes YE, but migrated ACDOCA history shows BA/SB on the posting GLs — likely migration remapping or adjacent process. Verify one BA doc in FB03; design proceeds with YE | Vaibhav/Functional | No |
-| O-07 | Copy ECC TVARVC values `/CCBJI/RTR_DEBITGL` + `/CCBJI/RTR_KOSTL` (debit GL + debit-line profit center) from ECC STVARV | Vaibhav (ECC) | Before first posting test |
+| O-05 | ~~KOKRS~~ **CLOSED**: TKA02 7827 → JP00 | — | Closed |
+| O-06 | ~~BA doc type~~ **CLOSED**: FB03 on doc 0127744258 shows BA = CCMC upload (accrual transfer/reversal, /CCEJ/RURCO_FI_UPLD), unrelated to support fee. Design stays YE | — | Closed |
+| O-07 | ~~ECC TVARVC~~ **CLOSED**: RTR_DEBITGL = 0115103238; RTR_KOSTL (debit-line profit center): 7827 → 7827019901, 7830 → 7830010162 | — | Closed |
 | O-08 | ECC never posted a profitability segment; account-based COPA CRITERIA on credit lines is the S/4 addition per FS v2.0 — CO functional to validate characteristic list | CO Functional | Before posting go-live |
-| O-09 | Verify existing `/CCBJI/T_SUP_COS` structure + content vs BW /BIC/AZJSUFEECE2 (16 rows) | Vaibhav (S/4 SE11/SE16) | Before COPA posting build |
+| O-09 | ~~T_SUP_COS~~ **CLOSED**: 16 rows confirmed in S/4, same key (HKONT+WW214+WW207+WW237→KSTAR); note one mapping differs from BW (0893309312/X/blank/X → 0994294122 in S/4 vs 0994293406 in BW) — S/4 content is authoritative | — | Closed |
 | O-10 | Confirm two §8.5 diagram readings: Adjacent+SpecificGL combined condition (AND vs two rules); Other Category continue-vs-skip | Functional | Before cascade build |
-| O-11 | Target S/4 ABAP release + Basis level (CDS/Open-SQL syntax level) | Basis | Before CDS build |
+| O-11 | ~~ABAP release~~ **CLOSED**: SAP_BASIS 816 / S4CORE 109 — latest platform, full CDS/CTE/window-function/AMDP syntax available | — | Closed |
 | O-12 | KAM L4 upload program: business checking if mapping can be derived from system directly — upload program (+TCode) built only if manual upload stays | Business/Functional | Phase 6 |
 
 ## 14. Decisions taken (for the record)
