@@ -41,8 +41,11 @@ FORM get_data.
     CLEAR ls_final_ext.
     MOVE-CORRESPONDING ls_final TO ls_final_ext.
 
-    " Read latest Action Taken entry (most recent by date+time)
-    SELECT chkbox at_sal_ord at_qty at_remarks
+    " Read latest Action Taken entry (most recent by date+time).
+    " The @-escaped host variables put this SELECT in strict mode, so the
+    " field list MUST be comma-separated – without the commas it does not
+    " pass the syntax check.
+    SELECT chkbox, at_sal_ord, at_qty, at_remarks
       FROM yrg_imb_action
       INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
             @lv_at_qty,              @ls_final_ext-at_remarks)
