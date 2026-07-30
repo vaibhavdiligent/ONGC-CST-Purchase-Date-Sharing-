@@ -8,7 +8,7 @@
 | RICEF | GAP-1000002273 |
 | Company Code | 7827 (BJI); TVARVC also shows 7830 |
 | Based on | FS_SupportFee_S4HANA_v2.0.docx + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx + ECC posting program /CCBJI/RUFIGLR_SUPPFI_POST |
-| Status | v1.1 — Design for review. No code written yet. v1.1: posting design aligned to actual ECC program (doc type YE confirmed; 1-debit-line structure; explicit tax lines; 400-line split; EXTENSION1/BAdI for XREF1_HD). |
+| Status | v1.2 — Design for review. No code written yet. v1.1: posting design aligned to actual ECC program. v1.2: FS v1.3 + client review points absorbed (existing /CCBJI/T_SUP_COS reused — new CE table cancelled; updated §8.5 priority diagram; KAM upload pending business decision); performance architecture (CDS + AMDP) added; BW HANA source findings incorporated (RJ/AB doc types, 3-mechanism dedup — see bw_sources/README). |
 | Author | Claude (Diligent Consulting) — reviewed by Vaibhav Maheshwari |
 
 ---
@@ -49,7 +49,7 @@ Verified system facts driving this design:
 | 4 | `/CCBJI/RUFIGLI_REP_FORM` | Include | Logic |
 | 5 | `/CCBJI/RURGL_REPSUPP` | TCode | Launch report |
 | 6 | `/CCBJI/T_KAM_L4_CC` | Table | KAM L4 → cost center mapping (§3.1) |
-| 7 | `/CCBJI/T_SUPFEE_CE` | Table | Cost element mapping for COPA posting (§3.2) |
+| 7 | `/CCBJI/T_SUP_COS` (EXISTING in S/4 — reused, no new table) | Table | Cost element mapping for COPA posting (§3.2) |
 | 8 | `/CCBJI/T_GL_TYPE` | Table | GL type classification (§3.3) |
 | 9 | `/CCBJI/T_RPPCAT_TY` | Table | RPP category type classification (§3.4) |
 | 10 | `/CCBJI/RUFIGLR_KAML4_UPLOAD` | Report | KAM L4 CSV upload (§9) |
@@ -83,19 +83,15 @@ Initial load: BIC_AZKAMORGL42.XLSX (115 rows). DECISION D-01: validity dates
 (DATAB/DATBI) are NOT added — the BW original has none; can be added later if
 business asks.
 
-### 3.2 `/CCBJI/T_SUPFEE_CE` — Cost element mapping (COPA posting)
-Mirrors `/BIC/AZJSUFEECE2`:
-
-| Field | Key | Type |
-|---|---|---|
-| MANDT | X | MANDT |
-| HKONT | X | CHAR 10 (posting GL) |
-| WW214 | X | CHAR 1 flag |
-| WW207 | X | CHAR 1 flag |
-| WW237 | X | CHAR 1 flag |
-| KSTAR | | CHAR 10 |
-
-Initial load: the 16 rows from BW (GLs 0893201522, 0893309312).
+### 3.2 Cost element mapping (COPA posting) — EXISTING table `/CCBJI/T_SUP_COS`
+Per client review (30.07.2026): the S/4 equivalent of `/BIC/AZJSUFEECE2` already
+exists as `/CCBJI/T_SUP_COS` ("Support Fee Cost Element", FS v1.3 §9.3) and is
+reused — the previously planned new table is CANCELLED. Verify at build start
+(O-09): SE11 structure and content vs the 16 BW rows (GLs 0893201522,
+0893309312 × WW214/WW207/WW237 flags → KSTAR). Additionally per review point 1:
+`/CCBJI/T_MAP_GL`-VALUE_FIELD content is repurposed — costing-based value-field
+names are replaced by GL/cost-element values for account-based COPA (config
+data activity, owner Functional).
 
 ### 3.3 `/CCBJI/T_GL_TYPE` — GL type classification (DECISION D-02)
 The FS decision tree needs each expense GL classed as 50% Support / CokeON / Other.
@@ -181,9 +177,42 @@ Double-count prevention (ZFLAG): after both flows load, FI lines whose
 (BLART, expense GL, BELNR) also appear in the COPA flow with equal amount are
 zeroed (DEB_CRE_LC_CHECK logic from the HANA views, now in ABAP).
 
+
+## 5a. Performance architecture (v1.2)
+
+Three layers, code-to-data:
+1. **CDS views** (Layer 1): parameterized `/CCBJI/` DDLs for the ACDOCA FI slice
+   and COPA-segment slice (field projection, GL scope via association to
+   T_MAP_GL/T_DOC_TYP).
+2. **AMDP** (Layer 2): class `/CCBJI/CL_SUPFEE_DATA` — near-1:1 port of the
+   proven BW procedure SUPPORT_FEE_STATGING_CALCULATION (6-branch UNION incl.
+   RJ/AB, flag-based exclusions, ROW_NUMBER dedup, document-level SUM), reading
+   the CDS views, returning a table parameter (~10-50k rows). One DB round trip;
+   118M-row periods never leave HANA.
+3. **ABAP** (Layer 3): incidence cascade (sorted tables/binary search), fee
+   calc, ALV, posting — small data only.
+
+P_PTASK parallel sessions apply to the ABAP-bound work: posting/simulation
+BAPI fan-out (biggest wall-clock win), optional master-data enrichment, and an
+extraction safety valve (AMDP split by BLART bucket) activated by config only.
+HANA parallelizes the extraction internally — no aRFC needed there.
+Targets: Simulation normal month < 2 min; worst month < 15 min; posting < 10
+min. Prove with ST05/SQLM/PlanViz on the reconciliation month.
+
 ## 6. Calculation (F_CLASSIFY_LINES + F_PROCESS_DATA)
 
 Per FS v2.0 §8, two flows selected via `/CCBJI/T_DOC_TYP`-SOURCE by expense GL.
+
+FS v1.3 §8.5 replaced the priority table with a decision-flow diagram carrying
+TWO numberings: business priority (GL=1, CC=2, RPPCat=3, Customer=4, Channel=5)
+and PROGRAM ORDER (RPPCat=1, CC=2, Customer=3, Channel=4, GL=5). The program
+order matches the legacy ABAP cascade exactly (RPP-Cat lookup -> GL+PRCTR ->
+BAC+Channel -> Channel -> GL-only), with the GL fixed-rate routing (50% Support
+GL / CokeON GL) as an up-front branch. Two interpretation points to confirm
+(O-10): (a) diagram shows "Adjacent Category + Specific GL (Rebate, Spot Only)
+-> Apply 50%" as one combined condition — AND or two rules? (b) "Other
+Category" now flows on through CC/Customer/Channel checks (v2.0 said skip) —
+confirm out-of-scope vs continue.
 
 Priority cascade (both flows), implemented over sorted tables with BINARY SEARCH:
 
@@ -301,7 +330,7 @@ below replicates the **actual ECC program** (analyzed from source, closing O-01)
    existing BKPF/ACDOCA docs BLART `YE`, RBUKRS/RYEAR/POPER (+ XREF1_HD pattern);
    if found, hard stop with list unless checkbox P_FORCE is set.
 6. COPA-source documents additionally carry the profitability-segment CRITERIA
-   table (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUPFEE_CE` flag
+   table (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUP_COS` flag
    lookup) for account-based COPA — one BAPI for both flows (FS v2.0). Note the
    ECC program posted NO profitability segment (COPA went via RKEVEXT3 in BW
    era); this is the one deliberate functional addition — flag for CO functional
@@ -333,6 +362,10 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 | O-06 | Doc type: ECC program hard-codes YE, but migrated ACDOCA history shows BA/SB on the posting GLs — likely migration remapping or adjacent process. Verify one BA doc in FB03; design proceeds with YE | Vaibhav/Functional | No |
 | O-07 | Copy ECC TVARVC values `/CCBJI/RTR_DEBITGL` + `/CCBJI/RTR_KOSTL` (debit GL + debit-line profit center) from ECC STVARV | Vaibhav (ECC) | Before first posting test |
 | O-08 | ECC never posted a profitability segment; account-based COPA CRITERIA on credit lines is the S/4 addition per FS v2.0 — CO functional to validate characteristic list | CO Functional | Before posting go-live |
+| O-09 | Verify existing `/CCBJI/T_SUP_COS` structure + content vs BW /BIC/AZJSUFEECE2 (16 rows) | Vaibhav (S/4 SE11/SE16) | Before COPA posting build |
+| O-10 | Confirm two §8.5 diagram readings: Adjacent+SpecificGL combined condition (AND vs two rules); Other Category continue-vs-skip | Functional | Before cascade build |
+| O-11 | Target S/4 ABAP release + Basis level (CDS/Open-SQL syntax level) | Basis | Before CDS build |
+| O-12 | KAM L4 upload program: business checking if mapping can be derived from system directly — upload program (+TCode) built only if manual upload stays | Business/Functional | Phase 6 |
 
 ## 14. Decisions taken (for the record)
 
