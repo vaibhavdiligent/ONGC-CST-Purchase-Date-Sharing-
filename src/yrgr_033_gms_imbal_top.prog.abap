@@ -55,15 +55,6 @@ DATA: lv_has_role TYPE c LENGTH 1.
 
 DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 
-" Comment fields for the Notes block on the selection screen (block b2).
-" Filled at INITIALIZATION so no SE38 text elements need maintaining.
-" 79 is the maximum width of a SELECTION-SCREEN COMMENT.
-DATA: cmt1 TYPE c LENGTH 79,
-      cmt2 TYPE c LENGTH 79,
-      cmt3 TYPE c LENGTH 79,
-      cmt4 TYPE c LENGTH 79,
-      cmt5 TYPE c LENGTH 79.
-
 " Deferred grid refresh: set in DATA_CHANGED, consumed in DATA_CHANGED_FINISHED.
 " Refreshing inside DATA_CHANGED dumps with OBJECTS_OBJREF_NOT_ASSIGNED_NO.
 DATA: gv_refresh_grid TYPE c LENGTH 1,
@@ -142,6 +133,11 @@ SELECTION-SCREEN END OF BLOCK b.
 * Notes block (reference YRXR025N) – explains the data effectivity date
 * of each radio button. Texts are assigned at INITIALIZATION.
 * Maintain TEXT-002 in SE38 -> Goto -> Text Elements as 'Notes'.
+*
+* NOTE: cmt1..cmt5 must NOT be declared with DATA. SELECTION-SCREEN
+* COMMENT declares the field itself (here as C LENGTH 79); an explicit
+* DATA statement gives '"CMT1" was already declared'.
+* 79 is also the maximum width – (83) is rejected by the syntax check.
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   SELECTION-SCREEN COMMENT /1(79) cmt1.
