@@ -1186,21 +1186,33 @@ FORM get_data.
 *   Max % (125) unchanged. Gated by the s_sptag period so other scheme
 *   years are untouched.
 *   ------------------------------------------------------------------
+*   GAIL 30.07.2026 : this override must HONOUR YRVR147 (yrva_mstr_waiver).
+*   Earlier it force-set every month to 75 AFTER the table was read, which
+*   clobbered a min% the user had maintained - e.g. March set to nil to
+*   waive the 75% floor was reset to 75, so the March discount never
+*   computed. Now we only migrate the legacy 80% floor to 75%; any value
+*   the user maintained in YRVR147 (including an intentional nil = waived
+*   month) is left exactly as maintained.
+  DEFINE set_min75.
+    IF wa_yrva_mstr_waiver-&1 = 80.
+      wa_yrva_mstr_waiver-&1 = 75.
+    ENDIF.
+  END-OF-DEFINITION.
 *   PRODUCTION : CIS 2026-27 (this is the live scheme year).
 *   Monthly run = single scheme month Jun'2026 - Mar'2027.
   IF s_sptag-low GE '20260601' AND s_sptag-high LE '20270331'.
-    wa_yrva_mstr_waiver-min_perc_m1   = 75.
-    wa_yrva_mstr_waiver-min_perc_m2   = 75.
-    wa_yrva_mstr_waiver-min_perc_m3   = 75.
-    wa_yrva_mstr_waiver-min_perc_m4   = 75.
-    wa_yrva_mstr_waiver-min_perc_m5   = 75.
-    wa_yrva_mstr_waiver-min_perc_m6   = 75.
-    wa_yrva_mstr_waiver-min_perc_m7   = 75.
-    wa_yrva_mstr_waiver-min_perc_m8   = 75.
-    wa_yrva_mstr_waiver-min_perc_m9   = 75.
-    wa_yrva_mstr_waiver-min_perc_m10  = 75.
-    wa_yrva_mstr_waiver-min_perc_m11  = 75.
-    wa_yrva_mstr_waiver-min_perc_m12  = 75.
+    set_min75 min_perc_m1.
+    set_min75 min_perc_m2.
+    set_min75 min_perc_m3.
+    set_min75 min_perc_m4.
+    set_min75 min_perc_m5.
+    set_min75 min_perc_m6.
+    set_min75 min_perc_m7.
+    set_min75 min_perc_m8.
+    set_min75 min_perc_m9.
+    set_min75 min_perc_m10.
+    set_min75 min_perc_m11.
+    set_min75 min_perc_m12.
   ENDIF.
 *   Annual run = fiscal year 01.04.2026 - 31.03.2027.
   IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
@@ -1213,18 +1225,18 @@ FORM get_data.
 *   live 2026-27 scheme only.
 *   Monthly test run = single scheme month Jun'2025 - Mar'2026.
   IF s_sptag-low GE '20250601' AND s_sptag-high LE '20260331'.
-    wa_yrva_mstr_waiver-min_perc_m1   = 75.
-    wa_yrva_mstr_waiver-min_perc_m2   = 75.
-    wa_yrva_mstr_waiver-min_perc_m3   = 75.
-    wa_yrva_mstr_waiver-min_perc_m4   = 75.
-    wa_yrva_mstr_waiver-min_perc_m5   = 75.
-    wa_yrva_mstr_waiver-min_perc_m6   = 75.
-    wa_yrva_mstr_waiver-min_perc_m7   = 75.
-    wa_yrva_mstr_waiver-min_perc_m8   = 75.
-    wa_yrva_mstr_waiver-min_perc_m9   = 75.
-    wa_yrva_mstr_waiver-min_perc_m10  = 75.
-    wa_yrva_mstr_waiver-min_perc_m11  = 75.
-    wa_yrva_mstr_waiver-min_perc_m12  = 75.
+    set_min75 min_perc_m1.
+    set_min75 min_perc_m2.
+    set_min75 min_perc_m3.
+    set_min75 min_perc_m4.
+    set_min75 min_perc_m5.
+    set_min75 min_perc_m6.
+    set_min75 min_perc_m7.
+    set_min75 min_perc_m8.
+    set_min75 min_perc_m9.
+    set_min75 min_perc_m10.
+    set_min75 min_perc_m11.
+    set_min75 min_perc_m12.
   ENDIF.
 *   Annual test run = fiscal year 01.04.2025 - 31.03.2026.
   IF s_sptag-low EQ '20250401' AND s_sptag-high EQ '20260331'.
