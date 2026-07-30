@@ -8826,7 +8826,13 @@ FORM monthly_discount .
       ENDCASE.
       READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
            WITH KEY qais_no = wa_yrva_qais_data-qais_no.
-      IF sy-subrc = 0.
+*     S/F (shortfall) waiver is applicable ONLY when the customer's total
+*     monthly lifting is BELOW the CIS minimum, i.e. below 75% of MCQ. If
+*     the customer lifted >= 75% of MCQ it already meets the minimum on its
+*     own, so the shortfall waiver does not apply and 'S/F Waiver' must not
+*     be shown (mcq_perc = grp lift / MCQ, the same ratio the eligibility
+*     test uses). GAIL 30.07.2026.
+      IF sy-subrc = 0 AND it_data_monthly-mcq_perc < 75.
         it_data_monthly-sale_order = 'S/F Waiver'.
       ELSEIF wa_yrva_qais_data-waiver_1 = lv_runmon
           OR wa_yrva_qais_data-waiver_2 = lv_runmon
