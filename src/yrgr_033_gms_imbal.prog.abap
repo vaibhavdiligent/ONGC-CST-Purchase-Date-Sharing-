@@ -85,7 +85,7 @@ AT SELECTION-SCREEN.
     READ TABLE s_dat4 INTO DATA(ls_dat4_chk) INDEX 1.
     IF sy-subrc = 0 AND ls_dat4_chk-low IS NOT INITIAL.
       IF ls_dat4_chk-low < '20220101'.
-        MESSAGE 'From date cannot be less than 01.01.2022' TYPE 'E'.
+        MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
       ENDIF.
       lv_fn_from_day = ls_dat4_chk-low+6(2).
       IF lv_fn_from_day NE '01' AND lv_fn_from_day NE '16'.
