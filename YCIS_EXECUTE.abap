@@ -257,6 +257,7 @@ FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_err    TYPE i,
         lv_dup    TYPE i,
+        lv_zero   TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_off    TYPE vkbur,
@@ -305,6 +306,17 @@ FORM process_selected USING p_action TYPE char1.
         lv_dup = lv_dup + 1.
         gs_out-order_no = lv_exord.
         gs_out-remarks  = |Rebate order { lv_exord } already created|.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
+        CONTINUE.
+      ENDIF.
+
+*     Zero-amount guard (GAIL 30.07.2026): a row with no discount value or
+*     no order quantity must NOT create a rebate order. Skip it with a clear
+*     remark instead of attempting (and reporting) a failed creation.
+      IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
+        lv_zero = lv_zero + 1.
+        gs_out-remarks = 'Zero rebate amount - order not created'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
         CONTINUE.
@@ -365,43 +377,22 @@ FORM process_selected USING p_action TYPE char1.
 * executed rows stay on the main grid with their Rebate Order number, so the
 * CPC user sees the full rebate-order list right after execution (visibility).
   IF p_action = 'E'.
-    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0.
+    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
 *     only already-created lines were selected
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
+      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_zero } zero-amount skipped, { lv_err } failed - see 'Remarks' column| TYPE 'S'.
     ENDIF.
-*   confirmation pop-up after execution (GAIL 27.07.2026)
-    IF lv_cnt > 0.
-      PERFORM show_stmt_popup.
-    ENDIF.
+*   The verification & confirmation pop-up is shown at L1 and L2 (the levels
+*   that verify/confirm the figures), NOT at L3 execution. (GAIL 30.07.2026)
   ELSE.
     MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  show_stmt_popup   (confirmation statement pop-up)
-*&---------------------------------------------------------------------*
-FORM show_stmt_popup.
-  DATA: lv_ans TYPE c.
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
-    EXPORTING
-      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
-      text_question         =
-        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
-        'rates and amounts, have been verified and confirmed after considering ' &&
-        'customer waivers, shortfall waivers, sales return quantities, and ' &&
-        'Group/MLE details.'
-      text_button_1         = 'OK'
-      icon_button_1         = 'ICON_OKAY'
-      display_cancel_button = ' '
-    IMPORTING
-      answer                = lv_ans
-    EXCEPTIONS
-      text_not_found        = 1
-      OTHERS                = 2.
-ENDFORM.
+*   The Verification & Confirmation pop-up was removed from L3: per GAIL
+*   (30.07.2026) it is shown only at L1 (maker) and L2 (approver), the
+*   levels that verify and confirm the figures - L3 only executes.
 
 *&---------------------------------------------------------------------*
 *&      Form  create_order   (build & post the rebate order from payload)
@@ -420,6 +411,14 @@ FORM create_order USING p_appr TYPE ycis_apprvl
         x_return    LIKE bapireturn1,
         w_objtype   LIKE bapiusw01-objtype,
         w_vbeln     LIKE bapivbeln-vbeln.
+
+*   Do NOT create a zero-amount rebate order (GAIL 30.07.2026): if there is
+*   no discount value or no order quantity, there is nothing to credit, so
+*   skip creation and return with an empty document. Mirrors the guard in
+*   the original YRVU001 (IF cd_value1 <> 0 AND target_qty <> 0 -> create).
+  IF p_appr-cd_value IS INITIAL OR p_appr-target_qty IS INITIAL.
+    RETURN.
+  ENDIF.
 
   x_header-doc_type   = p_appr-doc_type.
   x_header-sales_org  = p_appr-sales_org.

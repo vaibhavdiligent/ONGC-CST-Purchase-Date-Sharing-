@@ -12069,6 +12069,9 @@ FORM stage_all_rebates.
       PERFORM send_wf_mail USING '2' lv_off
               'CIS rebates confirmed by L1 - pending your approval (L2)'.
     ENDLOOP.
+*   Verification & Confirmation pop-up at L1 (maker), before the success
+*   message. Shown at L1 and L2 only - not at L3. (GAIL 30.07.2026)
+    PERFORM show_stmt_popup.
     MESSAGE |{ lv_cnt } record(s) submitted for L2 approval (YCIS_APPRVL)| TYPE 'S'.
   ELSEIF lv_skip > 0.
 *   rows were computed but every one was held back by the eligibility rule
@@ -12077,6 +12080,32 @@ FORM stage_all_rebates.
     MESSAGE 'No records available to submit for approval' TYPE 'I'.
   ENDIF.
 ENDFORM.                    "stage_all_rebates
+*&---------------------------------------------------------------------*
+*&      Form  show_stmt_popup   (verification & confirmation pop-up - L1)
+*&---------------------------------------------------------------------*
+*   Shown at L1 (this maker program) and L2 (YCIS_APPROVE) - the levels that
+*   verify and confirm the figures. NOT shown at L3 (execution). GAIL
+*   30.07.2026.
+*&---------------------------------------------------------------------*
+FORM show_stmt_popup.
+  DATA: lv_ans TYPE c.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
+      text_question         =
+        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
+        'rates and amounts, have been verified and confirmed after considering ' &&
+        'customer waivers, shortfall waivers, sales return quantities, and ' &&
+        'Group/MLE details.'
+      text_button_1         = 'OK'
+      icon_button_1         = 'ICON_OKAY'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = lv_ans
+    EXCEPTIONS
+      text_not_found        = 1
+      OTHERS                = 2.
+ENDFORM.                    "show_stmt_popup
 *&---------------------------------------------------------------------*
 *&      Form  send_wf_mail   (CIS 2026-27 - L1 -> L2 notification)
 *&---------------------------------------------------------------------*
