@@ -56,6 +56,12 @@ TYPES: BEGIN OF ty_out,
          meins      TYPE meins,        " unit
          rebate_val TYPE ycis_apprvl-rebate_val,  " rebate amount of this grade
          waers      TYPE waers,        " currency
+*        workflow status (visible for every record - pending / approved /
+*        returned / completed), plus the last rejection detail
+         scheme_type TYPE ycis_apprvl-scheme_type,
+         status_txt  TYPE char32,
+         rej_by      TYPE ycis_apprvl-rej_by,
+         rej_remarks TYPE ycis_apprvl-rej_remarks,
 *        approval trail - who approved at each level and when
          l1_user    TYPE ycis_apprvl-l1_user,
          l1_date    TYPE ycis_apprvl-l1_date,
@@ -88,7 +94,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
 SELECT-OPTIONS: s_sptag FOR ycis_apprvl-period_from,   " CIS period
                 s_vkbur FOR ycis_apprvl-sales_off,     " sales office
                 s_kunnr FOR ycis_apprvl-kunnr,         " customer
-                s_vbeln FOR ycis_apprvl-order_no.      " rebate order
+                s_vbeln FOR ycis_apprvl-order_no,      " rebate order
+                s_stat  FOR ycis_apprvl-wf_status.     " workflow status (blank = all)
 SELECTION-SCREEN END OF BLOCK b1.
 
 *--------------------------------------------------------------------*
@@ -96,7 +103,7 @@ START-OF-SELECTION.
   PERFORM load_nodisc.
   PERFORM get_data.
   IF gt_out IS INITIAL.
-    MESSAGE 'No rebate orders found for the selection' TYPE 'I'.
+    MESSAGE 'No records found for the selection' TYPE 'I'.
     RETURN.
   ENDIF.
   PERFORM build_fieldcat.
@@ -124,12 +131,15 @@ FORM get_data.
   DATA: lt_appr TYPE STANDARD TABLE OF ycis_apprvl,
         ls_appr TYPE ycis_apprvl.
 
+*   Show EVERY record with its status (Pending L2 / Pending L3 / Completed /
+*   Returned) - the completed-only filter (order_no <> space) was removed so
+*   in-flight and rejected records are visible in the report. GAIL 31.07.2026.
   SELECT * FROM ycis_apprvl INTO TABLE lt_appr
     WHERE order_no    IN s_vbeln
-      AND order_no    <> space
       AND sales_off   IN s_vkbur
       AND kunnr       IN s_kunnr
-      AND period_from IN s_sptag.
+      AND period_from IN s_sptag
+      AND wf_status   IN s_stat.
 
   LOOP AT lt_appr INTO ls_appr.
     PERFORM emit_order USING ls_appr.
@@ -167,8 +177,15 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
 * ---- 1) grade detail captured at source (YCIS_APPRVL_GRD) ------------
   DATA: lt_cap TYPE STANDARD TABLE OF ycis_apprvl_grd,
         ls_cap TYPE ycis_apprvl_grd.
+*   Key the grade detail by the business key (not by order_no) so it is found
+*   for in-flight records too, whose order has not been created yet.
   SELECT * FROM ycis_apprvl_grd INTO TABLE lt_cap
-    WHERE order_no = p_appr-order_no.
+    WHERE qais_no     = p_appr-qais_no
+      AND scheme_type = p_appr-scheme_type
+      AND period_from = p_appr-period_from
+      AND period_to   = p_appr-period_to
+      AND kunnr       = p_appr-kunnr
+      AND kvgr2       = p_appr-kvgr2.
   IF lt_cap IS NOT INITIAL.
     LOOP AT lt_cap INTO ls_cap.
       CLEAR gs_out.
@@ -258,6 +275,11 @@ ENDFORM.
 *&      Form  fill_appr_trail   (approval trail: who/when at L1/L2/L3)
 *&---------------------------------------------------------------------*
 FORM fill_appr_trail USING p_appr TYPE ycis_apprvl.
+*   workflow status (shown for every record) + last rejection detail
+  PERFORM status_text USING p_appr CHANGING gs_out-status_txt.
+  gs_out-scheme_type = p_appr-scheme_type.
+  gs_out-rej_by      = p_appr-rej_by.
+  gs_out-rej_remarks = p_appr-rej_remarks.
   gs_out-l1_user = p_appr-l1_user.
   gs_out-l1_date = p_appr-l1_date.
   gs_out-l1_time = p_appr-l1_time.
@@ -267,6 +289,24 @@ FORM fill_appr_trail USING p_appr TYPE ycis_apprvl.
   gs_out-l3_user = p_appr-l3_user.
   gs_out-l3_date = p_appr-l3_date.
   gs_out-l3_time = p_appr-l3_time.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  status_text   (readable workflow status for the report)
+*&---------------------------------------------------------------------*
+FORM status_text USING p_appr TYPE ycis_apprvl
+              CHANGING p_txt TYPE any.
+  CASE p_appr-wf_status.
+    WHEN '40'. p_txt = 'Completed - Order Created'.
+    WHEN '30'. p_txt = 'Pending L3 (Approved by L2)'.
+    WHEN '20'.
+      IF p_appr-rej_level = '3'.
+        p_txt = 'Returned by L3 - Pending L2'.
+      ELSE.
+        p_txt = 'Pending L2 (Submitted by L1)'.
+      ENDIF.
+    WHEN '10'. p_txt = 'Returned by L2 - Pending L1'.
+    WHEN OTHERS. p_txt = p_appr-wf_status.
+  ENDCASE.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  grade_name   (grade / material name for a KONDM)
@@ -308,6 +348,8 @@ FORM build_fieldcat.
   add_fc 'KUNNR'     'Customer'.
   add_fc 'NAME1'     'Customer Name'.
   add_fc 'SALES_OFF' 'Sales Office'.
+  add_fc 'SCHEME_TYPE' 'Scheme'.
+  add_fc 'STATUS_TXT' 'Status'.
   add_fc 'KONDM'     'MPG'.
   add_fc 'KONDM_TXT' 'Material / Grade Name'.
   add_fc 'LFT_QTY'   'Lifted Qty'.
@@ -323,6 +365,8 @@ FORM build_fieldcat.
   add_fc 'L3_USER'   'L3 Executed By'.
   add_fc 'L3_DATE'   'L3 Date'.
   add_fc 'L3_TIME'   'L3 Time'.
+  add_fc 'REJ_BY'      'Rejected By'.
+  add_fc 'REJ_REMARKS' 'Reject Remark'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
