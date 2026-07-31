@@ -235,8 +235,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  show_stmt_popup   (confirmation statement pop-up after approve)
 *&---------------------------------------------------------------------*
-FORM show_stmt_popup.
-  DATA: lv_ans TYPE c.
+FORM show_stmt_popup CHANGING p_ans TYPE c.
+  CLEAR p_ans.
   CALL FUNCTION 'POPUP_TO_CONFIRM'
     EXPORTING
       titlebar              = 'CIS 2026-27 - Verification & Confirmation'
@@ -244,12 +244,16 @@ FORM show_stmt_popup.
         'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
         'rates and amounts, have been verified and confirmed after considering ' &&
         'customer waivers, shortfall waivers, sales return quantities, and ' &&
-        'Group/MLE details.'
-      text_button_1         = 'OK'
+        'Group/MLE details.' &&
+        ' Approve the selected record(s) and forward to L3?'
+      text_button_1         = 'Yes'
       icon_button_1         = 'ICON_OKAY'
+      text_button_2         = 'No'
+      icon_button_2         = 'ICON_CANCEL'
+      default_button        = '2'
       display_cancel_button = ' '
     IMPORTING
-      answer                = lv_ans
+      answer                = p_ans           " '1' = Yes, '2' = No
     EXCEPTIONS
       text_not_found        = 1
       OTHERS                = 2.
@@ -329,6 +333,7 @@ FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
+        lv_ans    TYPE c,
         lv_off    TYPE vkbur.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
@@ -341,6 +346,17 @@ FORM process_selected USING p_action TYPE char1.
     PERFORM get_reject_remark CHANGING lv_remark.
     IF lv_remark IS INITIAL.
       MESSAGE 'Reject remark is mandatory' TYPE 'I'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+*   Verification & Confirmation must GATE the approval - ask before any DB
+*   change. Yes forwards to L3; No cancels and nothing is approved. (GAIL
+*   31.07.2026 - earlier the pop-up ran after COMMIT, so No still approved.)
+  IF p_action = 'A'.
+    PERFORM show_stmt_popup CHANGING lv_ans.
+    IF lv_ans <> '1'.
+      MESSAGE 'Approval cancelled - nothing sent to L3' TYPE 'S'.
       RETURN.
     ENDIF.
   ENDIF.
@@ -382,12 +398,8 @@ FORM process_selected USING p_action TYPE char1.
       ENDIF.
     ENDLOOP.
     MESSAGE |{ lv_cnt } line(s) processed| TYPE 'S'.
-*   drop the processed lines from the current list
+*   drop the processed lines from the current list (L2 no longer sees them)
     DELETE gt_out WHERE sel = 'X'.
-*   confirmation pop-up after approval (GAIL 27.07.2026)
-    IF p_action = 'A'.
-      PERFORM show_stmt_popup.
-    ENDIF.
   ENDIF.
 ENDFORM.
 

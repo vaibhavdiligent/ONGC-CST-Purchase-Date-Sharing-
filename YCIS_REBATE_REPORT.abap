@@ -50,7 +50,7 @@ TYPES: BEGIN OF ty_out,
          name1      TYPE name1_gp,     " customer name
          sales_off  TYPE vkbur,        " sales office
          kondm      TYPE kondm,        " grade
-         kondm_txt  TYPE t178t-vtext,  " grade / material name
+         kondm_txt  TYPE maktx,        " material name (from YRVA_GRADE_CISD -> MAKT)
          lft_qty    TYPE menge_d,      " lifted qty of this grade
          elig_qty   TYPE menge_d,      " discounted qty of this grade (capping-split)
          meins      TYPE meins,        " unit
@@ -309,25 +309,39 @@ FORM status_text USING p_appr TYPE ycis_apprvl
   ENDCASE.
 ENDFORM.
 *&---------------------------------------------------------------------*
-*&      Form  grade_name   (grade / material name for a KONDM)
-*&   Price-group text (T178T) first; if none, fall back to the material
-*&   mapped to this grade in YRVA_GRADE_CISD (YY_GRADE -> YY_MATNR), so
-*&   CIS grades with no T178T text (e.g. G7 / I1 / H3) still show a name.
+*&      Form  grade_name   (material name for a KONDM / grade)
+*&   GAIL 31.07.2026: source the material from YRVA_GRADE_CISD (the CIS
+*&   grade->material master). For the grade (YY_GRADE = KONDM) take the
+*&   mapped material (YY_MATNR) and show its material description (MAKT-
+*&   MAKTX); if there is no description show the material number itself.
+*&   Only if the grade is not maintained in YRVA_GRADE_CISD do we fall back
+*&   to the price-group text (T178T).
 *&---------------------------------------------------------------------*
 FORM grade_name USING p_kondm TYPE kondm CHANGING p_txt TYPE any.
-  DATA: lv_matnr TYPE matnr.
+  DATA: lv_matnr TYPE matnr,
+        lv_maktx TYPE maktx.
   CLEAR p_txt.
   IF p_kondm IS INITIAL.
     RETURN.
   ENDIF.
+* material mapped to this grade in YRVA_GRADE_CISD (YY_GRADE -> YY_MATNR)
+  CLEAR lv_matnr.
+  SELECT yy_matnr UP TO 1 ROWS INTO lv_matnr
+    FROM yrva_grade_cisd WHERE yy_grade = p_kondm.
+  ENDSELECT.
+  IF lv_matnr IS NOT INITIAL.
+    SELECT SINGLE maktx FROM makt INTO lv_maktx
+      WHERE matnr = lv_matnr AND spras = sy-langu.
+    IF lv_maktx IS NOT INITIAL.
+      p_txt = lv_maktx.
+    ELSE.
+      p_txt = lv_matnr.
+    ENDIF.
+    RETURN.
+  ENDIF.
+* fallback - price-group (grade) text
   SELECT SINGLE vtext FROM t178t INTO p_txt
     WHERE spras = sy-langu AND kondm = p_kondm.
-  IF p_txt IS INITIAL.
-    SELECT yy_matnr UP TO 1 ROWS INTO lv_matnr
-      FROM yrva_grade_cisd WHERE yy_grade = p_kondm.
-    ENDSELECT.
-    p_txt = lv_matnr.
-  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
