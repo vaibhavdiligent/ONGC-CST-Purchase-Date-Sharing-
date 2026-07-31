@@ -4184,6 +4184,44 @@ FORM format_data .
       MODIFY  it_yrva_qais_data_temp FROM wa_yrva_qais_data_temp.
     ENDLOOP.
   ENDIF.
+*** SOC : CIS 2026-27 - Group Lifted = SUM of members' Individual Lifted ***
+*   GAIL 31.07.2026 (NILKAMAL 1726 vs 2246 ; CARRIS 70 vs 98): the group-lift
+*   loops above clip every member by the FLAGSHIP's MOU start date
+*   (wa_yrva_qais_data_temp-mou_begda), while the individual-lift loops clip
+*   each customer by its OWN mou_begda. So members that lifted before the
+*   flagship's MOU were dropped from the group total, making Group Lifted come
+*   out LESS than the sum of the individual lifted quantities of the same
+*   members. Group Lifted must equal that sum. Recompute each flagship's group
+*   totals as the exact sum of its BP-cluster members' individual lifted
+*   quantities (same cluster gate used for clubbing). Non-group rows (blank
+*   KVGR2) are left untouched - they display the individual value directly.
+  DATA: ls_gf TYPE yrva_qais_data,
+        ls_gm TYPE yrva_qais_data.
+  LOOP AT it_yrva_qais_data_temp INTO ls_gf.
+    CHECK ls_gf-kvgr2 IS NOT INITIAL.
+    CLEAR: ls_gf-grp_lift_qty_m1,  ls_gf-grp_lift_qty_m2,  ls_gf-grp_lift_qty_m3,
+           ls_gf-grp_lift_qty_m4,  ls_gf-grp_lift_qty_m5,  ls_gf-grp_lift_qty_m6,
+           ls_gf-grp_lift_qty_m7,  ls_gf-grp_lift_qty_m8,  ls_gf-grp_lift_qty_m9,
+           ls_gf-grp_lift_qty_m10, ls_gf-grp_lift_qty_m11, ls_gf-grp_lift_qty_m12.
+    LOOP AT it_yrva_qais_data INTO ls_gm WHERE kvgr2 = ls_gf-kvgr2.
+      PERFORM is_grp_member USING ls_gf-kunnr ls_gm-kunnr CHANGING gv_ismem.
+      CHECK gv_ismem = 'X'.
+      ls_gf-grp_lift_qty_m1  = ls_gf-grp_lift_qty_m1  + ls_gm-ind_lift_qty_m1.
+      ls_gf-grp_lift_qty_m2  = ls_gf-grp_lift_qty_m2  + ls_gm-ind_lift_qty_m2.
+      ls_gf-grp_lift_qty_m3  = ls_gf-grp_lift_qty_m3  + ls_gm-ind_lift_qty_m3.
+      ls_gf-grp_lift_qty_m4  = ls_gf-grp_lift_qty_m4  + ls_gm-ind_lift_qty_m4.
+      ls_gf-grp_lift_qty_m5  = ls_gf-grp_lift_qty_m5  + ls_gm-ind_lift_qty_m5.
+      ls_gf-grp_lift_qty_m6  = ls_gf-grp_lift_qty_m6  + ls_gm-ind_lift_qty_m6.
+      ls_gf-grp_lift_qty_m7  = ls_gf-grp_lift_qty_m7  + ls_gm-ind_lift_qty_m7.
+      ls_gf-grp_lift_qty_m8  = ls_gf-grp_lift_qty_m8  + ls_gm-ind_lift_qty_m8.
+      ls_gf-grp_lift_qty_m9  = ls_gf-grp_lift_qty_m9  + ls_gm-ind_lift_qty_m9.
+      ls_gf-grp_lift_qty_m10 = ls_gf-grp_lift_qty_m10 + ls_gm-ind_lift_qty_m10.
+      ls_gf-grp_lift_qty_m11 = ls_gf-grp_lift_qty_m11 + ls_gm-ind_lift_qty_m11.
+      ls_gf-grp_lift_qty_m12 = ls_gf-grp_lift_qty_m12 + ls_gm-ind_lift_qty_m12.
+    ENDLOOP.
+    MODIFY it_yrva_qais_data_temp FROM ls_gf.
+  ENDLOOP.
+*** EOC : CIS 2026-27 - Group Lifted = SUM of members' Individual Lifted ***
 ENDFORM.                    " FORMAT_DATA
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA_MONTH
