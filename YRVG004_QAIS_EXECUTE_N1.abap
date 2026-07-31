@@ -12034,7 +12034,24 @@ FORM stage_all_rebates.
         lv_off  TYPE vkbur,
         lv_flow TYPE abap_bool,
         lv_qind TYPE p DECIMALS 3,
+        lv_ans  TYPE c,                  " Verification & Confirmation answer
         lv_zero TYPE p DECIMALS 3.       " MCQ only applies to monthly
+*   nothing selected (the caller already dropped the unticked rows) -> stop
+  IF it_data_monthly[]        IS INITIAL AND it_data_quater[] IS INITIAL AND
+     it_data_annual[]         IS INITIAL AND it_annual_consis[] IS INITIAL AND
+     it_data_annual_newcus[]  IS INITIAL.
+    MESSAGE 'Please select at least one line to submit for approval' TYPE 'I'.
+    RETURN.
+  ENDIF.
+*   Verification & Confirmation FIRST - it must gate the submission. Only if
+*   the maker chooses Yes are the records forwarded to L2; No cancels and
+*   nothing is staged. (GAIL 31.07.2026 - earlier the pop-up ran after the
+*   COMMIT, so 'No' still submitted.)
+  PERFORM show_stmt_popup CHANGING lv_ans.
+  IF lv_ans <> '1'.
+    MESSAGE 'Submission cancelled - nothing sent to L2' TYPE 'S'.
+    RETURN.
+  ENDIF.
   REFRESH gt_stg_office.
   IF r_quater = 'X'.
     LOOP AT it_data_quater.
@@ -12107,9 +12124,11 @@ FORM stage_all_rebates.
       PERFORM send_wf_mail USING '2' lv_off
               'CIS rebates confirmed by L1 - pending your approval (L2)'.
     ENDLOOP.
-*   Verification & Confirmation pop-up at L1 (maker), before the success
-*   message. Shown at L1 and L2 only - not at L3. (GAIL 30.07.2026)
-    PERFORM show_stmt_popup.
+*   Issue 2: the rows just forwarded to L2 must leave the L1 screen at once.
+*   hide_forwarded re-reads YCIS_APPRVL (now Pending-L2) and removes them from
+*   the display tables; the ALV refresh set by the caller shows the reduced
+*   list. (GAIL 31.07.2026)
+    PERFORM hide_forwarded.
     MESSAGE |{ lv_cnt } record(s) submitted for L2 approval (YCIS_APPRVL)| TYPE 'S'.
   ELSEIF lv_skip > 0.
 *   rows were computed but every one was held back by the eligibility rule
@@ -12191,8 +12210,8 @@ ENDFORM.                    "hide_forwarded
 *   verify and confirm the figures. NOT shown at L3 (execution). GAIL
 *   30.07.2026.
 *&---------------------------------------------------------------------*
-FORM show_stmt_popup.
-  DATA: lv_ans TYPE c.
+FORM show_stmt_popup CHANGING p_ans TYPE c.
+  CLEAR p_ans.
   CALL FUNCTION 'POPUP_TO_CONFIRM'
     EXPORTING
       titlebar              = 'CIS 2026-27 - Verification & Confirmation'
@@ -12200,12 +12219,16 @@ FORM show_stmt_popup.
         'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
         'rates and amounts, have been verified and confirmed after considering ' &&
         'customer waivers, shortfall waivers, sales return quantities, and ' &&
-        'Group/MLE details.'
-      text_button_1         = 'OK'
+        'Group/MLE details.' &&
+        ' Submit the selected record(s) to L2 for approval?'
+      text_button_1         = 'Yes'
       icon_button_1         = 'ICON_OKAY'
+      text_button_2         = 'No'
+      icon_button_2         = 'ICON_CANCEL'
+      default_button        = '2'
       display_cancel_button = ' '
     IMPORTING
-      answer                = lv_ans
+      answer                = p_ans          " '1' = Yes, '2' = No
     EXCEPTIONS
       text_not_found        = 1
       OTHERS                = 2.
