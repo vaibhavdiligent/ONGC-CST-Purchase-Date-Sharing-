@@ -4184,17 +4184,25 @@ FORM format_data .
       MODIFY  it_yrva_qais_data_temp FROM wa_yrva_qais_data_temp.
     ENDLOOP.
   ENDIF.
-*** SOC : CIS 2026-27 - Group Lifted = SUM of members' Individual Lifted ***
-*   GAIL 31.07.2026 (NILKAMAL 1726 vs 2246 ; CARRIS 70 vs 98): the group-lift
-*   loops above clip every member by the FLAGSHIP's MOU start date
-*   (wa_yrva_qais_data_temp-mou_begda), while the individual-lift loops clip
-*   each customer by its OWN mou_begda. So members that lifted before the
-*   flagship's MOU were dropped from the group total, making Group Lifted come
-*   out LESS than the sum of the individual lifted quantities of the same
-*   members. Group Lifted must equal that sum. Recompute each flagship's group
-*   totals as the exact sum of its BP-cluster members' individual lifted
-*   quantities (same cluster gate used for clubbing). Non-group rows (blank
-*   KVGR2) are left untouched - they display the individual value directly.
+*   CIS 2026-27: Group Lifted = SUM of members' Individual Lifted (see form)
+  PERFORM correct_group_lift.
+ENDFORM.                    " FORMAT_DATA
+*&---------------------------------------------------------------------*
+*&      Form  correct_group_lift   (CIS 2026-27 - GAIL 31.07.2026)
+*&---------------------------------------------------------------------*
+*   NILKAMAL 1726 vs 2246 ; CARRIS 70 vs 98: the group-lift loops clip every
+*   member by the FLAGSHIP's MOU start date (wa_yrva_qais_data_temp-mou_begda)
+*   while the individual-lift loops clip each customer by its OWN mou_begda,
+*   so members that lifted before the flagship's MOU were dropped from the
+*   group total - Group Lifted came out LESS than the sum of the individual
+*   lifted quantities of the same members. Group Lifted must equal that sum.
+*   Recompute each flagship's group totals as the exact sum of its BP-cluster
+*   members' individual lifted quantities (same cluster gate used for
+*   clubbing). Called from BOTH format_data (quarterly) and format_data_month
+*   (monthly), since each computes its own group loops. Non-group rows (blank
+*   KVGR2) are skipped - they display the individual value directly.
+*&---------------------------------------------------------------------*
+FORM correct_group_lift.
   DATA: ls_gf TYPE yrva_qais_data,
         ls_gm TYPE yrva_qais_data.
   LOOP AT it_yrva_qais_data_temp INTO ls_gf.
@@ -4221,8 +4229,7 @@ FORM format_data .
     ENDLOOP.
     MODIFY it_yrva_qais_data_temp FROM ls_gf.
   ENDLOOP.
-*** EOC : CIS 2026-27 - Group Lifted = SUM of members' Individual Lifted ***
-ENDFORM.                    " FORMAT_DATA
+ENDFORM.                    "correct_group_lift
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA_MONTH
 *&---------------------------------------------------------------------*
@@ -5817,6 +5824,8 @@ FORM format_data_month .
     CLEAR : wa_yrva_qais_data_temp.
 ****EOC BY ujjwal & PRIYANKA and madan sir ON 24.07.2019 ; Correcting invalid code et group lifted quantity
   ENDIF.
+*   CIS 2026-27: Group Lifted = SUM of members' Individual Lifted (monthly path)
+  PERFORM correct_group_lift.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  QUARTER_DISCOUNT
