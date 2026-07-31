@@ -313,7 +313,7 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         ls_text-line = ||.                                           APPEND ls_text TO lt_text.
         ls_text-line = |Rebate (PSD) lines have been verified and approved by L2.|.
         APPEND ls_text TO lt_text.
-        ls_text-line = |Please log in to T-Code YRVU015_E and generate the credit-memo requests.|.
+        ls_text-line = |Please log in to the L3 (CPC) execution T-Code and generate the credit-memo requests.|.
         APPEND ls_text TO lt_text.
         ls_text-line = ||.                                           APPEND ls_text TO lt_text.
         ls_text-line = |This is a system generated mail. Please do not reply.|.
