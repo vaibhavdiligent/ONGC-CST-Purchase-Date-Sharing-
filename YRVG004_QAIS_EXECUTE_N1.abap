@@ -12119,6 +12119,72 @@ FORM stage_all_rebates.
   ENDIF.
 ENDFORM.                    "stage_all_rebates
 *&---------------------------------------------------------------------*
+*&      Form  hide_forwarded   (maker-checker: L1 must not see in-flight rows)
+*&---------------------------------------------------------------------*
+*   GAIL 31.07.2026 - process rule: once L1 submits a customer to L2, that
+*   record is "in flight" with L2 and must NOT appear on the L1 screen again
+*   until it comes back. Remove from the L1 display every row already stored
+*   in YCIS_APPRVL for this period with WF_STATUS Pending-L2 (20), Pending-L3
+*   (30) or Completed (40). Rows rejected back to L1 (WF_STATUS 10) and rows
+*   never submitted remain visible so L1 can (re)work and (re)submit them.
+*&---------------------------------------------------------------------*
+FORM hide_forwarded.
+  TYPES: BEGIN OF ty_fwd,
+           scheme_type TYPE ycis_apprvl-scheme_type,
+           kunnr       TYPE ycis_apprvl-kunnr,
+           kvgr2       TYPE ycis_apprvl-kvgr2,
+         END OF ty_fwd.
+  DATA: lt_fwd TYPE SORTED TABLE OF ty_fwd
+                    WITH NON-UNIQUE KEY scheme_type kunnr kvgr2.
+
+  SELECT scheme_type kunnr kvgr2
+    FROM ycis_apprvl INTO TABLE lt_fwd
+    WHERE period_from = s_sptag-low
+      AND period_to   = s_sptag-high
+      AND wf_status   IN ('20','30','40').
+  CHECK lt_fwd IS NOT INITIAL.
+
+  LOOP AT it_data_monthly.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'M'
+               kunnr       = it_data_monthly-kunnr
+               kvgr2       = it_data_monthly-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_monthly. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_data_quater.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'Q'
+               kunnr       = it_data_quater-kunnr
+               kvgr2       = it_data_quater-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_quater. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_data_annual.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'A'
+               kunnr       = it_data_annual-kunnr
+               kvgr2       = it_data_annual-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_annual. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_annual_consis.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'C'
+               kunnr       = it_annual_consis-kunnr
+               kvgr2       = it_annual_consis-kvgr2.
+    IF sy-subrc = 0. DELETE it_annual_consis. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_data_annual_newcus.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'A'
+               kunnr       = it_data_annual_newcus-kunnr
+               kvgr2       = it_data_annual_newcus-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_annual_newcus. ENDIF.
+  ENDLOOP.
+ENDFORM.                    "hide_forwarded
+*&---------------------------------------------------------------------*
 *&      Form  show_stmt_popup   (verification & confirmation pop-up - L1)
 *&---------------------------------------------------------------------*
 *   Shown at L1 (this maker program) and L2 (YCIS_APPROVE) - the levels that
@@ -14514,6 +14580,8 @@ START-OF-SELECTION.
 END-OF-SELECTION.
 *generate field catlofs.
   PERFORM create_field_catalog.
+*   Maker-checker: hide rows already submitted to L2 (in flight) - GAIL 31.07.2026
+  PERFORM hide_forwarded.
 *Display the final records.
   PERFORM display_list.
 
