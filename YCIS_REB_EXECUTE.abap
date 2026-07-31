@@ -21,7 +21,7 @@ REPORT  ycis_reb_execute.
 
 TYPE-POOLS: slis.
 
-TABLES: ycis_apprvl, ycis_wf_appr.
+TABLES: ycis_apprvl, ycis_wf_appr, yrva_rebate.
 
 CONSTANTS: gc_level  TYPE ycis_wlevel VALUE '3',
            gc_scheme TYPE ycis_apprvl-scheme_type VALUE 'U'. " Upliftment Rebate
