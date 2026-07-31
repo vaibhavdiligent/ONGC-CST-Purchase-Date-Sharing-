@@ -310,33 +310,24 @@ FORM status_text USING p_appr TYPE ycis_apprvl
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  grade_name   (material name for a KONDM / grade)
-*&   GAIL 31.07.2026: source the material from YRVA_GRADE_CISD (the CIS
-*&   grade->material master). For the grade (YY_GRADE = KONDM) take the
-*&   mapped material (YY_MATNR) and show its material description (MAKT-
-*&   MAKTX); if there is no description show the material number itself.
+*&   GAIL 31.07.2026: show the MATERIAL NAME only (YY_MATNR) from
+*&   YRVA_GRADE_CISD (YY_GRADE = KONDM) - NOT the material description.
 *&   Only if the grade is not maintained in YRVA_GRADE_CISD do we fall back
-*&   to the price-group text (T178T).
+*&   to the price-group (grade) text (T178T).
 *&---------------------------------------------------------------------*
 FORM grade_name USING p_kondm TYPE kondm CHANGING p_txt TYPE any.
-  DATA: lv_matnr TYPE matnr,
-        lv_maktx TYPE maktx.
+  DATA: lv_matnr TYPE matnr.
   CLEAR p_txt.
   IF p_kondm IS INITIAL.
     RETURN.
   ENDIF.
-* material mapped to this grade in YRVA_GRADE_CISD (YY_GRADE -> YY_MATNR)
+* material name mapped to this grade in YRVA_GRADE_CISD (YY_GRADE -> YY_MATNR)
   CLEAR lv_matnr.
   SELECT yy_matnr UP TO 1 ROWS INTO lv_matnr
     FROM yrva_grade_cisd WHERE yy_grade = p_kondm.
   ENDSELECT.
   IF lv_matnr IS NOT INITIAL.
-    SELECT SINGLE maktx FROM makt INTO lv_maktx
-      WHERE matnr = lv_matnr AND spras = sy-langu.
-    IF lv_maktx IS NOT INITIAL.
-      p_txt = lv_maktx.
-    ELSE.
-      p_txt = lv_matnr.
-    ENDIF.
+    p_txt = lv_matnr.
     RETURN.
   ENDIF.
 * fallback - price-group (grade) text
