@@ -418,7 +418,7 @@ PRIMARY KEY.   ENDSELECT.
 *   that number to the external GEMV (KREDITOR) vendor - confirm in BUCF.
     CONSTANTS c_bp_group TYPE bu_group VALUE 'GEMV'.
     CONSTANTS c_bp_categ TYPE bu_type  VALUE '2'.   " 2 = Organization
-    CONSTANTS c_industry TYPE j_1kftind VALUE 'GEM'. " Type of Industry (functional: default 'GEM')
+    CONSTANTS c_industry TYPE lfa1-j_1kftind VALUE 'GEM'. " Type of Industry (functional: default 'GEM')
 
     CLEAR: lt_cvis, ls_cvis, lt_return, ls_company, ls_purchasing,
            ls_bankdetails, ls_wtax, lv_brsch, lv_bp_guid, lv_bp, lv_err.
