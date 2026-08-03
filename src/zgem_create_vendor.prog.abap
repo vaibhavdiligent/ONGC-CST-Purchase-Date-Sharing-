@@ -418,6 +418,7 @@ PRIMARY KEY.   ENDSELECT.
 *   that number to the external GEMV (KREDITOR) vendor - confirm in BUCF.
     CONSTANTS c_bp_group TYPE bu_group VALUE 'GEMV'.
     CONSTANTS c_bp_categ TYPE bu_type  VALUE '2'.   " 2 = Organization
+    CONSTANTS c_industry TYPE j_1kftind VALUE 'GEM'. " Type of Industry (functional: default 'GEM')
 
     CLEAR: lt_cvis, ls_cvis, lt_return, ls_company, ls_purchasing,
            ls_bankdetails, ls_wtax, lv_brsch, lv_bp_guid, lv_bp, lv_err.
@@ -476,6 +477,10 @@ PRIMARY KEY.   ENDSELECT.
     ls_cvis-vendor-central_data-central-datax-stcd3     = 'X'.
     ls_cvis-vendor-central_data-central-data-j_1ipanno  = wa_order-vendor_pan.
     ls_cvis-vendor-central_data-central-datax-j_1ipanno = 'X'.
+*   Type of Industry (J_1KFTIND) is mandatory for GeM vendors -
+*   functional confirmed defaulting it to 'GEM'.
+    ls_cvis-vendor-central_data-central-data-j_1kftind  = c_industry.
+    ls_cvis-vendor-central_data-central-datax-j_1kftind = 'X'.
     ls_cvis-vendor-central_data-central-data-xzemp      = 'X'.
     ls_cvis-vendor-central_data-central-datax-xzemp     = 'X'.
     ls_cvis-vendor-central_data-address-postal-data-sort1  = wa_order-vendor_code.
