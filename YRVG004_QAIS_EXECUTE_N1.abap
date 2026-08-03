@@ -7680,6 +7680,13 @@ FORM annual_discount .
         LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN s_sptag-low AND s_sptag-high
 *              AND pkunag = wa_yrva_qais_data-kunnr
          AND kvgr2 = wa_yrva_qais_data-kvgr2.
+*         CIS 2026-27 (GAIL 31.07.2026): club only genuine BP-relationship
+*         group/MLE members, same as the monthly path - not raw KVGR2.
+          PERFORM is_grp_member USING wa_yrva_qais_data-kunnr
+                                      wa_s922-pkunag CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
 *       consider only selected material in case of Pipe and ducting sector
           IF wa_yrva_qais_data-p_d_sector = 'X'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NE  '09' AND
@@ -14379,6 +14386,13 @@ FORM annual_consis_discount .
       IF wa_yrva_qais_data-kvgr2 IS NOT INITIAL.
         LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN s_sptag-low AND s_sptag-high
          AND kvgr2 = wa_yrva_qais_data-kvgr2.
+*         CIS 2026-27 (GAIL 31.07.2026): club only genuine BP-relationship
+*         group/MLE members, same as the monthly path - not raw KVGR2.
+          PERFORM is_grp_member USING wa_yrva_qais_data-kunnr
+                                      wa_s922-pkunag CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
 *       consider only selected material in case of Pipe and ducting sector
           IF wa_yrva_qais_data-p_d_sector = 'X'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NE  '09' AND
