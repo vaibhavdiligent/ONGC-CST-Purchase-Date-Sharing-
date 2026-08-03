@@ -516,7 +516,9 @@ PRIMARY KEY.   ENDSELECT.
 *   company code data (OVL)
     ls_company-task           = 'M'.
     ls_company-data_key-bukrs = 'OVL'.
-    ls_company-data-akont     = '190101'.
+*   Recon account must be zero-padded (SKB1 stores SAKNR ALPHA, e.g. 0000190101)
+*   otherwise the foreign-key check fails with "190101 does not exist in OVL".
+    ls_company-data-akont     = |{ '190101' ALPHA = IN }|.
     ls_company-datax-akont    = 'X'.
     ls_company-data-zuawa     = '000'.
     ls_company-datax-zuawa    = 'X'.
