@@ -437,7 +437,14 @@ PRIMARY KEY.   ENDSELECT.
     ls_cvis-partner-central_data-common-data-bp_control-grouping   = c_bp_group.
     ls_cvis-partner-central_data-common-data-bp_organization-name1 = wa_order-vendor_name.
 *   Search term on the BP -> CVI maps it to LFA1-SORTL (required entry field).
-    ls_cvis-partner-central_data-common-data-bp_centraldata-searchterm1 = wa_order-vendor_code.
+*   Guarantee a non-blank value: vendor code, else vendor name, else 'GEM'.
+    IF wa_order-vendor_code IS NOT INITIAL.
+      ls_cvis-partner-central_data-common-data-bp_centraldata-searchterm1 = wa_order-vendor_code.
+    ELSEIF wa_order-vendor_name IS NOT INITIAL.
+      ls_cvis-partner-central_data-common-data-bp_centraldata-searchterm1 = wa_order-vendor_name.
+    ELSE.
+      ls_cvis-partner-central_data-common-data-bp_centraldata-searchterm1 = 'GEM'.
+    ENDIF.
 
 *   supplier role FLVN00
     APPEND INITIAL LINE TO ls_cvis-partner-central_data-role-roles
