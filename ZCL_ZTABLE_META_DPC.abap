@@ -20,6 +20,13 @@
 *& Structure  : function module DDIF_FIELDINFO_GET (DFIES characteristics).
 *& Data       : dynamic SELECT * FROM (tabname), each row -> JSON via
 *&              /ui2/cl_json=>serialize.
+*& CDS redirect: for a SINGLE-table read with an explicit field list, if
+*&              the table has a sanctioned successor CDS (ARS_API_SUCCESSOR)
+*&              and every requested field is a non-calculated, same-named
+*&              element in that CDS (CL_DD_DDL_FIELD_TRACKER), the read is
+*&              served from the CDS instead of the table (base table kept as
+*&              automatic fallback). Fully transparent to the caller - same
+*&              field names, WHERE and paging. Joins are NEVER redirected.
 *& Security   : AUTHORITY-CHECK on S_TABU_NAM (display) before any read.
 *&
 *& Fully code based -> extends /IWBEP/CL_MGW_ABS_DATA (the standard
@@ -107,6 +114,30 @@ CLASS zcl_ztable_meta_dpc DEFINITION
       IMPORTING iv_tabname      TYPE string
                 iv_join         TYPE abap_bool
       RETURNING VALUE(rv_order) TYPE string.
+
+    " One element-to-base-field row of a CDS view (mirrors the structure
+    " CL_DD_DDL_FIELD_TRACKER returns).
+    TYPES: BEGIN OF ty_cds_base_field,
+             entity_name   TYPE dd_cds_entity_name,
+             element_name  TYPE fieldname,
+             base_object   TYPE objectname,
+             base_field    TYPE fieldname,
+             is_calculated TYPE dd_cds_calculated,
+           END OF ty_cds_base_field.
+    TYPES tt_cds_base_field TYPE STANDARD TABLE OF ty_cds_base_field WITH DEFAULT KEY.
+
+    " Decide whether a SINGLE-table read can be served from a released
+    " successor CDS instead of the base table (same logic the ATC
+    " correction program uses): look up ARS_API_SUCCESSOR for the table,
+    " then confirm - via CL_DD_DDL_FIELD_TRACKER - that EVERY requested
+    " field exists in that CDS as a non-calculated, same-named element.
+    " Only then is the CDS a safe drop-in (field names + WHERE unchanged).
+    " Never used for joins. ev_ok = abap_false -> read the table as before.
+    METHODS resolve_cds_source
+      IMPORTING iv_tabname  TYPE tabname
+                iv_fields   TYPE string
+      EXPORTING ev_cds_name TYPE string
+                ev_ok       TYPE abap_bool.
 
     " Read DDIC field metadata for the table.
     METHODS read_structure
@@ -513,6 +544,75 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD resolve_cds_source.
+    " Same approach as report ZATC_RESULT_CORRECTION: ARS_API_SUCCESSOR
+    " gives SAP's sanctioned successor object for direct access to a table,
+    " and CL_DD_DDL_FIELD_TRACKER gives that CDS's element -> base-field
+    " map. We only redirect when the swap is transparent: every requested
+    " field is present in the CDS as a NON-calculated element whose name
+    " equals the table field name (so Fields, WhereClause and ORDER BY need
+    " no translation). Otherwise we leave ev_ok = abap_false (read table).
+    CLEAR: ev_cds_name, ev_ok.
+
+    " 1. successor CDS for this table (only tables SAP flagged appear here).
+    SELECT SINGLE successor_tadir_obj_name FROM ars_api_successor
+      INTO @DATA(lv_succ)
+      WHERE object_key  = @iv_tabname
+        AND object_type = 'TABL'.
+    IF sy-subrc <> 0.
+      IF iv_tabname = 'KONV'.
+        lv_succ = 'V_KONV_CDS'.          " same explicit fallback as the ATC report
+      ELSE.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    IF lv_succ IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " successor object must actually exist in the dictionary.
+    SELECT SINGLE obj_name FROM tadir INTO @DATA(lv_obj)
+      WHERE obj_name = @lv_succ.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+
+    " 2. element / base-field information of the CDS.
+    DATA lo_ddl  TYPE REF TO cl_dd_ddl_field_tracker.
+    DATA lt_base TYPE tt_cds_base_field.
+    DATA lv_ddl  TYPE ddlname.
+    lv_ddl = lv_succ.
+    TRY.
+        CREATE OBJECT lo_ddl EXPORTING iv_ddlname = lv_ddl.
+        lo_ddl->get_base_field_information( RECEIVING rt_base_fields = lt_base ).
+      CATCH cx_root.
+        RETURN.
+    ENDTRY.
+    IF lt_base IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " 3. every requested field must be a non-calculated, same-named element.
+    DATA lt_req TYPE STANDARD TABLE OF string.
+    SPLIT iv_fields AT ',' INTO TABLE lt_req.
+    LOOP AT lt_req INTO DATA(lv_f).
+      CONDENSE lv_f.
+      IF lv_f IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      DATA lv_el TYPE fieldname.
+      lv_el = to_upper( lv_f ).
+      READ TABLE lt_base INTO DATA(ls_b) WITH KEY element_name = lv_el.
+      IF sy-subrc <> 0 OR ls_b-is_calculated = 'X'.
+        RETURN.                          " field missing / calculated -> use table
+      ENDIF.
+    ENDLOOP.
+
+    ev_cds_name = lv_succ.
+    ev_ok       = abap_true.
+  ENDMETHOD.
+
+
   METHOD read_structure.
     DATA: lt_dfies TYPE STANDARD TABLE OF dfies,
           ls_field TYPE zcl_ztable_meta_mpc=>ty_field_info.
@@ -613,6 +713,10 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
     DATA lt_cols TYPE string_table.   " selected column list (empty = all)
     DATA lv_from TYPE string.         " single table OR the join expression
+    " CDS redirection (single table only): if set, the read is served from
+    " a successor CDS with the base table kept as an automatic fallback.
+    DATA lv_cds_used  TYPE abap_bool.
+    DATA lv_table_src TYPE string.
 
     IF iv_join IS NOT INITIAL.
       "--- JOIN mode: Fields is mandatory and must be TAB~FIELD [AS ALIAS];
@@ -642,20 +746,36 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
           me->raise_error( |{ lv_single } is not a selectable table or view.| ).
         ENDIF.
       ENDIF.
+      lv_from = lv_single.
       IF iv_fields IS NOT INITIAL.
+        " Result structure is always built from the BASE TABLE's DDIC, so
+        " DataJson carries the table field names whether we read the table
+        " or a same-named CDS element.
         me->build_field_projection(
           EXPORTING iv_tabname = lv_single
                     iv_fields  = iv_fields
           IMPORTING et_cols    = lt_cols
                     er_table   = lr_table ).
+        " Try to serve the read from a successor CDS (transparent to CPI).
+        me->resolve_cds_source(
+          EXPORTING iv_tabname  = lv_single
+                    iv_fields   = iv_fields
+          IMPORTING ev_cds_name = DATA(lv_cds_name)
+                    ev_ok       = DATA(lv_cds_ok) ).
+        IF lv_cds_ok = abap_true.
+          lv_from       = lv_cds_name.
+          lv_cds_used   = abap_true.
+          lv_table_src  = lv_single.
+        ENDIF.
       ELSE.
+        " No field list -> read the whole table (CDS redirection needs the
+        " requested fields to prove a safe drop-in).
         TRY.
             CREATE DATA lr_table TYPE STANDARD TABLE OF (lv_single).
           CATCH cx_sy_create_data_error.
             me->raise_error( |Cannot build a work area for { lv_single }.| ).
         ENDTRY.
       ENDIF.
-      lv_from = lv_single.
     ENDIF.
 
     ASSIGN lr_table->* TO <lt_data>.
@@ -666,36 +786,63 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     DATA lv_cols TYPE string.
     lv_cols = concat_lines_of( table = lt_cols sep = `, ` ).
 
-    TRY.
-        IF lv_order IS NOT INITIAL.
-          TRY.
-              SELECT (lv_cols) FROM (lv_from)
-                WHERE (lt_where)
-                ORDER BY (lv_order)
-                INTO CORRESPONDING FIELDS OF TABLE @<lt_data>
-                UP TO @lv_fetch ROWS
-                OFFSET @lv_offset.
-            CATCH cx_sy_dynamic_osql_error.
-              " OFFSET query rejected (e.g. exotic view) -> legacy paging.
-              CLEAR: lv_order, <lt_data>.
-              lv_fetch  = iv_top + iv_skip + 1.
-              IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
-                lv_fetch = gc_hard_max_rows.
-              ENDIF.
-              SELECT (lt_cols) FROM (lv_from)
-                INTO CORRESPONDING FIELDS OF TABLE <lt_data>
-                UP TO lv_fetch ROWS
-                WHERE (lt_where).
-          ENDTRY.
-        ELSE.
-          SELECT (lt_cols) FROM (lv_from)
-            INTO CORRESPONDING FIELDS OF TABLE <lt_data>
-            UP TO lv_fetch ROWS
-            WHERE (lt_where).
-        ENDIF.
-      CATCH cx_sy_dynamic_osql_error INTO DATA(lx_sql).
-        me->raise_error( |Read failed: { lx_sql->get_text( ) }| ).
-    ENDTRY.
+    " Source order. When a CDS was chosen it is tried first and the base
+    " table is kept as an automatic fallback (should the CDS read fail for
+    " any runtime reason). Otherwise there is a single source (table or the
+    " join expression). Because the CDS is only used when every field is a
+    " same-named element, lt_cols / lv_order / lt_where are identical for
+    " both sources - only the FROM changes (exactly like the ATC report).
+    DATA lt_sources TYPE STANDARD TABLE OF string.
+    IF lv_cds_used = abap_true.
+      APPEND lv_from      TO lt_sources.   " the successor CDS
+      APPEND lv_table_src TO lt_sources.   " the base table (fallback)
+    ELSE.
+      APPEND lv_from TO lt_sources.
+    ENDIF.
+
+    DATA(lv_order_bak) = lv_order.
+    DATA(lv_fetch_bak) = lv_fetch.
+    LOOP AT lt_sources INTO DATA(lv_src).
+      DATA(lv_is_last) = xsdbool( sy-tabix = lines( lt_sources ) ).
+      CLEAR <lt_data>.
+      lv_order = lv_order_bak.
+      lv_fetch = lv_fetch_bak.
+      TRY.
+          IF lv_order IS NOT INITIAL.
+            TRY.
+                SELECT (lv_cols) FROM (lv_src)
+                  WHERE (lt_where)
+                  ORDER BY (lv_order)
+                  INTO CORRESPONDING FIELDS OF TABLE @<lt_data>
+                  UP TO @lv_fetch ROWS
+                  OFFSET @lv_offset.
+              CATCH cx_sy_dynamic_osql_error.
+                " OFFSET query rejected (e.g. exotic view) -> legacy paging.
+                CLEAR: lv_order, <lt_data>.
+                lv_fetch  = iv_top + iv_skip + 1.
+                IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
+                  lv_fetch = gc_hard_max_rows.
+                ENDIF.
+                SELECT (lt_cols) FROM (lv_src)
+                  INTO CORRESPONDING FIELDS OF TABLE <lt_data>
+                  UP TO lv_fetch ROWS
+                  WHERE (lt_where).
+            ENDTRY.
+          ELSE.
+            SELECT (lt_cols) FROM (lv_src)
+              INTO CORRESPONDING FIELDS OF TABLE <lt_data>
+              UP TO lv_fetch ROWS
+              WHERE (lt_where).
+          ENDIF.
+          lv_from = lv_src.               " source actually used
+          EXIT.
+        CATCH cx_sy_dynamic_osql_error INTO DATA(lx_sql).
+          IF lv_is_last = abap_true.
+            me->raise_error( |Read failed: { lx_sql->get_text( ) }| ).
+          ENDIF.
+          " else: CDS read failed -> loop tries the base table next.
+      ENDTRY.
+    ENDLOOP.
 
     CLEAR ev_has_more.
     DATA lv_taken TYPE i.
