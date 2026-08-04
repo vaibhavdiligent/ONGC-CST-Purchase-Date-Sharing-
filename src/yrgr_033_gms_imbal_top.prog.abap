@@ -77,8 +77,8 @@ DATA: lv_fn_from_day TYPE c LENGTH 2,
 TYPES: BEGIN OF ty_action_cols,
          at_chkbox   TYPE c LENGTH 1,   " Action Taken flag (X = action done)
          at_sal_ord  TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
-         at_qty      TYPE char20,        " Quantity   (from YRG_IMB_ACTION)
-         at_remarks  TYPE char255,       " Remarks    (from YRG_IMB_ACTION)
+         at_qty      TYPE char20,        " unused since 03.08.2026 (column removed)
+         at_remarks  TYPE char255,       " unused since 03.08.2026 (column removed)
          at_changed  TYPE c LENGTH 1,   " 'X' = row was edited in R4 mode
        END OF ty_action_cols.
 

@@ -212,6 +212,12 @@ START-OF-SELECTION.
     ENDIF.
 
   ELSEIF r4 EQ 'X'.
+    " Access check (03.08.2026): role ZO_GMS_BKD_NOM_WRFLW_MKTG plus
+    " YV_VKBUR authorization for any Sales Office entered.
+    DATA: lv_r4_ok TYPE c LENGTH 1.
+    PERFORM check_r4_authority CHANGING lv_r4_ok.
+    CHECK lv_r4_ok = 'X'.
+
     " Action Taken mode: use s_dat4/s_vk4 as date/sales-office input.
     " Shows the same contract list as R1, filtered by the user-provided date range.
     REFRESH: s_date[].

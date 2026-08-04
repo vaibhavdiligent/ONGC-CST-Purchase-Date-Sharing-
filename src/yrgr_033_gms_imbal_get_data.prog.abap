@@ -27,6 +27,8 @@ FORM get_data.
     IF s_vk4 IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vk4.
     ENDIF.
+    " Show only sales offices the user is authorized for (object YV_VKBUR)
+    PERFORM filter_by_vkbur_auth.
   ELSEIF r1 EQ 'X'.
     " s_vkbur belongs to r1 only – it must never filter the r3 (Till Date) list
     IF s_vkbur IS NOT INITIAL.
@@ -35,7 +37,6 @@ FORM get_data.
   ENDIF.
 
   " Copy lt_final into lt_final_ext and augment with Action Taken data
-  DATA: lv_at_qty TYPE menge_d.     " QUAN to match AT_QTY in YRG_IMB_ACTION
 
   LOOP AT lt_final INTO ls_final.
     CLEAR ls_final_ext.
@@ -45,13 +46,11 @@ FORM get_data.
     " The @-escaped host variables put this SELECT in strict mode, so the
     " field list MUST be comma-separated – without the commas it does not
     " pass the syntax check.
-    SELECT chkbox, at_sal_ord, at_qty, at_remarks
+    SELECT chkbox, at_sal_ord
       FROM yrg_imb_action
-      INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
-            @lv_at_qty,              @ls_final_ext-at_remarks)
+      INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord)
       WHERE docnr = @ls_final-docnr
       ORDER BY saved_on DESCENDING, saved_at DESCENDING.
-      ls_final_ext-at_qty = lv_at_qty.
       EXIT.
     ENDSELECT.
 
@@ -82,13 +81,91 @@ FORM set_row_style CHANGING ps_row TYPE ty_final_ext.
   ENDIF.
 
   ls_styl-fieldname = 'AT_SAL_ORD'. INSERT ls_styl INTO TABLE ps_row-cell.
-  ls_styl-fieldname = 'AT_QTY'.     INSERT ls_styl INTO TABLE ps_row-cell.
-  ls_styl-fieldname = 'AT_REMARKS'. INSERT ls_styl INTO TABLE ps_row-cell.
 
   " The checkbox itself always stays editable
   ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
   ls_styl-fieldname = 'AT_CHKBOX'.
   INSERT ls_styl INTO TABLE ps_row-cell.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form FILTER_BY_VKBUR_AUTH
+*& Removes rows whose Sales Office the user is not authorized for
+*& (authorization object YV_VKBUR, field VKBUR). Each distinct VKBUR is
+*& checked once, so the AUTHORITY-CHECK cost does not grow with row count.
+*&---------------------------------------------------------------------*
+FORM filter_by_vkbur_auth.
+  TYPES: BEGIN OF ty_vk_auth,
+           vkbur TYPE vkbur,
+           ok    TYPE c LENGTH 1,
+         END OF ty_vk_auth.
+  DATA: lt_vk_auth TYPE SORTED TABLE OF ty_vk_auth WITH UNIQUE KEY vkbur,
+        ls_vk_auth TYPE ty_vk_auth.
+
+  LOOP AT lt_final INTO ls_final.
+    READ TABLE lt_vk_auth TRANSPORTING NO FIELDS WITH KEY vkbur = ls_final-vkbur.
+    CHECK sy-subrc NE 0.
+    CLEAR ls_vk_auth.
+    ls_vk_auth-vkbur = ls_final-vkbur.
+    AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+      ID 'VKBUR' FIELD ls_final-vkbur.
+    IF sy-subrc = 0.
+      ls_vk_auth-ok = 'X'.
+    ENDIF.
+    INSERT ls_vk_auth INTO TABLE lt_vk_auth.
+  ENDLOOP.
+
+  LOOP AT lt_vk_auth INTO ls_vk_auth WHERE ok IS INITIAL.
+    DELETE lt_final WHERE vkbur = ls_vk_auth-vkbur.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form CHECK_R4_AUTHORITY
+*& Action Taken (r4) access check – mail of 03.08.2026:
+*&   1. User must hold role ZO_GMS_BKD_NOM_WRFLW_MKTG.
+*&   2. Sales offices entered in s_vk4 must be covered by authorization
+*&      object YV_VKBUR (field VKBUR).
+*& Returns 'X' in p_ok when the user may continue.
+*&---------------------------------------------------------------------*
+FORM check_r4_authority CHANGING p_ok TYPE c.
+  DATA: lv_vk4_chk TYPE vkbur.
+
+  CLEAR p_ok.
+
+  " 1. Role check
+  SELECT SINGLE uname FROM agr_users
+    INTO @DATA(lv_r4_uname)
+    WHERE uname    = @sy-uname
+    AND   agr_name = 'ZO_GMS_BKD_NOM_WRFLW_MKTG'.
+  IF sy-subrc NE 0.
+    MESSAGE 'You are not authorised to execute this option' TYPE 'E'.
+    RETURN.
+  ENDIF.
+
+  " 2. Sales office authorization for every value the user typed in
+  LOOP AT s_vk4 INTO DATA(ls_vk4_auth).
+    IF ls_vk4_auth-low IS NOT INITIAL.
+      lv_vk4_chk = ls_vk4_auth-low.
+      AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+        ID 'VKBUR' FIELD lv_vk4_chk.
+      IF sy-subrc NE 0.
+        MESSAGE |You are not authorised for Sales Office { lv_vk4_chk }| TYPE 'E'.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    IF ls_vk4_auth-high IS NOT INITIAL.
+      lv_vk4_chk = ls_vk4_auth-high.
+      AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+        ID 'VKBUR' FIELD lv_vk4_chk.
+      IF sy-subrc NE 0.
+        MESSAGE |You are not authorised for Sales Office { lv_vk4_chk }| TYPE 'E'.
+        RETURN.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  p_ok = 'X'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -140,19 +217,9 @@ FORM fill_fieldcat.
   IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
   APPEND gs_fieldcat TO gt_fieldcat.
 
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'AT_QTY'.     gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '15'.          gs_fieldcat-scrtext_l = 'Qty'.
-  gs_fieldcat-scrtext_m = 'Qty'.         gs_fieldcat-scrtext_s = 'Qty'.
-  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'AT_REMARKS'. gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '30'.          gs_fieldcat-scrtext_l = 'Remarks'.
-  gs_fieldcat-scrtext_m = 'Remarks'.     gs_fieldcat-scrtext_s = 'Rem'.
-  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
-  APPEND gs_fieldcat TO gt_fieldcat.
+  " Qty and Remarks columns removed on 03.08.2026 request – AT and SO only.
+  " The YRG_IMB_ACTION fields AT_QTY / AT_REMARKS are kept in the table and
+  " are simply written blank.
 
   " Allow mixed-case filter on Status field (values are 'Posted'/'Not Posted')
   LOOP AT gt_fieldcat ASSIGNING FIELD-SYMBOL(<fs_stat>) WHERE fieldname = 'STAT'.
@@ -1001,10 +1068,10 @@ FORM save_action_taken.
     ls_imb_action-saved_on = sy-datum.
     ls_imb_action-saved_at = sy-uzeit.
     ls_imb_action-chkbox   = <fs_sav>-at_chkbox.
+    " AT_QTY / AT_REMARKS are no longer captured (columns removed
+    " on 03.08.2026), so they stay blank in the table.
     IF <fs_sav>-at_chkbox = 'X'.
       ls_imb_action-at_sal_ord = <fs_sav>-at_sal_ord.
-      ls_imb_action-at_qty     = <fs_sav>-at_qty.
-      ls_imb_action-at_remarks = <fs_sav>-at_remarks.
     ENDIF.
     INSERT yrg_imb_action FROM ls_imb_action.
     " Count every changed row – unticking a box is a valid change to save
@@ -1039,7 +1106,7 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
         <fs_ext>-at_chkbox  = ls_mod-value.
         <fs_ext>-at_changed = 'X'.
         IF <fs_ext>-at_chkbox <> 'X'.
-          CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
+          CLEAR <fs_ext>-at_sal_ord.
           DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
         ENDIF.
         " Ticking the box activates SO / Qty / Remarks, unticking disables them.
@@ -1058,26 +1125,12 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
           EXPORTING i_fieldname = 'AT_SAL_ORD'
                     i_row_id    = lv_row_idx
                     i_style     = lv_style.
-        CALL METHOD p_data_changed->modify_style
-          EXPORTING i_fieldname = 'AT_QTY'
-                    i_row_id    = lv_row_idx
-                    i_style     = lv_style.
-        CALL METHOD p_data_changed->modify_style
-          EXPORTING i_fieldname = 'AT_REMARKS'
-                    i_row_id    = lv_row_idx
-                    i_style     = lv_style.
         gv_refresh_grid = 'X'.
       WHEN 'AT_SAL_ORD'.
         <fs_ext>-at_sal_ord = ls_mod-value.
         <fs_ext>-at_changed = 'X'.
         " Clear previous SO validation error when user edits this cell
         DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
-      WHEN 'AT_QTY'.
-        <fs_ext>-at_qty     = ls_mod-value.
-        <fs_ext>-at_changed = 'X'.
-      WHEN 'AT_REMARKS'.
-        <fs_ext>-at_remarks = ls_mod-value.
-        <fs_ext>-at_changed = 'X'.
     ENDCASE.
   ENDLOOP.
   " NOTE: never call refresh_table_display here. Refreshing inside the
