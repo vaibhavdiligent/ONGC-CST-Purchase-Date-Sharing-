@@ -131,7 +131,7 @@ DATA: BEGIN OF it_data_quater OCCURS 0 ,
         ind_elgl_qty_m3  TYPE p DECIMALS 3,
         tot_grp_lift_qty TYPE p DECIMALS 3,
         tot_elgl_qty     TYPE p DECIMALS 3,
-        value            TYPE kbetr,
+        value            TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
         remarks(30),
         sale_order       TYPE vbeln,
         check(1),
@@ -154,8 +154,8 @@ DATA: BEGIN OF it_data_annual OCCURS 0 ,
         waiver_2       TYPE yy_qais_month,
         waiver_3       TYPE yy_qais_month,
         remarks(30),
-        value          TYPE kbetr,
-        loyal_discount TYPE kbetr,
+        value          TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
+        loyal_discount TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
         sale_order     TYPE vbeln,
         check(1),
       END OF it_data_annual .
@@ -174,8 +174,8 @@ DATA: BEGIN OF it_annual_consis OCCURS 0 ,
 *        waiver_2       TYPE yy_qais_month,
 *        waiver_3       TYPE yy_qais_month,
         remarks(30),
-        value          TYPE kbetr,
-        loyal_discount TYPE kbetr,
+        value          TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
+        loyal_discount TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
         sale_order     TYPE vbeln,
         check(1),
         mou_begda      TYPE  begda,
@@ -198,8 +198,8 @@ DATA: BEGIN OF it_data_annual_newcus OCCURS 0 ,
         waiver_3       TYPE yy_qais_month,
         remarks(30),
         rate           TYPE kbetr,
-        value          TYPE kbetr,
-        loyal_discount TYPE kbetr,
+        value          TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
+        loyal_discount TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
         sale_order     TYPE vbeln,
         check(1),
       END OF it_data_annual_newcus .
@@ -219,7 +219,7 @@ DATA: BEGIN OF it_data_monthly OCCURS 0 ,
         tot_elgl_qty TYPE p DECIMALS 3,
 *        REMARKS(30)," SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222 date: 12/10/2023
         remarks(40), " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222 date: 12/10/2023
-        value        TYPE kbetr,
+        value        TYPE p LENGTH 11 DECIMALS 2,   " widened from KBETR to avoid COMPUTE_BCD_OVERFLOW on large groups
         sale_order(15),   " order no OR L1 status: S/F Waiver / Month Waiver / Grp O.K.
         check(1),
       END OF it_data_monthly,
