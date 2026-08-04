@@ -12352,7 +12352,17 @@ FORM stage_one USING p_stype   TYPE char1
 *   Monthly Committed Qty (MCQ) + achievement % -> shown at L1/L2/L3
   ls-mcq_qty     = p_mcq.
   IF p_mcq IS NOT INITIAL.
-    ls-mcq_perc  = p_lift / p_mcq * 100.
+*   MCQ achievement % is stored in YCIS_APPRVL-MCQ_PERC (DEC 5,2 -> max
+*   999.99). With heavy lifting against a small MCQ the true % can exceed
+*   999.99 (e.g. 842.5 / 5 * 100 = 16850%), which raised COMPUTE_BCD_OVERFLOW
+*   and terminated the L1 Execute. Compute in a wide field and cap at the
+*   column maximum so the row still forwards to L2. (GAIL 04.08.2026)
+    DATA lv_mcqp TYPE p LENGTH 8 DECIMALS 2.
+    lv_mcqp = p_lift / p_mcq * 100.
+    IF lv_mcqp > '999.99'.
+      lv_mcqp = '999.99'.
+    ENDIF.
+    ls-mcq_perc  = lv_mcqp.
   ENDIF.
   ls-ind_lft_qty = p_indlift.            " individual lifted qty -> shown at L3
 *                                          (LFT_QTY already holds group lift)
