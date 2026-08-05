@@ -131,6 +131,12 @@ replicated and compared in one run.
 Mandatory fields are validated at runtime per mode (R1 needs document type +
 date range; R2 needs at least one order number).
 
+**Dynamic screen:** only the fields of the chosen mode are visible — selecting
+"Give order No" hides the automatic-selection fields and shows only the Sales
+Document range, and vice versa (radio buttons with `USER-COMMAND` +
+`AT SELECTION-SCREEN OUTPUT` / `MODIF ID`). The mandatory fields of the active
+mode carry the required-entry indicator (`SCREEN-REQUIRED = '2'`).
+
 Everything else is fixed: create-order mode, X's original pricing date, zero
 tolerance, statistical lines excluded, all comparison rows shown. The ALV
 header shows how many orders were selected; a Customer column identifies the

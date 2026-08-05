@@ -82,9 +82,8 @@
 *& (ABGRU <> space) are skipped.
 *&
 *& TEXT ELEMENTS (maintain in SE38 -> Goto -> Text elements)
-*&   TEXT-001  Automatic selection (top orders by net value)
-*&   TEXT-002  Selection mode
-*&   TEXT-003  Specific sales orders
+*&   TEXT-001  Order selection
+*&   TEXT-002  How do you want to select the orders?
 *&---------------------------------------------------------------------*
 REPORT zsd_pricing_compare.
 
@@ -94,22 +93,44 @@ TABLES: vbak.
 * Selection screen
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-002.
-  PARAMETERS: p_auto RADIOBUTTON GROUP md DEFAULT 'X', " R1 automatic top-N
+  PARAMETERS: p_auto RADIOBUTTON GROUP md DEFAULT 'X'
+                     USER-COMMAND md,                  " R1 automatic top-N
               p_list RADIOBUTTON GROUP md.             " R2 explicit orders
 SELECTION-SCREEN END OF BLOCK b0.
 
-* --- R1: automatic selection (doc type + period mandatory) ------------
+* Only the fields of the chosen mode are visible (see AT SELECTION-
+* SCREEN OUTPUT); the mandatory ones carry the required indicator.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  SELECT-OPTIONS: s_auart FOR vbak-auart,              " document type
-                  s_erdat FOR vbak-erdat,              " creation period
-                  s_kunnr FOR vbak-kunnr.              " customer (optional)
-  PARAMETERS p_topn TYPE i DEFAULT 1.                  " orders to check
+  SELECT-OPTIONS: s_auart FOR vbak-auart MODIF ID r1,  " document type
+                  s_erdat FOR vbak-erdat MODIF ID r1,  " creation period
+                  s_kunnr FOR vbak-kunnr MODIF ID r1.  " customer (optional)
+  PARAMETERS p_topn TYPE i DEFAULT 1 MODIF ID r1.      " orders to check
+  SELECT-OPTIONS s_vbeln FOR vbak-vbeln MODIF ID r2.   " order numbers
 SELECTION-SCREEN END OF BLOCK b1.
 
-* --- R2: user-specified sales orders ----------------------------------
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-003.
-  SELECT-OPTIONS s_vbeln FOR vbak-vbeln.               " order numbers
-SELECTION-SCREEN END OF BLOCK b2.
+*----------------------------------------------------------------------*
+* Show only the fields of the selected mode; mark mandatory fields
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    CASE screen-group1.
+      WHEN 'R1'.                       " automatic-selection fields
+        IF p_list = abap_true.
+          screen-active = '0'.
+        ELSEIF screen-name = 'S_AUART-LOW'
+            OR screen-name = 'S_ERDAT-LOW'
+            OR screen-name = 'P_TOPN'.
+          screen-required = '2'.       " required indicator
+        ENDIF.
+      WHEN 'R2'.                       " order-list field
+        IF p_auto = abap_true.
+          screen-active = '0'.
+        ELSEIF screen-name = 'S_VBELN-LOW'.
+          screen-required = '2'.
+        ENDIF.
+    ENDCASE.
+    MODIFY SCREEN.
+  ENDLOOP.
 
 *----------------------------------------------------------------------*
 * Local class
