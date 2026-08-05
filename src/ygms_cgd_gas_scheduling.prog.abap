@@ -211,17 +211,19 @@ DATA: gt_bdc TYPE TABLE OF bdcdata.
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+* All radio buttons of one group must belong to the same block,
+* therefore both sections live in block B1 with comment headings.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-007.
+SELECTION-SCREEN COMMENT /1(50) TEXT-001.
 PARAMETERS: rb_dmup  RADIOBUTTON GROUP rad1 DEFAULT 'X'
                      USER-COMMAND ucom,
             rb_dmcal RADIOBUTTON GROUP rad1,
             rb_dmdwn RADIOBUTTON GROUP rad1.
-SELECTION-SCREEN END OF BLOCK b1.
-
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+SELECTION-SCREEN ULINE.
+SELECTION-SCREEN COMMENT /1(50) TEXT-002.
 PARAMETERS: rb_cfup  RADIOBUTTON GROUP rad1,
             rb_cfcal RADIOBUTTON GROUP rad1.
-SELECTION-SCREEN END OF BLOCK b2.
+SELECTION-SCREEN END OF BLOCK b1.
 
 * File upload block (Stage 1 + Stage 2 upload)
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
@@ -808,11 +810,11 @@ FORM f_dm_upload.
         ls_map    TYPE ty_gamap,
         lv_ok     TYPE char1,
         lv_answer TYPE char1,
-        lt_dmd    TYPE TABLE OF yrxa_cgd_gaid_dmd,
-        ls_dmd    TYPE yrxa_cgd_gaid_dmd,
-        lt_log    TYPE TABLE OF yrxa_gaid_dmd_log,
-        ls_log    TYPE yrxa_gaid_dmd_log,
-        lt_exist  TYPE TABLE OF yrxa_cgd_gaid_dmd,
+        lt_dmd    TYPE TABLE OF yrxa_cgdgaid_dmd,
+        ls_dmd    TYPE yrxa_cgdgaid_dmd,
+        lt_log    TYPE TABLE OF yrxa_gaid_dmdlog,
+        ls_log    TYPE yrxa_gaid_dmdlog,
+        lt_exist  TYPE TABLE OF yrxa_cgdgaid_dmd,
         lt_dup    TYPE TABLE OF ty_upl,
         ls_upl    TYPE ty_upl,
         lv_lines  TYPE i,
@@ -892,7 +894,7 @@ FORM f_dm_upload.
       ls_log-ernam    = sy-uname.
       APPEND ls_log TO lt_log.
     ENDLOOP.
-    MODIFY yrxa_gaid_dmd_log FROM TABLE lt_log.
+    MODIFY yrxa_gaid_dmdlog FROM TABLE lt_log.
     COMMIT WORK.
     PERFORM f_show_err_popup USING gt_err 'Upload Errors'.
     RETURN.
@@ -900,7 +902,7 @@ FORM f_dm_upload.
 
 * Existing data check (re-upload)
   IF gt_upl[] IS NOT INITIAL.
-    SELECT * FROM yrxa_cgd_gaid_dmd
+    SELECT * FROM yrxa_cgdgaid_dmd
       INTO TABLE lt_exist
       FOR ALL ENTRIES IN gt_upl
       WHERE gas_day  = gt_upl-gas_day
@@ -936,7 +938,7 @@ FORM f_dm_upload.
       ls_log-ernam     = sy-uname.
       APPEND ls_log TO lt_log.
     ENDLOOP.
-    MODIFY yrxa_gaid_dmd_log FROM TABLE lt_log.
+    MODIFY yrxa_gaid_dmdlog FROM TABLE lt_log.
     COMMIT WORK.
     IF lv_answer <> '1'.
       MESSAGE 'Upload cancelled by user' TYPE 'S' DISPLAY LIKE 'W'.
@@ -967,8 +969,8 @@ FORM f_dm_upload.
     APPEND ls_log TO lt_log.
   ENDLOOP.
 
-  MODIFY yrxa_cgd_gaid_dmd FROM TABLE lt_dmd.
-  MODIFY yrxa_gaid_dmd_log FROM TABLE lt_log.
+  MODIFY yrxa_cgdgaid_dmd FROM TABLE lt_dmd.
+  MODIFY yrxa_gaid_dmdlog FROM TABLE lt_log.
   COMMIT WORK.
   MESSAGE 'Successfully uploaded' TYPE 'S'.
 ENDFORM.
@@ -1118,7 +1120,7 @@ FORM f_dm_calculate.
     ENDLOOP.
 *   Uploaded demand of the GA ID
     SELECT SINGLE upl_gaid gaid_desc dmd_qty
-      FROM yrxa_cgd_gaid_dmd
+      FROM yrxa_cgdgaid_dmd
       INTO (ls_alv-upl_gaid, ls_alv-gaid_desc, ls_alv-upl_qty)
       WHERE gas_day  = p_gday
         AND sap_gaid = lo_grp-sap_gaid.
@@ -1158,9 +1160,9 @@ ENDFORM.
 *&      Form  F_DM_SAVE
 *&---------------------------------------------------------------------*
 FORM f_dm_save.
-  DATA: lt_cal    TYPE TABLE OF yrxa_gaid_cal_dmd,
-        ls_cal    TYPE yrxa_gaid_cal_dmd,
-        lt_exist  TYPE TABLE OF yrxa_gaid_cal_dmd,
+  DATA: lt_cal    TYPE TABLE OF yrxa_gaid_caldmd,
+        ls_cal    TYPE yrxa_gaid_caldmd,
+        lt_exist  TYPE TABLE OF yrxa_gaid_caldmd,
         lt_old    TYPE TABLE OF yrxa_gaid_dcq,
         ls_old    TYPE yrxa_gaid_dcq,
         ls_dcqdb  TYPE yrxa_gaid_dcq,
@@ -1170,7 +1172,7 @@ FORM f_dm_save.
 
 * Existing data check
   IF gt_alv1[] IS NOT INITIAL.
-    SELECT * FROM yrxa_gaid_cal_dmd
+    SELECT * FROM yrxa_gaid_caldmd
       INTO TABLE lt_exist
       FOR ALL ENTRIES IN gt_alv1
       WHERE gas_day  = gt_alv1-gas_day
@@ -1206,7 +1208,7 @@ FORM f_dm_save.
     ls_cal-ernam       = sy-uname.
     APPEND ls_cal TO lt_cal.
   ENDLOOP.
-  INSERT yrxa_gaid_cal_dmd FROM TABLE lt_cal ACCEPTING DUPLICATE KEYS.
+  INSERT yrxa_gaid_caldmd FROM TABLE lt_cal ACCEPTING DUPLICATE KEYS.
 
 * Upsert contract level data (key: Contract / Gas Day)
   IF gt_cdcq[] IS NOT INITIAL.
@@ -1257,8 +1259,8 @@ ENDFORM.
 * Stage 1 - Download the latest calculated demanded schedule (matrix)
 *----------------------------------------------------------------------*
 FORM f_dm_download.
-  DATA: lt_cal    TYPE TABLE OF yrxa_gaid_cal_dmd,
-        ls_cal    TYPE yrxa_gaid_cal_dmd,
+  DATA: lt_cal    TYPE TABLE OF yrxa_gaid_caldmd,
+        ls_cal    TYPE yrxa_gaid_caldmd,
         lt_days   LIKE gt_dates,
         lt_matrix TYPE TABLE OF ty_matrix,
         ls_matrix TYPE ty_matrix,
@@ -1273,7 +1275,7 @@ FORM f_dm_download.
     MESSAGE 'Gas Day is mandatory' TYPE 'E'.
   ENDIF.
 
-  SELECT * FROM yrxa_gaid_cal_dmd
+  SELECT * FROM yrxa_gaid_caldmd
     INTO TABLE lt_cal
     WHERE gas_day  IN s_gday
       AND upl_gaid IN s_gaid2.
@@ -1494,8 +1496,8 @@ FORM f_cf_upload.
         ls_ac      TYPE ty_kna1,
         lt_bygaid  TYPE TABLE OF ty_upl,
         lt_infile  TYPE TABLE OF kunnr,
-        lt_cald    TYPE TABLE OF yrxa_gaid_cal_dmd,
-        ls_cald    TYPE yrxa_gaid_cal_dmd,
+        lt_cald    TYPE TABLE OF yrxa_gaid_caldmd,
+        ls_cald    TYPE yrxa_gaid_caldmd,
         lt_contr   TYPE TABLE OF yrxa_gaid_dcq,
         lt_nomi    TYPE TABLE OF ty_nomi,
         ls_upl     TYPE ty_upl,
@@ -1599,7 +1601,7 @@ FORM f_cf_upload.
       ENDLOOP.
 *     latest calculated demanded qty of the GA ID
       CLEAR lt_cald[].
-      SELECT * FROM yrxa_gaid_cal_dmd
+      SELECT * FROM yrxa_gaid_caldmd
         INTO TABLE lt_cald
         WHERE gas_day  = lo_g-gas_day
           AND sap_gaid = lo_g-bsark.
@@ -1739,8 +1741,8 @@ FORM f_cf_calculate.
   DATA: lt_dcq    TYPE TABLE OF yrxa_gaid_dcq,
         lt_cnf    TYPE TABLE OF yrxa_cgd_cnf_qty,
         ls_c      TYPE yrxa_cgd_cnf_qty,
-        lt_dmd    TYPE TABLE OF yrxa_cgd_gaid_dmd,
-        ls_d      TYPE yrxa_cgd_gaid_dmd,
+        lt_dmd    TYPE TABLE OF yrxa_cgdgaid_dmd,
+        ls_d      TYPE yrxa_cgdgaid_dmd,
         ls_alv    TYPE ty_alv2,
         lv_sum    TYPE ygms_cgd_qty,
         lv_cnf    TYPE ygms_cgd_qty,
@@ -1773,7 +1775,7 @@ FORM f_cf_calculate.
   SORT lt_cnf BY gas_day kunnr.
 
 * GA ID text from the demanded upload (per FS)
-  SELECT * FROM yrxa_cgd_gaid_dmd
+  SELECT * FROM yrxa_cgdgaid_dmd
     INTO TABLE lt_dmd
     FOR ALL ENTRIES IN lt_dcq
     WHERE gas_day  = lt_dcq-gas_day
@@ -1883,8 +1885,8 @@ FORM f_cf_validate CHANGING cv_ok TYPE char1.
         lv_vbeln_x TYPE vbeln_va,
         lt_cur     TYPE TABLE OF yrvt_cont_dcq,
         ls_cur     TYPE yrvt_cont_dcq,
-        lt_cald    TYPE TABLE OF yrxa_gaid_cal_dmd,
-        ls_cald    TYPE yrxa_gaid_cal_dmd,
+        lt_cald    TYPE TABLE OF yrxa_gaid_caldmd,
+        ls_cald    TYPE yrxa_gaid_caldmd,
         lv_qsum    TYPE ygms_cgd_qty,
         lv_dsum    TYPE ygms_cgd_qty,
         lv_dmax    TYPE ygms_cgd_qty,
@@ -2010,7 +2012,7 @@ FORM f_cf_validate CHANGING cv_ok TYPE char1.
 
 *   latest calculated demanded qty of the GA ID
     CLEAR: lv_cal, lt_cald[].
-    SELECT * FROM yrxa_gaid_cal_dmd
+    SELECT * FROM yrxa_gaid_caldmd
       INTO TABLE lt_cald
       WHERE gas_day  = lo_grp-gas_day
         AND sap_gaid = lo_grp-sap_gaid.
@@ -2031,7 +2033,7 @@ FORM f_cf_validate CHANGING cv_ok TYPE char1.
     ENDIF.
 
 *   5. demanded qty range check with current DCQ sums
-    SELECT COUNT(*) FROM yrxa_cgd_gaid_dmd
+    SELECT COUNT(*) FROM yrxa_cgdgaid_dmd
       WHERE gas_day  = lo_grp-gas_day
         AND sap_gaid = lo_grp-sap_gaid.
     IF sy-dbcnt > 0.
@@ -2067,11 +2069,11 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  F_CF_LOG
 *&---------------------------------------------------------------------*
-* Append YRXA_CONT_CNF_LOG rows. iv_mode 'V' validate / 'N' nomination
+* Append YRXA_CONT_CNFLOG rows. iv_mode 'V' validate / 'N' nomination
 *----------------------------------------------------------------------*
 FORM f_cf_log USING iv_mode TYPE char1.
-  DATA: lt_log TYPE TABLE OF yrxa_cont_cnf_log,
-        ls_log TYPE yrxa_cont_cnf_log,
+  DATA: lt_log TYPE TABLE OF yrxa_cont_cnflog,
+        ls_log TYPE yrxa_cont_cnflog,
         ls_alv TYPE ty_alv2,
         ls_e   TYPE ty_err2,
         ls_n   TYPE ty_nomn_error.
@@ -2121,7 +2123,7 @@ FORM f_cf_log USING iv_mode TYPE char1.
     ENDIF.
     APPEND ls_log TO lt_log.
   ENDLOOP.
-  MODIFY yrxa_cont_cnf_log FROM TABLE lt_log.
+  MODIFY yrxa_cont_cnflog FROM TABLE lt_log.
   COMMIT WORK.
 ENDFORM.
 

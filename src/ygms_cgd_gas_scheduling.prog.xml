@@ -54,6 +54,12 @@
      <LENGTH>34</LENGTH>
     </item>
     <item>
+     <ID>I</ID>
+     <KEY>007</KEY>
+     <ENTRY>CGD Gas Scheduling</ENTRY>
+     <LENGTH>18</LENGTH>
+    </item>
+    <item>
      <ID>S</ID>
      <KEY>P_FILE</KEY>
      <ENTRY>File Path</ENTRY>
