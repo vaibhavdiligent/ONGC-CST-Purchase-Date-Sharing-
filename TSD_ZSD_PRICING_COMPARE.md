@@ -155,8 +155,17 @@ so one glance answers "is pricing correct or not".
 
 **Screen 2 — Pricing detail** (double-click an order row): popup ALV with the
 full condition-by-condition and field-by-field comparison of that order —
-status, rate X/Y/delta, pricing unit, UoM, condition value X/Y/delta, remark.
-Layout save and Excel export available on both grids.
+status, rate X/Y/delta, pricing unit, UoM, condition value X/Y/delta, the
+pricing date used, remark. Layout save and Excel export available on both
+grids.
+
+**Level 3 — VK13 jump** (double-click a condition row in the detail): the
+program validates the row is a real pricing condition type (T685, usage A,
+application V) and calls transaction **VK13** with the condition type pre-set
+(parameter ID `VKS`, `WITH AUTHORITY-CHECK`). The record to inspect is the one
+valid on the **pricing date shown in the row**. Double-clicking a value-field
+row (NETPR, KZWI1, …) shows an explanatory message instead — there is no
+condition record behind those.
 
 ## 7. Setup / transport notes
 

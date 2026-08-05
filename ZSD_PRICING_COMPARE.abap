@@ -54,7 +54,10 @@
 *&             ERROR). The report header shows the overall RESULT.
 *&   Screen 2: double-click an order row -> popup ALV with the full
 *&             condition-by-condition and field-by-field comparison
-*&             of that order.
+*&             of that order (incl. the pricing date used).
+*&   Level 3:  double-click a condition row in the detail -> VK13 for
+*&             that condition type (check the record valid on the
+*&             pricing date shown in the row).
 *&
 *& Amounts are normalised to external format before comparison, i.e.
 *& the TCURX decimal shift is applied (JPY has 0 decimals -> internal
@@ -195,6 +198,7 @@ CLASS lcl_app DEFINITION FINAL.
         kwert_old  TYPE ty_amount,
         kwert_new  TYPE ty_amount,
         kwert_diff TYPE ty_amount,
+        prsdt      TYPE prsdt,         " pricing date used for order Y
         remark     TYPE c LENGTH 200,
         color      TYPE lvc_t_scol,
       END OF ty_result,
@@ -277,7 +281,8 @@ CLASS lcl_app DEFINITION FINAL.
                 it_y       TYPE ty_t_cond
                 it_vbap_y  TYPE ty_t_vbap
                 iv_netwr_y TYPE vbak-netwr
-                iv_waerk_y TYPE vbak-waerk.
+                iv_waerk_y TYPE vbak-waerk
+                iv_prsdt   TYPE prsdt.
 
     METHODS compare_fields
       IMPORTING is_vbak    TYPE ty_vbak
@@ -285,7 +290,8 @@ CLASS lcl_app DEFINITION FINAL.
                 it_vbap    TYPE ty_t_vbap
                 it_vbap_y  TYPE ty_t_vbap
                 iv_netwr_y TYPE vbak-netwr
-                iv_waerk_y TYPE vbak-waerk.
+                iv_waerk_y TYPE vbak-waerk
+                iv_prsdt   TYPE prsdt.
 
     METHODS set_occurrence
       CHANGING ct_cond TYPE ty_t_cond.
@@ -309,6 +315,10 @@ CLASS lcl_app DEFINITION FINAL.
       IMPORTING iv_vbeln_x TYPE vbeln_va.
 
     METHODS on_double_click
+      FOR EVENT double_click OF cl_salv_events_table
+      IMPORTING row column.
+
+    METHODS on_detail_click
       FOR EVENT double_click OF cl_salv_events_table
       IMPORTING row column.
 
@@ -490,6 +500,7 @@ CLASS lcl_app IMPLEMENTATION.
                            vbeln_y = lv_vbeln_y
                            kunnr   = is_vbak-kunnr
                            kschl   = space
+                           prsdt   = lv_prsdt
                            status  = c_error
                            remark  = lv_error ) ).
       ls_sum-status = c_error.
@@ -509,7 +520,8 @@ CLASS lcl_app IMPLEMENTATION.
                         it_y       = lt_cond_y
                         it_vbap_y  = lt_vbap_y
                         iv_netwr_y = lv_netwr_y
-                        iv_waerk_y = lv_waerk_y ).
+                        iv_waerk_y = lv_waerk_y
+                        iv_prsdt   = lv_prsdt ).
 
     " ------- per-order verdict for the overview ALV -------------------
     ls_sum-netwr_y    = to_external( iv_amount = CONV #( lv_netwr_y )
@@ -705,6 +717,7 @@ CLASS lcl_app IMPLEMENTATION.
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
           kunnr     = is_vbak-kunnr
+          prsdt     = iv_prsdt
           posnr     = ls_x-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_x-posnr ]-matnr
                                OPTIONAL )
@@ -789,6 +802,7 @@ CLASS lcl_app IMPLEMENTATION.
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
           kunnr     = is_vbak-kunnr
+          prsdt     = iv_prsdt
           posnr     = ls_y-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_y-posnr ]-matnr
                                OPTIONAL )
@@ -808,7 +822,8 @@ CLASS lcl_app IMPLEMENTATION.
                     it_vbap    = it_vbap
                     it_vbap_y  = it_vbap_y
                     iv_netwr_y = iv_netwr_y
-                    iv_waerk_y = iv_waerk_y ).
+                    iv_waerk_y = iv_waerk_y
+                    iv_prsdt   = iv_prsdt ).
 
   ENDMETHOD.
 
@@ -840,6 +855,7 @@ CLASS lcl_app IMPLEMENTATION.
         add_result( VALUE #( vbeln_x = is_vbak-vbeln
                              vbeln_y = iv_vbeln_y
                              kunnr   = is_vbak-kunnr
+                             prsdt   = iv_prsdt
                              posnr   = ls_vbap-posnr
                              matnr   = ls_vbap-matnr
                              kschl   = 'ITEM'
@@ -858,6 +874,7 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-vbeln_x = is_vbak-vbeln.
         ls_res-vbeln_y = iv_vbeln_y.
         ls_res-kunnr   = is_vbak-kunnr.
+        ls_res-prsdt   = iv_prsdt.
         ls_res-posnr   = ls_vbap-posnr.
         ls_res-matnr   = ls_vbap-matnr.
         ls_res-kschl   = lv_field.
@@ -902,6 +919,7 @@ CLASS lcl_app IMPLEMENTATION.
     ls_res-vbeln_x  = is_vbak-vbeln.
     ls_res-vbeln_y  = iv_vbeln_y.
     ls_res-kunnr    = is_vbak-kunnr.
+    ls_res-prsdt    = iv_prsdt.
     ls_res-posnr    = '000000'.
     ls_res-kschl    = 'VBAK-NETWR'.
     ls_res-waers    = is_vbak-waerk.
@@ -1137,6 +1155,42 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD on_detail_click.
+
+    " third drill level: jump into the condition record maintenance
+    " (VK13) for the double-clicked condition type - the record valid
+    " on the order's pricing date (PRSDT column) is the one to check
+    READ TABLE mt_detail INTO DATA(ls_det) INDEX row.
+    IF sy-subrc <> 0 OR ls_det-kschl IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " only real pricing condition types can be displayed in VK13 -
+    " field rows (NETPR, KZWI1, VBAK-NETWR, ...) have no record
+    DATA lv_kschl TYPE kscha.
+    lv_kschl = ls_det-kschl.
+    SELECT SINGLE kschl FROM t685
+      WHERE kvewe = 'A'
+        AND kappl = 'V'
+        AND kschl = @lv_kschl
+      INTO @lv_kschl.
+    IF sy-subrc <> 0.
+      MESSAGE |{ ls_det-kschl } is a value field - no condition record (VK13) behind it|
+        TYPE 'S'.
+      RETURN.
+    ENDIF.
+
+    SET PARAMETER ID 'VKS' FIELD lv_kschl.
+    TRY.
+        CALL TRANSACTION 'VK13' WITH AUTHORITY-CHECK.
+      CATCH cx_sy_authorization_error.
+        MESSAGE 'No authorization for transaction VK13'(m07)
+          TYPE 'S' DISPLAY LIKE 'E'.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
   METHOD display_detail.
 
     " screen 2: condition-by-condition + field-by-field comparison of
@@ -1187,9 +1241,13 @@ CLASS lcl_app IMPLEMENTATION.
             lo_cols->get_column( 'KWERT_OLD' )->set_medium_text( 'Value X (ECC)' ).
             lo_cols->get_column( 'KWERT_NEW' )->set_medium_text( 'Value Y (S/4)' ).
             lo_cols->get_column( 'KWERT_DIFF' )->set_medium_text( 'Value delta' ).
+            lo_cols->get_column( 'PRSDT' )->set_medium_text( 'Pricing date' ).
             lo_cols->get_column( 'REMARK' )->set_medium_text( 'Remark' ).
           CATCH cx_salv_not_found.
         ENDTRY.
+
+        " double-click a condition row -> VK13 for that condition type
+        SET HANDLER on_detail_click FOR lo_alv->get_event( ).
 
         lo_alv->set_screen_popup( start_column = 5
                                   end_column   = 170
