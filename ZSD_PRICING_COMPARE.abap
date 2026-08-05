@@ -610,6 +610,14 @@ CLASS lcl_app IMPLEMENTATION.
       INTO TABLE @DATA(lt_prcd).
 
     LOOP AT lt_prcd INTO DATA(ls_prcd).
+      " keep only comparable lines: inactive and statistical lines are
+      " excluded HERE, before occurrence numbering, so that both sides
+      " number their occurrences on the same basis
+      IF ls_prcd-kinak IS NOT INITIAL
+         OR ls_prcd-kstat = 'X'
+         OR ls_prcd-kschl IS INITIAL.
+        CONTINUE.
+      ENDIF.
       DATA(lv_waers) = COND waers( WHEN ls_prcd-waers IS NOT INITIAL
                                    THEN ls_prcd-waers
                                    ELSE iv_waerk ).
@@ -784,11 +792,44 @@ CLASS lcl_app IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
+      " ------- find the matching Y condition line ---------------------
+      " 1st: same item + type + occurrence (exact position match)
+      " 2nd: any unused line of the type with IDENTICAL values - the
+      "      step sequence may differ between the ECC and S/4 pricing
+      "      procedures, which must not be reported as missing
+      " 3rd: any unused line of the type (compared -> shows the delta)
+      " only when the type does not exist on Y at all -> MISSING_S4
+      DATA(lv_found) = abap_false.
       READ TABLE lt_y ASSIGNING FIELD-SYMBOL(<ls_y>)
            WITH KEY posnr = ls_x-posnr
                     kschl = ls_x-kschl
-                    occ   = ls_x-occ.
-      IF sy-subrc <> 0.
+                    occ   = ls_x-occ
+                    used  = abap_false.
+      IF sy-subrc = 0.
+        lv_found = abap_true.
+      ENDIF.
+      IF lv_found = abap_false.
+        LOOP AT lt_y ASSIGNING <ls_y>
+             WHERE posnr = ls_x-posnr
+               AND kschl = ls_x-kschl
+               AND used  = abap_false
+               AND rate  = ls_x-rate
+               AND kwert = ls_x-kwert.
+          lv_found = abap_true.
+          EXIT.
+        ENDLOOP.
+      ENDIF.
+      IF lv_found = abap_false.
+        LOOP AT lt_y ASSIGNING <ls_y>
+             WHERE posnr = ls_x-posnr
+               AND kschl = ls_x-kschl
+               AND used  = abap_false.
+          lv_found = abap_true.
+          EXIT.
+        ENDLOOP.
+      ENDIF.
+
+      IF lv_found = abap_false.
         ms_stat-missing = ms_stat-missing + 1.
         ls_res-status = c_miss.
         IF ls_x-rate = 0 AND ls_x-kwert = 0.
@@ -1022,23 +1063,31 @@ CLASS lcl_app IMPLEMENTATION.
 
     " occurrence index: n-th appearance of a condition type within an
     " item, in pricing procedure order - used as matching key so that
-    " condition types appearing twice are compared pairwise
-    DATA: lv_posnr TYPE posnr_va,
-          lv_kschl TYPE kscha,
-          lv_occ   TYPE i.
+    " condition types appearing twice are compared pairwise.
+    " counted per item + condition type over the WHOLE item (not only
+    " consecutive rows), otherwise repeats separated by other types
+    " would all get occurrence 1
+    TYPES: BEGIN OF lty_cnt,
+             posnr TYPE posnr_va,
+             kschl TYPE kscha,
+             cnt   TYPE i,
+           END OF lty_cnt.
+    DATA lt_cnt TYPE HASHED TABLE OF lty_cnt
+                     WITH UNIQUE KEY posnr kschl.
+    FIELD-SYMBOLS <ls_cnt> TYPE lty_cnt.
 
     LOOP AT ct_cond ASSIGNING FIELD-SYMBOL(<ls_cond>).
-      IF <ls_cond>-posnr <> lv_posnr.
-        CLEAR: lv_kschl, lv_occ.
-        lv_posnr = <ls_cond>-posnr.
+      READ TABLE lt_cnt ASSIGNING <ls_cnt>
+           WITH TABLE KEY posnr = <ls_cond>-posnr
+                          kschl = <ls_cond>-kschl.
+      IF sy-subrc <> 0.
+        INSERT VALUE lty_cnt( posnr = <ls_cond>-posnr
+                              kschl = <ls_cond>-kschl
+                              cnt   = 0 )
+               INTO TABLE lt_cnt ASSIGNING <ls_cnt>.
       ENDIF.
-      IF <ls_cond>-kschl = lv_kschl.
-        lv_occ = lv_occ + 1.
-      ELSE.
-        lv_occ = 1.
-        lv_kschl = <ls_cond>-kschl.
-      ENDIF.
-      <ls_cond>-occ = lv_occ.
+      <ls_cnt>-cnt = <ls_cnt>-cnt + 1.
+      <ls_cond>-occ = <ls_cnt>-cnt.
     ENDLOOP.
 
   ENDMETHOD.

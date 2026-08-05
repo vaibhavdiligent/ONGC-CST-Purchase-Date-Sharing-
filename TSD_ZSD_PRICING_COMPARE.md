@@ -65,8 +65,17 @@ migrated configuration, unaffected by condition records changed since then.
 - X's conditions: `PRCD_ELEMENTS` via `VBAK-KNUMV` (alternative access in
   S/4HANA would be CDS view `V_KONV`).
 - Match key: **item (KPOSN) + condition type (KSCHL) + occurrence** (n-th
-  appearance of the type within the item, in STUNR/ZAEHK order) — so condition
-  types appearing twice are compared pairwise.
+  appearance of the type within the item, counted over the whole item in
+  STUNR/ZAEHK order) — so condition types appearing twice are compared
+  pairwise. Inactive (`KINAK`) and statistical (`KSTAT`) lines are excluded
+  **before** occurrence numbering on both sides, so both sides number on the
+  same basis.
+- **Fallback matching** (prevents false MISSING when the step sequence
+  differs between the ECC and S/4 pricing procedures): if no Y line matches
+  the exact occurrence, the program takes an unused Y line of the same
+  item + type with **identical values**, then any unused line of that type
+  (which is then compared and shows the delta). `MISSING_S4` is reported only
+  when the condition type does not exist on Y at all for that item.
 - Compared per condition line: rate **KBETR**, pricing unit **KPEIN**,
   condition unit **KMEIN**, condition value **KWERT**.
 - **Stored value fields** compared between X and Y (customer requirement),
