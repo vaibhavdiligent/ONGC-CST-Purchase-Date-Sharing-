@@ -231,6 +231,7 @@ FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_err    TYPE i,
         lv_dup    TYPE i,
+        lv_zero   TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_off    TYPE vkbur,
@@ -277,6 +278,30 @@ FORM process_selected USING p_action TYPE char1.
         lv_dup = lv_dup + 1.
         gs_out-order_no = lv_exord.
         gs_out-remarks  = |Rebate order { lv_exord } already created|.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
+        CONTINUE.
+      ENDIF.
+
+*     Zero-amount group member (GAIL 05.08.2026): a row with no discount
+*     value / no order quantity creates NO rebate order, but it has already
+*     flowed L1 -> L2 as a legitimate 'Grp O.k' / waiver line. Complete it
+*     with a dummy SD document ('GROUP OK') and Approved status so the group
+*     is treated as processed and can be run again next month - instead of
+*     being reported as a failed creation and left stuck at Pending.
+      IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
+        lv_zero = lv_zero + 1.
+        gs_appr-wf_status = '40'.          " Completed
+        gs_appr-status    = 'A'.           " Approved (clears 'P' Pending)
+        gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
+        gs_appr-l3_user   = sy-uname.
+        gs_appr-l3_date   = sy-datum.
+        gs_appr-l3_time   = sy-uzeit.
+        gs_appr-remarks   = 'Group OK - zero lifting, no order created'.
+        MODIFY ycis_apprvl FROM gs_appr.
+        COMMIT WORK AND WAIT.
+        gs_out-order_no = 'GROUP OK'.
+        gs_out-remarks  = 'Group OK - zero lifting, no order created'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
         CONTINUE.
@@ -329,10 +354,10 @@ FORM process_selected USING p_action TYPE char1.
   ENDIF.
 
   IF p_action = 'E'.
-    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0.
+    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
+      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_zero } group-OK completed (dummy SD), { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
     ENDIF.
     IF lv_cnt > 0.
       PERFORM show_stmt_popup.

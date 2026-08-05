@@ -347,12 +347,26 @@ FORM process_selected USING p_action TYPE char1.
         CONTINUE.
       ENDIF.
 
-*     Zero-amount guard (GAIL 30.07.2026): a row with no discount value or
-*     no order quantity must NOT create a rebate order. Skip it with a clear
-*     remark instead of attempting (and reporting) a failed creation.
+*     Zero-amount group member (GAIL 05.08.2026): a row with no discount
+*     value / no order quantity creates NO rebate order, but it has already
+*     flowed L1 -> L2 as a legitimate 'Grp O.k' / waiver line (a pure zero
+*     row with no waiver is blocked at L1). It must still be COMPLETED with
+*     a dummy SD document ('GROUP OK') and Approved status, so the group is
+*     treated as processed and can be run again next month - instead of
+*     being left stuck at Pending with a blank SD document.
       IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
         lv_zero = lv_zero + 1.
-        gs_out-remarks = 'Zero rebate amount - order not created'.
+        gs_appr-wf_status = '40'.          " Completed
+        gs_appr-status    = 'A'.           " Approved (clears 'P' Pending)
+        gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
+        gs_appr-l3_user   = sy-uname.
+        gs_appr-l3_date   = sy-datum.
+        gs_appr-l3_time   = sy-uzeit.
+        gs_appr-remarks   = 'Group OK - zero lifting, no order created'.
+        MODIFY ycis_apprvl FROM gs_appr.
+        COMMIT WORK AND WAIT.
+        gs_out-order_no = 'GROUP OK'.
+        gs_out-remarks  = 'Group OK - zero lifting, no order created'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
         CONTINUE.
@@ -417,7 +431,7 @@ FORM process_selected USING p_action TYPE char1.
 *     only already-created lines were selected
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_zero } zero-amount skipped, { lv_err } failed - see 'Remarks' column| TYPE 'S'.
+      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_zero } group-OK completed (dummy SD), { lv_err } failed - see 'Remarks' column| TYPE 'S'.
     ENDIF.
 *   The verification & confirmation pop-up is shown at L1 and L2 (the levels
 *   that verify/confirm the figures), NOT at L3 execution. (GAIL 30.07.2026)
