@@ -67,11 +67,16 @@ migrated configuration, unaffected by condition records changed since then.
 - Match key: **item (KPOSN) + condition type (KSCHL) + occurrence** (n-th
   appearance of the type within the item, in STUNR/ZAEHK order) — so condition
   types appearing twice are compared pairwise.
-- Compared fields: rate **KBETR**, pricing unit **KPEIN**, condition unit
-  **KMEIN**, condition value **KWERT** (create mode only), plus one row per
-  item for the item net value **NETWR**.
-- Tolerance `P_TOL` (absolute, external units; default 0 — with JPY even ¥1
-  deltas are relevant).
+- Compared per condition line: rate **KBETR**, pricing unit **KPEIN**,
+  condition unit **KMEIN**, condition value **KWERT**.
+- **Stored value fields** compared between X and Y (customer requirement),
+  shown as extra rows with the field name in the Cond.Type/Field column:
+  - `VBAP` per item: `NETWR`, `NETPR`, `SKTOF`, `WAVWR`, `KZWI1`–`KZWI6`
+    (pricing subtotals), `MWSBP` (tax)
+  - `VBAK` header: `NETWR`
+  - Amount fields are TCURX-converted before comparison; non-amount fields
+    (e.g. `SKTOF`) are compared as raw values with X/Y shown in the remark.
+- Zero tolerance — with JPY even ¥1 deltas are relevant.
 
 ### Amount normalisation (critical for JPY)
 
@@ -133,13 +138,25 @@ sold-to party of each row. All BAPI input/output variables are cleared
 explicitly at the start of each order so no values carry over between the
 orders of one run.
 
-## 6. Output
+## 6. Output — two screens
 
-SALV grid (layout save enabled, Excel export via standard ALV functions):
-X order, Y order, item, material, condition type, status (color-coded),
-rate X/Y/delta, pricing unit X/Y, UoM X/Y, condition value X/Y/delta, remark.
-Header block shows run totals (orders, errors, OK / mismatch / missing / new /
-manual counts).
+**Screen 1 — Order overview** (one row per order): customer, old/new order
+numbers, item count, net value X / Y / delta, check counters (total, OK,
+differences, warnings) and a color-coded verdict:
+
+| Verdict | Meaning |
+|---|---|
+| `ALL OK` (green) | Every check passed — S/4 reproduces the ECC pricing (warnings, if any, are informational) |
+| `CHECK` (red) | At least one real difference — double-click the row for detail |
+| `ERROR` (red) | Copy order Y could not be created (BAPI messages in remark) |
+
+The report header shows the overall RESULT line ("ALL OK" or "N differences")
+so one glance answers "is pricing correct or not".
+
+**Screen 2 — Pricing detail** (double-click an order row): popup ALV with the
+full condition-by-condition and field-by-field comparison of that order —
+status, rate X/Y/delta, pricing unit, UoM, condition value X/Y/delta, remark.
+Layout save and Excel export available on both grids.
 
 ## 7. Setup / transport notes
 
