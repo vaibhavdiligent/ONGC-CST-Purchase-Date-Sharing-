@@ -64,6 +64,17 @@ DATA: gv_refresh_grid TYPE c LENGTH 1,
 " message when there was nothing to report.
 DATA: gv_mail_count TYPE i.
 
+" Cache of AUTHORITY-CHECK results per sales office, so the check runs
+" once per distinct VKBUR instead of once per row.
+TYPES: BEGIN OF ty_vk_auth,
+         vkbur TYPE vkbur,
+         ok    TYPE c LENGTH 1,
+       END OF ty_vk_auth.
+DATA: gt_vk_auth TYPE SORTED TABLE OF ty_vk_auth WITH UNIQUE KEY vkbur.
+
+" Red used to flag rows the user may not change (info_fname='ROWCOLOR')
+CONSTANTS: gc_row_red TYPE char4 VALUE 'C600'.
+
 DATA: lv_fn_from_day TYPE c LENGTH 2,
       lv_fn_to_day   TYPE c LENGTH 2,
       lv_fn_next_day TYPE sy-datum,
@@ -82,10 +93,13 @@ TYPES: BEGIN OF ty_action_cols,
          at_changed  TYPE c LENGTH 1,   " 'X' = row was edited in R4 mode
        END OF ty_action_cols.
 
-" Display-only fields: cell style (editability) + cell colour (SO error)
+" Display-only fields: cell style (editability), cell colour (SO error),
+" row colour (unauthorized sales office) and the per-row authorization flag.
 TYPES: BEGIN OF ty_display_cols,
-         cell      TYPE lvc_t_styl,     " stylefname='CELL': Not Posted rows disabled
+         cell      TYPE lvc_t_styl,     " stylefname='CELL': SO editable only when AT ticked
          cellcolor TYPE lvc_t_scol,     " ctab_fname='CELLCOLOR': SO error in red
+         rowcolor  TYPE char4,          " info_fname='ROWCOLOR': whole line red
+         auth_ok   TYPE c LENGTH 1,     " 'X' = user may change this row's sales office
        END OF ty_display_cols.
 
 TYPES: BEGIN OF ty_final_ext.

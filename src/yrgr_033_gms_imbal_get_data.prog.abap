@@ -27,8 +27,9 @@ FORM get_data.
     IF s_vk4 IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vk4.
     ENDIF.
-    " Show only sales offices the user is authorized for (object YV_VKBUR)
-    PERFORM filter_by_vkbur_auth.
+    " NOTE: the list is NOT filtered by authorization – the user sees every
+    " entry matching the input. YV_VKBUR only restricts who may CHANGE a
+    " row; that is evaluated per row below and enforced on edit/save.
   ELSEIF r1 EQ 'X'.
     " s_vkbur belongs to r1 only – it must never filter the r3 (Till Date) list
     IF s_vkbur IS NOT INITIAL.
@@ -54,8 +55,11 @@ FORM get_data.
       EXIT.
     ENDSELECT.
 
-    " R4 mode: SO / Qty / Remarks are only editable once AT is checked
+    " R4 mode: record whether this row's sales office may be changed,
+    " and make SO editable only once AT is ticked.
     IF r4 EQ 'X'.
+      PERFORM is_vkbur_authorized USING ls_final-vkbur
+                                  CHANGING ls_final_ext-auth_ok.
       PERFORM set_row_style CHANGING ls_final_ext.
     ENDIF.
 
@@ -89,51 +93,51 @@ FORM set_row_style CHANGING ps_row TYPE ty_final_ext.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form FILTER_BY_VKBUR_AUTH
-*& Removes rows whose Sales Office the user is not authorized for
-*& (authorization object YV_VKBUR, field VKBUR). Each distinct VKBUR is
-*& checked once, so the AUTHORITY-CHECK cost does not grow with row count.
+*& Form IS_VKBUR_AUTHORIZED
+*& Returns 'X' in p_ok when the user may CHANGE data for this sales
+*& office (authorization object YV_VKBUR, field WERKS).
+*& Viewing is never restricted – the full list is always displayed.
+*& Results are cached in gt_vk_auth, so AUTHORITY-CHECK runs once per
+*& distinct sales office rather than once per row.
+*&
+*& NOTE: if YV_VKBUR carries further fields (e.g. ACTVT), they must be
+*& listed here as ID '<name>' DUMMY, otherwise sy-subrc is always 8.
 *&---------------------------------------------------------------------*
-FORM filter_by_vkbur_auth.
-  TYPES: BEGIN OF ty_vk_auth,
-           vkbur TYPE vkbur,
-           ok    TYPE c LENGTH 1,
-         END OF ty_vk_auth.
-  DATA: lt_vk_auth TYPE SORTED TABLE OF ty_vk_auth WITH UNIQUE KEY vkbur,
-        ls_vk_auth TYPE ty_vk_auth.
+FORM is_vkbur_authorized USING p_vkbur TYPE vkbur
+                         CHANGING p_ok TYPE c.
+  DATA: ls_vk_auth TYPE ty_vk_auth.
 
-  LOOP AT lt_final INTO ls_final.
-    READ TABLE lt_vk_auth TRANSPORTING NO FIELDS WITH KEY vkbur = ls_final-vkbur.
-    CHECK sy-subrc NE 0.
-    CLEAR ls_vk_auth.
-    ls_vk_auth-vkbur = ls_final-vkbur.
-    AUTHORITY-CHECK OBJECT 'YV_VKBUR'
-      ID 'VKBUR' FIELD ls_final-vkbur.
-    IF sy-subrc = 0.
-      ls_vk_auth-ok = 'X'.
-    ENDIF.
-    INSERT ls_vk_auth INTO TABLE lt_vk_auth.
-  ENDLOOP.
+  CLEAR p_ok.
 
-  LOOP AT lt_vk_auth INTO ls_vk_auth WHERE ok IS INITIAL.
-    DELETE lt_final WHERE vkbur = ls_vk_auth-vkbur.
-  ENDLOOP.
+  READ TABLE gt_vk_auth INTO ls_vk_auth WITH KEY vkbur = p_vkbur.
+  IF sy-subrc = 0.
+    p_ok = ls_vk_auth-ok.
+    RETURN.
+  ENDIF.
+
+  CLEAR ls_vk_auth.
+  ls_vk_auth-vkbur = p_vkbur.
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'WERKS' FIELD p_vkbur.
+  IF sy-subrc = 0.
+    ls_vk_auth-ok = 'X'.
+  ENDIF.
+  INSERT ls_vk_auth INTO TABLE gt_vk_auth.
+
+  p_ok = ls_vk_auth-ok.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Form CHECK_R4_AUTHORITY
 *& Action Taken (r4) access check – mail of 03.08.2026:
-*&   1. User must hold role ZO_GMS_BKD_NOM_WRFLW_MKTG.
-*&   2. Sales offices entered in s_vk4 must be covered by authorization
-*&      object YV_VKBUR (field VKBUR).
+*& user must hold role ZO_GMS_BKD_NOM_WRFLW_MKTG to run this option.
+*& Sales office authorization is NOT checked here – any office may be
+*& viewed; YV_VKBUR only governs which rows may be changed.
 *& Returns 'X' in p_ok when the user may continue.
 *&---------------------------------------------------------------------*
 FORM check_r4_authority CHANGING p_ok TYPE c.
-  DATA: lv_vk4_chk TYPE vkbur.
-
   CLEAR p_ok.
 
-  " 1. Role check
   SELECT SINGLE uname FROM agr_users
     INTO @DATA(lv_r4_uname)
     WHERE uname    = @sy-uname
@@ -142,28 +146,6 @@ FORM check_r4_authority CHANGING p_ok TYPE c.
     MESSAGE 'You are not authorised to execute this option' TYPE 'E'.
     RETURN.
   ENDIF.
-
-  " 2. Sales office authorization for every value the user typed in
-  LOOP AT s_vk4 INTO DATA(ls_vk4_auth).
-    IF ls_vk4_auth-low IS NOT INITIAL.
-      lv_vk4_chk = ls_vk4_auth-low.
-      AUTHORITY-CHECK OBJECT 'YV_VKBUR'
-        ID 'VKBUR' FIELD lv_vk4_chk.
-      IF sy-subrc NE 0.
-        MESSAGE |You are not authorised for Sales Office { lv_vk4_chk }| TYPE 'E'.
-        RETURN.
-      ENDIF.
-    ENDIF.
-    IF ls_vk4_auth-high IS NOT INITIAL.
-      lv_vk4_chk = ls_vk4_auth-high.
-      AUTHORITY-CHECK OBJECT 'YV_VKBUR'
-        ID 'VKBUR' FIELD lv_vk4_chk.
-      IF sy-subrc NE 0.
-        MESSAGE |You are not authorised for Sales Office { lv_vk4_chk }| TYPE 'E'.
-        RETURN.
-      ENDIF.
-    ENDIF.
-  ENDLOOP.
 
   p_ok = 'X'.
 ENDFORM.
@@ -249,6 +231,7 @@ FORM display.
     CREATE OBJECT grid EXPORTING i_parent = dg_parent_grid.
     gs_layout-stylefname = 'CELL'.
     gs_layout-ctab_fname = 'CELLCOLOR'.
+    gs_layout-info_fname = 'ROWCOLOR'.   " red line = sales office not authorized
     SET HANDLER lcl_event_handler=>top_of_page FOR grid.
     SET HANDLER lcl_event_handler=>toolbar      FOR grid.
     SET HANDLER lcl_event_handler=>user_command FOR grid.
@@ -1028,6 +1011,23 @@ FORM save_action_taken.
   " Sync any pending ALV cell edits to the internal table
   CALL METHOD grid->check_changed_data.
 
+  " --- Pass 0: sales office authorization ----------------------------------
+  " A changed row whose sales office is not covered by YV_VKBUR is refused:
+  " the line is painted red and nothing is written for it.
+  DATA: lv_auth_err TYPE c LENGTH 1.
+  LOOP AT lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_auth>) WHERE at_changed = 'X'.
+    CHECK <fs_auth>-auth_ok NE 'X'.
+    <fs_auth>-rowcolor = gc_row_red.
+    lv_auth_err = 'X'.
+  ENDLOOP.
+  IF lv_auth_err = 'X'.
+    CALL METHOD grid->refresh_table_display
+      EXPORTING is_stable = gs_stable.
+    MESSAGE 'You are not authorized to change data for the selected sales office'
+            TYPE 'W'.
+    RETURN.
+  ENDIF.
+
   " --- Pass 1: SO validation -----------------------------------------------
   " Clear previous error highlights; for changed rows with a filled SO,
   " verify the SO exists in VBPA. Mark invalid cells red and count errors.
@@ -1093,13 +1093,24 @@ ENDFORM.
 *& Handles cell edits in Action Taken ALV (r4 mode)
 *&---------------------------------------------------------------------*
 FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_protocol.
-  DATA: lv_row_idx TYPE i,
-        lv_style   TYPE lvc_style.
+  DATA: lv_row_idx  TYPE i,
+        lv_style    TYPE lvc_style,
+        lv_auth_err TYPE c LENGTH 1.
 
   LOOP AT p_data_changed->mt_mod_cells INTO DATA(ls_mod).
     lv_row_idx = ls_mod-row_id.
     READ TABLE lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_ext>) INDEX lv_row_idx.
     IF sy-subrc <> 0. CONTINUE. ENDIF.
+
+    " Sales office not covered by YV_VKBUR: reject the change, paint the
+    " whole line red and report it once after the loop. The value is not
+    " transferred, and the deferred refresh restores the old cell content.
+    IF <fs_ext>-auth_ok NE 'X'.
+      <fs_ext>-rowcolor = gc_row_red.
+      lv_auth_err       = 'X'.
+      gv_refresh_grid   = 'X'.
+      CONTINUE.
+    ENDIF.
 
     CASE ls_mod-fieldname.
       WHEN 'AT_CHKBOX'.
@@ -1133,6 +1144,11 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
         DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
     ENDCASE.
   ENDLOOP.
+
+  IF lv_auth_err = 'X'.
+    MESSAGE 'You are not authorized to change data for the selected sales office'
+            TYPE 'S' DISPLAY LIKE 'E'.
+  ENDIF.
   " NOTE: never call refresh_table_display here. Refreshing inside the
   " DATA_CHANGED event leaves the grid's data-provider unbound and dumps
   " with OBJECTS_OBJREF_NOT_ASSIGNED_NO on the next scroll. The refresh is
