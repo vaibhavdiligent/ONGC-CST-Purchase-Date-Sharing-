@@ -72,6 +72,10 @@ TYPES: BEGIN OF ty_vk_auth,
        END OF ty_vk_auth.
 DATA: gt_vk_auth TYPE SORTED TABLE OF ty_vk_auth WITH UNIQUE KEY vkbur.
 
+" 'X' = AUTHORITY-CHECK could not evaluate YV_VKBUR (field list mismatch),
+" so the refusal is a configuration problem, not a missing authorization.
+DATA: gv_auth_objerr TYPE c LENGTH 1.
+
 " Red used to flag rows the user may not change (info_fname='ROWCOLOR')
 CONSTANTS: gc_row_red TYPE char4 VALUE 'C600'.
 

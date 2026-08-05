@@ -95,19 +95,20 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form IS_VKBUR_AUTHORIZED
 *& Returns 'X' in p_ok when the user may CHANGE data for this sales
-*& office (authorization object YV_VKBUR, field WERKS).
+*& office (authorization object YV_VKBUR).
 *& Viewing is never restricted – the full list is always displayed.
-*& Results are cached in gt_vk_auth, so AUTHORITY-CHECK runs once per
-*& distinct sales office rather than once per row.
-*&
-*& NOTE: if YV_VKBUR carries further fields (e.g. ACTVT), they must be
-*& listed here as ID '<name>' DUMMY, otherwise sy-subrc is always 8.
+*& Results are cached in gt_vk_auth, so the check runs once per distinct
+*& sales office rather than once per row.
 *&---------------------------------------------------------------------*
 FORM is_vkbur_authorized USING p_vkbur TYPE vkbur
                          CHANGING p_ok TYPE c.
-  DATA: ls_vk_auth TYPE ty_vk_auth.
+  DATA: ls_vk_auth TYPE ty_vk_auth,
+        lv_subrc   TYPE sy-subrc.
 
   CLEAR p_ok.
+  IF p_vkbur IS INITIAL.
+    RETURN.
+  ENDIF.
 
   READ TABLE gt_vk_auth INTO ls_vk_auth WITH KEY vkbur = p_vkbur.
   IF sy-subrc = 0.
@@ -115,16 +116,63 @@ FORM is_vkbur_authorized USING p_vkbur TYPE vkbur
     RETURN.
   ENDIF.
 
+  PERFORM auth_check_vkbur USING p_vkbur CHANGING lv_subrc.
+
   CLEAR ls_vk_auth.
   ls_vk_auth-vkbur = p_vkbur.
-  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
-    ID 'WERKS' FIELD p_vkbur.
-  IF sy-subrc = 0.
+  IF lv_subrc = 0.
     ls_vk_auth-ok = 'X'.
   ENDIF.
   INSERT ls_vk_auth INTO TABLE gt_vk_auth.
-
   p_ok = ls_vk_auth-ok.
+
+  " Anything other than 0 (authorized) or 4 (not authorized) means the
+  " object's field list does not match what we checked. Remember it so the
+  " user gets a message naming the real problem instead of a bare refusal.
+  IF lv_subrc NE 0 AND lv_subrc NE 4.
+    gv_auth_objerr = 'X'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form AUTH_CHECK_VKBUR
+*& Runs AUTHORITY-CHECK on YV_VKBUR for one sales office.
+*&
+*& The object's field list is resolved at runtime rather than assumed.
+*& AUTHORITY-CHECK returns sy-subrc = 24 when the field names or the
+*& number of fields do not match the object, so each shape below is tried
+*& until one gives a definitive answer. Only 0 (authorized) and
+*& 4 (not authorized) are treated as answers – everything else moves on
+*& to the next shape. This is why a user holding sales office 2100 was
+*& previously refused: the single-field WERKS check returned 24, not 4.
+*&---------------------------------------------------------------------*
+FORM auth_check_vkbur USING p_vkbur TYPE vkbur
+                      CHANGING p_subrc TYPE sy-subrc.
+
+  " 1) WERKS only
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'WERKS' FIELD p_vkbur.
+  p_subrc = sy-subrc.
+  CHECK p_subrc NE 0 AND p_subrc NE 4.
+
+  " 2) WERKS + activity
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'WERKS' FIELD p_vkbur
+    ID 'ACTVT' DUMMY.
+  p_subrc = sy-subrc.
+  CHECK p_subrc NE 0 AND p_subrc NE 4.
+
+  " 3) VKBUR only
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'VKBUR' FIELD p_vkbur.
+  p_subrc = sy-subrc.
+  CHECK p_subrc NE 0 AND p_subrc NE 4.
+
+  " 4) VKBUR + activity
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'VKBUR' FIELD p_vkbur
+    ID 'ACTVT' DUMMY.
+  p_subrc = sy-subrc.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -1023,8 +1071,13 @@ FORM save_action_taken.
   IF lv_auth_err = 'X'.
     CALL METHOD grid->refresh_table_display
       EXPORTING is_stable = gs_stable.
-    MESSAGE 'You are not authorized to change data for the selected sales office'
-            TYPE 'W'.
+    IF gv_auth_objerr = 'X'.
+      MESSAGE 'Authorization object YV_VKBUR could not be evaluated - check its field list in SU21'
+              TYPE 'W'.
+    ELSE.
+      MESSAGE 'You are not authorized to change data for the selected sales office'
+              TYPE 'W'.
+    ENDIF.
     RETURN.
   ENDIF.
 
@@ -1146,8 +1199,13 @@ FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_pr
   ENDLOOP.
 
   IF lv_auth_err = 'X'.
-    MESSAGE 'You are not authorized to change data for the selected sales office'
-            TYPE 'S' DISPLAY LIKE 'E'.
+    IF gv_auth_objerr = 'X'.
+      MESSAGE 'Authorization object YV_VKBUR could not be evaluated - check its field list in SU21'
+              TYPE 'S' DISPLAY LIKE 'E'.
+    ELSE.
+      MESSAGE 'You are not authorized to change data for the selected sales office'
+              TYPE 'S' DISPLAY LIKE 'E'.
+    ENDIF.
   ENDIF.
   " NOTE: never call refresh_table_display here. Refreshing inside the
   " DATA_CHANGED event leaves the grid's data-provider unbound and dumps
