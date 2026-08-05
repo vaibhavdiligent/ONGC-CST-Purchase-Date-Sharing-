@@ -1210,7 +1210,7 @@ CLASS lcl_app IMPLEMENTATION.
             lo_cols->get_column( 'WARN' )->set_medium_text( 'Warnings' ).
             lo_cols->get_column( 'STATUS' )->set_medium_text( 'Result' ).
             lo_cols->get_column( 'REMARK' )->set_medium_text( 'Remark' ).
-          CATCH cx_salv_not_found.
+          CATCH cx_salv_not_found cx_salv_data_error.
         ENDTRY.
 
         " overall verdict header
@@ -1359,7 +1359,7 @@ CLASS lcl_app IMPLEMENTATION.
             lo_col->set_medium_text( 'Section' ).
             lo_col->set_long_text( 'Section' ).
             lo_col = lo_cols->get_column( 'KSCHL' ).
-            lo_col->set_short_text( 'Cond./Field' ).
+            lo_col->set_short_text( 'Cnd/Field' ).
             lo_col->set_medium_text( 'Condition/Field' ).
             lo_col->set_long_text( 'Condition Type / Compared Field' ).
             " hotspot: condition type is clickable -> VK13
@@ -1385,7 +1385,7 @@ CLASS lcl_app IMPLEMENTATION.
             lo_cols->get_column( 'KPEIN_NEW' )->set_visible( abap_false ).
             lo_cols->get_column( 'KMEIN_OLD' )->set_visible( abap_false ).
             lo_cols->get_column( 'KMEIN_NEW' )->set_visible( abap_false ).
-          CATCH cx_salv_not_found.
+          CATCH cx_salv_not_found cx_salv_data_error.
         ENDTRY.
 
         " explain the popup to the user
