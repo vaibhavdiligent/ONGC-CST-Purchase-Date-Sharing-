@@ -358,10 +358,6 @@ CLASS lcl_app DEFINITION FINAL.
       FOR EVENT double_click OF cl_salv_events_table
       IMPORTING row column.
 
-    METHODS on_detail_link
-      FOR EVENT link_click OF cl_salv_events_table
-      IMPORTING row column.
-
     METHODS jump_to_vk13
       IMPORTING iv_row TYPE i.
 
@@ -1274,11 +1270,6 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD on_detail_link.
-    jump_to_vk13( row ).
-  ENDMETHOD.
-
-
   METHOD jump_to_vk13.
 
     " third drill level: jump into the condition record maintenance
@@ -1362,9 +1353,6 @@ CLASS lcl_app IMPLEMENTATION.
             lo_col->set_short_text( 'Cnd/Field' ).
             lo_col->set_medium_text( 'Condition/Field' ).
             lo_col->set_long_text( 'Condition Type / Compared Field' ).
-            " hotspot: condition type is clickable -> VK13
-            CAST cl_salv_column_table( lo_col )->set_cell_type(
-              if_salv_c_cell_type=>hotspot ).
             lo_col = lo_cols->get_column( 'VTEXT' ).
             lo_col->set_short_text( 'Descriptn' ).
             lo_col->set_medium_text( 'Description' ).
@@ -1393,13 +1381,11 @@ CLASS lcl_app IMPLEMENTATION.
         lo_grid->create_label( row = 1 column = 1
           text = |Pricing detail: order { iv_vbeln_x } (ECC) vs copy (S/4)| ).
         lo_grid->create_flow( row = 2 column = 1 )->create_text(
-          text = 'Green = identical. Click a condition type to open the condition record (VK13).' ).
+          text = 'Green = identical. Double-click a condition row to open the condition record (VK13).' ).
         lo_alv->set_top_of_list( lo_grid ).
 
-        " click or double-click a condition row -> VK13
-        DATA(lo_events) = lo_alv->get_event( ).
-        SET HANDLER on_detail_click FOR lo_events.
-        SET HANDLER on_detail_link  FOR lo_events.
+        " double-click a condition row -> VK13
+        SET HANDLER on_detail_click FOR lo_alv->get_event( ).
 
         lo_alv->set_screen_popup( start_column = 5
                                   end_column   = 170
