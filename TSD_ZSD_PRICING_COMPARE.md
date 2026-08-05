@@ -70,12 +70,18 @@ migrated configuration, unaffected by condition records changed since then.
   pairwise. Inactive (`KINAK`) and statistical (`KSTAT`) lines are excluded
   **before** occurrence numbering on both sides, so both sides number on the
   same basis.
-- **Fallback matching** (prevents false MISSING when the step sequence
-  differs between the ECC and S/4 pricing procedures): if no Y line matches
-  the exact occurrence, the program takes an unused Y line of the same
-  item + type with **identical values**, then any unused line of that type
-  (which is then compared and shows the delta). `MISSING_S4` is reported only
+- **Matching order** (prevents false MISSING/MISMATCH when the step sequence
+  differs between the ECC and S/4 pricing procedures): for each X line the
+  program takes ① an unused Y line of the same item + type with **identical
+  values**, else ② the positional match (same occurrence), else ③ any unused
+  line of that type (compared, delta shown). `MISSING_S4` is reported only
   when the condition type does not exist on Y at all for that item.
+- **Two-pass processing:** normal condition lines claim their Y partners
+  first; manual lines (`KHERK = 'C'` / `KMPRS`) are processed in a second
+  pass and consume only leftover Y lines — so a manual line can neither steal
+  a regular line's partner nor leave its own Y counterpart to be misreported
+  as `NEW_IN_S4`. Manual rows display both the X value and the freshly
+  determined Y value.
 - Compared per condition line: rate **KBETR**, pricing unit **KPEIN**,
   condition unit **KMEIN**, condition value **KWERT**.
 - **Stored value fields** compared between X and Y (customer requirement),

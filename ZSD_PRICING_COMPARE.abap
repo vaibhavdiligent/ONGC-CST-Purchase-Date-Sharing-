@@ -756,12 +756,24 @@ CLASS lcl_app IMPLEMENTATION.
     DATA lt_y TYPE ty_t_cond.
     lt_y = it_y.
 
+    " pass 1: normal condition lines claim their Y partners first;
+    " pass 2: manual lines consume only the leftovers - a manual line
+    " must never steal the Y line of a regular line of the same type
+    DO 2 TIMES.
+      DATA(lv_pass) = sy-index.
+
     LOOP AT it_x INTO DATA(ls_x).
 
       " ignore inactive and statistical lines
       IF ls_x-kinak IS NOT INITIAL
          OR ls_x-kstat = 'X'
          OR ls_x-kschl IS INITIAL.
+        CONTINUE.
+      ENDIF.
+
+      DATA(lv_manual) = boolc( ls_x-kherk = 'C' OR ls_x-kmprs = 'X' ).
+      IF ( lv_pass = 1 AND lv_manual = abap_true )
+      OR ( lv_pass = 2 AND lv_manual = abap_false ).
         CONTINUE.
       ENDIF.
 
@@ -783,41 +795,35 @@ CLASS lcl_app IMPLEMENTATION.
           kmein_old = ls_x-kmein
           kwert_old = ls_x-kwert ).
 
-      " manually entered conditions cannot be re-derived by repricing
-      IF ls_x-kherk = 'C' OR ls_x-kmprs = 'X'.
-        ms_stat-manual = ms_stat-manual + 1.
-        ls_res-status = c_manual.
-        ls_res-remark = 'Manual condition on X - not re-priced on Y'(r01).
-        add_result( ls_res ).
-        CONTINUE.
-      ENDIF.
-
       " ------- find the matching Y condition line ---------------------
-      " 1st: same item + type + occurrence (exact position match)
-      " 2nd: any unused line of the type with IDENTICAL values - the
-      "      step sequence may differ between the ECC and S/4 pricing
-      "      procedures, which must not be reported as missing
-      " 3rd: any unused line of the type (compared -> shows the delta)
+      " 1st: unused line of the same item + type with IDENTICAL values
+      "      (the step sequence may differ between the ECC and S/4
+      "      pricing procedures - equal values must never mismatch or
+      "      be reported as missing)
+      " 2nd: same item + type + occurrence (positional match - pairs
+      "      the remaining lines so the delta is shown)
+      " 3rd: any unused line of the type
       " only when the type does not exist on Y at all -> MISSING_S4
       DATA(lv_found) = abap_false.
-      READ TABLE lt_y ASSIGNING FIELD-SYMBOL(<ls_y>)
-           WITH KEY posnr = ls_x-posnr
-                    kschl = ls_x-kschl
-                    occ   = ls_x-occ
-                    used  = abap_false.
-      IF sy-subrc = 0.
+      FIELD-SYMBOLS <ls_y> TYPE ty_cond.
+      LOOP AT lt_y ASSIGNING <ls_y>
+           WHERE posnr = ls_x-posnr
+             AND kschl = ls_x-kschl
+             AND used  = abap_false
+             AND rate  = ls_x-rate
+             AND kwert = ls_x-kwert.
         lv_found = abap_true.
-      ENDIF.
+        EXIT.
+      ENDLOOP.
       IF lv_found = abap_false.
-        LOOP AT lt_y ASSIGNING <ls_y>
-             WHERE posnr = ls_x-posnr
-               AND kschl = ls_x-kschl
-               AND used  = abap_false
-               AND rate  = ls_x-rate
-               AND kwert = ls_x-kwert.
+        READ TABLE lt_y ASSIGNING <ls_y>
+             WITH KEY posnr = ls_x-posnr
+                      kschl = ls_x-kschl
+                      occ   = ls_x-occ
+                      used  = abap_false.
+        IF sy-subrc = 0.
           lv_found = abap_true.
-          EXIT.
-        ENDLOOP.
+        ENDIF.
       ENDIF.
       IF lv_found = abap_false.
         LOOP AT lt_y ASSIGNING <ls_y>
@@ -827,6 +833,26 @@ CLASS lcl_app IMPLEMENTATION.
           lv_found = abap_true.
           EXIT.
         ENDLOOP.
+      ENDIF.
+
+      " manually entered conditions cannot be re-derived by repricing;
+      " still consume the Y line of the same type (if any) so it is
+      " not reported again as NEW_IN_S4, and show both values
+      IF lv_manual = abap_true.
+        ms_stat-manual = ms_stat-manual + 1.
+        ls_res-status = c_manual.
+        ls_res-remark = 'Manual condition on X - not re-priced on Y'(r01).
+        IF lv_found = abap_true.
+          <ls_y>-used = abap_true.
+          ls_res-rate_new   = <ls_y>-rate.
+          ls_res-rate_diff  = <ls_y>-rate - ls_x-rate.
+          ls_res-kpein_new  = <ls_y>-kpein.
+          ls_res-kmein_new  = <ls_y>-kmein.
+          ls_res-kwert_new  = <ls_y>-kwert.
+          ls_res-kwert_diff = <ls_y>-kwert - ls_x-kwert.
+        ENDIF.
+        add_result( ls_res ).
+        CONTINUE.
       ENDIF.
 
       IF lv_found = abap_false.
@@ -877,6 +903,8 @@ CLASS lcl_app IMPLEMENTATION.
       add_result( ls_res ).
 
     ENDLOOP.
+
+    ENDDO.
 
     " conditions that only exist on the re-priced order Y
     LOOP AT lt_y INTO DATA(ls_y) WHERE used = abap_false.
