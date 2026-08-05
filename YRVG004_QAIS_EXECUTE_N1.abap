@@ -2642,7 +2642,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'   .
 *              CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '11' AND wa_s922-kondm NE  '14' AND
@@ -2704,7 +2704,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -2761,7 +2761,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -2837,7 +2837,7 @@ FORM format_data .
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P.
 * EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 * SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 * EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
@@ -2909,7 +2909,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
@@ -2977,7 +2977,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
@@ -3047,7 +3047,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3103,7 +3103,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3159,7 +3159,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3234,7 +3234,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " SOC Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " SOC Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " EOC Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3301,7 +3301,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '09' AND
@@ -3369,7 +3369,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '09' AND
@@ -3439,7 +3439,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3495,7 +3495,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3551,7 +3551,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3626,7 +3626,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3694,7 +3694,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3762,7 +3762,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3830,7 +3830,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3886,7 +3886,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3942,7 +3942,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4016,7 +4016,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 **            IF wa_yrva_qais_data-p_d_sector = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'."  SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'."  SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 **              IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '09' AND
@@ -4084,7 +4084,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 ***            IF wa_yrva_qais_data-p_d_sector = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 **              IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '09' AND
@@ -4152,7 +4152,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 **            IF wa_yrva_qais_data-p_d_sector = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 **              IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '09' AND
@@ -4269,7 +4269,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4308,7 +4308,7 @@ FORM format_data_month .
             LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4347,7 +4347,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4431,7 +4431,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4501,7 +4501,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4570,7 +4570,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4648,7 +4648,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4687,7 +4687,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4725,7 +4725,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4811,7 +4811,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4885,7 +4885,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4964,7 +4964,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5041,7 +5041,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5087,7 +5087,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5133,7 +5133,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5221,7 +5221,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5305,7 +5305,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
 **soc BY UJJWAL/priyanka on charm 400003180 on 01-12-2020 to exclude some MPG as per indivisul liftted qty
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND  wa_s922-kondm NOT IN range_p.
 **                    wa_s922-kondm
@@ -5393,7 +5393,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5478,7 +5478,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5516,7 +5516,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5554,7 +5554,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5639,7 +5639,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2..
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5709,7 +5709,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5778,7 +5778,7 @@ FORM format_data_month .
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
