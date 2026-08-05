@@ -206,7 +206,10 @@ CLASS lcl_app DEFINITION FINAL.
         kunnr      TYPE kunnr,
         posnr      TYPE posnr_va,
         matnr      TYPE vbap-matnr,
+        srtfld     TYPE i,             " 1 header / 2 item values / 3 cond.
+        sectn      TYPE c LENGTH 20,   " section shown to the user
         kschl      TYPE c LENGTH 12,   " condition type or compared field
+        vtext      TYPE c LENGTH 40,   " plain-language description
         status     TYPE c LENGTH 10,
         rate_old   TYPE ty_amount,
         rate_new   TYPE ty_amount,
@@ -267,13 +270,21 @@ CLASS lcl_app DEFINITION FINAL.
       c_check   TYPE c LENGTH 10 VALUE 'CHECK',     " order verdict
       c_percent TYPE c LENGTH 1  VALUE 'A'.
 
+    TYPES:
+      BEGIN OF ty_ktext,
+        kschl TYPE kscha,
+        vtext TYPE string,
+      END OF ty_ktext.
+
     DATA: mt_result  TYPE STANDARD TABLE OF ty_result,
           mt_detail  TYPE STANDARD TABLE OF ty_result,
           mt_summary TYPE STANDARD TABLE OF ty_summary,
           ms_stat    TYPE ty_stat,
           mv_info    TYPE string,
           mt_tcurx   TYPE HASHED TABLE OF tcurx
-                          WITH UNIQUE KEY currkey.
+                          WITH UNIQUE KEY currkey,
+          mt_ktext   TYPE HASHED TABLE OF ty_ktext
+                          WITH UNIQUE KEY kschl.
 
     METHODS process_order
       IMPORTING is_vbak TYPE ty_vbak.
@@ -339,9 +350,24 @@ CLASS lcl_app DEFINITION FINAL.
       FOR EVENT double_click OF cl_salv_events_table
       IMPORTING row column.
 
+    METHODS on_link_click
+      FOR EVENT link_click OF cl_salv_events_table
+      IMPORTING row column.
+
     METHODS on_detail_click
       FOR EVENT double_click OF cl_salv_events_table
       IMPORTING row column.
+
+    METHODS on_detail_link
+      FOR EVENT link_click OF cl_salv_events_table
+      IMPORTING row column.
+
+    METHODS jump_to_vk13
+      IMPORTING iv_row TYPE i.
+
+    METHODS get_kschl_text
+      IMPORTING iv_kschl       TYPE kscha
+      RETURNING VALUE(rv_text) TYPE string.
 
 ENDCLASS.
 
@@ -520,6 +546,7 @@ CLASS lcl_app IMPLEMENTATION.
       add_result( VALUE #( vbeln_x = is_vbak-vbeln
                            vbeln_y = lv_vbeln_y
                            kunnr   = is_vbak-kunnr
+                           sectn   = 'Error'(s04)
                            kschl   = space
                            prsdt   = lv_prsdt
                            status  = c_error
@@ -742,6 +769,9 @@ CLASS lcl_app IMPLEMENTATION.
           posnr     = ls_x-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_x-posnr ]-matnr
                                OPTIONAL )
+          srtfld    = 3
+          sectn     = 'Pricing condition'(s03)
+          vtext     = get_kschl_text( ls_x-kschl )
           kschl     = ls_x-kschl
           rate_old  = ls_x-rate
           waers     = ls_x-waers
@@ -827,6 +857,9 @@ CLASS lcl_app IMPLEMENTATION.
           posnr     = ls_y-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_y-posnr ]-matnr
                                OPTIONAL )
+          srtfld    = 3
+          sectn     = 'Pricing condition'(s03)
+          vtext     = get_kschl_text( ls_y-kschl )
           kschl     = ls_y-kschl
           status    = c_new
           rate_new  = ls_y-rate
@@ -879,7 +912,10 @@ CLASS lcl_app IMPLEMENTATION.
                              prsdt   = iv_prsdt
                              posnr   = ls_vbap-posnr
                              matnr   = ls_vbap-matnr
+                             srtfld  = 2
+                             sectn   = 'Item values'(s02)
                              kschl   = 'ITEM'
+                             vtext   = 'Item existence check'
                              status  = c_diff
                              remark  = 'Item missing on copy order Y'(r08) ) ).
         CONTINUE.
@@ -898,18 +934,35 @@ CLASS lcl_app IMPLEMENTATION.
         ls_res-prsdt   = iv_prsdt.
         ls_res-posnr   = ls_vbap-posnr.
         ls_res-matnr   = ls_vbap-matnr.
+        ls_res-srtfld  = 2.
+        ls_res-sectn   = 'Item values'(s02).
         ls_res-kschl   = lv_field.
+        ls_res-vtext   = SWITCH #( lv_field
+          WHEN 'NETWR' THEN 'Item net value'
+          WHEN 'NETPR' THEN 'Net price'
+          WHEN 'SKTOF' THEN 'Cash discount indicator'
+          WHEN 'WAVWR' THEN 'Cost (moving average price)'
+          WHEN 'KZWI1' THEN 'Pricing subtotal 1'
+          WHEN 'KZWI2' THEN 'Pricing subtotal 2'
+          WHEN 'KZWI3' THEN 'Pricing subtotal 3'
+          WHEN 'KZWI4' THEN 'Pricing subtotal 4'
+          WHEN 'KZWI5' THEN 'Pricing subtotal 5'
+          WHEN 'KZWI6' THEN 'Pricing subtotal 6'
+          WHEN 'MWSBP' THEN 'Item tax amount'
+          ELSE lv_field ).
         ls_res-remark  = |Item field VBAP-{ lv_field }|.
 
         DESCRIBE FIELD <lv_x> TYPE lv_type.
         IF lv_type = 'P'.        " amount field -> external format
-          ls_res-waers     = is_vbak-waerk.
-          ls_res-rate_old  = to_external( iv_amount = CONV #( <lv_x> )
-                                          iv_waers  = is_vbak-waerk ).
-          ls_res-rate_new  = to_external( iv_amount = CONV #( <lv_y> )
-                                          iv_waers  = iv_waerk_y ).
-          ls_res-rate_diff = ls_res-rate_new - ls_res-rate_old.
-          IF ls_res-rate_diff <> 0.
+          " amounts go into the Amount columns; the Rate columns stay
+          " reserved for condition rates so the two are never mixed
+          ls_res-waers      = is_vbak-waerk.
+          ls_res-kwert_old  = to_external( iv_amount = CONV #( <lv_x> )
+                                           iv_waers  = is_vbak-waerk ).
+          ls_res-kwert_new  = to_external( iv_amount = CONV #( <lv_y> )
+                                           iv_waers  = iv_waerk_y ).
+          ls_res-kwert_diff = ls_res-kwert_new - ls_res-kwert_old.
+          IF ls_res-kwert_diff <> 0.
             ls_res-status = c_diff.
           ELSE.
             ls_res-status = c_ok.
@@ -942,15 +995,18 @@ CLASS lcl_app IMPLEMENTATION.
     ls_res-kunnr    = is_vbak-kunnr.
     ls_res-prsdt    = iv_prsdt.
     ls_res-posnr    = '000000'.
+    ls_res-srtfld   = 1.
+    ls_res-sectn    = 'Order total'(s01).
     ls_res-kschl    = 'VBAK-NETWR'.
+    ls_res-vtext    = 'Order net value (header)'.
     ls_res-waers    = is_vbak-waerk.
     ls_res-remark   = 'Header net value VBAK-NETWR'(r09).
-    ls_res-rate_old = to_external( iv_amount = CONV #( is_vbak-netwr )
-                                   iv_waers  = is_vbak-waerk ).
-    ls_res-rate_new = to_external( iv_amount = CONV #( iv_netwr_y )
-                                   iv_waers  = iv_waerk_y ).
-    ls_res-rate_diff = ls_res-rate_new - ls_res-rate_old.
-    IF ls_res-rate_diff <> 0.
+    ls_res-kwert_old = to_external( iv_amount = CONV #( is_vbak-netwr )
+                                    iv_waers  = is_vbak-waerk ).
+    ls_res-kwert_new = to_external( iv_amount = CONV #( iv_netwr_y )
+                                    iv_waers  = iv_waerk_y ).
+    ls_res-kwert_diff = ls_res-kwert_new - ls_res-kwert_old.
+    IF ls_res-kwert_diff <> 0.
       ms_stat-mismatch = ms_stat-mismatch + 1.
       ls_res-status = c_diff.
     ELSE.
@@ -1019,6 +1075,28 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA(lv_dec) = CONV i( ls_tcurx-currdec ).
     rv_ext = iv_amount * ( 10 ** ( 2 - lv_dec ) ).
+
+  ENDMETHOD.
+
+
+  METHOD get_kschl_text.
+
+    " buffered read of the condition type description (T685T)
+    READ TABLE mt_ktext INTO DATA(ls_ktext)
+         WITH TABLE KEY kschl = iv_kschl.
+    IF sy-subrc <> 0.
+      ls_ktext-kschl = iv_kschl.
+      SELECT SINGLE vtext FROM t685t
+        WHERE spras = @sy-langu
+          AND kvewe = 'A'
+          AND kappl = 'V'
+          AND kschl = @iv_kschl
+        INTO @DATA(lv_vtext).
+      ls_ktext-vtext = COND #( WHEN sy-subrc = 0 THEN lv_vtext
+                               ELSE 'Pricing condition' ).
+      INSERT ls_ktext INTO TABLE mt_ktext.
+    ENDIF.
+    rv_text = ls_ktext-vtext.
 
   ENDMETHOD.
 
@@ -1115,6 +1193,9 @@ CLASS lcl_app IMPLEMENTATION.
             lo_col->set_short_text( 'SO Old' ).
             lo_col->set_medium_text( 'Sales Order Old' ).
             lo_col->set_long_text( 'Sales Order Old (ECC)' ).
+            " hotspot: order number is clickable -> opens the detail
+            CAST cl_salv_column_table( lo_col )->set_cell_type(
+              if_salv_c_cell_type=>hotspot ).
             lo_col = lo_cols->get_column( 'VBELN_Y' ).
             lo_col->set_short_text( 'SO New' ).
             lo_col->set_medium_text( 'Sales Order New' ).
@@ -1151,11 +1232,13 @@ CLASS lcl_app IMPLEMENTATION.
                  |Warnings: { ms_stat-warn }  | &
                  |Errors: { ms_stat-errors }| ).
         lo_grid->create_flow( row = 5 column = 1 )->create_text(
-          text = 'Double-click an order row to see the pricing comparison in detail' ).
+          text = 'Click an order number (or double-click the row) to see the pricing comparison in detail' ).
         lo_alv->set_top_of_list( lo_grid ).
 
-        " double-click -> pricing detail of the selected order
-        SET HANDLER on_double_click FOR lo_alv->get_event( ).
+        " click on the order number or double-click -> pricing detail
+        DATA(lo_events) = lo_alv->get_event( ).
+        SET HANDLER on_double_click FOR lo_events.
+        SET HANDLER on_link_click   FOR lo_events.
 
         lo_alv->display( ).
 
@@ -1176,12 +1259,32 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD on_link_click.
+
+    READ TABLE mt_summary INTO DATA(ls_sum) INDEX row.
+    IF sy-subrc = 0.
+      display_detail( ls_sum-vbeln_x ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
   METHOD on_detail_click.
+    jump_to_vk13( row ).
+  ENDMETHOD.
+
+
+  METHOD on_detail_link.
+    jump_to_vk13( row ).
+  ENDMETHOD.
+
+
+  METHOD jump_to_vk13.
 
     " third drill level: jump into the condition record maintenance
-    " (VK13) for the double-clicked condition type - the record valid
-    " on the order's pricing date (PRSDT column) is the one to check
-    READ TABLE mt_detail INTO DATA(ls_det) INDEX row.
+    " (VK13) for the clicked condition type - the record valid on the
+    " order's pricing date (PRSDT column) is the one to check
+    READ TABLE mt_detail INTO DATA(ls_det) INDEX iv_row.
     IF sy-subrc <> 0 OR ls_det-kschl IS INITIAL.
       RETURN.
     ENDIF.
@@ -1228,6 +1331,10 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    " reading order for the user: order total first, then the item
+    " value fields, then the pricing conditions of each item
+    SORT mt_detail BY srtfld posnr kschl.
+
     TRY.
         cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
                                 CHANGING  t_table      = mt_detail ).
@@ -1247,28 +1354,52 @@ CLASS lcl_app IMPLEMENTATION.
             lo_col->set_short_text( 'SO New' ).
             lo_col->set_medium_text( 'Sales Order New' ).
             lo_col->set_long_text( 'Sales Order New (S/4)' ).
+            lo_col = lo_cols->get_column( 'SECTN' ).
+            lo_col->set_short_text( 'Section' ).
+            lo_col->set_medium_text( 'Section' ).
+            lo_col->set_long_text( 'Section' ).
             lo_col = lo_cols->get_column( 'KSCHL' ).
-            lo_col->set_short_text( 'CTyp/Field' ).
-            lo_col->set_medium_text( 'Cond.Type / Field' ).
+            lo_col->set_short_text( 'Cond./Field' ).
+            lo_col->set_medium_text( 'Condition/Field' ).
             lo_col->set_long_text( 'Condition Type / Compared Field' ).
+            " hotspot: condition type is clickable -> VK13
+            CAST cl_salv_column_table( lo_col )->set_cell_type(
+              if_salv_c_cell_type=>hotspot ).
+            lo_col = lo_cols->get_column( 'VTEXT' ).
+            lo_col->set_short_text( 'Descriptn' ).
+            lo_col->set_medium_text( 'Description' ).
+            lo_col->set_long_text( 'Description' ).
             lo_cols->get_column( 'STATUS' )->set_medium_text( 'Status' ).
-            lo_cols->get_column( 'RATE_OLD' )->set_medium_text( 'Rate/Amt X (ECC)' ).
-            lo_cols->get_column( 'RATE_NEW' )->set_medium_text( 'Rate/Amt Y (S/4)' ).
-            lo_cols->get_column( 'RATE_DIFF' )->set_medium_text( 'Delta' ).
-            lo_cols->get_column( 'KPEIN_OLD' )->set_medium_text( 'Per X' ).
-            lo_cols->get_column( 'KPEIN_NEW' )->set_medium_text( 'Per Y' ).
-            lo_cols->get_column( 'KMEIN_OLD' )->set_medium_text( 'UoM X' ).
-            lo_cols->get_column( 'KMEIN_NEW' )->set_medium_text( 'UoM Y' ).
-            lo_cols->get_column( 'KWERT_OLD' )->set_medium_text( 'Value X (ECC)' ).
-            lo_cols->get_column( 'KWERT_NEW' )->set_medium_text( 'Value Y (S/4)' ).
-            lo_cols->get_column( 'KWERT_DIFF' )->set_medium_text( 'Value delta' ).
+            lo_cols->get_column( 'RATE_OLD' )->set_medium_text( 'Rate X (ECC)' ).
+            lo_cols->get_column( 'RATE_NEW' )->set_medium_text( 'Rate Y (S/4)' ).
+            lo_cols->get_column( 'RATE_DIFF' )->set_medium_text( 'Rate delta' ).
+            lo_cols->get_column( 'KWERT_OLD' )->set_medium_text( 'Amount X (ECC)' ).
+            lo_cols->get_column( 'KWERT_NEW' )->set_medium_text( 'Amount Y (S/4)' ).
+            lo_cols->get_column( 'KWERT_DIFF' )->set_medium_text( 'Amount delta' ).
             lo_cols->get_column( 'PRSDT' )->set_medium_text( 'Pricing date' ).
             lo_cols->get_column( 'REMARK' )->set_medium_text( 'Remark' ).
+            " keep the first view simple: technical columns are
+            " available via layout but hidden by default
+            lo_cols->get_column( 'SRTFLD' )->set_technical( abap_true ).
+            lo_cols->get_column( 'KPEIN_OLD' )->set_visible( abap_false ).
+            lo_cols->get_column( 'KPEIN_NEW' )->set_visible( abap_false ).
+            lo_cols->get_column( 'KMEIN_OLD' )->set_visible( abap_false ).
+            lo_cols->get_column( 'KMEIN_NEW' )->set_visible( abap_false ).
           CATCH cx_salv_not_found.
         ENDTRY.
 
-        " double-click a condition row -> VK13 for that condition type
-        SET HANDLER on_detail_click FOR lo_alv->get_event( ).
+        " explain the popup to the user
+        DATA(lo_grid) = NEW cl_salv_form_layout_grid( ).
+        lo_grid->create_label( row = 1 column = 1
+          text = |Pricing detail: order { iv_vbeln_x } (ECC) vs copy (S/4)| ).
+        lo_grid->create_flow( row = 2 column = 1 )->create_text(
+          text = 'Green = identical. Click a condition type to open the condition record (VK13).' ).
+        lo_alv->set_top_of_list( lo_grid ).
+
+        " click or double-click a condition row -> VK13
+        DATA(lo_events) = lo_alv->get_event( ).
+        SET HANDLER on_detail_click FOR lo_events.
+        SET HANDLER on_detail_link  FOR lo_events.
 
         lo_alv->set_screen_popup( start_column = 5
                                   end_column   = 170

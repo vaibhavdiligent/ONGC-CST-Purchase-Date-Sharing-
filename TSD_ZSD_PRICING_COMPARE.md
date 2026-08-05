@@ -159,11 +159,24 @@ differences, warnings) and a color-coded verdict:
 The report header shows the overall RESULT line ("ALL OK" or "N differences")
 so one glance answers "is pricing correct or not".
 
-**Screen 2 — Pricing detail** (double-click an order row): popup ALV with the
-full condition-by-condition and field-by-field comparison of that order —
-status, rate X/Y/delta, pricing unit, UoM, condition value X/Y/delta, the
-pricing date used, remark. Layout save and Excel export available on both
-grids.
+**Screen 2 — Pricing detail** (click the order number hotspot or double-click
+the row): popup ALV designed for end users —
+
+- Rows are grouped by a **Section** column and sorted in reading order:
+  *Order total* (VBAK-NETWR) → *Item values* (NETWR, NETPR, subtotals, tax,
+  cost…) → *Pricing conditions* per item.
+- A **Description** column translates every row into plain language: condition
+  type texts from T685T ("Output Tax") and fixed texts for value fields
+  ("Pricing subtotal 3", "Cost (moving average price)").
+- **Rate columns** carry only condition rates; **Amount columns** carry all
+  money values (condition values and field values) — the two are never mixed.
+- Technical columns (pricing unit, UoM) are hidden by default and can be
+  added back via the ALV layout.
+- The condition type is rendered as a **hotspot** — a single click (or
+  double-click) opens VK13 (level 3). The popup header explains the colors
+  and the click behaviour.
+
+Layout save and Excel export available on both grids.
 
 **Level 3 — VK13 jump** (double-click a condition row in the detail): the
 program validates the row is a real pricing condition type (T685, usage A,
