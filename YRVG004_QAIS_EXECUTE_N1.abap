@@ -8062,10 +8062,21 @@ FORM monthly_discount .
 *   the monthly shortfall waiver automatically (replaces manual YRVG018).
 *   It only binds when monthly lifting < 75% MCQ (otherwise the customer
 *   meets the minimum anyway), which matches Clause 8(e).
+    DATA lv_nsf_ok TYPE c.               " non-shortfall 75% rule met (GAIL 05.08.2026)
+    lv_nsf_ok = 'X'.
     READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
          WITH KEY qais_no = wa_yrva_qais_data-qais_no.
     IF sy-subrc EQ 0.
-      w_waive_month = 'X' .
+*     GAIL 05.08.2026: grant the monthly shortfall waiver ONLY when the
+*     customer has lifted >= 75% of the MCQ of the NON-shortfall grades
+*     (Discount Scheme 2026-27). If not, the shortfall is the customer's
+*     own and the waiver / discount must NOT pass.
+      PERFORM nonsf_waiver_ok USING wa_yrva_qais_data-kunnr
+                                    wa_yrva_qais_data-qais_no
+                             CHANGING lv_nsf_ok.
+      IF lv_nsf_ok = 'X'.
+        w_waive_month = 'X' .
+      ENDIF.
     ENDIF.
 *** EOC : CIS 2026-27 - auto monthly shortfall waiver (Clause 8 / R2) ***
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
@@ -8899,7 +8910,9 @@ FORM monthly_discount .
 *     own, so the shortfall waiver does not apply and 'S/F Waiver' must not
 *     be shown (mcq_perc = grp lift / MCQ, the same ratio the eligibility
 *     test uses). GAIL 30.07.2026.
-      IF sy-subrc = 0 AND it_data_monthly-mcq_perc < 75.
+*     Only label 'S/F Waiver' when the waiver was actually granted, i.e.
+*     the non-shortfall 75% rule is met (lv_nsf_ok). GAIL 05.08.2026.
+      IF sy-subrc = 0 AND it_data_monthly-mcq_perc < 75 AND lv_nsf_ok = 'X'.
         it_data_monthly-sale_order = 'S/F Waiver'.
       ELSEIF wa_yrva_qais_data-waiver_1 = lv_runmon
           OR wa_yrva_qais_data-waiver_2 = lv_runmon
@@ -12036,6 +12049,112 @@ FORM build_cis_shortfall.
   SORT it_cis_shortfall BY qais_no.
   DELETE ADJACENT DUPLICATES FROM it_cis_shortfall COMPARING qais_no.
 ENDFORM.                    "build_cis_shortfall
+*&---------------------------------------------------------------------*
+*&      Form  nonsf_waiver_ok    (CIS 2026-27 - GAIL 05.08.2026)
+*&---------------------------------------------------------------------*
+*   Monthly Shortfall Grade Waiver may be granted ONLY IF the customer has
+*   lifted at least 75% of the MCQ of the NON-shortfall grades (Discount
+*   Scheme 2026-27, Monthly Shortfall Grade Waiver clause). Earlier the
+*   waiver was granted for any CIS that merely had a shortfall grade, so a
+*   customer who under-lifted the grades that WERE available still received
+*   the discount (e.g. cust 25612 / CIS ...083: non-shortfall grade
+*   P52A003A MCQ 50 MT, 75% = 37.5 MT, lifted only 34 MT -> must fail).
+*     non-shortfall grades = signed grades (YRVA_QAIS_TNTLFT) NOT declared
+*                            shortfall (YCIS_SHORTFALL) for the run month
+*     non-shortfall MCQ     = SUM( YY_TNT_LIFTING ) of those grades
+*     non-shortfall lifted  = SUM( S922-UMMENGE )  of those grades
+*   For seasonal-sector customers (all signed non-shortfall grades seasonal)
+*   only seasonal grades (range_s) count towards the lifting. The 75% check
+*   is waived when the non-shortfall MCQ is <= 10 MT (A4CQ). Grade<->material
+*   is mapped through YRVA_GRADE_CISD (YY_MATNR -> YY_GRADE = KONDM).
+*   Returns p_ok = 'X' when the waiver may stand.
+*&---------------------------------------------------------------------*
+FORM nonsf_waiver_ok USING p_kunnr TYPE kunnr
+                           p_qais  TYPE any
+                  CHANGING p_ok    TYPE c.
+  DATA: lt_tnt   TYPE STANDARD TABLE OF yrva_qais_tntlft,
+        ls_tnt   TYPE yrva_qais_tntlft,
+        lt_sfmat TYPE STANDARD TABLE OF matnr,
+        lt_sfkon TYPE RANGE OF kondm,
+        lt_nskon TYPE RANGE OF kondm,
+        ls_kon   LIKE LINE OF lt_sfkon,
+        lv_kondm TYPE kondm,
+        lv_mcq   TYPE p DECIMALS 3,
+        lv_lift  TYPE p DECIMALS 3,
+        lv_umb   TYPE s922-ummenge,
+        lv_vtweg TYPE s922-vtweg,
+        lv_all_s TYPE c,
+        lv_seas  TYPE c.
+
+  p_ok = 'X'.
+*   grade-wise signed plan (per-grade MCQ). No plan -> do not block.
+  SELECT * FROM yrva_qais_tntlft INTO TABLE lt_tnt
+    WHERE qais_no = p_qais.
+  IF lt_tnt IS INITIAL.
+    RETURN.
+  ENDIF.
+*   materials declared shortfall that cover the run month -> grade range
+  LOOP AT it_ycis_shortfall INTO DATA(ls_sf)
+       WHERE period_from LE s_sptag-low
+         AND period_to   GE s_sptag-high.
+    APPEND ls_sf-matnr TO lt_sfmat.
+    CLEAR lv_kondm.
+    SELECT SINGLE yy_grade FROM yrva_grade_cisd INTO lv_kondm
+      WHERE yy_matnr = ls_sf-matnr.
+    IF lv_kondm IS NOT INITIAL.
+      ls_kon-sign = 'I'. ls_kon-option = 'EQ'. ls_kon-low = lv_kondm.
+      APPEND ls_kon TO lt_sfkon.
+    ENDIF.
+  ENDLOOP.
+*   non-shortfall MCQ + the non-shortfall grade (KONDM) list
+  lv_all_s = 'X'.
+  LOOP AT lt_tnt INTO ls_tnt.
+    READ TABLE lt_sfmat TRANSPORTING NO FIELDS
+         WITH KEY table_line = ls_tnt-matnr.
+    IF sy-subrc = 0.
+      CONTINUE.                          " shortfall grade -> excluded
+    ENDIF.
+    lv_mcq = lv_mcq + ls_tnt-yy_tnt_lifting.
+    CLEAR lv_kondm.
+    SELECT SINGLE yy_grade FROM yrva_grade_cisd INTO lv_kondm
+      WHERE yy_matnr = ls_tnt-matnr.
+    IF lv_kondm IS NOT INITIAL.
+      ls_kon-sign = 'I'. ls_kon-option = 'EQ'. ls_kon-low = lv_kondm.
+      APPEND ls_kon TO lt_nskon.
+      IF lv_kondm NOT IN range_s.
+        CLEAR lv_all_s.                  " a non-seasonal signed grade exists
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+*   no non-shortfall grade, or <= 10 MT (A4CQ) -> waiver stands
+  IF lv_mcq <= 10 OR lt_nskon IS INITIAL.
+    p_ok = 'X'.
+    RETURN.
+  ENDIF.
+*   seasonal-sector customer = all signed non-shortfall grades are seasonal
+  lv_seas = lv_all_s.
+*   non-shortfall lifting for the run month (grade = KONDM)
+  SELECT kondm ummenge vtweg FROM s922 INTO (lv_kondm, lv_umb, lv_vtweg)
+    WHERE pkunag = p_kunnr
+      AND sptag  IN s_sptag.
+    IF lv_vtweg = '60'.
+      CONTINUE.                          " channel 60 is not counted as lifting
+    ENDIF.
+    IF lv_kondm IN lt_sfkon.
+      CONTINUE.                          " shortfall-grade lifting excluded
+    ENDIF.
+    IF lv_seas = 'X' AND lv_kondm NOT IN range_s.
+      CONTINUE.                          " seasonal customer: only seasonal grades count
+    ENDIF.
+    lv_lift = lv_lift + lv_umb.
+  ENDSELECT.
+*   grant the waiver only when >= 75% of the non-shortfall MCQ is lifted
+  IF lv_lift >= lv_mcq * 75 / 100.
+    p_ok = 'X'.
+  ELSE.
+    CLEAR p_ok.
+  ENDIF.
+ENDFORM.                    "nonsf_waiver_ok
 *&---------------------------------------------------------------------*
 *&      Form  stage_all_rebates   (CIS 2026-27 - Maker/Checker R4)
 *&---------------------------------------------------------------------*
