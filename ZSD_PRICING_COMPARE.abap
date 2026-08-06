@@ -156,6 +156,7 @@ CLASS lcl_app DEFINITION FINAL.
         erdat TYPE vbak-erdat,
         kunnr TYPE vbak-kunnr,
         netwr TYPE vbak-netwr,
+        kalsm TYPE vbak-kalsm,
       END OF ty_vbak,
       ty_t_vbak TYPE STANDARD TABLE OF ty_vbak WITH DEFAULT KEY,
 
@@ -245,6 +246,8 @@ CLASS lcl_app DEFINITION FINAL.
         kunnr      TYPE kunnr,
         vbeln_x    TYPE vbeln_va,
         vbeln_y    TYPE vbeln_va,
+        kalsm_x    TYPE vbak-kalsm,
+        kalsm_y    TYPE vbak-kalsm,
         items      TYPE i,
         netwr_x    TYPE ty_amount,
         netwr_y    TYPE ty_amount,
@@ -268,6 +271,7 @@ CLASS lcl_app DEFINITION FINAL.
       c_error   TYPE c LENGTH 10 VALUE 'ERROR',
       c_allok   TYPE c LENGTH 10 VALUE 'ALL OK',    " order verdict
       c_check   TYPE c LENGTH 10 VALUE 'CHECK',     " order verdict
+      c_info    TYPE c LENGTH 10 VALUE 'INFO',      " expected difference
       c_percent TYPE c LENGTH 1  VALUE 'A'.
 
     TYPES:
@@ -303,6 +307,7 @@ CLASS lcl_app DEFINITION FINAL.
                 et_vbap_y  TYPE ty_t_vbap
                 ev_netwr_y TYPE vbak-netwr
                 ev_waerk_y TYPE vbak-waerk
+                ev_kalsm_y TYPE vbak-kalsm
                 ev_error   TYPE string.
 
     METHODS compare_conditions
@@ -393,7 +398,7 @@ CLASS lcl_app IMPLEMENTATION.
     " ------- R2: user-specified order numbers -------------------------
     IF p_list = abap_true.
       SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
-             erdat, kunnr, netwr
+             erdat, kunnr, netwr, kalsm
         FROM vbak
         WHERE vbeln IN @s_vbeln
         ORDER BY vbeln
@@ -407,7 +412,7 @@ CLASS lcl_app IMPLEMENTATION.
     " all further details of X are read from VBAK/VBAP/VBPA/VBKD
     ELSEIF s_kunnr[] IS INITIAL.
       SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
-             erdat, kunnr, netwr
+             erdat, kunnr, netwr, kalsm
         FROM vbak
         WHERE auart IN @s_auart
           AND erdat IN @s_erdat
@@ -427,7 +432,7 @@ CLASS lcl_app IMPLEMENTATION.
 
       LOOP AT lt_kunnr INTO DATA(lv_kunnr).
         SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
-               erdat, kunnr, netwr
+               erdat, kunnr, netwr, kalsm
           FROM vbak
           WHERE auart IN @s_auart
             AND erdat IN @s_erdat
@@ -470,12 +475,13 @@ CLASS lcl_app IMPLEMENTATION.
           lt_vbap_y  TYPE ty_t_vbap,
           lv_netwr_y TYPE vbak-netwr,
           lv_waerk_y TYPE vbak-waerk,
+          lv_kalsm_y TYPE vbak-kalsm,
           lv_vbeln_y TYPE vbeln_va,
           lv_error   TYPE string.
 
     " fresh work area per order (method runs once per selected order)
     CLEAR: lt_cond_y[], lt_vbap_y[], lv_netwr_y, lv_waerk_y,
-           lv_vbeln_y, lv_error.
+           lv_kalsm_y, lv_vbeln_y, lv_error.
 
     " ------- items of X (skip fully rejected items) -------------------
     DATA lt_vbap TYPE ty_t_vbap.
@@ -526,12 +532,15 @@ CLASS lcl_app IMPLEMENTATION.
                               et_vbap_y  = lt_vbap_y
                               ev_netwr_y = lv_netwr_y
                               ev_waerk_y = lv_waerk_y
+                              ev_kalsm_y = lv_kalsm_y
                               ev_error   = lv_error ).
 
     DATA(ls_sum) = VALUE ty_summary(
         kunnr   = is_vbak-kunnr
         vbeln_x = is_vbak-vbeln
         vbeln_y = lv_vbeln_y
+        kalsm_x = is_vbak-kalsm
+        kalsm_y = lv_kalsm_y
         items   = lines( lt_vbap )
         waers   = is_vbak-waerk
         netwr_x = to_external( iv_amount = CONV #( is_vbak-netwr )
@@ -591,6 +600,10 @@ CLASS lcl_app IMPLEMENTATION.
         ELSE |Pricing matches - S/4 reproduces the ECC result| ).
       ls_sum-color  = VALUE #( ( fname = 'STATUS'
                                  color-col = col_positive ) ).
+    ENDIF.
+    IF ls_sum-kalsm_x <> ls_sum-kalsm_y.
+      ls_sum-remark = |PRICING PROCEDURE DIFFERS ({ ls_sum-kalsm_x } vs | &
+                      |{ ls_sum-kalsm_y })! { ls_sum-remark }|.
     ENDIF.
     APPEND ls_sum TO mt_summary.
 
@@ -657,7 +670,7 @@ CLASS lcl_app IMPLEMENTATION.
     " and every exporting parameter explicitly so nothing carries over
     " from the previous order in the loop
     CLEAR: ev_vbeln_y, et_cond, et_vbap_y, ev_netwr_y, ev_waerk_y,
-           ev_error, ls_hdr, ls_ls.
+           ev_kalsm_y, ev_error, ls_hdr, ls_ls.
     CLEAR: lt_itm[], lt_prt[], lt_sch[], lt_ret[].
 
     " ------- header: copy org data of X, force new pricing ------------
@@ -726,7 +739,7 @@ CLASS lcl_app IMPLEMENTATION.
         wait = 'X'.
 
     " ------- read the freshly priced result of Y ----------------------
-    SELECT SINGLE knumv, waerk, netwr FROM vbak
+    SELECT SINGLE knumv, waerk, netwr, kalsm FROM vbak
       WHERE vbeln = @ev_vbeln_y
       INTO @DATA(ls_vbak_y).
     IF sy-subrc <> 0.
@@ -735,6 +748,7 @@ CLASS lcl_app IMPLEMENTATION.
     ENDIF.
     ev_netwr_y = ls_vbak_y-netwr.
     ev_waerk_y = ls_vbak_y-waerk.
+    ev_kalsm_y = ls_vbak_y-kalsm.
 
     et_cond = get_prcd_conditions( iv_knumv = ls_vbak_y-knumv
                                    iv_waerk = ls_vbak_y-waerk ).
@@ -1027,10 +1041,17 @@ CLASS lcl_app IMPLEMENTATION.
           ls_res-kwert_new  = to_external( iv_amount = CONV #( <lv_y> )
                                            iv_waers  = iv_waerk_y ).
           ls_res-kwert_diff = ls_res-kwert_new - ls_res-kwert_old.
-          IF ls_res-kwert_diff <> 0.
-            ls_res-status = c_diff.
-          ELSE.
+          IF ls_res-kwert_diff = 0.
             ls_res-status = c_ok.
+          ELSEIF lv_field = 'WAVWR'.
+            " cost drift is expected: X froze the moving average price
+            " at its creation date, Y pulls the current one - this is
+            " time, not migration -> informational, never red
+            ls_res-status = c_info.
+            ls_res-remark =
+              'Cost drift (current moving avg. price) - expected, no config impact'(r10).
+          ELSE.
+            ls_res-status = c_diff.
           ENDIF.
         ELSE.                    " flag / character field -> raw compare
           IF <lv_x> <> <lv_y>.
@@ -1045,6 +1066,8 @@ CLASS lcl_app IMPLEMENTATION.
 
         IF ls_res-status = c_diff.
           ms_stat-mismatch = ms_stat-mismatch + 1.
+        ELSEIF ls_res-status = c_info.
+          " counted as warning via add_result
         ELSE.
           ms_stat-ok = ms_stat-ok + 1.
         ENDIF.
@@ -1224,7 +1247,7 @@ CLASS lcl_app IMPLEMENTATION.
                                        color-col = col_negative
                                        color-int = 1 ) ).
         ENDIF.
-      WHEN c_manual.
+      WHEN c_manual OR c_info.
         ms_stat-warn = ms_stat-warn + 1.
         ls_result-color = VALUE #( ( fname = 'STATUS'
                                      color-col = col_total ) ).
@@ -1274,6 +1297,14 @@ CLASS lcl_app IMPLEMENTATION.
             lo_col->set_medium_text( 'Sales Order New' ).
             lo_col->set_long_text( 'Sales Order New (S/4)' ).
             lo_cols->get_column( 'ITEMS' )->set_medium_text( 'Items' ).
+            lo_col = lo_cols->get_column( 'KALSM_X' ).
+            lo_col->set_short_text( 'Proc. X' ).
+            lo_col->set_medium_text( 'Pric.Proc. X (ECC)' ).
+            lo_col->set_long_text( 'Pricing Procedure X (ECC)' ).
+            lo_col = lo_cols->get_column( 'KALSM_Y' ).
+            lo_col->set_short_text( 'Proc. Y' ).
+            lo_col->set_medium_text( 'Pric.Proc. Y (S/4)' ).
+            lo_col->set_long_text( 'Pricing Procedure Y (S/4)' ).
             lo_cols->get_column( 'NETWR_X' )->set_medium_text( 'Net Value X (ECC)' ).
             lo_cols->get_column( 'NETWR_Y' )->set_medium_text( 'Net Value Y (S/4)' ).
             lo_cols->get_column( 'NETWR_DIFF' )->set_medium_text( 'Net delta' ).
