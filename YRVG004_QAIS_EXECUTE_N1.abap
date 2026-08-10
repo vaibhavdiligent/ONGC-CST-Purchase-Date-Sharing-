@@ -12525,6 +12525,9 @@ ENDFORM.                    "stage_one
 *     - zero value but GROUP code that lifted while
 *       this code lifted nothing                    -> flow  (rule 3:
 *       'Grp O.k' in the zero-lifting code)
+*     - zero value with only a CUSTOMER MONTHLY WAIVER -> do NOT flow
+*       (GAIL 06.08.2026: a wrongly-maintained customer waiver must not
+*       push a zero-value line to L2)
 *     - otherwise (zero value, no waiver, no group
 *       lifting)                                     -> fail  (rule 2: do
 *       not flow to L2)
@@ -12560,11 +12563,16 @@ FORM l1_row_may_flow USING p_kunnr TYPE kunnr
       p_flow = 'X'.                 " S/F waiver
       RETURN.
     ENDIF.
-    IF ls_q-waiver_1 = lv_runmon OR ls_q-waiver_2 = lv_runmon
-       OR ls_q-waiver_3 = lv_runmon.
-      p_flow = 'X'.                 " Month waiver
-      RETURN.
-    ENDIF.
+*   GAIL 06.08.2026: a ZERO-discount row that only carries a customer
+*   MONTHLY WAIVER must NOT be forwarded to L2. If a customer waiver was
+*   wrongly maintained it would otherwise push a zero-value line forward;
+*   holding it back at L1 prevents that. (S/F waiver and Grp O.k. below
+*   still flow, as those are genuine zero-value reasons.)
+*    IF ls_q-waiver_1 = lv_runmon OR ls_q-waiver_2 = lv_runmon
+*       OR ls_q-waiver_3 = lv_runmon.
+*      p_flow = 'X'.                 " Month waiver - no longer forwarded
+*      RETURN.
+*    ENDIF.
   ENDIF.
   IF p_kvgr2 IS NOT INITIAL
      AND p_grp IS NOT INITIAL       " group lifted in the period
