@@ -337,41 +337,61 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM build_fieldcat.
+*   Every column carries its DDIC reference (REF_TABNAME / REF_FIELDNAME) so
+*   the ALV grid interactive Filter and Sort work. Without a type reference
+*   the classic ALV cannot build the filter, which is why the funnel did
+*   nothing. Amount / quantity / currency columns are left without a QUAN/CURR
+*   reference on purpose (they carry no unit field here) - they still filter
+*   as numeric values. STATUS_TXT is computed and gets an explicit CHAR type.
+*   GAIL 06.08.2026.
   DEFINE add_fc.
     CLEAR gs_fcat.
-    gs_fcat-fieldname = &1.
-    gs_fcat-seltext_l = &2.
-    gs_fcat-seltext_m = &2.
-    gs_fcat-seltext_s = &2.
+    gs_fcat-fieldname     = &1.
+    gs_fcat-seltext_l     = &2.
+    gs_fcat-seltext_m     = &2.
+    gs_fcat-seltext_s     = &2.
+    gs_fcat-ref_tabname   = &3.
+    gs_fcat-ref_fieldname = &4.
     APPEND gs_fcat TO gt_fcat.
   END-OF-DEFINITION.
 
-  add_fc 'VBELN'     'Rebate Order'.
-  add_fc 'AUART'     'Doc Type'.
-  add_fc 'ERDAT'     'Created On'.
-  add_fc 'BSTKD'     'Reference No'.
-  add_fc 'KUNNR'     'Customer'.
-  add_fc 'NAME1'     'Customer Name'.
-  add_fc 'SALES_OFF' 'Sales Office'.
-  add_fc 'SCHEME_TYPE' 'Scheme'.
-  add_fc 'STATUS_TXT' 'Status'.
-  add_fc 'KONDM'     'MPG'.
-  add_fc 'KONDM_TXT' 'Material / Grade Name'.
-  add_fc 'LFT_QTY'   'Lifted Qty'.
-  add_fc 'ELIG_QTY'  'Discount Qty'.
-  add_fc 'REBATE_VAL' 'Rebate Amount'.
-  add_fc 'WAERS'     'Currency'.
-  add_fc 'L1_USER'   'L1 Approved By'.
-  add_fc 'L1_DATE'   'L1 Date'.
-  add_fc 'L1_TIME'   'L1 Time'.
-  add_fc 'L2_USER'   'L2 Approved By'.
-  add_fc 'L2_DATE'   'L2 Date'.
-  add_fc 'L2_TIME'   'L2 Time'.
-  add_fc 'L3_USER'   'L3 Executed By'.
-  add_fc 'L3_DATE'   'L3 Date'.
-  add_fc 'L3_TIME'   'L3 Time'.
-  add_fc 'REJ_BY'      'Rejected By'.
-  add_fc 'REJ_REMARKS' 'Reject Remark'.
+  add_fc 'VBELN'       'Rebate Order'          'YCIS_APPRVL'     'ORDER_NO'.
+  add_fc 'AUART'       'Doc Type'              'VBAK'            'AUART'.
+  add_fc 'ERDAT'       'Created On'            'VBAK'            'ERDAT'.
+  add_fc 'BSTKD'       'Reference No'          'VBKD'            'BSTKD'.
+  add_fc 'KUNNR'       'Customer'              'YCIS_APPRVL'     'KUNNR'.
+  add_fc 'NAME1'       'Customer Name'         'KNA1'            'NAME1'.
+  add_fc 'SALES_OFF'   'Sales Office'          'YCIS_APPRVL'     'SALES_OFF'.
+  add_fc 'SCHEME_TYPE' 'Scheme'                'YCIS_APPRVL'     'SCHEME_TYPE'.
+  add_fc 'STATUS_TXT'  'Status'                ''                ''.
+  add_fc 'KONDM'       'MPG'                   'YCIS_APPRVL_GRD' 'KONDM'.
+  add_fc 'KONDM_TXT'   'Material / Grade Name' 'MAKT'            'MAKTX'.
+  add_fc 'LFT_QTY'     'Lifted Qty'            ''                ''.
+  add_fc 'ELIG_QTY'    'Discount Qty'          ''                ''.
+  add_fc 'REBATE_VAL'  'Rebate Amount'         ''                ''.
+  add_fc 'WAERS'       'Currency'              'YCIS_APPRVL'     'WAERS'.
+  add_fc 'L1_USER'     'L1 Approved By'        'YCIS_APPRVL'     'L1_USER'.
+  add_fc 'L1_DATE'     'L1 Date'               'YCIS_APPRVL'     'L1_DATE'.
+  add_fc 'L1_TIME'     'L1 Time'               'YCIS_APPRVL'     'L1_TIME'.
+  add_fc 'L2_USER'     'L2 Approved By'        'YCIS_APPRVL'     'L2_USER'.
+  add_fc 'L2_DATE'     'L2 Date'               'YCIS_APPRVL'     'L2_DATE'.
+  add_fc 'L2_TIME'     'L2 Time'               'YCIS_APPRVL'     'L2_TIME'.
+  add_fc 'L3_USER'     'L3 Executed By'        'YCIS_APPRVL'     'L3_USER'.
+  add_fc 'L3_DATE'     'L3 Date'               'YCIS_APPRVL'     'L3_DATE'.
+  add_fc 'L3_TIME'     'L3 Time'               'YCIS_APPRVL'     'L3_TIME'.
+  add_fc 'REJ_BY'      'Rejected By'           'YCIS_APPRVL'     'REJ_BY'.
+  add_fc 'REJ_REMARKS' 'Reject Remark'         'YCIS_APPRVL'     'REJ_REMARKS'.
+
+*   STATUS_TXT is a computed CHAR32 value with no DDIC element - set an
+*   explicit type so the grid Filter / Sort work on it as well.
+  READ TABLE gt_fcat INTO gs_fcat WITH KEY fieldname = 'STATUS_TXT'.
+  IF sy-subrc = 0.
+    gs_fcat-inttype   = 'C'.
+    gs_fcat-datatype  = 'CHAR'.
+    gs_fcat-intlen    = 32.
+    gs_fcat-outputlen = 32.
+    MODIFY gt_fcat FROM gs_fcat INDEX sy-tabix.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
