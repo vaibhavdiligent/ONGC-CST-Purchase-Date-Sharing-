@@ -9,12 +9,11 @@ TABLES: t001.
 
 TYPE-POOLS: slis.
 
-CONSTANTS: gc_rldnr1 TYPE c LENGTH 2 VALUE '4A',
-           gc_rldnr2 TYPE c LENGTH 2 VALUE '4C'.
-
 DATA: gv_lines TYPE i.
 
 * JVSO1 Final Data
+* S/4HANA: data read from CDS view JV_JVSO1_ACDOCA (CJVSO1_ACD)
+* as per SAP Note 3082514 - ledger 4C amounts in HSL_4C / KSL_4C
 TYPES: BEGIN OF ty_jvso1,
          rjvnam TYPE char10,
          rrecin TYPE char5,
@@ -26,6 +25,8 @@ TYPES: BEGIN OF ty_jvso1,
          tsl    TYPE p LENGTH 15 DECIMALS 2,
          hsl    TYPE p LENGTH 15 DECIMALS 2,
          ksl    TYPE p LENGTH 15 DECIMALS 2,
+         hsl_4c TYPE p LENGTH 15 DECIMALS 2,
+         ksl_4c TYPE p LENGTH 15 DECIMALS 2,
          budat  TYPE budat,
        END OF ty_jvso1.
 

@@ -7,6 +7,10 @@
 
 FORM get_data.
 
+* S/4HANA: table JVSO1 replaced by CDS view JV_JVSO1_ACDOCA
+* (ABAP SQL name CJVSO1_ACD) as per SAP Note 3082514.
+* The view returns ACDOCA data in the JVSO1 structure without a
+* ledger split - ledger 4C amounts are in columns HSL_4C / KSL_4C.
   SELECT rjvnam
          rrecin
          racct
@@ -17,11 +21,12 @@ FORM get_data.
          tsl
          hsl
          ksl
+         hsl_4c
+         ksl_4c
          budat
     INTO TABLE gt_jvso1
-    FROM jvso1
-   WHERE rldnr IN ( gc_rldnr1, gc_rldnr2 )
-     AND rrcty = '0'
+    FROM cjvso1_acd
+   WHERE rrcty = '0'
      AND rvers = '1'
      AND ryear = p_gjahr
      AND poper = p_poper.
