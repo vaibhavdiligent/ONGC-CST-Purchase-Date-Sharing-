@@ -386,6 +386,20 @@ FORM build_fieldcat.
   add_fc 'L3_TIME'     'L3 Time'               'YCIS_APPRVL'     'L3_TIME'.
   add_fc 'REJ_BY'      'Rejected By'           'YCIS_APPRVL'     'REJ_BY'.
   add_fc 'REJ_REMARKS' 'Reject Remark'         'YCIS_APPRVL'     'REJ_REMARKS'.
+
+*   STATUS_TXT borrows CUST_NAME only for its (filterable) CHAR type, so the
+*   grid would otherwise show that field's label 'Name 1'. Force the header
+*   back to 'Status': DDICTXT = 'L' tells ALV to use SELTEXT_L over the DDIC
+*   text. GAIL 06.08.2026.
+  READ TABLE gt_fcat INTO gs_fcat WITH KEY fieldname = 'STATUS_TXT'.
+  IF sy-subrc = 0.
+    gs_fcat-ddictxt      = 'L'.
+    gs_fcat-reptext_ddic = 'Status'.
+    gs_fcat-seltext_l    = 'Status'.
+    gs_fcat-seltext_m    = 'Status'.
+    gs_fcat-seltext_s    = 'Status'.
+    MODIFY gt_fcat FROM gs_fcat INDEX sy-tabix.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
