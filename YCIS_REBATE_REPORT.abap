@@ -363,7 +363,12 @@ FORM build_fieldcat.
   add_fc 'NAME1'       'Customer Name'         'KNA1'            'NAME1'.
   add_fc 'SALES_OFF'   'Sales Office'          'YCIS_APPRVL'     'SALES_OFF'.
   add_fc 'SCHEME_TYPE' 'Scheme'                'YCIS_APPRVL'     'SCHEME_TYPE'.
-  add_fc 'STATUS_TXT'  'Status'                ''                ''.
+*   STATUS_TXT is computed (no DDIC element of its own). The ALV grid Filter
+*   needs a real DDIC reference - an explicit inttype alone is not enough -
+*   so reference a plain CHAR field (CUST_NAME, char 35) purely to give the
+*   column a filterable/sortable character type; the header stays 'Status'
+*   via the seltext above. GAIL 06.08.2026.
+  add_fc 'STATUS_TXT'  'Status'                'YCIS_APPRVL'     'CUST_NAME'.
   add_fc 'KONDM'       'MPG'                   'YCIS_APPRVL_GRD' 'KONDM'.
   add_fc 'KONDM_TXT'   'Material / Grade Name' 'MAKT'            'MAKTX'.
   add_fc 'LFT_QTY'     'Lifted Qty'            ''                ''.
@@ -381,17 +386,6 @@ FORM build_fieldcat.
   add_fc 'L3_TIME'     'L3 Time'               'YCIS_APPRVL'     'L3_TIME'.
   add_fc 'REJ_BY'      'Rejected By'           'YCIS_APPRVL'     'REJ_BY'.
   add_fc 'REJ_REMARKS' 'Reject Remark'         'YCIS_APPRVL'     'REJ_REMARKS'.
-
-*   STATUS_TXT is a computed CHAR32 value with no DDIC element - set an
-*   explicit type so the grid Filter / Sort work on it as well.
-  READ TABLE gt_fcat INTO gs_fcat WITH KEY fieldname = 'STATUS_TXT'.
-  IF sy-subrc = 0.
-    gs_fcat-inttype   = 'C'.
-    gs_fcat-datatype  = 'CHAR'.
-    gs_fcat-intlen    = 32.
-    gs_fcat-outputlen = 32.
-    MODIFY gt_fcat FROM gs_fcat INDEX sy-tabix.
-  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
