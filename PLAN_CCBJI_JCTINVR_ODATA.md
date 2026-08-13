@@ -1,6 +1,6 @@
 # Plan — Inbound OData Service for /CCBJI/T_JCTINVR (NTA Invoice Registration Numbers)
 
-**Status:** PLAN — for review before build
+**Status:** APPROVED — Option A confirmed 13.08.2026 (build in progress)
 **Customer:** Coca-Cola Bottlers Japan (CCBJI), S/4HANA
 **Interface:** NTA file → SAP CPI → **OData (this development)** → S/4HANA
 **Replaces (AS-IS):** ABInitio compare logic that read `/CCBJI/T_JCTINVR` from ECC, compared the
@@ -42,11 +42,6 @@ transparent table, key = `MANDT` + `INVOICE_CD`.
 | 17 | ZUPTIM | | TIMS | 6 | UPTIM | Changed at |
 | 18 | ZUPDIND | | CHAR | 1 | /CCEJ/MDM_UPD_IND | Update indicator — fixed values **D**elete / **I**nsert / **U**pdate |
 
-Key observation: the table key is only `INVOICE_CD`, so there is exactly **one row per
-registration number** — "insert back" in the AS-IS diagram translates to
-**INSERT for new numbers / UPDATE for existing ones** (`MODIFY`), with `ZUPDIND`
-recording which one happened and `LATEST_KBN` flagging the record as current.
-
 ## 2. Technology choice — code-based OData V2 (same process as ZTABLE_META dynamic read)
 
 Same recipe as the dynamic read service already built for this landscape:
@@ -74,23 +69,22 @@ write to its table, we don't create objects in it).
 
 ## 3. Objects to create
 
-| Object | Name (proposed) | Notes |
-|--------|-----------------|-------|
+| Object | Name | Notes |
+|--------|------|-------|
 | Model Provider Class | `ZCL_ZCCBJI_JCTINVR_MPC` | inherits `/IWBEP/CL_MGW_ABS_MODEL`; `DEFINE` redefined |
 | Data Provider Class | `ZCL_ZCCBJI_JCTINVR_DPC` | inherits `/IWBEP/CL_MGW_ABS_DATA`; `CREATE_DEEP_ENTITY` redefined |
 | Technical model name | `ZCCBJI_JCTINVR_MDL` (version 0001) | via `/IWBEP/REG_SERVICE` |
 | Technical service name | `ZCCBJI_JCTINVR_SRV` (version 0001) | via `/IWBEP/REG_SERVICE` + `/IWFND/MAINT_SERVICE` |
-| Package | same Z package/convention as `ZTABLE_META` (e.g. `ZGMS` equivalent for CCBJI) + transport | open question #5 |
+| Package | CCBJI Z package convention + transport | open question #5 |
 
 ### Entity model (defined in code in the MPC `DEFINE`)
 
 **Header entity `InvoiceRegistrations`** / set `InvoiceRegistrationsSet` —
-technical parent only, key `RequestId` (Edm.String 32, nullable, creatable);
-CPI leaves it blank. Bound to `TYPES ty_header` in the MPC.
+technical parent only, key `REQUEST_ID` (Edm.String 32, nullable, creatable);
+CPI leaves it blank; the response echoes the processing summary in it.
 
 **Item entity `InvoiceRegistration`** / set `InvoiceRegistrationSet` —
-one entity per NTA record, "same format" as the table's business fields.
-Bound to `TYPES ty_item` in the MPC:
+one entity per NTA record, "same format" as the table's business fields:
 
 | Property | Key | Nullable | MaxLen | Maps to table field |
 |----------|:---:|:--------:|-------:|---------------------|
@@ -114,41 +108,40 @@ navigation property **`InvoiceRegistration`** on the header (exact name matters 
 it is the wrapper element CPI maps the line items into). Both entity sets
 `set_creatable( abap_true )`.
 
-## 4. Processing logic — `CREATE_DEEP_ENTITY` (the "Compare Logic" box from the diagram)
+## 4. Processing logic — `CREATE_DEEP_ENTITY` — **Option A (literal AS-IS diagram, CONFIRMED)**
+
+Compare field: incoming **Registered Number** (NTA) vs **`INVOICE_CD`** in
+`/CCBJI/T_JCTINVR` — single-field match, exactly as in the flow diagram
+("If Registered Number found in T_JCTINVR Table then Insert into T_JCTINVR").
 
 ```
 1. read_entry_data → header + item table (whole NTA batch in one call)
 2. VALIDATE each item:
-      - INVOICE_CD not initial, length ≤ 14 (pattern T + 13 digits if NTA standard)
-      - dates parse to valid DATS; collect per-record errors
-      - duplicate INVOICE_CD inside the batch → keep last occurrence (log warning)
-3. FETCH: SELECT the matching rows from /ccbji/t_jctinvr
-      FOR ALL ENTRIES / IN range of incoming INVOICE_CDs  → lt_existing (sorted table)
-4. COMPARE each incoming record against lt_existing:
-      a) NOT found  → new record:      ZUPDIND = 'I',
-                                       ZERNAM/ZERSDA/ZERZZT = sy-uname/sy-datum/sy-uzeit
-      b) Found & any business field differs
-                    → changed record:  ZUPDIND = 'U',
-                                       keep original ZERNAM/ZERSDA/ZERZZT,
-                                       ZAENAM/ZUPDAT/ZUPTIM = sy-uname/sy-datum/sy-uzeit
-      c) Found & identical → SKIP (no DB touch, counted as "unchanged")
-5. WRITE: MODIFY /ccbji/t_jctinvr FROM TABLE lt_upsert   (single LUW)
-      - sy-subrc ≠ 0 → ROLLBACK WORK + /iwbep/cx_mgw_busi_exception with message container
-      - any validation errors collected in step 2 → ROLLBACK + error response
-        (all-or-nothing, same contract as the AS-IS full-batch job)
-6. COMMIT WORK AND WAIT; return header entity + summary
-      (inserted / updated / unchanged counts via message container)
+      - INVOICE_CD not initial (upper-cased, condensed)
+      - dates parse to valid DATS → else reject the whole batch (all-or-nothing)
+      - duplicate INVOICE_CD inside the batch → keep last occurrence
+3. AUTHORITY: S_TABU_NAM activity 02 (change) on /CCBJI/T_JCTINVR
+4. FETCH: SELECT rows from /ccbji/t_jctinvr FOR ALL ENTRIES on incoming INVOICE_CDs
+5. COMPARE each incoming record (Option A — literal image logic):
+      a) INVOICE_CD FOUND      → write the incoming record back over the existing
+                                 row (physically an UPDATE, key already exists):
+                                 all 9 business fields taken from the payload,
+                                 original ZERNAM/ZERSDA/ZERZZT preserved,
+                                 ZAENAM/ZUPDAT/ZUPTIM = sy-uname/sy-datum/sy-uzeit,
+                                 ZUPDIND = 'U'
+      b) INVOICE_CD NOT found  → SKIP (no insert), counted and reported
+      (No field-by-field change detection — every matched record is written back,
+       exactly as the AS-IS diagram states.)
+6. WRITE: MODIFY /ccbji/t_jctinvr FROM TABLE lt_update (single LUW)
+      - failure → ROLLBACK WORK + /iwbep/cx_mgw_busi_exception (message container)
+7. COMMIT WORK AND WAIT; response header REQUEST_ID echoes the summary,
+      e.g. "U:1234 S:56" (updated / skipped-not-found counts)
 ```
 
 Notes:
-- **`MODIFY` (upsert)**, not `INSERT`, because the single-field key makes
-  "found → insert" from the AS-IS diagram physically an update on S/4.
 - No standard BAPI exists for this add-on table → direct `MODIFY` of the transparent
   table inside the DPC, wrapped in explicit commit/rollback (acceptable: add-on master
   data, APPL0, no number ranges or change documents involved).
-- **Authority check** before writing, mirroring the read service's `S_TABU_NAM` check but
-  with activity `02` (change) on `/CCBJI/T_JCTINVR` — the CPI technical user's role
-  needs this authorization.
 - Error raising via the same `raise_error` / message-container pattern as
   `ZCL_ZTABLE_META_DPC`.
 - Batch sizes: NTA full files can be large — CPI should chunk (e.g. 5–10k records per
@@ -158,8 +151,8 @@ Notes:
 
 | # | Where | Action |
 |---|-------|--------|
-| 1 | SE24/ADT | create + activate `ZCL_ZCCBJI_JCTINVR_MPC` (TYPES + `DEFINE`: 2 entity types, association, nav. property, both sets creatable) |
-| 2 | SE24/ADT | create + activate `ZCL_ZCCBJI_JCTINVR_DPC` (`CREATE_DEEP_ENTITY` logic of §4) |
+| 1 | SE24/ADT | create + activate `ZCL_ZCCBJI_JCTINVR_MPC` (source: `ZCL_ZCCBJI_JCTINVR_MPC.abap`) |
+| 2 | SE24/ADT | create + activate `ZCL_ZCCBJI_JCTINVR_DPC` (source: `ZCL_ZCCBJI_JCTINVR_DPC.abap`) |
 | 3 | /IWBEP/REG_SERVICE | register model `ZCCBJI_JCTINVR_MDL` 0001 (MPC) + service `ZCCBJI_JCTINVR_SRV` 0001 (DPC) |
 | 4 | /IWFND/MAINT_SERVICE | Add Service, alias LOCAL, filter `ZCCBJI_JCTINVR_SRV`, assign package |
 | 5 | Caches | `/IWBEP/CACHE_CLEANUP` + `/IWFND/CACHE_CLEANUP`, Load Metadata, verify `$metadata?x=1` (2 entity sets, nav. property `InvoiceRegistration`, `sap:creatable="true"`) |
@@ -180,32 +173,35 @@ POST /sap/opu/odata/sap/ZCCBJI_JCTINVR_SRV/InvoiceRegistrationsSet
 }
 ```
 
-Test cases: new number (→ I), existing number changed (→ U), existing identical (→ skip),
-invalid date (→ 400 + rollback), duplicate in batch, empty batch, missing authorization,
-5k-record volume test.
+Test cases: existing number (→ updated, ZUPDIND 'U', changed-by audit stamped),
+unknown number (→ skipped, reported in summary), invalid date (→ 400 + nothing written),
+duplicate in batch (last wins), empty batch (→ 400), missing authorization (→ 403-style
+error), 5k-record volume test.
 
 ## 6. CPI receiver channel (for the CPI team)
 
 - Adapter: **OData V2**, Operation **Create (POST)**, Resource Path `InvoiceRegistrationsSet`,
   **Sub Levels = 1**, CSRF enabled.
-- Map NTA fields → child `InvoiceRegistration`; leave `RequestId` unmapped.
+- Map NTA fields → child `InvoiceRegistration`; leave `REQUEST_ID` unmapped.
 - Chunk large NTA files; on HTTP 4xx/5xx the whole chunk is rolled back → safe to retry.
+- Response `REQUEST_ID` carries "U:n S:m" (updated / skipped counts) for iFlow logging.
 
 ## 7. Repo deliverables (this branch)
 
 1. `ZCL_ZCCBJI_JCTINVR_MPC.abap` — code-based Model Provider (TYPES + DEFINE)
-2. `ZCL_ZCCBJI_JCTINVR_DPC.abap` — code-based Data Provider (CREATE_DEEP_ENTITY compare/upsert)
+2. `ZCL_ZCCBJI_JCTINVR_DPC.abap` — code-based Data Provider (CREATE_DEEP_ENTITY, Option A logic)
 3. `ZCCBJI_JCTINVR_ODATA_GUIDE.md` — build/registration/test guide in the same format as
    `ZTABLE_META_ODATA_GUIDE.md`
 
-## 8. Open questions (answers refine the build, defaults are safe)
+## 8. Decisions & open questions
 
-1. **Compare scope:** AS-IS text says "if registered number FOUND then insert". Default
-   assumption: standard delta upsert — insert when new, update when changed (§4). If NTA
-   deltas must instead only refresh already-known numbers, step 4a becomes "skip + log".
-2. **Deletes:** does the NTA feed ever carry revocations as physical deletes (`ZUPDIND = 'D'`),
-   or only `REVOCATION_DATE` updates? Default: no physical deletes.
-3. **LATEST_KBN:** sent by CPI as-is (current default) or forced to '1' by the backend?
-4. **Error contract:** all-or-nothing per POST (default, matches AS-IS batch) vs.
-   accept-partial with an error list returned to CPI.
-5. Confirm package + transport naming convention for the CCBJI objects.
+1. **Compare scope — DECIDED (Option A, 13.08.2026):** single-field match on
+   INVOICE_CD; found → write payload back (update); not found → skip + count.
+   No field-by-field change detection.
+2. **Deletes:** NTA feed assumed to carry revocations only as `REVOCATION_DATE`
+   values, never physical deletes (`ZUPDIND = 'D'` not produced by this service).
+3. **LATEST_KBN:** passed through from CPI as-is.
+4. **Error contract:** all-or-nothing per POST (validation or DB error rolls back the
+   whole chunk); "not found → skipped" is NOT an error, it is reported in the summary.
+5. Confirm package + transport naming convention for the CCBJI objects (build uses a
+   placeholder package prompt in the guide).
