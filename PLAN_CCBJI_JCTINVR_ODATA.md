@@ -1,11 +1,17 @@
 # Plan — Inbound OData Service for /CCBJI/T_JCTINVR (NTA Invoice Registration Numbers)
 
 **Status:** PLAN — for review before build
+**Customer:** Coca-Cola Bottlers Japan (CCBJI), S/4HANA
 **Interface:** NTA file → SAP CPI → **OData (this development)** → S/4HANA
 **Replaces (AS-IS):** ABInitio compare logic that read `/CCBJI/T_JCTINVR` from ECC, compared the
 incoming NTA registered numbers, and inserted back into the same table.
-**TO-BE:** CPI posts the NTA records to a new OData service; the **compare + insert logic moves
-into the S/4 backend** (inside the OData data-provider class).
+**TO-BE (per flow diagram):** CPI posts the NTA records to a new OData service; the
+**compare + insert logic moves into the S/4 backend** (inside the OData data-provider class).
+
+**Build approach:** fully **code-based OData V2** — MPC + DPC classes only, **no SEGW project** —
+i.e. the exact same process already used for the dynamic table read service
+(`ZTABLE_META` — see `ZTABLE_META_ODATA_GUIDE.md`, `ZCL_ZTABLE_META_MPC/DPC.abap`).
+This is the write-direction counterpart of that development.
 
 ---
 
@@ -41,18 +47,27 @@ registration number** — "insert back" in the AS-IS diagram translates to
 **INSERT for new numbers / UPDATE for existing ones** (`MODIFY`), with `ZUPDIND`
 recording which one happened and `LATEST_KBN` flagging the record as current.
 
-## 2. Technology choice — OData V2 via SEGW (Gateway), deep-entity pattern
+## 2. Technology choice — code-based OData V2 (same process as ZTABLE_META dynamic read)
 
-Chosen to match the existing, working CPI-inbound service in this repo
-(`ZGMS_EXCHRATE_ODATA_GUIDE.md`, `ZCL_GMS_EXCHRATE_DPC/MPC.abap`):
+Same recipe as the dynamic read service already built for this landscape:
 
-- **OData V2** — CPI's OData receiver adapter default, POST with CSRF handling out of the box.
-- **SEGW project** (not RAP) — the processing is a batch "compare and write" on a namespaced
-  table with no BO semantics; a `CREATE_DEEP_ENTITY` redefinition is the simplest robust fit
-  and mirrors the ZGMS_EXCHRATE precedent already proven with this CPI landscape.
-- **Deep entity (header + items)** — CPI sends the whole NTA delta in ONE POST
-  (Sub Levels = 1), so the full batch is processed in a single LUW: all-or-nothing,
-  one commit, one response.
+- **OData V2**, CPI OData receiver adapter, CSRF handled by the adapter.
+- **Code-based model + data provider — no SEGW project:**
+  - MPC class inheriting `/IWBEP/CL_MGW_ABS_MODEL`, entity model built in a
+    redefined `DEFINE` method (`create_entity_type` / `create_property` /
+    `bind_structure` / `create_entity_set`), payload structures declared as
+    `TYPES` in the MPC public section.
+  - DPC class inheriting `/IWBEP/CL_MGW_ABS_DATA`, the CPI POST handled in a
+    redefined `/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CREATE_DEEP_ENTITY`.
+  - Registration on the backend in `/IWBEP/REG_SERVICE` (model + service),
+    then `/IWFND/MAINT_SERVICE` Add Service — exactly like `ZTABLE_META_SRV`.
+- Differences vs. the read service, because this one is **inbound (write)**:
+  - Direction is POST/Create, so the DPC redefines `CREATE_DEEP_ENTITY`
+    instead of `GET_ENTITYSET`.
+  - The model needs **two entity types + an association/navigation** (header →
+    items) so CPI can send the whole NTA batch in ONE deep POST (Sub Levels = 1).
+  - Entity sets are flagged `set_creatable( abap_true )` directly in the MPC
+    `DEFINE` — being code-based, no MPC_EXT workaround is needed.
 
 All objects in customer namespace `Z` (the `/CCBJI/` namespace is add-on-owned; we only
 write to its table, we don't create objects in it).
@@ -61,17 +76,24 @@ write to its table, we don't create objects in it).
 
 | Object | Name (proposed) | Notes |
 |--------|-----------------|-------|
-| SEGW project | `ZCCBJI_JCTINVR` | package as per system convention + workbench transport |
-| Header entity | `InvoiceRegistrations` / set `InvoiceRegistrationsSet` | technical key `REQUEST_ID` (Edm.String 32, nullable, creatable) — CPI leaves blank |
-| Item entity | `InvoiceRegistration` / set `InvoiceRegistrationSet` | 10 business fields, all Edm.String, Creatable+Updatable ticked |
-| Association | `InvoiceRegistrations_InvoiceRegistration`, 1 : 0..n, nav. property **`InvoiceRegistration`** | exact name matters for CPI mapping |
-| Generated classes | `ZCL_ZCCBJI_JCTINVR_MPC/_MPC_EXT/_DPC/_DPC_EXT` | via Generate Runtime Objects |
-| Service | `ZCCBJI_JCTINVR_SRV` | registered in `/IWFND/MAINT_SERVICE`, alias LOCAL |
+| Model Provider Class | `ZCL_ZCCBJI_JCTINVR_MPC` | inherits `/IWBEP/CL_MGW_ABS_MODEL`; `DEFINE` redefined |
+| Data Provider Class | `ZCL_ZCCBJI_JCTINVR_DPC` | inherits `/IWBEP/CL_MGW_ABS_DATA`; `CREATE_DEEP_ENTITY` redefined |
+| Technical model name | `ZCCBJI_JCTINVR_MDL` (version 0001) | via `/IWBEP/REG_SERVICE` |
+| Technical service name | `ZCCBJI_JCTINVR_SRV` (version 0001) | via `/IWBEP/REG_SERVICE` + `/IWFND/MAINT_SERVICE` |
+| Package | same Z package/convention as `ZTABLE_META` (e.g. `ZGMS` equivalent for CCBJI) + transport | open question #5 |
 
-### Item entity properties (the payload CPI sends — "same format" as the table)
+### Entity model (defined in code in the MPC `DEFINE`)
 
-| Property | Key | Nullable | MaxLen | Maps to |
-|----------|:---:|:--------:|-------:|---------|
+**Header entity `InvoiceRegistrations`** / set `InvoiceRegistrationsSet` —
+technical parent only, key `RequestId` (Edm.String 32, nullable, creatable);
+CPI leaves it blank. Bound to `TYPES ty_header` in the MPC.
+
+**Item entity `InvoiceRegistration`** / set `InvoiceRegistrationSet` —
+one entity per NTA record, "same format" as the table's business fields.
+Bound to `TYPES ty_item` in the MPC:
+
+| Property | Key | Nullable | MaxLen | Maps to table field |
+|----------|:---:|:--------:|-------:|---------------------|
 | INVOICE_CD | ✔ | – | 14 | INVOICE_CD |
 | PROCESS_KBN | – | ✔ | 2 | PROCESS_KBN |
 | CORRECTION_KBN | – | ✔ | 1 | CORRECTION_KBN |
@@ -83,9 +105,14 @@ write to its table, we don't create objects in it).
 | REVOCATION_DATE | – | ✔ | 10 | REVOCATION_DATE (DATS) |
 | EXPIRATION_DATE | – | ✔ | 10 | EXPIRATION_DATE (DATS) |
 
-Dates travel as Edm.String and are normalized in the backend (accept `YYYYMMDD`,
-`YYYY-MM-DD` and `DD.MM.YYYY`); MANDT and the 7 audit fields are **not** in the payload —
-the backend fills them.
+All properties Edm.String (dates normalized in the backend — accept `YYYYMMDD`,
+`YYYY-MM-DD`, `DD.MM.YYYY`). `MANDT` and the 7 audit fields are **not** in the
+payload — the backend fills them.
+
+**Association** `InvoiceRegistrations_InvoiceRegistration`, cardinality 1 : 0..n,
+navigation property **`InvoiceRegistration`** on the header (exact name matters —
+it is the wrapper element CPI maps the line items into). Both entity sets
+`set_creatable( abap_true )`.
 
 ## 4. Processing logic — `CREATE_DEEP_ENTITY` (the "Compare Logic" box from the diagram)
 
@@ -109,7 +136,7 @@ the backend fills them.
       - sy-subrc ≠ 0 → ROLLBACK WORK + /iwbep/cx_mgw_busi_exception with message container
       - any validation errors collected in step 2 → ROLLBACK + error response
         (all-or-nothing, same contract as the AS-IS full-batch job)
-6. COMMIT WORK AND WAIT; return header entity + summary message
+6. COMMIT WORK AND WAIT; return header entity + summary
       (inserted / updated / unchanged counts via message container)
 ```
 
@@ -117,25 +144,27 @@ Notes:
 - **`MODIFY` (upsert)**, not `INSERT`, because the single-field key makes
   "found → insert" from the AS-IS diagram physically an update on S/4.
 - No standard BAPI exists for this add-on table → direct `MODIFY` of the transparent
-  table inside the DPC, wrapped in explicit commit/rollback (acceptable: the table is
-  add-on master data, APPL0, no number ranges or change documents involved).
+  table inside the DPC, wrapped in explicit commit/rollback (acceptable: add-on master
+  data, APPL0, no number ranges or change documents involved).
+- **Authority check** before writing, mirroring the read service's `S_TABU_NAM` check but
+  with activity `02` (change) on `/CCBJI/T_JCTINVR` — the CPI technical user's role
+  needs this authorization.
+- Error raising via the same `raise_error` / message-container pattern as
+  `ZCL_ZTABLE_META_DPC`.
 - Batch sizes: NTA full files can be large — CPI should chunk (e.g. 5–10k records per
   POST); the service is stateless per call so chunking is safe.
 
-## 5. Build & activation steps (system work, follows the ZGMS_EXCHRATE checklist)
+## 5. Build & activation steps (same checklist shape as ZTABLE_META)
 
 | # | Where | Action |
 |---|-------|--------|
-| 1 | SEGW | Create project `ZCCBJI_JCTINVR` |
-| 2 | SEGW | Item entity `InvoiceRegistration` (10 props per table above, Creatable+Updatable) |
-| 3 | SEGW | Header entity `InvoiceRegistrations` (key `REQUEST_ID`, nullable) |
-| 4 | SEGW | Association 1 : 0..n, navigation property `InvoiceRegistration` |
-| 5 | SEGW | Generate Runtime Objects |
-| 6 | SE24 | `..._DPC_EXT` → redefine `CREATE_DEEP_ENTITY` (logic in §4) |
-| 7 | SE24 | `..._MPC_EXT` → redefine `DEFINE` → `set_creatable( abap_true )` on both entity sets |
-| 8 | /IWFND/MAINT_SERVICE | Add service `ZCCBJI_JCTINVR_SRV`, alias LOCAL |
-| 9 | Caches | `/IWBEP/CACHE_CLEANUP`, `/IWFND/CACHE_CLEANUP`, Load Metadata, check `$metadata` |
-| 10 | /IWFND/GW_CLIENT | POST test (payload below) → verify in SE16 `/CCBJI/T_JCTINVR` |
+| 1 | SE24/ADT | create + activate `ZCL_ZCCBJI_JCTINVR_MPC` (TYPES + `DEFINE`: 2 entity types, association, nav. property, both sets creatable) |
+| 2 | SE24/ADT | create + activate `ZCL_ZCCBJI_JCTINVR_DPC` (`CREATE_DEEP_ENTITY` logic of §4) |
+| 3 | /IWBEP/REG_SERVICE | register model `ZCCBJI_JCTINVR_MDL` 0001 (MPC) + service `ZCCBJI_JCTINVR_SRV` 0001 (DPC) |
+| 4 | /IWFND/MAINT_SERVICE | Add Service, alias LOCAL, filter `ZCCBJI_JCTINVR_SRV`, assign package |
+| 5 | Caches | `/IWBEP/CACHE_CLEANUP` + `/IWFND/CACHE_CLEANUP`, Load Metadata, verify `$metadata?x=1` (2 entity sets, nav. property `InvoiceRegistration`, `sap:creatable="true"`) |
+| 6 | /IWFND/GW_CLIENT | POST test (payload below) → verify in SE16 `/CCBJI/T_JCTINVR` |
+| 7 | Role | grant the CPI user change authorization for `/CCBJI/T_JCTINVR` (`S_TABU_NAM` ACTVT 02) |
 
 ### Gateway Client test payload
 
@@ -152,21 +181,22 @@ POST /sap/opu/odata/sap/ZCCBJI_JCTINVR_SRV/InvoiceRegistrationsSet
 ```
 
 Test cases: new number (→ I), existing number changed (→ U), existing identical (→ skip),
-invalid date (→ 400 + rollback), duplicate in batch, empty batch, 5k-record volume test.
+invalid date (→ 400 + rollback), duplicate in batch, empty batch, missing authorization,
+5k-record volume test.
 
 ## 6. CPI receiver channel (for the CPI team)
 
 - Adapter: **OData V2**, Operation **Create (POST)**, Resource Path `InvoiceRegistrationsSet`,
   **Sub Levels = 1**, CSRF enabled.
-- Map NTA fields → child `InvoiceRegistration`; leave `REQUEST_ID` unmapped.
+- Map NTA fields → child `InvoiceRegistration`; leave `RequestId` unmapped.
 - Chunk large NTA files; on HTTP 4xx/5xx the whole chunk is rolled back → safe to retry.
 
 ## 7. Repo deliverables (this branch)
 
-1. `zcl_zccbji_jctinvr_dpc_ext.clas.abap` — DPC_EXT with `CREATE_DEEP_ENTITY` compare/upsert logic
-2. `zcl_zccbji_jctinvr_mpc_ext.clas.abap` — MPC_EXT `DEFINE` redefinition
-3. `ZCCBJI_JCTINVR_ODATA_GUIDE.md` — step-by-step SEGW build/registration/test guide
-   (same format as `ZGMS_EXCHRATE_ODATA_GUIDE.md`)
+1. `ZCL_ZCCBJI_JCTINVR_MPC.abap` — code-based Model Provider (TYPES + DEFINE)
+2. `ZCL_ZCCBJI_JCTINVR_DPC.abap` — code-based Data Provider (CREATE_DEEP_ENTITY compare/upsert)
+3. `ZCCBJI_JCTINVR_ODATA_GUIDE.md` — build/registration/test guide in the same format as
+   `ZTABLE_META_ODATA_GUIDE.md`
 
 ## 8. Open questions (answers refine the build, defaults are safe)
 
@@ -178,4 +208,4 @@ invalid date (→ 400 + rollback), duplicate in batch, empty batch, 5k-record vo
 3. **LATEST_KBN:** sent by CPI as-is (current default) or forced to '1' by the backend?
 4. **Error contract:** all-or-nothing per POST (default, matches AS-IS batch) vs.
    accept-partial with an error list returned to CPI.
-5. Confirm package + transport naming convention for the SEGW project.
+5. Confirm package + transport naming convention for the CCBJI objects.
