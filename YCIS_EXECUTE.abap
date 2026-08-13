@@ -239,7 +239,7 @@ FORM top_of_page.                                           "#EC CALLED
   DATA: lt_hdr TYPE slis_t_listheader,
         ls_hdr TYPE slis_listheader.
   CLEAR ls_hdr. ls_hdr-typ = 'H'.
-  ls_hdr-info = 'CIS 2026-27 - Level-3 Execution (verified & confirmed at L1 and L2)'.
+  ls_hdr-info = 'CIS 2026-27 L-3 Execution (Verified & Confirmed at L1 & L2)'.
   APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt1. APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt2. APPEND ls_hdr TO lt_hdr.
