@@ -1,5 +1,13 @@
 # ZCCBJI_JCTINVR – Inbound OData V2 Service (CPI → S/4) for /CCBJI/T_JCTINVR
 
+> **ACTUAL SYSTEM NAMES (namespaced deployment):** the productive import goes into
+> package `/CCBJI/ODATA_DYNAMIC`, so the objects use the `/CCBJI/` namespace
+> (zip `CCBJI_JCTINVR_ODATA_NS_abapGit.zip`):
+> classes **`/CCBJI/CL_JCTINVR_MPC`** + **`/CCBJI/CL_JCTINVR_DPC`**,
+> model **`/CCBJI/JCTINVR_MDL`**, service **`/CCBJI/JCTINVR_SRV`**,
+> URL **`/sap/opu/odata/CCBJI/JCTINVR_SRV/`**. The `Z*` names below document the
+> generic template — substitute the namespaced names when executing the steps.
+
 Inbound service for the NTA invoice-registration-number feed (CCBJI /
 qualified invoicing business). CPI posts the NTA records; the backend runs
 the compare logic that used to live in ABInitio and writes the matched
