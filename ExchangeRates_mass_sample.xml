@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sample mass-upload file for the Exchange Rate interface (ZF01_EXCHANGE_RATE_SRV).
+  Root <ExchangeRates> wraps any number of <ExchangeRate> records.
+
+  RULES (must be followed by the sending system / CPI):
+   1. VALID_FROM format = DD.MM.YYYY  (e.g. 01.04.2025)
+   2. NO trailing/leading spaces inside any value (send "14.95000", not "14.95000 ").
+   3. Mandatory (always required): RATE_TYPE, FROM_CURR, TO_CURRNCY, VALID_FROM,
+      EXCH_RATE, FROM_FACTOR, TO_FACTOR.
+   4. Optional (send as 0 when not used): EXCH_RATE_V, FROM_FACTOR_V, TO_FACTOR_V.
+      -> Only the indirect rate EXCH_RATE is used. Keep the _V fields = 0.
+   5. FROM_FACTOR / TO_FACTOR must be > 0 (use 1 if no ratio).
+   6. Currencies must be valid and the currency pair must be maintained in SAP
+      (rate type + translation ratios, transaction OB07/OBBS). Unmaintained pairs
+      are rejected per record with a "not maintained" message.
+-->
+<ExchangeRates>
+  <ExchangeRate>
+    <RATE_TYPE>M</RATE_TYPE>
+    <FROM_CURR>USD</FROM_CURR>
+    <TO_CURRNCY>INR</TO_CURRNCY>
+    <VALID_FROM>01.04.2025</VALID_FROM>
+    <EXCH_RATE>83.25000</EXCH_RATE>
+    <FROM_FACTOR>1</FROM_FACTOR>
+    <TO_FACTOR>1</TO_FACTOR>
+    <EXCH_RATE_V>0</EXCH_RATE_V>
+    <FROM_FACTOR_V>0</FROM_FACTOR_V>
+    <TO_FACTOR_V>0</TO_FACTOR_V>
+  </ExchangeRate>
+  <ExchangeRate>
+    <RATE_TYPE>M</RATE_TYPE>
+    <FROM_CURR>EUR</FROM_CURR>
+    <TO_CURRNCY>INR</TO_CURRNCY>
+    <VALID_FROM>01.04.2025</VALID_FROM>
+    <EXCH_RATE>90.10000</EXCH_RATE>
+    <FROM_FACTOR>1</FROM_FACTOR>
+    <TO_FACTOR>1</TO_FACTOR>
+    <EXCH_RATE_V>0</EXCH_RATE_V>
+    <FROM_FACTOR_V>0</FROM_FACTOR_V>
+    <TO_FACTOR_V>0</TO_FACTOR_V>
+  </ExchangeRate>
+  <ExchangeRate>
+    <RATE_TYPE>M</RATE_TYPE>
+    <FROM_CURR>GBP</FROM_CURR>
+    <TO_CURRNCY>INR</TO_CURRNCY>
+    <VALID_FROM>01.04.2025</VALID_FROM>
+    <EXCH_RATE>105.40000</EXCH_RATE>
+    <FROM_FACTOR>1</FROM_FACTOR>
+    <TO_FACTOR>1</TO_FACTOR>
+    <EXCH_RATE_V>0</EXCH_RATE_V>
+    <FROM_FACTOR_V>0</FROM_FACTOR_V>
+    <TO_FACTOR_V>0</TO_FACTOR_V>
+  </ExchangeRate>
+  <ExchangeRate>
+    <RATE_TYPE>M</RATE_TYPE>
+    <FROM_CURR>AED</FROM_CURR>
+    <TO_CURRNCY>INR</TO_CURRNCY>
+    <VALID_FROM>01.04.2025</VALID_FROM>
+    <EXCH_RATE>22.66000</EXCH_RATE>
+    <FROM_FACTOR>1</FROM_FACTOR>
+    <TO_FACTOR>1</TO_FACTOR>
+    <EXCH_RATE_V>0</EXCH_RATE_V>
+    <FROM_FACTOR_V>0</FROM_FACTOR_V>
+    <TO_FACTOR_V>0</TO_FACTOR_V>
+  </ExchangeRate>
+  <ExchangeRate>
+    <RATE_TYPE>M</RATE_TYPE>
+    <FROM_CURR>JPY</FROM_CURR>
+    <TO_CURRNCY>INR</TO_CURRNCY>
+    <VALID_FROM>01.04.2025</VALID_FROM>
+    <EXCH_RATE>0.55000</EXCH_RATE>
+    <FROM_FACTOR>1</FROM_FACTOR>
+    <TO_FACTOR>1</TO_FACTOR>
+    <EXCH_RATE_V>0</EXCH_RATE_V>
+    <FROM_FACTOR_V>0</FROM_FACTOR_V>
+    <TO_FACTOR_V>0</TO_FACTOR_V>
+  </ExchangeRate>
+</ExchangeRates>
