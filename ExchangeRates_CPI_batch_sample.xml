@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  SAMPLE PAYLOAD THAT CPI MUST SEND TO THE ODATA SERVICE (mass upload)
+  Service : ZF01_EXCHANGE_RATE_SRV   Entity set : ExchangeRates
+  Operation : Create (POST)  with  BATCH PROCESSING = ON
+  ============================================================================
+
+  WHY THIS SHAPE:
+   The OData service is FLAT - one Create = one ExchangeRate. To send many in
+   ONE HTTP call, CPI wraps each record as a <batchChangeSetPart> inside a
+   <batchChangeSet> inside <batchParts>. The OData V2 receiver adapter turns
+   this into a single /$batch request; SAP runs CREATE_ENTITY once per part.
+
+  HOW TO USE IN CPI:
+   1. OData V2 receiver -> Entity = ExchangeRates, Operation = Create (POST),
+      Batch Processing = ON.
+   2. Model Operation -> tick "Generate XML Schema Definition" -> this gives the
+      EXACT node names for the batch structure. If the generated entity node is
+      not <ExchangeRates>, use whatever name it shows (replace below accordingly).
+   3. Message Mapping: source (repeating <ExchangeRate>) -> target
+      (repeating <batchChangeSetPart>); map the 10 fields into the entity node.
+
+  DATA RULES (same as source):
+   - VALID_FROM = DD.MM.YYYY, no spaces in values, factors > 0,
+     _V fields = 0, currency pair must be maintained in SAP (OB07/OBBS).
+  ============================================================================
+-->
+<batchParts>
+  <batchChangeSet>
+
+    <batchChangeSetPart>
+      <ExchangeRates>
+        <RATE_TYPE>M</RATE_TYPE>
+        <FROM_CURR>USD</FROM_CURR>
+        <TO_CURRNCY>INR</TO_CURRNCY>
+        <VALID_FROM>01.04.2025</VALID_FROM>
+        <EXCH_RATE>83.25000</EXCH_RATE>
+        <FROM_FACTOR>1</FROM_FACTOR>
+        <TO_FACTOR>1</TO_FACTOR>
+        <EXCH_RATE_V>0</EXCH_RATE_V>
+        <FROM_FACTOR_V>0</FROM_FACTOR_V>
+        <TO_FACTOR_V>0</TO_FACTOR_V>
+      </ExchangeRates>
+    </batchChangeSetPart>
+
+    <batchChangeSetPart>
+      <ExchangeRates>
+        <RATE_TYPE>M</RATE_TYPE>
+        <FROM_CURR>EUR</FROM_CURR>
+        <TO_CURRNCY>INR</TO_CURRNCY>
+        <VALID_FROM>01.04.2025</VALID_FROM>
+        <EXCH_RATE>90.10000</EXCH_RATE>
+        <FROM_FACTOR>1</FROM_FACTOR>
+        <TO_FACTOR>1</TO_FACTOR>
+        <EXCH_RATE_V>0</EXCH_RATE_V>
+        <FROM_FACTOR_V>0</FROM_FACTOR_V>
+        <TO_FACTOR_V>0</TO_FACTOR_V>
+      </ExchangeRates>
+    </batchChangeSetPart>
+
+    <batchChangeSetPart>
+      <ExchangeRates>
+        <RATE_TYPE>M</RATE_TYPE>
+        <FROM_CURR>AED</FROM_CURR>
+        <TO_CURRNCY>INR</TO_CURRNCY>
+        <VALID_FROM>01.04.2025</VALID_FROM>
+        <EXCH_RATE>22.66000</EXCH_RATE>
+        <FROM_FACTOR>1</FROM_FACTOR>
+        <TO_FACTOR>1</TO_FACTOR>
+        <EXCH_RATE_V>0</EXCH_RATE_V>
+        <FROM_FACTOR_V>0</FROM_FACTOR_V>
+        <TO_FACTOR_V>0</TO_FACTOR_V>
+      </ExchangeRates>
+    </batchChangeSetPart>
+
+  </batchChangeSet>
+</batchParts>
