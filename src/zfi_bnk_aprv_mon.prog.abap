@@ -40,7 +40,7 @@ TYPES: BEGIN OF ty_mon,
          laufi      TYPE regut-laufi,   "Payment medium run id   (REGUT / REGUHM-LAUFI_M)
          batchno    TYPE reguhm-batchno,"FBPM1 batch number       (REGUHM)
          src_laufd  TYPE reguhm-laufd,  "Source F110 run date     (REGUHM-LAUFD)
-         src_laufi  TYPE reguhm-laufi,  "Source F110 run id       (REGUHM-LAUFI)
+         f110_runs  TYPE c LENGTH 60,   "All source F110 run ids feeding this batch
          dtkey      TYPE regut-dtkey,
          lfdnr      TYPE regut-lfdnr,
          waers      TYPE regut-waers,
@@ -121,35 +121,16 @@ FORM f_get_data .
     RETURN.
   ENDIF.
 
-* -- Step 2: derive the distinct payment-medium runs from REGUHM
-*    (LAUFD_M / LAUFI_M). These identify the batches held in REGUT.
-  DATA: BEGIN OF ls_medkey,
-          zbukr   TYPE reguhm-zbukr,
-          laufd_m TYPE reguhm-laufd_m,
-          laufi_m TYPE reguhm-laufi_m,
-        END OF ls_medkey.
-  DATA: lt_medkey LIKE STANDARD TABLE OF ls_medkey,
-        ls_hm     TYPE reguhm.
-
-  LOOP AT gt_reguhm INTO ls_hm.
-    CLEAR ls_medkey.
-    ls_medkey-zbukr   = ls_hm-zbukr.
-    ls_medkey-laufd_m = ls_hm-laufd_m.
-    ls_medkey-laufi_m = ls_hm-laufi_m.
-    APPEND ls_medkey TO lt_medkey.
-  ENDLOOP.
-  SORT lt_medkey.
-  DELETE ADJACENT DUPLICATES FROM lt_medkey.
-
-* -- Step 3: read the batches from REGUT for those medium runs.
-*    REGUT-LAUFD/LAUFI is the medium run = REGUHM-LAUFD_M/LAUFI_M.
-  IF lt_medkey IS NOT INITIAL.
-    SELECT * FROM regut INTO TABLE gt_regut
-      FOR ALL ENTRIES IN lt_medkey
-      WHERE zbukr = lt_medkey-zbukr
-        AND laufd = lt_medkey-laufd_m
-        AND laufi = lt_medkey-laufi_m.
-  ENDIF.
+* -- Step 2: read the batches from REGUT for the medium runs referenced by
+*    REGUHM. REGUT-LAUFD/LAUFI is the medium run = REGUHM-LAUFD_M/LAUFI_M.
+*    FOR ALL ENTRIES already removes duplicate driver tuples, so no batch
+*    is lost and no manual de-duplication is needed. One REGUT row = one
+*    batch, keyed by the concatenated REGUT key (as in ZFI_BNK_APP).
+  SELECT * FROM regut INTO TABLE gt_regut
+    FOR ALL ENTRIES IN gt_reguhm
+    WHERE zbukr = gt_reguhm-zbukr
+      AND laufd = gt_reguhm-laufd_m
+      AND laufi = gt_reguhm-laufi_m.
 
   IF gt_regut IS INITIAL.
     RETURN.
@@ -199,7 +180,9 @@ FORM f_build_output .
         ls_paym   TYPE zfi_paym_file,
         ls_mon    TYPE ty_mon,
         lv_key    TYPE zfi_batch_sign-batch_no,
-        lv_snro   TYPE zfi_batch_sign-snro.
+        lv_snro   TYPE zfi_batch_sign-snro,
+        lt_f110   TYPE SORTED TABLE OF reguhm-laufi WITH UNIQUE KEY table_line,
+        lv_f110   TYPE reguhm-laufi.
 
   SORT gt_sign BY batch_no signer snro.
 
@@ -224,18 +207,32 @@ FORM f_build_output .
     ls_mon-crdate    = ls_reg-tsdat.
     ls_mon-crtime    = ls_reg-tstim.
 
-*   REGUHM is the driver: recover this batch's medium run back to the
-*   REGUHM row to expose the F110 source run (LAUFD/LAUFI) and BATCHNO.
-*   REGUT-LAUFD/LAUFI (medium run) = REGUHM-LAUFD_M/LAUFI_M.
-    READ TABLE gt_reguhm INTO ls_reguhm
-         WITH KEY laufd_m = ls_reg-laufd
-                  laufi_m = ls_reg-laufi
-                  zbukr   = ls_reg-zbukr.
-    IF sy-subrc = 0.
-      ls_mon-batchno   = ls_reguhm-batchno.
-      ls_mon-src_laufd = ls_reguhm-laufd.
-      ls_mon-src_laufi = ls_reguhm-laufi.
-    ENDIF.
+*   REGUHM link: a batch's medium run (REGUT-LAUFD/LAUFI = REGUHM-
+*   LAUFD_M/LAUFI_M) can be fed by MORE THAN ONE F110 run. Collect every
+*   distinct F110 run so none is lost (e.g. OVL1 and OVL2 on one medium
+*   run), plus the batch number and the F110 run date.
+    CLEAR: ls_mon-batchno, ls_mon-src_laufd, ls_mon-f110_runs.
+    REFRESH lt_f110.
+    LOOP AT gt_reguhm INTO ls_reguhm
+         WHERE zbukr   = ls_reg-zbukr
+           AND laufd_m = ls_reg-laufd
+           AND laufi_m = ls_reg-laufi.
+      IF ls_mon-src_laufd IS INITIAL.
+        ls_mon-src_laufd = ls_reguhm-laufd.
+      ENDIF.
+      IF ls_mon-batchno IS INITIAL.
+        ls_mon-batchno = ls_reguhm-batchno.
+      ENDIF.
+      INSERT ls_reguhm-laufi INTO TABLE lt_f110.   "unique -> distinct runs
+    ENDLOOP.
+    LOOP AT lt_f110 INTO lv_f110.
+      IF ls_mon-f110_runs IS INITIAL.
+        ls_mon-f110_runs = lv_f110.
+      ELSE.
+        CONCATENATE ls_mon-f110_runs lv_f110
+               INTO ls_mon-f110_runs SEPARATED BY ' / '.
+      ENDIF.
+    ENDLOOP.
 
 *   Expected approvers come from config (ZFI_BNK_RULE by company code);
 *   "signed" is taken from the digital-signature table ZFI_BATCH_SIGN.
@@ -370,7 +367,7 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'LAUFI'      'Med Run'        'Medium Run Id'        'Payment Medium Run Id'.
   PERFORM f_col_text USING lo_cols 'BATCHNO'    'Batch No'       'FBPM1 Batch No'       'FBPM1 Batch Number (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'SRC_LAUFD'  'F110 Date'      'F110 Run Date'        'Source F110 Run Date (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'SRC_LAUFI'  'F110 Run'       'F110 Run Id'          'Source F110 Run Id (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Runs'      'F110 Run(s)'          'Source F110 Run(s) feeding this batch (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
