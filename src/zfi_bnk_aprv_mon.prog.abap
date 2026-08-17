@@ -212,8 +212,6 @@ FORM f_build_output .
     ls_mon-batchno   = ls_hm-batchno.
     ls_mon-dtkey     = ls_hm-hbkid.
     ls_mon-vblnr     = ls_hm-vblnr.
-    ls_mon-rbetr     = ls_hm-rbetr.        "amount for this payment (REGUHM)
-    ls_mon-waers     = ls_hm-waers.
     IF ls_hm-lifnr IS NOT INITIAL.
       ls_mon-vendor = ls_hm-lifnr.
     ELSE.
@@ -237,6 +235,8 @@ FORM f_build_output .
         ls_mon-batch_key  = lv_bkey.
         ls_mon-banks      = ls_reg-banks.
         ls_mon-lfdnr      = ls_reg-lfdnr.
+        ls_mon-rbetr      = ls_reg-rbetr.   "amount from REGUT batch
+        ls_mon-waers      = ls_reg-waers.
         ls_mon-fsnam      = ls_reg-fsnam.
         ls_mon-crusr      = ls_reg-tsusr.
         ls_mon-crdate     = ls_reg-tsdat.
@@ -393,7 +393,7 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Run'       'F110 Run Id'          'F110 Run Id (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'VENDOR'     'Vendor'         'Vendor/Customer'      'Vendor / Customer (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'VBLNR'      'Pay Doc'        'Payment Doc'          'Payment Document (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Batch Amount'         'Batch Amount (REGUT)'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
   PERFORM f_col_text USING lo_cols 'L1_PENDING' 'L1 Pend'        'L1 Pending With'      'Level-1 Pending With'.
