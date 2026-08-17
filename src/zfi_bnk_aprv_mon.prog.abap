@@ -20,6 +20,9 @@
 *& the medium run, then reads REGUT - the single source of truth for batch
 *& approval - and evaluates the digital signatures held in ZFI_BATCH_SIGN.
 *&
+*& Output grain: ONE ROW PER REGUHM RECORD. Every REGUHM entry is shown,
+*& even when no REGUT batch exists yet (status "Batch Not Created").
+*&
 *& Batch key (matches ZFI_BNK_APP / ZFI_BNK_APP1 / ZFI_PAYMEDIUM_DMEE_20):
 *&   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR
 *&   (41 chars, built RESPECTING BLANKS) -> stored in ZFI_BATCH_SIGN-BATCH_NO
@@ -39,8 +42,10 @@ TYPES: BEGIN OF ty_mon,
          laufd      TYPE regut-laufd,   "Payment medium run date (REGUT / REGUHM-LAUFD_M)
          laufi      TYPE regut-laufi,   "Payment medium run id   (REGUT / REGUHM-LAUFI_M)
          batchno    TYPE reguhm-batchno,"FBPM1 batch number       (REGUHM)
-         src_laufd  TYPE reguhm-laufd,  "Source F110 run date     (REGUHM-LAUFD)
-         f110_runs  TYPE c LENGTH 60,   "All source F110 run ids feeding this batch
+         src_laufd  TYPE reguhm-laufd,  "F110 run date            (REGUHM-LAUFD)
+         f110_runs  TYPE c LENGTH 60,   "F110 run id              (REGUHM-LAUFI)
+         vendor     TYPE c LENGTH 10,   "Vendor / customer        (REGUHM LIFNR/KUNNR)
+         vblnr      TYPE reguhm-vblnr,  "Payment document         (REGUHM-VBLNR)
          dtkey      TYPE regut-dtkey,
          lfdnr      TYPE regut-lfdnr,
          waers      TYPE regut-waers,
@@ -175,102 +180,121 @@ ENDFORM.                    " F_GET_DATA
 *&      Form  F_BUILD_OUTPUT
 *&---------------------------------------------------------------------*
 FORM f_build_output .
-  TYPES: BEGIN OF lty_run,
-           zbukr TYPE reguhm-zbukr,
-           laufd TYPE reguhm-laufd,
-           laufi TYPE reguhm-laufi,
-         END OF lty_run.
-
-  DATA: ls_reg     TYPE regut,
-        ls_reguhm  TYPE reguhm,
+  DATA: ls_hm      TYPE reguhm,
+        ls_reg     TYPE regut,
         ls_rule    TYPE zfi_bnk_rule,
         ls_sign    TYPE zfi_batch_sign,
         ls_paym    TYPE zfi_paym_file,
         ls_mon     TYPE ty_mon,
-        lv_key     TYPE zfi_batch_sign-batch_no,
+        lv_bkey    TYPE zfi_batch_sign-batch_no,
         lv_snro    TYPE zfi_batch_sign-snro,
-        lt_f110    TYPE SORTED TABLE OF reguhm-laufi WITH UNIQUE KEY table_line,
-        lv_f110    TYPE reguhm-laufi,
-        lt_allrun  TYPE SORTED TABLE OF lty_run WITH UNIQUE KEY zbukr laufd laufi,
-        lt_covered TYPE SORTED TABLE OF lty_run WITH UNIQUE KEY zbukr laufd laufi,
-        ls_run     TYPE lty_run.
+        lt_bkeys   TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
+        lv_nbatch  TYPE i,
+        lv_signed  TYPE abap_bool.
 
   SORT gt_sign BY batch_no signer snro.
 
-  LOOP AT gt_regut INTO ls_reg.
+* ---------------------------------------------------------------------*
+* One output row per REGUHM record (the FS starting table). Each REGUHM
+* record is linked to its payment-medium batch(es) in REGUT via
+*   REGUT-LAUFD/LAUFI = REGUHM-LAUFD_M/LAUFI_M.
+* A record with no REGUT batch yet is shown as "Batch Not Created".
+* ---------------------------------------------------------------------*
+  LOOP AT gt_reguhm INTO ls_hm.
     CLEAR ls_mon.
 
-    CONCATENATE ls_reg-zbukr ls_reg-banks ls_reg-laufd ls_reg-laufi
-                ls_reg-xvorl ls_reg-dtkey ls_reg-lfdnr
-           INTO lv_key RESPECTING BLANKS.
+*   -- REGUHM (F110 / vendor) attributes
+    ls_mon-zbukr     = ls_hm-zbukr.
+    ls_mon-src_laufd = ls_hm-laufd.        "F110 run date
+    ls_mon-f110_runs = ls_hm-laufi.        "F110 run id
+    ls_mon-laufd     = ls_hm-laufd_m.      "medium run date
+    ls_mon-laufi     = ls_hm-laufi_m.      "medium run id
+    ls_mon-batchno   = ls_hm-batchno.
+    ls_mon-dtkey     = ls_hm-hbkid.
+    ls_mon-vblnr     = ls_hm-vblnr.
+    ls_mon-rbetr     = ls_hm-rbetr.        "amount for this payment (REGUHM)
+    ls_mon-waers     = ls_hm-waers.
+    IF ls_hm-lifnr IS NOT INITIAL.
+      ls_mon-vendor = ls_hm-lifnr.
+    ELSE.
+      ls_mon-vendor = ls_hm-kunnr.
+    ENDIF.
 
-    ls_mon-batch_key = lv_key.
-    ls_mon-zbukr     = ls_reg-zbukr.
-    ls_mon-banks     = ls_reg-banks.
-    ls_mon-laufd     = ls_reg-laufd.
-    ls_mon-laufi     = ls_reg-laufi.
-    ls_mon-dtkey     = ls_reg-dtkey.
-    ls_mon-lfdnr     = ls_reg-lfdnr.
-    ls_mon-waers     = ls_reg-waers.
-    ls_mon-rbetr     = ls_reg-rbetr.
-    ls_mon-fsnam     = ls_reg-fsnam.
-    ls_mon-crusr     = ls_reg-tsusr.
-    ls_mon-crdate    = ls_reg-tsdat.
-    ls_mon-crtime    = ls_reg-tstim.
-
-*   REGUHM link: a batch's medium run (REGUT-LAUFD/LAUFI = REGUHM-
-*   LAUFD_M/LAUFI_M) can be fed by MORE THAN ONE F110 run. Collect every
-*   distinct F110 run so none is lost (e.g. OVL1 and OVL2 on one medium
-*   run), plus the batch number and the F110 run date.
-    CLEAR: ls_mon-batchno, ls_mon-src_laufd, ls_mon-f110_runs.
-    REFRESH lt_f110.
-    LOOP AT gt_reguhm INTO ls_reguhm
-         WHERE zbukr   = ls_reg-zbukr
-           AND laufd_m = ls_reg-laufd
-           AND laufi_m = ls_reg-laufi.
-      IF ls_mon-src_laufd IS INITIAL.
-        ls_mon-src_laufd = ls_reguhm-laufd.
-      ENDIF.
-      IF ls_mon-batchno IS INITIAL.
-        ls_mon-batchno = ls_reguhm-batchno.
-      ENDIF.
-      INSERT ls_reguhm-laufi INTO TABLE lt_f110.   "unique -> distinct runs
-    ENDLOOP.
-    LOOP AT lt_f110 INTO lv_f110.
-      IF ls_mon-f110_runs IS INITIAL.
-        ls_mon-f110_runs = lv_f110.
-      ELSE.
-        CONCATENATE ls_mon-f110_runs lv_f110
-               INTO ls_mon-f110_runs SEPARATED BY ' / '.
+*   -- Linked REGUT batch(es) for this record's medium run
+    REFRESH lt_bkeys.
+    CLEAR lv_nbatch.
+    LOOP AT gt_regut INTO ls_reg
+         WHERE zbukr = ls_hm-zbukr
+           AND laufd = ls_hm-laufd_m
+           AND laufi = ls_hm-laufi_m.
+      lv_nbatch = lv_nbatch + 1.
+      CONCATENATE ls_reg-zbukr ls_reg-banks ls_reg-laufd ls_reg-laufi
+                  ls_reg-xvorl ls_reg-dtkey ls_reg-lfdnr
+             INTO lv_bkey RESPECTING BLANKS.
+      APPEND lv_bkey TO lt_bkeys.
+*     representative batch attributes (first REGUT file of the medium run)
+      IF ls_mon-batch_key IS INITIAL.
+        ls_mon-batch_key  = lv_bkey.
+        ls_mon-banks      = ls_reg-banks.
+        ls_mon-lfdnr      = ls_reg-lfdnr.
+        ls_mon-fsnam      = ls_reg-fsnam.
+        ls_mon-crusr      = ls_reg-tsusr.
+        ls_mon-crdate     = ls_reg-tsdat.
+        ls_mon-crtime     = ls_reg-tstim.
+        ls_mon-regut_stat = ls_reg-status.
       ENDIF.
     ENDLOOP.
 
-*   Expected approvers come from config (ZFI_BNK_RULE by company code);
-*   "signed" is taken from the digital-signature table ZFI_BATCH_SIGN.
-    LOOP AT gt_rule INTO ls_rule WHERE zrule_id = ls_reg-zbukr.
+*   -- No batch created yet: show the REGUHM record as pending
+    IF lv_nbatch = 0.
+      ls_mon-status    = 'Batch Not Created'.
+      ls_mon-regut_txt = 'No Batch'.
+      APPEND ls_mon TO gt_mon.
+      CONTINUE.
+    ENDIF.
 
+*   -- REGUT file status text (representative batch) - EPIC_REGUT_STATUS
+    CASE ls_mon-regut_stat.
+      WHEN space. ls_mon-regut_txt = 'Created'.
+      WHEN '010'. ls_mon-regut_txt = 'Sent'.
+      WHEN '020'. ls_mon-regut_txt = 'Acknowledged'.
+      WHEN '030'. ls_mon-regut_txt = 'Transfer Failed'.
+      WHEN '040'. ls_mon-regut_txt = 'Transfer Confirmed'.
+      WHEN OTHERS. ls_mon-regut_txt = ls_mon-regut_stat.
+    ENDCASE.
+
+*   -- Approvers from config (ZFI_BNK_RULE by company). An approver counts
+*      as signed only when signed on ALL batch files of the medium run.
+    LOOP AT gt_rule INTO ls_rule WHERE zrule_id = ls_hm-zbukr.
       CASE ls_rule-zrule.
         WHEN gc_rule_l1.  lv_snro = '1'.
         WHEN gc_rule_l2.  lv_snro = '2'.
         WHEN OTHERS.      CONTINUE.
       ENDCASE.
 
-      CLEAR ls_sign.
-      READ TABLE gt_sign INTO ls_sign WITH KEY batch_no = lv_key
-                                               signer   = ls_rule-zuser
-                                               snro     = lv_snro
-                                               BINARY SEARCH.
+      lv_signed = abap_true.
+      LOOP AT lt_bkeys INTO lv_bkey.
+        CLEAR ls_sign.
+        READ TABLE gt_sign INTO ls_sign WITH KEY batch_no = lv_bkey
+                                                 signer   = ls_rule-zuser
+                                                 snro     = lv_snro
+                                                 BINARY SEARCH.
+        IF sy-subrc <> 0 OR ls_sign-digitl_sign <> 'X'.
+          lv_signed = abap_false.
+          EXIT.
+        ENDIF.
+      ENDLOOP.
 
       IF lv_snro = '1'.
         ls_mon-l1_total = ls_mon-l1_total + 1.
-        IF sy-subrc = 0 AND ls_sign-digitl_sign = 'X'.
+        IF lv_signed = abap_true.
           ls_mon-l1_signed = ls_mon-l1_signed + 1.
         ELSE.
           PERFORM f_add_pending USING ls_rule-zuser CHANGING ls_mon-l1_pending.
         ENDIF.
       ELSE.
         ls_mon-l2_total = ls_mon-l2_total + 1.
-        IF sy-subrc = 0 AND ls_sign-digitl_sign = 'X'.
+        IF lv_signed = abap_true.
           ls_mon-l2_signed = ls_mon-l2_signed + 1.
         ELSE.
           PERFORM f_add_pending USING ls_rule-zuser CHANGING ls_mon-l2_pending.
@@ -278,30 +302,18 @@ FORM f_build_output .
       ENDIF.
     ENDLOOP.
 
-*   REGUT file status (single source of truth per FS) - EPIC_REGUT_STATUS
-    ls_mon-regut_stat = ls_reg-status.
-    CASE ls_reg-status.
-      WHEN space. ls_mon-regut_txt = 'Created'.
-      WHEN '010'. ls_mon-regut_txt = 'Sent'.
-      WHEN '020'. ls_mon-regut_txt = 'Acknowledged'.
-      WHEN '030'. ls_mon-regut_txt = 'Transfer Failed'.
-      WHEN '040'. ls_mon-regut_txt = 'Transfer Confirmed'.
-      WHEN OTHERS. ls_mon-regut_txt = ls_reg-status.
-    ENDCASE.
-
-*   Sent to bank: authoritative from REGUT status (Sent / Acknowledged /
-*   Transfer Confirmed); ZFI_PAYM_FILE-SENT kept as a fallback indicator.
-    IF ls_reg-status = '010' OR ls_reg-status = '020'
-                             OR ls_reg-status = '040'.
+*   -- Sent to bank: authoritative from REGUT status; paym file as fallback
+    IF ls_mon-regut_stat = '010' OR ls_mon-regut_stat = '020'
+                                  OR ls_mon-regut_stat = '040'.
       ls_mon-sent_flag = 'X'.
     ENDIF.
-    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_reg-laufd
-                                             laufi = ls_reg-laufi.
+    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_hm-laufd_m
+                                             laufi = ls_hm-laufi_m.
     IF sy-subrc = 0 AND ls_paym-sent = 'X'.
       ls_mon-sent_flag = 'X'.
     ENDIF.
 
-*   Overall status
+*   -- Overall status
     IF ls_mon-sent_flag = 'X'.
       ls_mon-status = 'Sent to Bank'.
     ELSEIF ls_mon-l1_total = 0 AND ls_mon-l2_total = 0.
@@ -314,7 +326,7 @@ FORM f_build_output .
       ls_mon-status = 'Approved'.
     ENDIF.
 
-*   Optional filter: only pending batches
+*   -- Optional filter: only pending records
     IF p_pend = abap_true AND
      ( ls_mon-status = 'Approved' OR ls_mon-status = 'Sent to Bank' ).
       CONTINUE.
@@ -323,55 +335,7 @@ FORM f_build_output .
     APPEND ls_mon TO gt_mon.
   ENDLOOP.
 
-* --- Second pass (per FS): a run exists in REGUHM once F110 has run, but
-*     REGUT is only updated once the batch is created. So any F110 run in
-*     REGUHM that has NO batch in REGUT yet must still be shown - as
-*     "Batch Not Created". Covered runs already appear in the batch rows
-*     above (in the F110 Run(s) column), so only add the uncovered ones.
-  LOOP AT gt_reguhm INTO ls_reguhm.
-    CLEAR ls_run.
-    ls_run-zbukr = ls_reguhm-zbukr.
-    ls_run-laufd = ls_reguhm-laufd.
-    ls_run-laufi = ls_reguhm-laufi.
-    INSERT ls_run INTO TABLE lt_allrun.        "distinct F110 runs in REGUHM
-
-*   batch created?  REGUT-LAUFD/LAUFI = REGUHM-LAUFD_M/LAUFI_M
-    READ TABLE gt_regut TRANSPORTING NO FIELDS
-         WITH KEY zbukr = ls_reguhm-zbukr
-                  laufd = ls_reguhm-laufd_m
-                  laufi = ls_reguhm-laufi_m.
-    IF sy-subrc = 0.
-      INSERT ls_run INTO TABLE lt_covered.     "F110 run has a REGUT batch
-    ENDIF.
-  ENDLOOP.
-
-  LOOP AT lt_allrun INTO ls_run.
-    READ TABLE lt_covered TRANSPORTING NO FIELDS
-         WITH KEY zbukr = ls_run-zbukr
-                  laufd = ls_run-laufd
-                  laufi = ls_run-laufi.
-    IF sy-subrc = 0.
-      CONTINUE.                                "already shown via a batch row
-    ENDIF.
-
-    CLEAR ls_mon.
-    ls_mon-zbukr     = ls_run-zbukr.
-    ls_mon-src_laufd = ls_run-laufd.
-    ls_mon-f110_runs = ls_run-laufi.
-    ls_mon-status    = 'Batch Not Created'.
-    ls_mon-regut_txt = 'No Batch'.
-*   batch number if REGUHM already carries one before REGUT is written
-    READ TABLE gt_reguhm INTO ls_reguhm
-         WITH KEY zbukr = ls_run-zbukr
-                  laufd = ls_run-laufd
-                  laufi = ls_run-laufi.
-    IF sy-subrc = 0.
-      ls_mon-batchno = ls_reguhm-batchno.
-    ENDIF.
-    APPEND ls_mon TO gt_mon.                    "pending by definition - always shown
-  ENDLOOP.
-
-  SORT gt_mon BY zbukr src_laufd f110_runs laufd laufi.
+  SORT gt_mon BY zbukr src_laufd f110_runs vendor.
 ENDFORM.                    " F_BUILD_OUTPUT
 
 *&---------------------------------------------------------------------*
@@ -425,9 +389,11 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'LAUFD'      'Med Date'       'Medium Run Date'      'Payment Medium Run Date'.
   PERFORM f_col_text USING lo_cols 'LAUFI'      'Med Run'        'Medium Run Id'        'Payment Medium Run Id'.
   PERFORM f_col_text USING lo_cols 'BATCHNO'    'Batch No'       'FBPM1 Batch No'       'FBPM1 Batch Number (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'SRC_LAUFD'  'F110 Date'      'F110 Run Date'        'Source F110 Run Date (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Runs'      'F110 Run(s)'          'Source F110 Run(s) - REGUHM'.
-  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount'.
+  PERFORM f_col_text USING lo_cols 'SRC_LAUFD'  'F110 Date'      'F110 Run Date'        'F110 Run Date (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Run'       'F110 Run Id'          'F110 Run Id (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'VENDOR'     'Vendor'         'Vendor/Customer'      'Vendor / Customer (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'VBLNR'      'Pay Doc'        'Payment Doc'          'Payment Document (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
   PERFORM f_col_text USING lo_cols 'L1_PENDING' 'L1 Pend'        'L1 Pending With'      'Level-1 Pending With'.
