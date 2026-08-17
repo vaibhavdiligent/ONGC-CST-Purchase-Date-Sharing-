@@ -212,6 +212,7 @@ FORM f_build_output .
     ls_mon-batchno   = ls_hm-batchno.
     ls_mon-dtkey     = ls_hm-hbkid.
     ls_mon-vblnr     = ls_hm-vblnr.
+    ls_mon-waers     = ls_hm-waers.        "currency per record (REGUHM)
     IF ls_hm-lifnr IS NOT INITIAL.
       ls_mon-vendor = ls_hm-lifnr.
     ELSE.
@@ -235,8 +236,10 @@ FORM f_build_output .
         ls_mon-batch_key  = lv_bkey.
         ls_mon-banks      = ls_reg-banks.
         ls_mon-lfdnr      = ls_reg-lfdnr.
-        ls_mon-rbetr      = ls_reg-rbetr.   "amount from REGUT batch
-        ls_mon-waers      = ls_reg-waers.
+        ls_mon-rbetr      = ls_reg-rbetr.   "amount from REGUT batch (REGUHM has none)
+        IF ls_mon-waers IS INITIAL.
+          ls_mon-waers    = ls_reg-waers.   "fallback if REGUHM currency empty
+        ENDIF.
         ls_mon-fsnam      = ls_reg-fsnam.
         ls_mon-crusr      = ls_reg-tsusr.
         ls_mon-crdate     = ls_reg-tsdat.
