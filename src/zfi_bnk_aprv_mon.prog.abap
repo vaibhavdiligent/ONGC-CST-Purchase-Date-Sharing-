@@ -162,8 +162,10 @@ FORM f_get_data .
       WHERE batch_no = lt_keys-table_line.
   ENDIF.
 
-* -- Step 6: payment file (sent status) - one row per medium LAUFD/LAUFI
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym
+* -- Step 6: payment file (sent status) - one row per medium LAUFD/LAUFI.
+*    Select only the needed fields (avoid pulling LOB columns via FAE).
+  SELECT laufd laufi sent FROM zfi_paym_file
+    INTO CORRESPONDING FIELDS OF TABLE gt_paym
     FOR ALL ENTRIES IN gt_regut
     WHERE laufd = gt_regut-laufd
       AND laufi = gt_regut-laufi.
@@ -367,7 +369,7 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'LAUFI'      'Med Run'        'Medium Run Id'        'Payment Medium Run Id'.
   PERFORM f_col_text USING lo_cols 'BATCHNO'    'Batch No'       'FBPM1 Batch No'       'FBPM1 Batch Number (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'SRC_LAUFD'  'F110 Date'      'F110 Run Date'        'Source F110 Run Date (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Runs'      'F110 Run(s)'          'Source F110 Run(s) feeding this batch (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Runs'      'F110 Run(s)'          'Source F110 Run(s) - REGUHM'.
   PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
