@@ -6,10 +6,19 @@
 *& Monitors the approval status of payment batches for release to the
 *& bank (F110 / Payment Factory dual-control flow).
 *&
-*& Data flow (per FS "F110 Payment Run"):
-*&   F110 -> REGUH/REGUP -> REGUHM -> REGUT (payment medium / batch)
-*&   Approval is driven by the digital-signature Z-table ZFI_BATCH_SIGN;
-*&   REGUT is the single source of truth for batch approval visibility.
+*& Data flow (per FS "F110 Payment Run") - starting table is REGUHM:
+*&   F110 run          -> REGUH / REGUP          (payment run data)
+*&   Payment medium    -> REGUHM                 (LAUFD/LAUFI = F110 run,
+*&                                                LAUFD_M/LAUFI_M = medium run,
+*&                                                BATCHNO = batch)
+*&   Batch created     -> REGUT                  (REGUT-LAUFD/LAUFI are the
+*&                                                medium run = REGUHM-LAUFD_M/
+*&                                                LAUFI_M)
+*&   Digital signature -> ZFI_BATCH_SIGN         (dual-control approval)
+*&
+*& The report starts from REGUHM (selection is on the F110 run), resolves
+*& the medium run, then reads REGUT - the single source of truth for batch
+*& approval - and evaluates the digital signatures held in ZFI_BATCH_SIGN.
 *&
 *& Batch key (matches ZFI_BNK_APP / ZFI_BNK_APP1 / ZFI_PAYMEDIUM_DMEE_20):
 *&   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR
@@ -64,16 +73,16 @@ DATA: gt_regut  TYPE STANDARD TABLE OF regut,
 CONSTANTS: gc_rule_l1 TYPE zfi_bnk_rule-zrule VALUE '90700005',   "Level-1 approvers
            gc_rule_l2 TYPE zfi_bnk_rule-zrule VALUE '90700006'.   "Level-2 approvers
 
-DATA: gv_laufd TYPE regut-laufd,
-      gv_laufi TYPE regut-laufi,
-      gv_zbukr TYPE regut-zbukr.
+DATA: gv_laufd TYPE reguhm-laufd,
+      gv_laufi TYPE reguhm-laufi,
+      gv_zbukr TYPE reguhm-zbukr.
 
 *----------------------------------------------------------------------*
-* Selection screen
+* Selection screen - the F110 payment run (REGUHM = starting table)
 *----------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
-SELECT-OPTIONS: so_laufd FOR gv_laufd,   "Run date
-                so_laufi FOR gv_laufi,   "Run id
+SELECT-OPTIONS: so_laufd FOR gv_laufd,   "F110 run date (REGUHM-LAUFD)
+                so_laufi FOR gv_laufi,   "F110 run id   (REGUHM-LAUFI)
                 so_zbukr FOR gv_zbukr.   "Paying company code
 PARAMETERS: p_pend AS CHECKBOX.          "Only pending (not fully approved)
 SELECTION-SCREEN END OF BLOCK b1.
@@ -97,33 +106,59 @@ START-OF-SELECTION.
 *&      Form  F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_get_data .
-  REFRESH: gt_regut, gt_reguhm, gt_sign, gt_paym, gt_rule.
+  REFRESH: gt_reguhm, gt_regut, gt_sign, gt_paym, gt_rule.
 
-  SELECT * FROM regut INTO TABLE gt_regut
+* -- Step 1 (per FS): start from REGUHM - the payment medium header
+*    created after the F110 run. Selection is on the F110 run.
+  SELECT * FROM reguhm INTO TABLE gt_reguhm
     WHERE laufd IN so_laufd
       AND laufi IN so_laufi
       AND zbukr IN so_zbukr.
+
+  IF gt_reguhm IS INITIAL.
+    RETURN.
+  ENDIF.
+
+* -- Step 2: derive the distinct payment-medium runs from REGUHM
+*    (LAUFD_M / LAUFI_M). These identify the batches held in REGUT.
+  DATA: BEGIN OF ls_medkey,
+          zbukr   TYPE reguhm-zbukr,
+          laufd_m TYPE reguhm-laufd_m,
+          laufi_m TYPE reguhm-laufi_m,
+        END OF ls_medkey.
+  DATA: lt_medkey LIKE STANDARD TABLE OF ls_medkey,
+        ls_hm     TYPE reguhm.
+
+  LOOP AT gt_reguhm INTO ls_hm.
+    CLEAR ls_medkey.
+    ls_medkey-zbukr   = ls_hm-zbukr.
+    ls_medkey-laufd_m = ls_hm-laufd_m.
+    ls_medkey-laufi_m = ls_hm-laufi_m.
+    APPEND ls_medkey TO lt_medkey.
+  ENDLOOP.
+  SORT lt_medkey.
+  DELETE ADJACENT DUPLICATES FROM lt_medkey.
+
+* -- Step 3: read the batches from REGUT for those medium runs.
+*    REGUT-LAUFD/LAUFI is the medium run = REGUHM-LAUFD_M/LAUFI_M.
+  IF lt_medkey IS NOT INITIAL.
+    SELECT * FROM regut INTO TABLE gt_regut
+      FOR ALL ENTRIES IN lt_medkey
+      WHERE zbukr = lt_medkey-zbukr
+        AND laufd = lt_medkey-laufd_m
+        AND laufi = lt_medkey-laufi_m.
+  ENDIF.
 
   IF gt_regut IS INITIAL.
     RETURN.
   ENDIF.
 
-* FBPM1 medium/batch link (REGUHM). Since the customer no longer runs
-* BCM, batches are created through FBPM1, which writes REGUHM. The REGUT
-* payment-medium run (LAUFD/LAUFI) equals REGUHM-LAUFD_M/LAUFI_M; REGUHM
-* additionally carries the source F110 run (LAUFD/LAUFI) and BATCHNO.
-  SELECT * FROM reguhm INTO TABLE gt_reguhm
-    FOR ALL ENTRIES IN gt_regut
-    WHERE laufd_m = gt_regut-laufd
-      AND laufi_m = gt_regut-laufi
-      AND zbukr   = gt_regut-zbukr.
-
-* Configured approvers (ZFI_BNK_RULE): rule 90700005 = L1, 90700006 = L2
+* -- Step 4: configured approvers (ZFI_BNK_RULE): 90700005 = L1, 90700006 = L2
   SELECT * FROM zfi_bnk_rule INTO TABLE gt_rule
     WHERE zrule = gc_rule_l1
        OR zrule = gc_rule_l2.
 
-* Signature records for the batches in scope (BATCH_NO = concatenated key)
+* -- Step 5: signature records for the batches (BATCH_NO = concatenated key)
   DATA: lt_keys TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
         lv_key  TYPE zfi_batch_sign-batch_no,
         ls_reg  TYPE regut.
@@ -144,7 +179,7 @@ FORM f_get_data .
       WHERE batch_no = lt_keys-table_line.
   ENDIF.
 
-* Payment file (sent status) - one row per LAUFD/LAUFI
+* -- Step 6: payment file (sent status) - one row per medium LAUFD/LAUFI
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym
     FOR ALL ENTRIES IN gt_regut
     WHERE laufd = gt_regut-laufd
@@ -187,9 +222,9 @@ FORM f_build_output .
     ls_mon-crdate    = ls_reg-tsdat.
     ls_mon-crtime    = ls_reg-tstim.
 
-*   FBPM1 link (REGUHM): batch number + source F110 run. The REGUT
-*   medium run (LAUFD/LAUFI) maps to REGUHM-LAUFD_M/LAUFI_M. Batches not
-*   created via FBPM1 have no REGUHM row, so these columns stay blank.
+*   REGUHM is the driver: recover this batch's medium run back to the
+*   REGUHM row to expose the F110 source run (LAUFD/LAUFI) and BATCHNO.
+*   REGUT-LAUFD/LAUFI (medium run) = REGUHM-LAUFD_M/LAUFI_M.
     READ TABLE gt_reguhm INTO ls_reguhm
          WITH KEY laufd_m = ls_reg-laufd
                   laufi_m = ls_reg-laufi
@@ -355,26 +390,26 @@ ENDFORM.                    " F_COL_TEXT
 *&---------------------------------------------------------------------*
 *&      Form  F_F4_LAUFI
 *&---------------------------------------------------------------------*
-*  Value help (F4) for the run identifier - shows existing payment runs
-*  (Run date + Run id) from REGUT and returns the selected LAUFI.
+*  Value help (F4) for the run identifier - shows existing F110 payment
+*  runs (Run date + Run id) from REGUHM and returns the selected LAUFI.
 *----------------------------------------------------------------------*
-FORM f_f4_laufi CHANGING cv_laufi TYPE regut-laufi.
+FORM f_f4_laufi CHANGING cv_laufi TYPE reguhm-laufi.
   TYPES: BEGIN OF lty_help,
-           laufd TYPE regut-laufd,
-           laufi TYPE regut-laufi,
+           laufd TYPE reguhm-laufd,
+           laufi TYPE reguhm-laufi,
          END OF lty_help.
 
   DATA: lt_help   TYPE STANDARD TABLE OF lty_help,
         lt_return TYPE STANDARD TABLE OF ddshretval,
         ls_return TYPE ddshretval.
 
-  SELECT DISTINCT laufd laufi FROM regut
+  SELECT DISTINCT laufd laufi FROM reguhm
     INTO TABLE lt_help
     UP TO 500 ROWS
     WHERE laufi IN so_laufi.
   IF lt_help IS INITIAL.
 *   fall back to all runs if the current restriction returns nothing
-    SELECT DISTINCT laufd laufi FROM regut
+    SELECT DISTINCT laufd laufi FROM reguhm
       INTO TABLE lt_help
       UP TO 500 ROWS.
   ENDIF.
