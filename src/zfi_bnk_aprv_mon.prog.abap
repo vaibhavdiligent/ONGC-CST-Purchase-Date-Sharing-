@@ -408,8 +408,54 @@ FORM f_display_alv .
 * Hide the raw REGUT status code (readable text shown via REGUT_TXT)
   PERFORM f_col_hide USING lo_cols 'REGUT_STAT'.
 
+* Column order: identifiers + status first (always populated), then the
+* approval detail, then the batch / file columns (blank until the batch
+* is created) at the end.
+  PERFORM f_col_pos USING lo_cols 'ZBUKR'       1.
+  PERFORM f_col_pos USING lo_cols 'SRC_LAUFD'   2.
+  PERFORM f_col_pos USING lo_cols 'F110_RUNS'   3.
+  PERFORM f_col_pos USING lo_cols 'VENDOR'      4.
+  PERFORM f_col_pos USING lo_cols 'VBLNR'       5.
+  PERFORM f_col_pos USING lo_cols 'STATUS'      6.
+  PERFORM f_col_pos USING lo_cols 'REGUT_TXT'   7.
+  PERFORM f_col_pos USING lo_cols 'L1_TOTAL'    8.
+  PERFORM f_col_pos USING lo_cols 'L1_SIGNED'   9.
+  PERFORM f_col_pos USING lo_cols 'L1_PENDING' 10.
+  PERFORM f_col_pos USING lo_cols 'L2_TOTAL'   11.
+  PERFORM f_col_pos USING lo_cols 'L2_SIGNED'  12.
+  PERFORM f_col_pos USING lo_cols 'L2_PENDING' 13.
+  PERFORM f_col_pos USING lo_cols 'SENT_FLAG'  14.
+  PERFORM f_col_pos USING lo_cols 'LAUFD'      15.
+  PERFORM f_col_pos USING lo_cols 'LAUFI'      16.
+  PERFORM f_col_pos USING lo_cols 'BATCHNO'    17.
+  PERFORM f_col_pos USING lo_cols 'RBETR'      18.
+  PERFORM f_col_pos USING lo_cols 'WAERS'      19.
+  PERFORM f_col_pos USING lo_cols 'BATCH_KEY'  20.
+  PERFORM f_col_pos USING lo_cols 'BANKS'      21.
+  PERFORM f_col_pos USING lo_cols 'DTKEY'      22.
+  PERFORM f_col_pos USING lo_cols 'LFDNR'      23.
+  PERFORM f_col_pos USING lo_cols 'FSNAM'      24.
+  PERFORM f_col_pos USING lo_cols 'CRUSR'      25.
+
   lo_alv->display( ).
 ENDFORM.                    " F_DISPLAY_ALV
+
+*&---------------------------------------------------------------------*
+*&      Form  F_COL_POS
+*&---------------------------------------------------------------------*
+*  Place a column at a given position in the ALV output
+*----------------------------------------------------------------------*
+FORM f_col_pos USING io_cols TYPE REF TO cl_salv_columns_table
+                     iv_col  TYPE lvc_fname
+                     iv_pos  TYPE i.
+  DATA: lx_err TYPE REF TO cx_root.
+  TRY.
+      io_cols->set_column_position( columnname = iv_col
+                                    position   = iv_pos ).
+    CATCH cx_root INTO lx_err.
+*     column not present / position clash - ignore
+  ENDTRY.
+ENDFORM.                    " F_COL_POS
 
 *&---------------------------------------------------------------------*
 *&      Form  F_COL_HIDE
