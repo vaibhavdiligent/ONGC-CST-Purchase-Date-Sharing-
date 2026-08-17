@@ -53,7 +53,12 @@ TYPES: BEGIN OF ty_mon,
 DATA: gt_regut TYPE STANDARD TABLE OF regut,
       gt_sign  TYPE STANDARD TABLE OF zfi_batch_sign,
       gt_paym  TYPE STANDARD TABLE OF zfi_paym_file,
+      gt_rule  TYPE STANDARD TABLE OF zfi_bnk_rule,   "Approver config
       gt_mon   TYPE STANDARD TABLE OF ty_mon.
+
+* Approval rules (ZFI_BNK_RULE): rule -> approval level
+CONSTANTS: gc_rule_l1 TYPE zfi_bnk_rule-zrule VALUE '90700005',   "Level-1 approvers
+           gc_rule_l2 TYPE zfi_bnk_rule-zrule VALUE '90700006'.   "Level-2 approvers
 
 DATA: gv_laufd TYPE regut-laufd,
       gv_laufi TYPE regut-laufi,
@@ -70,6 +75,15 @@ PARAMETERS: p_pend AS CHECKBOX.          "Only pending (not fully approved)
 SELECTION-SCREEN END OF BLOCK b1.
 
 *----------------------------------------------------------------------*
+* F4 value help for the run identifier (LAUFI) - list existing runs
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR so_laufi-low.
+  PERFORM f_f4_laufi CHANGING so_laufi-low.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR so_laufi-high.
+  PERFORM f_f4_laufi CHANGING so_laufi-high.
+
+*----------------------------------------------------------------------*
 START-OF-SELECTION.
   PERFORM f_get_data.
   PERFORM f_build_output.
@@ -79,7 +93,7 @@ START-OF-SELECTION.
 *&      Form  F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_get_data .
-  REFRESH: gt_regut, gt_sign, gt_paym.
+  REFRESH: gt_regut, gt_sign, gt_paym, gt_rule.
 
   SELECT * FROM regut INTO TABLE gt_regut
     WHERE laufd IN so_laufd
@@ -89,6 +103,11 @@ FORM f_get_data .
   IF gt_regut IS INITIAL.
     RETURN.
   ENDIF.
+
+* Configured approvers (ZFI_BNK_RULE): rule 90700005 = L1, 90700006 = L2
+  SELECT * FROM zfi_bnk_rule INTO TABLE gt_rule
+    WHERE zrule = gc_rule_l1
+       OR zrule = gc_rule_l2.
 
 * Signature records for the batches in scope (BATCH_NO = concatenated key)
   DATA: lt_keys TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
@@ -123,12 +142,14 @@ ENDFORM.                    " F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_build_output .
   DATA: ls_reg  TYPE regut,
+        ls_rule TYPE zfi_bnk_rule,
         ls_sign TYPE zfi_batch_sign,
         ls_paym TYPE zfi_paym_file,
         ls_mon  TYPE ty_mon,
-        lv_key  TYPE zfi_batch_sign-batch_no.
+        lv_key  TYPE zfi_batch_sign-batch_no,
+        lv_snro TYPE zfi_batch_sign-snro.
 
-  SORT gt_sign BY batch_no snro signer.
+  SORT gt_sign BY batch_no signer snro.
 
   LOOP AT gt_regut INTO ls_reg.
     CLEAR ls_mon.
@@ -151,28 +172,50 @@ FORM f_build_output .
     ls_mon-crdate    = ls_reg-tsdat.
     ls_mon-crtime    = ls_reg-tstim.
 
-*   Aggregate signatures for this batch
-    LOOP AT gt_sign INTO ls_sign WHERE batch_no = lv_key.
-      CASE ls_sign-snro.
-        WHEN '1'.
-          ls_mon-l1_total = ls_mon-l1_total + 1.
-          IF ls_sign-digitl_sign = 'X'.
-            ls_mon-l1_signed = ls_mon-l1_signed + 1.
-          ELSE.
-            PERFORM f_add_pending USING ls_sign-signer CHANGING ls_mon-l1_pending.
-          ENDIF.
-        WHEN '2'.
-          ls_mon-l2_total = ls_mon-l2_total + 1.
-          IF ls_sign-digitl_sign = 'X'.
-            ls_mon-l2_signed = ls_mon-l2_signed + 1.
-          ELSE.
-            PERFORM f_add_pending USING ls_sign-signer CHANGING ls_mon-l2_pending.
-          ENDIF.
+*   Expected approvers come from config (ZFI_BNK_RULE by company code);
+*   "signed" is taken from the digital-signature table ZFI_BATCH_SIGN.
+    LOOP AT gt_rule INTO ls_rule WHERE zrule_id = ls_reg-zbukr.
+
+      CASE ls_rule-zrule.
+        WHEN gc_rule_l1.  lv_snro = '1'.
+        WHEN gc_rule_l2.  lv_snro = '2'.
+        WHEN OTHERS.      CONTINUE.
       ENDCASE.
+
+      CLEAR ls_sign.
+      READ TABLE gt_sign INTO ls_sign WITH KEY batch_no = lv_key
+                                               signer   = ls_rule-zuser
+                                               snro     = lv_snro
+                                               BINARY SEARCH.
+
+      IF lv_snro = '1'.
+        ls_mon-l1_total = ls_mon-l1_total + 1.
+        IF sy-subrc = 0 AND ls_sign-digitl_sign = 'X'.
+          ls_mon-l1_signed = ls_mon-l1_signed + 1.
+        ELSE.
+          PERFORM f_add_pending USING ls_rule-zuser CHANGING ls_mon-l1_pending.
+        ENDIF.
+      ELSE.
+        ls_mon-l2_total = ls_mon-l2_total + 1.
+        IF sy-subrc = 0 AND ls_sign-digitl_sign = 'X'.
+          ls_mon-l2_signed = ls_mon-l2_signed + 1.
+        ELSE.
+          PERFORM f_add_pending USING ls_rule-zuser CHANGING ls_mon-l2_pending.
+        ENDIF.
+      ENDIF.
     ENDLOOP.
 
+*   Sent status from the payment file
+    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_reg-laufd
+                                             laufi = ls_reg-laufi.
+    IF sy-subrc = 0.
+      ls_mon-sent_flag = ls_paym-sent.
+    ENDIF.
+
 *   Overall status
-    IF ls_mon-l1_total = 0 AND ls_mon-l2_total = 0.
+    IF ls_mon-sent_flag = 'X'.
+      ls_mon-status = 'Sent to Bank'.
+    ELSEIF ls_mon-l1_total = 0 AND ls_mon-l2_total = 0.
       ls_mon-status = 'No Approvers'.
     ELSEIF ls_mon-l1_total > 0 AND ls_mon-l1_signed < ls_mon-l1_total.
       ls_mon-status = 'Pending L1'.
@@ -182,15 +225,9 @@ FORM f_build_output .
       ls_mon-status = 'Approved'.
     ENDIF.
 
-*   Sent status from the payment file
-    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_reg-laufd
-                                             laufi = ls_reg-laufi.
-    IF sy-subrc = 0.
-      ls_mon-sent_flag = ls_paym-sent.
-    ENDIF.
-
 *   Optional filter: only pending batches
-    IF p_pend = abap_true AND ls_mon-status = 'Approved'.
+    IF p_pend = abap_true AND
+     ( ls_mon-status = 'Approved' OR ls_mon-status = 'Sent to Bank' ).
       CONTINUE.
     ENDIF.
 
@@ -205,7 +242,7 @@ ENDFORM.                    " F_BUILD_OUTPUT
 *&---------------------------------------------------------------------*
 *  Append a pending signer to the comma-separated pending list
 *----------------------------------------------------------------------*
-FORM f_add_pending USING iv_signer TYPE zfi_batch_sign-signer
+FORM f_add_pending USING iv_signer TYPE c
                 CHANGING cv_pending TYPE c.
   IF cv_pending IS INITIAL.
     cv_pending = iv_signer.
@@ -281,3 +318,50 @@ FORM f_col_text USING io_cols  TYPE REF TO cl_salv_columns_table
 *     column not present - ignore
   ENDTRY.
 ENDFORM.                    " F_COL_TEXT
+
+*&---------------------------------------------------------------------*
+*&      Form  F_F4_LAUFI
+*&---------------------------------------------------------------------*
+*  Value help (F4) for the run identifier - shows existing payment runs
+*  (Run date + Run id) from REGUT and returns the selected LAUFI.
+*----------------------------------------------------------------------*
+FORM f_f4_laufi CHANGING cv_laufi TYPE regut-laufi.
+  TYPES: BEGIN OF lty_help,
+           laufd TYPE regut-laufd,
+           laufi TYPE regut-laufi,
+         END OF lty_help.
+
+  DATA: lt_help   TYPE STANDARD TABLE OF lty_help,
+        lt_return TYPE STANDARD TABLE OF ddshretval,
+        ls_return TYPE ddshretval.
+
+  SELECT DISTINCT laufd laufi FROM regut
+    INTO TABLE lt_help
+    UP TO 500 ROWS
+    WHERE laufi IN so_laufi.
+  IF lt_help IS INITIAL.
+*   fall back to all runs if the current restriction returns nothing
+    SELECT DISTINCT laufd laufi FROM regut
+      INTO TABLE lt_help
+      UP TO 500 ROWS.
+  ENDIF.
+  SORT lt_help BY laufd DESCENDING laufi ASCENDING.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'LAUFI'
+      value_org       = 'S'
+    TABLES
+      value_tab       = lt_help
+      return_tab      = lt_return
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+  IF sy-subrc = 0.
+    READ TABLE lt_return INTO ls_return INDEX 1.
+    IF sy-subrc = 0.
+      cv_laufi = ls_return-fieldval.
+    ENDIF.
+  ENDIF.
+ENDFORM.                    " F_F4_LAUFI
