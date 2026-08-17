@@ -27,8 +27,11 @@ TYPES: BEGIN OF ty_mon,
          batch_key  TYPE c LENGTH 45,   "Concatenated REGUT key
          zbukr      TYPE regut-zbukr,
          banks      TYPE regut-banks,
-         laufd      TYPE regut-laufd,
-         laufi      TYPE regut-laufi,
+         laufd      TYPE regut-laufd,   "Payment medium run date (REGUT / REGUHM-LAUFD_M)
+         laufi      TYPE regut-laufi,   "Payment medium run id   (REGUT / REGUHM-LAUFI_M)
+         batchno    TYPE reguhm-batchno,"FBPM1 batch number       (REGUHM)
+         src_laufd  TYPE reguhm-laufd,  "Source F110 run date     (REGUHM-LAUFD)
+         src_laufi  TYPE reguhm-laufi,  "Source F110 run id       (REGUHM-LAUFI)
          dtkey      TYPE regut-dtkey,
          lfdnr      TYPE regut-lfdnr,
          waers      TYPE regut-waers,
@@ -50,11 +53,12 @@ TYPES: BEGIN OF ty_mon,
 *----------------------------------------------------------------------*
 * Global data
 *----------------------------------------------------------------------*
-DATA: gt_regut TYPE STANDARD TABLE OF regut,
-      gt_sign  TYPE STANDARD TABLE OF zfi_batch_sign,
-      gt_paym  TYPE STANDARD TABLE OF zfi_paym_file,
-      gt_rule  TYPE STANDARD TABLE OF zfi_bnk_rule,   "Approver config
-      gt_mon   TYPE STANDARD TABLE OF ty_mon.
+DATA: gt_regut  TYPE STANDARD TABLE OF regut,
+      gt_reguhm TYPE STANDARD TABLE OF reguhm,        "FBPM1 medium/batch link
+      gt_sign   TYPE STANDARD TABLE OF zfi_batch_sign,
+      gt_paym   TYPE STANDARD TABLE OF zfi_paym_file,
+      gt_rule   TYPE STANDARD TABLE OF zfi_bnk_rule,  "Approver config
+      gt_mon    TYPE STANDARD TABLE OF ty_mon.
 
 * Approval rules (ZFI_BNK_RULE): rule -> approval level
 CONSTANTS: gc_rule_l1 TYPE zfi_bnk_rule-zrule VALUE '90700005',   "Level-1 approvers
@@ -93,7 +97,7 @@ START-OF-SELECTION.
 *&      Form  F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_get_data .
-  REFRESH: gt_regut, gt_sign, gt_paym, gt_rule.
+  REFRESH: gt_regut, gt_reguhm, gt_sign, gt_paym, gt_rule.
 
   SELECT * FROM regut INTO TABLE gt_regut
     WHERE laufd IN so_laufd
@@ -103,6 +107,16 @@ FORM f_get_data .
   IF gt_regut IS INITIAL.
     RETURN.
   ENDIF.
+
+* FBPM1 medium/batch link (REGUHM). Since the customer no longer runs
+* BCM, batches are created through FBPM1, which writes REGUHM. The REGUT
+* payment-medium run (LAUFD/LAUFI) equals REGUHM-LAUFD_M/LAUFI_M; REGUHM
+* additionally carries the source F110 run (LAUFD/LAUFI) and BATCHNO.
+  SELECT * FROM reguhm INTO TABLE gt_reguhm
+    FOR ALL ENTRIES IN gt_regut
+    WHERE laufd_m = gt_regut-laufd
+      AND laufi_m = gt_regut-laufi
+      AND zbukr   = gt_regut-zbukr.
 
 * Configured approvers (ZFI_BNK_RULE): rule 90700005 = L1, 90700006 = L2
   SELECT * FROM zfi_bnk_rule INTO TABLE gt_rule
@@ -141,13 +155,14 @@ ENDFORM.                    " F_GET_DATA
 *&      Form  F_BUILD_OUTPUT
 *&---------------------------------------------------------------------*
 FORM f_build_output .
-  DATA: ls_reg  TYPE regut,
-        ls_rule TYPE zfi_bnk_rule,
-        ls_sign TYPE zfi_batch_sign,
-        ls_paym TYPE zfi_paym_file,
-        ls_mon  TYPE ty_mon,
-        lv_key  TYPE zfi_batch_sign-batch_no,
-        lv_snro TYPE zfi_batch_sign-snro.
+  DATA: ls_reg    TYPE regut,
+        ls_reguhm TYPE reguhm,
+        ls_rule   TYPE zfi_bnk_rule,
+        ls_sign   TYPE zfi_batch_sign,
+        ls_paym   TYPE zfi_paym_file,
+        ls_mon    TYPE ty_mon,
+        lv_key    TYPE zfi_batch_sign-batch_no,
+        lv_snro   TYPE zfi_batch_sign-snro.
 
   SORT gt_sign BY batch_no signer snro.
 
@@ -171,6 +186,19 @@ FORM f_build_output .
     ls_mon-crusr     = ls_reg-tsusr.
     ls_mon-crdate    = ls_reg-tsdat.
     ls_mon-crtime    = ls_reg-tstim.
+
+*   FBPM1 link (REGUHM): batch number + source F110 run. The REGUT
+*   medium run (LAUFD/LAUFI) maps to REGUHM-LAUFD_M/LAUFI_M. Batches not
+*   created via FBPM1 have no REGUHM row, so these columns stay blank.
+    READ TABLE gt_reguhm INTO ls_reguhm
+         WITH KEY laufd_m = ls_reg-laufd
+                  laufi_m = ls_reg-laufi
+                  zbukr   = ls_reg-zbukr.
+    IF sy-subrc = 0.
+      ls_mon-batchno   = ls_reguhm-batchno.
+      ls_mon-src_laufd = ls_reguhm-laufd.
+      ls_mon-src_laufi = ls_reguhm-laufi.
+    ENDIF.
 
 *   Expected approvers come from config (ZFI_BNK_RULE by company code);
 *   "signed" is taken from the digital-signature table ZFI_BATCH_SIGN.
@@ -285,6 +313,11 @@ FORM f_display_alv .
   lo_cols->set_optimize( abap_true ).
 
   PERFORM f_col_text USING lo_cols 'BATCH_KEY'  'Batch Key'      'Batch Key'            'Batch Key (REGUT)'.
+  PERFORM f_col_text USING lo_cols 'LAUFD'      'Med Date'       'Medium Run Date'      'Payment Medium Run Date'.
+  PERFORM f_col_text USING lo_cols 'LAUFI'      'Med Run'        'Medium Run Id'        'Payment Medium Run Id'.
+  PERFORM f_col_text USING lo_cols 'BATCHNO'    'Batch No'       'FBPM1 Batch No'       'FBPM1 Batch Number (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'SRC_LAUFD'  'F110 Date'      'F110 Run Date'        'Source F110 Run Date (REGUHM)'.
+  PERFORM f_col_text USING lo_cols 'SRC_LAUFI'  'F110 Run'       'F110 Run Id'          'Source F110 Run Id (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
