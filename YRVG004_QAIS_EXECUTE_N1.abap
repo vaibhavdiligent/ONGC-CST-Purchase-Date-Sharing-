@@ -406,6 +406,7 @@ DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 TABLES: ycis_apprvl, ycis_wf_appr.
 DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
+DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 *** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -12188,6 +12189,7 @@ FORM stage_all_rebates.
     RETURN.
   ENDIF.
   REFRESH gt_stg_office.
+  CLEAR gv_stg_dup.
   IF r_quater = 'X'.
     LOOP AT it_data_quater.
       lv_qind = it_data_quater-ind_lift_qty_m1 + it_data_quater-ind_lift_qty_m2
@@ -12252,7 +12254,12 @@ FORM stage_all_rebates.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
-  IF lv_cnt > 0.
+*   Split the processed rows into NEWLY submitted vs ALREADY with L2/L3, so
+*   L1 gets clear feedback and knows a repeat Execute did nothing. Only newly
+*   submitted rows trigger an L2 e-mail (gt_stg_office holds their offices).
+*   (GAIL 06.08.2026)
+  DATA(lv_new) = lv_cnt - gv_stg_dup.
+  IF lv_new > 0.
     COMMIT WORK.
 *   notify the Level-2 (PC MKTG-HOD) approvers of each office
     LOOP AT gt_stg_office INTO lv_off.
@@ -12264,7 +12271,16 @@ FORM stage_all_rebates.
 *   the display tables; the ALV refresh set by the caller shows the reduced
 *   list. (GAIL 31.07.2026)
     PERFORM hide_forwarded.
-    MESSAGE |{ lv_cnt } record(s) submitted for L2 approval (YCIS_APPRVL)| TYPE 'S'.
+    IF gv_stg_dup > 0.
+      MESSAGE |{ lv_new } record(s) submitted to L2 (e-mail sent); { gv_stg_dup } already with L2/L3 - not re-sent| TYPE 'S'.
+    ELSE.
+      MESSAGE |{ lv_new } record(s) submitted for L2 approval (e-mail sent)| TYPE 'S'.
+    ENDIF.
+  ELSEIF gv_stg_dup > 0.
+*   every selected row was already forwarded earlier - no re-staging, no
+*   duplicate e-mail; just tell L1 clearly.
+    PERFORM hide_forwarded.
+    MESSAGE |All { gv_stg_dup } selected record(s) are already with L2/L3 - already forwarded, no e-mail re-sent| TYPE 'I'.
   ELSEIF lv_skip > 0.
 *   rows were computed but every one was held back by the eligibility rule
     MESSAGE |{ lv_skip } customer(s) not submitted: zero discount - no lifting/eligibility and no waiver applicable| TYPE 'I'.
@@ -12508,7 +12524,8 @@ FORM stage_one USING p_stype   TYPE char1
       AND kunnr       = ls-kunnr
       AND kvgr2       = ls-kvgr2.
   IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40' ).
-    RETURN.                              " already forwarded - skip
+    gv_stg_dup = gv_stg_dup + 1.         " count it so L1 gets clear feedback
+    RETURN.                              " already forwarded - skip, no re-mail
   ENDIF.
   MODIFY ycis_apprvl FROM ls.
 *   grade-wise detail for the rebate report (captured at source)
