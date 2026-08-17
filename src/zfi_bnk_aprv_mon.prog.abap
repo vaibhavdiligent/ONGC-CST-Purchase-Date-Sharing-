@@ -53,6 +53,8 @@ TYPES: BEGIN OF ty_mon,
          l2_signed  TYPE i,             "Level-2 approvers signed
          l2_pending TYPE c LENGTH 60,   "Level-2 pending signers
          status     TYPE c LENGTH 20,   "Overall approval status
+         regut_stat TYPE regut-status,  "REGUT file status code (EPIC_REGUT_STATUS)
+         regut_txt  TYPE c LENGTH 20,   "REGUT file status text
          sent_flag  TYPE zfi_paym_file-sent,   "Sent to bank
          crusr      TYPE regut-tsusr,   "Created by (TemSe user)
          crdate     TYPE regut-tsdat,
@@ -268,11 +270,27 @@ FORM f_build_output .
       ENDIF.
     ENDLOOP.
 
-*   Sent status from the payment file
+*   REGUT file status (single source of truth per FS) - EPIC_REGUT_STATUS
+    ls_mon-regut_stat = ls_reg-status.
+    CASE ls_reg-status.
+      WHEN space. ls_mon-regut_txt = 'Created'.
+      WHEN '010'. ls_mon-regut_txt = 'Sent'.
+      WHEN '020'. ls_mon-regut_txt = 'Acknowledged'.
+      WHEN '030'. ls_mon-regut_txt = 'Transfer Failed'.
+      WHEN '040'. ls_mon-regut_txt = 'Transfer Confirmed'.
+      WHEN OTHERS. ls_mon-regut_txt = ls_reg-status.
+    ENDCASE.
+
+*   Sent to bank: authoritative from REGUT status (Sent / Acknowledged /
+*   Transfer Confirmed); ZFI_PAYM_FILE-SENT kept as a fallback indicator.
+    IF ls_reg-status = '010' OR ls_reg-status = '020'
+                             OR ls_reg-status = '040'.
+      ls_mon-sent_flag = 'X'.
+    ENDIF.
     READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_reg-laufd
                                              laufi = ls_reg-laufi.
-    IF sy-subrc = 0.
-      ls_mon-sent_flag = ls_paym-sent.
+    IF sy-subrc = 0 AND ls_paym-sent = 'X'.
+      ls_mon-sent_flag = 'X'.
     ENDIF.
 
 *   Overall status
@@ -361,11 +379,32 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'L2_SIGNED'  'L2 Sgn'         'L2 Signed'            'Level-2 Signed'.
   PERFORM f_col_text USING lo_cols 'L2_PENDING' 'L2 Pend'        'L2 Pending With'      'Level-2 Pending With'.
   PERFORM f_col_text USING lo_cols 'STATUS'     'Status'         'Approval Status'      'Approval Status'.
+  PERFORM f_col_text USING lo_cols 'REGUT_TXT'  'File Stat'      'REGUT File Status'    'REGUT File Status (source of truth)'.
   PERFORM f_col_text USING lo_cols 'SENT_FLAG'  'Sent'           'Sent to Bank'         'Sent to Bank'.
   PERFORM f_col_text USING lo_cols 'CRUSR'      'Created By'     'Created By'           'Created By'.
 
+* Hide the raw REGUT status code (readable text shown via REGUT_TXT)
+  PERFORM f_col_hide USING lo_cols 'REGUT_STAT'.
+
   lo_alv->display( ).
 ENDFORM.                    " F_DISPLAY_ALV
+
+*&---------------------------------------------------------------------*
+*&      Form  F_COL_HIDE
+*&---------------------------------------------------------------------*
+*  Make a column technical (not displayed)
+*----------------------------------------------------------------------*
+FORM f_col_hide USING io_cols TYPE REF TO cl_salv_columns_table
+                      iv_col  TYPE lvc_fname.
+  DATA: lo_col TYPE REF TO cl_salv_column,
+        lx_nf  TYPE REF TO cx_salv_not_found.
+  TRY.
+      lo_col = io_cols->get_column( iv_col ).
+      lo_col->set_technical( abap_true ).
+    CATCH cx_salv_not_found INTO lx_nf.
+*     column not present - ignore
+  ENDTRY.
+ENDFORM.                    " F_COL_HIDE
 
 *&---------------------------------------------------------------------*
 *&      Form  F_COL_TEXT
