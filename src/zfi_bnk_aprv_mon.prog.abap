@@ -175,16 +175,25 @@ ENDFORM.                    " F_GET_DATA
 *&      Form  F_BUILD_OUTPUT
 *&---------------------------------------------------------------------*
 FORM f_build_output .
-  DATA: ls_reg    TYPE regut,
-        ls_reguhm TYPE reguhm,
-        ls_rule   TYPE zfi_bnk_rule,
-        ls_sign   TYPE zfi_batch_sign,
-        ls_paym   TYPE zfi_paym_file,
-        ls_mon    TYPE ty_mon,
-        lv_key    TYPE zfi_batch_sign-batch_no,
-        lv_snro   TYPE zfi_batch_sign-snro,
-        lt_f110   TYPE SORTED TABLE OF reguhm-laufi WITH UNIQUE KEY table_line,
-        lv_f110   TYPE reguhm-laufi.
+  TYPES: BEGIN OF lty_run,
+           zbukr TYPE reguhm-zbukr,
+           laufd TYPE reguhm-laufd,
+           laufi TYPE reguhm-laufi,
+         END OF lty_run.
+
+  DATA: ls_reg     TYPE regut,
+        ls_reguhm  TYPE reguhm,
+        ls_rule    TYPE zfi_bnk_rule,
+        ls_sign    TYPE zfi_batch_sign,
+        ls_paym    TYPE zfi_paym_file,
+        ls_mon     TYPE ty_mon,
+        lv_key     TYPE zfi_batch_sign-batch_no,
+        lv_snro    TYPE zfi_batch_sign-snro,
+        lt_f110    TYPE SORTED TABLE OF reguhm-laufi WITH UNIQUE KEY table_line,
+        lv_f110    TYPE reguhm-laufi,
+        lt_allrun  TYPE SORTED TABLE OF lty_run WITH UNIQUE KEY zbukr laufd laufi,
+        lt_covered TYPE SORTED TABLE OF lty_run WITH UNIQUE KEY zbukr laufd laufi,
+        ls_run     TYPE lty_run.
 
   SORT gt_sign BY batch_no signer snro.
 
@@ -314,7 +323,55 @@ FORM f_build_output .
     APPEND ls_mon TO gt_mon.
   ENDLOOP.
 
-  SORT gt_mon BY zbukr laufd laufi.
+* --- Second pass (per FS): a run exists in REGUHM once F110 has run, but
+*     REGUT is only updated once the batch is created. So any F110 run in
+*     REGUHM that has NO batch in REGUT yet must still be shown - as
+*     "Batch Not Created". Covered runs already appear in the batch rows
+*     above (in the F110 Run(s) column), so only add the uncovered ones.
+  LOOP AT gt_reguhm INTO ls_reguhm.
+    CLEAR ls_run.
+    ls_run-zbukr = ls_reguhm-zbukr.
+    ls_run-laufd = ls_reguhm-laufd.
+    ls_run-laufi = ls_reguhm-laufi.
+    INSERT ls_run INTO TABLE lt_allrun.        "distinct F110 runs in REGUHM
+
+*   batch created?  REGUT-LAUFD/LAUFI = REGUHM-LAUFD_M/LAUFI_M
+    READ TABLE gt_regut TRANSPORTING NO FIELDS
+         WITH KEY zbukr = ls_reguhm-zbukr
+                  laufd = ls_reguhm-laufd_m
+                  laufi = ls_reguhm-laufi_m.
+    IF sy-subrc = 0.
+      INSERT ls_run INTO TABLE lt_covered.     "F110 run has a REGUT batch
+    ENDIF.
+  ENDLOOP.
+
+  LOOP AT lt_allrun INTO ls_run.
+    READ TABLE lt_covered TRANSPORTING NO FIELDS
+         WITH KEY zbukr = ls_run-zbukr
+                  laufd = ls_run-laufd
+                  laufi = ls_run-laufi.
+    IF sy-subrc = 0.
+      CONTINUE.                                "already shown via a batch row
+    ENDIF.
+
+    CLEAR ls_mon.
+    ls_mon-zbukr     = ls_run-zbukr.
+    ls_mon-src_laufd = ls_run-laufd.
+    ls_mon-f110_runs = ls_run-laufi.
+    ls_mon-status    = 'Batch Not Created'.
+    ls_mon-regut_txt = 'No Batch'.
+*   batch number if REGUHM already carries one before REGUT is written
+    READ TABLE gt_reguhm INTO ls_reguhm
+         WITH KEY zbukr = ls_run-zbukr
+                  laufd = ls_run-laufd
+                  laufi = ls_run-laufi.
+    IF sy-subrc = 0.
+      ls_mon-batchno = ls_reguhm-batchno.
+    ENDIF.
+    APPEND ls_mon TO gt_mon.                    "pending by definition - always shown
+  ENDLOOP.
+
+  SORT gt_mon BY zbukr src_laufd f110_runs laufd laufi.
 ENDFORM.                    " F_BUILD_OUTPUT
 
 *&---------------------------------------------------------------------*
