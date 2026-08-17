@@ -139,16 +139,26 @@ SELECT * FROM ZFI_PATH INTO WA_ZFI_PATH UP TO 1 ROWS WHERE SYSID = SYST-SYSID
         ls_rule     TYPE zfi_bnk_rule.
 
 * ---- REGUT key parts (local variables, lengths match REGUT) ---------
-* Known sources from the payment header:
+* Sources from the payment header:
   l_bukrs = i_fpayh-zbukr.
   l_laufd = i_fpayh-laufd.
   l_laufi = i_fpayh-laufi.
   l_xvorl = i_fpayh-xvorl.
+  l_banks = i_fpayh-zland.    "Bank Country/Region Key -> REGUT-BANKS
+  l_dtkey = i_fpayh-hbkid.    "House bank            -> REGUT-DTKEY (e.g. HB_01)
 
-* >>> To be populated in the system (mapping to be done manually):
-*  l_banks = ...        "Bank Country/Region Key
-*  l_dtkey = ...        "Additional TemSe key field (e.g. HB_01)
-*  l_lfdnr = ...        "Sequence number of the file within the run
+* LFDNR: next sequence number for this key.  NOTE: the REGUT row for the
+* current file is usually not yet written when this format module runs,
+* so MAX(LFDNR)+1 predicts the number the framework will assign. Verify
+* this matches the actual REGUT-LFDNR (else the key will not match).
+  SELECT MAX( lfdnr ) INTO l_lfdnr FROM regut
+    WHERE zbukr = l_bukrs
+      AND banks = l_banks
+      AND laufd = l_laufd
+      AND laufi = l_laufi
+      AND xvorl = l_xvorl
+      AND dtkey = l_dtkey.
+  l_lfdnr = l_lfdnr + 1.
 
   CLEAR lv_batch_no.
   CONCATENATE l_bukrs l_banks l_laufd l_laufi
