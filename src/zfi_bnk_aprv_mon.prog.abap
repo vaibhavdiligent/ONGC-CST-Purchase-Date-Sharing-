@@ -1,0 +1,283 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFI_BNK_APRV_MON
+*&---------------------------------------------------------------------*
+*& Payment Batch Approval Monitor
+*&
+*& Monitors the approval status of payment batches for release to the
+*& bank (F110 / Payment Factory dual-control flow).
+*&
+*& Data flow (per FS "F110 Payment Run"):
+*&   F110 -> REGUH/REGUP -> REGUHM -> REGUT (payment medium / batch)
+*&   Approval is driven by the digital-signature Z-table ZFI_BATCH_SIGN;
+*&   REGUT is the single source of truth for batch approval visibility.
+*&
+*& Batch key (matches ZFI_BNK_APP / ZFI_BNK_APP1 / ZFI_PAYMEDIUM_DMEE_20):
+*&   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR
+*&   (41 chars, built RESPECTING BLANKS) -> stored in ZFI_BATCH_SIGN-BATCH_NO
+*&
+*& Approval levels (see ZFI_BNK_RULE):
+*&   SNRO 1 = level-1 approvers, SNRO 2 = level-2 approvers
+*&---------------------------------------------------------------------*
+REPORT zfi_bnk_aprv_mon.
+
+*----------------------------------------------------------------------*
+* Types
+*----------------------------------------------------------------------*
+TYPES: BEGIN OF ty_mon,
+         batch_key  TYPE c LENGTH 45,   "Concatenated REGUT key
+         zbukr      TYPE regut-zbukr,
+         banks      TYPE regut-banks,
+         laufd      TYPE regut-laufd,
+         laufi      TYPE regut-laufi,
+         dtkey      TYPE regut-dtkey,
+         lfdnr      TYPE regut-lfdnr,
+         waers      TYPE regut-waers,
+         rbetr      TYPE p LENGTH 15 DECIMALS 2,   "Amount (from REGUT-RBETR)
+         fsnam      TYPE regut-fsnam,
+         l1_total   TYPE i,             "Level-1 approvers assigned
+         l1_signed  TYPE i,             "Level-1 approvers signed
+         l1_pending TYPE c LENGTH 60,   "Level-1 pending signers
+         l2_total   TYPE i,             "Level-2 approvers assigned
+         l2_signed  TYPE i,             "Level-2 approvers signed
+         l2_pending TYPE c LENGTH 60,   "Level-2 pending signers
+         status     TYPE c LENGTH 20,   "Overall approval status
+         sent_flag  TYPE zfi_paym_file-sent,   "Sent to bank
+         crusr      TYPE regut-tsusr,   "Created by (TemSe user)
+         crdate     TYPE regut-tsdat,
+         crtime     TYPE regut-tstim,
+       END OF ty_mon.
+
+*----------------------------------------------------------------------*
+* Global data
+*----------------------------------------------------------------------*
+DATA: gt_regut TYPE STANDARD TABLE OF regut,
+      gt_sign  TYPE STANDARD TABLE OF zfi_batch_sign,
+      gt_paym  TYPE STANDARD TABLE OF zfi_paym_file,
+      gt_mon   TYPE STANDARD TABLE OF ty_mon.
+
+DATA: gv_laufd TYPE regut-laufd,
+      gv_laufi TYPE regut-laufi,
+      gv_zbukr TYPE regut-zbukr.
+
+*----------------------------------------------------------------------*
+* Selection screen
+*----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECT-OPTIONS: so_laufd FOR gv_laufd,   "Run date
+                so_laufi FOR gv_laufi,   "Run id
+                so_zbukr FOR gv_zbukr.   "Paying company code
+PARAMETERS: p_pend AS CHECKBOX.          "Only pending (not fully approved)
+SELECTION-SCREEN END OF BLOCK b1.
+
+*----------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM f_get_data.
+  PERFORM f_build_output.
+  PERFORM f_display_alv.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_GET_DATA
+*&---------------------------------------------------------------------*
+FORM f_get_data .
+  REFRESH: gt_regut, gt_sign, gt_paym.
+
+  SELECT * FROM regut INTO TABLE gt_regut
+    WHERE laufd IN so_laufd
+      AND laufi IN so_laufi
+      AND zbukr IN so_zbukr.
+
+  IF gt_regut IS INITIAL.
+    RETURN.
+  ENDIF.
+
+* Signature records for the batches in scope (BATCH_NO = concatenated key)
+  DATA: lt_keys TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
+        lv_key  TYPE zfi_batch_sign-batch_no,
+        ls_reg  TYPE regut.
+
+  LOOP AT gt_regut INTO ls_reg.
+    CLEAR lv_key.
+    CONCATENATE ls_reg-zbukr ls_reg-banks ls_reg-laufd ls_reg-laufi
+                ls_reg-xvorl ls_reg-dtkey ls_reg-lfdnr
+           INTO lv_key RESPECTING BLANKS.
+    APPEND lv_key TO lt_keys.
+  ENDLOOP.
+  SORT lt_keys.
+  DELETE ADJACENT DUPLICATES FROM lt_keys.
+
+  IF lt_keys IS NOT INITIAL.
+    SELECT * FROM zfi_batch_sign INTO TABLE gt_sign
+      FOR ALL ENTRIES IN lt_keys
+      WHERE batch_no = lt_keys-table_line.
+  ENDIF.
+
+* Payment file (sent status) - one row per LAUFD/LAUFI
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym
+    FOR ALL ENTRIES IN gt_regut
+    WHERE laufd = gt_regut-laufd
+      AND laufi = gt_regut-laufi.
+ENDFORM.                    " F_GET_DATA
+
+*&---------------------------------------------------------------------*
+*&      Form  F_BUILD_OUTPUT
+*&---------------------------------------------------------------------*
+FORM f_build_output .
+  DATA: ls_reg  TYPE regut,
+        ls_sign TYPE zfi_batch_sign,
+        ls_paym TYPE zfi_paym_file,
+        ls_mon  TYPE ty_mon,
+        lv_key  TYPE zfi_batch_sign-batch_no.
+
+  SORT gt_sign BY batch_no snro signer.
+
+  LOOP AT gt_regut INTO ls_reg.
+    CLEAR ls_mon.
+
+    CONCATENATE ls_reg-zbukr ls_reg-banks ls_reg-laufd ls_reg-laufi
+                ls_reg-xvorl ls_reg-dtkey ls_reg-lfdnr
+           INTO lv_key RESPECTING BLANKS.
+
+    ls_mon-batch_key = lv_key.
+    ls_mon-zbukr     = ls_reg-zbukr.
+    ls_mon-banks     = ls_reg-banks.
+    ls_mon-laufd     = ls_reg-laufd.
+    ls_mon-laufi     = ls_reg-laufi.
+    ls_mon-dtkey     = ls_reg-dtkey.
+    ls_mon-lfdnr     = ls_reg-lfdnr.
+    ls_mon-waers     = ls_reg-waers.
+    ls_mon-rbetr     = ls_reg-rbetr.
+    ls_mon-fsnam     = ls_reg-fsnam.
+    ls_mon-crusr     = ls_reg-tsusr.
+    ls_mon-crdate    = ls_reg-tsdat.
+    ls_mon-crtime    = ls_reg-tstim.
+
+*   Aggregate signatures for this batch
+    LOOP AT gt_sign INTO ls_sign WHERE batch_no = lv_key.
+      CASE ls_sign-snro.
+        WHEN '1'.
+          ls_mon-l1_total = ls_mon-l1_total + 1.
+          IF ls_sign-digitl_sign = 'X'.
+            ls_mon-l1_signed = ls_mon-l1_signed + 1.
+          ELSE.
+            PERFORM f_add_pending USING ls_sign-signer CHANGING ls_mon-l1_pending.
+          ENDIF.
+        WHEN '2'.
+          ls_mon-l2_total = ls_mon-l2_total + 1.
+          IF ls_sign-digitl_sign = 'X'.
+            ls_mon-l2_signed = ls_mon-l2_signed + 1.
+          ELSE.
+            PERFORM f_add_pending USING ls_sign-signer CHANGING ls_mon-l2_pending.
+          ENDIF.
+      ENDCASE.
+    ENDLOOP.
+
+*   Overall status
+    IF ls_mon-l1_total = 0 AND ls_mon-l2_total = 0.
+      ls_mon-status = 'No Approvers'.
+    ELSEIF ls_mon-l1_total > 0 AND ls_mon-l1_signed < ls_mon-l1_total.
+      ls_mon-status = 'Pending L1'.
+    ELSEIF ls_mon-l2_total > 0 AND ls_mon-l2_signed < ls_mon-l2_total.
+      ls_mon-status = 'Pending L2'.
+    ELSE.
+      ls_mon-status = 'Approved'.
+    ENDIF.
+
+*   Sent status from the payment file
+    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_reg-laufd
+                                             laufi = ls_reg-laufi.
+    IF sy-subrc = 0.
+      ls_mon-sent_flag = ls_paym-sent.
+    ENDIF.
+
+*   Optional filter: only pending batches
+    IF p_pend = abap_true AND ls_mon-status = 'Approved'.
+      CONTINUE.
+    ENDIF.
+
+    APPEND ls_mon TO gt_mon.
+  ENDLOOP.
+
+  SORT gt_mon BY zbukr laufd laufi.
+ENDFORM.                    " F_BUILD_OUTPUT
+
+*&---------------------------------------------------------------------*
+*&      Form  F_ADD_PENDING
+*&---------------------------------------------------------------------*
+*  Append a pending signer to the comma-separated pending list
+*----------------------------------------------------------------------*
+FORM f_add_pending USING iv_signer TYPE zfi_batch_sign-signer
+                CHANGING cv_pending TYPE c.
+  IF cv_pending IS INITIAL.
+    cv_pending = iv_signer.
+  ELSE.
+    CONCATENATE cv_pending iv_signer INTO cv_pending SEPARATED BY ','.
+  ENDIF.
+ENDFORM.                    " F_ADD_PENDING
+
+*&---------------------------------------------------------------------*
+*&      Form  F_DISPLAY_ALV
+*&---------------------------------------------------------------------*
+FORM f_display_alv .
+  DATA: lo_alv     TYPE REF TO cl_salv_table,
+        lo_cols    TYPE REF TO cl_salv_columns_table,
+        lo_funcs   TYPE REF TO cl_salv_functions_list,
+        lx_msg     TYPE REF TO cx_salv_msg.
+
+  IF gt_mon IS INITIAL.
+    MESSAGE 'No payment batches found for the selection' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_mon ).
+    CATCH cx_salv_msg INTO lx_msg.
+      MESSAGE lx_msg->get_text( ) TYPE 'I'.
+      RETURN.
+  ENDTRY.
+
+* Toolbar / standard functions
+  lo_funcs = lo_alv->get_functions( ).
+  lo_funcs->set_all( abap_true ).
+
+* Column headers and width optimization
+  lo_cols = lo_alv->get_columns( ).
+  lo_cols->set_optimize( abap_true ).
+
+  PERFORM f_col_text USING lo_cols 'BATCH_KEY'  'Batch Key'      'Batch Key'            'Batch Key (REGUT)'.
+  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Amount'               'Payment Amount'.
+  PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
+  PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
+  PERFORM f_col_text USING lo_cols 'L1_PENDING' 'L1 Pend'        'L1 Pending With'      'Level-1 Pending With'.
+  PERFORM f_col_text USING lo_cols 'L2_TOTAL'   'L2 Tot'         'L2 Approvers'         'Level-2 Approvers'.
+  PERFORM f_col_text USING lo_cols 'L2_SIGNED'  'L2 Sgn'         'L2 Signed'            'Level-2 Signed'.
+  PERFORM f_col_text USING lo_cols 'L2_PENDING' 'L2 Pend'        'L2 Pending With'      'Level-2 Pending With'.
+  PERFORM f_col_text USING lo_cols 'STATUS'     'Status'         'Approval Status'      'Approval Status'.
+  PERFORM f_col_text USING lo_cols 'SENT_FLAG'  'Sent'           'Sent to Bank'         'Sent to Bank'.
+  PERFORM f_col_text USING lo_cols 'CRUSR'      'Created By'     'Created By'           'Created By'.
+
+  lo_alv->display( ).
+ENDFORM.                    " F_DISPLAY_ALV
+
+*&---------------------------------------------------------------------*
+*&      Form  F_COL_TEXT
+*&---------------------------------------------------------------------*
+FORM f_col_text USING io_cols  TYPE REF TO cl_salv_columns_table
+                      iv_col   TYPE lvc_fname
+                      iv_short TYPE scrtext_s
+                      iv_med   TYPE scrtext_m
+                      iv_long  TYPE scrtext_l.
+  DATA: lo_col TYPE REF TO cl_salv_column,
+        lx_nf  TYPE REF TO cx_salv_not_found.
+  TRY.
+      lo_col = io_cols->get_column( iv_col ).
+      lo_col->set_short_text( iv_short ).
+      lo_col->set_medium_text( iv_med ).
+      lo_col->set_long_text( iv_long ).
+    CATCH cx_salv_not_found INTO lx_nf.
+*     column not present - ignore
+  ENDTRY.
+ENDFORM.                    " F_COL_TEXT
