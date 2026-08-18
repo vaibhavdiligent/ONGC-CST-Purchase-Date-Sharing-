@@ -3,7 +3,7 @@
 *&  Standalone (single-program) build of YRVG004_QAIS_EXECUTE.
 *&  All includes (TOP / SEL / F01) merged in include-expansion order.
 *&  CIS lifting % change: Monthly 80->75, Annual 85->80.
-*&  PRODUCTION = 2026-27; plus a clearly marked TEST ONLY 2025-26 block.
+*&  PRODUCTION = 2026-27 (TEST ONLY 2025-26 block removed at go-live).
 *&---------------------------------------------------------------------*
 REPORT  yrvg004_qais_execute_n1 MESSAGE-ID yv01.
 
@@ -1232,31 +1232,8 @@ FORM get_data.
   IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
     wa_yrva_mstr_waiver-annual_min   = 80.
   ENDIF.
-*** SOC : TEST ONLY - CIS 2025-26 - REMOVE before running PRODUCTION only ***
-*   Test data is available only for FY 2025-26, so the same new logic is
-*   enabled for 2025-26 to allow testing. DELETE this whole TEST ONLY
-*   block (down to its EOC marker) when the program is to run for the
-*   live 2026-27 scheme only.
-*   Monthly test run = single scheme month Jun'2025 - Mar'2026.
-  IF s_sptag-low GE '20250601' AND s_sptag-high LE '20260331'.
-    set_min75 min_perc_m1.
-    set_min75 min_perc_m2.
-    set_min75 min_perc_m3.
-    set_min75 min_perc_m4.
-    set_min75 min_perc_m5.
-    set_min75 min_perc_m6.
-    set_min75 min_perc_m7.
-    set_min75 min_perc_m8.
-    set_min75 min_perc_m9.
-    set_min75 min_perc_m10.
-    set_min75 min_perc_m11.
-    set_min75 min_perc_m12.
-  ENDIF.
-*   Annual test run = fiscal year 01.04.2025 - 31.03.2026.
-  IF s_sptag-low EQ '20250401' AND s_sptag-high EQ '20260331'.
-    wa_yrva_mstr_waiver-annual_min   = 80.
-  ENDIF.
-*** EOC : TEST ONLY - CIS 2025-26 ***
+*   TEST-ONLY (CIS 2025-26) block removed for go-live - production runs the
+*   live 2026-27 scheme only. (GAIL 06.08.2026)
 *** EOC : CIS lifting % change (period-gated) ***
   MOVE-CORRESPONDING wa_yrva_mstr_waiver TO wa_yrva_mstr_waiver_temp.
 
