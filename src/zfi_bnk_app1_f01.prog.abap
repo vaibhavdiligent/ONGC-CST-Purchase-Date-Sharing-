@@ -36,6 +36,12 @@ FORM f_prepare_op_tab1 .
       WHERE laufi = gt_paym-laufi
       AND   laufd = gt_paym-laufd.
 
+*   Self-heal: make sure every REGUT batch has its approver rows. The DMEE
+*   format module predicts LFDNR (MAX+1) before REGUT is committed, so a
+*   batch created later in the same run can be left with no ZFI_BATCH_SIGN
+*   rows and would silently drop out of the worklist below.
+    PERFORM f_ensure_batch_sign USING gt_batch_header.
+
     IF gt_batch_header IS NOT INITIAL.
 *     Read this user's level-1 signature assignments
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
@@ -83,6 +89,76 @@ FORM f_prepare_op_tab1 .
   ENDIF.
 
 ENDFORM.                    " F_PREPARE_OP_TAB1
+
+*&---------------------------------------------------------------------*
+*&      Form  F_ENSURE_BATCH_SIGN
+*&---------------------------------------------------------------------*
+*  Guarantee every REGUT batch in gt_batch_header has its approver rows
+*  in ZFI_BATCH_SIGN, keyed to the ACTUAL REGUT key.
+*
+*  Why: the DMEE format module ZFI_PAYMEDIUM_DMEE_20 creates the approver
+*  rows using a PREDICTED LFDNR (SELECT MAX( lfdnr ) + 1) while REGUT is
+*  not yet committed. When several batches are created in one run the
+*  prediction repeats, so a later batch's MODIFY overwrites an earlier
+*  key instead of creating its own - leaving that REGUT batch with no
+*  approver rows, and it drops out of every worklist. Here we re-create
+*  any missing rows from ZFI_BNK_RULE against the real REGUT key, so no
+*  batch can be orphaned. Existing (incl. already-signed) rows are left
+*  untouched.
+*----------------------------------------------------------------------*
+FORM f_ensure_batch_sign USING it_hdr TYPE STANDARD TABLE.
+  DATA: lt_rule TYPE STANDARD TABLE OF zfi_bnk_rule,
+        ls_rule TYPE zfi_bnk_rule,
+        ls_hdr  TYPE regut,
+        ls_sign TYPE zfi_batch_sign,
+        lt_new  TYPE STANDARD TABLE OF zfi_batch_sign,
+        lv_key  TYPE zfi_batch_sign-batch_no,
+        lv_cnt  TYPE i.
+
+  CHECK it_hdr IS NOT INITIAL.
+
+* Configured approvers: rule 90700005 = level 1, 90700006 = level 2
+  SELECT * FROM zfi_bnk_rule INTO TABLE lt_rule
+    WHERE zrule = '90700005' OR zrule = '90700006'.
+  IF lt_rule IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  LOOP AT it_hdr INTO ls_hdr.
+    CLEAR lv_key.
+    CONCATENATE ls_hdr-zbukr ls_hdr-banks
+                ls_hdr-laufd ls_hdr-laufi
+                ls_hdr-xvorl ls_hdr-dtkey
+                ls_hdr-lfdnr
+           INTO lv_key RESPECTING BLANKS.
+
+*   already has approver rows -> leave as is
+    SELECT COUNT(*) INTO lv_cnt FROM zfi_batch_sign WHERE batch_no = lv_key.
+    IF lv_cnt > 0.
+      CONTINUE.
+    ENDIF.
+
+*   create the approver rows for this batch's paying company code
+    LOOP AT lt_rule INTO ls_rule WHERE zrule_id = ls_hdr-zbukr.
+      CLEAR ls_sign.
+      ls_sign-batch_no = lv_key.
+      ls_sign-signer   = ls_rule-zuser.
+      CASE ls_rule-zrule.
+        WHEN '90700005'. ls_sign-snro = '1'.
+        WHEN '90700006'. ls_sign-snro = '2'.
+        WHEN OTHERS.     CONTINUE.
+      ENDCASE.
+      ls_sign-cdate = sy-datum.
+      ls_sign-ctime = sy-uzeit.
+      APPEND ls_sign TO lt_new.
+    ENDLOOP.
+  ENDLOOP.
+
+  IF lt_new IS NOT INITIAL.
+    INSERT zfi_batch_sign FROM TABLE lt_new ACCEPTING DUPLICATE KEYS.
+    COMMIT WORK.
+  ENDIF.
+ENDFORM.                    " F_ENSURE_BATCH_SIGN
 
 *&---------------------------------------------------------------------*
 *&      Form  F_ALV_BUILD_FIELDCAT1
@@ -246,6 +322,10 @@ FORM f_prepare_op_tab2 .
       FOR ALL ENTRIES IN gt_paym2
       WHERE laufi = gt_paym2-laufi
       AND   laufd = gt_paym2-laufd.
+
+*   Self-heal missing approver rows (see F_ENSURE_BATCH_SIGN) so no batch
+*   drops out of the level-2 worklist either.
+    PERFORM f_ensure_batch_sign USING gt_batch_header2.
 
     IF gt_batch_header2 IS NOT INITIAL.
 *     Read this user's open level-2 signature assignments
