@@ -71,6 +71,7 @@ TYPES: BEGIN OF ty_mon,
 *----------------------------------------------------------------------*
 DATA: gt_regut  TYPE STANDARD TABLE OF regut,
       gt_reguhm TYPE STANDARD TABLE OF reguhm,        "FBPM1 medium/batch link
+      gt_reguh  TYPE STANDARD TABLE OF reguh,         "F110 payment header (amount)
       gt_sign   TYPE STANDARD TABLE OF zfi_batch_sign,
       gt_paym   TYPE STANDARD TABLE OF zfi_paym_file,
       gt_rule   TYPE STANDARD TABLE OF zfi_bnk_rule,  "Approver config
@@ -113,7 +114,7 @@ START-OF-SELECTION.
 *&      Form  F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_get_data .
-  REFRESH: gt_reguhm, gt_regut, gt_sign, gt_paym, gt_rule.
+  REFRESH: gt_reguhm, gt_reguh, gt_regut, gt_sign, gt_paym, gt_rule.
 
 * -- Step 1 (per FS): start from REGUHM - the payment medium header
 *    created after the F110 run. Selection is on the F110 run.
@@ -125,6 +126,19 @@ FORM f_get_data .
   IF gt_reguhm IS INITIAL.
     RETURN.
   ENDIF.
+
+* -- Step 1a: F110 payment header (REGUH) for the per-vendor amount.
+*    REGUHM carries no amount, so the true payment amount per record comes
+*    from REGUH on the same F110 key (run + vendor + payment document).
+  SELECT * FROM reguh INTO TABLE gt_reguh
+    FOR ALL ENTRIES IN gt_reguhm
+    WHERE laufd = gt_reguhm-laufd
+      AND laufi = gt_reguhm-laufi
+      AND zbukr = gt_reguhm-zbukr
+      AND lifnr = gt_reguhm-lifnr
+      AND kunnr = gt_reguhm-kunnr
+      AND empfg = gt_reguhm-empfg
+      AND vblnr = gt_reguhm-vblnr.
 
 * -- Step 2: read the batches from REGUT for the medium runs referenced by
 *    REGUHM. REGUT-LAUFD/LAUFI is the medium run = REGUHM-LAUFD_M/LAUFI_M.
@@ -181,6 +195,7 @@ ENDFORM.                    " F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_build_output .
   DATA: ls_hm      TYPE reguhm,
+        ls_reguh   TYPE reguh,
         ls_reg     TYPE regut,
         ls_rule    TYPE zfi_bnk_rule,
         ls_sign    TYPE zfi_batch_sign,
@@ -219,6 +234,24 @@ FORM f_build_output .
       ls_mon-vendor = ls_hm-kunnr.
     ENDIF.
 
+*   -- Per-vendor payment amount from the F110 header (REGUH). REGUHM has
+*      no amount, so each record's true amount is REGUH-RBETR on the same
+*      F110 key (run + vendor + payment document).
+    READ TABLE gt_reguh INTO ls_reguh
+         WITH KEY laufd = ls_hm-laufd
+                  laufi = ls_hm-laufi
+                  zbukr = ls_hm-zbukr
+                  lifnr = ls_hm-lifnr
+                  kunnr = ls_hm-kunnr
+                  empfg = ls_hm-empfg
+                  vblnr = ls_hm-vblnr.
+    IF sy-subrc = 0.
+      ls_mon-rbetr = ls_reguh-rbetr.
+      IF ls_mon-waers IS INITIAL.
+        ls_mon-waers = ls_reguh-waers.
+      ENDIF.
+    ENDIF.
+
 *   -- Linked REGUT batch(es) for this record's medium run
     REFRESH lt_bkeys.
     CLEAR lv_nbatch.
@@ -236,9 +269,8 @@ FORM f_build_output .
         ls_mon-batch_key  = lv_bkey.
         ls_mon-banks      = ls_reg-banks.
         ls_mon-lfdnr      = ls_reg-lfdnr.
-        ls_mon-rbetr      = ls_reg-rbetr.   "amount from REGUT batch (REGUHM has none)
         IF ls_mon-waers IS INITIAL.
-          ls_mon-waers    = ls_reg-waers.   "fallback if REGUHM currency empty
+          ls_mon-waers    = ls_reg-waers.   "last-resort currency fallback
         ENDIF.
         ls_mon-fsnam      = ls_reg-fsnam.
         ls_mon-crusr      = ls_reg-tsusr.
@@ -396,7 +428,7 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Run'       'F110 Run Id'          'F110 Run Id (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'VENDOR'     'Vendor'         'Vendor/Customer'      'Vendor / Customer (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'VBLNR'      'Pay Doc'        'Payment Doc'          'Payment Document (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Batch Amount'         'Batch Amount (REGUT)'.
+  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Payment Amount'       'Payment Amount (REGUH)'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
   PERFORM f_col_text USING lo_cols 'L1_PENDING' 'L1 Pend'        'L1 Pending With'      'Level-1 Pending With'.
