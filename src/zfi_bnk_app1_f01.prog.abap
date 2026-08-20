@@ -106,7 +106,7 @@ ENDFORM.                    " F_PREPARE_OP_TAB1
 *  batch can be orphaned. Existing (incl. already-signed) rows are left
 *  untouched.
 *----------------------------------------------------------------------*
-FORM f_ensure_batch_sign USING it_hdr TYPE STANDARD TABLE.
+FORM f_ensure_batch_sign USING it_hdr LIKE gt_batch_header.
   DATA: lt_rule TYPE STANDARD TABLE OF zfi_bnk_rule,
         ls_rule TYPE zfi_bnk_rule,
         ls_hdr  TYPE regut,
