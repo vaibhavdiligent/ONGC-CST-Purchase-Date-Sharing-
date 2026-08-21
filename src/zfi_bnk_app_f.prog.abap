@@ -48,9 +48,12 @@ FORM f_prepare_op_tab .
       SORT lt_keys.
       DELETE ADJACENT DUPLICATES FROM lt_keys.
       IF lt_keys IS NOT INITIAL.
+*       Only the batches the current user is an assigned signer for -
+*       the user must not see batches that are not his to approve.
         SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
                         FOR ALL ENTRIES IN lt_keys
-                        WHERE batch_no = lt_keys-table_line.
+                        WHERE batch_no = lt_keys-table_line
+                        AND   signer   = sy-uname.
       ENDIF.
     ENDIF.
   ENDIF.
@@ -64,7 +67,8 @@ FORM f_prepare_op_tab .
                 gs_batch_header-lfdnr
            INTO lv_key RESPECTING BLANKS.
 
-    READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = lv_key.
+    READ TABLE gt_batch_sign INTO gs_batch_sign WITH KEY batch_no = lv_key
+                                                         signer   = sy-uname.
 
     IF sy-subrc EQ 0.
       IF gs_batch_sign-digitl_sign = ' '.
