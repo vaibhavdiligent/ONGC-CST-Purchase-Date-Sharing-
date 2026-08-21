@@ -817,3 +817,86 @@ ST05 SQL trace on a narrowed run (posting date 31.03.2025, company code OVL)
 shows the literal values sent to VBRK and V_KONV_CDS and the rows returned.
 A debugger session on the same selection answers it just as fast: check
 `sy-subrc` and the **length** of `lv_vbeln` after the VBRK read.
+
+## Round 5 - the real mock2 source (ZFI_GSTR1_SUB)
+
+Diffed the actual source against the PDF listing. Most of the diff is the
+listing's 72-character truncation being restored. Only **three** real code
+changes exist, and all three are the fixes already discussed:
+
+| line | change |
+|---|---|
+| 394 | `DATA(lv_vbeln) = wa_bkpf-AWKEY(10).` - truncation applied |
+| 405 | `FROM konv` -> `FROM v_konv_cds` |
+| 417-419 | `wa_final-grsval` moved inside the JOIG/JOCG/JOSG/JOUG `IF` |
+
+So the AWKEY CHAR(20) hypothesis from round 4h is **already handled** - `(10)`
+is there. That candidate is closed.
+
+`txgrp` is confirmed present in the `it_bseg_h` field list (line 177), and
+nothing between the loop head and the SD block skips it. No downstream statement
+clears `txbval` / `grsval` / `totval` - the only `CLEAR: wa_final...` is at line
+894, after the `APPEND`.
+
+### Remaining suspect - operand types in the LOOP WHERE
+
+```abap
+    SELECT * FROM v_konv_cds INTO TABLE @DATA(it_konv) WHERE knumv = @lv_knumv.
+    LOOP AT it_konv INTO DATA(wa_konv) where kposn = wa_bseg-TXGRP.
+```
+
+`it_konv` is declared inline from the SELECT, so its row type is now the
+**V_KONV_CDS** structure, not `KONV`. `KONV-KPOSN` is NUMC(6); whatever
+V_KONV_CDS declares for `KPOSN` is what the comparison now uses.
+`BSEG-TXGRP` is NUMC(3).
+
+- NUMC vs NUMC - operands align on numeric value, `010` = `000010`, matches.
+  This is what ECC did.
+- **CHAR vs NUMC** - the NUMC operand converts to character and comparison
+  right-pads: `'010   '` against `'000010'`, **never equal**. Loop body never
+  runs, every amount stays zero.
+
+That is exactly the observed symptom, and it is the only difference introduced
+by the view swap that the data checks cannot see.
+
+**Check:** SE11 -> `V_KONV_CDS` -> field `KPOSN` -> data type. NUMC(6) clears
+this; anything else confirms it.
+
+**Fix that is safe either way** - force both operands to one type:
+
+```abap
+    DATA lv_kposn TYPE konv-kposn.        " NUMC(6)
+    lv_kposn = wa_bseg-txgrp.             " 010 -> 000010
+    LOOP AT it_konv INTO DATA(wa_konv) WHERE kposn = lv_kposn.
+```
+
+### Independent defects found in the real source
+
+Five `READ TABLE ... BINARY SEARCH` reads whose tables are not sorted by the
+search key. A binary read on a wrongly ordered table is undefined - it can
+report "not found" for a row that exists.
+
+| line | table | sorted by | searched by | valid |
+|---|---|---|---|---|
+| 318 | `lt_skip_chk` | SORT commented out (304) | bukrs belnr gjahr | **no** |
+| 675 | `it_bkpf` | bukrs belnr gjahr (71) | **belnr only** | **no** |
+| 770 | `it_bkpf2` | belnr gjahr (249) | **awkey** | **no** |
+| 776 | `it_bkpf_r` | bukrs belnr gjahr (236) | **awkey** | **no** |
+| 817 | `it_bseg_k` | bukrs belnr gjahr | **belnr only** | **no** |
+| 906 | `t_tcs` | belnr | belnr | yes |
+
+Line 675 sits inside the document loop and overwrites `wa_bkpf` after the
+amounts are computed, so it does not cause the zeros, but it feeds
+`invnum`/`pregst` and the cancellation logic below it. All five should be fixed:
+either sort by the search key first, or drop `BINARY SEARCH`.
+
+### Fastest route from here
+
+Static analysis is exhausted - source and data both check out. Narrow the
+selection to posting date 31.03.2025 / company code OVL and either:
+
+- **ST05** trace: shows the literal values sent to VBRK and V_KONV_CDS and the
+  rows returned; or
+- **debugger**: break at line 409, inspect `wa_bseg-txgrp`, `it_konv` line
+  count, and `wa_konv-kposn` - then compare the two operands' **types and
+  lengths** in the variable view.
