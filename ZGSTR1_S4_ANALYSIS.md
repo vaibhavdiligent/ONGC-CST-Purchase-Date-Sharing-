@@ -606,3 +606,58 @@ round 4c.
 
 `TXGRP` is still not visible in the SE16 layout, so the join key remains the
 one unresolved item.
+
+## Round 4g - TXGRP matches; (D) is ruled out
+
+`TXGRP` from SE16:
+
+| BUKRS | BUZEI | KOART | HKONT | TXGRP |
+|---|---|---|---|---|
+| OVC | 001-004 | S/D | ... | 000 |
+| OVL | 001 | D | 0000091111 | 000 |
+| **OVL** | **002** | **S** | **0000230903** | **010** |
+
+`OVL / 002` is the line the report reads, and its `TXGRP` is `010`. `KPOSN` in
+V_KONV_CDS is `10`, i.e. NUMC(6) `000010`; `010` as NUMC(3) pads to `000010`.
+**They match.** The loop condition at line 477 is correct and (D) is eliminated.
+
+### Elimination status
+
+| candidate | status |
+|---|---|
+| (B) KNUMV resolves | conditions found under 0001172510 - **ruled out** |
+| (C) V_KONV_CDS returns data | KAWRT 88,945.20 present - **ruled out** |
+| (D) `kposn = wa_bseg-TXGRP` | 000010 = 000010 - **ruled out** |
+| skip-check (ZGSTR1_EXEMPT) | rows are present in the output - **ruled out** |
+| **(A) `wa_bkpf-glvor = 'SD00'`** | **not yet checked - the only link left** |
+
+The skip-check is ruled out by structure: the `IF sy-subrc <> 0` at line 388
+closes at line 962, **after** `APPEND wa_final TO it_final` at line 960. A
+document caught by that check is dropped entirely, not zeroed. All 326 rows are
+present, so it never triggers.
+
+### Latent defect found while checking this
+
+```abap
+  SELECT bukrs belnr gjahr FROM ZGSTR1_EXEMPT INTO TABLE lt_skip_chk.
+*  SORT lt_skip_chk BY bukrs belnr gjahr.        "<-- commented out
+  ...
+        READ TABLE lt_skip_chk INTO wa_skip_chk
+          WITH KEY bukrs = ... belnr = ... gjahr = ...
+                  BINARY SEARCH.                 "<-- still binary
+```
+
+The `SORT` is commented out but `BINARY SEARCH` remains. A binary read on an
+unsorted table is undefined - it can return a false hit or a false miss
+depending on row order. A false hit here silently drops a document from GSTR1
+entirely.
+
+It is **not** causing the zero amounts (row counts match ECC at 519, so nothing
+is being dropped today), but it is live and will bite as soon as
+ZGSTR1_EXEMPT grows. Either restore the SORT or drop `BINARY SEARCH`.
+
+### Outstanding
+
+`SE16 -> BKPF`, `BUKRS = OVL`, `BELNR = 8124000001`, `GJAHR = 2024`: read
+`GLVOR` and `AWKEY`. GLVOR not `SD00` explains the entire symptom - the SD
+branch is skipped and the FI/BSET branch finds nothing for zero-rated supplies.
