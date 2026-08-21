@@ -530,3 +530,49 @@ Had rows been dropped from `it_konv`, the result would be a **mix** of correct
 and zero values, not 0 out of 326 across ten separate fields.
 
 The all-or-nothing pattern still points at the loop condition, not at ordering.
+
+## Round 4e - BSEG for 8124000001
+
+SE16 on BSEG for BELNR 8124000001 / GJAHR 2024 returns **6 rows across two
+company codes**:
+
+| BUKRS | BUZEI | BSCHL | KOART | HKONT | KUNNR |
+|---|---|---|---|---|---|
+| OVC | 001 | 40 | S | 0000190316 | |
+| OVC | 002 | 01 | D | 0000091110 | 0000010066 |
+| OVC | 003 | 50 | S | 0000192401 | |
+| OVC | 004 | 50 | S | 0000230101 | |
+| OVL | 001 | 01 | D | 0000091111 | 0000010071 |
+| **OVL** | **002** | 50 | **S** | **0000230903** | |
+
+The relevant line is **OVL / BUZEI 002**:
+
+- the V_KONV_CDS row carrying `KAWRT 88,945.20` shows `G/L Acct` **230903**,
+  which matches `HKONT 0000230903` on that line;
+- the report row is `Sr. No. 002`, and `Sr. No.` is `BSEG-BUZEI`;
+- `KOART = 'S'`, so it passes the select's `koart = 'S'` filter (OVC BUZEI 002
+  is KOART `D` and is excluded).
+
+`TXGRP` is not among the columns in the SE16 default layout, so the join key is
+still unconfirmed. That single field is what remains outstanding.
+
+### Separate finding - the BSEG select has no GJAHR
+
+```abap
+        FROM bseg INTO TABLE @DATA(it_bseg_h)
+        FOR ALL ENTRIES IN @it_bset
+        WHERE bukrs IN @s_cc
+        AND  belnr = @it_bset-belnr
+        AND  koart = 'S'
+        AND  buzid NE 'T'.
+```
+
+Verified not truncated in the listing (those lines are 24-35 characters). The
+WHERE has `BUKRS` and `BELNR` but **no `GJAHR`**, so the same document number
+from another fiscal year is pulled in. This is the same defect class as the
+SKFBT read fixed in ZFI_TDS_REPORT.
+
+It is not the cause of the zero amounts - row counts match ECC exactly at 519,
+so nothing extra is currently leaking in - but it should be closed while the
+program is open. `it_bset` already carries `gjahr`; add
+`AND gjahr = @it_bset-gjahr`.
