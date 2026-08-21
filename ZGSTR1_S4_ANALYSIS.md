@@ -273,3 +273,77 @@ before filing.
 `wa_final-grsval = wa_bset-hwbas.` in the FI branch sits outside its inner IF -
 the same shape as the SD bug just fixed. All 196 FI rows match today, so it is
 not causing an error, but it carries the same dependence on row order.
+
+---
+
+# Round 4 - UAT mock2 (fwexternalresapuatmock2testing.zip), FY 2024-25
+
+Two ALV exports, both by "Assistant tax", 22 seconds apart:
+
+- `EXPORT_20260821_124431.xlsx` - 519 data rows, header on row 4
+- `zgstr1-21.08.26.XLSX` - 519 data rows, header on row 1
+
+Period is **01.04.2024 - 31.03.2025**, a different fiscal year from the run
+verified in round 3 (that was FY 2025-26, documents 8125*).
+
+## Which export is which
+
+Workbook metadata is identical on both (creator "SAP WebAS"), so provenance was
+established from the HSN/SAC fingerprint found in round 2:
+
+| doc | EXPORT | zgstr1 | round-2 finding |
+|---|---|---|---|
+| 8124000232 and 5 others | 85072000 | 847130 | S/4 = 85072000, ECC = 847130 |
+
+So **EXPORT_20260821_124431.xlsx is the S/4 output** and
+**zgstr1-21.08.26.XLSX is the ECC baseline**.
+
+## The SD amounts are still completely missing
+
+Joined on (document, fiscal year, Sr. No.): same 519 keys in both, no rows lost.
+327 rows differ, and the split is the original pre-fix signature exactly:
+
+| | differing (326 detail rows) | matching (192) |
+|---|---|---|
+| Doc prefix | 8124, 8324 | 2224, 2324, 9232, 9424, 9924, 9222 |
+| Type of Entry | Zero Rated, Scrap Sales | White Goods Recovery |
+
+**All 326 SD rows are 0.00 in S/4; all 326 are non-zero in ECC.** Not a partial
+failure - the SD branch produces nothing at all.
+
+| column | S/4 | ECC | missing |
+|---|---:|---:|---:|
+| Total Inv/Note Value | 0.00 | 3,333,432,903.81 | 3,333,432,903.81 |
+| Taxable Value | 0.00 | 3,330,085,125.57 | 3,330,085,125.57 |
+| IGST Amount | 0.00 | 475,903.26 | 475,903.26 |
+| CGST Amount | 0.00 | 1,435,937.49 | 1,435,937.49 |
+| SGST/UGST Amount | 0.00 | 1,435,937.49 | 1,435,937.49 |
+
+The 192 FI rows tie out to the rupee (183,330,647.86 both sides), confirming the
+BSET branch is healthy and that document selection is correct - only the SD
+amounts are absent.
+
+## What this means
+
+This is the **round-2 bug, unchanged**, on a different fiscal year. Two possible
+causes, and they are distinguishable:
+
+1. **The corrected program is not in this system.** This is a UAT/mock2
+   environment, separate from where the fix was made and verified. Most likely
+   explanation - check the transport.
+2. **The fix is present but PRCD_ELEMENTS has no FY 2024-25 conditions.** The
+   round-3 verification passed on FY 2025-26 documents. If FY 2024-25 documents
+   were migrated without their pricing conditions, the corrected read still
+   returns nothing.
+
+### How to tell them apart
+
+1. In the mock2 system, open `ZFI_GSTR1_SUB` and look at the read near line 473.
+   If it still says `FROM konv`, it is cause 1 - transport the fix.
+2. If it says `FROM prcd_elements`, take document 8124000001: get `BKPF-AWKEY`,
+   look up `VBRK-KNUMV`, then check `PRCD_ELEMENTS` for that `KNUMV`. No rows
+   means cause 2 - a data migration gap, not a code defect.
+
+Cause 2 would need a business decision, not a code change: FY 2024-25 GSTR1
+cannot be produced from S/4 if the conditions behind those invoices were never
+migrated.
