@@ -928,3 +928,63 @@ What is actually needed is small - on the trace list, the lines whose Object is
 `Rec > 0` there means the SELECT works and the `LOOP ... WHERE kposn` filter is
 what discards the rows - which would confirm the operand-type hypothesis in
 round 5.
+
+## Round 6 - ST05 (HTML export) proves both SELECTs work
+
+`st05_html.htm` parses cleanly - 3,731 trace rows, 3,465 of them from
+`ZFI_GSTR1_REPORT`.
+
+| object | calls | records returned |
+|---|---|---|
+| `VBRK` (`WHERE MANDT = ? AND VBELN = ?`) | 1018 | **1018 of 1018 returned a record** |
+| `V_KONV_CDS` (`WHERE MANDT = ? AND KNUMV = ?`) | 392 | **392 of 392 returned records** (min 2, max 16) |
+
+Distribution of records from V_KONV_CDS: 2 (170x), 3 (7x), 4 (159x), 8 (16x),
+16 (40x). **Never zero.**
+
+The only VBRK reads returning 0 are `WHERE SFAKN = ? LIMIT 1` (303 of 323) -
+that is the cancellation check further down, where no hit is the normal case for
+an uncancelled invoice. Not related.
+
+### Verdict
+
+Both database reads in the SD path work on every single call:
+
+- step (B) `SELECT SINGLE knumv FROM vbrk` - **1018/1018 succeed**
+- step (C) `SELECT * FROM v_konv_cds` - **392/392 return rows**
+
+`it_konv` is therefore populated every time. The rows are discarded in ABAP,
+which leaves exactly one statement:
+
+```abap
+    LOOP AT it_konv INTO DATA(wa_konv) where kposn = wa_bseg-TXGRP.
+```
+
+This is runtime proof, not inference. Line 409 is the bug.
+
+### Fix applied
+
+`it_konv` is declared inline from `V_KONV_CDS`, so `KPOSN` now carries that
+view's type rather than `KONV`'s NUMC(6), while `BSEG-TXGRP` is NUMC(3).
+NUMC against NUMC compares on numeric value and matches, which is what ECC did.
+If the view types KPOSN as character, the NUMC operand converts to character and
+the comparison right-pads - `'010   '` against `'000010'` - so the loop never
+matches and every amount stays zero.
+
+Converting through an explicitly typed field makes both operands NUMC(6)
+regardless of what the view declares:
+
+```abap
+    DATA lv_kposn TYPE konv-kposn.
+    CLEAR lv_kposn.
+    lv_kposn = wa_bseg-txgrp.
+    LOOP AT it_konv INTO DATA(wa_konv) WHERE kposn = lv_kposn.
+```
+
+Applied to `ZFI_GSTR1_SUB` at line 409; the original is retained commented
+beneath it.
+
+**Confirm the diagnosis** with SE11 -> `V_KONV_CDS` -> field `KPOSN` -> data
+type. NUMC(6) means the type theory is wrong and the mismatch is in TXGRP's
+value instead - in which case check `wa_bseg-txgrp` in the debugger at line 409,
+since the fix above would then be a no-op.

@@ -406,7 +406,19 @@ IF sy-subrc = 0 AND wa_bkpf-glvor = 'SD00'.
       INTO TABLE @DATA(it_konv)
       WHERE knumv = @lv_knumv.
 
-    LOOP AT it_konv INTO DATA(wa_konv) where kposn = wa_bseg-TXGRP.
+*     S.O.C - IT_KONV is declared inline from V_KONV_CDS, so KPOSN now carries
+*     that view's type instead of KONV's NUMC(6). Comparing it directly with
+*     BSEG-TXGRP (NUMC 3) is only safe while both are NUMC; if the view types
+*     KPOSN as character, the NUMC operand converts to character and the
+*     comparison right-pads ('010   ' against '000010'), so the loop never
+*     matches and every amount stays zero. Convert through an explicitly typed
+*     field so both operands are NUMC(6) whatever the view declares.
+    DATA lv_kposn TYPE konv-kposn.
+    CLEAR lv_kposn.
+    lv_kposn = wa_bseg-txgrp.
+    LOOP AT it_konv INTO DATA(wa_konv) WHERE kposn = lv_kposn.
+*     E.O.C
+*    LOOP AT it_konv INTO DATA(wa_konv) where kposn = wa_bseg-TXGRP.
 
       "Taxable value
       IF wa_konv-kschl = 'JOIG'
