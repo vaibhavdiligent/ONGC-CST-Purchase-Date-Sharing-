@@ -51,7 +51,8 @@ DATA : gt_paym          TYPE STANDARD TABLE OF zfi_paym_file,
        gt_batch_sign3   TYPE STANDARD TABLE OF zfi_batch_sign ,
        gt_final         TYPE STANDARD TABLE OF ty_final,
        gt_final2        TYPE STANDARD TABLE OF ty_final,
-       gt_final3        type STANDARD TABLE OF ty_final.
+       gt_final3        type STANDARD TABLE OF ty_final,
+       gt_reguhm        TYPE STANDARD TABLE OF reguhm.    "for BATCHNO exclusion check
 
 DATA: gs_paym          LIKE LINE OF gt_paym,
       gs_batch_header  LIKE LINE OF gt_batch_header,

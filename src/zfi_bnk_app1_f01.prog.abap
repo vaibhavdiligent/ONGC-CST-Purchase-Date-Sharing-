@@ -19,7 +19,8 @@
 *&      Form  F_PREPARE_OP_TAB1
 *&---------------------------------------------------------------------*
 FORM f_prepare_op_tab1 .
-  DATA: lv_key TYPE c LENGTH 45.
+  DATA: lv_key  TYPE c LENGTH 45,
+        lv_skip TYPE abap_bool.
 
   REFRESH : gt_paym, gt_batch_header,gt_batch_sign,gt_final.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym.
@@ -42,6 +43,9 @@ FORM f_prepare_op_tab1 .
 *   rows and would silently drop out of the worklist below.
     PERFORM f_ensure_batch_sign USING gt_batch_header.
 
+*   Load REGUHM so batches that already carry a BATCHNO can be excluded.
+    PERFORM f_load_reguhm USING gt_batch_header.
+
     IF gt_batch_header IS NOT INITIAL.
 *     Read this user's level-1 signature assignments
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign
@@ -52,6 +56,12 @@ FORM f_prepare_op_tab1 .
 
       sort gt_batch_sign by CDATE1 CTIME1.
       LOOP AT gt_batch_header INTO gs_batch_header.
+*       Skip batches that already have a BATCHNO in REGUHM
+        PERFORM f_skip_batchno USING gs_batch_header CHANGING lv_skip.
+        IF lv_skip = abap_true.
+          CLEAR gs_batch_header.
+          CONTINUE.
+        ENDIF.
 *       Build unique key from the REGUT primary key fields
         CLEAR lv_key.
         CONCATENATE gs_batch_header-zbukr gs_batch_header-banks
@@ -159,6 +169,45 @@ FORM f_ensure_batch_sign USING it_hdr LIKE gt_batch_header.
     COMMIT WORK.
   ENDIF.
 ENDFORM.                    " F_ENSURE_BATCH_SIGN
+
+*&---------------------------------------------------------------------*
+*&      Form  F_LOAD_REGUHM
+*&---------------------------------------------------------------------*
+*  Load REGUHM for the batches in scope so BATCHNO can be checked. The
+*  REGUT batch (LAUFD/LAUFI = medium run) links to REGUHM on
+*  LAUFD_M / LAUFI_M (+ ZBUKR).
+*----------------------------------------------------------------------*
+FORM f_load_reguhm USING it_hdr LIKE gt_batch_header.
+  REFRESH gt_reguhm.
+  CHECK it_hdr IS NOT INITIAL.
+  SELECT * FROM reguhm INTO TABLE gt_reguhm
+    FOR ALL ENTRIES IN it_hdr
+    WHERE zbukr   = it_hdr-zbukr
+      AND laufd_m = it_hdr-laufd
+      AND laufi_m = it_hdr-laufi.
+ENDFORM.                    " F_LOAD_REGUHM
+
+*&---------------------------------------------------------------------*
+*&      Form  F_SKIP_BATCHNO
+*&---------------------------------------------------------------------*
+*  Returns 'X' when the given REGUT batch has a REGUHM record whose
+*  BATCHNO is filled. Such batches must NOT be processed or shown in the
+*  ALV. Match: REGUT-ZBUKR/LAUFD/LAUFI = REGUHM-ZBUKR/LAUFD_M/LAUFI_M.
+*----------------------------------------------------------------------*
+FORM f_skip_batchno USING    is_hdr  TYPE regut
+                    CHANGING cv_skip TYPE abap_bool.
+  DATA ls_hm TYPE reguhm.
+  cv_skip = abap_false.
+  LOOP AT gt_reguhm INTO ls_hm
+       WHERE zbukr   = is_hdr-zbukr
+         AND laufd_m = is_hdr-laufd
+         AND laufi_m = is_hdr-laufi.
+    IF ls_hm-batchno IS NOT INITIAL.
+      cv_skip = abap_true.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.                    " F_SKIP_BATCHNO
 
 *&---------------------------------------------------------------------*
 *&      Form  F_ALV_BUILD_FIELDCAT1
@@ -310,7 +359,8 @@ ENDFORM.                    " F_ALV_REPORT_LAYOUT1
 *      <--P2        text
 *----------------------------------------------------------------------*
 FORM f_prepare_op_tab2 .
-  DATA: lv_key TYPE c LENGTH 45.
+  DATA: lv_key  TYPE c LENGTH 45,
+        lv_skip TYPE abap_bool.
 *  BREAK sab_vaibhav.
   REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign2.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
@@ -327,6 +377,9 @@ FORM f_prepare_op_tab2 .
 *   drops out of the level-2 worklist either.
     PERFORM f_ensure_batch_sign USING gt_batch_header2.
 
+*   Load REGUHM so batches that already carry a BATCHNO can be excluded.
+    PERFORM f_load_reguhm USING gt_batch_header2.
+
     IF gt_batch_header2 IS NOT INITIAL.
 *     Read this user's open level-2 signature assignments
       SELECT * FROM  zfi_batch_sign INTO TABLE gt_batch_sign2
@@ -335,6 +388,12 @@ FORM f_prepare_op_tab2 .
         and   snro = '2'.
 
       LOOP AT gt_batch_header2 INTO gs_batch_header2.
+*       Skip batches that already have a BATCHNO in REGUHM
+        PERFORM f_skip_batchno USING gs_batch_header2 CHANGING lv_skip.
+        IF lv_skip = abap_true.
+          CLEAR gs_batch_header2.
+          CONTINUE.
+        ENDIF.
         CLEAR lv_key.
         CONCATENATE gs_batch_header2-zbukr gs_batch_header2-banks
                     gs_batch_header2-laufd gs_batch_header2-laufi
@@ -582,7 +641,8 @@ ENDFORM.                    " FREE_OBJECTS2
 *      <--P2        text
 *----------------------------------------------------------------------*
 FORM f_prepare_op_tab3 .
-  DATA: lv_key TYPE c LENGTH 45.
+  DATA: lv_key  TYPE c LENGTH 45,
+        lv_skip TYPE abap_bool.
   REFRESH : gt_paym3, gt_batch_header3,gt_final3, gt_batch_sign3.
 *break sab_vaibhav.
   SELECT * FROM zfi_paym_file INTO TABLE gt_paym3 WHERE sent = 'X'.
@@ -601,7 +661,16 @@ FORM f_prepare_op_tab3 .
     ENDIF.
   ENDIF.
 
+* Load REGUHM so batches that already carry a BATCHNO can be excluded.
+  PERFORM f_load_reguhm USING gt_batch_header3.
+
   LOOP AT gt_batch_header3 INTO gs_batch_header3.
+*   Skip batches that already have a BATCHNO in REGUHM
+    PERFORM f_skip_batchno USING gs_batch_header3 CHANGING lv_skip.
+    IF lv_skip = abap_true.
+      CLEAR gs_batch_header3.
+      CONTINUE.
+    ENDIF.
     CLEAR lv_key.
     CONCATENATE gs_batch_header3-zbukr gs_batch_header3-banks
                 gs_batch_header3-laufd gs_batch_header3-laufi
