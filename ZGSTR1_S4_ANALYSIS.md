@@ -347,3 +347,93 @@ causes, and they are distinguishable:
 Cause 2 would need a business decision, not a code change: FY 2024-25 GSTR1
 cannot be produced from S/4 if the conditions behind those invoices were never
 migrated.
+
+## Round 4b - the mock2 program reads V_KONV_CDS
+
+Confirmed by the developer: the read in the mock2 system is against
+`V_KONV_CDS`, not `KONV`. So the remediation IS in that system, and cause 1
+from round 4 (fix not transported) is ruled out.
+
+### The loop body never executes - not once
+
+Split the S/4 SD rows by whether a field is written inside or outside the
+`LOOP AT it_konv` block:
+
+| field | written | non-zero in S/4 | non-zero in ECC |
+|---|---|---|---|
+| Taxable Value | inside | 0 / 326 | 326 / 326 |
+| Gross Value | inside | 0 / 326 | 326 / 326 |
+| Total Inv/Note Value | inside | 0 / 326 | 326 / 326 |
+| Tax Rate | inside | 0 / 326 | 19 / 326 |
+| IGST Rate / Amount | inside | 0 / 326 | 12 / 326 |
+| CGST Rate / Amount | inside | 0 / 326 | 7 / 326 |
+| SGST/UGST Rate / Amount | inside | 0 / 326 | 7 / 326 |
+| Quantity | outside | 326 / 326 populated | 326 / 326 |
+| HSN/SAC | outside | 326 / 326 populated | 326 / 326 |
+| Unit | outside | 326 / 326 populated | 326 / 326 |
+| Place of Supply | outside | 326 / 326 populated | 326 / 326 |
+| Invoice Number | outside | 324 / 326 populated | 324 / 326 |
+
+Everything outside the loop is populated and matches ECC exactly. Every one of
+the ten fields inside the loop is zero on every one of the 326 rows.
+
+This matters: a data-quality gap would show a **mix** - some documents with
+conditions, some without. Zero out of 326 across ten independent fields means
+the loop body is **never entered at all**. The document, the item, the HSN, the
+quantity and the unit are all resolved correctly; only the condition read
+yields nothing.
+
+### Three candidate failure points, in code order
+
+```abap
+IF sy-subrc = 0 AND wa_bkpf-glvor = 'SD00'.        " (A)
+  DATA(lv_vbeln) = wa_bkpf-AWKEY.
+  SELECT SINGLE knumv FROM vbrk INTO @DATA(lv_knumv)
+    WHERE vbeln = @lv_vbeln.                       " (B)
+  IF sy-subrc = 0.
+    SELECT * FROM v_konv_cds INTO TABLE @DATA(it_konv)
+      WHERE knumv = @lv_knumv.                     " (C)
+    LOOP AT it_konv WHERE kposn = wa_bseg-TXGRP.   " (D)
+```
+
+- **(A)** `GLVOR` not `SD00` -> the ELSE/BSET branch runs instead and finds
+  nothing for these documents. Also produces all-zeros.
+- **(B)** `AWKEY` -> `VBELN` fails, or `VBRK-KNUMV` is empty, so (C) never runs.
+- **(C)** `V_KONV_CDS` returns no rows for that `KNUMV`.
+- **(D)** rows returned, but `KPOSN` never equals `BSEG-TXGRP`.
+
+The evidence cannot separate these from the outside - all four produce exactly
+the observed all-zero result.
+
+### The experiment that separates them
+
+Round 3 verified this same logic working on FY 2025-26 documents (8125*).
+Round 4 fails on FY 2024-25 (8124*). Run the checks below on **one failing
+document and one working document** - the contrast is what identifies the cause.
+
+Take `8124000001` (failing) and an `8125*` document that produced correct values:
+
+1. `SE16 -> BKPF`, that BELNR: read `GLVOR` and `AWKEY`.
+   GLVOR not `SD00` on the failing one -> cause (A), and the report is taking
+   the FI branch for SD documents.
+2. `SE16 -> VBRK`, VBELN from AWKEY: read `KNUMV`.
+   Empty or no record -> cause (B).
+3. With that KNUMV, count rows in **all three**: `V_KONV_CDS`,
+   `PRCD_ELEMENTS`, and `KONV`.
+   - all three empty -> the conditions were never migrated (data gap)
+   - `KONV` has rows but `PRCD_ELEMENTS` / `V_KONV_CDS` do not -> the pricing
+     data migration did not cover this document; **switching the read to
+     PRCD_ELEMENTS will not help**, the data has to be migrated
+   - `PRCD_ELEMENTS` has rows but `V_KONV_CDS` does not -> the compatibility
+     view is the problem; read `PRCD_ELEMENTS` directly
+4. If rows are returned, compare `KPOSN` against `BSEG-TXGRP` for that document
+   -> cause (D).
+
+Step 3 is the one that decides whether this is a code change or a migration
+task, so do not skip the three-way count.
+
+### Note on scope
+
+If the answer is that FY 2024-25 conditions are absent from PRCD_ELEMENTS, no
+code change can produce those amounts, and filing GSTR1 for that year out of
+S/4 needs a business decision rather than a developer fix.
