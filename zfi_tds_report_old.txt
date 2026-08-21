@@ -1,0 +1,1951 @@
+***********************************************************************
+* Program    : ZFI_TDS_REPORT                                        *
+*                                                                    *
+*                                                                    *
+* Title      : TDS  Report                                           *
+***********************************************************************
+
+REPORT zfi_tds_listing LINE-SIZE 225.
+
+TABLES: bkpf,
+        bseg,
+        with_item,
+        t059z,
+        lfa1.
+
+* alv type pool declaration
+TYPE-POOLS: slis.
+
+TYPES: BEGIN OF ty_bkpf,
+         bukrs TYPE bkpf-bukrs,
+         belnr TYPE bkpf-belnr,
+         gjahr TYPE bkpf-gjahr,
+         bldat TYPE bkpf-bldat,
+         budat TYPE bkpf-budat,
+         xblnr TYPE bkpf-xblnr,
+         stblg TYPE bkpf-stblg,
+         bktxt TYPE bkpf-bktxt,
+       END OF ty_bkpf.
+
+DATA:lt_bkpf TYPE STANDARD TABLE OF ty_bkpf,
+     ls_bkpf TYPE ty_bkpf.
+
+TYPES: BEGIN OF ty_with_item,
+         belnr    TYPE with_item-belnr,
+         bukrs    TYPE with_item-bukrs,
+         gjahr    TYPE with_item-gjahr,
+         witht    TYPE with_item-witht,
+         wt_qsshh TYPE with_item-wt_qsshh,
+         wt_acco  TYPE with_item-wt_acco,
+         wt_qbshh TYPE with_item-wt_qbshh,
+       END OF ty_with_item.
+DATA:lt_with_item TYPE STANDARD TABLE OF ty_with_item,
+     ls_with_item TYPE ty_with_item.
+
+TYPES:BEGIN OF ty_t059z,
+        witht TYPE t059z-witht,
+        qsatz TYPE t059z-qsatz,
+      END OF ty_t059z.
+
+DATA:lt_t059z TYPE STANDARD TABLE OF ty_t059z,
+     ls_t059z TYPE ty_t059z.
+
+TYPES:BEGIN OF ty_lfa1,
+        lifnr TYPE lfa1-lifnr,
+        land1 TYPE lfa1-land1,
+        name1 TYPE lfa1-name1,
+        stcd3 TYPE lfa1-stcd3,
+      END OF ty_lfa1.
+
+DATA: lt_lfa1 TYPE STANDARD TABLE OF ty_lfa1,
+      ls_lfa1 TYPE ty_lfa1.
+
+TYPES:BEGIN OF ty_t005t,
+        spras TYPE   t005t-spras,
+        land1 TYPE    t005t-land1,
+        landx TYPE  t005t-landx,
+      END OF ty_t005t.
+
+DATA: lt_t005t TYPE STANDARD TABLE OF ty_t005t,
+      ls_t005t TYPE ty_t005t.
+
+TYPES:BEGIN OF ty_ekko,
+        ebeln TYPE ekko-ebeln,
+        bedat TYPE ekko-bedat,
+      END OF ty_ekko.
+
+DATA:lt_ekko TYPE STANDARD TABLE OF ty_ekko,
+     ls_ekko TYPE ty_ekko.
+
+TYPES: BEGIN OF ty_ekpo,
+         ebeln TYPE ekpo-ebeln,
+         loekz TYPE ekpo-loekz,
+         netwr TYPE ekpo-netwr,
+         mwskz TYPE ekpo-mwskz,
+         effwr TYPE ekpo-effwr,
+         bedat TYPE ekko-bedat,
+       END OF ty_ekpo.
+
+TYPES: BEGIN OF ty_ekpo1,
+         ebeln TYPE ekpo-ebeln,
+         loekz TYPE ekpo-loekz,
+         netwr TYPE ekpo-netwr,
+         mwskz TYPE ekpo-mwskz,
+         effwr TYPE ekpo-effwr,
+         bedat TYPE ekko-bedat,
+       END OF ty_ekpo1.
+
+DATA:lt_ekpo TYPE STANDARD TABLE OF ty_ekpo,
+     ls_ekpo TYPE ty_ekpo.
+DATA:lt_ekpo1 TYPE STANDARD TABLE OF ty_ekpo1,
+     ls_ekpo1 TYPE ty_ekpo1.
+DATA: BEGIN OF wa_ekpo_n,
+        ebeln TYPE ekpo-ebeln,
+        ebelp TYPE ekpo-ebelp,
+        netwr TYPE ekpo-netwr,
+      END OF wa_ekpo_n,
+      it_ekpo_n LIKE TABLE OF wa_ekpo_n,
+      po_val    TYPE ekpo-netwr.
+
+TYPES:BEGIN OF ty_final,
+        lifnr     TYPE lfa1-lifnr,
+        land1     TYPE lfa1-land1,
+        landx     TYPE t005t-landx,
+        name1     TYPE lfa1-name1,
+        stcd3     TYPE lfa1-stcd3,
+        bktxt     TYPE bkpf-bktxt,
+        bldat     TYPE bkpf-bldat,
+        xblnr     TYPE bkpf-xblnr,
+        belnr     TYPE bkpf-belnr,
+        bukrs     TYPE bkpf-bukrs,
+        gjahr     TYPE bkpf-gjahr,
+        wt_acco   TYPE with_item-wt_acco,
+        bschl     TYPE bseg-bschl,
+        bedat     TYPE ekko-bedat,
+        ebeln     TYPE bseg-ebeln,
+        augdt     TYPE bseg-augdt,
+        wt_qsshh  TYPE with_item-wt_qsshh,
+        witht     TYPE with_item-witht,
+        wt_qbshh  TYPE with_item-wt_qbshh,
+        qsatz     TYPE with_item-qsatz,
+        qsatz1    TYPE with_item-qsatz,
+        wt_qbshh1 TYPE with_item-wt_qbshh,
+        qsatz2    TYPE with_item-qsatz,
+        wt_qbshh2 TYPE with_item-wt_qbshh,
+        effwr(20),
+        budat     TYPE bkpf-budat,        ""added on 7/6/22 by hrishi n
+        gstin(16) TYPE c ,             ""added on 2/6/22 by hrishi n
+      END OF ty_final.
+DATA:lv_iz TYPE with_item-wt_qbshh,
+     lv_cz TYPE with_item-wt_qbshh,
+     lv_sz TYPE with_item-wt_qbshh.
+
+TYPES:BEGIN OF ty_final5,
+        gstin(16)    TYPE c ,        ""added on 2/6/22 by hrishi n
+        belnr        TYPE bkpf-belnr,
+        lv_iz        TYPE with_item-wt_qbshh,
+        lv_cz        TYPE with_item-wt_qbshh,
+        lv_sz        TYPE with_item-wt_qbshh,
+
+        lifnr        TYPE lfa1-lifnr,
+        land1        TYPE lfa1-land1,
+        landx        TYPE t005t-landx,
+        name1        TYPE lfa1-name1,
+        stcd3        TYPE lfa1-stcd3,
+        bktxt        TYPE bkpf-bktxt,
+        bldat        TYPE bkpf-bldat,
+        xblnr        TYPE bkpf-xblnr,
+
+        bukrs        TYPE bkpf-bukrs,
+        gjahr        TYPE bkpf-gjahr,
+        wt_acco      TYPE with_item-wt_acco,
+        bschl        TYPE bseg-bschl,
+        bedat        TYPE ekko-bedat,
+        ebeln        TYPE bseg-ebeln,
+        augdt        TYPE bseg-augdt,
+        wt_qsshh     TYPE with_item-wt_qsshh,
+        witht        TYPE with_item-witht,
+        qsatz        TYPE with_item-qsatz,
+        qsatz1       TYPE with_item-qsatz,
+        qsatz2       TYPE with_item-qsatz,
+        effwr(20),
+        netwr        TYPE ekpo-netwr,
+        mwskz        TYPE ekpo-mwskz,
+        inv          TYPE ekpo-netwr,
+        tax          TYPE ekpo-netwr,  ""Changed by Soumya
+        tds(10),
+        amt_tds(10),
+        date_tds(10),
+        budat        TYPE bkpf-budat,    ""added on 7/6/22 by hrishi n
+        cgstcl       TYPE augbl,      "CGST Clearing Doc."adden on 27/06/23 by hrishi n
+        cgstcld      TYPE augdt,
+        sgstcl       TYPE augbl,      "SGST Clearing Doc."adden on 27/06/23 by hrishi n
+        sgstcld      TYPE augdt,
+        igstcl       TYPE augbl,      "IGST/UGST Clearing Doc."adden on 27/06/23 by hrishi n
+        igstcld      TYPE augdt,
+      END OF ty_final5.
+
+DATA:lt_final TYPE STANDARD TABLE OF ty_final,
+     ls_final TYPE ty_final.
+DATA:lt_final1 TYPE STANDARD TABLE OF ty_final,
+     ls_final1 TYPE ty_final.
+DATA:lt_final2 TYPE STANDARD TABLE OF ty_final,
+     ls_final2 TYPE ty_final.
+DATA:lt_final3 TYPE STANDARD TABLE OF ty_final,
+     ls_final3 TYPE ty_final.
+DATA:lt_final4 TYPE STANDARD TABLE OF ty_final,
+     ls_final4 TYPE ty_final.
+DATA:lt_final5 TYPE STANDARD TABLE OF ty_final5,
+     ls_final5 TYPE ty_final5.
+DATA:lt_final6 TYPE STANDARD TABLE OF ty_final5,
+     ls_final6 TYPE ty_final5.
+DATA:lt_final7 TYPE STANDARD TABLE OF ty_final5,
+     ls_final7 TYPE ty_final5.
+DATA:lt_final8 TYPE STANDARD TABLE OF ty_final5,
+     ls_final8 TYPE ty_final5.
+DATA:lt_final9 TYPE STANDARD TABLE OF ty_final5,
+     ls_final9 TYPE ty_final5.
+DATA:i_fcat  TYPE slis_t_fieldcat_alv,
+     wa_fcat LIKE LINE OF i_fcat.
+DATA: lt_mwskz LIKE  rtax1u15 OCCURS 0,
+      ls_mwskz LIKE rtax1u15.
+
+DATA:lt_zfinal TYPE STANDARD TABLE OF ty_final5,
+     ls_zfinal TYPE ty_final5.
+
+DATA:i_wmwst(10).
+
+DATA: BEGIN OF it_bkpf OCCURS 0,
+        blart LIKE bkpf-blart,
+        belnr LIKE bkpf-belnr,
+        bldat LIKE bkpf-bldat,
+        budat LIKE bkpf-budat,
+        waers LIKE bkpf-waers,
+        usnam LIKE bkpf-usnam,
+        ppnam LIKE bkpf-ppnam,
+        gjahr LIKE bkpf-gjahr, "Added PN
+        bukrs LIKE bkpf-bukrs, "Added PN
+        xblnr LIKE bkpf-xblnr,
+      END OF it_bkpf,
+
+      BEGIN OF wa_bseg_r,
+        bukrs TYPE bseg-bukrs,
+        belnr TYPE bseg-belnr,
+        gjahr TYPE bseg-gjahr,
+        buzei TYPE bseg-buzei,
+        rebzg TYPE bseg-rebzg,
+      END OF wa_bseg_r,
+
+      it_bseg_r LIKE TABLE OF wa_bseg_r.
+
+
+TYPES : BEGIN OF ty_bseg,
+          bukrs LIKE bseg-bukrs,
+          belnr LIKE bseg-belnr,
+          gjahr LIKE bseg-gjahr,
+          buzei LIKE bseg-buzei,
+          buzid LIKE bseg-buzid,
+          augdt LIKE bseg-augdt,
+          bschl LIKE bseg-bschl,
+          koart LIKE bseg-koart,
+          mwskz LIKE bseg-mwskz,
+          dmbtr LIKE bseg-dmbtr,
+          txbhw LIKE bseg-txbhw,
+          ktosl LIKE bseg-ktosl,
+          bupla LIKE bseg-bupla,
+          secco LIKE bseg-secco,
+          valut LIKE bseg-valut,
+          ebeln TYPE bseg-ebeln,
+          lifnr TYPE bseg-lifnr,
+        END OF ty_bseg.
+
+DATA:lt_bseg    TYPE STANDARD TABLE OF ty_bseg,
+     ls_bseg    TYPE ty_bseg,
+     lt_bseg1   TYPE STANDARD TABLE OF ty_bseg,
+     lt_bseg2   TYPE STANDARD TABLE OF ty_bseg,
+     lt_bseg3   TYPE STANDARD TABLE OF ty_bseg,
+     lt_bseg4   TYPE STANDARD TABLE OF ty_bseg,
+     lt_bseg5   TYPE STANDARD TABLE OF ty_bseg,
+     ls_bseg1   TYPE ty_bseg,
+     inv_val1   TYPE bseg-dmbtr,
+     inv_val1_n TYPE bseg-dmbtr,
+     inv_val2   TYPE bseg-dmbtr,
+     inv_val3   TYPE bseg-dmbtr,
+     inv_val4   TYPE bseg-dmbtr.
+
+DATA: wrk_tabix LIKE sy-tabix.
+
+**************start of selection screen*****************
+
+SELECT-OPTIONS: postdate FOR bkpf-budat OBLIGATORY,
+                vendor FOR lfa1-lifnr.
+PARAMETERS: p_bukrs TYPE bkpf-bukrs OBLIGATORY.
+
+*******************************************************
+
+DATA  g_rb.
+DATA wa_zfi_t509c_add TYPE zfi_t509c_add.
+
+
+DATA:itab_fiwtin_tan_exem TYPE TABLE OF fiwtin_tan_exem,
+     wa_fiwtin_tan_exem   LIKE LINE OF  itab_fiwtin_tan_exem,
+     wa_bsak_stax         TYPE bsak,
+     wa_tcurr             TYPE tcurr,
+     temp_date(10),
+     v_success            TYPE char1,
+     v_qsatz              TYPE p DECIMALS 2,
+     v_index_tax          TYPE sy-tabix.
+DATA: BEGIN OF it_bkpf_new OCCURS 0.
+        INCLUDE STRUCTURE bkpf.
+DATA :END OF  it_bkpf_new.
+
+DATA : BEGIN OF bsegtab OCCURS 0.
+        INCLUDE STRUCTURE bseg.
+DATA :  flag TYPE c,
+        END OF bsegtab.
+
+DATA: BEGIN OF data_tab OCCURS 0.
+        INCLUDE STRUCTURE with_item.
+DATA :END OF  data_tab.
+
+TYPES : BEGIN OF ty_bsas,
+          bukrs TYPE bsas-bukrs,
+          hkont TYPE bsas-hkont,
+          augdt TYPE bsas-augdt,
+          augbl TYPE bsas-augbl,
+          gjahr TYPE bsas-gjahr,
+          belnr TYPE bsas-belnr,
+          buzei TYPE bsas-buzei,
+          budat TYPE bsas-budat,
+        END OF ty_bsas.
+
+DATA : it_bsas TYPE STANDARD TABLE OF ty_bsas,
+       wa_bsas TYPE ty_bsas.
+
+************ADDN BY SANDEEP AS ON 14.12.2024*********
+DATA: inv_amt TYPE ekpo-netwr.
+
+*****************************
+
+***********************************************************************
+START-OF-SELECTION.
+*----------------------------*
+**Get FI documents from BKPF
+  PERFORM get_bkpf.
+  IF lt_bkpf IS NOT INITIAL.
+    PERFORM get_withitem.
+    PERFORM get_t059z.
+    PERFORM get_docs.
+    PERFORM get_vendor.
+    PERFORM get_po.
+    PERFORM get_bsas.     "for clearing docs "added on 27/06/23 by hrishi n
+    PERFORM get_display.
+    PERFORM get_ongc_docs.
+    PERFORM get_fieldcatt.
+  ELSE.
+    PERFORM get_ongc_docs.
+    PERFORM get_fieldcatt.
+    IF lt_final9 IS INITIAL.
+      MESSAGE 'No Data Available for the input period' TYPE 'S'.
+    ENDIF.
+  ENDIF.
+**
+**
+**
+
+
+***----+C03
+*  ENDIF.
+***  ENDIF.
+*ENDFORM.                    " get_taxcodtyp
+***&---------------------------------------------------------------------*
+***&      Form  GET_BKPF
+***&---------------------------------------------------------------------*
+***       text
+***----------------------------------------------------------------------*
+***  -->  p1        text
+***  <--  p2        text
+***----------------------------------------------------------------------*
+FORM get_bkpf .
+
+  REFRESH:lt_bkpf.
+  IF p_bukrs IS INITIAL.
+
+    SELECT bukrs
+        belnr
+        gjahr
+        bldat
+        budat
+        xblnr
+        stblg
+        bktxt
+   FROM bkpf INTO TABLE lt_bkpf
+   WHERE budat IN postdate.
+
+  ELSE.
+
+    SELECT bukrs
+           belnr
+           gjahr
+           bldat
+           budat
+           xblnr
+           stblg
+           bktxt
+       FROM bkpf INTO TABLE lt_bkpf
+      WHERE budat IN postdate
+        AND bukrs = p_bukrs.
+  ENDIF.
+ENDFORM.                    " GET_BKPF
+***&---------------------------------------------------------------------*
+***&      Form  GET_DOCS
+***&---------------------------------------------------------------------*
+***       text
+***----------------------------------------------------------------------*
+***  -->  p1        text
+***  <--  p2        text
+***----------------------------------------------------------------------*
+FORM get_docs .
+  CLEAR lt_bseg.
+
+  IF lt_with_item IS NOT INITIAL.
+    SELECT  bukrs
+            belnr
+            gjahr
+            buzei
+            augdt
+            bschl
+            ktosl
+            bupla
+            secco
+            valut
+            ebeln
+            lifnr
+       FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg
+     FOR ALL ENTRIES IN lt_with_item
+     WHERE bukrs = lt_with_item-bukrs
+       AND belnr = lt_with_item-belnr
+       AND gjahr = lt_with_item-gjahr.
+
+    SELECT bukrs
+           belnr
+           gjahr
+           buzei
+           rebzg
+      FROM bseg INTO CORRESPONDING FIELDS OF TABLE it_bseg_r
+      FOR ALL ENTRIES IN lt_with_item
+      WHERE bukrs = lt_with_item-bukrs
+        AND belnr = lt_with_item-belnr
+        AND gjahr = lt_with_item-gjahr
+        AND rebzg NE ''.
+
+  ENDIF.
+
+  SORT it_bseg_r BY belnr gjahr DESCENDING.
+  SORT lt_bseg BY belnr gjahr lifnr DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM it_bseg_r COMPARING belnr gjahr .
+  DELETE ADJACENT DUPLICATES FROM lt_bseg COMPARING belnr gjahr .
+
+  IF lt_with_item IS NOT INITIAL.
+    SELECT bukrs
+           belnr
+           gjahr
+           buzei
+           buzid
+           augdt
+           bschl
+           koart
+           mwskz
+           dmbtr
+           txbhw
+           ktosl
+           bupla
+           secco
+           valut
+           ebeln
+           lifnr
+       FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg1
+       FOR ALL ENTRIES IN lt_with_item
+       WHERE bukrs = lt_with_item-bukrs
+         AND belnr = lt_with_item-belnr
+         AND gjahr = lt_with_item-gjahr
+         AND ( bschl = '86' OR ktosl = '' OR bschl = '81' OR bschl = '91' ) .
+
+    SELECT bukrs
+           belnr
+           gjahr
+           buzei
+           buzid
+           augdt
+           bschl
+           koart
+           dmbtr
+           ktosl
+           bupla
+           secco
+           valut
+           ebeln
+           lifnr
+      FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg2
+     FOR ALL ENTRIES IN lt_with_item
+     WHERE bukrs = lt_with_item-bukrs
+       AND belnr = lt_with_item-belnr
+       AND gjahr = lt_with_item-gjahr
+       AND bschl = '81'.
+
+    SELECT bukrs
+           belnr
+           gjahr
+           buzei
+           buzid
+           augdt
+           bschl
+           koart
+           dmbtr
+           ktosl
+           bupla
+           secco
+           valut
+           ebeln
+           lifnr
+       FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg3
+       FOR ALL ENTRIES IN lt_with_item
+       WHERE bukrs = lt_with_item-bukrs
+         AND belnr = lt_with_item-belnr
+         AND gjahr = lt_with_item-gjahr
+         AND bschl = '91'.
+
+    SELECT bukrs
+           belnr
+           gjahr
+           buzei
+           buzid
+           augdt
+           bschl
+           koart
+           mwskz
+           dmbtr
+           ktosl
+           bupla
+           secco
+           valut
+           ebeln
+           lifnr
+     FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg4
+    FOR ALL ENTRIES IN lt_with_item
+    WHERE bukrs = lt_with_item-bukrs
+     AND belnr = lt_with_item-belnr
+     AND gjahr = lt_with_item-gjahr
+     AND buzid = 'T' .
+
+    SELECT bukrs
+           belnr
+           gjahr
+           buzei
+           buzid
+           augdt
+           bschl
+           koart
+           mwskz
+           dmbtr
+           txbhw
+           ktosl
+           bupla
+           secco
+           valut
+           ebeln
+           lifnr
+      FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg5
+      FOR ALL ENTRIES IN lt_with_item
+      WHERE bukrs = lt_with_item-bukrs
+        AND belnr = lt_with_item-belnr
+        AND gjahr = lt_with_item-gjahr
+        AND ( koart NE 'K' AND ktosl = '' ) .
+  ENDIF.
+
+  SORT lt_bseg1 BY belnr gjahr lifnr DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_bseg1 COMPARING belnr gjahr.
+ENDFORM.                    " GET_DOCS
+***&---------------------------------------------------------------------*
+***&      Form  GET_WITHITEM
+***&---------------------------------------------------------------------*
+***       text
+***----------------------------------------------------------------------*
+***  -->  p1        text
+***  <--  p2        text
+***----------------------------------------------------------------------*
+FORM get_withitem .
+  CLEAR:lt_with_item.
+  REFRESH:lt_with_item.
+
+  IF lt_bkpf IS NOT INITIAL.
+    SELECT belnr
+           bukrs
+           gjahr
+           witht
+           wt_qsshh
+           wt_acco
+           wt_qbshh
+      FROM with_item INTO TABLE lt_with_item
+      FOR ALL ENTRIES IN lt_bkpf
+      WHERE bukrs = lt_bkpf-bukrs
+        AND belnr = lt_bkpf-belnr
+        AND gjahr = lt_bkpf-gjahr
+        AND wt_qsshh NE 0.
+  ENDIF.
+ENDFORM.                    " GET_WITHITEM
+
+FORM get_vendor .
+  IF lt_bseg IS NOT INITIAL.
+    SELECT lifnr
+           land1
+           name1
+           stcd3
+      FROM lfa1
+      INTO TABLE lt_lfa1
+      FOR ALL ENTRIES IN lt_bseg
+      WHERE lifnr = lt_bseg-lifnr
+        AND lifnr IN vendor.
+
+  ENDIF.
+
+  IF lt_lfa1 IS NOT INITIAL.
+    SELECT spras
+           land1
+           landx
+      FROM t005t
+      INTO TABLE lt_t005t
+      FOR ALL ENTRIES IN lt_lfa1
+      WHERE land1 = lt_lfa1-land1
+       AND spras = 'E'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_display .
+  DATA:lv_index  TYPE i,
+       lv_index1 TYPE i,
+       lv_index2 TYPE i.
+  SORT lt_bkpf BY belnr gjahr bukrs.
+  SORT lt_with_item BY belnr bukrs gjahr.
+  SORT lt_lfa1 BY lifnr.
+  SORT lt_bseg BY belnr gjahr bukrs.
+  SORT lt_ekko BY ebeln.
+  SORT lt_t059z BY witht.
+
+  DATA: a TYPE i VALUE 0.
+  LOOP AT  lt_with_item INTO ls_with_item WHERE   witht = 'IZ' OR witht = 'CZ' OR witht = 'SZ'.
+    ls_final-witht = ls_with_item-witht.
+    ls_final-wt_qsshh = ls_with_item-wt_qsshh.
+    ls_final-wt_qbshh = ls_with_item-wt_qbshh.
+    READ TABLE lt_bseg INTO ls_bseg WITH  KEY belnr = ls_with_item-belnr
+                                             gjahr = ls_with_item-gjahr
+                               bukrs = ls_with_item-bukrs BINARY SEARCH.
+
+    "S.O.C BY ROHIT ON 13-08-2025
+    a = 0.
+    IF ls_with_item-wt_acco NE ls_bseg-lifnr.
+
+      ls_bseg-lifnr = ls_with_item-wt_acco.
+      a = 1.
+    ENDIF.
+
+    "E.O.C BY ROHIT ON 13-08-2025
+    IF a = 0.
+      READ TABLE lt_lfa1 INTO ls_lfa1 WITH KEY  lifnr  = ls_bseg-lifnr BINARY SEARCH.
+      IF sy-subrc = 0.
+
+        ls_final-name1 = ls_lfa1-name1.
+        ls_final-stcd3 = ls_lfa1-stcd3.
+
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = ls_lfa1-lifnr
+          IMPORTING
+            output = ls_lfa1-lifnr.
+        ls_final-lifnr = ls_lfa1-lifnr.
+        ls_final-land1 = ls_lfa1-land1.
+      ENDIF.
+    ELSEIF a = 1.
+      SELECT SINGLE  lifnr
+               land1
+               name1
+               stcd3
+          FROM lfa1
+          INTO ls_lfa1 WHERE lifnr = ls_bseg-lifnr.
+
+      IF sy-subrc = 0.
+
+        ls_final-name1 = ls_lfa1-name1.
+        ls_final-stcd3 = ls_lfa1-stcd3.
+
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = ls_lfa1-lifnr
+          IMPORTING
+            output = ls_lfa1-lifnr.
+        ls_final-lifnr = ls_lfa1-lifnr.
+        ls_final-land1 = ls_lfa1-land1.
+      ENDIF.
+    ENDIF.
+    READ TABLE lt_t005t INTO ls_t005t WITH KEY land1 = ls_lfa1-land1.
+    IF sy-subrc = 0.
+      ls_final-landx = ls_t005t-landx.
+    ENDIF.
+    READ TABLE lt_bkpf INTO ls_bkpf  WITH KEY belnr = ls_with_item-belnr
+                                              bukrs = ls_with_item-bukrs
+                               gjahr = ls_with_item-gjahr BINARY SEARCH.
+    IF sy-subrc = 0 .
+      ls_final-bktxt = ls_bkpf-bktxt.
+      ls_final-bldat = ls_bkpf-bldat.
+      ls_final-xblnr = ls_bkpf-xblnr.
+      ls_final-gjahr = ls_bkpf-gjahr.
+      ls_final-bukrs = ls_bkpf-bukrs.
+      ls_final-belnr  = ls_bkpf-belnr.
+      ls_final-budat  = ls_bkpf-budat.       ""added on 7/6/22 by hrishi n
+    ENDIF.
+
+    READ TABLE lt_t059z INTO ls_t059z WITH KEY witht = ls_with_item-witht BINARY SEARCH.
+    IF sy-subrc = 0.
+      ls_final-qsatz = ls_t059z-qsatz.
+    ENDIF.
+
+    ls_final-bschl = ls_bseg-bschl.
+    ls_final-gstin = '07AAACO1230F1DB'.  ""added on 2/6/22 by hrishi n
+    IF ls_lfa1-lifnr IS NOT INITIAL.
+      APPEND ls_final TO lt_final.
+    ENDIF.
+
+    CLEAR:ls_bkpf,ls_with_item,ls_final,ls_lfa1,ls_with_item,ls_bseg.
+  ENDLOOP.
+
+  SORT lt_with_item BY belnr gjahr bukrs.
+
+  lt_final1 = lt_final.
+  lt_final4 = lt_final.
+
+  SORT lt_final4 BY belnr witht.
+  LOOP AT lt_final4 INTO ls_final4.
+    IF ls_final4-witht = 'IZ'.
+      lv_iz = lv_iz + ls_final4-wt_qbshh.
+      ls_final5-lv_iz = lv_iz.
+      IF lv_iz < 0.
+        ls_final5-lv_iz = abs(  ls_final5-lv_iz ).
+      ELSEIF lv_iz > 0.
+        ls_final5-lv_iz =  ls_final5-lv_iz * -1.
+      ENDIF.
+      ls_final5-qsatz = ls_final4-qsatz.
+      ls_final5-qsatz = abs(  ls_final5-qsatz ).
+      ls_final5-witht = ls_final4-witht.
+      ls_final5-belnr = ls_final4-belnr.
+      ls_final5-budat = ls_final4-budat.               ""added on 7/6/22 by hrishi n
+      ls_final5-wt_qsshh = ls_final4-wt_qsshh.
+      ls_final5-wt_qsshh = abs(  ls_final5-wt_qsshh ).
+      ls_final5-bldat = ls_final4-bldat.
+      ls_final5-xblnr = ls_final4-xblnr.
+      ls_final5-bktxt = ls_final4-bktxt.
+      ls_final5-bukrs = ls_final4-bukrs.
+      ls_final5-lifnr = ls_final4-lifnr.
+      ls_final5-name1 = ls_final4-name1.
+      ls_final5-stcd3 = ls_final4-stcd3.
+      ls_final5-lifnr = ls_final4-lifnr.
+      ls_final5-landx = ls_final4-landx.
+
+    ELSEIF
+       ls_final4-witht = 'CZ'.
+      lv_cz = lv_cz + ls_final4-wt_qbshh.
+      ls_final5-lv_cz = lv_cz.
+
+      IF lv_cz < 0.
+        ls_final5-lv_cz = abs(  ls_final5-lv_cz ).
+      ELSEIF lv_cz > 0.
+        ls_final5-lv_cz = ls_final5-lv_cz * -1.
+      ENDIF.
+
+      ls_final5-witht = ls_final4-witht.
+      ls_final5-belnr = ls_final4-belnr.
+      ls_final5-budat  = ls_final4-budat.       ""added on 7/6/22 by hrishi n
+      ls_final5-wt_qsshh = ls_final4-wt_qsshh.
+      ls_final5-wt_qsshh = abs(  ls_final5-wt_qsshh ).
+      ls_final5-qsatz1 = ls_final4-qsatz.
+      ls_final5-qsatz1 = abs(  ls_final5-qsatz1 ).
+      ls_final5-bldat = ls_final4-bldat.
+      ls_final5-xblnr = ls_final4-xblnr.
+      ls_final5-bktxt = ls_final4-bktxt.
+      ls_final5-bukrs = ls_final4-bukrs.
+      ls_final5-lifnr = ls_final4-lifnr.
+      ls_final5-name1 = ls_final4-name1.
+      ls_final5-stcd3 = ls_final4-stcd3.
+      ls_final5-lifnr = ls_final4-lifnr.
+      ls_final5-landx = ls_final4-landx.
+
+    ELSEIF
+      ls_final4-witht = 'SZ'.
+      lv_sz = lv_sz + ls_final4-wt_qbshh.
+      ls_final5-lv_sz = lv_sz.
+
+      IF lv_sz < 0.
+        ls_final5-lv_sz = abs(  ls_final5-lv_sz ).
+      ELSEIF lv_sz > 0.
+        ls_final5-lv_sz = ls_final5-lv_sz * -1.
+      ENDIF.
+
+      ls_final5-witht = ls_final4-witht.
+      ls_final5-belnr = ls_final4-belnr.
+      ls_final5-budat  = ls_final4-budat.       ""added on 7/6/22 by hrishi n
+      ls_final5-wt_qsshh = ls_final4-wt_qsshh.
+      ls_final5-wt_qsshh = abs(  ls_final5-wt_qsshh ).
+      ls_final5-qsatz2 = ls_final4-qsatz.
+      ls_final5-qsatz2 = abs(  ls_final5-qsatz2 ).
+      ls_final5-bldat = ls_final4-bldat.
+      ls_final5-xblnr = ls_final4-xblnr.
+      ls_final5-bktxt = ls_final4-bktxt.
+      ls_final5-bukrs = ls_final4-bukrs.
+      ls_final5-lifnr = ls_final4-lifnr.
+      ls_final5-name1 = ls_final4-name1.
+      ls_final5-stcd3 = ls_final4-stcd3.
+      ls_final5-lifnr = ls_final4-lifnr.
+      ls_final5-landx = ls_final4-landx.
+    ENDIF.
+
+    AT END OF belnr.
+      APPEND ls_final5 TO lt_final5.
+      CLEAR:ls_final5,ls_final4, lv_iz,lv_sz,lv_cz.
+    ENDAT.
+  ENDLOOP.
+
+  lt_final3 = lt_final1.
+  SORT lt_lfa1 BY lifnr.
+  DATA:lv_index3 TYPE i.
+  lt_final6 = lt_final5.
+
+  SORT lt_ekko BY ebeln.
+  LOOP AT lt_final6 INTO ls_final6.
+
+    LOOP AT lt_bseg1 INTO ls_bseg1 WHERE belnr = ls_final6-belnr AND bschl = '86'.
+      ls_final6-ebeln = ls_bseg1-ebeln.
+      MODIFY lt_final6 FROM ls_final6.
+    ENDLOOP.
+    CLEAR:ls_final6,ls_bseg,ls_ekko.
+
+  ENDLOOP.
+  lt_final7 = lt_final6.
+
+  LOOP AT lt_final7 INTO ls_final7.
+    LOOP AT  lt_ekko INTO ls_ekko WHERE  ebeln = ls_final7-ebeln.
+      ls_final7-bedat = ls_ekko-bedat.
+      MODIFY lt_final7 FROM ls_final7.
+    ENDLOOP.
+    CLEAR:ls_final7,ls_ekko.
+  ENDLOOP.
+
+  lt_final8 = lt_final7.
+  LOOP AT  lt_final8 INTO ls_final8.
+    LOOP AT lt_ekpo1 INTO ls_ekpo1  WHERE ebeln = ls_final8-ebeln.
+      ls_final8-netwr = ls_ekpo1-netwr.
+      MODIFY lt_final8 FROM ls_final8.
+    ENDLOOP.
+    CLEAR:ls_final8,ls_ekpo.
+  ENDLOOP.
+
+  lt_final9 = lt_final8.
+  CLEAR:po_val.
+
+  LOOP AT lt_final9 INTO ls_final9.
+    IF ls_final9-ebeln IS NOT INITIAL.
+
+      LOOP AT it_ekpo_n INTO wa_ekpo_n WHERE ebeln = ls_final9-ebeln.
+        po_val = po_val + wa_ekpo_n-netwr.
+        CLEAR wa_ekpo_n.
+      ENDLOOP.
+      ls_final9-effwr = po_val.
+      MODIFY lt_final9 FROM ls_final9.
+      CLEAR:  po_val.
+
+    ENDIF.
+    CLEAR ls_bseg.
+
+    READ TABLE lt_bseg1 INTO ls_bseg WITH KEY belnr = ls_final9-belnr.
+    IF sy-subrc = 0.
+
+      inv_val1 = ls_bseg-dmbtr.
+      inv_val1_n = ls_bseg-txbhw.
+      ls_final9-mwskz = ls_bseg-mwskz.
+
+      CLEAR ls_bseg.
+      LOOP AT  lt_bseg4 INTO ls_bseg WHERE belnr = ls_final9-belnr.
+        inv_val4 = inv_val4 + ls_bseg-dmbtr.
+        CLEAR ls_bseg.
+      ENDLOOP.
+
+****ADDN******
+
+
+
+
+      SELECT skfbt FROM bseg INTO @DATA(ls_skfbt) WHERE belnr = @ls_final9-belnr AND koart = 'K'.
+      ENDSELECT.
+
+
+
+      SELECT belnr, waers FROM bkpf INTO TABLE @DATA(lt_curr) WHERE belnr  = @ls_final9-belnr
+                                                              AND   bukrs =  @p_bukrs.
+
+      IF sy-subrc  = 0.
+        DATA(inv_valf) = 0.
+        LOOP AT lt_curr  INTO DATA(ls_curr).
+          IF ls_curr-waers = 'INR'.
+
+            inv_valf = ls_skfbt.
+
+          ELSE.
+
+            READ TABLE lt_with_item INTO DATA(ls_with_item1) WITH KEY belnr = ls_final9-belnr bukrs = ls_final9-bukrs.
+
+            IF sy-subrc = 0.
+              SELECT kursf FROM bkpf INTO TABLE @DATA(lt_curr1) WHERE belnr = @ls_final9-belnr
+                                                                 AND bukrs = @ls_final9-bukrs
+                                                                 AND gjahr = @ls_with_item1-gjahr.
+
+            ENDIF.
+
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+
+******END OF ADDN*********.
+
+**********************************************************************
+      "Non-RCM with ITC Case
+**********************************************************************
+      IF ls_final9-mwskz = 'EC' OR ls_final9-mwskz = 'JG' OR ls_final9-mwskz = 'KG' OR ls_final9-mwskz = 'LG' OR ls_final9-mwskz = 'NG'
+      OR ls_final9-mwskz = 'PG' OR ls_final9-mwskz = 'QG' OR ls_final9-mwskz = 'HC' OR ls_final9-mwskz = 'JC' OR ls_final9-mwskz = 'TG'
+      OR ls_final9-mwskz = 'UG' OR ls_final9-mwskz = 'BM' OR ls_final9-mwskz = 'BS' OR ls_final9-mwskz = 'BE' OR ls_final9-mwskz = 'BH'
+      OR ls_final9-mwskz = 'BI' OR ls_final9-mwskz = 'EX' OR ls_final9-mwskz = 'NI'.
+
+        ls_final9-tax = ls_final9-wt_qsshh.
+*        ls_final9-inv = ls_final9-wt_qsshh + inv_val4.
+        inv_amt = ls_final9-wt_qsshh + inv_val4.
+
+**********added by sandeep  as on 14.02.2024*****************
+
+        IF lt_curr1 IS NOT INITIAL.
+          LOOP AT lt_curr1 INTO DATA(ls_curr1).
+            inv_valf = ls_curr1-kursf * ls_skfbt.
+            CLEAR ls_curr1.
+          ENDLOOP.
+        ENDIF.
+
+        ls_final9-inv = inv_valf.
+
+*        IF INV_AMT = LS_FINAL9-TAX.
+*
+*          IF LS_SKFBT IS NOT INITIAL.
+*            IF INV_AMT = LS_SKFBT.
+*              LS_FINAL9-INV = INV_AMT.
+*
+*            ELSEIF LS_SKFBT > INV_AMT.
+*              LS_FINAL9-INV = LS_SKFBT.
+*
+*            ELSE.
+*              LS_FINAL9-INV = INV_AMT.
+*            ENDIF.
+*
+*          ENDIF.
+*        ELSE.
+*
+*          LS_FINAL9-INV = INV_AMT.
+*
+*        ENDIF.
+
+*        ls_final9-inv = INV_AMT.
+
+************end of code *****************
+
+**********************************************************************
+        "Non-RCM with Non-ITC Case
+**********************************************************************
+      ELSEIF ls_final9-mwskz = 'BG' OR ls_final9-mwskz = 'XG' OR ls_final9-mwskz = 'DA' OR ls_final9-mwskz = 'EG' OR ls_final9-mwskz = 'WG'
+      OR ls_final9-mwskz = 'GG' OR ls_final9-mwskz = 'HG' OR ls_final9-mwskz = 'IG' OR ls_final9-mwskz = 'BJ' OR ls_final9-mwskz = 'BK'
+      OR ls_final9-mwskz = 'BL' OR ls_final9-mwskz = 'BN' OR ls_final9-mwskz = 'BT'.
+
+        ls_final9-tax = ls_final9-wt_qsshh.
+*        ls_final9-inv = ls_final9-wt_qsshh + inv_val4.
+        inv_amt = ls_final9-wt_qsshh + inv_val4.
+
+**********added by code as on 14.02.2024*****************
+
+        IF lt_curr1 IS NOT INITIAL.
+          LOOP AT lt_curr1 INTO DATA(ls_curr2).
+            inv_valf = ls_curr2-kursf * ls_skfbt.
+            CLEAR ls_curr2.
+          ENDLOOP.
+        ENDIF.
+
+        ls_final9-inv = inv_valf.
+*        IF INV_AMT = LS_FINAL9-TAX.
+*
+*
+*          IF LS_SKFBT IS NOT INITIAL.
+*            IF INV_AMT = LS_SKFBT.
+*              LS_FINAL9-INV = INV_AMT.
+*
+*            ELSEIF LS_SKFBT > INV_AMT.
+*              LS_FINAL9-INV = LS_SKFBT.
+*
+*            ELSE.
+*              LS_FINAL9-INV = INV_AMT.
+*            ENDIF.
+*
+*          ENDIF.
+*        ELSE.
+*
+*          LS_FINAL9-INV = INV_AMT.
+*
+*        ENDIF.
+
+
+*             ls_final9-inv = INV_AMT.
+
+************end of code *****************
+
+
+
+
+**********************************************************************
+        "RCM with ITC Case
+**********************************************************************
+      ELSEIF ls_final9-mwskz = 'EA' OR ls_final9-mwskz = 'HA' OR ls_final9-mwskz = 'JA' OR ls_final9-mwskz = 'OA' OR ls_final9-mwskz = 'PA'
+      OR ls_final9-mwskz = 'TA' OR ls_final9-mwskz = 'EB' OR ls_final9-mwskz = 'HB' OR ls_final9-mwskz = 'BP' OR ls_final9-mwskz = 'BU'.
+        ls_final9-tax = ls_final9-wt_qsshh.
+*        ls_final9-inv = ls_final9-wt_qsshh.
+        inv_amt = ls_final9-wt_qsshh.
+
+**********added by code as on 14.02.2024*****************
+
+        IF lt_curr1 IS NOT INITIAL.
+          LOOP AT lt_curr1 INTO DATA(ls_curr3).
+            inv_valf = ls_curr3-kursf * ls_skfbt.
+            CLEAR ls_curr3.
+          ENDLOOP.
+        ENDIF.
+
+        ls_final9-inv = inv_valf.
+*        IF INV_AMT = LS_FINAL9-TAX.
+*
+*
+*          IF LS_SKFBT IS NOT INITIAL.
+*            IF INV_AMT = LS_SKFBT.
+*              LS_FINAL9-INV = INV_AMT.
+*
+*            ELSEIF LS_SKFBT > INV_AMT.
+*              LS_FINAL9-INV = LS_SKFBT.
+*
+*            ELSE.
+*              LS_FINAL9-INV = INV_AMT.
+*            ENDIF.
+*
+*          ENDIF.
+*        ELSE.
+*
+*          LS_FINAL9-INV = INV_AMT.
+*
+*        ENDIF
+
+
+*             ls_final9-inv = INV_AMT.
+
+************end of code *****************
+
+
+**********************************************************************
+        "RCM with Non-ITC Case
+**********************************************************************
+      ELSEIF ls_final9-mwskz = 'JB' OR ls_final9-mwskz = 'BR' OR ls_final9-mwskz = 'KB' OR ls_final9-mwskz = 'DR' OR ls_final9-mwskz = 'OB'
+      OR ls_final9-mwskz = 'PB' OR ls_final9-mwskz = 'GR' OR ls_final9-mwskz = 'HR' OR ls_final9-mwskz = 'BQ' OR ls_final9-mwskz = 'BV'.
+        ls_final9-tax = ls_final9-wt_qsshh.
+*        ls_final9-inv = ls_final9-wt_qsshh."" + inv_val4.
+        inv_amt = ls_final9-wt_qsshh.
+
+**********added by code as on 14.02.2024*****************
+*        IF INV_AMT = LS_FINAL9-TAX.
+
+
+
+        IF lt_curr1 IS NOT INITIAL.
+          LOOP AT lt_curr1 INTO DATA(ls_curr4).
+            inv_valf = ls_curr4-kursf * ls_skfbt.
+            CLEAR ls_curr4.
+          ENDLOOP.
+        ENDIF.
+
+        ls_final9-inv = inv_valf.
+
+
+*          IF LS_SKFBT IS NOT INITIAL.
+*            IF INV_AMT = LS_SKFBT.
+*              LS_FINAL9-INV = INV_AMT.
+*
+*            ELSEIF LS_SKFBT > INV_AMT.
+*              LS_FINAL9-INV = LS_SKFBT.
+*
+*            ELSE.
+*              LS_FINAL9-INV = INV_AMT.
+*            ENDIF.
+*
+*          ENDIF.
+*        ELSE.
+*
+*          LS_FINAL9-INV = INV_AMT.
+*
+*        ENDIF.
+
+
+*             ls_final9-inv = INV_AMT.
+
+************end of code *****************
+
+
+
+
+      ELSE.
+
+        ls_final9-tax = ls_final9-wt_qsshh.
+        inv_amt = ls_final9-wt_qsshh.
+
+**********added by code as on 14.02.2024*****************
+
+        IF lt_curr1 IS NOT INITIAL.
+          LOOP AT lt_curr1 INTO DATA(ls_curr5).
+            inv_valf = ls_curr5-kursf * ls_skfbt.
+            CLEAR ls_curr5.
+          ENDLOOP.
+
+        ENDIF.
+
+        ls_final9-inv = inv_valf.
+*     clear ls_final9.
+
+*        IF INV_AMT = LS_FINAL9-TAX.
+*
+*          IF LS_SKFBT IS NOT INITIAL.
+*            IF INV_AMT = LS_SKFBT.
+*              LS_FINAL9-INV = INV_AMT.
+*
+*            ELSEIF LS_SKFBT > INV_AMT.
+*              LS_FINAL9-INV = LS_SKFBT.
+*
+*            ELSE.
+*              LS_FINAL9-INV = INV_AMT.
+*            ENDIF.
+*
+*          ENDIF.
+*        ELSE.
+*
+*          LS_FINAL9-INV = INV_AMT.
+*
+*        ENDIF.
+
+
+*             ls_final9-inv = INV_AMT.
+
+************end of code *****************
+
+
+
+
+
+      ENDIF.
+    ENDIF.
+
+    ls_final9-gstin = '07AAACO1230F1DB'.      ""added on 2/6/22 by hrishi n
+    MODIFY lt_final9 FROM ls_final9.
+    CLEAR: ls_final9, inv_val1, inv_val1_n, inv_val2, inv_val3, inv_val4 , inv_amt , inv_valf,  ls_curr1,ls_curr2 , ls_curr3, ls_curr4,ls_curr5 , lt_curr1[], lt_curr[]..
+  ENDLOOP.
+
+  DELETE lt_final9 WHERE wt_qsshh IS INITIAL.
+  LOOP AT it_bseg_r INTO wa_bseg_r.
+    DELETE lt_final9 WHERE belnr = wa_bseg_r-belnr.
+    DELETE lt_final9 WHERE belnr = wa_bseg_r-rebzg.
+    CLEAR wa_bseg_r.
+  ENDLOOP.
+
+  LOOP AT lt_bkpf INTO ls_bkpf.
+    IF ls_bkpf-stblg IS NOT INITIAL.
+      DELETE lt_final9 WHERE belnr = ls_bkpf-belnr.
+      DELETE lt_final9 WHERE belnr = ls_bkpf-stblg.
+    ENDIF.
+    CLEAR ls_bkpf.
+  ENDLOOP.
+  CLEAR:ls_final9.
+
+  LOOP AT lt_final9 INTO ls_final9.
+    LOOP AT it_bsas INTO DATA(wa_bsas) WHERE bukrs = ls_final9-bukrs AND belnr = ls_final9-belnr AND budat = ls_final9-budat.
+      IF sy-subrc EQ 0.
+        IF ls_final9-lv_cz IS NOT INITIAL AND wa_bsas-hkont = '0000190204'.
+          ls_final9-cgstcl  = wa_bsas-augbl.
+
+          ls_final9-cgstcld = wa_bsas-augdt.
+        ELSEIF ls_final9-lv_sz IS NOT INITIAL AND ( wa_bsas-hkont = '0000190205' OR wa_bsas-hkont = '0000190207' ).
+          ls_final9-sgstcl  = wa_bsas-augbl.
+          ls_final9-sgstcld = wa_bsas-augdt.
+        ELSEIF ls_final9-lv_iz IS NOT INITIAL AND wa_bsas-hkont = '0000190206'.
+          ls_final9-igstcl  = wa_bsas-augbl.
+          ls_final9-igstcld = wa_bsas-augdt.
+        ENDIF.
+      ENDIF.
+*       IF LS_FINAL9-LV_CZ < 0 or LS_FINAL9-LV_IZ < 0 or LS_FINAL9-LV_SZ < 0 .
+*      LS_FINAL9-INV = LS_FINAL9-INV * ( -1 ).
+*      LS_FINAL9-TAX = LS_FINAL9-TAX * ( -1 ) .
+*      LS_FINAL9-WT_QSSHH = LS_FINAL9-WT_QSSHH * ( -1  ).
+*    ENDIF.
+
+    ENDLOOP.
+*************************Added by Ritika on 29-02-2024***************************************
+*    LOOP AT LT_FINAL9 INTO LS_FINAL9.
+*    IF LS_FINAL9-LV_CZ < 0 or LS_FINAL9-LV_IZ < 0 or LS_FINAL9-LV_SZ < 0 .
+*      LS_FINAL9-INV = LS_FINAL9-INV * ( -1 ).
+*      LS_FINAL9-TAX = LS_FINAL9-TAX * ( -1 ) .
+*      LS_FINAL9-WT_QSSHH = LS_FINAL9-WT_QSSHH * ( -1  ).
+*    ENDIF.
+
+*************************END HERE***********************************************************
+
+    IF ls_final9-lv_cz LT '0.00' OR ls_final9-lv_iz  LT '0.00'  OR ls_final9-lv_sz   LT '0.00'.
+      ls_final9-inv = ls_final9-inv * ( -1 ).
+      ls_final9-tax = ls_final9-tax * ( -1 ) .
+      ls_final9-wt_qsshh = ls_final9-wt_qsshh * ( -1  ).
+    ENDIF.
+    MODIFY lt_final9 FROM ls_final9 TRANSPORTING cgstcl cgstcld sgstcl sgstcld igstcl igstcld inv tax wt_qsshh .
+
+
+
+    CLEAR : ls_final9,wa_bsas.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_PO
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_po .
+  IF lt_bseg1 IS NOT INITIAL.
+    SELECT ebeln
+           bedat
+      FROM ekko
+      INTO TABLE lt_ekko
+      FOR ALL ENTRIES IN lt_bseg1
+      WHERE ebeln = lt_bseg1-ebeln.
+  ENDIF.
+
+  IF lt_ekko IS NOT INITIAL.
+    SELECT ebeln
+           loekz
+           netwr
+           mwskz
+           effwr
+      FROM ekpo
+      INTO TABLE lt_ekpo
+      FOR ALL ENTRIES IN lt_ekko
+      WHERE ebeln = lt_ekko-ebeln
+        AND loekz NE 'L'.
+
+    SELECT ebeln
+           ebelp
+           netwr
+      FROM ekpo INTO TABLE it_ekpo_n
+      FOR ALL ENTRIES IN lt_ekko
+      WHERE ebeln = lt_ekko-ebeln.
+  ENDIF.
+
+  LOOP AT lt_ekpo INTO ls_ekpo.
+    COLLECT ls_ekpo INTO lt_ekpo1.
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_FIELDCATT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_fieldcatt .
+  wa_fcat-col_pos = '1' .
+  wa_fcat-fieldname = 'LIFNR'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Vendor Code' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '2' .
+  wa_fcat-fieldname = 'NAME1'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Vendor Name' .
+  wa_fcat-outputlen = '30'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '3' .
+  wa_fcat-fieldname ='LANDX'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Vendor Country' .
+  wa_fcat-outputlen = '10'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '4' .
+  wa_fcat-fieldname ='INV'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Invoice Value' .
+  wa_fcat-outputlen = '10'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '5' .
+  wa_fcat-fieldname = 'TAX'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Taxable Value' .
+  wa_fcat-outputlen = '10'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+
+  wa_fcat-col_pos = '6' .
+  wa_fcat-fieldname = 'STCD3'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'GSTIN No. of deductee' .
+  wa_fcat-outputlen = '30'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '7' .
+  wa_fcat-fieldname = 'BKTXT'.
+  wa_fcat-tabname = 'IT_FINAL6' .
+  wa_fcat-seltext_m = 'Description' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '8' .
+  wa_fcat-fieldname = 'XBLNR'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Vendor Invoice No.' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '9' .
+  wa_fcat-fieldname = 'BLDAT'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Vendor Invoice Date' .
+  wa_fcat-outputlen = '20'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '10' .
+  wa_fcat-fieldname = 'EBELN'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'PO No.' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '11' .
+  wa_fcat-fieldname = 'BEDAT'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'PO Date' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '12' .
+  wa_fcat-fieldname = 'EFFWR'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Po Value(Excl.Tax)' .
+  wa_fcat-just = 'R'.
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '13' .
+  wa_fcat-fieldname = 'WT_QSSHH'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS base Amount' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '14' .
+  wa_fcat-fieldname = 'QSATZ'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS_IGST Rate' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '15' .
+  wa_fcat-fieldname = 'QSATZ1'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS_CGST Rate' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '16' .
+  wa_fcat-fieldname = 'QSATZ2'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS_SGST Rate' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '17' .
+  wa_fcat-fieldname = 'LV_IZ'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS IGST Amount' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '18' .
+  wa_fcat-fieldname = 'LV_CZ'.
+  wa_fcat-tabname = 'IT_FINAL6' .
+  wa_fcat-seltext_m = 'TDS_CGST Amount' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '19' .
+  wa_fcat-fieldname = 'LV_SZ'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS_SGST Amount' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '20' .
+  wa_fcat-fieldname = 'TDS'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS Certificate No.' .
+  wa_fcat-outputlen = '20'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '21' .
+  wa_fcat-fieldname = 'AMT_TDS'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Amount Of TDS' .
+  wa_fcat-outputlen = '20'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '22' .
+  wa_fcat-fieldname = 'DATE_TDS'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Date Of Issue' .
+  wa_fcat-outputlen = '20'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '23' .
+  wa_fcat-fieldname = 'BELNR'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'FI Document' .
+  wa_fcat-outputlen = '15'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '24' .               ""added on 2/6/22 by hrishi n
+  wa_fcat-fieldname = 'GSTIN'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'TDS GSTIN' .
+  wa_fcat-outputlen = '16'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '25' .               ""added on 7/6/22 by hrishi n
+  wa_fcat-fieldname = 'BUDAT'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_m = 'Posting Date' .
+  wa_fcat-outputlen = '16'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '26' .               ""added on 27/6/23 by hrishi n
+  wa_fcat-fieldname = 'CGSTCL'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_l = 'TDS_CGST Clearing Doc.' .
+  wa_fcat-outputlen = '16'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '27' .               ""added on 27/6/23 by hrishi n
+  wa_fcat-fieldname = 'CGSTCLD'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_l = 'TDS_CGST Clearing Date' .
+  wa_fcat-outputlen = '16'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '28' .               ""added on 27/6/23 by hrishi n
+  wa_fcat-fieldname = 'SGSTCL'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_l = 'TDS_SGST/UGST Clearing Doc.' .
+  wa_fcat-outputlen = '20'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '29' .               ""added on 27/6/23 by hrishi n
+  wa_fcat-fieldname = 'SGSTCLD'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_l = 'TDS_SGST/UGST Clearing Date' .
+  wa_fcat-outputlen = '20'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '30' .               ""added on 27/6/23 by hrishi n
+  wa_fcat-fieldname = 'IGSTCL'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_l = 'TDS_IGST Clearing Doc.' .
+  wa_fcat-outputlen = '16'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+  wa_fcat-col_pos = '31' .               ""added on 27/6/23 by hrishi n
+  wa_fcat-fieldname = 'IGSTCLD'.
+  wa_fcat-tabname = 'IT_FINAL9' .
+  wa_fcat-seltext_l = 'TDS_IGST Clearing Date' .
+  wa_fcat-outputlen = '16'.
+  APPEND wa_fcat TO i_fcat .
+  CLEAR:wa_fcat.
+
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+      it_fieldcat        = i_fcat
+      i_save             = 'X'
+    TABLES
+      t_outtab           = lt_final9.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_T059Z
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_t059z .
+  IF lt_with_item IS NOT INITIAL.
+    SELECT
+      witht
+      qsatz FROM t059z
+      INTO TABLE lt_t059z  FOR ALL ENTRIES IN
+      lt_with_item WHERE witht = lt_with_item-witht.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_ZFI_WITH_ITEMS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_ongc_docs.
+
+  DATA lv_taxbase TYPE string.
+  DATA lv_invamt TYPE string.
+  DATA lv_taxamt TYPE string.
+
+  IF p_bukrs IS INITIAL.
+    SELECT bukrs,
+        belnr,
+        gjahr,
+        zbukrs,
+        zbelnr,
+        zgjahr,
+        bldat,
+        budat,
+        xblnr,
+        stblg,
+        bktxt
+   FROM zfibkpf INTO TABLE @DATA(lt_zbkpf)
+   WHERE budat IN @postdate.
+  ELSE.
+    SELECT bukrs
+           belnr
+           gjahr
+           zbukrs
+           zbelnr
+           zgjahr
+           bldat
+           budat
+           xblnr
+           stblg
+           bktxt
+  FROM zfibkpf INTO TABLE lt_zbkpf
+      WHERE budat IN postdate
+        AND bukrs = p_bukrs.
+  ENDIF.
+
+
+  IF lt_zbkpf IS NOT INITIAL.
+    SELECT belnr,
+           bukrs,
+           gjahr,
+           witht,
+           wt_qsshh,
+           wt_acco,
+           wt_qbshh
+      FROM zfi_with_item INTO TABLE @DATA(lt_zwith_item)
+      FOR ALL ENTRIES IN @lt_zbkpf
+      WHERE bukrs = @lt_zbkpf-bukrs
+         AND belnr = @lt_zbkpf-belnr
+         AND gjahr = @lt_zbkpf-gjahr
+         AND wt_withcd IN ('CG','SG','IG')
+         AND wt_qsshh NE 0.
+
+
+    REFRESH it_bsas[].
+    SELECT bukrs
+           hkont
+           augdt
+           augbl
+           gjahr
+           belnr
+           buzei
+           budat
+      FROM bsas INTO TABLE it_bsas
+      FOR ALL ENTRIES IN lt_zbkpf
+      WHERE bukrs = lt_zbkpf-bukrs
+        AND hkont IN ( '0000190204' , '0000190205' , '0000190206' , '0000190207' )
+        AND belnr = lt_zbkpf-zbelnr
+        AND gjahr = lt_zbkpf-zgjahr.
+
+  ENDIF.
+
+
+  IF lt_zwith_item IS NOT INITIAL.
+    SELECT
+      witht,
+      wt_withcd,
+      qsatz FROM t059z
+      INTO TABLE @DATA(lt_zt059z)
+      WHERE witht IN ('CZ','SZ','IZ')
+        AND wt_withcd IN ('Z1','Z2','Z3').
+  ENDIF.
+
+
+  IF lt_zwith_item IS NOT INITIAL.
+    SELECT bukrs,
+           belnr,
+           gjahr,
+           buzei,
+           augdt,
+           bschl,
+           koart,
+           ktosl,
+           bupla,
+           secco,
+           valut,
+           ebeln,
+           lifnr
+      FROM zfi_bseg INTO TABLE @DATA(lt_zbseg)
+     FOR ALL ENTRIES IN @lt_zwith_item
+     WHERE bukrs = @lt_zwith_item-bukrs
+       AND belnr = @lt_zwith_item-belnr
+       AND gjahr = @lt_zwith_item-gjahr.
+
+
+    SELECT bukrs,
+          belnr,
+          gjahr,
+          buzei,
+          augdt,
+          bschl,
+          koart,
+          ktosl,
+          bupla,
+          secco,
+          valut,
+          ebeln,
+          lifnr
+     FROM bseg INTO TABLE @DATA(lt_zbseg_k)
+    FOR ALL ENTRIES IN @lt_zbkpf
+    WHERE bukrs = @lt_zbkpf-zbukrs
+      AND belnr = @lt_zbkpf-zbelnr
+      AND gjahr = @lt_zbkpf-zgjahr
+      AND koart = 'K'.
+
+  ENDIF.
+
+  SORT lt_zbseg BY belnr gjahr lifnr DESCENDING.
+
+  DELETE ADJACENT DUPLICATES FROM lt_zbseg COMPARING belnr gjahr .
+
+
+  IF lt_zbseg_k IS NOT INITIAL OR vendor IS NOT INITIAL.
+    SELECT lifnr,
+          land1,
+          name1,
+          stcd3
+     FROM lfa1 INTO TABLE @DATA(lt_zlfa1)
+     FOR ALL ENTRIES IN @lt_zbseg_k
+     WHERE lifnr = @lt_zbseg_k-lifnr
+       AND lifnr IN @vendor.
+
+  ENDIF.
+
+  IF lt_zlfa1 IS NOT INITIAL.
+    SELECT spras,
+           land1,
+           landx
+      FROM t005t INTO TABLE @DATA(lt_zt005t)
+      FOR ALL ENTRIES IN @lt_zlfa1
+      WHERE land1 = @lt_zlfa1-land1
+        AND spras = 'E'.
+
+  ENDIF.
+
+
+  SORT lt_zbkpf BY belnr gjahr bukrs.
+  SORT lt_zwith_item BY belnr bukrs gjahr.
+  SORT lt_zlfa1 BY lifnr.
+  SORT lt_zbseg BY belnr gjahr bukrs.
+  SORT lt_zt059z BY witht.
+  DELETE ADJACENT DUPLICATES FROM lt_zwith_item COMPARING belnr bukrs gjahr witht.
+
+
+  LOOP AT lt_zwith_item INTO ls_with_item WHERE witht = 'IG' OR witht = 'CG' OR witht = 'SG'.
+
+    ls_zfinal-witht    = ls_with_item-witht.
+    ls_zfinal-wt_qsshh = ls_with_item-wt_qsshh.
+    ls_zfinal-inv      = ls_with_item-wt_qsshh.
+    ls_zfinal-tax      = ls_with_item-wt_qsshh.
+    READ TABLE lt_zbkpf INTO DATA(ls_zbkpf) WITH KEY belnr = ls_with_item-belnr
+                                              bukrs = ls_with_item-bukrs
+                                              gjahr = ls_with_item-gjahr BINARY SEARCH.
+
+    READ TABLE lt_zbseg_k INTO DATA(ls_zbseg_k) WITH KEY bukrs = ls_zbkpf-zbukrs
+                                                         belnr = ls_zbkpf-zbelnr
+                                                         gjahr = ls_zbkpf-zgjahr
+                                                         koart = 'K' .
+
+
+    READ TABLE lt_zlfa1 INTO ls_lfa1 WITH KEY lifnr  = ls_zbseg_k-lifnr .
+    IF sy-subrc = 0.
+      ls_zfinal-name1 = ls_lfa1-name1.
+      ls_zfinal-stcd3 = ls_lfa1-stcd3.
+
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+        EXPORTING
+          input  = ls_lfa1-lifnr
+        IMPORTING
+          output = ls_lfa1-lifnr.
+
+      ls_zfinal-lifnr = ls_lfa1-lifnr.
+      ls_zfinal-land1 = ls_lfa1-land1.
+    ENDIF.
+
+    READ TABLE lt_zt005t INTO ls_t005t WITH KEY land1 = ls_lfa1-land1.
+    IF sy-subrc = 0.
+      ls_zfinal-landx = ls_t005t-landx.
+    ENDIF.
+
+
+    IF sy-subrc = 0 .
+      ls_zfinal-bktxt = ls_zbkpf-bktxt.
+      ls_zfinal-bldat = ls_zbkpf-bldat.
+      ls_zfinal-xblnr = ls_zbkpf-xblnr.
+      ls_zfinal-gjahr = ls_zbkpf-gjahr.
+      ls_zfinal-bukrs = ls_zbkpf-bukrs.
+      ls_zfinal-belnr = ls_zbkpf-zbelnr.
+      ls_zfinal-budat = ls_zbkpf-budat.
+    ENDIF.
+
+    READ TABLE lt_zbseg INTO DATA(ls_zbseg) WITH KEY belnr = ls_with_item-belnr
+                                                       gjahr = ls_with_item-gjahr
+                                                       bukrs = ls_with_item-bukrs BINARY SEARCH.
+
+    ls_zfinal-bschl = ls_zbseg-bschl.
+    ls_zfinal-gstin = '07AAACO1230F1DB'.
+
+    IF ls_lfa1-lifnr IS NOT INITIAL.
+      APPEND ls_zfinal TO lt_zfinal.
+    ENDIF.
+
+    CLEAR:ls_zbkpf,ls_with_item,ls_zfinal,ls_lfa1,ls_with_item,ls_zbseg.
+  ENDLOOP.
+
+
+  SORT lt_zwith_item BY belnr bukrs gjahr.
+  SORT lt_zfinal BY belnr bukrs gjahr.
+
+  DATA lt_zwith_item2 TYPE STANDARD TABLE OF ty_with_item.
+
+  MOVE-CORRESPONDING lt_zwith_item[] TO lt_zwith_item2[] .
+  DELETE lt_zwith_item WHERE witht = 'CG' OR witht = 'SG'.
+
+  LOOP AT lt_zwith_item INTO ls_with_item WHERE witht = 'IG'.
+    READ TABLE lt_zbkpf INTO ls_zbkpf WITH KEY belnr = ls_with_item-belnr
+                                                      bukrs = ls_with_item-bukrs
+                                                      gjahr = ls_with_item-gjahr.
+
+    READ TABLE lt_zfinal INTO ls_zfinal WITH KEY belnr = ls_zbkpf-zbelnr
+                                                 gjahr = ls_zbkpf-zgjahr
+                                                 bukrs = ls_zbkpf-zbukrs.
+
+    ls_zfinal-lv_iz =  ls_zfinal-lv_iz + ls_with_item-wt_qbshh * -1.
+
+    READ TABLE lt_zt059z INTO DATA(ls_zt059z) WITH KEY wt_withcd = 'Z3'.
+    ls_zfinal-qsatz = ls_zt059z-qsatz.
+
+    AT END OF belnr.
+      MODIFY TABLE lt_zfinal FROM ls_zfinal TRANSPORTING lv_iz qsatz .
+      CLEAR : ls_zfinal,ls_with_item.
+    ENDAT.
+  ENDLOOP.
+
+
+  MOVE-CORRESPONDING lt_zwith_item2[] TO lt_zwith_item[].
+  DELETE lt_zwith_item WHERE witht = 'IG' OR witht = 'SG'.
+
+  LOOP AT lt_zwith_item INTO ls_with_item WHERE witht = 'CG'.
+    READ TABLE lt_zbkpf INTO ls_zbkpf WITH KEY belnr = ls_with_item-belnr
+                                                     bukrs = ls_with_item-bukrs
+                                                     gjahr = ls_with_item-gjahr.
+
+    READ TABLE lt_zfinal INTO ls_zfinal WITH KEY belnr = ls_zbkpf-zbelnr
+                                                 gjahr = ls_zbkpf-zgjahr
+                                                 bukrs = ls_zbkpf-zbukrs.
+
+    ls_zfinal-lv_cz =  ls_zfinal-lv_cz + ls_with_item-wt_qbshh * -1.
+
+    READ TABLE lt_zt059z INTO ls_zt059z WITH KEY wt_withcd = 'Z1'.
+    ls_zfinal-qsatz1 = ls_zt059z-qsatz.
+
+    AT END OF belnr.
+      MODIFY TABLE lt_zfinal FROM ls_zfinal TRANSPORTING lv_cz qsatz1 .
+      CLEAR : ls_zfinal,ls_with_item.
+    ENDAT.
+  ENDLOOP.
+
+
+  MOVE-CORRESPONDING lt_zwith_item2[] TO lt_zwith_item[].
+  DELETE lt_zwith_item WHERE witht = 'IG' OR witht = 'CG'.
+
+  LOOP AT lt_zwith_item INTO ls_with_item WHERE witht = 'SG'.
+    READ TABLE lt_zbkpf INTO ls_zbkpf WITH KEY belnr = ls_with_item-belnr
+                                                     bukrs = ls_with_item-bukrs
+                                                     gjahr = ls_with_item-gjahr.
+
+    READ TABLE lt_zfinal INTO ls_zfinal WITH KEY belnr = ls_zbkpf-zbelnr
+                                                 gjahr = ls_zbkpf-zgjahr
+                                                 bukrs = ls_zbkpf-zbukrs.
+
+    ls_zfinal-lv_sz = ls_zfinal-lv_sz + ls_with_item-wt_qbshh * -1.
+
+    READ TABLE lt_zt059z INTO ls_zt059z WITH KEY wt_withcd = 'Z2'.
+    ls_zfinal-qsatz2 = ls_zt059z-qsatz.
+
+    AT END OF belnr.
+      MODIFY TABLE lt_zfinal FROM ls_zfinal TRANSPORTING lv_sz qsatz2 .
+      CLEAR : ls_zfinal,ls_with_item.
+    ENDAT.
+  ENDLOOP.
+
+  DELETE lt_zfinal WHERE lv_iz = '0.00' AND lv_cz = '0.00' AND lv_sz = '0.00'.
+  SORT lt_zfinal BY belnr lifnr inv lv_iz lv_cz lv_sz DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_zfinal COMPARING belnr lifnr inv tax wt_qsshh.
+
+  IF lt_zfinal IS NOT INITIAL.
+    LOOP AT lt_zfinal INTO ls_zfinal.
+
+      lv_taxbase = ls_zfinal-wt_qsshh.
+      IF lv_taxbase CA '-'.
+        ls_zfinal-wt_qsshh = ls_zfinal-wt_qsshh * -1.
+      ENDIF.
+
+      lv_invamt = ls_zfinal-inv.
+      IF lv_invamt CA '-'.
+        ls_zfinal-inv = ls_zfinal-inv * -1.
+      ENDIF.
+
+      lv_taxamt = ls_zfinal-tax.
+      IF lv_taxamt CA '-'.
+        ls_zfinal-tax = ls_zfinal-tax * -1.
+      ENDIF.
+
+      LOOP AT it_bsas INTO DATA(wa_bsas) WHERE bukrs = ls_zfinal-bukrs AND belnr = ls_zfinal-belnr AND budat = ls_zfinal-budat.
+        IF wa_bsas IS NOT INITIAL.
+          IF ls_zfinal-lv_cz IS NOT INITIAL AND wa_bsas-hkont = '0000190204'.
+            ls_zfinal-cgstcl  = wa_bsas-augbl.
+            ls_zfinal-cgstcld = wa_bsas-augdt.
+          ELSEIF ls_zfinal-lv_sz IS NOT INITIAL AND ( wa_bsas-hkont = '0000190205' OR wa_bsas-hkont = '0000190207' ).
+            ls_zfinal-sgstcl  = wa_bsas-augbl.
+            ls_zfinal-sgstcld = wa_bsas-augdt.
+          ELSEIF ls_zfinal-lv_iz IS NOT INITIAL AND wa_bsas-hkont = '0000190206'.
+            ls_zfinal-igstcl  = wa_bsas-augbl.
+            ls_zfinal-igstcld = wa_bsas-augdt.
+          ENDIF.
+        ENDIF.
+        CLEAR : wa_bsas.
+      ENDLOOP.
+*        MODIFY lt_final9 FROM ls_final9 TRANSPORTING cgstcl cgstcld sgstcl sgstcld igstcl igstcld.
+************added by aparna
+      IF ls_zfinal-lv_cz LT '0.00' OR ls_zfinal-lv_iz  LT '0.00'  OR ls_zfinal-lv_sz   LT '0.00'.
+        ls_zfinal-inv = ls_zfinal-inv * ( -1 ).
+        ls_zfinal-tax = ls_zfinal-tax * ( -1 ) .
+        ls_zfinal-wt_qsshh = ls_zfinal-wt_qsshh * ( -1  ).
+      ENDIF.
+**************      ended by aparna
+      APPEND ls_zfinal TO lt_final9.
+      CLEAR: ls_zfinal,lv_taxbase,lv_invamt,lv_taxamt.
+
+    ENDLOOP.
+  ENDIF.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_BSAS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_bsas .
+*********changes for clearing doc
+  SELECT bukrs
+         hkont
+         augdt
+         augbl
+         gjahr
+         belnr
+         buzei
+         budat
+    FROM bsas INTO TABLE it_bsas
+    FOR ALL ENTRIES IN lt_bkpf
+    WHERE bukrs = lt_bkpf-bukrs
+      AND hkont IN ( '0000190204' , '0000190205' , '0000190206' , '0000190207' )
+      AND belnr = lt_bkpf-belnr
+      AND gjahr = lt_bkpf-gjahr.
+ENDFORM.
