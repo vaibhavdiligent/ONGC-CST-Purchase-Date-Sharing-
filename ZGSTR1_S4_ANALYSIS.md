@@ -988,3 +988,57 @@ beneath it.
 type. NUMC(6) means the type theory is wrong and the mismatch is in TXGRP's
 value instead - in which case check `wa_bseg-txgrp` in the debugger at line 409,
 since the fix above would then be a no-op.
+
+## Round 7 - verification of the KPOSN fix (output `i1`)
+
+`i1` covers **01.04.2025 - 31.03.2026**, 605 data rows: 392 SD-origin
+(8125 x323, 8325 x69) and 213 FI.
+
+### The SD amounts are back
+
+| column | non-zero on SD rows |
+|---|---|
+| Total Inv/Note Value | **392 / 392** |
+| Gross Value | **392 / 392** |
+| Taxable Value | **392 / 392** |
+
+Previously 0 of 326. Multi-item documents also resolve **per item** now -
+8325000002 shows 1,080.00 on Sr. 002 and 4,800.00 on Sr. 003 - which is the
+KPOSN match working item by item, exactly what the fix was for.
+
+### Against the ECC baseline
+
+The ECC run (`zgstr1_old_output`, 01.04.2025 - **21.03.2026**) is a subset of
+this period. Joined on (document, fiscal year, Sr. No.):
+
+- ECC rows: 555; **all 555 present in `i1`**, none missing
+- of those 555, **2 rows differ**, and only on one column
+
+| doc | Sr | HSN ECC | HSN S/4 | Taxable (both) |
+|---|---|---|---|---|
+| 8125000037 | 002 | 847130 | 85072000 | 289,800.00 |
+| 8325000036 | 002 | 847130 | 85072000 | 44,206.00 |
+
+These are the same two material-master rows identified in round 3. Amounts
+match exactly. Not a reporting defect.
+
+### The 50 extra rows are not an error
+
+`i1` has 605 rows against ECC's 555. All 50 extra rows are posted **31.03.2026**
+- after the ECC run's cut-off of 21.03.2026 - so they fall in the wider date
+range, not in any overlap. None has a zero total.
+
+### Conclusion
+
+The report is correct. Every money column matches ECC on all 555 comparable
+rows; the only differences are the two known HSN master-data rows, and the extra
+rows are explained entirely by the longer selection period.
+
+Remaining open items are unrelated to this defect:
+
+1. HSN/SAC on materials behind 8125000037 and 8325000036 - decide which code is
+   right and correct the material master.
+2. The five `READ TABLE ... BINARY SEARCH` reads on tables not sorted by their
+   search key (lines 318, 675, 770, 776, 817), including one whose `SORT` is
+   commented out at line 304.
+3. The `it_bseg_h` select qualifies on BUKRS and BELNR but not GJAHR.
