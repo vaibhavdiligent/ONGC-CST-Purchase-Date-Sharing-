@@ -661,3 +661,84 @@ ZGSTR1_EXEMPT grows. Either restore the SORT or drop `BINARY SEARCH`.
 `SE16 -> BKPF`, `BUKRS = OVL`, `BELNR = 8124000001`, `GJAHR = 2024`: read
 `GLVOR` and `AWKEY`. GLVOR not `SD00` explains the entire symptom - the SD
 branch is skipped and the FI/BSET branch finds nothing for zero-rated supplies.
+
+## Round 4h - GLVOR and AWKEY are correct; the VBRK read is the last link
+
+BKPF for 8124000001 / 2024:
+
+| BUKRS | BLART | GLVOR | AWKEY | TCODE |
+|---|---|---|---|---|
+| OVC | RV | RFBU | `8124000001OVC 2024` | FB01 |
+| **OVL** | RV | **SD00** | **`0090002699`** | VF02 |
+
+The OVL row - the one the report reads - has `GLVOR = SD00` and
+`AWKEY = 0090002699`. **(A) is ruled out.**
+
+Line 426 also confirms this is one of the failing rows:
+`ELSEIF wa_final-glacct = '230903'. wa_final-typent = 'Zero Rated'.`
+
+Lines 400-460 contain no reassignment of `wa_bseg` before the loop, so the work
+area reaching line 477 is OVL/002 with `TXGRP = 010` as established.
+
+### Everything verified except one step
+
+| step | status |
+|---|---|
+| `wa_bseg` = OVL/002, TXGRP 010 | verified |
+| READ it_bkpf finds the OVL row | verified (GLVOR SD00) |
+| `lv_vbeln = wa_bkpf-AWKEY` = 0090002699 | verified |
+| **`SELECT SINGLE knumv FROM vbrk WHERE vbeln = @lv_vbeln`** | **NOT verified** |
+| `v_konv_cds` has KNUMV 0001172510 | verified (KAWRT 88,945.20) |
+| `kposn = wa_bseg-TXGRP` -> 000010 = 000010 | verified |
+
+The KNUMV `0001172510` was looked up directly in V_KONV_CDS; nothing has
+confirmed that the *program's* VBRK read returns it.
+
+### Leading hypothesis - CHAR(20) host variable against a CHAR(10) column
+
+```abap
+  DATA(lv_vbeln) = wa_bkpf-AWKEY.        " inline -> type AWKEY, CHAR(20)
+  SELECT SINGLE knumv FROM vbrk INTO @DATA(lv_knumv)
+    WHERE vbeln = @lv_vbeln.             " VBRK-VBELN is CHAR(10)
+```
+
+`lv_vbeln` inherits `AWKEY`, which is **CHAR(20)**, so it holds
+`'0090002699'` followed by **ten trailing blanks**. `VBRK-VBELN` is CHAR(10).
+
+On the classic databases under ECC, CHAR comparison is blank-padded and
+trailing blanks are insignificant, so this matched. On **HANA**, ABAP CHAR maps
+to NVARCHAR, where **trailing blanks are significant**. That makes the
+comparison `'0090002699' = '0090002699          '` unequal, the SELECT SINGLE
+returns `sy-subrc = 4`, the `IF sy-subrc = 0` guard fails, and the condition
+read never runs.
+
+This fits every observation:
+
+- identical source, correct in ECC, zero in S/4
+- **all** SD rows fail uniformly - every AWKEY is padded the same way
+- everything either side of that one statement verifies clean
+- the FI branch is untouched because it never goes near VBRK
+
+### The test - 30 seconds
+
+`SE16 -> VBRK`, `VBELN = 0090002699`. If it returns a row with
+`KNUMV = 0001172510`, the data is present and the **statement** is what fails,
+confirming the hypothesis.
+
+### The fix
+
+Type the variable to the column, not to AWKEY:
+
+```abap
+  DATA lv_vbeln TYPE vbrk-vbeln.         " CHAR(10)
+  lv_vbeln = wa_bkpf-awkey(10).
+  SELECT SINGLE knumv FROM vbrk INTO @lv_knumv
+    WHERE vbeln = @lv_vbeln.
+```
+
+Replaces the inline `DATA(lv_vbeln) = wa_bkpf-AWKEY.` at line 462. Declare
+`lv_vbeln` with the other locals in the form.
+
+Caveat: this does not explain why round 3 passed on FY 2025-26 documents. That
+run may have been a different system or program version - worth confirming which
+system produced `new_output_1` before treating the two as one code base.
