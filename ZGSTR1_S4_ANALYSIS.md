@@ -576,3 +576,33 @@ It is not the cause of the zero amounts - row counts match ECC exactly at 519,
 so nothing extra is currently leaking in - but it should be closed while the
 program is open. `it_bset` already carries `gjahr`; add
 `AND gjahr = @it_bset-gjahr`.
+
+## Round 4f - VBELN is on the customer line only
+
+Same 6 BSEG rows with `VBELN` now visible:
+
+| BUKRS | BUZEI | KOART | HKONT | VBELN |
+|---|---|---|---|---|
+| OVC | 001 | S | 0000190316 | (blank) |
+| OVC | 002 | D | 0000091110 | (blank) |
+| OVC | 003 | S | 0000192401 | (blank) |
+| OVC | 004 | S | 0000230101 | (blank) |
+| OVL | 001 | **D** | 0000091111 | **0090002699** |
+| OVL | 002 | **S** | 0000230903 | **(blank)** |
+
+`VBELN` is populated only on the **customer (KOART `D`)** line. The select that
+fills `it_bseg_h` filters `koart = 'S'`, so **every row in `it_bseg_h` has a
+blank VBELN**. The field was added to that select ("added by mohd mobassir")
+but on the S lines it is always empty.
+
+This does not break the condition read directly - that path takes the billing
+document from `BKPF-AWKEY`, not from `BSEG-VBELN` - but any logic elsewhere
+that relies on `wa_bseg-vbeln` is reading a blank field on every row.
+
+Useful by-product: the billing document is **0090002699**. That gives a direct
+check of step (B) - `VBRK-VBELN = 0090002699` should yield
+`KNUMV = 0001172510`, the KNUMV whose conditions were confirmed present in
+round 4c.
+
+`TXGRP` is still not visible in the SE16 layout, so the join key remains the
+one unresolved item.
