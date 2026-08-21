@@ -437,3 +437,75 @@ task, so do not skip the three-way count.
 If the answer is that FY 2024-25 conditions are absent from PRCD_ELEMENTS, no
 code change can produce those amounts, and filing GSTR1 for that year out of
 S/4 needs a business decision rather than a developer fix.
+
+## Round 4c - V_KONV_CDS returns the data; the join key is the problem
+
+SE16 on `V_KONV_CDS` for `KNUMV = 0001172510` returns 2 rows:
+
+| KPOSN (Item) | STUNR | KSCHL | KAWRT |
+|---|---|---|---|
+| 10 | 10 | ZSER | 30.00 |
+| **10** | 20 | **JOIG** | **88,945.20** |
+
+`88,945.20` is exactly the Taxable / Gross / Total value that document
+`8124000001` Sr. No. 002 shows in the ECC baseline. So:
+
+- **(B) is fine** - the KNUMV resolves.
+- **(C) is fine** - `V_KONV_CDS` returns the conditions, with the right value.
+
+That leaves **(D)**: `LOOP AT it_konv WHERE kposn = wa_bseg-TXGRP`.
+
+### Why (D) is now the prime suspect
+
+`KPOSN` in the view is **10** - the SD billing item number, stored as NUMC(6)
+`000010`. `BSEG-TXGRP` is NUMC(3). ABAP pads the shorter operand with leading
+zeros, so the loop matches only when TXGRP is `010`:
+
+| BSEG-TXGRP | padded | vs KPOSN 000010 |
+|---|---|---|
+| `010` | `000010` | match |
+| `001` | `000001` | no match |
+| `002` | `000002` | no match |
+| `000` | `000000` | no match |
+
+In ECC the match evidently succeeded, so TXGRP was `010` there. If S/4 fills it
+differently, the loop body is skipped on every row - which is precisely the
+observed all-zero result.
+
+This also fits the rest of the evidence. `wa_bseg` itself resolves correctly:
+`MENGE`, `MEINS` and `HSN_SAC` come from the same work area and are populated
+on all 326 rows. Only the field used as the join key fails.
+
+Note the report has no other link to the SD item - the BSEG select
+(`it_bseg_h`) reads `VBELN` but **not** `POSNR`, so `TXGRP` is the only
+available key.
+
+Also note `Sr. No.` is `BSEG-BUZEI` (`wa_final-invlin = wa_bseg-buzei`), not
+TXGRP - the `002` in the output is the FI line number and is unrelated to
+KPOSN.
+
+### The check that confirms it
+
+`SE16 -> BSEG`, the FI document behind KNUMV 0001172510, column `TXGRP`:
+
+- `TXGRP = 010` -> (D) is fine, and the cause is (A): `BKPF-GLVOR` is not
+  `SD00`, so the ELSE/BSET branch runs. For zero-rated supplies BSET holds no
+  line in GL accounts 192402/192403/192404, so that branch also yields zero.
+  Check `BKPF-GLVOR` in that case.
+- `TXGRP` anything else -> confirmed (D).
+
+Run the same check on a working FY 2025-26 document (8125*). If TXGRP is `010`
+there and different here, that is the whole answer.
+
+### If (D) is confirmed
+
+Do not "fix" it by loosening the comparison. The loop needs the SD item number,
+and TXGRP is only a proxy for it. Options, best first:
+
+1. Add `POSNR` to the `it_bseg_h` select and match `kposn = wa_bseg-posnr`.
+   This is the real key and removes the dependence on how TXGRP is filled.
+2. If POSNR is not populated on the FI line, derive the item from the billing
+   document (`VBELN` is already selected) via VBRP, and match on that.
+
+Either way, this is a code change, not a migration issue - the condition data
+is present and correct in S/4.
