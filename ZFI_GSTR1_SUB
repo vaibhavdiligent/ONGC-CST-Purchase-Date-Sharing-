@@ -1,0 +1,1446 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZFI_GSTR1_SUB
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  FETCH_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fetch_data .
+
+
+  CALL FUNCTION 'G_SET_GET_ALL_VALUES'    "" FM TO FETCH DATA FROM A SET
+    EXPORTING
+      client        = sy-mandt
+*     FORMULA_RETRIEVAL           = ' '
+*     LEVEL         = 0
+      setnr         = 'ZTAX_CODE'
+*     VARIABLES_REPLACEMENT       = ' '
+      table         = 'BSET'
+      class         = '0000'
+*     NO_DESCRIPTIONS             = 'X'
+*     NO_RW_INFO    = 'X'
+*     DATE_FROM     =
+*     DATE_TO       =
+      fieldname     = 'MWSKZ'
+    TABLES
+      set_values    = t_set
+    EXCEPTIONS
+      set_not_found = 1
+      OTHERS        = 2.
+  IF sy-subrc <> 0.
+    MESSAGE 'Invalid set' TYPE 'E'.
+
+  ELSEIF sy-subrc EQ 0.
+    LOOP AT t_set INTO wa_set.        "STORING THE SET VALUE IN A INTERNAL TABLE.
+
+      wa_set1-value = wa_set-from.
+
+      APPEND wa_set1 TO lt_set.
+
+      CLEAR :  wa_set, wa_set1.
+    ENDLOOP.
+  ENDIF.
+
+
+
+
+
+
+  SELECT
+      bukrs,
+      belnr,
+      gjahr,
+      blart,
+      bldat,
+      budat,
+      xblnr,
+      stblg,
+      awtyp,
+      awkey,
+      xblnr_alt,
+      glvor              "added by mohd mobassir
+      FROM bkpf INTO TABLE @DATA(it_bkpf)
+      WHERE bukrs IN @s_cc
+      AND   budat IN @s_dt.
+
+  IF it_bkpf IS NOT INITIAL.
+    SORT it_bkpf BY bukrs belnr gjahr.
+
+    SELECT
+      bukrs,
+      belnr,
+      gjahr,
+      buzei,
+      mwskz,
+      hkont,
+      txgrp,
+      hwbas,
+      hwste,
+      kschl,
+      kbetr,
+      shkzg
+      FROM bset INTO TABLE @DATA(it_bset)
+      FOR ALL ENTRIES IN @it_bkpf
+      WHERE bukrs IN @s_cc
+      AND belnr = @it_bkpf-belnr
+      AND gjahr = @it_bkpf-gjahr.
+
+*************code added by sandeep r as on 08.01.2024 for creation of tax code*****************
+
+
+    DATA : v TYPE i.    "USED AS INDICATOR.
+
+    LOOP AT it_bset INTO DATA(ls_bset).          "" FIL;TER OUT THOSE DATA WHOSE TAX CODE IS NOT MAITAIN IN ZTAX_CODE.
+      LOOP AT lt_set INTO DATA(wa_set2).
+        IF ls_bset-mwskz = wa_set2-value.
+          v = 1.
+          EXIT.
+        ELSE.
+          v = 0.
+        ENDIF.
+      ENDLOOP.
+      CLEAR: wa_set2.
+      IF v = 0.
+        DELETE it_bset WHERE mwskz = ls_bset-mwskz.
+      ENDIF.
+      CLEAR : v, wa_set2, ls_bset.
+
+    ENDLOOP.
+
+*************code added by sandeep r as on 08.01.2024 for creation of tax code*****************
+
+**
+    """""('OE','DO','CO','BO','EO','YF','YG','YH','YE','YC','KC','YD','YB').
+
+
+
+
+
+
+
+*********changes for clearing doc
+    SELECT
+      bukrs,
+      hkont,
+      augdt,
+      augbl,
+      gjahr,
+      belnr,
+      buzei,
+      budat
+      FROM bsas INTO TABLE @DATA(it_bsas)
+      FOR ALL ENTRIES IN @it_bkpf
+      WHERE bukrs = @it_bkpf-bukrs
+        AND hkont IN ( '0000192402' , '0000192403' , '0000192404' )
+        AND belnr = @it_bkpf-belnr
+        AND gjahr = @it_bkpf-gjahr.
+
+
+    IF it_bset IS NOT INITIAL.
+      SORT it_bset BY bukrs belnr gjahr buzei.
+
+      SELECT
+        bukrs,
+        belnr,
+        gjahr,
+        buzei,
+        mwskz,
+        hkont,
+        txgrp,
+        hwbas,
+        hwste,
+        kschl,
+        kbetr,
+        shkzg
+        FROM bset INTO TABLE @DATA(it_bset2)
+        FOR ALL ENTRIES IN @it_bset
+        WHERE bukrs IN @s_cc
+        AND belnr = @it_bset-belnr
+        AND gjahr = @it_bset-gjahr.
+
+      SORT it_bset2 BY bukrs belnr gjahr buzei.
+
+      SELECT
+        bukrs,
+        belnr,
+        gjahr,
+        buzei,
+        buzid,
+        koart,
+        shkzg,
+        mwskz,
+        dmbtr,
+        txgrp,
+        hkont,
+        menge,
+        meins,
+        hsn_sac,
+        vbeln                 "added by mohd mobassir
+        FROM bseg INTO TABLE @DATA(it_bseg_h)
+        FOR ALL ENTRIES IN @it_bset
+        WHERE bukrs IN @s_cc
+        AND   belnr = @it_bset-belnr
+        AND   koart = 'S'
+        AND   buzid NE 'T'.
+
+      SELECT
+        bukrs,
+        belnr,
+        gjahr,
+        buzei,
+        buzid,
+        koart,
+        mwskz,
+        kunnr
+        FROM bseg INTO TABLE @DATA(it_bseg_k)
+        FOR ALL ENTRIES IN @it_bset
+        WHERE bukrs IN @s_cc
+        AND   belnr = @it_bset-belnr
+        AND   koart = 'D'.
+
+    ENDIF.
+  ENDIF.
+
+  IF it_bseg_k IS NOT INITIAL.
+    SORT it_bseg_k BY bukrs belnr gjahr.
+
+    SELECT
+      kunnr,
+      land1,
+      name1,
+      regio,
+      stcd3
+      FROM kna1 INTO TABLE @DATA(it_kna1)
+      FOR ALL ENTRIES IN @it_bseg_k
+      WHERE kunnr = @it_bseg_k-kunnr.
+
+    SORT it_kna1 BY kunnr.
+
+    SELECT
+        bukrs,
+        belnr,
+        gjahr,
+        blart,
+        awkey
+        FROM bkpf INTO TABLE @DATA(it_bkpf_r)
+        FOR ALL ENTRIES IN @it_bseg_k
+        WHERE bukrs IN @s_cc
+        AND   belnr = @it_bseg_k-belnr
+        AND   gjahr = @it_bseg_k-gjahr.
+
+    IF it_bkpf_r IS NOT INITIAL.
+      SORT it_bkpf_r BY bukrs belnr gjahr.
+
+      REFRESH it_bkpf2.
+      CLEAR wa_bkpf2.
+
+      LOOP AT it_bkpf_r INTO DATA(wa_bkpf_r) WHERE blart = 'KR' OR blart = 'KS'.
+        wa_bkpf2-belnr = wa_bkpf_r-awkey(10).
+        wa_bkpf2-gjahr = wa_bkpf_r-awkey+10(4).
+        wa_bkpf2-awkey = wa_bkpf_r-awkey.
+        APPEND wa_bkpf2 TO it_bkpf2.
+      ENDLOOP.
+
+      IF it_bkpf2 IS NOT INITIAL.
+        SORT it_bkpf2 BY belnr gjahr.
+
+        SELECT
+          belnr,
+          gjahr,
+          budat,
+          stblg
+          FROM rbkp INTO TABLE @DATA(it_rbkp)
+          FOR ALL ENTRIES IN @it_bkpf2
+          WHERE belnr = @it_bkpf2-belnr
+          AND   gjahr = @it_bkpf2-gjahr
+          AND   stblg NE ''.
+
+      ENDIF.
+
+      IF it_rbkp IS NOT INITIAL.
+        SORT it_rbkp BY belnr gjahr.
+
+        REFRESH it_temp.
+        CLEAR wa_temp.
+
+        LOOP AT it_rbkp INTO DATA(wa_rbkp).
+          wa_temp-stblg = wa_rbkp-stblg.
+          CONCATENATE wa_rbkp-stblg wa_rbkp-gjahr INTO wa_temp-awkey.
+          APPEND wa_temp TO it_temp.
+        ENDLOOP.
+
+        IF it_temp IS NOT INITIAL.
+          SORT it_temp BY stblg.
+          REFRESH it_bkpf_r.
+
+          SELECT
+              bukrs
+              belnr
+              gjahr
+              blart
+              awkey
+              FROM bkpf INTO TABLE it_bkpf_r
+              FOR ALL ENTRIES IN it_temp
+              WHERE bukrs IN s_cc
+              AND   awkey = it_temp-awkey.
+
+        ENDIF.
+      ENDIF.
+
+    ENDIF.
+  ENDIF.
+  DELETE it_bseg_h WHERE mwskz = ' '.
+
+    "BOC by mohd mobassir ON 13.07.2026
+
+  SELECT bukrs belnr gjahr
+    FROM ZGSTR1_EXEMPT
+    INTO TABLE lt_skip_chk.
+
+*  SORT lt_skip_chk BY bukrs belnr gjahr.
+
+  "EOC by mohd mobassir ON 13.07.2026
+
+  IF it_bseg_h IS NOT INITIAL.
+
+    LOOP AT it_bseg_h INTO DATA(wa_bseg).
+
+         "BOC by mohd mobassir ON 13.07.2026
+
+        READ TABLE lt_skip_chk INTO wa_skip_chk
+          WITH KEY bukrs = wa_bseg-bukrs
+                   belnr = wa_bseg-belnr
+                   gjahr = wa_bseg-gjahr
+                   BINARY SEARCH.
+
+        IF sy-subrc <> 0.   " match not found -> run existing logic as-is
+
+        "EOC by mohd mobassir ON 13.07.2026
+
+
+
+      wa_final-intref = wa_bseg-belnr.
+      wa_final-gstinp = '07AAACO1230F1Z2'.
+      wa_final-docsta = 'Original'.
+      wa_final-invlin = wa_bseg-buzei.
+
+      wa_final-glacct = wa_bseg-hkont.
+      wa_final-hsnsac = wa_bseg-hsn_sac.
+
+      IF wa_final-hsnsac IS INITIAL.      ""Added on 7/6/22 by hrishi n
+        SELECT SINGLE matnr,werks FROM bseg INTO @DATA(wa_bseg_1)
+                                  WHERE bukrs = @wa_bseg-bukrs
+                                    AND belnr = @wa_bseg-belnr
+                                    AND gjahr = @wa_bseg-gjahr
+                                    AND buzei = @wa_bseg-buzei.
+        IF wa_bseg_1 IS NOT INITIAL.
+          SELECT SINGLE steuc FROM marc INTO @DATA(hsn_sac)
+                              WHERE matnr = @wa_bseg_1-matnr
+                                AND werks = @wa_bseg_1-werks.
+
+          IF hsn_sac IS NOT INITIAL.
+            wa_final-hsnsac = hsn_sac.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      wa_final-unitcd = 'Nos'.
+      wa_final-tquant = wa_bseg-menge.
+
+      SHIFT wa_final-glacct LEFT DELETING LEADING '0'.
+
+      IF wa_final-glacct = '239094' OR wa_final-glacct = '239092'.
+        wa_final-typent = 'White Goods Recovery'.
+      ELSEIF wa_final-glacct = '230903'.
+        wa_final-typent = 'Zero Rated'.
+      ELSEIF wa_final-glacct = '230922' OR wa_final-glacct = '230923'.
+        wa_final-typent = 'LD'.
+      ELSEIF wa_final-glacct = '239012'.
+        wa_final-typent = 'Scrap Sales'.
+      ELSEIF wa_final-glacct = '239013'.
+        wa_final-typent = 'Tender Fees'.
+      ELSEIF wa_final-glacct = '239021'.
+        wa_final-typent = 'Penalty'.
+      ENDIF.
+
+      IF wa_bseg-mwskz = 'OE'.
+        wa_final-txappl = 'L'.
+      ELSE.
+        wa_final-txappl = 'T'.
+      ENDIF.
+
+
+
+"totval and grsval logic for SD related document
+
+*      LOOP at it_bkpf into DATA(wa_bkpf).
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+"Boc by mohd mobassir
+
+"SD Document logic
+
+READ TABLE it_bkpf INTO DATA(wa_bkpf)
+WITH KEY bukrs = wa_bseg-bukrs
+         belnr = wa_bseg-belnr
+         gjahr = wa_bseg-gjahr.
+
+IF sy-subrc = 0 AND wa_bkpf-glvor = 'SD00'.
+
+  DATA(lv_vbeln) = wa_bkpf-AWKEY(10).
+
+  SELECT SINGLE knumv
+    FROM vbrk
+    INTO @DATA(lv_knumv)
+    WHERE vbeln = @lv_vbeln.
+
+
+  IF sy-subrc = 0.
+
+    SELECT *
+      FROM v_konv_cds
+      INTO TABLE @DATA(it_konv)
+      WHERE knumv = @lv_knumv.
+
+    LOOP AT it_konv INTO DATA(wa_konv) where kposn = wa_bseg-TXGRP.
+
+      "Taxable value
+      IF wa_konv-kschl = 'JOIG'
+      OR wa_konv-kschl = 'JOCG'
+      OR wa_konv-kschl = 'JOSG'
+      OR wa_konv-kschl = 'JOUG'.
+
+        wa_final-txbval = wa_konv-kawrt.
+
+   wa_final-grsval = wa_konv-kawrt.
+      ENDIF.
+
+      "Gross value
+
+
+      CASE wa_konv-kschl.
+        WHEN 'JOIG'.
+
+          wa_final-igstrt = wa_konv-kbetr / 10.
+          wa_final-igstvl = wa_konv-kwert.
+
+        WHEN 'JOCG'.
+
+          wa_final-cgstrt = wa_konv-kbetr / 10.
+          wa_final-cgstvl = wa_konv-kwert.
+
+        WHEN 'JOSG' OR 'JOUG'.
+
+          wa_final-sugstr = wa_konv-kbetr / 10.
+          wa_final-sugstv = wa_konv-kwert.
+
+      ENDCASE.
+
+      wa_final-txrate =
+          wa_final-igstrt +
+          wa_final-cgstrt +
+          wa_final-sugstr.
+
+      wa_final-totval =
+          wa_final-txbval +
+          wa_final-igstvl +
+          wa_final-cgstvl +
+          wa_final-sugstv.
+
+    ENDLOOP.
+  ENDIF.
+
+  else.
+
+"EOC by mohd mobassir
+
+ "for fi related documents
+
+    LOOP AT it_bset2 INTO DATA(wa_bset) WHERE belnr = wa_bseg-belnr AND gjahr = wa_bseg-gjahr AND txgrp = wa_bseg-txgrp.
+
+        IF wa_bset-shkzg = 'H'.
+          IF  wa_bset-kschl = 'JOIG'.
+            wa_final-txbval = wa_bset-hwbas.
+          ELSEIF wa_bset-kschl = 'JOCG'.
+            wa_final-txbval = wa_bset-hwbas.
+          ELSEIF  wa_bset-kschl = 'JOSG' OR  wa_bset-kschl = 'JOUG'.
+            wa_final-txbval = wa_bset-hwbas.
+          ENDIF.
+          wa_final-grsval = wa_bset-hwbas.
+
+          CASE wa_bset-kschl.
+            WHEN 'JOIG'.
+              wa_final-igstrt = ( wa_bset-kbetr / 10 )." * -1.
+              wa_final-igstvl = wa_bset-hwste.
+
+            WHEN 'JOCG'.
+              wa_final-cgstrt = ( wa_bset-kbetr / 10 )." * -1.
+              wa_final-cgstvl = wa_bset-hwste.
+
+            WHEN 'JOSG' OR 'JOUG'.
+              wa_final-sugstr = ( wa_bset-kbetr / 10 )." * -1.
+              wa_final-sugstv = wa_bset-hwste.
+
+          ENDCASE.
+
+          wa_final-txrate = wa_final-igstrt + wa_final-cgstrt + wa_final-sugstr.
+          wa_final-totval = wa_final-txbval + wa_final-igstvl + wa_final-cgstvl + wa_final-sugstv.
+
+        ELSE.
+
+          wa_final-txbval = wa_bset-hwbas * -1.
+          wa_final-grsval = wa_bset-hwbas * -1.
+
+          CASE wa_bset-kschl.
+            WHEN 'JOIG'.
+              wa_final-igstrt = ( wa_bset-kbetr / 10 )." * -1.
+              wa_final-igstvl = wa_bset-hwste * -1.
+
+            WHEN 'JOCG'.
+              wa_final-cgstrt = ( wa_bset-kbetr / 10 )." * -1.
+              wa_final-cgstvl = wa_bset-hwste * -1.
+
+            WHEN 'JOSG' OR 'JOUG'.
+              wa_final-sugstr = ( wa_bset-kbetr / 10 )." * -1
+              wa_final-sugstv = wa_bset-hwste * -1.
+
+          ENDCASE.
+
+          wa_final-txrate = wa_final-igstrt + wa_final-cgstrt + wa_final-sugstr.
+          wa_final-totval = wa_final-txbval + wa_final-igstvl + wa_final-cgstvl + wa_final-sugstv.
+
+        ENDIF.
+      ENDLOOP.
+
+      IF sy-subrc NE 0.
+
+        LOOP AT it_bset2 INTO DATA(wa_bset2) WHERE belnr = wa_bseg-belnr AND gjahr = wa_bseg-gjahr."" AND txgrp = wa_bseg-txgrp.
+
+          IF wa_bset2-shkzg = 'H'.
+            IF  wa_bset2-kschl = 'JOIG'.
+              wa_final-txbval = wa_bset2-hwbas.
+            ELSEIF wa_bset2-kschl = 'JOCG'.
+              wa_final-txbval = wa_bset2-hwbas.
+            ELSEIF  wa_bset2-kschl = 'JOSG' OR  wa_bset2-kschl = 'JOUG'.
+              wa_final-txbval = wa_bset2-hwbas.
+            ENDIF.
+            wa_final-grsval = wa_bset2-hwbas.
+
+            CASE wa_bset2-kschl.
+              WHEN 'JOIG'.
+                wa_final-igstrt = ( wa_bset2-kbetr / 10 )." * -1.
+                wa_final-igstvl = wa_bset2-hwste.
+
+              WHEN 'JOCG'.
+                wa_final-cgstrt = ( wa_bset2-kbetr / 10 )." * -1.
+                wa_final-cgstvl = wa_bset2-hwste.
+
+              WHEN 'JOSG' OR 'JOUG'.
+                wa_final-sugstr = ( wa_bset2-kbetr / 10 )." * -1.
+                wa_final-sugstv = wa_bset2-hwste.
+
+            ENDCASE.
+
+            wa_final-txrate = wa_final-igstrt + wa_final-cgstrt + wa_final-sugstr.
+            wa_final-totval = wa_final-txbval + wa_final-igstvl + wa_final-cgstvl + wa_final-sugstv.
+
+          ELSE.
+
+            wa_final-txbval = wa_bset2-hwbas * -1.
+            wa_final-grsval = wa_bset2-hwbas * -1.
+
+            CASE wa_bset2-kschl.
+              WHEN 'JOIG'.
+                wa_final-igstrt = ( wa_bset2-kbetr / 10 )." * -1.
+                wa_final-igstvl = wa_bset2-hwste * -1.
+
+              WHEN 'JOCG'.
+                wa_final-cgstrt = ( wa_bset2-kbetr / 10 )." * -1.
+                wa_final-cgstvl = wa_bset2-hwste * -1.
+
+              WHEN 'JOSG' OR 'JOUG'.
+                wa_final-sugstr = ( wa_bset2-kbetr / 10 )." * -1
+                wa_final-sugstv = wa_bset2-hwste * -1.
+
+            ENDCASE.
+
+            wa_final-txrate = wa_final-igstrt + wa_final-cgstrt + wa_final-sugstr.
+            wa_final-totval = wa_final-txbval + wa_final-igstvl + wa_final-cgstvl + wa_final-sugstv.
+
+          ENDIF.
+        ENDLOOP.
+
+      ENDIF.
+
+ENDIF.
+
+*"""""""""""""""""""""""""""""""""""""""""""""
+*       READ TABLE it_bkpf INTO DATA(wa_bkpf)
+*       WITH KEY bukrs = wa_bseg-bukrs
+*                belnr = wa_bseg-belnr
+*                gjahr = wa_bseg-gjahr.
+*
+*  IF sy-subrc = 0 AND wa_bkpf-glvor = 'SD00'.
+*
+**    append wa_bseg to lt_sd_docs.
+**
+**    sort lt_sd_docs by belnr.
+**
+**   DELETE ADJACENT DUPLICATES FROM lt_sd_docs
+**       COMPARING belnr.
+*
+**        if wa_bkpf-glvor = 'sd00'.
+*         data(lv_belnr) = wa_bkpf-belnr.
+**          DATA(lv_vbeln) = wa_bkpf-awkey.
+*           data(lv_vbeln) = wa_bseg-vbeln.
+*
+*       if wa_bkpf is NOT INITIAL.
+*
+*         SELECT knumv
+*           FROM vbrk
+*           into TABLE @data(it_vbrk)
+*           where vbeln = @lv_vbeln.
+*
+*          if it_vbrk is not INITIAL.
+*            SELECT *
+*              from konv into @data(it_konv)
+*        where knuvm = it_vbrk-knumv.
+*              if sy-subrc = 0.
+*
+*                loop at it_konv into data(wa_konv).
+*
+*
+**        IF wa_bset-shkzg = 'H'.
+*          IF  wa_konv-kschl = 'JOIG'.
+**            wa_final-txbval = wa_bset-hwbas.
+**            wa_final-txbval = wa_konv-KAWRT.
+*          ELSEIF wa_konv-kschl = 'JOCG'.
+*            wa_final-txbval = wa_konv-KAWRT ."wa_bset-hwbas.
+*          ELSEIF  wa_konv-kschl = 'JOSG' OR  wa_konv-kschl = 'JOUG'.
+*            wa_final-txbval = wa_konv-KAWRT."wa_bset-hwbas.
+*          ENDIF.
+*          wa_final-grsval = wa_konv-KAWRT."wa_bset-hwbas.
+*
+*          CASE wa_konv-kschl.  "need to check from here....
+*            WHEN 'JOIG'.
+*              wa_final-igstrt = ( wa_bset-kbetr / 10 )." * -1.
+*              wa_final-igstvl = wa_bset-hwste.
+*
+*            WHEN 'JOCG'.
+*              wa_final-cgstrt = ( wa_bset-kbetr / 10 )." * -1.
+*              wa_final-cgstvl = wa_bset-hwste.
+*
+*            WHEN 'JOSG' OR 'JOUG'.
+*              wa_final-sugstr = ( wa_bset-kbetr / 10 )." * -1.
+*              wa_final-sugstv = wa_bset-hwste.
+*
+*          ENDCASE.
+*
+*          wa_final-txrate = wa_final-igstrt + wa_final-cgstrt + wa_final-sugstr.
+*          wa_final-totval = wa_final-txbval + wa_final-igstvl + wa_final-cgstvl + wa_final-sugstv.
+*
+*        ELSE.
+*
+*          wa_final-txbval = wa_bset-hwbas * -1.
+*          wa_final-grsval = wa_bset-hwbas * -1.
+*
+*          CASE wa_bset-kschl.
+*            WHEN 'JOIG'.
+*              wa_final-igstrt = ( wa_bset-kbetr / 10 )." * -1.
+*              wa_final-igstvl = wa_bset-hwste * -1.
+*
+*            WHEN 'JOCG'.
+*              wa_final-cgstrt = ( wa_bset-kbetr / 10 )." * -1.
+*              wa_final-cgstvl = wa_bset-hwste * -1.
+*
+*            WHEN 'JOSG' OR 'JOUG'.
+*              wa_final-sugstr = ( wa_bset-kbetr / 10 )." * -1
+*              wa_final-sugstv = wa_bset-hwste * -1.
+*
+*          ENDCASE.
+*
+*          wa_final-txrate = wa_final-igstrt + wa_final-cgstrt + wa_final-sugstr.
+*          wa_final-totval = wa_final-txbval + wa_final-igstvl + wa_final-cgstvl + wa_final-sugstv.
+*
+*        ENDIF.
+*      ENDLOOP.
+*              endloop.
+*"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+
+      READ TABLE it_bkpf INTO wa_bkpf WITH KEY belnr = wa_bseg-belnr BINARY SEARCH.
+      IF sy-subrc = 0.
+
+*         "BOC by mohd mobassir ON 13.07.2026
+*
+*        READ TABLE lt_skip_chk INTO wa_skip_chk
+*          WITH KEY bukrs = wa_bkpf-bukrs
+*                   belnr = wa_bkpf-belnr
+*                   gjahr = wa_bkpf-gjahr
+*                   BINARY SEARCH.
+*
+*        IF sy-subrc <> 0.   " match found -> run existing logic as-is
+*
+*        "EOC by mohd mobassir ON 13.07.2026
+
+
+        wa_final-invdat = wa_bkpf-bldat.
+        wa_final-postdt = wa_bkpf-budat.
+        wa_final-fiscyr = wa_bkpf-gjahr.
+
+        IF wa_bkpf-budat LT '20170701'.
+          wa_final-pregst = 'Yes'.
+        ELSE.
+          wa_final-pregst = 'No'.
+        ENDIF.
+
+        IF wa_bkpf-blart = 'DR' OR wa_bkpf-blart = 'DA' OR wa_bkpf-blart = 'RV'.
+          wa_final-invnum = wa_bkpf-xblnr.
+        ELSEIF wa_bkpf-blart = 'KJ' OR wa_bkpf-blart = 'KM' OR wa_bkpf-blart = 'KR' OR wa_bkpf-blart = 'KS' OR wa_bkpf-blart = 'SA'.
+          wa_final-invnum = wa_bkpf-xblnr_alt.
+
+        ELSEIF wa_bkpf-blart = 'RC' OR wa_bkpf-blart = 'RD'.
+          wa_final-invnum = wa_bkpf-xblnr.
+
+          IF  wa_bkpf-blart = 'RC'.
+            wa_final-invsta = 'Credit Note'.
+          ELSE.
+            wa_final-invsta = 'Debit Note'.
+          ENDIF.
+
+        ENDIF.
+
+        IF wa_bkpf-blart = 'DR' OR wa_bkpf-blart = 'DA' OR wa_bkpf-blart = 'SA'.
+          wa_final-doctyp = 'Regular Invoice'.
+
+        ELSEIF wa_bkpf-blart = 'DG' OR wa_bkpf-blart = 'KG' OR wa_bkpf-blart = 'RC'.
+
+          wa_final-doctyp = 'Credit Note'.
+          wa_final-nvcnum = wa_bkpf-xblnr.
+          wa_final-nvcdat = wa_bkpf-bldat.
+
+        ELSEIF wa_bkpf-blart = 'RD'.
+          wa_final-doctyp = 'Debit Note'.
+          wa_final-nvcnum = wa_bkpf-xblnr.
+          wa_final-nvcdat = wa_bkpf-bldat.
+
+        ELSEIF wa_bkpf-blart = 'RV'.
+          SELECT SINGLE fkart FROM vbrk INTO @DATA(v_fkart) WHERE vbeln = @wa_bkpf-awkey.
+          IF sy-subrc = 0.
+            IF v_fkart = 'ZSCR' OR v_fkart = 'ZSET' OR v_fkart = 'ZSEM' .
+              wa_final-doctyp = 'Regular Invoice'.
+
+            ELSEIF v_fkart = 'ZCR1'.
+              wa_final-doctyp = 'Credit Note'.
+              wa_final-resnot = 'Sales Return'.
+
+            ELSEIF v_fkart = 'ZDR1'.
+              wa_final-doctyp = 'Debit Note'.
+
+            ELSEIF v_fkart = 'ZEXP'.
+              wa_final-doctyp = 'Bill of Supply'.
+
+            ENDIF.
+          ENDIF.
+
+          IF wa_bkpf-blart = 'KR'.
+            wa_final-typgsr = 'Goods'.
+
+          ELSEIF wa_bkpf-blart = 'RV'.
+            SELECT SINGLE pstyv FROM vbrp INTO @DATA(v_pstyv) WHERE vbeln = @wa_bkpf-awkey.
+            IF sy-subrc = 0.
+              IF v_pstyv NE 'TAD'.
+                wa_final-typgsr = 'Goods'.
+              ELSE.
+                wa_final-typgsr = 'Services'.
+              ENDIF.
+            ENDIF.
+
+          ELSE.
+            wa_final-typgsr = 'Services'.
+          ENDIF.
+        ENDIF.
+
+        IF wa_bkpf-blart = 'KR' OR wa_bkpf-blart = 'KS'.
+
+          READ TABLE it_bkpf2 INTO wa_bkpf2 WITH KEY awkey = wa_bkpf-awkey BINARY SEARCH.
+          IF sy-subrc = 0.
+            READ TABLE it_rbkp INTO wa_rbkp WITH KEY belnr = wa_bkpf2-belnr gjahr = wa_bkpf2-gjahr BINARY SEARCH.
+            IF sy-subrc = 0.
+              READ TABLE it_temp INTO wa_temp WITH KEY stblg = wa_rbkp-stblg BINARY SEARCH.
+              IF sy-subrc = 0.
+                READ TABLE it_bkpf_r INTO wa_bkpf_r WITH KEY awkey = wa_temp-awkey BINARY SEARCH.
+                IF sy-subrc = 0.
+                  wa_final-revdoc = wa_bkpf_r-belnr.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+
+        ELSEIF wa_bkpf-blart = 'RV'.                                                     ""Added on 7/6/22 by hrishi n
+          SELECT SINGLE vbeln FROM vbrk INTO @DATA(canc_doc) WHERE sfakn = @wa_bkpf-awkey.
+          IF sy-subrc = 0.
+            IF canc_doc IS NOT INITIAL OR canc_doc = wa_bkpf-awkey.
+              wa_final-revdoc = canc_doc.
+            ENDIF.
+            CLEAR canc_doc.
+          ELSEIF sy-subrc <> 0.
+            SELECT SINGLE vbeln,sfakn FROM vbrk INTO @DATA(canc_doc1) WHERE vbeln = @wa_bkpf-awkey.
+            IF canc_doc1-sfakn IS NOT INITIAL.
+              wa_final-revdoc = canc_doc1-sfakn.
+            ENDIF.
+
+          ENDIF.
+
+        ELSE.
+          wa_final-revdoc = wa_bkpf-stblg.
+        ENDIF.
+
+        IF wa_final-revdoc IS NOT INITIAL.
+
+          IF wa_final-doctyp = 'Credit Note'.
+            wa_final-invsta = 'Credit Note'.
+          ELSEIF wa_final-doctyp = 'Debit Note'.
+            wa_final-invsta = 'Debit Note'.
+          ELSE.
+            wa_final-invsta = 'Cancelled'.
+          ENDIF.
+
+        ENDIF.
+endif.
+
+
+      READ TABLE it_bseg_k INTO DATA(wa_bseg2) WITH KEY belnr = wa_bseg-belnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        wa_final-iccode = wa_bseg2-kunnr.
+
+        READ TABLE it_kna1 INTO DATA(wa_kna1) WITH KEY kunnr = wa_bseg2-kunnr BINARY SEARCH.
+        IF sy-subrc = 0.
+
+          IF wa_kna1-land1 = 'IN'.
+            wa_final-plsupp = wa_kna1-regio.
+
+            IF wa_kna1-regio IS NOT INITIAL AND wa_kna1-regio NOT BETWEEN '0' AND '99' .       ""Added on 2/6/22 by hrishi n
+              wa_final-plsupp = '99'.
+            ENDIF.
+
+          ELSE.
+            wa_final-plsupp = '99'.
+          ENDIF.
+
+          IF wa_kna1-regio = '07'.
+            wa_final-suptyp = 'Intra'.
+          ELSE.
+            wa_final-suptyp = 'Inter'.
+          ENDIF.
+
+          IF wa_kna1-stcd3 IS NOT INITIAL.
+            wa_final-invtyp = 'B2B'.
+            wa_final-ctptyp = 'Registered'.
+            wa_final-ctpgst = wa_kna1-stcd3.
+            wa_final-ctpnam = wa_kna1-name1.
+
+          ELSE.
+            wa_final-ctptyp = 'Unregistered'.
+            IF wa_kna1-regio = '07'.
+              wa_final-invtyp = 'B2CL'.
+            ELSE.
+              wa_final-invtyp = 'B2CS'.
+              wa_final-ctpnam = wa_kna1-name1.
+
+            ENDIF.
+          ENDIF.
+********************          added by aparna
+          SELECT * FROM setleaf INTO TABLE @DATA(it_setl) WHERE setname = 'ZFI_EINV_LIFNR'.
+          READ TABLE it_setl INTO DATA(wa_setl) WITH KEY valfrom = wa_kna1-stcd3.
+          IF sy-subrc = 0.
+            wa_final-invtyp = 'SEZWOP'.
+*              wa_final-stypcd = 'B2CS'.
+*            ELSE.
+*              wa_final-stypcd = 'B2B'.
+          ENDIF.
+
+***********************          ended by aparna
+        ENDIF.
+
+      ENDIF.
+
+      wa_final-report = ''.
+
+
+      LOOP AT it_bsas INTO DATA(wa_bsas) WHERE bukrs = wa_bkpf-bukrs AND belnr = wa_bkpf-belnr AND gjahr = wa_bkpf-gjahr.
+        IF sy-subrc EQ 0.
+          IF wa_final-cgstvl IS NOT INITIAL AND wa_bsas-hkont = '0000192404'.
+            wa_final-cgstcl  = wa_bsas-augbl.
+            wa_final-cgstcld = wa_bsas-augdt.
+          ENDIF.
+          IF wa_final-sugstv IS NOT INITIAL AND wa_bsas-hkont = '0000192403'.
+            wa_final-sgstcl  = wa_bsas-augbl.
+            wa_final-sgstcld = wa_bsas-augdt.
+          ENDIF.
+          IF wa_final-igstvl IS NOT INITIAL AND wa_bsas-hkont = '0000192402'.
+            wa_final-igstcl  = wa_bsas-augbl.
+            wa_final-igstcld = wa_bsas-augdt.
+          ENDIF.
+        ENDIF.
+        CLEAR wa_bsas.
+      ENDLOOP.
+
+      APPEND wa_final TO it_final.
+      CLEAR: wa_final, wa_bset, wa_bseg, wa_bseg2, wa_bkpf, wa_kna1, v_fkart, v_pstyv.
+            ENDIF.
+    ENDLOOP.
+  ENDIF.
+  IF it_final is not INITIAL.
+  SELECT fwste, belnr FROM bset INTO TABLE  @DATA(t_tcs) FOR ALL ENTRIES IN @it_final      "SOC CHANGE FOR TCS FIELD ADD (04-04-2024) BY ROHIT
+    WHERE bukrs IN @s_cc
+    AND   belnr = @it_final-intref
+    AND   kschl = 'JOTC'.
+      SORT t_tcs BY belnr.
+  LOOP AT it_final INTO DATA(ls_final).
+
+    READ TABLE t_tcs INTO DATA(ls_tcs) WITH KEY belnr = ls_final-intref BINARY SEARCH .
+    IF sy-subrc EQ 0.
+      ls_final-fwste = ls_tcs-fwste.
+    ENDIF.
+    MODIFY it_final FROM ls_final.
+    CLEAR : ls_final .
+
+  ENDLOOP.                                                                                "EOC FOR TCS FIELD ADD(04-04-2024) BY ROHIT
+  ENDIF.
+
+
+
+
+  IF r2 = 'X'.
+    DELETE it_final WHERE revdoc NE ''.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display .
+
+  PERFORM build_fcat.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program     = sy-repid
+      i_callback_top_of_page = 'TOP_OF_PAGE'
+      is_layout              = wa_layout
+      it_fieldcat            = it_fcat
+      it_sort                = it_sort
+      i_save                 = 'A'
+    TABLES
+      t_outtab               = it_final[]
+    EXCEPTIONS
+      program_error          = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BUILD_FCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM build_fcat .
+  DATA count TYPE i VALUE '1'.
+
+  wa_layout-zebra = 'X'.
+  wa_layout-colwidth_optimize = 'X'.
+
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'INTREF'.
+  wa_fcat-seltext_l = 'Internal Ref. Doc.'.
+  wa_fcat-key = 'X'.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TYPENT'.
+  wa_fcat-seltext_l = 'Type of Entry'.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'GSTINP'.
+  wa_fcat-seltext_l = 'GSTIN of Taxpayer'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'DOCTYP'.
+  wa_fcat-seltext_l = 'Document Type'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'INVTYP'.
+  wa_fcat-seltext_l = 'Invoice Type'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'DOCSTA'.
+  wa_fcat-seltext_l = 'Document Status'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'SUPTYP'.
+  wa_fcat-seltext_l = 'Supply Type'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CTPTYP'.
+  wa_fcat-seltext_l = 'Counter-party Type'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CTPGST'.
+  wa_fcat-seltext_l = 'Counter-party GSTIN'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CTPNAM'.
+  wa_fcat-seltext_l = 'Counter-party Name'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'NVCNUM'.
+  wa_fcat-seltext_l = 'Note/Voucher No.'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'NVCDAT'.
+  wa_fcat-seltext_l = 'Note/Voucher Date'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'INVNUM'.
+  wa_fcat-seltext_l = 'Invoice Number'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'INVDAT'.
+  wa_fcat-seltext_l = 'Invoice Date'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'RESNOT'.
+  wa_fcat-seltext_l = 'Reason for Note Issue'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'PREGST'.
+  wa_fcat-seltext_l = 'Pre-GST Doc.'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TOTVAL'.
+  wa_fcat-seltext_l = 'Total Inv/Note Value'.
+  wa_fcat-do_sum = ''.  "Changed line
+
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'PLSUPP'.
+  wa_fcat-seltext_l = 'Place of Supply'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'INVLIN'.
+  wa_fcat-seltext_l = 'Sr. No.'.
+  wa_fcat-do_sum = ''.  "Changed line
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'GRSVAL'.
+  wa_fcat-seltext_l = 'Gross Value'.
+  wa_fcat-do_sum = ''.  "Changed line
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TYPGSR'.
+  wa_fcat-seltext_l = 'Type G/S'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'HSNSAC'.
+  wa_fcat-seltext_l = 'HSN/SAC'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TQUANT'.
+  wa_fcat-seltext_l = 'Quantity'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'UNITCD'.
+  wa_fcat-seltext_l = 'Unit'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TXBVAL'.
+  wa_fcat-seltext_l = 'Taxable Value'.
+  wa_fcat-do_sum = ''.  "Changed line
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TXRATE'.
+  wa_fcat-seltext_l = 'Tax Rate'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'IGSTRT'.
+  wa_fcat-seltext_l = 'IGST Rate'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'IGSTVL'.
+  wa_fcat-seltext_l = 'IGST Amount'.
+  wa_fcat-do_sum = ''.  "Changed line
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CGSTRT'.
+  wa_fcat-seltext_l = 'CGST Rate'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CGSTVL'.
+  wa_fcat-seltext_l = 'CGST Amount'.
+  wa_fcat-do_sum = ''.  "Changed line
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'SUGSTR'.
+  wa_fcat-seltext_l = 'SGST/UGST Rate'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'SUGSTV'.
+  wa_fcat-seltext_l = 'SGST/UGST Amount'.
+  wa_fcat-do_sum = ''.  "Changed line
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'TXAPPL'.
+  wa_fcat-seltext_l = 'Tax Applicability'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'FISCYR'.
+  wa_fcat-seltext_l = 'Fiscal Year'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'POSTDT'.
+  wa_fcat-seltext_l = 'Posting Date'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'INVSTA'.
+  wa_fcat-seltext_l = 'Invoice Status'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'REVDOC'.
+  wa_fcat-seltext_l = 'Reversed With'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'ICCODE'.
+  wa_fcat-seltext_l = 'Internal Counter-party code'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'GLACCT'.
+  wa_fcat-seltext_l = 'GL Account'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'REPORT'.
+  wa_fcat-seltext_l = 'Report Type'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CGSTCL'.
+  wa_fcat-seltext_l = 'CGST Clearing Doc.'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'CGSTCLD'.
+  wa_fcat-seltext_l = 'CGST Clearing Date'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'SGSTCL'.
+  wa_fcat-seltext_l = 'SGST Clearing Doc.'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'SGSTCLD'.
+  wa_fcat-seltext_l = 'SGST Clearing Date'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'IGSTCL'.
+  wa_fcat-seltext_l = 'IGST Clearing Doc.'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'IGSTCLD'.
+  wa_fcat-seltext_l = 'IGST Clearing Date'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.
+
+  count = count + 1.             " SOC FOR FIELD ADD TCS ON (04-04-2024) BY ROHIT
+  wa_fcat-col_pos = count.
+  wa_fcat-tabname = 'IT_FINAL'.
+  wa_fcat-fieldname = 'FWSTE'.
+  wa_fcat-seltext_l = 'TCS'.
+  wa_fcat-do_sum = ''.
+  APPEND wa_fcat TO it_fcat.
+  CLEAR wa_fcat.                " EOC FOR FIELD ADD TCS ON (04-04-2024) BY ROHIT
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  TOP_OF_PAGE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM top_of_page.
+*ALV Header declarations
+  DATA: t_header  TYPE slis_t_listheader,
+        wa_header TYPE slis_listheader,
+        dt_low    TYPE char10,
+        dt_high   TYPE char10.
+
+*Title
+  wa_header-typ = 'H'.
+  CONCATENATE 'GSTR1' '-' s_cc-low INTO  wa_header-info SEPARATED BY space.
+  APPEND wa_header TO t_header.
+  CLEAR wa_header.
+
+  CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+    EXPORTING
+      date_internal            = s_dt-low
+    IMPORTING
+      date_external            = dt_low
+    EXCEPTIONS
+      date_internal_is_invalid = 1
+      OTHERS                   = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+  CALL FUNCTION 'CONVERT_DATE_TO_EXTERNAL'
+    EXPORTING
+      date_internal            = s_dt-high
+    IMPORTING
+      date_external            = dt_high
+    EXCEPTIONS
+      date_internal_is_invalid = 1
+      OTHERS                   = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+  wa_header-typ = 'A'.
+  CONCATENATE 'Period:' dt_low '-' dt_high INTO  wa_header-info SEPARATED BY space.
+  APPEND wa_header TO t_header.
+  CLEAR wa_header.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = t_header.
+
+ENDFORM.
