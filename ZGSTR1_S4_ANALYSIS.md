@@ -742,3 +742,78 @@ Replaces the inline `DATA(lv_vbeln) = wa_bkpf-AWKEY.` at line 462. Declare
 Caveat: this does not explain why round 3 passed on FY 2025-26 documents. That
 run may have been a different system or program version - worth confirming which
 system produced `new_output_1` before treating the two as one code base.
+
+## Round 4i - full chain verified for 8324000008; every input is correct
+
+Traced the yellow-highlighted row (EXPORT row 197) end to end.
+
+**BKPF** - OVL / 8324000008 / 2024, BLART `RC`:
+`GLVOR = SD00`, `AWKEY = 0090003288`, BUDAT 31.03.2025.
+
+**VBRK** - VBELN `0090003288` (matches AWKEY exactly):
+`FKART ZCR1`, `WAERK USD`, `VKORG OVL`, `KALSM OVLEXP`,
+**`KNUMV = 0001173747`**.
+
+**V_KONV_CDS** for KNUMV `0001173747` - 3 rows, all `KPOSN (Item) = 10`:
+
+| Item | Step | Cntr | KSCHL | KAWRT | KBETR | G/L |
+|---|---|---|---|---|---|---|
+| 10 | 10 | 1 | ZSER | 10.00 | 0.00 | |
+| 10 | 10 | 2 | ZSER | 10.00 | 55,627.32 | 230903 |
+| 10 | 20 | 1 | **JOIG** | **55,627.32** | 0.00 | |
+
+`JOIG KAWRT = 55,627.32` is exactly the Taxable / Gross / Total value ECC
+reports for this row. Walking the loop by hand:
+`txbval = 55,627.32`, `igstrt = 0.00/10 = 0`, `totval = 55,627.32 + 0 + 0 + 0`
+= **55,627.32**. Correct.
+
+### Every candidate is now eliminated on data
+
+| step | evidence | verdict |
+|---|---|---|
+| (A) `glvor = 'SD00'` | BKPF shows SD00 | passes |
+| (B) AWKEY -> VBRK -> KNUMV | 0090003288 -> 0001173747 | passes |
+| (C) V_KONV_CDS returns rows | 3 rows, JOIG 55,627.32 | passes |
+| (D) `kposn = TXGRP` | KPOSN 10, TXGRP 010 -> both 000010 | passes |
+
+Two documents traced completely (8124000001 and 8324000008); both have every
+input correct and both output zero. Static analysis is exhausted - nothing left
+in the data explains it.
+
+### Important caveat on the source
+
+**The listing analysed throughout this document reads `FROM konv`. The mock2
+system reads `FROM v_konv_cds`.** So the mock2 source is definitively *not* the
+source in these PDFs, and there may be further differences in that version that
+cannot be seen from here. Any further static reasoning is unsafe without the
+actual mock2 source of `ZFI_GSTR1_SUB` as text.
+
+### Remaining hypothesis and a low-risk test
+
+```abap
+  DATA(lv_vbeln) = wa_bkpf-AWKEY.     " inline -> AWKEY, CHAR(20)
+  SELECT SINGLE knumv FROM vbrk ... WHERE vbeln = @lv_vbeln.
+```
+
+SE16 lookups succeed because the value is typed into a CHAR(10) field. The
+program passes CHAR(20) - the document number plus ten trailing blanks - and on
+HANA (CHAR maps to NVARCHAR) trailing blanks are significant, unlike the
+blank-padded CHAR semantics of the ECC database.
+
+Two-line change, no risk either way:
+
+```abap
+  DATA lv_vbeln TYPE vbrk-vbeln.      " CHAR(10)
+  lv_vbeln = wa_bkpf-awkey(10).
+```
+
+If the hypothesis is right this fixes all 326 rows. If not, it changes nothing -
+taking the first 10 characters of an AWKEY that already holds only a billing
+document number is a no-op.
+
+### Otherwise - runtime evidence is now required
+
+ST05 SQL trace on a narrowed run (posting date 31.03.2025, company code OVL)
+shows the literal values sent to VBRK and V_KONV_CDS and the rows returned.
+A debugger session on the same selection answers it just as fast: check
+`sy-subrc` and the **length** of `lv_vbeln` after the VBRK read.
