@@ -722,6 +722,10 @@ FORM get_display .
   DATA:lv_index  TYPE i,
        lv_index1 TYPE i,
        lv_index2 TYPE i.
+*     S.O.C - locals for the restricted SKFBT read below.
+  DATA: lr_skfbt_gjahr TYPE RANGE OF bkpf-gjahr,
+        ls_wi_gjahr    TYPE ty_with_item.
+*     E.O.C
   SORT lt_bkpf BY belnr gjahr bukrs.
   SORT lt_with_item BY belnr bukrs gjahr.
   SORT lt_lfa1 BY lifnr.
@@ -980,7 +984,29 @@ FORM get_display .
 
 
       " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
-      SELECT skfbt FROM bseg INTO @DATA(ls_skfbt) WHERE belnr = @ls_final9-belnr AND koart = 'K' ORDER BY PRIMARY KEY.
+*     S.O.C - BELNR alone is not unique: the same document number exists in
+*     other company codes and fiscal years, so this read could pick up a
+*     foreign document. Restrict it to the run's company code (P_BUKRS is
+*     OBLIGATORY, single value) and to the document's own fiscal year.
+*     LS_FINAL9-GJAHR is never filled anywhere in the FINAL5 chain, so the
+*     year is taken from LT_WITH_ITEM - the same source the KURSF select
+*     below already uses. The range is left empty when no year is found, so
+*     those documents keep their present behaviour instead of losing rows.
+      CLEAR lr_skfbt_gjahr.
+      READ TABLE lt_with_item INTO ls_wi_gjahr
+                 WITH KEY belnr = ls_final9-belnr
+                          bukrs = ls_final9-bukrs.
+      IF sy-subrc = 0 AND ls_wi_gjahr-gjahr IS NOT INITIAL.
+        lr_skfbt_gjahr = VALUE #( ( sign = 'I' option = 'EQ' low = ls_wi_gjahr-gjahr ) ).
+      ENDIF.
+      SELECT skfbt FROM bseg INTO @DATA(ls_skfbt)
+        WHERE belnr = @ls_final9-belnr
+          AND bukrs = @p_bukrs
+          AND gjahr IN @lr_skfbt_gjahr
+          AND koart = 'K'
+        ORDER BY PRIMARY KEY.
+*     E.O.C
+*      SELECT skfbt FROM bseg INTO @DATA(ls_skfbt) WHERE belnr = @ls_final9-belnr AND koart = 'K' ORDER BY PRIMARY KEY.
 *      SELECT  cashdiscountabsolutebaseamount AS skfbt FROM
 *     i_operationalacctgdocitem WHERE accountingdocument = @ls_final9-belnr
 *     AND financialaccounttype = 'K' INTO @DATA(ls_skfbt) UP TO 1 ROWS .
