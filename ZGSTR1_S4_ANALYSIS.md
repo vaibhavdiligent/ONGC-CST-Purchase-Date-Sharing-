@@ -1042,3 +1042,51 @@ Remaining open items are unrelated to this defect:
    search key (lines 318, 675, 770, 776, 817), including one whose `SORT` is
    commented out at line 304.
 3. The `it_bseg_h` select qualifies on BUKRS and BELNR but not GJAHR.
+
+## Round 7b - tax amounts verified
+
+### Against ECC, all 555 overlapping rows
+
+Every tax column matches to the rupee - zero differing rows on each:
+
+| column | differing | ECC total | S/4 total |
+|---|---|---|---|
+| Taxable Value | 0 | 67,516,804.78 | 67,516,804.78 |
+| Tax Rate | 0 | 3,672.00 | 3,672.00 |
+| IGST Rate | 0 | 240.00 | 240.00 |
+| IGST Amount | 0 | 1,090,257.00 | 1,090,257.00 |
+| CGST Rate | 0 | 1,716.00 | 1,716.00 |
+| CGST Amount | 0 | 1,116,013.89 | 1,116,013.89 |
+| SGST/UGST Rate | 0 | 1,716.00 | 1,716.00 |
+| SGST/UGST Amount | 0 | 1,116,013.89 | 1,116,013.89 |
+| Total Inv/Note Value | 0 | 70,839,089.56 | 70,839,089.56 |
+
+### Internal consistency, all 605 rows
+
+| check | result |
+|---|---|
+| rate set but amount zero | **0** |
+| amount set but rate zero | **0** |
+| amount != taxable x rate (1% / Rs 1 tolerance) | **0** |
+| CGST total == SGST total | **exact** |
+
+The third check matters most: it proves `wa_final-igstvl = wa_konv-kwert` and
+its CGST/SGST counterparts are populating correctly. If `KWERT` were coming
+back empty from V_KONV_CDS the way the amounts did before the fix, every taxed
+row would show a rate with a zero amount. None does.
+
+217 of 605 rows carry GST; the remainder are zero-rated or exempt, consistent
+with the export-heavy profile of this company code.
+
+### By path
+
+| group | rows | with GST | IGST | CGST | SGST |
+|---|---|---|---|---|---|
+| SD (KONV path) | 392 | 23 | 1,090,743.00 | 774,304.87 | 774,304.87 |
+| FI (BSET path) | 213 | 194 | 0.00 | 13,066,366.10 | 13,066,366.10 |
+
+The SD path - the one that was returning nothing - now produces GST on the 23
+rows that carry it, and the IGST it reports is entirely its own (the FI path
+has no IGST at all). Most SD rows remain zero-rated exports, which is correct.
+
+**Tax amounts are complete and arithmetically consistent.**
