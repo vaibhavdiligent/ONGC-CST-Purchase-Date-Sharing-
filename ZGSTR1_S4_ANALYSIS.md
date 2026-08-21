@@ -900,3 +900,31 @@ selection to posting date 31.03.2025 / company code OVL and either:
 - **debugger**: break at line 409, inspect `wa_bseg-txgrp`, `it_konv` line
   count, and `wa_konv-kposn` - then compare the two operands' **types and
   lengths** in the variable view.
+
+## Round 5b - st05_trace.trc cannot be read outside SAP
+
+The file is SAP's proprietary binary export:
+
+```
+___ST05___BINARY_EXPORT___SAP_BASIS_816___SP_0001
+```
+
+Body is 444,612 bytes at **7.99 bits/byte entropy** - fully compressed. It is
+not zlib, gzip, raw deflate, bz2 or lzma at any offset, and `strings` recovers
+no SQL text. SAP compresses these with its own algorithm, so the trace can only
+be read inside a SAP system.
+
+**Re-export it as text instead:** ST05 -> Display Trace -> then
+`List -> Save/Send -> File` (or `System -> List -> Save -> Local File`) and
+choose **Unconverted**. That produces a readable .txt.
+
+What is actually needed is small - on the trace list, the lines whose Object is
+`VBRK` and `V_KONV_CDS`, showing:
+
+- the **Rec** (records returned) column
+- the statement text with its bound values (double-click a line to expand)
+
+`Rec = 0` on the V_KONV_CDS SELECT means the read itself returns nothing.
+`Rec > 0` there means the SELECT works and the `LOOP ... WHERE kposn` filter is
+what discards the rows - which would confirm the operand-type hypothesis in
+round 5.
