@@ -509,3 +509,24 @@ and TXGRP is only a proxy for it. Options, best first:
 
 Either way, this is a code change, not a migration issue - the condition data
 is present and correct in S/4.
+
+## Round 4d - the TDS-style SORT pattern is not present here
+
+Checked whether the ZFI_TDS_REPORT failure mode (SORT followed by
+DELETE ADJACENT DUPLICATES keeping the wrong row) also applies to this program.
+It does not:
+
+- **No `DELETE ADJACENT DUPLICATES` anywhere.** The only occurrence, line 660,
+  is commented out.
+- **`it_bseg_h` is never sorted.** Neither is `it_konv`.
+- The only internal-table deletes are `it_bset` by MWSKZ (176), `it_bseg_h`
+  WHERE `mwskz = ' '` (364), and `it_final` WHERE `revdoc NE ''` (987) - all
+  value filters, none order-dependent.
+
+The output evidence rules it out independently. Had rows been dropped from
+`it_bseg_h`, those documents would be **absent** from the report; instead all
+326 rows are present with correct Quantity, HSN/SAC, Unit and Place of Supply.
+Had rows been dropped from `it_konv`, the result would be a **mix** of correct
+and zero values, not 0 out of 326 across ten separate fields.
+
+The all-or-nothing pattern still points at the loop condition, not at ordering.
