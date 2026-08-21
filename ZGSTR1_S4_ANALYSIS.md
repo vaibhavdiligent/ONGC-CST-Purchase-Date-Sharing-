@@ -221,3 +221,55 @@ correct.
 also sits outside its inner IF. All 196 FI rows currently match, so it is not
 biting today, but it is the same accident waiting on BSET row order. Worth
 fixing at the same time.
+
+---
+
+# Round 3 - verification after the GRSVAL fix
+
+Compared `new_output_1` (S/4) against `zgstr1_old_output` (ECC), joined on
+(document, fiscal year, Sr. No.).
+
+## Result - the report is fixed
+
+| run | rows differing from ECC |
+|---|---|
+| original S/4 | 359 of 555 |
+| after KONV -> PRCD_ELEMENTS | 345 of 555 |
+| **after GRSVAL fix** | **2 of 555** |
+
+Zero regressions at any step. Every money column now matches ECC on all 555
+rows:
+
+| column | differing rows |
+|---|---|
+| Total Inv/Note Value | 0 |
+| Gross Value | 0 |
+| Taxable Value | 0 |
+| Tax Rate | 0 |
+| IGST Rate / Amount | 0 |
+| CGST Rate / Amount | 0 |
+| SGST/UGST Rate / Amount | 0 |
+
+The `Gross Value == Taxable Value` invariant now holds on 359 of 359 SD rows,
+matching ECC exactly (it was 16 of 359 before this fix).
+
+## The 2 remaining rows are master data, not code
+
+| doc | Sr | HSN ECC | HSN S/4 |
+|---|---|---|---|
+| 8125000037 | 002 | 847130 | 85072000 |
+| 8325000036 | 002 | 847130 | 85072000 |
+
+847130 is data-processing machines, 85072000 is lead-acid accumulators - two
+unrelated commodities, so this is the HSN/SAC maintained on the material, not
+a reporting defect. All amounts on both rows match ECC.
+
+Decide which HSN is correct for those materials and correct it in the material
+master. Note this affects the GST return content, so it is worth resolving
+before filing.
+
+## Still open (latent, not currently biting)
+
+`wa_final-grsval = wa_bset-hwbas.` in the FI branch sits outside its inner IF -
+the same shape as the SD bug just fixed. All 196 FI rows match today, so it is
+not causing an error, but it carries the same dependence on row order.
