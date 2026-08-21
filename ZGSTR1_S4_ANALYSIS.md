@@ -129,3 +129,95 @@ The SE38 PDF listings truncate code at 72 characters; 38 lines are affected.
 The block analysed above (lines 455-525) is **not** among them and is fully
 visible. A complete corrected program cannot be produced from the PDFs alone -
 supply the source as a text file for that.
+
+---
+
+# Round 2 - verification after the KONV -> PRCD_ELEMENTS fix
+
+Compared `change_output` (S/4 after the fix) against `zgstr1_old_output` (ECC
+baseline), joined on (document, fiscal year, Sr. No.).
+
+## Result
+
+| | before fix | after fix |
+|---|---|---|
+| Rows differing from ECC | 359 of 555 | **345 of 555** |
+| Regressions | - | **0** |
+
+The fix worked. All 359 rows that previously printed 0.00 now carry values, and
+these columns now match ECC on **every row**:
+
+- Total Inv/Note Value
+- Taxable Value
+- Tax Rate
+- IGST Rate / IGST Amount
+- CGST Rate / CGST Amount
+- SGST/UGST Rate / SGST/UGST Amount
+
+Remaining differences: Gross Value (343 rows) and HSN/SAC (2 rows). Both were
+previously masked by the zeros.
+
+## Remaining bug - Gross Value, 343 rows
+
+In ECC, Gross Value equals Taxable Value on all 555 rows. In S/4 it does so on
+only 16 of the 359 SD rows.
+
+| doc | Sr | Gross ECC | Gross S/4 | Taxable (both) |
+|---|---|---|---|---|
+| 8125000003 | 002 | 12,421.21 | 10.00 | 12,421.21 |
+| 8125000007 | 002 | 502,600.00 | 140.00 | 502,600.00 |
+| 8125000015 | 002 | 451,100.00 | 17,350.00 | 451,100.00 |
+
+Cause, `ZFI_GSTR1_SUB` line 490:
+
+```abap
+      IF wa_konv-kschl = 'JOIG' OR ... 'JOUG'.
+        wa_final-txbval = wa_konv-kawrt.
+      ENDIF.                              "<-- IF closes here
+
+      "Gross value
+      wa_final-grsval = wa_konv-kawrt.    "<-- OUTSIDE the IF
+```
+
+`grsval` is assigned on every pass of the loop, so it retains the KAWRT of
+whichever condition row comes last - freight, a surcharge, a minor condition -
+rather than the GST condition. `txbval` is guarded by the IF and was always
+correct.
+
+ECC's KONV returned rows in physical key order and the GST condition happened
+to land last. HANA guarantees no order without ORDER BY, so a different
+condition wins. Same class of defect as the ZFI_TDS_REPORT sort bug: an
+order-dependent assignment that ECC got right by accident.
+
+### Fix
+
+```abap
+      "Taxable value
+      IF wa_konv-kschl = 'JOIG'
+      OR wa_konv-kschl = 'JOCG'
+      OR wa_konv-kschl = 'JOSG'
+      OR wa_konv-kschl = 'JOUG'.
+
+        wa_final-txbval = wa_konv-kawrt.
+        "Gross value - must come from the same GST condition, not from
+        "whichever row happens to be last in the loop
+        wa_final-grsval = wa_konv-kawrt.
+
+      ENDIF.
+```
+
+Delete the old `wa_final-grsval = wa_konv-kawrt.` and its `"Gross value`
+comment from below the ENDIF. Order-independent, and reproduces ECC on all
+343 rows.
+
+## Not code
+
+**HSN/SAC, 2 rows.** Documents 8125000037 and 8325000036: `847130` in ECC vs
+`85072000` in S/4 (data-processing machines vs lead-acid accumulators). That is
+the material's HSN code in master data. Amounts on both rows are already
+correct.
+
+**Same latent pattern in the FI branch.** `wa_final-grsval = wa_bset-hwbas.`
+also sits outside its inner IF. All 196 FI rows currently match, so it is not
+biting today, but it is the same accident waiting on BSET row order. Worth
+fixing at the same time.
