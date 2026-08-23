@@ -1,13 +1,16 @@
 *&---------------------------------------------------------------------*
 *& Report  YCIS_EXECUTE
 *&---------------------------------------------------------------------*
-*& CIS 2026-27 - 3-level approval workflow : LEVEL 3 (CPC - Execution).
+*& CIS 2026-27 - 6-level approval workflow : LEVEL 3 (CPC - Execution).
 *&
 *&   L3 (CPC) is central (maintained in YCIS_WF_APPR under sales office
 *&   '0001', level 3) and sees the Pending-L3 rows of ALL sales offices.
 *&     EXECUTE -> create the rebate order (credit-memo request) via BAPI,
-*&                WF_STATUS '40' (Completed), store the order number.
-*&     REJECT  -> WF_STATUS '20' (back to L2 - PC MKTG-HOD), e-mail L2.
+*&                WF_STATUS '40' (Pending L4), store the order number,
+*&                forward to L4 (CPC Finance - Financial Vetting), e-mail L4.
+*&     REJECT  -> WF_STATUS '10' (back to L1 for reinitiation), e-mail L1.
+*&   Status model (6-level): 10 L1 / 20 L2 / 30 L3 / 40 L4 / 50 L5 / 60 L6 /
+*&   70 Completed (disbursed).  Any reject at any level returns to L1.
 *&
 *& GUI status 'STANDARD' (function codes EXEC, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (see doc).
@@ -356,17 +359,17 @@ FORM process_selected USING p_action TYPE char1.
 *     being left stuck at Pending with a blank SD document.
       IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
         lv_zero = lv_zero + 1.
-        gs_appr-wf_status = '40'.          " Completed
-        gs_appr-status    = 'A'.           " Approved (clears 'P' Pending)
+        gs_appr-wf_status = '40'.          " Pending L4 - forwarded (6-level flow)
+        gs_appr-status    = 'P'.           " still in workflow
         gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Group OK - zero lifting, no order created'.
+        gs_appr-remarks   = 'Group OK - zero lifting, forwarded to L4'.
         MODIFY ycis_apprvl FROM gs_appr.
         COMMIT WORK AND WAIT.
         gs_out-order_no = 'GROUP OK'.
-        gs_out-remarks  = 'Group OK - zero lifting, no order created'.
+        gs_out-remarks  = 'Group OK - zero lifting, forwarded to L4'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
         CONTINUE.
@@ -375,13 +378,13 @@ FORM process_selected USING p_action TYPE char1.
       CLEAR lv_vbeln.
       PERFORM create_order USING gs_appr CHANGING lv_vbeln.
       IF lv_vbeln IS NOT INITIAL.
-        gs_appr-wf_status = '40'.        " Completed
-        gs_appr-status    = 'A'.         " Approved - order created (clears 'P' Pending)
+        gs_appr-wf_status = '40'.        " Pending L4 (Financial Vetting) - 6-level flow
+        gs_appr-status    = 'P'.         " still in workflow (final only after L6)
         gs_appr-order_no  = lv_vbeln.
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Executed - order created'.
+        gs_appr-remarks   = 'Executed - rebate order created, forwarded to L4'.
         MODIFY ycis_apprvl FROM gs_appr.
 *       one sync commit per row: persists this order's VBKD / YRVA_REBATE /
 *       YCIS_APPRVL_GRD / master + the YCIS_APPRVL stamp together, so the
@@ -401,7 +404,8 @@ FORM process_selected USING p_action TYPE char1.
         MODIFY gt_out FROM gs_out.
       ENDIF.
     ELSE.
-      gs_appr-wf_status   = '20'.     " back to L2
+      gs_appr-wf_status   = '10'.     " back to L1 (6-level: any reject returns to L1)
+      gs_appr-status      = 'R'.
       gs_appr-rej_level   = gc_level.
       gs_appr-rej_by      = sy-uname.
       gs_appr-rej_date    = sy-datum.
@@ -414,29 +418,30 @@ FORM process_selected USING p_action TYPE char1.
     ENDIF.
   ENDLOOP.
 
-  IF lv_cnt > 0.
-    COMMIT WORK.
-    IF p_action = 'R'.
-      LOOP AT lt_office INTO lv_off.
-        PERFORM send_mail USING '2' lv_off lv_off 'CIS rebates rejected by L3 - please review (L2)'.
-      ENDLOOP.
-*     rejected rows leave L3 - remove them from the grid
-      DELETE gt_out WHERE sel = 'X'.
-    ENDIF.
-  ENDIF.
-* executed rows stay on the main grid with their Rebate Order number, so the
-* CPC user sees the full rebate-order list right after execution (visibility).
+* executed rows keep their Rebate Order number on the grid; they are now
+* forwarded to L4 (CPC Finance - Financial Vetting). Reject returns to L1.
   IF p_action = 'E'.
+*   L4 is central in YCIS_WF_APPR (sales office '0001', level 4) - notify once
+*   that rebate orders are ready for financial vetting. (executed rows are
+*   already committed per-row above.)
+    IF lv_cnt > 0 OR lv_zero > 0.
+      PERFORM send_mail USING '4' '0001' '0001' space.
+    ENDIF.
     IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
-*     only already-created lines were selected
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_zero } group-OK completed (dummy SD), { lv_err } failed - see 'Remarks' column| TYPE 'S'.
+      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } group-OK forwarded, { lv_err } failed - see 'Remarks'| TYPE 'S'.
     ENDIF.
-*   The verification & confirmation pop-up is shown at L1 and L2 (the levels
-*   that verify/confirm the figures), NOT at L3 execution. (GAIL 30.07.2026)
   ELSE.
-    MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
+    IF lv_cnt > 0.
+      COMMIT WORK.
+*     6-level rule: any reject returns to L1 for reinitiation - notify L1.
+      LOOP AT lt_office INTO lv_off.
+        PERFORM send_mail USING '1' lv_off lv_off space.
+      ENDLOOP.
+      DELETE gt_out WHERE sel = 'X'.
+    ENDIF.
+    MESSAGE |{ lv_cnt } line(s) rejected and returned to L1| TYPE 'S'.
   ENDIF.
 ENDFORM.
 
@@ -745,20 +750,29 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-*     L3 (CPC) reject -> back to L2 (PC MKTG-HOD)
       ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
-      ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
-      APPEND ls_text TO lt_text.
-      ls_text-line = |for your review. Please log in to T-Code YRVG004_A and re-check the records.|.
-      APPEND ls_text TO lt_text.
+      IF p_level = '4'.
+*       L3 execution done -> forward to L4 (CPC Finance - Financial Vetting)
+        ls_text-line = |Rebate orders under the CIS 2026-27 Scheme have been generated by L3 (CPC Marketing).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in and Review & Vet the discounts (Financial Vetting - L4).|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'CIS Discount/Rebate Order Processed - Action Required at L4'.
+      ELSE.
+*       L3 reject -> back to L1 for reinitiation (6-level rule)
+        ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been rejected by L3 (CPC).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in to T-Code YRVG004 (Run CIS Scheme) and reinitiate the process.|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'CIS Discount Request Rejected by L3 - Reinitiation Required at L1'.
+      ENDIF.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       ls_text-line = |With warm regards,|.                          APPEND ls_text TO lt_text.
       ls_text-line = |GAIL (INDIA) LTD.|.                           APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       ls_text-line = |This is a system generated mail. Please do not reply.|.
       APPEND ls_text TO lt_text.
-      lv_sub = 'CIS Scheme - Rebates returned by L3 for review'.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).

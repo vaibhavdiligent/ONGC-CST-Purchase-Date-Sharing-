@@ -12288,7 +12288,7 @@ FORM hide_forwarded.
     FROM ycis_apprvl INTO TABLE lt_fwd
     WHERE period_from = s_sptag-low
       AND period_to   = s_sptag-high
-      AND wf_status   IN ('20','30','40').
+      AND wf_status   IN ('20','30','40','50','60','70').  " in-flight L2..L6 / completed (6-level)
   CHECK lt_fwd IS NOT INITIAL.
 
   LOOP AT it_data_monthly.
@@ -12500,7 +12500,8 @@ FORM stage_one USING p_stype   TYPE char1
       AND period_to   = ls-period_to
       AND kunnr       = ls-kunnr
       AND kvgr2       = ls-kvgr2.
-  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40' ).
+  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40'
+                     OR lv_wf = '50' OR lv_wf = '60' OR lv_wf = '70' ).
     gv_stg_dup = gv_stg_dup + 1.         " count it so L1 gets clear feedback
     RETURN.                              " already forwarded - skip, no re-mail
   ENDIF.
