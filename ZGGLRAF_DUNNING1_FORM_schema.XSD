@@ -1,0 +1,2532 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xsd:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xfa="http://www.xfa.org/schema/xfa-template/2.2/" xmlns:xfadata="http://www.xfa.org/schema/xfa-data/1.0/" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+ <xsd:import namespace="http://www.xfa.org/schema/xfa-data/1.0/"/>
+ <xsd:element name="data">
+  <xsd:complexType>
+   <xsd:sequence>
+    <xsd:element name="DATE" type="xsd:date">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>System Date</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>System Date</dc:description>
+       <dc:title>Date</dc:title>
+      </xsd:appinfo>
+     </xsd:annotation>
+    </xsd:element>
+    <xsd:element name="WA_BUS_PART">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>CBP: General Data (Read Transfer Structure)</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>CBP: General Data (Read Transfer Structure)</dc:description>
+      </xsd:appinfo>
+     </xsd:annotation>
+     <xsd:complexType>
+      <xsd:sequence>
+       <xsd:element name="PARTNER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Number</dc:description>
+          <dc:title>Business Partner</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ADDRNUMBER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Address Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Address Number</dc:description>
+          <dc:title>Addr. No.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TYPE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Category</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Category</dc:description>
+          <dc:title>BPC</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BPKIND">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Type</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Type</dc:description>
+          <dc:title>Type</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BU_GROUP">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Grouping</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Grouping</dc:description>
+          <dc:title>Grp.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BPEXT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Number in External System</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Number in External System</dc:description>
+          <dc:title>External BP Number</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BU_SORT1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Search Term 1 for Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Search Term 1 for Business Partner</dc:description>
+          <dc:title>Search Term 1</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BU_SORT2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Search Term 2 for Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Search Term 2 for Business Partner</dc:description>
+          <dc:title>Search Term 2</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="SOURCE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Data Origin Types</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Data Origin Types</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TITLE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Form-of-Address Key</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Form-of-Address Key</dc:description>
+          <dc:title>Key</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="XDELE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Central Archiving Flag</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Central Archiving Flag</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="XBLCK">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Central Block for Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Central Block for Business Partner</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="AUGRP">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Authorization Group</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Authorization Group</dc:description>
+          <dc:title>AGrp</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TITLE_LET">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Salutation</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Salutation</dc:description>
+          <dc:title>Salutation</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="50"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BU_LOGSYS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Logical system</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Logical system</dc:description>
+          <dc:title>Log.System</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CONTACT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner: Contact Permission</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner: Contact Permission</dc:description>
+          <dc:title>Contact</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NOT_RELEASED">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Indicator: Not Released</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Indicator: Not Released</dc:description>
+          <dc:title>NRel</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PRINT_MODE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Print Format</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Print Format</dc:description>
+          <dc:title>Print Format</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BP_EEW_DUMMY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Dummy function in length 1</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Dummy function in length 1</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="RATE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Cost Rate/Revenue Rate for Project Costing</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Cost Rate/Revenue Rate for Project Costing</dc:description>
+          <dc:title>Cost/Revenue Rate</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="15"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_ORG1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name 1 of organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name 1 of organization</dc:description>
+          <dc:title>Name 1</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_ORG2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name 2 of organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name 2 of organization</dc:description>
+          <dc:title>Name 2</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_ORG3">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name 3 of organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name 3 of organization</dc:description>
+          <dc:title>Name 3</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_ORG4">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name 4 of organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name 4 of organization</dc:description>
+          <dc:title>Name 4</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LEGAL_ENTY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>BP: Legal form of organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>BP: Legal form of organization</dc:description>
+          <dc:title>Legal form</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="IND_SECTOR">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Industry sector</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Industry sector</dc:description>
+          <dc:title>Industry</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LEGAL_ORG">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Legal Entity of Organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Legal Entity of Organization</dc:description>
+          <dc:title>LegEnty</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="FOUND_DAT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date organization founded</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date organization founded</dc:description>
+          <dc:title>Founded</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="LIQUID_DAT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Liquidation date of organization</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Liquidation date of organization</dc:description>
+          <dc:title>Liq. date</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="LOCATION_1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>International location number  (part 1)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>International location number  (part 1)</dc:description>
+          <dc:title>ILN 1</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="7"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LOCATION_2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>International location number (Part 2)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>International location number (Part 2)</dc:description>
+          <dc:title>ILN 2</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="5"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LOCATION_3">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Check digit for the international location number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Check digit for the international location number</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_LAST">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Last Name of Business Partner (Person)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Last Name of Business Partner (Person)</dc:description>
+          <dc:title>Last Name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_FIRST">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>First Name of Business Partner (Person)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>First Name of Business Partner (Person)</dc:description>
+          <dc:title>First Name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_LST2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Other Last Name of a Person</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Other Last Name of a Person</dc:description>
+          <dc:title>Other Last Name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_LAST2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name at birth of business partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name at birth of business partner</dc:description>
+          <dc:title>Name at Birth</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAMEMIDDLE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Middle name or second forename of a person</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Middle name or second forename of a person</dc:description>
+          <dc:title>Middle or second name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TITLE_ACA1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Academic Title: Key</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Academic Title: Key</dc:description>
+          <dc:title>Academic Title 1</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TITLE_ACA2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Second academic title (key)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Second academic title (key)</dc:description>
+          <dc:title>2nd key</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TITLE_ROYL">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name supplement, e.g. noble title (key)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name supplement, e.g. noble title (key)</dc:description>
+          <dc:title>Key</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PREFIX1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name Prefix (Key)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name Prefix (Key)</dc:description>
+          <dc:title>Prefix Key</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PREFIX2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>2nd name prefix (key)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>2nd name prefix (key)</dc:description>
+          <dc:title>2nd key</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME1_TEXT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Full Name</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Full Name</dc:description>
+          <dc:title>Full Name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="80"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NICKNAME">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Nickname of Business Partner (Person)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Nickname of Business Partner (Person)</dc:description>
+          <dc:title>Known As</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="INITIALS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>&quot;Middle Initial&quot; or personal initials</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>&quot;Middle Initial&quot; or personal initials</dc:description>
+          <dc:title>Initials</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAMEFORMAT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name format</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name format</dc:description>
+          <dc:title>Format</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAMCOUNTRY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Country/Region for Name Format Rule</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Country/Region for Name Format Rule</dc:description>
+          <dc:title>C/R</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LANGU_CORR">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner: Correspondence Language</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner: Correspondence Language</dc:description>
+          <dc:title>LG</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="XSEXM">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Selection: Business partner is male</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Selection: Business partner is male</dc:description>
+          <dc:title>M</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="XSEXF">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Selection: Business partner is female</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Selection: Business partner is female</dc:description>
+          <dc:title>F</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BIRTHPL">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Birthplace of business partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Birthplace of business partner</dc:description>
+          <dc:title>Birthplace</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="MARST">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Marital Status of Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Marital Status of Business Partner</dc:description>
+          <dc:title>Marital Stat.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="EMPLO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name of Employer of a Natural Person</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name of Employer of a Natural Person</dc:description>
+          <dc:title>Employer</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="35"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="JOBGR">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Occupation/group</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Occupation/group</dc:description>
+          <dc:title>Occupation</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NATIO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Nationality</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Nationality</dc:description>
+          <dc:title>Nat</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CNTAX">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Obsolete Field</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Obsolete Field</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CNDSC">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Country/Region of Origin: Non-Resident Companies</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Country/Region of Origin: Non-Resident Companies</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PERSNUMBER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Person Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Person Number</dc:description>
+          <dc:title>Person</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="XSEXU">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Selection: Sex of business partner is not known</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Selection: Sex of business partner is not known</dc:description>
+          <dc:title>U</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="XUBNAME">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Obsolete Field</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Obsolete Field</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="12"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BU_LANGU">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business partner: Language</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business partner: Language</dc:description>
+          <dc:title>LG</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BIRTHDT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date of Birth of Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date of Birth of Business Partner</dc:description>
+          <dc:title>Birth Date</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="DEATHDT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date of death of business partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date of death of business partner</dc:description>
+          <dc:title>Death date</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="PERNO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Personnel Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Personnel Number</dc:description>
+          <dc:title>Pers.No.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="8"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CHILDREN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Obsolete Field</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Obsolete Field</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="MEM_HOUSE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Obsolete Field</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Obsolete Field</dc:description>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:decimal">
+          <xsd:totalDigits value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PARTGRPTYP">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Group type</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Group type</dc:description>
+          <dc:title>GTyp</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_GRP1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name 1 (group)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name 1 (group)</dc:description>
+          <dc:title>Name 1</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_GRP2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name 2 (group)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name 2 (group)</dc:description>
+          <dc:title>Name 2</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LGTYP">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Legitimation Type</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Legitimation Type</dc:description>
+          <dc:title>Type</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LGNUM">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Identification number of legitimation document</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Identification number of legitimation document</dc:description>
+          <dc:title>Identific.Number</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="16"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="INFCT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Responsible local court</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Responsible local court</dc:description>
+          <dc:title>Responsible local court</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="30"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="COMRG">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Entry in commercial register</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Entry in commercial register</dc:description>
+          <dc:title>Entry in commercial register</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="30"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CLBRG">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>BP: Entry in register of associations</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>BP: Entry in register of associations</dc:description>
+          <dc:title>Register of associations</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="30"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="COPRG">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Entry in Register of Cooperatives</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Entry in Register of Cooperatives</dc:description>
+          <dc:title>Register of Cooperatives</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="30"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="COMREG_DAT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date of entry in trade register</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date of entry in trade register</dc:description>
+          <dc:title>TrRegEntry</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="M_BONIWERT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Creditworthiness value set manually</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Creditworthiness value set manually</dc:description>
+          <dc:title>Crd.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="M_BONIDAT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date on Which Creditworthiness was Manually Set</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date on Which Creditworthiness was Manually Set</dc:description>
+          <dc:title>Credwth dt</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="NAME1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name field 1 (name1/last name)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name field 1 (name1/last name)</dc:description>
+          <dc:title>Name 1/last name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Name field 2 (name2/first name)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Name field 2 (name2/first name)</dc:description>
+          <dc:title>Name 2/First name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="NAME_CO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>c/o name</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>c/o name</dc:description>
+          <dc:title>c/o name</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CITY1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>City</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>City</dc:description>
+          <dc:title>City</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CITY2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>District</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>District</dc:description>
+          <dc:title>District</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CITY_CODE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>City code for city/street file</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>City code for city/street file</dc:description>
+          <dc:title>City Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="12"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CITYP_CODE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>District code for City and Street file</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>District code for City and Street file</dc:description>
+          <dc:title>District</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="8"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="HOME_CITY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>City (different from postal city)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>City (different from postal city)</dc:description>
+          <dc:title>City (Diff. from Postal City)</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CITYH_CODE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Different city for city/street file</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Different city for city/street file</dc:description>
+          <dc:title>City Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="12"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CHCKSTATUS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>City file test status</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>City file test status</dc:description>
+          <dc:title>Status</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="REGIOGROUP">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Regional structure grouping</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Regional structure grouping</dc:description>
+          <dc:title>RegStGrp.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="8"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="POST_CODE1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>City postal code</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>City postal code</dc:description>
+          <dc:title>Postl Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="POST_CODE2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>PO Box Postal Code</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>PO Box Postal Code</dc:description>
+          <dc:title>Postl Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="POST_CODE3">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Company Postal Code (for Large Customers)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Company Postal Code (for Large Customers)</dc:description>
+          <dc:title>Postl Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PCODE1_EXT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported)City Postal Code Extension, e.g. ZIP+4+2 Code</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported)City Postal Code Extension, e.g. ZIP+4+2 Code</dc:description>
+          <dc:title>Extension</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PCODE2_EXT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported) PO Box Postal Code Extension</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported) PO Box Postal Code Extension</dc:description>
+          <dc:title>Extension</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PCODE3_EXT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported) Major Customer Postal Code Extension</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported) Major Customer Postal Code Extension</dc:description>
+          <dc:title>Extension</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PO_BOX">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>PO Box</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>PO Box</dc:description>
+          <dc:title>PO Box</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DONT_USE_P">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>PO Box Address Undeliverable Flag</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>PO Box Address Undeliverable Flag</dc:description>
+          <dc:title>Undeliverable</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PO_BOX_NUM">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Flag: PO Box Without Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Flag: PO Box Without Number</dc:description>
+          <dc:title>PO</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PO_BOX_LOC">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>PO Box city</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>PO Box city</dc:description>
+          <dc:title>PO Box City</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CITY_CODE2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>City PO box code (City file)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>City PO box code (City file)</dc:description>
+          <dc:title>City Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="12"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PO_BOX_REG">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Region for PO Box (Country/Region, State, Province, ...)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Region for PO Box (Country/Region, State, Province, ...)</dc:description>
+          <dc:title>PO Region</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PO_BOX_CTY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>PO Box of Country/Region</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>PO Box of Country/Region</dc:description>
+          <dc:title>PO C/R</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="POSTALAREA">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported) Post Delivery District</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported) Post Delivery District</dc:description>
+          <dc:title>Delivery Dist.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="15"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TRANSPZONE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Transportation zone to or from which the goods are delivered</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Transportation zone to or from which the goods are delivered</dc:description>
+          <dc:title>TranspZone</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STREET">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street</dc:description>
+          <dc:title>Street</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="60"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DONT_USE_S">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street Address Undeliverable Flag</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street Address Undeliverable Flag</dc:description>
+          <dc:title>Undeliverable</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STREETCODE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street Number for City/Street File</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street Number for City/Street File</dc:description>
+          <dc:title>Street Code</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="12"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STREETABBR">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported) Abbreviation of Street Name</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported) Abbreviation of Street Name</dc:description>
+          <dc:title>Abr</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="HOUSE_NUM1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>House Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>House Number</dc:description>
+          <dc:title>House No.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="HOUSE_NUM2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>House number supplement</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>House number supplement</dc:description>
+          <dc:title>Supplement</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="HOUSE_NUM3">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not supported) House Number Range</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not supported) House Number Range</dc:description>
+          <dc:title>Range</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STR_SUPPL1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street 2</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street 2</dc:description>
+          <dc:title>Street 2</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STR_SUPPL2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street 3</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street 3</dc:description>
+          <dc:title>Street 3</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STR_SUPPL3">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street 4</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street 4</dc:description>
+          <dc:title>Street 4</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LOCATION">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Street 5</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Street 5</dc:description>
+          <dc:title>Street 5</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BUILDING">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Building (Number or Code)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Building (Number or Code)</dc:description>
+          <dc:title>Building</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="FLOOR">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Floor in building</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Floor in building</dc:description>
+          <dc:title>Floor</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ROOMNUMBER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Room or Apartment Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Room or Apartment Number</dc:description>
+          <dc:title>Room No.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="COUNTRY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Country/Region Key</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Country/Region Key</dc:description>
+          <dc:title>C/R</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LANGU">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Language Key</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Language Key</dc:description>
+          <dc:title>Language</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="REGION">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Region (State, Province, County)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Region (State, Province, County)</dc:description>
+          <dc:title>Rg</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="SORT1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Search Term 1</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Search Term 1</dc:description>
+          <dc:title>Search Term 1</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="SORT2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Search Term 2</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Search Term 2</dc:description>
+          <dc:title>Search Term 2</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="SORT_PHN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported) Phonetic Search Sort Field</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported) Phonetic Search Sort Field</dc:description>
+          <dc:title>Phonet. Sort.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ADDRORIGIN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not Supported) Address Data Source (Key)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not Supported) Address Data Source (Key)</dc:description>
+          <dc:title>Srce</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="EXTENSION1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Extension (only for data conversion) (e.g. data line)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Extension (only for data conversion) (e.g. data line)</dc:description>
+          <dc:title>Data line</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="EXTENSION2">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Extension (only for data conversion) (e.g. telebox)</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Extension (only for data conversion) (e.g. telebox)</dc:description>
+          <dc:title>Telebox</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TIME_ZONE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Address Time Zone</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Address Time Zone</dc:description>
+          <dc:title>Zone</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="6"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TAXJURCODE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Tax Jurisdiction</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Tax Jurisdiction</dc:description>
+          <dc:title>Tax Jurisdiction</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="15"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ADDRESS_ID">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>(Not supported) Physical address ID</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>(Not supported) Physical address ID</dc:description>
+          <dc:title>Address ID</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="REMARK">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Address notes</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Address notes</dc:description>
+          <dc:title>Address notes</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="50"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="LANGU_CREA">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Address record creation original language</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Address record creation original language</dc:description>
+          <dc:title>Lang</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PO_BOX_LOBBY">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>PO Box Lobby</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>PO Box Lobby</dc:description>
+          <dc:title>PO Box Lobby</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DELI_SERV_TYPE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Type of Delivery Service</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Type of Delivery Service</dc:description>
+          <dc:title>Delvry Serv Type</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DELI_SERV_NUMBER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Number of Delivery Service</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Number of Delivery Service</dc:description>
+          <dc:title>Delivery Service Number</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DEFLT_COMM">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Standard communication type</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Standard communication type</dc:description>
+          <dc:title>Std</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TEL_NUMBER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Telephone No.: Dialing Code and Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Telephone No.: Dialing Code and Number</dc:description>
+          <dc:title>Telephone</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="30"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="TEL_EXTENS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Telephone no.: Extension</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Telephone no.: Extension</dc:description>
+          <dc:title>Extension</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="FAX_NUMBER">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Fax Number: Dialing Code and Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Fax Number: Dialing Code and Number</dc:description>
+          <dc:title>Fax</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="30"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="FAX_EXTENS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Fax no.: Extension</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Fax no.: Extension</dc:description>
+          <dc:title>Extension</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="VALID_FROM" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Valid From</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Valid From</dc:description>
+          <dc:title>Valid From</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="VALID_TO" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Valid To</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Valid To</dc:description>
+          <dc:title>Valid To</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="NATPERS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business Partner Is a Natural Person Under the Tax Laws</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business Partner Is a Natural Person Under the Tax Laws</dc:description>
+          <dc:title>Natural Person</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="WAKLASS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Employee classification</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Employee classification</dc:description>
+          <dc:title>EmpC</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="FIRMART">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Type of installation company</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Type of installation company</dc:description>
+          <dc:title>CT</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ARBFELD">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Company work field</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Company work field</dc:description>
+          <dc:title>WF</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="MITGLIED">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Membership of installer</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Membership of installer</dc:description>
+          <dc:title>M</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="SPZULASS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Division license of installer</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Division license of installer</dc:description>
+          <dc:title>Div.lic.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ARTZULASS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Installer license type</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Installer license type</dc:description>
+          <dc:title>ZA</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="AUSWANZ">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Number of identifications</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Number of identifications</dc:description>
+          <dc:title>ID</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PLOMBENZ">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Sealing pliers number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Sealing pliers number</dc:description>
+          <dc:title>Pliers no.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="FREMDEVU">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Main utility company</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Main utility company</dc:description>
+          <dc:title>MUC</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STATINS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Valid status of installer in supply area</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Valid status of installer in supply area</dc:description>
+          <dc:title>St</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="STATDATUM" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date on which status of installer comes into effect</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date on which status of installer comes into effect</dc:description>
+          <dc:title>Effec.from</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="ERSTZUL" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date of initial license of installer</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date of initial license of installer</dc:description>
+          <dc:title>In.license</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="WERKSTATT" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date of workshop inspection</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date of workshop inspection</dc:description>
+          <dc:title>WShopInsp.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="VERLZUL" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date of license renewal</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date of license renewal</dc:description>
+          <dc:title>Renewal</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="ENDEZUL" type="xsd:date">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Date until which license is renewed</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Date until which license is renewed</dc:description>
+          <dc:title>Renewal to</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+       </xsd:element>
+       <xsd:element name="ANZEVU">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Number of utility companies</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Number of utility companies</dc:description>
+          <dc:title>Ut</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="ANZFIL">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Number of branches supported by an installionr company</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Number of branches supported by an installionr company</dc:description>
+          <dc:title>NB</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+          <xsd:pattern value="\d+"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="AUSW_INST">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Identification number for installer license</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Identification number for installer license</dc:description>
+          <dc:title>ID</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DR_LICENSE_LAND1">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Country/Region in Which Driver&apos;s License Was Acquired</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Country/Region in Which Driver&apos;s License Was Acquired</dc:description>
+          <dc:title>CR.D</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DR_LICENSE_REGIO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Region in which driver&apos;s license was acquired</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Region in which driver&apos;s license was acquired</dc:description>
+          <dc:title>Driv</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="3"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DR_LICENSE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Driver&apos;s license number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Driver&apos;s license number</dc:description>
+          <dc:title>License number</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="20"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="SOC_SECURE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Social Insurance Number</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Social Insurance Number</dc:description>
+          <dc:title>Soc. Ins.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="12"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="WELFARE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Welfare office</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Welfare office</dc:description>
+          <dc:title>Welf.off.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="9"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PLACE_EMPL">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Work center</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Work center</dc:description>
+          <dc:title>Work center</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="40"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="KTOKLASSE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Account Class</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Account Class</dc:description>
+          <dc:title>AcCl.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="BUPINFOREL">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Information release for business partner data</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Information release for business partner data</dc:description>
+          <dc:title>IR</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="2"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CLERK_ID">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Business partner-specific criteria for agent determination</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Business partner-specific criteria for agent determination</dc:description>
+          <dc:title>Opertr ID</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="8"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="RECPTYPE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Category for Alternate Payee</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Category for Alternate Payee</dc:description>
+          <dc:title>C</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="PYMET">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Payment method for donations/fund payments</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Payment method for donations/fund payments</dc:description>
+          <dc:title>P</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="EMBVT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Bank details ID for donations/fund payments</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Bank details ID for donations/fund payments</dc:description>
+          <dc:title>BDID</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="HKONT">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>G/L accounts for donations/fund payments</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>G/L accounts for donations/fund payments</dc:description>
+          <dc:title>G/L acct</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="CLASSIFICATION">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Classification of Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Classification of Business Partner</dc:description>
+          <dc:title>Clas</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="4"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="VIP">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Indicate Very Important Business Partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Indicate Very Important Business Partner</dc:description>
+          <dc:title>VIP</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="1"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="IDENT_INST">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Identification Number for Installer License</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Identification Number for Installer License</dc:description>
+          <dc:title>ID</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="18"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="MUSTER_KUN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Reference for creating a standard customer for bus. partner</xsd:documentation>
+         <xsd:appinfo>
+          <dc:description>Reference for creating a standard customer for bus. partner</dc:description>
+          <dc:title>Ref.cust.</dc:title>
+         </xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType>
+         <xsd:restriction base="xsd:string">
+          <xsd:maxLength value="10"/>
+         </xsd:restriction>
+        </xsd:simpleType>
+       </xsd:element>
+      </xsd:sequence>
+     </xsd:complexType>
+    </xsd:element>
+    <xsd:element name="GV_STRING" type="xsd:string"/>
+    <xsd:element name="ADDRESS" type="xsd:string">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>Address Node ADDRESS 
+ ADDRESS-NUMBER-FIELD = PWB_DATA-WA_BUS_PART-ADDRNUMBER 
+ PERSON-NUMBER-FIELD = PWB_DATA-WA_BUS_PART-PERSNUMBER</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>Address Node ADDRESS</dc:description>
+      </xsd:appinfo>
+     </xsd:annotation>
+    </xsd:element>
+    <xsd:element name="TOTAL_A">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>Dunning Balance</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>Dunning Balance</dc:description>
+       <dc:title>Dunning Balance</dc:title>
+      </xsd:appinfo>
+     </xsd:annotation>
+     <xsd:simpleType>
+      <xsd:restriction base="xsd:decimal">
+       <xsd:totalDigits value="13"/>
+       <xsd:fractionDigits value="2"/>
+      </xsd:restriction>
+     </xsd:simpleType>
+    </xsd:element>
+    <xsd:element name="W_BINARY" type="xsd:base64Binary"/>
+    <xsd:element name="GRAPHIC">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>Graphic Node GRAPHIC
+URL-FIELD = W_BINARY</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>Graphic Node GRAPHIC
+URL-FIELD = W_BINARY</dc:description>
+      </xsd:appinfo>
+     </xsd:annotation>
+     <xsd:complexType>
+      <xsd:simpleContent>
+       <xsd:extension base="xsd:base64Binary">
+        <xsd:attribute ref="xfadata:contentType" default="image/*"/>
+        <xsd:attribute ref="xfadata:transferEncoding" fixed="base64"/>
+       </xsd:extension>
+      </xsd:simpleContent>
+     </xsd:complexType>
+    </xsd:element>
+    <xsd:element name="GV_ADDRESS" type="xsd:string"/>
+    <xsd:element name="LV_TEL">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>Telephone No.: Dialing Code and Number</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>Telephone No.: Dialing Code and Number</dc:description>
+       <dc:title>Telephone</dc:title>
+      </xsd:appinfo>
+     </xsd:annotation>
+     <xsd:simpleType>
+      <xsd:restriction base="xsd:string">
+       <xsd:maxLength value="30"/>
+      </xsd:restriction>
+     </xsd:simpleType>
+    </xsd:element>
+    <xsd:element name="GV_COM_ADR1" type="xsd:string"/>
+    <xsd:element name="GV_COM_ADR" type="xsd:string"/>
+    <xsd:element name="LV_TEXT">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>Character 300</xsd:documentation>
+      <xsd:appinfo>
+       <dc:description>Character 300</dc:description>
+      </xsd:appinfo>
+     </xsd:annotation>
+     <xsd:simpleType>
+      <xsd:restriction base="xsd:string">
+       <xsd:maxLength value="200"/>
+      </xsd:restriction>
+     </xsd:simpleType>
+    </xsd:element>
+   </xsd:sequence>
+  </xsd:complexType>
+ </xsd:element>
+</xsd:schema>

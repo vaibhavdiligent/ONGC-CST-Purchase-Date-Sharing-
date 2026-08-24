@@ -1,0 +1,757 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xfa generator="AdobeLiveCycleDesignerES_V9.8.0.0.20140107.1.905771_SAP" APIVersion="3.4.11306.0"?><xdp:xdp xmlns:xdp="http://ns.adobe.com/xdp/" timeStamp="2019-03-20T10:38:44Z" uuid="48e65974-1d6d-4e04-ae68-5fb019af02a1">
+<template xmlns:xliff="urn:oasis:names:tc:xliff:document:1.1" xmlns="http://www.xfa.org/schema/xfa-template/2.8/">
+   <tags xmlns="http://www.xfa.org/schema/xfa-xliff/1.0/"><value id="N141"><body xmlns="http://www.w3.org/1999/xhtml" xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.5.9308.0"><p>Sub: Reminder for Outstanding Dues</p><p><span style="xfa-spacerun:yes"> </span></p><p>Dear Sir/Madam,</p><p><span style="xfa-spacerun:yes"> </span></p><p>You are one of our valued customers and we are thankful to you for availing 24X7 Piped Natural Gas supply. During verification of our records, it is observed that the outstanding due in your account till date is Rs.<span xfa:embed="#floatingField000041" xfa:embedMode="raw" xfa:embedType="uri"/>.</p><p><span style="xfa-spacerun:yes"> </span></p><p>Owing to your preoccupation, you may have missed the payment of gas bills.Through this reminder,we request you to make the payment within seven days of receipt of this letter to enable us to continue to provide better services to you .We provide various convenient options for Bill payment. You can choose any mode of payment convenient to you.The information on various modes of payment is provided in the PNG bill.</p><p><span style="xfa-spacerun:yes"> </span></p><p>Should you find any discrepancies, please do bring it to our notice. If you have already made the payment, please ignore this reminder and forward the payment details to us at the above mentioned address or you may contact us at 1800 102 9282, or write to us at<span style="xfa-spacerun:yes"> </span><span style="color:#0000ff;text-decoration:underline">gailgashelpline@gail.co.in</span>.</p><p><span style="xfa-spacerun:yes"> </span></p><p>Inconvenience caused, if any, is sincerely regretted. We assure you of our best services always.</p><p><span style="xfa-spacerun:yes"> </span></p><p>Thanking you,</p><p><span style="xfa-spacerun:yes"> </span></p><p>Yours truly,</p><p style="font-size:9pt;font-weight:bold">Gail Gas Limited</p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="color:#c0c0c0">This is a computer generated letter requires no signature. If you are not using gas,Kindly inform us the same on<span style="xfa-spacerun:yes"> </span></p><p style="tab-interval:0.393in;color:#0000ff;text-decoration:underline">gailgashelpline@gail.co.in</p><p style="tab-interval:0.393in;color:#0000ff;text-decoration:underline"><span style="xfa-spacerun:yes">                                 </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></p></body></value><value id="N330"><body xmlns="http://www.w3.org/1999/xhtml" xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.5.9308.0"><p style="text-decoration:none">To,</p><p style="text-decoration:none"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none"><span style="xfa-spacerun:yes"> </span></p></body></value><value id="N67"><body xmlns="http://www.w3.org/1999/xhtml" xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.5.9308.0"><p style="text-decoration:none"><span style="xfa-spacerun:yes">                               </span><span style="font-size:18pt;font-weight:bold">Gail Gas Limited</span></p><p style="text-decoration:none"><span style="xfa-spacerun:yes">      </span><span style="font-size:14pt">( A wholly own subsidiary of Gail(INDIA) Limited )</span></p><p style="text-decoration:none"><span style="xfa-spacerun:yes">                               </span><span style="font-size:14pt"> A-1,Sector-2,Noida,U.P</span></p></body></value><value id="N739">BP Number:-</value><value id="N795">Customer Name:-</value><value id="N851">               Date:-</value><value id="N879">G V_ ADDRES S</value><value id="N885"><body xmlns="http://www.w3.org/1999/xhtml" xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.5.9308.0"><p>Address:-<span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField018467" xfa:embedMode="raw" xfa:embedType="uri"/></p></body></value></tags>
+   <?formServer defaultPDFRenderFormat acrobat8.0static?>
+   <subform layout="tb" locale="en_GB_EURO" name="data" restoreState="auto">
+      <pageSet>
+         <pageArea id="Page1" name="Page1">
+            <contentArea h="10.5in" w="8in" x="0.25in" y="0.25in">
+               <?templateDesigner expand 1?></contentArea>
+            <medium long="11in" short="8.5in" stock="letter"/>
+            <?templateDesigner expand 1?></pageArea>
+         <?templateDesigner expand 1?></pageSet>
+      <subform h="10.5in" w="8in">
+         <field access="readOnly" h="9mm" id="floatingField024464" name="GV_COM_ADR" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <bind match="dataRef" ref="$.GV_COM_ADR"/>
+            <caption>
+               <value>
+                  <text xliff:rid="2704AF04-D5FF-4866-9485-38B261D13704">GV_COM_ADR</text>
+               </value>
+            </caption>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField005705" name="GV_COM_ADR1" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <bind match="dataRef" ref="$.GV_COM_ADR1"/>
+            <caption>
+               <value>
+                  <text xliff:rid="5C66371F-01EA-4A87-AA1D-A208221964C3">GV_COM_ADR1</text>
+               </value>
+            </caption>
+         </field>
+         <draw h="25.412mm" name="StaticText1" w="133.35mm" x="44.45mm" y="6.35mm">
+            <ui>
+               <textEdit/>
+            </ui>
+            <value>
+               <exData xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" contentType="text/html" xft-xliff:id="N67" xliff:rid="N67">
+                  <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.7.0.0"><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">                               </span><span style="font-size:18pt;font-weight:bold">GAIL Gas Limited</span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">      </span><span style="font-size:14pt;font-weight:bold">( A wholly own subsidiary of GAIL(INDIA) Limited )</span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">       </span><span style="font-size:14pt;font-weight:bold"><span xfa:embed="#floatingField024464" xfa:embedMode="raw" xfa:embedType="uri"/></span></p><p style="font-size:14pt;font-weight:bold;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">                         </span><span xfa:embed="#floatingField005705" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+               </exData>
+            </value>
+            <font typeface="Arial"/>
+            <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+         </draw>
+         <draw hAlign="justify" minH="153.188mm" name="StaticText2" w="200.025mm" x="3.175mm" y="85.725mm">
+            <ui>
+               <textEdit/>
+            </ui>
+            <value>
+               <exData xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" contentType="text/html" xft-xliff:id="N141" xliff:rid="N141">
+                  <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.7.0.0"><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in">Dear Customer,</p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in">Thanking you,</p><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="text-decoration:none;letter-spacing:0in">Yours truly,</p><p style="font-size:9pt;font-weight:bold;text-decoration:none;letter-spacing:0in">GAIL Gas Limited</p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="color:#c0c0c0;text-decoration:none;letter-spacing:0in">This is a computer generated letter requires no signature. If you are not using gas,Kindly inform us the same on<span style="xfa-spacerun:yes"> </span></p><p style="tab-interval:0.393in;color:#0000ff;text-decoration:underline;letter-spacing:0in">gailgashelpline@gail.co.in</p><p style="tab-interval:0.393in;color:#0000ff;text-decoration:underline;letter-spacing:0in"><span style="xfa-spacerun:yes">                                 </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-size:9pt;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p></body>
+               </exData>
+            </value>
+            <font baselineShift="0pt" typeface="Arial"/>
+            <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+            <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt"/>
+            <keep intact="none"/>
+            <traversal>
+               <traverse ref="LV_TEXT[0]"/>
+            </traversal>
+         </draw>
+         <draw h="0in" name="Line1" w="196.85mm" x="3.175mm" y="38.1mm">
+            <value>
+               <line slope="/"/>
+            </value>
+            <?templateDesigner expand 1?>
+         </draw>
+         <draw h="0in" name="Line3" w="196.85mm" x="3.175mm" y="212.725mm">
+            <value>
+               <line slope="/"/>
+            </value>
+         </draw>
+         <field access="readOnly" h="9.525mm" name="DATE" w="62mm" x="133.35mm" y="44.45mm">
+            <ui>
+               <dateTimeEdit>
+                  <border presence="hidden">
+                     <?templateDesigner StyleID aped0?></border>
+                  <margin/>
+               </dateTimeEdit>
+            </ui>
+            <font typeface="Arial" weight="bold"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <date/>
+            </value>
+            <caption reserve="25mm">
+               <para vAlign="middle"/>
+               <value>
+                  <text xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" xft-xliff:id="N851" xliff:rid="N851">               Date:-</text>
+               </value>
+            </caption>
+            <bind match="dataRef" ref="$.DATE">
+               <picture>date{YYYY-MM-DD}</picture>
+            </bind>
+            <desc>
+               <text name="Schema Annotation">Current Date of Application Server</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField006334" name="GV_STRING" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <bind match="dataRef" ref="$.GV_STRING"/>
+            <caption>
+               <value>
+                  <text xliff:rid="8151B692-C936-419C-BB5D-ECF2E97DE33B">GV_STRING</text>
+               </value>
+            </caption>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField026500" name="PARTNER" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit hScrollPolicy="off">
+                  <border>
+                     <edge/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="10"/>
+            </value>
+            <bind match="dataRef" ref="$.WA_BUS_PART.PARTNER"/>
+            <caption>
+               <value>
+                  <text xliff:rid="386D1D1F-BF03-44D3-9C3F-F472F9A1FD11">Business Partner</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Business Partner Number</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField018467" name="HOUSE_NUM1" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="10"/>
+            </value>
+            <bind match="dataRef" ref="$.WA_BUS_PART.HOUSE_NUM1"/>
+            <caption>
+               <value>
+                  <text xliff:rid="9E28B2E6-EA54-455A-B170-4BA998FBB972">House No.</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">House Number</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField018467_copy1" name="GV_ADDRESS" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <?templateDesigner StyleID aped3?>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <bind match="dataRef" ref="$.GV_ADDRESS"/>
+            <caption>
+               <value>
+                  <text xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" xft-xliff:id="N879" xliff:rid="N879">G V_ ADDRES S</text>
+               </value>
+            </caption>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField019169" name="STREET" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="60"/>
+            </value>
+            <bind match="dataRef" ref="$.WA_BUS_PART.STREET"/>
+            <caption>
+               <value>
+                  <text xliff:rid="A14ABC86-E059-4303-A40B-1903C41B34E4">Street</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Street</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField015724" name="STR_SUPPL1" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="40"/>
+            </value>
+            <bind match="dataRef" ref="$.WA_BUS_PART.STR_SUPPL1"/>
+            <caption>
+               <value>
+                  <text xliff:rid="B429F0B3-BADA-46DB-86EE-97B177A6F343">Street 2</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Street 2</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField011478" name="STR_SUPPL2" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="40"/>
+            </value>
+            <bind match="dataRef" ref="$.WA_BUS_PART.STR_SUPPL2"/>
+            <caption>
+               <value>
+                  <text xliff:rid="BD1E18BC-2CF7-4BFA-A497-FD0CA129DB7B">Street 3</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Street 3</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField029358" name="STR_SUPPL3" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="40"/>
+            </value>
+            <bind match="dataRef" ref="$.WA_BUS_PART.STR_SUPPL3"/>
+            <caption>
+               <value>
+                  <text xliff:rid="E85A06EC-141A-4764-9DC0-6300C96AE1B8">Street 4</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Street 4</text>
+            </desc>
+         </field>
+         <field access="readOnly" h="9mm" id="floatingField026962" name="LV_TEL" presence="hidden" w="62mm" x="0mm" y="0mm">
+            <ui>
+               <textEdit>
+                  <border>
+                     <edge stroke="lowered"/>
+                  </border>
+                  <margin/>
+               </textEdit>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <value>
+               <text maxChars="30"/>
+            </value>
+            <bind match="dataRef" ref="$.LV_TEL"/>
+            <caption>
+               <value>
+                  <text xliff:rid="175F4801-38F8-46D7-9B4E-5CA6ECC2C213">Telephone</text>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Telephone no.: dialling code+number</text>
+            </desc>
+         </field>
+         <draw h="34.925mm" name="StaticText5" w="111.125mm" x="3.175mm" y="41.275mm">
+            <ui>
+               <textEdit/>
+            </ui>
+            <value>
+               <exData xmlns:xft-xliff="http://www.xfa.org/schema/xfa-xliff/1.0/" contentType="text/html" xft-xliff:id="N885" xliff:rid="N885">
+                  <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/" xfa:APIVersion="2.7.0.0"><p style="font-weight:bold;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p><p style="font-weight:bold;text-decoration:none;letter-spacing:0in"><span xfa:embed="#floatingField006334" xfa:embedMode="raw" xfa:embedType="uri"/></p><p style="font-weight:bold;text-decoration:none;letter-spacing:0in">(Business Partner No.<span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField026500" xfa:embedMode="raw" xfa:embedType="uri"/>)</p><p style="font-weight:bold;text-decoration:none;letter-spacing:0in"><span xfa:embed="#floatingField018467" xfa:embedMode="raw" xfa:embedType="uri"/><span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField019169" xfa:embedMode="raw" xfa:embedType="uri"/></p><p style="font-weight:bold;text-decoration:none;letter-spacing:0in"><span xfa:embed="#floatingField015724" xfa:embedMode="raw" xfa:embedType="uri"/><span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField011478" xfa:embedMode="raw" xfa:embedType="uri"/><span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField029358" xfa:embedMode="raw" xfa:embedType="uri"/></p><p style="font-weight:bold;text-decoration:none;letter-spacing:0in"><span xfa:embed="#floatingField026962" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+               </exData>
+            </value>
+            <font typeface="Arial"/>
+            <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+         </draw>
+         <field h="25.4mm" w="31.75mm" x="9.525mm" y="6.35mm">
+            <ui>
+               <imageEdit>
+                  <border presence="hidden">
+                     <?templateDesigner StyleID aped0?></border>
+                  <margin/>
+               </imageEdit>
+            </ui>
+            <caption placement="bottom" reserve="5mm">
+               <para vAlign="middle"/>
+            </caption>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <bind match="dataRef" ref="$.GRAPHIC"/>
+            <desc>
+               <exData name="Schema Annotation">Graphic Node GRAPHIC 
+ URL-FIELD = W_BINARY</exData>
+            </desc>
+         </field>
+         <keep intact="none"/>
+         <?templateDesigner expand 0?>
+         <traversal>
+            <traverse operation="first" ref="#field[12]"/>
+         </traversal>
+         <subform hAlign="justify" layout="tb" minH="41.275mm" w="200.025mm" x="3.175mm" y="101.6mm">
+            <bind match="none"/>
+            <?templateDesigner expand 1?></subform>
+         <field access="readOnly" hAlign="justify" minH="12.7mm" name="LV_TEXT" w="193.675mm" x="3.175mm" y="101.6mm">
+            <ui>
+               <textEdit multiLine="1"/>
+            </ui>
+            <font typeface="Arial"/>
+            <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+            <para vAlign="middle"/>
+            <caption reserve="1.2762mm">
+               <para vAlign="middle"/>
+               <value>
+                  <text xliff:rid="0DC893F3-C4BB-489C-B9FE-9A3A32BC3912"/>
+               </value>
+            </caption>
+            <desc>
+               <text name="Schema Annotation">Char255</text>
+            </desc>
+            <bind match="dataRef" ref="$.LV_TEXT"/>
+         </field>
+      </subform>
+      <proto/>
+      <desc>
+         <text name="version">8.01.4329.1.616512.510114</text>
+      </desc>
+      <?templateDesigner expand 1?>
+      <?renderCache.subset "Arial" 0 0 ISO-8859-1 4 188 47 0003000F00110014001500160017002300240025002600270028002A002B002C002E00300031003200330035003600370039003C004200440046004700480049004A004B004C004E004F005000510052005300540055005600570058005C ,.1234@ABCDEGHIKMNOPRSTVY_acdefghiklmnopqrstuy?>
+      <?renderCache.subset "Arial" 1 0 ISO-8859-1 4 192 48 0003000B000C000F00100011001400150016001D00240025002600270028002A002B002C002F003000310032003300350036003700380039004200440045004700480049004B004C004F0050005100520055005600570058005A005C005E0060 (),-.123:ABCDEGHILMNOPRSTUV_abdefhilmnorstuwy{}?></subform>
+   <?templateDesigner DefaultLanguage FormCalc?>
+   <?templateDesigner DefaultRunAt client?>
+   <?templateDesigner SaveTaggedPDF 1?>
+   <?templateDesigner SavePDFWithEmbeddedFonts 1?>
+   <?templateDesigner Grid show:1, snap:1, units:0, color:ff8080, origin:(0,0), interval:(125000,125000), objsnap:0, guidesnap:0, pagecentersnap:0?>
+   <?originalXFAVersion http://www.xfa.org/schema/xfa-template/2.5/?>
+   <?templateDesigner FormTargetVersion 25?>
+   <?templateDesigner Rulers horizontal:1, vertical:1, guidelines:1, crosshairs:0?>
+   <?templateDesigner Zoom 101?></template>
+<config xmlns="http://www.xfa.org/schema/xci/2.8/">
+   <agent name="designer">
+      <!--  [0..n]  -->
+      <destination>pdf</destination>
+      <pdf>
+         <!--  [0..n]  -->
+         <fontInfo/>
+      </pdf>
+      <common>
+         <template>
+            <base>http://dvrpscs.gail.co.in:8000/sap/bc/fp/form/layout/</base>
+         </template>
+      </common>
+   </agent>
+   <present>
+      <!--  [0..n]  -->
+      <pdf>
+         <!--  [0..n]  -->
+         <version>1.7</version>
+      </pdf>
+      <common>
+         <data>
+            <xsl>
+               <uri/>
+            </xsl>
+            <outputXSL>
+               <uri/>
+            </outputXSL>
+         </data>
+      </common>
+      <xdp>
+         <packets>*</packets>
+      </xdp>
+   </present>
+</config>
+<connectionSet xmlns="http://www.xfa.org/schema/xfa-connection-set/2.8/">
+   <xsdConnection dataDescription="data" name="ZGGLRAF_DUNNING1_FORM">
+      <uri/>
+      <rootElement>data</rootElement>
+   </xsdConnection>
+   <?originalXFAVersion http://www.xfa.org/schema/xfa-connection-set/2.4/?></connectionSet>
+<xfa:datasets xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/">
+   <xfa:data xfa:dataNode="dataGroup"/>
+   <dd:dataDescription xmlns:dd="http://ns.adobe.com/data-description/" dd:name="data">
+      <data>
+         <DATE/>
+         <WA_BUS_PART>
+            <PARTNER/>
+            <ADDRNUMBER/>
+            <TYPE/>
+            <BPKIND/>
+            <BU_GROUP/>
+            <BPEXT/>
+            <BU_SORT1/>
+            <BU_SORT2/>
+            <SOURCE/>
+            <TITLE/>
+            <XDELE/>
+            <XBLCK/>
+            <AUGRP/>
+            <TITLE_LET/>
+            <BU_LOGSYS/>
+            <CONTACT/>
+            <NOT_RELEASED/>
+            <PRINT_MODE/>
+            <BP_EEW_DUMMY/>
+            <RATE/>
+            <NAME_ORG1/>
+            <NAME_ORG2/>
+            <NAME_ORG3/>
+            <NAME_ORG4/>
+            <LEGAL_ENTY/>
+            <IND_SECTOR/>
+            <LEGAL_ORG/>
+            <FOUND_DAT/>
+            <LIQUID_DAT/>
+            <LOCATION_1/>
+            <LOCATION_2/>
+            <LOCATION_3/>
+            <NAME_LAST/>
+            <NAME_FIRST/>
+            <NAME_LST2/>
+            <NAME_LAST2/>
+            <NAMEMIDDLE/>
+            <TITLE_ACA1/>
+            <TITLE_ACA2/>
+            <TITLE_ROYL/>
+            <PREFIX1/>
+            <PREFIX2/>
+            <NAME1_TEXT/>
+            <NICKNAME/>
+            <INITIALS/>
+            <NAMEFORMAT/>
+            <NAMCOUNTRY/>
+            <LANGU_CORR/>
+            <XSEXM/>
+            <XSEXF/>
+            <BIRTHPL/>
+            <MARST/>
+            <EMPLO/>
+            <JOBGR/>
+            <NATIO/>
+            <CNTAX/>
+            <CNDSC/>
+            <PERSNUMBER/>
+            <XSEXU/>
+            <XUBNAME/>
+            <BU_LANGU/>
+            <BIRTHDT/>
+            <DEATHDT/>
+            <PERNO/>
+            <CHILDREN/>
+            <MEM_HOUSE/>
+            <PARTGRPTYP/>
+            <NAME_GRP1/>
+            <NAME_GRP2/>
+            <LGTYP/>
+            <LGNUM/>
+            <INFCT/>
+            <COMRG/>
+            <CLBRG/>
+            <COPRG/>
+            <COMREG_DAT/>
+            <M_BONIWERT/>
+            <M_BONIDAT/>
+            <NAME1/>
+            <NAME2/>
+            <NAME_CO/>
+            <CITY1/>
+            <CITY2/>
+            <CITY_CODE/>
+            <CITYP_CODE/>
+            <HOME_CITY/>
+            <CITYH_CODE/>
+            <CHCKSTATUS/>
+            <REGIOGROUP/>
+            <POST_CODE1/>
+            <POST_CODE2/>
+            <POST_CODE3/>
+            <PCODE1_EXT/>
+            <PCODE2_EXT/>
+            <PCODE3_EXT/>
+            <PO_BOX/>
+            <DONT_USE_P/>
+            <PO_BOX_NUM/>
+            <PO_BOX_LOC/>
+            <CITY_CODE2/>
+            <PO_BOX_REG/>
+            <PO_BOX_CTY/>
+            <POSTALAREA/>
+            <TRANSPZONE/>
+            <STREET/>
+            <DONT_USE_S/>
+            <STREETCODE/>
+            <STREETABBR/>
+            <HOUSE_NUM1/>
+            <HOUSE_NUM2/>
+            <HOUSE_NUM3/>
+            <STR_SUPPL1/>
+            <STR_SUPPL2/>
+            <STR_SUPPL3/>
+            <LOCATION/>
+            <BUILDING/>
+            <FLOOR/>
+            <ROOMNUMBER/>
+            <COUNTRY/>
+            <LANGU/>
+            <REGION/>
+            <SORT1/>
+            <SORT2/>
+            <SORT_PHN/>
+            <ADDRORIGIN/>
+            <EXTENSION1/>
+            <EXTENSION2/>
+            <TIME_ZONE/>
+            <TAXJURCODE/>
+            <ADDRESS_ID/>
+            <REMARK/>
+            <LANGU_CREA/>
+            <PO_BOX_LOBBY/>
+            <DELI_SERV_TYPE/>
+            <DELI_SERV_NUMBER/>
+            <DEFLT_COMM/>
+            <TEL_NUMBER/>
+            <TEL_EXTENS/>
+            <FAX_NUMBER/>
+            <FAX_EXTENS/>
+            <VALID_FROM/>
+            <VALID_TO/>
+            <NATPERS/>
+            <WAKLASS/>
+            <FIRMART/>
+            <ARBFELD/>
+            <MITGLIED/>
+            <SPZULASS/>
+            <ARTZULASS/>
+            <AUSWANZ/>
+            <PLOMBENZ/>
+            <FREMDEVU/>
+            <STATINS/>
+            <STATDATUM/>
+            <ERSTZUL/>
+            <WERKSTATT/>
+            <VERLZUL/>
+            <ENDEZUL/>
+            <ANZEVU/>
+            <ANZFIL/>
+            <AUSW_INST/>
+            <DR_LICENSE_LAND1/>
+            <DR_LICENSE_REGIO/>
+            <DR_LICENSE/>
+            <SOC_SECURE/>
+            <WELFARE/>
+            <PLACE_EMPL/>
+            <KTOKLASSE/>
+            <BUPINFOREL/>
+            <CLERK_ID/>
+            <RECPTYPE/>
+            <PYMET/>
+            <EMBVT/>
+            <HKONT/>
+            <CLASSIFICATION/>
+            <VIP/>
+            <IDENT_INST/>
+            <MUSTER_KUN/>
+         </WA_BUS_PART>
+         <GV_STRING/>
+         <ADDRESS/>
+         <TOTAL_A/>
+         <W_BINARY/>
+         <GRAPHIC/>
+         <GV_ADDRESS/>
+         <LV_TEL/>
+         <GV_COM_ADR1/>
+         <GV_COM_ADR/>
+         <LV_TEXT/>
+      </data>
+   </dd:dataDescription>
+</xfa:datasets>
+<localeSet xmlns="http://www.xfa.org/schema/xfa-locale-set/2.7/">
+   <locale desc="English (United Kingdom)" name="en_GB_EURO">
+      <calendarSymbols name="gregorian">
+         <monthNames>
+            <month>January</month>
+            <month>February</month>
+            <month>March</month>
+            <month>April</month>
+            <month>May</month>
+            <month>June</month>
+            <month>July</month>
+            <month>August</month>
+            <month>September</month>
+            <month>October</month>
+            <month>November</month>
+            <month>December</month>
+         </monthNames>
+         <monthNames abbr="1">
+            <month>Jan</month>
+            <month>Feb</month>
+            <month>Mar</month>
+            <month>Apr</month>
+            <month>May</month>
+            <month>Jun</month>
+            <month>Jul</month>
+            <month>Aug</month>
+            <month>Sep</month>
+            <month>Oct</month>
+            <month>Nov</month>
+            <month>Dec</month>
+         </monthNames>
+         <dayNames>
+            <day>Sunday</day>
+            <day>Monday</day>
+            <day>Tuesday</day>
+            <day>Wednesday</day>
+            <day>Thursday</day>
+            <day>Friday</day>
+            <day>Saturday</day>
+         </dayNames>
+         <dayNames abbr="1">
+            <day>Sun</day>
+            <day>Mon</day>
+            <day>Tue</day>
+            <day>Wed</day>
+            <day>Thu</day>
+            <day>Fri</day>
+            <day>Sat</day>
+         </dayNames>
+         <meridiemNames>
+            <meridiem>AM</meridiem>
+            <meridiem>PM</meridiem>
+         </meridiemNames>
+         <eraNames>
+            <era>BC</era>
+            <era>AD</era>
+         </eraNames>
+      </calendarSymbols>
+      <datePatterns>
+         <datePattern name="full">EEEE, D MMMM YYYY</datePattern>
+         <datePattern name="long">D MMMM YYYY</datePattern>
+         <datePattern name="med">D MMM YYYY</datePattern>
+         <datePattern name="short">DD/MM/YYYY</datePattern>
+      </datePatterns>
+      <timePatterns>
+         <timePattern name="full">HH:MM:SS Z</timePattern>
+         <timePattern name="long">HH:MM:SS Z</timePattern>
+         <timePattern name="med">HH:MM:SS</timePattern>
+         <timePattern name="short">HH:MM</timePattern>
+      </timePatterns>
+      <dateTimeSymbols>GyMdkHmsSEDFwWahKzZ</dateTimeSymbols>
+      <numberPatterns>
+         <numberPattern name="numeric">z,zz9.zzz</numberPattern>
+         <numberPattern name="currency">$z,zz9.99</numberPattern>
+         <numberPattern name="percent">z,zz9%</numberPattern>
+      </numberPatterns>
+      <numberSymbols>
+         <numberSymbol name="decimal">.</numberSymbol>
+         <numberSymbol name="grouping">,</numberSymbol>
+         <numberSymbol name="percent">%</numberSymbol>
+         <numberSymbol name="minus">-</numberSymbol>
+         <numberSymbol name="zero">0</numberSymbol>
+      </numberSymbols>
+      <currencySymbols>
+         <currencySymbol name="symbol">€</currencySymbol>
+         <currencySymbol name="isoname">EUR</currencySymbol>
+         <currencySymbol name="decimal">.</currencySymbol>
+      </currencySymbols>
+   </locale>
+   <?originalXFAVersion http://www.xfa.org/schema/xfa-locale-set/2.1/?></localeSet>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.2-c001 63.139439, 2010/10/12-08:45:30        ">
+   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+      <rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" rdf:about="">
+         <xmp:MetadataDate>2019-03-20T10:38:44Z</xmp:MetadataDate>
+         <xmp:CreatorTool>Adobe LiveCycle Designer ES 9.8</xmp:CreatorTool>
+      </rdf:Description>
+      <rdf:Description xmlns:pdf="http://ns.adobe.com/pdf/1.3/" rdf:about="">
+         <pdf:Producer>Adobe LiveCycle Designer ES 9.8</pdf:Producer>
+      </rdf:Description>
+      <rdf:Description xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" rdf:about="">
+         <xmpMM:DocumentID>uuid:48e65974-1d6d-4e04-ae68-5fb019af02a1</xmpMM:DocumentID>
+      </rdf:Description>
+      <rdf:Description xmlns:desc="http://ns.adobe.com/xfa/promoted-desc/" rdf:about="">
+         <desc:version rdf:parseType="Resource">
+            <rdf:value>8.01.4329.1.616512.510114</rdf:value>
+            <desc:ref>/template/subform[1]</desc:ref>
+         </desc:version>
+      </rdf:Description>
+   </rdf:RDF>
+</x:xmpmeta></xdp:xdp>
