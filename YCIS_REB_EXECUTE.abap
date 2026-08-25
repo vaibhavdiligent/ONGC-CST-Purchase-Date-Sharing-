@@ -10,8 +10,12 @@
 *&        ALL sales offices and, on EXECUTE, replays the stored payload into
 *&        BAPI_SALESDOCU_CREATEFROMDATA (BUS2094 credit-memo request) exactly
 *&        as the original YRVU001 FORM check / FORM sales_order did, then
-*&        writes YRVA_REBATE and stamps WF_STATUS '40' (Completed) / STATUS
-*&        'A'. REJECT -> WF_STATUS '20' (back to L2), mail L2.
+*&        writes YRVA_REBATE and stamps WF_STATUS '40' (Pending L4) / STATUS
+*&        'P', and mails L4. REJECT -> WF_STATUS '20' (back to L2), mail L2.
+*&   L4 : YCIS_REB_VET       (CPC Finance - Financial Vetting) 40 -> 50.
+*&   L5 : YCIS_REB_APPRV5    (CPC Head - Final Approval)       50 -> 60.
+*&   L6 : YCIS_REB_DISBURSE  (CPC Finance - Disbursement)      60 -> 70 (done).
+*&        Rejection at L4/L5/L6 returns the row one level back (mail that level).
 *&
 *& Reuses the shared approval infrastructure (YCIS_APPRVL / YCIS_WF_APPR),
 *& separated from the QAIS queue by SCHEME_TYPE = 'U'.
@@ -274,7 +278,7 @@ FORM process_selected USING p_action TYPE char1.
           AND period_to   = gs_appr-period_to
           AND kunnr       = gs_appr-kunnr
           AND kvgr2       = gs_appr-kvgr2.
-      IF lv_exord IS NOT INITIAL OR lv_exstat = '40'.
+      IF lv_exord IS NOT INITIAL OR lv_exstat >= '40'.
         lv_dup = lv_dup + 1.
         gs_out-order_no = lv_exord.
         gs_out-remarks  = |Rebate order { lv_exord } already created|.
@@ -291,17 +295,17 @@ FORM process_selected USING p_action TYPE char1.
 *     being reported as a failed creation and left stuck at Pending.
       IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
         lv_zero = lv_zero + 1.
-        gs_appr-wf_status = '40'.          " Completed
-        gs_appr-status    = 'A'.           " Approved (clears 'P' Pending)
+        gs_appr-wf_status = '40'.          " Pending L4 (forwarded, no real order)
+        gs_appr-status    = 'P'.           " Pending onward approval
         gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Group OK - zero lifting, no order created'.
+        gs_appr-remarks   = 'Group OK - zero lifting, forwarded to L4'.
         MODIFY ycis_apprvl FROM gs_appr.
         COMMIT WORK AND WAIT.
         gs_out-order_no = 'GROUP OK'.
-        gs_out-remarks  = 'Group OK - zero lifting, no order created'.
+        gs_out-remarks  = 'Group OK - zero lifting, forwarded to L4'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
         CONTINUE.
@@ -310,17 +314,17 @@ FORM process_selected USING p_action TYPE char1.
       CLEAR lv_vbeln.
       PERFORM create_reb_order USING gs_appr CHANGING lv_vbeln.
       IF lv_vbeln IS NOT INITIAL.
-        gs_appr-wf_status = '40'.        " Completed
-        gs_appr-status    = 'A'.         " Approved - order created
+        gs_appr-wf_status = '40'.        " Pending L4 (forwarded to CPC Finance)
+        gs_appr-status    = 'P'.         " Pending onward approval
         gs_appr-order_no  = lv_vbeln.
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Executed - rebate order created'.
+        gs_appr-remarks   = 'Executed - rebate order created, forwarded to L4'.
         MODIFY ycis_apprvl FROM gs_appr.
         lv_cnt = lv_cnt + 1.
         gs_out-order_no = lv_vbeln.
-        gs_out-remarks  = 'Executed - rebate order created'.
+        gs_out-remarks  = 'Executed - rebate order created, forwarded to L4'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
       ELSE.
@@ -351,6 +355,11 @@ FORM process_selected USING p_action TYPE char1.
       ENDLOOP.
       DELETE gt_out WHERE sel = 'X'.
     ENDIF.
+  ENDIF.
+
+* executed / group-OK rows are now Pending L4 -> notify CPC Finance (central)
+  IF p_action = 'E' AND ( lv_cnt > 0 OR lv_zero > 0 ).
+    PERFORM send_mail USING '4' '0001' '0001'.
   ENDIF.
 
   IF p_action = 'E'.
@@ -576,16 +585,31 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-      ls_text-line = |Dear Sir/Madam,|.                              APPEND ls_text TO lt_text.
-      ls_text-line = ||.                                             APPEND ls_text TO lt_text.
-      ls_text-line = |The rebate (PSD) lines for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
-      APPEND ls_text TO lt_text.
-      ls_text-line = |for your review. Please log in to T-Code YRVU015_E (L2) and re-check the records.|.
-      APPEND ls_text TO lt_text.
-      ls_text-line = ||.                                             APPEND ls_text TO lt_text.
-      ls_text-line = |This is a system generated mail. Please do not reply.|.
-      APPEND ls_text TO lt_text.
-      lv_sub = 'Rebate (PSD) - returned by L3 for review'.
+      IF p_level = '4'.
+*       forward to L4 (CPC Finance - Financial Vetting)
+        ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
+        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
+        ls_text-line = |Rebate (PSD) credit-memo requests have been created by L3 (CPC).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in and Review & Vet the rebate amounts (L4 - CPC Finance).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
+        ls_text-line = |This is a system generated mail. Please do not reply.|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'Rebate (PSD) - Order Created, Action Required at L4'.
+      ELSE.
+*       reject -> back to L2
+        ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
+        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
+        ls_text-line = |The rebate (PSD) lines for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |for your review. Please log in to T-Code YRVU015_E (L2) and re-check the records.|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = ||.                                           APPEND ls_text TO lt_text.
+        ls_text-line = |This is a system generated mail. Please do not reply.|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'Rebate (PSD) - returned by L3 for review'.
+      ENDIF.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
