@@ -49,6 +49,34 @@ To print/e-mail the note (e.g. at L5/L6, or on demand from YRVG052), generate th
 `FP_JOB_OPEN → <generated FM>( populate WA_NOTE from YCIS_APPRVL: APPR_NOTE_NO, REF_NO, VARIANT_NAME=scheme, DISC_TOTAL_VALUE=Σ rebate_val, L1..L6 remarks from REMARKS/REM_L4/L5/L6 and L1_SIGN..L6_SIGN from L1_USER+L1_DATE+L1_TIME … L6_USER+L6_DATE+L6_TIME ) → FP_JOB_CLOSE`.
 I can build this print driver program if you want it wired to the approval table.
 
+## Print trigger — "Print Approval Note" button on YRVG052
+
+The report `YCIS_REBATE_REPORT` (YRVG052) now has the print driver built in
+(package `CIS_2026_27_APPRNOTE_PRINT_abapGit.zip`):
+
+- Select a line (customer / rebate order) in the report → press **Print Approval
+  Note** → the driver reads the record from `YCIS_APPRVL`, fills `ZCIS_APPR_NOTE_S`
+  (total = Σ REBATE_VAL for the order; L1–L6 signature lines from
+  `L*_USER + L*_DATE + L*_TIME`; L4–L6 remarks from `REM_L4/REM_L5/REM_L6`,
+  L3 remark from `REMARKS`) and renders the form via
+  `FP_FUNCTION_MODULE_NAME → FP_JOB_OPEN → <form FM> → FP_JOB_CLOSE`.
+- The note is available once the rebate order exists (created at L3). Before L3
+  there is no order number, so the button reports that and prints nothing.
+
+### One-time manual step — GUI status for YRVG052 (SE41)
+The report now calls a GUI status named **`STANDARD`**. Create it once:
+1. SE41 → Program `YCIS_REBATE_REPORT`, Status `STANDARD` → **Copy Status**.
+2. Copy **from** program `SAPLKKBL`, status `STANDARD` (this is the ALV standard
+   toolbar) **to** `YCIS_REBATE_REPORT` / `STANDARD`.
+3. Add one push button to the application toolbar with function code **`PRNT`**,
+   text **"Print Approval Note"**, icon `ICON_PRINT` (suggested key F5).
+4. Activate the status, then reactivate the report.
+
+Without this status the ALV grid still opens (SAP falls back), but the Print
+button won't appear until the status is created — so this step is required for
+the button to show.
+
 ## Notes
-- Form/interface name `ZCIS_PSD_APPR_NOTE` is a suggestion — rename in SFP to your standard (e.g. `ZGGLRAF_…`); if you rename, also update `<INTERFACE>` in `SFPF_*.XML` and the file names.
+- Form/interface name `ZCIS_PSD_APPR_NOTE` is a suggestion — rename in SFP to your standard (e.g. `ZGGLRAF_…`); if you rename, also update `<INTERFACE>` in `SFPF_*.XML`, the file names, **and** the `i_name = 'ZCIS_PSD_APPR_NOTE'` in `YCIS_REBATE_REPORT` (FORM print_note).
+- The print driver expects the interface import parameter to be named **`WA_NOTE`** (type `ZCIS_APPR_NOTE_S`). Keep that name in the interface.
 - Page size is set to A4; change `medium … stock="a4"` to `stock="letter"` in the XDP if you print on Letter.

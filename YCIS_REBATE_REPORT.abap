@@ -408,16 +408,196 @@ FORM display_alv.
   gs_layout-zebra             = 'X'.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
-      i_callback_program = sy-repid
-      is_layout          = gs_layout
-      it_fieldcat        = gt_fcat
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'SET_STATUS'
+      i_callback_user_command  = 'USER_COMMAND'
+      is_layout                = gs_layout
+      it_fieldcat              = gt_fcat
     TABLES
-      t_outtab           = gt_out
+      t_outtab                 = gt_out
     EXCEPTIONS
-      program_error      = 1
-      OTHERS             = 2.
+      program_error            = 1
+      OTHERS                   = 2.
   IF sy-subrc <> 0.
     MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
             WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
   ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  set_status
+*&---------------------------------------------------------------------*
+*&  GUI status 'STANDARD' must exist in this program - create it in SE41
+*&  by COPYING status 'STANDARD' from program SAPLKKBL (the ALV standard
+*&  toolbar) and adding one push button with function code 'PRNT'
+*&  (suggested key F5, text "Print Approval Note", icon ICON_PRINT).
+*&---------------------------------------------------------------------*
+FORM set_status USING rt_extab TYPE slis_t_extab.            "#EC CALLED
+  SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  user_command
+*&---------------------------------------------------------------------*
+FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
+                        rs_selfield TYPE slis_selfield.
+  DATA: lr_grid  TYPE REF TO cl_gui_alv_grid,
+        lt_rows  TYPE lvc_t_row,
+        ls_row   TYPE lvc_s_row,
+        lv_vbeln TYPE vbeln_va.
+
+  CASE r_ucomm.
+    WHEN 'PRNT'.
+*       find the target row: use the marked row(s); if none, the cursor row
+      CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
+        IMPORTING
+          e_grid = lr_grid.
+      IF lr_grid IS NOT INITIAL.
+        CALL METHOD lr_grid->get_selected_rows
+          IMPORTING
+            et_index_rows = lt_rows.
+      ENDIF.
+      READ TABLE lt_rows INTO ls_row INDEX 1.
+      IF sy-subrc = 0.
+        READ TABLE gt_out INTO gs_out INDEX ls_row-index.
+      ELSEIF rs_selfield-tabindex > 0.
+        READ TABLE gt_out INTO gs_out INDEX rs_selfield-tabindex.
+      ELSE.
+        MESSAGE 'Select a line (customer / rebate order) to print the note' TYPE 'I'.
+        RETURN.
+      ENDIF.
+      lv_vbeln = gs_out-vbeln.
+      IF lv_vbeln IS INITIAL.
+        MESSAGE 'Approval Note is available once the rebate order is created (L3)' TYPE 'I'.
+        RETURN.
+      ENDIF.
+      PERFORM print_note USING lv_vbeln.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  print_note   (render the CIS PSD Discount Approval Note)
+*&---------------------------------------------------------------------*
+FORM print_note USING p_vbeln TYPE vbeln_va.
+  DATA: lt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
+        ls_appr   TYPE ycis_apprvl,
+        ls_note   TYPE zcis_appr_note_s,
+        lv_total  TYPE ycis_apprvl-rebate_val,
+        lv_fm     TYPE funcname,
+        ls_outpar TYPE sfpoutputparams,
+        ls_docpar TYPE sfpdocparams.
+
+*   all approval rows that produced this rebate order (usually one)
+  SELECT * FROM ycis_apprvl INTO TABLE lt_appr
+    WHERE order_no = p_vbeln.
+  IF lt_appr IS INITIAL.
+    MESSAGE 'No approval record found for this rebate order' TYPE 'I'.
+    RETURN.
+  ENDIF.
+  READ TABLE lt_appr INTO ls_appr INDEX 1.
+
+*   total discount value across the order's approval rows
+  CLEAR lv_total.
+  LOOP AT lt_appr INTO ls_appr.
+    lv_total = lv_total + ls_appr-rebate_val.
+  ENDLOOP.
+  READ TABLE lt_appr INTO ls_appr INDEX 1.
+
+*   ---- fill the note structure from the approval record ----
+  CLEAR ls_note.
+  ls_note-appr_note_no     = ls_appr-qais_no.
+  ls_note-ref_no           = 'GAIL/PMG/CPC/PSD Discount disbursement'.
+  ls_note-variant_name     = ls_appr-qais_no.
+  WRITE lv_total TO ls_note-disc_total_value CURRENCY ls_appr-waers.
+  CONDENSE ls_note-disc_total_value.
+
+*   per-level signature lines: user + date + time (available for all levels)
+  PERFORM sign_line USING ls_appr-l1_user ls_appr-l1_date ls_appr-l1_time
+                    CHANGING ls_note-l1_sign.
+  PERFORM sign_line USING ls_appr-l2_user ls_appr-l2_date ls_appr-l2_time
+                    CHANGING ls_note-l2_sign.
+  PERFORM sign_line USING ls_appr-l3_user ls_appr-l3_date ls_appr-l3_time
+                    CHANGING ls_note-l3_sign.
+  PERFORM sign_line USING ls_appr-l4_user ls_appr-l4_date ls_appr-l4_time
+                    CHANGING ls_note-l4_sign.
+  PERFORM sign_line USING ls_appr-l5_user ls_appr-l5_date ls_appr-l5_time
+                    CHANGING ls_note-l5_sign.
+  PERFORM sign_line USING ls_appr-l6_user ls_appr-l6_date ls_appr-l6_time
+                    CHANGING ls_note-l6_sign.
+
+*   per-level remarks (L1-L3 share the general REMARKS; L4-L6 have their own)
+  ls_note-l3_remarks = ls_appr-remarks.
+  ls_note-l4_remarks = ls_appr-rem_l4.
+  ls_note-l5_remarks = ls_appr-rem_l5.
+  ls_note-l6_remarks = ls_appr-rem_l6.
+
+*   ---- render the Adobe form ----
+  CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
+    EXPORTING
+      i_name     = 'ZCIS_PSD_APPR_NOTE'
+    IMPORTING
+      e_funcname = lv_fm
+    EXCEPTIONS
+      OTHERS     = 1.
+  IF sy-subrc <> 0 OR lv_fm IS INITIAL.
+    MESSAGE 'Approval Note form ZCIS_PSD_APPR_NOTE is not active' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  ls_outpar-nodialog = space.        " show the print/preview dialog
+  ls_outpar-preview  = 'X'.
+  CALL FUNCTION 'FP_JOB_OPEN'
+    CHANGING
+      ie_outputparams = ls_outpar
+    EXCEPTIONS
+      cancel          = 1
+      usage_error     = 2
+      system_error    = 3
+      internal_error  = 4
+      OTHERS          = 5.
+  IF sy-subrc <> 0.
+    RETURN.
+  ENDIF.
+
+  ls_docpar-langu   = sy-langu.
+  ls_docpar-country = 'IN'.
+  CALL FUNCTION lv_fm
+    EXPORTING
+      /1bcdwb/docparams = ls_docpar
+      wa_note           = ls_note
+    EXCEPTIONS
+      usage_error       = 1
+      system_error      = 2
+      internal_error    = 3
+      OTHERS            = 4.
+  IF sy-subrc <> 0.
+    MESSAGE 'Error while generating the Approval Note' TYPE 'I'.
+  ENDIF.
+
+  CALL FUNCTION 'FP_JOB_CLOSE'
+    EXCEPTIONS
+      usage_error    = 1
+      system_error   = 2
+      internal_error = 3
+      OTHERS         = 4.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  sign_line   (build "USER  DD.MM.YYYY  HH:MM:SS")
+*&---------------------------------------------------------------------*
+FORM sign_line USING p_user TYPE any
+                     p_date TYPE datum
+                     p_time TYPE uzeit
+               CHANGING p_out TYPE any.
+  DATA: lv_d TYPE char10, lv_t TYPE char8.
+  CLEAR p_out.
+  CHECK p_user IS NOT INITIAL.
+  IF p_date IS NOT INITIAL.
+    WRITE p_date TO lv_d DD/MM/YYYY.
+  ENDIF.
+  IF p_time IS NOT INITIAL.
+    WRITE p_time TO lv_t USING EDIT MASK '__:__:__'.
+  ENDIF.
+  CONCATENATE p_user lv_d lv_t INTO p_out SEPARATED BY space.
+  CONDENSE p_out.
 ENDFORM.
