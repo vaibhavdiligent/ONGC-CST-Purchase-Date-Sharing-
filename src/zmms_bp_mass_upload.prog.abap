@@ -866,7 +866,7 @@ CLASS lcl_base DEFINITION ABSTRACT.
     "! back or the API deletes them.
     METHODS merge_banks
       IMPORTING iv_lifnr TYPE lifnr
-      CHANGING  ct_bank  TYPE vmds_ei_bankdetail_t.
+      CHANGING  ct_bank  TYPE cvis_ei_bankdetail_t.
 
     "! Gross merge for LFBW.
     METHODS merge_wtax
@@ -913,7 +913,7 @@ CLASS lcl_base IMPLEMENTATION.
                                data_key-bankn = ls_db-bankn ] ).
         CONTINUE.                                " file overrides this one
       ENDIF.
-      DATA ls_keep TYPE vmds_ei_bankdetail.
+      DATA ls_keep TYPE cvis_ei_cvi_bankdetail.
       CLEAR ls_keep.
       ls_keep-task           = gc_m.
       ls_keep-data_key-banks = ls_db-banks.
@@ -1188,7 +1188,7 @@ CLASS lcl_h_create IMPLEMENTATION.
 
       " bank details
       IF lv_bankl IS NOT INITIAL AND lv_bankn IS NOT INITIAL.
-        DATA ls_bk TYPE vmds_ei_bankdetail.
+        DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
         CLEAR ls_bk.
         ls_bk-task           = gc_i.
         ls_bk-data_key-banks = lv_banks.
@@ -1680,7 +1680,7 @@ CLASS lcl_h_bank IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA lt_bank TYPE vmds_ei_bankdetail_t.
+    DATA lt_bank TYPE cvis_ei_bankdetail_t.
     CLEAR lt_bank.
     DATA lv_bad TYPE abap_bool.
     CLEAR lv_bad.
@@ -1699,7 +1699,7 @@ CLASS lcl_h_bank IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA ls_bk TYPE vmds_ei_bankdetail.
+      DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
       CLEAR ls_bk.
       ls_bk-task           = gc_m.
       ls_bk-data_key-banks = ls_in-banks.
