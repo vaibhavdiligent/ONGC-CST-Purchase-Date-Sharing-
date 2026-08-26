@@ -3,6 +3,7 @@
 **Source input:** `revendorandcustomermastercreationmassuploadtempla.zip` (11 workbooks, 17 usable sheets)
 **Proposed program:** `YGMS_BP_MASS_UPLOAD` (namespace follows existing `src/ygms_*` convention)
 **Status:** PLAN ONLY — no code written yet, per instruction.
+**Verified against:** system CRS, S4CORE 109 / SAP_BASIS 816 — see `SYSTEM_FINDINGS.md`.
 
 ---
 
@@ -197,16 +198,22 @@ Adding a 12th template later = one new handler class + rows in `YGMS_BP_UPL_LAYO
 >
 > | Class | Meaning | Columns | Share |
 > |:---:|---|---:|---:|
-> | **A** | Maps to `CL_MD_BP_MAINTAIN=>MAINTAIN( )` | 220 | 80.3% |
+> | **A** | Maps to `CL_MD_BP_MAINTAIN=>MAINTAIN( )` | 238 | 86.9% |
 > | **B** | Maps to `BAPI_BANK_CREATE` / `_CHANGE` (bank keys are not BP objects) | 17 | 6.2% |
-> | **C** | **No standard API** — `J_1IMOVEND` (CIN); direct update or BDC only | 18 | 6.6% |
+> | **C** | No standard API | **0** | 0.0% |
 > | **D** | Dead LSMW/dynpro artifact — read and ignored | 11 | 4.0% |
 > | **E** | **Unmapped** — needs functional clarification | 8 | 2.9% |
 > | | **Total** | **274** | |
 >
-> So the honest answer to "does every field map to the class?" is **no**: 220 of 274 do.
-> The 18 class-C and 8 class-E columns are the ones that block a complete build, and they
-> are concentrated in Scenarios 6 and 7.
+> **Verified against system CRS** (S4CORE 109 / SAP_BASIS 816) — see
+> `SYSTEM_FINDINGS.md`. All 11 scenarios are technically buildable. The only columns not
+> addressable through the class are the 17 bank-master fields (a different API by design)
+> and the 8 in the TAN template that still need a functional answer.
+>
+> Sections 3, 5 and 7 below predate that verification in places; `SYSTEM_FINDINGS.md` is
+> authoritative where they differ. In particular: CIN fields **are** maintainable through
+> the API, `IN3` does not exist in this system, and bank details follow **gross/replace**
+> semantics rather than append.
 
 
 Legend: `→` target field. `[X]` = corresponding `DATAX` flag must be set.
