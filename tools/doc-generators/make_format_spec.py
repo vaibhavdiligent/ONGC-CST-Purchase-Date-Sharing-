@@ -132,18 +132,37 @@ T(['Programs','Scenarios','Columns documented'],
 H('1.  How to read this document',1)
 P('There is one section per radio button. Each section names the workbook tab it reads, states how that tab '
   'is laid out today, and lists every column.')
-P('Both programs read the chosen tab from row 2 onwards.',bold=True)
-P('Several tabs in the two workbooks do not follow that layout today — they carry field type, field length, '
-  'guideline or sample rows between the headings and the data. Where that is the case it is stated at the '
-  'top of the section, and the tab needs re-cutting before it can be loaded. The required layout is:')
-B('Row 1 — the heading row')
-B('Row 2 onwards — data only')
-B('No description, type, length, guideline or sample rows in between')
-NOTE('The supplier program does skip rows whose first cell reads Field Type, Field Length, Sample, Project, '
-     'Tech name and similar, so some of these tabs will already work. It is not a substitute for a clean '
-     'layout: rows that do not start with one of those words are read as data.')
+P('Every tab of both workbooks must be laid out the same way:',bold=True)
+B('Row 1 - the heading row')
+B('Row 2 onwards - data only')
+B('Nothing in between: no field type row, no field length row, no mandatory/optional row, no guideline '
+  'row and no sample rows')
+P('Both programs read the chosen tab from row 2.',bold=True)
+P('Twelve of the sixteen tabs do not follow this today. Each section below states exactly which rows to '
+  'delete from that tab. Please delete them rather than hide them - a hidden row is still read.')
+P('Delete rows only, never columns.',bold=True)
+P('Delete ROWS only - never columns. Several tabs start with a label column that holds text like "Field Tech name" or "Sample data" and is empty on the data rows. That column still counts. On the supplier creation tab, for instance, the vendor number is column B, not column A. Deleting the label column would shift every field one place to the left and the file would load into the wrong fields.')
+P('The column letters in the tables below are the letters the program expects. If a letter in the table '
+  'does not match your file, a column has been added or removed and the file will not load correctly.')
+NOTE('The supplier program does skip rows whose first cell reads Field Type, Field Length, Sample, Project '
+     'or Tech name, so some tabs will load even before they are re-cut. It is not a substitute for a clean '
+     'layout: any row that does not begin with one of those words is read as data. Patner function row 6 '
+     'begins with LIFNR and Block_Unblocked row 8 begins with Default XK05 - both would be read as records.')
 
-H('2.  Mandatory and optional',1)
+H('2.  Heading rows to skip',1)
+P('Both programs have a field on the selection screen called Heading rows to skip, set to 1. With the '
+  'layout above that is correct: one heading row, then data.')
+P('On the first run, the top of the result list shows a line like:')
+P('        Line 1 skipped:  KUNNR / BUKRS / VKORG / VTWEG / SPART ...',italic=True)
+T(['What that line shows','What it means','What to do'],
+  [['Your column headings','Correct','Leave the field at 1'],
+   ['A real customer or supplier record','The heading row was removed before the program saw it',
+    'Set the field to 0, otherwise every file loses its first record']],
+  widths=[4.5,5.5,5.0],fs=9)
+P('If a tab has not been re-cut yet, this field can also be used to step over the extra rows - for example '
+  'Patner function currently needs 9.')
+
+H('3.  Mandatory and optional',1)
 P('Where the workbook itself marks a column Mandatory or Optional, that marking is reproduced here. Where it '
   'does not, the column is shown blank — SAP still applies its own required-field rules for the account group, '
   'so a field can be rejected at posting even if it is not marked mandatory in the spreadsheet.')
@@ -153,22 +172,30 @@ P('If you leave a cell empty the program leaves whatever is already in SAP untou
 doc.add_page_break()
 
 # ------------------------------------------------------------------ vendor
-H('3.  Supplier master — ZMMS_BP_MASS_UPLOAD',1)
+H('4.  Supplier master - ZMMS_BP_MASS_UPLOAD',1)
 n=0
 for radio,tab in VSCEN:
     n+=1
-    H(f'3.{n}  {radio}',2)
+    H(f'4.{n}  {radio}',2)
     tech,desc,typ,lng,mo,first = VLAY[tab]
     rr=VEN[tab]
     P(f'Workbook tab:  {tab}',bold=True)
-    lay=[['Headings (technical names)',f'row {tech}']]
-    if desc: lay.append(['Field description',f'row {desc}'])
-    if typ:  lay.append(['Field type',f'row {typ}'])
-    if lng:  lay.append(['Field length',f'row {lng}'])
-    if mo:   lay.append(['Mandatory / optional',f'row {mo}'])
-    lay.append(['Data starts',f'row {first}'])
-    lay.append(['Complies with row 1 / row 2', 'Yes' if (tech==1 and first==2) else 'No - re-cut needed'])
-    T(['Layout today','Where'],lay,widths=[6.0,4.0],fs=9)
+    extra=[]
+    if desc and desc!=1: extra.append(f'field description (row {desc})')
+    if typ:  extra.append(f'field type (row {typ})')
+    if lng:  extra.append(f'field length (row {lng})')
+    if mo:   extra.append(f'mandatory/optional (row {mo})')
+    if tech!=1: extra.append(f'everything above the heading row (rows 1 to {tech-1})')
+    ok = (tech==1 and first==2)
+    todo = ('Nothing - this tab is already correct' if ok
+            else ('Move the heading row to row 1 and delete ' + ', '.join(extra) + ', and the sample rows, '
+                  f'so the first record sits on row 2 (it is on row {first} today)'))
+    T(['Required','Detail'],
+      [['Heading row','row 1'],
+       ['First data row','row 2'],
+       ['Headings are on','row %d today' % tech],
+       ['First record is on','row %d today' % first],
+       ['To do',todo]],widths=[4.0,12.0],fs=9)
     mx=max((max(d) if d else 0) for d in rr.values())
     rows=[]
     for i in range(1,mx+1):
@@ -184,18 +211,24 @@ for radio,tab in VSCEN:
     doc.add_page_break()
 
 # ------------------------------------------------------------------ customer
-H('4.  Customer master — ZSDS_CUST_MASS_UPLOAD',1)
+H('5.  Customer master - ZSDS_CUST_MASS_UPLOAD',1)
 CUSROWS=rowsof('/home/user/ONGC-CST-Purchase-Date-Sharing-/customer master LSMW -  with format.xlsx')
 n=0
 for scen,radio,tab,namerow,first in CSCEN:
     n+=1
-    H(f'4.{n}  {radio}',2)
+    H(f'5.{n}  {radio}',2)
     rr=CUSROWS[tab]
     P(f'Workbook tab:  {tab.strip()}',bold=True)
-    T(['Layout today','Where'],
-      [['Headings',f'row {namerow}'],['Data starts',f'row {first}'],
-       ['Complies with row 1 / row 2','Yes' if (namerow==1 and first==2) else 'No - re-cut needed']],
-      widths=[6.0,4.0],fs=9)
+    ok=(namerow==1 and first==2)
+    todo=('Nothing - this tab is already correct' if ok
+          else (f'Move the heading row from row {namerow} to row 1 and delete every other row above the '
+                f'first record, so the first record sits on row 2 (it is on row {first} today)'))
+    T(['Required','Detail'],
+      [['Heading row','row 1'],
+       ['First data row','row 2'],
+       ['Headings are on',f'row {namerow} today'],
+       ['First record is on',f'row {first} today'],
+       ['To do',todo]],widths=[4.0,12.0],fs=9)
     ent={int(c):(nd,fl,cv,(cm or '').strip()) for sc,c,nd,fl,cv,cm in MAP if sc==scen}
     mx=max(list(ent)+[max(d) if d else 0 for d in rr.values()])
     rows=[]

@@ -88,12 +88,20 @@ T(['You need','Why'],
    ['A few known-good customers / suppliers','For the change scenarios, so you can confirm existing data is not disturbed'],
   ], widths=[6.0,10.0])
 
-P('One rule about the spreadsheets:', bold=True)
-B('Row 1 must be the heading row.')
-B('Data must start on row 2.')
-B('There must be no description or instruction rows in between.')
-NOTE('Two tabs currently need re-cutting before they can be loaded: SAGA customer has its headings on row 2 '
-     'with row 1 empty, and domestic customer IND has descriptions on row 2 with data starting on row 3.')
+H('2.1  The file layout - this applies to every tab of both workbooks', 2)
+P('Every tab must be laid out the same way:', bold=True)
+B('Row 1 - the heading row.')
+B('Row 2 onwards - data only.')
+B('Nothing in between. No field type row, no field length row, no mandatory/optional row, '
+  'no guideline row and no sample rows.')
+P('Both programs read the chosen tab from row 2.', bold=True)
+P('Most tabs in the two workbooks do not follow this today - they carry type, length, guideline or sample '
+  'rows between the headings and the first real record. Of the sixteen tabs, four already comply and twelve '
+  'need re-cutting. The companion Upload File Format Specification states, tab by tab, exactly which rows '
+  'to delete.')
+NOTE('Please delete those rows rather than hide them. A hidden row is still read.')
+P('Delete rows only, never columns.',bold=True)
+P('Delete ROWS only - never columns. Several tabs start with a label column that holds text like "Field Tech name" or "Sample data" and is empty on the data rows. That column still counts. On the supplier creation tab, for instance, the vendor number is column B, not column A. Deleting the label column would shift every field one place to the left and the file would load into the wrong fields.')
 
 # ------------------------------------------------------------------ 3
 H('3.  The most important instruction: always test run first', 1)
@@ -101,6 +109,20 @@ P('Both programs have a Test run checkbox, and it is ticked by default. Leave it
 P('In a test run the program does everything it would normally do, including every validation, but nothing '
   'is saved. You get the full result list showing exactly what would have happened, row by row.')
 P('Only untick Test run once a file comes back with no errors.', bold=True)
+
+H('3.1  One check to do on your very first run', 2)
+P('Both programs have a field called Heading rows to skip, set to 1. That matches the layout above: '
+  'one heading row, then data.')
+P('On your first run, look at the top of the result list. There will be a line like this:')
+P('        Line 1 skipped:  KUNNR / BUKRS / VKORG / VTWEG / SPART ...', italic=True)
+P('That line shows what the program treated as the heading row.')
+T(['What that line shows','What it means','What to do'],
+  [['Your column headings','Correct','Nothing - leave the field at 1'],
+   ['A real customer or supplier record','The heading row was already removed before the program saw it',
+    'Set Heading rows to skip to 0 and run again, otherwise every file loses its first record'],
+  ], widths=[4.5,6.0,5.5])
+P('This only has to be established once. Please tell us which of the two you see and we will set it '
+  'permanently so nobody has to remember it.')
 
 doc.add_page_break()
 
@@ -114,6 +136,7 @@ T(['Field','What to enter'],
    ['File is on the PC / application server','Where the file sits. Use PC for normal testing.'],
    ['Test run (nothing is posted)','Leave ticked for the first pass'],
    ['Stop at the first faulty row','Tick this if you want the run to halt as soon as something fails, instead of working through the whole file'],
+   ['Heading rows to skip','Leave at 1. See section 3.1.'],
   ], widths=[5.5,10.5])
 
 H('4.2  The nine scenarios', 2)
@@ -143,6 +166,7 @@ T(['Field','What to enter'],
    ['Test run (nothing is posted)','Leave ticked for the first pass'],
    ['Stop at the first faulty row','Halt on the first failure instead of processing the whole file'],
    ['BP grouping (blank = derived)','Leave this blank. SAP then derives the BP grouping from the account group, which is the normal behaviour. Only fill it if you need to force a particular grouping.'],
+   ['Heading rows to skip','Leave at 1. See section 3.1.'],
   ], widths=[5.5,10.5])
 
 H('5.2  The seven scenarios', 2)
