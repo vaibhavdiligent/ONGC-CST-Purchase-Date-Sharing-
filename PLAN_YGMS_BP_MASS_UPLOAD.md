@@ -191,6 +191,24 @@ Adding a 12th template later = one new handler class + rows in `YGMS_BP_UPL_LAYO
 
 ## 5. Scenario-by-scenario field mapping
 
+> **Coverage — read this first.** A full column-by-column matrix for all 274 data
+> columns across the 17 sheets is in **`PLAN_YGMS_BP_MASS_UPLOAD_ANNEX_A_FIELD_MAP.md`**
+> (and `.csv`). Summary:
+>
+> | Class | Meaning | Columns | Share |
+> |:---:|---|---:|---:|
+> | **A** | Maps to `CL_MD_BP_MAINTAIN=>MAINTAIN( )` | 220 | 80.3% |
+> | **B** | Maps to `BAPI_BANK_CREATE` / `_CHANGE` (bank keys are not BP objects) | 17 | 6.2% |
+> | **C** | **No standard API** — `J_1IMOVEND` (CIN); direct update or BDC only | 18 | 6.6% |
+> | **D** | Dead LSMW/dynpro artifact — read and ignored | 11 | 4.0% |
+> | **E** | **Unmapped** — needs functional clarification | 8 | 2.9% |
+> | | **Total** | **274** | |
+>
+> So the honest answer to "does every field map to the class?" is **no**: 220 of 274 do.
+> The 18 class-C and 8 class-E columns are the ones that block a complete build, and they
+> are concentrated in Scenarios 6 and 7.
+
+
 Legend: `→` target field. `[X]` = corresponding `DATAX` flag must be set.
 
 ### Scenario 1 — Vendor / BP Create (`Vendor Creation Template_All CC_Sample.xlsx`, `Sheet1`, 66 cols)

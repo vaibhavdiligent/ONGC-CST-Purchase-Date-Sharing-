@@ -1,0 +1,275 @@
+Scenario,Workbook,Sheet,Col,TemplateField,Class,ClassMeaning,Target,Note
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,2,LIFNR,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key; blank on create
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,3,BUKRS,A,CL_MD_BP_MAINTAIN,VENDOR-COMPANY_DATA-COMPANY-DATA_KEY-BUKRS,org key
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,4,EKORG,A,CL_MD_BP_MAINTAIN,VENDOR-PURCHASING_DATA-PURCHASING-DATA_KEY-EKORG,org key
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,5,KTOKK,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-KTOKK,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,6,TITLE_MEDI,A,CL_MD_BP_MAINTAIN,PARTNER-CENTRAL_DATA-COMMON-DATA-BP_CENTRALDATA-TITLE_KEY,"CONV: template holds text ""Company"", API needs TITLE key"
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,7,NAME1,A,CL_MD_BP_MAINTAIN,PARTNER-...-BP_ORGANIZATION-NAME1,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,8,NAME2,A,CL_MD_BP_MAINTAIN,PARTNER-...-BP_ORGANIZATION-NAME2,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,9,NAME3,A,CL_MD_BP_MAINTAIN,PARTNER-...-BP_ORGANIZATION-NAME3,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,10,NAME4,A,CL_MD_BP_MAINTAIN,PARTNER-...-BP_ORGANIZATION-NAME4,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,11,SORT1,A,CL_MD_BP_MAINTAIN,PARTNER-...-BP_CENTRALDATA-SEARCHTERM1,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,12,SORT2,A,CL_MD_BP_MAINTAIN,PARTNER-...-BP_CENTRALDATA-SEARCHTERM2,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,13,STR_SUPPL1,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-STR_SUPPL1,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,14,STR_SUPPL2,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-STR_SUPPL2,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,15,STREET,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-STREET,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,16,STR_SUPPL3,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-STR_SUPPL3,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,17,CITY2,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-DISTRICT,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,18,POST_CODE1,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-POSTL_COD1,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,19,CITY1,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-CITY,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,20,COUNTRY,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-COUNTRY,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,21,REGION,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-REGION,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,22,LANGU,A,CL_MD_BP_MAINTAIN,ADDRESS-POSTAL-DATA-LANGU,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,23,TEL_NUMBER,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-PHONE-PHONE[]-TELEPHONE,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,24,TEL_EXTENS,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-PHONE-PHONE[]-EXTENSION,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,25,TEL_NUMBER2,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-PHONE-PHONE[]-TELEPHONE (2nd),
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,26,TEL_EXTENS2,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-PHONE-PHONE[]-EXTENSION (2nd),
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,27,MOB_NUMBER,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-PHONE-PHONE[] R_3_USER=3,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,28,MOB_NUMBER2,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-PHONE-PHONE[] R_3_USER=3 (2nd),
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,29,FAX_NUMBER,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-FAX-FAX[]-FAX,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,30,SMTP_ADDR,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-SMTP-SMTP[]-E_MAIL,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,31,SMTP_ADDR2,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-SMTP-SMTP[]-E_MAIL (2nd),
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,32,KUNNR,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-KUNNR,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,33,VBUND,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-VBUND,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,34,KONZS,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-KONZS,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,35,STCD3,A,CL_MD_BP_MAINTAIN,VENDOR-...-CENTRAL-DATA-STCD3 + PARTNER TAXNUMBERS[] IN3,dual write; IN3=GSTIN
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,36,STCD5,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-STCD5,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,37,STCEG,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-STCEG,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,38,J_1KFTBUS,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-J_1KFTBUS,Argentina field; likely unused
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,39,STENR,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-CENTRAL-DATA-STENR,likely unused
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,40,BRSCH,A,CL_MD_BP_MAINTAIN,VENDOR-...-CENTRAL-DATA-BRSCH + PARTNER INDUSTRYSECTOR,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,41,BANKS_01,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BANKS,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,42,BANKL_01,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BANKL,pre-check BNKA
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,43,BANKN_01,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BANKN,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,44,KOINH_01,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-KOINH,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,45,BKONT,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BKONT,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,46,IBAN,A,CL_MD_BP_MAINTAIN,VENDOR-CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-IBAN,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,47,AKONT,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-AKONT,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,48,FDGRV,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-FDGRV,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,49,ALTKN,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ALTKN,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,50,ZTERM,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZTERM,CC level
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,51,REPRF,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-REPRF,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,52,ZWELS,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZWELS,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,53,ZAHLS,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZAHLS,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,54,HBKID,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-HBKID,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,55,VEN_CLASS,C,no standard API,J_1IMOVEND-VEN_CLASS,NO standard API - see Q4
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,56,J_1ISSIST,C,no standard API,J_1IMOVEND-J_1ISSIST,NO standard API - see Q4
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,57,J_1IPANNO,C,no standard API,J_1IMOVEND-J_1IPANNO or BP TAXNUMBERS[],category unconfirmed - see Q3
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,58,QLAND,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-QLAND,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,59,WITHT,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,60,WT_WITHCD,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,61,WAERS,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-WAERS,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,62,ZTERM,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-ZTERM,POrg level - same tech name as col 50
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,63,KALSK,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-KALSK,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,64,WEBRE,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-WEBRE,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,65,INCO1,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-INCO1,
+1 Vendor/BP Create,Vendor Creation Template_All CC_Sample.xlsx,Sheet1,66,INCO2,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-INCO2,
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,2,LIFNR,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,target
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,3,BUKRS,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,target
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,4,EKORG,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA_KEY-EKORG,target
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,5,LIFNR,A,CL_MD_BP_MAINTAIN,(read source),"reference vendor - drives a read, not a write"
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,6,BUKRS,A,CL_MD_BP_MAINTAIN,(read source),reference CC
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,7,EKORG,A,CL_MD_BP_MAINTAIN,(read source),reference POrg
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,8,<no tech name>,D,ignored (artifact),-,"""Always X"" - LSMW artifact, ignored"
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,9,AKONT,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-AKONT,
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,10,<no tech name>,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZWELS,"tech name MISSING in template; inferred from description ""Payment Method"""
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,11,<no tech name>,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-REPRF,"tech name MISSING in template; inferred from ""Chk double Invoice"""
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,12,WAERS,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-WAERS,
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,13,KALSK,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-KALSK,
+2 Vendor Extend,Vendor Extend Template.Ver1.xlsx,Vendor Extend,14,WEBRE,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-WEBRE,
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,2,LIFNR,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,3,BUKRS,A,CL_MD_BP_MAINTAIN,(authorisation check only),LFBK is client-level
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,4,BANKS,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BANKS,
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,5,BANKL,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BANKL,
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,6,BANKN,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-BANKN,
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,7,KOINH,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-KOINH,
+4 Vendor Bank Details,Bank Details and Bank Key Template_V1.0.xlsx,Bank Details,8,IBAN,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-BANKDETAIL-BANKDETAILS[]-IBAN,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,2,BANKS,B,BAPI_BANK_*,BAPI_BANK_CREATE BANK_CTRY,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,3,BANKL,B,BAPI_BANK_*,BAPI_BANK_CREATE BANK_KEY,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,4,BANKA,B,BAPI_BANK_*,BANK_ADDRESS-BANK_NAME,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,5,PROVZ,B,BAPI_BANK_*,BANK_ADDRESS-REGION,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,6,STRAS,B,BAPI_BANK_*,BANK_ADDRESS-STREET,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,7,ORT01,B,BAPI_BANK_*,BANK_ADDRESS-CITY,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,8,BRNCH,B,BAPI_BANK_*,BANK_ADDRESS-BANK_BRANCH,
+3 Bank Key (BNKA),Bank Details and Bank Key Template_V1.0.xlsx,Bank Key,9,SWIFT,B,BAPI_BANK_*,BANK_ADDRESS-SWIFT_CODE,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,2,BANKS,B,BAPI_BANK_*,BAPI_BANK_CREATE BANK_CTRY,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,3,BANKL,B,BAPI_BANK_*,BAPI_BANK_CREATE BANK_KEY,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,4,BANKA,B,BAPI_BANK_*,BANK_ADDRESS-BANK_NAME,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,5,PROVZ,B,BAPI_BANK_*,BANK_ADDRESS-REGION,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,6,STRAS,B,BAPI_BANK_*,BANK_ADDRESS-STREET,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,7,ORT01,B,BAPI_BANK_*,BANK_ADDRESS-CITY,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,8,BRNCH,B,BAPI_BANK_*,BANK_ADDRESS-BANK_BRANCH,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,9,SWIFT,B,BAPI_BANK_*,BANK_ADDRESS-SWIFT_CODE,
+3 Bank Key (BNKA),Bank key format_Uploadable File.xlsx,Sheet1,10,BNKLZ,B,BAPI_BANK_*,BANK_ADDRESS-BANK_NO,template says keep blank
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,2,LIFNR,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,3,BUKRS,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,4,D0610,D,ignored (artifact),-,XK02 screen flag - ignored
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,5,QLAND,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-QLAND,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,6,WITHT_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,7,WITHT_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,8,WITHT_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,9,WITHT_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,10,WITHT_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,11,WITHT_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,12,WT_WITHCD_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,13,WT_WITHCD_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,14,WT_WITHCD_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,15,WT_WITHCD_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,16,WT_WITHCD_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,17,WT_WITHCD_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,18,WT_SUBJCT_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_SUBJCT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,19,WT_SUBJCT_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_SUBJCT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,20,WT_SUBJCT_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_SUBJCT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,21,WT_SUBJCT_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_SUBJCT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,22,WT_SUBJCT_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_SUBJCT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,23,WT_SUBJCT_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_SUBJCT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,24,QSREC_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-QSREC,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,25,QSREC_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-QSREC,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,26,QSREC_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-QSREC,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,27,QSREC_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-QSREC,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,28,QSREC_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-QSREC,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,29,QSREC_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-QSREC,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,30,WT_WTSTCD_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTSTCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,31,WT_WTSTCD_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTSTCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,32,WT_WTSTCD_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTSTCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,33,WT_WTSTCD_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTSTCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,34,WT_WTSTCD_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTSTCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,35,WT_WTSTCD_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTSTCD,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,36,WT_EXNR_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,37,WT_EXNR_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,38,WT_EXNR_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,39,WT_EXNR_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,40,WT_EXNR_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,41,WT_EXNR_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,42,WT_EXRT_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,43,WT_EXRT_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,44,WT_EXRT_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,45,WT_EXRT_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,46,WT_EXRT_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,47,WT_EXRT_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,48,WT_WTEXRS_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTEXRS,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,49,WT_WTEXRS_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTEXRS,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,50,WT_WTEXRS_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTEXRS,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,51,WT_WTEXRS_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTEXRS,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,52,WT_WTEXRS_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTEXRS,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,53,WT_WTEXRS_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WTEXRS,
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,54,WT_EXDF_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,55,WT_EXDF_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,56,WT_EXDF_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,57,WT_EXDF_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,58,WT_EXDF_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,59,WT_EXDF_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,60,WT_EXDT_01,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,61,WT_EXDT_02,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,62,WT_EXDT_03,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,63,WT_EXDT_04,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,64,WT_EXDT_05,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,DD.MM.YYYY -> YYYYMMDD
+5 Withholding Tax / TDS,TDS for upload Format_V.01.xlsx,Sheet1,65,WT_EXDT_06,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,DD.MM.YYYY -> YYYYMMDD
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,1,Vendor,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,2,Company,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,3,Address,E,UNMAPPED,?,EMPTY in every data row - purpose unknown
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,4,Section_code_1,E,UNMAPPED,?,no LFBW field; sample value = company code -> Business Place? See Q6
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,5,Section_code_2,E,UNMAPPED,?,as above
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,6,Certificate_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,7,Certificate_2,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXNR,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,8,Exemption_rate_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,9,Exemption_rate_2,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXRT,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,10,Validfrom_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,11,Validfrom2,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDF,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,12,Validto_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,13,Validto_2,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_EXDT,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,14,taxtype_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,15,Taxtype_2,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA_KEY-WITHT,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,16,taxcode_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,17,Taxcode_2,A,CL_MD_BP_MAINTAIN,COMPANY[]-WTAX_TYPE[]-DATA-WT_WITHCD,
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,18,threshold_1,E,UNMAPPED,?,"no LFBW field - TDS threshold is config, not master data. See Q6"
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,19,threshold_2,E,UNMAPPED,?,as above
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,20,Currency_1,E,UNMAPPED,?,no LFBW field. See Q6
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,21,Currency_2,E,UNMAPPED,?,as above
+6 TDS Exemption / TAN,TAN details update.xlsx,CIN TAN EXEMPTION,22,<no header>,E,UNMAPPED,?,"unheaded column, value 0 in 2 rows - purpose unknown"
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,1,Vendor Account Number,C,no standard API,J_1IMOVEND-LIFNR,key
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,2,Company Code,C,no standard API,(auth check),
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,3,Address View,D,ignored (artifact),-,screen view flag - ignored
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,4,ECC Number,C,no standard API,J_1IMOVEND-J_1IEXCD,NO standard API; pre-GST field
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,5,Excise Registration Number,C,no standard API,J_1IMOVEND-J_1IEXRN,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,6,Excise Range,C,no standard API,J_1IMOVEND-J_1IEXRG,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,7,Excise Division,C,no standard API,J_1IMOVEND-J_1IEXDI,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,8,Excise Commissionerate,C,no standard API,J_1IMOVEND-J_1ICOMM,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,9,Central Sales Tax Number,C,no standard API,J_1IMOVEND-J_1ICSTNO,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,10,Local Sales Tax Number,C,no standard API,J_1IMOVEND-J_1ILSTNO,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,11,Service Tax Registration Number,C,no standard API,J_1IMOVEND-J_1ISERN,NO standard API; pre-GST
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,12,Permanent Account Number,C,no standard API,J_1IMOVEND-J_1IPANNO or BP TAXNUMBERS[],see Q3
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,13,SSI status,C,no standard API,J_1IMOVEND-J_1ISSIST,NO standard API
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,14,Exc.Tax Ind. Vendor,C,no standard API,J_1IMOVEND-J_1IEXCIVE,NO standard API
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,CIN MSME,15,Type of Vendor,C,no standard API,J_1IMOVEND-J_1IVTYP,NO standard API
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,PAN Update,2,Sap V Code,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,PAN Update,3,PAN No.,C,no standard API,J_1IMOVEND-J_1IPANNO or BP TAXNUMBERS[],see Q3
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,1,<no header>,D,ignored (artifact),-,transaction code XK02 - ignored
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,2,<no header>,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key (vendor number)
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,3,<no header>,D,ignored (artifact),-,screen view flag X
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,4,<no header>,D,ignored (artifact),-,screen view flag X
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,5,<no header>,D,ignored (artifact),-,screen view flag X
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,6,<no header>,D,ignored (artifact),-,screen view flag X
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,7,<no header>,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-SMTP-SMTP[]-E_MAIL,
+7 CIN / PAN / MSME,CIN_Email_MSME upload.xlsx,Email,8,<no header>,A,CL_MD_BP_MAINTAIN,ADDRESS-COMMUNICATION-SMTP-SMTP[]-E_MAIL (2nd),
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Term,1,Vendor Code,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Term,2,Company Code,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Term,3,Pur Org,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA_KEY-EKORG,key
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Term,4,Payment Term,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZTERM + PURCHASING[]-DATA-ZTERM,written at both org levels
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Method,1,Vendor Code,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Method,2,Company Code,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+8 Payment Term / Method,Payment Term and Method update_V.01.xlsx,Payment Method,3,Payment Method,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZWELS,
+9 Purchasing Org Data,Purchase Org Data update.xlsx,Sheet1,2,Vendor code,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+9 Purchasing Org Data,Purchase Org Data update.xlsx,Sheet1,3,Pur Org,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA_KEY-EKORG,key
+9 Purchasing Org Data,Purchase Org Data update.xlsx,Sheet1,4,CONFIRMATION CONTROL,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-BSTAE,"tech name ASSUMED - confirm on LFM1, Q7"
+9 Purchasing Org Data,Purchase Org Data update.xlsx,Sheet1,5,CHECK ACKNOWLEDGEMENT,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-KZABS,"tech name ASSUMED - confirm on LFM1, Q7"
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,1,LIFNR,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,2,BUKRS,A,CL_MD_BP_MAINTAIN,(auth check),
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,3,EKORG,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA_KEY-EKORG,key
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,4,D0320,D,ignored (artifact),-,XK01/XK02 screen flag - ignored
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,5,USE_ZAV,D,ignored (artifact),-,"LSMW artifact ""Always X"" - ignored"
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,6,PARVW_05,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,7,PARVW_06,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,8,PARVW_07,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,9,PARVW_08,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,10,PARVW_09,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,11,PARVW_10,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,12,PARVW_11,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,13,PARVW_12,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,14,PARVW_13,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,15,PARVW_14,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,16,PARVW_15,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,17,GPARN_05,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,18,GPARN_06,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,19,GPARN_07,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,20,GPARN_08,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,21,GPARN_09,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,22,GPARN_10,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,23,GPARN_11,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,24,GPARN_12,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,25,GPARN_13,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,26,GPARN_14,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,27,GPARN_15,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,28,PARVW_01,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,29,PARVW_02,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,30,PARVW_03,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,31,PARVW_04,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA_KEY-PARVW,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,32,GPARN_01,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,33,GPARN_02,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,34,GPARN_03,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+10 Partner Functions,Vendor Partner Function Template.xlsx,Sheet1,35,GPARN_04,A,CL_MD_BP_MAINTAIN,PURCHASING[]-FUNCTIONS[]-DATA-LIFN2,note: file orders 05-15 BEFORE 01-04
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,1,<tcode>,D,ignored (artifact),-,"""XK05"" - LSMW artifact, ignored"
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,2,LIFNR,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,3,BUKRS,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,4,EKORG,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA_KEY-EKORG,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,5,SPERR,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-CENTRAL-DATA-SPERR,central posting block
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,6,SPERR_1,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-SPERR,CC posting block
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,7,SPERM,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-CENTRAL-DATA-SPERM,central purchasing block
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,8,SPERM_1,A,CL_MD_BP_MAINTAIN,PURCHASING[]-DATA-SPERM,POrg purchasing block
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Total Block,9,SPERQ,A,CL_MD_BP_MAINTAIN,CENTRAL_DATA-CENTRAL-DATA-SPERQ,
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Payment block,1,Vendor code,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Payment block,2,Comp code,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Payment block,3,Block / unblock,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-ZAHLS,UNBLOCK not expressible without template change - Q8
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Deletion Flag,1,Vendor code,A,CL_MD_BP_MAINTAIN,VENDOR-HEADER-OBJECT_INSTANCE-LIFNR,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Deletion Flag,2,Comp code,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA_KEY-BUKRS,key
+11 Block / Unblock,Vendor Block_Unblocked.xlsx,Deletion Flag,3,Block / unblock,A,CL_MD_BP_MAINTAIN,COMPANY[]-DATA-LOEVM,UNBLOCK not expressible without template change - Q8
