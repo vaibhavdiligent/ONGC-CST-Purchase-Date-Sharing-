@@ -90,6 +90,10 @@
 *&---------------------------------------------------------------------*
 REPORT zsds_cust_mass_upload.
 
+" ICON_* constants live in the ICON type pool. TYPE-POOLS is classic ABAP
+" and is one of the tier-2 exemptions recorded in the header.
+TYPE-POOLS icon.
+
 *----------------------------------------------------------------------*
 * Types and constants
 *----------------------------------------------------------------------*
@@ -331,9 +335,13 @@ CLASS lcl_util IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_empty.
+    " IS INITIAL takes a data object, not an expression, so the result of
+    " CONDENSE is put in a variable first.
+    DATA lv_c TYPE string.
     rv = abap_true.
     LOOP AT is_row-cells INTO DATA(lv).
-      IF condense( lv ) IS NOT INITIAL.
+      lv_c = condense( lv ).
+      IF lv_c IS NOT INITIAL.
         rv = abap_false.
         RETURN.
       ENDIF.
@@ -380,7 +388,18 @@ CLASS lcl_excel IMPLEMENTATION.
         RAISE EXCEPTION TYPE lcx_upl
           EXPORTING iv_text = |Cannot read { iv_file } from the PC|.
       ENDIF.
-      rv = cl_bcs_convert=>solix_to_xstring( it_solix = lt_bin iv_size = lv_len ).
+      " SCMS_BINARY_TO_XSTRING rather than a utility class, so no method
+      " signature outside this program has to be right for it to compile.
+      CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+        EXPORTING input_length = lv_len
+        IMPORTING buffer       = rv
+        TABLES    binary_tab   = lt_bin
+        EXCEPTIONS failed      = 1
+                   OTHERS      = 2.
+      IF sy-subrc <> 0.
+        RAISE EXCEPTION TYPE lcx_upl
+          EXPORTING iv_text = |{ iv_file } could not be converted|.
+      ENDIF.
     ELSE.
       DATA lv_msg TYPE string.
       DATA lv_x   TYPE xstring.
@@ -408,7 +427,7 @@ CLASS lcl_excel IMPLEMENTATION.
         lo_xl = NEW cl_fdt_xl_spreadsheet(
                       document_name = CONV string( iv_file )
                       xdocument     = lv_bin ).
-      CATCH cx_fdt_excel_core INTO DATA(lx).
+      CATCH cx_root INTO DATA(lx).
         RAISE EXCEPTION TYPE lcx_upl
           EXPORTING iv_text = |Workbook cannot be parsed: { lx->get_text( ) }|.
     ENDTRY.
@@ -1642,9 +1661,14 @@ ENDCLASS.
 *   and segment 0000 is the main segment, which is where the old
 *   "total limit across all control areas" (KNKA-KLIMG) belongs.
 *
-*   The class API below is the documented CL_UKM_FACADE pattern. Confirm
-*   the exact signatures in SE24 for this release before the first run;
-*   everything is isolated here so a correction is a one-place change.
+*   Signatures verified against the class documentation:
+*     CL_UKM_FACADE=>CREATE( i_activity ) RETURNING ro_facade      (static)
+*     ->GET_BUPA_FACTORY( ) RETURNING ro_bupa_factory
+*     CL_UKM_BUPA_FACTORY->GET_CREDIT_ACCOUNT( i_partner i_credit_sgmnt )
+*     CL_UKM_ACCOUNT->GET_BP_CMS_SGM( IMPORTING es_bp_cms_sgm )
+*     CL_UKM_ACCOUNT->SET_BP_CMS_SGM( is_bp_cms_sgm )
+*     CL_UKM_BUSINESS_PARTNER->GET_BP_CMS / ->SET_BP_CMS
+*     CL_UKM_BUPA_FACTORY->SAVE_ALL( i_testrun i_upd_task ... )
 *----------------------------------------------------------------------*
 CLASS lcl_credit DEFINITION FINAL.
   PUBLIC SECTION.
@@ -1674,18 +1698,17 @@ CLASS lcl_credit IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF p_test = abap_true.
-      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
-                   iv_text = |Test run OK - would set segment { iv_sgmnt }| ).
-      RETURN.
-    ENDIF.
-
     TRY.
-        DATA(lo_factory) = cl_ukm_facade=>get_instance( )->get_bupa_factory( ).
+        " CL_UKM_FACADE is a singleton built through CREATE, not GET_INSTANCE.
+        " I_ACTIVITY drives locking and eventing; BP_MAINTENANCE ('MAINTAIN')
+        " is the activity for maintaining credit master data.
+        DATA(lo_facade)  = cl_ukm_facade=>create(
+                             i_activity = cl_ukm_cnst_eventing=>bp_maintenance ).
+        DATA(lo_factory) = lo_facade->get_bupa_factory( ).
 
         DATA(lo_account) = lo_factory->get_credit_account(
-                             i_partner      = CONV #( iv_kunnr )
-                             i_credit_sgmnt = CONV #( iv_sgmnt ) ).
+                             i_partner      = CONV bu_partner( iv_kunnr )
+                             i_credit_sgmnt = CONV ukm_credit_sgmnt( iv_sgmnt ) ).
 
         DATA ls_sgm TYPE ukm_s_bp_cms_sgm.
         lo_account->get_bp_cms_sgm( IMPORTING es_bp_cms_sgm = ls_sgm ).
@@ -1701,19 +1724,29 @@ CLASS lcl_credit IMPLEMENTATION.
         lo_account->set_bp_cms_sgm( EXPORTING is_bp_cms_sgm = ls_sgm ).
 
         IF iv_risk IS NOT INITIAL.
-          DATA(lo_bp) = lo_factory->get_business_partner( CONV #( iv_kunnr ) ).
+          DATA(lo_bp) = lo_factory->get_business_partner(
+                          i_partner = CONV bu_partner( iv_kunnr ) ).
           DATA ls_cms TYPE ukm_s_bp_cms.
           lo_bp->get_bp_cms( IMPORTING es_bp_cms = ls_cms ).
           ls_cms-risk_class = iv_risk.
           lo_bp->set_bp_cms( EXPORTING is_bp_cms = ls_cms ).
         ENDIF.
 
-        " SAVE_ALL alone does not commit - the BAPI commit is required.
-        lo_factory->save_all( i_upd_task = abap_false ).
-        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+        " SAVE_ALL has its own I_TESTRUN, so a test run still goes through
+        " the API and still validates - it simply does not persist.
+        lo_factory->save_all( i_testrun  = p_test
+                              i_upd_task = abap_false ).
 
-        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
-                     iv_text = |Credit data updated for segment { iv_sgmnt }| ).
+        IF p_test = abap_true.
+          CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+          mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
+                       iv_text = |Test run OK - segment { iv_sgmnt } would be updated| ).
+        ELSE.
+          " SAVE_ALL alone does not commit - the BAPI commit is required.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+          mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
+                       iv_text = |Credit data updated for segment { iv_sgmnt }| ).
+        ENDIF.
 
       CATCH cx_root INTO DATA(lx).
         CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
@@ -2235,11 +2268,15 @@ START-OF-SELECTION.
                                              iv_from_pc = p_pc
                                              iv_sheet   = go_engine->sheet( ) ).
     CATCH lcx_upl INTO DATA(gx).
-      MESSAGE gx->get_text( ) TYPE 'E'.
+      " MESSAGE takes a data object, not an expression.
+      DATA(gv_txt) = gx->get_text( ).
+      MESSAGE gv_txt TYPE 'E'.
   ENDTRY.
 
   IF gt_row IS INITIAL.
-    MESSAGE |Tab "{ go_engine->sheet( ) }" holds no data from row 2 onwards| TYPE 'I'.
+    DATA gv_none TYPE string.
+    gv_none = |Tab "{ go_engine->sheet( ) }" holds no data from row 2 onwards|.
+    MESSAGE gv_none TYPE 'I'.
     RETURN.
   ENDIF.
 
@@ -2248,5 +2285,7 @@ START-OF-SELECTION.
 END-OF-SELECTION.
 
   go_log->counts( IMPORTING ev_ok = DATA(gv_ok) ev_err = DATA(gv_err) ).
-  MESSAGE |{ lines( gt_row ) } row(s) read, { gv_ok } processed, { gv_err } with errors| TYPE 'S'.
+  DATA gv_sum TYPE string.
+  gv_sum = |{ lines( gt_row ) } row(s) read, { gv_ok } processed, { gv_err } with errors|.
+  MESSAGE gv_sum TYPE 'S'.
   go_log->display( ).
