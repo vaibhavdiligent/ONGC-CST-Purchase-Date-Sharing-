@@ -79,7 +79,7 @@ REPORT zmms_bp_mass_upload.
 TYPES ty_dec TYPE p LENGTH 13 DECIMALS 2.
 
 " Local table of BP roles - avoids depending on a DDIC table type name.
-TYPES ty_roles TYPE STANDARD TABLE OF bu_partnerrole WITH EMPTY KEY.
+TYPES ty_roles TYPE STANDARD TABLE OF bu_role WITH EMPTY KEY.
 
 TYPES: BEGIN OF ty_row,
          row   TYPE i,
@@ -380,9 +380,10 @@ CLASS lcl_excel IMPLEMENTATION.
       rv = cl_bcs_convert=>solix_to_xstring( it_solix = lt_bin iv_size = lv_len ).
     ELSE.
       TRY.
-          OPEN DATASET iv_file FOR INPUT IN BINARY MODE.
+          DATA lv_osmsg TYPE string.
+          OPEN DATASET iv_file FOR INPUT IN BINARY MODE MESSAGE lv_osmsg.
           IF sy-subrc <> 0.
-            RAISE EXCEPTION NEW lcx_upl( |Cannot open the server file: { iv_file }| ).
+            RAISE EXCEPTION NEW lcx_upl( |Cannot open the server file { iv_file }: { lv_osmsg }| ).
           ENDIF.
           READ DATASET iv_file INTO rv.
           CLOSE DATASET iv_file.
@@ -599,7 +600,7 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     "! e.g. Z002->Z0X2, Z003->Z0X3, Z009->Z019, Z012->Z022, Z007->ZPLN.
     METHODS bp_group  IMPORTING iv_ktokk TYPE clike RETURNING VALUE(rv) TYPE bu_group.
     METHODS bp_roles  IMPORTING iv_ktokk TYPE clike RETURNING VALUE(rt) TYPE ty_roles.
-    METHODS title_key IMPORTING iv_text  TYPE clike RETURNING VALUE(rv) TYPE ad_title.
+    METHODS title_key IMPORTING iv_text  TYPE clike RETURNING VALUE(rv) TYPE tsad3t-title.
 
     METHODS vend_exists IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE abap_bool.
     METHODS vend_land1  IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE land1.
@@ -611,8 +612,8 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS constructor.
 
     TYPES: BEGIN OF ty_g2b, ktokk TYPE ktokk, grouping TYPE bu_group, END OF ty_g2b,
-           BEGIN OF ty_r2b, ktokk TYPE ktokk, role     TYPE bu_partnerrole, END OF ty_r2b,
-           BEGIN OF ty_ttl, txt   TYPE ad_titletx, key TYPE ad_title, END OF ty_ttl.
+           BEGIN OF ty_r2b, ktokk TYPE ktokk, role     TYPE bu_role,       END OF ty_r2b,
+           BEGIN OF ty_ttl, txt   TYPE tsad3t-title_medi, key TYPE tsad3t-title, END OF ty_ttl.
 
     DATA: mt_bukrs TYPE SORTED TABLE OF bukrs  WITH UNIQUE KEY table_line,
           mt_ekorg TYPE SORTED TABLE OF ekorg  WITH UNIQUE KEY table_line,
@@ -674,7 +675,7 @@ CLASS lcl_cfg IMPLEMENTATION.
   METHOD ok_bankl.
     DATA lv TYPE abap_bool.
     SELECT SINGLE @abap_true FROM bnka
-      WHERE banks = @iv_banks AND bankl = @iv_bankl AND xdele = @space
+      WHERE banks = @iv_banks AND bankl = @iv_bankl AND loevm = @space
       INTO @lv.
     rv = xsdbool( lv = abap_true ).
   ENDMETHOD.
@@ -1029,10 +1030,11 @@ CLASS lcl_h_create IMPLEMENTATION.
 
   METHOD fill_partner.
     " --- BP central ------------------------------------------------------
+    " BP_CONTROL holds the control fields CATEGORY and GROUPING. It has no
+    " DATAX counterpart - BUS_EI_BUPA_CENTRAL_DATA_XFLAG contains only
+    " BP_CENTRALDATA, BP_PERSON and BP_ORGANIZATION - so these are simply set.
     cs_data-partner-central_data-common-data-bp_control-category = '2'.  " organisation
     cs_data-partner-central_data-common-data-bp_control-grouping = mo_cfg->bp_group( iv_ktokk ).
-    cs_data-partner-central_data-common-datax-bp_control-category = abap_true.
-    cs_data-partner-central_data-common-datax-bp_control-grouping = abap_true.
 
     DATA(lv_title) = mo_cfg->title_key( lcl_util=>cell( is_row = is_row iv_col = 6 ) ).
 
@@ -1697,7 +1699,7 @@ CLASS lcl_h_bank DEFINITION INHERITING FROM lcl_base FINAL.
              banks TYPE banks,
              bankl TYPE bankk,
              bankn TYPE bankn,
-             koinh TYPE koinh,
+             koinh TYPE koinh_fi,
              iban  TYPE iban,
            END OF ty_in,
            tt_in TYPE STANDARD TABLE OF ty_in WITH EMPTY KEY.
