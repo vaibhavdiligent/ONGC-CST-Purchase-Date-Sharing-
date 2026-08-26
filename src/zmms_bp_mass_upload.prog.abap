@@ -78,6 +78,9 @@ REPORT zmms_bp_mass_upload.
 " exemption rates and threshold amounts is declared here rather than inline.
 TYPES ty_dec TYPE p LENGTH 13 DECIMALS 2.
 
+" Local table of BP roles - avoids depending on a DDIC table type name.
+TYPES ty_roles TYPE STANDARD TABLE OF bu_partnerrole WITH EMPTY KEY.
+
 TYPES: BEGIN OF ty_row,
          row   TYPE i,
          cells TYPE STANDARD TABLE OF string WITH EMPTY KEY,
@@ -309,11 +312,7 @@ CLASS lcl_util IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_meta.
-    CONSTANTS lc_words TYPE string VALUE
-      'FIELD TECH,FIELD TECHNICAL,FIELD TYPE,FIELD LENGTH,FIELD NAME,' &&
-      'FIELD DESCRIPTION,MANDATORY,OPTIONAL,GUIDELINE,TECH NAME,' &&
-      'PROJECT,SUBPROJECT,OBJECT,USER INPUT,DEFAULT VALUE,TRANSACTION CODE'.
-    DATA lt_w TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    DATA lt_w TYPE string_table.
 
     rv = abap_false.
     DATA(lv_c1) = to_upper( cell( is_row = is_row iv_col = 1 ) ).
@@ -321,7 +320,15 @@ CLASS lcl_util IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    SPLIT lc_words AT ',' INTO TABLE lt_w.
+    lt_w = VALUE #( ( `FIELD TECH` )        ( `FIELD TECHNICAL` )
+                    ( `FIELD TYPE` )        ( `FIELD LENGTH` )
+                    ( `FIELD NAME` )        ( `FIELD DESCRIPTION` )
+                    ( `MANDATORY` )         ( `OPTIONAL` )
+                    ( `GUIDELINE` )         ( `TECH NAME` )
+                    ( `PROJECT` )           ( `SUBPROJECT` )
+                    ( `OBJECT` )            ( `USER INPUT` )
+                    ( `DEFAULT VALUE` )     ( `TRANSACTION CODE` ) ).
+
     LOOP AT lt_w INTO DATA(lv_w).
       IF lv_c1 CS lv_w.
         rv = abap_true.
@@ -539,7 +546,7 @@ CLASS lcl_log IMPLEMENTATION.
         lo_alv->get_columns( )->set_optimize( abap_true ).
 
         DATA(lo_cols) = lo_alv->get_columns( ).
-        DATA(lt_lbl) = VALUE stringtab(
+        DATA(lt_lbl) = VALUE string_table(
           ( |ICON;Status| ) ( |XLSROW;Excel row| ) ( |KEY1;Vendor / key| )
           ( |KEY2;Comp.code| ) ( |KEY3;Purch.org| ) ( |MSGTY;Type| )
           ( |MSGID;MsgID| ) ( |MSGNO;MsgNo| ) ( |STRUC;API structure| )
@@ -591,7 +598,7 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     "! BP grouping for an account group. NOT identity - CVIC_VEND_TO_BP1 maps
     "! e.g. Z002->Z0X2, Z003->Z0X3, Z009->Z019, Z012->Z022, Z007->ZPLN.
     METHODS bp_group  IMPORTING iv_ktokk TYPE clike RETURNING VALUE(rv) TYPE bu_group.
-    METHODS bp_roles  IMPORTING iv_ktokk TYPE clike RETURNING VALUE(rt) TYPE bu_partnerrole_t.
+    METHODS bp_roles  IMPORTING iv_ktokk TYPE clike RETURNING VALUE(rt) TYPE ty_roles.
     METHODS title_key IMPORTING iv_text  TYPE clike RETURNING VALUE(rv) TYPE ad_title.
 
     METHODS vend_exists IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE abap_bool.
@@ -1039,7 +1046,7 @@ CLASS lcl_h_create IMPLEMENTATION.
                    CHANGING  cs_data  = cs_data-partner-central_data-common-data-bp_centraldata
                              cs_datax = cs_data-partner-central_data-common-datax-bp_centraldata ).
 
-    DATA(lt_name) = VALUE stringtab( ( |NAME1;7| ) ( |NAME2;8| ) ( |NAME3;9| ) ( |NAME4;10| ) ).
+    DATA(lt_name) = VALUE string_table( ( |NAME1;7| ) ( |NAME2;8| ) ( |NAME3;9| ) ( |NAME4;10| ) ).
     LOOP AT lt_name INTO DATA(lv_p).
       SPLIT lv_p AT ';' INTO DATA(lv_f) DATA(lv_c).
       lcl_util=>set( EXPORTING iv_comp = lv_f iv_value = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_c ) )
@@ -1049,10 +1056,12 @@ CLASS lcl_h_create IMPLEMENTATION.
 
     " --- roles, from CVIC_VEND_TO_BP2 (every group maps to FLVN00+FLVN01) --
     "     DATA_KEY is an element of type BU_ROLE, not a structure.
+    DATA ls_role TYPE bus_ei_bupa_roles.
     LOOP AT mo_cfg->bp_roles( iv_ktokk ) INTO DATA(lv_role).
-      APPEND VALUE bus_ei_bupa_roles(
-        task     = gc_i
-        data_key = lv_role ) TO cs_data-partner-central_data-role-roles.
+      CLEAR ls_role.
+      ls_role-task     = gc_i.
+      ls_role-data_key = lv_role.
+      APPEND ls_role TO cs_data-partner-central_data-role-roles.
     ENDLOOP.
 
     " --- address ---------------------------------------------------------
@@ -1060,7 +1069,7 @@ CLASS lcl_h_create IMPLEMENTATION.
     CLEAR ls_adr.
     ls_adr-task = gc_i.
 
-    DATA(lt_post) = VALUE stringtab(
+    DATA(lt_post) = VALUE string_table(
       ( |STR_SUPPL1;13| ) ( |STR_SUPPL2;14| ) ( |STREET;15| ) ( |STR_SUPPL3;16| )
       ( |DISTRICT;17| )   ( |POSTL_COD1;18| ) ( |CITY;19| )   ( |COUNTRY;20| )
       ( |REGION;21| )     ( |LANGU;22| ) ).
@@ -1071,50 +1080,63 @@ CLASS lcl_h_create IMPLEMENTATION.
                                cs_datax = ls_adr-data-postal-datax ).
     ENDLOOP.
 
-    " telephone / mobile / fax / e-mail
-    DATA(lt_tel) = VALUE stringtab( ( |23;24;| ) ( |25;26;| ) ( |27;;3| ) ( |28;;3| ) ).
+    " telephone / mobile - "number column;extension column;mobile flag"
+    DATA: ls_tel TYPE bus_ei_bupa_telephone,
+          ls_fax TYPE bus_ei_bupa_fax,
+          ls_smt TYPE bus_ei_bupa_smtp,
+          lt_tel TYPE string_table.
+
+    lt_tel = VALUE #( ( `23;24;` ) ( `25;26;` ) ( `27;;3` ) ( `28;;3` ) ).
+
     LOOP AT lt_tel INTO DATA(lv_tp).
       SPLIT lv_tp AT ';' INTO DATA(lv_n) DATA(lv_x) DATA(lv_u).
       DATA(lv_num) = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_n ) ).
       IF lv_num IS INITIAL.
         CONTINUE.
       ENDIF.
-      APPEND VALUE bus_ei_bupa_telephone(
-        contact-task      = gc_i
-        contact-data-telephone = lv_num
-        contact-data-extension = COND #( WHEN lv_x IS NOT INITIAL
-                                         THEN lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_x ) ) )
-        contact-data-r_3_user  = lv_u
-        contact-data-std_no    = COND #( WHEN lv_n = '23' THEN abap_true )
-        ) TO ls_adr-data-communication-phone-phone.
+      CLEAR ls_tel.
+      ls_tel-contact-task           = gc_i.
+      ls_tel-contact-data-telephone = lv_num.
+      IF lv_x IS NOT INITIAL.
+        ls_tel-contact-data-extension = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_x ) ).
+      ENDIF.
+      ls_tel-contact-data-r_3_user = lv_u.
+      IF lv_n = '23'.
+        ls_tel-contact-data-std_no = abap_true.
+      ENDIF.
+      APPEND ls_tel TO ls_adr-data-communication-phone-phone.
     ENDLOOP.
 
     DATA(lv_fax) = lcl_util=>cell( is_row = is_row iv_col = 29 ).
     IF lv_fax IS NOT INITIAL.
-      APPEND VALUE bus_ei_bupa_fax(
-        contact-task      = gc_i
-        contact-data-fax  = lv_fax
-        contact-data-std_no = abap_true ) TO ls_adr-data-communication-fax-fax.
+      CLEAR ls_fax.
+      ls_fax-contact-task        = gc_i.
+      ls_fax-contact-data-fax    = lv_fax.
+      ls_fax-contact-data-std_no = abap_true.
+      APPEND ls_fax TO ls_adr-data-communication-fax-fax.
     ENDIF.
 
     DO 2 TIMES.
-      DATA(lv_mc) = COND i( WHEN sy-index = 1 THEN 30 ELSE 31 ).
+      DATA lv_mc TYPE i.
+      lv_mc = COND #( WHEN sy-index = 1 THEN 30 ELSE 31 ).
       DATA(lv_mail) = lcl_util=>cell( is_row = is_row iv_col = lv_mc ).
       IF lv_mail IS INITIAL.
         CONTINUE.
       ENDIF.
-      APPEND VALUE bus_ei_bupa_smtp(
-        contact-task        = gc_i
-        contact-data-e_mail = lv_mail
-        contact-data-std_no = COND #( WHEN sy-index = 1 THEN abap_true )
-        ) TO ls_adr-data-communication-smtp-smtp.
+      CLEAR ls_smt.
+      ls_smt-contact-task        = gc_i.
+      ls_smt-contact-data-e_mail = lv_mail.
+      IF sy-index = 1.
+        ls_smt-contact-data-std_no = abap_true.
+      ENDIF.
+      APPEND ls_smt TO ls_adr-data-communication-smtp-smtp.
     ENDDO.
 
     APPEND ls_adr TO cs_data-partner-central_data-address-addresses.
   ENDMETHOD.
 
   METHOD fill_central.
-    DATA(lt_map) = VALUE stringtab(
+    DATA(lt_map) = VALUE string_table(
       ( |KTOKK;5|  ) ( |KUNNR;32| ) ( |VBUND;33| ) ( |KONZS;34| )
       ( |STCD3;35| ) ( |STCD5;36| ) ( |STCEG;37| ) ( |J_1KFTBUS;38| )
       ( |STENR;39| ) ( |BRSCH;40| )
@@ -1225,7 +1247,7 @@ CLASS lcl_h_create IMPLEMENTATION.
       CLEAR ls_cc.
       ls_cc-task           = COND #( WHEN lv_lifnr IS INITIAL THEN gc_i ELSE gc_m ).
       ls_cc-data_key-bukrs = lv_bukrs.
-      DATA(lt_cc) = VALUE stringtab(
+      DATA(lt_cc) = VALUE string_table(
         ( |AKONT;47| ) ( |FDGRV;48| ) ( |ALTKN;49| ) ( |ZTERM;50| )
         ( |REPRF;51| ) ( |ZWELS;52| ) ( |ZAHLS;53| ) ( |HBKID;54| )
         ( |QLAND;58| ) ).
@@ -1260,7 +1282,7 @@ CLASS lcl_h_create IMPLEMENTATION.
         CLEAR ls_po.
         ls_po-task           = COND #( WHEN lv_lifnr IS INITIAL THEN gc_i ELSE gc_m ).
         ls_po-data_key-ekorg = lv_ekorg.
-        DATA(lt_po) = VALUE stringtab(
+        DATA(lt_po) = VALUE string_table(
           ( |WAERS;61| ) ( |ZTERM;62| ) ( |KALSK;63| )
           ( |WEBRE;64| ) ( |INCO1;65| ) ( |INCO2;66| ) ).
         LOOP AT lt_po INTO DATA(lv_op).
@@ -1641,12 +1663,12 @@ CLASS lcl_h_bkey IMPLEMENTATION.
       ELSEIF p_test = abap_true.
         CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_key iv_ty = 'S'
-                     iv_txt = COND #( WHEN lv_exists = abap_true THEN 'Test run OK - would change the bank'
+                     iv_txt = COND string( WHEN lv_exists = abap_true THEN 'Test run OK - would change the bank'
                                                                  ELSE 'Test run OK - would create the bank' ) ).
       ELSE.
         CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_key iv_ty = 'S'
-                     iv_txt = COND #( WHEN lv_exists = abap_true THEN 'Bank changed' ELSE 'Bank created' ) ).
+                     iv_txt = COND string( WHEN lv_exists = abap_true THEN 'Bank changed' ELSE 'Bank created' ) ).
       ENDIF.
 
       IF p_stop = abap_true AND mo_log->has_error( ls_row-row ) = abap_true.
@@ -1965,7 +1987,7 @@ CLASS lcl_h_cin IMPLEMENTATION.
 
   METHOD lif_h~run.
     " column -> LFA1 field
-    DATA(lt_map) = VALUE stringtab(
+    DATA(lt_map) = VALUE string_table(
       ( |J_1IEXCD;4|   ) ( |J_1IEXRN;5|   ) ( |J_1IEXRG;6|  ) ( |J_1IEXDI;7| )
       ( |J_1IEXCO;8|   ) ( |J_1ICSTNO;9|  ) ( |J_1ILSTNO;10| ) ( |J_1ISERN;11| )
       ( |J_1IPANNO;12| ) ( |J_1ISSIST;13| ) ( |J_1IEXCIVE;14| ) ( |J_1IVTYP;15| ) ).
@@ -2040,7 +2062,7 @@ CLASS lcl_h_pfn IMPLEMENTATION.
 
   METHOD lif_h~run.
     " "PARVW column;GPARN column" for the 15 slots, in template order
-    DATA(lt_pair) = VALUE stringtab(
+    DATA(lt_pair) = VALUE string_table(
       ( |6;17|  ) ( |7;18|  ) ( |8;19|  ) ( |9;20|  ) ( |10;21| )
       ( |11;22| ) ( |12;23| ) ( |13;24| ) ( |14;25| ) ( |15;26| ) ( |16;27| )
       ( |28;32| ) ( |29;33| ) ( |30;34| ) ( |31;35| ) ).
