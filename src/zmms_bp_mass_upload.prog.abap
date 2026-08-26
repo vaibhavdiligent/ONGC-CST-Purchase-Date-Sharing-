@@ -185,6 +185,8 @@ CLASS lcl_util DEFINITION FINAL.
     CLASS-METHODS cell    IMPORTING is_row TYPE ty_row iv_col TYPE i RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS to_date IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE d.
     CLASS-METHODS to_dec  IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE ty_dec.
+    "! Generic ALPHA conversion for fields whose domain carries the exit.
+    CLASS-METHODS alpha   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS lifnr   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE lifnr.
     CLASS-METHODS gl      IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE saknr.
     CLASS-METHODS is_sample IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
@@ -273,28 +275,36 @@ CLASS lcl_util IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
-  METHOD lifnr.
-    CLEAR rv.
-    DATA(lv) = to_upper( condense( iv_in ) ).
-    IF lv IS INITIAL.
-      RETURN.
-    ENDIF.
-    rv = lv.
-    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
-      EXPORTING input  = rv
-      IMPORTING output = rv.
-  ENDMETHOD.
-
-  METHOD gl.
+  METHOD alpha.
     CLEAR rv.
     DATA(lv) = condense( iv_in ).
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    rv = lv.
     CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
-      EXPORTING input  = rv
+      EXPORTING input  = lv
       IMPORTING output = rv.
+  ENDMETHOD.
+
+  METHOD lifnr.
+    " LFA1-LIFNR, WYT3-LIFN2 and VMDS_EI_FUNCTIONS_DATA-PARTNER (domain KTONR)
+    " all carry the ALPHA exit.
+    CLEAR rv.
+    DATA(lv) = to_upper( condense( iv_in ) ).
+    IF lv IS INITIAL.
+      RETURN.
+    ENDIF.
+    rv = alpha( lv ).
+  ENDMETHOD.
+
+  METHOD gl.
+    " AKONT / SAKNR - domain SAKNR carries the ALPHA exit.
+    CLEAR rv.
+    DATA(lv) = condense( iv_in ).
+    IF lv IS INITIAL.
+      RETURN.
+    ENDIF.
+    rv = alpha( lv ).
   ENDMETHOD.
 
   METHOD is_sample.
@@ -1138,15 +1148,27 @@ CLASS lcl_h_create IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD fill_central.
+    " "FIELD;column;A" - the trailing A marks a field whose domain carries the
+    " ALPHA conversion exit, so the Excel value must be right-aligned and
+    " zero-padded before it is handed to the API.
+    "   KUNNR  domain KUNNR  - ALPHA
+    "   VBUND  domain RCOMP  - ALPHA
+    " KONZS, STCD*, BRSCH, J_1I* and VEN_CLASS have no conversion exit and are
+    " passed through unchanged.
     DATA(lt_map) = VALUE string_table(
-      ( |KTOKK;5|  ) ( |KUNNR;32| ) ( |VBUND;33| ) ( |KONZS;34| )
-      ( |STCD3;35| ) ( |STCD5;36| ) ( |STCEG;37| ) ( |J_1KFTBUS;38| )
-      ( |STENR;39| ) ( |BRSCH;40| )
+      ( |KTOKK;5;|  ) ( |KUNNR;32;A| ) ( |VBUND;33;A| ) ( |KONZS;34;| )
+      ( |STCD3;35;| ) ( |STCD5;36;|  ) ( |STCEG;37;|  ) ( |J_1KFTBUS;38;| )
+      ( |STENR;39;| ) ( |BRSCH;40;|  )
       " CIN - LFA1 fields, confirmed present in VMDS_EI_VMD_CENTRAL
-      ( |VEN_CLASS;55| ) ( |J_1ISSIST;56| ) ( |J_1IPANNO;57| ) ).
+      ( |VEN_CLASS;55;| ) ( |J_1ISSIST;56;| ) ( |J_1IPANNO;57;| ) ).
+
     LOOP AT lt_map INTO DATA(lv_p).
-      SPLIT lv_p AT ';' INTO DATA(lv_f) DATA(lv_c).
-      lcl_util=>set( EXPORTING iv_comp = lv_f iv_value = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_c ) )
+      SPLIT lv_p AT ';' INTO DATA(lv_f) DATA(lv_c) DATA(lv_a).
+      DATA(lv_v) = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_c ) ).
+      IF lv_a = 'A'.
+        lv_v = lcl_util=>alpha( lv_v ).
+      ENDIF.
+      lcl_util=>set( EXPORTING iv_comp = lv_f iv_value = lv_v
                      CHANGING  cs_data  = cs_data-vendor-central_data-central-data
                                cs_datax = cs_data-vendor-central_data-central-datax ).
     ENDLOOP.
