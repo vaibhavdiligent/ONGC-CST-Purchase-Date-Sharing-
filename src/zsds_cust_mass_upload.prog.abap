@@ -209,7 +209,8 @@ SELECTION-SCREEN END OF BLOCK b2.
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
 PARAMETERS: p_test  AS CHECKBOX DEFAULT 'X',
             p_stop  AS CHECKBOX,
-            p_bpgrp TYPE bu_group.
+            p_bpgrp TYPE bu_group,
+            p_skip  TYPE i DEFAULT 1.
 SELECTION-SCREEN END OF BLOCK b3.
 
 *----------------------------------------------------------------------*
@@ -368,10 +369,12 @@ CLASS lcl_excel DEFINITION FINAL.
     " Returns the rows of IV_SHEET from row 2 onwards. Row 1 is the heading
     " row on every tab of this workbook.
     METHODS read
-      IMPORTING iv_file      TYPE rlgrap-filename
-                iv_from_pc   TYPE abap_bool
-                iv_sheet     TYPE string
-      RETURNING VALUE(rt)    TYPE tt_row
+      IMPORTING iv_file    TYPE rlgrap-filename
+                iv_from_pc TYPE abap_bool
+                iv_sheet   TYPE string
+                iv_skip    TYPE i DEFAULT 1
+      EXPORTING et_skipped TYPE string_table
+                et_row     TYPE tt_row
       RAISING   lcx_upl.
   PRIVATE SECTION.
     METHODS load_bin
@@ -467,14 +470,15 @@ CLASS lcl_excel IMPLEMENTATION.
         EXPORTING iv_text = |Tab "{ iv_sheet }" could not be converted|.
     ENDIF.
 
-    " CL_FDT_XL_SPREADSHEET returns the heading row as the first line, so
-    " skipping index 1 leaves exactly "data from row 2 onwards".
+    " How many leading lines to drop is a selection-screen setting rather
+    " than an assumption. Whether CL_FDT_XL_SPREADSHEET hands back the
+    " heading row as its first line, or consumes it as the column names and
+    " returns data only, is release-dependent - so instead of guessing, the
+    " lines that were dropped are handed back to the caller and written to
+    " the log. One run tells you whether the setting is right.
     DATA lv_idx TYPE i.
     LOOP AT <lt_tab> ASSIGNING FIELD-SYMBOL(<ls_line>).
       lv_idx = sy-tabix.
-      IF lv_idx = 1.
-        CONTINUE.
-      ENDIF.
       DATA ls_row TYPE ty_row.
       CLEAR ls_row.
       ls_row-row = lv_idx.
@@ -487,8 +491,23 @@ CLASS lcl_excel IMPLEMENTATION.
         lv_cellv = <lv_c>.
         APPEND lv_cellv TO ls_row-cells.
       ENDDO.
+
+      IF lv_idx <= iv_skip.
+        DATA lv_show TYPE string.
+        CLEAR lv_show.
+        LOOP AT ls_row-cells INTO DATA(lv_one) FROM 1 TO 8.
+          IF lv_show IS INITIAL.
+            lv_show = lv_one.
+          ELSE.
+            lv_show = |{ lv_show } / { lv_one }|.
+          ENDIF.
+        ENDLOOP.
+        APPEND |Line { lv_idx } skipped: { lv_show }| TO et_skipped.
+        CONTINUE.
+      ENDIF.
+
       IF lcl_util=>is_empty( ls_row ) = abap_false.
-        APPEND ls_row TO rt.
+        APPEND ls_row TO et_row.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
@@ -2285,10 +2304,16 @@ START-OF-SELECTION.
   DATA(go_log)    = NEW lcl_log( ).
   DATA(go_engine) = NEW lcl_engine( iv_scen = gv_scen io_log = go_log ).
 
+  DATA gt_row  TYPE tt_row.
+  DATA gt_skip TYPE string_table.
   TRY.
-      DATA(gt_row) = NEW lcl_excel( )->read( iv_file    = p_file
-                                             iv_from_pc = p_pc
-                                             iv_sheet   = go_engine->sheet( ) ).
+      NEW lcl_excel( )->read(
+        EXPORTING iv_file    = p_file
+                  iv_from_pc = p_pc
+                  iv_sheet   = go_engine->sheet( )
+                  iv_skip    = p_skip
+        IMPORTING et_skipped = gt_skip
+                  et_row     = gt_row ).
     CATCH lcx_upl INTO DATA(gx).
       " MESSAGE takes a data object, not an expression.
       DATA(gv_txt) = gx->get_text( ).
@@ -2301,6 +2326,12 @@ START-OF-SELECTION.
     MESSAGE gv_none TYPE 'I'.
     RETURN.
   ENDIF.
+
+  " Record what was treated as heading, so a wrong setting is visible in
+  " the log instead of silently costing you a row.
+  LOOP AT gt_skip INTO DATA(gv_sk).
+    go_log->add( iv_row = 0 iv_type = 'I' iv_text = gv_sk ).
+  ENDLOOP.
 
   go_engine->run( gt_row ).
 

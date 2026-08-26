@@ -102,6 +102,9 @@ TYPES: BEGIN OF ty_msg,
        END OF ty_msg,
        tt_msg TYPE STANDARD TABLE OF ty_msg WITH EMPTY KEY.
 
+" Lines the reader treated as heading, reported in the log.
+DATA gt_skipped TYPE string_table.
+
 CONSTANTS:
   gc_i     TYPE cmd_ei_object_task VALUE 'I',   " insert
   gc_u     TYPE cmd_ei_object_task VALUE 'U',   " update
@@ -144,7 +147,8 @@ SELECTION-SCREEN END OF BLOCK b2.
 
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
 PARAMETERS: p_test AS CHECKBOX DEFAULT 'X',   " simulate - nothing is posted
-            p_stop AS CHECKBOX.               " stop at the first faulty row
+            p_stop AS CHECKBOX,               " stop at the first faulty row
+            p_skip TYPE i DEFAULT 1.          " leading lines treated as heading
 SELECTION-SCREEN END OF BLOCK b3.
 
 *----------------------------------------------------------------------*
@@ -443,6 +447,11 @@ CLASS lcl_excel IMPLEMENTATION.
       RAISE EXCEPTION NEW lcx_upl( |Tab "{ iv_sheet }" is empty.| ).
     ENDIF.
 
+    " How many leading lines count as heading is a selection-screen setting,
+    " not an assumption: whether CL_FDT_XL_SPREADSHEET returns the heading
+    " row as its first line or consumes it as the column names is
+    " release-dependent. The dropped lines are kept in GT_SKIPPED and
+    " written to the log, so one run shows whether the setting is right.
     DATA lv_r TYPE i.
     LOOP AT <lt_tab> ASSIGNING <ls_lin>.
       lv_r = lv_r + 1.
@@ -459,6 +468,21 @@ CLASS lcl_excel IMPLEMENTATION.
         ENDIF.
         APPEND condense( CONV string( <lv_val> ) ) TO ls_row-cells.
       ENDDO.
+
+      IF lv_r <= p_skip.
+        DATA lv_show TYPE string.
+        CLEAR lv_show.
+        LOOP AT ls_row-cells INTO DATA(lv_one) FROM 1 TO 8.
+          IF lv_show IS INITIAL.
+            lv_show = lv_one.
+          ELSE.
+            lv_show = |{ lv_show } / { lv_one }|.
+          ENDIF.
+        ENDLOOP.
+        APPEND |Line { lv_r } skipped: { lv_show }| TO gt_skipped.
+        CONTINUE.
+      ENDIF.
+
       APPEND ls_row TO rt_row.
     ENDLOOP.
 
@@ -581,7 +605,9 @@ CLASS lcl_log IMPLEMENTATION.
         lo_alv->display( ).
 
       CATCH cx_salv_msg INTO DATA(lx).
-        MESSAGE lx->get_text( ) TYPE 'E'.
+        " MESSAGE takes a data object, not an expression.
+        DATA(lv_err) = lx->get_text( ).
+        MESSAGE lv_err TYPE 'E'.
     ENDTRY.
   ENDMETHOD.
 
@@ -1193,11 +1219,19 @@ CLASS lcl_h_create IMPLEMENTATION.
       DATA lv_bad TYPE abap_bool.
       CLEAR lv_bad.
 
+      " IS INITIAL takes a data object, not an expression, so the derived
+      " BP grouping is read into a variable first.
+      DATA lv_grp TYPE bu_group.
+      CLEAR lv_grp.
+      IF lv_ktokk IS NOT INITIAL.
+        lv_grp = mo_cfg->bp_group( lv_ktokk ).
+      ENDIF.
+
       IF mo_cfg->ok_ktokk( lv_ktokk ) = abap_false.
         mo_log->add( iv_row = ls_row-row iv_ty = 'E'
                      iv_txt = |Account group { lv_ktokk } does not exist (column 5, KTOKK)| ).
         lv_bad = abap_true.
-      ELSEIF mo_cfg->bp_group( lv_ktokk ) IS INITIAL.
+      ELSEIF lv_grp IS INITIAL.
         mo_log->add( iv_row = ls_row-row iv_ty = 'E'
                      iv_txt = |Account group { lv_ktokk } has no BP grouping in CVIC_VEND_TO_BP1| ).
         lv_bad = abap_true.
@@ -2406,8 +2440,22 @@ START-OF-SELECTION.
                                         iv_sheet   = go_h->sheet( )
                                         iv_from_pc = p_pc ).
     CATCH lcx_upl INTO DATA(gx).
-      MESSAGE gx->get_text( ) TYPE 'E'.
+      " MESSAGE takes a data object, not an expression.
+      DATA(gv_txt) = gx->get_text( ).
+      MESSAGE gv_txt TYPE 'E'.
   ENDTRY.
+
+  " Record what the reader treated as heading, so a wrong "Heading rows"
+  " setting shows up in the log instead of silently costing a data row.
+  LOOP AT gt_skipped INTO DATA(gv_sk).
+    go_log->add( iv_row = 0 iv_ty = 'I' iv_txt = gv_sk ).
+  ENDLOOP.
+
+  IF lt_rows IS INITIAL.
+    DATA gv_none TYPE string.
+    gv_none = |Tab "{ go_h->sheet( ) }" holds no data rows after the heading|.
+    MESSAGE gv_none TYPE 'I'.
+  ENDIF.
 
   go_h->run( lt_rows ).
 

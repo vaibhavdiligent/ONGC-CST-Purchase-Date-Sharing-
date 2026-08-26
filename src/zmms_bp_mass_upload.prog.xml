@@ -103,6 +103,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_SKIP</KEY>
+     <ENTRY>D       .Heading rows to skip</ENTRY>
+     <LENGTH>20</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>P_SRV</KEY>
      <ENTRY>D       .File is on the application server</ENTRY>
      <LENGTH>33</LENGTH>
