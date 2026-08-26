@@ -38,7 +38,7 @@
     <item>
      <ID>S</ID>
      <KEY>P_BPGRP</KEY>
-     <ENTRY>D       .BP grouping (blank = let the API derive it)</ENTRY>
+     <ENTRY>D       .BP grouping (blank = derived)</ENTRY>
      <LENGTH>43</LENGTH>
     </item>
     <item>
@@ -98,8 +98,8 @@
     <item>
      <ID>S</ID>
      <KEY>P_SRV</KEY>
-     <ENTRY>D       .File is on the application server</ENTRY>
-     <LENGTH>33</LENGTH>
+     <ENTRY>D       .File is on the appl. server</ENTRY>
+     <LENGTH>27</LENGTH>
     </item>
     <item>
      <ID>S</ID>
