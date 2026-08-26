@@ -58,10 +58,15 @@
 *&   CMDS_EI_EXTERN-CENTRAL_DATA-CENTRAL-DATA / -DATAX
 *&     (CMDS_EI_VMD_CENTRAL_DATA / _XFLAG - SAP's own name, "VMD" not a typo)
 *&   CMDS_EI_EXTERN-CENTRAL_DATA-ADDRESS-POSTAL-DATA (BAPIAD1VL) / -DATAX
-*&   CMDS_EI_EXTERN-CENTRAL_DATA-ADDRESS-COMMUNICATION-PHONE / -FAX / -SMTP
-*&     line CVIS_EI_PHONE-DATA-TELEPHONE, CVIS_EI_FAX-DATA-FAX,
-*&     line CVIS_EI_SMTP-DATA-E_MAIL
-*&   CMDS_EI_EXTERN-CENTRAL_DATA-TAX_IND, line CMDS_EI_TAX_IND:
+*&   CMDS_EI_EXTERN-CENTRAL_DATA-ADDRESS-COMMUNICATION-PHONE-PHONE
+*&     and -FAX-FAX, -SMTP-SMTP. Each of PHONE / FAX / SMTP is a WRAPPER
+*&     STRUCTURE (CVIS_EI_CVI_PHONE etc.) holding CURRENT_STATE plus a
+*&     table of the same name - the table is one level deeper than the
+*&     component name suggests. Line structures:
+*&       CVIS_EI_PHONE-DATA-TELEPHONE (mobile: -DATA-R_3_USER, AD_FLGMOB)
+*&       CVIS_EI_FAX-DATA-FAX,  CVIS_EI_SMTP-DATA-E_MAIL
+*&   CMDS_EI_EXTERN-CENTRAL_DATA-TAX_IND-TAX_IND - same wrapper pattern
+*&     (CMDS_EI_CMD_TAX_IND). Line CMDS_EI_TAX_IND:
 *&     DATA_KEY-ALAND / -TATYP, DATA-TAXKD, DATAX-TAXKD
 *&   CMDS_EI_EXTERN-COMPANY_DATA-COMPANY, line CMDS_EI_COMPANY:
 *&     DATA_KEY-BUKRS, DATA / DATAX (CMDS_EI_COMPANY_DATA / _DATAX)
@@ -438,7 +443,7 @@ CLASS lcl_excel IMPLEMENTATION.
     " Tab names in this workbook carry trailing blanks, so compare trimmed.
     DATA lv_hit TYPE string.
     LOOP AT lt_names INTO DATA(lv_nm).
-      IF to_upper( condense( CONV string( lv_nm ) ) ) = to_upper( condense( iv_sheet ) ).
+      IF to_upper( condense( lv_nm ) ) = to_upper( condense( iv_sheet ) ).
         lv_hit = lv_nm.
         EXIT.
       ENDIF.
@@ -473,7 +478,9 @@ CLASS lcl_excel IMPLEMENTATION.
         IF sy-subrc <> 0.
           EXIT.
         ENDIF.
-        APPEND CONV string( <lv_c> ) TO ls_row-cells.
+        DATA lv_cellv TYPE string.
+        lv_cellv = <lv_c>.
+        APPEND lv_cellv TO ls_row-cells.
       ENDDO.
       IF lcl_util=>is_empty( ls_row ) = abap_false.
         APPEND ls_row TO rt.
@@ -2039,7 +2046,7 @@ CLASS lcl_engine IMPLEMENTATION.
             data_key-aland    = lv_aland
             data_key-tatyp    = lv_tatyp
             data-taxkd        = lv_cell
-            datax-taxkd       = abap_true ) TO ls_cust-central_data-tax_ind.
+            datax-taxkd       = abap_true ) TO ls_cust-central_data-tax_ind-tax_ind.
 
         WHEN gc_n_lic.
           mo_lic->set( iv_fld = ls_m-fld iv_val = lv_cell
@@ -2056,26 +2063,29 @@ CLASS lcl_engine IMPLEMENTATION.
       APPEND VALUE cvis_ei_phone( task = gc_m
                                   data-telephone  = lv_tel
                                   datax-telephone = abap_true
-                                ) TO ls_cust-central_data-address-communication-phone.
+                                ) TO ls_cust-central_data-address-communication-phone-phone.
     ENDIF.
     IF lv_mob IS NOT INITIAL.
-      " A mobile number is a telephone entry flagged as a mobile number.
+      " A mobile number is a telephone entry flagged as mobile. The flag is
+      " BAPIADTEL-R_3_USER, whose data element is AD_FLGMOB.
       APPEND VALUE cvis_ei_phone( task = gc_m
                                   data-telephone  = lv_mob
+                                  data-r_3_user   = abap_true
                                   datax-telephone = abap_true
-                                ) TO ls_cust-central_data-address-communication-phone.
+                                  datax-r_3_user  = abap_true
+                                ) TO ls_cust-central_data-address-communication-phone-phone.
     ENDIF.
     IF lv_fax IS NOT INITIAL.
       APPEND VALUE cvis_ei_fax( task = gc_m
                                 data-fax  = lv_fax
                                 datax-fax = abap_true
-                              ) TO ls_cust-central_data-address-communication-fax.
+                              ) TO ls_cust-central_data-address-communication-fax-fax.
     ENDIF.
     IF lv_smt IS NOT INITIAL.
       APPEND VALUE cvis_ei_smtp( task = gc_m
                                  data-e_mail  = lv_smt
                                  datax-e_mail = abap_true
-                               ) TO ls_cust-central_data-address-communication-smtp.
+                               ) TO ls_cust-central_data-address-communication-smtp-smtp.
     ENDIF.
 
     " ---- 4. company code and sales area --------------------------------
