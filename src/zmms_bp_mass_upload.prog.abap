@@ -74,6 +74,10 @@ REPORT zmms_bp_mass_upload.
 *----------------------------------------------------------------------*
 * Types and constants
 *----------------------------------------------------------------------*
+" RETURNING parameters must be fully typed, so the packed type used for
+" exemption rates and threshold amounts is declared here rather than inline.
+TYPES ty_dec TYPE p LENGTH 13 DECIMALS 2.
+
 TYPES: BEGIN OF ty_row,
          row   TYPE i,
          cells TYPE STANDARD TABLE OF string WITH EMPTY KEY,
@@ -177,7 +181,7 @@ CLASS lcl_util DEFINITION FINAL.
 
     CLASS-METHODS cell    IMPORTING is_row TYPE ty_row iv_col TYPE i RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS to_date IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE d.
-    CLASS-METHODS to_dec  IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE p LENGTH 13 DECIMALS 2.
+    CLASS-METHODS to_dec  IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE ty_dec.
     CLASS-METHODS lifnr   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE lifnr.
     CLASS-METHODS gl      IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE saknr.
     CLASS-METHODS is_sample IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
