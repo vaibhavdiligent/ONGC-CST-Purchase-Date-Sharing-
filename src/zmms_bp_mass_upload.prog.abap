@@ -54,6 +54,20 @@
 *&   UPDATE / MODIFY on any table.
 *&   Run ATC with variant ABAP_CLOUD_READINESS and record the tier-2
 *&   exemptions above in the review checklist.
+*&
+*& Structure paths verified against DD03L from system CRS
+*&   BUS_EI_EXTERN-CENTRAL_DATA-COMMON / -ADDRESS / -ROLE / -BANKDETAIL
+*&   BUS_EI_BUPA_CENTRAL-DATA-BP_CONTROL-CATEGORY / -GROUPING
+*&   BUS_EI_STRUC_CENTRAL-TITLE_KEY / -SEARCHTERM1 / -SEARCHTERM2
+*&   BUS_EI_BUPA_ADDRESS-DATA-POSTAL-DATA (BUS_EI_STRUC_ADDRESS) / -DATAX
+*&   BUS_EI_BUPA_ADDRESS-DATA-COMMUNICATION-PHONE-PHONE / -SMTP-SMTP / -FAX-FAX
+*&   BUS_EI_BUPA_TELEPHONE|SMTP|FAX-CONTACT-TASK / -CONTACT-DATA-*
+*&     telephone TELEPHONE/EXTENSION/STD_NO/R_3_USER, e-mail E_MAIL, fax FAX
+*&   BUS_EI_BUPA_ROLES-TASK / -DATA_KEY (BU_ROLE element, NOT a structure)
+*&   CVIS_EI_BANKDETAIL-BANKDETAILS (CVIS_EI_BANKDETAIL_T)
+*&     line CVIS_EI_CVI_BANKDETAIL: TASK / DATA_KEY (BANKS,BANKL,BANKN) / DATA / DATAX
+*&   VMDS_EI_COMPANY-WTAX_TYPE-WTAX_TYPE, VMDS_EI_PURCHASING-FUNCTIONS-FUNCTIONS
+*&   VMDS_EI_FUNCTIONS-DATA-PARTNER (not LIFN2); LTSNR/WERKS live in DATA_KEY
 *&---------------------------------------------------------------------*
 REPORT zmms_bp_mass_upload.
 
@@ -1030,10 +1044,11 @@ CLASS lcl_h_create IMPLEMENTATION.
     ENDLOOP.
 
     " --- roles, from CVIC_VEND_TO_BP2 (every group maps to FLVN00+FLVN01) --
+    "     DATA_KEY is an element of type BU_ROLE, not a structure.
     LOOP AT mo_cfg->bp_roles( iv_ktokk ) INTO DATA(lv_role).
       APPEND VALUE bus_ei_bupa_roles(
-        task = gc_i
-        data_key-rolecategory = lv_role ) TO cs_data-partner-central_data-role-roles.
+        task     = gc_i
+        data_key = lv_role ) TO cs_data-partner-central_data-role-roles.
     ENDLOOP.
 
     " --- address ---------------------------------------------------------
