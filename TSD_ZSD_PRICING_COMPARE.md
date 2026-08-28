@@ -65,13 +65,33 @@ migrated configuration, unaffected by condition records changed since then.
 - X's conditions: `PRCD_ELEMENTS` via `VBAK-KNUMV` (alternative access in
   S/4HANA would be CDS view `V_KONV`).
 - Match key: **item (KPOSN) + condition type (KSCHL) + occurrence** (n-th
-  appearance of the type within the item, in STUNR/ZAEHK order) — so condition
-  types appearing twice are compared pairwise.
-- Compared fields: rate **KBETR**, pricing unit **KPEIN**, condition unit
-  **KMEIN**, condition value **KWERT** (create mode only), plus one row per
-  item for the item net value **NETWR**.
-- Tolerance `P_TOL` (absolute, external units; default 0 — with JPY even ¥1
-  deltas are relevant).
+  appearance of the type within the item, counted over the whole item in
+  STUNR/ZAEHK order) — so condition types appearing twice are compared
+  pairwise. Inactive (`KINAK`) and statistical (`KSTAT`) lines are excluded
+  **before** occurrence numbering on both sides, so both sides number on the
+  same basis.
+- **Matching order** (prevents false MISSING/MISMATCH when the step sequence
+  differs between the ECC and S/4 pricing procedures): for each X line the
+  program takes ① an unused Y line of the same item + type with **identical
+  values**, else ② the positional match (same occurrence), else ③ any unused
+  line of that type (compared, delta shown). `MISSING_S4` is reported only
+  when the condition type does not exist on Y at all for that item.
+- **Two-pass processing:** normal condition lines claim their Y partners
+  first; manual lines (`KHERK = 'C'` / `KMPRS`) are processed in a second
+  pass and consume only leftover Y lines — so a manual line can neither steal
+  a regular line's partner nor leave its own Y counterpart to be misreported
+  as `NEW_IN_S4`. Manual rows display both the X value and the freshly
+  determined Y value.
+- Compared per condition line: rate **KBETR**, pricing unit **KPEIN**,
+  condition unit **KMEIN**, condition value **KWERT**.
+- **Stored value fields** compared between X and Y (customer requirement),
+  shown as extra rows with the field name in the Cond.Type/Field column:
+  - `VBAP` per item: `NETWR`, `NETPR`, `SKTOF`, `WAVWR`, `KZWI1`–`KZWI6`
+    (pricing subtotals), `MWSBP` (tax)
+  - `VBAK` header: `NETWR`
+  - Amount fields are TCURX-converted before comparison; non-amount fields
+    (e.g. `SKTOF`) are compared as raw values with X/Y shown in the remark.
+- Zero tolerance — with JPY even ¥1 deltas are relevant.
 
 ### Amount normalisation (critical for JPY)
 
@@ -94,6 +114,7 @@ All amounts are converted to external format before comparison:
 | `MISSING_S4` | Condition on X not re-determined on Y → missing/wrong condition record or access sequence. **Red** only if X carried a rate/value ≠ 0; **yellow** when both are zero (no impact on the pricing outcome) |
 | `NEW_IN_S4` | Condition determined on Y but absent on X. **Red** only if Y carries a rate/value ≠ 0; **yellow** when zero |
 | `MANUAL` | Manually entered on X (`KHERK = 'C'` / `KMPRS = 'X'`) — cannot be re-derived by repricing; info only |
+| `INFO` | Expected difference, never red: currently `VBAP-WAVWR` (cost) — X froze the moving average price at creation, Y pulls the current one; time-based, not a migration defect |
 | `ERROR` | Y could not be created (BAPI messages shown in remark) |
 
 Filtering rules: inactive lines (`KINAK ≠ space`) and statistical lines
@@ -103,15 +124,34 @@ mismatch, since header distribution across items can legitimately differ.
 
 ## 5. Selection screen
 
+Two modes via radio buttons:
+
+**R1 — Automatic selection (default)**
+
 | Field | Description |
 |---|---|
-| `S_AUART` (obligatory) | Sales document type(s) |
-| `S_ERDAT` (obligatory) | Creation date range |
+| `S_AUART` (mandatory in R1) | Sales document type(s) |
+| `S_ERDAT` (mandatory in R1) | Creation date range |
 | `S_KUNNR` (optional) | Customer (sold-to) range — when filled, the top-N orders are determined **per customer** |
-| `P_TOPN` (obligatory, default 1) | How many orders to check: the N highest-value orders (`VBAK-NETWR` descending) overall, or per customer when `S_KUNNR` is filled |
+| `P_TOPN` (default 1) | How many orders to check: the N highest-value orders (`VBAK-NETWR` descending) overall, or per customer when `S_KUNNR` is filled |
 
 Example: 5 customers in `S_KUNNR` and `P_TOPN` = 5 → up to 25 orders are
 replicated and compared in one run.
+
+**R2 — Specific sales orders**
+
+| Field | Description |
+|---|---|
+| `S_VBELN` (mandatory in R2) | Sales order number(s) — every listed order is copied and compared, regardless of document type/date |
+
+Mandatory fields are validated at runtime per mode (R1 needs document type +
+date range; R2 needs at least one order number).
+
+**Dynamic screen:** only the fields of the chosen mode are visible — selecting
+"Give order No" hides the automatic-selection fields and shows only the Sales
+Document range, and vice versa (radio buttons with `USER-COMMAND` +
+`AT SELECTION-SCREEN OUTPUT` / `MODIF ID`). The mandatory fields of the active
+mode carry the required-entry indicator (`SCREEN-REQUIRED = '2'`).
 
 Everything else is fixed: create-order mode, X's original pricing date, zero
 tolerance, statistical lines excluded, all comparison rows shown. The ALV
@@ -120,13 +160,49 @@ sold-to party of each row. All BAPI input/output variables are cleared
 explicitly at the start of each order so no values carry over between the
 orders of one run.
 
-## 6. Output
+## 6. Output — two screens
 
-SALV grid (layout save enabled, Excel export via standard ALV functions):
-X order, Y order, item, material, condition type, status (color-coded),
-rate X/Y/delta, pricing unit X/Y, UoM X/Y, condition value X/Y/delta, remark.
-Header block shows run totals (orders, errors, OK / mismatch / missing / new /
-manual counts).
+**Screen 1 — Order overview** (one row per order): customer, old/new order
+numbers, **pricing procedure of X and Y** (a differing KALSM is flagged
+prominently in the remark — it is the root cause of most downstream deltas),
+item count, net value X / Y / delta, check counters (total, OK, differences,
+warnings) and a color-coded verdict:
+
+| Verdict | Meaning |
+|---|---|
+| `ALL OK` (green) | Every check passed — S/4 reproduces the ECC pricing (warnings, if any, are informational) |
+| `CHECK` (red) | At least one real difference — double-click the row for detail |
+| `ERROR` (red) | Copy order Y could not be created (BAPI messages in remark) |
+
+The report header shows the overall RESULT line ("ALL OK" or "N differences")
+so one glance answers "is pricing correct or not".
+
+**Screen 2 — Pricing detail** (click the order number hotspot or double-click
+the row): popup ALV designed for end users —
+
+- Rows are grouped by a **Section** column and sorted in reading order:
+  *Order total* (VBAK-NETWR) → *Item values* (NETWR, NETPR, subtotals, tax,
+  cost…) → *Pricing conditions* per item.
+- A **Description** column translates every row into plain language: condition
+  type texts from T685T ("Output Tax") and fixed texts for value fields
+  ("Pricing subtotal 3", "Cost (moving average price)").
+- **Rate columns** carry only condition rates; **Amount columns** carry all
+  money values (condition values and field values) — the two are never mixed.
+- Technical columns (pricing unit, UoM) are hidden by default and can be
+  added back via the ALV layout.
+- The condition type is rendered as a **hotspot** — a single click (or
+  double-click) opens VK13 (level 3). The popup header explains the colors
+  and the click behaviour.
+
+Layout save and Excel export available on both grids.
+
+**Level 3 — VK13 jump** (double-click a condition row in the detail): the
+program validates the row is a real pricing condition type (T685, usage A,
+application V) and calls transaction **VK13** with the condition type pre-set
+(parameter ID `VKS`, `WITH AUTHORITY-CHECK`). The record to inspect is the one
+valid on the **pricing date shown in the row**. Double-clicking a value-field
+row (NETPR, KZWI1, …) shows an explanatory message instead — there is no
+condition record behind those.
 
 ## 7. Setup / transport notes
 

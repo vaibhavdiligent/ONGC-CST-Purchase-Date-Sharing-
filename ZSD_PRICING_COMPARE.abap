@@ -12,14 +12,22 @@
 *& reproduces the ECC result, the program lets S/4HANA re-derive the
 *& pricing from scratch on a copy order Y.
 *&
-*& The user enters document type and creation date range (mandatory),
-*& optionally a customer range, and how many orders to check (default
-*& 1). The program picks the top-N orders X with the HIGHEST net value
-*& (VBAK-NETWR) in that period - overall when no customer is entered,
-*& or per customer when a customer range is entered (e.g. 5 customers
-*& x top 5 orders = 25 copy orders). Every other detail of X (org
-*& data, partners, items, quantities, pricing date, conditions) is
-*& read from the database (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
+*& Two selection modes (radio buttons):
+*&
+*&   R1 AUTOMATIC (default): document type and creation date range are
+*&      mandatory; optionally a customer range and how many orders to
+*&      check (default 1). The program picks the top-N orders X with
+*&      the HIGHEST net value (VBAK-NETWR) in that period - overall
+*&      when no customer is entered, or per customer when a customer
+*&      range is entered (e.g. 5 customers x top 5 orders = 25 copy
+*&      orders).
+*&
+*&   R2 ORDER LIST: the user enters specific sales order numbers
+*&      (multiple selection); each listed order is copied and compared.
+*&
+*& Every other detail of X (org data, partners, items, quantities,
+*& pricing date, conditions) is read from the database
+*& (VBAK/VBAP/VBPA/VBKD/PRCD_ELEMENTS).
 *&
 *& Y is created with BAPI_SALESORDER_CREATEFROMDAT2 and
 *& LOGIC_SWITCH-PRICING = 'B' (carry out new pricing) using X's
@@ -34,8 +42,22 @@
 *& ----------
 *& Condition lines are matched per item + condition type + occurrence
 *& and compared on rate (KBETR), pricing unit (KPEIN), condition unit
-*& (KMEIN) and - in create mode - condition value (KWERT). One extra
-*& row per item compares the item net value (NETWR).
+*& (KMEIN) and condition value (KWERT). In addition the stored value
+*& fields are compared between X and Y (customer requirement):
+*&   VBAP: NETWR NETPR SKTOF WAVWR KZWI1..KZWI6 MWSBP  (per item)
+*&   VBAK: NETWR                                       (header)
+*&
+*& OUTPUT (two screens)
+*& --------------------
+*&   Screen 1: overview ALV - one row per order with net values X/Y,
+*&             check counters and a clear verdict (ALL OK / CHECK /
+*&             ERROR). The report header shows the overall RESULT.
+*&   Screen 2: double-click an order row -> popup ALV with the full
+*&             condition-by-condition and field-by-field comparison
+*&             of that order (incl. the pricing date used).
+*&   Level 3:  double-click a condition row in the detail -> VK13 for
+*&             that condition type (check the record valid on the
+*&             pricing date shown in the row).
 *&
 *& Amounts are normalised to external format before comparison, i.e.
 *& the TCURX decimal shift is applied (JPY has 0 decimals -> internal
@@ -60,7 +82,8 @@
 *& (ABGRU <> space) are skipped.
 *&
 *& TEXT ELEMENTS (maintain in SE38 -> Goto -> Text elements)
-*&   TEXT-001  Document type and period (order X = highest net value)
+*&   TEXT-001  Order selection
+*&   TEXT-002  How do you want to select the orders?
 *&---------------------------------------------------------------------*
 REPORT zsd_pricing_compare.
 
@@ -69,12 +92,45 @@ TABLES: vbak.
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: p_auto RADIOBUTTON GROUP md DEFAULT 'X'
+                     USER-COMMAND md,                  " R1 automatic top-N
+              p_list RADIOBUTTON GROUP md.             " R2 explicit orders
+SELECTION-SCREEN END OF BLOCK b0.
+
+* Only the fields of the chosen mode are visible (see AT SELECTION-
+* SCREEN OUTPUT); the mandatory ones carry the required indicator.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
-  SELECT-OPTIONS: s_auart FOR vbak-auart OBLIGATORY,   " document type
-                  s_erdat FOR vbak-erdat OBLIGATORY,   " creation period
-                  s_kunnr FOR vbak-kunnr.              " customer (optional)
-  PARAMETERS p_topn TYPE i DEFAULT 1 OBLIGATORY.       " orders to check
+  SELECT-OPTIONS: s_auart FOR vbak-auart MODIF ID r1,  " document type
+                  s_erdat FOR vbak-erdat MODIF ID r1,  " creation period
+                  s_kunnr FOR vbak-kunnr MODIF ID r1.  " customer (optional)
+  PARAMETERS p_topn TYPE i DEFAULT 1 MODIF ID r1.      " orders to check
+  SELECT-OPTIONS s_vbeln FOR vbak-vbeln MODIF ID r2.   " order numbers
 SELECTION-SCREEN END OF BLOCK b1.
+
+*----------------------------------------------------------------------*
+* Show only the fields of the selected mode; mark mandatory fields
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    CASE screen-group1.
+      WHEN 'R1'.                       " automatic-selection fields
+        IF p_list = abap_true.
+          screen-active = '0'.
+        ELSEIF screen-name = 'S_AUART-LOW'
+            OR screen-name = 'S_ERDAT-LOW'
+            OR screen-name = 'P_TOPN'.
+          screen-required = '2'.       " required indicator
+        ENDIF.
+      WHEN 'R2'.                       " order-list field
+        IF p_auto = abap_true.
+          screen-active = '0'.
+        ELSEIF screen-name = 'S_VBELN-LOW'.
+          screen-required = '2'.
+        ENDIF.
+    ENDCASE.
+    MODIFY SCREEN.
+  ENDLOOP.
 
 *----------------------------------------------------------------------*
 * Local class
@@ -100,6 +156,7 @@ CLASS lcl_app DEFINITION FINAL.
         erdat TYPE vbak-erdat,
         kunnr TYPE vbak-kunnr,
         netwr TYPE vbak-netwr,
+        kalsm TYPE vbak-kalsm,
       END OF ty_vbak,
       ty_t_vbak TYPE STANDARD TABLE OF ty_vbak WITH DEFAULT KEY,
 
@@ -109,8 +166,19 @@ CLASS lcl_app DEFINITION FINAL.
         werks  TYPE vbap-werks,
         kwmeng TYPE vbap-kwmeng,
         vrkme  TYPE vbap-vrkme,
-        netwr  TYPE vbap-netwr,
         abgru  TYPE vbap-abgru,
+        " item fields compared ECC vs S/4 (customer requirement)
+        netwr  TYPE vbap-netwr,
+        netpr  TYPE vbap-netpr,
+        sktof  TYPE vbap-sktof,
+        wavwr  TYPE vbap-wavwr,
+        kzwi1  TYPE vbap-kzwi1,
+        kzwi2  TYPE vbap-kzwi2,
+        kzwi3  TYPE vbap-kzwi3,
+        kzwi4  TYPE vbap-kzwi4,
+        kzwi5  TYPE vbap-kzwi5,
+        kzwi6  TYPE vbap-kzwi6,
+        mwsbp  TYPE vbap-mwsbp,
       END OF ty_vbap,
       ty_t_vbap TYPE STANDARD TABLE OF ty_vbap WITH DEFAULT KEY,
 
@@ -133,19 +201,16 @@ CLASS lcl_app DEFINITION FINAL.
       END OF ty_cond,
       ty_t_cond TYPE STANDARD TABLE OF ty_cond WITH DEFAULT KEY,
 
-      BEGIN OF ty_net,
-        posnr TYPE posnr_va,
-        netwr TYPE ty_amount,          " external format
-      END OF ty_net,
-      ty_t_net TYPE STANDARD TABLE OF ty_net WITH DEFAULT KEY,
-
       BEGIN OF ty_result,
         vbeln_x    TYPE vbeln_va,
         vbeln_y    TYPE vbeln_va,
         kunnr      TYPE kunnr,
         posnr      TYPE posnr_va,
         matnr      TYPE vbap-matnr,
-        kschl      TYPE kscha,
+        srtfld     TYPE i,             " 1 header / 2 item values / 3 cond.
+        sectn      TYPE c LENGTH 20,   " section shown to the user
+        kschl      TYPE c LENGTH 12,   " condition type or compared field
+        vtext      TYPE c LENGTH 40,   " plain-language description
         status     TYPE c LENGTH 10,
         rate_old   TYPE ty_amount,
         rate_new   TYPE ty_amount,
@@ -158,6 +223,7 @@ CLASS lcl_app DEFINITION FINAL.
         kwert_old  TYPE ty_amount,
         kwert_new  TYPE ty_amount,
         kwert_diff TYPE ty_amount,
+        prsdt      TYPE prsdt,         " pricing date used for order Y
         remark     TYPE c LENGTH 200,
         color      TYPE lvc_t_scol,
       END OF ty_result,
@@ -171,7 +237,30 @@ CLASS lcl_app DEFINITION FINAL.
         missing    TYPE i,
         new_in_s4  TYPE i,
         manual     TYPE i,
-      END OF ty_stat.
+        crit       TYPE i,   " red rows = real differences to investigate
+        warn       TYPE i,   " yellow rows = informational only
+      END OF ty_stat,
+
+      " one row per order X for the overview ALV (screen 1)
+      BEGIN OF ty_summary,
+        kunnr      TYPE kunnr,
+        vbeln_x    TYPE vbeln_va,
+        vbeln_y    TYPE vbeln_va,
+        kalsm_x    TYPE vbak-kalsm,
+        kalsm_y    TYPE vbak-kalsm,
+        items      TYPE i,
+        netwr_x    TYPE ty_amount,
+        netwr_y    TYPE ty_amount,
+        netwr_diff TYPE ty_amount,
+        waers      TYPE waers,
+        checks     TYPE i,
+        ok         TYPE i,
+        crit       TYPE i,
+        warn       TYPE i,
+        status     TYPE c LENGTH 10,   " ALL OK / CHECK / ERROR
+        remark     TYPE c LENGTH 200,
+        color      TYPE lvc_t_scol,
+      END OF ty_summary.
 
     CONSTANTS:
       c_ok      TYPE c LENGTH 10 VALUE 'OK',
@@ -180,14 +269,26 @@ CLASS lcl_app DEFINITION FINAL.
       c_new     TYPE c LENGTH 10 VALUE 'NEW_IN_S4',
       c_manual  TYPE c LENGTH 10 VALUE 'MANUAL',
       c_error   TYPE c LENGTH 10 VALUE 'ERROR',
-      c_netrow  TYPE kscha       VALUE '*NET',
+      c_allok   TYPE c LENGTH 10 VALUE 'ALL OK',    " order verdict
+      c_check   TYPE c LENGTH 10 VALUE 'CHECK',     " order verdict
+      c_info    TYPE c LENGTH 10 VALUE 'INFO',      " expected difference
       c_percent TYPE c LENGTH 1  VALUE 'A'.
 
-    DATA: mt_result TYPE STANDARD TABLE OF ty_result,
-          ms_stat   TYPE ty_stat,
-          mv_info   TYPE string,
-          mt_tcurx  TYPE HASHED TABLE OF tcurx
-                         WITH UNIQUE KEY currkey.
+    TYPES:
+      BEGIN OF ty_ktext,
+        kschl TYPE kscha,
+        vtext TYPE string,
+      END OF ty_ktext.
+
+    DATA: mt_result  TYPE STANDARD TABLE OF ty_result,
+          mt_detail  TYPE STANDARD TABLE OF ty_result,
+          mt_summary TYPE STANDARD TABLE OF ty_summary,
+          ms_stat    TYPE ty_stat,
+          mv_info    TYPE string,
+          mt_tcurx   TYPE HASHED TABLE OF tcurx
+                          WITH UNIQUE KEY currkey,
+          mt_ktext   TYPE HASHED TABLE OF ty_ktext
+                          WITH UNIQUE KEY kschl.
 
     METHODS process_order
       IMPORTING is_vbak TYPE ty_vbak.
@@ -203,7 +304,10 @@ CLASS lcl_app DEFINITION FINAL.
                 iv_prsdt TYPE prsdt
       EXPORTING ev_vbeln_y TYPE vbeln_va
                 et_cond    TYPE ty_t_cond
-                et_net     TYPE ty_t_net
+                et_vbap_y  TYPE ty_t_vbap
+                ev_netwr_y TYPE vbak-netwr
+                ev_waerk_y TYPE vbak-waerk
+                ev_kalsm_y TYPE vbak-kalsm
                 ev_error   TYPE string.
 
     METHODS compare_conditions
@@ -212,7 +316,19 @@ CLASS lcl_app DEFINITION FINAL.
                 it_vbap    TYPE ty_t_vbap
                 it_x       TYPE ty_t_cond
                 it_y       TYPE ty_t_cond
-                it_net_y   TYPE ty_t_net.
+                it_vbap_y  TYPE ty_t_vbap
+                iv_netwr_y TYPE vbak-netwr
+                iv_waerk_y TYPE vbak-waerk
+                iv_prsdt   TYPE prsdt.
+
+    METHODS compare_fields
+      IMPORTING is_vbak    TYPE ty_vbak
+                iv_vbeln_y TYPE vbeln_va
+                it_vbap    TYPE ty_t_vbap
+                it_vbap_y  TYPE ty_t_vbap
+                iv_netwr_y TYPE vbak-netwr
+                iv_waerk_y TYPE vbak-waerk
+                iv_prsdt   TYPE prsdt.
 
     METHODS set_occurrence
       CHANGING ct_cond TYPE ty_t_cond.
@@ -232,6 +348,28 @@ CLASS lcl_app DEFINITION FINAL.
 
     METHODS display.
 
+    METHODS display_detail
+      IMPORTING iv_vbeln_x TYPE vbeln_va.
+
+    METHODS on_double_click
+      FOR EVENT double_click OF cl_salv_events_table
+      IMPORTING row column.
+
+    METHODS on_link_click
+      FOR EVENT link_click OF cl_salv_events_table
+      IMPORTING row column.
+
+    METHODS on_detail_click
+      FOR EVENT double_click OF cl_salv_events_table
+      IMPORTING row column.
+
+    METHODS jump_to_vk13
+      IMPORTING iv_row TYPE i.
+
+    METHODS get_kschl_text
+      IMPORTING iv_kschl       TYPE kscha
+      RETURNING VALUE(rv_text) TYPE string.
+
 ENDCLASS.
 
 
@@ -242,17 +380,39 @@ CLASS lcl_app IMPLEMENTATION.
     DATA: lt_vbak TYPE ty_t_vbak,
           lv_cust TYPE i.
 
-    IF p_topn < 1.
-      MESSAGE 'Number of orders to check must be at least 1'(m03) TYPE 'E'.
+    " ------- mode-dependent input validation --------------------------
+    IF p_auto = abap_true.
+      IF s_auart[] IS INITIAL OR s_erdat[] IS INITIAL.
+        MESSAGE 'Document type and date range are mandatory for automatic selection'(m04)
+          TYPE 'E'.
+      ENDIF.
+      IF p_topn < 1.
+        MESSAGE 'Number of orders to check must be at least 1'(m03) TYPE 'E'.
+      ENDIF.
+    ELSE.
+      IF s_vbeln[] IS INITIAL.
+        MESSAGE 'Enter at least one sales order number'(m05) TYPE 'E'.
+      ENDIF.
     ENDIF.
 
-    " pick the top-N highest-value orders in the selected period:
+    " ------- R2: user-specified order numbers -------------------------
+    IF p_list = abap_true.
+      SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
+             erdat, kunnr, netwr, kalsm
+        FROM vbak
+        WHERE vbeln IN @s_vbeln
+        ORDER BY vbeln
+        INTO CORRESPONDING FIELDS OF TABLE @lt_vbak.
+
+      mv_info = |Order list: { lines( lt_vbak ) } order(s) selected|.
+
+    " ------- R1: pick the top-N highest-value orders ------------------
     "  - without customer restriction: N orders overall
     "  - with customer range: N orders PER customer
     " all further details of X are read from VBAK/VBAP/VBPA/VBKD
-    IF s_kunnr[] IS INITIAL.
+    ELSEIF s_kunnr[] IS INITIAL.
       SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
-             erdat, kunnr, netwr
+             erdat, kunnr, netwr, kalsm
         FROM vbak
         WHERE auart IN @s_auart
           AND erdat IN @s_erdat
@@ -260,18 +420,19 @@ CLASS lcl_app IMPLEMENTATION.
         INTO CORRESPONDING FIELDS OF TABLE @lt_vbak
         UP TO @p_topn ROWS.
     ELSE.
+      DATA lt_kunnr TYPE STANDARD TABLE OF vbak-kunnr.
       SELECT DISTINCT kunnr
         FROM vbak
         WHERE auart IN @s_auart
           AND erdat IN @s_erdat
           AND kunnr IN @s_kunnr
         ORDER BY kunnr
-        INTO TABLE @DATA(lt_kunnr).
+        INTO TABLE @lt_kunnr.
       lv_cust = lines( lt_kunnr ).
 
       LOOP AT lt_kunnr INTO DATA(lv_kunnr).
         SELECT vbeln, auart, vkorg, vtweg, spart, knumv, waerk,
-               erdat, kunnr, netwr
+               erdat, kunnr, netwr, kalsm
           FROM vbak
           WHERE auart IN @s_auart
             AND erdat IN @s_erdat
@@ -288,12 +449,14 @@ CLASS lcl_app IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF s_kunnr[] IS INITIAL.
-      mv_info = |Top { p_topn } order(s) by net value: | &
-                |{ lines( lt_vbak ) } order(s) selected|.
-    ELSE.
-      mv_info = |Top { p_topn } order(s) per customer for { lv_cust } | &
-                |customer(s): { lines( lt_vbak ) } order(s) selected|.
+    IF p_auto = abap_true.
+      IF s_kunnr[] IS INITIAL.
+        mv_info = |Top { p_topn } order(s) by net value: | &
+                  |{ lines( lt_vbak ) } order(s) selected|.
+      ELSE.
+        mv_info = |Top { p_topn } order(s) per customer for { lv_cust } | &
+                  |customer(s): { lines( lt_vbak ) } order(s) selected|.
+      ENDIF.
     ENDIF.
 
     LOOP AT lt_vbak INTO DATA(ls_vbak).
@@ -309,17 +472,23 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD process_order.
 
     DATA: lt_cond_y  TYPE ty_t_cond,
-          lt_net_y   TYPE ty_t_net,
+          lt_vbap_y  TYPE ty_t_vbap,
+          lv_netwr_y TYPE vbak-netwr,
+          lv_waerk_y TYPE vbak-waerk,
+          lv_kalsm_y TYPE vbak-kalsm,
           lv_vbeln_y TYPE vbeln_va,
           lv_error   TYPE string.
 
     " fresh work area per order (method runs once per selected order)
-    CLEAR: lt_cond_y[], lt_net_y[], lv_vbeln_y, lv_error.
+    CLEAR: lt_cond_y[], lt_vbap_y[], lv_netwr_y, lv_waerk_y,
+           lv_kalsm_y, lv_vbeln_y, lv_error.
 
     " ------- items of X (skip fully rejected items) -------------------
     DATA lt_vbap TYPE ty_t_vbap.
     CLEAR lt_vbap[].
-    SELECT posnr, matnr, werks, kwmeng, vrkme, netwr, abgru
+    SELECT posnr, matnr, werks, kwmeng, vrkme, abgru,
+           netwr, netpr, sktof, wavwr,
+           kzwi1, kzwi2, kzwi3, kzwi4, kzwi5, kzwi6, mwsbp
       FROM vbap
       WHERE vbeln = @is_vbak-vbeln
       ORDER BY posnr
@@ -351,23 +520,48 @@ CLASS lcl_app IMPLEMENTATION.
     DATA(lt_cond_x) = get_prcd_conditions( iv_knumv = is_vbak-knumv
                                            iv_waerk = is_vbak-waerk ).
 
+    " counters before this order - used for the per-order verdict
+    DATA(ls_stat0) = ms_stat.
+
     " ------- re-derive pricing on copy order Y ------------------------
     create_order_y( EXPORTING is_vbak    = is_vbak
                               it_vbap    = lt_vbap
                               iv_prsdt   = lv_prsdt
                     IMPORTING ev_vbeln_y = lv_vbeln_y
                               et_cond    = lt_cond_y
-                              et_net     = lt_net_y
+                              et_vbap_y  = lt_vbap_y
+                              ev_netwr_y = lv_netwr_y
+                              ev_waerk_y = lv_waerk_y
+                              ev_kalsm_y = lv_kalsm_y
                               ev_error   = lv_error ).
+
+    DATA(ls_sum) = VALUE ty_summary(
+        kunnr   = is_vbak-kunnr
+        vbeln_x = is_vbak-vbeln
+        vbeln_y = lv_vbeln_y
+        kalsm_x = is_vbak-kalsm
+        kalsm_y = lv_kalsm_y
+        items   = lines( lt_vbap )
+        waers   = is_vbak-waerk
+        netwr_x = to_external( iv_amount = CONV #( is_vbak-netwr )
+                               iv_waers  = is_vbak-waerk ) ).
 
     IF lv_error IS NOT INITIAL.
       ms_stat-errors = ms_stat-errors + 1.
       add_result( VALUE #( vbeln_x = is_vbak-vbeln
                            vbeln_y = lv_vbeln_y
                            kunnr   = is_vbak-kunnr
+                           sectn   = 'Error'(s04)
                            kschl   = space
+                           prsdt   = lv_prsdt
                            status  = c_error
                            remark  = lv_error ) ).
+      ls_sum-status = c_error.
+      ls_sum-remark = lv_error.
+      ls_sum-color  = VALUE #( ( fname = 'STATUS'
+                                 color-col = col_negative
+                                 color-int = 1 ) ).
+      APPEND ls_sum TO mt_summary.
       RETURN.
     ENDIF.
 
@@ -377,7 +571,41 @@ CLASS lcl_app IMPLEMENTATION.
                         it_vbap    = lt_vbap
                         it_x       = lt_cond_x
                         it_y       = lt_cond_y
-                        it_net_y   = lt_net_y ).
+                        it_vbap_y  = lt_vbap_y
+                        iv_netwr_y = lv_netwr_y
+                        iv_waerk_y = lv_waerk_y
+                        iv_prsdt   = lv_prsdt ).
+
+    " ------- per-order verdict for the overview ALV -------------------
+    ls_sum-netwr_y    = to_external( iv_amount = CONV #( lv_netwr_y )
+                                     iv_waers  = lv_waerk_y ).
+    ls_sum-netwr_diff = ls_sum-netwr_y - ls_sum-netwr_x.
+    ls_sum-ok     = ms_stat-ok   - ls_stat0-ok.
+    ls_sum-crit   = ms_stat-crit - ls_stat0-crit.
+    ls_sum-warn   = ms_stat-warn - ls_stat0-warn.
+    ls_sum-checks = ls_sum-ok + ls_sum-crit + ls_sum-warn.
+
+    IF ls_sum-crit > 0.
+      ls_sum-status = c_check.
+      ls_sum-remark = |{ ls_sum-crit } difference(s) - | &
+                      |double-click for pricing detail|.
+      ls_sum-color  = VALUE #( ( fname = 'STATUS'
+                                 color-col = col_negative
+                                 color-int = 1 ) ).
+    ELSE.
+      ls_sum-status = c_allok.
+      ls_sum-remark = COND #(
+        WHEN ls_sum-warn > 0
+        THEN |Pricing matches ({ ls_sum-warn } informational warning(s))|
+        ELSE |Pricing matches - S/4 reproduces the ECC result| ).
+      ls_sum-color  = VALUE #( ( fname = 'STATUS'
+                                 color-col = col_positive ) ).
+    ENDIF.
+    IF ls_sum-kalsm_x <> ls_sum-kalsm_y.
+      ls_sum-remark = |PRICING PROCEDURE DIFFERS ({ ls_sum-kalsm_x } vs | &
+                      |{ ls_sum-kalsm_y })! { ls_sum-remark }|.
+    ENDIF.
+    APPEND ls_sum TO mt_summary.
 
   ENDMETHOD.
 
@@ -395,6 +623,14 @@ CLASS lcl_app IMPLEMENTATION.
       INTO TABLE @DATA(lt_prcd).
 
     LOOP AT lt_prcd INTO DATA(ls_prcd).
+      " keep only comparable lines: inactive and statistical lines are
+      " excluded HERE, before occurrence numbering, so that both sides
+      " number their occurrences on the same basis
+      IF ls_prcd-kinak IS NOT INITIAL
+         OR ls_prcd-kstat = 'X'
+         OR ls_prcd-kschl IS INITIAL.
+        CONTINUE.
+      ENDIF.
       DATA(lv_waers) = COND waers( WHEN ls_prcd-waers IS NOT INITIAL
                                    THEN ls_prcd-waers
                                    ELSE iv_waerk ).
@@ -433,8 +669,8 @@ CLASS lcl_app IMPLEMENTATION.
     " the method runs once per order X - clear every BAPI input/output
     " and every exporting parameter explicitly so nothing carries over
     " from the previous order in the loop
-    CLEAR: ev_vbeln_y, et_cond, et_net, ev_error,
-           ls_hdr, ls_ls.
+    CLEAR: ev_vbeln_y, et_cond, et_vbap_y, ev_netwr_y, ev_waerk_y,
+           ev_kalsm_y, ev_error, ls_hdr, ls_ls.
     CLEAR: lt_itm[], lt_prt[], lt_sch[], lt_ret[].
 
     " ------- header: copy org data of X, force new pricing ------------
@@ -503,27 +739,28 @@ CLASS lcl_app IMPLEMENTATION.
         wait = 'X'.
 
     " ------- read the freshly priced result of Y ----------------------
-    SELECT SINGLE knumv, waerk FROM vbak
+    SELECT SINGLE knumv, waerk, netwr, kalsm FROM vbak
       WHERE vbeln = @ev_vbeln_y
       INTO @DATA(ls_vbak_y).
     IF sy-subrc <> 0.
       ev_error = |Order Y { ev_vbeln_y } not found after commit|.
       RETURN.
     ENDIF.
+    ev_netwr_y = ls_vbak_y-netwr.
+    ev_waerk_y = ls_vbak_y-waerk.
+    ev_kalsm_y = ls_vbak_y-kalsm.
 
     et_cond = get_prcd_conditions( iv_knumv = ls_vbak_y-knumv
                                    iv_waerk = ls_vbak_y-waerk ).
 
-    SELECT posnr, netwr FROM vbap
+    " item value fields of Y for the ECC-vs-S/4 field comparison
+    SELECT posnr, matnr, werks, kwmeng, vrkme, abgru,
+           netwr, netpr, sktof, wavwr,
+           kzwi1, kzwi2, kzwi3, kzwi4, kzwi5, kzwi6, mwsbp
+      FROM vbap
       WHERE vbeln = @ev_vbeln_y
       ORDER BY posnr
-      INTO TABLE @DATA(lt_vbap_y).
-    LOOP AT lt_vbap_y INTO DATA(ls_vbap_y).
-      APPEND VALUE ty_net(
-          posnr = ls_vbap_y-posnr
-          netwr = to_external( iv_amount = CONV #( ls_vbap_y-netwr )
-                               iv_waers  = ls_vbak_y-waerk ) ) TO et_net.
-    ENDLOOP.
+      INTO CORRESPONDING FIELDS OF TABLE @et_vbap_y.
 
   ENDMETHOD.
 
@@ -532,6 +769,12 @@ CLASS lcl_app IMPLEMENTATION.
 
     DATA lt_y TYPE ty_t_cond.
     lt_y = it_y.
+
+    " pass 1: normal condition lines claim their Y partners first;
+    " pass 2: manual lines consume only the leftovers - a manual line
+    " must never steal the Y line of a regular line of the same type
+    DO 2 TIMES.
+      DATA(lv_pass) = sy-index.
 
     LOOP AT it_x INTO DATA(ls_x).
 
@@ -542,13 +785,23 @@ CLASS lcl_app IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
+      DATA(lv_manual) = boolc( ls_x-kherk = 'C' OR ls_x-kmprs = 'X' ).
+      IF ( lv_pass = 1 AND lv_manual = abap_true )
+      OR ( lv_pass = 2 AND lv_manual = abap_false ).
+        CONTINUE.
+      ENDIF.
+
       DATA(ls_res) = VALUE ty_result(
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
           kunnr     = is_vbak-kunnr
+          prsdt     = iv_prsdt
           posnr     = ls_x-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_x-posnr ]-matnr
                                OPTIONAL )
+          srtfld    = 3
+          sectn     = 'Pricing condition'(s03)
+          vtext     = get_kschl_text( ls_x-kschl )
           kschl     = ls_x-kschl
           rate_old  = ls_x-rate
           waers     = ls_x-waers
@@ -556,20 +809,67 @@ CLASS lcl_app IMPLEMENTATION.
           kmein_old = ls_x-kmein
           kwert_old = ls_x-kwert ).
 
-      " manually entered conditions cannot be re-derived by repricing
-      IF ls_x-kherk = 'C' OR ls_x-kmprs = 'X'.
+      " ------- find the matching Y condition line ---------------------
+      " 1st: unused line of the same item + type with IDENTICAL values
+      "      (the step sequence may differ between the ECC and S/4
+      "      pricing procedures - equal values must never mismatch or
+      "      be reported as missing)
+      " 2nd: same item + type + occurrence (positional match - pairs
+      "      the remaining lines so the delta is shown)
+      " 3rd: any unused line of the type
+      " only when the type does not exist on Y at all -> MISSING_S4
+      DATA(lv_found) = abap_false.
+      FIELD-SYMBOLS <ls_y> TYPE ty_cond.
+      LOOP AT lt_y ASSIGNING <ls_y>
+           WHERE posnr = ls_x-posnr
+             AND kschl = ls_x-kschl
+             AND used  = abap_false
+             AND rate  = ls_x-rate
+             AND kwert = ls_x-kwert.
+        lv_found = abap_true.
+        EXIT.
+      ENDLOOP.
+      IF lv_found = abap_false.
+        READ TABLE lt_y ASSIGNING <ls_y>
+             WITH KEY posnr = ls_x-posnr
+                      kschl = ls_x-kschl
+                      occ   = ls_x-occ
+                      used  = abap_false.
+        IF sy-subrc = 0.
+          lv_found = abap_true.
+        ENDIF.
+      ENDIF.
+      IF lv_found = abap_false.
+        LOOP AT lt_y ASSIGNING <ls_y>
+             WHERE posnr = ls_x-posnr
+               AND kschl = ls_x-kschl
+               AND used  = abap_false.
+          lv_found = abap_true.
+          EXIT.
+        ENDLOOP.
+      ENDIF.
+
+      " manually entered conditions cannot be re-derived by repricing;
+      " still consume the Y line of the same type (if any) so it is
+      " not reported again as NEW_IN_S4, and show both values
+      IF lv_manual = abap_true.
         ms_stat-manual = ms_stat-manual + 1.
         ls_res-status = c_manual.
         ls_res-remark = 'Manual condition on X - not re-priced on Y'(r01).
+        IF lv_found = abap_true.
+          <ls_y>-used = abap_true.
+          ls_res-rate_new   = <ls_y>-rate.
+          ls_res-rate_diff  = <ls_y>-rate - ls_x-rate.
+          ls_res-kpein_new  = <ls_y>-kpein.
+          ls_res-kmein_new  = <ls_y>-kmein.
+          ls_res-kwert_new  = <ls_y>-kwert.
+          ls_res-kwert_diff = <ls_y>-kwert - ls_x-kwert.
+        ENDIF.
         add_result( ls_res ).
         CONTINUE.
       ENDIF.
 
-      READ TABLE lt_y ASSIGNING FIELD-SYMBOL(<ls_y>)
-           WITH KEY posnr = ls_x-posnr
-                    kschl = ls_x-kschl
-                    occ   = ls_x-occ.
-      IF sy-subrc <> 0.
+      IF lv_found = abap_false.
         ms_stat-missing = ms_stat-missing + 1.
         ls_res-status = c_miss.
         IF ls_x-rate = 0 AND ls_x-kwert = 0.
@@ -618,6 +918,8 @@ CLASS lcl_app IMPLEMENTATION.
 
     ENDLOOP.
 
+    ENDDO.
+
     " conditions that only exist on the re-priced order Y
     LOOP AT lt_y INTO DATA(ls_y) WHERE used = abap_false.
       IF ls_y-kinak IS NOT INITIAL
@@ -630,9 +932,13 @@ CLASS lcl_app IMPLEMENTATION.
           vbeln_x   = is_vbak-vbeln
           vbeln_y   = iv_vbeln_y
           kunnr     = is_vbak-kunnr
+          prsdt     = iv_prsdt
           posnr     = ls_y-posnr
           matnr     = VALUE #( it_vbap[ posnr = ls_y-posnr ]-matnr
                                OPTIONAL )
+          srtfld    = 3
+          sectn     = 'Pricing condition'(s03)
+          vtext     = get_kschl_text( ls_y-kschl )
           kschl     = ls_y-kschl
           status    = c_new
           rate_new  = ls_y-rate
@@ -643,36 +949,163 @@ CLASS lcl_app IMPLEMENTATION.
           remark    = 'Determined in S/4 only - not present on ECC order'(r05) ) ).
     ENDLOOP.
 
-    " item net value comparison
+    " header + item value fields (ECC vs S/4 field comparison)
+    compare_fields( is_vbak    = is_vbak
+                    iv_vbeln_y = iv_vbeln_y
+                    it_vbap    = it_vbap
+                    it_vbap_y  = it_vbap_y
+                    iv_netwr_y = iv_netwr_y
+                    iv_waerk_y = iv_waerk_y
+                    iv_prsdt   = iv_prsdt ).
+
+  ENDMETHOD.
+
+
+  METHOD compare_fields.
+
+    " compare stored value fields of the migrated ECC order X against
+    " the freshly priced copy Y (customer requirement):
+    "   VBAP: NETWR NETPR SKTOF WAVWR KZWI1..KZWI6 MWSBP
+    "   VBAK: NETWR
+    " amount fields (type P) are converted with the TCURX decimal
+    " shift; other fields (e.g. SKTOF flag) are compared as raw values
+    CONSTANTS lc_fields TYPE string
+      VALUE 'NETWR NETPR SKTOF WAVWR KZWI1 KZWI2 KZWI3 KZWI4 KZWI5 KZWI6 MWSBP'.
+
+    DATA: lv_type TYPE c LENGTH 1,
+          ls_res  TYPE ty_result.
+    FIELD-SYMBOLS: <lv_x> TYPE any,
+                   <lv_y> TYPE any.
+
+    SPLIT lc_fields AT space INTO TABLE DATA(lt_fields).
+
     LOOP AT it_vbap INTO DATA(ls_vbap).
-      READ TABLE it_net_y INTO DATA(ls_net_y)
+
+      READ TABLE it_vbap_y INTO DATA(ls_vbap_y)
            WITH KEY posnr = ls_vbap-posnr.
       IF sy-subrc <> 0.
+        ms_stat-mismatch = ms_stat-mismatch + 1.
+        add_result( VALUE #( vbeln_x = is_vbak-vbeln
+                             vbeln_y = iv_vbeln_y
+                             kunnr   = is_vbak-kunnr
+                             prsdt   = iv_prsdt
+                             posnr   = ls_vbap-posnr
+                             matnr   = ls_vbap-matnr
+                             srtfld  = 2
+                             sectn   = 'Item values'(s02)
+                             kschl   = 'ITEM'
+                             vtext   = 'Item existence check'
+                             status  = c_diff
+                             remark  = 'Item missing on copy order Y'(r08) ) ).
         CONTINUE.
       ENDIF.
-      DATA(lv_net_old) = to_external( iv_amount = CONV #( ls_vbap-netwr )
-                                      iv_waers  = is_vbak-waerk ).
-      DATA(ls_netres) = VALUE ty_result(
-          vbeln_x   = is_vbak-vbeln
-          vbeln_y   = iv_vbeln_y
-          kunnr     = is_vbak-kunnr
-          posnr     = ls_vbap-posnr
-          matnr     = ls_vbap-matnr
-          kschl     = c_netrow
-          waers     = is_vbak-waerk
-          rate_old  = lv_net_old
-          rate_new  = ls_net_y-netwr
-          rate_diff = ls_net_y-netwr - lv_net_old
-          remark    = 'Item net value (NETWR)'(r06) ).
-      IF ls_netres-rate_diff <> 0.
-        ms_stat-mismatch = ms_stat-mismatch + 1.
-        ls_netres-status = c_diff.
-      ELSE.
-        ms_stat-ok = ms_stat-ok + 1.
-        ls_netres-status = c_ok.
-      ENDIF.
-      add_result( ls_netres ).
+
+      LOOP AT lt_fields INTO DATA(lv_field).
+        ASSIGN COMPONENT lv_field OF STRUCTURE ls_vbap   TO <lv_x>.
+        CHECK sy-subrc = 0.
+        ASSIGN COMPONENT lv_field OF STRUCTURE ls_vbap_y TO <lv_y>.
+        CHECK sy-subrc = 0.
+
+        CLEAR ls_res.
+        ls_res-vbeln_x = is_vbak-vbeln.
+        ls_res-vbeln_y = iv_vbeln_y.
+        ls_res-kunnr   = is_vbak-kunnr.
+        ls_res-prsdt   = iv_prsdt.
+        ls_res-posnr   = ls_vbap-posnr.
+        ls_res-matnr   = ls_vbap-matnr.
+        ls_res-srtfld  = 2.
+        ls_res-sectn   = 'Item values'(s02).
+        ls_res-kschl   = lv_field.
+        ls_res-vtext   = SWITCH #( lv_field
+          WHEN 'NETWR' THEN 'Item net value'
+          WHEN 'NETPR' THEN 'Net price'
+          WHEN 'SKTOF' THEN 'Cash discount indicator'
+          WHEN 'WAVWR' THEN 'Cost (moving average price)'
+          WHEN 'KZWI1' THEN 'Pricing subtotal 1'
+          WHEN 'KZWI2' THEN 'Pricing subtotal 2'
+          WHEN 'KZWI3' THEN 'Pricing subtotal 3'
+          WHEN 'KZWI4' THEN 'Pricing subtotal 4'
+          WHEN 'KZWI5' THEN 'Pricing subtotal 5'
+          WHEN 'KZWI6' THEN 'Pricing subtotal 6'
+          WHEN 'MWSBP' THEN 'Item tax amount'
+          ELSE lv_field ).
+        ls_res-remark  = |Item field VBAP-{ lv_field }|.
+
+        DESCRIBE FIELD <lv_x> TYPE lv_type.
+        IF lv_type = 'P'.        " amount field -> external format
+          " amounts go into the Amount columns; the Rate columns stay
+          " reserved for condition rates so the two are never mixed
+          ls_res-waers      = is_vbak-waerk.
+          ls_res-kwert_old  = to_external( iv_amount = CONV #( <lv_x> )
+                                           iv_waers  = is_vbak-waerk ).
+          ls_res-kwert_new  = to_external( iv_amount = CONV #( <lv_y> )
+                                           iv_waers  = iv_waerk_y ).
+          ls_res-kwert_diff = ls_res-kwert_new - ls_res-kwert_old.
+          IF ls_res-kwert_diff = 0.
+            ls_res-status = c_ok.
+          ELSEIF lv_field = 'WAVWR'.
+            " cost drift is expected: X froze the moving average price
+            " at its creation date, Y pulls the current one - this is
+            " time, not migration -> informational, never red
+            ls_res-status = c_info.
+            ls_res-remark =
+              'Cost drift (current moving avg. price) - expected, no config impact'(r10).
+          ELSE.
+            ls_res-status = c_diff.
+          ENDIF.
+        ELSE.                    " flag / character field -> raw compare
+          IF <lv_x> <> <lv_y>.
+            ls_res-status = c_diff.
+            ls_res-remark = |VBAP-{ lv_field }: X = '{ <lv_x> }', | &
+                            |Y = '{ <lv_y> }'|.
+          ELSE.
+            ls_res-status = c_ok.
+            ls_res-remark = |VBAP-{ lv_field }: '{ <lv_x> }' (identical)|.
+          ENDIF.
+        ENDIF.
+
+        IF ls_res-status = c_diff.
+          ms_stat-mismatch = ms_stat-mismatch + 1.
+        ELSEIF ls_res-status = c_info.
+          " counted as warning via add_result
+        ELSE.
+          ms_stat-ok = ms_stat-ok + 1.
+        ENDIF.
+        add_result( ls_res ).
+      ENDLOOP.
+
     ENDLOOP.
+
+    " ------- header net value VBAK-NETWR ------------------------------
+    CLEAR ls_res.
+    ls_res-vbeln_x  = is_vbak-vbeln.
+    ls_res-vbeln_y  = iv_vbeln_y.
+    ls_res-kunnr    = is_vbak-kunnr.
+    ls_res-prsdt    = iv_prsdt.
+    ls_res-posnr    = '000000'.
+    ls_res-srtfld   = 1.
+    ls_res-sectn    = 'Order total'(s01).
+    ls_res-kschl    = 'VBAK-NETWR'.
+    ls_res-vtext    = 'Order net value (header)'.
+    ls_res-waers    = is_vbak-waerk.
+    ls_res-remark   = 'Header net value VBAK-NETWR'(r09).
+    ls_res-kwert_old = to_external( iv_amount = CONV #( is_vbak-netwr )
+                                    iv_waers  = is_vbak-waerk ).
+    ls_res-kwert_new = to_external( iv_amount = CONV #( iv_netwr_y )
+                                    iv_waers  = iv_waerk_y ).
+    ls_res-kwert_diff = ls_res-kwert_new - ls_res-kwert_old.
+    IF ls_res-kwert_diff <> 0.
+      ms_stat-mismatch = ms_stat-mismatch + 1.
+      ls_res-status = c_diff.
+    ELSE.
+      ms_stat-ok = ms_stat-ok + 1.
+      ls_res-status = c_ok.
+    ENDIF.
+    IF is_vbak-waerk <> iv_waerk_y.
+      ls_res-remark = |Currency differs: X { is_vbak-waerk } vs | &
+                      |Y { iv_waerk_y }|.
+    ENDIF.
+    add_result( ls_res ).
 
   ENDMETHOD.
 
@@ -681,23 +1114,31 @@ CLASS lcl_app IMPLEMENTATION.
 
     " occurrence index: n-th appearance of a condition type within an
     " item, in pricing procedure order - used as matching key so that
-    " condition types appearing twice are compared pairwise
-    DATA: lv_posnr TYPE posnr_va,
-          lv_kschl TYPE kscha,
-          lv_occ   TYPE i.
+    " condition types appearing twice are compared pairwise.
+    " counted per item + condition type over the WHOLE item (not only
+    " consecutive rows), otherwise repeats separated by other types
+    " would all get occurrence 1
+    TYPES: BEGIN OF lty_cnt,
+             posnr TYPE posnr_va,
+             kschl TYPE kscha,
+             cnt   TYPE i,
+           END OF lty_cnt.
+    DATA lt_cnt TYPE HASHED TABLE OF lty_cnt
+                     WITH UNIQUE KEY posnr kschl.
+    FIELD-SYMBOLS <ls_cnt> TYPE lty_cnt.
 
     LOOP AT ct_cond ASSIGNING FIELD-SYMBOL(<ls_cond>).
-      IF <ls_cond>-posnr <> lv_posnr.
-        CLEAR: lv_kschl, lv_occ.
-        lv_posnr = <ls_cond>-posnr.
+      READ TABLE lt_cnt ASSIGNING <ls_cnt>
+           WITH TABLE KEY posnr = <ls_cond>-posnr
+                          kschl = <ls_cond>-kschl.
+      IF sy-subrc <> 0.
+        INSERT VALUE lty_cnt( posnr = <ls_cond>-posnr
+                              kschl = <ls_cond>-kschl
+                              cnt   = 0 )
+               INTO TABLE lt_cnt ASSIGNING <ls_cnt>.
       ENDIF.
-      IF <ls_cond>-kschl = lv_kschl.
-        lv_occ = lv_occ + 1.
-      ELSE.
-        lv_occ = 1.
-        lv_kschl = <ls_cond>-kschl.
-      ENDIF.
-      <ls_cond>-occ = lv_occ.
+      <ls_cnt>-cnt = <ls_cnt>-cnt + 1.
+      <ls_cond>-occ = <ls_cnt>-cnt.
     ENDLOOP.
 
   ENDMETHOD.
@@ -734,6 +1175,28 @@ CLASS lcl_app IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD get_kschl_text.
+
+    " buffered read of the condition type description (T685T)
+    READ TABLE mt_ktext INTO DATA(ls_ktext)
+         WITH TABLE KEY kschl = iv_kschl.
+    IF sy-subrc <> 0.
+      ls_ktext-kschl = iv_kschl.
+      SELECT SINGLE vtext FROM t685t
+        WHERE spras = @sy-langu
+          AND kvewe = 'A'
+          AND kappl = 'V'
+          AND kschl = @iv_kschl
+        INTO @DATA(lv_vtext).
+      ls_ktext-vtext = COND #( WHEN sy-subrc = 0 THEN lv_vtext
+                               ELSE 'Pricing condition' ).
+      INSERT ls_ktext INTO TABLE mt_ktext.
+    ENDIF.
+    rv_text = ls_ktext-vtext.
+
+  ENDMETHOD.
+
+
   METHOD collect_messages.
     LOOP AT it_return INTO DATA(ls_ret) WHERE type CA 'EAX'.
       IF rv_msg IS NOT INITIAL.
@@ -758,28 +1221,34 @@ CLASS lcl_app IMPLEMENTATION.
     " zero-value missing/new conditions are warnings (yellow) only
     CASE ls_result-status.
       WHEN c_diff OR c_error.
+        ms_stat-crit = ms_stat-crit + 1.
         ls_result-color = VALUE #( ( fname = 'STATUS'
                                      color-col = col_negative
                                      color-int = 1 ) ).
       WHEN c_miss.
         IF ls_result-rate_old = 0 AND ls_result-kwert_old = 0.
+          ms_stat-warn = ms_stat-warn + 1.
           ls_result-color = VALUE #( ( fname = 'STATUS'
                                        color-col = col_total ) ).
         ELSE.
+          ms_stat-crit = ms_stat-crit + 1.
           ls_result-color = VALUE #( ( fname = 'STATUS'
                                        color-col = col_negative
                                        color-int = 1 ) ).
         ENDIF.
       WHEN c_new.
         IF ls_result-rate_new = 0 AND ls_result-kwert_new = 0.
+          ms_stat-warn = ms_stat-warn + 1.
           ls_result-color = VALUE #( ( fname = 'STATUS'
                                        color-col = col_total ) ).
         ELSE.
+          ms_stat-crit = ms_stat-crit + 1.
           ls_result-color = VALUE #( ( fname = 'STATUS'
                                        color-col = col_negative
                                        color-int = 1 ) ).
         ENDIF.
-      WHEN c_manual.
+      WHEN c_manual OR c_info.
+        ms_stat-warn = ms_stat-warn + 1.
         ls_result-color = VALUE #( ( fname = 'STATUS'
                                      color-col = col_total ) ).
       WHEN c_ok.
@@ -794,13 +1263,16 @@ CLASS lcl_app IMPLEMENTATION.
 
   METHOD display.
 
+    " screen 1: one row per order with the overall verdict -
+    " double-click a row to open the pricing detail (screen 2)
     DATA lo_alv TYPE REF TO cl_salv_table.
 
-    SORT mt_result BY kunnr vbeln_x posnr kschl.
+    SORT mt_summary BY kunnr vbeln_x.
+    SORT mt_result  BY kunnr vbeln_x posnr kschl.
 
     TRY.
         cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
-                                CHANGING  t_table      = mt_result ).
+                                CHANGING  t_table      = mt_summary ).
 
         lo_alv->get_functions( )->set_all( ).
         lo_alv->get_columns( )->set_optimize( ).
@@ -813,8 +1285,166 @@ CLASS lcl_app IMPLEMENTATION.
 
         DATA(lo_cols) = lo_alv->get_columns( ).
         TRY.
-            " override all three DDIC texts, otherwise the ALV falls
-            " back to the data-element text ("Sales Document")
+            DATA(lo_col) = lo_cols->get_column( 'VBELN_X' ).
+            lo_col->set_short_text( 'SO Old' ).
+            lo_col->set_medium_text( 'Sales Order Old' ).
+            lo_col->set_long_text( 'Sales Order Old (ECC)' ).
+            " hotspot: order number is clickable -> opens the detail
+            CAST cl_salv_column_table( lo_col )->set_cell_type(
+              if_salv_c_cell_type=>hotspot ).
+            lo_col = lo_cols->get_column( 'VBELN_Y' ).
+            lo_col->set_short_text( 'SO New' ).
+            lo_col->set_medium_text( 'Sales Order New' ).
+            lo_col->set_long_text( 'Sales Order New (S/4)' ).
+            lo_cols->get_column( 'ITEMS' )->set_medium_text( 'Items' ).
+            lo_col = lo_cols->get_column( 'KALSM_X' ).
+            lo_col->set_short_text( 'Proc. X' ).
+            lo_col->set_medium_text( 'Pric.Proc. X (ECC)' ).
+            lo_col->set_long_text( 'Pricing Procedure X (ECC)' ).
+            lo_col = lo_cols->get_column( 'KALSM_Y' ).
+            lo_col->set_short_text( 'Proc. Y' ).
+            lo_col->set_medium_text( 'Pric.Proc. Y (S/4)' ).
+            lo_col->set_long_text( 'Pricing Procedure Y (S/4)' ).
+            lo_cols->get_column( 'NETWR_X' )->set_medium_text( 'Net Value X (ECC)' ).
+            lo_cols->get_column( 'NETWR_Y' )->set_medium_text( 'Net Value Y (S/4)' ).
+            lo_cols->get_column( 'NETWR_DIFF' )->set_medium_text( 'Net delta' ).
+            lo_cols->get_column( 'CHECKS' )->set_medium_text( 'Checks' ).
+            lo_cols->get_column( 'OK' )->set_medium_text( 'OK' ).
+            lo_cols->get_column( 'CRIT' )->set_medium_text( 'Differences' ).
+            lo_cols->get_column( 'WARN' )->set_medium_text( 'Warnings' ).
+            lo_cols->get_column( 'STATUS' )->set_medium_text( 'Result' ).
+            lo_cols->get_column( 'REMARK' )->set_medium_text( 'Remark' ).
+          CATCH cx_salv_not_found cx_salv_data_error.
+        ENDTRY.
+
+        " overall verdict header
+        DATA(lo_grid) = NEW cl_salv_form_layout_grid( ).
+        lo_grid->create_label( row = 1 column = 1
+          text = 'Pricing validation ECC -> S/4HANA (copy order, original pricing date)' ).
+        lo_grid->create_label( row = 2 column = 1
+          text = COND string(
+            WHEN ms_stat-crit = 0 AND ms_stat-errors = 0
+            THEN |RESULT: ALL OK - S/4HANA reproduces the ECC pricing|
+            ELSE |RESULT: { ms_stat-crit } difference(s), | &
+                 |{ ms_stat-errors } error(s) - check red rows| ) ).
+        lo_grid->create_flow( row = 3 column = 1 )->create_text(
+          text = mv_info ).
+        lo_grid->create_flow( row = 4 column = 1 )->create_text(
+          text = |Orders: { ms_stat-orders }  | &
+                 |Checks OK: { ms_stat-ok }  | &
+                 |Differences: { ms_stat-crit }  | &
+                 |Warnings: { ms_stat-warn }  | &
+                 |Errors: { ms_stat-errors }| ).
+        lo_grid->create_flow( row = 5 column = 1 )->create_text(
+          text = 'Click an order number (or double-click the row) to see the pricing comparison in detail' ).
+        lo_alv->set_top_of_list( lo_grid ).
+
+        " click on the order number or double-click -> pricing detail
+        DATA(lo_events) = lo_alv->get_event( ).
+        SET HANDLER on_double_click FOR lo_events.
+        SET HANDLER on_link_click   FOR lo_events.
+
+        lo_alv->display( ).
+
+      CATCH cx_salv_msg INTO DATA(lx_salv).
+        MESSAGE lx_salv->get_text( ) TYPE 'E'.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD on_double_click.
+
+    READ TABLE mt_summary INTO DATA(ls_sum) INDEX row.
+    IF sy-subrc = 0.
+      display_detail( ls_sum-vbeln_x ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD on_link_click.
+
+    READ TABLE mt_summary INTO DATA(ls_sum) INDEX row.
+    IF sy-subrc = 0.
+      display_detail( ls_sum-vbeln_x ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD on_detail_click.
+    jump_to_vk13( row ).
+  ENDMETHOD.
+
+
+  METHOD jump_to_vk13.
+
+    " third drill level: jump into the condition record maintenance
+    " (VK13) for the clicked condition type - the record valid on the
+    " order's pricing date (PRSDT column) is the one to check
+    READ TABLE mt_detail INTO DATA(ls_det) INDEX iv_row.
+    IF sy-subrc <> 0 OR ls_det-kschl IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " only real pricing condition types can be displayed in VK13 -
+    " field rows (NETPR, KZWI1, VBAK-NETWR, ...) have no record
+    DATA lv_kschl TYPE kscha.
+    lv_kschl = ls_det-kschl.
+    SELECT SINGLE kschl FROM t685
+      WHERE kvewe = 'A'
+        AND kappl = 'V'
+        AND kschl = @lv_kschl
+      INTO @lv_kschl.
+    IF sy-subrc <> 0.
+      MESSAGE |{ ls_det-kschl } is a value field - no condition record (VK13) behind it|
+        TYPE 'S'.
+      RETURN.
+    ENDIF.
+
+    SET PARAMETER ID 'VKS' FIELD lv_kschl.
+    TRY.
+        CALL TRANSACTION 'VK13' WITH AUTHORITY-CHECK.
+      CATCH cx_sy_authorization_error.
+        MESSAGE 'No authorization for transaction VK13'(m07)
+          TYPE 'S' DISPLAY LIKE 'E'.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD display_detail.
+
+    " screen 2: condition-by-condition + field-by-field comparison of
+    " one order, shown as a popup over the overview ALV
+    DATA lo_alv TYPE REF TO cl_salv_table.
+
+    CLEAR mt_detail.
+    LOOP AT mt_result INTO DATA(ls_result)
+         WHERE vbeln_x = iv_vbeln_x.
+      APPEND ls_result TO mt_detail.
+    ENDLOOP.
+    IF mt_detail IS INITIAL.
+      MESSAGE 'No detail rows for this order'(m06) TYPE 'S'.
+      RETURN.
+    ENDIF.
+
+    " reading order for the user: order total first, then the item
+    " value fields, then the pricing conditions of each item
+    SORT mt_detail BY srtfld posnr kschl.
+
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                                CHANGING  t_table      = mt_detail ).
+
+        lo_alv->get_functions( )->set_all( ).
+        lo_alv->get_columns( )->set_optimize( ).
+        lo_alv->get_columns( )->set_color_column( 'COLOR' ).
+        lo_alv->get_display_settings( )->set_striped_pattern( abap_true ).
+
+        DATA(lo_cols) = lo_alv->get_columns( ).
+        TRY.
             DATA(lo_col) = lo_cols->get_column( 'VBELN_X' ).
             lo_col->set_short_text( 'SO Old' ).
             lo_col->set_medium_text( 'Sales Order Old' ).
@@ -823,41 +1453,56 @@ CLASS lcl_app IMPLEMENTATION.
             lo_col->set_short_text( 'SO New' ).
             lo_col->set_medium_text( 'Sales Order New' ).
             lo_col->set_long_text( 'Sales Order New (S/4)' ).
+            lo_col = lo_cols->get_column( 'SECTN' ).
+            lo_col->set_short_text( 'Section' ).
+            lo_col->set_medium_text( 'Section' ).
+            lo_col->set_long_text( 'Section' ).
+            lo_col = lo_cols->get_column( 'KSCHL' ).
+            lo_col->set_short_text( 'Cnd/Field' ).
+            lo_col->set_medium_text( 'Condition/Field' ).
+            lo_col->set_long_text( 'Condition Type / Compared Field' ).
+            lo_col = lo_cols->get_column( 'VTEXT' ).
+            lo_col->set_short_text( 'Descriptn' ).
+            lo_col->set_medium_text( 'Description' ).
+            lo_col->set_long_text( 'Description' ).
             lo_cols->get_column( 'STATUS' )->set_medium_text( 'Status' ).
             lo_cols->get_column( 'RATE_OLD' )->set_medium_text( 'Rate X (ECC)' ).
             lo_cols->get_column( 'RATE_NEW' )->set_medium_text( 'Rate Y (S/4)' ).
             lo_cols->get_column( 'RATE_DIFF' )->set_medium_text( 'Rate delta' ).
-            lo_cols->get_column( 'KPEIN_OLD' )->set_medium_text( 'Per X' ).
-            lo_cols->get_column( 'KPEIN_NEW' )->set_medium_text( 'Per Y' ).
-            lo_cols->get_column( 'KMEIN_OLD' )->set_medium_text( 'UoM X' ).
-            lo_cols->get_column( 'KMEIN_NEW' )->set_medium_text( 'UoM Y' ).
-            lo_cols->get_column( 'KWERT_OLD' )->set_medium_text( 'Value X (ECC)' ).
-            lo_cols->get_column( 'KWERT_NEW' )->set_medium_text( 'Value Y (S/4)' ).
-            lo_cols->get_column( 'KWERT_DIFF' )->set_medium_text( 'Value delta' ).
+            lo_cols->get_column( 'KWERT_OLD' )->set_medium_text( 'Amount X (ECC)' ).
+            lo_cols->get_column( 'KWERT_NEW' )->set_medium_text( 'Amount Y (S/4)' ).
+            lo_cols->get_column( 'KWERT_DIFF' )->set_medium_text( 'Amount delta' ).
+            lo_cols->get_column( 'PRSDT' )->set_medium_text( 'Pricing date' ).
             lo_cols->get_column( 'REMARK' )->set_medium_text( 'Remark' ).
-          CATCH cx_salv_not_found.
+            " keep the first view simple: technical columns are
+            " available via layout but hidden by default
+            lo_cols->get_column( 'SRTFLD' )->set_technical( abap_true ).
+            lo_cols->get_column( 'KPEIN_OLD' )->set_visible( abap_false ).
+            lo_cols->get_column( 'KPEIN_NEW' )->set_visible( abap_false ).
+            lo_cols->get_column( 'KMEIN_OLD' )->set_visible( abap_false ).
+            lo_cols->get_column( 'KMEIN_NEW' )->set_visible( abap_false ).
+          CATCH cx_salv_not_found cx_salv_data_error.
         ENDTRY.
 
-        " summary header
+        " explain the popup to the user
         DATA(lo_grid) = NEW cl_salv_form_layout_grid( ).
         lo_grid->create_label( row = 1 column = 1
-          text = 'Pricing validation ECC -> S/4HANA (copy order, original pricing date)' ).
+          text = |Pricing detail: order { iv_vbeln_x } (ECC) vs copy (S/4)| ).
         lo_grid->create_flow( row = 2 column = 1 )->create_text(
-          text = mv_info ).
-        lo_grid->create_flow( row = 3 column = 1 )->create_text(
-          text = |Orders: { ms_stat-orders }  Errors: { ms_stat-errors }| ).
-        lo_grid->create_flow( row = 4 column = 1 )->create_text(
-          text = |Conditions compared: { ms_stat-compared }  | &
-                 |OK: { ms_stat-ok }  Mismatch: { ms_stat-mismatch }  | &
-                 |Missing in S/4: { ms_stat-missing }  | &
-                 |New in S/4: { ms_stat-new_in_s4 }  | &
-                 |Manual: { ms_stat-manual }| ).
+          text = 'Green = identical. Double-click a condition row to open the condition record (VK13).' ).
         lo_alv->set_top_of_list( lo_grid ).
 
+        " double-click a condition row -> VK13
+        SET HANDLER on_detail_click FOR lo_alv->get_event( ).
+
+        lo_alv->set_screen_popup( start_column = 5
+                                  end_column   = 170
+                                  start_line   = 2
+                                  end_line     = 27 ).
         lo_alv->display( ).
 
       CATCH cx_salv_msg INTO DATA(lx_salv).
-        MESSAGE lx_salv->get_text( ) TYPE 'E'.
+        MESSAGE lx_salv->get_text( ) TYPE 'S' DISPLAY LIKE 'E'.
     ENDTRY.
 
   ENDMETHOD.
