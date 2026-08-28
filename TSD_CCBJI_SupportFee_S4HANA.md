@@ -7,8 +7,8 @@
 | Transaction | `/CCBJI/RURGL_REPSUPP` (new, to be created in S/4) |
 | RICEF | GAP-1000002273 |
 | Company Code | 7827 (BJI); TVARVC also shows 7830 |
-| Based on | FS_SupportFee_S4HANA_v2.0.docx + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx |
-| Status | v1.0 — Design for review. No code written yet. |
+| Based on | FS_SupportFee_S4HANA_v2.0.docx + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx + ECC posting program /CCBJI/RUFIGLR_SUPPFI_POST |
+| Status | v1.2 — Design for review. No code written yet. v1.1: posting design aligned to actual ECC program. v1.2: FS v1.3 + client review points absorbed (existing /CCBJI/T_SUP_COS reused — new CE table cancelled; updated §8.5 priority diagram; KAM upload pending business decision); performance architecture (CDS + AMDP) added; BW HANA source findings incorporated (RJ/AB doc types, 3-mechanism dedup — see bw_sources/README). |
 | Author | Claude (Diligent Consulting) — reviewed by Vaibhav Maheshwari |
 
 ---
@@ -49,7 +49,7 @@ Verified system facts driving this design:
 | 4 | `/CCBJI/RUFIGLI_REP_FORM` | Include | Logic |
 | 5 | `/CCBJI/RURGL_REPSUPP` | TCode | Launch report |
 | 6 | `/CCBJI/T_KAM_L4_CC` | Table | KAM L4 → cost center mapping (§3.1) |
-| 7 | `/CCBJI/T_SUPFEE_CE` | Table | Cost element mapping for COPA posting (§3.2) |
+| 7 | `/CCBJI/T_SUP_COS` (EXISTING in S/4 — reused, no new table) | Table | Cost element mapping for COPA posting (§3.2) |
 | 8 | `/CCBJI/T_GL_TYPE` | Table | GL type classification (§3.3) |
 | 9 | `/CCBJI/T_RPPCAT_TY` | Table | RPP category type classification (§3.4) |
 | 10 | `/CCBJI/RUFIGLR_KAML4_UPLOAD` | Report | KAM L4 CSV upload (§9) |
@@ -63,6 +63,7 @@ Verified system facts driving this design:
 | 18 | `/CCBJI/RTR_TOT` | Data element | DEC 15 total (replaces Z_RTR_TOT) |
 | 19 | SM30 maintenance views/dialogs for tables 6–9 | TMG | User maintenance |
 | 20 | Number range object (reuse `Z_SUPP_FEE` copied to S/4, interval Z1 1000000001–1999999999) | SNRO | COPA doc grouping id |
+| 21 | BAdI implementation `ACC_DOCUMENT` (`/CCBJI/` impl.) | BAdI | Map EXTENSION1 row (XREF1_HD) to BKPF-XREF1_HD, as the ECC program did |
 
 TVARVC entries (STVARV, new in S/4): see §8.
 
@@ -82,19 +83,15 @@ Initial load: BIC_AZKAMORGL42.XLSX (115 rows). DECISION D-01: validity dates
 (DATAB/DATBI) are NOT added — the BW original has none; can be added later if
 business asks.
 
-### 3.2 `/CCBJI/T_SUPFEE_CE` — Cost element mapping (COPA posting)
-Mirrors `/BIC/AZJSUFEECE2`:
-
-| Field | Key | Type |
-|---|---|---|
-| MANDT | X | MANDT |
-| HKONT | X | CHAR 10 (posting GL) |
-| WW214 | X | CHAR 1 flag |
-| WW207 | X | CHAR 1 flag |
-| WW237 | X | CHAR 1 flag |
-| KSTAR | | CHAR 10 |
-
-Initial load: the 16 rows from BW (GLs 0893201522, 0893309312).
+### 3.2 Cost element mapping (COPA posting) — EXISTING table `/CCBJI/T_SUP_COS`
+Per client review (30.07.2026): the S/4 equivalent of `/BIC/AZJSUFEECE2` already
+exists as `/CCBJI/T_SUP_COS` ("Support Fee Cost Element", FS v1.3 §9.3) and is
+reused — the previously planned new table is CANCELLED. Verify at build start
+(O-09): SE11 structure and content vs the 16 BW rows (GLs 0893201522,
+0893309312 × WW214/WW207/WW237 flags → KSTAR). Additionally per review point 1:
+`/CCBJI/T_MAP_GL`-VALUE_FIELD content is repurposed — costing-based value-field
+names are replaced by GL/cost-element values for account-based COPA (config
+data activity, owner Functional).
 
 ### 3.3 `/CCBJI/T_GL_TYPE` — GL type classification (DECISION D-02)
 The FS decision tree needs each expense GL classed as 50% Support / CokeON / Other.
@@ -180,9 +177,42 @@ Double-count prevention (ZFLAG): after both flows load, FI lines whose
 (BLART, expense GL, BELNR) also appear in the COPA flow with equal amount are
 zeroed (DEB_CRE_LC_CHECK logic from the HANA views, now in ABAP).
 
+
+## 5a. Performance architecture (v1.2)
+
+Three layers, code-to-data:
+1. **CDS views** (Layer 1): parameterized `/CCBJI/` DDLs for the ACDOCA FI slice
+   and COPA-segment slice (field projection, GL scope via association to
+   T_MAP_GL/T_DOC_TYP).
+2. **AMDP** (Layer 2): class `/CCBJI/CL_SUPFEE_DATA` — near-1:1 port of the
+   proven BW procedure SUPPORT_FEE_STATGING_CALCULATION (6-branch UNION incl.
+   RJ/AB, flag-based exclusions, ROW_NUMBER dedup, document-level SUM), reading
+   the CDS views, returning a table parameter (~10-50k rows). One DB round trip;
+   118M-row periods never leave HANA.
+3. **ABAP** (Layer 3): incidence cascade (sorted tables/binary search), fee
+   calc, ALV, posting — small data only.
+
+P_PTASK parallel sessions apply to the ABAP-bound work: posting/simulation
+BAPI fan-out (biggest wall-clock win), optional master-data enrichment, and an
+extraction safety valve (AMDP split by BLART bucket) activated by config only.
+HANA parallelizes the extraction internally — no aRFC needed there.
+Targets: Simulation normal month < 2 min; worst month < 15 min; posting < 10
+min. Prove with ST05/SQLM/PlanViz on the reconciliation month.
+
 ## 6. Calculation (F_CLASSIFY_LINES + F_PROCESS_DATA)
 
 Per FS v2.0 §8, two flows selected via `/CCBJI/T_DOC_TYP`-SOURCE by expense GL.
+
+FS v1.3 §8.5 replaced the priority table with a decision-flow diagram carrying
+TWO numberings: business priority (GL=1, CC=2, RPPCat=3, Customer=4, Channel=5)
+and PROGRAM ORDER (RPPCat=1, CC=2, Customer=3, Channel=4, GL=5). The program
+order matches the legacy ABAP cascade exactly (RPP-Cat lookup -> GL+PRCTR ->
+BAC+Channel -> Channel -> GL-only), with the GL fixed-rate routing (50% Support
+GL / CokeON GL) as an up-front branch. Two interpretation points to confirm
+(O-10): (a) diagram shows "Adjacent Category + Specific GL (Rebate, Spot Only)
+-> Apply 50%" as one combined condition — AND or two rules? (b) "Other
+Category" now flows on through CC/Customer/Channel checks (v2.0 said skip) —
+confirm out-of-scope vs continue.
 
 Priority cascade (both flows), implemented over sorted tables with BINARY SEARCH:
 
@@ -238,7 +268,9 @@ Notes:
 | `/CCBJI/RTR_50PCT` | P | `50.00` | NEW (D-05: fixed rate configurable, not hardcoded) |
 | `/CCBJI/RTR_VENDPCT` | P | vending-channel % for CokeON GLs | NEW (value TBD by business; empty = rule inactive) |
 | `/CCBJI/RTR_DEFPC` | P | default profit center (optional) | NEW (D-04 step 4) |
-| `/CCEJ/RTR/HANA_CONN`, `/CCBJI/RTR_SFEE_AL11`, `RTR_BSCHL`, `RTR_COUNT`, `RTR_DEBITGL`, `RTR/POSTING_GL` | | | RETIRED (file/HANA-era; BSCHL replaced by DRCRK; others unmaintained in BW → confirmed unused) |
+| `/CCBJI/RTR_DEBITGL` | P | debit GL of the aggregated debit line | **RETAINED — value to be copied from ECC TVARVC** |
+| `/CCBJI/RTR_KOSTL` (ECC variant) | P/S | profit center for the debit line | **RETAINED — value to be copied from ECC TVARVC** (note: BW entry of same name = dummy cost center; ECC entry = debit-line PRCTR — two different meanings, ECC one is the posting-relevant one) |
+| `/CCEJ/RTR/HANA_CONN`, `/CCBJI/RTR_SFEE_AL11`, `RTR_BSCHL`, `RTR_COUNT`, `RTR/POSTING_GL`, `RTR_SFEE_TAXGL` | | | RETIRED (file/HANA-era; BSCHL replaced by DRCRK; TAXGL was dead code in ECC) |
 
 DECISION D-06 (cost center scope, Flow 2): **scope = `/CCBJI/T_SUP_FEE` itself** —
 a GL+PRCTR(/KOSTL-key) combination present in the incidence master is in scope;
@@ -257,30 +289,52 @@ Modeled on ZJRTR_RUCOPBR_HANA_ALLOC_UPLD (KAM_L4 branch) with the gaps fixed:
 
 ## 10. Posting Mode (RB_POST) & Simulation (RB_SIM)
 
-Replaces file generation entirely (`F_BAPI_PROCESS` → direct BAPI):
+Replaces the two-step file chain (BW `F_BAPI_PROCESS` file → ECC
+`/CCBJI/RUFIGLR_SUPPFI_POST`) with direct posting. The document construction
+below replicates the **actual ECC program** (analyzed from source, closing O-01):
 
-1. Result lines grouped by Credit GL (as legacy), split at **800 items** per
-   document (constant C_MAX800 retained).
-2. Per document: header BUS_ACT `RFBU`, DOC_TYPE `YE`, doc/posting date = last day
-   of period (`SN_LAST_DAY_OF_MONTH` → `LAST_DAY_OF_MONTHS` S/4 equivalent),
-   currency JPY. Debit = ACCURAL_GL_ACC (40), Credit = POSTING_GL_ACC (50) from
-   `/CCBJI/T_MAP_GL`; PRCTR + RCNTR on the P&L lines; XREF1_HD = docnr+bukrs+gjahr
-   (docnr from number range Z1/Z_SUPP_FEE for COPA source, = SOURCE for FI).
-   Tax: TAX_CODE passed on GL lines; no separate tax line (legacy file carried the
-   code only — sample YE doc from ECC (pending, point 2) will confirm; flagged
-   OPEN O-01).
+1. **Document type `YE` (confirmed — hard-coded in ECC program).** Header:
+   BUS_ACT blank (defaults RFBU), COMP_CODE = P_BUKRS, DOC_DATE = sy-datlo,
+   PSTNG_DATE = last day of selected period, FISC_YEAR/FIS_PERIOD from selection,
+   HEADER_TXT = "<JP support-fee text> YYYY/PP nn/NN", USERNAME = sy-uname,
+   CURRENCY_ISO `JPY` on every CURRENCYAMOUNT row.
+   **XREF1_HD** (= COPA docnr + BUKRS + GJAHR; docnr from number range
+   Z1/Z_SUPP_FEE for COPA source, = SOURCE literal for FI) passed via
+   **EXTENSION1 + `ACC_DOCUMENT` BAdI implementation** (object #21) — exactly as
+   ECC did. XBLNR stays empty (ECC parsed ref_doc_no but never mapped it).
+2. **Line structure (per ECC program, corrects FS §10):**
+   * ONE aggregated **debit line per document**: GL from TVARVC
+     `/CCBJI/RTR_DEBITGL`, PROFIT_CTR from TVARVC `/CCBJI/RTR_KOSTL`
+     (ECC meaning: debit-line profit center), amount = document gross total
+     (positive).
+   * One **credit line per result record**: POSTING_GL_ACC, PRCTR of the record,
+     TAX_CODE, ITEM_TEXT = fixed JP text + channel, amount = supp_fee × −1.
+     COSTCENTER filled only when the credit GL is a cost element (CSKB check,
+     JP00) and the cost center exists in CSKS — else the record errors (as ECC
+     MOD-002).
+   * **Tax lines — explicit, not BAPI auto-calc**: per credit record
+     `CALCULATE_TAX_FROM_NET_AMOUNT` (BUKRS, tax code, JPY, net fee), each
+     condition rounded via `J_1I6_ROUND_TO_NEAREST_AMT`; tax ≠ 0 → extra
+     CURRENCYAMOUNT row (tax × −1) + ACCOUNTTAX row (COND_KEY, ACCT_KEY,
+     tax code).
+   * Split at **400 ACCOUNTGL lines per document** (ECC MOD-001 limit; the 800
+     was only the BW file-record split and is obsolete).
 3. **Simulation (RB_SIM)**: identical build, `BAPI_ACC_DOCUMENT_CHECK` per
-   document, no commit; output = the would-be documents in ALV (doc count, per-doc
-   totals, per-line errors). Zero risk dry run for month-end.
-4. **Posting**: per document — CHECK, then POST, then `BAPI_TRANSACTION_COMMIT`
-   (WAIT). Error → collect in log, continue with next document (no all-or-nothing
-   across documents), summary ALV at end (success/fail per document + message).
-5. **Re-run protection (DECISION D-07)**: before posting, SELECT existing ACDOCA
-   docs with BLART `YE`, RBUKRS/RYEAR/POPER and our XREF1_HD pattern; if found,
-   hard stop with list unless user sets new checkbox P_FORCE ("repost anyway").
-6. COPA-source documents post with the profitability-segment CRITERIA table
-   (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUPFEE_CE` flag lookup),
-   fulfilling the account-based COPA posting — one BAPI for both flows (FS v2.0).
+   document, no commit; ALV of would-be documents (doc count, per-doc totals,
+   per-line messages). Mirrors the ECC program's own simulation radiobutton.
+4. **Posting**: per document — POST then `BAPI_TRANSACTION_COMMIT` (WAIT 'X'),
+   ROLLBACK on error; continue with next document; summary ALV at end. Amounts
+   passed verbatim (no ×100 scaling — confirmed in ECC code).
+5. **Re-run protection (DECISION D-07)**: ECC had NONE in-system (file archiving
+   only), which no longer exists → mandatory here: before posting, SELECT
+   existing BKPF/ACDOCA docs BLART `YE`, RBUKRS/RYEAR/POPER (+ XREF1_HD pattern);
+   if found, hard stop with list unless checkbox P_FORCE is set.
+6. COPA-source documents additionally carry the profitability-segment CRITERIA
+   table (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUP_COS` flag
+   lookup) for account-based COPA — one BAPI for both flows (FS v2.0). Note the
+   ECC program posted NO profitability segment (COPA went via RKEVEXT3 in BW
+   era); this is the one deliberate functional addition — flag for CO functional
+   validation (O-08).
 
 ## 11. ALV Output
 
@@ -300,11 +354,18 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 
 | # | Item | Owner | Blocking? |
 |---|---|---|---|
-| O-01 | Sample legacy YE doc + ECC consumer program (validates BAPI field mapping & tax handling) | Vaibhav (point 2, pending) | No — design assumes FS §10; will adjust |
-| O-02 | Reconciliation extract from BW (run instructions provided separately) | Vaibhav (point 3) | Needed before go-live sign-off, not for build |
+| O-01 | ~~ECC consumer program field mapping~~ **CLOSED** — /CCBJI/RUFIGLR_SUPPFI_POST source analyzed; §10 updated | — | Closed |
+| O-02 | Reconciliation benchmark REVISED: FB03 check proved BA docs are CCMC-upload accrual transfers (TCode /CCEJ/RURCO_FI_UPLD), NOT the legacy support fee — the YE output was never migrated to S/4. Benchmark options: (a) export legacy YE docs from ECC for one month, or (b) functional sign-off of Simulation output in UAT | Vaibhav / Functional | Before go-live sign-off |
 | O-03 | Business values for `/CCBJI/T_GL_TYPE`, `/CCBJI/T_RPPCAT_TY`, `RTR_VENDPCT` | Functional | No — rules dormant until config filled (D-02/D-03) |
-| O-04 | Package name + transport | Basis | Before object creation |
-| O-05 | Confirm KOKRS value for CSKS reads (assumed JP00-equivalent controlling area) | Functional | Minor |
+| O-04 | ~~Package~~ **CLOSED**: new package `/CCBJI/SUPPFEE` — client rule: EVERY object strictly in the /CCBJI/ namespace, no Z or Y names anywhere | — | Closed |
+| O-05 | ~~KOKRS~~ **CLOSED**: TKA02 7827 → JP00 | — | Closed |
+| O-06 | ~~BA doc type~~ **CLOSED**: FB03 on doc 0127744258 shows BA = CCMC upload (accrual transfer/reversal, /CCEJ/RURCO_FI_UPLD), unrelated to support fee. Design stays YE | — | Closed |
+| O-07 | ~~ECC TVARVC~~ **CLOSED**: RTR_DEBITGL = 0115103238; RTR_KOSTL (debit-line profit center): 7827 → 7827019901, 7830 → 7830010162 | — | Closed |
+| O-08 | ECC never posted a profitability segment; account-based COPA CRITERIA on credit lines is the S/4 addition per FS v2.0 — CO functional to validate characteristic list | CO Functional | Before posting go-live |
+| O-09 | ~~T_SUP_COS~~ **CLOSED**: 16 rows confirmed in S/4, same key (HKONT+WW214+WW207+WW237→KSTAR); note one mapping differs from BW (0893309312/X/blank/X → 0994294122 in S/4 vs 0994293406 in BW) — S/4 content is authoritative | — | Closed |
+| O-10 | Confirm two §8.5 diagram readings: Adjacent+SpecificGL combined condition (AND vs two rules); Other Category continue-vs-skip | Functional | Before cascade build |
+| O-11 | ~~ABAP release~~ **CLOSED**: SAP_BASIS 816 / S4CORE 109 — latest platform, full CDS/CTE/window-function/AMDP syntax available | — | Closed |
+| O-12 | KAM L4 upload program: business checking if mapping can be derived from system directly — upload program (+TCode) built only if manual upload stays | Business/Functional | Phase 6 |
 
 ## 14. Decisions taken (for the record)
 
@@ -318,3 +379,7 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 * D-08 Parallelization: STARTING NEW TASK, default server group, user-selectable session count (P_PTASK); posting serialized in main task
 * D-09 P_SOURCE dropped; Simulation mode added (RB_SIM)
 * D-10 Packaging code = WW226_PA (FS §4.2 correction; WW223_PA is RPP Category)
+* D-11 FI document layout = replica of ECC /CCBJI/RUFIGLR_SUPPFI_POST: doc type YE, one aggregated debit line (TVARVC GL + PRCTR), per-record credit lines, explicit tax lines (CALCULATE_TAX_FROM_NET_AMOUNT + ACCOUNTTAX), 400-line split, EXTENSION1/BAdI for XREF1_HD, per-document commit
+* D-12 Naming standard: client has no written convention — the draft codified from existing /CCBJI/ patterns (RUFIGLR_/RUFIGLI_ programs, T_/S_ DDIC, RTR_ elements, CL_/IM_ classes/BAdIs, I_ CDS, GAP-1000002273 transport prefix) is adopted as the project standard
+* D-13 Coding standard: no client ATC variant/guideline — build to latest S/4HANA 2025 practice: CDS + AMDP data layer, clean modern ABAP (inline declarations, SALV OM, class-based logic behind the FS-mandated report shell), SAP default ATC checks clean
+* D-14 Client TSD template to follow later — this markdown TSD remains the working design document and will be ported into the client template when provided
