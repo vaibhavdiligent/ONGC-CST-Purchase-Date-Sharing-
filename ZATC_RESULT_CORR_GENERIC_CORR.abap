@@ -424,12 +424,6 @@ START-OF-SELECTION.
     IF repos_tab[] IS NOT INITIAL.
       LOOP AT repos_tab INTO DATA(wa_repos_tab).
         l_tabix = sy-tabix.
-        IF p_rem IS NOT INITIAL.
-          IF wa_repos_tab-line CS p_rem.
-            REFRESH repos_tab_new.
-            EXIT.
-          ENDIF.
-        ENDIF.
         IF l_tab IS NOT INITIAL.
           IF l_tabix < l_tab.
             CONTINUE.
@@ -481,6 +475,9 @@ START-OF-SELECTION.
             IF sy-subrc = 0.
               CONCATENATE wa_repos_tab(l_find) text-001 wa_final-note_corr INTO wa_repos_tab
                 SEPARATED BY space.
+              APPEND wa_repos_tab TO repos_tab_new.
+            ELSE.
+              APPEND wa_repos_tab TO repos_tab_new.
             ENDIF.
           ELSE.
             CONCATENATE wa_repos_tab-line text-001 wa_final-note_corr INTO wa_repos_tab-line SEPARATED BY space.
@@ -489,21 +486,19 @@ START-OF-SELECTION.
         ENDIF.
       ENDLOOP.
     ENDIF.
-    DESCRIBE TABLE repos_tab LINES DATA(l_repos_old).
-    DESCRIBE TABLE repos_tab_new LINES DATA(l_repos_new).
     IF wa_output-program_name IS INITIAL AND wa_output-check_title IS INITIAL.
       wa_output-program_name = wa_final_p-objname.
       wa_output-subobj       = wa_final_p-sobjname.
       wa_output-run_status   = 'Not processed'.
       APPEND wa_output TO it_output.
       CLEAR wa_output.
-    ELSEIF repos_tab_new[] IS INITIAL OR l_repos_old = l_repos_new.
+    ELSEIF repos_tab_new[] IS INITIAL.
       wa_output-run_status = 'Processed'.
       wa_output-status     = 'No change'.
       APPEND wa_output TO it_output.
       CLEAR wa_output.
     ENDIF.
-    IF repos_tab_new[] IS NOT INITIAL AND l_repos_old <> l_repos_new.
+    IF repos_tab_new[] IS NOT INITIAL.
       IF wa_final_p-enhname IS INITIAL.
         CASE wa_final_p-objtype.
           WHEN 'PROG' OR 'FUGR' OR 'FUGS'.
@@ -656,7 +651,6 @@ START-OF-SELECTION.
     ENDIF.
     REFRESH repos_tab_new.
     REFRESH repos_tab.
-    CLEAR : l_repos_new,l_repos_old.
   ENDLOOP.
   cl_salv_table=>factory( IMPORTING r_salv_table = DATA(lo_table)
                           CHANGING  t_table      = it_output ).
