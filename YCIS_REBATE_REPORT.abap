@@ -42,6 +42,7 @@ TABLES: ycis_apprvl.
 * Output structure - one row per grade
 *--------------------------------------------------------------------*
 TYPES: BEGIN OF ty_out,
+         sel        TYPE flag,          " tick to print the Approval Note
          vbeln      TYPE vbeln_va,     " rebate order
          auart      TYPE auart,        " doc type
          erdat      TYPE erdat,        " created on
@@ -355,6 +356,17 @@ FORM build_fieldcat.
     APPEND gs_fcat TO gt_fcat.
   END-OF-DEFINITION.
 
+* tick-box column to choose the line whose Approval Note is printed
+  CLEAR gs_fcat.
+  gs_fcat-fieldname = 'SEL'.
+  gs_fcat-seltext_l = 'Print'.
+  gs_fcat-seltext_m = 'Print'.
+  gs_fcat-seltext_s = 'Print'.
+  gs_fcat-checkbox  = 'X'.
+  gs_fcat-edit      = 'X'.
+  gs_fcat-outputlen = 5.
+  APPEND gs_fcat TO gt_fcat.
+
   add_fc 'VBELN'       'Rebate Order'          'YCIS_APPRVL'     'ORDER_NO'.
   add_fc 'AUART'       'Doc Type'              'VBAK'            'AUART'.
   add_fc 'ERDAT'       'Created On'            'VBAK'            'ERDAT'.
@@ -406,6 +418,7 @@ ENDFORM.
 FORM display_alv.
   gs_layout-colwidth_optimize = 'X'.
   gs_layout-zebra             = 'X'.
+  gs_layout-box_fieldname     = 'SEL'.   " row-select tick box
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid
@@ -448,22 +461,29 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
 
   CASE r_ucomm.
     WHEN 'PRNT'.
-*       find the target row: use the marked row(s); if none, the cursor row
+*       commit the tick made in the grid so gt_out-SEL is up to date
       CALL FUNCTION 'GET_GLOBALS_FROM_SLVC_FULLSCR'
         IMPORTING
           e_grid = lr_grid.
       IF lr_grid IS NOT INITIAL.
+        CALL METHOD lr_grid->check_changed_data.
+      ENDIF.
+*       target row: the ticked Print box; else a highlighted row; else cursor
+      CLEAR gs_out.
+      READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
+      IF sy-subrc <> 0 AND lr_grid IS NOT INITIAL.
         CALL METHOD lr_grid->get_selected_rows
           IMPORTING
             et_index_rows = lt_rows.
+        READ TABLE lt_rows INTO ls_row INDEX 1.
+        IF sy-subrc = 0.
+          READ TABLE gt_out INTO gs_out INDEX ls_row-index.
+        ELSEIF rs_selfield-tabindex > 0.
+          READ TABLE gt_out INTO gs_out INDEX rs_selfield-tabindex.
+        ENDIF.
       ENDIF.
-      READ TABLE lt_rows INTO ls_row INDEX 1.
-      IF sy-subrc = 0.
-        READ TABLE gt_out INTO gs_out INDEX ls_row-index.
-      ELSEIF rs_selfield-tabindex > 0.
-        READ TABLE gt_out INTO gs_out INDEX rs_selfield-tabindex.
-      ELSE.
-        MESSAGE 'Select a line (customer / rebate order) to print the note' TYPE 'I'.
+      IF gs_out IS INITIAL.
+        MESSAGE 'Tick the Print box on the line you want, then press Print Approval Note' TYPE 'I'.
         RETURN.
       ENDIF.
       lv_vbeln = gs_out-vbeln.
@@ -472,6 +492,12 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
         RETURN.
       ENDIF.
       PERFORM print_note USING lv_vbeln.
+*       clear the tick(s) after printing
+      LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
+      ENDLOOP.
+      rs_selfield-refresh = 'X'.
   ENDCASE.
 ENDFORM.
 
@@ -507,7 +533,8 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
   CLEAR ls_note.
   ls_note-appr_note_no     = ls_appr-qais_no.
   ls_note-ref_no           = 'GAIL/PMG/CPC/PSD Discount disbursement'.
-  ls_note-variant_name     = ls_appr-qais_no.
+  WRITE sy-datum TO ls_note-doc_date DD/MM/YYYY.
+  PERFORM scheme_name USING ls_appr CHANGING ls_note-variant_name.
   WRITE lv_total TO ls_note-disc_total_value CURRENCY ls_appr-waers.
   CONDENSE ls_note-disc_total_value.
 
@@ -580,6 +607,26 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
       system_error   = 2
       internal_error = 3
       OTHERS         = 4.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  scheme_name   (Subject / Variant = scheme text + period)
+*&---------------------------------------------------------------------*
+FORM scheme_name USING    ps_appr TYPE ycis_apprvl
+                 CHANGING p_out   TYPE any.
+  DATA: lv_txt TYPE char25, lv_f TYPE char10, lv_t TYPE char10.
+  CASE ps_appr-scheme_type.
+    WHEN 'M'. lv_txt = 'Monthly CIS'.
+    WHEN 'Q'. lv_txt = 'Quarterly CIS'.
+    WHEN 'A'. lv_txt = 'Annual CIS'.
+    WHEN 'C'. lv_txt = 'Annual Consistency CIS'.
+    WHEN 'U'. lv_txt = 'Upliftment Rebate (PSD)'.
+    WHEN OTHERS. lv_txt = ps_appr-scheme_type.
+  ENDCASE.
+  WRITE ps_appr-period_from TO lv_f DD/MM/YYYY.
+  WRITE ps_appr-period_to   TO lv_t DD/MM/YYYY.
+  CONCATENATE lv_txt '(' lv_f 'to' lv_t ')' INTO p_out SEPARATED BY space.
+  CONDENSE p_out.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

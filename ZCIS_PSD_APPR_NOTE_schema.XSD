@@ -4,12 +4,6 @@
  <xsd:element name="data">
   <xsd:complexType>
    <xsd:sequence>
-    <xsd:element name="DATE" type="xsd:date">
-     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
-      <xsd:documentation>System Date</xsd:documentation>
-      <xsd:appinfo><dc:description>System Date</dc:description><dc:title>Date</dc:title></xsd:appinfo>
-     </xsd:annotation>
-    </xsd:element>
     <xsd:element name="WA_NOTE">
      <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
       <xsd:documentation>CIS PSD Approval Note - Header</xsd:documentation>
@@ -30,6 +24,13 @@
          <xsd:appinfo><dc:description>Reference Number</dc:description><dc:title>Ref. No.</dc:title></xsd:appinfo>
         </xsd:annotation>
         <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DOC_DATE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Approval Note Date</xsd:documentation>
+         <xsd:appinfo><dc:description>Approval Note Date</dc:description><dc:title>Date</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="10"/></xsd:restriction></xsd:simpleType>
        </xsd:element>
        <xsd:element name="VARIANT_NAME">
         <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
