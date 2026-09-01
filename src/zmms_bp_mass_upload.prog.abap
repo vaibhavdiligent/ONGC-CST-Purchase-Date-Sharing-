@@ -1313,21 +1313,22 @@ CLASS lcl_h_create IMPLEMENTATION.
       CLEAR ls_cc.
       ls_cc-task           = COND #( WHEN lv_lifnr IS INITIAL THEN gc_i ELSE gc_m ).
       ls_cc-data_key-bukrs = lv_bukrs.
-      " "FIELD;column;A" - A marks a domain that carries the ALPHA exit.
-      " Confirmed from DD01L: SAKNR (AKONT) and FDGRP (FDGRV) do; ZTERM,
-      " REPRF, ZWELS, ZAHLS, HBKID, QLAND and CHAR10 (ALTKN) do not.
+      " "FIELD;column;length" - same convention as FILL_CENTRAL: a length
+      " means the domain carries the ALPHA exit and the value is padded to
+      " that length. Confirmed from DD01L: SAKNR (AKONT) and FDGRP (FDGRV)
+      " carry it, both CHAR 10; ZTERM, REPRF, ZWELS, ZAHLS, HBKID, QLAND
+      " and CHAR10 (ALTKN) do not.
       DATA(lt_cc) = VALUE string_table(
-        ( |AKONT;47;A| ) ( |FDGRV;48;A| ) ( |ALTKN;49;| ) ( |ZTERM;50;| )
-        ( |REPRF;51;|  ) ( |ZWELS;52;|  ) ( |ZAHLS;53;| ) ( |HBKID;54;| )
-        ( |QLAND;58;|  ) ).
+        ( |AKONT;47;10| ) ( |FDGRV;48;10| ) ( |ALTKN;49;| ) ( |ZTERM;50;| )
+        ( |REPRF;51;|   ) ( |ZWELS;52;|   ) ( |ZAHLS;53;| ) ( |HBKID;54;| )
+        ( |QLAND;58;|   ) ).
       LOOP AT lt_cc INTO DATA(lv_cp).
         SPLIT lv_cp AT ';' INTO DATA(lv_cf) DATA(lv_cn) DATA(lv_ca).
         DATA(lv_cv) = lcl_util=>cell( is_row = ls_row iv_col = CONV i( lv_cn ) ).
         IF lv_cf = 'AKONT'.
           lv_cv = lv_akont.                      " already ALPHA-converted
-        ELSEIF lv_ca = 'A'.
-          " FDGRV / FDGRP is CHAR 10 and carries ALPHA.
-          lv_cv = lcl_util=>alpha( iv_in = lv_cv iv_len = 10 ).
+        ELSEIF lv_ca IS NOT INITIAL.
+          lv_cv = lcl_util=>alpha( iv_in = lv_cv iv_len = CONV i( lv_ca ) ).
         ENDIF.
         lcl_util=>set( EXPORTING iv_comp = lv_cf iv_value = lv_cv
                        CHANGING cs_data = ls_cc-data cs_datax = ls_cc-datax ).
