@@ -1,0 +1,498 @@
+*&---------------------------------------------------------------------*
+*& Report  ZXF08U06
+*&---------------------------------------------------------------------*
+* Customer              : GAIL                                         *
+* Program Name          : ZXF08U06                                     *
+* Development Class     : ZF01_OTH                                         *
+* Transport Request No  :                                  *
+* Initiated by          : Gaurav Sharma / Mr. Atul                  *
+* Developed by          : Piyush                                  *
+* Version No            : V 1.0                                        *
+* Program Description   : HDFC IDOC                                     *
+* Modification History  :                                              *
+* Date               Person              Remarks                       *
+************************************************************************
+* DD.MM.YYYY                                                           *
+************************************************************************
+*                                                                      *
+*                                                                      *
+*----------------------------------------------------------------------*
+*Variables
+DATA  L_RCVPRN            TYPE EDI_RCVPRN.
+DATA  L_MAIN_RCVPRN       TYPE STRING VALUE '(SAPLIEDP)PEXR_EDIDC-RCVPRN'.
+
+DATA  WA_E1EDKA1          TYPE E1EDKA1.
+
+DATA  WA_E1IDKU5          TYPE E1IDKU5.
+
+DATA WA_E1IDB02           TYPE E1IDB02.
+DATA WA_E1IDB02_BA           TYPE E1IDB02.
+DATA WA_E1IDB02_BB           TYPE E1IDB02.
+
+"Fieldsymbols
+FIELD-SYMBOLS:
+  <FS_EDIDD_TABLE>     TYPE EDIDD,
+  <FS_EDIDD_TABLE_TMP> TYPE EDIDD,
+  <FS_EDIDD_TABLE2>    TYPE EDIDD,
+
+  <FS_FIELD_VALUE>     TYPE ANY.
+
+
+DATA : WA_E1IDPU1 TYPE E1IDPU1.
+
+DATA: WA_E1EDP02 TYPE E1EDP02.
+
+DATA: LT_ADR6  TYPE TABLE OF ADR6,
+      LS_ADR6  TYPE ADR6,
+      LV_ADRNR TYPE ADR6-ADDRNUMBER,
+      LV_EMAIL TYPE CHAR70,
+      LV_STR1  TYPE ADRC-STR_SUPPL1,
+      LV_STR2  TYPE ADRC-STR_SUPPL2.
+********
+
+DATA : LV_BKTXT      TYPE BKTXT,
+       WA_E1IDKU1_DB TYPE E1IDKU1,
+       WA_E1EDK03_DB TYPE E1EDK03,
+       LV_DATE       TYPE DATUM.
+
+
+***Local Data
+DATA: W_BANK_ACC_DB     TYPE BANKN,
+      WA_LFBK_DB        TYPE LFBK,
+      L_LENGTH_DB       TYPE I,
+      L_POS_DB          TYPE I,
+      L_SEGFLD_VALUE_DB TYPE TEXT255,
+ WA_E1IDKU3_DB     TYPE E1IDKU3,
+      WA_E1IDKU3_DD     TYPE E1IDKU3,
+      WA_E1IDKU3_BCM    TYPE E1IDKU3,
+      LV_EXTPAYM        TYPE CHAR3,
+      LV_EXTDESC        TYPE CHAR70.
+DATA: LT_PARAM TYPE TABLE OF ZFI_BK_PAYEXT,
+      LS_PARAM TYPE ZFI_BK_PAYEXT.
+DATA : LS_E1EDKA1 TYPE E1EDKA1.
+DATA: V_TABN TYPE p DECIMALS 2,
+      V_MOBN TYPE p DECIMALS 2.
+******-------------------------------------------------------------------*
+
+ASSIGN (L_MAIN_RCVPRN) TO <FS_FIELD_VALUE>.
+IF <FS_FIELD_VALUE> IS ASSIGNED.
+  CLEAR L_RCVPRN.
+  L_RCVPRN  = <FS_FIELD_VALUE>.
+ENDIF.
+
+
+DATA : LV_FLAG TYPE CHAR01.
+
+
+CONSTANTS : LC_SET   TYPE SETNAMENEW VALUE 'YRF_IDOC_USER_DEBUG',
+            LC_TAB   TYPE RGSBS-TABLE VALUE 'SYST',
+            LC_CLASS TYPE RGSBS-CLASS VALUE '0000'.
+DATA : LT_RGSB4 TYPE TABLE OF RGSB4,
+       LS_RGSB4 TYPE RGSB4,
+       LS_VAL   TYPE RGSB4.
+
+CALL FUNCTION 'G_SET_GET_ALL_VALUES'
+  EXPORTING
+    CLIENT        = SY-MANDT
+    SETNR         = LC_SET
+    TABLE         = LC_TAB
+    CLASS         = LC_CLASS
+  TABLES
+    SET_VALUES    = LT_RGSB4
+  EXCEPTIONS
+    SET_NOT_FOUND = 1
+    OTHERS        = 2.
+
+IF SY-SUBRC = 0.
+  READ TABLE LT_RGSB4 INTO LS_RGSB4 WITH KEY  FROM = SY-UNAME.
+  IF SY-SUBRC = 0.
+    DO.
+      IF LV_FLAG = 1.
+        EXIT.
+      ENDIF.
+    ENDDO.
+  ENDIF.
+ENDIF.
+
+READ TABLE EDIDD_TABLE ASSIGNING <FS_EDIDD_TABLE_TMP> WITH KEY SEGNAM = 'E1IDKU3'.
+IF SY-SUBRC = 0.
+  MOVE <FS_EDIDD_TABLE_TMP>-SDATA TO WA_E1IDKU3_DB.
+  SELECT * FROM ZFI_BK_PAYEXT INTO TABLE LT_PARAM
+  WHERE BUKRS = WA_E1IDKU3_DB-PAYRUNCC
+  AND ZLSCH = WA_E1IDKU3_DB-EXTPAYM
+  AND PARNUM = L_RCVPRN.
+  IF SY-SUBRC = 0.
+****    Replace Special characters from Name1,Name2,Name3,Stras,BELNR
+    LOOP AT EDIDD_TABLE ASSIGNING <FS_EDIDD_TABLE>.
+      IF <FS_EDIDD_TABLE>-SEGNAM EQ 'E1IDB02'.
+        MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDB02.
+        IF WA_E1IDB02-FIIQUALI = 'BB'.
+          W_BANK_ACC_DB = WA_E1IDB02-FIIKONTO.
+          MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDB02_BB.
+
+**Reason : Passing Name2 field of Lfa1 to IDOC Segment e1idb02-fiiknam2
+          IF REGUH_DATA-RZAWE EQ 'C'.
+***            LOOP AT EDIDD_TABLE ASSIGNING FIELD-SYMBOL(<FS_EDIDD>) WHERE SEGNAM = 'E1EDKA1' .
+***              MOVE <FS_EDIDD>-SDATA TO LS_E1EDKA1 .
+***              IF LS_E1EDKA1-PARVW = 'BE' .
+****                SELECT SINGLE NAME2 INTO @DATA(LV_NAME2) FROM LFA1
+****                  WHERE LIFNR = @LS_E1EDKA1-PARTN .
+                IF REGUH_DATA-ZNME1 IS NOT INITIAL .
+                  WA_E1IDB02-FIIKNAME = REGUH_DATA-ZNME1.
+                  WA_E1IDB02-fiiknam2 = REGUH_DATA-ZNME2.
+                  MOVE WA_E1IDB02 TO <FS_EDIDD_TABLE>-SDATA .
+***                  CLEAR LV_NAME2.
+****                  EXIT.
+                ENDIF.
+*****              ENDIF.
+******            ENDLOOP.
+          ENDIF.
+******          Check wa_e1idb02-fiibranch
+          IF WA_E1IDB02-FIIBRANCH IS NOT INITIAL.
+            CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+            CONDENSE: WA_E1IDB02-FIIBRANCH.
+            L_SEGFLD_VALUE_DB = WA_E1IDB02-FIIBRANCH.
+            L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+            DO L_LENGTH_DB TIMES.
+              IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^&*_={}[]\|;"<>`'.
+                CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1).       "replace with Space
+              ENDIF.
+              L_POS_DB = L_POS_DB + 1.
+            ENDDO.
+            CONDENSE L_SEGFLD_VALUE_DB.
+            WA_E1IDB02-FIIBRANCH = L_SEGFLD_VALUE_DB.
+          ENDIF.
+
+          IF WA_E1IDB02-FIIKNAM2 IS NOT INITIAL.
+            CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+            CONDENSE: WA_E1IDB02-FIIKNAM2.
+            L_SEGFLD_VALUE_DB = WA_E1IDB02-FIIKNAM2.
+            L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+            DO L_LENGTH_DB TIMES.
+              IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^*_={}[]\|;"<>`'.
+                CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1).       "replace with Space
+              ENDIF.
+              L_POS_DB = L_POS_DB + 1.
+            ENDDO.
+            CONDENSE L_SEGFLD_VALUE_DB.
+            CONCATENATE ' ' L_SEGFLD_VALUE_DB INTO WA_E1IDB02-FIIKNAM2.
+*              wa_e1idb02-fiiknam2 = l_segfld_value_db.
+          ENDIF.
+
+******          Check wa_e1idb02-fiikname
+          IF WA_E1IDB02-FIIKNAME IS NOT INITIAL.
+            CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+            CONDENSE: WA_E1IDB02-FIIKNAM2,WA_E1IDB02-FIIKNAME.
+            L_SEGFLD_VALUE_DB = WA_E1IDB02-FIIKNAME.
+            L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+            DO L_LENGTH_DB TIMES.
+              IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^*_={}[]\|;"<>`'.
+                CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1).       "replace with Space
+              ENDIF.
+              L_POS_DB = L_POS_DB + 1.
+            ENDDO.
+            CONDENSE L_SEGFLD_VALUE_DB.
+            WA_E1IDB02-FIIKNAME = L_SEGFLD_VALUE_DB.
+          ENDIF.
+***** Replace fibkont value
+          CLEAR LS_PARAM.
+          READ TABLE LT_PARAM INTO LS_PARAM WITH KEY SEGNAM = <FS_EDIDD_TABLE>-SEGNAM
+                                                     SEGFLD = 'FIIBKONT'
+                                                 FIELDVALUE = WA_E1IDB02-FIIBKONT.
+          IF SY-SUBRC = 0.
+            WA_E1IDB02-FIIBKONT = LS_PARAM-QUAL_FIELDVALUE.
+          ENDIF.
+
+        ELSEIF WA_E1IDB02-FIIQUALI = 'BA'.
+          IF REGUH_DATA-RZAWE = 'C'.
+            IF REGUH_DATA-UZAWE IS NOT INITIAL.
+              SELECT SINGLE ZPRINT_LOC from ZFI_PAY_SUP_BP INTO @DATA(LS_ZPRINT_LOC) WHERE UZAWE = @REGUH_DATA-UZAWE.
+                 IF SY-SUBRC = 0.
+                   WA_E1IDB02-CTABNAME = LS_ZPRINT_LOC.
+            ENDIF.
+            ENDIF.
+            ELSEIF reguh_data-rbetr GE '500000000.00'.
+             SELECT SINGLE ZLEI FROM LFA1 INTO @DATA(LS_ZLEI) WHERE LIFNR = @REGUH_DATA-LIFNR.
+               IF SY-SUBRC = 0.
+                   WA_E1IDB02-CTABNAME = LS_ZLEI.
+            ENDIF.
+            ENDIF.
+          MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDB02_BA.
+        ENDIF.
+        MOVE WA_E1IDB02 TO <FS_EDIDD_TABLE>-SDATA.
+      ENDIF.
+      IF <FS_EDIDD_TABLE>-SEGNAM EQ 'E1EDKA1'.
+        MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1EDKA1.
+        IF WA_E1EDKA1-PARVW = 'BE'.
+   IF REGUH_DATA-ZNME1 IS NOT INITIAL AND REGUH_DATA-RZAWE = 'C'.
+            WA_E1EDKA1-NAME1 = REGUH_DATA-ZNME1.
+            WA_E1EDKA1-NAME2 = REGUH_DATA-ZNME2.
+
+            ELSE.
+
+          SELECT SINGLE * INTO WA_LFBK_DB FROM LFBK
+                 WHERE LIFNR = WA_E1EDKA1-PARTN
+                   AND BANKN = W_BANK_ACC_DB.
+          IF SY-SUBRC = 0.
+
+            IF WA_LFBK_DB-KOINH IS INITIAL.
+              CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+              CONDENSE: WA_E1EDKA1-NAME1,WA_E1EDKA1-NAME2,WA_E1EDKA1-NAME3.
+              CONCATENATE WA_E1EDKA1-NAME1 WA_E1EDKA1-NAME2
+                          INTO WA_E1EDKA1-NAME1 SEPARATED BY SPACE.
+              CONCATENATE WA_E1EDKA1-NAME1 WA_E1EDKA1-NAME3
+                          INTO WA_E1EDKA1-NAME1 SEPARATED BY SPACE.
+              L_SEGFLD_VALUE_DB = WA_E1EDKA1-NAME1.
+              L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+              DO L_LENGTH_DB TIMES.
+                IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^&*_={}[]\|;"<>`'.
+                  CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1). "replace with Space
+                ENDIF.
+                L_POS_DB = L_POS_DB + 1.
+              ENDDO.
+              CONDENSE L_SEGFLD_VALUE_DB.
+              WA_E1EDKA1-NAME1 = L_SEGFLD_VALUE_DB.
+              CLEAR:WA_E1EDKA1-NAME2,WA_E1EDKA1-NAME3,WA_E1EDKA1-NAME4.
+            ELSEIF WA_LFBK_DB-KOINH IS NOT INITIAL.
+              CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+              L_SEGFLD_VALUE_DB = WA_LFBK_DB-KOINH.
+              L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+              DO L_LENGTH_DB TIMES.
+                IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^&*_={}[]\|;"<>`'.
+                  CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1). "replace with Space
+                ENDIF.
+                L_POS_DB = L_POS_DB + 1.
+              ENDDO.
+              CONDENSE L_SEGFLD_VALUE_DB.
+              WA_LFBK_DB-KOINH = L_SEGFLD_VALUE_DB.
+              WA_E1EDKA1-NAME1 = WA_LFBK_DB-KOINH.
+              CLEAR:WA_E1EDKA1-NAME2,WA_E1EDKA1-NAME3,WA_E1EDKA1-NAME4.
+            ENDIF.
+
+
+******          Check special characters in Street and house number 1 (STRAS)
+            IF WA_E1EDKA1-STRAS IS NOT INITIAL.
+              CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+              CONDENSE: WA_E1EDKA1-STRAS.
+              L_SEGFLD_VALUE_DB = WA_E1EDKA1-STRAS.
+              L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+              DO L_LENGTH_DB TIMES.
+                IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^&*_={}[]\|;"<>`'.
+                  CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1).       "replace with Space
+                ENDIF.
+                L_POS_DB = L_POS_DB + 1.
+              ENDDO.
+              CONDENSE L_SEGFLD_VALUE_DB.
+              WA_E1EDKA1-STRAS = L_SEGFLD_VALUE_DB.
+            ENDIF.
+
+************* Get address details for street 2 and PO Box
+            LV_ADRNR = REGUH_DATA-ZADNR.
+            IF LV_ADRNR IS NOT INITIAL.
+              SELECT * UP TO 2 ROWS
+                FROM ADR6
+                INTO TABLE LT_ADR6
+                WHERE ADDRNUMBER = LV_ADRNR.
+
+              SELECT SINGLE STR_SUPPL1
+                            STR_SUPPL2
+                FROM ADRC
+                INTO (LV_STR1,LV_STR2)
+                WHERE ADDRNUMBER = LV_ADRNR.
+              IF SY-SUBRC = 0.
+                WA_E1EDKA1-STRS2 = LV_STR1.
+                WA_E1EDKA1-PFACH = LV_STR2.
+              ENDIF.
+            ENDIF.
+            CLEAR: LV_EMAIL.
+            LOOP AT LT_ADR6 INTO LS_ADR6.
+              IF LS_ADR6-SMTP_ADDR IS NOT INITIAL AND SY-TABIX = 1.
+                CONCATENATE LS_ADR6-SMTP_ADDR ',' INTO LV_EMAIL.
+              ENDIF.
+              IF SY-TABIX NE 1.
+                CONCATENATE LV_EMAIL LS_ADR6-SMTP_ADDR  INTO LV_EMAIL.
+              ENDIF.
+              CONDENSE LV_EMAIL.
+            ENDLOOP.
+            WA_E1EDKA1-ILNNR = LV_EMAIL.
+          ENDIF.
+          ENDIF.
+
+            IF NOT REGUH_DATA-EMPFG IS INITIAL AND REGUH_DATA-DORIGIN EQ 'TR-CM-BT'.
+            WA_E1EDKA1-PARTN = REGUH_DATA-EMPFG+0(5).
+
+            ENDIF.
+***          MOVE WA_E1EDKA1 TO <FS_EDIDD_TABLE>-SDATA.
+             IF REGUH_DATA-RZAWE = 'M'.
+                SELECT SINGLE STCD3 , J_1IPANNO FROM LFA1 INTO @DATA(LS_LFA1_M) WHERE LIFNR = @REGUH_DATA-LIFNR.
+               IF SY-SUBRC = 0.
+                   WA_E1EDKA1-BNAME = LS_LFA1_M-J_1IPANNO.
+            WA_E1EDKA1-PAORG = LS_LFA1_M-STCD3.
+
+            ENDIF.
+        ENDIF.
+        MOVE WA_E1EDKA1 TO <FS_EDIDD_TABLE>-SDATA.
+        ENDIF.
+      ENDIF.
+
+      IF <FS_EDIDD_TABLE>-SEGNAM EQ 'E1EDP02'.
+        MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1EDP02.
+        READ TABLE LT_PARAM INTO LS_PARAM WITH KEY SEGNAM = <FS_EDIDD_TABLE>-SEGNAM
+                                                   SEGFLD = 'BELNR'.
+        IF SY-SUBRC = 0.
+          IF WA_E1EDP02-QUALF = LS_PARAM-QUAL_FIELDVALUE.
+            IF WA_E1EDP02-BELNR IS NOT INITIAL.
+              CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+              CONDENSE: WA_E1EDKA1-STRAS.
+              L_SEGFLD_VALUE_DB = WA_E1EDP02-BELNR.
+              L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+              DO L_LENGTH_DB TIMES.
+                IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^&*_={}[]\|;"<>`'.
+                  CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1).       "replace with Space
+                ENDIF.
+                L_POS_DB = L_POS_DB + 1.
+              ENDDO.
+              CONDENSE L_SEGFLD_VALUE_DB.
+              WA_E1EDP02-BELNR = L_SEGFLD_VALUE_DB.
+              MOVE WA_E1EDP02 TO <FS_EDIDD_TABLE>-SDATA.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      IF <FS_EDIDD_TABLE>-SEGNAM EQ 'E1IDPU1'.
+        MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDPU1.
+        READ TABLE LT_PARAM INTO LS_PARAM WITH KEY SEGNAM = <FS_EDIDD_TABLE>-SEGNAM
+                                                   SEGFLD = 'DOCNUMMR'.
+        IF SY-SUBRC = 0.
+          IF WA_E1IDPU1-DOCNUMMR IS NOT INITIAL.
+            CLEAR: L_LENGTH_DB, L_POS_DB, L_SEGFLD_VALUE_DB.
+            CONDENSE: WA_E1EDKA1-STRAS.
+            L_SEGFLD_VALUE_DB = WA_E1IDPU1-DOCNUMMR.
+            L_LENGTH_DB  = STRLEN( L_SEGFLD_VALUE_DB ).
+            DO L_LENGTH_DB TIMES.
+              IF L_SEGFLD_VALUE_DB+L_POS_DB(1) CA '~''!@#$%^&*_={}[]\|;"<>`'.
+                CLEAR: L_SEGFLD_VALUE_DB+L_POS_DB(1).       "replace with Space
+              ENDIF.
+              L_POS_DB = L_POS_DB + 1.
+            ENDDO.
+            CONDENSE L_SEGFLD_VALUE_DB.
+            WA_E1IDPU1-DOCNUMMR = L_SEGFLD_VALUE_DB.
+          ENDIF.
+*          ENDIF.
+          MOVE WA_E1IDPU1 TO <FS_EDIDD_TABLE>-SDATA.
+        ENDIF.
+      ENDIF.
+
+*    To replace Run id From REGUH Structure Table as after BCM activation Group will be created,
+*    So Original Run ID is captured for E1IDKU3 Structure
+      IF  <FS_EDIDD_TABLE>-SEGNAM = 'E1IDKU3'.
+        MOVE  <FS_EDIDD_TABLE>-SDATA TO WA_E1IDKU3_BCM.
+
+        IF REGUH_DATA-SRTF3 IS NOT INITIAL.
+          DATA(LV_STRF3) = REGUH_DATA-SRTF3.
+
+          IF LV_STRF3 CA ';'.
+            SHIFT LV_STRF3 LEFT UP TO ';'.
+            SHIFT LV_STRF3 BY 1 PLACES.
+            SPLIT LV_STRF3 AT SPACE INTO DATA(LV_LAUFI) DATA(LV_TEMP).
+
+            IF LV_LAUFI IS NOT INITIAL.
+              WA_E1IDKU3_BCM-PAYRUNID = LV_LAUFI.
+              MOVE WA_E1IDKU3_BCM TO <FS_EDIDD_TABLE>-SDATA.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+*    To replace Run id From REGUH Structure Table as after BCM activation Group will be created,
+*    So Original Run ID is captured for E1IDKU3 Structure
+
+      CLEAR:WA_E1EDKA1,WA_E1IDB02,WA_E1EDP02,WA_E1IDPU1,LS_PARAM ,  WA_E1EDK03_DB.
+    ENDLOOP.
+
+    CLEAR:LS_PARAM.
+    IF ( WA_E1IDB02_BA-FIIBKENN+0(3) = WA_E1IDB02_BB-FIIBKENN+0(3) ).
+      READ TABLE EDIDD_TABLE ASSIGNING <FS_EDIDD_TABLE> WITH KEY SEGNAM = 'E1IDKU3'.
+      IF SY-SUBRC = 0.
+        MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDKU3_DB.
+        LOOP AT LT_PARAM INTO LS_PARAM WHERE SEGNAM = 'E1IDB02'.
+          IF LS_PARAM-QUAL_FIELDNAME = 'EXTDESC'.
+            LV_EXTDESC = LS_PARAM-QUAL_FIELDVALUE.
+          ELSEIF LS_PARAM-QUAL_FIELDNAME = 'EXTPAYM'.
+            LV_EXTPAYM = LS_PARAM-QUAL_FIELDVALUE.
+          ENDIF.
+        ENDLOOP.
+           IF WA_E1IDKU3_DB-PAIRZAWE NE 'C'.
+        WA_E1IDKU3_DB-EXTDESC = LV_EXTDESC.
+        WA_E1IDKU3_DB-EXTPAYM = LV_EXTPAYM.
+        ENDIF.
+        MOVE WA_E1IDKU3_DB TO  <FS_EDIDD_TABLE>-SDATA.
+      ENDIF.
+
+    ELSE.
+      READ TABLE EDIDD_TABLE ASSIGNING <FS_EDIDD_TABLE> WITH KEY SEGNAM = 'E1IDKU5'.
+      IF SY-SUBRC = 0.
+        MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDKU5.
+        LOOP AT LT_PARAM INTO LS_PARAM WHERE SEGNAM = <FS_EDIDD_TABLE>-SEGNAM.
+          READ TABLE LT_PARAM INTO DATA(LS_PARAM1) WITH KEY SEGNAM = 'UZEIT'.   " DVRK9A0AP7
+          IF SY-UZEIT < LS_PARAM1-TABNAME.
+            V_TABN = LS_PARAM-TABNAME.
+            V_MOBN = WA_E1IDKU5-MOABETR(15).
+            IF V_MOBN GT V_TABN.
+              READ TABLE EDIDD_TABLE ASSIGNING <FS_EDIDD_TABLE2> WITH KEY SEGNAM = LS_PARAM-FIELDVALUE.
+              IF SY-SUBRC = 0.
+                MOVE <FS_EDIDD_TABLE2>-SDATA TO WA_E1IDKU3_DB.
+                IF LS_PARAM-QUAL_FIELDNAME = 'EXTDESC'.
+                  LV_EXTDESC = LS_PARAM-QUAL_FIELDVALUE.
+                ELSEIF LS_PARAM-QUAL_FIELDNAME = 'EXTPAYM'.
+                  LV_EXTPAYM = LS_PARAM-QUAL_FIELDVALUE.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+          CLEAR : LS_PARAM1.                                                    " DVRK9A0AP7
+        ENDLOOP.
+        IF WA_E1IDKU3_DB-PAIRZAWE NE 'C'.
+        WA_E1IDKU3_DB-EXTDESC = LV_EXTDESC.
+        WA_E1IDKU3_DB-EXTPAYM = LV_EXTPAYM.
+        ENDIF.
+        IF <FS_EDIDD_TABLE2> IS ASSIGNED.
+          MOVE WA_E1IDKU3_DB TO <FS_EDIDD_TABLE2>-SDATA.
+        ENDIF.
+
+      ENDIF.
+    ENDIF.
+
+    READ TABLE  EDIDD_TABLE ASSIGNING <FS_EDIDD_TABLE> WITH KEY SEGNAM = 'E1IDKU3'.
+    IF SY-SUBRC = 0.
+      MOVE <FS_EDIDD_TABLE>-SDATA TO WA_E1IDKU3_DB.
+
+      READ TABLE LT_PARAM INTO LS_PARAM WITH KEY SEGNAM = <FS_EDIDD_TABLE>-SEGNAM
+                                                 FIELDVALUE = WA_E1IDKU3_DB-PAIUZAWE.
+      IF SY-SUBRC = 0.
+        WA_E1IDKU3_DB-INSCODE3 = LS_PARAM-QUAL_FIELDVALUE.
+        MOVE WA_E1IDKU3_DB TO <FS_EDIDD_TABLE>-SDATA.
+      ELSE.
+        DATA : LT_REGUH TYPE TABLE OF REGUH.
+        READ TABLE LT_PARAM INTO LS_PARAM WITH KEY SEGNAM = 'REGUH'.
+        IF SY-SUBRC = 0.
+          SELECT * FROM REGUH INTO TABLE LT_REGUH
+            WHERE LAUFD = WA_E1IDKU3_DB-PAYRUNDT
+            AND LAUFI = WA_E1IDKU3_DB-PAYRUNID
+            AND XVORL = ' '
+            AND HBKID = LS_PARAM-FIELDVALUE.
+          IF SY-SUBRC = 0.
+            WA_E1IDKU3_DB-INSCODE3 = LS_PARAM-QUAL_FIELDVALUE.
+            MOVE WA_E1IDKU3_DB TO <FS_EDIDD_TABLE>-SDATA.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+ IF WA_E1IDKU3_DB-EXTPAYM = 'D'.
+        WA_E1IDKU3_DB-PAIRZAWE = WA_E1IDKU3_DB-EXTPAYM.
+        MOVE WA_E1IDKU3_DB TO <FS_EDIDD_TABLE>-SDATA.
+    ENDIF.
+    ENDIF.
+
+  ENDIF.
+ENDIF.
