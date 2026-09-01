@@ -439,6 +439,19 @@ FORM build_fieldcat.
     gs_fcat-seltext_s    = 'Status'.
     MODIFY gt_fcat FROM gs_fcat INDEX sy-tabix.
   ENDIF.
+
+*   The USER columns all reference data element UNAME, whose DDIC label is
+*   'User Name' - which the grid would otherwise show for every one of them.
+*   Force the column-specific header (DDICTXT = 'L' = use SELTEXT_L). GAIL.
+  LOOP AT gt_fcat INTO gs_fcat.
+    CASE gs_fcat-fieldname.
+      WHEN 'L1_USER' OR 'L2_USER' OR 'L3_USER' OR 'L4_USER'
+        OR 'L5_USER' OR 'L6_USER' OR 'REJ_BY'.
+        gs_fcat-ddictxt      = 'L'.
+        gs_fcat-reptext_ddic = gs_fcat-seltext_l.
+        MODIFY gt_fcat FROM gs_fcat INDEX sy-tabix.
+    ENDCASE.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
