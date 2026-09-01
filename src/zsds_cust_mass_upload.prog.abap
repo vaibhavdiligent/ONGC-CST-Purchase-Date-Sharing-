@@ -264,8 +264,11 @@ CLASS lcl_util DEFINITION FINAL.
     " applied here by target field rather than read from DD03L-CONROUT.
     "   KUNNR / LIFNR / VBUND -> ALPHA        AKONT -> ALPHA (SAKNR)
     "   FDGRV -> ALPHA (domain FDGRP)
+    " IV_LEN is the length of the field the value is going into. Without it
+    " nothing is padded - see the comment in the implementation.
     CLASS-METHODS alpha
       IMPORTING iv_in     TYPE string
+                iv_len    TYPE i DEFAULT 0
       RETURNING VALUE(rv) TYPE string.
 
     CLASS-METHODS is_empty
@@ -336,13 +339,25 @@ CLASS lcl_util IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD alpha.
+    " Leading-zero conversion, done here rather than through
+    " CONVERSION_EXIT_ALPHA_INPUT.
+    "
+    " That function module pads to the length of its OUTPUT parameter. This
+    " method used to hand it a STRING, which has no fixed length, so it had
+    " nothing to pad to and the zeros were never added: a reconciliation
+    " account keyed as 1120001 stayed 1120001 instead of becoming
+    " 0001120001, and every SKB1 lookup missed.
+    "
+    " Padding to IV_LEN here removes the dependency on that behaviour.
+    " Only purely numeric values are padded, which is what ALPHA does.
+    CLEAR rv.
     rv = condense( iv_in ).
     IF rv IS INITIAL OR rv = gc_clear.
       RETURN.
     ENDIF.
-    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
-      EXPORTING input  = rv
-      IMPORTING output = rv.
+    IF iv_len > 0 AND rv CO '0123456789' AND strlen( rv ) < iv_len.
+      rv = repeat( val = '0' occ = iv_len - strlen( rv ) ) && rv.
+    ENDIF.
   ENDMETHOD.
 
   METHOD is_empty.
@@ -1906,8 +1921,17 @@ CLASS lcl_engine IMPLEMENTATION.
       RETURN.
     ELSE.
       CASE iv_cnv.
-        WHEN 'AL'.
-          <lv_t> = lcl_util=>alpha( lv_in ).
+        WHEN 'AL' OR 'GL'.
+          " GL was never handled here, so the seven AKONT columns fell
+          " through to WHEN OTHERS and reached the API with no conversion
+          " at all. Both codes now take the same path.
+          "
+          " The padding length is read from the target field itself, so it
+          " is always the real DDIC length - 10 for KUNNR, LIFNR, AKONT and
+          " FDGRV, 6 for VBUND - and cannot drift out of step with a table.
+          DATA lv_len TYPE i.
+          DESCRIBE FIELD <lv_t> LENGTH lv_len IN CHARACTER MODE.
+          <lv_t> = lcl_util=>alpha( iv_in = lv_in iv_len = lv_len ).
         WHEN 'DT'.
           DATA(lv_d) = lcl_util=>to_date( lv_in ).
           IF lv_d IS INITIAL.
@@ -1951,7 +1975,7 @@ CLASS lcl_engine IMPLEMENTATION.
     LOOP AT mt_map INTO DATA(ls_k) WHERE node = gc_n_key.
       DATA(lv_v) = lcl_util=>cell( is_row = is_row iv_col = ls_k-col ).
       CASE ls_k-fld.
-        WHEN 'KUNNR'. lv_kunnr = lcl_util=>alpha( lv_v ).
+        WHEN 'KUNNR'. lv_kunnr = lcl_util=>alpha( iv_in = lv_v iv_len = 10 ).
         WHEN 'BUKRS'. lv_bukrs = lv_v.
         WHEN 'VKORG'. lv_vkorg = lv_v.
         WHEN 'VTWEG'. lv_vtweg = lv_v.
@@ -2217,7 +2241,7 @@ CLASS lcl_engine IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       IF ls_m-node = gc_n_key AND ls_m-fld = 'KUNNR'.
-        lv_kunnr = lcl_util=>alpha( lv_cell ).
+        lv_kunnr = lcl_util=>alpha( iv_in = lv_cell iv_len = 10 ).
         CONTINUE.
       ENDIF.
       CHECK ls_m-node = gc_n_cred.

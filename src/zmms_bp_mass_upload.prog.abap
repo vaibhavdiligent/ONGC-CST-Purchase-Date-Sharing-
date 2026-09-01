@@ -191,7 +191,11 @@ CLASS lcl_util DEFINITION FINAL.
     CLASS-METHODS to_date IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE d.
     CLASS-METHODS to_dec  IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE ty_dec.
     "! Generic ALPHA conversion for fields whose domain carries the exit.
-    CLASS-METHODS alpha   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE string.
+    " IV_LEN is the length of the field the value is going into. Without it
+    " nothing is padded - see the comment in the implementation.
+    CLASS-METHODS alpha   IMPORTING iv_in     TYPE string
+                                    iv_len    TYPE i DEFAULT 0
+                          RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS lifnr   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE lifnr.
     CLASS-METHODS gl      IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE saknr.
     CLASS-METHODS is_empty  IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
@@ -279,14 +283,25 @@ CLASS lcl_util IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD alpha.
+    " Leading-zero conversion, done here rather than through
+    " CONVERSION_EXIT_ALPHA_INPUT.
+    "
+    " That function module pads to the length of its OUTPUT parameter. This
+    " method used to hand it a STRING, which has no fixed length, so it had
+    " nothing to pad to and the zeros were never added: a reconciliation
+    " account keyed as 1120001 stayed 1120001 instead of becoming
+    " 0001120001, and every SKB1 lookup missed.
+    "
+    " Padding to IV_LEN here removes the dependency on that behaviour.
+    " Only purely numeric values are padded, which is what ALPHA does.
     CLEAR rv.
-    DATA(lv) = condense( iv_in ).
-    IF lv IS INITIAL.
+    rv = condense( iv_in ).
+    IF rv IS INITIAL.
       RETURN.
     ENDIF.
-    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
-      EXPORTING input  = lv
-      IMPORTING output = rv.
+    IF iv_len > 0 AND rv CO '0123456789' AND strlen( rv ) < iv_len.
+      rv = repeat( val = '0' occ = iv_len - strlen( rv ) ) && rv.
+    ENDIF.
   ENDMETHOD.
 
   METHOD lifnr.
@@ -297,17 +312,18 @@ CLASS lcl_util IMPLEMENTATION.
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    rv = alpha( lv ).
+    rv = alpha( iv_in = lv iv_len = 10 ).
   ENDMETHOD.
 
   METHOD gl.
-    " AKONT / SAKNR - domain SAKNR carries the ALPHA exit.
+    " AKONT / SAKNR - domain SAKNR carries the ALPHA exit, and SAKNR is
+    " CHAR 10, so 1120001 has to become 0001120001.
     CLEAR rv.
     DATA(lv) = condense( iv_in ).
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    rv = alpha( lv ).
+    rv = alpha( iv_in = lv iv_len = 10 ).
   ENDMETHOD.
 
 
@@ -1171,15 +1187,16 @@ CLASS lcl_h_create IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD fill_central.
-    " "FIELD;column;A" - the trailing A marks a field whose domain carries the
-    " ALPHA conversion exit, so the Excel value must be right-aligned and
-    " zero-padded before it is handed to the API.
-    "   KUNNR  domain KUNNR  - ALPHA
-    "   VBUND  domain RCOMP  - ALPHA
+    " "FIELD;column;length" - a length means the field's domain carries the
+    " ALPHA exit, so a numeric value is zero-padded to that length before it
+    " goes to the API. The LENGTH matters, not just the fact of the exit:
+    " KUNNR is CHAR 10 and VBUND is CHAR 6, so they pad differently.
+    "   KUNNR  domain KUNNR  - ALPHA, 10
+    "   VBUND  domain RCOMP  - ALPHA, 6
     " KONZS, STCD*, BRSCH, J_1I* and VEN_CLASS have no conversion exit and are
     " passed through unchanged.
     DATA(lt_map) = VALUE string_table(
-      ( |KTOKK;5;|  ) ( |KUNNR;32;A| ) ( |VBUND;33;A| ) ( |KONZS;34;| )
+      ( |KTOKK;5;|  ) ( |KUNNR;32;10| ) ( |VBUND;33;6| ) ( |KONZS;34;| )
       ( |STCD3;35;| ) ( |STCD5;36;|  ) ( |STCEG;37;|  ) ( |J_1KFTBUS;38;| )
       ( |STENR;39;| ) ( |BRSCH;40;|  )
       " CIN - LFA1 fields, confirmed present in VMDS_EI_VMD_CENTRAL
@@ -1188,8 +1205,8 @@ CLASS lcl_h_create IMPLEMENTATION.
     LOOP AT lt_map INTO DATA(lv_p).
       SPLIT lv_p AT ';' INTO DATA(lv_f) DATA(lv_c) DATA(lv_a).
       DATA(lv_v) = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_c ) ).
-      IF lv_a = 'A'.
-        lv_v = lcl_util=>alpha( lv_v ).
+      IF lv_a IS NOT INITIAL.
+        lv_v = lcl_util=>alpha( iv_in = lv_v iv_len = CONV i( lv_a ) ).
       ENDIF.
       lcl_util=>set( EXPORTING iv_comp = lv_f iv_value = lv_v
                      CHANGING  cs_data  = cs_data-vendor-central_data-central-data
@@ -1315,7 +1332,8 @@ CLASS lcl_h_create IMPLEMENTATION.
         IF lv_cf = 'AKONT'.
           lv_cv = lv_akont.                      " already ALPHA-converted
         ELSEIF lv_ca = 'A'.
-          lv_cv = lcl_util=>alpha( lv_cv ).
+          " FDGRV / FDGRP is CHAR 10 and carries ALPHA.
+          lv_cv = lcl_util=>alpha( iv_in = lv_cv iv_len = 10 ).
         ENDIF.
         lcl_util=>set( EXPORTING iv_comp = lv_cf iv_value = lv_cv
                        CHANGING cs_data = ls_cc-data cs_datax = ls_cc-datax ).
