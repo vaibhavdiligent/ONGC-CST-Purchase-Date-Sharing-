@@ -34,14 +34,26 @@ one ABAP report. No PI channel, no DB2 connection, no gather component.
 
 ## 2. Selection screen
 
+The report runs unattended as a daily job, so the screen carries only what a job
+variant needs — two fields:
+
 | Field | Type | Default | Purpose |
 |---|---|---|---|
 | `P_DATE` | `SY-DATUM` (obligatory) | `SY-DATUM` | Process date the revocation / expiration dates are compared against |
-| `S_INVCD` | select-option on `INVOICE_CD` | empty | Optional restriction (testing / re-runs) |
-| `P_CHGBY` | `ZAENAM` (CHAR 12) | `SY-UNAME` | Value written to `ZAENAM` (legacy constant was `AbInitio`) |
-| `P_TEST` | checkbox | `X` | Test run — classify and list, no database update |
-| `P_CMTSZ` | INT4 | 5000 | `COMMIT WORK` after n updated rows |
-| `P_ALV` | checkbox | `X` | ALV in dialog; classic list is always used in background |
+| `P_TEST` | checkbox | off | Test run — classify and list, no database update |
+
+Everything the old draft exposed as a parameter is now derived at runtime:
+
+| Dropped parameter | Now |
+|---|---|
+| `P_CHGBY` (changed by) | `SY-UNAME` — the job user (legacy graph wrote `AbInitio`) |
+| `P_CMTSZ` (commit size) | constant `GC_COMMIT_SIZE` = 5000 |
+| `P_ALV` (output form) | ALV in dialog, spool list when `SY-BATCH` is set |
+| `S_INVCD` (invoice range) | whole table — the daily job never restricts it |
+
+**Job setup (SM36):** step = program `/CCBJI/JCTINVR_CHECK_MODIFY`, variant `DAILY`
+with `P_DATE` = current date (dynamic date calculation "current date", so the variant
+never goes stale) and `P_TEST` blank; schedule daily 10:00 JST.
 
 ## 3. Processing logic
 
@@ -63,7 +75,7 @@ Case 2 keeps the legacy safeguard that a row flagged `D` **without** any revocat
 expiration date was deleted by another process and must not be reactivated.
 
 For every changed row the delta/audit block is refreshed exactly as the legacy reformat
-component did: `ZUPDIND`, `ZAENAM` (= `P_CHGBY`), `ZUPDAT` (= `SY-DATUM`),
+component did: `ZUPDIND`, `ZAENAM` (= `SY-UNAME`), `ZUPDAT` (= `SY-DATUM`),
 `ZUPTIM` (= `SY-UZEIT`). `MANDT` is not written explicitly — Open SQL works in the logon
 client of the job (the graph hard-coded `100`).
 
@@ -81,10 +93,10 @@ to `AND`; nothing else moves.
 * Only rows carrying a revocation or an expiration date are read
   (`WHERE revocation_date <> '00000000' OR expiration_date <> '00000000'`), and only
   four columns are transferred — the bulk of the registry never leaves the database.
-* Updates touch four fields per row and commit every `P_CMTSZ` rows, so a large first
+* Updates touch four fields per row and commit every 5000 rows, so a large first
   run does not build one huge transaction.
-* If the candidate set ever grows beyond comfortable memory, restrict with `S_INVCD`
-  or add a secondary index on `REVOCATION_DATE` / `EXPIRATION_DATE`.
+* If the candidate set ever grows beyond comfortable memory, add a secondary index
+  on `REVOCATION_DATE` / `EXPIRATION_DATE`.
 
 ## 5. Output
 
@@ -95,7 +107,7 @@ to `AND`; nothing else moves.
 
 ## 6. Test plan
 
-1. `P_TEST = 'X'` with `P_DATE = SY-DATUM` — check the classification against a manual
+1. `P_TEST` ticked with `P_DATE` = today — check the classification against a manual
    `SE16N` sample before any update run.
 2. Row with `REVOCATION_DATE` = yesterday and `ZUPDIND = 'U'` → becomes `D`.
 3. Row with `EXPIRATION_DATE` = yesterday and `ZUPDIND` initial → becomes `D`.

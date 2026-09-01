@@ -18,18 +18,6 @@
      <LENGTH>51</LENGTH>
     </item>
     <item>
-     <ID>I</ID>
-     <KEY>B01</KEY>
-     <ENTRY>Selection</ENTRY>
-     <LENGTH>9</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
-     <KEY>B02</KEY>
-     <ENTRY>Processing Options</ENTRY>
-     <LENGTH>18</LENGTH>
-    </item>
-    <item>
      <ID>S</ID>
      <KEY>P_DATE</KEY>
      <ENTRY>Process Date (Reference Date)</ENTRY>
@@ -37,33 +25,9 @@
     </item>
     <item>
      <ID>S</ID>
-     <KEY>S_INVCD</KEY>
-     <ENTRY>Invoice Registration Number</ENTRY>
-     <LENGTH>27</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_CHGBY</KEY>
-     <ENTRY>Changed By (ZAENAM)</ENTRY>
-     <LENGTH>19</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
      <KEY>P_TEST</KEY>
      <ENTRY>Test Run (No Database Update)</ENTRY>
      <LENGTH>29</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_CMTSZ</KEY>
-     <ENTRY>Commit After n Updates</ENTRY>
-     <LENGTH>22</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_ALV</KEY>
-     <ENTRY>Display Result as ALV List</ENTRY>
-     <LENGTH>26</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

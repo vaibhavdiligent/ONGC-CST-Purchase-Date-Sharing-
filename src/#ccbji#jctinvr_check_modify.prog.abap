@@ -31,14 +31,16 @@
 *&   For every changed row the delta/audit fields are refreshed exactly
 *&   like the legacy reformat component did:
 *&     ZUPDIND = 'D' / 'U'
-*&     ZAENAM  = changed-by  (legacy constant 'AbInitio', now the job
-*&                            user - overridable on the selection screen)
+*&     ZAENAM  = SY-UNAME    (legacy graph wrote the constant 'AbInitio')
 *&     ZUPDAT  = system date
 *&     ZUPTIM  = system time
 *&   MANDT is not set explicitly (the legacy graph forced 100); Open SQL
 *&   works in the logon client of the job.
 *&
-*& Scheduling : daily background job, legacy slot 10:00 JST.
+*& Scheduling : daily background job, legacy slot 10:00 JST. The report
+*& is built for unattended execution - the selection screen carries only
+*& the process date and a test-run flag, everything else (changed-by,
+*& commit size, output form) is derived at runtime.
 *&---------------------------------------------------------------------*
 REPORT /ccbji/jctinvr_check_modify.
 
@@ -67,13 +69,13 @@ TYPES: BEGIN OF ty_log,
 *----------------------------------------------------------------------*
 CONSTANTS: gc_ind_delete TYPE /ccbji/t_jctinvr-zupdind VALUE 'D',
            gc_ind_update TYPE /ccbji/t_jctinvr-zupdind VALUE 'U',
-           gc_date_init  TYPE /ccbji/t_jctinvr-revocation_date VALUE '00000000'.
+           gc_date_init  TYPE /ccbji/t_jctinvr-revocation_date VALUE '00000000',
+*          COMMIT WORK after this many updated rows
+           gc_commit_size TYPE i VALUE 5000.
 
 *----------------------------------------------------------------------*
 * GLOBAL DATA
 *----------------------------------------------------------------------*
-DATA: gs_invr TYPE /ccbji/t_jctinvr.
-
 DATA: gt_cand TYPE STANDARD TABLE OF ty_cand,
       gt_log  TYPE STANDARD TABLE OF ty_log,
       go_alv  TYPE REF TO cl_salv_table.
@@ -87,25 +89,10 @@ DATA: gv_read     TYPE i,
 *----------------------------------------------------------------------*
 * SELECTION SCREEN
 *----------------------------------------------------------------------*
-SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE TEXT-b01.
-  PARAMETERS     p_date  TYPE sy-datum OBLIGATORY DEFAULT sy-datum.
-  SELECT-OPTIONS s_invcd FOR gs_invr-invoice_cd.
-SELECTION-SCREEN END OF BLOCK b01.
-
-SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE TEXT-b02.
-  PARAMETERS: p_chgby TYPE /ccbji/t_jctinvr-zaenam DEFAULT sy-uname,
-              p_test  AS CHECKBOX DEFAULT 'X',
-              p_cmtsz TYPE i DEFAULT 5000,
-              p_alv   AS CHECKBOX DEFAULT 'X'.
-SELECTION-SCREEN END OF BLOCK b02.
-
-*----------------------------------------------------------------------*
-* AT SELECTION-SCREEN
-*----------------------------------------------------------------------*
-AT SELECTION-SCREEN.
-  IF p_cmtsz <= 0.
-    MESSAGE 'Commit size must be greater than zero' TYPE 'E'.
-  ENDIF.
+* The report is meant to run unattended as a daily job, so the screen is
+* kept to the two values a job variant ever needs.
+PARAMETERS: p_date TYPE sy-datum OBLIGATORY DEFAULT sy-datum,
+            p_test AS CHECKBOX.
 
 *----------------------------------------------------------------------*
 * START-OF-SELECTION
@@ -133,9 +120,8 @@ FORM read_candidates.
          expiration_date,
          zupdind
     FROM /ccbji/t_jctinvr
-   WHERE invoice_cd IN @s_invcd
-     AND ( revocation_date <> @gc_date_init
-        OR expiration_date <> @gc_date_init )
+   WHERE revocation_date <> @gc_date_init
+      OR expiration_date <> @gc_date_init
     INTO TABLE @gt_cand.
 
   gv_read = lines( gt_cand ).
@@ -201,6 +187,7 @@ ENDFORM.
 FORM update_database.
 
   DATA: lv_since_commit TYPE i,
+        lv_chgby        TYPE /ccbji/t_jctinvr-zaenam,
         lv_updat        TYPE /ccbji/t_jctinvr-zupdat,
         lv_uptim        TYPE /ccbji/t_jctinvr-zuptim.
 
@@ -208,6 +195,7 @@ FORM update_database.
     RETURN.
   ENDIF.
 
+  lv_chgby = sy-uname.                 "legacy graph wrote 'AbInitio'
   lv_updat = sy-datum.
   lv_uptim = sy-uzeit.
 
@@ -220,7 +208,7 @@ FORM update_database.
 
     UPDATE /ccbji/t_jctinvr
        SET zupdind = @<ls_log>-new_ind,
-           zaenam  = @p_chgby,
+           zaenam  = @lv_chgby,
            zupdat  = @lv_updat,
            zuptim  = @lv_uptim
      WHERE invoice_cd = @<ls_log>-invoice_cd.
@@ -234,7 +222,7 @@ FORM update_database.
     ENDIF.
 
     lv_since_commit = lv_since_commit + 1.
-    IF lv_since_commit >= p_cmtsz.
+    IF lv_since_commit >= gc_commit_size.
       COMMIT WORK AND WAIT.
       CLEAR lv_since_commit.
     ENDIF.
@@ -254,7 +242,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM display_result.
 
-  IF p_alv = abap_true AND sy-batch IS INITIAL.
+  IF sy-batch IS INITIAL.
     PERFORM display_alv.
   ELSE.
     PERFORM write_summary.
@@ -271,7 +259,7 @@ FORM write_summary.
   WRITE: / 'NTA invoice registration number - check and modify'.
   ULINE.
   WRITE: / 'Process date                 :', p_date.
-  WRITE: / 'Changed by (ZAENAM)          :', p_chgby.
+  WRITE: / 'Changed by (ZAENAM)          :', sy-uname.
   IF p_test = abap_true.
     WRITE: / 'Mode                         : Test run (no update)'.
   ELSE.
