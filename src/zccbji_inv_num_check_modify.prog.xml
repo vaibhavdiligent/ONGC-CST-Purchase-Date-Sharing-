@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_PROG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <PROGDIR>
+    <NAME>ZCCBJI_INV_NUM_CHECK_MODIFY</NAME>
+    <STATE>A</STATE>
+    <DTEFPS>U</DTEFPS>
+    <UCCHECK>X</UCCHECK>
+    <SUBC>1</SUBC>
+    <RSTAT>K</RSTAT>
+    <FIXPT>X</FIXPT>
+   </PROGDIR>
+   <TPOOL>
+    <item>
+     <ID>R</ID>
+     <ENTRY>NTA Invoice Number Status Check and Modify</ENTRY>
+     <LENGTH>42</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>B01</KEY>
+     <ENTRY>Selection</ENTRY>
+     <LENGTH>9</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>B02</KEY>
+     <ENTRY>Processing Options</ENTRY>
+     <LENGTH>18</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_DATE</KEY>
+     <ENTRY>Process Date (Reference Date)</ENTRY>
+     <LENGTH>29</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S_INVCD</KEY>
+     <ENTRY>Invoice Registration Number</ENTRY>
+     <LENGTH>27</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_CHGBY</KEY>
+     <ENTRY>Changed By (ZAENAM)</ENTRY>
+     <LENGTH>19</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_TEST</KEY>
+     <ENTRY>Test Run (No Database Update)</ENTRY>
+     <LENGTH>29</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_CMTSZ</KEY>
+     <ENTRY>Commit After n Updates</ENTRY>
+     <LENGTH>22</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_ALV</KEY>
+     <ENTRY>Display Result as ALV List</ENTRY>
+     <LENGTH>26</LENGTH>
+    </item>
+   </TPOOL>
+  </asx:values>
+ </asx:abap>
+</abapGit>
