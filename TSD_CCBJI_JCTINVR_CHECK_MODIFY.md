@@ -3,6 +3,7 @@
 | | |
 |---|---|
 | Program | `/CCBJI/JCTINVR_CHECK_MODIFY` |
+| Report title | NTA Invoice Reg.No. - Daily Status Check and Modify |
 | Transaction | `/CCBJI/JCTINVRCHK` |
 | Replaces | Ab Initio / PI graph `05228MD_NationalTaxAgency_C1_InvoiceNumber_CheckModify` |
 | Package | `/CCBJI/ODATA_DYNAMIC` (same package as the JCTINVR OData objects) |

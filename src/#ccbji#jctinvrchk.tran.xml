@@ -16,7 +16,7 @@
    </TSTCC>
    <TSTCT>
     <TCODE>/CCBJI/JCTINVRCHK</TCODE>
-    <TTEXT>NTA Invoice Number Check and Modify</TTEXT>
+    <TTEXT>NTA Invoice Reg.No. Check and Modify</TTEXT>
    </TSTCT>
   </asx:values>
  </asx:abap>

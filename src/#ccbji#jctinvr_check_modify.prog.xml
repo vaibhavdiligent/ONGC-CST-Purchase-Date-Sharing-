@@ -14,8 +14,8 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>NTA Invoice Number Status Check and Modify</ENTRY>
-     <LENGTH>42</LENGTH>
+     <ENTRY>NTA Invoice Reg.No. - Daily Status Check and Modify</ENTRY>
+     <LENGTH>51</LENGTH>
     </item>
     <item>
      <ID>I</ID>
