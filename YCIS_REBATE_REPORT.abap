@@ -73,6 +73,15 @@ TYPES: BEGIN OF ty_out,
          l3_user    TYPE ycis_apprvl-l3_user,
          l3_date    TYPE ycis_apprvl-l3_date,
          l3_time    TYPE ycis_apprvl-l3_time,
+         l4_user    TYPE ycis_apprvl-l4_user,
+         l4_date    TYPE ycis_apprvl-l4_date,
+         l4_time    TYPE ycis_apprvl-l4_time,
+         l5_user    TYPE ycis_apprvl-l5_user,
+         l5_date    TYPE ycis_apprvl-l5_date,
+         l5_time    TYPE ycis_apprvl-l5_time,
+         l6_user    TYPE ycis_apprvl-l6_user,
+         l6_date    TYPE ycis_apprvl-l6_date,
+         l6_time    TYPE ycis_apprvl-l6_time,
        END OF ty_out.
 
 TYPES: BEGIN OF ty_grade,
@@ -290,6 +299,15 @@ FORM fill_appr_trail USING p_appr TYPE ycis_apprvl.
   gs_out-l3_user = p_appr-l3_user.
   gs_out-l3_date = p_appr-l3_date.
   gs_out-l3_time = p_appr-l3_time.
+  gs_out-l4_user = p_appr-l4_user.
+  gs_out-l4_date = p_appr-l4_date.
+  gs_out-l4_time = p_appr-l4_time.
+  gs_out-l5_user = p_appr-l5_user.
+  gs_out-l5_date = p_appr-l5_date.
+  gs_out-l5_time = p_appr-l5_time.
+  gs_out-l6_user = p_appr-l6_user.
+  gs_out-l6_date = p_appr-l6_date.
+  gs_out-l6_time = p_appr-l6_time.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  status_text   (readable workflow status for the report)
@@ -396,6 +414,15 @@ FORM build_fieldcat.
   add_fc 'L3_USER'     'L3 Executed By'        'YCIS_APPRVL'     'L3_USER'.
   add_fc 'L3_DATE'     'L3 Date'               'YCIS_APPRVL'     'L3_DATE'.
   add_fc 'L3_TIME'     'L3 Time'               'YCIS_APPRVL'     'L3_TIME'.
+  add_fc 'L4_USER'     'L4 Vetted By'          'YCIS_APPRVL'     'L4_USER'.
+  add_fc 'L4_DATE'     'L4 Date'               'YCIS_APPRVL'     'L4_DATE'.
+  add_fc 'L4_TIME'     'L4 Time'               'YCIS_APPRVL'     'L4_TIME'.
+  add_fc 'L5_USER'     'L5 Approved By'        'YCIS_APPRVL'     'L5_USER'.
+  add_fc 'L5_DATE'     'L5 Date'               'YCIS_APPRVL'     'L5_DATE'.
+  add_fc 'L5_TIME'     'L5 Time'               'YCIS_APPRVL'     'L5_TIME'.
+  add_fc 'L6_USER'     'L6 Disbursed By'       'YCIS_APPRVL'     'L6_USER'.
+  add_fc 'L6_DATE'     'L6 Date'               'YCIS_APPRVL'     'L6_DATE'.
+  add_fc 'L6_TIME'     'L6 Time'               'YCIS_APPRVL'     'L6_TIME'.
   add_fc 'REJ_BY'      'Rejected By'           'YCIS_APPRVL'     'REJ_BY'.
   add_fc 'REJ_REMARKS' 'Reject Remark'         'YCIS_APPRVL'     'REJ_REMARKS'.
 
