@@ -3,7 +3,7 @@
  <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
   <asx:values>
    <PROGDIR>
-    <NAME>ZCCBJI_INV_NUM_CHECK_MODIFY</NAME>
+    <NAME>/CCBJI/JCTINVR_CHECK_MODIFY</NAME>
     <STATE>A</STATE>
     <DTEFPS>U</DTEFPS>
     <UCCHECK>X</UCCHECK>

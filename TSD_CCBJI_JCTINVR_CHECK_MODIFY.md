@@ -2,9 +2,10 @@
 
 | | |
 |---|---|
-| Program | `ZCCBJI_INV_NUM_CHECK_MODIFY` |
-| Transaction | `ZCCBJI_INVCHK` |
+| Program | `/CCBJI/JCTINVR_CHECK_MODIFY` |
+| Transaction | `/CCBJI/JCTINVRCHK` |
 | Replaces | Ab Initio / PI graph `05228MD_NationalTaxAgency_C1_InvoiceNumber_CheckModify` |
+| Package | `/CCBJI/ODATA_DYNAMIC` (same package as the JCTINVR OData objects) |
 | Table | `/CCBJI/T_JCTINVR` — Invoice registration number (qualified invoicing business) |
 | Schedule | Daily background job, legacy slot 10:00 JST |
 | Author | Claude (Diligent Consulting) — for Vaibhav Maheshwari |
@@ -28,7 +29,7 @@ one ABAP report. No PI channel, no DB2 connection, no gather component.
 | Reformat output (`zupdind/mandt/zaenam/zupdat/zuptim`) | field assignment in `FORM update_database` |
 | Gather | single internal table `gt_log` |
 | Update DB2 target (key `mandt + invoice_cd`) | `UPDATE /ccbji/t_jctinvr … WHERE invoice_cd = …` |
-| Daily 10:00 JST schedule | SM36 job on `ZCCBJI_INVCHK` |
+| Daily 10:00 JST schedule | SM36 job on `/CCBJI/JCTINVRCHK` |
 
 ## 2. Selection screen
 
@@ -102,13 +103,29 @@ to `AND`; nothing else moves.
 6. Re-run the same day → zero changes (the job is idempotent).
 7. Back-date `P_DATE` to reproduce a historical run and compare with the legacy DB2 result.
 
-## 7. Transport objects
+## 7. Naming convention
 
-| Object | Type |
-|---|---|
-| `ZCCBJI_INV_NUM_CHECK_MODIFY` | Report (`src/zccbji_inv_num_check_modify.prog.*`) |
-| `ZCCBJI_INVCHK` | Transaction (`src/zccbji_invchk.tran.xml`) |
+The object names follow the objects already deployed for this same table and the same
+NTA interface (see `ZCCBJI_JCTINVR_ODATA_GUIDE.md` on branch
+`claude/odata-ccbji-t-jctinvr-zntu9g`): the productive import goes into package
+`/CCBJI/ODATA_DYNAMIC` and the objects carry the `/CCBJI/` namespace —
+`/CCBJI/CL_JCTINVR_MPC`, `/CCBJI/CL_JCTINVR_DPC`, `/CCBJI/JCTINVR_MDL`,
+`/CCBJI/JCTINVR_SRV`. This report is the batch counterpart of that inbound service,
+so it joins the same `JCTINVR` family:
 
-Both are Z-namespace so they activate in the customer package without a namespace
-licence. If the objects must live in `/CCBJI/`, rename to
-`/CCBJI/RUJCTR_INVNUM_CHKMOD` and `/CCBJI/RUJCT_INVCHK` — the code is unchanged.
+| Object | Name | abapGit file |
+|---|---|---|
+| Report | `/CCBJI/JCTINVR_CHECK_MODIFY` (27 chars, limit 30) | `src/#ccbji#jctinvr_check_modify.prog.*` |
+| Transaction | `/CCBJI/JCTINVRCHK` (17 chars, limit 20) | `src/#ccbji#jctinvrchk.tran.xml` |
+
+CCBJI also runs an older report convention of the form
+`/CCBJI/R<U|D><module><submodule>R_<name>` (`/CCBJI/RUFIGLR_REPORTING_SUPP`,
+`/CCBJI/RUFIAPR_ACCURAL_DME`, `/CCBJI/RUSDSLSR_LSA_UPLOAD`). If the CCBJI object
+register requires that form for this interface (05228**MD** = master data), the
+equivalent name is `/CCBJI/RUFIMDR_INVNUM_CHKMOD` with transaction
+`/CCBJI/RUFIMD_INVCHK` — rename the two files, the `REPORT` statement, `<NAME>` in
+the `.prog.xml` and `TCODE`/`PGMNA` in the `.tran.xml`; the logic is unaffected.
+
+Creating objects in `/CCBJI/` requires the namespace to be set to *modifiable* in
+SE03 on the target system (repair licence for the namespace), which is already the
+case there — the OData classes above were imported the same way.

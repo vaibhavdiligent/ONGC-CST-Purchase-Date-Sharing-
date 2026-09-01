@@ -1,5 +1,5 @@
 *&---------------------------------------------------------------------*
-*& Report  ZCCBJI_INV_NUM_CHECK_MODIFY
+*& Report  /CCBJI/JCTINVR_CHECK_MODIFY
 *&---------------------------------------------------------------------*
 *& National Tax Agency (NTA) - Qualified Invoice Issuer Registration
 *& Number : status check and modify.
@@ -40,7 +40,7 @@
 *&
 *& Scheduling : daily background job, legacy slot 10:00 JST.
 *&---------------------------------------------------------------------*
-REPORT zccbji_inv_num_check_modify.
+REPORT /ccbji/jctinvr_check_modify.
 
 *----------------------------------------------------------------------*
 * TYPES
