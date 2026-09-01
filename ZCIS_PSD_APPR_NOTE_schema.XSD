@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xsd:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xfa="http://www.xfa.org/schema/xfa-template/2.2/" xmlns:xfadata="http://www.xfa.org/schema/xfa-data/1.0/" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+ <xsd:import namespace="http://www.xfa.org/schema/xfa-data/1.0/"/>
+ <xsd:element name="data">
+  <xsd:complexType>
+   <xsd:sequence>
+    <xsd:element name="WA_NOTE">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>CIS PSD Approval Note - Header</xsd:documentation>
+      <xsd:appinfo><dc:description>CIS PSD Approval Note - Header</dc:description></xsd:appinfo>
+     </xsd:annotation>
+     <xsd:complexType>
+      <xsd:sequence>
+       <xsd:element name="APPR_NOTE_NO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Approval Note Number</xsd:documentation>
+         <xsd:appinfo><dc:description>Approval Note Number</dc:description><dc:title>Approval Note #</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="20"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="REF_NO">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Reference Number</xsd:documentation>
+         <xsd:appinfo><dc:description>Reference Number</dc:description><dc:title>Ref. No.</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DOC_DATE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Approval Note Date</xsd:documentation>
+         <xsd:appinfo><dc:description>Approval Note Date</dc:description><dc:title>Date</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="10"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="VARIANT_NAME">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Scheme / Variant Name</xsd:documentation>
+         <xsd:appinfo><dc:description>Scheme / Variant Name</dc:description><dc:title>Subject: Disbursement of Discounts for</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="DISC_TOTAL_VALUE">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Discount Total Value</xsd:documentation>
+         <xsd:appinfo><dc:description>Discount Total Value</dc:description><dc:title>Discount total value (Rs.)</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="25"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L1_REMARKS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L1 Remarks</xsd:documentation>
+         <xsd:appinfo><dc:description>L1 Remarks</dc:description><dc:title>Comments/Remarks entered during L1 approval</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="200"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L1_SIGN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L1 Signature/CPF/Time</xsd:documentation>
+         <xsd:appinfo><dc:description>L1 Signature/CPF/Time</dc:description><dc:title>L1 digital signature, CPF No. &amp; Time Stamp</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L2_REMARKS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L2 Remarks</xsd:documentation>
+         <xsd:appinfo><dc:description>L2 Remarks</dc:description><dc:title>Comments/Remarks entered during L2 approval</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="200"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L2_SIGN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L2 Signature/CPF/Time</xsd:documentation>
+         <xsd:appinfo><dc:description>L2 Signature/CPF/Time</dc:description><dc:title>L2 digital signature, CPF No. &amp; Time Stamp</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L3_REMARKS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L3 Remarks</xsd:documentation>
+         <xsd:appinfo><dc:description>L3 Remarks</dc:description><dc:title>Comments/Remarks entered during L3 approval</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="200"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L3_SIGN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L3 Signature/CPF/Time</xsd:documentation>
+         <xsd:appinfo><dc:description>L3 Signature/CPF/Time</dc:description><dc:title>L3 digital signature, CPF No. &amp; Time Stamp</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L4_REMARKS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L4 Remarks</xsd:documentation>
+         <xsd:appinfo><dc:description>L4 Remarks</dc:description><dc:title>Comments/Remarks entered during L4 approval</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="200"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L4_SIGN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L4 Signature/CPF/Time</xsd:documentation>
+         <xsd:appinfo><dc:description>L4 Signature/CPF/Time</dc:description><dc:title>L4 digital signature, CPF No. &amp; Time Stamp</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L5_REMARKS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L5 Remarks</xsd:documentation>
+         <xsd:appinfo><dc:description>L5 Remarks</dc:description><dc:title>Comments/Remarks entered during L5 approval</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="200"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L5_SIGN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L5 Signature/CPF/Time</xsd:documentation>
+         <xsd:appinfo><dc:description>L5 Signature/CPF/Time</dc:description><dc:title>L5 digital signature, CPF No. &amp; Time Stamp</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L6_REMARKS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L6 Remarks</xsd:documentation>
+         <xsd:appinfo><dc:description>L6 Remarks</dc:description><dc:title>Comments/Remarks entered during L6 approval</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="200"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+       <xsd:element name="L6_SIGN">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>L6 Signature/CPF/Time</xsd:documentation>
+         <xsd:appinfo><dc:description>L6 Signature/CPF/Time</dc:description><dc:title>L6 digital signature, CPF No. &amp; Time Stamp</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+      </xsd:sequence>
+     </xsd:complexType>
+    </xsd:element>
+   </xsd:sequence>
+  </xsd:complexType>
+ </xsd:element>
+</xsd:schema>

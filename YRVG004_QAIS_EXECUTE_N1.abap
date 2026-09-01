@@ -3,7 +3,7 @@
 *&  Standalone (single-program) build of YRVG004_QAIS_EXECUTE.
 *&  All includes (TOP / SEL / F01) merged in include-expansion order.
 *&  CIS lifting % change: Monthly 80->75, Annual 85->80.
-*&  PRODUCTION = 2026-27; plus a clearly marked TEST ONLY 2025-26 block.
+*&  PRODUCTION = 2026-27 (TEST ONLY 2025-26 block removed at go-live).
 *&---------------------------------------------------------------------*
 REPORT  yrvg004_qais_execute_n1 MESSAGE-ID yv01.
 
@@ -406,12 +406,13 @@ DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 TABLES: ycis_apprvl, ycis_wf_appr.
 DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
+DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 *** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
 *   Group / MLE membership is read from BP relationships (table BUT050):
 *     RELTYP 'ZGPGRP' = Has Group Customer, 'ZGPMLL' = Has MLE.
-*     Derived via CVI_CUST_LINK + BUT000 (see get_group_mle_members).
+*     Derived via CVI_CUST_LINK + BUT000 (see build_bp_clusters).
 *   Non-discount grades (PS/GS/Powder/Polyfines) count for eligibility but
 *   receive no monthly/annual discount -> YCIS_NODISC_GRD.
 *   The 200 MT upper-capping is already handled inside YRVG004 at CIS
@@ -420,10 +421,31 @@ DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail
 TABLES: ycis_nodisc_grd.
 DATA: it_but050        TYPE STANDARD TABLE OF but050,
       wa_but050        TYPE but050,
-      it_grp_members   TYPE STANDARD TABLE OF kunnr,        " group/MLE member customer codes
-      wa_grp_member    TYPE kunnr,
       it_ycis_nodisc   TYPE STANDARD TABLE OF ycis_nodisc_grd,
       wa_ycis_nodisc   TYPE ycis_nodisc_grd.
+*   Group-clubbing gate (CIS 2026-27 R3, GAIL 30.07.2026): quantities are
+*   clubbed across customers ONLY when a valid BP relationship (BUT050,
+*   Group / MLE relationship family - RELTYP contains 'ZGP', e.g. ZGPGRP /
+*   ZGPMLL, shown in BP as "Has Group Customer" / "Has Multi Location
+*   Entity") is maintained - sharing KVGR2 alone is no longer sufficient.
+*   Group/MLE relationships are STAR-shaped (one flagship BP linked to many
+*   members), so a per-row lookup cannot see the whole group. Instead we
+*   build BP CLUSTERS once: every customer connected (either direction,
+*   transitively) through a ZGP* relationship lands in the same cluster, and
+*   clubbing is allowed only within a cluster. A customer with no ZGP*
+*   relationship stays in its own singleton cluster (no clubbing).
+TYPES: BEGIN OF ty_bpcust,
+         kunnr TYPE kunnr,
+         bp    TYPE but000-partner,
+       END OF ty_bpcust,
+       BEGIN OF ty_clust,
+         kunnr   TYPE kunnr,
+         cluster TYPE kunnr,       " representative kunnr of the cluster
+       END OF ty_clust.
+DATA: it_bpcust      TYPE STANDARD TABLE OF ty_bpcust,
+      it_clust       TYPE SORTED TABLE OF ty_clust WITH UNIQUE KEY kunnr,
+      gv_clust_built TYPE flag,    " X once BP clusters have been built
+      gv_ismem       TYPE flag.    " is_grp_member result
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *   CIS (qais_no) that have at least one signed material declared shortfall
 *   for the period -> eligible for monthly shortfall waiver (Clause 8).
@@ -981,11 +1003,11 @@ FORM validation .
         ENDIF.
       ENDIF.
       IF lv_siml NE 'X'.
-*       TESTING (GAIL UAT): future end-date check disabled on request.
-*       Restore the block below to re-enable it before go-live.
-*        IF s_sptag-high GT sy-datum.
-*          MESSAGE 'End date can not be Future date' TYPE 'E' .
-*        ENDIF.
+*       Go-live: end date must not be a future date. (Re-enabled after UAT -
+*       was disabled during testing on request. GAIL 06.08.2026)
+        IF s_sptag-high GT sy-datum.
+          MESSAGE 'End date can not be Future date' TYPE 'E' .
+        ENDIF.
       ENDIF.
     ELSEIF r_newcus = 'X' AND   "Vivek
         ( s_sptag-low+4(4) NE '0801' OR  s_sptag-high+4(4) NE '0331' ) .
@@ -1178,51 +1200,40 @@ FORM get_data.
 *   Max % (125) unchanged. Gated by the s_sptag period so other scheme
 *   years are untouched.
 *   ------------------------------------------------------------------
+*   GAIL 30.07.2026 : this override must HONOUR YRVR147 (yrva_mstr_waiver).
+*   Earlier it force-set every month to 75 AFTER the table was read, which
+*   clobbered a min% the user had maintained - e.g. March set to nil to
+*   waive the 75% floor was reset to 75, so the March discount never
+*   computed. Now we only migrate the legacy 80% floor to 75%; any value
+*   the user maintained in YRVR147 (including an intentional nil = waived
+*   month) is left exactly as maintained.
+  DEFINE set_min75.
+    IF wa_yrva_mstr_waiver-&1 = 80.
+      wa_yrva_mstr_waiver-&1 = 75.
+    ENDIF.
+  END-OF-DEFINITION.
 *   PRODUCTION : CIS 2026-27 (this is the live scheme year).
 *   Monthly run = single scheme month Jun'2026 - Mar'2027.
   IF s_sptag-low GE '20260601' AND s_sptag-high LE '20270331'.
-    wa_yrva_mstr_waiver-min_perc_m1   = 75.
-    wa_yrva_mstr_waiver-min_perc_m2   = 75.
-    wa_yrva_mstr_waiver-min_perc_m3   = 75.
-    wa_yrva_mstr_waiver-min_perc_m4   = 75.
-    wa_yrva_mstr_waiver-min_perc_m5   = 75.
-    wa_yrva_mstr_waiver-min_perc_m6   = 75.
-    wa_yrva_mstr_waiver-min_perc_m7   = 75.
-    wa_yrva_mstr_waiver-min_perc_m8   = 75.
-    wa_yrva_mstr_waiver-min_perc_m9   = 75.
-    wa_yrva_mstr_waiver-min_perc_m10  = 75.
-    wa_yrva_mstr_waiver-min_perc_m11  = 75.
-    wa_yrva_mstr_waiver-min_perc_m12  = 75.
+    set_min75 min_perc_m1.
+    set_min75 min_perc_m2.
+    set_min75 min_perc_m3.
+    set_min75 min_perc_m4.
+    set_min75 min_perc_m5.
+    set_min75 min_perc_m6.
+    set_min75 min_perc_m7.
+    set_min75 min_perc_m8.
+    set_min75 min_perc_m9.
+    set_min75 min_perc_m10.
+    set_min75 min_perc_m11.
+    set_min75 min_perc_m12.
   ENDIF.
 *   Annual run = fiscal year 01.04.2026 - 31.03.2027.
   IF s_sptag-low EQ '20260401' AND s_sptag-high EQ '20270331'.
     wa_yrva_mstr_waiver-annual_min   = 80.
   ENDIF.
-*** SOC : TEST ONLY - CIS 2025-26 - REMOVE before running PRODUCTION only ***
-*   Test data is available only for FY 2025-26, so the same new logic is
-*   enabled for 2025-26 to allow testing. DELETE this whole TEST ONLY
-*   block (down to its EOC marker) when the program is to run for the
-*   live 2026-27 scheme only.
-*   Monthly test run = single scheme month Jun'2025 - Mar'2026.
-  IF s_sptag-low GE '20250601' AND s_sptag-high LE '20260331'.
-    wa_yrva_mstr_waiver-min_perc_m1   = 75.
-    wa_yrva_mstr_waiver-min_perc_m2   = 75.
-    wa_yrva_mstr_waiver-min_perc_m3   = 75.
-    wa_yrva_mstr_waiver-min_perc_m4   = 75.
-    wa_yrva_mstr_waiver-min_perc_m5   = 75.
-    wa_yrva_mstr_waiver-min_perc_m6   = 75.
-    wa_yrva_mstr_waiver-min_perc_m7   = 75.
-    wa_yrva_mstr_waiver-min_perc_m8   = 75.
-    wa_yrva_mstr_waiver-min_perc_m9   = 75.
-    wa_yrva_mstr_waiver-min_perc_m10  = 75.
-    wa_yrva_mstr_waiver-min_perc_m11  = 75.
-    wa_yrva_mstr_waiver-min_perc_m12  = 75.
-  ENDIF.
-*   Annual test run = fiscal year 01.04.2025 - 31.03.2026.
-  IF s_sptag-low EQ '20250401' AND s_sptag-high EQ '20260331'.
-    wa_yrva_mstr_waiver-annual_min   = 80.
-  ENDIF.
-*** EOC : TEST ONLY - CIS 2025-26 ***
+*   TEST-ONLY (CIS 2025-26) block removed for go-live - production runs the
+*   live 2026-27 scheme only. (GAIL 06.08.2026)
 *** EOC : CIS lifting % change (period-gated) ***
   MOVE-CORRESPONDING wa_yrva_mstr_waiver TO wa_yrva_mstr_waiver_temp.
 
@@ -2609,7 +2620,7 @@ FORM format_data .
 *              AND wa_s922-kondm NE  '46' AND wa_s922-kondm NE  '38'   .
 *              CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '11' AND wa_s922-kondm NE  '14' AND
@@ -2671,7 +2682,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -2728,7 +2739,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -2781,6 +2792,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -2798,7 +2815,7 @@ FORM format_data .
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P.
 * EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 * SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 * EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
@@ -2851,6 +2868,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -2864,7 +2887,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
@@ -2913,6 +2936,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -2926,7 +2955,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000006951.
 *                NE  '09' AND
@@ -2996,7 +3025,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3052,7 +3081,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3108,7 +3137,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3163,6 +3192,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3177,7 +3212,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " EOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " SOC Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " SOC Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " EOC Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3225,6 +3260,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3238,7 +3279,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '09' AND
@@ -3287,6 +3328,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3300,7 +3347,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P. " Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p. " Added by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007173.
 *                NE  '09' AND
@@ -3370,7 +3417,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3426,7 +3473,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3482,7 +3529,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3537,6 +3584,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3551,7 +3604,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3599,6 +3652,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3613,7 +3672,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3661,6 +3720,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3675,7 +3740,7 @@ FORM format_data .
 *            ENDIF.
 *            IF WA_YRVA_QAIS_DATA-P_D_SECTOR = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *              IF WA_YRVA_QAIS_DATA-P_R_INDICATOR = 'P' AND WA_S922-KONDM NOT IN RANGE_P." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000007571
 *                NE  '09' AND
 *                wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3743,7 +3808,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3799,7 +3864,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3855,7 +3920,7 @@ FORM format_data .
 *            AND WA_S922-KONDM NE  '46' AND WA_S922-KONDM NE  '38'   .
 *            CONTINUE.
 *          ENDIF.
-          IF wa_yrva_qais_data-p_d_sector = 'X'.
+          IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *              NE  '09' AND
 *              wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -3910,6 +3975,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3923,7 +3994,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 **            IF wa_yrva_qais_data-p_d_sector = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'."  SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'."  SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 **              IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '09' AND
@@ -3972,6 +4043,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -3985,7 +4062,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 ***            IF wa_yrva_qais_data-p_d_sector = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 **              IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '09' AND
@@ -4034,6 +4111,12 @@ FORM format_data .
       ENDIF.
       IF w_begda LT w_endda.
         LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*         CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+          PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                      wa_kunnr-kunnr CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
           LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
             AND pkunag = wa_kunnr-kunnr
             AND kvgr2 = wa_kunnr-kvgr2.
@@ -4047,7 +4130,7 @@ FORM format_data .
 *              CONTINUE.
 *            ENDIF.
 **            IF wa_yrva_qais_data-p_d_sector = 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
-            IF wa_yrva_qais_data_temp-p_d_sector = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
+            IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 **              IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
               IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm 4000008015.
 *                NE  '09' AND
@@ -4079,7 +4162,52 @@ FORM format_data .
       MODIFY  it_yrva_qais_data_temp FROM wa_yrva_qais_data_temp.
     ENDLOOP.
   ENDIF.
+*   CIS 2026-27: Group Lifted = SUM of members' Individual Lifted (see form)
+  PERFORM correct_group_lift.
 ENDFORM.                    " FORMAT_DATA
+*&---------------------------------------------------------------------*
+*&      Form  correct_group_lift   (CIS 2026-27 - GAIL 31.07.2026)
+*&---------------------------------------------------------------------*
+*   NILKAMAL 1726 vs 2246 ; CARRIS 70 vs 98: the group-lift loops clip every
+*   member by the FLAGSHIP's MOU start date (wa_yrva_qais_data_temp-mou_begda)
+*   while the individual-lift loops clip each customer by its OWN mou_begda,
+*   so members that lifted before the flagship's MOU were dropped from the
+*   group total - Group Lifted came out LESS than the sum of the individual
+*   lifted quantities of the same members. Group Lifted must equal that sum.
+*   Recompute each flagship's group totals as the exact sum of its BP-cluster
+*   members' individual lifted quantities (same cluster gate used for
+*   clubbing). Called from BOTH format_data (quarterly) and format_data_month
+*   (monthly), since each computes its own group loops. Non-group rows (blank
+*   KVGR2) are skipped - they display the individual value directly.
+*&---------------------------------------------------------------------*
+FORM correct_group_lift.
+  DATA: ls_gf TYPE yrva_qais_data,
+        ls_gm TYPE yrva_qais_data.
+  LOOP AT it_yrva_qais_data_temp INTO ls_gf.
+    CHECK ls_gf-kvgr2 IS NOT INITIAL.
+    CLEAR: ls_gf-grp_lift_qty_m1,  ls_gf-grp_lift_qty_m2,  ls_gf-grp_lift_qty_m3,
+           ls_gf-grp_lift_qty_m4,  ls_gf-grp_lift_qty_m5,  ls_gf-grp_lift_qty_m6,
+           ls_gf-grp_lift_qty_m7,  ls_gf-grp_lift_qty_m8,  ls_gf-grp_lift_qty_m9,
+           ls_gf-grp_lift_qty_m10, ls_gf-grp_lift_qty_m11, ls_gf-grp_lift_qty_m12.
+    LOOP AT it_yrva_qais_data INTO ls_gm WHERE kvgr2 = ls_gf-kvgr2.
+      PERFORM is_grp_member USING ls_gf-kunnr ls_gm-kunnr CHANGING gv_ismem.
+      CHECK gv_ismem = 'X'.
+      ls_gf-grp_lift_qty_m1  = ls_gf-grp_lift_qty_m1  + ls_gm-ind_lift_qty_m1.
+      ls_gf-grp_lift_qty_m2  = ls_gf-grp_lift_qty_m2  + ls_gm-ind_lift_qty_m2.
+      ls_gf-grp_lift_qty_m3  = ls_gf-grp_lift_qty_m3  + ls_gm-ind_lift_qty_m3.
+      ls_gf-grp_lift_qty_m4  = ls_gf-grp_lift_qty_m4  + ls_gm-ind_lift_qty_m4.
+      ls_gf-grp_lift_qty_m5  = ls_gf-grp_lift_qty_m5  + ls_gm-ind_lift_qty_m5.
+      ls_gf-grp_lift_qty_m6  = ls_gf-grp_lift_qty_m6  + ls_gm-ind_lift_qty_m6.
+      ls_gf-grp_lift_qty_m7  = ls_gf-grp_lift_qty_m7  + ls_gm-ind_lift_qty_m7.
+      ls_gf-grp_lift_qty_m8  = ls_gf-grp_lift_qty_m8  + ls_gm-ind_lift_qty_m8.
+      ls_gf-grp_lift_qty_m9  = ls_gf-grp_lift_qty_m9  + ls_gm-ind_lift_qty_m9.
+      ls_gf-grp_lift_qty_m10 = ls_gf-grp_lift_qty_m10 + ls_gm-ind_lift_qty_m10.
+      ls_gf-grp_lift_qty_m11 = ls_gf-grp_lift_qty_m11 + ls_gm-ind_lift_qty_m11.
+      ls_gf-grp_lift_qty_m12 = ls_gf-grp_lift_qty_m12 + ls_gm-ind_lift_qty_m12.
+    ENDLOOP.
+    MODIFY it_yrva_qais_data_temp FROM ls_gf.
+  ENDLOOP.
+ENDFORM.                    "correct_group_lift
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA_MONTH
 *&---------------------------------------------------------------------*
@@ -4119,7 +4247,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4158,7 +4286,7 @@ FORM format_data_month .
             LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4197,7 +4325,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4271,11 +4399,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4335,11 +4469,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4398,11 +4538,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4480,7 +4626,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4519,7 +4665,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4557,7 +4703,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr
               AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4633,11 +4779,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4701,11 +4853,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4774,11 +4932,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4855,7 +5019,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4901,7 +5065,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -4947,7 +5111,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5025,11 +5189,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5103,11 +5273,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
 **soc BY UJJWAL/priyanka on charm 400003180 on 01-12-2020 to exclude some MPG as per indivisul liftted qty
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND  wa_s922-kondm NOT IN range_p.
 **                    wa_s922-kondm
@@ -5185,11 +5361,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5274,7 +5456,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5312,7 +5494,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5350,7 +5532,7 @@ FORM format_data_month .
               AND pkunag = wa_yrva_qais_data-kunnr.
 *              AND kvgr2 = wa_yrva_qais_data-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-              IF wa_yrva_qais_data-p_d_sector = 'X'.
+              IF wa_yrva_qais_data-p_d_sector = 'X' OR wa_yrva_qais_data-p_r_indicator = 'S'.
                 IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                  NE  '09' AND
 *                  wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5425,11 +5607,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2..
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5489,11 +5677,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5552,11 +5746,17 @@ FORM format_data_month .
           ENDIF.
           IF w_begda LT w_endda.
             LOOP AT it_kunnr INTO wa_kunnr WHERE kvgr2 = wa_yrva_qais_data_temp-kvgr2.
+*             CIS 2026-27 R3: club only genuine BP-relationship group/MLE members
+              PERFORM is_grp_member USING wa_yrva_qais_data_temp-kunnr
+                                          wa_kunnr-kunnr CHANGING gv_ismem.
+              IF gv_ismem IS INITIAL.
+                CONTINUE.
+              ENDIF.
               LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN w_begda AND w_endda
                 AND pkunag = wa_kunnr-kunnr
                 AND kvgr2 = wa_kunnr-kvgr2.
 *       consider only selected material in case of Pipe and ducting sector.
-                IF wa_yrva_qais_data_temp-p_d_sector = 'X'.
+                IF wa_yrva_qais_data_temp-p_d_sector = 'X' OR wa_yrva_qais_data_temp-p_r_indicator = 'S'.
                   IF wa_yrva_qais_data_temp-p_r_indicator = 'P' AND wa_s922-kondm NOT IN range_p.
 *                    NE  '09' AND
 *                    wa_s922-kondm NE  '34'  AND wa_s922-kondm NE  '20'
@@ -5602,6 +5802,8 @@ FORM format_data_month .
     CLEAR : wa_yrva_qais_data_temp.
 ****EOC BY ujjwal & PRIYANKA and madan sir ON 24.07.2019 ; Correcting invalid code et group lifted quantity
   ENDIF.
+*   CIS 2026-27: Group Lifted = SUM of members' Individual Lifted (monthly path)
+  PERFORM correct_group_lift.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  QUARTER_DISCOUNT
@@ -7456,6 +7658,13 @@ FORM annual_discount .
         LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN s_sptag-low AND s_sptag-high
 *              AND pkunag = wa_yrva_qais_data-kunnr
          AND kvgr2 = wa_yrva_qais_data-kvgr2.
+*         CIS 2026-27 (GAIL 31.07.2026): club only genuine BP-relationship
+*         group/MLE members, same as the monthly path - not raw KVGR2.
+          PERFORM is_grp_member USING wa_yrva_qais_data-kunnr
+                                      wa_s922-pkunag CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
 *       consider only selected material in case of Pipe and ducting sector
           IF wa_yrva_qais_data-p_d_sector = 'X'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NE  '09' AND
@@ -7831,10 +8040,21 @@ FORM monthly_discount .
 *   the monthly shortfall waiver automatically (replaces manual YRVG018).
 *   It only binds when monthly lifting < 75% MCQ (otherwise the customer
 *   meets the minimum anyway), which matches Clause 8(e).
+    DATA lv_nsf_ok TYPE c.               " non-shortfall 75% rule met (GAIL 05.08.2026)
+    lv_nsf_ok = 'X'.
     READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
          WITH KEY qais_no = wa_yrva_qais_data-qais_no.
     IF sy-subrc EQ 0.
-      w_waive_month = 'X' .
+*     GAIL 05.08.2026: grant the monthly shortfall waiver ONLY when the
+*     customer has lifted >= 75% of the MCQ of the NON-shortfall grades
+*     (Discount Scheme 2026-27). If not, the shortfall is the customer's
+*     own and the waiver / discount must NOT pass.
+      PERFORM nonsf_waiver_ok USING wa_yrva_qais_data-kunnr
+                                    wa_yrva_qais_data-qais_no
+                             CHANGING lv_nsf_ok.
+      IF lv_nsf_ok = 'X'.
+        w_waive_month = 'X' .
+      ENDIF.
     ENDIF.
 *** EOC : CIS 2026-27 - auto monthly shortfall waiver (Clause 8 / R2) ***
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007399
@@ -8644,24 +8864,40 @@ FORM monthly_discount .
 *       S/F Waiver   - shortfall grade waiver applies to this CIS
 *       Month Waiver - customer monthly waiver applies in the run month
 *       Grp O.K.     - group code that lifted nothing while the group did lift
-      DATA lv_runmon TYPE char3.
+      DATA: lv_runmon TYPE char3, lv_mondisp TYPE char3.
       CLEAR it_data_monthly-sale_order.
       CASE s_sptag-low+4(2).
-        WHEN '04'. lv_runmon = 'APR'. WHEN '05'. lv_runmon = 'MAY'.
-        WHEN '06'. lv_runmon = 'JUN'. WHEN '07'. lv_runmon = 'JUL'.
-        WHEN '08'. lv_runmon = 'AUG'. WHEN '09'. lv_runmon = 'SEP'.
-        WHEN '10'. lv_runmon = 'OCT'. WHEN '11'. lv_runmon = 'NOV'.
-        WHEN '12'. lv_runmon = 'DEC'. WHEN '01'. lv_runmon = 'JAN'.
-        WHEN '02'. lv_runmon = 'FEB'. WHEN '03'. lv_runmon = 'MAR'.
+        WHEN '04'. lv_runmon = 'APR'. lv_mondisp = 'Apr'.
+        WHEN '05'. lv_runmon = 'MAY'. lv_mondisp = 'May'.
+        WHEN '06'. lv_runmon = 'JUN'. lv_mondisp = 'Jun'.
+        WHEN '07'. lv_runmon = 'JUL'. lv_mondisp = 'Jul'.
+        WHEN '08'. lv_runmon = 'AUG'. lv_mondisp = 'Aug'.
+        WHEN '09'. lv_runmon = 'SEP'. lv_mondisp = 'Sep'.
+        WHEN '10'. lv_runmon = 'OCT'. lv_mondisp = 'Oct'.
+        WHEN '11'. lv_runmon = 'NOV'. lv_mondisp = 'Nov'.
+        WHEN '12'. lv_runmon = 'DEC'. lv_mondisp = 'Dec'.
+        WHEN '01'. lv_runmon = 'JAN'. lv_mondisp = 'Jan'.
+        WHEN '02'. lv_runmon = 'FEB'. lv_mondisp = 'Feb'.
+        WHEN '03'. lv_runmon = 'MAR'. lv_mondisp = 'Mar'.
       ENDCASE.
       READ TABLE it_cis_shortfall TRANSPORTING NO FIELDS
            WITH KEY qais_no = wa_yrva_qais_data-qais_no.
-      IF sy-subrc = 0.
+*     S/F (shortfall) waiver is applicable ONLY when the customer's total
+*     monthly lifting is BELOW the CIS minimum, i.e. below 75% of MCQ. If
+*     the customer lifted >= 75% of MCQ it already meets the minimum on its
+*     own, so the shortfall waiver does not apply and 'S/F Waiver' must not
+*     be shown (mcq_perc = grp lift / MCQ, the same ratio the eligibility
+*     test uses). GAIL 30.07.2026.
+*     Only label 'S/F Waiver' when the waiver was actually granted, i.e.
+*     the non-shortfall 75% rule is met (lv_nsf_ok). GAIL 05.08.2026.
+      IF sy-subrc = 0 AND it_data_monthly-mcq_perc < 75 AND lv_nsf_ok = 'X'.
         it_data_monthly-sale_order = 'S/F Waiver'.
       ELSEIF wa_yrva_qais_data-waiver_1 = lv_runmon
           OR wa_yrva_qais_data-waiver_2 = lv_runmon
           OR wa_yrva_qais_data-waiver_3 = lv_runmon.
-        it_data_monthly-sale_order = 'Month Waiver'.
+*       show the actual waiver month, e.g. 'Jun Waiver' (GAIL 28.07.2026)
+        CONCATENATE lv_mondisp 'Waiver'
+               INTO it_data_monthly-sale_order SEPARATED BY space.
       ELSEIF it_data_monthly-kvgr2 IS NOT INITIAL
          AND it_data_monthly-grp_lift_qty IS NOT INITIAL
          AND it_data_monthly-ind_lift_qty IS INITIAL.
@@ -11608,55 +11844,144 @@ FORM check_monthly_waiver USING p_curmth TYPE yy_qais_month
   ENDLOOP.
 ENDFORM.                    "check_monthly_waiver
 *&---------------------------------------------------------------------*
-*&      Form  get_group_mle_members   (CIS 2026-27 - R3)
+*&      Form  build_bp_clusters   (CIS 2026-27 - R3, GAIL 30.07.2026)
 *&---------------------------------------------------------------------*
-*   Returns the Group / MLE member CUSTOMER CODES for a flagship customer,
-*   per the derivation logic provided by Mr. Pankaj Wadhwa:
-*     1. Flagship KUNNR -> CVI_CUST_LINK-CUSTOMER -> PARTNER_GUID
-*     2. PARTNER_GUID  -> BUT000-PARTNER_GUID     -> BUT000-PARTNER (BP no.)
-*     3. BP no.        -> BUT050-PARTNER1, RELTYP  = ZGPGRP (Group)
-*                                          RELTYP  = ZGPMLL (MLE)
-*                      -> BUT050-PARTNER2 (member BP numbers)
-*     4. member BP     -> BUT000-PARTNER_GUID      -> CVI_CUST_LINK-CUSTOMER
-*   Only relationships valid on the scheme date (s_sptag-low) are used
-*   (quantity clubbing is governed by the relationship validity period).
-*   The flagship customer itself is included in the member list.
+*   Builds it_clust = customer -> cluster, where a cluster is the set of
+*   customers connected through the BP Group / MLE relationship family
+*   (BUT050 whose RELTYP contains 'ZGP', e.g. ZGPGRP "Has Group Customer" /
+*   ZGPMLL "Has Multi Location Entity"). Relationships are STAR-shaped (one
+*   flagship BP linked to each member), so we UNION both partners of every
+*   relationship - regardless of direction - and take the transitive
+*   closure. All members of a group/MLE therefore share one cluster, while a
+*   customer with no ZGP* relationship stays alone.
+*     KUNNR <-> BP :  CVI_CUST_LINK (customer<->partner_guid) + BUT000
+*                     (partner_guid<->partner).
+*   Only relationships valid on the scheme date (s_sptag-low) are used.
+*   Built once (bulk selects) and reused for every clubbing decision.
 *&---------------------------------------------------------------------*
-FORM get_group_mle_members USING p_flagship TYPE kunnr.
-  DATA: lv_guid      TYPE but000-partner_guid,
-        lv_bp        TYPE but000-partner,
-        lv_mem_guid  TYPE but000-partner_guid,
-        lv_mem_kunnr TYPE kunnr.
-  REFRESH it_grp_members.
-  APPEND p_flagship TO it_grp_members.
-*  1) flagship customer code -> partner GUID
-  SELECT SINGLE partner_guid FROM cvi_cust_link INTO lv_guid
-    WHERE customer = p_flagship.
-  CHECK sy-subrc = 0.
-*  2) partner GUID -> BP number
-  SELECT SINGLE partner FROM but000 INTO lv_bp
-    WHERE partner_guid = lv_guid.
-  CHECK sy-subrc = 0.
-*  3) flagship BP -> member BPs (Group ZGPGRP / MLE ZGPMLL), valid on date
-  SELECT * FROM but050 INTO TABLE it_but050
-    WHERE partner1 = lv_bp
-      AND ( reltyp = 'ZGPGRP' OR reltyp = 'ZGPMLL' )
+FORM build_bp_clusters.
+  DATA: lt_link  TYPE STANDARD TABLE OF cvi_cust_link,
+        ls_link  TYPE cvi_cust_link,
+        lt_but00 TYPE STANDARD TABLE OF but000,
+        ls_but00 TYPE but000,
+        lt_rel   TYPE STANDARD TABLE OF but050,
+        lt_rel2  TYPE STANDARD TABLE OF but050,
+        ls_bpc   TYPE ty_bpcust,
+        ls_p1    TYPE ty_bpcust,
+        ls_p2    TYPE ty_bpcust,
+        ls_clust TYPE ty_clust,
+        lv_r1    TYPE kunnr,
+        lv_r2    TYPE kunnr.
+
+  REFRESH: it_clust, it_bpcust.
+  CHECK it_kunnr[] IS NOT INITIAL.
+
+* every customer starts in its own singleton cluster
+  LOOP AT it_kunnr INTO wa_kunnr.
+    ls_clust-kunnr   = wa_kunnr-kunnr.
+    ls_clust-cluster = wa_kunnr-kunnr.
+    INSERT ls_clust INTO TABLE it_clust.        "#EC CI_SORTSEQ (dup ignored)
+  ENDLOOP.
+
+* customer <-> BP number
+  SELECT customer partner_guid FROM cvi_cust_link
+    INTO CORRESPONDING FIELDS OF TABLE lt_link
+    FOR ALL ENTRIES IN it_kunnr
+    WHERE customer = it_kunnr-kunnr.
+  IF lt_link[] IS NOT INITIAL.
+    SELECT partner partner_guid FROM but000
+      INTO CORRESPONDING FIELDS OF TABLE lt_but00
+      FOR ALL ENTRIES IN lt_link
+      WHERE partner_guid = lt_link-partner_guid.
+  ENDIF.
+  LOOP AT lt_link INTO ls_link.
+    READ TABLE lt_but00 INTO ls_but00
+         WITH KEY partner_guid = ls_link-partner_guid.
+    CHECK sy-subrc = 0.
+    ls_bpc-kunnr = ls_link-customer.
+    ls_bpc-bp    = ls_but00-partner.
+    APPEND ls_bpc TO it_bpcust.
+  ENDLOOP.
+  SORT it_bpcust BY bp.
+  CHECK it_bpcust[] IS NOT INITIAL.
+
+* group/MLE relationships among our BPs (both directions), valid on date
+  SELECT * FROM but050 INTO TABLE lt_rel
+    FOR ALL ENTRIES IN it_bpcust
+    WHERE partner1  = it_bpcust-bp
       AND date_to   GE s_sptag-low
       AND date_from LE s_sptag-low.
-  LOOP AT it_but050 INTO wa_but050.
-*    4) member BP -> GUID -> member customer code
-    CLEAR: lv_mem_guid, lv_mem_kunnr.
-    SELECT SINGLE partner_guid FROM but000 INTO lv_mem_guid
-      WHERE partner = wa_but050-partner2.
+  SELECT * FROM but050 INTO TABLE lt_rel2
+    FOR ALL ENTRIES IN it_bpcust
+    WHERE partner2  = it_bpcust-bp
+      AND date_to   GE s_sptag-low
+      AND date_from LE s_sptag-low.
+  APPEND LINES OF lt_rel2 TO lt_rel.
+  SORT lt_rel BY partner1 partner2 reltyp.
+  DELETE ADJACENT DUPLICATES FROM lt_rel COMPARING partner1 partner2 reltyp.
+
+* union the two customers of every ZGP* (group/MLE) relationship
+  LOOP AT lt_rel INTO wa_but050.
+    CHECK wa_but050-reltyp CS 'ZGP'.            " group / MLE family only
+    READ TABLE it_bpcust INTO ls_p1
+         WITH KEY bp = wa_but050-partner1 BINARY SEARCH.
     CHECK sy-subrc = 0.
-    SELECT SINGLE customer FROM cvi_cust_link INTO lv_mem_kunnr
-      WHERE partner_guid = lv_mem_guid.
-    IF sy-subrc = 0.
-      APPEND lv_mem_kunnr TO it_grp_members.
+    READ TABLE it_bpcust INTO ls_p2
+         WITH KEY bp = wa_but050-partner2 BINARY SEARCH.
+    CHECK sy-subrc = 0.
+    PERFORM clust_of USING ls_p1-kunnr CHANGING lv_r1.
+    PERFORM clust_of USING ls_p2-kunnr CHANGING lv_r2.
+    IF lv_r1 <> lv_r2.
+*     merge cluster r2 into r1 (relabel every member of r2)
+      LOOP AT it_clust INTO ls_clust WHERE cluster = lv_r2.
+        ls_clust-cluster = lv_r1.
+        MODIFY it_clust FROM ls_clust.
+      ENDLOOP.
     ENDIF.
   ENDLOOP.
-  SORT it_grp_members. DELETE ADJACENT DUPLICATES FROM it_grp_members.
-ENDFORM.                    "get_group_mle_members
+ENDFORM.                    "build_bp_clusters
+*&---------------------------------------------------------------------*
+*&      Form  clust_of   (representative cluster of a customer)
+*&---------------------------------------------------------------------*
+FORM clust_of USING p_kunnr TYPE kunnr
+           CHANGING p_clust TYPE kunnr.
+  DATA ls TYPE ty_clust.
+  READ TABLE it_clust INTO ls WITH KEY kunnr = p_kunnr.
+  IF sy-subrc = 0.
+    p_clust = ls-cluster.
+  ELSE.
+    p_clust = p_kunnr.        " not in run set - treat as its own cluster
+  ENDIF.
+ENDFORM.                    "clust_of
+*&---------------------------------------------------------------------*
+*&      Form  is_grp_member   (CIS 2026-27 - R3 clubbing gate)
+*&---------------------------------------------------------------------*
+*   Returns p_ismem = 'X' when candidate p_member may be clubbed with
+*   p_flagship, i.e. both belong to the same BP group/MLE cluster (or are
+*   the same customer). A customer with no ZGP* relationship forms its own
+*   cluster, so it clubs with itself only. Clusters are built once on first
+*   use.
+*&---------------------------------------------------------------------*
+FORM is_grp_member USING p_flagship TYPE kunnr
+                         p_member   TYPE kunnr
+                   CHANGING p_ismem TYPE flag.
+  DATA: lv_r1 TYPE kunnr,
+        lv_r2 TYPE kunnr.
+  CLEAR p_ismem.
+  IF gv_clust_built IS INITIAL.
+    PERFORM build_bp_clusters.
+    gv_clust_built = 'X'.
+  ENDIF.
+  IF p_flagship = p_member.
+    p_ismem = 'X'.
+    RETURN.
+  ENDIF.
+  PERFORM clust_of USING p_flagship CHANGING lv_r1.
+  PERFORM clust_of USING p_member   CHANGING lv_r2.
+  IF lv_r1 = lv_r2.
+    p_ismem = 'X'.
+  ENDIF.
+ENDFORM.                    "is_grp_member
 *&---------------------------------------------------------------------*
 *&      Form  is_nodisc_grade   (CIS 2026-27 - R5 dev-form pt.5)
 *&---------------------------------------------------------------------*
@@ -11703,6 +12028,112 @@ FORM build_cis_shortfall.
   DELETE ADJACENT DUPLICATES FROM it_cis_shortfall COMPARING qais_no.
 ENDFORM.                    "build_cis_shortfall
 *&---------------------------------------------------------------------*
+*&      Form  nonsf_waiver_ok    (CIS 2026-27 - GAIL 05.08.2026)
+*&---------------------------------------------------------------------*
+*   Monthly Shortfall Grade Waiver may be granted ONLY IF the customer has
+*   lifted at least 75% of the MCQ of the NON-shortfall grades (Discount
+*   Scheme 2026-27, Monthly Shortfall Grade Waiver clause). Earlier the
+*   waiver was granted for any CIS that merely had a shortfall grade, so a
+*   customer who under-lifted the grades that WERE available still received
+*   the discount (e.g. cust 25612 / CIS ...083: non-shortfall grade
+*   P52A003A MCQ 50 MT, 75% = 37.5 MT, lifted only 34 MT -> must fail).
+*     non-shortfall grades = signed grades (YRVA_QAIS_TNTLFT) NOT declared
+*                            shortfall (YCIS_SHORTFALL) for the run month
+*     non-shortfall MCQ     = SUM( YY_TNT_LIFTING ) of those grades
+*     non-shortfall lifted  = SUM( S922-UMMENGE )  of those grades
+*   For seasonal-sector customers (all signed non-shortfall grades seasonal)
+*   only seasonal grades (range_s) count towards the lifting. The 75% check
+*   is waived when the non-shortfall MCQ is <= 10 MT (A4CQ). Grade<->material
+*   is mapped through YRVA_GRADE_CISD (YY_MATNR -> YY_GRADE = KONDM).
+*   Returns p_ok = 'X' when the waiver may stand.
+*&---------------------------------------------------------------------*
+FORM nonsf_waiver_ok USING p_kunnr TYPE kunnr
+                           p_qais  TYPE any
+                  CHANGING p_ok    TYPE c.
+  DATA: lt_tnt   TYPE STANDARD TABLE OF yrva_qais_tntlft,
+        ls_tnt   TYPE yrva_qais_tntlft,
+        lt_sfmat TYPE STANDARD TABLE OF matnr,
+        lt_sfkon TYPE RANGE OF kondm,
+        lt_nskon TYPE RANGE OF kondm,
+        ls_kon   LIKE LINE OF lt_sfkon,
+        lv_kondm TYPE kondm,
+        lv_mcq   TYPE p DECIMALS 3,
+        lv_lift  TYPE p DECIMALS 3,
+        lv_umb   TYPE s922-ummenge,
+        lv_vtweg TYPE s922-vtweg,
+        lv_all_s TYPE c,
+        lv_seas  TYPE c.
+
+  p_ok = 'X'.
+*   grade-wise signed plan (per-grade MCQ). No plan -> do not block.
+  SELECT * FROM yrva_qais_tntlft INTO TABLE lt_tnt
+    WHERE qais_no = p_qais.
+  IF lt_tnt IS INITIAL.
+    RETURN.
+  ENDIF.
+*   materials declared shortfall that cover the run month -> grade range
+  LOOP AT it_ycis_shortfall INTO DATA(ls_sf)
+       WHERE period_from LE s_sptag-low
+         AND period_to   GE s_sptag-high.
+    APPEND ls_sf-matnr TO lt_sfmat.
+    CLEAR lv_kondm.
+    SELECT SINGLE yy_grade FROM yrva_grade_cisd INTO lv_kondm
+      WHERE yy_matnr = ls_sf-matnr.
+    IF lv_kondm IS NOT INITIAL.
+      ls_kon-sign = 'I'. ls_kon-option = 'EQ'. ls_kon-low = lv_kondm.
+      APPEND ls_kon TO lt_sfkon.
+    ENDIF.
+  ENDLOOP.
+*   non-shortfall MCQ + the non-shortfall grade (KONDM) list
+  lv_all_s = 'X'.
+  LOOP AT lt_tnt INTO ls_tnt.
+    READ TABLE lt_sfmat TRANSPORTING NO FIELDS
+         WITH KEY table_line = ls_tnt-matnr.
+    IF sy-subrc = 0.
+      CONTINUE.                          " shortfall grade -> excluded
+    ENDIF.
+    lv_mcq = lv_mcq + ls_tnt-yy_tnt_lifting.
+    CLEAR lv_kondm.
+    SELECT SINGLE yy_grade FROM yrva_grade_cisd INTO lv_kondm
+      WHERE yy_matnr = ls_tnt-matnr.
+    IF lv_kondm IS NOT INITIAL.
+      ls_kon-sign = 'I'. ls_kon-option = 'EQ'. ls_kon-low = lv_kondm.
+      APPEND ls_kon TO lt_nskon.
+      IF lv_kondm NOT IN range_s.
+        CLEAR lv_all_s.                  " a non-seasonal signed grade exists
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+*   no non-shortfall grade, or <= 10 MT (A4CQ) -> waiver stands
+  IF lv_mcq <= 10 OR lt_nskon IS INITIAL.
+    p_ok = 'X'.
+    RETURN.
+  ENDIF.
+*   seasonal-sector customer = all signed non-shortfall grades are seasonal
+  lv_seas = lv_all_s.
+*   non-shortfall lifting for the run month (grade = KONDM)
+  SELECT kondm ummenge vtweg FROM s922 INTO (lv_kondm, lv_umb, lv_vtweg)
+    WHERE pkunag = p_kunnr
+      AND sptag  IN s_sptag.
+    IF lv_vtweg = '60'.
+      CONTINUE.                          " channel 60 is not counted as lifting
+    ENDIF.
+    IF lv_kondm IN lt_sfkon.
+      CONTINUE.                          " shortfall-grade lifting excluded
+    ENDIF.
+    IF lv_seas = 'X' AND lv_kondm NOT IN range_s.
+      CONTINUE.                          " seasonal customer: only seasonal grades count
+    ENDIF.
+    lv_lift = lv_lift + lv_umb.
+  ENDSELECT.
+*   grant the waiver only when >= 75% of the non-shortfall MCQ is lifted
+  IF lv_lift >= lv_mcq * 75 / 100.
+    p_ok = 'X'.
+  ELSE.
+    CLEAR p_ok.
+  ENDIF.
+ENDFORM.                    "nonsf_waiver_ok
+*&---------------------------------------------------------------------*
 *&      Form  stage_all_rebates   (CIS 2026-27 - Maker/Checker R4)
 *&---------------------------------------------------------------------*
 *   Maker action: save the computed rebate rows (from the result table of
@@ -11712,11 +12143,30 @@ ENDFORM.                    "build_cis_shortfall
 *&---------------------------------------------------------------------*
 FORM stage_all_rebates.
   DATA: lv_cnt  TYPE i,
+        lv_skip TYPE i,                  " rows held back (zero disc / no waiver)
         lv_off  TYPE vkbur,
         lv_flow TYPE abap_bool,
         lv_qind TYPE p DECIMALS 3,
+        lv_ans  TYPE c,                  " Verification & Confirmation answer
         lv_zero TYPE p DECIMALS 3.       " MCQ only applies to monthly
+*   nothing selected (the caller already dropped the unticked rows) -> stop
+  IF it_data_monthly[]        IS INITIAL AND it_data_quater[] IS INITIAL AND
+     it_data_annual[]         IS INITIAL AND it_annual_consis[] IS INITIAL AND
+     it_data_annual_newcus[]  IS INITIAL.
+    MESSAGE 'Please select at least one line to submit for approval' TYPE 'I'.
+    RETURN.
+  ENDIF.
+*   Verification & Confirmation FIRST - it must gate the submission. Only if
+*   the maker chooses Yes are the records forwarded to L2; No cancels and
+*   nothing is staged. (GAIL 31.07.2026 - earlier the pop-up ran after the
+*   COMMIT, so 'No' still submitted.)
+  PERFORM show_stmt_popup CHANGING lv_ans.
+  IF lv_ans <> '1'.
+    MESSAGE 'Submission cancelled - nothing sent to L2' TYPE 'S'.
+    RETURN.
+  ENDIF.
   REFRESH gt_stg_office.
+  CLEAR gv_stg_dup.
   IF r_quater = 'X'.
     LOOP AT it_data_quater.
       lv_qind = it_data_quater-ind_lift_qty_m1 + it_data_quater-ind_lift_qty_m2
@@ -11725,6 +12175,7 @@ FORM stage_all_rebates.
               it_data_quater-value lv_qind it_data_quater-tot_grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
@@ -11739,6 +12190,7 @@ FORM stage_all_rebates.
               it_data_annual-value it_data_annual-ind_lift_qty it_data_annual-grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
@@ -11753,6 +12205,7 @@ FORM stage_all_rebates.
               it_annual_consis-value it_annual_consis-ind_lift_qty it_annual_consis-grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
@@ -11767,6 +12220,7 @@ FORM stage_all_rebates.
               it_data_monthly-value it_data_monthly-ind_lift_qty it_data_monthly-grp_lift_qty
               CHANGING lv_flow.
       IF lv_flow IS INITIAL.                 " fail (zero discount, no waiver / not Grp O.k)
+        lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
       PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
@@ -11777,18 +12231,136 @@ FORM stage_all_rebates.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
-  IF lv_cnt > 0.
+*   Split the processed rows into NEWLY submitted vs ALREADY with L2/L3, so
+*   L1 gets clear feedback and knows a repeat Execute did nothing. Only newly
+*   submitted rows trigger an L2 e-mail (gt_stg_office holds their offices).
+*   (GAIL 06.08.2026)
+  DATA(lv_new) = lv_cnt - gv_stg_dup.
+  IF lv_new > 0.
     COMMIT WORK.
 *   notify the Level-2 (PC MKTG-HOD) approvers of each office
     LOOP AT gt_stg_office INTO lv_off.
       PERFORM send_wf_mail USING '2' lv_off
               'CIS rebates confirmed by L1 - pending your approval (L2)'.
     ENDLOOP.
-    MESSAGE |{ lv_cnt } record(s) submitted for L2 approval (YCIS_APPRVL)| TYPE 'S'.
+*   Issue 2: the rows just forwarded to L2 must leave the L1 screen at once.
+*   hide_forwarded re-reads YCIS_APPRVL (now Pending-L2) and removes them from
+*   the display tables; the ALV refresh set by the caller shows the reduced
+*   list. (GAIL 31.07.2026)
+    PERFORM hide_forwarded.
+    IF gv_stg_dup > 0.
+      MESSAGE |{ lv_new } record(s) submitted to L2 (e-mail sent); { gv_stg_dup } already with L2/L3 - not re-sent| TYPE 'S'.
+    ELSE.
+      MESSAGE |{ lv_new } record(s) submitted for L2 approval (e-mail sent)| TYPE 'S'.
+    ENDIF.
+  ELSEIF gv_stg_dup > 0.
+*   every selected row was already forwarded earlier - no re-staging, no
+*   duplicate e-mail; just tell L1 clearly.
+    PERFORM hide_forwarded.
+    MESSAGE |All { gv_stg_dup } selected record(s) are already with L2/L3 - already forwarded, no e-mail re-sent| TYPE 'I'.
+  ELSEIF lv_skip > 0.
+*   rows were computed but every one was held back by the eligibility rule
+    MESSAGE |{ lv_skip } customer(s) not submitted: zero discount - no lifting/eligibility and no waiver applicable| TYPE 'I'.
   ELSE.
     MESSAGE 'No records available to submit for approval' TYPE 'I'.
   ENDIF.
 ENDFORM.                    "stage_all_rebates
+*&---------------------------------------------------------------------*
+*&      Form  hide_forwarded   (maker-checker: L1 must not see in-flight rows)
+*&---------------------------------------------------------------------*
+*   GAIL 31.07.2026 - process rule: once L1 submits a customer to L2, that
+*   record is "in flight" with L2 and must NOT appear on the L1 screen again
+*   until it comes back. Remove from the L1 display every row already stored
+*   in YCIS_APPRVL for this period with WF_STATUS Pending-L2 (20), Pending-L3
+*   (30) or Completed (40). Rows rejected back to L1 (WF_STATUS 10) and rows
+*   never submitted remain visible so L1 can (re)work and (re)submit them.
+*&---------------------------------------------------------------------*
+FORM hide_forwarded.
+  TYPES: BEGIN OF ty_fwd,
+           scheme_type TYPE ycis_apprvl-scheme_type,
+           kunnr       TYPE ycis_apprvl-kunnr,
+           kvgr2       TYPE ycis_apprvl-kvgr2,
+         END OF ty_fwd.
+  DATA: lt_fwd TYPE SORTED TABLE OF ty_fwd
+                    WITH NON-UNIQUE KEY scheme_type kunnr kvgr2.
+
+  SELECT scheme_type kunnr kvgr2
+    FROM ycis_apprvl INTO TABLE lt_fwd
+    WHERE period_from = s_sptag-low
+      AND period_to   = s_sptag-high
+      AND wf_status   IN ('20','30','40','50','60','70').  " in-flight L2..L6 / completed (6-level)
+  CHECK lt_fwd IS NOT INITIAL.
+
+  LOOP AT it_data_monthly.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'M'
+               kunnr       = it_data_monthly-kunnr
+               kvgr2       = it_data_monthly-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_monthly. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_data_quater.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'Q'
+               kunnr       = it_data_quater-kunnr
+               kvgr2       = it_data_quater-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_quater. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_data_annual.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'A'
+               kunnr       = it_data_annual-kunnr
+               kvgr2       = it_data_annual-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_annual. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_annual_consis.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'C'
+               kunnr       = it_annual_consis-kunnr
+               kvgr2       = it_annual_consis-kvgr2.
+    IF sy-subrc = 0. DELETE it_annual_consis. ENDIF.
+  ENDLOOP.
+
+  LOOP AT it_data_annual_newcus.
+    READ TABLE lt_fwd TRANSPORTING NO FIELDS
+      WITH KEY scheme_type = 'A'
+               kunnr       = it_data_annual_newcus-kunnr
+               kvgr2       = it_data_annual_newcus-kvgr2.
+    IF sy-subrc = 0. DELETE it_data_annual_newcus. ENDIF.
+  ENDLOOP.
+ENDFORM.                    "hide_forwarded
+*&---------------------------------------------------------------------*
+*&      Form  show_stmt_popup   (verification & confirmation pop-up - L1)
+*&---------------------------------------------------------------------*
+*   Shown at L1 (this maker program) and L2 (YCIS_APPROVE) - the levels that
+*   verify and confirm the figures. NOT shown at L3 (execution). GAIL
+*   30.07.2026.
+*&---------------------------------------------------------------------*
+FORM show_stmt_popup CHANGING p_ans TYPE c.
+  CLEAR p_ans.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
+      text_question         =
+        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
+        'rates and amounts, have been verified and confirmed after considering ' &&
+        'customer waivers, shortfall waivers, sales return quantities, and ' &&
+        'Group/MLE details.' &&
+        ' Submit the selected record(s) to L2 for approval?'
+      text_button_1         = 'Yes'
+      icon_button_1         = 'ICON_OKAY'
+      text_button_2         = 'No'
+      icon_button_2         = 'ICON_CANCEL'
+      default_button        = '2'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = p_ans          " '1' = Yes, '2' = No
+    EXCEPTIONS
+      text_not_found        = 1
+      OTHERS                = 2.
+ENDFORM.                    "show_stmt_popup
 *&---------------------------------------------------------------------*
 *&      Form  send_wf_mail   (CIS 2026-27 - L1 -> L2 notification)
 *&---------------------------------------------------------------------*
@@ -11892,7 +12464,17 @@ FORM stage_one USING p_stype   TYPE char1
 *   Monthly Committed Qty (MCQ) + achievement % -> shown at L1/L2/L3
   ls-mcq_qty     = p_mcq.
   IF p_mcq IS NOT INITIAL.
-    ls-mcq_perc  = p_lift / p_mcq * 100.
+*   MCQ achievement % is stored in YCIS_APPRVL-MCQ_PERC (DEC 5,2 -> max
+*   999.99). With heavy lifting against a small MCQ the true % can exceed
+*   999.99 (e.g. 842.5 / 5 * 100 = 16850%), which raised COMPUTE_BCD_OVERFLOW
+*   and terminated the L1 Execute. Compute in a wide field and cap at the
+*   column maximum so the row still forwards to L2. (GAIL 04.08.2026)
+    DATA lv_mcqp TYPE p LENGTH 8 DECIMALS 2.
+    lv_mcqp = p_lift / p_mcq * 100.
+    IF lv_mcqp > '999.99'.
+      lv_mcqp = '999.99'.
+    ENDIF.
+    ls-mcq_perc  = lv_mcqp.
   ENDIF.
   ls-ind_lft_qty = p_indlift.            " individual lifted qty -> shown at L3
 *                                          (LFT_QTY already holds group lift)
@@ -11907,6 +12489,22 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_time     = sy-uzeit.
   ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
   ls-waers       = 'INR'.
+*   Prevent duplicate forwarding / duplicate L2 e-mail when L1 presses
+*   Execute again: if this CIS is already Pending-L2 / Pending-L3 / done,
+*   leave it as-is and do NOT re-stage or re-notify. (GAIL 28.07.2026)
+  DATA lv_wf TYPE ycis_apprvl-wf_status.
+  SELECT SINGLE wf_status INTO lv_wf FROM ycis_apprvl
+    WHERE qais_no     = ls-qais_no
+      AND scheme_type = ls-scheme_type
+      AND period_from = ls-period_from
+      AND period_to   = ls-period_to
+      AND kunnr       = ls-kunnr
+      AND kvgr2       = ls-kvgr2.
+  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40'
+                     OR lv_wf = '50' OR lv_wf = '60' OR lv_wf = '70' ).
+    gv_stg_dup = gv_stg_dup + 1.         " count it so L1 gets clear feedback
+    RETURN.                              " already forwarded - skip, no re-mail
+  ENDIF.
   MODIFY ycis_apprvl FROM ls.
 *   grade-wise detail for the rebate report (captured at source)
   PERFORM stage_grade_detail USING ls.
@@ -11922,6 +12520,9 @@ ENDFORM.                    "stage_one
 *     - zero value but GROUP code that lifted while
 *       this code lifted nothing                    -> flow  (rule 3:
 *       'Grp O.k' in the zero-lifting code)
+*     - zero value with only a CUSTOMER MONTHLY WAIVER -> do NOT flow
+*       (GAIL 06.08.2026: a wrongly-maintained customer waiver must not
+*       push a zero-value line to L2)
 *     - otherwise (zero value, no waiver, no group
 *       lifting)                                     -> fail  (rule 2: do
 *       not flow to L2)
@@ -11957,11 +12558,16 @@ FORM l1_row_may_flow USING p_kunnr TYPE kunnr
       p_flow = 'X'.                 " S/F waiver
       RETURN.
     ENDIF.
-    IF ls_q-waiver_1 = lv_runmon OR ls_q-waiver_2 = lv_runmon
-       OR ls_q-waiver_3 = lv_runmon.
-      p_flow = 'X'.                 " Month waiver
-      RETURN.
-    ENDIF.
+*   GAIL 06.08.2026: a ZERO-discount row that only carries a customer
+*   MONTHLY WAIVER must NOT be forwarded to L2. If a customer waiver was
+*   wrongly maintained it would otherwise push a zero-value line forward;
+*   holding it back at L1 prevents that. (S/F waiver and Grp O.k. below
+*   still flow, as those are genuine zero-value reasons.)
+*    IF ls_q-waiver_1 = lv_runmon OR ls_q-waiver_2 = lv_runmon
+*       OR ls_q-waiver_3 = lv_runmon.
+*      p_flow = 'X'.                 " Month waiver - no longer forwarded
+*      RETURN.
+*    ENDIF.
   ENDIF.
   IF p_kvgr2 IS NOT INITIAL
      AND p_grp IS NOT INITIAL       " group lifted in the period
@@ -13912,6 +14518,13 @@ FORM annual_consis_discount .
       IF wa_yrva_qais_data-kvgr2 IS NOT INITIAL.
         LOOP AT it_s922 INTO wa_s922 WHERE sptag BETWEEN s_sptag-low AND s_sptag-high
          AND kvgr2 = wa_yrva_qais_data-kvgr2.
+*         CIS 2026-27 (GAIL 31.07.2026): club only genuine BP-relationship
+*         group/MLE members, same as the monthly path - not raw KVGR2.
+          PERFORM is_grp_member USING wa_yrva_qais_data-kunnr
+                                      wa_s922-pkunag CHANGING gv_ismem.
+          IF gv_ismem IS INITIAL.
+            CONTINUE.
+          ENDIF.
 *       consider only selected material in case of Pipe and ducting sector
           IF wa_yrva_qais_data-p_d_sector = 'X'.
             IF wa_yrva_qais_data-p_r_indicator = 'P' AND wa_s922-kondm NE  '09' AND
@@ -14145,6 +14758,8 @@ START-OF-SELECTION.
 END-OF-SELECTION.
 *generate field catlofs.
   PERFORM create_field_catalog.
+*   Maker-checker: hide rows already submitted to L2 (in flight) - GAIL 31.07.2026
+  PERFORM hide_forwarded.
 *Display the final records.
   PERFORM display_list.
 
