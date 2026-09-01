@@ -102,7 +102,8 @@ TYPES: BEGIN OF ty_msg,
        END OF ty_msg,
        tt_msg TYPE STANDARD TABLE OF ty_msg WITH EMPTY KEY.
 
-" Lines the reader treated as heading, reported in the log.
+" Notes from the reader worth showing in the log - currently only the
+" substitution when a workbook has a single, differently named tab.
 DATA gt_skipped TYPE string_table.
 
 CONSTANTS:
@@ -193,16 +194,12 @@ CLASS lcl_util DEFINITION FINAL.
     CLASS-METHODS alpha   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS lifnr   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE lifnr.
     CLASS-METHODS gl      IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE saknr.
-    CLASS-METHODS is_sample IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
     CLASS-METHODS is_empty  IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
     "! TRUE for one of the template's own descriptive header lines
     "! (field type / length / mandatory / guideline / LSMW project ...).
-    CLASS-METHODS is_meta   IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
     "! Central row filter. Data begins in row 2 on every tab; anything above
     "! that, blank rows, sample rows and leftover header lines are skipped.
-    CLASS-METHODS skip_row  IMPORTING is_row TYPE ty_row
-                            EXPORTING ev_why TYPE string
-                                      rv     TYPE abap_bool.
+    CLASS-METHODS skip_row  IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
 ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
@@ -313,9 +310,6 @@ CLASS lcl_util IMPLEMENTATION.
     rv = alpha( lv ).
   ENDMETHOD.
 
-  METHOD is_sample.
-    rv = xsdbool( to_upper( cell( is_row = is_row iv_col = 1 ) ) CS 'SAMPLE' ).
-  ENDMETHOD.
 
   METHOD is_empty.
     rv = abap_true.
@@ -327,58 +321,17 @@ CLASS lcl_util IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
-  METHOD is_meta.
-    DATA lt_w TYPE string_table.
-
-    rv = abap_false.
-    DATA(lv_c1) = to_upper( cell( is_row = is_row iv_col = 1 ) ).
-    IF lv_c1 IS INITIAL.
-      RETURN.
-    ENDIF.
-
-    lt_w = VALUE #( ( `FIELD TECH` )        ( `FIELD TECHNICAL` )
-                    ( `FIELD TYPE` )        ( `FIELD LENGTH` )
-                    ( `FIELD NAME` )        ( `FIELD DESCRIPTION` )
-                    ( `MANDATORY` )         ( `OPTIONAL` )
-                    ( `GUIDELINE` )         ( `TECH NAME` )
-                    ( `PROJECT` )           ( `SUBPROJECT` )
-                    ( `OBJECT` )            ( `USER INPUT` )
-                    ( `DEFAULT VALUE` )     ( `TRANSACTION CODE` ) ).
-
-    LOOP AT lt_w INTO DATA(lv_w).
-      IF lv_c1 CS lv_w.
-        rv = abap_true.
-        RETURN.
-      ENDIF.
-    ENDLOOP.
-  ENDMETHOD.
 
   METHOD skip_row.
-    " A skipped row is now always explained. Rows used to disappear with no
-    " trace, so a file whose first column still read "Sample data" produced
-    " a run that processed nothing and said nothing about why.
-    CLEAR ev_why.
-    rv = abap_false.
-    IF is_row-row < 2.
-      rv = abap_true.
-      RETURN.
-    ENDIF.
-    IF is_empty( is_row ) = abap_true.
-      rv = abap_true.
-      RETURN.
-    ENDIF.
-    IF is_sample( is_row ) = abap_true.
-      rv = abap_true.
-      ev_why = |the first cell reads "{ cell( is_row = is_row iv_col = 1 ) }", |
-            && |which marks it as a sample row - clear column A to load it|.
-      RETURN.
-    ENDIF.
-    IF is_meta( is_row ) = abap_true.
-      rv = abap_true.
-      ev_why = |the first cell reads "{ cell( is_row = is_row iv_col = 1 ) }", |
-            && |which marks it as a heading or guideline row|.
-      RETURN.
-    ENDIF.
+    " Which rows are data is decided by POSITION alone - the heading rows
+    " are dropped by the reader according to P_SKIP. Nothing in the row's
+    " content causes it to be skipped.
+    "
+    " Column A of these templates is a label column carrying "Field Tech
+    " name", "Sample data" and so on. It used to be read as a marker, which
+    " meant a file copied from the sample tab and edited - the way people
+    " actually work - loaded nothing at all. It is ignored entirely now.
+    rv = is_empty( is_row ).
   ENDMETHOD.
 
 ENDCLASS.
@@ -505,17 +458,8 @@ CLASS lcl_excel IMPLEMENTATION.
         APPEND condense( CONV string( <lv_val> ) ) TO ls_row-cells.
       ENDDO.
 
+      " Heading rows are dropped quietly - P_SKIP says how many.
       IF lv_r <= p_skip.
-        DATA lv_show TYPE string.
-        CLEAR lv_show.
-        LOOP AT ls_row-cells INTO DATA(lv_one) FROM 1 TO 8.
-          IF lv_show IS INITIAL.
-            lv_show = lv_one.
-          ELSE.
-            lv_show = |{ lv_show } / { lv_one }|.
-          ENDIF.
-        ENDLOOP.
-        APPEND |Line { lv_r } skipped: { lv_show }| TO gt_skipped.
         CONTINUE.
       ENDIF.
 
@@ -1255,15 +1199,7 @@ CLASS lcl_h_create IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -1452,15 +1388,7 @@ CLASS lcl_h_tds IMPLEMENTATION.
                lc_exdf   TYPE i VALUE 54,  lc_exdt   TYPE i VALUE 60.
 
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -1612,15 +1540,7 @@ CLASS lcl_h_tan IMPLEMENTATION.
     DATA lt_exem TYPE STANDARD TABLE OF fiwtin_tan_exem.
 
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -1735,15 +1655,7 @@ CLASS lcl_h_bkey IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -1923,15 +1835,7 @@ CLASS lcl_h_bank IMPLEMENTATION.
     DATA lt_in TYPE tt_in.
 
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
       DATA(lv_l) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
@@ -1992,15 +1896,7 @@ CLASS lcl_h_ext IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -2157,15 +2053,7 @@ CLASS lcl_h_cin IMPLEMENTATION.
       ( |J_1IPANNO;12| ) ( |J_1ISSIST;13| ) ( |J_1IEXCIVE;14| ) ( |J_1IVTYP;15| ) ).
 
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -2240,15 +2128,7 @@ CLASS lcl_h_pfn IMPLEMENTATION.
       ( |28;32| ) ( |29;33| ) ( |30;34| ) ( |31;35| ) ).
 
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -2386,15 +2266,7 @@ CLASS lcl_h_blk IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      DATA lv_why TYPE string.
-      DATA lv_skip TYPE abap_bool.
-      lcl_util=>skip_row( EXPORTING is_row = ls_row
-                          IMPORTING ev_why = lv_why rv = lv_skip ).
-      IF lv_skip = abap_true.
-        IF lv_why IS NOT INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = |Row skipped - { lv_why }| ).
-        ENDIF.
+      IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
 

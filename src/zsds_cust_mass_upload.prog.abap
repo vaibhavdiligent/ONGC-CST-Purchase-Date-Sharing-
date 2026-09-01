@@ -505,17 +505,8 @@ CLASS lcl_excel IMPLEMENTATION.
         APPEND lv_cellv TO ls_row-cells.
       ENDDO.
 
+      " Heading rows are dropped quietly - IV_SKIP says how many.
       IF lv_idx <= iv_skip.
-        DATA lv_show TYPE string.
-        CLEAR lv_show.
-        LOOP AT ls_row-cells INTO DATA(lv_one) FROM 1 TO 8.
-          IF lv_show IS INITIAL.
-            lv_show = lv_one.
-          ELSE.
-            lv_show = |{ lv_show } / { lv_one }|.
-          ENDIF.
-        ENDLOOP.
-        APPEND |Line { lv_idx } skipped: { lv_show }| TO et_skipped.
         CONTINUE.
       ENDIF.
 
