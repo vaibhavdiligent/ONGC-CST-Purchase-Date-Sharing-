@@ -200,7 +200,9 @@ CLASS lcl_util DEFINITION FINAL.
     CLASS-METHODS is_meta   IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
     "! Central row filter. Data begins in row 2 on every tab; anything above
     "! that, blank rows, sample rows and leftover header lines are skipped.
-    CLASS-METHODS skip_row  IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
+    CLASS-METHODS skip_row  IMPORTING is_row TYPE ty_row
+                            EXPORTING ev_why TYPE string
+                                      rv     TYPE abap_bool.
 ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
@@ -352,10 +354,31 @@ CLASS lcl_util IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD skip_row.
-    rv = xsdbool(    is_row-row < 2
-                  OR is_empty( is_row )  = abap_true
-                  OR is_sample( is_row ) = abap_true
-                  OR is_meta( is_row )   = abap_true ).
+    " A skipped row is now always explained. Rows used to disappear with no
+    " trace, so a file whose first column still read "Sample data" produced
+    " a run that processed nothing and said nothing about why.
+    CLEAR ev_why.
+    rv = abap_false.
+    IF is_row-row < 2.
+      rv = abap_true.
+      RETURN.
+    ENDIF.
+    IF is_empty( is_row ) = abap_true.
+      rv = abap_true.
+      RETURN.
+    ENDIF.
+    IF is_sample( is_row ) = abap_true.
+      rv = abap_true.
+      ev_why = |the first cell reads "{ cell( is_row = is_row iv_col = 1 ) }", |
+            && |which marks it as a sample row - clear column A to load it|.
+      RETURN.
+    ENDIF.
+    IF is_meta( is_row ) = abap_true.
+      rv = abap_true.
+      ev_why = |the first cell reads "{ cell( is_row = is_row iv_col = 1 ) }", |
+            && |which marks it as a heading or guideline row|.
+      RETURN.
+    ENDIF.
   ENDMETHOD.
 
 ENDCLASS.
@@ -427,9 +450,22 @@ CLASS lcl_excel IMPLEMENTATION.
         EXIT.
       ENDIF.
     ENDLOOP.
+    " A workbook saved as a single sheet - which is what happens when one tab
+    " is copied out of the master workbook - keeps its "Sheet1" name. There is
+    " no ambiguity about which tab was meant, so use it and say so.
+    IF lv_use IS INITIAL AND lines( lt_ws ) = 1.
+      lv_use = lt_ws[ 1 ].
+      APPEND |Tab "{ iv_sheet }" was not found, but the workbook has only one | &&
+             |tab ("{ lv_use }") - that tab was used| TO gt_skipped.
+    ENDIF.
+
     IF lv_use IS INITIAL.
+      DATA lv_have TYPE string.
+      LOOP AT lt_ws INTO DATA(lv_n).
+        lv_have = COND string( WHEN lv_have IS INITIAL THEN lv_n ELSE |{ lv_have }, { lv_n }| ).
+      ENDLOOP.
       RAISE EXCEPTION NEW lcx_upl(
-        |Tab "{ iv_sheet }" not found. Use the customer workbook "Vendor LSMW with Template.xlsx".| ).
+        |Tab "{ iv_sheet }" not found. This workbook has: { lv_have }| ).
     ENDIF.
 
     DATA lo_ref TYPE REF TO data.
@@ -672,15 +708,32 @@ CLASS lcl_cfg IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD constructor.
-    SELECT bukrs FROM t001  INTO TABLE @DATA(lt1). mt_bukrs = lt1.
-    SELECT ekorg FROM t024e INTO TABLE @DATA(lt2). mt_ekorg = lt2.
-    SELECT ktokk FROM t077k INTO TABLE @DATA(lt3). mt_ktokk = lt3.
-    SELECT zterm FROM t052  INTO TABLE @DATA(lt4). mt_zterm = lt4.
-    SELECT parvw FROM tpar  INTO TABLE @DATA(lt5). mt_parvw = lt5.
-    SELECT land1 FROM t005  INTO TABLE @DATA(lt6). mt_land1 = lt6.
+    " Every one of these targets is declared WITH UNIQUE KEY, and moving a
+    " result set that contains duplicates into such a table raises
+    " ITAB_DUPLICATE_KEY - a short dump, not a catchable error.
+    "
+    " T052 is the one that bites: it holds one row per instalment, so a
+    " payment term with three instalments appears three times. T005 has a
+    " row per country, but the same applies the moment any of these tables
+    " is configured with more than one row per code. DISTINCT removes the
+    " duplicates in the database, so the move can never fail.
+    SELECT DISTINCT bukrs FROM t001  INTO TABLE @DATA(lt1). mt_bukrs = lt1.
+    SELECT DISTINCT ekorg FROM t024e INTO TABLE @DATA(lt2). mt_ekorg = lt2.
+    SELECT DISTINCT ktokk FROM t077k INTO TABLE @DATA(lt3). mt_ktokk = lt3.
+    SELECT DISTINCT zterm FROM t052  INTO TABLE @DATA(lt4). mt_zterm = lt4.
+    SELECT DISTINCT parvw FROM tpar  INTO TABLE @DATA(lt5). mt_parvw = lt5.
+    SELECT DISTINCT land1 FROM t005  INTO TABLE @DATA(lt6). mt_land1 = lt6.
 
+    " MT_G2B is keyed on the account group alone. If the customising ever
+    " maps one account group to more than one BP grouping, INSERT reports
+    " it with SY-SUBRC 4 and the first entry wins, instead of dumping.
     SELECT account_group AS ktokk, grouping
-      FROM cvic_vend_to_bp1 INTO CORRESPONDING FIELDS OF TABLE @mt_g2b.
+      FROM cvic_vend_to_bp1 INTO TABLE @DATA(lt_g2b).
+    LOOP AT lt_g2b INTO DATA(ls_g2b).
+      INSERT VALUE ty_g2b( ktokk    = ls_g2b-ktokk
+                           grouping = ls_g2b-grouping ) INTO TABLE mt_g2b.
+    ENDLOOP.
+
     SELECT account_group AS ktokk, role
       FROM cvic_vend_to_bp2 INTO CORRESPONDING FIELDS OF TABLE @mt_r2b.
 
@@ -1202,7 +1255,15 @@ CLASS lcl_h_create IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -1391,7 +1452,15 @@ CLASS lcl_h_tds IMPLEMENTATION.
                lc_exdf   TYPE i VALUE 54,  lc_exdt   TYPE i VALUE 60.
 
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -1543,7 +1612,15 @@ CLASS lcl_h_tan IMPLEMENTATION.
     DATA lt_exem TYPE STANDARD TABLE OF fiwtin_tan_exem.
 
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -1658,7 +1735,15 @@ CLASS lcl_h_bkey IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -1838,7 +1923,15 @@ CLASS lcl_h_bank IMPLEMENTATION.
     DATA lt_in TYPE tt_in.
 
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
       DATA(lv_l) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
@@ -1899,7 +1992,15 @@ CLASS lcl_h_ext IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -2056,7 +2157,15 @@ CLASS lcl_h_cin IMPLEMENTATION.
       ( |J_1IPANNO;12| ) ( |J_1ISSIST;13| ) ( |J_1IEXCIVE;14| ) ( |J_1IVTYP;15| ) ).
 
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -2131,7 +2240,15 @@ CLASS lcl_h_pfn IMPLEMENTATION.
       ( |28;32| ) ( |29;33| ) ( |30;34| ) ( |31;35| ) ).
 
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 
@@ -2269,7 +2386,15 @@ CLASS lcl_h_blk IMPLEMENTATION.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
-      IF lcl_util=>skip_row( ls_row ) = abap_true.
+      DATA lv_why TYPE string.
+      DATA lv_skip TYPE abap_bool.
+      lcl_util=>skip_row( EXPORTING is_row = ls_row
+                          IMPORTING ev_why = lv_why rv = lv_skip ).
+      IF lv_skip = abap_true.
+        IF lv_why IS NOT INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = |Row skipped - { lv_why }| ).
+        ENDIF.
         CONTINUE.
       ENDIF.
 

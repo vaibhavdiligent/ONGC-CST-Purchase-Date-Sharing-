@@ -456,9 +456,22 @@ CLASS lcl_excel IMPLEMENTATION.
         EXIT.
       ENDIF.
     ENDLOOP.
+    " A workbook saved as a single sheet - which is what happens when one tab
+    " is copied out of the master workbook - keeps its "Sheet1" name. There is
+    " no ambiguity about which tab was meant, so use it and say so.
+    IF lv_hit IS INITIAL AND lines( lt_names ) = 1.
+      lv_hit = lt_names[ 1 ].
+      APPEND |Tab "{ iv_sheet }" was not found, but the workbook has only one | &&
+             |tab ("{ lv_hit }") - that tab was used| TO et_skipped.
+    ENDIF.
+
     IF lv_hit IS INITIAL.
+      DATA lv_have TYPE string.
+      LOOP AT lt_names INTO DATA(lv_n).
+        lv_have = COND string( WHEN lv_have IS INITIAL THEN lv_n ELSE |{ lv_have }, { lv_n }| ).
+      ENDLOOP.
       RAISE EXCEPTION TYPE lcx_upl
-        EXPORTING iv_text = |Tab "{ iv_sheet }" not found in the workbook|.
+        EXPORTING iv_text = |Tab "{ iv_sheet }" not found. This workbook has: { lv_have }|.
     ENDIF.
 
     DATA(lo_data) = lo_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet(
@@ -708,19 +721,38 @@ CLASS lcl_cfg IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD constructor.
+    " MT_TSTL is NON-UNIQUE, so it can be filled directly.
     SELECT talnd, lfdnr, tatyp FROM tstl
       INTO CORRESPONDING FIELDS OF TABLE @mt_tstl.
 
+    " Everything below is declared WITH UNIQUE KEY. Filling such a table
+    " from a result set that contains duplicates raises ITAB_DUPLICATE_KEY,
+    " which is a short dump and not catchable - so duplicates are removed
+    " before the move, never after.
+    "
+    " These four config tables are keyed on the code today, so DISTINCT is
+    " belt and braces. The supplier program dumped on exactly this pattern
+    " against T052, which does hold several rows per code.
+    SELECT DISTINCT kdgrp FROM t151  INTO TABLE @mt_kdgrp.
+    SELECT DISTINCT waers FROM tcurc INTO TABLE @mt_waers.
+    SELECT DISTINCT werks FROM t001w INTO TABLE @mt_werks.
+    SELECT DISTINCT ktokd FROM t077d INTO TABLE @mt_ktokd.
+
+    " Two columns each, keyed on the first, so INSERT is used instead:
+    " a duplicate sets SY-SUBRC 4 and the first entry wins.
     SELECT kkber, credit_sgmnt AS sgmnt FROM ukm_kkber2sgm
-      INTO CORRESPONDING FIELDS OF TABLE @mt_sgm.
+      INTO TABLE @DATA(lt_sgm).
+    LOOP AT lt_sgm INTO DATA(ls_sgm).
+      INSERT VALUE ty_sgm( kkber = ls_sgm-kkber
+                           sgmnt = ls_sgm-sgmnt ) INTO TABLE mt_sgm.
+    ENDLOOP.
 
     SELECT credit_sgmnt AS sgmnt, currency AS waers FROM ukmcred_sgm0c
-      INTO CORRESPONDING FIELDS OF TABLE @mt_cur.
-
-    SELECT kdgrp FROM t151  INTO TABLE @mt_kdgrp.
-    SELECT waers FROM tcurc INTO TABLE @mt_waers.
-    SELECT werks FROM t001w INTO TABLE @mt_werks.
-    SELECT ktokd FROM t077d INTO TABLE @mt_ktokd.
+      INTO TABLE @DATA(lt_cur).
+    LOOP AT lt_cur INTO DATA(ls_cur).
+      INSERT VALUE ty_cur( sgmnt = ls_cur-sgmnt
+                           waers = ls_cur-waers ) INTO TABLE mt_cur.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD cust_exists.
