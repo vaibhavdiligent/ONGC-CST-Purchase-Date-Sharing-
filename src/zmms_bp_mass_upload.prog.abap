@@ -102,10 +102,6 @@ TYPES: BEGIN OF ty_msg,
        END OF ty_msg,
        tt_msg TYPE STANDARD TABLE OF ty_msg WITH EMPTY KEY.
 
-" Notes from the reader worth showing in the log - currently only the
-" substitution when a workbook has a single, differently named tab.
-DATA gt_skipped TYPE string_table.
-
 CONSTANTS:
   gc_i     TYPE cmd_ei_object_task VALUE 'I',   " insert
   gc_u     TYPE cmd_ei_object_task VALUE 'U',   " update
@@ -424,8 +420,6 @@ CLASS lcl_excel IMPLEMENTATION.
     " no ambiguity about which tab was meant, so use it and say so.
     IF lv_use IS INITIAL AND lines( lt_ws ) = 1.
       lv_use = lt_ws[ 1 ].
-      APPEND |Tab "{ iv_sheet }" was not found, but the workbook has only one | &&
-             |tab ("{ lv_use }") - that tab was used| TO gt_skipped.
     ENDIF.
 
     IF lv_use IS INITIAL.
@@ -2459,12 +2453,6 @@ START-OF-SELECTION.
       DATA(gv_txt) = gx->get_text( ).
       MESSAGE gv_txt TYPE 'E'.
   ENDTRY.
-
-  " Record what the reader treated as heading, so a wrong "Heading rows"
-  " setting shows up in the log instead of silently costing a data row.
-  LOOP AT gt_skipped INTO DATA(gv_sk).
-    go_log->add( iv_row = 0 iv_ty = 'I' iv_txt = gv_sk ).
-  ENDLOOP.
 
   IF lt_rows IS INITIAL.
     DATA gv_none TYPE string.

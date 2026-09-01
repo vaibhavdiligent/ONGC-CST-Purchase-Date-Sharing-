@@ -388,8 +388,7 @@ CLASS lcl_excel DEFINITION FINAL.
                 iv_from_pc TYPE abap_bool
                 iv_sheet   TYPE string
                 iv_skip    TYPE i DEFAULT 1
-      EXPORTING et_skipped TYPE string_table
-                et_row     TYPE tt_row
+      EXPORTING et_row     TYPE tt_row
       RAISING   lcx_upl.
   PRIVATE SECTION.
     METHODS load_bin
@@ -476,8 +475,6 @@ CLASS lcl_excel IMPLEMENTATION.
     " no ambiguity about which tab was meant, so use it and say so.
     IF lv_hit IS INITIAL AND lines( lt_names ) = 1.
       lv_hit = lt_names[ 1 ].
-      APPEND |Tab "{ iv_sheet }" was not found, but the workbook has only one | &&
-             |tab ("{ lv_hit }") - that tab was used| TO et_skipped.
     ENDIF.
 
     IF lv_hit IS INITIAL.
@@ -2351,16 +2348,14 @@ START-OF-SELECTION.
   DATA(go_log)    = NEW lcl_log( ).
   DATA(go_engine) = NEW lcl_engine( iv_scen = gv_scen io_log = go_log ).
 
-  DATA gt_row  TYPE tt_row.
-  DATA gt_skip TYPE string_table.
+  DATA gt_row TYPE tt_row.
   TRY.
       NEW lcl_excel( )->read(
         EXPORTING iv_file    = p_file
                   iv_from_pc = p_pc
                   iv_sheet   = go_engine->sheet( )
                   iv_skip    = p_skip
-        IMPORTING et_skipped = gt_skip
-                  et_row     = gt_row ).
+        IMPORTING et_row     = gt_row ).
     CATCH lcx_upl INTO DATA(gx).
       " MESSAGE takes a data object, not an expression.
       DATA(gv_txt) = gx->get_text( ).
@@ -2373,12 +2368,6 @@ START-OF-SELECTION.
     MESSAGE gv_none TYPE 'I'.
     RETURN.
   ENDIF.
-
-  " Record what was treated as heading, so a wrong setting is visible in
-  " the log instead of silently costing you a row.
-  LOOP AT gt_skip INTO DATA(gv_sk).
-    go_log->add( iv_row = 0 iv_type = 'I' iv_text = gv_sk ).
-  ENDLOOP.
 
   go_engine->run( gt_row ).
 
