@@ -1,0 +1,237 @@
+﻿02.09.26 Dynamic List Display                                                  1
+
+Table: T059U
+
+	MANDT	SPRAS	LAND1	WITHT	TEXT40
+
+	500	EN	IN	11	194A-Inv-Other Interest(Corp)
+	500	EN	IN	12	194A-Inv-Other Interest(Non-Corp)
+	500	EN	IN	13	194A-Adv-Other Interest(Corp)
+	500	EN	IN	14	194A-Adv-Other Interest(Non-Corp)
+	500	EN	IN	15	195-Inv-Non Residents(Corp)-Sec 44BB
+	500	EN	IN	16	195-Inv-Non Residents(Non-Corp)-Sec 44BB
+	500	EN	IN	17	195-Adv-Non Residents(Corp)-Sec 44BB
+	500	EN	IN	18	195-Adv-Non Resident(Non-Corp)-Sec 44 BB
+	500	EN	IN	19	195-Adv-Non Residents(Non-Corp)-Sec 44D
+	500	EN	IN	1A	194A-Inv-Other Interest(Corp)-EDU CESS
+	500	EN	IN	1B	195-Inv-Non Res(Corp)-Sec 44BB-EDU CESS
+	500	EN	IN	1C	194C-Inv-Contractors(Corp)-EDU CESS
+	500	EN	IN	1D	195-Inv-Non Res(Corp)-Sec 44D-EDU CESS
+	500	EN	IN	1H	194H-Inv-Commn / Brokerage (Corp)-E CESS
+	500	EN	IN	1I	194I-Inv-Rent(Corp) - EDU CESS
+	500	EN	IN	1J	194J-Inv-Professionals(Corp) - EDU CESS
+	500	EN	IN	20	194C-Inv-Advtg Contractors(Corp)
+	500	EN	IN	21	194C-Inv-Contractors(Non-Corp)
+	500	EN	IN	22	194C-Inv-Advtg Contractors(Non-Corp)
+	500	EN	IN	23	194C-Adv-Contractors(Corp)
+	500	EN	IN	24	194C-Adv-Advtg Contract(Corp)
+	500	EN	IN	25	194C-Adv-Contractors(Non-Corp)
+	500	EN	IN	26	194C-Adv-Advtg Contract(Non-Corp)
+	500	EN	IN	27	195-Inv-Non Residents(Corp)-Sec 44D
+	500	EN	IN	28	195-Inv-Non Residents(Non-Corp)-Sec 44D
+	500	EN	IN	29	195-Adv-Non Residents(Corp)-Sec 44D
+	500	EN	IN	2A	194A-Inv-Other Int(Non-Corp)-EDU CESS
+	500	EN	IN	2B	195-Inv-Non Res(Non-Corp)-Sec44BB-E CESS
+	500	EN	IN	2C	194C-Inv-Sub Contractors(Corp)-EDU CESS
+	500	EN	IN	2D	195-Inv-Non Res(Non-Corp)-Sec 44D-E CESS
+	500	EN	IN	2H	194H-Inv-Comn / Broker(Non-Corp)EDU CESS
+	500	EN	IN	2I	194I-Inv-Rent(Non-Corp) -  EDU CESS
+	500	EN	IN	2J	194J-Inv-Professionals(Non-Corp)- EDU CE
+	500	EN	IN	30	194C-Inv-Contractors(Corp)
+	500	EN	IN	31	194H-Inv-Commn / Brokerage (Corp)
+	500	EN	IN	32	194H-Inv-Commn / Brokerage (Non-Corp)
+	500	EN	IN	33	194H-Adv-Commn / Brokerage (Corp)
+	500	EN	IN	34	194H-Adv-Commn / Brokerage (Non-Corp)
+	500	EN	IN	35	194I-Inv-Rent(Corp)
+	500	EN	IN	36	194I-Inv-Rent(Non-Corp)
+	500	EN	IN	37	194I-Adv-Rent(Corp)
+	500	EN	IN	38	194I-Adv-Rent(Non-Corp)
+	500	EN	IN	39	194J-Inv-Professionals(Corp)
+	500	EN	IN	3C	194C-Inv-Advtg Contractors(Corp)-EDU CES
+	500	EN	IN	40	194J-Inv-Professionals(Non-Corp)
+	500	EN	IN	41	194J-Adv-Professionals(Corp)
+	500	EN	IN	42	194J-Adv-Professionals(Non-Corp)
+	500	EN	IN	43	Service Tax
+	500	EN	IN	44	194E-Inv-Non Residents(Non-Corp)sports
+	500	EN	IN	45	194E-Adv-Non Resident(Non-Corp)-sports
+	500	EN	IN	46	Buiding Workers Cess
+	500	EN	IN	47	Compensation on acquisition
+	500	EN	IN	48	19EAdv-Non Residents(Non-corp)
+	500	EN	IN	49	194E-Inv-Non Residents(Corp)sports
+	500	EN	IN	4A	393(1) - Resident TDS
+	500	EN	IN	4B	393(1) - Resident TDS - Material
+	500	EN	IN	4C	393(2)-Non Res-Company
+	500	EN	IN	4D	393(2)-Non Res-Non Company
+	500	EN	IN	4E	393(3) - Resident TDS Spl Nature
+	500	EN	IN	4F	397(2) - Resident - No PAN
+	500	EN	IN	4G	394(1) - Resident TCS
+	500	EN	IN	4H	394(1) - Non-Resident TCS
+	500	EN	IN	4I	397(2) - Resident TCS - No PAN
+	500	EN	IN	4Q	Section 194Q - TDS on Purchase of goods
+	500	EN	IN	50	Tax collection at source
+	500	EN	IN	51	195-Inv-Non Residents(Corp)-Sec 44BB
+	500	EN	IN	52	VAT UNDER  EWT
+	500	EN	IN	53	194J-Inv-Professionals(Corp)
+	500	EN	IN	55	Service Tax
+	500	EN	IN	56	Service tax 10.30% borne by ongc
+	500	EN	IN	57	Service tax on 25% value borne by ongc
+	500	EN	IN	58	Service  tax on 25% value
+	500	EN	IN	59	Service Tax (Old)
+	500	EN	IN	5A	TCS Scrap, Minerals & Motor Vehicle 2018
+	500	EN	IN	5B	TCS - Lease /Licence wef 01.04.2018
+	500	EN	IN	5C	TCS u/s 206(1H) wef 01.10.2020
+	500	EN	IN	5D	TDS u/s 194O e-Commerce sale
+	500	EN	IN	5Q	194Q TDS on sale Of Goods (Advance)
+	500	EN	IN	60	194A-(INV) INT.OTH.THAN INT.ON SECURITIY
+	500	EN	IN	61	192- Income under the head Salary
+	500	EN	IN	62	194A-(INV) INT.OTH.THAN INT.ON SECURITIY
+	500	EN	IN	63	194A-(ADV)INT.OTH.THAN INT.ON  SECURTIES
+	500	EN	IN	64	194A-(ADV)INT.OTH.THAN INT.ON  SECURTIES
+	500	EN	IN	65	194C- INV CONTRACTOR INDIVIDUAL/HUF
+	500	EN	IN	66	194C-(INV) TRPT. CONT. 0% IF PAN QUOTED
+	500	EN	IN	67	194C-(ADV) INDIVIDUAL/HUF
+	500	EN	IN	68	194C- INV CONT OTHER THAN INDIVIDUAL/HUF
+	500	EN	IN	69	194C-TPT CON.OT TH.IND./HUFIFPANNOTQUOTE
+	500	EN	IN	6C	194C-Inv-Contractors(Non-Corp)-EDU CESS
+	500	EN	IN	70	194C-(ADV) OTHER THAN INDIVIDUAL/HUF
+	500	EN	IN	71	194H-(INV) COMMISSION OR BROKERAGE
+	500	EN	IN	72	194H-(INV) COMMISSION OR BROKERAGE
+	500	EN	IN	73	194C-(ADV) COMMISSION OR BROKERAGE
+	500	EN	IN	74	194C-(ADV) COMMISSION OR BROKERAGE
+	500	EN	IN	75	194I -(INV) RENT OF P&M AND EQPT
+	500	EN	IN	76	194IA Immovble Prpt.excl Agri Land NCorp
+	500	EN	IN	77	194IA Immovble Prpt.excl Agri Land Corp
+	500	EN	IN	78	194-I(INV)RENT OTHER THAN P&M AND EQPT
+	500	EN	IN	79	194-I(INV)RENT OTHER THAN P&M AND EQPT
+	500	EN	IN	7C	194C-Inv-Sub Contractor(Non-Corp)-E CESS
+	500	EN	IN	80	194J-(INV) PROFESIONAL CHARGES
+	500	EN	IN	81	194J-(ADV) PROFESIONAL CHARGES
+	500	EN	IN	82	194E- Non Residents(Non-Corp)sports
+	500	EN	IN	83	194E- Non Residents(Corp)sports
+	500	EN	IN	84	194J-(INV) PROFESIONAL CHARGES
+	500	EN	IN	85	194LC Intt.on Exter.Comm.Borrowing NCorp
+	500	EN	IN	86	194LC Intt. on Exter.Comm.Borrowing Corp
+	500	EN	IN	87	194LD Intt. on dominated bond Non-corp.
+	500	EN	IN	88	194LD Intt. on dominated bond Corp.
+	500	EN	IN	89	194J-(ADV) PROFESIONAL CHARGES
+	500	EN	IN	8C	194C-Inv-Advtg Contract(Non-Corp)-EDU CE
+	500	EN	IN	90	Buiding Workers Cess
+	500	EN	IN	91	195-Inv-Non Residents(Corp)-Sec 44
+	500	EN	IN	92	195-Inv-Non Residents(Non-Corp)-Sec 44
+	500	EN	IN	93	194I -(INV) RENT OF P&M AND EQPT
+	500	EN	IN	94	EQUALIZATION LEVY
+	500	EN	IN	95	Service Tax (New)
+	500	EN	IN	96	Service Tax (Swatch Bharat Cess)
+	500	EN	IN	97	Service Tax (w.e.f.15.11.15)
+	500	EN	IN	98	Service Tax (Krishi Kalyan Cess)
+	500	EN	IN	99	exemption under section 197
+	500	EN	IN	9A	194E- Non Residents(Non-Corp)sports
+	500	EN	IN	9B	194E- Non Residents(Corp)sports
+	500	EN	IN	9C	194LC Intt.on Exter.Comm.Borrowing NCorp
+	500	EN	IN	9D	194LC Intt. on Exter.Comm.Borrowing Corp
+	500	EN	IN	9E	194LD Intt. on dominated bond Non-corp.
+	500	EN	IN	9F	194LD Intt. on dominated bond Corp.
+	500	EN	IN	9G	195-Inv-Non Residents(Corp)
+	500	EN	IN	9H	195-Inv-Non Residents(Non-Corp)
+	500	EN	IN	9I	195-Non Residents(Corp) Sec 44BB,44D,DTA
+	500	EN	IN	9J	195-NonResidts(Non-Cor) Sec 44BB,44D,DTA
+	500	EN	IN	9K	195(2)& 195(3) -Inv-Non Residents(Corp)
+	500	EN	IN	9L	195-Adv-Non Residents(Corp)
+	500	EN	IN	9M	197(1) &195 -Corporate Residents
+	500	EN	IN	9N	195-Adv-Non Residents(Non Corp)
+	500	EN	IN	9O	IT TDS NOT APPLICABLE (INV)
+	500	EN	IN	9P	IT TDS NOT APPLICABLE (ADV)
+	500	EN	IN	9Q	GST TDS NOT APPLICABLE (INV)
+	500	EN	IN	9R	GST TDS NOT APPLICABLE (ADV)
+	500	EN	IN	9S	193-INV-Other than Company
+	500	EN	IN	9T	193-INV-Company
+	500	EN	IN	A1	194A-Inv-Other Interest(Corp)
+	500	EN	IN	A2	194A-Inv-Other Interest(Non-Corp)
+	500	EN	IN	AA	194A-Adv-Other Interest(Corp)
+	500	EN	IN	AB	194A-Adv-Other Interest(Non-Corp)
+	500	EN	IN	AC	194C-Adv-Contractors(Corp)-EDU CESS
+	500	EN	IN	AD	195-Adv-Non Res(Corp)-Sec 44D-EDU CESS
+	500	EN	IN	AG	IN:TDS GST INTRA STATE FOR TESTING
+	500	EN	IN	AH	194H-Adv-Commn / Broker (Corp)-EDU CESS
+	500	EN	IN	AI	194I-Adv-Rent(Corp)- EDU CESS
+	500	EN	IN	AJ	194J-Adv-Professionals(Corp) - EDU CESS
+	500	EN	IN	B1	195-Inv-Non Residents(Corp)-Sec 44BB
+	500	EN	IN	B2	195-Inv-Non Residents(Non-Corp)-Sec 44BB
+	500	EN	IN	BA	195-Adv-Non Residents(Corp)-Sec 44BB
+	500	EN	IN	BB	195-Adv-Non Resident(Non-Corp)-Sec 44 BB
+	500	EN	IN	BC	194C-Adv-Sub-Contractors(Corp)-EDU CESS
+	500	EN	IN	BD	195-Adv-Non Res(Non-Corp)-Sec 44D-EDU CE
+	500	EN	IN	BE	194A-Adv-Other Int(Non-Corp)-EDU CESS
+	500	EN	IN	BH	194H-Adv-Commn / Broker (N-Corp)-EDU CES
+	500	EN	IN	BI	194I-Adv-Rent(Non-Corp)- EDU CESS
+	500	EN	IN	BJ	194J-Adv-Profes(Non-Corp) - EDU CESS
+	500	EN	IN	C1	194C-Inv-Contractors(Corp)
+	500	EN	IN	C2	194C-Inv-Sub Contractors(Corp)
+	500	EN	IN	C3	194C-Inv-Advtg Contractors(Corp)
+	500	EN	IN	C6	194C-Inv-Contractors(Non-Corp)
+	500	EN	IN	C7	194C-Inv-Sub Contractors(Non-Corp)
+	500	EN	IN	C8	194C-Inv-Advtg Contractors(Non-Corp)
+	500	EN	IN	CA	194C-Adv-Contractors(Corp)
+	500	EN	IN	CB	194C-Adv-Sub-Contractors(Corp)
+	500	EN	IN	CF	194C-Adv-Contractors(Non-Corp)
+	500	EN	IN	CG	IN:TDS ON  CGST (INV)
+	500	EN	IN	CH	194C-Adv-Advtg Contract(Non-Corp)
+	500	EN	IN	D1	195-Inv-Non Residents(Corp)-Sec 44D
+	500	EN	IN	D2	195-Inv-Non Residents(Non-Corp)-Sec 44D
+	500	EN	IN	DA	195-Adv-Non Residents(Corp)-Sec 44D
+	500	EN	IN	DB	195-Adv-Non Residents(Non-Corp)-Sec 44D
+	500	EN	IN	EA	194A-Adv-Other Interest(Corp)-EDU CESS
+	500	EN	IN	EB	195-Adv-Non Res(N-Corp)-Sec 44 BB-E CESS
+	500	EN	IN	EC	194C-Adv-Sub-Contractors(Corp)-EDU CESS
+	500	EN	IN	EE	195-Adv-Non Res(Corp)-Sec 44BB-EDU CESS
+	500	EN	IN	FC	194C-Adv-Contractors(Non-Corp)-EDU CESS
+	500	EN	IN	GC	194C-Adv-Sub-Cont(Non-Corp)-EDU CESS
+	500	EN	IN	H1	194H-Inv-Commn / Brokerage (Corp)
+	500	EN	IN	H2	194H-Inv-Commn / Brokerage (Non-Corp)
+	500	EN	IN	HA	194H-Adv-Commn / Brokerage (Corp)
+	500	EN	IN	HB	194H-Adv-Commn / Brokerage (Non-Corp)
+	500	EN	IN	HC	194C-Adv-Advtg Contract(N-Corp)-EDU CESS
+	500	EN	IN	I1	194I-Inv-Rent(Corp)
+	500	EN	IN	I2	194I-Inv-Rent(Non-Corp)
+	500	EN	IN	IA	194I-Adv-Rent(Corp)
+	500	EN	IN	IB	194I-Adv-Rent(Non-Corp)
+	500	EN	IN	IG	IN:TDS ON IGST (INV)
+	500	EN	IN	J1	194J-Inv-Professionals(Corp)
+	500	EN	IN	J2	194J-Inv-Professionals(Non-Corp)
+	500	EN	IN	JA	194J-Adv-Professionals(Corp)
+	500	EN	IN	JB	194J-Adv-Professionals(Non-Corp)
+	500	EN	IN	LD	IN:Liquidated Damages
+	500	EN	IN	SG	IN:TDS ON  SGST/UGST (INV)
+	500	EN	IN	SN	Seigniorage Charges
+	500	EN	IN	ST	Service Tax
+	500	EN	IN	TG	TESTING FOR NEW TAX CODE CREATION
+	500	EN	IN	TS	Edu cess on service tax
+	500	EN	IN	W0	WCT - FOR ASSAM
+	500	EN	IN	W1	WCT-GUJARAT
+	500	EN	IN	W2	WCT - Andhra Pradesh
+	500	EN	IN	W3	WCT FOR TAMILNADU
+	500	EN	IN	W4	WCT - West Bengal
+	500	EN	IN	W5	WCT - Maharashtra
+	500	EN	IN	W6	WCT -Uttaranchal
+	500	EN	IN	W7	WCT - Tripura
+	500	EN	IN	W8	WCT - Delhi
+	500	EN	IN	W9	TDS SALES TAFX  FOR - RAJASTHAN
+	500	EN	IN	WA	AGST  - FOR  ASSAM
+	500	EN	IN	WB	 ADV WORK CONT. TAX-BARODA
+	500	EN	IN	WC	WCT for Govt of Puducherry
+	500	EN	IN	WE	WCT - FOR ASSAM
+	500	EN	IN	WF	WCT - FOR MIZORAM
+	500	EN	IN	WG	WCT  - FOR  GOA
+	500	EN	IN	WH	AGST  - FOR  Himachal pradesh
+	500	EN	IN	WJ	 ADV WORK CONT. TAMIL NADU
+	500	EN	IN	WK	WCT - JHARKHAND
+	500	EN	IN	WL	WCT  - FOR  ORRISA
+	500	EN	IN	WM	WCT - Madhya Pradesh
+	500	EN	IN	WP	AGST  - FOR  Punjab
+	500	EN	IN	WR	WCT  - FOR   RAJASTHAN
+	500	EN	IN	WS	 ADV WORK CONT.  TAX- ASSAM
+	500	EN	IN	WT	 ADV WORK CONT. TAX-TRIPURA
+	500	EN	IN	WU	WCT  - FOR  Uttar pradesh
+	500	EN	IN	ZC	TDS ON CGST (ADV)
+	500	EN	IN	ZI	TDS ON IGST (ADV)
+	500	EN	IN	ZS	TDS ON SGST/UGST (ADV)

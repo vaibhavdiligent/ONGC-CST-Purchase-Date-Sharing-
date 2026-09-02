@@ -1,0 +1,7 @@
+﻿02.09.2026                                                                                                                                                 Dynamic List Display                                                                                                                                                                                                           1
+
+Table: EDIDC
+
+	MANDT	          DOCNUM	DOCREL	STATUS	DOCTYP	DIRECT	RCVPOR	RCVPRT	RCVPRN	RCVSAD	RCVSMN	RCVSNA	RCVSCA	RCVSDF	RCVSLF	RCVLAD	STD	STDVRS	STDMES	MESCOD	MESFCT	OUTMOD	TEST	SNDPOR	SNDPRT	SNDPRN	SNDSAD	SNDSMN	SNDSNA	SNDSCA	SNDSDF	SNDSLF	SNDLAD	REFINT	REFGRP	REFMES	ARCKEY	CREDAT	CRETIM	MESTYP	IDOCTP	CIMTYP	RCVPFC	SNDPFC	SERIAL	EXPRSS	UPDDAT	UPDTIM	MAXSEGNUM
+
+	500	0000000008937534	758	03		1	SAPPXD	B	HDFC													2		SAPRD1	LS	RD1CLNT500												06.04.2026	13:10:13	PAYEXT	PEXR2002				20260406131013		06.04.2026	13:10:14	   000024
