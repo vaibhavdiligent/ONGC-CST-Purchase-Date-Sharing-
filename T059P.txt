@@ -1,0 +1,307 @@
+﻿02.09.2026                                                                                                                                                                Dynamic List Display                                                                                                                                                                                                                         1
+
+Table: T059P
+
+	MANDT	LAND1	WITHT	WT_TPNR	WT_ACCPT	WT_ACCALL	WT_ACCTMAX	WT_WTRD	WT_CEINV	WT_BASE	WT_DOPOST	WT_POSTM	WT_ALWT	WT_WTDSC	WT_SLFWT	WT_WTDP	WT_MANUAL	WT_MAINTB	WT_MAINTA	WT_REDBAS	WT_WTINV	REGIO	TDFORM	WT_BCPLVL	WT_CTNBRL	WT_MANBAS	KSCHL	J_1BSUMVAL	J_1BTEXKEY	WT_KURST	WT_INHERITBASE	WT_NOREDUCTION	J_1AFORMAT	KSCHL_TX	J_1BWHTBASE_NF	ALL_TAX_CODES	J_DAILY_ACC	TEXT40
+
+	500	AR	CO	    000	0			00	1	1	X	2	X			    000	X	2	2					0		X												SS Withholding tax: Contractors
+	500	AR	EE	    000	0			00	1	1	X	2				    000		2	2					0														SS Withholding tax: Possible employees
+	500	AR	G1	    000	3			00	1	1	X	2			X	    000	X	2	1					0		X												Withholding tax for earning tax RNI
+	500	AR	GA	    000	3			00	1	1	X	2			X	    000	X	2	1					0		X												Withholding tax for earning tax RI
+	500	AR	I1	    000	0			00	1	1	X	2				    000		1	2					0														GI withholding tax: Region 1
+	500	AR	I2	    000	0			00	1	1	X	2				    000		1	1					0														GI Withholding tax: Region 2
+	500	AR	I3	    000	0			00	1	1	X	2				    000		1	1					0														GI Withholding tax: Region 3
+	500	AR	IB	    000	0			00	2	1	X	2				    000		2	2					0														Gross income
+	500	AR	IV	    000	0			00	2	5	X	2				    000	X	1	1					0		X												VAT withholding tax
+	500	BR	IC	    001	3			00		4	X	1				    000		2	2						X				WT01									IRRF for natural persons (CPF)
+	500	BR	IF	    002	0			00		2	X	1				    000		2	2						X			X	WT04									Funrural
+	500	BR	IP	    003	0			00		1	X	1				    000	X	2	2						X	X		X	WT05									FCPS
+	500	BR	IR	    004	0			00		2	X	1				    000		2	2						X				WT02									IRRF for companies
+	500	BR	IS	    005	0			00		2	X	1				    000		2	2						X				WT03									ISSF
+	500	CL	Q1	    001	0			00		1	X	1				    000	X	2	2						X	X												Global complementary tax
+	500	CL	Q2	    002	0			00		1	X	1				    000	X	2	2						X	X												Additional tax
+	500	CL	Q3	    003	0			00		3	X	1				    000	X	2	2						X	X												Value-added tax
+	500	CO	01	    001	0			00		1	X	1				    000		2	2				F_RFKQST20_CO_01		X													Withholding income tax - residents
+	500	CO	02	    002	0			00		1	X	1				    000		2	2				F_RFKQST20_CO_01		X													Withholding income tax - non-residents
+	500	CO	03	    003	0			00		1	X	1				    000	X	2	2	X					X	X												Stamp withholding tax
+	500	CO	04	    007	0			00		1	X	1				    000		2	2						X	X												Withholding income tax dividends
+	500	CO	05	    009	0			00		1	X	1				    001		2	2	X					X													Remittance (depending on income w/h tax)
+	500	CO	06	    010	0			00		1	X	1				    000		2	2						X													ICA withholding tax for goods/services
+	500	CO	07	    013	0			00		3	X	1				    000		2	2						X													WT  VAT goods/services
+	500	CO	10	    000	0			00	0	1	X	2				    000		2	2					0	X													Samples for withholding on payment momen
+	500	CO	AT	    005	0			00		1	X	1				    000		2	2						X													Self-withholding
+	500	CO	S1	    004	0			00		1	X	1				    000		2	2						X													Income tax withheld by customer
+	500	CO	S2	    011	0			00		3	X	1				    000		2	2						X													VAT withheld by customer
+	500	CO	S3	    012	0			00		1	X	1				    000		2	2						X													ICA tax withheld by customer
+	500	GB	04	    000	0			00	0	1	X	2				    000		2	2		X			0	X	X												CIS 4 Registration Card
+	500	GB	05	    000	0			00	0	1	X	2				    000		2	2		X			0	X	X												CIS 5 Construction Tax Certificate
+	500	GB	06	    000	0			00	0	1	X	2				    000		2	2		X			0	X	X												CIS 6 Subcontractors Tax Certificate
+	500	GB	99	    000	0			00	0	1	X	2				    000		2	2		X			0	X	X												net with manual base amt
+	500	IN	11	    095	0			00		2	X	1				    000		2	2						X	X												194A-Inv-Other Interest(Corp)
+	500	IN	12	    096	0			00		2	X	1				    000		2	2						X	X												194A-Inv-Other Interest(Non-Corp)
+	500	IN	13	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194A-Adv-Other Interest(Corp)
+	500	IN	14	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194A-Adv-Other Interest(Non-Corp)
+	500	IN	15	    097	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Corp)-Sec 44BB
+	500	IN	16	    098	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Non-Corp)-Sec 44BB
+	500	IN	17	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Corp)-Sec 44BB
+	500	IN	18	    099	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Resident(Non-Corp)-Sec 44 BB
+	500	IN	19	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Non-Corp)-Sec 44D
+	500	IN	1A	    052	0			00		2	X	1				    009		2	2						X	X					X							194A-Inv-Other Interest(Corp)-EDU CESS
+	500	IN	1B	    056	0			00		2	X	1				    012		2	2						X	X					X							195-Inv-Non Res(Corp)-Sec 44BB-EDU CESS
+	500	IN	1C	    058	0			00		2	X	1				    006		2	2						X	X					X							194C-Inv-Contractors(Corp)-EDU CESS
+	500	IN	1D	    064	0			00		2	X	1				    019		2	2						X	X					X							195-Inv-Non Res(Corp)-Sec 44D-EDU CESS
+	500	IN	1H	    066	0			00		2	X	1				    021		2	2						X	X					X							194H-Inv-Commn / Brokerage (Corp)-E CESS
+	500	IN	1I	    068	0			00		2	X	1				    023		2	2						X	X					X							194I-Inv-Rent(Corp) - EDU CESS
+	500	IN	1J	    070	0			00		2	X	1				    025		2	2						X	X					X							194J-Inv-Professionals(Corp) - EDU CESS
+	500	IN	20	    000	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Advtg Contractors(Corp)
+	500	IN	21	    000	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Contractors(Non-Corp)
+	500	IN	22	    094	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Advtg Contractors(Non-Corp)
+	500	IN	23	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Contractors(Corp)
+	500	IN	24	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Advtg Contract(Corp)
+	500	IN	25	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Contractors(Non-Corp)
+	500	IN	26	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Advtg Contract(Non-Corp)
+	500	IN	27	    000	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Corp)-Sec 44D
+	500	IN	28	    000	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Non-Corp)-Sec 44D
+	500	IN	29	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Corp)-Sec 44D
+	500	IN	2A	    055	0			00		2	X	1				    010		2	2						X	X					X							194A-Inv-Other Int(Non-Corp)-EDU CESS
+	500	IN	2B	    057	0			00		2	X	1				    013		2	2						X	X				TTB	X							195-Inv-Non Res(Non-Corp)-Sec44BB-E CESS
+	500	IN	2C	    059	0			00		2	X	1				    014		2	2						X	X					X							194C-Inv-Sub Contractors(Corp)-EDU CESS
+	500	IN	2D	    065	0			00		2	X	1				    020		2	2						X	X					X							195-Inv-Non Res(Non-Corp)-Sec 44D-E CESS
+	500	IN	2H	    067	0			00		2	X	1				    022		2	2						X	X					X							194H-Inv-Comn / Broker(Non-Corp)EDU CESS
+	500	IN	2I	    069	0			00		2	X	1				    024		2	2						X	X					X							194I-Inv-Rent(Non-Corp) -  EDU CESS
+	500	IN	2J	    071	0			00		2	X	1				    026		2	2						X	X					X							194J-Inv-Professionals(Non-Corp)- EDU CE
+	500	IN	30	    000	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Contractors(Corp)
+	500	IN	31	    000	0			00		2	X	1				    000		2	2						X	X												194H-Inv-Commn / Brokerage (Corp)
+	500	IN	32	    000	0			00		2	X	1				    000		2	2						X	X												194H-Inv-Commn / Brokerage (Non-Corp)
+	500	IN	33	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194H-Adv-Commn / Brokerage (Corp)
+	500	IN	34	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194H-Adv-Commn / Brokerage (Non-Corp)
+	500	IN	35	    000	0			00		2	X	1				    000		2	2						X	X												194I-Inv-Rent(Corp)
+	500	IN	36	    000	0			00		2	X	1				    000		2	2						X	X												194I-Inv-Rent(Non-Corp)
+	500	IN	37	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194I-Adv-Rent(Corp)
+	500	IN	38	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194I-Adv-Rent(Non-Corp)
+	500	IN	39	    000	0			00		2	X	1				    000		2	2						X	X												194J-Inv-Professionals(Corp)
+	500	IN	3C	    060	0			00		2	X	1				    015		2	2						X	X					X							194C-Inv-Advtg Contractors(Corp)-EDU CES
+	500	IN	40	    000	0			00		2	X	1				    000		2	2						X	X												194J-Inv-Professionals(Non-Corp)
+	500	IN	41	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194J-Adv-Professionals(Corp)
+	500	IN	42	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194J-Adv-Professionals(Non-Corp)
+	500	IN	43	    000	0			00		2	X	1				    000		2	2						X	X												Service Tax
+	500	IN	44	    000	0			00		2	X	1				    000		2	2						X	X												194E-Inv-Non Residents(Non-Corp)sports
+	500	IN	45	    000	0			00	1	2	X	2		X		    000		2	2					0	X	X												194E-Adv-Non Resident(Non-Corp)-sports
+	500	IN	46	    090	0			00		1	X	1				    000		2	2						X	X												Buiding Workers Cess
+	500	IN	47	    091	0			00		1	X	1				    000	X	2	2						X	X												Compensation on acquisition
+	500	IN	48	    119	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								19EAdv-Non Residents(Non-corp)
+	500	IN	49	    000	0			00		2	X	1		X		    000		2	2					0	X	X				TTB								194E-Inv-Non Residents(Corp)sports
+	500	IN	4A	    160	0			01		1	X	1				    000	X	2	2						X	X				TTB								393(1) - Resident TDS
+	500	IN	4B	    161	0			01		1	X	1				    000		2	2						X	X				TTB								393(1) - Resident TDS - Material
+	500	IN	4C	    162	0			01		2	X	1				    000	X	2	2						X	X				TTB								393(2)-Non Res-Company
+	500	IN	4D	    163	0			01		2	X	1				    000	X	2	2						X	X				TTB								393(2)-Non Res-Non Company
+	500	IN	4E	    164	0			01		1	X	1				    000	X	2	2						X	X				TTB								393(3) - Resident TDS Spl Nature
+	500	IN	4F	    165	0			01		1	X	1				    000	X	2	2						X	X				TTB								397(2) - Resident - No PAN
+	500	IN	4G	    166	0			01		2	X	1				    000	X	2	2						X	X												394(1) - Resident TCS
+	500	IN	4H	    167	0			01		2	X	1				    000	X	2	2						X	X												394(1) - Non-Resident TCS
+	500	IN	4I	    168	0			01		2	X	1				    000	X	2	2						X	X												397(2) - Resident TCS - No PAN
+	500	IN	4Q	    154	0			01		1	X	1				    000		2	2						X	X				TTB								Section 194Q - TDS on Purchase of goods
+	500	IN	50	    000	0			01		2	X	1				    000		2	2						X	X												Tax collection at source
+	500	IN	51	    000	0			00		2	X	1				    000	X	2	2						X	X				TTB								195-Inv-Non Residents(Corp)-Sec 44BB
+	500	IN	52	    092	0			00		2	X	1				    000		2	2						X	X												VAT UNDER  EWT
+	500	IN	53	    093	A			00		2	X	1				    000		2	2						X	X												194J-Inv-Professionals(Corp)
+	500	IN	55	    000	0			00		2	X	1				    000		2	2						X	X												Service Tax
+	500	IN	56	    000	0			00		2	X	1				    000		2	2						X	X												Service tax 10.30% borne by ongc
+	500	IN	57	    000	0			00		2	X	1				    000		2	2						X	X												Service tax on 25% value borne by ongc
+	500	IN	58	    000	0			00		2	X	1				    000		2	2						X	X												Service  tax on 25% value
+	500	IN	59	    000	0			00		2	X	1				    000		2	2						X	X				M								Service Tax (Old)
+	500	IN	5A	    147	0			01		2	X	1				    000		2	2						X	X												TCS Scrap, Minerals & Motor Vehicle 2018
+	500	IN	5B	    148	0			01		2	X	1				    000		2	2						X	X												TCS - Lease /Licence wef 01.04.2018
+	500	IN	5C	    153	0			01		2	X	1				    000		2	2						X	X												TCS u/s 206(1H) wef 01.10.2020
+	500	IN	5D	    156	0			01		2	X	1				    000	X	2	2						X	X												TDS u/s 194O e-Commerce sale
+	500	IN	5Q	    155	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194Q TDS on sale Of Goods (Advance)
+	500	IN	60	    000	0			01		2	X	1				    000		2	2						X	X												194A-(INV) INT.OTH.THAN INT.ON SECURITIY
+	500	IN	61	    100	0			01		2	X	1				    000		2	2						X	X												192- Income under the head Salary
+	500	IN	62	    102	0			01		2	X	1				    000		2	2						X	X												194A-(INV) INT.OTH.THAN INT.ON SECURITIY
+	500	IN	63	    000	0			01	1	2	X	2		X		    000		2	2					0	X	X												194A-(ADV)INT.OTH.THAN INT.ON  SECURTIES
+	500	IN	64	    103	0			01	1	2	X	2		X		    000		2	2					0	X	X												194A-(ADV)INT.OTH.THAN INT.ON  SECURTIES
+	500	IN	65	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194C- INV CONTRACTOR INDIVIDUAL/HUF
+	500	IN	66	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194C-(INV) TRPT. CONT. 0% IF PAN QUOTED
+	500	IN	67	    000	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194C-(ADV) INDIVIDUAL/HUF
+	500	IN	68	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194C- INV CONT OTHER THAN INDIVIDUAL/HUF
+	500	IN	69	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194C-TPT CON.OT TH.IND./HUFIFPANNOTQUOTE
+	500	IN	6C	    061	0			00		2	X	1				    016		2	2						X	X					X							194C-Inv-Contractors(Non-Corp)-EDU CESS
+	500	IN	70	    000	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194C-(ADV) OTHER THAN INDIVIDUAL/HUF
+	500	IN	71	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194H-(INV) COMMISSION OR BROKERAGE
+	500	IN	72	    104	0			01		1	X	1				    000		2	2						X	X				TTB								194H-(INV) COMMISSION OR BROKERAGE
+	500	IN	73	    000	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194C-(ADV) COMMISSION OR BROKERAGE
+	500	IN	74	    105	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194C-(ADV) COMMISSION OR BROKERAGE
+	500	IN	75	    000	0			01		2	X	1				    000		2	2						X	X				TTB								194I -(INV) RENT OF P&M AND EQPT
+	500	IN	76	    111	0			01		2	X	1				    000		2	2						X	X				TTB								194IA Immovble Prpt.excl Agri Land NCorp
+	500	IN	77	    110	0			01		2	X	1				    000		2	2						X	X				TTB								194IA Immovble Prpt.excl Agri Land Corp
+	500	IN	78	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194-I(INV)RENT OTHER THAN P&M AND EQPT
+	500	IN	79	    107	0			01		1	X	1				    000		2	2						X	X				TTB								194-I(INV)RENT OTHER THAN P&M AND EQPT
+	500	IN	7C	    062	0			00		2	X	1				    017		2	2						X	X					X							194C-Inv-Sub Contractor(Non-Corp)-E CESS
+	500	IN	80	    000	0			01		1	X	1				    000		2	2						X	X				TTB								194J-(INV) PROFESIONAL CHARGES
+	500	IN	81	    000	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194J-(ADV) PROFESIONAL CHARGES
+	500	IN	82	    000	0			01		2	X	1		X		    000		2	2					0	X	X				TTB								194E- Non Residents(Non-Corp)sports
+	500	IN	83	    000	0			01		2	X	1		X		    000		2	2					0	X	X				TTB								194E- Non Residents(Corp)sports
+	500	IN	84	    108	0			01		1	X	1				    000		2	2						X	X				TTB								194J-(INV) PROFESIONAL CHARGES
+	500	IN	85	    000	0			01		2	X	1				    000		2	2						X	X				TTB								194LC Intt.on Exter.Comm.Borrowing NCorp
+	500	IN	86	    000	0			01		2	X	1				    000		2	2						X	X				TTB								194LC Intt. on Exter.Comm.Borrowing Corp
+	500	IN	87	    114	0			01		2	X	1				    000		2	2						X	X				TTB								194LD Intt. on dominated bond Non-corp.
+	500	IN	88	    115	0			01		2	X	1				    000		2	2						X	X				TTB								194LD Intt. on dominated bond Corp.
+	500	IN	89	    109	0			01	1	2	X	2		X		    000		2	2					0	X	X				TTB								194J-(ADV) PROFESIONAL CHARGES
+	500	IN	8C	    063	0			00		2	X	1				    018		2	2						X	X					X							194C-Inv-Advtg Contract(Non-Corp)-EDU CE
+	500	IN	90	    112	0			01		1	X	1				    000		2	2						X	X												Buiding Workers Cess
+	500	IN	91	    123	0			01		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Corp)-Sec 44
+	500	IN	92	    124	0			01		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Non-Corp)-Sec 44
+	500	IN	93	    106	0			01		2	X	1				    000		2	2						X	X				TTB								194I -(INV) RENT OF P&M AND EQPT
+	500	IN	94	    125	0			01		2	X	1				    000		2	2						X	X				TTB								EQUALIZATION LEVY
+	500	IN	95	    118	0			00		2	X	1				    000		2	2						X	X				M								Service Tax (New)
+	500	IN	96	    120	0			00		2	X	1				    000		2	2						X	X				M								Service Tax (Swatch Bharat Cess)
+	500	IN	97	    121	0			00		2	X	1				    000		2	2						X	X				M								Service Tax (w.e.f.15.11.15)
+	500	IN	98	    122	0			00		2	X	1				    000		2	2						X	X				M								Service Tax (Krishi Kalyan Cess)
+	500	IN	99	    126	0			00		2	X	1				    000		2	2						X	X				TTB								exemption under section 197
+	500	IN	9A	    137	0			01		2	X	1				    000		2	2						X	X				TTB								194E- Non Residents(Non-Corp)sports
+	500	IN	9B	    138	0			01		2	X	1				    000		2	2						X	X				TTB								194E- Non Residents(Corp)sports
+	500	IN	9C	    139	0			01		2	X	1				    000		2	2						X	X				TTB								194LC Intt.on Exter.Comm.Borrowing NCorp
+	500	IN	9D	    140	0			01		2	X	1				    000		2	2						X	X				TTB								194LC Intt. on Exter.Comm.Borrowing Corp
+	500	IN	9E	    141	0			01		2	X	1				    000		2	2						X	X				TTB								194LD Intt. on dominated bond Non-corp.
+	500	IN	9F	    142	0			01		2	X	1				    000		2	2						X	X				TTB								194LD Intt. on dominated bond Corp.
+	500	IN	9G	    143	0			01		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Corp)
+	500	IN	9H	    144	0			01		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Non-Corp)
+	500	IN	9I	    145	0			01		2	X	1				    000		2	2						X	X				TTB								195-Non Residents(Corp) Sec 44BB,44D,DTA
+	500	IN	9J	    130	0			01		2	X	1				    000		2	2						X	X				TTB								195-NonResidts(Non-Cor) Sec 44BB,44D,DTA
+	500	IN	9K	    150	0			01		2	X	1				    000		2	2						X	X				TTB								195(2)& 195(3) -Inv-Non Residents(Corp)
+	500	IN	9L	    146	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Corp)
+	500	IN	9M	    131	0			01		2	X	1				    000		2	2						X	X				TTB								197(1) &195 -Corporate Residents
+	500	IN	9N	    135	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Non Corp)
+	500	IN	9O	    136	0			01		2	X	1				    000		2	2						X	X				TTB								IT TDS NOT APPLICABLE (INV)
+	500	IN	9P	    151	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								IT TDS NOT APPLICABLE (ADV)
+	500	IN	9Q	    149	0			00		1	X	1				    000		2	2						X	X				TTB								GST TDS NOT APPLICABLE (INV)
+	500	IN	9R	    152	0			00	1	2	X	2		X		    000		2	2			06		0	X	X				TTB								GST TDS NOT APPLICABLE (ADV)
+	500	IN	9S	    157	0			01		2	X	1				    000		2	2						X	X				TTB								193-INV-Other than Company
+	500	IN	9T	    158	0			01		2	X	1				    000		2	2						X	X				TTB								193-INV-Company
+	500	IN	A1	    009	0			00		2	X	1				    000		2	2						X	X												194A-Inv-Other Interest(Corp)
+	500	IN	A2	    010	0			00		2	X	1				    000		2	2						X	X												194A-Inv-Other Interest(Non-Corp)
+	500	IN	AA	    001	0			00	1	2	X	2		X		    000		2	2					0	X	X												194A-Adv-Other Interest(Corp)
+	500	IN	AB	    002	0			00	1	2	X	2		X		    000		2	2					0	X	X												194A-Adv-Other Interest(Non-Corp)
+	500	IN	AC	    074	0			00	1	2	X	2				    007		2	2					0	X	X					X							194C-Adv-Contractors(Corp)-EDU CESS
+	500	IN	AD	    080	0			00	1	2	X	2				    032		2	2					0	X	X					X							195-Adv-Non Res(Corp)-Sec 44D-EDU CESS
+	500	IN	AG	    050	0			00		1	X	1				    000	X	2	2						X	X												IN:TDS GST INTRA STATE FOR TESTING
+	500	IN	AH	    082	0			00	1	2	X	2				    034		2	2					0	X	X					X							194H-Adv-Commn / Broker (Corp)-EDU CESS
+	500	IN	AI	    084	0			00	1	2	X	2				    036		2	2					0	X	X					X							194I-Adv-Rent(Corp)- EDU CESS
+	500	IN	AJ	    086	0			00	1	2	X	2				    038		2	2					0	X	X					X							194J-Adv-Professionals(Corp) - EDU CESS
+	500	IN	B1	    012	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Corp)-Sec 44BB
+	500	IN	B2	    013	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Non-Corp)-Sec 44BB
+	500	IN	BA	    003	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Corp)-Sec 44BB
+	500	IN	BB	    004	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Resident(Non-Corp)-Sec 44 BB
+	500	IN	BC	    075	0			00	1	2	X	2				    005		2	2					0	X	X					X							194C-Adv-Sub-Contractors(Corp)-EDU CESS
+	500	IN	BD	    081	0			00	1	2	X	2				    033		2	2					0	X	X				TTB	X							195-Adv-Non Res(Non-Corp)-Sec 44D-EDU CE
+	500	IN	BE	    054	0			00	1	2	X	2				    002		2	2					0	X	X					X							194A-Adv-Other Int(Non-Corp)-EDU CESS
+	500	IN	BH	    083	0			00	1	2	X	2				    035		2	2					0	X	X					X							194H-Adv-Commn / Broker (N-Corp)-EDU CES
+	500	IN	BI	    085	0			00	1	2	X	2				    037		2	2					0	X	X					X							194I-Adv-Rent(Non-Corp)- EDU CESS
+	500	IN	BJ	    087	0			00	1	2	X	2				    039		2	2					0	X	X					X							194J-Adv-Profes(Non-Corp) - EDU CESS
+	500	IN	C1	    006	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Contractors(Corp)
+	500	IN	C2	    014	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Sub Contractors(Corp)
+	500	IN	C3	    015	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Advtg Contractors(Corp)
+	500	IN	C6	    016	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Contractors(Non-Corp)
+	500	IN	C7	    017	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Sub Contractors(Non-Corp)
+	500	IN	C8	    018	0			00		2	X	1				    000		2	2						X	X												194C-Inv-Advtg Contractors(Non-Corp)
+	500	IN	CA	    007	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Contractors(Corp)
+	500	IN	CB	    005	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Sub-Contractors(Corp)
+	500	IN	CF	    029	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Contractors(Non-Corp)
+	500	IN	CG	    030	0			00		1	X	1		X		    000		2	2					0	X	X												IN:TDS ON  CGST (INV)
+	500	IN	CH	    031	0			00	1	2	X	2		X		    000		2	2					0	X	X												194C-Adv-Advtg Contract(Non-Corp)
+	500	IN	D1	    019	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Corp)-Sec 44D
+	500	IN	D2	    020	0			00		2	X	1				    000		2	2						X	X				TTB								195-Inv-Non Residents(Non-Corp)-Sec 44D
+	500	IN	DA	    032	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Corp)-Sec 44D
+	500	IN	DB	    033	0			00	1	2	X	2		X		    000		2	2					0	X	X				TTB								195-Adv-Non Residents(Non-Corp)-Sec 44D
+	500	IN	EA	    053	0			00	1	2	X	2				    001		2	2					0	X	X					X							194A-Adv-Other Interest(Corp)-EDU CESS
+	500	IN	EB	    073	0			00	1	2	X	2				    004		2	2					0	X	X				TTB	X							195-Adv-Non Res(N-Corp)-Sec 44 BB-E CESS
+	500	IN	EC	    076	0			00	1	2	X	2				    028		2	2					0	X	X					X							194C-Adv-Sub-Contractors(Corp)-EDU CESS
+	500	IN	EE	    072	0			00	1	2	X	2				    003		2	2					0	X	X					X							195-Adv-Non Res(Corp)-Sec 44BB-EDU CESS
+	500	IN	FC	    077	0			00	1	2	X	2				    029		2	2					0	X	X					X							194C-Adv-Contractors(Non-Corp)-EDU CESS
+	500	IN	GC	    078	0			00	1	2	X	2				    030		2	2					0	X	X					X							194C-Adv-Sub-Cont(Non-Corp)-EDU CESS
+	500	IN	H1	    021	0			00		2	X	1				    000		2	2						X	X												194H-Inv-Commn / Brokerage (Corp)
+	500	IN	H2	    022	0			00		2	X	1				    000		2	2						X	X												194H-Inv-Commn / Brokerage (Non-Corp)
+	500	IN	HA	    034	0			00	1	2	X	2		X		    000		2	2					0	X	X												194H-Adv-Commn / Brokerage (Corp)
+	500	IN	HB	    035	0			00	1	2	X	2		X		    000		2	2					0	X	X												194H-Adv-Commn / Brokerage (Non-Corp)
+	500	IN	HC	    079	0			00	1	2	X	2				    031		2	2					0	X	X					X							194C-Adv-Advtg Contract(N-Corp)-EDU CESS
+	500	IN	I1	    023	0			00		2	X	1				    000		2	2						X	X												194I-Inv-Rent(Corp)
+	500	IN	I2	    024	0			00		4	X	1				    000		2	2						X	X												194I-Inv-Rent(Non-Corp)
+	500	IN	IA	    036	0			00	1	2	X	2		X		    000		2	2					0	X	X												194I-Adv-Rent(Corp)
+	500	IN	IB	    037	0			00	1	2	X	2		X		    000		2	2					0	X	X												194I-Adv-Rent(Non-Corp)
+	500	IN	IG	    129	0			00		1	X	1		X		    000		2	2					0	X	X												IN:TDS ON IGST (INV)
+	500	IN	J1	    025	0			00		2	X	1				    000		2	2						X	X												194J-Inv-Professionals(Corp)
+	500	IN	J2	    026	0			00		2	X	1				    000		2	2						X	X												194J-Inv-Professionals(Non-Corp)
+	500	IN	JA	    038	0			00	1	2	X	2		X		    000		2	2					0	X	X												194J-Adv-Professionals(Corp)
+	500	IN	JB	    039	0			00	1	2	X	2		X		    000		2	2					0	X	X												194J-Adv-Professionals(Non-Corp)
+	500	IN	LD	    134	0			00		1	X	1				    000		2	2						X	X				TTB								IN:Liquidated Damages
+	500	IN	SG	    028	0			00		1	X	1		X		    000		2	2					0	X	X												IN:TDS ON  SGST/UGST (INV)
+	500	IN	SN	    159	0			01		2	X	1				    000		2	2						X	X				TTB								Seigniorage Charges
+	500	IN	ST	    051	0			00		2	X	1				    000		2	2						X	X				M								Service Tax
+	500	IN	TG	    127	0			00		2	X	1				    000	X	2	2						X	X				M								TESTING FOR NEW TAX CODE CREATION
+	500	IN	TS	    088	0			00		2	X	1				    051		2	2						X	X					X							Edu cess on service tax
+	500	IN	W0	    027	0			00		2	X	1				    000		2	2			AS			X	X												WCT - FOR ASSAM
+	500	IN	W1	    008	0			00		2	X	1				    000		2	2			GJ			X	X												WCT-GUJARAT
+	500	IN	W2	    041	0			00		2	X	1				    000		2	2			AP			X	X												WCT - Andhra Pradesh
+	500	IN	W3	    042	0			00		2	X	1		X		    000		2	2			22		0	X	X												WCT FOR TAMILNADU
+	500	IN	W4	    043	0			00		2	X	1				    000		2	2			WB			X	X												WCT - West Bengal
+	500	IN	W5	    044	0			00		2	X	1				    000		2	2			MAH			X	X												WCT - Maharashtra
+	500	IN	W6	    045	0			00		2	X	1				    000		2	2			UTN			X	X												WCT -Uttaranchal
+	500	IN	W7	    046	0			00		2	X	1				    000		2	2			TP			X	X												WCT - Tripura
+	500	IN	W8	    047	0			00		2	X	1				    000		2	2			DEL			X	X												WCT - Delhi
+	500	IN	W9	    048	0			00		2	X	1				    000		2	2			RJ			X	X												TDS SALES TAFX  FOR - RAJASTHAN
+	500	IN	WA	    049	0			00		2	X	1				    000		2	2						X	X												AGST  - FOR  ASSAM
+	500	IN	WB	    000	0			00	1	2	X	2		X		    000		2	2			06		0	X	X												 ADV WORK CONT. TAX-BARODA
+	500	IN	WC	    040	0			00		2	X	1				    000		2	2						X	X												WCT for Govt of Puducherry
+	500	IN	WE	    000	0			00		2	X	1				    000		2	2			AS			X	X												WCT - FOR ASSAM
+	500	IN	WF	    116	0			00		2	X	1				    000		2	2			AS			X	X												WCT - FOR MIZORAM
+	500	IN	WG	    101	0			00		2	X	1				    000		2	2			UP			X	X												WCT  - FOR  GOA
+	500	IN	WH	    011	0			00		2	X	1				    000		2	2			HP			X	X												AGST  - FOR  Himachal pradesh
+	500	IN	WJ	    113	0			00	1	2	X	2		X		    000		2	2			22		0	X	X												 ADV WORK CONT. TAMIL NADU
+	500	IN	WK	    000	0			00		2	X	1				    000		2	2			12			X	X												WCT - JHARKHAND
+	500	IN	WL	    117	0			00		2	X	1				    000		2	2			18			X	X												WCT  - FOR  ORRISA
+	500	IN	WM	    000	0			00		2	X	1				    000		2	2			12			X	X												WCT - Madhya Pradesh
+	500	IN	WP	    089	0			00		2	X	1				    000		2	2			PB			X	X												AGST  - FOR  Punjab
+	500	IN	WR	    000	0			00		2	X	1				    000		2	2			20			X	X												WCT  - FOR   RAJASTHAN
+	500	IN	WS	    000	0			00	1	2	X	2		X		    000		2	2			03		0	X	X												 ADV WORK CONT.  TAX- ASSAM
+	500	IN	WT	    000	0			00	1	2	X	2		X		    000		2	2			23		0	X	X												 ADV WORK CONT. TAX-TRIPURA
+	500	IN	WU	    000	0			00		2	X	1				    000		2	2			UP			X	X												WCT  - FOR  Uttar pradesh
+	500	IN	ZC	    132	0			00	1	2	X	2		X		    000		2	2			06		0	X	X												TDS ON CGST (ADV)
+	500	IN	ZI	    128	0			00	1	2	X	2		X		    000		2	2			06		0	X	X												TDS ON IGST (ADV)
+	500	IN	ZS	    133	0			00	1	2	X	2		X		    000		2	2			06		0	X	X												TDS ON SGST/UGST (ADV)
+	500	IT	I1	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X												Contrib. INPS 10% a carico Profess.
+	500	IT	I2	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X												Contrib. INPS 10% a carico Societa´
+	500	IT	I3	    000	0			00	0	1	X	2				    000	X	2	2		X			0	X	X												Ritenuta d'acconto professionisti
+	500	IT	I4	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X												Ritenuta d'acconto percip. vita
+	500	IT	I5	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X												Ritenuta previdenziale INPS
+	500	IT	RA	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X
+	500	JP	01	    001	0			02		1	X	1				    000		1	1						X													Fee 10 % - 20 %
+	500	JP	02	    002	0			02		1	X	1				    000		1	1						X	X												Payment for temp.assistant 10%
+	500	JP	P1	    001	0			02	0	1	X	2				    000		1	1					0	X					G								Payment for non-resident 10 %
+	500	KR	K1	    000	0			02	0	1	X	2				    000	X	2	2					0	X	X												General income tax Korea
+	500	KR	K2	    000	0			02	0	1	X	2				    000	X	2	2					0	X	X												Local tax
+	500	MX	01	    000	0			00	0	1	X	2				    000	X	2	2		X		F_RFKQST20_MX	0	X	X												Example ISR/income w/hold.tax for Mexico
+	500	MX	02	    000	0			00	0	3	X	2				    000	X	2	2		X			0	X	X												Sample withholding VAT for Mexico
+	500	PE	Q1	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X												Fourth category income tax
+	500	PE	Q2	    000	0			00	0	1	X	2				    000	X	2	2					0	X	X												Solidarity tax (Fonavi)
+	500	PH	CI	    001	0			00		1	X	1				    000	X	2	2						X	X												Exp. Withholding Tax (upon customer inv)
+	500	PH	CP	    002	0			00	0	1	X	2		X	X	    000	X	2	2					0	X	X												Exp. Withholding Tax (customer payment)
+	500	PH	EI	    003	0			00		1	X	1				    000	X	2	2						X	X												Expanded Withholding Tax (invoice)
+	500	PH	EP	    000	0			00	0	1	X	2		X	X	    000	X	2	2					0	X	X												Expanded Withholding Tax (payment)
+	500	PH	EV	    005	0			00	0	1	X	2		X	X	    000	X	2	2					0	X	X												Expanded VAT on sale to gov't entity
+	500	PH	EX	    006	0			00	0	1	X	2		X	X	    000	X	2	2					0	X	X												Payees exempt from Withholding Tax
+	500	PH	FI	    004	0			00		1	X	1				    000	X	2	2						X	X												Final Tax (Invoice)
+	500	PH	FP	    000	0			00	0	1	X	2		X	X	    000	X	2	2					0	X	X												Final Tax (payment)
+	500	TH	01	    001	0			00		1	X	1				    000	X	2	2							X												at Inv.& No certificate numbering
+	500	TH	02	    002	0			00		1	X	1				    000	X	2	2							X												at Inv.& No cert.no.(onecycle grossup)
+	500	TH	11	    000	0			00	0	1	X	2				    000	X	2	2		X			2	X	X												at Paymnt.&No cert.numbering
+	500	TH	12	    000	0			00	0	1	X	2				    000	X	2	2		X			2	X	X												at Paymnt.&No cert.no.(onecycle grossup)
+	500	TH	R1	    000	0			00	1	1	X	2				    000	X	2	2		X			1	X	X												A/R at Paymnt.&No cert.numbering
+	500	TR	1	    001	0			00		1	X	1				    000		2	2						X	X												WT1
+	500	TR	2	    002	0			00		1	X	1				    000		2	2						X	X												WT2
+	500	VE	01	    000	0			00	0	1	X	2				    000	X	2	2		X			1	X	X												Service
+	500	VE	02	    000	0			00	0	1	X	2				    000	X	2	2		X			1	X	X												Leasing
+	500	VE	03	    000	0			00	0	1	X	2				    000	X	2	2		X			1	X	X												Transport
+	500	VE	T1	    000	0			00	0	1	X	2				    000	X	2	2		X			0	X	X												Tarif number 2 ( < 14.800.000 VEB)
+	500	VE	T2	    000	0			00	0	1	X	2				    000	X	2	2		X			0	X	X												Tarif number 2 ( < 22.200.000 VEB)
+	500	VE	T3	    000	0			00	0	1	X	2				    000	X	2	2		X			0	X	X												Tarif number 2 ( >  22.200.000 VEB)
+	500	VE	TM	    000	0			00	0	1	X	2				    000	X	2	2		X			0	X	X												Tarifa 2 acumulada (base/amount manual)

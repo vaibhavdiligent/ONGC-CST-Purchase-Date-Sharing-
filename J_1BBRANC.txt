@@ -1,0 +1,79 @@
+﻿02.09.2026                                                                                                                                                                                                                                                                                                                                                                Dynamic List Display                                                                                                                                                                                                                                                                                                                                                                                                                          1
+
+Table: J_1BBRANCH
+
+	MANDT	BUKRS	BRANCH	BUPLA_TYPE	NAME	CGC_BRANCH	STATE_INSC	MUNIC_INSC	INDUSTRY	SINGLE	ADRNR	NFDEC	KR_REPRES	KR_BUSTYPE	KR_INDTYPE	STCD1	STCD2	STCD5	KR_TAXOFF	PAC01	VDP01	PAC02	VDP02	IPICONTRIBUTOR	IDSIGN	SOURE_DANGERGOOD	SUFRAMA	       NIRE	NIREDT	SPEDACTIND	CNAE	LEGALNAT	CRTN	ICMSTAXPAY	INDTYP	TDT	COMSIZE	DECREGPC	AUT_ADD_DATA_IMP	PISCONTRIBUTOR	COFINSCONTRIBUTOR	ICMSCONTRIBUTOR	ICMSSTCONTRIBUTOR	ISSCONTRIBUTOR	PREFIX	BRANCH_LONG	GSTIN	GSTTDSN	GSTSEZ	BUPLA_CLASS	DEPARTMENT_NAME	PERSON_NAME	PERSON_EMAIL1	REPRESN	INDTYPN	GESTYP	NTSNUMBER	BUSCODE	VALID_FROM	VALID_TO	DECLN_PERD_VAR	CNBP_ENABLED	TAX_REG_NMBR	MNG_DRCT_CONN_ENBLD	DECLD_DRCT_CONN_ENBLD	GSTCD	BUPLA_H_DUMMY_PS	EDOC_PH_CERTID	NAME
+
+	500	MUM			Western Offshore	      0000					332141	    0																00000000000				    0000															27AAACO1598A1ZN										 00000000
+	500	MUM	BS		B&S  Asset Mumbai N.A.	      0000					332141	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												B&S  Asset Mumbai N.A.
+	500	MUM	CB		cbg,mumbai N.A.	      0000					23342	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												cbg,mumbai N.A.
+	500	MUM	DB		DBG,MUMBAI N.A.	      0000					23370	    0				ACWPA9621K												00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												DBG,MUMBAI N.A.
+	500	MUM	EB		EB  EBG, Mumbai N.A.	      0000					23404	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												EB  EBG, Mumbai N.A.
+	500	MUM	EC		EC  E&C, Mumbai N.A.	      0000					23405	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												EC  E&C, Mumbai N.A.
+	500	MUM	GD10		GD-MUM-10T3-IPSHEM-Goa	      0000					192424	    0																00000000000				    0000															30AAACO1598A1Z0	30AAACO1598A1D9									 00000000												GD-MUM-10T3-IPSHEM-Goa
+	500	MUM	GJ71		GJ-MUM-10P2-Hazira	      0000					192425	    0																00000000000				    0000															24AAACO1598A4ZQ	24AAACO1598A1D2									 00000000												GJ-MUM-10P2-Hazira
+	500	MUM	GOA		IPSEM, goa	      0000					23406	    0																00000000000				    0000															30AAACO1598A1Z0	30AAACO1598A1D9									 00000000												30AAACO1598A1Z0
+	500	MUM	HZR		HAZIRA PLANT	      0000					23413	    0																00000000000				    0000															24AAACO1598A4ZQ	24AAACO1598A1D2									 00000000												HAZIRA PLANT
+	500	MUM	KKN		Business Place for KAKINADA	      0000					289088	    0																00000000000				    0000															37AAACO1598A1ZM	37AAACO1598A1DV									 00000000												37AAACO1598A1ZM
+	500	MUM	MH10		MH-MUM-WOFF-Others N.A.	      0000					192426	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-WOFF-Others N.A.
+	500	MUM	MH11		MH-MUM-10P1-Uran N.A.	      0000					192427	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10P1-Uran N.A.
+	500	MUM	MH12		MH-MUM-10K1-IOTL Tanks N.A.	      0000					192428	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10K1-IOTL Tanks N.A.
+	500	MUM	MH13		MH-MUM-10K2-BPCL Tanks N.A.	      0000					192429	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10K2-BPCL Tanks N.A.
+	500	MUM	MH14		MH-MUM-10K3-IOTLTanksC/oHazira	      0000					192430	    0																00000000000				    0000																									 00000000												MH-MUM-10K3-IOTLTanksC/oHazira
+	500	MUM	MH15		MH-MUM-10R1-MUM RO N.A.	      0000					192431	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10R1-MUM RO N.A.
+	500	MUM	MH16		MH-MUM-11A1-Mumbai High N.A.	      0000					192432	    0				400021/S/431												00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												MH-MUM-11A1-Mumbai High N.A.
+	500	MUM	MH17		MH-MUM-12A1-Neelam Heera N.A.	      0000					192433	    0																00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												MH-MUM-12A1-Neelam Heera N.A.
+	500	MUM	MH18		MH-MUM-13A1-Bassein N.A.	      0000					247754	    0																00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												MH-MUM-13A1-Bassein N.A.
+	500	MUM	MH19		MH-MUM-10S1-10S2-Off.Logis.N.A	      0000					291312	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10S1-10S2-Off.Logis.N.A
+	500	MUM	MH21		MH-MUM-10B1-10R2 WOB,MUM N.A.	      0000					300721	    0				400021/S/431												00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												MH-MUM-10B1-10R2 WOB,MUM N.A.
+	500	MUM	MH22		MH-MUM-10D1-DS, Mumbai N.A.	      0000					300722	    0				400021/S/431												00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												MH-MUM-10D1-DS, Mumbai N.A.
+	500	MUM	MH23		MH-MUM-10E1-ES, Mumbai N.A.	      0000					300723	    0				400021/S/431												00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												MH-MUM-10E1-ES, Mumbai N.A.
+	500	MUM	MH31		MH-MUM-10T1-IOGPT-Panvel N.A.	      0000					300724	    0				400021/S/431												00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10T1-IOGPT-Panvel N.A.
+	500	MUM	MH32		MH-MUM-10T2-IEOT-Panvel N.A.	      0000					300725	    0				400021/S/431												00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												MH-MUM-10T2-IEOT-Panvel N.A.
+	500	MUM	NLM		Neelam, mumbai N.A.	      0000					23407	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												Neelam, mumbai N.A.
+	500	MUM	NV		 Nhava Supply Base N.A.	      0000					1057213	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												 Nhava Supply Base N.A.
+	500	MUM	OB		Bus place for OB,MUM N.A.	      0000					194841	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												Bus place for OB,MUM N.A.
+	500	MUM	PV		Panvel, mumbai N.A.	      0000					23409	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												Panvel, mumbai N.A.
+	500	MUM	TB		TBG, Mumbai N.A.	      0000					23410	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												TBG, Mumbai N.A.
+	500	MUM	TS		T&S, Mumbai N.A.	      0000					23411	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												T&S, Mumbai N.A.
+	500	MUM	URAN		URAN COMPLEX N.A.	      0000					23367	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												URAN COMPLEX N.A.
+	500	MUM	URN		Uran plant N.A.	      0000					23414	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												Uran plant N.A.
+	500	MUM	XY10		abcdgej	      0000					1074015	    0																00000000000				    0000																									 00000000
+	500	MUM	XY11		abcdgej	      0000					1074018	    0																00000000000				    0000																									 00000000
+	500	MUM	XY12		abcdgej	      0000					1074019	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ1		abcdefghi	      0000					1074008	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ2		abcdefghi	      0000					1074009	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ3		abcdefghi	      0000					1074010	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ4		abcdefghi	      0000					1074011	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ5		abcdefghi	      0000					1074012	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ6		abcdefghi	      0000					1074013	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ7		abcdefghi	      0000					1074014	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ8		abcdgej	      0000					1074016	    0																00000000000				    0000																									 00000000
+	500	MUM	XYZ9		abcdgej	      0000					1074017	    0																00000000000				    0000																									 00000000
+	500	MUM	Z101		Jammu & Kashmir-NSP	      0000					1074843	    0																00000000000				    0000															01AAACO1598A1Z1	01AAACO1598A1DA									 00000000												01AAACO1598A1Z1
+	500	MUM	Z120			      0000					1351836	    0																00000000000				    0000															20AAACO1598A1Z1	20AAACO1598A1DA									 00000000												20AAACO1598A1Z1
+	500	MUM	ZG97		Offshore Business Place	      0000					1073987	    0																00000000000				    0000															97AAACO1598A1ZG	97AAACO1598A1DP									 00000000												97AAACO1598A1ZG
+	500	MUM	ZH29			      0000					1358095	    0																00000000000				    0000															29AAACO1598A3ZH	29AAACO1598A1DS									 00000000												29AAACO1598A3ZH - KAR
+	500	MUM	ZI29		Karnataka Basin NSP	      0000					1076728	    0																00000000000				    0000															29AAACO1598A2ZI	29AAACO1598A1DS									 00000000												29AAACO1598A2ZI
+	500	MUM	ZK19			      0000					1351837	    0																00000000000				    0000															19AAACO1598A1ZK	19AAACO1598A1DT									 00000000												19AAACO1598A1ZK
+	500	MUM	ZL09			      0000					1351838	    0																00000000000				    0000															09AAACO1598A1ZL	09AAACO1598A1DU									 00000000												09AAACO1598A1ZL
+	500	MUM	ZL18			      0000					1351839	    0																00000000000				    0000															18AAACO1598A2ZL	18AAACO1598A1DV									 00000000												18AAACO1598A2ZL
+	500	MUM	ZN08			      0000					1351840	    0																00000000000				    0000															08AAACO1598A1ZN	08JDHO00862B1DI									 00000000												08AAACO1598A1ZN
+	500	MUM	ZN27		Mum Onshore Business Place	      0000					1073849	    0																00000000000				    0000															27AAACO1598A1ZN	27AAACO1598A1DW									 00000000												27AAACO1598A1ZN
+	500	MUM	ZO36		Telengana Basin NSP	      0000					1074753	    0																00000000000				    0000															36AAACO1598A1ZO	36AAACO1598A1DX									 00000000												36AAACO1598A1ZO
+	500	MUM	ZP07			      0000					1351841	    0																00000000000				    0000															07AAACO1598A1ZP	07AAACO1598A1DY									 00000000												07AAACO1598A1ZP
+	500	MUM	ZP16			      0000					1351842	    0																00000000000				    0000															16AAACO1598A2ZP	16AAACO1598A1DZ									 00000000												16AAACO1598A2ZP
+	500	MUM	ZQ24		GJ-MUM-10P2-Hazira	      0000					1073850	    0																00000000000				    0000															24AAACO1598A4ZQ	24AAACO1598A1D2									 00000000												24AAACO1598A4ZQ
+	500	MUM	ZQ35		Andaman & Nicobar-NSP	      0000					1076457	    0																00000000000				    0000															35AAACO1598A1ZQ	35AAACO1598A1DZ									 00000000												35AAACO1598A1ZQ
+	500	MUM	ZR05			      0000					1351843	    0																00000000000				    0000															05AAACO1598A3ZR	05AAACO1598A1D2									 00000000												05AAACO1598A3ZR
+	500	MUM	ZR06		Haryana  Basin NSP	      0000					1074755	    0																00000000000				    0000															06AAACO1598A1ZR	06AAACO1598A1D0									 00000000												06AAACO1598A1ZR
+	500	MUM	ZR24			      0000					1351844	    0																00000000000				    0000															24AAACO1598A3ZR	24BRDO00600F1DF									 00000000												24AAACO1598A3ZR
+	500	MUM	ZS34			      0000					1351845	    0																00000000000				    0000															34AAACO1598A1ZS	34AAACO1598A1D1									 00000000												34AAACO1598A1ZS
+	500	MUM	ZU33			      0000					1351846	    0																00000000000				    0000															33AAACO1598A1ZU	33AAACO1598A1D3									 00000000												33AAACO1598A1ZU
+	500	MUM	ZV23			      0000					1351847	    0																00000000000				    0000															23AAACO1598A1ZV	23AAACO1598A1D4									 00000000												23AAACO1598A1ZV
+	500	MUM	ZW22			      0000					1358096	    0																00000000000				    0000															22AAACO1598A2ZW	22AAACO1598A1D6									 00000000												22AAACO1598A2ZW - CHHATTISGARH
+	500	MUM	ZX03			      0000					1351848	    0																00000000000				    0000															03AAACO1598A1ZX	03AAACO1598A1D6									 00000000												03AAACO1598A1ZX
+	500	MUM	ZX22			      0000					1350272	    0																00000000000				    0000															22AAACO1598A1ZX	22AAACO1598A1D6									 00000000												22AAACO1598A1ZX
+	500	MUM	ZZ02			      0000					1351849	    0																00000000000				    0000															02AAACO1598A1ZZ	02AAACO1598A1D8									 00000000												02AAACO1598A1ZZ
+	500	MUM	ZZ10		Bihar Basin NSP	      0000					1074754	    0																00000000000				    0000															10AAACO1598A4ZZ	10AAACO1598A1DB									 00000000												10AAACO1598A4ZZ
+	500	MUM	ZZ21			      0000					1351850	    0																00000000000				    0000															21AAACO1598A1ZZ	21AAACO1598A1D8									 00000000												21AAACO1598A1ZZ
