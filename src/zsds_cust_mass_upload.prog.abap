@@ -338,11 +338,17 @@ CLASS lcl_util IMPLEMENTATION.
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    REPLACE ALL OCCURRENCES OF ',' IN lv WITH ''.
-    REPLACE ALL OCCURRENCES OF ' ' IN lv WITH ''.
+    REPLACE ALL OCCURRENCES OF ',' IN lv WITH ``.
+    " Not REPLACE ... OF ' ': a text-field literal drops its trailing blanks,
+    " so the search pattern is empty and REPLACE dumps with
+    " CX_SY_REPLACE_INFINITE_LOOP. CONDENSE NO-GAPS removes the blanks
+    " without that trap.
+    CONDENSE lv NO-GAPS.
     TRY.
         rv = lv.
-      CATCH cx_sy_conversion_no_number.
+      CATCH cx_sy_conversion_error.
+        " The superclass, so an overflow is caught as well as a value that
+        " is not a number at all.
         CLEAR rv.
     ENDTRY.
   ENDMETHOD.
@@ -2538,10 +2544,12 @@ CLASS lcl_engine IMPLEMENTATION.
             " The indicator is the first token; a number after it is the
             " cycle in months, KNB1-ZINRT.
             DATA(lv_int) = condense( lv_cell ).
-            REPLACE ALL OCCURRENCES OF '/' IN lv_int WITH ' '.
-            REPLACE ALL OCCURRENCES OF '-' IN lv_int WITH ' '.
+            " Backquoted literals: a quoted ' ' loses its blank, which would
+            " glue "Z1/3" into "Z13" and make the separator empty.
+            REPLACE ALL OCCURRENCES OF '/' IN lv_int WITH ` `.
+            REPLACE ALL OCCURRENCES OF '-' IN lv_int WITH ` `.
             CONDENSE lv_int.
-            SPLIT lv_int AT ' ' INTO DATA(lv_ind) DATA(lv_cyc).
+            SPLIT lv_int AT ` ` INTO DATA(lv_ind) DATA(lv_cyc).
             set_comp( EXPORTING iv_fld = 'VZSKZ' iv_val = lv_ind
                                 iv_cnv = ls_m-cnv iv_row = is_row-row
                                 iv_struc = 'KNB1'

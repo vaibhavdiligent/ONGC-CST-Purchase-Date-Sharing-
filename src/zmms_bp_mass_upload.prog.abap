@@ -285,7 +285,10 @@ CLASS lcl_util IMPLEMENTATION.
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    REPLACE ALL OCCURRENCES OF ',' IN lv WITH ''.
+    REPLACE ALL OCCURRENCES OF ',' IN lv WITH ``.
+    " Blanks go through CONDENSE - REPLACE ... OF ' ' has an empty search
+    " pattern, which dumps with CX_SY_REPLACE_INFINITE_LOOP.
+    CONDENSE lv NO-GAPS.
     TRY.
         rv = lv.
       CATCH cx_sy_conversion_error.
