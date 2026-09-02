@@ -775,6 +775,29 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     " request as a creation and asks for a number.
     METHODS cust_guid   IMPORTING iv_kunnr  TYPE kunnr
                         RETURNING VALUE(rv) TYPE bu_partner_guid.
+    METHODS cust_bp     IMPORTING iv_kunnr  TYPE kunnr
+                        RETURNING VALUE(rv) TYPE bu_partner.
+
+    " The API does not take a "modify" task on the customer side, so every
+    " node has to say insert or update. These answer which one it is.
+    METHODS has_knb1    IMPORTING iv_kunnr  TYPE kunnr
+                                  iv_bukrs  TYPE bukrs
+                        RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS has_knvv    IMPORTING iv_kunnr  TYPE kunnr
+                                  iv_vkorg  TYPE vkorg
+                                  iv_vtweg  TYPE vtweg
+                                  iv_spart  TYPE spart
+                        RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS has_knvi    IMPORTING iv_kunnr  TYPE kunnr
+                                  iv_aland  TYPE land1
+                                  iv_tatyp  TYPE tatyp
+                        RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS has_role    IMPORTING iv_partner TYPE bu_partner
+                                  iv_role    TYPE bu_role
+                        RETURNING VALUE(rv)  TYPE abap_bool.
+    METHODS has_ident   IMPORTING iv_partner TYPE bu_partner
+                                  iv_cat     TYPE bu_id_type
+                        RETURNING VALUE(rv)  TYPE abap_bool.
 
     " The credit tab carries no company code and no sales area, so the ones
     " the customer already has are what the payment terms and the customer
@@ -903,6 +926,44 @@ CLASS lcl_cfg IMPLEMENTATION.
   METHOD cust_guid.
     SELECT SINGLE partner_guid FROM cvi_cust_link
       WHERE customer = @iv_kunnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD cust_bp.
+    SELECT SINGLE b~partner FROM but000 AS b
+      INNER JOIN cvi_cust_link AS l ON l~partner_guid = b~partner_guid
+      WHERE l~customer = @iv_kunnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD has_knb1.
+    SELECT SINGLE @abap_true FROM knb1
+      WHERE kunnr = @iv_kunnr AND bukrs = @iv_bukrs INTO @rv.
+  ENDMETHOD.
+
+  METHOD has_knvv.
+    SELECT SINGLE @abap_true FROM knvv
+      WHERE kunnr = @iv_kunnr AND vkorg = @iv_vkorg
+        AND vtweg = @iv_vtweg AND spart = @iv_spart INTO @rv.
+  ENDMETHOD.
+
+  METHOD has_knvi.
+    SELECT SINGLE @abap_true FROM knvi
+      WHERE kunnr = @iv_kunnr AND aland = @iv_aland AND tatyp = @iv_tatyp INTO @rv.
+  ENDMETHOD.
+
+  METHOD has_role.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE @abap_true FROM but100
+      WHERE partner = @iv_partner AND rltyp = @iv_role INTO @rv.
+  ENDMETHOD.
+
+  METHOD has_ident.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE @abap_true FROM but0id
+      WHERE partner = @iv_partner AND type = @iv_cat INTO @rv.
   ENDMETHOD.
 
   METHOD cust_bukrs.
@@ -2319,9 +2380,19 @@ CLASS lcl_engine IMPLEMENTATION.
     DATA ls_comp TYPE cmds_ei_company.
     DATA ls_sale TYPE cmds_ei_sales.
     CLEAR: ls_comp, ls_sale.
-    ls_comp-task = gc_m.
+    " "Modify" is not a task the customer API accepts - every node has to
+    " say whether it is an insert or an update, so each one is asked for.
+    ls_comp-task = COND #( WHEN lv_exists = abap_true
+                            AND lo_cfg->has_knb1( iv_kunnr = lv_kunnr
+                                                  iv_bukrs = lv_bukrs ) = abap_true
+                           THEN gc_u ELSE gc_i ).
     ls_comp-data_key-bukrs = lv_bukrs.
-    ls_sale-task = gc_m.
+    ls_sale-task = COND #( WHEN lv_exists = abap_true
+                            AND lo_cfg->has_knvv( iv_kunnr = lv_kunnr
+                                                  iv_vkorg = lv_vkorg
+                                                  iv_vtweg = lv_vtweg
+                                                  iv_spart = lv_spart ) = abap_true
+                           THEN gc_u ELSE gc_i ).
     ls_sale-data_key-vkorg = lv_vkorg.
     ls_sale-data_key-vtweg = lv_vtweg.
     ls_sale-data_key-spart = lv_spart.
@@ -2403,7 +2474,11 @@ CLASS lcl_engine IMPLEMENTATION.
             CONTINUE.
           ENDIF.
           APPEND VALUE cmds_ei_tax_ind(
-            task              = gc_m
+            task              = COND #( WHEN lv_exists = abap_true
+                                         AND lo_cfg->has_knvi( iv_kunnr = lv_kunnr
+                                                               iv_aland = lv_aland
+                                                               iv_tatyp = lv_tatyp ) = abap_true
+                                        THEN gc_u ELSE gc_i )
             data_key-aland    = lv_aland
             data_key-tatyp    = lv_tatyp
             data-taxkd        = lv_cell
@@ -2425,7 +2500,7 @@ CLASS lcl_engine IMPLEMENTATION.
     " holds for fax and e-mail, so every field goes through CONTACT-.
     IF lv_tel IS NOT INITIAL.
       APPEND VALUE cvis_ei_phone_str(
-               contact-task            = gc_m
+               contact-task            = gc_i
                contact-data-telephone  = lv_tel
                contact-datax-telephone = abap_true
              ) TO ls_cust-central_data-address-communication-phone-phone.
@@ -2434,7 +2509,7 @@ CLASS lcl_engine IMPLEMENTATION.
       " A mobile number is a telephone entry flagged as mobile. The flag is
       " BAPIADTEL-R_3_USER, whose data element is AD_FLGMOB.
       APPEND VALUE cvis_ei_phone_str(
-               contact-task            = gc_m
+               contact-task            = gc_i
                contact-data-telephone  = lv_mob
                contact-data-r_3_user   = abap_true
                contact-datax-telephone = abap_true
@@ -2443,14 +2518,14 @@ CLASS lcl_engine IMPLEMENTATION.
     ENDIF.
     IF lv_fax IS NOT INITIAL.
       APPEND VALUE cvis_ei_fax_str(
-               contact-task      = gc_m
+               contact-task      = gc_i
                contact-data-fax  = lv_fax
                contact-datax-fax = abap_true
              ) TO ls_cust-central_data-address-communication-fax-fax.
     ENDIF.
     IF lv_smt IS NOT INITIAL.
       APPEND VALUE cvis_ei_smtp_str(
-               contact-task         = gc_m
+               contact-task         = gc_i
                contact-data-e_mail  = lv_smt
                contact-datax-e_mail = abap_true
              ) TO ls_cust-central_data-address-communication-smtp-smtp.
@@ -2484,16 +2559,27 @@ CLASS lcl_engine IMPLEMENTATION.
       ls_bp-central_data-common-data-bp_control-grouping = p_bpgrp.
     ENDIF.
 
-    APPEND VALUE bus_ei_bupa_roles( task = gc_m data_key = gc_role_fi )
-           TO ls_bp-central_data-role-roles.
+    " A role the partner already has is an update, a new one an insert.
+    DATA(lv_bp) = COND bu_partner( WHEN lv_task <> gc_i AND lv_kunnr IS NOT INITIAL
+                                   THEN lo_cfg->cust_bp( lv_kunnr ) ).
+    APPEND VALUE bus_ei_bupa_roles(
+      task     = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
+                                                iv_role    = gc_role_fi ) = abap_true
+                         THEN gc_u ELSE gc_i )
+      data_key = gc_role_fi ) TO ls_bp-central_data-role-roles.
     IF lv_vkorg IS NOT INITIAL.
-      APPEND VALUE bus_ei_bupa_roles( task = gc_m data_key = gc_role_sd )
-             TO ls_bp-central_data-role-roles.
+      APPEND VALUE bus_ei_bupa_roles(
+        task     = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
+                                                  iv_role    = gc_role_sd ) = abap_true
+                           THEN gc_u ELSE gc_i )
+        data_key = gc_role_sd ) TO ls_bp-central_data-role-roles.
     ENDIF.
 
     IF lv_adh IS NOT INITIAL.
       APPEND VALUE bus_ei_bupa_identification(
-        task                            = gc_m
+        task                            = COND #( WHEN lo_cfg->has_ident( iv_partner = lv_bp
+                                                                          iv_cat     = gc_id_aadhaar ) = abap_true
+                                                  THEN gc_u ELSE gc_i )
         data_key-identificationcategory = gc_id_aadhaar
         data_key-identificationnumber   = lv_adh
       ) TO ls_bp-central_data-ident_number-ident_numbers.
@@ -2682,7 +2768,9 @@ CLASS lcl_engine IMPLEMENTATION.
     DATA ls_cust TYPE cmds_ei_extern.
     CLEAR ls_cust.
     ls_cust-header-object_instance-kunnr = iv_kunnr.
-    ls_cust-header-object_task           = gc_m.
+    " The customer exists - this is an update. "Modify" is not a task the
+    " customer API accepts.
+    ls_cust-header-object_task           = gc_u.
 
     " ---- company code for the KNB1 fields ------------------------------
     IF ls_comp-datax IS NOT INITIAL.
@@ -2717,7 +2805,8 @@ CLASS lcl_engine IMPLEMENTATION.
                      iv_text = |Payment terms and interest indicator not written - the customer is in | &&
                                |company codes { lv_list } and this tab has no company code column| ).
       ELSE.
-        ls_comp-task = gc_m.
+        " The company code was read from KNB1, so the row is there already.
+        ls_comp-task = gc_u.
         ls_comp-data_key-bukrs = lt_b[ 1 ].
         APPEND ls_comp TO ls_cust-company_data-company.
       ENDIF.
@@ -2736,7 +2825,8 @@ CLASS lcl_engine IMPLEMENTATION.
                      iv_text = |Customer group 3 not written - the customer has { lines( lt_s ) } sales | &&
                                |areas and this tab has no sales area columns| ).
       ELSE.
-        ls_sale-task = gc_m.
+        " Likewise the sales area comes from KNVV.
+        ls_sale-task = gc_u.
         ls_sale-data_key-vkorg = lt_s[ 1 ]-vkorg.
         ls_sale-data_key-vtweg = lt_s[ 1 ]-vtweg.
         ls_sale-data_key-spart = lt_s[ 1 ]-spart.
@@ -2761,7 +2851,7 @@ CLASS lcl_engine IMPLEMENTATION.
 
     DATA ls_bp TYPE bus_ei_extern.
     CLEAR ls_bp.
-    ls_bp-header-object_task                  = gc_m.
+    ls_bp-header-object_task                  = gc_u.
     ls_bp-header-object_instance-bpartnerguid = lv_guid.
 
     DATA ls_cvis TYPE cvis_ei_extern.
