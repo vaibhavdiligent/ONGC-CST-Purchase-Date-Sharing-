@@ -264,13 +264,29 @@ P('In SAP S/4HANA a credit limit is held in the currency of its credit segment, 
 P('In your system the credit segment is the same code as the credit control area. For example credit control '
   'area 1000 uses segment 1000 in INR, 7450 uses segment 7450 in EUR, and 6600 uses segment 6600 in MAD.')
 
-H('9.4  Two field limits in the existing licence table', 2)
+H('9.4  What the credit Limit tab writes, and where', 2)
+P('The tab carries three fields that are customer master data rather than credit data: payment terms, the '
+  'interest indicator and customer group 3. They are written through the same Business Partner interface as '
+  'every other scenario - nothing is written to a table directly.')
+P('Payment terms and the interest indicator belong to a company code, and customer group 3 to a sales area, '
+  'but the tab carries neither. The program therefore uses the ones the customer already has:')
+T(['Situation','What happens'],
+  [['The customer is in one company code','Payment terms and interest indicator are written there'],
+   ['The customer is in several company codes','The company codes belonging to the credit control area in '
+    'the row are used to narrow it down. If exactly one remains, that is used'],
+   ['It still cannot be narrowed to one','A red line naming the company codes, and the two fields are not '
+    'written. The credit limit itself is unaffected. Add a company code column if you need this'],
+   ['The customer has one sales area','Customer group 3 is written there'],
+   ['The customer has several sales areas','A red line, and customer group 3 is not written']],
+  widths=[6.0,10.0])
+
+H('9.5  Two field limits in the existing licence table', 2)
 T(['Field','Limit','Effect'],
   [['Bank Guarantee Amount','Whole numbers only, maximum 10 digits','A guarantee of 2,500,000.50 is stored as 2,500,000. If decimals are needed the field itself has to be changed.'],
    ['Distance in kms','Maximum 32,767','A larger value cannot be stored and the row is rejected'],
   ], widths=[4.0,4.0,8.0])
 
-H('9.5  Tax classifications depend on the country', 2)
+H('9.6  Tax classifications depend on the country', 2)
 P('The tax classification columns are filled according to the tax categories configured for the country in question:')
 T(['Country','Tax categories configured'],
   [['India','JTX1, JTX2, JTX3, JTX4, JOCG, JTC1'],
@@ -295,7 +311,7 @@ T(['Tab','Column','What we found','What the program does'],
    ['SAGA customer','39–41','The three Spanish DIR3 codes required for FACe e-invoicing, but two of them pointed at the same field','Accounting Office to Tax Number 3, Managing Office to Tax Number 4, Processing Unit to Tax Number 5'],
    ['SAGA customer','44','Repeats Tax Number 3, but is annotated with a reconciliation account','Loaded as the reconciliation account'],
    ['credit Limit','14','Credit representative group. This is not configured in your system — the field is empty for every credit control area.','Not loaded'],
-   ['credit Limit','R','Holds two values in one column: the interest indicator and the interest cycle','Please split this into two columns'],
+   ['credit Limit','R','Holds two values in one column: the interest indicator and the interest cycle','Loaded as both - the first value becomes the interest indicator, a number after it the calculation cycle in months. Splitting the column is still cleaner but no longer necessary.'],
   ], widths=[3.0,1.6,6.4,5.0])
 
 # ------------------------------------------------------------------ 11

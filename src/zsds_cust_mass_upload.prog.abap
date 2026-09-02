@@ -753,8 +753,27 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
   PUBLIC SECTION.
     CLASS-METHODS get RETURNING VALUE(ro) TYPE REF TO lcl_cfg.
 
+    TYPES tt_bukrs TYPE STANDARD TABLE OF bukrs WITH EMPTY KEY.
+    TYPES: BEGIN OF ty_sarea,
+             vkorg TYPE vkorg,
+             vtweg TYPE vtweg,
+             spart TYPE spart,
+           END OF ty_sarea,
+           tt_sarea TYPE STANDARD TABLE OF ty_sarea WITH EMPTY KEY.
+
     METHODS cust_exists IMPORTING iv_kunnr  TYPE kunnr
                         RETURNING VALUE(rv) TYPE abap_bool.
+
+    " The credit tab carries no company code and no sales area, so the ones
+    " the customer already has are what the payment terms and the customer
+    " group can be written to.
+    METHODS cust_bukrs  IMPORTING iv_kunnr  TYPE kunnr
+                        RETURNING VALUE(rt) TYPE tt_bukrs.
+    METHODS cust_sales  IMPORTING iv_kunnr  TYPE kunnr
+                        RETURNING VALUE(rt) TYPE tt_sarea.
+    " Company codes belonging to a credit control area (T001-KKBER).
+    METHODS kkber_bukrs IMPORTING iv_kkber  TYPE kkber
+                        RETURNING VALUE(rt) TYPE tt_bukrs.
 
     " Title text -> title key (ADRC-TITLE). The templates carry the text
     " ("Company", "Mr."), the API wants the key.
@@ -867,6 +886,22 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD cust_exists.
     SELECT SINGLE @abap_true FROM kna1 WHERE kunnr = @iv_kunnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD cust_bukrs.
+    SELECT bukrs FROM knb1 WHERE kunnr = @iv_kunnr
+      ORDER BY bukrs INTO TABLE @rt.
+  ENDMETHOD.
+
+  METHOD cust_sales.
+    SELECT vkorg, vtweg, spart FROM knvv WHERE kunnr = @iv_kunnr
+      ORDER BY vkorg, vtweg, spart
+      INTO CORRESPONDING FIELDS OF TABLE @rt.
+  ENDMETHOD.
+
+  METHOD kkber_bukrs.
+    SELECT bukrs FROM t001 WHERE kkber = @iv_kkber
+      ORDER BY bukrs INTO TABLE @rt.
   ENDMETHOD.
 
   METHOD title_key.
@@ -1968,6 +2003,18 @@ CLASS lcl_engine DEFINITION FINAL.
     METHODS master IMPORTING is_row TYPE ty_row.
     METHODS credit IMPORTING is_row TYPE ty_row.
 
+    " The credit tab also carries three customer-master fields - payment
+    " terms, interest indicator and customer group 3. They are written
+    " through the same Business Partner API as everything else; the company
+    " code and the sales area they belong to are taken from the ones the
+    " customer already has, because the tab does not carry them.
+    METHODS credit_master
+      IMPORTING iv_kunnr TYPE kunnr
+                iv_kkber TYPE kkber
+                iv_row   TYPE i
+                is_comp  TYPE cmds_ei_company
+                is_sale  TYPE cmds_ei_sales.
+
     " Re-points every map entry at the column that actually carries its
     " heading in this file. Entries whose heading is blank, duplicated or
     " absent keep the position they were built with.
@@ -2460,6 +2507,8 @@ CLASS lcl_engine IMPLEMENTATION.
           lv_sgm   TYPE ty_dec.
     DATA: lv_has_main TYPE abap_bool,
           lv_has_sgm  TYPE abap_bool.
+    DATA: ls_comp TYPE cmds_ei_company,
+          ls_sale TYPE cmds_ei_sales.
 
     LOOP AT mt_map INTO DATA(ls_m).
       DATA(lv_cell) = lcl_util=>cell( is_row = is_row iv_col = ls_m-col ).
@@ -2470,14 +2519,56 @@ CLASS lcl_engine IMPLEMENTATION.
         lv_kunnr = lcl_util=>alpha( iv_in = lv_cell iv_len = 10 ).
         CONTINUE.
       ENDIF.
-      CHECK ls_m-node = gc_n_cred.
-      CASE ls_m-fld.
-        WHEN 'SEGMENT'.    lv_kkber = lv_cell.
-        WHEN 'LIMIT_MAIN'. lv_main  = lcl_util=>to_dec( lv_cell ). lv_has_main = abap_true.
-        WHEN 'LIMIT_SGM'.  lv_sgm   = lcl_util=>to_dec( lv_cell ). lv_has_sgm  = abap_true.
-        WHEN 'CURRENCY'.   lv_curr  = lv_cell.
-        WHEN 'RISK_CLASS'. lv_risk  = lv_cell.
-        WHEN 'XBLOCKED'.   lv_block = lv_cell.
+
+      CASE ls_m-node.
+        WHEN gc_n_cred.
+          CASE ls_m-fld.
+            WHEN 'SEGMENT'.    lv_kkber = lv_cell.
+            WHEN 'LIMIT_MAIN'. lv_main  = lcl_util=>to_dec( lv_cell ). lv_has_main = abap_true.
+            WHEN 'LIMIT_SGM'.  lv_sgm   = lcl_util=>to_dec( lv_cell ). lv_has_sgm  = abap_true.
+            WHEN 'CURRENCY'.   lv_curr  = lv_cell.
+            WHEN 'RISK_CLASS'. lv_risk  = lv_cell.
+            WHEN 'XBLOCKED'.   lv_block = lv_cell.
+          ENDCASE.
+
+        WHEN gc_n_comp.
+          IF ls_m-fld = 'VZSKZ'.
+            " The template's interest column holds the indicator and, on
+            " some files, the calculation cycle behind it ("Z1 3", "Z1/3").
+            " The indicator is the first token; a number after it is the
+            " cycle in months, KNB1-ZINRT.
+            DATA(lv_int) = condense( lv_cell ).
+            REPLACE ALL OCCURRENCES OF '/' IN lv_int WITH ' '.
+            REPLACE ALL OCCURRENCES OF '-' IN lv_int WITH ' '.
+            CONDENSE lv_int.
+            SPLIT lv_int AT ' ' INTO DATA(lv_ind) DATA(lv_cyc).
+            set_comp( EXPORTING iv_fld = 'VZSKZ' iv_val = lv_ind
+                                iv_cnv = ls_m-cnv iv_row = is_row-row
+                                iv_struc = 'KNB1'
+                      CHANGING  cs_data  = ls_comp-data
+                                cs_datax = ls_comp-datax ).
+            lv_cyc = condense( lv_cyc ).
+            IF lv_cyc IS NOT INITIAL AND lv_cyc CO '0123456789'.
+              set_comp( EXPORTING iv_fld = 'ZINRT' iv_val = lv_cyc
+                                  iv_cnv = 'NM' iv_row = is_row-row
+                                  iv_struc = 'KNB1'
+                        CHANGING  cs_data  = ls_comp-data
+                                  cs_datax = ls_comp-datax ).
+            ENDIF.
+          ELSE.
+            set_comp( EXPORTING iv_fld = ls_m-fld iv_val = lv_cell
+                                iv_cnv = ls_m-cnv iv_row = is_row-row
+                                iv_struc = 'KNB1'
+                      CHANGING  cs_data  = ls_comp-data
+                                cs_datax = ls_comp-datax ).
+          ENDIF.
+
+        WHEN gc_n_sale.
+          set_comp( EXPORTING iv_fld = ls_m-fld iv_val = lv_cell
+                              iv_cnv = ls_m-cnv iv_row = is_row-row
+                              iv_struc = 'KNVV'
+                    CHANGING  cs_data  = ls_sale-data
+                              cs_datax = ls_sale-datax ).
       ENDCASE.
     ENDLOOP.
 
@@ -2540,6 +2631,103 @@ CLASS lcl_engine IMPLEMENTATION.
                       iv_block   = space
                       iv_risk    = space
                       iv_row     = is_row-row ).
+    ENDIF.
+
+    " Payment terms, interest indicator and customer group 3 are customer
+    " master fields, not credit data - they go through the BP API.
+    IF ls_comp-datax IS NOT INITIAL OR ls_sale-datax IS NOT INITIAL.
+      credit_master( iv_kunnr = lv_kunnr
+                     iv_kkber = lv_kkber
+                     iv_row   = is_row-row
+                     is_comp  = ls_comp
+                     is_sale  = ls_sale ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD credit_master.
+    DATA(lo_cfg) = lcl_cfg=>get( ).
+    DATA ls_comp TYPE cmds_ei_company.
+    DATA ls_sale TYPE cmds_ei_sales.
+    ls_comp = is_comp.
+    ls_sale = is_sale.
+
+    DATA ls_cust TYPE cmds_ei_extern.
+    CLEAR ls_cust.
+    ls_cust-header-object_instance-kunnr = iv_kunnr.
+    ls_cust-header-object_task           = gc_m.
+
+    " ---- company code for the KNB1 fields ------------------------------
+    IF ls_comp-datax IS NOT INITIAL.
+      DATA(lt_b) = lo_cfg->cust_bukrs( iv_kunnr ).
+      IF lines( lt_b ) > 1 AND iv_kkber IS NOT INITIAL.
+        " More than one company code: the credit control area decides.
+        DATA(lt_k) = lo_cfg->kkber_bukrs( iv_kkber ).
+        DATA lt_n TYPE lcl_cfg=>tt_bukrs.
+        LOOP AT lt_b INTO DATA(lv_b).
+          IF line_exists( lt_k[ table_line = lv_b ] ).
+            APPEND lv_b TO lt_n.
+          ENDIF.
+        ENDLOOP.
+        IF lines( lt_n ) = 1.
+          lt_b = lt_n.
+        ENDIF.
+      ENDIF.
+
+      IF lines( lt_b ) = 0.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                     iv_struc = 'KNB1'
+                     iv_text = |Payment terms and interest indicator not written - customer { iv_kunnr } | &&
+                               |is not extended to any company code| ).
+      ELSEIF lines( lt_b ) > 1.
+        DATA lv_list TYPE string.
+        CLEAR lv_list.
+        LOOP AT lt_b INTO DATA(lv_b2).
+          lv_list = COND string( WHEN lv_list IS INITIAL THEN lv_b2 ELSE |{ lv_list }, { lv_b2 }| ).
+        ENDLOOP.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                     iv_struc = 'KNB1'
+                     iv_text = |Payment terms and interest indicator not written - the customer is in | &&
+                               |company codes { lv_list } and this tab has no company code column| ).
+      ELSE.
+        ls_comp-task = gc_m.
+        ls_comp-data_key-bukrs = lt_b[ 1 ].
+        APPEND ls_comp TO ls_cust-company_data-company.
+      ENDIF.
+    ENDIF.
+
+    " ---- sales area for the KNVV fields --------------------------------
+    IF ls_sale-datax IS NOT INITIAL.
+      DATA(lt_s) = lo_cfg->cust_sales( iv_kunnr ).
+      IF lines( lt_s ) = 0.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                     iv_struc = 'KNVV'
+                     iv_text = |Customer group 3 not written - customer { iv_kunnr } has no sales area| ).
+      ELSEIF lines( lt_s ) > 1.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                     iv_struc = 'KNVV'
+                     iv_text = |Customer group 3 not written - the customer has { lines( lt_s ) } sales | &&
+                               |areas and this tab has no sales area columns| ).
+      ELSE.
+        ls_sale-task = gc_m.
+        ls_sale-data_key-vkorg = lt_s[ 1 ]-vkorg.
+        ls_sale-data_key-vtweg = lt_s[ 1 ]-vtweg.
+        ls_sale-data_key-spart = lt_s[ 1 ]-spart.
+        APPEND ls_sale TO ls_cust-sales_data-sales.
+      ENDIF.
+    ENDIF.
+
+    IF ls_cust-company_data-company IS INITIAL AND ls_cust-sales_data-sales IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA ls_cvis TYPE cvis_ei_extern.
+    CLEAR ls_cvis.
+    ls_cvis-customer = ls_cust.
+    IF mo_cvis->post( is_data  = ls_cvis
+                      iv_row   = iv_row
+                      iv_kunnr = iv_kunnr ) = abap_true.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
+                   iv_text = 'Payment terms / interest indicator / customer group updated' ).
     ENDIF.
   ENDMETHOD.
 

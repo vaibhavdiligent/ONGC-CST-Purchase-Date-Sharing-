@@ -254,6 +254,15 @@ for scen,radio,tab,namerow,first in CSCEN:
             if head: rows.append([letters(i), head, 'not loaded', '', ''])
     T(['Col','Heading in the workbook','Goes to','Field','Format'],rows,
       widths=[1.0,5.4,3.4,3.2,2.2])
+    if scen=='R5':
+        P('Credit limits are written through SAP Credit Management (FSCM): the limit is set on the credit '
+          'segment of the credit control area in the row, the total limit on the main segment 0000, the risk '
+          'class on the business partner and the block on the segment. Nothing is written to the old credit '
+          'management tables, which S/4HANA no longer maintains.')
+        P('Payment terms, interest indicator and customer group 3 on this tab are customer master data, not '
+          'credit data. They are written through the Business Partner interface, into the company code and '
+          'sales area the customer already has - see section 9.4 of the test guide. The interest column may '
+          'hold the indicator and the calculation cycle together ("Z1 3"); both are loaded.')
     doc.add_page_break()
 
 doc.save('/home/user/ONGC-CST-Purchase-Date-Sharing-/docs/BP_Mass_Upload_File_Format_Spec.docx')
