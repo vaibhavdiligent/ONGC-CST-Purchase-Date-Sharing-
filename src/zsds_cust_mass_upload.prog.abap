@@ -635,6 +635,31 @@ CLASS lcl_excel IMPLEMENTATION.
         et_head = ls_l-cells.
         CONTINUE.
       ENDIF.
+      IF ls_l-row = lv_hrow + 1.
+        " Some tabs spread the headings over two lines - the credit tab
+        " carries the technical names on one line and, for the columns that
+        " have no technical name, the description on the next. A blank
+        " heading is therefore filled from the neighbouring line, but only
+        " from a line that is itself part of the heading block: a line that
+        " carries none of this scenario's headings is data and is left
+        " alone.
+        IF score( it_head = ls_l-cells it_want = it_want ) > 0.
+          DATA lv_hc TYPE i.
+          LOOP AT ls_l-cells INTO DATA(lv_fill).
+            lv_hc = sy-tabix.
+            IF lv_fill IS INITIAL.
+              CONTINUE.
+            ENDIF.
+            IF lv_hc > lines( et_head ).
+              APPEND INITIAL LINE TO et_head.
+            ENDIF.
+            READ TABLE et_head ASSIGNING FIELD-SYMBOL(<lv_hd>) INDEX lv_hc.
+            IF sy-subrc = 0 AND <lv_hd> IS INITIAL.
+              <lv_hd> = lv_fill.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
       IF lcl_util=>is_empty( ls_l ) = abap_false.
         APPEND ls_l TO et_row.
       ENDIF.
@@ -1192,7 +1217,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 51   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'INTERESTCALCULATIONINDICATOR' )  " Interest calculation indicator
       ( scen = 'R1' col = 52   node = 'B' fld = 'ZINRT' cnv = '' hdr = 'INTERESTCALCULATIONFREQUENCYINMONTHS' )  " Interest calculation frequency in months
       ( scen = 'R1' col = 53   node = 'B' fld = 'ALTKN' cnv = '' hdr = 'PREVIOUSMASTERRECORDNUMBER' )  " Previous Master Record Number
-      ( scen = 'R1' col = 54   node = 'B' fld = 'ZTERM' cnv = '' hdr = '' )
+      ( scen = 'R1' col = 54   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
       ( scen = 'R1' col = 55   node = 'B' fld = 'TOGRU' cnv = '' hdr = 'TOLERANCEGROUPFORTHEBUSINESSPARTNERGLACC' )  " Tolerance group for the business partner/G/L account
       ( scen = 'R1' col = 56   node = 'B' fld = 'XZVER' cnv = '' hdr = 'INDICATORRECORDPAYMENTHISTORY' )  " Indicator: Record Payment History ?
       ( scen = 'R1' col = 57   node = 'B' fld = 'ZWELS' cnv = '' hdr = 'LISTOFTHEPAYMENTMETHODSTOBECONSIDERED' )  " List of the Payment Methods to be Considered
@@ -1200,7 +1225,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 59   node = 'S' fld = 'BZIRK' cnv = '' hdr = 'SALESDISTRICT' )  " Sales district
       ( scen = 'R1' col = 60   node = 'S' fld = 'VKBUR' cnv = '' hdr = 'SALESOFFICE' )  " Sales Office
       ( scen = 'R1' col = 61   node = 'S' fld = 'VKGRP' cnv = '' hdr = 'SALESGROUP' )  " Sales Group
-      ( scen = 'R1' col = 62   node = 'S' fld = 'KDGRP' cnv = '' hdr = '' )
+      ( scen = 'R1' col = 62   node = 'S' fld = 'KDGRP' cnv = '' hdr = 'CUSTOMERGROUP' )  " Customer group
       ( scen = 'R1' col = 63   node = 'S' fld = 'KLABC' cnv = '' hdr = 'CUSTOMERCLASSIFICATIONABCANALYSIS' )  " Customer classification (ABC analysis)
       ( scen = 'R1' col = 64   node = 'S' fld = 'WAERS' cnv = '' hdr = 'CURRENCY' )  " Currency
       ( scen = 'R1' col = 65   node = 'S' fld = 'KONDA' cnv = '' hdr = 'PRICEGROUPCUSTOMER' )  " Price group (customer)
@@ -1213,7 +1238,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 72   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'MAXIMUMNUMBEROFPARTIALDELIVERIESALLOWEDP' )  " Maximum Number of Partial Deliveries Allowed Per Item
       ( scen = 'R1' col = 73   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCOTERMSPART1' )  " Incoterms (Part 1)
       ( scen = 'R1' col = 74   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCOTERMSPART2' )  " Incoterms (Part 2)
-      ( scen = 'R1' col = 75   node = 'B' fld = 'ZTERM' cnv = '' hdr = '' )
+      ( scen = 'R1' col = 75   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
       ( scen = 'R1' col = 76   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'ACCOUNTASSIGNMENTGROUPFORCUSTOMER' )  " Account Assignment Group for Customer
       ( scen = 'R1' col = 77   node = 'T' fld = 'JOCG' cnv = '' hdr = 'JOIGINCENTRALGSTOP' )  " JOIG IN:Central GST - OP
       ( scen = 'R1' col = 78   node = 'T' fld = 'JTC1' cnv = '' hdr = 'JTC1IN206C1HGOODS' )  " JTC1 IN: 206C(1H) Goods
@@ -1255,7 +1280,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 114  node = 'Z' fld = 'BG_ISS_BANK' cnv = '' hdr = 'BGISSUINGBANK' )  " BG Issuing Bank
       ( scen = 'R1' col = 115  node = 'Z' fld = 'AGGR_EXPDT' cnv = 'DT' hdr = 'AGREEMENTEXPIRYDATE' )  " Agreement Expiry Date
       ( scen = 'R1' col = 116  node = 'Z' fld = 'APPOINT_DT' cnv = 'DT' hdr = 'APPOINTMENTDATE' )  " Appointment Date
-      ( scen = 'R1' col = 117  node = 'S' fld = 'KDGRP' cnv = '' hdr = '' )
+      ( scen = 'R1' col = 117  node = 'S' fld = 'KDGRP' cnv = '' hdr = 'CUSTOMERGROUP' )  " Customer group
       ( scen = 'R1' col = 118  node = 'Z' fld = 'AIOCD_CODE' cnv = '' hdr = 'AIOCDCODE' )  " AIOCD Code
       ( scen = 'R1' col = 119  node = 'Z' fld = 'CUST_BNK_NAME' cnv = '' hdr = 'CUSTOMERBANKNAME' )  " Customer Bank Name
       ( scen = 'R1' col = 120  node = 'Z' fld = 'DST_BOOKING' cnv = '' hdr = 'DESTINATIONOFBOOKING' )  " Destination of Booking
@@ -1486,16 +1511,16 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R4' col = 33   node = 'M' fld = 'SMT' cnv = '' hdr = 'SMTPADDR' )  " SMTP_ADDR
       ( scen = 'R4' col = 34   node = 'C' fld = 'KATR3' cnv = '' hdr = 'KATR3' )  " KATR3
       ( scen = 'R4' col = 35   node = 'C' fld = 'KATR4' cnv = '' hdr = 'KATR4' )  " KATR4
-      ( scen = 'R4' col = 36   node = 'C' fld = 'LIFNR' cnv = 'AL' hdr = 'LIFNR' )  " LIFNR
+      ( scen = 'R4' col = 36   node = 'C' fld = 'LIFNR' cnv = 'AL' hdr = '' )
       ( scen = 'R4' col = 37   node = 'C' fld = 'VBUND' cnv = 'AL' hdr = 'VBUND' )  " VBUND
       ( scen = 'R4' col = 38   node = 'C' fld = 'KONZS' cnv = '' hdr = 'KONZS' )  " KONZS
       ( scen = 'R4' col = 39   node = 'C' fld = 'STCD3' cnv = '' hdr = 'STCD3' )  " STCD3
       ( scen = 'R4' col = 40   node = 'C' fld = 'STCD4' cnv = '' hdr = 'STCD4' )  " STCD4
-      ( scen = 'R4' col = 41   node = 'C' fld = 'STCD5' cnv = '' hdr = 'STCD5' )  " STCD5
+      ( scen = 'R4' col = 41   node = 'C' fld = 'STCD5' cnv = '' hdr = 'STCD4' )  " STCD4
       ( scen = 'R4' col = 42   node = 'C' fld = 'STCEG' cnv = '' hdr = 'STCEG' )  " STCEG
       ( scen = 'R4' col = 43   node = 'C' fld = 'J_1IPANNO' cnv = '' hdr = 'J1IPANNO' )  " J_1IPANNO
-      ( scen = 'R4' col = 44   node = 'B' fld = 'AKONT' cnv = 'GL' hdr = '' )
-      ( scen = 'R4' col = 45   node = 'B' fld = 'AKONT' cnv = 'GL' hdr = '' )
+      ( scen = 'R4' col = 44   node = 'B' fld = 'AKONT' cnv = 'GL' hdr = 'STCD3' )  " STCD3
+      ( scen = 'R4' col = 45   node = 'B' fld = 'AKONT' cnv = 'GL' hdr = 'AKONT' )  " AKONT
       ( scen = 'R4' col = 46   node = 'B' fld = 'ZUAWA' cnv = '' hdr = 'ZUAWA' )  " ZUAWA
       ( scen = 'R4' col = 47   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'VZSKZ' )  " VZSKZ
       ( scen = 'R4' col = 48   node = 'B' fld = 'ZINRT' cnv = '' hdr = 'ZINRT' )  " ZINRT
@@ -1625,7 +1650,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R6' col = 37   node = 'B' fld = 'FDGRV' cnv = 'AL' hdr = 'PLANNINGGROUP' )  " Planning group
       ( scen = 'R6' col = 38   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'INTERESTCALCULATIONINDICATOR' )  " Interest calculation indicator
       ( scen = 'R6' col = 39   node = 'B' fld = 'ZINRT' cnv = '' hdr = 'INTERESTCALCULATIONFREQUENCYIN' )  " Interest calculation frequency in
-      ( scen = 'R6' col = 40   node = 'B' fld = 'ZTERM' cnv = '' hdr = '' )
+      ( scen = 'R6' col = 40   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
       ( scen = 'R6' col = 41   node = 'B' fld = 'XZVER' cnv = '' hdr = 'INDICATORRECORDPAYMENTHISTORY' )  " Indicator: Record Payment History
       ( scen = 'R6' col = 42   node = 'B' fld = 'ZWELS' cnv = '' hdr = 'LISTOFTHEPAYMENTMETHODSTOBE' )  " List of the Payment Methods to be
       ( scen = 'R6' col = 43   node = 'S' fld = 'BZIRK' cnv = '' hdr = 'SALESDISTRICT' )  " Sales district
@@ -1644,12 +1669,12 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R6' col = 56   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'MAXIMUMNUMBEROFPARTIALDELIVER' )  " Maximum Number of Partial Deliver
       ( scen = 'R6' col = 57   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCOTERMSPART1' )  " Incoterms (Part 1)
       ( scen = 'R6' col = 58   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCOTERMSPART2' )  " Incoterms (Part 2)
-      ( scen = 'R6' col = 59   node = 'B' fld = 'ZTERM' cnv = '' hdr = '' )
+      ( scen = 'R6' col = 59   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
       ( scen = 'R6' col = 60   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'CUSTOMERACCOUNTASSIGNMENTGROUP' )  " Customer Account Assignment Group
-      ( scen = 'R6' col = 61   node = 'T' fld = 'UTXJ' cnv = '' hdr = '' )
-      ( scen = 'R6' col = 62   node = 'T' fld = 'UTX2' cnv = '' hdr = '' )
-      ( scen = 'R6' col = 63   node = 'T' fld = 'UTX3' cnv = '' hdr = '' )
-      ( scen = 'R6' col = 64   node = 'T' fld = 'MWST' cnv = '' hdr = '' )
+      ( scen = 'R6' col = 61   node = 'T' fld = 'UTXJ' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
+      ( scen = 'R6' col = 62   node = 'T' fld = 'UTX2' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
+      ( scen = 'R6' col = 63   node = 'T' fld = 'UTX3' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
+      ( scen = 'R6' col = 64   node = 'T' fld = 'MWST' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
       ( scen = 'R6' col = 65   node = 'S' fld = 'KVGR1' cnv = '' hdr = 'CUSTOMERGROUP1' )  " Customer group 1
       ( scen = 'R6' col = 66   node = 'S' fld = 'KVGR2' cnv = '' hdr = 'CUSTOMERGROUP2' )  " Customer group 2
       ( scen = 'R6' col = 67   node = 'S' fld = 'KVGR3' cnv = '' hdr = 'CUSTOMERGROUP3' )  " Customer group 3
@@ -1702,7 +1727,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R7' col = 37   node = 'B' fld = 'FDGRV' cnv = 'AL' hdr = 'PLANNINGGROUP' )  " Planning group
       ( scen = 'R7' col = 38   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'INTERESTCALCULATIONINDICATOR' )  " Interest calculation indicator
       ( scen = 'R7' col = 39   node = 'B' fld = 'ZINRT' cnv = '' hdr = 'INTERESTCALCULATIONFREQUENCYIN' )  " Interest calculation frequency in
-      ( scen = 'R7' col = 40   node = 'B' fld = 'ZTERM' cnv = '' hdr = '' )
+      ( scen = 'R7' col = 40   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
       ( scen = 'R7' col = 41   node = 'B' fld = 'XZVER' cnv = '' hdr = 'INDICATORRECORDPAYMENTHISTORY' )  " Indicator: Record Payment History
       ( scen = 'R7' col = 42   node = 'B' fld = 'ZWELS' cnv = '' hdr = 'LISTOFTHEPAYMENTMETHODSTOBE' )  " List of the Payment Methods to be
       ( scen = 'R7' col = 43   node = 'S' fld = 'BZIRK' cnv = '' hdr = 'SALESDISTRICT' )  " Sales district
@@ -1721,12 +1746,12 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R7' col = 56   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'MAXIMUMNUMBEROFPARTIALDELIVER' )  " Maximum Number of Partial Deliver
       ( scen = 'R7' col = 57   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCOTERMSPART1' )  " Incoterms (Part 1)
       ( scen = 'R7' col = 58   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCOTERMSPART2' )  " Incoterms (Part 2)
-      ( scen = 'R7' col = 59   node = 'B' fld = 'ZTERM' cnv = '' hdr = '' )
+      ( scen = 'R7' col = 59   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
       ( scen = 'R7' col = 60   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'CUSTOMERACCOUNTASSIGNMENTGROUP' )  " Customer Account Assignment Group
-      ( scen = 'R7' col = 61   node = 'T' fld = 'UTXJ' cnv = '' hdr = '' )
-      ( scen = 'R7' col = 62   node = 'T' fld = 'UTX2' cnv = '' hdr = '' )
-      ( scen = 'R7' col = 63   node = 'T' fld = 'UTX3' cnv = '' hdr = '' )
-      ( scen = 'R7' col = 64   node = 'T' fld = 'MWST' cnv = '' hdr = '' )
+      ( scen = 'R7' col = 61   node = 'T' fld = 'UTXJ' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
+      ( scen = 'R7' col = 62   node = 'T' fld = 'UTX2' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
+      ( scen = 'R7' col = 63   node = 'T' fld = 'UTX3' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
+      ( scen = 'R7' col = 64   node = 'T' fld = 'MWST' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
       ( scen = 'R7' col = 65   node = 'S' fld = 'KVGR1' cnv = '' hdr = 'CUSTOMERGROUP1' )  " Customer group 1
       ( scen = 'R7' col = 66   node = 'S' fld = 'KVGR2' cnv = '' hdr = 'CUSTOMERGROUP2' )  " Customer group 2
       ( scen = 'R7' col = 67   node = 'S' fld = 'KVGR3' cnv = '' hdr = 'CUSTOMERGROUP3' )  " Customer group 3
@@ -2233,49 +2258,105 @@ CLASS lcl_engine IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " heading key -> column, skipping any key that appears twice in the file
-    TYPES: BEGIN OF ty_h, key TYPE string, col TYPE i, n TYPE i, END OF ty_h.
-    DATA lt_h TYPE SORTED TABLE OF ty_h WITH UNIQUE KEY key.
+    " ---- what the file's heading line holds ---------------------------
+    " Every occurrence of every heading, in file order. A heading that
+    " appears more than once is not thrown away: the second "Terms of
+    " payment key" in the file belongs to the second one in the template.
+    TYPES: BEGIN OF ty_h,   key TYPE string, col TYPE i, n TYPE i, END OF ty_h.
+    TYPES: BEGIN OF ty_occ, key TYPE string, seq TYPE i, col TYPE i, END OF ty_occ.
+    TYPES: BEGIN OF ty_bc,  col TYPE i,      key TYPE string, END OF ty_bc.
+    DATA lt_cnt   TYPE SORTED TABLE OF ty_h   WITH UNIQUE KEY key.
+    DATA lt_occ   TYPE SORTED TABLE OF ty_occ WITH UNIQUE KEY key seq.
+    DATA lt_bycol TYPE SORTED TABLE OF ty_bc  WITH UNIQUE KEY col.
+
     LOOP AT it_head INTO DATA(lv_h).
       " The column number has to be taken here, before anything else runs.
-      " READ TABLE on a sorted table is a binary search and leaves SY-TABIX
-      " at the position the key WOULD be inserted at, so reading SY-TABIX
-      " after it recorded the heading's place in the alphabet instead of its
-      " place in the file.
+      " READ TABLE on a sorted table is a binary search, and SAP sets
+      " SY-TABIX to the position the key WOULD be inserted at when it finds
+      " nothing - so reading SY-TABIX after it gives the heading's place in
+      " the alphabet instead of its place in the file.
       DATA(lv_col) = sy-tabix.
-      DATA(lv_k) = lcl_util=>squash( lv_h ).
+      DATA(lv_k)   = lcl_util=>squash( lv_h ).
       IF lv_k IS INITIAL.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_h ASSIGNING FIELD-SYMBOL(<ls_h>) WITH KEY key = lv_k.
+      DATA lv_seq TYPE i.
+      READ TABLE lt_cnt ASSIGNING FIELD-SYMBOL(<ls_c>) WITH KEY key = lv_k.
       IF sy-subrc = 0.
-        <ls_h>-n = <ls_h>-n + 1.
+        <ls_c>-n = <ls_c>-n + 1.
+        lv_seq   = <ls_c>-n.
       ELSE.
-        INSERT VALUE ty_h( key = lv_k col = lv_col n = 1 ) INTO TABLE lt_h.
+        INSERT VALUE ty_h( key = lv_k col = lv_col n = 1 ) INTO TABLE lt_cnt.
+        lv_seq = 1.
+      ENDIF.
+      INSERT VALUE ty_occ( key = lv_k seq = lv_seq col = lv_col ) INTO TABLE lt_occ.
+      INSERT VALUE ty_bc( col = lv_col key = lv_k ) INTO TABLE lt_bycol.
+    ENDLOOP.
+
+    " ---- and how often the template uses each heading ------------------
+    DATA lt_mcnt TYPE SORTED TABLE OF ty_h WITH UNIQUE KEY key.
+    LOOP AT mt_map INTO DATA(ls_c1) WHERE hdr IS NOT INITIAL.
+      DATA(lv_ck) = CONV string( ls_c1-hdr ).
+      READ TABLE lt_mcnt ASSIGNING FIELD-SYMBOL(<ls_mc>) WITH KEY key = lv_ck.
+      IF sy-subrc = 0.
+        <ls_mc>-n = <ls_mc>-n + 1.
+      ELSE.
+        INSERT VALUE ty_h( key = lv_ck n = 1 ) INTO TABLE lt_mcnt.
       ENDIF.
     ENDLOOP.
 
     DATA lt_done TYPE SORTED TABLE OF i WITH NON-UNIQUE KEY table_line.
     DATA lt_used TYPE SORTED TABLE OF i WITH NON-UNIQUE KEY table_line.
+    DATA lt_seen TYPE SORTED TABLE OF ty_h WITH UNIQUE KEY key.
     DATA lv_moved TYPE i.
 
-    " First pass - the heading the template carries above the column.
+    " ---- first pass: the heading the template carries above the column --
+    " A repeated heading is matched by its occurrence, and only when the
+    " file repeats it exactly as often as the template does - otherwise
+    " there is no way to tell which is which and the column stays put.
     LOOP AT mt_map ASSIGNING FIELD-SYMBOL(<ls_m>) WHERE hdr IS NOT INITIAL.
       DATA(lv_ix) = sy-tabix.
-      READ TABLE lt_h INTO DATA(ls_h) WITH KEY key = CONV string( <ls_m>-hdr ).
-      IF sy-subrc = 0 AND ls_h-n = 1.
-        IF ls_h-col <> <ls_m>-col.
-          lv_moved = lv_moved + 1.
-        ENDIF.
-        <ls_m>-col = ls_h-col.
-        INSERT lv_ix   INTO TABLE lt_done.
-        INSERT ls_h-col INTO TABLE lt_used.
+      DATA(lv_key) = CONV string( <ls_m>-hdr ).
+
+      DATA lv_mseq TYPE i.
+      READ TABLE lt_seen ASSIGNING FIELD-SYMBOL(<ls_s>) WITH KEY key = lv_key.
+      IF sy-subrc = 0.
+        <ls_s>-n = <ls_s>-n + 1.
+        lv_mseq  = <ls_s>-n.
+      ELSE.
+        INSERT VALUE ty_h( key = lv_key n = 1 ) INTO TABLE lt_seen.
+        lv_mseq = 1.
       ENDIF.
+
+      READ TABLE lt_cnt  INTO DATA(ls_fc) WITH KEY key = lv_key.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_mcnt INTO DATA(ls_mc) WITH KEY key = lv_key.
+      " The file must repeat the heading at least as often as the template
+      " does; the nth in the template is then the nth in the file. Fewer in
+      " the file than in the template means there is no telling which is
+      " which, so those columns stay where they are.
+      IF sy-subrc <> 0 OR ls_fc-n < ls_mc-n.
+        CONTINUE.
+      ENDIF.
+      READ TABLE lt_occ INTO DATA(ls_o) WITH KEY key = lv_key seq = lv_mseq.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+
+      IF ls_o-col <> <ls_m>-col.
+        lv_moved = lv_moved + 1.
+      ENDIF.
+      <ls_m>-col = ls_o-col.
+      INSERT lv_ix   INTO TABLE lt_done.
+      INSERT ls_o-col INTO TABLE lt_used.
     ENDLOOP.
 
-    " Second pass - the technical field name, for files headed that way.
-    " Only field names that occur once in this scenario, and only columns
-    " no heading has already claimed.
+    " ---- second pass: the technical field name -------------------------
+    " For files headed with field names rather than the template wording.
+    " Only names that occur once in this scenario, once in the file, and
+    " only columns no heading has already claimed.
     DATA(lt_fk) = fld_keys( ).
     LOOP AT mt_map ASSIGNING <ls_m>.
       DATA(lv_ix2) = sy-tabix.
@@ -2286,48 +2367,82 @@ CLASS lcl_engine IMPLEMENTATION.
       IF lv_fk IS INITIAL OR NOT line_exists( lt_fk[ table_line = lv_fk ] ).
         CONTINUE.
       ENDIF.
-      READ TABLE lt_h INTO ls_h WITH KEY key = lv_fk.
-      IF sy-subrc = 0 AND ls_h-n = 1
-         AND NOT line_exists( lt_used[ table_line = ls_h-col ] ).
-        IF ls_h-col <> <ls_m>-col.
-          lv_moved = lv_moved + 1.
+      READ TABLE lt_cnt INTO ls_fc WITH KEY key = lv_fk.
+      IF sy-subrc <> 0 OR ls_fc-n <> 1
+         OR line_exists( lt_used[ table_line = ls_fc-col ] ).
+        CONTINUE.
+      ENDIF.
+      IF ls_fc-col <> <ls_m>-col.
+        lv_moved = lv_moved + 1.
+      ENDIF.
+      <ls_m>-col = ls_fc-col.
+      INSERT lv_ix2   INTO TABLE lt_done.
+      INSERT ls_fc-col INTO TABLE lt_used.
+    ENDLOOP.
+
+    IF lt_done IS INITIAL.
+      " No heading in this file was recognised at all, so there is nothing
+      " to say and nothing to protect against - the file is read exactly as
+      " the template is laid out.
+      RETURN.
+    ENDIF.
+
+    " ---- what is left is read by position ------------------------------
+    " And a position another field has already been found at cannot be
+    " read: on a file with a column inserted or removed it holds the
+    " neighbour's value, and a wrong value is worse than none.
+    DATA lv_miss  TYPE string.
+    DATA lv_nmiss TYPE i.
+    DATA lv_nblank TYPE i.
+    LOOP AT mt_map ASSIGNING <ls_m>.
+      DATA(lv_ix3) = sy-tabix.
+      IF line_exists( lt_done[ table_line = lv_ix3 ] ).
+        CONTINUE.
+      ENDIF.
+      lv_nmiss = lv_nmiss + 1.
+      IF lv_nmiss <= 12.
+        lv_miss = COND string( WHEN lv_miss IS INITIAL
+                               THEN |{ <ls_m>-fld }({ <ls_m>-col })|
+                               ELSE |{ lv_miss }, { <ls_m>-fld }({ <ls_m>-col })| ).
+      ENDIF.
+      " Two reasons not to read the position after all. Either another
+      " field has already been found there, or the heading sitting there is
+      " one this scenario knows and it belongs to a different field. Both
+      " mean the column has moved and the position now holds someone else's
+      " value, which is worse than none.
+      DATA(lv_blank) = xsdbool( line_exists( lt_used[ table_line = <ls_m>-col ] ) ).
+      IF lv_blank = abap_false.
+        READ TABLE lt_bycol INTO DATA(ls_bc) WITH KEY col = <ls_m>-col.
+        IF sy-subrc = 0
+           AND ls_bc-key <> CONV string( <ls_m>-hdr )
+           AND ls_bc-key <> lcl_util=>squash( <ls_m>-fld )
+           AND ( line_exists( lt_mcnt[ key = ls_bc-key ] )
+              OR line_exists( lt_fk[ table_line = ls_bc-key ] ) ).
+          lv_blank = abap_true.
         ENDIF.
-        <ls_m>-col = ls_h-col.
-        INSERT ls_h-col INTO TABLE lt_used.
+      ENDIF.
+      IF lv_blank = abap_true.
+        <ls_m>-col = 0.
+        lv_nblank = lv_nblank + 1.
       ENDIF.
     ENDLOOP.
 
-    " One line, not one per column - the data is read correctly either way,
-    " but it is worth knowing that the file is not laid out like the template.
+    " One line each, not one per column.
     IF lv_moved > 0.
       mo_log->add( iv_row = 0 iv_type = 'I'
                    iv_text = |{ lv_moved } column(s) sit elsewhere in this file than in | &&
                              |the template - each was read from where its heading is| ).
     ENDIF.
-
-    " And the ones no heading could be found for: those were read from the
-    " position the template has them in, which is only right if the file is
-    " laid out like the template. This is the line that shows a column being
-    " read from the wrong place, so it names them.
-    DATA lv_miss TYPE string.
-    DATA lv_nmiss TYPE i.
-    LOOP AT mt_map ASSIGNING <ls_m>.
-      DATA(lv_ix3) = sy-tabix.
-      IF line_exists( lt_done[ table_line = lv_ix3 ] )
-      OR line_exists( lt_used[ table_line = <ls_m>-col ] ).
-        CONTINUE.
-      ENDIF.
-      lv_nmiss = lv_nmiss + 1.
-      IF lv_nmiss <= 15.
-        lv_miss = COND string( WHEN lv_miss IS INITIAL
-                               THEN |{ <ls_m>-fld }({ <ls_m>-col })|
-                               ELSE |{ lv_miss }, { <ls_m>-fld }({ <ls_m>-col })| ).
-      ENDIF.
-    ENDLOOP.
     IF lv_nmiss > 0.
+      mo_log->add( iv_row = 0 iv_type = 'I'
+                   iv_text = |{ lv_nmiss } column(s) carry no heading this program recognises | &&
+                             |and were read by position: { lv_miss }| ).
+    ENDIF.
+    IF lv_nblank > 0.
       mo_log->add( iv_row = 0 iv_type = 'W'
-                   iv_text = |{ lv_nmiss } column(s) carry no heading this program recognises and were | &&
-                             |read by position: { lv_miss }| ).
+                   iv_text = |{ lv_nblank } of those sit where another field was found, so they | &&
+                             |were left empty rather than loaded with a neighbour's value - | &&
+                             |give those columns their template heading| ).
     ENDIF.
   ENDMETHOD.
 

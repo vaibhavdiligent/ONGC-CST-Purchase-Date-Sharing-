@@ -142,11 +142,15 @@ B('Columns may be in a different order from the template, and columns you do not
   'each column is read from wherever its heading actually is.')
 B('A heading may be the wording used in the template ("Company Code") or the technical field name '
   '("BUKRS"). Both are recognised.')
+B('A heading used more than once on a tab is matched by its turn - the second one in the file is the '
+  'second one in the template - as long as the file repeats it at least as often as the template does.')
+B('Headings running across two lines (a technical name on one, a description on the next, as on the '
+  'credit tab) are both used.')
 P('What still has to be right:',bold=True)
-B('Headings must not be renamed or translated. A heading the program does not recognise makes that one '
-  'column fall back to its position in the template - which is where a wrong value can creep in.')
-B('A heading that appears twice on the same tab cannot identify a column, so both copies fall back to '
-  'their position. Please make repeated headings unique.')
+B('Headings must not be renamed or translated. A column whose heading is not recognised is read from the '
+  'position it has in the template, which is only correct if that part of the file matches the template.')
+B('Such a column is left empty rather than loaded when its position turns out to hold a different field. '
+  'The result list names those columns.')
 B('Every row between the heading row and the first record must be deleted: field type, field length, '
   'mandatory/optional, guideline and sample rows are all read as data. Please delete them rather than '
   'hide them - a hidden row is still read.')

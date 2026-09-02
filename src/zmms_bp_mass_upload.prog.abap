@@ -892,6 +892,29 @@ CLASS lcl_excel IMPLEMENTATION.
     IF lv_hrow > 0 AND lv_hrow <= lines( lt_hit ) AND it_hdr IS NOT INITIAL.
       DATA lv_hc TYPE i.
       DATA(lt_head) = lt_hit[ lv_hrow ]-cells.
+      " A tab may spread its headings over two lines: a blank heading is
+      " filled from the next line, but only when that line is itself part of
+      " the heading block - a line carrying none of this scenario's headings
+      " is data and is left alone.
+      IF lv_hrow < lines( lt_hit ).
+        DATA(lt_next) = lt_hit[ lv_hrow + 1 ]-cells.
+        IF score( it_head = lt_next it_hdr = it_hdr ) > 0.
+          DATA lv_fc TYPE i.
+          LOOP AT lt_next INTO DATA(lv_fill).
+            lv_fc = sy-tabix.
+            IF lv_fill IS INITIAL.
+              CONTINUE.
+            ENDIF.
+            IF lv_fc > lines( lt_head ).
+              APPEND INITIAL LINE TO lt_head.
+            ENDIF.
+            READ TABLE lt_head ASSIGNING FIELD-SYMBOL(<lv_hd>) INDEX lv_fc.
+            IF sy-subrc = 0 AND <lv_hd> IS INITIAL.
+              <lv_hd> = lv_fill.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
       LOOP AT lt_head INTO DATA(lv_ht).
         lv_hc = sy-tabix.
         DATA(lv_key) = lcl_util=>squash( lv_ht ).
