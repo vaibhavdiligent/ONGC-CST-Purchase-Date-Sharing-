@@ -288,6 +288,16 @@ CLASS lcl_util DEFINITION FINAL.
     CLASS-METHODS is_empty
       IMPORTING is_row    TYPE ty_row
       RETURNING VALUE(rv) TYPE abap_bool.
+
+    " Copies the components that were actually filled - those whose flag is
+    " set in IS_FROMX - into the like-named components of CS_TO, raising the
+    " same flags there. Used to give the business partner the address the
+    " customer was given, without writing the mapping out twice.
+    CLASS-METHODS copy_like
+      IMPORTING is_from  TYPE any
+                is_fromx TYPE any
+      CHANGING  cs_to    TYPE any
+                cs_tox   TYPE any.
 ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
@@ -383,6 +393,33 @@ CLASS lcl_util IMPLEMENTATION.
   METHOD squash.
     rv = to_upper( CONV string( iv_in ) ).
     REPLACE ALL OCCURRENCES OF REGEX '[^A-Z0-9]' IN rv WITH ''.
+  ENDMETHOD.
+
+  METHOD copy_like.
+    FIELD-SYMBOLS: <lv_fx> TYPE any, <lv_f>  TYPE any,
+                   <lv_tx> TYPE any, <lv_t>  TYPE any.
+    DATA lo_str TYPE REF TO cl_abap_structdescr.
+    lo_str ?= cl_abap_typedescr=>describe_by_data( is_fromx ).
+    LOOP AT lo_str->components INTO DATA(ls_cmp).
+      ASSIGN COMPONENT ls_cmp-name OF STRUCTURE is_fromx TO <lv_fx>.
+      IF sy-subrc <> 0 OR <lv_fx> IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      ASSIGN COMPONENT ls_cmp-name OF STRUCTURE cs_tox TO <lv_tx>.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      ASSIGN COMPONENT ls_cmp-name OF STRUCTURE is_from TO <lv_f>.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      ASSIGN COMPONENT ls_cmp-name OF STRUCTURE cs_to TO <lv_t>.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      <lv_t>  = <lv_f>.
+      <lv_tx> = <lv_fx>.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD is_empty.
@@ -803,6 +840,16 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS cust_bp     IMPORTING iv_kunnr  TYPE kunnr
                         RETURNING VALUE(rv) TYPE bu_partner.
 
+    " CVI customising: which business partner grouping and which BP roles a
+    " customer account group creates. Maintained with SM30, views
+    " CVIV_CUST_TO_BP1 and CVIV_CUST_TO_BP2. A creation must state the
+    " grouping - it is what gives the new partner its number range.
+    METHODS bp_group    IMPORTING iv_ktokd  TYPE clike
+                        RETURNING VALUE(rv) TYPE bu_group.
+    TYPES tt_role TYPE STANDARD TABLE OF bu_role WITH EMPTY KEY.
+    METHODS bp_roles    IMPORTING iv_ktokd  TYPE clike
+                        RETURNING VALUE(rt) TYPE tt_role.
+
     " The API does not take a "modify" task on the customer side, so every
     " node has to say insert or update. These answer which one it is.
     METHODS has_knb1    IMPORTING iv_kunnr  TYPE kunnr
@@ -924,6 +971,11 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     DATA mt_zterm TYPE SORTED TABLE OF dzterm WITH UNIQUE KEY table_line.
     DATA mt_vzskz TYPE SORTED TABLE OF vzskz WITH UNIQUE KEY table_line.
 
+    TYPES: BEGIN OF ty_g2b, ktokd TYPE ktokd, grouping TYPE bu_group, END OF ty_g2b,
+           BEGIN OF ty_r2b, ktokd TYPE ktokd, role     TYPE bu_role,  END OF ty_r2b.
+    DATA mt_g2b TYPE SORTED TABLE OF ty_g2b WITH UNIQUE KEY ktokd.
+    DATA mt_r2b TYPE SORTED TABLE OF ty_r2b WITH NON-UNIQUE KEY ktokd.
+
     METHODS constructor.
 ENDCLASS.
 
@@ -957,6 +1009,19 @@ CLASS lcl_cfg IMPLEMENTATION.
     " T052 holds one row per instalment, so the payment terms repeat.
     SELECT DISTINCT zterm FROM t052 INTO TABLE @mt_zterm.
     SELECT DISTINCT vzskz FROM t056 INTO TABLE @mt_vzskz.
+
+    " Keyed on the account group alone. Should the customising ever map one
+    " account group to two groupings, INSERT reports it with SY-SUBRC 4 and
+    " the first wins, instead of dumping on a duplicate key.
+    SELECT account_group AS ktokd, grouping
+      FROM cvic_cust_to_bp1 INTO TABLE @DATA(lt_g2b).
+    LOOP AT lt_g2b INTO DATA(ls_g2b).
+      INSERT VALUE ty_g2b( ktokd    = ls_g2b-ktokd
+                           grouping = ls_g2b-grouping ) INTO TABLE mt_g2b.
+    ENDLOOP.
+
+    SELECT account_group AS ktokd, role
+      FROM cvic_cust_to_bp2 INTO CORRESPONDING FIELDS OF TABLE @mt_r2b.
 
     " Two columns each, keyed on the first, so INSERT is used instead:
     " a duplicate sets SY-SUBRC 4 and the first entry wins.
@@ -1087,6 +1152,16 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD segment_curr.
     rv = VALUE #( mt_cur[ sgmnt = iv_sgmnt ]-waers OPTIONAL ).
+  ENDMETHOD.
+
+  METHOD bp_group.
+    rv = VALUE #( mt_g2b[ ktokd = CONV ktokd( iv_ktokd ) ]-grouping OPTIONAL ).
+  ENDMETHOD.
+
+  METHOD bp_roles.
+    LOOP AT mt_r2b INTO DATA(ls_r) WHERE ktokd = iv_ktokd.
+      APPEND ls_r-role TO rt.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD ok_kvgr3.
@@ -2164,6 +2239,16 @@ CLASS lcl_engine DEFINITION FINAL.
       CHANGING  cs_data  TYPE any
                 cs_datax TYPE any.
 
+    " Moves one component of the customer's address into a differently
+    " named component of the business partner, when it was filled.
+    METHODS bp_copy
+      IMPORTING iv_from  TYPE clike
+                iv_to    TYPE clike
+                iv_row   TYPE i
+                is_post  TYPE any
+      CHANGING  cs_data  TYPE any
+                cs_datax TYPE any.
+
     METHODS master IMPORTING is_row TYPE ty_row.
     METHODS credit IMPORTING is_row TYPE ty_row.
 
@@ -2515,6 +2600,18 @@ CLASS lcl_engine IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD bp_copy.
+    FIELD-SYMBOLS <lv_v> TYPE any.
+    ASSIGN COMPONENT iv_from OF STRUCTURE is_post TO <lv_v>.
+    IF sy-subrc <> 0 OR <lv_v> IS INITIAL.
+      RETURN.
+    ENDIF.
+    set_comp( EXPORTING iv_fld = iv_to iv_val = <lv_v>
+                        iv_cnv = '' iv_row = iv_row iv_struc = 'BP'
+              CHANGING  cs_data  = cs_data
+                        cs_datax = cs_datax ).
+  ENDMETHOD.
+
   METHOD master.
     DATA(lo_cfg) = lcl_cfg=>get( ).
     mo_lic->reset( ).
@@ -2771,29 +2868,97 @@ CLASS lcl_engine IMPLEMENTATION.
       ENDIF.
     ENDIF.
     ls_bp-central_data-common-data-bp_control-category = gc_org.
-    " Grouping is derived by CL_MD_BP_MAINTAIN from the account group
-    " unless the user overrides it on the selection screen.
-    IF p_bpgrp IS NOT INITIAL.
+
+    " A creation has to state the grouping: it is what gives the new partner
+    " its number range, and without it the API answers "Specify at least one
+    " number for the business partner". It is not derived from the account
+    " group on its own - the mapping is CVI customising, SM30 view
+    " CVIV_CUST_TO_BP1. The selection screen overrides it.
+    IF lv_task = gc_i.
+      DATA lv_grp TYPE bu_group.
+      lv_grp = p_bpgrp.
+      IF lv_grp IS INITIAL.
+        lv_grp = lo_cfg->bp_group( lv_ktokd ).
+      ENDIF.
+      IF lv_grp IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_type = 'E' iv_fld = 'KTOKD'
+                     iv_text = |Account group { lv_ktokd } has no business partner grouping in | &&
+                               |CVIC_CUST_TO_BP1 - maintain it with SM30 view CVIV_CUST_TO_BP1, | &&
+                               |or give a grouping on the selection screen| ).
+        RETURN.
+      ENDIF.
+      ls_bp-central_data-common-data-bp_control-grouping = lv_grp.
+    ELSEIF p_bpgrp IS NOT INITIAL.
       ls_bp-central_data-common-data-bp_control-grouping = p_bpgrp.
     ENDIF.
 
-    " A role the partner already has is an update, a new one an insert.
+    " The roles the account group creates are CVI customising too, SM30 view
+    " CVIV_CUST_TO_BP2. Where that is not maintained, the two standard
+    " customer roles are used: FI, plus SD when the row carries a sales area.
     DATA(lv_bp) = COND bu_partner( WHEN lv_task <> gc_i AND lv_kunnr IS NOT INITIAL
                                    THEN lo_cfg->cust_bp( lv_kunnr ) ).
+    DATA(lt_roles) = lo_cfg->bp_roles( lv_ktokd ).
+    IF lt_roles IS INITIAL.
+      APPEND gc_role_fi TO lt_roles.
+      IF lv_vkorg IS NOT INITIAL.
+        APPEND gc_role_sd TO lt_roles.
+      ENDIF.
+    ENDIF.
+
+    " A role the partner already has is an update, a new one an insert.
     DATA lv_rtask TYPE cmd_ei_object_task.
-    lv_rtask = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
-                                              iv_role    = gc_role_fi ) = abap_true
-                       THEN gc_u ELSE gc_i ).
-    APPEND VALUE bus_ei_bupa_roles(
-      task     = lv_rtask
-      data_key = gc_role_fi ) TO ls_bp-central_data-role-roles.
-    IF lv_vkorg IS NOT INITIAL.
+    LOOP AT lt_roles INTO DATA(lv_role).
       lv_rtask = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
-                                                iv_role    = gc_role_sd ) = abap_true
+                                                iv_role    = lv_role ) = abap_true
                          THEN gc_u ELSE gc_i ).
       APPEND VALUE bus_ei_bupa_roles(
         task     = lv_rtask
-        data_key = gc_role_sd ) TO ls_bp-central_data-role-roles.
+        data_key = lv_role ) TO ls_bp-central_data-role-roles.
+    ENDLOOP.
+
+    " A new business partner needs a name and an address of its own. The
+    " customer's are what they are, so they are copied across rather than
+    " mapped a second time. On a change the partner already has both, and
+    " CVI keeps them in step with the customer.
+    IF lv_task = gc_i.
+      " NAME -> NAME1 and so on: the customer address structure and the BP
+      " organisation structure name the same things differently.
+      bp_copy( EXPORTING iv_from = 'NAME'   iv_to = 'NAME1' iv_row = is_row-row
+                         is_post = ls_cust-central_data-address-postal-data
+               CHANGING  cs_data = ls_bp-central_data-common-data-bp_organization
+                         cs_datax = ls_bp-central_data-common-datax-bp_organization ).
+      bp_copy( EXPORTING iv_from = 'NAME_2' iv_to = 'NAME2' iv_row = is_row-row
+                         is_post = ls_cust-central_data-address-postal-data
+               CHANGING  cs_data = ls_bp-central_data-common-data-bp_organization
+                         cs_datax = ls_bp-central_data-common-datax-bp_organization ).
+      bp_copy( EXPORTING iv_from = 'NAME_3' iv_to = 'NAME3' iv_row = is_row-row
+                         is_post = ls_cust-central_data-address-postal-data
+               CHANGING  cs_data = ls_bp-central_data-common-data-bp_organization
+                         cs_datax = ls_bp-central_data-common-datax-bp_organization ).
+      bp_copy( EXPORTING iv_from = 'NAME_4' iv_to = 'NAME4' iv_row = is_row-row
+                         is_post = ls_cust-central_data-address-postal-data
+               CHANGING  cs_data = ls_bp-central_data-common-data-bp_organization
+                         cs_datax = ls_bp-central_data-common-datax-bp_organization ).
+      bp_copy( EXPORTING iv_from = 'SORT1' iv_to = 'SEARCHTERM1' iv_row = is_row-row
+                         is_post = ls_cust-central_data-address-postal-data
+               CHANGING  cs_data = ls_bp-central_data-common-data-bp_centraldata
+                         cs_datax = ls_bp-central_data-common-datax-bp_centraldata ).
+      bp_copy( EXPORTING iv_from = 'SORT2' iv_to = 'SEARCHTERM2' iv_row = is_row-row
+                         is_post = ls_cust-central_data-address-postal-data
+               CHANGING  cs_data = ls_bp-central_data-common-data-bp_centraldata
+                         cs_datax = ls_bp-central_data-common-datax-bp_centraldata ).
+
+      DATA ls_adr TYPE bus_ei_bupa_address.
+      CLEAR ls_adr.
+      ls_adr-task = gc_i.
+      lcl_util=>copy_like(
+        EXPORTING is_from  = ls_cust-central_data-address-postal-data
+                  is_fromx = ls_cust-central_data-address-postal-datax
+        CHANGING  cs_to    = ls_adr-data-postal-data
+                  cs_tox   = ls_adr-data-postal-datax ).
+      IF ls_adr-data-postal-datax IS NOT INITIAL.
+        APPEND ls_adr TO ls_bp-central_data-address-addresses.
+      ENDIF.
     ENDIF.
 
     IF lv_adh IS NOT INITIAL.
