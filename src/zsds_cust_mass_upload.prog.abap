@@ -829,24 +829,24 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
            END OF ty_sarea,
            tt_sarea TYPE STANDARD TABLE OF ty_sarea WITH EMPTY KEY.
 
-    METHODS cust_exists IMPORTING iv_kunnr  TYPE kunnr
-                        RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS cust_exists IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rv)       TYPE abap_bool.
 
     " The Business Partner behind a customer, through the CVI link. A change
     " has to name the partner it is changing, otherwise the API reads the
     " request as a creation and asks for a number.
-    METHODS cust_guid   IMPORTING iv_kunnr  TYPE kunnr
-                        RETURNING VALUE(rv) TYPE bu_partner_guid.
-    METHODS cust_bp     IMPORTING iv_kunnr  TYPE kunnr
-                        RETURNING VALUE(rv) TYPE bu_partner.
+    METHODS cust_guid   IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rv)       TYPE bu_partner_guid.
+    METHODS cust_bp     IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rv)       TYPE bu_partner.
 
     " CVI customising: which business partner grouping and which BP roles a
     " customer account group creates. Maintained with SM30, views
     " CVIV_CUST_TO_BP1 and CVIV_CUST_TO_BP2. A creation must state the
     " grouping - it is what gives the new partner its number range.
     " The customer number that ended up behind a GUID we created.
-    METHODS cust_by_guid IMPORTING iv_guid   TYPE bu_partner_guid
-                         RETURNING VALUE(rv) TYPE kunnr.
+    METHODS cust_by_guid IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
+                         RETURNING VALUE(rv)      TYPE kunnr.
 
     METHODS bp_group    IMPORTING iv_ktokd  TYPE clike
                         RETURNING VALUE(rv) TYPE bu_group.
@@ -856,35 +856,38 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
 
     " The API does not take a "modify" task on the customer side, so every
     " node has to say insert or update. These answer which one it is.
-    METHODS has_knb1    IMPORTING iv_kunnr  TYPE kunnr
-                                  iv_bukrs  TYPE bukrs
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_knvv    IMPORTING iv_kunnr  TYPE kunnr
-                                  iv_vkorg  TYPE vkorg
-                                  iv_vtweg  TYPE vtweg
-                                  iv_spart  TYPE spart
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_knvi    IMPORTING iv_kunnr  TYPE kunnr
-                                  iv_aland  TYPE land1
-                                  iv_tatyp  TYPE tatyp
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_role    IMPORTING iv_partner TYPE bu_partner
-                                  iv_role    TYPE bu_role
-                        RETURNING VALUE(rv)  TYPE abap_bool.
-    METHODS has_ident   IMPORTING iv_partner TYPE bu_partner
-                                  iv_cat     TYPE bu_id_type
-                        RETURNING VALUE(rv)  TYPE abap_bool.
+    " By value, not by reference: a by-reference parameter demands an actual
+    " parameter of exactly the same type, and these are called with whatever
+    " the row happened to give.
+    METHODS has_knb1    IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                                  VALUE(iv_bukrs) TYPE bukrs
+                        RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_knvv    IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                                  VALUE(iv_vkorg) TYPE vkorg
+                                  VALUE(iv_vtweg) TYPE vtweg
+                                  VALUE(iv_spart) TYPE spart
+                        RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_knvi    IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                                  VALUE(iv_aland) TYPE land1
+                                  VALUE(iv_tatyp) TYPE tatyp
+                        RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_role    IMPORTING VALUE(iv_partner) TYPE bu_partner
+                                  VALUE(iv_role)    TYPE bu_role
+                        RETURNING VALUE(rv)         TYPE abap_bool.
+    METHODS has_ident   IMPORTING VALUE(iv_partner) TYPE bu_partner
+                                  VALUE(iv_cat)     TYPE bu_id_type
+                        RETURNING VALUE(rv)         TYPE abap_bool.
 
     " The credit tab carries no company code and no sales area, so the ones
     " the customer already has are what the payment terms and the customer
     " group can be written to.
-    METHODS cust_bukrs  IMPORTING iv_kunnr  TYPE kunnr
-                        RETURNING VALUE(rt) TYPE tt_bukrs.
-    METHODS cust_sales  IMPORTING iv_kunnr  TYPE kunnr
-                        RETURNING VALUE(rt) TYPE tt_sarea.
+    METHODS cust_bukrs  IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rt)       TYPE tt_bukrs.
+    METHODS cust_sales  IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rt)       TYPE tt_sarea.
     " Company codes belonging to a credit control area (T001-KKBER).
-    METHODS kkber_bukrs IMPORTING iv_kkber  TYPE kkber
-                        RETURNING VALUE(rt) TYPE tt_bukrs.
+    METHODS kkber_bukrs IMPORTING VALUE(iv_kkber) TYPE kkber
+                        RETURNING VALUE(rt)       TYPE tt_bukrs.
 
     " Title text -> title key (ADRC-TITLE). The templates carry the text
     " ("Company", "Mr."), the API wants the key.
@@ -934,8 +937,8 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
              kvgr3 TYPE kvgr3,
            END OF ty_bad_sa,
            tt_bad_sa TYPE STANDARD TABLE OF ty_bad_sa WITH EMPTY KEY.
-    METHODS bad_kvgr3   IMPORTING iv_kunnr  TYPE kunnr
-                        RETURNING VALUE(rt) TYPE tt_bad_sa.
+    METHODS bad_kvgr3   IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rt)       TYPE tt_bad_sa.
 
     METHODS ok_kdgrp    IMPORTING iv        TYPE clike
                         RETURNING VALUE(rv) TYPE abap_bool.

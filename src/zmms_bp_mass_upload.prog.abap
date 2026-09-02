@@ -199,8 +199,8 @@ CLASS lcl_util DEFINITION FINAL.
     CLASS-METHODS to_date IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE d.
     CLASS-METHODS to_dec  IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE ty_dec.
     "! Generic ALPHA conversion for fields whose domain carries the exit.
-    " IV_LEN is the length of the field the value is going into. Without it
-    " nothing is padded - see the comment in the implementation.
+    "! IV_LEN is the length of the field the value is going into. Without it
+    "! nothing is padded - see the comment in the implementation.
     CLASS-METHODS alpha   IMPORTING iv_in     TYPE string
                                     iv_len    TYPE i DEFAULT 0
                           RETURNING VALUE(rv) TYPE string.
@@ -1142,19 +1142,25 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
 
     "! The API takes no "modify" task, so every node has to say insert or
     "! update. These answer which one it is.
-    METHODS has_lfb1 IMPORTING iv_lifnr TYPE lifnr iv_bukrs TYPE bukrs
-                     RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_lfm1 IMPORTING iv_lifnr TYPE lifnr iv_ekorg TYPE ekorg
-                     RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_lfbw IMPORTING iv_lifnr TYPE lifnr iv_bukrs TYPE bukrs
-                               iv_witht TYPE witht
-                     RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_lfbk IMPORTING iv_lifnr TYPE lifnr iv_banks TYPE banks
-                               iv_bankl TYPE bankk iv_bankn TYPE bankn
-                     RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS has_wyt3 IMPORTING iv_lifnr TYPE lifnr iv_ekorg TYPE ekorg
-                               iv_parvw TYPE parvw
-                     RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS has_lfb1 IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                               VALUE(iv_bukrs) TYPE bukrs
+                     RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_lfm1 IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                               VALUE(iv_ekorg) TYPE ekorg
+                     RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_lfbw IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                               VALUE(iv_bukrs) TYPE bukrs
+                               VALUE(iv_witht) TYPE witht
+                     RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_lfbk IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                               VALUE(iv_banks) TYPE banks
+                               VALUE(iv_bankl) TYPE bankk
+                               VALUE(iv_bankn) TYPE bankn
+                     RETURNING VALUE(rv)       TYPE abap_bool.
+    METHODS has_wyt3 IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                               VALUE(iv_ekorg) TYPE ekorg
+                               VALUE(iv_parvw) TYPE parvw
+                     RETURNING VALUE(rv)       TYPE abap_bool.
     METHODS vend_land1  IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE land1.
     METHODS vend_pan    IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE j_1ipanno.
     METHODS vend_guid   IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE bu_partner_guid.
