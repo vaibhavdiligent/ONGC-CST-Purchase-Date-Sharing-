@@ -89,19 +89,31 @@ T(['You need','Why'],
   ], widths=[6.0,10.0])
 
 H('2.1  The file layout - this applies to every tab of both workbooks', 2)
-P('Every tab must be laid out the same way:', bold=True)
-B('Row 1 - the heading row.')
-B('Row 2 onwards - data only.')
-B('Nothing in between. No field type row, no field length row, no mandatory/optional row, '
-  'no guideline row and no sample rows.')
-P('Both programs read the chosen tab from row 2.', bold=True)
-P('Most tabs in the two workbooks do not follow this today - they carry type, length, guideline or sample '
-  'rows between the headings and the first real record. Of the sixteen tabs, four already comply and twelve '
-  'need re-cutting. The companion Upload File Format Specification states, tab by tab, exactly which rows '
-  'to delete.')
-NOTE('Please delete those rows rather than hide them. A hidden row is still read.')
-P('Delete rows only, never columns.',bold=True)
-P('Delete ROWS only - never columns. Several tabs start with a label column that holds text like "Field Tech name" or "Sample data" and is empty on the data rows. That column still counts. On the supplier creation tab, for instance, the vendor number is column B, not column A. Deleting the label column would shift every field one place to the left and the file would load into the wrong fields.')
+P('The programs find the data by its headings, not by its position.', bold=True)
+P('Each scenario knows the headings that belong above its columns. On opening the file both programs look '
+  'through every tab, and through the first ten lines of each tab, for the line carrying most of those '
+  'headings. That line is the heading row; everything below it is data.')
+P('What this means in practice:')
+B('The tab may be called anything. You can send the whole workbook, or one tab saved on its own as '
+  '"Sheet1" - both load the same way.')
+B('The heading row does not have to be row 1. A title line above it is no longer a problem.')
+B('Columns may be in a different order from the template, and columns you do not need may be deleted. '
+  'Each column is read from wherever its heading actually is.')
+B('A column heading may be either the wording used in the template ("Company Code") or the technical '
+  'field name ("BUKRS"). Both are recognised.')
+P('What still has to be right:', bold=True)
+B('Please do not rename or translate the headings. A heading the program does not recognise makes that '
+  'one column fall back to its position in the template, which is where a wrong value can creep in.')
+B('If the same heading appears twice on a tab, neither copy can identify a column, so both fall back to '
+  'their position. Please make repeated headings unique.')
+B('Rows between the heading row and the first record - field type, field length, mandatory/optional, '
+  'guideline and sample rows - must be deleted. They are read as data. Please delete them rather than '
+  'hide them: a hidden row is still read.')
+P('The companion Upload File Format Specification lists, tab by tab, every column and every row that has '
+  'to go.')
+NOTE('One line at the top of the result list tells you how many columns were found somewhere other than '
+     'where the template has them. Nothing is wrong with that - it is there so you can see that the '
+     'program noticed.')
 
 # ------------------------------------------------------------------ 3
 H('3.  The most important instruction: always test run first', 1)
@@ -110,19 +122,12 @@ P('In a test run the program does everything it would normally do, including eve
   'is saved. You get the full result list showing exactly what would have happened, row by row.')
 P('Only untick Test run once a file comes back with no errors.', bold=True)
 
-H('3.1  One check to do on your very first run', 2)
-P('Both programs have a field called Heading rows to skip, set to 1. That matches the layout above: '
-  'one heading row, then data.')
-P('On your first run, look at the top of the result list. There will be a line like this:')
-P('        Line 1 skipped:  KUNNR / BUKRS / VKORG / VTWEG / SPART ...', italic=True)
-P('That line shows what the program treated as the heading row.')
-T(['What that line shows','What it means','What to do'],
-  [['Your column headings','Correct','Nothing - leave the field at 1'],
-   ['A real customer or supplier record','The heading row was already removed before the program saw it',
-    'Set Heading rows to skip to 0 and run again, otherwise every file loses its first record'],
-  ], widths=[4.5,6.0,5.5])
-P('This only has to be established once. Please tell us which of the two you see and we will set it '
-  'permanently so nobody has to remember it.')
+H('3.1  Heading rows to skip', 2)
+P('Both programs have a field called Heading rows to skip, set to 1. It is now only a fallback: it is used '
+  'when no heading row can be recognised at all - for example a file sent with the heading row already '
+  'removed. When the headings are there, the program finds them itself and this field is ignored.')
+P('If a run reports that no tab carries the columns of the scenario, that is the case to look at: either '
+  'the headings have been renamed, or the file is the wrong one for the radio button selected.')
 
 doc.add_page_break()
 
@@ -151,7 +156,7 @@ T(['Radio button','Workbook tab','What it does'],
    ['Partner functions','Patner function','Maintains purchasing partner functions'],
    ['Block / unblock','Block_Unblocked','Sets or clears posting and purchasing blocks'],
   ], widths=[4.8,4.2,7.0])
-NOTE('The tab name "Patner function" is spelled as it appears in your workbook. The program looks for that exact name, so please do not correct the spelling in the file.')
+NOTE('The tab names in this table are the ones in your workbook - the spelling "Patner function" included. They are shown so you can see which tab each radio button was built from; the program no longer depends on them, so renaming a tab does no harm.')
 
 doc.add_page_break()
 
@@ -189,7 +194,7 @@ N('Choose the scenario that matches the tab you want to load.')
 N('Select the workbook.')
 N('Leave Test run ticked.')
 N('Execute.')
-N('The program reads the tab from row 2 and processes every row.')
+N('The program locates the heading row and processes every row below it.')
 N('A result list appears. Work through any errors, correct the spreadsheet, and run again.')
 N('When the test run is clean, untick Test run and execute again to post for real.')
 
@@ -225,8 +230,8 @@ doc.add_page_break()
 H('8.  Suggested test cases', 1)
 P('We suggest working through these in order. Each one is quick and isolates a different part of the program.')
 T(['#','Test','How','What should happen'],
-  [['1','Empty file','Run any scenario against a tab with only the heading row','A message saying the tab holds no data from row 2 onwards. Nothing is posted.'],
-   ['2','Wrong tab','Point the program at the customer workbook while a supplier scenario is selected','A clear message that the tab was not found'],
+  [['1','Empty file','Run any scenario against a tab with only the heading row','A message saying the tab holds no data below its heading. Nothing is posted.'],
+   ['2','Wrong file','Point the program at the customer workbook while a supplier scenario is selected','A clear message that no tab in that workbook carries the columns of the selected scenario'],
    ['3','One good row, test run','One valid new customer or supplier','Green line, "Test run OK". Check in BP that nothing was actually created.'],
    ['4','One good row, live','Same row with Test run unticked','Green line, record created. Verify it in BP.'],
    ['5','Deliberate error','Put an account group that does not exist in the account group column','Red line naming the field and the value. Nothing posted for that row.'],
@@ -298,7 +303,7 @@ H('11.  Points we still need from you', 1)
 T(['#','Point','What we need'],
   [['1','Aadhaar number','SAP has no standard field for Aadhaar. We propose the identification type X90003, matching the X90001 and X90002 types you already use. Please confirm it has been created.'],
    ['2','SAGA tab, Spanish DIR3 codes','Please confirm the allocation in section 10. Also note that columns CG and CH are annotated "VAT number" and "Accounting Office" but are in fact the 20B and 21B drug licence fields — loading Spanish tax data there would overwrite licence values that your invoice and credit note programs read.'],
-   ['3','SAGA customer and domestic customer IND tabs','Please re-issue with headings on row 1 and data from row 2.'],
+   ['3','SAGA customer and domestic customer IND tabs','No longer blocking - the program finds the heading row on row 2 by itself. The descriptive rows between the headings and the first record still have to go.'],
    ['4','Sample records','Two existing customers that already carry licence data and a bank guarantee, one Indian and one Morocco or SAGA, so we can verify the mapping against real values.'],
   ], widths=[0.9,3.6,11.5])
 

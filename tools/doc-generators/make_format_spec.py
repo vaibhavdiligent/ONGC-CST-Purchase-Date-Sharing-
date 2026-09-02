@@ -130,37 +130,39 @@ T(['Programs','Scenarios','Columns documented'],
    ['ZSDS_CUST_MASS_UPLOAD  (customer master)','7','607']],widths=[8.0,3.0,5.0],fs=9.5)
 
 H('1.  How to read this document',1)
-P('There is one section per radio button. Each section names the workbook tab it reads, states how that tab '
-  'is laid out today, and lists every column.')
-P('Every tab of both workbooks must be laid out the same way:',bold=True)
-B('Row 1 - the heading row')
-B('Row 2 onwards - data only')
-B('Nothing in between: no field type row, no field length row, no mandatory/optional row, no guideline '
-  'row and no sample rows')
-P('Both programs read the chosen tab from row 2.',bold=True)
-P('Twelve of the sixteen tabs do not follow this today. Each section below states exactly which rows to '
-  'delete from that tab. Please delete them rather than hide them - a hidden row is still read.')
-P('Delete rows only, never columns.',bold=True)
-P('Delete ROWS only - never columns. Several tabs start with a label column that holds text like "Field Tech name" or "Sample data" and is empty on the data rows. That column still counts. On the supplier creation tab, for instance, the vendor number is column B, not column A. Deleting the label column would shift every field one place to the left and the file would load into the wrong fields.')
-P('The column letters in the tables below are the letters the program expects. If a letter in the table '
-  'does not match your file, a column has been added or removed and the file will not load correctly.')
-NOTE('The supplier program does skip rows whose first cell reads Field Type, Field Length, Sample, Project '
-     'or Tech name, so some tabs will load even before they are re-cut. It is not a substitute for a clean '
-     'layout: any row that does not begin with one of those words is read as data. Patner function row 6 '
-     'begins with LIFNR and Block_Unblocked row 8 begins with Default XK05 - both would be read as records.')
+P('There is one section per radio button. Each section names the workbook tab it was built from, states how '
+  'that tab is laid out today, and lists every column.')
+P('The programs find the data by its headings, not by its position.',bold=True)
+P('Each scenario knows the headings that belong above its columns. On opening the file both programs look '
+  'through every tab of the workbook, and through the first ten lines of each tab, for the line carrying '
+  'most of those headings. That line is the heading row; everything below it is data. So:')
+B('The tab may be called anything, and the workbook may hold one tab or all of them.')
+B('The heading row does not have to be row 1.')
+B('Columns may be in a different order from the template, and columns you do not need may be deleted - '
+  'each column is read from wherever its heading actually is.')
+B('A heading may be the wording used in the template ("Company Code") or the technical field name '
+  '("BUKRS"). Both are recognised.')
+P('What still has to be right:',bold=True)
+B('Headings must not be renamed or translated. A heading the program does not recognise makes that one '
+  'column fall back to its position in the template - which is where a wrong value can creep in.')
+B('A heading that appears twice on the same tab cannot identify a column, so both copies fall back to '
+  'their position. Please make repeated headings unique.')
+B('Every row between the heading row and the first record must be deleted: field type, field length, '
+  'mandatory/optional, guideline and sample rows are all read as data. Please delete them rather than '
+  'hide them - a hidden row is still read.')
+P('Each section below states exactly which rows to delete from that tab.')
+P('The column letters in the tables below are the letters the template uses. They are there so you can '
+  'find a column, not as a requirement: if a letter does not match your file, the program still reads the '
+  'column by its heading. One line at the top of the result list says how many columns were found '
+  'somewhere else.')
 
 H('2.  Heading rows to skip',1)
-P('Both programs have a field on the selection screen called Heading rows to skip, set to 1. With the '
-  'layout above that is correct: one heading row, then data.')
-P('On the first run, the top of the result list shows a line like:')
-P('        Line 1 skipped:  KUNNR / BUKRS / VKORG / VTWEG / SPART ...',italic=True)
-T(['What that line shows','What it means','What to do'],
-  [['Your column headings','Correct','Leave the field at 1'],
-   ['A real customer or supplier record','The heading row was removed before the program saw it',
-    'Set the field to 0, otherwise every file loses its first record']],
-  widths=[4.5,5.5,5.0],fs=9)
-P('If a tab has not been re-cut yet, this field can also be used to step over the extra rows - for example '
-  'Patner function currently needs 9.')
+P('Both programs have a field on the selection screen called Heading rows to skip, set to 1. It is now '
+  'only a fallback, used when no heading row can be recognised at all - a file sent with the heading row '
+  'already removed, for instance. When the headings are present the program finds them itself and the '
+  'field is ignored.')
+P('If a run reports that no tab in the workbook carries the columns of the scenario, either the headings '
+  'have been renamed or the file does not match the radio button selected.')
 
 H('3.  Mandatory and optional',1)
 P('Where the workbook itself marks a column Mandatory or Optional, that marking is reproduced here. Where it '
@@ -179,20 +181,26 @@ for radio,tab in VSCEN:
     H(f'4.{n}  {radio}',2)
     tech,desc,typ,lng,mo,first = VLAY[tab]
     rr=VEN[tab]
-    P(f'Workbook tab:  {tab}',bold=True)
-    extra=[]
-    if desc and desc!=1: extra.append(f'field description (row {desc})')
-    if typ:  extra.append(f'field type (row {typ})')
-    if lng:  extra.append(f'field length (row {lng})')
-    if mo:   extra.append(f'mandatory/optional (row {mo})')
-    if tech!=1: extra.append(f'everything above the heading row (rows 1 to {tech-1})')
-    ok = (tech==1 and first==2)
+    P(f'Workbook tab this was built from:  {tab}   (the tab may be renamed - the program does not read the name)',bold=True)
+    # Only the rows BETWEEN the headings and the first record have to go -
+    # anything above the heading row is stepped over by the program itself.
+    named={}
+    if desc: named[desc]='field description'
+    if typ:  named[typ]='field type'
+    if lng:  named[lng]='field length'
+    if mo:   named[mo]='mandatory/optional'
+    gone=list(range(tech+1,first))
+    what=[named[r] for r in gone if r in named]
+    if [r for r in gone if r not in named]: what.append('sample and guideline rows')
+    ok = not gone
     todo = ('Nothing - this tab is already correct' if ok
-            else ('Move the heading row to row 1 and delete ' + ', '.join(extra) + ', and the sample rows, '
-                  f'so the first record sits on row 2 (it is on row {first} today)'))
+            else (f'Delete row{"s" if len(gone)>1 else ""} {gone[0]}'
+                  + (f' to {gone[-1]}' if len(gone)>1 else '')
+                  + (' (' + ', '.join(what) + ')' if what else '')
+                  + f', so the first record sits directly under the heading row on row {tech}'))
     T(['Required','Detail'],
-      [['Heading row','row 1'],
-       ['First data row','row 2'],
+      [['Heading row','anywhere in the first ten rows - the program finds it'],
+       ['First data row','the row directly under the headings'],
        ['Headings are on','row %d today' % tech],
        ['First record is on','row %d today' % first],
        ['To do',todo]],widths=[4.0,12.0],fs=9)
@@ -218,14 +226,16 @@ for scen,radio,tab,namerow,first in CSCEN:
     n+=1
     H(f'5.{n}  {radio}',2)
     rr=CUSROWS[tab]
-    P(f'Workbook tab:  {tab.strip()}',bold=True)
-    ok=(namerow==1 and first==2)
+    P(f'Workbook tab this was built from:  {tab.strip()}   (the tab may be renamed - the program does not read the name)',bold=True)
+    gone=list(range(namerow+1,first))
+    ok = not gone
     todo=('Nothing - this tab is already correct' if ok
-          else (f'Move the heading row from row {namerow} to row 1 and delete every other row above the '
-                f'first record, so the first record sits on row 2 (it is on row {first} today)'))
+          else (f'Delete row{"s" if len(gone)>1 else ""} {gone[0]}'
+                + (f' to {gone[-1]}' if len(gone)>1 else '')
+                + f', so the first record sits directly under the heading row on row {namerow}'))
     T(['Required','Detail'],
-      [['Heading row','row 1'],
-       ['First data row','row 2'],
+      [['Heading row','anywhere in the first ten rows - the program finds it'],
+       ['First data row','the row directly under the headings'],
        ['Headings are on',f'row {namerow} today'],
        ['First record is on',f'row {first} today'],
        ['To do',todo]],widths=[4.0,12.0],fs=9)
