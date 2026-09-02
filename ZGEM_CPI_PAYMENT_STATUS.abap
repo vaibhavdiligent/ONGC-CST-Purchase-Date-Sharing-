@@ -7,18 +7,40 @@
 *&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
 *&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
 *&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
-*&   5. Parse the common response envelope and show it as an ALV grid.
+*&   5. Parse response and show it as an ALV grid.
 *&      (ALV list header is taken from selection-screen field p_head.)
+*&
+*& Request payload sent (all paydata values are JSON strings):
+*&   {"user":"ONGCVIDESH","method":"payments",
+*&    "paydata":{"transactionID":"..","status":"Success","paymentBy":"NEFT",
+*&      "contractNo":"..","gemInvoiceNo":"..","invoiceNo":"..","billNo":"..",
+*&      "billAmountPaid":"10","transactionDate":"2025-01-02",
+*&      "deductionType":"NA","bankName":"..","bankTransactionNo":"..",
+*&      "sanctions":"10.00","sanctionDate":"2024-11-19"}}
+*&   Every paydata field is a selection-screen parameter (defaults below).
 *&---------------------------------------------------------------------*
 REPORT zgem_cpi_payment_status.
 
 CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
 
 PARAMETERS:
-            p_head  TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
-            p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-            p_paydat TYPE string LOWER CASE, " encrypted paydata blob
-            p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.
+            p_head   TYPE char70 LOWER CASE DEFAULT 'Payment Status (3.11)', " ALV list header (editable)
+            p_user   TYPE string LOWER CASE DEFAULT 'NBCCServices',
+            p_txnid  TYPE string LOWER CASE DEFAULT '173200477772237507927',  " transactionID
+            p_status TYPE string LOWER CASE DEFAULT 'Success',
+            p_paymby TYPE string LOWER CASE DEFAULT 'NEFT',                    " paymentBy
+            p_contno TYPE string LOWER CASE DEFAULT 'GEMC-511687737507927',    " contractNo
+            p_geminv TYPE string LOWER CASE DEFAULT 'GEM-950165',              " gemInvoiceNo
+            p_invno  TYPE string LOWER CASE DEFAULT 'sdf578',                  " invoiceNo
+            p_billno TYPE string LOWER CASE DEFAULT '511687737507927-2B1',     " billNo
+            p_bamt   TYPE string LOWER CASE DEFAULT '10',                      " billAmountPaid (string)
+            p_txndt  TYPE string LOWER CASE DEFAULT '2025-01-02',              " transactionDate
+            p_dedtyp TYPE string LOWER CASE DEFAULT 'NA',                      " deductionType
+            p_bank   TYPE string LOWER CASE DEFAULT 'ICICI BANK',              " bankName
+            p_bktxno TYPE string LOWER CASE DEFAULT 'UTI657454690',            " bankTransactionNo
+            p_sanc   TYPE string LOWER CASE DEFAULT '10.00',                   " sanctions
+            p_sancdt TYPE string LOWER CASE DEFAULT '2024-11-19',              " sanctionDate
+            p_path   TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/PaymentStatus'.
 
 *--- Token proxy objects (same pattern as the summary program)
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
@@ -28,46 +50,59 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       err_string       TYPE string,
       gv_token         TYPE string.
 
-*--- Request payload (Section Payment Status (3.11))
+*--- paydata payload (Section Payment Status (3.11)) - all fields are strings
+TYPES: BEGIN OF ty_paydata,
+         transactionid     TYPE string,
+         status            TYPE string,
+         paymentby         TYPE string,
+         contractno        TYPE string,
+         geminvoiceno      TYPE string,
+         invoiceno         TYPE string,
+         billno            TYPE string,
+         billamountpaid    TYPE string,
+         transactiondate   TYPE string,
+         deductiontype     TYPE string,
+         bankname          TYPE string,
+         banktransactionno TYPE string,
+         sanctions         TYPE string,
+         sanctiondate      TYPE string,
+       END OF ty_paydata.
+
+*--- Request payload
 TYPES: BEGIN OF ty_request,
-         user          TYPE string,
-         method        TYPE string,
-         paydata       TYPE string,
+         user    TYPE string,
+         method  TYPE string,
+         paydata TYPE ty_paydata,
        END OF ty_request.
 
-*--- Common response envelope (Status / Iat / data: Sub,Aud,Iss + inner data).
-*   The inner "data" varies per API, so it is captured as raw JSON for display.
+*--- Response structure matching the ACTUAL payload (confirmed real response).
+*   {"transactionID":..,"status":..,"paymentMode":..,"message":..}
 TYPES: BEGIN OF ty_display,
-         status  TYPE string,
-         iat     TYPE string,
-         sub     TYPE string,
-         aud     TYPE string,
-         iss     TYPE string,
-         data    TYPE string,   " raw inner data JSON
+         transactionid TYPE string,
+         status        TYPE string,
+         paymentmode   TYPE string,
+         message       TYPE string,
+         raw_response  TYPE string,   " full raw response, kept for diagnosis
        END OF ty_display,
        tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
 
-DATA: lo_client   TYPE REF TO if_http_client,
-      ls_request  TYPE ty_request,
-      lv_json     TYPE string,
-      lv_response TYPE string,
-      lv_code     TYPE i,
-      lv_reason   TYPE string,
-      lt_display  TYPE tt_display,
-      ls_display  TYPE ty_display,
-      lo_alv      TYPE REF TO cl_salv_table,
-      lx_salv     TYPE REF TO cx_salv_msg.
+DATA: lo_client    TYPE REF TO if_http_client,
+      ls_request   TYPE ty_request,
+      lv_json      TYPE string,
+      lv_response  TYPE string,
+      lv_code      TYPE i,
+      lv_reason    TYPE string,
+      lt_display   TYPE tt_display,
+      ls_display   TYPE ty_display,
+      lo_alv       TYPE REF TO cl_salv_table,
+      lx_salv      TYPE REF TO cx_salv_msg,
+      lt_name_maps TYPE /ui2/cl_json=>name_mappings.
 
 START-OF-SELECTION.
 
-*--- 1. Validate input
-  IF p_paydat IS INITIAL.
-    WRITE: / 'Error: paydata is mandatory.'. RETURN.
-  ENDIF.
-
-*--- 1a. Generate the SEK security token via the CPI token proxy
-  proxy_data-mt_security_token_sender-username = 'ONGCVIDESH'.
-  proxy_data-mt_security_token_sender-password = 'M8sQ3Zp2Xk7L1dT9V4bH6cW0YgF5nRJA'.
+*--- 1. Generate the SEK security token via the CPI token proxy
+  proxy_data-mt_security_token_sender-username = 'NBCCServices'.
+  proxy_data-mt_security_token_sender-password = '823090987ez07u8maz0z8789qn5a4a62'.
   TRY.
       CREATE OBJECT lo_gem_token.
       CALL METHOD lo_gem_token->si_security_token_ob
@@ -79,18 +114,49 @@ START-OF-SELECTION.
   ENDTRY.
   gv_token = lt_input-mt_security_token_receiver-token.
 
-*--- 2. Build the JSON request payload
+*--- 2. Build the request payload from selection-screen values
   CLEAR ls_request.
   ls_request-user   = p_user.
   ls_request-method = 'payments'.
-  ls_request-paydata = p_paydat.
+  ls_request-paydata-transactionid     = p_txnid.
+  ls_request-paydata-status            = p_status.
+  ls_request-paydata-paymentby         = p_paymby.
+  ls_request-paydata-contractno        = p_contno.
+  ls_request-paydata-geminvoiceno      = p_geminv.
+  ls_request-paydata-invoiceno         = p_invno.
+  ls_request-paydata-billno            = p_billno.
+  ls_request-paydata-billamountpaid    = p_bamt.
+  ls_request-paydata-transactiondate   = p_txndt.
+  ls_request-paydata-deductiontype     = p_dedtyp.
+  ls_request-paydata-bankname          = p_bank.
+  ls_request-paydata-banktransactionno = p_bktxno.
+  ls_request-paydata-sanctions         = p_sanc.
+  ls_request-paydata-sanctiondate      = p_sancdt.
+
+*--- 3. Serialize as plain JSON with the real camelCase keys.
+*   name_mappings handles the camelCase keys; low_case handles user/method/
+*   paydata and the all-lowercase keys (status, sanctions).
+  lt_name_maps = VALUE #(
+    ( abap = 'TRANSACTIONID'     json = 'transactionID' )
+    ( abap = 'PAYMENTBY'         json = 'paymentBy' )
+    ( abap = 'CONTRACTNO'        json = 'contractNo' )
+    ( abap = 'GEMINVOICENO'      json = 'gemInvoiceNo' )
+    ( abap = 'INVOICENO'         json = 'invoiceNo' )
+    ( abap = 'BILLNO'            json = 'billNo' )
+    ( abap = 'BILLAMOUNTPAID'    json = 'billAmountPaid' )
+    ( abap = 'TRANSACTIONDATE'   json = 'transactionDate' )
+    ( abap = 'DEDUCTIONTYPE'     json = 'deductionType' )
+    ( abap = 'BANKNAME'          json = 'bankName' )
+    ( abap = 'BANKTRANSACTIONNO' json = 'bankTransactionNo' )
+    ( abap = 'SANCTIONDATE'      json = 'sanctionDate' ) ).
 
   lv_json = /ui2/cl_json=>serialize(
-              data        = ls_request
-              compress    = abap_true
-              pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
+              data          = ls_request
+              compress      = abap_true
+              pretty_name   = /ui2/cl_json=>pretty_mode-low_case
+              name_mappings = lt_name_maps ).
 
-*--- 3. Create HTTP client from SM59 destination and set path/method
+*--- 4. Create HTTP client from SM59 destination and set path/method
   cl_http_client=>create_by_destination(
     EXPORTING destination = c_dest
     IMPORTING client      = lo_client
@@ -103,13 +169,13 @@ START-OF-SELECTION.
   cl_http_utility=>set_request_uri( request = lo_client->request uri = p_path ).
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
 
-*--- 4. Headers: Content-Type + SEK token header 'token' = Bearer <token>
+*--- 5. Headers: Content-Type + SEK token header 'token' = Bearer <token>
   lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
   IF gv_token IS NOT INITIAL.
     lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
   ENDIF.
 
-*--- 5. Body + send + receive
+*--- 6. Body + send + receive
   lo_client->request->set_cdata( lv_json ).
   lo_client->send( EXCEPTIONS OTHERS = 1 ).
   IF sy-subrc <> 0.
@@ -120,34 +186,14 @@ START-OF-SELECTION.
   lv_response = lo_client->response->get_cdata( ).
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 6. Parse the common envelope (Status/Iat/data.Sub/Aud/Iss) for display.
-*   Inner data kept raw; tighten with a typed structure once the exact
-*   response fields for this API are confirmed.
-  TYPES: BEGIN OF ty_env_data,
-           sub TYPE string, aud TYPE string, iss TYPE string,
-         END OF ty_env_data.
-  TYPES: BEGIN OF ty_env,
-           status TYPE string, iat TYPE string, data TYPE ty_env_data,
-         END OF ty_env.
-  DATA ls_env TYPE ty_env.
-  DATA lt_maps TYPE /ui2/cl_json=>name_mappings.
-  lt_maps = VALUE #(
-    ( abap = 'STATUS' json = 'Status' ) ( abap = 'IAT' json = 'Iat' )
-    ( abap = 'DATA'   json = 'data' )   ( abap = 'SUB' json = 'Sub' )
-    ( abap = 'AUD'    json = 'Aud' )    ( abap = 'ISS' json = 'Iss' ) ).
-  /ui2/cl_json=>deserialize( EXPORTING json = lv_response name_mappings = lt_maps
-                             CHANGING data = ls_env ).
-
+*--- 7. Parse the flat response into typed fields
   CLEAR ls_display.
-  ls_display-status = ls_env-status.
-  ls_display-iat    = ls_env-iat.
-  ls_display-sub    = ls_env-data-sub.
-  ls_display-aud    = ls_env-data-aud.
-  ls_display-iss    = ls_env-data-iss.
-  ls_display-data   = lv_response.   " full raw response for reference
+  /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                             CHANGING  data = ls_display ).
+  ls_display-raw_response = lv_response.   " full raw response for reference
   APPEND ls_display TO lt_display.
 
-*--- 7. Display as ALV grid with the (editable) list header from p_head
+*--- 8. Display as ALV grid with the (editable) list header from p_head
   TRY.
       cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
                               CHANGING  t_table      = lt_display ).
