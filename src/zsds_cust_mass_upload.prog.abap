@@ -837,6 +837,30 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS segment_curr IMPORTING iv_sgmnt  TYPE char10
                          RETURNING VALUE(rv) TYPE waers.
 
+    " Check tables of the three customer-master fields the credit tab
+    " carries. The API reports a failed check as a bare "Entry X does not
+    " exist in TVV3", which says neither which field nor where the value
+    " came from - so the values are checked here first.
+    METHODS ok_kvgr3    IMPORTING iv        TYPE clike
+                        RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS ok_zterm    IMPORTING iv        TYPE clike
+                        RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS ok_vzskz    IMPORTING iv        TYPE clike
+                        RETURNING VALUE(rv) TYPE abap_bool.
+
+    " Sales areas of a customer whose STORED customer group 3 is no longer
+    " in TVV3. The API validates the whole customer, so one such row blocks
+    " every update of that customer until it is corrected.
+    TYPES: BEGIN OF ty_bad_sa,
+             vkorg TYPE vkorg,
+             vtweg TYPE vtweg,
+             spart TYPE spart,
+             kvgr3 TYPE kvgr3,
+           END OF ty_bad_sa,
+           tt_bad_sa TYPE STANDARD TABLE OF ty_bad_sa WITH EMPTY KEY.
+    METHODS bad_kvgr3   IMPORTING iv_kunnr  TYPE kunnr
+                        RETURNING VALUE(rt) TYPE tt_bad_sa.
+
     METHODS ok_kdgrp    IMPORTING iv        TYPE clike
                         RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_waers    IMPORTING iv        TYPE clike
@@ -871,6 +895,9 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     DATA mt_waers TYPE SORTED TABLE OF waers WITH UNIQUE KEY table_line.
     DATA mt_werks TYPE SORTED TABLE OF werks_d WITH UNIQUE KEY table_line.
     DATA mt_ktokd TYPE SORTED TABLE OF ktokd WITH UNIQUE KEY table_line.
+    DATA mt_kvgr3 TYPE SORTED TABLE OF kvgr3 WITH UNIQUE KEY table_line.
+    DATA mt_zterm TYPE SORTED TABLE OF dzterm WITH UNIQUE KEY table_line.
+    DATA mt_vzskz TYPE SORTED TABLE OF vzskz WITH UNIQUE KEY table_line.
 
     METHODS constructor.
 ENDCLASS.
@@ -901,6 +928,10 @@ CLASS lcl_cfg IMPLEMENTATION.
     SELECT DISTINCT waers FROM tcurc INTO TABLE @mt_waers.
     SELECT DISTINCT werks FROM t001w INTO TABLE @mt_werks.
     SELECT DISTINCT ktokd FROM t077d INTO TABLE @mt_ktokd.
+    SELECT DISTINCT kvgr3 FROM tvv3 INTO TABLE @mt_kvgr3.
+    " T052 holds one row per instalment, so the payment terms repeat.
+    SELECT DISTINCT zterm FROM t052 INTO TABLE @mt_zterm.
+    SELECT DISTINCT vzskz FROM t056 INTO TABLE @mt_vzskz.
 
     " Two columns each, keyed on the first, so INSERT is used instead:
     " a duplicate sets SY-SUBRC 4 and the first entry wins.
@@ -1031,6 +1062,27 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD segment_curr.
     rv = VALUE #( mt_cur[ sgmnt = iv_sgmnt ]-waers OPTIONAL ).
+  ENDMETHOD.
+
+  METHOD ok_kvgr3.
+    rv = xsdbool( line_exists( mt_kvgr3[ table_line = iv ] ) ).
+  ENDMETHOD.
+  METHOD ok_zterm.
+    rv = xsdbool( line_exists( mt_zterm[ table_line = iv ] ) ).
+  ENDMETHOD.
+  METHOD ok_vzskz.
+    rv = xsdbool( line_exists( mt_vzskz[ table_line = iv ] ) ).
+  ENDMETHOD.
+
+  METHOD bad_kvgr3.
+    SELECT vkorg, vtweg, spart, kvgr3 FROM knvv
+      WHERE kunnr = @iv_kunnr AND kvgr3 <> @space
+      INTO TABLE @DATA(lt_sa).
+    LOOP AT lt_sa INTO DATA(ls_sa).
+      IF ok_kvgr3( ls_sa-kvgr3 ) = abap_false.
+        APPEND CORRESPONDING #( ls_sa ) TO rt.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD ok_kdgrp.
@@ -2102,6 +2154,15 @@ CLASS lcl_engine DEFINITION FINAL.
                 is_comp  TYPE cmds_ei_company
                 is_sale  TYPE cmds_ei_sales.
 
+    " The API validates the customer as a whole, so a value already stored
+    " against one of its sales areas can reject an update that has nothing
+    " to do with it. This says which one, instead of leaving the user with
+    " a bare "Entry X does not exist in TVV3".
+    METHODS warn_stored
+      IMPORTING iv_kunnr TYPE kunnr
+                iv_row   TYPE i
+                is_sale  TYPE cmds_ei_sales.
+
     " Technical field names that occur only once in this scenario, and so
     " can identify a column on a file headed with field names.
     METHODS fld_keys RETURNING VALUE(rt) TYPE string_table.
@@ -2176,6 +2237,12 @@ CLASS lcl_engine IMPLEMENTATION.
     TYPES: BEGIN OF ty_h, key TYPE string, col TYPE i, n TYPE i, END OF ty_h.
     DATA lt_h TYPE SORTED TABLE OF ty_h WITH UNIQUE KEY key.
     LOOP AT it_head INTO DATA(lv_h).
+      " The column number has to be taken here, before anything else runs.
+      " READ TABLE on a sorted table is a binary search and leaves SY-TABIX
+      " at the position the key WOULD be inserted at, so reading SY-TABIX
+      " after it recorded the heading's place in the alphabet instead of its
+      " place in the file.
+      DATA(lv_col) = sy-tabix.
       DATA(lv_k) = lcl_util=>squash( lv_h ).
       IF lv_k IS INITIAL.
         CONTINUE.
@@ -2184,7 +2251,7 @@ CLASS lcl_engine IMPLEMENTATION.
       IF sy-subrc = 0.
         <ls_h>-n = <ls_h>-n + 1.
       ELSE.
-        INSERT VALUE ty_h( key = lv_k col = sy-tabix n = 1 ) INTO TABLE lt_h.
+        INSERT VALUE ty_h( key = lv_k col = lv_col n = 1 ) INTO TABLE lt_h.
       ENDIF.
     ENDLOOP.
 
@@ -2236,6 +2303,31 @@ CLASS lcl_engine IMPLEMENTATION.
       mo_log->add( iv_row = 0 iv_type = 'I'
                    iv_text = |{ lv_moved } column(s) sit elsewhere in this file than in | &&
                              |the template - each was read from where its heading is| ).
+    ENDIF.
+
+    " And the ones no heading could be found for: those were read from the
+    " position the template has them in, which is only right if the file is
+    " laid out like the template. This is the line that shows a column being
+    " read from the wrong place, so it names them.
+    DATA lv_miss TYPE string.
+    DATA lv_nmiss TYPE i.
+    LOOP AT mt_map ASSIGNING <ls_m>.
+      DATA(lv_ix3) = sy-tabix.
+      IF line_exists( lt_done[ table_line = lv_ix3 ] )
+      OR line_exists( lt_used[ table_line = <ls_m>-col ] ).
+        CONTINUE.
+      ENDIF.
+      lv_nmiss = lv_nmiss + 1.
+      IF lv_nmiss <= 15.
+        lv_miss = COND string( WHEN lv_miss IS INITIAL
+                               THEN |{ <ls_m>-fld }({ <ls_m>-col })|
+                               ELSE |{ lv_miss }, { <ls_m>-fld }({ <ls_m>-col })| ).
+      ENDIF.
+    ENDLOOP.
+    IF lv_nmiss > 0.
+      mo_log->add( iv_row = 0 iv_type = 'W'
+                   iv_text = |{ lv_nmiss } column(s) carry no heading this program recognises and were | &&
+                             |read by position: { lv_miss }| ).
     ENDIF.
   ENDMETHOD.
 
@@ -2435,6 +2527,13 @@ CLASS lcl_engine IMPLEMENTATION.
                               cs_datax = ls_comp-datax ).
 
         WHEN gc_n_sale.
+          IF ls_m-fld = 'KVGR3' AND lo_cfg->ok_kvgr3( lv_cell ) = abap_false.
+            mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                         iv_struc = 'KNVV' iv_fld = 'KVGR3'
+                         iv_text = |Customer group 3 "{ lv_cell }" (column { ls_m-col }) is not in TVV3 | &&
+                                   |- maintain it with SM30 view V_TVV3 or correct the file| ).
+            CONTINUE.
+          ENDIF.
           set_comp( EXPORTING iv_fld = ls_m-fld iv_val = lv_cell
                               iv_cnv = ls_m-cnv iv_row = is_row-row
                               iv_struc = 'KNVV'
@@ -2600,6 +2699,10 @@ CLASS lcl_engine IMPLEMENTATION.
     ls_cvis-partner  = ls_bp.
     ls_cvis-customer = ls_cust.
 
+    IF lv_exists = abap_true.
+      warn_stored( iv_kunnr = lv_kunnr iv_row = is_row-row is_sale = ls_sale ).
+    ENDIF.
+
     DATA(lv_ok) = mo_cvis->post( is_data  = ls_cvis
                                  iv_row   = is_row-row
                                  iv_kunnr = lv_kunnr ).
@@ -2653,6 +2756,12 @@ CLASS lcl_engine IMPLEMENTATION.
           ENDCASE.
 
         WHEN gc_n_comp.
+          IF ls_m-fld = 'ZTERM' AND lo_cfg->ok_zterm( lv_cell ) = abap_false.
+            mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                         iv_struc = 'KNB1' iv_fld = 'ZTERM'
+                         iv_text = |Payment terms "{ lv_cell }" (column { ls_m-col }) are not in T052| ).
+            CONTINUE.
+          ENDIF.
           IF ls_m-fld = 'VZSKZ'.
             " The template's interest column holds the indicator and, on
             " some files, the calculation cycle behind it ("Z1 3", "Z1/3").
@@ -2665,6 +2774,12 @@ CLASS lcl_engine IMPLEMENTATION.
             REPLACE ALL OCCURRENCES OF '-' IN lv_int WITH ` `.
             CONDENSE lv_int.
             SPLIT lv_int AT ` ` INTO DATA(lv_ind) DATA(lv_cyc).
+            IF lo_cfg->ok_vzskz( lv_ind ) = abap_false.
+              mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                           iv_struc = 'KNB1' iv_fld = 'VZSKZ'
+                           iv_text = |Interest indicator "{ lv_ind }" (column { ls_m-col }) is not in T056| ).
+              CONTINUE.
+            ENDIF.
             set_comp( EXPORTING iv_fld = 'VZSKZ' iv_val = lv_ind
                                 iv_cnv = ls_m-cnv iv_row = is_row-row
                                 iv_struc = 'KNB1'
@@ -2767,6 +2882,25 @@ CLASS lcl_engine IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD warn_stored.
+    DATA(lt_bad) = lcl_cfg=>get( )->bad_kvgr3( iv_kunnr ).
+    LOOP AT lt_bad INTO DATA(ls_bad).
+      " Corrected by this run if the file writes that same sales area.
+      IF is_sale-datax-kvgr3     = abap_true
+     AND is_sale-data_key-vkorg = ls_bad-vkorg
+     AND is_sale-data_key-vtweg = ls_bad-vtweg
+     AND is_sale-data_key-spart = ls_bad-spart.
+        CONTINUE.
+      ENDIF.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'W'
+                   iv_struc = 'KNVV' iv_fld = 'KVGR3'
+                   iv_text = |Sales area { ls_bad-vkorg }/{ ls_bad-vtweg }/{ ls_bad-spart } of this | &&
+                             |customer already holds Customer group 3 "{ ls_bad-kvgr3 }", which is not | &&
+                             |in TVV3. The API checks the whole customer, so it rejects the update until | &&
+                             |that value is maintained in SM30 view V_TVV3 or replaced from the file| ).
+    ENDLOOP.
+  ENDMETHOD.
+
   METHOD credit_master.
     DATA(lo_cfg) = lcl_cfg=>get( ).
     DATA ls_comp TYPE cmds_ei_company.
@@ -2846,6 +2980,10 @@ CLASS lcl_engine IMPLEMENTATION.
     IF ls_cust-company_data-company IS INITIAL AND ls_cust-sales_data-sales IS INITIAL.
       RETURN.
     ENDIF.
+
+    " Anything already stored against this customer that no longer passes
+    " its check table will reject the update, whatever this file sends.
+    warn_stored( iv_kunnr = iv_kunnr iv_row = iv_row is_sale = ls_sale ).
 
     " The partner node has to name the business partner being changed. With
     " an empty partner header the API reads the request as a creation and
