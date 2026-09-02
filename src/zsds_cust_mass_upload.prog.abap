@@ -770,6 +770,12 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS cust_exists IMPORTING iv_kunnr  TYPE kunnr
                         RETURNING VALUE(rv) TYPE abap_bool.
 
+    " The Business Partner behind a customer, through the CVI link. A change
+    " has to name the partner it is changing, otherwise the API reads the
+    " request as a creation and asks for a number.
+    METHODS cust_guid   IMPORTING iv_kunnr  TYPE kunnr
+                        RETURNING VALUE(rv) TYPE bu_partner_guid.
+
     " The credit tab carries no company code and no sales area, so the ones
     " the customer already has are what the payment terms and the customer
     " group can be written to.
@@ -892,6 +898,11 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD cust_exists.
     SELECT SINGLE @abap_true FROM kna1 WHERE kunnr = @iv_kunnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD cust_guid.
+    SELECT SINGLE partner_guid FROM cvi_cust_link
+      WHERE customer = @iv_kunnr INTO @rv.
   ENDMETHOD.
 
   METHOD cust_bukrs.
@@ -2457,6 +2468,15 @@ CLASS lcl_engine IMPLEMENTATION.
     DATA ls_bp TYPE bus_ei_extern.
     CLEAR ls_bp.
     ls_bp-header-object_task     = lv_task.
+    " A change has to say which partner it changes. Without the GUID the API
+    " treats the request as a creation and answers "Specify at least one
+    " number for the business partner".
+    IF lv_task <> gc_i AND lv_kunnr IS NOT INITIAL.
+      DATA(lv_guid) = lo_cfg->cust_guid( lv_kunnr ).
+      IF lv_guid IS NOT INITIAL.
+        ls_bp-header-object_instance-bpartnerguid = lv_guid.
+      ENDIF.
+    ENDIF.
     ls_bp-central_data-common-data-bp_control-category = gc_org.
     " Grouping is derived by CL_MD_BP_MAINTAIN from the account group
     " unless the user overrides it on the selection screen.
@@ -2728,8 +2748,25 @@ CLASS lcl_engine IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    " The partner node has to name the business partner being changed. With
+    " an empty partner header the API reads the request as a creation and
+    " answers "Specify at least one number for the business partner".
+    DATA(lv_guid) = lo_cfg->cust_guid( iv_kunnr ).
+    IF lv_guid IS INITIAL.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                   iv_text = |Customer { iv_kunnr } has no business partner link (CVI_CUST_LINK) - | &&
+                             |payment terms, interest indicator and customer group were not written| ).
+      RETURN.
+    ENDIF.
+
+    DATA ls_bp TYPE bus_ei_extern.
+    CLEAR ls_bp.
+    ls_bp-header-object_task                  = gc_m.
+    ls_bp-header-object_instance-bpartnerguid = lv_guid.
+
     DATA ls_cvis TYPE cvis_ei_extern.
     CLEAR ls_cvis.
+    ls_cvis-partner  = ls_bp.
     ls_cvis-customer = ls_cust.
     IF mo_cvis->post( is_data  = ls_cvis
                       iv_row   = iv_row
