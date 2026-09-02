@@ -392,7 +392,7 @@ CLASS lcl_util IMPLEMENTATION.
 
   METHOD squash.
     rv = to_upper( CONV string( iv_in ) ).
-    REPLACE ALL OCCURRENCES OF REGEX '[^A-Z0-9]' IN rv WITH ''.
+    REPLACE ALL OCCURRENCES OF PCRE '[^A-Z0-9]' IN rv WITH ''.
   ENDMETHOD.
 
   METHOD copy_like.
@@ -2992,7 +2992,7 @@ CLASS lcl_engine IMPLEMENTATION.
     IF lv_adh IS NOT INITIAL.
       DATA lv_itask TYPE cmd_ei_object_task.
       lv_itask = COND #( WHEN lo_cfg->has_ident( iv_partner = lv_bp
-                                                 iv_cat     = gc_id_aadhaar ) = abap_true
+                                                 iv_cat     = CONV bu_id_type( gc_id_aadhaar ) ) = abap_true
                          THEN gc_u ELSE gc_i ).
       APPEND VALUE bus_ei_bupa_identification(
         task                            = lv_itask

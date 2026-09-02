@@ -354,7 +354,7 @@ CLASS lcl_util IMPLEMENTATION.
 
   METHOD squash.
     rv = to_upper( CONV string( iv_in ) ).
-    REPLACE ALL OCCURRENCES OF REGEX '[^A-Z0-9]' IN rv WITH ''.
+    REPLACE ALL OCCURRENCES OF PCRE '[^A-Z0-9]' IN rv WITH ''.
   ENDMETHOD.
 
   METHOD skip_row.
@@ -1884,7 +1884,7 @@ CLASS lcl_h_create IMPLEMENTATION.
       DATA ls_cc TYPE vmds_ei_company.
       CLEAR ls_cc.
       ls_cc-task           = COND #( WHEN lv_lifnr IS NOT INITIAL
-                                      AND mo_cfg->has_lfb1( iv_lifnr = lv_lifnr iv_bukrs = lv_bukrs ) = abap_true
+                                      AND mo_cfg->has_lfb1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_bukrs = CONV bukrs( lv_bukrs ) ) = abap_true
                                      THEN gc_u ELSE gc_i ).
       ls_cc-data_key-bukrs = lv_bukrs.
       " "FIELD;column;length" - same convention as FILL_CENTRAL: a length
@@ -1928,7 +1928,7 @@ CLASS lcl_h_create IMPLEMENTATION.
         DATA ls_po TYPE vmds_ei_purchasing.
         CLEAR ls_po.
         ls_po-task           = COND #( WHEN lv_lifnr IS NOT INITIAL
-                                        AND mo_cfg->has_lfm1( iv_lifnr = lv_lifnr iv_ekorg = lv_ekorg ) = abap_true
+                                        AND mo_cfg->has_lfm1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_ekorg = CONV ekorg( lv_ekorg ) ) = abap_true
                                        THEN gc_u ELSE gc_i ).
         ls_po-data_key-ekorg = lv_ekorg.
         DATA(lt_po) = VALUE string_table(
@@ -2033,8 +2033,11 @@ CLASS lcl_h_tds IMPLEMENTATION.
 
         DATA ls_wt TYPE vmds_ei_wtax_type.
         CLEAR ls_wt.
-        ls_wt-task           = COND #( WHEN mo_cfg->has_lfbw( iv_lifnr = lv_lifnr iv_bukrs = lv_bukrs
-                                                              iv_witht = lv_wt ) = abap_true
+        " CONV at the call: the cell was read as a STRING, and a parameter
+        " typed with a dictionary type does not take one as it stands.
+        ls_wt-task           = COND #( WHEN mo_cfg->has_lfbw( iv_lifnr = lv_lifnr
+                                                              iv_bukrs = lv_bukrs
+                                                              iv_witht = CONV witht( lv_wt ) ) = abap_true
                                        THEN gc_u ELSE gc_i ).
         ls_wt-data_key-witht = lv_wt.
 
@@ -2090,7 +2093,7 @@ CLASS lcl_h_tds IMPLEMENTATION.
 
       DATA ls_cc TYPE vmds_ei_company.
       CLEAR ls_cc.
-      ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = lv_lifnr iv_bukrs = lv_bukrs ) = abap_true
+      ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_bukrs = CONV bukrs( lv_bukrs ) ) = abap_true
                                      THEN gc_u ELSE gc_i ).
       ls_cc-data_key-bukrs = lv_bukrs.
       lcl_util=>set( EXPORTING iv_comp = 'QLAND' iv_value = lv_qland
@@ -2394,8 +2397,10 @@ CLASS lcl_h_bank IMPLEMENTATION.
 
       DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
       CLEAR ls_bk.
-      ls_bk-task           = COND #( WHEN mo_cfg->has_lfbk( iv_lifnr = iv_lifnr iv_banks = ls_in-banks
-                                                            iv_bankl = ls_in-bankl iv_bankn = ls_in-bankn ) = abap_true
+      ls_bk-task           = COND #( WHEN mo_cfg->has_lfbk( iv_lifnr = CONV lifnr( iv_lifnr )
+                                                            iv_banks = CONV banks( ls_in-banks )
+                                                            iv_bankl = CONV bankk( ls_in-bankl )
+                                                            iv_bankn = CONV bankn( ls_in-bankn ) ) = abap_true
                                      THEN gc_u ELSE gc_i ).
       ls_bk-data_key-banks = ls_in-banks.
       ls_bk-data_key-bankl = ls_in-bankl.
@@ -2534,7 +2539,7 @@ CLASS lcl_h_ext IMPLEMENTATION.
       " ---- company code: copy from the reference, then overlay ----------
       DATA ls_cc TYPE vmds_ei_company.
       CLEAR ls_cc.
-      ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = lv_lifnr iv_bukrs = lv_bukrs ) = abap_true
+      ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_bukrs = CONV bukrs( lv_bukrs ) ) = abap_true
                                      THEN gc_u ELSE gc_i ).
       ls_cc-data_key-bukrs = lv_bukrs.
 
@@ -2580,7 +2585,7 @@ CLASS lcl_h_ext IMPLEMENTATION.
       IF lv_ekorg IS NOT INITIAL.
         DATA ls_po TYPE vmds_ei_purchasing.
         CLEAR ls_po.
-        ls_po-task           = COND #( WHEN mo_cfg->has_lfm1( iv_lifnr = lv_lifnr iv_ekorg = lv_ekorg ) = abap_true
+        ls_po-task           = COND #( WHEN mo_cfg->has_lfm1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_ekorg = CONV ekorg( lv_ekorg ) ) = abap_true
                                        THEN gc_u ELSE gc_i ).
         ls_po-data_key-ekorg = lv_ekorg.
 
@@ -2780,8 +2785,9 @@ CLASS lcl_h_pfn IMPLEMENTATION.
 
         DATA ls_fn TYPE vmds_ei_functions.
         CLEAR ls_fn.
-        ls_fn-task           = COND #( WHEN mo_cfg->has_wyt3( iv_lifnr = lv_lifnr iv_ekorg = lv_ekorg
-                                                              iv_parvw = lv_parvw ) = abap_true
+        ls_fn-task           = COND #( WHEN mo_cfg->has_wyt3( iv_lifnr = CONV lifnr( lv_lifnr )
+                                                              iv_ekorg = CONV ekorg( lv_ekorg )
+                                                              iv_parvw = CONV parvw( lv_parvw ) ) = abap_true
                                        THEN gc_u ELSE gc_i ).
         ls_fn-data_key-parvw = lv_parvw.
         ls_fn-data_key-parza = '000'.
@@ -2812,7 +2818,7 @@ CLASS lcl_h_pfn IMPLEMENTATION.
 
       DATA ls_po TYPE vmds_ei_purchasing.
       CLEAR ls_po.
-      ls_po-task              = COND #( WHEN mo_cfg->has_lfm1( iv_lifnr = lv_lifnr iv_ekorg = lv_ekorg ) = abap_true
+      ls_po-task              = COND #( WHEN mo_cfg->has_lfm1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_ekorg = CONV ekorg( lv_ekorg ) ) = abap_true
                                         THEN gc_u ELSE gc_i ).
       ls_po-data_key-ekorg    = lv_ekorg.
       ls_po-functions-functions = lt_fn.
@@ -2929,7 +2935,7 @@ CLASS lcl_h_blk IMPLEMENTATION.
       IF lv_s1 IS NOT INITIAL.
         DATA ls_cc TYPE vmds_ei_company.
         CLEAR ls_cc.
-        ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = lv_lifnr iv_bukrs = lv_bukrs ) = abap_true
+        ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_bukrs = CONV bukrs( lv_bukrs ) ) = abap_true
                                      THEN gc_u ELSE gc_i ).
         ls_cc-data_key-bukrs = lv_bukrs.
         lcl_util=>set( EXPORTING iv_comp = 'SPERR' iv_value = lv_s1 iv_force = abap_true
@@ -2940,7 +2946,7 @@ CLASS lcl_h_blk IMPLEMENTATION.
       IF lv_m1 IS NOT INITIAL.
         DATA ls_po TYPE vmds_ei_purchasing.
         CLEAR ls_po.
-          ls_po-task           = COND #( WHEN mo_cfg->has_lfm1( iv_lifnr = lv_lifnr iv_ekorg = lv_ekorg ) = abap_true
+          ls_po-task           = COND #( WHEN mo_cfg->has_lfm1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_ekorg = CONV ekorg( lv_ekorg ) ) = abap_true
                                        THEN gc_u ELSE gc_i ).
         ls_po-data_key-ekorg = lv_ekorg.
         lcl_util=>set( EXPORTING iv_comp = 'SPERM' iv_value = lv_m1 iv_force = abap_true
