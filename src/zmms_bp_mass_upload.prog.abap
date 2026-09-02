@@ -2939,7 +2939,9 @@ START-OF-SELECTION.
     WHEN p_r8 = abap_true THEN 'R8'
     ELSE                       'R9' ).
 
-  DATA lt_rows TYPE tt_row.
+  DATA lt_rows  TYPE tt_row.
+  DATA gv_sheet TYPE string.
+  DATA gv_moved TYPE i.
   TRY.
       NEW lcl_excel( )->read(
         EXPORTING iv_file    = p_file
@@ -2947,8 +2949,8 @@ START-OF-SELECTION.
                   iv_from_pc = p_pc
                   it_hdr     = lcl_hdr=>for( gv_scen )
         IMPORTING et_row     = lt_rows
-                  ev_sheet   = DATA(gv_sheet)
-                  ev_moved   = DATA(gv_moved) ).
+                  ev_sheet   = gv_sheet
+                  ev_moved   = gv_moved ).
     CATCH lcx_upl INTO DATA(gx).
       " MESSAGE takes a data object, not an expression.
       DATA(gv_txt) = gx->get_text( ).

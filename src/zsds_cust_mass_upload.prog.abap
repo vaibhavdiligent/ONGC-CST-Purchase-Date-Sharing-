@@ -1980,6 +1980,15 @@ CLASS lcl_engine DEFINITION FINAL.
     METHODS sheet RETURNING VALUE(rv) TYPE string.
     METHODS run   IMPORTING it_row TYPE tt_row.
 
+    " The headings this scenario expects, as matching keys. Used to find the
+    " right tab whatever it is called.
+    METHODS headings RETURNING VALUE(rt) TYPE string_table.
+
+    " Re-points every map entry at the column that actually carries its
+    " heading in this file. Entries whose heading is blank, duplicated or
+    " absent keep the position they were built with.
+    METHODS bind_columns IMPORTING it_head TYPE string_table.
+
   PRIVATE SECTION.
     DATA mv_scen  TYPE char2.
     DATA mo_log   TYPE REF TO lcl_log.
@@ -2015,18 +2024,9 @@ CLASS lcl_engine DEFINITION FINAL.
                 is_comp  TYPE cmds_ei_company
                 is_sale  TYPE cmds_ei_sales.
 
-    " Re-points every map entry at the column that actually carries its
-    " heading in this file. Entries whose heading is blank, duplicated or
-    " absent keep the position they were built with.
-    METHODS bind_columns IMPORTING it_head TYPE string_table.
-
     " Technical field names that occur only once in this scenario, and so
     " can identify a column on a file headed with field names.
     METHODS fld_keys RETURNING VALUE(rt) TYPE string_table.
-
-    " The headings this scenario expects, as matching keys. Used to find the
-    " right tab whatever it is called.
-    METHODS headings RETURNING VALUE(rt) TYPE string_table.
 ENDCLASS.
 
 CLASS lcl_engine IMPLEMENTATION.
@@ -2765,7 +2765,9 @@ START-OF-SELECTION.
   DATA(go_log)    = NEW lcl_log( ).
   DATA(go_engine) = NEW lcl_engine( iv_scen = gv_scen io_log = go_log ).
 
-  DATA gt_row TYPE tt_row.
+  DATA gt_row  TYPE tt_row.
+  DATA gt_head TYPE string_table.
+  DATA gv_sheet TYPE string.
   TRY.
       NEW lcl_excel( )->read(
         EXPORTING iv_file    = p_file
@@ -2773,9 +2775,9 @@ START-OF-SELECTION.
                   iv_sheet   = go_engine->sheet( )
                   iv_skip    = p_skip
                   it_want    = go_engine->headings( )
-        IMPORTING et_head    = DATA(gt_head)
+        IMPORTING et_head    = gt_head
                   et_row     = gt_row
-                  ev_sheet   = DATA(gv_sheet) ).
+                  ev_sheet   = gv_sheet ).
     CATCH lcx_upl INTO DATA(gx).
       " MESSAGE takes a data object, not an expression.
       DATA(gv_txt) = gx->get_text( ).
@@ -2784,7 +2786,7 @@ START-OF-SELECTION.
 
   IF gt_row IS INITIAL.
     DATA gv_none TYPE string.
-    gv_none = |Tab "{ gv_sheet }" holds no data below the { p_skip } heading row(s)|.
+    gv_none = |Tab "{ gv_sheet }" holds no data below its heading row|.
     MESSAGE gv_none TYPE 'I'.
     RETURN.
   ENDIF.
@@ -2794,7 +2796,9 @@ START-OF-SELECTION.
 
 END-OF-SELECTION.
 
-  go_log->counts( IMPORTING ev_ok = DATA(gv_ok) ev_err = DATA(gv_err) ).
+  DATA gv_ok  TYPE i.
+  DATA gv_err TYPE i.
+  go_log->counts( IMPORTING ev_ok = gv_ok ev_err = gv_err ).
   DATA gv_sum TYPE string.
   gv_sum = |{ lines( gt_row ) } row(s) read, { gv_ok } processed, { gv_err } with errors|.
   MESSAGE gv_sum TYPE 'S'.
