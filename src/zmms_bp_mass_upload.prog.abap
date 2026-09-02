@@ -81,11 +81,23 @@ TYPES ty_dec TYPE p LENGTH 13 DECIMALS 2.
 " Local table of BP roles - avoids depending on a DDIC table type name.
 TYPES ty_roles TYPE STANDARD TABLE OF bu_role WITH EMPTY KEY.
 
+TYPES: tt_cell TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+
 TYPES: BEGIN OF ty_row,
          row   TYPE i,
-         cells TYPE STANDARD TABLE OF string WITH EMPTY KEY,
+         cells TYPE tt_cell,
        END OF ty_row,
        tt_row TYPE STANDARD TABLE OF ty_row WITH EMPTY KEY.
+
+" The heading that belongs above each column this program reads. It is what
+" lets a file be loaded whose columns have been moved, added or removed - and
+" what lets the right tab be found whatever the tab is called.
+TYPES: BEGIN OF ty_hdr,
+         scen TYPE char2,
+         col  TYPE i,
+         hdr  TYPE char40,
+       END OF ty_hdr,
+       tt_hdr TYPE STANDARD TABLE OF ty_hdr WITH EMPTY KEY.
 
 TYPES: BEGIN OF ty_msg,
          icon    TYPE icon_d,
@@ -200,6 +212,9 @@ CLASS lcl_util DEFINITION FINAL.
     "! Central row filter. Data begins in row 2 on every tab; anything above
     "! that, blank rows, sample rows and leftover header lines are skipped.
     CLASS-METHODS skip_row  IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
+    "! Heading text reduced to letters and digits in upper case, so that
+    "! "Vendor  code", "vendor_code" and "VENDOR CODE" are one and the same.
+    CLASS-METHODS squash    IMPORTING iv_in  TYPE clike RETURNING VALUE(rv) TYPE string.
 ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
@@ -334,6 +349,11 @@ CLASS lcl_util IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD squash.
+    rv = to_upper( CONV string( iv_in ) ).
+    REPLACE ALL OCCURRENCES OF REGEX '[^A-Z0-9]' IN rv WITH ''.
+  ENDMETHOD.
+
   METHOD skip_row.
     " Which rows are data is decided by POSITION alone - the heading rows
     " are dropped by the reader according to P_SKIP. Nothing in the row's
@@ -351,17 +371,343 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 * Excel reader
 *----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* LCL_HDR - the heading that belongs above each column
+*   Taken from the customer workbook, one entry per column this program
+*   reads, reduced to letters and digits. Two things are built on it:
+*     - the right tab is the one whose heading line carries most of these,
+*       so the tab NAME does not decide anything;
+*     - each column is then read from wherever its heading actually is, so
+*       inserted, deleted or reordered columns load correctly.
+*   Columns whose heading is blank or appears twice on the same tab are not
+*   listed - those keep their position.
+*----------------------------------------------------------------------*
+CLASS lcl_hdr DEFINITION FINAL.
+  PUBLIC SECTION.
+    CLASS-METHODS for  IMPORTING iv_scen   TYPE char2
+                       RETURNING VALUE(rt) TYPE tt_hdr.
+  PRIVATE SECTION.
+    CLASS-DATA mt TYPE tt_hdr.
+    CLASS-METHODS build RETURNING VALUE(rt) TYPE tt_hdr.
+ENDCLASS.
+
+CLASS lcl_hdr IMPLEMENTATION.
+
+  METHOD for.
+    IF mt IS INITIAL.
+      mt = build( ).
+    ENDIF.
+    rt = VALUE #( FOR ls IN mt WHERE ( scen = iv_scen ) ( ls ) ).
+  ENDMETHOD.
+
+  METHOD build.
+    " R1 - Vendor creation for All CC (64 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R1' col = 1    hdr = 'FIELDTECHNAME' )
+      ( scen = 'R1' col = 2    hdr = 'LIFNR' )
+      ( scen = 'R1' col = 3    hdr = 'BUKRS' )
+      ( scen = 'R1' col = 4    hdr = 'EKORG' )
+      ( scen = 'R1' col = 5    hdr = 'KTOKK' )
+      ( scen = 'R1' col = 6    hdr = 'TITLEMEDI' )
+      ( scen = 'R1' col = 7    hdr = 'NAME1' )
+      ( scen = 'R1' col = 8    hdr = 'NAME2' )
+      ( scen = 'R1' col = 9    hdr = 'NAME3' )
+      ( scen = 'R1' col = 10   hdr = 'NAME4' )
+      ( scen = 'R1' col = 11   hdr = 'SORT1' )
+      ( scen = 'R1' col = 12   hdr = 'SORT2' )
+      ( scen = 'R1' col = 13   hdr = 'STRSUPPL1' )
+      ( scen = 'R1' col = 14   hdr = 'STRSUPPL2' )
+      ( scen = 'R1' col = 15   hdr = 'STREET' )
+      ( scen = 'R1' col = 16   hdr = 'STRSUPPL3' )
+      ( scen = 'R1' col = 17   hdr = 'CITY2' )
+      ( scen = 'R1' col = 18   hdr = 'POSTCODE1' )
+      ( scen = 'R1' col = 19   hdr = 'CITY1' )
+      ( scen = 'R1' col = 20   hdr = 'COUNTRY' )
+      ( scen = 'R1' col = 21   hdr = 'REGION' )
+      ( scen = 'R1' col = 22   hdr = 'LANGU' )
+      ( scen = 'R1' col = 23   hdr = 'TELNUMBER' )
+      ( scen = 'R1' col = 24   hdr = 'TELEXTENS' )
+      ( scen = 'R1' col = 25   hdr = 'TELNUMBER2' )
+      ( scen = 'R1' col = 26   hdr = 'TELEXTENS2' )
+      ( scen = 'R1' col = 27   hdr = 'MOBNUMBER' )
+      ( scen = 'R1' col = 28   hdr = 'MOBNUMBER2' )
+      ( scen = 'R1' col = 29   hdr = 'FAXNUMBER' )
+      ( scen = 'R1' col = 30   hdr = 'SMTPADDR' )
+      ( scen = 'R1' col = 31   hdr = 'SMTPADDR2' )
+      ( scen = 'R1' col = 32   hdr = 'KUNNR' )
+      ( scen = 'R1' col = 33   hdr = 'VBUND' )
+      ( scen = 'R1' col = 34   hdr = 'KONZS' )
+      ( scen = 'R1' col = 35   hdr = 'STCD3' )
+      ( scen = 'R1' col = 36   hdr = 'STCD5' )
+      ( scen = 'R1' col = 37   hdr = 'STCEG' )
+      ( scen = 'R1' col = 38   hdr = 'J1KFTBUS' )
+      ( scen = 'R1' col = 39   hdr = 'STENR' )
+      ( scen = 'R1' col = 40   hdr = 'BRSCH' )
+      ( scen = 'R1' col = 41   hdr = 'BANKS01' )
+      ( scen = 'R1' col = 42   hdr = 'BANKL01' )
+      ( scen = 'R1' col = 43   hdr = 'BANKN01' )
+      ( scen = 'R1' col = 44   hdr = 'KOINH01' )
+      ( scen = 'R1' col = 45   hdr = 'BKONT' )
+      ( scen = 'R1' col = 46   hdr = 'IBAN' )
+      ( scen = 'R1' col = 47   hdr = 'AKONT' )
+      ( scen = 'R1' col = 48   hdr = 'FDGRV' )
+      ( scen = 'R1' col = 49   hdr = 'ALTKN' )
+      ( scen = 'R1' col = 51   hdr = 'REPRF' )
+      ( scen = 'R1' col = 52   hdr = 'ZWELS' )
+      ( scen = 'R1' col = 53   hdr = 'ZAHLS' )
+      ( scen = 'R1' col = 54   hdr = 'HBKID' )
+      ( scen = 'R1' col = 55   hdr = 'VENCLASS' )
+      ( scen = 'R1' col = 56   hdr = 'J1ISSIST' )
+      ( scen = 'R1' col = 57   hdr = 'J1IPANNO' )
+      ( scen = 'R1' col = 58   hdr = 'QLAND' )
+      ( scen = 'R1' col = 59   hdr = 'WITHT' )
+      ( scen = 'R1' col = 60   hdr = 'WTWITHCD' )
+      ( scen = 'R1' col = 61   hdr = 'WAERS' )
+      ( scen = 'R1' col = 63   hdr = 'KALSK' )
+      ( scen = 'R1' col = 64   hdr = 'WEBRE' )
+      ( scen = 'R1' col = 65   hdr = 'INCO1' )
+      ( scen = 'R1' col = 66   hdr = 'INCO2' )
+    ) TO rt.
+
+    " R2 - TDS upload (64 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R2' col = 2    hdr = 'LIFNR' )
+      ( scen = 'R2' col = 3    hdr = 'BUKRS' )
+      ( scen = 'R2' col = 4    hdr = 'D0610' )
+      ( scen = 'R2' col = 5    hdr = 'QLAND' )
+      ( scen = 'R2' col = 6    hdr = 'WITHT01' )
+      ( scen = 'R2' col = 7    hdr = 'WITHT02' )
+      ( scen = 'R2' col = 8    hdr = 'WITHT03' )
+      ( scen = 'R2' col = 9    hdr = 'WITHT04' )
+      ( scen = 'R2' col = 10   hdr = 'WITHT05' )
+      ( scen = 'R2' col = 11   hdr = 'WITHT06' )
+      ( scen = 'R2' col = 12   hdr = 'WTWITHCD01' )
+      ( scen = 'R2' col = 13   hdr = 'WTWITHCD02' )
+      ( scen = 'R2' col = 14   hdr = 'WTWITHCD03' )
+      ( scen = 'R2' col = 15   hdr = 'WTWITHCD04' )
+      ( scen = 'R2' col = 16   hdr = 'WTWITHCD05' )
+      ( scen = 'R2' col = 17   hdr = 'WTWITHCD06' )
+      ( scen = 'R2' col = 18   hdr = 'WTSUBJCT01' )
+      ( scen = 'R2' col = 19   hdr = 'WTSUBJCT02' )
+      ( scen = 'R2' col = 20   hdr = 'WTSUBJCT03' )
+      ( scen = 'R2' col = 21   hdr = 'WTSUBJCT04' )
+      ( scen = 'R2' col = 22   hdr = 'WTSUBJCT05' )
+      ( scen = 'R2' col = 23   hdr = 'WTSUBJCT06' )
+      ( scen = 'R2' col = 24   hdr = 'QSREC01' )
+      ( scen = 'R2' col = 25   hdr = 'QSREC02' )
+      ( scen = 'R2' col = 26   hdr = 'QSREC03' )
+      ( scen = 'R2' col = 27   hdr = 'QSREC04' )
+      ( scen = 'R2' col = 28   hdr = 'QSREC05' )
+      ( scen = 'R2' col = 29   hdr = 'QSREC06' )
+      ( scen = 'R2' col = 30   hdr = 'WTWTSTCD01' )
+      ( scen = 'R2' col = 31   hdr = 'WTWTSTCD02' )
+      ( scen = 'R2' col = 32   hdr = 'WTWTSTCD03' )
+      ( scen = 'R2' col = 33   hdr = 'WTWTSTCD04' )
+      ( scen = 'R2' col = 34   hdr = 'WTWTSTCD05' )
+      ( scen = 'R2' col = 35   hdr = 'WTWTSTCD06' )
+      ( scen = 'R2' col = 36   hdr = 'WTEXNR01' )
+      ( scen = 'R2' col = 37   hdr = 'WTEXNR02' )
+      ( scen = 'R2' col = 38   hdr = 'WTEXNR03' )
+      ( scen = 'R2' col = 39   hdr = 'WTEXNR04' )
+      ( scen = 'R2' col = 40   hdr = 'WTEXNR05' )
+      ( scen = 'R2' col = 41   hdr = 'WTEXNR06' )
+      ( scen = 'R2' col = 42   hdr = 'WTEXRT01' )
+      ( scen = 'R2' col = 43   hdr = 'WTEXRT02' )
+      ( scen = 'R2' col = 44   hdr = 'WTEXRT03' )
+      ( scen = 'R2' col = 45   hdr = 'WTEXRT04' )
+      ( scen = 'R2' col = 46   hdr = 'WTEXRT05' )
+      ( scen = 'R2' col = 47   hdr = 'WTEXRT06' )
+      ( scen = 'R2' col = 48   hdr = 'WTWTEXRS01' )
+      ( scen = 'R2' col = 49   hdr = 'WTWTEXRS02' )
+      ( scen = 'R2' col = 50   hdr = 'WTWTEXRS03' )
+      ( scen = 'R2' col = 51   hdr = 'WTWTEXRS04' )
+      ( scen = 'R2' col = 52   hdr = 'WTWTEXRS05' )
+      ( scen = 'R2' col = 53   hdr = 'WTWTEXRS06' )
+      ( scen = 'R2' col = 54   hdr = 'WTEXDF01' )
+      ( scen = 'R2' col = 55   hdr = 'WTEXDF02' )
+      ( scen = 'R2' col = 56   hdr = 'WTEXDF03' )
+      ( scen = 'R2' col = 57   hdr = 'WTEXDF04' )
+      ( scen = 'R2' col = 58   hdr = 'WTEXDF05' )
+      ( scen = 'R2' col = 59   hdr = 'WTEXDF06' )
+      ( scen = 'R2' col = 60   hdr = 'WTEXDT01' )
+      ( scen = 'R2' col = 61   hdr = 'WTEXDT02' )
+      ( scen = 'R2' col = 62   hdr = 'WTEXDT03' )
+      ( scen = 'R2' col = 63   hdr = 'WTEXDT04' )
+      ( scen = 'R2' col = 64   hdr = 'WTEXDT05' )
+      ( scen = 'R2' col = 65   hdr = 'WTEXDT06' )
+    ) TO rt.
+
+    " R3 - TAN details (21 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R3' col = 1    hdr = 'VENDOR' )
+      ( scen = 'R3' col = 2    hdr = 'COMPANY' )
+      ( scen = 'R3' col = 3    hdr = 'ADDRESS' )
+      ( scen = 'R3' col = 4    hdr = 'SECTIONCODE1' )
+      ( scen = 'R3' col = 5    hdr = 'SECTIONCODE2' )
+      ( scen = 'R3' col = 6    hdr = 'CERTIFICATE1' )
+      ( scen = 'R3' col = 7    hdr = 'CERTIFICATE2' )
+      ( scen = 'R3' col = 8    hdr = 'EXEMPTIONRATE1' )
+      ( scen = 'R3' col = 9    hdr = 'EXEMPTIONRATE2' )
+      ( scen = 'R3' col = 10   hdr = 'VALIDFROM1' )
+      ( scen = 'R3' col = 11   hdr = 'VALIDFROM2' )
+      ( scen = 'R3' col = 12   hdr = 'VALIDTO1' )
+      ( scen = 'R3' col = 13   hdr = 'VALIDTO2' )
+      ( scen = 'R3' col = 14   hdr = 'TAXTYPE1' )
+      ( scen = 'R3' col = 15   hdr = 'TAXTYPE2' )
+      ( scen = 'R3' col = 16   hdr = 'TAXCODE1' )
+      ( scen = 'R3' col = 17   hdr = 'TAXCODE2' )
+      ( scen = 'R3' col = 18   hdr = 'THRESHOLD1' )
+      ( scen = 'R3' col = 19   hdr = 'THRESHOLD2' )
+      ( scen = 'R3' col = 20   hdr = 'CURRENCY1' )
+      ( scen = 'R3' col = 21   hdr = 'CURRENCY2' )
+    ) TO rt.
+
+    " R4 - BANK Key creation (9 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R4' col = 1    hdr = 'FIELDTECHNICALNAME' )
+      ( scen = 'R4' col = 2    hdr = 'BANKS' )
+      ( scen = 'R4' col = 3    hdr = 'BANKL' )
+      ( scen = 'R4' col = 4    hdr = 'BANKA' )
+      ( scen = 'R4' col = 5    hdr = 'PROVZ' )
+      ( scen = 'R4' col = 6    hdr = 'STRAS' )
+      ( scen = 'R4' col = 7    hdr = 'ORT01' )
+      ( scen = 'R4' col = 8    hdr = 'BRNCH' )
+      ( scen = 'R4' col = 9    hdr = 'SWIFT' )
+    ) TO rt.
+
+    " R5 - Bank details update (8 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R5' col = 1    hdr = 'FIELDTECHNICALNAME' )
+      ( scen = 'R5' col = 2    hdr = 'LIFNR' )
+      ( scen = 'R5' col = 3    hdr = 'BUKRS' )
+      ( scen = 'R5' col = 4    hdr = 'BANKS' )
+      ( scen = 'R5' col = 5    hdr = 'BANKL' )
+      ( scen = 'R5' col = 6    hdr = 'BANKN' )
+      ( scen = 'R5' col = 7    hdr = 'KOINH' )
+      ( scen = 'R5' col = 8    hdr = 'IBAN' )
+    ) TO rt.
+
+    " R6 - Vendor extension (5 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R6' col = 1    hdr = 'FIELDTECHNICALNAME' )
+      ( scen = 'R6' col = 9    hdr = 'AKONT' )
+      ( scen = 'R6' col = 12   hdr = 'WAERS' )
+      ( scen = 'R6' col = 13   hdr = 'KALSK' )
+      ( scen = 'R6' col = 14   hdr = 'WEBRE' )
+    ) TO rt.
+
+    " R7 - CIN details (15 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R7' col = 1    hdr = 'VENDORACCOUNTNUMBER' )
+      ( scen = 'R7' col = 2    hdr = 'COMPANYCODE' )
+      ( scen = 'R7' col = 3    hdr = 'ADDRESSVIEW' )
+      ( scen = 'R7' col = 4    hdr = 'ECCNUMBER' )
+      ( scen = 'R7' col = 5    hdr = 'EXCISEREGISTRATIONNUMBER' )
+      ( scen = 'R7' col = 6    hdr = 'EXCISERANGE' )
+      ( scen = 'R7' col = 7    hdr = 'EXCISEDIVISION' )
+      ( scen = 'R7' col = 8    hdr = 'EXCISECOMMISSIONERATE' )
+      ( scen = 'R7' col = 9    hdr = 'CENTRALSALESTAXNUMBER' )
+      ( scen = 'R7' col = 10   hdr = 'LOCALSALESTAXNUMBER' )
+      ( scen = 'R7' col = 11   hdr = 'SERVICETAXREGISTRATIONNUMBER' )
+      ( scen = 'R7' col = 12   hdr = 'PERMANENTACCOUNTNUMBER' )
+      ( scen = 'R7' col = 13   hdr = 'SSISTATUS' )
+      ( scen = 'R7' col = 14   hdr = 'EXCTAXINDVENDOR' )
+      ( scen = 'R7' col = 15   hdr = 'TYPEOFVENDOR' )
+    ) TO rt.
+
+    " R8 - Patner function (35 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R8' col = 1    hdr = 'LIFNR' )
+      ( scen = 'R8' col = 2    hdr = 'BUKRS' )
+      ( scen = 'R8' col = 3    hdr = 'EKORG' )
+      ( scen = 'R8' col = 4    hdr = 'D0320' )
+      ( scen = 'R8' col = 5    hdr = 'USEZAV' )
+      ( scen = 'R8' col = 6    hdr = 'PARVW05' )
+      ( scen = 'R8' col = 7    hdr = 'PARVW06' )
+      ( scen = 'R8' col = 8    hdr = 'PARVW07' )
+      ( scen = 'R8' col = 9    hdr = 'PARVW08' )
+      ( scen = 'R8' col = 10   hdr = 'PARVW09' )
+      ( scen = 'R8' col = 11   hdr = 'PARVW10' )
+      ( scen = 'R8' col = 12   hdr = 'PARVW11' )
+      ( scen = 'R8' col = 13   hdr = 'PARVW12' )
+      ( scen = 'R8' col = 14   hdr = 'PARVW13' )
+      ( scen = 'R8' col = 15   hdr = 'PARVW14' )
+      ( scen = 'R8' col = 16   hdr = 'PARVW15' )
+      ( scen = 'R8' col = 17   hdr = 'GPARN05' )
+      ( scen = 'R8' col = 18   hdr = 'GPARN06' )
+      ( scen = 'R8' col = 19   hdr = 'GPARN07' )
+      ( scen = 'R8' col = 20   hdr = 'GPARN08' )
+      ( scen = 'R8' col = 21   hdr = 'GPARN09' )
+      ( scen = 'R8' col = 22   hdr = 'GPARN10' )
+      ( scen = 'R8' col = 23   hdr = 'GPARN11' )
+      ( scen = 'R8' col = 24   hdr = 'GPARN12' )
+      ( scen = 'R8' col = 25   hdr = 'GPARN13' )
+      ( scen = 'R8' col = 26   hdr = 'GPARN14' )
+      ( scen = 'R8' col = 27   hdr = 'GPARN15' )
+      ( scen = 'R8' col = 28   hdr = 'PARVW01' )
+      ( scen = 'R8' col = 29   hdr = 'PARVW02' )
+      ( scen = 'R8' col = 30   hdr = 'PARVW03' )
+      ( scen = 'R8' col = 31   hdr = 'PARVW04' )
+      ( scen = 'R8' col = 32   hdr = 'GPARN01' )
+      ( scen = 'R8' col = 33   hdr = 'GPARN02' )
+      ( scen = 'R8' col = 34   hdr = 'GPARN03' )
+      ( scen = 'R8' col = 35   hdr = 'GPARN04' )
+    ) TO rt.
+
+    " R9 - Block_Unblocked (9 identifiable headings)
+    APPEND LINES OF VALUE tt_hdr(
+      ( scen = 'R9' col = 1    hdr = 'TECHNAME' )
+      ( scen = 'R9' col = 2    hdr = 'LIFNR' )
+      ( scen = 'R9' col = 3    hdr = 'BUKRS' )
+      ( scen = 'R9' col = 4    hdr = 'EKORG' )
+      ( scen = 'R9' col = 5    hdr = 'SPERR' )
+      ( scen = 'R9' col = 6    hdr = 'SPERR1' )
+      ( scen = 'R9' col = 7    hdr = 'SPERM' )
+      ( scen = 'R9' col = 8    hdr = 'SPERM1' )
+      ( scen = 'R9' col = 9    hdr = 'SPERQ' )
+    ) TO rt.
+  ENDMETHOD.
+
+ENDCLASS.
+
 CLASS lcl_excel DEFINITION FINAL.
   PUBLIC SECTION.
+    "! Returns the data rows of the tab that carries this scenario's columns.
+    "! IT_HDR says which heading belongs above which column: the tab is chosen
+    "! by how many of those headings its heading line has - so the tab NAME
+    "! does not matter - and every cell is then taken from the column that
+    "! actually carries its heading, whatever position that is.
+    "! IV_SHEET is only the tie-breaker and the fallback.
     METHODS read
       IMPORTING iv_file       TYPE rlgrap-filename
                 iv_sheet      TYPE string
                 iv_from_pc    TYPE abap_bool
-      RETURNING VALUE(rt_row) TYPE tt_row
+                it_hdr        TYPE tt_hdr OPTIONAL
+      EXPORTING et_row        TYPE tt_row
+                ev_sheet      TYPE string
+                ev_moved      TYPE i
       RAISING   lcx_upl.
   PRIVATE SECTION.
+    TYPES: BEGIN OF ty_pos,
+             tgt TYPE i,
+             src TYPE i,
+           END OF ty_pos.
+
     METHODS load_bin IMPORTING iv_file TYPE rlgrap-filename iv_from_pc TYPE abap_bool
                      RETURNING VALUE(rv) TYPE xstring RAISING lcx_upl.
+
+    "! One worksheet as a table of rows, heading lines included.
+    METHODS sheet_rows
+      IMPORTING io_xl     TYPE REF TO cl_fdt_xl_spreadsheet
+                iv_name   TYPE string
+      RETURNING VALUE(rt) TYPE tt_row
+      RAISING   lcx_upl.
+
+    "! How many of the scenario's headings this line carries.
+    METHODS score
+      IMPORTING it_head   TYPE tt_cell
+                it_hdr    TYPE tt_hdr
+      RETURNING VALUE(rv) TYPE i.
 ENDCLASS.
 
 CLASS lcl_excel IMPLEMENTATION.
@@ -395,47 +741,13 @@ CLASS lcl_excel IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
-  METHOD read.
-    DATA(lv_x) = load_bin( iv_file = iv_file iv_from_pc = iv_from_pc ).
-
-    DATA lo_xl TYPE REF TO cl_fdt_xl_spreadsheet.
-    TRY.
-        lo_xl = NEW cl_fdt_xl_spreadsheet( document_name = CONV string( iv_file )
-                                           xdocument     = lv_x ).
-      CATCH cx_root INTO DATA(lx).
-        RAISE EXCEPTION NEW lcx_upl( |The file is not a readable .xlsx workbook: { lx->get_text( ) }| ).
-    ENDTRY.
-
-    lo_xl->if_fdt_doc_spreadsheet~get_worksheet_names( IMPORTING worksheet_names = DATA(lt_ws) ).
-
-    DATA lv_use TYPE string.
-    LOOP AT lt_ws INTO DATA(lv_ws).
-      IF to_upper( CONV string( lv_ws ) ) = to_upper( iv_sheet ).
-        lv_use = lv_ws.
-        EXIT.
-      ENDIF.
-    ENDLOOP.
-    " A workbook saved as a single sheet - which is what happens when one tab
-    " is copied out of the master workbook - keeps its "Sheet1" name. There is
-    " no ambiguity about which tab was meant, so use it and say so.
-    IF lv_use IS INITIAL AND lines( lt_ws ) = 1.
-      lv_use = lt_ws[ 1 ].
-    ENDIF.
-
-    IF lv_use IS INITIAL.
-      DATA lv_have TYPE string.
-      LOOP AT lt_ws INTO DATA(lv_n).
-        lv_have = COND string( WHEN lv_have IS INITIAL THEN lv_n ELSE |{ lv_have }, { lv_n }| ).
-      ENDLOOP.
-      RAISE EXCEPTION NEW lcx_upl(
-        |Tab "{ iv_sheet }" not found. This workbook has: { lv_have }| ).
-    ENDIF.
-
+  METHOD sheet_rows.
     DATA lo_ref TYPE REF TO data.
     TRY.
-        lo_ref = lo_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet( lv_use ).
+        lo_ref = io_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet( CONV #( iv_name ) ).
       CATCH cx_root INTO DATA(lx2).
-        RAISE EXCEPTION NEW lcx_upl( |Tab "{ iv_sheet }" could not be converted: { lx2->get_text( ) }| ).
+        RAISE EXCEPTION NEW lcx_upl(
+          |Tab "{ iv_name }" could not be converted: { lx2->get_text( ) }| ).
     ENDTRY.
 
     FIELD-SYMBOLS: <lt_tab> TYPE STANDARD TABLE,
@@ -443,14 +755,9 @@ CLASS lcl_excel IMPLEMENTATION.
                    <lv_val> TYPE any.
     ASSIGN lo_ref->* TO <lt_tab>.
     IF <lt_tab> IS NOT ASSIGNED.
-      RAISE EXCEPTION NEW lcx_upl( |Tab "{ iv_sheet }" is empty.| ).
+      RETURN.
     ENDIF.
 
-    " How many leading lines count as heading is a selection-screen setting,
-    " not an assumption: whether CL_FDT_XL_SPREADSHEET returns the heading
-    " row as its first line or consumes it as the column names is
-    " release-dependent. The dropped lines are kept in GT_SKIPPED and
-    " written to the log, so one run shows whether the setting is right.
     DATA lv_r TYPE i.
     LOOP AT <lt_tab> ASSIGNING <ls_lin>.
       lv_r = lv_r + 1.
@@ -467,17 +774,194 @@ CLASS lcl_excel IMPLEMENTATION.
         ENDIF.
         APPEND condense( CONV string( <lv_val> ) ) TO ls_row-cells.
       ENDDO.
+      APPEND ls_row TO rt.
+    ENDLOOP.
+  ENDMETHOD.
 
-      " Heading rows are dropped quietly - P_SKIP says how many.
-      IF lv_r <= p_skip.
+  METHOD score.
+    DATA lt_k TYPE SORTED TABLE OF string WITH NON-UNIQUE KEY table_line.
+    LOOP AT it_head INTO DATA(lv_h).
+      DATA(lv_k) = lcl_util=>squash( lv_h ).
+      IF lv_k IS NOT INITIAL.
+        INSERT lv_k INTO TABLE lt_k.
+      ENDIF.
+    ENDLOOP.
+    LOOP AT it_hdr INTO DATA(ls_w).
+      IF line_exists( lt_k[ table_line = CONV string( ls_w-hdr ) ] ).
+        rv = rv + 1.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD read.
+    CLEAR: et_row, ev_sheet, ev_moved.
+    DATA(lv_x) = load_bin( iv_file = iv_file iv_from_pc = iv_from_pc ).
+
+    DATA lo_xl TYPE REF TO cl_fdt_xl_spreadsheet.
+    TRY.
+        lo_xl = NEW cl_fdt_xl_spreadsheet( document_name = CONV string( iv_file )
+                                           xdocument     = lv_x ).
+      CATCH cx_root INTO DATA(lx).
+        RAISE EXCEPTION NEW lcx_upl( |The file is not a readable .xlsx workbook: { lx->get_text( ) }| ).
+    ENDTRY.
+
+    lo_xl->if_fdt_doc_spreadsheet~get_worksheet_names( IMPORTING worksheet_names = DATA(lt_ws) ).
+    IF lt_ws IS INITIAL.
+      RAISE EXCEPTION NEW lcx_upl( |{ iv_file } contains no worksheet.| ).
+    ENDIF.
+
+    " The tab whose name matches, if there is one. Names are compared on
+    " letters and digits only, so trailing blanks, capitalisation and spaces
+    " against underscores make no difference.
+    DATA lv_named TYPE string.
+    DATA(lv_want) = lcl_util=>squash( iv_sheet ).
+    LOOP AT lt_ws INTO DATA(lv_ws).
+      IF lcl_util=>squash( CONV string( lv_ws ) ) = lv_want.
+        lv_named = lv_ws.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+
+    " What decides is the heading line: over every tab, and over the first
+    " few lines of each, the line carrying most of this scenario's headings
+    " wins. That way the tab name does not matter, and neither does a title
+    " line sitting above the headings. Equally good tabs go to the one named
+    " for the scenario.
+    CONSTANTS lc_scan TYPE i VALUE 10.
+    DATA lv_use  TYPE string.
+    DATA lt_hit  TYPE tt_row.
+    DATA lv_best TYPE i.
+    DATA lv_hrow TYPE i.
+    IF it_hdr IS NOT INITIAL.
+      LOOP AT lt_ws INTO DATA(lv_w2).
+        DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = CONV string( lv_w2 ) ).
+        DATA(lv_max) = COND i( WHEN lines( lt_r ) < lc_scan THEN lines( lt_r )
+                               ELSE lc_scan ).
+        DO lv_max TIMES.
+          DATA(lv_i)  = sy-index.
+          DATA(lv_sc) = score( it_head = lt_r[ lv_i ]-cells it_hdr = it_hdr ).
+          IF lv_sc > lv_best
+          OR ( lv_sc > 0 AND lv_sc = lv_best AND lv_w2 = lv_named AND lv_use <> lv_named ).
+            lv_best = lv_sc.
+            lv_use  = lv_w2.
+            lt_hit  = lt_r.
+            lv_hrow = lv_i.
+          ENDIF.
+        ENDDO.
+      ENDLOOP.
+    ENDIF.
+
+    " Nothing recognisable - fall back to the name, then to the only tab
+    " there is, and to P_SKIP for the number of heading lines.
+    IF lv_best = 0.
+      CLEAR lt_hit.
+      lv_use  = lv_named.
+      lv_hrow = p_skip.
+      IF lv_use IS INITIAL AND lines( lt_ws ) = 1.
+        lv_use = lt_ws[ 1 ].
+      ENDIF.
+    ENDIF.
+
+    IF lv_use IS INITIAL.
+      DATA lv_have TYPE string.
+      LOOP AT lt_ws INTO DATA(lv_n).
+        lv_have = COND string( WHEN lv_have IS INITIAL THEN lv_n ELSE |{ lv_have }, { lv_n }| ).
+      ENDLOOP.
+      RAISE EXCEPTION NEW lcx_upl(
+        |No tab in this workbook carries the columns of "{ iv_sheet }". Tabs found: { lv_have }| ).
+    ENDIF.
+
+    IF lt_hit IS INITIAL.
+      lt_hit = sheet_rows( io_xl = lo_xl iv_name = lv_use ).
+    ENDIF.
+    ev_sheet = lv_use.
+    IF lt_hit IS INITIAL.
+      RAISE EXCEPTION NEW lcx_upl( |Tab "{ lv_use }" is empty.| ).
+    ENDIF.
+
+    " Bind each column to the position where its heading really is. A heading
+    " that appears twice on the tab is ambiguous and is left alone, as is one
+    " the file does not have at all - those columns keep their position.
+    TYPES: BEGIN OF ty_h, key TYPE string, col TYPE i, n TYPE i, END OF ty_h.
+    DATA lt_h   TYPE SORTED TABLE OF ty_h WITH UNIQUE KEY key.
+    DATA lt_pos TYPE SORTED TABLE OF ty_pos WITH UNIQUE KEY tgt.
+    DATA lt_src TYPE SORTED TABLE OF i WITH NON-UNIQUE KEY table_line.
+    IF lv_hrow > 0 AND lv_hrow <= lines( lt_hit ) AND it_hdr IS NOT INITIAL.
+      DATA lv_hc TYPE i.
+      DATA(lt_head) = lt_hit[ lv_hrow ]-cells.
+      LOOP AT lt_head INTO DATA(lv_ht).
+        lv_hc = sy-tabix.
+        DATA(lv_key) = lcl_util=>squash( lv_ht ).
+        IF lv_key IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        READ TABLE lt_h ASSIGNING FIELD-SYMBOL(<ls_h>) WITH KEY key = lv_key.
+        IF sy-subrc = 0.
+          <ls_h>-n = <ls_h>-n + 1.
+        ELSE.
+          INSERT VALUE ty_h( key = lv_key col = lv_hc n = 1 ) INTO TABLE lt_h.
+        ENDIF.
+      ENDLOOP.
+      LOOP AT it_hdr INTO DATA(ls_w).
+        READ TABLE lt_h INTO DATA(ls_h) WITH KEY key = CONV string( ls_w-hdr ).
+        IF sy-subrc = 0 AND ls_h-n = 1.
+          INSERT VALUE ty_pos( tgt = ls_w-col src = ls_h-col ) INTO TABLE lt_pos.
+          INSERT ls_h-col INTO TABLE lt_src.
+          IF ls_h-col <> ls_w-col.
+            ev_moved = ev_moved + 1.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    " Widest position the handlers may ask for.
+    DATA lv_wide TYPE i.
+    LOOP AT lt_pos INTO DATA(ls_p).
+      IF ls_p-tgt > lv_wide.
+        lv_wide = ls_p-tgt.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT lt_hit INTO DATA(ls_src).
+      IF ls_src-row <= lv_hrow.
         CONTINUE.
       ENDIF.
 
-      APPEND ls_row TO rt_row.
+      DATA ls_out TYPE ty_row.
+      CLEAR ls_out.
+      ls_out-row = ls_src-row.
+      IF lt_pos IS INITIAL.
+        ls_out-cells = ls_src-cells.
+      ELSE.
+        DATA(lv_n2) = COND i( WHEN lines( ls_src-cells ) > lv_wide
+                              THEN lines( ls_src-cells ) ELSE lv_wide ).
+        DO lv_n2 TIMES.
+          DATA(lv_t) = sy-index.
+          DATA lv_s TYPE i.
+          READ TABLE lt_pos INTO ls_p WITH KEY tgt = lv_t.
+          IF sy-subrc = 0.
+            lv_s = ls_p-src.
+          ELSEIF line_exists( lt_src[ table_line = lv_t ] ).
+            " This position has no heading of its own and the column sitting
+            " there belongs to another field - so there is nothing to read.
+            lv_s = 0.
+          ELSE.
+            lv_s = lv_t.
+          ENDIF.
+          DATA lv_v TYPE string.
+          CLEAR lv_v.
+          IF lv_s > 0 AND lv_s <= lines( ls_src-cells ).
+            lv_v = ls_src-cells[ lv_s ].
+          ENDIF.
+          APPEND lv_v TO ls_out-cells.
+        ENDDO.
+      ENDIF.
+
+      APPEND ls_out TO et_row.
     ENDLOOP.
 
-    IF rt_row IS INITIAL.
-      RAISE EXCEPTION NEW lcx_upl( |Tab "{ iv_sheet }" contains no rows.| ).
+    IF et_row IS INITIAL.
+      RAISE EXCEPTION NEW lcx_upl( |Tab "{ lv_use }" contains no rows below its heading.| ).
     ENDIF.
   ENDMETHOD.
 
@@ -2444,11 +2928,27 @@ START-OF-SELECTION.
     ENDIF.
   ENDIF.
 
+  DATA(gv_scen) = COND char2(
+    WHEN p_r1 = abap_true THEN 'R1'
+    WHEN p_r2 = abap_true THEN 'R2'
+    WHEN p_r3 = abap_true THEN 'R3'
+    WHEN p_r4 = abap_true THEN 'R4'
+    WHEN p_r5 = abap_true THEN 'R5'
+    WHEN p_r6 = abap_true THEN 'R6'
+    WHEN p_r7 = abap_true THEN 'R7'
+    WHEN p_r8 = abap_true THEN 'R8'
+    ELSE                       'R9' ).
+
   DATA lt_rows TYPE tt_row.
   TRY.
-      lt_rows = NEW lcl_excel( )->read( iv_file    = p_file
-                                        iv_sheet   = go_h->sheet( )
-                                        iv_from_pc = p_pc ).
+      NEW lcl_excel( )->read(
+        EXPORTING iv_file    = p_file
+                  iv_sheet   = go_h->sheet( )
+                  iv_from_pc = p_pc
+                  it_hdr     = lcl_hdr=>for( gv_scen )
+        IMPORTING et_row     = lt_rows
+                  ev_sheet   = DATA(gv_sheet)
+                  ev_moved   = DATA(gv_moved) ).
     CATCH lcx_upl INTO DATA(gx).
       " MESSAGE takes a data object, not an expression.
       DATA(gv_txt) = gx->get_text( ).
@@ -2457,8 +2957,16 @@ START-OF-SELECTION.
 
   IF lt_rows IS INITIAL.
     DATA gv_none TYPE string.
-    gv_none = |Tab "{ go_h->sheet( ) }" holds no data rows after the heading|.
+    gv_none = |Tab "{ gv_sheet }" holds no data rows below its heading|.
     MESSAGE gv_none TYPE 'I'.
+  ENDIF.
+
+  " Say so when the file's columns are not where the template has them - the
+  " data is read correctly either way, but it is worth knowing.
+  IF gv_moved > 0.
+    go_log->add( iv_row = 0 iv_ty = 'I'
+                 iv_txt = |{ gv_moved } column(s) sit elsewhere in this file than in the | &&
+                          |template - each was read from where its heading is| ).
   ENDIF.
 
   go_h->run( lt_rows ).
