@@ -1473,11 +1473,25 @@ CLASS lcl_base IMPLEMENTATION.
     cs_data-vendor-header-object_instance-lifnr = iv_lifnr.
     cs_data-vendor-header-object_task           = iv_task.
     cs_data-partner-header-object_task          = iv_task.
-    IF iv_task <> gc_i.
-      DATA(lv_guid) = mo_cfg->vend_guid( iv_lifnr ).
-      IF lv_guid IS NOT INITIAL.
-        cs_data-partner-header-object_instance-bpartnerguid = lv_guid.
-      ENDIF.
+
+    " The partner has to be identified in the message either way, or the API
+    " answers "Specify at least one number for the business partner"
+    " (message R11 123). A change names the partner by its GUID; a creation
+    " has no number yet - it comes from the grouping's range - so it is
+    " identified by a GUID generated here, which becomes the new partner's
+    " PARTNER_GUID.
+    DATA lv_guid TYPE bu_partner_guid.
+    IF iv_task = gc_i.
+      TRY.
+          lv_guid = cl_system_uuid=>if_system_uuid_static~create_uuid_x16( ).
+        CATCH cx_uuid_error.
+          CLEAR lv_guid.
+      ENDTRY.
+    ELSE.
+      lv_guid = mo_cfg->vend_guid( iv_lifnr ).
+    ENDIF.
+    IF lv_guid IS NOT INITIAL.
+      cs_data-partner-header-object_instance-bpartnerguid = lv_guid.
     ENDIF.
   ENDMETHOD.
 

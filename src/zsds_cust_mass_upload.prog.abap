@@ -844,6 +844,10 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     " customer account group creates. Maintained with SM30, views
     " CVIV_CUST_TO_BP1 and CVIV_CUST_TO_BP2. A creation must state the
     " grouping - it is what gives the new partner its number range.
+    " The customer number that ended up behind a GUID we created.
+    METHODS cust_by_guid IMPORTING iv_guid   TYPE bu_partner_guid
+                         RETURNING VALUE(rv) TYPE kunnr.
+
     METHODS bp_group    IMPORTING iv_ktokd  TYPE clike
                         RETURNING VALUE(rv) TYPE bu_group.
     TYPES tt_role TYPE STANDARD TABLE OF bu_role WITH EMPTY KEY.
@@ -1152,6 +1156,14 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD segment_curr.
     rv = VALUE #( mt_cur[ sgmnt = iv_sgmnt ]-waers OPTIONAL ).
+  ENDMETHOD.
+
+  METHOD cust_by_guid.
+    IF iv_guid IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE customer FROM cvi_cust_link
+      WHERE partner_guid = @iv_guid INTO @rv.
   ENDMETHOD.
 
   METHOD bp_group.
@@ -2858,14 +2870,27 @@ CLASS lcl_engine IMPLEMENTATION.
     DATA ls_bp TYPE bus_ei_extern.
     CLEAR ls_bp.
     ls_bp-header-object_task     = lv_task.
-    " A change has to say which partner it changes. Without the GUID the API
-    " treats the request as a creation and answers "Specify at least one
-    " number for the business partner".
-    IF lv_task <> gc_i AND lv_kunnr IS NOT INITIAL.
-      DATA(lv_guid) = lo_cfg->cust_guid( lv_kunnr ).
-      IF lv_guid IS NOT INITIAL.
-        ls_bp-header-object_instance-bpartnerguid = lv_guid.
-      ENDIF.
+
+    " The partner has to be identified in the message either way - the API
+    " answers "Specify at least one number for the business partner"
+    " otherwise (message R11 123). A change names the partner it changes by
+    " its GUID. A creation has no number yet, because the number comes from
+    " the grouping's range, so it is identified by a GUID generated here:
+    " that GUID becomes the new partner's PARTNER_GUID.
+    DATA lv_guid TYPE bu_partner_guid.
+    IF lv_task = gc_i.
+      TRY.
+          lv_guid = cl_system_uuid=>if_system_uuid_static~create_uuid_x16( ).
+        CATCH cx_uuid_error INTO DATA(lx_uuid).
+          DATA(lv_ut) = lx_uuid->get_text( ).
+          mo_log->add( iv_row = is_row-row iv_type = 'E' iv_text = lv_ut ).
+          RETURN.
+      ENDTRY.
+    ELSEIF lv_kunnr IS NOT INITIAL.
+      lv_guid = lo_cfg->cust_guid( lv_kunnr ).
+    ENDIF.
+    IF lv_guid IS NOT INITIAL.
+      ls_bp-header-object_instance-bpartnerguid = lv_guid.
     ENDIF.
     ls_bp-central_data-common-data-bp_control-category = gc_org.
 
@@ -2988,11 +3013,22 @@ CLASS lcl_engine IMPLEMENTATION.
                                  iv_kunnr = lv_kunnr ).
 
     " ---- 7. the licence record, only once the BP is safely in ----------
+    " A customer created with internal numbering has its number only after
+    " the save, and the GUID is what leads to it.
+    IF lv_ok = abap_true AND lv_task = gc_i AND lv_kunnr IS INITIAL
+       AND p_test = abap_false.
+      lv_kunnr = lo_cfg->cust_by_guid( lv_guid ).
+      IF lv_kunnr IS NOT INITIAL.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'S'
+                     iv_text = |Customer { lv_kunnr } created| ).
+      ENDIF.
+    ENDIF.
+
     IF lv_ok = abap_true AND mo_lic->touched( ) = abap_true.
       IF lv_kunnr IS INITIAL.
         mo_log->add( iv_row = is_row-row iv_type = 'W'
                      iv_struc = 'ZSD_LICENSE_CHK'
-                     iv_text = 'Licence data skipped - the customer number is assigned internally, so re-run this row in change mode' ).
+                     iv_text = 'Licence data skipped - the customer number is assigned internally and is not known in a test run; the productive run writes it' ).
       ELSE.
         mo_lic->save( iv_kunnr = lv_kunnr iv_row = is_row-row ).
       ENDIF.
