@@ -2473,12 +2473,16 @@ CLASS lcl_engine IMPLEMENTATION.
                          iv_text = |Tax category { lv_tatyp } is not configured for country { lv_aland }| ).
             CONTINUE.
           ENDIF.
+          DATA lv_ttask TYPE cmd_ei_object_task.
+          lv_ttask = gc_i.
+          IF lv_exists = abap_true
+             AND lo_cfg->has_knvi( iv_kunnr = lv_kunnr
+                                   iv_aland = lv_aland
+                                   iv_tatyp = lv_tatyp ) = abap_true.
+            lv_ttask = gc_u.
+          ENDIF.
           APPEND VALUE cmds_ei_tax_ind(
-            task              = COND #( WHEN lv_exists = abap_true
-                                         AND lo_cfg->has_knvi( iv_kunnr = lv_kunnr
-                                                               iv_aland = lv_aland
-                                                               iv_tatyp = lv_tatyp ) = abap_true
-                                        THEN gc_u ELSE gc_i )
+            task              = lv_ttask
             data_key-aland    = lv_aland
             data_key-tatyp    = lv_tatyp
             data-taxkd        = lv_cell
@@ -2562,24 +2566,29 @@ CLASS lcl_engine IMPLEMENTATION.
     " A role the partner already has is an update, a new one an insert.
     DATA(lv_bp) = COND bu_partner( WHEN lv_task <> gc_i AND lv_kunnr IS NOT INITIAL
                                    THEN lo_cfg->cust_bp( lv_kunnr ) ).
+    DATA lv_rtask TYPE cmd_ei_object_task.
+    lv_rtask = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
+                                              iv_role    = gc_role_fi ) = abap_true
+                       THEN gc_u ELSE gc_i ).
     APPEND VALUE bus_ei_bupa_roles(
-      task     = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
-                                                iv_role    = gc_role_fi ) = abap_true
-                         THEN gc_u ELSE gc_i )
+      task     = lv_rtask
       data_key = gc_role_fi ) TO ls_bp-central_data-role-roles.
     IF lv_vkorg IS NOT INITIAL.
+      lv_rtask = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
+                                                iv_role    = gc_role_sd ) = abap_true
+                         THEN gc_u ELSE gc_i ).
       APPEND VALUE bus_ei_bupa_roles(
-        task     = COND #( WHEN lo_cfg->has_role( iv_partner = lv_bp
-                                                  iv_role    = gc_role_sd ) = abap_true
-                           THEN gc_u ELSE gc_i )
+        task     = lv_rtask
         data_key = gc_role_sd ) TO ls_bp-central_data-role-roles.
     ENDIF.
 
     IF lv_adh IS NOT INITIAL.
+      DATA lv_itask TYPE cmd_ei_object_task.
+      lv_itask = COND #( WHEN lo_cfg->has_ident( iv_partner = lv_bp
+                                                 iv_cat     = gc_id_aadhaar ) = abap_true
+                         THEN gc_u ELSE gc_i ).
       APPEND VALUE bus_ei_bupa_identification(
-        task                            = COND #( WHEN lo_cfg->has_ident( iv_partner = lv_bp
-                                                                          iv_cat     = gc_id_aadhaar ) = abap_true
-                                                  THEN gc_u ELSE gc_i )
+        task                            = lv_itask
         data_key-identificationcategory = gc_id_aadhaar
         data_key-identificationnumber   = lv_adh
       ) TO ls_bp-central_data-ident_number-ident_numbers.
