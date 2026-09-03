@@ -55,6 +55,11 @@ TYPES: BEGIN OF ty_msg,
 " number into.
 CONSTANTS gc_id_aadhaar TYPE bu_id_type VALUE 'X90003'.
 
+" The task the extract interface expects on a read request. It is not the
+" task of a change - the maintain interface takes I or U - it is what tells
+" the extractor which record to assemble.
+CONSTANTS gc_task_read TYPE cmd_ei_object_task VALUE 'M'.
+
 " Data objects the SELECT-OPTIONS are built over, and the scenario the
 " proposed file name follows.
 DATA: gv_bp    TYPE bu_partner,
@@ -1331,8 +1336,13 @@ CLASS lcl_src IMPLEMENTATION.
 
   METHOD customer.
     CLEAR es_data.
+    " OBJECT_TASK has to be there as well as the number. Without it the
+    " extractor answers with an entry that carries no data at all - which is
+    " what produced a sample file holding only the key and the licence
+    " record, both of which are read here rather than through the interface.
     DATA ls_in TYPE cmds_ei_main.
-    APPEND VALUE cmds_ei_extern( header-object_instance-kunnr = iv_kunnr ) TO ls_in-customers.
+    APPEND VALUE cmds_ei_extern( header-object_task            = gc_task_read
+                                 header-object_instance-kunnr  = iv_kunnr ) TO ls_in-customers.
 
     DATA ls_out TYPE cmds_ei_main.
     DATA ls_err TYPE cvis_message.
@@ -1357,7 +1367,8 @@ CLASS lcl_src IMPLEMENTATION.
   METHOD vendor.
     CLEAR es_data.
     DATA ls_in TYPE vmds_ei_main.
-    APPEND VALUE vmds_ei_extern( header-object_instance-lifnr = iv_lifnr ) TO ls_in-vendors.
+    APPEND VALUE vmds_ei_extern( header-object_task           = gc_task_read
+                                 header-object_instance-lifnr = iv_lifnr ) TO ls_in-vendors.
 
     DATA ls_out TYPE vmds_ei_main.
     DATA ls_err TYPE cvis_message.
@@ -1889,13 +1900,32 @@ CLASS lcl_main IMPLEMENTATION.
     IF p_pc = abap_true.
       DATA(lt_bin) = cl_bcs_convert=>xstring_to_solix( iv_xstring ).
       cl_gui_frontend_services=>gui_download(
-        EXPORTING bin_filesize = xstrlen( iv_xstring )
-                  filename     = CONV string( p_file )
-                  filetype     = 'BIN'
-        CHANGING  data_tab     = lt_bin
-        EXCEPTIONS OTHERS      = 1 ).
+        EXPORTING bin_filesize            = xstrlen( iv_xstring )
+                  filename                = CONV string( p_file )
+                  filetype                = 'BIN'
+        CHANGING  data_tab                = lt_bin
+        EXCEPTIONS file_write_error        = 1
+                   no_batch                = 2
+                   gui_refuse_filetransfer = 3
+                   invalid_type            = 4
+                   no_authority            = 5
+                   access_denied           = 6
+                   disk_full               = 7
+                   file_not_found          = 8
+                   not_supported_by_gui    = 9
+                   error_no_gui            = 10
+                   OTHERS                  = 11 ).
       IF sy-subrc <> 0.
-        RAISE EXCEPTION NEW lcx_ext( |{ p_file } could not be written - is it open in Excel?| ).
+        DATA(lv_why) = SWITCH string( sy-subrc
+          WHEN 1  THEN 'the file could not be written - it is open in Excel, or read-only'
+          WHEN 2  THEN 'the program is running in the background, where there is no PC to write to'
+          WHEN 5  THEN 'no authorisation to write there'
+          WHEN 6  THEN 'access denied - the folder does not allow it'
+          WHEN 7  THEN 'the disk is full'
+          WHEN 8  THEN 'the folder does not exist'
+          WHEN 10 THEN 'there is no SAP GUI - write to the application server instead'
+          ELSE         |the download failed with reason { sy-subrc }| ).
+        RAISE EXCEPTION NEW lcx_ext( |{ p_file }: { lv_why }| ).
       ENDIF.
     ELSE.
       DATA lv_msg TYPE string.
