@@ -1415,9 +1415,9 @@ CLASS lcl_eng IMPLEMENTATION.
   METHOD constructor.
     mv_scen = iv_scen.
     mt_col  = lcl_map=>for( iv_scen ).
-    LOOP AT mt_col INTO DATA(ls_c).
-      IF ls_c-col > mv_wide.
-        mv_wide = ls_c-col.
+    LOOP AT mt_col INTO DATA(ls_cl).
+      IF ls_cl-col > mv_wide.
+        mv_wide = ls_cl-col.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
@@ -1426,10 +1426,10 @@ CLASS lcl_eng IMPLEMENTATION.
     DO mv_wide TIMES.
       APPEND INITIAL LINE TO rt.
     ENDDO.
-    LOOP AT mt_col INTO DATA(ls_c).
-      READ TABLE rt ASSIGNING FIELD-SYMBOL(<lv>) INDEX ls_c-col.
+    LOOP AT mt_col INTO DATA(ls_cl).
+      READ TABLE rt ASSIGNING FIELD-SYMBOL(<lv>) INDEX ls_cl-col.
       IF sy-subrc = 0.
-        <lv> = ls_c-hdr.
+        <lv> = ls_cl-hdr.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
@@ -1603,7 +1603,7 @@ CLASS lcl_eng IMPLEMENTATION.
                 WHEN 'TEL' OR 'MOB'.
                   LOOP AT ls_c-central_data-address-communication-phone-phone INTO DATA(ls_ph).
                     DATA(lv_mob) = xsdbool( ls_ph-contact-data-r_3_user = abap_true ).
-                    IF ( ls_col-fld = 'MOB' ) = lv_mob.
+                    IF xsdbool( ls_col-fld = 'MOB' ) = lv_mob.
                       lv_val = ls_ph-contact-data-telephone.
                       EXIT.
                     ENDIF.
@@ -1698,7 +1698,7 @@ CLASS lcl_eng IMPLEMENTATION.
     SELECT SINGLE zterm, vzskz FROM knb1
       WHERE kunnr = @is_key-kunnr INTO @DATA(ls_b1).
     SELECT SINGLE kvgr3 FROM knvv
-      WHERE kunnr = @is_key-kunnr INTO @DATA(ls_vv).
+      WHERE kunnr = @is_key-kunnr INTO @DATA(lv_kvgr3).
 
     LOOP AT lt_sgm INTO DATA(ls_s) WHERE credit_sgmnt <> '0000'.
       IF lines( mt_row ) >= p_max.
@@ -1735,7 +1735,7 @@ CLASS lcl_eng IMPLEMENTATION.
             ENDCASE.
           WHEN 'S'.
             IF ls_col-fld = 'KVGR3'.
-              lv_val = ls_vv-kvgr3.
+              lv_val = lv_kvgr3.
             ENDIF.
         ENDCASE.
         put( EXPORTING iv_col = ls_col-col iv_val = lv_val CHANGING cs_row = ls_row ).
@@ -1910,7 +1910,7 @@ CLASS lcl_main IMPLEMENTATION.
         lo_alv->display( ).
       CATCH cx_salv_msg cx_salv_not_found.
         LOOP AT lt_msg INTO DATA(ls_m).
-          WRITE: / ls_m-key, ls_m-message.
+          WRITE: / ls_m-objkey, ls_m-message.
         ENDLOOP.
     ENDTRY.
   ENDMETHOD.
