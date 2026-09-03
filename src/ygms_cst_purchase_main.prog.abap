@@ -942,9 +942,10 @@ FORM build_alv_display_table.
         LOOP AT lt_valid_map INTO ls_vmap_chk
           WHERE location_id   = ls_ongc_rcpt-location_id
             AND gail_material = ls_ongc_rcpt-material
-            AND ongc_material = ls_ongc_rcpt-ongc_material
-            AND static        = 'X'.
-          lv_skip_static = abap_true.
+            AND ongc_material = ls_ongc_rcpt-ongc_material.
+          IF ls_vmap_chk-static = 'X' OR ls_vmap_chk-ncst = 'X'.
+            lv_skip_static = abap_true.
+          ENDIF.
         ENDLOOP.
         IF lv_skip_static = abap_true.
           CONTINUE.
