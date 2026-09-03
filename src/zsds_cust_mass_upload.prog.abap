@@ -1871,12 +1871,27 @@ CLASS lcl_cvis DEFINITION FINAL.
       RETURNING VALUE(rv) TYPE abap_bool.
   PRIVATE SECTION.
     DATA mo_log TYPE REF TO lcl_log.
+
+    " The business partner keeps a global memory for the logical unit of work
+    " that has just been closed - including the save mode. A COMMIT does not
+    " clear it, and the next row is then refused with "Parameter IV_X_SAVE is
+    " ' ' for FM BUPA_CREATE_FROM_DATA. It should be 'A'". Initialising the
+    " memory gives every row a clean start.
+    METHODS reset_bp.
 ENDCLASS.
 
 CLASS lcl_cvis IMPLEMENTATION.
 
   METHOD constructor.
     mo_log = io_log.
+  ENDMETHOD.
+
+  METHOD reset_bp.
+    TRY.
+        CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
+      CATCH cx_sy_dyn_call_illegal_func.
+        RETURN.
+    ENDTRY.
   ENDMETHOD.
 
   METHOD post.
@@ -1920,6 +1935,7 @@ CLASS lcl_cvis IMPLEMENTATION.
           IMPORTING e_return   = lt_ret ).
       CATCH cx_root INTO DATA(lx2).
         ROLLBACK WORK.
+        reset_bp( ).
         mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
                      iv_text = |Maintain failed: { lx2->get_text( ) }| ).
         rv = abap_false.
@@ -1950,15 +1966,20 @@ CLASS lcl_cvis IMPLEMENTATION.
 
     IF rv = abap_false.
       ROLLBACK WORK.
+      reset_bp( ).
       RETURN.
     ENDIF.
 
     IF p_test = abap_true.
       ROLLBACK WORK.
+      reset_bp( ).
       mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                    iv_text = 'Test run OK - customer would be posted' ).
     ELSE.
-      COMMIT WORK AND WAIT.
+      " BAPI_TRANSACTION_COMMIT, not a bare COMMIT WORK: the business
+      " partner hangs its own end-of-LUW processing off it.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+      reset_bp( ).
       mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                    iv_text = 'Customer posted' ).
     ENDIF.
@@ -2136,9 +2157,20 @@ CLASS lcl_credit DEFINITION FINAL.
                 iv_row     TYPE i.
   PRIVATE SECTION.
     DATA mo_log TYPE REF TO lcl_log.
+    " Same reason as in LCL_CVIS: the partner memory has to be initialised
+    " once the unit of work is closed, or the next row is refused.
+    METHODS reset_bp.
 ENDCLASS.
 
 CLASS lcl_credit IMPLEMENTATION.
+
+  METHOD reset_bp.
+    TRY.
+        CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
+      CATCH cx_sy_dyn_call_illegal_func.
+        RETURN.
+    ENDTRY.
+  ENDMETHOD.
 
   METHOD constructor.
     mo_log = io_log.
@@ -2192,17 +2224,20 @@ CLASS lcl_credit IMPLEMENTATION.
 
         IF p_test = abap_true.
           CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+          reset_bp( ).
           mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                        iv_text = |Test run OK - segment { iv_sgmnt } would be updated| ).
         ELSE.
           " SAVE_ALL alone does not commit - the BAPI commit is required.
           CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+          reset_bp( ).
           mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                        iv_text = |Credit data updated for segment { iv_sgmnt }| ).
         ENDIF.
 
       CATCH cx_root INTO DATA(lx).
         CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+        reset_bp( ).
         mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
                      iv_text = |Credit update failed: { lx->get_text( ) }| ).
     ENDTRY.

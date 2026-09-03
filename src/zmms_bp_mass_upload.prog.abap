@@ -1370,6 +1370,12 @@ CLASS lcl_cvis DEFINITION FINAL.
                 is_data TYPE cvis_ei_extern
       RETURNING VALUE(rv_ok) TYPE abap_bool.
   PRIVATE SECTION.
+    " The business partner keeps a global memory for the logical unit of work
+    " that has just been closed - including the save mode. A COMMIT does not
+    " clear it, and the next row is then refused with "Parameter IV_X_SAVE is
+    " ' ' for FM BUPA_CREATE_FROM_DATA. It should be 'A'". Initialising the
+    " memory gives every row a clean start.
+    METHODS reset_bp.
     DATA mo_log TYPE REF TO lcl_log.
 ENDCLASS.
 
@@ -1377,6 +1383,14 @@ CLASS lcl_cvis IMPLEMENTATION.
 
   METHOD constructor.
     mo_log = io_log.
+  ENDMETHOD.
+
+  METHOD reset_bp.
+    TRY.
+        CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
+      CATCH cx_sy_dyn_call_illegal_func.
+        RETURN.
+    ENDTRY.
   ENDMETHOD.
 
   METHOD post.
@@ -1450,15 +1464,20 @@ CLASS lcl_cvis IMPLEMENTATION.
 
     IF rv_ok = abap_false.
       ROLLBACK WORK.
+      reset_bp( ).
       RETURN.
     ENDIF.
 
     IF p_test = abap_true.
       ROLLBACK WORK.
+      reset_bp( ).
       mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
                    iv_ty = 'S' iv_txt = 'Test run OK - would post' ).
     ELSE.
-      COMMIT WORK AND WAIT.
+      " BAPI_TRANSACTION_COMMIT, not a bare COMMIT WORK: the business partner
+      " hangs its own end-of-LUW processing off it.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+      reset_bp( ).
       mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
                    iv_ty = 'S' iv_txt = 'Posted successfully' ).
     ENDIF.
