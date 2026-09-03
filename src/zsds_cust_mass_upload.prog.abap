@@ -393,6 +393,13 @@ CLASS lcl_util IMPLEMENTATION.
   METHOD squash.
     rv = to_upper( CONV string( iv_in ) ).
     REPLACE ALL OCCURRENCES OF PCRE '[^A-Z0-9]' IN rv WITH ''.
+    " The key is kept in a 40 character field, so a longer heading has to be
+    " cut to the same length here - otherwise the file's key is 41 characters
+    " long, the map's is 40, and a column with a long heading could never
+    " match. "Key for sorting according to assignment numbers" is one.
+    IF strlen( rv ) > 40.
+      rv = rv(40).
+    ENDIF.
   ENDMETHOD.
 
   METHOD copy_like.

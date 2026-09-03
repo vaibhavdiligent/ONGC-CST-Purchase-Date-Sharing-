@@ -16,7 +16,8 @@ GENERIC = {'any','clike','string','i','abap_bool','csequence','numeric','simple'
 STRINGY = ('lcl_util=>cell(', 'to_upper(', 'to_lower(', 'condense(', 'lcl_util=>squash(')
 
 findings = []
-for p in ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap']:
+for p in ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap',
+            'src/zbcs_mass_upload_extract.prog.abap']:
     src = open(p, encoding='utf-8').read()
     lines = src.split('\n')
 
