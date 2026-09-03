@@ -285,6 +285,13 @@ CLASS lcl_util DEFINITION FINAL.
       IMPORTING iv_in     TYPE clike
       RETURNING VALUE(rv) TYPE string.
 
+    " A one character flag written as a word. Excel turns a tick into TRUE
+    " and some files carry YES or 1, all of which would land in a CHAR 1
+    " field as its first letter - T, Y, 1 - none of which SAP reads as set.
+    CLASS-METHODS flag
+      IMPORTING iv_in     TYPE clike
+      RETURNING VALUE(rv) TYPE string.
+
     CLASS-METHODS is_empty
       IMPORTING is_row    TYPE ty_row
       RETURNING VALUE(rv) TYPE abap_bool.
@@ -313,24 +320,60 @@ CLASS lcl_util IMPLEMENTATION.
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
+
+    " Excel hands a date over in whatever shape the cell had: with a time
+    " behind it, with slashes or dashes, the year in front, or - when the
+    " cell was a real date and the format was lost - as its serial number.
+    IF lv CS ' '.
+      SPLIT lv AT ` ` INTO lv DATA(lv_rest).
+    ENDIF.
     REPLACE ALL OCCURRENCES OF '/' IN lv WITH '.'.
     REPLACE ALL OCCURRENCES OF '-' IN lv WITH '.'.
+
     IF lv CS '.'.
-      SPLIT lv AT '.' INTO DATA(lv_d) DATA(lv_m) DATA(lv_y).
+      SPLIT lv AT '.' INTO DATA(lv_1) DATA(lv_2) DATA(lv_3).
+      IF lv_1 IS INITIAL OR lv_2 IS INITIAL OR lv_3 IS INITIAL
+         OR lv_1 CN '0123456789' OR lv_2 CN '0123456789' OR lv_3 CN '0123456789'.
+        RETURN.
+      ENDIF.
+
+      DATA: lv_d TYPE string,
+            lv_m TYPE string,
+            lv_y TYPE string.
+      IF strlen( lv_1 ) = 4.
+        lv_y = lv_1. lv_m = lv_2. lv_d = lv_3.        " 2026-12-31
+      ELSEIF CONV i( lv_1 ) > 12 OR CONV i( lv_2 ) <= 12.
+        lv_d = lv_1. lv_m = lv_2. lv_y = lv_3.        " 31.12.2026
+      ELSE.
+        lv_m = lv_1. lv_d = lv_2. lv_y = lv_3.        " 12/31/2026
+      ENDIF.
       IF strlen( lv_y ) = 2.
         " Two-digit years in these templates are always this century.
         lv_y = |20{ lv_y }|.
       ENDIF.
-      IF lv_d CO '0123456789' AND lv_m CO '0123456789' AND lv_y CO '0123456789'
-         AND lv_d IS NOT INITIAL AND lv_m IS NOT INITIAL AND strlen( lv_y ) = 4.
-        rv = |{ lv_y }{ lv_m ALPHA = IN WIDTH = 2 }{ lv_d ALPHA = IN WIDTH = 2 }|.
+      IF strlen( lv_y ) <> 4.
+        RETURN.
       ENDIF.
+      rv = |{ lv_y }{ lv_m ALPHA = IN WIDTH = 2 }{ lv_d ALPHA = IN WIDTH = 2 }|.
+
     ELSEIF strlen( lv ) = 8 AND lv CO '0123456789'.
       rv = lv.
+
+    ELSEIF strlen( lv ) BETWEEN 4 AND 6 AND lv CO '0123456789'.
+      " A spreadsheet serial: day 1 is 01.01.1900, and the sheet counts a
+      " 29.02.1900 that never existed, which is why the epoch is the 30th
+      " of December 1899. Only a sensible range is taken.
+      DATA(lv_ser) = CONV i( lv ).
+      IF lv_ser >= 20000 AND lv_ser <= 80000.
+        DATA lv_base TYPE d VALUE '18991230'.
+        DATA lv_dat  TYPE d.
+        lv_dat = lv_base + lv_ser.
+        rv = lv_dat.
+      ENDIF.
     ENDIF.
-    " Guard against 20260231 and friends without depending on a helper
-    " class signature: a real date survives a round trip through a date
-    " field, an invalid one does not.
+
+    " Guard against 20260231 and friends: a real date survives a round trip
+    " through a date field, an invalid one does not.
     IF rv IS NOT INITIAL.
       DATA lv_chk TYPE d.
       DATA lv_days TYPE i.
@@ -348,19 +391,62 @@ CLASS lcl_util IMPLEMENTATION.
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    REPLACE ALL OCCURRENCES OF ',' IN lv WITH ``.
-    " Not REPLACE ... OF ' ': a text-field literal drops its trailing blanks,
-    " so the search pattern is empty and REPLACE dumps with
-    " CX_SY_REPLACE_INFINITE_LOOP. CONDENSE NO-GAPS removes the blanks
-    " without that trap.
     CONDENSE lv NO-GAPS.
+
+    " A trailing minus is how SAP writes a negative number, and Excel hands
+    " it over that way too.
+    DATA(lv_neg) = abap_false.
+    IF substring( val = lv off = strlen( lv ) - 1 len = 1 ) = '-'.
+      lv_neg = abap_true.
+      lv = substring( val = lv len = strlen( lv ) - 1 ).
+    ENDIF.
+
+    " Which separator is the decimal one: the LAST of the two. 500,000.00
+    " and 500.000,00 are the same number written in two conventions, and
+    " taking the comma out of both would turn the second into 500.00.
+    DATA(lv_dot) = 0.
+    DATA(lv_com) = 0.
+    FIND ALL OCCURRENCES OF '.' IN lv MATCH COUNT DATA(lv_ndot).
+    FIND ALL OCCURRENCES OF ',' IN lv MATCH COUNT DATA(lv_ncom).
+    IF lv_ndot > 0.
+      FIND ALL OCCURRENCES OF '.' IN lv RESULTS DATA(lt_dot).
+      lv_dot = lt_dot[ lines( lt_dot ) ]-offset + 1.
+    ENDIF.
+    IF lv_ncom > 0.
+      FIND ALL OCCURRENCES OF ',' IN lv RESULTS DATA(lt_com).
+      lv_com = lt_com[ lines( lt_com ) ]-offset + 1.
+    ENDIF.
+
+    IF lv_dot > 0 AND lv_com > 0.
+      IF lv_com > lv_dot.
+        REPLACE ALL OCCURRENCES OF '.' IN lv WITH ``.
+        REPLACE ALL OCCURRENCES OF ',' IN lv WITH '.'.
+      ELSE.
+        REPLACE ALL OCCURRENCES OF ',' IN lv WITH ``.
+      ENDIF.
+    ELSEIF lv_ncom = 1.
+      " One comma and only two digits behind it is a decimal comma;
+      " anything else is a thousands separator.
+      IF strlen( lv ) - lv_com = 2.
+        REPLACE ALL OCCURRENCES OF ',' IN lv WITH '.'.
+      ELSE.
+        REPLACE ALL OCCURRENCES OF ',' IN lv WITH ``.
+      ENDIF.
+    ELSEIF lv_ncom > 1.
+      REPLACE ALL OCCURRENCES OF ',' IN lv WITH ``.
+    ENDIF.
+
     TRY.
         rv = lv.
       CATCH cx_sy_conversion_error.
         " The superclass, so an overflow is caught as well as a value that
         " is not a number at all.
         CLEAR rv.
+        RETURN.
     ENDTRY.
+    IF lv_neg = abap_true.
+      rv = rv * -1.
+    ENDIF.
   ENDMETHOD.
 
   METHOD to_int.
@@ -427,6 +513,20 @@ CLASS lcl_util IMPLEMENTATION.
       <lv_t>  = <lv_f>.
       <lv_tx> = <lv_fx>.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD flag.
+    DATA(lv) = to_upper( condense( CONV string( iv_in ) ) ).
+    rv = lv.
+    IF strlen( lv ) <= 1.
+      RETURN.
+    ENDIF.
+    CASE lv.
+      WHEN 'TRUE' OR 'YES' OR 'JA' OR 'Y' OR 'J' OR '1' OR 'SET' OR 'CHECKED'.
+        rv = 'X'.
+      WHEN 'FALSE' OR 'NO' OR 'NEIN' OR 'N' OR '0' OR 'UNCHECKED'.
+        CLEAR rv.
+    ENDCASE.
   ENDMETHOD.
 
   METHOD is_empty.
@@ -2646,7 +2746,14 @@ CLASS lcl_engine IMPLEMENTATION.
         WHEN 'TT'.
           <lv_t> = lcl_cfg=>get( )->title_key( lv_in ).
         WHEN OTHERS.
-          <lv_t> = lv_in.
+          " A word in a one character field is a flag written out in full.
+          DATA lv_w TYPE i.
+          DESCRIBE FIELD <lv_t> LENGTH lv_w IN CHARACTER MODE.
+          IF lv_w = 1 AND strlen( lv_in ) > 1.
+            <lv_t> = lcl_util=>flag( lv_in ).
+          ELSE.
+            <lv_t> = lv_in.
+          ENDIF.
       ENDCASE.
     ENDIF.
 
