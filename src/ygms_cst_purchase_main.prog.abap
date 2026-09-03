@@ -958,7 +958,7 @@ FORM build_alv_display_table.
         LOOP AT lt_valid_map INTO ls_vmap_chk
           WHERE location_id   = <fs_ongc_pop>-location_id
             AND gail_material = <fs_ongc_pop>-material.
-          IF ls_vmap_chk-static = 'X'.
+          IF ls_vmap_chk-static = 'X' OR ls_vmap_chk-ncst = 'X'.
             CONTINUE.
           ENDIF.
           <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
@@ -970,7 +970,8 @@ FORM build_alv_display_table.
           LOOP AT lt_valid_map INTO ls_vmap_chk
             WHERE location_id   = <fs_ongc_pop>-location_id
               AND gail_material = <fs_ongc_pop>-material.
-            IF ls_vmap_chk-static = 'X' AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code.
+            IF ( ls_vmap_chk-static = 'X' AND ls_vmap_chk-state <> <fs_ongc_pop>-state_code )
+              OR ls_vmap_chk-ncst = 'X'.
               CONTINUE.
             ENDIF.
             <fs_ongc_pop>-ongc_material = ls_vmap_chk-ongc_material.
