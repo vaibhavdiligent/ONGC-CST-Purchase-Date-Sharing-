@@ -65,7 +65,11 @@ DATA: gv_bp    TYPE bu_partner,
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
+" All sixteen scenarios are one radio button group, and a group cannot be
+" split over two blocks - so they share a block, with a heading line above
+" each half.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+SELECTION-SCREEN COMMENT /1(60) TEXT-002.
 PARAMETERS: p_c1 RADIOBUTTON GROUP g1 DEFAULT 'X',
             p_c2 RADIOBUTTON GROUP g1,
             p_c3 RADIOBUTTON GROUP g1,
@@ -73,9 +77,8 @@ PARAMETERS: p_c1 RADIOBUTTON GROUP g1 DEFAULT 'X',
             p_c5 RADIOBUTTON GROUP g1,
             p_c6 RADIOBUTTON GROUP g1,
             p_c7 RADIOBUTTON GROUP g1.
-SELECTION-SCREEN END OF BLOCK b1.
-
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+SELECTION-SCREEN SKIP.
+SELECTION-SCREEN COMMENT /1(60) TEXT-003.
 PARAMETERS: p_v1 RADIOBUTTON GROUP g1,
             p_v2 RADIOBUTTON GROUP g1,
             p_v3 RADIOBUTTON GROUP g1,
@@ -85,21 +88,21 @@ PARAMETERS: p_v1 RADIOBUTTON GROUP g1,
             p_v7 RADIOBUTTON GROUP g1,
             p_v8 RADIOBUTTON GROUP g1,
             p_v9 RADIOBUTTON GROUP g1.
-SELECTION-SCREEN END OF BLOCK b2.
+SELECTION-SCREEN END OF BLOCK b1.
 
-SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-004.
 SELECT-OPTIONS: s_bp    FOR gv_bp    NO INTERVALS,
                 s_kunnr FOR gv_kunnr NO INTERVALS,
                 s_lifnr FOR gv_lifnr NO INTERVALS.
 PARAMETERS:     p_max   TYPE i DEFAULT 20.
-SELECTION-SCREEN END OF BLOCK b3.
+SELECTION-SCREEN END OF BLOCK b2.
 
-SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-005.
 PARAMETERS: p_file TYPE rlgrap-filename LOWER CASE,
             p_pc   RADIOBUTTON GROUP g2 DEFAULT 'X',
             p_srv  RADIOBUTTON GROUP g2,
             p_blank AS CHECKBOX.
-SELECTION-SCREEN END OF BLOCK b4.
+SELECTION-SCREEN END OF BLOCK b3.
 
 *----------------------------------------------------------------------*
 * Exception

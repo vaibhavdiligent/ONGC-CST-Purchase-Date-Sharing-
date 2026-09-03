@@ -20,26 +20,26 @@
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
-     <ENTRY>Customer master  ZSDS_CUST_MASS_UPLOAD</ENTRY>
-     <LENGTH>38</LENGTH>
+     <ENTRY>Scenario</ENTRY>
+     <LENGTH>8</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>002</KEY>
-     <ENTRY>Supplier master  ZMMS_BP_MASS_UPLOAD</ENTRY>
-     <LENGTH>36</LENGTH>
+     <ENTRY>Customer master - ZSDS_CUST_MASS_UPLOAD</ENTRY>
+     <LENGTH>39</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>003</KEY>
-     <ENTRY>Which master records</ENTRY>
-     <LENGTH>20</LENGTH>
+     <ENTRY>Supplier master - ZMMS_BP_MASS_UPLOAD</ENTRY>
+     <LENGTH>37</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>004</KEY>
-     <ENTRY>Output</ENTRY>
-     <LENGTH>6</LENGTH>
+     <ENTRY>Which master records</ENTRY>
+     <LENGTH>20</LENGTH>
     </item>
     <item>
      <ID>S</ID>
@@ -184,6 +184,12 @@
      <KEY>P_BLANK</KEY>
      <ENTRY>P_BLANK D       .Headings only (empty template)</ENTRY>
      <LENGTH>30</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>005</KEY>
+     <ENTRY>Output</ENTRY>
+     <LENGTH>6</LENGTH>
     </item>
    </TPOOL>
   </asx:values>
