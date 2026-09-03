@@ -158,6 +158,17 @@ CLASS lcl_util IMPLEMENTATION.
 
     DATA(lv_kind) = cl_abap_typedescr=>describe_by_data( <lv> )->type_kind.
 
+    " A column name can land on a table or a structure inside the master
+    " data - there is no text for those, and assigning one to a string
+    " would terminate the program.
+    IF lv_kind = cl_abap_typedescr=>typekind_table
+    OR lv_kind = cl_abap_typedescr=>typekind_struct1
+    OR lv_kind = cl_abap_typedescr=>typekind_struct2
+    OR lv_kind = cl_abap_typedescr=>typekind_oref
+    OR lv_kind = cl_abap_typedescr=>typekind_dref.
+      RETURN.
+    ENDIF.
+
     IF lv_kind = cl_abap_typedescr=>typekind_date.
       DATA lv_d TYPE d.
       lv_d = <lv>.
@@ -209,9 +220,9 @@ CLASS lcl_util IMPLEMENTATION.
     REPLACE ALL OCCURRENCES OF '"'  IN rv WITH '&quot;'.
     REPLACE ALL OCCURRENCES OF `'`  IN rv WITH '&apos;'.
     " Tabs and line breaks inside a cell would break the sheet.
-    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf   IN rv WITH ' '.
-    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>newline IN rv WITH ' '.
-    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN rv WITH ' '.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf   IN rv WITH ` `.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>newline IN rv WITH ` `.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN rv WITH ` `.
   ENDMETHOD.
 
   METHOD col_letter.
@@ -279,7 +290,7 @@ CLASS lcl_xlsx IMPLEMENTATION.
   METHOD build.
     " Excel limits a sheet name to 31 characters and forbids : \ / ? * [ ]
     DATA(lv_name) = condense( CONV string( iv_sheet ) ).
-    REPLACE ALL OCCURRENCES OF PCRE '[:\\\\/?*\[\]]' IN lv_name WITH ' '.
+    REPLACE ALL OCCURRENCES OF PCRE '[:\\\\/?*\[\]]' IN lv_name WITH ` `.
     IF strlen( lv_name ) > 31.
       lv_name = lv_name(31).
     ENDIF.
@@ -389,7 +400,10 @@ CLASS lcl_map IMPLEMENTATION.
 
   METHOD name.
     rv = |{ sheet( iv_scen ) }_sample|.
-    REPLACE ALL OCCURRENCES OF ' ' IN rv WITH '_'.
+    " Backquotes, not quotes: a text field literal drops its trailing
+    " blanks, so ' ' is an empty search pattern and REPLACE terminates with
+    " CX_SY_REPLACE_INFINITE_LOOP.
+    REPLACE ALL OCCURRENCES OF ` ` IN rv WITH `_`.
   ENDMETHOD.
 
   METHOD build.
