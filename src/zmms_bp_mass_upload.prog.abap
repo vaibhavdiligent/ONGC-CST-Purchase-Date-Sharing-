@@ -242,7 +242,7 @@ CLASS lcl_util IMPLEMENTATION.
       " A word in a one character field is a flag written out in full.
       DATA lv_w TYPE i.
       DESCRIBE FIELD <lv_d> LENGTH lv_w IN CHARACTER MODE.
-      DATA(lv_v) = CONV string( iv_value ).
+      DATA(lv_v) = iv_value.        " already a string - no CONV needed
       IF lv_w = 1 AND strlen( condense( lv_v ) ) > 1.
         lv_v = flag( lv_v ).
       ENDIF.
@@ -1665,6 +1665,12 @@ CLASS lcl_base DEFINITION ABSTRACT.
     METHODS header
       IMPORTING iv_lifnr TYPE lifnr
                 iv_task  TYPE cmd_ei_object_task
+      " The GUID is handed back rather than read off the header again:
+      " BUS_EI_INSTANCE-BPARTNERGUID is BU_PARTNER_GUID_BAPI, a CHAR 32
+      " holding the hexadecimal digits, and the link table's PARTNER_GUID
+      " is BU_PARTNER_GUID, a RAW 16. The two do not convert into one
+      " another on their own.
+      EXPORTING ev_guid  TYPE bu_partner_guid
       CHANGING  cs_data  TYPE cvis_ei_extern.
 
     "! Gross merge - existing LFBK rows that are not in the file must be sent
@@ -1719,6 +1725,7 @@ CLASS lcl_base IMPLEMENTATION.
     IF lv_guid IS NOT INITIAL.
       cs_data-partner-header-object_instance-bpartnerguid = lv_guid.
     ENDIF.
+    ev_guid = lv_guid.
   ENDMETHOD.
 
   METHOD merge_banks.
@@ -2039,8 +2046,11 @@ CLASS lcl_h_create IMPLEMENTATION.
       " ---- build ----
       DATA ls_data TYPE cvis_ei_extern.
       CLEAR ls_data.
+      DATA lv_guid TYPE bu_partner_guid.
+      CLEAR lv_guid.
       header( EXPORTING iv_lifnr = lv_lifnr
                         iv_task  = COND #( WHEN lv_lifnr IS INITIAL THEN gc_i ELSE gc_u )
+              IMPORTING ev_guid  = lv_guid
               CHANGING  cs_data  = ls_data ).
 
       fill_partner( EXPORTING is_row = ls_row iv_ktokk = lv_ktokk CHANGING cs_data = ls_data ).
@@ -2132,8 +2142,7 @@ CLASS lcl_h_create IMPLEMENTATION.
       " back to it, so the run says which vendor it made instead of leaving
       " the column empty.
       IF lv_ok = abap_true AND lv_lifnr IS INITIAL AND p_test = abap_false.
-        DATA(lv_new) = mo_cfg->vend_by_guid(
-                         ls_data-partner-header-object_instance-bpartnerguid ).
+        DATA(lv_new) = mo_cfg->vend_by_guid( lv_guid ).
         IF lv_new IS INITIAL.
           mo_log->add( iv_row = ls_row-row iv_ty = 'W'
                        iv_txt = 'Posted, but the new vendor number could not be read back from CVI_VEND_LINK' ).
