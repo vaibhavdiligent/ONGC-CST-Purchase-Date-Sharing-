@@ -1852,7 +1852,10 @@ CLASS lcl_h_create IMPLEMENTATION.
           ls_smt TYPE bus_ei_bupa_smtp,
           lt_tel TYPE string_table.
 
-    lt_tel = VALUE #( ( `23;24;` ) ( `25;26;` ) ( `27;;3` ) ( `28;;3` ) ).
+    " The mobile marker is R_3_USER, data element AD_FLGMOB - a flag, so it
+    " is 'X', not the ADR2 usage number 3. With a 3 in it the number is
+    " stored as a landline and the extractor never reads it back as mobile.
+    lt_tel = VALUE #( ( `23;24;` ) ( `25;26;` ) ( `27;;X` ) ( `28;;X` ) ).
 
     LOOP AT lt_tel INTO DATA(lv_tp).
       SPLIT lv_tp AT ';' INTO DATA(lv_n) DATA(lv_x) DATA(lv_u).

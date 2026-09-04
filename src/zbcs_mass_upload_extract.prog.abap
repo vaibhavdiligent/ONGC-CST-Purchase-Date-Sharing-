@@ -987,236 +987,278 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'C7' col = 75   hdr = 'DEA To Date' node = 'Z' fld = 'DEA_TO_DATE' fmt = 'DT' )
     ) TO rt.
 
+    " V1 - Vendor creation for All CC (64 columns)
     APPEND LINES OF VALUE tt_col(
-      ( scen = 'V1' col = 1    hdr = 'Field Tech name' node = 'V' fld = 'FIELDTECHNAME' fmt = '' )
-      ( scen = 'V1' col = 2    hdr = 'LIFNR' node = 'V' fld = 'LIFNR' fmt = '' )
-      ( scen = 'V1' col = 3    hdr = 'BUKRS' node = 'V' fld = 'BUKRS' fmt = '' )
-      ( scen = 'V1' col = 4    hdr = 'EKORG' node = 'V' fld = 'EKORG' fmt = '' )
+      ( scen = 'V1' col = 1    hdr = 'Field Tech name' node = '-' fld = '' fmt = '' )
+      ( scen = 'V1' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V1' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V1' col = 4    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
       ( scen = 'V1' col = 5    hdr = 'KTOKK' node = 'V' fld = 'KTOKK' fmt = '' )
-      ( scen = 'V1' col = 6    hdr = 'TITLE_MEDI' node = 'V' fld = 'TITLEMEDI' fmt = '' )
-      ( scen = 'V1' col = 7    hdr = 'NAME1' node = 'V' fld = 'NAME1' fmt = '' )
-      ( scen = 'V1' col = 8    hdr = 'NAME2' node = 'V' fld = 'NAME2' fmt = '' )
-      ( scen = 'V1' col = 9    hdr = 'Name 3' node = 'V' fld = 'NAME3' fmt = '' )
-      ( scen = 'V1' col = 10   hdr = 'Name 4' node = 'V' fld = 'NAME4' fmt = '' )
-      ( scen = 'V1' col = 11   hdr = 'SORT1' node = 'V' fld = 'SORT1' fmt = '' )
-      ( scen = 'V1' col = 12   hdr = 'SORT2' node = 'V' fld = 'SORT2' fmt = '' )
-      ( scen = 'V1' col = 13   hdr = 'STR_SUPPL1' node = 'V' fld = 'STRSUPPL1' fmt = '' )
-      ( scen = 'V1' col = 14   hdr = 'STR_SUPPL2' node = 'V' fld = 'STRSUPPL2' fmt = '' )
-      ( scen = 'V1' col = 15   hdr = 'STREET' node = 'V' fld = 'STREET' fmt = '' )
-      ( scen = 'V1' col = 16   hdr = 'STR_SUPPL3' node = 'V' fld = 'STRSUPPL3' fmt = '' )
-      ( scen = 'V1' col = 17   hdr = 'CITY2' node = 'V' fld = 'CITY2' fmt = '' )
-      ( scen = 'V1' col = 18   hdr = 'POST_CODE1' node = 'V' fld = 'POSTCODE1' fmt = '' )
-      ( scen = 'V1' col = 19   hdr = 'CITY1' node = 'V' fld = 'CITY1' fmt = '' )
-      ( scen = 'V1' col = 20   hdr = 'COUNTRY' node = 'V' fld = 'COUNTRY' fmt = '' )
-      ( scen = 'V1' col = 21   hdr = 'REGION' node = 'V' fld = 'REGION' fmt = '' )
-      ( scen = 'V1' col = 22   hdr = 'LANGU' node = 'V' fld = 'LANGU' fmt = '' )
-      ( scen = 'V1' col = 23   hdr = 'TEL_NUMBER' node = 'V' fld = 'TELNUMBER' fmt = '' )
-      ( scen = 'V1' col = 24   hdr = 'TEL_EXTENS' node = 'V' fld = 'TELEXTENS' fmt = '' )
-      ( scen = 'V1' col = 25   hdr = 'TEL_NUMBER2' node = 'V' fld = 'TELNUMBER2' fmt = '' )
-      ( scen = 'V1' col = 26   hdr = 'TEL_EXTENS2' node = 'V' fld = 'TELEXTENS2' fmt = '' )
-      ( scen = 'V1' col = 27   hdr = 'MOB_NUMBER' node = 'V' fld = 'MOBNUMBER' fmt = '' )
-      ( scen = 'V1' col = 28   hdr = 'MOB_NUMBER2' node = 'V' fld = 'MOBNUMBER2' fmt = '' )
-      ( scen = 'V1' col = 29   hdr = 'FAX_NUMBER' node = 'V' fld = 'FAXNUMBER' fmt = '' )
-      ( scen = 'V1' col = 30   hdr = 'SMTP_ADDR' node = 'V' fld = 'SMTPADDR' fmt = '' )
-      ( scen = 'V1' col = 31   hdr = 'SMTP_ADDR2' node = 'V' fld = 'SMTPADDR2' fmt = '' )
-      ( scen = 'V1' col = 32   hdr = 'KUNNR' node = 'V' fld = 'KUNNR' fmt = '' )
-      ( scen = 'V1' col = 33   hdr = 'VBUND' node = 'V' fld = 'VBUND' fmt = '' )
+      ( scen = 'V1' col = 6    hdr = 'TITLE_MEDI' node = 'A' fld = 'TITLE' fmt = 'TT' )
+      ( scen = 'V1' col = 7    hdr = 'NAME1' node = 'A' fld = 'NAME' fmt = '' )
+      ( scen = 'V1' col = 8    hdr = 'NAME2' node = 'A' fld = 'NAME_2' fmt = '' )
+      ( scen = 'V1' col = 9    hdr = 'Name 3' node = 'A' fld = 'NAME_3' fmt = '' )
+      ( scen = 'V1' col = 10   hdr = 'Name 4' node = 'A' fld = 'NAME_4' fmt = '' )
+      ( scen = 'V1' col = 11   hdr = 'SORT1' node = 'A' fld = 'SORT1' fmt = '' )
+      ( scen = 'V1' col = 12   hdr = 'SORT2' node = 'A' fld = 'SORT2' fmt = '' )
+      ( scen = 'V1' col = 13   hdr = 'STR_SUPPL1' node = 'A' fld = 'STR_SUPPL1' fmt = '' )
+      ( scen = 'V1' col = 14   hdr = 'STR_SUPPL2' node = 'A' fld = 'STR_SUPPL2' fmt = '' )
+      ( scen = 'V1' col = 15   hdr = 'STREET' node = 'A' fld = 'STREET' fmt = '' )
+      ( scen = 'V1' col = 16   hdr = 'STR_SUPPL3' node = 'A' fld = 'STR_SUPPL3' fmt = '' )
+      ( scen = 'V1' col = 17   hdr = 'CITY2' node = 'A' fld = 'DISTRICT' fmt = '' )
+      ( scen = 'V1' col = 18   hdr = 'POST_CODE1' node = 'A' fld = 'POSTL_COD1' fmt = '' )
+      ( scen = 'V1' col = 19   hdr = 'CITY1' node = 'A' fld = 'CITY' fmt = '' )
+      ( scen = 'V1' col = 20   hdr = 'COUNTRY' node = 'A' fld = 'COUNTRY' fmt = '' )
+      ( scen = 'V1' col = 21   hdr = 'REGION' node = 'A' fld = 'REGION' fmt = '' )
+      ( scen = 'V1' col = 22   hdr = 'LANGU' node = 'A' fld = 'LANGU' fmt = '' )
+      ( scen = 'V1' col = 23   hdr = 'TEL_NUMBER' node = 'M' fld = 'TEL' fmt = '' )
+      ( scen = 'V1' col = 24   hdr = 'TEL_EXTENS' node = 'M' fld = 'TELX' fmt = '' )
+      ( scen = 'V1' col = 25   hdr = 'TEL_NUMBER2' node = 'M' fld = 'TEL2' fmt = '' )
+      ( scen = 'V1' col = 26   hdr = 'TEL_EXTENS2' node = 'M' fld = 'TELX2' fmt = '' )
+      ( scen = 'V1' col = 27   hdr = 'MOB_NUMBER' node = 'M' fld = 'MOB' fmt = '' )
+      ( scen = 'V1' col = 28   hdr = 'MOB_NUMBER2' node = 'M' fld = 'MOB2' fmt = '' )
+      ( scen = 'V1' col = 29   hdr = 'FAX_NUMBER' node = 'M' fld = 'FAX' fmt = '' )
+      ( scen = 'V1' col = 30   hdr = 'SMTP_ADDR' node = 'M' fld = 'SMT' fmt = '' )
+      ( scen = 'V1' col = 31   hdr = 'SMTP_ADDR2' node = 'M' fld = 'SMT2' fmt = '' )
+      ( scen = 'V1' col = 32   hdr = 'KUNNR' node = 'V' fld = 'KUNNR' fmt = 'AL' )
+      ( scen = 'V1' col = 33   hdr = 'VBUND' node = 'V' fld = 'VBUND' fmt = 'AL' )
       ( scen = 'V1' col = 34   hdr = 'KONZS' node = 'V' fld = 'KONZS' fmt = '' )
       ( scen = 'V1' col = 35   hdr = 'STCD3' node = 'V' fld = 'STCD3' fmt = '' )
       ( scen = 'V1' col = 36   hdr = 'STCD5' node = 'V' fld = 'STCD5' fmt = '' )
       ( scen = 'V1' col = 37   hdr = 'STCEG' node = 'V' fld = 'STCEG' fmt = '' )
-      ( scen = 'V1' col = 38   hdr = 'J_1KFTBUS' node = 'V' fld = 'J1KFTBUS' fmt = '' )
+      ( scen = 'V1' col = 38   hdr = 'J_1KFTBUS' node = 'V' fld = 'J_1KFTBUS' fmt = '' )
       ( scen = 'V1' col = 39   hdr = 'STENR' node = 'V' fld = 'STENR' fmt = '' )
       ( scen = 'V1' col = 40   hdr = 'BRSCH' node = 'V' fld = 'BRSCH' fmt = '' )
-      ( scen = 'V1' col = 41   hdr = 'BANKS_01' node = 'V' fld = 'BANKS01' fmt = '' )
-      ( scen = 'V1' col = 42   hdr = 'BANKL_01' node = 'V' fld = 'BANKL01' fmt = '' )
-      ( scen = 'V1' col = 43   hdr = 'BANKN_01' node = 'V' fld = 'BANKN01' fmt = '' )
-      ( scen = 'V1' col = 44   hdr = 'KOINH_01' node = 'V' fld = 'KOINH01' fmt = '' )
-      ( scen = 'V1' col = 45   hdr = 'BKONT' node = 'V' fld = 'BKONT' fmt = '' )
-      ( scen = 'V1' col = 46   hdr = 'IBAN' node = 'V' fld = 'IBAN' fmt = '' )
-      ( scen = 'V1' col = 47   hdr = 'AKONT' node = 'V' fld = 'AKONT' fmt = '' )
-      ( scen = 'V1' col = 48   hdr = 'FDGRV' node = 'V' fld = 'FDGRV' fmt = '' )
-      ( scen = 'V1' col = 49   hdr = 'ALTKN' node = 'V' fld = 'ALTKN' fmt = '' )
-      ( scen = 'V1' col = 51   hdr = 'REPRF' node = 'V' fld = 'REPRF' fmt = '' )
-      ( scen = 'V1' col = 52   hdr = 'ZWELS' node = 'V' fld = 'ZWELS' fmt = '' )
-      ( scen = 'V1' col = 53   hdr = 'ZAHLS' node = 'V' fld = 'ZAHLS' fmt = '' )
-      ( scen = 'V1' col = 54   hdr = 'HBKID' node = 'V' fld = 'HBKID' fmt = '' )
-      ( scen = 'V1' col = 55   hdr = 'VEN_CLASS' node = 'V' fld = 'VENCLASS' fmt = '' )
-      ( scen = 'V1' col = 56   hdr = 'J_1ISSIST' node = 'V' fld = 'J1ISSIST' fmt = '' )
-      ( scen = 'V1' col = 57   hdr = 'J_1IPANNO' node = 'V' fld = 'J1IPANNO' fmt = '' )
-      ( scen = 'V1' col = 58   hdr = 'QLAND' node = 'V' fld = 'QLAND' fmt = '' )
-      ( scen = 'V1' col = 59   hdr = 'WITHT' node = 'V' fld = 'WITHT' fmt = '' )
-      ( scen = 'V1' col = 60   hdr = 'WT_WITHCD' node = 'V' fld = 'WTWITHCD' fmt = '' )
-      ( scen = 'V1' col = 61   hdr = 'WAERS' node = 'V' fld = 'WAERS' fmt = '' )
-      ( scen = 'V1' col = 63   hdr = 'KALSK' node = 'V' fld = 'KALSK' fmt = '' )
-      ( scen = 'V1' col = 64   hdr = 'WEBRE' node = 'V' fld = 'WEBRE' fmt = '' )
-      ( scen = 'V1' col = 65   hdr = 'INCO1' node = 'V' fld = 'INCO1' fmt = '' )
-      ( scen = 'V1' col = 66   hdr = 'INCO2' node = 'V' fld = 'INCO2' fmt = '' )
-      ( scen = 'V2' col = 2    hdr = 'LIFNR' node = 'V' fld = 'LIFNR' fmt = '' )
-      ( scen = 'V2' col = 3    hdr = 'BUKRS' node = 'V' fld = 'BUKRS' fmt = '' )
-      ( scen = 'V2' col = 4    hdr = 'D0610' node = 'V' fld = 'D0610' fmt = '' )
-      ( scen = 'V2' col = 5    hdr = 'QLAND' node = 'V' fld = 'QLAND' fmt = '' )
-      ( scen = 'V2' col = 6    hdr = 'WITHT_01' node = 'V' fld = 'WITHT01' fmt = '' )
-      ( scen = 'V2' col = 7    hdr = 'WITHT_02' node = 'V' fld = 'WITHT02' fmt = '' )
-      ( scen = 'V2' col = 8    hdr = 'WITHT_03' node = 'V' fld = 'WITHT03' fmt = '' )
-      ( scen = 'V2' col = 9    hdr = 'WITHT_04' node = 'V' fld = 'WITHT04' fmt = '' )
-      ( scen = 'V2' col = 10   hdr = 'WITHT_05' node = 'V' fld = 'WITHT05' fmt = '' )
-      ( scen = 'V2' col = 11   hdr = 'WITHT_06' node = 'V' fld = 'WITHT06' fmt = '' )
-      ( scen = 'V2' col = 12   hdr = 'WT_WITHCD_01' node = 'V' fld = 'WTWITHCD01' fmt = '' )
-      ( scen = 'V2' col = 13   hdr = 'WT_WITHCD_02' node = 'V' fld = 'WTWITHCD02' fmt = '' )
-      ( scen = 'V2' col = 14   hdr = 'WT_WITHCD_03' node = 'V' fld = 'WTWITHCD03' fmt = '' )
-      ( scen = 'V2' col = 15   hdr = 'WT_WITHCD_04' node = 'V' fld = 'WTWITHCD04' fmt = '' )
-      ( scen = 'V2' col = 16   hdr = 'WT_WITHCD_05' node = 'V' fld = 'WTWITHCD05' fmt = '' )
-      ( scen = 'V2' col = 17   hdr = 'WT_WITHCD_06' node = 'V' fld = 'WTWITHCD06' fmt = '' )
-      ( scen = 'V2' col = 18   hdr = 'WT_SUBJCT_01' node = 'V' fld = 'WTSUBJCT01' fmt = '' )
-      ( scen = 'V2' col = 19   hdr = 'WT_SUBJCT_02' node = 'V' fld = 'WTSUBJCT02' fmt = '' )
-      ( scen = 'V2' col = 20   hdr = 'WT_SUBJCT_03' node = 'V' fld = 'WTSUBJCT03' fmt = '' )
-      ( scen = 'V2' col = 21   hdr = 'WT_SUBJCT_04' node = 'V' fld = 'WTSUBJCT04' fmt = '' )
-      ( scen = 'V2' col = 22   hdr = 'WT_SUBJCT_05' node = 'V' fld = 'WTSUBJCT05' fmt = '' )
-      ( scen = 'V2' col = 23   hdr = 'WT_SUBJCT_06' node = 'V' fld = 'WTSUBJCT06' fmt = '' )
-      ( scen = 'V2' col = 24   hdr = 'QSREC_01' node = 'V' fld = 'QSREC01' fmt = '' )
-      ( scen = 'V2' col = 25   hdr = 'QSREC_02' node = 'V' fld = 'QSREC02' fmt = '' )
-      ( scen = 'V2' col = 26   hdr = 'QSREC_03' node = 'V' fld = 'QSREC03' fmt = '' )
-      ( scen = 'V2' col = 27   hdr = 'QSREC_04' node = 'V' fld = 'QSREC04' fmt = '' )
-      ( scen = 'V2' col = 28   hdr = 'QSREC_05' node = 'V' fld = 'QSREC05' fmt = '' )
-      ( scen = 'V2' col = 29   hdr = 'QSREC_06' node = 'V' fld = 'QSREC06' fmt = '' )
-      ( scen = 'V2' col = 30   hdr = 'WT_WTSTCD_01' node = 'V' fld = 'WTWTSTCD01' fmt = '' )
-      ( scen = 'V2' col = 31   hdr = 'WT_WTSTCD_02' node = 'V' fld = 'WTWTSTCD02' fmt = '' )
-      ( scen = 'V2' col = 32   hdr = 'WT_WTSTCD_03' node = 'V' fld = 'WTWTSTCD03' fmt = '' )
-      ( scen = 'V2' col = 33   hdr = 'WT_WTSTCD_04' node = 'V' fld = 'WTWTSTCD04' fmt = '' )
-      ( scen = 'V2' col = 34   hdr = 'WT_WTSTCD_05' node = 'V' fld = 'WTWTSTCD05' fmt = '' )
-      ( scen = 'V2' col = 35   hdr = 'WT_WTSTCD_06' node = 'V' fld = 'WTWTSTCD06' fmt = '' )
-      ( scen = 'V2' col = 36   hdr = 'WT_EXNR_01' node = 'V' fld = 'WTEXNR01' fmt = '' )
-      ( scen = 'V2' col = 37   hdr = 'WT_EXNR_02' node = 'V' fld = 'WTEXNR02' fmt = '' )
-      ( scen = 'V2' col = 38   hdr = 'WT_EXNR_03' node = 'V' fld = 'WTEXNR03' fmt = '' )
-      ( scen = 'V2' col = 39   hdr = 'WT_EXNR_04' node = 'V' fld = 'WTEXNR04' fmt = '' )
-      ( scen = 'V2' col = 40   hdr = 'WT_EXNR_05' node = 'V' fld = 'WTEXNR05' fmt = '' )
-      ( scen = 'V2' col = 41   hdr = 'WT_EXNR_06' node = 'V' fld = 'WTEXNR06' fmt = '' )
-      ( scen = 'V2' col = 42   hdr = 'WT_EXRT_01' node = 'V' fld = 'WTEXRT01' fmt = '' )
-      ( scen = 'V2' col = 43   hdr = 'WT_EXRT_02' node = 'V' fld = 'WTEXRT02' fmt = '' )
-      ( scen = 'V2' col = 44   hdr = 'WT_EXRT_03' node = 'V' fld = 'WTEXRT03' fmt = '' )
-      ( scen = 'V2' col = 45   hdr = 'WT_EXRT_04' node = 'V' fld = 'WTEXRT04' fmt = '' )
-      ( scen = 'V2' col = 46   hdr = 'WT_EXRT_05' node = 'V' fld = 'WTEXRT05' fmt = '' )
-      ( scen = 'V2' col = 47   hdr = 'WT_EXRT_06' node = 'V' fld = 'WTEXRT06' fmt = '' )
-      ( scen = 'V2' col = 48   hdr = 'WT_WTEXRS_01' node = 'V' fld = 'WTWTEXRS01' fmt = '' )
-      ( scen = 'V2' col = 49   hdr = 'WT_WTEXRS_02' node = 'V' fld = 'WTWTEXRS02' fmt = '' )
-      ( scen = 'V2' col = 50   hdr = 'WT_WTEXRS_03' node = 'V' fld = 'WTWTEXRS03' fmt = '' )
-      ( scen = 'V2' col = 51   hdr = 'WT_WTEXRS_04' node = 'V' fld = 'WTWTEXRS04' fmt = '' )
-      ( scen = 'V2' col = 52   hdr = 'WT_WTEXRS_05' node = 'V' fld = 'WTWTEXRS05' fmt = '' )
-      ( scen = 'V2' col = 53   hdr = 'WT_WTEXRS_06' node = 'V' fld = 'WTWTEXRS06' fmt = '' )
-      ( scen = 'V2' col = 54   hdr = 'WT_EXDF_01' node = 'V' fld = 'WTEXDF01' fmt = '' )
-      ( scen = 'V2' col = 55   hdr = 'WT_EXDF_02' node = 'V' fld = 'WTEXDF02' fmt = '' )
-      ( scen = 'V2' col = 56   hdr = 'WT_EXDF_03' node = 'V' fld = 'WTEXDF03' fmt = '' )
-      ( scen = 'V2' col = 57   hdr = 'WT_EXDF_04' node = 'V' fld = 'WTEXDF04' fmt = '' )
-      ( scen = 'V2' col = 58   hdr = 'WT_EXDF_05' node = 'V' fld = 'WTEXDF05' fmt = '' )
-      ( scen = 'V2' col = 59   hdr = 'WT_EXDF_06' node = 'V' fld = 'WTEXDF06' fmt = '' )
-      ( scen = 'V2' col = 60   hdr = 'WT_EXDT_01' node = 'V' fld = 'WTEXDT01' fmt = '' )
-      ( scen = 'V2' col = 61   hdr = 'WT_EXDT_02' node = 'V' fld = 'WTEXDT02' fmt = '' )
-      ( scen = 'V2' col = 62   hdr = 'WT_EXDT_03' node = 'V' fld = 'WTEXDT03' fmt = '' )
-      ( scen = 'V2' col = 63   hdr = 'WT_EXDT_04' node = 'V' fld = 'WTEXDT04' fmt = '' )
-      ( scen = 'V2' col = 64   hdr = 'WT_EXDT_05' node = 'V' fld = 'WTEXDT05' fmt = '' )
-      ( scen = 'V2' col = 65   hdr = 'WT_EXDT_06' node = 'V' fld = 'WTEXDT06' fmt = '' )
-      ( scen = 'V3' col = 1    hdr = 'Vendor' node = 'V' fld = 'VENDOR' fmt = '' )
-      ( scen = 'V3' col = 2    hdr = 'Company' node = 'V' fld = 'COMPANY' fmt = '' )
-      ( scen = 'V3' col = 3    hdr = 'Address' node = 'V' fld = 'ADDRESS' fmt = '' )
-      ( scen = 'V3' col = 4    hdr = 'Section_code_1' node = 'V' fld = 'SECTIONCODE1' fmt = '' )
-      ( scen = 'V3' col = 5    hdr = 'Section_code_2' node = 'V' fld = 'SECTIONCODE2' fmt = '' )
-      ( scen = 'V3' col = 6    hdr = 'Certificate_1' node = 'V' fld = 'CERTIFICATE1' fmt = '' )
-      ( scen = 'V3' col = 7    hdr = 'Certificate_2' node = 'V' fld = 'CERTIFICATE2' fmt = '' )
-      ( scen = 'V3' col = 8    hdr = 'Exemption_rate_1' node = 'V' fld = 'EXEMPTIONRATE1' fmt = '' )
-      ( scen = 'V3' col = 9    hdr = 'Exemption_rate_2' node = 'V' fld = 'EXEMPTIONRATE2' fmt = '' )
-      ( scen = 'V3' col = 10   hdr = 'Validfrom_1' node = 'V' fld = 'VALIDFROM1' fmt = '' )
-      ( scen = 'V3' col = 11   hdr = 'Validfrom2' node = 'V' fld = 'VALIDFROM2' fmt = '' )
-      ( scen = 'V3' col = 12   hdr = 'Validto_1' node = 'V' fld = 'VALIDTO1' fmt = '' )
-      ( scen = 'V3' col = 13   hdr = 'Validto_2' node = 'V' fld = 'VALIDTO2' fmt = '' )
-      ( scen = 'V3' col = 14   hdr = 'taxtype_1' node = 'V' fld = 'TAXTYPE1' fmt = '' )
-      ( scen = 'V3' col = 15   hdr = 'Taxtype_2' node = 'V' fld = 'TAXTYPE2' fmt = '' )
-      ( scen = 'V3' col = 16   hdr = 'taxcode_1' node = 'V' fld = 'TAXCODE1' fmt = '' )
-      ( scen = 'V3' col = 17   hdr = 'Taxcode_2' node = 'V' fld = 'TAXCODE2' fmt = '' )
-      ( scen = 'V3' col = 18   hdr = 'threshold_1' node = 'V' fld = 'THRESHOLD1' fmt = '' )
-      ( scen = 'V3' col = 19   hdr = 'threshold_2' node = 'V' fld = 'THRESHOLD2' fmt = '' )
-      ( scen = 'V3' col = 20   hdr = 'Currency_1' node = 'V' fld = 'CURRENCY1' fmt = '' )
-      ( scen = 'V3' col = 21   hdr = 'Currency_2' node = 'V' fld = 'CURRENCY2' fmt = '' )
-      ( scen = 'V4' col = 1    hdr = 'Field Technical Name' node = 'V' fld = 'FIELDTECHNICALNAME' fmt = '' )
-      ( scen = 'V4' col = 2    hdr = 'BANKS' node = 'V' fld = 'BANKS' fmt = '' )
-      ( scen = 'V4' col = 3    hdr = 'BANKL' node = 'V' fld = 'BANKL' fmt = '' )
-      ( scen = 'V4' col = 4    hdr = 'BANKA' node = 'V' fld = 'BANKA' fmt = '' )
-      ( scen = 'V4' col = 5    hdr = 'PROVZ' node = 'V' fld = 'PROVZ' fmt = '' )
-      ( scen = 'V4' col = 6    hdr = 'STRAS' node = 'V' fld = 'STRAS' fmt = '' )
-      ( scen = 'V4' col = 7    hdr = 'ORT01' node = 'V' fld = 'ORT01' fmt = '' )
-      ( scen = 'V4' col = 8    hdr = 'BRNCH' node = 'V' fld = 'BRNCH' fmt = '' )
-      ( scen = 'V4' col = 9    hdr = 'SWIFT' node = 'V' fld = 'SWIFT' fmt = '' )
-      ( scen = 'V5' col = 1    hdr = 'Field Technical Name' node = 'V' fld = 'FIELDTECHNICALNAME' fmt = '' )
-      ( scen = 'V5' col = 2    hdr = 'LIFNR' node = 'V' fld = 'LIFNR' fmt = '' )
-      ( scen = 'V5' col = 3    hdr = 'BUKRS' node = 'V' fld = 'BUKRS' fmt = '' )
-      ( scen = 'V5' col = 4    hdr = 'BANKS' node = 'V' fld = 'BANKS' fmt = '' )
-      ( scen = 'V5' col = 5    hdr = 'BANKL' node = 'V' fld = 'BANKL' fmt = '' )
-      ( scen = 'V5' col = 6    hdr = 'BANKN' node = 'V' fld = 'BANKN' fmt = '' )
-      ( scen = 'V5' col = 7    hdr = 'KOINH' node = 'V' fld = 'KOINH' fmt = '' )
-      ( scen = 'V5' col = 8    hdr = 'IBAN' node = 'V' fld = 'IBAN' fmt = '' )
-      ( scen = 'V6' col = 1    hdr = 'Field Technical Name' node = 'V' fld = 'FIELDTECHNICALNAME' fmt = '' )
-      ( scen = 'V6' col = 9    hdr = 'AKONT' node = 'V' fld = 'AKONT' fmt = '' )
-      ( scen = 'V6' col = 12   hdr = 'WAERS' node = 'V' fld = 'WAERS' fmt = '' )
-      ( scen = 'V6' col = 13   hdr = 'KALSK' node = 'V' fld = 'KALSK' fmt = '' )
-      ( scen = 'V6' col = 14   hdr = 'WEBRE' node = 'V' fld = 'WEBRE' fmt = '' )
-      ( scen = 'V7' col = 1    hdr = 'Vendor Account Number' node = 'V' fld = 'VENDORACCOUNTNUMBER' fmt = '' )
-      ( scen = 'V7' col = 2    hdr = 'Company Code' node = 'V' fld = 'COMPANYCODE' fmt = '' )
-      ( scen = 'V7' col = 3    hdr = 'Address View' node = 'V' fld = 'ADDRESSVIEW' fmt = '' )
-      ( scen = 'V7' col = 4    hdr = 'ECC Number' node = 'V' fld = 'ECCNUMBER' fmt = '' )
-      ( scen = 'V7' col = 5    hdr = 'Excise Registration Number' node = 'V' fld = 'EXCISEREGISTRATIONNUMBER' fmt = '' )
-      ( scen = 'V7' col = 6    hdr = 'Excise Range' node = 'V' fld = 'EXCISERANGE' fmt = '' )
-      ( scen = 'V7' col = 7    hdr = 'Excise Division' node = 'V' fld = 'EXCISEDIVISION' fmt = '' )
-      ( scen = 'V7' col = 8    hdr = 'Excise Commissionerate' node = 'V' fld = 'EXCISECOMMISSIONERATE' fmt = '' )
-      ( scen = 'V7' col = 9    hdr = 'Central Sales Tax Number' node = 'V' fld = 'CENTRALSALESTAXNUMBER' fmt = '' )
-      ( scen = 'V7' col = 10   hdr = 'Local Sales Tax Number' node = 'V' fld = 'LOCALSALESTAXNUMBER' fmt = '' )
-      ( scen = 'V7' col = 11   hdr = 'Service Tax Registration Number' node = 'V' fld = 'SERVICETAXREGISTRATIONNUMBER' fmt = '' )
-      ( scen = 'V7' col = 12   hdr = 'Permanent Account Number' node = 'V' fld = 'PERMANENTACCOUNTNUMBER' fmt = '' )
-      ( scen = 'V7' col = 13   hdr = 'SSI status' node = 'V' fld = 'SSISTATUS' fmt = '' )
-      ( scen = 'V7' col = 14   hdr = 'Exc.Tax Ind. Vendor' node = 'V' fld = 'EXCTAXINDVENDOR' fmt = '' )
-      ( scen = 'V7' col = 15   hdr = 'Type of Vendor' node = 'V' fld = 'TYPEOFVENDOR' fmt = '' )
-      ( scen = 'V8' col = 1    hdr = 'LIFNR' node = 'V' fld = 'LIFNR' fmt = '' )
-      ( scen = 'V8' col = 2    hdr = 'BUKRS' node = 'V' fld = 'BUKRS' fmt = '' )
-      ( scen = 'V8' col = 3    hdr = 'EKORG' node = 'V' fld = 'EKORG' fmt = '' )
-      ( scen = 'V8' col = 4    hdr = 'D0320' node = 'V' fld = 'D0320' fmt = '' )
-      ( scen = 'V8' col = 5    hdr = 'USE_ZAV' node = 'V' fld = 'USEZAV' fmt = '' )
-      ( scen = 'V8' col = 6    hdr = 'PARVW_05' node = 'V' fld = 'PARVW05' fmt = '' )
-      ( scen = 'V8' col = 7    hdr = 'PARVW_06' node = 'V' fld = 'PARVW06' fmt = '' )
-      ( scen = 'V8' col = 8    hdr = 'PARVW_07' node = 'V' fld = 'PARVW07' fmt = '' )
-      ( scen = 'V8' col = 9    hdr = 'PARVW_08' node = 'V' fld = 'PARVW08' fmt = '' )
-      ( scen = 'V8' col = 10   hdr = 'PARVW_09' node = 'V' fld = 'PARVW09' fmt = '' )
-      ( scen = 'V8' col = 11   hdr = 'PARVW_10' node = 'V' fld = 'PARVW10' fmt = '' )
-      ( scen = 'V8' col = 12   hdr = 'PARVW_11' node = 'V' fld = 'PARVW11' fmt = '' )
-      ( scen = 'V8' col = 13   hdr = 'PARVW_12' node = 'V' fld = 'PARVW12' fmt = '' )
-      ( scen = 'V8' col = 14   hdr = 'PARVW_13' node = 'V' fld = 'PARVW13' fmt = '' )
-      ( scen = 'V8' col = 15   hdr = 'PARVW_14' node = 'V' fld = 'PARVW14' fmt = '' )
-      ( scen = 'V8' col = 16   hdr = 'PARVW_15' node = 'V' fld = 'PARVW15' fmt = '' )
-      ( scen = 'V8' col = 17   hdr = 'GPARN_05' node = 'V' fld = 'GPARN05' fmt = '' )
-      ( scen = 'V8' col = 18   hdr = 'GPARN_06' node = 'V' fld = 'GPARN06' fmt = '' )
-      ( scen = 'V8' col = 19   hdr = 'GPARN_07' node = 'V' fld = 'GPARN07' fmt = '' )
-      ( scen = 'V8' col = 20   hdr = 'GPARN_08' node = 'V' fld = 'GPARN08' fmt = '' )
-      ( scen = 'V8' col = 21   hdr = 'GPARN_09' node = 'V' fld = 'GPARN09' fmt = '' )
-      ( scen = 'V8' col = 22   hdr = 'GPARN_10' node = 'V' fld = 'GPARN10' fmt = '' )
-      ( scen = 'V8' col = 23   hdr = 'GPARN_11' node = 'V' fld = 'GPARN11' fmt = '' )
-      ( scen = 'V8' col = 24   hdr = 'GPARN_12' node = 'V' fld = 'GPARN12' fmt = '' )
-      ( scen = 'V8' col = 25   hdr = 'GPARN_13' node = 'V' fld = 'GPARN13' fmt = '' )
-      ( scen = 'V8' col = 26   hdr = 'GPARN_14' node = 'V' fld = 'GPARN14' fmt = '' )
-      ( scen = 'V8' col = 27   hdr = 'GPARN_15' node = 'V' fld = 'GPARN15' fmt = '' )
-      ( scen = 'V8' col = 28   hdr = 'PARVW_01' node = 'V' fld = 'PARVW01' fmt = '' )
-      ( scen = 'V8' col = 29   hdr = 'PARVW_02' node = 'V' fld = 'PARVW02' fmt = '' )
-      ( scen = 'V8' col = 30   hdr = 'PARVW_03' node = 'V' fld = 'PARVW03' fmt = '' )
-      ( scen = 'V8' col = 31   hdr = 'PARVW_04' node = 'V' fld = 'PARVW04' fmt = '' )
-      ( scen = 'V8' col = 32   hdr = 'GPARN_01' node = 'V' fld = 'GPARN01' fmt = '' )
-      ( scen = 'V8' col = 33   hdr = 'GPARN_02' node = 'V' fld = 'GPARN02' fmt = '' )
-      ( scen = 'V8' col = 34   hdr = 'GPARN_03' node = 'V' fld = 'GPARN03' fmt = '' )
-      ( scen = 'V8' col = 35   hdr = 'GPARN_04' node = 'V' fld = 'GPARN04' fmt = '' )
-      ( scen = 'V9' col = 1    hdr = 'Tech name' node = 'V' fld = 'TECHNAME' fmt = '' )
-      ( scen = 'V9' col = 2    hdr = 'LIFNR' node = 'V' fld = 'LIFNR' fmt = '' )
-      ( scen = 'V9' col = 3    hdr = 'BUKRS' node = 'V' fld = 'BUKRS' fmt = '' )
-      ( scen = 'V9' col = 4    hdr = 'EKORG' node = 'V' fld = 'EKORG' fmt = '' )
+      ( scen = 'V1' col = 41   hdr = 'BANKS_01' node = 'N' fld = 'BANKS#1' fmt = '' )
+      ( scen = 'V1' col = 42   hdr = 'BANKL_01' node = 'N' fld = 'BANKL#1' fmt = '' )
+      ( scen = 'V1' col = 43   hdr = 'BANKN_01' node = 'N' fld = 'BANKN#1' fmt = '' )
+      ( scen = 'V1' col = 44   hdr = 'KOINH_01' node = 'N' fld = 'KOINH#1' fmt = '' )
+      ( scen = 'V1' col = 45   hdr = 'BKONT' node = 'N' fld = 'BKONT#1' fmt = '' )
+      ( scen = 'V1' col = 46   hdr = 'IBAN' node = 'N' fld = 'IBAN#1' fmt = '' )
+      ( scen = 'V1' col = 47   hdr = 'AKONT' node = 'B' fld = 'AKONT' fmt = 'GL' )
+      ( scen = 'V1' col = 48   hdr = 'FDGRV' node = 'B' fld = 'FDGRV' fmt = '' )
+      ( scen = 'V1' col = 49   hdr = 'ALTKN' node = 'B' fld = 'ALTKN' fmt = '' )
+      ( scen = 'V1' col = 50   hdr = '' node = 'B' fld = 'ZTERM' fmt = '' )
+      ( scen = 'V1' col = 51   hdr = 'REPRF' node = 'B' fld = 'REPRF' fmt = '' )
+      ( scen = 'V1' col = 52   hdr = 'ZWELS' node = 'B' fld = 'ZWELS' fmt = '' )
+      ( scen = 'V1' col = 53   hdr = 'ZAHLS' node = 'B' fld = 'ZAHLS' fmt = '' )
+      ( scen = 'V1' col = 54   hdr = 'HBKID' node = 'B' fld = 'HBKID' fmt = '' )
+      ( scen = 'V1' col = 55   hdr = 'VEN_CLASS' node = 'V' fld = 'VEN_CLASS' fmt = '' )
+      ( scen = 'V1' col = 56   hdr = 'J_1ISSIST' node = 'V' fld = 'J_1ISSIST' fmt = '' )
+      ( scen = 'V1' col = 57   hdr = 'J_1IPANNO' node = 'V' fld = 'J_1IPANNO' fmt = '' )
+      ( scen = 'V1' col = 58   hdr = 'QLAND' node = 'B' fld = 'QLAND' fmt = '' )
+      ( scen = 'V1' col = 59   hdr = 'WITHT' node = 'W' fld = 'WITHT#1' fmt = '' )
+      ( scen = 'V1' col = 60   hdr = 'WT_WITHCD' node = 'W' fld = 'WT_WITHCD#1' fmt = '' )
+      ( scen = 'V1' col = 61   hdr = 'WAERS' node = 'P' fld = 'WAERS' fmt = '' )
+      ( scen = 'V1' col = 62   hdr = '' node = 'P' fld = 'ZTERM' fmt = '' )
+      ( scen = 'V1' col = 63   hdr = 'KALSK' node = 'P' fld = 'KALSK' fmt = '' )
+      ( scen = 'V1' col = 64   hdr = 'WEBRE' node = 'P' fld = 'WEBRE' fmt = '' )
+      ( scen = 'V1' col = 65   hdr = 'INCO1' node = 'P' fld = 'INCO1' fmt = '' )
+      ( scen = 'V1' col = 66   hdr = 'INCO2' node = 'P' fld = 'INCO2' fmt = '' )
+    ) TO rt.
+
+    " V2 - TDS upload (64 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V2' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V2' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V2' col = 4    hdr = 'D0610' node = '-' fld = '' fmt = '' )
+      ( scen = 'V2' col = 5    hdr = 'QLAND' node = 'B' fld = 'QLAND' fmt = '' )
+      ( scen = 'V2' col = 6    hdr = 'WITHT_01' node = 'W' fld = 'WITHT#1' fmt = '' )
+      ( scen = 'V2' col = 7    hdr = 'WITHT_02' node = 'W' fld = 'WITHT#2' fmt = '' )
+      ( scen = 'V2' col = 8    hdr = 'WITHT_03' node = 'W' fld = 'WITHT#3' fmt = '' )
+      ( scen = 'V2' col = 9    hdr = 'WITHT_04' node = 'W' fld = 'WITHT#4' fmt = '' )
+      ( scen = 'V2' col = 10   hdr = 'WITHT_05' node = 'W' fld = 'WITHT#5' fmt = '' )
+      ( scen = 'V2' col = 11   hdr = 'WITHT_06' node = 'W' fld = 'WITHT#6' fmt = '' )
+      ( scen = 'V2' col = 12   hdr = 'WT_WITHCD_01' node = 'W' fld = 'WT_WITHCD#1' fmt = '' )
+      ( scen = 'V2' col = 13   hdr = 'WT_WITHCD_02' node = 'W' fld = 'WT_WITHCD#2' fmt = '' )
+      ( scen = 'V2' col = 14   hdr = 'WT_WITHCD_03' node = 'W' fld = 'WT_WITHCD#3' fmt = '' )
+      ( scen = 'V2' col = 15   hdr = 'WT_WITHCD_04' node = 'W' fld = 'WT_WITHCD#4' fmt = '' )
+      ( scen = 'V2' col = 16   hdr = 'WT_WITHCD_05' node = 'W' fld = 'WT_WITHCD#5' fmt = '' )
+      ( scen = 'V2' col = 17   hdr = 'WT_WITHCD_06' node = 'W' fld = 'WT_WITHCD#6' fmt = '' )
+      ( scen = 'V2' col = 18   hdr = 'WT_SUBJCT_01' node = 'W' fld = 'WT_SUBJCT#1' fmt = '' )
+      ( scen = 'V2' col = 19   hdr = 'WT_SUBJCT_02' node = 'W' fld = 'WT_SUBJCT#2' fmt = '' )
+      ( scen = 'V2' col = 20   hdr = 'WT_SUBJCT_03' node = 'W' fld = 'WT_SUBJCT#3' fmt = '' )
+      ( scen = 'V2' col = 21   hdr = 'WT_SUBJCT_04' node = 'W' fld = 'WT_SUBJCT#4' fmt = '' )
+      ( scen = 'V2' col = 22   hdr = 'WT_SUBJCT_05' node = 'W' fld = 'WT_SUBJCT#5' fmt = '' )
+      ( scen = 'V2' col = 23   hdr = 'WT_SUBJCT_06' node = 'W' fld = 'WT_SUBJCT#6' fmt = '' )
+      ( scen = 'V2' col = 24   hdr = 'QSREC_01' node = 'W' fld = 'QSREC#1' fmt = '' )
+      ( scen = 'V2' col = 25   hdr = 'QSREC_02' node = 'W' fld = 'QSREC#2' fmt = '' )
+      ( scen = 'V2' col = 26   hdr = 'QSREC_03' node = 'W' fld = 'QSREC#3' fmt = '' )
+      ( scen = 'V2' col = 27   hdr = 'QSREC_04' node = 'W' fld = 'QSREC#4' fmt = '' )
+      ( scen = 'V2' col = 28   hdr = 'QSREC_05' node = 'W' fld = 'QSREC#5' fmt = '' )
+      ( scen = 'V2' col = 29   hdr = 'QSREC_06' node = 'W' fld = 'QSREC#6' fmt = '' )
+      ( scen = 'V2' col = 30   hdr = 'WT_WTSTCD_01' node = 'W' fld = 'WT_WTSTCD#1' fmt = '' )
+      ( scen = 'V2' col = 31   hdr = 'WT_WTSTCD_02' node = 'W' fld = 'WT_WTSTCD#2' fmt = '' )
+      ( scen = 'V2' col = 32   hdr = 'WT_WTSTCD_03' node = 'W' fld = 'WT_WTSTCD#3' fmt = '' )
+      ( scen = 'V2' col = 33   hdr = 'WT_WTSTCD_04' node = 'W' fld = 'WT_WTSTCD#4' fmt = '' )
+      ( scen = 'V2' col = 34   hdr = 'WT_WTSTCD_05' node = 'W' fld = 'WT_WTSTCD#5' fmt = '' )
+      ( scen = 'V2' col = 35   hdr = 'WT_WTSTCD_06' node = 'W' fld = 'WT_WTSTCD#6' fmt = '' )
+      ( scen = 'V2' col = 36   hdr = 'WT_EXNR_01' node = 'W' fld = 'WT_EXNR#1' fmt = '' )
+      ( scen = 'V2' col = 37   hdr = 'WT_EXNR_02' node = 'W' fld = 'WT_EXNR#2' fmt = '' )
+      ( scen = 'V2' col = 38   hdr = 'WT_EXNR_03' node = 'W' fld = 'WT_EXNR#3' fmt = '' )
+      ( scen = 'V2' col = 39   hdr = 'WT_EXNR_04' node = 'W' fld = 'WT_EXNR#4' fmt = '' )
+      ( scen = 'V2' col = 40   hdr = 'WT_EXNR_05' node = 'W' fld = 'WT_EXNR#5' fmt = '' )
+      ( scen = 'V2' col = 41   hdr = 'WT_EXNR_06' node = 'W' fld = 'WT_EXNR#6' fmt = '' )
+      ( scen = 'V2' col = 42   hdr = 'WT_EXRT_01' node = 'W' fld = 'WT_EXRT#1' fmt = '' )
+      ( scen = 'V2' col = 43   hdr = 'WT_EXRT_02' node = 'W' fld = 'WT_EXRT#2' fmt = '' )
+      ( scen = 'V2' col = 44   hdr = 'WT_EXRT_03' node = 'W' fld = 'WT_EXRT#3' fmt = '' )
+      ( scen = 'V2' col = 45   hdr = 'WT_EXRT_04' node = 'W' fld = 'WT_EXRT#4' fmt = '' )
+      ( scen = 'V2' col = 46   hdr = 'WT_EXRT_05' node = 'W' fld = 'WT_EXRT#5' fmt = '' )
+      ( scen = 'V2' col = 47   hdr = 'WT_EXRT_06' node = 'W' fld = 'WT_EXRT#6' fmt = '' )
+      ( scen = 'V2' col = 48   hdr = 'WT_WTEXRS_01' node = 'W' fld = 'WT_WTEXRS#1' fmt = '' )
+      ( scen = 'V2' col = 49   hdr = 'WT_WTEXRS_02' node = 'W' fld = 'WT_WTEXRS#2' fmt = '' )
+      ( scen = 'V2' col = 50   hdr = 'WT_WTEXRS_03' node = 'W' fld = 'WT_WTEXRS#3' fmt = '' )
+      ( scen = 'V2' col = 51   hdr = 'WT_WTEXRS_04' node = 'W' fld = 'WT_WTEXRS#4' fmt = '' )
+      ( scen = 'V2' col = 52   hdr = 'WT_WTEXRS_05' node = 'W' fld = 'WT_WTEXRS#5' fmt = '' )
+      ( scen = 'V2' col = 53   hdr = 'WT_WTEXRS_06' node = 'W' fld = 'WT_WTEXRS#6' fmt = '' )
+      ( scen = 'V2' col = 54   hdr = 'WT_EXDF_01' node = 'W' fld = 'WT_EXDF#1' fmt = '' )
+      ( scen = 'V2' col = 55   hdr = 'WT_EXDF_02' node = 'W' fld = 'WT_EXDF#2' fmt = '' )
+      ( scen = 'V2' col = 56   hdr = 'WT_EXDF_03' node = 'W' fld = 'WT_EXDF#3' fmt = '' )
+      ( scen = 'V2' col = 57   hdr = 'WT_EXDF_04' node = 'W' fld = 'WT_EXDF#4' fmt = '' )
+      ( scen = 'V2' col = 58   hdr = 'WT_EXDF_05' node = 'W' fld = 'WT_EXDF#5' fmt = '' )
+      ( scen = 'V2' col = 59   hdr = 'WT_EXDF_06' node = 'W' fld = 'WT_EXDF#6' fmt = '' )
+      ( scen = 'V2' col = 60   hdr = 'WT_EXDT_01' node = 'W' fld = 'WT_EXDT#1' fmt = '' )
+      ( scen = 'V2' col = 61   hdr = 'WT_EXDT_02' node = 'W' fld = 'WT_EXDT#2' fmt = '' )
+      ( scen = 'V2' col = 62   hdr = 'WT_EXDT_03' node = 'W' fld = 'WT_EXDT#3' fmt = '' )
+      ( scen = 'V2' col = 63   hdr = 'WT_EXDT_04' node = 'W' fld = 'WT_EXDT#4' fmt = '' )
+      ( scen = 'V2' col = 64   hdr = 'WT_EXDT_05' node = 'W' fld = 'WT_EXDT#5' fmt = '' )
+      ( scen = 'V2' col = 65   hdr = 'WT_EXDT_06' node = 'W' fld = 'WT_EXDT#6' fmt = '' )
+    ) TO rt.
+
+    " V3 - TAN details (21 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V3' col = 1    hdr = 'Vendor' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V3' col = 2    hdr = 'Company' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V3' col = 3    hdr = 'Address' node = '-' fld = '' fmt = '' )
+      ( scen = 'V3' col = 4    hdr = 'Section_code_1' node = 'X' fld = 'SECCODE#1' fmt = '' )
+      ( scen = 'V3' col = 5    hdr = 'Section_code_2' node = 'X' fld = 'SECCODE#2' fmt = '' )
+      ( scen = 'V3' col = 6    hdr = 'Certificate_1' node = 'X' fld = 'WT_EXNR#1' fmt = '' )
+      ( scen = 'V3' col = 7    hdr = 'Certificate_2' node = 'X' fld = 'WT_EXNR#2' fmt = '' )
+      ( scen = 'V3' col = 8    hdr = 'Exemption_rate_1' node = 'X' fld = 'WT_EXRT#1' fmt = '' )
+      ( scen = 'V3' col = 9    hdr = 'Exemption_rate_2' node = 'X' fld = 'WT_EXRT#2' fmt = '' )
+      ( scen = 'V3' col = 10   hdr = 'Validfrom_1' node = 'X' fld = 'WT_EXDF#1' fmt = '' )
+      ( scen = 'V3' col = 11   hdr = 'Validfrom2' node = 'X' fld = 'WT_EXDF#2' fmt = '' )
+      ( scen = 'V3' col = 12   hdr = 'Validto_1' node = 'X' fld = 'WT_EXDT#1' fmt = '' )
+      ( scen = 'V3' col = 13   hdr = 'Validto_2' node = 'X' fld = 'WT_EXDT#2' fmt = '' )
+      ( scen = 'V3' col = 14   hdr = 'taxtype_1' node = 'X' fld = 'WITHT#1' fmt = '' )
+      ( scen = 'V3' col = 15   hdr = 'Taxtype_2' node = 'X' fld = 'WITHT#2' fmt = '' )
+      ( scen = 'V3' col = 16   hdr = 'taxcode_1' node = 'X' fld = 'WT_WITHCD#1' fmt = '' )
+      ( scen = 'V3' col = 17   hdr = 'Taxcode_2' node = 'X' fld = 'WT_WITHCD#2' fmt = '' )
+      ( scen = 'V3' col = 18   hdr = 'threshold_1' node = 'X' fld = 'FIWTIN_EXEM_THR#1' fmt = '' )
+      ( scen = 'V3' col = 19   hdr = 'threshold_2' node = 'X' fld = 'FIWTIN_EXEM_THR#2' fmt = '' )
+      ( scen = 'V3' col = 20   hdr = 'Currency_1' node = 'X' fld = 'WAERS#1' fmt = '' )
+      ( scen = 'V3' col = 21   hdr = 'Currency_2' node = 'X' fld = 'WAERS#2' fmt = '' )
+    ) TO rt.
+
+    " V4 - BANK Key creation (9 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V4' col = 1    hdr = 'Field Technical Name' node = '-' fld = '' fmt = '' )
+      ( scen = 'V4' col = 2    hdr = 'BANKS' node = 'N' fld = 'BANKS#1' fmt = '' )
+      ( scen = 'V4' col = 3    hdr = 'BANKL' node = 'N' fld = 'BANKL#1' fmt = '' )
+      ( scen = 'V4' col = 4    hdr = 'BANKA' node = 'Y' fld = 'BANKA' fmt = '' )
+      ( scen = 'V4' col = 5    hdr = 'PROVZ' node = 'Y' fld = 'PROVZ' fmt = '' )
+      ( scen = 'V4' col = 6    hdr = 'STRAS' node = 'Y' fld = 'STRAS' fmt = '' )
+      ( scen = 'V4' col = 7    hdr = 'ORT01' node = 'Y' fld = 'ORT01' fmt = '' )
+      ( scen = 'V4' col = 8    hdr = 'BRNCH' node = 'Y' fld = 'BRNCH' fmt = '' )
+      ( scen = 'V4' col = 9    hdr = 'SWIFT' node = 'Y' fld = 'SWIFT' fmt = '' )
+    ) TO rt.
+
+    " V5 - Bank details update (8 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V5' col = 1    hdr = 'Field Technical Name' node = '-' fld = '' fmt = '' )
+      ( scen = 'V5' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V5' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V5' col = 4    hdr = 'BANKS' node = 'N' fld = 'BANKS#1' fmt = '' )
+      ( scen = 'V5' col = 5    hdr = 'BANKL' node = 'N' fld = 'BANKL#1' fmt = '' )
+      ( scen = 'V5' col = 6    hdr = 'BANKN' node = 'N' fld = 'BANKN#1' fmt = '' )
+      ( scen = 'V5' col = 7    hdr = 'KOINH' node = 'N' fld = 'KOINH#1' fmt = '' )
+      ( scen = 'V5' col = 8    hdr = 'IBAN' node = 'N' fld = 'IBAN#1' fmt = '' )
+    ) TO rt.
+
+    " V6 - Vendor extension (12 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V6' col = 1    hdr = 'Field Technical Name' node = '-' fld = '' fmt = '' )
+      ( scen = 'V6' col = 2    hdr = '' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V6' col = 3    hdr = '' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V6' col = 4    hdr = '' node = 'K' fld = 'EKORG' fmt = '' )
+      ( scen = 'V6' col = 6    hdr = '' node = 'K' fld = 'RBUKRS' fmt = '' )
+      ( scen = 'V6' col = 7    hdr = '' node = 'K' fld = 'REKORG' fmt = '' )
+      ( scen = 'V6' col = 9    hdr = 'AKONT' node = 'B' fld = 'AKONT' fmt = 'GL' )
+      ( scen = 'V6' col = 10   hdr = '' node = 'B' fld = 'ZWELS' fmt = '' )
+      ( scen = 'V6' col = 11   hdr = '' node = 'B' fld = 'REPRF' fmt = '' )
+      ( scen = 'V6' col = 12   hdr = 'WAERS' node = 'P' fld = 'WAERS' fmt = '' )
+      ( scen = 'V6' col = 13   hdr = 'KALSK' node = 'P' fld = 'KALSK' fmt = '' )
+      ( scen = 'V6' col = 14   hdr = 'WEBRE' node = 'P' fld = 'WEBRE' fmt = '' )
+    ) TO rt.
+
+    " V7 - CIN details (15 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V7' col = 1    hdr = 'Vendor Account Number' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V7' col = 2    hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V7' col = 3    hdr = 'Address View' node = '-' fld = '' fmt = '' )
+      ( scen = 'V7' col = 4    hdr = 'ECC Number' node = 'V' fld = 'J_1IEXCD' fmt = '' )
+      ( scen = 'V7' col = 5    hdr = 'Excise Registration Number' node = 'V' fld = 'J_1IEXRN' fmt = '' )
+      ( scen = 'V7' col = 6    hdr = 'Excise Range' node = 'V' fld = 'J_1IEXRG' fmt = '' )
+      ( scen = 'V7' col = 7    hdr = 'Excise Division' node = 'V' fld = 'J_1IEXDI' fmt = '' )
+      ( scen = 'V7' col = 8    hdr = 'Excise Commissionerate' node = 'V' fld = 'J_1IEXCO' fmt = '' )
+      ( scen = 'V7' col = 9    hdr = 'Central Sales Tax Number' node = 'V' fld = 'J_1ICSTNO' fmt = '' )
+      ( scen = 'V7' col = 10   hdr = 'Local Sales Tax Number' node = 'V' fld = 'J_1ILSTNO' fmt = '' )
+      ( scen = 'V7' col = 11   hdr = 'Service Tax Registration Number' node = 'V' fld = 'J_1ISERN' fmt = '' )
+      ( scen = 'V7' col = 12   hdr = 'Permanent Account Number' node = 'V' fld = 'J_1IPANNO' fmt = '' )
+      ( scen = 'V7' col = 13   hdr = 'SSI status' node = 'V' fld = 'J_1ISSIST' fmt = '' )
+      ( scen = 'V7' col = 14   hdr = 'Exc.Tax Ind. Vendor' node = 'V' fld = 'J_1IEXCIVE' fmt = '' )
+      ( scen = 'V7' col = 15   hdr = 'Type of Vendor' node = 'V' fld = 'J_1IVTYP' fmt = '' )
+    ) TO rt.
+
+    " V8 - Patner function (35 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V8' col = 1    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V8' col = 2    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V8' col = 3    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
+      ( scen = 'V8' col = 4    hdr = 'D0320' node = '-' fld = '' fmt = '' )
+      ( scen = 'V8' col = 5    hdr = 'USE_ZAV' node = '-' fld = '' fmt = '' )
+      ( scen = 'V8' col = 6    hdr = 'PARVW_05' node = 'F' fld = 'PARVW#5' fmt = '' )
+      ( scen = 'V8' col = 7    hdr = 'PARVW_06' node = 'F' fld = 'PARVW#6' fmt = '' )
+      ( scen = 'V8' col = 8    hdr = 'PARVW_07' node = 'F' fld = 'PARVW#7' fmt = '' )
+      ( scen = 'V8' col = 9    hdr = 'PARVW_08' node = 'F' fld = 'PARVW#8' fmt = '' )
+      ( scen = 'V8' col = 10   hdr = 'PARVW_09' node = 'F' fld = 'PARVW#9' fmt = '' )
+      ( scen = 'V8' col = 11   hdr = 'PARVW_10' node = 'F' fld = 'PARVW#10' fmt = '' )
+      ( scen = 'V8' col = 12   hdr = 'PARVW_11' node = 'F' fld = 'PARVW#11' fmt = '' )
+      ( scen = 'V8' col = 13   hdr = 'PARVW_12' node = 'F' fld = 'PARVW#12' fmt = '' )
+      ( scen = 'V8' col = 14   hdr = 'PARVW_13' node = 'F' fld = 'PARVW#13' fmt = '' )
+      ( scen = 'V8' col = 15   hdr = 'PARVW_14' node = 'F' fld = 'PARVW#14' fmt = '' )
+      ( scen = 'V8' col = 16   hdr = 'PARVW_15' node = 'F' fld = 'PARVW#15' fmt = '' )
+      ( scen = 'V8' col = 17   hdr = 'GPARN_05' node = 'F' fld = 'PARTNER#5' fmt = '' )
+      ( scen = 'V8' col = 18   hdr = 'GPARN_06' node = 'F' fld = 'PARTNER#6' fmt = '' )
+      ( scen = 'V8' col = 19   hdr = 'GPARN_07' node = 'F' fld = 'PARTNER#7' fmt = '' )
+      ( scen = 'V8' col = 20   hdr = 'GPARN_08' node = 'F' fld = 'PARTNER#8' fmt = '' )
+      ( scen = 'V8' col = 21   hdr = 'GPARN_09' node = 'F' fld = 'PARTNER#9' fmt = '' )
+      ( scen = 'V8' col = 22   hdr = 'GPARN_10' node = 'F' fld = 'PARTNER#10' fmt = '' )
+      ( scen = 'V8' col = 23   hdr = 'GPARN_11' node = 'F' fld = 'PARTNER#11' fmt = '' )
+      ( scen = 'V8' col = 24   hdr = 'GPARN_12' node = 'F' fld = 'PARTNER#12' fmt = '' )
+      ( scen = 'V8' col = 25   hdr = 'GPARN_13' node = 'F' fld = 'PARTNER#13' fmt = '' )
+      ( scen = 'V8' col = 26   hdr = 'GPARN_14' node = 'F' fld = 'PARTNER#14' fmt = '' )
+      ( scen = 'V8' col = 27   hdr = 'GPARN_15' node = 'F' fld = 'PARTNER#15' fmt = '' )
+      ( scen = 'V8' col = 28   hdr = 'PARVW_01' node = 'F' fld = 'PARVW#1' fmt = '' )
+      ( scen = 'V8' col = 29   hdr = 'PARVW_02' node = 'F' fld = 'PARVW#2' fmt = '' )
+      ( scen = 'V8' col = 30   hdr = 'PARVW_03' node = 'F' fld = 'PARVW#3' fmt = '' )
+      ( scen = 'V8' col = 31   hdr = 'PARVW_04' node = 'F' fld = 'PARVW#4' fmt = '' )
+      ( scen = 'V8' col = 32   hdr = 'GPARN_01' node = 'F' fld = 'PARTNER#1' fmt = '' )
+      ( scen = 'V8' col = 33   hdr = 'GPARN_02' node = 'F' fld = 'PARTNER#2' fmt = '' )
+      ( scen = 'V8' col = 34   hdr = 'GPARN_03' node = 'F' fld = 'PARTNER#3' fmt = '' )
+      ( scen = 'V8' col = 35   hdr = 'GPARN_04' node = 'F' fld = 'PARTNER#4' fmt = '' )
+    ) TO rt.
+
+    " V9 - Block_Unblocked (9 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'V9' col = 1    hdr = 'Tech name' node = '-' fld = '' fmt = '' )
+      ( scen = 'V9' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'V9' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'V9' col = 4    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
       ( scen = 'V9' col = 5    hdr = 'SPERR' node = 'V' fld = 'SPERR' fmt = '' )
-      ( scen = 'V9' col = 6    hdr = 'SPERR_1' node = 'V' fld = 'SPERR1' fmt = '' )
+      ( scen = 'V9' col = 6    hdr = 'SPERR_1' node = 'B' fld = 'SPERR' fmt = '' )
       ( scen = 'V9' col = 7    hdr = 'SPERM' node = 'V' fld = 'SPERM' fmt = '' )
-      ( scen = 'V9' col = 8    hdr = 'SPERM_1' node = 'V' fld = 'SPERM1' fmt = '' )
+      ( scen = 'V9' col = 8    hdr = 'SPERM_1' node = 'P' fld = 'SPERM' fmt = '' )
       ( scen = 'V9' col = 9    hdr = 'SPERQ' node = 'V' fld = 'SPERQ' fmt = '' )
     ) TO rt.
   ENDMETHOD.
@@ -1256,9 +1298,43 @@ CLASS lcl_src DEFINITION FINAL.
     CLASS-METHODS title_text
       IMPORTING iv_title  TYPE clike
       RETURNING VALUE(rv) TYPE string.
+
+    " Two things the supplier interface does not carry: the bank master
+    " behind the vendor's own bank details, and the TAN exemption blocks.
+    " Passed by value with the dictionary type they are read with: an Open
+    " SQL host variable needs a type the compiler knows, and a by-reference
+    " parameter of a fixed type will not take anything else.
+    CLASS-METHODS bank_master
+      IMPORTING VALUE(iv_banks) TYPE banks
+                VALUE(iv_bankl) TYPE bankl
+      EXPORTING es_bnka         TYPE bnka.
+
+    " Component names are the table's own, so a column can be looked up by
+    " the same field name the upload program writes.
+    TYPES: BEGIN OF ty_tan,
+             seccode         TYPE string,
+             witht           TYPE string,
+             wt_withcd       TYPE string,
+             wt_exnr         TYPE string,
+             wt_exrt         TYPE string,
+             wt_exdf         TYPE string,
+             wt_exdt         TYPE string,
+             fiwtin_exem_thr TYPE string,
+             waers           TYPE string,
+           END OF ty_tan,
+           tt_tan TYPE STANDARD TABLE OF ty_tan WITH EMPTY KEY.
+
+    CLASS-METHODS tan_exem
+      IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                VALUE(iv_bukrs) TYPE bukrs
+      RETURNING VALUE(rt)       TYPE tt_tan.
   PRIVATE SECTION.
     CLASS-METHODS first_error
       IMPORTING is_error  TYPE cvis_message
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS pick
+      IMPORTING is_row    TYPE any
+                iv_fld    TYPE clike
       RETURNING VALUE(rv) TYPE string.
 ENDCLASS.
 
@@ -1394,6 +1470,69 @@ CLASS lcl_src IMPLEMENTATION.
     es_data = ls_out-vendors[ 1 ].
   ENDMETHOD.
 
+  METHOD bank_master.
+    CLEAR es_bnka.
+    IF iv_banks IS INITIAL OR iv_bankl IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE * FROM bnka
+      WHERE banks = @iv_banks AND bankl = @iv_bankl
+      INTO @es_bnka.
+  ENDMETHOD.
+
+  METHOD tan_exem.
+    " FIWTIN_TAN_EXEM is the table behind J_1ITAN_EXEM_SAVE, which the
+    " upload program writes through. It belongs to the India localisation,
+    " so the table is looked up before it is read - a system without it
+    " gets an empty result rather than a short dump.
+    SELECT SINGLE @abap_true FROM dd02l
+      WHERE tabname = 'FIWTIN_TAN_EXEM' AND tabclass = 'TRANSP' AND as4local = 'A'
+      INTO @DATA(lv_there).
+    IF lv_there <> abap_true.
+      RETURN.
+    ENDIF.
+
+    DATA lr_tab TYPE REF TO data.
+    FIELD-SYMBOLS <lt> TYPE STANDARD TABLE.
+
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF ('FIWTIN_TAN_EXEM').
+        ASSIGN lr_tab->* TO <lt>.
+        IF <lt> IS NOT ASSIGNED.
+          RETURN.
+        ENDIF.
+        SELECT * FROM ('FIWTIN_TAN_EXEM')
+          WHERE koart = 'K' AND accno = @iv_lifnr AND bukrs = @iv_bukrs
+          INTO CORRESPONDING FIELDS OF TABLE @<lt> UP TO 2 ROWS.
+      CATCH cx_root.
+        RETURN.
+    ENDTRY.
+
+    FIELD-SYMBOLS <ls> TYPE any.
+    LOOP AT <lt> ASSIGNING <ls>.
+      DATA ls_t TYPE ty_tan.
+      CLEAR ls_t.
+      ls_t-seccode         = pick( is_row = <ls> iv_fld = 'SECCODE' ).
+      ls_t-witht           = pick( is_row = <ls> iv_fld = 'WITHT' ).
+      ls_t-wt_withcd       = pick( is_row = <ls> iv_fld = 'WT_WITHCD' ).
+      ls_t-wt_exnr         = pick( is_row = <ls> iv_fld = 'WT_EXNR' ).
+      ls_t-wt_exrt         = pick( is_row = <ls> iv_fld = 'WT_EXRT' ).
+      ls_t-wt_exdf         = pick( is_row = <ls> iv_fld = 'WT_EXDF' ).
+      ls_t-wt_exdt         = pick( is_row = <ls> iv_fld = 'WT_EXDT' ).
+      ls_t-fiwtin_exem_thr = pick( is_row = <ls> iv_fld = 'FIWTIN_EXEM_THR' ).
+      ls_t-waers           = pick( is_row = <ls> iv_fld = 'WAERS' ).
+      APPEND ls_t TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD pick.
+    FIELD-SYMBOLS <lv> TYPE any.
+    ASSIGN COMPONENT iv_fld OF STRUCTURE is_row TO <lv>.
+    IF sy-subrc = 0.
+      rv = lcl_util=>text( iv_value = <lv> iv_fmt = '' ).
+    ENDIF.
+  ENDMETHOD.
+
   METHOD title_text.
     " The templates carry the title as text, the master data as a key.
     DATA(lv_key) = CONV ad_title( iv_title ).
@@ -1435,6 +1574,9 @@ CLASS lcl_eng DEFINITION FINAL.
     METHODS cust IMPORTING is_key TYPE lcl_src=>ty_key.
     METHODS cred IMPORTING is_key TYPE lcl_src=>ty_key.
     METHODS vend IMPORTING is_key TYPE lcl_src=>ty_key.
+    METHODS split_occ IMPORTING iv_in  TYPE clike
+                      EXPORTING ev_fld TYPE string
+                                ev_occ TYPE i.
     METHODS partner_of IMPORTING is_key TYPE lcl_src=>ty_key
                        RETURNING VALUE(rv) TYPE bu_partner.
 ENDCLASS.
@@ -1789,11 +1931,44 @@ CLASS lcl_eng IMPLEMENTATION.
 
     DATA(lt_comp) = ls_v-company_data-company.
     DATA(lt_pur)  = ls_v-purchasing_data-purchasing.
+    DATA(lt_bank) = ls_v-central_data-bankdetail-bankdetails.
     DATA ls_comp TYPE vmds_ei_company.
     DATA ls_pur  TYPE vmds_ei_purchasing.
 
-    DATA ls_bank TYPE cvis_ei_cvi_bankdetail.
-    READ TABLE ls_v-central_data-bankdetail-bankdetails INTO ls_bank INDEX 1.
+    " The bank master behind the vendor's first bank detail - the only
+    " source for the bank-key tab, which the supplier interface does not
+    " carry at all.
+    DATA ls_bnka TYPE bnka.
+    DATA ls_bk1  TYPE cvis_ei_cvi_bankdetail.
+    READ TABLE lt_bank INTO ls_bk1 INDEX 1.
+    IF sy-subrc = 0.
+      lcl_src=>bank_master( EXPORTING iv_banks = CONV banks( ls_bk1-data_key-banks )
+                                      iv_bankl = CONV bankl( ls_bk1-data_key-bankl )
+                            IMPORTING es_bnka  = ls_bnka ).
+    ENDIF.
+
+    " Telephone, mobile, fax and e-mail, in the order they are held, so a
+    " column asking for "the second one" gets the second one.
+    DATA: lt_teln TYPE string_table,
+          lt_telx TYPE string_table,
+          lt_mobn TYPE string_table,
+          lt_faxn TYPE string_table,
+          lt_smtp TYPE string_table.
+    LOOP AT ls_v-central_data-address-communication-phone-phone INTO DATA(ls_ph).
+      " R_3_USER carries data element AD_FLGMOB - a flag, not an ordinal.
+      IF ls_ph-contact-data-r_3_user = abap_true.
+        APPEND CONV string( ls_ph-contact-data-telephone ) TO lt_mobn.
+      ELSE.
+        APPEND CONV string( ls_ph-contact-data-telephone ) TO lt_teln.
+        APPEND CONV string( ls_ph-contact-data-extension ) TO lt_telx.
+      ENDIF.
+    ENDLOOP.
+    LOOP AT ls_v-central_data-address-communication-fax-fax INTO DATA(ls_fx).
+      APPEND CONV string( ls_fx-contact-data-fax ) TO lt_faxn.
+    ENDLOOP.
+    LOOP AT ls_v-central_data-address-communication-smtp-smtp INTO DATA(ls_sm).
+      APPEND CONV string( ls_sm-contact-data-e_mail ) TO lt_smtp.
+    ENDLOOP.
 
     DATA lv_ci TYPE i.
     DATA lv_pi TYPE i.
@@ -1804,10 +1979,14 @@ CLASS lcl_eng IMPLEMENTATION.
     WHILE lv_ci <= lv_cn.
       CLEAR ls_comp.
       READ TABLE lt_comp INTO ls_comp INDEX lv_ci.
+      DATA(lt_wt)  = ls_comp-wtax_type-wtax_type.
+      DATA(lt_tan) = lcl_src=>tan_exem( iv_lifnr = is_key-lifnr
+                                        iv_bukrs = CONV bukrs( ls_comp-data_key-bukrs ) ).
       lv_pi = 1.
       WHILE lv_pi <= lv_pn.
         CLEAR ls_pur.
         READ TABLE lt_pur INTO ls_pur INDEX lv_pi.
+        DATA(lt_fn) = ls_pur-functions-functions.
 
         IF lines( mt_row ) >= p_max.
           lv_pi = lv_pn + 1.
@@ -1818,42 +1997,96 @@ CLASS lcl_eng IMPLEMENTATION.
         DATA(ls_row) = empty_row( ).
         LOOP AT mt_col INTO DATA(ls_col).
           DATA lv_val TYPE string.
+          DATA lv_fld TYPE string.
+          DATA lv_occ TYPE i.
           CLEAR lv_val.
+          split_occ( EXPORTING iv_in  = ls_col-fld
+                     IMPORTING ev_fld = lv_fld ev_occ = lv_occ ).
 
-          CASE ls_col-fld.
-            WHEN 'FIELDTECHNAME'.
-              CLEAR lv_val.                       " the template's label column
-            WHEN 'LIFNR'.
-              lv_val = lcl_util=>text( iv_value = is_key-lifnr iv_fmt = 'AL' ).
-            WHEN 'BUKRS'.
-              lv_val = ls_comp-data_key-bukrs.
-            WHEN 'EKORG'.
-              lv_val = ls_pur-data_key-ekorg.
-            WHEN 'TITLEMEDI' OR 'TITLE_MEDI'.
-              lv_val = lcl_src=>title_text(
-                         comp( is_any = ls_v-central_data-address-postal-data
-                               iv_fld = 'TITLE' iv_fmt = '' ) ).
-            WHEN OTHERS.
-              " Wherever the field lives: general data, address, company
-              " code, purchasing organisation, bank details.
+          CASE ls_col-node.
+            WHEN 'K'.
+              CASE lv_fld.
+                WHEN 'LIFNR'.  lv_val = lcl_util=>text( iv_value = is_key-lifnr iv_fmt = 'AL' ).
+                WHEN 'BUKRS' OR 'RBUKRS'. lv_val = ls_comp-data_key-bukrs.
+                WHEN 'EKORG' OR 'REKORG'. lv_val = ls_pur-data_key-ekorg.
+              ENDCASE.
+
+            WHEN 'V'.
               lv_val = comp( is_any = ls_v-central_data-central-data
-                             iv_fld = ls_col-fld iv_fmt = ls_col-fmt ).
-              IF lv_val IS INITIAL.
-                lv_val = comp( is_any = ls_v-central_data-address-postal-data
-                               iv_fld = ls_col-fld iv_fmt = ls_col-fmt ).
+                             iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'A'.
+              lv_val = comp( is_any = ls_v-central_data-address-postal-data
+                             iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+              IF ls_col-fmt = 'TT' AND lv_val IS NOT INITIAL.
+                lv_val = lcl_src=>title_text( lv_val ).
               ENDIF.
-              IF lv_val IS INITIAL.
-                lv_val = comp( is_any = ls_comp-data iv_fld = ls_col-fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'M'.
+              CASE lv_fld.
+                WHEN 'TEL'.   READ TABLE lt_teln INTO lv_val INDEX 1.
+                WHEN 'TELX'.  READ TABLE lt_telx INTO lv_val INDEX 1.
+                WHEN 'TEL2'.  READ TABLE lt_teln INTO lv_val INDEX 2.
+                WHEN 'TELX2'. READ TABLE lt_telx INTO lv_val INDEX 2.
+                WHEN 'MOB'.   READ TABLE lt_mobn INTO lv_val INDEX 1.
+                WHEN 'MOB2'.  READ TABLE lt_mobn INTO lv_val INDEX 2.
+                WHEN 'FAX'.   READ TABLE lt_faxn INTO lv_val INDEX 1.
+                WHEN 'SMT'.   READ TABLE lt_smtp INTO lv_val INDEX 1.
+                WHEN 'SMT2'.  READ TABLE lt_smtp INTO lv_val INDEX 2.
+              ENDCASE.
+              IF sy-subrc <> 0.
+                CLEAR lv_val.
               ENDIF.
-              IF lv_val IS INITIAL.
-                lv_val = comp( is_any = ls_pur-data iv_fld = ls_col-fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'B'.
+              lv_val = comp( is_any = ls_comp-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'P'.
+              lv_val = comp( is_any = ls_pur-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'N'.
+              DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
+              CLEAR ls_bk.
+              READ TABLE lt_bank INTO ls_bk INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_bk-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                IF lv_val IS INITIAL.
+                  lv_val = comp( is_any = ls_bk-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                ENDIF.
               ENDIF.
-              IF lv_val IS INITIAL.
-                lv_val = comp( is_any = ls_bank-data_key iv_fld = ls_col-fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'W'.
+              DATA ls_wt TYPE vmds_ei_wtax_type.
+              CLEAR ls_wt.
+              READ TABLE lt_wt INTO ls_wt INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_wt-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                IF lv_val IS INITIAL.
+                  lv_val = comp( is_any = ls_wt-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                ENDIF.
               ENDIF.
-              IF lv_val IS INITIAL.
-                lv_val = comp( is_any = ls_bank-data iv_fld = ls_col-fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'F'.
+              DATA ls_fn TYPE vmds_ei_functions.
+              CLEAR ls_fn.
+              READ TABLE lt_fn INTO ls_fn INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_fn-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                IF lv_val IS INITIAL.
+                  lv_val = comp( is_any = ls_fn-data iv_fld = lv_fld iv_fmt = 'AL' ).
+                ENDIF.
               ENDIF.
+
+            WHEN 'X'.
+              DATA ls_tan TYPE lcl_src=>ty_tan.
+              CLEAR ls_tan.
+              READ TABLE lt_tan INTO ls_tan INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_tan iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+              ENDIF.
+
+            WHEN 'Y'.
+              lv_val = comp( is_any = ls_bnka iv_fld = lv_fld iv_fmt = ls_col-fmt ).
           ENDCASE.
 
           put( EXPORTING iv_col = ls_col-col iv_val = lv_val CHANGING cs_row = ls_row ).
@@ -1866,6 +2099,18 @@ CLASS lcl_eng IMPLEMENTATION.
       ENDWHILE.
       lv_ci = lv_ci + 1.
     ENDWHILE.
+  ENDMETHOD.
+
+  METHOD split_occ.
+    " A repeating node is addressed as FIELD#n in the map - the field name
+    " on its own means the first occurrence.
+    ev_fld = iv_in.
+    ev_occ = 1.
+    IF iv_in CS '#'.
+      SPLIT iv_in AT '#' INTO DATA(lv_f) DATA(lv_n).
+      ev_fld = lv_f.
+      ev_occ = CONV i( lv_n ).
+    ENDIF.
   ENDMETHOD.
 
 ENDCLASS.
