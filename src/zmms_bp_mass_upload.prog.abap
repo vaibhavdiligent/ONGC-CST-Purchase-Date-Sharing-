@@ -1322,6 +1322,15 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS bp_by_guid   IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
                          RETURNING VALUE(rv)      TYPE bu_partner.
 
+    " The key column asks for a vendor, but a user working in BP sees the
+    " partner number and the two are only the same where the grouping is
+    " flagged for it. A number that is not a vendor is therefore tried as a
+    " partner, and the vendor behind it is what the row is applied to.
+    METHODS vend_of
+      IMPORTING VALUE(iv_in) TYPE lifnr
+      EXPORTING ev_lifnr     TYPE lifnr
+                ev_from_bp   TYPE bu_partner.
+
   PRIVATE SECTION.
     CLASS-DATA go TYPE REF TO lcl_cfg.
     METHODS constructor.
@@ -1527,6 +1536,33 @@ CLASS lcl_cfg IMPLEMENTATION.
       WHERE partner_guid = @iv_guid INTO @rv.
   ENDMETHOD.
 
+  METHOD vend_of.
+    CLEAR: ev_lifnr, ev_from_bp.
+    IF iv_in IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " A vendor number wins - that is what the column asks for, and the same
+    " digits can be a vendor and, separately, someone else's partner.
+    IF vend_exists( iv_in ) = abap_true.
+      ev_lifnr = iv_in.
+      RETURN.
+    ENDIF.
+
+    " BUT000-PARTNER and LFA1-LIFNR are both CHAR 10 with the ALPHA exit,
+    " so the number as it stands can be looked up either way round.
+    SELECT SINGLE partner_guid FROM but000
+      WHERE partner = @iv_in INTO @DATA(lv_guid).
+    IF sy-subrc <> 0 OR lv_guid IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE vendor FROM cvi_vend_link
+      WHERE partner_guid = @lv_guid INTO @ev_lifnr.
+    IF ev_lifnr IS NOT INITIAL.
+      ev_from_bp = iv_in.
+    ENDIF.
+  ENDMETHOD.
+
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -1676,6 +1712,14 @@ CLASS lcl_base DEFINITION ABSTRACT.
           mo_cfg  TYPE REF TO lcl_cfg,
           mo_cvis TYPE REF TO lcl_cvis.
 
+    "! The vendor a key cell names, whether it holds the vendor number or
+    "! the business partner number. An unknown number is handed back as it
+    "! stands, so the caller's own "does not exist" check still speaks.
+    METHODS key_lifnr
+      IMPORTING is_row    TYPE ty_row
+                iv_col    TYPE i
+      RETURNING VALUE(rv) TYPE lifnr.
+
     METHODS header
       IMPORTING iv_lifnr TYPE lifnr
                 iv_task  TYPE cmd_ei_object_task
@@ -1713,6 +1757,28 @@ CLASS lcl_base IMPLEMENTATION.
     mo_log  = io_log.
     mo_cfg  = lcl_cfg=>get( ).
     mo_cvis = NEW lcl_cvis( io_log ).
+  ENDMETHOD.
+
+  METHOD key_lifnr.
+    rv = lcl_util=>lifnr( lcl_util=>cell( is_row = is_row iv_col = iv_col ) ).
+    IF rv IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA: lv_lifnr TYPE lifnr,
+          lv_bp    TYPE bu_partner.
+    mo_cfg->vend_of( EXPORTING iv_in      = rv
+                     IMPORTING ev_lifnr   = lv_lifnr
+                               ev_from_bp = lv_bp ).
+    IF lv_bp IS INITIAL OR lv_lifnr IS INITIAL.
+      RETURN.                            " a vendor number, or neither
+    ENDIF.
+
+    mo_log->add( iv_row = is_row-row iv_k1 = lv_lifnr iv_ty = 'S'
+                 iv_txt = |{ rv ALPHA = OUT } is business partner | &&
+                          |{ lv_bp ALPHA = OUT } - vendor | &&
+                          |{ lv_lifnr ALPHA = OUT } is used| ).
+    rv = lv_lifnr.
   ENDMETHOD.
 
   METHOD header.
@@ -1988,7 +2054,7 @@ CLASS lcl_h_create IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 2 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 3 ) ).
       DATA(lv_ekorg) = CONV ekorg( lcl_util=>cell( is_row = ls_row iv_col = 4 ) ).
       DATA(lv_ktokk) = CONV ktokk( to_upper( lcl_util=>cell( is_row = ls_row iv_col = 5 ) ) ).
@@ -2212,7 +2278,7 @@ CLASS lcl_h_tds IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 2 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 3 ) ).
       DATA(lv_qland) = to_upper( lcl_util=>cell( is_row = ls_row iv_col = 5 ) ).
       " column 4 = D0610, an XK02 screen flag - deliberately ignored
@@ -2370,7 +2436,7 @@ CLASS lcl_h_tan IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 1 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 1 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
       IF lv_lifnr IS INITIAL.
         CONTINUE.
@@ -2668,7 +2734,7 @@ CLASS lcl_h_bank IMPLEMENTATION.
       IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
       ENDIF.
-      DATA(lv_l) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
+      DATA(lv_l) = key_lifnr( is_row = ls_row iv_col = 2 ).
       IF lv_l IS INITIAL.
         CONTINUE.
       ENDIF.
@@ -2730,7 +2796,7 @@ CLASS lcl_h_ext IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 2 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 3 ) ).
       DATA(lv_ekorg) = CONV ekorg( lcl_util=>cell( is_row = ls_row iv_col = 4 ) ).
       DATA(lv_rbuk)  = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 6 ) ).
@@ -2889,7 +2955,7 @@ CLASS lcl_h_cin IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 1 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 1 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
       IF lv_lifnr IS INITIAL.
         CONTINUE.
@@ -2964,7 +3030,7 @@ CLASS lcl_h_pfn IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 1 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 1 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
       DATA(lv_ekorg) = CONV ekorg( lcl_util=>cell( is_row = ls_row iv_col = 3 ) ).
 
@@ -2990,7 +3056,7 @@ CLASS lcl_h_pfn IMPLEMENTATION.
       LOOP AT lt_pair INTO DATA(lv_pair).
         SPLIT lv_pair AT ';' INTO DATA(lv_pc) DATA(lv_gc).
         DATA(lv_parvw) = CONV parvw( to_upper( lcl_util=>cell( is_row = ls_row iv_col = CONV i( lv_pc ) ) ) ).
-        DATA(lv_partn) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = CONV i( lv_gc ) ) ).
+        DATA(lv_partn) = key_lifnr( is_row = ls_row iv_col = CONV i( lv_gc ) ).
 
         IF lv_parvw IS INITIAL AND lv_partn IS INITIAL.
           CONTINUE.
@@ -3106,7 +3172,7 @@ CLASS lcl_h_blk IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA(lv_lifnr) = lcl_util=>lifnr( lcl_util=>cell( is_row = ls_row iv_col = 2 ) ).
+      DATA(lv_lifnr) = key_lifnr( is_row = ls_row iv_col = 2 ).
       DATA(lv_bukrs) = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 3 ) ).
       DATA(lv_ekorg) = CONV ekorg( lcl_util=>cell( is_row = ls_row iv_col = 4 ) ).
 

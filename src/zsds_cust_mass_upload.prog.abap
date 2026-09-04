@@ -978,6 +978,15 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS bp_by_guid   IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
                          RETURNING VALUE(rv)      TYPE bu_partner.
 
+    " The key column asks for a customer, but a user working in BP sees the
+    " partner number and the two are only the same where the grouping is
+    " flagged for it. A number that is not a customer is therefore tried as
+    " a partner, and the customer behind it is what the row is applied to.
+    METHODS cust_of
+      IMPORTING VALUE(iv_in) TYPE kunnr
+      EXPORTING ev_kunnr     TYPE kunnr
+                ev_from_bp   TYPE bu_partner.
+
     METHODS bp_group    IMPORTING iv_ktokd  TYPE clike
                         RETURNING VALUE(rv) TYPE bu_group.
     TYPES tt_role TYPE STANDARD TABLE OF bu_role WITH EMPTY KEY.
@@ -1192,6 +1201,33 @@ CLASS lcl_cfg IMPLEMENTATION.
     ENDIF.
     SELECT SINGLE partner FROM but000
       WHERE partner_guid = @iv_guid INTO @rv.
+  ENDMETHOD.
+
+  METHOD cust_of.
+    CLEAR: ev_kunnr, ev_from_bp.
+    IF iv_in IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " A customer number wins - that is what the column asks for, and the
+    " same digits can be a customer and, separately, someone else's partner.
+    IF cust_exists( iv_in ) = abap_true.
+      ev_kunnr = iv_in.
+      RETURN.
+    ENDIF.
+
+    " BUT000-PARTNER and KNA1-KUNNR are both CHAR 10 with the ALPHA exit,
+    " so the number as it stands can be looked up either way round.
+    SELECT SINGLE partner_guid FROM but000
+      WHERE partner = @iv_in INTO @DATA(lv_guid).
+    IF sy-subrc <> 0 OR lv_guid IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE customer FROM cvi_cust_link
+      WHERE partner_guid = @lv_guid INTO @ev_kunnr.
+    IF ev_kunnr IS NOT INITIAL.
+      ev_from_bp = iv_in.
+    ENDIF.
   ENDMETHOD.
 
   METHOD cust_bp.
@@ -2415,6 +2451,15 @@ CLASS lcl_engine DEFINITION FINAL.
     DATA mo_cred  TYPE REF TO lcl_credit.
     DATA mt_map   TYPE tt_map.
 
+    " The customer a key cell names - see the method for what it resolves.
+    " TYPE STRING, not CLIKE: LCL_UTIL=>ALPHA takes a string by reference
+    " and a generically typed actual cannot reach it. Both callers read the
+    " cell with LCL_UTIL=>CELL( ), which returns a string.
+    METHODS key_kunnr
+      IMPORTING iv_cell   TYPE string
+                iv_row    TYPE i
+      RETURNING VALUE(rv) TYPE kunnr.
+
     " Moves IV_VAL into component IV_FLD of CS_DATA and flags the matching
     " component of CS_DATAX. RETURNING cannot be combined with CHANGING, so
     " this reports problems through the log instead of a return code.
@@ -2734,6 +2779,31 @@ CLASS lcl_engine IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+  METHOD key_kunnr.
+    " The customer a key cell names, whether it holds the customer number
+    " or the business partner number. An unknown number is handed back as
+    " it stands, so the caller's own "does not exist" check still speaks.
+    rv = lcl_util=>alpha( iv_in = iv_cell iv_len = 10 ).
+    IF rv IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA: lv_kunnr TYPE kunnr,
+          lv_bp    TYPE bu_partner.
+    lcl_cfg=>get( )->cust_of( EXPORTING iv_in      = rv
+                              IMPORTING ev_kunnr   = lv_kunnr
+                                        ev_from_bp = lv_bp ).
+    IF lv_bp IS INITIAL OR lv_kunnr IS INITIAL.
+      RETURN.                            " a customer number, or neither
+    ENDIF.
+
+    mo_log->add( iv_row = iv_row iv_kunnr = lv_kunnr iv_type = 'S'
+                 iv_text = |{ rv ALPHA = OUT } is business partner | &&
+                           |{ lv_bp ALPHA = OUT } - customer | &&
+                           |{ lv_kunnr ALPHA = OUT } is used| ).
+    rv = lv_kunnr.
+  ENDMETHOD.
+
   METHOD set_comp.
     ASSIGN COMPONENT iv_fld OF STRUCTURE cs_data TO FIELD-SYMBOL(<lv_t>).
     IF sy-subrc <> 0.
@@ -2825,7 +2895,7 @@ CLASS lcl_engine IMPLEMENTATION.
     LOOP AT mt_map INTO DATA(ls_k) WHERE node = gc_n_key.
       DATA(lv_v) = lcl_util=>cell( is_row = is_row iv_col = ls_k-col ).
       CASE ls_k-fld.
-        WHEN 'KUNNR'. lv_kunnr = lcl_util=>alpha( iv_in = lv_v iv_len = 10 ).
+        WHEN 'KUNNR'. lv_kunnr = key_kunnr( iv_cell = lv_v iv_row = is_row-row ).
         WHEN 'BUKRS'. lv_bukrs = lv_v.
         WHEN 'VKORG'. lv_vkorg = lv_v.
         WHEN 'VTWEG'. lv_vtweg = lv_v.
@@ -3251,7 +3321,7 @@ CLASS lcl_engine IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       IF ls_m-node = gc_n_key AND ls_m-fld = 'KUNNR'.
-        lv_kunnr = lcl_util=>alpha( iv_in = lv_cell iv_len = 10 ).
+        lv_kunnr = key_kunnr( iv_cell = lv_cell iv_row = is_row-row ).
         CONTINUE.
       ENDIF.
 
