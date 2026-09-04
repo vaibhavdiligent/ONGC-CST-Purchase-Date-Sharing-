@@ -984,7 +984,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'C5' col = 14   hdr = 'SBGRP' node = '-' fld = '' fmt = '' )
       ( scen = 'C5' col = 16   hdr = 'Payment Terms' node = 'B' fld = 'ZTERM' fmt = '' )
       ( scen = 'C5' col = 17   hdr = 'Cust Grp 3' node = 'S' fld = 'KVGR3' fmt = '' )
-      ( scen = 'C5' col = 18   hdr = 'Z1 Interest Indicator (cycle -> ZINRT, see handler)' node = 'B' fld = 'VZSKZ' fmt = '' )
+      ( scen = 'C5' col = 18   hdr = 'Z1 Interest Indicator & Interest cycle' node = 'B' fld = 'VZSKZ' fmt = '' )
       ( scen = 'C6' col = 1    hdr = 'Customer code' node = 'K' fld = 'KUNNR' fmt = 'AL' )
       ( scen = 'C6' col = 2    hdr = 'Transaction Code' node = '-' fld = '' fmt = '' )
       ( scen = 'C6' col = 3    hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' )

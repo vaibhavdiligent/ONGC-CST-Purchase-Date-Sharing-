@@ -1808,7 +1808,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R4' col = 33   node = 'M' fld = 'SMT' cnv = '' hdr = 'SMTPADDR' )  " SMTP_ADDR
       ( scen = 'R4' col = 34   node = 'C' fld = 'KATR3' cnv = '' hdr = 'KATR3' )  " KATR3
       ( scen = 'R4' col = 35   node = 'C' fld = 'KATR4' cnv = '' hdr = 'KATR4' )  " KATR4
-      ( scen = 'R4' col = 36   node = 'C' fld = 'LIFNR' cnv = 'AL' hdr = '' )
+      ( scen = 'R4' col = 36   node = 'C' fld = 'LIFNR' cnv = 'AL' hdr = 'LIFNR' )  " the template leaves the cell blank; the download names it
       ( scen = 'R4' col = 37   node = 'C' fld = 'VBUND' cnv = 'AL' hdr = 'VBUND' )  " VBUND
       ( scen = 'R4' col = 38   node = 'C' fld = 'KONZS' cnv = '' hdr = 'KONZS' )  " KONZS
       ( scen = 'R4' col = 39   node = 'C' fld = 'STCD3' cnv = '' hdr = 'STCD3' )  " STCD3
@@ -1910,7 +1910,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R5' col = 13   node = 'U' fld = 'XBLOCKED' cnv = '' hdr = 'CRBLB' )  " CRBLB
       ( scen = 'R5' col = 16   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'PAYMENTTERMS' )  " Payment Terms
       ( scen = 'R5' col = 17   node = 'S' fld = 'KVGR3' cnv = '' hdr = 'CUSTGRP3' )  " Cust Grp 3
-      ( scen = 'R5' col = 18   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'Z1INTERESTINDICATORCYCLEZINRTSEEHANDLER' )  " Z1 Interest Indicator (cycle -> ZINRT, see handler)
+      ( scen = 'R5' col = 18   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'Z1INTERESTINDICATORINTERESTCYCLE' )  " Z1 Interest Indicator & Interest cycle - the cycle goes to ZINRT, see the handler
     ) TO rt.
 
     " R6 - domestic customer US (75 columns, 73 mapped)
