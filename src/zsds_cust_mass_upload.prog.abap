@@ -1564,7 +1564,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 114  node = 'Z' fld = 'BG_ISS_BANK' cnv = '' hdr = 'BGISSUINGBANK' )  " BG Issuing Bank
       ( scen = 'R1' col = 115  node = 'Z' fld = 'AGGR_EXPDT' cnv = 'DT' hdr = 'AGREEMENTEXPIRYDATE' )  " Agreement Expiry Date
       ( scen = 'R1' col = 116  node = 'Z' fld = 'APPOINT_DT' cnv = 'DT' hdr = 'APPOINTMENTDATE' )  " Appointment Date
-      ( scen = 'R1' col = 117  node = 'S' fld = 'KDGRP' cnv = '' hdr = 'CUSTOMERGROUP' )  " Customer group
+      ( scen = 'R1' col = 117  node = 'Z' fld = 'KDGRP' cnv = '' hdr = 'CUSTOMERGROUP' )  " Customer group - the licence record's, as on the Morocco and SAGA tabs
       ( scen = 'R1' col = 118  node = 'Z' fld = 'AIOCD_CODE' cnv = '' hdr = 'AIOCDCODE' )  " AIOCD Code
       ( scen = 'R1' col = 119  node = 'Z' fld = 'CUST_BNK_NAME' cnv = '' hdr = 'CUSTOMERBANKNAME' )  " Customer Bank Name
       ( scen = 'R1' col = 120  node = 'Z' fld = 'DST_BOOKING' cnv = '' hdr = 'DESTINATIONOFBOOKING' )  " Destination of Booking
@@ -1641,7 +1641,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R2' col = 54   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'ANTLF' )  " ANTLF
       ( scen = 'R2' col = 55   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCO1' )  " INCO1
       ( scen = 'R2' col = 56   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCO2' )  " INCO2
-      ( scen = 'R2' col = 57   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'ZTERM' )  " ZTERM
+      ( scen = 'R2' col = 57   node = 'S' fld = 'ZTERM' cnv = '' hdr = 'ZTERM' )  " ZTERM - sales area, KNVV; this tab has no company code payment term
       ( scen = 'R2' col = 58   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'KTGRD' )  " KTGRD
       ( scen = 'R2' col = 59   node = 'T' fld = '#1' cnv = '' hdr = 'TAXKD01' )  " TAXKD_01
       ( scen = 'R2' col = 60   node = 'T' fld = '#2' cnv = '' hdr = 'TAXKD02' )  " TAXKD_02
