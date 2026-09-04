@@ -62,6 +62,10 @@ CONSTANTS gc_task_read TYPE cmd_ei_object_task VALUE 'M'.
 
 " Data objects the SELECT-OPTIONS are built over, and the scenario the
 " proposed file name follows.
+" The selection screen's own function code, so a radio button click can be
+" told apart from the user asking to run the extract.
+TABLES sscrfields.
+
 DATA: gv_bp    TYPE bu_partner,
       gv_kunnr TYPE kunnr,
       gv_lifnr TYPE lifnr,
@@ -75,7 +79,7 @@ DATA: gv_bp    TYPE bu_partner,
 " each half.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 SELECTION-SCREEN COMMENT /1(60) TEXT-002.
-PARAMETERS: p_c1 RADIOBUTTON GROUP g1 DEFAULT 'X',
+PARAMETERS: p_c1 RADIOBUTTON GROUP g1 USER-COMMAND rb DEFAULT 'X',
             p_c2 RADIOBUTTON GROUP g1,
             p_c3 RADIOBUTTON GROUP g1,
             p_c4 RADIOBUTTON GROUP g1,
@@ -1872,6 +1876,7 @@ ENDCLASS.
 CLASS lcl_main DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS scenario RETURNING VALUE(rv) TYPE char2.
+    CLASS-METHODS propose_file.
     CLASS-METHODS run.
   PRIVATE SECTION.
     CLASS-METHODS write
@@ -1894,6 +1899,33 @@ CLASS lcl_main IMPLEMENTATION.
       WHEN p_v5 = abap_true THEN 'V5' WHEN p_v6 = abap_true THEN 'V6'
       WHEN p_v7 = abap_true THEN 'V7' WHEN p_v8 = abap_true THEN 'V8'
       ELSE                       'V9' ).
+  ENDMETHOD.
+
+  METHOD propose_file.
+    " The file name follows the radio button, so two scenarios never land in
+    " the same workbook. Only a change of scenario rewrites it - a folder the
+    " user picked in the file dialog is kept, and so is a name they typed,
+    " until they move to a different scenario.
+    DATA(lv_now) = scenario( ).
+    IF lv_now = gv_scen AND p_file IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+    gv_scen = lv_now.
+
+    " Whatever stands in front of the last separator is the folder, and the
+    " separator is a backslash on the PC and a slash on the server.
+    DATA(lv_old) = CONV string( p_file ).
+    DATA(lv_dir) = `C:\temp\`.
+    DATA(lv_i)   = strlen( lv_old ).
+    WHILE lv_i > 0.
+      lv_i = lv_i - 1.
+      IF lv_old+lv_i(1) = '\' OR lv_old+lv_i(1) = '/'.
+        lv_dir = lv_old(lv_i) && lv_old+lv_i(1).
+        EXIT.
+      ENDIF.
+    ENDWHILE.
+
+    p_file = |{ lv_dir }{ lcl_map=>name( gv_scen ) }.xlsx|.
   ENDMETHOD.
 
   METHOD write.
@@ -1994,16 +2026,12 @@ ENDCLASS.
 * Selection-screen events
 *----------------------------------------------------------------------*
 INITIALIZATION.
-  gv_scen = lcl_main=>scenario( ).
-  p_file  = |C:\\temp\\{ lcl_map=>name( gv_scen ) }.xlsx|.
+  lcl_main=>propose_file( ).
 
 AT SELECTION-SCREEN OUTPUT.
-  " Keep the proposed file name in step with the scenario picked.
-  DATA(gv_now) = lcl_main=>scenario( ).
-  IF gv_now <> gv_scen.
-    gv_scen = gv_now.
-    p_file  = |C:\\temp\\{ lcl_map=>name( gv_scen ) }.xlsx|.
-  ENDIF.
+  " Show the file name that belongs to the scenario now selected. The radio
+  " button group carries USER-COMMAND, so a click comes straight back here.
+  lcl_main=>propose_file( ).
 
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
   DATA: lv_path TYPE string,
@@ -2023,6 +2051,14 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
   ENDIF.
 
 AT SELECTION-SCREEN.
+  " Runs before START-OF-SELECTION as well, so the file name is right even
+  " when the user picks a scenario and presses F8 without a screen refresh.
+  lcl_main=>propose_file( ).
+
+  " A radio button click is only that refresh - the user has not asked for
+  " anything to be extracted yet, so there is nothing to complain about.
+  CHECK sscrfields-ucomm <> 'RB'.
+
   IF s_bp[] IS INITIAL AND s_kunnr[] IS INITIAL AND s_lifnr[] IS INITIAL
      AND p_blank = abap_false.
     MESSAGE 'Give a business partner, a customer or a supplier - or tick "Headings only"' TYPE 'E'.
