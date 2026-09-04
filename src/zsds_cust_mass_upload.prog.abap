@@ -832,6 +832,12 @@ CLASS lcl_log DEFINITION FINAL.
                 iv_kunnr TYPE clike OPTIONAL
                 it_map   TYPE mdg_bs_bp_msgmap_t.
 
+    " A creation is logged before its number exists; this puts the number
+    " on the lines already written for that row so the list shows it.
+    METHODS set_key
+      IMPORTING iv_row   TYPE i
+                iv_kunnr TYPE clike.
+
     METHODS has_error
       IMPORTING iv_row    TYPE i
       RETURNING VALUE(rv) TYPE abap_bool.
@@ -872,6 +878,17 @@ CLASS lcl_log IMPLEMENTATION.
            iv_text  = ls_m-message
            iv_struc = ls_m-bapistrucname
            iv_fld   = ls_m-bapifldnm ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD set_key.
+    IF iv_kunnr IS INITIAL.
+      RETURN.
+    ENDIF.
+    LOOP AT mt_msg ASSIGNING FIELD-SYMBOL(<ls_m>) WHERE xlsrow = iv_row.
+      IF <ls_m>-kunnr IS INITIAL.
+        <ls_m>-kunnr = iv_kunnr.
+      ENDIF.
     ENDLOOP.
   ENDMETHOD.
 
@@ -3170,9 +3187,13 @@ CLASS lcl_engine IMPLEMENTATION.
     IF lv_ok = abap_true AND lv_task = gc_i AND lv_kunnr IS INITIAL
        AND p_test = abap_false.
       lv_kunnr = lo_cfg->cust_by_guid( lv_guid ).
-      IF lv_kunnr IS NOT INITIAL.
+      IF lv_kunnr IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_type = 'W'
+                     iv_text = 'Posted, but the new customer number could not be read back from CVI_CUST_LINK' ).
+      ELSE.
+        mo_log->set_key( iv_row = is_row-row iv_kunnr = lv_kunnr ).
         mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'S'
-                     iv_text = |Customer { lv_kunnr } created| ).
+                     iv_text = |Customer { lv_kunnr ALPHA = OUT } created| ).
       ENDIF.
     ENDIF.
 

@@ -1145,6 +1145,11 @@ CLASS lcl_log DEFINITION FINAL.
                 iv_k2  TYPE clike OPTIONAL
                 iv_k3  TYPE clike OPTIONAL
                 is_ret TYPE bapiret2.
+    " A creation is logged before its number exists; this puts the number
+    " on the lines already written for that row so the list shows it.
+    METHODS set_key
+      IMPORTING iv_row TYPE i
+                iv_k1  TYPE clike.
     METHODS has_error IMPORTING iv_row TYPE i RETURNING VALUE(rv) TYPE abap_bool.
     METHODS display.
   PRIVATE SECTION.
@@ -1177,6 +1182,17 @@ CLASS lcl_log IMPLEMENTATION.
     add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
          iv_ty  = is_ret-type iv_id = is_ret-id iv_no = is_ret-number
          iv_fl  = is_ret-field iv_txt = is_ret-message ).
+  ENDMETHOD.
+
+  METHOD set_key.
+    IF iv_k1 IS INITIAL.
+      RETURN.
+    ENDIF.
+    LOOP AT mt_msg ASSIGNING FIELD-SYMBOL(<ls_m>) WHERE xlsrow = iv_row.
+      IF <ls_m>-key1 IS INITIAL.
+        <ls_m>-key1 = iv_k1.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD has_error.
@@ -1294,6 +1310,11 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS vend_land1  IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE land1.
     METHODS vend_pan    IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE j_1ipanno.
     METHODS vend_guid   IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE bu_partner_guid.
+    " The other way round: a vendor created with internal numbering has its
+    " number only after the save, and the GUID the header carried is what
+    " leads to it.
+    METHODS vend_by_guid IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
+                         RETURNING VALUE(rv)      TYPE lifnr.
 
   PRIVATE SECTION.
     CLASS-DATA go TYPE REF TO lcl_cfg.
@@ -1482,6 +1503,14 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD vend_guid.
     SELECT SINGLE partner_guid FROM cvi_vend_link WHERE vendor = @iv_lifnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD vend_by_guid.
+    IF iv_guid IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE vendor FROM cvi_vend_link
+      WHERE partner_guid = @iv_guid INTO @rv.
   ENDMETHOD.
 
 ENDCLASS.
@@ -2094,8 +2123,27 @@ CLASS lcl_h_create IMPLEMENTATION.
         APPEND ls_po TO ls_data-vendor-purchasing_data-purchasing.
       ENDIF.
 
-      mo_cvis->post( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k2 = lv_bukrs iv_k3 = lv_ekorg
-                     is_data = ls_data ).
+      DATA(lv_ok) = mo_cvis->post( iv_row = ls_row-row iv_k1 = lv_lifnr
+                                   iv_k2 = lv_bukrs iv_k3 = lv_ekorg
+                                   is_data = ls_data ).
+
+      " A vendor created with internal numbering has no number until the
+      " save is through. The GUID the header put in the message is the way
+      " back to it, so the run says which vendor it made instead of leaving
+      " the column empty.
+      IF lv_ok = abap_true AND lv_lifnr IS INITIAL AND p_test = abap_false.
+        DATA(lv_new) = mo_cfg->vend_by_guid(
+                         ls_data-partner-header-object_instance-bpartnerguid ).
+        IF lv_new IS INITIAL.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
+                       iv_txt = 'Posted, but the new vendor number could not be read back from CVI_VEND_LINK' ).
+        ELSE.
+          mo_log->set_key( iv_row = ls_row-row iv_k1 = lv_new ).
+          mo_log->add( iv_row = ls_row-row iv_k1 = lv_new iv_k2 = lv_bukrs
+                       iv_k3 = lv_ekorg iv_ty = 'S'
+                       iv_txt = |Vendor { lv_new ALPHA = OUT } created| ).
+        ENDIF.
+      ENDIF.
 
       IF p_stop = abap_true AND mo_log->has_error( ls_row-row ) = abap_true.
         EXIT.
