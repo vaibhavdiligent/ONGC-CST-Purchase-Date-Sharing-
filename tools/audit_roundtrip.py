@@ -40,9 +40,11 @@ def workbook(path, sheet, head, rows=()):
     body, wide = '', len(head)
     for rn, cells in enumerate([list(head)] + [list(r) for r in rows], start=1):
         wide = max(wide, len(cells))
+        # Column A is written empty or not, exactly as LCL_XLSX does: a row
+        # that starts at B comes back one column short of the template.
         body += f'<row r="{rn}">' + ''.join(
             f'<c r="{letter(i)}{rn}" t="s"><v>{si(v)}</v></c>'
-            for i, v in enumerate(cells, 1) if v) + '</row>'
+            for i, v in enumerate(cells, 1) if v or i == 1) + '</row>'
     dim = f'A1:{letter(max(wide, 1))}{len(rows) + 1}'
 
     M = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'

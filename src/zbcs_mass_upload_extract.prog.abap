@@ -321,7 +321,12 @@ CLASS lcl_xlsx IMPLEMENTATION.
       " Taken before anything else runs: READ TABLE inside SI( ) sets
       " SY-TABIX, and the column number is wanted, not that.
       DATA(lv_col) = sy-tabix.
-      IF lv_cell IS INITIAL.
+      " Column A is always written, empty or not. CL_FDT_XL_SPREADSHEET
+      " builds its table from the cells it finds, so a row that starts at B
+      " comes back one column short and every value sits one place to the
+      " left of where the template says it is. The templates whose first
+      " column is a label leave A empty, which is exactly that case.
+      IF lv_cell IS INITIAL AND lv_col > 1.
         CONTINUE.                              " an empty cell is left out
       ENDIF.
       DATA(lv_ix) = si( lv_cell ).
@@ -591,7 +596,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'C1' col = 72   hdr = 'Maximum Number of Partial Deliveries Allowed Per Item' node = 'S' fld = 'ANTLF' fmt = '' )
       ( scen = 'C1' col = 73   hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' )
       ( scen = 'C1' col = 74   hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' )
-      ( scen = 'C1' col = 75   hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' )
+      ( scen = 'C1' col = 75   hdr = 'Terms of Payment Key' node = 'S' fld = 'ZTERM' fmt = '' )
       ( scen = 'C1' col = 76   hdr = 'Account Assignment Group for Customer' node = 'S' fld = 'KTGRD' fmt = '' )
       ( scen = 'C1' col = 77   hdr = 'JOIG IN:Central GST - OP' node = 'T' fld = 'JOCG' fmt = '' )
       ( scen = 'C1' col = 78   hdr = 'JTC1 IN: 206C(1H) Goods' node = 'T' fld = 'JTC1' fmt = '' )
@@ -860,7 +865,10 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'C4' col = 41   hdr = 'STCD4' node = 'C' fld = 'STCD5' fmt = '' )
       ( scen = 'C4' col = 42   hdr = 'STCEG' node = 'C' fld = 'STCEG' fmt = '' )
       ( scen = 'C4' col = 43   hdr = 'J_1IPANNO' node = 'C' fld = 'J_1IPANNO' fmt = '' )
-      ( scen = 'C4' col = 44   hdr = 'STCD3' node = 'B' fld = 'AKONT' fmt = 'GL' )
+      " Column 44 is headed STCD3, which column 39 already is; the upload
+      " program reads nothing from it until the customer confirms what it
+      " is, so nothing is written into it here either.
+      ( scen = 'C4' col = 44   hdr = 'STCD3' node = '-' fld = '' fmt = '' )
       ( scen = 'C4' col = 45   hdr = 'AKONT' node = 'B' fld = 'AKONT' fmt = 'GL' )
       ( scen = 'C4' col = 46   hdr = 'ZUAWA' node = 'B' fld = 'ZUAWA' fmt = '' )
       ( scen = 'C4' col = 47   hdr = 'VZSKZ' node = 'B' fld = 'VZSKZ' fmt = '' )
@@ -1002,7 +1010,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'C6' col = 56   hdr = 'Maximum Number of Partial Deliver' node = 'S' fld = 'ANTLF' fmt = '' )
       ( scen = 'C6' col = 57   hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' )
       ( scen = 'C6' col = 58   hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' )
-      ( scen = 'C6' col = 59   hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' )
+      ( scen = 'C6' col = 59   hdr = 'Terms of Payment Key' node = 'S' fld = 'ZTERM' fmt = '' )
       ( scen = 'C6' col = 60   hdr = 'Customer Account Assignment Group' node = 'S' fld = 'KTGRD' fmt = '' )
       ( scen = 'C6' col = 61   hdr = 'Tax classification for customer' node = 'T' fld = 'UTXJ' fmt = '' )
       ( scen = 'C6' col = 62   hdr = 'Tax classification for customer' node = 'T' fld = 'UTX2' fmt = '' )
@@ -1075,7 +1083,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'C7' col = 56   hdr = 'Maximum Number of Partial Deliver' node = 'S' fld = 'ANTLF' fmt = '' )
       ( scen = 'C7' col = 57   hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' )
       ( scen = 'C7' col = 58   hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' )
-      ( scen = 'C7' col = 59   hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' )
+      ( scen = 'C7' col = 59   hdr = 'Terms of Payment Key' node = 'S' fld = 'ZTERM' fmt = '' )
       ( scen = 'C7' col = 60   hdr = 'Customer Account Assignment Group' node = 'S' fld = 'KTGRD' fmt = '' )
       ( scen = 'C7' col = 61   hdr = 'Tax classification for customer' node = 'T' fld = 'UTXJ' fmt = '' )
       ( scen = 'C7' col = 62   hdr = 'Tax classification for customer' node = 'T' fld = 'UTX2' fmt = '' )

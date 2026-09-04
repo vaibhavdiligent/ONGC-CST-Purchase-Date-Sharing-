@@ -1522,7 +1522,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 72   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'MAXIMUMNUMBEROFPARTIALDELIVERIESALLOWEDP' )  " Maximum Number of Partial Deliveries Allowed Per Item
       ( scen = 'R1' col = 73   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCOTERMSPART1' )  " Incoterms (Part 1)
       ( scen = 'R1' col = 74   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCOTERMSPART2' )  " Incoterms (Part 2)
-      ( scen = 'R1' col = 75   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
+      ( scen = 'R1' col = 75   node = 'S' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key - sales area, KNVV
       ( scen = 'R1' col = 76   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'ACCOUNTASSIGNMENTGROUPFORCUSTOMER' )  " Account Assignment Group for Customer
       ( scen = 'R1' col = 77   node = 'T' fld = 'JOCG' cnv = '' hdr = 'JOIGINCENTRALGSTOP' )  " JOIG IN:Central GST - OP
       ( scen = 'R1' col = 78   node = 'T' fld = 'JTC1' cnv = '' hdr = 'JTC1IN206C1HGOODS' )  " JTC1 IN: 206C(1H) Goods
@@ -1803,7 +1803,12 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R4' col = 41   node = 'C' fld = 'STCD5' cnv = '' hdr = 'STCD4' )  " STCD4
       ( scen = 'R4' col = 42   node = 'C' fld = 'STCEG' cnv = '' hdr = 'STCEG' )  " STCEG
       ( scen = 'R4' col = 43   node = 'C' fld = 'J_1IPANNO' cnv = '' hdr = 'J1IPANNO' )  " J_1IPANNO
-      ( scen = 'R4' col = 44   node = 'B' fld = 'AKONT' cnv = 'GL' hdr = 'STCD3' )  " STCD3
+      " Column 44 (AR) is headed STCD3, which column 39 already is. It was
+      " mapped to the reconciliation account, which column 45 then wrote
+      " over, so whatever it holds went nowhere. It is one of the SAGA
+      " columns AM-AV still to be confirmed with the customer, so it is read
+      " by nothing until they say what it is - a value sent to the wrong
+      " field is worse than a value not sent.
       ( scen = 'R4' col = 45   node = 'B' fld = 'AKONT' cnv = 'GL' hdr = 'AKONT' )  " AKONT
       ( scen = 'R4' col = 46   node = 'B' fld = 'ZUAWA' cnv = '' hdr = 'ZUAWA' )  " ZUAWA
       ( scen = 'R4' col = 47   node = 'B' fld = 'VZSKZ' cnv = '' hdr = 'VZSKZ' )  " VZSKZ
@@ -1953,7 +1958,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R6' col = 56   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'MAXIMUMNUMBEROFPARTIALDELIVER' )  " Maximum Number of Partial Deliver
       ( scen = 'R6' col = 57   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCOTERMSPART1' )  " Incoterms (Part 1)
       ( scen = 'R6' col = 58   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCOTERMSPART2' )  " Incoterms (Part 2)
-      ( scen = 'R6' col = 59   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
+      ( scen = 'R6' col = 59   node = 'S' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key - sales area, KNVV
       ( scen = 'R6' col = 60   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'CUSTOMERACCOUNTASSIGNMENTGROUP' )  " Customer Account Assignment Group
       ( scen = 'R6' col = 61   node = 'T' fld = 'UTXJ' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
       ( scen = 'R6' col = 62   node = 'T' fld = 'UTX2' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
@@ -2030,7 +2035,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R7' col = 56   node = 'S' fld = 'ANTLF' cnv = '' hdr = 'MAXIMUMNUMBEROFPARTIALDELIVER' )  " Maximum Number of Partial Deliver
       ( scen = 'R7' col = 57   node = 'S' fld = 'INCO1' cnv = '' hdr = 'INCOTERMSPART1' )  " Incoterms (Part 1)
       ( scen = 'R7' col = 58   node = 'S' fld = 'INCO2' cnv = '' hdr = 'INCOTERMSPART2' )  " Incoterms (Part 2)
-      ( scen = 'R7' col = 59   node = 'B' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key
+      ( scen = 'R7' col = 59   node = 'S' fld = 'ZTERM' cnv = '' hdr = 'TERMSOFPAYMENTKEY' )  " Terms of Payment Key - sales area, KNVV
       ( scen = 'R7' col = 60   node = 'S' fld = 'KTGRD' cnv = '' hdr = 'CUSTOMERACCOUNTASSIGNMENTGROUP' )  " Customer Account Assignment Group
       ( scen = 'R7' col = 61   node = 'T' fld = 'UTXJ' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
       ( scen = 'R7' col = 62   node = 'T' fld = 'UTX2' cnv = '' hdr = 'TAXCLASSIFICATIONFORCUSTOMER' )  " Tax classification for customer
@@ -3372,7 +3377,22 @@ CLASS lcl_engine IMPLEMENTATION.
           CASE ls_m-fld.
             WHEN 'SEGMENT'.    lv_kkber = lv_cell.
             WHEN 'LIMIT_MAIN'. lv_main  = lcl_util=>to_dec( lv_cell ). lv_has_main = abap_true.
-            WHEN 'LIMIT_SGM'.  lv_sgm   = lcl_util=>to_dec( lv_cell ). lv_has_sgm  = abap_true.
+            WHEN 'LIMIT_SGM'.
+              " The credit tab carries the classic KLIME and KLIMK side by
+              " side and FSCM holds one limit per segment, so the two write
+              " the same field. The first filled column is the one used;
+              " the second only speaks up when it disagrees.
+              DATA(lv_sgm2) = lcl_util=>to_dec( lv_cell ).
+              IF lv_has_sgm = abap_true.
+                IF lv_sgm2 <> lv_sgm.
+                  mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                               iv_fld = 'LIMIT_SGM'
+                               iv_text = |Two segment limits in this row, { lv_sgm } and { lv_sgm2 } - the first is used| ).
+                ENDIF.
+              ELSE.
+                lv_sgm      = lv_sgm2.
+                lv_has_sgm  = abap_true.
+              ENDIF.
             WHEN 'CURRENCY'.   lv_curr  = lv_cell.
             WHEN 'RISK_CLASS'. lv_risk  = lv_cell.
             WHEN 'XBLOCKED'.   lv_block = lv_cell.
