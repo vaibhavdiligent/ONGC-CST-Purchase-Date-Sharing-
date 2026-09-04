@@ -604,6 +604,11 @@ CLASS lcl_hdr IMPLEMENTATION.
       ( scen = 'R1' col = 47   hdr = 'AKONT' )
       ( scen = 'R1' col = 48   hdr = 'FDGRV' )
       ( scen = 'R1' col = 49   hdr = 'ALTKN' )
+      " The template leaves 50 and 62 unlabelled and both are ZTERM - the
+      " company code's and the purchasing organisation's. A heading of its
+      " own for each tells them apart in a file downloaded as a sample; a
+      " file that still has them blank is read by position as before.
+      ( scen = 'R1' col = 50   hdr = 'ZTERMCOMPANYCODE' )
       ( scen = 'R1' col = 51   hdr = 'REPRF' )
       ( scen = 'R1' col = 52   hdr = 'ZWELS' )
       ( scen = 'R1' col = 53   hdr = 'ZAHLS' )
@@ -615,6 +620,7 @@ CLASS lcl_hdr IMPLEMENTATION.
       ( scen = 'R1' col = 59   hdr = 'WITHT' )
       ( scen = 'R1' col = 60   hdr = 'WTWITHCD' )
       ( scen = 'R1' col = 61   hdr = 'WAERS' )
+      ( scen = 'R1' col = 62   hdr = 'ZTERMPURCHORG' )
       ( scen = 'R1' col = 63   hdr = 'KALSK' )
       ( scen = 'R1' col = 64   hdr = 'WEBRE' )
       ( scen = 'R1' col = 65   hdr = 'INCO1' )
@@ -742,7 +748,17 @@ CLASS lcl_hdr IMPLEMENTATION.
     " R6 - Vendor extension (5 identifiable headings)
     APPEND LINES OF VALUE tt_hdr(
       ( scen = 'R6' col = 1    hdr = 'FIELDTECHNICALNAME' )
+      " Seven of this tab's columns carry no heading either, and the vendor
+      " number is one of them. Named here so a sample file reads, and so a
+      " file that names them is matched by name rather than by position.
+      ( scen = 'R6' col = 2    hdr = 'LIFNR' )
+      ( scen = 'R6' col = 3    hdr = 'BUKRS' )
+      ( scen = 'R6' col = 4    hdr = 'EKORG' )
+      ( scen = 'R6' col = 6    hdr = 'REFBUKRS' )
+      ( scen = 'R6' col = 7    hdr = 'REFEKORG' )
       ( scen = 'R6' col = 9    hdr = 'AKONT' )
+      ( scen = 'R6' col = 10   hdr = 'ZWELS' )
+      ( scen = 'R6' col = 11   hdr = 'REPRF' )
       ( scen = 'R6' col = 12   hdr = 'WAERS' )
       ( scen = 'R6' col = 13   hdr = 'KALSK' )
       ( scen = 'R6' col = 14   hdr = 'WEBRE' )
@@ -1077,6 +1093,7 @@ CLASS lcl_excel IMPLEMENTATION.
           INSERT VALUE ty_h( key = lv_key col = lv_hc n = 1 ) INTO TABLE lt_h.
         ENDIF.
       ENDLOOP.
+      DATA lt_lost TYPE SORTED TABLE OF i WITH NON-UNIQUE KEY table_line.
       LOOP AT it_hdr INTO DATA(ls_w).
         READ TABLE lt_h INTO DATA(ls_h) WITH KEY key = CONV string( ls_w-hdr ).
         IF sy-subrc = 0 AND ls_h-n = 1.
@@ -1085,8 +1102,22 @@ CLASS lcl_excel IMPLEMENTATION.
           IF ls_h-col <> ls_w-col.
             ev_moved = ev_moved + 1.
           ENDIF.
+        ELSE.
+          INSERT ls_w-col INTO TABLE lt_lost.
         ENDIF.
       ENDLOOP.
+
+      " A column whose heading is nowhere in this file is read from where the
+      " template puts it - but only while the file is laid out as the
+      " template is. Once something has moved, that position holds the
+      " neighbour's value, and a wrong value is worse than none.
+      IF ev_moved > 0.
+        LOOP AT lt_lost INTO DATA(lv_lost).
+          IF NOT line_exists( lt_pos[ tgt = lv_lost ] ).
+            INSERT VALUE ty_pos( tgt = lv_lost src = 0 ) INTO TABLE lt_pos.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
     ENDIF.
 
     " Widest position the handlers may ask for.

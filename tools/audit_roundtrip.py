@@ -7,9 +7,8 @@ column of every scenario has to come back bound.
 """
 import html, re, sys, zipfile, collections, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-sys.path.insert(0, '/tmp/claude-0/-home-user-ONGC-CST-Purchase-Date-Sharing-/0a870517-dcc5-5a06-9069-d731d41a85f0/scratchpad')
 from sim import sheets, squash, load_cust, load_vend
-from audit_mangle import bind
+from audit_column_mangle import bind
 
 EX = open('src/zbcs_mass_upload_extract.prog.abap', encoding='utf-8').read()
 

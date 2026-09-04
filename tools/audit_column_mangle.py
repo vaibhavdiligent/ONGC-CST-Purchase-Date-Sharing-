@@ -2,7 +2,8 @@
    with its own column, then delete a column and swap two others, and check
    that every mapped field still reads the value of ITS OWN column."""
 import sys, collections
-sys.path.insert(0,'/tmp/claude-0/-home-user-ONGC-CST-Purchase-Date-Sharing-/0a870517-dcc5-5a06-9069-d731d41a85f0/scratchpad')
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sim import sheets, squash, load_cust, load_vend
 
 def bind(ents, head, use_fld):
@@ -56,8 +57,15 @@ def check(which, path, scen, tab, hrow, ents):
         wide=max([ents[i]['col'] for i in src]+[max(mdata)]) if src else max(mdata)
         tgt2src={ents[i]['col']:c for i,c in src.items()}
         claimed=set(tgt2src.values())
+        # Once anything has moved, a column whose heading is nowhere in the
+        # file cannot be read from its template position - that position now
+        # holds the neighbour's value.
+        moved=any(ents[i]['col']!=c for i,c in src.items())
         for t in range(1,wide+1):
-            s=tgt2src.get(t, 0 if t in claimed else t)
+            if t in tgt2src:        s=tgt2src[t]
+            elif t in claimed:      s=0
+            elif moved:             s=0
+            else:                   s=t
             out[t]=mdata.get(s,'') if s else ''
         read=lambda i,e: out.get(e['col'],'')
     else:
