@@ -1328,6 +1328,30 @@ CLASS lcl_src DEFINITION FINAL.
       IMPORTING VALUE(iv_lifnr) TYPE lifnr
                 VALUE(iv_bukrs) TYPE bukrs
       RETURNING VALUE(rt)       TYPE tt_tan.
+
+    " Withholding tax, read from the table the interface writes to. The
+    " company-code node of the extract carries it, but only when the
+    " interface chooses to fill that node - and a sample with no tax type
+    " in it looks exactly like a vendor with no tax type. Reading LFBW
+    " settles which of the two it is.
+    TYPES: BEGIN OF ty_wtax,
+             witht     TYPE string,
+             wt_withcd TYPE string,
+             wt_subjct TYPE string,
+             qsrec     TYPE string,
+             wt_wtstcd TYPE string,
+             wt_exnr   TYPE string,
+             wt_exrt   TYPE string,
+             wt_wtexrs TYPE string,
+             wt_exdf   TYPE string,
+             wt_exdt   TYPE string,
+           END OF ty_wtax,
+           tt_wtax TYPE STANDARD TABLE OF ty_wtax WITH EMPTY KEY.
+
+    CLASS-METHODS wtax
+      IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                VALUE(iv_bukrs) TYPE bukrs
+      RETURNING VALUE(rt)       TYPE tt_wtax.
   PRIVATE SECTION.
     CLASS-METHODS first_error
       IMPORTING is_error  TYPE cvis_message
@@ -1522,6 +1546,31 @@ CLASS lcl_src IMPLEMENTATION.
       ls_t-fiwtin_exem_thr = pick( is_row = <ls> iv_fld = 'FIWTIN_EXEM_THR' ).
       ls_t-waers           = pick( is_row = <ls> iv_fld = 'WAERS' ).
       APPEND ls_t TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD wtax.
+    SELECT witht, wt_withcd, wt_subjct, qsrec, wt_wtstcd,
+           wt_exnr, wt_exrt, wt_wtexrs, wt_exdf, wt_exdt
+      FROM lfbw
+      WHERE lifnr = @iv_lifnr AND bukrs = @iv_bukrs
+      ORDER BY witht
+      INTO TABLE @DATA(lt_w) UP TO 6 ROWS.
+
+    LOOP AT lt_w INTO DATA(ls_w).
+      DATA ls_r TYPE ty_wtax.
+      CLEAR ls_r.
+      ls_r-witht     = lcl_util=>text( iv_value = ls_w-witht     iv_fmt = '' ).
+      ls_r-wt_withcd = lcl_util=>text( iv_value = ls_w-wt_withcd iv_fmt = '' ).
+      ls_r-wt_subjct = lcl_util=>text( iv_value = ls_w-wt_subjct iv_fmt = '' ).
+      ls_r-qsrec     = lcl_util=>text( iv_value = ls_w-qsrec     iv_fmt = '' ).
+      ls_r-wt_wtstcd = lcl_util=>text( iv_value = ls_w-wt_wtstcd iv_fmt = '' ).
+      ls_r-wt_exnr   = lcl_util=>text( iv_value = ls_w-wt_exnr   iv_fmt = '' ).
+      ls_r-wt_exrt   = lcl_util=>text( iv_value = ls_w-wt_exrt   iv_fmt = '' ).
+      ls_r-wt_wtexrs = lcl_util=>text( iv_value = ls_w-wt_wtexrs iv_fmt = '' ).
+      ls_r-wt_exdf   = lcl_util=>text( iv_value = ls_w-wt_exdf   iv_fmt = '' ).
+      ls_r-wt_exdt   = lcl_util=>text( iv_value = ls_w-wt_exdt   iv_fmt = '' ).
+      APPEND ls_r TO rt.
     ENDLOOP.
   ENDMETHOD.
 
@@ -1980,6 +2029,8 @@ CLASS lcl_eng IMPLEMENTATION.
       CLEAR ls_comp.
       READ TABLE lt_comp INTO ls_comp INDEX lv_ci.
       DATA(lt_wt)  = ls_comp-wtax_type-wtax_type.
+      DATA(lt_lfbw) = lcl_src=>wtax( iv_lifnr = is_key-lifnr
+                                     iv_bukrs = CONV bukrs( ls_comp-data_key-bukrs ) ).
       DATA(lt_tan) = lcl_src=>tan_exem( iv_lifnr = is_key-lifnr
                                         iv_bukrs = CONV bukrs( ls_comp-data_key-bukrs ) ).
       lv_pi = 1.
@@ -2063,6 +2114,15 @@ CLASS lcl_eng IMPLEMENTATION.
                 lv_val = comp( is_any = ls_wt-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
                 IF lv_val IS INITIAL.
                   lv_val = comp( is_any = ls_wt-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                ENDIF.
+              ELSE.
+                " The interface returned no tax types - LFBW says whether
+                " there are none or the node simply was not filled.
+                DATA ls_lfbw TYPE lcl_src=>ty_wtax.
+                CLEAR ls_lfbw.
+                READ TABLE lt_lfbw INTO ls_lfbw INDEX lv_occ.
+                IF sy-subrc = 0.
+                  lv_val = comp( is_any = ls_lfbw iv_fld = lv_fld iv_fmt = ls_col-fmt ).
                 ENDIF.
               ENDIF.
 
