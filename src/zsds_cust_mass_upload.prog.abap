@@ -273,6 +273,15 @@ CLASS lcl_util DEFINITION FINAL.
     "   FDGRV -> ALPHA (domain FDGRP)
     " IV_LEN is the length of the field the value is going into. Without it
     " nothing is padded - see the comment in the implementation.
+    " The character length of a field, or 0 when it has none. DESCRIBE
+    " FIELD ... IN CHARACTER MODE only takes a character-like operand: a
+    " packed field such as KNVV-ANTLF, an integer, or a STRING terminates
+    " the program with OBJECTS_NOT_CHAR, and a dynamically assigned field
+    " symbol can be any of those.
+    CLASS-METHODS char_len
+      IMPORTING iv_any    TYPE any
+      RETURNING VALUE(rv) TYPE i.
+
     CLASS-METHODS alpha
       IMPORTING iv_in     TYPE string
                 iv_len    TYPE i DEFAULT 0
@@ -452,6 +461,17 @@ CLASS lcl_util IMPLEMENTATION.
   METHOD to_int.
     DATA(lv_p) = to_dec( iv_in ).
     rv = round( val = lv_p dec = 0 ).
+  ENDMETHOD.
+
+  METHOD char_len.
+    rv = 0.
+    DATA(lv_kind) = cl_abap_typedescr=>describe_by_data( iv_any )->type_kind.
+    IF lv_kind = cl_abap_typedescr=>typekind_char
+    OR lv_kind = cl_abap_typedescr=>typekind_num
+    OR lv_kind = cl_abap_typedescr=>typekind_date
+    OR lv_kind = cl_abap_typedescr=>typekind_time.
+      DESCRIBE FIELD iv_any LENGTH rv IN CHARACTER MODE.
+    ENDIF.
   ENDMETHOD.
 
   METHOD alpha.
@@ -2230,21 +2250,30 @@ CLASS lcl_lic IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    CASE iv_cnv.
-      WHEN 'DT'.
-        DATA(lv_d) = lcl_util=>to_date( lv_in ).
-        IF lv_d IS INITIAL.
-          mo_log->add( iv_row = iv_row iv_type = 'E'
-                       iv_struc = 'ZSD_LICENSE_CHK' iv_fld = iv_fld
-                       iv_text = |"{ lv_in }" is not a valid date| ).
-          RETURN.
-        ENDIF.
-        <lv> = lv_d.
-      WHEN 'NM'.
-        <lv> = lcl_util=>to_int( lv_in ).
-      WHEN OTHERS.
-        <lv> = lv_in.
-    ENDCASE.
+    " The licence table has amounts and day counts in it, so the same guard
+    " applies here: a cell that will not convert is logged, not dumped.
+    TRY.
+        CASE iv_cnv.
+          WHEN 'DT'.
+            DATA(lv_d) = lcl_util=>to_date( lv_in ).
+            IF lv_d IS INITIAL.
+              mo_log->add( iv_row = iv_row iv_type = 'E'
+                           iv_struc = 'ZSD_LICENSE_CHK' iv_fld = iv_fld
+                           iv_text = |"{ lv_in }" is not a valid date| ).
+              RETURN.
+            ENDIF.
+            <lv> = lv_d.
+          WHEN 'NM'.
+            <lv> = lcl_util=>to_int( lv_in ).
+          WHEN OTHERS.
+            <lv> = lv_in.
+        ENDCASE.
+      CATCH cx_sy_conversion_error.
+        mo_log->add( iv_row = iv_row iv_type = 'E'
+                     iv_struc = 'ZSD_LICENSE_CHK' iv_fld = iv_fld
+                     iv_text = |"{ lv_in }" does not fit { iv_fld }| ).
+        RETURN.
+    ENDTRY.
     INSERT CONV fieldname( iv_fld ) INTO TABLE mt_fld.
   ENDMETHOD.
 
@@ -2821,41 +2850,54 @@ CLASS lcl_engine IMPLEMENTATION.
       " A blank cell means "leave alone", so no DATAX flag is set.
       RETURN.
     ELSE.
-      CASE iv_cnv.
-        WHEN 'AL' OR 'GL'.
-          " GL was never handled here, so the seven AKONT columns fell
-          " through to WHEN OTHERS and reached the API with no conversion
-          " at all. Both codes now take the same path.
-          "
-          " The padding length is read from the target field itself, so it
-          " is always the real DDIC length - 10 for KUNNR, LIFNR, AKONT and
-          " FDGRV, 6 for VBUND - and cannot drift out of step with a table.
-          DATA lv_len TYPE i.
-          DESCRIBE FIELD <lv_t> LENGTH lv_len IN CHARACTER MODE.
-          <lv_t> = lcl_util=>alpha( iv_in = lv_in iv_len = lv_len ).
-        WHEN 'DT'.
-          DATA(lv_d) = lcl_util=>to_date( lv_in ).
-          IF lv_d IS INITIAL.
-            mo_log->add( iv_row = iv_row iv_type = 'E'
-                         iv_struc = iv_struc iv_fld = iv_fld
-                         iv_text = |"{ lv_in }" is not a valid date| ).
-            RETURN.
-          ENDIF.
-          <lv_t> = lv_d.
-        WHEN 'NM'.
-          <lv_t> = lcl_util=>to_int( lv_in ).
-        WHEN 'TT'.
-          <lv_t> = lcl_cfg=>get( )->title_key( lv_in ).
-        WHEN OTHERS.
-          " A word in a one character field is a flag written out in full.
-          DATA lv_w TYPE i.
-          DESCRIBE FIELD <lv_t> LENGTH lv_w IN CHARACTER MODE.
-          IF lv_w = 1 AND strlen( lv_in ) > 1.
-            <lv_t> = lcl_util=>flag( lv_in ).
-          ELSE.
-            <lv_t> = lv_in.
-          ENDIF.
-      ENDCASE.
+      " Every branch below writes into a field the caller named at runtime,
+      " so the target can be a number or a date. A cell that is not one
+      " belongs in the log, not in a short dump.
+      TRY.
+        CASE iv_cnv.
+          WHEN 'AL' OR 'GL'.
+            " GL was never handled here, so the seven AKONT columns fell
+            " through to WHEN OTHERS and reached the API with no conversion
+            " at all. Both codes now take the same path.
+            "
+            " The padding length is read from the target field itself, so it
+            " is always the real DDIC length - 10 for KUNNR, LIFNR, AKONT and
+            " FDGRV, 6 for VBUND - and cannot drift out of step with a table.
+            DATA(lv_len) = lcl_util=>char_len( <lv_t> ).
+            IF lv_len > 0.
+              <lv_t> = lcl_util=>alpha( iv_in = lv_in iv_len = lv_len ).
+            ELSE.
+              " not a character field, so there is nothing to pad
+              <lv_t> = lv_in.
+            ENDIF.
+          WHEN 'DT'.
+            DATA(lv_d) = lcl_util=>to_date( lv_in ).
+            IF lv_d IS INITIAL.
+              mo_log->add( iv_row = iv_row iv_type = 'E'
+                           iv_struc = iv_struc iv_fld = iv_fld
+                           iv_text = |"{ lv_in }" is not a valid date| ).
+              RETURN.
+            ENDIF.
+            <lv_t> = lv_d.
+          WHEN 'NM'.
+            <lv_t> = lcl_util=>to_int( lv_in ).
+          WHEN 'TT'.
+            <lv_t> = lcl_cfg=>get( )->title_key( lv_in ).
+          WHEN OTHERS.
+            " A word in a one character field is a flag written out in full.
+            DATA(lv_w) = lcl_util=>char_len( <lv_t> ).
+            IF lv_w = 1 AND strlen( lv_in ) > 1.
+              <lv_t> = lcl_util=>flag( lv_in ).
+            ELSE.
+              <lv_t> = lv_in.
+            ENDIF.
+        ENDCASE.
+        CATCH cx_sy_conversion_error.
+          mo_log->add( iv_row = iv_row iv_type = 'E'
+                       iv_struc = iv_struc iv_fld = iv_fld
+                       iv_text = |"{ lv_in }" does not fit { iv_fld }| ).
+          RETURN.
+      ENDTRY.
     ENDIF.
 
     " DATAX carries the same component names as DATA.

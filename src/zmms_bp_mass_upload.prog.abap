@@ -188,6 +188,15 @@ CLASS lcl_util DEFINITION FINAL.
     "! Write a component into DATA and raise the matching DATAX flag.
     "! Empty value  -> ignored, so untouched template columns stay untouched.
     "! gc_clear     -> clears the field (DATA = space, DATAX = 'X').
+    " The character length of a field, or 0 when it has none. DESCRIBE
+    " FIELD ... IN CHARACTER MODE only takes a character-like operand: a
+    " packed field such as KNVV-ANTLF, an integer, or a STRING terminates
+    " the program with OBJECTS_NOT_CHAR, and a dynamically assigned field
+    " symbol can be any of those.
+    CLASS-METHODS char_len
+      IMPORTING iv_any    TYPE any
+      RETURNING VALUE(rv) TYPE i.
+
     CLASS-METHODS set
       IMPORTING iv_comp  TYPE string
                 iv_value TYPE string
@@ -223,6 +232,17 @@ ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
 
+  METHOD char_len.
+    rv = 0.
+    DATA(lv_kind) = cl_abap_typedescr=>describe_by_data( iv_any )->type_kind.
+    IF lv_kind = cl_abap_typedescr=>typekind_char
+    OR lv_kind = cl_abap_typedescr=>typekind_num
+    OR lv_kind = cl_abap_typedescr=>typekind_date
+    OR lv_kind = cl_abap_typedescr=>typekind_time.
+      DESCRIBE FIELD iv_any LENGTH rv IN CHARACTER MODE.
+    ENDIF.
+  ENDMETHOD.
+
   METHOD set.
     FIELD-SYMBOLS: <lv_d> TYPE any, <lv_x> TYPE any.
 
@@ -240,8 +260,7 @@ CLASS lcl_util IMPLEMENTATION.
       CLEAR <lv_d>.
     ELSE.
       " A word in a one character field is a flag written out in full.
-      DATA lv_w TYPE i.
-      DESCRIBE FIELD <lv_d> LENGTH lv_w IN CHARACTER MODE.
+      DATA(lv_w) = char_len( <lv_d> ).
       DATA(lv_v) = iv_value.        " already a string - no CONV needed
       IF lv_w = 1 AND strlen( condense( lv_v ) ) > 1.
         lv_v = flag( lv_v ).
