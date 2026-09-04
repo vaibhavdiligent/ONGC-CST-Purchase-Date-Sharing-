@@ -979,6 +979,12 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     " The Business Partner behind a customer, through the CVI link. A change
     " has to name the partner it is changing, otherwise the API reads the
     " request as a creation and asks for a number.
+    " The country of the address the customer already has. A postal code is
+    " checked against its country's rules, so a row that changes the one
+    " without naming the other has to carry it.
+    METHODS cust_land1  IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                        RETURNING VALUE(rv)       TYPE land1.
+
     METHODS cust_guid   IMPORTING VALUE(iv_kunnr) TYPE kunnr
                         RETURNING VALUE(rv)       TYPE bu_partner_guid.
     METHODS cust_bp     IMPORTING VALUE(iv_kunnr) TYPE kunnr
@@ -1208,6 +1214,13 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD cust_exists.
     SELECT SINGLE @abap_true FROM kna1 WHERE kunnr = @iv_kunnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD cust_land1.
+    IF iv_kunnr IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE land1 FROM kna1 WHERE kunnr = @iv_kunnr INTO @rv.
   ENDMETHOD.
 
   METHOD cust_guid.
@@ -3120,6 +3133,29 @@ CLASS lcl_engine IMPLEMENTATION.
 
       ENDCASE.
     ENDLOOP.
+
+    " ---- 2a. a postal code is checked against its country ---------------
+    " India's postal codes are six digits, Spain's five, and SAP tests the
+    " one against the other. A row that gives a postal code but leaves the
+    " country cell empty sends no country at all, and the code is then
+    " measured against the wrong country - "Postal code has the wrong
+    " length" on a perfectly good six digit code. The country the customer
+    " already has is sent with it.
+    IF ls_cust-central_data-address-postal-datax-postl_cod1 = abap_true
+       AND ls_cust-central_data-address-postal-datax-country <> abap_true.
+      DATA(lv_land) = lo_cfg->cust_land1( lv_kunnr ).
+      IF lv_land IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                     iv_struc = 'ADDRESS' iv_fld = 'COUNTRY'
+                     iv_text = 'A postal code needs its country - fill the country key column' ).
+        RETURN.
+      ENDIF.
+      ls_cust-central_data-address-postal-data-country  = lv_land.
+      ls_cust-central_data-address-postal-datax-country = abap_true.
+      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'S'
+                   iv_struc = 'ADDRESS' iv_fld = 'COUNTRY'
+                   iv_text = |No country in this row - the postal code is checked against { lv_land }| ).
+    ENDIF.
 
     " ---- 3. communication ----------------------------------------------
     " The line type of CVIS_EI_PHONE_T is CVIS_EI_PHONE_STR, which wraps

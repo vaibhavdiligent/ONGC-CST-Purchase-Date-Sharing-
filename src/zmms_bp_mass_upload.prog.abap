@@ -1948,6 +1948,8 @@ CLASS lcl_h_create DEFINITION INHERITING FROM lcl_base FINAL.
     METHODS lif_h~run       REDEFINITION.
   PRIVATE SECTION.
     METHODS fill_partner IMPORTING is_row TYPE ty_row iv_ktokk TYPE ktokk
+                                   iv_lifnr TYPE lifnr OPTIONAL
+                         EXPORTING ev_bad  TYPE abap_bool
                          CHANGING  cs_data TYPE cvis_ei_extern.
     METHODS fill_central IMPORTING is_row TYPE ty_row
                          CHANGING  cs_data TYPE cvis_ei_extern.
@@ -1959,6 +1961,7 @@ CLASS lcl_h_create IMPLEMENTATION.
   METHOD lif_h~first_row. rv = 2. ENDMETHOD.
 
   METHOD fill_partner.
+    CLEAR ev_bad.
     " --- BP central ------------------------------------------------------
     " BP_CONTROL holds the control fields CATEGORY and GROUPING. It has no
     " DATAX counterpart - BUS_EI_BUPA_CENTRAL_DATA_XFLAG contains only
@@ -2011,6 +2014,29 @@ CLASS lcl_h_create IMPLEMENTATION.
                      CHANGING  cs_data  = ls_adr-data-postal-data
                                cs_datax = ls_adr-data-postal-datax ).
     ENDLOOP.
+
+    " India's postal codes are six digits, Spain's five, and SAP tests the
+    " one against the other. A row that gives a postal code but leaves the
+    " country cell empty sends no country at all, and the code is then
+    " measured against the wrong country - "Postal code has the wrong
+    " length" on a perfectly good six digit code. The country the supplier
+    " already has is sent with it.
+    IF ls_adr-data-postal-datax-postl_cod1 = abap_true
+       AND ls_adr-data-postal-datax-country <> abap_true.
+      DATA(lv_land) = mo_cfg->vend_land1( iv_lifnr ).
+      IF lv_land IS INITIAL.
+        ev_bad = abap_true.
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
+                     iv_st = 'ADDRESS' iv_fl = 'COUNTRY'
+                     iv_txt = 'A postal code needs its country - fill the country key column (20)' ).
+      ELSE.
+        ls_adr-data-postal-data-country  = lv_land.
+        ls_adr-data-postal-datax-country = abap_true.
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'S'
+                     iv_st = 'ADDRESS' iv_fl = 'COUNTRY'
+                     iv_txt = |No country in this row - the postal code is checked against { lv_land }| ).
+      ENDIF.
+    ENDIF.
 
     " telephone / mobile - "number column;extension column;mobile flag"
     DATA: ls_tel TYPE bus_ei_bupa_telephone,
@@ -2183,7 +2209,17 @@ CLASS lcl_h_create IMPLEMENTATION.
               IMPORTING ev_guid  = lv_guid
               CHANGING  cs_data  = ls_data ).
 
-      fill_partner( EXPORTING is_row = ls_row iv_ktokk = lv_ktokk CHANGING cs_data = ls_data ).
+      DATA lv_nocty TYPE abap_bool.
+      CLEAR lv_nocty.
+      fill_partner( EXPORTING is_row = ls_row iv_ktokk = lv_ktokk iv_lifnr = lv_lifnr
+                    IMPORTING ev_bad = lv_nocty
+                    CHANGING  cs_data = ls_data ).
+      IF lv_nocty = abap_true.
+        IF p_stop = abap_true.
+          EXIT.
+        ENDIF.
+        CONTINUE.
+      ENDIF.
       fill_central( EXPORTING is_row = ls_row CHANGING cs_data = ls_data ).
 
       " bank details

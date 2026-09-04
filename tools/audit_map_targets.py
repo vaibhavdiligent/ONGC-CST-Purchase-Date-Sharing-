@@ -58,6 +58,23 @@ for prog, path, pattern in CASES:
         bad.append(f'{prog} {scen}: columns {", ".join(str(c) for c in sorted(cols))} '
                    f'all write {node}/{fld} - only the last one has any effect')
 
+# ---- a mapped column with no heading ------------------------------------
+# The extractor writes the heading row from this map, so a mapped column
+# with no heading comes out of the download blank - and two of them side by
+# side, both ZTERM, read as the same field twice. A column read by position
+# is also only right while the file is laid out as the template is, so a
+# heading is worth having for its own sake.
+for prog, path, pattern in CASES:
+    if prog != 'ZBCS_MASS_UPLOAD_EXTRACT':
+        continue
+    src = open(os.path.join(ROOT, path), encoding='utf-8').read()
+    for m in re.finditer(r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "
+                         r"node = '([\w-]*)' fld = '([^']*)'", src):
+        scen, col, hdr, node, fld = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+        if node not in ('', '-') and not hdr:
+            bad.append(f'{prog} {scen}: column {col} writes {node}/{fld} but has no heading - '
+                       f'it comes out of the download blank')
+
 # ---- a column that sits in one block and writes into another -----------
 # The blocks of a template run together - key, address, general data,
 # company code, sales area, licence - so a column whose node differs from
@@ -94,6 +111,7 @@ for prog, path, pattern in CASES:
                        f'part of the record')
 
 print('\n'.join(bad) if bad else
-      'clean - no two columns of a tab write the same field of the same node, and no '
-      'column writes into a different part of the record than its neighbours')
+      'clean - every mapped column has a heading, no two write the same field of '
+      'the same node, and none writes into a different part of the record than its '
+      'neighbours')
 sys.exit(1 if bad else 0)
