@@ -263,6 +263,23 @@ CLASS lcl_xlsx DEFINITION FINAL.
       RETURNING VALUE(rv) TYPE xstring
       RAISING   lcx_ext.
   PRIVATE SECTION.
+    " The workbook is read back by CL_FDT_XL_SPREADSHEET, which is not a
+    " general .xlsx reader: it takes the text of a cell from the shared
+    " string table and nowhere else, and it expects the parts Excel itself
+    " writes. A four-part package of inline strings loads in Excel and is
+    " refused by it, so every part below is written and every text cell
+    " points into xl/sharedStrings.xml.
+    TYPES: BEGIN OF ty_si,
+             text TYPE string,
+             idx  TYPE i,
+           END OF ty_si.
+    CLASS-DATA mt_si  TYPE HASHED TABLE OF ty_si WITH UNIQUE KEY text.
+    CLASS-DATA mt_txt TYPE string_table.
+    CLASS-DATA mv_use TYPE i.
+
+    CLASS-METHODS si
+      IMPORTING iv_text   TYPE string
+      RETURNING VALUE(rv) TYPE i.
     CLASS-METHODS row_xml
       IMPORTING it_cells  TYPE tt_cell
                 iv_row    TYPE i
@@ -283,20 +300,40 @@ CLASS lcl_xlsx IMPLEMENTATION.
     ENDTRY.
   ENDMETHOD.
 
+  METHOD si.
+    " The index of a text in the shared string table, adding it if it is
+    " not there yet. MV_USE counts the cells that point at one, which is
+    " what the sst element's "count" attribute means.
+    mv_use = mv_use + 1.
+    READ TABLE mt_si WITH TABLE KEY text = iv_text INTO DATA(ls_si).
+    IF sy-subrc = 0.
+      rv = ls_si-idx.
+      RETURN.
+    ENDIF.
+    APPEND iv_text TO mt_txt.
+    rv = lines( mt_txt ) - 1.
+    INSERT VALUE ty_si( text = iv_text idx = rv ) INTO TABLE mt_si.
+  ENDMETHOD.
+
   METHOD row_xml.
     rv = |<row r="{ iv_row }">|.
     LOOP AT it_cells INTO DATA(lv_cell).
+      " Taken before anything else runs: READ TABLE inside SI( ) sets
+      " SY-TABIX, and the column number is wanted, not that.
       DATA(lv_col) = sy-tabix.
       IF lv_cell IS INITIAL.
         CONTINUE.                              " an empty cell is left out
       ENDIF.
-      rv = rv && |<c r="{ lcl_util=>col_letter( lv_col ) }{ iv_row }" t="inlineStr">| &&
-                 |<is><t xml:space="preserve">{ lcl_util=>xml_escape( lv_cell ) }</t></is></c>|.
+      DATA(lv_ix) = si( lv_cell ).
+      rv = rv && |<c r="{ lcl_util=>col_letter( lv_col ) }{ iv_row }" t="s">| &&
+                 |<v>{ lv_ix }</v></c>|.
     ENDLOOP.
     rv = rv && |</row>|.
   ENDMETHOD.
 
   METHOD build.
+    CLEAR: mt_si, mt_txt, mv_use.
+
     " Excel limits a sheet name to 31 characters and forbids : \ / ? * [ ]
     DATA(lv_name) = condense( CONV string( iv_sheet ) ).
     REPLACE ALL OCCURRENCES OF PCRE '[:\\\\/?*\[\]]' IN lv_name WITH ` `.
@@ -307,15 +344,52 @@ CLASS lcl_xlsx IMPLEMENTATION.
       lv_name = 'Sheet1'.
     ENDIF.
 
+    " ---- the sheet, and with it the shared string table ----------------
+    DATA(lv_body) = row_xml( it_cells = it_head iv_row = 1 ).
+    DATA(lv_wide) = lines( it_head ).
+    LOOP AT it_row INTO DATA(ls_row).
+      lv_body = lv_body && row_xml( it_cells = ls_row-cells iv_row = sy-tabix + 1 ).
+      IF lines( ls_row-cells ) > lv_wide.
+        lv_wide = lines( ls_row-cells ).
+      ENDIF.
+    ENDLOOP.
+    IF lv_wide < 1.
+      lv_wide = 1.
+    ENDIF.
+    DATA(lv_dim) = |A1:{ lcl_util=>col_letter( lv_wide ) }{ lines( it_row ) + 1 }|.
+
     DATA(lv_sheet) =
       |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
-      |<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">| &&
-      |<sheetData>|.
-    lv_sheet = lv_sheet && row_xml( it_cells = it_head iv_row = 1 ).
-    LOOP AT it_row INTO DATA(ls_row).
-      lv_sheet = lv_sheet && row_xml( it_cells = ls_row-cells iv_row = sy-tabix + 1 ).
+      |<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" | &&
+      |xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">| &&
+      |<dimension ref="{ lv_dim }"/>| &&
+      |<sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>| &&
+      |<sheetFormatPr defaultRowHeight="15"/>| &&
+      |<sheetData>| && lv_body && |</sheetData>| &&
+      |</worksheet>|.
+
+    " ---- shared strings -------------------------------------------------
+    DATA(lv_sst) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" | &&
+      |count="{ mv_use }" uniqueCount="{ lines( mt_txt ) }">|.
+    LOOP AT mt_txt INTO DATA(lv_t).
+      lv_sst = lv_sst && |<si><t xml:space="preserve">{ lcl_util=>xml_escape( lv_t ) }</t></si>|.
     ENDLOOP.
-    lv_sheet = lv_sheet && |</sheetData></worksheet>|.
+    lv_sst = lv_sst && |</sst>|.
+
+    " ---- styles: one font, one format, which is all that is referenced --
+    DATA(lv_sty) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">| &&
+      |<fonts count="1"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>| &&
+      |<fills count="2"><fill><patternFill patternType="none"/></fill>| &&
+      |<fill><patternFill patternType="gray125"/></fill></fills>| &&
+      |<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>| &&
+      |<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>| &&
+      |<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>| &&
+      |<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>| &&
+      |</styleSheet>|.
 
     DATA(lv_types) =
       |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
@@ -324,18 +398,25 @@ CLASS lcl_xlsx IMPLEMENTATION.
       |<Default Extension="xml" ContentType="application/xml"/>| &&
       |<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>| &&
       |<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>| &&
+      |<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>| &&
+      |<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>| &&
+      |<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>| &&
+      |<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>| &&
       |</Types>|.
 
     DATA(lv_rels) =
       |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
       |<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">| &&
       |<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>| &&
+      |<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>| &&
+      |<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>| &&
       |</Relationships>|.
 
     DATA(lv_wb) =
       |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
       |<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" | &&
       |xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">| &&
+      |<bookViews><workbookView/></bookViews>| &&
       |<sheets><sheet name="{ lcl_util=>xml_escape( lv_name ) }" sheetId="1" r:id="rId1"/></sheets>| &&
       |</workbook>|.
 
@@ -343,14 +424,40 @@ CLASS lcl_xlsx IMPLEMENTATION.
       |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
       |<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">| &&
       |<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>| &&
+      |<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>| &&
+      |<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>| &&
       |</Relationships>|.
 
+    DATA(lv_core) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<cp:coreProperties | &&
+      |xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" | &&
+      |xmlns:dc="http://purl.org/dc/elements/1.1/" | &&
+      |xmlns:dcterms="http://purl.org/dc/terms/" | &&
+      |xmlns:dcmitype="http://purl.org/dc/dcmitype/" | &&
+      |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">| &&
+      |<dc:creator>ZBCS_MASS_UPLOAD_EXTRACT</dc:creator>| &&
+      |<cp:lastModifiedBy>ZBCS_MASS_UPLOAD_EXTRACT</cp:lastModifiedBy>| &&
+      |</cp:coreProperties>|.
+
+    DATA(lv_app) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<Properties | &&
+      |xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" | &&
+      |xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">| &&
+      |<Application>SAP</Application>| &&
+      |</Properties>|.
+
     DATA(lo_zip) = NEW cl_abap_zip( ).
-    lo_zip->add( name = '[Content_Types].xml'      content = to_x( lv_types ) ).
-    lo_zip->add( name = '_rels/.rels'              content = to_x( lv_rels ) ).
-    lo_zip->add( name = 'xl/workbook.xml'          content = to_x( lv_wb ) ).
+    lo_zip->add( name = '[Content_Types].xml'        content = to_x( lv_types ) ).
+    lo_zip->add( name = '_rels/.rels'                content = to_x( lv_rels ) ).
+    lo_zip->add( name = 'docProps/core.xml'          content = to_x( lv_core ) ).
+    lo_zip->add( name = 'docProps/app.xml'           content = to_x( lv_app ) ).
+    lo_zip->add( name = 'xl/workbook.xml'            content = to_x( lv_wb ) ).
     lo_zip->add( name = 'xl/_rels/workbook.xml.rels' content = to_x( lv_wbrels ) ).
-    lo_zip->add( name = 'xl/worksheets/sheet1.xml' content = to_x( lv_sheet ) ).
+    lo_zip->add( name = 'xl/styles.xml'              content = to_x( lv_sty ) ).
+    lo_zip->add( name = 'xl/sharedStrings.xml'       content = to_x( lv_sst ) ).
+    lo_zip->add( name = 'xl/worksheets/sheet1.xml'   content = to_x( lv_sheet ) ).
     rv = lo_zip->save( ).
   ENDMETHOD.
 
