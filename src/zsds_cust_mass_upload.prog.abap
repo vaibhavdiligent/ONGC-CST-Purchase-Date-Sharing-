@@ -971,6 +971,12 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     " The customer number that ended up behind a GUID we created.
     METHODS cust_by_guid IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
                          RETURNING VALUE(rv)      TYPE kunnr.
+    " The business partner behind the same GUID. Unless the grouping is
+    " flagged for the same number in CVIC_CUST_TO_BP1, the partner is
+    " numbered from its own range and does not match the customer - so the
+    " run has to say which one it is.
+    METHODS bp_by_guid   IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
+                         RETURNING VALUE(rv)      TYPE bu_partner.
 
     METHODS bp_group    IMPORTING iv_ktokd  TYPE clike
                         RETURNING VALUE(rv) TYPE bu_group.
@@ -1178,6 +1184,14 @@ CLASS lcl_cfg IMPLEMENTATION.
   METHOD cust_guid.
     SELECT SINGLE partner_guid FROM cvi_cust_link
       WHERE customer = @iv_kunnr INTO @rv.
+  ENDMETHOD.
+
+  METHOD bp_by_guid.
+    IF iv_guid IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE partner FROM but000
+      WHERE partner_guid = @iv_guid INTO @rv.
   ENDMETHOD.
 
   METHOD cust_bp.
@@ -3192,8 +3206,16 @@ CLASS lcl_engine IMPLEMENTATION.
                      iv_text = 'Posted, but the new customer number could not be read back from CVI_CUST_LINK' ).
       ELSE.
         mo_log->set_key( iv_row = is_row-row iv_kunnr = lv_kunnr ).
-        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'S'
-                     iv_text = |Customer { lv_kunnr ALPHA = OUT } created| ).
+        DATA(lv_bp2)  = lo_cfg->bp_by_guid( lv_guid ).
+        DATA(lv_made) = |Customer { lv_kunnr ALPHA = OUT } created|.
+        IF lv_bp2 IS INITIAL.
+          lv_made = lv_made && ' - but BUT000 holds no partner for its GUID; check the CVI link'.
+        ELSE.
+          lv_made = lv_made && | as business partner { lv_bp2 ALPHA = OUT }|.
+        ENDIF.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr
+                     iv_type = COND #( WHEN lv_bp2 IS INITIAL THEN 'W' ELSE 'S' )
+                     iv_text = lv_made ).
       ENDIF.
     ENDIF.
 

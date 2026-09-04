@@ -1315,6 +1315,12 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     " leads to it.
     METHODS vend_by_guid IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
                          RETURNING VALUE(rv)      TYPE lifnr.
+    " The business partner behind the same GUID. Unless the grouping is
+    " flagged for the same number in CVIC_VEND_TO_BP1, the partner is
+    " numbered from its own range and does not match the vendor - so the
+    " run has to say which one it is.
+    METHODS bp_by_guid   IMPORTING VALUE(iv_guid) TYPE bu_partner_guid
+                         RETURNING VALUE(rv)      TYPE bu_partner.
 
   PRIVATE SECTION.
     CLASS-DATA go TYPE REF TO lcl_cfg.
@@ -1510,6 +1516,14 @@ CLASS lcl_cfg IMPLEMENTATION.
       RETURN.
     ENDIF.
     SELECT SINGLE vendor FROM cvi_vend_link
+      WHERE partner_guid = @iv_guid INTO @rv.
+  ENDMETHOD.
+
+  METHOD bp_by_guid.
+    IF iv_guid IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE partner FROM but000
       WHERE partner_guid = @iv_guid INTO @rv.
   ENDMETHOD.
 
@@ -2143,14 +2157,22 @@ CLASS lcl_h_create IMPLEMENTATION.
       " the column empty.
       IF lv_ok = abap_true AND lv_lifnr IS INITIAL AND p_test = abap_false.
         DATA(lv_new) = mo_cfg->vend_by_guid( lv_guid ).
+        DATA(lv_bp)  = mo_cfg->bp_by_guid( lv_guid ).
         IF lv_new IS INITIAL.
           mo_log->add( iv_row = ls_row-row iv_ty = 'W'
                        iv_txt = 'Posted, but the new vendor number could not be read back from CVI_VEND_LINK' ).
         ELSE.
           mo_log->set_key( iv_row = ls_row-row iv_k1 = lv_new ).
+          DATA(lv_made) = |Vendor { lv_new ALPHA = OUT } created|.
+          IF lv_bp IS INITIAL.
+            lv_made = lv_made && ' - but BUT000 holds no partner for its GUID; check the CVI link'.
+          ELSE.
+            lv_made = lv_made && | as business partner { lv_bp ALPHA = OUT }|.
+          ENDIF.
           mo_log->add( iv_row = ls_row-row iv_k1 = lv_new iv_k2 = lv_bukrs
-                       iv_k3 = lv_ekorg iv_ty = 'S'
-                       iv_txt = |Vendor { lv_new ALPHA = OUT } created| ).
+                       iv_k3 = lv_ekorg
+                       iv_ty  = COND #( WHEN lv_bp IS INITIAL THEN 'W' ELSE 'S' )
+                       iv_txt = lv_made ).
         ENDIF.
       ENDIF.
 
