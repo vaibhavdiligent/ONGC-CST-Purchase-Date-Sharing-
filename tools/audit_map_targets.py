@@ -75,6 +75,30 @@ for prog, path, pattern in CASES:
             bad.append(f'{prog} {scen}: column {col} writes {node}/{fld} but has no heading - '
                        f'it comes out of the download blank')
 
+# ---- a column of the template the map does not mention at all ----------
+# The extractor writes the heading row from this map, so a template column
+# missing from it comes out of the download with no heading over it - a
+# blank column in the middle of the sheet, which is what "column names are
+# coming as blank" meant. A column the upload program does not read still
+# belongs in the map, with its heading and nothing else.
+NO_HEADING = {
+    ('ZBCS_MASS_UPLOAD_EXTRACT', 'C5', 15): 'the template has no heading there either',
+    ('ZBCS_MASS_UPLOAD_EXTRACT', 'V2',  1): 'the template has no heading there either',
+}
+for prog, path, pattern in CASES:
+    if prog != 'ZBCS_MASS_UPLOAD_EXTRACT':
+        continue
+    src = open(os.path.join(ROOT, path), encoding='utf-8').read()
+    cols = collections.defaultdict(set)
+    for m in re.finditer(pattern, src):
+        cols[m.group(1)].add(int(m.group(2)))
+    for scen, have in sorted(cols.items()):
+        for c in range(1, max(have) + 1):
+            if c in have or (prog, scen, c) in NO_HEADING:
+                continue
+            bad.append(f'{prog} {scen}: column {c} is not in the map, so the download '
+                       f'has no heading over it')
+
 # ---- a column that sits in one block and writes into another -----------
 # The blocks of a template run together - key, address, general data,
 # company code, sales area, licence - so a column whose node differs from
@@ -111,7 +135,7 @@ for prog, path, pattern in CASES:
                        f'part of the record')
 
 print('\n'.join(bad) if bad else
-      'clean - every mapped column has a heading, no two write the same field of '
-      'the same node, and none writes into a different part of the record than its '
-      'neighbours')
+      'clean - every column of every template has a heading in the download, no two '
+      'write the same field of the same node, and none writes into a different part '
+      'of the record than its neighbours')
 sys.exit(1 if bad else 0)
