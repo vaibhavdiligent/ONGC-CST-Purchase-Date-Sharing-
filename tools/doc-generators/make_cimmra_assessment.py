@@ -71,7 +71,8 @@ KV([
     ('Prepared for', 'Cipla Limited'),
     ('Prepared by', 'Diligent Consulting'),
     ('Subject', 'Vendor / Customer to Business Partner'),
-    ('Basis', 'Programs and design document received 07.09.2026'),
+    ('Basis', 'Six programs and the design document received 07.09.2026, '
+              'ZFI_CIMMRA_VENDOR_EXT received 08.09.2026'),
     ('Status', 'Assessment only - no program has been changed'),
 ], [4.0, 12.5])
 
@@ -83,6 +84,8 @@ P('This document sets out, program by program, what has to change so that the Ci
 P('The inbound file layout and the outbound response mechanism are unchanged. The portal '
   'sends the same file it sends today, and receives a response file in the same format.')
 P('Section 8 lists what we need from Cipla before development starts.')
+P('ZFI_CIMMRA_VENDOR_EXT was received after the first draft of this document and is '
+  'covered in section 5.6. It is the one program that has to be rewritten.', italic=True)
 
 # ------------------------------------------------------------------ 2
 H('2. What was reviewed', 1)
@@ -91,6 +94,8 @@ T(['Object', 'Type', 'Role in the interface'], [
     ['ZFI_CIMMRA_EMPVEND', 'Report', 'Employee vendor creation'],
     ['ZFI_CIMMRA_EMPVEND_UPD', 'Report', 'Employee vendor change'],
     ['ZFI_CIMMRA_BANK_CREATE', 'Report', 'Bank key creation'],
+    ['ZFI_CIMMRA_VENDOR_EXT', 'Report', 'Extends a vendor to a further company code '
+     'and purchasing organisation'],
     ['ZMM_RFC_VENDOR_CREATE', 'Function module', 'Builds the master data and posts it'],
     ['ZMM_RFC_VENDOR_CHANGE', 'Function module', 'Builds the changes and posts them'],
 ], [6.0, 3.2, 7.3])
@@ -108,8 +113,11 @@ P('Both function modules already build their data in the CVI interface structure
 P('The field mapping, which is the bulk of both function modules, is reused unchanged. '
   'What is added is the Business Partner half of the same message - category, grouping, '
   'roles, name, search terms and address - and a change of the call that posts it.')
-P('This is not a rewrite. The work is well defined and the pattern is one we have '
-  'already built and run in an S/4HANA system.', bold=True)
+P('That holds for five of the six programs. The exception is ZFI_CIMMRA_VENDOR_EXT, '
+  'which does not use the interface structures at all - it drives transaction XK01 '
+  'through a batch input recording. XK01 does not exist in S/4HANA, so that one '
+  'program is rewritten rather than adapted. Section 5.6 sets out what it does today '
+  'and what replaces it.', bold=True)
 
 # ------------------------------------------------------------------ 4
 H('4. The change that applies to both function modules', 1)
@@ -204,8 +212,46 @@ P('BAPI_BANK_CREATE is unchanged in S/4HANA. Only the file handling points in 5.
   'apply. This is the smallest of the five.')
 
 H('5.6  ZFI_CIMMRA_VENDOR_EXT  (report)', 2)
-P('Named in the design document as the vendor extension program, but not included in '
-  'the material received. See question Q5.')
+P('This program is the exception. It does not call the function modules and it does '
+  'not use the interface structures. It builds a batch input recording and runs it '
+  'through transaction XK01 - screens 0100, 0210, 0215, 0220, 0310, 0610 and 4000 of '
+  'module pool SAPMF02K, and screen 0100 of SAPLJ1I_MASTER for the CIN data.')
+P('Neither XK01 nor SAPMF02K exists in S/4HANA. The Business Partner is the single '
+  'point of entry for supplier master data, and the CIN master screens were removed '
+  'when those fields moved onto LFA1. The program therefore stops working at the '
+  'conversion, and is rewritten rather than adapted.', bold=True)
+P('The rewrite is not large, because the field set is small. What the recording sets '
+  'today is:')
+T(['Screen', 'What it sets', 'Replaced by'], [
+    ['0100', 'Vendor, company code, purchasing organisation, account group, and the '
+     'reference vendor with its company code and purchasing organisation',
+     'The key of the message, and a read of the reference - see the note below'],
+    ['0210', 'Reconciliation account, previous account number', 'Company code node'],
+    ['0215', 'Terms of payment, payment history indicator, payment methods',
+     'Company code node'],
+    ['0610', 'Withholding tax country. The withholding tax lines themselves are '
+     'commented out in the recording, so no tax type is extended today.',
+     'Company code node'],
+    ['0310', 'Purchasing currency and telephone', 'Purchasing organisation node'],
+    ['4000', 'Three indicators on the custom table ZFI_TAX_TAB', 'See the note below'],
+    ['SAPLJ1I_MASTER', 'PAN number and SSI status', 'General data - these are LFA1 '
+     'fields in S/4HANA'],
+], [2.8, 7.4, 6.3])
+P('Two points need a decision rather than only development.', bold=True)
+T(['#', 'Point', 'What it means'], [
+    ['A', 'The reference vendor',
+     'On the screen, naming a reference vendor copies everything the reference has. '
+     'The Business Partner interface has no such feature. The new program reads the '
+     'reference itself and carries the values across - but only the fields it reads. '
+     'Which fields are to be copied has to be agreed. See question Q7.'],
+    ['B', 'ZFI_TAX_TAB',
+     'A custom table filled today through a screen enhancement on XK01. Without the '
+     'transaction there is no screen, so the program writes the table itself. This '
+     'needs the table definition and its update rules. See requirement R7.'],
+], [1.3, 4.4, 10.8])
+P('The program also reads J_1IMOVEND directly, which is obsolete in S/4HANA - those '
+  'fields are columns of LFA1 now. And the file handling points in 5.3 apply to it as '
+  'they do to the other reports.')
 
 # ------------------------------------------------------------------ 6
 H('6. What does not change', 1)
@@ -223,7 +269,8 @@ T(['Object', 'Relative effort'], [
     ['ZFI_CIMMRA_VENDOR_CREATE', 'Small'],
     ['ZFI_CIMMRA_EMPVEND / _UPD', 'Small each, once Q1 is answered'],
     ['ZFI_CIMMRA_BANK_CREATE', 'Very small'],
-    ['ZFI_CIMMRA_VENDOR_EXT', 'Cannot be estimated - not received'],
+    ['ZFI_CIMMRA_VENDOR_EXT', 'Rewritten rather than adapted, but the field set is '
+     'small - comparable to one of the reports'],
 ], [8.0, 8.5])
 P('The Business Partner node is written once and used by both function modules. A firm '
   'estimate follows once the open points in section 8 are answered.')
@@ -255,21 +302,31 @@ T(['#', 'Question', 'Why it matters'], [
      '- for example directly by PI/PO?',
      'Decides whether the interface of the function modules may change, or must be kept '
      'as it is.'],
+    ['Q7', 'On a vendor extension, which fields should be copied from the reference '
+     'vendor?',
+     'Transaction XK01 copied everything the reference had. The Business Partner '
+     'interface has no reference feature, so the fields to copy have to be named. '
+     'Our proposal: reconciliation account, terms of payment, payment methods, payment '
+     'history indicator and planning group from the reference company code, and '
+     'currency, schema group and GR based invoice verification from the reference '
+     'purchasing organisation - each overridden by whatever the file supplies.'],
 ], [1.3, 7.2, 8.0])
 
 H('8.2  Objects and files we need', 2)
 T(['#', 'What', 'Why'], [
-    ['R1', 'ZFI_CIMMRA_VENDOR_EXT', 'Named in the design document, not received. Vendor '
-     'extension is a scenario in its own right.'],
-    ['R2', 'The customer programs, if Q4 is yes', 'None were received.'],
-    ['R3', 'ZGEN_UPDATE_X and ZPARAM_TABLE',
+    ['R1', 'The customer programs, if Q4 is yes', 'None were received.'],
+    ['R2', 'ZGEN_UPDATE_X and ZPARAM_TABLE',
      'Used throughout. We have the calls but not the definitions.'],
-    ['R4', 'The ZKRP_* structures used by the two function modules',
+    ['R3', 'The ZKRP_* structures used by the two function modules',
      'About forty structures carrying the interface parameters.'],
-    ['R5', 'One sample inbound file and one sample response file, for each of the four '
+    ['R4', 'One sample inbound file and one sample response file, for each of the five '
      'scenarios', 'To test against the real layout rather than a reconstruction.'],
-    ['R6', 'A development system and a transport, with the CVI Customizing already '
+    ['R5', 'A development system and a transport, with the CVI Customizing already '
      'converted', 'The Customizing decides the grouping and the roles at runtime.'],
+    ['R6', 'ZFI_TAX_TAB - the table definition, and how the three indicators are '
+     'derived', 'Filled today by a screen enhancement on XK01, which will not exist.'],
+    ['R7', 'The screen enhancement on XK01 that maintains ZFI_TAX_TAB, if it is a '
+     'custom development', 'To see what it does before the same is done in code.'],
 ], [1.3, 7.2, 8.0])
 
 H('8.3  Access', 2)
