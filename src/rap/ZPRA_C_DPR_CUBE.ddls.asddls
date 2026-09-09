@@ -68,12 +68,17 @@ define view entity ZPRA_C_DPR_CUBE
   @EndUserText.label: 'Volume Type Description'
   Daily.VolumeTypeDescription                     as VolumeTypeDescription,
 
-  /* ── Measures ─────────────────────────────────────────────────────────── */
+  /* ── Measures (signed: gas GAS_INJ counts negative, so SUM() nets) ───── */
 
   @EndUserText.label: 'Production Qty (Primary UoM)'
   @Aggregation.default: #SUM
   @Semantics.quantity.unitOfMeasure: 'ProdUom1'
-  Daily.ProdQty1                                  as ProdQty1,
+  cast( Daily.ProdQty1
+        * ( case Daily.VolumeType
+              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+              else                cast(  1 as abap.dec( 2, 0 ) )
+            end )
+        as abap.dec( 23, 3 ) )                    as ProdQty1,
 
   @EndUserText.label: 'Primary UoM'
   @Semantics.unitOfMeasure: true
@@ -82,7 +87,12 @@ define view entity ZPRA_C_DPR_CUBE
   @EndUserText.label: 'Production Qty (Secondary UoM)'
   @Aggregation.default: #SUM
   @Semantics.quantity.unitOfMeasure: 'ProdUom2'
-  Daily.ProdQty2                                  as ProdQty2,
+  cast( Daily.ProdQty2
+        * ( case Daily.VolumeType
+              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+              else                cast(  1 as abap.dec( 2, 0 ) )
+            end )
+        as abap.dec( 23, 3 ) )                    as ProdQty2,
 
   @EndUserText.label: 'Secondary UoM'
   @Semantics.unitOfMeasure: true
@@ -93,12 +103,17 @@ define view entity ZPRA_C_DPR_CUBE
   @Aggregation.default: #NOP
   PI.pi                                           as ParticipatingInterest,
 
-  /* OVL share = ProdQty1 × PI / 100 */
+  /* OVL share = signed ProdQty1 × PI / 100 */
   @EndUserText.label: 'OVL Share Qty (Primary UoM)'
   @Aggregation.default: #SUM
   @Semantics.quantity.unitOfMeasure: 'ProdUom1'
   cast(
-    Daily.ProdQty1 * PI.pi / cast( 100 as abap.dec(5,2) )
+    Daily.ProdQty1
+    * ( case Daily.VolumeType
+          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          else                cast(  1 as abap.dec( 2, 0 ) )
+        end )
+    * PI.pi / cast( 100 as abap.dec(5,2) )
     as abap.dec(23,3)
   )                                               as OvlShareQty1,
 
@@ -106,8 +121,62 @@ define view entity ZPRA_C_DPR_CUBE
   @Aggregation.default: #SUM
   @Semantics.quantity.unitOfMeasure: 'ProdUom2'
   cast(
-    Daily.ProdQty2 * PI.pi / cast( 100 as abap.dec(5,2) )
+    Daily.ProdQty2
+    * ( case Daily.VolumeType
+          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          else                cast(  1 as abap.dec( 2, 0 ) )
+        end )
+    * PI.pi / cast( 100 as abap.dec(5,2) )
     as abap.dec(23,3)
-  )                                               as OvlShareQty2
+  )                                               as OvlShareQty2,
+
+  /* ── Gas in MMSCMD (port of convert_gas_units_to_mmscm, signed) ───────── */
+  /* MCM -> as-is (MCM == MMSCM here), MCF -> /35.3, M3 -> /1,000,000.       */
+  @EndUserText.label: 'Gas (MMSCMD)'
+  @Aggregation.default: #SUM
+  cast(
+    ( case Daily.Product
+        when '722000004' then
+          case Daily.ProdUom1
+            when 'MCF' then Daily.ProdQty1 / cast( '35.3' as abap.dec( 4, 1 ) )
+            when 'M3'  then Daily.ProdQty1 / cast( 1000000 as abap.dec( 10, 0 ) )
+            else            Daily.ProdQty1
+          end
+        else cast( 0 as abap.dec( 23, 7 ) )
+      end )
+    * ( case Daily.VolumeType
+          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          else                cast(  1 as abap.dec( 2, 0 ) )
+        end )
+    as abap.dec( 23, 7 )
+  )                                               as GasMmscmd,
+
+  /* ── Total (O+OEG) BOEPD: oil/cond BOPD + gas MMSCMD * 6290, signed ───── */
+  @EndUserText.label: 'Total O+OEG (BOEPD)'
+  @Aggregation.default: #SUM
+  cast(
+    ( case Daily.Product
+        when '722000004' then
+          ( case Daily.ProdUom1
+              when 'MCF' then Daily.ProdQty1 / cast( '35.3' as abap.dec( 4, 1 ) )
+              when 'M3'  then Daily.ProdQty1 / cast( 1000000 as abap.dec( 10, 0 ) )
+              else            Daily.ProdQty1
+            end ) * cast( 6290 as abap.dec( 5, 0 ) )
+        else Daily.ProdQty1
+      end )
+    * ( case Daily.VolumeType
+          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          else                cast(  1 as abap.dec( 2, 0 ) )
+        end )
+    as abap.dec( 23, 3 )
+  )                                               as BoepdQty
 }
-where Daily.VolumeType = 'NET_PROD'   /* Default: Net Production only */
+/* Oil family: NET_PROD. Gas has NO NET_PROD rows in ZPRA_T_DLY_PRD -
+   net gas = GROSS_PROD - GAS_INJ, as in the classic DPR program. */
+where
+     (  Daily.Product <> '722000004'
+    and Daily.VolumeType = 'NET_PROD' )
+  or (  Daily.Product =  '722000004'
+    and Daily.VolumeType = 'GROSS_PROD' )
+  or (  Daily.Product =  '722000004'
+    and Daily.VolumeType = 'GAS_INJ' )
