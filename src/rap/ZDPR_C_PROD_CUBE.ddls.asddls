@@ -81,7 +81,6 @@ define view entity ZDPR_C_PROD_CUBE
         as abap.dec( 23, 3 ) )                    as ProdQty1,
 
   @EndUserText.label: 'Primary UoM'
-  @Semantics.unitOfMeasure: true
   Daily.ProdUom1                                  as ProdUom1,
 
   @EndUserText.label: 'Production Qty (Secondary UoM)'
@@ -95,7 +94,6 @@ define view entity ZDPR_C_PROD_CUBE
         as abap.dec( 23, 3 ) )                    as ProdQty2,
 
   @EndUserText.label: 'Secondary UoM'
-  @Semantics.unitOfMeasure: true
   Daily.ProdUom2                                  as ProdUom2,
 
   /* ── PI (Participating Interest) ─────────────────────────────────────── */

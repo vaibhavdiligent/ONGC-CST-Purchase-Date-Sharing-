@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR BOEPD Trend - Actual vs BE Target (Excel tab 2)'
+@EndUserText.label: 'DPR BOEPD Trend - Actual vs BE Target'
 @Metadata.ignorePropagatedAnnotations: true
 
 /* ── The graph of the DPR Excel (tab 2) as an analytical query ──────────────

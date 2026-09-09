@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR Monthly Reconciled Production - Interface View'
+@EndUserText.label: 'DPR Monthly Reconciled Production'
 @Metadata.ignorePropagatedAnnotations: true
 @ObjectModel.usageType: {
   serviceQuality: #A,
@@ -24,12 +24,10 @@ define view entity ZDPR_I_MONTHLY
 
       @Semantics.quantity.unitOfMeasure: 'ProdUom1'
       MrecPrd.prod_vl_qty1                as ProdQty1,
-      @Semantics.unitOfMeasure: true
       MrecPrd.prod_vl_uom1                as ProdUom1,
 
       @Semantics.quantity.unitOfMeasure: 'ProdUom2'
       MrecPrd.prod_vl_qty2                as ProdQty2,
-      @Semantics.unitOfMeasure: true
       MrecPrd.prod_vl_uom2                as ProdUom2,
 
       case MrecPrd.product

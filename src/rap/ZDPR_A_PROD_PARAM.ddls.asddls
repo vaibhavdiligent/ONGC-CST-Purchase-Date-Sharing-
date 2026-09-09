@@ -1,6 +1,4 @@
-@EndUserText.label: 'DPR Production Download - Input Parameters'
-@MappingRole: true
-
+@EndUserText.label: 'DPR Production Download Parameters'
 define abstract entity ZDPR_A_PROD_PARAM
 {
   @EndUserText.label: 'Date From'

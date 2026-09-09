@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR Day Base - unit-normalized daily production'
+@EndUserText.label: 'DPR Day Base - normalized daily prod'
 @Metadata.ignorePropagatedAnnotations: true
 @ObjectModel.usageType: {
   serviceQuality: #A,
@@ -65,16 +65,13 @@ define view entity ZDPR_P_DAY_BASE
         else            'OTHER'
       end                                             as BusinessUnit,
 
-      /* Fiscal year/period of the date (FY = April..March) */
-      case when month( D.production_date ) >= 4
-           then cast( year( D.production_date )     as abap.numc(4) )
-           else cast( year( D.production_date ) - 1 as abap.numc(4) )
-      end                                             as FiscalYear,
+      /* Fiscal year/period (FY = April..March): shifting the date back
+         3 months makes its calendar year/month exactly gjahr/monat */
+      cast( substring( dats_add_months( D.production_date, -3, 'INITIAL' ), 1, 4 )
+            as abap.numc(4) )                         as FiscalYear,
 
-      case when month( D.production_date ) >= 4
-           then cast( month( D.production_date ) - 3 as abap.numc(2) )
-           else cast( month( D.production_date ) + 9 as abap.numc(2) )
-      end                                             as FiscalPeriod,
+      cast( substring( dats_add_months( D.production_date, -3, 'INITIAL' ), 5, 2 )
+            as abap.numc(2) )                         as FiscalPeriod,
 
       /* Signed native daily figure: BOPD (oil family, NET_PROD) or MMSCMD
          (gas: +GROSS_PROD / -GAS_INJ, so SUM() nets automatically) */

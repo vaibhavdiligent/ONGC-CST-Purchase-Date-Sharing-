@@ -35,17 +35,17 @@ define view entity ZDPR_I_DAILY
       /* Quantities */
       @Semantics.quantity.unitOfMeasure: 'ProdUom1'
       DlyPrd.prod_vl_qty1                 as ProdQty1,
-      @Semantics.unitOfMeasure: true
       DlyPrd.prod_vl_uom1                 as ProdUom1,
 
       @Semantics.quantity.unitOfMeasure: 'ProdUom2'
       DlyPrd.prod_vl_qty2                 as ProdQty2,
-      @Semantics.unitOfMeasure: true
       DlyPrd.prod_vl_uom2                 as ProdUom2,
 
-      /* Calendar derivations */
-      year(  DlyPrd.production_date )     as CalendarYear,
-      month( DlyPrd.production_date )     as CalendarMonth,
+      /* Calendar derivations (no year()/month() in ABAP CDS) */
+      cast( substring( DlyPrd.production_date, 1, 4 )
+            as abap.numc(4) )             as CalendarYear,
+      cast( substring( DlyPrd.production_date, 5, 2 )
+            as abap.numc(2) )             as CalendarMonth,
 
       /* Product description (inline) */
       case DlyPrd.product

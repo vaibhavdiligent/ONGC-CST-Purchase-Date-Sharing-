@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR Production Performance - aggregation layer'
+@EndUserText.label: 'DPR Production Performance Aggregates'
 @Metadata.ignorePropagatedAnnotations: true
 
 /* ── Inner aggregation for the Production Performance query (Excel tab 3) ──
@@ -54,11 +54,11 @@ union all
       cast( 0 as abap.dec( 23, 7 ) )                  as SumActualQty,
       cast( 0 as abap.dec( 23, 3 ) )                  as SumActualBoepd,
 
-      cast( sum( Tar.tar_qty2 ) as abap.dec( 23, 7 ) ) as SumTargetQty,
+      cast( sum( Tar.tar_qty ) as abap.dec( 23, 7 ) ) as SumTargetQty,
 
       cast( sum( case Tar.product
-                   when '722000004' then Tar.tar_qty2 * cast( 6290 as abap.dec( 5, 0 ) )
-                   else                  Tar.tar_qty2
+                   when '722000004' then Tar.tar_qty * cast( 6290 as abap.dec( 5, 0 ) )
+                   else                  Tar.tar_qty
                  end ) as abap.dec( 23, 3 ) )         as SumTargetBoepd,
 
       /* fiscal months carrying a target (normally 12) */

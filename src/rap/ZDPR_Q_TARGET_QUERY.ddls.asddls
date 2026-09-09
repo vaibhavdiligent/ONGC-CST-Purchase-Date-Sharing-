@@ -82,8 +82,6 @@ define view entity ZDPR_Q_TARGET_QUERY
   @Aggregation.default: #SUM
   @Semantics.quantity.unitOfMeasure: 'ActualUom'
   Actual.ProdQty1                                 as ActualQty,
-
-  @Semantics.unitOfMeasure: true
   Actual.ProdUom1                                 as ActualUom,
 
   @AnalyticsDetails.query.axis: #COLUMNS
@@ -91,8 +89,6 @@ define view entity ZDPR_Q_TARGET_QUERY
   @Aggregation.default: #SUM
   @Semantics.quantity.unitOfMeasure: 'TargetUom'
   Target.TargetQty                                as TargetQty,
-
-  @Semantics.unitOfMeasure: true
   Target.TargetUom                                as TargetUom,
 
   @AnalyticsDetails.query.axis: #COLUMNS

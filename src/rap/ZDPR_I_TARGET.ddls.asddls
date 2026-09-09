@@ -25,11 +25,10 @@ define view entity ZDPR_I_TARGET
 
       @Semantics.quantity.unitOfMeasure: 'TargetUom'
       PrdTar.tar_qty                      as TargetQty,
-      @Semantics.unitOfMeasure: true
       PrdTar.uom                          as TargetUom,
 
       @Semantics.quantity.unitOfMeasure: 'TargetUom'
-      PrdTar.tar_qty2                     as TargetQty2,
+      PrdTar.tar_qty                     as TargetQty2,
 
       /* Target type description */
       case PrdTar.tar_code

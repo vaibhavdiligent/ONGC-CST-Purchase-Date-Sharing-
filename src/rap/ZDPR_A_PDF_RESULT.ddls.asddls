@@ -1,6 +1,4 @@
 @EndUserText.label: 'DPR PDF Download - Action Result'
-@MappingRole: true
-
 /*
  * Result structure returned by the downloadPdfProduction /
  * downloadPdfTargets static actions. The PDF is delivered

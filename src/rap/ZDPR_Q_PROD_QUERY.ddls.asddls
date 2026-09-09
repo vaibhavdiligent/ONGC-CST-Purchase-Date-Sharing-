@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR Production Query - By Product & Asset'
+@EndUserText.label: 'DPR Production by Product and Asset'
 @Metadata.ignorePropagatedAnnotations: true
 
 /* ── Analytical Query ─────────────────────────────────────────────────────── */
