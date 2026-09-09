@@ -86,7 +86,7 @@ define view entity ZDPR_P_DAY_BASE
             else D.prod_vl_qty1
           end )
         * ( case D.prd_vl_type
-              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+              when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
               else                cast(  1 as abap.dec( 2, 0 ) )
             end )
         as abap.dec( 23, 7 )

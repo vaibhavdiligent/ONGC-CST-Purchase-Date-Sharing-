@@ -42,7 +42,6 @@ define view entity ZDPR_C_BOEPD_DAY
   /* ── Dimensions ─────────────────────────────────────────────────────── */
   @AnalyticsDetails.query.axis: #ROWS
   @EndUserText.label: 'Production Date'
-  @Semantics.calendar.date: true
   key Day.ProductionDate                              as ProductionDate,
 
   @AnalyticsDetails.query.axis: #FREE

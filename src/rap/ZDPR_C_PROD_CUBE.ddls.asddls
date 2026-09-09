@@ -29,7 +29,6 @@ define view entity ZDPR_C_PROD_CUBE
 
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Production Date'
-  @Semantics.calendar.date: true
   key Daily.ProductionDate                        as ProductionDate,
 
   @AnalyticsDetails.query.axis: #FREE
@@ -75,7 +74,7 @@ define view entity ZDPR_C_PROD_CUBE
   @Semantics.quantity.unitOfMeasure: 'ProdUom1'
   cast( Daily.ProdQty1
         * ( case Daily.VolumeType
-              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+              when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
               else                cast(  1 as abap.dec( 2, 0 ) )
             end )
         as abap.dec( 23, 3 ) )                    as ProdQty1,
@@ -88,7 +87,7 @@ define view entity ZDPR_C_PROD_CUBE
   @Semantics.quantity.unitOfMeasure: 'ProdUom2'
   cast( Daily.ProdQty2
         * ( case Daily.VolumeType
-              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+              when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
               else                cast(  1 as abap.dec( 2, 0 ) )
             end )
         as abap.dec( 23, 3 ) )                    as ProdQty2,
@@ -108,7 +107,7 @@ define view entity ZDPR_C_PROD_CUBE
   cast(
     Daily.ProdQty1
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
           else                cast(  1 as abap.dec( 2, 0 ) )
         end )
     * PI.pi / cast( 100 as abap.dec(5,2) )
@@ -121,7 +120,7 @@ define view entity ZDPR_C_PROD_CUBE
   cast(
     Daily.ProdQty2
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
           else                cast(  1 as abap.dec( 2, 0 ) )
         end )
     * PI.pi / cast( 100 as abap.dec(5,2) )
@@ -143,7 +142,7 @@ define view entity ZDPR_C_PROD_CUBE
         else cast( 0 as abap.dec( 23, 7 ) )
       end )
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
           else                cast(  1 as abap.dec( 2, 0 ) )
         end )
     as abap.dec( 23, 7 )
@@ -163,7 +162,7 @@ define view entity ZDPR_C_PROD_CUBE
         else Daily.ProdQty1
       end )
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 2, 0 ) ) - cast( 1 as abap.dec( 2, 0 ) ) )
           else                cast(  1 as abap.dec( 2, 0 ) )
         end )
     as abap.dec( 23, 3 )
