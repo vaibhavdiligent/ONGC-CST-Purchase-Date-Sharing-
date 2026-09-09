@@ -42,32 +42,26 @@ group by ProductGroup
 
 union all
 
-  select from zpra_t_prd_tar as Tar
+  /* ZDPR_I_TARGET pre-computes ProductGroup and TargetBoepd as plain
+     columns, so this branch groups and sums plain fields only (no CASE
+     in GROUP BY / aggregates - rejected by the target release). */
+  select from ZDPR_I_TARGET as Tar
 {
   key cast( 'ANNUAL' as abap.char( 6 ) )              as ScopeType,
-  key case Tar.product
-        when '722000004' then 'GAS'
-        else                  'OIL'
-      end                                             as ProductGroup,
+  key Tar.ProductGroup                                as ProductGroup,
 
       /* no actuals at annual level - Excel shows "-" */
       cast( 0 as abap.dec( 23, 7 ) )                  as SumActualQty,
       cast( 0 as abap.dec( 23, 3 ) )                  as SumActualBoepd,
 
-      cast( sum( Tar.tar_qty ) as abap.dec( 23, 7 ) ) as SumTargetQty,
+      cast( sum( Tar.TargetQty )   as abap.dec( 23, 7 ) ) as SumTargetQty,
 
-      cast( sum( case Tar.product
-                   when '722000004' then Tar.tar_qty * cast( 6290 as abap.dec( 5, 0 ) )
-                   else                  Tar.tar_qty
-                 end ) as abap.dec( 23, 3 ) )         as SumTargetBoepd,
+      cast( sum( Tar.TargetBoepd ) as abap.dec( 23, 3 ) ) as SumTargetBoepd,
 
       /* fiscal months carrying a target (normally 12) */
-      cast( count( distinct Tar.monat ) as abap.dec( 10, 0 ) ) as Divisor
+      cast( count( distinct Tar.FiscalPeriod ) as abap.dec( 10, 0 ) ) as Divisor
 }
-where Tar.gjahr           = $parameters.P_FiscalYear
-  and Tar.tar_code        = 'TAR_BE'
-  and Tar.prod_vl_type_cd = 'NET_PROD'
-group by case Tar.product
-           when '722000004' then 'GAS'
-           else                  'OIL'
-         end
+where Tar.FiscalYear = $parameters.P_FiscalYear
+  and Tar.TargetCode = 'TAR_BE'
+  and Tar.VolumeType = 'NET_PROD'
+group by Tar.ProductGroup

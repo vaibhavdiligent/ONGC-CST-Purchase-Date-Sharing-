@@ -49,5 +49,17 @@ define view entity ZDPR_I_TARGET
         else                  'Other'
       end                                 as ProductDescription,
 
+      /* Plain columns so aggregation views need no CASE in sums/group by */
+      case PrdTar.product
+        when '722000004' then 'GAS'
+        else                  'OIL'
+      end                                 as ProductGroup,
+
+      /* BOEPD equivalent of the target rate (gas MMSCMD x 6290) */
+      cast( case PrdTar.product
+              when '722000004' then PrdTar.tar_qty * 6290
+              else                  PrdTar.tar_qty
+            end as abap.dec( 23, 3 ) )    as TargetBoepd,
+
       _AssetText
 }
