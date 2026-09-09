@@ -1,7 +1,7 @@
 @Metadata.layer: #CORE
 
 /*
- * Metadata Extension for ZPRA_Q_DPR_DAILY_TREND.
+ * Metadata Extension for ZDPR_Q_DAILY_TREND.
  *
  * Drives the on-screen rendering of the daily production trend
  * graph in Fiori Elements Analytical List Page (ALP):
@@ -14,7 +14,7 @@
  * @UI.lineItem definitions; this gives the user an inline Excel
  * export in addition to the dedicated downloadProduction action.
  */
-annotate view ZPRA_Q_DPR_DAILY_TREND with
+annotate view ZDPR_Q_DAILY_TREND with
 {
 
   /* ── Header info ──────────────────────────────────────────────────────── */

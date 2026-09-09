@@ -8,7 +8,7 @@
  * OData V4 JSON response and be decoded on the front-end
  * for download.
  */
-define abstract entity ZPRA_A_DPR_PDF_RESULT
+define abstract entity ZDPR_A_PDF_RESULT
 {
   @EndUserText.label: 'PDF File (Base64 encoded)'
   pdf_base64 : abap.string(0);

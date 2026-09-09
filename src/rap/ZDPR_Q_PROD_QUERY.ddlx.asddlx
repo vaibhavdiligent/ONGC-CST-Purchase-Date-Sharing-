@@ -1,14 +1,14 @@
 @Metadata.layer: #CORE
 
 /*
- * Metadata Extension for ZPRA_Q_DPR_PROD_QUERY
+ * Metadata Extension for ZDPR_Q_PROD_QUERY
  * Enables:
  *  - Filter bar (selectionFields)
  *  - Table columns (lineItem)
  *  - Chart (UI.chart)
  *  - Built-in "Export to Spreadsheet" (Excel) button in Fiori ALP
  */
-annotate view ZPRA_Q_DPR_PROD_QUERY with
+annotate view ZDPR_Q_PROD_QUERY with
 {
 
   /* ── Header info ─────────────────────────────────────────────────────── */

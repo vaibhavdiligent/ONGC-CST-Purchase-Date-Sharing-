@@ -16,13 +16,13 @@
 
 @OData.entityType.name: 'DPRBoepdTrendQueryType'
 
-define view entity ZPRA_Q_DPR_BOEPD_TREND
+define view entity ZDPR_Q_BOEPD_TREND
   with parameters
     P_DateFrom : zpra_t_dly_prd-production_date,
     P_DateTo   : zpra_t_dly_prd-production_date,
     P_Asset    : zpra_t_dly_prd-asset              /* '' = all assets */
 
-  as select from ZPRA_C_DPR_BOEPD_DAY
+  as select from ZDPR_C_BOEPD_DAY
 
 {
   /* ── X-axis ─────────────────────────────────────────────────────────── */

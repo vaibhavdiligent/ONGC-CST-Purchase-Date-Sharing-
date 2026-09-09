@@ -10,8 +10,8 @@
 /* ── OData exposure ──────────────────────────────────────────────────────── */
 @OData.entityType.name: 'DPRProductionCubeType'
 
-define view entity ZPRA_C_DPR_CUBE
-  as select from ZPRA_I_DPR_DAILY as Daily
+define view entity ZDPR_C_PROD_CUBE
+  as select from ZDPR_I_DAILY as Daily
 
   /* Asset name text */
   left outer join zoiu_pr_dn as AssetTxt

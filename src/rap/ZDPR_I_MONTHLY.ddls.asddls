@@ -8,7 +8,7 @@
   dataClass:      #TRANSACTIONAL
 }
 
-define view entity ZPRA_I_DPR_MONTHLY
+define view entity ZDPR_I_MONTHLY
   as select from zpra_t_mrec_prd as MrecPrd
 
   association [0..1] to zoiu_pr_dn as _AssetText

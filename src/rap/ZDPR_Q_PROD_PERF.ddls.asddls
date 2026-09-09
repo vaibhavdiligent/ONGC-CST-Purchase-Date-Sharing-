@@ -11,17 +11,17 @@
  *   Oil group  : BOPD        Gas group : MMSCMD       Boepd : Total (O+OEG)
  * AchievementPct = YTD "% Achv w.r.t. BE Target" (0 for ANNUAL rows, where the
  * Excel leaves the cell blank). Operates on <= 4 pre-aggregated rows - the
- * division cost is negligible; all scanning happened in ZPRA_P_DPR_PERF_AGG.
+ * division cost is negligible; all scanning happened in ZDPR_P_PERF_AGG.
  * ─────────────────────────────────────────────────────────────────────────── */
 @OData.entityType.name: 'DPRProdPerfQueryType'
 
-define view entity ZPRA_Q_DPR_PROD_PERF
+define view entity ZDPR_Q_PROD_PERF
   with parameters
     P_DateFrom   : zpra_t_dly_prd-production_date,
     P_DateTo     : zpra_t_dly_prd-production_date,
     P_FiscalYear : zpra_t_prd_tar-gjahr
 
-  as select from ZPRA_P_DPR_PERF_AGG(
+  as select from ZDPR_P_PERF_AGG(
                    P_DateFrom   : $parameters.P_DateFrom,
                    P_DateTo     : $parameters.P_DateTo,
                    P_FiscalYear : $parameters.P_FiscalYear )

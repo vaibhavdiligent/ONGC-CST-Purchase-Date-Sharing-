@@ -1,6 +1,6 @@
 @Metadata.layer: #CORE
 
-annotate view ZPRA_Q_DPR_TARGET_QUERY with
+annotate view ZDPR_Q_TARGET_QUERY with
 {
 
   @UI.headerInfo: {

@@ -8,7 +8,7 @@
   dataClass:      #MASTER
 }
 
-define view entity ZPRA_I_DPR_TARGET
+define view entity ZDPR_I_TARGET
   as select from zpra_t_prd_tar as PrdTar
 
   association [0..1] to zoiu_pr_dn as _AssetText

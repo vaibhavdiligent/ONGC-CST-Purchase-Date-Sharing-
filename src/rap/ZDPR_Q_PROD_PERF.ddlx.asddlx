@@ -1,13 +1,13 @@
 @Metadata.layer: #CORE
 
 /*
- * Metadata Extension for ZPRA_Q_DPR_PROD_PERF.
+ * Metadata Extension for ZDPR_Q_PROD_PERF.
  * Renders the DPR Excel tab-3 "Production Performance" block:
  *   table  : Scope x Product group with Actual / BE Target / % Achv
  *   chart  : Actual vs BE Target BOEPD by product group
  *   KPI    : % Achv with red/amber/green criticality
  */
-annotate view ZPRA_Q_DPR_PROD_PERF with
+annotate view ZDPR_Q_PROD_PERF with
 {
 
   @UI.headerInfo: {

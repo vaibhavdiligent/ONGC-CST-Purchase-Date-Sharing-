@@ -1,4 +1,4 @@
-CLASS zcl_zpra_dpr_pdf DEFINITION
+CLASS zcl_zdpr_pdf DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -6,8 +6,8 @@ CLASS zcl_zpra_dpr_pdf DEFINITION
     "-- Reuse the row types defined in the Excel class so both helpers
     "   work on the same SELECT result and stay in sync.
     TYPES:
-      tt_prod_rows   TYPE zcl_zpra_dpr_excel=>tt_prod_rows,
-      tt_target_rows TYPE zcl_zpra_dpr_excel=>tt_target_rows.
+      tt_prod_rows   TYPE zcl_zdpr_excel=>tt_prod_rows,
+      tt_target_rows TYPE zcl_zdpr_excel=>tt_target_rows.
 
     CLASS-METHODS:
       "! Fetch production data and return as PDF binary + page count.
@@ -38,7 +38,7 @@ CLASS zcl_zpra_dpr_pdf DEFINITION
 
       "! Render an arbitrary production row table as PDF.
       "! Form name configured via the constants below — change once
-      "! the Adobe form ZPRA_FRM_DPR_PRODUCTION is created in SFP.
+      "! the Adobe form ZDPR_FRM_PRODUCTION is created in SFP.
       generate_production_pdf
         IMPORTING
           it_data      TYPE tt_prod_rows
@@ -66,8 +66,8 @@ CLASS zcl_zpra_dpr_pdf DEFINITION
 
     " ── Adobe Form names (create via SFP) ─────────────────────────────────
     CONSTANTS:
-      c_form_production TYPE fpname VALUE 'ZPRA_FRM_DPR_PRODUCTION',
-      c_form_target     TYPE fpname VALUE 'ZPRA_FRM_DPR_TARGETS'.
+      c_form_production TYPE fpname VALUE 'ZDPR_FRM_PRODUCTION',
+      c_form_target     TYPE fpname VALUE 'ZDPR_FRM_TARGETS'.
 
     " ── Helper: select production data (same query as Excel exporter) ─────
     CLASS-METHODS select_production_data
@@ -95,7 +95,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_zpra_dpr_pdf IMPLEMENTATION.
+CLASS zcl_zdpr_pdf IMPLEMENTATION.
 
   "-------------------------------------------------------------------------
   " Public: production data → PDF (xstring + page count)

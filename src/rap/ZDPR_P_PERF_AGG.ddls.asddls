@@ -15,13 +15,13 @@
  *            Divisor = number of fiscal months found (normally 12)
  *            -> per-day annual target rate; no actuals (Excel shows "-")
  * ─────────────────────────────────────────────────────────────────────────── */
-define view entity ZPRA_P_DPR_PERF_AGG
+define view entity ZDPR_P_PERF_AGG
   with parameters
     P_DateFrom   : zpra_t_dly_prd-production_date,
     P_DateTo     : zpra_t_dly_prd-production_date,
     P_FiscalYear : zpra_t_prd_tar-gjahr
 
-  as select from ZPRA_C_DPR_BOEPD_DAY
+  as select from ZDPR_C_BOEPD_DAY
 
 {
   key 'YTD'                                           as ScopeType,

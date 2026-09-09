@@ -13,14 +13,14 @@
  * enabling target vs. actual variance analysis.
  * Parameters filter by fiscal year and target type.
  */
-define view entity ZPRA_Q_DPR_TARGET_QUERY
+define view entity ZDPR_Q_TARGET_QUERY
   with parameters
     P_FiscalYear : zpra_t_mrec_prd-gjahr,
     P_TargetCode : zpra_t_prd_tar-tar_code    /* e.g. TAR_BE, TAR_RE */
 
-  as select from ZPRA_I_DPR_MONTHLY as Actual
+  as select from ZDPR_I_MONTHLY as Actual
 
-  left outer join ZPRA_I_DPR_TARGET as Target
+  left outer join ZDPR_I_TARGET as Target
     on  Actual.FiscalYear   = Target.FiscalYear
     and Actual.FiscalPeriod = Target.FiscalPeriod
     and Actual.Asset        = Target.Asset

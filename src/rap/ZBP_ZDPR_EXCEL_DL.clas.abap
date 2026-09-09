@@ -1,11 +1,11 @@
-CLASS zbp_zpra_dpr_excel_dl DEFINITION
+CLASS zbp_zdpr_excel_dl DEFINITION
   PUBLIC ABSTRACT FINAL
-  FOR BEHAVIOR OF zpra_i_dpr_excel_dl.
+  FOR BEHAVIOR OF zdpr_i_excel_dl.
 
   PUBLIC SECTION.
 ENDCLASS.
 
-CLASS zbp_zpra_dpr_excel_dl IMPLEMENTATION.
+CLASS zbp_zdpr_excel_dl IMPLEMENTATION.
 ENDCLASS.
 
 "-- Handler class for static download actions (Excel + PDF) -----------------
@@ -42,7 +42,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
   " Excel: daily production
   "-------------------------------------------------------------------------
   METHOD download_production.
-    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zpra_i_dpr_excel_dl~downloadProduction,
+    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zdpr_i_excel_dl~downloadProduction,
           lv_xdata  TYPE xstring,
           lv_b64    TYPE string.
 
@@ -53,7 +53,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
     ENDIF.
 
     TRY.
-        lv_xdata = zcl_zpra_dpr_excel=>fetch_and_export_production(
+        lv_xdata = zcl_zdpr_excel=>fetch_and_export_production(
           iv_date_from = ls_param-%param-date_from
           iv_date_to   = ls_param-%param-date_to
         ).
@@ -78,7 +78,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
   " Excel: targets vs actual
   "-------------------------------------------------------------------------
   METHOD download_targets.
-    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zpra_i_dpr_excel_dl~downloadTargets,
+    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zdpr_i_excel_dl~downloadTargets,
           lv_xdata  TYPE xstring,
           lv_b64    TYPE string.
 
@@ -89,7 +89,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
     ENDIF.
 
     TRY.
-        lv_xdata = zcl_zpra_dpr_excel=>fetch_and_export_targets(
+        lv_xdata = zcl_zdpr_excel=>fetch_and_export_targets(
           iv_fiscal_year = ls_param-%param-fiscal_year
           iv_target_code = ls_param-%param-target_code
         ).
@@ -114,7 +114,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
   " PDF: daily production
   "-------------------------------------------------------------------------
   METHOD download_pdf_production.
-    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zpra_i_dpr_excel_dl~downloadPdfProduction,
+    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zdpr_i_excel_dl~downloadPdfProduction,
           lv_xdata  TYPE xstring,
           lv_pages  TYPE i,
           lv_b64    TYPE string.
@@ -126,7 +126,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
     ENDIF.
 
     TRY.
-        zcl_zpra_dpr_pdf=>fetch_and_export_production(
+        zcl_zdpr_pdf=>fetch_and_export_production(
           EXPORTING iv_date_from = ls_param-%param-date_from
                     iv_date_to   = ls_param-%param-date_to
           IMPORTING ev_pdf       = lv_xdata
@@ -154,7 +154,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
   " PDF: targets vs actual
   "-------------------------------------------------------------------------
   METHOD download_pdf_targets.
-    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zpra_i_dpr_excel_dl~downloadPdfTargets,
+    DATA: ls_result TYPE STRUCTURE FOR ACTION RESULT zdpr_i_excel_dl~downloadPdfTargets,
           lv_xdata  TYPE xstring,
           lv_pages  TYPE i,
           lv_b64    TYPE string.
@@ -166,7 +166,7 @@ CLASS lhc_dpr_excel IMPLEMENTATION.
     ENDIF.
 
     TRY.
-        zcl_zpra_dpr_pdf=>fetch_and_export_targets(
+        zcl_zdpr_pdf=>fetch_and_export_targets(
           EXPORTING iv_fiscal_year = ls_param-%param-fiscal_year
                     iv_target_code = ls_param-%param-target_code
           IMPORTING ev_pdf         = lv_xdata

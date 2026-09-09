@@ -13,13 +13,13 @@
 
 @OData.entityType.name: 'DPRDailyTrendQueryType'
 
-define view entity ZPRA_Q_DPR_DAILY_TREND
+define view entity ZDPR_Q_DAILY_TREND
   with parameters
     P_DateFrom : zpra_t_dly_prd-production_date,
     P_DateTo   : zpra_t_dly_prd-production_date,
     P_Asset    : zpra_t_dly_prd-asset              /* Optional: '' = all assets */
 
-  as select from ZPRA_C_DPR_CUBE
+  as select from ZDPR_C_PROD_CUBE
 
 {
   /* ── Time axis (X-axis for chart) ─────────────────────────────────────── */

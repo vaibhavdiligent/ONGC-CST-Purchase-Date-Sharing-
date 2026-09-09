@@ -8,7 +8,7 @@
   dataClass:      #TRANSACTIONAL
 }
 
-define view entity ZPRA_I_DPR_DAILY
+define view entity ZDPR_I_DAILY
   as select from zpra_t_dly_prd as DlyPrd
 
   /* Asset description */

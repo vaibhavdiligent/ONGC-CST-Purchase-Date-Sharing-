@@ -27,7 +27,7 @@
  * so the expensive CASE logic is evaluated once here instead of inside join
  * conditions - keeps HANA join pruning effective on large date ranges.
  * ─────────────────────────────────────────────────────────────────────────── */
-define view entity ZPRA_P_DPR_DAY_BASE
+define view entity ZDPR_P_DAY_BASE
   as select from zpra_t_dly_prd as D
 
   left outer join zpra_t_prd_pi as PI

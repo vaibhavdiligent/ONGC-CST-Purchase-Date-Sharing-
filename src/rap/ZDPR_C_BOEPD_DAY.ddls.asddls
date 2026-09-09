@@ -6,7 +6,7 @@
 /* ── Analytical Cube (performance-first) ────────────────────────────────────
  * Data behind Excel tab 2 (graph: "Actual Production" vs "BE Target" lines)
  * and tab 3 (Production Performance). All unit/sign logic lives in
- * ZPRA_P_DPR_DAY_BASE (computed once per row; gas = GROSS_PROD - GAS_INJ,
+ * ZDPR_P_DAY_BASE (computed once per row; gas = GROSS_PROD - GAS_INJ,
  * since gas has no NET_PROD rows); this cube only does
  *   - one EQUALITY join to the BE target (TAR_BE / NET_PROD, tar_qty2 daily
  *     rate) on asset/block/product/fiscal year/fiscal period. The join is
@@ -20,8 +20,8 @@
 
 @OData.entityType.name: 'DPRBoepdDayCubeType'
 
-define view entity ZPRA_C_DPR_BOEPD_DAY
-  as select from ZPRA_P_DPR_DAY_BASE as Day
+define view entity ZDPR_C_BOEPD_DAY
+  as select from ZDPR_P_DAY_BASE as Day
 
   /* BE Target daily rate (tar_qty2, OVL level) of the fiscal month.
      NOT joined on GAS_INJ rows (gas target must count once per day). */

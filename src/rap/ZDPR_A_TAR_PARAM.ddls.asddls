@@ -1,7 +1,7 @@
 @EndUserText.label: 'DPR Target Download - Input Parameters'
 @MappingRole: true
 
-define abstract entity ZPRA_A_DPR_TAR_PARAM
+define abstract entity ZDPR_A_TAR_PARAM
 {
   @EndUserText.label: 'Fiscal Year'
   fiscal_year  : abap.numc(4);

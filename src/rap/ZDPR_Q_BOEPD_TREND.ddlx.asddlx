@@ -1,12 +1,12 @@
 @Metadata.layer: #CORE
 
 /*
- * Metadata Extension for ZPRA_Q_DPR_BOEPD_TREND.
+ * Metadata Extension for ZDPR_Q_BOEPD_TREND.
  * Renders the DPR Excel tab-2 graph 1:1 in Fiori ALP:
  *   line chart, X = date, two series = Actual Production vs BE Target,
  *   table of the same rows underneath (native Export to Spreadsheet).
  */
-annotate view ZPRA_Q_DPR_BOEPD_TREND with
+annotate view ZDPR_Q_BOEPD_TREND with
 {
 
   @UI.headerInfo: {
