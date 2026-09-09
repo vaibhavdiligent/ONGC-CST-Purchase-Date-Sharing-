@@ -1463,6 +1463,7 @@ AND  setclass = '0000'.
 * flag selects the document type rule set, it is not a limit.
 *----------------------------------------------------------------------
     DATA : lv_persk        TYPE zpa0001-persk,
+           lv_full_power   TYPE c,
            lv_bdp_limit    TYPE zfi_ovl_bdp-bdp_limit,
            lv_bdp_msg(200) TYPE c.
 
@@ -1548,14 +1549,20 @@ AND  setclass = '0000'.
         MESSAGE 'You are not authorized to post - no valid HR record (ZPA0001) exists for your user id' TYPE 'E'.
       ENDIF.
 
+*     Employee subgroup E4 and above has full financial power - the
+*     document amount is not restricted for these grades.
+      PERFORM is_full_power_grade USING lv_persk CHANGING lv_full_power.
+
       CLEAR lv_bdp_limit.
-      SELECT SINGLE bdp_limit FROM zfi_ovl_bdp INTO lv_bdp_limit
-                                    WHERE agr_name_post = lv_persk.
-      IF sy-subrc NE 0.
-        CONCATENATE 'BDP limit is not maintained in table ZFI_OVL_BDP for employee subgroup'
-                    lv_persk
-                    INTO lv_bdp_msg SEPARATED BY space.
-        MESSAGE lv_bdp_msg TYPE 'E'.
+      IF lv_full_power IS INITIAL.
+        SELECT SINGLE bdp_limit FROM zfi_ovl_bdp INTO lv_bdp_limit
+                                      WHERE agr_name_post = lv_persk.
+        IF sy-subrc NE 0.
+          CONCATENATE 'BDP limit is not maintained in table ZFI_OVL_BDP for employee subgroup'
+                      lv_persk
+                      INTO lv_bdp_msg SEPARATED BY space.
+          MESSAGE lv_bdp_msg TYPE 'E'.
+        ENDIF.
       ENDIF.
 
       IF cash_bank_flg = 'X'.
@@ -1570,7 +1577,7 @@ AND  setclass = '0000'.
             ENDLOOP.
           ENDIF.
 
-          IF gross > lv_bdp_limit.
+          IF lv_full_power IS INITIAL AND gross > lv_bdp_limit.
             PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
           ENDIF.
         ENDIF.
@@ -1597,7 +1604,7 @@ AND  setclass = '0000'.
             ENDIF.
           ENDIF.
         ENDIF. " ( SY-CPROG = 'SAPMF05A' and  SY-TCODE = 'FB01' )
-        IF gross > lv_bdp_limit.
+        IF lv_full_power IS INITIAL AND gross > lv_bdp_limit.
           PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
         ENDIF.
 
@@ -8822,6 +8829,7 @@ AND  setclass = '0000'.
 * flag selects the document type rule set, it is not a limit.
 *----------------------------------------------------------------------
     DATA : lv_persk        TYPE zpa0001-persk,
+           lv_full_power   TYPE c,
            lv_bdp_limit    TYPE zfi_ovc_bdp-bdp_limit,
            lv_bdp_msg(200) TYPE c.
 
@@ -8907,14 +8915,20 @@ AND  setclass = '0000'.
         MESSAGE 'You are not authorized to post - no valid HR record (ZPA0001) exists for your user id' TYPE 'E'.
       ENDIF.
 
+*     Employee subgroup E4 and above has full financial power - the
+*     document amount is not restricted for these grades.
+      PERFORM is_full_power_grade USING lv_persk CHANGING lv_full_power.
+
       CLEAR lv_bdp_limit.
-      SELECT SINGLE bdp_limit FROM zfi_ovc_bdp INTO lv_bdp_limit
-                                    WHERE agr_name_post = lv_persk.
-      IF sy-subrc NE 0.
-        CONCATENATE 'BDP limit is not maintained in table ZFI_OVC_BDP for employee subgroup'
-                    lv_persk
-                    INTO lv_bdp_msg SEPARATED BY space.
-        MESSAGE lv_bdp_msg TYPE 'E'.
+      IF lv_full_power IS INITIAL.
+        SELECT SINGLE bdp_limit FROM zfi_ovc_bdp INTO lv_bdp_limit
+                                      WHERE agr_name_post = lv_persk.
+        IF sy-subrc NE 0.
+          CONCATENATE 'BDP limit is not maintained in table ZFI_OVC_BDP for employee subgroup'
+                      lv_persk
+                      INTO lv_bdp_msg SEPARATED BY space.
+          MESSAGE lv_bdp_msg TYPE 'E'.
+        ENDIF.
       ENDIF.
 
       IF cash_bank_flg = 'X'.
@@ -8929,7 +8943,7 @@ AND  setclass = '0000'.
             ENDLOOP.
           ENDIF.
 
-          IF gross > lv_bdp_limit.
+          IF lv_full_power IS INITIAL AND gross > lv_bdp_limit.
             PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
           ENDIF.
         ENDIF.
@@ -8953,7 +8967,7 @@ AND  setclass = '0000'.
 *            ENDIF.
 *          ENDIF.
 *        ENDIF. " ( SY-CPROG = 'SAPMF05A' and  SY-TCODE = 'FB01' )
-        IF gross > lv_bdp_limit.
+        IF lv_full_power IS INITIAL AND gross > lv_bdp_limit.
           PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
         ENDIF.
 
@@ -9347,6 +9361,27 @@ FORM get_user_grade CHANGING p_persk TYPE zpa0001-persk.
   ENDIF.
 
 ENDFORM.                                            "get_user_grade
+
+*&---------------------------------------------------------------------*
+*&      Form  IS_FULL_POWER_GRADE
+*&---------------------------------------------------------------------*
+*  Employee subgroups from C_FULL_POWER upwards (E4 .. E9) carry full
+*  financial power as per BDP - no amount limit is applied for them.
+*  Only executive grades (E..) are recognised here; any other employee
+*  subgroup stays subject to the limit maintained in the BDP table.
+*----------------------------------------------------------------------*
+FORM is_full_power_grade USING    p_persk TYPE zpa0001-persk
+                         CHANGING p_flag  TYPE c.
+
+  CONSTANTS : c_full_power TYPE zpa0001-persk VALUE 'E4'.
+
+  CLEAR p_flag.
+
+  IF p_persk(1) = 'E' AND p_persk GE c_full_power.
+    p_flag = 'X'.
+  ENDIF.
+
+ENDFORM.                                            "is_full_power_grade
 
 *&---------------------------------------------------------------------*
 *&      Form  RAISE_BDP_LIMIT_MSG

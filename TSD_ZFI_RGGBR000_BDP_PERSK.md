@@ -21,6 +21,7 @@ Org. Assignment).
 Two new helper subroutines were added at the end of the program:
 
 * `FORM get_user_grade` — returns the posting user's `PERSK`
+* `FORM is_full_power_grade` — flags grades E4 and above (no amount limit)
 * `FORM raise_bdp_limit_msg` — raises the limit-exceeded error message
 
 No other exit routine was touched. `FORM us001` still uses `C:FI_PCS_E*` /
@@ -55,16 +56,39 @@ IF lv_persk IS INITIAL.
   MESSAGE 'You are not authorized to post - no valid HR record (ZPA0001) exists for your user id' TYPE 'E'.
 ENDIF.
 
-SELECT SINGLE bdp_limit FROM zfi_ovl_bdp INTO lv_bdp_limit
-                              WHERE agr_name_post = lv_persk.
-IF sy-subrc NE 0.
-  " 'BDP limit is not maintained in table ZFI_OVL_BDP for employee subgroup <PERSK>'
+*     Employee subgroup E4 and above has full financial power.
+PERFORM is_full_power_grade USING lv_persk CHANGING lv_full_power.
+
+CLEAR lv_bdp_limit.
+IF lv_full_power IS INITIAL.
+  SELECT SINGLE bdp_limit FROM zfi_ovl_bdp INTO lv_bdp_limit
+                                WHERE agr_name_post = lv_persk.
+  IF sy-subrc NE 0.
+    " 'BDP limit is not maintained in table ZFI_OVL_BDP for employee subgroup <PERSK>'
+  ENDIF.
 ENDIF.
 ...
-IF gross > lv_bdp_limit.
+IF lv_full_power IS INITIAL AND gross > lv_bdp_limit.
   PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
 ENDIF.
 ```
+
+### Grades with full financial power — `FORM is_full_power_grade`
+
+Employee subgroup **E4 and above** (E4 … E9) approves any amount: no limit is
+read and no limit is applied. Only executive grades are recognised — the first
+character must be `E` — so any other employee subgroup stays subject to the
+limit in the BDP table.
+
+```abap
+CONSTANTS : c_full_power TYPE zpa0001-persk VALUE 'E4'.
+IF p_persk(1) = 'E' AND p_persk GE c_full_power.
+  p_flag = 'X'.
+ENDIF.
+```
+
+The threshold is a single constant in one subroutine shared by `u102` and
+`u252`, so a future change to the BDP is a one-line change.
 
 ### Determining the user's grade — `FORM get_user_grade`
 
@@ -120,19 +144,23 @@ Old content (24 rows, role names):
 | `FI_AP_E0_OVL_YY` | 50,000 |
 | … (AP / ASSET / GL × E0–E3, `C:` and `_YY` variants) | |
 
-New content (one row per grade in use, e.g.):
+New content — one row per **limited** grade. Grades E4 and above are handled in
+code and need no row:
 
 | AGR_NAME_POST | BDP_LIMIT |
 |---|---|
-| `E5` | … |
-| `E6` | … |
-| `E7` | … |
-| `E8` | … |
-| `E9` | … |
+| `E0` | 50,000 |
+| `E1` | 10,00,000 |
+| `E2` | 50,00,000 |
+| `E3` | 1,00,00,000 |
 
-The grade → limit amounts are to be supplied by Finance as per the BDP. Because
-the module dimension (AP / GL / ASSET) carried the same limit for a given level
-in the old table, dropping it loses nothing.
+Because the module dimension (AP / GL / ASSET) carried the same limit for a
+given level in the old table, dropping it loses nothing. The legacy role rows
+may be left in place — they are simply never read any more — or deleted once
+the change is confirmed in production.
+
+`ZFI_OVC_BDP` must be maintained the same way; the OVC routine `u252` uses the
+identical logic.
 
 Note: `PERSK` is `CHAR 2` and `AGR_NAME_POST` is longer, so the value must be
 maintained left-justified with no leading blanks.
@@ -144,10 +172,14 @@ maintained left-justified with no leading blanks.
 2. A user **without** a valid `ZPA0001` record (and no `ZMM_VMS_CR_NEW` mapping)
    is now **blocked** from posting. Batch / RFC / service users that post FI
    documents must be reviewed before go-live.
-3. A grade with no row in `ZFI_OVL_BDP` / `ZFI_OVC_BDP` blocks posting with an
-   explicit "limit not maintained" message — so a configuration gap is visible
-   rather than silently allowing the posting.
-4. Document types listed in set `BDP_DOCTYPE_NOLIMIT` (OVL) /
+3. A grade **below E4** with no row in `ZFI_OVL_BDP` / `ZFI_OVC_BDP` blocks
+   posting with an explicit "limit not maintained" message — so a configuration
+   gap is visible rather than silently allowing the posting. Grades E4 and above
+   need no row and are never blocked on amount.
+4. Confirm with Finance which grades actually occur in `ZPA0001-PERSK` for FI
+   posting users. If the population is predominantly E5 and above, the amount
+   limit will in practice apply to very few users.
+5. Document types listed in set `BDP_DOCTYPE_NOLIMIT` (OVL) /
    `BDP_DOCTYPE_NOLIMIT_OVC` (OVC) and transaction codes in set
    `ZJVA_NOP_TCODE` remain exempt — unchanged.
 
