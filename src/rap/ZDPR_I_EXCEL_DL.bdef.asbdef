@@ -1,36 +1,10 @@
-managed implementation in class zbp_zdpr_excel_dl unique;
-strict ( 2 );
+unmanaged implementation in class zbp_zdpr_excel_dl unique;
 
-/*
- * Behavior Definition for DPR Download Actions (Excel + PDF).
- *
- * Four static (unbound) actions are exposed:
- *   downloadProduction      – exports daily production data to Excel
- *   downloadTargets         – exports target vs actual data to Excel
- *   downloadPdfProduction   – exports daily production data to PDF
- *   downloadPdfTargets      – exports target vs actual data to PDF
- *
- * Each action is callable independently via OData V4:
- *   POST /DPRExcelDownload/com.sap.gateway.srvd.zdpr_sd_analytics.v0001.downloadProduction
- *   POST /DPRExcelDownload/com.sap.gateway.srvd.zdpr_sd_analytics.v0001.downloadTargets
- *   POST /DPRExcelDownload/com.sap.gateway.srvd.zdpr_sd_analytics.v0001.downloadPdfProduction
- *   POST /DPRExcelDownload/com.sap.gateway.srvd.zdpr_sd_analytics.v0001.downloadPdfTargets
- *
- * The Fiori Elements UI renders these as separate toolbar buttons:
- *   - "Export to Excel"  → downloadProduction / downloadTargets
- *   - "Export to PDF"    → downloadPdfProduction / downloadPdfTargets
- */
-
+// Action-only behavior: the entity exists purely to host the four
+// static download actions (Excel + PDF), called via OData action imports.
+// No CRUD, lock, etag or persistence - nothing is ever written.
 define behavior for ZDPR_I_EXCEL_DL alias DPRExcelDownload
-  lock master
-  authorization master ( instance )
-  etag none
 {
-  /* Read-only entity: CUD only declared so RAP framework is satisfied */
-  create; delete; update;
-
-  /* ── Excel actions ─────────────────────────────────────────────────── */
-
   static action downloadProduction
     parameter ZDPR_A_PROD_PARAM
     result   [1] ZDPR_A_EXCEL_RESULT;
@@ -38,8 +12,6 @@ define behavior for ZDPR_I_EXCEL_DL alias DPRExcelDownload
   static action downloadTargets
     parameter ZDPR_A_TAR_PARAM
     result   [1] ZDPR_A_EXCEL_RESULT;
-
-  /* ── PDF actions  ──────────────────────────────────────────────────── */
 
   static action downloadPdfProduction
     parameter ZDPR_A_PROD_PARAM

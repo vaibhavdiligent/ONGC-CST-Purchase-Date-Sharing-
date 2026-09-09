@@ -1,26 +1,71 @@
 @Metadata.layer: #CORE
 
-/*
- * Metadata Extension for ZDPR_Q_PROD_QUERY
- * Enables:
- *  - Filter bar (selectionFields)
- *  - Table columns (lineItem)
- *  - Chart (UI.chart)
- *  - Built-in "Export to Spreadsheet" (Excel) button in Fiori ALP
- */
+@UI.headerInfo: {
+  typeName:       'Production Record',
+  typeNamePlural: 'Production Records',
+  title:          { type: #STANDARD, value: 'ProductDescription' },
+  description:    { type: #STANDARD, value: 'AssetDescription'   }
+}
+
+@UI.chart: [
+  {
+    qualifier:  'ByDate',
+    title:      'Daily Production by Product',
+    chartType:  #COLUMN,
+    dimensions: ['ProductionDate', 'ProductDescription'],
+    measures:   ['ProdQty1', 'OvlShareQty1'],
+    measureAttributes: [
+      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
+      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductionDate',     role: #CATEGORY },
+      { dimension: 'ProductDescription', role: #SERIES   }
+    ]
+  },
+  {
+    qualifier:  'JvVsOvl',
+    title:      'JV vs OVL Share',
+    chartType:  #DONUT,
+    dimensions: ['ProductDescription'],
+    measures:   ['ProdQty1', 'OvlShareQty1'],
+    measureAttributes: [
+      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
+      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'ProductDescription', role: #CATEGORY }
+    ]
+  },
+  {
+    qualifier:  'ByAsset',
+    title:      'Production by Asset',
+    chartType:  #COLUMN_STACKED,
+    dimensions: ['AssetDescription', 'ProductDescription'],
+    measures:   ['ProdQty1'],
+    measureAttributes: [
+      { measure: 'ProdQty1', role: #AXIS_1, asDataPoint: true }
+    ],
+    dimensionAttributes: [
+      { dimension: 'AssetDescription',   role: #CATEGORY },
+      { dimension: 'ProductDescription', role: #SERIES   }
+    ]
+  }
+]
+
+@UI.presentationVariant: [{
+  qualifier:      'Default',
+  visualizations: [
+    { type: #AS_CHART,    qualifier: 'ByDate' },
+    { type: #AS_LINEITEM }
+  ],
+  sortOrder:      [{ by: 'ProductionDate', direction: #ASC }]
+}]
+
 annotate view ZDPR_Q_PROD_QUERY with
 {
-
-  /* ── Header info ─────────────────────────────────────────────────────── */
-  @UI.headerInfo: {
-    typeName:       'Production Record',
-    typeNamePlural: 'Production Records',
-    title:          { type: #STANDARD, value: 'ProductDescription' },
-    description:    { type: #STANDARD, value: 'AssetDescription'   }
-  }
-
-  /* ── Selection / Filter fields ────────────────────────────────────────── */
   @UI.selectionField: [{ position: 10 }]
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
   ProductionDate;
 
   @UI.selectionField: [{ position: 20 }]
@@ -38,13 +83,6 @@ annotate view ZDPR_Q_PROD_QUERY with
   @UI.selectionField: [{ position: 60 }]
   VolumeType;
 
-  /* ── Table columns (lineItem) — drives "Export to Spreadsheet" ─────────
-     The Fiori Elements Analytical List Page renders these as table columns
-     and automatically adds an "Export to Spreadsheet" (Excel) button.     */
-
-  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
-  ProductionDate;
-
   @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
   ProductDescription;
 
@@ -58,12 +96,14 @@ annotate view ZDPR_Q_PROD_QUERY with
   VolumeTypeDescription;
 
   @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'JV Production (UoM1)' }]
+  @UI.dataPoint: { title: 'Total JV Production', criticality: #NEUTRAL }
   ProdQty1;
 
   @UI.lineItem: [{ position: 70, importance: #LOW, label: 'UoM' }]
   ProdUom1;
 
   @UI.lineItem: [{ position: 80, importance: #HIGH, label: 'OVL Share (UoM1)' }]
+  @UI.dataPoint: { title: 'OVL Share', criticality: #POSITIVE }
   OvlShareQty1;
 
   @UI.lineItem: [{ position: 90, importance: #MEDIUM, label: 'JV Production (UoM2)' }]
@@ -74,79 +114,4 @@ annotate view ZDPR_Q_PROD_QUERY with
 
   @UI.lineItem: [{ position: 110, importance: #LOW, label: 'PI %' }]
   ParticipatingInterest;
-
-  /* ── Chart definition (multiple charts switchable in ALP toolbar) ───── */
-  @UI.chart: [
-    /* Primary: column chart by date+product */
-    {
-      qualifier:  'ByDate',
-      title:      'Daily Production by Product',
-      chartType:  #COLUMN,
-      dimensions: ['ProductionDate', 'ProductDescription'],
-      measures:   ['ProdQty1', 'OvlShareQty1'],
-      measureAttributes: [
-        { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
-        { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-      ],
-      dimensionAttributes: [
-        { dimension: 'ProductionDate',     role: #CATEGORY },
-        { dimension: 'ProductDescription', role: #SERIES   }
-      ]
-    },
-    /* Comparison: JV vs OVL share — pie */
-    {
-      qualifier:  'JvVsOvl',
-      title:      'JV vs OVL Share',
-      chartType:  #DONUT,
-      dimensions: ['ProductDescription'],
-      measures:   ['ProdQty1', 'OvlShareQty1'],
-      measureAttributes: [
-        { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
-        { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-      ],
-      dimensionAttributes: [
-        { dimension: 'ProductDescription', role: #CATEGORY }
-      ]
-    },
-    /* Asset breakdown: stacked column */
-    {
-      qualifier:  'ByAsset',
-      title:      'Production by Asset',
-      chartType:  #COLUMN_STACKED,
-      dimensions: ['AssetDescription', 'ProductDescription'],
-      measures:   ['ProdQty1'],
-      measureAttributes: [
-        { measure: 'ProdQty1', role: #AXIS_1, asDataPoint: true }
-      ],
-      dimensionAttributes: [
-        { dimension: 'AssetDescription',   role: #CATEGORY },
-        { dimension: 'ProductDescription', role: #SERIES   }
-      ]
-    }
-  ]
-  ProdQty1;
-
-  /* ── Presentation variant: chart-on-top + table-below (ALP default) ── */
-  @UI.presentationVariant: [{
-    qualifier:      'Default',
-    visualizations: [
-      { type: #AS_CHART,    qualifier: 'ByDate' },
-      { type: #AS_LINEITEM }
-    ],
-    sortOrder:      [{ by: 'ProductionDate', direction: #ASC }]
-  }]
-  ProductionDate;
-
-  /* ── Data point (KPI card value) ─────────────────────────────────────── */
-  @UI.dataPoint: {
-    title:         'Total JV Production',
-    criticality:   #NEUTRAL
-  }
-  ProdQty1;
-
-  @UI.dataPoint: {
-    title:         'OVL Share',
-    criticality:   #POSITIVE
-  }
-  OvlShareQty1;
 }
