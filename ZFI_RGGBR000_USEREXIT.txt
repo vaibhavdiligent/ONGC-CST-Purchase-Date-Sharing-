@@ -1453,130 +1453,36 @@ AND  setclass = '0000'.
     ist_blart-blart = 'ZV'.
     APPEND ist_blart.
 
-*----------------------+004 on 1.5.007
-    CONCATENATE 'C:FI_AP_E0_'     bkpf-bukrs INTO nprf0.
-    CONCATENATE 'C:FI_AP_E1_'     bkpf-bukrs INTO nprf1.
-    CONCATENATE 'C:FI_AP_E2_'     bkpf-bukrs INTO nprf2.
-    CONCATENATE 'C:FI_AP_E3_'     bkpf-bukrs INTO nprf3.
-    CONCATENATE 'C:FI_GL_E0_'     bkpf-bukrs  INTO nprf4.
-    CONCATENATE 'C:FI_GL_E1_'     bkpf-bukrs  INTO nprf5.
-    CONCATENATE 'C:FI_GL_E2_'     bkpf-bukrs  INTO nprf6.
-    CONCATENATE 'C:FI_GL_E3_'     bkpf-bukrs  INTO nprf7.
-    CONCATENATE 'C:FI_ASSET_E0_' bkpf-bukrs  INTO nprf8.
-    CONCATENATE 'C:FI_ASSET_E1_' bkpf-bukrs  INTO nprf9.
-    CONCATENATE 'C:FI_ASSET_E2_' bkpf-bukrs  INTO nprf10.
-    CONCATENATE 'C:FI_ASSET_E3_' bkpf-bukrs  INTO nprf11.
+*----------------------------------------------------------------------
+* BDP change : financial power is no longer derived from the roles
+* assigned to the user in AGR_USERS.  It is now derived from the
+* employee subgroup (grade) of the posting user, field PERSK of
+* table ZPA0001, and the limit for that grade is read from ZFI_OVL_BDP
+* (key field AGR_NAME_POST holds the employee subgroup).
+* Roles are still read, but only to recognise Cash / Bank users - that
+* flag selects the document type rule set, it is not a limit.
+*----------------------------------------------------------------------
+    DATA : lv_persk        TYPE zpa0001-persk,
+           lv_bdp_limit    TYPE zfi_ovl_bdp-bdp_limit,
+           lv_bdp_msg(200) TYPE c.
+
     CONCATENATE 'C:FI_CASH_OFFICER_' bkpf-bukrs  INTO nprf12.
     CONCATENATE 'C:FI_CASH_ASSTT_'   bkpf-bukrs  INTO nprf13.
     CONCATENATE 'C:FI_BANK_OFFICER_' bkpf-bukrs  INTO nprf14.
     CONCATENATE 'C:FI_BANK_ASSTT_'   bkpf-bukrs  INTO nprf15.
 
-    SELECT * INTO TABLE ist_nrole FROM agr_users WHERE uname =
-  sy-uname
-      AND  ( agr_name LIKE 'C:FI_AP_E%' OR
-     agr_name LIKE 'C:FI_GL_E%' OR
-     agr_name LIKE 'C:FI_ASSET_E%' OR
-     agr_name LIKE 'C:FI_CASH%' OR
-     agr_name LIKE 'C:FI_CASH_ASSTT%'  OR
-     agr_name LIKE 'C:FI_BANK%' OR
-     agr_name LIKE 'C:FI_BANK_ASSTT%' ).
-
-    SELECT * FROM  zfi_ovl_bdp INTO TABLE @DATA(it_bdp)
-  WHERE ( agr_name_post LIKE 'C:FI_AP_E%' OR
-   agr_name_post LIKE 'C:FI_GL_E%' OR
-   agr_name_post LIKE 'C:FI_ASSET_E%' OR
-   agr_name_post LIKE 'C:FI_CASH%' OR
-   agr_name_post LIKE 'C:FI_CASH_ASSTT%'  OR
-   agr_name_post LIKE 'C:FI_BANK%' OR
-   agr_name_post LIKE 'C:FI_BANK_ASSTT%' ).
-
-
-
-*---------------------+003 on 27.12.2006 Start  S.R.Sudha
-
-*  DATA : l_aflag.
-*  CLEAR l_aflag.
-*  SELECT setname AS setid valsign AS sign
-*          valoption AS option valfrom AS low  valto AS high
-*      INTO CORRESPONDING FIELDS  OF TABLE ist_bukrs
-*      FROM setleaf WHERE setname EQ  'FI_ARMS_CC' .
-*  LOOP AT ist_bukrs .
-*    IF bkpf-bukrs BETWEEN ist_bukrs-low AND ist_bukrs-high.
-*      CONCATENATE 'C:FI_AP_E0_'     bkpf-bukrs INTO prf0.
-*      CONCATENATE 'C:FI_AP_E1_'     bkpf-bukrs INTO prf1.
-*      CONCATENATE 'C:FI_AP_E2_'     bkpf-bukrs INTO prf2.
-*      CONCATENATE 'C:FI_AP_E3_'     bkpf-bukrs INTO prf3.
-*      CONCATENATE 'C:FI_GL_E0_'     bkpf-bukrs  INTO prf4.
-*      CONCATENATE 'C:FI_GL_E1_'     bkpf-bukrs  INTO prf5.
-*      CONCATENATE 'C:FI_GL_E2_'     bkpf-bukrs  INTO prf6.
-*      CONCATENATE 'C:FI_GL_E3_'     bkpf-bukrs  INTO prf7.
-*      CONCATENATE 'C:FI_ASSET_E0_' bkpf-bukrs  INTO prf8.
-*      CONCATENATE 'C:FI_ASSET_E1_' bkpf-bukrs  INTO prf9.
-*      CONCATENATE 'C:FI_ASSET_E2_' bkpf-bukrs  INTO prf10.
-*      CONCATENATE 'C:FI_ASSET_E3_' bkpf-bukrs  INTO prf11.
-*      CONCATENATE 'C:FI_CASH_' bkpf-bukrs  INTO prf12.
-*      CONCATENATE 'C:FI_CASH_ASSTT_'   bkpf-bukrs  INTO prf13.
-*      CONCATENATE 'C:FI_BANK_' bkpf-bukrs  INTO prf14.
-*      CONCATENATE 'C:FI_BANK_ASSTT_'   bkpf-bukrs  INTO prf15.
-*      l_aflag = 'X'.
-*    ENDIF.
-*  ENDLOOP.
-*  IF l_aflag = 'X'.
-*    SELECT * INTO TABLE ist_role FROM agr_users WHERE uname = sy-uname
-*AND  ( agr_name LIKE 'C:FI_AP_E%' OR
-*       agr_name LIKE 'C:FI_GL_E%' OR
-*       agr_name LIKE 'C:FI_ASSET_E%' OR
-*       agr_name LIKE 'C:FI_CASH%' OR
-*       agr_name LIKE 'C:FI_CASH_ASSTT%'  OR
-*       agr_name LIKE 'C:FI_BANK%' OR
-*       agr_name LIKE 'C:FI_BANK_ASSTT%' ).
-*  ENDIF.
-
-*--- Change Begin GR Mansuri 13.02.2004   FS-FI-AP-020
-*  IF l_aflag IS INITIAL.
-
-
-    CONCATENATE 'FI_AP_E0_'         bkpf-bukrs '_YY' INTO prf0.
-    CONCATENATE 'FI_AP_E1_'         bkpf-bukrs '_YY' INTO prf1.
-    CONCATENATE 'FI_AP_E2_'         bkpf-bukrs '_YY' INTO prf2.
-    CONCATENATE 'FI_AP_E3_'         bkpf-bukrs '_YY' INTO prf3.
-    CONCATENATE 'FI_GL_OFFICER_E0_' bkpf-bukrs '_YY' INTO prf4.
-    CONCATENATE 'FI_GL_OFFICER_E1_' bkpf-bukrs '_YY' INTO prf5.
-    CONCATENATE 'FI_GL_OFFICER_E2_' bkpf-bukrs '_YY' INTO prf6.
-    CONCATENATE 'FI_GL_OFFICER_E3_' bkpf-bukrs '_YY' INTO prf7.
-    CONCATENATE 'FI_ASSET_OFFICER_E0_' bkpf-bukrs '_YY' INTO prf8.
-    CONCATENATE 'FI_ASSET_OFFICER_E1_' bkpf-bukrs '_YY' INTO prf9.
-    CONCATENATE 'FI_ASSET_OFFICER_E2_' bkpf-bukrs '_YY' INTO prf10.
-    CONCATENATE 'FI_ASSET_OFFICER_E3_' bkpf-bukrs '_YY' INTO prf11.
     CONCATENATE 'FI_CASH_OFFICER_' bkpf-bukrs '_YY' INTO prf12.
     CONCATENATE 'FI_CASH_ASSTT_'   bkpf-bukrs '_YY' INTO prf13.
     CONCATENATE 'FI_BANK_OFFICER_' bkpf-bukrs '_YY' INTO prf14.
     CONCATENATE 'FI_BANK_ASSTT_'   bkpf-bukrs '_YY' INTO prf15.
 
-    SELECT * INTO TABLE ist_role FROM agr_users WHERE uname = sy-uname AND
-                                             ( agr_name LIKE 'FI_AP_E%' OR
-                                       agr_name LIKE 'FI_GL_OFFICER_E%' OR
-                                    agr_name LIKE 'FI_ASSET_OFFICER_E%' OR
-                                       agr_name LIKE 'FI_CASH_OFFICER%' OR
-                                        agr_name LIKE 'FI_CASH_ASSTT%'  OR
-                                       agr_name LIKE 'FI_BANK_OFFICER%' OR
-                                         agr_name LIKE 'FI_BANK_ASSTT%' ).
-
-    SELECT * FROM  zfi_ovl_bdp APPENDING TABLE it_bdp
-      WHERE ( agr_name_post LIKE 'FI_AP_E%' OR
-                                   agr_name_post LIKE 'FI_GL_OFFICER_E%' OR
-                                 agr_name_post LIKE 'FI_ASSET_OFFICER_E%' OR
-                                    agr_name_post LIKE 'FI_CASH_OFFICER%' OR
-                                     agr_name_post LIKE 'FI_CASH_ASSTT%'  OR
-                                    agr_name_post LIKE 'FI_BANK_OFFICER%' OR
-                                      agr_name_post LIKE 'FI_BANK_ASSTT%' ).
-
-
-
-*--------------+004
-    APPEND LINES OF ist_nrole TO ist_role .
-*--------------+004
-*  ENDIF.
+    SELECT * INTO TABLE ist_role FROM agr_users WHERE uname = sy-uname
+                                    AND ( agr_name LIKE 'C:FI_CASH%' OR
+                                          agr_name LIKE 'C:FI_BANK%' OR
+                                          agr_name LIKE 'FI_CASH_OFFICER%' OR
+                                          agr_name LIKE 'FI_CASH_ASSTT%'  OR
+                                          agr_name LIKE 'FI_BANK_OFFICER%' OR
+                                          agr_name LIKE 'FI_BANK_ASSTT%' ).
     IF bseg-shkzg  = 'S'.
       READ TABLE l_lbseg WITH KEY buzei = bseg-buzei.
       IF sy-subrc NE 0.
@@ -1633,263 +1539,69 @@ AND  setclass = '0000'.
     READ TABLE lt_values INTO ls_values WITH KEY from = sy-tcode.
     IF sy-subrc <> 0.
 ***** END of change on 07.11.2016
-      LOOP AT ist_role .
+*----------------------------------------------------------------------
+* Employee subgroup (grade) of the posting user and the financial
+* power maintained for that grade.
+*----------------------------------------------------------------------
+      PERFORM get_user_grade CHANGING lv_persk.
+      IF lv_persk IS INITIAL.
+        MESSAGE 'You are not authorized to post - no valid HR record (ZPA0001) exists for your user id' TYPE 'E'.
+      ENDIF.
 
-*    IF  ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf1 OR
-*          ist_role-agr_name CS prf2 OR ist_role-agr_name CS prf3 OR
-*          ist_role-agr_name CS prf4 OR ist_role-agr_name CS prf5 OR
-*          ist_role-agr_name CS prf6 OR ist_role-agr_name CS prf7 OR
-*          ist_role-agr_name CS prf8 OR ist_role-agr_name CS prf9 OR
-*          ist_role-agr_name CS prf10 OR ist_role-agr_name CS prf11 ).
-        IF  ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf1 OR
-              ist_role-agr_name CS prf2 OR ist_role-agr_name CS prf3 OR
-              ist_role-agr_name CS prf4 OR ist_role-agr_name CS prf5 OR
-              ist_role-agr_name CS prf6 OR ist_role-agr_name CS prf7 OR
-              ist_role-agr_name CS prf8 OR ist_role-agr_name CS prf9 OR
-             ist_role-agr_name CS prf10 OR ist_role-agr_name CS prf11 OR
-             ist_role-agr_name CS nprf0 OR ist_role-agr_name CS nprf1 OR
-             ist_role-agr_name CS nprf2 OR ist_role-agr_name CS nprf3 OR
-             ist_role-agr_name CS nprf4 OR ist_role-agr_name CS nprf5 OR
-             ist_role-agr_name CS nprf6 OR ist_role-agr_name CS nprf7 OR
-             ist_role-agr_name CS nprf8 OR ist_role-agr_name CS nprf9 OR
-           ist_role-agr_name CS nprf10 OR ist_role-agr_name CS nprf11 ).
+      CLEAR lv_bdp_limit.
+      SELECT SINGLE bdp_limit FROM zfi_ovl_bdp INTO lv_bdp_limit
+                                    WHERE agr_name_post = lv_persk.
+      IF sy-subrc NE 0.
+        CONCATENATE 'BDP limit is not maintained in table ZFI_OVL_BDP for employee subgroup'
+                    lv_persk
+                    INTO lv_bdp_msg SEPARATED BY space.
+        MESSAGE lv_bdp_msg TYPE 'E'.
+      ENDIF.
 
-          IF cash_bank_flg = 'X'.
+      IF cash_bank_flg = 'X'.
+**2. cash and bank
 
-            READ TABLE ist_blart WITH KEY blart = bkpf-blart.
-            IF sy-subrc NE 0.
-              IF bseg-shkzg  = 'S'.
-                CLEAR gross.
-                LOOP AT l_lbseg.
-                  ADD l_lbseg-dmbtr TO gross.
-                ENDLOOP.
-              ENDIF.
-*{30012165
-*          IF GROSS > 10000 .
-              READ TABLE it_bdp INTO DATA(wa_bdp) WITH KEY agr_name_post = ist_role-agr_name.
-              IF sy-subrc = 0.
-                IF gross > wa_bdp-bdp_limit .
-*}30012165
-*         IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-*                                            ist_role-agr_name CS prf8 )
-                  IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-                    ist_role-agr_name CS prf8  OR  ist_role-agr_name CS nprf0 OR
-                    ist_role-agr_name CS nprf4 OR  ist_role-agr_name CS nprf8 ).
-                    MESSAGE e146(zfi) .
-                  ENDIF.
-                ENDIF.
+        READ TABLE ist_blart WITH KEY blart = bkpf-blart.
+        IF sy-subrc NE 0.
+          IF bseg-shkzg  = 'S'.
+            CLEAR gross.
+            LOOP AT l_lbseg.
+              ADD l_lbseg-dmbtr TO gross.
+            ENDLOOP.
+          ENDIF.
 
-*{30012165
-*          IF GROSS > 500000 .
-                IF gross > wa_bdp-bdp_limit .
-*}30012165
-*            IF ( ist_role-agr_name CS prf1 OR
-*                               ist_role-agr_name CS prf5 OR
-*                 ist_role-agr_name CS prf9 )
-                  IF ( ist_role-agr_name CS prf1 OR
-                       ist_role-agr_name CS prf5 OR
-                       ist_role-agr_name CS prf9 OR
-                       ist_role-agr_name CS nprf1 OR
-                       ist_role-agr_name CS nprf5 OR
-                       ist_role-agr_name CS nprf9 ).
-                    .
-                    MESSAGE e147(zfi).
-                  ENDIF.
-                ENDIF.
-*{E2 E3 Commented 30012165
-*          IF GROSS > 1500000 .
-**            IF ( ist_role-agr_name CS prf2 OR
-**                 ist_role-agr_name CS prf3 OR
-**                 ist_role-agr_name CS prf6 OR
-**                 ist_role-agr_name CS prf7 OR
-**                 ist_role-agr_name CS prf10 OR
-**                 ist_role-agr_name CS prf11 ).
-*            IF ( IST_ROLE-AGR_NAME CS PRF2 OR
-*                 IST_ROLE-AGR_NAME CS PRF3 OR
-*                 IST_ROLE-AGR_NAME CS PRF6 OR
-*                 IST_ROLE-AGR_NAME CS PRF7 OR
-*                 IST_ROLE-AGR_NAME CS PRF10 OR
-*                 IST_ROLE-AGR_NAME CS PRF11 OR
-*                 IST_ROLE-AGR_NAME CS NPRF2 OR
-*                 IST_ROLE-AGR_NAME CS NPRF3 OR
-*                 IST_ROLE-AGR_NAME CS NPRF6 OR
-*                 IST_ROLE-AGR_NAME CS NPRF7 OR
-*                 IST_ROLE-AGR_NAME CS NPRF10 OR
-*                 IST_ROLE-AGR_NAME CS NPRF11 ).
-*              MESSAGE E148(ZFI) .
-*            ENDIF.
-*          ENDIF.
-
-*E2
-                IF gross > wa_bdp-bdp_limit .
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                  IF ( ist_role-agr_name CS prf2 OR
-                       ist_role-agr_name CS prf6 OR
-                       ist_role-agr_name CS prf10 OR
-                       ist_role-agr_name CS nprf2 OR
-                       ist_role-agr_name CS nprf6 OR
-                       ist_role-agr_name CS nprf10 ).
-                    MESSAGE e148(zfi) .
-                  ENDIF.
-                ENDIF.
-
-*E3
-                IF gross > wa_bdp-bdp_limit.
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                  IF ( ist_role-agr_name CS prf3 OR
-                       ist_role-agr_name CS prf7 OR
-                       ist_role-agr_name CS prf11 OR
-                       ist_role-agr_name CS nprf3 OR
-                       ist_role-agr_name CS nprf7 OR
-                       ist_role-agr_name CS nprf11 ).
-                    MESSAGE e895(zfi) .
-                  ENDIF.
-                ENDIF.
-              ENDIF.
-*{E2 E3 Commented 30012165
-            ENDIF.
-          ELSE.
-**Begin RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-**3. Other Doc Types including KM
-**End RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-
-            IF bseg-shkzg  = 'S'.
-              CLEAR gross.
-              LOOP AT l_lbseg.
-                ADD l_lbseg-dmbtr TO gross.
-              ENDLOOP.
-            ENDIF.
-
-**Begin RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-*Limit of 10 lakh to be enforced for direct F-02 tcode only. (SY-CPROG=SAPMF05A, SY-TCODE=FB01);
-*not for (already parked) documents being posted thru' FBV0 (SY-CPROG=SAPMF05A, SY-TCODE=FBVB),
-            IF ( sy-cprog = 'SAPMF05A' AND  sy-tcode = 'FB01' ). "=>F-02
-* for DOC type KM, direct  posting (F-02) not allowed for amt above Rs. 10 lakh.
-              IF gross > 1000000.
-                IF bseg-shkzg  = 'S'.
-                  READ TABLE ist_blart_limit10 WITH KEY blart = bkpf-blart.
-                  IF sy-subrc = 0. " limit of 10 lakh
-                    MESSAGE e896(zfi) WITH bkpf-blart .
-                  ENDIF.
-                ENDIF.
-              ENDIF.
-            ENDIF. " ( SY-CPROG = 'SAPMF05A' and  SY-TCODE = 'FB01' )
-
-* for DOC type other than KM, single level posting as per limists in BDP .
-**End RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-
-*{30012165
-*        IF GROSS > 10000 .
-            READ TABLE it_bdp INTO wa_bdp WITH KEY agr_name_post = ist_role-agr_name.
-            IF sy-subrc = 0.
-              IF gross > wa_bdp-bdp_limit.
-*}30012165
-*        IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-*                                           ist_role-agr_name CS prf8 )
-*.
-                IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-                                                  ist_role-agr_name CS prf8 OR
-                                                 ist_role-agr_name CS nprf0 OR
-                                                 ist_role-agr_name CS nprf4 OR
-                                                 ist_role-agr_name CS nprf8 ).
-
-                  MESSAGE e146(zfi) .
-                ENDIF.
-              ENDIF.
-*{30012165
-*        IF GROSS > 500000 .
-              IF gross > wa_bdp-bdp_limit.
-*}30012165
-*          IF ( ist_role-agr_name CS prf1 OR
-*                             ist_role-agr_name CS prf5 OR
-*               ist_role-agr_name CS prf9 ).
-                IF ( ist_role-agr_name CS prf1 OR
-                                           ist_role-agr_name CS prf5 OR
-                             ist_role-agr_name CS prf9 OR
-                             ist_role-agr_name CS nprf1 OR
-                             ist_role-agr_name CS nprf5 OR
-                             ist_role-agr_name CS nprf9 ).
-                  MESSAGE e147(zfi).
-                ENDIF.
-              ENDIF.
-
-*        IF GROSS > 1500000 .
-*          IF ( ist_role-agr_name CS prf2 OR
-*               ist_role-agr_name CS prf3 OR
-*               ist_role-agr_name CS prf6 OR
-*               ist_role-agr_name CS prf7 OR
-*               ist_role-agr_name CS prf10 OR
-*               ist_role-agr_name CS prf11 ).
-*{cr 30012165
-*          IF ( IST_ROLE-AGR_NAME CS PRF2 OR
-*                       IST_ROLE-AGR_NAME CS PRF3 OR
-*                       IST_ROLE-AGR_NAME CS PRF6 OR
-*                       IST_ROLE-AGR_NAME CS PRF7 OR
-*                       IST_ROLE-AGR_NAME CS PRF10 OR
-*                       IST_ROLE-AGR_NAME CS PRF11 OR
-*                       IST_ROLE-AGR_NAME CS NPRF2 OR
-*                       IST_ROLE-AGR_NAME CS NPRF3 OR
-*                       IST_ROLE-AGR_NAME CS NPRF6 OR
-*                       IST_ROLE-AGR_NAME CS NPRF7 OR
-*                       IST_ROLE-AGR_NAME CS NPRF10 OR
-*                       IST_ROLE-AGR_NAME CS NPRF11 ).
-*
-*            MESSAGE E148(ZFI) .
-*          ENDIF.
-*E2
-              IF gross > wa_bdp-bdp_limit .
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                IF ( ist_role-agr_name CS prf2 OR
-                     ist_role-agr_name CS prf6 OR
-                     ist_role-agr_name CS prf10 OR
-                     ist_role-agr_name CS nprf2 OR
-                     ist_role-agr_name CS nprf6 OR
-                     ist_role-agr_name CS nprf10 ).
-                  MESSAGE e148(zfi) .
-                ENDIF.
-              ENDIF.
-
-*E3
-              IF gross > wa_bdp-bdp_limit .
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                IF ( ist_role-agr_name CS prf3 OR
-                     ist_role-agr_name CS prf7 OR
-                     ist_role-agr_name CS prf11 OR
-                     ist_role-agr_name CS nprf3 OR
-                     ist_role-agr_name CS nprf7 OR
-                     ist_role-agr_name CS nprf11 ).
-                  MESSAGE e895(zfi) .
-                ENDIF.
-              ENDIF.
-
-            ENDIF.
-*        ENDIF.
-*}E2 E3 Commented 30012165
-
-
+          IF gross > lv_bdp_limit.
+            PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
           ENDIF.
         ENDIF.
-      ENDLOOP .
+
+      ELSE.
+**3. Other Doc Types including KM
+
+        IF bseg-shkzg  = 'S'.
+          CLEAR gross.
+          LOOP AT l_lbseg.
+            ADD l_lbseg-dmbtr TO gross.
+          ENDLOOP.
+        ENDIF.
+*Limit of 10 lakh to be enforced for direct F-02 tcode only. (SY-CPROG=SAPMF05A, SY-TCODE=FB01);
+*not for (already parked) documents being posted thru' FBV0 (SY-CPROG=SAPMF05A, SY-TCODE=FBVB),
+        IF ( sy-cprog = 'SAPMF05A' AND  sy-tcode = 'FB01' ). "=>F-02
+* for DOC type KM, direct  posting (F-02) not allowed for amt above Rs. 10 lakh.
+          IF gross > 1000000.
+            IF bseg-shkzg  = 'S'.
+              READ TABLE ist_blart_limit10 WITH KEY blart = bkpf-blart.
+              IF sy-subrc = 0. " limit of 10 lakh
+                MESSAGE e896(zfi) WITH bkpf-blart .
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ENDIF. " ( SY-CPROG = 'SAPMF05A' and  SY-TCODE = 'FB01' )
+        IF gross > lv_bdp_limit.
+          PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
+        ENDIF.
+
+      ENDIF.
     ENDIF.
 
 *====
@@ -9100,137 +8812,36 @@ AND  setclass = '0000'.
     ist_blart-blart = 'ZV'.
     APPEND ist_blart.
 
-*----------------------+004 on 1.5.007
-    CONCATENATE 'C:FI_AP_E0_'     bkpf-bukrs INTO nprf0.
-    CONCATENATE 'C:FI_AP_E1_'     bkpf-bukrs INTO nprf1.
-    CONCATENATE 'C:FI_AP_E2_'     bkpf-bukrs INTO nprf2.
-    CONCATENATE 'C:FI_AP_E3_'     bkpf-bukrs INTO nprf3.
-    CONCATENATE 'C:FI_GL_E0_'     bkpf-bukrs  INTO nprf4.
-    CONCATENATE 'C:FI_GL_E1_'     bkpf-bukrs  INTO nprf5.
-    CONCATENATE 'C:FI_GL_E2_'     bkpf-bukrs  INTO nprf6.
-    CONCATENATE 'C:FI_GL_E3_'     bkpf-bukrs  INTO nprf7.
-    CONCATENATE 'C:FI_ASSET_E0_' bkpf-bukrs  INTO nprf8.
-    CONCATENATE 'C:FI_ASSET_E1_' bkpf-bukrs  INTO nprf9.
-    CONCATENATE 'C:FI_ASSET_E2_' bkpf-bukrs  INTO nprf10.
-    CONCATENATE 'C:FI_ASSET_E3_' bkpf-bukrs  INTO nprf11.
+*----------------------------------------------------------------------
+* BDP change : financial power is no longer derived from the roles
+* assigned to the user in AGR_USERS.  It is now derived from the
+* employee subgroup (grade) of the posting user, field PERSK of
+* table ZPA0001, and the limit for that grade is read from ZFI_OVC_BDP
+* (key field AGR_NAME_POST holds the employee subgroup).
+* Roles are still read, but only to recognise Cash / Bank users - that
+* flag selects the document type rule set, it is not a limit.
+*----------------------------------------------------------------------
+    DATA : lv_persk        TYPE zpa0001-persk,
+           lv_bdp_limit    TYPE zfi_ovc_bdp-bdp_limit,
+           lv_bdp_msg(200) TYPE c.
+
     CONCATENATE 'C:FI_CASH_OFFICER_' bkpf-bukrs  INTO nprf12.
     CONCATENATE 'C:FI_CASH_ASSTT_'   bkpf-bukrs  INTO nprf13.
     CONCATENATE 'C:FI_BANK_OFFICER_' bkpf-bukrs  INTO nprf14.
     CONCATENATE 'C:FI_BANK_ASSTT_'   bkpf-bukrs  INTO nprf15.
 
-    SELECT * INTO TABLE ist_nrole FROM agr_users WHERE uname =
-  sy-uname
-      AND  ( agr_name LIKE 'C:FI_AP_E%' OR
-     agr_name LIKE 'C:FI_GL_E%' OR
-     agr_name LIKE 'C:FI_ASSET_E%' OR
-     agr_name LIKE 'C:FI_CASH%' OR
-     agr_name LIKE 'C:FI_CASH_ASSTT%'  OR
-     agr_name LIKE 'C:FI_BANK%' OR
-     agr_name LIKE 'C:FI_BANK_ASSTT%' ).
-
-    SELECT * FROM  zfi_ovc_bdp INTO TABLE @DATA(it_bdp)
-  WHERE ( agr_name_post LIKE 'C:FI_AP_E%' OR
-   agr_name_post LIKE 'C:FI_GL_E%' OR
-   agr_name_post LIKE 'C:FI_ASSET_E%' OR
-   agr_name_post LIKE 'C:FI_CASH%' OR
-   agr_name_post LIKE 'C:FI_CASH_ASSTT%'  OR
-   agr_name_post LIKE 'C:FI_BANK%' OR
-   agr_name_post LIKE 'C:FI_BANK_ASSTT%' ).
-
-
-
-*---------------------+003 on 27.12.2006 Start  S.R.Sudha
-
-*  DATA : l_aflag.
-*  CLEAR l_aflag.
-*  SELECT setname AS setid valsign AS sign
-*          valoption AS option valfrom AS low  valto AS high
-*      INTO CORRESPONDING FIELDS  OF TABLE ist_bukrs
-*      FROM setleaf WHERE setname EQ  'FI_ARMS_CC' .
-*  LOOP AT ist_bukrs .
-*    IF bkpf-bukrs BETWEEN ist_bukrs-low AND ist_bukrs-high.
-*      CONCATENATE 'C:FI_AP_E0_'     bkpf-bukrs INTO prf0.
-*      CONCATENATE 'C:FI_AP_E1_'     bkpf-bukrs INTO prf1.
-*      CONCATENATE 'C:FI_AP_E2_'     bkpf-bukrs INTO prf2.
-*      CONCATENATE 'C:FI_AP_E3_'     bkpf-bukrs INTO prf3.
-*      CONCATENATE 'C:FI_GL_E0_'     bkpf-bukrs  INTO prf4.
-*      CONCATENATE 'C:FI_GL_E1_'     bkpf-bukrs  INTO prf5.
-*      CONCATENATE 'C:FI_GL_E2_'     bkpf-bukrs  INTO prf6.
-*      CONCATENATE 'C:FI_GL_E3_'     bkpf-bukrs  INTO prf7.
-*      CONCATENATE 'C:FI_ASSET_E0_' bkpf-bukrs  INTO prf8.
-*      CONCATENATE 'C:FI_ASSET_E1_' bkpf-bukrs  INTO prf9.
-*      CONCATENATE 'C:FI_ASSET_E2_' bkpf-bukrs  INTO prf10.
-*      CONCATENATE 'C:FI_ASSET_E3_' bkpf-bukrs  INTO prf11.
-*      CONCATENATE 'C:FI_CASH_' bkpf-bukrs  INTO prf12.
-*      CONCATENATE 'C:FI_CASH_ASSTT_'   bkpf-bukrs  INTO prf13.
-*      CONCATENATE 'C:FI_BANK_' bkpf-bukrs  INTO prf14.
-*      CONCATENATE 'C:FI_BANK_ASSTT_'   bkpf-bukrs  INTO prf15.
-*      l_aflag = 'X'.
-*    ENDIF.
-*  ENDLOOP.
-*  IF l_aflag = 'X'.
-*    SELECT * INTO TABLE ist_role FROM agr_users WHERE uname = sy-uname
-*AND  ( agr_name LIKE 'C:FI_AP_E%' OR
-*       agr_name LIKE 'C:FI_GL_E%' OR
-*       agr_name LIKE 'C:FI_ASSET_E%' OR
-*       agr_name LIKE 'C:FI_CASH%' OR
-*       agr_name LIKE 'C:FI_CASH_ASSTT%'  OR
-*       agr_name LIKE 'C:FI_BANK%' OR
-*       agr_name LIKE 'C:FI_BANK_ASSTT%' ).
-*  ENDIF.
-
-*--- Change Begin GR Mansuri 13.02.2004   FS-FI-AP-020
-*  IF l_aflag IS INITIAL.
-
-
-    CONCATENATE 'FI_AP_E0_'         bkpf-bukrs '_YY' INTO prf0.
-    CONCATENATE 'FI_AP_E1_'         bkpf-bukrs '_YY' INTO prf1.
-    CONCATENATE 'FI_AP_E2_'         bkpf-bukrs '_YY' INTO prf2.
-    CONCATENATE 'FI_AP_E3_'         bkpf-bukrs '_YY' INTO prf3.
-    CONCATENATE 'FI_GL_OFFICER_E0_' bkpf-bukrs '_YY' INTO prf4.
-    CONCATENATE 'FI_GL_OFFICER_E1_' bkpf-bukrs '_YY' INTO prf5.
-    CONCATENATE 'FI_GL_OFFICER_E2_' bkpf-bukrs '_YY' INTO prf6.
-    CONCATENATE 'FI_GL_OFFICER_E3_' bkpf-bukrs '_YY' INTO prf7.
-    CONCATENATE 'FI_ASSET_OFFICER_E0_' bkpf-bukrs '_YY' INTO prf8.
-    CONCATENATE 'FI_ASSET_OFFICER_E1_' bkpf-bukrs '_YY' INTO prf9.
-    CONCATENATE 'FI_ASSET_OFFICER_E2_' bkpf-bukrs '_YY' INTO prf10.
-    CONCATENATE 'FI_ASSET_OFFICER_E3_' bkpf-bukrs '_YY' INTO prf11.
     CONCATENATE 'FI_CASH_OFFICER_' bkpf-bukrs '_YY' INTO prf12.
     CONCATENATE 'FI_CASH_ASSTT_'   bkpf-bukrs '_YY' INTO prf13.
     CONCATENATE 'FI_BANK_OFFICER_' bkpf-bukrs '_YY' INTO prf14.
     CONCATENATE 'FI_BANK_ASSTT_'   bkpf-bukrs '_YY' INTO prf15.
-    CONCATENATE 'FI_BANK_ASSTT_'   bkpf-bukrs '_YY' INTO prf15.
-    CONCATENATE 'FI_FA_E1_'   bkpf-bukrs '_YY' INTO prf16.
-    CONCATENATE 'FI_AFM_E2_'   bkpf-bukrs '_YY' INTO prf17.
 
-    SELECT * INTO TABLE ist_role FROM agr_users WHERE uname = sy-uname AND
-                                             ( agr_name LIKE 'FI_AP_E%' OR
-                                       agr_name LIKE 'FI_GL_OFFICER_E%' OR
-                                    agr_name LIKE 'FI_ASSET_OFFICER_E%' OR
-                                       agr_name LIKE 'FI_CASH_OFFICER%' OR
-                                        agr_name LIKE 'FI_CASH_ASSTT%'  OR
-                                       agr_name LIKE 'FI_BANK_OFFICER%' OR
-                                         agr_name LIKE 'FI_BANK_ASSTT%' OR
-                                             agr_name LIKE 'FI_FA%' OR
-                                      agr_name LIKE 'FI_AFM%' ).
-
-    SELECT * FROM  zfi_ovc_bdp APPENDING TABLE it_bdp
-      WHERE ( agr_name_post LIKE 'FI_AP_E%' OR
-                                   agr_name_post LIKE 'FI_GL_OFFICER_E%' OR
-                                 agr_name_post LIKE 'FI_ASSET_OFFICER_E%' OR
-                                    agr_name_post LIKE 'FI_CASH_OFFICER%' OR
-                                     agr_name_post LIKE 'FI_CASH_ASSTT%'  OR
-                                    agr_name_post LIKE 'FI_BANK_OFFICER%' OR
-                                      agr_name_post LIKE 'FI_BANK_ASSTT%' OR
-                                     agr_name_post LIKE 'FI_FA%' OR
-                                      agr_name_post LIKE 'FI_AFM%' ).
-
-
-
-*--------------+004
-    APPEND LINES OF ist_nrole TO ist_role .
-*--------------+004
-*  ENDIF.
+    SELECT * INTO TABLE ist_role FROM agr_users WHERE uname = sy-uname
+                                    AND ( agr_name LIKE 'C:FI_CASH%' OR
+                                          agr_name LIKE 'C:FI_BANK%' OR
+                                          agr_name LIKE 'FI_CASH_OFFICER%' OR
+                                          agr_name LIKE 'FI_CASH_ASSTT%'  OR
+                                          agr_name LIKE 'FI_BANK_OFFICER%' OR
+                                          agr_name LIKE 'FI_BANK_ASSTT%' ).
     IF bseg-shkzg  = 'S'.
       READ TABLE l_lbseg WITH KEY buzei = bseg-buzei.
       IF sy-subrc NE 0.
@@ -9287,268 +8898,66 @@ AND  setclass = '0000'.
     READ TABLE lt_values INTO ls_values WITH KEY from = sy-tcode.
     IF sy-subrc <> 0.
 ***** END of change on 07.11.2016
-      LOOP AT ist_role .
+*----------------------------------------------------------------------
+* Employee subgroup (grade) of the posting user and the financial
+* power maintained for that grade.
+*----------------------------------------------------------------------
+      PERFORM get_user_grade CHANGING lv_persk.
+      IF lv_persk IS INITIAL.
+        MESSAGE 'You are not authorized to post - no valid HR record (ZPA0001) exists for your user id' TYPE 'E'.
+      ENDIF.
 
-*    IF  ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf1 OR
-*          ist_role-agr_name CS prf2 OR ist_role-agr_name CS prf3 OR
-*          ist_role-agr_name CS prf4 OR ist_role-agr_name CS prf5 OR
-*          ist_role-agr_name CS prf6 OR ist_role-agr_name CS prf7 OR
-*          ist_role-agr_name CS prf8 OR ist_role-agr_name CS prf9 OR
-*          ist_role-agr_name CS prf10 OR ist_role-agr_name CS prf11 ).
-        IF  ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf1 OR
-              ist_role-agr_name CS prf2 OR ist_role-agr_name CS prf3 OR
-              ist_role-agr_name CS prf4 OR ist_role-agr_name CS prf5 OR
-              ist_role-agr_name CS prf6 OR ist_role-agr_name CS prf7 OR
-              ist_role-agr_name CS prf8 OR ist_role-agr_name CS prf9 OR
-             ist_role-agr_name CS prf10 OR ist_role-agr_name CS prf11 OR
-             ist_role-agr_name CS prf16 OR ist_role-agr_name CS prf17 OR
-             ist_role-agr_name CS nprf0 OR ist_role-agr_name CS nprf1 OR
-             ist_role-agr_name CS nprf2 OR ist_role-agr_name CS nprf3 OR
-             ist_role-agr_name CS nprf4 OR ist_role-agr_name CS nprf5 OR
-             ist_role-agr_name CS nprf6 OR ist_role-agr_name CS nprf7 OR
-             ist_role-agr_name CS nprf8 OR ist_role-agr_name CS nprf9 OR
-            ist_role-agr_name CS nprf10 OR ist_role-agr_name CS nprf11 ).
+      CLEAR lv_bdp_limit.
+      SELECT SINGLE bdp_limit FROM zfi_ovc_bdp INTO lv_bdp_limit
+                                    WHERE agr_name_post = lv_persk.
+      IF sy-subrc NE 0.
+        CONCATENATE 'BDP limit is not maintained in table ZFI_OVC_BDP for employee subgroup'
+                    lv_persk
+                    INTO lv_bdp_msg SEPARATED BY space.
+        MESSAGE lv_bdp_msg TYPE 'E'.
+      ENDIF.
 
-          IF cash_bank_flg = 'X'.
+      IF cash_bank_flg = 'X'.
+**2. cash and bank
 
-            READ TABLE ist_blart WITH KEY blart = bkpf-blart.
-            IF sy-subrc NE 0.
-              IF bseg-shkzg  = 'S'.
-                CLEAR gross.
-                LOOP AT l_lbseg.
-                  ADD l_lbseg-dmbe2 TO gross.
-                ENDLOOP.
-              ENDIF.
-*{30012165
-*          IF GROSS > 10000 .
-              READ TABLE it_bdp INTO DATA(wa_bdp) WITH KEY agr_name_post = ist_role-agr_name.
-              IF sy-subrc = 0.
-                IF gross > wa_bdp-bdp_limit .
-*}30012165
-*         IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-*                                            ist_role-agr_name CS prf8 )
-                  IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-                    ist_role-agr_name CS prf8  OR  ist_role-agr_name CS nprf0 OR
-                    ist_role-agr_name CS nprf4 OR  ist_role-agr_name CS nprf8 ).
-                    MESSAGE e146(zfi) .
-                  ENDIF.
-                ENDIF.
+        READ TABLE ist_blart WITH KEY blart = bkpf-blart.
+        IF sy-subrc NE 0.
+          IF bseg-shkzg  = 'S'.
+            CLEAR gross.
+            LOOP AT l_lbseg.
+              ADD l_lbseg-dmbe2 TO gross.
+            ENDLOOP.
+          ENDIF.
 
-*{30012165
-*          IF GROSS > 500000 .
-                IF gross > wa_bdp-bdp_limit .
-*}30012165
-*            IF ( ist_role-agr_name CS prf1 OR
-*                               ist_role-agr_name CS prf5 OR
-*                 ist_role-agr_name CS prf9 )
-                  IF ( ist_role-agr_name CS prf1 OR
-                       ist_role-agr_name CS prf5 OR
-                       ist_role-agr_name CS prf9 OR
-                       ist_role-agr_name CS prf16 OR
-                       ist_role-agr_name CS nprf1 OR
-                       ist_role-agr_name CS nprf5 OR
-                       ist_role-agr_name CS nprf9 ).
-                    .
-                    MESSAGE e908(zfi).
-                  ENDIF.
-                ENDIF.
-*{E2 E3 Commented 30012165
-*          IF GROSS > 1500000 .
-**            IF ( ist_role-agr_name CS prf2 OR
-**                 ist_role-agr_name CS prf3 OR
-**                 ist_role-agr_name CS prf6 OR
-**                 ist_role-agr_name CS prf7 OR
-**                 ist_role-agr_name CS prf10 OR
-**                 ist_role-agr_name CS prf11 ).
-*            IF ( IST_ROLE-AGR_NAME CS PRF2 OR
-*                 IST_ROLE-AGR_NAME CS PRF3 OR
-*                 IST_ROLE-AGR_NAME CS PRF6 OR
-*                 IST_ROLE-AGR_NAME CS PRF7 OR
-*                 IST_ROLE-AGR_NAME CS PRF10 OR
-*                 IST_ROLE-AGR_NAME CS PRF11 OR
-*                 IST_ROLE-AGR_NAME CS NPRF2 OR
-*                 IST_ROLE-AGR_NAME CS NPRF3 OR
-*                 IST_ROLE-AGR_NAME CS NPRF6 OR
-*                 IST_ROLE-AGR_NAME CS NPRF7 OR
-*                 IST_ROLE-AGR_NAME CS NPRF10 OR
-*                 IST_ROLE-AGR_NAME CS NPRF11 ).
-*              MESSAGE E148(ZFI) .
-*            ENDIF.
-*          ENDIF.
-
-*E2
-                IF gross > wa_bdp-bdp_limit .
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                  IF ( ist_role-agr_name CS prf2 OR
-                       ist_role-agr_name CS prf6 OR
-                       ist_role-agr_name CS prf10 OR
-                       ist_role-agr_name CS prf17 OR
-                       ist_role-agr_name CS nprf2 OR
-                       ist_role-agr_name CS nprf6 OR
-                       ist_role-agr_name CS nprf10 ).
-                    MESSAGE e909(zfi) .
-                  ENDIF.
-                ENDIF.
-
-*E3
-                IF gross > wa_bdp-bdp_limit.
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                  IF ( ist_role-agr_name CS prf3 OR
-                       ist_role-agr_name CS prf7 OR
-                       ist_role-agr_name CS prf11 OR
-                       ist_role-agr_name CS nprf3 OR
-                       ist_role-agr_name CS nprf7 OR
-                       ist_role-agr_name CS nprf11 ).
-                    MESSAGE e910(zfi) .
-                  ENDIF.
-                ENDIF.
-              ENDIF.
-*{E2 E3 Commented 30012165
-            ENDIF.
-          ELSE.
-**Begin RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-**3. Other Doc Types including KM
-**End RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-
-            IF bseg-shkzg  = 'S'.
-              CLEAR gross.
-              LOOP AT l_lbseg.
-                ADD l_lbseg-dmbe2 TO gross.
-              ENDLOOP.
-            ENDIF.
-
-**Begin RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-*Limit of 10 lakh to be enforced for direct F-02 tcode only. (SY-CPROG=SAPMF05A, SY-TCODE=FB01);
-*not for (already parked) documents being posted thru' FBV0 (SY-CPROG=SAPMF05A, SY-TCODE=FBVB),
-*            IF ( sy-cprog = 'SAPMF05A' AND  sy-tcode = 'FB01' ). "=>F-02
-** for DOC type KM, direct  posting (F-02) not allowed for amt above Rs. 10 lakh.
-*              IF gross > 1000000.
-*                IF bseg-shkzg  = 'S'.
-*                  READ TABLE ist_blart_limit10 WITH KEY blart = bkpf-blart.
-*                  IF sy-subrc = 0. " limit of 10 lakh
-*                    MESSAGE e896(zfi) WITH bkpf-blart .
-*                  ENDIF.
-*                ENDIF.
-*              ENDIF.
-*            ENDIF. " ( SY-CPROG = 'SAPMF05A' and  SY-TCODE = 'FB01' )
-
-* for DOC type other than KM, single level posting as per limists in BDP .
-**End RD1K995326 CAB_ALOK Changes in Financial Powers in New BDP - CR 30012165
-
-*{30012165
-*        IF GROSS > 10000 .
-            READ TABLE it_bdp INTO wa_bdp WITH KEY agr_name_post = ist_role-agr_name.
-            IF sy-subrc = 0.
-              IF gross > wa_bdp-bdp_limit.
-*}30012165
-*        IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-*                                           ist_role-agr_name CS prf8 )
-*.
-                IF ( ist_role-agr_name CS prf0 OR ist_role-agr_name CS prf4 OR
-                                                  ist_role-agr_name CS prf8 OR
-                                                 ist_role-agr_name CS nprf0 OR
-                                                 ist_role-agr_name CS nprf4 OR
-                                                 ist_role-agr_name CS nprf8 ).
-
-                  MESSAGE e146(zfi) .
-                ENDIF.
-              ENDIF.
-*{30012165
-*        IF GROSS > 500000 .
-              IF gross > wa_bdp-bdp_limit.
-*}30012165
-*          IF ( ist_role-agr_name CS prf1 OR
-*                             ist_role-agr_name CS prf5 OR
-*               ist_role-agr_name CS prf9 ).
-                IF ( ist_role-agr_name CS prf1 OR
-                                           ist_role-agr_name CS prf5 OR
-                             ist_role-agr_name CS prf9 OR
-                             ist_role-agr_name CS prf16 OR
-                             ist_role-agr_name CS nprf1 OR
-                             ist_role-agr_name CS nprf5 OR
-                             ist_role-agr_name CS nprf9 ).
-                  MESSAGE e908(zfi).
-                ENDIF.
-              ENDIF.
-
-*        IF GROSS > 1500000 .
-*          IF ( ist_role-agr_name CS prf2 OR
-*               ist_role-agr_name CS prf3 OR
-*               ist_role-agr_name CS prf6 OR
-*               ist_role-agr_name CS prf7 OR
-*               ist_role-agr_name CS prf10 OR
-*               ist_role-agr_name CS prf11 ).
-*{cr 30012165
-*          IF ( IST_ROLE-AGR_NAME CS PRF2 OR
-*                       IST_ROLE-AGR_NAME CS PRF3 OR
-*                       IST_ROLE-AGR_NAME CS PRF6 OR
-*                       IST_ROLE-AGR_NAME CS PRF7 OR
-*                       IST_ROLE-AGR_NAME CS PRF10 OR
-*                       IST_ROLE-AGR_NAME CS PRF11 OR
-*                       IST_ROLE-AGR_NAME CS NPRF2 OR
-*                       IST_ROLE-AGR_NAME CS NPRF3 OR
-*                       IST_ROLE-AGR_NAME CS NPRF6 OR
-*                       IST_ROLE-AGR_NAME CS NPRF7 OR
-*                       IST_ROLE-AGR_NAME CS NPRF10 OR
-*                       IST_ROLE-AGR_NAME CS NPRF11 ).
-*
-*            MESSAGE E148(ZFI) .
-*          ENDIF.
-*E2
-              IF gross > wa_bdp-bdp_limit .
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                IF ( ist_role-agr_name CS prf2 OR
-                     ist_role-agr_name CS prf6 OR
-                     ist_role-agr_name CS prf10 OR
-                     ist_role-agr_name CS prf17 OR
-                     ist_role-agr_name CS nprf2 OR
-                     ist_role-agr_name CS nprf6 OR
-                     ist_role-agr_name CS nprf10 ).
-                  MESSAGE e909(zfi) .
-                ENDIF.
-              ENDIF.
-
-*E3
-              IF gross > wa_bdp-bdp_limit .
-*            IF ( ist_role-agr_name CS prf2 OR
-*                 ist_role-agr_name CS prf3 OR
-*                 ist_role-agr_name CS prf6 OR
-*                 ist_role-agr_name CS prf7 OR
-*                 ist_role-agr_name CS prf10 OR
-*                 ist_role-agr_name CS prf11 ).
-                IF ( ist_role-agr_name CS prf3 OR
-                     ist_role-agr_name CS prf7 OR
-                     ist_role-agr_name CS prf11 OR
-                     ist_role-agr_name CS nprf3 OR
-                     ist_role-agr_name CS nprf7 OR
-                     ist_role-agr_name CS nprf11 ).
-                  MESSAGE e910(zfi) .
-                ENDIF.
-              ENDIF.
-
-            ENDIF.
-*        ENDIF.
-*}E2 E3 Commented 30012165
-
-
+          IF gross > lv_bdp_limit.
+            PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
           ENDIF.
         ENDIF.
-      ENDLOOP .
+
+      ELSE.
+**3. Other Doc Types including KM
+
+        IF bseg-shkzg  = 'S'.
+          CLEAR gross.
+          LOOP AT l_lbseg.
+            ADD l_lbseg-dmbe2 TO gross.
+          ENDLOOP.
+        ENDIF.
+*        IF ( sy-cprog = 'SAPMF05A' AND  sy-tcode = 'FB01' ). "=>F-02
+*          IF gross > 1000000.
+*            IF bseg-shkzg  = 'S'.
+*              READ TABLE ist_blart_limit10 WITH KEY blart = bkpf-blart.
+*              IF sy-subrc = 0. " limit of 10 lakh
+*                MESSAGE e896(zfi) WITH bkpf-blart .
+*              ENDIF.
+*            ENDIF.
+*          ENDIF.
+*        ENDIF. " ( SY-CPROG = 'SAPMF05A' and  SY-TCODE = 'FB01' )
+        IF gross > lv_bdp_limit.
+          PERFORM raise_bdp_limit_msg USING lv_persk lv_bdp_limit gross.
+        ENDIF.
+
+      ENDIF.
     ENDIF.
 
 *====
@@ -9900,3 +9309,69 @@ FORM u260 USING b_result.
   ENDLOOP.
 
 ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_USER_GRADE
+*&---------------------------------------------------------------------*
+*  Employee subgroup (grade) of the user who is posting the document.
+*  The SAP user id is the CPF number for employees; other users are
+*  mapped to a CPF number through ZMM_VMS_CR_NEW-CORE_USER_ID.
+*  P_PERSK is returned empty when no valid HR record exists.
+*----------------------------------------------------------------------*
+FORM get_user_grade CHANGING p_persk TYPE zpa0001-persk.
+
+  DATA : wa_zpa0001        TYPE zpa0001,
+         wa_zmm_vms_cr_new TYPE zmm_vms_cr_new.
+
+  CLEAR p_persk.
+
+  SELECT SINGLE * FROM zpa0001 INTO wa_zpa0001 WHERE pernr  = sy-uname  AND
+                                                     sprps  = ' '       AND
+                                                     endda >= sy-datum  AND
+                                                     begda <= sy-datum.
+  IF sy-subrc = 0.
+    p_persk = wa_zpa0001-persk.
+  ELSE.
+    SELECT * FROM zmm_vms_cr_new UP TO 1 ROWS INTO wa_zmm_vms_cr_new
+      WHERE core_user_id = sy-uname ORDER BY core_user_id cpf_no.
+    ENDSELECT.
+    IF sy-subrc = 0.
+      SELECT SINGLE * FROM zpa0001 INTO wa_zpa0001
+                          WHERE pernr  = wa_zmm_vms_cr_new-cpf_no AND
+                                sprps  = ' '                      AND
+                                endda >= sy-datum                 AND
+                                begda <= sy-datum.
+      IF sy-subrc = 0.
+        p_persk = wa_zpa0001-persk.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                                            "get_user_grade
+
+*&---------------------------------------------------------------------*
+*&      Form  RAISE_BDP_LIMIT_MSG
+*&---------------------------------------------------------------------*
+*  Error message raised when the document amount is above the BDP
+*  financial power of the posting user's employee subgroup.
+*----------------------------------------------------------------------*
+FORM raise_bdp_limit_msg USING p_persk TYPE zpa0001-persk
+                               p_limit TYPE p
+                               p_gross TYPE p.
+
+  DATA : lv_limit(20) TYPE c,
+         lv_gross(20) TYPE c,
+         lv_text(200) TYPE c.
+
+  WRITE p_limit TO lv_limit.
+  WRITE p_gross TO lv_gross.
+  CONDENSE lv_limit.
+  CONDENSE lv_gross.
+
+  CONCATENATE 'Document amount' lv_gross
+              'exceeds the BDP financial power of' lv_limit
+              'for employee subgroup' p_persk
+              INTO lv_text SEPARATED BY space.
+
+  MESSAGE lv_text TYPE 'E'.
+
+ENDFORM.                                            "raise_bdp_limit_msg
