@@ -1,0 +1,845 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFI_BCM_VEN_SBIFILE_CPY
+*&
+*&---------------------------------------------------------------------*
+*& Upload Program for Return file processing from SBI
+*& Two-Scenarios Handled
+*& i)  Inputs Through PI Interface
+*& ii) Manual Upload Through T.Code
+*&---------------------------------------------------------------------*
+REPORT zfi_bcm_ven_sbifile_cpy.
+
+*&---------------------------------------------------------------------*
+** Declarations
+TABLES : zfi_bcm_payordr, sscrfields.
+TYPE-POOLS  truxs.
+*&---------------------------------------------------------------------*
+*INCLUDE zexcel_download. "Download Excel Sheet
+*&---------------------------------------------------------------------*
+** Excel sheet Format
+DATA : gt_sbifile TYPE STANDARD TABLE OF zfi_bcm_sbifile,
+       gs_sbifile TYPE zfi_bcm_sbifile,
+       gt_type    TYPE truxs_t_text_data.
+DATA: ls_bank_data  TYPE zfi_bnk_input_f.
+TYPES: BEGIN OF ty_fill,
+        f_name      TYPE string,
+        ls_f1       TYPE char30,
+        ls_f2       TYPE char30,
+        ls_f3       TYPE char30,
+        ls_f4       TYPE char30,
+        ls_f5       TYPE char30,
+        ls_f6       TYPE char30,
+        ls_f7       TYPE char30,
+        ls_f8       TYPE char30,
+        ls_f9       TYPE char30,
+        ls_f10      TYPE char30,
+        ls_f11      TYPE char30,
+        ls_f12      TYPE char30,
+        ls_f13      TYPE char30,
+        ls_f14      TYPE char30,
+    END OF ty_fill.
+
+TYPES : BEGIN OF ty_line,
+  line(1000) TYPE c,
+  END OF ty_line.
+
+DATA: wa_fill TYPE ty_fill.
+
+DATA: it_fill TYPE TABLE OF ty_fill,
+      ls_fill TYPE ty_fill.
+
+DATA: ls_data       TYPE zfi_s_bcm_binary_data.
+DATA: lt_data       TYPE TABLE OF zfi_s_bcm_binary_data,
+      lt_bin_data   TYPE ssfbin OCCURS 0 WITH HEADER LINE.
+
+DATA: ls_params  TYPE ssfparms.
+DATA: lv_binary  TYPE xstring.
+
+DATA: datalen     TYPE i,
+      l_string11  TYPE string,
+      it_fill1    TYPE TABLE OF ty_fill,
+      char        TYPE c,
+      pos         TYPE i,
+      lv_ah       TYPE xstring,
+      wa_line     TYPE ty_line,
+      it_line     TYPE TABLE OF ty_line.
+
+*&---------------------------------------------------------------------*
+*      Error Screen Display - ALV output
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+DATA : lt_alv   TYPE STANDARD TABLE OF zfi_bcm_vendor_alv,
+       lt_alv1  TYPE STANDARD TABLE OF zfi_bcm_vendor_alv,
+       ls_alv   TYPE zfi_bcm_vendor_alv.
+*----------------------------------------------------------------------*
+DATA : lv_num   TYPE i,
+       lv_manual_p TYPE char1.
+DATA : gt_fcat  TYPE slis_t_fieldcat_alv,
+       gs_fcat  TYPE slis_fieldcat_alv.
+*----------------------------------------------------------------------*
+DATA : gt_payordr TYPE STANDARD TABLE OF zfi_bcm_payordr,
+       gs_payordr LIKE LINE OF gt_payordr.
+*&---------------------------------------------------------------------*
+*handles for OLE object
+DATA: h_excel TYPE ole2_object,         " Excel object
+      h_mapl  TYPE ole2_object,         " list of workbooks
+      h_map   TYPE ole2_object,         " workbook
+      h_zl    TYPE ole2_object,         " cell
+      h_f     TYPE ole2_object.         " font
+**ALV Header
+DATA : lt_header TYPE  slis_t_listheader,
+       ls_header TYPE  slis_listheader,
+       ls_date   TYPE  slis_listheader,
+       ls_time   TYPE  slis_listheader,
+       ls_user   TYPE  slis_listheader.
+*----------------------------------------------------------------------*
+** Variables
+DATA  lv_recno  TYPE i.
+DATA  lv_sucno  TYPE i.
+DATA  lv_failno TYPE i.
+DATA  lv_count  TYPE i.
+DATA  lv_date   TYPE dats.
+DATA  lv_datechk TYPE dats.
+DATA: lv_filename TYPE string.
+
+CLEAR:lv_recno,lv_failno,lv_recno.
+*&---------------------------------------------------------------------*
+** Push Button to Download Excel Sheet Format
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN FUNCTION KEY 1.
+*&---------------------------------------------------------------------*
+* Manually Upload Through T.Code
+* Selection screen - Select EXCEL File
+*&---------------------------------------------------------------------*
+**SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME  TITLE text-001.
+***SELECTION-SCREEN COMMENT 1(79) text-002 FOR FIELD p_file.
+**PARAMETER p_file TYPE rlgrap-filename." DEFAULT 'C:\TEST.xls'.
+**SELECTION-SCREEN END OF BLOCK b1.
+*&---------------------------------------------------------------------*
+INITIALIZATION.
+  MOVE 'DOWNLOAD EXCEL-FORMAT' TO sscrfields-functxt_01.
+
+AT SELECTION-SCREEN. "Download Excel Sheet Data
+  IF sscrfields-ucomm = 'FC01'.
+** Download Excel sheet format
+    PERFORM get_excel1.
+  ENDIF.
+
+START-OF-SELECTION.
+  IMPORT it_fill[] FROM MEMORY ID 'FIL'.
+  IMPORT lv_manual_p FROM MEMORY ID 'ALV'.
+  IMPORT ls_bank_data FROM MEMORY ID 'LOG'.
+
+  READ TABLE it_fill INTO ls_fill INDEX 1.
+  IF sy-subrc EQ 0.
+    lv_filename = ls_fill-f_name.
+
+    IF lv_filename+0(6) = 'TXN_PR'.         "When Filename = 'TXN_PR'
+      LOOP AT it_fill INTO ls_fill.
+        gs_sbifile-pyord = ls_fill-ls_f7+0(10). "PYORD
+
+        IF ls_fill-ls_f11 = 'Failure' OR
+           ls_fill-ls_f11 = 'FAILURE'.              "ZSTATUS
+          gs_sbifile-zstatus      = '005'.
+        ELSEIF ls_fill-ls_f11 = 'Success' OR
+               ls_fill-ls_f11 = 'SUCCESS'.
+          gs_sbifile-zstatus      = '002'.
+        ENDIF.
+        IF  gs_sbifile-zstatus      = '005'.
+          gs_sbifile-zrej_reason  = ls_fill-ls_f12.     "ZREJ_REASON
+*        ENDIF.
+        ELSEIF gs_sbifile-zstatus      = '002'.
+          gs_sbifile-zuonr        = ls_fill-ls_f10+0(10).    "ZUONR
+
+          gs_sbifile-zutrno       = ls_fill-ls_f10.          "ZUTRNO
+        ENDIF.
+        gs_sbifile-bktxt        = ls_fill-ls_f6.          "BKTXT
+        DATA: lv_datum TYPE sy-datum,
+              lv_cng_date TYPE char10.
+        CONCATENATE ls_fill-ls_f4+3(2) ls_fill-ls_f4+0(2) ls_fill-ls_f4+6(4)
+                    INTO lv_cng_date SEPARATED BY '/'.
+        gs_sbifile-zpaydate     = lv_cng_date.         "ZPAYDATE
+
+        APPEND gs_sbifile TO gt_sbifile.
+        CLEAR gs_sbifile.
+      ENDLOOP.
+*****
+    ELSEIF lv_filename+0(6) = 'TXN_CT'."When Filename NE 'TXN_CT'
+      LOOP AT it_fill INTO ls_fill.
+        gs_sbifile-pyord = ls_fill-ls_f10. "PYORD
+
+        IF ls_fill-ls_f11 = 'Failure' OR
+           ls_fill-ls_f11 = 'FAILURE'. "ZSTATUS
+          gs_sbifile-zstatus      = '005'.
+        ELSEIF ls_fill-ls_f11 = 'Success' OR
+               ls_fill-ls_f11 = 'SUCCESS'.
+          gs_sbifile-zstatus      = '002'.
+        ENDIF.
+        IF  gs_sbifile-zstatus      = '005'.
+          gs_sbifile-zrej_reason  = ls_fill-ls_f12."ZREJ_REASON
+        ELSEIF gs_sbifile-zstatus      = '002'.
+          gs_sbifile-zuonr        = ls_fill-ls_f5+0(10)."ZUONR
+          gs_sbifile-zutrno       = ls_fill-ls_f13.     "ZUTRNO
+        ENDIF.
+
+        gs_sbifile-bktxt        = ls_fill-ls_f7."BKTXT
+        CONCATENATE ls_fill-ls_f3+3(2) ls_fill-ls_f3+0(2) ls_fill-ls_f3+6(4)
+                    INTO lv_cng_date SEPARATED BY '/'.
+        gs_sbifile-zpaydate     = lv_cng_date."ZPAYDATE
+
+        APPEND gs_sbifile TO gt_sbifile.
+        CLEAR gs_sbifile.
+      ENDLOOP.
+****
+    ELSEIF lv_filename+0(6) = 'TXN_CN'. "When Filename NE 'TXN_CN'
+      LOOP AT it_fill INTO ls_fill.
+        gs_sbifile-pyord = ls_fill-ls_f10. "PYORD
+
+        IF ls_fill-ls_f12 = 'Failure' OR
+           ls_fill-ls_f12 = 'FAILURE'. "ZSTATUS
+          gs_sbifile-zstatus      = '005'.
+        ELSEIF ls_fill-ls_f12 = 'Success' OR
+               ls_fill-ls_f12 = 'SUCCESS'.
+          gs_sbifile-zstatus  = '002'.
+        ENDIF.
+
+        IF  gs_sbifile-zstatus      = '005'.
+          gs_sbifile-zrej_reason  = ls_fill-ls_f13."ZREJ_REASON
+        ELSEIF gs_sbifile-zstatus      = '002'.
+          gs_sbifile-zuonr        = ls_fill-ls_f5+0(10)."ZUONR
+          gs_sbifile-zutrno       = ls_fill-ls_f14.     "ZUTRNO
+        ENDIF.
+
+        gs_sbifile-bktxt        = ls_fill-ls_f7. "BKTXT
+        CONCATENATE ls_fill-ls_f3+3(2) ls_fill-ls_f3+0(2) ls_fill-ls_f3+6(4)
+                    INTO lv_cng_date SEPARATED BY '/'.
+        gs_sbifile-zpaydate     = lv_cng_date."ZPAYDATE
+
+        APPEND gs_sbifile TO gt_sbifile.
+        CLEAR gs_sbifile.
+      ENDLOOP.
+
+**********
+    ELSEIF lv_filename+0(6) = 'TXN_CC'.      "When Filename = 'TXN_CC'
+
+*      IMPORT l_string11 FROM MEMORY ID 'STRING'.
+**     IMPORT lv_filename from MEMORY ID 'FNM'.
+*      datalen = strlen( l_string11 ).
+*      DO datalen TIMES.
+*        pos = sy-index - 1.
+*        char = l_string11+pos.
+*        IF char CN 'ABCDEFGHIJKLMNOPQRSTUVWXYZ 1234567890' &
+*                   'abcdefghijklmnopqrstuvwxyz|+-*/=~#^()[]\&%$@.,;:"!_'.
+*          APPEND wa_line TO it_line.
+*          CLEAR wa_line.
+*        ELSE.
+*          CONCATENATE wa_line char INTO wa_line.
+*        ENDIF.
+*      ENDDO.
+*
+*      LOOP AT it_line INTO wa_line.
+*        IF wa_line IS INITIAL.
+*          CONTINUE.
+*        ELSE.
+*          SPLIT wa_line AT '|' INTO wa_fill-ls_f1
+*                                    wa_fill-ls_f2
+*                                    wa_fill-ls_f3
+*                                    wa_fill-ls_f4
+*                                    wa_fill-ls_f5
+*                                    wa_fill-ls_f6
+*                                    wa_fill-ls_f7
+*                                    wa_fill-ls_f8
+*                                    wa_fill-ls_f9
+*                                    wa_fill-ls_f10
+*                                    wa_fill-ls_f11
+*                                    wa_fill-ls_f12
+*                                    wa_fill-ls_f13
+*                                    wa_fill-ls_f14.
+*
+*          wa_fill-f_name = lv_filename.
+*
+*          APPEND wa_fill TO it_fill1.
+*          CLEAR wa_fill.
+*        ENDIF.
+*      ENDLOOP.
+*
+*      DELETE it_fill1 INDEX 1.
+
+      LOOP AT it_fill INTO ls_fill.
+        gs_sbifile-pyord = ls_fill-ls_f9+0(10).  "10.06.2014 ls_fill-ls_f8+0(10). "PYORD
+
+        IF ls_fill-ls_f10         = 'Failure' OR
+           ls_fill-ls_f10         = 'FAILURE'.                       "ZSTATUS
+          gs_sbifile-zstatus      = '005'.
+        ELSEIF ls_fill-ls_f10     = 'Success' OR
+               ls_fill-ls_f10     = 'SUCCESS'.
+          gs_sbifile-zstatus      = '002'.
+        ENDIF.
+        IF  gs_sbifile-zstatus    = '005'.
+          gs_sbifile-zrej_reason  = ls_fill-ls_f11.                  "ZREJ_REASON
+        ELSEIF gs_sbifile-zstatus = '002'.
+          gs_sbifile-zuonr        =  ls_fill-ls_f5+0(10).     "ls_fill-ls_f3+0(10).  "ZUONR
+
+          gs_sbifile-zutrno       = ls_fill-ls_f12.           "ls_fill-ls_f3.        "ZUTRNO
+        ENDIF.
+        gs_sbifile-bktxt          = ls_fill-ls_f7.     "ls_fill-ls_f8+10(12).  "BKTXT
+
+        CONCATENATE ls_fill-ls_f3+3(2) ls_fill-ls_f3+0(2) ls_fill-ls_f3+6(4)
+                    INTO lv_cng_date SEPARATED BY '/'.
+
+        gs_sbifile-zpaydate     =  lv_cng_date.       "ZPAYDATE
+
+        APPEND gs_sbifile TO gt_sbifile.
+        CLEAR gs_sbifile.
+      ENDLOOP.
+
+    ELSE.
+* Error logging when filename not found
+      CLEAR ls_alv.
+      ls_alv-zerr_filename = 'Filename not found in Vendor'.
+      CONCATENATE ls_alv-pyord
+                  ls_alv-zstatus
+                  ls_alv-zrej_reason
+                  ls_alv-bktxt
+                  ls_alv-zuonr
+                  ls_alv-zutrno
+                  ls_alv-zpaydate
+                  ls_alv-messg
+                  ls_alv-zerr_filename INTO ls_data-data SEPARATED BY ','.
+      APPEND ls_data TO lt_data.
+      CLEAR ls_data.
+
+*     Convert text to Binary
+      CALL FUNCTION 'SCMS_TEXT_TO_BINARY'
+        IMPORTING
+          output_length = ls_params-indatalen
+        TABLES
+          text_tab      = lt_data
+          binary_tab    = lt_bin_data.
+      IF sy-subrc <> 0.
+*       Implement suitable error handling here
+      ENDIF.
+
+*     Convert Binary data to Raw String
+      CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+        EXPORTING
+          input_length = ls_params-indatalen
+        IMPORTING
+          buffer       = lv_binary
+        TABLES
+          binary_tab   = lt_bin_data
+        EXCEPTIONS
+          failed       = 1
+          OTHERS       = 2.
+
+      ls_bank_data-prog_name = 'ZFI_BCM_VEN_SBIFILE_CPY'.
+      ls_bank_data-error_log = lv_binary.
+      ls_bank_data-error_log_len = ls_params-indatalen.
+
+      MODIFY zfi_bnk_input_f FROM ls_bank_data.
+      COMMIT WORK AND WAIT.
+    ENDIF.
+  ENDIF.
+  DESCRIBE TABLE gt_sbifile LINES lv_recno.
+*  CLEAR p_file.
+
+*&---------------------------------------------------------------------*
+*       Validation to Check the Status
+*&---------------------------------------------------------------------*
+  PERFORM check_data.
+*&---------------------------------------------------------------------*
+** Only For Maual Upload
+*&---------------------------------------------------------------------*
+  IF lt_alv IS INITIAL.
+    PERFORM manual_upload.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      Form  MANUAL_UPLOAD
+*&---------------------------------------------------------------------*
+*       Only For Manual Upload
+*----------------------------------------------------------------------*
+FORM manual_upload .
+  IF gt_sbifile IS NOT INITIAL.
+** Same function Module called From PI Interface also
+    CALL FUNCTION 'ZFI_BCMFM_SBIFILE'
+      EXPORTING
+        im_sbifile = gt_sbifile
+        im_upddata = gt_payordr
+      IMPORTING
+        ex_count   = lv_count.
+*    WRITE : lv_count.
+*    WRITE : 'Records Successfully Updated'.
+  ENDIF.
+ENDFORM.                    " MANUAL_UPLOAD
+*&---------------------------------------------------------------------*
+*&      Form  CHECK_DATA
+*&---------------------------------------------------------------------*
+*       Validation to Check the Status
+*----------------------------------------------------------------------*
+FORM check_data." USING gt_sbifile LIKE gt_sbifile.
+  LOOP AT gt_sbifile INTO gs_sbifile.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = gs_sbifile-pyord
+      IMPORTING
+        output = gs_sbifile-pyord.
+    "----------------------------------
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = gs_sbifile-zstatus
+      IMPORTING
+        output = gs_sbifile-zstatus.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = gs_sbifile-zuonr
+      IMPORTING
+        output = gs_sbifile-zuonr.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = gs_sbifile-bktxt
+      IMPORTING
+        output = gs_sbifile-bktxt.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = gs_sbifile-zutrno
+      IMPORTING
+        output = gs_sbifile-zutrno.
+
+    MODIFY gt_sbifile FROM gs_sbifile.
+    CLEAR gs_sbifile.
+  ENDLOOP.
+*"----------------------------------------------------------------------
+** Get Corresponding data from ZTABLE
+*"----------------------------------------------------------------------
+  IF gt_sbifile IS NOT INITIAL.
+    SELECT * FROM zfi_bcm_payordr INTO TABLE gt_payordr
+    FOR ALL ENTRIES IN gt_sbifile
+    WHERE pyord  = gt_sbifile-pyord ORDER BY PRIMARY KEY.
+  ENDIF.
+
+  LOOP AT gt_sbifile INTO gs_sbifile.
+    CLEAR lv_datechk.
+    CONCATENATE gs_sbifile-zpaydate+6(4) gs_sbifile-zpaydate+3(2) gs_sbifile-zpaydate(2)
+    INTO lv_datechk.
+**  Check Payment order is available in Table ZFI_BCM_PAYORDR.
+    READ TABLE gt_payordr INTO gs_payordr WITH KEY pyord = gs_sbifile-pyord.
+    IF sy-subrc NE 0.
+      ls_alv-pyord       = gs_sbifile-pyord.
+      ls_alv-zstatus     = gs_sbifile-zstatus.
+      ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+      ls_alv-zuonr       = gs_sbifile-zuonr.
+      ls_alv-bktxt       = gs_sbifile-bktxt.
+      ls_alv-zutrno      = gs_sbifile-zutrno.
+      ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+      ls_alv-messg    = 'Payment Order doesnot exist'.
+      APPEND ls_alv TO lt_alv.
+      CLEAR : ls_alv.
+    ELSE.
+**  Dont Proceed if ZFI_BCM_PAYORDR status is not '001'
+      IF gs_payordr-zstatus NE '001'.
+        ls_alv-pyord       = gs_sbifile-pyord.
+        ls_alv-zstatus     = gs_sbifile-zstatus.
+        ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+        ls_alv-zuonr       = gs_sbifile-zuonr.
+        ls_alv-bktxt       = gs_sbifile-bktxt.
+        ls_alv-zutrno      = gs_sbifile-zutrno.
+        ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+        ls_alv-messg    = 'Status of Payment Order is not "CREATED"'.
+        APPEND ls_alv TO lt_alv.
+        CLEAR : ls_alv.
+**  Check Status in Excel sheet
+**   Status: 002 - Successful 005 - Rejected
+      ELSE.
+        IF gs_sbifile-zstatus EQ '002'. "Success
+*** Check date Format
+          CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+            EXPORTING
+              date                      = lv_datechk
+            EXCEPTIONS
+              plausibility_check_failed = 1
+              OTHERS                    = 2.
+          IF sy-subrc <> 0.
+* Implement suitable error handling here
+            ls_alv-pyord       = gs_sbifile-pyord.
+            ls_alv-zstatus     = gs_sbifile-zstatus.
+            ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+            ls_alv-zuonr       = gs_sbifile-zuonr.
+            ls_alv-bktxt       = gs_sbifile-bktxt.
+            ls_alv-zutrno      = gs_sbifile-zutrno.
+            ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+            ls_alv-messg    = 'Incorrect Date Format,Always Use DD.MM.YYYY'.
+            APPEND ls_alv TO lt_alv.
+            CLEAR : ls_alv.
+          ELSE.
+            CLEAR lv_date.
+            CONCATENATE gs_sbifile-zpaydate+6(4) gs_sbifile-zpaydate+3(2) gs_sbifile-zpaydate(2) INTO lv_date.
+            gs_payordr-zpaydate = lv_date.
+            IF gs_sbifile-zutrno IS INITIAL OR gs_sbifile-zpaydate IS INITIAL
+                OR gs_sbifile-zuonr IS INITIAL OR gs_sbifile-bktxt IS INITIAL.
+              ls_alv-pyord       = gs_sbifile-pyord.
+              ls_alv-zstatus     = gs_sbifile-zstatus.
+              ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+              ls_alv-zuonr       = gs_sbifile-zuonr.
+              ls_alv-bktxt       = gs_sbifile-bktxt.
+              ls_alv-zutrno      = gs_sbifile-zutrno.
+              ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+              ls_alv-messg    = 'E Cheque Number, UTR Number, Debit Reference & Payment Date are Mandatory'.
+              APPEND ls_alv TO lt_alv.
+              CLEAR : ls_alv.
+            ELSE.
+              IF gs_sbifile-zrej_reason IS NOT INITIAL.
+                ls_alv-pyord       = gs_sbifile-pyord.
+                ls_alv-zstatus     = gs_sbifile-zstatus.
+                ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+                ls_alv-zuonr       = gs_sbifile-zuonr.
+                ls_alv-bktxt       = gs_sbifile-bktxt.
+                ls_alv-zutrno      = gs_sbifile-zutrno.
+                ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+                ls_alv-messg    = 'Reason for Rejection is not required for Success Records'.
+                APPEND ls_alv TO lt_alv.
+                CLEAR : ls_alv.
+              ENDIF.
+            ENDIF.
+          ENDIF.
+        ELSEIF gs_sbifile-zstatus EQ '005'. "Reject
+          IF gs_sbifile-zrej_reason IS INITIAL OR gs_sbifile-bktxt IS INITIAL
+            OR gs_sbifile-zpaydate IS INITIAL.
+            ls_alv-pyord       = gs_sbifile-pyord.
+            ls_alv-zstatus     = gs_sbifile-zstatus.
+            ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+            ls_alv-zuonr       = gs_sbifile-zuonr.
+            ls_alv-bktxt       = gs_sbifile-bktxt.
+            ls_alv-zutrno      = gs_sbifile-zutrno.
+            ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+            ls_alv-messg       = 'Reason For Rejection, Debit Reference & Payment Date are Mandatory'.
+            APPEND ls_alv TO lt_alv.
+            CLEAR : ls_alv.
+          ELSE.
+            IF gs_sbifile-zutrno IS NOT INITIAL "OR gs_sbifile-zpaydate IS NOT INITIAL
+                OR gs_sbifile-zuonr IS NOT INITIAL." OR gs_sbifile-bktxt IS NOT INITIAL.
+              ls_alv-pyord       = gs_sbifile-pyord.
+              ls_alv-zstatus     = gs_sbifile-zstatus.
+              ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+              ls_alv-zuonr       = gs_sbifile-zuonr.
+              ls_alv-bktxt       = gs_sbifile-bktxt.
+              ls_alv-zutrno      = gs_sbifile-zutrno.
+              ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+              ls_alv-messg    = 'E Cheque Number & UTR Number are Not required'. "& Payment Date
+              APPEND ls_alv TO lt_alv.
+              CLEAR : ls_alv.
+            ENDIF.
+          ENDIF.
+        ELSE. "Error
+          ls_alv-pyord       = gs_sbifile-pyord.
+          ls_alv-zstatus     = gs_sbifile-zstatus.
+          ls_alv-zrej_reason = gs_sbifile-zrej_reason.
+          ls_alv-zuonr       = gs_sbifile-zuonr.
+          ls_alv-bktxt       = gs_sbifile-bktxt.
+          ls_alv-zutrno      = gs_sbifile-zutrno.
+          ls_alv-zpaydate    = lv_datechk. "gs_sbifile-zpaydate.
+          ls_alv-messg    = 'Incorrect Status Values; Please modify to "002" For Success or "005" for Rejected'.
+          APPEND ls_alv TO lt_alv.
+          CLEAR : ls_alv.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+    CLEAR gs_sbifile.
+  ENDLOOP.
+  IF lt_alv IS NOT INITIAL. "Error Output
+*    DELETE ADJACENT DUPLICATES FROM lt_alv COMPARING pyord.
+    PERFORM disp_alv.
+    EXIT.
+  ENDIF.
+ENDFORM.                    " CHECK_DATA
+*&---------------------------------------------------------------------*
+
+*&---------------------------------------------------------------------*
+*&      Form  DISP_ALV
+*&---------------------------------------------------------------------*
+*      Error Screen Display
+*----------------------------------------------------------------------*
+FORM disp_alv .
+*----------------------------------------------------------------------*
+** Field catalog for ALV
+*----------------------------------------------------------------------*
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'PYORD'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'Payment Order'.
+  gs_fcat-outputlen =  '18'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'ZSTATUS'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'Status'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'ZREJ_REASON'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'Reason For Rejection'.
+  gs_fcat-outputlen =  '22'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'ZUONR'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'E Cheque Number'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'BKTXT'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'Debit Reference'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'ZUTRNO'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'UTR Number'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'ZPAYDATE'.
+  gs_fcat-tabname    = 'LT_ALV'.
+  gs_fcat-seltext_l  = 'Payment Date'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+  lv_num = lv_num + 1.
+  gs_fcat-col_pos    = lv_num.
+  gs_fcat-fieldname  = 'MESSG'.
+  gs_fcat-tabname    = 'GT_ALV'.
+  gs_fcat-seltext_l  = 'Message'.
+  gs_fcat-outputlen = '65'.
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+*----------------------------------------------------------------------*
+** Call ALV
+*----------------------------------------------------------------------*
+  IF lv_manual_p = 'X'.
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+      EXPORTING
+        i_callback_program     = sy-cprog
+        i_callback_top_of_page = 'TOP_OF_PAGE'
+        i_grid_title           = 'Incorrect Records'
+        it_fieldcat            = gt_fcat
+      TABLES
+        t_outtab               = lt_alv.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+  ELSEIF lv_manual_p = ' '.
+    PERFORM error_log. "To Be Tested
+  ENDIF.
+ENDFORM.                    " DISP_ALV
+*&---------------------------------------------------------------------*
+*&      Form  TOP_OF_PAGE
+*&---------------------------------------------------------------------*
+*       Header Text at Top of Page
+*----------------------------------------------------------------------*
+FORM top_of_page.
+  DATA: lv_head(60),
+        lv_date(10),
+        lv_time(10),
+        lv_info(60).
+**  Get Successful & Failed Records.
+  lt_alv1 = lt_alv.
+  DELETE ADJACENT DUPLICATES FROM lt_alv1 COMPARING pyord.
+  DESCRIBE TABLE lt_alv1 LINES lv_failno.
+  lv_sucno =  lv_recno - lv_failno.
+*----------------------------------------------------------------------*
+  ls_header-typ = 'H'.
+  ls_header-info = 'Upload Successful/Rejected Records'.
+  APPEND ls_header TO lt_header.
+
+  CLEAR ls_user.
+  ls_user-key = 'Total No of Rec:  '(050).
+  ls_user-typ = 'S'.
+  ls_user-info = lv_recno.
+  APPEND ls_user TO lt_header.
+
+  CLEAR ls_user.
+  ls_user-key = 'Successful Rec:  '(050).
+  ls_user-typ = 'S'.
+  ls_user-info = lv_sucno.
+  APPEND ls_user TO lt_header.
+
+  CLEAR ls_user.
+  ls_user-key = 'Failed Rec:  '(050).
+  ls_user-typ = 'S'.
+  ls_user-info = lv_failno.
+  APPEND ls_user TO lt_header.
+*----------------------------------------------------------------------*
+*  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+*    EXPORTING
+*      it_list_commentary = lt_header
+**     I_LOGO             =
+**     I_END_OF_LIST_GRID =
+**     I_ALV_FORM         =
+*    .
+
+  REFRESH lt_header.
+ENDFORM.                      "TOP_OF_PAGE
+*&---------------------------------------------------------------------*
+*&      Form  GET_EXCEL1
+*&---------------------------------------------------------------------*
+*       Download Excel Format
+*----------------------------------------------------------------------*
+FORM get_excel1 .
+
+  TYPES : BEGIN OF ty_excel,
+    f1 TYPE string,
+    f2 TYPE string,
+    f3 TYPE string,
+    f4 TYPE string,
+    f5 TYPE string,
+    f6 TYPE string,
+    f7 TYPE string,
+    END OF ty_excel.
+
+  DATA : lt_excel TYPE STANDARD TABLE OF ty_excel,
+         ls_excel TYPE ty_excel.
+
+  DATA : w_file_path TYPE string,
+         p_filename  TYPE rlgrap-filename.
+  CLEAR : p_filename, w_file_path, lt_excel.
+
+  ls_excel-f1 = 'Payment Order'.
+  ls_excel-f2 = 'Status'.
+  ls_excel-f3 = 'Reason for Rejection'.
+  ls_excel-f4 = 'E Cheque Number'.
+  ls_excel-f5 = 'Debit reference'.
+  ls_excel-f6 = 'UTR Number'.
+  ls_excel-f7 = 'Date of Payment'.
+  APPEND ls_excel TO lt_excel.
+  CLEAR ls_excel.
+
+
+  CALL FUNCTION 'KD_GET_FILENAME_ON_F4'
+    EXPORTING
+      mask          = '*.XLS'
+    CHANGING
+      file_name     = p_filename
+    EXCEPTIONS
+      mask_too_long = 1
+      OTHERS        = 2.
+  w_file_path = p_filename.
+
+  IF w_file_path IS NOT INITIAL.
+
+
+
+    CALL METHOD cl_gui_frontend_services=>gui_download
+      EXPORTING
+*       bin_filesize            =
+        filename                = w_file_path "'Sample.xls'
+        filetype                = 'DAT'
+        no_auth_check           = 'X'
+      CHANGING
+        data_tab                = lt_excel[]
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        not_supported_by_gui    = 22
+        error_no_gui            = 23
+        OTHERS                  = 24.
+    IF sy-subrc <> 0.
+*                 Implement suitable error handling here
+    ENDIF.
+  ENDIF.
+
+ENDFORM.                    " GET_EXCEL1
+*&---------------------------------------------------------------------*
+*&      Form  ERROR_LOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM error_log .
+
+  IF lt_alv IS NOT INITIAL.
+    LOOP AT lt_alv INTO ls_alv.
+      CONCATENATE ls_alv-pyord
+                  ls_alv-zstatus
+                  ls_alv-zrej_reason
+                  ls_alv-bktxt
+                  ls_alv-zuonr
+                  ls_alv-zutrno
+                  ls_alv-zpaydate
+                  ls_alv-messg
+                  ls_alv-zerr_filename INTO ls_data-data SEPARATED BY ','.
+      APPEND ls_data TO lt_data.
+      CLEAR ls_data.
+    ENDLOOP.
+  ENDIF.
+
+  CALL FUNCTION 'SCMS_TEXT_TO_BINARY'
+    IMPORTING
+      output_length = ls_params-indatalen
+    TABLES
+      text_tab      = lt_data
+      binary_tab    = lt_bin_data.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+* Convert Binary data to Raw String
+  CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+    EXPORTING
+      input_length = ls_params-indatalen
+    IMPORTING
+      buffer       = lv_binary
+    TABLES
+      binary_tab   = lt_bin_data
+    EXCEPTIONS
+      failed       = 1
+      OTHERS       = 2.
+
+  ls_bank_data-prog_name = 'ZFI_BCM_VEN_SBIFILE_CPY'.
+  ls_bank_data-error_log = lv_binary.
+  ls_bank_data-error_log_len = ls_params-indatalen.
+
+  MODIFY zfi_bnk_input_f FROM ls_bank_data.
+  COMMIT WORK AND WAIT.
+ENDFORM.                    " ERROR_LOG
