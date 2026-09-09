@@ -1,4 +1,4 @@
-@Metadata.layer: #CORE
+@Metadata.layer: #CUSTOMER
 
 @UI.headerInfo: {
   typeName:       'Production Performance',
@@ -12,24 +12,14 @@
   title:      'Actual vs BE Target (BOEPD)',
   chartType:  #COLUMN,
   dimensions: ['ProductGroupText', 'ScopeText'],
-  measures:   ['ActualBoepdPerDay', 'TargetBoepdPerDay'],
-  measureAttributes: [
-    { measure: 'ActualBoepdPerDay', role: #AXIS_1, asDataPoint: true },
-    { measure: 'TargetBoepdPerDay', role: #AXIS_1, asDataPoint: true }
-  ],
-  dimensionAttributes: [
-    { dimension: 'ProductGroupText', role: #CATEGORY },
-    { dimension: 'ScopeText',        role: #SERIES   }
-  ]
+  measures:   ['ActualBoepdPerDay', 'TargetBoepdPerDay']
 }]
 
 @UI.presentationVariant: [{
-  qualifier:      'Default',
   visualizations: [
-    { type: #AS_CHART, qualifier: 'PerfByGroup' },
+    { type: #AS_CHART },
     { type: #AS_LINEITEM }
-  ],
-  sortOrder:      [{ by: 'ScopeType', direction: #DESC }]
+  ]
 }]
 
 annotate view ZDPR_Q_PROD_PERF with
@@ -52,17 +42,7 @@ annotate view ZDPR_Q_PROD_PERF with
   @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'BE Target Total (BOEPD)' }]
   TargetBoepdPerDay;
 
-  @UI.lineItem: [{ position: 70, importance: #HIGH, label: '% Achv w.r.t. BE Target',
-                   criticality: 'AchievementCriticality' }]
-  @UI.dataPoint: {
-    title: '% Achv w.r.t. BE Target',
-    criticalityCalculation: {
-      improvementDirection:    #TARGET,
-      deviationRangeLowValue:  90,
-      toleranceRangeLowValue:  100,
-      toleranceRangeHighValue: 999,
-      deviationRangeHighValue: 9999
-    }
-  }
+  @UI.lineItem: [{ position: 70, importance: #HIGH, label: '% Achv w.r.t. BE Target' }]
+  @UI.dataPoint: { title: '% Achv w.r.t. BE Target' }
   AchievementPct;
 }

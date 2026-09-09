@@ -1,10 +1,10 @@
-@Metadata.layer: #CORE
+@Metadata.layer: #CUSTOMER
 
 @UI.headerInfo: {
   typeName:       'Daily Production Trend',
   typeNamePlural: 'Daily Production Trend',
   title:          { type: #STANDARD, value: 'ProductDescription' },
-  description:    { type: #STANDARD, value: 'AssetDescription'   }
+  description:    { type: #STANDARD, value: 'AssetDescription' }
 }
 
 @UI.chart: [{
@@ -12,50 +12,14 @@
   title:      'Daily Production Trend',
   chartType:  #LINE,
   dimensions: ['ProductionDate', 'ProductDescription'],
-  measures:   ['ProdQty1', 'OvlShareQty1'],
-  measureAttributes: [
-    { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
-    { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-  ],
-  dimensionAttributes: [
-    { dimension: 'ProductionDate',     role: #CATEGORY },
-    { dimension: 'ProductDescription', role: #SERIES   }
-  ]
-},
-{
-  qualifier:  'ProductMix',
-  title:      'Production Mix by Product',
-  chartType:  #COLUMN_STACKED,
-  dimensions: ['ProductDescription'],
-  measures:   ['ProdQty1'],
-  measureAttributes: [
-    { measure: 'ProdQty1', role: #AXIS_1, asDataPoint: true }
-  ],
-  dimensionAttributes: [
-    { dimension: 'ProductDescription', role: #CATEGORY }
-  ]
-},
-{
-  qualifier:  'OvlShareArea',
-  title:      'OVL Share Production',
-  chartType:  #AREA,
-  dimensions: ['ProductionDate'],
-  measures:   ['OvlShareQty1'],
-  measureAttributes: [
-    { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-  ],
-  dimensionAttributes: [
-    { dimension: 'ProductionDate', role: #CATEGORY }
-  ]
+  measures:   ['ProdQty1', 'OvlShareQty1']
 }]
 
 @UI.presentationVariant: [{
-  qualifier:        'Default',
-  visualizations:   [
-    { type: #AS_CHART, qualifier: 'TrendLine' },
+  visualizations: [
+    { type: #AS_CHART },
     { type: #AS_LINEITEM }
-  ],
-  sortOrder:        [{ by: 'ProductionDate', direction: #ASC }]
+  ]
 }]
 
 annotate view ZDPR_Q_DAILY_TREND with
@@ -83,14 +47,14 @@ annotate view ZDPR_Q_DAILY_TREND with
   AssetDescription;
 
   @UI.lineItem: [{ position: 40, importance: #HIGH, label: 'JV Daily Prod (UoM1)' }]
-  @UI.dataPoint: { title: 'Total JV Production', criticality: #NEUTRAL }
+  @UI.dataPoint: { title: 'Total JV Production' }
   ProdQty1;
 
   @UI.lineItem: [{ position: 50, importance: #LOW, label: 'UoM' }]
   ProdUom1;
 
   @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'OVL Share (UoM1)' }]
-  @UI.dataPoint: { title: 'OVL Share', criticality: #POSITIVE }
+  @UI.dataPoint: { title: 'OVL Share' }
   OvlShareQty1;
 
   @UI.lineItem: [{ position: 70, importance: #MEDIUM, label: 'JV Daily Prod (UoM2)' }]

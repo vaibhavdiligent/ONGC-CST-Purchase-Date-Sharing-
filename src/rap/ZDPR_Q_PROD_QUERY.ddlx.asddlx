@@ -1,65 +1,25 @@
-@Metadata.layer: #CORE
+@Metadata.layer: #CUSTOMER
 
 @UI.headerInfo: {
   typeName:       'Production Record',
-  typeNamePlural: 'Production Records',
+  typeNamePlural: 'Production Record',
   title:          { type: #STANDARD, value: 'ProductDescription' },
-  description:    { type: #STANDARD, value: 'AssetDescription'   }
+  description:    { type: #STANDARD, value: 'AssetDescription' }
 }
 
-@UI.chart: [
-  {
-    qualifier:  'ByDate',
-    title:      'Daily Production by Product',
-    chartType:  #COLUMN,
-    dimensions: ['ProductionDate', 'ProductDescription'],
-    measures:   ['ProdQty1', 'OvlShareQty1'],
-    measureAttributes: [
-      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
-      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-    ],
-    dimensionAttributes: [
-      { dimension: 'ProductionDate',     role: #CATEGORY },
-      { dimension: 'ProductDescription', role: #SERIES   }
-    ]
-  },
-  {
-    qualifier:  'JvVsOvl',
-    title:      'JV vs OVL Share',
-    chartType:  #DONUT,
-    dimensions: ['ProductDescription'],
-    measures:   ['ProdQty1', 'OvlShareQty1'],
-    measureAttributes: [
-      { measure: 'ProdQty1',     role: #AXIS_1, asDataPoint: true },
-      { measure: 'OvlShareQty1', role: #AXIS_1, asDataPoint: true }
-    ],
-    dimensionAttributes: [
-      { dimension: 'ProductDescription', role: #CATEGORY }
-    ]
-  },
-  {
-    qualifier:  'ByAsset',
-    title:      'Production by Asset',
-    chartType:  #COLUMN_STACKED,
-    dimensions: ['AssetDescription', 'ProductDescription'],
-    measures:   ['ProdQty1'],
-    measureAttributes: [
-      { measure: 'ProdQty1', role: #AXIS_1, asDataPoint: true }
-    ],
-    dimensionAttributes: [
-      { dimension: 'AssetDescription',   role: #CATEGORY },
-      { dimension: 'ProductDescription', role: #SERIES   }
-    ]
-  }
-]
+@UI.chart: [{
+  qualifier:  'ByDate',
+  title:      'Daily Production by Product',
+  chartType:  #COLUMN,
+  dimensions: ['ProductionDate', 'ProductDescription'],
+  measures:   ['ProdQty1', 'OvlShareQty1']
+}]
 
 @UI.presentationVariant: [{
-  qualifier:      'Default',
   visualizations: [
-    { type: #AS_CHART,    qualifier: 'ByDate' },
+    { type: #AS_CHART },
     { type: #AS_LINEITEM }
-  ],
-  sortOrder:      [{ by: 'ProductionDate', direction: #ASC }]
+  ]
 }]
 
 annotate view ZDPR_Q_PROD_QUERY with
@@ -96,14 +56,14 @@ annotate view ZDPR_Q_PROD_QUERY with
   VolumeTypeDescription;
 
   @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'JV Production (UoM1)' }]
-  @UI.dataPoint: { title: 'Total JV Production', criticality: #NEUTRAL }
+  @UI.dataPoint: { title: 'Total JV Production' }
   ProdQty1;
 
   @UI.lineItem: [{ position: 70, importance: #LOW, label: 'UoM' }]
   ProdUom1;
 
   @UI.lineItem: [{ position: 80, importance: #HIGH, label: 'OVL Share (UoM1)' }]
-  @UI.dataPoint: { title: 'OVL Share', criticality: #POSITIVE }
+  @UI.dataPoint: { title: 'OVL Share' }
   OvlShareQty1;
 
   @UI.lineItem: [{ position: 90, importance: #MEDIUM, label: 'JV Production (UoM2)' }]

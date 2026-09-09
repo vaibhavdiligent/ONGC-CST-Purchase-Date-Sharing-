@@ -1,63 +1,25 @@
-@Metadata.layer: #CORE
+@Metadata.layer: #CUSTOMER
 
 @UI.headerInfo: {
   typeName:       'Target Record',
-  typeNamePlural: 'Target Records',
+  typeNamePlural: 'Target Record',
   title:          { type: #STANDARD, value: 'ProductDescription' },
-  description:    { type: #STANDARD, value: 'AssetDescription'   }
+  description:    { type: #STANDARD, value: 'AssetDescription' }
 }
 
-@UI.chart: [
-  {
-    qualifier:  'ActualVsTarget',
-    title:      'Actual vs Target by Product',
-    chartType:  #BAR,
-    dimensions: ['ProductDescription'],
-    measures:   ['ActualQty', 'TargetQty'],
-    measureAttributes: [
-      { measure: 'ActualQty', role: #AXIS_1 },
-      { measure: 'TargetQty', role: #AXIS_1 }
-    ],
-    dimensionAttributes: [
-      { dimension: 'ProductDescription', role: #CATEGORY }
-    ]
-  },
-  {
-    qualifier:  'AchievementByAsset',
-    title:      'Achievement % by Asset',
-    chartType:  #COLUMN,
-    dimensions: ['AssetDescription'],
-    measures:   ['AchievementPct'],
-    measureAttributes: [
-      { measure: 'AchievementPct', role: #AXIS_1, asDataPoint: true }
-    ],
-    dimensionAttributes: [
-      { dimension: 'AssetDescription', role: #CATEGORY }
-    ]
-  },
-  {
-    qualifier:  'VarianceByPeriod',
-    title:      'Variance by Period',
-    chartType:  #COLUMN,
-    dimensions: ['FiscalPeriod', 'ProductDescription'],
-    measures:   ['VarianceQty'],
-    measureAttributes: [
-      { measure: 'VarianceQty', role: #AXIS_1, asDataPoint: true }
-    ],
-    dimensionAttributes: [
-      { dimension: 'FiscalPeriod',       role: #CATEGORY },
-      { dimension: 'ProductDescription', role: #SERIES   }
-    ]
-  }
-]
+@UI.chart: [{
+  qualifier:  'ActualVsTarget',
+  title:      'Actual vs Target by Product',
+  chartType:  #BAR,
+  dimensions: ['ProductDescription'],
+  measures:   ['ActualQty', 'TargetQty']
+}]
 
 @UI.presentationVariant: [{
-  qualifier:      'Default',
   visualizations: [
-    { type: #AS_CHART,    qualifier: 'ActualVsTarget' },
+    { type: #AS_CHART },
     { type: #AS_LINEITEM }
-  ],
-  sortOrder:      [{ by: 'FiscalPeriod', direction: #ASC }]
+  ]
 }]
 
 annotate view ZDPR_Q_TARGET_QUERY with
@@ -100,17 +62,7 @@ annotate view ZDPR_Q_TARGET_QUERY with
   @UI.lineItem: [{ position: 90, importance: #HIGH, label: 'Variance' }]
   VarianceQty;
 
-  @UI.lineItem: [{
-    position:    100,
-    importance:  #HIGH,
-    label:       'Achievement %',
-    criticality: 'AchievementCriticality'
-  }]
-  @UI.dataPoint: {
-    title:         'Achievement %',
-    targetValue:   100,
-    criticality:   #NEUTRAL,
-    visualization: #PROGRESS
-  }
+  @UI.lineItem: [{ position: 100, importance: #HIGH, label: 'Achievement %' }]
+  @UI.dataPoint: { title: 'Achievement %' }
   AchievementPct;
 }
