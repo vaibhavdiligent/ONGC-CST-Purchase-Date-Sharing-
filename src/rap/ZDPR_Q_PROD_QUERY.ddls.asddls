@@ -5,16 +5,14 @@
 
 /* ── Analytical Query ─────────────────────────────────────────────────────── */
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
-
 /* ── OData V4 ────────────────────────────────────────────────────────────── */
 @OData.entityType.name: 'DPRProductionQueryType'
 
 define view entity ZDPR_Q_PROD_QUERY
   with parameters
     /* Filter to a date range; defaults to current month if omitted */
-    P_DateFrom : zpra_t_dly_prd-production_date,
-    P_DateTo   : zpra_t_dly_prd-production_date
+    P_DateFrom : abap.dats,
+    P_DateTo   : abap.dats
 
   as select from ZDPR_C_PROD_CUBE
 

@@ -17,9 +17,9 @@
 
 define view entity ZDPR_Q_PROD_PERF
   with parameters
-    P_DateFrom   : zpra_t_dly_prd-production_date,
-    P_DateTo     : zpra_t_dly_prd-production_date,
-    P_FiscalYear : zpra_t_prd_tar-gjahr
+    P_DateFrom   : abap.dats,
+    P_DateTo     : abap.dats,
+    P_FiscalYear : gjahr
 
   as select from ZDPR_P_PERF_AGG(
                    P_DateFrom   : $parameters.P_DateFrom,

@@ -44,16 +44,10 @@ define view entity ZDPR_C_PROD_CUBE
   @ObjectModel.text.element: ['ProductDescription']
   key Daily.Product                               as Product,
 
-  @EndUserText.label: 'Product'
-  Daily.ProductDescription                        as ProductDescription,
-
   @AnalyticsDetails.query.axis: #ROWS
   @EndUserText.label: 'Asset'
   @ObjectModel.text.element: ['AssetDescription']
   key Daily.Asset                                 as Asset,
-
-  @EndUserText.label: 'Asset Description'
-  AssetTxt.dn_de                                  as AssetDescription,
 
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Block'
@@ -63,6 +57,13 @@ define view entity ZDPR_C_PROD_CUBE
   @EndUserText.label: 'Volume Type'
   @ObjectModel.text.element: ['VolumeTypeDescription']
   key Daily.VolumeType                            as VolumeType,
+
+  /* Texts (after the keys - key fields must be contiguous at the top) */
+  @EndUserText.label: 'Product'
+  Daily.ProductDescription                        as ProductDescription,
+
+  @EndUserText.label: 'Asset Description'
+  AssetTxt.dn_de                                  as AssetDescription,
 
   @EndUserText.label: 'Volume Type Description'
   Daily.VolumeTypeDescription                     as VolumeTypeDescription,

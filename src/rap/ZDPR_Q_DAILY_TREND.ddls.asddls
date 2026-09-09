@@ -9,15 +9,13 @@
  * line/bar chart rendering in Fiori Analytical List Page.
  */
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
-
 @OData.entityType.name: 'DPRDailyTrendQueryType'
 
 define view entity ZDPR_Q_DAILY_TREND
   with parameters
-    P_DateFrom : zpra_t_dly_prd-production_date,
-    P_DateTo   : zpra_t_dly_prd-production_date,
-    P_Asset    : zpra_t_dly_prd-asset              /* Optional: '' = all assets */
+    P_DateFrom : abap.dats,
+    P_DateTo   : abap.dats,
+    P_Asset    : abap.char(20)              /* Optional: '' = all assets */
 
   as select from ZDPR_C_PROD_CUBE
 

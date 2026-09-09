@@ -12,15 +12,13 @@
  * pushed to HANA - the OData result is ~1 row per date.
  * ─────────────────────────────────────────────────────────────────────────── */
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
-
 @OData.entityType.name: 'DPRBoepdTrendQueryType'
 
 define view entity ZDPR_Q_BOEPD_TREND
   with parameters
-    P_DateFrom : zpra_t_dly_prd-production_date,
-    P_DateTo   : zpra_t_dly_prd-production_date,
-    P_Asset    : zpra_t_dly_prd-asset              /* '' = all assets */
+    P_DateFrom : abap.dats,
+    P_DateTo   : abap.dats,
+    P_Asset    : abap.char(20)              /* '' = all assets */
 
   as select from ZDPR_C_BOEPD_DAY
 

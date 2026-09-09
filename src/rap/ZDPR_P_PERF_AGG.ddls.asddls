@@ -17,14 +17,14 @@
  * ─────────────────────────────────────────────────────────────────────────── */
 define view entity ZDPR_P_PERF_AGG
   with parameters
-    P_DateFrom   : zpra_t_dly_prd-production_date,
-    P_DateTo     : zpra_t_dly_prd-production_date,
-    P_FiscalYear : zpra_t_prd_tar-gjahr
+    P_DateFrom   : abap.dats,
+    P_DateTo     : abap.dats,
+    P_FiscalYear : gjahr
 
   as select from ZDPR_C_BOEPD_DAY
 
 {
-  key 'YTD'                                           as ScopeType,
+  key cast( 'YTD' as abap.char( 6 ) )                 as ScopeType,
   key ProductGroup                                    as ProductGroup,
 
       cast( sum( ActualQtyOvl )   as abap.dec( 23, 7 ) ) as SumActualQty,
@@ -44,7 +44,7 @@ union all
 
   select from zpra_t_prd_tar as Tar
 {
-  key 'ANNUAL'                                        as ScopeType,
+  key cast( 'ANNUAL' as abap.char( 6 ) )              as ScopeType,
   key case Tar.product
         when '722000004' then 'GAS'
         else                  'OIL'

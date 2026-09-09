@@ -4,8 +4,6 @@
 @Metadata.ignorePropagatedAnnotations: true
 
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
-
 @OData.entityType.name: 'DPRTargetQueryType'
 
 /*
@@ -15,8 +13,8 @@
  */
 define view entity ZDPR_Q_TARGET_QUERY
   with parameters
-    P_FiscalYear : zpra_t_mrec_prd-gjahr,
-    P_TargetCode : zpra_t_prd_tar-tar_code    /* e.g. TAR_BE, TAR_RE */
+    P_FiscalYear : gjahr,
+    P_TargetCode : abap.char(10)    /* e.g. TAR_BE, TAR_RE */
 
   as select from ZDPR_I_MONTHLY as Actual
 
@@ -47,23 +45,24 @@ define view entity ZDPR_Q_TARGET_QUERY
   @ObjectModel.text.element: ['ProductDescription']
   key Actual.Product                              as Product,
 
-  @EndUserText.label: 'Product Description'
-  Actual.ProductDescription                       as ProductDescription,
-
   @AnalyticsDetails.query.axis: #ROWS
   @AnalyticsDetails.query.totals: #SHOW
   @EndUserText.label: 'Asset'
   @ObjectModel.text.element: ['AssetDescription']
   key Actual.Asset                                as Asset,
 
-  @EndUserText.label: 'Asset'
-  Actual._AssetText.dn_de                         as AssetDescription,
-
   @AnalyticsDetails.query.axis: #FREE
   key Actual.Block                                as Block,
 
   @AnalyticsDetails.query.axis: #FREE
   key Actual.VolumeType                           as VolumeType,
+
+  /* Texts (after the keys - key fields must be contiguous at the top) */
+  @EndUserText.label: 'Product Description'
+  Actual.ProductDescription                       as ProductDescription,
+
+  @EndUserText.label: 'Asset'
+  Actual._AssetText.dn_de                         as AssetDescription,
 
   @AnalyticsDetails.query.axis: #FREE
   Actual.VolumeTypeDescription                    as VolumeTypeDescription,
