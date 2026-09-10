@@ -1,0 +1,173 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZFI_BCM_APP_PAYREP_TOP
+*&---------------------------------------------------------------------*
+TABLES : zfi_bcm_payordr,TGSB.
+*&---------------------------------------------------------------------*
+TYPES : BEGIN OF ty_lfa1,
+        lifnr TYPE lfa1-lifnr,
+        name1 TYPE lfa1-name1,
+        END OF ty_lfa1.
+
+TYPES : BEGIN OF ty_kna1,
+        kunnr TYPE kna1-kunnr,
+        name1 TYPE kna1-name1,
+        END OF ty_kna1.
+* BCM batch structures (BNK_BATCH_ITEM / BNK_BATCH_HEADER) removed.
+* Batch data now comes from REGUHM (BATCHNO + medium run LAUFD_M/LAUFI_M)
+* and the file status from REGUT (EPIC_REGUT_STATUS).
+
+TYPES : BEGIN OF ty_final,
+        bukrs      TYPE  zfi_bcm_payordr-bukrs,
+        laufd      TYPE  zfi_bcm_payordr-laufd,
+        laufi      TYPE  zfi_bcm_payordr-laufi,
+        batch_no   TYPE  reguhm-batchno,        "was BNK_BATCH_ITEM-BATCH_NO
+        txt30      TYPE  c LENGTH 20,           "REGUT file status text (was BCM batch status)
+        laufd_f    TYPE  reguhm-laufd_m,        "medium run date (was BNK_BATCH_HEADER-LAUFD_F)
+        laufi_f    TYPE  reguhm-laufi_m,        "medium run id   (was BNK_BATCH_HEADER-LAUFI_F)
+        lifnr      TYPE  zfi_bcm_payordr-lifnr,
+        kunnr      TYPE  zfi_bcm_payordr-kunnr,
+        name1      TYPE  lfa1-name1,
+        zrwbtr     TYPE  zfi_bcm_payordr-zrwbtr,
+        rwbtr      TYPE  zfi_bcm_payordr-rwbtr,
+        rzawe      TYPE  zfi_bcm_payordr-rzawe,
+        zbnks      TYPE  reguh-zbnks,
+        zbnkn      TYPE  reguh-zbnkn,
+        zbnky      TYPE  reguh-zbnky,
+        belnr      TYPE  zfi_bcm_payordr-belnr,
+        gjahr      TYPE  zfi_bcm_payordr-gjahr,
+        pyord      TYPE  zfi_bcm_payordr-pyord,
+        zstatus    TYPE  zfi_bcm_payordr-zstatus,
+        srtgb      type  zfi_bcm_payordr-srtgb,
+        secco      type  zfi_bcm_payordr-secco,
+        desc       TYPE  string,
+        zpaydocnr1 TYPE  zfi_bcm_payordr-zpaydocnr1,
+        zpaydate   TYPE  zfi_bcm_payordr-zpaydate,
+        zdelind    TYPE  zfi_bcm_payordr-zdelind,
+        zrej_reason TYPE  zfi_bcm_payordr-zrej_reason,
+        zuonr       TYPE  zfi_bcm_payordr-zuonr,
+        zutrno      TYPE  zfi_bcm_payordr-zutrno,
+        zdocnrliab  TYPE  zfi_bcm_payordr-zdocnrliab,
+        zpaydocnr2  TYPE  zfi_bcm_payordr-zpaydocnr2,
+        zpaydocnr3  TYPE  zfi_bcm_payordr-zpaydocnr3,
+       END OF ty_final.
+
+** Begin RD1K995321 CAB_ALOK     BCM Changes - CR 30011964
+* count summary data
+TYPES : BEGIN OF ty_statcount,
+          zstatus    TYPE  zfi_bcm_payordr-zstatus,
+          desc       TYPE  string,
+          rwbtr      TYPE  zfi_bcm_payordr-rwbtr,
+          count TYPE i,
+        END OF ty_statcount.
+
+TYPES : BEGIN OF ty_statfinal,
+          zstatus    TYPE  zfi_bcm_payordr-zstatus,
+          rwbtr      TYPE  zfi_bcm_payordr-rwbtr,
+          count TYPE i,
+          desc       TYPE  string,
+        END OF ty_statfinal.
+
+DATA: ist_statcount TYPE HASHED TABLE OF ty_statcount WITH UNIQUE KEY zstatus desc, " WITH HEADER LINE.
+      wa_statcount TYPE  ty_statcount .
+
+** End RD1K995321 CAB_ALOK     BCM Changes - CR 30011964
+
+
+
+*&---------------------------------------------------------------------*
+DATA: lt_payordr TYPE STANDARD TABLE OF zfi_bcm_payordr.
+DATA: ls_payordr TYPE zfi_bcm_payordr.
+DATA: lt_reguh   TYPE STANDARD TABLE OF reguh.
+DATA: ls_reguh   TYPE reguh.
+DATA: lt_lfa1    TYPE STANDARD TABLE OF ty_lfa1.
+DATA: ls_lfa1    TYPE ty_lfa1.
+DATA: lt_kna1    TYPE STANDARD TABLE OF ty_kna1.
+DATA: ls_kna1    TYPE ty_kna1.
+DATA: lt_final   TYPE STANDARD TABLE OF ty_final.
+DATA: ls_final   TYPE ty_final.
+* Batch link now via REGUHM (F110 run -> medium run + BATCHNO) and REGUT
+* (medium run -> file status). BCM batch-item/header and the CRM/JEST
+* status tables (CRM_JEST / CRM_JSTO_PRE / TJ02T) are no longer used.
+DATA : lt_reguhm         TYPE STANDARD TABLE OF reguhm.
+DATA : ls_reguhm         TYPE reguhm.
+DATA : lt_regut          TYPE STANDARD TABLE OF regut.
+DATA : ls_regut          TYPE regut.
+DATA : lt_dd07v          TYPE STANDARD TABLE OF dd07v.
+DATA : ls_dd07v          TYPE dd07v.
+*&---------------------------------------------------------------------*
+** ALV
+DATA : lt_fcat        TYPE  slis_t_fieldcat_alv.
+DATA : ls_fcat        TYPE  slis_fieldcat_alv.
+DATA : lt_layout      TYPE  slis_layout_alv.
+DATA : lt_header      TYPE  slis_t_listheader,
+       ls_header      TYPE  slis_listheader,
+       ls_date        TYPE  slis_listheader,
+       ls_time        TYPE  slis_listheader,
+       ls_user        TYPE  slis_listheader,
+       g_save         TYPE c VALUE 'X',
+       g_variant      TYPE disvariant,
+       gx_variant     TYPE disvariant,
+       g_exit         TYPE c,
+       ispfli         TYPE TABLE OF spfli.
+*&---------------------------------------------------------------------*
+** Variables
+DATA:   lv_index       TYPE i.
+DATA:   lv_head(60),
+        lv_date(10),
+        lv_time(10),
+        lv_info(60).
+*&---------------------------------------------------------------------*
+**SELECTION-SCREEN.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME  TITLE text-001.
+SELECT-OPTIONS : s_bukrs FOR zfi_bcm_payordr-bukrs," OBLIGATORY,
+                 s_pyord FOR zfi_bcm_payordr-pyord,
+                 s_statu FOR zfi_bcm_payordr-zstatus,
+                 s_lifnr FOR zfi_bcm_payordr-lifnr,
+                 s_kunnr FOR zfi_bcm_payordr-kunnr,
+                 s_srtgb for zfi_bcm_payordr-srtgb,
+                 s_secco for zfi_bcm_payordr-secco,
+                 s_laufd FOR zfi_bcm_payordr-laufd," OBLIGATORY,
+                 s_laufi FOR zfi_bcm_payordr-laufi,
+                 s_rzawe FOR zfi_bcm_payordr-rzawe.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002 .
+PARAMETERS: variant LIKE disvariant-variant.
+SELECTION-SCREEN END OF BLOCK b2.
+
+**GETTING DEFAULT VARIANT
+INITIALIZATION.
+  gx_variant-report = sy-repid.
+  CALL FUNCTION 'REUSE_ALV_VARIANT_DEFAULT_GET'
+    EXPORTING
+      i_save     = g_save
+    CHANGING
+      cs_variant = gx_variant
+    EXCEPTIONS
+      not_found  = 2.
+  IF sy-subrc = 0.
+    variant = gx_variant-variant.
+  ENDIF.
+** F4 Help for Varient
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR variant.
+**-- Display all existing variants
+  g_variant-report = sy-repid.
+* Utilizing the name of the report, this function module will search for a list of
+* variants and will fetch the selected one into the parameter field for variants
+  CALL FUNCTION 'REUSE_ALV_VARIANT_F4'
+    EXPORTING
+      is_variant = g_variant
+      i_save     = g_save
+    IMPORTING
+      e_exit     = g_exit
+      es_variant = gx_variant
+    EXCEPTIONS
+      not_found  = 2.
+  IF sy-subrc = 2.
+    MESSAGE ID sy-msgid TYPE 'S'      NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ELSE.
+    IF g_exit = space.
+      variant = gx_variant-variant.
+    ENDIF.
+  ENDIF.

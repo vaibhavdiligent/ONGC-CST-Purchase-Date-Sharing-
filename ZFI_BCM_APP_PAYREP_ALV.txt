@@ -1,0 +1,688 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZFI_BCM_APP_PAYREP_ALV
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  ALV_DISPLAY
+*&---------------------------------------------------------------------*
+DATA : lv_num TYPE i.
+
+*&---------------------------------------------------------------------*
+FORM alv_display .
+  PERFORM field_catalog.
+  lt_layout-colwidth_optimize  = 'X'.
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+  EXPORTING
+    i_callback_program                = sy-cprog
+   I_CALLBACK_PF_STATUS_SET       = 'ZPFSET'
+   I_CALLBACK_USER_COMMAND        = 'USER_COMMAND'
+
+    i_callback_top_of_page            = 'TOP_OF_PAGE'
+    is_layout                         = lt_layout
+    it_fieldcat                       = lt_fcat
+    i_save                            = 'X'
+    is_variant                        = g_variant
+   TABLES
+     t_outtab                         = lt_final
+*   EXCEPTIONS
+*     PROGRAM_ERROR                     = 1
+*     OTHERS                            = 2
+           .
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+ENDFORM.                    " ALV_DISPLAY
+form ZPFSET USING rt_extab TYPE slis_t_extab.
+
+
+
+  SET PF-STATUS 'ZSTANDARD' .
+
+
+
+ENDFORM.
+FORM user_command USING r_ucomm LIKE sy-ucomm
+                        rs_selfield TYPE slis_selfield.
+  DATA : index_aux LIKE sy-tabix.
+  index_aux = rs_selfield-tabindex.
+
+  CASE r_ucomm.
+
+    WHEN 'DOWN'.
+TYPES : BEGIN OF GTY_FIELDNAMES,
+                TITLE(100),
+              END   OF GTY_FIELDNAMES.
+
+
+
+
+DATA: GIT_FIELDNAMES TYPE STANDARD TABLE OF GTY_FIELDNAMES,
+
+            GWA_FIELDNAMES TYPE GTY_FIELDNAMES.
+
+
+
+
+DATA : GD_FILENAME TYPE STRING,
+            GD_PATH     TYPE STRING,
+            GD_FULLPATH TYPE STRING,
+            GD_RESULT   TYPE I.
+
+
+
+
+*Now have a subroutine where by you append your headings into the internal table i.e.,GIT_FIELDNAMES
+
+
+
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Company Code'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+*   CLEAR GWA_FIELDNAMES.
+*   GWA_FIELDNAMES-TITLE = 'Run Date'.
+*   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+*
+*   CLEAR GWA_FIELDNAMES.
+*   GWA_FIELDNAMES-TITLE = 'Run ID'.
+*   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'APP Run Date'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'APP Run ID'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Batch No'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'File Status'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+      CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Medium Run Date'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Medium Run ID'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Vendor A/C'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Customer A/C'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Name'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Invoice Amount' .
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'PaymentAmount'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Payment Method'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Country key'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Bank key'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Bank A/c Number'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Liability Doc.No.'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Fiscal Year'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Payment Order'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'PO Status'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Business Area'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Section Code'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Description'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Payment Doc No'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Payment Date'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'PO Deletion Indicator'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Reason for rejection'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'e-Cheque no'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'UTR Number'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'Bank receipt document'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'New Liability Doc (Paying CC)'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+   CLEAR GWA_FIELDNAMES.
+   GWA_FIELDNAMES-TITLE = 'New Liability Doc (Sending CC)'.
+   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+*   CLEAR GWA_FIELDNAMES.
+*   GWA_FIELDNAMES-TITLE = 'Material Description'.
+*   APPEND GWA_FIELDNAMES TO GIT_FIELDNAMES.
+
+
+
+
+*Once you are done with it you can call up the save dialog
+
+* Display save dialog window
+   CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+     EXPORTING
+       WINDOW_TITLE           = 'Save File As...'
+       DEFAULT_EXTENSION  = 'XLS'
+       DEFAULT_FILE_NAME  = 'BCM_Report'
+       INITIAL_DIRECTORY      = 'C:\'
+     CHANGING
+       FILENAME                      = GD_FILENAME
+       PATH                               = GD_PATH
+       FULLPATH                      = GD_FULLPATH
+       USER_ACTION               = GD_RESULT.
+
+
+
+
+* Check user did not cancel request
+   CHECK GD_RESULT EQ '0'.
+
+   CALL FUNCTION 'GUI_DOWNLOAD'
+     EXPORTING
+       FILENAME              = GD_FULLPATH
+       FILETYPE                = 'ASC'
+*     APPEND                = 'X'
+       WRITE_FIELD_SEPARATOR = 'X'
+*     CONFIRM_OVERWRITE     = 'X'
+     TABLES
+" Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 06.06.2026  FOR ATC
+*        DATA_TAB                 = LT_FINAL                  " Internal table having data
+DATA_TAB = LT_FINAL "#EC CI_FLDEXT_OK[2610650]
+" Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 06.06.2026 FOR ATC
+       FIELDNAMES            = GIT_FIELDNAMES     " Internal table having headings
+     EXCEPTIONS
+       FILE_OPEN_ERROR       = 1                         "#EC ARGCHECKED
+       FILE_WRITE_ERROR      = 2
+       OTHERS                           = 3.
+
+  ENDCASE.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  top_of_page
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM top_of_page.
+
+  ls_header-typ  = 'H'.
+  ls_header-info = 'Vendor Processing'.
+  APPEND ls_header TO lt_header.
+
+  CONCATENATE sy-datum+6(2) '-' sy-datum+4(2) '-' sy-datum(4)
+                INTO lv_date.
+  CLEAR ls_date.
+  ls_date-key  = 'Reporting Date:'(032).
+  ls_date-typ  = 'S'.
+  ls_date-info = lv_date.
+  APPEND ls_date TO lt_header.
+
+  CONCATENATE sy-uzeit(2) ':' sy-uzeit+2(2) ':' sy-uzeit+4(2)
+              INTO lv_time.
+
+  CLEAR ls_time.
+  ls_time-key  = 'Reporting Time:'(033).
+  ls_time-typ  = 'S'.
+  ls_time-info = lv_time.
+  APPEND ls_time TO lt_header.
+
+  CLEAR ls_user.
+  ls_user-key  = 'Reporting User:'(034).
+  ls_user-typ  = 'S'.
+  ls_user-info = sy-uname.
+  APPEND ls_user TO lt_header.
+
+
+**Begin RD1K995321 CAB_ALOK     BCM Changes - CR 30011964
+  CLEAR ls_user.
+*  ls_user-key  = '*'.  "(034).
+  ls_user-typ  = 'S'.
+  ls_user-info = 'Status | Description | Count | Amount:'.
+  APPEND ls_user TO lt_header.
+
+  data: wa_statcount1 TYPE  ty_statcount,
+        l_summary(100),
+        l_rwbtr(18),
+        l_count(10) .
+
+  CLEAR ls_user.
+  loop at ist_statcount INTO wa_statcount1.
+
+    MOVE EXACT wa_statcount1-rwbtr to l_rwbtr .
+    MOVE EXACT wa_statcount1-count to l_count.
+    CONCATENATE  wa_statcount1-zstatus wa_statcount1-desc l_count l_rwbtr
+       INTO l_summary SEPARATED BY ' | ' RESPECTING BLANKS.
+
+*  ls_user-key  = '*'.  "(034).
+    ls_user-typ  = 'S'.
+    ls_user-info = l_summary.
+    APPEND ls_user TO lt_header.
+
+  endloop.
+**End RD1K995321 CAB_ALOK     BCM Changes - CR 30011964
+
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = lt_header
+*     I_LOGO             =
+*     I_END_OF_LIST_GRID =
+*     I_ALV_FORM         =
+    .
+
+  REFRESH lt_header.
+ENDFORM.                      "TOP_OF_PAGE
+*&---------------------------------------------------------------------*
+*&      Form  FIELD_CATALOG
+*&---------------------------------------------------------------------*
+*       Field catalogs
+*----------------------------------------------------------------------*
+FORM field_catalog .
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'BUKRS'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Company Code'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'SRTGB'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Business Area'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'SECCO'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Section Code'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'LAUFD'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'APP Run Date'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'LAUFI'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'APP Run ID'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'BATCH_NO'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Batch No'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'TXT30'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'File Status'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'LAUFD_F'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Medium Run Date'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'LAUFI_F'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Medium Run ID'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'LIFNR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Vendor A/C'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'KUNNR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Customer A/C'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'NAME1'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Name'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZRWBTR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Invoice Amount'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'RWBTR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'PaymentAmount'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'RZAWE'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Payment Method'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZBNKS'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Country key'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZBNKY'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Bank key'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZBNKN'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Bank A/c Number'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'BELNR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Liability Doc.No.'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'GJAHR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Fiscal Year'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'PYORD'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Payment Order'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZSTATUS'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'PO Status'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'DESC'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Description'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZPAYDOCNR1'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Payment document No'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZPAYDATE'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Payment Date'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZDELIND'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'PO Deletion Indicator'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZREJ_REASON'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Reason for rejection'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZUONR'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'e-Cheque no'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZUTRNO'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'UTR Number'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZDOCNRLIAB'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'Bank receipt document'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num             = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZPAYDOCNR2'.
+  ls_fcat-tabname    = 'LT_FINAL'.
+  ls_fcat-seltext_l  = 'New Liability Doc (Paying CC)'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+  lv_num = lv_num + 1.
+  ls_fcat-col_pos    = lv_num.
+  ls_fcat-fieldname  = 'ZPAYDOCNR3'.
+  ls_fcat-tabname    = 'LT_PAYORDR'.
+  ls_fcat-seltext_l  = 'New Liability Doc (Sending CC)'.
+*ls_fcat-outputlen  = '16'.
+  APPEND ls_fcat TO lt_fcat.
+  CLEAR ls_fcat.
+
+*Begin RD1K995321 CAB_ALOK  CR 30011964
+*  lv_num             = lv_num + 1.
+*  ls_fcat-col_pos    = lv_num.
+*  ls_fcat-fieldname  = 'ZSTATUS'.
+*  ls_fcat-tabname    = 'LT_FINAL'.
+*  ls_fcat-seltext_l  = 'Status'.
+*  APPEND ls_fcat TO lt_fcat.
+*  CLEAR ls_fcat.
+*
+*  lv_num             = lv_num + 1.
+*  ls_fcat-col_pos    = lv_num.
+*  ls_fcat-fieldname  = 'RWBTR'.
+*  ls_fcat-tabname    = 'LT_FINAL'.
+*  ls_fcat-seltext_l  = 'Amount'.
+*  APPEND ls_fcat TO lt_fcat.
+*  CLEAR ls_fcat.
+
+*End RD1K995321 CAB_ALOK  CR 30011964
+
+
+
+
+ENDFORM.                    " FIELD_CATALOG
+
+*&---------------------------------------------------------------------*
+*&      Form  CHECK_VARIANT
+*&---------------------------------------------------------------------*
+FORM check_variant .
+  g_variant-variant = variant.
+  g_variant-report  = sy-repid.
+  CALL FUNCTION 'LVC_VARIANT_EXISTENCE_CHECK' "Check for display variant
+  EXPORTING
+      i_save               = space            "Variants Can be Saved
+    CHANGING
+      cs_variant           = g_variant        "Variant information
+    EXCEPTIONS
+      wrong_input          = 1                "Inconsistent input parameters
+      not_found            = 2                "Variant not found
+      program_error        = 3                "Program Errors
+      .                                       "  LVC_VARIANT_EXISTENCE_CHECK
+  IF sy-subrc = 2.
+    MESSAGE 'Display Variant Not Found, Displaying Default Variant'
+                                                              TYPE 'S'.
+  ENDIF.
+  CALL FUNCTION 'REUSE_ALV_VARIANT_DEFAULT_GET'
+    EXPORTING
+      i_save     = g_save
+    CHANGING
+      cs_variant = gx_variant
+    EXCEPTIONS
+      not_found  = 2.
+  IF sy-subrc = 0.
+    variant = gx_variant-variant.
+  ENDIF.
+ENDFORM.                    "CHECK_VARIANT

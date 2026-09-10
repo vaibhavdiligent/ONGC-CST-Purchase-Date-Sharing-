@@ -1,0 +1,11 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFI_BCM_APP_PAYREP
+*& Vendor Payment Summary
+*&---------------------------------------------------------------------*
+*& Date : 11-Dec-2013 By : SAB_ARJUN
+*&---------------------------------------------------------------------*
+REPORT zfi_bcm_app_payrep.
+
+INCLUDE zfi_bcm_app_payrep_top.
+INCLUDE zfi_bcm_app_payrep_pyord.
+INCLUDE zfi_bcm_app_payrep_alv.
