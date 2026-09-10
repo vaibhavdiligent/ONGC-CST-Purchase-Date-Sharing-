@@ -112,7 +112,8 @@ START-OF-SELECTION.
         MOVE ls_kna1-name1 TO ls_final-name1.
       ENDIF.
     ENDIF.
-** Batch data from REGUHM (batch no + medium run); file status from ZFI_PAYM_FILE
+** Batch data from REGUHM (batch no + medium run); send state from ZFI_PAYM_FILE
+    CLEAR : ls_reguhm, ls_paymf.
     READ TABLE lt_reguhm INTO ls_reguhm WITH KEY laufd = ls_payordr-laufd
                                                  laufi = ls_payordr-laufi
                                                  zbukr = ls_payordr-zbukr
@@ -122,23 +123,25 @@ START-OF-SELECTION.
       MOVE ls_reguhm-batchno TO ls_final-batch_no.
       MOVE ls_reguhm-laufd_m TO ls_final-laufd_f.
       MOVE ls_reguhm-laufi_m TO ls_final-laufi_f.
-** File send/received status from ZFI_PAYM_FILE (medium run). RECEIVED is
-** set by the inbound SBI return-file interface; SENT on outbound release.
       READ TABLE lt_paymf INTO ls_paymf WITH KEY laufd = ls_reguhm-laufd_m
                                                  laufi = ls_reguhm-laufi_m.
-      IF sy-subrc = 0.
-        IF ls_paymf-received = 'X'.
-          ls_final-txt30 = 'Received'.
-        ELSEIF ls_paymf-sent = 'X'.
-          IF ls_paymf-sent_error = 'X'.
-            ls_final-txt30 = 'Sent (Error)'.
-          ELSE.
-            ls_final-txt30 = 'Sent'.
-          ENDIF.
-        ELSE.
-          ls_final-txt30 = 'Not Sent'.
-        ENDIF.
+    ENDIF.
+** File status is PER PAYMENT, not per file: ZFI_PAYM_FILE-RECEIVED is a
+** file-level flag (one row per medium run) and would wrongly show every
+** payment of that file as "Received". A payment's bank response has
+** actually come back only when its own ZSTATUS has moved off '001'
+** (002 = success, 005 = rejected). Payments still '001' just show the
+** send state (Sent / Not Sent).
+    IF ls_payordr-zstatus = '002' OR ls_payordr-zstatus = '005'.
+      ls_final-txt30 = 'Received'.
+    ELSEIF ls_paymf-sent = 'X'.
+      IF ls_paymf-sent_error = 'X'.
+        ls_final-txt30 = 'Sent (Error)'.
+      ELSE.
+        ls_final-txt30 = 'Sent'.
       ENDIF.
+    ELSE.
+      ls_final-txt30 = 'Not Sent'.
     ENDIF.
     APPEND ls_final TO lt_final.
     CLEAR : ls_payordr, ls_final, ls_kna1, ls_lfa1.
