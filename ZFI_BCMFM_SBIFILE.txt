@@ -1,0 +1,86 @@
+FUNCTION zfi_bcmfm_sbifile.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  IMPORTING
+*"     REFERENCE(IM_SBIFILE) TYPE  ZFI_BCMTT_SBIFILE
+*"     REFERENCE(IM_UPDDATA) TYPE  ZFI_BCM_PAYORDRTT OPTIONAL
+*"  EXPORTING
+*"     REFERENCE(EX_COUNT) TYPE  I
+*"----------------------------------------------------------------------
+*& CR : 30009692 Developed By SAP_ARJUN Dt : 16-Sept-2013
+** Same function module called from PI Also
+*"----------------------------------------------------------------------
+  TABLES zfi_bcm_payordr.
+** Get Imported data
+  DATA : gt_sbifile TYPE STANDARD TABLE OF zfi_bcm_sbifile,
+         gs_sbifile TYPE zfi_bcm_sbifile.
+
+** Process Rejected Records
+  DATA : gt_rejrec_fm TYPE STANDARD TABLE OF zfi_bcm_rejrec,
+         gs_rejrec_fm TYPE zfi_bcm_rejrec.
+
+** ITAB For ZTABLE Data
+  DATA : gt_rejrec TYPE STANDARD TABLE OF zfi_bcm_sbifile,
+         gs_rejrec TYPE zfi_bcm_sbifile.
+
+  DATA : gt_payordr  TYPE STANDARD TABLE OF zfi_bcm_payordr,
+         gs_payordr1 LIKE LINE OF gt_payordr,
+         gs_payordr  LIKE LINE OF gt_payordr.
+
+** Processing Rejected records
+  DATA : lv_pyord TYPE pyordh-pyord.
+  DATA : lv_laufd TYPE pyordh-laufd.
+  DATA : lv_laufi TYPE pyordh-laufi.
+  DATA : ex_statu TYPE zfi_bcm_sbifile-zstatus. "EXPORT/IMPORT data
+  DATA : lv_statu TYPE zfi_bcm_sbifile-zstatus. "EXPORT/IMPORT data
+  DATA : lv_nos   TYPE i.
+  DATA : lv_count TYPE i.
+  DATA : lv_date  TYPE dats.
+  DATA : lv_datechk TYPE dats.
+*"----------------------------------------------------------------------
+** Import data
+  CLEAR : gt_sbifile, gt_payordr.
+  gt_sbifile = im_sbifile.
+  gt_payordr = im_upddata.
+*"----------------------------------------------------------------------
+
+*"----------------------------------------------------------------------
+  IF gt_sbifile IS NOT INITIAL.
+*"----------------------------------------------------------------------
+**  Validation
+*"----------------------------------------------------------------------
+**   Modify and use the Below Subroutine for PI interface
+    CLEAR lv_count.
+    LOOP AT gt_payordr INTO gs_payordr1.
+      CLEAR gs_payordr.
+      gs_payordr = gs_payordr1.
+      READ TABLE gt_sbifile INTO gs_sbifile WITH KEY pyord = gs_payordr-pyord.
+*                                                     zbukr = gs_payordr-zbukr.
+      IF sy-subrc EQ 0.
+
+        CLEAR lv_datechk.
+        CONCATENATE gs_sbifile-zpaydate+6(4) gs_sbifile-zpaydate+3(2) gs_sbifile-zpaydate(2)
+        INTO lv_datechk.
+        MOVE-CORRESPONDING gs_payordr TO zfi_bcm_payordr.
+        zfi_bcm_payordr-zstatus          = gs_sbifile-zstatus.
+        zfi_bcm_payordr-zrej_reason      = gs_sbifile-zrej_reason.
+        zfi_bcm_payordr-zutrno           = gs_sbifile-zutrno.
+        zfi_bcm_payordr-bktxt            = gs_sbifile-bktxt.
+        zfi_bcm_payordr-zuonr            = gs_sbifile-zuonr.
+        zfi_bcm_payordr-zpaydate         = lv_datechk. "gs_sbifile-zpaydate.
+        zfi_bcm_payordr-acc_changed_by   = sy-uname.
+        zfi_bcm_payordr-acc_change_date  = sy-datum.
+        zfi_bcm_payordr-acc_change_time  = sy-uzeit.
+        MODIFY zfi_bcm_payordr.
+        commit work.
+        AT NEW pyord.
+          lv_count = lv_count + 1.
+        ENDAT.
+      ENDIF.
+      CLEAR : gs_payordr1.
+    ENDLOOP.
+    ex_count = lv_count.
+  ENDIF.
+*"----------------------------------------------------------------------
+*"----------------------------------------------------------------------
+ENDFUNCTION.
