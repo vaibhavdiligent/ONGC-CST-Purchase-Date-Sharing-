@@ -58,13 +58,13 @@ START-OF-SELECTION.
        AND   kunnr = lt_payordr-kunnr.
 
     IF lt_reguhm IS NOT INITIAL.
-*     REGUT holds the batch/file created for the medium run. Its key
-*     LAUFD/LAUFI equals REGUHM-LAUFD_M/LAUFI_M; STATUS is the file status.
-      SELECT * FROM regut
-        INTO TABLE lt_regut
+*     File send/received status from ZFI_PAYM_FILE (one row per medium
+*     run, keyed by LAUFD/LAUFI = REGUHM-LAUFD_M/LAUFI_M). This is the
+*     table the inbound SBI return-file interface updates (RECEIVED).
+      SELECT * FROM zfi_paym_file
+        INTO TABLE lt_paymf
         FOR ALL ENTRIES IN lt_reguhm
-        WHERE zbukr = lt_reguhm-zbukr
-        AND   laufd = lt_reguhm-laufd_m
+        WHERE laufd = lt_reguhm-laufd_m
         AND   laufi = lt_reguhm-laufi_m.
     ENDIF.
   ENDIF.
@@ -112,7 +112,7 @@ START-OF-SELECTION.
         MOVE ls_kna1-name1 TO ls_final-name1.
       ENDIF.
     ENDIF.
-** Batch data from REGUHM (batch no + medium run) and file status from REGUT
+** Batch data from REGUHM (batch no + medium run); file status from ZFI_PAYM_FILE
     READ TABLE lt_reguhm INTO ls_reguhm WITH KEY laufd = ls_payordr-laufd
                                                  laufi = ls_payordr-laufi
                                                  zbukr = ls_payordr-zbukr
@@ -122,19 +122,22 @@ START-OF-SELECTION.
       MOVE ls_reguhm-batchno TO ls_final-batch_no.
       MOVE ls_reguhm-laufd_m TO ls_final-laufd_f.
       MOVE ls_reguhm-laufi_m TO ls_final-laufi_f.
-** File status from REGUT (medium run = REGUHM-LAUFD_M/LAUFI_M)
-      READ TABLE lt_regut INTO ls_regut WITH KEY zbukr = ls_reguhm-zbukr
-                                                 laufd = ls_reguhm-laufd_m
+** File send/received status from ZFI_PAYM_FILE (medium run). RECEIVED is
+** set by the inbound SBI return-file interface; SENT on outbound release.
+      READ TABLE lt_paymf INTO ls_paymf WITH KEY laufd = ls_reguhm-laufd_m
                                                  laufi = ls_reguhm-laufi_m.
       IF sy-subrc = 0.
-        CASE ls_regut-status.
-          WHEN space.  ls_final-txt30 = 'Created'.
-          WHEN '010'.  ls_final-txt30 = 'Sent'.
-          WHEN '020'.  ls_final-txt30 = 'Acknowledged'.
-          WHEN '030'.  ls_final-txt30 = 'Transfer Failed'.
-          WHEN '040'.  ls_final-txt30 = 'Transfer Confirmed'.
-          WHEN OTHERS. ls_final-txt30 = ls_regut-status.
-        ENDCASE.
+        IF ls_paymf-received = 'X'.
+          ls_final-txt30 = 'Received'.
+        ELSEIF ls_paymf-sent = 'X'.
+          IF ls_paymf-sent_error = 'X'.
+            ls_final-txt30 = 'Sent (Error)'.
+          ELSE.
+            ls_final-txt30 = 'Sent'.
+          ENDIF.
+        ELSE.
+          ls_final-txt30 = 'Not Sent'.
+        ENDIF.
       ENDIF.
     ENDIF.
     APPEND ls_final TO lt_final.
@@ -149,8 +152,8 @@ END-OF-SELECTION.
   PERFORM alv_display.
 *&---------------------------------------------------------------------*
 * FORM GET_STATUS removed - BCM batch status (CRM_STATUS_READ_MULTI /
-* CRM_JEST / TJ02T via BNK_BATCH_HEADER-GUID) is replaced by the REGUT
-* file status (EPIC_REGUT_STATUS) derived inline above.
+* CRM_JEST / TJ02T via BNK_BATCH_HEADER-GUID) is replaced by the
+* ZFI_PAYM_FILE send/received status derived inline above.
 *&---------------------------------------------------------------------*
 *&      Form  COUNT_SUMMARY
 *&---------------------------------------------------------------------*

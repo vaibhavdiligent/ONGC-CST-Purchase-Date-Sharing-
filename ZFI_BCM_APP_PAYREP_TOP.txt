@@ -14,14 +14,14 @@ TYPES : BEGIN OF ty_kna1,
         END OF ty_kna1.
 * BCM batch structures (BNK_BATCH_ITEM / BNK_BATCH_HEADER) removed.
 * Batch data now comes from REGUHM (BATCHNO + medium run LAUFD_M/LAUFI_M)
-* and the file status from REGUT (EPIC_REGUT_STATUS).
+* and the file send/received status from ZFI_PAYM_FILE.
 
 TYPES : BEGIN OF ty_final,
         bukrs      TYPE  zfi_bcm_payordr-bukrs,
         laufd      TYPE  zfi_bcm_payordr-laufd,
         laufi      TYPE  zfi_bcm_payordr-laufi,
         batch_no   TYPE  reguhm-batchno,        "was BNK_BATCH_ITEM-BATCH_NO
-        txt30      TYPE  c LENGTH 20,           "REGUT file status text (was BCM batch status)
+        txt30      TYPE  c LENGTH 20,           "file send/received status (was BCM batch status)
         laufd_f    TYPE  reguhm-laufd_m,        "medium run date (was BNK_BATCH_HEADER-LAUFD_F)
         laufi_f    TYPE  reguhm-laufi_m,        "medium run id   (was BNK_BATCH_HEADER-LAUFI_F)
         lifnr      TYPE  zfi_bcm_payordr-lifnr,
@@ -85,13 +85,14 @@ DATA: lt_kna1    TYPE STANDARD TABLE OF ty_kna1.
 DATA: ls_kna1    TYPE ty_kna1.
 DATA: lt_final   TYPE STANDARD TABLE OF ty_final.
 DATA: ls_final   TYPE ty_final.
-* Batch link now via REGUHM (F110 run -> medium run + BATCHNO) and REGUT
-* (medium run -> file status). BCM batch-item/header and the CRM/JEST
-* status tables (CRM_JEST / CRM_JSTO_PRE / TJ02T) are no longer used.
+* Batch link now via REGUHM (F110 run -> medium run + BATCHNO). File
+* send/received status comes from ZFI_PAYM_FILE - the same Z-table the
+* inbound SBI return-file interface updates (SENT / RECEIVED). BCM
+* batch-item/header and the CRM/JEST status tables are no longer used.
 DATA : lt_reguhm         TYPE STANDARD TABLE OF reguhm.
 DATA : ls_reguhm         TYPE reguhm.
-DATA : lt_regut          TYPE STANDARD TABLE OF regut.
-DATA : ls_regut          TYPE regut.
+DATA : lt_paymf          TYPE STANDARD TABLE OF zfi_paym_file.
+DATA : ls_paymf          TYPE zfi_paym_file.
 DATA : lt_dd07v          TYPE STANDARD TABLE OF dd07v.
 DATA : ls_dd07v          TYPE dd07v.
 *&---------------------------------------------------------------------*
