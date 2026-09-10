@@ -191,7 +191,8 @@ FORM f_get_data .
 *    when the signed file is transmitted to the bank. (REGUT-STATUS is NOT
 *    used: the custom send/return interfaces never update it, so it stays
 *    'Created' regardless of the real transfer state.)
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym
+  SELECT laufd laufi sent sent_error
+    FROM zfi_paym_file INTO CORRESPONDING FIELDS OF TABLE gt_paym
     FOR ALL ENTRIES IN gt_reguhm
     WHERE laufd = gt_reguhm-laufd_m
       AND laufi = gt_reguhm-laufi_m.
@@ -488,9 +489,9 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'L2_TOTAL'   'L2 Tot'         'L2 Approvers'         'Level-2 Approvers'.
   PERFORM f_col_text USING lo_cols 'L2_SIGNED'  'L2 Sgn'         'L2 Signed'            'Level-2 Signed'.
   PERFORM f_col_text USING lo_cols 'L2_PENDING' 'L2 Pend'        'L2 Pending With'      'Level-2 Pending With'.
-  PERFORM f_col_text USING lo_cols 'STATUS'     'Status'         'Batch Status'         'Batch Status (approval / sent / received)'.
+  PERFORM f_col_text USING lo_cols 'STATUS'     'Status'         'Batch Status'         'Batch Status'.
   PERFORM f_col_text USING lo_cols 'SENT_FLAG'  'Sent'           'Sent to Bank'         'Sent to Bank (ZFI_PAYM_FILE)'.
-  PERFORM f_col_text USING lo_cols 'RECV_FLAG'  'Recd'           'Received'             'Received back from Bank (ZFI_BCM_PAYORDR)'.
+  PERFORM f_col_text USING lo_cols 'RECV_FLAG'  'Recd'           'Received'             'Received back from Bank'.
   PERFORM f_col_text USING lo_cols 'CRUSR'      'Created By'     'Created By'           'Created By'.
 
 * Hide the REGUT status columns: the custom send/return interfaces never
