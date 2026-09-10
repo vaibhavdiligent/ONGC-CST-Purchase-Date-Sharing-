@@ -73,7 +73,6 @@ DATA: gt_regut  TYPE STANDARD TABLE OF regut,
       gt_reguhm TYPE STANDARD TABLE OF reguhm,        "FBPM1 medium/batch link
       gt_reguh  TYPE STANDARD TABLE OF reguh,         "F110 payment header (amount)
       gt_sign   TYPE STANDARD TABLE OF zfi_batch_sign,
-      gt_paym   TYPE STANDARD TABLE OF zfi_paym_file,
       gt_rule   TYPE STANDARD TABLE OF zfi_bnk_rule,  "Approver config
       gt_mon    TYPE STANDARD TABLE OF ty_mon.
 
@@ -114,7 +113,7 @@ START-OF-SELECTION.
 *&      Form  F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_get_data .
-  REFRESH: gt_reguhm, gt_reguh, gt_regut, gt_sign, gt_paym, gt_rule.
+  REFRESH: gt_reguhm, gt_reguh, gt_regut, gt_sign, gt_rule.
 
 * -- Step 1 (per FS): start from REGUHM - the payment medium header
 *    created after the F110 run. Selection is on the F110 run.
@@ -181,13 +180,8 @@ FORM f_get_data .
       WHERE batch_no = lt_keys-table_line.
   ENDIF.
 
-* -- Step 6: payment file (sent status) - one row per medium LAUFD/LAUFI.
-*    Select only the needed fields (avoid pulling LOB columns via FAE).
-  SELECT laufd laufi sent FROM zfi_paym_file
-    INTO CORRESPONDING FIELDS OF TABLE gt_paym
-    FOR ALL ENTRIES IN gt_regut
-    WHERE laufd = gt_regut-laufd
-      AND laufi = gt_regut-laufi.
+* (Sent-to-bank status is taken from REGUT-STATUS in F_BUILD_OUTPUT; the
+*  file-level ZFI_PAYM_FILE-SENT flag is no longer read here.)
 ENDFORM.                    " F_GET_DATA
 
 *&---------------------------------------------------------------------*
@@ -199,7 +193,6 @@ FORM f_build_output .
         ls_reg     TYPE regut,
         ls_rule    TYPE zfi_bnk_rule,
         ls_sign    TYPE zfi_batch_sign,
-        ls_paym    TYPE zfi_paym_file,
         ls_mon     TYPE ty_mon,
         lv_bkey    TYPE zfi_batch_sign-batch_no,
         lv_snro    TYPE zfi_batch_sign-snro,
@@ -337,14 +330,14 @@ FORM f_build_output .
       ENDIF.
     ENDLOOP.
 
-*   -- Sent to bank: authoritative from REGUT status; paym file as fallback
+*   -- Sent to bank: derive ONLY from the actual REGUT file transfer
+*      status (010 Sent / 020 Acknowledged / 040 Transfer Confirmed).
+*      Do NOT use ZFI_PAYM_FILE-SENT here: it is a file-level flag (one
+*      row per medium run), so it marked EVERY payment of the run - even
+*      unapproved ones - as "Sent to Bank". REGUT status is per batch and
+*      reflects the real transfer state (e.g. still 'Created' = not sent).
     IF ls_mon-regut_stat = '010' OR ls_mon-regut_stat = '020'
                                   OR ls_mon-regut_stat = '040'.
-      ls_mon-sent_flag = 'X'.
-    ENDIF.
-    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_hm-laufd_m
-                                             laufi = ls_hm-laufi_m.
-    IF sy-subrc = 0 AND ls_paym-sent = 'X'.
       ls_mon-sent_flag = 'X'.
     ENDIF.
 
