@@ -60,7 +60,9 @@ TYPES: BEGIN OF ty_mon,
          status     TYPE c LENGTH 20,   "Overall approval status
          regut_stat TYPE regut-status,  "REGUT file status code (EPIC_REGUT_STATUS)
          regut_txt  TYPE c LENGTH 20,   "REGUT file status text
-         sent_flag  TYPE zfi_paym_file-sent,   "Sent to bank
+         sent_flag  TYPE zfi_paym_file-sent,   "Sent to bank (ZFI_PAYM_FILE-SENT)
+         sent_err   TYPE zfi_paym_file-sent_error, "Send failed
+         recv_flag  TYPE c LENGTH 1,    "Received back from bank (ZFI_BCM_PAYORDR-ZSTATUS)
          crusr      TYPE regut-tsusr,   "Created by (TemSe user)
          crdate     TYPE regut-tsdat,
          crtime     TYPE regut-tstim,
@@ -73,6 +75,8 @@ DATA: gt_regut  TYPE STANDARD TABLE OF regut,
       gt_reguhm TYPE STANDARD TABLE OF reguhm,        "FBPM1 medium/batch link
       gt_reguh  TYPE STANDARD TABLE OF reguh,         "F110 payment header (amount)
       gt_sign   TYPE STANDARD TABLE OF zfi_batch_sign,
+      gt_paym   TYPE STANDARD TABLE OF zfi_paym_file,  "File send state (SENT)
+      gt_payordr TYPE STANDARD TABLE OF zfi_bcm_payordr,"Per-payment bank response (ZSTATUS)
       gt_rule   TYPE STANDARD TABLE OF zfi_bnk_rule,  "Approver config
       gt_mon    TYPE STANDARD TABLE OF ty_mon.
 
@@ -113,7 +117,8 @@ START-OF-SELECTION.
 *&      Form  F_GET_DATA
 *&---------------------------------------------------------------------*
 FORM f_get_data .
-  REFRESH: gt_reguhm, gt_reguh, gt_regut, gt_sign, gt_rule.
+  REFRESH: gt_reguhm, gt_reguh, gt_regut, gt_sign, gt_paym,
+           gt_payordr, gt_rule.
 
 * -- Step 1 (per FS): start from REGUHM - the payment medium header
 *    created after the F110 run. Selection is on the F110 run.
@@ -180,8 +185,29 @@ FORM f_get_data .
       WHERE batch_no = lt_keys-table_line.
   ENDIF.
 
-* (Sent-to-bank status is taken from REGUT-STATUS in F_BUILD_OUTPUT; the
-*  file-level ZFI_PAYM_FILE-SENT flag is no longer read here.)
+* -- Step 6: SENT state - ZFI_PAYM_FILE (one row per payment-medium run,
+*    keyed by LAUFD/LAUFI = REGUHM-LAUFD_M/LAUFI_M). This is the same
+*    Z-table and SENT flag that the operational program ZFI_BNK_APP1 sets
+*    when the signed file is transmitted to the bank. (REGUT-STATUS is NOT
+*    used: the custom send/return interfaces never update it, so it stays
+*    'Created' regardless of the real transfer state.)
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym
+    FOR ALL ENTRIES IN gt_reguhm
+    WHERE laufd = gt_reguhm-laufd_m
+      AND laufi = gt_reguhm-laufi_m.
+
+* -- Step 7: RECEIVED state - per-payment bank response in ZFI_BCM_PAYORDR
+*    (ZSTATUS 002 = success, 005 = rejected). This is the Z-table the
+*    inbound SBI return-file interface updates per payment order (matched
+*    by PYORD), so it is the reliable "received back from bank" signal -
+*    the same source the payment report ZFI_BCM_APP_PAYREP uses.
+  SELECT * FROM zfi_bcm_payordr INTO TABLE gt_payordr
+    FOR ALL ENTRIES IN gt_reguhm
+    WHERE laufd = gt_reguhm-laufd
+      AND laufi = gt_reguhm-laufi
+      AND zbukr = gt_reguhm-zbukr
+      AND lifnr = gt_reguhm-lifnr
+      AND kunnr = gt_reguhm-kunnr.
 ENDFORM.                    " F_GET_DATA
 
 *&---------------------------------------------------------------------*
@@ -193,11 +219,15 @@ FORM f_build_output .
         ls_reg     TYPE regut,
         ls_rule    TYPE zfi_bnk_rule,
         ls_sign    TYPE zfi_batch_sign,
+        ls_paym    TYPE zfi_paym_file,
+        ls_po      TYPE zfi_bcm_payordr,
         ls_mon     TYPE ty_mon,
         lv_bkey    TYPE zfi_batch_sign-batch_no,
         lv_snro    TYPE zfi_batch_sign-snro,
         lt_bkeys   TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
         lv_nbatch  TYPE i,
+        lv_po_tot  TYPE i,
+        lv_po_resp TYPE i,
         lv_signed  TYPE abap_bool.
 
   SORT gt_sign BY batch_no signer snro.
@@ -330,20 +360,49 @@ FORM f_build_output .
       ENDIF.
     ENDLOOP.
 
-*   -- Sent to bank: derive ONLY from the actual REGUT file transfer
-*      status (010 Sent / 020 Acknowledged / 040 Transfer Confirmed).
-*      Do NOT use ZFI_PAYM_FILE-SENT here: it is a file-level flag (one
-*      row per medium run), so it marked EVERY payment of the run - even
-*      unapproved ones - as "Sent to Bank". REGUT status is per batch and
-*      reflects the real transfer state (e.g. still 'Created' = not sent).
-    IF ls_mon-regut_stat = '010' OR ls_mon-regut_stat = '020'
-                                  OR ls_mon-regut_stat = '040'.
-      ls_mon-sent_flag = 'X'.
+*   -- SENT to bank: from ZFI_PAYM_FILE-SENT for this record's medium run
+*      (LAUFD_M/LAUFI_M). Same Z-table/flag the operational program
+*      ZFI_BNK_APP1 sets when the signed file is transmitted. SENT_ERROR
+*      marks a transmission failure.
+    CLEAR ls_paym.
+    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_hm-laufd_m
+                                             laufi = ls_hm-laufi_m.
+    IF sy-subrc = 0.
+      ls_mon-sent_flag = ls_paym-sent.
+      ls_mon-sent_err  = ls_paym-sent_error.
     ENDIF.
 
-*   -- Overall status
-    IF ls_mon-sent_flag = 'X'.
-      ls_mon-status = 'Sent to Bank'.
+*   -- RECEIVED back from bank: per-payment bank response in
+*      ZFI_BCM_PAYORDR-ZSTATUS (002 success / 005 rejected). This is the
+*      Z-table the inbound return-file interface updates per PYORD, and is
+*      the reliable "received" signal (the file-level ZFI_PAYM_FILE-RECEIVED
+*      flag can be missed by the inbound run-id match). The record counts
+*      as received back only when every matched payment order has a bank
+*      response, i.e. none is still '001' (Created).
+    CLEAR: lv_po_tot, lv_po_resp.
+    LOOP AT gt_payordr INTO ls_po WHERE laufd = ls_hm-laufd
+                                    AND laufi = ls_hm-laufi
+                                    AND zbukr = ls_hm-zbukr
+                                    AND lifnr = ls_hm-lifnr
+                                    AND kunnr = ls_hm-kunnr.
+      lv_po_tot = lv_po_tot + 1.
+      IF ls_po-zstatus = '002' OR ls_po-zstatus = '005'.
+        lv_po_resp = lv_po_resp + 1.
+      ENDIF.
+    ENDLOOP.
+    IF lv_po_tot > 0 AND lv_po_resp = lv_po_tot.
+      ls_mon-recv_flag = 'X'.
+    ENDIF.
+
+*   -- Overall status (lifecycle: Received > Sent > Approval)
+    IF ls_mon-recv_flag = 'X'.
+      ls_mon-status = 'Received from Bank'.
+    ELSEIF ls_mon-sent_flag = 'X'.
+      IF ls_mon-sent_err = 'X'.
+        ls_mon-status = 'Sent (Error)'.
+      ELSE.
+        ls_mon-status = 'Sent to Bank'.
+      ENDIF.
     ELSEIF ls_mon-l1_total = 0 AND ls_mon-l2_total = 0.
       ls_mon-status = 'No Approvers'.
     ELSEIF ls_mon-l1_total > 0 AND ls_mon-l1_signed < ls_mon-l1_total.
@@ -354,9 +413,10 @@ FORM f_build_output .
       ls_mon-status = 'Approved'.
     ENDIF.
 
-*   -- Optional filter: only pending records
+*   -- Optional filter: only pending records (exclude fully-progressed)
     IF p_pend = abap_true AND
-     ( ls_mon-status = 'Approved' OR ls_mon-status = 'Sent to Bank' ).
+     ( ls_mon-status = 'Approved' OR ls_mon-status = 'Sent to Bank'
+       OR ls_mon-status = 'Received from Bank' ).
       CONTINUE.
     ENDIF.
 
@@ -428,13 +488,18 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'L2_TOTAL'   'L2 Tot'         'L2 Approvers'         'Level-2 Approvers'.
   PERFORM f_col_text USING lo_cols 'L2_SIGNED'  'L2 Sgn'         'L2 Signed'            'Level-2 Signed'.
   PERFORM f_col_text USING lo_cols 'L2_PENDING' 'L2 Pend'        'L2 Pending With'      'Level-2 Pending With'.
-  PERFORM f_col_text USING lo_cols 'STATUS'     'Status'         'Approval Status'      'Approval Status'.
-  PERFORM f_col_text USING lo_cols 'REGUT_TXT'  'File Stat'      'REGUT File Status'    'REGUT File Status (source of truth)'.
-  PERFORM f_col_text USING lo_cols 'SENT_FLAG'  'Sent'           'Sent to Bank'         'Sent to Bank'.
+  PERFORM f_col_text USING lo_cols 'STATUS'     'Status'         'Batch Status'         'Batch Status (approval / sent / received)'.
+  PERFORM f_col_text USING lo_cols 'SENT_FLAG'  'Sent'           'Sent to Bank'         'Sent to Bank (ZFI_PAYM_FILE)'.
+  PERFORM f_col_text USING lo_cols 'RECV_FLAG'  'Recd'           'Received'             'Received back from Bank (ZFI_BCM_PAYORDR)'.
   PERFORM f_col_text USING lo_cols 'CRUSR'      'Created By'     'Created By'           'Created By'.
 
-* Hide the raw REGUT status code (readable text shown via REGUT_TXT)
+* Hide the REGUT status columns: the custom send/return interfaces never
+* update REGUT-STATUS (it stays 'Created'), so it is not a reliable
+* lifecycle indicator. The STATUS column carries the real state instead.
   PERFORM f_col_hide USING lo_cols 'REGUT_STAT'.
+  PERFORM f_col_hide USING lo_cols 'REGUT_TXT'.
+* SENT_ERROR is reflected in STATUS ('Sent (Error)'); keep it off the grid.
+  PERFORM f_col_hide USING lo_cols 'SENT_ERR'.
 
 * Column order: identifiers + status first (always populated), then the
 * approval detail, then the batch / file columns (blank until the batch
@@ -445,14 +510,14 @@ FORM f_display_alv .
   PERFORM f_col_pos USING lo_cols 'VENDOR'      4.
   PERFORM f_col_pos USING lo_cols 'VBLNR'       5.
   PERFORM f_col_pos USING lo_cols 'STATUS'      6.
-  PERFORM f_col_pos USING lo_cols 'REGUT_TXT'   7.
-  PERFORM f_col_pos USING lo_cols 'L1_TOTAL'    8.
-  PERFORM f_col_pos USING lo_cols 'L1_SIGNED'   9.
-  PERFORM f_col_pos USING lo_cols 'L1_PENDING' 10.
-  PERFORM f_col_pos USING lo_cols 'L2_TOTAL'   11.
-  PERFORM f_col_pos USING lo_cols 'L2_SIGNED'  12.
-  PERFORM f_col_pos USING lo_cols 'L2_PENDING' 13.
-  PERFORM f_col_pos USING lo_cols 'SENT_FLAG'  14.
+  PERFORM f_col_pos USING lo_cols 'SENT_FLAG'   7.
+  PERFORM f_col_pos USING lo_cols 'RECV_FLAG'   8.
+  PERFORM f_col_pos USING lo_cols 'L1_TOTAL'    9.
+  PERFORM f_col_pos USING lo_cols 'L1_SIGNED'  10.
+  PERFORM f_col_pos USING lo_cols 'L1_PENDING' 11.
+  PERFORM f_col_pos USING lo_cols 'L2_TOTAL'   12.
+  PERFORM f_col_pos USING lo_cols 'L2_SIGNED'  13.
+  PERFORM f_col_pos USING lo_cols 'L2_PENDING' 14.
   PERFORM f_col_pos USING lo_cols 'LAUFD'      15.
   PERFORM f_col_pos USING lo_cols 'LAUFI'      16.
   PERFORM f_col_pos USING lo_cols 'BATCHNO'    17.
