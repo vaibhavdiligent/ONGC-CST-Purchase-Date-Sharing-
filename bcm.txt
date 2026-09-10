@@ -1,0 +1,12 @@
+﻿10.09.2026                                                                                                                                                                     Dynamic List Display                                                                                                                                                                                                                               1
+
+Vendor Processing
+
+Reporting Date:			10-09-2026
+Reporting Time:			14:44:47
+Reporting User:			SAP_ABAP
+			Status		 Description				 Count		 Amount:
+			001	 Created			         7			-2520706.60
+			002	 Successful				         1				-14000.00
+
+	APP Run Date	APP Run ID				Batch No		File Status			Medium Run Date		Medium Run ID	Vendor A/C	Name	Invoice Amount	Payment Method	Bank key	Bank A/c Number	Liability Doc.No.	Fiscal Year	Payment Order	PO Status	Description	Payment document No	Payment Date	PO Deletion Indicator	Reason for rejection	e-Cheque no	UTR Number	Bank receipt document	New Liability Doc (Paying CC)	New Liability Doc (Sending CC)
