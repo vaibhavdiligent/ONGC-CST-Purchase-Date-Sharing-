@@ -365,13 +365,20 @@ FORM f_build_output .
 *      (LAUFD_M/LAUFI_M). Same Z-table/flag the operational program
 *      ZFI_BNK_APP1 sets when the signed file is transmitted. SENT_ERROR
 *      marks a transmission failure.
-    CLEAR ls_paym.
-    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_hm-laufd_m
-                                             laufi = ls_hm-laufi_m.
-    IF sy-subrc = 0.
-      ls_mon-sent_flag = ls_paym-sent.
-      ls_mon-sent_err  = ls_paym-sent_error.
-    ENDIF.
+*      ZFI_PAYM_FILE is keyed per file (…/LFDNR), so a medium run can have
+*      several rows. Roll them up: the run counts as sent once ANY of its
+*      files has gone to the bank, and shows the error state if any file
+*      failed to transmit.
+    CLEAR: ls_paym, ls_mon-sent_flag, ls_mon-sent_err.
+    LOOP AT gt_paym INTO ls_paym WHERE laufd = ls_hm-laufd_m
+                                   AND laufi = ls_hm-laufi_m.
+      IF ls_paym-sent = 'X'.
+        ls_mon-sent_flag = 'X'.
+      ENDIF.
+      IF ls_paym-sent_error = 'X'.
+        ls_mon-sent_err = 'X'.
+      ENDIF.
+    ENDLOOP.
 
 *   -- RECEIVED back from bank: per-payment bank response in
 *      ZFI_BCM_PAYORDR-ZSTATUS (002 success / 005 rejected). This is the

@@ -113,7 +113,7 @@ START-OF-SELECTION.
       ENDIF.
     ENDIF.
 ** Batch data from REGUHM (batch no + medium run); send state from ZFI_PAYM_FILE
-    CLEAR : ls_reguhm, ls_paymf.
+    CLEAR : ls_reguhm, ls_paymf, lv_pf_sent, lv_pf_senterr.
     READ TABLE lt_reguhm INTO ls_reguhm WITH KEY laufd = ls_payordr-laufd
                                                  laufi = ls_payordr-laufi
                                                  zbukr = ls_payordr-zbukr
@@ -123,8 +123,18 @@ START-OF-SELECTION.
       MOVE ls_reguhm-batchno TO ls_final-batch_no.
       MOVE ls_reguhm-laufd_m TO ls_final-laufd_f.
       MOVE ls_reguhm-laufi_m TO ls_final-laufi_f.
-      READ TABLE lt_paymf INTO ls_paymf WITH KEY laufd = ls_reguhm-laufd_m
-                                                 laufi = ls_reguhm-laufi_m.
+*     ZFI_PAYM_FILE is keyed per file (…/LFDNR), so a medium run can have
+*     several rows. Roll up the send state: sent if ANY file went, error
+*     if ANY file failed to transmit.
+      LOOP AT lt_paymf INTO ls_paymf WHERE laufd = ls_reguhm-laufd_m
+                                       AND laufi = ls_reguhm-laufi_m.
+        IF ls_paymf-sent = 'X'.
+          lv_pf_sent = 'X'.
+        ENDIF.
+        IF ls_paymf-sent_error = 'X'.
+          lv_pf_senterr = 'X'.
+        ENDIF.
+      ENDLOOP.
     ENDIF.
 ** File status is PER PAYMENT, not per file: ZFI_PAYM_FILE-RECEIVED is a
 ** file-level flag (one row per medium run) and would wrongly show every
@@ -134,8 +144,8 @@ START-OF-SELECTION.
 ** send state (Sent / Not Sent).
     IF ls_payordr-zstatus = '002' OR ls_payordr-zstatus = '005'.
       ls_final-txt30 = 'Received'.
-    ELSEIF ls_paymf-sent = 'X'.
-      IF ls_paymf-sent_error = 'X'.
+    ELSEIF lv_pf_sent = 'X'.
+      IF lv_pf_senterr = 'X'.
         ls_final-txt30 = 'Sent (Error)'.
       ELSE.
         ls_final-txt30 = 'Sent'.

@@ -1,0 +1,161 @@
+  METHOD zii_siia_bank_return_file_rece~siia_bank_return_file_receiver.
+
+    DATA: it_zfi_bnk_input_f TYPE TABLE OF zfi_bnk_input_f.
+    DATA: lt_paym_file       TYPE TABLE OF zfi_paym_file.
+    DATA: ls_zfi_bnk_input_f TYPE zfi_bnk_input_f,
+          ls_paym_file       TYPE zfi_paym_file,
+          ls_ben_rcvf        TYPE zfiben_file_moni.
+    DATA: lv_year   TYPE char4,
+          lv_datum  TYPE sy-datum,
+          lv_date_m TYPE sy-datum,
+          lv_time_m TYPE sy-uzeit.
+
+
+    DATA: lt_data            TYPE TABLE OF zfi_s_bcm_binary_data,
+          ls_data            TYPE zfi_s_bcm_binary_data,
+          lt_bin_data        TYPE TABLE OF ssfbin,
+          ls_params          TYPE ssfparms,
+          lv_binary          TYPE xstring,
+          wa_zfi_bnk_input_f TYPE zfi_bnk_input_f.
+
+*** Copy date and time
+    lv_date_m = sy-datum.
+    lv_time_m = sy-uzeit.
+
+* Update table : Received File data from SBI
+    ls_zfi_bnk_input_f-crdate = lv_date_m.
+    ls_zfi_bnk_input_f-crtime = lv_time_m.
+    ls_zfi_bnk_input_f-return_file = input-mt_bank_return_file_receiver-return_file.
+    ls_zfi_bnk_input_f-status = input-mt_bank_return_file_receiver-status.
+    MODIFY zfi_bnk_input_f FROM ls_zfi_bnk_input_f.
+    COMMIT WORK AND WAIT.
+
+    APPEND ls_zfi_bnk_input_f TO it_zfi_bnk_input_f.
+    CLEAR: ls_zfi_bnk_input_f.
+    EXPORT  it_zfi_bnk_input_f = it_zfi_bnk_input_f TO MEMORY ID 'PRO'.
+
+    IF input-mt_bank_return_file_receiver-status+0(6) = 'TXN_CN' "BCM
+     OR input-mt_bank_return_file_receiver-status+0(6) = 'TXN_CT'
+      OR input-mt_bank_return_file_receiver-status+0(6) = 'TXN_CC'
+      OR input-mt_bank_return_file_receiver-status+0(6) = 'TXN_PR'.
+
+      lv_year = input-mt_bank_return_file_receiver-status+17(2).
+
+      CONCATENATE '20' lv_year INTO lv_year.
+      CONCATENATE lv_year  input-mt_bank_return_file_receiver-status+15(2)  input-mt_bank_return_file_receiver-status+13(2) INTO lv_datum.
+
+*   Update Global Table for Received data
+*   Per-file: a payment run can have several DME files (ZFI_PAYM_FILE now
+*   keyed MANDT/LAUFD/LAUFI/LFDNR). LAUFD/LAUFI alone no longer identifies
+*   a single file, so match the return to its row by the 6-digit TIME that
+*   is common to both names:
+*     return Status  -> time at +25(6)   (right after the 6-char LAUFI)
+*     stored FILE_NAME -> time is the last 6 characters
+*   NOTE(UAT): verify these offsets against a real return file; if the
+*   sent FILE_NAME carries a suffix after the time, adjust the tail read.
+      DATA: lv_rtime TYPE char6,
+            lv_off   TYPE i.
+      lv_rtime = input-mt_bank_return_file_receiver-status+25(6).
+
+      REFRESH lt_paym_file.
+      SELECT * FROM zfi_paym_file INTO TABLE lt_paym_file
+        WHERE laufd = lv_datum
+          AND laufi = input-mt_bank_return_file_receiver-status+19(6).
+
+      LOOP AT lt_paym_file INTO ls_paym_file.
+        CLEAR lv_off.
+        lv_off = strlen( ls_paym_file-file_name ) - 6.
+        IF lv_off < 0.
+          CONTINUE.
+        ENDIF.
+        IF ls_paym_file-file_name+lv_off(6) = lv_rtime.
+          ls_paym_file-received_filename  = input-mt_bank_return_file_receiver-status.
+          ls_paym_file-received           = 'X'.
+          ls_paym_file-received_date      = lv_date_m.
+          ls_paym_file-received_time      = lv_time_m.
+          ls_paym_file-file_data_received = input-mt_bank_return_file_receiver-return_file.
+          MODIFY zfi_paym_file FROM ls_paym_file.
+          COMMIT WORK.
+          EXIT.
+        ENDIF.
+        CLEAR ls_paym_file.
+      ENDLOOP.
+
+      CLEAR: ls_paym_file.
+
+    ELSEIF input-mt_bank_return_file_receiver-status+0(10) = 'COMPBENACK'. "BENEFICIARY RETURN FILE
+      DATA: lv_sentd TYPE char8,
+            lv_vmcd  TYPE char8,
+            lv_sentt TYPE sy-uzeit.
+      lv_sentd =  input-mt_bank_return_file_receiver-status+11(6).
+      CONCATENATE '20' lv_sentd+4(2) lv_sentd+2(2) lv_sentd+0(2) INTO lv_sentd.
+      IF input-mt_bank_return_file_receiver-status+18(8) = 'OVL30523'.
+        lv_vmcd  = input-mt_bank_return_file_receiver-status+26(8).
+        lv_sentt  = input-mt_bank_return_file_receiver-status+34(6).
+      ELSE.
+        lv_vmcd   = input-mt_bank_return_file_receiver-status+27(8).
+        lv_sentt  = input-mt_bank_return_file_receiver-status+35(6).
+      ENDIF.
+      SELECT SINGLE * FROM zfiben_file_moni INTO ls_ben_rcvf
+        WHERE vmc_apdate = lv_vmcd
+          AND sent_date  = lv_sentd
+          AND sent_time  = lv_sentt.   "input-return_file-status+35(6).
+      IF sy-subrc EQ 0.
+        ls_ben_rcvf-received_filename = input-mt_bank_return_file_receiver-status.
+        ls_ben_rcvf-received_flag     =   'X'.
+        ls_ben_rcvf-received_date     =  lv_date_m.
+        ls_ben_rcvf-received_time     =  lv_time_m.
+        ls_ben_rcvf-data_received     = input-mt_bank_return_file_receiver-return_file.
+        MODIFY zfiben_file_moni FROM ls_ben_rcvf.
+        COMMIT WORK.
+
+**********************
+*    ** Error logging when Date and time is not correct.
+      ELSE.
+        REFRESH : lt_data,lt_bin_data.
+        CLEAR: ls_data,ls_params.
+        ls_data-data = 'Dates and Time is not correct.!!'.
+        APPEND ls_data TO lt_data.
+
+*   Convert To Binary
+        CALL FUNCTION 'SCMS_TEXT_TO_BINARY'
+          IMPORTING
+            output_length = ls_params-indatalen
+          TABLES
+            text_tab      = lt_data
+            binary_tab    = lt_bin_data.
+
+*   Convert Binary data to Raw String
+        CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+          EXPORTING
+            input_length = ls_params-indatalen
+          IMPORTING
+            buffer       = lv_binary
+          TABLES
+            binary_tab   = lt_bin_data
+          EXCEPTIONS
+            failed       = 1
+            OTHERS       = 2.
+
+        CLEAR : wa_zfi_bnk_input_f.
+        wa_zfi_bnk_input_f-crdate        = lv_date_m.
+        wa_zfi_bnk_input_f-crtime        = lv_time_m.
+        wa_zfi_bnk_input_f-return_file   = input-mt_bank_return_file_receiver-return_file.
+        wa_zfi_bnk_input_f-status        = input-mt_bank_return_file_receiver-status.
+        wa_zfi_bnk_input_f-prog_name     = 'ZFI_BNK_BEN_RET_DT_TM'.
+        wa_zfi_bnk_input_f-error_log     = lv_binary.
+        wa_zfi_bnk_input_f-error_log_len = ls_params-indatalen.
+
+        MODIFY zfi_bnk_input_f FROM wa_zfi_bnk_input_f.
+        COMMIT WORK AND WAIT.
+*      COMMIT WORK .
+        EXIT.
+      ENDIF.
+**************************
+
+      CLEAR ls_ben_rcvf.
+    ENDIF.
+
+    SUBMIT zfi_r_bcm_incoming AND RETURN.
+
+  ENDMETHOD.

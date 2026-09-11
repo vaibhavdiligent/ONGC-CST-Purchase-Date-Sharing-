@@ -93,6 +93,8 @@ DATA : lt_reguhm         TYPE STANDARD TABLE OF reguhm.
 DATA : ls_reguhm         TYPE reguhm.
 DATA : lt_paymf          TYPE STANDARD TABLE OF zfi_paym_file.
 DATA : ls_paymf          TYPE zfi_paym_file.
+DATA : lv_pf_sent        TYPE c LENGTH 1.   "run-level rollup: any file sent
+DATA : lv_pf_senterr     TYPE c LENGTH 1.   "run-level rollup: any file send error
 DATA : lt_dd07v          TYPE STANDARD TABLE OF dd07v.
 DATA : ls_dd07v          TYPE dd07v.
 *&---------------------------------------------------------------------*
