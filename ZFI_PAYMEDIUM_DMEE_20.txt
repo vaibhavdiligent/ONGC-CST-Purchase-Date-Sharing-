@@ -105,7 +105,12 @@ SELECT * FROM ZFI_PATH INTO WA_ZFI_PATH UP TO 1 ROWS WHERE SYSID = SYST-SYSID
 
     if sy-subrc = 0.
 * Begin of <RD1K973468>
-      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi g_time into g_filename.
+*     Insert the 'B' marker between the payment run id (LAUFI) and the
+*     time, so the outgoing file name matches the format SBI expects in
+*     Production:  <TXN>.<send date>.<corp><run date><LAUFI>B<time>.txt
+*     The inbound return-file interface also relies on this 'B' at the
+*     fixed offset (after the 5-char run id) to parse the run id / time.
+      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi 'B' g_time into g_filename.
 * End of <RD1K976705> on 21062011
       concatenate wa_zfi_path-fsnam g_filename '.txt' into g_filename.
 *     concatenate wa_zfi_path-fsnam g_filename  into g_filename.
@@ -117,84 +122,6 @@ SELECT * FROM ZFI_PATH INTO WA_ZFI_PATH UP TO 1 ROWS WHERE SYSID = SYST-SYSID
     C_FILENAME = g_filename.  "'SPAN'.
 
   endif.
-
-* ---------------------------------------------------------------------*
-* BCM signature mapping - create approver entries in ZFI_BATCH_SIGN
-*   - BATCH_NO = concatenated REGUT key (must match ZFI_BNK_APP1 logic):
-*       ZBUKR(4) BANKS(3) LAUFD(8) LAUFI(6) XVORL(1) DTKEY(16) LFDNR(3)
-*   - Approvers read from ZFI_BNK_RULE (ZRULE_ID = paying company code):
-*       Rule 90700005 -> SNRO 1 signers
-*       Rule 90700006 -> SNRO 2 signers
-* ---------------------------------------------------------------------*
-  DATA: lv_batch_no TYPE zfi_batch_sign-batch_no,
-        l_bukrs     TYPE bukrs,        "ZBUKR  - 4
-        l_banks     TYPE banks,        "BANKS  - 3
-        l_laufd     TYPE laufd,        "LAUFD  - 8
-        l_laufi     TYPE laufi,        "LAUFI  - 6
-        l_xvorl     TYPE xvorl,        "XVORL  - 1
-        l_dtkey     TYPE dtkey_d,      "DTKEY  - 16
-        l_lfdnr     TYPE lfdnu,        "LFDNR  - 3
-        ls_sign     TYPE zfi_batch_sign,
-        lt_rule     TYPE STANDARD TABLE OF zfi_bnk_rule,
-        ls_rule     TYPE zfi_bnk_rule.
-
-* ---- REGUT key parts (local variables, lengths match REGUT) ---------
-* Sources from the payment header:
-  l_bukrs = i_fpayh-zbukr.
-  l_laufd = i_fpayh-laufd.
-  l_laufi = i_fpayh-laufi.
-  l_xvorl = i_fpayh-xvorl.
-  l_banks = i_fpayh-zland.    "Bank Country/Region Key -> REGUT-BANKS
-  l_dtkey = i_fpayh-hbkid.    "House bank            -> REGUT-DTKEY (e.g. HB_01)
-
-* LFDNR: next sequence number for this key.  NOTE: the REGUT row for the
-* current file is usually not yet written when this format module runs,
-* so MAX(LFDNR)+1 predicts the number the framework will assign. Verify
-* this matches the actual REGUT-LFDNR (else the key will not match).
-  SELECT MAX( lfdnr ) INTO l_lfdnr FROM regut
-    WHERE zbukr = l_bukrs
-      AND banks = l_banks
-      AND laufd = l_laufd
-      AND laufi = l_laufi
-      AND xvorl = l_xvorl
-      AND dtkey = l_dtkey.
-  l_lfdnr = l_lfdnr + 1.
-
-  CLEAR lv_batch_no.
-  CONCATENATE l_bukrs l_banks l_laufd l_laufi
-              l_xvorl l_dtkey l_lfdnr
-         INTO lv_batch_no RESPECTING BLANKS.
-
-* ---- SNRO 1 approvers : Rule 90700005 -------------------------------
-  CLEAR lt_rule.
-  SELECT * FROM zfi_bnk_rule INTO TABLE lt_rule
-    WHERE zrule    = '90700005'
-    AND   zrule_id = i_fpayh-zbukr.
-  LOOP AT lt_rule INTO ls_rule.
-    CLEAR ls_sign.
-    ls_sign-batch_no = lv_batch_no.
-    ls_sign-signer   = ls_rule-zuser.
-    ls_sign-snro     = '1'.
-    ls_sign-cdate    = sy-datum.
-    ls_sign-ctime    = sy-uzeit.
-    MODIFY zfi_batch_sign FROM ls_sign.
-  ENDLOOP.
-
-* ---- SNRO 2 approvers : Rule 90700006 -------------------------------
-  CLEAR lt_rule.
-  SELECT * FROM zfi_bnk_rule INTO TABLE lt_rule
-    WHERE zrule    = '90700006'
-    AND   zrule_id = i_fpayh-zbukr.
-  LOOP AT lt_rule INTO ls_rule.
-    CLEAR ls_sign.
-    ls_sign-batch_no = lv_batch_no.
-    ls_sign-signer   = ls_rule-zuser.
-    ls_sign-snro     = '2'.
-    ls_sign-cdate    = sy-datum.
-    ls_sign-ctime    = sy-uzeit.
-    MODIFY zfi_batch_sign FROM ls_sign.
-  ENDLOOP.
-* ---------------------------------------------------------------------*
 
 * -- simple file sheet
   IF lwa_dmee_head-filesheet = '1'.
