@@ -1,0 +1,91 @@
+*----------------------------------------------------------------------*
+***INCLUDE ZFI_BNK_APP_I01.
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_0100 INPUT.
+  DATA : lv_code type sy-ucomm.
+  lv_code = sy-ucomm.
+*BOC By SAP_ABAP on 27/08/26
+* Back (F3), Exit (Shift+F3) and Cancel (F12) had no branch in this CASE,
+* so they fell through it and screen 100 never left. Screen 100 also
+* carried no GUI status at all - MODULE STATUS_0100 still held the SE51
+* generator stub SET PF-STATUS 'xxxxxxxx' commented out - so the function
+* codes never reached PAI in the first place, and DOWNLOAD1/2/3 and
+* RESENT had no buttons either. Status ZPF_FI_BNK_APP is created in SE41
+* and set in MODULE STATUS_0100 (include ZFI_BNK_APP_OUTPUTO01).
+*
+* The ALV grid and its container are released before leaving. Without
+* this, LEAVE TO SCREEN 0 returns to the selection screen with C_CCONT
+* and C_ALVGD still bound to the destroyed screen; the PBO guard
+* IF c_ccont IS INITIAL then skips re-creation on the next execution and
+* SET_TABLE_FOR_FIRST_DISPLAY runs against a dead control.
+*
+* Old code:
+*  case lv_code.
+*    when 'E'.
+*      LEAVE to SCREEN 0.
+**      call TRANSACTION 'ZBNK_APP2'.
+*
+*  ENDCASE.
+  CASE lv_code.
+    WHEN 'BACK' OR 'CANC' OR 'EXIT' OR 'E'.
+
+      IF c_alvgd IS NOT INITIAL.
+        CALL METHOD c_alvgd->free
+          EXCEPTIONS
+            cntl_error        = 1
+            cntl_system_error = 2
+            OTHERS            = 3.
+        CLEAR c_alvgd.
+      ENDIF.
+
+      IF c_ccont IS NOT INITIAL.
+        CALL METHOD c_ccont->free
+          EXCEPTIONS
+            cntl_error        = 1
+            cntl_system_error = 2
+            OTHERS            = 3.
+        CLEAR c_ccont.
+      ENDIF.
+
+      CALL METHOD cl_gui_cfw=>flush
+        EXCEPTIONS
+          cntl_system_error = 1
+          cntl_error        = 2
+          OTHERS            = 3.
+
+*     Shift+F3 ends the transaction; F3 and F12 fall back to the
+*     selection screen so the user can re-run with other dates.
+      IF lv_code = 'EXIT'.
+        LEAVE PROGRAM.
+      ELSE.
+        LEAVE TO SCREEN 0.
+      ENDIF.
+
+  ENDCASE.
+*EOC By SAP_ABAP on 27/08/26
+
+ENDMODULE.                 " USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  GET_SELECTED_ROW  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE get_selected_row INPUT.
+  DATA : lv_code1 TYPE sy-ucomm.
+  lv_code1 = sy-ucomm.
+  IF lv_code1 = 'DOWNLOAD1'.
+    PERFORM download_sent_data.
+  ELSEIF lv_code1 =  'DOWNLOAD2'.
+    PERFORM download_raw_data.
+  ELSEIF lv_code1 =  'DOWNLOAD3'.
+    PERFORM download_rec_data.
+  ELSEIF lv_code1 = 'RESENT'.
+    PERFORM f_resent.
+  ENDIF.
+
+ENDMODULE.                 " GET_SELECTED_ROW  INPUT
