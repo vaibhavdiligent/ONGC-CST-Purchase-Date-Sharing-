@@ -116,18 +116,47 @@ Result: each grid line resends/downloads **its own** file, not the run's single 
 
 ---
 
-## Item 7 — Inbound return-file interface (`ZII_SIIA_BANK_RETURN_FILE_RE`)
-With several files per run, `LAUFD/LAUFI` alone can't pick the right row on the
-return. Match by the **full file name**, which is unique per file:
+## Item 7 — Inbound return-file interface (`ZII_SIIA_BANK_RETURN_FILE_RE`)  *(lowest priority — do last, with the live proxy)*
+Today it sets `RECEIVED` on **one** row:
 ```abap
 SELECT SINGLE * FROM zfi_paym_file INTO ls_paym_file
    WHERE laufd = lv_datum
-     AND laufi = <status+19(6)>
-     AND file_name = <returned file name from the Status/return payload>.
+     AND laufi = input-...-status+19(6).
 ```
-(The returned `Status` echoes the sent file name; strip to the same form stored in
-`FILE_NAME`.) Set `RECEIVED` on that specific row. Per-payment `ZFI_BCM_PAYORDR`
-posting via `ZFI_BCMFM_SBIFILE` is by `PYORD` and is unaffected.
+With several rows per run this now hits an arbitrary row. **Do not match on
+`file_name = Status`** — the bank echoes a *transformed* name
+(`TXN_CT_<corp><laufd><laufi>B<time>_<procdate>`), not the sent `FILE_NAME`
+(`CT.<sdate>.<corp><laufd><laufi><time>`). The reliable per-file discriminator
+common to both is the **6-digit time** (`sy-uzeit` at generation):
+- Return `Status`: time is at **`+25(6)`** (right after the `B`).
+- Stored `FILE_NAME`: time is the **last 6 characters** (no suffix today).
+
+So loop the run's rows and match on the time:
+```abap
+DATA lv_rtime TYPE t.
+DATA lv_off   TYPE i.
+lv_rtime = input-...-status+25(6).            "time from the return file name
+SELECT * FROM zfi_paym_file INTO TABLE lt_pf
+   WHERE laufd = lv_datum AND laufi = <laufi>. "all files of the run
+LOOP AT lt_pf INTO ls_paym_file.
+  lv_off = strlen( ls_paym_file-file_name ) - 6.
+  IF ls_paym_file-file_name+lv_off(6) = lv_rtime.
+    ls_paym_file-received          = 'X'.
+    ls_paym_file-received_date     = lv_date_m.
+    ls_paym_file-received_time     = lv_time_m.
+    ls_paym_file-received_filename = input-...-status.
+    ls_paym_file-file_data_received = input-...-return_file.
+    MODIFY zfi_paym_file FROM ls_paym_file.
+    COMMIT WORK.
+    EXIT.
+  ENDIF.
+ENDLOOP.
+```
+**Impact is low:** the reports (`ZFI_BNK_APRV_MON`, `ZFI_BCM_APP_PAYREP`) take
+"Received" from **`ZFI_BCM_PAYORDR-ZSTATUS`** (matched per `PYORD` via
+`ZFI_BCMFM_SBIFILE`, unaffected). This file-level flag only drives `ZFI_BNK_APP`'s
+`Rec.` column and Download-Received button. **UAT:** confirm the time offsets
+(`+25(6)` in the Status; last 6 of `FILE_NAME`) against a real return file.
 
 ---
 
