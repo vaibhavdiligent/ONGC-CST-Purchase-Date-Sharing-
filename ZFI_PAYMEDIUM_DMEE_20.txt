@@ -79,13 +79,7 @@ FUNCTION zfi_paymedium_dmee_20.
                                                      and hbkid = i_fpayh-hbkid.
     if sy-subrc = 0.
 * Begin of <RD1K973468>
-*     File name must match the format SBI expects in Production:
-*       <TXN>.<send date>.<corp><run date><LAUFI>B<time>_<rzawe>.txt
-*     'B' marker sits between the run id (LAUFI) and the time - the inbound
-*     return-file interface parses the run id / time by the fixed offset
-*     around this 'B'. The payment method (RZAWE) is appended AFTER the
-*     time so it never shifts the corp/run-date/run-id/B/time offsets.
-      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi 'B' g_time '_' i_fpayh-rzawe into g_filename.
+      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi g_time into g_filename.
 * End of <RD1K976705> on 21062011
       concatenate wa_zfi_path-fsnam g_filename '.txt' into g_filename.
 *     concatenate wa_zfi_path-fsnam g_filename  into g_filename.
