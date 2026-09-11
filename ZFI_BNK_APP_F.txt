@@ -81,7 +81,8 @@ FORM f_prepare_op_tab .
       gs_final-chdate     = gs_batch_header-dwdat.
       gs_final-chtime     = gs_batch_header-dwtim.
       READ TABLE gt_paym INTO gs_paym WITH KEY laufd = gs_batch_header-laufd
-                                               laufi = gs_batch_header-laufi.
+                                               laufi = gs_batch_header-laufi
+                                               lfdnr = gs_batch_header-lfdnr.
       IF sy-subrc = 0.
         gs_final-raw_data           = gs_paym-raw_data.
         gs_final-file_data_sent     = gs_paym-file_data_sent.
@@ -387,7 +388,8 @@ FORM download_sent_data .
         ELSE.
           CLEAR gs_paym.
           READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
-                                                   laufd = gs_final-laufd.
+                                                   laufd = gs_final-laufd
+                                                   lfdnr = gs_final-lfdnr.
           IF sy-subrc EQ 0.
             CLEAR file_name.
             file_name = gs_paym-file_name.
@@ -500,7 +502,8 @@ FORM download_raw_data .
       IF sy-subrc = 0.
         CLEAR gs_paym.
         READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
-                                                 laufd = gs_final-laufd.
+                                                 laufd = gs_final-laufd
+                                                 lfdnr = gs_final-lfdnr.
         IF sy-subrc EQ 0.
           CLEAR file_name.
           CONCATENATE 'R' gs_paym-file_name INTO file_name.
@@ -622,7 +625,8 @@ FORM download_rec_data .
         ELSE.
           CLEAR gs_paym.
           READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
-                                                   laufd = gs_final-laufd.
+                                                   laufd = gs_final-laufd
+                                                   lfdnr = gs_final-lfdnr.
           IF sy-subrc EQ 0.
             CLEAR file_name.
             file_name = gs_paym-received_filename .
@@ -744,7 +748,8 @@ FORM f_resent .
 
         CLEAR gs_paym.
         READ TABLE gt_paym INTO gs_paym WITH KEY laufi = gs_final-laufi
-                                                 laufd = gs_final-laufd.
+                                                 laufd = gs_final-laufd
+                                                 lfdnr = gs_final-lfdnr.
         IF sy-subrc = 0.
           IF gs_paym-sent <> 'X'.
             MESSAGE 'Can not be resent' TYPE 'I'.
