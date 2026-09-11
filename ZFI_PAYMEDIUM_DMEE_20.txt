@@ -107,10 +107,13 @@ SELECT * FROM ZFI_PATH INTO WA_ZFI_PATH UP TO 1 ROWS WHERE SYSID = SYST-SYSID
 * Begin of <RD1K973468>
 *     Insert the 'B' marker between the payment run id (LAUFI) and the
 *     time, so the outgoing file name matches the format SBI expects in
-*     Production:  <TXN>.<send date>.<corp><run date><LAUFI>B<time>.txt
+*     Production:  <TXN>.<send date>.<corp><run date><LAUFI>B<time>_<rzawe>.txt
 *     The inbound return-file interface also relies on this 'B' at the
 *     fixed offset (after the 5-char run id) to parse the run id / time.
-      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi 'B' g_time into g_filename.
+*     The payment method (RZAWE) is appended at the end (after the time)
+*     so it does not shift the corp/run-date/run-id/B/time offsets the
+*     inbound parser depends on.
+      concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi 'B' g_time '_' i_fpayh-rzawe into g_filename.
 * End of <RD1K976705> on 21062011
       concatenate wa_zfi_path-fsnam g_filename '.txt' into g_filename.
 *     concatenate wa_zfi_path-fsnam g_filename  into g_filename.
