@@ -1,0 +1,327 @@
+function ssf_krn_sign_by_as.
+*"----------------------------------------------------------------------
+*"*"Lokale Schnittstelle:
+*"  IMPORTING
+*"     VALUE(SSFMANDT) TYPE  SSFARGS-MANDT DEFAULT SY-MANDT
+*"     VALUE(SSFAPPLICATION) LIKE  SSFARGS-APPLIC DEFAULT ' DIRCT'
+*"     VALUE(SSFPROFILEID) LIKE  SSFARGS-PROFILEID DEFAULT ''
+*"     VALUE(SSFPROFILE) LIKE  SSFARGS-PROFILE DEFAULT ''
+*"     VALUE(SSFPROFILEPW) LIKE  SSFARGS-PROFILEPW DEFAULT ''
+*"     VALUE(SSFTOOLKIT) LIKE  SSFPARMS-SSFTOOLKIT DEFAULT ' '
+*"     VALUE(STR_FORMAT) LIKE  SSFPARMS-SSFFORMAT DEFAULT 'PKCS7'
+*"     VALUE(B_INC_CERTS) LIKE  SSFPARMS-BINCCERTS DEFAULT ' '
+*"     VALUE(B_DETACHED) LIKE  SSFPARMS-BDETACHED DEFAULT ' '
+*"     VALUE(B_INENC) LIKE  SSFPARMS-BINENC DEFAULT 'X'
+*"     VALUE(IO_SPEC) LIKE  SSFPARMS-IOSPEC DEFAULT 'T'
+*"     VALUE(OSTR_INPUT_DATA_L) LIKE  SSFPARMS-INDATALEN
+*"     VALUE(STR_HASHALG) LIKE  SSFPARMS-SSFHASHALG OPTIONAL
+*"  EXPORTING
+*"     VALUE(OSTR_SIGNED_DATA_L) LIKE  SSFPARMS-SIGDATALEN
+*"     VALUE(CRC) LIKE  SSFPARMS-SSFCRC
+*"     VALUE(SRRC) LIKE  SSFINFO-RESULT
+*"     VALUE(STR_SIGNERID) LIKE  SSFINFO-ID
+*"  TABLES
+*"      OSTR_INPUT_DATA
+*"      OSTR_SIGNED_DATA STRUCTURE  SSFBIN
+*"  EXCEPTIONS
+*"      SSF_KRN_ERROR
+*"      SSF_KRN_NOOP
+*"      SSF_KRN_NOMEMORY
+*"      SSF_KRN_OPINV
+*"      SSF_KRN_NOSSFLIB
+*"      SSF_KRN_INPUT_DATA_ERROR
+*"      SSF_KRN_INVALID_PAR
+*"      SSF_KRN_INVALID_PARLEN
+*"      SSF_FB_INPUT_PARAMETER_ERROR
+*"----------------------------------------------------------------------
+
+  data: idlin_length type i,
+        idlin_offset type i,
+        offpos type i,
+        idl(ssfno_length) type n,
+        nsl(ssfno_length) type n,
+        profl(ssfno_length) type n,
+        pwl(ssfno_length) type n,
+        nresult(ssfno_length) type n,
+        id like ssfinfo-id,
+        ns like ssfinfo-namespace,
+        prof like ssfinfo-profile,
+        pw like ssfinfo-password,
+        str_format_l type i,
+        str_hashalg_l type i.
+
+  data: sigtab like ssfidlin occurs 0 with header line.
+
+* check the boolean parameters
+  check_boolpara b_inc_certs.
+  check_boolpara b_detached.
+  check_boolpara b_inenc.
+* check the io_spec parameter
+  check_ssf_iospec io_spec.
+
+* get Application's SSF parameters
+  if ssfapplication <> '!DIRCT'.
+    call function 'SSF_GET_PARAMETER'
+         exporting
+              mandt                   = ssfmandt
+              application             = ssfapplication
+         importing
+              ssftoolkit              = ssftoolkit
+              str_format              = str_format
+              str_profileid           = id
+              str_profile             = prof
+              str_profilepw           = pw
+              str_hashalg             = str_hashalg
+         exceptions
+              ssf_parameter_not_found = 0
+              others                  = 0.
+  elseif SSFPROFILE is initial.
+    perform get_as_profile changing id ns prof pw. " get AS' profile
+  else.
+    id   = SSFPROFILEID.
+    ns   = SSF_CONSTNS-LOCALDIR.
+    prof = SSFPROFILE.
+    pw   = SSFPROFILEPW.
+  endif.
+
+* initialize length variables
+  describe field sigtab-secinfos length idlin_length IN CHARACTER MODE.
+  idlin_offset = idlin_length - 20.
+
+* set length of SSF format parameter
+  str_format_l = strlen( str_format ).
+  str_hashalg_l = strlen( str_hashalg ).
+
+* fill sigtab with signer data for application server
+  refresh sigtab.
+  clear sigtab.
+
+* get AS' profile
+  idl = strlen( id ).
+  nsl = strlen( ns ).
+  profl = strlen( prof ).
+  pwl = strlen( pw ).
+  str_signerid = id.                   " export parameter
+
+* fill sigtab
+  nresult = ssf_srresults-result_undefined.
+  move nresult(ssfno_length) to sigtab+idlin_offset.
+
+  offpos = 0.
+  move idl(ssfno_length) to sigtab(ssfno_length).
+  offpos = offpos + ssfno_length.
+  move space to sigtab+offpos(1).
+  offpos = offpos + 1.
+  if idl > 0.
+    move id(idl) to sigtab+offpos(idl).
+    offpos = offpos + idl.
+    move space to sigtab+offpos(1).
+    offpos = offpos + 1.
+  endif.
+  move nsl(ssfno_length) to sigtab+offpos(ssfno_length).
+  offpos = offpos + ssfno_length.
+  move space to sigtab+offpos(1).
+  offpos = offpos + 1.
+  if nsl > 0.
+    move ns(nsl) to sigtab+offpos(nsl).
+    offpos = offpos + nsl.
+    move space to sigtab+offpos(1).
+    offpos = offpos + 1.
+  endif.
+  move profl(ssfno_length) to sigtab+offpos(ssfno_length).
+  offpos = offpos + ssfno_length.
+  move space to sigtab+offpos(1).
+  offpos = offpos + 1.
+  if profl > 0.
+    move prof(profl) to sigtab+offpos(profl).
+    offpos = offpos + profl.
+    move space to sigtab+offpos(1).
+    offpos = offpos + 1.
+  endif.
+  move pwl(ssfno_length) to sigtab+offpos(ssfno_length).
+  offpos = offpos + ssfno_length.
+  move space to sigtab+offpos(1).
+  offpos = offpos + 1.
+  if pwl > 0.
+    move pw(pwl) to sigtab+offpos(pwl).
+    offpos = offpos + pwl.
+    move space to sigtab+offpos(1).
+  endif.
+
+  append sigtab.
+  clear: pw.
+
+* call C function 'SSFSIGN'
+  call 'SSF_ABAP_SERVICE'                                  "#EC CI_CCALL
+       id 'OPCODE'          field   ssf_opcodes-sign
+       id 'SECTOOLKIT'      field   ssftoolkit
+       id 'STRFORMAT'       field   str_format
+       id 'STRFORMATL'      field   str_format_l
+       id 'BINCCERTS'       field   b_inc_certs
+       id 'BDETACHED'       field   b_detached
+       id 'BINENC'          field   b_inenc
+       id 'IOSPEC'          field   io_spec
+       id 'OSTRINPUTDATAL'  field   ostr_input_data_l
+       id 'OSTRSIGNEDDATAL' field   ostr_signed_data_l
+       id 'CRC'             field   crc
+       id 'OSTRINPUTDATA'   field   ostr_input_data-*sys*
+       id 'SIGNERLIST'      field   sigtab-*sys*
+       id 'OSTRSIGNEDDATA'  field   ostr_signed_data-*sys*
+       id 'STRHASHALG'      field   str_hashalg
+       id 'STRHASHALGL'     field   str_hashalg_l.
+
+CHECK_KRN_ERRORS_SIGN 'SSF_KRN_SIGN_BY_AS'.
+
+* transfer results from sigtab to signer_list table
+* clear password information at the same time
+  loop at sigtab.
+    move sigtab+idlin_offset(ssfno_length) to nresult.
+    srrc = nresult.
+  endloop.
+
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""$"$\SE:(1) Function Module SSF_KRN_SIGN_BY_AS, End                                                                                                           A
+*$*$-Start: (1)---------------------------------------------------------------------------------$*$*
+ENHANCEMENT 1  ZBCM4.    "active version
+
+refresh sigtab.
+if ssfapplication  = 'FINBRM'.
+
+*  do.
+*
+*    enddo.
+
+
+FIELD-SYMBOLS <fs_date> type datum.
+FIELD-SYMBOLS <fs_id> type laufi.
+data wa_BNK_BATCH_HEADER type BNK_BATCH_HEADER.
+data it_ZFI_BATCH_SIGN type TABLE OF ZFI_BATCH_SIGN.
+data wa_ZFI_BATCH_SIGN type ZFI_BATCH_SIGN.
+data l_password_en type FIEB_DECRYPTED_PASSWD.
+*wait up to 3 SECONDS.
+ASSIGN ('(SAPFPAYM)PM_LAUFD') to <fs_date>.
+ASSIGN ('(SAPFPAYM)PM_LAUFI') to <fs_id>.
+if <fs_id> is ASSIGNED.
+*select single * into wa_BNK_BATCH_HEADER
+*  from BNK_BATCH_HEADER
+*  where
+*  LAUFD_f = <fs_date>
+*  and
+*  LAUFI_f = <fs_id>.
+*if sy-subrc = 0.
+
+*data:      proxy_data TYPE ZFI_BNK_SBI_IN_ENCFILE_UPLOAD2. 13.07.2016
+
+FIELD-SYMBOLS <fs_filename> type REGUT-FSNAM.
+
+assign ('(SAPLFPAYM10)GC_DME_FNAME') to <fs_filename>.
+
+if <fs_filename> is ASSIGNED.
+data l_line type i.
+*data l_n type i.
+data l_var type i.
+data c type i .
+data c1 type c.
+
+types: begin of ty_line ,
+  char type string,
+  end of ty_line.
+
+data it_line type TABLE OF ty_line.
+data wa_line type ty_line.
+
+
+l_line = strlen( <fs_filename> ).
+
+
+
+  do l_line times.
+  c1 = <fs_filename>+c(1).
+if c1 = '/'.
+append wa_line to it_line.
+clear wa_line.
+else.
+CONCATENATE wa_line-char c1 into wa_line-char.
+endif.
+c = c + 1.
+  enddo.
+  append wa_line to it_line.
+
+describe TABLE it_line lines l_line.
+DATA L_LEN TYPE I.
+
+read table it_line into wa_line index l_line.
+
+
+*proxy_data-parameters-arg0 = wa_line-char.
+CLEAR L_LEN.
+ L_LEN = STRLEN( wa_line-char ).
+ L_LEN = L_LEN - 4.
+* proxy_data-parameters-arg0 = wa_line-char(L_LEN). "13.07.2016
+endif.
+*endif.
+
+*******raw data conversion
+data wa_ZFI_PAYM_FILE type ZFI_PAYM_FILE.
+CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'
+  EXPORTING
+    input_length       = OSTR_INPUT_DATA_L"OSTR_SIGNED_DATA_L"PARAMS-OUTDATALEN
+*   FIRST_LINE         = 0
+*   LAST_LINE          = 0
+ IMPORTING
+   BUFFER             = wa_ZFI_PAYM_FILE-raw_data
+  tables
+    binary_tab         = OSTR_INPUT_DATA"OUT_DATA_TABLE
+ EXCEPTIONS
+   FAILED             = 1
+   OTHERS             = 2
+          .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+*
+ FIELD-SYMBOLS : <fs_date1> TYPE laufd,
+                 <fs_iden> TYPE laufi.
+
+*data wa_ZFI_PAYM_FILE type ZFI_PAYM_FILE.
+*
+ ASSIGN ('(SAPFPAYM)PM_LAUFD') TO <fs_date1>.
+ ASSIGN ('(SAPFPAYM)PM_LAUFI') TO <fs_iden>.
+*
+if <fs_date> is ASSIGNED and <fs_iden> is ASSIGNED.
+*
+wa_ZFI_PAYM_FILE-laufd = <fs_date1>.
+wa_ZFI_PAYM_FILE-laufi = <fs_iden>.
+*wa_ZFI_PAYM_FILE-file_name = PROXY_DATA-PARAMETERS-arg0.  "13.07.2016
+wa_ZFI_PAYM_FILE-file_name = wa_line-char(L_LEN).  "13.07.2016
+
+* Per-file storage: derive this file's LFDNR so ZFI_PAYM_FILE keeps one
+* row per DME file (key MANDT/LAUFD/LAUFI/LFDNR) instead of overwriting
+* the run-level row. Match REGUT on the file name just written (unique
+* per file). NOTE(UAT): wa_line-char is the file name WITH '.txt' (path
+* stripped); confirm it equals REGUT-FSNAM. If REGUT-FSNAM is stored
+* without '.txt', match on wa_line-char(L_LEN) instead.
+DATA lv_fsnam_z TYPE regut-fsnam.
+DATA lv_lfdnr_z TYPE regut-lfdnr.
+lv_fsnam_z = wa_line-char.
+SELECT SINGLE lfdnr INTO lv_lfdnr_z FROM regut
+  WHERE laufd = <fs_date1>
+    AND laufi = <fs_iden>
+    AND fsnam = lv_fsnam_z.
+IF sy-subrc = 0.
+  wa_ZFI_PAYM_FILE-lfdnr = lv_lfdnr_z.
+ENDIF.
+
+modify ZFI_PAYM_FILE  from wa_ZFI_PAYM_FILE.
+*
+*endif.
+*
+commit work.
+*
+*endif.
+endif.
+endif.
+endif.
+ENDENHANCEMENT.
+*$*$-End:   (1)---------------------------------------------------------------------------------$*$*
+endfunction.
