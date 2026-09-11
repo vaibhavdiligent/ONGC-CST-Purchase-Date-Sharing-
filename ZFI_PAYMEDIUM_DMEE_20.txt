@@ -43,10 +43,7 @@ FUNCTION zfi_paymedium_dmee_20.
     EXPORTING
       i_tree_type = 'PAYM'
       i_tree_id   = i_fpayhx-formi
-" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 10.06.2026  for ATC
-*       item        = wa_item
-      item        = wa_item "#EC CI_FLDEXT_OK[2610650]
-" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 10.06.2026 for ATC
+      item        = wa_item
       uparam      = i_format_params
     TABLES
       file_output = t_file_output.
@@ -59,18 +56,7 @@ FUNCTION zfi_paymedium_dmee_20.
     AND   tree_id   = p_treeid
     AND   version   = '000'.           "active version
 
-
-* Quick Fix Replace this statement by a SELECT statement with ORDER BY
-* 08.06.2026 14:10:20 SAP_ABAP
-* Transport OCQK901318 SAP - ATC Correction 01.06.2026
-* Replaced Code:
-*  select single * from zfi_s2s_txn into wa_zfi_s2s_txn where rzawe = i_fpayh-rzawe.
-
-SELECT * FROM ZFI_S2S_TXN INTO WA_ZFI_S2S_TXN UP TO 1 ROWS WHERE RZAWE = I_FPAYH-RZAWE
- ORDER BY PRIMARY KEY .
- ENDSELECT.
-* End of Quick Fix
-
+  select single * from zfi_s2s_txn into wa_zfi_s2s_txn where rzawe = i_fpayh-rzawe.
   if sy-subrc = 0.
 
     g_ztxn = wa_zfi_s2s_txn-ztxn.
@@ -88,31 +74,17 @@ SELECT * FROM ZFI_S2S_TXN INTO WA_ZFI_S2S_TXN UP TO 1 ROWS WHERE RZAWE = I_FPAYH
 *
 *    endif.
 
-
-* Quick Fix Replace this statement by a SELECT statement with ORDER BY
-* 08.06.2026 14:10:20 SAP_ABAP
-* Transport OCQK901318 SAP - ATC Correction 01.06.2026
-* Replaced Code:
-*    select single * from zfi_path into wa_zfi_path where sysid = syst-sysid
-*                                                     and zbukr = i_fpayh-zbukr
-*                                                     and hbkid = i_fpayh-hbkid.
-
-SELECT * FROM ZFI_PATH INTO WA_ZFI_PATH UP TO 1 ROWS WHERE SYSID = SYST-SYSID
- AND ZBUKR = I_FPAYH-ZBUKR AND HBKID = I_FPAYH-HBKID
- ORDER BY PRIMARY KEY .
- ENDSELECT.
-* End of Quick Fix
-
+    select single * from zfi_path into wa_zfi_path where sysid = syst-sysid
+                                                     and zbukr = i_fpayh-zbukr
+                                                     and hbkid = i_fpayh-hbkid.
     if sy-subrc = 0.
 * Begin of <RD1K973468>
-*     Insert the 'B' marker between the payment run id (LAUFI) and the
-*     time, so the outgoing file name matches the format SBI expects in
-*     Production:  <TXN>.<send date>.<corp><run date><LAUFI>B<time>_<rzawe>.txt
-*     The inbound return-file interface also relies on this 'B' at the
-*     fixed offset (after the 5-char run id) to parse the run id / time.
-*     The payment method (RZAWE) is appended at the end (after the time)
-*     so it does not shift the corp/run-date/run-id/B/time offsets the
-*     inbound parser depends on.
+*     File name must match the format SBI expects in Production:
+*       <TXN>.<send date>.<corp><run date><LAUFI>B<time>_<rzawe>.txt
+*     'B' marker sits between the run id (LAUFI) and the time - the inbound
+*     return-file interface parses the run id / time by the fixed offset
+*     around this 'B'. The payment method (RZAWE) is appended AFTER the
+*     time so it never shifts the corp/run-date/run-id/B/time offsets.
       concatenate g_ztxn '.' g_sdate '.' wa_zfi_path-corpid g_date i_fpayh-laufi 'B' g_time '_' i_fpayh-rzawe into g_filename.
 * End of <RD1K976705> on 21062011
       concatenate wa_zfi_path-fsnam g_filename '.txt' into g_filename.
