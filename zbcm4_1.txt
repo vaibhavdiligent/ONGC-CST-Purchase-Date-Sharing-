@@ -295,7 +295,7 @@ wa_ZFI_PAYM_FILE-file_name = wa_line-char(L_LEN).  "13.07.2016
 * LAUFD / LAUFI : this enhancement runs INSIDE the payment-medium LUW,
 * BEFORE COMMIT WORK - so REGUT (written via update task) is not on the DB
 * yet, and the SAPFPAYM globals PM_LAUFD/PM_LAUFI come through BLANK here.
-* The run key is therefore handed over from the DMEE filename exit
+* The run key is handed over from the DMEE filename exit
 * (ZFI_PAYMEDIUM_DMEE_20), which has it reliably from I_FPAYH, via
 * EXPORT ... TO MEMORY ID 'ZBCM_LAUF'.
 DATA: lv_ilaufd TYPE laufd,
