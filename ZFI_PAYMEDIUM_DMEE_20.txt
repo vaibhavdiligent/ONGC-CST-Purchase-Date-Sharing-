@@ -90,6 +90,15 @@ FUNCTION zfi_paymedium_dmee_20.
 
     C_FILENAME = g_filename.  "'SPAN'.
 
+*   Hand the run key (LAUFD/LAUFI) to the ZFI_PAYM_FILE enhancement ZBCM4
+*   in the signing FM SSF_KRN_SIGN_BY_AS: there PM_LAUFD/PM_LAUFI are blank
+*   and REGUT is not yet committed, so it cannot get the run key itself.
+*   Here I_FPAYH carries it reliably. LAUFD/LAUFI are run-level (same for
+*   every file of the run), so a single memory slot is enough.
+    EXPORT laufd = i_fpayh-laufd
+           laufi = i_fpayh-laufi
+      TO MEMORY ID 'ZBCM_LAUF'.
+
   endif.
 
 *                                                                      *
@@ -121,14 +130,16 @@ FUNCTION zfi_paymedium_dmee_20.
   L_BANKS = i_fpayh-ZLAND.
   l_dtkey = i_fpayh-HBKID.
 *  l_lfdnr =
-  select max( LFDNR ) into l_LFDNR from REGUT
-    WHERE
-    ZBUKR = l_bukrs and
-BANKS = l_banks and
-LAUFD = l_laufd and
-LAUFI = l_laufi and
-XVORL = l_xvorl and
-DTKEY = l_dtkey.
+* LFDNR must match the value the ZFI_PAYM_FILE enhancement (ZBCM4) stores,
+* so the batch_no built here is found later. REGUT is not committed at this
+* point (payment-medium LUW, before COMMIT), so MAX(REGUT) would return a
+* stale value and every file would get LFDNR 1. Derive it the same way as
+* ZBCM4: MAX(LFDNR)+1 over the ZFI_PAYM_FILE rows already committed for
+* this run (prior files commit their row before the next file is signed).
+* NOTE(UAT): assumes files are processed in REGUT creation order.
+  select max( lfdnr ) into l_LFDNR from zfi_paym_file
+    WHERE laufd = l_laufd
+      AND laufi = l_laufi.
 
   l_LFDNR = l_LFDNR + 1.
 * >>> To be populated in the system (mapping to be done manually):

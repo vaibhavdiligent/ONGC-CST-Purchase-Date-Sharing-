@@ -292,30 +292,34 @@ if <fs_date> is ASSIGNED and <fs_iden> is ASSIGNED.
 *
 wa_ZFI_PAYM_FILE-file_name = wa_line-char(L_LEN).  "13.07.2016
 
-* LAUFD / LAUFI / LFDNR : the SAPFPAYM globals PM_LAUFD/PM_LAUFI are NOT
-* reliably populated in the signing context (PM_LAUFD came through BLANK,
-* which collapsed every file onto one empty key). Derive the full REGUT
-* key from the file just written, matched on its name (REGUT-FSNAM is
-* unique per file). This fixes the blank LAUFD, gives the per-file LFDNR,
-* and guarantees the ZFI_PAYM_FILE key byte-matches what ZFI_BNK_APP1 /
-* ZFI_BNK_APP build from REGUT.
-* NOTE(UAT): wa_line-char is the file name WITH '.txt' (path stripped);
-* confirm it equals REGUT-FSNAM. If REGUT-FSNAM is stored without '.txt'
-* (or is truncated), match on wa_line-char(L_LEN) or add LAUFI/LAUFD.
-DATA lv_fsnam_z TYPE regut-fsnam.
-DATA ls_regut_z TYPE regut.
-lv_fsnam_z = wa_line-char.
-SELECT SINGLE * FROM regut INTO ls_regut_z
-  WHERE fsnam = lv_fsnam_z.
-IF sy-subrc = 0.
-  wa_ZFI_PAYM_FILE-laufd = ls_regut_z-laufd.
-  wa_ZFI_PAYM_FILE-laufi = ls_regut_z-laufi.
-  wa_ZFI_PAYM_FILE-lfdnr = ls_regut_z-lfdnr.
-ELSE.
-* Fallback to the globals if the name match fails (keeps prior behaviour)
-  wa_ZFI_PAYM_FILE-laufd = <fs_date1>.
-  wa_ZFI_PAYM_FILE-laufi = <fs_iden>.
+* LAUFD / LAUFI : this enhancement runs INSIDE the payment-medium LUW,
+* BEFORE COMMIT WORK - so REGUT (written via update task) is not on the DB
+* yet, and the SAPFPAYM globals PM_LAUFD/PM_LAUFI come through BLANK here.
+* The run key is therefore handed over from the DMEE filename exit
+* (ZFI_PAYMEDIUM_DMEE_20), which has it reliably from I_FPAYH, via
+* EXPORT ... TO MEMORY ID 'ZBCM_LAUF'.
+DATA: lv_ilaufd TYPE laufd,
+      lv_ilaufi TYPE laufi,
+      lv_maxlf  TYPE regut-lfdnr.
+IMPORT laufd = lv_ilaufd laufi = lv_ilaufi FROM MEMORY ID 'ZBCM_LAUF'.
+IF lv_ilaufd IS INITIAL.
+  lv_ilaufd = <fs_date1>.        "fallback to globals
+  lv_ilaufi = <fs_iden>.
 ENDIF.
+wa_ZFI_PAYM_FILE-laufd = lv_ilaufd.
+wa_ZFI_PAYM_FILE-laufi = lv_ilaufi.
+
+* LFDNR : the real REGUT-LFDNR is not available before COMMIT, so derive
+* the file's sequence. Each file's enhancement commits its own
+* ZFI_PAYM_FILE row (COMMIT WORK below), so the next file sees the prior
+* rows - MAX(LFDNR)+1 gives 1,2,3 in signing order.
+* NOTE(UAT): this assumes files are signed in REGUT creation order, so the
+* sequence equals REGUT-LFDNR (which ZFI_BNK_APP1/ZFI_BNK_APP use to link
+* file <-> signature). Verify with a real multi-file run; if the order can
+* differ, populate ZFI_PAYM_FILE from REGUT in a post-COMMIT step instead.
+SELECT MAX( lfdnr ) INTO lv_maxlf FROM zfi_paym_file
+  WHERE laufd = lv_ilaufd AND laufi = lv_ilaufi.
+wa_ZFI_PAYM_FILE-lfdnr = lv_maxlf + 1.
 
 modify ZFI_PAYM_FILE  from wa_ZFI_PAYM_FILE.
 *
