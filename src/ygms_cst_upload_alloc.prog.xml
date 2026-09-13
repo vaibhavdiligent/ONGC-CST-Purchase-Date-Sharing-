@@ -32,6 +32,12 @@
     <item>
      <ID>I</ID>
      <KEY>003</KEY>
+     <ENTRY>ONGC Invoice Details</ENTRY>
+     <LENGTH>20</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>004</KEY>
      <ENTRY>Create Nomination Data</ENTRY>
      <LENGTH>22</LENGTH>
     </item>
