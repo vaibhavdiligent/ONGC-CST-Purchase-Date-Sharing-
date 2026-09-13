@@ -137,11 +137,12 @@ FUNCTION zfi_paymedium_dmee_20.
 * ZBCM4: MAX(LFDNR)+1 over the ZFI_PAYM_FILE rows already committed for
 * this run (prior files commit their row before the next file is signed).
 * NOTE(UAT): assumes files are processed in REGUT creation order.
-  select max( lfdnr ) into l_LFDNR from zfi_paym_file
+  DATA lv_cnt_lf TYPE i.
+  select count(*) into lv_cnt_lf from zfi_paym_file
     WHERE laufd = l_laufd
       AND laufi = l_laufi.
 
-  l_LFDNR = l_LFDNR + 1.
+  l_LFDNR = lv_cnt_lf + 1.
 * >>> To be populated in the system (mapping to be done manually):
 *  l_banks = ...        "Bank Country/Region Key
 *  l_dtkey = ...        "Additional TemSe key field (e.g. HB_01)

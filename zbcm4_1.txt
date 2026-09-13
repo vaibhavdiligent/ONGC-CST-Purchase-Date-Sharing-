@@ -300,7 +300,7 @@ wa_ZFI_PAYM_FILE-file_name = wa_line-char(L_LEN).  "13.07.2016
 * EXPORT ... TO MEMORY ID 'ZBCM_LAUF'.
 DATA: lv_ilaufd TYPE laufd,
       lv_ilaufi TYPE laufi,
-      lv_maxlf  TYPE regut-lfdnr.
+      lv_cnt_lf TYPE i.
 IMPORT laufd = lv_ilaufd laufi = lv_ilaufi FROM MEMORY ID 'ZBCM_LAUF'.
 IF lv_ilaufd IS INITIAL.
   lv_ilaufd = <fs_date1>.        "fallback to globals
@@ -317,9 +317,9 @@ wa_ZFI_PAYM_FILE-laufi = lv_ilaufi.
 * sequence equals REGUT-LFDNR (which ZFI_BNK_APP1/ZFI_BNK_APP use to link
 * file <-> signature). Verify with a real multi-file run; if the order can
 * differ, populate ZFI_PAYM_FILE from REGUT in a post-COMMIT step instead.
-SELECT MAX( lfdnr ) INTO lv_maxlf FROM zfi_paym_file
+SELECT COUNT(*) INTO lv_cnt_lf FROM zfi_paym_file
   WHERE laufd = lv_ilaufd AND laufi = lv_ilaufi.
-wa_ZFI_PAYM_FILE-lfdnr = lv_maxlf + 1.
+wa_ZFI_PAYM_FILE-lfdnr = lv_cnt_lf + 1.
 
 modify ZFI_PAYM_FILE  from wa_ZFI_PAYM_FILE.
 *
