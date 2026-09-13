@@ -23,12 +23,15 @@ FORM f_prepare_op_tab1 .
         lv_skip TYPE abap_bool.
 
   REFRESH : gt_paym, gt_batch_header,gt_batch_sign,gt_final.
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym.
+* Load only PENDING (not-yet-sent) files. Since ZFI_PAYM_FILE is now keyed
+* per file (…/LFDNR), SENT is per file: filtering SENT = ' ' drops only the
+* files already transmitted (and their large RAW_DATA/FILE_DATA blobs) - it
+* no longer drops sibling batches of a run (that was the old run-level
+* behaviour). This is the main load-time fix: the whole history of sent
+* files is no longer read. Approved-but-unsent batches are still excluded
+* per-batch via DIGITL_SIGN below.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym WHERE sent = ' '.
 
-* Do NOT hide on the file-level flag: one file holds many batches, so this
-* would drop every batch of the file after only one batch is approved.
-* Approved batches are excluded per-batch via DIGITL_SIGN below instead.
-*  DELETE gt_paym WHERE file_data_sent IS NOT INITIAL.
   DELETE gt_paym WHERE raw_data IS INITIAL.
 
   IF gt_paym IS NOT INITIAL.
@@ -496,18 +499,13 @@ FORM f_prepare_op_tab2 .
         lv_skip TYPE abap_bool.
 *  BREAK sab_vaibhav.
   REFRESH : gt_paym2, gt_batch_header2,gt_final2, gt_batch_sign2.
-*BOC By SAP_ABAP on 27/08/26
-* ZFI_PAYM_FILE is keyed MANDT/LAUFD/LAUFI - one medium file per payment
-* run, covering every REGUT batch of that run. Filtering the worklist on
-* the run-level SENT flag therefore dropped every batch of a run as soon
-* as one batch had been approved and the file sent, leaving the rest
-* transmitted but unapproved and invisible here.
-* Approved batches are already excluded per batch below, via
-* DIGITL_SIGN = ' ' AND SNRO = '2' - exactly as F_PREPARE_OP_TAB1 does for
-* level 1, where this same file-level filter was removed earlier.
-*  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2.
-*EOC By SAP_ABAP on 27/08/26
+* ZFI_PAYM_FILE is now keyed per file (MANDT/LAUFD/LAUFI/LFDNR), so SENT is
+* a per-file flag. The old run-level concern (one sent batch hiding the
+* whole run) no longer applies, so we filter SENT = ' ' again to load only
+* pending files - this avoids reading the entire history of sent files and
+* their RAW_DATA/FILE_DATA blobs (main load-time fix). Approved-but-unsent
+* batches are still excluded per batch below via DIGITL_SIGN = ' ' + SNRO 2.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
 
   DELETE gt_paym2 WHERE file_data_sent IS INITIAL.
 
