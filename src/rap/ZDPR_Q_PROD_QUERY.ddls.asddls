@@ -76,7 +76,7 @@ define view entity ZDPR_Q_PROD_QUERY
   @EndUserText.label: 'OVL Share (Secondary UoM)'
   OvlShareQty2,
 
-  @AnalyticsDetails.query.axis: #COLUMNS
+  @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'PI %'
   ParticipatingInterest
 }

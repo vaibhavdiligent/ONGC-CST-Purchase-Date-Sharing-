@@ -96,9 +96,11 @@ define view entity ZDPR_C_PROD_CUBE
   @EndUserText.label: 'Secondary UoM'
   Daily.ProdUom2                                  as ProdUom2,
 
-  /* ── PI (Participating Interest) ─────────────────────────────────────── */
+  /* ── PI (Participating Interest): an attribute of asset/block, not a
+     measure. #NONE = groupable property; OData V4 only supports
+     SUM/MIN/MAX/AVG/COUNT_DISTINCT for measures (NOP/FORMULA rejected). */
   @EndUserText.label: 'Participating Interest %'
-  @Aggregation.default: #NOP
+  @Aggregation.default: #NONE
   PI.pi                                           as ParticipatingInterest,
 
   /* OVL share = signed ProdQty1 × PI / 100 */

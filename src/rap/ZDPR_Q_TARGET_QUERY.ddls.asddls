@@ -101,7 +101,8 @@ define view entity ZDPR_Q_TARGET_QUERY
 
   @AnalyticsDetails.query.axis: #COLUMNS
   @EndUserText.label: 'Achievement %'
-  @Aggregation.default: #NOP
+  /* ratio: AVG of row percentages (OData V4 has no FORMULA/NOP) */
+  @Aggregation.default: #AVG
   cast(
     case
       when Target.TargetQty <> 0
