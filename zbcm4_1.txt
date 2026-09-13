@@ -290,26 +290,31 @@ ENDIF.
 *
 if <fs_date> is ASSIGNED and <fs_iden> is ASSIGNED.
 *
-wa_ZFI_PAYM_FILE-laufd = <fs_date1>.
-wa_ZFI_PAYM_FILE-laufi = <fs_iden>.
-*wa_ZFI_PAYM_FILE-file_name = PROXY_DATA-PARAMETERS-arg0.  "13.07.2016
 wa_ZFI_PAYM_FILE-file_name = wa_line-char(L_LEN).  "13.07.2016
 
-* Per-file storage: derive this file's LFDNR so ZFI_PAYM_FILE keeps one
-* row per DME file (key MANDT/LAUFD/LAUFI/LFDNR) instead of overwriting
-* the run-level row. Match REGUT on the file name just written (unique
-* per file). NOTE(UAT): wa_line-char is the file name WITH '.txt' (path
-* stripped); confirm it equals REGUT-FSNAM. If REGUT-FSNAM is stored
-* without '.txt', match on wa_line-char(L_LEN) instead.
+* LAUFD / LAUFI / LFDNR : the SAPFPAYM globals PM_LAUFD/PM_LAUFI are NOT
+* reliably populated in the signing context (PM_LAUFD came through BLANK,
+* which collapsed every file onto one empty key). Derive the full REGUT
+* key from the file just written, matched on its name (REGUT-FSNAM is
+* unique per file). This fixes the blank LAUFD, gives the per-file LFDNR,
+* and guarantees the ZFI_PAYM_FILE key byte-matches what ZFI_BNK_APP1 /
+* ZFI_BNK_APP build from REGUT.
+* NOTE(UAT): wa_line-char is the file name WITH '.txt' (path stripped);
+* confirm it equals REGUT-FSNAM. If REGUT-FSNAM is stored without '.txt'
+* (or is truncated), match on wa_line-char(L_LEN) or add LAUFI/LAUFD.
 DATA lv_fsnam_z TYPE regut-fsnam.
-DATA lv_lfdnr_z TYPE regut-lfdnr.
+DATA ls_regut_z TYPE regut.
 lv_fsnam_z = wa_line-char.
-SELECT SINGLE lfdnr INTO lv_lfdnr_z FROM regut
-  WHERE laufd = <fs_date1>
-    AND laufi = <fs_iden>
-    AND fsnam = lv_fsnam_z.
+SELECT SINGLE * FROM regut INTO ls_regut_z
+  WHERE fsnam = lv_fsnam_z.
 IF sy-subrc = 0.
-  wa_ZFI_PAYM_FILE-lfdnr = lv_lfdnr_z.
+  wa_ZFI_PAYM_FILE-laufd = ls_regut_z-laufd.
+  wa_ZFI_PAYM_FILE-laufi = ls_regut_z-laufi.
+  wa_ZFI_PAYM_FILE-lfdnr = ls_regut_z-lfdnr.
+ELSE.
+* Fallback to the globals if the name match fails (keeps prior behaviour)
+  wa_ZFI_PAYM_FILE-laufd = <fs_date1>.
+  wa_ZFI_PAYM_FILE-laufi = <fs_iden>.
 ENDIF.
 
 modify ZFI_PAYM_FILE  from wa_ZFI_PAYM_FILE.
