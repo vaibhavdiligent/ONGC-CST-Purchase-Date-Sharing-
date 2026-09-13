@@ -90,14 +90,8 @@ define view entity ZDPR_C_TARGET_CUBE
   @Semantics.quantity.unitOfMeasure: 'ActualUom'
   cast( Actual.ProdQty1
         - coalesce( Target.TargetQty, cast( 0 as abap.dec( 23, 3 ) ) )
-        as abap.dec( 23, 3 ) )                       as VarianceQty,
-
-  /* ratio per row; AVG at aggregated levels (no FORMULA/NOP in OData) */
-  @EndUserText.label: 'Achievement %'
-  @Aggregation.default: #AVG
-  cast( case
-          when Target.TargetQty <> 0
-          then Actual.ProdQty1 * cast( 100 as abap.dec( 5, 2 ) ) / Target.TargetQty
-          else cast( 0 as abap.dec( 5, 2 ) )
-        end as abap.dec( 7, 2 ) )                    as AchievementPct
+        as abap.dec( 23, 3 ) )                       as VarianceQty
 }
+/* Achievement % is NOT a cube measure: the analytic engine accepts only
+   SUM/MIN/MAX in a cube. The ratio is a FORMULA in ZDPR_Q_TARGET_QUERY,
+   computed after aggregation from ActualQty and TargetQty. */

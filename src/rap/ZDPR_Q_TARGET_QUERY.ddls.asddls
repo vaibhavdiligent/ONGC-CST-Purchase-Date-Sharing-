@@ -74,8 +74,13 @@ define view ZDPR_Q_TARGET_QUERY
   @EndUserText.label: 'Variance (Actual - Target)'
   VarianceQty,
 
+  /* FORMULA: evaluated by the analytic engine after aggregation, so every
+     level shows actual-of-sums / target-of-sums. Float casts because a
+     classic view allows '/' for floats only. */
   @AnalyticsDetails.query.axis: #COLUMNS
   @EndUserText.label: 'Achievement %'
-  AchievementPct
+  @Aggregation.default: #FORMULA
+  cast( ActualQty as abap.fltp ) * cast( 100 as abap.fltp )
+    / cast( TargetQty as abap.fltp )                 as AchievementPct
 }
 where FiscalYear = $parameters.P_FiscalYear
