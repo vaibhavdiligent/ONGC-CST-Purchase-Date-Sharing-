@@ -20,8 +20,7 @@
 define view ZDPR_Q_BOEPD_TREND
   with parameters
     P_DateFrom : datum,
-    P_DateTo   : datum,
-    P_Asset    : char20              /* '' = all assets */
+    P_DateTo   : datum
 
   as select from ZDPR_C_BOEPD_DAY
 
@@ -65,5 +64,4 @@ define view ZDPR_Q_BOEPD_TREND
 }
 where ProductionDate >= $parameters.P_DateFrom
   and ProductionDate <= $parameters.P_DateTo
-  and ( $parameters.P_Asset = '' or Asset = $parameters.P_Asset )
   and BusinessUnit <> 'OTHER'   /* screen out test/garbage asset codes */

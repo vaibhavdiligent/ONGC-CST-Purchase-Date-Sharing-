@@ -65,7 +65,7 @@ define view ZDPR_Q_TARGET_QUERY
   Actual.ProductDescription                       as ProductDescription,
 
   @EndUserText.label: 'Asset'
-  cast( Actual._AssetText.dn_de as abap.char( 80 ) ) as AssetDescription,
+  rtrim( Actual._AssetText.dn_de, ' ' )            as AssetDescription,
 
   @AnalyticsDetails.query.axis: #FREE
   Actual.VolumeTypeDescription                    as VolumeTypeDescription,
@@ -106,13 +106,12 @@ define view ZDPR_Q_TARGET_QUERY
   @EndUserText.label: 'Achievement %'
   /* ratio: AVG of row percentages (OData V4 has no FORMULA/NOP) */
   @Aggregation.default: #AVG
-  cast(
-    case
-      when Target.TargetQty <> 0
-      then Actual.ProdQty1 * cast( 100 as abap.dec(5,2) ) / Target.TargetQty
-      else cast( 0 as abap.dec(5,2) )
-    end
-    as abap.dec(7,2)
-  )                                               as AchievementPct
+  /* division() instead of '/': classic views allow '/' for floats only */
+  case
+    when Target.TargetQty <> 0
+    then cast( division( Actual.ProdQty1 * 100, Target.TargetQty, 2 )
+               as abap.dec( 7, 2 ) )
+    else cast( 0 as abap.dec( 7, 2 ) )
+  end                                             as AchievementPct
 }
 where Actual.FiscalYear = $parameters.P_FiscalYear

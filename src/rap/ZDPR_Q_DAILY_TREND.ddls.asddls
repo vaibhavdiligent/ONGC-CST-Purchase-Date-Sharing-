@@ -17,8 +17,7 @@
 define view ZDPR_Q_DAILY_TREND
   with parameters
     P_DateFrom : datum,
-    P_DateTo   : datum,
-    P_Asset    : char20              /* Optional: '' = all assets */
+    P_DateTo   : datum
 
   as select from ZDPR_C_PROD_CUBE
 
@@ -72,4 +71,3 @@ define view ZDPR_Q_DAILY_TREND
 }
 where ProductionDate >= $parameters.P_DateFrom
   and ProductionDate <= $parameters.P_DateTo
-  and ( $parameters.P_Asset = '' or Asset = $parameters.P_Asset )
