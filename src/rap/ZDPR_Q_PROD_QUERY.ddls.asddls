@@ -1,3 +1,5 @@
+@AbapCatalog.sqlViewName: 'ZDPRQPRODQUERY'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR Production by Product and Asset'
@@ -5,14 +7,15 @@
 
 /* ── Analytical Query ─────────────────────────────────────────────────────── */
 @Analytics.query: true
+@OData.publish: true
+@Metadata.allowExtensions: true
 /* ── OData V4 ────────────────────────────────────────────────────────────── */
-@OData.entityType.name: 'DPRProductionQueryType'
 
-define view entity ZDPR_Q_PROD_QUERY
+define view ZDPR_Q_PROD_QUERY
   with parameters
     /* Filter to a date range; defaults to current month if omitted */
-    P_DateFrom : abap.dats,
-    P_DateTo   : abap.dats
+    P_DateFrom : datum,
+    P_DateTo   : datum
 
   as select from ZDPR_C_PROD_CUBE
 

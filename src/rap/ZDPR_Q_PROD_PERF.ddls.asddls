@@ -2,6 +2,7 @@
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR Production Performance (Excel tab 3)'
 @Metadata.ignorePropagatedAnnotations: true
+@Metadata.allowExtensions: true
 
 /* ── The Production Performance table of the DPR Excel (tab 3) ──────────────
  * One row per (Scope, Product group):
@@ -17,8 +18,8 @@
 
 define view entity ZDPR_Q_PROD_PERF
   with parameters
-    P_DateFrom   : abap.dats,
-    P_DateTo     : abap.dats,
+    P_DateFrom   : datum,
+    P_DateTo     : datum,
     P_FiscalYear : gjahr
 
   as select from ZDPR_P_PERF_AGG(

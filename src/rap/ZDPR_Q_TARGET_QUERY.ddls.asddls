@@ -1,20 +1,23 @@
+@AbapCatalog.sqlViewName: 'ZDPRQTARGETQRY'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR Target vs Actual Query'
 @Metadata.ignorePropagatedAnnotations: true
 
 @Analytics.query: true
-@OData.entityType.name: 'DPRTargetQueryType'
+@OData.publish: true
+@Metadata.allowExtensions: true
 
 /*
  * This query joins monthly reconciled production with production targets,
  * enabling target vs. actual variance analysis.
  * Parameters filter by fiscal year and target type.
  */
-define view entity ZDPR_Q_TARGET_QUERY
+define view ZDPR_Q_TARGET_QUERY
   with parameters
     P_FiscalYear : gjahr,
-    P_TargetCode : abap.char(10)    /* e.g. TAR_BE, TAR_RE */
+    P_TargetCode : char10    /* e.g. TAR_BE, TAR_RE */
 
   as select from ZDPR_I_MONTHLY as Actual
 
@@ -62,7 +65,7 @@ define view entity ZDPR_Q_TARGET_QUERY
   Actual.ProductDescription                       as ProductDescription,
 
   @EndUserText.label: 'Asset'
-  Actual._AssetText.dn_de                         as AssetDescription,
+  cast( Actual._AssetText.dn_de as abap.char( 80 ) ) as AssetDescription,
 
   @AnalyticsDetails.query.axis: #FREE
   Actual.VolumeTypeDescription                    as VolumeTypeDescription,

@@ -63,7 +63,8 @@ define view entity ZDPR_C_PROD_CUBE
   Daily.ProductDescription                        as ProductDescription,
 
   @EndUserText.label: 'Asset Description'
-  AssetTxt.dn_de                                  as AssetDescription,
+  /* cast drops the OIUNM conversion exit, which OData cannot expose */
+  cast( AssetTxt.dn_de as abap.char( 80 ) )       as AssetDescription,
 
   @EndUserText.label: 'Volume Type Description'
   Daily.VolumeTypeDescription                     as VolumeTypeDescription,

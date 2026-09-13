@@ -17,8 +17,8 @@
  * ─────────────────────────────────────────────────────────────────────────── */
 define view entity ZDPR_P_PERF_AGG
   with parameters
-    P_DateFrom   : abap.dats,
-    P_DateTo     : abap.dats,
+    P_DateFrom   : datum,
+    P_DateTo     : datum,
     P_FiscalYear : gjahr
 
   as select from ZDPR_C_BOEPD_DAY

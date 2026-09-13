@@ -1,9 +1,5 @@
 @EndUserText.label: 'DPR Analytics - Service Definition'
 define service ZDPR_SD_ANALYTICS {
-  expose ZDPR_Q_PROD_QUERY   as DPRProductionQuery;
-  expose ZDPR_Q_TARGET_QUERY as DPRTargetQuery;
-  expose ZDPR_Q_DAILY_TREND  as DPRDailyTrend;
-  expose ZDPR_Q_BOEPD_TREND  as DPRBoepdTrend;
   expose ZDPR_Q_PROD_PERF    as DPRProductionPerformance;
   expose ZDPR_C_PROD_CUBE    as DPRProductionCube;
   expose ZDPR_C_BOEPD_DAY    as DPRBoepdDayCube;

@@ -1,3 +1,5 @@
+@AbapCatalog.sqlViewName: 'ZDPRQDAILYTREND'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR Daily Production Trend Query'
@@ -9,13 +11,14 @@
  * line/bar chart rendering in Fiori Analytical List Page.
  */
 @Analytics.query: true
-@OData.entityType.name: 'DPRDailyTrendQueryType'
+@OData.publish: true
+@Metadata.allowExtensions: true
 
-define view entity ZDPR_Q_DAILY_TREND
+define view ZDPR_Q_DAILY_TREND
   with parameters
-    P_DateFrom : abap.dats,
-    P_DateTo   : abap.dats,
-    P_Asset    : abap.char(20)              /* Optional: '' = all assets */
+    P_DateFrom : datum,
+    P_DateTo   : datum,
+    P_Asset    : char20              /* Optional: '' = all assets */
 
   as select from ZDPR_C_PROD_CUBE
 

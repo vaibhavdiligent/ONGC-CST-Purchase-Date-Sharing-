@@ -1,3 +1,5 @@
+@AbapCatalog.sqlViewName: 'ZDPRQBOEPDTREND'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR BOEPD Trend - Actual vs BE Target'
@@ -12,13 +14,14 @@
  * pushed to HANA - the OData result is ~1 row per date.
  * ─────────────────────────────────────────────────────────────────────────── */
 @Analytics.query: true
-@OData.entityType.name: 'DPRBoepdTrendQueryType'
+@OData.publish: true
+@Metadata.allowExtensions: true
 
-define view entity ZDPR_Q_BOEPD_TREND
+define view ZDPR_Q_BOEPD_TREND
   with parameters
-    P_DateFrom : abap.dats,
-    P_DateTo   : abap.dats,
-    P_Asset    : abap.char(20)              /* '' = all assets */
+    P_DateFrom : datum,
+    P_DateTo   : datum,
+    P_Asset    : char20              /* '' = all assets */
 
   as select from ZDPR_C_BOEPD_DAY
 
