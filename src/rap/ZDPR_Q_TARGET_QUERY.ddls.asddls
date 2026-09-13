@@ -9,109 +9,73 @@
 @OData.publish: true
 @Metadata.allowExtensions: true
 
-/*
- * This query joins monthly reconciled production with production targets,
- * enabling target vs. actual variance analysis.
- * Parameters filter by fiscal year and target type.
- */
+/* Target vs actual per fiscal period, asset and product.
+   Analytical query: single cube data source, no joins, no expressions -
+   the join and all calculations are in ZDPR_C_TARGET_CUBE. The target
+   code parameter is passed through to the cube. */
 define view ZDPR_Q_TARGET_QUERY
   with parameters
     P_FiscalYear : gjahr,
-    P_TargetCode : char10    /* e.g. TAR_BE, TAR_RE */
+    P_TargetCode : char10
 
-  as select from ZDPR_I_MONTHLY as Actual
-
-  left outer join ZDPR_I_TARGET as Target
-    on  Actual.FiscalYear   = Target.FiscalYear
-    and Actual.FiscalPeriod = Target.FiscalPeriod
-    and Actual.Asset        = Target.Asset
-    and Actual.Block        = Target.Block
-    and Actual.Product      = Target.Product
-    and Actual.VolumeType   = Target.VolumeType
-    and Target.TargetCode   = $parameters.P_TargetCode
+  as select from ZDPR_C_TARGET_CUBE( P_TargetCode: $parameters.P_TargetCode )
 
 {
-  /* ── Dimensions ──────────────────────────────────────────────────────── */
-
-  @AnalyticsDetails.query.axis: #FREE
-  @EndUserText.label: 'Fiscal Year'
-  key Actual.FiscalYear                           as FiscalYear,
+  /* ── Row dimensions ─────────────────────────────────────────────────── */
+  @AnalyticsDetails.query.axis: #ROWS
+  @AnalyticsDetails.query.totals: #SHOW
+  FiscalPeriod,
 
   @AnalyticsDetails.query.axis: #ROWS
   @AnalyticsDetails.query.totals: #SHOW
-  @EndUserText.label: 'Fiscal Period'
-  key Actual.FiscalPeriod                         as FiscalPeriod,
+  Product,
+
+  @AnalyticsDetails.query.axis: #ROWS
+  ProductDescription,
 
   @AnalyticsDetails.query.axis: #ROWS
   @AnalyticsDetails.query.totals: #SHOW
-  @EndUserText.label: 'Product'
-  @ObjectModel.text.element: ['ProductDescription']
-  key Actual.Product                              as Product,
+  Asset,
 
   @AnalyticsDetails.query.axis: #ROWS
-  @AnalyticsDetails.query.totals: #SHOW
-  @EndUserText.label: 'Asset'
-  @ObjectModel.text.element: ['AssetDescription']
-  key Actual.Asset                                as Asset,
+  AssetDescription,
+
+  /* ── Free (filter) dimensions ───────────────────────────────────────── */
+  @AnalyticsDetails.query.axis: #FREE
+  FiscalYear,
 
   @AnalyticsDetails.query.axis: #FREE
-  key Actual.Block                                as Block,
+  Block,
 
   @AnalyticsDetails.query.axis: #FREE
-  key Actual.VolumeType                           as VolumeType,
-
-  /* Texts (after the keys - key fields must be contiguous at the top) */
-  @EndUserText.label: 'Product Description'
-  Actual.ProductDescription                       as ProductDescription,
-
-  @EndUserText.label: 'Asset'
-  rtrim( Actual._AssetText.dn_de, ' ' )            as AssetDescription,
+  VolumeType,
 
   @AnalyticsDetails.query.axis: #FREE
-  Actual.VolumeTypeDescription                    as VolumeTypeDescription,
+  VolumeTypeDescription,
 
   @AnalyticsDetails.query.axis: #FREE
-  @EndUserText.label: 'Target Type'
-  Target.TargetCode                               as TargetCode,
+  TargetCode,
 
   @AnalyticsDetails.query.axis: #FREE
-  Target.TargetTypeDescription                    as TargetTypeDescription,
+  TargetTypeDescription,
 
-  /* ── Measures ─────────────────────────────────────────────────────────── */
-
+  /* ── Column measures ────────────────────────────────────────────────── */
   @AnalyticsDetails.query.axis: #COLUMNS
   @EndUserText.label: 'Actual Production'
-  @Aggregation.default: #SUM
-  @Semantics.quantity.unitOfMeasure: 'ActualUom'
-  Actual.ProdQty1                                 as ActualQty,
-  Actual.ProdUom1                                 as ActualUom,
+  ActualQty,
+  ActualUom,
 
   @AnalyticsDetails.query.axis: #COLUMNS
   @EndUserText.label: 'Target Quantity'
-  @Aggregation.default: #SUM
-  @Semantics.quantity.unitOfMeasure: 'TargetUom'
-  Target.TargetQty                                as TargetQty,
-  Target.TargetUom                                as TargetUom,
+  TargetQty,
+  TargetUom,
 
   @AnalyticsDetails.query.axis: #COLUMNS
   @EndUserText.label: 'Variance (Actual - Target)'
-  @Aggregation.default: #SUM
-  @Semantics.quantity.unitOfMeasure: 'ActualUom'
-  cast(
-    Actual.ProdQty1 - Target.TargetQty
-    as abap.dec(23,3)
-  )                                               as VarianceQty,
+  VarianceQty,
 
   @AnalyticsDetails.query.axis: #COLUMNS
   @EndUserText.label: 'Achievement %'
-  /* ratio: AVG of row percentages (OData V4 has no FORMULA/NOP) */
-  @Aggregation.default: #AVG
-  /* division() instead of '/': classic views allow '/' for floats only */
-  case
-    when Target.TargetQty <> 0
-    then cast( division( Actual.ProdQty1 * 100, Target.TargetQty, 2 )
-               as abap.dec( 7, 2 ) )
-    else cast( 0 as abap.dec( 7, 2 ) )
-  end                                             as AchievementPct
+  AchievementPct
 }
-where Actual.FiscalYear = $parameters.P_FiscalYear
+where FiscalYear = $parameters.P_FiscalYear
