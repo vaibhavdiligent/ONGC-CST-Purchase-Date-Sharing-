@@ -13,7 +13,7 @@
  * unbound RAP actions. A single dummy key row is sufficient.
  * Actions are triggered via OData POST to the action import.
  */
-define root view entity ZPRA_I_DPR_EXCEL_DL
+define root view entity ZDPR_I_EXCEL_DL
   as select from I_BusinessUser as BU
   {
     key BU.UserID       as RequestId,

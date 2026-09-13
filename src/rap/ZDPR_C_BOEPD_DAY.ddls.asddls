@@ -1,14 +1,14 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR BOEPD per Day - Actual vs BE Target Cube'
+@EndUserText.label: 'DPR BOEPD Day Cube - Actual vs Target'
 @Metadata.ignorePropagatedAnnotations: true
 
 /* ── Analytical Cube (performance-first) ────────────────────────────────────
  * Data behind Excel tab 2 (graph: "Actual Production" vs "BE Target" lines)
  * and tab 3 (Production Performance). All unit/sign logic lives in
- * ZPRA_P_DPR_DAY_BASE (computed once per row; gas = GROSS_PROD - GAS_INJ,
+ * ZDPR_P_DAY_BASE (computed once per row; gas = GROSS_PROD - GAS_INJ,
  * since gas has no NET_PROD rows); this cube only does
- *   - one EQUALITY join to the BE target (TAR_BE / NET_PROD, tar_qty2 daily
+ *   - one EQUALITY join to the BE target (TAR_BE / NET_PROD, tar_qty daily
  *     rate) on asset/block/product/fiscal year/fiscal period. The join is
  *     suppressed on GAS_INJ rows so the target is not double-counted for gas.
  *   - plain multiplications for the measures
@@ -20,10 +20,10 @@
 
 @OData.entityType.name: 'DPRBoepdDayCubeType'
 
-define view entity ZPRA_C_DPR_BOEPD_DAY
-  as select from ZPRA_P_DPR_DAY_BASE as Day
+define view entity ZDPR_C_BOEPD_DAY
+  as select from ZDPR_P_DAY_BASE as Day
 
-  /* BE Target daily rate (tar_qty2, OVL level) of the fiscal month.
+  /* BE Target daily rate (tar_qty, OVL level) of the fiscal month.
      NOT joined on GAS_INJ rows (gas target must count once per day). */
   left outer join zpra_t_prd_tar as Tar
     on  Tar.asset           = Day.Asset
@@ -42,7 +42,6 @@ define view entity ZPRA_C_DPR_BOEPD_DAY
   /* ── Dimensions ─────────────────────────────────────────────────────── */
   @AnalyticsDetails.query.axis: #ROWS
   @EndUserText.label: 'Production Date'
-  @Semantics.calendar.date: true
   key Day.ProductionDate                              as ProductionDate,
 
   @AnalyticsDetails.query.axis: #FREE
@@ -96,13 +95,13 @@ define view entity ZPRA_C_DPR_BOEPD_DAY
   /* ── BE Target measures ("BE Target" flat line / tab-3 rows) ────────── */
   @EndUserText.label: 'BE Target Qty (BOPD / MMSCMD)'
   @Aggregation.default: #SUM
-  coalesce( cast( Tar.tar_qty2 as abap.dec( 23, 7 ) ),
+  coalesce( cast( Tar.tar_qty as abap.dec( 23, 7 ) ),
             cast( 0            as abap.dec( 23, 7 ) ) )
                                                       as TargetQty,
 
   @EndUserText.label: 'BE Target BOEPD'
   @Aggregation.default: #SUM
-  cast( coalesce( cast( Tar.tar_qty2 as abap.dec( 23, 7 ) ),
+  cast( coalesce( cast( Tar.tar_qty as abap.dec( 23, 7 ) ),
                   cast( 0            as abap.dec( 23, 7 ) ) )
         * Day.BoeFactor as abap.dec( 23, 3 ) )        as TargetBoepd,
 

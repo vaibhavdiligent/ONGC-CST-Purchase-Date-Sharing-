@@ -1,6 +1,6 @@
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR Day Base - unit-normalized daily production'
+@EndUserText.label: 'DPR Day Base - normalized daily prod'
 @Metadata.ignorePropagatedAnnotations: true
 @ObjectModel.usageType: {
   serviceQuality: #A,
@@ -27,7 +27,7 @@
  * so the expensive CASE logic is evaluated once here instead of inside join
  * conditions - keeps HANA join pruning effective on large date ranges.
  * ─────────────────────────────────────────────────────────────────────────── */
-define view entity ZPRA_P_DPR_DAY_BASE
+define view entity ZDPR_P_DAY_BASE
   as select from zpra_t_dly_prd as D
 
   left outer join zpra_t_prd_pi as PI
@@ -65,16 +65,13 @@ define view entity ZPRA_P_DPR_DAY_BASE
         else            'OTHER'
       end                                             as BusinessUnit,
 
-      /* Fiscal year/period of the date (FY = April..March) */
-      case when month( D.production_date ) >= 4
-           then cast( year( D.production_date )     as abap.numc(4) )
-           else cast( year( D.production_date ) - 1 as abap.numc(4) )
-      end                                             as FiscalYear,
+      /* Fiscal year/period (FY = April..March): shifting the date back
+         3 months makes its calendar year/month exactly gjahr/monat */
+      cast( substring( dats_add_months( D.production_date, -3, 'INITIAL' ), 1, 4 )
+            as abap.numc(4) )                         as FiscalYear,
 
-      case when month( D.production_date ) >= 4
-           then cast( month( D.production_date ) - 3 as abap.numc(2) )
-           else cast( month( D.production_date ) + 9 as abap.numc(2) )
-      end                                             as FiscalPeriod,
+      cast( substring( dats_add_months( D.production_date, -3, 'INITIAL' ), 5, 2 )
+            as abap.numc(2) )                         as FiscalPeriod,
 
       /* Signed native daily figure: BOPD (oil family, NET_PROD) or MMSCMD
          (gas: +GROSS_PROD / -GAS_INJ, so SUM() nets automatically) */
@@ -89,8 +86,8 @@ define view entity ZPRA_P_DPR_DAY_BASE
             else D.prod_vl_qty1
           end )
         * ( case D.prd_vl_type
-              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-              else                cast(  1 as abap.dec( 2, 0 ) )
+              when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+              else                cast(  1 as abap.dec( 3, 0 ) )
             end )
         as abap.dec( 23, 7 )
       )                                               as QtyNative,

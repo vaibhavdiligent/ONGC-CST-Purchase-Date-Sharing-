@@ -1,6 +1,8 @@
+@AbapCatalog.sqlViewName: 'ZDPRQBOEPDTREND'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR BOEPD Trend - Actual vs BE Target (Excel tab 2)'
+@EndUserText.label: 'DPR BOEPD Trend - Actual vs BE Target'
 @Metadata.ignorePropagatedAnnotations: true
 
 /* ── The graph of the DPR Excel (tab 2) as an analytical query ──────────────
@@ -12,17 +14,15 @@
  * pushed to HANA - the OData result is ~1 row per date.
  * ─────────────────────────────────────────────────────────────────────────── */
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
+@OData.publish: true
+@Metadata.allowExtensions: true
 
-@OData.entityType.name: 'DPRBoepdTrendQueryType'
-
-define view entity ZPRA_Q_DPR_BOEPD_TREND
+define view ZDPR_Q_BOEPD_TREND
   with parameters
-    P_DateFrom : zpra_t_dly_prd-production_date,
-    P_DateTo   : zpra_t_dly_prd-production_date,
-    P_Asset    : zpra_t_dly_prd-asset              /* '' = all assets */
+    P_DateFrom : datum,
+    P_DateTo   : datum
 
-  as select from ZPRA_C_DPR_BOEPD_DAY
+  as select from ZDPR_C_BOEPD_DAY
 
 {
   /* ── X-axis ─────────────────────────────────────────────────────────── */
@@ -64,5 +64,4 @@ define view entity ZPRA_Q_DPR_BOEPD_TREND
 }
 where ProductionDate >= $parameters.P_DateFrom
   and ProductionDate <= $parameters.P_DateTo
-  and ( $parameters.P_Asset = '' or Asset = $parameters.P_Asset )
   and BusinessUnit <> 'OTHER'   /* screen out test/garbage asset codes */

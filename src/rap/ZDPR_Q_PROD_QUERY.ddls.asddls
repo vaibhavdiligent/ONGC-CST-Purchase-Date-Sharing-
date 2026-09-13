@@ -1,22 +1,23 @@
+@AbapCatalog.sqlViewName: 'ZDPRQPRODQUERY'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
-@EndUserText.label: 'DPR Production Query - By Product & Asset'
+@EndUserText.label: 'DPR Production by Product and Asset'
 @Metadata.ignorePropagatedAnnotations: true
 
 /* ── Analytical Query ─────────────────────────────────────────────────────── */
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
-
+@OData.publish: true
+@Metadata.allowExtensions: true
 /* ── OData V4 ────────────────────────────────────────────────────────────── */
-@OData.entityType.name: 'DPRProductionQueryType'
 
-define view entity ZPRA_Q_DPR_PROD_QUERY
+define view ZDPR_Q_PROD_QUERY
   with parameters
     /* Filter to a date range; defaults to current month if omitted */
-    P_DateFrom : zpra_t_dly_prd-production_date,
-    P_DateTo   : zpra_t_dly_prd-production_date
+    P_DateFrom : datum,
+    P_DateTo   : datum
 
-  as select from ZPRA_C_DPR_CUBE
+  as select from ZDPR_C_PROD_CUBE
 
 {
   /* ── Row dimensions ───────────────────────────────────────────────────── */

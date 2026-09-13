@@ -1,7 +1,5 @@
 @EndUserText.label: 'DPR Excel Download - Action Result'
-@MappingRole: true
-
-define abstract entity ZPRA_A_DPR_EXCEL_RESULT
+define abstract entity ZDPR_A_EXCEL_RESULT
 {
   @EndUserText.label: 'Excel File (Base64 encoded)'
   excel_base64 : abap.string(0);

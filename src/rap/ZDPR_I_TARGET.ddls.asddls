@@ -8,7 +8,7 @@
   dataClass:      #MASTER
 }
 
-define view entity ZPRA_I_DPR_TARGET
+define view entity ZDPR_I_TARGET
   as select from zpra_t_prd_tar as PrdTar
 
   association [0..1] to zoiu_pr_dn as _AssetText
@@ -25,11 +25,10 @@ define view entity ZPRA_I_DPR_TARGET
 
       @Semantics.quantity.unitOfMeasure: 'TargetUom'
       PrdTar.tar_qty                      as TargetQty,
-      @Semantics.unitOfMeasure: true
       PrdTar.uom                          as TargetUom,
 
       @Semantics.quantity.unitOfMeasure: 'TargetUom'
-      PrdTar.tar_qty2                     as TargetQty2,
+      PrdTar.tar_qty                     as TargetQty2,
 
       /* Target type description */
       case PrdTar.tar_code
@@ -49,6 +48,18 @@ define view entity ZPRA_I_DPR_TARGET
         when '722000005' then 'LNG'
         else                  'Other'
       end                                 as ProductDescription,
+
+      /* Plain columns so aggregation views need no CASE in sums/group by */
+      case PrdTar.product
+        when '722000004' then 'GAS'
+        else                  'OIL'
+      end                                 as ProductGroup,
+
+      /* BOEPD equivalent of the target rate (gas MMSCMD x 6290) */
+      cast( case PrdTar.product
+              when '722000004' then PrdTar.tar_qty * 6290
+              else                  PrdTar.tar_qty
+            end as abap.dec( 23, 3 ) )    as TargetBoepd,
 
       _AssetText
 }

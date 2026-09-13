@@ -10,8 +10,8 @@
 /* ── OData exposure ──────────────────────────────────────────────────────── */
 @OData.entityType.name: 'DPRProductionCubeType'
 
-define view entity ZPRA_C_DPR_CUBE
-  as select from ZPRA_I_DPR_DAILY as Daily
+define view entity ZDPR_C_PROD_CUBE
+  as select from ZDPR_I_DAILY as Daily
 
   /* Asset name text */
   left outer join zoiu_pr_dn as AssetTxt
@@ -29,7 +29,6 @@ define view entity ZPRA_C_DPR_CUBE
 
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Production Date'
-  @Semantics.calendar.date: true
   key Daily.ProductionDate                        as ProductionDate,
 
   @AnalyticsDetails.query.axis: #FREE
@@ -45,16 +44,10 @@ define view entity ZPRA_C_DPR_CUBE
   @ObjectModel.text.element: ['ProductDescription']
   key Daily.Product                               as Product,
 
-  @EndUserText.label: 'Product'
-  Daily.ProductDescription                        as ProductDescription,
-
   @AnalyticsDetails.query.axis: #ROWS
   @EndUserText.label: 'Asset'
   @ObjectModel.text.element: ['AssetDescription']
   key Daily.Asset                                 as Asset,
-
-  @EndUserText.label: 'Asset Description'
-  AssetTxt.dn_de                                  as AssetDescription,
 
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Block'
@@ -64,6 +57,15 @@ define view entity ZPRA_C_DPR_CUBE
   @EndUserText.label: 'Volume Type'
   @ObjectModel.text.element: ['VolumeTypeDescription']
   key Daily.VolumeType                            as VolumeType,
+
+  /* Texts (after the keys - key fields must be contiguous at the top) */
+  @EndUserText.label: 'Product'
+  Daily.ProductDescription                        as ProductDescription,
+
+  @EndUserText.label: 'Asset Description'
+  /* rtrim() yields a plain string without the OIUNM conversion exit,
+     which OData cannot expose (a cast to the same type is optimised away) */
+  rtrim( AssetTxt.dn_de, ' ' )                    as AssetDescription,
 
   @EndUserText.label: 'Volume Type Description'
   Daily.VolumeTypeDescription                     as VolumeTypeDescription,
@@ -75,13 +77,12 @@ define view entity ZPRA_C_DPR_CUBE
   @Semantics.quantity.unitOfMeasure: 'ProdUom1'
   cast( Daily.ProdQty1
         * ( case Daily.VolumeType
-              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-              else                cast(  1 as abap.dec( 2, 0 ) )
+              when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+              else                cast(  1 as abap.dec( 3, 0 ) )
             end )
         as abap.dec( 23, 3 ) )                    as ProdQty1,
 
   @EndUserText.label: 'Primary UoM'
-  @Semantics.unitOfMeasure: true
   Daily.ProdUom1                                  as ProdUom1,
 
   @EndUserText.label: 'Production Qty (Secondary UoM)'
@@ -89,18 +90,20 @@ define view entity ZPRA_C_DPR_CUBE
   @Semantics.quantity.unitOfMeasure: 'ProdUom2'
   cast( Daily.ProdQty2
         * ( case Daily.VolumeType
-              when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-              else                cast(  1 as abap.dec( 2, 0 ) )
+              when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+              else                cast(  1 as abap.dec( 3, 0 ) )
             end )
         as abap.dec( 23, 3 ) )                    as ProdQty2,
 
   @EndUserText.label: 'Secondary UoM'
-  @Semantics.unitOfMeasure: true
   Daily.ProdUom2                                  as ProdUom2,
 
-  /* ── PI (Participating Interest) ─────────────────────────────────────── */
+  /* ── PI (Participating Interest): constant per asset/block, so MAX
+     returns the exact value at asset level; totals are informational.
+     A DEC element in a cube must be a measure (DEC characteristics are
+     rejected), and OData accepts only SUM/MIN/MAX/AVG/COUNT_DISTINCT. */
   @EndUserText.label: 'Participating Interest %'
-  @Aggregation.default: #NOP
+  @Aggregation.default: #MAX
   PI.pi                                           as ParticipatingInterest,
 
   /* OVL share = signed ProdQty1 × PI / 100 */
@@ -110,8 +113,8 @@ define view entity ZPRA_C_DPR_CUBE
   cast(
     Daily.ProdQty1
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-          else                cast(  1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+          else                cast(  1 as abap.dec( 3, 0 ) )
         end )
     * PI.pi / cast( 100 as abap.dec(5,2) )
     as abap.dec(23,3)
@@ -123,8 +126,8 @@ define view entity ZPRA_C_DPR_CUBE
   cast(
     Daily.ProdQty2
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-          else                cast(  1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+          else                cast(  1 as abap.dec( 3, 0 ) )
         end )
     * PI.pi / cast( 100 as abap.dec(5,2) )
     as abap.dec(23,3)
@@ -145,8 +148,8 @@ define view entity ZPRA_C_DPR_CUBE
         else cast( 0 as abap.dec( 23, 7 ) )
       end )
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-          else                cast(  1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+          else                cast(  1 as abap.dec( 3, 0 ) )
         end )
     as abap.dec( 23, 7 )
   )                                               as GasMmscmd,
@@ -165,8 +168,8 @@ define view entity ZPRA_C_DPR_CUBE
         else Daily.ProdQty1
       end )
     * ( case Daily.VolumeType
-          when 'GAS_INJ' then cast( -1 as abap.dec( 2, 0 ) )
-          else                cast(  1 as abap.dec( 2, 0 ) )
+          when 'GAS_INJ' then ( cast( 0 as abap.dec( 3, 0 ) ) - cast( 1 as abap.dec( 3, 0 ) ) )
+          else                cast(  1 as abap.dec( 3, 0 ) )
         end )
     as abap.dec( 23, 3 )
   )                                               as BoepdQty

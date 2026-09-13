@@ -1,4 +1,4 @@
-CLASS zcl_zpra_dpr_excel DEFINITION
+CLASS zcl_zdpr_excel DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
@@ -113,7 +113,7 @@ CLASS zcl_zpra_dpr_excel DEFINITION
 ENDCLASS.
 
 
-CLASS zcl_zpra_dpr_excel IMPLEMENTATION.
+CLASS zcl_zdpr_excel IMPLEMENTATION.
 
   METHOD generate_production_excel.
     DATA: lt_headers TYPE string_table,

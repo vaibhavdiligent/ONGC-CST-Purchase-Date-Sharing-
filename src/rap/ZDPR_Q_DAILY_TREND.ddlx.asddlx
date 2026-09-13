@@ -1,0 +1,65 @@
+@Metadata.layer: #CUSTOMER
+
+@UI.headerInfo: {
+  typeName:       'Daily Production Trend',
+  typeNamePlural: 'Daily Production Trend',
+  title:          { type: #STANDARD, value: 'ProductDescription' },
+  description:    { type: #STANDARD, value: 'AssetDescription' }
+}
+
+@UI.chart: [{
+  qualifier:  'TrendLine',
+  title:      'Daily Production Trend',
+  chartType:  #LINE,
+  dimensions: ['ProductionDate', 'ProductDescription'],
+  measures:   ['ProdQty1', 'OvlShareQty1']
+}]
+
+@UI.presentationVariant: [{
+  visualizations: [
+    { type: #AS_CHART },
+    { type: #AS_LINEITEM }
+  ]
+}]
+
+annotate view ZDPR_Q_DAILY_TREND with
+{
+  @UI.selectionField: [{ position: 10 }]
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
+  ProductionDate;
+
+  @UI.selectionField: [{ position: 20 }]
+  CalendarYear;
+
+  @UI.selectionField: [{ position: 30 }]
+  CalendarMonth;
+
+  @UI.selectionField: [{ position: 40 }]
+  Product;
+
+  @UI.selectionField: [{ position: 50 }]
+  Asset;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
+  ProductDescription;
+
+  @UI.lineItem: [{ position: 30, importance: #MEDIUM, label: 'Asset' }]
+  AssetDescription;
+
+  @UI.lineItem: [{ position: 40, importance: #HIGH, label: 'JV Daily Prod (UoM1)' }]
+  @UI.dataPoint: { title: 'Total JV Production' }
+  ProdQty1;
+
+  @UI.lineItem: [{ position: 50, importance: #LOW, label: 'UoM' }]
+  ProdUom1;
+
+  @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'OVL Share (UoM1)' }]
+  @UI.dataPoint: { title: 'OVL Share' }
+  OvlShareQty1;
+
+  @UI.lineItem: [{ position: 70, importance: #MEDIUM, label: 'JV Daily Prod (UoM2)' }]
+  ProdQty2;
+
+  @UI.lineItem: [{ position: 80, importance: #MEDIUM, label: 'OVL Share (UoM2)' }]
+  OvlShareQty2;
+}

@@ -1,3 +1,5 @@
+@AbapCatalog.sqlViewName: 'ZDPRQDAILYTREND'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR Daily Production Trend Query'
@@ -9,17 +11,15 @@
  * line/bar chart rendering in Fiori Analytical List Page.
  */
 @Analytics.query: true
-@Analytics.settings.maxResultSize: #UNLIMITED
+@OData.publish: true
+@Metadata.allowExtensions: true
 
-@OData.entityType.name: 'DPRDailyTrendQueryType'
-
-define view entity ZPRA_Q_DPR_DAILY_TREND
+define view ZDPR_Q_DAILY_TREND
   with parameters
-    P_DateFrom : zpra_t_dly_prd-production_date,
-    P_DateTo   : zpra_t_dly_prd-production_date,
-    P_Asset    : zpra_t_dly_prd-asset              /* Optional: '' = all assets */
+    P_DateFrom : datum,
+    P_DateTo   : datum
 
-  as select from ZPRA_C_DPR_CUBE
+  as select from ZDPR_C_PROD_CUBE
 
 {
   /* ── Time axis (X-axis for chart) ─────────────────────────────────────── */
@@ -71,4 +71,3 @@ define view entity ZPRA_Q_DPR_DAILY_TREND
 }
 where ProductionDate >= $parameters.P_DateFrom
   and ProductionDate <= $parameters.P_DateTo
-  and ( $parameters.P_Asset = '' or Asset = $parameters.P_Asset )
