@@ -34,15 +34,31 @@
 *& Reference     : RGJVEA10_ACD / RGJVEAS0_ACD (transaction GJ19A)
 *&                 IF_JVA_EQUITY_ADJUST / CL_JVA_EQUITY_ADJUST
 *&
+*& Built against  : IF_JVA_EQUITY_ADJUST / CL_JVA_EQUITY_ADJUST as
+*&                 exported from system OCQ, release 816.
+*&
 *& IMPORTANT - why every row is pre-validated
 *&                 CL_JVA_EQUITY_ADJUST reports invalid selection data
-*&                 with hard MESSAGE ... TYPE 'E' statements (e234/e232/
-*&                 e243/e235/e117/e237/e566/e674/e682 ...). An E message
-*&                 raised in START-OF-SELECTION terminates the whole
-*&                 event block - meaning one bad row would abandon every
-*&                 row after it. PERFORM validate_row therefore repeats
-*&                 the class's own checks BEFORE the class is called, so
-*&                 a bad row is logged as Skipped and the run continues.
+*&                 with hard MESSAGE ... TYPE 'E' statements - 25 of them
+*&                 in release 816. An E message raised in
+*&                 START-OF-SELECTION terminates the whole event block,
+*&                 meaning one bad row would abandon every row after it.
+*&                 PERFORM validate_row therefore repeats the class's own
+*&                 checks BEFORE the class is called, so a bad row is
+*&                 logged as Skipped and the run continues.
+*&
+*&                 Covered: e234 e232 e243 e235 e117 e237 e566 e674 e682
+*&                 e746 e108(glofaa_gb) - company code, venture, equity
+*&                 groups, period, posting date, authorisation.
+*&
+*&                 NOT covered - residual risk: the intercompany checks
+*&                 (e220 e349 e799 and the intercompany e117), which
+*&                 depend on T8JI and partner-share master data. These
+*&                 are configuration problems that would affect every row
+*&                 for a venture equally, so they are better fixed in
+*&                 master data than replicated here. If one fires, the
+*&                 run stops at that row - run in background so the log
+*&                 written so far is in the spool.
 *&                 Keep validate_row in step with the class.
 *&
 *& Results       : The interface exposes no results getter, and the
@@ -125,6 +141,11 @@ DATA: gt_r_acct  TYPE jv_account_range_table,
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
+" Text symbols to maintain (SE38 -> Goto -> Text Elements):
+"   001  Upload File
+"   002  Processing Options for Equity Change
+"   003  Cutback Posting Options
+"   004  Run Type
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
   PARAMETERS p_xls TYPE string OBLIGATORY.        " upload file (.xls/.xlsx)
 SELECTION-SCREEN END OF BLOCK b1.
@@ -132,12 +153,17 @@ SELECTION-SCREEN END OF BLOCK b1.
 " Run-level options - they apply to every row, exactly as they would to
 " a single GJ19A run. Names and defaults follow RGJVEAS0_ACD.
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
+  PARAMETERS: p_single RADIOBUTTON GROUP proc DEFAULT 'X', " Single Item
+              p_aggreg RADIOBUTTON GROUP proc.             " Aggregated
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2a WITH FRAME TITLE text-003.
   PARAMETERS: p_ivpeqg RADIOBUTTON GROUP pst1 DEFAULT 'X', " per Equity Group
               p_ivpptn RADIOBUTTON GROUP pst1,             " per Partner
               p_ivpexp RADIOBUTTON GROUP pst1.             " per Partner/Expense
-SELECTION-SCREEN END OF BLOCK b2.
+SELECTION-SCREEN END OF BLOCK b2a.
 
-SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-003.
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-004.
   PARAMETERS: p_displ  RADIOBUTTON GROUP runt,             " Analysis only
               p_test   RADIOBUTTON GROUP runt DEFAULT 'X', " Test run
               p_update RADIOBUTTON GROUP runt.             " Update run
@@ -339,6 +365,7 @@ FORM process_one_row USING ps_raw TYPE ty_raw.
         iv_ivpeqg         = p_ivpeqg
         iv_ivpptn         = p_ivpptn
         iv_ivpexp         = p_ivpexp
+        iv_ec_aggregated  = p_aggreg
         iv_analysis_only  = p_displ
         iv_test           = p_test
         iv_repid_callback = sy-repid
@@ -468,8 +495,8 @@ FORM validate_row USING    pv_bukrs  TYPE bukrs
         lv_same_ven  TYPE abap_bool,
         lv_same_type TYPE abap_bool,
         lv_same_curr TYPE abap_bool,
-        lv_activity  TYPE c LENGTH 2,
-        lv_count     TYPE i.
+        lv_gjahr_p   TYPE gjahr,
+        lv_activity  TYPE c LENGTH 2.
 
   cv_ok = abap_true.
 
@@ -592,6 +619,27 @@ FORM validate_row USING    pv_bukrs  TYPE bukrs
       cv_ok = abap_false.
       RETURN.
     ENDIF.
+  ENDIF.
+
+  " The class then derives the posting fiscal year from that date
+  " (class: CHECK_POSTING_DATE, e108(glofaa_gb)).
+  CALL FUNCTION 'DETERMINE_PERIOD'
+    EXPORTING
+      date                = COND #( WHEN pv_budat IS INITIAL
+                                    THEN ls_periods-datbi ELSE pv_budat )
+      version             = ls_t001-periv
+    IMPORTING
+      year                = lv_gjahr_p
+    EXCEPTIONS
+      period_in_not_valid = 1
+      period_not_assigned = 2
+      version_undefined   = 3
+      error_message       = 4
+      OTHERS              = 8.
+  IF sy-subrc <> 0.
+    cs_log-message = |Posting date cannot be assigned to a period in fiscal year variant { ls_t001-periv }|.
+    cv_ok = abap_false.
+    RETURN.
   ENDIF.
 
   " ---- authorisation (class: CHECK_AUTHORITY) -----------------------
