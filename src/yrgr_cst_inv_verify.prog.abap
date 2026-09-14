@@ -5,7 +5,8 @@
 *&---------------------------------------------------------------------*
 REPORT yrgr_cst_inv_verify.
 
-TABLES: yrga_cst_b2b_4, yrga_cst_b2b_5, yrga_cst_loc_map.
+TABLES: yrga_cst_b2b_4, yrga_cst_b2b_5, yrga_cst_loc_map,
+        yrga_cst_mat_map, yrga_cst_b2b_3.
 
 *----------------------------------------------------------------------*
 * Type definitions
@@ -25,9 +26,15 @@ TYPES: BEGIN OF ty_item_alv,
          bill_from     TYPE datum,
          bill_to       TYPE datum,
          ongc_material TYPE ygms_de_ongc_mat,
+         gail_location TYPE ygms_de_loc_id,
+         gail_material TYPE ygms_de_gail_mat,
          state_code    TYPE regio,
          qty_scm       TYPE ygms_de_qty_scm,
          qty_mbg       TYPE ygms_de_qty_mbg,
+         qty_sent_scm  TYPE ygms_de_qty_scm,
+         qty_sent_mbg  TYPE ygms_de_qty_mbg,
+         diff_scm      TYPE ygms_de_qty_scm,
+         diff_mbg      TYPE ygms_de_qty_mbg,
          avg_gcv       TYPE ygms_de_gcv,
          avg_ncv       TYPE ygms_de_ncv,
          rate          TYPE yrga_de_price,
@@ -250,6 +257,7 @@ FORM process_view_invoice.
   ENDIF.
 
   PERFORM fetch_header_data.
+  PERFORM enrich_item_data.
   PERFORM display_alv.
 
 ENDFORM.
@@ -342,7 +350,8 @@ FORM fetch_item_data.
     READ TABLE gt_loc_ctp ASSIGNING FIELD-SYMBOL(<fs_map>)
       WITH KEY ongc_ctp_id = <fs_item>-ctp_id.
     IF sy-subrc = 0.
-      ls_alv-gail_loc_id = <fs_map>-gail_loc_id.
+      ls_alv-gail_loc_id   = <fs_map>-gail_loc_id.
+      ls_alv-gail_location = <fs_map>-gail_loc_id.
     ENDIF.
 
     APPEND ls_alv TO gt_item_alv.
@@ -380,6 +389,45 @@ FORM fetch_header_data.
     INTO TABLE @lt_b2b4.
 
   gt_header_alv = CORRESPONDING #( lt_b2b4 ).
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form enrich_item_data
+*&  Enrich ALV items with GAIL Material, Qty sent to ONGC, and Diffs
+*&---------------------------------------------------------------------*
+FORM enrich_item_data.
+
+  DATA: lv_gail_mat  TYPE ygms_de_gail_mat,
+        lv_sent_scm  TYPE ygms_de_qty_scm,
+        lv_sent_mbg  TYPE ygms_de_qty_mbg.
+
+  LOOP AT gt_item_alv ASSIGNING FIELD-SYMBOL(<fs_alv>).
+
+    " GAIL Material from YRGA_CST_MAT_MAP
+    CLEAR lv_gail_mat.
+    SELECT SINGLE gail_material
+      FROM yrga_cst_mat_map
+      WHERE location_id   = @<fs_alv>-gail_location
+        AND ongc_material = @<fs_alv>-ongc_material
+        AND deleted       = @abap_false
+      INTO @lv_gail_mat.
+    <fs_alv>-gail_material = lv_gail_mat.
+
+    " Qty sent to ONGC from YRGA_CST_B2B_3 via GAIL_ID
+    CLEAR: lv_sent_scm, lv_sent_mbg.
+    SELECT SINGLE qty_in_scm, qty_in_mbg
+      FROM yrga_cst_b2b_3
+      WHERE gail_id = @<fs_alv>-gail_id
+      INTO (@lv_sent_scm, @lv_sent_mbg).
+    <fs_alv>-qty_sent_scm = lv_sent_scm.
+    <fs_alv>-qty_sent_mbg = lv_sent_mbg.
+
+    " Differences
+    <fs_alv>-diff_scm = lv_sent_scm - <fs_alv>-qty_scm.
+    <fs_alv>-diff_mbg = lv_sent_mbg - <fs_alv>-qty_mbg.
+
+  ENDLOOP.
 
 ENDFORM.
 
@@ -428,10 +476,63 @@ FORM display_alv.
       ENDTRY.
 
       go_alv->get_columns( )->set_optimize( abap_true ).
+
+      " Set column labels for item data view
+      IF gv_show_header = abap_false.
+        DATA(lo_cols) = go_alv->get_columns( ).
+        TRY.
+            CAST cl_salv_column( lo_cols->get_column( 'INVOICE_DATE' ) )->set_short_text( 'Inv Date' ).
+            CAST cl_salv_column( lo_cols->get_column( 'INVOICE_DATE' ) )->set_medium_text( 'Invoice Date' ).
+            CAST cl_salv_column( lo_cols->get_column( 'INVOICE_DATE' ) )->set_long_text( 'Invoice Date' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'BILL_FROM' ) )->set_short_text( 'Bill From' ).
+            CAST cl_salv_column( lo_cols->get_column( 'BILL_FROM' ) )->set_medium_text( 'Bill From' ).
+            CAST cl_salv_column( lo_cols->get_column( 'BILL_FROM' ) )->set_long_text( 'Bill From' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_short_text( 'Bill To' ).
+            CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_medium_text( 'Bill To' ).
+            CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_long_text( 'Bill To' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_short_text( 'Inv Qty SCM' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_medium_text( 'Invoice Qty(SCM)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_long_text( 'Invoice Quantity (SCM)' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_short_text( 'Inv Qty MBG' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_medium_text( 'Invoice Qty(MBG)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_long_text( 'Invoice Qty (MBG)' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_short_text( 'GAIL Loc' ).
+            CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_medium_text( 'GAIL Location' ).
+            CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_long_text( 'GAIL Location' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'GAIL_MATERIAL' ) )->set_short_text( 'GAIL Mat' ).
+            CAST cl_salv_column( lo_cols->get_column( 'GAIL_MATERIAL' ) )->set_medium_text( 'GAIL Material' ).
+            CAST cl_salv_column( lo_cols->get_column( 'GAIL_MATERIAL' ) )->set_long_text( 'GAIL Material' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_SCM' ) )->set_short_text( 'Sent SCM' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_SCM' ) )->set_medium_text( 'Qty Sent(SCM)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_SCM' ) )->set_long_text( 'Qty sent to ONGC (SCM)' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_MBG' ) )->set_short_text( 'Sent MBG' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_MBG' ) )->set_medium_text( 'Qty Sent(MBG)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_MBG' ) )->set_long_text( 'Qty sent to ONGC (MBG)' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'DIFF_SCM' ) )->set_short_text( 'Diff SCM' ).
+            CAST cl_salv_column( lo_cols->get_column( 'DIFF_SCM' ) )->set_medium_text( 'Diff (SCM)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'DIFF_SCM' ) )->set_long_text( 'Diff (SCM)' ).
+
+            CAST cl_salv_column( lo_cols->get_column( 'DIFF_MBG' ) )->set_short_text( 'Diff MBG' ).
+            CAST cl_salv_column( lo_cols->get_column( 'DIFF_MBG' ) )->set_medium_text( 'Diff (MBG)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'DIFF_MBG' ) )->set_long_text( 'Diff (MBG)' ).
+
+          CATCH cx_salv_not_found.
+        ENDTRY.
+      ENDIF.
+
       go_alv->get_display_settings( )->set_list_header(
         COND #( WHEN gv_show_header = abap_true
-                THEN 'ONGC CST Invoice - Header Data'
-                ELSE 'ONGC CST Invoice - Item Data' ) ).
+                THEN 'ONGC CST Invoice Details - Header'
+                ELSE 'ONGC CST Invoice Details' ) ).
 
       go_alv->display( ).
 
