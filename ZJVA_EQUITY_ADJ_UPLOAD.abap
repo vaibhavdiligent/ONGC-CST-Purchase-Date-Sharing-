@@ -8,20 +8,19 @@
 *&                 per row of an Excel file, so that many venture /
 *&                 equity-group changes can be processed in one go.
 *&
-*&                 Each row of the Excel file is ONE complete execution
-*&                 of the standard transaction - it carries its own
-*&                 venture, old and new equity group, document date
-*&                 range, posting year / period / date and object
-*&                 filters. Amounts, recovery indicators, document types
-*&                 and account determination are NEVER taken from the
-*&                 file; they are derived by standard SAP logic exactly
-*&                 as they are in GJ19A. That is deliberate - it is what
-*&                 keeps the run reconcilable with cutback and stops a
-*&                 re-run from double posting.
+*&                 Each row is ONE complete execution of the standard
+*&                 transaction - its own venture, old and new equity
+*&                 group, document date range, posting year / period /
+*&                 date and object filters. Amounts, recovery indicators,
+*&                 document types and account determination are NEVER
+*&                 taken from the file; they are derived by standard
+*&                 logic exactly as in GJ19A. That is what keeps the run
+*&                 reconcilable with cutback and stops a re-run from
+*&                 double posting.
 *&
 *&                 No standard logic is copied. For every row the program
 *&                 instantiates the standard class CL_JVA_EQUITY_ADJUST
-*&                 and calls the same three methods that the standard
+*&                 and calls the same interface methods that the standard
 *&                 report RGJVEA10_ACD (transaction GJ19A) calls:
 *&
 *&                     set_run_parameters( )
@@ -29,22 +28,34 @@
 *&                     run_process( )
 *&
 *&                 Reversal, re-booking, cutback correction and posting
-*&                 therefore remain 100% standard, and future SAP
+*&                 therefore stay 100% standard, and future SAP
 *&                 corrections to that class flow through automatically.
 *&
-*&                 Excel is read with the standard FM
-*&                 TEXT_CONVERT_XLS_TO_SAP. Results are shown as an ALV
-*&                 log, one line per uploaded row.
-*&
 *& Reference     : RGJVEA10_ACD / RGJVEAS0_ACD (transaction GJ19A)
+*&                 IF_JVA_EQUITY_ADJUST / CL_JVA_EQUITY_ADJUST
 *&
-*& NOTE          : Rows are processed independently. A row that fails
-*&                 does not stop the rows after it - the failure is
-*&                 reported in the log. Run type defaults to Test Run.
+*& IMPORTANT - why every row is pre-validated
+*&                 CL_JVA_EQUITY_ADJUST reports invalid selection data
+*&                 with hard MESSAGE ... TYPE 'E' statements (e234/e232/
+*&                 e243/e235/e117/e237/e566/e674/e682 ...). An E message
+*&                 raised in START-OF-SELECTION terminates the whole
+*&                 event block - meaning one bad row would abandon every
+*&                 row after it. PERFORM validate_row therefore repeats
+*&                 the class's own checks BEFORE the class is called, so
+*&                 a bad row is logged as Skipped and the run continues.
+*&                 Keep validate_row in step with the class.
+*&
+*& Results       : The interface exposes no results getter, and the
+*&                 class keeps its results (MS_EA_RESULTS) private. The
+*&                 class does however write its messages to the
+*&                 application log (object JVA). Each row is therefore
+*&                 bracketed by a timestamp and its log entries are read
+*&                 back afterwards - see FORM read_row_result.
+*&
+*& NOTE          : Not yet syntax-checked - written without access to an
+*&                 SAP system. Check in SE38 before transporting.
 *&---------------------------------------------------------------------*
 REPORT zjva_equity_adj_upload.
-
-TABLES acdoca.
 
 *----------------------------------------------------------------------*
 * Types
@@ -71,23 +82,23 @@ TYPES: BEGIN OF ty_raw,
          acctt   TYPE c LENGTH 10,   " 16 Account To
          cntr    TYPE c LENGTH 10,   " 17 Cost Center
          ordnr   TYPE c LENGTH 12,   " 18 Order
-         projk   TYPE c LENGTH 24,   " 19 WBS Element (external)
+         projk   TYPE c LENGTH 24,   " 19 WBS Element (external key)
          nplnr   TYPE c LENGTH 12,   " 20 Network
          vornr   TYPE c LENGTH 4,    " 21 Network Activity
        END OF ty_raw.
 
 TYPES: BEGIN OF ty_log,
          rowno   TYPE c LENGTH 6,
-         bukrs   TYPE c LENGTH 4,
-         vname   TYPE c LENGTH 6,
-         eqold   TYPE c LENGTH 3,
-         eqnew   TYPE c LENGTH 3,
-         gjahr   TYPE c LENGTH 4,
-         monat   TYPE c LENGTH 2,
-         runtype TYPE c LENGTH 12,          " Analysis / Test / Update
-         status  TYPE c LENGTH 10,          " Success / Error / Skipped
-         msgid   TYPE sy-msgid,
-         msgno   TYPE sy-msgno,
+         bukrs   TYPE bukrs,
+         vname   TYPE jv_name,
+         eqold   TYPE jv_egroup,
+         eqnew   TYPE jv_egroup,
+         gjahr   TYPE gjahr,
+         monat   TYPE monat,
+         runtype TYPE c LENGTH 10,          " Analysis / Test / Update
+         status  TYPE c LENGTH 10,          " Success / Warning / Error / Skipped
+         errors  TYPE i,
+         warns   TYPE i,
          message TYPE c LENGTH 200,
        END OF ty_log.
 
@@ -95,20 +106,21 @@ TYPES: BEGIN OF ty_log,
 * Global data
 *----------------------------------------------------------------------*
 " go_adjust must be GLOBAL: the standard class calls back into this
-" report's ALV handler FORMs (see iv_repid_callback below), and those
-" FORMs need the object reference of the row currently being processed.
+" report's ALV handler FORMs (that is what iv_repid_callback is for),
+" and those FORMs need the object of the row being processed.
 DATA: go_adjust TYPE REF TO if_jva_equity_adjust.
 
 DATA: gt_raw TYPE STANDARD TABLE OF ty_raw,
       gt_log TYPE STANDARD TABLE OF ty_log.
 
-RANGES: gr_budat FOR sy-datum,
-        gr_acct  FOR acdoca-racct,
-        gr_cntr  FOR acdoca-rcntr,
-        gr_ordnr FOR acdoca-aufnr,
-        gr_projk FOR acdoca-ps_psp_pnr,
-        gr_nplnr FOR acdoca-nplnr,
-        gr_vornr FOR acdoca-vornr.
+" Typed exactly as IF_JVA_EQUITY_ADJUST~SET_RUN_PARAMETERS expects them.
+DATA: gt_r_acct  TYPE jv_account_range_table,
+      gt_r_budat TYPE fins_t_budat_range,
+      gt_r_cntr  TYPE jv_cost_center_range_table,
+      gt_r_nplnr TYPE jv_network_range_table,
+      gt_r_ordnr TYPE jv_order_range_table,
+      gt_r_projk TYPE jv_project_range_table,
+      gt_r_vornr TYPE vornr_rang_t.
 
 *----------------------------------------------------------------------*
 * Selection screen
@@ -117,24 +129,19 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
   PARAMETERS p_xls TYPE string OBLIGATORY.        " upload file (.xls/.xlsx)
 SELECTION-SCREEN END OF BLOCK b1.
 
-" Run-level processing options. These are NOT per row - they apply to
-" every row in the file, exactly as they would to a single GJ19A run.
+" Run-level options - they apply to every row, exactly as they would to
+" a single GJ19A run. Names and defaults follow RGJVEAS0_ACD.
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE text-002.
-  PARAMETERS: p_single RADIOBUTTON GROUP proc DEFAULT 'X', " Single Item
-              p_aggreg RADIOBUTTON GROUP proc.             " Aggregated
-SELECTION-SCREEN END OF BLOCK b2.
-
-SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-003.
   PARAMETERS: p_ivpeqg RADIOBUTTON GROUP pst1 DEFAULT 'X', " per Equity Group
               p_ivpptn RADIOBUTTON GROUP pst1,             " per Partner
               p_ivpexp RADIOBUTTON GROUP pst1.             " per Partner/Expense
-SELECTION-SCREEN END OF BLOCK b3.
+SELECTION-SCREEN END OF BLOCK b2.
 
-SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE text-004.
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-003.
   PARAMETERS: p_displ  RADIOBUTTON GROUP runt,             " Analysis only
               p_test   RADIOBUTTON GROUP runt DEFAULT 'X', " Test run
               p_update RADIOBUTTON GROUP runt.             " Update run
-SELECTION-SCREEN END OF BLOCK b4.
+SELECTION-SCREEN END OF BLOCK b3.
 
 *----------------------------------------------------------------------*
 * F4 help
@@ -210,7 +217,6 @@ FORM read_upload_file.
     MESSAGE 'Could not read the upload file' TYPE 'E'.
   ENDIF.
 
-  " Drop completely empty trailing rows and any sample rows left behind.
   DELETE gt_raw WHERE bukrs IS INITIAL
                   AND vname IS INITIAL
                   AND eqold IS INITIAL
@@ -243,21 +249,23 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM process_one_row USING ps_raw TYPE ty_raw.
 
-  DATA: ls_log    TYPE ty_log,
-        lv_bukrs  TYPE jva_search_help_ts-bukrs,
-        lv_vname  TYPE jva_search_help_ts-vname,
-        lv_eqold  TYPE jvto1-regrou,
-        lv_eqnew  TYPE jvto1-regrou,
-        lv_year   TYPE bkpf-gjahr,
-        lv_period TYPE bkpf-monat,
-        lv_frdate TYPE sy-datum,
-        lv_todate TYPE sy-datum,
-        lv_budat  TYPE sy-datum,
-        lv_bktxt  TYPE bkpf-bktxt,
-        lv_excloi TYPE c LENGTH 1,
-        lv_ok     TYPE abap_bool.
+  DATA: ls_log     TYPE ty_log,
+        lv_bukrs   TYPE bukrs,
+        lv_vname   TYPE jv_name,
+        lv_eqold   TYPE jv_egroup,
+        lv_eqnew   TYPE jv_egroup,
+        lv_year    TYPE gjahr,
+        lv_period  TYPE monat,
+        lv_frdate  TYPE syst_datum,
+        lv_todate  TYPE syst_datum,
+        lv_budat   TYPE syst_datum,
+        lv_bktxt   TYPE bktxt,
+        lv_excloi  TYPE char1,
+        lv_ok      TYPE abap_bool,
+        lv_time_fr TYPE sy-uzeit,
+        lv_date_fr TYPE sy-datum.
 
-  " ---- build the log line up front so every exit path reports it -----
+  " ---- log line first, so every exit path reports something ---------
   ls_log-rowno = ps_raw-rowno.
   ls_log-bukrs = ps_raw-bukrs.
   ls_log-vname = ps_raw-vname.
@@ -274,35 +282,37 @@ FORM process_one_row USING ps_raw TYPE ty_raw.
     ls_log-runtype = 'Update'.
   ENDIF.
 
-  " ---- convert and validate the row ---------------------------------
+  " ---- convert the character cells ----------------------------------
   PERFORM convert_row USING    ps_raw
                       CHANGING lv_bukrs lv_vname lv_eqold lv_eqnew
                                lv_year  lv_period
                                lv_frdate lv_todate lv_budat
                                lv_bktxt lv_excloi
                                ls_log   lv_ok.
-
   IF lv_ok = abap_false.
     ls_log-status = 'Skipped'.
     APPEND ls_log TO gt_log.
     RETURN.
   ENDIF.
 
-  " ---- build the object-filter ranges for this row ------------------
-  PERFORM build_ranges USING ps_raw.
-
-  " ---- authorisation, same process code the standard uses -----------
-  PERFORM check_authority USING    lv_bukrs
-                          CHANGING ls_log lv_ok.
+  " ---- repeat the class's own checks, so it never raises a hard E ---
+  PERFORM validate_row USING    lv_bukrs lv_vname lv_eqold lv_eqnew
+                                lv_year  lv_period lv_budat
+                       CHANGING ls_log   lv_ok.
   IF lv_ok = abap_false.
-    ls_log-status = 'Error'.
+    ls_log-status = 'Skipped'.
     APPEND ls_log TO gt_log.
     RETURN.
   ENDIF.
 
-  " ---- run the STANDARD equity adjustment for this row --------------
-  " Mirrors FORM check_parameters / FORM run of RGJVEA10_ACD exactly.
+  " ---- object filters for this row ----------------------------------
+  PERFORM build_ranges USING ps_raw.
+
+  " ---- run the STANDARD equity adjustment ---------------------------
+  " Mirrors FORM check_parameters / FORM run of RGJVEA10_ACD.
   CLEAR go_adjust.
+  lv_date_fr = sy-datum.
+  lv_time_fr = sy-uzeit.
 
   TRY.
       go_adjust = NEW cl_jva_equity_adjust( ).
@@ -318,49 +328,40 @@ FORM process_one_row USING ps_raw TYPE ty_raw.
         iv_eqold          = lv_eqold
         iv_excloi         = lv_excloi
         iv_budat          = lv_budat
-        it_acct           = gr_acct[]
-        it_budat          = gr_budat[]
-        it_cntr           = gr_cntr[]
-        it_ordnr          = gr_ordnr[]
-        it_projk          = gr_projk[]
-        it_nplnr          = gr_nplnr[]
-        it_vornr          = gr_vornr[]
+        it_acct           = gt_r_acct
+        it_budat          = gt_r_budat
+        it_cntr           = gt_r_cntr
+        it_ordnr          = gt_r_ordnr
+        it_projk          = gt_r_projk
+        it_nplnr          = gt_r_nplnr
+        it_vornr          = gt_r_vornr
         iv_bktxt          = lv_bktxt
         iv_ivpeqg         = p_ivpeqg
         iv_ivpptn         = p_ivpptn
         iv_ivpexp         = p_ivpexp
-        iv_ec_aggregated  = p_aggreg
         iv_analysis_only  = p_displ
         iv_test           = p_test
         iv_repid_callback = sy-repid
         iv_farm_in_out    = abap_false ).
 
-      " Standard validation (authority + selection data). It may adjust
-      " the date range, exactly as it does on the GJ19A screen.
+      " Standard validation. It also derives the date range defaults,
+      " exactly as it does on the GJ19A screen.
       go_adjust->check_screen_parameters( CHANGING cv_frdate = lv_frdate
                                                    cv_todate = lv_todate ).
 
       " Reversal, re-booking and cutback correction - all standard.
       go_adjust->run_process( ).
 
-      ls_log-status = 'Success'.
-
     CATCH cx_root INTO DATA(lx_root).
       ls_log-status  = 'Error'.
       ls_log-message = lx_root->get_text( ).
+      APPEND ls_log TO gt_log.
+      RETURN.
   ENDTRY.
 
-  " A message raised inside the run is the most specific thing we have.
-  IF ls_log-message IS INITIAL AND sy-msgid IS NOT INITIAL.
-    ls_log-msgid = sy-msgid.
-    ls_log-msgno = sy-msgno.
-    MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
-            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4
-            INTO ls_log-message.
-    IF sy-msgty CA 'EAX'.
-      ls_log-status = 'Error'.
-    ENDIF.
-  ENDIF.
+  " ---- read what the run wrote to the application log ---------------
+  PERFORM read_row_result USING    lv_date_fr lv_time_fr
+                          CHANGING ls_log.
 
   APPEND ls_log TO gt_log.
 
@@ -369,21 +370,18 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form convert_row
 *&---------------------------------------------------------------------*
-*& Converts the character cells into typed fields and validates what can
-*& be validated before the standard checks take over.
-*&---------------------------------------------------------------------*
 FORM convert_row USING    ps_raw    TYPE ty_raw
-                 CHANGING cv_bukrs  TYPE jva_search_help_ts-bukrs
-                          cv_vname  TYPE jva_search_help_ts-vname
-                          cv_eqold  TYPE jvto1-regrou
-                          cv_eqnew  TYPE jvto1-regrou
-                          cv_year   TYPE bkpf-gjahr
-                          cv_period TYPE bkpf-monat
-                          cv_frdate TYPE sy-datum
-                          cv_todate TYPE sy-datum
-                          cv_budat  TYPE sy-datum
-                          cv_bktxt  TYPE bkpf-bktxt
-                          cv_excloi TYPE c
+                 CHANGING cv_bukrs  TYPE bukrs
+                          cv_vname  TYPE jv_name
+                          cv_eqold  TYPE jv_egroup
+                          cv_eqnew  TYPE jv_egroup
+                          cv_year   TYPE gjahr
+                          cv_period TYPE monat
+                          cv_frdate TYPE syst_datum
+                          cv_todate TYPE syst_datum
+                          cv_budat  TYPE syst_datum
+                          cv_bktxt  TYPE bktxt
+                          cv_excloi TYPE char1
                           cs_log    TYPE ty_log
                           cv_ok     TYPE abap_bool.
 
@@ -396,7 +394,6 @@ FORM convert_row USING    ps_raw    TYPE ty_raw
   cv_bktxt  = ps_raw-bktxt.
   cv_excloi = ps_raw-excloi.
 
-  " ---- mandatory fields ---------------------------------------------
   IF cv_bukrs IS INITIAL OR cv_vname IS INITIAL
      OR cv_eqold IS INITIAL OR cv_eqnew IS INITIAL.
     cs_log-message = 'Company code, venture and both equity groups are mandatory'.
@@ -404,14 +401,7 @@ FORM convert_row USING    ps_raw    TYPE ty_raw
     RETURN.
   ENDIF.
 
-  IF cv_eqold = cv_eqnew.
-    cs_log-message = 'Old and new equity group must be different'.
-    cv_ok = abap_false.
-    RETURN.
-  ENDIF.
-
-  " ---- year / period -------------------------------------------------
-  IF ps_raw-gjahr CO ' 0123456789' AND ps_raw-gjahr IS NOT INITIAL.
+  IF ps_raw-gjahr CO '0123456789' AND ps_raw-gjahr IS NOT INITIAL.
     cv_year = ps_raw-gjahr.
   ELSE.
     cs_log-message = 'Posting year is missing or not numeric'.
@@ -419,7 +409,7 @@ FORM convert_row USING    ps_raw    TYPE ty_raw
     RETURN.
   ENDIF.
 
-  IF ps_raw-monat CO ' 0123456789' AND ps_raw-monat IS NOT INITIAL.
+  IF ps_raw-monat CO '0123456789 ' AND ps_raw-monat IS NOT INITIAL.
     cv_period = ps_raw-monat.
   ELSE.
     cs_log-message = 'Posting period is missing or not numeric'.
@@ -427,13 +417,6 @@ FORM convert_row USING    ps_raw    TYPE ty_raw
     RETURN.
   ENDIF.
 
-  IF cv_period < '01' OR cv_period > '12'.
-    cs_log-message = 'Posting period must be between 01 and 12 (no special periods)'.
-    cv_ok = abap_false.
-    RETURN.
-  ENDIF.
-
-  " ---- dates ---------------------------------------------------------
   PERFORM to_date USING ps_raw-frdate CHANGING cv_frdate.
   PERFORM to_date USING ps_raw-todate CHANGING cv_todate.
   PERFORM to_date USING ps_raw-budat  CHANGING cv_budat.
@@ -453,10 +436,190 @@ FORM convert_row USING    ps_raw    TYPE ty_raw
 ENDFORM.
 
 *&---------------------------------------------------------------------*
+*& Form validate_row
+*&---------------------------------------------------------------------*
+*& Repeats the checks CL_JVA_EQUITY_ADJUST performs in
+*& CHECK_COMPANY_CODE / CHECK_VENTURE / CHECK_EQUITY_GROUP /
+*& CHECK_POSTING_DATE / CHECK_AUTHORITY.
+*&
+*& The class raises these as MESSAGE TYPE 'E', which would terminate the
+*& whole event block and abandon every remaining row. Catching them here
+*& keeps the rows independent. Only the class's ERROR cases are repeated -
+*& its warnings are left to the class.
+*&---------------------------------------------------------------------*
+FORM validate_row USING    pv_bukrs  TYPE bukrs
+                           pv_vname  TYPE jv_name
+                           pv_eqold  TYPE jv_egroup
+                           pv_eqnew  TYPE jv_egroup
+                           pv_year   TYPE gjahr
+                           pv_period TYPE monat
+                           pv_budat  TYPE syst_datum
+                  CHANGING cs_log    TYPE ty_log
+                           cv_ok     TYPE abap_bool.
+
+  DATA: ls_t001      TYPE t001,
+        ls_t8jv      TYPE t8jv,
+        ls_t8jg_old  TYPE t8jg,
+        ls_t8jg_new  TYPE t8jg,
+        lt_periods   TYPE STANDARD TABLE OF periods,
+        ls_periods   TYPE periods,
+        lv_poper     TYPE periods-buper,
+        lv_last      TYPE periods-buper,
+        lv_same_ven  TYPE abap_bool,
+        lv_same_type TYPE abap_bool,
+        lv_same_curr TYPE abap_bool,
+        lv_activity  TYPE c LENGTH 2,
+        lv_count     TYPE i.
+
+  cv_ok = abap_true.
+
+  " ---- company code (class: CHECK_COMPANY_CODE, e234) ---------------
+  SELECT SINGLE * FROM t001 INTO ls_t001 WHERE bukrs = pv_bukrs.
+  IF sy-subrc <> 0 OR ls_t001-xjvaa <> 'X'.
+    cs_log-message = |Company code { pv_bukrs } is not active for Joint Venture Accounting|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  SELECT COUNT( * ) FROM t8jz WHERE bukrs = pv_bukrs.
+  IF sy-subrc <> 0.
+    cs_log-message = |No JVA company code settings for { pv_bukrs }|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  " ---- venture (class: CHECK_VENTURE, e232 / e243) ------------------
+  SELECT SINGLE * FROM t8jv INTO ls_t8jv
+                  WHERE bukrs = pv_bukrs AND vname = pv_vname.
+  IF sy-subrc <> 0.
+    cs_log-message = |Venture { pv_vname } does not exist in company code { pv_bukrs }|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  IF ls_t8jv-vtype = '2' OR ls_t8jv-vtype = '5'.
+    cs_log-message = |Venture { pv_vname } has a venture type that cannot be equity adjusted|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  " ---- equity groups (class: CHECK_EQUITY_GROUP, e235/e117/e237/e566)
+  SELECT * FROM t8jg INTO ls_t8jg_old UP TO 1 ROWS
+           WHERE bukrs = pv_bukrs AND vname = pv_vname AND egrup = pv_eqold.
+  ENDSELECT.
+  IF sy-subrc <> 0.
+    cs_log-message = |Old equity group { pv_eqold } does not exist for venture { pv_vname }|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+  IF ls_t8jg_old-egroupact <> 'X'.
+    cs_log-message = |Old equity group { pv_eqold } is not active|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  SELECT * FROM t8jg INTO ls_t8jg_new UP TO 1 ROWS
+           WHERE bukrs = pv_bukrs AND vname = pv_vname AND egrup = pv_eqnew.
+  ENDSELECT.
+  IF sy-subrc <> 0.
+    cs_log-message = |New equity group { pv_eqnew } does not exist for venture { pv_vname }|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+  IF ls_t8jg_new-egroupact <> 'X'.
+    cs_log-message = |New equity group { pv_eqnew } is not active|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  IF pv_eqold = pv_eqnew.
+    cs_log-message = 'Old and new equity group must be different'.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'COMPARE_2_EQUITY_GROUPS'
+    EXPORTING
+      bukrs        = pv_bukrs
+      vname        = pv_vname
+      eg_old       = pv_eqold
+      eg_new       = pv_eqnew
+    IMPORTING
+      same_venture = lv_same_ven
+      same_type    = lv_same_type
+      equal_curr   = lv_same_curr
+    EXCEPTIONS
+      not_found    = 1
+      OTHERS       = 2.
+  IF sy-subrc = 0 AND lv_same_ven IS INITIAL.
+    cs_log-message = |Equity groups { pv_eqold } and { pv_eqnew } do not belong to the same venture|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  " ---- period and posting date (class: CHECK_POSTING_DATE) ----------
+  CALL FUNCTION 'G_PERIODS_OF_YEAR_GET'
+    EXPORTING
+      variant             = ls_t001-periv
+      year                = pv_year
+    IMPORTING
+      last_normal_period  = lv_last
+    TABLES
+      i_periods           = lt_periods
+    EXCEPTIONS
+      variant_not_defined = 1
+      year_not_defined    = 2
+      OTHERS              = 3.
+  IF sy-subrc <> 0.
+    cs_log-message = |Fiscal year variant { ls_t001-periv } is not defined for { pv_year }|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  lv_poper = pv_period.
+  READ TABLE lt_periods INTO ls_periods WITH KEY buper = lv_poper.
+  IF sy-subrc <> 0.
+    cs_log-message = |Posting period { pv_period } is not allowed (special periods are not permitted)|.
+    cv_ok = abap_false.
+    RETURN.
+  ENDIF.
+
+  " The ACDOCA class rejects a posting date outside the period
+  " unconditionally - there is no "allow previous periods" option.
+  IF pv_budat IS NOT INITIAL.
+    IF pv_budat < ls_periods-datab OR pv_budat > ls_periods-datbi.
+      cs_log-message = |Posting date { pv_budat DATE = USER } is outside posting period { pv_period }/{ pv_year }|.
+      cv_ok = abap_false.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " ---- authorisation (class: CHECK_AUTHORITY) -----------------------
+  IF p_update = 'X'.
+    lv_activity = '16'.
+  ELSE.
+    lv_activity = '48'.
+  ENDIF.
+
+  CALL FUNCTION 'JV_AUTHORITY_CHECK_PROCESS'
+    EXPORTING
+      process_code = 'EQUITY-ADJ'
+      activity     = lv_activity
+      bukrs        = pv_bukrs
+    EXCEPTIONS
+      OTHERS       = 1.
+  IF sy-subrc <> 0.
+    cs_log-message = |No authorisation for equity adjustment in company code { pv_bukrs }|.
+    cv_ok = abap_false.
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
 *& Form to_date  - DD.MM.YYYY (or YYYYMMDD) text cell to a real date
 *&---------------------------------------------------------------------*
 FORM to_date USING pv_text TYPE c
-             CHANGING cv_date TYPE sy-datum.
+             CHANGING cv_date TYPE syst_datum.
 
   DATA lv_text TYPE c LENGTH 10.
 
@@ -469,16 +632,13 @@ FORM to_date USING pv_text TYPE c
   ENDIF.
 
   IF lv_text CS '.'.
-    " DD.MM.YYYY
     cv_date+6(2) = lv_text+0(2).      " day
     cv_date+4(2) = lv_text+3(2).      " month
     cv_date+0(4) = lv_text+6(4).      " year
   ELSEIF strlen( lv_text ) = 8 AND lv_text CO '0123456789'.
-    " YYYYMMDD, as Excel sometimes hands it over
-    cv_date = lv_text.
+    cv_date = lv_text.                " YYYYMMDD
   ENDIF.
 
-  " Reject anything that is not a real calendar date.
   CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
     EXPORTING
       date                      = cv_date
@@ -494,79 +654,73 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& Form build_ranges
 *&---------------------------------------------------------------------*
-*& Builds the object-filter ranges for one row. A blank cell means no
-*& restriction, which matches leaving the field empty on the GJ19A screen.
+*& A blank cell means no restriction, matching an empty field on the
+*& GJ19A screen.
 *&---------------------------------------------------------------------*
 FORM build_ranges USING ps_raw TYPE ty_raw.
 
-  DATA: lv_from TYPE sy-datum,
-        lv_to   TYPE sy-datum.
+  DATA: lv_from  TYPE syst_datum,
+        lv_to    TYPE syst_datum,
+        lv_acctf TYPE racct,
+        lv_acctt TYPE racct,
+        lv_cntr  TYPE kostl,
+        lv_ordnr TYPE aufnr,
+        lv_nplnr TYPE aufnr,
+        lv_pspnr TYPE ps_posnr.
 
-  REFRESH: gr_budat, gr_acct, gr_cntr, gr_ordnr,
-           gr_projk, gr_nplnr, gr_vornr.
+  CLEAR: gt_r_budat, gt_r_acct, gt_r_cntr, gt_r_ordnr,
+         gt_r_projk, gt_r_nplnr, gt_r_vornr.
 
   " Selection posting-date range
   PERFORM to_date USING ps_raw-selbudf CHANGING lv_from.
   PERFORM to_date USING ps_raw-selbudt CHANGING lv_to.
-  IF lv_from IS NOT INITIAL OR lv_to IS NOT INITIAL.
-    gr_budat-sign = 'I'.
+  IF lv_from IS NOT INITIAL.
     IF lv_to IS INITIAL.
-      gr_budat-option = 'EQ'.
-      gr_budat-low    = lv_from.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_from ) TO gt_r_budat.
     ELSE.
-      gr_budat-option = 'BT'.
-      gr_budat-low    = lv_from.
-      gr_budat-high   = lv_to.
+      APPEND VALUE #( sign = 'I' option = 'BT' low = lv_from high = lv_to ) TO gt_r_budat.
     ENDIF.
-    APPEND gr_budat.
   ENDIF.
 
-  " Account range
+  " Account range - accounts are stored with leading zeros
   IF ps_raw-acctf IS NOT INITIAL.
-    gr_acct-sign = 'I'.
+    lv_acctf = ps_raw-acctf.
+    PERFORM alpha_in CHANGING lv_acctf.
     IF ps_raw-acctt IS INITIAL.
-      gr_acct-option = 'EQ'.
-      gr_acct-low    = ps_raw-acctf.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_acctf ) TO gt_r_acct.
     ELSE.
-      gr_acct-option = 'BT'.
-      gr_acct-low    = ps_raw-acctf.
-      gr_acct-high   = ps_raw-acctt.
+      lv_acctt = ps_raw-acctt.
+      PERFORM alpha_in CHANGING lv_acctt.
+      APPEND VALUE #( sign = 'I' option = 'BT' low = lv_acctf high = lv_acctt ) TO gt_r_acct.
     ENDIF.
-    " Accounts are stored with leading zeros.
-    PERFORM alpha_in CHANGING gr_acct-low.
-    PERFORM alpha_in CHANGING gr_acct-high.
-    APPEND gr_acct.
   ENDIF.
 
-  " Single-value object filters
   IF ps_raw-cntr IS NOT INITIAL.
-    gr_cntr-sign = 'I'. gr_cntr-option = 'EQ'. gr_cntr-low = ps_raw-cntr.
-    PERFORM alpha_in CHANGING gr_cntr-low.
-    APPEND gr_cntr.
+    lv_cntr = ps_raw-cntr.
+    PERFORM alpha_in CHANGING lv_cntr.
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_cntr ) TO gt_r_cntr.
   ENDIF.
 
   IF ps_raw-ordnr IS NOT INITIAL.
-    gr_ordnr-sign = 'I'. gr_ordnr-option = 'EQ'. gr_ordnr-low = ps_raw-ordnr.
-    PERFORM alpha_in CHANGING gr_ordnr-low.
-    APPEND gr_ordnr.
+    lv_ordnr = ps_raw-ordnr.
+    PERFORM alpha_in CHANGING lv_ordnr.
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_ordnr ) TO gt_r_ordnr.
   ENDIF.
 
   IF ps_raw-nplnr IS NOT INITIAL.
-    gr_nplnr-sign = 'I'. gr_nplnr-option = 'EQ'. gr_nplnr-low = ps_raw-nplnr.
-    PERFORM alpha_in CHANGING gr_nplnr-low.
-    APPEND gr_nplnr.
+    lv_nplnr = ps_raw-nplnr.
+    PERFORM alpha_in CHANGING lv_nplnr.
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_nplnr ) TO gt_r_nplnr.
   ENDIF.
 
   IF ps_raw-vornr IS NOT INITIAL.
-    gr_vornr-sign = 'I'. gr_vornr-option = 'EQ'. gr_vornr-low = ps_raw-vornr.
-    APPEND gr_vornr.
+    APPEND VALUE #( sign = 'I' option = 'EQ' low = ps_raw-vornr ) TO gt_r_vornr.
   ENDIF.
 
   " WBS element: the file carries the EXTERNAL key, the class expects the
-  " internal number - same conversion FORM convert_project_range does in
-  " the standard report.
+  " internal number - same conversion RGJVEA10_ACD does in
+  " FORM convert_project_range.
   IF ps_raw-projk IS NOT INITIAL.
-    DATA lv_pspnr TYPE ps_posnr.
     CALL FUNCTION 'CJPN_EXTERN_TO_INTERN_CONV'
       EXPORTING
         ext_num       = ps_raw-projk
@@ -577,8 +731,7 @@ FORM build_ranges USING ps_raw TYPE ty_raw.
         error_message = 2
         OTHERS        = 4.
     IF sy-subrc = 0 AND lv_pspnr IS NOT INITIAL.
-      gr_projk-sign = 'I'. gr_projk-option = 'EQ'. gr_projk-low = lv_pspnr.
-      APPEND gr_projk.
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_pspnr ) TO gt_r_projk.
     ENDIF.
   ENDIF.
 
@@ -602,37 +755,113 @@ FORM alpha_in CHANGING cv_value TYPE any.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Form check_authority
+*& Form read_row_result
 *&---------------------------------------------------------------------*
-*& Same process code the standard equity adjustment checks against.
-*& Activity 16 = execute (update), 48 = simulate (test / analysis).
+*& IF_JVA_EQUITY_ADJUST exposes no results getter and the class keeps
+*& MS_EA_RESULTS private, so the run's outcome is read back from the
+*& application log the class writes to (object JVA, saved to the
+*& database - see CL_JVA_EQUITY_ADJUST, method INITIALIZE_OBJECTS).
+*&
+*& The log is identified by the time window the row ran in, plus user.
 *&---------------------------------------------------------------------*
-FORM check_authority USING    pv_bukrs TYPE jva_search_help_ts-bukrs
-                     CHANGING cs_log   TYPE ty_log
-                              cv_ok    TYPE abap_bool.
+FORM read_row_result USING    pv_date_fr TYPE sy-datum
+                              pv_time_fr TYPE sy-uzeit
+                     CHANGING cs_log     TYPE ty_log.
 
-  DATA lv_activity TYPE c LENGTH 2.
+  DATA: ls_filter    TYPE bal_s_lfil,
+        lt_header    TYPE balhdr_t,
+        lt_msg_hndl  TYPE bal_t_msgh,
+        ls_msg       TYPE bal_s_msg,
+        lv_txt       TYPE string.
 
-  cv_ok = abap_true.
+  CLEAR: cs_log-errors, cs_log-warns.
 
-  IF p_update = 'X'.
-    lv_activity = '16'.
-  ELSE.
-    lv_activity = '48'.
-  ENDIF.
+  APPEND VALUE #( sign = 'I' option = 'EQ'
+                  low  = if_jva_message_output=>gc_bal_object-jva )
+         TO ls_filter-object.
+  APPEND VALUE #( sign = 'I' option = 'EQ'
+                  low  = if_jva_message_output=>gc_bal_subobject-general )
+         TO ls_filter-subobject.
+  APPEND VALUE #( sign = 'I' option = 'EQ' low = pv_date_fr ) TO ls_filter-aldate.
+  APPEND VALUE #( sign = 'I' option = 'EQ' low = sy-uname )   TO ls_filter-aluser.
+  APPEND VALUE #( sign = 'I' option = 'BT'
+                  low  = pv_time_fr high = sy-uzeit )         TO ls_filter-altime.
 
-  CALL FUNCTION 'JV_AUTHORITY_CHECK_PROCESS'
+  CALL FUNCTION 'BAL_DB_SEARCH'
     EXPORTING
-      process_code = 'EQUITY-ADJ'
-      activity     = lv_activity
-      bukrs        = pv_bukrs
+      i_s_log_filter = ls_filter
+    IMPORTING
+      e_t_log_header = lt_header
     EXCEPTIONS
-      OTHERS       = 1.
+      log_not_found  = 1
+      OTHERS         = 2.
 
-  IF sy-subrc <> 0.
-    cs_log-message = |No authorisation for equity adjustment in company code { pv_bukrs }|.
-    cv_ok = abap_false.
+  IF sy-subrc <> 0 OR lt_header IS INITIAL.
+    " No log written - the run had nothing to say.
+    cs_log-status = 'Success'.
+    RETURN.
   ENDIF.
+
+  " Severity counts come straight off the log headers.
+  LOOP AT lt_header INTO DATA(ls_header).
+    cs_log-errors = cs_log-errors + ls_header-msg_cnt_a + ls_header-msg_cnt_e.
+    cs_log-warns  = cs_log-warns  + ls_header-msg_cnt_w.
+  ENDLOOP.
+
+  IF cs_log-errors > 0.
+    cs_log-status = 'Error'.
+  ELSEIF cs_log-warns > 0.
+    cs_log-status = 'Warning'.
+  ELSE.
+    cs_log-status = 'Success'.
+    RETURN.
+  ENDIF.
+
+  " Load the logs and pull the first message that explains the status.
+  CALL FUNCTION 'BAL_DB_LOAD'
+    EXPORTING
+      i_t_log_header = lt_header
+    EXCEPTIONS
+      OTHERS         = 1.
+  IF sy-subrc <> 0.
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'BAL_GLB_SEARCH_MSG'
+    EXPORTING
+      i_s_msg_filter = VALUE bal_s_mfil(
+                         msgty = COND #( WHEN cs_log-errors > 0
+                                         THEN VALUE #( ( sign = 'I' option = 'EQ' low = 'E' )
+                                                       ( sign = 'I' option = 'EQ' low = 'A' ) )
+                                         ELSE VALUE #( ( sign = 'I' option = 'EQ' low = 'W' ) ) ) )
+    IMPORTING
+      e_t_msg_handle = lt_msg_hndl
+    EXCEPTIONS
+      msg_not_found  = 1
+      OTHERS         = 2.
+  IF sy-subrc <> 0 OR lt_msg_hndl IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  READ TABLE lt_msg_hndl INTO DATA(ls_hndl) INDEX 1.
+  IF sy-subrc = 0.
+    CALL FUNCTION 'BAL_LOG_MSG_READ'
+      EXPORTING
+        i_s_msg_handle = ls_hndl
+      IMPORTING
+        e_s_msg        = ls_msg
+        e_txt_msg      = lv_txt
+      EXCEPTIONS
+        OTHERS         = 1.
+    IF sy-subrc = 0.
+      cs_log-message = lv_txt.
+    ENDIF.
+  ENDIF.
+
+  " Free the loaded logs so the next row starts clean.
+  CALL FUNCTION 'BAL_GLB_MEMORY_REFRESH'
+    EXCEPTIONS
+      OTHERS = 1.
 
 ENDFORM.
 
