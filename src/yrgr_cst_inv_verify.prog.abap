@@ -119,9 +119,9 @@ SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   PARAMETERS: p_view  RADIOBUTTON GROUP r1 DEFAULT 'X',
-              p_verfy RADIOBUTTON GROUP r1,
-              p_vstat RADIOBUTTON GROUP r1,
-              p_canc  RADIOBUTTON GROUP r1.
+              p_verfy RADIOBUTTON GROUP r1 NO-DISPLAY,
+              p_vstat RADIOBUTTON GROUP r1 NO-DISPLAY,
+              p_canc  RADIOBUTTON GROUP r1 NO-DISPLAY.
 SELECTION-SCREEN END OF BLOCK b2.
 
 *----------------------------------------------------------------------*
