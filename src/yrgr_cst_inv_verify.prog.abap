@@ -493,11 +493,11 @@ FORM display_alv.
             CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_medium_text( 'Bill To' ).
             CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_long_text( 'Bill To' ).
 
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_short_text( 'Inv Qty SCM' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_short_text( 'InvQty SCM' ).
             CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_medium_text( 'Invoice Qty(SCM)' ).
             CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_long_text( 'Invoice Quantity (SCM)' ).
 
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_short_text( 'Inv Qty MBG' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_short_text( 'InvQty MBG' ).
             CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_medium_text( 'Invoice Qty(MBG)' ).
             CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_long_text( 'Invoice Qty (MBG)' ).
 
