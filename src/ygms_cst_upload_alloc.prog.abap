@@ -41,7 +41,7 @@ SELECTION-SCREEN END OF BLOCK b4.
 INITIALIZATION.
   btn1   = '@48@ Upload/View Receipt Data'.
   btn2   = '@48@ Run Allocation'.
-  btn3   = '@48@ ONGC Invoice Details'.
+  btn3   = '@48@ View Invoice Details'.
   btn4   = '@48@ Create Nomination Data'.
   c_txt1 = 'Click here to upload/view receipt data'.
   c_txt2 = 'Allocate receipt quantities to states'.
@@ -58,7 +58,8 @@ AT SELECTION-SCREEN.
     WHEN 'ALLOC'.
       SUBMIT ygms_cst_purchase_main VIA SELECTION-SCREEN AND RETURN.
     WHEN 'INVDT'.
-      SUBMIT yrgr_cst_inv_verify VIA SELECTION-SCREEN AND RETURN.
+      SUBMIT yrgr_cst_inv_verify USING SELECTION-SET 'TEST1'
+                                  VIA SELECTION-SCREEN AND RETURN.
     WHEN 'NOMIN'.
       SUBMIT yrgg015_purc_nom_ongc_b2b VIA SELECTION-SCREEN AND RETURN.
   ENDCASE.
