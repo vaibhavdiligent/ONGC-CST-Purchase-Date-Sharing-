@@ -405,22 +405,27 @@ FORM display_alv.
 
       go_alv->get_functions( )->set_all( abap_true ).
 
-      go_alv->get_functions( )->add_function(
-        name     = gc_btn_item
-        icon     = '@04@'
-        text     = 'Item Data'
-        tooltip  = 'Show invoice item details'
-        position = if_salv_c_function_position=>right_of_salv_functions ).
+      TRY.
+          go_alv->get_functions( )->add_function(
+            name     = gc_btn_item
+            icon     = '@04@'
+            text     = 'Item Data'
+            tooltip  = 'Show invoice item details'
+            position = if_salv_c_function_position=>right_of_salv_functions ).
 
-      go_alv->get_functions( )->add_function(
-        name     = gc_btn_header
-        icon     = '@05@'
-        text     = 'Header Data'
-        tooltip  = 'Show invoice header details'
-        position = if_salv_c_function_position=>right_of_salv_functions ).
+          go_alv->get_functions( )->add_function(
+            name     = gc_btn_header
+            icon     = '@05@'
+            text     = 'Header Data'
+            tooltip  = 'Show invoice header details'
+            position = if_salv_c_function_position=>right_of_salv_functions ).
 
-      CREATE OBJECT go_handler.
-      SET HANDLER go_handler->on_user_command FOR go_alv->get_event( ).
+          CREATE OBJECT go_handler.
+          SET HANDLER go_handler->on_user_command FOR go_alv->get_event( ).
+
+        CATCH cx_salv_method_not_supported.
+          " Custom toolbar buttons not supported in fullscreen list mode; continue without them
+      ENDTRY.
 
       go_alv->get_columns( )->set_optimize( abap_true ).
       go_alv->get_display_settings( )->set_list_header(
