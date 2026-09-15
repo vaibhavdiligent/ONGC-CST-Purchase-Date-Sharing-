@@ -350,8 +350,7 @@ FORM fetch_item_data.
     READ TABLE gt_loc_ctp ASSIGNING FIELD-SYMBOL(<fs_map>)
       WITH KEY ongc_ctp_id = <fs_item>-ctp_id.
     IF sy-subrc = 0.
-      ls_alv-gail_loc_id   = <fs_map>-gail_loc_id.
-      ls_alv-gail_location = <fs_map>-gail_loc_id.
+      ls_alv-gail_loc_id = <fs_map>-gail_loc_id.
     ENDIF.
 
     APPEND ls_alv TO gt_item_alv.
@@ -398,18 +397,32 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM enrich_item_data.
 
-  DATA: lv_gail_mat  TYPE ygms_de_gail_mat,
+  DATA: lv_gail_loc  TYPE ygms_de_loc_id,
+        lv_gail_mat  TYPE ygms_de_gail_mat,
         lv_sent_scm  TYPE ygms_de_qty_scm,
         lv_sent_mbg  TYPE ygms_de_qty_mbg.
 
   LOOP AT gt_item_alv ASSIGNING FIELD-SYMBOL(<fs_alv>).
 
-    " GAIL Material from YRGA_CST_MAT_MAP
+    " GAIL Location from YRGA_CST_LOC_MAP filtered by CTP, dates, and DELETED
+    CLEAR lv_gail_loc.
+    SELECT SINGLE gail_loc_id
+      FROM yrga_cst_loc_map
+      WHERE ongc_ctp_id  = @<fs_alv>-ctp_id
+        AND valid_from   = @<fs_alv>-bill_from
+        AND valid_to     = @<fs_alv>-bill_to
+        AND deleted      = @abap_false
+      INTO @lv_gail_loc.
+    <fs_alv>-gail_location = lv_gail_loc.
+
+    " GAIL Material from YRGA_CST_MAT_MAP filtered by GAIL Location, ONGC Material, dates, and DELETED
     CLEAR lv_gail_mat.
     SELECT SINGLE gail_material
       FROM yrga_cst_mat_map
-      WHERE location_id   = @<fs_alv>-gail_location
+      WHERE location_id   = @lv_gail_loc
         AND ongc_material = @<fs_alv>-ongc_material
+        AND valid_from    = @<fs_alv>-bill_from
+        AND valid_to      = @<fs_alv>-bill_to
         AND deleted       = @abap_false
       INTO @lv_gail_mat.
     <fs_alv>-gail_material = lv_gail_mat.
