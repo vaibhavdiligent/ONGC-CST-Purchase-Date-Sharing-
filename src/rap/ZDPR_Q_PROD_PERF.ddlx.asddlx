@@ -1,0 +1,48 @@
+@Metadata.layer: #CUSTOMER
+
+@UI.headerInfo: {
+  typeName:       'Production Performance',
+  typeNamePlural: 'Production Performance',
+  title:          { type: #STANDARD, value: 'ProductGroupText' },
+  description:    { type: #STANDARD, value: 'ScopeText' }
+}
+
+@UI.chart: [{
+  qualifier:  'PerfByGroup',
+  title:      'Actual vs BE Target (BOEPD)',
+  chartType:  #COLUMN,
+  dimensions: ['ProductGroupText', 'ScopeText'],
+  measures:   ['ActualBoepdPerDay', 'TargetBoepdPerDay']
+}]
+
+@UI.presentationVariant: [{
+  visualizations: [
+    { type: #AS_CHART },
+    { type: #AS_LINEITEM }
+  ]
+}]
+
+annotate view ZDPR_Q_PROD_PERF with
+{
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Scope' }]
+  ScopeText;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
+  ProductGroupText;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH, label: 'Actual (BOPD / MMSCMD)' }]
+  ActualPerDay;
+
+  @UI.lineItem: [{ position: 40, importance: #HIGH, label: 'BE Target (BOPD / MMSCMD)' }]
+  TargetPerDay;
+
+  @UI.lineItem: [{ position: 50, importance: #HIGH, label: 'Actual Total (BOEPD)' }]
+  ActualBoepdPerDay;
+
+  @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'BE Target Total (BOEPD)' }]
+  TargetBoepdPerDay;
+
+  @UI.lineItem: [{ position: 70, importance: #HIGH, label: '% Achv w.r.t. BE Target' }]
+  @UI.dataPoint: { title: '% Achv w.r.t. BE Target' }
+  AchievementPct;
+}

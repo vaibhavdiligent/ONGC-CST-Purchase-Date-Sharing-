@@ -1,0 +1,93 @@
+@AbapCatalog.sqlViewName: 'ZDPRQPRODPERF'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+@EndUserText.label: 'DPR Production Performance (Excel tab 3)'
+@Metadata.ignorePropagatedAnnotations: true
+@Metadata.allowExtensions: true
+
+/* ── The Production Performance table of the DPR Excel (tab 3) ──────────────
+ * One row per (Scope, Product group):
+ *   Scope 'YTD'    -> Actual & BE Target per-day figures for the report window
+ *   Scope 'ANNUAL' -> BE Target per-day figure only (Actual = 0, Excel "-")
+ * Columns mirror the Excel blocks:
+ *   Oil group  : BOPD        Gas group : MMSCMD       Boepd : Total (O+OEG)
+ * AchievementPct = YTD "% Achv w.r.t. BE Target" (0 for ANNUAL rows, where the
+ * Excel leaves the cell blank). Operates on <= 4 pre-aggregated rows - the
+ * division cost is negligible; all scanning happened in ZDPR_P_PERF_AGG.
+ * ─────────────────────────────────────────────────────────────────────────── */
+@OData.publish: true
+
+define view ZDPR_Q_PROD_PERF
+  with parameters
+    P_DateFrom   : datum,
+    P_DateTo     : datum,
+    P_FiscalYear : gjahr
+
+  as select from ZDPR_P_PERF_AGG(
+                   P_DateFrom   : $parameters.P_DateFrom,
+                   P_DateTo     : $parameters.P_DateTo,
+                   P_FiscalYear : $parameters.P_FiscalYear )
+
+{
+  key ScopeType,
+  key ProductGroup,
+
+      @EndUserText.label: 'Scope'
+      case ScopeType
+        when 'YTD'    then 'YTD'
+        when 'ANNUAL' then 'Annual'
+        else               ScopeType
+      end                                             as ScopeText,
+
+      @EndUserText.label: 'Product Group'
+      case ProductGroup
+        when 'GAS' then 'Gas ( MMSCMD )'
+        else            'Oil, LNG & Condensate ( BOPD )'
+      end                                             as ProductGroupText,
+
+      /* ── Actual (per-day average over the window; 0 on ANNUAL rows) ──── */
+      @EndUserText.label: 'Actual (BOPD / MMSCMD)'
+      cast( case when Divisor > 0
+                 then cast( division( SumActualQty, Divisor, 7 ) as abap.dec( 23, 7 ) )
+                 else cast( 0 as abap.dec( 23, 7 ) )
+            end as abap.dec( 23, 7 ) )                as ActualPerDay,
+
+      @EndUserText.label: 'Actual Total (BOEPD)'
+      cast( case when Divisor > 0
+                 then cast( division( SumActualBoepd, Divisor, 3 ) as abap.dec( 23, 3 ) )
+                 else cast( 0 as abap.dec( 23, 3 ) )
+            end as abap.dec( 23, 3 ) )                as ActualBoepdPerDay,
+
+      /* ── BE Target (per-day rate) ────────────────────────────────────── */
+      @EndUserText.label: 'BE Target (BOPD / MMSCMD)'
+      cast( case when Divisor > 0
+                 then cast( division( SumTargetQty, Divisor, 7 ) as abap.dec( 23, 7 ) )
+                 else cast( 0 as abap.dec( 23, 7 ) )
+            end as abap.dec( 23, 7 ) )                as TargetPerDay,
+
+      @EndUserText.label: 'BE Target Total (BOEPD)'
+      cast( case when Divisor > 0
+                 then cast( division( SumTargetBoepd, Divisor, 3 ) as abap.dec( 23, 3 ) )
+                 else cast( 0 as abap.dec( 23, 3 ) )
+            end as abap.dec( 23, 3 ) )                as TargetBoepdPerDay,
+
+      /* ── % Achievement w.r.t. BE Target (YTD only; 0 -> blank/Annual) ── */
+      @EndUserText.label: '% Achv w.r.t. BE Target'
+      cast( case when ScopeType = 'YTD' and SumTargetBoepd > 0
+                 then cast( division( SumActualBoepd * 100, SumTargetBoepd, 2 )
+                            as abap.dec( 10, 2 ) )
+                 else cast( 0 as abap.dec( 10, 2 ) )
+            end as abap.dec( 10, 2 ) )                as AchievementPct,
+
+      /* UI criticality for the % cell: 3=green >=100, 2=amber >=90, 1=red,
+         0=neutral (ANNUAL rows - no actual, Excel shows "-") */
+      @EndUserText.label: 'Achievement Criticality'
+      cast( case
+              when ScopeType <> 'YTD' or SumTargetBoepd <= 0        then 0
+              when SumActualBoepd >= SumTargetBoepd                 then 3
+              when SumActualBoepd * cast( 100 as abap.dec( 4, 0 ) )
+                   >= SumTargetBoepd * cast( 90 as abap.dec( 4, 0 ) ) then 2
+              else 1
+            end as abap.int1 )                        as AchievementCriticality
+}
