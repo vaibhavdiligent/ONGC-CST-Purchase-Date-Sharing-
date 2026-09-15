@@ -68,7 +68,7 @@ Last updated: 2026-09-15.
 | ZDPR_C_BOEPD_DAY | cube | actual vs BE target per day (join to targets, not on GAS_INJ rows) |
 | ZDPR_C_TARGET_CUBE | cube (param P_TargetCode) | monthly actual vs target — the join lives HERE because queries may not join |
 | ZDPR_P_PERF_AGG | view entity (union) | YTD + ANNUAL aggregates for tab 3 |
-| ZDPR_Q_PROD_PERF | view entity | tab-3 query (ratios of pre-aggregated rows); exposed via OData V4 |
+| ZDPR_Q_PROD_PERF | **classic `define view`**, `@OData.publish: true` (also in the V4 SRVD) | tab-3 query (ratios via division()); OData V2 service ZDPR_Q_PROD_PERF_CDS for the Overview Page |
 | ZDPR_Q_BOEPD_TREND, ZDPR_Q_DAILY_TREND, ZDPR_Q_PROD_QUERY, ZDPR_Q_TARGET_QUERY | **classic `define view`**, `@Analytics.query: true`, `@OData.publish: true` | analytical queries → auto-generated OData V2 services `ZDPR_Q_*_CDS` |
 | ZDPR_A_PROD_PARAM, ZDPR_A_TAR_PARAM, ZDPR_A_EXCEL_RESULT, ZDPR_A_PDF_RESULT | abstract entities | action parameters/results |
 | ZDPR_I_EXCEL_DL | root view + BDEF (unmanaged, action-only) | hosts 4 static download actions |
@@ -81,6 +81,13 @@ Old ZPRA_* names were abandoned on the user's instruction ("make everything new"
 do not reintroduce them.
 
 ## 4. Current status (as of last message)
+
+- **Direction change 2026-09-15: ONE dashboard, not four apps.** Target is a Fiori
+  Overview Page (OVP) app with cards per query, all on OData V2 (hence
+  ZDPR_Q_PROD_PERF also published as V2). Design + manifest/card snippets are in
+  `deploy/ZDPR_RAP_Single_Dashboard_OVP.docx`. OVP cards bind to the `...Results`
+  entity set and get parameters via `UI.SelectionVariant#Params`; global filter
+  entity type = `ZDPR_Q_PROD_PERFType`.
 
 - All CDS objects **active** in the customer's system (imported via
   ZABAPGIT_STANDALONE offline ZIP into ZPR_DPR_RAP, transport OCQK901644).
@@ -143,7 +150,9 @@ old annotation registry and strict checks). Every item below cost a round trip:
 
 ## 6. How to rebuild deliverables
 
-Scratchpad scripts (recreate if the container was reset — they are not in git):
+ZIP builder is in git: `python3 tools/build_abapgit_zip.py` (add `--with-ddlx` to
+include metadata extensions) writes `deploy/ZPR_DPR_RAP_abapgit.zip`. The docx
+generators live in `tools/` too where available; if missing, recreate them.
 - `build_abapgit_zip.py` — builds `ZPR_DPR_RAP_abapgit.zip` from `src/rap/` with
   generated abapGit sidecar XMLs (formats copied from SAP-samples/abap-platform-rap100).
   `DDLS` list must include all 18 views; `DDLX = []` for the "no-ddlx" variant
