@@ -1,3 +1,5 @@
+@AbapCatalog.sqlViewName: 'ZDPRQPRODPERF'
+@AbapCatalog.compiler.compareFilter: true
 @AbapCatalog.viewEnhancementCategory: [#NONE]
 @AccessControl.authorizationCheck: #NOT_REQUIRED
 @EndUserText.label: 'DPR Production Performance (Excel tab 3)'
@@ -14,9 +16,9 @@
  * Excel leaves the cell blank). Operates on <= 4 pre-aggregated rows - the
  * division cost is negligible; all scanning happened in ZDPR_P_PERF_AGG.
  * ─────────────────────────────────────────────────────────────────────────── */
-@OData.entityType.name: 'DPRProdPerfQueryType'
+@OData.publish: true
 
-define view entity ZDPR_Q_PROD_PERF
+define view ZDPR_Q_PROD_PERF
   with parameters
     P_DateFrom   : datum,
     P_DateTo     : datum,
@@ -47,34 +49,34 @@ define view entity ZDPR_Q_PROD_PERF
       /* ── Actual (per-day average over the window; 0 on ANNUAL rows) ──── */
       @EndUserText.label: 'Actual (BOPD / MMSCMD)'
       cast( case when Divisor > 0
-                 then SumActualQty / Divisor
+                 then cast( division( SumActualQty, Divisor, 7 ) as abap.dec( 23, 7 ) )
                  else cast( 0 as abap.dec( 23, 7 ) )
             end as abap.dec( 23, 7 ) )                as ActualPerDay,
 
       @EndUserText.label: 'Actual Total (BOEPD)'
       cast( case when Divisor > 0
-                 then SumActualBoepd / Divisor
+                 then cast( division( SumActualBoepd, Divisor, 3 ) as abap.dec( 23, 3 ) )
                  else cast( 0 as abap.dec( 23, 3 ) )
             end as abap.dec( 23, 3 ) )                as ActualBoepdPerDay,
 
       /* ── BE Target (per-day rate) ────────────────────────────────────── */
       @EndUserText.label: 'BE Target (BOPD / MMSCMD)'
       cast( case when Divisor > 0
-                 then SumTargetQty / Divisor
+                 then cast( division( SumTargetQty, Divisor, 7 ) as abap.dec( 23, 7 ) )
                  else cast( 0 as abap.dec( 23, 7 ) )
             end as abap.dec( 23, 7 ) )                as TargetPerDay,
 
       @EndUserText.label: 'BE Target Total (BOEPD)'
       cast( case when Divisor > 0
-                 then SumTargetBoepd / Divisor
+                 then cast( division( SumTargetBoepd, Divisor, 3 ) as abap.dec( 23, 3 ) )
                  else cast( 0 as abap.dec( 23, 3 ) )
             end as abap.dec( 23, 3 ) )                as TargetBoepdPerDay,
 
       /* ── % Achievement w.r.t. BE Target (YTD only; 0 -> blank/Annual) ── */
       @EndUserText.label: '% Achv w.r.t. BE Target'
       cast( case when ScopeType = 'YTD' and SumTargetBoepd > 0
-                 then SumActualBoepd * cast( 100 as abap.dec( 4, 0 ) )
-                      / SumTargetBoepd
+                 then cast( division( SumActualBoepd * 100, SumTargetBoepd, 2 )
+                            as abap.dec( 10, 2 ) )
                  else cast( 0 as abap.dec( 10, 2 ) )
             end as abap.dec( 10, 2 ) )                as AchievementPct,
 
