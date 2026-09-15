@@ -52,7 +52,7 @@ START-OF-SELECTION.
        FOR ALL ENTRIES IN lt_payordr
        WHERE laufd = lt_payordr-laufd
        AND   laufi = lt_payordr-laufi
-       AND   xvorl = ' '
+*       AND   xvorl = ' '   "kept open: REGUHM match was empty with this on
        AND   zbukr = lt_payordr-zbukr
        AND   lifnr = lt_payordr-lifnr
        AND   kunnr = lt_payordr-kunnr.
