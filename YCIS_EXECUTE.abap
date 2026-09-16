@@ -1,13 +1,16 @@
 *&---------------------------------------------------------------------*
 *& Report  YCIS_EXECUTE
 *&---------------------------------------------------------------------*
-*& CIS 2026-27 - 3-level approval workflow : LEVEL 3 (CPC - Execution).
+*& CIS 2026-27 - 6-level approval workflow : LEVEL 3 (CPC - Execution).
 *&
 *&   L3 (CPC) is central (maintained in YCIS_WF_APPR under sales office
 *&   '0001', level 3) and sees the Pending-L3 rows of ALL sales offices.
 *&     EXECUTE -> create the rebate order (credit-memo request) via BAPI,
-*&                WF_STATUS '40' (Completed), store the order number.
-*&     REJECT  -> WF_STATUS '20' (back to L2 - PC MKTG-HOD), e-mail L2.
+*&                WF_STATUS '40' (Pending L4), store the order number,
+*&                forward to L4 (CPC Finance - Financial Vetting), e-mail L4.
+*&     REJECT  -> WF_STATUS '10' (back to L1 for reinitiation), e-mail L1.
+*&   Status model (6-level): 10 L1 / 20 L2 / 30 L3 / 40 L4 / 50 L5 / 60 L6 /
+*&   70 Completed (disbursed).  Any reject at any level returns to L1.
 *&
 *& GUI status 'STANDARD' (function codes EXEC, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (see doc).
@@ -65,7 +68,9 @@ DATA: gt_appr  TYPE STANDARD TABLE OF ycis_apprvl,
       gt_fcat  TYPE slis_t_fieldcat_alv,
       gs_fcat  TYPE slis_fieldcat_alv,
       gs_layout TYPE slis_layout_alv,
-      gv_isl3  TYPE flag.
+      gv_isl3  TYPE flag,
+      gr_stype TYPE RANGE OF ycis_apprvl-scheme_type,
+      gs_stype LIKE LINE OF gr_stype.
 
 *--------------------------------------------------------------------*
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
@@ -73,10 +78,26 @@ SELECT-OPTIONS: s_sptag FOR ycis_apprvl-period_from,
                 s_vkbur FOR ycis_apprvl-sales_off,
                 s_kunnr FOR ycis_apprvl-kunnr,
                 s_kvgr2 FOR ycis_apprvl-kvgr2.
+*   Scheme selection - same Monthly / Yearly choice as the L1 program
+*   (YRVG004_QAIS_EXECUTE_N1). Monthly -> 'M', Yearly -> Annual 'A' +
+*   Annual Consistency 'C'. GAIL 30.07.2026.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_mon  RADIOBUTTON GROUP g1 DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(25) c_mon.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_year RADIOBUTTON GROUP g1.
+SELECTION-SCREEN COMMENT 3(25) c_year.
+SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b1.
+
+INITIALIZATION.
+  c_mon  = 'Monthly'.
+  c_year = 'Yearly (Annual)'.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
+  PERFORM build_stype_range.
   PERFORM check_l3_auth.
   IF gv_isl3 IS INITIAL.
     MESSAGE 'You are not maintained as a Level-3 (CPC) executor (YCIS_WF_APPR)' TYPE 'I'.
@@ -105,11 +126,30 @@ ENDFORM.
 FORM get_pending.
 *   CPC is central -> all offices' pending-L3 rows (narrowed by s_vkbur)
   SELECT * FROM ycis_apprvl INTO TABLE gt_appr
-    WHERE wf_status   = '30'
+    WHERE wf_status    = '30'
+      AND scheme_type IN gr_stype               " Monthly / Yearly (excl. rebate 'U')
       AND sales_off   IN s_vkbur
       AND period_from IN s_sptag
       AND kunnr       IN s_kunnr
       AND kvgr2       IN s_kvgr2.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  build_stype_range   (Monthly / Yearly scheme selection)
+*&---------------------------------------------------------------------*
+*   Monthly -> 'M'; Yearly -> Annual 'A' + Annual Consistency 'C'. Mirrors
+*   the L1 program's Monthly / Annual choice and keeps the rebate queue
+*   ('U') out. GAIL 30.07.2026.
+*&---------------------------------------------------------------------*
+FORM build_stype_range.
+  REFRESH gr_stype.
+  gs_stype-sign = 'I'. gs_stype-option = 'EQ'.
+  IF p_year = 'X'.
+    gs_stype-low = 'A'. APPEND gs_stype TO gr_stype.
+    gs_stype-low = 'C'. APPEND gs_stype TO gr_stype.
+  ELSE.
+    gs_stype-low = 'M'. APPEND gs_stype TO gr_stype.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -202,7 +242,7 @@ FORM top_of_page.                                           "#EC CALLED
   DATA: lt_hdr TYPE slis_t_listheader,
         ls_hdr TYPE slis_listheader.
   CLEAR ls_hdr. ls_hdr-typ = 'H'.
-  ls_hdr-info = 'CIS 2026-27 - Level-3 Execution (verified & confirmed at L1 and L2)'.
+  ls_hdr-info = 'CIS 2026-27 L-3 Execution (Verified & Confirmed at L1 & L2)'.
   APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt1. APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt2. APPEND ls_hdr TO lt_hdr.
@@ -256,6 +296,7 @@ FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_err    TYPE i,
         lv_dup    TYPE i,
+        lv_zero   TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_off    TYPE vkbur,
@@ -309,17 +350,47 @@ FORM process_selected USING p_action TYPE char1.
         CONTINUE.
       ENDIF.
 
+*     Zero-amount group member (GAIL 05.08.2026): a row with no discount
+*     value / no order quantity creates NO rebate order, but it has already
+*     flowed L1 -> L2 as a legitimate 'Grp O.k' / waiver line (a pure zero
+*     row with no waiver is blocked at L1). It must still be COMPLETED with
+*     a dummy SD document ('GROUP OK') and Approved status, so the group is
+*     treated as processed and can be run again next month - instead of
+*     being left stuck at Pending with a blank SD document.
+      IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
+        lv_zero = lv_zero + 1.
+        gs_appr-wf_status = '40'.          " Pending L4 - forwarded (6-level flow)
+        gs_appr-status    = 'P'.           " still in workflow
+        gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
+        gs_appr-l3_user   = sy-uname.
+        gs_appr-l3_date   = sy-datum.
+        gs_appr-l3_time   = sy-uzeit.
+        gs_appr-remarks   = 'Group OK - zero lifting, forwarded to L4'.
+        MODIFY ycis_apprvl FROM gs_appr.
+        COMMIT WORK AND WAIT.
+        gs_out-order_no = 'GROUP OK'.
+        gs_out-remarks  = 'Group OK - zero lifting, forwarded to L4'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
+        CONTINUE.
+      ENDIF.
+
       CLEAR lv_vbeln.
       PERFORM create_order USING gs_appr CHANGING lv_vbeln.
       IF lv_vbeln IS NOT INITIAL.
-        gs_appr-wf_status = '40'.        " Completed
-        gs_appr-status    = 'A'.         " Approved - order created (clears 'P' Pending)
+        gs_appr-wf_status = '40'.        " Pending L4 (Financial Vetting) - 6-level flow
+        gs_appr-status    = 'P'.         " still in workflow (final only after L6)
         gs_appr-order_no  = lv_vbeln.
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Executed - order created'.
+        gs_appr-remarks   = 'Executed - rebate order created, forwarded to L4'.
         MODIFY ycis_apprvl FROM gs_appr.
+*       one sync commit per row: persists this order's VBKD / YRVA_REBATE /
+*       YCIS_APPRVL_GRD / master + the YCIS_APPRVL stamp together, so the
+*       duplicate guard is crash-safe and group execution does 1 (not 3)
+*       extra COMMIT WORK AND WAIT per member.
+        COMMIT WORK AND WAIT.
         lv_cnt = lv_cnt + 1.
 *       keep the row on the main grid and show the created rebate order
         gs_out-order_no = lv_vbeln.
@@ -333,7 +404,8 @@ FORM process_selected USING p_action TYPE char1.
         MODIFY gt_out FROM gs_out.
       ENDIF.
     ELSE.
-      gs_appr-wf_status   = '20'.     " back to L2
+      gs_appr-wf_status   = '10'.     " back to L1 (6-level: any reject returns to L1)
+      gs_appr-status      = 'R'.
       gs_appr-rej_level   = gc_level.
       gs_appr-rej_by      = sy-uname.
       gs_appr-rej_date    = sy-datum.
@@ -346,56 +418,36 @@ FORM process_selected USING p_action TYPE char1.
     ENDIF.
   ENDLOOP.
 
-  IF lv_cnt > 0.
-    COMMIT WORK.
-    IF p_action = 'R'.
-      LOOP AT lt_office INTO lv_off.
-        PERFORM send_mail USING '2' lv_off lv_off 'CIS rebates rejected by L3 - please review (L2)'.
-      ENDLOOP.
-*     rejected rows leave L3 - remove them from the grid
-      DELETE gt_out WHERE sel = 'X'.
-    ENDIF.
-  ENDIF.
-* executed rows stay on the main grid with their Rebate Order number, so the
-* CPC user sees the full rebate-order list right after execution (visibility).
+* executed rows keep their Rebate Order number on the grid; they are now
+* forwarded to L4 (CPC Finance - Financial Vetting). Reject returns to L1.
   IF p_action = 'E'.
-    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0.
-*     only already-created lines were selected
+*   L4 is central in YCIS_WF_APPR (sales office '0001', level 4) - notify once
+*   that rebate orders are ready for financial vetting. (executed rows are
+*   already committed per-row above.)
+    IF lv_cnt > 0 OR lv_zero > 0.
+      PERFORM send_mail USING '4' '0001' '0001' space.
+    ENDIF.
+    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
-    ENDIF.
-*   confirmation pop-up after execution (GAIL 27.07.2026)
-    IF lv_cnt > 0.
-      PERFORM show_stmt_popup.
+      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } group-OK forwarded, { lv_err } failed - see 'Remarks'| TYPE 'S'.
     ENDIF.
   ELSE.
-    MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
+    IF lv_cnt > 0.
+      COMMIT WORK.
+*     6-level rule: any reject returns to L1 for reinitiation - notify L1.
+      LOOP AT lt_office INTO lv_off.
+        PERFORM send_mail USING '1' lv_off lv_off space.
+      ENDLOOP.
+      DELETE gt_out WHERE sel = 'X'.
+    ENDIF.
+    MESSAGE |{ lv_cnt } line(s) rejected and returned to L1| TYPE 'S'.
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  show_stmt_popup   (confirmation statement pop-up)
-*&---------------------------------------------------------------------*
-FORM show_stmt_popup.
-  DATA: lv_ans TYPE c.
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
-    EXPORTING
-      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
-      text_question         =
-        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
-        'rates and amounts, have been verified and confirmed after considering ' &&
-        'customer waivers, shortfall waivers, sales return quantities, and ' &&
-        'Group/MLE details.'
-      text_button_1         = 'OK'
-      icon_button_1         = 'ICON_OKAY'
-      display_cancel_button = ' '
-    IMPORTING
-      answer                = lv_ans
-    EXCEPTIONS
-      text_not_found        = 1
-      OTHERS                = 2.
-ENDFORM.
+*   The Verification & Confirmation pop-up was removed from L3: per GAIL
+*   (30.07.2026) it is shown only at L1 (maker) and L2 (approver), the
+*   levels that verify and confirm the figures - L3 only executes.
 
 *&---------------------------------------------------------------------*
 *&      Form  create_order   (build & post the rebate order from payload)
@@ -414,6 +466,14 @@ FORM create_order USING p_appr TYPE ycis_apprvl
         x_return    LIKE bapireturn1,
         w_objtype   LIKE bapiusw01-objtype,
         w_vbeln     LIKE bapivbeln-vbeln.
+
+*   Do NOT create a zero-amount rebate order (GAIL 30.07.2026): if there is
+*   no discount value or no order quantity, there is nothing to credit, so
+*   skip creation and return with an empty document. Mirrors the guard in
+*   the original YRVU001 (IF cd_value1 <> 0 AND target_qty <> 0 -> create).
+  IF p_appr-cd_value IS INITIAL OR p_appr-target_qty IS INITIAL.
+    RETURN.
+  ENDIF.
 
   x_header-doc_type   = p_appr-doc_type.
   x_header-sales_org  = p_appr-sales_org.
@@ -483,7 +543,13 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
   UPDATE vbkd SET bstdk   = p_appr-period_from
                   bstdk_e = p_appr-period_to
             WHERE vbeln = p_vbeln.
-  COMMIT WORK AND WAIT.
+*   Performance (GAIL 30.07.2026 - L3 slow for group customers): the
+*   per-form COMMIT WORK AND WAIT calls were removed. All direct-table
+*   updates for one row (VBKD / YRVA_REBATE / YCIS_APPRVL_GRD / master /
+*   YCIS_APPRVL) are now committed ONCE per row by the caller, so a group
+*   of N members needs 1 (not 3) extra sync commit per member. The sales
+*   order itself is already persisted by BAPI_TRANSACTION_COMMIT above,
+*   which is why the VBKD update here still finds the document.
 
 * rebate log
   CLEAR ls_reb.
@@ -509,8 +575,7 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
       AND period_to   = p_appr-period_to
       AND kunnr       = p_appr-kunnr
       AND kvgr2       = p_appr-kvgr2.
-
-  COMMIT WORK AND WAIT.
+* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -635,7 +700,7 @@ FORM post_master_update USING p_appr TYPE ycis_apprvl
       ENDIF.
       MODIFY yrva_qais_data_m FROM ls_qm.
   ENDCASE.
-  COMMIT WORK AND WAIT.
+* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -685,20 +750,29 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-*     L3 (CPC) reject -> back to L2 (PC MKTG-HOD)
       ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
-      ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
-      APPEND ls_text TO lt_text.
-      ls_text-line = |for your review. Please log in to T-Code YRVG004_A and re-check the records.|.
-      APPEND ls_text TO lt_text.
+      IF p_level = '4'.
+*       L3 execution done -> forward to L4 (CPC Finance - Financial Vetting)
+        ls_text-line = |Rebate orders under the CIS 2026-27 Scheme have been generated by L3 (CPC Marketing).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in and Review & Vet the discounts (Financial Vetting - L4).|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'CIS Discount/Rebate Order Processed - Action Required at L4'.
+      ELSE.
+*       L3 reject -> back to L1 for reinitiation (6-level rule)
+        ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been rejected by L3 (CPC).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in to T-Code YRVG004 (Run CIS Scheme) and reinitiate the process.|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'CIS Discount Request Rejected by L3 - Reinitiation Required at L1'.
+      ENDIF.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       ls_text-line = |With warm regards,|.                          APPEND ls_text TO lt_text.
       ls_text-line = |GAIL (INDIA) LTD.|.                           APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       ls_text-line = |This is a system generated mail. Please do not reply.|.
       APPEND ls_text TO lt_text.
-      lv_sub = 'CIS Scheme - Rebates returned by L3 for review'.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
