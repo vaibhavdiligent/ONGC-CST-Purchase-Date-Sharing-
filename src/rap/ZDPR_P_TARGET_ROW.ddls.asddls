@@ -38,9 +38,10 @@ define view entity ZDPR_P_TARGET_ROW
   key PrdTar.product                      as Product,
   key PrdTar.prod_vl_type_cd              as VolumeType,
 
-      /* tar_qty is a QUAN field: the unit reference is mandatory */
-      @Semantics.quantity.unitOfMeasure: 'TargetUom'
-      PrdTar.tar_qty                      as TargetQty,
+      /* tar_qty is a QUAN field; the cast makes it a plain decimal so no
+         unit reference is required (the raw quantity with its unit is
+         available in ZDPR_I_TARGET) */
+      cast( PrdTar.tar_qty as abap.dec( 15, 5 ) ) as TargetQty,
       PrdTar.uom                          as TargetUom,
 
       case PrdTar.product
