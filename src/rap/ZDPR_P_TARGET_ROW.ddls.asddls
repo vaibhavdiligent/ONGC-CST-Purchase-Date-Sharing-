@@ -38,6 +38,8 @@ define view entity ZDPR_P_TARGET_ROW
   key PrdTar.product                      as Product,
   key PrdTar.prod_vl_type_cd              as VolumeType,
 
+      /* tar_qty is a QUAN field: the unit reference is mandatory */
+      @Semantics.quantity.unitOfMeasure: 'TargetUom'
       PrdTar.tar_qty                      as TargetQty,
       PrdTar.uom                          as TargetUom,
 
