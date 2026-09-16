@@ -11,11 +11,12 @@
   qualifier:  'TrendLine',
   title:      'Daily Production Trend',
   chartType:  #LINE,
-  dimensions: ['ProductionDate', 'ProductDescription'],
+  dimensions: ['ProductionDateText', 'ProductDescription'],
   measures:   ['ProdQty1', 'OvlShareQty1']
 }]
 
 @UI.presentationVariant: [{
+  sortOrder: [{ by: 'ProductionDate', direction: #ASC }],
   visualizations: [
     { type: #AS_CHART },
     { type: #AS_LINEITEM }
@@ -27,6 +28,9 @@ annotate view ZDPR_Q_DAILY_TREND with
   @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
   ProductionDate;
+
+  @UI.lineItem: [{ position: 15, importance: #HIGH, label: 'Date' }]
+  ProductionDateText;
 
   @UI.selectionField: [{ position: 20 }]
   CalendarYear;

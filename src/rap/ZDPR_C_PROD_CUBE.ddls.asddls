@@ -59,6 +59,15 @@ define view entity ZDPR_C_PROD_CUBE
   key Daily.VolumeType                            as VolumeType,
 
   /* Texts (after the keys - key fields must be contiguous at the top) */
+  /* Readable YYYY-MM-DD date for chart category axes */
+  @EndUserText.label: 'Date'
+  concat( substring( cast( Daily.ProductionDate as abap.char( 8 ) ), 1, 4 ),
+    concat( '-',
+      concat( substring( cast( Daily.ProductionDate as abap.char( 8 ) ), 5, 2 ),
+        concat( '-',
+          substring( cast( Daily.ProductionDate as abap.char( 8 ) ), 7, 2 ) ) ) ) )
+                                                  as ProductionDateText,
+
   @EndUserText.label: 'Product'
   Daily.ProductDescription                        as ProductDescription,
 

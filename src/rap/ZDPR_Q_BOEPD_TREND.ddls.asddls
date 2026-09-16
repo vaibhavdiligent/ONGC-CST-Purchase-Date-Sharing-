@@ -30,6 +30,12 @@ define view ZDPR_Q_BOEPD_TREND
   @AnalyticsDetails.query.totals: #HIDE
   ProductionDate,
 
+  /* chart category axis: readable YYYY-MM-DD text of the date */
+  @AnalyticsDetails.query.axis: #ROWS
+  @AnalyticsDetails.query.totals: #HIDE
+  @EndUserText.label: 'Date'
+  ProductionDateText,
+
   /* ── Free drill-down dimensions ─────────────────────────────────────── */
   @AnalyticsDetails.query.axis: #FREE
   Asset,

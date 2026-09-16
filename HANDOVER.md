@@ -87,7 +87,7 @@ Last updated: 2026-09-15.
 | ZBP_ZDPR_EXCEL_DL, ZCL_ZDPR_EXCEL (abap2xlsx), ZCL_ZDPR_PDF | classes | handler + Excel/PDF generation |
 | ZDPR_SD_ANALYTICS | service definition | V4: PROD_PERF, both cubes, I-views, EXCEL_DL (NOT the analytical queries) |
 | ZDPR_SB_ANALYTICS_O4 | service binding (manual in ADT) | OData V4 – UI |
-| ZDPR_Q_*.ddlx (5) | metadata extensions (manual in ADT) | minimal UI annotations; sources in `src/rap/*.ddlx.asddlx` |
+| ZDPR_Q_*.ddlx (5) | metadata extensions (manual in ADT) | minimal UI annotations; sources in `src/rap/*.ddlx.asddlx`. 2026-09-16: BOEPD/DAILY charts use `ProductionDateText`, PROD_PERF line items ordered RowLabel/ActualPerDay/AchievementPct (criticality) for the 3-column table card |
 
 Old ZPRA_* names were abandoned on the user's instruction ("make everything new");
 do not reintroduce them.
@@ -199,6 +199,25 @@ generators live in `tools/` too where available; if missing, recreate them.
   (Step 0–5 with checks).
 - Security note to keep repeating when relevant: views use
   `@AccessControl.authorizationCheck: #NOT_REQUIRED` → no row-level restriction.
+
+## 7b. Fiori Overview Page limits (2026-09-16)
+
+- The real OVP does not look like the first mockup: table/list cards show max
+  3 columns x 3 rows, charts use theme colours, DATS shows as YYYYMMDD, KPI
+  header only on aggregatable entity sets. Verified rules, mockup-vs-reality
+  table, manifest (resizable layout, defaultSpan, two performance cards YTD /
+  Annual via SelectionVariant on ScopeType) and options (custom card, ALP, SAC)
+  are in `deploy/ZDPR_RAP_Fiori_OVP_Limits_and_Layout.docx`; realistic mockup
+  `deploy/DPR_Dashboard_Fiori_Realistic.{html,png}` (tools/make_fiori_limits_doc.js).
+- Backend additions for it: `ProductionDateText` (YYYY-MM-DD) in ZDPR_C_BOEPD_DAY,
+  ZDPR_C_PROD_CUBE, ZDPR_Q_BOEPD_TREND, ZDPR_Q_DAILY_TREND; `RowLabel` in
+  ZDPR_Q_PROD_PERF.
+- abapGit pull error seen by the user after the target fix: "column
+  FISCALYEARSTART/DAYSINFISCALYEAR/TARGETVOLUME/TARGETBOE unknown" in
+  ZDPR_I_TARGET_FY / P_TARGET_DAY / P_BOEPD_ROWS = the new ZDPR_I_TARGET was not
+  activated first. Fix: activate ZDPR_I_TARGET in ADT (or re-pull with it
+  ticked), then the rest in order I_TARGET_FY, P_DATE_SPINE, P_TARGET_DAY,
+  P_BOEPD_ROWS, C_BOEPD_DAY, P_PERF_AGG, C_PROD_CUBE, queries.
 
 ## 8. Likely next requests
 

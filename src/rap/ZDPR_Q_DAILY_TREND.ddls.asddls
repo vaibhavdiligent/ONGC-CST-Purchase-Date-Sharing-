@@ -27,6 +27,12 @@ define view ZDPR_Q_DAILY_TREND
   @AnalyticsDetails.query.totals: #HIDE
   ProductionDate,
 
+  /* chart category axis: readable YYYY-MM-DD text of the date */
+  @AnalyticsDetails.query.axis: #ROWS
+  @AnalyticsDetails.query.totals: #HIDE
+  @EndUserText.label: 'Date'
+  ProductionDateText,
+
   @AnalyticsDetails.query.axis: #FREE
   CalendarYear,
 

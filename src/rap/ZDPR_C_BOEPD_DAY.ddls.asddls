@@ -51,6 +51,17 @@ define view entity ZDPR_C_BOEPD_DAY
   @AnalyticsDetails.query.axis: #FREE
   key Row.VolumeType                                  as VolumeType,
 
+  /* Readable date for chart category axes (Fiori renders a DATS as the raw
+     YYYYMMDD string). ISO layout keeps the alphabetical order = date order. */
+  @AnalyticsDetails.query.axis: #FREE
+  @EndUserText.label: 'Date'
+  concat( substring( cast( Row.ProductionDate as abap.char( 8 ) ), 1, 4 ),
+    concat( '-',
+      concat( substring( cast( Row.ProductionDate as abap.char( 8 ) ), 5, 2 ),
+        concat( '-',
+          substring( cast( Row.ProductionDate as abap.char( 8 ) ), 7, 2 ) ) ) ) )
+                                                      as ProductionDateText,
+
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Product Group'
   Row.ProductGroup                                    as ProductGroup,

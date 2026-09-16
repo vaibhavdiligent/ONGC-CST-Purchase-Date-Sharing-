@@ -10,11 +10,12 @@
   qualifier:  'BoepdVsTarget',
   title:      'Actual Production vs BE Target (BOEPD)',
   chartType:  #LINE,
-  dimensions: ['ProductionDate'],
+  dimensions: ['ProductionDateText'],
   measures:   ['ActualBoepdOvl', 'TargetBoepd']
 }]
 
 @UI.presentationVariant: [{
+  sortOrder: [{ by: 'ProductionDate', direction: #ASC }],
   visualizations: [
     { type: #AS_CHART },
     { type: #AS_LINEITEM }
@@ -26,6 +27,9 @@ annotate view ZDPR_Q_BOEPD_TREND with
   @UI.selectionField: [{ position: 10 }]
   @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Production Date' }]
   ProductionDate;
+
+  @UI.lineItem: [{ position: 15, importance: #HIGH, label: 'Date' }]
+  ProductionDateText;
 
   @UI.selectionField: [{ position: 20 }]
   Asset;
