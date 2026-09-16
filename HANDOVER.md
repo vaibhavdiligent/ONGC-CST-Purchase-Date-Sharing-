@@ -60,7 +60,7 @@ Last updated: 2026-09-15.
   product; missing CF → 0) and gas × 1000 (→ MMSCM) × 6290 (BOE), sums the year
   and divides by the days in the FY (365/366). That flat annual BOEPD is the
   "BE Target" line. Targets are OVL level (JV conversion only when p_c_jv, we
-  use OVL for both lines). Implemented in ZDPR_I_TARGET → ZDPR_I_TARGET_FY →
+  use OVL for both lines). Implemented in ZDPR_P_TARGET_ROW → ZDPR_I_TARGET_FY →
   ZDPR_P_TARGET_DAY → ZDPR_P_BOEPD_ROWS (union with actuals) → ZDPR_C_BOEPD_DAY.
 - Open customer questions for the future "Production Dashboard" (not started):
   source of annual goals 7.252 MMT oil / 2.574 BCM gas / 9.826 MMTOE, gas→ToE
@@ -70,7 +70,8 @@ Last updated: 2026-09-15.
 
 | Object | Type | Notes |
 |---|---|---|
-| ZDPR_I_DAILY / ZDPR_I_MONTHLY / ZDPR_I_TARGET | view entities | interface views on the tables; I_TARGET joins ZPRA_T_TAR_CF and exposes ProductGroup, TargetVolume (bbl/MMSCM), TargetBoe, FiscalYearStart, DaysInFiscalYear |
+| ZDPR_I_DAILY / ZDPR_I_MONTHLY / ZDPR_I_TARGET | view entities | interface views on the tables (I_TARGET unchanged since first activation - keep it so; abapGit failed when dependents were added to a changed view) |
+| ZDPR_P_TARGET_ROW | view entity | target rows from the tables, joins ZPRA_T_TAR_CF: TargetVolume (bbl/MMSCM), TargetBoe, FiscalYearStart, DaysInFiscalYear |
 | ZDPR_I_TARGET_FY | view entity (group by) | annual target per TargetCode/FY/asset/block/product, all months + NET_PROD/GROSS_PROD/GAS_INJ |
 | ZDPR_P_DAY_BASE | view entity | base layer: unit conversion, signed gas (GAS_INJ negative), BU, fiscal year/period, PI% |
 | ZDPR_P_DATE_SPINE | view entity (group by) | distinct production dates + FY/period |
@@ -215,9 +216,11 @@ generators live in `tools/` too where available; if missing, recreate them.
 - abapGit pull error seen by the user after the target fix: "column
   FISCALYEARSTART/DAYSINFISCALYEAR/TARGETVOLUME/TARGETBOE unknown" in
   ZDPR_I_TARGET_FY / P_TARGET_DAY / P_BOEPD_ROWS = the new ZDPR_I_TARGET was not
-  activated first. Fix: activate ZDPR_I_TARGET in ADT (or re-pull with it
-  ticked), then the rest in order I_TARGET_FY, P_DATE_SPINE, P_TARGET_DAY,
-  P_BOEPD_ROWS, C_BOEPD_DAY, P_PERF_AGG, C_PROD_CUBE, queries.
+  activated first; a second pull gave the same list. Resolved by decoupling:
+  ZDPR_I_TARGET restored to its active version, scaling moved to the NEW view
+  ZDPR_P_TARGET_ROW (no dependent of a changed object any more). Lesson: on
+  this system add columns in new objects rather than extending a view that
+  other new views read in the same pull.
 
 ## 8. Likely next requests
 

@@ -10,14 +10,14 @@
  *   - all three volume types NET_PROD / GROSS_PROD / GAS_INJ are included
  *     (r_prd_vl_type[] of the classic report; gas targets are NOT stored as
  *     NET_PROD, which is why a NET_PROD-only join returned 0 for gas)
- *   - volumes are the scaled figures of ZDPR_I_TARGET (barrels / MMSCM, BOE)
+ *   - volumes are the scaled figures of ZDPR_P_TARGET_ROW (barrels / MMSCM, BOE)
  * The consumer divides the annual volume by DaysInFiscalYear to obtain the
  * flat "BE Target" daily rate (fill_dynamic_table_sec2b: value / lv_days).
  * CDS cannot divide two aggregates in one view, so the division happens in
  * ZDPR_P_TARGET_DAY.
  * ─────────────────────────────────────────────────────────────────────────── */
 define view entity ZDPR_I_TARGET_FY
-  as select from ZDPR_I_TARGET as Tar
+  as select from ZDPR_P_TARGET_ROW as Tar
 
 {
   key Tar.TargetCode                                  as TargetCode,

@@ -48,7 +48,8 @@ const SECTIONS = [
   { title: "Interface Views", objs: [
     ["ZDPR_I_DAILY", "ZDPR_I_DAILY.ddls.asddls", "CDS view entity", "Daily production (ZPRA_T_DLY_PRD) with calendar year/month, product and volume-type texts."],
     ["ZDPR_I_MONTHLY", "ZDPR_I_MONTHLY.ddls.asddls", "CDS view entity", "Monthly reconciled production (ZPRA_T_MREC_PRD)."],
-    ["ZDPR_I_TARGET", "ZDPR_I_TARGET.ddls.asddls", "CDS view entity", "Production targets (ZPRA_T_PRD_TAR) scaled like the classic report: TargetVolume (barrels / MMSCM), TargetBoe, conversion factor from ZPRA_T_TAR_CF, days in fiscal year."],
+    ["ZDPR_I_TARGET", "ZDPR_I_TARGET.ddls.asddls", "CDS view entity", "Production targets (ZPRA_T_PRD_TAR) with ProductGroup as plain column."],
+    ["ZDPR_P_TARGET_ROW", "ZDPR_P_TARGET_ROW.ddls.asddls", "CDS view entity", "Target rows scaled like the classic report: TargetVolume (barrels / MMSCM), TargetBoe, conversion factor from ZPRA_T_TAR_CF, days in fiscal year."],
     ["ZDPR_I_TARGET_FY", "ZDPR_I_TARGET_FY.ddls.asddls", "CDS view entity", "Annual target per fiscal year / asset / block / product (all months, volume types NET_PROD, GROSS_PROD, GAS_INJ)."],
   ]},
   { title: "Base and Aggregation Layer", objs: [
