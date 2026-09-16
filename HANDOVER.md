@@ -238,3 +238,5 @@ generators live in `tools/` too where available; if missing, recreate them.
    ZPRA_C_DPR_PROF, abap2xlsx, optional Adobe forms ZDPR_FRM_PRODUCTION/TARGETS).
 5. The Production Dashboard (BU-grouped rates vs targets, asking rate, remarks)
    once the customer answers the open questions in section 2.
+
+- CDS arithmetic: maximal precision 37 digits — cast every intermediate product (tar_qty × 1e6 × conv_factor failed until cast stepwise in ZDPR_P_TARGET_ROW).

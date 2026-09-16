@@ -47,25 +47,35 @@ define view entity ZDPR_P_TARGET_ROW
       end                                 as ProductGroup,
 
       /* MMT -> barrels factor of the fiscal year (0 when missing) */
-      cast( coalesce( cast( Cf.conv_factor as abap.dec( 15, 7 ) ),
-                      cast( 0 as abap.dec( 15, 7 ) ) )
-            as abap.dec( 15, 7 ) )        as ConversionFactor,
+      cast( coalesce( cast( Cf.conv_factor as abap.dec( 11, 6 ) ),
+                      cast( 0 as abap.dec( 11, 6 ) ) )
+            as abap.dec( 11, 6 ) )        as ConversionFactor,
 
-      /* monthly target volume: barrels (oil family) / MMSCM (gas) */
+      /* monthly target volume: barrels (oil family) / MMSCM (gas).
+         Every intermediate product is cast back to a small DEC: CDS
+         arithmetic may not exceed 37 digits (tar_qty x 1e6 x factor did). */
       cast( case PrdTar.product
-              when '722000004' then PrdTar.tar_qty * cast( 1000 as abap.dec( 10, 0 ) )
-              else                  PrdTar.tar_qty * cast( 1000000 as abap.dec( 10, 0 ) )
-                                    * coalesce( cast( Cf.conv_factor as abap.dec( 15, 7 ) ),
-                                                cast( 0 as abap.dec( 15, 7 ) ) )
+              when '722000004' then
+                cast( cast( PrdTar.tar_qty as abap.dec( 15, 5 ) )
+                      * cast( 1000 as abap.dec( 4, 0 ) ) as abap.dec( 20, 3 ) )
+              else
+                cast( cast( cast( PrdTar.tar_qty as abap.dec( 15, 5 ) )
+                            * cast( 1000000 as abap.dec( 7, 0 ) ) as abap.dec( 20, 3 ) )
+                      * coalesce( cast( Cf.conv_factor as abap.dec( 11, 6 ) ),
+                                  cast( 0 as abap.dec( 11, 6 ) ) ) as abap.dec( 23, 3 ) )
             end as abap.dec( 23, 3 ) )    as TargetVolume,
 
       /* monthly target in barrels of oil equivalent (gas: MMSCM x 6290) */
       cast( case PrdTar.product
-              when '722000004' then PrdTar.tar_qty * cast( 1000 as abap.dec( 10, 0 ) )
-                                    * cast( 6290 as abap.dec( 5, 0 ) )
-              else                  PrdTar.tar_qty * cast( 1000000 as abap.dec( 10, 0 ) )
-                                    * coalesce( cast( Cf.conv_factor as abap.dec( 15, 7 ) ),
-                                                cast( 0 as abap.dec( 15, 7 ) ) )
+              when '722000004' then
+                cast( cast( cast( PrdTar.tar_qty as abap.dec( 15, 5 ) )
+                            * cast( 1000 as abap.dec( 4, 0 ) ) as abap.dec( 20, 3 ) )
+                      * cast( 6290 as abap.dec( 4, 0 ) ) as abap.dec( 23, 3 ) )
+              else
+                cast( cast( cast( PrdTar.tar_qty as abap.dec( 15, 5 ) )
+                            * cast( 1000000 as abap.dec( 7, 0 ) ) as abap.dec( 20, 3 ) )
+                      * coalesce( cast( Cf.conv_factor as abap.dec( 11, 6 ) ),
+                                  cast( 0 as abap.dec( 11, 6 ) ) ) as abap.dec( 23, 3 ) )
             end as abap.dec( 23, 3 ) )    as TargetBoe,
 
       /* 1 April of the fiscal year */
