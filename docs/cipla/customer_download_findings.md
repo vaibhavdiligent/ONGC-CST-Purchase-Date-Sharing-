@@ -135,9 +135,33 @@ shared strings and column A always written, the heading matcher, and the extract
 
 ## 7. Settled
 
-- QCIL block 3 - the description row is the correct one; the technical row carries a
-  stray `KUNNR` and is ignored for that block.
 - `cust extn` and `block unblock` are handled by the same program.
+- No Z table. The format map lives in the program as constants, exactly as `LCL_MAP` does
+  in the two programs already running. Everything the selection screen needs comes from
+  standard tables at runtime - `T005`/`T005T` for the country, `T001` for the company code
+  and its country, `T077D`/`T077X` for the account group, `TVKO`/`TVKOV`/`TSPA` for the
+  sales area, and live `KNA1`/`KNB1`/`KNVV` to keep the F4 to combinations that exist.
+  The column layout of a template is Cipla's document, not SAP data, and exists in no
+  standard table - that is the part the program carries.
+
+### The QCIL export block is not settled after all
+
+I recommended taking the description row as the authority there, and that recommendation
+was wrong. Reading the block column by column:
+
+- The **technical row** is complete and coherent: 83 columns whose names are
+  byte-identical to the 83-column template Australia and Morocco use for `ZDOM`.
+- The **description row** has only 65 entries and drifts: it is one column out from
+  column 2, then two columns out from column 20 onward where a technical column
+  (`HOUSE_NUM1`) has no description at all, and it stops at column 65 leaving the whole
+  `ZSD_LICENSE_CHK` block undescribed.
+- The **sample data row** agrees with the description row, not with the technical row -
+  `NE` (Niger) sits under `POST_CODE1` where the description says Country Key.
+
+So two rows agree with each other and one is internally consistent, which means the block
+is two different templates pasted together rather than a single shifted row. The parser
+now flags it instead of resolving it. **Cipla has to say which template the QCIL export
+really is.**
 
 ## 8. The five description-only blocks are almost entirely resolvable
 
@@ -170,7 +194,40 @@ position stands for**. The blocks that name them show the category in the descri
 `JOCG`, `JTC1`, `JTX1` to `JTX4` on the India sheets, `UTXJ`, `UTX2`, `UTX3` on the US
 sheets, `MWST` elsewhere - and the description-only blocks give nothing.
 
-## 9. The sample data cannot be used to derive the country
+## 9. The country comes from the workbook
+
+The workbook states the country, in the sheet name and in the Project row above each
+block: "DOM customer creation for Australia" and `Australia_ZDOM`, "Ship to party Dubai",
+"Europe customer master" and `Europe`, "ZEXP customer upload / India export" and "India to
+India", "YDOM- Kenya", "Morocco customer code creation", "New customer for Uganda" and
+"Uganda domestick". Exelan and Invagen are the two United States entities and their
+Project rows read "US Sold to's". SAGA carries no country word; its sample rows are ZAR
+and ZA.
+
+| Sheet | Country | From |
+|---|---|---|
+| Australia | AU | stated |
+| Dubai | AE | stated |
+| Europe | ES ? | **a region, not a country - Cipla has to say which countries it serves** |
+| Exelan | US | "US Sold to's" |
+| India | IN | stated |
+| Invagen | US | "US Sold to's" |
+| Kenya | KE | stated |
+| Moroccco | MA | stated |
+| QCIL | UG | "New customer for Uganda" |
+| SAGA | ZA | inferred from the sample rows |
+| `cust extn`, `block unblock` | any | not country specific |
+
+With that map, **country plus account group names exactly one format - 59 keys, no
+ambiguity**. Exelan and Invagen are both United States and overlap on `YVSP`, `ZPLN` and
+`ZCDP`, and each of those resolves to the same format, so the entity never has to be
+asked for. Only four account groups - `ZDOM`, `ZEXP`, `ZOTC`, `ZSHP` - need the country
+at all; the other twenty are the same format everywhere.
+
+A country the workbook does not cover gets an error on the selection screen rather than an
+empty file.
+
+## 10. What the sample data cannot be used for
 
 The company code in the sample rows frequently belongs to a different entity from the
 sheet it sits on - the blocks were copied between sheets and the sample row came with
@@ -187,9 +244,8 @@ them.
 | QCIL | 4500, and **1000** on two blocks |
 | SAGA | 4100, and **7450**, **1000** |
 
-So the sheet-to-country mapping has to be given, not inferred. Two sheets also share one
-country - Exelan (5400) and Invagen (5200) are both United States - so country alone
-cannot choose the format.
+So the company code cannot be taken from the sample rows. The country does not need them -
+it is stated on the sheet, as section 9 sets out.
 
 ### What the selection screen reads
 
@@ -200,8 +256,5 @@ cannot choose the format.
 | Customer account group | `T077D`, text from `T077X` |
 | Sales area, where a format needs it | `TVKO` (which also carries `BUKRS`), `TVKOV`, `TSPA` |
 
-The entity dimension - which of Exelan and Invagen, which of the two European company
-codes - exists in no standard table. It needs a small Z customising table holding
-company code, account group and format, seeded from the workbook and confirmed by Cipla.
-That table also makes a future template change a Customizing change rather than a
-transport.
+No Z table is needed. Country and account group resolve the format on their own, and the
+format map itself lives in the program as constants, generated from the workbook.

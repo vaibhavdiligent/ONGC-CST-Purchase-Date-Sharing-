@@ -23,6 +23,28 @@ import openpyxl
 TCODE = re.compile(r'^X[A-Z]\d{2}$')
 MARK = {'PROJECT', 'SUBPROJECT', 'OBJECT', 'M', 'O', 'TCODE'}
 
+# The country each sheet serves. The workbook states it in the sheet name and in the
+# Project row above the first block - "DOM customer creation for Australia",
+# "Ship to party Dubai", "Europe customer master", "ZEXP customer upload / India export",
+# "YDOM- Kenya", "Morocco customer code creation", "New customer for Uganda / Uganda
+# domestick". Exelan and Invagen are the two United States entities, and their Project
+# rows read "US Sold to's". SAGA carries no country word; its sample rows are ZAR and ZA.
+# Europe is a region rather than a country and is the one entry Cipla has to confirm.
+SHEET_COUNTRY = {
+    'Australia': 'AU',
+    'Dubai':     'AE',
+    'Europe':    'ES',      # to be confirmed - the sheet serves a region
+    'Exelan':    'US',
+    'India':     'IN',
+    'Invagen':   'US',
+    'Kenya':     'KE',
+    'Moroccco':  'MA',
+    'QCIL':      'UG',
+    'SAGA':      'ZA',      # inferred from the sample rows, no country word on the sheet
+    'cust extn': '*',       # extension template, valid for any country
+    'block unblock': '*',   # XD05, valid for any country
+}
+
 
 def blocks_of(ws):
     """Every template block on one sheet, in row order."""
@@ -38,7 +60,20 @@ def blocks_of(ws):
                 if str(ws.cell(anchor, c).value or '').strip()]
         nxt = min([t for t in tech if t > d] + [r for r in desc if r > d] + [ws.max_row + 1])
         rows = [r for r in range(d + 1, nxt) if TCODE.match(str(ws.cell(r, 1).value or '').strip())]
+        # A block whose description row has drifted out of step with its technical row is
+        # flagged rather than silently resolved either way. The technical row is kept,
+        # because it is the one that is complete, but the block is reported.
+        inconsistent = False
+        if h:
+            fl = [str(ws.cell(h, c).value).strip() for c in cols]
+            ds = [str(ws.cell(d, c).value or '').strip() for c in cols]
+            pairs = {'TCODE': 'transaction code', 'KTOKD': 'customer account group',
+                     'BUKRS': 'company code', 'VKORG': 'sales organization'}
+            inconsistent = sum(1 for f, x in zip(fl, ds)
+                               if f in pairs and x and x.lower() != pairs[f]) >= 2
+
         rec = dict(sheet=ws.title, tech_row=h, desc_row=d, ncol=len(cols),
+                   inconsistent=inconsistent,
                    fields=[str(ws.cell(h, c).value).strip() for c in cols] if h else [],
                    desc=[str(ws.cell(d, c).value or '').strip() for c in cols],
                    typ=[str(ws.cell(h + 1, c).value or '').strip() for c in cols] if h else [],
@@ -76,12 +111,31 @@ def main(path, out):
                                  desc=b['desc'], typ=b['typ'], length=b['length'],
                                  has_tech=bool(b['fields'])))
         for k in (b['ktokd'] or ['?']):
-            combo.append(dict(sheet=b['sheet'], ktokd=k, format=sig,
+            combo.append(dict(sheet=b['sheet'], country=SHEET_COUNTRY.get(b['sheet'], '?'),
+                              ktokd=k, format=sig,
                               tech_row=b['tech_row'], desc_row=b['desc_row']))
 
-    json.dump(dict(formats=fmt, combinations=combo), open(out, 'w'), indent=1)
+    json.dump(dict(formats=fmt, combinations=combo, sheet_country=SHEET_COUNTRY),
+              open(out, 'w'), indent=1)
+
+    # A country and an account group must name exactly one format, or the selection
+    # screen cannot resolve what the user asked for.
+    key = {}
+    for c in combo:
+        key.setdefault((c['country'], c['ktokd']), set()).add(c['format'])
+    clash = {k: v for k, v in key.items() if len(v) > 1}
+    print(f'{len(key)} country + account-group keys, {len(clash)} ambiguous')
+    for k, v in clash.items():
+        print(f'   {k} -> {sorted(v)}')
     print(f'{len(all_blocks)} blocks, {len(fmt)} distinct formats, '
           f'{len(combo)} country/account-group combinations -> {out}')
+    odd = [b for b in all_blocks if b.get('inconsistent')]
+    if odd:
+        print(f'{len(odd)} block(s) whose description row disagrees with the technical row:')
+        for b in odd:
+            print(f"   {b['sheet']:12} technical row {b['tech_row']}, description row "
+                  f"{b['desc_row']}  {b['ncol']} columns")
+
     missing = [b for b in all_blocks if not b['fields']]
     if missing:
         print(f'{len(missing)} block(s) carry no technical field row:')
