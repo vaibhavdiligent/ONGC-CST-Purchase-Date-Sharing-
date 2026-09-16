@@ -133,13 +133,75 @@ Carried over from `ZBCS_MASS_UPLOAD_EXTRACT` unchanged: the nine-part xlsx packa
 shared strings and column A always written, the heading matcher, and the extract through
 `CMD_EI_API_EXTRACT=>GET_DATA` alongside the `ZSD_LICENSE_CHK` and `BUT0ID` reads.
 
-## 7. Still to settle
+## 7. Settled
 
-1. The five description-only blocks: their technical fields have to be agreed.
-2. QCIL block 3: confirm the description row is the correct one.
-3. `cust extn` and `block unblock`: in scope for this program, or separate?
-4. Sheet-to-country mapping: the sheets are named for entities (Exelan, Invagen, QCIL,
-   SAGA) as much as for countries. The selection screen needs the country key and the
-   company code behind each, which the sample data gives (6700 Australia, 8300 Dubai,
-   7450/7000 Europe, 5400 Exelan, 1000 India, 5200 Invagen, 4900 Kenya, 6600 Morocco,
-   4500 QCIL, 4100 SAGA) but which should be confirmed rather than inferred.
+- QCIL block 3 - the description row is the correct one; the technical row carries a
+  stray `KUNNR` and is ignored for that block.
+- `cust extn` and `block unblock` are handled by the same program.
+
+## 8. The five description-only blocks are almost entirely resolvable
+
+Learning description to field from the 55 blocks that do carry technical names gives 174
+pairs, and those resolve the five blocks as follows.
+
+| Block | Columns | Resolved | Needs confirming |
+|---|---|---|---|
+| India ZDOD / ZDOF / ZDOC | 136 | all 136 | nothing - the descriptions are identical to India ZDOM position by position, so the technical list carries straight over |
+| India ZSHM | 108 | 108 | 10 columns whose description is ambiguous |
+| `cust extn` | 43 | 43 | 8 ambiguous, plus 2 descriptions truncated by Excel |
+
+Seven descriptions are used for more than one field across the workbook. Every one of them
+follows a consistent pattern in the blocks that do carry technical names, so the reading
+below is proposed rather than guessed - but it should be confirmed, because a wrong tax
+classification is written silently.
+
+| Description | Reading | Evidence |
+|---|---|---|
+| "Always X" | `USE_ZAV` | 18 blocks against 1; `ZAV` appears only on the Kenya and SAGA sheets |
+| "Name 1" | `NAME1` | `NAME1_01` is a contact person name and appears only in the SAGA contact block |
+| "Attribute 4" | `KATR4` | `KATRA4` appears in 3 blocks only |
+| "Terms of Payment Key", first then second | `ZTERM` then `ZTERM1` | that order holds in all 9 blocks that carry both (the ZEXP format spells the second `ZTERM_1`) |
+| "Customer group", first then second | `KDGRP` then `KDGRP1` | that order holds in all 6 blocks that carry both |
+| "Tax classification for customer" repeated | `TAXKD_01` .. `TAXKD_0n` in order | consecutive and in order in all 10 blocks that carry them |
+| "Customer code" | `KUNNR` | `KNA1` in the QCIL block is the stray noted above |
+
+The tax classifications need one thing more than the field name: **which tax category each
+position stands for**. The blocks that name them show the category in the description -
+`JOCG`, `JTC1`, `JTX1` to `JTX4` on the India sheets, `UTXJ`, `UTX2`, `UTX3` on the US
+sheets, `MWST` elsewhere - and the description-only blocks give nothing.
+
+## 9. The sample data cannot be used to derive the country
+
+The company code in the sample rows frequently belongs to a different entity from the
+sheet it sits on - the blocks were copied between sheets and the sample row came with
+them.
+
+| Sheet | Company codes in its sample rows |
+|---|---|
+| Australia | 6700, and **1000** on ZCDP and ZPLN |
+| Dubai | 8300, and **5200** on ZSHP |
+| Europe | 7450, 7000, and **6700**, **1000** |
+| Exelan | 5400, and **1000** on ZCDP and ZPLN |
+| Kenya | 4900, and **5400** on YVTO |
+| Moroccco | 6600, and **1000** on three blocks |
+| QCIL | 4500, and **1000** on two blocks |
+| SAGA | 4100, and **7450**, **1000** |
+
+So the sheet-to-country mapping has to be given, not inferred. Two sheets also share one
+country - Exelan (5400) and Invagen (5200) are both United States - so country alone
+cannot choose the format.
+
+### What the selection screen reads
+
+| Field | Check table |
+|---|---|
+| Country | `T005`, text from `T005T` |
+| Company code | `T001`, which carries `LAND1` - so the country follows from the company code rather than being a second question |
+| Customer account group | `T077D`, text from `T077X` |
+| Sales area, where a format needs it | `TVKO` (which also carries `BUKRS`), `TVKOV`, `TSPA` |
+
+The entity dimension - which of Exelan and Invagen, which of the two European company
+codes - exists in no standard table. It needs a small Z customising table holding
+company code, account group and format, seeded from the workbook and confirmed by Cipla.
+That table also makes a future template change a Customizing change rather than a
+transport.
