@@ -48,15 +48,19 @@ const SECTIONS = [
   { title: "Interface Views", objs: [
     ["ZDPR_I_DAILY", "ZDPR_I_DAILY.ddls.asddls", "CDS view entity", "Daily production (ZPRA_T_DLY_PRD) with calendar year/month, product and volume-type texts."],
     ["ZDPR_I_MONTHLY", "ZDPR_I_MONTHLY.ddls.asddls", "CDS view entity", "Monthly reconciled production (ZPRA_T_MREC_PRD)."],
-    ["ZDPR_I_TARGET", "ZDPR_I_TARGET.ddls.asddls", "CDS view entity", "Production targets (ZPRA_T_PRD_TAR) with ProductGroup and TargetBoepd as plain columns."],
+    ["ZDPR_I_TARGET", "ZDPR_I_TARGET.ddls.asddls", "CDS view entity", "Production targets (ZPRA_T_PRD_TAR) scaled like the classic report: TargetVolume (barrels / MMSCM), TargetBoe, conversion factor from ZPRA_T_TAR_CF, days in fiscal year."],
+    ["ZDPR_I_TARGET_FY", "ZDPR_I_TARGET_FY.ddls.asddls", "CDS view entity", "Annual target per fiscal year / asset / block / product (all months, volume types NET_PROD, GROSS_PROD, GAS_INJ)."],
   ]},
   { title: "Base and Aggregation Layer", objs: [
     ["ZDPR_P_DAY_BASE", "ZDPR_P_DAY_BASE.ddls.asddls", "CDS view entity", "Unit-normalised, signed daily figure (gas = GROSS_PROD − GAS_INJ), BOE factor, PI %, fiscal year/period, Business Unit."],
+    ["ZDPR_P_DATE_SPINE", "ZDPR_P_DATE_SPINE.ddls.asddls", "CDS view entity", "One row per production date with its fiscal year / period."],
+    ["ZDPR_P_TARGET_DAY", "ZDPR_P_TARGET_DAY.ddls.asddls", "CDS view entity", "BE target daily rate (annual volume ÷ days in FY) on every production date per asset / block / product."],
+    ["ZDPR_P_BOEPD_ROWS", "ZDPR_P_BOEPD_ROWS.ddls.asddls", "CDS view entity (union)", "Actual rows (A) and target rows (T) with identical columns — row source of ZDPR_C_BOEPD_DAY."],
     ["ZDPR_P_PERF_AGG", "ZDPR_P_PERF_AGG.ddls.asddls", "CDS view entity (union)", "YTD and ANNUAL aggregates for the Production Performance table (Excel tab 3)."],
   ]},
   { title: "Analytical Cubes", objs: [
     ["ZDPR_C_PROD_CUBE", "ZDPR_C_PROD_CUBE.ddls.asddls", "CDS view entity, @Analytics.dataCategory #CUBE", "Daily production cube: JV and OVL quantities, gas MMSCMD, BOEPD."],
-    ["ZDPR_C_BOEPD_DAY", "ZDPR_C_BOEPD_DAY.ddls.asddls", "CDS view entity, #CUBE", "Actual vs BE target per day — the data behind the Excel tab-2 graph."],
+    ["ZDPR_C_BOEPD_DAY", "ZDPR_C_BOEPD_DAY.ddls.asddls", "CDS view entity, #CUBE", "Actual vs BE target per day (plain select on ZDPR_P_BOEPD_ROWS) — the data behind the Excel tab-2 graph."],
     ["ZDPR_C_TARGET_CUBE", "ZDPR_C_TARGET_CUBE.ddls.asddls", "CDS view entity, #CUBE, parameter P_TargetCode", "Monthly actual vs target; the join lives here because analytical queries may not join."],
   ]},
   { title: "Analytical Queries (OData V2 via @OData.publish)", objs: [

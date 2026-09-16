@@ -5,15 +5,17 @@
 
 /* ── Analytical Cube (performance-first) ────────────────────────────────────
  * Data behind Excel tab 2 (graph: "Actual Production" vs "BE Target" lines)
- * and tab 3 (Production Performance). All unit/sign logic lives in
- * ZDPR_P_DAY_BASE (computed once per row; gas = GROSS_PROD - GAS_INJ,
- * since gas has no NET_PROD rows); this cube only does
- *   - one EQUALITY join to the BE target (TAR_BE / NET_PROD, tar_qty daily
- *     rate) on asset/block/product/fiscal year/fiscal period. The join is
- *     suppressed on GAS_INJ rows so the target is not double-counted for gas.
- *   - plain multiplications for the measures
- * so aggregation fully pushes down to HANA. Queries on top take mandatory
- * date-range parameters, keeping scans bounded.
+ * and tab 3 (Production Performance). Plain select on ZDPR_P_BOEPD_ROWS:
+ *   RowType 'A' - one row per daily production record (ZDPR_P_DAY_BASE:
+ *                 unit/sign logic, gas = GROSS_PROD - GAS_INJ, PI %)
+ *   RowType 'T' - one row per date x asset/block/product carrying the BE
+ *                 target daily rate of the date's fiscal year
+ *                 (ZDPR_P_TARGET_DAY: annual TAR_BE volume / days in FY,
+ *                 scaled exactly like the classic DPR report)
+ * SUM over a date therefore yields the "Actual Production" value and the
+ * flat "BE Target" value of the DPR graph. No join, no CASE - aggregation
+ * fully pushes down to HANA; queries on top take mandatory date-range
+ * parameters, keeping scans bounded.
  * ─────────────────────────────────────────────────────────────────────────── */
 @Analytics.dataCategory: #CUBE
 @Analytics.internalName: #LOCAL
@@ -21,89 +23,74 @@
 @OData.entityType.name: 'DPRBoepdDayCubeType'
 
 define view entity ZDPR_C_BOEPD_DAY
-  as select from ZDPR_P_DAY_BASE as Day
-
-  /* BE Target daily rate (tar_qty, OVL level) of the fiscal month.
-     NOT joined on GAS_INJ rows (gas target must count once per day). */
-  left outer join zpra_t_prd_tar as Tar
-    on  Tar.asset           = Day.Asset
-    and Tar.block           = Day.Block
-    and Tar.product         = Day.Product
-    and Tar.gjahr           = Day.FiscalYear
-    and Tar.monat           = Day.FiscalPeriod
-    and Tar.tar_code        = 'TAR_BE'
-    and Tar.prod_vl_type_cd = 'NET_PROD'
-    and Day.VolumeType     <> 'GAS_INJ'
+  as select from ZDPR_P_BOEPD_ROWS as Row
 
   association [0..1] to zoiu_pr_dn as _AssetText
     on $projection.Asset = _AssetText.dn_no
 
 {
   /* ── Dimensions ─────────────────────────────────────────────────────── */
+  @AnalyticsDetails.query.axis: #FREE
+  @EndUserText.label: 'Row Type (A=Actual, T=Target)'
+  key Row.RowType                                     as RowType,
+
   @AnalyticsDetails.query.axis: #ROWS
   @EndUserText.label: 'Production Date'
-  key Day.ProductionDate                              as ProductionDate,
+  key Row.ProductionDate                              as ProductionDate,
 
   @AnalyticsDetails.query.axis: #FREE
   @ObjectModel.text.association: '_AssetText'
-  key Day.Asset                                       as Asset,
+  key Row.Asset                                       as Asset,
 
   @AnalyticsDetails.query.axis: #FREE
-  key Day.Block                                       as Block,
+  key Row.Block                                       as Block,
 
   @AnalyticsDetails.query.axis: #FREE
-  key Day.Product                                     as Product,
+  key Row.Product                                     as Product,
 
   @AnalyticsDetails.query.axis: #FREE
-  key Day.VolumeType                                  as VolumeType,
+  key Row.VolumeType                                  as VolumeType,
 
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Product Group'
-  Day.ProductGroup                                    as ProductGroup,
+  Row.ProductGroup                                    as ProductGroup,
 
   @AnalyticsDetails.query.axis: #FREE
   @EndUserText.label: 'Business Unit'
-  Day.BusinessUnit                                    as BusinessUnit,
+  Row.BusinessUnit                                    as BusinessUnit,
 
   @AnalyticsDetails.query.axis: #FREE
-  Day.FiscalYear                                      as FiscalYear,
+  Row.FiscalYear                                      as FiscalYear,
 
   @AnalyticsDetails.query.axis: #FREE
-  Day.FiscalPeriod                                    as FiscalPeriod,
+  Row.FiscalPeriod                                    as FiscalPeriod,
 
   /* ── Actual measures (signed: gas GROSS positive, GAS_INJ negative) ─── */
   @EndUserText.label: 'Actual Qty JV (BOPD / MMSCMD)'
   @Aggregation.default: #SUM
-  Day.QtyNative                                       as ActualQtyJv,
+  Row.ActualQtyJv                                     as ActualQtyJv,
 
   @EndUserText.label: 'Actual Qty OVL (BOPD / MMSCMD)'
   @Aggregation.default: #SUM
-  cast( Day.QtyNative * Day.PiPct / cast( 100 as abap.dec( 5, 2 ) )
-        as abap.dec( 23, 7 ) )                        as ActualQtyOvl,
+  Row.ActualQtyOvl                                    as ActualQtyOvl,
 
   @EndUserText.label: 'Actual BOEPD JV'
   @Aggregation.default: #SUM
-  cast( Day.QtyNative * Day.BoeFactor
-        as abap.dec( 23, 3 ) )                        as ActualBoepdJv,
+  Row.ActualBoepdJv                                   as ActualBoepdJv,
 
   /* "Actual Production" line of Excel tab 2 (OVL share, BOEPD) */
   @EndUserText.label: 'Actual BOEPD (OVL)'
   @Aggregation.default: #SUM
-  cast( Day.QtyNative * Day.BoeFactor * Day.PiPct / cast( 100 as abap.dec( 5, 2 ) )
-        as abap.dec( 23, 3 ) )                        as ActualBoepdOvl,
+  Row.ActualBoepdOvl                                  as ActualBoepdOvl,
 
   /* ── BE Target measures ("BE Target" flat line / tab-3 rows) ────────── */
   @EndUserText.label: 'BE Target Qty (BOPD / MMSCMD)'
   @Aggregation.default: #SUM
-  coalesce( cast( Tar.tar_qty as abap.dec( 23, 7 ) ),
-            cast( 0            as abap.dec( 23, 7 ) ) )
-                                                      as TargetQty,
+  Row.TargetQty                                       as TargetQty,
 
   @EndUserText.label: 'BE Target BOEPD'
   @Aggregation.default: #SUM
-  cast( coalesce( cast( Tar.tar_qty as abap.dec( 23, 7 ) ),
-                  cast( 0            as abap.dec( 23, 7 ) ) )
-        * Day.BoeFactor as abap.dec( 23, 3 ) )        as TargetBoepd,
+  Row.TargetBoepd                                     as TargetBoepd,
 
   _AssetText
 }

@@ -51,9 +51,17 @@ Last updated: 2026-09-15.
   `tar_qty` — `tar_qty2` does NOT exist, it was program-computed), `ZPRA_T_PRD_PI`
   (participating interest), `ZOIU_PR_DN` (asset texts; `dn_de` has conversion
   exit OIUNM), `ZPRA_C_DPR_PROF` (config view).
-- **Data gap**: BE targets for FY 2025-26 are NOT loaded in ZPRA_T_PRD_TAR, so
-  target lines are zero for current dates. Test with FY 2024-25 dates
-  (e.g. 01.04.2024–14.04.2024). This is a customer data task, not a bug.
+- **BE target calculation (fixed 2026-09-16, was the "target line = 0" bug)**:
+  `tar_qty` in `ZPRA_T_PRD_TAR` is a MONTHLY figure in MMT (oil family) / BCM
+  (gas); gas targets are NOT stored as `NET_PROD`. The classic report
+  (`convert_target_units`, `fill_dynamic_table_sec2b`, `fill_dynamic_table_sec5a`)
+  takes all TAR_BE rows of the fiscal year, volume types NET_PROD + GROSS_PROD +
+  GAS_INJ, scales oil × 1e6 × conv_factor (`ZPRA_T_TAR_CF` by gjahr/asset/block/
+  product; missing CF → 0) and gas × 1000 (→ MMSCM) × 6290 (BOE), sums the year
+  and divides by the days in the FY (365/366). That flat annual BOEPD is the
+  "BE Target" line. Targets are OVL level (JV conversion only when p_c_jv, we
+  use OVL for both lines). Implemented in ZDPR_I_TARGET → ZDPR_I_TARGET_FY →
+  ZDPR_P_TARGET_DAY → ZDPR_P_BOEPD_ROWS (union with actuals) → ZDPR_C_BOEPD_DAY.
 - Open customer questions for the future "Production Dashboard" (not started):
   source of annual goals 7.252 MMT oil / 2.574 BCM gas / 9.826 MMTOE, gas→ToE
   factor, remarks process, OVP vs ALP choice, JV vs OVL level per block.
@@ -62,10 +70,14 @@ Last updated: 2026-09-15.
 
 | Object | Type | Notes |
 |---|---|---|
-| ZDPR_I_DAILY / ZDPR_I_MONTHLY / ZDPR_I_TARGET | view entities | interface views on the tables; I_TARGET exposes ProductGroup + TargetBoepd as plain columns |
+| ZDPR_I_DAILY / ZDPR_I_MONTHLY / ZDPR_I_TARGET | view entities | interface views on the tables; I_TARGET joins ZPRA_T_TAR_CF and exposes ProductGroup, TargetVolume (bbl/MMSCM), TargetBoe, FiscalYearStart, DaysInFiscalYear |
+| ZDPR_I_TARGET_FY | view entity (group by) | annual target per TargetCode/FY/asset/block/product, all months + NET_PROD/GROSS_PROD/GAS_INJ |
 | ZDPR_P_DAY_BASE | view entity | base layer: unit conversion, signed gas (GAS_INJ negative), BU, fiscal year/period, PI% |
+| ZDPR_P_DATE_SPINE | view entity (group by) | distinct production dates + FY/period |
+| ZDPR_P_TARGET_DAY | view entity | date spine × ZDPR_I_TARGET_FY (TAR_BE): TargetQty/TargetBoepd = annual ÷ DaysInFiscalYear |
+| ZDPR_P_BOEPD_ROWS | view entity (union) | RowType 'A' actual rows (DAY_BASE) + 'T' target rows (TARGET_DAY), identical casts |
 | ZDPR_C_PROD_CUBE | cube | daily production cube (PI% = #MAX measure) |
-| ZDPR_C_BOEPD_DAY | cube | actual vs BE target per day (join to targets, not on GAS_INJ rows) |
+| ZDPR_C_BOEPD_DAY | cube | plain select on ZDPR_P_BOEPD_ROWS (no join): SUM per date = Actual line + flat BE Target line |
 | ZDPR_C_TARGET_CUBE | cube (param P_TargetCode) | monthly actual vs target — the join lives HERE because queries may not join |
 | ZDPR_P_PERF_AGG | view entity (union) | YTD + ANNUAL aggregates for tab 3 |
 | ZDPR_Q_PROD_PERF | **classic `define view`**, `@OData.publish: true` (also in the V4 SRVD) | tab-3 query (ratios via division()); OData V2 service ZDPR_Q_PROD_PERF_CDS for the Overview Page |
@@ -193,9 +205,13 @@ generators live in `tools/` too where available; if missing, recreate them.
 1. Fiori generator / preview problems (parameters, chart missing → DDLX not
    active, empty service list → destination `WebIDE*` properties).
 2. Registering V2 services, publishing the V4 binding, Work Zone tile setup.
-3. Validating figures against the DPR Excel (target-line calibration: CDS uses
-   raw `tar_qty`; classic program scales by UoM factors and days — may need a
-   conversion once real numbers are compared).
+3. Validating figures against the DPR Excel. The target scaling now mirrors the
+   classic report (see section 2). Remaining possible deviations: classic uses
+   the CF of the *report* year for every target row (we use the target's own
+   gjahr — same thing for the current FY); per-asset target start date
+   (`get_target_start_date`) only affects per-asset columns, not the grand
+   total used by the graph; ZDPR_C_TARGET_CUBE / ZDPR_Q_TARGET_QUERY still
+   compare raw monthly `tar_qty` with monthly reconciled actuals.
 4. Transport to QA/PRD (dependencies: ZPRA_T_* tables, ZOIU_PR_DN,
    ZPRA_C_DPR_PROF, abap2xlsx, optional Adobe forms ZDPR_FRM_PRODUCTION/TARGETS).
 5. The Production Dashboard (BU-grouped rates vs targets, asking rate, remarks)

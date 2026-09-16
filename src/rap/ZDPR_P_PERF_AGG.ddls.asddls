@@ -11,9 +11,11 @@
  *   YTD    : actual + target sums over the report window [P_DateFrom..P_DateTo],
  *            Divisor = number of production days in the window
  *            -> per-day figures == the Excel "YTD Actual/Target" row values
- *   ANNUAL : BE-target sums over the whole fiscal year P_FiscalYear,
- *            Divisor = number of fiscal months found (normally 12)
- *            -> per-day annual target rate; no actuals (Excel shows "-")
+ *   ANNUAL : BE-target volume of the whole fiscal year P_FiscalYear
+ *            (ZDPR_I_TARGET_FY: all months, all volume types, scaled like
+ *            the classic report), Divisor = days in the fiscal year
+ *            -> per-day annual target rate == the classic "Target : YYYY-YY"
+ *            grand total; no actuals (Excel shows "-")
  * ─────────────────────────────────────────────────────────────────────────── */
 define view entity ZDPR_P_PERF_AGG
   with parameters
@@ -42,10 +44,11 @@ group by ProductGroup
 
 union all
 
-  /* ZDPR_I_TARGET pre-computes ProductGroup and TargetBoepd as plain
-     columns, so this branch groups and sums plain fields only (no CASE
-     in GROUP BY / aggregates - rejected by the target release). */
-  select from ZDPR_I_TARGET as Tar
+  /* ZDPR_I_TARGET_FY holds the scaled annual TAR_BE volume per asset and
+     ProductGroup / DaysInFiscalYear as plain columns, so this branch groups
+     and sums plain fields only (no CASE in GROUP BY / aggregates - rejected
+     by the target release). */
+  select from ZDPR_I_TARGET_FY as Tar
 {
   key cast( 'ANNUAL' as abap.char( 6 ) )              as ScopeType,
   key Tar.ProductGroup                                as ProductGroup,
@@ -54,14 +57,13 @@ union all
       cast( 0 as abap.dec( 23, 7 ) )                  as SumActualQty,
       cast( 0 as abap.dec( 23, 3 ) )                  as SumActualBoepd,
 
-      cast( sum( Tar.TargetQty )   as abap.dec( 23, 7 ) ) as SumTargetQty,
+      cast( sum( Tar.AnnualTargetVolume ) as abap.dec( 23, 7 ) ) as SumTargetQty,
 
-      cast( sum( Tar.TargetBoepd ) as abap.dec( 23, 3 ) ) as SumTargetBoepd,
+      cast( sum( Tar.AnnualTargetBoe )    as abap.dec( 23, 3 ) ) as SumTargetBoepd,
 
-      /* fiscal months carrying a target (normally 12) */
-      cast( count( distinct Tar.FiscalPeriod ) as abap.dec( 10, 0 ) ) as Divisor
+      /* days in the fiscal year (365 / 366) */
+      cast( max( Tar.DaysInFiscalYear ) as abap.dec( 10, 0 ) ) as Divisor
 }
 where Tar.FiscalYear = $parameters.P_FiscalYear
   and Tar.TargetCode = 'TAR_BE'
-  and Tar.VolumeType = 'NET_PROD'
 group by Tar.ProductGroup

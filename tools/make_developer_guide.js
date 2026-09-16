@@ -100,9 +100,11 @@ c.push(P("All objects are in package ZPR_DPR_RAP. Sources are in section 10. Ext
 c.push(table(
   ["Object", "Type", "Role", "How it gets into the system"],
   [
-    ["ZDPR_I_DAILY, ZDPR_I_MONTHLY, ZDPR_I_TARGET", "CDS view entities", "Interface views on the tables", "abapGit ZIP"],
+    ["ZDPR_I_DAILY, ZDPR_I_MONTHLY, ZDPR_I_TARGET", "CDS view entities", "Interface views on the tables; ZDPR_I_TARGET scales tar_qty (MMT/BCM) to barrels / MMSCM / BOE like the classic report", "abapGit ZIP"],
+    ["ZDPR_I_TARGET_FY", "CDS view entity (aggregation)", "Annual target per FY/asset/block/product: all months, all volume types, days in FY", "abapGit ZIP"],
     ["ZDPR_P_DAY_BASE", "CDS view entity", "Unit conversion, signed gas, BU, fiscal period, PI %", "abapGit ZIP"],
-    ["ZDPR_C_PROD_CUBE, ZDPR_C_BOEPD_DAY, ZDPR_C_TARGET_CUBE", "Analytical cubes", "Data behind the queries (all joins live here)", "abapGit ZIP"],
+    ["ZDPR_P_DATE_SPINE, ZDPR_P_TARGET_DAY, ZDPR_P_BOEPD_ROWS", "CDS view entities", "Date spine; BE target daily rate on every date; union of actual + target rows (row source of ZDPR_C_BOEPD_DAY)", "abapGit ZIP"],
+    ["ZDPR_C_PROD_CUBE, ZDPR_C_BOEPD_DAY, ZDPR_C_TARGET_CUBE", "Analytical cubes", "Data behind the queries", "abapGit ZIP"],
     ["ZDPR_P_PERF_AGG", "CDS view entity (union)", "YTD / Annual aggregates for tab 3", "abapGit ZIP"],
     ["ZDPR_Q_BOEPD_TREND, ZDPR_Q_DAILY_TREND, ZDPR_Q_PROD_QUERY, ZDPR_Q_TARGET_QUERY", "Classic views, @Analytics.query, @OData.publish", "Analytical queries → OData V2 services ZDPR_Q_*_CDS", "abapGit ZIP + register service (section 5)"],
     ["ZDPR_Q_PROD_PERF", "Classic view, @OData.publish (also in V4 service)", "Tab-3 Production Performance → ZDPR_Q_PROD_PERF_CDS", "abapGit ZIP + register service"],
@@ -170,6 +172,8 @@ c.push(PB());
 /* ── 6 Verification ────────────────────────────────────────────────────── */
 c.push(H1("6. Verifying the Backend Before Touching BTP"));
 c.push(STEP("ADT → ZDPR_Q_BOEPD_TREND → Open With → Data Preview → parameters 01.04.2024 / 14.04.2024. Rows with ActualBoepdOvl and TargetBoepd must appear."));
+c.push(P("How the BE Target line is calculated (matches the classic DPR report, section “Target : YYYY-YY”, BOPD/MMSCMD mode): for the fiscal year of each date, all TAR_BE rows of ZPRA_T_PRD_TAR are taken — every fiscal month and all three volume types NET_PROD, GROSS_PROD and GAS_INJ (gas targets are not stored as NET_PROD). tar_qty is stored as MMT (oil family) or BCM (gas) and is scaled: oil family × 1,000,000 × conversion factor from ZPRA_T_TAR_CF (same fiscal year, asset, block, product); gas × 1,000 = MMSCM, and × 6290 for BOE. The annual sum is divided by the days in the fiscal year (365/366) to give the flat daily rate. If ZPRA_T_TAR_CF has no row for an oil asset and fiscal year, that asset's oil target is 0 — exactly as in the classic report."));
+c.push(P("Quick check in ADT: Data Preview on ZDPR_I_TARGET_FY filtered on TargetCode = TAR_BE and the current fiscal year. AnnualTargetBoe / DaysInFiscalYear summed over all rows must equal the GRAND-TOTAL of the “Target : YYYY-YY” row in the DPR Excel (BOPD/MMSCMD mode). If a row has ConversionFactor 0 in ZDPR_I_TARGET, the ZPRA_T_TAR_CF entry is missing."));
 c.push(STEP("ADT → ZDPR_Q_PROD_PERF → Data Preview → same dates, fiscal year 2024. Four rows: YTD/ANNUAL × OIL/GAS."));
 c.push(STEP("Service binding preview (V4): entity DPRProductionPerformance shows the same four rows."));
 c.push(STEP("Browser: the five V2 $metadata documents of section 5 load."));
@@ -350,8 +354,8 @@ c.push(PB());
 c.push(H1("10. Complete Source Code"));
 c.push(P("Every object, in creation order. To create an object by hand: create it in ADT with the exact name and type, delete the skeleton, paste the block in full, activate. The ZBP_ZDPR_EXCEL_DL block contains the global class (main source) followed by the local handler class starting at CLASS lhc_dpr_excel (Local Types include)."));
 const SECTIONS = [
-  ["10.1 Interface views", [["ZDPR_I_DAILY","ZDPR_I_DAILY.ddls.asddls"],["ZDPR_I_MONTHLY","ZDPR_I_MONTHLY.ddls.asddls"],["ZDPR_I_TARGET","ZDPR_I_TARGET.ddls.asddls"]]],
-  ["10.2 Base and aggregation layer", [["ZDPR_P_DAY_BASE","ZDPR_P_DAY_BASE.ddls.asddls"],["ZDPR_P_PERF_AGG","ZDPR_P_PERF_AGG.ddls.asddls"]]],
+  ["10.1 Interface views", [["ZDPR_I_DAILY","ZDPR_I_DAILY.ddls.asddls"],["ZDPR_I_MONTHLY","ZDPR_I_MONTHLY.ddls.asddls"],["ZDPR_I_TARGET","ZDPR_I_TARGET.ddls.asddls"],["ZDPR_I_TARGET_FY","ZDPR_I_TARGET_FY.ddls.asddls"]]],
+  ["10.2 Base and aggregation layer", [["ZDPR_P_DAY_BASE","ZDPR_P_DAY_BASE.ddls.asddls"],["ZDPR_P_DATE_SPINE","ZDPR_P_DATE_SPINE.ddls.asddls"],["ZDPR_P_TARGET_DAY","ZDPR_P_TARGET_DAY.ddls.asddls"],["ZDPR_P_BOEPD_ROWS","ZDPR_P_BOEPD_ROWS.ddls.asddls"],["ZDPR_P_PERF_AGG","ZDPR_P_PERF_AGG.ddls.asddls"]]],
   ["10.3 Analytical cubes", [["ZDPR_C_PROD_CUBE","ZDPR_C_PROD_CUBE.ddls.asddls"],["ZDPR_C_BOEPD_DAY","ZDPR_C_BOEPD_DAY.ddls.asddls"],["ZDPR_C_TARGET_CUBE","ZDPR_C_TARGET_CUBE.ddls.asddls"]]],
   ["10.4 Analytical queries (OData V2)", [["ZDPR_Q_BOEPD_TREND","ZDPR_Q_BOEPD_TREND.ddls.asddls"],["ZDPR_Q_DAILY_TREND","ZDPR_Q_DAILY_TREND.ddls.asddls"],["ZDPR_Q_PROD_QUERY","ZDPR_Q_PROD_QUERY.ddls.asddls"],["ZDPR_Q_TARGET_QUERY","ZDPR_Q_TARGET_QUERY.ddls.asddls"]]],
   ["10.5 Production Performance query (OData V2 and V4)", [["ZDPR_Q_PROD_PERF","ZDPR_Q_PROD_PERF.ddls.asddls"]]],
