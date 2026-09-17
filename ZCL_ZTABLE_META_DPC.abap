@@ -12,11 +12,21 @@
 *& The table name is MANDATORY and is read from the $filter on Tabname.
 *& $top / $skip are honoured for paging; if no $top is given a safe
 *& default cap is applied to TableDataSet so a client cannot dump a
-*& whole large table by accident.
+*& whole large table by accident. Paging runs in the DATABASE
+*& (ORDER BY key columns + OFFSET), so deep pages cost the same as the
+*& first one; join pages are additionally capped server-side, with the
+*& remainder delivered via server-driven paging (__next).
 *&
 *& Structure  : function module DDIF_FIELDINFO_GET (DFIES characteristics).
 *& Data       : dynamic SELECT * FROM (tabname), each row -> JSON via
 *&              /ui2/cl_json=>serialize.
+*& CDS redirect: for a SINGLE-table read with an explicit field list, if
+*&              the table has a sanctioned successor CDS (ARS_API_SUCCESSOR)
+*&              and every requested field is a non-calculated, same-named
+*&              element in that CDS (CL_DD_DDL_FIELD_TRACKER), the read is
+*&              served from the CDS instead of the table (base table kept as
+*&              automatic fallback). Fully transparent to the caller - same
+*&              field names, WHERE and paging. Joins are NEVER redirected.
 *& Security   : AUTHORITY-CHECK on S_TABU_NAM (display) before any read.
 *&
 *& Fully code based -> extends /IWBEP/CL_MGW_ABS_DATA (the standard
@@ -35,13 +45,16 @@ CLASS zcl_ztable_meta_dpc DEFINITION
     METHODS /iwbep/if_mgw_appl_srv_runtime~get_entityset REDEFINITION.
 
   PROTECTED SECTION.
-    CONSTANTS gc_default_max_rows TYPE i VALUE 1000.   " cap when no $top sent
-    CONSTANTS gc_hard_max_rows    TYPE i VALUE 50000.  " absolute ceiling
+    CONSTANTS gc_default_max_rows TYPE i VALUE 1000.     " cap when no $top sent
+    CONSTANTS gc_hard_max_rows    TYPE i VALUE 1000000.  " absolute ceiling (backstop)
+    CONSTANTS gc_join_page_cap    TYPE i VALUE 500.      " max page size for joins;
+                                                         " server-driven paging
+                                                         " (__next) serves the rest
 
-    " Extract the requested table name from the $filter select options.
+    " Extract the requested table name (or comma list) from $filter.
     METHODS get_tabname_from_filter
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
-      RETURNING VALUE(rv_tabname)        TYPE tabname.
+      RETURNING VALUE(rv_tabname)        TYPE string.
 
     " Extract the optional WhereClause filter (Open SQL restriction).
     METHODS get_where_from_filter
@@ -53,6 +66,19 @@ CLASS zcl_ztable_meta_dpc DEFINITION
       IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
       RETURNING VALUE(rv_fields)         TYPE string.
 
+    " Extract the optional Join filter (join FROM expression).
+    METHODS get_join_from_filter
+      IMPORTING it_filter_select_options TYPE /iwbep/t_mgw_select_option
+      RETURNING VALUE(rv_join)           TYPE string.
+
+    " Decode a value that the caller Base64URL-encoded and prefixed 'B64:'.
+    " This lets a filter value hide SQL quotes/operators/spaces from CPI's
+    " OData adapter, which cannot parse them in $filter. Raw (unprefixed)
+    " values are returned unchanged.
+    METHODS decode_b64
+      IMPORTING iv_value        TYPE string
+      RETURNING VALUE(rv_value) TYPE string.
+
     " Build a reduced internal table containing only the requested fields
     " (validated against the table's DDIC columns) plus the column list.
     METHODS build_field_projection
@@ -62,15 +88,56 @@ CLASS zcl_ztable_meta_dpc DEFINITION
                 er_table   TYPE REF TO data
       RAISING   /iwbep/cx_mgw_busi_exception.
 
+    " Build the result table for a join from qualified TAB~FIELD AS ALIAS
+    " specs, resolving each field's type from its source table's DDIC.
+    METHODS build_join_projection
+      IMPORTING iv_tables TYPE string
+                iv_fields TYPE string
+      EXPORTING et_cols   TYPE string_table
+                er_table  TYPE REF TO data
+      RAISING   /iwbep/cx_mgw_busi_exception.
+
     " Raise a business exception with a single message text.
     METHODS raise_error
       IMPORTING iv_text TYPE string
       RAISING   /iwbep/cx_mgw_busi_exception.
 
-    " Check display authorisation for the table (S_TABU_NAM).
+    " Check display authorisation for each table in the (comma) list.
     METHODS check_table_authority
-      IMPORTING iv_tabname TYPE tabname
+      IMPORTING iv_tables TYPE string
       RAISING   /iwbep/cx_mgw_busi_exception.
+
+    " Deterministic ORDER BY (key columns of every table in the list,
+    " client column excluded) so the database itself can page via OFFSET.
+    " Empty result -> caller falls back to in-memory skipping.
+    METHODS get_order_by
+      IMPORTING iv_tabname      TYPE string
+                iv_join         TYPE abap_bool
+      RETURNING VALUE(rv_order) TYPE string.
+
+    " One element-to-base-field row of a CDS view (mirrors the structure
+    " CL_DD_DDL_FIELD_TRACKER returns).
+    TYPES: BEGIN OF ty_cds_base_field,
+             entity_name   TYPE dd_cds_entity_name,
+             element_name  TYPE fieldname,
+             base_object   TYPE objectname,
+             base_field    TYPE fieldname,
+             is_calculated TYPE dd_cds_calculated,
+           END OF ty_cds_base_field.
+    TYPES tt_cds_base_field TYPE STANDARD TABLE OF ty_cds_base_field WITH DEFAULT KEY.
+
+    " Decide whether a SINGLE-table read can be served from a released
+    " successor CDS instead of the base table (same logic the ATC
+    " correction program uses): look up ARS_API_SUCCESSOR for the table,
+    " then confirm - via CL_DD_DDL_FIELD_TRACKER - that EVERY requested
+    " field exists in that CDS as a non-calculated, same-named element.
+    " Only then is the CDS a safe drop-in (field names + WHERE unchanged).
+    " Never used for joins. ev_ok = abap_false -> read the table as before.
+    METHODS resolve_cds_source
+      IMPORTING iv_tabname  TYPE tabname
+                iv_fields   TYPE string
+      EXPORTING ev_cds_name TYPE string
+                ev_ok       TYPE abap_bool.
 
     " Read DDIC field metadata for the table.
     METHODS read_structure
@@ -80,12 +147,14 @@ CLASS zcl_ztable_meta_dpc DEFINITION
 
     " Read table data dynamically and serialise each row to JSON.
     METHODS read_data
-      IMPORTING iv_tabname     TYPE tabname
-                iv_top         TYPE i
-                iv_skip        TYPE i
-                iv_where       TYPE string OPTIONAL
-                iv_fields      TYPE string OPTIONAL
-      RETURNING VALUE(rt_rows) TYPE zcl_ztable_meta_mpc=>tt_table_row
+      IMPORTING iv_tabname  TYPE string
+                iv_top      TYPE i
+                iv_skip     TYPE i
+                iv_where    TYPE string OPTIONAL
+                iv_fields   TYPE string OPTIONAL
+                iv_join     TYPE string OPTIONAL
+      EXPORTING et_rows     TYPE zcl_ztable_meta_mpc=>tt_table_row
+                ev_has_more TYPE abap_bool
       RAISING   /iwbep/cx_mgw_busi_exception.
 ENDCLASS.
 
@@ -94,7 +163,7 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
   METHOD /iwbep/if_mgw_appl_srv_runtime~get_entityset.
 
-    DATA(lv_tabname) = me->get_tabname_from_filter( it_filter_select_options ).
+    DATA(lv_tabname) = me->decode_b64( me->get_tabname_from_filter( it_filter_select_options ) ).
 
     IF lv_tabname IS INITIAL.
       me->raise_error( |Table name is mandatory. Use $filter=Tabname eq 'MARA'.| ).
@@ -108,29 +177,71 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     CASE iv_entity_set_name.
 
       WHEN 'TableStructureSet'.
-        DATA(lt_fields) = me->read_structure( lv_tabname ).
+        " read_structure expects a single table name (C30); the structure
+        " endpoint is always a single table, so convert from the string.
+        DATA lv_struct_tab TYPE tabname.
+        lv_struct_tab = lv_tabname.
+        DATA(lt_fields) = me->read_structure( lv_struct_tab ).
         copy_data_to_ref( EXPORTING is_data = lt_fields
                           CHANGING  cr_data = er_entityset ).
 
       WHEN 'TableDataSet'.
-        " Paging: honour $top / $skip, else apply the default cap.
+        " Paging - two modes, transparent to the caller:
+        "  * explicit $top / $skip (client-driven), and
+        "  * server-driven paging (CPI "Page Size" / "Process in Pages").
+        "    The skiptoken carries "offset_pagesize". When more rows remain
+        "    we hand back a skiptoken; the framework then adds a __next link,
+        "    which is what makes CPI's hasMoreRecords property become true.
+        DATA(lv_where)  = me->decode_b64( me->get_where_from_filter( it_filter_select_options ) ).
+        DATA(lv_fields) = me->decode_b64( me->get_fields_from_filter( it_filter_select_options ) ).
+        DATA(lv_join)   = me->decode_b64( me->get_join_from_filter( it_filter_select_options ) ).
+
         DATA lv_top  TYPE i.
         DATA lv_skip TYPE i.
-        lv_skip = is_paging-skip.
-        IF is_paging-top > 0.
-          lv_top = is_paging-top.
+        DATA(lv_skiptoken) = io_tech_request_context->get_skiptoken( ).
+        IF lv_skiptoken IS NOT INITIAL.
+          SPLIT lv_skiptoken AT '_' INTO DATA(lv_tok_off) DATA(lv_tok_siz).
+          lv_skip = lv_tok_off.
+          lv_top  = lv_tok_siz.
         ELSE.
+          lv_skip = is_paging-skip.
+          IF is_paging-top > 0.
+            lv_top = is_paging-top.
+          ELSE.
+            lv_top = gc_default_max_rows.
+          ENDIF.
+        ENDIF.
+        IF lv_top <= 0.
           lv_top = gc_default_max_rows.
         ENDIF.
 
-        DATA(lv_where)  = me->get_where_from_filter( it_filter_select_options ).
-        DATA(lv_fields) = me->get_fields_from_filter( it_filter_select_options ).
+        " Joins are the expensive path and the caller cannot know a safe
+        " page size in advance, so the server caps the page itself. The
+        " remaining rows flow through server-driven paging (__next /
+        " hasMoreRecords) - fully transparent to the caller's query.
+        IF lv_join IS NOT INITIAL AND lv_top > gc_join_page_cap.
+          lv_top = gc_join_page_cap.
+        ENDIF.
 
-        DATA(lt_rows) = me->read_data( iv_tabname = lv_tabname
-                                       iv_top     = lv_top
-                                       iv_skip    = lv_skip
-                                       iv_where   = lv_where
-                                       iv_fields  = lv_fields ).
+        DATA lt_rows     TYPE zcl_ztable_meta_mpc=>tt_table_row.
+        DATA lv_has_more TYPE abap_bool.
+        me->read_data(
+          EXPORTING iv_tabname = lv_tabname
+                    iv_top     = lv_top
+                    iv_skip    = lv_skip
+                    iv_where   = lv_where
+                    iv_fields  = lv_fields
+                    iv_join    = lv_join
+          IMPORTING et_rows     = lt_rows
+                    ev_has_more = lv_has_more ).
+
+        " More rows remain -> return a skiptoken; the framework emits the
+        " __next link and CPI sets hasMoreRecords = true to loop again.
+        IF lv_has_more = abap_true.
+          DATA(lv_next_off) = lv_skip + lv_top.
+          es_response_context-skiptoken = |{ lv_next_off }_{ lv_top }|.
+        ENDIF.
+
         copy_data_to_ref( EXPORTING is_data = lt_rows
                           CHANGING  cr_data = er_entityset ).
 
@@ -188,20 +299,18 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
 
 
   METHOD build_field_projection.
-    " Describe the table and validate every requested field against its
-    " real DDIC columns (whitelist -> no injection). Build a reduced
-    " structure/table containing only those fields, in the requested order.
-    DATA lo_struct TYPE REF TO cl_abap_structdescr.
-    DATA lt_names  TYPE STANDARD TABLE OF string.
-    DATA lt_comp   TYPE cl_abap_structdescr=>component_table.
-    DATA lv_cname  TYPE abap_compname.
+    " Validate every requested field and resolve its type through DDIC via
+    " 'TABLE-FIELD'. This also resolves fields that come from a .INCLUDE or
+    " append structure (which get_components does NOT flatten). Build a
+    " reduced result table with just those fields, in the requested order.
+    DATA lt_names TYPE STANDARD TABLE OF string.
+    DATA lt_comp  TYPE cl_abap_structdescr=>component_table.
+    DATA ls_comp  TYPE abap_componentdescr.
+    DATA lo_type  TYPE REF TO cl_abap_datadescr.
 
-    TRY.
-        lo_struct ?= cl_abap_typedescr=>describe_by_name( iv_tabname ).
-      CATCH cx_root.
-        me->raise_error( |Cannot describe structure of { iv_tabname }.| ).
-    ENDTRY.
-    DATA(lt_all) = lo_struct->get_components( ).
+    DATA lv_tab TYPE string.
+    lv_tab = iv_tabname.
+    CONDENSE lv_tab.
 
     SPLIT iv_fields AT ',' INTO TABLE lt_names.
     LOOP AT lt_names INTO DATA(lv_name).
@@ -209,32 +318,298 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
       IF lv_name IS INITIAL.
         CONTINUE.
       ENDIF.
-      lv_cname = to_upper( lv_name ).
-      READ TABLE lt_all WITH KEY name = lv_cname INTO DATA(ls_comp).
-      IF sy-subrc <> 0.
-        me->raise_error( |Field { lv_name } does not exist in { iv_tabname }.| ).
-      ENDIF.
+      DATA(lv_up) = to_upper( lv_name ).
+      TRY.
+          lo_type ?= cl_abap_typedescr=>describe_by_name( |{ lv_tab }-{ lv_up }| ).
+        CATCH cx_root.
+          me->raise_error( |Field { lv_name } does not exist in { iv_tabname }.| ).
+      ENDTRY.
+      CLEAR ls_comp.
+      ls_comp-name = lv_up.
+      ls_comp-type = lo_type.
       APPEND ls_comp TO lt_comp.
-      APPEND |{ ls_comp-name }| TO et_cols.
+      APPEND lv_up TO et_cols.
     ENDLOOP.
 
     IF lt_comp IS INITIAL.
       me->raise_error( |No valid fields supplied in the Fields parameter.| ).
     ENDIF.
 
-    DATA(lo_row_struct) = cl_abap_structdescr=>get( lt_comp ).
-    DATA(lo_row_table)  = cl_abap_tabledescr=>create( lo_row_struct ).
-    CREATE DATA er_table TYPE HANDLE lo_row_table.
+    TRY.
+        DATA(lo_row_struct) = cl_abap_structdescr=>get( lt_comp ).
+        DATA(lo_row_table)  = cl_abap_tabledescr=>create( lo_row_struct ).
+        CREATE DATA er_table TYPE HANDLE lo_row_table.
+      CATCH cx_root.
+        me->raise_error( |Cannot build the projection (duplicate field?).| ).
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD get_join_from_filter.
+    " Optional property Join carries the join FROM expression, e.g.
+    " Join eq 'VBAK INNER JOIN VBAP ON VBAK~VBELN = VBAP~VBELN'.
+    LOOP AT it_filter_select_options ASSIGNING FIELD-SYMBOL(<ls_filter>).
+      IF <ls_filter>-property = 'JOIN' OR <ls_filter>-property = 'Join'.
+        READ TABLE <ls_filter>-select_options ASSIGNING FIELD-SYMBOL(<ls_range>) INDEX 1.
+        IF sy-subrc = 0.
+          rv_join = <ls_range>-low.
+          RETURN.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD decode_b64.
+    " 'B64:<base64url>' -> decoded text. Base64URL uses - and _ and no
+    " padding; convert to standard Base64 and pad before decoding. This lets
+    " the caller pass a WhereClause/Join whose raw form (quotes, =, spaces)
+    " CPI's OData $filter parser would reject.
+    rv_value = iv_value.
+    IF iv_value NP 'B64:*'.
+      RETURN.
+    ENDIF.
+    DATA(lv_enc) = substring( val = iv_value off = 4 ).
+    REPLACE ALL OCCURRENCES OF '-' IN lv_enc WITH '+'.
+    REPLACE ALL OCCURRENCES OF '_' IN lv_enc WITH '/'.
+    DATA(lv_mod) = strlen( lv_enc ) MOD 4.
+    IF lv_mod = 2.
+      lv_enc = lv_enc && '=='.
+    ELSEIF lv_mod = 3.
+      lv_enc = lv_enc && '='.
+    ENDIF.
+    TRY.
+        rv_value = cl_http_utility=>decode_base64( encoded = lv_enc ).
+      CATCH cx_root.
+        rv_value = iv_value.       " leave as-is if it is not valid Base64
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD build_join_projection.
+    " Fields are qualified specs: TAB~FIELD [AS ALIAS], comma separated.
+    " Every referenced table must be in the Tabname list; every field must
+    " exist in its table. Build a flat result structure keyed by the alias.
+    DATA lt_specs   TYPE STANDARD TABLE OF string.
+    DATA lt_allowed TYPE STANDARD TABLE OF string.
+    DATA lt_comp    TYPE cl_abap_structdescr=>component_table.
+    DATA ls_comp    TYPE abap_componentdescr.
+    DATA lv_off     TYPE i.
+
+    SPLIT iv_tables AT ',' INTO TABLE lt_allowed.
+    LOOP AT lt_allowed ASSIGNING FIELD-SYMBOL(<lv_a>).
+      CONDENSE <lv_a>.
+      <lv_a> = to_upper( <lv_a> ).
+    ENDLOOP.
+
+    SPLIT iv_fields AT ',' INTO TABLE lt_specs.
+    LOOP AT lt_specs INTO DATA(lv_spec).
+      CONDENSE lv_spec.
+      IF lv_spec IS INITIAL.
+        CONTINUE.
+      ENDIF.
+
+      " Separate the optional  ' AS <alias>'  suffix.
+      DATA lv_src   TYPE string.
+      DATA lv_alias TYPE string.
+      CLEAR: lv_src, lv_alias.
+      DATA(lv_up) = to_upper( lv_spec ).
+      FIND FIRST OCCURRENCE OF ` AS ` IN lv_up MATCH OFFSET lv_off.
+      IF sy-subrc = 0.
+        lv_src   = lv_spec(lv_off).
+        lv_alias = lv_spec+lv_off.
+        SHIFT lv_alias LEFT BY 4 PLACES.       " drop ' AS '
+      ELSE.
+        lv_src = lv_spec.
+      ENDIF.
+      CONDENSE lv_src.
+      CONDENSE lv_alias.
+
+      " Split TAB~FIELD.
+      DATA lv_tab   TYPE string.
+      DATA lv_field TYPE string.
+      IF lv_src CS '~'.
+        SPLIT lv_src AT '~' INTO lv_tab lv_field.
+        CONDENSE lv_tab.
+        CONDENSE lv_field.
+      ELSE.
+        me->raise_error( |Join field '{ lv_spec }' must be qualified as TABLE~FIELD.| ).
+      ENDIF.
+
+      " Table must be one of the declared (authorised) tables.
+      DATA(lv_tab_up) = to_upper( lv_tab ).
+      READ TABLE lt_allowed TRANSPORTING NO FIELDS WITH KEY table_line = lv_tab_up.
+      IF sy-subrc <> 0.
+        me->raise_error( |Table { lv_tab } (field { lv_field }) is not in the Tabname list.| ).
+      ENDIF.
+
+      " Resolve the field's type through DDIC via TABLE-FIELD (also resolves
+      " .INCLUDE / append fields, which get_components does not flatten).
+      DATA(lv_field_up) = to_upper( lv_field ).
+      DATA lo_ftype TYPE REF TO cl_abap_datadescr.
+      TRY.
+          lo_ftype ?= cl_abap_typedescr=>describe_by_name( |{ lv_tab_up }-{ lv_field_up }| ).
+        CATCH cx_root.
+          me->raise_error( |Field { lv_field } does not exist in { lv_tab }.| ).
+      ENDTRY.
+
+      IF lv_alias IS INITIAL.
+        lv_alias = lv_field.
+      ENDIF.
+      DATA(lv_alias_up) = to_upper( lv_alias ).
+
+      CLEAR ls_comp.
+      ls_comp-name = lv_alias_up.
+      ls_comp-type = lo_ftype.
+      APPEND ls_comp TO lt_comp.
+
+      APPEND |{ lv_tab }~{ lv_field } AS { lv_alias_up }| TO et_cols.
+    ENDLOOP.
+
+    IF lt_comp IS INITIAL.
+      me->raise_error( |No valid fields supplied for the join.| ).
+    ENDIF.
+
+    TRY.
+        DATA(lo_row_struct) = cl_abap_structdescr=>get( lt_comp ).
+        DATA(lo_row_table)  = cl_abap_tabledescr=>create( lo_row_struct ).
+        CREATE DATA er_table TYPE HANDLE lo_row_table.
+      CATCH cx_root.
+        me->raise_error( |Cannot build the join result (duplicate alias in Fields?).| ).
+    ENDTRY.
   ENDMETHOD.
 
 
   METHOD check_table_authority.
-    AUTHORITY-CHECK OBJECT 'S_TABU_NAM'
-      ID 'ACTVT' FIELD '03'
-      ID 'TABLE' FIELD iv_tabname.
+    " iv_tables may be a single table or a comma-separated list (join).
+    DATA lt_tab TYPE STANDARD TABLE OF string.
+    SPLIT iv_tables AT ',' INTO TABLE lt_tab.
+    LOOP AT lt_tab INTO DATA(lv_t).
+      CONDENSE lv_t.
+      IF lv_t IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      DATA lv_tabnam TYPE tabname.
+      lv_tabnam = to_upper( lv_t ).
+      AUTHORITY-CHECK OBJECT 'S_TABU_NAM'
+        ID 'ACTVT' FIELD '03'
+        ID 'TABLE' FIELD lv_tabnam.
+      IF sy-subrc <> 0.
+        me->raise_error( |No display authorisation (S_TABU_NAM) for table { lv_tabnam }.| ).
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD get_order_by.
+    " Collect the key columns of every table in the (comma) list, in list
+    " order. The client column (CLNT) is excluded - ABAP SQL forbids it
+    " under automatic client handling. For joins the columns are qualified
+    " as TAB~FIELD. An empty result tells the caller to fall back to the
+    " old in-memory skip (no OFFSET possible without ORDER BY).
+    DATA lt_tab   TYPE STANDARD TABLE OF string.
+    DATA lt_ord   TYPE STANDARD TABLE OF string.
+    DATA lt_dfies TYPE STANDARD TABLE OF dfies.
+
+    SPLIT iv_tabname AT ',' INTO TABLE lt_tab.
+    LOOP AT lt_tab INTO DATA(lv_t).
+      CONDENSE lv_t.
+      IF lv_t IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      DATA lv_tabnam TYPE tabname.
+      lv_tabnam = to_upper( lv_t ).
+      CLEAR lt_dfies.
+      CALL FUNCTION 'DDIF_FIELDINFO_GET'
+        EXPORTING
+          tabname   = lv_tabnam
+        TABLES
+          dfies_tab = lt_dfies
+        EXCEPTIONS
+          OTHERS    = 1.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      LOOP AT lt_dfies ASSIGNING FIELD-SYMBOL(<ls_f>)
+           WHERE keyflag = 'X' AND datatype <> 'CLNT'.
+        IF iv_join = abap_true.
+          APPEND |{ lv_tabnam }~{ <ls_f>-fieldname }| TO lt_ord.
+        ELSE.
+          APPEND |{ <ls_f>-fieldname }| TO lt_ord.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+
+    rv_order = concat_lines_of( table = lt_ord sep = `, ` ).
+  ENDMETHOD.
+
+
+  METHOD resolve_cds_source.
+    " Same approach as report ZATC_RESULT_CORRECTION: ARS_API_SUCCESSOR
+    " gives SAP's sanctioned successor object for direct access to a table,
+    " and CL_DD_DDL_FIELD_TRACKER gives that CDS's element -> base-field
+    " map. We only redirect when the swap is transparent: every requested
+    " field is present in the CDS as a NON-calculated element whose name
+    " equals the table field name (so Fields, WhereClause and ORDER BY need
+    " no translation). Otherwise we leave ev_ok = abap_false (read table).
+    CLEAR: ev_cds_name, ev_ok.
+
+    " 1. successor CDS for this table (only tables SAP flagged appear here).
+    SELECT SINGLE successor_tadir_obj_name FROM ars_api_successor
+      INTO @DATA(lv_succ)
+      WHERE object_key  = @iv_tabname
+        AND object_type = 'TABL'.
     IF sy-subrc <> 0.
-      me->raise_error( |No display authorisation (S_TABU_NAM) for table { iv_tabname }.| ).
+      IF iv_tabname = 'KONV'.
+        lv_succ = 'V_KONV_CDS'.          " same explicit fallback as the ATC report
+      ELSE.
+        RETURN.
+      ENDIF.
     ENDIF.
+    IF lv_succ IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " successor object must actually exist in the dictionary.
+    SELECT SINGLE obj_name FROM tadir INTO @DATA(lv_obj)
+      WHERE obj_name = @lv_succ.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+
+    " 2. element / base-field information of the CDS.
+    DATA lo_ddl  TYPE REF TO cl_dd_ddl_field_tracker.
+    DATA lt_base TYPE tt_cds_base_field.
+    DATA lv_ddl  TYPE ddlname.
+    lv_ddl = lv_succ.
+    TRY.
+        CREATE OBJECT lo_ddl EXPORTING iv_ddlname = lv_ddl.
+        lo_ddl->get_base_field_information( RECEIVING rt_base_fields = lt_base ).
+      CATCH cx_root.
+        RETURN.
+    ENDTRY.
+    IF lt_base IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " 3. every requested field must be a non-calculated, same-named element.
+    DATA lt_req TYPE STANDARD TABLE OF string.
+    SPLIT iv_fields AT ',' INTO TABLE lt_req.
+    LOOP AT lt_req INTO DATA(lv_f).
+      CONDENSE lv_f.
+      IF lv_f IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      DATA lv_el TYPE fieldname.
+      lv_el = to_upper( lv_f ).
+      READ TABLE lt_base INTO DATA(ls_b) WITH KEY element_name = lv_el.
+      IF sy-subrc <> 0 OR ls_b-is_calculated = 'X'.
+        RETURN.                          " field missing / calculated -> use table
+      ENDIF.
+    ENDLOOP.
+
+    ev_cds_name = lv_succ.
+    ev_ok       = abap_true.
   ENDMETHOD.
 
 
@@ -291,82 +666,212 @@ CLASS zcl_ztable_meta_dpc IMPLEMENTATION.
     FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE,
                    <ls_data> TYPE any.
 
-    " Make sure the object exists and is readable via Open SQL
-    " (transparent / pooled / cluster table or a DDIC view).
-    SELECT SINGLE tabname FROM dd02l INTO @DATA(lv_dummy)
-      WHERE tabname  = @iv_tabname
-        AND tabclass IN ( 'TRANSP', 'POOL', 'CLUSTER', 'VIEW' ).
-    IF sy-subrc <> 0.
-      SELECT SINGLE viewname FROM dd25l INTO @DATA(lv_vdummy)
-        WHERE viewname = @iv_tabname.
-      IF sy-subrc <> 0.
-        me->raise_error( |{ iv_tabname } is not a selectable table or view.| ).
-      ENDIF.
+    " Paging. Preferred: TRUE DATABASE PAGING - ORDER BY <key columns>
+    " with OFFSET <skip>, so a page costs the same however deep it lies.
+    " (The old approach fetched skip+top rows and discarded skip of them
+    " in ABAP; deep pages grew slower and slower until the gateway timed
+    " out - worst on joins.) One extra row (top + 1) is fetched to detect
+    " whether a further page exists and hand back a skiptoken
+    " (-> __next -> CPI hasMoreRecords).
+    " Fallback: if no key columns can be determined (or the OFFSET query
+    " is rejected), the old fetch-and-discard paging is used.
+    DATA lv_join_flag TYPE abap_bool.
+    IF iv_join IS NOT INITIAL.
+      lv_join_flag = abap_true.
     ENDIF.
+    DATA(lv_order) = me->get_order_by( iv_tabname = iv_tabname
+                                       iv_join    = lv_join_flag ).
 
-    " Build the target internal table. With a Fields projection it holds
-    " only the requested columns; otherwise it is the full table row type.
-    DATA lt_cols TYPE string_table.        " selected column list (empty = all)
-    IF iv_fields IS NOT INITIAL.
-      me->build_field_projection(
-        EXPORTING iv_tabname = iv_tabname
-                  iv_fields  = iv_fields
-        IMPORTING et_cols    = lt_cols
-                  er_table   = lr_table ).
+    DATA lv_fetch  TYPE i.
+    DATA lv_offset TYPE i.
+    IF lv_order IS NOT INITIAL.
+      lv_fetch  = iv_top + 1.
+      lv_offset = iv_skip.
     ELSE.
-      TRY.
-          CREATE DATA lr_table TYPE STANDARD TABLE OF (iv_tabname).
-        CATCH cx_sy_create_data_error.
-          me->raise_error( |Cannot build a work area for { iv_tabname }.| ).
-      ENDTRY.
+      lv_fetch  = iv_top + iv_skip + 1.
+      lv_offset = 0.
     ENDIF.
-
-    ASSIGN lr_table->* TO <lt_data>.
-
-    " Dynamic read with paging. UP TO n ROWS caps the result set;
-    " skipping is done in ABAP after fetch (portable across DBs).
-    DATA lv_fetch TYPE i.
-    lv_fetch = iv_top + iv_skip.
-    " Never fetch more than the hard ceiling in a single call.
     IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
       lv_fetch = gc_hard_max_rows.
     ENDIF.
 
     " Optional dynamic WHERE (table form avoids length limits). An empty
     " table means no restriction (all rows).
+    " Convenience: a double quote (") is accepted as the string-literal
+    " delimiter and translated to a single quote, so the caller can write
+    "   WhereClause eq 'MANDT = "100"'
+    " instead of doubling single quotes for OData
+    "   WhereClause eq 'MANDT = ''100'''
+    " (the doubled form still works - single quotes are left untouched).
     DATA lt_where TYPE STANDARD TABLE OF string.
     IF iv_where IS NOT INITIAL.
-      APPEND iv_where TO lt_where.
+      DATA lv_where TYPE string.
+      lv_where = iv_where.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_where WITH ''''.
+      APPEND lv_where TO lt_where.
     ENDIF.
 
-    " An empty column list in SELECT (lt_cols) reads all columns (SELECT *).
-    " INTO CORRESPONDING FIELDS maps the selected columns to same-named
-    " components of the (reduced or full) target structure.
-    TRY.
-        SELECT (lt_cols) FROM (iv_tabname)
-          INTO CORRESPONDING FIELDS OF TABLE <lt_data>
-          UP TO lv_fetch ROWS
-          WHERE (lt_where).
-      CATCH cx_sy_dynamic_osql_error INTO DATA(lx_sql).
-        me->raise_error( |Read failed for { iv_tabname }: { lx_sql->get_text( ) }| ).
-    ENDTRY.
+    DATA lt_cols TYPE string_table.   " selected column list (empty = all)
+    DATA lv_from TYPE string.         " single table OR the join expression
+    " CDS redirection (single table only): if set, the read is served from
+    " a successor CDS with the base table kept as an automatic fallback.
+    DATA lv_cds_used  TYPE abap_bool.
+    DATA lv_table_src TYPE string.
 
+    IF iv_join IS NOT INITIAL.
+      "--- JOIN mode: Fields is mandatory and must be TAB~FIELD [AS ALIAS];
+      "    the join expression itself becomes the dynamic FROM clause.
+      IF iv_fields IS INITIAL.
+        me->raise_error( |Fields (qualified TAB~FIELD AS ALIAS) is mandatory for a join.| ).
+      ENDIF.
+      me->build_join_projection(
+        EXPORTING iv_tables = iv_tabname
+                  iv_fields = iv_fields
+        IMPORTING et_cols   = lt_cols
+                  er_table  = lr_table ).
+      lv_from = iv_join.
+      " Same convenience: allow " as string-literal delimiter in the join.
+      REPLACE ALL OCCURRENCES OF '"' IN lv_from WITH ''''.
+    ELSE.
+      "--- Single-table mode (behaviour unchanged).
+      DATA lv_single TYPE tabname.
+      lv_single = iv_tabname.
+      SELECT SINGLE tabname FROM dd02l INTO @DATA(lv_dummy)
+        WHERE tabname  = @lv_single
+          AND tabclass IN ( 'TRANSP', 'POOL', 'CLUSTER', 'VIEW' ).
+      IF sy-subrc <> 0.
+        SELECT SINGLE viewname FROM dd25l INTO @DATA(lv_vdummy)
+          WHERE viewname = @lv_single.
+        IF sy-subrc <> 0.
+          me->raise_error( |{ lv_single } is not a selectable table or view.| ).
+        ENDIF.
+      ENDIF.
+      lv_from = lv_single.
+      IF iv_fields IS NOT INITIAL.
+        " Result structure is always built from the BASE TABLE's DDIC, so
+        " DataJson carries the table field names whether we read the table
+        " or a same-named CDS element.
+        me->build_field_projection(
+          EXPORTING iv_tabname = lv_single
+                    iv_fields  = iv_fields
+          IMPORTING et_cols    = lt_cols
+                    er_table   = lr_table ).
+        " Try to serve the read from a successor CDS (transparent to CPI).
+        me->resolve_cds_source(
+          EXPORTING iv_tabname  = lv_single
+                    iv_fields   = iv_fields
+          IMPORTING ev_cds_name = DATA(lv_cds_name)
+                    ev_ok       = DATA(lv_cds_ok) ).
+        IF lv_cds_ok = abap_true.
+          lv_from       = lv_cds_name.
+          lv_cds_used   = abap_true.
+          lv_table_src  = lv_single.
+        ENDIF.
+      ELSE.
+        " No field list -> read the whole table (CDS redirection needs the
+        " requested fields to prove a safe drop-in).
+        TRY.
+            CREATE DATA lr_table TYPE STANDARD TABLE OF (lv_single).
+          CATCH cx_sy_create_data_error.
+            me->raise_error( |Cannot build a work area for { lv_single }.| ).
+        ENDTRY.
+      ENDIF.
+    ENDIF.
+
+    ASSIGN lr_table->* TO <lt_data>.
+
+    " Dynamic read. Empty column list = all columns; empty lt_where = all
+    " rows. The OFFSET variant needs strict-mode syntax, i.e. a comma-
+    " separated select list, so join lt_cols into a single string for it.
+    DATA lv_cols TYPE string.
+    lv_cols = concat_lines_of( table = lt_cols sep = `, ` ).
+
+    " Source order. When a CDS was chosen it is tried first and the base
+    " table is kept as an automatic fallback (should the CDS read fail for
+    " any runtime reason). Otherwise there is a single source (table or the
+    " join expression). Because the CDS is only used when every field is a
+    " same-named element, lt_cols / lv_order / lt_where are identical for
+    " both sources - only the FROM changes (exactly like the ATC report).
+    DATA lt_sources TYPE STANDARD TABLE OF string.
+    IF lv_cds_used = abap_true.
+      APPEND lv_from      TO lt_sources.   " the successor CDS
+      APPEND lv_table_src TO lt_sources.   " the base table (fallback)
+    ELSE.
+      APPEND lv_from TO lt_sources.
+    ENDIF.
+
+    DATA(lv_order_bak) = lv_order.
+    DATA(lv_fetch_bak) = lv_fetch.
+    LOOP AT lt_sources INTO DATA(lv_src).
+      DATA(lv_is_last) = xsdbool( sy-tabix = lines( lt_sources ) ).
+      CLEAR <lt_data>.
+      lv_order = lv_order_bak.
+      lv_fetch = lv_fetch_bak.
+      TRY.
+          IF lv_order IS NOT INITIAL.
+            TRY.
+                SELECT (lv_cols) FROM (lv_src)
+                  WHERE (lt_where)
+                  ORDER BY (lv_order)
+                  INTO CORRESPONDING FIELDS OF TABLE @<lt_data>
+                  UP TO @lv_fetch ROWS
+                  OFFSET @lv_offset.
+              CATCH cx_sy_dynamic_osql_error.
+                " OFFSET query rejected (e.g. exotic view) -> legacy paging.
+                CLEAR: lv_order, <lt_data>.
+                lv_fetch  = iv_top + iv_skip + 1.
+                IF lv_fetch <= 0 OR lv_fetch > gc_hard_max_rows.
+                  lv_fetch = gc_hard_max_rows.
+                ENDIF.
+                SELECT (lt_cols) FROM (lv_src)
+                  INTO CORRESPONDING FIELDS OF TABLE <lt_data>
+                  UP TO lv_fetch ROWS
+                  WHERE (lt_where).
+            ENDTRY.
+          ELSE.
+            SELECT (lt_cols) FROM (lv_src)
+              INTO CORRESPONDING FIELDS OF TABLE <lt_data>
+              UP TO lv_fetch ROWS
+              WHERE (lt_where).
+          ENDIF.
+          lv_from = lv_src.               " source actually used
+          EXIT.
+        CATCH cx_sy_dynamic_osql_error INTO DATA(lx_sql).
+          IF lv_is_last = abap_true.
+            me->raise_error( |Read failed: { lx_sql->get_text( ) }| ).
+          ENDIF.
+          " else: CDS read failed -> loop tries the base table next.
+      ENDTRY.
+    ENDLOOP.
+
+    CLEAR ev_has_more.
+    DATA lv_taken TYPE i.
     LOOP AT <lt_data> ASSIGNING <ls_data>.
-      lv_rowno = sy-tabix.
-      " apply $skip
-      IF lv_rowno <= iv_skip.
+      " Legacy path only: the skipped rows are part of the fetched set and
+      " are dropped here. With OFFSET the database already skipped them.
+      IF lv_order IS INITIAL AND sy-tabix <= iv_skip.
         CONTINUE.
       ENDIF.
+      lv_taken = lv_taken + 1.
+      " The (iv_top + 1)-th row after the skip proves another page exists;
+      " flag it and stop without returning it.
+      IF lv_taken > iv_top.
+        ev_has_more = abap_true.
+        EXIT.
+      ENDIF.
+      " Absolute row number across all pages (both paging paths).
+      lv_rowno = iv_skip + lv_taken.
       CLEAR ls_row.
       ls_row-tabname     = iv_tabname.
       ls_row-row_no      = lv_rowno.
       ls_row-whereclause = iv_where.          " echo the applied filter
       ls_row-fields      = iv_fields.         " echo the selected fields
+      ls_row-join        = iv_join.           " echo the join expression
       ls_row-data_json   = /ui2/cl_json=>serialize(
                              data        = <ls_data>
                              compress    = abap_false
                              pretty_name = /ui2/cl_json=>pretty_mode-none ).
-      APPEND ls_row TO rt_rows.
+      APPEND ls_row TO et_rows.
     ENDLOOP.
   ENDMETHOD.
 
