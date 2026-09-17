@@ -1,0 +1,23 @@
+unmanaged implementation in class zbp_zdpr_excel_dl unique;
+
+// Action-only behavior: the entity exists purely to host the four
+// static download actions (Excel + PDF), called via OData action imports.
+// No CRUD, lock, etag or persistence - nothing is ever written.
+define behavior for ZDPR_I_EXCEL_DL alias DPRExcelDownload
+{
+  static action downloadProduction
+    parameter ZDPR_A_PROD_PARAM
+    result   [1] ZDPR_A_EXCEL_RESULT;
+
+  static action downloadTargets
+    parameter ZDPR_A_TAR_PARAM
+    result   [1] ZDPR_A_EXCEL_RESULT;
+
+  static action downloadPdfProduction
+    parameter ZDPR_A_PROD_PARAM
+    result   [1] ZDPR_A_PDF_RESULT;
+
+  static action downloadPdfTargets
+    parameter ZDPR_A_TAR_PARAM
+    result   [1] ZDPR_A_PDF_RESULT;
+}
