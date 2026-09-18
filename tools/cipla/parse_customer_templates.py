@@ -81,8 +81,20 @@ def blocks_of(ws):
             inconsistent = sum(1 for f, x in zip(fl, ds)
                                if f in pairs and x and x.lower() != pairs[f]) >= 2
 
+        # The transaction code the template is for. Every create template is
+        # XD01; the block and unblock sheet is XD05, and writing XD01 into it
+        # would hand the user a file for the wrong transaction.
+        tcode = ''
+        for r in rows:
+            v = str(ws.cell(r, 1).value or '').strip()
+            if TCODE.match(v):
+                tcode = v
+                break
+        if not tcode and ws.title == 'block unblock':
+            tcode = 'XD05'
+
         rec = dict(sheet=ws.title, tech_row=h, desc_row=d, ncol=len(cols),
-                   inconsistent=inconsistent,
+                   inconsistent=inconsistent, tcode=tcode,
                    fields=[str(ws.cell(h, c).value).strip() for c in cols] if h else [],
                    desc=[str(ws.cell(d, c).value or '').strip() for c in cols],
                    typ=[str(ws.cell(h + 1, c).value or '').strip() for c in cols] if h else [],
@@ -122,7 +134,7 @@ def block_unblock(ws):
               'SPERR', 'SPERR_B', 'AUFSD', 'AUFSD_S', 'LIFSD', 'LIFSD_S',
               'FAKSD', 'FAKSD_S', 'CASSD', 'CASSD_S']
     return dict(sheet=ws.title, tech_row=None, desc_row=2, ncol=len(fields),
-                inconsistent=False, fields=fields,
+                inconsistent=False, tcode='XD05', fields=fields,
                 desc=['Blocking or unblocking'] + [str(ws.cell(2, c).value).strip()
                                                    for c in cols],
                 typ=[], length=[], mo=[], sample_rows=[3, 4], ktokd=['*'])
@@ -155,6 +167,7 @@ def main(path, out):
         sig = hashlib.md5(key.encode()).hexdigest()[:8]
         fmt.setdefault(sig, dict(id=sig, ncol=b['ncol'], fields=b['fields'],
                                  desc=b['desc'], typ=b['typ'], length=b['length'],
+                                 tcode=b.get('tcode') or 'XD01',
                                  has_tech=bool(b['fields'])))
         for k in (b['ktokd'] or ['?']):
             for ctry in SHEET_COUNTRY.get(b['sheet'], ['?']):

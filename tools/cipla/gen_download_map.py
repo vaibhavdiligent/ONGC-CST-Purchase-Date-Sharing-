@@ -39,12 +39,12 @@ CONT = {'PARNR': 'PARNR', 'NAME1_01': 'NAME1', 'NAMEV_01': 'NAMEV',
         'ABTNR_01': 'ABTNR', 'PAFKT_01': 'PAFKT'}
 
 # An LSMW control column. It carries a constant, not master data.
-CONST = {'TCODE': 'XD01', 'USE_ZAV': 'X', 'ZAV': 'X'}
+CONST = {'USE_ZAV': 'X', 'ZAV': 'X'}
 
 # Copying from a reference is an XD01 feature. A customer that exists has no
 # reference, so these columns are written empty.
 NONE = {'REF_KUNNR', 'REF_BUKRS', 'REF_VKORG', 'REF_VTWEG', 'REF_SPART',
-        'BUKRS1', 'VKORG1', 'VTWEG1', 'SPART1', 'KNA1'}
+        'BUKRS1', 'VKORG1', 'VTWEG1', 'SPART1'}
 
 # Where the same name lives in two places, the workbook's own usage decides.
 FIXED = {
@@ -70,6 +70,9 @@ FIXED = {
     'WAERS':   ('S', 'WAERS'),
     'AADHAAR_NO': ('I', 'X90003'),
     'KATRA4': ('C', 'KATR4'),     # the workbook's spelling of the KNA1 attribute
+    # The QCIL templates head the customer number column KNA1. Left unmapped it
+    # would come out empty, which is the one column the file cannot do without.
+    'KNA1':   ('K', 'KUNNR'),
     'MWST': ('T', 'MWST'), 'UTXJ': ('T', 'UTXJ'),
     'UTX2': ('T', 'UTX2'), 'UTX3': ('T', 'UTX3'),
 }
@@ -77,7 +80,7 @@ FIXED = {
 # How a stored value is written so that the upload reads it back unchanged.
 #   DT date   NM whole number   AL leading zeros   TT title key
 FMT = {'KUNNR': 'AL', 'LIFNR': 'AL', 'AKONT': 'GL', 'TITLE_MEDI': 'TT',
-       'FISKN': 'AL', 'ALTKN': 'AL'}
+       'FISKN': 'AL', 'ALTKN': 'AL', 'KNA1': 'AL'}
 
 
 def fields_of(tab):
@@ -124,6 +127,8 @@ SINGLE = {'alwaysx': 'USE_ZAV', 'name1': 'NAME1', 'attribute4': 'KATR4',
 # Where the heading names the tax category, the column is read by category rather
 # than by position. The India heading reads JOIG and the category is JOCG - SAP's
 # own inconsistency, and the upload program already follows it.
+INDIA_TAX = ['JOCG', 'JTC1', 'JTX1', 'JTX2', 'JTX3', 'JTX4']
+
 CATEGORY = {'JOIG': 'JOCG', 'JTC1': 'JTC1', 'JTX1': 'JTX1', 'JTX2': 'JTX2',
             'JTX3': 'JTX3', 'JTX4': 'JTX4', 'UTXJ': 'UTXJ', 'UTX2': 'UTX2',
             'UTX3': 'UTX3', 'MWST': 'MWST'}
@@ -168,6 +173,11 @@ def main():
         fmt = REG['formats'][sig]
         users = sorted({f"{c['country']}/{c['ktokd']}" for c in REG['combinations']
                         if c['format'] == sig})
+        lands = {c['country'] for c in REG['combinations'] if c['format'] == sig}
+        # Cipla confirmed the order of India's six tax categories, so a template
+        # used only by India can name them even where its headings do not.
+        india_only = lands == {'IN'}
+        nth_tax = 0
         lines.append(f"    \"  {sig} - {fmt['ncol']} columns - {', '.join(users)}")
         names = fmt['fields'] or ['' for _ in fmt['desc']]
         seen_desc = collections.Counter()
@@ -175,12 +185,19 @@ def main():
             if not fld:                      # a description-only block
                 seen_desc[squash(desc)] += 1
                 fld = from_description(desc, seen_desc[squash(desc)]) or desc
-            node, target = resolve(fld)
+            if fld == 'TCODE':
+                node, target = 'X', fmt.get('tcode') or 'XD01'
+            else:
+                node, target = resolve(fld)
             # A tax column whose heading names its category is read by category.
             if node == 'T' and target.startswith('#'):
                 head = re.sub(r'[^A-Z0-9]', '', (desc or '').upper())[:4]
                 if head in CATEGORY:
                     target = CATEGORY[head]
+                elif india_only and nth_tax < len(INDIA_TAX):
+                    target = INDIA_TAX[nth_tax]
+            if node == 'T':
+                nth_tax += 1
             if node == '?':
                 unresolved[fld] += 1
             hdr = (desc or fld).replace("'", "''")
