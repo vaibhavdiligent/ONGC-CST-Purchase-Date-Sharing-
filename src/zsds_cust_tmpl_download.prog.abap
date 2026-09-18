@@ -613,10 +613,10 @@ CLASS lcl_tmpl IMPLEMENTATION.
 
   METHOD resolve.
     load( ).
-    READ TABLE mt_combi INTO DATA(ls_c)
+    READ TABLE mt_combi INTO DATA(ls_cb)
          WITH KEY land = iv_land ktokd = iv_ktokd.
     IF sy-subrc = 0.
-      rv = ls_c-tmpl.
+      rv = ls_cb-tmpl.
     ENDIF.
   ENDMETHOD.
 
@@ -630,13 +630,13 @@ CLASS lcl_tmpl IMPLEMENTATION.
 
   METHOD countries.
     load( ).
-    LOOP AT mt_combi INTO DATA(ls_c).
-      IF ls_c-land = gc_any.
+    LOOP AT mt_combi INTO DATA(ls_cb).
+      IF ls_cb-land = gc_any.
         CONTINUE.
       ENDIF.
-      READ TABLE rt TRANSPORTING NO FIELDS WITH KEY table_line = ls_c-land.
+      READ TABLE rt TRANSPORTING NO FIELDS WITH KEY table_line = ls_cb-land.
       IF sy-subrc <> 0.
-        APPEND ls_c-land TO rt.
+        APPEND ls_cb-land TO rt.
       ENDIF.
     ENDLOOP.
     SORT rt.
@@ -644,10 +644,10 @@ CLASS lcl_tmpl IMPLEMENTATION.
 
   METHOD groups.
     load( ).
-    LOOP AT mt_combi INTO DATA(ls_c) WHERE land = iv_land.
-      READ TABLE rt TRANSPORTING NO FIELDS WITH KEY table_line = ls_c-ktokd.
+    LOOP AT mt_combi INTO DATA(ls_cb) WHERE land = iv_land.
+      READ TABLE rt TRANSPORTING NO FIELDS WITH KEY table_line = ls_cb-ktokd.
       IF sy-subrc <> 0.
-        APPEND ls_c-ktokd TO rt.
+        APPEND ls_cb-ktokd TO rt.
       ENDIF.
     ENDLOOP.
     SORT rt.
