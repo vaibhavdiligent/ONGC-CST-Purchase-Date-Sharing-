@@ -1054,7 +1054,7 @@ CLASS lcl_main DEFINITION FINAL.
     CLASS-METHODS f4_ktokd.
     " One list of every template the workbook holds. Whichever of the two
     " fields the help is called from, it fills both.
-    CLASS-METHODS f4_template IMPORTING iv_return TYPE clike.
+    CLASS-METHODS f4_template.
     " The country as it stands on the screen this moment.
     CLASS-METHODS screen_land RETURNING VALUE(rv) TYPE land1.
     CLASS-METHODS screen_val IMPORTING iv_field  TYPE clike
@@ -1129,20 +1129,21 @@ CLASS lcl_main IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD f4_land.
-    f4_template( 'LAND1' ).
+    f4_template( ).
   ENDMETHOD.
 
   METHOD f4_ktokd.
-    f4_template( 'KTOKD' ).
+    f4_template( ).
   ENDMETHOD.
 
   METHOD f4_template.
-    " Every template the workbook holds, as one list: the country and its
-    " name, the account group and its text, and how wide the template is. A
-    " country already typed narrows the list to that country; an empty one
-    " shows all of them, because a user who does not yet know which
-    " combinations exist is exactly the one who needs the list.
+    " Every template the workbook holds, as one list: the pair that names it,
+    " the country and its name, the account group and its text, and how wide
+    " the template is. A country already typed narrows the list to that
+    " country; an empty one shows all of them, because a user who does not yet
+    " know which combinations exist is exactly the one who needs the list.
     TYPES: BEGIN OF ty_f4,
+             tmpl  TYPE char11,
              land1 TYPE land1,
              landx TYPE landx,
              ktokd TYPE ktokd,
@@ -1177,6 +1178,7 @@ CLASS lcl_main IMPLEMENTATION.
     LOOP AT lt_combi INTO DATA(ls_cb).
       DATA ls_f4 TYPE ty_f4.
       CLEAR ls_f4.
+      ls_f4-tmpl  = |{ ls_cb-land }/{ ls_cb-ktokd }|.
       ls_f4-land1 = ls_cb-land.
       ls_f4-ktokd = ls_cb-ktokd.
       READ TABLE lt_ctry INTO DATA(ls_ct) WITH KEY land1 = ls_cb-land.
@@ -1193,21 +1195,42 @@ CLASS lcl_main IMPLEMENTATION.
     ENDLOOP.
     SORT lt_f4 BY land1 ktokd.
 
-    " Picking a row fills the country as well as the account group, so the
-    " two fields cannot be left disagreeing with each other.
-    DATA lt_map TYPE STANDARD TABLE OF dselc WITH EMPTY KEY.
-    APPEND VALUE dselc( fldname = 'LAND1' dyfldname = 'P_LAND'  ) TO lt_map.
-    APPEND VALUE dselc( fldname = 'KTOKD' dyfldname = 'P_KTOKD' ) TO lt_map.
-
+    " The chosen row is taken back rather than transported. Automatic
+    " transport writes one field, and a template needs two; the mapping table
+    " that would write both only works on a real dynpro's value request, not
+    " on a selection screen, where it writes nothing at all. So no
+    " DYNPROFIELD is passed, the pair comes back in RETURN_TAB, and both
+    " fields are written here - which also keeps them from disagreeing.
+    DATA lt_ret TYPE STANDARD TABLE OF ddshretval.
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
-      EXPORTING retfield         = iv_return
-                dynpprog         = sy-repid
-                dynpnr           = sy-dynnr
-                window_title     = 'Customer templates'
-                value_org        = 'S'
-      TABLES    value_tab        = lt_f4
-                dynpfld_mapping  = lt_map
-      EXCEPTIONS OTHERS          = 1.
+      EXPORTING  retfield     = 'TMPL'
+                 window_title = 'Customer templates'
+                 value_org    = 'S'
+      TABLES     value_tab    = lt_f4
+                 return_tab   = lt_ret
+      EXCEPTIONS OTHERS       = 1.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+
+    READ TABLE lt_ret INTO DATA(ls_ret) INDEX 1.
+    IF sy-subrc <> 0 OR ls_ret-fieldval IS INITIAL.
+      RETURN.                                  " the user left without picking
+    ENDIF.
+    DATA lv_pick_land  TYPE string.
+    DATA lv_pick_ktokd TYPE string.
+    SPLIT ls_ret-fieldval AT '/' INTO lv_pick_land lv_pick_ktokd.
+
+    DATA lt_upd TYPE TABLE OF dynpread.
+    APPEND VALUE dynpread( fieldname  = 'P_LAND'
+                           fieldvalue = condense( lv_pick_land ) ) TO lt_upd.
+    APPEND VALUE dynpread( fieldname  = 'P_KTOKD'
+                           fieldvalue = condense( lv_pick_ktokd ) ) TO lt_upd.
+    CALL FUNCTION 'DYNP_VALUES_UPDATE'
+      EXPORTING  dyname     = sy-repid
+                 dynumb     = sy-dynnr
+      TABLES     dynpfields = lt_upd
+      EXCEPTIONS OTHERS     = 1.
   ENDMETHOD.
 
   METHOD screen_val.

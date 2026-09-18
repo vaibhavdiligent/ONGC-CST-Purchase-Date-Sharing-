@@ -138,6 +138,16 @@ def main():
             others = {x for x in pars
                       if x != helped and x not in transported
                       and re.search(r'\b' + x + r'\b', reach, re.I)}
+            up = reach.upper()
+            if 'F4IF_INT_TABLE_VALUE_REQUEST' in up:
+                writes_back = ('DYNPROFIELD' in up
+                               or ('RETURN_TAB' in up and 'DYNP_VALUES_UPDATE' in up))
+                if not writes_back:
+                    findings.append(
+                        f'{name}: the value help for {helped} shows a list but writes '
+                        f'nothing back - pass DYNPROFIELD, or take the pick from '
+                        f'RETURN_TAB and write it with DYNP_VALUES_UPDATE')
+
             if others and 'DYNP_VALUES_READ' not in reach.upper():
                 findings.append(
                     f'{name}: the value help for {helped} reads '
