@@ -31,19 +31,28 @@ MARK = {'PROJECT', 'SUBPROJECT', 'OBJECT', 'M', 'O', 'TCODE'}
 # rows read "US Sold to's". SAGA carries no country word; its sample rows are ZAR and ZA.
 # Europe is a region rather than a country and is the one entry Cipla has to confirm.
 SHEET_COUNTRY = {
-    'Australia': 'AU',
-    'Dubai':     'AE',
-    'Europe':    'ES',      # to be confirmed - the sheet serves a region
-    'Exelan':    'US',
-    'India':     'IN',
-    'Invagen':   'US',
-    'Kenya':     'KE',
-    'Moroccco':  'MA',
-    'QCIL':      'UG',
-    'SAGA':      'ZA',      # inferred from the sample rows, no country word on the sheet
-    'cust extn': '*',       # extension template, valid for any country
-    'block unblock': '*',   # XD05, valid for any country
+    'Australia': ['AU'],
+    'Dubai':     ['AE'],
+    # Confirmed by Cipla: the Europe template serves four countries and is the same for
+    # all of them - United Kingdom 7101, Belgium 7001, Spain 7451, Netherlands 7501.
+    'Europe':    ['GB', 'BE', 'ES', 'NL'],
+    'Exelan':    ['US'],
+    'India':     ['IN'],
+    'Invagen':   ['US'],
+    'Kenya':     ['KE'],
+    'Moroccco':  ['MA'],
+    'QCIL':      ['UG'],
+    'SAGA':      ['ZA'],    # inferred from the sample rows, no country word on the sheet
+    'cust extn': ['*'],     # extension template, valid for any country
+    'block unblock': ['*'],  # XD05, valid for any country
 }
+
+# The QCIL export block holds two layouts at once: a technical row copied from the
+# 83-column Australia/Morocco template, and a description and data row copied from the
+# QCIL domestic template and pasted one column out. Cipla confirmed it is the QCIL
+# template - 63 fields, plus the transaction code and the customer code, 65 columns in
+# all - so the block takes the QCIL domestic field list.
+BLOCK_FROM = {('QCIL', 'ZEXP'): ('QCIL', 'ZDOM')}
 
 
 def blocks_of(ws):
@@ -81,7 +90,13 @@ def blocks_of(ws):
                    mo=([str(ws.cell(h - 1, c).value or '').strip() for c in cols]
                        if h and str(ws.cell(h - 1, 1).value or '').strip() in ('M', 'O') else []),
                    sample_rows=rows)
-        if rec['fields'] and 'KTOKD' in rec['fields']:
+        # A block whose rows disagree is keyed from the description row, because the
+        # data follows the description.
+        if inconsistent and 'Customer Account Group' in rec['desc']:
+            kc = cols[rec['desc'].index('Customer Account Group')]
+            rec['ktokd'] = sorted({str(ws.cell(r, kc).value).strip()
+                                   for r in rows if ws.cell(r, kc).value})
+        elif rec['fields'] and 'KTOKD' in rec['fields']:
             kc = cols[rec['fields'].index('KTOKD')]
             rec['ktokd'] = sorted({str(ws.cell(r, kc).value).strip()
                                    for r in rows if ws.cell(r, kc).value})
@@ -101,6 +116,16 @@ def main(path, out):
     for ws in wb.worksheets:
         all_blocks += blocks_of(ws)
 
+    # A block that borrows another block's layout takes its field list before the
+    # formats are worked out.
+    by_key = {(b['sheet'], k): b for b in all_blocks for k in (b['ktokd'] or [])}
+    for dst, src in BLOCK_FROM.items():
+        if dst in by_key and src in by_key:
+            for f in ('fields', 'desc', 'typ', 'length', 'ncol'):
+                by_key[dst][f] = by_key[src][f]
+            by_key[dst]['borrowed_from'] = f'{src[0]}/{src[1]}'
+            by_key[dst]['inconsistent'] = False
+
     # One format per distinct column list. A format is shared by every
     # country/account group combination that uses the same columns.
     fmt, combo = {}, []
@@ -111,9 +136,9 @@ def main(path, out):
                                  desc=b['desc'], typ=b['typ'], length=b['length'],
                                  has_tech=bool(b['fields'])))
         for k in (b['ktokd'] or ['?']):
-            combo.append(dict(sheet=b['sheet'], country=SHEET_COUNTRY.get(b['sheet'], '?'),
-                              ktokd=k, format=sig,
-                              tech_row=b['tech_row'], desc_row=b['desc_row']))
+            for ctry in SHEET_COUNTRY.get(b['sheet'], ['?']):
+                combo.append(dict(sheet=b['sheet'], country=ctry, ktokd=k, format=sig,
+                                  tech_row=b['tech_row'], desc_row=b['desc_row']))
 
     json.dump(dict(formats=fmt, combinations=combo, sheet_country=SHEET_COUNTRY),
               open(out, 'w'), indent=1)

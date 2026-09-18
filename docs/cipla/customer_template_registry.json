@@ -7369,11 +7369,51 @@
   },
   {
    "sheet": "Europe",
+   "country": "GB",
+   "ktokd": "YSHP",
+   "format": "43156406",
+   "tech_row": 4,
+   "desc_row": 7
+  },
+  {
+   "sheet": "Europe",
+   "country": "BE",
+   "ktokd": "YSHP",
+   "format": "43156406",
+   "tech_row": 4,
+   "desc_row": 7
+  },
+  {
+   "sheet": "Europe",
    "country": "ES",
    "ktokd": "YSHP",
    "format": "43156406",
    "tech_row": 4,
    "desc_row": 7
+  },
+  {
+   "sheet": "Europe",
+   "country": "NL",
+   "ktokd": "YSHP",
+   "format": "43156406",
+   "tech_row": 4,
+   "desc_row": 7
+  },
+  {
+   "sheet": "Europe",
+   "country": "GB",
+   "ktokd": "ZCDP",
+   "format": "9c914100",
+   "tech_row": 10,
+   "desc_row": 13
+  },
+  {
+   "sheet": "Europe",
+   "country": "BE",
+   "ktokd": "ZCDP",
+   "format": "9c914100",
+   "tech_row": 10,
+   "desc_row": 13
   },
   {
    "sheet": "Europe",
@@ -7385,11 +7425,59 @@
   },
   {
    "sheet": "Europe",
+   "country": "NL",
+   "ktokd": "ZCDP",
+   "format": "9c914100",
+   "tech_row": 10,
+   "desc_row": 13
+  },
+  {
+   "sheet": "Europe",
+   "country": "GB",
+   "ktokd": "ZDOM",
+   "format": "e10ec770",
+   "tech_row": 20,
+   "desc_row": 23
+  },
+  {
+   "sheet": "Europe",
+   "country": "BE",
+   "ktokd": "ZDOM",
+   "format": "e10ec770",
+   "tech_row": 20,
+   "desc_row": 23
+  },
+  {
+   "sheet": "Europe",
    "country": "ES",
    "ktokd": "ZDOM",
    "format": "e10ec770",
    "tech_row": 20,
    "desc_row": 23
+  },
+  {
+   "sheet": "Europe",
+   "country": "NL",
+   "ktokd": "ZDOM",
+   "format": "e10ec770",
+   "tech_row": 20,
+   "desc_row": 23
+  },
+  {
+   "sheet": "Europe",
+   "country": "GB",
+   "ktokd": "ZEXP",
+   "format": "ab38ead5",
+   "tech_row": 29,
+   "desc_row": 32
+  },
+  {
+   "sheet": "Europe",
+   "country": "BE",
+   "ktokd": "ZEXP",
+   "format": "ab38ead5",
+   "tech_row": 29,
+   "desc_row": 32
   },
   {
    "sheet": "Europe",
@@ -7401,7 +7489,23 @@
   },
   {
    "sheet": "Europe",
-   "country": "ES",
+   "country": "NL",
+   "ktokd": "ZEXP",
+   "format": "ab38ead5",
+   "tech_row": 29,
+   "desc_row": 32
+  },
+  {
+   "sheet": "Europe",
+   "country": "GB",
+   "ktokd": "ZPLN",
+   "format": "42895e0e",
+   "tech_row": 35,
+   "desc_row": 38
+  },
+  {
+   "sheet": "Europe",
+   "country": "BE",
    "ktokd": "ZPLN",
    "format": "42895e0e",
    "tech_row": 35,
@@ -7410,6 +7514,46 @@
   {
    "sheet": "Europe",
    "country": "ES",
+   "ktokd": "ZPLN",
+   "format": "42895e0e",
+   "tech_row": 35,
+   "desc_row": 38
+  },
+  {
+   "sheet": "Europe",
+   "country": "NL",
+   "ktokd": "ZPLN",
+   "format": "42895e0e",
+   "tech_row": 35,
+   "desc_row": 38
+  },
+  {
+   "sheet": "Europe",
+   "country": "GB",
+   "ktokd": "ZSHP",
+   "format": "8a74041a",
+   "tech_row": 44,
+   "desc_row": 47
+  },
+  {
+   "sheet": "Europe",
+   "country": "BE",
+   "ktokd": "ZSHP",
+   "format": "8a74041a",
+   "tech_row": 44,
+   "desc_row": 47
+  },
+  {
+   "sheet": "Europe",
+   "country": "ES",
+   "ktokd": "ZSHP",
+   "format": "8a74041a",
+   "tech_row": 44,
+   "desc_row": 47
+  },
+  {
+   "sheet": "Europe",
+   "country": "NL",
    "ktokd": "ZSHP",
    "format": "8a74041a",
    "tech_row": 44,
@@ -7722,8 +7866,8 @@
   {
    "sheet": "QCIL",
    "country": "UG",
-   "ktokd": "X",
-   "format": "f7e2b95a",
+   "ktokd": "ZEXP",
+   "format": "d7ee33bb",
    "tech_row": 21,
    "desc_row": 24
   },
@@ -7809,17 +7953,44 @@
   }
  ],
  "sheet_country": {
-  "Australia": "AU",
-  "Dubai": "AE",
-  "Europe": "ES",
-  "Exelan": "US",
-  "India": "IN",
-  "Invagen": "US",
-  "Kenya": "KE",
-  "Moroccco": "MA",
-  "QCIL": "UG",
-  "SAGA": "ZA",
-  "cust extn": "*",
-  "block unblock": "*"
+  "Australia": [
+   "AU"
+  ],
+  "Dubai": [
+   "AE"
+  ],
+  "Europe": [
+   "GB",
+   "BE",
+   "ES",
+   "NL"
+  ],
+  "Exelan": [
+   "US"
+  ],
+  "India": [
+   "IN"
+  ],
+  "Invagen": [
+   "US"
+  ],
+  "Kenya": [
+   "KE"
+  ],
+  "Moroccco": [
+   "MA"
+  ],
+  "QCIL": [
+   "UG"
+  ],
+  "SAGA": [
+   "ZA"
+  ],
+  "cust extn": [
+   "*"
+  ],
+  "block unblock": [
+   "*"
+  ]
  }
 }

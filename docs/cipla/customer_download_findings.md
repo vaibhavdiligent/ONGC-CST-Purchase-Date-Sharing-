@@ -144,7 +144,17 @@ shared strings and column A always written, the heading matcher, and the extract
   The column layout of a template is Cipla's document, not SAP data, and exists in no
   standard table - that is the part the program carries.
 
-### The QCIL export block is not settled after all
+### The QCIL export block - answered
+
+Cipla answered "63 columns, QCIL", and that resolves it. The QCIL domestic template is 65
+columns: the transaction code, the customer code, and 63 data fields. The export block's
+description and data rows overlap it 64 of 65, so the export template is the QCIL
+template, and the 83-column technical row on that block was pasted in from elsewhere.
+The parser now gives the block the QCIL domestic field list.
+
+What follows is the reading of the block that led to the question, kept for the record.
+
+### How the block was mis-pasted
 
 I recommended taking the description row as the authority there, and that recommendation
 was wrong. Reading the block column by column:
@@ -158,10 +168,9 @@ was wrong. Reading the block column by column:
 - The **sample data row** agrees with the description row, not with the technical row -
   `NE` (Niger) sits under `POST_CODE1` where the description says Country Key.
 
-So two rows agree with each other and one is internally consistent, which means the block
-is two different templates pasted together rather than a single shifted row. The parser
-now flags it instead of resolving it. **Cipla has to say which template the QCIL export
-really is.**
+Its description and data rows are the QCIL domestic template pasted one column out through
+the first 25 columns, realigning from column 26 - which is why the last eight columns,
+`TIN`, `TAXP_TYPE`, `NINBRN` and `LEGL_NAME` among them, match QCIL domestic exactly.
 
 ## 8. The five description-only blocks are almost entirely resolvable
 
@@ -208,7 +217,7 @@ and ZA.
 |---|---|---|
 | Australia | AU | stated |
 | Dubai | AE | stated |
-| Europe | ES ? | **a region, not a country - Cipla has to say which countries it serves** |
+| Europe | GB, BE, ES, NL | confirmed by Cipla - United Kingdom 7101, Belgium 7001, Spain 7451, Netherlands 7501, one template for all four |
 | Exelan | US | "US Sold to's" |
 | India | IN | stated |
 | Invagen | US | "US Sold to's" |
@@ -218,7 +227,7 @@ and ZA.
 | SAGA | ZA | inferred from the sample rows |
 | `cust extn`, `block unblock` | any | not country specific |
 
-With that map, **country plus account group names exactly one format - 59 keys, no
+With that map, **country plus account group names exactly one format - 77 keys, no
 ambiguity**. Exelan and Invagen are both United States and overlap on `YVSP`, `ZPLN` and
 `ZCDP`, and each of those resolves to the same format, so the entity never has to be
 asked for. Only four account groups - `ZDOM`, `ZEXP`, `ZOTC`, `ZSHP` - need the country
@@ -258,3 +267,31 @@ it is stated on the sheet, as section 9 sets out.
 
 No Z table is needed. Country and account group resolve the format on their own, and the
 format map itself lives in the program as constants, generated from the workbook.
+
+
+## 11. The tax classifications - answered
+
+Cipla confirmed that India carries six tax categories for every customer type, in this
+order:
+
+| Position | Category |
+|---|---|
+| `TAXKD_01` | JOCG |
+| `TAXKD_02` | JTC1 |
+| `TAXKD_03` | JTX1 |
+| `TAXKD_04` | JTX2 |
+| `TAXKD_05` | JTX3 |
+| `TAXKD_06` | JTX4 |
+
+That is exactly the order the India ZDOM template names in its own headings, so the
+positional rule holds and the India ZSHM block takes all six.
+
+The `cust extn` template carries five rather than six, and it takes the first five -
+JOCG, JTC1, JTX1, JTX2, JTX3. India ZSHP confirms that shape independently: it is a
+five-column block that names its fields `TAXKD_01` to `TAXKD_05`.
+
+## 12. Nothing is outstanding
+
+Every country, every account group, every column and every field now resolves. The
+registry holds 23 formats and 80 country and account-group combinations, with no
+ambiguous key.
