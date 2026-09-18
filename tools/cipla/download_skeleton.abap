@@ -1044,10 +1044,21 @@ CLASS lcl_main DEFINITION FINAL.
     " The template the selection screen currently points at, empty when
     " the country and account group given are not covered.
     CLASS-METHODS chosen RETURNING VALUE(rv) TYPE char8.
-    CLASS-METHODS label  RETURNING VALUE(rv) TYPE string.
+    " The name the file and the sheet carry. LABEL reads the program's own
+    " values, which is what PBO and PAI want; LABEL_SCREEN reads the screen,
+    " which is what a value help wants.
+    CLASS-METHODS label RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS label_screen RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS propose_file.
     CLASS-METHODS f4_land.
     CLASS-METHODS f4_ktokd.
+    " The country as it stands on the screen this moment.
+    CLASS-METHODS screen_land RETURNING VALUE(rv) TYPE land1.
+    CLASS-METHODS screen_val IMPORTING iv_field  TYPE clike
+                             RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS label_of IMPORTING iv_land   TYPE clike
+                                     iv_ktokd  TYPE clike
+                           RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS validate.
     CLASS-METHODS run.
   PRIVATE SECTION.
@@ -1067,16 +1078,28 @@ CLASS lcl_main IMPLEMENTATION.
     ENDCASE.
   ENDMETHOD.
 
-  METHOD label.
+  METHOD label_of.
     CASE abap_true.
       WHEN p_ext. rv = 'CUST_EXTN'.
       WHEN p_blk. rv = 'BLOCK_UNBLOCK'.
       WHEN OTHERS.
-        rv = |{ p_land }_{ p_ktokd }|.
-        IF p_land IS INITIAL OR p_ktokd IS INITIAL.
+        rv = |{ iv_land }_{ iv_ktokd }|.
+        IF iv_land IS INITIAL OR iv_ktokd IS INITIAL.
           rv = 'CUSTOMER'.
         ENDIF.
     ENDCASE.
+  ENDMETHOD.
+
+  METHOD label.
+    rv = label_of( iv_land = p_land iv_ktokd = p_ktokd ).
+  ENDMETHOD.
+
+  METHOD label_screen.
+    " The template radio buttons carry USER-COMMAND, so a click on one has
+    " already been through PAI and the program holds the current choice. The
+    " country and the account group are plain input fields with no round trip
+    " of their own, so those two are read off the screen.
+    rv = label_of( iv_land = screen_land( ) iv_ktokd = screen_val( 'P_KTOKD' ) ).
   ENDMETHOD.
 
   METHOD propose_file.
@@ -1135,12 +1158,48 @@ CLASS lcl_main IMPLEMENTATION.
       EXCEPTIONS OTHERS         = 1.
   ENDMETHOD.
 
+  METHOD screen_val.
+    " A value help runs before the screen has been handed to the program, so
+    " the program variable still holds whatever the last round trip left in
+    " it - nothing at all the first time the screen is used. The value has to
+    " be read off the screen itself.
+    DATA lt_dynp TYPE TABLE OF dynpread.
+    DATA ls_dynp TYPE dynpread.
+    ls_dynp-fieldname = iv_field.
+    APPEND ls_dynp TO lt_dynp.
+    CALL FUNCTION 'DYNP_VALUES_READ'
+      EXPORTING  dyname             = sy-repid
+                 dynumb             = sy-dynnr
+                 translate_to_upper = abap_true
+      TABLES     dynpfields         = lt_dynp
+      EXCEPTIONS OTHERS             = 1.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    READ TABLE lt_dynp INTO ls_dynp INDEX 1.
+    IF sy-subrc = 0.
+      rv = condense( ls_dynp-fieldvalue ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD screen_land.
+    rv = screen_val( 'P_LAND' ).
+    IF rv IS INITIAL.
+      rv = p_land.
+    ENDIF.
+  ENDMETHOD.
+
   METHOD f4_ktokd.
     " The account groups the workbook covers for the country chosen, so a
     " combination that has no template cannot be picked by accident.
-    DATA(lt_grp) = lcl_tmpl=>groups( p_land ).
+    DATA(lv_land) = screen_land( ).
+    IF lv_land IS INITIAL.
+      MESSAGE 'Choose a country first' TYPE 'S' DISPLAY LIKE 'W'.
+      RETURN.
+    ENDIF.
+    DATA(lt_grp) = lcl_tmpl=>groups( lv_land ).
     IF lt_grp IS INITIAL.
-      MESSAGE |No customer template exists for country { p_land }| TYPE 'S' DISPLAY LIKE 'W'.
+      MESSAGE |No customer template exists for country { lv_land }| TYPE 'S' DISPLAY LIKE 'W'.
       RETURN.
     ENDIF.
     SELECT ktokd, txt30 FROM t077x
@@ -1318,7 +1377,7 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
   cl_gui_frontend_services=>file_save_dialog(
     EXPORTING window_title      = 'Save the template'
               default_extension = 'xlsx'
-              default_file_name = |{ lcl_main=>label( ) }.xlsx|
+              default_file_name = |{ lcl_main=>label_screen( ) }.xlsx|
               file_filter       = |Excel workbook (*.xlsx)\|*.xlsx\||
     CHANGING  filename          = lv_name
               path              = lv_path

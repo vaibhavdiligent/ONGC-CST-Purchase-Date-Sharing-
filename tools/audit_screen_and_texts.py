@@ -9,7 +9,12 @@ Each of these cost a round trip once already:
   * a TEXT-nnn with no text symbol behind it, or a selection-screen parameter
     with no selection text - both give a blank on screen rather than an error,
     which is worse;
-  * a parameter name longer than eight characters, which the compiler refuses.
+  * a parameter name longer than eight characters, which the compiler refuses;
+  * a value help that depends on another field of the same screen but reads that
+    field's program variable. A value help runs before the screen has been handed
+    to the program, so the variable still holds the previous round trip's value -
+    empty the first time - and the help answers on the wrong country. The value
+    has to come off the screen with DYNP_VALUES_READ.
 """
 import os, re, sys
 
@@ -101,6 +106,44 @@ def main():
 
         for x in sorted(pars):
             check(name, len(x) <= 8, f'{x} is longer than the eight characters a parameter may have')
+
+        # ---- a value help that leans on another field of the same screen -
+        # A radio button whose group carries USER-COMMAND has already been
+        # through PAI by the time any value help runs, so the program holds
+        # its current value. Every other field needs DYNP_VALUES_READ.
+        live = set()
+        for m in re.finditer(r'\b(\w+)\s+RADIOBUTTON GROUP\s+(\w+)', code, re.I):
+            live.add((m.group(1).upper(), m.group(2).lower()))
+        cmd_groups = {g.lower() for g in re.findall(
+            r'RADIOBUTTON GROUP\s+(\w+)\s+USER-COMMAND', code, re.I)}
+        transported = {f for f, g in live if g in cmd_groups}
+
+        bodies = {}
+        for m in re.finditer(r'^\s*METHOD\s+(\w+)\s*\.(.*?)^\s*ENDMETHOD', code,
+                             re.M | re.S | re.I):
+            bodies[m.group(1).lower()] = m.group(2)
+        for m in re.finditer(r'AT SELECTION-SCREEN ON VALUE-REQUEST FOR\s+(\w+)\s*\.(.*?)'
+                             r'(?=^AT SELECTION-SCREEN|^START-OF-SELECTION|^INITIALIZATION|\Z)',
+                             code, re.M | re.S | re.I):
+            helped, block = m.group(1).upper(), m.group(2)
+            # the handler and everything it reaches, however deep
+            reach, seen, todo = block, set(), re.findall(r'(?:\w+=>)?(\w+)\s*\(', block)
+            while todo:
+                call = todo.pop().lower()
+                if call in seen or call not in bodies:
+                    continue
+                seen.add(call)
+                reach += bodies[call]
+                todo += re.findall(r'(?:\w+=>)?(\w+)\s*\(', bodies[call])
+            others = {x for x in pars
+                      if x != helped and x not in transported
+                      and re.search(r'\b' + x + r'\b', reach, re.I)}
+            if others and 'DYNP_VALUES_READ' not in reach.upper():
+                findings.append(
+                    f'{name}: the value help for {helped} reads '
+                    f'{", ".join(sorted(others))} straight from the program, but a value '
+                    f'help runs before the screen is handed over - read it with '
+                    f'DYNP_VALUES_READ')
 
     if findings:
         print(f'{len(findings)} problem(s):')
