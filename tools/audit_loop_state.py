@@ -17,7 +17,8 @@ SHUT  = re.compile(r'^(ENDIF|ENDCASE|ENDDO|ENDWHILE|ENDTRY|ENDLOOP|ENDSELECT)\b'
 findings = []
 
 for p in ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap',
-            'src/zbcs_mass_upload_extract.prog.abap']:
+            'src/zbcs_mass_upload_extract.prog.abap',
+         'src/zsds_cust_tmpl_download.prog.abap']:
     lines = open(p, encoding='utf-8').read().split('\n')
     for i, l in enumerate(lines):
         if not re.match(r'\s*LOOP AT (it_row|lt_rows)\b', l):

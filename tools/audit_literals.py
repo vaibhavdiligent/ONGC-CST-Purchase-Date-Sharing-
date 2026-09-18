@@ -18,7 +18,8 @@ import re, sys
 
 PROGS = ['src/zsds_cust_mass_upload.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap',
-         'src/zbcs_mass_upload_extract.prog.abap']
+         'src/zbcs_mass_upload_extract.prog.abap',
+         'src/zsds_cust_tmpl_download.prog.abap']
 
 BLANK = r"'\s+'"                      # a quoted literal of blanks only
 findings = []

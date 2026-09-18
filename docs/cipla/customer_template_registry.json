@@ -6150,6 +6150,49 @@
    "length": [],
    "has_tech": false
   },
+  "c9c1a8dd": {
+   "id": "c9c1a8dd",
+   "ncol": 16,
+   "fields": [
+    "LABEL",
+    "KUNNR",
+    "BUKRS",
+    "VKORG",
+    "VTWEG",
+    "SPART",
+    "SPERR",
+    "SPERR_B",
+    "AUFSD",
+    "AUFSD_S",
+    "LIFSD",
+    "LIFSD_S",
+    "FAKSD",
+    "FAKSD_S",
+    "CASSD",
+    "CASSD_S"
+   ],
+   "desc": [
+    "Blocking or unblocking",
+    "Customer Account Number",
+    "Company Code",
+    "Sales Organization",
+    "Distribution Channel",
+    "Division",
+    "Central posting block",
+    "Posting block for company code",
+    "Central order block for customer",
+    "Customer order block (sales area)",
+    "Central delivery block for the customer",
+    "Customer delivery block (sales area)",
+    "Central billing block for customer",
+    "Billing block for customer (sales and distribution)",
+    "Central sales block for customer",
+    "Sales block for customer (sales area)"
+   ],
+   "typ": [],
+   "length": [],
+   "has_tech": true
+  },
   "6d2ec22f": {
    "id": "6d2ec22f",
    "ncol": 132,
@@ -7742,6 +7785,14 @@
    "format": "28573fa5",
    "tech_row": null,
    "desc_row": 1
+  },
+  {
+   "sheet": "block unblock",
+   "country": "*",
+   "ktokd": "*",
+   "format": "c9c1a8dd",
+   "tech_row": null,
+   "desc_row": 2
   },
   {
    "sheet": "Invagen",

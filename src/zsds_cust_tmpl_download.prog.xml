@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_PROG" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <PROGDIR>
+    <NAME>ZSDS_CUST_TMPL_DOWNLOAD</NAME>
+    <STATE>A</STATE>
+    <DTEFPS>U</DTEFPS>
+    <UCCHECK>X</UCCHECK>
+    <SUBC>1</SUBC>
+    <RSTAT>K</RSTAT>
+    <FIXPT>X</FIXPT>
+   </PROGDIR>
+   <TPOOL>
+    <item>
+     <ID>R</ID>
+     <ENTRY>Customer master template download</ENTRY>
+     <LENGTH>33</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>001</KEY>
+     <ENTRY>Template</ENTRY>
+     <LENGTH>8</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>002</KEY>
+     <ENTRY>Country and account group</ENTRY>
+     <LENGTH>25</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>003</KEY>
+     <ENTRY>Which customers</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>004</KEY>
+     <ENTRY>Output</ENTRY>
+     <LENGTH>6</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_CRT</KEY>
+     <ENTRY>P_CRT   D       .Customer create template</ENTRY>
+     <LENGTH>24</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EXT</KEY>
+     <ENTRY>P_EXT   D       .Customer extension template</ENTRY>
+     <LENGTH>27</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_BLK</KEY>
+     <ENTRY>P_BLK   D       .Block / unblock template</ENTRY>
+     <LENGTH>24</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_LAND</KEY>
+     <ENTRY>P_LAND  D       .Country</ENTRY>
+     <LENGTH>7</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_KTOKD</KEY>
+     <ENTRY>P_KTOKD D       .Customer account group</ENTRY>
+     <LENGTH>22</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S_BP</KEY>
+     <ENTRY>S_BP    D       .Business partner</ENTRY>
+     <LENGTH>16</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S_KUNNR</KEY>
+     <ENTRY>S_KUNNR D       .Customer</ENTRY>
+     <LENGTH>8</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_MAX</KEY>
+     <ENTRY>P_MAX   D       .Rows at most</ENTRY>
+     <LENGTH>12</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_FILE</KEY>
+     <ENTRY>P_FILE  D       .Save the workbook as</ENTRY>
+     <LENGTH>20</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_PC</KEY>
+     <ENTRY>P_PC    D       .Write to the PC</ENTRY>
+     <LENGTH>15</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_SRV</KEY>
+     <ENTRY>P_SRV   D       .Write to the appl. server</ENTRY>
+     <LENGTH>25</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_EMPTY</KEY>
+     <ENTRY>P_EMPTY D       .Template only (no data)</ENTRY>
+     <LENGTH>23</LENGTH>
+    </item>
+   </TPOOL>
+  </asx:values>
+ </asx:abap>
+</abapGit>

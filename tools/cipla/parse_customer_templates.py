@@ -110,10 +110,31 @@ def blocks_of(ws):
     return out
 
 
+def block_unblock(ws):
+    """The XD05 sheet, which has no Project rows and no technical field row.
+
+    Row 1 groups the columns, row 2 describes them, rows 3 and 4 are the blocking
+    and the unblocking example. Column 1 is a label rather than a field.
+    """
+    cols = [c for c in range(1, ws.max_column + 1)
+            if str(ws.cell(2, c).value or '').strip()]
+    fields = ['LABEL', 'KUNNR', 'BUKRS', 'VKORG', 'VTWEG', 'SPART',
+              'SPERR', 'SPERR_B', 'AUFSD', 'AUFSD_S', 'LIFSD', 'LIFSD_S',
+              'FAKSD', 'FAKSD_S', 'CASSD', 'CASSD_S']
+    return dict(sheet=ws.title, tech_row=None, desc_row=2, ncol=len(fields),
+                inconsistent=False, fields=fields,
+                desc=['Blocking or unblocking'] + [str(ws.cell(2, c).value).strip()
+                                                   for c in cols],
+                typ=[], length=[], mo=[], sample_rows=[3, 4], ktokd=['*'])
+
+
 def main(path, out):
     wb = openpyxl.load_workbook(path, data_only=True)
     all_blocks = []
     for ws in wb.worksheets:
+        if ws.title == 'block unblock':
+            all_blocks.append(block_unblock(ws))
+            continue
         all_blocks += blocks_of(ws)
 
     # A block that borrows another block's layout takes its field list before the
