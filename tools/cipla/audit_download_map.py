@@ -65,6 +65,30 @@ def main():
             fail.append(f'{where}: node {node} is not one the engine handles')
         check(hdr.strip() != '', f'{where}: the heading is blank')
 
+    # --- 1a. the customer number -----------------------------------------
+    # A downloaded row has to say which customer it is, or it cannot be read
+    # back or edited. Three of the workbook's templates carry no such column
+    # at all - they begin at the company code, because they were written for
+    # creating a customer, where the number does not exist yet. Those are
+    # named here so the gap is a recorded decision rather than an oversight.
+    NO_CUSTOMER_COLUMN = {
+        '43156406',   # 63 columns, the YSHP ship-to template
+        '6e6467eb',   # 74 columns, YVSP / YVMI / YVTO
+        'ab38ead5',   # 79 columns, the ZEXP export template
+    }
+    has_kunnr = collections.defaultdict(bool)
+    for tmpl, col, hdr, node, fld, fmt in rows:
+        if node == 'K' and fld == 'KUNNR':
+            has_kunnr[tmpl] = True
+    for tmpl in {t for t, *_ in rows}:
+        if not has_kunnr[tmpl] and tmpl not in NO_CUSTOMER_COLUMN:
+            fail.append(f'{tmpl}: no column carries the customer number, and it is not '
+                        f'one of the templates recorded as having none')
+    for tmpl in NO_CUSTOMER_COLUMN:
+        if has_kunnr.get(tmpl):
+            fail.append(f'{tmpl}: recorded as having no customer number column, but one '
+                        f'is mapped - take it off the list')
+
     # --- 2. the shape of each template ------------------------------------
     by_tmpl = collections.defaultdict(list)
     for tmpl, col, *_ in rows:
