@@ -3165,6 +3165,9 @@ CLASS lcl_main DEFINITION FINAL.
     CLASS-METHODS propose_file.
     CLASS-METHODS f4_land.
     CLASS-METHODS f4_ktokd.
+    " One list of every template the workbook holds. Whichever of the two
+    " fields the help is called from, it fills both.
+    CLASS-METHODS f4_template IMPORTING iv_return TYPE clike.
     " The country as it stands on the screen this moment.
     CLASS-METHODS screen_land RETURNING VALUE(rv) TYPE land1.
     CLASS-METHODS screen_val IMPORTING iv_field  TYPE clike
@@ -3239,36 +3242,85 @@ CLASS lcl_main IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD f4_land.
-    " Only the countries the workbook covers are offered, with the name
-    " taken from the country table so the list reads as it does anywhere
-    " else in the system.
-    DATA(lt_land) = lcl_tmpl=>countries( ).
-    IF lt_land IS INITIAL.
-      RETURN.
-    ENDIF.
-    SELECT land1, landx FROM t005t
-      FOR ALL ENTRIES IN @lt_land
-      WHERE spras = @sy-langu AND land1 = @lt_land-table_line
-      INTO TABLE @DATA(lt_txt).
+    f4_template( 'LAND1' ).
+  ENDMETHOD.
 
+  METHOD f4_ktokd.
+    f4_template( 'KTOKD' ).
+  ENDMETHOD.
+
+  METHOD f4_template.
+    " Every template the workbook holds, as one list: the country and its
+    " name, the account group and its text, and how wide the template is. A
+    " country already typed narrows the list to that country; an empty one
+    " shows all of them, because a user who does not yet know which
+    " combinations exist is exactly the one who needs the list.
     TYPES: BEGIN OF ty_f4,
              land1 TYPE land1,
              landx TYPE landx,
+             ktokd TYPE ktokd,
+             txt30 TYPE text30,
+             cols  TYPE char5,
            END OF ty_f4.
     DATA lt_f4 TYPE STANDARD TABLE OF ty_f4 WITH EMPTY KEY.
-    LOOP AT lt_land INTO DATA(lv_l).
-      READ TABLE lt_txt INTO DATA(ls_t) WITH KEY land1 = lv_l.
-      APPEND VALUE ty_f4( land1 = lv_l landx = COND #( WHEN sy-subrc = 0 THEN ls_t-landx ) ) TO lt_f4.
+
+    DATA(lv_land) = screen_land( ).
+    DATA(lt_combi) = lcl_tmpl=>combis( ).
+    DELETE lt_combi WHERE land = gc_any.
+    IF lv_land IS NOT INITIAL.
+      DELETE lt_combi WHERE land <> lv_land.
+      IF lt_combi IS INITIAL.
+        MESSAGE |No customer template exists for country { lv_land }| TYPE 'S' DISPLAY LIKE 'W'.
+        RETURN.
+      ENDIF.
+    ENDIF.
+    IF lt_combi IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT land1, landx FROM t005t
+      FOR ALL ENTRIES IN @lt_combi
+      WHERE spras = @sy-langu AND land1 = @lt_combi-land
+      INTO TABLE @DATA(lt_ctry).
+    SELECT ktokd, txt30 FROM t077x
+      FOR ALL ENTRIES IN @lt_combi
+      WHERE spras = @sy-langu AND ktokd = @lt_combi-ktokd
+      INTO TABLE @DATA(lt_grp).
+
+    LOOP AT lt_combi INTO DATA(ls_cb).
+      DATA ls_f4 TYPE ty_f4.
+      CLEAR ls_f4.
+      ls_f4-land1 = ls_cb-land.
+      ls_f4-ktokd = ls_cb-ktokd.
+      READ TABLE lt_ctry INTO DATA(ls_ct) WITH KEY land1 = ls_cb-land.
+      IF sy-subrc = 0.
+        ls_f4-landx = ls_ct-landx.
+      ENDIF.
+      READ TABLE lt_grp INTO DATA(ls_gr) WITH KEY ktokd = ls_cb-ktokd.
+      IF sy-subrc = 0.
+        ls_f4-txt30 = ls_gr-txt30.
+      ENDIF.
+      ls_f4-cols = lines( lcl_tmpl=>cols( ls_cb-tmpl ) ).
+      SHIFT ls_f4-cols LEFT DELETING LEADING '0'.
+      APPEND ls_f4 TO lt_f4.
     ENDLOOP.
+    SORT lt_f4 BY land1 ktokd.
+
+    " Picking a row fills the country as well as the account group, so the
+    " two fields cannot be left disagreeing with each other.
+    DATA lt_map TYPE STANDARD TABLE OF dselc WITH EMPTY KEY.
+    APPEND VALUE dselc( fldname = 'LAND1' dyfldname = 'P_LAND'  ) TO lt_map.
+    APPEND VALUE dselc( fldname = 'KTOKD' dyfldname = 'P_KTOKD' ) TO lt_map.
 
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
-      EXPORTING retfield        = 'LAND1'
-                dynpprog        = sy-repid
-                dynpnr          = sy-dynnr
-                dynprofield     = 'P_LAND'
-                value_org       = 'S'
-      TABLES    value_tab       = lt_f4
-      EXCEPTIONS OTHERS         = 1.
+      EXPORTING retfield         = iv_return
+                dynpprog         = sy-repid
+                dynpnr           = sy-dynnr
+                window_title     = 'Customer templates'
+                value_org        = 'S'
+      TABLES    value_tab        = lt_f4
+                dynpfld_mapping  = lt_map
+      EXCEPTIONS OTHERS          = 1.
   ENDMETHOD.
 
   METHOD screen_val.
@@ -3300,44 +3352,6 @@ CLASS lcl_main IMPLEMENTATION.
     IF rv IS INITIAL.
       rv = p_land.
     ENDIF.
-  ENDMETHOD.
-
-  METHOD f4_ktokd.
-    " The account groups the workbook covers for the country chosen, so a
-    " combination that has no template cannot be picked by accident.
-    DATA(lv_land) = screen_land( ).
-    IF lv_land IS INITIAL.
-      MESSAGE 'Choose a country first' TYPE 'S' DISPLAY LIKE 'W'.
-      RETURN.
-    ENDIF.
-    DATA(lt_grp) = lcl_tmpl=>groups( lv_land ).
-    IF lt_grp IS INITIAL.
-      MESSAGE |No customer template exists for country { lv_land }| TYPE 'S' DISPLAY LIKE 'W'.
-      RETURN.
-    ENDIF.
-    SELECT ktokd, txt30 FROM t077x
-      FOR ALL ENTRIES IN @lt_grp
-      WHERE spras = @sy-langu AND ktokd = @lt_grp-table_line
-      INTO TABLE @DATA(lt_txt).
-
-    TYPES: BEGIN OF ty_f4,
-             ktokd TYPE ktokd,
-             txt30 TYPE text30,
-           END OF ty_f4.
-    DATA lt_f4 TYPE STANDARD TABLE OF ty_f4 WITH EMPTY KEY.
-    LOOP AT lt_grp INTO DATA(lv_k).
-      READ TABLE lt_txt INTO DATA(ls_t) WITH KEY ktokd = lv_k.
-      APPEND VALUE ty_f4( ktokd = lv_k txt30 = COND #( WHEN sy-subrc = 0 THEN ls_t-txt30 ) ) TO lt_f4.
-    ENDLOOP.
-
-    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
-      EXPORTING retfield        = 'KTOKD'
-                dynpprog        = sy-repid
-                dynpnr          = sy-dynnr
-                dynprofield     = 'P_KTOKD'
-                value_org       = 'S'
-      TABLES    value_tab       = lt_f4
-      EXCEPTIONS OTHERS         = 1.
   ENDMETHOD.
 
   METHOD validate.
