@@ -3032,6 +3032,21 @@ CLASS lcl_eng IMPLEMENTATION.
         RETURN.
     ENDTRY.
 
+    " The template is chosen by account group, the customers by number, and
+    " nothing forces the two to agree. A customer whose own account group is
+    " not the one the template is for still downloads - the file simply has
+    " that template's layout - but the user is told, because a file whose
+    " account group column disagrees with its layout is easy to misread.
+    IF p_crt = abap_true AND p_ktokd IS NOT INITIAL.
+      DATA(lv_ktokd) = comp( is_any = ls_c-central_data-central-data
+                             iv_fld = 'KTOKD' iv_fmt = '' ).
+      IF lv_ktokd IS NOT INITIAL AND lv_ktokd <> p_ktokd.
+        add_msg( iv_key = is_key-kunnr iv_type = 'W'
+                 iv_text = |Account group { lv_ktokd }, but the template is | &&
+                           |for { p_ktokd } - the file has the { p_ktokd } layout| ).
+      ENDIF.
+    ENDIF.
+
     DATA(ls_lic) = lcl_src=>licence( is_key-kunnr ).
     DATA(lv_adh) = lcl_src=>aadhaar( is_key-partner ).
     DATA(ls_knvk) = lcl_src=>contact( is_key-kunnr ).
