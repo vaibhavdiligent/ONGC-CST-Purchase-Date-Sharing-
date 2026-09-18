@@ -22,6 +22,25 @@
 *&
 *& The workbook is written as a real .xlsx (a zip of OpenXML parts, built
 *& with CL_ABAP_ZIP), because that is what the upload programs read.
+*&
+*& S/4HANA
+*&   Nothing here is obsolete. The master data is read through the extract
+*&   interfaces the business partner is maintained through, and the tables
+*&   read besides are current ones. The program writes nothing: no INSERT,
+*&   no UPDATE, no MODIFY, no COMMIT, no BAPI, no CALL TRANSACTION and no
+*&   batch input.
+*&
+*& Clean core positioning (S/4HANA 2502 / ABAP Cloud)
+*&   Deliberately TIER 2, as the two upload programs are. CMD_EI_API_EXTRACT
+*&   and VMD_EI_API_EXTRACT are "Not released", and the released alternative
+*&   (the CDS views behind I_Customer and I_Supplier) does not carry the
+*&   licence record or the identification numbers the templates need.
+*&   CL_GUI_FRONTEND_SERVICES is classic GUI only, which is what a download
+*&   to a user's PC means. Reads are confined to LCL_SRC so they can be
+*&   swapped for released CDS views without touching the engine.
+*&   Run ATC with variant ABAP_CLOUD_READINESS and record those two
+*&   exemptions. There is nothing else to record - the program changes no
+*&   data at all.
 *&---------------------------------------------------------------------*
 REPORT zbcs_mass_upload_extract.
 

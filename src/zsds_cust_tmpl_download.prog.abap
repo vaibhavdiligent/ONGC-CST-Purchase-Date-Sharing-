@@ -33,6 +33,35 @@
 *& Naming convention
 *&   Z<MODULE>_ pattern from Cipla_Checklist Part 1.1.
 *&
+*& S/4HANA
+*&   Nothing here is obsolete in S/4HANA. The program reads the customer
+*&   through CMD_EI_API_EXTRACT, which is the interface the customer is
+*&   maintained through as a business partner, and the tables it reads
+*&   besides - BUT000, BUT0ID and CVI_CUST_LINK for the partner, KNVK for
+*&   the contact person, T005T, T077X and TSAD3T for texts - are all
+*&   current. The program writes nothing at all: no INSERT, no UPDATE, no
+*&   MODIFY, no COMMIT, no BAPI, no CALL TRANSACTION and no batch input.
+*&
+*&   XD01 and XD05 are obsolete in S/4HANA - a customer is maintained as a
+*&   business partner - and they appear here only as the contents of a
+*&   template column, never as a call. The transaction code column is taken
+*&   from each template's own sample row, so it says what the template says.
+*&   The block and unblock template has no such column at all; its blocking
+*&   flags are read from the general data, the company code and the sales
+*&   area, which is where a business partner keeps them.
+*&
+*& Clean core positioning (S/4HANA 2502 / ABAP Cloud)
+*&   Deliberately TIER 2, for the same reason ZSDS_CUST_MASS_UPLOAD is.
+*&   CMD_EI_API_EXTRACT is "Not released", and the released alternative
+*&   (the CDS views behind I_Customer) does not carry the licence record or
+*&   the identification numbers the templates need. CL_GUI_FRONTEND_SERVICES
+*&   is classic GUI only, which is what a download to a user's PC means.
+*&   Every read is confined to LCL_SRC, so it can be swapped for released
+*&   CDS views without touching the engine.
+*&   Run ATC with variant ABAP_CLOUD_READINESS and record those two
+*&   exemptions. There is nothing else to record - the program changes no
+*&   data at all.
+*&
 *& The column map below is generated from the template workbook by
 *& tools/cipla/gen_download_program.py, so a change to a template is a
 *& regeneration rather than an edit.
