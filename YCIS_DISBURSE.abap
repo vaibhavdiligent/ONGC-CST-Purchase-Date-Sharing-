@@ -49,6 +49,7 @@ TYPES: BEGIN OF ty_out,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
          order_no    TYPE ycis_apprvl-order_no,
+         cn_doc      TYPE ycis_apprvl-cn_doc,
          purch_no    TYPE ycis_apprvl-purch_no,
          l3_user     TYPE ycis_apprvl-l3_user,
          l4_user     TYPE ycis_apprvl-l4_user,
@@ -188,6 +189,7 @@ FORM build_fieldcat.
   add_fc 'ELIG_QTY'    'Eligible Qty'    ''.
   add_fc 'REBATE_VAL'  'Rebate Value'    ''.
   add_fc 'ORDER_NO'    'Rebate Order'    ''.
+  add_fc 'CN_DOC'      'Credit Note'     ''.
   add_fc 'PURCH_NO'    'Reference No'    ''.
   add_fc 'L3_USER'     'L3 Executed By'  ''.
   add_fc 'L4_USER'     'L4 Vetted By'    ''.
@@ -302,7 +304,8 @@ FORM process_selected USING p_action TYPE char1.
         lt_rofc   TYPE STANDARD TABLE OF vkbur,
         lv_ans    TYPE c,
         lv_off    TYPE vkbur,
-        lv_ok     TYPE flag.
+        lv_ok     TYPE flag,
+        lv_cndoc  TYPE vbeln_vf.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -337,12 +340,17 @@ FORM process_selected USING p_action TYPE char1.
                   kvgr2       = gs_out-kvgr2.
     CHECK sy-subrc = 0.
     IF p_action = 'A'.
-*       finance posting hook (no-op until finance design is finalised)
-      CLEAR lv_ok.
-      PERFORM post_disbursement USING gs_appr CHANGING lv_ok.
+*       CIS 2026-27 (CPC Topic 1): auto-generate the G2 Credit Note from the
+*       ZP09 rebate request, PARKED for F&A to check & release. Failure to
+*       create leaves the row Pending L6 (not marked disbursed).
+      CLEAR: lv_ok, lv_cndoc.
+      PERFORM post_disbursement USING gs_appr CHANGING lv_ok lv_cndoc.
       IF lv_ok IS INITIAL.
-*         posting hook signalled failure - skip this row, leave it Pending L6
+*         credit-note creation failed - skip this row, leave it Pending L6
         CONTINUE.
+      ENDIF.
+      IF lv_cndoc IS NOT INITIAL.
+        gs_appr-cn_doc = lv_cndoc.         " G2 credit note (parked) - prints on note
       ENDIF.
       gs_appr-wf_status = '70'.            " Completed / Disbursed
       gs_appr-status    = 'A'.
@@ -397,13 +405,66 @@ ENDFORM.
 *&  return p_ok = 'X' on success. Until then this is a controlled no-op so
 *&  that disbursement records the workflow completion without failing.
 *&---------------------------------------------------------------------*
+*   CIS 2026-27 (CPC Topic 1 answers): at L6 disbursement the system creates
+*   the Credit Note (billing type G2) from the ZP09 credit-memo request that
+*   L3 already created (order-related billing, copy control ZP09 -> G2). The
+*   billing date is the creation date. The note is intended to be PARKED for
+*   F&A to check & release (posting to accounting is NOT forced here): keep
+*   the "Posting block" flag ticked on billing type G2 in Customizing (VOFA)
+*   so the document is created but not passed to FI until F&A releases it
+*   (VF02 / VFX3), where the existing PDF + customer e-mail is triggered.
 FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
-                       CHANGING p_ok    TYPE flag.
-  p_ok = 'X'.
-* Example (to be enabled once finance design is confirmed):
-*   CALL FUNCTION 'Z_CIS_POST_DISBURSEMENT'
-*     EXPORTING  is_apprvl = ps_appr
-*     IMPORTING  e_success = p_ok.
+                       CHANGING p_ok    TYPE flag
+                                p_cndoc TYPE vbeln_vf.
+  DATA: lt_bill   TYPE STANDARD TABLE OF bapivbrk,
+        ls_bill   TYPE bapivbrk,
+        lt_succ   TYPE STANDARD TABLE OF bapivbrksuccess,
+        ls_succ   TYPE bapivbrksuccess,
+        lt_return TYPE STANDARD TABLE OF bapireturn1,
+        ls_return TYPE bapireturn1,
+        lv_err    TYPE flag.
+
+  CLEAR: p_ok, p_cndoc.
+*   need the L3 rebate order (ZP09) as the billing reference
+  IF ps_appr-order_no IS INITIAL.
+    MESSAGE 'No rebate order (ZP09) found - Credit Note not created' TYPE 'I'.
+    RETURN.
+  ENDIF.
+*   idempotent: a Credit Note already exists for this proposal -> keep it
+  IF ps_appr-cn_doc IS NOT INITIAL.
+    p_ok    = 'X'.
+    p_cndoc = ps_appr-cn_doc.
+    RETURN.
+  ENDIF.
+
+  ls_bill-salesorg   = ps_appr-sales_org.
+  ls_bill-ref_doc    = ps_appr-order_no.    " ZP09 credit-memo request
+  ls_bill-ref_doc_ca = 'C'.                 " order-related billing
+  ls_bill-doc_number = ps_appr-order_no.
+  ls_bill-bill_date  = sy-datum.            " billing date = creation date
+  APPEND ls_bill TO lt_bill.
+
+  CALL FUNCTION 'BAPI_BILLINGDOC_CREATEMULTIPLE'
+    TABLES
+      billingdatain = lt_bill
+      return        = lt_return
+      success       = lt_succ.
+
+*   any error message -> rollback, signal failure, leave row Pending L6
+  LOOP AT lt_return INTO ls_return WHERE type = 'E' OR type = 'A'.
+    lv_err = 'X'.
+  ENDLOOP.
+  READ TABLE lt_succ INTO ls_succ INDEX 1.
+  IF lv_err = 'X' OR sy-subrc <> 0 OR ls_succ-bill_doc IS INITIAL.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    MESSAGE 'Credit Note (G2) creation failed for the selected proposal' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+    EXPORTING wait = 'X'.
+  p_cndoc = ls_succ-bill_doc.
+  p_ok    = 'X'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
