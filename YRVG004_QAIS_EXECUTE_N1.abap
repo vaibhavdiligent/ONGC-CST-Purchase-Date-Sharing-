@@ -8253,7 +8253,35 @@ FORM monthly_discount .
         it_data_monthly-ind_elgl_qty =  it_data_monthly-ind_lift_qty.
       ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008707
-      it_data_monthly-ind_elgl_qty = it_data_monthly-ind_elgl_qty - wa_yrva_qais_data-lv_no_dis_qty.
+** CIS 2026-27 June'26 discrepancy (BIS): apply the UPPER CAP to the DISCOUNTABLE
+** quantity (lifting EXCLUDING non-discount grades YCIS_NODISC_GRD), not to the
+** total. Eligible = MIN( lifting-excl-non-disc , upper cap ). The min/max
+** qualifying (grp_lift vs w_month_min / w_month_max above) still uses TOTAL
+** lifting incl non-disc, per policy. Earlier the total was capped first and the
+** non-disc qty subtracted after, which understated the eligible qty.
+      DATA: lv_jun_dgrp TYPE p DECIMALS 3,
+            lv_jun_dind TYPE p DECIMALS 3,
+            lv_jun_dcap TYPE p DECIMALS 3.
+      IF r_rlld IS INITIAL AND r_rhd IS INITIAL AND c_maint IS INITIAL
+         AND c_maint1 IS INITIAL AND ls_psdq IS INITIAL
+         AND it_data_monthly-ind_elgl_qty IS NOT INITIAL.
+        lv_jun_dgrp = it_data_monthly-grp_lift_qty - wa_yrva_qais_data-lv_no_dis_qty.
+        IF lv_jun_dgrp < 0. lv_jun_dgrp = 0. ENDIF.
+        lv_jun_dind = it_data_monthly-ind_lift_qty - wa_yrva_qais_data-lv_no_dis_qty.
+        IF lv_jun_dind < 0. lv_jun_dind = 0. ENDIF.
+        IF w_month_max_perc IS NOT INITIAL AND lv_jun_dgrp GT w_month_max.
+          lv_jun_dcap = w_month_max.               " Scenario 2: discountable > cap -> capped
+        ELSE.
+          lv_jun_dcap = lv_jun_dgrp.               " Scenario 1: discountable <= cap -> full
+        ENDIF.
+        IF lv_jun_dgrp > 0.
+          it_data_monthly-ind_elgl_qty = ( lv_jun_dind / lv_jun_dgrp ) * lv_jun_dcap.
+        ELSE.
+          it_data_monthly-ind_elgl_qty = 0.
+        ENDIF.
+      ELSE.
+        it_data_monthly-ind_elgl_qty = it_data_monthly-ind_elgl_qty - wa_yrva_qais_data-lv_no_dis_qty.
+      ENDIF.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007262
 *      IF R_MONTH1 EQ 'X'  OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR  C_MAINT EQ 'X' OR C_MAINT1 EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007262
