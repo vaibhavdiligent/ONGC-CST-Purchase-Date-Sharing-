@@ -36,7 +36,10 @@ TYPES: BEGIN OF ty_out,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
+         wv_stat     TYPE ycis_apprvl-wv_stat,     " Shortfall/Customer Waiver status
          mcq_qty     TYPE ycis_apprvl-mcq_qty,
+         lft_qty     TYPE ycis_apprvl-lft_qty,       " group lifted qty
+         ind_lft_qty TYPE ycis_apprvl-ind_lft_qty,   " individual lifted qty
          mcq_perc    TYPE ycis_apprvl-mcq_perc,
          elig_qty    TYPE ycis_apprvl-elig_qty,
          rebate_val  TYPE ycis_apprvl-rebate_val,
@@ -200,7 +203,10 @@ FORM build_fieldcat.
   add_fc 'CUST_NAME'   'Customer Name' ''.
   add_fc 'KVGR2'       'Cust Group'    ''.
   add_fc 'SALES_OFF'   'Sales Office'  ''.
+  add_fc 'WV_STAT'     'Waiver Status'   ''.
   add_fc 'MCQ_QTY'     'MCQ Qty'       ''.
+  add_fc 'LFT_QTY'     'Group Lifted Qty'      ''.
+  add_fc 'IND_LFT_QTY' 'Individual Lifted Qty' ''.
   add_fc 'MCQ_PERC'    'MCQ %'         ''.
   add_fc 'ELIG_QTY'    'Eligible Qty'  ''.
   add_fc 'REBATE_VAL'  'Rebate Value'  ''.

@@ -12218,7 +12218,8 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
               it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
               it_data_quater-tot_elgl_qty it_data_quater-remarks
-              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero lv_zero.
+              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero lv_zero
+              it_data_quater-sale_order.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_annual = 'X'.
@@ -12233,7 +12234,8 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
               it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
               it_data_annual-tot_elgl_qty it_data_annual-remarks
-              it_data_annual-grp_lift_qty 'ZAIS' lv_zero it_data_annual-ind_lift_qty.
+              it_data_annual-grp_lift_qty 'ZAIS' lv_zero it_data_annual-ind_lift_qty
+              it_data_annual-sale_order.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_consis = 'X'.
@@ -12248,7 +12250,8 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
               it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
               it_annual_consis-tot_elgl_qty it_annual_consis-remarks
-              it_annual_consis-grp_lift_qty 'ZACD' lv_zero it_annual_consis-ind_lift_qty.
+              it_annual_consis-grp_lift_qty 'ZACD' lv_zero it_annual_consis-ind_lift_qty
+              it_annual_consis-sale_order.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
@@ -12264,7 +12267,8 @@ FORM stage_all_rebates.
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
               it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty
-              it_data_monthly-ind_lift_qty.
+              it_data_monthly-ind_lift_qty
+              it_data_monthly-sale_order.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
@@ -12466,7 +12470,8 @@ FORM stage_one USING p_stype   TYPE char1
                      p_lift    TYPE p
                      p_rebcond TYPE any
                      p_mcq     TYPE p
-                     p_indlift TYPE p.
+                     p_indlift TYPE p
+                     p_wvstat  TYPE any.
   DATA: ls TYPE ycis_apprvl.
   CLEAR ls.
 *   best-effort CIS number for traceability
@@ -12525,6 +12530,7 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_date     = sy-datum.
   ls-l1_time     = sy-uzeit.
   ls-rem_l1      = gv_l1_remark.         " L1 approval remark (prints on note)
+  ls-wv_stat     = p_wvstat.             " Shortfall/Customer Waiver status (shown L2-L5)
   ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
   ls-waers       = 'INR'.
 *   Prevent duplicate forwarding / duplicate L2 e-mail when L1 presses
