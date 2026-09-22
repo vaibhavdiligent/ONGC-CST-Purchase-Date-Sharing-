@@ -1251,8 +1251,13 @@ FORM get_data.
 *   Loaded once; used per customer in the monthly waiver logic.
   SELECT * FROM ycis_waiver_rule INTO TABLE it_ycis_waiver_rule
     WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
+*   CIS 2026-27 pt.6: only CPC-L3-APPROVED shortfall rows drive the calc.
+*   (Maintained via the maker-checker program YCIS_SHORTFALL_MC.) Set the
+*   existing declarations to APPR_STATUS = 'A' after adding the field so
+*   current shortfall grades stay active.
   SELECT * FROM ycis_shortfall INTO TABLE it_ycis_shortfall
-    WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
+    WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high
+      AND appr_status = 'A'.
   SELECT * FROM ycis_nodisc_grd INTO TABLE it_ycis_nodisc.
 *   Build the non-discount grade range (PS/GS/Powder/Polyfines) used to
 *   exclude these grades from the discountable qty (they still count for
