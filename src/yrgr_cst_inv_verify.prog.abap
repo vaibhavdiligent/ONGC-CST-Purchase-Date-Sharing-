@@ -29,8 +29,9 @@ TYPES: BEGIN OF ty_item_alv,
          gail_location TYPE ygms_de_loc_id,
          gail_material TYPE ygms_de_gail_mat,
          state_code    TYPE regio,
-         qty_scm       TYPE ygms_de_qty_scm,
-         qty_mbg       TYPE ygms_de_qty_mbg,
+         qty_cuom      TYPE ygms_de_qty_scm,
+         cuom          TYPE c LENGTH 3,
+         qty_ruom      TYPE ygms_de_qty_mbg,
          qty_sent_scm  TYPE ygms_de_qty_scm,
          qty_sent_mbg  TYPE ygms_de_qty_mbg,
          diff_scm      TYPE ygms_de_qty_scm,
@@ -39,16 +40,14 @@ TYPES: BEGIN OF ty_item_alv,
          avg_ncv       TYPE ygms_de_ncv,
          rate          TYPE yrga_de_price,
          rate_curr     TYPE waers,
+         rate_per      TYPE p LENGTH 5 DECIMALS 3,
          rate_uom      TYPE meins,
-         gross_amt     TYPE yrga_de_amount,
+         basic_amt     TYPE yrga_de_amount,
          tax_type      TYPE yrga_de_name50,
-         tax_1         TYPE yrga_de_tax_rate,
-         tax_2         TYPE yrga_de_tax_rate,
-         tax_3         TYPE yrga_de_tax_rate,
-         tax_1_amt     TYPE yrga_de_amount,
-         tax_2_amt     TYPE yrga_de_amount,
-         tax_3_amt     TYPE yrga_de_amount,
-         net_amt       TYPE yrga_de_amount,
+         tax_rate      TYPE yrga_de_tax_rate,
+         tax_amt       TYPE yrga_de_amount,
+         inv_amt       TYPE yrga_de_amount,
+         hsn_code      TYPE c LENGTH 11,
          received_on   TYPE datum,
          received_at   TYPE uzeit,
          user_id       TYPE syuname,
@@ -69,9 +68,11 @@ TYPES: BEGIN OF ty_header_alv,
          currency     TYPE waers,
          price_uom    TYPE meins,
          exch_rate    TYPE yrga_de_exch_rate,
-         tot_qty_scm  TYPE ygms_de_qty_scm,
-         tot_qty_mbg  TYPE ygms_de_qty_mbg,
-         gross_amt    TYPE yrga_de_amount,
+         tot_qty_cuom TYPE ygms_de_qty_scm,
+         cuom         TYPE c LENGTH 3,
+         tot_qty_ruom TYPE ygms_de_qty_mbg,
+         ruom         TYPE c LENGTH 3,
+         basic_amt    TYPE yrga_de_amount,
          total_taxes  TYPE yrga_de_amount,
          round_off    TYPE yrga_de_round_off,
          payable_amt  TYPE yrga_de_amount,
@@ -97,7 +98,6 @@ TYPES: BEGIN OF ty_header_alv,
          supp_vat_tin TYPE yrga_de_tin,
          supp_cst_tin TYPE yrga_de_tin,
          supp_gst     TYPE yrga_de_gstin,
-         hsn_code     TYPE yrga_de_hsn_code,
          supp_through TYPE yrga_de_invoice_no,
        END OF ty_header_alv.
 
@@ -326,22 +326,21 @@ FORM fetch_item_data.
       bill_to       = <fs_item>-bill_to
       ongc_material = <fs_item>-ongc_material
       state_code    = <fs_item>-state_code
-      qty_scm       = <fs_item>-qty_scm
-      qty_mbg       = <fs_item>-qty_mbg
+      qty_cuom      = <fs_item>-qty_cuom
+      cuom          = <fs_item>-cuom
+      qty_ruom      = <fs_item>-qty_ruom
       avg_gcv       = <fs_item>-avg_gcv
       avg_ncv       = <fs_item>-avg_ncv
       rate          = <fs_item>-rate
       rate_curr     = <fs_item>-rate_curr
+      rate_per      = <fs_item>-rate_per
       rate_uom      = <fs_item>-rate_uom
-      gross_amt     = <fs_item>-gross_amt
+      basic_amt     = <fs_item>-basic_amt
       tax_type      = <fs_item>-tax_type
-      tax_1         = <fs_item>-tax_1
-      tax_2         = <fs_item>-tax_2
-      tax_3         = <fs_item>-tax_3
-      tax_1_amt     = <fs_item>-tax_1_amt
-      tax_2_amt     = <fs_item>-tax_2_amt
-      tax_3_amt     = <fs_item>-tax_3_amt
-      net_amt       = <fs_item>-net_amt
+      tax_rate      = <fs_item>-tax_rate
+      tax_amt       = <fs_item>-tax_amt
+      inv_amt       = <fs_item>-inv_amt
+      hsn_code      = <fs_item>-hsn_code
       received_on   = <fs_item>-received_on
       received_at   = <fs_item>-received_at
       user_id       = <fs_item>-user_id
@@ -437,8 +436,8 @@ FORM enrich_item_data.
     <fs_alv>-qty_sent_mbg = lv_sent_mbg.
 
     " Differences
-    <fs_alv>-diff_scm = lv_sent_scm - <fs_alv>-qty_scm.
-    <fs_alv>-diff_mbg = lv_sent_mbg - <fs_alv>-qty_mbg.
+    <fs_alv>-diff_scm = lv_sent_scm - <fs_alv>-qty_cuom.
+    <fs_alv>-diff_mbg = lv_sent_mbg - <fs_alv>-qty_ruom.
 
   ENDLOOP.
 
@@ -506,13 +505,13 @@ FORM display_alv.
             CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_medium_text( 'Bill To' ).
             CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_long_text( 'Bill To' ).
 
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_short_text( 'InvQty SCM' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_medium_text( 'Invoice Qty(SCM)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SCM' ) )->set_long_text( 'Invoice Quantity (SCM)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_CUOM' ) )->set_short_text( 'InvQty SCM' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_CUOM' ) )->set_medium_text( 'Invoice Qty(SCM)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_CUOM' ) )->set_long_text( 'Invoice Quantity (SCM)' ).
 
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_short_text( 'InvQty MBG' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_medium_text( 'Invoice Qty(MBG)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_MBG' ) )->set_long_text( 'Invoice Qty (MBG)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_RUOM' ) )->set_short_text( 'InvQty MBG' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_RUOM' ) )->set_medium_text( 'Invoice Qty(MBG)' ).
+            CAST cl_salv_column( lo_cols->get_column( 'QTY_RUOM' ) )->set_long_text( 'Invoice Qty (MBG)' ).
 
             CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_short_text( 'GAIL Loc' ).
             CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_medium_text( 'GAIL Location' ).
