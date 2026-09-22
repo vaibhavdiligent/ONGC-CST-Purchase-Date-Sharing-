@@ -407,6 +407,7 @@ TABLES: ycis_apprvl, ycis_wf_appr.
 DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
+DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
 *** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -12193,6 +12194,14 @@ FORM stage_all_rebates.
     MESSAGE 'Submission cancelled - nothing sent to L2' TYPE 'S'.
     RETURN.
   ENDIF.
+*   CIS 2026-27: a remark is MANDATORY at L1 (approval). It is stored on every
+*   row staged in this submission and prints in the L1 column of the note.
+  CLEAR gv_l1_remark.
+  PERFORM get_l1_remark CHANGING gv_l1_remark.
+  IF gv_l1_remark IS INITIAL.
+    MESSAGE 'Remark is mandatory' TYPE 'I'.
+    RETURN.
+  ENDIF.
   REFRESH gt_stg_office.
   CLEAR gv_stg_dup.
   IF r_quater = 'X'.
@@ -12515,6 +12524,7 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_user     = sy-uname.
   ls-l1_date     = sy-datum.
   ls-l1_time     = sy-uzeit.
+  ls-rem_l1      = gv_l1_remark.         " L1 approval remark (prints on note)
   ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
   ls-waers       = 'INR'.
 *   Prevent duplicate forwarding / duplicate L2 e-mail when L1 presses
@@ -12538,6 +12548,33 @@ FORM stage_one USING p_stype   TYPE char1
   PERFORM stage_grade_detail USING ls.
   COLLECT p_vkbur INTO gt_stg_office.       " for the L2 notification
 ENDFORM.                    "stage_one
+*&---------------------------------------------------------------------*
+*&      Form  get_l1_remark   (CIS 2026-27 - mandatory L1 approval remark)
+*&---------------------------------------------------------------------*
+FORM get_l1_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
+  DATA: lt_fields TYPE STANDARD TABLE OF sval,
+        ls_field  TYPE sval,
+        lv_ret    TYPE char1.
+  ls_field-tabname   = 'YCIS_APPRVL'.
+  ls_field-fieldname = 'REM_L1'.               " 100-char remark field
+  ls_field-fieldtext = 'Remark'.
+  ls_field-field_obl = 'X'.
+  APPEND ls_field TO lt_fields.
+  CALL FUNCTION 'POPUP_GET_VALUES'
+    EXPORTING
+      popup_title     = 'Approval remark (mandatory)'
+    IMPORTING
+      returncode      = lv_ret
+    TABLES
+      fields          = lt_fields
+    EXCEPTIONS
+      error_in_fields = 1
+      OTHERS          = 2.
+  IF sy-subrc = 0 AND lv_ret <> 'A'.
+    READ TABLE lt_fields INTO ls_field INDEX 1.
+    p_remark = ls_field-value.
+  ENDIF.
+ENDFORM.                    "get_l1_remark
 *&---------------------------------------------------------------------*
 *&      Form  l1_row_may_flow   (CIS 2026-27 - L1 flow decision)
 *&---------------------------------------------------------------------*

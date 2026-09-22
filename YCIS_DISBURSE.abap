@@ -310,12 +310,15 @@ FORM process_selected USING p_action TYPE char1.
     RETURN.
   ENDIF.
 
-  IF p_action = 'R'.
-    PERFORM get_reject_remark CHANGING lv_remark.
-    IF lv_remark IS INITIAL.
-      MESSAGE 'Reject remark is mandatory' TYPE 'I'.
-      RETURN.
-    ENDIF.
+* CIS 2026-27: a remark is MANDATORY at every level for BOTH disburse and reject
+  IF p_action = 'A'.
+    PERFORM get_remark USING 'Disbursement remark (mandatory)' CHANGING lv_remark.
+  ELSE.
+    PERFORM get_remark USING 'Reject remark (mandatory)'       CHANGING lv_remark.
+  ENDIF.
+  IF lv_remark IS INITIAL.
+    MESSAGE 'Remark is mandatory' TYPE 'I'.
+    RETURN.
   ENDIF.
 
   IF p_action = 'A'.
@@ -346,7 +349,7 @@ FORM process_selected USING p_action TYPE char1.
       gs_appr-l6_user   = sy-uname.
       gs_appr-l6_date   = sy-datum.
       gs_appr-l6_time   = sy-uzeit.
-      gs_appr-rem_l6    = 'L6 disbursed - CIS discount completed'.
+      gs_appr-rem_l6    = lv_remark.           " L6 disbursement remark (prints on note)
       gs_appr-remarks   = 'Disbursed - CIS discount completed'.
       COLLECT gs_appr-sales_off INTO lt_dofc.
       lv_disb = lv_disb + 1.
@@ -404,17 +407,19 @@ FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
+FORM get_remark USING p_title TYPE clike
+                CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
   DATA: lt_fields TYPE STANDARD TABLE OF sval,
         ls_field  TYPE sval,
         lv_ret    TYPE char1.
   ls_field-tabname   = 'YCIS_APPRVL'.
-  ls_field-fieldname = 'REJ_REMARKS'.
+  ls_field-fieldname = 'REM_L6'.               " 100-char remark field
+  ls_field-fieldtext = 'Remark'.
   ls_field-field_obl = 'X'.
   APPEND ls_field TO lt_fields.
   CALL FUNCTION 'POPUP_GET_VALUES'
     EXPORTING
-      popup_title     = 'Reject remark'
+      popup_title     = p_title
     IMPORTING
       returncode      = lv_ret
     TABLES

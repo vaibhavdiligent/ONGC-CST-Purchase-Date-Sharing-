@@ -297,12 +297,15 @@ FORM process_selected USING p_action TYPE char1.
     RETURN.
   ENDIF.
 
-  IF p_action = 'R'.
-    PERFORM get_reject_remark CHANGING lv_remark.
-    IF lv_remark IS INITIAL.
-      MESSAGE 'Reject remark is mandatory' TYPE 'I'.
-      RETURN.
-    ENDIF.
+* CIS 2026-27: a remark is MANDATORY at every level for BOTH approve and reject
+  IF p_action = 'A'.
+    PERFORM get_remark USING 'Approval remark (mandatory)' CHANGING lv_remark.
+  ELSE.
+    PERFORM get_remark USING 'Reject remark (mandatory)'   CHANGING lv_remark.
+  ENDIF.
+  IF lv_remark IS INITIAL.
+    MESSAGE 'Remark is mandatory' TYPE 'I'.
+    RETURN.
   ENDIF.
 
   IF p_action = 'A'.
@@ -326,7 +329,7 @@ FORM process_selected USING p_action TYPE char1.
       gs_appr-l4_user   = sy-uname.
       gs_appr-l4_date   = sy-datum.
       gs_appr-l4_time   = sy-uzeit.
-      gs_appr-rem_l4    = 'L4 financially vetted'.
+      gs_appr-rem_l4    = lv_remark.                 " L4 approval remark (prints on note)
       gs_appr-remarks   = 'L4 financially vetted'.
       lv_appr = lv_appr + 1.
     ELSE.
@@ -363,17 +366,19 @@ FORM process_selected USING p_action TYPE char1.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
+FORM get_remark USING p_title TYPE clike
+                CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
   DATA: lt_fields TYPE STANDARD TABLE OF sval,
         ls_field  TYPE sval,
         lv_ret    TYPE char1.
   ls_field-tabname   = 'YCIS_APPRVL'.
-  ls_field-fieldname = 'REJ_REMARKS'.
+  ls_field-fieldname = 'REM_L4'.               " 100-char remark field
+  ls_field-fieldtext = 'Remark'.
   ls_field-field_obl = 'X'.
   APPEND ls_field TO lt_fields.
   CALL FUNCTION 'POPUP_GET_VALUES'
     EXPORTING
-      popup_title     = 'Reject remark'
+      popup_title     = p_title
     IMPORTING
       returncode      = lv_ret
     TABLES
