@@ -547,56 +547,113 @@ ENDFORM.
 FORM print_note USING p_vbeln TYPE vbeln_va.
   DATA: lt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
         ls_appr   TYPE ycis_apprvl,
+        ls_key    TYPE ycis_apprvl,
         ls_note   TYPE zcis_appr_note_s,
+        lt_office TYPE STANDARD TABLE OF zcis_appr_note_row,
+        ls_office TYPE zcis_appr_note_row,
+        ls_rep    TYPE ycis_apprvl,       " representative row (furthest in workflow)
         lv_total  TYPE ycis_apprvl-rebate_val,
+        lv_otot   TYPE ycis_apprvl-rebate_val,
+        lv_sno    TYPE i,
+        lv_have   TYPE flag,
+        lv_waers  TYPE waers,
         lv_fm     TYPE funcname,
         ls_outpar TYPE sfpoutputparams,
         ls_docpar TYPE sfpdocparams.
 
-*   all approval rows that produced this rebate order (usually one)
-  SELECT * FROM ycis_apprvl INTO TABLE lt_appr
-    WHERE order_no = p_vbeln.
-  IF lt_appr IS INITIAL.
+*   The note groups ALL rows of one scheme (customer reference) for one
+*   period, by Sales Office (CPC Topic 2 Q4). Find the ticked order's key,
+*   then re-select every row sharing that reference + period + scheme.
+  SELECT SINGLE * FROM ycis_apprvl INTO ls_key WHERE order_no = p_vbeln.
+  IF sy-subrc <> 0.
     MESSAGE 'No approval record found for this rebate order' TYPE 'I'.
     RETURN.
   ENDIF.
-  READ TABLE lt_appr INTO ls_appr INDEX 1.
+  SELECT * FROM ycis_apprvl INTO TABLE lt_appr
+    WHERE purch_no    = ls_key-purch_no
+      AND period_from = ls_key-period_from
+      AND period_to   = ls_key-period_to
+      AND scheme_type = ls_key-scheme_type.
+  IF lt_appr IS INITIAL.
+    lt_appr = VALUE #( ( ls_key ) ).
+  ENDIF.
 
-*   total discount value across the order's approval rows
-  CLEAR lv_total.
+*   representative row = the one that has progressed furthest (highest
+*   wf_status), used for the central L3-L6 blocks and the header stamps.
+  CLEAR ls_rep.
+  LOOP AT lt_appr INTO ls_appr.
+    IF ls_appr-wf_status >= ls_rep-wf_status.
+      ls_rep = ls_appr.
+    ENDIF.
+  ENDLOOP.
+  IF ls_rep IS INITIAL.
+    READ TABLE lt_appr INTO ls_rep INDEX 1.
+  ENDIF.
+
+*   ---- header (CPC Topic 2: number = the YRVG052 customer reference) ----
+  CLEAR ls_note.
+  ls_note-appr_note_no = ls_rep-purch_no.
+  ls_note-ref_no       = 'GAIL/PMG/CPC/PSD Discount disbursement'.
+  WRITE sy-datum TO ls_note-doc_date DD/MM/YYYY.
+  PERFORM scheme_name USING ls_rep CHANGING ls_note-variant_name.
+
+*   ---- build the Sales-Office table (L1 / L2 grouped by office) ----
+*   Explicit control break on SALES_OFF (rows sorted ascending by approval
+*   time so the LAST approver per office wins). AT NEW/AT END is avoided on
+*   purpose - it would mask the work-area fields (e.g. WAERS) with '*'.
+  REFRESH lt_office.
+  CLEAR: lv_total, lv_sno, lv_have, lv_waers.
+  SORT lt_appr BY sales_off l2_date l2_time l1_date l1_time.
   LOOP AT lt_appr INTO ls_appr.
     lv_total = lv_total + ls_appr-rebate_val.
+    IF lv_have = 'X' AND ls_appr-sales_off <> ls_office-sales_off.
+      WRITE lv_otot TO ls_office-disc_value CURRENCY lv_waers.
+      CONDENSE ls_office-disc_value.
+      APPEND ls_office TO lt_office.
+      CLEAR: ls_office, lv_have.
+    ENDIF.
+    IF lv_have IS INITIAL.
+      lv_sno = lv_sno + 1.
+      ls_office-s_no      = lv_sno.
+      ls_office-sales_off = ls_appr-sales_off.
+      lv_otot = 0.
+      lv_have = 'X'.
+    ENDIF.
+    lv_otot = lv_otot + ls_appr-rebate_val.
+    ls_office-l1_remarks = ls_appr-rem_l1.
+    ls_office-l1_cpf     = ls_appr-l1_user.
+    PERFORM sign_line USING ls_appr-l1_user ls_appr-l1_date ls_appr-l1_time
+                      CHANGING ls_office-l1_stamp.
+    ls_office-l2_remarks = ls_appr-rem_l2.
+    ls_office-l2_cpf     = ls_appr-l2_user.
+    PERFORM sign_line USING ls_appr-l2_user ls_appr-l2_date ls_appr-l2_time
+                      CHANGING ls_office-l2_stamp.
+    lv_waers = ls_appr-waers.
   ENDLOOP.
-  READ TABLE lt_appr INTO ls_appr INDEX 1.
+  IF lv_have = 'X'.
+    WRITE lv_otot TO ls_office-disc_value CURRENCY lv_waers.
+    CONDENSE ls_office-disc_value.
+    APPEND ls_office TO lt_office.
+  ENDIF.
 
-*   ---- fill the note structure from the approval record ----
-  CLEAR ls_note.
-  ls_note-appr_note_no     = ls_appr-qais_no.
-  ls_note-ref_no           = 'GAIL/PMG/CPC/PSD Discount disbursement'.
-  WRITE sy-datum TO ls_note-doc_date DD/MM/YYYY.
-  PERFORM scheme_name USING ls_appr CHANGING ls_note-variant_name.
-  WRITE lv_total TO ls_note-disc_total_value CURRENCY ls_appr-waers.
+*   grand total = sum of all offices (CPC Topic 2 Q8)
+  WRITE lv_total TO ls_note-disc_total_value CURRENCY ls_rep-waers.
   CONDENSE ls_note-disc_total_value.
+  ls_note-grand_total = ls_note-disc_total_value.
 
-*   per-level signature lines: user + date + time (available for all levels)
-  PERFORM sign_line USING ls_appr-l1_user ls_appr-l1_date ls_appr-l1_time
-                    CHANGING ls_note-l1_sign.
-  PERFORM sign_line USING ls_appr-l2_user ls_appr-l2_date ls_appr-l2_time
-                    CHANGING ls_note-l2_sign.
-  PERFORM sign_line USING ls_appr-l3_user ls_appr-l3_date ls_appr-l3_time
+*   ---- central blocks L3 / L4 / L5 / L6 (single approver each) ----
+  PERFORM sign_line USING ls_rep-l3_user ls_rep-l3_date ls_rep-l3_time
                     CHANGING ls_note-l3_sign.
-  PERFORM sign_line USING ls_appr-l4_user ls_appr-l4_date ls_appr-l4_time
+  PERFORM sign_line USING ls_rep-l4_user ls_rep-l4_date ls_rep-l4_time
                     CHANGING ls_note-l4_sign.
-  PERFORM sign_line USING ls_appr-l5_user ls_appr-l5_date ls_appr-l5_time
+  PERFORM sign_line USING ls_rep-l5_user ls_rep-l5_date ls_rep-l5_time
                     CHANGING ls_note-l5_sign.
-  PERFORM sign_line USING ls_appr-l6_user ls_appr-l6_date ls_appr-l6_time
+  PERFORM sign_line USING ls_rep-l6_user ls_rep-l6_date ls_rep-l6_time
                     CHANGING ls_note-l6_sign.
-
-*   per-level remarks (L1-L3 share the general REMARKS; L4-L6 have their own)
-  ls_note-l3_remarks = ls_appr-remarks.
-  ls_note-l4_remarks = ls_appr-rem_l4.
-  ls_note-l5_remarks = ls_appr-rem_l5.
-  ls_note-l6_remarks = ls_appr-rem_l6.
+  ls_note-l3_remarks = ls_rep-rem_l3.
+  ls_note-l4_remarks = ls_rep-rem_l4.
+  ls_note-l5_remarks = ls_rep-rem_l5.
+  ls_note-l6_remarks = ls_rep-rem_l6.
 
 *   ---- render the Adobe form ----
   CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'
@@ -632,6 +689,7 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
     EXPORTING
       /1bcdwb/docparams = ls_docpar
       wa_note           = ls_note
+      it_office         = lt_office
     EXCEPTIONS
       usage_error       = 1
       system_error      = 2
