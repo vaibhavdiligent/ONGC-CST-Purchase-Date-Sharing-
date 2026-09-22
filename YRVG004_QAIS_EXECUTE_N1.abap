@@ -408,6 +408,15 @@ DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
+*   CIS 2026-27 pt.1: zonal (sales-office) authorization cache. Restriction
+*   is via auth object ZCIS_VKBR (ID VKBUR + ACTVT). An L1 user sees only the
+*   sales offices granted in their role; cross-zone / MLE-Group is unlocked by
+*   granting the extra VKBUR value (or '*') in the role.
+TYPES: BEGIN OF ty_authoff,
+         vkbur TYPE vkbur,
+         ok    TYPE flag,
+       END OF ty_authoff.
+DATA: gt_authoff TYPE HASHED TABLE OF ty_authoff WITH UNIQUE KEY vkbur.
 *** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -12720,6 +12729,9 @@ ENDFORM.                    "stage_grade_detail
 *  <--  p2        text
 *----------------------------------------------------------------------*
 FORM display_list .
+* CIS 2026-27 pt.1: restrict the displayed rows to the user's authorized
+* sales offices (zonal restriction). Applied to whichever result table is active.
+  PERFORM zonal_filter.
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
@@ -12827,6 +12839,75 @@ FORM display_list .
   ENDIF.
 
 ENDFORM.                    " DISPLAY_LIST
+*&---------------------------------------------------------------------*
+*&      Form  zonal_filter   (CIS 2026-27 pt.1 - zonal restriction)
+*&---------------------------------------------------------------------*
+*   Remove from the active result table every row whose sales office the
+*   user is not authorized for (auth object ZCIS_VKBR). Rollout-safe: while
+*   the object is not yet assigned to the user's role it does not restrict
+*   (see office_authorized); once BIS grants it, only the user's offices show.
+*&---------------------------------------------------------------------*
+FORM zonal_filter.
+  DATA lv_ok TYPE flag.
+  IF r_quater = 'X'.
+    LOOP AT it_data_quater.
+      PERFORM office_authorized USING it_data_quater-vkbur CHANGING lv_ok.
+      IF lv_ok IS INITIAL. DELETE it_data_quater. ENDIF.
+    ENDLOOP.
+  ELSEIF r_annual = 'X'.
+    LOOP AT it_data_annual.
+      PERFORM office_authorized USING it_data_annual-vkbur CHANGING lv_ok.
+      IF lv_ok IS INITIAL. DELETE it_data_annual. ENDIF.
+    ENDLOOP.
+  ELSEIF r_consis = 'X'.
+    LOOP AT it_annual_consis.
+      PERFORM office_authorized USING it_annual_consis-vkbur CHANGING lv_ok.
+      IF lv_ok IS INITIAL. DELETE it_annual_consis. ENDIF.
+    ENDLOOP.
+  ELSEIF r_newcus = 'X'.
+    LOOP AT it_data_annual_newcus.
+      PERFORM office_authorized USING it_data_annual_newcus-vkbur CHANGING lv_ok.
+      IF lv_ok IS INITIAL. DELETE it_data_annual_newcus. ENDIF.
+    ENDLOOP.
+  ELSE.
+    LOOP AT it_data_monthly.
+      PERFORM office_authorized USING it_data_monthly-vkbur CHANGING lv_ok.
+      IF lv_ok IS INITIAL. DELETE it_data_monthly. ENDIF.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.                    "zonal_filter
+*&---------------------------------------------------------------------*
+*&      Form  office_authorized   (auth object ZCIS_VKBR, cached)
+*&---------------------------------------------------------------------*
+*   sy-subrc after AUTHORITY-CHECK:
+*     0  -> authorized                     (show)
+*     12 -> object NOT in the user's roles (restriction not yet activated
+*           for this user -> show, so an unconfigured role does not blank
+*           the report during rollout)
+*     4  -> object present but this office NOT granted (hide)
+*&---------------------------------------------------------------------*
+FORM office_authorized USING p_vkbur TYPE vkbur CHANGING p_ok TYPE flag.
+  DATA ls_cache TYPE ty_authoff.
+  CLEAR p_ok.
+  IF p_vkbur IS INITIAL.
+    p_ok = 'X'.                 " no office on the row -> do not hide
+    RETURN.
+  ENDIF.
+  READ TABLE gt_authoff INTO ls_cache WITH TABLE KEY vkbur = p_vkbur.
+  IF sy-subrc = 0.
+    p_ok = ls_cache-ok.
+    RETURN.
+  ENDIF.
+  AUTHORITY-CHECK OBJECT 'ZCIS_VKBR'
+    ID 'VKBUR' FIELD p_vkbur
+    ID 'ACTVT' FIELD '16'.
+  IF sy-subrc = 0 OR sy-subrc = 12.
+    p_ok = 'X'.
+  ENDIF.
+  ls_cache-vkbur = p_vkbur.
+  ls_cache-ok    = p_ok.
+  INSERT ls_cache INTO TABLE gt_authoff.
+ENDFORM.                    "office_authorized
 *&---------------------------------------------------------------------*
 *&      Form  CREATE_SALE_ORDER
 *&---------------------------------------------------------------------*
