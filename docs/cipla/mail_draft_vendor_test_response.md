@@ -147,13 +147,80 @@ The program now checks this before calling the API and says:
 
 ---
 
+### Questions on tab 6 (Block / Unblock)
+
+**6.1 — What was intended for vendor `362243`?** The row sets the central blocks
+(`SPERR`, `SPERM`), the company-code block (`SPERR_1`) and `SPERQ = 99` all at
+once, which are two different patterns in one row. Your template's own samples
+show them separately:
+
+| | SPERR | SPERR_1 | SPERM | SPERM_1 | SPERQ | means |
+|---|---|---|---|---|---|---|
+| sample row 9 | X | | X | | 99 | total block at vendor level |
+| sample rows 10/11 | | X | | X | | block in one company code / purchasing org |
+
+Which of the two was meant for this vendor? The two give materially different
+results, so we would rather not assume.
+
+**6.2 — Does the `SPERQ` rule still hold?** Your guideline reads *"This should be
+blank if record has to block at company/ purchase level."* The program enforces it
+and rejects the row. Should it stay an error, or should `SPERQ` be allowed
+together with a company-code block?
+
+**6.3 — Employee codes.** Following your note, a purchasing-organisation block
+requested without a purchasing organisation is now applied **centrally** instead,
+with a warning, and the row posts. Please confirm that is what you want — the
+alternative is to reject the row so that the file is corrected.
+
+**6.4 — How should an *unblock* be written?** This is the one we most need an
+answer on. The tab is titled *"Block and unblock vendor"*, but all six sample rows
+are blocks, and the template does not say how to express an unblock. In the
+program a blank cell means **"leave this indicator unchanged"** — it cannot mean
+"remove the block", or no row could ever set only some of the flags.
+
+We have provisionally used the word `UNBLOCK` in the cell to mean "clear this
+indicator". Please confirm that is acceptable, or tell us the marker you would
+prefer, and **please include unblock rows in the next test** — that half of the
+tab has not been exercised at all.
+
+### Questions on tab 9 (Partner function)
+
+**9.1 — Please extend partner `100098685` to purchasing organisation 1000.** Note
+that this number is not a mistake in the test file: it is the partner used in your
+own template's sample row. It exists as a supplier, but it has no purchasing
+organisation 1000 view in the sandbox, which is why all five rows were rejected.
+Either extend it there, or tell us which partner number to use for sandbox
+testing.
+
+**9.2 — Is the number in `GPARN_05` a vendor number or a business partner
+number?** The program accepts either and resolves a business partner number to its
+vendor. `100098685` did not resolve, so it was treated as a vendor number. Please
+confirm that is intended.
+
+**9.3 — Which partner functions are in scope for vendors?** Only `ZP` was tested.
+Partner functions are checked against `TPAR`, which lists the functions of every
+partner type — customer, vendor, personnel, contact — so a customer-side function
+typed into this tab would be accepted here and then refused by SAP with an obscure
+message. If you send the list of functions that are valid for vendors, we will
+check against that list and reject a wrong one with a clear message.
+
+**9.4 — Partner functions already on the vendor that are *not* in the file: keep
+or remove?** SAP treats this segment as gross data — anything not sent is deleted.
+The program currently **keeps** them, so a file adding `ZP` does not disturb the
+functions the account group created. Please confirm that is the behaviour you
+want.
+
+*Minor:* we treat columns 4 and 5 (`D0320`, `USE_ZAV`) as screen-control fields
+from the old recording and ignore them. Please confirm.
+
 ### Summary of what we need from you
 
 1. The **TDS file** that was actually uploaded (tab 7).
-2. **Extend vendor `100098685`** to purchasing organisation 1000 (tab 9).
-3. **Confirmation of the `SPERQ` rule** in the Block/Unblock template (tab 6).
-4. After the corrected program is imported, a **re-test of the All CC Vendor
-   creation tab**, which is the one that could not run.
+2. **Extend partner `100098685`** to purchasing organisation 1000 (question 9.1).
+3. Answers to the questions on **tab 6** (6.1 to 6.4) and **tab 9** (9.2 to 9.4).
+4. After the corrected programs are imported, a re-test of the **All CC Vendor
+   creation** tab, which is the one that could not run, and of **unblock** rows,
+   which have not been tested at all.
 
 We will share the corrected programs for import. Please let us know if any of the
 above needs a discussion.
