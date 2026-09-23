@@ -1324,7 +1324,10 @@ CLASS lcl_excel IMPLEMENTATION.
     ENDLOOP.
 
     IF et_row IS INITIAL.
-      RAISE EXCEPTION NEW lcx_upl( |Tab "{ lv_use }" contains no rows below its heading.| ).
+      RAISE EXCEPTION NEW lcx_upl(
+        |Tab "{ lv_use }" has { lines( lt_hit ) } line(s); the headings were found on | &&
+        |line { lv_hrow } and the data would start on line { lv_data + 1 }, but there is | &&
+        |nothing there. Check that the data sits under the headings on this tab.| ).
     ENDIF.
   ENDMETHOD.
 
@@ -1415,7 +1418,12 @@ CLASS lcl_log IMPLEMENTATION.
 
   METHOD display.
     IF mt_msg IS INITIAL.
-      MESSAGE 'No data rows were found to process.' TYPE 'S' DISPLAY LIKE 'W'.
+      " Every way a run can end now writes something here first, so this is
+      " a last resort and says only what it knows. It used to say "No data
+      " rows were found to process." - a diagnosis it was in no position to
+      " make, and one that overwrote the real reason in the status bar.
+      MESSAGE 'The run ended without a single message - please send the file in.'
+              TYPE 'S' DISPLAY LIKE 'W'.
       RETURN.
     ENDIF.
 
@@ -1912,7 +1920,6 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 INTERFACE lif_h.
   METHODS sheet     RETURNING VALUE(rv) TYPE string.
-  METHODS first_row RETURNING VALUE(rv) TYPE i.
   METHODS run       IMPORTING it_row TYPE tt_row.
   "! The column a row is recognised by. A row whose key column is empty is
   "! passed over in silence - which is right for the blank lines at the
@@ -1924,7 +1931,7 @@ ENDINTERFACE.
 
 CLASS lcl_base DEFINITION ABSTRACT.
   PUBLIC SECTION.
-    INTERFACES lif_h ABSTRACT METHODS sheet first_row run.
+    INTERFACES lif_h ABSTRACT METHODS sheet run.
     METHODS constructor IMPORTING io_log TYPE REF TO lcl_log.
     "! Column 2 on every tab that carries LIFNR there; redefined where the
     "! tab starts with the vendor instead of with a label column.
@@ -2171,7 +2178,6 @@ ENDCLASS.
 CLASS lcl_h_create DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
   PRIVATE SECTION.
@@ -2186,7 +2192,6 @@ ENDCLASS.
 CLASS lcl_h_create IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_create. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
   METHOD lif_h~key_col.   rv = 5. ENDMETHOD.
 
   METHOD fill_partner.
@@ -2592,14 +2597,12 @@ ENDCLASS.
 CLASS lcl_h_tds DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
 
 CLASS lcl_h_tds IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_tds. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
 
   METHOD lif_h~run.
     " Column bases for the six blocks _01.._06 (offset = block - 1)
@@ -2768,7 +2771,6 @@ ENDCLASS.
 CLASS lcl_h_tan DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
@@ -2776,7 +2778,6 @@ ENDCLASS.
 CLASS lcl_h_tan IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_tan. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
   METHOD lif_h~key_col.   rv = 1. ENDMETHOD.
 
   METHOD lif_h~run.
@@ -2895,14 +2896,12 @@ ENDCLASS.
 CLASS lcl_h_bkey DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
 
 CLASS lcl_h_bkey IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_bkey. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
@@ -2998,7 +2997,6 @@ ENDCLASS.
 CLASS lcl_h_bank DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_in,
@@ -3018,7 +3016,6 @@ ENDCLASS.
 CLASS lcl_h_bank IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_bank. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
 
   METHOD flush.
     DATA: lv_row TYPE i,
@@ -3140,14 +3137,12 @@ ENDCLASS.
 CLASS lcl_h_ext DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
 
 CLASS lcl_h_ext IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_ext. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
 
   METHOD lif_h~run.
     LOOP AT it_row INTO DATA(ls_row).
@@ -3319,7 +3314,6 @@ ENDCLASS.
 CLASS lcl_h_cin DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
@@ -3327,7 +3321,6 @@ ENDCLASS.
 CLASS lcl_h_cin IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_cin. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
   METHOD lif_h~key_col.   rv = 1. ENDMETHOD.
 
   METHOD lif_h~run.
@@ -3396,7 +3389,6 @@ ENDCLASS.
 CLASS lcl_h_pfn DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
@@ -3404,7 +3396,6 @@ ENDCLASS.
 CLASS lcl_h_pfn IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_pfn. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
   METHOD lif_h~key_col.   rv = 1. ENDMETHOD.
 
   METHOD lif_h~run.
@@ -3546,7 +3537,6 @@ ENDCLASS.
 CLASS lcl_h_blk DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
-    METHODS lif_h~first_row REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
   PRIVATE SECTION.
     METHODS flag IMPORTING iv_cell TYPE string RETURNING VALUE(rv) TYPE string.
@@ -3555,7 +3545,6 @@ ENDCLASS.
 CLASS lcl_h_blk IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_blk. ENDMETHOD.
-  METHOD lif_h~first_row. rv = 2. ENDMETHOD.
 
   METHOD flag.
     DATA(lv) = to_upper( condense( iv_cell ) ).
@@ -3784,20 +3773,34 @@ START-OF-SELECTION.
   DATA(go_log) = NEW lcl_log( ).
   DATA(go_h)   = lcl_factory=>create( go_log ).
 
+  " Why every stop below writes to the LOG and returns, rather than sending
+  " a message:
+  "   MESSAGE ... TYPE 'E' here writes the status bar and ends this event
+  "   block. END-OF-SELECTION still runs, and the first thing DISPLAY does
+  "   for an empty log is write the status bar again - with "No data rows
+  "   were found to process." The real reason was overwritten by the generic
+  "   one, every time, and that generic line is all a tester ever saw. The
+  "   reason now goes into the list, where it stays put and can be read,
+  "   copied and sent on.
   IF go_h IS INITIAL.
-    MESSAGE 'No scenario selected.' TYPE 'E'.
+    go_log->add( iv_row = 0 iv_ty = 'E' iv_txt = 'No scenario selected.' ).
+    RETURN.
   ENDIF.
 
   " Up-front check for a clean message. CL_MD_BP_MAINTAIN performs its own
   " checks per company code and purchasing organisation as well.
   AUTHORITY-CHECK OBJECT 'F_LFA1_BUK' ID 'BUKRS' DUMMY ID 'ACTVT' FIELD '02'.
   IF sy-subrc <> 0.
-    MESSAGE 'No authorisation to change supplier master data (F_LFA1_BUK).' TYPE 'E'.
+    go_log->add( iv_row = 0 iv_ty = 'E'
+                 iv_txt = 'No authorisation to change supplier master data (F_LFA1_BUK).' ).
+    RETURN.
   ENDIF.
   IF p_test = abap_false.
     AUTHORITY-CHECK OBJECT 'F_LFA1_BUK' ID 'BUKRS' DUMMY ID 'ACTVT' FIELD '01'.
     IF sy-subrc <> 0.
-      MESSAGE 'No authorisation for a productive run - please use the test run.' TYPE 'E'.
+      go_log->add( iv_row = 0 iv_ty = 'E'
+                   iv_txt = 'No authorisation for a productive run - please use the test run.' ).
+      RETURN.
     ENDIF.
   ENDIF.
 
@@ -3828,15 +3831,14 @@ START-OF-SELECTION.
                   ev_moved   = gv_moved
                   ev_skipped = gv_skip ).
     CATCH lcx_upl INTO DATA(gx).
-      " MESSAGE takes a data object, not an expression.
-      DATA(gv_txt) = gx->get_text( ).
-      MESSAGE gv_txt TYPE 'E'.
+      go_log->add( iv_row = 0 iv_ty = 'E' iv_txt = gx->get_text( ) ).
+      RETURN.
   ENDTRY.
 
   IF lt_rows IS INITIAL.
-    DATA gv_none TYPE string.
-    gv_none = |Tab "{ gv_sheet }" holds no data rows below its heading|.
-    MESSAGE gv_none TYPE 'I'.
+    go_log->add( iv_row = 0 iv_ty = 'E'
+                 iv_txt = |Tab "{ gv_sheet }" holds no data rows below its heading| ).
+    RETURN.
   ENDIF.
 
   IF gv_skip > 0.

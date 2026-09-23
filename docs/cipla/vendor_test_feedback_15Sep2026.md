@@ -153,6 +153,51 @@ Two more things on this tab:
 * the same miss on the **purchasing** side was completely silent — the company
   code branch warned and the purchasing branch did not. It now warns too.
 
+## TDS upload, tab by tab — why "No data rows were found to process."
+
+**That message was never a diagnosis.** It is what `DISPLAY` fell back on when
+the log was empty, and the log was empty because the run had already stopped —
+the reader had refused the file and said why. What happened to the reason is
+this:
+
+1. `LCL_EXCEL=>READ` raised, with a message naming the tab or the workbook;
+2. the driver caught it and wrote it to the **status bar** with
+   `MESSAGE ... TYPE 'E'`, which ends `START-OF-SELECTION`;
+3. `END-OF-SELECTION` still runs. It calls `DISPLAY`, the log is empty, and
+   `DISPLAY` writes the status bar again — with the stock sentence.
+
+So the real reason was overwritten by the generic one **every time**, and the
+generic one is what was screenshotted and sent back. The same trap was in the
+customer upload program, where the summary line *"0 row(s) read, 0 processed"*
+took the status bar over instead.
+
+Every fatal stop now writes to the **log** and returns, so the reason appears in
+the list, where it stays on screen and can be read, copied and sent on. That
+covers the reader's refusals, both authorisation checks and the "no scenario"
+case. The stock sentence has been replaced by one that claims nothing it cannot
+know: *"The run ended without a single message — please send the file in."*
+
+The reader's own message for this case now says where it looked:
+
+> Tab "TDS upload" has 96 line(s); the headings were found on line 1 and the
+> data would start on line 3, but there is nothing there. Check that the data
+> sits under the headings on this tab.
+
+`tools/audit_fatal_message.py` holds the rule: no `MESSAGE` of type E, A or X
+between `START-OF-SELECTION` and `END-OF-SELECTION`, the log displayed exactly
+once, and no stock sentence that diagnoses a file which may never have been read.
+
+**What is still needed from Cipla:** the TDS file they actually uploaded. The
+handler and the column map are demonstrably right — against their own
+observations workbook the reader binds 64 of 64 columns and finds `LIFNR` in
+column 2 — so the fault is in the file or in which tab was picked, and the
+message that would have said which was the one being destroyed. On the next run
+it will say so itself.
+
+While on this tab: `LIF_H~FIRST_ROW` was declared, implemented nine times and
+called nowhere. It claimed data begins on row 2, which is not how the reader
+decides anything. Removed.
+
 ## Block / unblock, tab by tab — why the error came
 
 The failing row is row 2, vendor `362243` (business partner `362243`, vendor

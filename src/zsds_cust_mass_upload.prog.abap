@@ -975,7 +975,10 @@ CLASS lcl_log IMPLEMENTATION.
 
   METHOD display.
     IF mt_msg IS INITIAL.
-      MESSAGE 'Nothing was processed' TYPE 'I'.
+      " Every way a run can end writes something here first, so this says
+      " only what it knows rather than diagnosing a file it never read.
+      MESSAGE 'The run ended without a single message - please send the file in.'
+              TYPE 'S' DISPLAY LIKE 'W'.
       RETURN.
     ENDIF.
     DATA lo_alv TYPE REF TO cl_salv_table.
@@ -3818,15 +3821,18 @@ START-OF-SELECTION.
                   et_row     = gt_row
                   ev_sheet   = gv_sheet ).
     CATCH lcx_upl INTO DATA(gx).
-      " MESSAGE takes a data object, not an expression.
-      DATA(gv_txt) = gx->get_text( ).
-      MESSAGE gv_txt TYPE 'E'.
+      " The reason goes into the LOG, not into the status bar. An E message
+      " here ends this event block, END-OF-SELECTION still runs, and the
+      " summary line it writes takes the status bar over - so the reason the
+      " file could not be read was replaced by "0 row(s) read, 0 processed",
+      " every time. In the list it stays put and can be read and sent on.
+      go_log->add( iv_row = 0 iv_type = 'E' iv_text = gx->get_text( ) ).
+      RETURN.
   ENDTRY.
 
   IF gt_row IS INITIAL.
-    DATA gv_none TYPE string.
-    gv_none = |Tab "{ gv_sheet }" holds no data below its heading row|.
-    MESSAGE gv_none TYPE 'I'.
+    go_log->add( iv_row = 0 iv_type = 'E'
+                 iv_text = |Tab "{ gv_sheet }" holds no data below its heading row| ).
     RETURN.
   ENDIF.
 
