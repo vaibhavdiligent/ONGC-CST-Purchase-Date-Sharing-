@@ -1,0 +1,51 @@
+﻿23.09.2026                                         Dynamic List Display                                                                                                  1
+
+Joint Venture Trial Balance
+
+	2025
+	OVL
+	Index Based USD
+	01  To  04
+	87.73000
+	85.705
+
+		G/L account	G/L Description	Opening Balance ( MM1601 )	Debit Balance ( MM1601 )	Credit Balance ( MM1601 )	Closing Balance ( MM1601 )
+
+		100297	Adv Rec-Account Receivable-Others	                     0.00	                   0.00	                8,467.20	-8,467.20
+		100298	Pre-Paid Expenses	                     0.00	              72,707.72	               72,707.72	                     0.00
+		100701	Joint Venture Customer Control Account	                     0.00	             206,749.58	              207,805.84	-1,056.26
+		100702	Joint Venture Cash Call Request (Customer)	                     0.00	             294,174.00	                    0.00	               294,174.00
+		100703	Joint Venture Cash Call Offset (Customer)	                     0.00	             294,174.00	              294,174.00	                     0.00
+		10602	F/A-F/F & Other Eqpt-Office Equipment	                     0.00	               5,159.95	                5,159.95	                     0.00
+		160206	Res & Sur-Profit & Loss Account Balance	                     0.00	                   0.00	                    0.00	                     0.00
+		190101	Sundry Creditors-Indigenous	                     0.00	                   0.00	               60,840.00	-60,840.00
+		200355	Wages To Direct  / Doctors/ Deputated  Employees	                     0.00	              33,131.36	               33,131.36	                     0.00
+		200449	Exp OnTravelling & Trg/Others  Other Than Employee	                     0.00	                 813.94	                  813.94	                     0.00
+		200450	Registration - Visa / Passports	                     0.00	                  17.40	                   17.40	                     0.00
+		200820	Hiring & Leasing-Land Logistics Vehicle-Car & Jeep	                     0.00	              12,705.89	               12,705.89	                     0.00
+		201105	Light & Power - Variable Charges	                     0.00	               2,244.82	                2,244.82	                     0.00
+		201202	Rent For Office Building	                     0.00	              12,800.03	               12,800.03	                     0.00
+		201411	Donations	                     0.00	               1,292.40	                1,292.40	                     0.00
+		201418	News Paper & Periodicals	                     0.00	                  26.64	                   26.64	                     0.00
+		201419	Stationary & Printing	                     0.00	                 545.93	                  545.93	                     0.00
+		201421	Telephone Expenses - Office	                     0.00	                   0.72	                    0.72	                     0.00
+		201423	Telephone Expenses-Cellular Phones	                     0.00	                  86.19	                   86.19	                     0.00
+		201427	Bank Charges	                     0.00	                 293.11	                  293.11	                     0.00
+		201430	General Office Expenses (Includes Meeting Expense)	                     0.00	               6,559.63	                6,559.63	                     0.00
+		201438	Gift Expenses	                     0.00	               1,529.52	                1,529.52	                     0.00
+		201499	Miscellaneous Expenses	                     0.00	                  13.18	                   13.18	                     0.00
+		201701	Guarantee Fee-Loans	                     0.00	                  88.60	                   88.60	                     0.00
+		201807	Office Expenditure - Administration	                     0.00	              39,430.00	               39,430.00	                     0.00
+		201920	Cash Exc Loss/Gain on Business Transactions Others	                     0.00	              36,094.23	               36,094.23	                     0.00
+		209929	Transfer Direct Cost - In Expenses	                     0.00	              21,410.00	               21,410.00	                     0.00
+		320061	Furniture and Fittings - Shadow Accounts	                     0.00	               5,159.95	                5,159.95	                     0.00
+		321005	Adv recoverable in cash or in kind-Shadow Postings	                     0.00	               8,467.20	                    0.00	                 8,467.20
+		321901	Sundry Creditor for Supplies/Works-Shadow Accounts	                     0.00	              60,840.00	                    0.00	                60,840.00
+		91299	Cash   Contra Account	                     0.00	             133,575.68	              133,575.68	                     0.00
+		93237	UAB Bank -EP3 Myanmar	                     0.00	              54,082.07	               54,082.07	                     0.00
+		96214	Cash Account , Myanmar Kyat - MMK	                     0.00	              10,726.77	               10,726.77	                     0.00
+		96451	Bank Main A/C:United Amara Bank Ltd.,Myanmar(MMK)	                     0.00	              63,691.49	               63,691.49	                     0.00
+		96490	SBI A/C: MYANMAR EP-3 (14000003120001) USD	                     0.00	                  28.00	                   28.00	                     0.00
+		96493	SBI A/C: MYANMAR EP-3 (14000003120002) MMK	                     0.00	               2,220.49	                2,220.49	                     0.00
+
+	*			                     0.00	           1,380,840.49	            1,087,722.75	               293,117.74
