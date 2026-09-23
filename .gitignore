@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Scratch output of tools/audit_conversion_exits.py
+unknown_domains.txt
