@@ -139,26 +139,12 @@
             <para hAlign="left"/>
             <value><text> </text></value>
          </draw>
-         <draw name="d44048" w="180mm" h="12mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt" weight="normal"/>
-            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
-            <para hAlign="left"/>
-            <value><text>L1:  Customer-wise, grade-wise sales quantities, along with eligible PSD rates and amounts, have been verified and confirmed after considering customer waivers, shortfall waivers, sales return quantities, and Group/MLE details.</text></value>
-         </draw>
          <draw name="d52946" w="180mm" h="2mm">
             <ui><textEdit/></ui>
             <font typeface="Arial" size="10pt" weight="normal"/>
             <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
             <para hAlign="left"/>
             <value><text> </text></value>
-         </draw>
-         <draw name="d1842" w="180mm" h="12mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt" weight="normal"/>
-            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
-            <para hAlign="left"/>
-            <value><text>L2:  Customer-wise eligible PSD have been forwarded, and all supporting documents have been submitted to CPC.</text></value>
          </draw>
          <draw name="d52946" w="180mm" h="2mm">
             <ui><textEdit/></ui>
@@ -203,13 +189,6 @@
             <bind match="dataRef" ref="$.WA_NOTE.GRAND_TOTAL"/>
          </field>
          <draw name="dgap_tbl" w="180mm" h="3mm"><ui><textEdit/></ui><font typeface="Arial" size="10pt"/><margin topInset="1mm" bottomInset="0.5mm"/><para hAlign="left"/><value><text> </text></value></draw>
-         <draw name="d87154" w="180mm" h="12mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt" weight="normal"/>
-            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
-            <para hAlign="left"/>
-            <value><text>L3:  Rebate orders have been created.</text></value>
-         </draw>
          <field name="L3_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
             <font typeface="Arial" size="10pt"/>
@@ -234,13 +213,6 @@
             <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
             <para hAlign="left"/>
             <value><text> </text></value>
-         </draw>
-         <draw name="d47523" w="180mm" h="12mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt" weight="normal"/>
-            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
-            <para hAlign="left"/>
-            <value><text>L4:  Customer-wise eligible PSDs have been vetted.</text></value>
          </draw>
          <field name="L4_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
@@ -267,13 +239,6 @@
             <para hAlign="left"/>
             <value><text> </text></value>
          </draw>
-         <draw name="d67282" w="180mm" h="12mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt" weight="normal"/>
-            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
-            <para hAlign="left"/>
-            <value><text>L5:  The Discount proposal has been approved. CPC F&amp;A is requested to process the discount disbursement to the respective customers.</text></value>
-         </draw>
          <field name="L5_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
             <font typeface="Arial" size="10pt"/>
@@ -298,13 +263,6 @@
             <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
             <para hAlign="left"/>
             <value><text> </text></value>
-         </draw>
-         <draw name="d16230" w="180mm" h="12mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt" weight="normal"/>
-            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
-            <para hAlign="left"/>
-            <value><text>L6:  The discount has been disbursed to the respective customers. Workflow completed.</text></value>
          </draw>
          <field name="L6_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
