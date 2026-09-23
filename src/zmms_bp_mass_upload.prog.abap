@@ -193,18 +193,18 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 CLASS lcl_util DEFINITION FINAL.
   PUBLIC SECTION.
-    "! Write a component into DATA and raise the matching DATAX flag.
-    "! Empty value  -> ignored, so untouched template columns stay untouched.
-    "! gc_clear     -> clears the field (DATA = space, DATAX = 'X').
-    " The character length of a field, or 0 when it has none. DESCRIBE
-    " FIELD ... IN CHARACTER MODE only takes a character-like operand: a
-    " packed field such as KNVV-ANTLF, an integer, or a STRING terminates
-    " the program with OBJECTS_NOT_CHAR, and a dynamically assigned field
-    " symbol can be any of those.
+    "! The character length of a field, or 0 when it has none. DESCRIBE
+    "! FIELD ... IN CHARACTER MODE only takes a character-like operand: a
+    "! packed field such as KNVV-ANTLF, an integer, or a STRING terminates
+    "! the program with OBJECTS_NOT_CHAR, and a dynamically assigned field
+    "! symbol can be any of those.
     CLASS-METHODS char_len
       IMPORTING iv_any    TYPE any
       RETURNING VALUE(rv) TYPE i.
 
+    "! Write a component into DATA and raise the matching DATAX flag.
+    "! Empty value  -> ignored, so untouched template columns stay untouched.
+    "! gc_clear     -> clears the field (DATA = space, DATAX = 'X').
     CLASS-METHODS set
       IMPORTING iv_comp  TYPE string
                 iv_value TYPE string
@@ -1983,11 +1983,13 @@ ENDINTERFACE.
 
 CLASS lcl_base DEFINITION ABSTRACT.
   PUBLIC SECTION.
+    " KEY_COL is deliberately not in the ABSTRACT list: LCL_BASE implements
+    " it, returning column 2, and the handlers whose tab starts with the
+    " vendor rather than with a label column redefine it. It needs no
+    " declaration of its own here - INTERFACES has already declared it, and
+    " an interface method may carry the tilde only on a REDEFINITION.
     INTERFACES lif_h ABSTRACT METHODS sheet run.
     METHODS constructor IMPORTING io_log TYPE REF TO lcl_log.
-    "! Column 2 on every tab that carries LIFNR there; redefined where the
-    "! tab starts with the vendor instead of with a label column.
-    METHODS lif_h~key_col.
   PROTECTED SECTION.
     DATA: mo_log  TYPE REF TO lcl_log,
           mo_cfg  TYPE REF TO lcl_cfg,
@@ -2064,6 +2066,8 @@ CLASS lcl_base IMPLEMENTATION.
     mo_cvis = NEW lcl_cvis( io_log ).
   ENDMETHOD.
 
+  " Column 2 on every tab that carries LIFNR there; redefined where the tab
+  " starts with the vendor instead of with a label column.
   METHOD lif_h~key_col.
     rv = 2.
   ENDMETHOD.
