@@ -153,6 +153,71 @@ Two more things on this tab:
 * the same miss on the **purchasing** side was completely silent — the company
   code branch warned and the purchasing branch did not. It now warns too.
 
+## TAN details — "rows sent" said nothing, and it was not only this tab
+
+The TAN run ended with
+
+> 2 TAN exemption rows sent to J_1ITAN_EXEM_SAVE
+
+which was true and of no use: **sent** was all the program knew, because it had
+not looked. `J_1ITAN_EXEM_SAVE` is an update module — the call only registers
+the work and nothing has happened when it returns. The `COMMIT WORK AND WAIT`
+that follows is what runs it, and `SY-SUBRC` after that commit is the answer:
+non-zero means the update was terminated and nothing was saved. That `SY-SUBRC`
+was never read, so the same line appeared whether the rows were stored or lost.
+
+Asking the same question of every other tab found the identical hole in four
+more places. `BAPI_TRANSACTION_COMMIT` reports a failed update in its `RETURN`
+parameter, and `WAIT = X` is what makes that parameter meaningful — the call
+comes back only once the update has run. `RETURN` was being thrown away
+everywhere it was called:
+
+| Where | Said | Had checked |
+|---|---|---|
+| Vendor / BP post (R1, R2, R5–R9) | *Posted successfully* | nothing |
+| Bank key creation (R4) | *Bank created / Bank changed* | nothing |
+| TAN details (R3) | *rows sent to J_1ITAN_EXEM_SAVE* | nothing |
+| Customer post (customer program) | *Customer posted* | nothing |
+| Credit segment (customer program) | *Credit data updated* | nothing |
+| Licence record (customer program) | *Licence record updated* | the `MODIFY`, but not the commit |
+
+So a row whose update terminated in the update task was still reported as
+posted. Every one of them now reads its verdict before it says anything:
+
+* `LCL_CVIS=>COMMIT` commits and reports — on a failure the row gets the API's
+  own message plus *"The update did not go through — nothing was saved for this
+  row"*, and **no** success line;
+* the TAN save reads `SY-SUBRC` and says either *"2 TAN exemption row(s) saved"*
+  or *"The update that saves the TAN exemptions was terminated (COMMIT WORK
+  returned 4) — nothing was saved for this row. Look for the short dump under
+  SM13."*
+
+The TAN outcome is also reported **per row** now, against the vendor and the
+Excel row the user is looking at, instead of as one line against row 0. The test
+run says *"Test run OK — 2 TAN exemption row(s) would be saved"* on the same row,
+so a test and a productive run read the same way.
+
+`tools/audit_commit_verdict.py` holds the rule: every
+`BAPI_TRANSACTION_COMMIT` passes `WAIT = ABAP_TRUE` and reads `RETURN`, every
+`COMMIT WORK AND WAIT` reads `SY-SUBRC`, and no message tells the user that work
+was "sent". It finds all six of the holes above in the code as it was.
+
+### How to read a run, after this
+
+Every row now ends in exactly one of three states, and all three are visible in
+the list:
+
+* a green line naming what was done — *Posted successfully*, *Bank created*,
+  *2 TAN exemption row(s) saved*, *Customer posted*;
+* a green *Test run OK — would …* line, in a test run, saying what would have
+  happened;
+* one or more red lines saying what stopped it, and **no** green line for that
+  row.
+
+The list header counts them: `Rows OK: n   Rows with errors: n`. A row with no
+line at all is no longer possible — the run says so explicitly if nothing was
+processed, and every way of stopping early now writes its reason into the list.
+
 ## TDS upload, tab by tab — why "No data rows were found to process."
 
 **That message was never a diagnosis.** It is what `DISPLAY` fell back on when

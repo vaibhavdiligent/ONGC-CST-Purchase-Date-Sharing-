@@ -2235,9 +2235,21 @@ CLASS lcl_cvis IMPLEMENTATION.
                    iv_text = 'Test run OK - customer would be posted' ).
     ELSE.
       " BAPI_TRANSACTION_COMMIT, not a bare COMMIT WORK: the business
-      " partner hangs its own end-of-LUW processing off it.
-      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+      " partner hangs its own end-of-LUW processing off it. Its RETURN is
+      " read, because it is the only thing that says whether the update
+      " actually ran - without it "Customer posted" was a claim, not a fact.
+      DATA ls_cret TYPE bapiret2.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING wait   = abap_true
+        IMPORTING return = ls_cret.
       reset_bp( ).
+      IF ls_cret-type CA 'EAX'.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                     iv_text = |The update did not go through - nothing was saved | &&
+                               |for this row: { ls_cret-message }| ).
+        rv = abap_false.
+        RETURN.
+      ENDIF.
       mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                    iv_text = 'Customer posted' ).
     ENDIF.
@@ -2376,7 +2388,18 @@ CLASS lcl_lic IMPLEMENTATION.
     " Authorised direct write - see the header comment of this report.
     MODIFY zsd_license_chk FROM ls_db.
     IF sy-subrc = 0.
+      " The MODIFY succeeding is not the same as the record being there: the
+      " COMMIT is what makes it so, and its SY-SUBRC is what says the work
+      " went through.
       COMMIT WORK AND WAIT.
+      DATA(lv_csub) = sy-subrc.
+      IF lv_csub <> 0.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                     iv_struc = 'ZSD_LICENSE_CHK'
+                     iv_text = |The update was terminated (COMMIT WORK returned { lv_csub }) | &&
+                               |- the licence record was not written| ).
+        RETURN.
+      ENDIF.
       mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                    iv_struc = 'ZSD_LICENSE_CHK'
                    iv_text = COND string(
@@ -2495,11 +2518,21 @@ CLASS lcl_credit IMPLEMENTATION.
           mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
                        iv_text = |Test run OK - segment { iv_sgmnt } would be updated| ).
         ELSE.
-          " SAVE_ALL alone does not commit - the BAPI commit is required.
-          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+          " SAVE_ALL alone does not commit - the BAPI commit is required, and
+          " its RETURN is what says whether the update ran.
+          DATA ls_uret TYPE bapiret2.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+            EXPORTING wait   = abap_true
+            IMPORTING return = ls_uret.
           reset_bp( ).
-          mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
-                       iv_text = |Credit data updated for segment { iv_sgmnt }| ).
+          IF ls_uret-type CA 'EAX'.
+            mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
+                         iv_text = |Segment { iv_sgmnt }: the update did not go through - | &&
+                                   |nothing was saved: { ls_uret-message }| ).
+          ELSE.
+            mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S'
+                         iv_text = |Credit data updated for segment { iv_sgmnt }| ).
+          ENDIF.
         ENDIF.
 
       CATCH cx_root INTO DATA(lx).

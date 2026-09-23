@@ -1799,6 +1799,19 @@ CLASS lcl_cvis DEFINITION FINAL.
                 iv_k3   TYPE clike OPTIONAL
                 is_data TYPE cvis_ei_extern
       RETURNING VALUE(rv_ok) TYPE abap_bool.
+
+    "! Commits, and says whether the update actually went through.
+    "! BAPI_TRANSACTION_COMMIT reports a failed update in RETURN, and that
+    "! was being thrown away everywhere it was called - so a row whose
+    "! update terminated was still logged "Posted successfully". WAIT = X is
+    "! what makes RETURN worth reading: the call comes back only once the
+    "! update task has run.
+    METHODS commit
+      IMPORTING iv_row    TYPE i
+                iv_k1     TYPE clike OPTIONAL
+                iv_k2     TYPE clike OPTIONAL
+                iv_k3     TYPE clike OPTIONAL
+      RETURNING VALUE(rv) TYPE abap_bool.
   PRIVATE SECTION.
     " The business partner keeps a global memory for the logical unit of work
     " that has just been closed - including the save mode. A COMMIT does not
@@ -1821,6 +1834,21 @@ CLASS lcl_cvis IMPLEMENTATION.
       CATCH cx_sy_dyn_call_illegal_func.
         RETURN.
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD commit.
+    DATA ls_ret TYPE bapiret2.
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING wait   = abap_true
+      IMPORTING return = ls_ret.
+    rv = xsdbool( ls_ret-type NA 'EAX' ).
+    IF rv = abap_false.
+      mo_log->add_ret( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
+                       is_ret = ls_ret ).
+      mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
+                   iv_ty = 'E'
+                   iv_txt = 'The update did not go through - nothing was saved for this row' ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD post.
@@ -1905,9 +1933,15 @@ CLASS lcl_cvis IMPLEMENTATION.
                    iv_ty = 'S' iv_txt = 'Test run OK - would post' ).
     ELSE.
       " BAPI_TRANSACTION_COMMIT, not a bare COMMIT WORK: the business partner
-      " hangs its own end-of-LUW processing off it.
-      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+      " hangs its own end-of-LUW processing off it. Its verdict decides what
+      " the row is told - "Posted successfully" is only said once the update
+      " has run and reported nothing against it.
+      DATA(lv_done) = commit( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3 ).
       reset_bp( ).
+      IF lv_done = abap_false.
+        rv_ok = abap_false.
+        RETURN.
+      ENDIF.
       mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
                    iv_ty = 'S' iv_txt = 'Posted successfully' ).
     ENDIF.
@@ -2783,6 +2817,16 @@ CLASS lcl_h_tan IMPLEMENTATION.
   METHOD lif_h~run.
     DATA lt_exem TYPE STANDARD TABLE OF fiwtin_tan_exem.
 
+    " Where each exemption line came from, so that the outcome of the one
+    " save at the end can be told against the row the user is looking at.
+    TYPES: BEGIN OF ty_from,
+             row   TYPE i,
+             lifnr TYPE lifnr,
+             bukrs TYPE bukrs,
+             n     TYPE i,
+           END OF ty_from.
+    DATA lt_from TYPE SORTED TABLE OF ty_from WITH UNIQUE KEY row.
+
     LOOP AT it_row INTO DATA(ls_row).
       IF lcl_util=>skip_row( ls_row ) = abap_true.
         CONTINUE.
@@ -2861,6 +2905,16 @@ CLASS lcl_h_tan IMPLEMENTATION.
         ls_ex-waers            = to_upper( lcl_util=>cell( is_row = ls_row iv_col = 20 + lv_o ) ).
 
         APPEND ls_ex TO lt_exem.
+        " Which row each exemption line came from, so the outcome of the
+        " save can be reported against the row the user can see, instead of
+        " as one line against row 0.
+        READ TABLE lt_from ASSIGNING FIELD-SYMBOL(<ls_fr>) WITH KEY row = ls_row-row.
+        IF sy-subrc = 0.
+          <ls_fr>-n = <ls_fr>-n + 1.
+        ELSE.
+          INSERT VALUE ty_from( row = ls_row-row lifnr = lv_lifnr
+                                bukrs = lv_bukrs n = 1 ) INTO TABLE lt_from.
+        ENDIF.
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k2 = lv_bukrs iv_ty = 'S'
                      iv_txt = |Block { sy-index } ({ lv_wt }/{ lv_cd }, from { lv_df DATE = USER }) | &&
                               |{ COND string( WHEN p_test = abap_true THEN 'validated - would be saved'
@@ -2877,15 +2931,35 @@ CLASS lcl_h_tan IMPLEMENTATION.
     ENDIF.
 
     IF p_test = abap_true.
-      mo_log->add( iv_row = 0 iv_ty = 'S'
-                   iv_txt = |Test run - { lines( lt_exem ) } TAN exemption rows validated, nothing saved| ).
-    ELSE.
-      CALL FUNCTION 'J_1ITAN_EXEM_SAVE' IN UPDATE TASK
-        TABLES it_tan_exem = lt_exem.
-      COMMIT WORK AND WAIT.
-      mo_log->add( iv_row = 0 iv_ty = 'S'
-                   iv_txt = |{ lines( lt_exem ) } TAN exemption rows sent to J_1ITAN_EXEM_SAVE| ).
+      LOOP AT lt_from INTO DATA(ls_fr).
+        mo_log->add( iv_row = ls_fr-row iv_k1 = ls_fr-lifnr iv_k2 = ls_fr-bukrs iv_ty = 'S'
+                     iv_txt = |Test run OK - { ls_fr-n } TAN exemption row(s) would be saved| ).
+      ENDLOOP.
+      RETURN.
     ENDIF.
+
+    " J_1ITAN_EXEM_SAVE is an update module: the call only registers the
+    " work, and nothing has happened when it returns. The COMMIT is what
+    " runs it, AND WAIT is what makes the program wait for the answer, and
+    " SY-SUBRC is that answer - non-zero means the update was terminated and
+    " nothing was saved. It was not being read, so the run said "rows sent
+    " to J_1ITAN_EXEM_SAVE" either way: true, and no use to anyone.
+    CALL FUNCTION 'J_1ITAN_EXEM_SAVE' IN UPDATE TASK
+      TABLES it_tan_exem = lt_exem.
+    COMMIT WORK AND WAIT.
+    DATA(lv_sub) = sy-subrc.
+
+    LOOP AT lt_from INTO DATA(ls_f2).
+      IF lv_sub = 0.
+        mo_log->add( iv_row = ls_f2-row iv_k1 = ls_f2-lifnr iv_k2 = ls_f2-bukrs iv_ty = 'S'
+                     iv_txt = |{ ls_f2-n } TAN exemption row(s) saved| ).
+      ELSE.
+        mo_log->add( iv_row = ls_f2-row iv_k1 = ls_f2-lifnr iv_k2 = ls_f2-bukrs iv_ty = 'E'
+                     iv_txt = |The update that saves the TAN exemptions was terminated | &&
+                              |(COMMIT WORK returned { lv_sub }) - nothing was saved for this | &&
+                              |row. Look for the short dump under SM13.| ).
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
 ENDCLASS.
@@ -2975,8 +3049,7 @@ CLASS lcl_h_bkey IMPLEMENTATION.
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_key iv_ty = 'S'
                      iv_txt = COND string( WHEN lv_exists = abap_true THEN 'Test run OK - would change the bank'
                                                                  ELSE 'Test run OK - would create the bank' ) ).
-      ELSE.
-        CALL FUNCTION 'BAPI_TRANSACTION_COMMIT' EXPORTING wait = abap_true.
+      ELSEIF mo_cvis->commit( iv_row = ls_row-row iv_k1 = lv_key ) = abap_true.
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_key iv_ty = 'S'
                      iv_txt = COND string( WHEN lv_exists = abap_true THEN 'Bank changed' ELSE 'Bank created' ) ).
       ENDIF.
