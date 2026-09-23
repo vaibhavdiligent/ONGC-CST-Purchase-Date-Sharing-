@@ -153,6 +153,73 @@ Two more things on this tab:
 * the same miss on the **purchasing** side was completely silent — the company
   code branch warned and the purchasing branch did not. It now warns too.
 
+## Partner functions — the green line, and why the partner was not added
+
+### 1. The green line was never a success
+
+    2  0700000800  1000 1000  A  F2 165  Vendor 0100098685 has not been created ...
+    3  0100143049             S          100168036 is business partner 100168036 ...
+    3  0100143049  1000 1000  A  F2 165  Vendor 0100098685 has not been created ...
+
+The green line on row 3 is the program saying **which vendor a business partner
+number resolved to** — a remark made on the way, not an outcome. It was logged as
+message type `S`, and the icon rule gave a green light to everything that was not
+an error or a warning, so a row that failed showed green and red together and
+read as though half of it had worked.
+
+Three remarks wore a green light: the business-partner resolution, *"No country
+in this row — the postal code is checked against IN"*, and *"1 existing bank
+account(s) retained"* — which is why the Bank Details run showed a green line
+that was not a posting either.
+
+Now the green light belongs to message type `S` alone, `S` is used for an outcome
+alone, and every remark carries the information icon instead. **A row that failed
+shows no green light at all.**
+
+The row counts follow the same logic. They were two-way — a row was "OK" because
+nothing had gone wrong — so a row passed over for want of a partner function or a
+block indicator was counted among the successes. Three buckets now:
+
+> PRODUCTIVE RUN    Rows OK: 2    Rows with errors: 3    Rows skipped: 1
+
+A row is **OK** because something was done to it and said so; **error** because a
+red line says what stopped it; **skipped** because neither. Lines written against
+row 0 are about the run and are no longer counted as rows at all.
+
+### 2. Why the partner was not added
+
+All five rows asked for partner function `ZP` with partner `100098685` in
+purchasing organisation 1000, and all five came back with
+
+> `F2 165` — Vendor 0100098685 has not been created for purchasing organization 1000
+
+This is **master data, not the program**. The partner exists as a supplier — the
+program's own *"Partner vendor does not exist"* check passed — but it has **no
+purchasing organisation 1000 view** (`LFM1`). `WYT3` cannot hold a partner the
+purchasing organisation does not know, so every row was refused. The message names
+the *partner*, which is why it reads as though the row's own vendor were at fault.
+
+Two things follow:
+
+* **To make these rows post**, extend vendor `100098685` to purchasing
+  organisation 1000 — the *Vendor extension* tab does exactly that — and run the
+  partner function file again. Nothing in the file needs changing.
+* The program now checks `LFM1` for the partner **before** calling the API, so the
+  row says what to do instead of relaying `F2 165`:
+
+  > Partner 0100098685 (column 17) is not extended to purchasing organisation
+  > 1000 — extend it there first (tab "Vendor extension")
+
+`tools/audit_status_icons.py` holds the icon and counting rules.
+
+**One to confirm with Cipla:** partner functions are validated against `TPAR`,
+which lists the functions of every partner type — customer, vendor, personnel,
+contact. A customer-side function typed into the vendor tab would be accepted
+here and refused by the API with an obscure message. Restricting the check to
+vendor functions needs the `TPAR` field that carries the partner number type,
+which is not in the dictionary extract we hold — so it has not been changed on a
+guess.
+
 ## TAN details — "rows sent" said nothing, and it was not only this tab
 
 The TAN run ended with

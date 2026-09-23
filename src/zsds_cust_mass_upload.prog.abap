@@ -906,8 +906,9 @@ CLASS lcl_log DEFINITION FINAL.
       RETURNING VALUE(rv) TYPE abap_bool.
 
     METHODS counts
-      EXPORTING ev_ok  TYPE i
-                ev_err TYPE i.
+      EXPORTING ev_ok   TYPE i
+                ev_err  TYPE i
+                ev_skip TYPE i.
 
     METHODS display.
   PRIVATE SECTION.
@@ -918,9 +919,14 @@ CLASS lcl_log IMPLEMENTATION.
 
   METHOD add.
     APPEND VALUE ty_msg(
+      " A green light is an OUTCOME and nothing else. The lines that say what
+      " the program noticed on the way used to wear one too, so a row that
+      " failed showed green and red together and read as though half of it
+      " had worked.
       icon    = COND #( WHEN iv_type = 'E' OR iv_type = 'A' THEN icon_red_light
                         WHEN iv_type = 'W'                  THEN icon_yellow_light
-                        ELSE                                     icon_green_light )
+                        WHEN iv_type = 'S'                  THEN icon_green_light
+                        ELSE                                     icon_information )
       xlsrow  = iv_row
       kunnr   = iv_kunnr
       bukrs   = iv_bukrs
@@ -961,16 +967,29 @@ CLASS lcl_log IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD counts.
+    " Three outcomes, not two. A row is OK because something was DONE to it
+    " and said so, not merely because nothing went wrong, and a line written
+    " against row 0 is about the run rather than about a row.
     DATA lt_bad TYPE SORTED TABLE OF i WITH UNIQUE KEY table_line.
+    DATA lt_win TYPE SORTED TABLE OF i WITH UNIQUE KEY table_line.
     DATA lt_all TYPE SORTED TABLE OF i WITH UNIQUE KEY table_line.
     LOOP AT mt_msg INTO DATA(ls).
+      IF ls-xlsrow <= 0.
+        CONTINUE.
+      ENDIF.
       INSERT ls-xlsrow INTO TABLE lt_all.
       IF ls-msgty = 'E' OR ls-msgty = 'A'.
         INSERT ls-xlsrow INTO TABLE lt_bad.
+      ELSEIF ls-msgty = 'S'.
+        INSERT ls-xlsrow INTO TABLE lt_win.
       ENDIF.
     ENDLOOP.
     ev_err = lines( lt_bad ).
-    ev_ok  = lines( lt_all ) - ev_err.
+    LOOP AT lt_bad INTO DATA(lv_b).
+      DELETE lt_win WHERE table_line = lv_b.
+    ENDLOOP.
+    ev_ok   = lines( lt_win ).
+    ev_skip = lines( lt_all ) - ev_err - ev_ok.
   ENDMETHOD.
 
   METHOD display.
@@ -2923,7 +2942,7 @@ CLASS lcl_engine IMPLEMENTATION.
       RETURN.                            " a customer number, or neither
     ENDIF.
 
-    mo_log->add( iv_row = iv_row iv_kunnr = lv_kunnr iv_type = 'S'
+    mo_log->add( iv_row = iv_row iv_kunnr = lv_kunnr iv_type = 'I'
                  iv_text = |{ rv ALPHA = OUT } is business partner | &&
                            |{ lv_bp ALPHA = OUT } - customer | &&
                            |{ lv_kunnr ALPHA = OUT } is used| ).
@@ -3245,7 +3264,7 @@ CLASS lcl_engine IMPLEMENTATION.
       ENDIF.
       ls_cust-central_data-address-postal-data-country  = lv_land.
       ls_cust-central_data-address-postal-datax-country = abap_true.
-      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'S'
+      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'I'
                    iv_struc = 'ADDRESS' iv_fld = 'COUNTRY'
                    iv_text = |No country in this row - the postal code is checked against { lv_land }| ).
     ENDIF.
@@ -3874,10 +3893,12 @@ START-OF-SELECTION.
 
 END-OF-SELECTION.
 
-  DATA gv_ok  TYPE i.
-  DATA gv_err TYPE i.
-  go_log->counts( IMPORTING ev_ok = gv_ok ev_err = gv_err ).
+  DATA gv_ok   TYPE i.
+  DATA gv_err  TYPE i.
+  DATA gv_skip TYPE i.
+  go_log->counts( IMPORTING ev_ok = gv_ok ev_err = gv_err ev_skip = gv_skip ).
   DATA gv_sum TYPE string.
-  gv_sum = |{ lines( gt_row ) } row(s) read, { gv_ok } processed, { gv_err } with errors|.
+  gv_sum = |{ lines( gt_row ) } row(s) read, { gv_ok } processed, { gv_err } with errors| &&
+           COND string( WHEN gv_skip > 0 THEN |, { gv_skip } skipped| ELSE `` ).
   MESSAGE gv_sum TYPE 'S'.
   go_log->display( ).

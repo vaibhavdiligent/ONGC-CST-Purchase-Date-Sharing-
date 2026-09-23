@@ -1372,9 +1372,16 @@ CLASS lcl_log IMPLEMENTATION.
 
   METHOD add.
     APPEND VALUE #(
+      " A green light is an OUTCOME and nothing else. The lines that say what
+      " the program noticed on the way - which vendor a business partner
+      " number resolved to, which country a postal code was checked against,
+      " how many bank accounts were kept - used to wear one too, so a row
+      " that failed showed green and red together and read as though half of
+      " it had worked.
       icon    = COND #( WHEN iv_ty CA 'EAX' THEN icon_red_light
                         WHEN iv_ty = 'W'    THEN icon_yellow_light
-                        ELSE                     icon_green_light )
+                        WHEN iv_ty = 'S'    THEN icon_green_light
+                        ELSE                     icon_information )
       xlsrow  = iv_row
       key1    = iv_k1
       key2    = iv_k2
@@ -1427,17 +1434,27 @@ CLASS lcl_log IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " count distinct rows
+    " Count the rows of the file. A line written against row 0 is about the
+    " run, not about a row, so it is left out - it used to be counted as a
+    " row that had gone well.
     DATA lt_r TYPE SORTED TABLE OF i WITH UNIQUE KEY table_line.
     LOOP AT mt_msg INTO DATA(ls).
-      INSERT ls-xlsrow INTO TABLE lt_r.
+      IF ls-xlsrow > 0.
+        INSERT ls-xlsrow INTO TABLE lt_r.
+      ENDIF.
     ENDLOOP.
-    DATA: lv_ok TYPE i, lv_er TYPE i.
+    " Three outcomes, not two. A row is OK because something was DONE to it
+    " and said so, not merely because nothing went wrong: a row passed over
+    " for want of a partner function, or of a block indicator, used to be
+    " counted among the successes.
+    DATA: lv_ok TYPE i, lv_er TYPE i, lv_sk TYPE i.
     LOOP AT lt_r INTO DATA(lv_rr).
       IF has_error( lv_rr ) = abap_true.
         lv_er = lv_er + 1.
-      ELSE.
+      ELSEIF line_exists( mt_msg[ xlsrow = lv_rr msgty = 'S' ] ).
         lv_ok = lv_ok + 1.
+      ELSE.
+        lv_sk = lv_sk + 1.
       ENDIF.
     ENDLOOP.
 
@@ -1467,7 +1484,8 @@ CLASS lcl_log IMPLEMENTATION.
         DATA(lv_hdr) = |{ COND string( WHEN p_test = abap_true
                                        THEN 'TEST RUN - nothing was posted'
                                        ELSE 'PRODUCTIVE RUN' ) }| &&
-                       |    Rows OK: { lv_ok }    Rows with errors: { lv_er }|.
+                       |    Rows OK: { lv_ok }    Rows with errors: { lv_er }| &&
+                       COND string( WHEN lv_sk > 0 THEN |    Rows skipped: { lv_sk }| ELSE `` ).
         lo_alv->get_display_settings( )->set_list_header( CONV lvc_title( lv_hdr ) ).
         lo_alv->display( ).
 
@@ -2092,7 +2110,7 @@ CLASS lcl_base IMPLEMENTATION.
       RETURN.                            " a vendor number, or neither
     ENDIF.
 
-    mo_log->add( iv_row = is_row-row iv_k1 = lv_lifnr iv_ty = 'S'
+    mo_log->add( iv_row = is_row-row iv_k1 = lv_lifnr iv_ty = 'I'
                  iv_txt = |{ rv ALPHA = OUT } is business partner | &&
                           |{ lv_bp ALPHA = OUT } - vendor | &&
                           |{ lv_lifnr ALPHA = OUT } is used| ).
@@ -2321,7 +2339,7 @@ CLASS lcl_h_create IMPLEMENTATION.
       ELSE.
         ls_adr-data-postal-data-country  = lv_land.
         ls_adr-data-postal-datax-country = abap_true.
-        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'S'
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'I'
                      iv_st = 'ADDRESS' iv_fl = 'COUNTRY'
                      iv_txt = |No country in this row - the postal code is checked against { lv_land }| ).
       ENDIF.
@@ -3144,7 +3162,7 @@ CLASS lcl_h_bank IMPLEMENTATION.
     DATA(lv_before) = lines( lt_bank ).
     merge_banks( EXPORTING iv_lifnr = iv_lifnr CHANGING ct_bank = lt_bank ).
     IF lines( lt_bank ) > lv_before.
-      mo_log->add( iv_row = lv_row iv_k1 = iv_lifnr iv_ty = 'S'
+      mo_log->add( iv_row = lv_row iv_k1 = iv_lifnr iv_ty = 'I'
                    iv_txt = |{ lines( lt_bank ) - lv_before } existing bank account(s) retained| ).
     ENDIF.
 
