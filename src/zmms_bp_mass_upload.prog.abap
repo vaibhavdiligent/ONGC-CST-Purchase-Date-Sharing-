@@ -222,6 +222,14 @@ CLASS lcl_util DEFINITION FINAL.
                                     iv_len    TYPE i DEFAULT 0
                           RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS lifnr   IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE lifnr.
+    "! A language. The templates carry the two letter ISO code - EN, ES, NL -
+    "! and SAP's own language key is one character, which is NOT the first
+    "! letter of the ISO code: Spanish is ES but S, Swedish SV but V, Danish
+    "! DA but K. Cutting the code to one character therefore files a Spanish
+    "! address under English and a Swedish one under Spanish, without a word.
+    "! Domain SPRAS carries conversion exit ISOLA for exactly this.
+    "! An unknown code comes back empty so the caller can say so.
+    CLASS-METHODS lang    IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE spras.
     CLASS-METHODS gl      IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE saknr.
     "! A one character flag written as a word. Excel turns a tick into TRUE
     "! and some files carry YES or 1, all of which would land in a CHAR 1
@@ -429,6 +437,31 @@ CLASS lcl_util IMPLEMENTATION.
     ENDTRY.
     IF lv_neg = abap_true.
       rv = rv * -1.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD lang.
+    CLEAR rv.
+    DATA(lv) = to_upper( condense( iv_in ) ).
+    IF lv IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " One character is already the internal key - a file downloaded from
+    " this system carries it that way.
+    IF strlen( lv ) = 1.
+      rv = lv.
+      RETURN.
+    ENDIF.
+
+    DATA lv_out TYPE spras.
+    CALL FUNCTION 'CONVERSION_EXIT_ISOLA_INPUT'
+      EXPORTING  input            = lv
+      IMPORTING  output           = lv_out
+      EXCEPTIONS unknown_language = 1
+                 OTHERS           = 2.
+    IF sy-subrc = 0.
+      rv = lv_out.
     ENDIF.
   ENDMETHOD.
 
@@ -1793,6 +1826,30 @@ CLASS lcl_base DEFINITION ABSTRACT.
                 iv_col    TYPE i
       RETURNING VALUE(rv) TYPE lifnr.
 
+    "! An amount or a rate. TO_DEC hands back zero for a cell it cannot read
+    "! - "1,00,000" written the Indian way, a stray "NA", a number Excel
+    "! exported with a currency sign - and a rate read as zero is not a blank
+    "! rate, it is a wrong posting. A cell that held something and converted
+    "! to nothing is said so here rather than passed on in silence.
+    METHODS dec_cell
+      IMPORTING is_row    TYPE ty_row
+                iv_col    TYPE i
+                iv_what   TYPE clike
+                iv_k1     TYPE clike OPTIONAL
+                iv_k2     TYPE clike OPTIONAL
+      RETURNING VALUE(rv) TYPE ty_dec.
+
+    "! The same for a date. TO_DATE gives back an empty date both for a cell
+    "! that is empty and for one it cannot read, and the two mean very
+    "! different things to a validity period.
+    METHODS date_cell
+      IMPORTING is_row    TYPE ty_row
+                iv_col    TYPE i
+                iv_what   TYPE clike
+                iv_k1     TYPE clike OPTIONAL
+                iv_k2     TYPE clike OPTIONAL
+      RETURNING VALUE(rv) TYPE d.
+
     METHODS header
       IMPORTING iv_lifnr TYPE lifnr
                 iv_task  TYPE cmd_ei_object_task
@@ -1834,6 +1891,33 @@ CLASS lcl_base IMPLEMENTATION.
 
   METHOD lif_h~key_col.
     rv = 2.
+  ENDMETHOD.
+
+  METHOD dec_cell.
+    DATA(lv_txt) = lcl_util=>cell( is_row = is_row iv_col = iv_col ).
+    IF lv_txt IS INITIAL.
+      RETURN.
+    ENDIF.
+    rv = lcl_util=>to_dec( lv_txt ).
+    IF rv IS INITIAL AND lv_txt CN ' 0.,-'.
+      " Something was written there, and it was not a way of writing zero.
+      mo_log->add( iv_row = is_row-row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_ty = 'W'
+                   iv_txt = |"{ lv_txt }" in column { iv_col } is not a number - | &&
+                            |{ iv_what } is sent as zero| ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD date_cell.
+    DATA(lv_txt) = lcl_util=>cell( is_row = is_row iv_col = iv_col ).
+    IF lv_txt IS INITIAL.
+      RETURN.
+    ENDIF.
+    rv = lcl_util=>to_date( lv_txt ).
+    IF rv IS INITIAL.
+      mo_log->add( iv_row = is_row-row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_ty = 'W'
+                   iv_txt = |"{ lv_txt }" in column { iv_col } is not a date - | &&
+                            |{ iv_what } is sent empty| ).
+    ENDIF.
   ENDMETHOD.
 
   METHOD key_lifnr.
@@ -2036,13 +2120,34 @@ CLASS lcl_h_create IMPLEMENTATION.
     DATA(lt_post) = VALUE string_table(
       ( |STR_SUPPL1;13| ) ( |STR_SUPPL2;14| ) ( |STREET;15| ) ( |STR_SUPPL3;16| )
       ( |DISTRICT;17| )   ( |POSTL_COD1;18| ) ( |CITY;19| )   ( |COUNTRY;20| )
-      ( |REGION;21| )     ( |LANGU;22| ) ).
+      ( |REGION;21| ) ).
     LOOP AT lt_post INTO DATA(lv_pp).
       SPLIT lv_pp AT ';' INTO DATA(lv_pf) DATA(lv_pc).
       lcl_util=>set( EXPORTING iv_comp = lv_pf iv_value = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_pc ) )
                      CHANGING  cs_data  = ls_adr-data-postal-data
                                cs_datax = ls_adr-data-postal-datax ).
     ENDLOOP.
+
+    " The language (column 22) is set on its own. LANGU is one character and
+    " holds SAP's own key; the templates carry the two letter ISO code. Sent
+    " through the generic path the code would be read as a flag written out
+    " in full - NO, the code for Norwegian, clears the field and JA, the code
+    " for Japanese, sets it to X - and whatever survived that would be cut to
+    " its first letter, which files ES under English and SV under Spanish.
+    DATA(lv_lgin) = lcl_util=>cell( is_row = is_row iv_col = 22 ).
+    IF lv_lgin IS NOT INITIAL.
+      DATA(lv_spras) = lcl_util=>lang( lv_lgin ).
+      IF lv_spras IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'W'
+                     iv_st = 'ADDRESS' iv_fl = 'LANGU'
+                     iv_txt = |"{ lv_lgin }" is not a language key (column 22) - | &&
+                              |the address keeps the language it would get by default| ).
+      ELSE.
+        lcl_util=>set( EXPORTING iv_comp = 'LANGU' iv_value = CONV string( lv_spras )
+                       CHANGING  cs_data  = ls_adr-data-postal-data
+                                 cs_datax = ls_adr-data-postal-datax ).
+      ENDIF.
+    ENDIF.
 
     " India's postal codes are six digits, Spain's five, and SAP tests the
     " one against the other. A row that gives a postal code but leaves the
@@ -2467,15 +2572,28 @@ CLASS lcl_h_tds IMPLEMENTATION.
         lcl_util=>set( EXPORTING iv_comp = 'WT_EXNR'
                        iv_value = lcl_util=>cell( is_row = ls_row iv_col = lc_exnr + lv_o )
                        CHANGING cs_data = ls_wt-data cs_datax = ls_wt-datax ).
-        lcl_util=>set( EXPORTING iv_comp = 'WT_EXRT'
-                       iv_value = lcl_util=>cell( is_row = ls_row iv_col = lc_exrt + lv_o )
-                       CHANGING cs_data = ls_wt-data cs_datax = ls_wt-datax ).
+        " WT_EXRT is a packed field, the one field on this tab the generic
+        " setter has to convert. Its conversion guard is silent, so the rate
+        " is read here instead and a cell that is not a number is reported.
+        DATA(lv_rtxt) = lcl_util=>cell( is_row = ls_row iv_col = lc_exrt + lv_o ).
+        IF lv_rtxt IS NOT INITIAL.
+          DATA(lv_rate) = dec_cell( is_row = ls_row iv_col = lc_exrt + lv_o
+                                    iv_what = |block { sy-index } exemption rate|
+                                    iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
+          lcl_util=>set( EXPORTING iv_comp = 'WT_EXRT' iv_value = CONV string( lv_rate )
+                         iv_force = abap_true
+                         CHANGING cs_data = ls_wt-data cs_datax = ls_wt-datax ).
+        ENDIF.
         lcl_util=>set( EXPORTING iv_comp = 'WT_WTEXRS'
                        iv_value = to_upper( lcl_util=>cell( is_row = ls_row iv_col = lc_wtexrs + lv_o ) )
                        CHANGING cs_data = ls_wt-data cs_datax = ls_wt-datax ).
 
-        DATA(lv_df) = lcl_util=>to_date( lcl_util=>cell( is_row = ls_row iv_col = lc_exdf + lv_o ) ).
-        DATA(lv_dt) = lcl_util=>to_date( lcl_util=>cell( is_row = ls_row iv_col = lc_exdt + lv_o ) ).
+        DATA(lv_df) = date_cell( is_row = ls_row iv_col = lc_exdf + lv_o
+                                 iv_what = |block { sy-index } "valid from"|
+                                 iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
+        DATA(lv_dt) = date_cell( is_row = ls_row iv_col = lc_exdt + lv_o
+                                 iv_what = |block { sy-index } "valid to"|
+                                 iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
         lcl_util=>set( EXPORTING iv_comp = 'WT_EXDF' iv_value = CONV string( lv_df )
                        CHANGING cs_data = ls_wt-data cs_datax = ls_wt-datax ).
         lcl_util=>set( EXPORTING iv_comp = 'WT_EXDT' iv_value = CONV string( lv_dt )
@@ -2587,7 +2705,9 @@ CLASS lcl_h_tan IMPLEMENTATION.
           CONTINUE.
         ENDIF.
         DATA(lv_cd) = to_upper( lcl_util=>cell( is_row = ls_row iv_col = 16 + lv_o ) ).
-        DATA(lv_df) = lcl_util=>to_date( lcl_util=>cell( is_row = ls_row iv_col = 10 + lv_o ) ).
+        DATA(lv_df) = date_cell( is_row = ls_row iv_col = 10 + lv_o
+                                 iv_what = |block { sy-index } "valid from"|
+                                 iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
 
         IF lv_df IS INITIAL.
           mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k2 = lv_bukrs iv_ty = 'E'
@@ -2611,10 +2731,16 @@ CLASS lcl_h_tan IMPLEMENTATION.
         ls_ex-wt_withcd        = lv_cd.
         ls_ex-wt_exdf          = lv_df.
         ls_ex-pan_no           = lv_pan.
-        ls_ex-wt_exdt          = lcl_util=>to_date( lcl_util=>cell( is_row = ls_row iv_col = 12 + lv_o ) ).
+        ls_ex-wt_exdt          = date_cell( is_row = ls_row iv_col = 12 + lv_o
+                                           iv_what = |block { sy-index } "valid to"|
+                                           iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
         ls_ex-wt_exnr          = lcl_util=>cell( is_row = ls_row iv_col = 6 + lv_o ).
-        ls_ex-wt_exrt          = lcl_util=>to_dec( lcl_util=>cell( is_row = ls_row iv_col = 8 + lv_o ) ).
-        ls_ex-fiwtin_exem_thr  = lcl_util=>to_dec( lcl_util=>cell( is_row = ls_row iv_col = 18 + lv_o ) ).
+        ls_ex-wt_exrt          = dec_cell( is_row = ls_row iv_col = 8 + lv_o
+                                          iv_what = |block { sy-index } exemption rate|
+                                          iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
+        ls_ex-fiwtin_exem_thr  = dec_cell( is_row = ls_row iv_col = 18 + lv_o
+                                           iv_what = |block { sy-index } threshold amount|
+                                           iv_k1 = lv_lifnr iv_k2 = lv_bukrs ).
         ls_ex-waers            = to_upper( lcl_util=>cell( is_row = ls_row iv_col = 20 + lv_o ) ).
 
         APPEND ls_ex TO lt_exem.

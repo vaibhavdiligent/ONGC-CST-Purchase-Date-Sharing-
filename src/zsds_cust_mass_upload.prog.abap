@@ -294,6 +294,17 @@ CLASS lcl_util DEFINITION FINAL.
                 iv_len    TYPE i DEFAULT 0
       RETURNING VALUE(rv) TYPE string.
 
+    " A language. The templates carry the two letter ISO code - EN, ES, NL -
+    " and SAP's own language key is one character, which is NOT the first
+    " letter of the ISO code: Spanish is ES but S, Swedish SV but V, Danish
+    " DA but K. Cutting the code to one character therefore files a Spanish
+    " address under English and a Swedish one under Spanish, without a word.
+    " Domain SPRAS carries conversion exit ISOLA for exactly this.
+    " An unknown code comes back empty so the caller can say so.
+    CLASS-METHODS lang
+      IMPORTING iv_in     TYPE string
+      RETURNING VALUE(rv) TYPE spras.
+
     " Upper-cases and strips everything except letters and digits, so tab
     " names and column headings can be compared without being defeated by
     " spacing, punctuation or capitalisation.
@@ -478,6 +489,31 @@ CLASS lcl_util IMPLEMENTATION.
     OR lv_kind = cl_abap_typedescr=>typekind_date
     OR lv_kind = cl_abap_typedescr=>typekind_time.
       DESCRIBE FIELD iv_any LENGTH rv IN CHARACTER MODE.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD lang.
+    CLEAR rv.
+    DATA(lv) = to_upper( condense( iv_in ) ).
+    IF lv IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " One character is already the internal key - a file downloaded from
+    " this system carries it that way.
+    IF strlen( lv ) = 1.
+      rv = lv.
+      RETURN.
+    ENDIF.
+
+    DATA lv_out TYPE spras.
+    CALL FUNCTION 'CONVERSION_EXIT_ISOLA_INPUT'
+      EXPORTING  input            = lv
+      IMPORTING  output           = lv_out
+      EXCEPTIONS unknown_language = 1
+                 OTHERS           = 2.
+    IF sy-subrc = 0.
+      rv = lv_out.
     ENDIF.
   ENDMETHOD.
 
@@ -1500,7 +1536,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 30   node = 'A' fld = 'CITY' cnv = '' hdr = 'CITY' )  " City
       ( scen = 'R1' col = 31   node = 'A' fld = 'COUNTRY' cnv = '' hdr = 'COUNTRYKEY' )  " Country Key
       ( scen = 'R1' col = 32   node = 'A' fld = 'REGION' cnv = '' hdr = 'REGIONSTATEPROVINCECOUNTY' )  " Region (State, Province, County)
-      ( scen = 'R1' col = 33   node = 'A' fld = 'LANGU' cnv = '' hdr = 'LANGUAGEKEY' )  " Language Key
+      ( scen = 'R1' col = 33   node = 'A' fld = 'LANGU' cnv = 'LG' hdr = 'LANGUAGEKEY' )  " Language Key
       ( scen = 'R1' col = 34   node = 'M' fld = 'TEL' cnv = '' hdr = 'FIRSTTELEPHONENODIALLINGCODENUMBER' )  " First telephone no.: dialling code+number
       ( scen = 'R1' col = 35   node = 'M' fld = 'MOB' cnv = '' hdr = 'FIRSTMOBILETELEPHONENODIALINGCODENUMBER' )  " First Mobile Telephone No.: Dialing Code + Number
       ( scen = 'R1' col = 36   node = 'M' fld = 'FAX' cnv = '' hdr = 'FIRSTFAXNODIALLINGCODENUMBER' )  " First fax no.: dialling code+number
@@ -1631,7 +1667,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R2' col = 23   node = 'A' fld = 'CITY' cnv = '' hdr = 'CITY1' )  " CITY1
       ( scen = 'R2' col = 24   node = 'A' fld = 'COUNTRY' cnv = '' hdr = 'COUNTRY' )  " COUNTRY
       ( scen = 'R2' col = 25   node = 'A' fld = 'REGION' cnv = '' hdr = 'REGION' )  " REGION
-      ( scen = 'R2' col = 26   node = 'A' fld = 'LANGU' cnv = '' hdr = 'LANGU' )  " LANGU
+      ( scen = 'R2' col = 26   node = 'A' fld = 'LANGU' cnv = 'LG' hdr = 'LANGU' )  " LANGU
       ( scen = 'R2' col = 27   node = 'M' fld = 'TEL' cnv = '' hdr = 'TELNUMBER' )  " TEL_NUMBER
       ( scen = 'R2' col = 28   node = 'M' fld = 'MOB' cnv = '' hdr = 'MOBNUMBER' )  " MOB_NUMBER
       ( scen = 'R2' col = 29   node = 'M' fld = 'FAX' cnv = '' hdr = 'FAXNUMBER' )  " FAX_NUMBER
@@ -1699,7 +1735,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R3' col = 24   node = 'A' fld = 'CITY' cnv = '' hdr = 'CITY1' )  " CITY1
       ( scen = 'R3' col = 25   node = 'A' fld = 'COUNTRY' cnv = '' hdr = 'COUNTRY' )  " COUNTRY
       ( scen = 'R3' col = 26   node = 'A' fld = 'REGION' cnv = '' hdr = 'REGION' )  " REGION
-      ( scen = 'R3' col = 27   node = 'A' fld = 'LANGU' cnv = '' hdr = 'LANGU' )  " LANGU
+      ( scen = 'R3' col = 27   node = 'A' fld = 'LANGU' cnv = 'LG' hdr = 'LANGU' )  " LANGU
       ( scen = 'R3' col = 28   node = 'M' fld = 'TEL' cnv = '' hdr = 'TELNUMBER' )  " TEL_NUMBER
       ( scen = 'R3' col = 29   node = 'M' fld = 'MOB' cnv = '' hdr = 'MOBNUMBER' )  " MOB_NUMBER
       ( scen = 'R3' col = 30   node = 'M' fld = 'FAX' cnv = '' hdr = 'FAXNUMBER' )  " FAX_NUMBER
@@ -1808,7 +1844,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R4' col = 26   node = 'A' fld = 'COUNTRY' cnv = '' hdr = 'COUNTRY' )  " COUNTRY
       ( scen = 'R4' col = 27   node = 'A' fld = 'REGION' cnv = '' hdr = 'REGION' )  " REGION
       ( scen = 'R4' col = 28   node = 'A' fld = 'TIME_ZONE' cnv = '' hdr = 'TIMEZONE' )  " TIME_ZONE
-      ( scen = 'R4' col = 29   node = 'A' fld = 'LANGU' cnv = '' hdr = 'LANGU' )  " LANGU
+      ( scen = 'R4' col = 29   node = 'A' fld = 'LANGU' cnv = 'LG' hdr = 'LANGU' )  " LANGU
       ( scen = 'R4' col = 30   node = 'M' fld = 'TEL' cnv = '' hdr = 'TELNUMBER' )  " TEL_NUMBER
       ( scen = 'R4' col = 31   node = 'M' fld = 'MOB' cnv = '' hdr = 'MOBNUMBER' )  " MOB_NUMBER
       ( scen = 'R4' col = 32   node = 'M' fld = 'FAX' cnv = '' hdr = 'FAXNUMBER' )  " FAX_NUMBER
@@ -1945,7 +1981,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R6' col = 23   node = 'A' fld = 'CITY' cnv = '' hdr = 'CITY' )  " City
       ( scen = 'R6' col = 24   node = 'A' fld = 'COUNTRY' cnv = '' hdr = 'COUNTRYKEY' )  " Country Key
       ( scen = 'R6' col = 25   node = 'A' fld = 'REGION' cnv = '' hdr = 'REGIONSTATEPROVINCECOUNTY' )  " Region (State, Province, County)
-      ( scen = 'R6' col = 26   node = 'A' fld = 'LANGU' cnv = '' hdr = 'LANGUAGEKEY' )  " Language Key
+      ( scen = 'R6' col = 26   node = 'A' fld = 'LANGU' cnv = 'LG' hdr = 'LANGUAGEKEY' )  " Language Key
       ( scen = 'R6' col = 27   node = 'M' fld = 'TEL' cnv = '' hdr = 'FIRSTTELEPHONENODIALLINGCOD' )  " First telephone no.: dialling cod
       ( scen = 'R6' col = 28   node = 'M' fld = 'MOB' cnv = '' hdr = 'FIRSTMOBILETELEPHONENODIALI' )  " First Mobile Telephone No.: Diali
       ( scen = 'R6' col = 29   node = 'M' fld = 'FAX' cnv = '' hdr = 'FIRSTFAXNODIALLINGCODENUMB' )  " First fax no.: dialling code+numb
@@ -2022,7 +2058,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R7' col = 23   node = 'A' fld = 'CITY' cnv = '' hdr = 'CITY' )  " City
       ( scen = 'R7' col = 24   node = 'A' fld = 'COUNTRY' cnv = '' hdr = 'COUNTRYKEY' )  " Country Key
       ( scen = 'R7' col = 25   node = 'A' fld = 'REGION' cnv = '' hdr = 'REGIONSTATEPROVINCECOUNTY' )  " Region (State, Province, County)
-      ( scen = 'R7' col = 26   node = 'A' fld = 'LANGU' cnv = '' hdr = 'LANGUAGEKEY' )  " Language Key
+      ( scen = 'R7' col = 26   node = 'A' fld = 'LANGU' cnv = 'LG' hdr = 'LANGUAGEKEY' )  " Language Key
       ( scen = 'R7' col = 27   node = 'M' fld = 'TEL' cnv = '' hdr = 'FIRSTTELEPHONENODIALLINGCOD' )  " First telephone no.: dialling cod
       ( scen = 'R7' col = 28   node = 'M' fld = 'MOB' cnv = '' hdr = 'FIRSTMOBILETELEPHONENODIALI' )  " First Mobile Telephone No.: Diali
       ( scen = 'R7' col = 29   node = 'M' fld = 'FAX' cnv = '' hdr = 'FIRSTFAXNODIALLINGCODENUMB' )  " First fax no.: dialling code+numb
@@ -2908,6 +2944,20 @@ CLASS lcl_engine IMPLEMENTATION.
             <lv_t> = lcl_util=>to_int( lv_in ).
           WHEN 'TT'.
             <lv_t> = lcl_cfg=>get( )->title_key( lv_in ).
+          WHEN 'LG'.
+            " Never through WHEN OTHERS: LANGU is one character, so a two
+            " letter ISO code would be read there as a flag written out in
+            " full - NO, the code for Norwegian, clears the field and JA,
+            " the code for Japanese, sets it to X - and what survived that
+            " would be cut to its first letter, filing ES under English.
+            DATA(lv_lg) = lcl_util=>lang( lv_in ).
+            IF lv_lg IS INITIAL.
+              mo_log->add( iv_row = iv_row iv_type = 'W'
+                           iv_struc = iv_struc iv_fld = iv_fld
+                           iv_text = |"{ lv_in }" is not a language key - the field is left alone| ).
+              RETURN.
+            ENDIF.
+            <lv_t> = lv_lg.
           WHEN OTHERS.
             " A word in a one character field is a flag written out in full.
             DATA(lv_w) = lcl_util=>char_len( <lv_t> ).

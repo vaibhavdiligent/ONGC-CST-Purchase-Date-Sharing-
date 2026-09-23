@@ -107,6 +107,64 @@ Where the central column is already filled, the warning says that instead of
 overwriting it. A row's rule breaches are also reported together now, rather than
 one per run.
 
+## Conversion errors found on a second pass
+
+The screenshot on the vendor creation tab is our own file-type message, not a
+conversion error — nothing reads the file before it. But looking for conversion
+faults turned up two real ones in the code, both of which lose or corrupt data in
+silence.
+
+### 5. A two-letter language code cut to one character (both upload programs)
+
+Every row of the test file carries `LANGU = EN`. `LANGU` on the BP address
+(`BUS_EI_BUPA_POSTAL_ADDRESS-LANGU`, data type `LANG`) is **one character**, and
+holds SAP's own key. The ISO code and the SAP key are not the same letter:
+
+| ISO | EN | ES | SV | DA | PT | ZH | KO | JA | NO |
+|---|---|---|---|---|---|---|---|---|---|
+| SAP | E | **S** | **V** | **K** | P | **1** | **3** | J | **O** |
+
+Both programs write a cell into a field named at runtime, and both treat a value
+longer than a one-character target as a flag written out in full. A language sent
+down that path was mangled twice:
+
+* `NO`, the code for Norwegian, was read as *false* and **cleared the field**;
+* `JA`, the code for Japanese, was read as *true* and set it to **X**;
+* anything else was cut to its first letter — so `ES` filed a Spanish address
+  under **English** and `SV` filed a Swedish one under **Spanish**.
+
+Nothing raised and nothing was logged. `EN → E` is right by luck, which is why
+the test did not show it, but Cipla's rollout covers Spain, the Netherlands,
+Morocco, Kenya, Uganda, South Africa and Australia.
+
+Fixed: domain `SPRAS` carries conversion exit **ISOLA** for exactly this, so
+`LCL_UTIL=>LANG` now runs `CONVERSION_EXIT_ISOLA_INPUT`. One character is taken
+as the internal key already (that is what a file downloaded from this system
+carries), two characters go through the exit, and a code that is not a language
+is reported rather than guessed at. In the customer program the six `LANGU`
+columns carry a new conversion marker `LG`; in the vendor program column 22 is
+set on its own instead of through the generic list.
+`tools/audit_language_key.py` takes the set of `LANG` fields from the DD03L
+extract, so a language column nobody thought of is caught too.
+
+### 6. An amount or a date that will not convert became zero, silently
+
+`TO_DEC` hands back zero for a cell it cannot read — `1,00,000` written the
+Indian way, a stray `NA`, a number Excel exported with a currency symbol — and
+`TO_DATE` hands back an empty date both for an empty cell and for one it cannot
+read. On the TAN and TDS tabs those feed the exemption rate, the threshold
+amount and the validity period. **An exemption rate read as zero is not a blank
+rate, it is a wrong TDS posting**, and nothing said so.
+
+Fixed: `DEC_CELL` and `DATE_CELL` on the base handler read, convert, and report a
+cell that held something and converted to nothing:
+
+> "1,00,000" in column 18 is not a number — block 1 threshold amount is sent as zero
+
+All six sites on the TAN and TDS tabs now go through them, including `WT_EXRT`,
+the one field on the TDS tab that the generic setter has to convert and whose own
+guard was silent.
+
 ## To confirm with Cipla
 
 1. **`SPERQ` together with a company-code block.** The Block / Unblock template's
@@ -119,3 +177,7 @@ one per run.
    can be reproduced rather than inferred.
 3. **Partner `100098685`.** Confirm it should be extended to purchasing
    organisation 1000, or that a different partner was meant.
+4. **How the language should read in a downloaded template.** The download
+   writes the field's real value, SAP's one-character key (`E`), while Cipla's
+   own templates show the two-letter ISO code (`EN`). The upload now takes
+   either, so nothing breaks; say which one the templates should show.
