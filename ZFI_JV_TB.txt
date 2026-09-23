@@ -1,0 +1,2254 @@
+*&---------------------------------------------------------------------*
+* Program    : ZFI_JV_TB                                              *
+* Title      : Trail balance joint venture wise                       *
+* FS No.     :                                                        *
+* Author     : Hrishikesh Nikam                                       *
+* Date       : 22-03-22                                               *
+* Login Id   : ABAPUSER01                                             *
+* Description: Report for Trail balance joint venture wise            *
+* Tran. Code : ZJVTB                                                  *
+*                                                                     *
+***********************************************************************
+* Change History:-                                                    *
+*                                                                     *
+* Changed on  Changed by        TR No.     Description                *
+* 01-11-2022  Hrishikesh Nikam  OCDK906236 ZJVTB Layout change        *
+*                                                                     *
+* 15-02-2023 Hrishikesh Nikam   OCDK906479 Rec indi & report of GT 10 JVs *                                                                   *
+*                                                                     *
+* 13-03-2023 Hrishikesh Nikam      Display closing balance of all JVs *
+
+* 19-02-2023 Aparna Anand        USD AND INR BOTH ADDITION                                                                  *
+*                                                                     *
+* ADD HERE IF ANY CHANGE DONE IN THE PROGRAM                          *
+*                                                                     *
+*&---------------------------------------------------------------------*
+REPORT zzjvtb_test.
+
+TYPE-POOLS: vrm.
+
+TABLES : jvto1,
+         sscrfields,
+         smp_dyntxt.
+
+TYPES : BEGIN OF ty_jvto13,
+          ryear  TYPE  jvto1-ryear,
+          rtcur  TYPE  jvto1-rtcur,
+          drcrk  TYPE  jvto1-drcrk,
+          rbukrs TYPE jvto1-rbukrs,
+          rjvnam TYPE jvto1-rjvnam,
+          racct  TYPE jvto1-racct,
+          hslvt  TYPE jvto1-hslvt,
+          kslvt  TYPE jvto1-kslvt,
+        END OF ty_jvto13.
+
+TYPES : BEGIN OF ty_jvto1,
+          ryear  TYPE  jvto1-ryear,
+          rtcur  TYPE  jvto1-rtcur,
+          drcrk  TYPE  jvto1-drcrk,
+          rbukrs TYPE jvto1-rbukrs,
+          rjvnam TYPE jvto1-rjvnam,
+          racct  TYPE jvto1-racct,
+          hslvt  TYPE jvto1-hslvt,
+          kslvt  TYPE jvto1-kslvt,
+        END OF ty_jvto1.
+
+TYPES : BEGIN OF ty_jvto2,
+          ryear  TYPE  jvto1-ryear,
+          rtcur  TYPE  jvto1-rtcur,
+          drcrk  TYPE  jvto1-drcrk,
+          rbukrs TYPE jvto1-rbukrs,
+          rjvnam TYPE jvto1-rjvnam,
+          racct  TYPE jvto1-racct,
+          kslvt  TYPE  jvto1-kslvt,
+        END OF ty_jvto2.
+
+TYPES : BEGIN OF ty_jvt,
+          racct  TYPE jvto1-racct,
+          ryear  TYPE  jvto1-ryear,
+          rbukrs TYPE jvto1-rbukrs,
+          rjvnam TYPE jvto1-rjvnam,
+        END OF ty_jvt.
+
+TYPES : BEGIN OF ty_jvso1,
+          ryear  TYPE jvso1-ryear,
+          rtcur  TYPE jvso1-rtcur,
+          drcrk  TYPE jvso1-drcrk,
+          poper  TYPE jvso1-poper,
+          rbukrs TYPE jvso1-rbukrs,
+          rjvnam TYPE jvso1-rjvnam,
+          racct  TYPE jvso1-racct,
+          hsl    TYPE jvso1-hsl,
+          ksl    TYPE jvso1-ksl,
+        END OF ty_jvso1.
+
+TYPES : BEGIN OF ty_ska1,
+          ktopl TYPE ska1-ktopl,
+          saknr TYPE ska1-saknr,
+          xbilk TYPE ska1-xbilk,
+          sakan TYPE ska1-sakan,
+          txt20 TYPE skat-txt20,
+          txt50 TYPE skat-txt50,
+        END OF ty_ska1.
+
+TYPES : BEGIN OF ty_skat,
+          saknr TYPE ska1-saknr,
+          txt50 TYPE skat-txt50,
+        END OF ty_skat.
+
+TYPES : BEGIN OF ty_final,
+          rjvnam    TYPE jvto1-rjvnam,
+          racct     TYPE jvto1-racct,
+          txt50     TYPE skat-txt50,
+          bal_opn   TYPE decfloat34,
+          bal_opn_i TYPE decfloat34,
+          bal_opn_u TYPE decfloat34,
+          bal_cre   TYPE decfloat34,
+          bal_cre_i TYPE decfloat34,
+          bal_cre_u TYPE decfloat34,
+          bal_deb   TYPE decfloat34,
+          bal_deb_i TYPE decfloat34,
+          bal_deb_u TYPE decfloat34,
+          bal_clo   TYPE decfloat34,
+          bal_clo_i TYPE decfloat34,
+          bal_clo_u TYPE decfloat34,
+        END OF ty_final.
+
+TYPES : BEGIN OF ty_final2,
+          rjvnam        TYPE jvto1-rjvnam,
+          racct         TYPE jvto1-racct,
+          txt50         TYPE skat-txt50,
+          bal_opn(20)   TYPE c,
+          bal_opn_i(20) TYPE c,
+          bal_opn_u(20) TYPE c,
+          bal_cre(20)   TYPE c,
+          bal_cre_i(20) TYPE c,
+          bal_cre_u(20) TYPE c,
+          bal_deb(20)   TYPE c,
+          bal_deb_i(20) TYPE c,
+          bal_deb_u(20) TYPE c,
+          bal_clo(20)   TYPE c,
+          bal_clo_i(20) TYPE c,
+          bal_clo_u(20) TYPE c,
+        END OF ty_final2.
+
+TYPES : BEGIN OF ty_final3,
+          racct TYPE jvto1-racct,
+          txt50 TYPE skat-txt50,
+        END OF ty_final3.
+
+TYPES : BEGIN OF ty_final4,
+          racct     TYPE jvto1-racct,
+          txt50     TYPE skat-txt50,
+          bal_opn1  TYPE jvto1-hslvt,
+          bal_cre1  TYPE jvto1-hslvt,
+          bal_deb1  TYPE jvto1-hslvt,
+          bal_clo1  TYPE jvto1-hslvt,
+
+          bal_opn2  TYPE jvto1-hslvt,
+          bal_cre2  TYPE jvto1-hslvt,
+          bal_deb2  TYPE jvto1-hslvt,
+          bal_clo2  TYPE jvto1-hslvt,
+
+          bal_opn3  TYPE jvto1-hslvt,
+          bal_cre3  TYPE jvto1-hslvt,
+          bal_deb3  TYPE jvto1-hslvt,
+          bal_clo3  TYPE jvto1-hslvt,
+
+          bal_opn4  TYPE jvto1-hslvt,
+          bal_cre4  TYPE jvto1-hslvt,
+          bal_deb4  TYPE jvto1-hslvt,
+          bal_clo4  TYPE jvto1-hslvt,
+
+          bal_opn5  TYPE jvto1-hslvt,
+          bal_cre5  TYPE jvto1-hslvt,
+          bal_deb5  TYPE jvto1-hslvt,
+          bal_clo5  TYPE jvto1-hslvt,
+
+          bal_opn6  TYPE jvto1-hslvt,
+          bal_cre6  TYPE jvto1-hslvt,
+          bal_deb6  TYPE jvto1-hslvt,
+          bal_clo6  TYPE jvto1-hslvt,
+
+          bal_opn7  TYPE jvto1-hslvt,
+          bal_cre7  TYPE jvto1-hslvt,
+          bal_deb7  TYPE jvto1-hslvt,
+          bal_clo7  TYPE jvto1-hslvt,
+
+          bal_opn8  TYPE jvto1-hslvt,
+          bal_cre8  TYPE jvto1-hslvt,
+          bal_deb8  TYPE jvto1-hslvt,
+          bal_clo8  TYPE jvto1-hslvt,
+
+          bal_opn9  TYPE jvto1-hslvt,
+          bal_cre9  TYPE jvto1-hslvt,
+          bal_deb9  TYPE jvto1-hslvt,
+          bal_clo9  TYPE jvto1-hslvt,
+
+          bal_opn10 TYPE jvto1-hslvt,
+          bal_cre10 TYPE jvto1-hslvt,
+          bal_deb10 TYPE jvto1-hslvt,
+          bal_clo10 TYPE jvto1-hslvt,
+
+        END OF ty_final4.
+
+TYPES : BEGIN OF ty_alljv,
+          rjvnam TYPE jvto1-racct,
+        END OF ty_alljv.
+
+DATA : lt_jvto1_ad  TYPE STANDARD TABLE OF ty_jvto13.
+
+DATA : lt_jvto1    TYPE STANDARD TABLE OF ty_jvto1,
+       lt_jvto2    TYPE STANDARD TABLE OF ty_jvto2,
+       lt_jvt      TYPE STANDARD TABLE OF ty_jvt,
+       lt_jvso1_1  TYPE STANDARD TABLE OF ty_jvso1,
+       lt_jvso1_2  TYPE STANDARD TABLE OF ty_jvso1,
+       lt_ska1     TYPE STANDARD TABLE OF ty_ska1,
+       lt_skat     TYPE STANDARD TABLE OF ty_skat,
+       lt_final    TYPE STANDARD TABLE OF ty_final,
+       lt_bfinal   TYPE STANDARD TABLE OF ty_final,
+       lt_alljv    TYPE STANDARD TABLE OF ty_alljv,
+       lt_final2   TYPE STANDARD TABLE OF ty_final2,
+       lt_final3   TYPE STANDARD TABLE OF ty_final3,
+       lt_final4   TYPE STANDARD TABLE OF ty_final4,
+
+       ls_jvto1    TYPE ty_jvto1,
+       ls_jvto1_1  TYPE ty_jvto1,
+       ls_jvto1_2  TYPE ty_jvto1,
+       ls_jvto2    TYPE ty_jvto2,
+       ls_jvt      TYPE ty_jvt,
+       ls_jvt_1    TYPE ty_jvt,
+       ls_jvso1_1  TYPE ty_jvso1,
+       ls_jvso1_11 TYPE ty_jvso1,
+       ls_jvso1_2  TYPE ty_jvso1,
+       ls_jvso1_22 TYPE ty_jvso1,
+       ls_ska1     TYPE ty_ska1,
+       ls_skat     TYPE ty_skat,
+       ls_final    TYPE ty_final,
+       ls_final_1  TYPE ty_final,
+       ls_final_2  TYPE ty_final,
+       ls_bfinal   TYPE ty_final,
+       ls_alljv    TYPE ty_alljv,
+       ls_final2   TYPE ty_final2,
+       ls_final3   TYPE ty_final3,
+       ls_final4   TYPE ty_final4.
+
+DATA : lt_fcat   TYPE slis_t_fieldcat_alv,
+       wa_fcat   TYPE slis_fieldcat_alv,
+       it_header TYPE slis_t_listheader,
+       wa_header TYPE slis_listheader,
+       wa_layout TYPE slis_layout_alv.
+
+TYPES : BEGIN OF ty_final5,
+          racct       TYPE jvto1-racct,
+          txt50       TYPE skat-txt50,
+          bal_clo(20) TYPE c,
+        END OF ty_final5.
+
+TYPES : BEGIN OF ty_tcurr,
+          kurst TYPE tcurr-kurst,
+          fcurr TYPE tcurr-fcurr,
+          tcurr TYPE tcurr-tcurr,
+          gdatu TYPE tcurr-gdatu,
+          ukurs TYPE tcurr-ukurs,
+        END OF ty_tcurr.
+
+DATA : it_curr TYPE STANDARD TABLE OF ty_tcurr.
+
+DATA lt_fieldcat TYPE lvc_t_fcat.
+DATA ls_lay      TYPE lvc_s_layo.
+DATA ls_fieldcat LIKE LINE OF lt_fieldcat.
+DATA lr_itab     TYPE REF TO data.
+DATA lv_string   TYPE string.
+
+FIELD-SYMBOLS <fs_itab> TYPE STANDARD TABLE .
+
+DATA: gt_list    TYPE vrm_values.
+DATA: gwa_list   TYPE vrm_value.
+DATA: gt_values  TYPE TABLE OF dynpread,
+      gwa_values TYPE dynpread.
+
+DATA: gv_selected_value(20) TYPE c.
+
+DATA:int_header TYPE slis_t_listheader,
+     fs_header  TYPE slis_listheader,
+     t_line     LIKE fs_header-info.
+
+DATA : zperiod     TYPE  rpmax,
+       zjv_nam     TYPE jvto1-rjvnam,
+       lv_diff     TYPE num,
+       lv_sumc     TYPE jvto1-hslvt,
+       lv_opnbal   TYPE jvto1-hslvt,
+       lv_opnbal_i TYPE jvto1-hslvt,
+       lv_opnbal_u TYPE jvto1-hslvt,
+       lv_clobal   TYPE jvto1-hslvt,
+       lv_clobal_i TYPE jvto1-hslvt,
+       lv_clobal_u TYPE jvto1-hslvt,
+       lv_debbal   TYPE jvto1-hslvt,
+       lv_debbal_i TYPE jvto1-hslvt,
+       lv_debbal_u TYPE jvto1-hslvt,
+       lv_crebal   TYPE jvto1-hslvt,
+       lv_crebal_i TYPE jvto1-hslvt,
+       lv_crebal_u TYPE jvto1-hslvt.
+
+DATA : col_count TYPE i,
+       row_jv(6) TYPE c,
+       row_count TYPE i,
+       flg1      TYPE c.
+
+DATA : gv_ukurs TYPE string.
+DATA : lv_ukurs TYPE string.
+
+DATA : gt_dynpread TYPE STANDARD TABLE OF dynpread,
+       gs_dynpread TYPE dynpread.
+
+DATA: gt_return TYPE ddshretval OCCURS 0 WITH HEADER LINE.
+*--------------------------------------------------------------*
+*SELECTION SCREEN
+*--------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME.
+
+PARAMETERS : p_year  TYPE gjahr ,     "remove mandatory
+             p_bukrs TYPE bukrs .  "remove mandatory
+
+SELECT-OPTIONS p_jvnam FOR zjv_nam  .    "remove mandatory
+
+PARAMETERS: s_curr TYPE c AS LISTBOX VISIBLE LENGTH 20 .  "remove mandatory
+
+SELECT-OPTIONS s_period FOR zperiod NO-EXTENSION.
+
+SELECT-OPTIONS p_rrecin FOR jvto1-rrecin.
+
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN:  FUNCTION KEY 1 .  " code ADDED on 27.12.2023 by sandeep rauthan
+
+*--------------------------------------------------------------*
+*At Selection Screen
+*--------------------------------------------------------------*
+
+* AT SELECTION-SCREEN.
+*******code ADDED on 27.12.2023 by sandeep rauthan********
+*   CASE sscrfields-ucomm.  " code ADDED on 27.12.2023 by sandeep rauthan
+*   WHEN 'FC01'.
+*     PERFORM processguide.
+*  ENDCASE.
+
+*******code ADDED on 27.12.2023 by sandeep rauthan********
+
+
+
+
+
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF screen-name = 'S_PERIOD-LOW'.
+      screen-input = 0.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_jvnam-low.
+  gs_dynpread-fieldname = 'P_BUKRS'.
+  APPEND gs_dynpread TO gt_dynpread.
+
+  CALL FUNCTION 'DYNP_VALUES_READ'
+    EXPORTING
+      dyname               = sy-cprog
+      dynumb               = sy-dynnr
+      translate_to_upper   = 'X'
+    TABLES
+      dynpfields           = gt_dynpread
+    EXCEPTIONS
+      invalid_abapworkarea = 1
+      invalid_dynprofield  = 2
+      invalid_dynproname   = 3
+      invalid_dynpronummer = 4
+      invalid_request      = 5
+      no_fielddescription  = 6
+      invalid_parameter    = 7
+      undefind_error       = 8
+      double_conversion    = 9
+      stepl_not_found      = 10
+      OTHERS               = 11.
+
+  CLEAR gs_dynpread.
+  READ TABLE gt_dynpread INTO gs_dynpread INDEX 1.
+
+  SELECT bukrs,
+         vname,
+         vtext
+    FROM t8jvt INTO TABLE @DATA(lt_jvf4)
+    WHERE bukrs = @gs_dynpread-fieldvalue.
+  IF gs_dynpread-fieldvalue IS INITIAL.
+    SELECT bukrs,
+           vname,
+           vtext
+      FROM t8jvt INTO TABLE @lt_jvf4.
+  ENDIF.
+
+
+  IF lt_jvf4 IS NOT INITIAL.
+    CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+      EXPORTING
+        retfield        = 'P_JVNAM'
+        value_org       = 'S'
+      TABLES
+        value_tab       = lt_jvf4
+        return_tab      = gt_return
+      EXCEPTIONS
+        parameter_error = 1
+        no_values_found = 2
+        OTHERS          = 3.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+  ENDIF.
+
+
+AT SELECTION-SCREEN ON s_curr.
+  CLEAR: gwa_values, gt_values.
+  REFRESH gt_values.
+  gwa_values-fieldname = 'S_CURR'.
+  APPEND gwa_values TO gt_values.
+  CALL FUNCTION 'DYNP_VALUES_READ'
+    EXPORTING
+      dyname             = sy-cprog
+      dynumb             = sy-dynnr
+      translate_to_upper = 'X'
+    TABLES
+      dynpfields         = gt_values.
+
+  READ TABLE gt_values INDEX 1 INTO gwa_values.
+  IF sy-subrc = 0 AND gwa_values-fieldvalue IS NOT INITIAL.
+    READ TABLE gt_list INTO gwa_list
+                      WITH KEY key = gwa_values-fieldvalue.
+    IF sy-subrc = 0.
+      gv_selected_value = gwa_list-text.
+    ENDIF.
+  ENDIF.
+
+AT SELECTION-SCREEN .
+*******code ADDED on 27.12.2023 by sandeep rauthan********
+  CASE sscrfields-ucomm.  " code ADDED on 27.12.2023 by sandeep rauthan
+    WHEN 'FC01'.
+      PERFORM processguide.
+  ENDCASE.
+
+*******code ADDED on 27.12.2023 by sandeep rauthan********
+
+  CLEAR:row_count,flg1.
+  REFRESH lt_alljv[].
+*  SELECT rjvnam FROM jvto1 INTO TABLE lt_alljv
+*     WHERE ryear = p_year
+*       AND rbukrs = p_bukrs
+*       AND rjvnam IN p_jvnam
+*       AND rldnr = '4A'
+*       AND rrcty = '0'
+*       AND rrecin IN  p_rrecin.
+  SELECT DISTINCT rjvnam
+*BOC By SAP_ABAP on 22/09/26
+*  FROM jv_jvto1_acdoca
+  FROM jv_jvto1_acdoca_switch_2
+*EOC By SAP_ABAP on 22/09/26
+  INTO TABLE @lt_alljv
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND rrecin IN @p_rrecin.
+
+  SORT lt_alljv BY rjvnam ASCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_alljv.
+
+  DESCRIBE TABLE lt_alljv LINES row_count.
+  IF row_count GT 10.
+    flg1 = 'X'.
+    MESSAGE 'For more than 10 ventures only closing balance will be displayed' TYPE 'W'.
+  ENDIF.
+
+
+
+
+
+*--------------------------------------------------------------*
+*Initialization
+*--------------------------------------------------------------*
+INITIALIZATION.
+
+***************** code added by sandeep on 27.12.2023****************
+  smp_dyntxt-icon_id = icon_pdf .
+  smp_dyntxt-quickinfo = 'Manual'.
+  smp_dyntxt-icon_text = 'Process Guide'.
+  sscrfields-functxt_01 = smp_dyntxt.
+  CLEAR smp_dyntxt.
+*****************code added by sandeep on 27.12.2023**********************
+
+
+  gwa_list-key = '1'.
+  gwa_list-text = 'Company Code INR'.
+  APPEND gwa_list TO gt_list.
+  gwa_list-key = '2'.
+  gwa_list-text = 'Index Based USD'.
+  APPEND gwa_list TO gt_list.
+*  CODE ADDED BY APARNA '' 19.02.2024
+  gwa_list-key = '3'.
+  gwa_list-text = 'USD & INR'.
+  APPEND gwa_list TO gt_list.
+* CODE ENDED BY APARNA '' 19.02.2024
+  CALL FUNCTION 'VRM_SET_VALUES'
+    EXPORTING
+      id              = 'S_CURR'
+      values          = gt_list
+    EXCEPTIONS
+      id_illegal_name = 1
+      OTHERS          = 2.
+
+  MOVE: 'I' TO s_period-sign,
+        'EQ' TO s_period-option,
+        '1' TO s_period-low.
+  APPEND s_period.
+
+*--------------------------------------------------------------*
+*START-OF-SELECTION.
+*--------------------------------------------------------------*
+
+START-OF-SELECTION.
+
+
+******************* C0DE ADDED ON 31.12.2023 BY SANDEEP R**********
+
+  DATA : lv_error_msg TYPE string.
+
+  IF p_year IS INITIAL.
+    MESSAGE : 'fill the fiscal year,company code,joint venture and currency field' TYPE 'E'.
+
+  ELSEIF p_bukrs IS INITIAL.
+    MESSAGE : 'fill the company code field' TYPE 'E'.
+
+
+  ELSEIF p_jvnam IS INITIAL.
+    MESSAGE : 'fill the joint venture field' TYPE 'E'.
+
+
+  ELSEIF s_period IS INITIAL.
+    MESSAGE : 'fill the currency field' TYPE 'E'.
+
+  ENDIF.
+
+******************* C0DE ADDED ON 31.12.2023 BY SANDEEP R**********
+
+  PERFORM get_data.
+  PERFORM set_data.
+  PERFORM disp_data.
+
+END-OF-SELECTION.
+
+*--------------------------------------------------------------*
+*FORM get_data.
+*--------------------------------------------------------------*
+FORM get_data.
+  break abapuser02.
+*  SELECT racct
+*   FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvt
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*  AND rrecin IN p_rrecin.
+  SELECT DISTINCT racct
+*BOC By SAP_ABAP on 22/09/26
+*  FROM jv_jvto1_acdoca
+  FROM jv_jvto1_acdoca_switch_2
+*EOC By SAP_ABAP on 22/09/26
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvt
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND rrecin IN @p_rrecin.
+
+  SORT lt_jvt BY racct ASCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_jvt COMPARING racct .
+  READ TABLE lt_jvt INTO DATA(ls_jvt) WITH KEY racct = '0000160206'.
+  IF ls_jvt IS INITIAL.
+    ls_jvt-racct = '0000160206'.
+    APPEND ls_jvt TO lt_jvt.
+    CLEAR ls_jvt.
+  ENDIF.
+
+  IF lt_jvt IS NOT INITIAL.
+
+    SELECT a~ktopl
+           a~saknr
+           a~xbilk
+           a~sakan
+           b~txt20
+           b~txt50
+      FROM ska1 AS a
+      INNER JOIN skat AS b ON b~saknr = a~saknr
+      INTO CORRESPONDING FIELDS OF TABLE lt_ska1
+      FOR ALL ENTRIES IN lt_jvt
+      WHERE a~saknr = lt_jvt-racct
+        AND a~ktopl = 'ONGC'
+        AND a~xbilk = ' '
+        AND b~spras = 'EN'
+    AND b~ktopl = 'ONGC'.
+
+    SELECT saknr
+           txt50
+      FROM skat
+    INTO TABLE lt_skat
+    FOR ALL ENTRIES IN lt_jvt
+    WHERE saknr = lt_jvt-racct
+    AND spras = 'E'.
+
+  ENDIF.
+
+  IF gv_selected_value  = 'Company Code INR'.
+
+*    SELECT SUM( hslvt ) AS hslvt rjvnam racct
+*      FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*        AND rrecin IN  p_rrecin
+*    GROUP BY rjvnam racct.
+*BOC By SAP_ABAP on 22/09/26
+* Issue: opening balance (HSLVT) blank since the move from JVTO1 to the
+* ACDOCA views. The program read JV_JVTO1_ACDOCA, which is only the
+* ACDOCA branch. JV_JVTO1_ACDOCA_SWITCH_2 unions that branch (fiscal years
+* from the JVA-on-ACDOCA activation year, table JVAONACDOCAACTIV) with the
+* legacy JVTO1 data (JV_JVTO1_T8JTPM) for the years before it. Every read
+* of the totals view is moved: venture list (AT SELECTION-SCREEN), account
+* list and the three balance reads here. Ledger stays 4A - in this view
+* the 4C amounts are separate columns (HSLVT_4C), not separate rows.
+* Line-item reads on JV_JVSO1_ACDOCA are unchanged: not part of the issue.
+* ASSUMPTION: HSLVT for the activation year and later depends on the JVA
+* balance carry-forward having been posted into ACDOCA - being verified.
+*EOC By SAP_ABAP on 22/09/26
+      SELECT SUM( hslvt ) AS hslvt,
+       rjvnam,
+       racct
+*BOC By SAP_ABAP on 22/09/26
+*  FROM jv_jvto1_acdoca
+  FROM jv_jvto1_acdoca_switch_2
+*EOC By SAP_ABAP on 22/09/26
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+*    SELECT SUM( hsl ) AS hsl rjvnam racct
+*      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND poper BETWEEN s_period-low AND s_period-high
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*        AND drcrk = 'H'
+*        AND rrecin IN p_rrecin
+*    GROUP BY rjvnam racct.
+      SELECT SUM( hsl ) AS hsl,
+       rjvnam,
+       racct
+  FROM jv_jvso1_acdoca
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_1
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND poper  BETWEEN @s_period-low AND @s_period-high
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND drcrk  =  'H'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+*    SELECT SUM( hsl ) AS hsl rjvnam racct
+*      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_2
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND poper BETWEEN s_period-low AND s_period-high
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*        AND drcrk = 'S'
+*        AND rrecin IN p_rrecin
+*    GROUP BY rjvnam racct.
+SELECT SUM( hsl ) AS hsl,
+       rjvnam,
+       racct
+  FROM jv_jvso1_acdoca
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_2
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND poper  BETWEEN @s_period-low AND @s_period-high
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND drcrk  =  'S'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+  ELSEIF gv_selected_value  = 'Index Based USD'.
+
+*    SELECT SUM( kslvt ) AS hslvt rjvnam racct
+*       FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+*       WHERE ryear = p_year
+*         AND rbukrs = p_bukrs
+*         AND rjvnam IN p_jvnam
+*         AND rldnr = '4A'
+*         AND rrcty = '0'
+*         AND rrecin IN  p_rrecin
+*    GROUP BY rjvnam racct.
+*BOC By SAP_ABAP on 22/09/26
+* Was summing HSLVT (INR) into the USD opening balance - the JVTO1 ->
+* view conversion dropped KSLVT. Restored; view moved as above.
+*SELECT SUM( hslvt ) AS hslvt,
+*       rjvnam,
+*       racct
+*  FROM jv_jvto1_acdoca
+*  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+*  WHERE ryear  =  @p_year
+*    AND rbukrs =  @p_bukrs
+*    AND rjvnam IN @p_jvnam
+*    AND rldnr  =  '4A'
+*    AND rrcty  =  '0'
+*    AND rrecin IN @p_rrecin
+*  GROUP BY rjvnam, racct.
+SELECT SUM( kslvt ) AS hslvt,
+       rjvnam,
+       racct
+  FROM jv_jvto1_acdoca_switch_2
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+*EOC By SAP_ABAP on 22/09/26
+
+*    SELECT SUM( ksl ) AS ksl rjvnam racct
+*       FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
+*       WHERE ryear = p_year
+*         AND rbukrs = p_bukrs
+*         AND rjvnam IN p_jvnam
+*         AND poper BETWEEN s_period-low AND s_period-high
+*         AND rldnr = '4A'
+*         AND rrcty = '0'
+*         AND drcrk = 'H'
+*         AND rrecin IN p_rrecin
+*    GROUP BY rjvnam racct.
+*
+*    SELECT SUM( ksl ) AS ksl rjvnam racct
+*      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_2
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND poper BETWEEN s_period-low AND s_period-high
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*        AND drcrk = 'S'
+*        AND rrecin IN p_rrecin
+*    GROUP BY rjvnam racct.
+SELECT SUM( ksl ) AS ksl,
+       rjvnam,
+       racct
+  FROM jv_jvso1_acdoca
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_1
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND poper  BETWEEN @s_period-low AND @s_period-high
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND drcrk  =  'H'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+SELECT SUM( ksl ) AS ksl,
+       rjvnam,
+       racct
+  FROM jv_jvso1_acdoca
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_2
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND poper  BETWEEN @s_period-low AND @s_period-high
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND drcrk  =  'S'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+************************************* CODE BEGIN BY APARNA ANAND 19.02.2024     ADDITION USD + INR
+
+  ELSEIF gv_selected_value  = 'USD & INR'.
+
+
+
+*    SELECT SUM( hslvt  ) AS  hslvt  SUM( kslvt ) AS   kslvt rjvnam racct
+*      FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*        AND rrecin IN  p_rrecin
+*    GROUP BY rjvnam racct .
+
+*    SELECT SUM( hslvt  ) AS  hslvt  SUM( kslvt ) AS   kslvt rjvnam racct
+*      FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvto1
+*      WHERE ryear = p_year
+*        AND rbukrs = p_bukrs
+*        AND rjvnam IN p_jvnam
+*        AND rldnr = '4A'
+*        AND rrcty = '0'
+*        AND rrecin IN  p_rrecin
+*    GROUP BY rjvnam racct .
+SELECT SUM( hslvt ) AS hslvt,
+       SUM( kslvt ) AS kslvt,
+       rjvnam,
+       racct
+*BOC By SAP_ABAP on 22/09/26
+*  FROM jv_jvto1_acdoca
+  FROM jv_jvto1_acdoca_switch_2
+*EOC By SAP_ABAP on 22/09/26
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+*    SELECT SUM( hsl ) AS hsl SUM( ksl )  AS ksl rjvnam racct
+*  FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
+*  WHERE ryear = p_year
+*    AND rbukrs = p_bukrs
+*    AND rjvnam IN p_jvnam
+*    AND poper BETWEEN s_period-low AND s_period-high
+*    AND rldnr = '4A'
+*    AND rrcty = '0'
+*    AND drcrk = 'H'
+*    AND rrecin IN p_rrecin
+*GROUP BY rjvnam racct.
+*
+*
+*
+*    SELECT SUM( hsl ) AS hsl SUM( ksl )  AS ksl rjvnam racct
+*       FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_2
+*       WHERE ryear = p_year
+*         AND rbukrs = p_bukrs
+*         AND rjvnam IN p_jvnam
+*         AND poper BETWEEN s_period-low AND s_period-high
+*         AND rldnr = '4A'
+*         AND rrcty = '0'
+*         AND drcrk = 'S'
+*         AND rrecin IN p_rrecin
+*     GROUP BY rjvnam racct.
+SELECT SUM( hsl ) AS hsl,
+       SUM( ksl ) AS ksl,
+       rjvnam,
+       racct
+  FROM jv_jvso1_acdoca
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_1
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND poper  BETWEEN @s_period-low AND @s_period-high
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND drcrk  =  'H'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+
+SELECT SUM( hsl ) AS hsl,
+       SUM( ksl ) AS ksl,
+       rjvnam,
+       racct
+  FROM jv_jvso1_acdoca
+  INTO CORRESPONDING FIELDS OF TABLE @lt_jvso1_2
+  WHERE ryear  =  @p_year
+    AND rbukrs =  @p_bukrs
+    AND rjvnam IN @p_jvnam
+    AND poper  BETWEEN @s_period-low AND @s_period-high
+    AND rldnr  =  '4A'
+    AND rrcty  =  '0'
+    AND drcrk  =  'S'
+    AND rrecin IN @p_rrecin
+  GROUP BY rjvnam, racct.
+
+**************************************** CODE ENDED APARNA ANAND 19.02.2024    ADDITION USD + INR
+
+  ENDIF.
+
+
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM set_data.
+*--------------------------------------------------------------*
+FORM set_data.
+
+  SORT lt_jvt BY racct ASCENDING.
+  SORT lt_jvto1 BY racct  ASCENDING.
+  SORT lt_jvso1_1 BY racct  ASCENDING.
+  SORT lt_jvso1_2 BY racct  ASCENDING.
+  SORT lt_jvto1_ad BY racct  ASCENDING.
+
+  IF gv_selected_value  = 'Company Code INR'.
+
+    LOOP AT lt_jvt INTO ls_jvt .
+      LOOP AT lt_alljv INTO ls_alljv.
+        ls_final-rjvnam = ls_alljv-rjvnam.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = ls_jvt-racct
+          IMPORTING
+            output = ls_final-racct.
+
+        READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_1-hsl IS NOT INITIAL.
+          ls_final-bal_cre =  ls_jvso1_1-hsl * -1 .
+        ENDIF.
+
+        READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_2-hsl IS NOT INITIAL.
+          ls_final-bal_deb =  ls_jvso1_2-hsl.
+        ENDIF.
+
+        READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        READ TABLE lt_ska1 INTO ls_ska1 WITH KEY saknr = ls_jvto1-racct.
+        IF sy-subrc EQ 0.
+          ls_final-bal_opn = '0'.
+        ELSEIF sy-subrc NE 0.
+          ls_final-bal_opn = ls_jvto1-hslvt.
+        ENDIF.
+
+        READ TABLE lt_skat INTO ls_skat WITH KEY saknr = ls_jvt-racct.
+        ls_final-txt50 = ls_skat-txt50.
+
+        ls_final-bal_clo = ls_final-bal_clo + ls_final-bal_opn + ls_final-bal_deb - ls_final-bal_cre.
+
+        IF ls_final IS NOT INITIAL.
+          IF ( ls_final-bal_clo NE '0.00' ) OR ( ls_final-bal_opn NE '0.00') OR ( ls_final-bal_deb NE '0.00' ) OR ( ls_final-bal_cre NE '0.00' ).
+            APPEND ls_final TO lt_final.
+          ENDIF.
+        ENDIF.
+
+        IF ls_final-racct = '160206'.
+          APPEND ls_final TO lt_final.
+        ENDIF.
+
+        IF ls_final-racct = '120170'." add by rohit on 16.07.2025
+          APPEND ls_final TO lt_final.
+        ENDIF.
+
+        CLEAR : ls_final,ls_jvso1_1,ls_jvto1,ls_ska1,ls_skat,ls_jvt_1,ls_alljv,ls_jvso1_2.
+      ENDLOOP.
+      CLEAR ls_jvt.
+    ENDLOOP.
+
+  ELSEIF gv_selected_value  = 'Index Based USD'.
+
+    LOOP AT lt_jvt INTO ls_jvt .
+      LOOP AT lt_alljv INTO ls_alljv.
+        ls_final-rjvnam = ls_alljv-rjvnam.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = ls_jvt-racct
+          IMPORTING
+            output = ls_final-racct.
+
+        READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_1-ksl IS NOT INITIAL.
+          ls_final-bal_cre =  ls_jvso1_1-ksl * -1 .
+        ENDIF.
+
+        READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_2-ksl IS NOT INITIAL.
+          ls_final-bal_deb =  ls_jvso1_2-ksl.
+        ENDIF.
+
+        READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        READ TABLE lt_ska1 INTO ls_ska1 WITH KEY saknr = ls_jvto1-racct.
+        IF sy-subrc EQ 0.
+          ls_final-bal_opn = '0'.
+        ELSEIF sy-subrc NE 0.
+          ls_final-bal_opn = ls_jvto1-hslvt.
+        ENDIF.
+
+        READ TABLE lt_skat INTO ls_skat WITH KEY saknr = ls_jvt-racct.
+        ls_final-txt50 = ls_skat-txt50.
+
+        ls_final-bal_clo = ls_final-bal_clo + ls_final-bal_opn + ls_final-bal_deb - ls_final-bal_cre.
+
+        IF ls_final IS NOT INITIAL.
+          IF ( ls_final-bal_clo NE '0.00' ) OR ( ls_final-bal_opn NE '0.00') OR ( ls_final-bal_deb NE '0.00' ) OR ( ls_final-bal_cre NE '0.00' ).
+            APPEND ls_final TO lt_final.
+          ENDIF.
+        ENDIF.
+
+        IF ls_final-racct = '160206'.
+          APPEND ls_final TO lt_final.
+        ENDIF.
+        IF ls_final-racct = '120170'." add by rohit on 16.07.2025
+          APPEND ls_final TO lt_final.
+        ENDIF.
+        CLEAR : ls_final,ls_jvso1_1,ls_jvto1,ls_ska1,ls_skat,ls_jvt_1,ls_alljv,ls_jvso1_2.
+      ENDLOOP.
+      CLEAR ls_jvt.
+    ENDLOOP.
+************************************************************************************************************
+  ELSEIF gv_selected_value  = 'USD & INR'.
+
+    LOOP AT lt_jvt INTO ls_jvt .
+      LOOP AT lt_alljv INTO ls_alljv.
+        ls_final-rjvnam = ls_alljv-rjvnam.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+          EXPORTING
+            input  = ls_jvt-racct
+          IMPORTING
+            output = ls_final-racct.
+
+        READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_1-hsl IS NOT INITIAL.
+          ls_final-bal_cre_i =  ls_jvso1_1-hsl * -1 .
+          ls_final-bal_cre_u =  ls_jvso1_1-ksl * -1 .
+        ENDIF.
+
+        READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_2-hsl IS NOT INITIAL.
+          ls_final-bal_deb_i =  ls_jvso1_2-hsl.
+          ls_final-bal_deb_u =  ls_jvso1_2-ksl.
+        ENDIF.
+
+        READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_jvt-racct rjvnam = ls_alljv-rjvnam.
+        READ TABLE lt_ska1 INTO ls_ska1 WITH KEY saknr = ls_jvto1-racct.
+        IF sy-subrc EQ 0.
+          ls_final-bal_opn = '0'.
+        ELSEIF sy-subrc NE 0.
+          ls_final-bal_opn_i = ls_jvto1-hslvt.
+          ls_final-bal_opn_u = ls_jvto1-kslvt.
+        ENDIF.
+
+        READ TABLE lt_skat INTO ls_skat WITH KEY saknr = ls_jvt-racct.
+        ls_final-txt50 = ls_skat-txt50.
+
+        ls_final-bal_clo_i = ls_final-bal_clo_i + ls_final-bal_opn_i + ls_final-bal_deb_i - ls_final-bal_cre_i.
+        ls_final-bal_clo_u = ls_final-bal_clo_u + ls_final-bal_opn_u + ls_final-bal_deb_u - ls_final-bal_cre_u.
+
+        IF ls_final IS NOT INITIAL.
+          IF ( ls_final-bal_clo_i NE '0.00' )  OR ( ls_final-bal_clo_u NE '0.00' ) OR ( ls_final-bal_opn_i NE '0.00') OR ( ls_final-bal_opn_u NE '0.00')  OR ( ls_final-bal_deb_i NE '0.00' )  OR ( ls_final-bal_deb_u NE '0.00' )
+           OR ( ls_final-bal_cre_i NE '0.00' ) OR ( ls_final-bal_cre_u NE '0.00' ).
+            APPEND ls_final TO lt_final.
+          ENDIF.
+        ENDIF.
+
+        IF ls_final-racct = '160206'.
+          APPEND ls_final TO lt_final.
+        ENDIF.
+
+        IF ls_final-racct = '120170'." add by rohit on 16.07.2025
+          APPEND ls_final TO lt_final.
+        ENDIF.
+
+        CLEAR : ls_final,ls_jvso1_1,ls_jvto1,ls_ska1,ls_skat,ls_jvt_1,ls_alljv,ls_jvso1_2.
+      ENDLOOP.
+      CLEAR ls_jvt.
+    ENDLOOP.
+
+  ENDIF.
+***********************************************************************
+
+
+  DATA lv_160206 TYPE skat-txt50.
+  CLEAR lv_160206.
+
+  SELECT SINGLE txt50 FROM skat INTO lv_160206 WHERE saknr = '0000160206'
+                                                        AND ktopl = 'ONGC'
+  AND spras = 'EN'.
+
+  CLEAR : lv_opnbal, lv_crebal,lv_clobal,lv_debbal , lv_opnbal_i, lv_crebal_i ,lv_clobal_i ,lv_debbal_i  ,lv_opnbal_u , lv_crebal_u ,lv_clobal_u ,lv_debbal_u.
+  break abapuser02.
+  LOOP AT lt_alljv INTO ls_alljv.
+    LOOP AT lt_ska1 INTO ls_ska1.
+
+      READ TABLE lt_jvto1 INTO ls_jvto1 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+      IF sy-subrc = 0.
+        IF gv_selected_value  = 'USD & INR'.
+*           lv_opnbal   = ls_jvto1-kslvt.
+          lv_opnbal_i = ls_jvto1-hslvt.
+          lv_opnbal_u = ls_jvto1-kslvt.
+        ELSE.
+          lv_opnbal   = ls_jvto1-hslvt.
+        ENDIF.
+        DATA(flag_ad) = 'X'.
+        DATA(flag) = 'X'.
+      ENDIF.
+*  ENDLOOP.
+
+      IF gv_selected_value  = 'Company Code INR'.
+        READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_1-hsl IS NOT INITIAL.
+          lv_crebal = ls_jvso1_2-hsl * -1.
+          flag = 'X'.
+        ENDIF.
+        READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_2-hsl IS NOT INITIAL.
+          lv_debbal = ls_jvso1_1-hsl.
+          flag = 'X'.
+        ENDIF.
+
+      ELSEIF gv_selected_value  = 'Index Based USD'.
+
+        READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_1-hsl IS NOT INITIAL.
+          lv_crebal = ls_jvso1_2-hsl * -1.
+          flag = 'X'.
+        ENDIF.
+        READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+        IF ls_jvso1_2-hsl IS NOT INITIAL.
+          lv_debbal = ls_jvso1_1-hsl.
+          flag = 'X'.
+        ENDIF.
+      ELSEIF gv_selected_value  = 'USD & INR'.
+
+        READ TABLE lt_jvso1_1 INTO ls_jvso1_1 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+        IF sy-subrc = 0..
+          lv_crebal_i = ls_jvso1_2-hsl * -1.
+          lv_crebal_u = ls_jvso1_2-ksl * -1.
+          flag = 'X'.
+        ENDIF.
+        READ TABLE lt_jvso1_2 INTO ls_jvso1_2 WITH KEY racct = ls_ska1-saknr rjvnam = ls_alljv-rjvnam.
+        IF sy-subrc = 0.
+          lv_debbal_i = ls_jvso1_1-hsl.
+          lv_debbal_u = ls_jvso1_1-ksl.
+          flag = 'X'.
+        ENDIF.
+      ENDIF.
+
+*BREAK abapuser02.
+      IF flag_ad = 'X'.
+        READ TABLE lt_final INTO ls_final WITH KEY racct = '160206' rjvnam = ls_alljv-rjvnam.
+        IF sy-subrc = 0.
+          lv_clobal          = ls_final-bal_clo.
+          lv_clobal_i        = ls_final-bal_clo_i.
+          lv_clobal_u        = ls_final-bal_clo_u.
+          ls_final-bal_clo   = lv_opnbal .
+          ls_final-bal_clo_i = lv_opnbal_i.
+          ls_final-bal_clo_u = lv_opnbal_u .
+          ls_final-bal_clo   = ls_final-bal_clo   +  lv_clobal.
+          ls_final-bal_clo_i = ls_final-bal_clo_i +  lv_clobal_i.
+          ls_final-bal_clo_u = ls_final-bal_clo_u +  lv_clobal_u.
+          ls_final-bal_opn   = ls_final-bal_opn   +  lv_opnbal.
+          ls_final-bal_opn_i = ls_final-bal_opn_i +  lv_opnbal_i.
+          ls_final-bal_opn_u = ls_final-bal_opn_u +  lv_opnbal_u.
+          ls_final-bal_deb   = ls_final-bal_opn   +  lv_debbal.
+          ls_final-bal_deb_i = ls_final-bal_opn_i +  lv_debbal_i.
+          ls_final-bal_deb_u = ls_final-bal_opn_u +  lv_debbal_u.
+          ls_final-bal_cre   = ls_final-bal_opn   +  lv_crebal.
+          ls_final-bal_cre_i = ls_final-bal_opn_i +  lv_crebal_i.
+          ls_final-bal_cre_u = ls_final-bal_opn_u +  lv_crebal_u.
+          ls_final-txt50     = lv_160206.
+
+          IF flag = 'X'.
+            MODIFY lt_final FROM ls_final TRANSPORTING bal_opn bal_clo txt50 WHERE racct = '160206' AND rjvnam = ls_alljv-rjvnam.
+          ENDIF.
+          IF flag = 'X' AND  gv_selected_value  = 'USD & INR'.
+            MODIFY lt_final FROM ls_final TRANSPORTING bal_opn_i  bal_opn_u  bal_clo_i  bal_clo_u  txt50 WHERE racct = '160206' AND rjvnam = ls_alljv-rjvnam.
+          ENDIF.
+        ELSEIF ls_final IS INITIAL.
+
+        ENDIF.
+      ENDIF.
+
+
+      CLEAR : ls_final,ls_jvto1,lv_opnbal,ls_ska1,lv_debbal,lv_debbal_i , lv_debbal_u ,lv_crebal, lv_crebal_i ,lv_crebal_u ,lv_clobal ,
+              lv_crebal_i ,lv_crebal_u, flag_ad, lv_opnbal_i, lv_opnbal_u, lv_clobal_i, lv_clobal_u.
+    ENDLOOP.
+    CLEAR ls_alljv.
+  ENDLOOP.
+
+  PERFORM after_set_data.
+
+  CLEAR : lv_opnbal, lv_crebal,lv_crebal_i ,lv_crebal_u ,lv_clobal, lv_crebal_i ,lv_crebal_u ,lv_debbal ,lv_debbal_i , lv_debbal_u,
+          lv_opnbal_i, lv_opnbal_u.
+  break abapuser02.
+  LOOP AT lt_alljv INTO ls_alljv.
+    LOOP AT lt_bfinal INTO ls_bfinal WHERE rjvnam = ls_alljv-rjvnam.
+
+      IF ls_bfinal IS NOT INITIAL.
+
+        lv_opnbal   =  lv_opnbal   + ls_bfinal-bal_opn.
+        lv_opnbal_i =  lv_opnbal_i + ls_bfinal-bal_opn_i.
+        lv_opnbal_u =  lv_opnbal_u + ls_bfinal-bal_opn_u.
+        lv_clobal   =  lv_clobal   + ls_bfinal-bal_clo.
+        lv_clobal_i =  lv_clobal_i + ls_bfinal-bal_clo_i.
+        lv_clobal_u =  lv_clobal_u + ls_bfinal-bal_clo_u.
+        lv_crebal   =  lv_crebal   + ls_bfinal-bal_cre.
+        lv_crebal_i =  lv_crebal_i + ls_bfinal-bal_cre_i.
+        lv_crebal_u =  lv_crebal_u + ls_bfinal-bal_cre_u.
+        lv_debbal   =  lv_debbal   + ls_bfinal-bal_deb.
+        lv_debbal_i =  lv_debbal_i + ls_bfinal-bal_deb_i.
+        lv_debbal_u =  lv_debbal_i + ls_bfinal-bal_deb_u.
+
+        CLEAR ls_bfinal.
+      ENDIF.
+
+      DATA(flag2) = 'X'.
+    ENDLOOP.
+
+    IF flag = 'X'.
+      READ TABLE lt_final INTO ls_final WITH KEY racct = '120170' rjvnam = ls_alljv-rjvnam.
+      ls_final-bal_opn   = ls_final-bal_opn   + lv_opnbal.
+      ls_final-bal_opn_i = ls_final-bal_opn_i + lv_opnbal_i.
+      ls_final-bal_opn_u = ls_final-bal_opn_u + lv_opnbal_u.
+      ls_final-bal_clo   = ls_final-bal_clo   + lv_clobal.
+      ls_final-bal_clo_i = ls_final-bal_clo_i + lv_clobal_i.
+      ls_final-bal_clo_u = ls_final-bal_clo_u + lv_clobal_u.
+      ls_final-bal_cre   = ls_final-bal_cre   + lv_crebal.
+      ls_final-bal_cre_i = ls_final-bal_cre_i + lv_crebal_i.
+      ls_final-bal_cre_u = ls_final-bal_cre_u + lv_crebal_u.
+      ls_final-bal_deb   = ls_final-bal_deb   + lv_debbal.
+      ls_final-bal_deb_i = ls_final-bal_deb_i + lv_debbal_i.
+      ls_final-bal_deb_u = ls_final-bal_deb_u + lv_debbal_u.
+
+      IF ls_final IS NOT INITIAL.
+        MODIFY lt_final FROM ls_final TRANSPORTING bal_opn bal_clo bal_cre bal_deb
+         bal_opn_i  bal_opn_u  bal_clo_i  bal_clo_u  WHERE rjvnam = ls_alljv-rjvnam AND racct = '120170'.
+      ENDIF.
+*      IF flag = 'X' AND  gv_selected_value  = 'USD & INR'.
+*        MODIFY lt_final FROM ls_final TRANSPORTING bal_opn_i  bal_opn_u  bal_clo_i  bal_clo_u  txt50 WHERE racct = '120170' AND rjvnam = ls_alljv-rjvnam.
+*      ENDIF.
+    ENDIF.
+
+    CLEAR : ls_alljv ,ls_final ,lv_clobal ,lv_clobal_i,lv_clobal_u,lv_crebal ,lv_crebal_i ,lv_crebal_u ,lv_opnbal ,lv_opnbal_i ,lv_opnbal_u ,lv_debbal ,lv_debbal_i ,lv_debbal_u.
+  ENDLOOP.
+
+  CLEAR : ls_final,ls_jvto1,ls_ska1,lv_opnbal, lv_opnbal_i ,lv_opnbal_u ,  lv_clobal ,lv_clobal_i,lv_clobal_u ,lv_crebal, lv_crebal_i ,lv_crebal_u ,lv_debbal ,lv_debbal_i ,lv_debbal_u.
+
+  SORT lt_final BY rjvnam racct ASCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_final COMPARING rjvnam racct.
+
+  IF gv_selected_value  = 'USD & INR'.
+    flg1 = 'X'.
+  ENDIF.
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM disp_data.
+*--------------------------------------------------------------*
+FORM disp_data .
+******************************************Added on 01.11.2022 by hrishi n*****************************
+  IF lt_final IS NOT INITIAL.
+    MOVE-CORRESPONDING lt_final[] TO lt_final2[].
+    MOVE-CORRESPONDING lt_final[] TO lt_final3[].
+  ENDIF.
+
+  IF lt_final3 IS NOT INITIAL.
+    SORT lt_final3 BY racct ASCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_final3 COMPARING racct.
+  ENDIF.
+
+  IF lt_final3 IS NOT INITIAL.
+    SORT lt_final3 BY racct ASCENDING.
+
+    LOOP AT lt_final3 INTO ls_final3.
+      ls_final4-racct = ls_final3-racct.
+      ls_final4-txt50 = ls_final3-txt50.
+
+      APPEND ls_final4 TO lt_final4.
+      CLEAR ls_final4.
+    ENDLOOP.
+  ENDIF.
+
+
+  IF flg1 NE 'X'.
+
+    CLEAR col_count.
+    SORT lt_final2 BY rjvnam racct ASCENDING.
+    READ TABLE lt_alljv INTO DATA(ls_jvnam) INDEX 1.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo1 = ls_final2-bal_clo.
+          ls_final4-bal_opn1 = ls_final2-bal_opn.
+          ls_final4-bal_deb1 = ls_final2-bal_deb.
+          ls_final4-bal_cre1 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo1
+                                                       bal_opn1
+                                                       bal_deb1
+                                                       bal_cre1 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 2.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo2 = ls_final2-bal_clo.
+          ls_final4-bal_opn2 = ls_final2-bal_opn.
+          ls_final4-bal_deb2 = ls_final2-bal_deb.
+          ls_final4-bal_cre2 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo2
+                                                       bal_opn2
+                                                       bal_deb2
+                                                       bal_cre2 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 3.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo3 = ls_final2-bal_clo.
+          ls_final4-bal_opn3 = ls_final2-bal_opn.
+          ls_final4-bal_deb3 = ls_final2-bal_deb.
+          ls_final4-bal_cre3 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo3
+                                                       bal_opn3
+                                                       bal_deb3
+                                                       bal_cre3 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 4.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo4 = ls_final2-bal_clo.
+          ls_final4-bal_opn4 = ls_final2-bal_opn.
+          ls_final4-bal_deb4 = ls_final2-bal_deb.
+          ls_final4-bal_cre4 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo4
+                                                       bal_opn4
+                                                       bal_deb4
+                                                       bal_cre4 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 5.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo5 = ls_final2-bal_clo.
+          ls_final4-bal_opn5 = ls_final2-bal_opn.
+          ls_final4-bal_deb5 = ls_final2-bal_deb.
+          ls_final4-bal_cre5 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo5
+                                                       bal_opn5
+                                                       bal_deb5
+                                                       bal_cre5 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 6.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo6 = ls_final2-bal_clo.
+          ls_final4-bal_opn6 = ls_final2-bal_opn.
+          ls_final4-bal_deb6 = ls_final2-bal_deb.
+          ls_final4-bal_cre6 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo6
+                                                       bal_opn6
+                                                       bal_deb6
+                                                       bal_cre6 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 7.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo7 = ls_final2-bal_clo.
+          ls_final4-bal_opn7 = ls_final2-bal_opn.
+          ls_final4-bal_deb7 = ls_final2-bal_deb.
+          ls_final4-bal_cre7 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo7
+                                                       bal_opn7
+                                                       bal_deb7
+                                                       bal_cre7 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 8.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo8 = ls_final2-bal_clo.
+          ls_final4-bal_opn8 = ls_final2-bal_opn.
+          ls_final4-bal_deb8 = ls_final2-bal_deb.
+          ls_final4-bal_cre8 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo8
+                                                       bal_opn8
+                                                       bal_deb8
+                                                       bal_cre8 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 9.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo9 = ls_final2-bal_clo.
+          ls_final4-bal_opn9 = ls_final2-bal_opn.
+          ls_final4-bal_deb9 = ls_final2-bal_deb.
+          ls_final4-bal_cre9 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo9
+                                                       bal_opn9
+                                                       bal_deb9
+                                                       bal_cre9 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 10.
+
+    IF ls_jvnam IS NOT INITIAL.
+      col_count = col_count + 1.
+
+      LOOP AT lt_final4 INTO ls_final4 .
+        LOOP AT lt_final2 INTO ls_final2 WHERE racct = ls_final4-racct AND rjvnam = ls_jvnam-rjvnam.
+          ls_final4-bal_clo10 = ls_final2-bal_clo.
+          ls_final4-bal_opn10 = ls_final2-bal_opn.
+          ls_final4-bal_deb10 = ls_final2-bal_deb.
+          ls_final4-bal_cre10 = ls_final2-bal_cre.
+          MODIFY lt_final4 FROM ls_final4 TRANSPORTING bal_clo10
+                                                       bal_opn10
+                                                       bal_deb10
+                                                       bal_cre10 WHERE racct = ls_final2-racct.
+        ENDLOOP.
+      ENDLOOP.
+    ENDIF.
+
+***************************************End of addn by hrishi n on 01.11.2022**************************************
+
+    PERFORM fcat_fill.
+    PERFORM alv_display.
+  ELSEIF flg1 EQ 'X' .
+
+
+    DATA clo_jvnam1 TYPE string.
+    DATA clo_jvnam2 TYPE string.
+    DATA col_nam TYPE string.
+    DATA col_nam2 TYPE string.
+
+
+    ls_fieldcat-fieldname = 'RACCT'.
+    ls_fieldcat-col_pos   = '1'.
+    ls_fieldcat-coltext   = 'G/L account'.
+    APPEND ls_fieldcat TO lt_fieldcat.
+
+    ls_fieldcat-fieldname = 'TXT50'.
+    ls_fieldcat-col_pos   = '2'.
+    ls_fieldcat-outputlen = '50'.
+    ls_fieldcat-coltext   = 'G/L Description'.
+    APPEND ls_fieldcat TO lt_fieldcat.
+*******************************************************    APARNA
+    IF gv_selected_value  = 'USD & INR'.
+      LOOP AT lt_alljv INTO DATA(ls_jvnam1).
+        CLEAR : clo_jvnam1,clo_jvnam2.
+        clo_jvnam1 = sy-tabix.
+        CONCATENATE 'BAL_CLO_U' clo_jvnam1 INTO clo_jvnam1.
+        CONCATENATE 'Closing Bal USD' ls_jvnam1-rjvnam INTO clo_jvnam2 SEPARATED BY space.
+        ls_fieldcat-fieldname = clo_jvnam1.
+        ls_fieldcat-col_pos   = sy-tabix + 2.
+        ls_fieldcat-coltext   = clo_jvnam2.
+        ls_fieldcat-outputlen = '20'.
+        ls_fieldcat-do_sum    = abap_true.
+*      LS_FIELDCAT-NO_ZERO   = ABAP_TRUE.
+        ls_fieldcat-inttype   = 'P'.
+        ls_fieldcat-decimals  = '3'.
+        APPEND ls_fieldcat TO lt_fieldcat.
+      ENDLOOP.
+      DATA(lt_fcat_tmp) = lt_fieldcat.
+      SORT lt_fcat_tmp DESCENDING BY col_pos.
+      TRY.
+          DATA(lv_cat) =  lt_fcat_tmp[ 1 ]-col_pos.
+        CATCH cx_sy_itab_line_not_found.
+      ENDTRY.
+
+      LOOP AT lt_alljv INTO ls_jvnam1.
+        CLEAR : clo_jvnam1,clo_jvnam2.
+        clo_jvnam1 = sy-tabix.
+        CONCATENATE 'BAL_CLO_I' clo_jvnam1 INTO clo_jvnam1.
+        CONCATENATE 'Closing Bal INR' ls_jvnam1-rjvnam INTO clo_jvnam2 SEPARATED BY space.
+        ls_fieldcat-fieldname = clo_jvnam1.
+        .
+        ls_fieldcat-col_pos = lv_cat + sy-tabix.
+        ls_fieldcat-coltext   = clo_jvnam2.
+        ls_fieldcat-outputlen = '20'.
+        ls_fieldcat-do_sum    = abap_true.
+*      LS_FIELDCAT-NO_ZERO   = ABAP_TRUE.
+        ls_fieldcat-inttype   = 'P'.
+        ls_fieldcat-decimals  = '3'.
+        APPEND ls_fieldcat TO lt_fieldcat.
+        CLEAR  : ls_fieldcat .
+      ENDLOOP.
+      CLEAR  lv_cat.
+    ELSE.
+*******************************************************APARNA
+      LOOP AT lt_alljv INTO ls_jvnam1.
+        CLEAR : clo_jvnam1,clo_jvnam2.
+        clo_jvnam1 = sy-tabix.
+        CONCATENATE 'BAL_CLO' clo_jvnam1 INTO clo_jvnam1.
+        CONCATENATE 'Closing Bal' ls_jvnam1-rjvnam INTO clo_jvnam2 SEPARATED BY space.
+        ls_fieldcat-fieldname = clo_jvnam1.
+        ls_fieldcat-col_pos   = sy-tabix + 2.
+        ls_fieldcat-coltext   = clo_jvnam2.
+        ls_fieldcat-outputlen = '20'.
+        ls_fieldcat-do_sum    = abap_true.
+*      LS_FIELDCAT-NO_ZERO   = ABAP_TRUE.
+        ls_fieldcat-inttype   = 'P'.
+        ls_fieldcat-decimals  = '3'.
+        APPEND ls_fieldcat TO lt_fieldcat.
+      ENDLOOP.
+    ENDIF.
+    CALL METHOD cl_alv_table_create=>create_dynamic_table
+      EXPORTING
+        it_fieldcatalog = lt_fieldcat
+      IMPORTING
+        ep_table        = lr_itab.
+
+    ASSIGN lr_itab->* TO <fs_itab>.
+
+    DATA lr_itab_line TYPE REF TO data.
+    DATA lt_final5 TYPE REF TO data.
+*
+    FIELD-SYMBOLS <fs_itab_line> TYPE any.
+    FIELD-SYMBOLS <fs_itab2> TYPE STANDARD TABLE.
+*
+    CREATE DATA lr_itab_line LIKE LINE OF <fs_itab>.
+    ASSIGN lr_itab_line->* TO <fs_itab_line>.
+
+
+
+    CREATE DATA lr_itab LIKE STANDARD TABLE OF <fs_itab_line>.
+    ASSIGN lr_itab->* TO <fs_itab2>.
+
+    FIELD-SYMBOLS: <fs1>,
+                   <fs2>,
+                   <fs3>,
+                   <fs4>,
+                   <fs5>.
+    .
+    DATA col_no TYPE i.
+    ASSIGN COMPONENT 1 OF STRUCTURE <fs_itab_line> TO <fs1>.
+    ASSIGN COMPONENT 2 OF STRUCTURE <fs_itab_line> TO <fs2>.
+
+    CLEAR ls_final3.
+    CLEAR ls_final.
+    SORT lt_final BY racct.
+    break abapuser02.
+    LOOP AT lt_final3 INTO ls_final3.
+
+      col_no = 3.
+
+      <fs1> = ls_final3-racct.
+      <fs2> = ls_final3-txt50.
+      IF gv_selected_value  = 'USD & INR'.
+        LOOP AT lt_final INTO ls_final WHERE racct = ls_final3-racct.
+          CONCATENATE 'Closing Bal USD' ls_final-rjvnam INTO col_nam SEPARATED BY space.
+          CONCATENATE 'Closing Bal INR' ls_final-rjvnam INTO col_nam2 SEPARATED BY space.
+          READ TABLE lt_fieldcat INTO ls_fieldcat WITH KEY coltext = col_nam.
+          IF sy-subrc = 0.
+            col_no = ls_fieldcat-col_pos.
+            ASSIGN COMPONENT col_no OF STRUCTURE <fs_itab_line> TO <fs5>.
+
+            <fs5> = ls_final-bal_clo_u.
+
+            UNASSIGN <fs5>.
+          ENDIF.
+          READ TABLE lt_fieldcat INTO ls_fieldcat WITH KEY coltext = col_nam2.
+          IF sy-subrc = 0.
+            col_no = ls_fieldcat-col_pos.
+
+            ASSIGN COMPONENT col_no OF STRUCTURE <fs_itab_line> TO <fs5>.
+
+            <fs5> = ls_final-bal_clo_i.
+
+            UNASSIGN <fs5>.
+          ENDIF.
+
+
+        ENDLOOP.
+      ELSE.
+        LOOP AT lt_final INTO ls_final WHERE racct = ls_final3-racct.
+          CONCATENATE 'Closing Bal' ls_final-rjvnam INTO col_nam SEPARATED BY space.
+          READ TABLE lt_fieldcat INTO ls_fieldcat WITH KEY coltext = col_nam.
+          col_no = ls_fieldcat-col_pos.
+          ASSIGN COMPONENT col_no OF STRUCTURE <fs_itab_line> TO <fs5>.
+
+          <fs5> = ls_final-bal_clo.
+
+          UNASSIGN <fs5>.
+        ENDLOOP.
+      ENDIF.
+      INSERT <fs_itab_line> INTO TABLE <fs_itab> .
+      CLEAR <fs_itab_line>.
+      CLEAR:col_no.
+    ENDLOOP.
+    UNASSIGN <fs1>.
+    UNASSIGN <fs2>.
+
+    IF <fs_itab> IS NOT INITIAL.
+      <fs_itab2> = <fs_itab> .
+
+      CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+        EXPORTING
+          i_callback_program     = sy-cprog
+          i_callback_top_of_page = 'TOP_OF_PAGE'
+          is_layout_lvc          = ls_lay
+          it_fieldcat_lvc        = lt_fieldcat
+          i_default              = 'X'
+          i_save                 = 'A'
+        TABLES
+          t_outtab               = <fs_itab>
+        EXCEPTIONS
+          program_error          = 1
+          OTHERS                 = 2.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+*        DATA: lo_alv       TYPE REF TO cl_salv_table,
+*              lo_columns   TYPE REF TO cl_salv_columns_table,
+*              lo_layout    TYPE REF TO cl_salv_layout,
+*              lo_disp_set  TYPE REF TO cl_salv_display_settings,
+*              lo_column    TYPE REF TO cl_salv_column_table,
+*              lo_functions TYPE REF TO cl_salv_functions,
+*              lo_agr       TYPE REF TO cl_salv_aggregations,
+*              style        TYPE outputstyle.
+*
+*        DATA ls_layout_key TYPE salv_s_layout_key.
+*
+*       TRY.
+*           cl_salv_table=>factory(
+*             IMPORTING
+*               r_salv_table = lo_alv
+*             CHANGING
+*               t_table = <fs_itab> ).
+*        CATCH cx_salv_msg .
+*       ENDTRY.
+*
+*        LO_COLUMNS = LO_ALV->GET_COLUMNS( ).
+*        LO_COLUMNS->SET_OPTIMIZE( ABAP_TRUE ).
+*
+*        LOOP AT LT_FIELDCAT INTO LS_FIELDCAT.
+*         TRY.
+*          LO_COLUMN ?= LO_COLUMNS->GET_COLUMN( LS_FIELDCAT-FIELDNAME ).
+*          LO_COLUMN->SET_LONG_TEXT( LS_FIELDCAT-COLTEXT ).
+*
+*          CATCH cx_salv_not_found.
+*         ENDTRY.
+*        ENDLOOP.
+*
+*       lo_layout = lo_alv->get_layout( ).
+*       lo_layout->set_default( abap_true ).
+*
+*       ls_layout_key-report = sy-repid.
+*       lo_layout->set_key( ls_layout_key ).
+*
+*       lo_layout->set_save_restriction( if_salv_c_layout=>restrict_none ).
+*
+*       lo_functions = lo_alv->get_functions( ).
+*       lo_functions->set_all( abap_true ).
+*
+*       lo_disp_set = lo_alv->get_display_settings( ).
+*       lo_disp_set->set_striped_pattern( abap_true ).
+*
+*       lo_alv->display( ).
+*
+    ENDIF.
+
+  ENDIF.
+
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM fcat_fill .
+FORM fcat_fill .
+*--------------------------------------------------------------*
+******************************************Added on 01.11.2022 by hrishi n*****************************
+  DATA : h_opbal TYPE string,
+         h_clbal TYPE string,
+         h_crbal TYPE string,
+         h_dbbal TYPE string.
+
+  READ TABLE lt_alljv INTO DATA(ls_jvnam) INDEX 1.
+  CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal.
+  CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+  PERFORM alv_fcat USING :   'RACCT'      'G/L account'       ' ' ,
+                             'TXT50'      'G/L Description'   ' ' ,
+                             'BAL_OPN1'    h_opbal   'X' ,
+                             'BAL_DEB1'    h_dbbal   'X' ,
+                             'BAL_CRE1'    h_crbal   'X' ,
+                             'BAL_CLO1'    h_clbal   'X' .
+
+  IF col_count GE 2.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 2.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :  'BAL_OPN2'    h_opbal   'X' ,
+                              'BAL_DEB2'    h_dbbal   'X' ,
+                              'BAL_CRE2'    h_crbal   'X' ,
+                              'BAL_CLO2'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 3.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 3.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN3'   h_opbal   'X' ,
+                               'BAL_DEB3'   h_dbbal   'X' ,
+                               'BAL_CRE3'   h_crbal   'X' ,
+                               'BAL_CLO3'   h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 4.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 4.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING : 'BAL_OPN4'    h_opbal   'X' ,
+                             'BAL_DEB4'    h_dbbal   'X' ,
+                             'BAL_CRE4'    h_crbal   'X' ,
+                             'BAL_CLO4'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 5.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 5.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN5'    h_opbal   'X' ,
+                               'BAL_DEB5'    h_dbbal   'X' ,
+                               'BAL_CRE5'    h_crbal   'X' ,
+                               'BAL_CLO5'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 6.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 6.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN6'    h_opbal   'X' ,
+                               'BAL_DEB6'    h_dbbal   'X' ,
+                               'BAL_CRE6'    h_crbal   'X' ,
+                               'BAL_CLO6'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 7.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 7.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN7'    h_opbal   'X' ,
+                               'BAL_DEB7'    h_dbbal   'X' ,
+                               'BAL_CRE7'    h_crbal   'X' ,
+                               'BAL_CLO7'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 8.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 8.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN8'    h_opbal   'X' ,
+                               'BAL_DEB8'    h_dbbal   'X' ,
+                               'BAL_CRE8'    h_crbal   'X' ,
+                               'BAL_CLO8'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 9.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 9.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN9'    h_opbal   'X' ,
+                               'BAL_DEB9'    h_dbbal   'X' ,
+                               'BAL_CRE9'    h_crbal   'X' ,
+                               'BAL_CLO9'    h_clbal   'X' .
+  ENDIF.
+
+  IF col_count GE 10.
+    CLEAR : h_opbal, h_clbal, h_crbal, h_dbbal, ls_jvnam.
+    READ TABLE lt_alljv INTO ls_jvnam INDEX 10.
+    CONCATENATE : 'Opening Balance (' ls_jvnam-rjvnam ')' INTO h_opbal SEPARATED BY space,
+                  'Closing Balance (' ls_jvnam-rjvnam ')' INTO h_clbal SEPARATED BY space,
+                  'Credit Balance ('  ls_jvnam-rjvnam ')' INTO h_crbal SEPARATED BY space,
+                  'Debit Balance ('   ls_jvnam-rjvnam ')' INTO h_dbbal SEPARATED BY space.
+
+    PERFORM alv_fcat USING :   'BAL_OPN10'    h_opbal   'X' ,
+                               'BAL_DEB10'    h_dbbal   'X' ,
+                               'BAL_CRE10'    h_crbal   'X' ,
+                               'BAL_CLO10'    h_clbal   'X' .
+  ENDIF.
+
+***************************************End of addn by hrishi n on 01.11.2022**************************************
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM  alv_fcat  .
+*--------------------------------------------------------------*
+FORM alv_fcat  USING    VALUE(p_011)
+                        VALUE(p_012)
+                        VALUE(p_013).
+
+  wa_fcat-fieldname   = p_011.
+  wa_fcat-seltext_l   = p_012.
+  IF wa_fcat-fieldname EQ 'TXT50' OR wa_fcat-fieldname EQ 'RACCT'.
+  ELSE.
+    wa_fcat-do_sum      = 'X'.
+  ENDIF.
+
+  APPEND wa_fcat TO lt_fcat.
+  CLEAR wa_fcat.
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM alv_display .
+*--------------------------------------------------------------*
+FORM alv_display .
+  wa_layout-info_fieldname     = 'LINE_COLOR'.
+  wa_layout-colwidth_optimize  = 'X'.
+  wa_layout-zebra              = 'X'.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program     = sy-cprog
+      i_callback_top_of_page = 'TOP_OF_PAGE'
+      is_layout              = wa_layout
+      it_fieldcat            = lt_fcat
+      i_default              = 'X'
+      i_save                 = 'A'
+    TABLES
+      t_outtab               = lt_final4
+    EXCEPTIONS
+      program_error          = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM top_of_page.
+*--------------------------------------------------------------*
+FORM top_of_page.
+  PERFORM ex_change.
+  REFRESH int_header[].
+  fs_header-typ = 'H'.
+  fs_header-info = 'Joint Venture Trial Balance'.
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  fs_header-typ = 'S'.
+  fs_header-info =  p_year .
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  fs_header-typ = 'S'.
+  fs_header-info =  p_bukrs .
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  fs_header-typ = 'S'.
+  fs_header-info = gwa_list-text .
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  fs_header-typ = 'S'.
+  CONCATENATE  s_period-low+1(2) ' To ' space s_period-high+1(2) INTO fs_header-info SEPARATED BY space.
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  fs_header-typ = 'S'.
+  fs_header-info = gv_ukurs .
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  fs_header-typ = 'S'.
+  fs_header-info = lv_ukurs .
+  APPEND fs_header TO int_header.
+  CLEAR fs_header.
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = int_header.
+
+ENDFORM.
+*--------------------------------------------------------------*
+*FORM after_set_data.
+*--------------------------------------------------------------*
+FORM after_set_data.
+
+  CLEAR : ls_final.
+  LOOP AT lt_final INTO ls_final.
+    IF ls_final-racct GE 500000 AND ls_final-racct LE 599999.
+      APPEND ls_final TO lt_bfinal.
+      DELETE TABLE lt_final FROM ls_final.
+      CLEAR ls_final.
+    ENDIF.
+  ENDLOOP.
+
+  SORT lt_bfinal BY racct ASCENDING.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  PROCESSGUIDE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM processguide .
+
+  DATA : la_gos_dis  TYPE sibflporb.
+
+*variable to attachment
+  DATA: lv_attano TYPE string.
+
+
+
+
+  IF sy-uname CA sy-abcde.
+
+    DATA lv_ip_mode TYPE c.
+    CLEAR : lv_attano,la_gos_dis.
+
+    la_gos_dis-objtype = 'ZGOS3'.
+    lv_attano = 'ZJVTBPROCESSGUIDE'.
+    la_gos_dis-instid  = lv_attano.
+    la_gos_dis-catid  = 'BO'.
+    lv_ip_mode = 'C'. "create/change/display/delete
+
+    CALL FUNCTION 'GOS_ATTACHMENT_LIST_POPUP'
+      EXPORTING
+        is_object      = la_gos_dis
+        ip_attachments = 'X'
+        ip_mode        = lv_ip_mode.
+
+  ELSE.
+
+    MESSAGE 'To update attachment list contact SAP core team. Continue to view process guide.' TYPE 'S'.
+
+    CLEAR : lv_attano,la_gos_dis.
+
+    la_gos_dis-objtype = 'ZGOS3'.
+    lv_attano = 'ZJVTBPROCESSGUIDE'.
+    la_gos_dis-instid  = lv_attano.
+    la_gos_dis-catid  = 'BO'.
+
+    CALL FUNCTION 'GOS_ATTACHMENT_LIST_POPUP'
+      EXPORTING
+        is_object = la_gos_dis.
+
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  EX_CHANGE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM ex_change .
+
+  DATA: t_year  TYPE gjahr.
+  DATA  gv_ukurs2 TYPE tcurr-ukurs.
+  DATA lv_month TYPE i.
+  DATA lv_days(2) TYPE c.
+  DATA lv_month1 TYPE rpmax.
+  DATA lv_month2 TYPE rpmax.
+  DATA lv_budat TYPE sy-datum.
+  DATA lv_budat2 TYPE sy-datum.
+  DATA lv_budat3 TYPE sy-datum.
+  CLEAR : gv_ukurs2 , lv_month1 , lv_month2,  lv_ukurs , lv_budat3.
+
+
+*********************************************
+  lv_month1+1(2) = s_period-high+1(2) .
+  lv_month2+1(2) = s_period-low+1(2) .
+
+  "soc by rohit on 01.05.2026.
+
+  IF lv_month1 GT 9.
+
+    t_year =  p_year + 1.
+
+  ELSE .
+    t_year = p_year.
+
+  ENDIF.
+
+  "eoc by rohit on 01.05.2026.
+
+
+
+  IF  lv_month1+1(2)      = '01'.
+    lv_month1+1(2) = '04'.
+  ELSEIF   lv_month1+1(2)   = '02'.
+    lv_month1+1(2) = '05'.
+  ELSEIF  lv_month1+1(2) = '03'.
+    lv_month1+1(2) = '06'.
+  ELSEIF   lv_month1+1(2) = '04'.
+    lv_month1+1(2) = '07'.
+  ELSEIF  lv_month1+1(2) = '05'.
+    lv_month1+1(2) = '08'.
+  ELSEIF lv_month1+1(2) = '06'.
+    lv_month1+1(2) = '09'.
+  ELSEIF  lv_month1+1(2) = '07'.
+    lv_month1+1(2) = '10'.
+  ELSEIF  lv_month1+1(2) = '08'.
+    lv_month1+1(2) = '11'.
+  ELSEIF  lv_month1+1(2) = '09'.
+    lv_month1+1(2) = '12'.
+  ELSEIF  lv_month1+1(2) = '10'.
+    lv_month1+1(2) = '01'.
+  ELSEIF  lv_month1+1(2)  = '11'.
+    lv_month1+1(2) = '02'.
+  ELSEIF  lv_month1+1(2) = '12'.
+    lv_month1+1(2) = '03'.
+  ENDIF.
+
+**************************************
+  IF  lv_month2+1(2)      = '01'.
+    lv_month2+1(2) = '04'.
+  ELSEIF   lv_month2+1(2)   = '02'.
+    lv_month2+1(2) = '05'.
+  ELSEIF  lv_month2+1(2) = '03'.
+    lv_month2+1(2) = '06'.
+  ELSEIF   lv_month2+1(2) = '04'.
+    lv_month2+1(2) = '07'.
+  ELSEIF  lv_month2+1(2) = '05'.
+    lv_month2+1(2) = '08'.
+  ELSEIF lv_month2+1(2) = '06'.
+    lv_month2+1(2) = '09'.
+  ELSEIF  lv_month2+1(2) = '07'.
+    lv_month2+1(2) = '10'.
+  ELSEIF  lv_month2+1(2) = '08'.
+    lv_month2+1(2) = '11'.
+  ELSEIF  lv_month2+1(2) = '09'.
+    lv_month2+1(2) = '12'.
+  ELSEIF  lv_month2+1(2) = '10'.
+    lv_month2+1(2) = '01'.
+  ELSEIF  lv_month2+1(2)  = '11'.
+    lv_month2+1(2) = '02'.
+  ELSEIF  lv_month2+1(2) = '12'.
+    lv_month2+1(2) = '03'.
+  ENDIF.
+*****************************************************************
+  IF s_period-high IS NOT INITIAL.
+
+    CLEAR lv_days.
+    IF  lv_month1+1(2)  = '02'.
+      lv_days = '28'.
+    ELSEIF (  lv_month1+1(2)  = '04' OR  lv_month1+1(2)  = '06' OR  lv_month1+1(2)  = '09' OR   lv_month1+1(2)  = '11' ).
+      lv_days = '30'.
+    ELSE.
+      lv_days = '31'.
+    ENDIF.
+
+    IF p_year NE t_year.   " SOC BY ROHIT ON 01.05.2026
+      CONCATENATE   lv_days lv_month1+1(2) t_year  INTO lv_budat.
+      CONCATENATE   '01' lv_month1+1(2) t_year   INTO lv_budat3.
+
+    ELSE .
+      CONCATENATE   lv_days lv_month1+1(2) p_year  INTO lv_budat.
+      CONCATENATE   '01' lv_month1+1(2) p_year   INTO lv_budat3.
+
+    ENDIF.    " EOC BY ROHIT ON 01.05.2026
+
+    CONDENSE lv_budat.
+    CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+      EXPORTING
+        input  = lv_budat
+      IMPORTING
+        output = lv_budat.
+
+    CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+      EXPORTING
+        input  = lv_budat3
+      IMPORTING
+        output = lv_budat3.
+
+*    SELECT SINGLE ukurs
+*          FROM tcurr
+*          INTO gv_ukurs2
+*         WHERE kurst = 'CLT'
+*           AND fcurr = 'USD'
+*           AND tcurr = 'INR'
+*           AND gdatu BETWEEN lv_budat AND lv_budat3.
+    SELECT ukurs
+          FROM tcurr UP TO 1 ROWS
+          INTO gv_ukurs2
+         WHERE kurst = 'CLT'
+           AND fcurr = 'USD'
+           AND tcurr = 'INR'
+           AND gdatu BETWEEN lv_budat AND lv_budat3 ORDER BY PRIMARY KEY. ENDSELECT.
+    gv_ukurs = gv_ukurs2.
+
+  ELSE.
+    CLEAR lv_days.
+    IF s_period-low+1(2)  = '02'.
+      lv_days = '28'.
+    ELSEIF ( s_period-low+1(2)  = '04' OR s_period-low+1(2)  = '06' OR s_period-low+1(2)  = '09' OR s_period-low+1(2)  = '11' ).
+      lv_days = '30'.
+    ELSE.
+      lv_days = '31'.
+    ENDIF.
+
+
+    CONCATENATE lv_days lv_month2+1(2) p_year    INTO lv_budat.
+
+    CONDENSE lv_budat.
+    CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+      EXPORTING
+        input  = lv_budat
+      IMPORTING
+        output = lv_budat.
+*
+
+    SELECT SINGLE ukurs
+          FROM tcurr
+          INTO gv_ukurs2
+         WHERE kurst = 'CLT'
+           AND fcurr = 'USD'
+           AND tcurr = 'INR'
+           AND gdatu = lv_budat.
+
+  ENDIF.
+  gv_ukurs = gv_ukurs2.
+*************************************************************************************** avarage rate
+
+*  DO.
+
+  CLEAR :lv_days ,  gv_ukurs2 .
+
+  IF   lv_month2+1(2)  = '02'.
+    lv_days = '28'.
+  ELSEIF (   lv_month2+1(2)  = '04' OR   lv_month2+1(2)  = '06' OR  lv_month2+1(2)  = '09' OR   lv_month2+1(2) = '11' ).
+    lv_days = '30'.
+  ELSE.
+    lv_days = '31'.
+  ENDIF.
+
+  CONCATENATE  '01' lv_month2+1(2) p_year  INTO lv_budat2.
+
+  CONDENSE lv_budat2.
+  CALL FUNCTION 'CONVERSION_EXIT_INVDT_INPUT'
+    EXPORTING
+      input  = lv_budat2
+    IMPORTING
+      output = lv_budat2.
+
+  SELECT kurst
+        fcurr
+        tcurr
+        gdatu
+         ukurs
+        FROM tcurr
+        INTO TABLE it_curr
+       WHERE kurst = 'NTA'
+         AND fcurr = 'USD'
+         AND tcurr = 'INR'
+         AND gdatu BETWEEN  lv_budat AND lv_budat2.
+
+  LOOP AT it_curr INTO DATA(wa_curr).
+    lv_ukurs = lv_ukurs + wa_curr-ukurs.
+  ENDLOOP.
+
+  lv_ukurs =  lv_ukurs /  s_period-high+1(2).
+
+ENDFORM.
