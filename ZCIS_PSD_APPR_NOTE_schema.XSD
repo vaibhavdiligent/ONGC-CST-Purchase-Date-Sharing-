@@ -130,6 +130,38 @@
         </xsd:annotation>
         <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="60"/></xsd:restriction></xsd:simpleType>
        </xsd:element>
+       <xsd:element name="GRAND_TOTAL">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Grand Total of all offices</xsd:documentation>
+         <xsd:appinfo><dc:description>Grand Total of all offices</dc:description><dc:title>Grand Total (Rs.)</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="25"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
+      </xsd:sequence>
+     </xsd:complexType>
+    </xsd:element>
+    <xsd:element name="IT_OFFICE">
+     <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+      <xsd:documentation>CIS PSD Approval Note - Sales Office table</xsd:documentation>
+      <xsd:appinfo><dc:description>CIS PSD Approval Note - Sales Office table</dc:description></xsd:appinfo>
+     </xsd:annotation>
+     <xsd:complexType>
+      <xsd:sequence>
+       <xsd:element name="DATA" minOccurs="0" maxOccurs="unbounded">
+        <xsd:complexType>
+         <xsd:sequence>
+          <xsd:element name="S_NO"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="3"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="SALES_OFF"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="4"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="L1_REMARKS"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="100"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="L1_CPF"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="12"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="L1_STAMP"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="40"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="L2_REMARKS"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="100"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="L2_CPF"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="12"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="L2_STAMP"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="40"/></xsd:restriction></xsd:simpleType></xsd:element>
+          <xsd:element name="DISC_VALUE"><xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="25"/></xsd:restriction></xsd:simpleType></xsd:element>
+         </xsd:sequence>
+        </xsd:complexType>
+       </xsd:element>
       </xsd:sequence>
      </xsd:complexType>
     </xsd:element>
