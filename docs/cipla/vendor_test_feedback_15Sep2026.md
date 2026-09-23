@@ -107,6 +107,52 @@ Where the central column is already filled, the warning says that instead of
 overwriting it. A row's rule breaches are also reported together now, rather than
 one per run.
 
+## Vendor extension, tab by tab — was the vendor extended?
+
+**Yes.** The log's last line is *Posted successfully* with **both** keys filled —
+company code 3900 and purchasing organisation 3900 — so `LFB1` for 3900 and
+`LFM1` for 3900 were created for vendor `0100142655`. Note also that the
+"already extended" warning did **not** appear, which means 3900 was genuinely new
+rather than an update.
+
+The warning in the middle of the row is about the **copy**, not the extension:
+
+> Reference company code 1000 has no data for this vendor
+
+The row named company code 1000 as the reference to copy `AKONT`, `ZTERM`,
+`ZWELS`, `REPRF` and `FDGRV` from. Vendor `0100142655` has no company code 1000
+data, so nothing was copied. Everything that ended up on 3900 came from the row's
+own override columns: `AKONT 1120001`, `ZWELS CNT`, `REPRF X`, and on the
+purchasing side `WAERS INR`, `KALSK 01`, `WEBRE X`. So the extension is complete
+for those fields, and any field the reference would have carried — `ZTERM` and
+`FDGRV` in particular — is **not set**. That is what the warning is telling you to
+check.
+
+### Why the reference found nothing — column 5 was never read
+
+The test row left **REF LIFNR (column 5) empty** and filled only REF BUKRS 1000
+and REF EKORG 1000. The program was reading columns 6 and 7 and **ignoring column
+5 altogether**, so the copy was always taken from the vendor being extended — and
+a reference vendor typed into the file would have done nothing at all, in silence.
+The row therefore asked "copy my own company code 1000 data", which does not
+exist.
+
+Fixed: column 5 is now read, resolved through the same business-partner lookup as
+the vendor itself, and checked to exist. Left empty it still means the vendor
+itself — which is how a second company code is added to a supplier that already
+has one — but a reference vendor now does what the column says. The sample the
+download writes fills column 5 with the vendor, and
+`tools/audit_extract_fields.py` now derives the key names from the extractor's own
+code, so a key column the upload reads that the sample leaves empty is caught.
+
+Two more things on this tab:
+
+* the warning now says what it means for the outcome: *"Vendor 0100142655 has no
+  data in reference company code 1000 (columns 5/6) — nothing was copied, and
+  3900 is extended with the values in columns 9 to 11 only"*;
+* the same miss on the **purchasing** side was completely silent — the company
+  code branch warned and the purchasing branch did not. It now warns too.
+
 ## Conversion errors found on a second pass
 
 The screenshot on the vendor creation tab is our own file-type message, not a

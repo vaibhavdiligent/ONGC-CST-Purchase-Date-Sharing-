@@ -795,6 +795,7 @@ CLASS lcl_hdr IMPLEMENTATION.
       ( scen = 'R6' col = 2    hdr = 'LIFNR' )
       ( scen = 'R6' col = 3    hdr = 'BUKRS' )
       ( scen = 'R6' col = 4    hdr = 'EKORG' )
+      ( scen = 'R6' col = 5    hdr = 'REFLIFNR' )
       ( scen = 'R6' col = 6    hdr = 'REFBUKRS' )
       ( scen = 'R6' col = 7    hdr = 'REFEKORG' )
       ( scen = 'R6' col = 9    hdr = 'AKONT' )
@@ -3044,6 +3045,13 @@ CLASS lcl_h_ext IMPLEMENTATION.
       DATA(lv_ekorg) = CONV ekorg( lcl_util=>cell( is_row = ls_row iv_col = 4 ) ).
       DATA(lv_rbuk)  = CONV bukrs( lcl_util=>cell( is_row = ls_row iv_col = 6 ) ).
       DATA(lv_reko)  = CONV ekorg( lcl_util=>cell( is_row = ls_row iv_col = 7 ) ).
+      " Column 5 is the reference VENDOR - the supplier whose company code
+      " and purchasing data this extension is copied from. It used to be
+      " passed over, so the copy was always taken from the vendor being
+      " extended, and a reference vendor typed in the file did nothing at
+      " all. Left empty it still means the vendor itself, which is how a
+      " second company code is added to a supplier that already has one.
+      DATA(lv_rlif)  = key_lifnr( is_row = ls_row iv_col = 5 ).
 
       IF lv_lifnr IS INITIAL.
         CONTINUE.
@@ -3062,6 +3070,15 @@ CLASS lcl_h_ext IMPLEMENTATION.
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k3 = lv_ekorg iv_ty = 'E'
                      iv_txt = |Target purchasing organisation { lv_ekorg } does not exist| ).
         CONTINUE.
+      ENDIF.
+
+      IF lv_rlif IS NOT INITIAL AND mo_cfg->vend_exists( lv_rlif ) = abap_false.
+        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'E'
+                     iv_txt = |Reference vendor { lv_rlif } does not exist (column 5)| ).
+        CONTINUE.
+      ENDIF.
+      IF lv_rlif IS INITIAL.
+        lv_rlif = lv_lifnr.
       ENDIF.
 
       " already extended?
@@ -3085,7 +3102,7 @@ CLASS lcl_h_ext IMPLEMENTATION.
 
       IF lv_rbuk IS NOT INITIAL.
         SELECT SINGLE akont, zterm, zwels, reprf, fdgrv
-          FROM lfb1 WHERE lifnr = @lv_lifnr AND bukrs = @lv_rbuk
+          FROM lfb1 WHERE lifnr = @lv_rlif AND bukrs = @lv_rbuk
           INTO @DATA(ls_ref).
         IF sy-subrc = 0.
           lcl_util=>set( EXPORTING iv_comp = 'AKONT' iv_value = CONV string( ls_ref-akont )
@@ -3100,7 +3117,9 @@ CLASS lcl_h_ext IMPLEMENTATION.
                          CHANGING cs_data = ls_cc-data cs_datax = ls_cc-datax ).
         ELSE.
           mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k2 = lv_bukrs iv_ty = 'W'
-                       iv_txt = |Reference company code { lv_rbuk } has no data for this vendor| ).
+                       iv_txt = |Vendor { lv_rlif } has no data in reference company code { lv_rbuk } | &&
+                                |(columns 5/6) - nothing was copied, and { lv_bukrs } is extended with | &&
+                                |the values in columns 9 to 11 only| ).
         ENDIF.
       ENDIF.
 
@@ -3131,7 +3150,7 @@ CLASS lcl_h_ext IMPLEMENTATION.
 
         IF lv_reko IS NOT INITIAL.
           SELECT SINGLE waers, zterm, kalsk, webre, inco1, inco2
-            FROM lfm1 WHERE lifnr = @lv_lifnr AND ekorg = @lv_reko
+            FROM lfm1 WHERE lifnr = @lv_rlif AND ekorg = @lv_reko
             INTO @DATA(ls_rp).
           IF sy-subrc = 0.
             lcl_util=>set( EXPORTING iv_comp = 'WAERS' iv_value = CONV string( ls_rp-waers )
@@ -3146,6 +3165,14 @@ CLASS lcl_h_ext IMPLEMENTATION.
                            CHANGING cs_data = ls_po-data cs_datax = ls_po-datax ).
             lcl_util=>set( EXPORTING iv_comp = 'INCO2' iv_value = CONV string( ls_rp-inco2 )
                            CHANGING cs_data = ls_po-data cs_datax = ls_po-datax ).
+          ELSE.
+            " The company code branch says so and this one did not, so a
+            " purchasing organisation quietly came through with nothing but
+            " the file's own three columns on it.
+            mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k3 = lv_ekorg iv_ty = 'W'
+                         iv_txt = |Vendor { lv_rlif } has no data in reference purchasing | &&
+                                  |organisation { lv_reko } (columns 5/7) - nothing was copied, and | &&
+                                  |{ lv_ekorg } is extended with the values in columns 12 to 14 only| ).
           ENDIF.
         ENDIF.
 

@@ -58,12 +58,41 @@ BY_NODE = {
     ('V', 'N'): BANKDET,
     ('V', 'Y'): BNKA,
 }
-# nodes the engine resolves in code rather than by component name
+# Nodes the engine resolves in code rather than by component name. The key
+# node is read out of the extractor's own CASE blocks rather than typed here,
+# so a key the extractor learns to fill is known to this test at once and a
+# key it does not fill is caught - which is the whole point of the check.
+def key_cases(src):
+    """Every key name the extractor's own WHEN 'K' branches resolve.
+
+    The branches are written two ways - a CASE over the field name and a
+    plain IF - so both are read, and the branch ends where a line at the
+    same indentation as its WHEN starts the next one.
+    """
+    names, lines = set(), src.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() != "WHEN 'K'.":
+            continue
+        indent = len(line) - len(line.lstrip())
+        for body in lines[i + 1:]:
+            stripped = body.strip()
+            if not stripped:
+                continue
+            here = len(body) - len(body.lstrip())
+            if here <= indent and (stripped.startswith('WHEN ')
+                                   or stripped.startswith('ENDCASE')):
+                break
+            if stripped.startswith('WHEN ') or '-fld = ' in stripped:
+                names |= set(re.findall(r"'(\w+)'", stripped))
+    return names
+
+
 IN_CODE = {
-    'K': {'KUNNR', 'BUKRS', 'VKORG', 'VTWEG', 'SPART', 'KTOKD',
-          'LIFNR', 'EKORG', 'RBUKRS', 'REKORG'},
+    'K': key_cases(EX),
     'M': {'TEL', 'TELX', 'TEL2', 'TELX2', 'MOB', 'MOB2', 'FAX', 'SMT', 'SMT2'},
 }
+if not IN_CODE['K']:
+    sys.exit('no WHEN \'K\' case block found - the extractor changed shape')
 FREE = {'T', 'I', 'U'}          # tax category, identification, credit master
 
 # the TAN structure the extractor declares for itself

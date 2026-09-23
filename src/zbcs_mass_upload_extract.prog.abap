@@ -1358,7 +1358,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'V6' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
       ( scen = 'V6' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
       ( scen = 'V6' col = 4    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
-      ( scen = 'V6' col = 5    hdr = 'REF LIFNR' node = '-' fld = '' fmt = '' )
+      ( scen = 'V6' col = 5    hdr = 'REF LIFNR' node = 'K' fld = 'RLIFNR' fmt = 'AL' )
       ( scen = 'V6' col = 6    hdr = 'REF BUKRS' node = 'K' fld = 'RBUKRS' fmt = '' )
       ( scen = 'V6' col = 7    hdr = 'REF EKORG' node = 'K' fld = 'REKORG' fmt = '' )
       ( scen = 'V6' col = 8    hdr = 'Char' node = '-' fld = '' fmt = '' )
@@ -2236,7 +2236,11 @@ CLASS lcl_eng IMPLEMENTATION.
           CASE ls_col-node.
             WHEN 'K'.
               CASE lv_fld.
-                WHEN 'LIFNR'.  lv_val = lcl_util=>text( iv_value = is_key-lifnr iv_fmt = 'AL' ).
+                " RLIFNR is the vendor the extension copies from. The
+                " sample names the vendor itself, which is what an empty
+                " cell means, so a downloaded row reads back unchanged.
+                WHEN 'LIFNR' OR 'RLIFNR'.
+                  lv_val = lcl_util=>text( iv_value = is_key-lifnr iv_fmt = 'AL' ).
                 WHEN 'BUKRS' OR 'RBUKRS'. lv_val = ls_comp-data_key-bukrs.
                 WHEN 'EKORG' OR 'REKORG'. lv_val = ls_pur-data_key-ekorg.
               ENDCASE.
