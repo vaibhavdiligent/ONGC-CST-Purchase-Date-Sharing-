@@ -236,6 +236,15 @@ CLASS lcl_util DEFINITION FINAL.
     "! field as its first letter - T, Y, 1 - none of which SAP reads as set.
     CLASS-METHODS flag      IMPORTING iv_in  TYPE clike RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS is_empty  IMPORTING is_row TYPE ty_row RETURNING VALUE(rv) TYPE abap_bool.
+    "! TRUE for one of the customer template's own rows between the technical
+    "! name line and the data - the field type row, the field length row, the
+    "! mandatory/optional row, and the description and guideline rows. Only
+    "! ever applied to the unbroken run of rows directly under the heading,
+    "! so a data row further down is never touched by it.
+    CLASS-METHODS header_matter
+      IMPORTING is_row    TYPE ty_row
+                iv_keycol TYPE i
+      RETURNING VALUE(rv) TYPE abap_bool.
     "! TRUE for one of the template's own descriptive header lines
     "! (field type / length / mandatory / guideline / LSMW project ...).
     "! Central row filter. Data begins in row 2 on every tab; anything above
@@ -518,6 +527,88 @@ CLASS lcl_util IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD header_matter.
+    rv = abap_false.
+
+    " Column 1 of these tabs is a label - "Field Type", "Field Length",
+    " "Guideline ->" - except where it carries the key itself, so it is
+    " weighed both ways: a row counts if every cell matches, or if every
+    " cell but the first does.
+    DATA: lv_all TYPE i, lv_type TYPE i, lv_dig TYPE i, lv_mo TYPE i,
+          lv_c1t TYPE abap_bool, lv_c1d TYPE abap_bool, lv_c1m TYPE abap_bool,
+          lv_long TYPE abap_bool.
+    " X is deliberately NOT a type letter here. It is the commonest cell
+    " value in these files, and a row whose only filled cells are flags -
+    " the CIN tab's "address view" rows are exactly that - would otherwise
+    " be read as the field type row and thrown away.
+    CONSTANTS lc_types TYPE string
+      VALUE ',C,N,D,T,P,I,F,CHAR,NUMC,DATS,TIMS,CURR,DEC,QUAN,UNIT,CUKY,LANG,RAW,'.
+
+    LOOP AT is_row-cells INTO DATA(lv_cell).
+      DATA(lv_ix) = sy-tabix.
+      DATA(lv_v)  = to_upper( condense( lv_cell ) ).
+      IF lv_v IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      lv_all = lv_all + 1.
+      DATA(lv_is_type) = xsdbool( lc_types CS |,{ lv_v },| ).
+      DATA(lv_is_dig)  = xsdbool( lv_v CO '0123456789' ).
+      DATA(lv_is_mo)   = xsdbool( lv_v = 'M' OR lv_v = 'O' OR lv_v = 'M/O' ).
+      IF lv_is_type = abap_true. lv_type = lv_type + 1. ENDIF.
+      IF lv_is_dig  = abap_true.
+        lv_dig = lv_dig + 1.
+        " A DDIC length is at most three digits. A company code is four and
+        " a vendor number more, so a row of real keys is never mistaken for
+        " the field length row.
+        IF strlen( lv_v ) > 3.
+          lv_long = abap_true.
+        ENDIF.
+      ENDIF.
+      IF lv_is_mo = abap_true. lv_mo = lv_mo + 1. ENDIF.
+      IF lv_ix = 1.
+        lv_c1t = lv_is_type.
+        lv_c1d = lv_is_dig.
+        lv_c1m = lv_is_mo.
+      ENDIF.
+    ENDLOOP.
+
+    IF lv_all < 2.
+      RETURN.
+    ENDIF.
+
+    " How many cells a row is allowed to have that do not match. One is the
+    " label in column 1. The Bank key tab needs a second: every one of its
+    " header rows carries prose in the last column - "Swift Code" where the
+    " others say Char, "Optional" where they say O - so a row there never
+    " matches outright. Two stragglers are only allowed on a row wide enough
+    " for them to be stragglers.
+    DATA(lv_slack) = COND i( WHEN lv_all >= 4 THEN 2 ELSE 1 ).
+
+    " the field type row
+    IF lv_type >= lv_all - lv_slack AND lv_type > 0
+       AND ( lv_c1t = abap_true OR lv_type < lv_all ).
+      rv = abap_true.
+      RETURN.
+    ENDIF.
+    " the field length row
+    IF lv_long = abap_false AND lv_dig > 0 AND lv_dig >= lv_all - lv_slack.
+      rv = abap_true.
+      RETURN.
+    ENDIF.
+    " the mandatory/optional row
+    IF lv_mo > 0 AND lv_mo >= lv_all - lv_slack.
+      rv = abap_true.
+      RETURN.
+    ENDIF.
+
+    " the description and guideline rows. No key in any of these templates
+    " can hold a space, so a key cell that has one is prose, not a key.
+    DATA(lv_key) = condense( cell( is_row = is_row iv_col = iv_keycol ) ).
+    IF lv_key IS NOT INITIAL AND lv_key CS ` `.
+      rv = abap_true.
+    ENDIF.
   ENDMETHOD.
 
 
@@ -893,9 +984,11 @@ CLASS lcl_excel DEFINITION FINAL.
                 iv_sheet      TYPE string
                 iv_from_pc    TYPE abap_bool
                 it_hdr        TYPE tt_hdr OPTIONAL
+                iv_keycol     TYPE i DEFAULT 2
       EXPORTING et_row        TYPE tt_row
                 ev_sheet      TYPE string
                 ev_moved      TYPE i
+                ev_skipped    TYPE i
       RAISING   lcx_upl.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_pos,
@@ -1004,7 +1097,7 @@ CLASS lcl_excel IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD read.
-    CLEAR: et_row, ev_sheet, ev_moved.
+    CLEAR: et_row, ev_sheet, ev_moved, ev_skipped.
     DATA(lv_x) = load_bin( iv_file = iv_file iv_from_pc = iv_from_pc ).
 
     DATA lo_xl TYPE REF TO cl_fdt_xl_spreadsheet.
@@ -1089,6 +1182,28 @@ CLASS lcl_excel IMPLEMENTATION.
       RAISE EXCEPTION NEW lcx_upl( |Tab "{ lv_use }" is empty.| ).
     ENDIF.
 
+    " The customer workbook does not put its data directly under the
+    " technical name line: below it come the field type row, the field
+    " length row, the mandatory/optional row and the description and
+    " guideline rows - five lines on some tabs, four on Block_Unblocked.
+    " Those were read as data and each produced a row saying the vendor
+    " "C", "16" or "Vendor Account Number" does not exist. Only the
+    " unbroken run of them under the heading is passed over: the moment a
+    " line is not one of them the skipping stops, so a data row further
+    " down is never at risk. The heading row itself is bound first, below,
+    " which is why only LV_DATA moves and LV_HROW stays where it is.
+    DATA(lv_data) = lv_hrow.
+    WHILE lv_data < lines( lt_hit ).
+      DATA(lv_peek) = lt_hit[ lv_data + 1 ].
+      " A blank line is not the template's own, so it ends the run too.
+      IF lcl_util=>is_empty( lv_peek ) = abap_true
+      OR lcl_util=>header_matter( is_row = lv_peek iv_keycol = iv_keycol ) = abap_false.
+        EXIT.
+      ENDIF.
+      lv_data    = lv_data + 1.
+      ev_skipped = ev_skipped + 1.
+    ENDWHILE.
+
     " Bind each column to the position where its heading really is. A heading
     " that appears twice on the tab is ambiguous and is left alone, as is one
     " the file does not have at all - those columns keep their position.
@@ -1171,7 +1286,7 @@ CLASS lcl_excel IMPLEMENTATION.
     ENDLOOP.
 
     LOOP AT lt_hit INTO DATA(ls_src).
-      IF ls_src-row <= lv_hrow.
+      IF ls_src-row <= lv_data.
         CONTINUE.
       ENDIF.
 
@@ -3515,9 +3630,24 @@ CLASS lcl_h_blk IMPLEMENTATION.
       CLEAR lv_bad.
       IF lv_q IS NOT INITIAL AND lv_q <> gc_clear
          AND ( lv_s1 IS NOT INITIAL OR lv_m1 IS NOT INITIAL ).
+        " The template's own guideline above column 9: "This should be blank
+        " if record has to block at company/ purchase level. As per current
+        " process, if record is blocked at vendor level, user has to give
+        " 99/ 01 value in this field."
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'E'
-                     iv_txt = 'SPERQ (column 9) must stay blank when a company-code or purch.org block is applied' ).
+                     iv_txt = 'SPERQ (column 9) must be blank when the block is at company code or ' &&
+                              'purchasing organisation level (columns 6 and 8). Fill it only for a ' &&
+                              'block at vendor level - columns 5 and 7 - and leave 6 and 8 empty' ).
         lv_bad = abap_true.
+      ENDIF.
+      " 01, 02 and 99 are what the template lists. Anything else is passed
+      " on as it stands - the domain may know more - but it is worth saying.
+      IF lv_q IS NOT INITIAL AND lv_q <> gc_clear
+         AND lv_q <> '01' AND lv_q <> '02' AND lv_q <> '99'.
+        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'W'
+                     iv_txt = |SPERQ "{ lv_q }" is not one of the values the template lists - | &&
+                              |01 block purchase order, 02 block quotation request and purchase | &&
+                              |order, 99 total block| ).
       ENDIF.
       IF lv_bad = abap_true.
         IF p_stop = abap_true.
@@ -3685,15 +3815,18 @@ START-OF-SELECTION.
   DATA lt_rows  TYPE tt_row.
   DATA gv_sheet TYPE string.
   DATA gv_moved TYPE i.
+  DATA gv_skip  TYPE i.
   TRY.
       NEW lcl_excel( )->read(
         EXPORTING iv_file    = p_file
                   iv_sheet   = go_h->sheet( )
                   iv_from_pc = p_pc
                   it_hdr     = lcl_hdr=>for( gv_scen )
+                  iv_keycol  = go_h->key_col( )
         IMPORTING et_row     = lt_rows
                   ev_sheet   = gv_sheet
-                  ev_moved   = gv_moved ).
+                  ev_moved   = gv_moved
+                  ev_skipped = gv_skip ).
     CATCH lcx_upl INTO DATA(gx).
       " MESSAGE takes a data object, not an expression.
       DATA(gv_txt) = gx->get_text( ).
@@ -3704,6 +3837,13 @@ START-OF-SELECTION.
     DATA gv_none TYPE string.
     gv_none = |Tab "{ gv_sheet }" holds no data rows below its heading|.
     MESSAGE gv_none TYPE 'I'.
+  ENDIF.
+
+  IF gv_skip > 0.
+    go_log->add( iv_row = 0 iv_ty = 'I'
+                 iv_txt = |{ gv_skip } line(s) below the heading are the template's own | &&
+                          |field type, length, mandatory and guideline rows - they were | &&
+                          |passed over, not read as data| ).
   ENDIF.
 
   " Say so when the file's columns are not where the template has them - the

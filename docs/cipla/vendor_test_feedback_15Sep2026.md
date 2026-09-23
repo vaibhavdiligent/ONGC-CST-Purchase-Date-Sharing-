@@ -153,6 +153,80 @@ Two more things on this tab:
 * the same miss on the **purchasing** side was completely silent — the company
   code branch warned and the purchasing branch did not. It now warns too.
 
+## Block / unblock, tab by tab — why the error came
+
+The failing row is row 2, vendor `362243` (business partner `362243`, vendor
+`0000131232`):
+
+| LIFNR | BUKRS | EKORG | SPERR | SPERR_1 | SPERM | SPERM_1 | SPERQ |
+|---|---|---|---|---|---|---|---|
+| 362243 | 1000 | *(blank)* | X | X | X | X | 99 |
+
+> `SPERM_1 (purch.org block) requires a purchasing organisation in column 4`
+
+That message was **right**, and it is the template's own rule. `Vendor LSMW with
+Template.xlsx`, tab `Block_Unblocked`, row 8 says of column H:
+
+> *"Block for a particular Purch Org. **Purch Org is mandatory** if need to apply
+> this block"*
+
+and of column G, the central block:
+
+> *"Block Across All Purch Org. **Not Require to share Purch Org. Info** in case
+> if need to apply this block"*
+
+So for an employee vendor, which has no purchasing organisation at all, column 8
+is the wrong column — column 7 is the one to use, and the row already had it.
+Per Cipla's note on the tab this is now a **warning** rather than an error, and
+the block is applied centrally instead, so the row posts.
+
+### The row will now stop on a second rule of the template's own
+
+Row 2 also sets `SPERR_1 = X` **and** `SPERQ = 99`. The guideline above column I
+reads:
+
+> *"This should be blank if record has to block at company/ purchase level. As per
+> current process, if record is blocked at vendor level, user has to give 99/ 01
+> value in this field. 01 : Block purchase order · 02 : Block quot. request and
+> purchase order · 99 : Total block"*
+
+`SPERQ` and a company-code block cannot both be set. Compare the template's own
+samples: row 9 is `SPERR=X, SPERM=X, SPERQ=99` with **no** `_1` columns; rows 10
+and 11 are `SPERR_1=X, SPERM_1=X` with **no** `SPERQ`. Row 3 of the test file
+follows the first pattern and posted successfully; row 2 mixes the two.
+
+**The row that will work for an employee vendor total block** is the template's
+row 9 shape: `SPERR = X`, `SPERM = X`, `SPERQ = 99`, and leave `SPERR_1`,
+`SPERM_1` and the company code / purchasing organisation columns empty.
+
+The message now quotes the remedy rather than just the rule, and a `SPERQ` value
+outside 01 / 02 / 99 is reported as a warning.
+
+### The template's own header rows were being read as vendors
+
+Checking this tab against `Vendor LSMW with Template.xlsx` turned up something
+larger. The reader found the heading line correctly — row 4, `Tech name` — and
+then treated **everything below it** as data. On that tab rows 5 to 8 are the
+field type row, the field length row and the two description rows, so uploading
+Cipla's own source workbook produced four rows reading *"Vendor C does not
+exist"*, *"Vendor 0000000016 does not exist"* and so on. Most tabs are affected:
+five junk rows on Bank key creation, Bank details update and Vendor extension,
+three on Partner function, two on Vendor creation.
+
+The reader now passes over the unbroken run of template rows between the heading
+and the data, recognising them by shape — a row of DDIC type words, a row of
+lengths (all digits, none longer than three), a row of M/O, and a row whose key
+cell contains a space, which no key in these templates can. The moment a line is
+not one of those the skipping stops, so a data row further down is never at risk,
+and the run says how many lines it passed over.
+
+Verified against both workbooks: on `Vendor LSMW with Template.xlsx` all nine
+tabs now land on the right first data row, and on the files Cipla actually
+uploaded — single heading row, data from row 2 — nothing is skipped at all. The
+one line still read as data is the description row of the TDS tab, whose vendor
+cell reads `Vendor`; that produces one clear *"Vendor VENDOR does not exist"*
+rather than being passed over in silence.
+
 ## Conversion errors found on a second pass
 
 The screenshot on the vendor creation tab is our own file-type message, not a
