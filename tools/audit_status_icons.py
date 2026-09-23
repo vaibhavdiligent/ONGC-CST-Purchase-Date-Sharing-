@@ -57,7 +57,7 @@ for prog in PROGS:
                         f'error looks like a success')
 
     # three buckets, and row 0 left out of them
-    counter = re.search(r'METHOD (?:counts|display)\..*?ENDMETHOD\.', src, re.S)
+
     body = src[m.end():]
     if not re.search(r'\bev_skip\b|\blv_sk\b', src):
         findings.append(f'{name}: the run counts rows two ways - a row passed '

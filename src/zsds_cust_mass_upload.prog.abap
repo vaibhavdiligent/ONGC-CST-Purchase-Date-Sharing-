@@ -351,8 +351,11 @@ CLASS lcl_util IMPLEMENTATION.
     " Excel hands a date over in whatever shape the cell had: with a time
     " behind it, with slashes or dashes, the year in front, or - when the
     " cell was a real date and the format was lost - as its serial number.
-    IF lv CS ' '.
-      SPLIT lv AT ` ` INTO lv DATA(lv_rest).
+    IF lv CS ` `.
+      " Excel hands a date over with the time behind it. Only the date is
+      " wanted; SPLIT needed somewhere to put the rest, and that somewhere
+      " was a variable nothing ever read.
+      lv = substring_before( val = lv sub = ` ` ).
     ENDIF.
     REPLACE ALL OCCURRENCES OF '/' IN lv WITH '.'.
     REPLACE ALL OCCURRENCES OF '-' IN lv WITH '.'.
@@ -699,7 +702,7 @@ CLASS lcl_excel IMPLEMENTATION.
 
   METHOD sheet_rows.
     DATA(lo_data) = io_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet(
-                      worksheet_name = CONV #( iv_name ) ).
+                      worksheet_name = iv_name ).
     FIELD-SYMBOLS <lt_tab> TYPE STANDARD TABLE.
     ASSIGN lo_data->* TO <lt_tab>.
     IF <lt_tab> IS NOT ASSIGNED.
@@ -768,7 +771,7 @@ CLASS lcl_excel IMPLEMENTATION.
     DATA lv_named TYPE string.
     DATA(lv_wnm) = lcl_util=>squash( iv_sheet ).
     LOOP AT lt_names INTO DATA(lv_nm).
-      IF lcl_util=>squash( CONV string( lv_nm ) ) = lv_wnm.
+      IF lcl_util=>squash( lv_nm ) = lv_wnm.
         lv_named = lv_nm.
         EXIT.
       ENDIF.
@@ -786,7 +789,7 @@ CLASS lcl_excel IMPLEMENTATION.
     DATA lv_hrow TYPE i.
     IF it_want IS NOT INITIAL.
       LOOP AT lt_names INTO DATA(lv_n2).
-        DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = CONV string( lv_n2 ) ).
+        DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = lv_n2 ).
         DATA(lv_max) = COND i( WHEN lines( lt_r ) < lc_scan THEN lines( lt_r )
                                ELSE lc_scan ).
         DO lv_max TIMES.
@@ -3864,7 +3867,11 @@ START-OF-SELECTION.
   DATA gv_sheet TYPE string.
   TRY.
       NEW lcl_excel( )->read(
-        EXPORTING iv_file    = p_file
+        " P_FILE is a screen field, C(255); IV_FILE is a STRING taken by
+        " reference, and a by-reference parameter takes nothing but its own
+        " type - no conversion happens on the way in. Hence the conversion
+        " here, in the one place the path crosses that boundary.
+        EXPORTING iv_file    = CONV string( p_file )
                   iv_from_pc = p_pc
                   iv_sheet   = go_engine->sheet( )
                   iv_skip    = p_skip

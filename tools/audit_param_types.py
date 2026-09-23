@@ -47,9 +47,10 @@ GENERIC = {'any','clike','string','i','abap_bool','csequence','numeric','simple'
 STRINGY = ('lcl_util=>cell(', 'to_upper(', 'to_lower(', 'condense(', 'lcl_util=>squash(')
 
 findings = []
-for p in ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap',
+PROGS_ALL = ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap',
             'src/zbcs_mass_upload_extract.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap']:
+         'src/zsds_cust_tmpl_download.prog.abap']
+for p in PROGS_ALL:
     src = open(p, encoding='utf-8').read()
     lines = src.split('\n')
 
@@ -119,7 +120,55 @@ for p in ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.a
                                         f'is {want}; a character field and a hexadecimal one '
                                         f'do not convert into one another')
 
+# ---------------------------------------------------------------------------
+# The same rule read the other way round. A by-reference parameter TYPE STRING
+# takes nothing but a STRING either, so a screen field - which can never be one,
+# PARAMETERS has no STRING - cannot be handed to it:
+#
+#   The type "C(255)" of "P_FILE" is not compatible with the type "STRING" of
+#   "IV_FILE"
+#
+# which is what P_FILE did to LCL_EXCEL=>READ once the path parameter was
+# widened. Only the first direction was checked here, so it went through.
+for p in PROGS_ALL:
+    path = os.path.join(ROOT, p)
+    if not os.path.exists(path):
+        continue
+    src = open(path, encoding='utf-8').read()
+
+    # a screen field is a character field, always
+    screen = {m.group(1).lower() for m in re.finditer(
+        r'^\s*(?:PARAMETERS|SELECT-OPTIONS):?\s+(\w+)', src, re.I | re.M)}
+    screen |= {m.group(1).lower() for m in re.finditer(
+        r'^\s{2,}(\w+)\s+(?:TYPE|LIKE|RADIOBUTTON|AS CHECKBOX)', src, re.M)
+        if False}          # chained PARAMETERS are picked up below
+
+    # chained declarations: PARAMETERS: a TYPE x, b TYPE y.
+    for m in re.finditer(r'^\s*(?:PARAMETERS|SELECT-OPTIONS):\s(.*?)\.(?=\s*$)',
+                         src, re.S | re.M | re.I):
+        for part in m.group(1).split(','):
+            d = re.match(r'\s*(\w+)', part)
+            if d:
+                screen.add(d.group(1).lower())
+
+    # formal parameters TYPE STRING that are NOT VALUE( )
+    byref = set()
+    for m in re.finditer(r'(VALUE\(\s*)?\b(\w+)\s*\)?\s+TYPE\s+string\b',
+                         src, re.I):
+        if not m.group(1):
+            byref.add(m.group(2).lower())
+
+    for m in re.finditer(r'\b(\w+)\s*=\s*(\w+)\b', src):
+        formal, actual = m.group(1).lower(), m.group(2).lower()
+        if formal in byref and actual in screen:
+            line = src[:m.start()].count('\n') + 1
+            findings.append(f'{p}:{line}: {formal} = {actual} - {actual.upper()} is a '
+                            f'screen field, which is a character field, and {formal.upper()} '
+                            f'is a STRING taken by reference. A by-reference parameter takes '
+                            f'nothing but its own type; convert at the call')
+
 print('\n'.join(findings) if findings else
-      'clean - no string reaches a by-reference parameter of a fixed type, and no '
-      'character field is handed to a hexadecimal one')
+      'clean - no string reaches a by-reference parameter of a fixed type, no '
+      'screen field reaches a by-reference STRING, and no character field is '
+      'handed to a hexadecimal one')
 sys.exit(1 if findings else 0)

@@ -324,8 +324,11 @@ CLASS lcl_util IMPLEMENTATION.
     " Excel hands a date over in whatever shape the cell had: with a time
     " behind it, with slashes or dashes, the year in front, or - when the
     " cell was a real date and the format was lost - as its serial number.
-    IF lv CS ' '.
-      SPLIT lv AT ` ` INTO lv DATA(lv_rest).
+    IF lv CS ` `.
+      " Excel hands a date over with the time behind it. Only the date is
+      " wanted; SPLIT needed somewhere to put the rest, and that somewhere
+      " was a variable nothing ever read.
+      lv = substring_before( val = lv sub = ` ` ).
     ENDIF.
     REPLACE ALL OCCURRENCES OF '/' IN lv WITH '.'.
     REPLACE ALL OCCURRENCES OF '-' IN lv WITH '.'.
@@ -1047,7 +1050,7 @@ CLASS lcl_excel IMPLEMENTATION.
   METHOD sheet_rows.
     DATA lo_ref TYPE REF TO data.
     TRY.
-        lo_ref = io_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet( CONV #( iv_name ) ).
+        lo_ref = io_xl->if_fdt_doc_spreadsheet~get_itab_from_worksheet( iv_name ).
       CATCH cx_root INTO DATA(lx2).
         RAISE EXCEPTION NEW lcx_upl(
           |Tab "{ iv_name }" could not be converted: { lx2->get_text( ) }| ).
@@ -1119,7 +1122,7 @@ CLASS lcl_excel IMPLEMENTATION.
     DATA lv_named TYPE string.
     DATA(lv_want) = lcl_util=>squash( iv_sheet ).
     LOOP AT lt_ws INTO DATA(lv_ws).
-      IF lcl_util=>squash( CONV string( lv_ws ) ) = lv_want.
+      IF lcl_util=>squash( lv_ws ) = lv_want.
         lv_named = lv_ws.
         EXIT.
       ENDIF.
@@ -1137,7 +1140,7 @@ CLASS lcl_excel IMPLEMENTATION.
     DATA lv_hrow TYPE i.
     IF it_hdr IS NOT INITIAL.
       LOOP AT lt_ws INTO DATA(lv_w2).
-        DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = CONV string( lv_w2 ) ).
+        DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = lv_w2 ).
         DATA(lv_max) = COND i( WHEN lines( lt_r ) < lc_scan THEN lines( lt_r )
                                ELSE lc_scan ).
         DO lv_max TIMES.
@@ -3916,7 +3919,11 @@ START-OF-SELECTION.
   DATA gv_skip  TYPE i.
   TRY.
       NEW lcl_excel( )->read(
-        EXPORTING iv_file    = p_file
+        " P_FILE is a screen field, C(255); IV_FILE is a STRING taken by
+        " reference, and a by-reference parameter takes nothing but its own
+        " type - no conversion happens on the way in. Hence the conversion
+        " here, in the one place the path crosses that boundary.
+        EXPORTING iv_file    = CONV string( p_file )
                   iv_sheet   = go_h->sheet( )
                   iv_from_pc = p_pc
                   it_hdr     = lcl_hdr=>for( gv_scen )
