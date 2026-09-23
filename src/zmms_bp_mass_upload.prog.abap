@@ -81,6 +81,14 @@ TYPES ty_dec TYPE p LENGTH 13 DECIMALS 2.
 " Local table of BP roles - avoids depending on a DDIC table type name.
 TYPES ty_roles TYPE STANDARD TABLE OF bu_role WITH EMPTY KEY.
 
+" The file path. RLGRAP-FILENAME, which this parameter used to have, is
+" CHAR 128, and the file dialog hands back a STRING. A path longer than 128
+" characters - which a OneDrive or Teams synchronised folder reaches easily -
+" was therefore cut off on the way into the parameter, taking the ".xlsx" at
+" the end of it with it. The file then looked to the program like a file of
+" some other type. 255 is the widest a screen field goes.
+TYPES ty_path TYPE c LENGTH 255.
+
 TYPES: tt_cell TYPE STANDARD TABLE OF string WITH EMPTY KEY.
 
 TYPES: BEGIN OF ty_row,
@@ -149,7 +157,7 @@ PARAMETERS:
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-PARAMETERS: p_file TYPE rlgrap-filename OBLIGATORY,
+PARAMETERS: p_file TYPE ty_path OBLIGATORY LOWER CASE,
             p_pc   RADIOBUTTON GROUP g2 DEFAULT 'X',   " file on the PC
             p_srv  RADIOBUTTON GROUP g2.               " file on the app server
 SELECTION-SCREEN END OF BLOCK b2.
@@ -847,7 +855,7 @@ CLASS lcl_excel DEFINITION FINAL.
     "! actually carries its heading, whatever position that is.
     "! IV_SHEET is only the tie-breaker and the fallback.
     METHODS read
-      IMPORTING iv_file       TYPE rlgrap-filename
+      IMPORTING iv_file       TYPE string
                 iv_sheet      TYPE string
                 iv_from_pc    TYPE abap_bool
                 it_hdr        TYPE tt_hdr OPTIONAL
@@ -861,7 +869,7 @@ CLASS lcl_excel DEFINITION FINAL.
              src TYPE i,
            END OF ty_pos.
 
-    METHODS load_bin IMPORTING iv_file TYPE rlgrap-filename iv_from_pc TYPE abap_bool
+    METHODS load_bin IMPORTING iv_file TYPE string iv_from_pc TYPE abap_bool
                      RETURNING VALUE(rv) TYPE xstring RAISING lcx_upl.
 
     "! One worksheet as a table of rows, heading lines included.
@@ -885,7 +893,7 @@ CLASS lcl_excel IMPLEMENTATION.
       DATA: lt_bin TYPE solix_tab,
             lv_len TYPE i.
       cl_gui_frontend_services=>gui_upload(
-        EXPORTING filename   = CONV string( iv_file )
+        EXPORTING filename   = iv_file
                   filetype   = 'BIN'
         IMPORTING filelength = lv_len
         CHANGING  data_tab   = lt_bin
@@ -967,7 +975,7 @@ CLASS lcl_excel IMPLEMENTATION.
 
     DATA lo_xl TYPE REF TO cl_fdt_xl_spreadsheet.
     TRY.
-        lo_xl = NEW cl_fdt_xl_spreadsheet( document_name = CONV string( iv_file )
+        lo_xl = NEW cl_fdt_xl_spreadsheet( document_name = iv_file
                                            xdocument     = lv_x ).
       CATCH cx_root INTO DATA(lx).
         RAISE EXCEPTION NEW lcx_upl( |The file is not a readable .xlsx workbook: { lx->get_text( ) }| ).
@@ -1201,6 +1209,8 @@ CLASS lcl_log DEFINITION FINAL.
       IMPORTING iv_row TYPE i
                 iv_k1  TYPE clike.
     METHODS has_error IMPORTING iv_row TYPE i RETURNING VALUE(rv) TYPE abap_bool.
+    "! Nothing was written at all - no row of the file reached a handler.
+    METHODS is_empty RETURNING VALUE(rv) TYPE abap_bool.
     METHODS display.
   PRIVATE SECTION.
     DATA mt_msg TYPE tt_msg.
@@ -1248,6 +1258,10 @@ CLASS lcl_log IMPLEMENTATION.
   METHOD has_error.
     rv = xsdbool( line_exists( mt_msg[ xlsrow = iv_row msgty = 'E' ] )
                OR line_exists( mt_msg[ xlsrow = iv_row msgty = 'A' ] ) ).
+  ENDMETHOD.
+
+  METHOD is_empty.
+    rv = xsdbool( mt_msg IS INITIAL ).
   ENDMETHOD.
 
   METHOD display.
@@ -1751,12 +1765,21 @@ INTERFACE lif_h.
   METHODS sheet     RETURNING VALUE(rv) TYPE string.
   METHODS first_row RETURNING VALUE(rv) TYPE i.
   METHODS run       IMPORTING it_row TYPE tt_row.
+  "! The column a row is recognised by. A row whose key column is empty is
+  "! passed over in silence - which is right for the blank lines at the
+  "! bottom of a tab and wrong for a file whose columns are somewhere else,
+  "! where every row is passed over and the run ends with nothing said. The
+  "! column is named here so that the run can say which one it read.
+  METHODS key_col   RETURNING VALUE(rv) TYPE i.
 ENDINTERFACE.
 
 CLASS lcl_base DEFINITION ABSTRACT.
   PUBLIC SECTION.
     INTERFACES lif_h ABSTRACT METHODS sheet first_row run.
     METHODS constructor IMPORTING io_log TYPE REF TO lcl_log.
+    "! Column 2 on every tab that carries LIFNR there; redefined where the
+    "! tab starts with the vendor instead of with a label column.
+    METHODS lif_h~key_col.
   PROTECTED SECTION.
     DATA: mo_log  TYPE REF TO lcl_log,
           mo_cfg  TYPE REF TO lcl_cfg,
@@ -1807,6 +1830,10 @@ CLASS lcl_base IMPLEMENTATION.
     mo_log  = io_log.
     mo_cfg  = lcl_cfg=>get( ).
     mo_cvis = NEW lcl_cvis( io_log ).
+  ENDMETHOD.
+
+  METHOD lif_h~key_col.
+    rv = 2.
   ENDMETHOD.
 
   METHOD key_lifnr.
@@ -1945,6 +1972,7 @@ CLASS lcl_h_create DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
     METHODS lif_h~first_row REDEFINITION.
+    METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
   PRIVATE SECTION.
     METHODS fill_partner IMPORTING is_row TYPE ty_row iv_ktokk TYPE ktokk
@@ -1959,6 +1987,7 @@ CLASS lcl_h_create IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_create. ENDMETHOD.
   METHOD lif_h~first_row. rv = 2. ENDMETHOD.
+  METHOD lif_h~key_col.   rv = 5. ENDMETHOD.
 
   METHOD fill_partner.
     CLEAR ev_bad.
@@ -2506,6 +2535,7 @@ CLASS lcl_h_tan DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
     METHODS lif_h~first_row REDEFINITION.
+    METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
 
@@ -2513,6 +2543,7 @@ CLASS lcl_h_tan IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_tan. ENDMETHOD.
   METHOD lif_h~first_row. rv = 2. ENDMETHOD.
+  METHOD lif_h~key_col.   rv = 1. ENDMETHOD.
 
   METHOD lif_h~run.
     DATA lt_exem TYPE STANDARD TABLE OF fiwtin_tan_exem.
@@ -3021,6 +3052,7 @@ CLASS lcl_h_cin DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
     METHODS lif_h~first_row REDEFINITION.
+    METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
 
@@ -3028,6 +3060,7 @@ CLASS lcl_h_cin IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_cin. ENDMETHOD.
   METHOD lif_h~first_row. rv = 2. ENDMETHOD.
+  METHOD lif_h~key_col.   rv = 1. ENDMETHOD.
 
   METHOD lif_h~run.
     " column -> LFA1 field
@@ -3096,6 +3129,7 @@ CLASS lcl_h_pfn DEFINITION INHERITING FROM lcl_base FINAL.
   PUBLIC SECTION.
     METHODS lif_h~sheet     REDEFINITION.
     METHODS lif_h~first_row REDEFINITION.
+    METHODS lif_h~key_col   REDEFINITION.
     METHODS lif_h~run       REDEFINITION.
 ENDCLASS.
 
@@ -3103,6 +3137,7 @@ CLASS lcl_h_pfn IMPLEMENTATION.
 
   METHOD lif_h~sheet.     rv = gc_sh_pfn. ENDMETHOD.
   METHOD lif_h~first_row. rv = 2. ENDMETHOD.
+  METHOD lif_h~key_col.   rv = 1. ENDMETHOD.
 
   METHOD lif_h~run.
     " "PARVW column;GPARN column" for the 15 slots, in template order
@@ -3162,6 +3197,18 @@ CLASS lcl_h_pfn IMPLEMENTATION.
         IF mo_cfg->vend_exists( lv_partn ) = abap_false.
           mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k3 = lv_ekorg iv_ty = 'E'
                        iv_txt = |Partner vendor { lv_partn } does not exist (column { lv_gc })| ).
+          lv_bad = abap_true.
+          CONTINUE.
+        ENDIF.
+        " The partner must be a supplier of this purchasing organisation, not
+        " merely a supplier: without LFM1 the API answers F2 165, "has not
+        " been created for purchasing organization", naming the partner - a
+        " message that reads as though the row's own vendor were at fault.
+        IF mo_cfg->has_lfm1( iv_lifnr = CONV lifnr( lv_partn )
+                             iv_ekorg = CONV ekorg( lv_ekorg ) ) = abap_false.
+          mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k3 = lv_ekorg iv_ty = 'E'
+                       iv_txt = |Partner { lv_partn } (column { lv_gc }) is not extended to purchasing | &&
+                                |organisation { lv_ekorg } - extend it there first (tab "Vendor extension")| ).
           lv_bad = abap_true.
           CONTINUE.
         ENDIF.
@@ -3277,21 +3324,52 @@ CLASS lcl_h_blk IMPLEMENTATION.
       DATA(lv_m1)  = flag( lcl_util=>cell( is_row = ls_row iv_col = 8 ) ).   " POrg purchasing
       DATA(lv_q)   = flag( lcl_util=>cell( is_row = ls_row iv_col = 9 ) ).   " function block
 
-      " template's own rules
+      " A block can only be set where the vendor is extended. An employee
+      " supplier has no purchasing organisation at all, so a row that asks
+      " for a purchasing-organisation block without naming one is not a
+      " mistake to turn away - Cipla's own note on the test file reads
+      " "Purchase Org is not applicable to Employee code". The block is put
+      " where that vendor does carry one, centrally, and the row says so.
       IF lv_s1 IS NOT INITIAL AND lv_bukrs IS INITIAL.
-        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'E'
-                     iv_txt = 'SPERR_1 (company-code block) requires a company code in column 3' ).
-        CONTINUE.
+        DATA(lv_s1w) = COND string(
+          WHEN lv_s IS INITIAL
+          THEN 'no company code in column 3 - the posting block was applied centrally (SPERR) instead'
+          ELSE 'no company code in column 3 - the central posting block in column 5 covers this vendor' ).
+        IF lv_s IS INITIAL.
+          lv_s = lv_s1.
+        ENDIF.
+        CLEAR lv_s1.
+        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'W'
+                     iv_txt = |SPERR_1 (company-code block): { lv_s1w }| ).
       ENDIF.
       IF lv_m1 IS NOT INITIAL AND lv_ekorg IS INITIAL.
-        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'E'
-                     iv_txt = 'SPERM_1 (purch.org block) requires a purchasing organisation in column 4' ).
-        CONTINUE.
+        DATA(lv_m1w) = COND string(
+          WHEN lv_m IS INITIAL
+          THEN 'no purchasing organisation in column 4 - the purchasing block was applied centrally (SPERM) instead'
+          ELSE 'no purchasing organisation in column 4 - the central purchasing block in column 7 covers this vendor' ).
+        IF lv_m IS INITIAL.
+          lv_m = lv_m1.
+        ENDIF.
+        CLEAR lv_m1.
+        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'W'
+                     iv_txt = |SPERM_1 (purch.org block): { lv_m1w }| ).
       ENDIF.
+
+      " The template's own rule. Every breach of the row is reported, not
+      " only the first - a tester who has to run the file once per message
+      " learns the file's faults one at a time.
+      DATA lv_bad TYPE abap_bool.
+      CLEAR lv_bad.
       IF lv_q IS NOT INITIAL AND lv_q <> gc_clear
          AND ( lv_s1 IS NOT INITIAL OR lv_m1 IS NOT INITIAL ).
         mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'E'
-                     iv_txt = 'SPERQ must stay blank when a company-code or purch.org block is applied' ).
+                     iv_txt = 'SPERQ (column 9) must stay blank when a company-code or purch.org block is applied' ).
+        lv_bad = abap_true.
+      ENDIF.
+      IF lv_bad = abap_true.
+        IF p_stop = abap_true.
+          EXIT.
+        ENDIF.
         CONTINUE.
       ENDIF.
       IF lv_s IS INITIAL AND lv_s1 IS INITIAL AND lv_m IS INITIAL
@@ -3388,12 +3466,31 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
               user_action  = lv_ua ).
   IF lv_ua = cl_gui_frontend_services=>action_ok AND lv_rc >= 1.
     READ TABLE lt_ft INTO DATA(ls_ft) INDEX 1.
-    p_file = ls_ft-filename.
+    " The dialog hands back a STRING and the parameter is 255 characters.
+    " A path longer than that is refused here rather than silently cut
+    " short - a cut short path names no file and cannot be read.
+    IF strlen( ls_ft-filename ) > 255.
+      MESSAGE 'That path is longer than 255 characters - move the file to a shorter path' TYPE 'S' DISPLAY LIKE 'E'.
+    ELSE.
+      p_file = ls_ft-filename.
+    ENDIF.
   ENDIF.
 
 AT SELECTION-SCREEN.
-  IF to_upper( CONV string( p_file ) ) NS '.XLSX'.
-    MESSAGE 'The customer workbook is .xlsx - .xls is not supported.' TYPE 'E'.
+  " Only .xlsx can be read - CL_FDT_XL_SPREADSHEET reads the OpenXML
+  " package and nothing else. What is tested is the end of the name, not
+  " whether ".xlsx" appears somewhere in it: a folder called "xlsx files"
+  " used to be enough to let a .xls through, and a path that had been cut
+  " short was enough to hold a perfectly good .xlsx back.
+  DATA gv_ext TYPE string.
+  gv_ext = to_upper( CONV string( p_file ) ).
+  IF gv_ext IS NOT INITIAL AND gv_ext NP '*.XLSX'.
+    IF gv_ext CP '*.XLS' OR gv_ext CP '*.XLSM' OR gv_ext CP '*.XLSB'
+    OR gv_ext CP '*.CSV' OR gv_ext CP '*.TXT'.
+      MESSAGE 'This program reads .xlsx only - open the file in Excel and save it as "Excel Workbook (*.xlsx)"' TYPE 'E'.
+    ELSE.
+      MESSAGE 'The file name does not end in .xlsx - pick the workbook with F4' TYPE 'E'.
+    ENDIF.
   ENDIF.
 
 *----------------------------------------------------------------------*
@@ -3465,6 +3562,30 @@ START-OF-SELECTION.
   ENDIF.
 
   go_h->run( lt_rows ).
+
+  " A run that says nothing at all is the hardest kind to act on: the rows
+  " were read, every one of them was passed over for want of a key, and the
+  " list came up empty. Say which tab was read, how many rows sat under its
+  " heading and which column was looked in - that is enough to see at a
+  " glance that the heading line, or the column, is not where it is expected.
+  IF go_log->is_empty( ) = abap_true AND lt_rows IS NOT INITIAL.
+    DATA gv_kcol TYPE i.
+    DATA gv_khdr TYPE string.
+    gv_kcol = go_h->key_col( ).
+    " READ TABLE takes a table, not a method call, so the headings are read
+    " into a variable of their own first.
+    DATA gt_kh TYPE tt_hdr.
+    gt_kh = lcl_hdr=>for( gv_scen ).
+    READ TABLE gt_kh INTO DATA(gs_kh) WITH KEY col = gv_kcol.
+    IF sy-subrc = 0.
+      gv_khdr = | ({ gs_kh-hdr })|.
+    ENDIF.
+    go_log->add( iv_row = 0 iv_ty = 'W'
+                 iv_txt = |Tab "{ gv_sheet }" has { lines( lt_rows ) } row(s) below its heading | &&
+                          |line, and column { gv_kcol }{ gv_khdr } is empty on every one of them - | &&
+                          |nothing was processed. Check that the heading line sits directly above | &&
+                          |the data and that this column is filled| ).
+  ENDIF.
 
 END-OF-SELECTION.
   go_log->display( ).

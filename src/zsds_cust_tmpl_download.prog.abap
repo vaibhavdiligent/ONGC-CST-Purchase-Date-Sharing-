@@ -70,6 +70,14 @@ REPORT zsds_cust_tmpl_download.
 
 TYPES: tt_cell TYPE STANDARD TABLE OF string WITH EMPTY KEY.
 
+" The file path. RLGRAP-FILENAME, which this parameter used to have, is
+" CHAR 128, and the file dialog hands the chosen path back as a STRING. A
+" path longer than 128 characters - which a OneDrive or Teams synchronised
+" folder reaches on its own - was cut short on the way into the parameter,
+" taking the ".xlsx" at the end of it with it. 255 is the widest a screen
+" field goes.
+TYPES ty_path TYPE c LENGTH 255.
+
 TYPES: BEGIN OF ty_row,
          cells TYPE tt_cell,
        END OF ty_row,
@@ -147,7 +155,7 @@ PARAMETERS:     p_max   TYPE i DEFAULT 100.
 SELECTION-SCREEN END OF BLOCK b3.
 
 SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
-PARAMETERS: p_file  TYPE rlgrap-filename LOWER CASE,
+PARAMETERS: p_file  TYPE ty_path LOWER CASE,
             p_pc    RADIOBUTTON GROUP g2 DEFAULT 'X',
             p_srv   RADIOBUTTON GROUP g2,
             p_empty AS CHECKBOX.
@@ -3578,7 +3586,13 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
               fullpath          = lv_full
     EXCEPTIONS OTHERS           = 1 ).
   IF sy-subrc = 0 AND lv_full IS NOT INITIAL.
-    p_file = lv_full.
+    " A path longer than the parameter is refused rather than silently cut
+    " short - a cut short path writes the file somewhere else, or not at all.
+    IF strlen( lv_full ) > 255.
+      MESSAGE 'That path is longer than 255 characters - pick a shorter folder' TYPE 'S' DISPLAY LIKE 'E'.
+    ELSE.
+      p_file = lv_full.
+    ENDIF.
   ENDIF.
 
 AT SELECTION-SCREEN.

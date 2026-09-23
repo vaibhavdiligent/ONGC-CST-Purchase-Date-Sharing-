@@ -111,6 +111,13 @@ TYPE-POOLS icon.
 " credit limits is declared here rather than inline.
 TYPES ty_dec TYPE p LENGTH 15 DECIMALS 2.
 
+" The file path. RLGRAP-FILENAME, which this parameter used to have, is
+" CHAR 128, and the file dialog hands back a STRING. A path longer than 128
+" characters - which a OneDrive or Teams synchronised folder reaches easily -
+" was cut off on the way into the parameter, taking the ".xlsx" at the end of
+" it with it. 255 is the widest a screen field goes.
+TYPES ty_path TYPE c LENGTH 255.
+
 TYPES: BEGIN OF ty_row,
          row   TYPE i,
          cells TYPE string_table,
@@ -208,7 +215,7 @@ PARAMETERS: p_r1 RADIOBUTTON GROUP g1 DEFAULT 'X' USER-COMMAND uc,
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-PARAMETERS: p_file TYPE rlgrap-filename OBLIGATORY,
+PARAMETERS: p_file TYPE ty_path OBLIGATORY LOWER CASE,
             p_pc   RADIOBUTTON GROUP g2 DEFAULT 'X',
             p_srv  RADIOBUTTON GROUP g2.
 SELECTION-SCREEN END OF BLOCK b2.
@@ -576,7 +583,7 @@ CLASS lcl_excel DEFINITION FINAL.
     " a renamed tab, a single-sheet copy or the master workbook all load the
     " same way. IV_SHEET is only the tie-breaker and the fallback.
     METHODS read
-      IMPORTING iv_file    TYPE rlgrap-filename
+      IMPORTING iv_file    TYPE string
                 iv_from_pc TYPE abap_bool
                 iv_sheet   TYPE string
                 iv_skip    TYPE i DEFAULT 1
@@ -587,7 +594,7 @@ CLASS lcl_excel DEFINITION FINAL.
       RAISING   lcx_upl.
   PRIVATE SECTION.
     METHODS load_bin
-      IMPORTING iv_file    TYPE rlgrap-filename
+      IMPORTING iv_file    TYPE string
                 iv_from_pc TYPE abap_bool
       RETURNING VALUE(rv)  TYPE xstring
       RAISING   lcx_upl.
@@ -614,7 +621,7 @@ CLASS lcl_excel IMPLEMENTATION.
 
     IF iv_from_pc = abap_true.
       cl_gui_frontend_services=>gui_upload(
-        EXPORTING filename   = CONV string( iv_file )
+        EXPORTING filename   = iv_file
                   filetype   = 'BIN'
         IMPORTING filelength = lv_len
         CHANGING  data_tab   = lt_bin
@@ -705,7 +712,7 @@ CLASS lcl_excel IMPLEMENTATION.
     DATA lo_xl TYPE REF TO cl_fdt_xl_spreadsheet.
     TRY.
         lo_xl = NEW cl_fdt_xl_spreadsheet(
-                      document_name = CONV string( iv_file )
+                      document_name = iv_file
                       xdocument     = lv_bin ).
       CATCH cx_root INTO DATA(lx).
         RAISE EXCEPTION TYPE lcx_upl
@@ -3706,7 +3713,28 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
               rc          = lv_rc
     EXCEPTIONS OTHERS     = 1 ).
   IF sy-subrc = 0 AND lt_files IS NOT INITIAL.
-    p_file = lt_files[ 1 ]-filename.
+    " A path longer than the parameter is refused rather than silently cut
+    " short - a cut short path names no file and cannot be read.
+    IF strlen( lt_files[ 1 ]-filename ) > 255.
+      MESSAGE 'That path is longer than 255 characters - move the file to a shorter path' TYPE 'S' DISPLAY LIKE 'E'.
+    ELSE.
+      p_file = lt_files[ 1 ]-filename.
+    ENDIF.
+  ENDIF.
+
+AT SELECTION-SCREEN.
+  " Only .xlsx can be read - CL_FDT_XL_SPREADSHEET reads the OpenXML package
+  " and nothing else. The end of the name is what is tested, not whether
+  " ".xlsx" appears somewhere in the path.
+  DATA gv_ext TYPE string.
+  gv_ext = to_upper( CONV string( p_file ) ).
+  IF gv_ext IS NOT INITIAL AND gv_ext NP '*.XLSX'.
+    IF gv_ext CP '*.XLS' OR gv_ext CP '*.XLSM' OR gv_ext CP '*.XLSB'
+    OR gv_ext CP '*.CSV' OR gv_ext CP '*.TXT'.
+      MESSAGE 'This program reads .xlsx only - open the file in Excel and save it as "Excel Workbook (*.xlsx)"' TYPE 'E'.
+    ELSE.
+      MESSAGE 'The file name does not end in .xlsx - pick the workbook with F4' TYPE 'E'.
+    ENDIF.
   ENDIF.
 
 *----------------------------------------------------------------------*
