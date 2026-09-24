@@ -15,13 +15,13 @@
 *&   L6 is central (maintained in YCIS_WF_APPR under sales office '0001',
 *&   level 6) and sees the Pending-L6 rows of ALL sales offices.
 *&
-*&   NOTE ON DISBURSEMENT POSTING: the actual financial posting (credit
-*&   note / G-L / payment run) depends on the finance configuration agreed
-*&   with CPC Finance and is NOT performed here. This program records the
-*&   approval-workflow completion (WF_STATUS '70', STATUS 'A') against the
-*&   rebate order already created at L3. The hook FORM post_disbursement is
-*&   provided as the single place to plug that posting in once the finance
-*&   design (BAPI / posting FM) is finalised.
+*&   DISBURSEMENT POSTING (CPC 24.09.2026 - full automation): on Disburse
+*&   the program creates the G2 Credit Note from the L3 rebate order and
+*&   POSTS it to accounting immediately (FORM post_disbursement). Both the
+*&   billing document (CN_DOC) and the FI accounting document (ACC_DOC /
+*&   ACC_YEAR) are stored against the workflow (WF_STATUS '70') and shown on
+*&   the L6 screen; the credit-note PDF + customer e-mail fire via output
+*&   determination. See post_disbursement for the G2 Customizing needed.
 *&
 *& GUI status 'STANDARD' (function codes APPR, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (copy from the L2
@@ -50,6 +50,8 @@ TYPES: BEGIN OF ty_out,
          rebate_val  TYPE ycis_apprvl-rebate_val,
          order_no    TYPE ycis_apprvl-order_no,
          cn_doc      TYPE ycis_apprvl-cn_doc,
+         acc_doc     TYPE ycis_apprvl-acc_doc,
+         acc_year    TYPE ycis_apprvl-acc_year,
          purch_no    TYPE ycis_apprvl-purch_no,
          l3_user     TYPE ycis_apprvl-l3_user,
          l4_user     TYPE ycis_apprvl-l4_user,
@@ -190,6 +192,8 @@ FORM build_fieldcat.
   add_fc 'REBATE_VAL'  'Rebate Value'    ''.
   add_fc 'ORDER_NO'    'Rebate Order'    ''.
   add_fc 'CN_DOC'      'Credit Note'     ''.
+  add_fc 'ACC_DOC'     'Accounting Doc'  ''.
+  add_fc 'ACC_YEAR'    'Fiscal Year'     ''.
   add_fc 'PURCH_NO'    'Reference No'    ''.
   add_fc 'L3_USER'     'L3 Executed By'  ''.
   add_fc 'L4_USER'     'L4 Vetted By'    ''.
@@ -305,7 +309,9 @@ FORM process_selected USING p_action TYPE char1.
         lv_ans    TYPE c,
         lv_off    TYPE vkbur,
         lv_ok     TYPE flag,
-        lv_cndoc  TYPE vbeln_vf.
+        lv_cndoc  TYPE vbeln_vf,
+        lv_accdoc TYPE belnr_d,
+        lv_accyr  TYPE gjahr.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -340,18 +346,22 @@ FORM process_selected USING p_action TYPE char1.
                   kvgr2       = gs_out-kvgr2.
     CHECK sy-subrc = 0.
     IF p_action = 'A'.
-*       CIS 2026-27 (CPC Topic 1): auto-generate the G2 Credit Note from the
-*       ZP09 rebate request, PARKED for F&A to check & release. Failure to
-*       create leaves the row Pending L6 (not marked disbursed).
-      CLEAR: lv_ok, lv_cndoc.
-      PERFORM post_disbursement USING gs_appr CHANGING lv_ok lv_cndoc.
+*       CIS 2026-27 (CPC 24.09.2026): fully automatic - create the G2 Credit
+*       Note from the ZP09 request, POST it to accounting immediately, and let
+*       output determination send the PDF + customer e-mail. Failure to
+*       create/post leaves the row Pending L6 (not marked disbursed).
+      CLEAR: lv_ok, lv_cndoc, lv_accdoc, lv_accyr.
+      PERFORM post_disbursement USING gs_appr
+              CHANGING lv_ok lv_cndoc lv_accdoc lv_accyr.
       IF lv_ok IS INITIAL.
 *         credit-note creation failed - skip this row, leave it Pending L6
         CONTINUE.
       ENDIF.
       IF lv_cndoc IS NOT INITIAL.
-        gs_appr-cn_doc = lv_cndoc.         " G2 credit note (parked) - prints on note
+        gs_appr-cn_doc = lv_cndoc.         " G2 credit note (billing doc)
       ENDIF.
+      gs_appr-acc_doc  = lv_accdoc.        " FI accounting document (posted)
+      gs_appr-acc_year = lv_accyr.
       gs_appr-wf_status = '70'.            " Completed / Disbursed
       gs_appr-status    = 'A'.
       gs_appr-l6_user   = sy-uname.
@@ -393,29 +403,31 @@ FORM process_selected USING p_action TYPE char1.
     ENDLOOP.
   ENDIF.
   DELETE gt_out WHERE sel = 'X'.
-  MESSAGE |{ lv_disb } disbursed (completed), { lv_rej } returned to L1| TYPE 'S'.
+  MESSAGE |{ lv_disb } disbursed (Credit Note created & posted), { lv_rej } returned to L1| TYPE 'S'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 *&      Form  post_disbursement
 *&---------------------------------------------------------------------*
-*&  Finance-posting hook. The rebate order was already created at L3; the
-*&  actual credit-note / G-L / payment posting depends on the CPC Finance
-*&  design and is not yet configured. Plug the posting BAPI/FM in here and
-*&  return p_ok = 'X' on success. Until then this is a controlled no-op so
-*&  that disbursement records the workflow completion without failing.
+*&  Credit-note creation + immediate posting at L6 disbursement.
 *&---------------------------------------------------------------------*
-*   CIS 2026-27 (CPC Topic 1 answers): at L6 disbursement the system creates
-*   the Credit Note (billing type G2) from the ZP09 credit-memo request that
-*   L3 already created (order-related billing, copy control ZP09 -> G2). The
-*   billing date is the creation date. The note is intended to be PARKED for
-*   F&A to check & release (posting to accounting is NOT forced here): keep
-*   the "Posting block" flag ticked on billing type G2 in Customizing (VOFA)
-*   so the document is created but not passed to FI until F&A releases it
-*   (VF02 / VFX3), where the existing PDF + customer e-mail is triggered.
-FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
-                       CHANGING p_ok    TYPE flag
-                                p_cndoc TYPE vbeln_vf.
+*   CIS 2026-27 (CPC 24.09.2026): at L6 the system creates the Credit Note
+*   (billing type G2) from the ZP09 credit-memo request created at L3
+*   (order-related billing, copy control ZP09 -> G2), with billing/posting
+*   date = disbursement date, and it is POSTED TO ACCOUNTING IMMEDIATELY.
+*   Both numbers (billing doc CN_DOC and FI document ACC_DOC/ACC_YEAR) are
+*   stored against the workflow and shown on the L6 screen.
+*
+*   Customizing prerequisites for full automation:
+*     - Billing type G2: 'Posting block' flag OFF (VOFA) so FI posts at once.
+*     - Output type on G2 (credit-note copy + customer e-mail): dispatch
+*       time 4 (send immediately) so the PDF download + e-mail fire without
+*       any manual step (VV31 / NACE).
+FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
+                       CHANGING p_ok     TYPE flag
+                                p_cndoc  TYPE vbeln_vf
+                                p_accdoc TYPE belnr_d
+                                p_accyr  TYPE gjahr.
   DATA: lt_bill   TYPE STANDARD TABLE OF bapivbrk,
         ls_bill   TYPE bapivbrk,
         lt_succ   TYPE STANDARD TABLE OF bapivbrksuccess,
@@ -424,7 +436,7 @@ FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
         ls_return TYPE bapireturn1,
         lv_err    TYPE flag.
 
-  CLEAR: p_ok, p_cndoc.
+  CLEAR: p_ok, p_cndoc, p_accdoc, p_accyr.
 *   need the L3 rebate order (ZP09) as the billing reference
   IF ps_appr-order_no IS INITIAL.
     MESSAGE 'No rebate order (ZP09) found - Credit Note not created' TYPE 'I'.
@@ -432,8 +444,10 @@ FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
   ENDIF.
 *   idempotent: a Credit Note already exists for this proposal -> keep it
   IF ps_appr-cn_doc IS NOT INITIAL.
-    p_ok    = 'X'.
-    p_cndoc = ps_appr-cn_doc.
+    p_ok     = 'X'.
+    p_cndoc  = ps_appr-cn_doc.
+    p_accdoc = ps_appr-acc_doc.
+    p_accyr  = ps_appr-acc_year.
     RETURN.
   ENDIF.
 
@@ -441,9 +455,14 @@ FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
   ls_bill-ref_doc    = ps_appr-order_no.    " ZP09 credit-memo request
   ls_bill-ref_doc_ca = 'C'.                 " order-related billing
   ls_bill-doc_number = ps_appr-order_no.
-  ls_bill-bill_date  = sy-datum.            " billing date = creation date
+  ls_bill-bill_date  = sy-datum.            " billing/posting date = disbursement date
   APPEND ls_bill TO lt_bill.
 
+*   CPC (24.09.2026): FULL automation - create the G2 Credit Note AND post it
+*   to accounting IMMEDIATELY. Posting to FI happens automatically provided the
+*   'Posting block' flag on billing type G2 is OFF (VOFA). The credit-note
+*   output (PDF download + customer e-mail) is fired by output determination
+*   on G2 set to dispatch time 4 (send immediately) - no manual step.
   CALL FUNCTION 'BAPI_BILLINGDOC_CREATEMULTIPLE'
     TABLES
       billingdatain = lt_bill
@@ -457,14 +476,26 @@ FORM post_disbursement USING    ps_appr TYPE ycis_apprvl
   READ TABLE lt_succ INTO ls_succ INDEX 1.
   IF lv_err = 'X' OR sy-subrc <> 0 OR ls_succ-bill_doc IS INITIAL.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
-    MESSAGE 'Credit Note (G2) creation failed for the selected proposal' TYPE 'I'.
+    MESSAGE 'Credit Note (G2) creation/posting failed for the selected proposal' TYPE 'I'.
     RETURN.
   ENDIF.
 
   CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
     EXPORTING wait = 'X'.
   p_cndoc = ls_succ-bill_doc.
-  p_ok    = 'X'.
+
+*   read the accounting document posted for this billing document, so both
+*   numbers can be shown against the workflow (CPC 24.09.2026 pt.2).
+  SELECT SINGLE belnr gjahr INTO (p_accdoc, p_accyr)
+    FROM bkpf
+    WHERE awtyp = 'VBRK'
+      AND awkey = p_cndoc.
+  IF p_accdoc IS INITIAL.
+*     billing posted but FI doc not found (e.g. posting still in the update
+*     task or a posting block is set) - the billing doc is still created.
+    MESSAGE 'Credit Note created; accounting document not yet posted - check billing type G2 posting block' TYPE 'I'.
+  ENDIF.
+  p_ok = 'X'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
