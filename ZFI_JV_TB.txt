@@ -958,10 +958,10 @@ FORM get_opening.
 
   REFRESH lt_jvto1.
 
-  SELECT SINGLE gjahr
+  SELECT SINGLE ryear
     FROM jvaonacdocaactiv
     INTO @lv_start_year
-    WHERE activity_id = 'START'.
+    WHERE id = 'START'.
   IF sy-subrc NE 0 OR p_year LE lv_start_year.
     lv_bcf_year = p_year.
   ELSE.
