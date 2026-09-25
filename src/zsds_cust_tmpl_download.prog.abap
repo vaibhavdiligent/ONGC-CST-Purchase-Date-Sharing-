@@ -3418,12 +3418,19 @@ CLASS lcl_main IMPLEMENTATION.
     ENDLOOP.
     SORT lt_f4 BY ktokd.
 
+    " WINDOW_TITLE is a C field on this function module, and a classic
+    " function module takes nothing else there - a string template builds a
+    " STRING and the call dies with CALL_FUNCTION_CONFLICT_GEN_TYP before it
+    " has done anything. The title is built into a character field first.
+    DATA lv_title TYPE char70.
+    lv_title = |Account groups for { lcl_tmpl=>region_text( lv_regn ) }|.
+
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
       EXPORTING  retfield     = 'KTOKD'
                  dynpprog     = sy-repid
                  dynpnr       = sy-dynnr
                  dynprofield  = 'P_KTOKD'
-                 window_title = |Account groups for { lcl_tmpl=>region_text( lv_regn ) }|
+                 window_title = lv_title
                  value_org    = 'S'
       TABLES     value_tab    = lt_f4
       EXCEPTIONS OTHERS       = 1.
