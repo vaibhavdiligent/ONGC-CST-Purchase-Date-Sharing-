@@ -20,6 +20,8 @@
 
 * 19-02-2023 Aparna Anand        USD AND INR BOTH ADDITION                                                                  *
 *                                                                     *
+* 25-09-2026 SAP_ABAP  Opening balance from JVTO1 carry-forward of the *
+*                       JVA-on-ACDOCA START year + ACDOCA postings    *
 * ADD HERE IF ANY CHANGE DONE IN THE PROGRAM                          *
 *                                                                     *
 *&---------------------------------------------------------------------*
@@ -551,6 +553,11 @@ END-OF-SELECTION.
 *--------------------------------------------------------------*
 FORM get_data.
   break abapuser02.
+*BOC By SAP_ABAP on 25/09/26
+  DATA ls_jvt_open TYPE ty_jvt.
+
+  PERFORM get_opening.
+*EOC By SAP_ABAP on 25/09/26
 *  SELECT racct
 *   FROM jvto1 INTO CORRESPONDING FIELDS OF TABLE lt_jvt
 *      WHERE ryear = p_year
@@ -571,6 +578,20 @@ FORM get_data.
     AND rldnr  =  '4A'
     AND rrcty  =  '0'
     AND rrecin IN @p_rrecin.
+
+*BOC By SAP_ABAP on 25/09/26
+* Ventures/accounts with an opening balance but no posting in p_year
+* (e.g. only a carry-forward in JVTO1) are not returned by the view.
+  LOOP AT lt_jvto1 INTO ls_jvto1.
+    ls_jvt_open-racct = ls_jvto1-racct.
+    APPEND ls_jvt_open TO lt_jvt.
+    ls_alljv-rjvnam = ls_jvto1-rjvnam.
+    APPEND ls_alljv TO lt_alljv.
+  ENDLOOP.
+  CLEAR : ls_jvto1, ls_jvt_open, ls_alljv.
+  SORT lt_alljv BY rjvnam ASCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_alljv.
+*EOC By SAP_ABAP on 25/09/26
 
   SORT lt_jvt BY racct ASCENDING.
   DELETE ADJACENT DUPLICATES FROM lt_jvt COMPARING racct .
@@ -633,21 +654,24 @@ FORM get_data.
 * ASSUMPTION: HSLVT for the activation year and later depends on the JVA
 * balance carry-forward having been posted into ACDOCA - being verified.
 *EOC By SAP_ABAP on 22/09/26
-      SELECT SUM( hslvt ) AS hslvt,
-       rjvnam,
-       racct
-*BOC By SAP_ABAP on 22/09/26
-*  FROM jv_jvto1_acdoca
-  FROM jv_jvto1_acdoca_switch_2
-*EOC By SAP_ABAP on 22/09/26
-  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
-  WHERE ryear  =  @p_year
-    AND rbukrs =  @p_bukrs
-    AND rjvnam IN @p_jvnam
-    AND rldnr  =  '4A'
-    AND rrcty  =  '0'
-    AND rrecin IN @p_rrecin
-  GROUP BY rjvnam, racct.
+*BOC By SAP_ABAP on 25/09/26
+* Opening balance (lt_jvto1-hslvt) is filled in FORM get_opening.
+*      SELECT SUM( hslvt ) AS hslvt,
+*       rjvnam,
+*       racct
+**BOC By SAP_ABAP on 22/09/26
+**  FROM jv_jvto1_acdoca
+*  FROM jv_jvto1_acdoca_switch_2
+**EOC By SAP_ABAP on 22/09/26
+*  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+*  WHERE ryear  =  @p_year
+*    AND rbukrs =  @p_bukrs
+*    AND rjvnam IN @p_jvnam
+*    AND rldnr  =  '4A'
+*    AND rrcty  =  '0'
+*    AND rrecin IN @p_rrecin
+*  GROUP BY rjvnam, racct.
+*EOC By SAP_ABAP on 25/09/26
 
 *    SELECT SUM( hsl ) AS hsl rjvnam racct
 *      FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
@@ -727,19 +751,26 @@ SELECT SUM( hsl ) AS hsl,
 *    AND rrcty  =  '0'
 *    AND rrecin IN @p_rrecin
 *  GROUP BY rjvnam, racct.
-SELECT SUM( kslvt ) AS hslvt,
-       rjvnam,
-       racct
-  FROM jv_jvto1_acdoca_switch_2
-  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
-  WHERE ryear  =  @p_year
-    AND rbukrs =  @p_bukrs
-    AND rjvnam IN @p_jvnam
-    AND rldnr  =  '4A'
-    AND rrcty  =  '0'
-    AND rrecin IN @p_rrecin
-  GROUP BY rjvnam, racct.
+*SELECT SUM( kslvt ) AS hslvt,
+*       rjvnam,
+*       racct
+*  FROM jv_jvto1_acdoca_switch_2
+*  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+*  WHERE ryear  =  @p_year
+*    AND rbukrs =  @p_bukrs
+*    AND rjvnam IN @p_jvnam
+*    AND rldnr  =  '4A'
+*    AND rrcty  =  '0'
+*    AND rrecin IN @p_rrecin
+*  GROUP BY rjvnam, racct.
 *EOC By SAP_ABAP on 22/09/26
+*BOC By SAP_ABAP on 25/09/26
+* USD opening: set_data reads the opening from HSLVT, so move KSLVT
+* (filled in FORM get_opening) into it.
+  LOOP AT lt_jvto1 ASSIGNING FIELD-SYMBOL(<ls_open_usd>).
+    <ls_open_usd>-hslvt = <ls_open_usd>-kslvt.
+  ENDLOOP.
+*EOC By SAP_ABAP on 25/09/26
 
 *    SELECT SUM( ksl ) AS ksl rjvnam racct
 *       FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
@@ -819,22 +850,25 @@ SELECT SUM( ksl ) AS ksl,
 *        AND rrcty = '0'
 *        AND rrecin IN  p_rrecin
 *    GROUP BY rjvnam racct .
-SELECT SUM( hslvt ) AS hslvt,
-       SUM( kslvt ) AS kslvt,
-       rjvnam,
-       racct
-*BOC By SAP_ABAP on 22/09/26
-*  FROM jv_jvto1_acdoca
-  FROM jv_jvto1_acdoca_switch_2
-*EOC By SAP_ABAP on 22/09/26
-  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
-  WHERE ryear  =  @p_year
-    AND rbukrs =  @p_bukrs
-    AND rjvnam IN @p_jvnam
-    AND rldnr  =  '4A'
-    AND rrcty  =  '0'
-    AND rrecin IN @p_rrecin
-  GROUP BY rjvnam, racct.
+*BOC By SAP_ABAP on 25/09/26
+* Opening balance (lt_jvto1-hslvt/kslvt) is filled in FORM get_opening.
+*SELECT SUM( hslvt ) AS hslvt,
+*       SUM( kslvt ) AS kslvt,
+*       rjvnam,
+*       racct
+**BOC By SAP_ABAP on 22/09/26
+**  FROM jv_jvto1_acdoca
+*  FROM jv_jvto1_acdoca_switch_2
+**EOC By SAP_ABAP on 22/09/26
+*  INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+*  WHERE ryear  =  @p_year
+*    AND rbukrs =  @p_bukrs
+*    AND rjvnam IN @p_jvnam
+*    AND rldnr  =  '4A'
+*    AND rrcty  =  '0'
+*    AND rrecin IN @p_rrecin
+*  GROUP BY rjvnam, racct.
+*EOC By SAP_ABAP on 25/09/26
 
 *    SELECT SUM( hsl ) AS hsl SUM( ksl )  AS ksl rjvnam racct
 *  FROM jvso1 INTO CORRESPONDING FIELDS OF TABLE lt_jvso1_1
@@ -900,6 +934,84 @@ SELECT SUM( hsl ) AS hsl,
 
 
 ENDFORM.
+*BOC By SAP_ABAP on 25/09/26
+*--------------------------------------------------------------*
+*FORM get_opening.
+*--------------------------------------------------------------*
+* Opening balance per venture/account for p_year into lt_jvto1
+* (HSLVT = company code INR, KSLVT = index based USD).
+* JVA runs on ACDOCA from the START entry in JVAONACDOCAACTIV (GJACTCD).
+* - p_year up to the START year: carry-forward of ledger 4A in JVTO1.
+* - p_year after the START year: JVTO1 carry-forward of the START year
+*   plus all ACDOCA postings (periods 001-016) from the START year up to
+*   p_year - 1.
+* The ACDOCA carry-forward (period 000), which the switch views use from
+* the START year on, is not used: it does not hold correct balances per
+* venture (opening of 2026 for MM1601 did not net to zero).
+*--------------------------------------------------------------*
+FORM get_opening.
+
+  DATA : lv_start_year TYPE gjahr,
+         lv_bcf_year   TYPE gjahr,
+         lv_prev_year  TYPE gjahr,
+         ls_open       TYPE ty_jvto1.
+
+  REFRESH lt_jvto1.
+
+  SELECT SINGLE ryear
+    FROM jvaonacdocaactiv
+    INTO @lv_start_year
+    WHERE id = 'START'.
+  IF sy-subrc NE 0 OR p_year LE lv_start_year.
+    lv_bcf_year = p_year.
+  ELSE.
+    lv_bcf_year = lv_start_year.
+  ENDIF.
+
+  SELECT SUM( hslvt ) AS hslvt,
+         SUM( kslvt ) AS kslvt,
+         rjvnam,
+         racct
+    FROM jvto1
+    INTO CORRESPONDING FIELDS OF TABLE @lt_jvto1
+    WHERE ryear  =  @lv_bcf_year
+      AND rbukrs =  @p_bukrs
+      AND rjvnam IN @p_jvnam
+      AND rldnr  =  '4A'
+      AND rrcty  =  '0'
+      AND rrecin IN @p_rrecin
+    GROUP BY rjvnam, racct.
+
+  IF lv_bcf_year LT p_year.
+    lv_prev_year = p_year - 1.
+
+    SELECT SUM( hsl ) AS hsl,
+           SUM( ksl ) AS ksl,
+           rjvnam,
+           racct
+      FROM jv_jvso1_acdoca
+      INTO TABLE @DATA(lt_acd_mov)
+      WHERE ryear  BETWEEN @lv_bcf_year AND @lv_prev_year
+        AND rbukrs =  @p_bukrs
+        AND rjvnam IN @p_jvnam
+        AND poper  BETWEEN '001' AND '016'
+        AND rldnr  =  '4A'
+        AND rrcty  =  '0'
+        AND rrecin IN @p_rrecin
+      GROUP BY rjvnam, racct.
+
+    LOOP AT lt_acd_mov INTO DATA(ls_acd_mov).
+      CLEAR ls_open.
+      ls_open-rjvnam = ls_acd_mov-rjvnam.
+      ls_open-racct  = ls_acd_mov-racct.
+      ls_open-hslvt  = ls_acd_mov-hsl.
+      ls_open-kslvt  = ls_acd_mov-ksl.
+      COLLECT ls_open INTO lt_jvto1.
+    ENDLOOP.
+  ENDIF.
+
+ENDFORM.
+*EOC By SAP_ABAP on 25/09/26
 *--------------------------------------------------------------*
 *FORM set_data.
 *--------------------------------------------------------------*
@@ -1206,7 +1318,7 @@ FORM set_data.
         lv_crebal_u =  lv_crebal_u + ls_bfinal-bal_cre_u.
         lv_debbal   =  lv_debbal   + ls_bfinal-bal_deb.
         lv_debbal_i =  lv_debbal_i + ls_bfinal-bal_deb_i.
-        lv_debbal_u =  lv_debbal_i + ls_bfinal-bal_deb_u.
+        lv_debbal_u =  lv_debbal_u + ls_bfinal-bal_deb_u.
 
         CLEAR ls_bfinal.
       ENDIF.
