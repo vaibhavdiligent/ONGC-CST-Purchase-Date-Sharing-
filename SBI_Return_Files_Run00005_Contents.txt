@@ -1,0 +1,141 @@
+============================================================================
+ SBI RETURN FILES - PAYMENT RUN 00005 (Run date 13.09.2026 / LAUFI OVL4)
+ Contents of the three files received from bank, for output verification
+============================================================================
+
+The bank returned this run's 5 payment lines in THREE files, by payment
+type. Each file has its OWN column layout. The key field that links a file
+line to the SAP payment order is the "CR LINE REF NO" (for CN/CT) or the
+"CREDIT DESCRIPTION" (for CC) - this is the Payment Order (PYORD).
+
+----------------------------------------------------------------------------
+ FILE 1 : TXN_CC   (Corporate Card - recharge)   - 12 columns
+ File name: TXN_CC_03052313092600005B160411_16092026.csv
+----------------------------------------------------------------------------
+Columns:
+  1  CARD NO             2  CARD REFERENCE NO   3  CREATION DATE
+  4  CREATION TIME       5  ECHEQUENO           6  DEBIT AMOUNT
+  7  DR_LINE_REF_NO      8  AMOUNT              9  CREDIT DESCRIPTION
+ 10  CREDIT STATUS      11  REMARKS            12  TRANSACTION NO
+
+Line 1
+  CARD NO ............ 4216870700044884
+  CARD REFERENCE NO .. 100013850365
+  CREATION DATE ...... 09/13/2026
+  CREATION TIME ...... 17:28:20
+  ECHEQUENO .......... CC09402058
+  DEBIT AMOUNT ....... (blank)
+  DR_LINE_REF_NO ..... 2026091300005B
+  AMOUNT ............. 3882
+  CREDIT DESCRIPTION . 000083320620260913ONGC Card Recharge
+                       -> Payment Order (PYORD) = 0000833206
+  CREDIT STATUS ...... Success
+  REMARKS ............ (blank)
+  TRANSACTION NO ..... CC09402058
+
+----------------------------------------------------------------------------
+ FILE 2 : TXN_CN   (NEFT)   - 14 columns
+ File name: TXN_CN_03052313092600005B160411_15092026.csv
+----------------------------------------------------------------------------
+Columns:
+  1  ACCOUNT NO          2  IFS CODE            3  CREATION DATE
+  4  CREATION TIME       5  ECHEQUE NO          6  DEBIT AMOUNT
+  7  DR LINE REF NO      8  AMOUNT              9  CPF NO
+ 10  CR LINE REF NO     11  MERCHANT CODE      12  CREDIT STATUS
+ 13  REMARKS            14  UTR
+
+Line 1
+  ACCOUNT NO ......... 135451000058
+  IFS CODE ........... ICIC0001354
+  CREATION DATE ...... 09/13/2026
+  CREATION TIME ...... 17:26:53
+  ECHEQUE NO ......... CNAFJSNEE000006
+  DEBIT AMOUNT ....... (blank)
+  DR LINE REF NO ..... 2026091300005B8
+  AMOUNT ............. 2194500
+  CPF NO ............. 0000151395
+  CR LINE REF NO ..... 0000833207   <- Payment Order (PYORD)
+  MERCHANT CODE ...... NEFT
+  CREDIT STATUS ...... Success
+  REMARKS ............ Completed Successfully
+  UTR ................ SBIN326258654305
+
+Line 2
+  ACCOUNT NO ......... 09630200000619
+  IFS CODE ........... BARB0KAIDEL
+  CREATION DATE ...... 09/13/2026
+  CREATION TIME ...... 17:26:53
+  ECHEQUE NO ......... CNAFJSNEE000004
+  DEBIT AMOUNT ....... (blank)
+  DR LINE REF NO ..... 2026091300005B8
+  AMOUNT ............. 177858.60
+  CPF NO ............. 0000894344
+  CR LINE REF NO ..... 0000833208   <- Payment Order (PYORD)
+  MERCHANT CODE ...... NEFT
+  CREDIT STATUS ...... Success
+  REMARKS ............ Completed Successfully
+  UTR ................ SBIN326258657234
+
+Line 3
+  ACCOUNT NO ......... 00031370026109
+  IFS CODE ........... HDFC0001452
+  CREATION DATE ...... 09/13/2026
+  CREATION TIME ...... 17:26:53
+  ECHEQUE NO ......... CNAFJSNEE000005
+  DEBIT AMOUNT ....... (blank)
+  DR LINE REF NO ..... 2026091300005B8
+  AMOUNT ............. 63292
+  CPF NO ............. 0007073502
+  CR LINE REF NO ..... 0000833209   <- Payment Order (PYORD)
+  MERCHANT CODE ...... NEFT
+  CREDIT STATUS ...... Success
+  REMARKS ............ Completed Successfully
+  UTR ................ SBIN326258655649
+
+----------------------------------------------------------------------------
+ FILE 3 : TXN_CT   - 13 columns
+ File name: TXN_CT_03052313092600005B160411_15092026.csv
+----------------------------------------------------------------------------
+Columns:
+  1  ACCOUNT NO          2  BRANCH CODE         3  CREATION DATE
+  4  CREATION TIME       5  ECHEQUE NO          6  DEBIT AMOUNT
+  7  DR LINE REF NO      8  AMOUNT              9  CPF NO
+ 10  CR LINE REF NO     11  CREDIT STATUS      12  REMARKS
+ 13  TRANSACTION NUMBER
+
+Line 1
+  ACCOUNT NO ......... 00000030061355187
+  BRANCH CODE ........ 03838
+  CREATION DATE ...... 09/13/2026
+  CREATION TIME ...... 17:26:56
+  ECHEQUE NO ......... CT0AJPPSP000004
+  DEBIT AMOUNT ....... (blank)
+  DR LINE REF NO ..... 2026091300005B9
+  AMOUNT ............. 14000
+  CPF NO ............. 0007078087
+  CR LINE REF NO ..... 00833210     <- Payment Order (PYORD) = 0000833210
+  CREDIT STATUS ...... Success
+  REMARKS ............ Completed Successfully
+  TRANSACTION NUMBER . CT0AJPPSP000004
+
+============================================================================
+ CONSOLIDATED - all 5 payments of run 00005 (for matching to SAP output)
+============================================================================
+
+ Payment Order | File   | Amount      | Status  | UTR / Txn No
+ --------------+--------+-------------+---------+---------------------
+ 0000833206    | TXN_CC | 3,882.00    | Success | CC09402058
+ 0000833207    | TXN_CN | 2,194,500.00| Success | SBIN326258654305
+ 0000833208    | TXN_CN | 177,858.60  | Success | SBIN326258657234
+ 0000833209    | TXN_CN | 63,292.00   | Success | SBIN326258655649
+ 0000833210    | TXN_CT | 14,000.00   | Success | CT0AJPPSP000004
+
+ Payment Date (all lines) : 13.09.2026
+ Debit Reference (BKTXT)  : from "DR LINE REF NO" column
+                            (2026091300005B / ...B8 / ...B9)
+
+Note: All five lines were returned by the bank as "Success". These are the
+values that should appear in SAP (ZFI_BCM_PAYORDR) once each file is
+processed - Payment Order, Status = 002 (Success), UTR/Transaction Number,
+Amount and Payment Date as listed above.
+============================================================================
