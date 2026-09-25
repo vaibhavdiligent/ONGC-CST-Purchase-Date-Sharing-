@@ -45,22 +45,31 @@ def main():
     # A country and an account group name one template. The two that belong to
     # no country are reached by their own radio button, not through this table.
     seen, combi = set(), []
-    for c in sorted(reg['combinations'], key=lambda x: (x['country'], x['ktokd'])):
+    for c in sorted(reg['combinations'], key=lambda x: (x['region'], x['ktokd'],
+                                                        x['country'])):
         if c['country'] == '*':
             continue
-        key = (c['country'], c['ktokd'])
+        key = (c['region'], c['ktokd'], c['country'])
         if key in seen:
             continue
         seen.add(key)
-        combi.append(f"      ( land = '{c['country']}' ktokd = '{c['ktokd']}' "
+        combi.append(f"      ( regn = '{c['region']}' land = '{c['country']}' "
+                     f"ktokd = '{c['ktokd']}' "
                      f"tmpl = '{alias.get(c['format'], c['format'])}' )")
 
+    # The regions the dropdown offers. The two that belong to no country are
+    # reached by their own radio button, so they are not in the list.
+    region = [f"      ( regn = '{r['region']}' text = '{r['text']}' )"
+              for r in reg['regions'] if r['countries']]
+
     text = open(SKEL).read()
+    text = text.replace('*<<REGION>>', '\n'.join(region))
     text = text.replace('*<<COMBI>>', '\n'.join(combi))
     text = text.replace('*<<MAP>>', mapping)
     open(OUT, 'w').write(text)
     print(f'{OUT}: {len(text.splitlines())} lines, {len(body)} columns, '
-          f'{len(combi)} combinations, {CHUNKS} map methods')
+          f'{len(combi)} combinations, {len(region)} regions, '
+          f'{CHUNKS} map methods')
     return 0
 
 

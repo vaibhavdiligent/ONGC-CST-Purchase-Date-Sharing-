@@ -7380,6 +7380,7 @@
  "combinations": [
   {
    "sheet": "Australia",
+   "region": "AU",
    "country": "AU",
    "ktokd": "ZDOM",
    "format": "f7e2b95a",
@@ -7388,6 +7389,7 @@
   },
   {
    "sheet": "Australia",
+   "region": "AU",
    "country": "AU",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7396,6 +7398,7 @@
   },
   {
    "sheet": "Australia",
+   "region": "AU",
    "country": "AU",
    "ktokd": "ZSHP",
    "format": "8a74041a",
@@ -7404,6 +7407,7 @@
   },
   {
    "sheet": "Australia",
+   "region": "AU",
    "country": "AU",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7412,6 +7416,7 @@
   },
   {
    "sheet": "Australia",
+   "region": "AU",
    "country": "AU",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7420,6 +7425,7 @@
   },
   {
    "sheet": "Dubai",
+   "region": "AE",
    "country": "AE",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7428,6 +7434,7 @@
   },
   {
    "sheet": "Dubai",
+   "region": "AE",
    "country": "AE",
    "ktokd": "ZSHP",
    "format": "80d23dd8",
@@ -7436,6 +7443,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "GB",
    "ktokd": "YSHP",
    "format": "43156406",
@@ -7444,6 +7452,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "BE",
    "ktokd": "YSHP",
    "format": "43156406",
@@ -7452,6 +7461,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "ES",
    "ktokd": "YSHP",
    "format": "43156406",
@@ -7460,6 +7470,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "NL",
    "ktokd": "YSHP",
    "format": "43156406",
@@ -7468,6 +7479,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "GB",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7476,6 +7488,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "BE",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7484,6 +7497,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "ES",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7492,6 +7506,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "NL",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7500,6 +7515,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "GB",
    "ktokd": "ZDOM",
    "format": "e10ec770",
@@ -7508,6 +7524,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "BE",
    "ktokd": "ZDOM",
    "format": "e10ec770",
@@ -7516,6 +7533,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "ES",
    "ktokd": "ZDOM",
    "format": "e10ec770",
@@ -7524,6 +7542,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "NL",
    "ktokd": "ZDOM",
    "format": "e10ec770",
@@ -7532,6 +7551,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "GB",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7540,6 +7560,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "BE",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7548,6 +7569,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "ES",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7556,6 +7578,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "NL",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7564,6 +7587,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "GB",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7572,6 +7596,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "BE",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7580,6 +7605,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "ES",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7588,6 +7614,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "NL",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7596,6 +7623,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "GB",
    "ktokd": "ZSHP",
    "format": "8a74041a",
@@ -7604,6 +7632,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "BE",
    "ktokd": "ZSHP",
    "format": "8a74041a",
@@ -7612,6 +7641,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "ES",
    "ktokd": "ZSHP",
    "format": "8a74041a",
@@ -7620,6 +7650,7 @@
   },
   {
    "sheet": "Europe",
+   "region": "EU",
    "country": "NL",
    "ktokd": "ZSHP",
    "format": "8a74041a",
@@ -7628,6 +7659,7 @@
   },
   {
    "sheet": "Exelan",
+   "region": "EX",
    "country": "US",
    "ktokd": "YVSP",
    "format": "6e6467eb",
@@ -7636,6 +7668,7 @@
   },
   {
    "sheet": "Exelan",
+   "region": "EX",
    "country": "US",
    "ktokd": "YVMI",
    "format": "6e6467eb",
@@ -7644,6 +7677,7 @@
   },
   {
    "sheet": "Exelan",
+   "region": "EX",
    "country": "US",
    "ktokd": "YVTO",
    "format": "6e6467eb",
@@ -7652,6 +7686,7 @@
   },
   {
    "sheet": "Exelan",
+   "region": "EX",
    "country": "US",
    "ktokd": "YSHP",
    "format": "43156406",
@@ -7660,6 +7695,7 @@
   },
   {
    "sheet": "Exelan",
+   "region": "EX",
    "country": "US",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7668,6 +7704,7 @@
   },
   {
    "sheet": "Exelan",
+   "region": "EX",
    "country": "US",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7676,6 +7713,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZEXP",
    "format": "da47e4b3",
@@ -7684,6 +7722,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZDOM",
    "format": "fb40b09b",
@@ -7692,6 +7731,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7700,6 +7740,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZOTC",
    "format": "42895e0e",
@@ -7708,6 +7749,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZMPC",
    "format": "42895e0e",
@@ -7716,6 +7758,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZPY1",
    "format": "32831d38",
@@ -7724,6 +7767,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZREM",
    "format": "06551ad0",
@@ -7732,6 +7776,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZNOT",
    "format": "84513e29",
@@ -7740,6 +7785,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZSUB",
    "format": "f10a66f5",
@@ -7748,6 +7794,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZSHP",
    "format": "6c94ea65",
@@ -7756,6 +7803,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZSHM",
    "format": "67849f38",
@@ -7764,6 +7812,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7772,6 +7821,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZBMR",
    "format": "647cd8ca",
@@ -7780,6 +7830,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZDOD",
    "format": "1f487b03",
@@ -7788,6 +7839,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZDOF",
    "format": "1f487b03",
@@ -7796,6 +7848,7 @@
   },
   {
    "sheet": "India",
+   "region": "IN",
    "country": "IN",
    "ktokd": "ZDOC",
    "format": "1f487b03",
@@ -7804,6 +7857,7 @@
   },
   {
    "sheet": "cust extn",
+   "region": "CX",
    "country": "*",
    "ktokd": "ZDOM",
    "format": "28573fa5",
@@ -7812,6 +7866,7 @@
   },
   {
    "sheet": "block unblock",
+   "region": "BU",
    "country": "*",
    "ktokd": "*",
    "format": "c9c1a8dd",
@@ -7820,6 +7875,7 @@
   },
   {
    "sheet": "Invagen",
+   "region": "IV",
    "country": "US",
    "ktokd": "ZDOM",
    "format": "6d2ec22f",
@@ -7828,6 +7884,7 @@
   },
   {
    "sheet": "Invagen",
+   "region": "IV",
    "country": "US",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7836,6 +7893,7 @@
   },
   {
    "sheet": "Invagen",
+   "region": "IV",
    "country": "US",
    "ktokd": "ZSHP",
    "format": "80d23dd8",
@@ -7844,6 +7902,7 @@
   },
   {
    "sheet": "Invagen",
+   "region": "IV",
    "country": "US",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7852,6 +7911,7 @@
   },
   {
    "sheet": "Invagen",
+   "region": "IV",
    "country": "US",
    "ktokd": "YVSP",
    "format": "6e6467eb",
@@ -7860,6 +7920,7 @@
   },
   {
    "sheet": "Invagen",
+   "region": "IV",
    "country": "US",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7868,6 +7929,7 @@
   },
   {
    "sheet": "Kenya",
+   "region": "KE",
    "country": "KE",
    "ktokd": "YDOM",
    "format": "08585a5a",
@@ -7876,6 +7938,7 @@
   },
   {
    "sheet": "Kenya",
+   "region": "KE",
    "country": "KE",
    "ktokd": "YVTO",
    "format": "6e6467eb",
@@ -7884,6 +7947,7 @@
   },
   {
    "sheet": "Kenya",
+   "region": "KE",
    "country": "KE",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -7892,6 +7956,7 @@
   },
   {
    "sheet": "Moroccco",
+   "region": "MA",
    "country": "MA",
    "ktokd": "ZDOM",
    "format": "f7e2b95a",
@@ -7900,6 +7965,7 @@
   },
   {
    "sheet": "Moroccco",
+   "region": "MA",
    "country": "MA",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -7908,6 +7974,7 @@
   },
   {
    "sheet": "Moroccco",
+   "region": "MA",
    "country": "MA",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7916,6 +7983,7 @@
   },
   {
    "sheet": "Moroccco",
+   "region": "MA",
    "country": "MA",
    "ktokd": "ZOTC",
    "format": "9c914100",
@@ -7924,6 +7992,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "ZDOM",
    "format": "d7ee33bb",
@@ -7932,6 +8001,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "YSHP",
    "format": "43156406",
@@ -7940,6 +8010,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "ZEXP",
    "format": "d7ee33bb",
@@ -7948,6 +8019,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "ZSHP",
    "format": "8a74041a",
@@ -7956,6 +8028,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "ZSUB",
    "format": "f10a66f5",
@@ -7964,6 +8037,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "ZCDP",
    "format": "9c914100",
@@ -7972,6 +8046,7 @@
   },
   {
    "sheet": "QCIL",
+   "region": "UG",
    "country": "UG",
    "ktokd": "ZOTC",
    "format": "9c914100",
@@ -7980,6 +8055,7 @@
   },
   {
    "sheet": "SAGA",
+   "region": "ZA",
    "country": "ZA",
    "ktokd": "YDOM",
    "format": "08585a5a",
@@ -7988,6 +8064,7 @@
   },
   {
    "sheet": "SAGA",
+   "region": "ZA",
    "country": "ZA",
    "ktokd": "YINT",
    "format": "08585a5a",
@@ -7996,6 +8073,7 @@
   },
   {
    "sheet": "SAGA",
+   "region": "ZA",
    "country": "ZA",
    "ktokd": "YTDR",
    "format": "08585a5a",
@@ -8004,6 +8082,7 @@
   },
   {
    "sheet": "SAGA",
+   "region": "ZA",
    "country": "ZA",
    "ktokd": "ZEXP",
    "format": "ab38ead5",
@@ -8012,6 +8091,7 @@
   },
   {
    "sheet": "SAGA",
+   "region": "ZA",
    "country": "ZA",
    "ktokd": "ZPLN",
    "format": "42895e0e",
@@ -8020,6 +8100,7 @@
   },
   {
    "sheet": "SAGA",
+   "region": "ZA",
    "country": "ZA",
    "ktokd": "ZDOM",
    "format": "e10ec770",
@@ -8067,5 +8148,102 @@
   "block unblock": [
    "*"
   ]
- }
+ },
+ "regions": [
+  {
+   "region": "AU",
+   "sheet": "Australia",
+   "countries": [
+    "AU"
+   ],
+   "text": "Australia (AU)"
+  },
+  {
+   "region": "BU",
+   "sheet": "block unblock",
+   "countries": [],
+   "text": "Block / unblock"
+  },
+  {
+   "region": "CX",
+   "sheet": "cust extn",
+   "countries": [],
+   "text": "Customer extension"
+  },
+  {
+   "region": "AE",
+   "sheet": "Dubai",
+   "countries": [
+    "AE"
+   ],
+   "text": "Dubai (AE)"
+  },
+  {
+   "region": "EU",
+   "sheet": "Europe",
+   "countries": [
+    "GB",
+    "BE",
+    "ES",
+    "NL"
+   ],
+   "text": "Europe (GB/BE/ES/NL)"
+  },
+  {
+   "region": "EX",
+   "sheet": "Exelan",
+   "countries": [
+    "US"
+   ],
+   "text": "Exelan (US)"
+  },
+  {
+   "region": "IN",
+   "sheet": "India",
+   "countries": [
+    "IN"
+   ],
+   "text": "India (IN)"
+  },
+  {
+   "region": "IV",
+   "sheet": "Invagen",
+   "countries": [
+    "US"
+   ],
+   "text": "Invagen (US)"
+  },
+  {
+   "region": "KE",
+   "sheet": "Kenya",
+   "countries": [
+    "KE"
+   ],
+   "text": "Kenya (KE)"
+  },
+  {
+   "region": "MA",
+   "sheet": "Moroccco",
+   "countries": [
+    "MA"
+   ],
+   "text": "Morocco (MA)"
+  },
+  {
+   "region": "UG",
+   "sheet": "QCIL",
+   "countries": [
+    "UG"
+   ],
+   "text": "QCIL (UG)"
+  },
+  {
+   "region": "ZA",
+   "sheet": "SAGA",
+   "countries": [
+    "ZA"
+   ],
+   "text": "SAGA (ZA)"
+  }
+ ]
 }

@@ -14,7 +14,11 @@ SRC  = open(os.path.join(ROOT, 'src/zsds_cust_tmpl_download.prog.abap'), encodin
 
 ROW = re.compile(r"\(\s*tmpl = '(\w+)'\s+col = (\d+)\s+hdr = '(.*?)'\s+node = '(.)'\s+"
                  r"fld = '(.*?)'\s+fmt = '(\w*)'\s*\)")
-COMBI = re.compile(r"\(\s*land = '(\w+)'\s+ktokd = '(\w+)'\s+tmpl = '(\w+)'\s*\)")
+# The combination row carries the REGION first: the workbook is organised by
+# region, and a country alone does not name one template - Europe is four
+# countries, and the United States is two entities sharing three account groups.
+COMBI = re.compile(r"\(\s*regn = '(\w+)'\s+land = '(\w+)'\s+ktokd = '(\w+)'\s+"
+                   r"tmpl = '(\w+)'\s*\)")
 
 # The structure each node reads from, as the engine reads it.
 NODE_TABLE = {'A': 'CVIS_EI_1VL',                 # address, BAPIAD1VL flattened
@@ -100,11 +104,13 @@ def main():
     # --- 3. every combination reaches a template --------------------------
     combis = COMBI.findall(SRC)
     check(combis, 'the program carries no combination table')
-    seen = collections.Counter((l, k) for l, k, _ in combis)
+    seen = collections.Counter((r, l, k) for r, l, k, _ in combis)
     for key, n in seen.items():
-        check(n == 1, f'{key[0]}/{key[1]} appears {n} times in the combination table')
-    for land, ktokd, tmpl in combis:
-        check(tmpl in by_tmpl, f'{land}/{ktokd} points at template {tmpl}, which has no columns')
+        check(n == 1, f'{key[0]} {key[1]}/{key[2]} appears {n} times in the '
+                      f'combination table')
+    for regn, land, ktokd, tmpl in combis:
+        check(tmpl in by_tmpl, f'{regn} {land}/{ktokd} points at template {tmpl}, '
+                               f'which has no columns')
 
     # --- 4. the map still matches the workbook ----------------------------
     alias = {c['format']: RENAMED[c['sheet']]
@@ -130,10 +136,32 @@ def main():
                   f'{name} column {i}: the workbook says "{desc}", the program '
                   f'"{by_hdr[name].get(i)}"')
 
-    want = {(c['country'], c['ktokd']) for c in REG['combinations'] if c['country'] != '*'}
-    have = {(l, k) for l, k, _ in combis}
+    want = {(c['region'], c['country'], c['ktokd'])
+            for c in REG['combinations'] if c['country'] != '*'}
+    have = {(r, l, k) for r, l, k, _ in combis}
     for miss in sorted(want - have):
-        fail.append(f'{miss[0]}/{miss[1]} is in the workbook but not in the program')
+        fail.append(f'{miss[0]} {miss[1]}/{miss[2]} is in the workbook but not '
+                    f'in the program')
+    for extra in sorted(have - want):
+        fail.append(f'{extra[0]} {extra[1]}/{extra[2]} is in the program but not '
+                    f'in the workbook')
+
+    # The region and the account group must name exactly one template, which
+    # is the whole reason the screen asks for a region rather than a country.
+    by_rk = {}
+    for r, l, k, t in combis:
+        by_rk.setdefault((r, k), set()).add(t)
+    for (r, k), t in sorted(by_rk.items()):
+        check(len(t) == 1, f'{r}/{k} resolves to {len(t)} templates: {sorted(t)}')
+
+    # Every region the dropdown offers has at least one template behind it,
+    # and every region a combination names is in the dropdown.
+    shown = set(re.findall(r"\(\s*regn = '(\w+)' text = '[^']*'\s*\)", SRC))
+    used  = {r for r, _, _, _ in combis}
+    for r in sorted(shown - used):
+        fail.append(f'the dropdown offers region {r}, which has no template')
+    for r in sorted(used - shown):
+        fail.append(f'region {r} has templates but the dropdown does not offer it')
     for extra in sorted(have - want):
         fail.append(f'{extra[0]}/{extra[1]} is in the program but not in the workbook')
 

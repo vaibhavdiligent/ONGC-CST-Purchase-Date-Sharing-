@@ -61,8 +61,8 @@
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_LAND</KEY>
-     <ENTRY>P_LAND  D       .Country</ENTRY>
+     <KEY>P_REGN</KEY>
+     <ENTRY>P_REGN  D       .Country / region</ENTRY>
      <LENGTH>7</LENGTH>
     </item>
     <item>

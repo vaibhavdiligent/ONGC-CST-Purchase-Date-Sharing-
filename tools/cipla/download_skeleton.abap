@@ -87,13 +87,36 @@ TYPES: BEGIN OF ty_col,
        END OF ty_col,
        tt_col TYPE STANDARD TABLE OF ty_col WITH EMPTY KEY.
 
-" Which template a country and an account group resolve to.
+" Which template a region and an account group resolve to.
+"
+" The workbook is organised by REGION, not by country, and the two do not
+" line up. Europe is one template for four countries; the United States has
+" two entities, Exelan and Invagen, sharing three account groups between
+" them. A country and an account group therefore do not name one template,
+" which is why the screen asks for the region. The country is carried along
+" for the file name and the heading - it is derived, never typed.
 TYPES: BEGIN OF ty_combi,
+         regn  TYPE char2,
          land  TYPE land1,
          ktokd TYPE ktokd,
          tmpl  TYPE char8,
        END OF ty_combi,
        tt_combi TYPE STANDARD TABLE OF ty_combi WITH EMPTY KEY.
+
+" The regions the dropdown offers, each with its countries in brackets.
+TYPES: BEGIN OF ty_regn,
+         regn TYPE char2,
+         text TYPE char40,
+       END OF ty_regn,
+       tt_regn TYPE STANDARD TABLE OF ty_regn WITH EMPTY KEY.
+
+" The file path. RLGRAP-FILENAME, which this parameter used to have, is
+" CHAR 128, and the file dialog hands the chosen path back as a STRING. A
+" path longer than 128 characters - which a OneDrive or Teams synchronised
+" folder reaches on its own - was cut short on the way into the parameter,
+" taking the ".xlsx" at the end of it with it. 255 is the widest a screen
+" field goes.
+TYPES ty_path TYPE c LENGTH 255.
 
 TYPES: tt_land  TYPE STANDARD TABLE OF land1 WITH EMPTY KEY,
        tt_ktokd TYPE STANDARD TABLE OF ktokd WITH EMPTY KEY.
@@ -136,7 +159,13 @@ PARAMETERS: p_crt RADIOBUTTON GROUP g1 USER-COMMAND rb DEFAULT 'X',
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-PARAMETERS: p_land  TYPE land1,
+" A dropdown, not a free text country key. Half the workbook's sheets are
+" named for something that is not a country - Dubai is a city, Europe is
+" four countries, SAGA and QCIL are entities - so a user who had to type a
+" country key had to know it, and the ones who did not got "Country key not
+" found" from the dynpro before the program was ever reached.
+PARAMETERS: p_regn  TYPE char2 AS LISTBOX VISIBLE LENGTH 40
+                    USER-COMMAND rg,
             p_ktokd TYPE ktokd.
 SELECTION-SCREEN END OF BLOCK b2.
 
@@ -147,7 +176,7 @@ PARAMETERS:     p_max   TYPE i DEFAULT 100.
 SELECTION-SCREEN END OF BLOCK b3.
 
 SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
-PARAMETERS: p_file  TYPE rlgrap-filename LOWER CASE,
+PARAMETERS: p_file  TYPE ty_path LOWER CASE,
             p_pc    RADIOBUTTON GROUP g2 DEFAULT 'X',
             p_srv   RADIOBUTTON GROUP g2,
             p_empty AS CHECKBOX.
@@ -511,22 +540,34 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 CLASS lcl_tmpl DEFINITION FINAL.
   PUBLIC SECTION.
-    " The template a country and an account group resolve to, empty when
-    " the workbook does not cover the combination.
+    " The template a region and an account group resolve to, empty when the
+    " workbook does not cover the combination.
     CLASS-METHODS resolve
-      IMPORTING iv_land   TYPE land1
+      IMPORTING iv_regn   TYPE char2
                 iv_ktokd  TYPE ktokd
       RETURNING VALUE(rv) TYPE char8.
+
+    " The country a region stands for - the first of them where a region
+    " covers several, which is only Europe. Used for the file name and the
+    " heading; nothing is selected by it.
+    CLASS-METHODS land_of
+      IMPORTING iv_regn   TYPE char2
+      RETURNING VALUE(rv) TYPE land1.
+
+    " Every region the workbook holds, in the order the dropdown shows them.
+    CLASS-METHODS regions RETURNING VALUE(rt) TYPE tt_regn.
+    CLASS-METHODS region_text
+      IMPORTING iv_regn   TYPE char2
+      RETURNING VALUE(rv) TYPE char40.
 
     CLASS-METHODS cols
       IMPORTING iv_tmpl   TYPE char8
       RETURNING VALUE(rt) TYPE tt_col.
 
-    " Every country the workbook covers, and every account group it covers
-    " for one country - what the F4 on the selection screen offers.
-    CLASS-METHODS countries RETURNING VALUE(rt) TYPE tt_land.
+    " Every account group the workbook covers for one region - what the F4 on
+    " the selection screen offers once a region is chosen.
     CLASS-METHODS groups
-      IMPORTING iv_land   TYPE land1
+      IMPORTING iv_regn   TYPE char2
       RETURNING VALUE(rt) TYPE tt_ktokd.
 
     CLASS-METHODS combis RETURNING VALUE(rt) TYPE tt_combi.
@@ -534,6 +575,7 @@ CLASS lcl_tmpl DEFINITION FINAL.
   PRIVATE SECTION.
     CLASS-DATA mt_col   TYPE tt_col.
     CLASS-DATA mt_combi TYPE tt_combi.
+    CLASS-DATA mt_regn  TYPE tt_regn.
     CLASS-METHODS load.
     CLASS-METHODS map_1 RETURNING VALUE(rt) TYPE tt_col.
     CLASS-METHODS map_2 RETURNING VALUE(rt) TYPE tt_col.
@@ -558,6 +600,10 @@ CLASS lcl_tmpl IMPLEMENTATION.
     mt_combi = VALUE tt_combi(
 *<<COMBI>>
     ).
+
+    mt_regn = VALUE tt_regn(
+*<<REGION>>
+    ).
   ENDMETHOD.
 
   METHOD combis.
@@ -568,9 +614,30 @@ CLASS lcl_tmpl IMPLEMENTATION.
   METHOD resolve.
     load( ).
     READ TABLE mt_combi INTO DATA(ls_cb)
-         WITH KEY land = iv_land ktokd = iv_ktokd.
+         WITH KEY regn = iv_regn ktokd = iv_ktokd.
     IF sy-subrc = 0.
       rv = ls_cb-tmpl.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD land_of.
+    load( ).
+    READ TABLE mt_combi INTO DATA(ls_cb) WITH KEY regn = iv_regn.
+    IF sy-subrc = 0.
+      rv = ls_cb-land.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD regions.
+    load( ).
+    rt = mt_regn.
+  ENDMETHOD.
+
+  METHOD region_text.
+    load( ).
+    READ TABLE mt_regn INTO DATA(ls_rg) WITH KEY regn = iv_regn.
+    IF sy-subrc = 0.
+      rv = ls_rg-text.
     ENDIF.
   ENDMETHOD.
 
@@ -582,23 +649,10 @@ CLASS lcl_tmpl IMPLEMENTATION.
     SORT rt BY col.
   ENDMETHOD.
 
-  METHOD countries.
-    load( ).
-    LOOP AT mt_combi INTO DATA(ls_cb).
-      IF ls_cb-land = gc_any.
-        CONTINUE.
-      ENDIF.
-      READ TABLE rt TRANSPORTING NO FIELDS WITH KEY table_line = ls_cb-land.
-      IF sy-subrc <> 0.
-        APPEND ls_cb-land TO rt.
-      ENDIF.
-    ENDLOOP.
-    SORT rt.
-  ENDMETHOD.
 
   METHOD groups.
     load( ).
-    LOOP AT mt_combi INTO DATA(ls_cb) WHERE land = iv_land.
+    LOOP AT mt_combi INTO DATA(ls_cb) WHERE regn = iv_regn.
       READ TABLE rt TRANSPORTING NO FIELDS WITH KEY table_line = ls_cb-ktokd.
       IF sy-subrc <> 0.
         APPEND ls_cb-ktokd TO rt.
@@ -1094,16 +1148,16 @@ CLASS lcl_main DEFINITION FINAL.
     CLASS-METHODS label RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS label_screen RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS propose_file.
-    CLASS-METHODS f4_land.
+    " Fills the region dropdown. A listbox is filled once, before the screen
+    " is shown, and the key it stores is the region - never a country key.
+    CLASS-METHODS fill_regions.
+    " The account groups of the region on the screen this moment.
     CLASS-METHODS f4_ktokd.
-    " One list of every template the workbook holds. Whichever of the two
-    " fields the help is called from, it fills both.
-    CLASS-METHODS f4_template.
-    " The country as it stands on the screen this moment.
-    CLASS-METHODS screen_land RETURNING VALUE(rv) TYPE land1.
+    " The region as it stands on the screen this moment.
+    CLASS-METHODS screen_regn RETURNING VALUE(rv) TYPE char2.
     CLASS-METHODS screen_val IMPORTING iv_field  TYPE clike
                              RETURNING VALUE(rv) TYPE string.
-    CLASS-METHODS label_of IMPORTING iv_land   TYPE clike
+    CLASS-METHODS label_of IMPORTING iv_regn   TYPE clike
                                      iv_ktokd  TYPE clike
                            RETURNING VALUE(rv) TYPE string.
     CLASS-METHODS validate.
@@ -1121,7 +1175,7 @@ CLASS lcl_main IMPLEMENTATION.
       WHEN p_ext. rv = gc_tmpl_extn.
       WHEN p_blk. rv = gc_tmpl_blk.
       WHEN OTHERS.
-        rv = lcl_tmpl=>resolve( iv_land = p_land iv_ktokd = p_ktokd ).
+        rv = lcl_tmpl=>resolve( iv_regn = p_regn iv_ktokd = p_ktokd ).
     ENDCASE.
   ENDMETHOD.
 
@@ -1130,15 +1184,22 @@ CLASS lcl_main IMPLEMENTATION.
       WHEN p_ext. rv = 'CUST_EXTN'.
       WHEN p_blk. rv = 'BLOCK_UNBLOCK'.
       WHEN OTHERS.
-        rv = |{ iv_land }_{ iv_ktokd }|.
-        IF iv_land IS INITIAL OR iv_ktokd IS INITIAL.
+        " The file keeps the country in its name, which is what the MDM
+        " team files it under. Europe's four countries share one template,
+        " so the region stands in its own name there.
+        DATA(lv_land) = lcl_tmpl=>land_of( CONV char2( iv_regn ) ).
+        rv = |{ lv_land }_{ iv_ktokd }|.
+        IF iv_regn = 'EU'.
+          rv = |EUROPE_{ iv_ktokd }|.
+        ENDIF.
+        IF iv_regn IS INITIAL OR iv_ktokd IS INITIAL.
           rv = 'CUSTOMER'.
         ENDIF.
     ENDCASE.
   ENDMETHOD.
 
   METHOD label.
-    rv = label_of( iv_land = p_land iv_ktokd = p_ktokd ).
+    rv = label_of( iv_regn = p_regn iv_ktokd = p_ktokd ).
   ENDMETHOD.
 
   METHOD label_screen.
@@ -1146,7 +1207,7 @@ CLASS lcl_main IMPLEMENTATION.
     " already been through PAI and the program holds the current choice. The
     " country and the account group are plain input fields with no round trip
     " of their own, so those two are read off the screen.
-    rv = label_of( iv_land = screen_land( ) iv_ktokd = screen_val( 'P_KTOKD' ) ).
+    rv = label_of( iv_regn = screen_regn( ) iv_ktokd = screen_val( 'P_KTOKD' ) ).
   ENDMETHOD.
 
   METHOD propose_file.
@@ -1172,109 +1233,82 @@ CLASS lcl_main IMPLEMENTATION.
     p_file = |{ lv_dir }{ lv_now }.xlsx|.
   ENDMETHOD.
 
-  METHOD f4_land.
-    f4_template( ).
+  METHOD fill_regions.
+    " The dropdown is filled once, before the screen is shown. Its key is the
+    " region and its text carries the country in brackets, so the user picks
+    " "Europe (GB/BE/ES/NL)" and never has to know that Dubai is AE.
+    DATA lt_vrm TYPE vrm_values.
+    LOOP AT lcl_tmpl=>regions( ) INTO DATA(ls_rg).
+      APPEND VALUE vrm_value( key = ls_rg-regn text = ls_rg-text ) TO lt_vrm.
+    ENDLOOP.
+    CALL FUNCTION 'VRM_SET_VALUES'
+      EXPORTING  id     = 'P_REGN'
+                 values = lt_vrm
+      EXCEPTIONS OTHERS = 1.
   ENDMETHOD.
 
   METHOD f4_ktokd.
-    f4_template( ).
-  ENDMETHOD.
+    " Only the account groups the chosen region actually has. With the region
+    " picked from a list there is one field left to fill, so the value comes
+    " back the ordinary way and no second field has to be written behind it.
+    DATA(lv_regn) = screen_regn( ).
+    IF lv_regn IS INITIAL.
+      MESSAGE 'Choose a region first' TYPE 'S' DISPLAY LIKE 'W'.
+      RETURN.
+    ENDIF.
 
-  METHOD f4_template.
-    " Every template the workbook holds, as one list: the pair that names it,
-    " the country and its name, the account group and its text, and how wide
-    " the template is. A country already typed narrows the list to that
-    " country; an empty one shows all of them, because a user who does not yet
-    " know which combinations exist is exactly the one who needs the list.
+    DATA(lt_grp) = lcl_tmpl=>groups( lv_regn ).
+    IF lt_grp IS INITIAL.
+      MESSAGE |No customer template exists for { lcl_tmpl=>region_text( lv_regn ) }|
+              TYPE 'S' DISPLAY LIKE 'W'.
+      RETURN.
+    ENDIF.
+
     TYPES: BEGIN OF ty_f4,
-             tmpl  TYPE char11,
-             land1 TYPE land1,
-             landx TYPE landx,
              ktokd TYPE ktokd,
              txt30 TYPE text30,
              cols  TYPE char5,
            END OF ty_f4.
     DATA lt_f4 TYPE STANDARD TABLE OF ty_f4 WITH EMPTY KEY.
 
-    DATA(lv_land) = screen_land( ).
-    DATA(lt_combi) = lcl_tmpl=>combis( ).
-    DELETE lt_combi WHERE land = gc_any.
-    IF lv_land IS NOT INITIAL.
-      DELETE lt_combi WHERE land <> lv_land.
-      IF lt_combi IS INITIAL.
-        MESSAGE |No customer template exists for country { lv_land }| TYPE 'S' DISPLAY LIKE 'W'.
-        RETURN.
-      ENDIF.
-    ENDIF.
-    IF lt_combi IS INITIAL.
-      RETURN.
-    ENDIF.
-
-    SELECT land1, landx FROM t005t
-      FOR ALL ENTRIES IN @lt_combi
-      WHERE spras = @sy-langu AND land1 = @lt_combi-land
-      INTO TABLE @DATA(lt_ctry).
+    " The whole (small) text table rather than FOR ALL ENTRIES: LT_GRP is a
+    " table of a single field, and FOR ALL ENTRIES has no component to drive
+    " itself from there.
     SELECT ktokd, txt30 FROM t077x
-      FOR ALL ENTRIES IN @lt_combi
-      WHERE spras = @sy-langu AND ktokd = @lt_combi-ktokd
-      INTO TABLE @DATA(lt_grp).
+      WHERE spras = @sy-langu
+      INTO TABLE @DATA(lt_txt).
 
-    LOOP AT lt_combi INTO DATA(ls_cb).
+    LOOP AT lt_grp INTO DATA(lv_k).
       DATA ls_f4 TYPE ty_f4.
       CLEAR ls_f4.
-      ls_f4-tmpl  = |{ ls_cb-land }/{ ls_cb-ktokd }|.
-      ls_f4-land1 = ls_cb-land.
-      ls_f4-ktokd = ls_cb-ktokd.
-      READ TABLE lt_ctry INTO DATA(ls_ct) WITH KEY land1 = ls_cb-land.
+      ls_f4-ktokd = lv_k.
+      READ TABLE lt_txt INTO DATA(ls_t) WITH KEY ktokd = lv_k.
       IF sy-subrc = 0.
-        ls_f4-landx = ls_ct-landx.
+        ls_f4-txt30 = ls_t-txt30.
       ENDIF.
-      READ TABLE lt_grp INTO DATA(ls_gr) WITH KEY ktokd = ls_cb-ktokd.
-      IF sy-subrc = 0.
-        ls_f4-txt30 = ls_gr-txt30.
-      ENDIF.
-      ls_f4-cols = lines( lcl_tmpl=>cols( ls_cb-tmpl ) ).
+      ls_f4-cols = lines( lcl_tmpl=>cols(
+        lcl_tmpl=>resolve( iv_regn = lv_regn iv_ktokd = lv_k ) ) ).
       SHIFT ls_f4-cols LEFT DELETING LEADING '0'.
       APPEND ls_f4 TO lt_f4.
     ENDLOOP.
-    SORT lt_f4 BY land1 ktokd.
+    SORT lt_f4 BY ktokd.
 
-    " The chosen row is taken back rather than transported. Automatic
-    " transport writes one field, and a template needs two; the mapping table
-    " that would write both only works on a real dynpro's value request, not
-    " on a selection screen, where it writes nothing at all. So no
-    " DYNPROFIELD is passed, the pair comes back in RETURN_TAB, and both
-    " fields are written here - which also keeps them from disagreeing.
-    DATA lt_ret TYPE STANDARD TABLE OF ddshretval.
     CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
-      EXPORTING  retfield     = 'TMPL'
-                 window_title = 'Customer templates'
+      EXPORTING  retfield     = 'KTOKD'
+                 dynpprog     = sy-repid
+                 dynpnr       = sy-dynnr
+                 dynprofield  = 'P_KTOKD'
+                 window_title = |Account groups for { lcl_tmpl=>region_text( lv_regn ) }|
                  value_org    = 'S'
       TABLES     value_tab    = lt_f4
-                 return_tab   = lt_ret
       EXCEPTIONS OTHERS       = 1.
-    IF sy-subrc <> 0.
-      RETURN.
-    ENDIF.
+  ENDMETHOD.
 
-    READ TABLE lt_ret INTO DATA(ls_ret) INDEX 1.
-    IF sy-subrc <> 0 OR ls_ret-fieldval IS INITIAL.
-      RETURN.                                  " the user left without picking
+  METHOD screen_regn.
+    rv = screen_val( 'P_REGN' ).
+    IF rv IS INITIAL.
+      rv = p_regn.
     ENDIF.
-    DATA lv_pick_land  TYPE string.
-    DATA lv_pick_ktokd TYPE string.
-    SPLIT ls_ret-fieldval AT '/' INTO lv_pick_land lv_pick_ktokd.
-
-    DATA lt_upd TYPE TABLE OF dynpread.
-    APPEND VALUE dynpread( fieldname  = 'P_LAND'
-                           fieldvalue = condense( lv_pick_land ) ) TO lt_upd.
-    APPEND VALUE dynpread( fieldname  = 'P_KTOKD'
-                           fieldvalue = condense( lv_pick_ktokd ) ) TO lt_upd.
-    CALL FUNCTION 'DYNP_VALUES_UPDATE'
-      EXPORTING  dyname     = sy-repid
-                 dynumb     = sy-dynnr
-      TABLES     dynpfields = lt_upd
-      EXCEPTIONS OTHERS     = 1.
   ENDMETHOD.
 
   METHOD screen_val.
@@ -1301,29 +1335,23 @@ CLASS lcl_main IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
-  METHOD screen_land.
-    rv = screen_val( 'P_LAND' ).
-    IF rv IS INITIAL.
-      rv = p_land.
-    ENDIF.
-  ENDMETHOD.
-
   METHOD validate.
     IF p_crt = abap_true.
-      IF p_land IS INITIAL.
-        MESSAGE 'Give a country' TYPE 'E'.
+      IF p_regn IS INITIAL.
+        MESSAGE 'Choose a region' TYPE 'E'.
       ENDIF.
       IF p_ktokd IS INITIAL.
         MESSAGE 'Give a customer account group' TYPE 'E'.
       ENDIF.
-      " A country the workbook does not cover, and a country it does cover
-      " but not with this account group, are two different messages - the
-      " user should not have to guess which of the two is wrong.
-      IF lcl_tmpl=>groups( p_land ) IS INITIAL.
-        MESSAGE |No customer template exists for country { p_land }| TYPE 'E'.
+      " A region the workbook does not cover, and a region it does cover but
+      " not with this account group, are two different messages - the user
+      " should not have to guess which of the two is wrong.
+      IF lcl_tmpl=>groups( p_regn ) IS INITIAL.
+        MESSAGE |No customer template exists for { lcl_tmpl=>region_text( p_regn ) }|
+                TYPE 'E'.
       ENDIF.
-      IF lcl_tmpl=>resolve( iv_land = p_land iv_ktokd = p_ktokd ) IS INITIAL.
-        MESSAGE |No customer template exists for country { p_land } | &&
+      IF lcl_tmpl=>resolve( iv_regn = p_regn iv_ktokd = p_ktokd ) IS INITIAL.
+        MESSAGE |No customer template exists for { lcl_tmpl=>region_text( p_regn ) } | &&
                 |with account group { p_ktokd }| TYPE 'E'.
       ENDIF.
     ENDIF.
@@ -1389,7 +1417,7 @@ CLASS lcl_main IMPLEMENTATION.
   METHOD run.
     DATA(lv_tmpl) = chosen( ).
     IF lv_tmpl IS INITIAL.
-      MESSAGE |No customer template exists for country { p_land } | &&
+      MESSAGE |No customer template exists for { lcl_tmpl=>region_text( p_regn ) } | &&
               |with account group { p_ktokd }| TYPE 'E'.
       RETURN.
     ENDIF.
@@ -1425,14 +1453,16 @@ ENDCLASS.
 * Selection-screen events
 *----------------------------------------------------------------------*
 INITIALIZATION.
+  " A listbox is filled before the screen is shown, not while it is on it.
+  lcl_main=>fill_regions( ).
   lcl_main=>propose_file( ).
 
 AT SELECTION-SCREEN OUTPUT.
-  " The country and the account group only apply to the customer create
+  " The region and the account group only apply to the customer create
   " template; the extension and the block / unblock templates are the same
-  " for every country.
+  " everywhere.
   LOOP AT SCREEN.
-    IF screen-name = 'P_LAND' OR screen-name = 'P_KTOKD'.
+    IF screen-name = 'P_REGN' OR screen-name = 'P_KTOKD'.
       IF p_crt = abap_true.
         screen-input = 1.
       ELSE.
@@ -1444,9 +1474,6 @@ AT SELECTION-SCREEN OUTPUT.
   " Show the file name that belongs to the template now selected. The
   " radio button group carries USER-COMMAND, so a click comes back here.
   lcl_main=>propose_file( ).
-
-AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_land.
-  lcl_main=>f4_land( ).
 
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_ktokd.
   lcl_main=>f4_ktokd( ).
@@ -1465,7 +1492,13 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
               fullpath          = lv_full
     EXCEPTIONS OTHERS           = 1 ).
   IF sy-subrc = 0 AND lv_full IS NOT INITIAL.
-    p_file = lv_full.
+    " A path longer than the parameter is refused rather than silently cut
+    " short - a cut short path writes the file somewhere else, or not at all.
+    IF strlen( lv_full ) > 255.
+      MESSAGE 'That path is longer than 255 characters - pick a shorter folder' TYPE 'S' DISPLAY LIKE 'E'.
+    ELSE.
+      p_file = lv_full.
+    ENDIF.
   ENDIF.
 
 AT SELECTION-SCREEN.

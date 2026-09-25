@@ -47,6 +47,27 @@ SHEET_COUNTRY = {
     'block unblock': ['*'],  # XD05, valid for any country
 }
 
+# The workbook is organised by REGION, not by country, and the two do not line up:
+# Europe is one template for four countries, and the United States has two entities -
+# Exelan and Invagen - with three account groups in common. A country alone therefore
+# cannot say which template is wanted, which is why the selection screen offers the
+# region and derives the country from it. The code is what the screen stores; the text
+# is what it shows, with the country or countries in brackets.
+SHEET_REGION = {
+    'Australia':     ('AU', 'Australia'),
+    'Dubai':         ('AE', 'Dubai'),
+    'Europe':        ('EU', 'Europe'),
+    'Exelan':        ('EX', 'Exelan'),
+    'India':         ('IN', 'India'),
+    'Invagen':       ('IV', 'Invagen'),
+    'Kenya':         ('KE', 'Kenya'),
+    'Moroccco':      ('MA', 'Morocco'),     # the sheet name has the typo, not the country
+    'QCIL':          ('UG', 'QCIL'),
+    'SAGA':          ('ZA', 'SAGA'),
+    'cust extn':     ('CX', 'Customer extension'),
+    'block unblock': ('BU', 'Block / unblock'),
+}
+
 # The QCIL export block holds two layouts at once: a technical row copied from the
 # 83-column Australia/Morocco template, and a description and data row copied from the
 # QCIL domestic template and pasted one column out. Cipla confirmed it is the QCIL
@@ -169,13 +190,24 @@ def main(path, out):
                                  desc=b['desc'], typ=b['typ'], length=b['length'],
                                  tcode=b.get('tcode') or 'XD01',
                                  has_tech=bool(b['fields'])))
+        rg, rtext = SHEET_REGION.get(b['sheet'], ('??', b['sheet']))
         for k in (b['ktokd'] or ['?']):
             for ctry in SHEET_COUNTRY.get(b['sheet'], ['?']):
-                combo.append(dict(sheet=b['sheet'], country=ctry, ktokd=k, format=sig,
-                                  tech_row=b['tech_row'], desc_row=b['desc_row']))
+                combo.append(dict(sheet=b['sheet'], region=rg, country=ctry, ktokd=k,
+                                  format=sig, tech_row=b['tech_row'],
+                                  desc_row=b['desc_row']))
 
-    json.dump(dict(formats=fmt, combinations=combo, sheet_country=SHEET_COUNTRY),
-              open(out, 'w'), indent=1)
+    # The region list the selection screen shows, each with the country or
+    # countries behind it, so the user picks a place and not a key.
+    regions = []
+    for sheet, (rg, rtext) in SHEET_REGION.items():
+        lands = [c for c in SHEET_COUNTRY.get(sheet, []) if c != '*']
+        regions.append(dict(region=rg, sheet=sheet, countries=lands,
+                            text=f'{rtext} ({"/".join(lands)})' if lands else rtext))
+    regions.sort(key=lambda r: r['text'])
+
+    json.dump(dict(formats=fmt, combinations=combo, sheet_country=SHEET_COUNTRY,
+                   regions=regions), open(out, 'w'), indent=1)
 
     # A country and an account group must name exactly one format, or the selection
     # screen cannot resolve what the user asked for.
