@@ -222,6 +222,19 @@ generators live in `tools/` too where available; if missing, recreate them.
   this system add columns in new objects rather than extending a view that
   other new views read in the same pull.
 
+## 7c. Production Dashboard workbook analysis (2026-09-25)
+
+- Customer's planning tool: `Production_Dashboard FY27(31.08.2026).xlsm` on main
+  (64 sheets). Full SAP-vs-manual mapping in
+  `deploy/Production_Dashboard_Excel_SAP_Data_Mapping.docx`
+  (tools/make_excel_mapping_doc.js). Key facts: three chains (daily DPR typed,
+  partner CP reconciled monthly, targets BE/RE/MoU typed); OVL = JV x PI;
+  MMTOE = MMT + BCM (1:1, NOT 6290); CF = OVL bbl / OVL tonnes per month with
+  latest-month carry-forward; reconciled-till month is a manual switch; not in
+  SAP: remarks/reasons, CP operational data (wells, survey, water cut/injection),
+  CP rounded figures, standardised/reference rates, manual adjustments.
+- Open questions for the customer are in section 7 of that document.
+
 ## 8. Likely next requests
 
 1. Fiori generator / preview problems (parameters, chart missing → DDLX not
