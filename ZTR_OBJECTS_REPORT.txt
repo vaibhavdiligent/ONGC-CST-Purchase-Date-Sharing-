@@ -99,6 +99,14 @@ DATA: t_return    TYPE TABLE OF bapiret2,
       gt_e071     TYPE STANDARD TABLE OF e071,                    " TABU HEADERS FOR P_LTR
       gt_e071k    TYPE STANDARD TABLE OF e071k.                   " TABU KEYS FOR P_LTR
 
+" OBJECTS NEEDED BY COPIED OBJECTS BUT MISSING HERE AND NOT SELECTED
+" (SEARCH HELPS, MAINTENANCE DIALOG OF A TABLE) - COPIED AUTOMATICALLY
+TYPES: BEGIN OF ty_dep,
+         object TYPE trobjtype,
+         name   TYPE trobj_name,
+       END OF ty_dep.
+DATA gt_deps TYPE SORTED TABLE OF ty_dep WITH UNIQUE KEY object name.
+
 *---------------------------------------------*
 * PARAMETERS
 *---------------------------------------------*
@@ -466,7 +474,7 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm
     WHEN 'COPY'.
       READ TABLE it_data WITH KEY sel = 'X' TRANSPORTING NO FIELDS.
       IF sy-subrc = 0.
-        CLEAR: t_return, gt_objects, gt_ddic_act, gt_done_fm.
+        CLEAR: t_return, gt_objects, gt_ddic_act, gt_done_fm, gt_e071, gt_e071k, gt_deps.
 
         PERFORM process_selected.
 
@@ -532,6 +540,7 @@ FORM process_selected.
 
   " 9. SEARCH HELPS
   PERFORM collect_names USING 'SHLP SHLD' CHANGING lt_names.
+  PERFORM merge_deps USING 'SHLP' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_ddic = lv_name.
     PERFORM make_shlp.
@@ -615,6 +624,7 @@ FORM process_selected.
 * 5. FUNCTION GROUPS / SINGLE FUNCTION MODULES
 *--------------------------------------------------------------------*
   PERFORM collect_names USING 'FUGR' CHANGING lt_names.
+  PERFORM merge_deps USING 'FUGR' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_fgname = lv_name.
     PERFORM make_fugr_complete.
@@ -652,6 +662,7 @@ FORM process_selected.
 * 17-19. MAINTENANCE OBJECTS, VIEW CLUSTERS, CLASSIC BADI IMPL.
 *--------------------------------------------------------------------*
   PERFORM collect_names USING 'TOBJ' CHANGING lt_names.
+  PERFORM merge_deps USING 'TOBJ' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     PERFORM make_tobj USING lv_name.
   ENDLOOP.
@@ -700,6 +711,48 @@ FORM process_selected.
   PERFORM lock_into_tr.
   PERFORM lock_keys_into_tr.
 
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM ADD_DEP
+*&---------------------------------------------------------------------*
+*& REMEMBER A CUSTOMER OBJECT THAT A COPIED OBJECT NEEDS, IF IT DOES
+*& NOT EXIST IN THIS SYSTEM YET (IT IS THEN COPIED IN ITS OWN STEP)
+*&---------------------------------------------------------------------*
+FORM add_dep USING iv_object TYPE csequence
+                   iv_name   TYPE csequence.
+  DATA: lv_object TYPE trobjtype,
+        lv_name   TYPE trobj_name,
+        lv_dir    TYPE tadir-obj_name.
+
+  lv_object = iv_object.
+  lv_name   = iv_name.
+  IF lv_name IS INITIAL OR ( lv_name(1) <> 'Z' AND lv_name(1) <> 'Y' AND lv_name(1) <> '/' ).
+    RETURN.
+  ENDIF.
+  lv_dir = lv_name.
+  SELECT SINGLE obj_name FROM tadir INTO @DATA(lv_exists)
+    WHERE pgmid = 'R3TR' AND object = @lv_object AND obj_name = @lv_dir.
+  IF sy-subrc = 0.
+    RETURN.                               " ALREADY IN THIS SYSTEM
+  ENDIF.
+  INSERT VALUE #( object = lv_object name = lv_name ) INTO TABLE gt_deps.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MERGE_DEPS
+*&---------------------------------------------------------------------*
+*& ADD THE AUTOMATIC DEPENDENCIES OF ONE TYPE TO THE NAMES TO COPY
+*&---------------------------------------------------------------------*
+FORM merge_deps USING    iv_object TYPE csequence
+                CHANGING ct_names  TYPE tt_objnames.
+  LOOP AT gt_deps INTO DATA(ls_dep) WHERE object = iv_object.
+    INSERT ls_dep-name INTO TABLE ct_names.
+    IF sy-subrc = 0.
+      lcl_util=>add_msg( iv_type = 'I'
+                         iv_text = |{ ls_dep-object } { ls_dep-name } - NOT IN THE REQUEST, COPIED AS DEPENDENCY| ).
+    ENDIF.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -866,6 +919,9 @@ FORM make_detl.
   ENDIF.
   COMMIT WORK.
 
+  " SEARCH HELP OF THE DATA ELEMENT
+  PERFORM add_dep USING 'SHLP' ls_dd04l_wa_a-shlpname.
+
   " STEP 3: PACKAGE + TRANSPORT + ACTIVATION QUEUE
   lcl_util=>create_tadir( iv_object = 'DTEL' iv_name = lv_ddic ).
   lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'DTEL' iv_name = lv_ddic ).
@@ -951,6 +1007,30 @@ FORM make_tabl.
   lcl_util=>create_tadir( iv_object = 'TABL' iv_name = lv_ddic ).
   lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'TABL' iv_name = lv_ddic ).
   APPEND VALUE #( object = 'TABL' name = lv_ddic ) TO gt_ddic_act.
+
+  " DEPENDENCIES: SEARCH HELPS OF THE FIELDS, SM30 MAINTENANCE DIALOG
+  LOOP AT lt_dd35v_tab INTO DATA(ls_dd35v).
+    PERFORM add_dep USING 'SHLP' ls_dd35v-shlpname.
+  ENDLOOP.
+  TYPES: BEGIN OF ty_tvdir,
+           tabname TYPE tvdir-tabname,
+           area    TYPE tvdir-area,
+         END OF ty_tvdir.
+  DATA: lt_tvdir TYPE STANDARD TABLE OF ty_tvdir,
+        lv_tsub  TYPE sy-subrc.
+  lcl_util=>rfc_read(
+    EXPORTING iv_table  = 'TVDIR'
+              it_where  = VALUE #( ( text = |TABNAME = '{ lv_ddic }'| ) )
+              it_fields = VALUE #( ( 'TABNAME' ) ( 'AREA' ) )
+              iv_quiet  = abap_true
+    IMPORTING et_data   = lt_tvdir
+              ev_subrc  = lv_tsub ).
+  READ TABLE lt_tvdir INTO DATA(ls_tvdir) INDEX 1.
+  IF sy-subrc = 0.
+    PERFORM add_dep USING 'FUGR' ls_tvdir-area.
+    DATA(lv_tobj) = |{ lv_ddic }S|.        " TOBJ NAME = TABLE + 'S'
+    PERFORM add_dep USING 'TOBJ' lv_tobj.
+  ENDIF.
 
   " STEP 3: SECONDARY INDEXES (NOT PART OF DDIF_TABL_PUT)
   LOOP AT lt_dd12v_tab INTO DATA(ls_dd12v).
