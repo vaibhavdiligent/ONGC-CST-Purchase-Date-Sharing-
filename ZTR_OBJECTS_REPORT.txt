@@ -1,6 +1,11 @@
 *&---------------------------------------------------------------------*
-*& Report ZDUAL_MAINTENANCE_RPT
+*& Report ZDUAL_MAINTENANCE_RPT   (file ZTR_OBJECTS_REPORT)
 *&---------------------------------------------------------------------*
+*& RUNS IN S/4HANA (TARGET SYSTEM). Needs ABAP 7.50 or higher.
+*& Counterpart of ZRS_ABAP_GET_TR, which runs in ECC and builds the
+*& source request. Only remote-enabled function modules are called in
+*& ECC via the RFC destination P_RD; all writing happens here.
+*&
 *& Reads the object list of a transport request (and its tasks) from a
 *& source system via RFC and re-creates the selected objects in this
 *& system, recording them in a local transport request.
@@ -3484,9 +3489,14 @@ FORM make_suso USING iv_name TYPE csequence.
     ENDIF.
   ENDDO.
 
+  " KEY FIELD DIFFERS PER TABLE: TOBJ/TOBJVOR* = OBJCT, TOBJT = OBJECT, TACTZ = BROBJ
   lv_where = |OBJCT = '{ lv_objct }'|.
-  PERFORM copy_tables USING 'TOBJ TOBJT TACTZ' lv_where abap_false CHANGING lv_ok.
+  PERFORM copy_tables USING 'TOBJ' lv_where abap_false CHANGING lv_ok.
   PERFORM copy_tables USING 'TOBJVOR TOBJVORDAT TOBJVORFLG' lv_where abap_true CHANGING lv_ok2.
+  lv_where = |OBJECT = '{ lv_objct }'|.
+  PERFORM copy_tables USING 'TOBJT' lv_where abap_true CHANGING lv_ok2.
+  lv_where = |BROBJ = '{ lv_objct }'|.
+  PERFORM copy_tables USING 'TACTZ' lv_where abap_true CHANGING lv_ok2.
   IF lv_ok = abap_true.
     lcl_util=>create_tadir( iv_object = 'SUSO' iv_name = lv_objct ).
     lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'SUSO' iv_name = lv_objct ).

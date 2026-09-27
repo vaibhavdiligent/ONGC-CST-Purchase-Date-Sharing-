@@ -1,7 +1,14 @@
 *&---------------------------------------------------------------------*
-*& REPORT ZATC_SCAN_PROGRAM
+*& REPORT ZATC_SCAN_PROGRAM   (file ZRS_ABAP_GET_TR)
 *&---------------------------------------------------------------------*
+*& RUNS IN ECC (SOURCE SYSTEM).
+*& Finds every customer object a program / transaction depends on
+*& (SAP environment analysis, recursive) and records all of them in
+*& one transport request. That request is then the source request of
+*& ZTR_OBJECTS_REPORT, which runs in S/4HANA and copies the objects.
 *&
+*& Syntax: kept at ABAP 7.02 level (no inline DATA( ), VALUE #, CONV,
+*& NEW, @host variables) so it compiles on any ECC 6.0 release.
 *&---------------------------------------------------------------------*
 REPORT zatc_scan_program.
 
@@ -3205,7 +3212,7 @@ FORM add_cand USING iv_name TYPE csequence.
     RETURN.
   ENDIF.
   PERFORM is_customer USING lv_name CHANGING lv_cust.
-  IF lv_cust = abap_false.
+  IF lv_cust IS INITIAL.
     RETURN.
   ENDIF.
   INSERT lv_name INTO TABLE gt_seen.
@@ -3230,6 +3237,7 @@ FORM add_if_missing USING iv_name TYPE char255.
         lt_req    TYPE STANDARD TABLE OF trkorr,
         lv_req    TYPE trkorr,
         lv_obj    TYPE e071-obj_name,
+        lv_func   TYPE tfdir-funcname,
         lv_dirobj TYPE tadir-obj_name.
 
   READ TABLE gt_final TRANSPORTING NO FIELDS WITH KEY progname = iv_name.
@@ -3264,7 +3272,8 @@ FORM add_if_missing USING iv_name TYPE char255.
 
   " FUNCTION MODULE -> FUNC + ITS FUNCTION GROUP
   IF strlen( iv_name ) <= 30.
-    SELECT SINGLE * FROM enlfdir INTO ls_enlf WHERE funcname = iv_name.
+    lv_func = iv_name.
+    SELECT SINGLE * FROM enlfdir INTO ls_enlf WHERE funcname = lv_func.
     IF sy-subrc = 0.
       CLEAR gs_final.
       gs_final-main_program = 'DEPENDENCY'.
@@ -3433,7 +3442,13 @@ FORM transport_objects.
         lv_ok       TYPE i,
         lv_err      TYPE i,
         lv_text     TYPE string,
-        lo_alv      TYPE REF TO cl_salv_table.
+        lo_alv      TYPE REF TO cl_salv_table,
+        lo_columns  TYPE REF TO cl_salv_columns_table,
+        lv_ok_c     TYPE c LENGTH 10,
+        lv_err_c    TYPE c LENGTH 10,
+        lv_type     TYPE trobjtype,
+        lv_objn     TYPE e071-obj_name,
+        lv_func     TYPE tfdir-funcname.
 
   lt_final = gt_final.
   SORT lt_final BY progname type.
@@ -3449,9 +3464,11 @@ FORM transport_objects.
         CONTINUE.
     ENDCASE.
 
+    lv_type = ls_final-type.
+    lv_objn = ls_final-progname.
     SELECT * FROM e071 INTO TABLE lt_e071
-      WHERE object   = ls_final-type
-        AND obj_name = ls_final-progname
+      WHERE object   = lv_type
+        AND obj_name = lv_objn
         AND ( pgmid = 'R3TR' OR pgmid = 'LIMU' ).
     IF sy-subrc = 0.
       READ TABLE lt_e071 INTO ls_e071 INDEX 1.
@@ -3462,13 +3479,14 @@ FORM transport_objects.
       " NEVER TRANSPORTED: OBJECT DIRECTORY
       lv_dirobj = ls_final-progname.
       SELECT SINGLE * FROM tadir INTO ls_dir
-        WHERE pgmid = 'R3TR' AND object = ls_final-type AND obj_name = lv_dirobj.
+        WHERE pgmid = 'R3TR' AND object = lv_type AND obj_name = lv_dirobj.
       IF sy-subrc = 0.
         ls_ko200-pgmid    = 'R3TR'.
         ls_ko200-object   = ls_dir-object.
         ls_ko200-obj_name = ls_dir-obj_name.
       ELSEIF ls_final-type = 'FUNC'.
-        SELECT SINGLE * FROM tfdir INTO ls_tfdir WHERE funcname = ls_final-progname.
+        lv_func = ls_final-progname.
+        SELECT SINGLE * FROM tfdir INTO ls_tfdir WHERE funcname = lv_func.
         IF sy-subrc = 0.
           ls_ko200-pgmid    = 'LIMU'.
           ls_ko200-object   = 'FUNC'.
@@ -3590,15 +3608,21 @@ FORM transport_objects.
   TRY.
       cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
                               CHANGING  t_table      = lt_log ).
-      lo_alv->get_columns( )->set_optimize( 'X' ).
-      lo_alv->set_screen_popup( start_column = 5  end_column = 150
-                                start_line   = 3  end_line   = 25 ).
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( 'X' ).
+      lo_alv->set_screen_popup( start_column = 5
+                                end_column   = 150
+                                start_line   = 3
+                                end_line     = 25 ).
       lo_alv->display( ).
     CATCH cx_salv_msg.
   ENDTRY.
 
-  lv_text = |{ lv_ok } object(s) added to { lv_order }, { lv_err } not added. | &&
-            |Use { lv_order } as source request in ZTR_OBJECTS_REPORT.|.
+  WRITE lv_ok  TO lv_ok_c  LEFT-JUSTIFIED.
+  WRITE lv_err TO lv_err_c LEFT-JUSTIFIED.
+  CONCATENATE lv_ok_c 'object(s) added to' lv_order ',' lv_err_c 'not added.'
+              'Use' lv_order 'as source request in ZTR_OBJECTS_REPORT.'
+    INTO lv_text SEPARATED BY space.
   MESSAGE lv_text TYPE 'S'.
 ENDFORM.
 
@@ -3667,7 +3691,7 @@ FORM analyse_environment.
     ENDIF.
 
     PERFORM is_customer USING ls_work-name CHANGING lv_cust.
-    IF lv_cust = abap_false.
+    IF lv_cust IS INITIAL.
       CONTINUE.                               " SAP STANDARD: NOT COPIED
     ENDIF.
     APPEND ls_work-name TO gt_all_names.
@@ -3784,12 +3808,12 @@ FORM is_customer USING    iv_name TYPE csequence
   lv_name = iv_name.
   CONDENSE lv_name.
   TRANSLATE lv_name TO UPPER CASE.
-  cv_cust = abap_false.
+  CLEAR cv_cust.
   IF lv_name CP 'Z*'     OR lv_name CP 'Y*'     OR lv_name CP '/*'     OR
      lv_name CP 'SAPMZ*' OR lv_name CP 'SAPMY*' OR lv_name CP 'MZ*'    OR
      lv_name CP 'MY*'    OR lv_name CP 'SAPLZ*' OR lv_name CP 'SAPLY*' OR
      lv_name CP 'LZ*'    OR lv_name CP 'LY*'    OR lv_name CP 'SAPDBZ*' OR
      lv_name CP 'SAPDBY*'.
-    cv_cust = abap_true.
+    cv_cust = 'X'.
   ENDIF.
 ENDFORM.
