@@ -3699,6 +3699,17 @@ FORM analyse_environment.
       CONTINUE.                         " DDIC, MESSAGES ... : NO CODE
     ENDIF.
 
+    " TRANSACTION -> THE PROGRAM IT STARTS (CALL/LEAVE TO TRANSACTION)
+    IF lv_objtype = 'TRAN'.
+      CLEAR ls_tstc.
+      SELECT SINGLE * FROM tstc INTO ls_tstc WHERE tcode = lv_objname.
+      IF sy-subrc = 0 AND ls_tstc-pgmna IS NOT INITIAL.
+        ls_work-type = 'PROG'.
+        ls_work-name = ls_tstc-pgmna.
+        APPEND ls_work TO lt_work.
+      ENDIF.
+    ENDIF.
+
     " INCLUDES OF A PROGRAM (MODULE POOL / REPORT INCLUDES HAVE THEIR
     " OWN DIRECTORY ENTRY AND MUST BE TRANSPORTED TOO)
     IF lv_objtype = 'PROG'.
