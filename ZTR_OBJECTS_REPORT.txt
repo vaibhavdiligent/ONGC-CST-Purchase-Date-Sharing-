@@ -13,10 +13,30 @@
 *&   5. FUGR / FUNC          Function group (TOP + includes + all FMs)
 *&                           or single function module
 *&   6. TRAN                 Transaction code (TSTC/TSTCT/TSTCP/TSTCC)
+*&   7. TTYP / TTYD          Table type
+*&   8. VIEW / VIED          Database / maintenance / help view
+*&   9. SHLP / SHLD          Search help
+*&  10. ENQU / ENQD          Lock object
+*&  11. TYPE / TYPD          Type group
+*&  12. MSAG / MESS          Message class / single message
+*&  13. PARA                 SET/GET parameter ID
+*&  14. NROB                 Number range object
+*&  15. INTF / CLAS (+ CLSD CPUB CPRO CPRI CINC METH)  Interface / class
+*&  16. DYNP / CUAD          Screens and GUI status (also copied
+*&                           automatically with every program / FUGR)
+*&  17. TOBJ                 Table maintenance object (SE54)
+*&  18. VCLS                 View cluster
+*&  19. SXCI                 Classic BAdI implementation
+*&  20. TABU                 Table contents (keys from E071K)
+*&
+*& NOT COPIED (NO REMOTE WRITE-BACK API): SSFO, SFPF, ENHO/ENHS, SMIM
 *&
 *& DDIC objects are first written inactive and then activated together
-*& in dependency order (DOMA -> DTEL -> TABL -> INDX), so objects of the
-*& same request that depend on each other activate correctly.
+*& in dependency order (DOMA -> DTEL -> TABL/TTYP -> VIEW/SHLP/ENQU),
+*& so objects of the same request that depend on each other activate.
+*& Source systems are read with remote-enabled APIs only: RFC_READ_TABLE,
+*& DD_*_GET, RPY_PROGRAM_READ, RS_CUA_INTERNAL_FETCH and the version
+*& management readers SVRS_GET_VERSION_*_40 (remote comparison).
 *&---------------------------------------------------------------------*
 REPORT zdual_maintenance_rpt.
 
@@ -47,8 +67,9 @@ TYPES: BEGIN OF ty_act,
          id     TYPE ddobjectid,
        END OF ty_act.
 
-TYPES: tt_options TYPE STANDARD TABLE OF rfc_db_opt WITH EMPTY KEY,
-       tt_names   TYPE STANDARD TABLE OF fieldname WITH EMPTY KEY.
+TYPES: tt_options  TYPE STANDARD TABLE OF rfc_db_opt WITH EMPTY KEY,
+       tt_names    TYPE STANDARD TABLE OF fieldname WITH EMPTY KEY,
+       tt_objnames TYPE SORTED TABLE OF trobj_name WITH UNIQUE KEY table_line.
 
 *---------------------------------------------*
 * INTERNAL TABLES AND VARIABLES
@@ -73,7 +94,10 @@ DATA: lv_ddic     TYPE dcobjdef-name,
 DATA: t_return    TYPE TABLE OF bapiret2,
       gt_objects  TYPE TABLE OF ko200,
       gt_ddic_act TYPE TABLE OF ty_act,
-      gt_done_fm  TYPE SORTED TABLE OF rs38l-name WITH UNIQUE KEY table_line.
+      gt_done_fm  TYPE SORTED TABLE OF rs38l-name WITH UNIQUE KEY table_line,
+      gt_trkorrs  TYPE STANDARD TABLE OF trkorr WITH EMPTY KEY,  " SOURCE REQUEST + TASKS
+      gt_e071     TYPE STANDARD TABLE OF e071,                    " TABU HEADERS FOR P_LTR
+      gt_e071k    TYPE STANDARD TABLE OF e071k.                   " TABU KEYS FOR P_LTR
 
 *---------------------------------------------*
 * PARAMETERS
@@ -103,6 +127,7 @@ CLASS lcl_util DEFINITION.
       rfc_read IMPORTING iv_table  TYPE csequence
                          it_where  TYPE tt_options
                          it_fields TYPE tt_names OPTIONAL
+                         iv_quiet  TYPE abap_bool DEFAULT abap_false
                EXPORTING et_data   TYPE STANDARD TABLE
                          ev_subrc  TYPE sy-subrc.
 ENDCLASS.
@@ -209,6 +234,9 @@ CLASS lcl_util IMPLEMENTATION.
     IF ev_subrc = 2.
       RETURN.          " NO DATA - NOT AN ERROR
     ELSEIF ev_subrc <> 0.
+      IF iv_quiet = abap_true.
+        RETURN.
+      ENDIF.
       add_msg( iv_type = 'E'
                iv_text = |RFC_READ_TABLE { lv_table } FAILED (RC { ev_subrc }) { lv_msg }| ).
       RETURN.
@@ -295,6 +323,8 @@ FORM get_tr_objects.
     APPEND ls_e070-trkorr TO lt_tr.
   ENDLOOP.
 
+  gt_trkorrs = lt_tr.
+
   " STEP 2: OBJECT LIST OF ALL OF THEM
   LOOP AT lt_tr INTO DATA(lv_tr).
     IF sy-tabix = 1.
@@ -358,7 +388,11 @@ FORM check_local_status.
 
     CASE <fs_data>-object.
       WHEN 'DOMA' OR 'DOMD' OR 'DTEL' OR 'DTED' OR 'TABL' OR 'TABD' OR 'TABT'
-        OR 'PROG' OR 'REPS' OR 'REPT' OR 'INCL' OR 'FUGR' OR 'FUNC' OR 'TRAN'.
+        OR 'PROG' OR 'REPS' OR 'REPT' OR 'INCL' OR 'FUGR' OR 'FUNC' OR 'TRAN'
+        OR 'TTYP' OR 'TTYD' OR 'VIEW' OR 'VIED' OR 'SHLP' OR 'SHLD' OR 'ENQU' OR 'ENQD'
+        OR 'TYPE' OR 'TYPD' OR 'MSAG' OR 'MESS' OR 'PARA' OR 'NROB'
+        OR 'INTF' OR 'INTD' OR 'CLAS' OR 'CLSD' OR 'CPUB' OR 'CPRO' OR 'CPRI' OR 'CINC' OR 'METH'
+        OR 'DYNP' OR 'CUAD' OR 'TOBJ' OR 'VCLS' OR 'SXCI' OR 'TABU'.
         <fs_data>-support = 'SUPPORTED'.
       WHEN OTHERS.
         <fs_data>-support = 'NOT SUPPORTED'.
@@ -454,60 +488,123 @@ ENDFORM.
 * PROCESS SELECTED ROWS
 *---------------------------------------------*
 FORM process_selected.
-  DATA: lt_names TYPE SORTED TABLE OF trobj_name WITH UNIQUE KEY table_line,
+  DATA: lt_names TYPE tt_objnames,
+        lt_clas  TYPE tt_objnames,
         lv_name  TYPE trobj_name.
 
 *--------------------------------------------------------------------*
-* 1. DOMAINS (R3TR DOMA / LIMU DOMD)
+* DICTIONARY: WRITE EVERYTHING INACTIVE, THEN ACTIVATE TOGETHER
 *--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO DATA(wa_selected) WHERE sel = 'X'
-                                           AND ( object = 'DOMA' OR object = 'DOMD' ).
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
-  ENDLOOP.
+  " 1. DOMAINS
+  PERFORM collect_names USING 'DOMA DOMD' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_ddic = lv_name.
     PERFORM make_doma.
   ENDLOOP.
 
-*--------------------------------------------------------------------*
-* 2. DATA ELEMENTS (R3TR DTEL / LIMU DTED)
-*--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
-                                     AND ( object = 'DTEL' OR object = 'DTED' ).
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
-  ENDLOOP.
+  " 2. DATA ELEMENTS
+  PERFORM collect_names USING 'DTEL DTED' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_ddic = lv_name.
     PERFORM make_detl.
   ENDLOOP.
 
-*--------------------------------------------------------------------*
-* 3. TABLES / STRUCTURES (R3TR TABL / LIMU TABD / LIMU TABT)
-*--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
-                                     AND ( object = 'TABL' OR object = 'TABD' OR object = 'TABT' ).
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
-  ENDLOOP.
+  " 3. TABLES / STRUCTURES
+  PERFORM collect_names USING 'TABL TABD TABT' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_ddic = lv_name.
     PERFORM make_tabl.
   ENDLOOP.
 
-  " ACTIVATE ALL DDIC OBJECTS WRITTEN ABOVE IN DEPENDENCY ORDER
+  " 7. TABLE TYPES
+  PERFORM collect_names USING 'TTYP TTYD' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    lv_ddic = lv_name.
+    PERFORM make_ttyp.
+  ENDLOOP.
+
+  " 8. VIEWS
+  PERFORM collect_names USING 'VIEW VIED' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    lv_ddic = lv_name.
+    PERFORM make_view.
+  ENDLOOP.
+
+  " 9. SEARCH HELPS
+  PERFORM collect_names USING 'SHLP SHLD' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    lv_ddic = lv_name.
+    PERFORM make_shlp.
+  ENDLOOP.
+
+  " 10. LOCK OBJECTS
+  PERFORM collect_names USING 'ENQU ENQD' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    lv_ddic = lv_name.
+    PERFORM make_enqu.
+  ENDLOOP.
+
   PERFORM activate_ddic.
 
-*--------------------------------------------------------------------*
-* 4. PROGRAMS & INCLUDES (R3TR PROG / LIMU REPS / LIMU REPT)
-*--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
-                                     AND ( object = 'PROG' OR object = 'REPS'
-                                        OR object = 'REPT' OR object = 'INCL' ).
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
+  " 11. TYPE GROUPS
+  PERFORM collect_names USING 'TYPE TYPD' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_type USING lv_name.
   ENDLOOP.
+
+*--------------------------------------------------------------------*
+* TEXTS / SETTINGS
+*--------------------------------------------------------------------*
+  " 12. MESSAGE CLASSES AND SINGLE MESSAGES (LIMU MESS = CLASS(20)+NO(3))
+  PERFORM collect_names USING 'MSAG' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_msag USING lv_name space.
+  ENDLOOP.
+  PERFORM collect_names USING 'MESS' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_msag USING lv_name(20) lv_name+20(3).
+  ENDLOOP.
+
+  " 13. SET/GET PARAMETERS
+  PERFORM collect_names USING 'PARA' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_para USING lv_name.
+  ENDLOOP.
+
+  " 14. NUMBER RANGE OBJECTS
+  PERFORM collect_names USING 'NROB' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_nrob USING lv_name.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+* 15. INTERFACES, THEN CLASSES (ANY PART OF A CLASS COPIES THE CLASS)
+*--------------------------------------------------------------------*
+  PERFORM collect_names USING 'INTF INTD' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_intf USING lv_name.
+  ENDLOOP.
+
+  CLEAR lt_clas.
+  LOOP AT it_data INTO DATA(wa_selected) WHERE sel = 'X'.
+    CASE wa_selected-object.
+      WHEN 'CLAS' OR 'CLSD' OR 'CPUB' OR 'CPRO' OR 'CPRI'.
+        INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_clas.
+      WHEN 'METH'.                          " CLASS(30) + METHOD
+        INSERT CONV trobj_name( wa_selected-obj_name(30) ) INTO TABLE lt_clas.
+      WHEN 'CINC'.                          " ZCL_X=====CCIMP
+        SPLIT wa_selected-obj_name AT '=' INTO lv_name DATA(lv_rest).
+        INSERT lv_name INTO TABLE lt_clas.
+    ENDCASE.
+  ENDLOOP.
+  LOOP AT lt_clas INTO lv_name.
+    PERFORM make_clas USING lv_name.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+* 4. PROGRAMS & INCLUDES (SCREENS + GUI STATUS COPIED WITH THEM)
+*--------------------------------------------------------------------*
+  PERFORM collect_names USING 'PROG REPS REPT INCL' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_prog = lv_name.
     PERFORM make_prog.
@@ -515,51 +612,113 @@ FORM process_selected.
   ENDLOOP.
 
 *--------------------------------------------------------------------*
-* 5a. FUNCTION GROUPS WITH ALL THEIR FUNCTION MODULES (R3TR FUGR)
+* 5. FUNCTION GROUPS / SINGLE FUNCTION MODULES
 *--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO wa_selected WHERE sel = 'X' AND object = 'FUGR'.
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
-  ENDLOOP.
+  PERFORM collect_names USING 'FUGR' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_fgname = lv_name.
     PERFORM make_fugr_complete.
   ENDLOOP.
 
-*--------------------------------------------------------------------*
-* 5b. SINGLE FUNCTION MODULES (LIMU FUNC)
-*--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO wa_selected WHERE sel = 'X' AND object = 'FUNC'.
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
-  ENDLOOP.
+  PERFORM collect_names USING 'FUNC' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_fname = lv_name.
     PERFORM make_single_func.
   ENDLOOP.
 
 *--------------------------------------------------------------------*
-* 6. TRANSACTION CODES (R3TR TRAN)
+* 16. SINGLE SCREENS (LIMU DYNP = PROG(40)+DYNNR(4)) / GUI STATUS
 *--------------------------------------------------------------------*
-  CLEAR lt_names.
-  LOOP AT it_data INTO wa_selected WHERE sel = 'X' AND object = 'TRAN'.
-    INSERT CONV trobj_name( wa_selected-obj_name ) INTO TABLE lt_names.
+  PERFORM collect_names USING 'DYNP' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_dynp USING lv_name(40) lv_name+40(4).
   ENDLOOP.
+
+  PERFORM collect_names USING 'CUAD' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_cuad USING lv_name(40).
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+* 6. TRANSACTION CODES
+*--------------------------------------------------------------------*
+  PERFORM collect_names USING 'TRAN' CHANGING lt_names.
   LOOP AT lt_names INTO lv_name.
     lv_tran = lv_name.
     PERFORM make_tran.
   ENDLOOP.
 
 *--------------------------------------------------------------------*
+* 17-19. MAINTENANCE OBJECTS, VIEW CLUSTERS, CLASSIC BADI IMPL.
+*--------------------------------------------------------------------*
+  PERFORM collect_names USING 'TOBJ' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_tobj USING lv_name.
+  ENDLOOP.
+
+  PERFORM collect_names USING 'VCLS' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_vcls USING lv_name.
+  ENDLOOP.
+
+  PERFORM collect_names USING 'SXCI' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_sxci USING lv_name.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+* 20. TABLE CONTENTS (KEYS OF THE SOURCE REQUEST IN E071K)
+*--------------------------------------------------------------------*
+  PERFORM collect_names USING 'TABU' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_tabu USING lv_name.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
 * OBJECTS SELECTED THAT THIS REPORT CANNOT COPY
 *--------------------------------------------------------------------*
   LOOP AT it_data INTO wa_selected WHERE sel = 'X' AND support = 'NOT SUPPORTED'.
-    lcl_util=>add_msg( iv_type = 'W'
-                       iv_text = |{ wa_selected-pgmid } { wa_selected-object } { wa_selected-obj_name } - OBJECT TYPE NOT SUPPORTED, SKIPPED| ).
+    CASE wa_selected-object.
+      WHEN 'SSFO' OR 'SSST'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - SMART FORMS CANNOT BE READ VIA RFC. COPY WITH SMARTFORMS DOWNLOAD/UPLOAD (XML)| ).
+      WHEN 'SFPF' OR 'SFPI'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - ADOBE FORM/INTERFACE: NO WRITE API FOR REMOTE VERSION. USE SFP DOWNLOAD/UPLOAD| ).
+      WHEN 'ENHO' OR 'ENHS' OR 'ENHC' OR 'ENSC'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - ENHANCEMENTS NEED THE ENHANCEMENT FRAMEWORK IN THE TARGET, RE-CREATE IN SE19/SE20| ).
+      WHEN 'SMIM'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - MIME OBJECTS: EXPORT/IMPORT VIA SE80 MIME REPOSITORY| ).
+      WHEN OTHERS.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-pgmid } { wa_selected-object } { wa_selected-obj_name } - OBJECT TYPE NOT SUPPORTED, SKIPPED| ).
+    ENDCASE.
   ENDLOOP.
 
   PERFORM lock_into_tr.
+  PERFORM lock_keys_into_tr.
 
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM COLLECT_NAMES
+*&---------------------------------------------------------------------*
+*& UNIQUE NAMES OF THE SELECTED ROWS WITH ONE OF THE GIVEN OBJECT TYPES
+*& (IV_TYPES = SPACE SEPARATED LIST, E.G. 'TABL TABD TABT')
+*&---------------------------------------------------------------------*
+FORM collect_names USING    iv_types TYPE csequence
+                   CHANGING ct_names TYPE tt_objnames.
+  DATA lt_types TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+
+  CLEAR ct_names.
+  SPLIT iv_types AT space INTO TABLE lt_types.
+  LOOP AT it_data INTO DATA(ls_data) WHERE sel = 'X'.
+    IF line_exists( lt_types[ table_line = CONV string( ls_data-object ) ] ).
+      INSERT CONV trobj_name( ls_data-obj_name ) INTO TABLE ct_names.
+    ENDIF.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -824,88 +983,94 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *& FORM ACTIVATE_DDIC
 *&---------------------------------------------------------------------*
-*& ACTIVATE DOMAINS -> DATA ELEMENTS -> TABLES. TABLES THAT FAIL ARE
-*& RETRIED ONCE (E.G. A STRUCTURE INCLUDED IN ANOTHER TABLE OF THE TR).
+*& ACTIVATE IN DEPENDENCY ORDER:
+*&   DOMA -> DTEL -> TABL + TTYP (TWO PASSES, THEY CAN REFER TO EACH
+*&   OTHER) -> VIEW -> SHLP -> ENQU
 *&---------------------------------------------------------------------*
 FORM activate_ddic.
-  DATA: lv_rc    TYPE sy-subrc,
-        lt_retry TYPE STANDARD TABLE OF ty_act.
+  DATA: lt_retry TYPE STANDARD TABLE OF ty_act,
+        lv_ok    TYPE abap_bool.
 
   LOOP AT gt_ddic_act INTO DATA(ls_act) WHERE object = 'DOMA'.
-    CLEAR lv_rc.
-    CALL FUNCTION 'DDIF_DOMA_ACTIVATE'
-      EXPORTING
-        name        = ls_act-name
-      IMPORTING
-        rc          = lv_rc
-      EXCEPTIONS
-        not_found   = 1
-        put_failure = 2
-        OTHERS      = 3.
-    IF sy-subrc <> 0 OR lv_rc > 4.
-      lcl_util=>add_msg( iv_type = 'E' iv_text = |DOMA { ls_act-name } - ACTIVATION FAILED (RC { lv_rc }), CHECK SE11| ).
-    ELSE.
-      lcl_util=>add_msg( iv_type = 'S' iv_text = |DOMA { ls_act-name } - CREATED AND ACTIVATED| ).
-    ENDIF.
+    PERFORM activate_one USING ls_act abap_true CHANGING lv_ok.
   ENDLOOP.
-
   LOOP AT gt_ddic_act INTO ls_act WHERE object = 'DTEL'.
-    CLEAR lv_rc.
-    CALL FUNCTION 'DDIF_DTEL_ACTIVATE'
-      EXPORTING
-        name        = ls_act-name
-      IMPORTING
-        rc          = lv_rc
-      EXCEPTIONS
-        not_found   = 1
-        put_failure = 2
-        OTHERS      = 3.
-    IF sy-subrc <> 0 OR lv_rc > 4.
-      lcl_util=>add_msg( iv_type = 'E' iv_text = |DTEL { ls_act-name } - ACTIVATION FAILED (RC { lv_rc }), CHECK SE11| ).
-    ELSE.
-      lcl_util=>add_msg( iv_type = 'S' iv_text = |DTEL { ls_act-name } - CREATED AND ACTIVATED| ).
-    ENDIF.
+    PERFORM activate_one USING ls_act abap_true CHANGING lv_ok.
   ENDLOOP.
 
-  " TABLES: FIRST PASS
-  LOOP AT gt_ddic_act INTO ls_act WHERE object = 'TABL'.
-    CLEAR lv_rc.
-    CALL FUNCTION 'DDIF_TABL_ACTIVATE'
-      EXPORTING
-        name        = ls_act-name
-      IMPORTING
-        rc          = lv_rc
-      EXCEPTIONS
-        not_found   = 1
-        put_failure = 2
-        OTHERS      = 3.
-    IF sy-subrc <> 0 OR lv_rc > 4.
+  " FIRST PASS: FAILURES ARE ONLY COLLECTED
+  LOOP AT gt_ddic_act INTO ls_act WHERE object = 'TABL' OR object = 'TTYP'.
+    PERFORM activate_one USING ls_act abap_false CHANGING lv_ok.
+    IF lv_ok = abap_false.
       APPEND ls_act TO lt_retry.
-    ELSE.
-      lcl_util=>add_msg( iv_type = 'S' iv_text = |TABL { ls_act-name } - CREATED AND ACTIVATED| ).
     ENDIF.
   ENDLOOP.
-
-  " TABLES: SECOND PASS FOR THE ONES THAT DEPENDED ON OTHER TABLES
+  " SECOND PASS: NOW REPORTED
   LOOP AT lt_retry INTO ls_act.
-    CLEAR lv_rc.
-    CALL FUNCTION 'DDIF_TABL_ACTIVATE'
-      EXPORTING
-        name        = ls_act-name
-      IMPORTING
-        rc          = lv_rc
-      EXCEPTIONS
-        not_found   = 1
-        put_failure = 2
-        OTHERS      = 3.
-    IF sy-subrc <> 0 OR lv_rc > 4.
-      lcl_util=>add_msg( iv_type = 'E' iv_text = |TABL { ls_act-name } - ACTIVATION FAILED (RC { lv_rc }), CHECK SE11 ACTIVATION LOG| ).
-    ELSE.
-      lcl_util=>add_msg( iv_type = 'S' iv_text = |TABL { ls_act-name } - CREATED AND ACTIVATED| ).
-    ENDIF.
+    PERFORM activate_one USING ls_act abap_true CHANGING lv_ok.
+  ENDLOOP.
+
+  LOOP AT gt_ddic_act INTO ls_act WHERE object = 'VIEW'.
+    PERFORM activate_one USING ls_act abap_true CHANGING lv_ok.
+  ENDLOOP.
+  LOOP AT gt_ddic_act INTO ls_act WHERE object = 'SHLP'.
+    PERFORM activate_one USING ls_act abap_true CHANGING lv_ok.
+  ENDLOOP.
+  LOOP AT gt_ddic_act INTO ls_act WHERE object = 'ENQU'.
+    PERFORM activate_one USING ls_act abap_true CHANGING lv_ok.
   ENDLOOP.
 
   COMMIT WORK.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM ACTIVATE_ONE
+*&---------------------------------------------------------------------*
+FORM activate_one USING    is_act    TYPE ty_act
+                           iv_report TYPE abap_bool
+                  CHANGING cv_ok     TYPE abap_bool.
+  DATA lv_rc TYPE sy-subrc.
+
+  CASE is_act-object.
+    WHEN 'DOMA'.
+      CALL FUNCTION 'DDIF_DOMA_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+    WHEN 'DTEL'.
+      CALL FUNCTION 'DDIF_DTEL_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+    WHEN 'TABL'.
+      CALL FUNCTION 'DDIF_TABL_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+    WHEN 'TTYP'.
+      CALL FUNCTION 'DDIF_TTYP_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+    WHEN 'VIEW'.
+      CALL FUNCTION 'DDIF_VIEW_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+    WHEN 'SHLP'.
+      CALL FUNCTION 'DDIF_SHLP_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+    WHEN 'ENQU'.
+      CALL FUNCTION 'DDIF_ENQU_ACTIVATE'
+        EXPORTING name = is_act-name IMPORTING rc = lv_rc
+        EXCEPTIONS not_found = 1 put_failure = 2 OTHERS = 3.
+  ENDCASE.
+
+  IF sy-subrc <> 0 OR lv_rc > 4.
+    cv_ok = abap_false.
+    IF iv_report = abap_true.
+      lcl_util=>add_msg( iv_type = 'E' iv_text = |{ is_act-object } { is_act-name } - ACTIVATION FAILED (RC { lv_rc }), CHECK SE11 ACTIVATION LOG| ).
+    ENDIF.
+  ELSE.
+    cv_ok = abap_true.
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |{ is_act-object } { is_act-name } - CREATED AND ACTIVATED| ).
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -1031,6 +1196,12 @@ FORM make_prog.
 
   lcl_util=>add_tr_obj( iv_pgmid = 'LIMU' iv_object = 'REPS' iv_name = lv_prog ).
   COMMIT WORK.
+
+  " STEP 4: SCREENS AND GUI STATUS (REPORT, MODULE POOL, FUNCTION GROUP)
+  IF lv_subc CA '1MF'.
+    DATA(lv_main) = lv_prog.
+    PERFORM copy_screens_and_status USING lv_main.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -1590,6 +1761,1561 @@ FORM make_tran.
     lcl_util=>add_msg( iv_type = 'S' iv_text = |TRAN { lv_tran } - UPDATED| ).
   ELSE.
     lcl_util=>add_msg( iv_type = 'S' iv_text = |TRAN { lv_tran } - CREATED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM FINISH_DDIC
+*&---------------------------------------------------------------------*
+*& COMMON END OF A DDIC PUT: PACKAGE, TRANSPORT, ACTIVATION QUEUE
+*&---------------------------------------------------------------------*
+FORM finish_ddic USING iv_object TYPE csequence
+                       iv_name   TYPE csequence.
+  COMMIT WORK.
+  lcl_util=>create_tadir( iv_object = iv_object iv_name = iv_name ).
+  lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = iv_object iv_name = iv_name ).
+  APPEND VALUE #( object = iv_object name = iv_name ) TO gt_ddic_act.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_TTYP
+*&---------------------------------------------------------------------*
+*& 7. TABLE TYPE (READ: VERSION MANAGEMENT, REMOTE)
+*&---------------------------------------------------------------------*
+FORM make_ttyp.
+  DATA: lv_objname   TYPE vrsd-objname,
+        lv_info      TYPE abaptext-line,
+        lv_name      TYPE dd40v-typename,
+        lt_vsmodisrc TYPE STANDARD TABLE OF smodisrc,
+        lt_vsmodilog TYPE STANDARD TABLE OF smodilog,
+        lt_dd40tv    TYPE STANDARD TABLE OF dd40tv,
+        lt_dd40v     TYPE STANDARD TABLE OF dd40v,
+        lt_dd42v     TYPE STANDARD TABLE OF dd42v,
+        lt_dd43t     TYPE STANDARD TABLE OF dd43t,
+        lt_dd43v     TYPE STANDARD TABLE OF dd43v.
+  FIELD-SYMBOLS <lv_text> TYPE any.
+
+  lv_objname = lv_ddic.
+  lv_name    = lv_ddic.
+
+  CALL FUNCTION 'SVRS_GET_VERSION_TTYD_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_objname
+      versno                = '00000'
+    IMPORTING
+      info_line             = lv_info
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      dd40tv_tab            = lt_dd40tv
+      dd40v_tab             = lt_dd40v
+      dd42v_tab             = lt_dd42v
+      dd43tv_tab            = lt_dd43t
+      dd43v_tab             = lt_dd43v
+      vsmodilog             = lt_vsmodilog
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  READ TABLE lt_dd40v INTO DATA(ls_dd40v) INDEX 1.
+  IF sy-subrc <> 0 OR ls_dd40v-typename IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TTYP { lv_ddic } - READ FROM SOURCE FAILED| ).
+    RETURN.
+  ENDIF.
+
+  " SHORT TEXT FROM THE TEXT TABLE IF THE HEADER HAS NONE
+  IF ls_dd40v-ddtext IS INITIAL AND lt_dd40tv IS NOT INITIAL.
+    READ TABLE lt_dd40tv ASSIGNING FIELD-SYMBOL(<ls_text>) INDEX 1.
+    ASSIGN COMPONENT 'DDTEXT' OF STRUCTURE <ls_text> TO <lv_text>.
+    IF sy-subrc = 0.
+      ls_dd40v-ddtext = <lv_text>.
+      ls_dd40v-ddlanguage = sy-langu.
+    ENDIF.
+  ENDIF.
+
+  CALL FUNCTION 'DD_TTYP_PUT'
+    EXPORTING
+      dd40v_wa            = ls_dd40v
+      put_state           = 'N'
+      ttyp_name           = lv_name
+    TABLES
+      dd42v_tab           = lt_dd42v
+      dd43v_tab           = lt_dd43v
+    EXCEPTIONS
+      db_access_failure   = 1
+      illegal_value       = 2
+      object_inconsistent = 3
+      OTHERS              = 4.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TTYP { lv_ddic } - TABLE TYPE PUT FAILURE| ).
+    RETURN.
+  ENDIF.
+
+  PERFORM finish_ddic USING 'TTYP' lv_ddic.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_VIEW
+*&---------------------------------------------------------------------*
+*& 8. VIEW (DATABASE / MAINTENANCE / HELP / PROJECTION)
+*&---------------------------------------------------------------------*
+FORM make_view.
+  DATA: lv_view    TYPE dd25l-viewname,
+        ls_dd25v_a TYPE dd25v,
+        ls_dd25v_n TYPE dd25v,
+        ls_dd09l_a TYPE dd09v,
+        ls_dd09l_n TYPE dd09v,
+        lt_dd26v_a TYPE STANDARD TABLE OF dd26v,
+        lt_dd26v_n TYPE STANDARD TABLE OF dd26v,
+        lt_dd27p_a TYPE STANDARD TABLE OF dd27p,
+        lt_dd27p_n TYPE STANDARD TABLE OF dd27p,
+        lt_dd28v_a TYPE STANDARD TABLE OF dd28v,
+        lt_dd28v_n TYPE STANDARD TABLE OF dd28v,
+        lv_msg     TYPE c LENGTH 200.
+
+  lv_view = lv_ddic.
+
+  CALL FUNCTION 'DD_VIEW_GET' DESTINATION p_rd
+    EXPORTING
+      view_name             = lv_view
+      langu                 = sy-langu
+      prid                  = 0
+      withtext              = 'X'
+    IMPORTING
+      dd25v_wa_a            = ls_dd25v_a
+      dd25v_wa_n            = ls_dd25v_n
+      dd09l_wa_a            = ls_dd09l_a
+      dd09l_wa_n            = ls_dd09l_n
+    TABLES
+      dd26v_tab_a           = lt_dd26v_a
+      dd26v_tab_n           = lt_dd26v_n
+      dd27p_tab_a           = lt_dd27p_a
+      dd27p_tab_n           = lt_dd27p_n
+      dd28v_tab_a           = lt_dd28v_a
+      dd28v_tab_n           = lt_dd28v_n
+    EXCEPTIONS
+      access_failure        = 1
+      system_failure        = 2 MESSAGE lv_msg
+      communication_failure = 3 MESSAGE lv_msg
+      OTHERS                = 4.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |VIEW { lv_ddic } - READ FROM SOURCE FAILED { lv_msg }| ).
+    RETURN.
+  ENDIF.
+  IF ls_dd25v_a-viewname IS INITIAL.
+    ls_dd25v_a = ls_dd25v_n.
+    ls_dd09l_a = ls_dd09l_n.
+    lt_dd26v_a = lt_dd26v_n.
+    lt_dd27p_a = lt_dd27p_n.
+    lt_dd28v_a = lt_dd28v_n.
+  ENDIF.
+  IF ls_dd25v_a-viewname IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |VIEW { lv_ddic } - NOT FOUND IN SOURCE SYSTEM| ).
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'DD_VIEW_PUT'
+    EXPORTING
+      dd25v_wa          = ls_dd25v_a
+      dd09l_wa          = ls_dd09l_a
+      put_state         = 'N'
+      view_name         = lv_view
+    TABLES
+      dd26v_tab         = lt_dd26v_a
+      dd27p_tab         = lt_dd27p_a
+      dd28v_tab         = lt_dd28v_a
+    EXCEPTIONS
+      db_access_failure = 1
+      OTHERS            = 2.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |VIEW { lv_ddic } - VIEW PUT FAILURE| ).
+    RETURN.
+  ENDIF.
+
+  PERFORM finish_ddic USING 'VIEW' lv_ddic.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_SHLP
+*&---------------------------------------------------------------------*
+*& 9. SEARCH HELP (ELEMENTARY AND COLLECTIVE)
+*&---------------------------------------------------------------------*
+FORM make_shlp.
+  DATA: lv_objname   TYPE vrsd-objname,
+        lv_info      TYPE abaptext-line,
+        lv_name      TYPE dd30l-shlpname,
+        lt_vsmodisrc TYPE STANDARD TABLE OF smodisrc,
+        lt_vsmodilog TYPE STANDARD TABLE OF smodilog,
+        lt_dd30tv    TYPE STANDARD TABLE OF dd30tv,
+        lt_dd30v     TYPE STANDARD TABLE OF dd30v,
+        lt_dd31v     TYPE STANDARD TABLE OF dd31v,
+        lt_dd32v     TYPE STANDARD TABLE OF dd32v,
+        lt_dd32p     TYPE STANDARD TABLE OF dd32p,
+        lt_dd33v     TYPE STANDARD TABLE OF dd33v.
+  FIELD-SYMBOLS <lv_text> TYPE any.
+
+  lv_objname = lv_ddic.
+  lv_name    = lv_ddic.
+
+  CALL FUNCTION 'SVRS_GET_VERSION_SHLD_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_objname
+      versno                = '00000'
+    IMPORTING
+      info_line             = lv_info
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      dd30tv_tab            = lt_dd30tv
+      dd30v_tab             = lt_dd30v
+      dd31v_tab             = lt_dd31v
+      dd32v_tab             = lt_dd32v
+      dd33v_tab             = lt_dd33v
+      vsmodilog             = lt_vsmodilog
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  READ TABLE lt_dd30v INTO DATA(ls_dd30v) INDEX 1.
+  IF sy-subrc <> 0 OR ls_dd30v-shlpname IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |SHLP { lv_ddic } - READ FROM SOURCE FAILED| ).
+    RETURN.
+  ENDIF.
+
+  IF ls_dd30v-ddtext IS INITIAL AND lt_dd30tv IS NOT INITIAL.
+    READ TABLE lt_dd30tv ASSIGNING FIELD-SYMBOL(<ls_text>) INDEX 1.
+    ASSIGN COMPONENT 'DDTEXT' OF STRUCTURE <ls_text> TO <lv_text>.
+    IF sy-subrc = 0.
+      ls_dd30v-ddtext = <lv_text>.
+      ls_dd30v-ddlanguage = sy-langu.
+    ENDIF.
+  ENDIF.
+
+  lt_dd32p = CORRESPONDING #( lt_dd32v ).
+
+  CALL FUNCTION 'DD_SHLP_PUT'
+    EXPORTING
+      dd30v_wa            = ls_dd30v
+      put_state           = 'N'
+      shlp_name           = lv_name
+    TABLES
+      dd31v_tab           = lt_dd31v
+      dd32p_tab           = lt_dd32p
+      dd33v_tab           = lt_dd33v
+    EXCEPTIONS
+      db_access_failure   = 1
+      illegal_value       = 2
+      object_inconsistent = 3
+      OTHERS              = 4.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |SHLP { lv_ddic } - SEARCH HELP PUT FAILURE| ).
+    RETURN.
+  ENDIF.
+
+  PERFORM finish_ddic USING 'SHLP' lv_ddic.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_ENQU
+*&---------------------------------------------------------------------*
+*& 10. LOCK OBJECT (ENQUEUE/DEQUEUE MODULES ARE GENERATED ON ACTIVATION)
+*&---------------------------------------------------------------------*
+FORM make_enqu.
+  DATA: lv_enqu    TYPE dd25l-viewname,
+        ls_dd25v_a TYPE dd25v,
+        ls_dd25v_n TYPE dd25v,
+        lt_dd26v_a TYPE STANDARD TABLE OF dd26v,
+        lt_dd26v_n TYPE STANDARD TABLE OF dd26v,
+        lt_dd27p_a TYPE STANDARD TABLE OF dd27p,
+        lt_dd27p_n TYPE STANDARD TABLE OF dd27p,
+        lv_msg     TYPE c LENGTH 200.
+
+  lv_enqu = lv_ddic.
+
+  CALL FUNCTION 'DD_ENQU_GET' DESTINATION p_rd
+    EXPORTING
+      enqu_name             = lv_enqu
+      langu                 = sy-langu
+      prid                  = 0
+      withtext              = 'X'
+    IMPORTING
+      dd25v_wa_a            = ls_dd25v_a
+      dd25v_wa_n            = ls_dd25v_n
+    TABLES
+      dd26v_tab_a           = lt_dd26v_a
+      dd26v_tab_n           = lt_dd26v_n
+      dd27p_tab_a           = lt_dd27p_a
+      dd27p_tab_n           = lt_dd27p_n
+    EXCEPTIONS
+      access_failure        = 1
+      system_failure        = 2 MESSAGE lv_msg
+      communication_failure = 3 MESSAGE lv_msg
+      OTHERS                = 4.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |ENQU { lv_ddic } - READ FROM SOURCE FAILED { lv_msg }| ).
+    RETURN.
+  ENDIF.
+  IF ls_dd25v_a-viewname IS INITIAL.
+    ls_dd25v_a = ls_dd25v_n.
+    lt_dd26v_a = lt_dd26v_n.
+    lt_dd27p_a = lt_dd27p_n.
+  ENDIF.
+  IF ls_dd25v_a-viewname IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |ENQU { lv_ddic } - NOT FOUND IN SOURCE SYSTEM| ).
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'DD_ENQU_PUT'
+    EXPORTING
+      dd25v_wa          = ls_dd25v_a
+      put_state         = 'N'
+      enqu_name         = lv_enqu
+    TABLES
+      dd26v_tab         = lt_dd26v_a
+      dd27p_tab         = lt_dd27p_a
+    EXCEPTIONS
+      db_access_failure = 1
+      OTHERS            = 2.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |ENQU { lv_ddic } - LOCK OBJECT PUT FAILURE| ).
+    RETURN.
+  ENDIF.
+
+  PERFORM finish_ddic USING 'ENQU' lv_ddic.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_TYPE
+*&---------------------------------------------------------------------*
+*& 11. TYPE GROUP: CREATE (RS_DD_TYGR_INSERT_SOURCES) AND WRITE THE
+*&     ORIGINAL 255-CHARACTER SOURCE INTO %_C<NAME>
+*&---------------------------------------------------------------------*
+FORM make_type USING iv_name TYPE csequence.
+  TYPES: BEGIN OF ty_ddtypet,
+           ddlanguage TYPE ddtypet-ddlanguage,
+           ddtext     TYPE ddtypet-ddtext,
+         END OF ty_ddtypet.
+  DATA: lv_tg        TYPE rsedd0-typegroup,
+        lv_objname   TYPE vrsd-objname,
+        lv_info      TYPE abaptext-line,
+        lv_text      TYPE ddtypet-ddtext,
+        lv_include   TYPE progname,
+        lv_subrc     TYPE sy-subrc,
+        lt_vsmodisrc TYPE STANDARD TABLE OF smodisrc,
+        lt_vsmodilog TYPE STANDARD TABLE OF smodilog,
+        lt_repos     TYPE STANDARD TABLE OF abaptxt255,
+        lt_trdir     TYPE STANDARD TABLE OF trdir,
+        lt_src72     TYPE STANDARD TABLE OF abapsource,
+        lt_texts     TYPE STANDARD TABLE OF ty_ddtypet.
+
+  lv_tg      = iv_name.
+  lv_objname = iv_name.
+  lv_include = |%_C{ lv_tg }|.
+
+  CALL FUNCTION 'SVRS_GET_VERSION_TYPD_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_objname
+      versno                = '00000'
+    IMPORTING
+      info_line             = lv_info
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      repos_tab             = lt_repos
+      vsmodilog             = lt_vsmodilog
+      trdir_tab             = lt_trdir
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  IF sy-subrc <> 0 OR lt_repos IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TYPE { lv_tg } - READ FROM SOURCE FAILED| ).
+    RETURN.
+  ENDIF.
+
+  SELECT SINGLE typegroup FROM ddtypes INTO @DATA(lv_exists) WHERE typegroup = @lv_tg.
+  IF sy-subrc <> 0.
+    lcl_util=>rfc_read(
+      EXPORTING iv_table  = 'DDTYPET'
+                it_where  = VALUE #( ( text = |TYPEGROUP = '{ lv_tg }'| ) )
+                it_fields = VALUE #( ( 'DDLANGUAGE' ) ( 'DDTEXT' ) )
+                iv_quiet  = abap_true
+      IMPORTING et_data   = lt_texts
+                ev_subrc  = lv_subrc ).
+    READ TABLE lt_texts INTO DATA(ls_text) WITH KEY ddlanguage = sy-langu.
+    IF sy-subrc <> 0.
+      READ TABLE lt_texts INTO ls_text INDEX 1.
+    ENDIF.
+    lv_text = ls_text-ddtext.
+
+    LOOP AT lt_repos INTO DATA(ls_repos).
+      APPEND VALUE #( line = ls_repos-line ) TO lt_src72.
+    ENDLOOP.
+
+    CALL FUNCTION 'RS_DD_TYGR_INSERT_SOURCES'
+      EXPORTING
+        typegroupname        = lv_tg
+        ddtext               = lv_text
+        corrnum              = p_ltr
+        devclass             = p_pk
+      TABLES
+        source               = lt_src72
+      EXCEPTIONS
+        already_exists       = 1
+        not_executed         = 2
+        permission_failure   = 3
+        object_not_specified = 4
+        illegal_name         = 5
+        OTHERS               = 6.
+    IF sy-subrc <> 0 AND sy-subrc <> 1.
+      lcl_util=>add_msg( iv_type = 'E' iv_text = |TYPE { lv_tg } - TYPE GROUP CREATE FAILURE| ).
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " FULL SOURCE (LINES > 72 CHARACTERS KEPT)
+  INSERT REPORT lv_include FROM lt_repos.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TYPE { lv_tg } - SOURCE NOT WRITTEN| ).
+    RETURN.
+  ENDIF.
+  COMMIT WORK.
+
+  lcl_util=>create_tadir( iv_object = 'TYPE' iv_name = lv_tg ).
+  lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'TYPE' iv_name = lv_tg ).
+  lcl_util=>add_msg( iv_type = 'S' iv_text = |TYPE { lv_tg } - COPIED| ).
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM COPY_TABLES
+*&---------------------------------------------------------------------*
+*& GENERIC COPY OF CONTROL-TABLE ROWS FROM THE SOURCE SYSTEM:
+*&   READ ROWS MATCHING IV_WHERE FROM EACH TABLE IN IV_TABLES (SPACE
+*&   SEPARATED), DELETE THE LOCAL ROWS WITH THE SAME CONDITION, INSERT.
+*&   IV_WHERE: CONDITIONS JOINED WITH ' AND ' (NO OTHER ' AND ' INSIDE).
+*&   IV_QUIET: TABLES THAT MAY NOT EXIST IN EVERY RELEASE.
+*&---------------------------------------------------------------------*
+FORM copy_tables USING    iv_tables TYPE csequence
+                          iv_where  TYPE csequence
+                          iv_quiet  TYPE abap_bool
+                 CHANGING cv_ok     TYPE abap_bool.
+  DATA: lt_tabs    TYPE STANDARD TABLE OF string WITH EMPTY KEY,
+        lt_parts   TYPE STANDARD TABLE OF string WITH EMPTY KEY,
+        lt_options TYPE tt_options,
+        lv_where   TYPE string,
+        lv_tab     TYPE tabname,
+        lv_subrc   TYPE sy-subrc,
+        lr_tab     TYPE REF TO data.
+  FIELD-SYMBOLS <lt_rows> TYPE STANDARD TABLE.
+
+  cv_ok    = abap_true.
+  lv_where = iv_where.
+
+  " WHERE -> RFC_READ_TABLE OPTIONS (ONE CONDITION PER LINE, MAX 72)
+  IF lv_where IS NOT INITIAL.
+    SPLIT lv_where AT ' AND ' INTO TABLE lt_parts.
+    LOOP AT lt_parts INTO DATA(lv_part).
+      IF sy-tabix = 1.
+        APPEND VALUE #( text = lv_part ) TO lt_options.
+      ELSE.
+        APPEND VALUE #( text = |AND { lv_part }| ) TO lt_options.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+  SPLIT iv_tables AT space INTO TABLE lt_tabs.
+  LOOP AT lt_tabs INTO DATA(lv_tabname).
+    lv_tab = lv_tabname.
+
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF (lv_tab).
+      CATCH cx_sy_create_data_error.
+        IF iv_quiet = abap_false.
+          lcl_util=>add_msg( iv_type = 'E' iv_text = |TABLE { lv_tab } DOES NOT EXIST IN THIS SYSTEM| ).
+          cv_ok = abap_false.
+        ENDIF.
+        CONTINUE.
+    ENDTRY.
+    ASSIGN lr_tab->* TO <lt_rows>.
+
+    lcl_util=>rfc_read( EXPORTING iv_table = lv_tab
+                                  it_where = lt_options
+                                  iv_quiet = iv_quiet
+                        IMPORTING et_data  = <lt_rows>
+                                  ev_subrc = lv_subrc ).
+    IF lv_subrc <> 0 AND lv_subrc <> 2.
+      IF iv_quiet = abap_false.
+        cv_ok = abap_false.
+      ENDIF.
+      CONTINUE.
+    ENDIF.
+
+    " REPLACE: ROWS DELETED IN THE SOURCE ARE DELETED HERE TOO
+    IF lv_where IS NOT INITIAL.
+      DELETE FROM (lv_tab) WHERE (lv_where).
+    ELSE.
+      DELETE FROM (lv_tab).
+    ENDIF.
+    IF <lt_rows> IS NOT INITIAL.
+      MODIFY (lv_tab) FROM TABLE <lt_rows>.
+      IF sy-subrc <> 0.
+        lcl_util=>add_msg( iv_type = 'E' iv_text = |TABLE { lv_tab } - ROWS NOT WRITTEN| ).
+        cv_ok = abap_false.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+  COMMIT WORK.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_MSAG
+*&---------------------------------------------------------------------*
+*& 12. MESSAGE CLASS (IV_MSGNR INITIAL) OR ONE MESSAGE, ALL LANGUAGES
+*&---------------------------------------------------------------------*
+FORM make_msag USING iv_arbgb TYPE csequence
+                     iv_msgnr TYPE csequence.
+  DATA: lv_arbgb TYPE t100-arbgb,
+        lv_msgnr TYPE t100-msgnr,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool,
+        lv_name  TYPE trobj_name.
+
+  lv_arbgb = iv_arbgb.
+  lv_msgnr = iv_msgnr.
+
+  IF lv_msgnr IS INITIAL.
+    lv_where = |ARBGB = '{ lv_arbgb }'|.
+    PERFORM copy_tables USING 'T100A T100T T100 T100U' lv_where abap_false CHANGING lv_ok.
+    IF lv_ok = abap_true.
+      lcl_util=>create_tadir( iv_object = 'MSAG' iv_name = lv_arbgb ).
+      lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'MSAG' iv_name = lv_arbgb ).
+      lcl_util=>add_msg( iv_type = 'S' iv_text = |MSAG { lv_arbgb } - COPIED| ).
+    ENDIF.
+  ELSE.
+    " MESSAGE CLASS MUST EXIST FOR A SINGLE MESSAGE
+    SELECT SINGLE arbgb FROM t100a INTO @DATA(lv_exists) WHERE arbgb = @lv_arbgb.
+    IF sy-subrc <> 0.
+      PERFORM make_msag USING lv_arbgb space.
+      RETURN.
+    ENDIF.
+    lv_where = |ARBGB = '{ lv_arbgb }' AND MSGNR = '{ lv_msgnr }'|.
+    PERFORM copy_tables USING 'T100 T100U' lv_where abap_false CHANGING lv_ok.
+    IF lv_ok = abap_true.
+      lv_name = lv_arbgb.
+      lv_name+20 = lv_msgnr.
+      lcl_util=>add_tr_obj( iv_pgmid = 'LIMU' iv_object = 'MESS' iv_name = lv_name ).
+      lcl_util=>add_msg( iv_type = 'S' iv_text = |MESS { lv_arbgb } { lv_msgnr } - COPIED| ).
+    ENDIF.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_PARA
+*&---------------------------------------------------------------------*
+*& 13. SET/GET PARAMETER ID
+*&---------------------------------------------------------------------*
+FORM make_para USING iv_name TYPE csequence.
+  DATA: lv_para  TYPE tpara-paramid,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool.
+
+  lv_para  = iv_name.
+  lv_where = |PARAMID = '{ lv_para }'|.
+  PERFORM copy_tables USING 'TPARA TPARAT' lv_where abap_false CHANGING lv_ok.
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'PARA' iv_name = lv_para ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'PARA' iv_name = lv_para ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |PARA { lv_para } - COPIED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_NROB
+*&---------------------------------------------------------------------*
+*& 14. NUMBER RANGE OBJECT (DEFINITION + TEXTS, NOT THE INTERVALS -
+*&     INTERVALS ARE CLIENT DATA AND ARE MAINTAINED IN SNRO/SNUM)
+*&---------------------------------------------------------------------*
+FORM make_nrob USING iv_name TYPE csequence.
+  DATA: lv_nrob  TYPE tnro-object,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool.
+
+  lv_nrob  = iv_name.
+  lv_where = |OBJECT = '{ lv_nrob }'|.
+  PERFORM copy_tables USING 'TNRO TNROT' lv_where abap_false CHANGING lv_ok.
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'NROB' iv_name = lv_nrob ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'NROB' iv_name = lv_nrob ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |NROB { lv_nrob } - COPIED (MAINTAIN INTERVALS IN SNRO)| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_TOBJ
+*&---------------------------------------------------------------------*
+*& 17. TABLE MAINTENANCE / TRANSPORT OBJECT (SE54 / SOBJ)
+*&     E071 NAME = OBJECT NAME + OBJECT TYPE (LAST CHARACTER)
+*&---------------------------------------------------------------------*
+FORM make_tobj USING iv_name TYPE csequence.
+  DATA: lv_full  TYPE string,
+        lv_len   TYPE i,
+        lv_obj   TYPE objh-objectname,
+        lv_type  TYPE objh-objecttype,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool,
+        lv_ok2   TYPE abap_bool.
+
+  lv_full = condense( CONV string( iv_name ) ).
+  lv_len  = strlen( lv_full ) - 1.
+  IF lv_len <= 0.
+    RETURN.
+  ENDIF.
+  lv_obj  = condense( lv_full(lv_len) ).
+  lv_type = lv_full+lv_len(1).
+
+  lv_where = |OBJECTNAME = '{ lv_obj }' AND OBJECTTYPE = '{ lv_type }'|.
+  PERFORM copy_tables USING 'OBJH OBJT OBJS' lv_where abap_false CHANGING lv_ok.
+  PERFORM copy_tables USING 'OBJSL OBJM' lv_where abap_true CHANGING lv_ok2.
+
+  " MAINTENANCE DIALOG SETTINGS (TABLE/VIEW)
+  lv_where = |TABNAME = '{ lv_obj }'|.
+  PERFORM copy_tables USING 'TDDAT TVDIR TVIMF' lv_where abap_true CHANGING lv_ok2.
+
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'TOBJ' iv_name = iv_name ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'TOBJ' iv_name = iv_name ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |TOBJ { lv_obj } ({ lv_type }) - COPIED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_VCLS
+*&---------------------------------------------------------------------*
+*& 18. VIEW CLUSTER (SE54): HEADER, TEXTS, OBJECT STRUCTURE, EVENTS
+*&---------------------------------------------------------------------*
+FORM make_vcls USING iv_name TYPE csequence.
+  DATA: lv_vcls  TYPE vcldir-vclname,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool,
+        lv_ok2   TYPE abap_bool.
+
+  lv_vcls  = iv_name.
+  lv_where = |VCLNAME = '{ lv_vcls }'|.
+  PERFORM copy_tables USING 'VCLDIR VCLDIRT VCLSTRUC VCLSTRUCT' lv_where abap_false CHANGING lv_ok.
+  PERFORM copy_tables USING 'VCLSTRUDEP VCLMF' lv_where abap_true CHANGING lv_ok2.
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'VCLS' iv_name = lv_vcls ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'VCLS' iv_name = lv_vcls ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |VCLS { lv_vcls } - COPIED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_SXCI
+*&---------------------------------------------------------------------*
+*& 19. CLASSIC BADI IMPLEMENTATION (SE19). THE IMPLEMENTING CLASS IS A
+*&     NORMAL CLAS OBJECT - KEEP IT IN THE SAME REQUEST / SELECTION.
+*&---------------------------------------------------------------------*
+FORM make_sxci USING iv_name TYPE csequence.
+  DATA: lv_impl  TYPE sxc_attr-imp_name,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool,
+        lv_ok2   TYPE abap_bool.
+
+  lv_impl  = iv_name.
+  lv_where = |IMP_NAME = '{ lv_impl }'|.
+  PERFORM copy_tables USING 'SXC_ATTR SXC_ATTRT SXC_EXIT SXC_CLASS' lv_where abap_false CHANGING lv_ok.
+  PERFORM copy_tables USING 'SXC_FCODE SXC_COCO SXC_INTA SXC_SSCR' lv_where abap_true CHANGING lv_ok2.
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'SXCI' iv_name = lv_impl ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'SXCI' iv_name = lv_impl ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |SXCI { lv_impl } - COPIED (CHECK ACTIVE FLAG IN SE19)| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM READ_REMOTE_SOURCE
+*&---------------------------------------------------------------------*
+*& SOURCE OF ANY PROGRAM / INCLUDE IN THE SOURCE SYSTEM (EMPTY IF NONE)
+*&---------------------------------------------------------------------*
+FORM read_remote_source USING    iv_prog   TYPE csequence
+                        CHANGING ct_source TYPE rswsourcet.
+  DATA: lv_prog            TYPE rpy_prog-progname,
+        ls_prog_inf        TYPE rpy_prog,
+        lt_include_tab     TYPE STANDARD TABLE OF rpy_repo,
+        lt_source          TYPE STANDARD TABLE OF abapsource,
+        lt_source_extended TYPE STANDARD TABLE OF abaptxt255,
+        lt_textelements    TYPE STANDARD TABLE OF textpool.
+
+  CLEAR ct_source.
+  lv_prog = iv_prog.
+  CALL FUNCTION 'RPY_PROGRAM_READ' DESTINATION p_rd
+    EXPORTING
+      program_name          = lv_prog
+      with_includelist      = ' '
+      with_lowercase        = 'X'
+    IMPORTING
+      prog_inf              = ls_prog_inf
+    TABLES
+      include_tab           = lt_include_tab
+      source                = lt_source
+      source_extended       = lt_source_extended
+      textelements          = lt_textelements
+    EXCEPTIONS
+      cancelled             = 1
+      not_found             = 2
+      permission_error      = 3
+      system_failure        = 4
+      communication_failure = 5
+      OTHERS                = 6.
+  IF sy-subrc = 0.
+    LOOP AT lt_source_extended INTO DATA(ls_line).
+      APPEND ls_line-line TO ct_source.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM ACTIVATE_WB
+*&---------------------------------------------------------------------*
+*& ACTIVATE A WORKBENCH OBJECT IF IT IS STILL IN THE INACTIVE LIST
+*&---------------------------------------------------------------------*
+FORM activate_wb USING iv_object TYPE csequence
+                       iv_name   TYPE csequence.
+  DATA: lv_object  TYPE dwinactiv-object,
+        lv_name    TYPE dwinactiv-obj_name,
+        lt_objects TYPE STANDARD TABLE OF dwinactiv.
+
+  lv_object = iv_object.
+  lv_name   = iv_name.
+  SELECT * FROM dwinactiv INTO TABLE @lt_objects
+    WHERE object = @lv_object AND obj_name = @lv_name.
+  IF lt_objects IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'RS_WORKING_OBJECTS_ACTIVATE'
+    EXPORTING
+      activate_ddic_objects  = space
+      with_popup             = space
+    TABLES
+      objects                = lt_objects
+    EXCEPTIONS
+      excecution_error       = 1
+      cancelled              = 2
+      insert_into_corr_error = 3
+      OTHERS                 = 4.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |{ lv_object } { lv_name } - CREATED BUT NOT ACTIVE, ACTIVATE IN SE24/SE80| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_INTF
+*&---------------------------------------------------------------------*
+*& 15a. INTERFACE: FULL DEFINITION FROM VERSION MANAGEMENT (REMOTE),
+*&      CREATED WITH SEO_INTERFACE_CREATE_COMPLETE
+*&---------------------------------------------------------------------*
+FORM make_intf USING iv_name TYPE csequence.
+  DATA: lv_objname    TYPE vrsd-objname,
+        lv_info       TYPE abaptext-line,
+        lv_intf       TYPE seoclsname,
+        lv_version    TYPE seoversion VALUE '1',
+        lv_korrnr     TYPE trkorr,
+        lt_vsmodisrc  TYPE STANDARD TABLE OF smodisrc,
+        lt_smodilog   TYPE STANDARD TABLE OF smodilog,
+        lt_aliases_v  TYPE STANDARD TABLE OF seoaliases,
+        lt_attrib_v   TYPE STANDARD TABLE OF vseoattrib_vrs,
+        lt_compri_v   TYPE STANDARD TABLE OF vseocompri,
+        lt_event_v    TYPE STANDARD TABLE OF vseoevent,
+        lt_excep_v    TYPE STANDARD TABLE OF vseoexcep,
+        lt_interf_v   TYPE STANDARD TABLE OF vseointerf,
+        lt_method_v   TYPE STANDARD TABLE OF vseomethod,
+        lt_param_v    TYPE STANDARD TABLE OF vseoparam,
+        lt_pool_src   TYPE STANDARD TABLE OF abaptxt255,
+        lt_src        TYPE STANDARD TABLE OF abaptxt255,
+        lt_trdir      TYPE STANDARD TABLE OF trdir,
+        lt_type_v     TYPE STANDARD TABLE OF vseotype_vrs,
+        lt_typepls_v  TYPE STANDARD TABLE OF seotypepls,
+        " SEO_INTERFACE_CREATE_COMPLETE FORMATS
+        ls_interface  TYPE vseointerf,
+        lt_comprising TYPE seor_comprisings_r,
+        lt_attributes TYPE seoo_attributes_r,
+        lt_methods    TYPE seoo_methods_r,
+        lt_events     TYPE seoo_events_r,
+        lt_parameters TYPE seos_parameters_r,
+        lt_exceps     TYPE seos_exceptions_r,
+        lt_aliases    TYPE seoo_aliases_r,
+        lt_typepusage TYPE seot_typepusages_r,
+        lt_types      TYPE seoo_types_r.
+
+  lv_intf    = iv_name.
+  lv_objname = iv_name.
+
+  CALL FUNCTION 'SVRS_GET_VERSION_INTF_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_objname
+      versno                = '00000'
+    IMPORTING
+      info_line             = lv_info
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      pseoaliases           = lt_aliases_v
+      pvseoattrib           = lt_attrib_v
+      pvseocompri           = lt_compri_v
+      pvseoevent            = lt_event_v
+      pvseoexcep            = lt_excep_v
+      pvseointerf           = lt_interf_v
+      psmodilog             = lt_smodilog
+      pvseomethod           = lt_method_v
+      pvseoparam            = lt_param_v
+      ppool_source          = lt_pool_src
+      psource               = lt_src
+      ptrdir                = lt_trdir
+      type_tab              = lt_type_v
+      pseotypepls           = lt_typepls_v
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  READ TABLE lt_interf_v INTO ls_interface INDEX 1.
+  IF sy-subrc <> 0 OR ls_interface-clsname IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |INTF { lv_intf } - READ FROM SOURCE FAILED| ).
+    RETURN.
+  ENDIF.
+
+  ls_interface-version = lv_version.
+  lt_comprising = CORRESPONDING #( lt_compri_v ).
+  lt_attributes = CORRESPONDING #( lt_attrib_v ).
+  lt_methods    = CORRESPONDING #( lt_method_v ).
+  lt_events     = CORRESPONDING #( lt_event_v ).
+  lt_parameters = CORRESPONDING #( lt_param_v ).
+  lt_exceps     = CORRESPONDING #( lt_excep_v ).
+  lt_aliases    = CORRESPONDING #( lt_aliases_v ).
+  lt_typepusage = CORRESPONDING #( lt_typepls_v ).
+  lt_types      = CORRESPONDING #( lt_type_v ).
+
+  CALL FUNCTION 'SEO_INTERFACE_CREATE_COMPLETE'
+    EXPORTING
+      corrnr          = p_ltr
+      devclass        = p_pk
+      version         = lv_version
+      overwrite       = 'X'
+      suppress_dialog = 'X'
+    IMPORTING
+      korrnr          = lv_korrnr
+    CHANGING
+      interface       = ls_interface
+      comprisings     = lt_comprising
+      attributes      = lt_attributes
+      methods         = lt_methods
+      events          = lt_events
+      parameters      = lt_parameters
+      exceps          = lt_exceps
+      aliases         = lt_aliases
+      typepusages     = lt_typepusage
+      types           = lt_types
+    EXCEPTIONS
+      existing        = 1
+      is_class        = 2
+      db_error        = 3
+      component_error = 4
+      no_access       = 5
+      other           = 6
+      OTHERS          = 7.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |INTF { lv_intf } - INTERFACE CREATE FAILURE| ).
+    RETURN.
+  ENDIF.
+  COMMIT WORK.
+
+  PERFORM activate_wb USING 'INTF' lv_intf.
+  lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'INTF' iv_name = lv_intf ).
+  lcl_util=>add_msg( iv_type = 'S' iv_text = |INTF { lv_intf } - COPIED| ).
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_CLAS
+*&---------------------------------------------------------------------*
+*& 15b. CLASS:
+*&   1. HEADER, FRIENDS, SUPERCLASS          SVRS_GET_VERSION_CLSD_40
+*&   2. PUBLIC/PROTECTED/PRIVATE COMPONENTS  SVRS_GET_VERSION_CPUB/CPRO/CPRI_40
+*&   3. METHOD SOURCES (ALL IMPLEMENTED)     TMDIR + SVRS_GET_VERSION_METH_40
+*&   4. LOCAL TYPES / CLASSES / MACROS / TEST CLASSES (CCDEF, CCIMP ...)
+*&   CREATED IN ONE STEP WITH SEO_CLASS_CREATE_COMPLETE, THEN ACTIVATED
+*&---------------------------------------------------------------------*
+FORM make_clas USING iv_name TYPE csequence.
+  TYPES: BEGIN OF ty_tmdir,
+           methodindx TYPE tmdir-methodindx,
+           methodname TYPE tmdir-methodname,
+         END OF ty_tmdir.
+  DATA: lv_class      TYPE seoclsname,
+        lv_objname    TYPE vrsd-objname,
+        lv_info       TYPE abaptext-line,
+        lv_version    TYPE seoversion VALUE '1',
+        lv_korrnr     TYPE trkorr,
+        lv_subrc      TYPE sy-subrc,
+        lv_section    TYPE c LENGTH 4,
+        lt_vsmodisrc  TYPE STANDARD TABLE OF smodisrc,
+        lt_smodilog   TYPE STANDARD TABLE OF smodilog,
+        lt_class_v    TYPE STANDARD TABLE OF vseoclass,
+        lt_friends_v  TYPE STANDARD TABLE OF seofriends,
+        lt_metarel_v  TYPE STANDARD TABLE OF seometarel,
+        lt_src        TYPE STANDARD TABLE OF abaptxt255,
+        lt_trdir      TYPE STANDARD TABLE OF trdir,
+        " ONE SECTION
+        lt_alias_s    TYPE STANDARD TABLE OF seoaliases,
+        lt_attrib_s   TYPE STANDARD TABLE OF vseoattrib_vrs,
+        lt_event_s    TYPE STANDARD TABLE OF vseoevent,
+        lt_excep_s    TYPE STANDARD TABLE OF vseoexcep,
+        lt_implrel_s  TYPE STANDARD TABLE OF seoimplrel,
+        lt_method_s   TYPE STANDARD TABLE OF vseomethod,
+        lt_metarel_s  TYPE STANDARD TABLE OF seometarel,
+        lt_param_s    TYPE STANDARD TABLE OF vseoparam,
+        lt_redef_s    TYPE STANDARD TABLE OF seoredef,
+        lt_type_s     TYPE STANDARD TABLE OF vseotype_vrs,
+        lt_typepls_s  TYPE STANDARD TABLE OF seotypepls,
+        " ALL SECTIONS
+        lt_alias_v    TYPE STANDARD TABLE OF seoaliases,
+        lt_attrib_v   TYPE STANDARD TABLE OF vseoattrib_vrs,
+        lt_event_v    TYPE STANDARD TABLE OF vseoevent,
+        lt_excep_v    TYPE STANDARD TABLE OF vseoexcep,
+        lt_implrel_v  TYPE STANDARD TABLE OF seoimplrel,
+        lt_method_v   TYPE STANDARD TABLE OF vseomethod,
+        lt_param_v    TYPE STANDARD TABLE OF vseoparam,
+        lt_redef_v    TYPE STANDARD TABLE OF seoredef,
+        lt_type_v     TYPE STANDARD TABLE OF vseotype_vrs,
+        lt_typepls_v  TYPE STANDARD TABLE OF seotypepls,
+        " METHOD SOURCES
+        lt_tmdir      TYPE STANDARD TABLE OF ty_tmdir,
+        lt_meth_src   TYPE STANDARD TABLE OF abaptxt255,
+        lt_msrc       TYPE seo_method_source_table,
+        ls_msrc       TYPE seo_method_source,
+        " SEO_CLASS_CREATE_COMPLETE FORMATS
+        ls_class      TYPE vseoclass,
+        ls_inherit    TYPE vseoextend,
+        lt_redefs     TYPE seor_redefinitions_r,
+        lt_impls      TYPE seor_implementings_r,
+        lt_attributes TYPE seoo_attributes_r,
+        lt_methods    TYPE seoo_methods_r,
+        lt_events     TYPE seoo_events_r,
+        lt_types      TYPE seoo_types_r,
+        lt_parameters TYPE seos_parameters_r,
+        lt_exceps     TYPE seos_exceptions_r,
+        lt_aliases    TYPE seoo_aliases_r,
+        lt_typepusage TYPE seot_typepusages_r,
+        lt_friends    TYPE seo_friends,
+        lt_locals_def TYPE rswsourcet,
+        lt_locals_imp TYPE rswsourcet,
+        lt_locals_mac TYPE rswsourcet,
+        lt_locals_au  TYPE rswsourcet,
+        lt_tpool_src  TYPE rswsourcet.
+
+  lv_class   = iv_name.
+  lv_objname = iv_name.
+
+  " STEP 1: CLASS HEADER, FRIENDS, RELATIONS
+  CALL FUNCTION 'SVRS_GET_VERSION_CLSD_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_objname
+      versno                = '00000'
+    IMPORTING
+      info_line             = lv_info
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      pvseoclass            = lt_class_v
+      pseofriends           = lt_friends_v
+      psmodilog             = lt_smodilog
+      pseometarel           = lt_metarel_v
+      psource               = lt_src
+      ptrdir                = lt_trdir
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  READ TABLE lt_class_v INTO ls_class INDEX 1.
+  IF sy-subrc <> 0 OR ls_class-clsname IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |CLAS { lv_class } - READ FROM SOURCE FAILED| ).
+    RETURN.
+  ENDIF.
+
+  " STEP 2: COMPONENTS OF ALL THREE VISIBILITY SECTIONS
+  DO 3 TIMES.
+    CLEAR: lt_alias_s, lt_attrib_s, lt_event_s, lt_excep_s, lt_implrel_s, lt_method_s,
+           lt_metarel_s, lt_param_s, lt_redef_s, lt_type_s, lt_typepls_s, lt_src, lt_trdir.
+    CASE sy-index.
+      WHEN 1.
+        lv_section = 'CPUB'.
+        CALL FUNCTION 'SVRS_GET_VERSION_CPUB_40'
+          EXPORTING
+            destination = p_rd object_name = lv_objname versno = '00000'
+          IMPORTING
+            info_line   = lv_info
+          TABLES
+            vsmodisrc   = lt_vsmodisrc  pseoalias   = lt_alias_s   pvseoattrib = lt_attrib_s
+            pvseoevent  = lt_event_s    pvseoexcep  = lt_excep_s   pseoimplrel = lt_implrel_s
+            psmodilog   = lt_smodilog   pvseomethod = lt_method_s  pseometarel = lt_metarel_s
+            pvseoparam  = lt_param_s    pseoredef   = lt_redef_s   psource     = lt_src
+            ptrdir      = lt_trdir      pvseotype   = lt_type_s    pseotypepls = lt_typepls_s
+          EXCEPTIONS
+            no_version = 1 system_failure = 2 communication_failure = 3 OTHERS = 4.
+      WHEN 2.
+        lv_section = 'CPRO'.
+        CALL FUNCTION 'SVRS_GET_VERSION_CPRO_40'
+          EXPORTING
+            destination = p_rd object_name = lv_objname versno = '00000'
+          IMPORTING
+            info_line   = lv_info
+          TABLES
+            vsmodisrc   = lt_vsmodisrc  pseoalias   = lt_alias_s   pvseoattrib = lt_attrib_s
+            pvseoevent  = lt_event_s    pvseoexcep  = lt_excep_s   psmodilog   = lt_smodilog
+            pvseomethod = lt_method_s   pvseoparam  = lt_param_s   pseoredef   = lt_redef_s
+            psource     = lt_src        ptrdir      = lt_trdir     pvseotype   = lt_type_s
+            pseotypepls = lt_typepls_s
+          EXCEPTIONS
+            no_version = 1 system_failure = 2 communication_failure = 3 OTHERS = 4.
+      WHEN 3.
+        lv_section = 'CPRI'.
+        CALL FUNCTION 'SVRS_GET_VERSION_CPRI_40'
+          EXPORTING
+            destination = p_rd object_name = lv_objname versno = '00000'
+          IMPORTING
+            info_line   = lv_info
+          TABLES
+            vsmodisrc   = lt_vsmodisrc  pseoalias   = lt_alias_s   pvseoattrib = lt_attrib_s
+            pvseoevent  = lt_event_s    pvseoexcep  = lt_excep_s   psmodilog   = lt_smodilog
+            pvseomethod = lt_method_s   pvseoparam  = lt_param_s   psource     = lt_src
+            ptrdir      = lt_trdir      pvseotype   = lt_type_s    pseotypepls = lt_typepls_s
+          EXCEPTIONS
+            no_version = 1 system_failure = 2 communication_failure = 3 OTHERS = 4.
+    ENDCASE.
+    IF sy-subrc > 1.         " NO_VERSION = EMPTY SECTION, FINE
+      lcl_util=>add_msg( iv_type = 'E' iv_text = |CLAS { lv_class } - READ OF { lv_section } FAILED| ).
+      RETURN.
+    ENDIF.
+    APPEND LINES OF: lt_alias_s   TO lt_alias_v,   lt_attrib_s  TO lt_attrib_v,
+                     lt_event_s   TO lt_event_v,   lt_excep_s   TO lt_excep_v,
+                     lt_implrel_s TO lt_implrel_v, lt_method_s  TO lt_method_v,
+                     lt_metarel_s TO lt_metarel_v, lt_param_s   TO lt_param_v,
+                     lt_redef_s   TO lt_redef_v,   lt_type_s    TO lt_type_v,
+                     lt_typepls_s TO lt_typepls_v.
+  ENDDO.
+
+  " SUPERCLASS (RELTYPE 2 = INHERITANCE)
+  LOOP AT lt_metarel_v INTO DATA(ls_rel) WHERE reltype = '2'.
+    ls_inherit = CORRESPONDING #( ls_rel ).
+    EXIT.
+  ENDLOOP.
+
+  ls_class-version = lv_version.
+  lt_impls      = CORRESPONDING #( lt_implrel_v ).
+  lt_redefs     = CORRESPONDING #( lt_redef_v ).
+  lt_attributes = CORRESPONDING #( lt_attrib_v ).
+  lt_methods    = CORRESPONDING #( lt_method_v ).
+  lt_events     = CORRESPONDING #( lt_event_v ).
+  lt_types      = CORRESPONDING #( lt_type_v ).
+  lt_parameters = CORRESPONDING #( lt_param_v ).
+  lt_exceps     = CORRESPONDING #( lt_excep_v ).
+  lt_aliases    = CORRESPONDING #( lt_alias_v ).
+  lt_typepusage = CORRESPONDING #( lt_typepls_v ).
+  lt_friends    = CORRESPONDING #( lt_friends_v ).
+  SORT lt_impls BY refclsname.
+  DELETE ADJACENT DUPLICATES FROM lt_impls COMPARING refclsname.
+
+  " STEP 3: SOURCE OF EVERY IMPLEMENTED METHOD (OWN, INTERFACE, REDEFINED)
+  lcl_util=>rfc_read(
+    EXPORTING iv_table  = 'TMDIR'
+              it_where  = VALUE #( ( text = |CLASSNAME = '{ lv_class }'| ) )
+              it_fields = VALUE #( ( 'METHODINDX' ) ( 'METHODNAME' ) )
+    IMPORTING et_data   = lt_tmdir
+              ev_subrc  = lv_subrc ).
+  LOOP AT lt_tmdir INTO DATA(ls_tmdir) WHERE methodname IS NOT INITIAL AND methodindx <> 0.
+    CLEAR: lt_meth_src, ls_msrc.
+    lv_objname     = lv_class.
+    lv_objname+30  = ls_tmdir-methodname.
+    CALL FUNCTION 'SVRS_GET_VERSION_METH_40'
+      EXPORTING
+        destination           = p_rd
+        object_name           = lv_objname
+        versno                = '00000'
+      IMPORTING
+        info_line             = lv_info
+      TABLES
+        vsmodisrc             = lt_vsmodisrc
+        repos_tab             = lt_meth_src
+        vsmodilog             = lt_smodilog
+        trdir_tab             = lt_trdir
+      EXCEPTIONS
+        no_version            = 1
+        system_failure        = 2
+        communication_failure = 3
+        OTHERS                = 4.
+    IF sy-subrc <> 0 OR lt_meth_src IS INITIAL.
+      lcl_util=>add_msg( iv_type = 'W' iv_text = |CLAS { lv_class } - SOURCE OF { ls_tmdir-methodname } NOT READ| ).
+      CONTINUE.
+    ENDIF.
+    ls_msrc-cpdname = ls_tmdir-methodname.
+    IF line_exists( lt_redef_v[ mtdname = ls_tmdir-methodname ] ).
+      ls_msrc-redefine = 'X'.
+    ENDIF.
+    LOOP AT lt_meth_src INTO DATA(ls_meth_line).
+      APPEND ls_meth_line-line TO ls_msrc-source.
+    ENDLOOP.
+    APPEND ls_msrc TO lt_msrc.
+  ENDLOOP.
+
+  " STEP 4: CLASS-LOCAL DEFINITIONS / IMPLEMENTATIONS / MACROS / TESTS
+  DATA(lv_ccdef) = CONV progname( cl_oo_classname_service=>get_ccdef_name( lv_class ) ).
+  DATA(lv_ccimp) = CONV progname( cl_oo_classname_service=>get_ccimp_name( lv_class ) ).
+  DATA(lv_ccmac) = CONV progname( cl_oo_classname_service=>get_ccmac_name( lv_class ) ).
+  DATA(lv_ccau)  = CONV progname( cl_oo_classname_service=>get_ccau_name( lv_class ) ).
+  PERFORM read_remote_source USING lv_ccdef CHANGING lt_locals_def.
+  PERFORM read_remote_source USING lv_ccimp CHANGING lt_locals_imp.
+  PERFORM read_remote_source USING lv_ccmac CHANGING lt_locals_mac.
+  PERFORM read_remote_source USING lv_ccau  CHANGING lt_locals_au.
+
+  " STEP 5: CREATE / OVERWRITE THE CLASS
+  CALL FUNCTION 'SEO_CLASS_CREATE_COMPLETE'
+    EXPORTING
+      corrnr          = p_ltr
+      devclass        = p_pk
+      version         = lv_version
+      overwrite       = 'X'
+      suppress_dialog = 'X'
+      method_sources  = lt_msrc
+      locals_def      = lt_locals_def
+      locals_imp      = lt_locals_imp
+      locals_mac      = lt_locals_mac
+      locals_au       = lt_locals_au
+    IMPORTING
+      korrnr          = lv_korrnr
+    CHANGING
+      class           = ls_class
+      inheritance     = ls_inherit
+      redefinitions   = lt_redefs
+      implementings   = lt_impls
+      attributes      = lt_attributes
+      methods         = lt_methods
+      events          = lt_events
+      types           = lt_types
+      parameters      = lt_parameters
+      exceps          = lt_exceps
+      aliases         = lt_aliases
+      typepusages     = lt_typepusage
+      friendships     = lt_friends
+    EXCEPTIONS
+      existing        = 1
+      is_interface    = 2
+      db_error        = 3
+      component_error = 4
+      no_access       = 5
+      other           = 6
+      OTHERS          = 7.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |CLAS { lv_class } - CLASS CREATE FAILURE| ).
+    RETURN.
+  ENDIF.
+  COMMIT WORK.
+
+  " STEP 6: TEXT SYMBOLS OF THE CLASS POOL
+  DATA(lv_pool) = CONV progname( cl_oo_classname_service=>get_classpool_name( lv_class ) ).
+  DATA: ls_prog_inf     TYPE rpy_prog,
+        lt_incl         TYPE STANDARD TABLE OF rpy_repo,
+        lt_s72          TYPE STANDARD TABLE OF abapsource,
+        lt_s255         TYPE STANDARD TABLE OF abaptxt255,
+        lt_textelements TYPE STANDARD TABLE OF textpool.
+  CALL FUNCTION 'RPY_PROGRAM_READ' DESTINATION p_rd
+    EXPORTING
+      program_name          = lv_pool
+      with_includelist      = ' '
+      only_texts            = 'X'
+    IMPORTING
+      prog_inf              = ls_prog_inf
+    TABLES
+      include_tab           = lt_incl
+      source                = lt_s72
+      source_extended       = lt_s255
+      textelements          = lt_textelements
+    EXCEPTIONS
+      OTHERS                = 1.
+  IF sy-subrc = 0 AND lt_textelements IS NOT INITIAL.
+    INSERT TEXTPOOL lv_pool FROM lt_textelements LANGUAGE sy-langu.
+  ENDIF.
+
+  PERFORM activate_wb USING 'CLAS' lv_class.
+  lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'CLAS' iv_name = lv_class ).
+  lcl_util=>add_msg( iv_type = 'S' iv_text = |CLAS { lv_class } - COPIED ({ lines( lt_msrc ) } METHODS)| ).
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM COPY_SCREENS_AND_STATUS
+*&---------------------------------------------------------------------*
+*& ALL SCREENS OF A PROGRAM (D020S IN THE SOURCE) + ITS GUI STATUS
+*&---------------------------------------------------------------------*
+FORM copy_screens_and_status USING iv_prog TYPE csequence.
+  TYPES: BEGIN OF ty_d020s,
+           dnum TYPE d020s-dnum,
+         END OF ty_d020s.
+  DATA: lt_d020s TYPE STANDARD TABLE OF ty_d020s,
+        lv_prog  TYPE progname,
+        lv_subrc TYPE sy-subrc.
+
+  lv_prog = iv_prog.
+  lcl_util=>rfc_read(
+    EXPORTING iv_table  = 'D020S'
+              it_where  = VALUE #( ( text = |PROG = '{ lv_prog }'| ) )
+              it_fields = VALUE #( ( 'DNUM' ) )
+              iv_quiet  = abap_true
+    IMPORTING et_data   = lt_d020s
+              ev_subrc  = lv_subrc ).
+  LOOP AT lt_d020s INTO DATA(ls_d020s).
+    PERFORM make_dynp USING lv_prog ls_d020s-dnum.
+  ENDLOOP.
+
+  PERFORM make_cuad USING lv_prog.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_DYNP
+*&---------------------------------------------------------------------*
+*& 16a. ONE SCREEN: HEADER, FIELDS, FLOW LOGIC, PARAMETERS, TEXTS
+*&      (READ: SVRS_GET_VERSION_DYNP_40, WRITE: EXPORT DYNPRO)
+*&---------------------------------------------------------------------*
+FORM make_dynp USING iv_prog TYPE csequence
+                     iv_dnum TYPE csequence.
+  DATA: lv_prog      TYPE progname,
+        lv_dnum      TYPE d020s-dnum,
+        lv_objname   TYPE vrsd-objname,
+        lv_info      TYPE abaptext-line,
+        lv_dynid     TYPE c LENGTH 44,
+        lv_trname    TYPE trobj_name,
+        lt_vsmodisrc TYPE STANDARD TABLE OF smodisrc,
+        lt_vsmodilog TYPE STANDARD TABLE OF smodilog,
+        lt_d020s     TYPE STANDARD TABLE OF d020s,
+        lt_d020t     TYPE STANDARD TABLE OF d020t,
+        lt_d021se    TYPE STANDARD TABLE OF d021se,
+        lt_d021s     TYPE STANDARD TABLE OF d021s,
+        lt_d021t     TYPE STANDARD TABLE OF d021t,
+        lt_d022s     TYPE STANDARD TABLE OF d022s,
+        lt_d023s     TYPE STANDARD TABLE OF d023s,
+        ls_d020s     TYPE d020s.
+
+  lv_prog       = iv_prog.
+  lv_dnum       = iv_dnum.
+  lv_objname    = lv_prog.
+  lv_objname+40 = lv_dnum.
+
+  CALL FUNCTION 'SVRS_GET_VERSION_DYNP_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_objname
+      versno                = '00000'
+    IMPORTING
+      info_line             = lv_info
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      d020s_tab             = lt_d020s
+      d020t_tab             = lt_d020t
+      d021s_tab             = lt_d021se
+      d021t_tab             = lt_d021t
+      d022s_tab             = lt_d022s
+      d023s_tab             = lt_d023s
+      vsmodilog             = lt_vsmodilog
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  READ TABLE lt_d020s INTO ls_d020s INDEX 1.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |DYNP { lv_prog } { lv_dnum } - READ FROM SOURCE FAILED| ).
+    RETURN.
+  ENDIF.
+
+  lt_d021s = CORRESPONDING #( lt_d021se ).
+
+  lv_dynid     = lv_prog.
+  lv_dynid+40  = lv_dnum.
+  EXPORT DYNPRO ls_d020s lt_d021s lt_d022s lt_d023s ID lv_dynid.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |DYNP { lv_prog } { lv_dnum } - SCREEN NOT WRITTEN| ).
+    RETURN.
+  ENDIF.
+
+  " SCREEN TITLE AND FIELD TEXTS (ALL LANGUAGES)
+  DELETE FROM d020t WHERE prog = lv_prog AND dynr = lv_dnum.
+  MODIFY d020t FROM TABLE lt_d020t.
+  DELETE FROM d021t WHERE prog = lv_prog AND dynr = lv_dnum.
+  MODIFY d021t FROM TABLE lt_d021t.
+  COMMIT WORK.
+
+  lv_trname    = lv_prog.
+  lv_trname+40 = lv_dnum.
+  lcl_util=>add_tr_obj( iv_pgmid = 'LIMU' iv_object = 'DYNP' iv_name = lv_trname ).
+  lcl_util=>add_msg( iv_type = 'S' iv_text = |DYNP { lv_prog } { lv_dnum } - COPIED| ).
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_CUAD
+*&---------------------------------------------------------------------*
+*& 16b. GUI STATUS / TITLES / MENUS OF A PROGRAM (REMOTE-ENABLED FETCH)
+*&---------------------------------------------------------------------*
+FORM make_cuad USING iv_prog TYPE csequence.
+  DATA: lv_prog   TYPE trdir-name,
+        ls_adm    TYPE rsmpe_adm,
+        lt_sta    TYPE STANDARD TABLE OF rsmpe_stat,
+        lt_fun    TYPE STANDARD TABLE OF rsmpe_funt,
+        lt_men    TYPE STANDARD TABLE OF rsmpe_men,
+        lt_mtx    TYPE STANDARD TABLE OF rsmpe_mnlt,
+        lt_act    TYPE STANDARD TABLE OF rsmpe_act,
+        lt_but    TYPE STANDARD TABLE OF rsmpe_but,
+        lt_pfk    TYPE STANDARD TABLE OF rsmpe_pfk,
+        lt_set    TYPE STANDARD TABLE OF rsmpe_staf,
+        lt_doc    TYPE STANDARD TABLE OF rsmpe_atrt,
+        lt_tit    TYPE STANDARD TABLE OF rsmpe_titt,
+        lt_biv    TYPE STANDARD TABLE OF rsmpe_buts,
+        ls_tr_key TYPE trkey,
+        lv_fg     TYPE string,
+        lv_msg    TYPE c LENGTH 200.
+
+  lv_prog = iv_prog.
+
+  CALL FUNCTION 'RS_CUA_INTERNAL_FETCH' DESTINATION p_rd
+    EXPORTING
+      program               = lv_prog
+      language              = sy-langu
+      state                 = 'A'
+    IMPORTING
+      adm                   = ls_adm
+    TABLES
+      sta                   = lt_sta
+      fun                   = lt_fun
+      men                   = lt_men
+      mtx                   = lt_mtx
+      act                   = lt_act
+      but                   = lt_but
+      pfk                   = lt_pfk
+      set                   = lt_set
+      doc                   = lt_doc
+      tit                   = lt_tit
+      biv                   = lt_biv
+    EXCEPTIONS
+      not_found             = 1
+      unknown_version       = 2
+      system_failure        = 3 MESSAGE lv_msg
+      communication_failure = 4 MESSAGE lv_msg
+      OTHERS                = 5.
+  IF sy-subrc = 1.
+    RETURN.                           " PROGRAM HAS NO GUI STATUS
+  ELSEIF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |CUAD { lv_prog } - READ FROM SOURCE FAILED { lv_msg }| ).
+    RETURN.
+  ENDIF.
+  IF lt_sta IS INITIAL AND lt_tit IS INITIAL AND lt_men IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  " TRANSPORT KEY: FUNCTION GROUP FOR SAPL<FG>, OTHERWISE THE PROGRAM
+  ls_tr_key-devclass = p_pk.
+  ls_tr_key-sub_type = 'CUAD'.
+  ls_tr_key-sub_name = lv_prog.
+  IF lv_prog CP 'SAPL*' OR lv_prog CP '/*/SAPL*'.
+    lv_fg = replace( val = CONV string( lv_prog ) sub = 'SAPL' with = '' ).
+    ls_tr_key-obj_type = 'FUGR'.
+    ls_tr_key-obj_name = lv_fg.
+  ELSE.
+    ls_tr_key-obj_type = 'PROG'.
+    ls_tr_key-obj_name = lv_prog.
+  ENDIF.
+
+  sy-tcode = 'SE41' ##WRITE_OK.   " SAME WORKAROUND AS ABAPGIT (NOTE 2159455)
+  CALL FUNCTION 'RS_CUA_INTERNAL_WRITE'
+    EXPORTING
+      program   = lv_prog
+      language  = sy-langu
+      tr_key    = ls_tr_key
+      adm       = ls_adm
+      state     = 'A'
+    TABLES
+      sta       = lt_sta
+      fun       = lt_fun
+      men       = lt_men
+      mtx       = lt_mtx
+      act       = lt_act
+      but       = lt_but
+      pfk       = lt_pfk
+      set       = lt_set
+      doc       = lt_doc
+      tit       = lt_tit
+      biv       = lt_biv
+    EXCEPTIONS
+      not_found = 1
+      OTHERS    = 2.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |CUAD { lv_prog } - GUI STATUS NOT WRITTEN| ).
+    RETURN.
+  ENDIF.
+  COMMIT WORK.
+
+  lcl_util=>add_tr_obj( iv_pgmid = 'LIMU' iv_object = 'CUAD' iv_name = lv_prog ).
+  lcl_util=>add_msg( iv_type = 'S' iv_text = |CUAD { lv_prog } - GUI STATUS COPIED| ).
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_TABU
+*&---------------------------------------------------------------------*
+*& 20. TABLE CONTENTS: THE KEYS RECORDED IN E071K OF THE SOURCE
+*&     REQUEST (INCL. GENERIC KEYS WITH '*') ARE TURNED INTO WHERE
+*&     CONDITIONS, THE ROWS ARE READ VIA RFC AND WRITTEN HERE. THE SAME
+*&     KEYS ARE ADDED TO THE LOCAL REQUEST.
+*&---------------------------------------------------------------------*
+FORM make_tabu USING iv_name TYPE csequence.
+  TYPES: BEGIN OF ty_e071k,
+           trkorr     TYPE e071k-trkorr,
+           pgmid      TYPE e071k-pgmid,
+           object     TYPE e071k-object,
+           objname    TYPE e071k-objname,
+           mastertype TYPE e071k-mastertype,
+           mastername TYPE e071k-mastername,
+           tabkey     TYPE e071k-tabkey,
+         END OF ty_e071k.
+  DATA: lv_tab     TYPE tabname,
+        lt_e071k   TYPE STANDARD TABLE OF ty_e071k,
+        lt_options TYPE tt_options,
+        lt_conds   TYPE STANDARD TABLE OF string WITH EMPTY KEY,
+        lv_where   TYPE string,
+        lv_key     TYPE string,
+        lv_val     TYPE string,
+        lv_pos     TYPE i,
+        lv_len     TYPE i,
+        lv_keylen  TYPE i,
+        lv_ok      TYPE abap_bool,
+        lv_rows    TYPE i,
+        lv_subrc   TYPE sy-subrc.
+
+  lv_tab = iv_name.
+
+  SELECT SINGLE tabname FROM dd02l INTO @DATA(lv_exists)
+    WHERE tabname = @lv_tab AND as4local = 'A'.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TABU { lv_tab } - TABLE NOT ACTIVE IN THIS SYSTEM, COPY THE TABLE FIRST| ).
+    RETURN.
+  ENDIF.
+
+  " KEYS OF THIS TABLE IN THE SOURCE REQUEST AND ITS TASKS
+  LOOP AT gt_trkorrs INTO DATA(lv_tr).
+    IF sy-tabix = 1.
+      APPEND VALUE #( text = |( TRKORR = '{ lv_tr }'| ) TO lt_options.
+    ELSE.
+      APPEND VALUE #( text = |OR TRKORR = '{ lv_tr }'| ) TO lt_options.
+    ENDIF.
+  ENDLOOP.
+  APPEND VALUE #( text = |) AND OBJECT = 'TABU'| ) TO lt_options.
+  APPEND VALUE #( text = |AND OBJNAME = '{ lv_tab }'| ) TO lt_options.
+
+  lcl_util=>rfc_read(
+    EXPORTING iv_table  = 'E071K'
+              it_where  = lt_options
+              it_fields = VALUE #( ( 'TRKORR' ) ( 'PGMID' ) ( 'OBJECT' ) ( 'OBJNAME' )
+                                   ( 'MASTERTYPE' ) ( 'MASTERNAME' ) ( 'TABKEY' ) )
+    IMPORTING et_data   = lt_e071k
+              ev_subrc  = lv_subrc ).
+  SORT lt_e071k BY tabkey.
+  DELETE ADJACENT DUPLICATES FROM lt_e071k COMPARING tabkey.
+  IF lt_e071k IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'W' iv_text = |TABU { lv_tab } - NO KEYS (E071K) IN THE SOURCE REQUEST| ).
+    RETURN.
+  ENDIF.
+
+  " KEY FIELDS OF THE TABLE IN KEY ORDER
+  SELECT fieldname, position, leng, inttype, datatype
+    FROM dd03l
+    WHERE tabname = @lv_tab AND as4local = 'A' AND keyflag = 'X'
+      AND fieldname NOT LIKE '.%'
+    ORDER BY position
+    INTO TABLE @DATA(lt_keys).
+
+  LOOP AT lt_e071k INTO DATA(ls_e071k).
+    CLEAR: lt_conds, lv_pos.
+    lv_key    = ls_e071k-tabkey.
+    lv_keylen = strlen( lv_key ).
+
+    LOOP AT lt_keys INTO DATA(ls_keyfield).
+      lv_len = ls_keyfield-leng.
+      IF ls_keyfield-datatype = 'CLNT'.
+        lv_pos = lv_pos + lv_len.        " CLIENT: RFC LOGON CLIENT / SY-MANDT
+        CONTINUE.
+      ENDIF.
+      IF ls_keyfield-inttype NA 'CNDT' OR lv_pos >= lv_keylen.
+        EXIT.                            " NON-CHARACTER KEY OR KEY ENDS HERE
+      ENDIF.
+      IF lv_pos + lv_len > lv_keylen.
+        lv_len = lv_keylen - lv_pos.
+      ENDIF.
+      lv_val = lv_key+lv_pos(lv_len).
+      IF lv_val CA '*'.
+        " GENERIC KEY: PREFIX BEFORE '*' -> LIKE 'PREFIX%'
+        SPLIT lv_val AT '*' INTO DATA(lv_prefix) DATA(lv_dummy).
+        IF lv_prefix IS NOT INITIAL.
+          REPLACE ALL OCCURRENCES OF `'` IN lv_prefix WITH `''`.
+          APPEND |{ ls_keyfield-fieldname } LIKE '{ lv_prefix }%'| TO lt_conds.
+        ENDIF.
+        EXIT.
+      ENDIF.
+      REPLACE ALL OCCURRENCES OF `'` IN lv_val WITH `''`.
+      APPEND |{ ls_keyfield-fieldname } = '{ lv_val }'| TO lt_conds.
+      lv_pos = lv_pos + ls_keyfield-leng.
+    ENDLOOP.
+
+    CONCATENATE LINES OF lt_conds INTO lv_where SEPARATED BY ` AND `.
+    PERFORM copy_tables USING lv_tab lv_where abap_false CHANGING lv_ok.
+    IF lv_ok = abap_true.
+      lv_rows = lv_rows + 1.
+      APPEND VALUE #( pgmid = 'R3TR' object = 'TABU' objname = lv_tab
+                      mastertype = 'TABU' mastername = lv_tab
+                      tabkey = ls_e071k-tabkey ) TO gt_e071k.
+    ENDIF.
+  ENDLOOP.
+
+  IF lv_rows > 0.
+    APPEND VALUE #( pgmid = 'R3TR' object = 'TABU' obj_name = lv_tab objfunc = 'K' ) TO gt_e071.
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |TABU { lv_tab } - { lv_rows } KEY(S) COPIED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM LOCK_KEYS_INTO_TR
+*&---------------------------------------------------------------------*
+*& RECORD TABLE CONTENTS (TABU + E071K KEYS) IN THE LOCAL REQUEST
+*&---------------------------------------------------------------------*
+FORM lock_keys_into_tr.
+  IF gt_e071 IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  SORT gt_e071 BY obj_name.
+  DELETE ADJACENT DUPLICATES FROM gt_e071 COMPARING obj_name.
+
+  CALL FUNCTION 'TR_APPEND_TO_COMM_OBJS_KEYS'
+    EXPORTING
+      wi_trkorr = p_ltr
+    TABLES
+      wt_e071   = gt_e071
+      wt_e071k  = gt_e071k
+    EXCEPTIONS
+      OTHERS    = 1.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TABLE KEYS NOT ADDED TO REQUEST { p_ltr } (USE A TASK OR CUSTOMIZING REQUEST)| ).
+  ELSE.
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |{ lines( gt_e071k ) } TABLE KEY(S) ADDED TO REQUEST { p_ltr }| ).
   ENDIF.
 ENDFORM.
 
