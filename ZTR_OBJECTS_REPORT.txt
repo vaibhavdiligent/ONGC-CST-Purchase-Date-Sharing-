@@ -49,7 +49,7 @@ REPORT zdual_maintenance_rpt.
 *---------------------------------------------*
 * TYPE DECLARATIONS
 *---------------------------------------------*
-TYPE-POOLS: slis.
+TYPE-POOLS: slis, seoc.
 
 TYPES: BEGIN OF ty_e071,
          sel      TYPE c LENGTH 1,
@@ -1933,8 +1933,9 @@ FORM make_ttyp.
       system_failure        = 2
       communication_failure = 3
       OTHERS                = 4.
+  DATA(lv_rfc_rc) = sy-subrc.
   READ TABLE lt_dd40v INTO DATA(ls_dd40v) INDEX 1.
-  IF sy-subrc <> 0 OR ls_dd40v-typename IS INITIAL.
+  IF lv_rfc_rc > 1 OR sy-subrc <> 0 OR ls_dd40v-typename IS INITIAL.
     lcl_util=>add_msg( iv_type = 'E' iv_text = |TTYP { lv_ddic } - READ FROM SOURCE FAILED| ).
     RETURN.
   ENDIF.
@@ -2093,8 +2094,9 @@ FORM make_shlp.
       system_failure        = 2
       communication_failure = 3
       OTHERS                = 4.
+  DATA(lv_rfc_rc) = sy-subrc.
   READ TABLE lt_dd30v INTO DATA(ls_dd30v) INDEX 1.
-  IF sy-subrc <> 0 OR ls_dd30v-shlpname IS INITIAL.
+  IF lv_rfc_rc > 1 OR sy-subrc <> 0 OR ls_dd30v-shlpname IS INITIAL.
     lcl_util=>add_msg( iv_type = 'E' iv_text = |SHLP { lv_ddic } - READ FROM SOURCE FAILED| ).
     RETURN.
   ENDIF.
@@ -2251,7 +2253,7 @@ FORM make_type USING iv_name TYPE csequence.
     RETURN.
   ENDIF.
 
-  SELECT SINGLE typegroup FROM ddtypes INTO @DATA(lv_exists) WHERE typegroup = @lv_tg.
+  SELECT SINGLE name FROM trdir INTO @DATA(lv_exists) WHERE name = @lv_include.
   IF sy-subrc <> 0.
     lcl_util=>rfc_read(
       EXPORTING iv_table  = 'DDTYPET'
@@ -2329,17 +2331,32 @@ FORM copy_tables USING    iv_tables TYPE csequence
   cv_ok    = abap_true.
   lv_where = iv_where.
 
-  " WHERE -> RFC_READ_TABLE OPTIONS (ONE CONDITION PER LINE, MAX 72)
-  IF lv_where IS NOT INITIAL.
-    SPLIT lv_where AT ' AND ' INTO TABLE lt_parts.
-    LOOP AT lt_parts INTO DATA(lv_part).
-      IF sy-tabix = 1.
-        APPEND VALUE #( text = lv_part ) TO lt_options.
-      ELSE.
-        APPEND VALUE #( text = |AND { lv_part }| ) TO lt_options.
-      ENDIF.
-    ENDLOOP.
+  " AN EMPTY WHERE WOULD DELETE THE WHOLE LOCAL TABLE - REFUSED
+  IF lv_where IS INITIAL.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |TABLE { iv_tables } - NO KEY CONDITION, NOTHING COPIED| ).
+    cv_ok = abap_false.
+    RETURN.
   ENDIF.
+
+  " WHERE -> RFC_READ_TABLE OPTIONS. A LINE HOLDS 72 CHARACTERS AND THE
+  " LINES ARE JOINED WITH A BLANK, SO A LONG CONDITION IS SPLIT INTO
+  " 'FIELD =' AND THE VALUE (NEVER INSIDE THE QUOTED VALUE).
+  SPLIT lv_where AT ' AND ' INTO TABLE lt_parts.
+  LOOP AT lt_parts INTO DATA(lv_part).
+    DATA(lv_prefix) = COND string( WHEN sy-tabix = 1 THEN `` ELSE `AND ` ).
+    IF strlen( lv_prefix ) + strlen( lv_part ) <= 72.
+      APPEND VALUE #( text = lv_prefix && lv_part ) TO lt_options.
+    ELSE.
+      SPLIT lv_part AT ` ` INTO DATA(lv_fld) DATA(lv_op) DATA(lv_rest).
+      IF strlen( lv_rest ) > 72.
+        lcl_util=>add_msg( iv_type = 'E' iv_text = |TABLE { iv_tables } - KEY VALUE LONGER THAN 72 CHARACTERS, COPY MANUALLY: { lv_part }| ).
+        cv_ok = abap_false.
+        RETURN.
+      ENDIF.
+      APPEND VALUE #( text = |{ lv_prefix }{ lv_fld } { lv_op }| ) TO lt_options.
+      APPEND VALUE #( text = lv_rest ) TO lt_options.
+    ENDIF.
+  ENDLOOP.
 
   SPLIT iv_tables AT space INTO TABLE lt_tabs.
   LOOP AT lt_tabs INTO DATA(lv_tabname).
@@ -2369,11 +2386,7 @@ FORM copy_tables USING    iv_tables TYPE csequence
     ENDIF.
 
     " REPLACE: ROWS DELETED IN THE SOURCE ARE DELETED HERE TOO
-    IF lv_where IS NOT INITIAL.
-      DELETE FROM (lv_tab) WHERE (lv_where).
-    ELSE.
-      DELETE FROM (lv_tab).
-    ENDIF.
+    DELETE FROM (lv_tab) WHERE (lv_where).
     IF <lt_rows> IS NOT INITIAL.
       MODIFY (lv_tab) FROM TABLE <lt_rows>.
       IF sy-subrc <> 0.
@@ -2639,7 +2652,7 @@ FORM make_intf USING iv_name TYPE csequence.
   DATA: lv_objname    TYPE vrsd-objname,
         lv_info       TYPE abaptext-line,
         lv_intf       TYPE seoclsname,
-        lv_version    TYPE seoversion VALUE '1',
+        lv_version    TYPE seoversion VALUE seoc_version_active,
         lv_korrnr     TYPE trkorr,
         lt_vsmodisrc  TYPE STANDARD TABLE OF smodisrc,
         lt_smodilog   TYPE STANDARD TABLE OF smodilog,
@@ -2699,8 +2712,9 @@ FORM make_intf USING iv_name TYPE csequence.
       system_failure        = 2
       communication_failure = 3
       OTHERS                = 4.
+  DATA(lv_rfc_rc) = sy-subrc.
   READ TABLE lt_interf_v INTO ls_interface INDEX 1.
-  IF sy-subrc <> 0 OR ls_interface-clsname IS INITIAL.
+  IF lv_rfc_rc > 1 OR sy-subrc <> 0 OR ls_interface-clsname IS INITIAL.
     lcl_util=>add_msg( iv_type = 'E' iv_text = |INTF { lv_intf } - READ FROM SOURCE FAILED| ).
     RETURN.
   ENDIF.
@@ -2750,6 +2764,13 @@ FORM make_intf USING iv_name TYPE csequence.
   ENDIF.
   COMMIT WORK.
 
+  " EXACT INTERFACE SOURCE (STRUCTURED TYPES, CONSTANTS ...)
+  IF lt_src IS NOT INITIAL.
+    DATA(lv_intfsec) = cl_oo_classname_service=>get_intfsec_name( lv_intf ).
+    INSERT REPORT lv_intfsec FROM lt_src.
+    COMMIT WORK.
+  ENDIF.
+
   PERFORM activate_wb USING 'INTF' lv_intf.
   lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'INTF' iv_name = lv_intf ).
   lcl_util=>add_msg( iv_type = 'S' iv_text = |INTF { lv_intf } - COPIED| ).
@@ -2773,7 +2794,7 @@ FORM make_clas USING iv_name TYPE csequence.
   DATA: lv_class      TYPE seoclsname,
         lv_objname    TYPE vrsd-objname,
         lv_info       TYPE abaptext-line,
-        lv_version    TYPE seoversion VALUE '1',
+        lv_version    TYPE seoversion VALUE seoc_version_active,
         lv_korrnr     TYPE trkorr,
         lv_subrc      TYPE sy-subrc,
         lv_section    TYPE c LENGTH 4,
@@ -2783,6 +2804,9 @@ FORM make_clas USING iv_name TYPE csequence.
         lt_friends_v  TYPE STANDARD TABLE OF seofriends,
         lt_metarel_v  TYPE STANDARD TABLE OF seometarel,
         lt_src        TYPE STANDARD TABLE OF abaptxt255,
+        lt_src_pub    TYPE STANDARD TABLE OF abaptxt255,
+        lt_src_pro    TYPE STANDARD TABLE OF abaptxt255,
+        lt_src_pri    TYPE STANDARD TABLE OF abaptxt255,
         lt_trdir      TYPE STANDARD TABLE OF trdir,
         " ONE SECTION
         lt_alias_s    TYPE STANDARD TABLE OF seoaliases,
@@ -2856,8 +2880,9 @@ FORM make_clas USING iv_name TYPE csequence.
       system_failure        = 2
       communication_failure = 3
       OTHERS                = 4.
+  DATA(lv_rfc_rc) = sy-subrc.
   READ TABLE lt_class_v INTO ls_class INDEX 1.
-  IF sy-subrc <> 0 OR ls_class-clsname IS INITIAL.
+  IF lv_rfc_rc > 1 OR sy-subrc <> 0 OR ls_class-clsname IS INITIAL.
     lcl_util=>add_msg( iv_type = 'E' iv_text = |CLAS { lv_class } - READ FROM SOURCE FAILED| ).
     RETURN.
   ENDIF.
@@ -2916,6 +2941,11 @@ FORM make_clas USING iv_name TYPE csequence.
       lcl_util=>add_msg( iv_type = 'E' iv_text = |CLAS { lv_class } - READ OF { lv_section } FAILED| ).
       RETURN.
     ENDIF.
+    CASE lv_section.
+      WHEN 'CPUB'. lt_src_pub = lt_src.
+      WHEN 'CPRO'. lt_src_pro = lt_src.
+      WHEN 'CPRI'. lt_src_pri = lt_src.
+    ENDCASE.
     APPEND LINES OF: lt_alias_s   TO lt_alias_v,   lt_attrib_s  TO lt_attrib_v,
                      lt_event_s   TO lt_event_v,   lt_excep_s   TO lt_excep_v,
                      lt_implrel_s TO lt_implrel_v, lt_method_s  TO lt_method_v,
@@ -3040,6 +3070,22 @@ FORM make_clas USING iv_name TYPE csequence.
   ENDIF.
   COMMIT WORK.
 
+  " STEP 5B: EXACT SECTION SOURCES (STRUCTURED TYPES, CONSTANTS ...) -
+  " THE COMPONENT TABLES ALONE DO NOT CARRY EVERYTHING A SECTION CAN HOLD
+  IF lt_src_pub IS NOT INITIAL.
+    DATA(lv_pubsec) = cl_oo_classname_service=>get_pubsec_name( lv_class ).
+    INSERT REPORT lv_pubsec FROM lt_src_pub.
+  ENDIF.
+  IF lt_src_pro IS NOT INITIAL.
+    DATA(lv_prosec) = cl_oo_classname_service=>get_prosec_name( lv_class ).
+    INSERT REPORT lv_prosec FROM lt_src_pro.
+  ENDIF.
+  IF lt_src_pri IS NOT INITIAL.
+    DATA(lv_prisec) = cl_oo_classname_service=>get_prisec_name( lv_class ).
+    INSERT REPORT lv_prisec FROM lt_src_pri.
+  ENDIF.
+  COMMIT WORK.
+
   " STEP 6: TEXT SYMBOLS OF THE CLASS POOL
   DATA(lv_pool) = CONV progname( cl_oo_classname_service=>get_classpool_name( lv_class ) ).
   DATA: ls_prog_inf     TYPE rpy_prog,
@@ -3149,8 +3195,9 @@ FORM make_dynp USING iv_prog TYPE csequence
       system_failure        = 2
       communication_failure = 3
       OTHERS                = 4.
+  DATA(lv_rfc_rc) = sy-subrc.
   READ TABLE lt_d020s INTO ls_d020s INDEX 1.
-  IF sy-subrc <> 0.
+  IF lv_rfc_rc > 1 OR sy-subrc <> 0.
     lcl_util=>add_msg( iv_type = 'E' iv_text = |DYNP { lv_prog } { lv_dnum } - READ FROM SOURCE FAILED| ).
     RETURN.
   ENDIF.
@@ -3390,6 +3437,10 @@ FORM make_tabu USING iv_name TYPE csequence.
       lv_pos = lv_pos + ls_keyfield-leng.
     ENDLOOP.
 
+    IF lt_conds IS INITIAL.
+      lcl_util=>add_msg( iv_type = 'W' iv_text = |TABU { lv_tab } - KEY '{ ls_e071k-tabkey }' CANNOT BE CONVERTED (GENERIC OR NON-CHARACTER KEY), COPY MANUALLY| ).
+      CONTINUE.
+    ENDIF.
     CONCATENATE LINES OF lt_conds INTO lv_where SEPARATED BY ` AND `.
     PERFORM copy_tables USING lv_tab lv_where abap_false CHANGING lv_ok.
     IF lv_ok = abap_true.
@@ -3517,9 +3568,22 @@ FORM lock_keys_into_tr.
   SORT gt_e071 BY obj_name.
   DELETE ADJACENT DUPLICATES FROM gt_e071 COMPARING obj_name.
 
+  " TABLE KEYS ARE RECORDED IN A TASK: THE USER'S OPEN TASK OF P_LTR,
+  " OR P_LTR ITSELF WHEN A TASK WAS ENTERED
+  DATA(lv_task) = p_ltr.
+  SELECT SINGLE strkorr FROM e070 INTO @DATA(lv_parent) WHERE trkorr = @p_ltr.
+  IF sy-subrc = 0 AND lv_parent IS INITIAL.
+    SELECT SINGLE trkorr FROM e070 INTO @lv_task
+      WHERE strkorr = @p_ltr AND as4user = @sy-uname AND trstatus = 'D'.
+    IF sy-subrc <> 0.
+      lcl_util=>add_msg( iv_type = 'E' iv_text = |TABLE KEYS NOT ADDED: NO OPEN TASK OF { sy-uname } IN REQUEST { p_ltr }| ).
+      RETURN.
+    ENDIF.
+  ENDIF.
+
   CALL FUNCTION 'TR_APPEND_TO_COMM_OBJS_KEYS'
     EXPORTING
-      wi_trkorr = p_ltr
+      wi_trkorr = lv_task
     TABLES
       wt_e071   = gt_e071
       wt_e071k  = gt_e071k
@@ -3590,22 +3654,23 @@ FORM lock_into_tr.
       wt_ko200                = gt_objects
     EXCEPTIONS
       cancel_edit_other_error = 1
-      show_only               = 2
+      show_only_other_error   = 2
       OTHERS                  = 3.
   IF sy-subrc <> 0.
     lcl_util=>add_msg( iv_type = 'E' iv_text = 'TR OBJECT CHECK FAILED' ).
     RETURN.
   ENDIF.
 
-  CALL FUNCTION 'TRINT_OBJECTS_CHECK_AND_INSERT'
+  CALL FUNCTION 'TR_OBJECTS_INSERT'
     EXPORTING
-      iv_order          = p_ltr
-      iv_with_dialog    = 'X'
-      iv_no_show_option = 'X'
-    CHANGING
-      ct_ko200          = gt_objects
+      wi_order                = p_ltr
+      iv_no_show_option       = 'X'
+    TABLES
+      wt_ko200                = gt_objects
     EXCEPTIONS
-      OTHERS            = 1.
+      cancel_edit_other_error = 1
+      show_only_other_error   = 2
+      OTHERS                  = 3.
   IF sy-subrc <> 0.
     lcl_util=>add_msg( iv_type = 'E' iv_text = |OBJECTS NOT ADDED TO REQUEST { p_ltr }| ).
   ELSE.
