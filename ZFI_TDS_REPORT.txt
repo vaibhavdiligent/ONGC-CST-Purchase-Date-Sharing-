@@ -1403,257 +1403,45 @@ ENDFORM.
 *  <--  p2        text
 *----------------------------------------------------------------------*
 FORM get_fieldcatt .
-  wa_fcat-col_pos = '1' .
-  wa_fcat-fieldname = 'LIFNR'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Vendor Code' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '2' .
-  wa_fcat-fieldname = 'NAME1'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Vendor Name' .
-  wa_fcat-outputlen = '30'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '3' .
-  wa_fcat-fieldname ='LANDX'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Vendor Country' .
-  wa_fcat-outputlen = '10'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '4' .
-  wa_fcat-fieldname ='INV'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Invoice Value' .
-  wa_fcat-outputlen = '10'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '5' .
-  wa_fcat-fieldname = 'TAX'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Taxable Value' .
-  wa_fcat-outputlen = '10'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-
-  wa_fcat-col_pos = '6' .
-  wa_fcat-fieldname = 'STCD3'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'GSTIN No. of deductee' .
-  wa_fcat-outputlen = '30'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '7' .
-  wa_fcat-fieldname = 'BKTXT'.
-  wa_fcat-tabname = 'IT_FINAL6' .
-  wa_fcat-seltext_m = 'Description' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '8' .
-  wa_fcat-fieldname = 'XBLNR'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Vendor Invoice No.' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '9' .
-  wa_fcat-fieldname = 'BLDAT'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Vendor Invoice Date' .
-  wa_fcat-outputlen = '20'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '10' .
-  wa_fcat-fieldname = 'EBELN'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'PO No.' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '11' .
-  wa_fcat-fieldname = 'BEDAT'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'PO Date' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '12' .
-  wa_fcat-fieldname = 'EFFWR'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Po Value(Excl.Tax)' .
-  wa_fcat-just = 'R'.
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '13' .
-  wa_fcat-fieldname = 'WT_QSSHH'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS base Amount' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '14' .
-  wa_fcat-fieldname = 'QSATZ'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS_IGST Rate' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '15' .
-  wa_fcat-fieldname = 'QSATZ1'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS_CGST Rate' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '16' .
-  wa_fcat-fieldname = 'QSATZ2'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS_SGST Rate' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '17' .
-  wa_fcat-fieldname = 'LV_IZ'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS IGST Amount' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '18' .
-  wa_fcat-fieldname = 'LV_CZ'.
-  wa_fcat-tabname = 'IT_FINAL6' .
-  wa_fcat-seltext_m = 'TDS_CGST Amount' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '19' .
-  wa_fcat-fieldname = 'LV_SZ'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS_SGST Amount' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '20' .
-  wa_fcat-fieldname = 'TDS'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS Certificate No.' .
-  wa_fcat-outputlen = '20'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '21' .
-  wa_fcat-fieldname = 'AMT_TDS'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Amount Of TDS' .
-  wa_fcat-outputlen = '20'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '22' .
-  wa_fcat-fieldname = 'DATE_TDS'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Date Of Issue' .
-  wa_fcat-outputlen = '20'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '23' .
-  wa_fcat-fieldname = 'BELNR'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'FI Document' .
-  wa_fcat-outputlen = '15'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '24' .               ""added on 2/6/22 by hrishi n
-  wa_fcat-fieldname = 'GSTIN'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'TDS GSTIN' .
-  wa_fcat-outputlen = '16'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '25' .               ""added on 7/6/22 by hrishi n
-  wa_fcat-fieldname = 'BUDAT'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_m = 'Posting Date' .
-  wa_fcat-outputlen = '16'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '26' .               ""added on 27/6/23 by hrishi n
-  wa_fcat-fieldname = 'CGSTCL'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_l = 'TDS_CGST Clearing Doc.' .
-  wa_fcat-outputlen = '16'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '27' .               ""added on 27/6/23 by hrishi n
-  wa_fcat-fieldname = 'CGSTCLD'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_l = 'TDS_CGST Clearing Date' .
-  wa_fcat-outputlen = '16'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '28' .               ""added on 27/6/23 by hrishi n
-  wa_fcat-fieldname = 'SGSTCL'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_l = 'TDS_SGST/UGST Clearing Doc.' .
-  wa_fcat-outputlen = '20'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '29' .               ""added on 27/6/23 by hrishi n
-  wa_fcat-fieldname = 'SGSTCLD'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_l = 'TDS_SGST/UGST Clearing Date' .
-  wa_fcat-outputlen = '20'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '30' .               ""added on 27/6/23 by hrishi n
-  wa_fcat-fieldname = 'IGSTCL'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_l = 'TDS_IGST Clearing Doc.' .
-  wa_fcat-outputlen = '16'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-  wa_fcat-col_pos = '31' .               ""added on 27/6/23 by hrishi n
-  wa_fcat-fieldname = 'IGSTCLD'.
-  wa_fcat-tabname = 'IT_FINAL9' .
-  wa_fcat-seltext_l = 'TDS_IGST Clearing Date' .
-  wa_fcat-outputlen = '16'.
-  APPEND wa_fcat TO i_fcat .
-  CLEAR:wa_fcat.
-
-
+*     S.O.C - Excel download was dropping columns. The catalog was built
+*     with mixed TABNAME (IT_FINAL6 / IT_FINAL9 - output table is
+*     LT_FINAL9), only SELTEXT_M or only SELTEXT_L filled, and no data
+*     type reference, so the S/4 spreadsheet export could not resolve
+*     some columns. Every column now gets one TABNAME, all header texts
+*     and a DDIC reference (or explicit type for the local CHAR fields).
+  CLEAR i_fcat.
+  PERFORM add_fcat USING: '1'  'LIFNR'    'Vendor Code'                 'LFA1'      'LIFNR'    '15',
+                          '2'  'NAME1'    'Vendor Name'                 'LFA1'      'NAME1'    '30',
+                          '3'  'LANDX'    'Vendor Country'              'T005T'     'LANDX'    '10',
+                          '4'  'INV'      'Invoice Value'               'EKPO'      'NETWR'    '15',
+                          '5'  'TAX'      'Taxable Value'               'EKPO'      'NETWR'    '15',
+                          '6'  'STCD3'    'GSTIN No. of deductee'       'LFA1'      'STCD3'    '30',
+                          '7'  'BKTXT'    'Description'                 'BKPF'      'BKTXT'    '25',
+                          '8'  'XBLNR'    'Vendor Invoice No.'          'BKPF'      'XBLNR'    '16',
+                          '9'  'BLDAT'    'Vendor Invoice Date'         'BKPF'      'BLDAT'    '20',
+                          '10' 'EBELN'    'PO No.'                      'BSEG'      'EBELN'    '15',
+                          '11' 'BEDAT'    'PO Date'                     'EKKO'      'BEDAT'    '15',
+                          '12' 'EFFWR'    'Po Value(Excl.Tax)'          ''          ''         '20',
+                          '13' 'WT_QSSHH' 'TDS base Amount'             'WITH_ITEM' 'WT_QSSHH' '15',
+                          '14' 'QSATZ'    'TDS_IGST Rate'               'WITH_ITEM' 'QSATZ'    '15',
+                          '15' 'QSATZ1'   'TDS_CGST Rate'               'WITH_ITEM' 'QSATZ'    '15',
+                          '16' 'QSATZ2'   'TDS_SGST Rate'               'WITH_ITEM' 'QSATZ'    '15',
+                          '17' 'LV_IZ'    'TDS IGST Amount'             'WITH_ITEM' 'WT_QBSHH' '15',
+                          '18' 'LV_CZ'    'TDS_CGST Amount'             'WITH_ITEM' 'WT_QBSHH' '15',
+                          '19' 'LV_SZ'    'TDS_SGST Amount'             'WITH_ITEM' 'WT_QBSHH' '15',
+                          '20' 'TDS'      'TDS Certificate No.'         ''          ''         '20',
+                          '21' 'AMT_TDS'  'Amount Of TDS'               ''          ''         '20',
+                          '22' 'DATE_TDS' 'Date Of Issue'               ''          ''         '20',
+                          '23' 'BELNR'    'FI Document'                 'BKPF'      'BELNR'    '15',
+                          '24' 'GSTIN'    'TDS GSTIN'                   ''          ''         '16',
+                          '25' 'BUDAT'    'Posting Date'                'BKPF'      'BUDAT'    '16',
+                          '26' 'CGSTCL'   'TDS_CGST Clearing Doc.'      'BSEG'      'AUGBL'    '16',
+                          '27' 'CGSTCLD'  'TDS_CGST Clearing Date'      'BSEG'      'AUGDT'    '16',
+                          '28' 'SGSTCL'   'TDS_SGST/UGST Clearing Doc.' 'BSEG'      'AUGBL'    '20',
+                          '29' 'SGSTCLD'  'TDS_SGST/UGST Clearing Date' 'BSEG'      'AUGDT'    '20',
+                          '30' 'IGSTCL'   'TDS_IGST Clearing Doc.'      'BSEG'      'AUGBL'    '16',
+                          '31' 'IGSTCLD'  'TDS_IGST Clearing Date'      'BSEG'      'AUGDT'    '16'.
+*     E.O.C
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program = sy-repid
@@ -1663,6 +1451,43 @@ FORM get_fieldcatt .
       t_outtab           = lt_final9.
 
 
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  ADD_FCAT
+*&---------------------------------------------------------------------*
+*       Append one column to the ALV field catalog I_FCAT
+*----------------------------------------------------------------------*
+FORM add_fcat USING pv_pos    TYPE any
+                    pv_field  TYPE any
+                    pv_text   TYPE any
+                    pv_reftab TYPE any
+                    pv_reffld TYPE any
+                    pv_len    TYPE any.
+  CLEAR wa_fcat.
+  wa_fcat-col_pos       = pv_pos.
+  wa_fcat-fieldname     = pv_field.
+  wa_fcat-tabname       = 'LT_FINAL9'.
+  wa_fcat-seltext_s     = pv_text.
+  wa_fcat-seltext_m     = pv_text.
+  wa_fcat-seltext_l     = pv_text.
+  wa_fcat-reptext_ddic  = pv_text.
+  wa_fcat-ddictxt       = 'L'.
+  wa_fcat-outputlen     = pv_len.
+  IF pv_reftab IS NOT INITIAL.
+    wa_fcat-ref_tabname   = pv_reftab.
+    wa_fcat-ref_fieldname = pv_reffld.
+  ELSE.
+*   Local CHAR fields (EFFWR, TDS, AMT_TDS, DATE_TDS, GSTIN) - no DDIC ref
+    wa_fcat-inttype   = 'C'.
+    wa_fcat-datatype  = 'CHAR'.
+    wa_fcat-intlen    = pv_len.
+    wa_fcat-ddic_outputlen = pv_len.
+  ENDIF.
+  IF pv_field = 'EFFWR'.
+    wa_fcat-just = 'R'.
+  ENDIF.
+  APPEND wa_fcat TO i_fcat.
+  CLEAR wa_fcat.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  GET_T059Z
