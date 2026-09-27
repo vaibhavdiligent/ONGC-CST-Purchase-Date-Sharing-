@@ -883,18 +883,17 @@ FORM get_display .
       OR wa_bsas-budat <> ls_final9-budat.
         EXIT.
       ENDIF.
-      IF sy-subrc EQ 0.
-        IF ls_final9-lv_cz IS NOT INITIAL AND wa_bsas-hkont = '0000190204'.
-          ls_final9-cgstcl  = wa_bsas-augbl.
-
-          ls_final9-cgstcld = wa_bsas-augdt.
-        ELSEIF ls_final9-lv_sz IS NOT INITIAL AND ( wa_bsas-hkont = '0000190205' OR wa_bsas-hkont = '0000190207' ).
-          ls_final9-sgstcl  = wa_bsas-augbl.
-          ls_final9-sgstcld = wa_bsas-augdt.
-        ELSEIF ls_final9-lv_iz IS NOT INITIAL AND wa_bsas-hkont = '0000190206'.
-          ls_final9-igstcl  = wa_bsas-augbl.
-          ls_final9-igstcld = wa_bsas-augdt.
-        ENDIF.
+*     (old "IF sy-subrc EQ 0" wrapper removed - every row reached here
+*      already matches BUKRS/BELNR/BUDAT, sy-subrc was not a real check)
+      IF ls_final9-lv_cz IS NOT INITIAL AND wa_bsas-hkont = '0000190204'.
+        ls_final9-cgstcl  = wa_bsas-augbl.
+        ls_final9-cgstcld = wa_bsas-augdt.
+      ELSEIF ls_final9-lv_sz IS NOT INITIAL AND ( wa_bsas-hkont = '0000190205' OR wa_bsas-hkont = '0000190207' ).
+        ls_final9-sgstcl  = wa_bsas-augbl.
+        ls_final9-sgstcld = wa_bsas-augdt.
+      ELSEIF ls_final9-lv_iz IS NOT INITIAL AND wa_bsas-hkont = '0000190206'.
+        ls_final9-igstcl  = wa_bsas-augbl.
+        ls_final9-igstcld = wa_bsas-augdt.
       ENDIF.
 *       IF LS_FINAL9-LV_CZ < 0 or LS_FINAL9-LV_IZ < 0 or LS_FINAL9-LV_SZ < 0 .
 *      LS_FINAL9-INV = LS_FINAL9-INV * ( -1 ).
