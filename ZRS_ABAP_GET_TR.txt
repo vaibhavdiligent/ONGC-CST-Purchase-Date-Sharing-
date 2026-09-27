@@ -1569,352 +1569,29 @@ START-OF-SELECTION.
       obj_name = it_tstc-pgmna.
   ENDIF.
 
-  PERFORM fill_it_scan .
-
+  " DECLARATIONS KEPT FOR THE LIST PART BELOW
   DATA ls_tadir TYPE tadir.
-  LOOP AT lt_tadir INTO ls_tadir.
-    REFRESH l_include_tab.
-    CALL FUNCTION 'RS_GET_ALL_INCLUDES'
-      EXPORTING
-        program             = ls_tadir-obj_name
-*       WITH_INACTIVE_INCLS = ' '
-*       WITH_RESERVED_INCLUDES =
-        with_class_includes = 'X'
-      TABLES
-        includetab          = l_include_tab
-      EXCEPTIONS
-        not_existent        = 1
-        no_program          = 2
-        OTHERS              = 3.
-    IF sy-subrc <> 0.
-* Implement suitable error handling here
-    ENDIF.
+  DATA repname2  TYPE  bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_t_repname.
+  DATA l_repname2 TYPE bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_s_repname.
+  DATA wa_include LIKE LINE OF l_include_tab.
+  DATA it_e071 TYPE TABLE OF e071.
+  DATA wa_e071 TYPE e071.
+  DATA l_tabname TYPE tabname.
+  DATA gs_func LIKE LINE OF gt_func.
+  DATA it_enlfdir TYPE TABLE OF enlfdir.
+  DATA wa_enlfdir TYPE enlfdir.
+  DATA gs_type LIKE LINE OF gt_type.
+  DATA it_dd03l TYPE TABLE OF dd03l.
+  DATA wa_dd03l TYPE dd03l.
+  DATA l_tvdir TYPE tvdir.
 
-*    CALL FUNCTION 'RS_GET_ALL_INCLUDES'
-*      EXPORTING
-*        program             = ls_tadir-obj_name
-**       WITH_INACTIVE_INCLS = 'X'
-**       WITH_RESERVED_INCLUDES       = 'X'
-*        with_class_includes = 'X'
-*        with_e_includes     = 'X'
-*      TABLES
-*        includetab          = l_include_tab
-*      EXCEPTIONS
-*        not_existent        = 1
-*        no_program          = 2
-*        OTHERS              = 3.
-*    IF sy-subrc <> 0.
-** Implement suitable error handling here
-*    ENDIF.
-
-    APPEND ls_tadir-obj_name TO l_include_tab.
-    DATA repname2  TYPE  bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_t_repname.
-    DATA l_repname2 TYPE bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_s_repname.
-
-    DATA wa_include LIKE LINE OF l_include_tab.
-    LOOP AT l_include_tab INTO wa_include.
-      TRANSLATE wa_include TO UPPER CASE .
-      IF wa_include(1) = 'Y' OR wa_include(1) = 'Z'.
-        APPEND wa_include TO gt_all_names.
-        LOOP AT it_scan INTO wa_scan.
-          REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
-          it_typ3,repname2.
-*    REFRESH: IT_OUTPUT.
-          REFRESH it_output.
-
-          l_repname2-sign = 'I'.
-          l_repname2-option = 'EQ'.
-          l_repname2-low = wa_include.
-          APPEND l_repname2 TO repname2.
-
-
-          PERFORM scan
-                TABLES  repname2 devclass1
-                USING wa_scan-srch_tem   .
-
-          DELETE it_output WHERE hit = ' '.
-          LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
-            wa_obj-srch_tem  = wa_scan-srch_tem.
-            wa_obj-repname = wa_output-repname.
-            wa_obj-text   = wa_output-text.
-            APPEND wa_obj TO it_obj.
-*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
-          ENDLOOP.
-
-        ENDLOOP.
-
-        DATA it_e071 TYPE TABLE OF e071.
-        SELECT * INTO TABLE it_e071
-          FROM e071
-          WHERE obj_name = wa_include
-          ORDER BY trkorr DESCENDING.
-        IF sy-subrc = 0.
-          DATA wa_e071 TYPE e071.
-          LOOP AT it_e071 INTO wa_e071.
-            gs_final-progname = wa_include.
-            gs_final-type = wa_e071-object.
-            gs_final-request = wa_e071-trkorr.
-            gs_final-main_program = ls_tadir-obj_name.
-            APPEND gs_final TO gt_final.
-            CLEAR gs_final.
-          ENDLOOP.
-        ENDIF.
-      ENDIF.
-
-    ENDLOOP.
-
-*  ENDLOOP.
-
-
-    DO.
-
-      PERFORM process_data.
-      IF it_obj[] IS INITIAL.
-        EXIT.
-      ENDIF.
-    ENDDO.
-
-
-
-*    WAIT UP TO 1 SECONDS.
-
-    DATA l_tabname TYPE tabname.
-*    data it_e071 type TABLE OF e071.
-    DATA gs_func LIKE LINE OF gt_func.
-    DATA it_enlfdir TYPE TABLE OF enlfdir.
-    DATA wa_enlfdir TYPE enlfdir.
-    LOOP AT gt_func INTO gs_func.
-      SELECT * INTO TABLE it_e071
-        FROM e071
-        WHERE obj_name = gs_func-funcname
-        ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_func-funcname.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-      ELSE.
-        SELECT SINGLE * INTO @DATA(l_tfdir)
-          FROM tfdir
-          WHERE
-          funcname =  @gs_func-funcname.
-        IF sy-subrc = 0.
-          gs_final-progname = l_tfdir-funcname.
-          gs_final-type = 'FUNC'.
-*          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ELSE.
-          gs_final-progname = gs_func-funcname.
-          gs_final-type = 'RFC'.
-*          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDIF.
-      ENDIF.
-*      endif.
-      SELECT SINGLE * INTO wa_enlfdir
-        FROM enlfdir
-        WHERE
-        funcname = gs_func-funcname.
-      IF sy-subrc = 0.
-        SELECT * INTO TABLE it_e071
-  FROM e071
-  WHERE obj_name = wa_enlfdir-area
-  ORDER BY trkorr DESCENDING.
-        IF sy-subrc = 0.
-          LOOP AT it_e071 INTO wa_e071.
-            gs_final-progname = wa_enlfdir-area."gs_func-funcname.
-            gs_final-type = wa_e071-object.
-            gs_final-request = wa_e071-trkorr.
-            gs_final-main_program = ls_tadir-obj_name.
-            APPEND gs_final TO gt_final.
-            CLEAR gs_final.
-          ENDLOOP.
-
-*          ENDIF.
-*        ENDIF.
-        ELSE.
-          gs_final-progname = wa_enlfdir-area.
-          gs_final-type = 'FUGR'.
-*          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-
-    DATA gs_type LIKE LINE OF gt_type.
-    LOOP AT gt_type INTO gs_type.
-      SELECT * INTO TABLE it_e071
-        FROM e071
-        WHERE obj_name = gs_type
-        ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_type.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-      ELSE.
-
-      ENDIF.
-      l_tabname = gs_type.
-      DATA it_dd03l TYPE TABLE OF dd03l.
-      DATA wa_dd03l TYPE dd03l.
-      SELECT * INTO TABLE it_dd03l
-        FROM dd03l
-        WHERE
-        tabname = l_tabname
-        AND
-        ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
-      IF sy-subrc = 0.
-        LOOP AT it_dd03l INTO wa_dd03l.
-          SELECT * INTO TABLE it_e071
-            FROM e071
-            WHERE obj_name = wa_dd03l-rollname
-            ORDER BY trkorr DESCENDING.
-          IF sy-subrc = 0.
-            LOOP AT it_e071 INTO wa_e071.
-              gs_final-progname = wa_dd03l-rollname.
-              gs_final-type = wa_e071-object.
-              gs_final-request = wa_e071-trkorr.
-              gs_final-main_program = ls_tadir-obj_name.
-              APPEND gs_final TO gt_final.
-              CLEAR gs_final.
-            ENDLOOP.
-          ENDIF.
-        ENDLOOP.
-      ENDIF.
-*      ENDIF.
-    ENDLOOP.
-
-*  ENDLOOP.
-
-*data gs_table like LINE OF gt_tables.
-    DATA l_tvdir TYPE tvdir.
-    LOOP AT gt_tables INTO gs_type.
-      SELECT * INTO TABLE it_e071
-            FROM e071
-            WHERE obj_name = gs_type
-            ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_type.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-
-        l_tabname = gs_type.
-*        data it_dd03l type TABLE OF dd03l.
-*        data wa_dd03l type dd03l.
-        SELECT * INTO TABLE it_dd03l
-          FROM dd03l
-          WHERE
-          tabname = l_tabname
-          AND
-          ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
-        IF sy-subrc = 0.
-          LOOP AT it_dd03l INTO wa_dd03l.
-            SELECT * INTO TABLE it_e071
-              FROM e071
-              WHERE obj_name = wa_dd03l-rollname
-              ORDER BY trkorr DESCENDING.
-            IF sy-subrc = 0.
-              LOOP AT it_e071 INTO wa_e071.
-                gs_final-progname =  wa_dd03l-rollname.
-                gs_final-type = wa_e071-object.
-                gs_final-request = wa_e071-trkorr.
-                gs_final-main_program = ls_tadir-obj_name.
-                APPEND gs_final TO gt_final.
-                CLEAR gs_final.
-              ENDLOOP.
-            ENDIF.
-          ENDLOOP.
-        ENDIF.
-        SELECT SINGLE * INTO l_tvdir
-        FROM tvdir
-        WHERE
-        tabname = gs_type.
-        IF sy-subrc = 0.
-          SELECT * INTO TABLE it_e071
-  FROM e071
-  WHERE obj_name = l_tvdir-area
-  ORDER BY trkorr DESCENDING.
-          IF sy-subrc = 0.
-            LOOP AT it_e071 INTO wa_e071.
-              gs_final-progname = l_tvdir-area.
-              gs_final-type = wa_e071-object.
-              gs_final-request = wa_e071-trkorr.
-              gs_final-main_program = ls_tadir-obj_name.
-              APPEND gs_final TO gt_final.
-              CLEAR gs_final.
-            ENDLOOP.
-          ENDIF.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-
-    LOOP AT gt_like INTO gs_type.
-      SELECT * INTO TABLE it_e071
-            FROM e071
-            WHERE obj_name = gs_type
-            ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_type.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-
-        l_tabname = gs_type.
-*        data it_dd03l type TABLE OF dd03l.
-*        data wa_dd03l type dd03l.
-        SELECT * INTO TABLE it_dd03l
-          FROM dd03l
-          WHERE
-          tabname = l_tabname
-          AND
-          ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
-        IF sy-subrc = 0.
-          LOOP AT it_dd03l INTO wa_dd03l.
-            SELECT * INTO TABLE it_e071
-              FROM e071
-              WHERE obj_name = wa_dd03l-rollname
-              ORDER BY trkorr DESCENDING.
-            IF sy-subrc = 0.
-              LOOP AT it_e071 INTO wa_e071.
-                gs_final-main_program = ls_tadir-obj_name.
-                gs_final-progname = wa_dd03l-rollname.
-                gs_final-type = wa_e071-object.
-                gs_final-request = wa_e071-trkorr.
-                gs_final-main_program = ls_tadir-obj_name.
-                APPEND gs_final TO gt_final.
-                CLEAR gs_final.
-              ENDLOOP.
-            ENDIF.
-          ENDLOOP.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-
-  ENDLOOP.
+  " ------------------------------------------------------------------
+  " DEPENDENCIES: SAP ENVIRONMENT ANALYSIS (THE SAME AS SE80 ->
+  " ENVIRONMENT ANALYSIS / WHERE-USED INDEX) INSTEAD OF A TEXT SCAN OF
+  " THE SOURCE. FOLLOWED RECURSIVELY FOR CUSTOMER OBJECTS ONLY.
+  " ------------------------------------------------------------------
+  PERFORM analyse_environment.
+  READ TABLE lt_tadir INTO ls_tadir INDEX 1.   " MAIN PROGRAM FOR THE LIST
 
   " ADD OBJECTS NEVER TRANSPORTED BEFORE AND THE DDIC DEPENDENCIES
   " (SEARCH HELPS, MAINTENANCE DIALOGS, CHECK TABLES, INCLUDES ...)
@@ -3519,6 +3196,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM add_cand USING iv_name TYPE csequence.
   DATA lv_name TYPE char255.
+  DATA lv_cust TYPE flag.
 
   lv_name = iv_name.
   CONDENSE lv_name.
@@ -3526,7 +3204,8 @@ FORM add_cand USING iv_name TYPE csequence.
   IF lv_name IS INITIAL.
     RETURN.
   ENDIF.
-  IF lv_name(1) <> 'Z' AND lv_name(1) <> 'Y' AND lv_name(1) <> '/'.
+  PERFORM is_customer USING lv_name CHANGING lv_cust.
+  IF lv_cust = abap_false.
     RETURN.
   ENDIF.
   INSERT lv_name INTO TABLE gt_seen.
@@ -3574,7 +3253,7 @@ FORM add_if_missing USING iv_name TYPE char255.
       SORT lt_req DESCENDING.
       READ TABLE lt_req INTO lv_req INDEX 1.
       CLEAR gs_final.
-      gs_final-main_program = 'DEPENDENCY'.
+      gs_final-main_program = 'ENVIRONMENT'.
       gs_final-progname     = iv_name.
       gs_final-type         = ls_dir-object.
       gs_final-request      = lv_req.
@@ -3922,3 +3601,165 @@ FORM transport_objects.
   MESSAGE lv_text TYPE 'S'.
 ENDFORM.
 
+*&---------------------------------------------------------------------*
+*& Form ANALYSE_ENVIRONMENT
+*&---------------------------------------------------------------------*
+*& Starting from the selected programs / transactions, collect every
+*& object they use with SAP's environment analysis
+*& (REPOSITORY_ENVIRONMENT_ALL, all object categories switched on).
+*& Customer programs, function groups/modules, classes, interfaces and
+*& transformations found are analysed again (recursively). All names
+*& go to GT_ALL_NAMES; EXPAND_DEPENDENCIES then adds them to the list
+*& with their object type (TADIR) and the DDIC dependencies.
+*&---------------------------------------------------------------------*
+FORM analyse_environment.
+  TYPES: BEGIN OF ty_work,
+           type TYPE seu_obj,
+           name TYPE sobj_name,
+         END OF ty_work.
+  DATA: lt_work    TYPE STANDARD TABLE OF ty_work,
+        ls_work    TYPE ty_work,
+        lt_done    TYPE HASHED TABLE OF ty_work WITH UNIQUE KEY type name,
+        lt_env     TYPE senvi_tab,
+        ls_types   TYPE envi_types,
+        lt_incl    TYPE programt,
+        ls_dir     TYPE tadir,
+        ls_tstc    TYPE tstc,
+        lv_idx     TYPE i,
+        lv_cust    TYPE flag,
+        lv_objtype TYPE euobj-id,
+        lv_objname TYPE tadir-obj_name,
+        lv_encl    TYPE tadir-obj_name.
+  DATA: ls_env  LIKE LINE OF lt_env,
+        lv_incl LIKE LINE OF lt_incl.
+  FIELD-SYMBOLS <lv_flag> TYPE any.
+
+  " ALL OBJECT CATEGORIES OF THE ENVIRONMENT ANALYSIS
+  DO.
+    ASSIGN COMPONENT sy-index OF STRUCTURE ls_types TO <lv_flag>.
+    IF sy-subrc <> 0.
+      EXIT.
+    ENDIF.
+    <lv_flag> = 'X'.
+  ENDDO.
+
+  " START OBJECTS: SELECTED PROGRAMS/OBJECTS AND TRANSACTIONS
+  LOOP AT lt_tadir INTO ls_dir.
+    ls_work-type = ls_dir-object.
+    ls_work-name = ls_dir-obj_name.
+    APPEND ls_work TO lt_work.
+  ENDLOOP.
+  LOOP AT it_tstc INTO ls_tstc.
+    ls_work-type = 'TRAN'.
+    ls_work-name = ls_tstc-tcode.
+    APPEND ls_work TO lt_work.
+  ENDLOOP.
+
+  lv_idx = 1.
+  WHILE lv_idx <= lines( lt_work ).
+    READ TABLE lt_work INTO ls_work INDEX lv_idx.
+    lv_idx = lv_idx + 1.
+    INSERT ls_work INTO TABLE lt_done.
+    IF sy-subrc <> 0.
+      CONTINUE.                               " ALREADY ANALYSED
+    ENDIF.
+
+    PERFORM is_customer USING ls_work-name CHANGING lv_cust.
+    IF lv_cust = abap_false.
+      CONTINUE.                               " SAP STANDARD: NOT COPIED
+    ENDIF.
+    APPEND ls_work-name TO gt_all_names.
+
+    " ONLY OBJECTS WITH OWN CODE HAVE A FURTHER ENVIRONMENT
+    CASE ls_work-type.
+      WHEN 'PROG' OR 'INCL' OR 'REPS'.
+        lv_objtype = 'PROG'.
+      WHEN 'FUGR' OR 'FUNC' OR 'CLAS' OR 'INTF' OR 'TRAN' OR 'XSLT'.
+        lv_objtype = ls_work-type.
+      WHEN OTHERS.
+        CONTINUE.
+    ENDCASE.
+    lv_objname = ls_work-name.
+
+    " INCLUDES OF A PROGRAM (MODULE POOL / REPORT INCLUDES HAVE THEIR
+    " OWN DIRECTORY ENTRY AND MUST BE TRANSPORTED TOO)
+    IF lv_objtype = 'PROG'.
+      CLEAR lt_incl.
+      CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+        EXPORTING
+          program      = lv_objname
+        TABLES
+          includetab   = lt_incl
+        EXCEPTIONS
+          not_existent = 1
+          no_program   = 2
+          OTHERS       = 3.
+      LOOP AT lt_incl INTO lv_incl.
+        ls_work-type = 'PROG'.
+        ls_work-name = lv_incl.
+        APPEND ls_work TO lt_work.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR lt_env.
+    CALL FUNCTION 'REPOSITORY_ENVIRONMENT_ALL'
+      EXPORTING
+        obj_type          = lv_objtype
+        environment_types = ls_types
+        object_name       = lv_objname
+      TABLES
+        environment_tab   = lt_env
+      EXCEPTIONS
+        OTHERS            = 1.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+
+    LOOP AT lt_env INTO ls_env.
+      " THE OBJECT ITSELF
+      IF strlen( ls_env-object ) <= 40.
+        ls_work-type = ls_env-type.
+        ls_work-name = ls_env-object.
+        APPEND ls_work TO lt_work.
+      ENDIF.
+      " ITS ENCLOSING OBJECT (FUNCTION GROUP OF A FUNCTION MODULE, CLASS
+      " OF A METHOD, PROGRAM OF AN INCLUDE, TABLE OF A FIELD ...)
+      IF ls_env-encl_obj IS NOT INITIAL.
+        lv_encl = ls_env-encl_obj.
+        CLEAR ls_dir.
+        SELECT SINGLE * FROM tadir INTO ls_dir
+          WHERE pgmid = 'R3TR' AND obj_name = lv_encl.
+        IF sy-subrc = 0.
+          ls_work-type = ls_dir-object.
+        ELSE.
+          ls_work-type = ls_env-type.
+        ENDIF.
+        ls_work-name = ls_env-encl_obj.
+        APPEND ls_work TO lt_work.
+      ENDIF.
+    ENDLOOP.
+  ENDWHILE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form IS_CUSTOMER
+*&---------------------------------------------------------------------*
+*& Customer object name: Z*, Y*, /NAMESPACE/*, and the programs /
+*& includes generated for them (SAPMZ*, MZ*, SAPLZ*, LZ* ...)
+*&---------------------------------------------------------------------*
+FORM is_customer USING    iv_name TYPE csequence
+                 CHANGING cv_cust TYPE flag.
+  DATA lv_name TYPE char255.
+
+  lv_name = iv_name.
+  CONDENSE lv_name.
+  TRANSLATE lv_name TO UPPER CASE.
+  cv_cust = abap_false.
+  IF lv_name CP 'Z*'     OR lv_name CP 'Y*'     OR lv_name CP '/*'     OR
+     lv_name CP 'SAPMZ*' OR lv_name CP 'SAPMY*' OR lv_name CP 'MZ*'    OR
+     lv_name CP 'MY*'    OR lv_name CP 'SAPLZ*' OR lv_name CP 'SAPLY*' OR
+     lv_name CP 'LZ*'    OR lv_name CP 'LY*'    OR lv_name CP 'SAPDBZ*' OR
+     lv_name CP 'SAPDBY*'.
+    cv_cust = abap_true.
+  ENDIF.
+ENDFORM.

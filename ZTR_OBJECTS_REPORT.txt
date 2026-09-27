@@ -28,6 +28,7 @@
 *&  18. VCLS                 View cluster
 *&  19. SXCI                 Classic BAdI implementation
 *&  20. TABU                 Table contents (keys from E071K)
+*&  21. SUSO / AUTH          Authorization object / authorization field
 *&
 *& NOT COPIED (NO REMOTE WRITE-BACK API): SSFO, SFPF, ENHO/ENHS, SMIM
 *&
@@ -400,7 +401,8 @@ FORM check_local_status.
         OR 'TTYP' OR 'TTYD' OR 'VIEW' OR 'VIED' OR 'SHLP' OR 'SHLD' OR 'ENQU' OR 'ENQD'
         OR 'TYPE' OR 'TYPD' OR 'MSAG' OR 'MESS' OR 'PARA' OR 'NROB'
         OR 'INTF' OR 'INTD' OR 'CLAS' OR 'CLSD' OR 'CPUB' OR 'CPRO' OR 'CPRI' OR 'CINC' OR 'METH'
-        OR 'DYNP' OR 'CUAD' OR 'TOBJ' OR 'VCLS' OR 'SXCI' OR 'TABU'.
+        OR 'DYNP' OR 'CUAD' OR 'TOBJ' OR 'VCLS' OR 'SXCI' OR 'TABU'
+        OR 'SUSO' OR 'AUTH'.
         <fs_data>-support = 'SUPPORTED'.
       WHEN OTHERS.
         <fs_data>-support = 'NOT SUPPORTED'.
@@ -678,6 +680,19 @@ FORM process_selected.
   ENDLOOP.
 
 *--------------------------------------------------------------------*
+* 21. AUTHORIZATION FIELDS, THEN AUTHORIZATION OBJECTS
+*--------------------------------------------------------------------*
+  PERFORM collect_names USING 'AUTH' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_auth USING lv_name.
+  ENDLOOP.
+
+  PERFORM collect_names USING 'SUSO' CHANGING lt_names.
+  LOOP AT lt_names INTO lv_name.
+    PERFORM make_suso USING lv_name.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
 * 20. TABLE CONTENTS (KEYS OF THE SOURCE REQUEST IN E071K)
 *--------------------------------------------------------------------*
   PERFORM collect_names USING 'TABU' CHANGING lt_names.
@@ -702,6 +717,18 @@ FORM process_selected.
       WHEN 'SMIM'.
         lcl_util=>add_msg( iv_type = 'W'
                            iv_text = |{ wa_selected-object } { wa_selected-obj_name } - MIME OBJECTS: EXPORT/IMPORT VIA SE80 MIME REPOSITORY| ).
+      WHEN 'XSLT'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - TRANSFORMATION: COPY THE SOURCE IN STRANS| ).
+      WHEN 'SHI3'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - AREA MENU: RE-CREATE IN SE43| ).
+      WHEN 'WDYN' OR 'WDYA' OR 'WDCA' OR 'WDCC'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - WEB DYNPRO IS NOT COPIED BY THIS REPORT| ).
+      WHEN 'SOBJ'.
+        lcl_util=>add_msg( iv_type = 'W'
+                           iv_text = |{ wa_selected-object } { wa_selected-obj_name } - BUSINESS OBJECT: RE-CREATE IN SWO1| ).
       WHEN OTHERS.
         lcl_util=>add_msg( iv_type = 'W'
                            iv_text = |{ wa_selected-pgmid } { wa_selected-object } { wa_selected-obj_name } - OBJECT TYPE NOT SUPPORTED, SKIPPED| ).
@@ -3368,6 +3395,99 @@ FORM make_tabu USING iv_name TYPE csequence.
   IF lv_rows > 0.
     APPEND VALUE #( pgmid = 'R3TR' object = 'TABU' obj_name = lv_tab objfunc = 'K' ) TO gt_e071.
     lcl_util=>add_msg( iv_type = 'S' iv_text = |TABU { lv_tab } - { lv_rows } KEY(S) COPIED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_AUTH
+*&---------------------------------------------------------------------*
+*& 21a. AUTHORIZATION FIELD (SU20): DEFINITION + TEXTS
+*&---------------------------------------------------------------------*
+FORM make_auth USING iv_name TYPE csequence.
+  DATA: lv_field TYPE authx-fieldname,
+        lv_where TYPE string,
+        lv_ok    TYPE abap_bool,
+        lv_ok2   TYPE abap_bool.
+
+  lv_field = iv_name.
+  lv_where = |FIELDNAME = '{ lv_field }'|.
+  PERFORM copy_tables USING 'AUTHX' lv_where abap_false CHANGING lv_ok.
+  PERFORM copy_tables USING 'AUTHXT' lv_where abap_true CHANGING lv_ok2.
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'AUTH' iv_name = lv_field ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'AUTH' iv_name = lv_field ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |AUTH { lv_field } - COPIED| ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& FORM MAKE_SUSO
+*&---------------------------------------------------------------------*
+*& 21b. AUTHORIZATION OBJECT (SU21): DEFINITION (DB TABLE TOBJ - NOT THE
+*&      TRANSPORT TYPE TOBJ), TEXTS, PERMITTED ACTIVITIES, SU24 DEFAULTS.
+*&      CUSTOMER AUTHORIZATION FIELDS OF THE OBJECT ARE COPIED FIRST.
+*&---------------------------------------------------------------------*
+FORM make_suso USING iv_name TYPE csequence.
+  TYPES: BEGIN OF ty_tobj,
+           objct TYPE tobj-objct,
+           fiel1 TYPE tobj-fiel1,
+           fiel2 TYPE tobj-fiel2,
+           fiel3 TYPE tobj-fiel3,
+           fiel4 TYPE tobj-fiel4,
+           fiel5 TYPE tobj-fiel5,
+           fiel6 TYPE tobj-fiel6,
+           fiel7 TYPE tobj-fiel7,
+           fiel8 TYPE tobj-fiel8,
+           fiel9 TYPE tobj-fiel9,
+           fiel0 TYPE tobj-fiel0,
+         END OF ty_tobj.
+  DATA: lv_objct TYPE tobj-objct,
+        lt_tobj  TYPE STANDARD TABLE OF ty_tobj,
+        lv_where TYPE string,
+        lv_subrc TYPE sy-subrc,
+        lv_ok    TYPE abap_bool,
+        lv_ok2   TYPE abap_bool.
+  FIELD-SYMBOLS <lv_field> TYPE any.
+
+  lv_objct = iv_name.
+
+  " CUSTOMER FIELDS USED BY THE OBJECT MUST EXIST FIRST
+  lcl_util=>rfc_read(
+    EXPORTING iv_table  = 'TOBJ'
+              it_where  = VALUE #( ( text = |OBJCT = '{ lv_objct }'| ) )
+              it_fields = VALUE #( ( 'OBJCT' ) ( 'FIEL1' ) ( 'FIEL2' ) ( 'FIEL3' ) ( 'FIEL4' )
+                                   ( 'FIEL5' ) ( 'FIEL6' ) ( 'FIEL7' ) ( 'FIEL8' ) ( 'FIEL9' ) ( 'FIEL0' ) )
+    IMPORTING et_data   = lt_tobj
+              ev_subrc  = lv_subrc ).
+  READ TABLE lt_tobj INTO DATA(ls_tobj) INDEX 1.
+  IF sy-subrc <> 0.
+    lcl_util=>add_msg( iv_type = 'E' iv_text = |SUSO { lv_objct } - NOT FOUND IN SOURCE SYSTEM| ).
+    RETURN.
+  ENDIF.
+  DATA: lv_comp  TYPE i,
+        lv_afield TYPE authx-fieldname.
+  DO 10 TIMES.
+    lv_comp = sy-index + 1.                    " FIEL1 ... FIEL0
+    ASSIGN COMPONENT lv_comp OF STRUCTURE ls_tobj TO <lv_field>.
+    IF sy-subrc <> 0 OR <lv_field> IS INITIAL.
+      CONTINUE.
+    ENDIF.
+    lv_afield = <lv_field>.
+    IF lv_afield CP 'Z*' OR lv_afield CP 'Y*' OR lv_afield CP '/*'.
+      SELECT SINGLE fieldname FROM authx INTO @DATA(lv_exists) WHERE fieldname = @lv_afield.
+      IF sy-subrc <> 0.
+        PERFORM make_auth USING lv_afield.
+      ENDIF.
+    ENDIF.
+  ENDDO.
+
+  lv_where = |OBJCT = '{ lv_objct }'|.
+  PERFORM copy_tables USING 'TOBJ TOBJT TACTZ' lv_where abap_false CHANGING lv_ok.
+  PERFORM copy_tables USING 'TOBJVOR TOBJVORDAT TOBJVORFLG' lv_where abap_true CHANGING lv_ok2.
+  IF lv_ok = abap_true.
+    lcl_util=>create_tadir( iv_object = 'SUSO' iv_name = lv_objct ).
+    lcl_util=>add_tr_obj( iv_pgmid = 'R3TR' iv_object = 'SUSO' iv_name = lv_objct ).
+    lcl_util=>add_msg( iv_type = 'S' iv_text = |SUSO { lv_objct } - COPIED| ).
   ENDIF.
 ENDFORM.
 
