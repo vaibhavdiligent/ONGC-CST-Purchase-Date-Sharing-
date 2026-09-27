@@ -17,7 +17,7 @@ REPORT zatc_scan_program.
 
 *FUNCTION-POOL ZSCAN_COMPLEXITY.             "MESSAGE-ID ..
 TYPE-POOLS seop.
-DATA abap_true TYPE flag VALUE 'X'.
+TYPE-POOLS abap.      " ABAP_TRUE / ABAP_FALSE
 DATA it_includes TYPE seop_methods_w_include.
 DATA it_clskey TYPE seoclskey.
 
@@ -1671,11 +1671,25 @@ START-OF-SELECTION.
 
 
 
-    SELECT * FROM tadir
-      INTO TABLE lt_tadir1
-      FOR ALL ENTRIES IN gt_final
-      WHERE obj_name = gt_final-progname(40).
-
+    " OBJECT DIRECTORY ENTRIES OF THE LISTED OBJECTS (TYPED HELPER TABLE:
+    " NO OFFSET/LENGTH ON A FOR ALL ENTRIES COMPONENT, AND NEVER EMPTY)
+    DATA lt_names TYPE STANDARD TABLE OF sobj_name.
+    DATA lv_sname TYPE sobj_name.
+    REFRESH lt_names.
+    LOOP AT gt_final INTO gs_final.
+      IF strlen( gs_final-progname ) <= 40.
+        lv_sname = gs_final-progname.
+        APPEND lv_sname TO lt_names.
+      ENDIF.
+    ENDLOOP.
+    SORT lt_names.
+    DELETE ADJACENT DUPLICATES FROM lt_names.
+    IF lt_names[] IS NOT INITIAL.
+      SELECT * FROM tadir
+        INTO TABLE lt_tadir1
+        FOR ALL ENTRIES IN lt_names
+        WHERE obj_name = lt_names-table_line.
+    ENDIF.
 
     IF gt_final[] IS NOT INITIAL.
       DATA gt_e070 TYPE TABLE OF e070.
@@ -3275,10 +3289,19 @@ FORM add_if_missing USING iv_name TYPE char255.
     lv_func = iv_name.
     SELECT SINGLE * FROM enlfdir INTO ls_enlf WHERE funcname = lv_func.
     IF sy-subrc = 0.
+      CLEAR: lt_req, lv_req.
+      lv_obj = iv_name.
+      SELECT trkorr FROM e071 INTO TABLE lt_req
+        WHERE pgmid    = 'LIMU'
+          AND object   = 'FUNC'
+          AND obj_name = lv_obj.
+      SORT lt_req DESCENDING.
+      READ TABLE lt_req INTO lv_req INDEX 1.
       CLEAR gs_final.
       gs_final-main_program = 'DEPENDENCY'.
       gs_final-progname     = iv_name.
       gs_final-type         = 'FUNC'.
+      gs_final-request      = lv_req.
       APPEND gs_final TO gt_final.
       PERFORM add_cand USING ls_enlf-area.
     ENDIF.
@@ -3644,7 +3667,7 @@ FORM analyse_environment.
          END OF ty_work.
   DATA: lt_work    TYPE STANDARD TABLE OF ty_work,
         ls_work    TYPE ty_work,
-        lt_done    TYPE HASHED TABLE OF ty_work WITH UNIQUE KEY type name,
+        lt_done    TYPE HASHED TABLE OF sobj_name WITH UNIQUE KEY table_line,
         lt_env     TYPE senvi_tab,
         ls_types   TYPE envi_types,
         lt_incl    TYPE programt,
@@ -3685,7 +3708,7 @@ FORM analyse_environment.
   WHILE lv_idx <= lines( lt_work ).
     READ TABLE lt_work INTO ls_work INDEX lv_idx.
     lv_idx = lv_idx + 1.
-    INSERT ls_work INTO TABLE lt_done.
+    INSERT ls_work-name INTO TABLE lt_done.
     IF sy-subrc <> 0.
       CONTINUE.                               " ALREADY ANALYSED
     ENDIF.
