@@ -3630,6 +3630,7 @@ FORM analyse_environment.
         lv_objtype TYPE euobj-id,
         lv_objname TYPE tadir-obj_name,
         lv_encl    TYPE tadir-obj_name.
+  DATA lv_funcname TYPE tfdir-funcname.
   DATA: ls_env  LIKE LINE OF lt_env,
         lv_incl LIKE LINE OF lt_incl.
   FIELD-SYMBOLS <lv_flag> TYPE any.
@@ -3670,16 +3671,33 @@ FORM analyse_environment.
     ENDIF.
     APPEND ls_work-name TO gt_all_names.
 
-    " ONLY OBJECTS WITH OWN CODE HAVE A FURTHER ENVIRONMENT
-    CASE ls_work-type.
-      WHEN 'PROG' OR 'INCL' OR 'REPS'.
-        lv_objtype = 'PROG'.
-      WHEN 'FUGR' OR 'FUNC' OR 'CLAS' OR 'INTF' OR 'TRAN' OR 'XSLT'.
-        lv_objtype = ls_work-type.
-      WHEN OTHERS.
-        CONTINUE.
-    ENDCASE.
+    " ONLY OBJECTS WITH OWN CODE HAVE A FURTHER ENVIRONMENT.
+    " THE REAL TYPE IS TAKEN FROM THE OBJECT DIRECTORY / FUNCTION
+    " DIRECTORY, SO IT DOES NOT DEPEND ON THE LABEL THE ANALYSIS USES
+    " (E.G. A CLASS REPORTED AS CLIF/OCLS/METH IS STILL FOLLOWED).
     lv_objname = ls_work-name.
+    CLEAR: lv_objtype, ls_dir.
+    SELECT SINGLE * FROM tadir INTO ls_dir
+      WHERE pgmid    = 'R3TR'
+        AND obj_name = lv_objname
+        AND object   IN ('PROG','FUGR','CLAS','INTF','TRAN','XSLT').
+    IF sy-subrc = 0.
+      lv_objtype = ls_dir-object.
+    ELSE.
+      SELECT SINGLE funcname FROM tfdir INTO lv_funcname
+        WHERE funcname = lv_objname.
+      IF sy-subrc = 0.
+        lv_objtype = 'FUNC'.
+      ELSE.
+        CASE ls_work-type.
+          WHEN 'PROG' OR 'INCL' OR 'REPS'.
+            lv_objtype = 'PROG'.        " E.G. FUNCTION GROUP INCLUDE LZ...
+        ENDCASE.
+      ENDIF.
+    ENDIF.
+    IF lv_objtype IS INITIAL.
+      CONTINUE.                         " DDIC, MESSAGES ... : NO CODE
+    ENDIF.
 
     " INCLUDES OF A PROGRAM (MODULE POOL / REPORT INCLUDES HAVE THEIR
     " OWN DIRECTORY ENTRY AND MUST BE TRANSPORTED TOO)
