@@ -1,0 +1,3804 @@
+*&---------------------------------------------------------------------*
+*& REPORT ZATC_SCAN_PROGRAM
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zatc_scan_program.
+
+
+
+
+*FUNCTION-POOL ZSCAN_COMPLEXITY.             "MESSAGE-ID ..
+TYPE-POOLS seop.
+DATA abap_true TYPE flag VALUE 'X'.
+DATA it_includes TYPE seop_methods_w_include.
+DATA it_clskey TYPE seoclskey.
+
+TYPES : BEGIN OF ty_final_m,
+          main_program TYPE char255,
+          progname     TYPE char255,
+          type         TYPE char50,
+          request      TYPE trkorr,
+          as4user      TYPE tr_as4user,
+          as4date      TYPE as4date,
+          as4time      TYPE as4time,
+          devclass     TYPE devclass,
+
+        END OF ty_final_m.
+DATA gt_final TYPE TABLE OF ty_final_m.
+DATA gt_final_l TYPE TABLE OF ty_final_m.
+DATA gs_final TYPE ty_final_m.
+
+
+TYPES : BEGIN OF ty_final,
+          priority      TYPE i,
+          check_title   TYPE char255,
+          check_message TYPE char255,
+          object_name   TYPE sobj_name,
+          object_type   TYPE trobjtype,
+*          MAIN          TYPE SOBJ_NAME,
+          ref_obj_type  TYPE char255,
+          ref_object    TYPE char255,
+        END OF ty_final.
+
+
+
+TYPES : BEGIN OF ty_scan,
+          priority     TYPE i,
+          srch_tem     TYPE text255,
+          look         TYPE char255,
+          description  TYPE char255,
+          message      TYPE char255,
+          ref_obj_type TYPE char255,
+*  PAKAGE TYPE
+        END OF ty_scan.
+
+TYPES : BEGIN OF ty_zalv_scna_display,
+          text1   TYPE text255,
+          repname TYPE  repid,
+          dynnr   TYPE  char4, "syst_dynnr,
+          versno  TYPE versno,
+          line_no TYPE  rsrow,
+          text    TYPE text255,
+          hit     TYPE  xfeld,
+          type    TYPE char50,
+        END OF ty_zalv_scna_display.
+
+DATA it_output TYPE TABLE OF ty_zalv_scna_display.
+DATA it_output_detail TYPE TABLE OF ty_zalv_scna_display.
+DATA it_output_detail1 TYPE TABLE OF ty_zalv_scna_display.
+DATA wa_output TYPE  ty_zalv_scna_display.
+DATA wa_output_detail TYPE  ty_zalv_scna_display.
+
+DATA it_scan TYPE TABLE OF ty_scan.
+DATA wa_scan TYPE ty_scan.
+DATA  devclass1 TYPE packrange.
+
+
+TYPES : BEGIN OF ty_obj,
+          srch_tem TYPE text255,
+          repname  TYPE  repid,
+          text     TYPE text255,
+        END OF ty_obj.
+DATA it_obj TYPE TABLE OF ty_obj.
+DATA wa_obj TYPE ty_obj.
+DATA gt_obj TYPE TABLE OF ty_obj.
+DATA gs_obj TYPE ty_obj.
+DATA it_obj_temp TYPE TABLE OF ty_obj.
+DATA it_obj_submit TYPE TABLE OF ty_obj.
+
+
+TYPE-POOLS:
+  slis,
+  sscr.
+
+TABLES:
+  seoclasstx,
+  tadir,
+  tlibt,
+  d020s,
+  trdir,
+  tstc.
+
+
+DATA: BEGIN OF gs_alv_item,
+        repname    TYPE sy-repid,
+        dynnr      TYPE sy-dynnr,
+        versno     TYPE vrsd-versno,
+        line_no    TYPE rsrow,
+        text       TYPE text255,
+        hit        TYPE xfeld,
+        cell_color TYPE lvc_t_scol,
+
+      END OF gs_alv_item,
+
+      gt_alv_item LIKE STANDARD TABLE OF gs_alv_item.
+
+TYPES: BEGIN OF ty_typ1,
+         obj_name TYPE sobj_name,
+         srch_str TYPE text50,
+         count    TYPE i,
+       END OF ty_typ1,
+       BEGIN OF ty_main,
+         obj_name TYPE sobj_name,
+         object   TYPE trobjtype,
+         srch_str TYPE text50,
+         count    TYPE i,
+         cmplx    TYPE char10,
+       END OF ty_main,
+       BEGIN OF ty_tab,
+         name LIKE trdir-name,
+       END OF ty_tab,
+       BEGIN OF ty_output,
+         repname TYPE  repid,
+         text    TYPE  text255,
+       END OF ty_output,
+       BEGIN OF ty_dtl,
+         main_prog TYPE sobj_name,
+         obj_name  TYPE sobj_name,
+       END OF ty_dtl.
+
+DATA: l_number_of_mainprograms LIKE sy-index,
+      it_tab                   TYPE TABLE OF ty_tab.
+DATA : "REPNAME1  TYPE RSB4H_R_T_REPNAME,
+  wa_typ1 TYPE ty_typ1,
+  wa_typ3 TYPE ty_typ1,
+  wa_main TYPE ty_main,
+  wa_dtl  TYPE ty_dtl,
+  it_dtl  TYPE TABLE OF ty_dtl,
+  it_typ1 TYPE TABLE OF ty_typ1,
+  it_typ2 TYPE TABLE OF ty_typ1,
+  it_typ3 TYPE TABLE OF ty_typ1,
+  it_main TYPE TABLE OF ty_main.
+*       DEVCLASS1 TYPE PACKRANGE.
+DATA:lv_repid    TYPE sy-repid,
+     lv_srch_str TYPE text50,
+     lv_cnt      TYPE i,
+     lv_procnt   TYPE i,
+     lv_repname  TYPE snap_range_program_it. "rsb4h_r_t_repname.
+DATA  lv_sstring TYPE text255.
+DATA: "IT_OUTPUT TYPE TABLE OF ZALV_SCNA_DISPLAY,
+      gt_output TYPE TABLE OF ty_output.
+*      WA_OUTPUT TYPE TY_OUTPUT.
+*TABLES:
+**  SEOCLASSTX,
+**  TADIR,
+**  TLIBT,
+**  D020S,
+*  TRDIR.
+
+CLASS:
+  lcl_source_scan DEFINITION DEFERRED.
+
+DATA:
+  lo_sscan TYPE REF TO lcl_source_scan,
+*  LV_SSTRING TYPE TEXT255,
+  lv_appl  TYPE trdir-appl.
+
+*SELECTION-SCREEN  BEGIN OF BLOCK: A05 WITH FRAME TITLE A05.
+*RANGES
+RANGES sstring     FOR lv_sstring ."NO INTERVALS MODIF ID DSP.
+DATA        p_regex     TYPE xfeld ."AS CHECKBOX MODIF ID DSP.
+*SELECTION-SCREEN: END OF BLOCK A05,
+*BEGIN OF BLOCK A10 WITH FRAME TITLE A10.
+RANGES :   repname  FOR trdir-name,
+                  dynnr    FOR d020s-dnum,
+                  subc     FOR trdir-subc,
+                  appl     FOR lv_appl,
+                  cnam     FOR trdir-cnam ,"MATCHCODE OBJECT USER_ADDR,
+                  unam     FOR trdir-unam ."MATCHCODE OBJECT USER_ADDR.
+*SELECTION-SCREEN: END OF BLOCK A10,
+*BEGIN OF BLOCK A11 WITH FRAME TITLE A11.
+RANGES    devclass FOR tadir-devclass.
+DATA subdevc TYPE xfeld ."AS CHECKBOX DEFAULT ' '.
+*SELECTION-SCREEN: END OF BLOCK A11,
+*BEGIN OF BLOCK A12 WITH FRAME TITLE A12.
+RANGES:   funcgrp  FOR tlibt-area.
+*SELECTION-SCREEN: END OF BLOCK A12,
+*BEGIN OF BLOCK A13 WITH FRAME TITLE A13.
+RANGES:   p_class  FOR seoclasstx-clsname.
+*SELECTION-SCREEN: END OF BLOCK A13,
+*BEGIN OF BLOCK A20 WITH FRAME TITLE A20.
+DATA: plusminu(2) TYPE n VALUE 2,
+      inclu       TYPE xfeld VALUE 'X', "AS CHECKBOX DEFAULT 'X',
+      modiass     TYPE xfeld , "AS CHECKBOX USER-COMMAND DUMMY,
+      comment     TYPE xfeld . "AS CHECKBOX.
+*SELECTION-SCREEN: END OF BLOCK A20,
+*BEGIN OF BLOCK A30 WITH FRAME TITLE A30.
+DATA: rb_code TYPE c VALUE 'X' , "RADIOBUTTON GROUP R10,
+      rb_dyn  TYPE c , "RADIOBUTTON GROUP R10,
+      rb_all  TYPE c , "RADIOBUTTON GROUP R10,
+      p_vers  TYPE xfeld. " AS CHECKBOX.
+*SELECTION-SCREEN: END OF BLOCK A30.
+*DATA gt_final TYPE TABLE OF ty_final.
+*DATA wa_final TYPE ty_final.
+
+DATA gt_func TYPE TABLE OF tfdir.
+DATA gt_class TYPE TABLE OF char255.
+DATA gt_type TYPE TABLE OF char255."tfdir.
+DATA gt_like TYPE TABLE OF char255.
+DATA gt_from TYPE TABLE OF char255.
+DATA gt_tables TYPE TABLE OF char255.
+
+TYPES:
+  BEGIN OF ty_dynpro,
+    repname LIKE d020s-prog,
+    dynnr   LIKE d020s-dnum,
+  END OF ty_dynpro.
+
+TYPES:
+  BEGIN OF ty_ls_objname,
+    report TYPE sy-repid,
+    dynnr  TYPE sy-dynnr,
+  END OF ty_ls_objname.
+
+DATA:
+  go_alv        TYPE REF TO cl_salv_hierseq_table,
+  gv_hit_count  TYPE i,
+  gv_sstring    TYPE string,
+  gv_dynp_found TYPE xfeld,
+  gv_vers_found TYPE xfeld,
+  gt_dynpro     TYPE STANDARD TABLE OF ty_dynpro,
+  gt_object     TYPE STANDARD TABLE OF tadir-obj_name,
+  gt_vrsd       TYPE HASHED TABLE OF vrsd
+                  WITH UNIQUE KEY objname versno,
+
+  BEGIN OF gs_alv_header,
+    repname TYPE tadir-obj_name,
+    dynnr   TYPE sy-dynnr,
+    expand  TYPE xfeld,
+    versno  TYPE vrsd-versno,
+  END OF gs_alv_header,
+
+  gt_alv_header LIKE STANDARD TABLE OF gs_alv_header.
+
+*    BEGIN OF gs_alv_item,
+*        repname    TYPE sy-repid,
+*        dynnr      TYPE sy-dynnr,
+*        versno     TYPE vrsd-versno,
+*        line_no    TYPE rsrow,
+*        text       TYPE text255,
+*        hit        TYPE xfeld,
+*        cell_color TYPE lvc_t_scol,
+*     END OF gs_alv_item,
+
+*     gt_alv_item LIKE STANDARD TABLE OF gs_alv_item.
+
+CONSTANTS:
+  gc_x TYPE xfeld VALUE 'X'.
+
+
+*TABLES : D020S.
+
+* INCLUDE LZSCAN_COMPLEXITYD...              " LOCAL CLASS DEFINITION
+
+
+*----------------------------------------------------------------------*
+*       CLASS lcx_scan_exceptions DEFINITION
+*----------------------------------------------------------------------*
+*       Exceptions for source scanning
+*----------------------------------------------------------------------*
+CLASS lcx_scan_exceptions DEFINITION INHERITING FROM cx_static_check FINAL.
+ENDCLASS.                    "lcx_scan_exceptions DEFINITION
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_source_scan DEFINITION
+*----------------------------------------------------------------------*
+*       ABAP source scanner
+*----------------------------------------------------------------------*
+CLASS lcl_source_scan DEFINITION FINAL.
+  PUBLIC SECTION.
+    METHODS:
+      constructor,
+
+      f4_class
+        CHANGING
+          cv_class_name TYPE clike,
+
+      f4_function_group
+        IMPORTING
+          iv_group_name TYPE clike,
+
+      f4_repname
+        CHANGING
+          cv_repname TYPE clike,
+
+      pbo,
+
+      start.
+
+  PROTECTED SECTION.
+
+
+    METHODS:
+      add_to_hitlist
+        IMPORTING
+          iv_report      TYPE clike
+          iv_dynpro      TYPE clike OPTIONAL
+          iv_source_line TYPE clike
+          iv_tabix       TYPE sy-tabix
+          iv_hit         TYPE xfeld
+          iv_versno      TYPE vrsd-versno,
+
+      call_abap_editor
+        IMPORTING
+          is_alv_item LIKE gs_alv_item,
+
+      call_screen_painter
+        IMPORTING
+          is_alv_item LIKE gs_alv_item,
+
+      display,
+
+      display_abap_version
+        IMPORTING
+          is_alv_item LIKE gs_alv_item,
+
+      display_screen_painter_version
+        IMPORTING
+          is_alv_item LIKE gs_alv_item,
+
+      display_version_management
+        IMPORTING
+          is_alv_header LIKE gs_alv_header,
+
+      get_alv_instance,
+      get_dynpro_flow_logic
+        IMPORTING
+                  iv_report       TYPE clike
+                  iv_dynpro       TYPE clike
+        RETURNING VALUE(rt_dflow) TYPE abaptxt255_tab,
+
+      get_hit_set
+        IMPORTING
+          iv_report TYPE clike
+          iv_dynpro TYPE clike OPTIONAL
+          it_abap   TYPE abaptxt255_tab
+          iv_tabix  TYPE sy-tabix
+          iv_versno TYPE vrsd-versno,
+
+      get_version_numbers
+        IMPORTING
+                  iv_report      TYPE clike
+                  iv_dynpro      TYPE clike OPTIONAL
+        RETURNING VALUE(rt_vrsd) LIKE gt_vrsd,
+
+      get_dynpros,
+      get_source_names,
+
+      get_source_by_version
+        IMPORTING
+                  iv_report      TYPE clike
+                  iv_dynpro      TYPE clike OPTIONAL
+                  iv_versno      TYPE vrsd-versno
+        RETURNING VALUE(rt_abap) TYPE abaptxt255_tab,
+
+      get_report_names,
+      get_function_names,
+      get_class_names,
+      get_interface_names,
+      get_includes,
+
+      search_abap_source   RAISING lcx_scan_exceptions,
+      search_dynpro_source RAISING lcx_scan_exceptions,
+
+      search_source
+        IMPORTING
+                  it_source TYPE abaptxt255_tab
+                  iv_report TYPE clike
+                  iv_dynpro TYPE clike OPTIONAL
+        RAISING   lcx_scan_exceptions,
+
+      set_alv_attributes,
+
+      on_link_click
+        FOR EVENT link_click OF cl_salv_events_hierseq
+        IMPORTING
+          sender
+          level
+          row
+          column.
+
+ENDCLASS.                    "lcl_source_scan DEFINITION
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_source_scan IMPLEMENTATION
+*----------------------------------------------------------------------*
+*       ABAP source scanner
+*----------------------------------------------------------------------*
+CLASS lcl_source_scan IMPLEMENTATION.
+  METHOD display_screen_painter_version.
+    DATA:
+      lv_object_name TYPE versobjnam,
+      ls_infolna     TYPE vrsinfolna,
+      ls_infolnb     TYPE vrsinfolnb,
+      ls_vrsd        LIKE LINE OF gt_vrsd,
+      ls_object_name TYPE ty_ls_objname.
+
+    ls_object_name-report = is_alv_item-repname.
+    ls_object_name-dynnr  = is_alv_item-dynnr.
+    lv_object_name        = ls_object_name.
+
+    READ TABLE gt_vrsd WITH TABLE KEY objname = lv_object_name
+                                      versno  = is_alv_item-versno
+                                      INTO ls_vrsd.
+
+    CHECK sy-subrc IS INITIAL.
+
+    ls_infolna = lv_object_name.
+    MOVE-CORRESPONDING ls_vrsd TO ls_infolnb.
+
+    CALL FUNCTION 'RS_SCRP_SHOW_VERS'
+      EXPORTING
+        infolna    = ls_infolna
+        infolnb    = ls_infolnb
+        objname    = lv_object_name
+        versno     = is_alv_item-versno
+      EXCEPTIONS
+        no_version = 1
+        cancelled  = 2
+        OTHERS     = 3.
+
+  ENDMETHOD.                    "display_screen_painter_version
+
+  METHOD display_abap_version.
+    DATA:
+      lt_trdir       TYPE STANDARD TABLE OF trdir,
+      lv_object_name TYPE versobjnam,
+      lv_title       TYPE sy-title,
+      lt_abap        TYPE abaptxt255_tab.
+
+    lv_object_name = is_alv_item-repname.
+
+*   Display report version
+    CALL FUNCTION 'SVRS_GET_REPS_FROM_OBJECT'
+      EXPORTING
+        object_name                  = lv_object_name
+        object_type                  = 'REPS'
+        versno                       = is_alv_item-versno
+        iv_no_release_transformation = gc_x
+      TABLES
+        repos_tab                    = lt_abap
+        trdir_tab                    = lt_trdir
+      EXCEPTIONS
+        no_version                   = 1
+        OTHERS                       = 2.
+
+    CHECK sy-subrc IS INITIAL.
+
+    CONCATENATE 'Programm:'(004)
+                is_alv_item-repname
+                'Version'(005)
+                 is_alv_item-versno
+                 INTO lv_title SEPARATED BY space.
+
+    EDITOR-CALL FOR lt_abap TITLE lv_title DISPLAY-MODE.
+
+  ENDMETHOD.                    "display_abap_version
+
+  METHOD call_screen_painter.
+    CALL FUNCTION 'RS_SCRP'
+      EXPORTING
+        abl_line       = is_alv_item-line_no
+        dynnr          = is_alv_item-dynnr
+        progname       = is_alv_item-repname
+        wanted_mode    = 'SHOW'
+      EXCEPTIONS
+        already_exists = 1
+        not_found      = 2
+        not_executed   = 3
+        OTHERS         = 4.
+
+  ENDMETHOD.                    "call_screen_painter
+
+  METHOD call_abap_editor.
+    CALL FUNCTION 'EDITOR_PROGRAM'
+      EXPORTING
+        appid   = 'PG'
+        display = gc_x
+        program = is_alv_item-repname
+        line    = is_alv_item-line_no
+        topline = is_alv_item-line_no
+      EXCEPTIONS
+        OTHERS  = 1.
+
+  ENDMETHOD.                    "call_abap_editor
+
+  METHOD display_version_management.
+    IF is_alv_header-dynnr IS INITIAL.
+*     call version management for programs
+      CALL FUNCTION 'RS_PROGRAM_VERSIONS'
+        EXPORTING
+          progname         = is_alv_header-repname
+        EXCEPTIONS
+          function_include = 1
+          OTHERS           = 2.
+    ELSE.
+      CALL FUNCTION 'RS_SCRP_VERSION'
+        EXPORTING
+          dynnr     = is_alv_header-dynnr
+          progname  = is_alv_header-repname
+          no_update = gc_x.
+    ENDIF.
+  ENDMETHOD.                    "display_version_management
+
+  METHOD constructor.
+    DATA:
+      ls_restrict    TYPE sscr_restrict,
+      ls_opt_list    TYPE sscr_opt_list,
+      ls_association TYPE sscr_ass.
+
+    ls_opt_list-name       = 'RESTRICT'.
+    ls_opt_list-options-cp = gc_x.
+    ls_opt_list-options-eq = gc_x.
+
+    APPEND ls_opt_list TO ls_restrict-opt_list_tab.
+
+    ls_association-kind    = 'S'.
+    ls_association-name    = 'SSTRING'.
+    ls_association-sg_main = 'I'.
+    ls_association-op_main = ls_association-op_addy = 'RESTRICT'.
+
+    APPEND ls_association TO ls_restrict-ass_tab.
+
+    CALL FUNCTION 'SELECT_OPTIONS_RESTRICT'
+      EXPORTING
+        program                = sy-repid
+        restriction            = ls_restrict
+      EXCEPTIONS
+        too_late               = 1
+        repeated               = 2
+        selopt_without_options = 3
+        selopt_without_signs   = 4
+        invalid_sign           = 5
+        empty_option_list      = 6
+        invalid_kind           = 7
+        repeated_kind_a        = 8
+        OTHERS                 = 9.
+
+  ENDMETHOD.                    "constructor
+
+  METHOD get_dynpro_flow_logic.
+    DATA: ls_dhead  TYPE d020s,
+          lt_dfield TYPE STANDARD TABLE OF d021s,
+          lt_dflow  TYPE STANDARD TABLE OF d022s,
+          lt_dmatch TYPE STANDARD TABLE OF d023s,
+
+          BEGIN OF ls_dynp_id,
+            prog TYPE d020s-prog,
+            dnum TYPE d020s-dnum,
+          END OF ls_dynp_id.
+
+    ls_dynp_id-prog = iv_report.
+    ls_dynp_id-dnum = iv_dynpro.
+
+    IMPORT DYNPRO ls_dhead lt_dfield lt_dflow lt_dmatch ID ls_dynp_id.
+
+    rt_dflow = lt_dflow.
+  ENDMETHOD.                    "get_dynpro_flow_logic
+
+  METHOD on_link_click.
+    DATA:
+      ls_alv_header LIKE LINE OF gt_alv_header,
+      ls_alv_item   LIKE LINE OF gt_alv_item.
+
+    CASE level.
+      WHEN '1'.
+        READ TABLE gt_alv_header INDEX row INTO ls_alv_header.
+        CHECK sy-subrc IS INITIAL.
+
+        display_version_management( ls_alv_header ).
+
+      WHEN '2'.
+        READ TABLE gt_alv_item INDEX row INTO ls_alv_item.
+        CHECK sy-subrc IS INITIAL.
+
+        IF ls_alv_item-dynnr IS INITIAL.
+          IF ls_alv_item-versno IS INITIAL.
+            call_abap_editor( ls_alv_item ).
+          ELSE.
+            display_abap_version( ls_alv_item ).
+          ENDIF.
+
+          SET PARAMETER ID 'RID' FIELD sy-repid.
+        ELSE.
+*         Call screen painter
+          IF ls_alv_item-versno IS INITIAL.
+            call_screen_painter( ls_alv_item ).
+          ELSE.
+            display_screen_painter_version( ls_alv_item ).
+          ENDIF.
+        ENDIF.
+    ENDCASE.
+  ENDMETHOD.                    "on_link_click
+
+  METHOD set_alv_attributes.
+    DATA:
+      lo_layout    TYPE REF TO cl_salv_layout,
+      lo_events    TYPE REF TO cl_salv_events_hierseq,
+      lo_functions TYPE REF TO cl_salv_functions_list,
+      lo_level     TYPE REF TO cl_salv_hierseq_level,
+      lo_column    TYPE REF TO cl_salv_column_hierseq,
+      lo_columns   TYPE REF TO cl_salv_columns_hierseq,
+      lt_columns   TYPE salv_t_column_ref,
+      ls_columns   LIKE LINE OF lt_columns,
+      lo_settings  TYPE REF TO cl_salv_display_settings,
+      lv_title     TYPE lvc_title,
+      lv_hits      TYPE lvc_title,
+      ls_color     TYPE lvc_s_colo,
+      ls_layout    TYPE salv_s_layout_key,
+      lt_functions TYPE salv_t_ui_func.
+
+*   Layout
+    ls_layout-report = sy-repid.
+    ls_layout-handle = 'SCAN'.
+
+    lo_layout = go_alv->get_layout( ).
+    lo_layout->set_key( ls_layout ).
+    lo_layout->set_save_restriction( ).
+
+*   Function keys/buttons
+    lo_functions = go_alv->get_functions( ).
+    lo_functions->set_all( gc_x ).
+
+*   exclude the following functions (column paging buttons)
+    lt_functions = lo_functions->get_functions( ).
+
+    TRY.
+*    lo_functions->remove_function( '&CRB' ).
+*    lo_functions->remove_function( '&CRL' ).
+*    lo_functions->remove_function( '&CRR' ).
+*    lo_functions->remove_function( '&CRE' ).
+      CATCH cx_salv_wrong_call
+            cx_salv_not_found.
+    ENDTRY.
+*   Display settings
+    lo_settings = go_alv->get_display_settings( ).
+
+*   Title
+    lv_hits = gv_hit_count.
+    SHIFT lv_hits LEFT DELETING LEADING space.
+
+    CONCATENATE lv_hits
+                'Treffer'(001)
+                INTO lv_hits SEPARATED BY space.
+
+    lv_title = 'Source Scan f#r String:'(002).
+
+    CONCATENATE lv_title
+                gv_sstring
+                INTO lv_title SEPARATED BY space.
+
+    CONCATENATE lv_title
+                lv_hits
+                INTO lv_title SEPARATED BY ' - '.
+
+    lo_settings->set_list_header( lv_title ).
+
+*   Event handling
+    lo_events = go_alv->get_event( ).
+    SET HANDLER on_link_click FOR lo_events.
+
+*   Field catalog
+    TRY.
+*       Field catalog/columns - header table
+        lo_columns  = go_alv->get_columns( '1' ).
+        lt_columns = lo_columns->get( ).
+
+        TRY.
+            lo_columns->set_expand_column( 'EXPAND' ).
+
+            lo_level = go_alv->get_level( '1' ).
+            lo_level->set_items_expanded( gc_x ).
+
+          CATCH cx_salv_data_error.
+        ENDTRY.
+
+        LOOP AT lt_columns INTO ls_columns.
+          CASE ls_columns-columnname.
+            WHEN 'EXPAND'.
+              ls_columns-r_column->set_technical( ).
+
+            WHEN 'DYNNR'.
+              IF gv_dynp_found IS INITIAL.
+                ls_columns-r_column->set_technical( ).
+              ELSE.
+                ls_columns-r_column->set_output_length( '15' ).
+              ENDIF.
+
+            WHEN 'VERSNO'.
+              IF gv_vers_found IS INITIAL.
+                ls_columns-r_column->set_technical( ).
+              ELSE.
+                ls_columns-r_column->set_leading_zero( gc_x ).
+                ls_columns-r_column->set_output_length( '15' ).
+                TRY.
+                    lo_column ?= ls_columns-r_column.
+                    lo_column->set_cell_type( if_salv_c_cell_type=>hotspot ).
+                  CATCH cx_sy_move_cast_error.
+                ENDTRY.
+              ENDIF.
+          ENDCASE.
+        ENDLOOP.
+
+*       Field catalog/columns - item table
+        lo_columns = go_alv->get_columns( '2' ).
+
+        TRY.
+            lo_columns->set_color_column( 'CELL_COLOR' ).
+          CATCH cx_salv_data_error.
+        ENDTRY.
+
+        lt_columns = lo_columns->get( ).
+
+        LOOP AT lt_columns INTO ls_columns.
+          CASE ls_columns-columnname.
+            WHEN 'REPNAME'.
+              ls_columns-r_column->set_technical( ).
+
+            WHEN 'DYNNR'.
+              ls_columns-r_column->set_technical( ).
+
+            WHEN 'VERSNO'.
+              ls_columns-r_column->set_technical( ).
+
+            WHEN 'CELL_COLOR'.
+              ls_columns-r_column->set_technical( ).
+
+            WHEN 'HIT'.
+              ls_columns-r_column->set_technical( ).
+
+            WHEN 'LINE_NO'.
+              ls_color-col = '4'.
+              TRY.
+                  lo_column ?= ls_columns-r_column.
+                  lo_column->set_color( ls_color ).
+                  lo_column->set_leading_zero( gc_x ).
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+
+            WHEN 'TEXT'.
+              TRY.
+                  lo_column ?= ls_columns-r_column.
+                  lo_column->set_cell_type( if_salv_c_cell_type=>hotspot ).
+                CATCH cx_sy_move_cast_error.
+              ENDTRY.
+
+          ENDCASE.
+        ENDLOOP.
+      CATCH cx_salv_not_found.
+    ENDTRY.
+
+  ENDMETHOD.                    "set_alv_attributes
+
+  METHOD get_alv_instance.
+    DATA:
+      lt_alv_bind TYPE salv_t_hierseq_binding,
+      ls_alv_bind LIKE LINE OF lt_alv_bind.
+
+    ls_alv_bind-master = ls_alv_bind-slave = 'REPNAME'.
+    APPEND ls_alv_bind TO lt_alv_bind.
+
+    ls_alv_bind-master = ls_alv_bind-slave = 'DYNNR'.
+    APPEND ls_alv_bind TO lt_alv_bind.
+
+    ls_alv_bind-master = ls_alv_bind-slave = 'VERSNO'.
+    APPEND ls_alv_bind TO lt_alv_bind.
+
+    TRY.
+        CALL METHOD cl_salv_hierseq_table=>factory
+          EXPORTING
+            t_binding_level1_level2 = lt_alv_bind
+          IMPORTING
+            r_hierseq               = go_alv
+          CHANGING
+            t_table_level1          = gt_alv_header
+            t_table_level2          = gt_alv_item.
+
+      CATCH cx_salv_data_error.
+      CATCH cx_salv_not_found.
+    ENDTRY.
+
+  ENDMETHOD.                    "get_alv_instance
+
+  METHOD f4_repname.
+    CALL FUNCTION 'REPOSITORY_INFO_SYSTEM_F4'
+      EXPORTING
+        object_type          = 'PROG'
+        object_name          = cv_repname
+        suppress_selection   = 'X'
+      IMPORTING
+        object_name_selected = cv_repname
+      EXCEPTIONS
+        cancel               = 1.
+  ENDMETHOD.                                                "f4_repname
+
+  METHOD f4_function_group.
+    DATA:
+      lv_fname TYPE dynfnam.
+
+    lv_fname = iv_group_name.
+
+    CALL FUNCTION 'RS_HELP_HANDLING'
+      EXPORTING
+        dynpfield                 = lv_fname
+        dynpname                  = sy-dynnr
+        object                    = 'FG  '
+        progname                  = sy-repid
+        suppress_selection_screen = 'X'.
+
+  ENDMETHOD.                    "f4_function_group
+
+  METHOD f4_class.
+    CALL FUNCTION 'F4_DD_ALLTYPES'
+      EXPORTING
+        object               = cv_class_name
+        suppress_selection   = gc_x
+        display_only         = space
+        only_types_for_clifs = gc_x
+      IMPORTING
+        result               = cv_class_name.
+  ENDMETHOD.                                                "f4_class
+
+  METHOD display.
+    DATA text TYPE c LENGTH 150.
+
+    IF gv_hit_count IS INITIAL.
+*      MESSAGE s326 WITH gv_sstring.
+      RETURN.
+    ENDIF.
+
+    IF sy-batch IS INITIAL.
+      text = |DISPLAY { gv_hit_count } HITS...|.
+      CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
+        EXPORTING
+          text = text.
+    ENDIF.
+
+    SORT gt_alv_item BY repname dynnr versno line_no hit DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM gt_alv_item COMPARING repname dynnr versno line_no.
+
+*    get_alv_instance( ).
+*    CHECK go_alv IS NOT INITIAL.
+*
+*    set_alv_attributes( ).
+*
+*    go_alv->display( ).
+
+  ENDMETHOD.                    "display
+
+  METHOD add_to_hitlist.
+    DATA:
+      ls_col LIKE LINE OF gs_alv_item-cell_color.
+
+    gs_alv_item-repname = iv_report.
+    gs_alv_item-dynnr   = iv_dynpro.
+    gs_alv_item-line_no = iv_tabix.
+    gs_alv_item-versno  = iv_versno.
+    gs_alv_item-text    = iv_source_line.
+
+    IF iv_hit IS NOT INITIAL.
+      gs_alv_item-hit = gc_x.
+      ADD 1 TO gv_hit_count.
+      ls_col-fname     = 'TEXT'.
+      ls_col-color-col = '5'.
+      APPEND ls_col TO gs_alv_item-cell_color.
+    ENDIF.
+
+    APPEND gs_alv_item TO gt_alv_item.
+
+    CLEAR gs_alv_item.
+  ENDMETHOD.                    "add_to_hitlist
+
+  METHOD get_hit_set.
+    DATA: lv_end     TYPE i,
+          lv_start   TYPE i,
+          lv_xtabix  TYPE sy-tabix,
+          lv_hitline TYPE xfeld.
+
+    FIELD-SYMBOLS:
+      <lv_abap> TYPE any.
+
+    lv_start = iv_tabix - plusminu .
+    lv_end   = iv_tabix + plusminu.
+
+    IF lv_start < 1.
+      lv_start = 1.
+    ENDIF.
+
+    WHILE lv_start <= lv_end.
+      READ TABLE it_abap ASSIGNING <lv_abap> INDEX lv_start.
+      IF sy-subrc IS NOT INITIAL.
+        EXIT.
+      ENDIF.
+
+      lv_xtabix = sy-tabix.
+
+      IF lv_start = iv_tabix.
+        lv_hitline = gc_x.
+      ELSE.
+        CLEAR lv_hitline.
+      ENDIF.
+
+      ADD 1 TO lv_start.
+
+      IF comment IS NOT INITIAL.
+        IF modiass IS INITIAL.
+          IF <lv_abap>(1) = '*'
+          OR <lv_abap>(1) = '"'.
+            CONTINUE.
+          ENDIF.
+        ELSE.
+          IF <lv_abap>(1) = '*'.
+            IF  <lv_abap>(2) = '*{' OR <lv_abap>(2) = '*}'.
+            ELSE.
+              CONTINUE.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      CALL METHOD add_to_hitlist
+        EXPORTING
+          iv_report      = iv_report
+          iv_dynpro      = iv_dynpro
+          iv_source_line = <lv_abap>
+          iv_tabix       = lv_xtabix
+          iv_hit         = lv_hitline
+          iv_versno      = iv_versno.
+
+    ENDWHILE.
+
+  ENDMETHOD.                    "get_hit_set
+
+  METHOD get_source_by_version.
+    DATA:
+      lv_object_name TYPE versobjnam,
+      ls_object_name TYPE ty_ls_objname,
+      lt_trdir       TYPE STANDARD TABLE OF trdir,
+      lt_d022s       TYPE STANDARD TABLE OF d022s.
+
+    IF iv_dynpro IS INITIAL.
+      lv_object_name = iv_report.
+
+      CALL FUNCTION 'SVRS_GET_REPS_FROM_OBJECT'
+        EXPORTING
+          object_name                  = lv_object_name
+          object_type                  = 'REPS'
+          versno                       = iv_versno
+          iv_no_release_transformation = 'X'
+        TABLES
+          repos_tab                    = rt_abap
+          trdir_tab                    = lt_trdir
+        EXCEPTIONS
+          no_version                   = 1
+          OTHERS                       = 2.
+    ELSE.
+      ls_object_name-report = iv_report.
+      ls_object_name-dynnr  = iv_dynpro.
+
+      lv_object_name = ls_object_name.
+
+      CALL FUNCTION 'SVRS_GET_VERSION_DYNP_40'
+        EXPORTING
+          object_name = lv_object_name
+          versno      = iv_versno
+        TABLES
+          d022s_tab   = lt_d022s
+        EXCEPTIONS
+          no_version  = 01
+          OTHERS      = 02.
+
+      CHECK sy-subrc IS INITIAL AND lt_d022s IS NOT INITIAL.
+
+      APPEND LINES OF lt_d022s TO rt_abap.
+
+    ENDIF.
+  ENDMETHOD.                    "get_source_by_version
+
+  METHOD get_version_numbers.
+    DATA:
+      ls_objname TYPE ty_ls_objname,
+      lv_objtype TYPE vrsd-objtype,
+      lv_objname TYPE versobjnam,
+      lv_versno  TYPE versno,
+      lt_vrsn    TYPE STANDARD TABLE OF vrsn,
+      lt_vrsd    TYPE STANDARD TABLE OF vrsd.
+
+    ls_objname-report = iv_report.
+    ls_objname-dynnr  = iv_dynpro.
+    lv_objname        = ls_objname.
+
+    IF iv_dynpro IS INITIAL.
+      lv_objtype = 'REPS'.
+    ELSE.
+      lv_objtype = 'DYNP'.
+    ENDIF.
+
+    CALL FUNCTION 'SVRS_GET_VERSION_DIRECTORY_46'
+      EXPORTING
+        objname                = lv_objname
+        objtype                = lv_objtype
+      TABLES
+        lversno_list           = lt_vrsn
+        version_list           = lt_vrsd
+      EXCEPTIONS
+        no_entry               = 1
+        communication_failure_ = 2
+        system_failure         = 3
+        OTHERS                 = 4.
+
+    CHECK sy-subrc IS INITIAL .
+
+    SORT lt_vrsd BY objname versno.
+    DELETE ADJACENT DUPLICATES FROM lt_vrsd COMPARING objname versno.
+
+    rt_vrsd = lt_vrsd.
+
+    DELETE TABLE rt_vrsd WITH TABLE KEY objname = lv_objname
+                                        versno  = lv_versno.
+
+    SORT rt_vrsd.
+
+    CHECK iv_dynpro IS NOT INITIAL.
+*   For dynpros we need to save the version information for the version display
+*   this is not required for source code
+    INSERT LINES OF rt_vrsd INTO TABLE gt_vrsd.
+
+  ENDMETHOD.                    "get_version_Numbers
+
+  METHOD search_abap_source.
+    DATA:
+      lt_abap        TYPE abaptxt255_tab,
+      percentage     TYPE i,
+      old_percentage TYPE i VALUE -1,
+      text           TYPE c LENGTH 150.
+
+    FIELD-SYMBOLS:
+     <lv_obj> TYPE tadir-obj_name.
+
+    LOOP AT gt_object ASSIGNING <lv_obj>.
+
+      IF sy-batch IS INITIAL.
+        percentage = sy-tabix * 100 / lines( gt_object ).
+        text = |SEARCH ABAP SOURCES ({ sy-tabix }/{ lines( gt_object ) })...|.
+
+        IF old_percentage <> percentage.
+          CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
+            EXPORTING
+              percentage = percentage
+              text       = text.
+          old_percentage = percentage.
+        ENDIF.
+      ENDIF.
+
+      READ REPORT <lv_obj> INTO lt_abap.
+      IF sy-subrc IS NOT INITIAL.
+        CONTINUE.
+      ENDIF.
+
+      search_source( it_source = lt_abap
+                     iv_report = <lv_obj> ).
+
+    ENDLOOP.
+
+    FREE gt_object.
+
+  ENDMETHOD.                    "search_abap_source
+
+  METHOD search_source.
+    DATA:
+      lt_source       TYPE abaptxt255_tab,
+      lt_source_vers  TYPE abaptxt255_tab,
+      lv_string_found TYPE xfeld,
+      lt_vrsd         TYPE STANDARD TABLE OF vrsd,
+      ls_vrsd         LIKE LINE OF lt_vrsd,
+      lv_number       TYPE i,
+      lv_index        TYPE i,
+      lt_results      TYPE match_result_tab,
+      ls_result       LIKE LINE OF lt_results,
+      ls_sstring      LIKE LINE OF sstring.
+
+    lt_source = it_source.
+
+    IF p_vers IS INITIAL.
+      lv_number = 1.
+    ELSE.
+      lt_vrsd = get_version_numbers( iv_report = iv_report
+                                     iv_dynpro = iv_dynpro ).
+
+      lv_number = lines( lt_vrsd ) + 1.
+    ENDIF.
+
+    DO lv_number TIMES.
+      CLEAR lv_string_found.
+
+      IF sy-index = 1.
+        CLEAR ls_vrsd.
+      ELSE.
+        lv_index = sy-index - 1.
+        READ TABLE lt_vrsd INDEX lv_index INTO ls_vrsd.
+        CHECK sy-subrc IS INITIAL.
+
+        lt_source_vers = get_source_by_version( iv_report = iv_report
+                                                iv_dynpro = iv_dynpro
+                                                iv_versno = ls_vrsd-versno ).
+
+        IF lt_source_vers IS NOT INITIAL.
+          lt_source = lt_source_vers.
+        ELSE.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+
+      LOOP AT sstring INTO ls_sstring.
+        REFRESH lt_results.
+
+        IF p_regex IS INITIAL.
+          FIND ALL OCCURRENCES OF ls_sstring-low IN TABLE lt_source
+            IN CHARACTER MODE
+            IGNORING CASE
+            RESULTS lt_results.
+        ELSE.
+          TRY.
+              FIND ALL OCCURRENCES OF REGEX ls_sstring-low IN TABLE lt_source
+                IN CHARACTER MODE
+                IGNORING CASE
+                RESULTS lt_results.
+            CATCH cx_sy_regex.
+*             invalid regex -> stop processing
+*              MESSAGE s384 WITH ls_sstring-low DISPLAY LIKE 'E'.
+              RAISE EXCEPTION TYPE lcx_scan_exceptions.
+          ENDTRY.
+        ENDIF.
+
+        CHECK lt_results IS NOT INITIAL.
+
+        lv_string_found = gc_x.
+
+        SORT lt_results BY line.
+        DELETE ADJACENT DUPLICATES FROM lt_results COMPARING line.
+
+        LOOP AT lt_results INTO ls_result.
+          CALL METHOD get_hit_set
+            EXPORTING
+              iv_report = iv_report
+              iv_dynpro = iv_dynpro
+              it_abap   = lt_source
+              iv_tabix  = ls_result-line
+              iv_versno = ls_vrsd-versno.
+        ENDLOOP.
+
+      ENDLOOP.
+      IF lv_string_found IS NOT INITIAL.
+*       Add ALV header entry
+        CLEAR gs_alv_header.
+
+        gs_alv_header-repname = iv_report.
+        gs_alv_header-dynnr   = iv_dynpro.
+        gs_alv_header-versno  = ls_vrsd-versno.
+        APPEND gs_alv_header TO gt_alv_header.
+
+        IF iv_dynpro IS NOT INITIAL.
+          gv_dynp_found = gc_x.
+        ENDIF.
+
+        IF ls_vrsd-versno IS NOT INITIAL.
+          gv_vers_found = gc_x.
+        ENDIF.
+      ENDIF.
+    ENDDO.
+
+  ENDMETHOD.                    "search_source
+
+  METHOD search_dynpro_source.
+    DATA:
+      lt_dflow TYPE abaptxt255_tab.
+
+    FIELD-SYMBOLS:
+      <ls_dynpro>     LIKE LINE OF gt_dynpro.
+
+    IF sy-batch IS INITIAL.
+      CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
+        EXPORTING
+          text = 'SEARCH DYNPRO SOURCES...'.
+    ENDIF.
+
+    LOOP AT gt_dynpro ASSIGNING <ls_dynpro>.
+      REFRESH lt_dflow.
+
+      lt_dflow = get_dynpro_flow_logic( iv_report = <ls_dynpro>-repname
+                                        iv_dynpro = <ls_dynpro>-dynnr ).
+
+      CHECK lt_dflow IS NOT INITIAL.
+
+      search_source( it_source = lt_dflow
+                     iv_report = <ls_dynpro>-repname
+                     iv_dynpro = <ls_dynpro>-dynnr ).
+
+    ENDLOOP.
+
+  ENDMETHOD.                    "search_dynpro_source
+
+  METHOD get_dynpros.
+    CHECK gt_object IS NOT INITIAL.
+
+    SELECT prog dnum INTO TABLE gt_dynpro
+      FROM d020s FOR ALL ENTRIES IN gt_object
+      WHERE prog = gt_object-table_line
+      AND   dnum IN dynnr.
+  ENDMETHOD.                    "get_dynpros
+
+  METHOD get_includes.
+    DATA:
+      lt_inc          TYPE STANDARD TABLE OF tadir-obj_name,
+      lt_inc_tmp      LIKE lt_inc,
+      lv_program      TYPE sy-repid,
+      lv_obj          TYPE tadir-obj_name,
+      class_name      TYPE seoclsname,
+      method_includes TYPE seop_methods_w_include.
+
+    CHECK inclu IS NOT INITIAL.
+
+    LOOP AT gt_object INTO lv_obj.
+
+      IF lv_obj+30(2) = 'CP'. "Class Pool
+        DELETE gt_object INDEX sy-tabix.
+
+        class_name = lv_obj(30).
+        TRANSLATE class_name USING '= '.
+
+        cl_oo_classname_service=>get_all_method_includes(
+          EXPORTING
+            clsname            = class_name
+          RECEIVING
+            result             = method_includes
+          EXCEPTIONS
+            class_not_existing = 1 ).
+
+        IF sy-subrc = 0.
+          APPEND LINES OF method_includes TO lt_inc.
+
+          APPEND cl_oo_classname_service=>get_ccdef_name( class_name )  TO lt_inc.
+          APPEND cl_oo_classname_service=>get_ccmac_name( class_name )  TO lt_inc.
+          APPEND cl_oo_classname_service=>get_ccimp_name( class_name )  TO lt_inc.
+          APPEND cl_oo_classname_service=>get_ccau_name( class_name )   TO lt_inc.
+          APPEND cl_oo_classname_service=>get_pubsec_name( class_name ) TO lt_inc.
+          APPEND cl_oo_classname_service=>get_prosec_name( class_name ) TO lt_inc.
+          APPEND cl_oo_classname_service=>get_prisec_name( class_name ) TO lt_inc.
+          APPEND cl_oo_classname_service=>get_ct_name( class_name )     TO lt_inc.
+        ENDIF.
+
+      ELSEIF lv_obj+30(2) = 'IP'. "Interface Pool
+        DELETE gt_object INDEX sy-tabix.
+
+        lv_obj+31(1) = 'U'.
+        APPEND lv_obj TO lt_inc.
+      ENDIF.
+
+      REFRESH lt_inc_tmp.
+
+      lv_program = lv_obj.
+
+      CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+        EXPORTING
+          program      = lv_program
+        TABLES
+          includetab   = lt_inc_tmp
+        EXCEPTIONS
+          not_existent = 1
+          no_program   = 2
+          OTHERS       = 3.
+
+      CHECK sy-subrc IS INITIAL.
+
+      APPEND LINES OF lt_inc_tmp TO lt_inc.
+    ENDLOOP.
+
+    SORT lt_inc.
+    DELETE ADJACENT DUPLICATES FROM lt_inc.
+
+    APPEND LINES OF lt_inc TO gt_object.
+
+  ENDMETHOD.                    "get_includes
+
+  METHOD get_report_names.
+    SELECT obj_name INTO TABLE gt_object
+      FROM tadir
+      WHERE pgmid  = 'R3TR'
+      AND   object = 'PROG'
+      AND   devclass IN devclass.                       "#EC CI_GENBUFF
+  ENDMETHOD.                    "get_report_names
+
+  METHOD get_function_names.
+    DATA:
+      lt_obj     TYPE STANDARD TABLE OF tadir-obj_name,
+      lv_obj     TYPE tadir-obj_name,
+      lv_fgroup  TYPE rs38l-area,
+      lv_program TYPE progname.
+
+    FIELD-SYMBOLS:
+      <lv_obj> LIKE LINE OF lt_obj.
+
+    SELECT obj_name INTO TABLE lt_obj
+      FROM tadir
+      WHERE pgmid  = 'R3TR'
+      AND   object = 'FUGR'
+      AND   devclass IN devclass
+      AND   obj_name IN funcgrp.                        "#EC CI_GENBUFF
+
+    LOOP AT lt_obj ASSIGNING <lv_obj>.
+      lv_fgroup = <lv_obj>.
+      CLEAR lv_program.
+
+      CALL FUNCTION 'FUNCTION_INCLUDE_CONCATENATE'
+        CHANGING
+          program                  = lv_program
+          complete_area            = lv_fgroup
+        EXCEPTIONS
+          not_enough_input         = 1
+          no_function_pool         = 2
+          delimiter_wrong_position = 3
+          OTHERS                   = 4.
+
+      CHECK sy-subrc IS INITIAL AND lv_program IS NOT INITIAL.
+
+      lv_obj = lv_program.
+      APPEND lv_obj TO gt_object.
+    ENDLOOP.
+  ENDMETHOD.                    "get_function_names
+
+  METHOD get_class_names.
+    DATA:
+      lt_obj TYPE STANDARD TABLE OF tadir-obj_name.
+
+    FIELD-SYMBOLS:
+      <ls_obj> LIKE LINE OF lt_obj.
+
+    SELECT obj_name INTO TABLE lt_obj
+      FROM tadir
+      WHERE pgmid  = 'R3TR'
+      AND   object = 'CLAS'
+      AND   devclass IN devclass
+      AND   obj_name IN p_class.                        "#EC CI_GENBUFF
+
+    LOOP AT lt_obj ASSIGNING <ls_obj>.
+      APPEND cl_oo_classname_service=>get_classpool_name( |{ <ls_obj> }| ) TO gt_object.
+    ENDLOOP.
+  ENDMETHOD.                    "get_class_names
+
+  METHOD get_interface_names.
+    DATA lt_obj TYPE STANDARD TABLE OF tadir-obj_name.
+    DATA ls_obj TYPE tadir-obj_name.
+
+    SELECT obj_name INTO TABLE lt_obj
+      FROM tadir
+      WHERE pgmid  = 'R3TR'
+      AND   object = 'INTF'
+      AND   devclass IN devclass
+      AND   obj_name IN p_class.                        "#EC CI_GENBUFF
+
+    LOOP AT lt_obj INTO ls_obj.
+      APPEND cl_oo_classname_service=>get_interfacepool_name( |{ ls_obj }| ) TO gt_object.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD get_source_names.
+    IF repname[] IS NOT INITIAL OR
+       cnam[]    IS NOT INITIAL OR
+       unam[]    IS NOT INITIAL OR
+       subc[]    IS NOT INITIAL OR
+       appl[]    IS NOT INITIAL.
+
+      SELECT name APPENDING TABLE gt_object
+        FROM trdir
+        WHERE name IN repname
+        AND   cnam IN cnam
+        AND   unam IN unam
+        AND   subc IN subc
+        AND   appl IN appl.
+    ENDIF.
+
+    IF devclass[] IS NOT INITIAL.
+      get_report_names( ).
+      get_function_names( ).
+      get_class_names( ).
+      get_interface_names( ).
+    ENDIF.
+
+    IF funcgrp[] IS NOT INITIAL.
+      get_function_names( ).
+    ENDIF.
+
+    IF p_class[] IS NOT INITIAL.
+      get_class_names( ).
+      get_interface_names( ).
+    ENDIF.
+
+    IF rb_code IS INITIAL.
+      get_dynpros( ).
+    ENDIF.
+
+  ENDMETHOD.                    "get_source_names
+
+  METHOD start.
+    DATA:
+     ls_sstring LIKE LINE OF sstring[].
+
+    IF sstring[] IS INITIAL AND modiass IS INITIAL.
+*     Please specifiy a search term
+*      MESSAGE s385 DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
+
+    IF NOT modiass IS INITIAL.
+      REFRESH sstring.
+      ls_sstring-sign    = 'I'.
+      ls_sstring-option  = 'EQ'.
+      ls_sstring-low     = '^\*\{'.
+      APPEND ls_sstring TO sstring.
+      ls_sstring-low     = '^\*\}'.
+      APPEND ls_sstring TO sstring.
+
+      p_regex = gc_x.
+    ENDIF.
+
+    READ TABLE sstring[] INTO ls_sstring INDEX 1.
+    IF lines( sstring[] ) = 1.
+      gv_sstring = ls_sstring-low.
+    ELSE.
+      CONCATENATE ls_sstring-low
+                  '...'
+                  INTO gv_sstring.
+    ENDIF.
+
+    IF sy-batch IS INITIAL.
+      CALL FUNCTION 'SAPGUI_PROGRESS_INDICATOR'
+        EXPORTING
+          text = 'GET INCLUDES...'.
+    ENDIF.
+
+    get_source_names( ).
+    get_includes( ).
+
+    IF rb_dyn IS INITIAL.
+      TRY.
+          search_abap_source( ).
+        CATCH lcx_scan_exceptions.
+          RETURN.
+      ENDTRY.
+    ENDIF.
+
+    IF rb_code IS INITIAL.
+      TRY.
+          search_dynpro_source( ).
+        CATCH lcx_scan_exceptions.
+          RETURN.
+      ENDTRY.
+    ENDIF.
+
+    display( ).
+  ENDMETHOD.                    "start
+
+  METHOD pbo.
+    DATA ls_screen TYPE screen.
+
+    CHECK modiass IS NOT INITIAL.
+
+    REFRESH sstring[].
+    CLEAR   sstring.
+    CLEAR   p_regex.
+
+    LOOP AT SCREEN INTO ls_screen.
+      CHECK ls_screen-group1 = 'DSP'.
+      ls_screen-input = '0'.
+      MODIFY SCREEN FROM ls_screen.
+    ENDLOOP.
+  ENDMETHOD.                    "pbo
+ENDCLASS.                    "lcl_source_scan IMPLEMENTATION
+
+*&---------------------------------------------------------------------*
+*& CLASS lcl_event_handler DEFINITION
+*&---------------------------------------------------------------------*
+CLASS lcl_event_handler DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS:
+      handle_user_command FOR EVENT added_function OF cl_salv_events_table
+        IMPORTING e_salv_function.
+ENDCLASS.
+
+*&---------------------------------------------------------------------*
+*& CLASS lcl_event_handler IMPLEMENTATION
+*&---------------------------------------------------------------------*
+CLASS lcl_event_handler IMPLEMENTATION.
+  METHOD handle_user_command.
+    CASE e_salv_function.
+      WHEN 'TR'.  " Your custom button's function code
+
+        DATA gt_final_t TYPE TABLE OF ty_final_m.
+
+        MOVE gt_final TO gt_final_t.
+        SORT gt_final_t BY progname type .
+        DELETE ADJACENT DUPLICATES FROM gt_final_t COMPARING progname type.
+        DATA l_order TYPE trwbo_request_header.
+        DATA l_task TYPE trwbo_request_headers.
+        DATA l_e071 TYPE e071.
+        DATA it_e071 TYPE TABLE OF e071.
+        DATA it_e071_1 TYPE TABLE OF e071.
+        DATA wa_enlfdir TYPE enlfdir.
+        DATA l_obj_name TYPE sobj_name.
+
+        LOOP AT gt_final_t INTO gs_final WHERE type <> 'TABU'.
+
+          SELECT  * INTO TABLE  it_e071_1
+            FROM e071
+            WHERE
+            object = gs_final-type
+            AND
+            obj_name = gs_final-progname.
+          IF sy-subrc = 0.
+            DELETE ADJACENT DUPLICATES FROM it_e071 COMPARING
+               pgmid object obj_name.
+            LOOP AT it_e071_1 INTO l_e071.
+              APPEND l_e071 TO it_e071.
+            ENDLOOP.
+
+*  BREAK-POINT.
+          ENDIF.
+*          endselect.
+          IF sy-subrc <> 0.
+*            else.
+            SELECT  * INTO wa_enlfdir
+                 FROM enlfdir
+                 WHERE
+                 funcname = gs_final-progname.
+              IF sy-subrc = 0.
+                SELECT  * INTO TABLE  it_e071_1
+          FROM e071
+          WHERE obj_name = wa_enlfdir-area.
+                IF sy-subrc = 0.
+                  DELETE ADJACENT DUPLICATES FROM it_e071 COMPARING
+                  pgmid object obj_name.
+                  LOOP AT it_e071_1 INTO l_e071.
+                    APPEND l_e071 TO it_e071.
+                  ENDLOOP.
+                ENDIF.
+
+              ENDIF.
+            ENDSELECT.
+          ENDIF.
+        ENDLOOP.
+
+*        BREAK-POINT.
+        DATA it_e071_t TYPE TABLE OF e071.
+        DATA it_e071k_t TYPE TABLE OF e071k.
+
+*CALL FUNCTION 'TR_INSERT_REQUEST_WITH_TASKS'
+*  EXPORTING
+*    IV_TYPE                 = 'T'
+*    IV_TEXT                 = 'DNT'
+**   IV_OWNER                = SY-UNAME
+**   IV_TARGET               =
+**   IT_ATTRIBUTES           =
+**   IT_USERS                =
+**   IV_TARDEVCL             =
+**   IV_DEVCLASS             =
+**   IV_TARLAYER             =
+* IMPORTING
+*   ES_REQUEST_HEADER       = l_order
+*   ET_TASK_HEADERS         = l_task
+* EXCEPTIONS
+*   INSERT_FAILED           = 1
+*   ENQUEUE_FAILED          = 2
+*   OTHERS                  = 3
+*          .
+*IF SY-SUBRC <> 0.
+** Implement suitable error handling here
+*ENDIF.
+*
+*
+*CALL FUNCTION 'TRINT_ORDER_CHOICE'
+* EXPORTING
+**   WI_SIMULATION                = ' '
+*   WI_ORDER_TYPE                = 'T'
+*   WI_TASK_TYPE                 = 'T'
+**   WI_CATEGORY                  = 'SYST'
+**   WI_CLIENT                    = SY-MANDT
+**   IV_TARSYSTEM                 = ' '
+**   WI_ORDER                     = ' '
+**   WI_E070                      =
+**   WI_SUPPRESS_DIALOG           = ' '
+**   WI_CLI_DEP                   = ' '
+**   WI_REMOVE_LOCKS              = 'X'
+**   WI_DISPLAY_BUTTON            = ' '
+**   WI_APPEND_TO_ORDER           = ' '
+**   WI_APPEND_TO_FO              = ' '
+**   IV_CURRENT_PROJECT           = ' '
+**   IV_WARN_NOSTAND_TAR          = ' '
+**   IV_PROJECT_CHECK             = ' '
+* IMPORTING
+*   WE_ORDER                     = l_order
+*   WE_TASK                      = l_task
+*  TABLES
+*    WT_E071                      = it_e071_t
+*    WT_E071K                     = it_e071k_t
+* EXCEPTIONS
+*   NO_CORRECTION_SELECTED       = 1
+*   DISPLAY_MODE                 = 2
+*   OBJECT_APPEND_ERROR          = 3
+*   RECURSIVE_CALL               = 4
+*   WRONG_ORDER_TYPE             = 5
+*   OTHERS                       = 6
+*          .
+*IF SY-SUBRC <> 0.
+* Implement suitable error handling here
+*ENDIF.
+
+*
+*CALL FUNCTION 'TR_ORDER_CHOICE_CORRECTION'
+* EXPORTING
+*   IV_CATEGORY                  = 'SYST'
+*   IV_CLI_DEP                   = ' '
+**   IV_PROJECT_CHECK             = ' '
+* IMPORTING
+*   EV_ORDER                     = l_order
+*   EV_TASK                      = l_task
+* EXCEPTIONS
+*   INVALID_CATEGORY             = 1
+*   NO_CORRECTION_SELECTED       = 2
+*   OTHERS                       = 3
+*          .
+        IF sy-subrc <> 0.
+          EXIT.
+* Implement suitable error handling here
+        ELSE.
+
+          LOOP AT it_e071 INTO l_e071.
+            l_e071-trkorr = l_order-trkorr.
+            MODIFY it_e071 FROM l_e071 INDEX sy-tabix TRANSPORTING trkorr.
+          ENDLOOP.
+
+          SORT it_e071 BY trkorr
+*AS4POS
+          pgmid
+          object
+          obj_name
+          objfunc
+*LOCKFLAG
+          gennum
+          lang
+          activity.
+          DELETE ADJACENT DUPLICATES FROM it_e071 COMPARING
+          trkorr
+*AS4POS
+          pgmid
+          object
+          obj_name
+          objfunc
+*LOCKFLAG
+          gennum
+          lang
+          activity
+          .
+
+          DATA l_aspos TYPE ddposition VALUE '000001'.
+          LOOP AT it_e071 INTO l_e071.
+            l_e071-as4pos = l_aspos.
+            l_aspos = l_aspos + 1.
+            MODIFY it_e071 FROM l_e071 INDEX sy-tabix TRANSPORTING as4pos.
+          ENDLOOP.
+
+          DATA it_e071k TYPE TABLE OF e071k.
+          DATA it_ko200 TYPE TABLE OF ko200.
+          DATA wa_ko200 TYPE ko200.
+          DATA l_edisegment TYPE edisegment.
+
+          LOOP AT it_e071 INTO l_e071 WHERE object(1) <> 'S'.
+
+*            select single * into l_EDISEGMENT
+*              from EDISEGMENT
+*              where
+*              SEGTYP = l_e071-obj_name.
+*              if sy-subrc = 0.
+*                CONTINUE.
+*                endif.
+*                endif.
+            MOVE-CORRESPONDING l_e071 TO wa_ko200.
+            APPEND wa_ko200 TO it_ko200.
+            IF l_e071-object = 'TABL' AND l_e071-obj_name(1) = 'Z'.
+              l_obj_name = l_e071-obj_name.
+              CALL FUNCTION 'TRINT_TADIR_UPDATE'
+                EXPORTING
+                  pgmid                = l_e071-pgmid
+                  object               = l_e071-object
+                  obj_name             = l_obj_name "l_e071-obj_name
+*                 AUTHOR               = '~'
+*                 CPROJECT             = '~'
+*                 DEVCLASS             = '~'
+                  edtflag              = ' '
+*                 GENFLAG              = '~'
+*                 MASTERLANG           = '~'
+*                 SRCDEP               = '~'
+*                 SRCSYSTEM            = '~'
+*                 VERSID               = '~'
+*                 PAKNOCHECK           = '~'
+*                 OBJSTABLTY           = '~'
+*                 DELFLAG              = '~'
+*                 TRANSL_TECH_TEXT     = '~'
+*                 CREATED_ON           = '~'
+*                 CHECK_DATE           = '~'
+*                 CHECK_CFG            = '~'
+*             IMPORTING
+*                 ES_TADIR             =
+                EXCEPTIONS
+                  object_has_no_tadir  = 1
+                  object_exists_global = 2
+                  OTHERS               = 3.
+              IF sy-subrc <> 0.
+* Implement suitable error handling here
+              ENDIF.
+            ENDIF.
+
+*            endif.
+          ENDLOOP.
+
+          CALL FUNCTION 'TR_OBJECTS_CHECK'
+            EXPORTING
+*             IV_NO_STANDARD_EDITOR   = ' '
+              iv_no_show_option       = 'X'
+*             IV_EXTERNALPS           = ' '
+*             IV_EXTERNALID           = ' '
+*             IV_NO_PS                = ' '
+* IMPORTING
+*             WE_ORDER                =
+*             WE_TASK                 =
+*             WE_OBJECTS_APPENDABLE   =
+            TABLES
+              wt_ko200                = it_ko200
+*             WT_E071K                =
+*             TT_TADIR                =
+            EXCEPTIONS
+              cancel_edit_other_error = 1
+              show_only_other_error   = 2
+              OTHERS                  = 3.
+          IF sy-subrc = 0.
+* Implement suitable error handling here
+*ENDIF.
+
+
+            CALL FUNCTION 'TR_OBJECTS_INSERT'
+              EXPORTING
+                wi_order                = l_order-trkorr
+*               IV_NO_STANDARD_EDITOR   = ' '
+*               IV_NO_SHOW_OPTION       = ' '
+*               IV_EXTERNALPS           = ' '
+*               IV_EXTERNALID           = ' '
+*               IV_NO_PS                = ' '
+* IMPORTING
+*               WE_ORDER                =
+*               WE_TASK                 =
+              TABLES
+                wt_ko200                = it_ko200
+*               WT_E071K                =
+*               TT_TADIR                =
+              EXCEPTIONS
+                cancel_edit_other_error = 1
+                show_only_other_error   = 2
+                OTHERS                  = 3.
+            IF sy-subrc = 0.
+              COMMIT WORK.
+* Implement suitable error handling here
+            ENDIF.
+          ENDIF.
+
+*CALL FUNCTION 'TR_APPEND_TO_COMM_OBJS_KEYS'
+*  EXPORTING
+**   WI_SIMULATION                        = ' '
+*   WI_SUPPRESS_KEY_CHECK                = 'X'
+*    WI_TRKORR                            = l_order-trkorr
+*  TABLES
+*    WT_E071                              = it_e071
+*    WT_E071K                             = it_e071k
+* EXCEPTIONS
+*   KEY_CHAR_IN_NON_CHAR_FIELD           = 1
+*   KEY_CHECK_KEYSYNTAX_ERROR            = 2
+*   KEY_INTTAB_TABLE                     = 3
+*   KEY_LONGER_FIELD_BUT_NO_GENERC       = 4
+*   KEY_MISSING_KEY_MASTER_FIELDS        = 5
+*   KEY_MISSING_KEY_TABLEKEY             = 6
+*   KEY_NON_CHAR_BUT_NO_GENERIC          = 7
+*   KEY_NO_KEY_FIELDS                    = 8
+*   KEY_STRING_LONGER_CHAR_KEY           = 9
+*   KEY_TABLE_HAS_NO_FIELDS              = 10
+*   KEY_TABLE_NOT_ACTIV                  = 11
+*   KEY_UNALLOWED_KEY_FUNCTION           = 12
+*   KEY_UNALLOWED_KEY_OBJECT             = 13
+*   KEY_UNALLOWED_KEY_OBJNAME            = 14
+*   KEY_UNALLOWED_KEY_PGMID              = 15
+*   KEY_WITHOUT_HEADER                   = 16
+*   OB_CHECK_OBJ_ERROR                   = 17
+*   OB_DEVCLASS_NO_EXIST                 = 18
+*   OB_EMPTY_KEY                         = 19
+*   OB_GENERIC_OBJECTNAME                = 20
+*   OB_ILL_DELIVERY_TRANSPORT            = 21
+*   OB_ILL_LOCK                          = 22
+*   OB_ILL_PARTS_TRANSPORT               = 23
+*   OB_ILL_SOURCE_SYSTEM                 = 24
+*   OB_ILL_SYSTEM_OBJECT                 = 25
+*   OB_ILL_TARGET                        = 26
+*   OB_INTTAB_TABLE                      = 27
+*   OB_LOCAL_OBJECT                      = 28
+*   OB_LOCKED_BY_OTHER                   = 29
+*   OB_MODIF_ONLY_IN_MODIF_ORDER         = 30
+*   OB_NAME_TOO_LONG                     = 31
+*   OB_NO_APPEND_OF_CORR_ENTRY           = 32
+*   OB_NO_APPEND_OF_C_MEMBER             = 33
+*   OB_NO_CONSOLIDATION_TRANSPORT        = 34
+*   OB_NO_ORIGINAL                       = 35
+*   OB_NO_SHARED_REPAIRS                 = 36
+*   OB_NO_SYSTEMNAME                     = 37
+*   OB_NO_SYSTEMTYPE                     = 38
+*   OB_NO_TADIR                          = 39
+*   OB_NO_TADIR_NOT_LOCKABLE             = 40
+*   OB_PRIVAT_OBJECT                     = 41
+*   OB_REPAIR_ONLY_IN_REPAIR_ORDER       = 42
+*   OB_RESERVED_NAME                     = 43
+*   OB_SYNTAX_ERROR                      = 44
+*   OB_TABLE_HAS_NO_FIELDS               = 45
+*   OB_TABLE_NOT_ACTIV                   = 46
+*   TR_ENQUEUE_FAILED                    = 47
+*   TR_ERRORS_IN_ERROR_TABLE             = 48
+*   TR_ILL_KORRNUM                       = 49
+*   TR_LOCKMOD_FAILED                    = 50
+*   TR_LOCK_ENQUEUE_FAILED               = 51
+*   TR_NOT_OWNER                         = 52
+*   TR_NO_SYSTEMNAME                     = 53
+*   TR_NO_SYSTEMTYPE                     = 54
+*   TR_ORDER_NOT_EXIST                   = 55
+*   TR_ORDER_RELEASED                    = 56
+*   TR_ORDER_UPDATE_ERROR                = 57
+*   TR_WRONG_ORDER_TYPE                  = 58
+*   OB_INVALID_TARGET_SYSTEM             = 59
+*   TR_NO_AUTHORIZATION                  = 60
+*   OB_WRONG_TABLETYP                    = 61
+*   OB_WRONG_CATEGORY                    = 62
+*   OB_SYSTEM_ERROR                      = 63
+*   OB_UNLOCAL_OBJEKT_IN_LOCAL_ORD       = 64
+*   TR_WRONG_CLIENT                      = 65
+*   OB_WRONG_CLIENT                      = 66
+*   KEY_WRONG_CLIENT                     = 67
+*   OTHERS                               = 68
+*          .
+*IF SY-SUBRC <> 0.
+** Implement suitable error handling here
+*  else.
+*    commit WORK.
+*ENDIF.
+
+
+        ENDIF.
+*
+*if l_task is not INITIAL.
+*
+*
+*ENDIF.
+
+*        MESSAGE 'Custom button clicked!' TYPE 'I'.
+        " Add your custom logic here
+    ENDCASE.
+  ENDMETHOD.
+ENDCLASS.
+
+
+SELECT-OPTIONS : repname1  FOR trdir-name,
+devclas1 FOR tadir-devclass OBLIGATORY,
+tcode FOR tstc-tcode.
+PARAMETER p_list TYPE c AS CHECKBOX.
+
+
+INITIALIZATION.
+  MESSAGE 'This program is Obsolete, Use new program - ZRS_ABAP_DEPENDED_OBJ' TYPE 'W'.
+
+START-OF-SELECTION.
+
+  DATA   l_include_tab          TYPE programt.
+
+  DATA lt_tadir TYPE TABLE OF tadir.
+  DATA it_tstc TYPE TABLE OF tstc.
+
+  IF tcode[] IS NOT INITIAL.
+    SELECT * INTO TABLE it_tstc
+      FROM tstc
+      WHERE
+      tcode IN tcode.
+  ENDIF.
+
+
+  IF repname1[] IS NOT INITIAL.
+    SELECT * INTO TABLE lt_tadir
+    FROM tadir
+    WHERE
+    obj_name IN repname1.
+  ENDIF.
+  IF it_tstc[] IS NOT INITIAL.
+    SELECT * APPENDING TABLE lt_tadir
+      FROM tadir
+      FOR ALL ENTRIES IN it_tstc
+      WHERE
+      obj_name = it_tstc-pgmna.
+  ENDIF.
+
+  PERFORM fill_it_scan .
+
+  DATA ls_tadir TYPE tadir.
+  LOOP AT lt_tadir INTO ls_tadir.
+    REFRESH l_include_tab.
+    CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+      EXPORTING
+        program             = ls_tadir-obj_name
+*       WITH_INACTIVE_INCLS = ' '
+*       WITH_RESERVED_INCLUDES =
+        with_class_includes = 'X'
+      TABLES
+        includetab          = l_include_tab
+      EXCEPTIONS
+        not_existent        = 1
+        no_program          = 2
+        OTHERS              = 3.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+*    CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+*      EXPORTING
+*        program             = ls_tadir-obj_name
+**       WITH_INACTIVE_INCLS = 'X'
+**       WITH_RESERVED_INCLUDES       = 'X'
+*        with_class_includes = 'X'
+*        with_e_includes     = 'X'
+*      TABLES
+*        includetab          = l_include_tab
+*      EXCEPTIONS
+*        not_existent        = 1
+*        no_program          = 2
+*        OTHERS              = 3.
+*    IF sy-subrc <> 0.
+** Implement suitable error handling here
+*    ENDIF.
+
+    APPEND ls_tadir-obj_name TO l_include_tab.
+    DATA repname2  TYPE  bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_t_repname.
+    DATA l_repname2 TYPE bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_s_repname.
+
+    DATA wa_include LIKE LINE OF l_include_tab.
+    LOOP AT l_include_tab INTO wa_include.
+      TRANSLATE wa_include TO UPPER CASE .
+      IF wa_include(1) = 'Y' OR wa_include(1) = 'Z'.
+        LOOP AT it_scan INTO wa_scan.
+          REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
+          it_typ3,repname2.
+*    REFRESH: IT_OUTPUT.
+          REFRESH it_output.
+
+          l_repname2-sign = 'I'.
+          l_repname2-option = 'EQ'.
+          l_repname2-low = wa_include.
+          APPEND l_repname2 TO repname2.
+
+
+          PERFORM scan
+                TABLES  repname2 devclass1
+                USING wa_scan-srch_tem   .
+
+          DELETE it_output WHERE hit = ' '.
+          LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
+            wa_obj-srch_tem  = wa_scan-srch_tem.
+            wa_obj-repname = wa_output-repname.
+            wa_obj-text   = wa_output-text.
+            APPEND wa_obj TO it_obj.
+*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
+          ENDLOOP.
+
+        ENDLOOP.
+
+        DATA it_e071 TYPE TABLE OF e071.
+        SELECT * INTO TABLE it_e071
+          FROM e071
+          WHERE obj_name = wa_include
+          ORDER BY trkorr DESCENDING.
+        IF sy-subrc = 0.
+          DATA wa_e071 TYPE e071.
+          LOOP AT it_e071 INTO wa_e071.
+            gs_final-progname = wa_include.
+            gs_final-type = wa_e071-object.
+            gs_final-request = wa_e071-trkorr.
+            gs_final-main_program = ls_tadir-obj_name.
+            APPEND gs_final TO gt_final.
+            CLEAR gs_final.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+
+    ENDLOOP.
+
+*  ENDLOOP.
+
+
+    DO.
+
+      PERFORM process_data.
+      IF it_obj[] IS INITIAL.
+        EXIT.
+      ENDIF.
+    ENDDO.
+
+
+
+*    WAIT UP TO 1 SECONDS.
+
+    DATA l_tabname TYPE tabname.
+*    data it_e071 type TABLE OF e071.
+    DATA gs_func LIKE LINE OF gt_func.
+    DATA it_enlfdir TYPE TABLE OF enlfdir.
+    DATA wa_enlfdir TYPE enlfdir.
+    LOOP AT gt_func INTO gs_func.
+      SELECT * INTO TABLE it_e071
+        FROM e071
+        WHERE obj_name = gs_func-funcname
+        ORDER BY trkorr DESCENDING.
+      IF sy-subrc = 0.
+        LOOP AT it_e071 INTO wa_e071.
+          gs_final-progname = gs_func-funcname.
+          gs_final-type = wa_e071-object.
+          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ENDLOOP.
+      ELSE.
+        SELECT SINGLE * INTO @DATA(l_tfdir)
+          FROM tfdir
+          WHERE
+          funcname =  @gs_func-funcname.
+        IF sy-subrc = 0.
+          gs_final-progname = l_tfdir-funcname.
+          gs_final-type = 'FUNC'.
+*          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ELSE.
+          gs_final-progname = gs_func-funcname.
+          gs_final-type = 'RFC'.
+*          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ENDIF.
+      ENDIF.
+*      endif.
+      SELECT SINGLE * INTO wa_enlfdir
+        FROM enlfdir
+        WHERE
+        funcname = gs_func-funcname.
+      IF sy-subrc = 0.
+        SELECT * INTO TABLE it_e071
+  FROM e071
+  WHERE obj_name = wa_enlfdir-area
+  ORDER BY trkorr DESCENDING.
+        IF sy-subrc = 0.
+          LOOP AT it_e071 INTO wa_e071.
+            gs_final-progname = wa_enlfdir-area."gs_func-funcname.
+            gs_final-type = wa_e071-object.
+            gs_final-request = wa_e071-trkorr.
+            gs_final-main_program = ls_tadir-obj_name.
+            APPEND gs_final TO gt_final.
+            CLEAR gs_final.
+          ENDLOOP.
+
+*          ENDIF.
+*        ENDIF.
+        ELSE.
+          gs_final-progname = wa_enlfdir-area.
+          gs_final-type = 'FUGR'.
+*          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    DATA gs_type LIKE LINE OF gt_type.
+    LOOP AT gt_type INTO gs_type.
+      SELECT * INTO TABLE it_e071
+        FROM e071
+        WHERE obj_name = gs_type
+        ORDER BY trkorr DESCENDING.
+      IF sy-subrc = 0.
+        LOOP AT it_e071 INTO wa_e071.
+          gs_final-progname = gs_type.
+          gs_final-type = wa_e071-object.
+          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ENDLOOP.
+      ELSE.
+
+      ENDIF.
+      l_tabname = gs_type.
+      DATA it_dd03l TYPE TABLE OF dd03l.
+      DATA wa_dd03l TYPE dd03l.
+      SELECT * INTO TABLE it_dd03l
+        FROM dd03l
+        WHERE
+        tabname = l_tabname
+        AND
+        ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
+      IF sy-subrc = 0.
+        LOOP AT it_dd03l INTO wa_dd03l.
+          SELECT * INTO TABLE it_e071
+            FROM e071
+            WHERE obj_name = wa_dd03l-rollname
+            ORDER BY trkorr DESCENDING.
+          IF sy-subrc = 0.
+            LOOP AT it_e071 INTO wa_e071.
+              gs_final-progname = wa_dd03l-rollname.
+              gs_final-type = wa_e071-object.
+              gs_final-request = wa_e071-trkorr.
+              gs_final-main_program = ls_tadir-obj_name.
+              APPEND gs_final TO gt_final.
+              CLEAR gs_final.
+            ENDLOOP.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+*      ENDIF.
+    ENDLOOP.
+
+*  ENDLOOP.
+
+*data gs_table like LINE OF gt_tables.
+    DATA l_tvdir TYPE tvdir.
+    LOOP AT gt_tables INTO gs_type.
+      SELECT * INTO TABLE it_e071
+            FROM e071
+            WHERE obj_name = gs_type
+            ORDER BY trkorr DESCENDING.
+      IF sy-subrc = 0.
+        LOOP AT it_e071 INTO wa_e071.
+          gs_final-progname = gs_type.
+          gs_final-type = wa_e071-object.
+          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ENDLOOP.
+
+        l_tabname = gs_type.
+*        data it_dd03l type TABLE OF dd03l.
+*        data wa_dd03l type dd03l.
+        SELECT * INTO TABLE it_dd03l
+          FROM dd03l
+          WHERE
+          tabname = l_tabname
+          AND
+          ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
+        IF sy-subrc = 0.
+          LOOP AT it_dd03l INTO wa_dd03l.
+            SELECT * INTO TABLE it_e071
+              FROM e071
+              WHERE obj_name = wa_dd03l-rollname
+              ORDER BY trkorr DESCENDING.
+            IF sy-subrc = 0.
+              LOOP AT it_e071 INTO wa_e071.
+                gs_final-progname =  wa_dd03l-rollname.
+                gs_final-type = wa_e071-object.
+                gs_final-request = wa_e071-trkorr.
+                gs_final-main_program = ls_tadir-obj_name.
+                APPEND gs_final TO gt_final.
+                CLEAR gs_final.
+              ENDLOOP.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+        SELECT SINGLE * INTO l_tvdir
+        FROM tvdir
+        WHERE
+        tabname = gs_type.
+        IF sy-subrc = 0.
+          SELECT * INTO TABLE it_e071
+  FROM e071
+  WHERE obj_name = l_tvdir-area
+  ORDER BY trkorr DESCENDING.
+          IF sy-subrc = 0.
+            LOOP AT it_e071 INTO wa_e071.
+              gs_final-progname = l_tvdir-area.
+              gs_final-type = wa_e071-object.
+              gs_final-request = wa_e071-trkorr.
+              gs_final-main_program = ls_tadir-obj_name.
+              APPEND gs_final TO gt_final.
+              CLEAR gs_final.
+            ENDLOOP.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    LOOP AT gt_like INTO gs_type.
+      SELECT * INTO TABLE it_e071
+            FROM e071
+            WHERE obj_name = gs_type
+            ORDER BY trkorr DESCENDING.
+      IF sy-subrc = 0.
+        LOOP AT it_e071 INTO wa_e071.
+          gs_final-progname = gs_type.
+          gs_final-type = wa_e071-object.
+          gs_final-request = wa_e071-trkorr.
+          gs_final-main_program = ls_tadir-obj_name.
+          APPEND gs_final TO gt_final.
+          CLEAR gs_final.
+        ENDLOOP.
+
+        l_tabname = gs_type.
+*        data it_dd03l type TABLE OF dd03l.
+*        data wa_dd03l type dd03l.
+        SELECT * INTO TABLE it_dd03l
+          FROM dd03l
+          WHERE
+          tabname = l_tabname
+          AND
+          ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
+        IF sy-subrc = 0.
+          LOOP AT it_dd03l INTO wa_dd03l.
+            SELECT * INTO TABLE it_e071
+              FROM e071
+              WHERE obj_name = wa_dd03l-rollname
+              ORDER BY trkorr DESCENDING.
+            IF sy-subrc = 0.
+              LOOP AT it_e071 INTO wa_e071.
+                gs_final-main_program = ls_tadir-obj_name.
+                gs_final-progname = wa_dd03l-rollname.
+                gs_final-type = wa_e071-object.
+                gs_final-request = wa_e071-trkorr.
+                gs_final-main_program = ls_tadir-obj_name.
+                APPEND gs_final TO gt_final.
+                CLEAR gs_final.
+              ENDLOOP.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+  ENDLOOP.
+
+  SORT gt_final BY progname type request.
+  DELETE ADJACENT DUPLICATES FROM gt_final COMPARING progname type request.
+
+  IF p_list IS INITIAL.
+
+    REFRESH gt_final_l.
+    DATA l_tstc TYPE tstc.
+    LOOP AT gt_final INTO gs_final.
+      SELECT SINGLE * INTO l_tstc
+        FROM tstc
+        WHERE
+        pgmna = gs_final-progname.
+      IF sy-subrc = 0.
+        SELECT * INTO TABLE it_e071
+                     FROM e071
+                     WHERE obj_name = l_tstc-tcode
+                     ORDER BY trkorr DESCENDING.
+        IF sy-subrc = 0.
+          LOOP AT it_e071 INTO wa_e071.
+            gs_final-main_program = ls_tadir-obj_name.
+            gs_final-progname = l_tstc-tcode.
+            gs_final-type = wa_e071-object.
+            gs_final-request = wa_e071-trkorr.
+            APPEND gs_final TO gt_final_l.
+            CLEAR gs_final.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    APPEND LINES OF gt_final_l TO gt_final.
+    DATA l_dd04l TYPE dd04l.
+    LOOP AT gt_final INTO gs_final WHERE type = 'DTEL'.
+      SELECT SINGLE * INTO l_dd04l
+      FROM dd04l
+        WHERE
+        rollname = gs_final-progname.
+      IF sy-subrc = 0 AND ( l_dd04l-domname(1) = 'Z' OR l_dd04l-domname(1) = 'Y' ).
+        SELECT * INTO TABLE it_e071
+                      FROM e071
+                      WHERE obj_name = l_dd04l-domname
+                      AND object = 'DOMA'
+                      ORDER BY trkorr DESCENDING.
+        IF sy-subrc = 0.
+          LOOP AT it_e071 INTO wa_e071.
+            gs_final-main_program = ls_tadir-obj_name.
+            gs_final-progname = l_dd04l-domname.
+            gs_final-type = wa_e071-object.
+            gs_final-request = wa_e071-trkorr.
+            APPEND gs_final TO gt_final.
+            CLEAR gs_final.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+
+
+    DATA :
+      lt_tadir1 TYPE TABLE OF tadir,
+      ls_tadir1 TYPE  tadir.
+
+    SORT gt_final BY progname type request.
+    DELETE ADJACENT DUPLICATES FROM gt_final COMPARING progname type request.
+
+
+
+    SELECT * FROM tadir
+      INTO TABLE lt_tadir1
+      FOR ALL ENTRIES IN gt_final
+      WHERE obj_name = gt_final-progname(40).
+
+
+    IF gt_final[] IS NOT INITIAL.
+      DATA gt_e070 TYPE TABLE OF e070.
+      DATA gs_e070 TYPE e070.
+      SELECT * INTO TABLE gt_e070
+      FROM e070
+        FOR ALL ENTRIES IN gt_final
+        WHERE
+        trkorr = gt_final-request.
+      DATA l_tabix TYPE sy-tabix.
+      LOOP AT gt_final INTO gs_final.
+        l_tabix = sy-tabix.
+        READ TABLE gt_e070 INTO gs_e070 WITH KEY trkorr = gs_final-request.
+        IF sy-subrc = 0.
+          gs_final-as4user = gs_e070-as4user.
+          gs_final-as4date = gs_e070-as4date.
+          gs_final-as4time = gs_e070-as4time.
+        ENDIF.
+
+        READ TABLE lt_tadir1 INTO ls_tadir1 WITH KEY
+                                obj_name = gs_final-progname.
+        IF sy-subrc = 0.
+          gs_final-devclass  = ls_tadir1-devclass.
+        ENDIF.
+
+
+
+        MODIFY gt_final FROM gs_final INDEX l_tabix.
+      ENDLOOP.
+    ENDIF.
+
+*  delete ADJACENT DUPLICATES FROM gt_final COMPARING progname type.
+
+
+
+
+*  REFRESH GT_FINAL.
+
+*  PERFORM FILL_IT_SCAN .
+*  MOVE REPNAME[] TO REPNAME1[].
+*  MOVE DEVCLAS1[] TO DEVCLASS1[].
+*
+*  LOOP AT IT_SCAN INTO DATA(LS_SCAN).
+*    REFRESH : GT_OUTPUT , IT_DTL, IT_TYP1,IT_TAB,IT_DTL,IT_TYP1,IT_TYP2,
+*    IT_TYP3.
+**    REFRESH: IT_OUTPUT.
+*    REFRESH IT_OUTPUT.
+*    PERFORM SCAN
+*          TABLES  REPNAME1 DEVCLASS1
+*          USING LS_SCAN-SRCH_TEM   .
+*
+*    DELETE IT_OUTPUT WHERE HIT NE 'X'.
+*    LOOP AT IT_OUTPUT INTO DATA(LS_OUTPUT).
+*      WA_OUTPUT-REPNAME = LS_OUTPUT-REPNAME.
+*      WA_OUTPUT-TEXT =  LS_SCAN-SRCH_TEM.
+*      APPEND WA_OUTPUT TO GT_OUTPUT.
+*    ENDLOOP.
+*    APPEND LINES OF IT_OUTPUT TO GT_OUTPUT.
+*  ENDLOOP.
+
+
+*
+*    IF IT_OUTPUT IS NOT INITIAL.
+*      SELECT * INTO  TABLE @DATA(IT_TADIR)
+*        FROM TADIR
+*        FOR ALL ENTRIES IN @IT_OUTPUT
+*        WHERE
+*        OBJ_NAME = @IT_OUTPUT-REPNAME.
+*
+*      SORT IT_OUTPUT BY REPNAME TEXT.
+**    DESCRIBE TABLE IT_OUTPUT LINES DATA(LV_LINES).
+*      LOOP AT IT_OUTPUT INTO DATA(LS_OUTPUT).
+*        TRANSLATE LS_OUTPUT-TEXT TO UPPER CASE.
+*
+*
+*
+*        IF LS_OUTPUT-TEXT CS LS_SCAN-LOOK AND WA_OUTPUT-TEXT(1) <> '*'.
+*          WA_FINAL-PRIORITY = LS_SCAN-PRIORITY .
+*          WA_FINAL-CHECK_TITLE = LS_SCAN-DESCRIPTION.
+*          WA_FINAL-CHECK_MESSAGE = LS_SCAN-MESSAGE.
+*          WA_FINAL-OBJECT_NAME = LS_OUTPUT-REPNAME.
+*          READ TABLE IT_TADIR INTO DATA(LS_TADIR)
+*          WITH KEY OBJ_NAME = LS_OUTPUT-REPNAME.
+*          IF SY-SUBRC = 0.
+*            WA_FINAL-OBJECT_TYPE = LS_TADIR-OBJECT.
+*          ELSE.
+*            REFRESH IT_TAB.
+*            CALL FUNCTION 'RS_GET_MAINPROGRAMS'
+*              EXPORTING
+*                NAME                   = LS_OUTPUT-REPNAME
+*                MULTIPLE_SELECT        = ' '
+*                REFRESH_INT_D010INC    = 'X'
+*              IMPORTING
+*                NUMBER_OF_MAINPROGRAMS = L_NUMBER_OF_MAINPROGRAMS
+*              TABLES
+*                MAINPROGRAMS           = IT_TAB
+*              EXCEPTIONS
+*                CANCELLED              = 1
+*                OTHERS                 = 2.
+*            IF IT_TAB[] IS NOT INITIAL.
+*              READ TABLE IT_TAB INTO DATA(WA_TAB) INDEX 1.
+**              WA_FINAL-MAIN = WA_TAB-NAME.
+*              SELECT SINGLE FUNCNAME INTO WA_FINAL-OBJECT_NAME
+*                FROM TFDIR
+*                WHERE
+*                PNAME = WA_TAB-NAME.
+*              IF SY-SUBRC = 0.
+*                WA_FINAL-OBJECT_TYPE = 'FUNC'.
+**                 ENDIF.
+*              ELSE.
+*                IF  LS_OUTPUT-REPNAME CS '===='.
+*                  REFRESH IT_INCLUDES.
+*                  IT_CLSKEY-CLSNAME = LS_OUTPUT-REPNAME(SY-FDPOS).
+*                  CALL FUNCTION 'SEO_CLASS_GET_METHOD_INCLUDES'
+*                    EXPORTING
+*                      CLSKEY                       = IT_CLSKEY
+*                    IMPORTING
+*                      INCLUDES                     = IT_INCLUDES
+*                    EXCEPTIONS
+*                      _INTERNAL_CLASS_NOT_EXISTING = 1
+*                      OTHERS                       = 2.
+*                  IF SY-SUBRC = 0 AND IT_INCLUDES[] IS NOT INITIAL.
+*                    READ TABLE IT_INCLUDES INTO DATA(WA_INCLUDE) WITH KEY
+*                    INCNAME = LS_OUTPUT-REPNAME .
+*                    IF SY-SUBRC = 0.
+*                      WA_FINAL-OBJECT_TYPE = 'CLAS'.
+*                      WA_FINAL-OBJECT_NAME = WA_INCLUDE-CPDKEY.
+*                    ENDIF.
+** IMPLEMENT SUITABLE ERROR HANDLING HERE
+*                  ENDIF.
+*
+*
+*                ENDIF.
+*              ENDIF.
+*            ENDIF.
+*          ENDIF.
+*          WA_FINAL-REF_OBJ_TYPE = LS_SCAN-REF_OBJ_TYPE.
+*          WA_FINAL-REF_OBJECT  = LS_SCAN-SRCH_TEM.
+*          APPEND WA_FINAL TO GT_FINAL.
+*        ENDIF.
+*        CLEAR WA_FINAL.
+*      ENDLOOP.
+*    ENDIF.
+*  ENDLOOP.
+*
+*
+    DATA lo_tab TYPE REF TO cl_salv_table.
+
+    IF gt_final[] IS NOT INITIAL.
+      TRY.
+**.. ALV FACTORY METHOD
+          cl_salv_table=>factory(
+            EXPORTING
+              list_display = if_salv_c_bool_sap=>false
+*
+            IMPORTING
+              r_salv_table = lo_tab
+            CHANGING
+              t_table      = gt_final ).
+          lo_tab->get_functions( )->set_all( ).
+
+*          progname TYPE char255,
+*          type     TYPE char50,
+*          request  TYPE char50,
+          lo_tab->get_columns( )->get_column(
+          columnname = 'MAIN_PROGRAM'(015) )->set_medium_text( value
+          = 'MAIN PROGRAM'(016) ) .
+          lo_tab->get_columns( )->get_column(
+          columnname = 'MAIN_PROGRAM'(015) )->set_output_length('40').
+
+          lo_tab->get_columns( )->get_column(
+        columnname = 'PROGNAME'(011) )->set_medium_text( value
+        = 'PROGNAME'(011) ) .
+          lo_tab->get_columns( )->get_column(
+          columnname = 'PROGNAME'(011) )->set_output_length('40').
+
+          lo_tab->get_columns( )->get_column(
+          columnname = 'TYPE'(013) )->set_medium_text( value =
+           'TYPE'(013) ).
+          lo_tab->get_columns( )->get_column(
+         columnname = 'TYPE'(013) )->set_output_length('10').
+
+
+          lo_tab->get_columns( )->get_column(
+          columnname = 'REQUEST'(014) )->set_medium_text( value =
+           'REQUEST'(014) ).
+          lo_tab->get_columns( )->get_column(
+         columnname = 'REQUEST'(014) )->set_output_length('15').
+
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*        COLUMNNAME = 'CHECK_MESSAGE'(005) )->SET_MEDIUM_TEXT( VALUE
+*        = 'CHECK MESSAGE'(006) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*COLUMNNAME = 'CHECK_MESSAGE'(005) )->SET_OUTPUT_LENGTH('35').
+*
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*         COLUMNNAME = 'OBJECT_NAME'(007) )->SET_MEDIUM_TEXT( VALUE =
+*          'OBJECT NAME'(008) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*         COLUMNNAME = 'OBJECT_TYPE'(009) )->SET_MEDIUM_TEXT( VALUE =
+*         'OBJECT TYPE'(010) ).
+**        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+**         COLUMNNAME = 'MAIN'(011) )->SET_MEDIUM_TEXT( VALUE =
+**         'MAIN PROGRAM NAME'(012) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*  COLUMNNAME = 'REF_OBJ_TYPE'(013) )->SET_LONG_TEXT( VALUE =
+*  'REFERENCED OBJECT TYPE'(014) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*COLUMNNAME = 'REF_OBJ_TYPE'(013) )->SET_OUTPUT_LENGTH('20').
+*
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*COLUMNNAME = 'REF_OBJECT'(015) )->SET_MEDIUM_TEXT( VALUE =
+*'REFERENCED OBJECT'(016) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*COLUMNNAME = 'REF_OBJECT'(015) )->SET_OUTPUT_LENGTH('20').
+
+
+*.. ENABLE THE STRIPED PATTERN ON THE ALV
+          lo_tab->get_display_settings( )->set_striped_pattern( abap_true ).
+          DATA lo_event TYPE REF TO cl_salv_events_table.
+          CALL METHOD lo_tab->get_event
+            RECEIVING
+              value = lo_event.
+
+          SET HANDLER lcl_event_handler=>handle_user_command FOR lo_event.
+
+          " Add custom button to the toolbar (using PF-STATUS)
+          lo_tab->set_screen_status(
+            pfstatus = 'ZSTATUS'     " Your custom PF status
+            report   = sy-repid ).          " Your report name
+
+*        DATA(LO_LOCAL) = NEW LOCAL( ).
+*        SET HANDLER LO_LOCAL->HANDLE FOR LO_EVENT.
+
+          lo_tab->display( ).
+*
+**..HIDE APPLICAION TOOLBAR PLACE
+*        CL_ABAP_LIST_LAYOUT=>SUPPRESS_TOOLBAR( ).
+*
+**.. WRITE STATEMENT TO CALL THE CUSTOM CONTAINER
+*        WRITE SPACE.
+*      CATCH CX_ROOT INTO DATA(LO_EXE_ROOT).
+*        MESSAGE LO_EXE_ROOT->GET_TEXT( ) TYPE IF_MSG_OUTPUT=>MSGTYPE_ERROR.
+      ENDTRY.
+    ENDIF.
+*
+*  ENDIF.
+*      ENDIF.
+*      LV_CNT = LV_CNT + 1.
+*      LV_PROCNT = LV_PROCNT + 1.
+*      IF ( WA_OUTPUT-REPNAME NE
+*        LV_REPID OR WA_OUTPUT-TEXT NE LV_SRCH_STR ) AND LV_CNT GT 1.
+*        IF WA_OUTPUT-REPNAME CS '='.
+*          REPLACE ALL OCCURRENCES OF '=' IN WA_OUTPUT-REPNAME WITH ``.
+*        ENDIF.
+*        IF WA_OUTPUT-REPNAME CS '_EXTCM'
+*OR WA_OUTPUT-REPNAME CS '_DPCCM' OR WA_OUTPUT-REPNAME CS '_DOCCM'.
+*          DATA(LV_LEN) = STRLEN( LS_OUTPUT-REPNAME ).
+*          LV_LEN = LV_LEN - 5.
+*          WA_OUTPUT-REPNAME = WA_OUTPUT-REPNAME+0(LV_LEN).
+*        ENDIF.
+*
+*        REFRESH:IT_TAB.
+*        CALL FUNCTION 'RS_GET_MAINPROGRAMS'
+*          EXPORTING
+*            NAME                   = WA_OUTPUT-REPNAME
+*            MULTIPLE_SELECT        = ' '
+*            REFRESH_INT_D010INC    = 'X'
+*          IMPORTING
+*            NUMBER_OF_MAINPROGRAMS = L_NUMBER_OF_MAINPROGRAMS
+*          TABLES
+*            MAINPROGRAMS           = IT_TAB
+*          EXCEPTIONS
+*            CANCELLED              = 1
+*            OTHERS                 = 2.
+*        IF SY-SUBRC = 0.
+*          IF L_NUMBER_OF_MAINPROGRAMS = 0.
+*            WA_TYP1-OBJ_NAME = WA_OUTPUT-REPNAME.
+*          ELSEIF L_NUMBER_OF_MAINPROGRAMS = 1.
+*            READ TABLE IT_TAB INTO WA_TYP1-OBJ_NAME INDEX 1.
+*            WA_DTL-OBJ_NAME = WA_OUTPUT-REPNAME.
+*            WA_DTL-MAIN_PROG = WA_TYP1-OBJ_NAME.
+*            APPEND WA_DTL TO IT_DTL.
+*          ELSE.
+*            WA_TYP1-OBJ_NAME = SPACE.
+*          ENDIF.
+*        ENDIF.
+*        WA_TYP1-COUNT = LV_PROCNT.
+*        WA_TYP1-SRCH_STR = WA_OUTPUT-TEXT.
+*        APPEND WA_TYP1 TO IT_TYP1.
+*        CLEAR: WA_TYP1, LV_PROCNT.
+*      ENDIF.
+*
+*      IF LV_LINES = LV_CNT.
+*        REFRESH:IT_TAB.
+*        CALL FUNCTION 'RS_GET_MAINPROGRAMS'
+*          EXPORTING
+*            NAME                   = WA_OUTPUT-REPNAME
+*            MULTIPLE_SELECT        = ' '
+*            REFRESH_INT_D010INC    = 'X'
+*          IMPORTING
+*            NUMBER_OF_MAINPROGRAMS = L_NUMBER_OF_MAINPROGRAMS
+*          TABLES
+*            MAINPROGRAMS           = IT_TAB
+*          EXCEPTIONS
+*            CANCELLED              = 1
+*            OTHERS                 = 2.
+*        IF SY-SUBRC = 0.
+*          IF L_NUMBER_OF_MAINPROGRAMS = 0.
+*            WA_TYP1-OBJ_NAME = WA_OUTPUT-REPNAME.
+*          ELSEIF L_NUMBER_OF_MAINPROGRAMS = 1.
+*            READ TABLE IT_TAB INTO WA_TYP1-OBJ_NAME INDEX 1.
+*            WA_DTL-OBJ_NAME = WA_OUTPUT-REPNAME.
+*            WA_DTL-MAIN_PROG = WA_TYP1-OBJ_NAME.
+*            APPEND WA_DTL TO IT_DTL.
+*          ELSE.
+*            WA_TYP1-OBJ_NAME = SPACE.
+*          ENDIF.
+*        ENDIF.
+*        WA_TYP1-COUNT = LV_PROCNT.
+*        WA_TYP1-SRCH_STR = WA_OUTPUT-TEXT.
+*        APPEND WA_TYP1 TO IT_TYP1.
+*        CLEAR: WA_TYP1, LV_PROCNT.
+*      ENDIF.
+*      LV_REPID = LS_OUTPUT-REPNAME.
+*      LV_SRCH_STR = WA_OUTPUT-TEXT.
+*    ENDLOOP.
+*  ENDIF.
+*  SORT IT_DTL BY MAIN_PROG.
+*  DELETE ADJACENT DUPLICATES FROM IT_DTL.
+*  CLEAR: LV_CNT, LV_PROCNT,LV_LINES.
+*  IF IT_TYP1 IS NOT INITIAL.
+*    SORT IT_TYP1 BY OBJ_NAME.
+*    LOOP AT IT_TYP1 INTO WA_TYP1.
+*      COLLECT WA_TYP1 INTO IT_TYP2.
+*    ENDLOOP.
+*
+*    DATA: LV_STR TYPE STRING.
+*    SORT IT_TYP2 BY OBJ_NAME.
+*    DESCRIBE TABLE IT_TYP2 LINES LV_LINES.
+*
+*    LOOP AT IT_TYP2 INTO WA_TYP1.
+*      LV_CNT = LV_CNT + 1.
+*      IF WA_TYP1-OBJ_NAME NE LV_REPID AND LV_CNT NE 1.
+*        WA_TYP3-SRCH_STR = LV_STR.
+*        WA_TYP3-COUNT = LV_PROCNT.
+*        WA_TYP3-OBJ_NAME = LV_REPID.
+*        APPEND WA_TYP3 TO IT_TYP3.
+*        CLEAR: WA_TYP3, LV_STR, LV_PROCNT.
+*      ENDIF.
+*      IF LV_STR IS NOT INITIAL.
+*        LV_STR = LV_STR && ',' && WA_TYP1-SRCH_STR.
+*      ELSE.
+*        LV_STR =  WA_TYP1-SRCH_STR.
+*      ENDIF.
+*      IF LV_LINES = LV_CNT.
+*        WA_TYP3-SRCH_STR = LV_STR.
+*        WA_TYP3-COUNT = LV_PROCNT + WA_TYP1-COUNT.
+*        WA_TYP3-OBJ_NAME = WA_TYP1-OBJ_NAME.
+*        APPEND WA_TYP3 TO IT_TYP3.
+*      ENDIF.
+*      LV_PROCNT = LV_PROCNT + WA_TYP1-COUNT.
+*      LV_REPID = WA_TYP1-OBJ_NAME.
+*    ENDLOOP.
+*
+*    SELECT OBJECT, OBJ_NAME, DEVCLASS
+*      INTO TABLE @DATA(IT_TADIR)
+*      FROM TADIR
+*      FOR ALL ENTRIES IN @IT_TYP2
+*    WHERE OBJ_NAME = @IT_TYP2-OBJ_NAME.
+*    LOOP AT IT_TYP3 INTO WA_TYP1.
+*      IF WA_TYP1-OBJ_NAME IS INITIAL.
+*        WA_MAIN-OBJ_NAME = 'FM INCLUDES'.
+*        WA_MAIN-OBJECT   = 'FUNC'.
+*      ELSEIF WA_TYP1-OBJ_NAME+0(3) = 'ZCL'.
+*        WA_MAIN-OBJ_NAME = WA_TYP1-OBJ_NAME.
+*        WA_MAIN-OBJECT   = 'INTD'.
+*      ELSE.
+*        READ TABLE IT_TADIR INTO DATA(WA_TADIR)
+*        WITH KEY OBJ_NAME = WA_TYP1-OBJ_NAME.
+*        IF SY-SUBRC = 0.
+*          WA_MAIN-OBJ_NAME = WA_TADIR-OBJ_NAME.
+*          WA_MAIN-OBJECT   = WA_TADIR-OBJECT.
+*        ELSE.
+*          WA_MAIN-OBJ_NAME = WA_TYP1-OBJ_NAME.
+*        ENDIF.
+*      ENDIF.
+*      IF WA_TYP1-COUNT LE '2'.
+*        WA_MAIN-CMPLX    = 'LOW'.
+*      ELSEIF WA_TYP1-COUNT GT '2' AND WA_TYP1-COUNT LE '5'.
+*        WA_MAIN-CMPLX    = 'MEDIUM'.
+*      ELSEIF WA_TYP1-COUNT GT '5' AND WA_TYP1-COUNT LE '8'.
+*        WA_MAIN-CMPLX    = 'HIGH'.
+*      ELSEIF WA_TYP1-COUNT GT '8'.
+*        WA_MAIN-CMPLX    = 'VERY HIGH'.
+*      ENDIF.
+*      WA_MAIN-SRCH_STR   = WA_TYP1-SRCH_STR.
+*      WA_MAIN-COUNT   = WA_TYP1-COUNT.
+*      APPEND WA_MAIN TO IT_MAIN.
+*    ENDLOOP.
+*  ENDIF.
+*ENDLOOP.
+*  IF IT_MAIN IS NOT INITIAL.
+*    TRY.
+***.. ALV FACTORY METHOD
+*        CL_SALV_TABLE=>FACTORY(
+*         EXPORTING LIST_DISPLAY = IF_SALV_C_BOOL_SAP=>FALSE
+**
+*                                IMPORTING R_SALV_TABLE = DATA(LO_TAB)
+*                                CHANGING  T_TABLE      = IT_MAIN ).
+*        LO_TAB->GET_FUNCTIONS( )->SET_ALL( ).
+*
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*        COLUMNNAME = 'CMPLX'(001) )->SET_SHORT_TEXT( VALUE
+*        = 'COMPLEXITY'(002) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*        COLUMNNAME = 'CMPLX'(001) )->SET_MEDIUM_TEXT( VALUE =
+*         'COMPLEXITY'(002) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*        COLUMNNAME = 'CMPLX'(001) )->SET_LONG_TEXT( VALUE
+*        = 'COMPLEXITY'(002) ).
+*
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*         COLUMNNAME = 'COUNT'(003) )->SET_SHORT_TEXT( VALUE =
+*          'COUNT'(004) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*         COLUMNNAME = 'COUNT'(003) )->SET_MEDIUM_TEXT( VALUE =
+*         'COUNT'(004) ).
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*         COLUMNNAME = 'COUNT'(003) )->SET_LONG_TEXT( VALUE =
+*         'COUNT'(004) ).
+**.. ENABLE THE STRIPED PATTERN ON THE ALV
+*     LO_TAB->GET_DISPLAY_SETTINGS( )->SET_STRIPED_PATTERN( ABAP_TRUE ).
+*
+*        CALL METHOD LO_TAB->GET_EVENT
+*          RECEIVING
+*            VALUE = DATA(LO_EVENT).
+*        DATA(LO_LOCAL) = NEW LOCAL( ).
+**        SET HANDLER LO_LOCAL->HANDLE FOR LO_EVENT.
+*
+*        LO_TAB->DISPLAY( ).
+*
+**..HIDE APPLICAION TOOLBAR PLACE
+*        CL_ABAP_LIST_LAYOUT=>SUPPRESS_TOOLBAR( ).
+*
+**.. WRITE STATEMENT TO CALL THE CUSTOM CONTAINER
+*        WRITE SPACE.
+*      CATCH CX_ROOT INTO DATA(LO_EXE_ROOT).
+*   MESSAGE LO_EXE_ROOT->GET_TEXT( ) TYPE IF_MSG_OUTPUT=>MSGTYPE_ERROR.
+*    ENDTRY.
+*  ENDIF.
+
+
+
+*ENDLOOP.
+  ELSE.
+
+***********vaibhav
+*  BREAK-POINT.
+    DELETE ADJACENT DUPLICATES FROM gt_final COMPARING progname type.
+    DATA l_string TYPE char255.
+    REFRESH: repname2.
+
+    DATA it_dd04l TYPE TABLE OF dd04l.
+    DATA wa_dd04l TYPE dd04l.
+
+    LOOP AT gt_final INTO gs_final.
+      CLEAR l_string.
+      l_string = gs_final-progname.
+      REFRESH it_output.
+      PERFORM scan
+            TABLES  repname2 devclas1
+            USING l_string.
+
+      SORT it_output BY repname hit text.
+      DELETE it_output WHERE hit = ' '.
+*      delete it_output WHERE text(1) = '*'.
+      DELETE ADJACENT DUPLICATES FROM it_output COMPARING repname.
+
+*"
+
+      IF gs_final-type = 'DOMA'.
+        SELECT * INTO TABLE it_dd04l
+          FROM dd04l
+          WHERE
+          domname = gs_final-progname..
+        IF sy-subrc = 0.
+          LOOP AT it_dd04l INTO wa_dd04l .
+            CLEAR wa_output.
+            wa_output-repname = wa_dd04l-rollname.
+            wa_output-text1  = gs_final-progname.
+            wa_output-hit    = 'X'.
+            APPEND wa_output TO it_output.
+          ENDLOOP.
+
+        ENDIF.
+
+      ELSEIF gs_final-type = 'DTEL'.
+        SELECT * INTO TABLE it_dd03l
+          FROM dd03l
+          WHERE
+          rollname = gs_final-progname.
+        IF sy-subrc = 0.
+          LOOP AT it_dd03l INTO wa_dd03l .
+            CLEAR wa_output.
+            wa_output-repname = wa_dd03l-tabname.
+            wa_output-text1  = gs_final-progname.
+            wa_output-hit    = 'X'.
+            APPEND wa_output TO it_output.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+
+      LOOP AT it_output INTO wa_output.
+        wa_output-type = gs_final-type.
+        APPEND wa_output TO it_output_detail.
+      ENDLOOP.
+*append LINES OF it_output to
+
+*      loop at it_output into wa_output ."where text(1) <> '*'.
+*        wa_output-text1 = gs_final-progname.
+*        append wa_output to it_output_detail.
+*      ENDLOOP.
+**
+    ENDLOOP.
+
+    SORT it_output_detail BY  text1 repname.
+    DELETE ADJACENT DUPLICATES FROM it_output_detail COMPARING repname text1.
+
+
+    DATA l_versno TYPE versno.
+    LOOP AT it_output_detail INTO wa_output .
+      IF wa_output-text(1) = '*'.
+        IF wa_output-text(2) <> '*"'.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+      MOVE wa_output TO wa_output_detail.
+      l_versno = l_versno + 1.
+      READ TABLE gt_obj INTO wa_obj WITH KEY
+      repname = wa_output-repname.
+      IF sy-subrc = 0.
+        l_versno = l_versno - 1.
+      ENDIF.  .
+      AT END OF text1.
+        wa_output_detail-versno = l_versno.
+        APPEND wa_output_detail TO it_output_detail1.
+        CLEAR l_versno.
+      ENDAT.
+    ENDLOOP.
+
+*
+*       FIELD-SYMBOLS <fs_output> type  ty_zalv_scna_display..
+*
+*    append LINES OF it_output_detail to it_output_detail1.
+*    sort it_output_detail1 by repname text1.
+*    DELETE ADJACENT DUPLICATES FROM it_output_detail1 COMPARING repname text1.
+*    refresh it_output_detail.
+*    loop at it_output_detail1 ASSIGNING <fs_output>.
+*    read TABLE gt_obj TRANSPORTING NO FIELDS with key
+*    repname = <fs_output>-repname.
+*    if sy-subrc = 0.
+*    <fs_output>-hit = 'X'.
+*    ENDIF.
+*    ENDLOOP.
+*
+*
+*    LOOP at it_output_detail1 ASSIGNING <fs_output>.
+*      read TABLE it_output_detail into wa_output with key
+*      repname = <fs_output>-repname.
+*      if sy-subrc <> 0.
+*        <fs_output>-hit = 'X'.
+*      ENDIF.
+*    endloop.
+*
+*    delete it_output_detail1 WHERE hit is INITIAL.
+*    append lines of it_output_detail1 to it_output_detail.
+
+    IF it_output_detail1[] IS NOT INITIAL.
+      TRY.
+**.. ALV FACTORY METHOD
+          cl_salv_table=>factory(
+            EXPORTING
+              list_display = if_salv_c_bool_sap=>false
+*
+            IMPORTING
+              r_salv_table = lo_tab
+            CHANGING
+              t_table      = it_output_detail1 ).
+          lo_tab->get_functions( )->set_all( ).
+
+************************************88
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*        COLUMNNAME = 'REPNAME' )->SET_MEDIUM_TEXT( VALUE
+*        = 'Used Object' ) .
+*        LO_TAB->GET_COLUMNS( )->GET_COLUMN(
+*        COLUMNNAME = 'REPNAME' )->SET_OUTPUT_LENGTH('40').
+
+
+          lo_tab->get_columns( )->get_column(
+          columnname = 'TEXT1' )->set_medium_text( value
+          = 'Object Nmae' ) .
+          lo_tab->get_columns( )->get_column(
+          columnname = 'TEXT1' )->set_output_length('40').
+
+          lo_tab->get_columns( )->get_column(
+          columnname = 'TYPE' )->set_medium_text( value
+          = 'Type pf Object' ) .
+          lo_tab->get_columns( )->get_column(
+          columnname = 'TYPE' )->set_output_length('10').
+
+          lo_tab->get_columns( )->get_column(
+          columnname = 'VERSNO' )->set_medium_text( value
+          = 'Usage Count' ) .
+          lo_tab->get_columns( )->get_column(
+          columnname = 'VERSNO' )->set_output_length('10').
+
+          lo_tab->get_columns( )->get_column(
+                 columnname = 'REPNAME' )->set_visible(' ').
+          lo_tab->get_columns( )->get_column(
+                 columnname = 'DYNNR' )->set_visible(' ').
+          lo_tab->get_columns( )->get_column(
+                columnname = 'LINE_NO' )->set_visible(' ').
+          lo_tab->get_columns( )->get_column(
+               columnname = 'TEXT' )->set_visible(' ').
+          lo_tab->get_columns( )->get_column(
+              columnname = 'HIT' )->set_visible(' ').
+
+
+****************************************
+
+          lo_tab->display( ).
+
+      ENDTRY.
+*endloop.
+    ENDIF.
+  ENDIF.
+
+
+
+*&---------------------------------------------------------------------*
+*& FORM SCAN
+*&---------------------------------------------------------------------*
+*& TEXT
+*&---------------------------------------------------------------------*
+*& -->  P1        TEXT
+*& <--  P2        TEXT
+*&---------------------------------------------------------------------*
+FORM scan TABLES program TYPE  bgrfc_cprog_range"rsb4h_r_t_repname
+                 pakage TYPE packrange
+          USING string TYPE text255  .
+  .
+
+*CLEAR LO_SSCAN.
+  CREATE OBJECT lo_sscan.
+
+  REFRESH sstring..
+  sstring-sign = 'I'.
+  sstring-option = 'EQ'.
+  sstring-low = string.
+  APPEND sstring.
+
+  REFRESH repname.
+  IF program[] IS NOT INITIAL.
+    MOVE program[] TO repname[].
+  ENDIF.
+
+  REFRESH devclass.
+  IF pakage[] IS NOT INITIAL.
+    MOVE pakage[] TO devclass[].
+  ENDIF.
+
+
+  lo_sscan->start( ).
+
+  FREE    lo_sscan..
+
+  IF gt_alv_item[] IS NOT INITIAL.
+    DATA wa_output TYPE ty_zalv_scna_display.
+    CLEAR wa_output.
+    LOOP AT gt_alv_item INTO gs_alv_item.
+      MOVE-CORRESPONDING gs_alv_item TO wa_output.
+      wa_output-text1 = string.
+      APPEND wa_output TO it_output.
+    ENDLOOP.
+    REFRESH gt_alv_item.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form FILL_IT_SCAN
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM fill_it_scan .
+
+  wa_scan-srch_tem = 'CALL FUNCTION'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'TYPE'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'CALL METHOD'.
+  APPEND wa_scan TO it_scan.
+
+
+  wa_scan-srch_tem = 'SCREEN'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'LIKE'.
+  APPEND wa_scan TO it_scan.
+
+
+************
+  wa_scan-srch_tem = 'FROM'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'SUBMIT'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'TABLES'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'IN PROGRAM'.
+  APPEND wa_scan TO it_scan.
+
+  wa_scan-srch_tem = 'AUTHORITY-CHECK OBJECT' .
+  APPEND wa_scan TO it_scan.
+
+
+
+
+***********8
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form process_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM process_data .
+
+  DATA l_un TYPE string.
+  DATA l_i TYPE i.
+  DATA l_var TYPE c.
+  DATA l_v TYPE i.
+  DATA l_flag TYPE flag.
+  DATA l_func TYPE char255.
+  DATA it_func TYPE TABLE OF tfdir.
+  DATA it_class TYPE TABLE OF char255.
+  DATA it_type TYPE TABLE OF char255.
+  DATA it_like TYPE TABLE OF char255.
+  DATA wa_func TYPE tfdir.
+  DATA l_like TYPE char20.
+
+  DATA l_ty TYPE sy-fdpos.
+
+  LOOP AT it_obj INTO wa_obj.
+    READ TABLE gt_obj INTO gs_obj WITH KEY
+      srch_tem = wa_obj-srch_tem
+          repname = wa_obj-repname
+          text  = wa_obj-text.
+    IF sy-subrc = 0.
+      CONTINUE.
+    ENDIF.
+    IF wa_obj-text(1) = '*'.
+      CONTINUE.
+    ENDIF.
+    TRANSLATE wa_obj-text TO UPPER CASE.
+    CLEAR : l_i,l_var,l_flag,l_func,l_v.
+    CASE wa_obj-srch_tem.
+      WHEN 'CALL FUNCTION'.
+        REPLACE ALL OCCURRENCES OF 'CALL FUNCTION' IN wa_obj-text WITH space.
+        CONDENSE wa_obj-text.
+        l_i = strlen( wa_obj-text ).
+        DO l_i TIMES.
+          l_var = wa_obj-text+l_v(1).
+          IF l_var = TEXT-001.
+            IF l_flag IS INITIAL.
+              l_flag = 'X'.
+              l_v = l_v + 1.
+              CONTINUE.
+            ELSE.
+              EXIT.
+            ENDIF.
+          ENDIF.
+          IF l_flag = 'X'.
+            CONCATENATE l_func l_var INTO l_func.
+          ENDIF.
+          l_v = l_v + 1.
+        ENDDO.
+        REPLACE ALL OCCURRENCES OF ',' IN l_func WITH space.
+        REPLACE ALL OCCURRENCES OF '.' IN l_func WITH space.
+        IF l_func(1) = 'Z' OR l_func(1) = 'Y'.
+          wa_func-funcname = l_func.
+          READ TABLE gt_func TRANSPORTING NO FIELDS WITH KEY
+          funcname = wa_func-funcname.
+          IF sy-subrc <> 0.
+            APPEND wa_func TO it_func.
+          ENDIF.
+        ENDIF.
+
+      WHEN 'CALL METHOD'.
+        REPLACE ALL OCCURRENCES OF 'CALL METHOD' IN wa_obj-text WITH space.
+        CONDENSE wa_obj-text.
+        l_i = strlen( wa_obj-text ).
+        DO l_i TIMES.
+          l_var = wa_obj-text+l_v(1).
+          IF l_var = '-'.
+            EXIT.
+          ELSE.
+            CONCATENATE l_func l_var INTO l_func.
+          ENDIF.
+          l_v = l_v + 1.
+        ENDDO.
+        DATA wa_obj1 LIKE LINE OF it_obj.
+        LOOP AT it_obj INTO wa_obj1 WHERE
+          srch_tem = 'TYPE' AND text CS l_func.
+        ENDLOOP.
+        IF sy-subrc = 0.
+          REPLACE ALL OCCURRENCES OF l_func IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'TYPE' IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'REF OF' IN wa_obj1-text WITH space.
+          CONDENSE wa_obj1-text.
+          IF wa_obj1-text(1) = 'Z' OR wa_obj1-text(1) = 'Y'.
+
+*            APPEND wa_obj1-text TO it_class.
+            READ TABLE gt_class TRANSPORTING NO FIELDS WITH KEY = wa_obj1-text.
+            IF sy-subrc <> 0.
+              APPEND wa_obj1-text TO it_class.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+
+      WHEN 'TYPE'.
+        IF wa_obj-text CS 'TYPE'.
+          l_ty = sy-fdpos.
+        ENDIF.
+        l_i = strlen( wa_obj-text ).
+        l_i = l_i - l_ty.
+        wa_obj1-text = wa_obj-text+l_ty(l_i).
+        REPLACE ALL OCCURRENCES OF 'DATA' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'TYPE' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'TABLE OF' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'STANDARD' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'OCCURS' IN    wa_obj1-text WITH space.
+        REPLACE ALL  OCCURRENCES OF 'WITH HEADER LINE' IN    wa_obj1-text WITH space.
+        CONDENSE wa_obj1-text.
+        IF wa_obj1-text(1) = 'Z' OR wa_obj1-text(1) = 'Y'.
+          REPLACE ALL OCCURRENCES OF ',' IN  wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF '.' IN  wa_obj1-text WITH space.
+          READ TABLE gt_type TRANSPORTING NO FIELDS WITH KEY = wa_obj1-text.
+          IF sy-subrc <> 0.
+            APPEND wa_obj1-text TO it_type.
+          ENDIF.
+*          APPEND wa_obj1-text TO it_type.
+        ENDIF.
+
+      WHEN 'LIKE'.
+        CLEAR l_like.
+        IF wa_obj-text CS 'LIKE'.
+          l_ty = sy-fdpos.
+        ENDIF.
+        l_i = strlen( wa_obj-text ).
+        l_i = l_i - l_ty.
+        wa_obj1-text = wa_obj-text+l_ty(l_i).
+        REPLACE ALL OCCURRENCES OF 'LIKE' IN wa_obj1-text WITH space.
+        CONDENSE wa_obj1-text.
+        SPLIT wa_obj1-text AT '-' INTO l_like l_un.
+        SPLIT l_like AT ' ' INTO l_like l_un.
+        IF wa_obj1-text CS '-'.
+          l_ty = sy-fdpos.
+          l_i = strlen( wa_obj1-text ).
+          l_i = l_i - l_ty.
+          wa_obj1-text = wa_obj1-text+l_ty(l_i).
+        ENDIF.
+        REPLACE ALL OCCURRENCES OF '-' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'DATA' IN wa_obj1-text WITH space.
+
+        REPLACE ALL OCCURRENCES OF 'TABLE OF' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'STANDARD' IN wa_obj1-text WITH space.
+        REPLACE ALL OCCURRENCES OF 'OCCURS' IN    wa_obj1-text WITH space.
+        REPLACE ALL  OCCURRENCES OF 'WITH HEADER LINE' IN    wa_obj1-text WITH space.
+        SPLIT wa_obj1-text AT ' ' INTO wa_obj1-text l_un.
+        CONDENSE wa_obj1-text.
+        IF wa_obj1-text(1) CS 'Z' OR wa_obj1-text(1) CS 'Y'.
+          DATA : l_s TYPE string.
+          DATA l_s1 TYPE string.
+          CLEAR l_s.
+          REPLACE ALL OCCURRENCES OF ',' IN  wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF '.' IN  wa_obj1-text WITH space.
+          SPLIT wa_obj1-text AT space INTO l_s l_s1.
+          IF l_s IS NOT INITIAL.
+            wa_obj1-text = l_s.
+          ENDIF.
+          READ TABLE gt_like TRANSPORTING NO FIELDS WITH KEY = wa_obj1-text.
+          IF sy-subrc <> 0.
+            APPEND wa_obj1-text TO it_like.
+          ENDIF.
+        ENDIF.
+
+        IF l_like(1) = 'Y' OR l_like(1) = 'Z'.
+          READ TABLE gt_like TRANSPORTING NO FIELDS WITH KEY = l_like.
+          IF sy-subrc <> 0.
+            APPEND l_like TO it_like.
+          ENDIF.
+
+        ENDIF.
+*  ENDLOOP.
+*TRY.
+*CALL METHOD l_func->align_endda
+*  EXPORTING
+*    has_secondary_infty =
+*  changing
+*    pnnnn               =
+*    pnnnn2              =
+*    pref                =
+*    .
+**  CATCH cx_hrpa_violated_assertion.
+**ENDTRY.
+      WHEN 'FROM'.
+        wa_obj1 = wa_obj.
+*if wa_obj-text cs 'FROM'.
+        IF wa_obj-text CS 'MODIFY' OR  wa_obj-text CS 'INSERT' OR
+           wa_obj-text CS 'UPDATE' OR  wa_obj-text CS 'DELETE'.
+          REPLACE ALL OCCURRENCES OF 'MODIFY' IN wa_obj-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'INSERT' IN wa_obj-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'UPDATE' IN wa_obj-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'DELETE' IN wa_obj-text WITH space.
+          CONDENSE wa_obj-text.
+          IF wa_obj-text CS 'FROM'.
+            l_ty = sy-fdpos.
+            IF l_ty > 0.
+              wa_obj-text = wa_obj-text(l_ty).
+            ELSE.
+              REPLACE ALL OCCURRENCES OF 'FROM' IN wa_obj-text WITH space.
+              CONDENSE wa_obj-text.
+              IF wa_obj-text CS 'WHERE'.
+                l_ty = sy-fdpos.
+*  if l_ty > 0.
+                wa_obj-text = wa_obj-text(l_ty).
+              ENDIF.
+            ENDIF.
+            CONDENSE wa_obj-text.
+*  l_ty = sy-fdpos.
+* l_i = strlen( wa_obj-text ).
+*          l_i = l_i - l_ty.
+*          wa_obj-text = wa_obj-text+l_ty(l_i).
+* replace all OCCURRENCES OF 'FROM' in wa_obj-text with space.
+* CONDENSE wa_obj-text.
+            IF wa_obj-text(1) = 'Z' OR wa_obj-text(1) = 'Y'.
+              REPLACE ALL  OCCURRENCES OF '.'  IN wa_obj-text WITH space.
+              APPEND wa_obj-text TO gt_from.
+            ENDIF.
+          ENDIF.
+*endif.
+        ELSE.
+          CLEAR l_un.
+          IF wa_obj-text CS 'FROM'.
+            l_ty = sy-fdpos.
+            l_i = strlen( wa_obj-text ).
+            l_i = l_i - l_ty.
+            wa_obj-text = wa_obj-text+l_ty(l_i).
+            REPLACE ALL OCCURRENCES OF 'FROM' IN wa_obj-text WITH space.
+            CONDENSE wa_obj-text.
+            IF wa_obj-text(1) = 'Z' OR wa_obj-text(1) = 'Y'.
+              REPLACE ALL  OCCURRENCES OF '.'  IN wa_obj-text WITH space.
+              SPLIT wa_obj-text AT space INTO wa_obj-text l_un.
+              APPEND wa_obj-text TO gt_from.
+            ENDIF.
+          ENDIF.
+*endif.
+        ENDIF.
+
+      WHEN 'TABLES'.
+        CONDENSE wa_obj-text.
+        IF wa_obj-text(1) = 'T'.
+          REPLACE ALL  OCCURRENCES OF 'TABLES'  IN wa_obj-text WITH space.
+          REPLACE ALL  OCCURRENCES OF ','  IN wa_obj-text WITH space.
+          REPLACE ALL  OCCURRENCES OF '.'  IN wa_obj-text WITH space.
+          l_i = strlen( wa_obj-text ).
+          CLEAR l_func.
+          DO l_i TIMES.
+            l_var = wa_obj-text+l_v(1).
+            IF l_var = ' '.
+              IF l_func(1) = 'Z' OR l_func(1) = 'Y'.
+*                        if l_func is not INITIAL.
+                REPLACE ALL OCCURRENCES OF '*' IN l_func WITH space .
+                CONDENSE l_func.
+                APPEND l_func TO gt_tables.
+              ENDIF.
+              CLEAR l_func.
+*            EXIT.
+            ELSE.
+              CONCATENATE l_func l_var INTO l_func.
+            ENDIF.
+            l_v = l_v + 1.
+          ENDDO.
+* CONDENSE wa_obj-text.
+        ENDIF.
+        IF l_func IS NOT INITIAL.
+          REPLACE ALL OCCURRENCES OF '*' IN l_func WITH space .
+          CONDENSE l_func.
+          IF l_func(1) = 'Z' OR l_func(1) = 'Y'.
+            APPEND l_func TO gt_tables.
+          ENDIF.
+          CLEAR l_func.
+        ENDIF.
+      WHEN 'SUBMIT'.
+        REPLACE ALL OCCURRENCES OF 'SUBMIT' IN wa_obj-text WITH space.
+        CONDENSE wa_obj-text.
+        l_i = strlen( wa_obj-text ).
+        CLEAR l_func.
+        CLEAR l_v.
+        DO l_i TIMES.
+          l_var = wa_obj-text+l_v(1).
+          IF l_var = ' '.
+            EXIT.
+          ELSE.
+            CONCATENATE l_func l_var INTO l_func.
+          ENDIF.
+          l_v = l_v + 1.
+        ENDDO.
+        DATA lt_tadit TYPE TABLE OF tadir.
+        DATA ls_tadir TYPE tadir.
+        SELECT * INTO TABLE lt_tadit
+        FROM tadir
+        WHERE
+        obj_name = l_func.
+        LOOP AT lt_tadit INTO ls_tadir.
+          REFRESH l_include_tab.
+          CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+            EXPORTING
+              program             = ls_tadir-obj_name
+*             WITH_INACTIVE_INCLS = 'X'
+*             WITH_RESERVED_INCLUDES = 'X'
+              with_class_includes = 'X'
+*             with_e_includes     = 'X'
+            TABLES
+              includetab          = l_include_tab
+            EXCEPTIONS
+              not_existent        = 1
+              no_program          = 2
+              OTHERS              = 3.
+          IF sy-subrc <> 0.
+* Implement suitable error handling here
+          ENDIF.
+
+          APPEND ls_tadir-obj_name TO l_include_tab.
+          DATA repname2  TYPE  bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_t_repname.
+          DATA l_repname2 TYPE bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_s_repname.
+
+          DATA wa_include LIKE LINE OF l_include_tab.
+          LOOP AT l_include_tab INTO wa_include .
+            TRANSLATE wa_include TO UPPER CASE .
+            IF wa_include(1) = 'Y' OR wa_include(1) = 'Z'.
+
+
+              DATA it_e071 TYPE TABLE OF e071.
+              SELECT * INTO TABLE it_e071
+                FROM e071
+                WHERE obj_name = wa_include
+                ORDER BY trkorr DESCENDING.
+              IF sy-subrc = 0.
+                DATA wa_e071 TYPE e071.
+                DATA l_no TYPE flag.
+
+                LOOP AT it_e071 INTO wa_e071.
+                  READ TABLE gt_final INTO gs_final WITH KEY
+progname = wa_include type = wa_e071-object
+request = wa_e071-trkorr.
+                  IF sy-subrc = 0.
+                    l_no = 'X'.
+                    EXIT.
+                  ENDIF.
+                  gs_final-progname = wa_include.
+                  gs_final-type = wa_e071-object.
+                  gs_final-request = wa_e071-trkorr.
+                  APPEND gs_final TO gt_final.
+                  CLEAR gs_final.
+                ENDLOOP.
+              ENDIF.
+
+              IF l_no IS INITIAL.
+
+                LOOP AT it_scan INTO wa_scan.
+                  REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
+                  it_typ3,repname2.
+*    REFRESH: IT_OUTPUT.
+                  REFRESH it_output.
+
+                  l_repname2-sign = 'I'.
+                  l_repname2-option = 'EQ'.
+                  l_repname2-low = wa_include.
+                  APPEND l_repname2 TO repname2.
+
+
+                  PERFORM scan
+                        TABLES  repname2 devclass1
+                        USING wa_scan-srch_tem   .
+
+                  DELETE it_output WHERE hit = ' '.
+                  LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
+                    wa_obj-srch_tem  = wa_scan-srch_tem.
+                    wa_obj-repname = wa_output-repname.
+                    wa_obj-text   = wa_output-text.
+                    APPEND wa_obj TO it_obj_submit.
+*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
+                  ENDLOOP.
+
+                ENDLOOP.
+              ENDIF.
+
+            ENDIF.
+
+          ENDLOOP.
+        ENDLOOP.
+      WHEN 'IN PROGRAM'.
+*        BREAK-POINT.
+        CONDENSE wa_obj-text.
+        IF wa_obj-text CS 'IN PROGRAM'.
+          l_ty = sy-fdpos.
+          l_i = strlen( wa_obj-text ).
+          l_i = l_i - l_ty.
+          wa_obj-text = wa_obj-text+l_ty(l_i).
+          REPLACE ALL OCCURRENCES OF 'IN PROGRAM' IN wa_obj-text WITH space.
+          CONDENSE wa_obj-text.
+          IF wa_obj-text(1) = 'Z' OR wa_obj-text(1) = 'Y'.
+            SELECT * INTO TABLE lt_tadit
+                    FROM tadir
+                    WHERE
+                    obj_name = wa_obj-text.
+            LOOP AT lt_tadit INTO ls_tadir.
+              REFRESH l_include_tab.
+              CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+                EXPORTING
+                  program             = ls_tadir-obj_name
+*                 WITH_INACTIVE_INCLS = 'X'
+*                 WITH_RESERVED_INCLUDES = 'X'
+                  with_class_includes = 'X'
+*                 with_e_includes     = 'X'
+                TABLES
+                  includetab          = l_include_tab
+                EXCEPTIONS
+                  not_existent        = 1
+                  no_program          = 2
+                  OTHERS              = 3.
+              IF sy-subrc <> 0.
+* Implement suitable error handling here
+              ENDIF.
+
+              APPEND ls_tadir-obj_name TO l_include_tab.
+*          DATA repname2  TYPE  BGRFC_CPROG_RANGE WITH HEADER LINE."rsb4h_r_t_repname.
+*          DATA l_repname2 TYPE BGRFC_CPROG_RANGE with HEADER LINE."rsb4h_r_s_repname.
+
+*          data wa_include like LINE OF l_include_tab.
+              LOOP AT l_include_tab INTO wa_include .
+                TRANSLATE wa_include TO UPPER CASE .
+                IF wa_include(1) = 'Y' OR wa_include(1) = 'Z'.
+
+
+*              data it_e071 type TABLE OF e071.
+                  SELECT * INTO TABLE it_e071
+                    FROM e071
+                    WHERE obj_name = wa_include
+                    ORDER BY trkorr DESCENDING.
+                  IF sy-subrc = 0.
+*                data wa_e071 type e071.
+*                data l_no type flag.
+
+                    LOOP AT it_e071 INTO wa_e071.
+                      READ TABLE gt_final INTO gs_final WITH KEY
+    progname = wa_include type = wa_e071-object
+    request = wa_e071-trkorr.
+                      IF sy-subrc = 0.
+                        l_no = 'X'.
+                        EXIT.
+                      ENDIF.
+                      gs_final-progname = wa_include.
+                      gs_final-type = wa_e071-object.
+                      gs_final-request = wa_e071-trkorr.
+                      APPEND gs_final TO gt_final.
+                      CLEAR gs_final.
+                    ENDLOOP.
+                  ENDIF.
+
+                  IF l_no IS INITIAL.
+
+                    LOOP AT it_scan INTO wa_scan.
+                      REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
+                      it_typ3,repname2.
+*    REFRESH: IT_OUTPUT.
+                      REFRESH it_output.
+
+                      l_repname2-sign = 'I'.
+                      l_repname2-option = 'EQ'.
+                      l_repname2-low = wa_include.
+                      APPEND l_repname2 TO repname2.
+
+
+                      PERFORM scan
+                            TABLES  repname2 devclass1
+                            USING wa_scan-srch_tem   .
+
+                      DELETE it_output WHERE hit = ' '.
+                      LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
+                        wa_obj-srch_tem  = wa_scan-srch_tem.
+                        wa_obj-repname = wa_output-repname.
+                        wa_obj-text   = wa_output-text.
+                        APPEND wa_obj TO it_obj_submit.
+*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
+                      ENDLOOP.
+
+                    ENDLOOP.
+                  ENDIF.
+
+                ENDIF.
+
+              ENDLOOP.
+
+            ENDLOOP.
+          ENDIF.
+        ENDIF.
+      WHEN 'AUTHORITY-CHECK OBJECT'.
+*        BREAK-POINT.
+    ENDCASE.
+  ENDLOOP.
+
+
+
+  APPEND LINES OF it_like TO gt_like.
+  APPEND LINES OF it_type TO gt_type.
+  APPEND LINES OF it_func TO gt_func.
+  APPEND LINES OF it_class TO gt_class.
+  APPEND LINES OF gt_from TO gt_tables.
+
+  APPEND LINES OF it_obj TO gt_obj.
+  REFRESH it_obj.
+
+  APPEND LINES OF it_obj_submit TO it_obj.
+  REFRESH it_obj_submit.
+
+  DATA: it_import      TYPE TABLE OF rsimp,
+        it_changing    TYPE TABLE OF rscha,
+        it_export      TYPE TABLE OF rsexp,
+        it_tables_type TYPE TABLE OF rstbl,
+        it_exec        TYPE TABLE OF rsexc,
+        it_docu        TYPE TABLE OF rsfdo,
+        it_source      TYPE TABLE OF rssource,
+        wa_import      TYPE rsimp,
+        wa_changing    TYPE rscha,
+        wa_export      TYPE rsexp,
+        wa_tables_type TYPE  rstbl,
+        wa_exec        TYPE rsexc,
+        wa_docu        TYPE rsfdo,
+        wa_source      TYPE rssource.
+
+  IF it_func[] IS NOT INITIAL.
+    DATA it_tfdir TYPE TABLE OF tfdir.
+    SELECT * INTO TABLE it_tfdir
+      FROM  tfdir
+      FOR ALL ENTRIES IN it_func
+      WHERE
+      funcname = it_func-funcname.
+
+    LOOP AT it_tfdir INTO wa_func.
+
+      CALL FUNCTION 'RPY_FUNCTIONMODULE_READ'
+        EXPORTING
+          functionname       = wa_func-funcname
+* IMPORTING
+*         GLOBAL_FLAG        =
+*         REMOTE_CALL        =
+*         UPDATE_TASK        =
+*         SHORT_TEXT         =
+*         FUNCTION_POOL      =
+*         REMOTE_BASXML_SUPPORTED       =
+        TABLES
+          import_parameter   = it_import
+          changing_parameter = it_changing
+          export_parameter   = it_export
+          tables_parameter   = it_tables_type
+          exception_list     = it_exec
+          documentation      = it_docu
+          source             = it_source
+        EXCEPTIONS
+          error_message      = 1
+          function_not_found = 2
+          invalid_name       = 3
+          OTHERS             = 4.
+      IF sy-subrc = 0.
+        LOOP AT it_import INTO wa_import WHERE ( typ(1) = 'Z' OR typ(1) = 'Y' ).
+          gs_type = wa_import-typ.
+          APPEND gs_type TO gt_type.
+        ENDLOOP.
+
+        LOOP AT it_export INTO wa_export WHERE ( typ(1) = 'Z' OR typ(1) = 'Y' ).
+          gs_type = wa_export-typ.
+          APPEND gs_type TO gt_type.
+        ENDLOOP.
+
+        LOOP AT it_changing INTO wa_changing WHERE ( typ(1) = 'Z' OR typ(1) = 'Y' ).
+          gs_type = wa_changing-typ.
+          APPEND gs_type TO gt_type.
+        ENDLOOP.
+
+        LOOP AT it_tables_type INTO wa_tables_type WHERE ( dbstruct(1) = 'Z' OR dbstruct = 'Y' ).
+          gs_type = wa_tables_type-dbstruct.
+          APPEND gs_type TO gt_type.
+        ENDLOOP.
+* Implement suitable error handling here
+      ENDIF.
+
+
+*refresh : it_like,it_type,it_class,it_func.
+*  SELECT * INTO TABLE @DATA(lt_tadit)
+*  FROM tadir
+*  WHERE
+*  obj_name = @wa_func-pname.
+*
+*  PERFORM fill_it_scan .
+
+*  LOOP AT lt_tadit INTO DATA(ls_tadir).
+      REFRESH l_include_tab.
+      CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+        EXPORTING
+          program             = wa_func-pname
+*         WITH_INACTIVE_INCLS = 'X'
+*         WITH_RESERVED_INCLUDES = 'X'
+          with_class_includes = 'X'
+*         with_e_includes     = 'X'
+        TABLES
+          includetab          = l_include_tab
+        EXCEPTIONS
+          not_existent        = 1
+          no_program          = 2
+          OTHERS              = 3.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+*      DATA repname2  TYPE  rsb4h_r_t_repname.
+*      DATA l_repname2 TYPE rsb4h_r_s_repname.
+      REFRESH : repname2.
+      CLEAR l_repname2.
+
+      LOOP AT l_include_tab INTO wa_include.
+        TRANSLATE wa_include TO UPPER CASE .
+*        IF wa_include+1(1) = 'Y' OR wa_include+1(1) = 'Z'.
+        LOOP AT it_scan INTO wa_scan.
+          REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
+          it_typ3,repname2.
+*    REFRESH: IT_OUTPUT.
+          REFRESH it_output.
+
+          l_repname2-sign = 'I'.
+          l_repname2-option = 'EQ'.
+          l_repname2-low = wa_include.
+          APPEND l_repname2 TO repname2.
+
+
+          PERFORM scan
+                TABLES  repname2 devclass1
+                USING wa_scan-srch_tem   .
+
+          DELETE it_output WHERE hit = ' '.
+          LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
+            wa_obj-srch_tem  = wa_scan-srch_tem.
+            wa_obj-repname = wa_output-repname.
+            wa_obj-text   = wa_output-text.
+            APPEND wa_obj TO it_obj.
+*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
+          ENDLOOP.
+
+        ENDLOOP.
+*        ENDIF.
+      ENDLOOP.
+
+*  ENDLOOP.
+
+    ENDLOOP.
+  ENDIF.
+  DATA wa_class LIKE LINE OF it_class.
+  DATA it_wbcrossi TYPE TABLE OF wbcrossi.
+  LOOP AT it_class INTO wa_class.
+    CONCATENATE wa_class '%' INTO wa_class.
+    SELECT * INTO TABLE it_wbcrossi
+      FROM wbcrossi
+      WHERE
+      master LIKE wa_class.
+    IF sy-subrc = 0.
+      DATA wa_wbcrossi TYPE  wbcrossi.
+      LOOP AT it_wbcrossi INTO wa_wbcrossi.
+        LOOP AT it_scan INTO wa_scan.
+          REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
+          it_typ3,repname2.
+*    REFRESH: IT_OUTPUT.
+          REFRESH it_output.
+
+          l_repname2-sign = 'I'.
+          l_repname2-option = 'EQ'.
+          l_repname2-low = wa_wbcrossi-name.
+          APPEND l_repname2 TO repname2.
+
+
+          PERFORM scan
+                TABLES  repname2 devclass1
+                USING wa_scan-srch_tem   .
+
+          DELETE it_output WHERE hit = ' '.
+          LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
+            wa_obj-srch_tem  = wa_scan-srch_tem.
+            wa_obj-repname = wa_output-repname.
+            wa_obj-text   = wa_output-text.
+            APPEND wa_obj TO it_obj.
+*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
+          ENDLOOP.
+
+        ENDLOOP.
+
+
+      ENDLOOP.
+    ENDIF.
+
+  ENDLOOP.
+
+*loop at it_like into data(wa_like).
+*           REPLACE ALL OCCURRENCES OF 'DATA' IN wa_like WITH space.
+*        REPLACE ALL OCCURRENCES OF 'LIKE' IN wa_like WITH space.
+*if wa_like cs '-'.
+* l_ty = sy-fdpos.
+*
+*endif.
+*ENDLOOP.
+
+
+ENDFORM.
+
+
+
+*Selection Text
+*DEVCLAS1	Package
+*P_LIST	Detail_list
+*REPNAME1	Program Name
+*TCODE  Transaction Code
+*
+*
+*Test Symbol
+*001  '
