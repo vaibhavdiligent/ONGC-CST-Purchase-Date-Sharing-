@@ -726,6 +726,9 @@ FORM process_selected.
       WHEN 'WDYN' OR 'WDYA' OR 'WDCA' OR 'WDCC'.
         lcl_util=>add_msg( iv_type = 'W'
                            iv_text = |{ wa_selected-object } { wa_selected-obj_name } - WEB DYNPRO IS NOT COPIED BY THIS REPORT| ).
+      WHEN 'DEVC'.
+        lcl_util=>add_msg( iv_type = 'I'
+                           iv_text = |DEVC { wa_selected-obj_name } - PACKAGE NOT COPIED, OBJECTS ARE CREATED IN { p_pk }| ).
       WHEN 'SOBJ'.
         lcl_util=>add_msg( iv_type = 'W'
                            iv_text = |{ wa_selected-object } { wa_selected-obj_name } - BUSINESS OBJECT: RE-CREATE IN SWO1| ).
