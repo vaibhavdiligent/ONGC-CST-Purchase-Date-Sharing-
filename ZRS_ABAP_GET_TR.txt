@@ -1,7 +1,14 @@
 *&---------------------------------------------------------------------*
-*& REPORT ZATC_SCAN_PROGRAM
+*& REPORT ZATC_SCAN_PROGRAM   (file ZRS_ABAP_GET_TR)
 *&---------------------------------------------------------------------*
+*& RUNS IN ECC (SOURCE SYSTEM).
+*& Finds every customer object a program / transaction depends on
+*& (SAP environment analysis, recursive) and records all of them in
+*& one transport request. That request is then the source request of
+*& ZTR_OBJECTS_REPORT, which runs in S/4HANA and copies the objects.
 *&
+*& Syntax: kept at ABAP 7.02 level (no inline DATA( ), VALUE #, CONV,
+*& NEW, @host variables) so it compiles on any ECC 6.0 release.
 *&---------------------------------------------------------------------*
 REPORT zatc_scan_program.
 
@@ -10,7 +17,7 @@ REPORT zatc_scan_program.
 
 *FUNCTION-POOL ZSCAN_COMPLEXITY.             "MESSAGE-ID ..
 TYPE-POOLS seop.
-DATA abap_true TYPE flag VALUE 'X'.
+TYPE-POOLS abap.      " ABAP_TRUE / ABAP_FALSE
 DATA it_includes TYPE seop_methods_w_include.
 DATA it_clskey TYPE seoclskey.
 
@@ -219,6 +226,12 @@ DATA gt_type TYPE TABLE OF char255."tfdir.
 DATA gt_like TYPE TABLE OF char255.
 DATA gt_from TYPE TABLE OF char255.
 DATA gt_tables TYPE TABLE OF char255.
+" ALL Z/Y PROGRAMS AND INCLUDES FOUND (ALSO THE ONES NEVER TRANSPORTED)
+DATA gt_all_names TYPE TABLE OF char255.
+" WORK LIST OF THE DEPENDENCY PASS (FORM EXPAND_DEPENDENCIES)
+TYPES ty_name_set TYPE HASHED TABLE OF char255 WITH UNIQUE KEY table_line.
+DATA gt_cand TYPE STANDARD TABLE OF char255.
+DATA gt_seen TYPE ty_name_set.
 
 TYPES:
   BEGIN OF ty_dynpro,
@@ -1514,378 +1527,8 @@ ENDCLASS.
 CLASS lcl_event_handler IMPLEMENTATION.
   METHOD handle_user_command.
     CASE e_salv_function.
-      WHEN 'TR'.  " Your custom button's function code
-
-        DATA gt_final_t TYPE TABLE OF ty_final_m.
-
-        MOVE gt_final TO gt_final_t.
-        SORT gt_final_t BY progname type .
-        DELETE ADJACENT DUPLICATES FROM gt_final_t COMPARING progname type.
-        DATA l_order TYPE trwbo_request_header.
-        DATA l_task TYPE trwbo_request_headers.
-        DATA l_e071 TYPE e071.
-        DATA it_e071 TYPE TABLE OF e071.
-        DATA it_e071_1 TYPE TABLE OF e071.
-        DATA wa_enlfdir TYPE enlfdir.
-        DATA l_obj_name TYPE sobj_name.
-
-        LOOP AT gt_final_t INTO gs_final WHERE type <> 'TABU'.
-
-          SELECT  * INTO TABLE  it_e071_1
-            FROM e071
-            WHERE
-            object = gs_final-type
-            AND
-            obj_name = gs_final-progname.
-          IF sy-subrc = 0.
-            DELETE ADJACENT DUPLICATES FROM it_e071 COMPARING
-               pgmid object obj_name.
-            LOOP AT it_e071_1 INTO l_e071.
-              APPEND l_e071 TO it_e071.
-            ENDLOOP.
-
-*  BREAK-POINT.
-          ENDIF.
-*          endselect.
-          IF sy-subrc <> 0.
-*            else.
-            SELECT  * INTO wa_enlfdir
-                 FROM enlfdir
-                 WHERE
-                 funcname = gs_final-progname.
-              IF sy-subrc = 0.
-                SELECT  * INTO TABLE  it_e071_1
-          FROM e071
-          WHERE obj_name = wa_enlfdir-area.
-                IF sy-subrc = 0.
-                  DELETE ADJACENT DUPLICATES FROM it_e071 COMPARING
-                  pgmid object obj_name.
-                  LOOP AT it_e071_1 INTO l_e071.
-                    APPEND l_e071 TO it_e071.
-                  ENDLOOP.
-                ENDIF.
-
-              ENDIF.
-            ENDSELECT.
-          ENDIF.
-        ENDLOOP.
-
-*        BREAK-POINT.
-        DATA it_e071_t TYPE TABLE OF e071.
-        DATA it_e071k_t TYPE TABLE OF e071k.
-
-*CALL FUNCTION 'TR_INSERT_REQUEST_WITH_TASKS'
-*  EXPORTING
-*    IV_TYPE                 = 'T'
-*    IV_TEXT                 = 'DNT'
-**   IV_OWNER                = SY-UNAME
-**   IV_TARGET               =
-**   IT_ATTRIBUTES           =
-**   IT_USERS                =
-**   IV_TARDEVCL             =
-**   IV_DEVCLASS             =
-**   IV_TARLAYER             =
-* IMPORTING
-*   ES_REQUEST_HEADER       = l_order
-*   ET_TASK_HEADERS         = l_task
-* EXCEPTIONS
-*   INSERT_FAILED           = 1
-*   ENQUEUE_FAILED          = 2
-*   OTHERS                  = 3
-*          .
-*IF SY-SUBRC <> 0.
-** Implement suitable error handling here
-*ENDIF.
-*
-*
-*CALL FUNCTION 'TRINT_ORDER_CHOICE'
-* EXPORTING
-**   WI_SIMULATION                = ' '
-*   WI_ORDER_TYPE                = 'T'
-*   WI_TASK_TYPE                 = 'T'
-**   WI_CATEGORY                  = 'SYST'
-**   WI_CLIENT                    = SY-MANDT
-**   IV_TARSYSTEM                 = ' '
-**   WI_ORDER                     = ' '
-**   WI_E070                      =
-**   WI_SUPPRESS_DIALOG           = ' '
-**   WI_CLI_DEP                   = ' '
-**   WI_REMOVE_LOCKS              = 'X'
-**   WI_DISPLAY_BUTTON            = ' '
-**   WI_APPEND_TO_ORDER           = ' '
-**   WI_APPEND_TO_FO              = ' '
-**   IV_CURRENT_PROJECT           = ' '
-**   IV_WARN_NOSTAND_TAR          = ' '
-**   IV_PROJECT_CHECK             = ' '
-* IMPORTING
-*   WE_ORDER                     = l_order
-*   WE_TASK                      = l_task
-*  TABLES
-*    WT_E071                      = it_e071_t
-*    WT_E071K                     = it_e071k_t
-* EXCEPTIONS
-*   NO_CORRECTION_SELECTED       = 1
-*   DISPLAY_MODE                 = 2
-*   OBJECT_APPEND_ERROR          = 3
-*   RECURSIVE_CALL               = 4
-*   WRONG_ORDER_TYPE             = 5
-*   OTHERS                       = 6
-*          .
-*IF SY-SUBRC <> 0.
-* Implement suitable error handling here
-*ENDIF.
-
-*
-*CALL FUNCTION 'TR_ORDER_CHOICE_CORRECTION'
-* EXPORTING
-*   IV_CATEGORY                  = 'SYST'
-*   IV_CLI_DEP                   = ' '
-**   IV_PROJECT_CHECK             = ' '
-* IMPORTING
-*   EV_ORDER                     = l_order
-*   EV_TASK                      = l_task
-* EXCEPTIONS
-*   INVALID_CATEGORY             = 1
-*   NO_CORRECTION_SELECTED       = 2
-*   OTHERS                       = 3
-*          .
-        IF sy-subrc <> 0.
-          EXIT.
-* Implement suitable error handling here
-        ELSE.
-
-          LOOP AT it_e071 INTO l_e071.
-            l_e071-trkorr = l_order-trkorr.
-            MODIFY it_e071 FROM l_e071 INDEX sy-tabix TRANSPORTING trkorr.
-          ENDLOOP.
-
-          SORT it_e071 BY trkorr
-*AS4POS
-          pgmid
-          object
-          obj_name
-          objfunc
-*LOCKFLAG
-          gennum
-          lang
-          activity.
-          DELETE ADJACENT DUPLICATES FROM it_e071 COMPARING
-          trkorr
-*AS4POS
-          pgmid
-          object
-          obj_name
-          objfunc
-*LOCKFLAG
-          gennum
-          lang
-          activity
-          .
-
-          DATA l_aspos TYPE ddposition VALUE '000001'.
-          LOOP AT it_e071 INTO l_e071.
-            l_e071-as4pos = l_aspos.
-            l_aspos = l_aspos + 1.
-            MODIFY it_e071 FROM l_e071 INDEX sy-tabix TRANSPORTING as4pos.
-          ENDLOOP.
-
-          DATA it_e071k TYPE TABLE OF e071k.
-          DATA it_ko200 TYPE TABLE OF ko200.
-          DATA wa_ko200 TYPE ko200.
-          DATA l_edisegment TYPE edisegment.
-
-          LOOP AT it_e071 INTO l_e071 WHERE object(1) <> 'S'.
-
-*            select single * into l_EDISEGMENT
-*              from EDISEGMENT
-*              where
-*              SEGTYP = l_e071-obj_name.
-*              if sy-subrc = 0.
-*                CONTINUE.
-*                endif.
-*                endif.
-            MOVE-CORRESPONDING l_e071 TO wa_ko200.
-            APPEND wa_ko200 TO it_ko200.
-            IF l_e071-object = 'TABL' AND l_e071-obj_name(1) = 'Z'.
-              l_obj_name = l_e071-obj_name.
-              CALL FUNCTION 'TRINT_TADIR_UPDATE'
-                EXPORTING
-                  pgmid                = l_e071-pgmid
-                  object               = l_e071-object
-                  obj_name             = l_obj_name "l_e071-obj_name
-*                 AUTHOR               = '~'
-*                 CPROJECT             = '~'
-*                 DEVCLASS             = '~'
-                  edtflag              = ' '
-*                 GENFLAG              = '~'
-*                 MASTERLANG           = '~'
-*                 SRCDEP               = '~'
-*                 SRCSYSTEM            = '~'
-*                 VERSID               = '~'
-*                 PAKNOCHECK           = '~'
-*                 OBJSTABLTY           = '~'
-*                 DELFLAG              = '~'
-*                 TRANSL_TECH_TEXT     = '~'
-*                 CREATED_ON           = '~'
-*                 CHECK_DATE           = '~'
-*                 CHECK_CFG            = '~'
-*             IMPORTING
-*                 ES_TADIR             =
-                EXCEPTIONS
-                  object_has_no_tadir  = 1
-                  object_exists_global = 2
-                  OTHERS               = 3.
-              IF sy-subrc <> 0.
-* Implement suitable error handling here
-              ENDIF.
-            ENDIF.
-
-*            endif.
-          ENDLOOP.
-
-          CALL FUNCTION 'TR_OBJECTS_CHECK'
-            EXPORTING
-*             IV_NO_STANDARD_EDITOR   = ' '
-              iv_no_show_option       = 'X'
-*             IV_EXTERNALPS           = ' '
-*             IV_EXTERNALID           = ' '
-*             IV_NO_PS                = ' '
-* IMPORTING
-*             WE_ORDER                =
-*             WE_TASK                 =
-*             WE_OBJECTS_APPENDABLE   =
-            TABLES
-              wt_ko200                = it_ko200
-*             WT_E071K                =
-*             TT_TADIR                =
-            EXCEPTIONS
-              cancel_edit_other_error = 1
-              show_only_other_error   = 2
-              OTHERS                  = 3.
-          IF sy-subrc = 0.
-* Implement suitable error handling here
-*ENDIF.
-
-
-            CALL FUNCTION 'TR_OBJECTS_INSERT'
-              EXPORTING
-                wi_order                = l_order-trkorr
-*               IV_NO_STANDARD_EDITOR   = ' '
-*               IV_NO_SHOW_OPTION       = ' '
-*               IV_EXTERNALPS           = ' '
-*               IV_EXTERNALID           = ' '
-*               IV_NO_PS                = ' '
-* IMPORTING
-*               WE_ORDER                =
-*               WE_TASK                 =
-              TABLES
-                wt_ko200                = it_ko200
-*               WT_E071K                =
-*               TT_TADIR                =
-              EXCEPTIONS
-                cancel_edit_other_error = 1
-                show_only_other_error   = 2
-                OTHERS                  = 3.
-            IF sy-subrc = 0.
-              COMMIT WORK.
-* Implement suitable error handling here
-            ENDIF.
-          ENDIF.
-
-*CALL FUNCTION 'TR_APPEND_TO_COMM_OBJS_KEYS'
-*  EXPORTING
-**   WI_SIMULATION                        = ' '
-*   WI_SUPPRESS_KEY_CHECK                = 'X'
-*    WI_TRKORR                            = l_order-trkorr
-*  TABLES
-*    WT_E071                              = it_e071
-*    WT_E071K                             = it_e071k
-* EXCEPTIONS
-*   KEY_CHAR_IN_NON_CHAR_FIELD           = 1
-*   KEY_CHECK_KEYSYNTAX_ERROR            = 2
-*   KEY_INTTAB_TABLE                     = 3
-*   KEY_LONGER_FIELD_BUT_NO_GENERC       = 4
-*   KEY_MISSING_KEY_MASTER_FIELDS        = 5
-*   KEY_MISSING_KEY_TABLEKEY             = 6
-*   KEY_NON_CHAR_BUT_NO_GENERIC          = 7
-*   KEY_NO_KEY_FIELDS                    = 8
-*   KEY_STRING_LONGER_CHAR_KEY           = 9
-*   KEY_TABLE_HAS_NO_FIELDS              = 10
-*   KEY_TABLE_NOT_ACTIV                  = 11
-*   KEY_UNALLOWED_KEY_FUNCTION           = 12
-*   KEY_UNALLOWED_KEY_OBJECT             = 13
-*   KEY_UNALLOWED_KEY_OBJNAME            = 14
-*   KEY_UNALLOWED_KEY_PGMID              = 15
-*   KEY_WITHOUT_HEADER                   = 16
-*   OB_CHECK_OBJ_ERROR                   = 17
-*   OB_DEVCLASS_NO_EXIST                 = 18
-*   OB_EMPTY_KEY                         = 19
-*   OB_GENERIC_OBJECTNAME                = 20
-*   OB_ILL_DELIVERY_TRANSPORT            = 21
-*   OB_ILL_LOCK                          = 22
-*   OB_ILL_PARTS_TRANSPORT               = 23
-*   OB_ILL_SOURCE_SYSTEM                 = 24
-*   OB_ILL_SYSTEM_OBJECT                 = 25
-*   OB_ILL_TARGET                        = 26
-*   OB_INTTAB_TABLE                      = 27
-*   OB_LOCAL_OBJECT                      = 28
-*   OB_LOCKED_BY_OTHER                   = 29
-*   OB_MODIF_ONLY_IN_MODIF_ORDER         = 30
-*   OB_NAME_TOO_LONG                     = 31
-*   OB_NO_APPEND_OF_CORR_ENTRY           = 32
-*   OB_NO_APPEND_OF_C_MEMBER             = 33
-*   OB_NO_CONSOLIDATION_TRANSPORT        = 34
-*   OB_NO_ORIGINAL                       = 35
-*   OB_NO_SHARED_REPAIRS                 = 36
-*   OB_NO_SYSTEMNAME                     = 37
-*   OB_NO_SYSTEMTYPE                     = 38
-*   OB_NO_TADIR                          = 39
-*   OB_NO_TADIR_NOT_LOCKABLE             = 40
-*   OB_PRIVAT_OBJECT                     = 41
-*   OB_REPAIR_ONLY_IN_REPAIR_ORDER       = 42
-*   OB_RESERVED_NAME                     = 43
-*   OB_SYNTAX_ERROR                      = 44
-*   OB_TABLE_HAS_NO_FIELDS               = 45
-*   OB_TABLE_NOT_ACTIV                   = 46
-*   TR_ENQUEUE_FAILED                    = 47
-*   TR_ERRORS_IN_ERROR_TABLE             = 48
-*   TR_ILL_KORRNUM                       = 49
-*   TR_LOCKMOD_FAILED                    = 50
-*   TR_LOCK_ENQUEUE_FAILED               = 51
-*   TR_NOT_OWNER                         = 52
-*   TR_NO_SYSTEMNAME                     = 53
-*   TR_NO_SYSTEMTYPE                     = 54
-*   TR_ORDER_NOT_EXIST                   = 55
-*   TR_ORDER_RELEASED                    = 56
-*   TR_ORDER_UPDATE_ERROR                = 57
-*   TR_WRONG_ORDER_TYPE                  = 58
-*   OB_INVALID_TARGET_SYSTEM             = 59
-*   TR_NO_AUTHORIZATION                  = 60
-*   OB_WRONG_TABLETYP                    = 61
-*   OB_WRONG_CATEGORY                    = 62
-*   OB_SYSTEM_ERROR                      = 63
-*   OB_UNLOCAL_OBJEKT_IN_LOCAL_ORD       = 64
-*   TR_WRONG_CLIENT                      = 65
-*   OB_WRONG_CLIENT                      = 66
-*   KEY_WRONG_CLIENT                     = 67
-*   OTHERS                               = 68
-*          .
-*IF SY-SUBRC <> 0.
-** Implement suitable error handling here
-*  else.
-*    commit WORK.
-*ENDIF.
-
-
-        ENDIF.
-*
-*if l_task is not INITIAL.
-*
-*
-*ENDIF.
-
-*        MESSAGE 'Custom button clicked!' TYPE 'I'.
-        " Add your custom logic here
+      WHEN 'TR'.  " PUT ALL LISTED OBJECTS INTO ONE TRANSPORT REQUEST
+        PERFORM transport_objects.
     ENDCASE.
   ENDMETHOD.
 ENDCLASS.
@@ -1895,6 +1538,10 @@ SELECT-OPTIONS : repname1  FOR trdir-name,
 devclas1 FOR tadir-devclass OBLIGATORY,
 tcode FOR tstc-tcode.
 PARAMETER p_list TYPE c AS CHECKBOX.
+" TARGET REQUEST IN THIS SYSTEM FOR THE 'TR' BUTTON (BLANK = CHOOSE /
+" CREATE IN A POPUP). THIS REQUEST IS THE SOURCE REQUEST (P_TR) OF
+" ZTR_OBJECTS_REPORT IN THE NEW SYSTEM.
+PARAMETERS p_trkorr TYPE e070-trkorr.
 
 
 INITIALIZATION.
@@ -1929,351 +1576,33 @@ START-OF-SELECTION.
       obj_name = it_tstc-pgmna.
   ENDIF.
 
-  PERFORM fill_it_scan .
-
+  " DECLARATIONS KEPT FOR THE LIST PART BELOW
   DATA ls_tadir TYPE tadir.
-  LOOP AT lt_tadir INTO ls_tadir.
-    REFRESH l_include_tab.
-    CALL FUNCTION 'RS_GET_ALL_INCLUDES'
-      EXPORTING
-        program             = ls_tadir-obj_name
-*       WITH_INACTIVE_INCLS = ' '
-*       WITH_RESERVED_INCLUDES =
-        with_class_includes = 'X'
-      TABLES
-        includetab          = l_include_tab
-      EXCEPTIONS
-        not_existent        = 1
-        no_program          = 2
-        OTHERS              = 3.
-    IF sy-subrc <> 0.
-* Implement suitable error handling here
-    ENDIF.
+  DATA repname2  TYPE  bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_t_repname.
+  DATA l_repname2 TYPE bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_s_repname.
+  DATA wa_include LIKE LINE OF l_include_tab.
+  DATA it_e071 TYPE TABLE OF e071.
+  DATA wa_e071 TYPE e071.
+  DATA l_tabname TYPE tabname.
+  DATA gs_func LIKE LINE OF gt_func.
+  DATA it_enlfdir TYPE TABLE OF enlfdir.
+  DATA wa_enlfdir TYPE enlfdir.
+  DATA gs_type LIKE LINE OF gt_type.
+  DATA it_dd03l TYPE TABLE OF dd03l.
+  DATA wa_dd03l TYPE dd03l.
+  DATA l_tvdir TYPE tvdir.
 
-*    CALL FUNCTION 'RS_GET_ALL_INCLUDES'
-*      EXPORTING
-*        program             = ls_tadir-obj_name
-**       WITH_INACTIVE_INCLS = 'X'
-**       WITH_RESERVED_INCLUDES       = 'X'
-*        with_class_includes = 'X'
-*        with_e_includes     = 'X'
-*      TABLES
-*        includetab          = l_include_tab
-*      EXCEPTIONS
-*        not_existent        = 1
-*        no_program          = 2
-*        OTHERS              = 3.
-*    IF sy-subrc <> 0.
-** Implement suitable error handling here
-*    ENDIF.
+  " ------------------------------------------------------------------
+  " DEPENDENCIES: SAP ENVIRONMENT ANALYSIS (THE SAME AS SE80 ->
+  " ENVIRONMENT ANALYSIS / WHERE-USED INDEX) INSTEAD OF A TEXT SCAN OF
+  " THE SOURCE. FOLLOWED RECURSIVELY FOR CUSTOMER OBJECTS ONLY.
+  " ------------------------------------------------------------------
+  PERFORM analyse_environment.
+  READ TABLE lt_tadir INTO ls_tadir INDEX 1.   " MAIN PROGRAM FOR THE LIST
 
-    APPEND ls_tadir-obj_name TO l_include_tab.
-    DATA repname2  TYPE  bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_t_repname.
-    DATA l_repname2 TYPE bgrfc_cprog_range WITH HEADER LINE."rsb4h_r_s_repname.
-
-    DATA wa_include LIKE LINE OF l_include_tab.
-    LOOP AT l_include_tab INTO wa_include.
-      TRANSLATE wa_include TO UPPER CASE .
-      IF wa_include(1) = 'Y' OR wa_include(1) = 'Z'.
-        LOOP AT it_scan INTO wa_scan.
-          REFRESH : gt_output , it_dtl, it_typ1,it_tab,it_dtl,it_typ1,it_typ2,
-          it_typ3,repname2.
-*    REFRESH: IT_OUTPUT.
-          REFRESH it_output.
-
-          l_repname2-sign = 'I'.
-          l_repname2-option = 'EQ'.
-          l_repname2-low = wa_include.
-          APPEND l_repname2 TO repname2.
-
-
-          PERFORM scan
-                TABLES  repname2 devclass1
-                USING wa_scan-srch_tem   .
-
-          DELETE it_output WHERE hit = ' '.
-          LOOP AT it_output INTO wa_output ."where text cs 'Z' or text cs 'Y'.
-            wa_obj-srch_tem  = wa_scan-srch_tem.
-            wa_obj-repname = wa_output-repname.
-            wa_obj-text   = wa_output-text.
-            APPEND wa_obj TO it_obj.
-*replace ALL OCCURRENCES OF wa_scan-srch_tem in wa_output-
-          ENDLOOP.
-
-        ENDLOOP.
-
-        DATA it_e071 TYPE TABLE OF e071.
-        SELECT * INTO TABLE it_e071
-          FROM e071
-          WHERE obj_name = wa_include
-          ORDER BY trkorr DESCENDING.
-        IF sy-subrc = 0.
-          DATA wa_e071 TYPE e071.
-          LOOP AT it_e071 INTO wa_e071.
-            gs_final-progname = wa_include.
-            gs_final-type = wa_e071-object.
-            gs_final-request = wa_e071-trkorr.
-            gs_final-main_program = ls_tadir-obj_name.
-            APPEND gs_final TO gt_final.
-            CLEAR gs_final.
-          ENDLOOP.
-        ENDIF.
-      ENDIF.
-
-    ENDLOOP.
-
-*  ENDLOOP.
-
-
-    DO.
-
-      PERFORM process_data.
-      IF it_obj[] IS INITIAL.
-        EXIT.
-      ENDIF.
-    ENDDO.
-
-
-
-*    WAIT UP TO 1 SECONDS.
-
-    DATA l_tabname TYPE tabname.
-*    data it_e071 type TABLE OF e071.
-    DATA gs_func LIKE LINE OF gt_func.
-    DATA it_enlfdir TYPE TABLE OF enlfdir.
-    DATA wa_enlfdir TYPE enlfdir.
-    LOOP AT gt_func INTO gs_func.
-      SELECT * INTO TABLE it_e071
-        FROM e071
-        WHERE obj_name = gs_func-funcname
-        ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_func-funcname.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-      ELSE.
-        SELECT SINGLE * INTO @DATA(l_tfdir)
-          FROM tfdir
-          WHERE
-          funcname =  @gs_func-funcname.
-        IF sy-subrc = 0.
-          gs_final-progname = l_tfdir-funcname.
-          gs_final-type = 'FUNC'.
-*          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ELSE.
-          gs_final-progname = gs_func-funcname.
-          gs_final-type = 'RFC'.
-*          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDIF.
-      ENDIF.
-*      endif.
-      SELECT SINGLE * INTO wa_enlfdir
-        FROM enlfdir
-        WHERE
-        funcname = gs_func-funcname.
-      IF sy-subrc = 0.
-        SELECT * INTO TABLE it_e071
-  FROM e071
-  WHERE obj_name = wa_enlfdir-area
-  ORDER BY trkorr DESCENDING.
-        IF sy-subrc = 0.
-          LOOP AT it_e071 INTO wa_e071.
-            gs_final-progname = wa_enlfdir-area."gs_func-funcname.
-            gs_final-type = wa_e071-object.
-            gs_final-request = wa_e071-trkorr.
-            gs_final-main_program = ls_tadir-obj_name.
-            APPEND gs_final TO gt_final.
-            CLEAR gs_final.
-          ENDLOOP.
-
-*          ENDIF.
-*        ENDIF.
-        ELSE.
-          gs_final-progname = wa_enlfdir-area.
-          gs_final-type = 'FUGR'.
-*          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-
-    DATA gs_type LIKE LINE OF gt_type.
-    LOOP AT gt_type INTO gs_type.
-      SELECT * INTO TABLE it_e071
-        FROM e071
-        WHERE obj_name = gs_type
-        ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_type.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-      ELSE.
-
-      ENDIF.
-      l_tabname = gs_type.
-      DATA it_dd03l TYPE TABLE OF dd03l.
-      DATA wa_dd03l TYPE dd03l.
-      SELECT * INTO TABLE it_dd03l
-        FROM dd03l
-        WHERE
-        tabname = l_tabname
-        AND
-        ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
-      IF sy-subrc = 0.
-        LOOP AT it_dd03l INTO wa_dd03l.
-          SELECT * INTO TABLE it_e071
-            FROM e071
-            WHERE obj_name = wa_dd03l-rollname
-            ORDER BY trkorr DESCENDING.
-          IF sy-subrc = 0.
-            LOOP AT it_e071 INTO wa_e071.
-              gs_final-progname = wa_dd03l-rollname.
-              gs_final-type = wa_e071-object.
-              gs_final-request = wa_e071-trkorr.
-              gs_final-main_program = ls_tadir-obj_name.
-              APPEND gs_final TO gt_final.
-              CLEAR gs_final.
-            ENDLOOP.
-          ENDIF.
-        ENDLOOP.
-      ENDIF.
-*      ENDIF.
-    ENDLOOP.
-
-*  ENDLOOP.
-
-*data gs_table like LINE OF gt_tables.
-    DATA l_tvdir TYPE tvdir.
-    LOOP AT gt_tables INTO gs_type.
-      SELECT * INTO TABLE it_e071
-            FROM e071
-            WHERE obj_name = gs_type
-            ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_type.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-
-        l_tabname = gs_type.
-*        data it_dd03l type TABLE OF dd03l.
-*        data wa_dd03l type dd03l.
-        SELECT * INTO TABLE it_dd03l
-          FROM dd03l
-          WHERE
-          tabname = l_tabname
-          AND
-          ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
-        IF sy-subrc = 0.
-          LOOP AT it_dd03l INTO wa_dd03l.
-            SELECT * INTO TABLE it_e071
-              FROM e071
-              WHERE obj_name = wa_dd03l-rollname
-              ORDER BY trkorr DESCENDING.
-            IF sy-subrc = 0.
-              LOOP AT it_e071 INTO wa_e071.
-                gs_final-progname =  wa_dd03l-rollname.
-                gs_final-type = wa_e071-object.
-                gs_final-request = wa_e071-trkorr.
-                gs_final-main_program = ls_tadir-obj_name.
-                APPEND gs_final TO gt_final.
-                CLEAR gs_final.
-              ENDLOOP.
-            ENDIF.
-          ENDLOOP.
-        ENDIF.
-        SELECT SINGLE * INTO l_tvdir
-        FROM tvdir
-        WHERE
-        tabname = gs_type.
-        IF sy-subrc = 0.
-          SELECT * INTO TABLE it_e071
-  FROM e071
-  WHERE obj_name = l_tvdir-area
-  ORDER BY trkorr DESCENDING.
-          IF sy-subrc = 0.
-            LOOP AT it_e071 INTO wa_e071.
-              gs_final-progname = l_tvdir-area.
-              gs_final-type = wa_e071-object.
-              gs_final-request = wa_e071-trkorr.
-              gs_final-main_program = ls_tadir-obj_name.
-              APPEND gs_final TO gt_final.
-              CLEAR gs_final.
-            ENDLOOP.
-          ENDIF.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-
-    LOOP AT gt_like INTO gs_type.
-      SELECT * INTO TABLE it_e071
-            FROM e071
-            WHERE obj_name = gs_type
-            ORDER BY trkorr DESCENDING.
-      IF sy-subrc = 0.
-        LOOP AT it_e071 INTO wa_e071.
-          gs_final-progname = gs_type.
-          gs_final-type = wa_e071-object.
-          gs_final-request = wa_e071-trkorr.
-          gs_final-main_program = ls_tadir-obj_name.
-          APPEND gs_final TO gt_final.
-          CLEAR gs_final.
-        ENDLOOP.
-
-        l_tabname = gs_type.
-*        data it_dd03l type TABLE OF dd03l.
-*        data wa_dd03l type dd03l.
-        SELECT * INTO TABLE it_dd03l
-          FROM dd03l
-          WHERE
-          tabname = l_tabname
-          AND
-          ( rollname LIKE 'Z%' OR rollname LIKE 'Y%' ).
-        IF sy-subrc = 0.
-          LOOP AT it_dd03l INTO wa_dd03l.
-            SELECT * INTO TABLE it_e071
-              FROM e071
-              WHERE obj_name = wa_dd03l-rollname
-              ORDER BY trkorr DESCENDING.
-            IF sy-subrc = 0.
-              LOOP AT it_e071 INTO wa_e071.
-                gs_final-main_program = ls_tadir-obj_name.
-                gs_final-progname = wa_dd03l-rollname.
-                gs_final-type = wa_e071-object.
-                gs_final-request = wa_e071-trkorr.
-                gs_final-main_program = ls_tadir-obj_name.
-                APPEND gs_final TO gt_final.
-                CLEAR gs_final.
-              ENDLOOP.
-            ENDIF.
-          ENDLOOP.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-
-  ENDLOOP.
+  " ADD OBJECTS NEVER TRANSPORTED BEFORE AND THE DDIC DEPENDENCIES
+  " (SEARCH HELPS, MAINTENANCE DIALOGS, CHECK TABLES, INCLUDES ...)
+  PERFORM expand_dependencies.
 
   SORT gt_final BY progname type request.
   DELETE ADJACENT DUPLICATES FROM gt_final COMPARING progname type request.
@@ -2342,11 +1671,25 @@ START-OF-SELECTION.
 
 
 
-    SELECT * FROM tadir
-      INTO TABLE lt_tadir1
-      FOR ALL ENTRIES IN gt_final
-      WHERE obj_name = gt_final-progname(40).
-
+    " OBJECT DIRECTORY ENTRIES OF THE LISTED OBJECTS (TYPED HELPER TABLE:
+    " NO OFFSET/LENGTH ON A FOR ALL ENTRIES COMPONENT, AND NEVER EMPTY)
+    DATA lt_names TYPE STANDARD TABLE OF sobj_name.
+    DATA lv_sname TYPE sobj_name.
+    REFRESH lt_names.
+    LOOP AT gt_final INTO gs_final.
+      IF strlen( gs_final-progname ) <= 40.
+        lv_sname = gs_final-progname.
+        APPEND lv_sname TO lt_names.
+      ENDIF.
+    ENDLOOP.
+    SORT lt_names.
+    DELETE ADJACENT DUPLICATES FROM lt_names.
+    IF lt_names[] IS NOT INITIAL.
+      SELECT * FROM tadir
+        INTO TABLE lt_tadir1
+        FOR ALL ENTRIES IN lt_names
+        WHERE obj_name = lt_names-table_line.
+    ENDIF.
 
     IF gt_final[] IS NOT INITIAL.
       DATA gt_e070 TYPE TABLE OF e070.
@@ -3176,6 +2519,11 @@ FORM process_data .
           REPLACE ALL OCCURRENCES OF l_func IN wa_obj1-text WITH space.
           REPLACE ALL OCCURRENCES OF 'TYPE' IN wa_obj1-text WITH space.
           REPLACE ALL OCCURRENCES OF 'REF OF' IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'REF TO' IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF 'DATA' IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF ':' IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF ',' IN wa_obj1-text WITH space.
+          REPLACE ALL OCCURRENCES OF '.' IN wa_obj1-text WITH space.
           CONDENSE wa_obj1-text.
           IF wa_obj1-text(1) = 'Z' OR wa_obj1-text(1) = 'Y'.
 
@@ -3659,7 +3007,7 @@ request = wa_e071-trkorr.
           APPEND gs_type TO gt_type.
         ENDLOOP.
 
-        LOOP AT it_tables_type INTO wa_tables_type WHERE ( dbstruct(1) = 'Z' OR dbstruct = 'Y' ).
+        LOOP AT it_tables_type INTO wa_tables_type WHERE ( dbstruct(1) = 'Z' OR dbstruct(1) = 'Y' ).
           gs_type = wa_tables_type-dbstruct.
           APPEND gs_type TO gt_type.
         ENDLOOP.
@@ -3802,3 +3150,693 @@ ENDFORM.
 *
 *Test Symbol
 *001  '
+
+*&---------------------------------------------------------------------*
+*& Form EXPAND_DEPENDENCIES
+*&---------------------------------------------------------------------*
+*& Completes GT_FINAL so that the request contains everything the
+*& program needs in the target system (ZTR_OBJECTS_REPORT):
+*&  - objects that were never transported (taken from TADIR)
+*&  - table/structure: data elements, .INCLUDE/.APPEND structures,
+*&    check tables, search helps, maintenance function group + TOBJ
+*&  - data element: domain, search help
+*&  - domain: value table
+*&  - table type: row type
+*&  - view: base tables
+*&  - search help: selection method, included search helps
+*&  - function module never transported: its function group
+*&---------------------------------------------------------------------*
+FORM expand_dependencies.
+  DATA: lv_idx   TYPE i,
+        lv_name  TYPE char255,
+        ls_dir   TYPE tadir,
+        ls_func  LIKE LINE OF gt_func.
+
+  CLEAR: gt_cand, gt_seen.
+
+  " EVERYTHING THE SCAN FOUND
+  LOOP AT lt_tadir INTO ls_dir.
+    PERFORM add_cand USING ls_dir-obj_name.
+  ENDLOOP.
+  LOOP AT gt_all_names INTO lv_name.
+    PERFORM add_cand USING lv_name.
+  ENDLOOP.
+  LOOP AT gt_type INTO lv_name.
+    PERFORM add_cand USING lv_name.
+  ENDLOOP.
+  LOOP AT gt_tables INTO lv_name.
+    PERFORM add_cand USING lv_name.
+  ENDLOOP.
+  LOOP AT gt_like INTO lv_name.
+    PERFORM add_cand USING lv_name.
+  ENDLOOP.
+  LOOP AT gt_class INTO lv_name.
+    PERFORM add_cand USING lv_name.
+  ENDLOOP.
+  LOOP AT gt_func INTO ls_func.
+    PERFORM add_cand USING ls_func-funcname.
+  ENDLOOP.
+  LOOP AT gt_final INTO gs_final.
+    PERFORM add_cand USING gs_final-progname.
+  ENDLOOP.
+
+  " WORK THROUGH THE LIST; DEPENDENCIES FOUND ARE APPENDED TO IT
+  lv_idx = 1.
+  WHILE lv_idx <= lines( gt_cand ).
+    READ TABLE gt_cand INTO lv_name INDEX lv_idx.
+    lv_idx = lv_idx + 1.
+    PERFORM add_if_missing USING lv_name.
+    PERFORM derive_deps USING lv_name.
+  ENDWHILE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form ADD_CAND
+*&---------------------------------------------------------------------*
+*& Put a customer object name (Z*, Y*, /NAMESPACE/*) on the work list
+*&---------------------------------------------------------------------*
+FORM add_cand USING iv_name TYPE csequence.
+  DATA lv_name TYPE char255.
+  DATA lv_cust TYPE flag.
+
+  lv_name = iv_name.
+  CONDENSE lv_name.
+  TRANSLATE lv_name TO UPPER CASE.
+  IF lv_name IS INITIAL.
+    RETURN.
+  ENDIF.
+  PERFORM is_customer USING lv_name CHANGING lv_cust.
+  IF lv_cust IS INITIAL.
+    RETURN.
+  ENDIF.
+  INSERT lv_name INTO TABLE gt_seen.
+  IF sy-subrc = 0.
+    APPEND lv_name TO gt_cand.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form ADD_IF_MISSING
+*&---------------------------------------------------------------------*
+*& Name not yet in GT_FINAL: if it is a real repository object (TADIR,
+*& not a local $ package) add it, with its last request if it was
+*& transported before. Function modules: FUNC + function group.
+*& (TADIR first, then E071 by its full key - E071 is not read by name
+*& only, which would be very slow on a large ECC.)
+*&---------------------------------------------------------------------*
+FORM add_if_missing USING iv_name TYPE char255.
+  DATA: lt_dir    TYPE STANDARD TABLE OF tadir,
+        ls_dir    TYPE tadir,
+        ls_enlf   TYPE enlfdir,
+        lt_req    TYPE STANDARD TABLE OF trkorr,
+        lv_req    TYPE trkorr,
+        lv_obj    TYPE e071-obj_name,
+        lv_func   TYPE tfdir-funcname,
+        lv_dirobj TYPE tadir-obj_name.
+
+  READ TABLE gt_final TRANSPORTING NO FIELDS WITH KEY progname = iv_name.
+  IF sy-subrc = 0.
+    RETURN.
+  ENDIF.
+
+  IF strlen( iv_name ) <= 40.
+    lv_dirobj = iv_name.
+    lv_obj    = iv_name.
+    SELECT * FROM tadir INTO TABLE lt_dir
+      WHERE pgmid    = 'R3TR'
+        AND obj_name = lv_dirobj
+        AND delflag  = space.
+    LOOP AT lt_dir INTO ls_dir WHERE devclass NP '$*'.
+      CLEAR: lt_req, lv_req.
+      SELECT trkorr FROM e071 INTO TABLE lt_req
+        WHERE pgmid    = 'R3TR'
+          AND object   = ls_dir-object
+          AND obj_name = lv_obj.
+      SORT lt_req DESCENDING.
+      READ TABLE lt_req INTO lv_req INDEX 1.
+      CLEAR gs_final.
+      gs_final-main_program = 'ENVIRONMENT'.
+      gs_final-progname     = iv_name.
+      gs_final-type         = ls_dir-object.
+      gs_final-request      = lv_req.
+      gs_final-devclass     = ls_dir-devclass.
+      APPEND gs_final TO gt_final.
+    ENDLOOP.
+  ENDIF.
+
+  " FUNCTION MODULE -> FUNC + ITS FUNCTION GROUP
+  IF strlen( iv_name ) <= 30.
+    lv_func = iv_name.
+    SELECT SINGLE * FROM enlfdir INTO ls_enlf WHERE funcname = lv_func.
+    IF sy-subrc = 0.
+      CLEAR: lt_req, lv_req.
+      lv_obj = iv_name.
+      SELECT trkorr FROM e071 INTO TABLE lt_req
+        WHERE pgmid    = 'LIMU'
+          AND object   = 'FUNC'
+          AND obj_name = lv_obj.
+      SORT lt_req DESCENDING.
+      READ TABLE lt_req INTO lv_req INDEX 1.
+      CLEAR gs_final.
+      gs_final-main_program = 'DEPENDENCY'.
+      gs_final-progname     = iv_name.
+      gs_final-type         = 'FUNC'.
+      gs_final-request      = lv_req.
+      APPEND gs_final TO gt_final.
+      PERFORM add_cand USING ls_enlf-area.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DERIVE_DEPS
+*&---------------------------------------------------------------------*
+*& Dictionary objects that IV_NAME needs to activate / work in the
+*& target system
+*&---------------------------------------------------------------------*
+FORM derive_deps USING iv_name TYPE char255.
+  DATA: lv_name   TYPE tabname,
+        lv_like   TYPE tadir-obj_name,
+        lv_tobj   TYPE string,
+        lv_len    TYPE i,
+        lt_dd03l  TYPE STANDARD TABLE OF dd03l,
+        ls_dd03l  TYPE dd03l,
+        lt_dd35l  TYPE STANDARD TABLE OF dd35l,
+        ls_dd35l  TYPE dd35l,
+        ls_dd04l  TYPE dd04l,
+        ls_dd01l  TYPE dd01l,
+        ls_dd40l  TYPE dd40l,
+        lt_dd26s  TYPE STANDARD TABLE OF dd26s,
+        ls_dd26s  TYPE dd26s,
+        ls_dd30l  TYPE dd30l,
+        lt_dd31s  TYPE STANDARD TABLE OF dd31s,
+        ls_dd31s  TYPE dd31s,
+        ls_tvdir  TYPE tvdir,
+        lt_tobj   TYPE STANDARD TABLE OF tadir,
+        ls_tobj   TYPE tadir.
+
+  IF strlen( iv_name ) > 30.
+    RETURN.
+  ENDIF.
+  lv_name = iv_name.
+
+  " TABLE / STRUCTURE
+  SELECT * FROM dd03l INTO TABLE lt_dd03l
+    WHERE tabname = lv_name AND as4local = 'A'.
+  IF sy-subrc = 0.
+    LOOP AT lt_dd03l INTO ls_dd03l.
+      PERFORM add_cand USING ls_dd03l-rollname.
+      IF ls_dd03l-fieldname(1) = '.'.                 " .INCLUDE / .APPEND
+        PERFORM add_cand USING ls_dd03l-precfield.
+      ENDIF.
+      IF ls_dd03l-checktable <> '*'.
+        PERFORM add_cand USING ls_dd03l-checktable.
+      ENDIF.
+    ENDLOOP.
+
+    " SEARCH HELPS ASSIGNED TO FIELDS
+    SELECT * FROM dd35l INTO TABLE lt_dd35l
+      WHERE tabname = lv_name AND as4local = 'A'.
+    LOOP AT lt_dd35l INTO ls_dd35l.
+      PERFORM add_cand USING ls_dd35l-shlpname.
+    ENDLOOP.
+
+    " MAINTENANCE DIALOG (SM30): FUNCTION GROUP + TRANSPORT OBJECT
+    SELECT SINGLE * FROM tvdir INTO ls_tvdir WHERE tabname = lv_name.
+    IF sy-subrc = 0.
+      PERFORM add_cand USING ls_tvdir-area.
+      CONCATENATE lv_name '%' INTO lv_like.
+      SELECT * FROM tadir INTO TABLE lt_tobj
+        WHERE pgmid = 'R3TR' AND object = 'TOBJ' AND obj_name LIKE lv_like.
+      LOOP AT lt_tobj INTO ls_tobj.
+        " TOBJ NAME = TABLE NAME + TYPE LETTER (S = TABLE, V = VIEW)
+        lv_tobj = ls_tobj-obj_name.
+        CONDENSE lv_tobj NO-GAPS.
+        lv_len = strlen( lv_tobj ) - 1.
+        CHECK lv_len > 0.
+        IF lv_tobj(lv_len) = lv_name.
+          READ TABLE gt_final TRANSPORTING NO FIELDS
+            WITH KEY progname = ls_tobj-obj_name type = 'TOBJ'.
+          IF sy-subrc <> 0.
+            CLEAR gs_final.
+            gs_final-main_program = 'DEPENDENCY'.
+            gs_final-progname     = ls_tobj-obj_name.
+            gs_final-type         = 'TOBJ'.
+            gs_final-devclass     = ls_tobj-devclass.
+            APPEND gs_final TO gt_final.
+          ENDIF.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
+
+  " DATA ELEMENT
+  SELECT SINGLE * FROM dd04l INTO ls_dd04l
+    WHERE rollname = lv_name AND as4local = 'A'.
+  IF sy-subrc = 0.
+    PERFORM add_cand USING ls_dd04l-domname.
+    PERFORM add_cand USING ls_dd04l-shlpname.
+  ENDIF.
+
+  " DOMAIN: VALUE TABLE
+  SELECT SINGLE * FROM dd01l INTO ls_dd01l
+    WHERE domname = lv_name AND as4local = 'A'.
+  IF sy-subrc = 0.
+    PERFORM add_cand USING ls_dd01l-entitytab.
+  ENDIF.
+
+  " TABLE TYPE: ROW TYPE
+  SELECT SINGLE * FROM dd40l INTO ls_dd40l
+    WHERE typename = lv_name AND as4local = 'A'.
+  IF sy-subrc = 0.
+    PERFORM add_cand USING ls_dd40l-rowtype.
+  ENDIF.
+
+  " VIEW: BASE TABLES
+  SELECT * FROM dd26s INTO TABLE lt_dd26s
+    WHERE viewname = lv_name AND as4local = 'A'.
+  LOOP AT lt_dd26s INTO ls_dd26s.
+    PERFORM add_cand USING ls_dd26s-tabname.
+  ENDLOOP.
+
+  " SEARCH HELP: SELECTION METHOD, INCLUDED SEARCH HELPS
+  SELECT SINGLE * FROM dd30l INTO ls_dd30l
+    WHERE shlpname = lv_name AND as4local = 'A'.
+  IF sy-subrc = 0.
+    PERFORM add_cand USING ls_dd30l-selmethod.
+    SELECT * FROM dd31s INTO TABLE lt_dd31s
+      WHERE shlpname = lv_name AND as4local = 'A'.
+    LOOP AT lt_dd31s INTO ls_dd31s.
+      PERFORM add_cand USING ls_dd31s-subshlp.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form TRANSPORT_OBJECTS
+*&---------------------------------------------------------------------*
+*& 'TR' button: put all listed objects into ONE request (P_TRKORR or
+*& chosen/created in the popup). Object by object, so one object locked
+*& in another request does not stop the rest; a log is shown at the end.
+*&---------------------------------------------------------------------*
+FORM transport_objects.
+  TYPES: BEGIN OF ty_log,
+           pgmid    TYPE pgmid,
+           object   TYPE trobjtype,
+           obj_name TYPE trobj_name,
+           status   TYPE bapi_msg,
+         END OF ty_log.
+  DATA: lt_final    TYPE TABLE OF ty_final_m,
+        ls_final    TYPE ty_final_m,
+        lt_ko200    TYPE STANDARD TABLE OF ko200,
+        lt_one      TYPE STANDARD TABLE OF ko200,
+        ls_ko200    TYPE ko200,
+        lt_e071     TYPE STANDARD TABLE OF e071,
+        ls_e071     TYPE e071,
+        ls_dir      TYPE tadir,
+        ls_tfdir    TYPE tfdir,
+        ls_e070     TYPE e070,
+        lv_order    TYPE e070-trkorr,
+        lv_task     TYPE e070-trkorr,
+        lv_obj_name TYPE sobj_name,
+        lv_dirobj   TYPE tadir-obj_name,
+        lt_log      TYPE STANDARD TABLE OF ty_log,
+        ls_log      TYPE ty_log,
+        lv_ok       TYPE i,
+        lv_err      TYPE i,
+        lv_text     TYPE string,
+        lo_alv      TYPE REF TO cl_salv_table,
+        lo_columns  TYPE REF TO cl_salv_columns_table,
+        lv_ok_c     TYPE c LENGTH 10,
+        lv_err_c    TYPE c LENGTH 10,
+        lv_type     TYPE trobjtype,
+        lv_objn     TYPE e071-obj_name,
+        lv_func     TYPE tfdir-funcname.
+
+  lt_final = gt_final.
+  SORT lt_final BY progname type.
+  DELETE ADJACENT DUPLICATES FROM lt_final COMPARING progname type.
+
+  " STEP 1: TRANSPORT ENTRY FOR EVERY LISTED OBJECT
+  LOOP AT lt_final INTO ls_final.
+    CLEAR ls_ko200.
+    CASE ls_final-type.
+      WHEN 'TABU' OR 'CDAT' OR 'VDAT' OR 'TDAT' OR 'RFC' OR 'DEVC' OR space.
+        " TABLE CONTENTS NEED KEYS; 'RFC' = REMOTE FUNCTION, NO OBJECT HERE;
+        " PACKAGES ARE NOT TRANSPORTED WITH THE OBJECTS (TARGET: P_PK)
+        CONTINUE.
+    ENDCASE.
+
+    lv_type = ls_final-type.
+    lv_objn = ls_final-progname.
+    SELECT * FROM e071 INTO TABLE lt_e071
+      WHERE object   = lv_type
+        AND obj_name = lv_objn
+        AND ( pgmid = 'R3TR' OR pgmid = 'LIMU' ).
+    IF sy-subrc = 0.
+      READ TABLE lt_e071 INTO ls_e071 INDEX 1.
+      ls_ko200-pgmid    = ls_e071-pgmid.
+      ls_ko200-object   = ls_e071-object.
+      ls_ko200-obj_name = ls_e071-obj_name.
+    ELSE.
+      " NEVER TRANSPORTED: OBJECT DIRECTORY
+      lv_dirobj = ls_final-progname.
+      SELECT SINGLE * FROM tadir INTO ls_dir
+        WHERE pgmid = 'R3TR' AND object = lv_type AND obj_name = lv_dirobj.
+      IF sy-subrc = 0.
+        ls_ko200-pgmid    = 'R3TR'.
+        ls_ko200-object   = ls_dir-object.
+        ls_ko200-obj_name = ls_dir-obj_name.
+      ELSEIF ls_final-type = 'FUNC'.
+        lv_func = ls_final-progname.
+        SELECT SINGLE * FROM tfdir INTO ls_tfdir WHERE funcname = lv_func.
+        IF sy-subrc = 0.
+          ls_ko200-pgmid    = 'LIMU'.
+          ls_ko200-object   = 'FUNC'.
+          ls_ko200-obj_name = ls_tfdir-funcname.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF ls_ko200-object IS INITIAL.
+      CLEAR ls_log.
+      ls_log-object   = ls_final-type.
+      ls_log-obj_name = ls_final-progname.
+      ls_log-status   = 'Not in object directory - skipped'.
+      APPEND ls_log TO lt_log.
+      CONTINUE.
+    ENDIF.
+    APPEND ls_ko200 TO lt_ko200.
+  ENDLOOP.
+
+  SORT lt_ko200 BY pgmid object obj_name.
+  DELETE ADJACENT DUPLICATES FROM lt_ko200 COMPARING pgmid object obj_name.
+  IF lt_ko200 IS INITIAL.
+    MESSAGE 'No transportable objects in the list' TYPE 'S' DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+
+  " STEP 2: TARGET REQUEST
+  lv_order = p_trkorr.
+  IF lv_order IS NOT INITIAL.
+    SELECT SINGLE * FROM e070 INTO ls_e070 WHERE trkorr = lv_order.
+    IF sy-subrc <> 0 OR ( ls_e070-trstatus <> 'D' AND ls_e070-trstatus <> 'L' ).
+      CONCATENATE 'Request' lv_order 'does not exist or is not modifiable'
+        INTO lv_text SEPARATED BY space.
+      MESSAGE lv_text TYPE 'S' DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
+    IF ls_e070-strkorr IS NOT INITIAL.
+      lv_order = ls_e070-strkorr.          " TASK GIVEN -> USE ITS REQUEST
+    ENDIF.
+  ELSE.
+    CALL FUNCTION 'TR_ORDER_CHOICE_CORRECTION'
+      EXPORTING
+        iv_category            = 'SYST'
+      IMPORTING
+        ev_order               = lv_order
+        ev_task                = lv_task
+      EXCEPTIONS
+        invalid_category       = 1
+        no_correction_selected = 2
+        OTHERS                 = 3.
+    IF sy-subrc <> 0 OR lv_order IS INITIAL.
+      MESSAGE 'No transport request selected' TYPE 'S' DISPLAY LIKE 'E'.
+      RETURN.
+    ENDIF.
+  ENDIF.
+
+  " STEP 3: INSERT OBJECT BY OBJECT
+  LOOP AT lt_ko200 INTO ls_ko200.
+    IF ls_ko200-object = 'TABL' AND ( ls_ko200-obj_name(1) = 'Z' OR ls_ko200-obj_name(1) = 'Y' ).
+      lv_obj_name = ls_ko200-obj_name.
+      CALL FUNCTION 'TRINT_TADIR_UPDATE'
+        EXPORTING
+          pgmid                = ls_ko200-pgmid
+          object               = ls_ko200-object
+          obj_name             = lv_obj_name
+          edtflag              = ' '
+        EXCEPTIONS
+          object_has_no_tadir  = 1
+          object_exists_global = 2
+          OTHERS               = 3.
+    ENDIF.
+
+    CLEAR lt_one.
+    APPEND ls_ko200 TO lt_one.
+    CLEAR: sy-msgid, sy-msgno.
+    CALL FUNCTION 'TR_OBJECTS_CHECK'
+      EXPORTING
+        iv_no_show_option       = 'X'
+      TABLES
+        wt_ko200                = lt_one
+      EXCEPTIONS
+        cancel_edit_other_error = 1
+        show_only_other_error   = 2
+        OTHERS                  = 3.
+    IF sy-subrc = 0.
+      CALL FUNCTION 'TR_OBJECTS_INSERT'
+        EXPORTING
+          wi_order                = lv_order
+          iv_no_show_option       = 'X'
+        TABLES
+          wt_ko200                = lt_one
+        EXCEPTIONS
+          cancel_edit_other_error = 1
+          show_only_other_error   = 2
+          OTHERS                  = 3.
+    ENDIF.
+
+    CLEAR ls_log.
+    ls_log-pgmid    = ls_ko200-pgmid.
+    ls_log-object   = ls_ko200-object.
+    ls_log-obj_name = ls_ko200-obj_name.
+    IF sy-subrc = 0.
+      lv_ok = lv_ok + 1.
+      ls_log-status = 'Added'.
+    ELSE.
+      lv_err = lv_err + 1.
+      IF sy-msgid IS NOT INITIAL.
+        MESSAGE ID sy-msgid TYPE 'S' NUMBER sy-msgno
+          WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 INTO ls_log-status.
+      ELSE.
+        ls_log-status = 'Not added (locked in another request?)'.
+      ENDIF.
+    ENDIF.
+    APPEND ls_log TO lt_log.
+  ENDLOOP.
+  COMMIT WORK.
+
+  " STEP 4: LOG
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                              CHANGING  t_table      = lt_log ).
+      lo_columns = lo_alv->get_columns( ).
+      lo_columns->set_optimize( 'X' ).
+      lo_alv->set_screen_popup( start_column = 5
+                                end_column   = 150
+                                start_line   = 3
+                                end_line     = 25 ).
+      lo_alv->display( ).
+    CATCH cx_salv_msg.
+  ENDTRY.
+
+  WRITE lv_ok  TO lv_ok_c  LEFT-JUSTIFIED.
+  WRITE lv_err TO lv_err_c LEFT-JUSTIFIED.
+  CONCATENATE lv_ok_c 'object(s) added to' lv_order ',' lv_err_c 'not added.'
+              'Use' lv_order 'as source request in ZTR_OBJECTS_REPORT.'
+    INTO lv_text SEPARATED BY space.
+  MESSAGE lv_text TYPE 'S'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form ANALYSE_ENVIRONMENT
+*&---------------------------------------------------------------------*
+*& Starting from the selected programs / transactions, collect every
+*& object they use with SAP's environment analysis
+*& (REPOSITORY_ENVIRONMENT_ALL, all object categories switched on).
+*& Customer programs, function groups/modules, classes, interfaces and
+*& transformations found are analysed again (recursively). All names
+*& go to GT_ALL_NAMES; EXPAND_DEPENDENCIES then adds them to the list
+*& with their object type (TADIR) and the DDIC dependencies.
+*&---------------------------------------------------------------------*
+FORM analyse_environment.
+  TYPES: BEGIN OF ty_work,
+           type TYPE seu_obj,
+           name TYPE sobj_name,
+         END OF ty_work.
+  DATA: lt_work    TYPE STANDARD TABLE OF ty_work,
+        ls_work    TYPE ty_work,
+        lt_done    TYPE HASHED TABLE OF sobj_name WITH UNIQUE KEY table_line,
+        lt_env     TYPE senvi_tab,
+        ls_types   TYPE envi_types,
+        lt_incl    TYPE programt,
+        ls_dir     TYPE tadir,
+        ls_tstc    TYPE tstc,
+        lv_idx     TYPE i,
+        lv_cust    TYPE flag,
+        lv_objtype TYPE euobj-id,
+        lv_objname TYPE tadir-obj_name,
+        lv_encl    TYPE tadir-obj_name.
+  DATA lv_funcname TYPE tfdir-funcname.
+  DATA: ls_env  LIKE LINE OF lt_env,
+        lv_incl LIKE LINE OF lt_incl.
+  FIELD-SYMBOLS <lv_flag> TYPE any.
+
+  " ALL OBJECT CATEGORIES OF THE ENVIRONMENT ANALYSIS
+  DO.
+    ASSIGN COMPONENT sy-index OF STRUCTURE ls_types TO <lv_flag>.
+    IF sy-subrc <> 0.
+      EXIT.
+    ENDIF.
+    <lv_flag> = 'X'.
+  ENDDO.
+
+  " START OBJECTS: SELECTED PROGRAMS/OBJECTS AND TRANSACTIONS
+  LOOP AT lt_tadir INTO ls_dir.
+    ls_work-type = ls_dir-object.
+    ls_work-name = ls_dir-obj_name.
+    APPEND ls_work TO lt_work.
+  ENDLOOP.
+  LOOP AT it_tstc INTO ls_tstc.
+    ls_work-type = 'TRAN'.
+    ls_work-name = ls_tstc-tcode.
+    APPEND ls_work TO lt_work.
+  ENDLOOP.
+
+  lv_idx = 1.
+  WHILE lv_idx <= lines( lt_work ).
+    READ TABLE lt_work INTO ls_work INDEX lv_idx.
+    lv_idx = lv_idx + 1.
+    INSERT ls_work-name INTO TABLE lt_done.
+    IF sy-subrc <> 0.
+      CONTINUE.                               " ALREADY ANALYSED
+    ENDIF.
+
+    PERFORM is_customer USING ls_work-name CHANGING lv_cust.
+    IF lv_cust IS INITIAL.
+      CONTINUE.                               " SAP STANDARD: NOT COPIED
+    ENDIF.
+    APPEND ls_work-name TO gt_all_names.
+
+    " ONLY OBJECTS WITH OWN CODE HAVE A FURTHER ENVIRONMENT.
+    " THE REAL TYPE IS TAKEN FROM THE OBJECT DIRECTORY / FUNCTION
+    " DIRECTORY, SO IT DOES NOT DEPEND ON THE LABEL THE ANALYSIS USES
+    " (E.G. A CLASS REPORTED AS CLIF/OCLS/METH IS STILL FOLLOWED).
+    lv_objname = ls_work-name.
+    CLEAR: lv_objtype, ls_dir.
+    SELECT SINGLE * FROM tadir INTO ls_dir
+      WHERE pgmid    = 'R3TR'
+        AND obj_name = lv_objname
+        AND object   IN ('PROG','FUGR','CLAS','INTF','TRAN','XSLT').
+    IF sy-subrc = 0.
+      lv_objtype = ls_dir-object.
+    ELSE.
+      SELECT SINGLE funcname FROM tfdir INTO lv_funcname
+        WHERE funcname = lv_objname.
+      IF sy-subrc = 0.
+        lv_objtype = 'FUNC'.
+      ELSE.
+        CASE ls_work-type.
+          WHEN 'PROG' OR 'INCL' OR 'REPS'.
+            lv_objtype = 'PROG'.        " E.G. FUNCTION GROUP INCLUDE LZ...
+        ENDCASE.
+      ENDIF.
+    ENDIF.
+    IF lv_objtype IS INITIAL.
+      CONTINUE.                         " DDIC, MESSAGES ... : NO CODE
+    ENDIF.
+
+    " TRANSACTION -> THE PROGRAM IT STARTS (CALL/LEAVE TO TRANSACTION)
+    IF lv_objtype = 'TRAN'.
+      CLEAR ls_tstc.
+      SELECT SINGLE * FROM tstc INTO ls_tstc WHERE tcode = lv_objname.
+      IF sy-subrc = 0 AND ls_tstc-pgmna IS NOT INITIAL.
+        ls_work-type = 'PROG'.
+        ls_work-name = ls_tstc-pgmna.
+        APPEND ls_work TO lt_work.
+      ENDIF.
+    ENDIF.
+
+    " INCLUDES OF A PROGRAM (MODULE POOL / REPORT INCLUDES HAVE THEIR
+    " OWN DIRECTORY ENTRY AND MUST BE TRANSPORTED TOO)
+    IF lv_objtype = 'PROG'.
+      CLEAR lt_incl.
+      CALL FUNCTION 'RS_GET_ALL_INCLUDES'
+        EXPORTING
+          program      = lv_objname
+        TABLES
+          includetab   = lt_incl
+        EXCEPTIONS
+          not_existent = 1
+          no_program   = 2
+          OTHERS       = 3.
+      LOOP AT lt_incl INTO lv_incl.
+        ls_work-type = 'PROG'.
+        ls_work-name = lv_incl.
+        APPEND ls_work TO lt_work.
+      ENDLOOP.
+    ENDIF.
+
+    CLEAR lt_env.
+    CALL FUNCTION 'REPOSITORY_ENVIRONMENT_ALL'
+      EXPORTING
+        obj_type          = lv_objtype
+        environment_types = ls_types
+        object_name       = lv_objname
+      TABLES
+        environment_tab   = lt_env
+      EXCEPTIONS
+        OTHERS            = 1.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+
+    LOOP AT lt_env INTO ls_env.
+      " THE OBJECT ITSELF
+      IF strlen( ls_env-object ) <= 40.
+        ls_work-type = ls_env-type.
+        ls_work-name = ls_env-object.
+        APPEND ls_work TO lt_work.
+      ENDIF.
+      " ITS ENCLOSING OBJECT (FUNCTION GROUP OF A FUNCTION MODULE, CLASS
+      " OF A METHOD, PROGRAM OF AN INCLUDE, TABLE OF A FIELD ...)
+      IF ls_env-encl_obj IS NOT INITIAL.
+        lv_encl = ls_env-encl_obj.
+        CLEAR ls_dir.
+        SELECT SINGLE * FROM tadir INTO ls_dir
+          WHERE pgmid = 'R3TR' AND obj_name = lv_encl.
+        IF sy-subrc = 0.
+          ls_work-type = ls_dir-object.
+        ELSE.
+          ls_work-type = ls_env-type.
+        ENDIF.
+        ls_work-name = ls_env-encl_obj.
+        APPEND ls_work TO lt_work.
+      ENDIF.
+    ENDLOOP.
+  ENDWHILE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form IS_CUSTOMER
+*&---------------------------------------------------------------------*
+*& Customer object name: Z*, Y*, /NAMESPACE/*, and the programs /
+*& includes generated for them (SAPMZ*, MZ*, SAPLZ*, LZ* ...)
+*&---------------------------------------------------------------------*
+FORM is_customer USING    iv_name TYPE csequence
+                 CHANGING cv_cust TYPE flag.
+  DATA lv_name TYPE char255.
+
+  lv_name = iv_name.
+  CONDENSE lv_name.
+  TRANSLATE lv_name TO UPPER CASE.
+  CLEAR cv_cust.
+  IF lv_name CP 'Z*'     OR lv_name CP 'Y*'     OR lv_name CP '/*'     OR
+     lv_name CP 'SAPMZ*' OR lv_name CP 'SAPMY*' OR lv_name CP 'MZ*'    OR
+     lv_name CP 'MY*'    OR lv_name CP 'SAPLZ*' OR lv_name CP 'SAPLY*' OR
+     lv_name CP 'LZ*'    OR lv_name CP 'LY*'    OR lv_name CP 'SAPDBZ*' OR
+     lv_name CP 'SAPDBY*'.
+    cv_cust = 'X'.
+  ENDIF.
+ENDFORM.
