@@ -1,0 +1,1759 @@
+*&---------------------------------------------------------------------*
+*& Report ZDUAL_MAINTENANCE_RPT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zdual_maintenance_rpt.
+
+
+*---------------------------------------------*
+* TYPE DECLARATIONS
+*---------------------------------------------*
+TYPE-POOLS: slis.
+
+
+TYPES: BEGIN OF ty_e071,
+         sel      TYPE c LENGTH 1,
+         trkorr   TYPE e071-trkorr,
+         as4pos   TYPE e071-as4pos,
+         pgmid    TYPE e071-pgmid,
+         object   TYPE e071-object,
+         obj_name TYPE e071-obj_name,
+         objfunc  TYPE e071-objfunc,
+         lockflag TYPE e071-lockflag,
+         gennum   TYPE e071-gennum,
+         lang     TYPE e071-lang,
+         activity TYPE c LENGTH 20,
+       END OF ty_e071.
+
+
+
+TYPES : BEGIN OF ty_objlist,
+          object   TYPE char4,
+          obj_name TYPE versobjnam,
+        END OF ty_objlist.
+
+*---------------------------------------------*
+* INTERNAL TABLES AND VARIABLES
+*---------------------------------------------*
+DATA: it_data     TYPE STANDARD TABLE OF ty_e071,
+      wa_data     TYPE ty_e071,
+      it_fieldcat TYPE slis_t_fieldcat_alv,
+      wa_fieldcat TYPE slis_fieldcat_alv,
+      v_repid     TYPE sy-repid,
+      lv_fname    TYPE vrsd-objname.
+
+DATA: wa_layout TYPE slis_layout_alv.
+
+DATA : lv_text    TYPE            char40,
+       wa_options TYPE            rfc_db_opt,
+       wa_fields  TYPE            rfc_db_fld,
+       it_options TYPE TABLE OF   rfc_db_opt,
+       it_fields  TYPE TABLE OF   rfc_db_fld,
+       it_data52  TYPE TABLE OF   tab512,
+       lv_fgname  TYPE            rsnewleng-area,
+       it_objlist TYPE TABLE OF   ty_objlist,
+       wa_objlist TYPE            ty_objlist,
+       lt_return  TYPE TABLE OF   bapiret2,
+       lv_ddic    TYPE            dcobjdef-name,
+       lv_prog    TYPE            progname,
+       lv_tran    TYPE            tcode,
+       lv_mprog   TYPE            progname.
+
+DATA: lt_e071    TYPE TABLE OF ty_e071,
+      ls_e071    TYPE ty_e071,
+      lt_fields  TYPE TABLE OF rfc_db_fld,
+      lt_data    TYPE TABLE OF tab512,
+      lt_options TYPE TABLE OF rfc_db_opt,
+      ls_options TYPE rfc_db_opt,
+      ls_data    TYPE tab512.
+
+DATA : t_return  TYPE TABLE OF  bapiret2,
+       ls_return TYPE  bapiret2.
+DATA : gv_objtyp TYPE  trobjtype,
+       gv_objnam TYPE  trobj_name,
+       gv_pgmid  TYPE  pgmid,
+       gv_fugr   TYPE  flag.
+
+DATA : lv_subc   TYPE subc,
+       ev_exists TYPE flag.
+
+
+
+
+DATA : gt_objects     TYPE TABLE OF ko200.
+DATA : gs_object      TYPE ko200.
+DATA : gv_new128 TYPE trobj_name.
+*---------------------------------------------*
+* PARAMETERS
+*---------------------------------------------*
+PARAMETERS: p_tr TYPE e070-trkorr OBLIGATORY.
+PARAMETERS: p_ltr TYPE e070-trkorr OBLIGATORY.
+PARAMETERS: p_pk TYPE devclass  .
+PARAMETERS: p_rd TYPE rfcdes-rfcdest  .
+
+*---------------------------------------------*
+* START-OF-SELECTION
+*---------------------------------------------*
+START-OF-SELECTION.
+  TRY.
+
+      " DEFINE SELECTION CRITERIA FOR SPECIFIC TR
+      CONCATENATE 'TRKORR = ''' p_tr '''' INTO ls_options-text.
+      APPEND ls_options TO lt_options.
+
+      " CALL RFC_READ_TABLE TO GET ALL FIELDS FROM E071
+      CALL FUNCTION 'RFC_READ_TABLE' DESTINATION p_rd
+        EXPORTING
+          query_table          = 'E071'
+        TABLES
+          fields               = lt_fields
+          data                 = lt_data
+          options              = lt_options
+        EXCEPTIONS
+          table_not_available  = 1
+          table_without_data   = 2
+          option_not_valid     = 3
+          field_not_valid      = 4
+          not_authorized       = 5
+          data_buffer_exceeded = 6
+          OTHERS               = 7.
+
+      IF sy-subrc = 0.
+        " PROCESS THE RETURNED DATA
+        LOOP AT lt_data INTO ls_data.
+          CLEAR ls_e071.
+          " MAP THE RAW DATA TO STRUCTURE (ASSUMING FIELDS ARE IN CORRECT ORDER)
+          ls_e071-trkorr    = ls_data+0(20).
+          ls_e071-as4pos    = ls_data+20(6).
+          ls_e071-pgmid     = ls_data+26(4).
+          ls_e071-object    = ls_data+30(4).
+          ls_e071-obj_name  = ls_data+34(120).
+          ls_e071-objfunc   = ls_data+154(1).
+          ls_e071-lockflag  = ls_data+155(1).
+          ls_e071-gennum    = ls_data+156(3).
+          ls_e071-lang      = ls_data+159(1).
+          ls_e071-activity  = ls_data+160(20).
+          APPEND ls_e071 TO lt_e071.
+        ENDLOOP.
+      ENDIF.
+
+
+    CATCH cx_root INTO DATA(lx_error).
+      MESSAGE lx_error->get_text( ) TYPE 'E'.
+  ENDTRY.
+
+
+  IF  lt_e071 IS INITIAL.
+    MESSAGE 'NO OBJECTS FOUND FOR THE GIVEN TRANSPORT REQUEST.' TYPE 'I'.
+    EXIT.
+  ENDIF.
+
+* MAP RESULT TO INTERNAL TABLE WITH CHECKBOX FIELD
+  LOOP AT lt_e071 INTO ls_e071.
+    MOVE-CORRESPONDING ls_e071 TO wa_data.
+    APPEND wa_data TO it_data.
+  ENDLOOP.
+
+
+  LOOP AT it_data ASSIGNING FIELD-SYMBOL(<fs_data>).
+*    PERFORM check_object_exist.
+    DATA : ls_tadir TYPE tadir.
+    CALL FUNCTION 'TR_CHECK_EXIST'
+      EXPORTING
+        iv_pgmid             = <fs_data>-pgmid    " Key field E071-PGMID
+        iv_object            = <fs_data>-object   " Key field E071-OBJECT
+        iv_obj_name          = <fs_data>-obj_name " Key field E071-OBJ_NAME
+        is_tadir             = ls_tadir              " Assigned TADIR key if known
+      IMPORTING
+        e_exist              = ev_exists          " Return value of object existence
+      EXCEPTIONS
+        tr_no_check_function = 1                " No check function exists for this object type
+        OTHERS               = 2.
+
+    IF ev_exists = 'X'.
+      <fs_data>-activity = 'AVAILABLE'.
+    ELSE.
+      <fs_data>-activity = 'NOT AVAILABLE'.
+    ENDIF.
+
+    ev_exists = ''.
+  ENDLOOP.
+
+
+  PERFORM build_fieldcat.
+
+  v_repid = sy-repid.
+  wa_layout-box_fieldname = 'SEL'.
+
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program       = v_repid
+      it_fieldcat              = it_fieldcat
+      i_save                   = 'A'
+      is_layout                = wa_layout
+      i_callback_pf_status_set = 'SET_PF_STATUS'
+      i_callback_user_command  = 'USER_COMMAND'
+    TABLES
+      t_outtab                 = it_data.
+
+*---------------------------------------------*
+* FORM BUILD_FIELDCAT
+*---------------------------------------------*
+FORM build_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = 'TRKORR'.
+  wa_fieldcat-seltext_m = 'TRANSPORT NO'.
+  wa_fieldcat-outputlen = 35.
+  wa_fieldcat-col_pos   = 2.
+
+  APPEND wa_fieldcat TO it_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = 'PGMID'.
+  wa_fieldcat-seltext_m = 'PROGRAM ID'.
+  wa_fieldcat-outputlen = 25.
+  wa_fieldcat-col_pos   = 3.
+
+  APPEND wa_fieldcat TO it_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = 'OBJECT'.
+  wa_fieldcat-seltext_m = 'OBJECT TYPE'.
+  wa_fieldcat-outputlen = 25.
+  wa_fieldcat-col_pos   = 4.
+
+  APPEND wa_fieldcat TO it_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = 'OBJ_NAME'.
+  wa_fieldcat-seltext_m = 'OBJECT NAME'.
+  wa_fieldcat-outputlen = 60.
+  wa_fieldcat-col_pos   = 5.
+
+  APPEND wa_fieldcat TO it_fieldcat.
+
+  CLEAR wa_fieldcat.
+  wa_fieldcat-fieldname = 'ACTIVITY'.
+  wa_fieldcat-outputlen = 25.
+  wa_fieldcat-seltext_m = 'STATUS'.
+  wa_fieldcat-col_pos   = 6.
+
+  APPEND wa_fieldcat TO it_fieldcat.
+
+ENDFORM.
+
+*---------------------------------------------*
+* GUI STATUS SETTING
+*---------------------------------------------*
+FORM set_pf_status USING rt_extab TYPE slis_t_extab.
+  SET PF-STATUS 'ZSTATUS'.
+ENDFORM.
+
+*---------------------------------------------*
+* USER COMMAND HANDLING
+*---------------------------------------------*
+FORM user_command USING r_ucomm     LIKE sy-ucomm
+                        rs_selfield TYPE slis_selfield.
+
+  CASE r_ucomm.
+    WHEN 'COPY'.
+      READ TABLE it_data WITH KEY sel = 'X' TRANSPORTING NO FIELDS.
+      IF sy-subrc = 0.
+        PERFORM process_selected.
+        IF t_return IS NOT INITIAL.
+          PERFORM display_return.
+        ELSE.
+          MESSAGE 'Objects are created.' TYPE 'S'.
+        ENDIF.
+
+      ELSE.
+        MESSAGE 'NO ROWS SELECTED.' TYPE 'I'.
+        RETURN.
+      ENDIF.
+    WHEN '&BACK' OR '&EXIT'.
+      LEAVE PROGRAM.
+  ENDCASE.
+
+ENDFORM.
+
+*---------------------------------------------*
+* PROCESS SELECTED ROWS
+*---------------------------------------------*
+FORM process_selected.
+
+*--------------------------------------------------------------------*
+* CREATE DDIC DOMAIN OBJECTS  .
+*--------------------------------------------------------------------*
+  LOOP AT it_data INTO DATA(wa_selected) WHERE sel = 'X'
+                                         AND object = 'DOMA' .
+    gv_pgmid = wa_selected-pgmid.
+
+    lv_ddic = wa_selected-obj_name.
+    PERFORM make_doma.
+    WAIT UP TO 2 SECONDS.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+
+*--------------------------------------------------------------------*
+* CREATE DDIC ELEMENT OBJECTS  .
+*--------------------------------------------------------------------*
+
+
+  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
+                                       AND object = 'DTEL' .
+    gv_pgmid = wa_selected-pgmid.
+    lv_ddic = wa_selected-obj_name.
+    PERFORM make_detl.
+    WAIT UP TO 2 SECONDS.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+* CREATE TABLE / STRUCTURE OBJECTS  .
+*--------------------------------------------------------------------*
+  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
+                                       AND object = 'TABL' .
+    gv_pgmid = wa_selected-pgmid.
+    lv_ddic = wa_selected-obj_name.
+    PERFORM make_tabl.
+    WAIT UP TO 2 SECONDS.
+  ENDLOOP.
+*--------------------------------------------------------------------*
+
+*--------------------------------------------------------------------*
+* CREATE PROGRAMS & INCLUDES .
+*--------------------------------------------------------------------*
+
+  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
+                                          AND ( object = 'INCL' OR object = 'PROG' OR object = 'REPS' )  .
+    gv_pgmid = wa_selected-pgmid.
+    lv_prog = wa_selected-obj_name.
+
+    PERFORM make_prog.
+    WAIT UP TO 2 SECONDS.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+
+*--------------------------------------------------------------------*
+* CREATE FUNCATION GROUP & FUNCTION.
+*--------------------------------------------------------------------*
+
+  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
+                                   AND object = 'FUGR' .
+
+    gv_pgmid = wa_selected-pgmid.
+    lv_fgname = wa_selected-obj_name.
+
+    "STEP - 1 CREATE FUNCTION GROUP.
+
+    CALL FUNCTION 'CRMOST_FUGR_EXISTS'
+      EXPORTING
+        name       = lv_fgname
+        objtype    = 'FUGR'
+      IMPORTING
+        bapireturn = ls_return.
+    .
+    "CHECK FUNCTION GROUP.
+    IF ls_return IS NOT INITIAL.
+
+      PERFORM make_functiongroup.
+
+      PERFORM make_includes.
+
+      WAIT UP TO 2 SECONDS.
+    ENDIF.
+
+*    IF gv_fugr IS INITIAL.
+    "STEP - 2 GET FUNCTION NAME LIST
+    CONCATENATE 'PNAME =' '''' 'SAPL' lv_fgname ''''
+    INTO wa_options-text .
+    APPEND wa_options TO it_options.
+
+    wa_fields-fieldname = 'FUNCNAME'.
+    APPEND wa_fields TO it_fields.
+
+    CALL FUNCTION 'RFC_READ_TABLE' DESTINATION p_rd
+      EXPORTING
+        query_table          = 'TFDIR'
+      TABLES
+        options              = it_options
+        fields               = it_fields
+        data                 = it_data52
+      EXCEPTIONS
+        table_not_available  = 1
+        table_without_data   = 2
+        option_not_valid     = 3
+        field_not_valid      = 4
+        not_authorized       = 5
+        data_buffer_exceeded = 6
+        OTHERS               = 7.
+    IF it_data52 IS NOT INITIAL.
+      "STEP - 3 CREATE FUNCTION
+      LOOP AT it_data52 INTO lv_fname.
+        PERFORM make_func.
+        WAIT UP TO 2 SECONDS.
+      ENDLOOP.
+    ENDIF.
+*    ENDIF.
+
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+*--------------------------------------------------------------------*
+* CREATE TRAN OBJECTS  .
+*--------------------------------------------------------------------*
+
+  LOOP AT it_data INTO wa_selected WHERE sel = 'X'
+                                   AND object = 'TRAN' .
+    lv_tran = wa_selected-obj_name.
+    gv_pgmid = wa_selected-pgmid.
+    PERFORM make_tran.
+    WAIT UP TO 2 SECONDS.
+  ENDLOOP.
+
+*--------------------------------------------------------------------*
+
+  PERFORM lock_into_tr.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_DOMA
+*&---------------------------------------------------------------------*
+*& CREATE DDIC OBJECT DOMAIN
+*&---------------------------------------------------------------------*
+FORM make_doma .
+  DATA :
+    lv_vrsd       TYPE vrsd-objname,
+    lv_rfcdes     TYPE rfcdes-rfcdest,
+    lv_trobj_name TYPE trobj_name.
+
+
+  DATA : ls_dd01v_wa_a LIKE  dd01v,
+         ls_dd01v_wa_n LIKE  dd01v,
+         ls_got_state  LIKE  dcdomaget,
+         "  TABLES
+         dd07v_tab_a   TYPE TABLE OF  dd07v,
+         dd07v_tab_n   TYPE TABLE OF  dd07v,
+         dcdomaget     TYPE dcdomaget.
+
+  " STEP 1: GET DETAILS OF DOMAIN FROM REMOTE SYSTEM.
+  dcdomaget-doma = 'M'.
+
+  CALL FUNCTION 'DD_DOMA_GET' DESTINATION p_rd
+    EXPORTING
+      domain_name   = lv_ddic
+      get_state     = dcdomaget
+      langu         = sy-langu
+      prid          = 0
+      withtext      = 'X'
+    IMPORTING
+      dd01v_wa_a    = ls_dd01v_wa_a
+      dd01v_wa_n    = ls_dd01v_wa_n
+*     GOT_STATE     =
+    TABLES
+      dd07v_tab_a   = dd07v_tab_a
+      dd07v_tab_n   = dd07v_tab_n
+    EXCEPTIONS
+      illegal_value = 1
+      op_failure    = 2
+      OTHERS        = 3.
+
+  IF sy-subrc <> 0.
+
+    APPEND VALUE #(       type       = 'E'
+                           id         = sy-msgid
+                           number     = sy-msgno
+                           message_v1 = sy-msgv1
+                           message_v2 = sy-msgv2
+                           message_v3 = sy-msgv3
+                           message_v4 = sy-msgv4
+                           message = lv_ddic && '-'&& 'DOMAIN PUT FAILURE' ) TO t_return.
+  ELSE.
+
+    " STEP 2: CREATE OR UPDATE DOMAIN USING DDIF_DOMA_PUT
+    CALL FUNCTION 'DD_DOMA_PUT'
+      EXPORTING
+        dd01v_wa            = ls_dd01v_wa_a
+        domain_name         = lv_ddic
+*       PRID                = 0
+*       CTRL_DOMA_PUT       = 'N'
+*       SAVE_ABAP_LANGUAGE_VERSION = ' '
+      TABLES
+        dd07v_tab           = dd07v_tab_a
+      EXCEPTIONS
+        illegal_value       = 1
+        op_failure          = 2
+        object_inconsistent = 3
+        OTHERS              = 4.
+
+
+    IF sy-subrc <> 0.
+
+      APPEND VALUE #(       type       = 'E'
+                             id         = sy-msgid
+                             number     = sy-msgno
+                             message_v1 = sy-msgv1
+                             message_v2 = sy-msgv2
+                             message_v3 = sy-msgv3
+                             message_v4 = sy-msgv4
+                             message = lv_ddic && '-'&&  'DOMAIN PUT FAILURE' ) TO t_return.
+
+    ELSE.
+
+      COMMIT WORK.
+*STEP 3 : LOCK TABLE INTO TR SYSTEM.
+      lv_trobj_name = lv_ddic.
+
+
+      gv_objnam = lv_trobj_name.
+      gv_objtyp = 'DOMA'.
+      PERFORM add_tr.
+
+      " STEP 4: ACTIVATE THE DOMAIN USING DDIF_DOMA_ACTIVATE
+      CALL FUNCTION 'DDIF_DOMA_ACTIVATE'
+        EXPORTING
+          name      = lv_ddic
+        EXCEPTIONS
+          not_found = 1
+          OTHERS    = 2.
+
+    ENDIF.
+  ENDIF.
+
+  CLEAR :
+       lv_vrsd  ,
+       lv_rfcdes   ,
+       lv_trobj_name ,
+       ls_dd01v_wa_a ,
+       ls_dd01v_wa_n ,
+       ls_got_state  ,
+       dd07v_tab_a   ,
+       dd07v_tab_n   ,
+       dcdomaget     .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_DETL
+*&---------------------------------------------------------------------*
+*&  CREATE DDIC OBJECT ELEMENT
+*&---------------------------------------------------------------------*
+FORM make_detl .
+  DATA :
+    lv_vrsd       TYPE vrsd-objname,
+    lv_rfcdes     TYPE rfcdes-rfcdest,
+    lv_trobj_name TYPE trobj_name.
+
+*"  EXPORTING
+  DATA:
+    ls_got_state   LIKE  ddrefstruc-state,
+    ls_dd04l_wa_a  LIKE  dd04l,
+    ls_dd04l_wa_n  LIKE  dd04l,
+    ls_dd01l_wa    LIKE  dd01l,
+    ls_tpara_wa    LIKE  tpara,
+*"  TABLES
+    lt_dd04t_tab_a TYPE TABLE OF  dd04t,
+    lt_dd04t_tab_n TYPE TABLE OF  dd04t,
+    ls_dcdtelget   TYPE dcdtelget.
+
+  " STEP 1: GET DETAILS OF ELEMENT FROM REMOTE SYSTEM.
+  ls_dcdtelget-dtget = 'M'.
+  CALL FUNCTION 'DD_DTEL_GET' DESTINATION p_rd
+    EXPORTING
+      get_state     = ls_dcdtelget
+      langu         = '*'
+      prid          = 0
+      withtext      = 'X'
+      roll_name     = lv_ddic
+    IMPORTING
+      got_state     = ls_got_state
+      dd04l_wa_a    = ls_dd04l_wa_a
+      dd04l_wa_n    = ls_dd04l_wa_n
+      dd01l_wa      = ls_dd01l_wa
+      tpara_wa      = ls_tpara_wa
+    TABLES
+      dd04t_tab_a   = lt_dd04t_tab_a
+      dd04t_tab_n   = lt_dd04t_tab_n
+    EXCEPTIONS
+      illegal_value = 1
+      OTHERS        = 2.
+
+  IF sy-subrc <> 0.
+    APPEND VALUE #(       type       = 'E'
+                           id         = sy-msgid
+                           number     = sy-msgno
+                           message_v1 = sy-msgv1
+                           message_v2 = sy-msgv2
+                           message_v3 = sy-msgv3
+                           message_v4 = sy-msgv4
+                           message = lv_ddic && '-'&& 'ELEMENT PUT FAILURE' ) TO t_return.
+
+  ELSE.
+
+    " STEP 2: CREATE OR UPDATE ELEMENT USING
+    CALL FUNCTION 'DD_DTEL_PUT'
+      EXPORTING
+        dd04l_wa            = ls_dd04l_wa_a       " HEADER OF DATA ELEMENT
+*       PRID                = 0                   " ID OF A STANDARD OUTPUT CHANNEL OR 0
+*       PUT_STATE           = 'N'                 " STATUS IN WHICH THE DATA ELEMENT WAS STORED
+        rollname            = lv_ddic              " NAME OF DATA ELEMENT TO BE WRITTEN
+*       SAVE_ABAP_LANGUAGE_VERSION = ' '
+      TABLES
+        dd04t_tab           = lt_dd04t_tab_a      " TEXTS (IN ANY LANGUAGE)
+      EXCEPTIONS
+        illegal_value       = 1                " A PARAMETER WAS SUPPLIED INCORRECTLY
+        object_inconsistent = 2                " THE DATA ELEMENT IS INCONSISTENT
+        db_access_failure   = 3
+        OTHERS              = 4.
+
+    IF sy-subrc <> 0.
+
+      APPEND VALUE #(   type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message = lv_ddic && '-'&&  'ELEMENT PUT FAILURE' ) TO t_return.
+
+    ELSE.
+      "STEP 3 : LOCK TABLE INTO TR SYSTEM.
+      lv_trobj_name = lv_ddic.
+      gv_objnam = lv_trobj_name.
+      gv_objtyp = 'DTEL'.
+      PERFORM add_tr.
+      COMMIT WORK.
+
+    ENDIF.
+
+
+    " STEP 4: ACTIVATE THE DOMAIN USING DDIF_DOMA_ACTIVATE
+    CALL FUNCTION 'DDIF_DTEL_ACTIVATE'
+      EXPORTING
+        name      = lv_ddic
+      EXCEPTIONS
+        not_found = 1
+        OTHERS    = 2.
+
+  ENDIF.
+
+  CLEAR :
+
+    lv_vrsd       ,
+    lv_rfcdes     ,
+    lv_trobj_name ,
+    ls_got_state  ,
+    ls_dd04l_wa_a ,
+    ls_dd04l_wa_n ,
+    ls_dd01l_wa   ,
+    ls_tpara_wa   ,
+    lt_dd04t_tab_a,
+    lt_dd04t_tab_n,
+    ls_dcdtelget  .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_TABL
+*&---------------------------------------------------------------------*
+*&  CREATE DDIC OBJECT TABLE
+*&---------------------------------------------------------------------*
+FORM make_tabl .
+  DATA :
+    lt_dfies_tab    TYPE TABLE OF dfies,
+    lt_fixed_values	TYPE TABLE OF	ddfixvalues,
+    lv_trobj_name   TYPE trobj_name.
+
+
+  DATA: lt_fields TYPE TABLE OF rfc_db_fld,
+        lt_data   TYPE TABLE OF tab512,
+        ls_data   TYPE tab512.
+
+  DATA: lt_options    TYPE TABLE OF rfc_db_opt,
+        lt_fields_sel TYPE TABLE OF rfc_db_fld.
+
+  DATA: lv_tabname      TYPE tabname VALUE 'DD09L'.
+
+  DATA : gv_new128      TYPE trobj_name.
+  DATA : gt_objects     TYPE TABLE OF ko200.
+  DATA : gs_object      TYPE ko200.
+
+  DATA : wa_dd02v_wa TYPE dd02v,
+         wa_dd09l_wa TYPE  dd09l.
+
+  DATA : lt_dd03p_tab TYPE TABLE OF  dd03p,
+         lt_dd05m_tab TYPE TABLE OF  dd05m,
+         lt_dd08v_tab TYPE TABLE OF  dd08v,
+         lt_dd12v_tab TYPE TABLE OF  dd12v,
+         lt_dd17v_tab TYPE TABLE OF  dd17v,
+         lt_dd35v_tab TYPE TABLE OF  dd35v,
+         lt_dd36m_tab TYPE TABLE OF  dd36m.
+
+
+*STEP 1 GET ALL INFROMATION OF TABLE FROM DESTI. SERVER
+
+  CALL FUNCTION 'DD_TABL_GET' DESTINATION p_rd
+    EXPORTING
+*     GET_STATE      = 'M'
+      langu          = sy-langu         " LANGUAGE IN WHICH TEXTS ARE READ
+      prid           = 0
+      tabl_name      = lv_ddic              " NAME OF THE TABLE TO BE READ
+      withtext       = 'X'
+      add_typeinfo   = 'X'              " WHETHER AND HOW TO READ INFORMATION ABOUT REFERENCED TYPES
+*     USE_CACHE      = ' '
+*     TRACELEVEL     = 0
+    IMPORTING
+      dd02v_wa_a     = wa_dd02v_wa
+*     DD02V_WA_N     =
+      dd09l_wa_a     = wa_dd09l_wa
+*     DD09L_WA_N     =
+*     GOT_STATE      =
+    TABLES
+      dd03p_tab_a    = lt_dd03p_tab
+      dd05m_tab_a    = lt_dd05m_tab
+      dd08v_tab_a    = lt_dd08v_tab
+      dd12v_tab_a    = lt_dd12v_tab
+      dd17v_tab_a    = lt_dd17v_tab
+      dd35v_tab_a    = lt_dd35v_tab
+      dd36m_tab_a    = lt_dd36m_tab
+    EXCEPTIONS
+      access_failure = 1
+      OTHERS         = 2.
+
+  IF sy-subrc <> 0.
+    APPEND VALUE #(        type       = 'E'
+                           id         = sy-msgid
+                           number     = sy-msgno
+                           message_v1 = sy-msgv1
+                           message_v2 = sy-msgv2
+                           message_v3 = sy-msgv3
+                           message_v4 = sy-msgv4
+                           message = lv_ddic && '-'&&  'TABLE PUT FAILURE' ) TO t_return.
+  ELSE.
+
+    CALL FUNCTION 'DDIF_TABL_PUT'
+      EXPORTING
+        name              = lv_ddic        " NAME OF THE TABLE TO BE WRITTEN
+        dd02v_wa          = wa_dd02v_wa         " TABLE HEADER
+        dd09l_wa          = wa_dd09l_wa         " TECHNICAL SETTINGS OF THE TABLE
+      TABLES
+        dd03p_tab         = lt_dd03p_tab      " TABLE FIELDS
+        dd05m_tab         = lt_dd05m_tab      " FOREIGN KEY FIELDS OF THE TABLE
+        dd08v_tab         = lt_dd08v_tab      " FOREIGN KEYS OF THE TABLE
+        dd35v_tab         = lt_dd35v_tab      " HEADER OF THE SEARCH HELP ASSIGNMENTS OF THE TABLE
+        dd36m_tab         = lt_dd36m_tab      " ALLOCATIONS OF THE SEARCH HELP ASSIGNMENTS OF THE TABLE
+      EXCEPTIONS
+        tabl_not_found    = 1                 " TABLE HEADER COULD NOT BE FOUND
+        name_inconsistent = 2                 " NAME IN SOURCES INCONSISTENT WITH NAME
+        tabl_inconsistent = 3                 " INCONSISTENT SOURCES
+        put_failure       = 4                 " WRITE ERROR (ROLLBACK RECOMMENDED)
+        put_refused       = 5.                " WRITE NOT ALLOWED
+    IF sy-subrc <> 0.
+      APPEND VALUE #(       type       = 'E'
+                             id         = sy-msgid
+                             number     = sy-msgno
+                             message_v1 = sy-msgv1
+                             message_v2 = sy-msgv2
+                             message_v3 = sy-msgv3
+                             message_v4 = sy-msgv4
+                             message = lv_ddic && '-'&&  'TABLE PUT FAILURE' ) TO t_return.
+    ELSE.
+*STEP 4 : LOCK TABLE INTO TR SYSTEM.
+      lv_trobj_name = lv_ddic.
+
+      gv_objnam = lv_trobj_name.
+      gv_objtyp = 'TABL'.
+      PERFORM add_tr.
+
+
+*STEP 5 : ACTIVATE THE TABLE.
+      CALL FUNCTION 'DDIF_TABL_ACTIVATE'
+        EXPORTING
+          name = lv_ddic. " NAME OF THE TABLE TO BE ACTIVATED
+
+    ENDIF.
+
+  ENDIF.
+  CLEAR  :
+  lt_dfies_tab   ,
+  lt_fixed_values,
+  lv_trobj_name  ,
+  lt_fields      ,
+  lt_data        ,
+  ls_data        ,
+  lt_options    ,
+  lt_fields_sel  ,
+  lv_tabname    ,
+  gv_new128    ,
+  gt_objects    ,
+  gs_object     ,
+  wa_dd02v_wa  ,
+  wa_dd09l_wa   ,
+  lt_dd03p_tab ,
+  lt_dd05m_tab  ,
+  lt_dd08v_tab  ,
+  lt_dd12v_tab  ,
+  lt_dd17v_tab  ,
+  lt_dd35v_tab  ,
+  lt_dd36m_tab  .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_PROG
+*&---------------------------------------------------------------------*
+*& CREATE PROGRAM & INCLUDE
+*&---------------------------------------------------------------------*
+FORM make_prog .
+
+  DATA : gv_newfilename TYPE sobj_name.
+  DATA : gt_objects     TYPE TABLE OF ko200.
+  DATA : gs_object      TYPE ko200.
+  DATA : gv_new128 TYPE trobj_name.
+
+  DATA : ls_prog_inf        TYPE  rpy_prog,
+         "  TABLES
+         lt_include_tab     TYPE TABLE OF  rpy_repo,
+         lt_source          TYPE TABLE OF  abapsource,
+         lt_source_extended TYPE TABLE OF  abaptxt255,
+         lt_textelements    TYPE TABLE OF  textpool.
+
+
+* FIND THE SOURCE CODE OF INCLUDES
+  CALL FUNCTION 'RPY_PROGRAM_READ' DESTINATION p_rd
+    EXPORTING
+      language            = sy-langu
+      program_name        = lv_prog
+      with_includelist    = 'X'
+      only_source         = ' '
+      only_texts          = ' '
+      read_latest_version = space
+      with_lowercase      = ' '
+    IMPORTING
+      prog_inf            = ls_prog_inf
+    TABLES
+      include_tab         = lt_include_tab
+      source              = lt_source                 " SOURCE TABLE
+      source_extended     = lt_source_extended
+      textelements        = lt_textelements
+    EXCEPTIONS
+      cancelled           = 1
+      not_found           = 2
+      permission_error    = 3
+      OTHERS              = 4.
+  IF sy-subrc <> 0.
+    APPEND VALUE #(       type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message = lv_prog && '-'&&  'REPORT PUT FAILURE' ) TO t_return.
+  ELSE.
+
+    lv_subc = ls_prog_inf-prog_type.
+
+    CALL FUNCTION 'RPY_PROGRAM_INSERT'
+      EXPORTING
+        application         = 'X'
+        authorization_group = space           " AUTHORIZATION GROUP
+        development_class   = p_pk            " PACKAGE
+        edit_lock           = space           " EDITOR LOCK FLAG
+        log_db              = space           " NAME OF LOGICAL DATABASE
+        program_name        = lv_prog
+        program_type        = lv_subc "'1'  "SUBC
+        r2_flag             = space
+        temporary           = space            " TEMPORARY OBJECT
+        title_string        = 'NEW PROGRAM TEST'
+        transport_number    = p_ltr
+        save_inactive       = space
+        suppress_dialog     = ' '
+        status              = space
+        uccheck             = 'X'
+      TABLES
+        source              = lt_source                " TABLE OF MESSAGES
+        source_extended     = lt_source_extended
+      EXCEPTIONS
+        already_exists      = 1
+        cancelled           = 2
+        name_not_allowed    = 3
+        permission_error    = 4
+        OTHERS              = 5.
+    IF sy-subrc <> 0.
+      IF sy-subrc <> 1.
+        APPEND VALUE #(       type       = 'E'
+                          id         = sy-msgid
+                          number     = sy-msgno
+                          message_v1 = sy-msgv1
+                          message_v2 = sy-msgv2
+                          message_v3 = sy-msgv3
+                          message_v4 = sy-msgv4
+                          message = lv_prog && '-'&&  'REPORT PUT FAILURE' ) TO t_return.
+
+      ELSE.
+
+        CALL FUNCTION 'RPY_PROGRAM_UPDATE'
+          EXPORTING
+            application         = 'X'
+            authorization_group = space
+            development_class   = p_pk
+            edit_lock           = space
+            log_db              = space
+            program_name        = lv_prog
+            program_type        = lv_subc
+            temporary           = space
+            title_string        = 'NEW PROGRAM TEST'
+            transport_number    = space
+            save_inactive       = space
+          TABLES
+            source              = lt_source
+            source_extended     = lt_source_extended
+          EXCEPTIONS
+            cancelled           = 1
+            permission_error    = 2
+            not_found           = 3.
+
+
+      ENDIF.
+
+    ENDIF.
+
+
+    CALL FUNCTION 'RPY_TEXTELEMENTS_INSERT'
+      EXPORTING
+        development_class  = p_pk                 " Package
+        language           = 'E'
+        program_name       = lv_prog
+        r2_flag            = 'X'
+        temporary          = ' '                 " Temporary Object
+        transport_number   = p_ltr
+        suppress_dialog    = 'X'
+      TABLES
+        source             = lt_textelements
+      EXCEPTIONS
+        cancelled          = 1
+        permission_error   = 2
+        program_not_exists = 3
+        OTHERS             = 4.
+
+
+  ENDIF.
+  CLEAR :
+  gv_newfilename ,
+  gt_objects     ,
+  gs_object      ,
+  gv_new128   ,
+  ls_prog_inf     ,
+  lt_include_tab     ,
+  lt_source          ,
+  lt_source_extended ,
+  lt_textelements    .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_FUGR
+*&---------------------------------------------------------------------*
+*& CREATE FUNCTION & FUNCATION GROUP
+*&---------------------------------------------------------------------*
+FORM make_functiongroup .
+
+  DATA :
+    lv_function_pool           TYPE  rsnewleng-area,
+    lv_short_text              TYPE  tftit-stext,
+    lv_responsible             TYPE  sy-uname,
+    lv_namespace               TYPE  rs38l-namespace,
+    lv_devclass                TYPE  rs38l-devclass,
+    lv_corrnum                 TYPE  e071-trkorr,
+    lv_suppress_language_check TYPE  rs38l-head,
+    lv_suppress_corr_check     TYPE  rs38l-extern,
+    lv_unicode_checks          TYPE  trdir-uccheck,
+    lv_short_text1             TYPE  tftit-stext VALUE 'TEST FG'.
+  .
+  DATA :
+    lv_vrsd   TYPE vrsd-objname,
+    lv_rfcdes TYPE rfcdes-rfcdest.
+
+  lv_function_pool  = lv_fgname.
+  lv_devclass       = p_pk.
+  lv_corrnum        = p_ltr.
+
+  " STEP 1: CREATE FUNCATION GROUP
+  CALL FUNCTION 'RS_FUNCTION_POOL_INSERT_AIE'
+    EXPORTING
+      function_pool           = lv_function_pool
+      short_text              = lv_short_text1
+      responsible             = sy-uname
+      namespace               = space
+      devclass                = lv_devclass
+      corrnum                 = lv_corrnum
+      suppress_language_check = 'X'
+      suppress_corr_check     = 'X'
+      unicode_checks          = 'X'
+    IMPORTING
+      corrnum                 = lv_corrnum
+    EXCEPTIONS
+      name_already_exists     = 1
+      name_not_correct        = 2
+      function_already_exists = 3
+      invalid_function_pool   = 4
+      invalid_name            = 5
+      too_many_functions      = 6
+      no_modify_permission    = 7
+      no_show_permission      = 8
+      enqueue_system_failure  = 9
+      canceled_in_corr        = 10
+      undefined_error         = 11.
+  IF sy-subrc <> 0.
+
+    APPEND VALUE #(      type       = 'E'
+                         id         = sy-msgid
+                         number     = sy-msgno
+                         message_v1 = sy-msgv1
+                         message_v2 = sy-msgv2
+                         message_v3 = sy-msgv3
+                         message_v4 = sy-msgv4
+                         message = lv_fgname && '-'&&  'FUNCTION GROUP PUT FAILURE' ) TO t_return.
+    gv_fugr = 'X'.
+  ENDIF.
+  CLEAR  :
+      lv_function_pool          ,
+      lv_short_text             ,
+      lv_responsible            ,
+      lv_namespace              ,
+      lv_devclass               ,
+      lv_corrnum                ,
+      lv_suppress_language_check,
+      lv_suppress_corr_check    ,
+      lv_unicode_checks         ,
+      lv_short_text1            ,
+      lv_vrsd   ,
+      lv_rfcdes .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_FUNC
+*&---------------------------------------------------------------------*
+*& CREATE FUNCTION
+*&---------------------------------------------------------------------*
+FORM make_func .
+
+*DATA
+  DATA :
+    lv_vrsd      TYPE vrsd-objname,
+
+    lv_info_line TYPE abaptext-line,
+*"  TABLES
+    lt_vsmodisrc TYPE TABLE OF smodisrc,
+    lt_uincl_tab TYPE TABLE OF abaptxt255,
+    lt_dincl_tab TYPE TABLE OF abaptext,
+    lt_enlfd_tab TYPE TABLE OF enlfdir,
+    lt_funct_tab TYPE TABLE OF funct,
+    lt_fupar_tab TYPE TABLE OF sfupararef,
+    lt_vsmodilog TYPE TABLE OF smodilog,
+    lt_tfdir_tab TYPE TABLE OF tfdir,
+    lt_tftit_tab TYPE TABLE OF tftit,
+    lt_trdir_tab TYPE TABLE OF trdir.
+
+  DATA:
+
+    lt_import_parameter   TYPE TABLE OF rsimp,
+    wa_import_parameter   TYPE rsimp,
+
+    lt_export_parameter   TYPE TABLE OF rsexp,
+    wa_export_parameter   TYPE rsexp,
+
+    lt_tables_parameter   TYPE TABLE OF rstbl,
+    wa_tables_parameter   TYPE rstbl,
+
+    lt_changing_parameter TYPE TABLE OF rscha,
+    wa_changing_parameter TYPE rscha.
+
+  DATA: lt_source        TYPE STANDARD TABLE OF rssource,
+        lv_function_name TYPE rs38l-name,
+        lv_short_text2   TYPE  tftit-stext VALUE 'TEST FM'.
+
+  lv_function_name  =  lv_fname.
+
+  " STEP 1: READ REMOTE SOURCE CODE
+  CALL FUNCTION 'SVRS_GET_VERSION_FUNC_40'
+    EXPORTING
+      destination           = p_rd
+      object_name           = lv_fname
+      versno                = '00000'
+*     IV_NO_RELEASE_TRANSFORMATION = LV_INFO_LINE
+    IMPORTING
+      info_line             = lv_info_line
+    TABLES
+      vsmodisrc             = lt_vsmodisrc
+      uincl_tab             = lt_uincl_tab
+      dincl_tab             = lt_dincl_tab
+      enlfd_tab             = lt_enlfd_tab
+      funct_tab             = lt_funct_tab
+      fupar_tab             = lt_fupar_tab
+      vsmodilog             = lt_vsmodilog
+      tfdir_tab             = lt_tfdir_tab
+      tftit_tab             = lt_tftit_tab
+      trdir_tab             = lt_trdir_tab
+    EXCEPTIONS
+      no_version            = 1
+      system_failure        = 2
+      communication_failure = 3
+      OTHERS                = 4.
+  IF sy-subrc <> 0.
+    APPEND VALUE #(       type       = 'E'
+                       id         = sy-msgid
+                       number     = sy-msgno
+                       message_v1 = sy-msgv1
+                       message_v2 = sy-msgv2
+                       message_v3 = sy-msgv3
+                       message_v4 = sy-msgv4
+                       message = 'FUNCATION PUT FAILURE' ) TO t_return.
+  ELSE.
+
+    " STEP 2: MAPPING IMPORT & EXPORT PARAMETER
+    LOOP AT lt_fupar_tab INTO DATA(wa_fupar_tab) WHERE paramtype = 'I'.
+      wa_import_parameter-parameter = wa_fupar_tab-parameter.
+      wa_import_parameter-types     = wa_fupar_tab-type.
+      IF wa_fupar_tab-type IS NOT INITIAL.
+        wa_import_parameter-typ       = wa_fupar_tab-structure.
+      ELSE.
+        wa_import_parameter-dbfield   = wa_fupar_tab-structure.
+      ENDIF.
+      wa_import_parameter-optional  = 'X'.
+      APPEND wa_import_parameter TO lt_import_parameter.
+      CLEAR wa_fupar_tab.
+    ENDLOOP.
+
+    LOOP AT lt_fupar_tab INTO wa_fupar_tab WHERE paramtype = 'E'.
+      wa_export_parameter-parameter = wa_fupar_tab-parameter.
+      wa_export_parameter-types     = wa_fupar_tab-type.
+      IF wa_fupar_tab-type IS NOT INITIAL.
+        wa_export_parameter-typ       = wa_fupar_tab-structure.
+      ELSE.
+        wa_export_parameter-dbfield   = wa_fupar_tab-structure.
+      ENDIF.
+      APPEND wa_export_parameter TO lt_export_parameter.
+      CLEAR  wa_export_parameter.
+      CLEAR wa_fupar_tab.
+    ENDLOOP.
+
+    LOOP AT lt_fupar_tab INTO wa_fupar_tab WHERE paramtype = 'C'.
+      wa_changing_parameter-parameter = wa_fupar_tab-parameter.
+      wa_changing_parameter-types     = wa_fupar_tab-type.
+      IF wa_fupar_tab-type IS NOT INITIAL.
+        wa_changing_parameter-typ       = wa_fupar_tab-structure.
+      ELSE.
+        wa_changing_parameter-dbfield   = wa_fupar_tab-structure.
+      ENDIF.
+      wa_changing_parameter-reference = 'X'.
+      APPEND wa_changing_parameter TO lt_changing_parameter.
+      CLEAR  wa_changing_parameter.
+      CLEAR wa_fupar_tab.
+    ENDLOOP.
+
+    LOOP AT lt_fupar_tab INTO wa_fupar_tab WHERE paramtype = 'T'.
+      wa_tables_parameter-parameter = wa_fupar_tab-parameter.
+      wa_tables_parameter-types     = wa_fupar_tab-type.
+      IF wa_fupar_tab-type IS NOT INITIAL.
+        wa_tables_parameter-typ       = wa_fupar_tab-structure.
+      ELSE.
+        wa_tables_parameter-dbstruct   = wa_fupar_tab-structure.
+      ENDIF.
+      APPEND wa_tables_parameter TO lt_tables_parameter.
+      CLEAR wa_tables_parameter.
+      CLEAR wa_fupar_tab.
+    ENDLOOP.
+
+
+
+    TYPES: BEGIN OF ty_line,
+             line TYPE string,
+           END OF ty_line.
+
+    DATA: "lt_source TYPE TABLE OF ty_line,    " Input lines
+      lt_target TYPE TABLE OF ty_line,    " Output formatted lines
+      wa_target TYPE ty_line.
+
+    DATA: lv_input   TYPE string,
+          lv_code    TYPE string,
+          lv_comment TYPE string,
+          lv_line    TYPE string,
+          lv_word    TYPE string.
+
+    DATA: it_words TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+
+    LOOP AT lt_source ASSIGNING FIELD-SYMBOL(<wa_source>).
+      lv_input = <wa_source>-line.
+
+      CLEAR: lv_line, lv_code, lv_comment, it_words.
+
+      " Case 1: Full-line comment (starts with * or ")
+      IF lv_input CP '*' OR lv_input CP '"'.
+        lv_comment = lv_input+1. " Remove prefix
+        SPLIT lv_comment AT space INTO TABLE it_words.
+
+        CLEAR lv_line.
+        LOOP AT it_words INTO lv_word.
+          IF strlen( lv_line ) + strlen( lv_word ) + 1 > 71.
+            wa_target-line = |{ lv_input(0) } { lv_line }|.
+            APPEND wa_target TO lt_target.
+            CLEAR lv_line.
+          ENDIF.
+
+          IF lv_line IS INITIAL.
+            lv_line = lv_word.
+          ELSE.
+            CONCATENATE lv_line lv_word INTO lv_line SEPARATED BY space.
+          ENDIF.
+        ENDLOOP.
+
+        IF lv_line IS NOT INITIAL.
+          wa_target-line = |{ lv_input(0) } { lv_line }|.
+          APPEND wa_target TO lt_target.
+        ENDIF.
+
+        " Case 2: Code line with inline comment
+      ELSEIF lv_input CS '"'.
+        SPLIT lv_input AT '"' INTO lv_code lv_comment.
+
+        " Combine code + first part of comment
+        wa_target-line = |{ lv_code }" { lv_comment }|.
+        IF strlen( wa_target-line ) <= 72.
+          APPEND wa_target TO lt_target.
+        ELSE.
+          " Code part on one line
+          wa_target-line = lv_code.
+          APPEND wa_target TO lt_target.
+
+          " Now wrap the comment part on next lines with "*"
+          SPLIT lv_comment AT space INTO TABLE it_words.
+          CLEAR lv_line.
+
+          LOOP AT it_words INTO lv_word.
+            IF strlen( lv_line ) + strlen( lv_word ) + 1 > 71.
+              wa_target-line = |* { lv_line }|.
+              APPEND wa_target TO lt_target.
+              CLEAR lv_line.
+            ENDIF.
+
+            IF lv_line IS INITIAL.
+              lv_line = lv_word.
+            ELSE.
+              CONCATENATE lv_line lv_word INTO lv_line SEPARATED BY space.
+            ENDIF.
+          ENDLOOP.
+
+          IF lv_line IS NOT INITIAL.
+            wa_target-line = |* { lv_line }|.
+            APPEND wa_target TO lt_target.
+          ENDIF.
+        ENDIF.
+
+        " Case 3: Pure code (no comment)
+      ELSE.
+        wa_target-line = lv_input.
+        APPEND wa_target TO lt_target.
+      ENDIF.
+
+    ENDLOOP.
+
+    "TO UPDATE THE SHORT TEXT FOR FUNCTION MODULE
+    READ TABLE lt_tftit_tab INTO DATA(wa_tftit_tab) WITH KEY funcname = lv_function_name.
+    lv_short_text2 = wa_tftit_tab-stext.
+
+    " STEP 4: TRY TO INSERT FM INTO ALREADY EXISET FM GROUP
+    IF lt_source IS NOT INITIAL.
+
+      DATA:
+        lv_index          TYPE sy-tabix,
+        lv_first_function TYPE sy-tabix,
+        lv_last_function  TYPE sy-tabix,
+        lv_first_endfunc  TYPE sy-tabix,
+        lv_last_endfunc   TYPE sy-tabix.
+      CLEAR lv_line.
+      " Step 1: Find first and last occurrences of FUNCTION
+      CLEAR: lv_first_function, lv_last_function.
+      LOOP AT lt_source INTO lv_line.
+        lv_index = sy-tabix.
+        IF lv_line CS 'FUNCTION'.
+          IF lv_first_function IS INITIAL.
+            lv_first_function = lv_index. " Store first occurrence
+          ENDIF.
+          lv_last_function = lv_index. " Update last occurrence
+        ENDIF.
+      ENDLOOP.
+
+      " Step 2: Find first and last occurrences of ENDFUNCTION
+      CLEAR: lv_first_endfunc, lv_last_endfunc.
+      LOOP AT lt_source INTO lv_line.
+        lv_index = sy-tabix.
+        IF lv_line CS 'ENDFUNCTION.'.
+          IF lv_first_endfunc IS INITIAL.
+            lv_first_endfunc = lv_index. " Store first occurrence
+          ENDIF.
+          lv_last_endfunc = lv_index. " Update last occurrence
+        ENDIF.
+      ENDLOOP.
+
+      " Step 3: Delete the last occurrences first (to avoid index shifting)
+      IF lv_last_endfunc > 0.
+        DELETE lt_source INDEX lv_last_endfunc.
+      ENDIF.
+      IF lv_last_function > 0.
+        DELETE lt_source INDEX lv_last_function.
+      ENDIF.
+
+      " Step 4: Delete the first occurrences (adjust for index shift)
+      IF lv_first_endfunc > 0 AND lv_first_endfunc <> lv_last_endfunc.
+        IF lv_last_endfunc > 0 AND lv_first_endfunc > lv_last_endfunc.
+          lv_first_endfunc = lv_first_endfunc - 1. " Adjust index if last was deleted
+        ENDIF.
+        DELETE lt_source INDEX lv_first_endfunc.
+      ENDIF.
+      IF lv_first_function > 0 AND lv_first_function <> lv_last_function.
+        IF lv_last_function > 0 AND lv_first_function > lv_last_function.
+          lv_first_function = lv_first_function - 1. " Adjust index if last was deleted
+        ENDIF.
+        DELETE lt_source INDEX lv_first_function.
+      ENDIF.
+
+
+
+      CALL FUNCTION 'RS_FUNCTIONMODULE_INSERT'
+        EXPORTING
+          funcname                = lv_function_name
+          function_pool           = lv_fgname   " FUNCTION GROUP MUST ALREADY EXIST
+          short_text              = lv_short_text2
+        TABLES
+          source                  = lt_source
+          import_parameter        = lt_import_parameter
+          export_parameter        = lt_export_parameter
+          tables_parameter        = lt_tables_parameter
+          changing_parameter      = lt_changing_parameter
+        EXCEPTIONS
+          double_task             = 1
+          error_message           = 2
+          function_already_exists = 3
+          invalid_function_pool   = 4
+          invalid_name            = 5
+          too_many_functions      = 6
+          no_modify_permission    = 7
+          no_show_permission      = 8
+          enqueue_system_failure  = 9
+          canceled_in_corr        = 10
+          OTHERS                  = 11.
+      IF sy-subrc <> 0.
+        APPEND VALUE #(       type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message = lv_fname && '<-->'&& 'FUNCTION PUT FAILURE' ) TO t_return.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  CLEAR :
+  lv_vrsd      ,
+  lv_info_line ,
+  lt_vsmodisrc ,
+  lt_uincl_tab ,
+  lt_dincl_tab ,
+  lt_enlfd_tab ,
+  lt_funct_tab ,
+  lt_fupar_tab ,
+  lt_vsmodilog ,
+  lt_tfdir_tab ,
+  lt_tftit_tab ,
+  lt_trdir_tab ,
+  lt_import_parameter   ,
+  wa_import_parameter   ,
+  lt_export_parameter   ,
+  wa_export_parameter   ,
+  lt_tables_parameter   ,
+  wa_tables_parameter   ,
+  lt_changing_parameter ,
+  wa_changing_parameter ,
+  lt_source        ,
+  lv_function_name ,
+  lv_short_text2   .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM MAKE_TRAN
+*&---------------------------------------------------------------------*
+*& CREATE TRANSECTION CODE
+*&---------------------------------------------------------------------*
+FORM make_tran .
+  DATA: lt_data       TYPE TABLE OF tab512,
+        lt_tstcp      TYPE TABLE OF tab512,
+        lt_fields     TYPE TABLE OF rfc_db_fld,
+        ls_tstc       TYPE tstc,
+        ls_tstcp      TYPE tstcp,
+        lv_trobj_name TYPE trobj_name,
+        lt_options    TYPE TABLE OF rfc_db_opt.
+
+  " Step 1: Prepare options for RFC_READ_TABLE to filter single TCODE
+  CLEAR lt_options.
+  APPEND VALUE #( text = |TCODE = '{ lv_tran }'| ) TO lt_options.
+  lv_trobj_name = lv_tran.
+
+  " Step 2: Read TCODE from remote system
+  TRY.
+      CALL FUNCTION 'RFC_READ_TABLE'
+        DESTINATION p_rd
+        EXPORTING
+          query_table         = 'TSTC'
+        TABLES
+          data                = lt_data
+          options             = lt_options
+          fields              = lt_fields
+        EXCEPTIONS
+          table_not_available = 1
+          table_without_data  = 2
+          option_not_valid    = 3
+          not_authorized      = 4
+          OTHERS              = 5.
+
+      IF sy-subrc <> 0.
+        APPEND VALUE #( type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message    = |{ lv_tran } - TCODE PUT FAILURE| ) TO t_return.
+        RETURN.
+      ENDIF.
+
+      " Step 3: Check if TCODE already exists in local system
+      SELECT SINGLE tcode
+        INTO @DATA(lv_tcode)
+        FROM tstc
+        WHERE tcode = @lv_tran.
+
+      IF sy-subrc = 0.
+        APPEND VALUE #( type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message    = |{ lv_tran } - TCODE ALREADY EXISTS IN LOCAL SYSTEM| ) TO t_return.
+        RETURN.
+      ENDIF.
+
+      " Step 4: Map fields from RFC data to TSTC structure
+      DATA(lv_offset) = 0.
+      READ TABLE lt_data INTO DATA(ls_rfc_data) INDEX 1.
+      LOOP AT lt_fields INTO DATA(ls_field).
+        CASE ls_field-fieldname.
+          WHEN 'TCODE'.
+            ls_tstc-tcode = ls_rfc_data+lv_offset(ls_field-length).
+          WHEN 'PGMNA'.
+            ls_tstc-pgmna = ls_rfc_data+lv_offset(ls_field-length).
+          WHEN 'CINFO'.
+            ls_tstc-cinfo = ls_rfc_data+lv_offset(ls_field-length).
+          WHEN 'DYPNO'.
+            ls_tstc-dypno = ls_rfc_data+lv_offset(ls_field-length).
+          WHEN 'MENUE'.
+            ls_tstc-menue = ls_rfc_data+lv_offset(ls_field-length).
+          WHEN 'ARBGB'.
+            ls_tstc-arbgb = ls_rfc_data+lv_offset(ls_field-length).
+        ENDCASE.
+        lv_offset += ls_field-length.
+      ENDLOOP.
+
+      " Step 5: Insert TCODE into local system
+      IF ls_tstc IS NOT INITIAL.
+        CALL FUNCTION 'ENQUEUE_E_TABLE'
+          EXPORTING
+            tabname        = 'TSTC'
+          EXCEPTIONS
+            foreign_lock   = 1
+            system_failure = 2
+            OTHERS         = 3.
+        IF sy-subrc = 0.
+          INSERT tstc FROM ls_tstc.
+          COMMIT WORK.
+          CALL FUNCTION 'DEQUEUE_E_TABLE'
+            EXPORTING
+              tabname = 'TSTC'.
+        ENDIF.
+      ENDIF.
+
+      " Step 6: Read and process transaction parameters (TSTCP)
+      CLEAR: lt_tstcp, lt_fields, lv_offset.
+      CALL FUNCTION 'RFC_READ_TABLE'
+        DESTINATION p_rd
+        EXPORTING
+          query_table = 'TSTCP'
+        TABLES
+          data        = lt_tstcp
+          options     = lt_options
+          fields      = lt_fields
+        EXCEPTIONS
+          OTHERS      = 5.
+
+      IF lt_tstcp IS NOT INITIAL.
+        " Check if TCODE parameters already exist in local system
+        SELECT SINGLE *
+          INTO @DATA(wa_tstcp)
+          FROM tstcp
+          WHERE tcode = @lv_tran.
+        IF sy-subrc = 0.
+          APPEND VALUE #( type       = 'E'
+                          id         = sy-msgid
+                          number     = sy-msgno
+                          message_v1 = sy-msgv1
+                          message_v2 = sy-msgv2
+                          message_v3 = sy-msgv3
+                          message_v4 = sy-msgv4
+                          message    = |{ lv_tran } - TCODE ALREADY EXISTS IN LOCAL SYSTEM| ) TO t_return.
+          RETURN.
+        ENDIF.
+
+        " Map fields from RFC data to TSTCP structure
+        READ TABLE lt_tstcp INTO ls_rfc_data INDEX 1.
+        LOOP AT lt_fields INTO ls_field.
+          CASE ls_field-fieldname.
+            WHEN 'TCODE'.
+              ls_tstcp-tcode = ls_rfc_data+lv_offset(ls_field-length).
+            WHEN 'PARAM'.
+              ls_tstcp-param = ls_rfc_data+lv_offset(ls_field-length).
+          ENDCASE.
+          lv_offset += ls_field-length.
+        ENDLOOP.
+
+        " Insert TCODE parameters into local system
+        IF ls_tstcp IS NOT INITIAL.
+          CALL FUNCTION 'ENQUEUE_E_TABLE'
+            EXPORTING
+              tabname        = 'TSTCP'
+            EXCEPTIONS
+              foreign_lock   = 1
+              system_failure = 2
+              OTHERS         = 3.
+          IF sy-subrc = 0.
+            INSERT tstcp FROM ls_tstcp.
+            COMMIT WORK.
+            CALL FUNCTION 'DEQUEUE_E_TABLE'
+              EXPORTING
+                tabname = 'TSTCP'.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      " Step 7: Lock table into transport request
+      gv_objnam = lv_trobj_name.
+      gv_objtyp = 'TRAN'.
+      PERFORM add_tr.
+
+    CATCH cx_root INTO DATA(lx_error).
+      APPEND VALUE #( type    = 'E'
+                      message = |Error processing TCODE { lv_tran }: { lx_error->get_text( ) }| ) TO t_return.
+  ENDTRY.
+
+  " Step 8: Clear variables
+  CLEAR: lt_data, lt_fields, ls_tstc, lv_trobj_name, lt_options, lt_tstcp, ls_tstcp.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM DISPLAY_RETURN
+*&---------------------------------------------------------------------*
+*& TEXT
+*&---------------------------------------------------------------------*
+*& -->  P1        TEXT
+*& <--  P2        TEXT
+*&---------------------------------------------------------------------*
+FORM display_return .
+  DATA:
+    lt_fieldcat       TYPE slis_t_fieldcat_alv,
+    ls_fieldcat       TYPE slis_fieldcat_alv,
+    lt_return_display TYPE TABLE OF bapiret2.
+
+  " COPY DATA TO DISPLAY TABLE (OPTIONAL, IF YOU NEED TO MODIFY DATA)
+  lt_return_display = t_return.
+
+  " BUILD FIELD CATALOG FOR ALV
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'TYPE'.
+  ls_fieldcat-seltext_m = 'MESSAGE TYPE'.
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+*  CLEAR LS_FIELDCAT.
+*  LS_FIELDCAT-FIELDNAME = 'ID'.
+*  LS_FIELDCAT-SELTEXT_M = 'MESSAGE ID'.
+*  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+*
+*  CLEAR LS_FIELDCAT.
+*  LS_FIELDCAT-FIELDNAME = 'NUMBER'.
+*  LS_FIELDCAT-SELTEXT_M = 'MESSAGE NUMBER'.
+*  APPEND LS_FIELDCAT TO LT_FIELDCAT.
+
+  CLEAR ls_fieldcat.
+  ls_fieldcat-fieldname = 'MESSAGE'.
+  ls_fieldcat-seltext_m = 'MESSAGE TEXT'.
+  ls_fieldcat-outputlen = 120. " ADJUST LENGTH FOR BETTER DISPLAY
+  APPEND ls_fieldcat TO lt_fieldcat.
+
+
+
+  " CALL ALV FUNCTION TO DISPLAY THE TABLE
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program = sy-repid
+      it_fieldcat        = lt_fieldcat
+    TABLES
+      t_outtab           = lt_return_display
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+    MESSAGE 'ERROR IN ALV DISPLAY' TYPE 'E'.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& FORM ADD_TR
+*&---------------------------------------------------------------------*
+*& TEXT
+*&---------------------------------------------------------------------*
+*& -->  P1        TEXT
+*& <--  P2        TEXT
+*&---------------------------------------------------------------------*
+FORM add_tr .
+
+  " PREPARE OBJECT LIST
+  gs_object-pgmid     = gv_pgmid .
+  gs_object-object    = gv_objtyp.  " PROGRAM/INCLUDE OBJECT TYPE
+  gv_new128           = gv_objnam.
+  gs_object-obj_name  = gv_new128.
+  gs_object-devclass   = p_pk.
+  APPEND gs_object TO gt_objects.
+  CLEAR :  gv_new128 , gv_objnam ,gv_objtyp,gv_pgmid .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form Make_Includes
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM make_includes .
+  DATA : ls_prog_inf        TYPE  rpy_prog,
+         lt_include_tab     TYPE TABLE OF  rpy_repo,
+         lt_source          TYPE TABLE OF  abapsource,
+         lt_source_extended TYPE TABLE OF  abaptxt255,
+         lt_textelements    TYPE TABLE OF  textpool.
+
+
+* FIND THE SOURCE CODE OF INCLUDES
+  lv_mprog = 'SAPL' && lv_fgname.
+
+  CALL FUNCTION 'RPY_PROGRAM_READ' DESTINATION p_rd
+    EXPORTING
+      language            = sy-langu
+      program_name        = lv_mprog
+      with_includelist    = 'X'
+      only_source         = ' '
+      only_texts          = ' '
+      read_latest_version = space
+      with_lowercase      = ' '
+    IMPORTING
+      prog_inf            = ls_prog_inf
+    TABLES
+      include_tab         = lt_include_tab
+      source              = lt_source                 " SOURCE TABLE
+      source_extended     = lt_source_extended
+      textelements        = lt_textelements
+    EXCEPTIONS
+      cancelled           = 1
+      not_found           = 2
+      permission_error    = 3
+      OTHERS              = 4.
+  IF sy-subrc <> 0.
+    APPEND VALUE #(       type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message = lv_prog && '-'&&  'REPORT PUT FAILURE' ) TO t_return.
+  ELSE.
+
+* check Includes
+
+    SELECT * FROM trdir
+      INTO TABLE @DATA(lt_incl)
+       FOR ALL ENTRIES IN @lt_include_tab
+      WHERE name = @lt_include_tab-inclname.
+    "    IF sy-subrc = 0 .
+
+    LOOP AT lt_include_tab INTO DATA(wa_include_tab).
+      READ TABLE lt_Incl INTO DATA(wa_incl) WITH KEY name = wa_include_tab-inclname .
+      IF sy-subrc <> 0 .
+        lv_prog = wa_include_tab-inclname.
+        PERFORM make_prog.
+        lv_prog = ''.
+      ENDIF.
+    ENDLOOP.
+
+
+
+*    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form Lock_into_TR
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM lock_into_tr .
+*  ADD to transport REQUEST USING STANDARD OBJECT insertion
+  CALL FUNCTION 'TR_OBJECTS_CHECK'
+    EXPORTING
+      iv_no_show_option       = 'X' "abap_true'
+    TABLES
+      wt_ko200                = gt_objects
+    EXCEPTIONS
+      cancel_edit_other_error = 1
+      show_only               = 2
+      OTHERS                  = 3.
+  IF sy-subrc <> 0.
+    APPEND VALUE #(       type       = 'E'
+                        id         = sy-msgid
+                        number     = sy-msgno
+                        message_v1 = sy-msgv1
+                        message_v2 = sy-msgv2
+                        message_v3 = sy-msgv3
+                        message_v4 = sy-msgv4
+                        message = 'TR PUT_FAILURE' ) TO t_return.
+  ENDIF.
+
+  CALL FUNCTION 'TRINT_OBJECTS_CHECK_AND_INSERT'
+    EXPORTING
+      iv_order          = p_ltr
+      iv_with_dialog    = 'X'
+      iv_no_show_option = 'X'
+    CHANGING
+      ct_ko200          = gt_objects
+    EXCEPTIONS
+      OTHERS            = 1.
+  IF sy-subrc <> 0.
+
+  ENDIF.
+
+
+ENDFORM.
