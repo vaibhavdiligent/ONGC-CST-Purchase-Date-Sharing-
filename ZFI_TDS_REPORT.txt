@@ -25,8 +25,9 @@ TYPES: BEGIN OF ty_bkpf,
          xblnr TYPE bkpf-xblnr,
          stblg TYPE bkpf-stblg,
          bktxt TYPE bkpf-bktxt,
+         waers TYPE bkpf-waers,          "Perf: replaces per-row BKPF read
+         kursf TYPE bkpf-kursf,          "Perf: replaces per-row BKPF read
        END OF ty_bkpf.
-
 DATA:lt_bkpf TYPE STANDARD TABLE OF ty_bkpf,
      ls_bkpf TYPE ty_bkpf.
 
@@ -187,48 +188,19 @@ TYPES:BEGIN OF ty_final5,
 
 DATA:lt_final TYPE STANDARD TABLE OF ty_final,
      ls_final TYPE ty_final.
-DATA:lt_final1 TYPE STANDARD TABLE OF ty_final,
-     ls_final1 TYPE ty_final.
-DATA:lt_final2 TYPE STANDARD TABLE OF ty_final,
-     ls_final2 TYPE ty_final.
-DATA:lt_final3 TYPE STANDARD TABLE OF ty_final,
-     ls_final3 TYPE ty_final.
 DATA:lt_final4 TYPE STANDARD TABLE OF ty_final,
      ls_final4 TYPE ty_final.
 DATA:lt_final5 TYPE STANDARD TABLE OF ty_final5,
      ls_final5 TYPE ty_final5.
-DATA:lt_final6 TYPE STANDARD TABLE OF ty_final5,
-     ls_final6 TYPE ty_final5.
-DATA:lt_final7 TYPE STANDARD TABLE OF ty_final5,
-     ls_final7 TYPE ty_final5.
-DATA:lt_final8 TYPE STANDARD TABLE OF ty_final5,
-     ls_final8 TYPE ty_final5.
 DATA:lt_final9 TYPE STANDARD TABLE OF ty_final5,
      ls_final9 TYPE ty_final5.
 DATA:i_fcat  TYPE slis_t_fieldcat_alv,
      wa_fcat LIKE LINE OF i_fcat.
-DATA: lt_mwskz LIKE  rtax1u15 OCCURS 0,
-      ls_mwskz LIKE rtax1u15.
 
 DATA:lt_zfinal TYPE STANDARD TABLE OF ty_final5,
      ls_zfinal TYPE ty_final5.
 
-DATA:i_wmwst(10).
-
-DATA: BEGIN OF it_bkpf OCCURS 0,
-        blart LIKE bkpf-blart,
-        belnr LIKE bkpf-belnr,
-        bldat LIKE bkpf-bldat,
-        budat LIKE bkpf-budat,
-        waers LIKE bkpf-waers,
-        usnam LIKE bkpf-usnam,
-        ppnam LIKE bkpf-ppnam,
-        gjahr LIKE bkpf-gjahr, "Added PN
-        bukrs LIKE bkpf-bukrs, "Added PN
-        xblnr LIKE bkpf-xblnr,
-      END OF it_bkpf,
-
-      BEGIN OF wa_bseg_r,
+DATA: BEGIN OF wa_bseg_r,
         bukrs TYPE bseg-bukrs,
         belnr TYPE bseg-belnr,
         gjahr TYPE bseg-gjahr,
@@ -262,18 +234,23 @@ TYPES : BEGIN OF ty_bseg,
 DATA:lt_bseg    TYPE STANDARD TABLE OF ty_bseg,
      ls_bseg    TYPE ty_bseg,
      lt_bseg1   TYPE STANDARD TABLE OF ty_bseg,
-     lt_bseg2   TYPE STANDARD TABLE OF ty_bseg,
-     lt_bseg3   TYPE STANDARD TABLE OF ty_bseg,
-     lt_bseg4   TYPE STANDARD TABLE OF ty_bseg,
-     lt_bseg5   TYPE STANDARD TABLE OF ty_bseg,
-     ls_bseg1   TYPE ty_bseg,
-     inv_val1   TYPE bseg-dmbtr,
-     inv_val1_n TYPE bseg-dmbtr,
-     inv_val2   TYPE bseg-dmbtr,
-     inv_val3   TYPE bseg-dmbtr,
-     inv_val4   TYPE bseg-dmbtr.
-
-DATA: wrk_tabix LIKE sy-tabix.
+     ls_bseg1   TYPE ty_bseg.
+*     S.O.C - Perf: LT_BSEG2..5 and INV_VAL1..4 removed. They were filled
+*     by four extra reads on ACDOCA (I_OPERATIONALACCTGDOCITEM) but never
+*     used in the output (INV_VAL4 only fed INV_AMT, which is not output).
+*     SKFBT and vendor (WT_ACCO) data are now pre-read once instead of
+*     per document inside the GET_DISPLAY loop.
+TYPES: BEGIN OF ty_skfbt,
+         bukrs TYPE bseg-bukrs,
+         belnr TYPE bseg-belnr,
+         gjahr TYPE bseg-gjahr,
+         buzei TYPE bseg-buzei,
+         skfbt TYPE bseg-skfbt,
+       END OF ty_skfbt.
+DATA: lt_skfbt     TYPE SORTED TABLE OF ty_skfbt
+                     WITH UNIQUE KEY bukrs belnr gjahr buzei,
+      lt_lfa1_acco TYPE SORTED TABLE OF ty_lfa1 WITH UNIQUE KEY lifnr.
+*     E.O.C
 
 **************start of selection screen*****************
 
@@ -282,31 +259,6 @@ SELECT-OPTIONS: postdate FOR bkpf-budat OBLIGATORY,
 PARAMETERS: p_bukrs TYPE bkpf-bukrs OBLIGATORY.
 
 *******************************************************
-
-DATA  g_rb.
-DATA wa_zfi_t509c_add TYPE zfi_t509c_add.
-
-
-DATA:itab_fiwtin_tan_exem TYPE TABLE OF fiwtin_tan_exem,
-     wa_fiwtin_tan_exem   LIKE LINE OF  itab_fiwtin_tan_exem,
-     wa_bsak_stax         TYPE bsak,
-     wa_tcurr             TYPE tcurr,
-     temp_date(10),
-     v_success            TYPE char1,
-     v_qsatz              TYPE p DECIMALS 2,
-     v_index_tax          TYPE sy-tabix.
-DATA: BEGIN OF it_bkpf_new OCCURS 0.
-        INCLUDE STRUCTURE bkpf.
-DATA :END OF  it_bkpf_new.
-
-DATA : BEGIN OF bsegtab OCCURS 0.
-         INCLUDE STRUCTURE bseg.
-DATA :   flag TYPE c,
-       END OF bsegtab.
-
-DATA: BEGIN OF data_tab OCCURS 0.
-        INCLUDE STRUCTURE with_item.
-DATA :END OF  data_tab.
 
 TYPES : BEGIN OF ty_bsas,
           bukrs TYPE bsas-bukrs,
@@ -322,10 +274,6 @@ TYPES : BEGIN OF ty_bsas,
 DATA : it_bsas TYPE STANDARD TABLE OF ty_bsas,
        wa_bsas TYPE ty_bsas.
 
-************ADDN BY SANDEEP AS ON 14.12.2024*********
-DATA: inv_amt TYPE ekpo-netwr.
-
-*****************************
 
 ***********************************************************************
 START-OF-SELECTION.
@@ -336,6 +284,7 @@ START-OF-SELECTION.
     PERFORM get_withitem.
     PERFORM get_t059z.
     PERFORM get_docs.
+    PERFORM get_skfbt.    "Perf: pre-read SKFBT instead of per row
     PERFORM get_vendor.
     PERFORM get_po.
     PERFORM get_bsas.     "for clearing docs "added on 27/06/23 by hrishi n
@@ -367,35 +316,25 @@ START-OF-SELECTION.
 ***  <--  p2        text
 ***----------------------------------------------------------------------*
 FORM get_bkpf .
-
   REFRESH:lt_bkpf.
-  IF p_bukrs IS INITIAL.
-
-    SELECT bukrs
-        belnr
-        gjahr
-        bldat
-        budat
-        xblnr
-        stblg
-        bktxt
-   FROM bkpf INTO TABLE lt_bkpf
-   WHERE budat IN postdate.
-
-  ELSE.
-
-    SELECT bukrs
-           belnr
-           gjahr
-           bldat
-           budat
-           xblnr
-           stblg
-           bktxt
-       FROM bkpf INTO TABLE lt_bkpf
-      WHERE budat IN postdate
-        AND bukrs = p_bukrs.
-  ENDIF.
+*     S.O.C - Perf: earlier ALL documents of the company code in the
+*     posting period were read (and a separate IF for an empty P_BUKRS,
+*     which is OBLIGATORY, so that branch could never run). Only
+*     documents that have a withholding tax line can reach the output,
+*     so read just those. WAERS/KURSF are taken here so the display loop
+*     no longer selects BKPF once per document.
+  SELECT bukrs, belnr, gjahr, bldat, budat, xblnr, stblg, bktxt,
+         waers, kursf
+    FROM bkpf
+   WHERE bukrs =  @p_bukrs
+     AND budat IN @postdate
+     AND EXISTS ( SELECT belnr FROM with_item
+                   WHERE bukrs    =  bkpf~bukrs
+                     AND belnr    =  bkpf~belnr
+                     AND gjahr    =  bkpf~gjahr
+                     AND wt_qsshh <> 0 )
+    INTO TABLE @lt_bkpf.
+*     E.O.C
 ENDFORM.                    " GET_BKPF
 ***&---------------------------------------------------------------------*
 ***&      Form  GET_DOCS
@@ -506,151 +445,9 @@ FORM get_docs .
    '91' ) INTO CORRESPONDING  FIELDS  OF  TABLE  @lt_bseg1 .
     " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
 
-    " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
-*    SELECT bukrs
-*           belnr
-*           gjahr
-*           buzei
-*           buzid
-*           augdt
-*           bschl
-*           koart
-*           dmbtr
-*           ktosl
-*           bupla
-*           secco
-*           valut
-*           ebeln
-*           lifnr
-*      FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg2
-*     FOR ALL ENTRIES IN lt_with_item
-*     WHERE bukrs = lt_with_item-bukrs
-*       AND belnr = lt_with_item-belnr
-*       AND gjahr = lt_with_item-gjahr
-*       AND bschl = '81'.
-    SELECT  companycode AS bukrs , accountingdocument AS belnr ,
-   fiscalyear AS gjahr , accountingdocumentitem AS buzei ,
-   accountingdocumentitemtype AS buzid , clearingdate AS augdt ,
-   postingkey AS bschl , financialaccounttype AS koart ,
-   absoluteamountincocodecrcy AS dmbtr , transactiontypedetermination AS
-   ktosl , businessplace AS bupla , taxsection AS secco , valuedate AS
-   valut , purchasingdocument AS ebeln , supplier AS lifnr FROM
-   i_operationalacctgdocitem FOR ALL ENTRIES IN @lt_with_item WHERE
-   companycode = @lt_with_item-bukrs AND accountingdocument =
-   @lt_with_item-belnr AND fiscalyear = @lt_with_item-gjahr AND postingkey
-   = '81' INTO CORRESPONDING  FIELDS  OF  TABLE  @lt_bseg2 .
-    " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
-
-    " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
-*    SELECT bukrs
-*           belnr
-*           gjahr
-*           buzei
-*           buzid
-*           augdt
-*           bschl
-*           koart
-*           dmbtr
-*           ktosl
-*           bupla
-*           secco
-*           valut
-*           ebeln
-*           lifnr
-*       FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg3
-*       FOR ALL ENTRIES IN lt_with_item
-*       WHERE bukrs = lt_with_item-bukrs
-*         AND belnr = lt_with_item-belnr
-*         AND gjahr = lt_with_item-gjahr
-*         AND bschl = '91'.
-    SELECT  companycode AS bukrs , accountingdocument AS belnr ,
-   fiscalyear AS gjahr , accountingdocumentitem AS buzei ,
-   accountingdocumentitemtype AS buzid , clearingdate AS augdt ,
-   postingkey AS bschl , financialaccounttype AS koart ,
-   absoluteamountincocodecrcy AS dmbtr , transactiontypedetermination AS
-   ktosl , businessplace AS bupla , taxsection AS secco , valuedate AS
-   valut , purchasingdocument AS ebeln , supplier AS lifnr FROM
-   i_operationalacctgdocitem FOR ALL ENTRIES IN @lt_with_item WHERE
-   companycode = @lt_with_item-bukrs AND accountingdocument =
-   @lt_with_item-belnr AND fiscalyear = @lt_with_item-gjahr AND postingkey
-   = '91' INTO CORRESPONDING  FIELDS  OF  TABLE  @lt_bseg3 .
-    " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
-
-    " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
-*    SELECT bukrs
-*           belnr
-*           gjahr
-*           buzei
-*           buzid
-*           augdt
-*           bschl
-*           koart
-*           mwskz
-*           dmbtr
-*           ktosl
-*           bupla
-*           secco
-*           valut
-*           ebeln
-*           lifnr
-*     FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg4
-*    FOR ALL ENTRIES IN lt_with_item
-*    WHERE bukrs = lt_with_item-bukrs
-*     AND belnr = lt_with_item-belnr
-*     AND gjahr = lt_with_item-gjahr
-*     AND buzid = 'T' .
-    SELECT  companycode AS bukrs , accountingdocument AS belnr ,
-   fiscalyear AS gjahr , accountingdocumentitem AS buzei ,
-   accountingdocumentitemtype AS buzid , clearingdate AS augdt ,
-   postingkey AS bschl , financialaccounttype AS koart , taxcode AS mwskz ,
-    absoluteamountincocodecrcy AS dmbtr , transactiontypedetermination AS
-   ktosl , businessplace AS bupla , taxsection AS secco , valuedate AS
-   valut , purchasingdocument AS ebeln , supplier AS lifnr FROM
-   i_operationalacctgdocitem FOR ALL ENTRIES IN @lt_with_item WHERE
-   companycode = @lt_with_item-bukrs AND accountingdocument =
-   @lt_with_item-belnr AND fiscalyear = @lt_with_item-gjahr AND
-   accountingdocumentitemtype = 'T' INTO CORRESPONDING  FIELDS  OF  TABLE
-   @lt_bseg4 .
-    " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
-
-    " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
-*    SELECT bukrs
-*           belnr
-*           gjahr
-*           buzei
-*           buzid
-*           augdt
-*           bschl
-*           koart
-*           mwskz
-*           dmbtr
-*           txbhw
-*           ktosl
-*           bupla
-*           secco
-*           valut
-*           ebeln
-*           lifnr
-*      FROM bseg INTO CORRESPONDING FIELDS OF TABLE lt_bseg5
-*      FOR ALL ENTRIES IN lt_with_item
-*      WHERE bukrs = lt_with_item-bukrs
-*        AND belnr = lt_with_item-belnr
-*        AND gjahr = lt_with_item-gjahr
-*        AND ( koart NE 'K' AND ktosl = '' ) .
-    SELECT  companycode AS bukrs , accountingdocument AS belnr ,
-   fiscalyear AS gjahr , accountingdocumentitem AS buzei ,
-   accountingdocumentitemtype AS buzid , clearingdate AS augdt ,
-   postingkey AS bschl , financialaccounttype AS koart , taxcode AS mwskz ,
-    absoluteamountincocodecrcy AS dmbtr , origltxabsltbaseamountincccrcy
-   AS txbhw , transactiontypedetermination AS ktosl , businessplace AS
-   bupla , taxsection AS secco , valuedate AS valut , purchasingdocument
-   AS ebeln , supplier AS lifnr FROM i_operationalacctgdocitem FOR ALL
-   ENTRIES IN @lt_with_item WHERE companycode = @lt_with_item-bukrs AND
-   accountingdocument = @lt_with_item-belnr AND fiscalyear =
-   @lt_with_item-gjahr AND ( financialaccounttype NE 'K' AND
-   transactiontypedetermination = '' ) INTO CORRESPONDING  FIELDS  OF
-   TABLE  @lt_bseg5 .
-    " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
+*     S.O.C - Perf: selects into LT_BSEG2 (BSCHL 81), LT_BSEG3 (BSCHL 91),
+*     LT_BSEG4 (BUZID T) and LT_BSEG5 removed - results were never used.
+*     E.O.C
   ENDIF.
 
   SORT lt_bseg1 BY belnr gjahr lifnr DESCENDING buzei ASCENDING.
@@ -699,16 +496,32 @@ FORM get_vendor .
 
   ENDIF.
 
-  IF lt_lfa1 IS NOT INITIAL.
-    SELECT spras
-           land1
-           landx
-      FROM t005t
-      INTO TABLE lt_t005t
-      FOR ALL ENTRIES IN lt_lfa1
-      WHERE land1 = lt_lfa1-land1
-       AND spras = 'E'.
+*     S.O.C - Perf: vendors from WITH_ITEM-WT_ACCO were read with a
+*     SELECT SINGLE per row inside GET_DISPLAY. Read them once here.
+*     (No VENDOR range here - the old SELECT SINGLE did not apply it.)
+  IF lt_with_item IS NOT INITIAL.
+    SELECT lifnr, land1, name1, stcd3
+      FROM lfa1
+       FOR ALL ENTRIES IN @lt_with_item
+     WHERE lifnr = @lt_with_item-wt_acco
+      INTO TABLE @lt_lfa1_acco.
   ENDIF.
+
+  IF lt_lfa1 IS NOT INITIAL OR lt_lfa1_acco IS NOT INITIAL.
+*     Country texts for both vendor sets (WT_ACCO vendors were missing)
+    DATA(lt_land1) = VALUE rsdsselopt_t(
+      FOR ls_l IN lt_lfa1      ( sign = 'I' option = 'EQ' low = ls_l-land1 ) ).
+    lt_land1 = VALUE #( BASE lt_land1
+      FOR ls_a IN lt_lfa1_acco ( sign = 'I' option = 'EQ' low = ls_a-land1 ) ).
+    SORT lt_land1 BY low.
+    DELETE ADJACENT DUPLICATES FROM lt_land1 COMPARING low.
+    SELECT spras, land1, landx
+      FROM t005t
+     WHERE land1 IN @lt_land1
+       AND spras = 'E'
+      INTO TABLE @lt_t005t.
+  ENDIF.
+*     E.O.C
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  GET_DISPLAY
@@ -723,8 +536,15 @@ FORM get_display .
        lv_index1 TYPE i,
        lv_index2 TYPE i.
 *     S.O.C - locals for the restricted SKFBT read below.
-  DATA: lr_skfbt_gjahr TYPE RANGE OF bkpf-gjahr,
-        ls_wi_gjahr    TYPE ty_with_item.
+  DATA: ls_wi_gjahr    TYPE ty_with_item,
+        ls_skfbt_row  TYPE ty_skfbt,
+        lv_skfbt      TYPE bseg-skfbt,
+*       NOTE: TYPE I kept deliberately - it was TYPE I before (inline
+*       DATA(inv_valf) = 0), so Invoice Value is rounded to whole rupees.
+*       Change to TYPE bseg-dmbtr if paise must be shown.
+        lv_inv_valf   TYPE i,
+        lv_from       TYPE sy-tabix,
+        lt_del_belnr  TYPE HASHED TABLE OF bkpf-belnr WITH UNIQUE KEY table_line.
 *     E.O.C
   SORT lt_bkpf BY belnr gjahr bukrs.
   SORT lt_with_item BY belnr bukrs gjahr.
@@ -732,6 +552,7 @@ FORM get_display .
   SORT lt_bseg BY belnr gjahr bukrs.
   SORT lt_ekko BY ebeln.
   SORT lt_t059z BY witht.
+  SORT lt_t005t BY land1.
 
   DATA: a TYPE i VALUE 0.
   LOOP AT  lt_with_item INTO ls_with_item WHERE   witht = 'IZ' OR witht = 'CZ' OR witht = 'SZ'.
@@ -767,12 +588,8 @@ FORM get_display .
         ls_final-land1 = ls_lfa1-land1.
       ENDIF.
     ELSEIF a = 1.
-      SELECT SINGLE  lifnr
-               land1
-               name1
-               stcd3
-          FROM lfa1
-          INTO ls_lfa1 WHERE lifnr = ls_bseg-lifnr.
+*     Perf: pre-read in GET_VENDOR instead of SELECT SINGLE per row
+      READ TABLE lt_lfa1_acco INTO ls_lfa1 WITH TABLE KEY lifnr = ls_bseg-lifnr.
 
       IF sy-subrc = 0.
 
@@ -788,7 +605,7 @@ FORM get_display .
         ls_final-land1 = ls_lfa1-land1.
       ENDIF.
     ENDIF.
-    READ TABLE lt_t005t INTO ls_t005t WITH KEY land1 = ls_lfa1-land1.
+    READ TABLE lt_t005t INTO ls_t005t WITH KEY land1 = ls_lfa1-land1 BINARY SEARCH.
     IF sy-subrc = 0.
       ls_final-landx = ls_t005t-landx.
     ENDIF.
@@ -821,7 +638,6 @@ FORM get_display .
 
   SORT lt_with_item BY belnr gjahr bukrs.
 
-  lt_final1 = lt_final.
   lt_final4 = lt_final.
 
   SORT lt_final4 BY belnr witht.
@@ -914,400 +730,159 @@ FORM get_display .
     ENDAT.
   ENDLOOP.
 
-  lt_final3 = lt_final1.
-  SORT lt_lfa1 BY lifnr.
-  DATA:lv_index3 TYPE i.
-  lt_final6 = lt_final5.
-
+*     S.O.C - Perf: LT_FINAL6/7/8 copies and four nested LOOP ... WHERE
+*     scans (full table scan per row) replaced by one pass with binary
+*     searches. Same values: last BSCHL 86 line for EBELN, EKKO-BEDAT,
+*     last LT_EKPO1 NETWR, sum of all EKPO NETWR for EFFWR.
   SORT lt_ekko BY ebeln.
-  LOOP AT lt_final6 INTO ls_final6.
-
-    LOOP AT lt_bseg1 INTO ls_bseg1 WHERE belnr = ls_final6-belnr AND bschl = '86'.
-      ls_final6-ebeln = ls_bseg1-ebeln.
-      MODIFY lt_final6 FROM ls_final6.
-    ENDLOOP.
-    CLEAR:ls_final6,ls_bseg,ls_ekko.
-
-  ENDLOOP.
-  lt_final7 = lt_final6.
-
-  LOOP AT lt_final7 INTO ls_final7.
-    LOOP AT  lt_ekko INTO ls_ekko WHERE  ebeln = ls_final7-ebeln.
-      ls_final7-bedat = ls_ekko-bedat.
-      MODIFY lt_final7 FROM ls_final7.
-    ENDLOOP.
-    CLEAR:ls_final7,ls_ekko.
-  ENDLOOP.
-
-  lt_final8 = lt_final7.
-  LOOP AT  lt_final8 INTO ls_final8.
-    LOOP AT lt_ekpo1 INTO ls_ekpo1  WHERE ebeln = ls_final8-ebeln.
-      ls_final8-netwr = ls_ekpo1-netwr.
-      MODIFY lt_final8 FROM ls_final8.
-    ENDLOOP.
-    CLEAR:ls_final8,ls_ekpo.
-  ENDLOOP.
-
-  lt_final9 = lt_final8.
-  CLEAR:po_val.
-
-  LOOP AT lt_final9 INTO ls_final9.
-    IF ls_final9-ebeln IS NOT INITIAL.
-
-      LOOP AT it_ekpo_n INTO wa_ekpo_n WHERE ebeln = ls_final9-ebeln.
-        po_val = po_val + wa_ekpo_n-netwr.
-        CLEAR wa_ekpo_n.
-      ENDLOOP.
-      ls_final9-effwr = po_val.
-      MODIFY lt_final9 FROM ls_final9.
-      CLEAR:  po_val.
-
-    ENDIF.
-    CLEAR ls_bseg.
-
-    READ TABLE lt_bseg1 INTO ls_bseg WITH KEY belnr = ls_final9-belnr.
+  SORT lt_ekpo1 STABLE BY ebeln.       "STABLE keeps 'last row wins'
+  SORT it_ekpo_n BY ebeln.
+  lt_final9 = lt_final5.
+  LOOP AT lt_final9 ASSIGNING FIELD-SYMBOL(<ls_f9>).
+*   PO number (LT_BSEG1 is sorted by BELNR in GET_DOCS)
+    READ TABLE lt_bseg1 TRANSPORTING NO FIELDS
+         WITH KEY belnr = <ls_f9>-belnr BINARY SEARCH.
     IF sy-subrc = 0.
-
-      inv_val1 = ls_bseg-dmbtr.
-      inv_val1_n = ls_bseg-txbhw.
-      ls_final9-mwskz = ls_bseg-mwskz.
-
-      CLEAR ls_bseg.
-      LOOP AT  lt_bseg4 INTO ls_bseg WHERE belnr = ls_final9-belnr.
-        inv_val4 = inv_val4 + ls_bseg-dmbtr.
-        CLEAR ls_bseg.
+      lv_from = sy-tabix.
+      LOOP AT lt_bseg1 INTO ls_bseg1 FROM lv_from.
+        IF ls_bseg1-belnr <> <ls_f9>-belnr.
+          EXIT.
+        ENDIF.
+        IF ls_bseg1-bschl = '86'.
+          <ls_f9>-ebeln = ls_bseg1-ebeln.
+        ENDIF.
       ENDLOOP.
+    ENDIF.
 
-****ADDN******
-
-
-
-
-      " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
-*     S.O.C - BELNR alone is not unique: the same document number exists in
-*     other company codes and fiscal years, so this read could pick up a
-*     foreign document. Restrict it to the run's company code (P_BUKRS is
-*     OBLIGATORY, single value) and to the document's own fiscal year.
-*     LS_FINAL9-GJAHR is never filled anywhere in the FINAL5 chain, so the
-*     year is taken from LT_WITH_ITEM - the same source the KURSF select
-*     below already uses. The range is left empty when no year is found, so
-*     those documents keep their present behaviour instead of losing rows.
-      CLEAR lr_skfbt_gjahr.
-      READ TABLE lt_with_item INTO ls_wi_gjahr
-                 WITH KEY belnr = ls_final9-belnr
-                          bukrs = ls_final9-bukrs.
-      IF sy-subrc = 0 AND ls_wi_gjahr-gjahr IS NOT INITIAL.
-        lr_skfbt_gjahr = VALUE #( ( sign = 'I' option = 'EQ' low = ls_wi_gjahr-gjahr ) ).
+    IF <ls_f9>-ebeln IS NOT INITIAL.
+*     PO date
+      READ TABLE lt_ekko INTO ls_ekko WITH KEY ebeln = <ls_f9>-ebeln BINARY SEARCH.
+      IF sy-subrc = 0.
+        <ls_f9>-bedat = ls_ekko-bedat.
       ENDIF.
-      SELECT skfbt FROM bseg INTO @DATA(ls_skfbt)
-        WHERE belnr = @ls_final9-belnr
-          AND bukrs = @p_bukrs
-          AND gjahr IN @lr_skfbt_gjahr
-          AND koart = 'K'
-        ORDER BY PRIMARY KEY.
-*     E.O.C
-*      SELECT skfbt FROM bseg INTO @DATA(ls_skfbt) WHERE belnr = @ls_final9-belnr AND koart = 'K' ORDER BY PRIMARY KEY.
-*      SELECT  cashdiscountabsolutebaseamount AS skfbt FROM
-*     i_operationalacctgdocitem WHERE accountingdocument = @ls_final9-belnr
-*     AND financialaccounttype = 'K' INTO @DATA(ls_skfbt) UP TO 1 ROWS .
-        " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
-      ENDSELECT.
-
-
-
-      SELECT belnr, waers FROM bkpf INTO TABLE @DATA(lt_curr) WHERE belnr  = @ls_final9-belnr
-                                                              AND   bukrs =  @p_bukrs.
-
-      IF sy-subrc  = 0.
-        DATA(inv_valf) = 0.
-        LOOP AT lt_curr  INTO DATA(ls_curr).
-          IF ls_curr-waers = 'INR'.
-
-            inv_valf = ls_skfbt.
-
-          ELSE.
-
-            READ TABLE lt_with_item INTO DATA(ls_with_item1) WITH KEY belnr = ls_final9-belnr bukrs = ls_final9-bukrs.
-
-            IF sy-subrc = 0.
-              SELECT kursf FROM bkpf INTO TABLE @DATA(lt_curr1) WHERE belnr = @ls_final9-belnr
-                                                                 AND bukrs = @ls_final9-bukrs
-                                                                 AND gjahr = @ls_with_item1-gjahr.
-
-            ENDIF.
-
+*     NETWR
+      READ TABLE lt_ekpo1 TRANSPORTING NO FIELDS
+           WITH KEY ebeln = <ls_f9>-ebeln BINARY SEARCH.
+      IF sy-subrc = 0.
+        lv_from = sy-tabix.
+        LOOP AT lt_ekpo1 INTO ls_ekpo1 FROM lv_from.
+          IF ls_ekpo1-ebeln <> <ls_f9>-ebeln.
+            EXIT.
           ENDIF.
+          <ls_f9>-netwr = ls_ekpo1-netwr.
         ENDLOOP.
       ENDIF.
-
-******END OF ADDN*********.
-
-**********************************************************************
-      "Non-RCM with ITC Case
-**********************************************************************
-      IF ls_final9-mwskz = 'EC' OR ls_final9-mwskz = 'JG' OR ls_final9-mwskz = 'KG' OR ls_final9-mwskz = 'LG' OR ls_final9-mwskz = 'NG'
-      OR ls_final9-mwskz = 'PG' OR ls_final9-mwskz = 'QG' OR ls_final9-mwskz = 'HC' OR ls_final9-mwskz = 'JC' OR ls_final9-mwskz = 'TG'
-      OR ls_final9-mwskz = 'UG' OR ls_final9-mwskz = 'BM' OR ls_final9-mwskz = 'BS' OR ls_final9-mwskz = 'BE' OR ls_final9-mwskz = 'BH'
-      OR ls_final9-mwskz = 'BI' OR ls_final9-mwskz = 'EX' OR ls_final9-mwskz = 'NI'.
-
-        ls_final9-tax = ls_final9-wt_qsshh.
-*        ls_final9-inv = ls_final9-wt_qsshh + inv_val4.
-        inv_amt = ls_final9-wt_qsshh + inv_val4.
-
-**********added by sandeep  as on 14.02.2024*****************
-
-        IF lt_curr1 IS NOT INITIAL.
-          LOOP AT lt_curr1 INTO DATA(ls_curr1).
-            inv_valf = ls_curr1-kursf * ls_skfbt.
-            CLEAR ls_curr1.
-          ENDLOOP.
-        ENDIF.
-
-        ls_final9-inv = inv_valf.
-
-*        IF INV_AMT = LS_FINAL9-TAX.
-*
-*          IF LS_SKFBT IS NOT INITIAL.
-*            IF INV_AMT = LS_SKFBT.
-*              LS_FINAL9-INV = INV_AMT.
-*
-*            ELSEIF LS_SKFBT > INV_AMT.
-*              LS_FINAL9-INV = LS_SKFBT.
-*
-*            ELSE.
-*              LS_FINAL9-INV = INV_AMT.
-*            ENDIF.
-*
-*          ENDIF.
-*        ELSE.
-*
-*          LS_FINAL9-INV = INV_AMT.
-*
-*        ENDIF.
-
-*        ls_final9-inv = INV_AMT.
-
-************end of code *****************
-
-**********************************************************************
-        "Non-RCM with Non-ITC Case
-**********************************************************************
-      ELSEIF ls_final9-mwskz = 'BG' OR ls_final9-mwskz = 'XG' OR ls_final9-mwskz = 'DA' OR ls_final9-mwskz = 'EG' OR ls_final9-mwskz = 'WG'
-      OR ls_final9-mwskz = 'GG' OR ls_final9-mwskz = 'HG' OR ls_final9-mwskz = 'IG' OR ls_final9-mwskz = 'BJ' OR ls_final9-mwskz = 'BK'
-      OR ls_final9-mwskz = 'BL' OR ls_final9-mwskz = 'BN' OR ls_final9-mwskz = 'BT'.
-
-        ls_final9-tax = ls_final9-wt_qsshh.
-*        ls_final9-inv = ls_final9-wt_qsshh + inv_val4.
-        inv_amt = ls_final9-wt_qsshh + inv_val4.
-
-**********added by code as on 14.02.2024*****************
-
-        IF lt_curr1 IS NOT INITIAL.
-          LOOP AT lt_curr1 INTO DATA(ls_curr2).
-            inv_valf = ls_curr2-kursf * ls_skfbt.
-            CLEAR ls_curr2.
-          ENDLOOP.
-        ENDIF.
-
-        ls_final9-inv = inv_valf.
-*        IF INV_AMT = LS_FINAL9-TAX.
-*
-*
-*          IF LS_SKFBT IS NOT INITIAL.
-*            IF INV_AMT = LS_SKFBT.
-*              LS_FINAL9-INV = INV_AMT.
-*
-*            ELSEIF LS_SKFBT > INV_AMT.
-*              LS_FINAL9-INV = LS_SKFBT.
-*
-*            ELSE.
-*              LS_FINAL9-INV = INV_AMT.
-*            ENDIF.
-*
-*          ENDIF.
-*        ELSE.
-*
-*          LS_FINAL9-INV = INV_AMT.
-*
-*        ENDIF.
-
-
-*             ls_final9-inv = INV_AMT.
-
-************end of code *****************
-
-
-
-
-**********************************************************************
-        "RCM with ITC Case
-**********************************************************************
-      ELSEIF ls_final9-mwskz = 'EA' OR ls_final9-mwskz = 'HA' OR ls_final9-mwskz = 'JA' OR ls_final9-mwskz = 'OA' OR ls_final9-mwskz = 'PA'
-      OR ls_final9-mwskz = 'TA' OR ls_final9-mwskz = 'EB' OR ls_final9-mwskz = 'HB' OR ls_final9-mwskz = 'BP' OR ls_final9-mwskz = 'BU'.
-        ls_final9-tax = ls_final9-wt_qsshh.
-*        ls_final9-inv = ls_final9-wt_qsshh.
-        inv_amt = ls_final9-wt_qsshh.
-
-**********added by code as on 14.02.2024*****************
-
-        IF lt_curr1 IS NOT INITIAL.
-          LOOP AT lt_curr1 INTO DATA(ls_curr3).
-            inv_valf = ls_curr3-kursf * ls_skfbt.
-            CLEAR ls_curr3.
-          ENDLOOP.
-        ENDIF.
-
-        ls_final9-inv = inv_valf.
-*        IF INV_AMT = LS_FINAL9-TAX.
-*
-*
-*          IF LS_SKFBT IS NOT INITIAL.
-*            IF INV_AMT = LS_SKFBT.
-*              LS_FINAL9-INV = INV_AMT.
-*
-*            ELSEIF LS_SKFBT > INV_AMT.
-*              LS_FINAL9-INV = LS_SKFBT.
-*
-*            ELSE.
-*              LS_FINAL9-INV = INV_AMT.
-*            ENDIF.
-*
-*          ENDIF.
-*        ELSE.
-*
-*          LS_FINAL9-INV = INV_AMT.
-*
-*        ENDIF
-
-
-*             ls_final9-inv = INV_AMT.
-
-************end of code *****************
-
-
-**********************************************************************
-        "RCM with Non-ITC Case
-**********************************************************************
-      ELSEIF ls_final9-mwskz = 'JB' OR ls_final9-mwskz = 'BR' OR ls_final9-mwskz = 'KB' OR ls_final9-mwskz = 'DR' OR ls_final9-mwskz = 'OB'
-      OR ls_final9-mwskz = 'PB' OR ls_final9-mwskz = 'GR' OR ls_final9-mwskz = 'HR' OR ls_final9-mwskz = 'BQ' OR ls_final9-mwskz = 'BV'.
-        ls_final9-tax = ls_final9-wt_qsshh.
-*        ls_final9-inv = ls_final9-wt_qsshh."" + inv_val4.
-        inv_amt = ls_final9-wt_qsshh.
-
-**********added by code as on 14.02.2024*****************
-*        IF INV_AMT = LS_FINAL9-TAX.
-
-
-
-        IF lt_curr1 IS NOT INITIAL.
-          LOOP AT lt_curr1 INTO DATA(ls_curr4).
-            inv_valf = ls_curr4-kursf * ls_skfbt.
-            CLEAR ls_curr4.
-          ENDLOOP.
-        ENDIF.
-
-        ls_final9-inv = inv_valf.
-
-
-*          IF LS_SKFBT IS NOT INITIAL.
-*            IF INV_AMT = LS_SKFBT.
-*              LS_FINAL9-INV = INV_AMT.
-*
-*            ELSEIF LS_SKFBT > INV_AMT.
-*              LS_FINAL9-INV = LS_SKFBT.
-*
-*            ELSE.
-*              LS_FINAL9-INV = INV_AMT.
-*            ENDIF.
-*
-*          ENDIF.
-*        ELSE.
-*
-*          LS_FINAL9-INV = INV_AMT.
-*
-*        ENDIF.
-
-
-*             ls_final9-inv = INV_AMT.
-
-************end of code *****************
-
-
-
-
-      ELSE.
-
-        ls_final9-tax = ls_final9-wt_qsshh.
-        inv_amt = ls_final9-wt_qsshh.
-
-**********added by code as on 14.02.2024*****************
-
-        IF lt_curr1 IS NOT INITIAL.
-          LOOP AT lt_curr1 INTO DATA(ls_curr5).
-            inv_valf = ls_curr5-kursf * ls_skfbt.
-            CLEAR ls_curr5.
-          ENDLOOP.
-
-        ENDIF.
-
-        ls_final9-inv = inv_valf.
-*     clear ls_final9.
-
-*        IF INV_AMT = LS_FINAL9-TAX.
-*
-*          IF LS_SKFBT IS NOT INITIAL.
-*            IF INV_AMT = LS_SKFBT.
-*              LS_FINAL9-INV = INV_AMT.
-*
-*            ELSEIF LS_SKFBT > INV_AMT.
-*              LS_FINAL9-INV = LS_SKFBT.
-*
-*            ELSE.
-*              LS_FINAL9-INV = INV_AMT.
-*            ENDIF.
-*
-*          ENDIF.
-*        ELSE.
-*
-*          LS_FINAL9-INV = INV_AMT.
-*
-*        ENDIF.
-
-
-*             ls_final9-inv = INV_AMT.
-
-************end of code *****************
-
-
-
-
-
+*     PO value (all items)
+      CLEAR po_val.
+      READ TABLE it_ekpo_n TRANSPORTING NO FIELDS
+           WITH KEY ebeln = <ls_f9>-ebeln BINARY SEARCH.
+      IF sy-subrc = 0.
+        lv_from = sy-tabix.
+        LOOP AT it_ekpo_n INTO wa_ekpo_n FROM lv_from.
+          IF wa_ekpo_n-ebeln <> <ls_f9>-ebeln.
+            EXIT.
+          ENDIF.
+          po_val = po_val + wa_ekpo_n-netwr.
+        ENDLOOP.
       ENDIF.
+      <ls_f9>-effwr = po_val.
     ENDIF.
+  ENDLOOP.
+  UNASSIGN <ls_f9>.
+  CLEAR: po_val, ls_ekko, ls_ekpo1, wa_ekpo_n, ls_bseg1.
+*     E.O.C
+
+  LOOP AT lt_final9 INTO ls_final9.
+    CLEAR ls_bseg.
+
+*     S.O.C - Perf: per document there were 3 SELECTs inside this loop
+*     (BSEG-SKFBT with SELECT..ENDSELECT, BKPF-WAERS, BKPF-KURSF). SKFBT is
+*     now pre-read in GET_SKFBT and WAERS/KURSF come from LT_BKPF.
+*     The five tax-code branches (Non-RCM ITC / Non-RCM Non-ITC / RCM ITC /
+*     RCM Non-ITC / others) all did exactly the same thing:
+*       TAX = WT_QSSHH, INV = SKFBT (INR) or KURSF * SKFBT (foreign curr.)
+*     so they are merged. The old code is in version history if the
+*     categories ever need different logic.
+    READ TABLE lt_bseg1 INTO ls_bseg WITH KEY belnr = ls_final9-belnr BINARY SEARCH.
+    IF sy-subrc = 0.
+      ls_final9-mwskz = ls_bseg-mwskz.
+
+      CLEAR: lv_skfbt, lv_inv_valf.
+*     Fiscal year of the document (LS_FINAL9-GJAHR is not filled)
+      READ TABLE lt_with_item INTO ls_wi_gjahr
+           WITH KEY belnr = ls_final9-belnr BINARY SEARCH.
+      IF sy-subrc = 0 AND ls_wi_gjahr-bukrs = ls_final9-bukrs.
+*       Cash discount base of the vendor line (last K line, as before)
+        READ TABLE lt_skfbt TRANSPORTING NO FIELDS
+             WITH KEY bukrs = p_bukrs
+                      belnr = ls_final9-belnr
+                      gjahr = ls_wi_gjahr-gjahr.   "sorted table - binary read
+        IF sy-subrc = 0.
+          lv_from = sy-tabix.
+          LOOP AT lt_skfbt INTO ls_skfbt_row FROM lv_from.
+            IF ls_skfbt_row-belnr <> ls_final9-belnr
+            OR ls_skfbt_row-gjahr <> ls_wi_gjahr-gjahr.
+              EXIT.
+            ENDIF.
+            lv_skfbt = ls_skfbt_row-skfbt.
+          ENDLOOP.
+        ENDIF.
+
+        READ TABLE lt_bkpf INTO ls_bkpf
+             WITH KEY belnr = ls_final9-belnr
+                      gjahr = ls_wi_gjahr-gjahr
+                      bukrs = ls_final9-bukrs BINARY SEARCH.
+        IF sy-subrc = 0.
+          IF ls_bkpf-waers = 'INR'.
+            lv_inv_valf = lv_skfbt.
+          ELSE.
+            lv_inv_valf = ls_bkpf-kursf * lv_skfbt.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      ls_final9-tax = ls_final9-wt_qsshh.
+      ls_final9-inv = lv_inv_valf.
+    ENDIF.
+*     E.O.C
 
     ls_final9-gstin = '07AAACO1230F1DB'.      ""added on 2/6/22 by hrishi n
     MODIFY lt_final9 FROM ls_final9.
-    CLEAR: ls_final9, inv_val1, inv_val1_n, inv_val2, inv_val3, inv_val4 , inv_amt , inv_valf,  ls_curr1,ls_curr2 , ls_curr3, ls_curr4,ls_curr5 , lt_curr1[], lt_curr[]..
+    CLEAR: ls_final9, ls_bkpf, ls_bseg, ls_wi_gjahr.
   ENDLOOP.
 
   DELETE lt_final9 WHERE wt_qsshh IS INITIAL.
+*     S.O.C - Perf: one DELETE ... WHERE (full scan) per referenced /
+*     reversed document replaced by a hashed list and a single pass.
   LOOP AT it_bseg_r INTO wa_bseg_r.
-    DELETE lt_final9 WHERE belnr = wa_bseg_r-belnr.
-    DELETE lt_final9 WHERE belnr = wa_bseg_r-rebzg.
-    CLEAR wa_bseg_r.
+    INSERT wa_bseg_r-belnr INTO TABLE lt_del_belnr.
+    INSERT wa_bseg_r-rebzg INTO TABLE lt_del_belnr.
   ENDLOOP.
-
-  LOOP AT lt_bkpf INTO ls_bkpf.
-    IF ls_bkpf-stblg IS NOT INITIAL.
-      DELETE lt_final9 WHERE belnr = ls_bkpf-belnr.
-      DELETE lt_final9 WHERE belnr = ls_bkpf-stblg.
+  LOOP AT lt_bkpf INTO ls_bkpf WHERE stblg IS NOT INITIAL.
+    INSERT ls_bkpf-belnr INTO TABLE lt_del_belnr.
+    INSERT ls_bkpf-stblg INTO TABLE lt_del_belnr.
+  ENDLOOP.
+  LOOP AT lt_final9 INTO ls_final9.
+    IF line_exists( lt_del_belnr[ table_line = ls_final9-belnr ] ).
+      DELETE lt_final9.
     ENDIF.
-    CLEAR ls_bkpf.
   ENDLOOP.
-  CLEAR:ls_final9.
+  CLEAR: ls_final9, ls_bkpf, wa_bseg_r.
+
+  SORT it_bsas STABLE BY bukrs belnr budat.   "STABLE keeps 'last row wins'
+*     E.O.C
 
   LOOP AT lt_final9 INTO ls_final9.
-    LOOP AT it_bsas INTO DATA(wa_bsas) WHERE bukrs = ls_final9-bukrs AND belnr = ls_final9-belnr AND budat = ls_final9-budat.
+    READ TABLE it_bsas TRANSPORTING NO FIELDS
+         WITH KEY bukrs = ls_final9-bukrs
+                  belnr = ls_final9-belnr
+                  budat = ls_final9-budat BINARY SEARCH.
+    lv_from = COND #( WHEN sy-subrc = 0 THEN sy-tabix ELSE lines( it_bsas ) + 1 ).
+    LOOP AT it_bsas INTO DATA(wa_bsas) FROM lv_from.
+      IF wa_bsas-bukrs <> ls_final9-bukrs OR wa_bsas-belnr <> ls_final9-belnr
+      OR wa_bsas-budat <> ls_final9-budat.
+        EXIT.
+      ENDIF.
       IF sy-subrc EQ 0.
         IF ls_final9-lv_cz IS NOT INITIAL AND wa_bsas-hkont = '0000190204'.
           ls_final9-cgstcl  = wa_bsas-augbl.
@@ -1658,7 +1233,12 @@ FORM get_ongc_docs.
   DELETE ADJACENT DUPLICATES FROM lt_zbseg COMPARING belnr gjahr .
 
 
-  IF lt_zbseg_k IS NOT INITIAL OR vendor IS NOT INITIAL.
+*     S.O.C - Perf: was "IF lt_zbseg_k IS NOT INITIAL OR vendor IS NOT
+*     INITIAL". With an empty FOR ALL ENTRIES table the whole WHERE is
+*     ignored, so a vendor range with no ONGC documents read ALL of LFA1.
+*     Rows are only ever looked up via LT_ZBSEG_K, so nothing is lost.
+  IF lt_zbseg_k IS NOT INITIAL.
+*     E.O.C
     SELECT lifnr,
           land1,
           name1,
@@ -1685,6 +1265,7 @@ FORM get_ongc_docs.
   SORT lt_zbkpf BY belnr gjahr bukrs.
   SORT lt_zwith_item BY belnr bukrs gjahr.
   SORT lt_zlfa1 BY lifnr.
+  SORT lt_zt005t BY land1.
   SORT lt_zbseg BY belnr gjahr bukrs.
   SORT lt_zt059z BY witht.
   DELETE ADJACENT DUPLICATES FROM lt_zwith_item COMPARING belnr bukrs gjahr witht.
@@ -1706,7 +1287,7 @@ FORM get_ongc_docs.
                                                          koart = 'K' .
 
 
-    READ TABLE lt_zlfa1 INTO ls_lfa1 WITH KEY lifnr  = ls_zbseg_k-lifnr .
+    READ TABLE lt_zlfa1 INTO ls_lfa1 WITH KEY lifnr  = ls_zbseg_k-lifnr BINARY SEARCH.
     IF sy-subrc = 0.
       ls_zfinal-name1 = ls_lfa1-name1.
       ls_zfinal-stcd3 = ls_lfa1-stcd3.
@@ -1721,7 +1302,7 @@ FORM get_ongc_docs.
       ls_zfinal-land1 = ls_lfa1-land1.
     ENDIF.
 
-    READ TABLE lt_zt005t INTO ls_t005t WITH KEY land1 = ls_lfa1-land1.
+    READ TABLE lt_zt005t INTO ls_t005t WITH KEY land1 = ls_lfa1-land1 BINARY SEARCH.
     IF sy-subrc = 0.
       ls_zfinal-landx = ls_t005t-landx.
     ENDIF.
@@ -1880,6 +1461,26 @@ FORM get_ongc_docs.
   ENDIF.
 
 
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_SKFBT
+*&---------------------------------------------------------------------*
+*       Perf: cash discount base (SKFBT) of the vendor lines, read once
+*       for all documents. Replaces the SELECT ... ENDSELECT on BSEG
+*       that ran once per output row inside GET_DISPLAY.
+*----------------------------------------------------------------------*
+FORM get_skfbt .
+  CLEAR lt_skfbt.
+  IF lt_with_item IS NOT INITIAL.
+    SELECT bukrs, belnr, gjahr, buzei, skfbt
+      FROM bseg
+       FOR ALL ENTRIES IN @lt_with_item
+     WHERE bukrs = @lt_with_item-bukrs
+       AND belnr = @lt_with_item-belnr
+       AND gjahr = @lt_with_item-gjahr
+       AND koart = 'K'
+      INTO TABLE @lt_skfbt.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  GET_BSAS
