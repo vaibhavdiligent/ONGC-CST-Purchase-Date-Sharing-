@@ -1,0 +1,706 @@
+*&---------------------------------------------------------------------*
+*& REPORT  YRFG001_DOWNLOAD_SEND_INVOICE
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT  YRVR167_MASS_DC_NOTE_DOWNLOAD.
+TYPE-POOLS SLIS.
+TABLES: VBRK,VBRP.
+CONSTANTS:
+        GC_FORMNAME_TOP_OF_PAGE TYPE SLIS_FORMNAME VALUE 'TOP_OF_PAGE'.
+DATA: GT_FIELDCAT TYPE SLIS_T_FIELDCAT_ALV,
+      GS_LAYOUT   TYPE SLIS_LAYOUT_ALV,
+      GT_EVENTS   TYPE SLIS_T_EVENT.
+DATA: G_REPID LIKE SY-REPID.
+DATA: GT_LIST_TOP_OF_PAGE TYPE SLIS_T_LISTHEADER.
+DATA: T_ATT_CONTENT_HEX TYPE SOLIX_TAB.
+DATA: FP_FORMOUTPUT     TYPE FPFORMOUTPUT.
+
+DATA: CS_BIL_INVOICE        TYPE LBBIL_INVOICE,
+      W_HD_ADR              TYPE LBBIL_HD_ADR,
+      IS_PRINT_DATA_TO_READ TYPE LBBIL_PRINT_DATA_TO_READ,
+      IT_KNVP               TYPE STANDARD TABLE OF KNVP WITH HEADER LINE.
+***DECLARATIONS FOR SMARTFORM TO PDF CONVERSION
+DATA: V_LANGUAGE     TYPE SFLANGU VALUE 'E',
+      V_E_DEVTYPE    TYPE RSPOPTYPE,
+      V_BIN_FILESIZE TYPE I,
+      V_NAME         TYPE STRING,
+      V_PATH         TYPE STRING,
+      V_FULLPATH     TYPE STRING,
+      V_FILTER       TYPE STRING,
+      V_UACT         TYPE I,
+      V_GUIOBJ       TYPE REF TO CL_GUI_FRONTEND_SERVICES,
+      V_FILENAME     TYPE STRING.
+DATA: ST_OUTPUT_OPTIONS       TYPE SSFCOMPOP,
+      ST_CONTROL_PARAMETERS   TYPE SSFCTRLOP,
+      ST_DOCUMENT_OUTPUT_INFO TYPE SSFCRESPD,
+      ST_JOB_OUTPUT_OPTIONS   TYPE SSFCRESOP,
+      ST_JOB_OUTPUT_INFO      TYPE SSFCRESCL,
+      W_FM_NAME               TYPE RS38L_FNAM,
+      LS_NAST                 TYPE NAST,
+      LS_REPEAT               TYPE NA_REPET,
+      WA_OBJKEY               TYPE NA_OBJKEY.
+
+
+DATA: IT_DOCS  TYPE STANDARD TABLE OF DOCS,
+      IT_LINES TYPE STANDARD TABLE OF TLINE.
+
+* SMARTFORM FROM CUSTOMIZING TABLE TNAPR
+DATA : W_FUNCNAME      TYPE FUNCNAME.
+DATA : FP_OUTPUTPARAMS TYPE SFPOUTPUTPARAMS.
+
+
+DATA : FP_DOCPARAMS    TYPE SFPDOCPARAMS.
+DATA: W_FORM_NAME   TYPE FPNAME .
+DATA :
+  LV_NAME  TYPE STRING,
+  LV_FPATH TYPE STRING,
+  LV_PATH  TYPE STRING.
+
+DATA : W_BILL        LIKE VBRK-VBELN,
+       W_FMNAME      TYPE TDSFNAME,
+       X_YRVA_REBATE TYPE YRVS_REBATE,
+       W_AUBEL       TYPE VBELN_VA,
+       W_FKDAT       TYPE FKDAT,
+       W_KUNNR       LIKE VBPA-KUNNR,
+       W_ADRNR       LIKE KNA1-ADRNR,
+       X_ADRC        LIKE ADRC,
+       W_NETWR       LIKE VBRK-NETWR,
+       W_FKIMG       LIKE VBRP-FKIMG,
+       W_BEZEI       TYPE BEZEI,
+       W_TEXT        TYPE CHAR200,
+       W_BSTKD       LIKE VBKD-BSTKD,
+       W_FROM_DATE   TYPE D,
+       W_TO_DATE     TYPE D,
+       W_VKBUR       TYPE VKBUR.
+
+DATA: BEGIN OF IT_VBELN OCCURS 0 ,
+        VBELN TYPE VBELN,
+        KUNAG TYPE KUNAG,
+        FKART TYPE FKART,
+      END OF IT_VBELN .
+SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+SELECTION-SCREEN SKIP.
+* SELECTION FOR ACTIVE AND RELEASED BG
+PARAMETERS: P_VKBUR TYPE VBRP-VKBUR OBLIGATORY.
+SELECT-OPTIONS: S_WERKS FOR  VBRP-WERKS NO INTERVALS NO-DISPLAY..
+SELECT-OPTIONS: S_VBELN FOR  VBRK-VBELN,
+                S_FKDAT FOR  VBRK-FKDAT OBLIGATORY.
+*PARAMETERS: RD_ZGS3 RADIOBUTTON GROUP RD1 DEFAULT 'X',
+*            RD_ZGS5 RADIOBUTTON GROUP RD1,
+*            RD_ZGT3 RADIOBUTTON GROUP RD1,
+*            RD_ZRDV RADIOBUTTON GROUP RD1.
+
+
+SELECTION-SCREEN  SKIP.
+
+SELECTION-SCREEN COMMENT /1(30) TEXT-998.
+*SELECTION-SCREEN BEGIN OF BLOCK B2 WITH FRAME TITLE TEXT-999.
+PARAMETERS: RD_ZCR1 RADIOBUTTON GROUP RD1 , "ZGS3
+            RD_ZPCR RADIOBUTTON GROUP RD1.  "ZGT3
+SELECTION-SCREEN END OF BLOCK B1.
+
+************************************************************************
+*                              INITIALIZATION                          *
+***********************************************************************
+
+INITIALIZATION.
+  G_REPID = SY-REPID.
+  S_WERKS-OPTION = 'EQ'.
+  S_WERKS-SIGN  = 'I'.
+  S_WERKS-LOW = '5010'.
+  APPEND S_WERKS.
+  S_WERKS-OPTION = 'EQ'.
+  S_WERKS-SIGN  = 'I'.
+  S_WERKS-LOW = '6010'.
+  APPEND S_WERKS.
+  S_WERKS-OPTION = 'EQ'.
+  S_WERKS-SIGN  = 'I'.
+  S_WERKS-LOW = '6020'.
+  APPEND S_WERKS.
+  S_WERKS-OPTION = 'EQ'.
+  S_WERKS-SIGN  = 'I'.
+  S_WERKS-LOW = '6030'.
+  APPEND S_WERKS.
+  S_WERKS-OPTION = 'EQ'.
+  S_WERKS-SIGN  = 'I'.
+  S_WERKS-LOW = '6040'.
+  APPEND S_WERKS.
+
+ "$$
+*  PERFORM E03_EVENTTAB_BUILD USING GT_EVENTS[].
+*  PERFORM E04_COMMENT_BUILD  USING GT_LIST_TOP_OF_PAGE[].
+*  PERFORM GET_INITIAL_DATA.
+
+************************************************************************
+*                              START OF SELECTION                          *
+***********************************************************************
+
+START-OF-SELECTION.
+* AUTHORISATION CHECK OF PLANT
+*  AUTHORITY-CHECK OBJECT 'YV_WERKS'
+*                 ID 'WERKS' FIELD S_WERKS.
+*  IF SY-SUBRC NE 0.
+*    MESSAGE E028(YV01) WITH S_WERKS.
+*  ENDIF.
+  PERFORM GET_DATA.
+*  PERFORM E01_FIELDCAT_INIT  USING GT_FIELDCAT[].
+
+END-OF-SELECTION.
+*&---------------------------------------------------------------------*
+*&      FORM  GET_DATA
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM GET_DATA .
+  DATA : LS_LBBIL_PRINT_DATA_TO_READ TYPE LBBIL_PRINT_DATA_TO_READ.
+  SELECT A~VBELN A~KUNAG INTO CORRESPONDING FIELDS OF TABLE IT_VBELN
+    FROM VBRK AS A INNER JOIN VBRP AS B
+    ON A~VBELN = B~VBELN
+     WHERE A~VBELN IN S_VBELN AND B~WERKS IN S_WERKS AND B~VKBUR = P_VKBUR
+    AND A~FKSTO = ''  AND A~FKDAT IN S_FKDAT
+** -> BEGIN OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+    AND A~DRAFT = SPACE
+    AND B~DRAFT = SPACE.
+** -> END OF CHANGES BY OF RITIKA ON 09.10.2024 FOR ATC
+
+*  ENDIF.
+  IF IT_VBELN[] IS INITIAL.
+    MESSAGE 'NO DATA FOR GIVEN SELECTION' TYPE 'I' .
+    LEAVE PROGRAM.
+  ENDIF.
+* TO OPEN 'TO SAVE' DIALOG BOX
+  CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG(  EXPORTING  WINDOW_TITLE = 'SAVE INVOICES'
+    DEFAULT_EXTENSION = 'PDF'
+    DEFAULT_FILE_NAME = 'DOWNLOAD'
+  CHANGING    FULLPATH = LV_FPATH
+    FILENAME = LV_NAME
+    PATH     = LV_PATH ).
+
+  IF LV_PATH IS NOT INITIAL.
+*GST RELEVANT CHANGES
+*      BREAK-POINT.
+*      IF RD_ZRNG = ABAP_TRUE
+*      OR RD_ZRGT = ABAP_TRUE.
+    CALL METHOD YCLTRANS_SERVICE=>GET_NAST
+      EXPORTING
+        IT_VBELN = IT_VBELN[]
+      IMPORTING
+        ET_NAST  = DATA(LT_NAST)
+        ET_VBELN = DATA(LT_VBFINAL).
+
+    IT_VBELN[] = LT_VBFINAL[].
+
+    IF RD_ZCR1 = ABAP_TRUE.
+      DELETE LT_NAST WHERE KSCHL NE 'ZCR1'.
+      IF LT_NAST[] IS INITIAL.
+        MESSAGE 'NO DATA FOR GIVEN SELECTION' TYPE 'I' .
+        LEAVE PROGRAM.
+      ENDIF.
+    ENDIF.
+    IF RD_ZPCR = ABAP_TRUE.
+      DELETE LT_NAST WHERE KSCHL NE 'ZPCR'.
+      IF LT_NAST[] IS INITIAL.
+        MESSAGE 'NO DATA FOR GIVEN SELECTION' TYPE 'I' .
+        LEAVE PROGRAM.
+      ENDIF.
+    ENDIF.
+    CALL METHOD YCLTRANS_SERVICE=>SET_PRINTPARMAS
+      RECEIVING
+        EX_PARMS = LS_LBBIL_PRINT_DATA_TO_READ.
+    LOOP AT IT_VBELN .
+
+      CLEAR: FP_OUTPUTPARAMS ,
+             CS_BIL_INVOICE.
+
+      FP_OUTPUTPARAMS-DEVICE = 'PRINTER'.
+      FP_OUTPUTPARAMS-DEST   = 'LP01'.
+*        FP_DOCPARAMS-FILLABLE  = 'X'.
+
+      FP_DOCPARAMS-LANGU     = 'EN'.
+      FP_OUTPUTPARAMS-NODIALOG = 'X'.
+      FP_OUTPUTPARAMS-PREVIEW  = ' '.
+      FP_OUTPUTPARAMS-GETPDF   = 'X'.
+
+      IF RD_ZCR1 = ABAP_TRUE.
+        W_FORM_NAME  = 'YRV_INVOICE_CREDIT_MEMO'.
+      ENDIF.
+      IF RD_ZPCR = ABAP_TRUE.
+        W_FORM_NAME  = 'YRV_CREDIT_NOTE'.
+*        FP_DOCPARAMS-FILLABLE  = 'X'.
+      ENDIF.
+
+
+      CALL FUNCTION 'SSF_GET_DEVICE_TYPE'
+        EXPORTING
+          I_LANGUAGE    = V_LANGUAGE
+          I_APPLICATION = 'SAPDEFAULT'
+        IMPORTING
+          E_DEVTYPE     = V_E_DEVTYPE.
+
+      ST_OUTPUT_OPTIONS-TDPRINTER = V_E_DEVTYPE.
+*ST_OUTPUT_OPTIONS-TDPRINTER = 'LOCL'.
+      ST_CONTROL_PARAMETERS-NO_DIALOG = 'X'.
+      ST_CONTROL_PARAMETERS-GETOTF = 'X'.
+
+*.................GET SMARTFORM FUNCTION MODULE NAME.................*
+      CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+        EXPORTING
+          FORMNAME           = W_FORM_NAME
+        IMPORTING
+          FM_NAME            = W_FM_NAME
+        EXCEPTIONS
+          NO_FORM            = 1
+          NO_FUNCTION_MODULE = 2
+          OTHERS             = 3.
+
+      IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+* WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+
+      READ TABLE LT_NAST REFERENCE INTO DATA(LR_NAST) WITH KEY OBJKY = IT_VBELN-VBELN
+                                                                PARNR = IT_VBELN-KUNAG.
+      IF SY-SUBRC = 0.
+        CALL FUNCTION 'LB_BIL_INV_OUTP_READ_PRTDATA'
+          EXPORTING
+            IF_BIL_NUMBER         = LR_NAST->OBJKY
+            IF_PARVW              = LR_NAST->PARVW
+            IF_PARNR              = LR_NAST->PARNR
+            IF_LANGUAGE           = LR_NAST->SPRAS
+            IS_PRINT_DATA_TO_READ = LS_LBBIL_PRINT_DATA_TO_READ
+          IMPORTING
+            ES_BIL_INVOICE        = CS_BIL_INVOICE
+          EXCEPTIONS
+            RECORDS_NOT_FOUND     = 1
+            RECORDS_NOT_REQUESTED = 2
+            OTHERS                = 3.
+        IF SY-SUBRC <> 0.
+        ENDIF.
+      ELSE.
+        CONTINUE.
+      ENDIF.
+      IF RD_ZCR1 EQ 'X' .
+        READ TABLE LT_NAST INTO LS_NAST WITH KEY OBJKY = IT_VBELN-VBELN
+                                                                  PARNR = IT_VBELN-KUNAG.
+        CALL FUNCTION W_FM_NAME
+          EXPORTING
+            CONTROL_PARAMETERS   = ST_CONTROL_PARAMETERS
+            OUTPUT_OPTIONS       = ST_OUTPUT_OPTIONS
+            IS_BIL_INVOICE       = CS_BIL_INVOICE
+            IS_NAST              = LS_NAST
+            IS_REPEAT            = LS_REPEAT
+          IMPORTING
+            DOCUMENT_OUTPUT_INFO = ST_DOCUMENT_OUTPUT_INFO
+            JOB_OUTPUT_INFO      = ST_JOB_OUTPUT_INFO
+            JOB_OUTPUT_OPTIONS   = ST_JOB_OUTPUT_OPTIONS
+*    TABLES
+*           ITAB_FINAL_H         = ITAB_FINAL_H
+*           ITAB_FINAL_D         = ITAB_FINAL_D
+*           ITAB_FINAL_H2        = ITAB_FINAL_H2
+*           ITAB_TRAVEL          = ITAB_TRAVEL
+          EXCEPTIONS
+            FORMATTING_ERROR     = 1
+            INTERNAL_ERROR       = 2
+            SEND_ERROR           = 3
+            USER_CANCELED        = 4
+            OTHERS               = 5.
+
+        IF SY-SUBRC <> 0.
+*      MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*      WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+      ELSE.
+        IF RD_ZPCR EQ 'X'.
+          W_BILL = IT_VBELN-VBELN.
+*GETTING SALES ORDER CORRESPONDING BILL
+*Begin of changes by of VIPUL on 20241028  for ATC
+SELECT AUBEL FKIMG VKBUR INTO (W_AUBEL,W_FKIMG,W_VKBUR) FROM VBRP
+UP TO 1 ROWS
+WHERE vbeln = w_bill ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241028  for ATC
+
+*NET VALUE AND BILL DATE
+          SELECT SINGLE NETWR FKDAT INTO (W_NETWR,W_FKDAT) FROM VBRK
+                            WHERE VBELN = W_BILL.
+
+*Begin of changes by of VIPUL on 20241028  for ATC
+SELECT BSTKD BSTDK BSTDK_E INTO (W_BSTKD,W_FROM_DATE,W_TO_DATE) FROM VBKD
+UP TO 1 ROWS
+WHERE vbeln = w_aubel ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241028  for ATC
+
+*FROM TABLE YRVA_REBATE
+*Begin of changes by of VIPUL on 20241028  for ATC
+SELECT * INTO CORRESPONDING FIELDS OF X_YRVA_REBATE FROM YRVA_REBATE
+UP TO 1 ROWS
+WHERE vbeln = w_aubel ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241028  for ATC
+          IF SY-SUBRC NE 0 .
+            X_YRVA_REBATE-YY_PER_START = W_FROM_DATE .
+            X_YRVA_REBATE-YY_PER_END = W_TO_DATE .
+            X_YRVA_REBATE-VKBUR = W_VKBUR .
+
+          ENDIF.
+
+
+*SALES OFFICE DESCRIPTION
+          SELECT SINGLE BEZEI INTO W_BEZEI FROM TVKBT
+                            WHERE SPRAS = 'EN' AND
+                                  VKBUR = X_YRVA_REBATE-VKBUR.
+
+*Begin of changes by of VIPUL on 20241028  for ATC
+SELECT KUNNR INTO W_KUNNR FROM VBPA
+UP TO 1 ROWS
+WHERE vbeln = w_aubel AND
+parvw = 'WE' ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241028  for ATC
+          IF NOT W_KUNNR IS INITIAL.
+
+*SOLD-TO-PARTY ADDRESS
+            SELECT SINGLE ADRNR INTO W_ADRNR FROM KNA1 WHERE KUNNR = W_KUNNR.
+
+*Begin of changes by of VIPUL on 20241028  for ATC
+SELECT * INTO X_ADRC
+FROM adrc
+UP TO 1 ROWS
+WHERE addrnumber = w_adrnr ORDER BY PRIMARY KEY .
+ENDSELECT.
+* *End of changes by of VIPUL on 20241028  for ATC
+          ENDIF.
+        ENDIF.
+
+*CONDITION TYPE TEXTS
+*        IF X_YRVA_REBATE-REB_COND = 'ZMQD'.
+*          W_TEXT = 'MONTHLY QUANTITY DISCOUNT - HDPE'(001).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZTQD'.
+*          W_TEXT = 'TRADER MONTHLY QUANTITY DISCOUNT - HDPE'(002).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZTLD'.
+*          W_TEXT = 'TRADER MONTHLY QUANTITY DISCOUNT - LLDPE'(003).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZAQD'.
+*          W_TEXT = 'ADDITIONAL MONTHLY QUANTITY DISCOUNT FOR RAFFIA GRADES'(004).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZSQD'.
+*          W_TEXT = 'SPECIAL MONTHLY QUANTITY DISCOUNT FOR SHEATH'(005).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZPQD'.
+*          W_TEXT = 'SPECIAL MONTHLY QUANTITY DISCOUNT FOR PIPE'(006).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZIQD'.
+*          W_TEXT = 'SPECIAL MONTHLY QUANTITY DISCOUNT FOR IM_LOW'(007).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZEQD'.
+*          W_TEXT = 'TRADE DISCOUNT FOR E52U GRADE'(008).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZBQD'.
+*          W_TEXT = 'SPECIAL MNTHLY QTY DISC FOR BM CUSTOMERS RAFFIA GRADES'(009).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZQTR'.
+*          W_TEXT = 'QUARTERLY QUANTITY DISCOUNT FOR RAFFIA GRADES'(010).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZLQD'.
+*          W_TEXT = 'MONTHLY QUANTITY DISCOUNT - LLDPE'(011).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZHHD'.
+*          W_TEXT = 'MONTHLY QUANTITY DISCOUNT - HDPE'(001).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZHLD'.
+*          W_TEXT = 'MONTHLY QUANTITY DISCOUNT - LLDPE'(011).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZPRT'.
+*          W_TEXT = 'PRICE PROTECTION'(012).
+***************    BOC BY PRIYA FOR CALL ID ***************
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZRQD'.
+*          W_TEXT = 'SMQD RM'(013).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZCQD'.
+*          W_TEXT = 'STD RAFFIA/MF PRIME'(014).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZAD3'.
+*          W_TEXT = 'STD RAFFIA/MF OG'(015).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZPP3'.
+*          W_TEXT = 'KNP E20AN PP DISC'(016).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZPP5'.
+*          W_TEXT = 'KNP E45 PP DISC'(017).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZP11'.
+*          W_TEXT = 'MQD-HD-AU'(018).
+*        ELSEIF X_YRVA_REBATE-REB_COND = 'ZPP1'.
+*          W_TEXT = 'TD HM BM'(019).
+***************************************************************
+*        ENDIF.
+        CALL FUNCTION W_FM_NAME
+          EXPORTING
+            CONTROL_PARAMETERS   = ST_CONTROL_PARAMETERS
+            OUTPUT_OPTIONS       = ST_OUTPUT_OPTIONS
+            X_YRVA_REBATE        = X_YRVA_REBATE
+            W_VBELN              = W_BILL
+            W_FKDAT              = W_FKDAT
+            X_ADRC               = X_ADRC
+            W_NETWR              = W_NETWR
+            W_FKIMG              = W_FKIMG
+            W_BEZEI              = W_BEZEI
+            W_TEXT               = W_TEXT
+            W_BSTKD              = W_BSTKD
+          IMPORTING
+            DOCUMENT_OUTPUT_INFO = ST_DOCUMENT_OUTPUT_INFO
+            JOB_OUTPUT_INFO      = ST_JOB_OUTPUT_INFO
+            JOB_OUTPUT_OPTIONS   = ST_JOB_OUTPUT_OPTIONS
+          EXCEPTIONS
+            FORMATTING_ERROR     = 1
+            INTERNAL_ERROR       = 2
+            SEND_ERROR           = 3
+            USER_CANCELED        = 4
+            OTHERS               = 5.
+        IF SY-SUBRC <> 0.
+          MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+                  WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+      ENDIF.
+*.........................CONVERT TO OTF TO PDF.......................*
+      CALL FUNCTION 'CONVERT_OTF_2_PDF'
+        IMPORTING
+          BIN_FILESIZE           = V_BIN_FILESIZE
+        TABLES
+          OTF                    = ST_JOB_OUTPUT_INFO-OTFDATA
+          DOCTAB_ARCHIVE         = IT_DOCS
+          LINES                  = IT_LINES
+        EXCEPTIONS
+          ERR_CONV_NOT_POSSIBLE  = 1
+          ERR_OTF_MC_NOENDMARKER = 2
+          OTHERS                 = 3.
+
+      IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+* WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+      CONCATENATE IT_VBELN-KUNAG '_' IT_VBELN-VBELN '.PDF' INTO LV_FPATH .
+      CONCATENATE LV_PATH LV_FPATH INTO LV_FPATH .
+
+
+      "DOWNLOAD THE FILE
+      CL_GUI_FRONTEND_SERVICES=>GUI_DOWNLOAD( EXPORTING FILENAME = LV_FPATH FILETYPE = 'BIN' CHANGING DATA_TAB = IT_LINES ).
+
+
+    ENDLOOP.
+  ELSE.
+    MESSAGE 'CREDIT NOTES DOWNLOAD CANCELLED.' TYPE 'I' .
+    LEAVE PROGRAM.
+  ENDIF.
+*  ENDIF.
+
+
+  IF SY-SUBRC EQ 0 AND IT_VBELN[] IS NOT INITIAL .
+    MESSAGE 'CREDIT NOTES DOWNLOADED SUCCESSFULLY' TYPE 'I' .
+    LEAVE PROGRAM.
+  ENDIF.
+
+
+ENDFORM.                    " GET_DATA
+*&---------------------------------------------------------------------*
+*&      FORM  PRE_PROCESSING
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM PRE_PROCESSING .
+  IS_PRINT_DATA_TO_READ-HD_GEN = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_ADR = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_GEN_DESCRIPT = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_ORG = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_PART_ADD = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_KOND = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_FIN = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_REF = 'X' .
+  IS_PRINT_DATA_TO_READ-HD_TECH = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_GEN = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_ADR = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_PRICE = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_KOND = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REF = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REFDLV = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REFORD = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REFPURORD = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REFVAG = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REFVG2 = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_REFVKT = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_TECH = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_FIN = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_CONFITM = 'X' .
+  IS_PRINT_DATA_TO_READ-IT_CONFBATCH = 'X' .
+  IS_PRINT_DATA_TO_READ-MSR_HD = 'X' .
+  IS_PRINT_DATA_TO_READ-MSR_IT = 'X' .
+  SELECT * FROM KNVP INTO TABLE IT_KNVP
+    WHERE VKORG = '6000' AND PARVW ='RE' .
+
+  CREATE OBJECT V_GUIOBJ.
+  CALL METHOD V_GUIOBJ->FILE_SAVE_DIALOG
+    EXPORTING
+      DEFAULT_EXTENSION = 'PDF'
+      DEFAULT_FILE_NAME = V_NAME
+      FILE_FILTER       = V_FILTER
+    CHANGING
+      FILENAME          = V_NAME
+      PATH              = V_PATH
+      FULLPATH          = V_FULLPATH
+      USER_ACTION       = V_UACT.
+
+  IF V_UACT = V_GUIOBJ->ACTION_CANCEL.
+    EXIT.
+  ENDIF.
+
+
+ENDFORM.                    " PRE_PROCESSING
+*&---------------------------------------------------------------------*
+*&      FORM  DOWNLOAD_LPG_INVOICE
+*&---------------------------------------------------------------------*
+*       TEXT
+*----------------------------------------------------------------------*
+*  -->  P1        TEXT
+*  <--  P2        TEXT
+*----------------------------------------------------------------------*
+FORM DOWNLOAD_LPG_INVOICE .
+  LOOP AT IT_VBELN.
+
+    CALL FUNCTION 'SSF_GET_DEVICE_TYPE'
+      EXPORTING
+        I_LANGUAGE    = V_LANGUAGE
+        I_APPLICATION = 'SAPDEFAULT'
+      IMPORTING
+        E_DEVTYPE     = V_E_DEVTYPE.
+
+    ST_OUTPUT_OPTIONS-TDPRINTER = V_E_DEVTYPE.
+*ST_OUTPUT_OPTIONS-TDPRINTER = 'LOCL'.
+    ST_CONTROL_PARAMETERS-NO_DIALOG = 'X'.
+    ST_CONTROL_PARAMETERS-GETOTF = 'X'.
+
+*.................GET SMARTFORM FUNCTION MODULE NAME.................*
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        FORMNAME           = 'YRV_INVOICE_LPG_VAT'
+      IMPORTING
+        FM_NAME            = W_FM_NAME
+      EXCEPTIONS
+        NO_FORM            = 1
+        NO_FUNCTION_MODULE = 2
+        OTHERS             = 3.
+
+    IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+* WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+    READ TABLE IT_KNVP WITH KEY KUNNR  = IT_VBELN-KUNAG .
+
+
+    WA_OBJKEY = IT_VBELN-VBELN .
+    CALL FUNCTION 'LB_BIL_INV_OUTP_READ_PRTDATA'
+      EXPORTING
+        IF_BIL_NUMBER         = WA_OBJKEY
+        IF_PARVW              = 'RE'
+        IF_PARNR              = IT_KNVP-KUNN2
+        IF_LANGUAGE           = 'E'
+        IS_PRINT_DATA_TO_READ = IS_PRINT_DATA_TO_READ
+      IMPORTING
+        ES_BIL_INVOICE        = CS_BIL_INVOICE
+      EXCEPTIONS
+        RECORDS_NOT_FOUND     = 1
+        RECORDS_NOT_REQUESTED = 2
+        OTHERS                = 3.
+
+*...........................CALL SMARTFORM............................*
+    CALL FUNCTION W_FM_NAME
+      EXPORTING
+        CONTROL_PARAMETERS   = ST_CONTROL_PARAMETERS
+        OUTPUT_OPTIONS       = ST_OUTPUT_OPTIONS
+        IS_BIL_INVOICE       = CS_BIL_INVOICE
+        IS_NAST              = LS_NAST
+        IS_REPEAT            = LS_REPEAT
+      IMPORTING
+        DOCUMENT_OUTPUT_INFO = ST_DOCUMENT_OUTPUT_INFO
+        JOB_OUTPUT_INFO      = ST_JOB_OUTPUT_INFO
+        JOB_OUTPUT_OPTIONS   = ST_JOB_OUTPUT_OPTIONS
+*    TABLES
+*       ITAB_FINAL_H         = ITAB_FINAL_H
+*       ITAB_FINAL_D         = ITAB_FINAL_D
+*       ITAB_FINAL_H2        = ITAB_FINAL_H2
+*       ITAB_TRAVEL          = ITAB_TRAVEL
+      EXCEPTIONS
+        FORMATTING_ERROR     = 1
+        INTERNAL_ERROR       = 2
+        SEND_ERROR           = 3
+        USER_CANCELED        = 4
+        OTHERS               = 5.
+
+    IF SY-SUBRC <> 0.
+*      MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*      WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ELSE.
+*.........................CONVERT TO OTF TO PDF.......................*
+      CALL FUNCTION 'CONVERT_OTF_2_PDF'
+        IMPORTING
+          BIN_FILESIZE           = V_BIN_FILESIZE
+        TABLES
+          OTF                    = ST_JOB_OUTPUT_INFO-OTFDATA
+          DOCTAB_ARCHIVE         = IT_DOCS
+          LINES                  = IT_LINES
+        EXCEPTIONS
+          ERR_CONV_NOT_POSSIBLE  = 1
+          ERR_OTF_MC_NOENDMARKER = 2
+          OTHERS                 = 3.
+
+      IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+* WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+
+*........................GET THE FILE NAME TO STORE....................*
+      CLEAR: V_NAME .
+      READ TABLE CS_BIL_INVOICE-HD_ADR INTO W_HD_ADR  WITH KEY PARTN_ROLE = 'WE' .
+      IF SY-SUBRC EQ 0 .
+        CONCATENATE W_HD_ADR-PARTN_NUMB '_' IT_VBELN-VBELN '.PDF'  INTO V_NAME.
+      ELSE.
+        CONCATENATE IT_VBELN-KUNAG '_' IT_VBELN-VBELN '.PDF'  INTO V_NAME.
+      ENDIF.
+
+*..................................DOWNLOAD AS FILE....................*
+      CONCATENATE V_PATH V_NAME INTO V_FILENAME .
+*    MOVE V_FULLPATH TO V_FILENAME.
+      CALL FUNCTION 'GUI_DOWNLOAD'
+        EXPORTING
+          BIN_FILESIZE            = V_BIN_FILESIZE
+          FILENAME                = V_FILENAME
+          FILETYPE                = 'BIN'
+        TABLES
+          DATA_TAB                = IT_LINES
+        EXCEPTIONS
+          FILE_WRITE_ERROR        = 1
+          NO_BATCH                = 2
+          GUI_REFUSE_FILETRANSFER = 3
+          INVALID_TYPE            = 4
+          NO_AUTHORITY            = 5
+          UNKNOWN_ERROR           = 6
+          HEADER_NOT_ALLOWED      = 7
+          SEPARATOR_NOT_ALLOWED   = 8
+          FILESIZE_NOT_ALLOWED    = 9
+          HEADER_TOO_LONG         = 10
+          DP_ERROR_CREATE         = 11
+          DP_ERROR_SEND           = 12
+          DP_ERROR_WRITE          = 13
+          UNKNOWN_DP_ERROR        = 14
+          ACCESS_DENIED           = 15
+          DP_OUT_OF_MEMORY        = 16
+          DISK_FULL               = 17
+          DP_TIMEOUT              = 18
+          FILE_NOT_FOUND          = 19
+          DATAPROVIDER_EXCEPTION  = 20
+          CONTROL_FLUSH_ERROR     = 21
+          OTHERS                  = 22.
+
+      IF SY-SUBRC <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+* WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+
+ENDFORM.                    " DOWNLOAD_LPG_INVOICE
