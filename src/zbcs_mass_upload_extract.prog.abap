@@ -2001,7 +2001,11 @@ CLASS lcl_eng IMPLEMENTATION.
               CASE ls_col-fld.
                 WHEN 'TEL' OR 'MOB'.
                   LOOP AT ls_c-central_data-address-communication-phone-phone INTO DATA(ls_ph).
-                    DATA(lv_mob) = xsdbool( ls_ph-contact-data-r_3_user = abap_true ).
+                  " R_3_USER is not a flag: SAP reads space and 1 as a
+                  " landline and 2 and 3 as a mobile, and refuses anything
+                  " else. Testing it against X never matched, so a mobile
+                  " came back as a landline.
+                    DATA(lv_mob) = xsdbool( ls_ph-contact-data-r_3_user CA '23' ).
                     IF xsdbool( ls_col-fld = 'MOB' ) = lv_mob.
                       lv_val = ls_ph-contact-data-telephone.
                       EXIT.
@@ -2183,8 +2187,9 @@ CLASS lcl_eng IMPLEMENTATION.
           lt_faxn TYPE string_table,
           lt_smtp TYPE string_table.
     LOOP AT ls_v-central_data-address-communication-phone-phone INTO DATA(ls_ph).
-      " R_3_USER carries data element AD_FLGMOB - a flag, not an ordinal.
-      IF ls_ph-contact-data-r_3_user = abap_true.
+      " R_3_USER is a number, not a flag: space and 1 are a landline,
+      " 2 and 3 a mobile.
+      IF ls_ph-contact-data-r_3_user CA '23'.
         APPEND CONV string( ls_ph-contact-data-telephone ) TO lt_mobn.
       ELSE.
         APPEND CONV string( ls_ph-contact-data-telephone ) TO lt_teln.

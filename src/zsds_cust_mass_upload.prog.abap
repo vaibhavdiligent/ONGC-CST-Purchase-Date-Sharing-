@@ -185,6 +185,9 @@ CONSTANTS:
   gc_org     TYPE bu_type VALUE '2'.
 
 " Aadhaar identification type - created by the client, see header.
+" What R_3_USER holds for a mobile number. See the note where it is set.
+CONSTANTS gc_mobile TYPE c LENGTH 1 VALUE '3'.
+
 CONSTANTS gc_id_aadhaar TYPE bu_id_category VALUE 'X90003'.
 
 " Main credit segment, from UKMCRED_SGM0C (MAIN_CRED_SGMNT = 'X').
@@ -3284,12 +3287,15 @@ CLASS lcl_engine IMPLEMENTATION.
              ) TO ls_cust-central_data-address-communication-phone-phone.
     ENDIF.
     IF lv_mob IS NOT INITIAL.
-      " A mobile number is a telephone entry flagged as mobile. The flag is
-      " BAPIADTEL-R_3_USER, whose data element is AD_FLGMOB.
+      " A mobile number is a telephone entry marked as mobile in R_3_USER.
+      " That field is not a flag: SAP's CL_ADDR_MAP=>CONVERT_ADTEL_TO_TELEPHONE
+      " takes space or 1 as a landline, 2 or 3 as a mobile, and answers
+      " anything else - an X included - with a type X message that brings the
+      " transaction down before anything is written.
       APPEND VALUE cvis_ei_phone_str(
                contact-task            = gc_i
                contact-data-telephone  = lv_mob
-               contact-data-r_3_user   = abap_true
+               contact-data-r_3_user   = gc_mobile
                contact-datax-telephone = abap_true
                contact-datax-r_3_user  = abap_true
              ) TO ls_cust-central_data-address-communication-phone-phone.

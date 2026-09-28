@@ -122,6 +122,9 @@ TYPES: BEGIN OF ty_msg,
        END OF ty_msg,
        tt_msg TYPE STANDARD TABLE OF ty_msg WITH EMPTY KEY.
 
+" What R_3_USER holds for a mobile number. See the note where it is set.
+CONSTANTS gc_mobile TYPE c LENGTH 1 VALUE '3'.
+
 CONSTANTS:
   gc_i     TYPE cmd_ei_object_task VALUE 'I',   " insert
   gc_u     TYPE cmd_ei_object_task VALUE 'U',   " update
@@ -2358,10 +2361,20 @@ CLASS lcl_h_create IMPLEMENTATION.
           ls_smt TYPE bus_ei_bupa_smtp,
           lt_tel TYPE string_table.
 
-    " The mobile marker is R_3_USER, data element AD_FLGMOB - a flag, so it
-    " is 'X', not the ADR2 usage number 3. With a 3 in it the number is
-    " stored as a landline and the extractor never reads it back as mobile.
-    lt_tel = VALUE #( ( `23;24;` ) ( `25;26;` ) ( `27;;X` ) ( `28;;X` ) ).
+    " R_3_USER is NOT a flag. SAP's own CL_ADDR_MAP=>CONVERT_ADTEL_TO_TELEPHONE
+    " reads it as a number and accepts four values and no others:
+    "
+    "   CASE is_adtel-r3_user.
+    "     WHEN space OR '1'.  CLEAR rs_telephone-mobile_phone.
+    "     WHEN '2'   OR '3'.  rs_telephone-mobile_phone = c_true.
+    "     WHEN OTHERS.        MESSAGE x890(am) WITH 'ADTEL-R3_USER'.
+    "   ENDCASE.
+    "
+    " An X there is WHEN OTHERS, and that MESSAGE is type X: the whole
+    " transaction goes down with MESSAGE_TYPE_X, "Internal error - value
+    " range of ADTEL-R3_USER", before anything is written. 3 is the mobile.
+    " "number column;extension column;M when the column is a mobile"
+    lt_tel = VALUE #( ( `23;24;` ) ( `25;26;` ) ( `27;;M` ) ( `28;;M` ) ).
 
     LOOP AT lt_tel INTO DATA(lv_tp).
       SPLIT lv_tp AT ';' INTO DATA(lv_n) DATA(lv_x) DATA(lv_u).
@@ -2375,7 +2388,9 @@ CLASS lcl_h_create IMPLEMENTATION.
       IF lv_x IS NOT INITIAL.
         ls_tel-contact-data-extension = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_x ) ).
       ENDIF.
-      ls_tel-contact-data-r_3_user = lv_u.
+      IF lv_u = 'M'.
+        ls_tel-contact-data-r_3_user = gc_mobile.
+      ENDIF.
       IF lv_n = '23'.
         ls_tel-contact-data-std_no = abap_true.
       ENDIF.

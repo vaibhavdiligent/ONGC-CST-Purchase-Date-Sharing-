@@ -3187,9 +3187,12 @@ CLASS lcl_eng IMPLEMENTATION.
             WHEN 'M'.
               CASE ls_col-fld.
                 WHEN 'TEL' OR 'MOB'.
-                  " R_3_USER is the flag that marks a number as a mobile.
+                  " R_3_USER is not a flag: SAP reads space and 1 as a
+                  " landline and 2 and 3 as a mobile, and refuses anything
+                  " else. Testing it against X never matched, so a mobile
+                  " came back as a landline.
                   LOOP AT ls_c-central_data-address-communication-phone-phone INTO DATA(ls_ph).
-                    DATA(lv_mob) = xsdbool( ls_ph-contact-data-r_3_user = abap_true ).
+                    DATA(lv_mob) = xsdbool( ls_ph-contact-data-r_3_user CA '23' ).
                     IF xsdbool( ls_col-fld = 'MOB' ) = lv_mob.
                       lv_val = ls_ph-contact-data-telephone.
                       EXIT.
