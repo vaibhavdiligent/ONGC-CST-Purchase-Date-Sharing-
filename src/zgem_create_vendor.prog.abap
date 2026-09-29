@@ -419,6 +419,7 @@ PRIMARY KEY.   ENDSELECT.
     CONSTANTS c_bp_group TYPE bu_group VALUE 'GEMV'.
     CONSTANTS c_bp_categ TYPE bu_type  VALUE '2'.   " 2 = Organization
     CONSTANTS c_industry TYPE lfa1-j_1kftind VALUE 'GEM'. " Type of Industry (functional: default 'GEM')
+    CONSTANTS c_ind_sys  TYPE bu_istype VALUE 'RE'. " BP industry system holding VOTH/Z031-Z034 (TB038B)
 
     CLEAR: lt_cvis, ls_cvis, lt_return, ls_company, ls_purchasing,
            ls_bankdetails, ls_wtax, lv_brsch, lv_bp_guid, lv_bp, lv_err.
@@ -544,9 +545,14 @@ PRIMARY KEY.   ENDSELECT.
         ENDIF.
       ENDIF.
     ENDIF.
+*   Industry (BRSCH) is BP-owned under CVI. Set it on the BP industry node
+*   (system RE, industry VOTH/Z031-Z034); CVI syncs it to LFA1-BRSCH.
     IF lv_brsch IS NOT INITIAL.
-      ls_cvis-vendor-central_data-central-data-brsch  = lv_brsch.
-      ls_cvis-vendor-central_data-central-datax-brsch = 'X'.
+      APPEND INITIAL LINE TO ls_cvis-partner-central_data-industrysector-industrysectors
+        ASSIGNING FIELD-SYMBOL(<fs_ind>).
+      <fs_ind>-task               = 'I'.
+      <fs_ind>-data_key-keysystem  = c_ind_sys.
+      <fs_ind>-data_key-ind_sector = lv_brsch.
     ENDIF.
 
 *   company code data (OVL)
