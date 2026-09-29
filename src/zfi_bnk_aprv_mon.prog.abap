@@ -20,8 +20,10 @@
 *& the medium run, then reads REGUT - the single source of truth for batch
 *& approval - and evaluates the digital signatures held in ZFI_BATCH_SIGN.
 *&
-*& Output grain: ONE ROW PER REGUHM RECORD. Every REGUHM entry is shown,
-*& even when no REGUT batch exists yet (status "Batch Not Created").
+*& Output grain: ONE SUMMARY ROW PER REGUT FILE (batch = ZBUKR..LFDNR),
+*& showing the batch TOTAL amount and line-item count. Double-click a row
+*& to drill into its individual payments (line items), which can be printed.
+*& Runs with no REGUT batch yet appear once as "Batch Not Created".
 *&
 *& Batch key (matches ZFI_BNK_APP / ZFI_BNK_APP1 / ZFI_PAYMEDIUM_DMEE_20):
 *&   ZBUKR + BANKS + LAUFD + LAUFI + XVORL + DTKEY + LFDNR
@@ -66,6 +68,8 @@ TYPES: BEGIN OF ty_mon,
          crusr      TYPE regut-tsusr,   "Created by (TemSe user)
          crdate     TYPE regut-tsdat,
          crtime     TYPE regut-tstim,
+         ztxn       TYPE zfi_s2s_txn-ztxn, "Payment TXN (file type: CN/CT/CC)
+         item_count TYPE i,             "No. of line items (payments) in the file
        END OF ty_mon.
 
 * Detail line (drill-down): one row per payment in the selected batch
@@ -101,8 +105,9 @@ DATA: gt_regut  TYPE STANDARD TABLE OF regut,
       gt_paym   TYPE STANDARD TABLE OF zfi_paym_file,  "File send state (SENT)
       gt_payordr TYPE STANDARD TABLE OF zfi_bcm_payordr,"Per-payment bank response (ZSTATUS)
       gt_rule   TYPE STANDARD TABLE OF zfi_bnk_rule,  "Approver config
-      gt_mon    TYPE STANDARD TABLE OF ty_mon,
-      gt_det    TYPE STANDARD TABLE OF ty_det.        "Drill-down detail
+      gt_s2s    TYPE STANDARD TABLE OF zfi_s2s_txn,   "RZAWE -> TXN (file type)
+      gt_mon    TYPE STANDARD TABLE OF ty_mon,        "Summary: one row per REGUT file
+      gt_det    TYPE STANDARD TABLE OF ty_det.        "Drill-down detail (line items)
 
 * Approval rules (ZFI_BNK_RULE): rule -> approval level
 CONSTANTS: gc_rule_l1 TYPE zfi_bnk_rule-zrule VALUE '90700005',   "Level-1 approvers
@@ -232,11 +237,17 @@ FORM f_get_data .
 *    when the signed file is transmitted to the bank. (REGUT-STATUS is NOT
 *    used: the custom send/return interfaces never update it, so it stays
 *    'Created' regardless of the real transfer state.)
-  SELECT laufd laufi sent sent_error
+  SELECT laufd laufi lfdnr sent sent_error
     FROM zfi_paym_file INTO CORRESPONDING FIELDS OF TABLE gt_paym
     FOR ALL ENTRIES IN gt_reguhm
     WHERE laufd = gt_reguhm-laufd_m
       AND laufi = gt_reguhm-laufi_m.
+
+* -- Payment method -> TXN (file type) map. A REGUT file holds the payments
+*    of one payment type (CN/CT/CC...): the file name starts with this TXN
+*    and each payment's RZAWE resolves to it via ZFI_S2S_TXN. Used to split
+*    the run's payments across its REGUT files and to total per file.
+  SELECT * FROM zfi_s2s_txn INTO TABLE gt_s2s.
 
 * -- Step 7: RECEIVED state - per-payment bank response in ZFI_BCM_PAYORDR
 *    (ZSTATUS 002 = success, 005 = rejected). This is the Z-table the
@@ -263,97 +274,61 @@ FORM f_build_output .
         ls_sign    TYPE zfi_batch_sign,
         ls_paym    TYPE zfi_paym_file,
         ls_po      TYPE zfi_bcm_payordr,
+        ls_s2s     TYPE zfi_s2s_txn,
         ls_mon     TYPE ty_mon,
         lv_bkey    TYPE zfi_batch_sign-batch_no,
         lv_snro    TYPE zfi_batch_sign-snro,
-        lt_bkeys   TYPE STANDARD TABLE OF zfi_batch_sign-batch_no,
-        lv_nbatch  TYPE i,
+        lv_ftxn    TYPE string,          "TXN of the REGUT file (from FSNAM)
+        lv_ptxn    TYPE string,          "TXN of a payment (from RZAWE)
         lv_po_tot  TYPE i,
         lv_po_resp TYPE i,
-        lv_signed  TYPE abap_bool.
+        lv_pay_rcv TYPE abap_bool,
+        lv_signed  TYPE abap_bool,
+        lv_runkey  TYPE string,
+        lt_seen    TYPE STANDARD TABLE OF string.  "medium runs that have a REGUT file
 
   SORT gt_sign BY batch_no signer snro.
 
-* ---------------------------------------------------------------------*
-* One output row per REGUHM record (the FS starting table). Each REGUHM
-* record is linked to its payment-medium batch(es) in REGUT via
-*   REGUT-LAUFD/LAUFI = REGUHM-LAUFD_M/LAUFI_M.
-* A record with no REGUT batch yet is shown as "Batch Not Created".
-* ---------------------------------------------------------------------*
-  LOOP AT gt_reguhm INTO ls_hm.
+* =====================================================================*
+* PART A - one SUMMARY row per REGUT file (LFDNR). This is the batch:
+*   REGUT is keyed ZBUKR+BANKS+LAUFD+LAUFI+XVORL+DTKEY+LFDNR, where
+*   LAUFD/LAUFI is the payment-medium run. Each file holds the payments of
+*   one payment type (TXN). The row shows the batch TOTAL amount and the
+*   line-item count; double-click drills into the individual payments.
+* =====================================================================*
+  LOOP AT gt_regut INTO ls_reg.
     CLEAR ls_mon.
+    ls_mon-zbukr      = ls_reg-zbukr.
+    ls_mon-banks      = ls_reg-banks.
+    ls_mon-laufd      = ls_reg-laufd.       "medium run date
+    ls_mon-laufi      = ls_reg-laufi.       "medium run id
+    ls_mon-lfdnr      = ls_reg-lfdnr.
+    ls_mon-dtkey      = ls_reg-dtkey.
+    ls_mon-fsnam      = ls_reg-fsnam.
+    ls_mon-waers      = ls_reg-waers.
+    ls_mon-crusr      = ls_reg-tsusr.
+    ls_mon-crdate     = ls_reg-tsdat.
+    ls_mon-crtime     = ls_reg-tstim.
+    ls_mon-regut_stat = ls_reg-status.
 
-*   -- REGUHM (F110 / vendor) attributes
-    ls_mon-zbukr     = ls_hm-zbukr.
-    ls_mon-src_laufd = ls_hm-laufd.        "F110 run date
-    ls_mon-f110_runs = ls_hm-laufi.        "F110 run id
-    ls_mon-laufd     = ls_hm-laufd_m.      "medium run date
-    ls_mon-laufi     = ls_hm-laufi_m.      "medium run id
-    ls_mon-batchno   = ls_hm-batchno.
-    ls_mon-dtkey     = ls_hm-hbkid.
-    ls_mon-vblnr     = ls_hm-vblnr.
-    ls_mon-waers     = ls_hm-waers.        "currency per record (REGUHM)
-    IF ls_hm-lifnr IS NOT INITIAL.
-      ls_mon-vendor = ls_hm-lifnr.
-    ELSE.
-      ls_mon-vendor = ls_hm-kunnr.
+*   mark this medium run as having a batch (for the "not created" pass)
+    CONCATENATE ls_reg-zbukr ls_reg-laufd ls_reg-laufi INTO lv_runkey.
+    READ TABLE lt_seen TRANSPORTING NO FIELDS WITH KEY table_line = lv_runkey.
+    IF sy-subrc <> 0.
+      APPEND lv_runkey TO lt_seen.
     ENDIF.
 
-*   -- Per-vendor payment amount from the F110 header (REGUH). REGUHM has
-*      no amount, so each record's true amount is REGUH-RBETR on the same
-*      F110 key (run + vendor + payment document).
-    READ TABLE gt_reguh INTO ls_reguh
-         WITH KEY laufd = ls_hm-laufd
-                  laufi = ls_hm-laufi
-                  zbukr = ls_hm-zbukr
-                  lifnr = ls_hm-lifnr
-                  kunnr = ls_hm-kunnr
-                  empfg = ls_hm-empfg
-                  vblnr = ls_hm-vblnr.
-    IF sy-subrc = 0.
-      ls_mon-rbetr = ls_reguh-rbetr.
-      IF ls_mon-waers IS INITIAL.
-        ls_mon-waers = ls_reguh-waers.
-      ENDIF.
-    ENDIF.
+*   batch key (incl LFDNR) - matches ZFI_BATCH_SIGN / ZFI_PAYMEDIUM_DMEE_20
+    CONCATENATE ls_reg-zbukr ls_reg-banks ls_reg-laufd ls_reg-laufi
+                ls_reg-xvorl ls_reg-dtkey ls_reg-lfdnr
+           INTO lv_bkey RESPECTING BLANKS.
+    ls_mon-batch_key = lv_bkey.
 
-*   -- Linked REGUT batch(es) for this record's medium run
-    REFRESH lt_bkeys.
-    CLEAR lv_nbatch.
-    LOOP AT gt_regut INTO ls_reg
-         WHERE zbukr = ls_hm-zbukr
-           AND laufd = ls_hm-laufd_m
-           AND laufi = ls_hm-laufi_m.
-      lv_nbatch = lv_nbatch + 1.
-      CONCATENATE ls_reg-zbukr ls_reg-banks ls_reg-laufd ls_reg-laufi
-                  ls_reg-xvorl ls_reg-dtkey ls_reg-lfdnr
-             INTO lv_bkey RESPECTING BLANKS.
-      APPEND lv_bkey TO lt_bkeys.
-*     representative batch attributes (first REGUT file of the medium run)
-      IF ls_mon-batch_key IS INITIAL.
-        ls_mon-batch_key  = lv_bkey.
-        ls_mon-banks      = ls_reg-banks.
-        ls_mon-lfdnr      = ls_reg-lfdnr.
-        IF ls_mon-waers IS INITIAL.
-          ls_mon-waers    = ls_reg-waers.   "last-resort currency fallback
-        ENDIF.
-        ls_mon-fsnam      = ls_reg-fsnam.
-        ls_mon-crusr      = ls_reg-tsusr.
-        ls_mon-crdate     = ls_reg-tsdat.
-        ls_mon-crtime     = ls_reg-tstim.
-        ls_mon-regut_stat = ls_reg-status.
-      ENDIF.
-    ENDLOOP.
+*   TXN (payment type) of this file, from the file name
+    PERFORM f_file_txn USING ls_reg-fsnam CHANGING lv_ftxn.
+    ls_mon-ztxn = lv_ftxn.
 
-*   -- No batch created yet: show the REGUHM record as pending
-    IF lv_nbatch = 0.
-      ls_mon-status    = 'Batch Not Created'.
-      ls_mon-regut_txt = 'No Batch'.
-      APPEND ls_mon TO gt_mon.
-      CONTINUE.
-    ENDIF.
-
-*   -- REGUT file status text (representative batch) - EPIC_REGUT_STATUS
+*   REGUT file status text
     CASE ls_mon-regut_stat.
       WHEN space. ls_mon-regut_txt = 'Created'.
       WHEN '010'. ls_mon-regut_txt = 'Sent'.
@@ -363,28 +338,74 @@ FORM f_build_output .
       WHEN OTHERS. ls_mon-regut_txt = ls_mon-regut_stat.
     ENDCASE.
 
-*   -- Approvers from config (ZFI_BNK_RULE by company). An approver counts
-*      as signed only when signed on ALL batch files of the medium run.
-    LOOP AT gt_rule INTO ls_rule WHERE zrule_id = ls_hm-zbukr.
+*   -- Sum the run's payments that belong to THIS file (matched by TXN).
+*      Amount = SUM(REGUH-RBETR); also count items and roll up "received".
+    CLEAR: lv_po_tot, lv_po_resp.
+    LOOP AT gt_reguhm INTO ls_hm WHERE zbukr   = ls_reg-zbukr
+                                   AND laufd_m = ls_reg-laufd
+                                   AND laufi_m = ls_reg-laufi.
+      CLEAR ls_reguh.
+      READ TABLE gt_reguh INTO ls_reguh
+           WITH KEY laufd = ls_hm-laufd laufi = ls_hm-laufi
+                    zbukr = ls_hm-zbukr lifnr = ls_hm-lifnr
+                    kunnr = ls_hm-kunnr empfg = ls_hm-empfg
+                    vblnr = ls_hm-vblnr.
+*     payment TXN via RZAWE -> ZFI_S2S_TXN; keep only this file's payments
+      CLEAR lv_ptxn.
+      IF sy-subrc = 0.
+        READ TABLE gt_s2s INTO ls_s2s WITH KEY rzawe = ls_reguh-rzawe.
+        IF sy-subrc = 0.
+          lv_ptxn = ls_s2s-ztxn.
+        ENDIF.
+      ENDIF.
+      IF lv_ftxn IS NOT INITIAL AND lv_ptxn IS NOT INITIAL AND lv_ptxn <> lv_ftxn.
+        CONTINUE.
+      ENDIF.
+
+      ls_mon-item_count = ls_mon-item_count + 1.
+      ls_mon-rbetr      = ls_mon-rbetr + ls_reguh-rbetr.
+      IF ls_mon-waers    IS INITIAL. ls_mon-waers    = ls_reguh-waers. ENDIF.
+      IF ls_mon-batchno  IS INITIAL. ls_mon-batchno  = ls_hm-batchno.  ENDIF.
+      IF ls_mon-src_laufd IS INITIAL. ls_mon-src_laufd = ls_hm-laufd.  ENDIF.
+      IF ls_mon-f110_runs IS INITIAL. ls_mon-f110_runs = ls_hm-laufi.  ENDIF.
+
+*     received: this payment has a bank response (off status 001)
+      lv_pay_rcv = abap_false.
+      LOOP AT gt_payordr INTO ls_po WHERE laufd = ls_hm-laufd
+                                      AND laufi = ls_hm-laufi
+                                      AND zbukr = ls_hm-zbukr
+                                      AND lifnr = ls_hm-lifnr
+                                      AND kunnr = ls_hm-kunnr.
+        IF ls_po-zstatus = '002' OR ls_po-zstatus = '003' OR ls_po-zstatus = '005'.
+          lv_pay_rcv = abap_true.
+        ENDIF.
+      ENDLOOP.
+      lv_po_tot = lv_po_tot + 1.
+      IF lv_pay_rcv = abap_true.
+        lv_po_resp = lv_po_resp + 1.
+      ENDIF.
+    ENDLOOP.
+    IF lv_po_tot > 0 AND lv_po_resp = lv_po_tot.
+      ls_mon-recv_flag = 'X'.
+    ENDIF.
+
+*   -- Approvers (ZFI_BNK_RULE by company) signed on THIS file's batch key
+    LOOP AT gt_rule INTO ls_rule WHERE zrule_id = ls_reg-zbukr.
       CASE ls_rule-zrule.
         WHEN gc_rule_l1.  lv_snro = '1'.
         WHEN gc_rule_l2.  lv_snro = '2'.
         WHEN OTHERS.      CONTINUE.
       ENDCASE.
-
-      lv_signed = abap_true.
-      LOOP AT lt_bkeys INTO lv_bkey.
-        CLEAR ls_sign.
-        READ TABLE gt_sign INTO ls_sign WITH KEY batch_no = lv_bkey
-                                                 signer   = ls_rule-zuser
-                                                 snro     = lv_snro
-                                                 BINARY SEARCH.
-        IF sy-subrc <> 0 OR ls_sign-digitl_sign <> 'X'.
-          lv_signed = abap_false.
-          EXIT.
-        ENDIF.
-      ENDLOOP.
-
+      CLEAR ls_sign.
+      READ TABLE gt_sign INTO ls_sign WITH KEY batch_no = lv_bkey
+                                               signer   = ls_rule-zuser
+                                               snro     = lv_snro
+                                               BINARY SEARCH.
+      IF sy-subrc = 0 AND ls_sign-digitl_sign = 'X'.
+        lv_signed = abap_true.
+      ELSE.
+        lv_signed = abap_false.
+      ENDIF.
       IF lv_snro = '1'.
         ls_mon-l1_total = ls_mon-l1_total + 1.
         IF lv_signed = abap_true.
@@ -402,77 +423,68 @@ FORM f_build_output .
       ENDIF.
     ENDLOOP.
 
-*   -- SENT to bank: from ZFI_PAYM_FILE-SENT for this record's medium run
-*      (LAUFD_M/LAUFI_M). Same Z-table/flag the operational program
-*      ZFI_BNK_APP1 sets when the signed file is transmitted. SENT_ERROR
-*      marks a transmission failure.
-*      ZFI_PAYM_FILE is keyed per file (…/LFDNR), so a medium run can have
-*      several rows. Roll them up: the run counts as sent once ANY of its
-*      files has gone to the bank, and shows the error state if any file
-*      failed to transmit.
+*   -- SENT to bank: ZFI_PAYM_FILE-SENT for THIS file (LAUFD/LAUFI/LFDNR)
     CLEAR: ls_paym, ls_mon-sent_flag, ls_mon-sent_err.
-    LOOP AT gt_paym INTO ls_paym WHERE laufd = ls_hm-laufd_m
-                                   AND laufi = ls_hm-laufi_m.
-      IF ls_paym-sent = 'X'.
-        ls_mon-sent_flag = 'X'.
-      ENDIF.
-      IF ls_paym-sent_error = 'X'.
-        ls_mon-sent_err = 'X'.
-      ENDIF.
-    ENDLOOP.
-
-*   -- RECEIVED back from bank: per-payment bank response in
-*      ZFI_BCM_PAYORDR-ZSTATUS (002 success / 005 rejected). This is the
-*      Z-table the inbound return-file interface updates per PYORD, and is
-*      the reliable "received" signal (the file-level ZFI_PAYM_FILE-RECEIVED
-*      flag can be missed by the inbound run-id match). The record counts
-*      as received back only when every matched payment order has a bank
-*      response, i.e. none is still '001' (Created).
-    CLEAR: lv_po_tot, lv_po_resp.
-    LOOP AT gt_payordr INTO ls_po WHERE laufd = ls_hm-laufd
-                                    AND laufi = ls_hm-laufi
-                                    AND zbukr = ls_hm-zbukr
-                                    AND lifnr = ls_hm-lifnr
-                                    AND kunnr = ls_hm-kunnr.
-      lv_po_tot = lv_po_tot + 1.
-      IF ls_po-zstatus = '002' OR ls_po-zstatus = '005'.
-        lv_po_resp = lv_po_resp + 1.
-      ENDIF.
-    ENDLOOP.
-    IF lv_po_tot > 0 AND lv_po_resp = lv_po_tot.
-      ls_mon-recv_flag = 'X'.
+    READ TABLE gt_paym INTO ls_paym WITH KEY laufd = ls_reg-laufd
+                                             laufi = ls_reg-laufi
+                                             lfdnr = ls_reg-lfdnr.
+    IF sy-subrc = 0.
+      ls_mon-sent_flag = ls_paym-sent.
+      ls_mon-sent_err  = ls_paym-sent_error.
     ENDIF.
 
-*   -- Overall status (lifecycle: Received > Sent > Approval)
-    IF ls_mon-recv_flag = 'X'.
-      ls_mon-status = 'Received from Bank'.
-    ELSEIF ls_mon-sent_flag = 'X'.
-      IF ls_mon-sent_err = 'X'.
-        ls_mon-status = 'Sent (Error)'.
-      ELSE.
-        ls_mon-status = 'Sent to Bank'.
-      ENDIF.
-    ELSEIF ls_mon-l1_total = 0 AND ls_mon-l2_total = 0.
-      ls_mon-status = 'No Approvers'.
-    ELSEIF ls_mon-l1_total > 0 AND ls_mon-l1_signed < ls_mon-l1_total.
-      ls_mon-status = 'Pending L1'.
-    ELSEIF ls_mon-l2_total > 0 AND ls_mon-l2_signed < ls_mon-l2_total.
-      ls_mon-status = 'Pending L2'.
-    ELSE.
-      ls_mon-status = 'Approved'.
-    ENDIF.
+    PERFORM f_set_status CHANGING ls_mon.
 
-*   -- Optional filter: only pending records (exclude fully-progressed)
     IF p_pend = abap_true AND
      ( ls_mon-status = 'Approved' OR ls_mon-status = 'Sent to Bank'
        OR ls_mon-status = 'Received from Bank' ).
       CONTINUE.
     ENDIF.
-
     APPEND ls_mon TO gt_mon.
   ENDLOOP.
 
-  SORT gt_mon BY zbukr src_laufd f110_runs vendor.
+* =====================================================================*
+* PART B - medium runs with NO REGUT file yet: one "Batch Not Created"
+* summary row per F110 run, totalling its payments.
+* =====================================================================*
+  LOOP AT gt_reguhm INTO ls_hm.
+    CONCATENATE ls_hm-zbukr ls_hm-laufd_m ls_hm-laufi_m INTO lv_runkey.
+    READ TABLE lt_seen TRANSPORTING NO FIELDS WITH KEY table_line = lv_runkey.
+    IF sy-subrc = 0.
+      CONTINUE.               "this medium run already has a REGUT batch row
+    ENDIF.
+    CLEAR ls_reguh.
+    READ TABLE gt_reguh INTO ls_reguh
+         WITH KEY laufd = ls_hm-laufd laufi = ls_hm-laufi
+                  zbukr = ls_hm-zbukr lifnr = ls_hm-lifnr
+                  kunnr = ls_hm-kunnr empfg = ls_hm-empfg
+                  vblnr = ls_hm-vblnr.
+    READ TABLE gt_mon INTO ls_mon WITH KEY zbukr     = ls_hm-zbukr
+                                           src_laufd = ls_hm-laufd
+                                           f110_runs = ls_hm-laufi
+                                           status    = 'Batch Not Created'.
+    IF sy-subrc = 0.
+      ls_mon-rbetr      = ls_mon-rbetr + ls_reguh-rbetr.
+      ls_mon-item_count = ls_mon-item_count + 1.
+      MODIFY gt_mon FROM ls_mon INDEX sy-tabix.
+    ELSE.
+      CLEAR ls_mon.
+      ls_mon-zbukr      = ls_hm-zbukr.
+      ls_mon-src_laufd  = ls_hm-laufd.
+      ls_mon-f110_runs  = ls_hm-laufi.
+      ls_mon-laufd      = ls_hm-laufd_m.
+      ls_mon-laufi      = ls_hm-laufi_m.
+      ls_mon-batchno    = ls_hm-batchno.
+      ls_mon-waers      = ls_reguh-waers.
+      ls_mon-rbetr      = ls_reguh-rbetr.
+      ls_mon-item_count = 1.
+      ls_mon-status     = 'Batch Not Created'.
+      ls_mon-regut_txt  = 'No Batch'.
+      APPEND ls_mon TO gt_mon.
+    ENDIF.
+  ENDLOOP.
+
+  SORT gt_mon BY zbukr laufd laufi lfdnr.
 ENDFORM.                    " F_BUILD_OUTPUT
 
 *&---------------------------------------------------------------------*
@@ -488,6 +500,58 @@ FORM f_add_pending USING iv_signer TYPE c
     CONCATENATE cv_pending iv_signer INTO cv_pending SEPARATED BY ','.
   ENDIF.
 ENDFORM.                    " F_ADD_PENDING
+
+*&---------------------------------------------------------------------*
+*&      Form  F_FILE_TXN
+*&---------------------------------------------------------------------*
+*  Extract the TXN (payment type, e.g. CN / CT / CC) from a REGUT file
+*  name. The name is built as  [<path>/]<TXN>.<sdate>.<...>.txt, so the
+*  TXN is the text before the first '.' of the last path segment.
+*----------------------------------------------------------------------*
+FORM f_file_txn USING iv_fsnam TYPE regut-fsnam
+             CHANGING cv_txn   TYPE string.
+  DATA: lv_name TYPE string,
+        lv_rest TYPE string,
+        lt_seg  TYPE STANDARD TABLE OF string.
+  CLEAR cv_txn.
+  lv_name = iv_fsnam.
+  IF lv_name CS '/'.
+    SPLIT lv_name AT '/' INTO TABLE lt_seg.
+    READ TABLE lt_seg INDEX lines( lt_seg ) INTO lv_name.
+  ENDIF.
+  IF lv_name CS '.'.
+    SPLIT lv_name AT '.' INTO cv_txn lv_rest.
+  ELSE.
+    cv_txn = lv_name.
+  ENDIF.
+  CONDENSE cv_txn.
+  TRANSLATE cv_txn TO UPPER CASE.
+ENDFORM.                    " F_FILE_TXN
+
+*&---------------------------------------------------------------------*
+*&      Form  F_SET_STATUS
+*&---------------------------------------------------------------------*
+*  Derive the overall batch status (lifecycle: Received > Sent > Approval).
+*----------------------------------------------------------------------*
+FORM f_set_status CHANGING cs_mon TYPE ty_mon.
+  IF cs_mon-recv_flag = 'X'.
+    cs_mon-status = 'Received from Bank'.
+  ELSEIF cs_mon-sent_flag = 'X'.
+    IF cs_mon-sent_err = 'X'.
+      cs_mon-status = 'Sent (Error)'.
+    ELSE.
+      cs_mon-status = 'Sent to Bank'.
+    ENDIF.
+  ELSEIF cs_mon-l1_total = 0 AND cs_mon-l2_total = 0.
+    cs_mon-status = 'No Approvers'.
+  ELSEIF cs_mon-l1_total > 0 AND cs_mon-l1_signed < cs_mon-l1_total.
+    cs_mon-status = 'Pending L1'.
+  ELSEIF cs_mon-l2_total > 0 AND cs_mon-l2_signed < cs_mon-l2_total.
+    cs_mon-status = 'Pending L2'.
+  ELSE.
+    cs_mon-status = 'Approved'.
+  ENDIF.
+ENDFORM.                    " F_SET_STATUS
 
 *&---------------------------------------------------------------------*
 *&      Form  F_DISPLAY_ALV
@@ -530,9 +594,9 @@ FORM f_display_alv .
   PERFORM f_col_text USING lo_cols 'BATCHNO'    'Batch No'       'FBPM1 Batch No'       'FBPM1 Batch Number (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'SRC_LAUFD'  'F110 Date'      'F110 Run Date'        'F110 Run Date (REGUHM)'.
   PERFORM f_col_text USING lo_cols 'F110_RUNS'  'F110 Run'       'F110 Run Id'          'F110 Run Id (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'VENDOR'     'Vendor'         'Vendor/Customer'      'Vendor / Customer (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'VBLNR'      'Pay Doc'        'Payment Doc'          'Payment Document (REGUHM)'.
-  PERFORM f_col_text USING lo_cols 'RBETR'      'Amount'         'Payment Amount'       'Payment Amount (REGUH)'.
+  PERFORM f_col_text USING lo_cols 'ZTXN'       'Type'           'Payment Type'         'Payment Type / TXN (file)'.
+  PERFORM f_col_text USING lo_cols 'ITEM_COUNT' 'Items'          'No. of Items'         'Number of Line Items in Batch'.
+  PERFORM f_col_text USING lo_cols 'RBETR'      'Batch Amt'      'Batch Total'          'Batch Total Amount (sum of line items)'.
   PERFORM f_col_text USING lo_cols 'L1_TOTAL'   'L1 Tot'         'L1 Approvers'         'Level-1 Approvers'.
   PERFORM f_col_text USING lo_cols 'L1_SIGNED'  'L1 Sgn'         'L1 Signed'            'Level-1 Signed'.
   PERFORM f_col_text USING lo_cols 'L1_PENDING' 'L1 Pend'        'L1 Pending With'      'Level-1 Pending With'.
@@ -551,38 +615,41 @@ FORM f_display_alv .
   PERFORM f_col_hide USING lo_cols 'REGUT_TXT'.
 * SENT_ERROR is reflected in STATUS ('Sent (Error)'); keep it off the grid.
   PERFORM f_col_hide USING lo_cols 'SENT_ERR'.
+* VENDOR / VBLNR are per-payment fields - they live in the drill-down now,
+* not in the batch summary, so hide them on the first ALV.
+  PERFORM f_col_hide USING lo_cols 'VENDOR'.
+  PERFORM f_col_hide USING lo_cols 'VBLNR'.
 
-* Column order: identifiers + status first (always populated), then the
-* approval detail, then the batch / file columns (blank until the batch
-* is created) at the end.
+* Column order: identifiers + status first, then the batch total / item
+* count, then approval detail, then the batch-key / file columns at the end.
   PERFORM f_col_pos USING lo_cols 'ZBUKR'       1.
   PERFORM f_col_pos USING lo_cols 'SRC_LAUFD'   2.
   PERFORM f_col_pos USING lo_cols 'F110_RUNS'   3.
-  PERFORM f_col_pos USING lo_cols 'VENDOR'      4.
-  PERFORM f_col_pos USING lo_cols 'VBLNR'       5.
-  PERFORM f_col_pos USING lo_cols 'STATUS'      6.
-  PERFORM f_col_pos USING lo_cols 'SENT_FLAG'   7.
-  PERFORM f_col_pos USING lo_cols 'RECV_FLAG'   8.
-  PERFORM f_col_pos USING lo_cols 'L1_TOTAL'    9.
-  PERFORM f_col_pos USING lo_cols 'L1_SIGNED'  10.
-  PERFORM f_col_pos USING lo_cols 'L1_PENDING' 11.
-  PERFORM f_col_pos USING lo_cols 'L2_TOTAL'   12.
-  PERFORM f_col_pos USING lo_cols 'L2_SIGNED'  13.
-  PERFORM f_col_pos USING lo_cols 'L2_PENDING' 14.
-  PERFORM f_col_pos USING lo_cols 'LAUFD'      15.
-  PERFORM f_col_pos USING lo_cols 'LAUFI'      16.
-  PERFORM f_col_pos USING lo_cols 'BATCHNO'    17.
-  PERFORM f_col_pos USING lo_cols 'RBETR'      18.
-  PERFORM f_col_pos USING lo_cols 'WAERS'      19.
-  PERFORM f_col_pos USING lo_cols 'BATCH_KEY'  20.
-  PERFORM f_col_pos USING lo_cols 'BANKS'      21.
-  PERFORM f_col_pos USING lo_cols 'DTKEY'      22.
-  PERFORM f_col_pos USING lo_cols 'LFDNR'      23.
+  PERFORM f_col_pos USING lo_cols 'LAUFD'       4.
+  PERFORM f_col_pos USING lo_cols 'LAUFI'       5.
+  PERFORM f_col_pos USING lo_cols 'LFDNR'       6.
+  PERFORM f_col_pos USING lo_cols 'ZTXN'        7.
+  PERFORM f_col_pos USING lo_cols 'STATUS'      8.
+  PERFORM f_col_pos USING lo_cols 'ITEM_COUNT'  9.
+  PERFORM f_col_pos USING lo_cols 'RBETR'      10.
+  PERFORM f_col_pos USING lo_cols 'WAERS'      11.
+  PERFORM f_col_pos USING lo_cols 'SENT_FLAG'  12.
+  PERFORM f_col_pos USING lo_cols 'RECV_FLAG'  13.
+  PERFORM f_col_pos USING lo_cols 'L1_TOTAL'   14.
+  PERFORM f_col_pos USING lo_cols 'L1_SIGNED'  15.
+  PERFORM f_col_pos USING lo_cols 'L1_PENDING' 16.
+  PERFORM f_col_pos USING lo_cols 'L2_TOTAL'   17.
+  PERFORM f_col_pos USING lo_cols 'L2_SIGNED'  18.
+  PERFORM f_col_pos USING lo_cols 'L2_PENDING' 19.
+  PERFORM f_col_pos USING lo_cols 'BATCHNO'    20.
+  PERFORM f_col_pos USING lo_cols 'BATCH_KEY'  21.
+  PERFORM f_col_pos USING lo_cols 'BANKS'      22.
+  PERFORM f_col_pos USING lo_cols 'DTKEY'      23.
   PERFORM f_col_pos USING lo_cols 'FSNAM'      24.
   PERFORM f_col_pos USING lo_cols 'CRUSR'      25.
 
 * Enable row selection and register the double-click drill-down: clicking
-* a row opens the batch detail (all payments of that medium run).
+* a batch row opens its line-item detail (printable).
   lo_alv->get_selections( )->set_selection_mode( if_salv_c_selection_mode=>row_column ).
   lo_events = lo_alv->get_event( ).
   CREATE OBJECT lo_handler.
@@ -699,33 +766,61 @@ ENDFORM.                    " F_F4_LAUFI
 *  same batch (payment-medium run) as the clicked monitor row.
 *----------------------------------------------------------------------*
 FORM f_show_detail USING iv_row TYPE i.
-  DATA: ls_mon TYPE ty_mon,
-        ls_hm  TYPE reguhm,
-        ls_rh  TYPE reguh,
-        ls_po  TYPE zfi_bcm_payordr,
-        ls_det TYPE ty_det.
+  DATA: ls_mon  TYPE ty_mon,
+        ls_hm   TYPE reguhm,
+        ls_rh   TYPE reguh,
+        ls_po   TYPE zfi_bcm_payordr,
+        ls_s2s  TYPE zfi_s2s_txn,
+        ls_det  TYPE ty_det,
+        lv_ptxn TYPE string,
+        lv_rsub TYPE sy-subrc.
 
   READ TABLE gt_mon INTO ls_mon INDEX iv_row.
   IF sy-subrc <> 0.
     RETURN.
   ENDIF.
 
-* A batch has no medium run yet (status "Batch Not Created") - nothing to
-* drill into.
-  IF ls_mon-laufd IS INITIAL AND ls_mon-laufi IS INITIAL.
-    MESSAGE 'No batch created yet for this run - no line items to show' TYPE 'I'.
-    RETURN.
-  ENDIF.
-
   REFRESH gt_det.
 
-* All REGUHM payments of the same medium run (= the batch) as the clicked
-* row. LAUFD_M/LAUFI_M identify the payment-medium run; ls_mon-laufd/laufi
-* already carry those values.
-  LOOP AT gt_reguhm INTO ls_hm
-       WHERE zbukr   = ls_mon-zbukr
-         AND laufd_m = ls_mon-laufd
-         AND laufi_m = ls_mon-laufi.
+* Line items of the clicked summary row:
+*  - REGUT-file (batch) row  -> payments of that medium run whose payment
+*    type (TXN) matches the file (LAUFD_M/LAUFI_M + TXN).
+*  - "Batch Not Created" row -> all payments of that F110 run.
+  LOOP AT gt_reguhm INTO ls_hm WHERE zbukr = ls_mon-zbukr.
+    IF ls_mon-laufd IS NOT INITIAL OR ls_mon-laufi IS NOT INITIAL.
+      IF ls_hm-laufd_m <> ls_mon-laufd OR ls_hm-laufi_m <> ls_mon-laufi.
+        CONTINUE.
+      ENDIF.
+    ELSE.
+      IF ls_hm-laufd <> ls_mon-src_laufd OR ls_hm-laufi <> ls_mon-f110_runs.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
+*   REGUH (amount + payment method) for this payment
+    CLEAR ls_rh.
+    READ TABLE gt_reguh INTO ls_rh
+         WITH KEY laufd = ls_hm-laufd laufi = ls_hm-laufi
+                  zbukr = ls_hm-zbukr lifnr = ls_hm-lifnr
+                  kunnr = ls_hm-kunnr empfg = ls_hm-empfg
+                  vblnr = ls_hm-vblnr.
+    lv_rsub = sy-subrc.
+
+*   TXN filter (batch rows only): keep payments of this file's type
+    IF ls_mon-ztxn IS NOT INITIAL.
+      CLEAR lv_ptxn.
+      IF lv_rsub = 0.
+        READ TABLE gt_s2s INTO ls_s2s WITH KEY rzawe = ls_rh-rzawe.
+        IF sy-subrc = 0.
+          lv_ptxn = ls_s2s-ztxn.
+          TRANSLATE lv_ptxn TO UPPER CASE.
+        ENDIF.
+      ENDIF.
+      IF lv_ptxn IS NOT INITIAL AND lv_ptxn <> ls_mon-ztxn.
+        CONTINUE.
+      ENDIF.
+    ENDIF.
+
     CLEAR ls_det.
     ls_det-zbukr     = ls_hm-zbukr.
     ls_det-laufd     = ls_hm-laufd_m.
@@ -745,16 +840,8 @@ FORM f_show_detail USING iv_row TYPE i.
       SELECT SINGLE name1 FROM kna1 INTO ls_det-name1 WHERE kunnr = ls_hm-kunnr.
     ENDIF.
 
-*   Per-vendor amount from the F110 header (REGUH)
-    READ TABLE gt_reguh INTO ls_rh
-         WITH KEY laufd = ls_hm-laufd
-                  laufi = ls_hm-laufi
-                  zbukr = ls_hm-zbukr
-                  lifnr = ls_hm-lifnr
-                  kunnr = ls_hm-kunnr
-                  empfg = ls_hm-empfg
-                  vblnr = ls_hm-vblnr.
-    IF sy-subrc = 0.
+*   Per-vendor amount from the F110 header (REGUH, already read above)
+    IF lv_rsub = 0.
       ls_det-rbetr = ls_rh-rbetr.
       IF ls_det-waers IS INITIAL.
         ls_det-waers = ls_rh-waers.
