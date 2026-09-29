@@ -68,6 +68,29 @@ TYPES: BEGIN OF ty_mon,
          crtime     TYPE regut-tstim,
        END OF ty_mon.
 
+* Detail line (drill-down): one row per payment in the selected batch
+* (same payment-medium run = REGUHM-LAUFD_M/LAUFI_M). Shown when the user
+* double-clicks a monitor row.
+TYPES: BEGIN OF ty_det,
+         zbukr    TYPE reguhm-zbukr,
+         laufd    TYPE reguhm-laufd_m, "medium run date (the batch)
+         laufi    TYPE reguhm-laufi_m, "medium run id   (the batch)
+         batchno  TYPE reguhm-batchno,
+         lifnr    TYPE reguhm-lifnr,
+         kunnr    TYPE reguhm-kunnr,
+         name1    TYPE lfa1-name1,     "vendor / customer name
+         vblnr    TYPE reguhm-vblnr,   "payment document
+         src_laufd TYPE reguhm-laufd,  "F110 run date
+         src_laufi TYPE reguhm-laufi,  "F110 run id
+         waers    TYPE reguhm-waers,
+         rbetr    TYPE p LENGTH 15 DECIMALS 2, "amount (REGUH)
+         pyord    TYPE zfi_bcm_payordr-pyord,
+         zstatus  TYPE zfi_bcm_payordr-zstatus,
+         stat_txt TYPE c LENGTH 15,    "status text
+         zutrno   TYPE zfi_bcm_payordr-zutrno,
+         zpaydate TYPE zfi_bcm_payordr-zpaydate,
+       END OF ty_det.
+
 *----------------------------------------------------------------------*
 * Global data
 *----------------------------------------------------------------------*
@@ -78,7 +101,8 @@ DATA: gt_regut  TYPE STANDARD TABLE OF regut,
       gt_paym   TYPE STANDARD TABLE OF zfi_paym_file,  "File send state (SENT)
       gt_payordr TYPE STANDARD TABLE OF zfi_bcm_payordr,"Per-payment bank response (ZSTATUS)
       gt_rule   TYPE STANDARD TABLE OF zfi_bnk_rule,  "Approver config
-      gt_mon    TYPE STANDARD TABLE OF ty_mon.
+      gt_mon    TYPE STANDARD TABLE OF ty_mon,
+      gt_det    TYPE STANDARD TABLE OF ty_det.        "Drill-down detail
 
 * Approval rules (ZFI_BNK_RULE): rule -> approval level
 CONSTANTS: gc_rule_l1 TYPE zfi_bnk_rule-zrule VALUE '90700005',   "Level-1 approvers
@@ -87,6 +111,23 @@ CONSTANTS: gc_rule_l1 TYPE zfi_bnk_rule-zrule VALUE '90700005',   "Level-1 appro
 DATA: gv_laufd TYPE reguhm-laufd,
       gv_laufi TYPE reguhm-laufi,
       gv_zbukr TYPE reguhm-zbukr.
+
+*----------------------------------------------------------------------*
+* Local event handler - double-click on a monitor row opens the batch
+* detail (all payments of that medium run) in a second ALV.
+*----------------------------------------------------------------------*
+CLASS lcl_event_handler DEFINITION.
+  PUBLIC SECTION.
+    METHODS on_double_click FOR EVENT double_click
+      OF cl_salv_events_table
+      IMPORTING row column.
+ENDCLASS.
+
+CLASS lcl_event_handler IMPLEMENTATION.
+  METHOD on_double_click.
+    PERFORM f_show_detail USING row.
+  ENDMETHOD.
+ENDCLASS.
 
 *----------------------------------------------------------------------*
 * Selection screen - the F110 payment run (REGUHM = starting table)
@@ -455,6 +496,8 @@ FORM f_display_alv .
   DATA: lo_alv     TYPE REF TO cl_salv_table,
         lo_cols    TYPE REF TO cl_salv_columns_table,
         lo_funcs   TYPE REF TO cl_salv_functions_list,
+        lo_events  TYPE REF TO cl_salv_events_table,
+        lo_handler TYPE REF TO lcl_event_handler,
         lx_msg     TYPE REF TO cx_salv_msg.
 
   IF gt_mon IS INITIAL.
@@ -537,6 +580,13 @@ FORM f_display_alv .
   PERFORM f_col_pos USING lo_cols 'LFDNR'      23.
   PERFORM f_col_pos USING lo_cols 'FSNAM'      24.
   PERFORM f_col_pos USING lo_cols 'CRUSR'      25.
+
+* Enable row selection and register the double-click drill-down: clicking
+* a row opens the batch detail (all payments of that medium run).
+  lo_alv->get_selections( )->set_selection_mode( if_salv_c_selection_mode=>row_column ).
+  lo_events = lo_alv->get_event( ).
+  CREATE OBJECT lo_handler.
+  SET HANDLER lo_handler->on_double_click FOR lo_events.
 
   lo_alv->display( ).
 ENDFORM.                    " F_DISPLAY_ALV
@@ -641,3 +691,188 @@ FORM f_f4_laufi CHANGING cv_laufi TYPE reguhm-laufi.
     ENDIF.
   ENDIF.
 ENDFORM.                    " F_F4_LAUFI
+
+*&---------------------------------------------------------------------*
+*&      Form  F_SHOW_DETAIL
+*&---------------------------------------------------------------------*
+*  Double-click drill-down: build and show all payments belonging to the
+*  same batch (payment-medium run) as the clicked monitor row.
+*----------------------------------------------------------------------*
+FORM f_show_detail USING iv_row TYPE i.
+  DATA: ls_mon TYPE ty_mon,
+        ls_hm  TYPE reguhm,
+        ls_rh  TYPE reguh,
+        ls_po  TYPE zfi_bcm_payordr,
+        ls_det TYPE ty_det.
+
+  READ TABLE gt_mon INTO ls_mon INDEX iv_row.
+  IF sy-subrc <> 0.
+    RETURN.
+  ENDIF.
+
+* A batch has no medium run yet (status "Batch Not Created") - nothing to
+* drill into.
+  IF ls_mon-laufd IS INITIAL AND ls_mon-laufi IS INITIAL.
+    MESSAGE 'No batch created yet for this run - no line items to show' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  REFRESH gt_det.
+
+* All REGUHM payments of the same medium run (= the batch) as the clicked
+* row. LAUFD_M/LAUFI_M identify the payment-medium run; ls_mon-laufd/laufi
+* already carry those values.
+  LOOP AT gt_reguhm INTO ls_hm
+       WHERE zbukr   = ls_mon-zbukr
+         AND laufd_m = ls_mon-laufd
+         AND laufi_m = ls_mon-laufi.
+    CLEAR ls_det.
+    ls_det-zbukr     = ls_hm-zbukr.
+    ls_det-laufd     = ls_hm-laufd_m.
+    ls_det-laufi     = ls_hm-laufi_m.
+    ls_det-batchno   = ls_hm-batchno.
+    ls_det-lifnr     = ls_hm-lifnr.
+    ls_det-kunnr     = ls_hm-kunnr.
+    ls_det-vblnr     = ls_hm-vblnr.
+    ls_det-src_laufd = ls_hm-laufd.
+    ls_det-src_laufi = ls_hm-laufi.
+    ls_det-waers     = ls_hm-waers.
+
+*   Vendor / customer name
+    IF ls_hm-lifnr IS NOT INITIAL.
+      SELECT SINGLE name1 FROM lfa1 INTO ls_det-name1 WHERE lifnr = ls_hm-lifnr.
+    ELSE.
+      SELECT SINGLE name1 FROM kna1 INTO ls_det-name1 WHERE kunnr = ls_hm-kunnr.
+    ENDIF.
+
+*   Per-vendor amount from the F110 header (REGUH)
+    READ TABLE gt_reguh INTO ls_rh
+         WITH KEY laufd = ls_hm-laufd
+                  laufi = ls_hm-laufi
+                  zbukr = ls_hm-zbukr
+                  lifnr = ls_hm-lifnr
+                  kunnr = ls_hm-kunnr
+                  empfg = ls_hm-empfg
+                  vblnr = ls_hm-vblnr.
+    IF sy-subrc = 0.
+      ls_det-rbetr = ls_rh-rbetr.
+      IF ls_det-waers IS INITIAL.
+        ls_det-waers = ls_rh-waers.
+      ENDIF.
+    ENDIF.
+
+*   Bank response for this vendor's payment order (ZFI_BCM_PAYORDR)
+    READ TABLE gt_payordr INTO ls_po
+         WITH KEY laufd = ls_hm-laufd
+                  laufi = ls_hm-laufi
+                  zbukr = ls_hm-zbukr
+                  lifnr = ls_hm-lifnr
+                  kunnr = ls_hm-kunnr.
+    IF sy-subrc = 0.
+      ls_det-pyord    = ls_po-pyord.
+      ls_det-zstatus  = ls_po-zstatus.
+      ls_det-zutrno   = ls_po-zutrno.
+      ls_det-zpaydate = ls_po-zpaydate.
+      CASE ls_po-zstatus.
+        WHEN '001'.      ls_det-stat_txt = 'Created'.
+        WHEN '002'.      ls_det-stat_txt = 'Successful'.
+        WHEN '003'.      ls_det-stat_txt = 'Posted'.
+        WHEN '005'.      ls_det-stat_txt = 'Rejected'.
+        WHEN OTHERS.     ls_det-stat_txt = ls_po-zstatus.
+      ENDCASE.
+    ENDIF.
+
+    APPEND ls_det TO gt_det.
+  ENDLOOP.
+
+  IF gt_det IS INITIAL.
+    MESSAGE 'No line items found for this batch' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  SORT gt_det BY lifnr kunnr vblnr.
+  PERFORM f_display_detail USING ls_mon.
+ENDFORM.                    " F_SHOW_DETAIL
+
+*&---------------------------------------------------------------------*
+*&      Form  F_DISPLAY_DETAIL
+*&---------------------------------------------------------------------*
+*  Show the batch detail (gt_det) in a second ALV with print enabled.
+*----------------------------------------------------------------------*
+FORM f_display_detail USING is_mon TYPE ty_mon.
+  DATA: lo_alv   TYPE REF TO cl_salv_table,
+        lo_cols  TYPE REF TO cl_salv_columns_table,
+        lo_funcs TYPE REF TO cl_salv_functions_list,
+        lo_disp  TYPE REF TO cl_salv_display_settings,
+        lv_title TYPE lvc_title,
+        lx_msg   TYPE REF TO cx_salv_msg.
+
+  TRY.
+      cl_salv_table=>factory(
+        IMPORTING
+          r_salv_table = lo_alv
+        CHANGING
+          t_table      = gt_det ).
+    CATCH cx_salv_msg INTO lx_msg.
+      MESSAGE lx_msg->get_text( ) TYPE 'I'.
+      RETURN.
+  ENDTRY.
+
+* Full toolbar incl. Print (set_all switches on the standard PRINT button)
+  lo_funcs = lo_alv->get_functions( ).
+  lo_funcs->set_all( abap_true ).
+
+* Title bar shows which batch is being displayed
+  CONCATENATE 'Batch payments -' is_mon-zbukr is_mon-laufi
+              'dt' is_mon-laufd
+         INTO lv_title SEPARATED BY space.
+  lo_disp = lo_alv->get_display_settings( ).
+  lo_disp->set_list_header( lv_title ).
+  lo_disp->set_striped_pattern( abap_true ).
+
+* Column headings
+  lo_cols = lo_alv->get_columns( ).
+  lo_cols->set_optimize( abap_true ).
+  PERFORM f_col_text USING lo_cols 'ZBUKR'    'Co Code'    'Company Code'     'Company Code'.
+  PERFORM f_col_text USING lo_cols 'LAUFD'    'Med Date'   'Medium Run Date'  'Payment Medium Run Date'.
+  PERFORM f_col_text USING lo_cols 'LAUFI'    'Med Run'    'Medium Run Id'    'Payment Medium Run Id'.
+  PERFORM f_col_text USING lo_cols 'BATCHNO'  'Batch No'   'FBPM1 Batch No'   'FBPM1 Batch Number'.
+  PERFORM f_col_text USING lo_cols 'LIFNR'    'Vendor'     'Vendor'           'Vendor'.
+  PERFORM f_col_text USING lo_cols 'KUNNR'    'Customer'   'Customer'         'Customer'.
+  PERFORM f_col_text USING lo_cols 'NAME1'    'Name'       'Name'             'Vendor / Customer Name'.
+  PERFORM f_col_text USING lo_cols 'VBLNR'    'Pay Doc'    'Payment Doc'      'Payment Document'.
+  PERFORM f_col_text USING lo_cols 'SRC_LAUFD' 'F110 Date' 'F110 Run Date'    'F110 Run Date'.
+  PERFORM f_col_text USING lo_cols 'SRC_LAUFI' 'F110 Run'  'F110 Run Id'      'F110 Run Id'.
+  PERFORM f_col_text USING lo_cols 'RBETR'    'Amount'     'Payment Amount'   'Payment Amount (REGUH)'.
+  PERFORM f_col_text USING lo_cols 'WAERS'    'Curr'       'Currency'         'Currency'.
+  PERFORM f_col_text USING lo_cols 'PYORD'    'Pay Order'  'Payment Order'    'Payment Order (ZFI_BCM_PAYORDR)'.
+  PERFORM f_col_text USING lo_cols 'STAT_TXT' 'Status'     'Payment Status'   'Payment Order Status'.
+  PERFORM f_col_text USING lo_cols 'ZUTRNO'   'UTR No'     'UTR Number'       'UTR / Transaction Number'.
+  PERFORM f_col_text USING lo_cols 'ZPAYDATE' 'Pay Date'   'Payment Date'     'Payment Date'.
+* ZSTATUS code is shown as text in STAT_TXT
+  PERFORM f_col_hide USING lo_cols 'ZSTATUS'.
+
+* Order: identifiers, vendor, amount, then bank response
+  PERFORM f_col_pos USING lo_cols 'ZBUKR'     1.
+  PERFORM f_col_pos USING lo_cols 'LIFNR'     2.
+  PERFORM f_col_pos USING lo_cols 'KUNNR'     3.
+  PERFORM f_col_pos USING lo_cols 'NAME1'     4.
+  PERFORM f_col_pos USING lo_cols 'VBLNR'     5.
+  PERFORM f_col_pos USING lo_cols 'RBETR'     6.
+  PERFORM f_col_pos USING lo_cols 'WAERS'     7.
+  PERFORM f_col_pos USING lo_cols 'PYORD'     8.
+  PERFORM f_col_pos USING lo_cols 'STAT_TXT'  9.
+  PERFORM f_col_pos USING lo_cols 'ZUTRNO'   10.
+  PERFORM f_col_pos USING lo_cols 'ZPAYDATE' 11.
+  PERFORM f_col_pos USING lo_cols 'LAUFD'    12.
+  PERFORM f_col_pos USING lo_cols 'LAUFI'    13.
+  PERFORM f_col_pos USING lo_cols 'BATCHNO'  14.
+  PERFORM f_col_pos USING lo_cols 'SRC_LAUFD' 15.
+  PERFORM f_col_pos USING lo_cols 'SRC_LAUFI' 16.
+
+* Show full-screen on top of the monitor (Back returns to the monitor).
+* Full-screen guarantees the complete toolbar, so the standard Print /
+* spool button is available for the batch payment list. (A popup would
+* offer only a reduced toolbar.)
+  lo_alv->display( ).
+ENDFORM.                    " F_DISPLAY_DETAIL
