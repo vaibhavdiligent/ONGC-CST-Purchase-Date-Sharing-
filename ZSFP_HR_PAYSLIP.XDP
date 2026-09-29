@@ -16,7 +16,7 @@
                      <margin/>
                   </textEdit>
                </ui>
-               <font typeface="Arial"/>
+               <font size="9pt" typeface="Arial"/>
                <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                <para vAlign="middle"/>
                <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ZYEAR"/>
@@ -30,7 +30,7 @@
                      <margin/>
                   </textEdit>
                </ui>
-               <font typeface="Arial"/>
+               <font size="9pt" typeface="Arial"/>
                <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                <para vAlign="middle"/>
                <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ZMONTH"/>
@@ -44,10 +44,10 @@
                      <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="text-decoration:none;letter-spacing:0in">Payslip</p><p style="text-decoration:none;letter-spacing:0in"><span xfa:embed="#floatingField015724" xfa:embedMode="raw" xfa:embedType="uri"/><span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField019169" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                   </exData>
                </value>
-               <font baselineShift="0pt" size="14pt" typeface="Arial" weight="bold"/>
+               <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold"/>
                <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                <caption placement="top" reserve="5mm">
-                  <font typeface="Arial"/>
+                  <font size="9pt" typeface="Arial"/>
                   <para vAlign="middle"/>
                </caption>
                <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt"/>
@@ -67,7 +67,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$record.GS_ZPAYROLLDET.NAME"/>
@@ -83,7 +83,7 @@
                            <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="color:#000000;text-decoration:none;letter-spacing:0in">MR.<span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField012457" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                         </exData>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial">
+                     <font size="9pt" baselineShift="0pt" typeface="Arial">
                         <fill>
                            <color value="255,255,255"/>
                         </fill>
@@ -112,10 +112,10 @@
                      </ui>
                      <value>
                         <exData contentType="text/html" xliff:rid="B89F77F9-F721-4F6D-BFE4-298AEFC07B17">
-                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">   </span><span style="font-size:12pt;font-weight:bold"><span style="xfa-spacerun:yes">  </span>Employee Details</span><span style="xfa-spacerun:yes">   </span></p></body>
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">   </span><span style="font-size:9pt;font-weight:bold"><span style="xfa-spacerun:yes">  </span>Employee Details</span><span style="xfa-spacerun:yes">   </span></p></body>
                         </exData>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial">
+                     <font size="9pt" baselineShift="0pt" typeface="Arial">
                         <fill>
                            <color value="255,255,255"/>
                         </fill>
@@ -136,10 +136,10 @@
                      </ui>
                      <value>
                         <exData contentType="text/html" xliff:rid="07C79EB6-1E06-42E8-8600-938B4A6962B6">
-                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:12pt;font-weight:bold;text-decoration:none;letter-spacing:0in">Payment &amp; Leave Details<span style="font-size:10pt;font-weight:normal"><span style="xfa-spacerun:yes">            </span></span></p></body>
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;font-weight:bold;text-decoration:none;letter-spacing:0in">Payment &amp; Leave Details<span style="font-size:9pt;font-weight:normal"><span style="xfa-spacerun:yes">            </span></span></p></body>
                         </exData>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial">
+                     <font size="9pt" baselineShift="0pt" typeface="Arial">
                         <fill>
                            <color value="255,255,255"/>
                         </fill>
@@ -160,10 +160,10 @@
                      </ui>
                      <value>
                         <exData contentType="text/html" xliff:rid="BB7872D5-9504-48B5-AF63-BF6279F17F32">
-                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:12pt;font-weight:bold;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">  </span>Location Details<span style="font-size:10pt;font-weight:normal"><span style="xfa-spacerun:yes">  </span></span></p></body>
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;font-weight:bold;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">  </span>Location Details<span style="font-size:9pt;font-weight:normal"><span style="xfa-spacerun:yes">  </span></span></p></body>
                         </exData>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial">
+                     <font size="9pt" baselineShift="0pt" typeface="Arial">
                         <fill>
                            <color value="255,255,255"/>
                         </fill>
@@ -189,7 +189,7 @@
                      <value>
                         <text xliff:rid="A0A4A4E8-7069-4B32-8466-5B1A667213D6">Emp. No</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -202,7 +202,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -231,7 +231,7 @@
                            <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField000041" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                         </exData>
                      </value>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                   </draw>
@@ -246,7 +246,7 @@
                      <value>
                         <text xliff:rid="A0899ACC-263C-451B-A9C2-962675066F28">Bank Name</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -259,7 +259,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET.BANK"/>
@@ -277,7 +277,7 @@
                            <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField018467" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                         </exData>
                      </value>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                   </draw>
@@ -292,7 +292,7 @@
                      <value>
                         <text xliff:rid="E01B996A-09C5-48F5-9C35-F94F39AFCA0B">Location</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -305,7 +305,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET3.ZZLOCN"/>
@@ -318,7 +318,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -345,7 +345,7 @@
                      <value>
                         <text xliff:rid="366A2B7D-2752-4FE3-8378-97A6B23016B8">Grade</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -358,7 +358,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET.GRD"/>
@@ -371,7 +371,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                      <value>
@@ -388,7 +388,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -404,7 +404,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET.UAN"/>
@@ -417,7 +417,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -437,7 +437,7 @@
                      <value>
                         <text xliff:rid="852A823B-553A-4DAD-ADF9-60BA0A5B939B">Acc No.</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -450,7 +450,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ACCTNO"/>
@@ -468,7 +468,7 @@
                            <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField006334" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                         </exData>
                      </value>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                   </draw>
@@ -483,7 +483,7 @@
                      <value>
                         <text xliff:rid="78116886-4F7A-47A5-8F13-2891EA9E3A34">Base Br.</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -496,7 +496,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET3.BASE_BRANCH"/>
@@ -509,7 +509,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -536,7 +536,7 @@
                      <value>
                         <text xliff:rid="BE657084-6C6C-4290-B2DA-E8877B838392">PAN</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -549,7 +549,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET1.PAN1"/>
@@ -567,7 +567,7 @@
                            <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField011478" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                         </exData>
                      </value>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                   </draw>
@@ -582,7 +582,7 @@
                      <value>
                         <text xliff:rid="3ECF1DDC-E7FD-492A-960B-E42C7DF2CD21">Days Paid</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -595,7 +595,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ATDY"/>
@@ -613,7 +613,7 @@
                            <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="letter-spacing:0in"><span xfa:embed="#floatingField026500" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                         </exData>
                      </value>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                   </draw>
@@ -628,7 +628,7 @@
                      <value>
                         <text xliff:rid="D68AB570-6C78-4D60-9860-E24DF080E0D9">Depute Br.</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -641,7 +641,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GS_ZPAYROLLDET3.ZZDEPB"/>
@@ -654,7 +654,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -681,7 +681,7 @@
                      <value>
                         <text xliff:rid="03C7BA9D-65EA-4715-B2B9-A642D792FFEF">Tax Regime</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -692,7 +692,7 @@
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <bind match="dataRef" ref="$.GV_TX_REGIME"/>
@@ -712,7 +712,7 @@
                      <value>
                         <text xliff:rid="EF0C674A-9030-4887-AAC6-B0D73ACCF619">Leave Balance</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -724,7 +724,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -739,7 +739,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -751,7 +751,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -766,7 +766,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -778,7 +778,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -793,7 +793,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -808,7 +808,7 @@
                      <value>
                         <text xliff:rid="B121B9C5-6C03-4D23-9EDF-D1BAC2CE2ED5">WON/SWON</text>
                      </value>
-                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -820,7 +820,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -853,7 +853,7 @@
                      <value>
                         <text xliff:rid="ADAD77FC-0ED7-4698-8473-61BBE29FD733">Projected Annual Tax Information</text>
                      </value>
-                     <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                     <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                         <fill>
                            <color value="255,255,255"/>
                         </fill>
@@ -875,7 +875,7 @@
                      <value>
                         <text xliff:rid="02921F98-03DF-438C-8002-0BDFA32205F3">Chapter VIA Relief</text>
                      </value>
-                     <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                     <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                         <fill>
                            <color value="255,255,255"/>
                         </fill>
@@ -899,7 +899,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -914,7 +914,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -926,7 +926,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -941,7 +941,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -953,7 +953,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -965,7 +965,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -984,7 +984,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -999,7 +999,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1011,7 +1011,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -1026,7 +1026,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1038,7 +1038,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1050,7 +1050,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1069,7 +1069,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font baselineShift="0pt" typeface="Arial"/>
+                     <font size="9pt" baselineShift="0pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                      <value>
@@ -1084,7 +1084,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1096,7 +1096,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                      <value>
@@ -1111,7 +1111,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1123,7 +1123,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1135,7 +1135,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1154,7 +1154,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1166,7 +1166,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1178,7 +1178,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -1193,7 +1193,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1205,7 +1205,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1217,7 +1217,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1236,7 +1236,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1248,7 +1248,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1260,7 +1260,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1272,7 +1272,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1284,7 +1284,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1296,7 +1296,7 @@
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -1316,7 +1316,7 @@
                <value>
                   <text xliff:rid="63FA9F8C-B6C5-44C8-A3DC-5CD3768F4614">* Please Note, Annual Income is after considering the exemption - if any.</text>
                </value>
-               <font typeface="Arial"/>
+               <font size="9pt" typeface="Arial"/>
                <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                <?renderCache.bounds 537166 12000 0 0 1417 1417 0 0?>
                <?renderCache.textRun 73 * Please Note, Annual Income is after considering the exemption - if any. 0 1417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?></draw>
@@ -1424,7 +1424,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                <value>
                   <text xliff:rid="D44057BE-515D-425F-8936-9E973185D255">Emp No : 	3								                                                                                            Annual salary Details</text>
                </value>
-               <font typeface="Arial"/>
+               <font size="9pt" typeface="Arial"/>
                <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                <?renderCache.bounds 717166 15166 0 0 1417 1417 0 0?>
                <?renderCache.textRun 9 Emp No :  0 1417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
@@ -1455,7 +1455,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="97B15045-86C3-431E-B5C6-C4F27D0CD2EF">Earnings</text>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1479,7 +1479,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="B83E3021-3EED-491C-8144-8EA8EAFA9528">Arrears (INR)</text>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1503,7 +1503,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="DCA9CC31-BFBE-4E49-8DD1-8B6C113334D5">Current (INR)</text>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1527,7 +1527,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="38F8A37D-2BA6-45BD-91EE-B9D414FEF9A7">Deductions</text>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1551,7 +1551,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="D406A4E2-29C9-47C6-9225-ED3DAB88F98E">Amount (INR)</text>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1575,7 +1575,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <margin/>
                      </textEdit>
                   </ui>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1602,7 +1602,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="2A812E89-E273-48D6-8516-2EAC558B706C">Amount(INR)</text>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                      <fill>
                         <color value="255,255,255"/>
                      </fill>
@@ -1633,7 +1633,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para vAlign="middle"/>
                         <bind match="dataRef" ref="$.EARNINGS"/>
@@ -1649,7 +1649,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para hAlign="right" vAlign="middle"/>
                         <bind match="dataRef" ref="$.ARRAMOUNT"/>
@@ -1665,7 +1665,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para hAlign="right" vAlign="middle"/>
                         <bind match="dataRef" ref="$.EARAMOUNT"/>
@@ -1700,7 +1700,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para vAlign="middle"/>
                         <bind match="dataRef" ref="$.DEDUCTIONS"/>
@@ -1716,7 +1716,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para hAlign="right" vAlign="middle"/>
                         <bind match="dataRef" ref="$.DEDAMT"/>
@@ -1754,7 +1754,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para vAlign="middle"/>
                         <bind match="dataRef" ref="$.FORM16"/>
@@ -1770,7 +1770,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para hAlign="right" vAlign="middle"/>
                         <bind match="dataRef" ref="$.FO16AMT"/>
@@ -1811,10 +1811,10 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   </ui>
                   <value>
                      <exData contentType="text/html" xliff:rid="5883E352-F88A-4B87-AE08-061599B6E457">
-                        <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;letter-spacing:0in">Total Earnings<span style="xfa-spacerun:yes"> </span><span style="font-size:8pt">(Current + Arrears )</span><span style="font-size:10pt"><span style="xfa-spacerun:yes">   </span></span></p></body>
+                        <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;letter-spacing:0in">Total Earnings<span style="xfa-spacerun:yes"> </span><span style="font-size:9pt">(Current + Arrears )</span><span style="font-size:9pt"><span style="xfa-spacerun:yes">   </span></span></p></body>
                      </exData>
                   </value>
-                  <font typeface="Arial" weight="bold"/>
+                  <font size="9pt" typeface="Arial" weight="bold"/>
                   <para vAlign="middle"/>
                   <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                   <border>
@@ -1841,7 +1841,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <margin/>
                      </textEdit>
                   </ui>
-                  <font typeface="Arial"/>
+                  <font size="9pt" typeface="Arial"/>
                   <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                   <para vAlign="middle"/>
                   <bind match="dataRef" ref="$record.GS_ZPAYROLLDET.TOT_EARN"/>
@@ -1857,7 +1857,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField002995" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                      </exData>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold"/>
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold"/>
                   <para hAlign="right" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                   <border>
@@ -1911,7 +1911,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <margin/>
                      </textEdit>
                   </ui>
-                  <font typeface="Arial"/>
+                  <font size="9pt" typeface="Arial"/>
                   <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                   <para vAlign="middle"/>
                   <bind match="dataRef" ref="$record.GS_ZPAYROLLDET1.TOT_DED"/>
@@ -1927,7 +1927,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField011942" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
                      </exData>
                   </value>
-                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold"/>
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold"/>
                   <para hAlign="right" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                   <border>
@@ -1951,7 +1951,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <margin/>
                      </textEdit>
                   </ui>
-                  <font baselineShift="0pt" typeface="Arial"/>
+                  <font size="9pt" baselineShift="0pt" typeface="Arial"/>
                   <para vAlign="middle"/>
                   <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                   <border>
@@ -1986,9 +1986,9 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
          </draw>
          <subform layout="lr-tb" minH="65.093mm" w="254mm" y="16.76mm">
             <bind match="none"/>
-            <subform layout="tb" minH="23.589mm" name="NetPay" w="114.3mm">
+            <subform layout="tb" minH="23.589mm" name="NetPay" w="96.664mm">
                <bind match="none"/>
-               <subform columnWidths="55.8948mm 58.405mm" layout="table" name="net_pay">
+               <subform columnWidths="47.8655mm 48.7984mm" layout="table" name="net_pay">
                   <border>
                      <edge/>
                   </border>
@@ -2000,7 +2000,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                        <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -2009,7 +2009,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <value>
                            <exData contentType="text/html" xliff:rid="16667C93-827A-4DCF-9FB2-C76B378860E8">
-                              <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:10pt;text-decoration:none;letter-spacing:0in">Net Pay<span style="font-size:12pt"><span style="xfa-spacerun:yes"> </span></span><span style="font-size:8pt">(INR)</span></p></body>
+                              <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;text-decoration:none;letter-spacing:0in">Net Pay<span style="font-size:9pt"><span style="xfa-spacerun:yes"> </span></span><span style="font-size:9pt">(INR)</span></p></body>
                            </exData>
                         </value>
                         <border>
@@ -2028,7 +2028,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para vAlign="middle"/>
                         <bind match="dataRef" ref="$record.GS_ZPAYROLLDET1.NPAY"/>
@@ -2039,7 +2039,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                        <font size="9pt" baselineShift="0pt" typeface="Arial" weight="bold"/>
                         <para hAlign="right" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <value>
@@ -2061,7 +2061,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para vAlign="middle"/>
                         <bind match="dataRef" ref="$record.GS_ZPAYROLLDET1.NPAY"/>
@@ -2078,7 +2078,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      </rectangle>
                   </value>
                </draw>
-               <subform columnWidths="54.4707mm 59.8295mm" layout="table" name="pf">
+               <subform columnWidths="47.8655mm 48.7984mm" layout="table" name="pf">
                   <border>
                      <edge/>
                   </border>
@@ -2098,7 +2098,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="19D5A048-7A4C-4D30-B4C7-2D06897D70EB">Retirals as on Month end</text>
                         </value>
-                        <font baselineShift="0pt" typeface="Arial">
+                        <font size="9pt" baselineShift="0pt" typeface="Arial">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -2128,7 +2128,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="346C2089-CB52-4A42-BF02-E09C47F3CECE">Provident Fund*</text>
                         </value>
-                        <font baselineShift="0pt" typeface="Arial">
+                        <font size="9pt" baselineShift="0pt" typeface="Arial">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -2144,7 +2144,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <ui>
                            <textEdit/>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2169,7 +2169,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="CDDB6607-E7E9-4569-B39F-0AC2FBA83EFF">Gratuity</text>
                         </value>
-                        <font baselineShift="0pt" typeface="Arial">
+                        <font size="9pt" baselineShift="0pt" typeface="Arial">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -2185,7 +2185,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <ui>
                            <textEdit/>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2211,7 +2211,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p>Loan Balance<span style="xfa-spacerun:yes"> </span><span style="xfa-spacerun:yes"> </span></p></body>
                            </exData>
                         </value>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <border>
                            <edge/>
                            <edge presence="hidden"/>
@@ -2228,7 +2228,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         </assist>
                      </draw>
                      <draw colSpan="2" h="7.168mm">
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <border>
                            <edge/>
                            <edge presence="hidden"/>
@@ -2263,7 +2263,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <ui>
                            <textEdit/>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2275,7 +2275,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <ui>
                            <textEdit/>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2287,7 +2287,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <ui>
                            <textEdit/>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2299,7 +2299,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <ui>
                            <textEdit/>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2314,17 +2314,9 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <margin leftInset="81.28mm"/>
                   <?templateDesigner expand 0?></subform>
                <?templateDesigner expand 0?></subform>
-            <draw h="30.48mm" name="Rectangle3" w="1.524mm">
-               <value>
-                  <rectangle>
-                     <edge presence="hidden"/>
-                     <corner presence="hidden" radius="5.08mm"/>
-                  </rectangle>
-               </value>
-            </draw>
-            <subform layout="lr-tb" minH="30mm" name="Details" w="138.176mm">
+            <subform layout="lr-tb" minH="30mm" name="Details" w="157.336mm">
                <bind match="none"/>
-               <subform columnWidths="12.72mm 29.9209mm 46.7399mm 34.591mm 14.2042mm" layout="table" name="LoanBalance">
+               <subform columnWidths="18mm 35.7475mm 25mm 39.2943mm 39.2943mm" layout="table" name="LoanBalance">
                   <border>
                      <edge/>
                   </border>
@@ -2335,7 +2327,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <edge/>
                            <corner thickness="0.1778mm"/>
                            <fill>
-                              <color value="153,204,255"/>
+                              <color value="0,128,192"/>
                            </fill>
                         </border>
                         <ui>
@@ -2344,7 +2336,11 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="5DEC78E0-FFD3-4EBC-AD02-D80A3B06B866">Loan Balance</text>
                         </value>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para vAlign="middle"/>
                      </draw>
@@ -2353,7 +2349,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <edge/>
                            <corner thickness="0.1778mm"/>
                            <fill>
-                              <color value="153,204,255"/>
+                              <color value="0,128,192"/>
                            </fill>
                         </border>
                         <ui>
@@ -2362,7 +2358,11 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="887C275A-B03D-49A5-B4C6-025A30A2C080">Perquisite Details</text>
                         </value>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
                         <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                         <para hAlign="center" vAlign="middle"/>
                      </draw>
@@ -2374,7 +2374,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      <?templateDesigner expand 0?></subform>
                   <subform layout="row" name="Row1" x="-50.47mm">
                      <assist role="TR"/>
-                     <subform colSpan="3" columnWidths="21.5959mm 37.9922mm 29.7938mm" layout="table" name="Table11" y="0mm">
+                     <subform colSpan="3" columnWidths="18mm 35.7475mm 25mm" layout="table" name="Table11" y="0mm">
                         <border>
                            <edge/>
                         </border>
@@ -2387,7 +2387,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para vAlign="middle"/>
                               <bind match="dataRef" ref="$.TLN"/>
@@ -2403,7 +2403,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para vAlign="middle"/>
                               <bind match="dataRef" ref="$.TLNDSC"/>
@@ -2419,7 +2419,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para hAlign="right" vAlign="middle"/>
                               <bind match="dataRef" ref="$.TOBL"/>
@@ -2439,7 +2439,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <bind match="dataRef" ref="$record.GT_LOAN_BAL"/>
                         <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
                         <?templateDesigner expand 1?></subform>
-                     <subform colSpan="2" columnWidths="24.4171mm 24.4171mm" layout="table" name="Table12">
+                     <subform colSpan="2" columnWidths="39.2943mm 39.2943mm" layout="table" name="Table12">
                         <border>
                            <edge/>
                         </border>
@@ -2449,7 +2449,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <ui>
                                  <textEdit/>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                               <border>
                                  <edge presence="hidden"/>
@@ -2461,7 +2461,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <ui>
                                  <textEdit/>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                               <border>
                                  <edge presence="hidden"/>
@@ -2498,7 +2498,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      </rectangle>
                   </value>
                </draw>
-               <subform columnWidths="29.2048mm 22.7148mm 22.7148mm 13.1409mm 20.1188mm 30.2818mm" layout="table" name="Inv_desc">
+               <subform columnWidths="30mm 18.7475mm 15mm 15mm 39.2943mm 39.2943mm" layout="table" name="Inv_desc">
                   <border>
                      <edge/>
                   </border>
@@ -2518,7 +2518,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="44C41E77-4F4E-40D4-83C1-6C883163BEE0">Investment Description  </text>
                         </value>
-                        <font baselineShift="0pt" typeface="Arial">
+                        <font size="9pt" baselineShift="0pt" typeface="Arial">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -2532,7 +2532,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      <occur max="-1"/>
                      <bind match="none"/>
                      <draw colSpan="2" minH="7.168mm" y="0mm">
-                        <font baselineShift="0pt" typeface="Arial">
+                        <font size="9pt" baselineShift="0pt" typeface="Arial">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -2558,7 +2558,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      <?templateDesigner expand 1?></subform>
                   <subform layout="row" name="Row1" x="-0.207mm" y="0mm">
                      <assist role="TR"/>
-                     <subform colSpan="4" columnWidths="53.9994mm 33.776mm" layout="table" name="Table14">
+                     <subform colSpan="4" columnWidths="48.7475mm 30mm" layout="table" name="Table14">
                         <border>
                            <edge/>
                         </border>
@@ -2571,7 +2571,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para vAlign="middle"/>
                               <bind match="dataRef" ref="$.INV_DESC"/>
@@ -2587,7 +2587,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para hAlign="right" vAlign="middle"/>
                               <bind match="dataRef" ref="$.INV_AMT"/>
@@ -2606,7 +2606,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <bind match="dataRef" ref="$record.GT_PR_DET"/>
                         <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
                         <?templateDesigner expand 1?></subform>
-                     <subform colSpan="2" columnWidths="25.2006mm 25.2006mm" layout="table" name="Table13" y="0mm">
+                     <subform colSpan="2" columnWidths="39.2943mm 39.2943mm" layout="table" name="Table13" y="0mm">
                         <border>
                            <edge/>
                         </border>
@@ -2619,7 +2619,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para vAlign="middle"/>
                               <bind match="dataRef" ref="$.DESC"/>
@@ -2635,7 +2635,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                                     <margin/>
                                  </textEdit>
                               </ui>
-                              <font typeface="Arial"/>
+                              <font size="9pt" typeface="Arial"/>
                               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                               <para hAlign="right" vAlign="middle"/>
                               <bind match="dataRef" ref="$.AMT"/>
@@ -2690,7 +2690,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      <value>
                         <text xliff:rid="95227BA2-7EF5-4CB6-ADA2-9F8964F2E5C3">Retrial Details</text>
                      </value>
-                     <font baselineShift="0pt" size="14pt" typeface="Arial" weight="bold"/>
+                     <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
                   </draw>
@@ -2710,7 +2710,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -2722,7 +2722,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                      <ui>
                         <textEdit/>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
                      <para hAlign="center" vAlign="middle"/>
                   </draw>
@@ -2740,10 +2740,10 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                </ui>
                <value>
                   <exData contentType="text/html" xliff:rid="4835CC16-E1D9-4780-BD90-0F4E09D4E633">
-                     <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:14pt;font-weight:bold;letter-spacing:0in">Arrears Breakup</p><p style="letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p></body>
+                     <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;font-weight:bold;letter-spacing:0in">Arrears Breakup</p><p style="letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p></body>
                   </exData>
                </value>
-               <font typeface="Arial"/>
+               <font size="9pt" typeface="Arial"/>
                <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="2.54mm"/>
                <border>
                   <edge presence="hidden"/>
@@ -2758,7 +2758,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2778,7 +2778,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2798,7 +2798,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2818,7 +2818,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2838,7 +2838,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2858,7 +2858,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2878,7 +2878,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2898,7 +2898,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2918,7 +2918,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2938,7 +2938,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2958,7 +2958,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2978,7 +2978,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -2998,7 +2998,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -3018,7 +3018,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                            <margin/>
                         </textEdit>
                      </ui>
-                     <font typeface="Arial"/>
+                     <font size="9pt" typeface="Arial"/>
                      <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                      <para vAlign="middle"/>
                      <value>
@@ -3052,7 +3052,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                   <value>
                      <text xliff:rid="987B6B12-5EB7-4AE6-94CB-65C49A9BA429">Misc Breakup</text>
                   </value>
-                  <font baselineShift="0pt" size="14pt" typeface="Arial" weight="bold"/>
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold"/>
                   <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="2.54mm"/>
                   <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt"/>
                   <?renderCache.bounds 573166 17232 0 0 1417 7200 0 0?>
@@ -3077,7 +3077,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="4610F100-23E0-4C41-9552-7C82A7D6A5CB">Component Description</text>
                         </value>
-                        <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                        <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -3099,7 +3099,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                         <value>
                            <text xliff:rid="BD94FD35-33C0-45E5-A804-FF10ED215A47">Amount</text>
                         </value>
-                        <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                        <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold">
                            <fill>
                               <color value="255,255,255"/>
                            </fill>
@@ -3122,7 +3122,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font size="8pt" typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para vAlign="middle"/>
                         <bind match="dataRef" ref="$.DESC"/>
@@ -3138,7 +3138,7 @@ hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
                               <margin/>
                            </textEdit>
                         </ui>
-                        <font typeface="Arial"/>
+                        <font size="9pt" typeface="Arial"/>
                         <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
                         <para hAlign="right" vAlign="middle"/>
                         <bind match="dataRef" ref="$.AMT"/>
