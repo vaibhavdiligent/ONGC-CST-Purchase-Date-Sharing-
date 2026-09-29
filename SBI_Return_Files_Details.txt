@@ -1,0 +1,284 @@
+==============================================================================
+ SBI RETURN FILES - CONTENTS SUMMARY
+ Decoded from the MT_BankReturnFile_Receiver XML payloads
+==============================================================================
+
+Each file's <ReturnFile> is a base64 CSV; <Status> is the file name that
+carries the run key:  TXN_XX_<corp6><rundate6><LAUFI><time6>_<senddate8>
+Column layouts differ by type:
+  TXN_CN (NEFT, 14 cols): Payment Order = 'CR LINE REF NO' (col 10),
+        Status col 12, UTR col 14.
+  TXN_CT (13 cols)      : Payment Order = 'CR LINE REF NO' (col 10),
+        Status col 11, Transaction No col 13.
+
+------------------------------------------------------------------------------
+ INDEX OF FILES
+------------------------------------------------------------------------------
+#  Type   Run date    LAUFI    Rows   OK Fail      Total amount
+1  CT     2026-09-28  00004      10   10    0      1,282,590.00
+2  CT     2026-09-28  00002       2    2    0        781,000.00
+3  NEFT   2026-09-28  00004       7    6    1      1,209,244.00
+4  NEFT   2026-09-27  00001       2    2    0        306,700.00
+5  NEFT   2026-09-28  00002       2    2    0        988,673.00
+6  NEFT   2026-09-27  00003      60   59    1     10,133,256.00
+7  CT     2026-09-27  00003      71   71    0     13,915,295.00
+
+==============================================================================
+ FILE 1:  TXN_CT_03052328092600004164701_28092026
+==============================================================================
+  Type          : TXN_CT
+  Run date      : 2026-09-28   (payment medium run)
+  Run id (LAUFI): 00004
+  File time     : 164701
+  Send date     : 2026-09-28
+  Line items    : 10   (Success: 10, Failure: 0)
+  Total amount  : 1,282,590.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  00836422               758.00  Success  CT0AKDIUG600002     Completed Successfully
+  2  00836421            14,600.00  Success  CT0AKDIUG600001     Completed Successfully
+  3  00836433           710,834.00  Success  CT0AKDIUG600009     Completed Successfully
+  4  00836427             1,250.00  Success  CT0AKDIUG600005     Completed Successfully
+  5  00836432             1,994.00  Success  CT0AKDIUG600008     Completed Successfully
+  6  00836424             6,886.00  Success  CT0AKDIUG600004     Completed Successfully
+  7  00836430           482,810.00  Success  CT0AKDIUG600006     Completed Successfully
+  8  00836431             9,735.00  Success  CT0AKDIUG600007     Completed Successfully
+  9  00836423             1,350.00  Success  CT0AKDIUG600003     Completed Successfully
+  10 00836436            52,373.00  Success  CT0AKDIUG600010     Completed Successfully
+
+==============================================================================
+ FILE 2:  TXN_CT_03052328092600002162227_28092026
+==============================================================================
+  Type          : TXN_CT
+  Run date      : 2026-09-28   (payment medium run)
+  Run id (LAUFI): 00002
+  File time     : 162227
+  Send date     : 2026-09-28
+  Line items    : 2   (Success: 2, Failure: 0)
+  Total amount  : 781,000.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  00836412           415,000.00  Success  CT0AKDIUG700002     Completed Successfully
+  2  00836410           366,000.00  Success  CT0AKDIUG700001     Completed Successfully
+
+==============================================================================
+ FILE 3:  TXN_CN_03052328092600004164701_28092026
+==============================================================================
+  Type          : TXN_CN (NEFT transfer)
+  Run date      : 2026-09-28   (payment medium run)
+  Run id (LAUFI): 00004
+  File time     : 164701
+  Send date     : 2026-09-28
+  Line items    : 7   (Success: 6, Failure: 1)
+  Total amount  : 1,209,244.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  0000836428           8,140.00  Success  SBIN226271532533    Completed Successfully
+  2  0000836437             724.00  Failure                      Invalid credit acc details:923010064535075   <<< FAILED
+  3  0000836425           2,450.00  Success  SBIN226271532534    Completed Successfully
+  4  0000836435         528,553.00  Success  SBIN226271531195    Completed Successfully
+  5  0000836434         635,756.00  Success  SBIN226271531194    Completed Successfully
+  6  0000836426          31,254.00  Success  SBIN226271529324    Completed Successfully
+  7  0000836429           2,367.00  Success  SBIN226271529323    Completed Successfully
+
+  ** 1 FAILED line(s) in this file - see remarks above. **
+  ** All-or-nothing per file: a failed line blocks the whole file from
+     posting until corrected. **
+
+==============================================================================
+ FILE 4:  TXN_CN_03052327092600001165526_27092026
+==============================================================================
+  Type          : TXN_CN (NEFT transfer)
+  Run date      : 2026-09-27   (payment medium run)
+  Run id (LAUFI): 00001
+  File time     : 165526
+  Send date     : 2026-09-27
+  Line items    : 2   (Success: 2, Failure: 0)
+  Total amount  : 306,700.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  0000836114         106,571.00  Success  SBIN126270755314    Completed Successfully
+  2  0000836113         200,129.00  Success  SBIN126270754329    Completed Successfully
+
+==============================================================================
+ FILE 5:  TXN_CN_03052328092600002162227_28092026
+==============================================================================
+  Type          : TXN_CN (NEFT transfer)
+  Run date      : 2026-09-28   (payment medium run)
+  Run id (LAUFI): 00002
+  File time     : 162227
+  Send date     : 2026-09-28
+  Line items    : 2   (Success: 2, Failure: 0)
+  Total amount  : 988,673.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  0000836411         403,000.00  Success  SBIN226271536235    Completed Successfully
+  2  0000836413         585,673.00  Success  SBIN226271534517    Completed Successfully
+
+==============================================================================
+ FILE 6:  TXN_CN_03052327092600003180251_27092026
+==============================================================================
+  Type          : TXN_CN (NEFT transfer)
+  Run date      : 2026-09-27   (payment medium run)
+  Run id (LAUFI): 00003
+  File time     : 180251
+  Send date     : 2026-09-27
+  Line items    : 60   (Success: 59, Failure: 1)
+  Total amount  : 10,133,256.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  0000836246         264,170.00  Success  SBIN126270804500    Completed Successfully
+  2  0000836312         585,673.00  Failure                      Invalid credit acc details:000401538549   <<< FAILED
+  3  0000836324         157,103.00  Success  SBIN126270803039    Completed Successfully
+  4  0000836354         304,029.00  Success  SBIN126270801646    Completed Successfully
+  5  0000836290         204,211.00  Success  SBIN126270803551    Completed Successfully
+  6  0000836298         253,682.00  Success  SBIN126270803979    Completed Successfully
+  7  0000836351         109,035.00  Success  SBIN126270800313    Completed Successfully
+  8  0000836371          58,115.00  Success  SBIN126270803973    Completed Successfully
+  9  0000836280         190,835.00  Success  SBIN126270803550    Completed Successfully
+  10 0000836331         146,192.00  Success  SBIN126270800932    Completed Successfully
+  11 0000836273         338,315.00  Success  SBIN126270803548    Completed Successfully
+  12 0000836319         119,409.00  Success  SBIN126270800930    Completed Successfully
+  13 0000836297         233,616.00  Success  SBIN126270801713    Completed Successfully
+  14 0000836283         186,700.00  Success  SBIN126270803988    Completed Successfully
+  15 0000836272         271,460.00  Success  SBIN126270803040    Completed Successfully
+  16 0000836304         275,206.00  Success  SBIN126270802667    Completed Successfully
+  17 0000836282         145,406.00  Success  SBIN126270800933    Completed Successfully
+  18 0000836326         157,994.00  Success  SBIN126270800928    Completed Successfully
+  19 0000836320         152,747.00  Success  SBIN126270803545    Completed Successfully
+  20 0000836321         136,437.00  Success  SBIN126270801642    Completed Successfully
+  21 0000836259         323,651.00  Success  SBIN126270801654    Completed Successfully
+  22 0000836336         143,631.00  Success  SBIN126270803546    Completed Successfully
+  23 0000836355          57,207.00  Success  SBIN126270803975    Completed Successfully
+  24 0000836295         217,081.00  Success  SBIN126270801715    Completed Successfully
+  25 0000836334         112,585.00  Success  SBIN126270804066    Completed Successfully
+  26 0000836365          78,839.00  Success  SBIN126270801650    Completed Successfully
+  27 0000836352          20,666.00  Success  SBIN126270803972    Completed Successfully
+  28 0000836303         225,412.00  Success  SBIN126270800312    Completed Successfully
+  29 0000836370          73,502.00  Success  SBIN126270801653    Completed Successfully
+  30 0000836323         157,014.00  Success  SBIN126270800309    Completed Successfully
+  31 0000836372          88,770.00  Success  SBIN126270804498    Completed Successfully
+  32 0000836279         103,454.00  Success  SBIN126270803986    Completed Successfully
+  33 0000836349         223,860.00  Success  SBIN126270801659    Completed Successfully
+  34 0000836315         178,506.00  Success  SBIN126270802665    Completed Successfully
+  35 0000836327         164,354.00  Success  SBIN126270801649    Completed Successfully
+  36 0000836340         230,745.00  Success  SBIN126270800931    Completed Successfully
+  37 0000836263         263,588.00  Success  SBIN126270801655    Completed Successfully
+  38 0000836362         107,254.00  Success  SBIN126270800311    Completed Successfully
+  39 0000836318         145,304.00  Success  SBIN126270801328    Completed Successfully
+  40 0000836375          96,169.00  Success  SBIN126270803544    Completed Successfully
+  41 0000836357          20,609.00  Success  SBIN126270800938    Completed Successfully
+  42 0000836287         235,334.00  Success  SBIN126270801641    Completed Successfully
+  43 0000836359          96,295.00  Success  SBIN126270803626    Completed Successfully
+  44 0000836261          99,194.00  Success  SBIN126270803987    Completed Successfully
+  45 0000836294         239,352.00  Success  SBIN126270803981    Completed Successfully
+  46 0000836347         123,993.00  Success  SBIN126270801657    Completed Successfully
+  47 0000836366         161,400.00  Success  SBIN126270802662    Completed Successfully
+  48 0000836288         254,559.00  Success  SBIN126270801405    Completed Successfully
+  49 0000836307         324,067.00  Success  SBIN126270801658    Completed Successfully
+  50 0000836322         118,369.00  Success  SBIN126270803552    Completed Successfully
+  51 0000836341          97,164.00  Success  SBIN126270801714    Completed Successfully
+  52 0000836306         151,795.00  Success  SBIN126270803624    Completed Successfully
+  53 0000836337          69,475.00  Success  SBIN126270804064    Completed Successfully
+  54 0000836289         195,573.00  Success  SBIN126270800310    Completed Successfully
+  55 0000836348          90,895.00  Success  SBIN126270800316    Completed Successfully
+  56 0000836376          92,418.00  Success  SBIN126270803547    Completed Successfully
+  57 0000836369          41,826.00  Success  SBIN126270801651    Completed Successfully
+  58 0000836316         185,583.00  Success  SBIN126270803555    Completed Successfully
+  59 0000836356          27,538.00  Success  SBIN126270803553    Completed Successfully
+  60 0000836271         205,890.00  Success  SBIN126270800315    Completed Successfully
+
+  ** 1 FAILED line(s) in this file - see remarks above. **
+  ** All-or-nothing per file: a failed line blocks the whole file from
+     posting until corrected. **
+
+==============================================================================
+ FILE 7:  TXN_CT_03052327092600003180252_27092026
+==============================================================================
+  Type          : TXN_CT
+  Run date      : 2026-09-27   (payment medium run)
+  Run id (LAUFI): 00003
+  File time     : 180252
+  Send date     : 2026-09-27
+  Line items    : 71   (Success: 71, Failure: 0)
+  Total amount  : 13,915,295.00
+
+  #  Payment Order          Amount  Status   UTR / Txn No        Remarks
+  --------------------------------  -----------------------------------------------------
+  1  00836344           148,867.00  Success  CT0AKCHTI000058     Completed Successfully
+  2  00836299           221,077.00  Success  CT0AKCHTI000035     Completed Successfully
+  3  00836314           160,975.00  Success  CT0AKCHTI000045     Completed Successfully
+  4  00836292           220,522.00  Success  CT0AKCHTI000032     Completed Successfully
+  5  00836264           304,066.00  Success  CT0AKCHTI000015     Completed Successfully
+  6  00836268           251,210.00  Success  CT0AKCHTI000019     Completed Successfully
+  7  00836313           192,270.00  Success  CT0AKCHTI000044     Completed Successfully
+  8  00836267           270,780.00  Success  CT0AKCHTI000018     Completed Successfully
+  9  00836266           193,315.00  Success  CT0AKCHTI000017     Completed Successfully
+  10 00836308           208,132.00  Success  CT0AKCHTI000040     Completed Successfully
+  11 00836257           316,243.00  Success  CT0AKCHTI000011     Completed Successfully
+  12 00836251           330,855.00  Success  CT0AKCHTI000005     Completed Successfully
+  13 00836255           100,068.00  Success  CT0AKCHTI000009     Completed Successfully
+  14 00836296           205,904.00  Success  CT0AKCHTI000034     Completed Successfully
+  15 00836274           293,277.00  Success  CT0AKCHTI000022     Completed Successfully
+  16 00836275           257,876.00  Success  CT0AKCHTI000023     Completed Successfully
+  17 00836265           279,668.00  Success  CT0AKCHTI000016     Completed Successfully
+  18 00836252           319,048.00  Success  CT0AKCHTI000006     Completed Successfully
+  19 00836309           113,623.00  Success  CT0AKCHTI000041     Completed Successfully
+  20 00836305           243,350.00  Success  CT0AKCHTI000039     Completed Successfully
+  21 00836248           295,293.00  Success  CT0AKCHTI000002     Completed Successfully
+  22 00836253           347,014.00  Success  CT0AKCHTI000007     Completed Successfully
+  23 00836300           260,663.00  Success  CT0AKCHTI000036     Completed Successfully
+  24 00836291           452,998.00  Success  CT0AKCHTI000031     Completed Successfully
+  25 00836258           250,141.00  Success  CT0AKCHTI000012     Completed Successfully
+  26 00836254            49,656.00  Success  CT0AKCHTI000008     Completed Successfully
+  27 00836277           541,031.00  Success  CT0AKCHTI000025     Completed Successfully
+  28 00836310           181,825.00  Success  CT0AKCHTI000042     Completed Successfully
+  29 00836301           239,800.00  Success  CT0AKCHTI000037     Completed Successfully
+  30 00836346            85,890.00  Success  CT0AKCHTI000060     Completed Successfully
+  31 00836269           294,311.00  Success  CT0AKCHTI000020     Completed Successfully
+  32 00836330           113,760.00  Success  CT0AKCHTI000050     Completed Successfully
+  33 00836333            96,108.00  Success  CT0AKCHTI000052     Completed Successfully
+  34 00836332           122,016.00  Success  CT0AKCHTI000051     Completed Successfully
+  35 00836368           104,533.00  Success  CT0AKCHTI000069     Completed Successfully
+  36 00836249           163,730.00  Success  CT0AKCHTI000003     Completed Successfully
+  37 00836285           124,094.00  Success  CT0AKCHTI000029     Completed Successfully
+  38 00836293           196,679.00  Success  CT0AKCHTI000033     Completed Successfully
+  39 00836361            84,810.00  Success  CT0AKCHTI000065     Completed Successfully
+  40 00836342            61,150.00  Success  CT0AKCHTI000056     Completed Successfully
+  41 00836343            92,770.00  Success  CT0AKCHTI000057     Completed Successfully
+  42 00836270           429,852.00  Success  CT0AKCHTI000021     Completed Successfully
+  43 00836256           207,661.00  Success  CT0AKCHTI000010     Completed Successfully
+  44 00836302           205,947.00  Success  CT0AKCHTI000038     Completed Successfully
+  45 00836345            93,128.00  Success  CT0AKCHTI000059     Completed Successfully
+  46 00836350           134,034.00  Success  CT0AKCHTI000061     Completed Successfully
+  47 00836358            26,800.00  Success  CT0AKCHTI000063     Completed Successfully
+  48 00836363           309,441.00  Success  CT0AKCHTI000066     Completed Successfully
+  49 00836360            73,068.00  Success  CT0AKCHTI000064     Completed Successfully
+  50 00836284           142,413.00  Success  CT0AKCHTI000028     Completed Successfully
+  51 00836311           285,642.00  Success  CT0AKCHTI000043     Completed Successfully
+  52 00836262           167,546.00  Success  CT0AKCHTI000014     Completed Successfully
+  53 00836260           259,216.00  Success  CT0AKCHTI000013     Completed Successfully
+  54 00836247           297,753.00  Success  CT0AKCHTI000001     Completed Successfully
+  55 00836276           242,213.00  Success  CT0AKCHTI000024     Completed Successfully
+  56 00836328            76,355.00  Success  CT0AKCHTI000048     Completed Successfully
+  57 00836329           276,184.00  Success  CT0AKCHTI000049     Completed Successfully
+  58 00836335           234,073.00  Success  CT0AKCHTI000053     Completed Successfully
+  59 00836317           142,454.00  Success  CT0AKCHTI000046     Completed Successfully
+  60 00836278           241,627.00  Success  CT0AKCHTI000026     Completed Successfully
+  61 00836339            95,077.00  Success  CT0AKCHTI000055     Completed Successfully
+  62 00836250           132,291.00  Success  CT0AKCHTI000004     Completed Successfully
+  63 00836338           133,102.00  Success  CT0AKCHTI000054     Completed Successfully
+  64 00836286           178,961.00  Success  CT0AKCHTI000030     Completed Successfully
+  65 00836281           164,679.00  Success  CT0AKCHTI000027     Completed Successfully
+  66 00836353           211,630.00  Success  CT0AKCHTI000062     Completed Successfully
+  67 00836325            99,701.00  Success  CT0AKCHTI000047     Completed Successfully
+  68 00836374            62,059.00  Success  CT0AKCHTI000071     Completed Successfully
+  69 00836367            43,677.00  Success  CT0AKCHTI000068     Completed Successfully
+  70 00836373            69,715.00  Success  CT0AKCHTI000070     Completed Successfully
+  71 00836364            89,598.00  Success  CT0AKCHTI000067     Completed Successfully
