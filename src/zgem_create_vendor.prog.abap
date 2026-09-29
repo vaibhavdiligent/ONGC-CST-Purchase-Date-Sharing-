@@ -475,6 +475,24 @@ PRIMARY KEY.   ENDSELECT.
     <fs_ausage>-data-valid_from      = sy-datum.
     <fs_ausage>-data-standard        = abap_true.
 
+*   BP bank details - in S/4 CVI the bank is a BP-level object, so it MUST be
+*   set on the partner node (LFBK is created from it by CVI). Setting it on the
+*   vendor node is ignored ("Bank data is provided from the business partner").
+    IF wa_order-vendor_bank_account_no IS NOT INITIAL.
+      APPEND INITIAL LINE TO ls_cvis-partner-central_data-bankdetail-bankdetails
+        ASSIGNING FIELD-SYMBOL(<fs_bank>).
+      <fs_bank>-task                  = 'I'.
+      <fs_bank>-data_key-bankdetailid = '0001'.
+      <fs_bank>-data-bank_ctry        = 'IN'.
+      <fs_bank>-data-bank_key         = wa_order-vendor_bank_ifsc_code.
+      <fs_bank>-data-bank_acct        = wa_order-vendor_bank_account_no.
+      <fs_bank>-data-accountholder    = wa_order-vendor_name.
+      <fs_bank>-datax-bank_ctry       = abap_true.
+      <fs_bank>-datax-bank_key        = abap_true.
+      <fs_bank>-datax-bank_acct       = abap_true.
+      <fs_bank>-datax-accountholder   = abap_true.
+    ENDIF.
+
 *   ===== Vendor node (LFA1 data) - CVI gives it the same number as the BP ==
     ls_cvis-vendor-header-object_task = 'I'.
 
@@ -572,16 +590,8 @@ PRIMARY KEY.   ENDSELECT.
     ls_purchasing-datax-webre = 'X'.
     APPEND ls_purchasing TO ls_cvis-vendor-purchasing_data-purchasing.
 
-*   bank details
-    IF wa_order-vendor_bank_account_no IS NOT INITIAL.
-      ls_bankdetails-task           = 'M'.
-      ls_bankdetails-data_key-banks = 'IN'.
-      ls_bankdetails-data_key-bankl = wa_order-vendor_bank_ifsc_code.
-      ls_bankdetails-data_key-bankn = wa_order-vendor_bank_account_no.
-      ls_bankdetails-data-koinh     = wa_order-vendor_name.
-      ls_bankdetails-datax-koinh    = 'X'.
-      APPEND ls_bankdetails TO ls_cvis-vendor-central_data-bankdetail-bankdetails.
-    ENDIF.
+*   bank details are set on the BP (partner) node above - in S/4 CVI the bank
+*   is BP-owned and a vendor-node bank is ignored, so it is not set here.
 
     APPEND ls_cvis TO lt_cvis.
 
