@@ -1,0 +1,3758 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xfa generator="AdobeLiveCycleDesigner_V11.0.9.20220218.1.20_SAP" APIVersion="3.6.22049.0"?><xdp:xdp xmlns:xdp="http://ns.adobe.com/xdp/" timeStamp="2026-08-26T12:38:29Z" uuid="5a96f64b-6915-421a-b377-faf7d7e0e744">
+<template xmlns:xliff="urn:oasis:names:tc:xliff:document:1.1" xmlns="http://www.xfa.org/schema/xfa-template/3.3/">
+   <?formServer defaultPDFRenderFormat acrobat10.0dynamic?>
+   <subform layout="tb" locale="en_US" name="data" restoreState="auto">
+      <pageSet>
+         <pageArea id="Page1" name="Page1">
+            <contentArea h="130.175mm" w="254mm" x="12.7mm" y="73.025mm"/>
+            <medium long="279.4mm" orientation="landscape" short="215.9mm" stock="letter"/>
+            <field access="readOnly" h="9mm" id="floatingField019169" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+               <ui>
+                  <textEdit>
+                     <border>
+                        <edge stroke="lowered"/>
+                     </border>
+                     <margin/>
+                  </textEdit>
+               </ui>
+               <font typeface="Arial"/>
+               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+               <para vAlign="middle"/>
+               <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ZYEAR"/>
+            </field>
+            <field access="readOnly" h="9mm" id="floatingField015724" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+               <ui>
+                  <textEdit>
+                     <border>
+                        <edge stroke="lowered"/>
+                     </border>
+                     <margin/>
+                  </textEdit>
+               </ui>
+               <font typeface="Arial"/>
+               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+               <para vAlign="middle"/>
+               <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ZMONTH"/>
+            </field>
+            <draw h="19.05mm" name="Text1" w="57.15mm" x="12.7mm" y="3.175mm">
+               <ui>
+                  <textEdit/>
+               </ui>
+               <value>
+                  <exData contentType="text/html" xliff:rid="605F927F-2F40-49BD-963F-CF90F231B71C">
+                     <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="text-decoration:none;letter-spacing:0in">Payslip</p><p style="text-decoration:none;letter-spacing:0in"><span xfa:embed="#floatingField015724" xfa:embedMode="raw" xfa:embedType="uri"/><span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField019169" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                  </exData>
+               </value>
+               <font baselineShift="0pt" size="14pt" typeface="Arial" weight="bold"/>
+               <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+               <caption placement="top" reserve="5mm">
+                  <font typeface="Arial"/>
+                  <para vAlign="middle"/>
+               </caption>
+               <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt"/>
+            </draw>
+            <subform columnWidths="21.197mm 14.9631mm 9.2759mm 40.182mm 25.992mm 7.155mm 9.128mm 7.155mm 9.128mm 7.155mm 23.661mm 21.43mm 57.456mm" layout="table" name="Table2" x="12.7mm" y="25.4mm">
+               <border>
+                  <edge/>
+               </border>
+               <subform layout="row" name="Row1">
+                  <assist role="TR"/>
+                  <field access="readOnly" h="9mm" id="floatingField012457" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit>
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$record.GS_ZPAYROLLDET.NAME"/>
+                  </field>
+                  <draw colSpan="-1" h="8.732mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html" xliff:rid="6432C723-63C1-4638-AF9F-DEBA2F1BEB67">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="color:#000000;text-decoration:none;letter-spacing:0in">MR.<span style="xfa-spacerun:yes"> </span><span xfa:embed="#floatingField012457" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial">
+                        <fill>
+                           <color value="255,255,255"/>
+                        </fill>
+                     </font>
+                     <para vAlign="middle"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                        <fill/>
+                     </border>
+                  </draw>
+                  <?templateDesigner expand 0?></subform>
+               <subform layout="row" name="Row1">
+                  <assist role="TR"/>
+                  <draw colSpan="4" h="5.933mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                        <fill>
+                           <color value="0,128,192"/>
+                        </fill>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html" xliff:rid="B89F77F9-F721-4F6D-BFE4-298AEFC07B17">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">   </span><span style="font-size:12pt;font-weight:bold"><span style="xfa-spacerun:yes">  </span>Employee Details</span><span style="xfa-spacerun:yes">   </span></p></body>
+                        </exData>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial">
+                        <fill>
+                           <color value="255,255,255"/>
+                        </fill>
+                     </font>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <draw colSpan="7" h="5.933mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                        <fill>
+                           <color value="0,128,192"/>
+                        </fill>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html" xliff:rid="07C79EB6-1E06-42E8-8600-938B4A6962B6">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:12pt;font-weight:bold;text-decoration:none;letter-spacing:0in">Payment &amp; Leave Details<span style="font-size:10pt;font-weight:normal"><span style="xfa-spacerun:yes">            </span></span></p></body>
+                        </exData>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial">
+                        <fill>
+                           <color value="255,255,255"/>
+                        </fill>
+                     </font>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <draw colSpan="2" h="5.933mm" name="Cell12">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                        <fill>
+                           <color value="0,128,192"/>
+                        </fill>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html" xliff:rid="BB7872D5-9504-48B5-AF63-BF6279F17F32">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:12pt;font-weight:bold;text-decoration:none;letter-spacing:0in"><span style="xfa-spacerun:yes">  </span>Location Details<span style="font-size:10pt;font-weight:normal"><span style="xfa-spacerun:yes">  </span></span></p></body>
+                        </exData>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial">
+                        <fill>
+                           <color value="255,255,255"/>
+                        </fill>
+                     </font>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform layout="row" name="Row2">
+                  <assist role="TR"/>
+                  <draw h="7.281mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="A0A4A4E8-7069-4B32-8466-5B1A667213D6">Emp. No</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField000041" name="PERNR" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit>
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="8"/>
+                     </value>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET.PERNR"/>
+                     <caption>
+                        <value>
+                           <text xliff:rid="BD3C7609-E341-4AE1-BD4A-06EB56104E42">Pers.No.</text>
+                        </value>
+                     </caption>
+                     <desc>
+                        <text name="Schema Annotation">Personnel Number</text>
+                     </desc>
+                  </field>
+                  <draw colSpan="3" h="7.281mm" name="Cell2">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField000041" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                  </draw>
+                  <draw h="7.281mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="A0899ACC-263C-451B-A9C2-962675066F28">Bank Name</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField018467" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET.BANK"/>
+                  </field>
+                  <draw colSpan="6" h="7.281mm" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField018467" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                  </draw>
+                  <draw h="7.281mm" name="Cell12">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="E01B996A-09C5-48F5-9C35-F94F39AFCA0B">Location</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField005705" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET3.ZZLOCN"/>
+                  </field>
+                  <draw h="7.281mm" name="Cell13">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField005705" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform layout="row" name="Row3">
+                  <assist role="TR"/>
+                  <draw h="7.4mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="366A2B7D-2752-4FE3-8378-97A6B23016B8">Grade</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField028145" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit>
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET.GRD"/>
+                  </field>
+                  <draw h="7.4mm" name="Cell2">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField028145" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                  </draw>
+                  <draw h="7.4mm" name="Cell3">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="99B32C81-5DC0-47C3-94A3-826DAEBE3A9F">UAN</text>
+                     </value>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField029358" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET.UAN"/>
+                  </field>
+                  <draw h="7.4mm" name="Cell4">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField029358" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                  </draw>
+                  <draw h="7.4mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="852A823B-553A-4DAD-ADF9-60BA0A5B939B">Acc No.</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField006334" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit>
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ACCTNO"/>
+                  </field>
+                  <draw colSpan="6" h="7.4mm" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField006334" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                  </draw>
+                  <draw h="7.4mm" name="Cell12">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="78116886-4F7A-47A5-8F13-2891EA9E3A34">Base Br.</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField026962" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET3.BASE_BRANCH"/>
+                  </field>
+                  <draw h="7.4mm" name="Cell13">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField026962" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform layout="row" name="Row4">
+                  <assist role="TR"/>
+                  <draw h="7.281mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="BE657084-6C6C-4290-B2DA-E8877B838392">PAN</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField011478" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET1.PAN1"/>
+                  </field>
+                  <draw colSpan="3" h="7.281mm" name="Cell2">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField011478" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                  </draw>
+                  <draw h="7.281mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="3ECF1DDC-E7FD-492A-960B-E42C7DF2CD21">Days Paid</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField026500" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET.ATDY"/>
+                  </field>
+                  <draw colSpan="6" h="7.281mm" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="letter-spacing:0in"><span xfa:embed="#floatingField026500" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                  </draw>
+                  <draw h="7.281mm" name="Cell12">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="D68AB570-6C78-4D60-9860-E24DF080E0D9">Depute Br.</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field access="readOnly" h="9mm" id="floatingField024464" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                     <ui>
+                        <textEdit multiLine="1">
+                           <border>
+                              <edge stroke="lowered"/>
+                           </border>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GS_ZPAYROLLDET3.ZZDEPB"/>
+                  </field>
+                  <draw h="7.281mm" name="Cell13">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <exData contentType="text/html">
+                           <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField024464" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                        </exData>
+                     </value>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform layout="row" name="Row5">
+                  <assist role="TR"/>
+                  <draw h="0.291333in" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="03C7BA9D-65EA-4715-B2B9-A642D792FFEF">Tax Regime</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <field colSpan="3" minH="0.291333in" name="TextField19" w="62mm">
+                     <ui>
+                        <textEdit>
+                           <border presence="hidden"/>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <bind match="dataRef" ref="$.GV_TX_REGIME"/>
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                  </field>
+                  <draw h="0.291333in" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="EF0C674A-9030-4887-AAC6-B0D73ACCF619">Leave Balance</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <draw h="0.291333in" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="08B3A009-057A-456F-A75D-3F9391E93EF0">EL</text>
+                     </value>
+                  </draw>
+                  <draw h="0.291333in" name="Cell7">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="0.291333in" name="Cell8">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="1BFAC9C9-F5A4-4791-BA39-A7CD256FD228">SL</text>
+                     </value>
+                  </draw>
+                  <draw h="0.291333in" name="Cell9">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="0.291333in" name="Cell10">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="D003B001-0B47-477D-BDAE-769174F845B2">CL</text>
+                     </value>
+                  </draw>
+                  <draw h="0.291333in" name="Cell11">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="0.291333in" name="Cell12">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="B121B9C5-6C03-4D23-9EDF-D1BAC2CE2ED5">WON/SWON</text>
+                     </value>
+                     <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <draw h="0.291333in" name="Cell13">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 0?></subform>
+               <bind match="none"/>
+               <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+               <overflow leader="HeaderRow"/>
+               <?templateDesigner expand 0?></subform>
+            <subform columnWidths="49.697mm 28.047mm 35.609mm 30mm 30mm 30mm" layout="table" name="Table4" presence="hidden" x="6.35mm" y="219.075mm">
+               <border>
+                  <edge/>
+               </border>
+               <subform id="HeaderRow_ID" layout="row" name="HeaderRow">
+                  <assist role="TH"/>
+                  <draw colSpan="4" h="5.705mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                        <fill>
+                           <color value="0,128,192"/>
+                        </fill>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="ADAD77FC-0ED7-4698-8473-61BBE29FD733">Projected Annual Tax Information</text>
+                     </value>
+                     <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                        <fill>
+                           <color value="255,255,255"/>
+                        </fill>
+                     </font>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <draw colSpan="2" h="5.705mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                        <fill>
+                           <color value="0,128,192"/>
+                        </fill>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="02921F98-03DF-438C-8002-0BDFA32205F3">Chapter VIA Relief</text>
+                     </value>
+                     <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                        <fill>
+                           <color value="255,255,255"/>
+                        </fill>
+                     </font>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <occur max="-1"/>
+                  <bind match="none"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform layout="row" name="Row1">
+                  <assist role="TR"/>
+                  <draw h="7.029mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="68ED01E0-FD07-406E-A20C-05C6F28FF035">Annual Income*</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell2">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell3">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="870494C2-DC81-4900-AE8A-410BD0F149E0">Net Tax Income r/o</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell4">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <subform layout="row" name="Row2">
+                  <assist role="TR"/>
+                  <draw h="7.029mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="E9252503-B8EE-4425-AE6D-0E1237881684">Deductions under Sec 16</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell2">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell3">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="561FA96C-25AB-40A6-93DC-9B562EEC4F61">Total Tax Payable</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell4">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <subform layout="row" name="Row3">
+                  <assist role="TR"/>
+                  <draw h="7.029mm" name="Cell1">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font baselineShift="0pt" typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="6BFBB4D3-C9AA-42F9-B18D-4060180A61C9">Chapter VIA Relief</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell2">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell3">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="754640CA-D641-494A-B599-04108F1BE903">Tax Deducted till date</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell4">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell5">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell6">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <subform layout="row" name="Row4">
+                  <assist role="TR"/>
+                  <draw h="7.029mm" name="Cell1" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell2" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell3" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text xliff:rid="D4EDBF52-0DCF-45D8-A883-7FDB8B0E6E3E">Balance Tax</text>
+                     </value>
+                  </draw>
+                  <draw h="7.029mm" name="Cell4" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell5" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell6" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <subform layout="row" name="Row5">
+                  <assist role="TR"/>
+                  <draw h="7.029mm" name="Cell1" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell2" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell3" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell4" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell5" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.029mm" name="Cell6" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <bind match="none"/>
+               <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+               <overflow leader="HeaderRow"/>
+               <?templateDesigner expand 0?></subform>
+            <draw h="5.2331mm" name="Text3" w="190.5mm" x="6.35mm" y="263.525mm">
+               <ui>
+                  <textEdit/>
+               </ui>
+               <value>
+                  <text xliff:rid="63FA9F8C-B6C5-44C8-A3DC-5CD3768F4614">* Please Note, Annual Income is after considering the exemption - if any.</text>
+               </value>
+               <font typeface="Arial"/>
+               <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+               <?renderCache.bounds 537166 12000 0 0 1417 1417 0 0?>
+               <?renderCache.textRun 73 * Please Note, Annual Income is after considering the exemption - if any. 0 1417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?></draw>
+            <draw h="25.4mm" name="Image1" w="57.15mm" x="208.28mm" y="3.175mm">
+               <value>
+                  <image contentType="image/png">iVBORw0KGgoAAAANSUhEUgAAAYEAAACDCAMAAABcOFepAAAAb1BMVEX///9OhMRLgsNHgMI7esBB
+fcFFf8I6ecA/fMFplMuVstlZi8f4+v3v8/mduNvd5vJym865y+XH1ep/o9KyxuLR3e3Y4vBlkspd
+jcjn7fZSh8X09/t2nc+HqNTB0eimvt6YtNkpcr0hb7uPrdetwuH7aqJ3AAAOp0lEQVR4nO1dCZfi
+LLM2EBbNonE3rj36/3/jVwskJMbumasznuvLc06fzkISqAeKAqliNIqIiIiIiIiIiIiIiIiI+DPk
+03l1K8vyfKtWu3dn5j+H6XKRGKs0QWlr0+xYRRr+FdYTaZUUSRdam7qMJPwDLGt7J30Hoc14/u78
+fTqWSg1L35Ngs8jBX8QqUQ+qfwC7ibrob+Ga/ix/bAdm+e6cfib22fcKKGwGi3dn9hNRaNmr6ong
+JiHgf69x6M27s/t52HsDSEiplE1Tm2zHhy00C7WZjbcCryglPUty/O4MfxwyIEBqEH19uCzn0yLn
+y6VWTunnxXS+LBfbNFUa2FLH9+X1I3E1OOy9zftmztSm+96l3fx2rFP7dfpXeftPYDpbrvOhG2ub
+FkPX8/XtMPhAxAtQTFen5XlS4bFnYDk5L+er6SAbEa9CDvplcqhtaqHP1TJFTe8YGFvoI5SFW3J8
+PJ+msfq/GPn6VB5qg8aOaOxOIUcNA6a1UYXG/locLqfpu7P9QRgbLe+n4/TIM5Cnd+NiIbUp353v
+z8HgZKioR00bsEMjYxkN0pfhroqTgHHqwfcDgxTN3p3vz8EgA/o8ahi4yIEEkYHXYVAL2dWoYeA0
+NGkn4/zcyzCoZAyK3jGwG+oIqJFEvASlHtAxAu+s3IhsiAFqJBEvwdTcy5d1jGdgoJUI9d5MfxY2
+9wLWN7zhGSjvu2IdhwMvxOq+EbCO8QzM77viNE5NvBKLuzpuaFbaM7C7M1ht9d4cfxz6v0PSiLhl
+YNRvA/rwztx+Ina2S4GbcmgYmPVuZ+/M7GeiR4H7cbJhoGuwyix2Aq9HkYR9gV3TxYaBTles4u/0
+fweHYMWWs3QaBsKu2FzemMnPxkk1umbLVxoGmq5YqHr9vhx+PspUUzuQVz5vGTiQjhJaxyWLfxf5
+WVuQtXbWfsvAWSdC2vr2vqz9dzBfGGvcj8AtA3Nj9STqn3+FuVNCo1VqHAPFOf4y/w5Mj8f+mrmI
+iIiIiIiIiIiIiIiIiP/32F0nPZBr2N5d5sUo/STu8oVPro/fHvEzpkZ2YS94eZnyGU8Iad1No7Lw
+0TQGmXgG0/5SRF6DVfszWhYq+mu56Kcbv5Y6Lp9+CsMMrP3PkSLBRMMMNAFATPTtewKsSvzqB9Qw
+F7h6bX6vp1VzpIVEm0ijFpo33MX1089gd7xerxMWuFxM4AR74vYXeVoydMU0GVMwxjSXUbh4iBtK
+xDPg6mz9r1+hr4bxi4JY4tIv1S2CVaZxCfvTsF1B8jJ11v7+x+I+A2ft6n8S3flegC4DO6reekl6
+R/gYNj0GSPbiwCva4xLqZ9FlgBcnmsL9d4E+ugys6RFV8f+4euVZdBkgs0dsR1PqkL2TRpeBI9V9
+s28SRzyFDgMrrt43GJeRdDWn6TDADvY4FmM7Ko1rKJ5DhwF25MAlQtzbWp516DBQad9LsxqSk7fl
+/TMQMrCnfpg6YF6p61yGOwywzxm52LDJFD36nkPIwJIGA+w6kCWNoDsMOGrIhYanh1SMtvUUQgac
+1Gmuh9UQsxEyEEqdZ5ZE9CZ4CgEDbAA5gfLIIKHJ6JABXlvtRgE8KovTc0/BCESKDBw1HnonyUzi
+GS3hndENhQzMUzz0fnylam5E/F8xniHGOC+04UO3ULSiO2Ncrn6d9Q/dLzNTfjr+ShARERERERER
+ERERERERERERERERERERERERERERERERERERERERERHxT7Bbr4P9auHsp7XMkKS/GfersJ/+9O6i
+k9sQeVH87irsx1+BDDzavHe1HXexoTX4a768IV+gPOunofgxuXt0M/TahUmttaYmd679RMGZET7Y
+wJcx3i97bH6R23Y+wR2IU4vuMdNf5pdLufwyW/7HX5ngox60N9kRrvg1uvkvY5yT2ag2v5w08ltm
+IC+puY5mX8b71nyZr9bR6UQpzAZzm/nX4/28Tk2apkYe8Vb1ZX55Nk7wgtFIm2Zf9mqM77CY0d0v
+/w7Ow2pDr88GY77MrejCkncELxkXggSVm14aXiZeuUfvg8nsZ6kUGjd0pkX881QLZRVckiwU3YZR
+PwiLZSu05gfQM2BnE+OLpclxAP6xlC+Kg04IjDhBXgSQ0cZ7ODdJ4hetb4Xlj52sSqSCd+sJ+t07
+J7Sbop2OGYuUUkhaFD8W/HYKq4MOgtpaLbU501njT36QWIRaKH7ftAZpKHxJzR49LhgP5uFihNRQ
+NjvMQH8zHfJPabb+pQ/ebQTM3kJbF8fhbifIPQjJbs/zeXWkiBsmkdlyNb/Ca9KdYyBxUbwdAxnQ
+Cg+ct+X3DCwXgHEiMvyPjvMrKzLhPZaQAe+54Rm4QfHNsYJ3YxWcSOfnqoVt3JyWNrFHzK0dEQPi
+gKEqrteKZX5arU8bmZgVid0XNqWYC54B3LjLHJbz+fIwIQYkveF6LKj8anGaV9evQT00zEDl91yg
+/A4zMG2uml4Q6EwmAd371HM0tc7PV4taOEkwA6s0USy4/HsG+KJqSZ9IddL+FBiohZyFDIBo9KzN
+X27ZMadSolWeidBB+Pyx0K0LGhSdG9hMYKFPKrFebuRU6xgoUiHqtgsABkz7Qnj0O8fOucEG6ms8
+HBtkoN0ND/1y8y+84Ws8HFosZLs3reo6sC9VkgYB6a8yqd3hyTI1INarZK8YZmAZCuRHBpYBA1LU
+I+OTg7pcLASz7xhIRNeh7KzovA4cjkHKNuhA7xjgLdAUuk5hUq5bCykvo4aBgxQiqODIQHsqhf0u
+Pv9uWVXVkinQZzyeNt5aJHCkD9NUmYuZgWnwq6qNstTdhEp0OU8Dt8aam49O6l0qLGaSGahUogK7
+6fcZWFv41swrY2BgPE1ZwTMDc+sUXwMtQPZzG8b+AC0RbCT3gAFLjbapz5YpZAZAXirU8V0GoIn9
+GO/IqZmmJnD1Zgk3frkc36Sp7/MgFlbHgR20kw3OVzYIs1FqasXQ62IlQiEcpGXKRdZUlD9g4ILd
+W+XVEGihDNqvvoywGWNxjrrvU0kPAz2B5pyB1mzV0DADE0lvhYxILj1vTscMQKvvuC93tdAVCn35
+IdJInwGq3oK9SBtyewzwDjB13TQUj5P2utKVWLRNBHoddI2HbhCFjp0xMzAqsZfeuJL/AQNgu1Fk
+If4itIEa+xS0QJiB7H6r0ATUlA0VPzV5LcvCl1OMj9jRH4qmH8jPljnbu+p11S78HTEAPHc2A8Se
+eEFAi29vBdhTk2/DLPQY4OqtVuSc3hS9y0DBLtQlhx8LRX7Tog5Oy1B4a0sfQQagf8B2vWAGRqWR
+iVBc+36fgamlo7FTQ8BAglUaO+MxMaA7CoZLp3CLs86lqQSbVpurL6doLEmQjMi2tdEiYeHMWKUo
+p9yYAdBNnQibjTWqydwoMhCoNIdvdq3oMcCOutYpo7SpGyEDN47wsHZRNwIH9t9iIOVe7dQwMNod
+UwVji8voTxgoNYkejCNS68wAVOl0BYV4wABa0XeW+S3BilrnXE43Ftq58YBSiai9L6fGXg9Kzabc
+QwbcwMnZF1WWSrBhHo+tuwy46n10MTJ8N9JlgKOcSOd73bEVdb9JdLXQHhkwJEghRkfZdBo5GgRo
+df8+A2B7TsoLNkT6JA4d4d9EQ+sC9bbDBPcbFoMhORCHbrVRiT6O7vsBfavOtUz03gsHqiT0CjeX
+AdJCshtgExhIe6+fHmwih2YPmu8EDLgAJisXI8Nnt8OAC2By8VEQ05ZeqB9hT4zWSNP8LpJExAyA
+klanUgaJ92A2HLmU7hEn7AcMQKcPmgvgarVjAPoxuzoSAwsp7ooNDNT9a4ijJgtmcDwwFt54gtsV
+9CVu3McMgMTueuK7rhcS9cyyAF0GkiY2CashF2Omw4BT/2sf/Ce0t2wnzBvYJ81IHg1VbK6OgZUR
+2S1kwI8LWg6vbHY/YOAM7QtnpmY1MdcwcAKjvyQGoEHeRRp6xEDB44JBWwhqnJMpfPwIAzDHKzOw
+TrvKbpAB6DuGpyXcd1oGWKQkKY6R4YrbYYB1j6twzSFjAqUOPrWQzU0cq6E8HAN4a5z0GJjRp0ju
+IxrNkKIfZiDzHRAKetQyAIaQHFNxqCftlfYbBrBmD1ujqa+IBfQ1J9UqY+qIMmiLgZJ/yMDDEJAd
+Bo5BxU+CgBkhAxx9klXsJGwoCLS+jLP2cuoYJdvkcz8/4RmgHgcZyLkG5VAgbEzNqBo0OjXvYQaw
+oKyt9oYy0DBAQ0oqzg1aZDZtMkPZ6DNQsfCuXFWGGThI36FswFptwoY4BlYwnvFme94fD8wb5T5A
+S/udhgEXLoz1GofW47B5IQN8zO17FTYUwhrta30sz5MN1r8KKNDlaTkDYZC10TBAXQ4yMP/Si/J8
+BZuD2Qbm7eS0HEPVrpiBJNkQsqJl4NYOt8ak3hoGsB26CrWw8NLt5Fwu0tMDBlKzmZwvGUio4rJt
+DoRxwAB8yykeDHfU1Ac/M3cGCmxyPZ+vCc/MiRm9YnbD6W78PHT09nGskZABnpRzYywXWWbbY4Bn
+LXw5OpFl+DGw7YTE0MQ0HXgyGjhQUqYzTqQ8Ayhq5PFoKTkMXJxpqjRO6AppXAwz5Wx0mu72DGSy
+GR+C+lLEgJ9yhky5mIylwb0r4e3KjRv9eNZj9SXhPvzx/rob6WaW5VfAwNT4GoyRZX2kF2DA6faT
+xSEFfAUNUJSPCxw/GRX+9Wl/Djlk4AsNCk0TxjUfuimChEyNL4pxQjdSLPPF4qGndEJnpjM9d5op
+k6Ymm1D2i0uSpqlaeE1VZ75nWCWZmOLmhltIkNalpzEv8Qm7cNmo6sxBFHhWY79byEx446IQmViN
+cpF5pX+qm5tFmWFe1My3gSTrRmI8HbSB++5jM/+pDNiENwpWdNsscWpmDLnw+Wyv5rcNFsFuQI3u
+hH9FXeKOmhK+bw/fxQHOJyXiAqUr3KG7M7/QGX7lzDfwPSUfuhLuOE1/f9RiFw5A9ruffuoriq6W
+/PmJP0Cx+34bxeIlH3v4lpeWJSIiIiIiIiIiIiIiIuIp/A9cZsYYakhH5QAAAABJRU5ErkJggg==</image>
+               </value>
+               <ui>
+                  <imageEdit/>
+               </ui>
+               <desc>
+                  <text name="embeddedHref">C:\Users\I353955\Desktop\images.png</text>
+               </desc>
+            </draw>
+            <subform h="50mm" w="100mm">
+               <bind match="none"/>
+            </subform>
+            <?templateDesigner expand 0?></pageArea>
+         <pageArea id="Page2_ID" name="Page2">
+            <medium long="279.4mm" orientation="landscape" short="215.9mm" stock="letter"/>
+            <contentArea h="190.5mm" w="254mm" x="12.7mm" y="12.7mm"/>
+            <subform h="19.05mm" w="254mm" x="12.7mm" y="12.7mm">
+               <bind match="none"/>
+               <?templateDesigner expand 1?></subform>
+            <?templateDesigner expand 0?></pageArea>
+         <pageArea id="Page4_ID" name="Page4">
+            <medium long="279.4mm" orientation="landscape" short="215.9mm" stock="letter"/>
+            <contentArea h="190.5mm" w="254mm" x="12.7mm" y="12.7mm"/>
+            <?templateDesigner expand 0?></pageArea>
+         <pageArea id="Page3_ID" name="Page3">
+            <medium long="279.4mm" orientation="landscape" short="215.9mm" stock="letter"/>
+            <contentArea h="200.025mm" w="254mm" x="12.7mm" y="3.175mm"/>
+            <draw h="6.35mm" name="Text2" w="254mm" x="12.7mm" y="3.175mm">
+               <ui>
+                  <textEdit/>
+               </ui>
+               <value>
+                  <text xliff:rid="D44057BE-515D-425F-8936-9E973185D255">Emp No : 	3								                                                                                            Annual salary Details</text>
+               </value>
+               <font typeface="Arial"/>
+               <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+               <?renderCache.bounds 717166 15166 0 0 1417 1417 0 0?>
+               <?renderCache.textRun 9 Emp No :  0 1417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 45875 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1 3 0 73417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 78979 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 109417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 145417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 181417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 217417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 253417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 289417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 1   0 325417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?>
+               <?renderCache.textRun 113                                                                                             Annual salary Details 0 361417 9313 0 0 0 "Arial" 0 0 10000 ISO-8859-1?></draw>
+            <?templateDesigner expand 0?></pageArea>
+         <?templateDesigner expand 0?></pageSet>
+      <subform layout="tb" name="Bodypage1" w="254mm">
+         <breakBefore target="Page1" targetType="pageArea"/>
+         <overflow target="Page2"/>
+         <subform columnWidths="47.8655mm 25.212mm 23.5864mm 51.7928mm 26.9547mm 51.6339mm 26.9547mm" layout="table" name="GT_RESULT">
+            <subform id="overflowLeader_ID" layout="row" name="overflowLeader">
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="97B15045-86C3-431E-B5C6-C4F27D0CD2EF">Earnings</text>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+               </draw>
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="B83E3021-3EED-491C-8144-8EA8EAFA9528">Arrears (INR)</text>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+               </draw>
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="DCA9CC31-BFBE-4E49-8DD1-8B6C113334D5">Current (INR)</text>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+               </draw>
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="38F8A37D-2BA6-45BD-91EE-B9D414FEF9A7">Deductions</text>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+               </draw>
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="D406A4E2-29C9-47C6-9225-ED3DAB88F98E">Amount (INR)</text>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+               </draw>
+               <assist role="TH"/>
+               <occur max="-1"/>
+               <bind match="none"/>
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+                  <value>
+                     <text xliff:rid="8E67A8DE-D409-40FA-9E5B-03C642DD5062">Fom16</text>
+                  </value>
+               </draw>
+               <draw>
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="2A812E89-E273-48D6-8516-2EAC558B706C">Amount(INR)</text>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold">
+                     <fill>
+                        <color value="255,255,255"/>
+                     </fill>
+                  </font>
+                  <para vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <fill>
+                        <color value="0,128,192"/>
+                     </fill>
+                     <corner thickness="0.216mm"/>
+                  </border>
+               </draw>
+               <?templateDesigner expand 0?></subform>
+            <subform layout="row" name="DATA">
+               <subform colSpan="3" columnWidths="47.8655mm 25.3712mm 23.6194mm" layout="table" name="Table15">
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <corner thickness="0.216mm"/>
+                  </border>
+                  <subform layout="row" name="Row1">
+                     <assist role="TR"/>
+                     <field minH="5.771mm" name="TextField12" w="62mm">
+                        <ui>
+                           <textEdit multiLine="1">
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para vAlign="middle"/>
+                        <bind match="dataRef" ref="$.EARNINGS"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <field minH="5.771mm" name="TextField13" w="62mm">
+                        <ui>
+                           <textEdit>
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para hAlign="right" vAlign="middle"/>
+                        <bind match="dataRef" ref="$.ARRAMOUNT"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <field minH="0.227208in" name="TextField14" w="62mm">
+                        <ui>
+                           <textEdit>
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para hAlign="right" vAlign="middle"/>
+                        <bind match="dataRef" ref="$.EARAMOUNT"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="dataRef" ref="$.DATA[*]"/>
+                     <?templateDesigner expand 1?>
+                     <keep intact="none"/>
+                     <occur max="-1"/>
+                  </subform>
+                  <bind match="dataRef" ref="$record.GT_RESULT"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <occur max="-1"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform colSpan="2" columnWidths="51.7928mm 26.9547mm" layout="table" name="Table16">
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <corner thickness="0.216mm"/>
+                  </border>
+                  <subform layout="row" name="Row1" x="0.002mm">
+                     <assist role="TR"/>
+                     <field minH="5.771mm" name="TextField15" w="62mm" x="0mm">
+                        <ui>
+                           <textEdit multiLine="1">
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para vAlign="middle"/>
+                        <bind match="dataRef" ref="$.DEDUCTIONS"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <field name="TextField16" w="62mm">
+                        <ui>
+                           <textEdit>
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para hAlign="right" vAlign="middle"/>
+                        <bind match="dataRef" ref="$.DEDAMT"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="dataRef" ref="$.DATA[*]"/>
+                     <?templateDesigner expand 1?>
+                     <keep intact="none"/>
+                     <occur max="-1"/>
+                  </subform>
+                  <bind match="dataRef" ref="$record.GT_DEDUCTION"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <?templateDesigner expand 1?>
+                  <occur max="-1"/>
+               </subform>
+               <assist role="TR"/>
+               <bind match="dataRef" ref="$record.GT_RESULT.DATA[*]"/>
+               <subform colSpan="2" columnWidths="51.6339mm 26.9547mm" layout="table" name="Table17">
+                  <border>
+                     <edge thickness="0.2159mm"/>
+                     <corner thickness="0.216mm"/>
+                  </border>
+                  <subform layout="row" name="Row1">
+                     <assist role="TR"/>
+                     <field minH="5.771mm" name="TextField17" w="62mm">
+                        <ui>
+                           <textEdit multiLine="1">
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para vAlign="middle"/>
+                        <bind match="dataRef" ref="$.FORM16"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <field minH="0.227208in" name="TextField18" w="62mm">
+                        <ui>
+                           <textEdit>
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para hAlign="right" vAlign="middle"/>
+                        <bind match="dataRef" ref="$.FO16AMT"/>
+                        <border>
+                           <edge presence="hidden"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="dataRef" ref="$.DATA[*]"/>
+                     <?templateDesigner expand 1?>
+                     <keep intact="none"/>
+                     <occur max="-1"/>
+                  </subform>
+                  <bind match="dataRef" ref="$record.GT_FORM16"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <?templateDesigner expand 1?>
+                  <occur max="-1"/>
+               </subform>
+               <?templateDesigner expand 0?>
+               <keep intact="none"/>
+            </subform>
+            <occur min="0"/>
+            <bind match="none"/>
+            <desc>
+               <text name="Schema Annotation">PaySlip</text>
+            </desc>
+            <overflow leader="overflowLeader"/>
+            <subform layout="row" name="DATA">
+               <assist role="TR"/>
+               <draw colSpan="2" h="7.167mm" w="62mm">
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <exData contentType="text/html" xliff:rid="5883E352-F88A-4B87-AE08-061599B6E457">
+                        <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:9pt;letter-spacing:0in">Total Earnings<span style="xfa-spacerun:yes"> </span><span style="font-size:8pt">(Current + Arrears )</span><span style="font-size:10pt"><span style="xfa-spacerun:yes">   </span></span></p></body>
+                     </exData>
+                  </value>
+                  <font typeface="Arial" weight="bold"/>
+                  <para vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge>
+                        <color value="128,128,128"/>
+                     </edge>
+                     <edge presence="hidden"/>
+                     <edge/>
+                     <edge/>
+                     <corner>
+                        <color value="128,128,128"/>
+                     </corner>
+                     <corner presence="hidden"/>
+                     <corner/>
+                     <corner/>
+                  </border>
+               </draw>
+               <field access="readOnly" h="9mm" id="floatingField002995" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                  <ui>
+                     <textEdit>
+                        <border>
+                           <edge stroke="lowered"/>
+                        </border>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <font typeface="Arial"/>
+                  <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                  <para vAlign="middle"/>
+                  <bind match="dataRef" ref="$record.GS_ZPAYROLLDET.TOT_EARN"/>
+               </field>
+               <draw h="7.167mm" w="62mm">
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <exData contentType="text/html">
+                        <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField002995" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                     </exData>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold"/>
+                  <para hAlign="right" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge>
+                        <color value="128,128,128"/>
+                     </edge>
+                     <edge/>
+                     <edge/>
+                     <edge presence="hidden"/>
+                     <corner>
+                        <color value="128,128,128"/>
+                     </corner>
+                     <corner/>
+                     <corner/>
+                     <corner presence="hidden"/>
+                  </border>
+               </draw>
+               <draw h="7.167mm" w="62mm">
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <text xliff:rid="BB11487F-BA24-481D-A545-9F752E723914">Total Deductions  </text>
+                  </value>
+                  <font baselineShift="0pt" size="9pt" typeface="Arial" weight="bold"/>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge>
+                        <color value="128,128,128"/>
+                     </edge>
+                     <edge presence="hidden"/>
+                     <edge/>
+                     <edge/>
+                     <corner>
+                        <color value="128,128,128"/>
+                     </corner>
+                     <corner presence="hidden"/>
+                     <corner/>
+                     <corner/>
+                  </border>
+               </draw>
+               <field access="readOnly" h="9mm" id="floatingField011942" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                  <ui>
+                     <textEdit>
+                        <border>
+                           <edge stroke="lowered"/>
+                        </border>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <font typeface="Arial"/>
+                  <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                  <para vAlign="middle"/>
+                  <bind match="dataRef" ref="$record.GS_ZPAYROLLDET1.TOT_DED"/>
+               </field>
+               <draw h="7.167mm" w="62mm">
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <value>
+                     <exData contentType="text/html">
+                        <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField011942" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                     </exData>
+                  </value>
+                  <font baselineShift="0pt" size="8pt" typeface="Arial" weight="bold"/>
+                  <para hAlign="right" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge>
+                        <color value="128,128,128"/>
+                     </edge>
+                     <edge/>
+                     <edge/>
+                     <edge presence="hidden"/>
+                     <corner>
+                        <color value="128,128,128"/>
+                     </corner>
+                     <corner/>
+                     <corner/>
+                     <corner presence="hidden"/>
+                  </border>
+               </draw>
+               <draw colSpan="2" h="7.167mm" w="62mm">
+                  <ui>
+                     <textEdit>
+                        <margin/>
+                     </textEdit>
+                  </ui>
+                  <font baselineShift="0pt" typeface="Arial"/>
+                  <para vAlign="middle"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                  <border>
+                     <edge presence="hidden">
+                        <color value="128,128,128"/>
+                     </edge>
+                     <edge/>
+                     <edge/>
+                     <edge presence="hidden"/>
+                     <corner presence="hidden">
+                        <color value="128,128,128"/>
+                     </corner>
+                     <corner/>
+                     <corner/>
+                     <corner presence="hidden"/>
+                  </border>
+                  <value>
+                     <text>  </text>
+                  </value>
+               </draw>
+               <?templateDesigner expand 0?></subform>
+            <subformSet name="FooterRow">
+               <?templateDesigner expand 1?></subformSet>
+            <?templateDesigner expand 0?></subform>
+         <draw h="1.905mm" name="Rectangle4" w="203.2mm">
+            <value>
+               <rectangle>
+                  <edge presence="hidden"/>
+                  <corner presence="hidden" radius="5.08mm"/>
+               </rectangle>
+            </value>
+         </draw>
+         <subform layout="lr-tb" minH="65.093mm" w="254mm" y="16.76mm">
+            <bind match="none"/>
+            <subform layout="tb" minH="23.589mm" name="NetPay" w="114.3mm">
+               <bind match="none"/>
+               <subform columnWidths="55.8948mm 58.405mm" layout="table" name="net_pay">
+                  <border>
+                     <edge/>
+                  </border>
+                  <subform layout="row" name="Row1">
+                     <assist role="TR"/>
+                     <draw h="7.62mm" w="1.200361in">
+                        <ui>
+                           <textEdit>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <value>
+                           <exData contentType="text/html" xliff:rid="16667C93-827A-4DCF-9FB2-C76B378860E8">
+                              <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:10pt;text-decoration:none;letter-spacing:0in">Net Pay<span style="font-size:12pt"><span style="xfa-spacerun:yes"> </span></span><span style="font-size:8pt">(INR)</span></p></body>
+                           </exData>
+                        </value>
+                        <border>
+                           <edge presence="hidden"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                     </draw>
+                     <field access="readOnly" h="9mm" id="floatingField023281" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                        <ui>
+                           <textEdit>
+                              <border>
+                                 <edge stroke="lowered"/>
+                              </border>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para vAlign="middle"/>
+                        <bind match="dataRef" ref="$record.GS_ZPAYROLLDET1.NPAY"/>
+                     </field>
+                     <draw minH="7.62mm">
+                        <ui>
+                           <textEdit>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font baselineShift="0pt" typeface="Arial" weight="bold"/>
+                        <para hAlign="right" marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <value>
+                           <exData contentType="text/html">
+                              <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p><span xfa:embed="#floatingField023281" xfa:embedMode="raw" xfa:embedType="uri"/></p></body>
+                           </exData>
+                        </value>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="none"/>
+                     <field access="readOnly" h="9mm" id="floatingField016827" name="TextField" presence="hidden" w="62mm" x="0mm" y="0mm">
+                        <ui>
+                           <textEdit>
+                              <border>
+                                 <edge stroke="lowered"/>
+                              </border>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para vAlign="middle"/>
+                        <bind match="dataRef" ref="$record.GS_ZPAYROLLDET1.NPAY"/>
+                     </field>
+                     <?templateDesigner expand 0?></subform>
+                  <bind match="none"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <?templateDesigner expand 0?></subform>
+               <draw h="1.651mm" name="Rectangle5" w="50.8mm">
+                  <value>
+                     <rectangle>
+                        <edge presence="hidden"/>
+                        <corner presence="hidden" radius="5.08mm"/>
+                     </rectangle>
+                  </value>
+               </draw>
+               <subform columnWidths="54.4707mm 59.8295mm" layout="table" name="pf">
+                  <border>
+                     <edge/>
+                  </border>
+                  <subform id="HeaderRow_ID_copy3" layout="row" name="HeaderRow" y="0mm">
+                     <assist role="TH"/>
+                     <draw colSpan="-1" h="7.168mm" name="Cell1">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="19D5A048-7A4C-4D30-B4C7-2D06897D70EB">Retirals as on Month end</text>
+                        </value>
+                        <font baselineShift="0pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <occur max="-1"/>
+                     <bind match="none"/>
+                     <?templateDesigner expand 1?></subform>
+                  <subform layout="row" name="Row1" y="0mm">
+                     <assist role="TR"/>
+                     <draw h="7.168mm" name="Cell1">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="346C2089-CB52-4A42-BF02-E09C47F3CECE">Provident Fund*</text>
+                        </value>
+                        <font baselineShift="0pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     </draw>
+                     <draw h="7.168mm" name="Cell2">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="none"/>
+                     <?templateDesigner expand 1?></subform>
+                  <subform layout="row" name="Row2" y="0mm">
+                     <assist role="TR"/>
+                     <draw h="7.168mm" name="Cell1">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="CDDB6607-E7E9-4569-B39F-0AC2FBA83EFF">Gratuity</text>
+                        </value>
+                        <font baselineShift="0pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     </draw>
+                     <draw h="7.168mm" name="Cell2">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="none"/>
+                     <?templateDesigner expand 1?></subform>
+                  <bind match="none"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <overflow leader="HeaderRow"/>
+                  <keep intact="contentArea"/>
+                  <?templateDesigner expand 0?></subform>
+               <subform columnWidths="35.56mm 25.4mm 35.56mm 25.4mm" layout="table" name="Table5" presence="hidden">
+                  <border>
+                     <edge/>
+                  </border>
+                  <subform id="HeaderRow_ID_copy1" layout="row" name="HeaderRow">
+                     <assist role="TH"/>
+                     <draw colSpan="2" h="7.168mm" name="LoanBalance" w="1.181097in">
+                        <value>
+                           <exData contentType="text/html" xliff:rid="271A0141-D0EA-4E81-9394-7AF8BB5E0F68">
+                              <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p>Loan Balance<span style="xfa-spacerun:yes"> </span><span style="xfa-spacerun:yes"> </span></p></body>
+                           </exData>
+                        </value>
+                        <font typeface="Arial"/>
+                        <border>
+                           <edge/>
+                           <edge presence="hidden"/>
+                           <edge/>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                           <corner thickness="0.1778mm"/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <para vAlign="middle"/>
+                        <assist>
+                           <speak xliff:rid="41F17A38-9B98-42F5-8C2C-F00708A4DB5D">Loan</speak>
+                        </assist>
+                     </draw>
+                     <draw colSpan="2" h="7.168mm">
+                        <font typeface="Arial"/>
+                        <border>
+                           <edge/>
+                           <edge presence="hidden"/>
+                           <edge/>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <corner presence="hidden" thickness="0.1778mm"/>
+                           <corner thickness="0.1778mm"/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <para vAlign="middle"/>
+                        <value>
+                           <text xliff:rid="44E3D2E4-6242-4CD8-A489-8A898839F6FC">Perquisite Details</text>
+                        </value>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <occur max="-1"/>
+                     <bind match="none"/>
+                     <?templateDesigner expand 0?></subform>
+                  <subform layout="row" name="Row1">
+                     <assist role="TR"/>
+                     <draw h="7.168mm" name="Cell1" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <draw h="7.168mm" name="Cell2" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <draw h="7.168mm" name="Cell3" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <draw h="7.168mm" name="Cell4" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="none"/>
+                     <?templateDesigner expand 0?></subform>
+                  <bind match="none"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <overflow leader="HeaderRow"/>
+                  <margin leftInset="81.28mm"/>
+                  <?templateDesigner expand 0?></subform>
+               <?templateDesigner expand 0?></subform>
+            <draw h="30.48mm" name="Rectangle3" w="1.524mm">
+               <value>
+                  <rectangle>
+                     <edge presence="hidden"/>
+                     <corner presence="hidden" radius="5.08mm"/>
+                  </rectangle>
+               </value>
+            </draw>
+            <subform layout="lr-tb" minH="30mm" name="Details" w="138.176mm">
+               <bind match="none"/>
+               <subform columnWidths="12.72mm 29.9209mm 46.7399mm 34.591mm 14.2042mm" layout="table" name="LoanBalance">
+                  <border>
+                     <edge/>
+                  </border>
+                  <subform id="HeaderRow_ID_copy4" layout="row" name="HeaderRow" x="-50.47mm">
+                     <assist role="TH"/>
+                     <draw colSpan="3" h="7.168mm" name="Cell1" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="153,204,255"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="5DEC78E0-FFD3-4EBC-AD02-D80A3B06B866">Loan Balance</text>
+                        </value>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para vAlign="middle"/>
+                     </draw>
+                     <draw colSpan="2" h="7.168mm" name="Cell3" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="153,204,255"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="887C275A-B03D-49A5-B4C6-025A30A2C080">Perquisite Details</text>
+                        </value>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para hAlign="center" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <occur max="-1"/>
+                     <bind match="none"/>
+                     <?templateDesigner expand 0?></subform>
+                  <subform layout="row" name="Row1" x="-50.47mm">
+                     <assist role="TR"/>
+                     <subform colSpan="3" columnWidths="21.5959mm 37.9922mm 29.7938mm" layout="table" name="Table11" y="0mm">
+                        <border>
+                           <edge/>
+                        </border>
+                        <subform layout="row" name="Row1" y="0mm">
+                           <assist role="TR"/>
+                           <field minH="7.168mm" name="TextField1" w="62mm" y="0mm">
+                              <ui>
+                                 <textEdit multiLine="1">
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para vAlign="middle"/>
+                              <bind match="dataRef" ref="$.TLN"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <field minH="7.168mm" name="TextField2" w="62mm" y="0mm">
+                              <ui>
+                                 <textEdit multiLine="1">
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para vAlign="middle"/>
+                              <bind match="dataRef" ref="$.TLNDSC"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <field minH="0.282208in" name="TextField3" w="62mm" y="0mm">
+                              <ui>
+                                 <textEdit multiLine="1">
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para hAlign="right" vAlign="middle"/>
+                              <bind match="dataRef" ref="$.TOBL"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <border>
+                              <edge presence="hidden"/>
+                           </border>
+                           <bind match="dataRef" ref="$.DATA[*]"/>
+                           <?templateDesigner expand 0?>
+                           <keep intact="none"/>
+                           <occur max="-1"/>
+                        </subform>
+                        <bind match="dataRef" ref="$record.GT_LOAN_BAL"/>
+                        <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                        <?templateDesigner expand 1?></subform>
+                     <subform colSpan="2" columnWidths="24.4171mm 24.4171mm" layout="table" name="Table12">
+                        <border>
+                           <edge/>
+                        </border>
+                        <subform layout="row" name="Row1" x="-0.039mm" y="0mm">
+                           <assist role="TR"/>
+                           <draw h="0.282208in" name="Text5" w="29.2864mm" y="0mm">
+                              <ui>
+                                 <textEdit/>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                              <border>
+                                 <edge presence="hidden"/>
+                                 <corner presence="hidden" thickness="0.1778mm"/>
+                              </border>
+                              <keep intact="none"/>
+                           </draw>
+                           <draw minH="0.282208in" name="Text6" w="29.2864mm">
+                              <ui>
+                                 <textEdit/>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                              <border>
+                                 <edge presence="hidden"/>
+                                 <corner presence="hidden" thickness="0.1778mm"/>
+                              </border>
+                              <keep intact="none"/>
+                           </draw>
+                           <border>
+                              <edge presence="hidden"/>
+                           </border>
+                           <bind match="none"/>
+                           <?templateDesigner expand 1?>
+                           <occur max="-1"/>
+                           <keep intact="none"/>
+                        </subform>
+                        <bind match="none"/>
+                        <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                        <?templateDesigner expand 1?></subform>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="none"/>
+                     <keep intact="none"/>
+                     <?templateDesigner expand 0?></subform>
+                  <bind match="none"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <overflow leader="HeaderRow"/>
+                  <?templateDesigner expand 0?></subform>
+               <draw h="1.905mm" name="Rectangle1" w="50.8mm">
+                  <value>
+                     <rectangle>
+                        <edge presence="hidden"/>
+                        <corner presence="hidden" radius="5.08mm"/>
+                     </rectangle>
+                  </value>
+               </draw>
+               <subform columnWidths="29.2048mm 22.7148mm 22.7148mm 13.1409mm 20.1188mm 30.2818mm" layout="table" name="Inv_desc">
+                  <border>
+                     <edge/>
+                  </border>
+                  <subform id="HeaderRow_ID_copy2" layout="row" name="HeaderRow" x="-0.207mm" y="0mm">
+                     <assist role="TH"/>
+                     <draw colSpan="4" h="7.168mm" name="Cell1" y="0mm">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="44C41E77-4F4E-40D4-83C1-6C883163BEE0">Investment Description  </text>
+                        </value>
+                        <font baselineShift="0pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <occur max="-1"/>
+                     <bind match="none"/>
+                     <draw colSpan="2" minH="7.168mm" y="0mm">
+                        <font baselineShift="0pt" typeface="Arial">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <value>
+                           <exData contentType="text/html" xliff:rid="0B583694-C61E-4CAD-8A5D-7B7010787CB7">
+                              <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="text-valign:middle;text-decoration:none;letter-spacing:0in">Exemption Considered<span style="letter-spacing:0em"><span style="xfa-spacerun:yes">  </span></span></p></body>
+                           </exData>
+                        </value>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt"/>
+                        <border>
+                           <edge/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                           <corner thickness="0.175mm"/>
+                        </border>
+                     </draw>
+                     <?templateDesigner expand 1?></subform>
+                  <subform layout="row" name="Row1" x="-0.207mm" y="0mm">
+                     <assist role="TR"/>
+                     <subform colSpan="4" columnWidths="53.9994mm 33.776mm" layout="table" name="Table14">
+                        <border>
+                           <edge/>
+                        </border>
+                        <subform layout="row" name="Row1" y="0mm">
+                           <assist role="TR"/>
+                           <field minH="7.168mm" name="TextField10" w="62mm" y="0mm">
+                              <ui>
+                                 <textEdit multiLine="1">
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para vAlign="middle"/>
+                              <bind match="dataRef" ref="$.INV_DESC"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <field minH="0.282208in" name="TextField11" w="62mm" y="0mm">
+                              <ui>
+                                 <textEdit>
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para hAlign="right" vAlign="middle"/>
+                              <bind match="dataRef" ref="$.INV_AMT"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <border>
+                              <edge presence="hidden"/>
+                           </border>
+                           <bind match="dataRef" ref="$.DATA[*]"/>
+                           <occur max="-1"/>
+                           <keep intact="none"/>
+                           <?templateDesigner expand 1?></subform>
+                        <bind match="dataRef" ref="$record.GT_PR_DET"/>
+                        <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                        <?templateDesigner expand 1?></subform>
+                     <subform colSpan="2" columnWidths="25.2006mm 25.2006mm" layout="table" name="Table13" y="0mm">
+                        <border>
+                           <edge/>
+                        </border>
+                        <subform layout="row" name="Row1" x="0mm" y="0mm">
+                           <assist role="TR"/>
+                           <field minH="7.168mm" name="TextField6" w="62mm" y="0mm">
+                              <ui>
+                                 <textEdit multiLine="1">
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para vAlign="middle"/>
+                              <bind match="dataRef" ref="$.DESC"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <field minH="0.282208in" name="TextField7" w="62mm" x="-0.208mm" y="0mm">
+                              <ui>
+                                 <textEdit>
+                                    <border presence="hidden"/>
+                                    <margin/>
+                                 </textEdit>
+                              </ui>
+                              <font typeface="Arial"/>
+                              <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                              <para hAlign="right" vAlign="middle"/>
+                              <bind match="dataRef" ref="$.AMT"/>
+                              <border>
+                                 <edge/>
+                                 <corner thickness="0.1778mm"/>
+                              </border>
+                           </field>
+                           <border>
+                              <edge presence="hidden"/>
+                           </border>
+                           <bind match="dataRef" ref="$.DATA[*]"/>
+                           <keep intact="none"/>
+                           <occur max="-1"/>
+                           <?templateDesigner expand 1?></subform>
+                        <bind match="dataRef" ref="$record.GT_EXEMPTION"/>
+                        <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                        <?templateDesigner expand 1?></subform>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="none"/>
+                     <keep intact="none"/>
+                     <?templateDesigner expand 1?></subform>
+                  <bind match="none"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <overflow leader="HeaderRow"/>
+                  <?templateDesigner expand 0?></subform>
+               <?templateDesigner expand 1?></subform>
+            <?templateDesigner expand 1?></subform>
+         <?templateDesigner expand 0?></subform>
+      <subform layout="tb" name="Bodypage2" w="254mm">
+         <breakBefore target="Page2" targetType="pageArea"/>
+         <bind match="none"/>
+         <breakAfter target="Page3" targetType="pageArea"/>
+         <subform layout="tb" minH="47.864mm" w="254mm">
+            <bind match="none"/>
+            <subform columnWidths="59.4558mm 194.544mm" layout="table" name="RetrialDetails">
+               <border>
+                  <edge/>
+               </border>
+               <subform id="HeaderRow_ID_copy5" layout="row" name="HeaderRow" y="0mm">
+                  <assist role="TH"/>
+                  <draw colSpan="-1" name="Cell1" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <value>
+                        <text xliff:rid="95227BA2-7EF5-4CB6-ADA2-9F8964F2E5C3">Retrial Details</text>
+                     </value>
+                     <font baselineShift="0pt" size="14pt" typeface="Arial" weight="bold"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <occur max="-1"/>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <subform layout="row" name="Row1" y="0mm">
+                  <assist role="TR"/>
+                  <draw h="7.168mm" name="Cell1" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <draw h="7.168mm" name="Cell2" y="0mm">
+                     <border>
+                        <edge/>
+                        <corner thickness="0.1778mm"/>
+                     </border>
+                     <ui>
+                        <textEdit/>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                     <para hAlign="center" vAlign="middle"/>
+                  </draw>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <bind match="none"/>
+                  <?templateDesigner expand 1?></subform>
+               <bind match="none"/>
+               <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+               <?templateDesigner expand 0?></subform>
+            <draw h="9.118mm" name="Arrearbreakup" w="203.2mm">
+               <ui>
+                  <textEdit/>
+               </ui>
+               <value>
+                  <exData contentType="text/html" xliff:rid="4835CC16-E1D9-4780-BD90-0F4E09D4E633">
+                     <body xmlns="http://www.w3.org/1999/xhtml" xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><p style="font-size:14pt;font-weight:bold;letter-spacing:0in">Arrears Breakup</p><p style="letter-spacing:0in"><span style="xfa-spacerun:yes"> </span></p></body>
+                  </exData>
+               </value>
+               <font typeface="Arial"/>
+               <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="2.54mm"/>
+               <border>
+                  <edge presence="hidden"/>
+               </border>
+            </draw>
+            <subform layout="tb">
+               <bind match="none"/>
+               <subform layout="lr-tb" name="DATA">
+                  <field h="9mm" name="TEXT1" w="29.21mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="40"/>
+                     </value>
+                     <bind match="dataRef" ref="$.TEXT1"/>
+                     <desc>
+                        <text name="Schema Annotation">Character field of length 40</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH01" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH01"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH02" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH02"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH03" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH03"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH04" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH04"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH05" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH05"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH06" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH06"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH07" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH07"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH08" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH08"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH09" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH09"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH10" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH10"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH11" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH11"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="MONTH12" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.MONTH12"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <field h="0.354333in" name="TOTAL" w="17.272mm">
+                     <ui>
+                        <textEdit>
+                           <margin/>
+                        </textEdit>
+                     </ui>
+                     <font typeface="Arial"/>
+                     <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                     <para vAlign="middle"/>
+                     <value>
+                        <text maxChars="10"/>
+                     </value>
+                     <bind match="dataRef" ref="$.TOTAL"/>
+                     <desc>
+                        <text name="Schema Annotation">Character Field with Length 10</text>
+                     </desc>
+                     <border>
+                        <edge/>
+                     </border>
+                  </field>
+                  <assist role="TR"/>
+                  <occur max="-1"/>
+                  <bind match="dataRef" ref="$.GT_RESULT3.DATA[*]"/>
+                  <border>
+                     <edge presence="hidden"/>
+                  </border>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <?templateDesigner expand 1?></subform>
+               <keep intact="contentArea"/>
+               <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+               <?templateDesigner expand 0?></subform>
+            <subform layout="tb" w="254mm">
+               <bind match="none"/>
+               <draw h="9.119mm" name="Text4" w="203.2mm">
+                  <ui>
+                     <textEdit/>
+                  </ui>
+                  <value>
+                     <text xliff:rid="987B6B12-5EB7-4AE6-94CB-65C49A9BA429">Misc Breakup</text>
+                  </value>
+                  <font baselineShift="0pt" size="14pt" typeface="Arial" weight="bold"/>
+                  <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="2.54mm"/>
+                  <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt"/>
+                  <?renderCache.bounds 573166 17232 0 0 1417 7200 0 0?>
+                  <?renderCache.textRun 12 Misc Breakup 0 1417 18254 0 0 0 "Arial" 1 0 14000 ISO-8859-1?></draw>
+               <subform columnWidths="85.961mm 61.9126mm" layout="table" name="Table10">
+                  <border>
+                     <edge/>
+                  </border>
+                  <subform id="HeaderRow_ID_copy6" layout="row" name="HeaderRow">
+                     <assist role="TH"/>
+                     <draw h="7.168mm" name="Cell1">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="4610F100-23E0-4C41-9552-7C82A7D6A5CB">Component Description</text>
+                        </value>
+                        <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     </draw>
+                     <draw h="7.168mm" name="Cell2">
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                           <fill>
+                              <color value="0,128,192"/>
+                           </fill>
+                        </border>
+                        <ui>
+                           <textEdit/>
+                        </ui>
+                        <value>
+                           <text xliff:rid="BD94FD35-33C0-45E5-A804-FF10ED215A47">Amount</text>
+                        </value>
+                        <font baselineShift="0pt" size="12pt" typeface="Arial" weight="bold">
+                           <fill>
+                              <color value="255,255,255"/>
+                           </fill>
+                        </font>
+                        <margin bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm" topInset="0.5mm"/>
+                        <para marginLeft="0pt" marginRight="0pt" spaceAbove="0pt" spaceBelow="0pt" textIndent="0pt" vAlign="middle"/>
+                     </draw>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <occur max="-1"/>
+                     <bind match="none"/>
+                     <?templateDesigner expand 1?></subform>
+                  <subform layout="row" name="Row1">
+                     <assist role="TR"/>
+                     <field minH="5.771mm" name="TextField8" w="62mm">
+                        <ui>
+                           <textEdit multiLine="1">
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font size="8pt" typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para vAlign="middle"/>
+                        <bind match="dataRef" ref="$.DESC"/>
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <field minH="5.771mm" name="TextField9" w="62mm">
+                        <ui>
+                           <textEdit>
+                              <border presence="hidden"/>
+                              <margin/>
+                           </textEdit>
+                        </ui>
+                        <font typeface="Arial"/>
+                        <margin bottomInset="1mm" leftInset="1mm" rightInset="1mm" topInset="1mm"/>
+                        <para hAlign="right" vAlign="middle"/>
+                        <bind match="dataRef" ref="$.AMT"/>
+                        <border>
+                           <edge/>
+                           <corner thickness="0.1778mm"/>
+                        </border>
+                     </field>
+                     <border>
+                        <edge presence="hidden"/>
+                     </border>
+                     <bind match="dataRef" ref="$.DATA[*]"/>
+                     <?templateDesigner expand 1?>
+                     <keep intact="none"/>
+                     <occur max="-1"/>
+                  </subform>
+                  <keep intact="contentArea"/>
+                  <bind match="dataRef" ref="$.GT_MIS_B"/>
+                  <?templateDesigner rowpattern first:1, next:1, firstcolor:f0f0f0, nextcolor:ffffff, apply:0?>
+                  <overflow leader="HeaderRow"/>
+                  <?templateDesigner expand 0?></subform>
+               <?templateDesigner expand 0?></subform>
+            <?templateDesigner expand 1?></subform>
+         <?templateDesigner expand 1?></subform>
+      <subform h="7.875in" name="Bodypage3" w="10in">
+         <breakBefore target="Page3" targetType="pageArea"/>
+         <bind match="none"/>
+      </subform>
+      <proto/>
+      <desc>
+         <text name="version">11.0.9.20230422.1.42.2</text>
+      </desc>
+      <?templateDesigner expand 1?>
+      <?renderCache.subset "Arial" 0 0 ISO-8859-1 4 200 50 0003000D000F001000110012001400160019001D002400250026002700280029002A002C002F0030003100330035003600370039004400450046004700480049004A004B004C004F0050005100520053005400550056005700580059005B005C005E0060 *,-./136:ABCDEFGILMNPRSTVabcdefghilmnopqrstuvxy{}?>
+      <?renderCache.subset "Arial" 1 0 ISO-8859-1 4 208 52 00030009000B000C000E0011001200140019002400250026002700280029002A002C002F003000310032003300350036003700380039003A00440046004700480049004A004B004C004D004E004F005000510052005300550056005700580059005B005C005E0060 &()+./16ABCDEFGILMNOPRSTUVWacdefghijklmnoprstuvxy{}?></subform>
+   <?templateDesigner DefaultPreviewDynamic 1?>
+   <?templateDesigner DefaultRunAt client?>
+   <?templateDesigner WidowOrphanControl 0?>
+   <?templateDesigner DefaultCaptionFontSettings face:Arial;size:10;weight:normal;style:normal?>
+   <?templateDesigner DefaultValueFontSettings face:Arial;size:10;weight:normal;style:normal?>
+   <?templateDesigner DefaultLanguage JavaScript?>
+   <?acrobat JavaScript strictScoping?>
+   <?templateDesigner SaveTaggedPDF 1?>
+   <?templateDesigner SavePDFWithEmbeddedFonts 1?>
+   <?templateDesigner Grid show:1, snap:1, units:0, color:ff8080, origin:(0,0), interval:(125000,125000), objsnap:0, guidesnap:0, pagecentersnap:0?>
+   <?templateDesigner FormTargetVersion 33?>
+   <?templateDesigner Zoom 70?>
+   <?templateDesigner Rulers horizontal:1, vertical:1, guidelines:1, crosshairs:0?></template>
+<config xmlns="http://www.xfa.org/schema/xci/3.0/">
+   <agent name="designer">
+      <!--  [0..n]  -->
+      <destination>pdf</destination>
+      <pdf>
+         <!--  [0..n]  -->
+         <fontInfo/>
+      </pdf>
+      <common>
+         <template>
+            <base>https://vhtcvi1dci.rise.sit.ultimatix.net:44300/sap/bc/fp/form/layout/</base>
+         </template>
+      </common>
+   </agent>
+   <present>
+      <!--  [0..n]  -->
+      <pdf>
+         <!--  [0..n]  -->
+         <version>1.7</version>
+         <adobeExtensionLevel>8</adobeExtensionLevel>
+      </pdf>
+      <common>
+         <data>
+            <xsl>
+               <uri/>
+            </xsl>
+            <outputXSL>
+               <uri/>
+            </outputXSL>
+         </data>
+      </common>
+      <xdp>
+         <packets>*</packets>
+      </xdp>
+   </present>
+   <psMap>
+      <font posture="normal" psName="ArialmonospacedforSAP" typeface="Arial monospaced for SAP" weight="normal"/>
+   </psMap>
+</config>
+<connectionSet xmlns="http://www.xfa.org/schema/xfa-connection-set/2.8/">
+   <xsdConnection dataDescription="data" name="ZSFP_HR_PAYSLIP">
+      <uri/>
+      <rootElement>data</rootElement>
+   </xsdConnection>
+</connectionSet>
+<xfa:datasets xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/">
+   <xfa:data xfa:dataNode="dataGroup"/>
+   <dd:dataDescription xmlns:dd="http://ns.adobe.com/data-description/" dd:name="data">
+      <data>
+         <GS_ZPAYROLLDET>
+            <MANDT/>
+            <PERNR/>
+            <ZMONTH/>
+            <ZYEAR/>
+            <BANK/>
+            <PFNUM/>
+            <SANUM/>
+            <UAN/>
+            <ESISNUM/>
+            <PAYSLIPNO/>
+            <GRD/>
+            <NAME/>
+            <ACCTNO/>
+            <ATDY/>
+            <DESG/>
+            <ABKRS/>
+            <BAS/>
+            <ARBAS/>
+            <DA/>
+            <ARR_DA/>
+            <HRTPD/>
+            <AHRTPD/>
+            <LTA/>
+            <BON/>
+            <CONTAX/>
+            <MISC/>
+            <ETAX1/>
+            <EARRTAX1/>
+            <ETAX2/>
+            <EARRTAX2/>
+            <ETAX3/>
+            <EARRTAX3/>
+            <ETAX4/>
+            <EARRTAX4/>
+            <ETAX5/>
+            <EARRTAX5/>
+            <ETAX6/>
+            <EARRTAX6/>
+            <ETAX7/>
+            <EARRTAX7/>
+            <ETAX8/>
+            <EARRTAX8/>
+            <ETAX9/>
+            <EARRTAX9/>
+            <ETAX10/>
+            <EARRTAX10/>
+            <SUNDRY_MED/>
+            <PA/>
+            <APA/>
+            <INSU/>
+            <ARR_CONTAX/>
+            <ARR_CONNTAX/>
+            <ARRLTA/>
+            <KIT_ALLOWANCE/>
+            <OT_AMOUNT/>
+            <ARR_OT/>
+            <VA1/>
+            <ARR_VA1/>
+            <TOT_EARN/>
+            <EMOL_EARN/>
+            <HRNPD/>
+            <LEN/>
+            <AHRNPD/>
+            <PFAMT/>
+            <VPFAMT/>
+            <PTAX/>
+            <TDS/>
+            <CPMSV/>
+            <LWECN/>
+            <HPRM/>
+            <DAMT1/>
+            <DAMT2/>
+            <DAMT3/>
+            <DAMT4/>
+            <DAMT5/>
+            <DAMT6/>
+            <DAMT7/>
+            <DAMT8/>
+            <ARRPF/>
+            <TPRN1/>
+            <TINT1/>
+            <TPRN2/>
+            <TINT2/>
+            <TPRN3/>
+            <TINT3/>
+            <TPRN4/>
+            <TINT4/>
+            <TPRN5/>
+            <TINT5/>
+            <TPRN6/>
+            <TINT6/>
+            <TPRN7/>
+            <TINT7/>
+            <TPRN8/>
+            <TINT8/>
+            <TPRN9/>
+            <TINT9/>
+            <TPRN10/>
+            <TINT10/>
+            <RELFLG/>
+         </GS_ZPAYROLLDET>
+         <GS_ZPAYROLLDET1>
+            <MANDT/>
+            <PERNR/>
+            <ZMONTH/>
+            <ZYEAR/>
+            <PFINST/>
+            <PFINT/>
+            <CINST/>
+            <CINT/>
+            <ESIS_AMT/>
+            <OTH_INV_AMT1/>
+            <OTH_INV_AMT2/>
+            <OTH_INV_AMT3/>
+            <TOT_DED/>
+            <NPAY/>
+            <DED1/>
+            <DED2/>
+            <DED3/>
+            <DED4/>
+            <DED5/>
+            <DED6/>
+            <DED7/>
+            <DED8/>
+            <TLN1/>
+            <TLNDESC1/>
+            <TOBL1/>
+            <TLN2/>
+            <TLNDESC2/>
+            <TOBL2/>
+            <TLN3/>
+            <TLNDESC3/>
+            <TOBL3/>
+            <TLN4/>
+            <TLNDESC4/>
+            <TOBL4/>
+            <TLN5/>
+            <TLNDESC5/>
+            <TOBL5/>
+            <TLN6/>
+            <TLNDESC6/>
+            <TOBL6/>
+            <TLN7/>
+            <TLNDESC7/>
+            <TOBL7/>
+            <TLN8/>
+            <TLNDESC8/>
+            <TOBL8/>
+            <TLN9/>
+            <TLNDESC9/>
+            <TOBL9/>
+            <TLN10/>
+            <TLNDESC10/>
+            <TOBL10/>
+            <YTDS/>
+            <PTDS/>
+            <PAN1/>
+            <PFOPNBAL/>
+            <INV_VIA/>
+            <INV_VIII/>
+            <GRYTD/>
+            <PROJGR/>
+            <ADR/>
+            <COPBL/>
+            <INV_DESC1/>
+            <INV_AMT1/>
+            <INV_DESC2/>
+            <INV_AMT2/>
+            <INV_DESC3/>
+            <INV_AMT3/>
+            <INV_DESC4/>
+            <INV_AMT4/>
+            <INV_DESC5/>
+            <INV_AMT5/>
+            <INV_DESC6/>
+            <INV_AMT6/>
+            <INV_DESC7/>
+            <INV_AMT7/>
+            <INV_DESC8/>
+            <INV_AMT8/>
+            <RELFLG/>
+         </GS_ZPAYROLLDET1>
+         <GS_ZPAYROLLDET2>
+            <MANDT/>
+            <PERNR/>
+            <ZMONTH/>
+            <ZYEAR/>
+            <INV_DESC9/>
+            <INV_AMT9/>
+            <INV_DESC10/>
+            <INV_AMT10/>
+            <OTHACODE1/>
+            <OTHAOPB1/>
+            <OTHAINST1/>
+            <OTHACODE2/>
+            <OTHAOPB2/>
+            <OTHAINST2/>
+            <OTHACODE3/>
+            <OTHAOPB3/>
+            <OTHAINST3/>
+            <ECODE1/>
+            <EMOLDESC1/>
+            <ECODE2/>
+            <EMOLDESC2/>
+            <ECODE3/>
+            <EMOLDESC3/>
+            <ECODE4/>
+            <EMOLDESC4/>
+            <ECODE5/>
+            <EMOLDESC5/>
+            <ECODE6/>
+            <EMOLDESC6/>
+            <ECODE7/>
+            <EMOLDESC7/>
+            <ECODE8/>
+            <EMOLDESC8/>
+            <ECODE9/>
+            <EMOLDESC9/>
+            <ECODE10/>
+            <EMOLDESC10/>
+            <PERQ/>
+            <FORPERQ/>
+            <OTH_INV_DESC1/>
+            <OTH_INV_DESC2/>
+            <OTH_INV_DESC3/>
+            <CREATE_USER_ID/>
+            <CREATE_DATE/>
+            <AFS_PEN/>
+            <ARR_AFS_PEN/>
+            <SA_AMOUNT/>
+            <ANNUAL_INCME/>
+            <P_TAX/>
+            <SAL_INCME/>
+            <INCME_RELIEF/>
+            <SBSEC15/>
+            <SBSEC2/>
+            <NPS_ANNUAL/>
+            <SBSEC6/>
+            <CON_EXEM/>
+            <Z80U_DD/>
+            <RENT_EXEM/>
+            <LTA_EXEM/>
+            <MED_EXEM/>
+            <PRIN_HSGLOAN/>
+            <INT_HSGLOAN/>
+            <TOTTAX_INCME/>
+            <TAX_PAYABLE/>
+            <YTD_TAX/>
+            <BAL_TAX/>
+            <PEN_CONTR/>
+            <PF_CONTR/>
+            <PF_BASIS/>
+            <PEN_BASIS/>
+            <TRFGB/>
+            <GENDER/>
+            <V_NPS_AMT/>
+            <PF_RETRO/>
+            <VPF_RETRO/>
+            <SNE/>
+            <SPK/>
+            <RELFLG/>
+         </GS_ZPAYROLLDET2>
+         <GS_ZPAYROLLDET3>
+            <MANDT/>
+            <PERNR/>
+            <ZMONTH/>
+            <ZYEAR/>
+            <INV_DESC11/>
+            <INV_AMT11/>
+            <INV_DESC12/>
+            <INV_AMT12/>
+            <INV_DESC13/>
+            <INV_AMT13/>
+            <INV_DESC14/>
+            <INV_AMT14/>
+            <INV_DESC15/>
+            <INV_AMT15/>
+            <INV_DESC16/>
+            <INV_AMT16/>
+            <INV_DESC17/>
+            <INV_AMT17/>
+            <INV_DESC18/>
+            <INV_AMT18/>
+            <INV_DESC19/>
+            <INV_AMT19/>
+            <INV_DESC20/>
+            <INV_AMT20/>
+            <EXPAT/>
+            <TX_METHOD/>
+            <FDC_TAX/>
+            <FDC_NTAX/>
+            <CONNTAX/>
+            <V_7NRI_AMT/>
+            <V_9VAE_AMT/>
+            <V_9VRX_AMT/>
+            <V_9FCN_AMT/>
+            <BANKA/>
+            <ENAME/>
+            <ZTOT_EARN/>
+            <PF/>
+            <ARR_PF/>
+            <TDS_AMT/>
+            <SA_AMT/>
+            <GRAT_PROV/>
+            <ZZLOCN/>
+            <BASE_BRANCH/>
+            <ZZDEPB/>
+            <IAL_TAX/>
+            <IAL_NTAX/>
+            <V_9IAN_AMT/>
+            <RELFLG/>
+         </GS_ZPAYROLLDET3>
+         <IV_YEAR/>
+         <IV_MONTH/>
+         <IV_PERNR/>
+         <GT_RESULT dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <PERNR/>
+               <EARNINGS/>
+               <ARRAMOUNT/>
+               <EARAMOUNT/>
+               <DEDUCTIONS/>
+               <DEDAMT/>
+               <FORM16/>
+               <FO16AMT/>
+            </DATA>
+         </GT_RESULT>
+         <GT_RESULT3 dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <PERNR/>
+               <TEXT1/>
+               <MONTH01/>
+               <MONTH02/>
+               <MONTH03/>
+               <MONTH04/>
+               <MONTH05/>
+               <MONTH06/>
+               <MONTH07/>
+               <MONTH08/>
+               <MONTH09/>
+               <MONTH10/>
+               <MONTH11/>
+               <MONTH12/>
+               <TOTAL/>
+            </DATA>
+         </GT_RESULT3>
+         <GT_LOAN_BAL dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <TLN/>
+               <TLNDSC/>
+               <TOBL/>
+            </DATA>
+         </GT_LOAN_BAL>
+         <GT_PR_DET dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <INV_DESC/>
+               <INV_AMT/>
+            </DATA>
+         </GT_PR_DET>
+         <GT_EXEMPTION dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <DESC/>
+               <AMT/>
+            </DATA>
+         </GT_EXEMPTION>
+         <GT_MIS_B dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <DESC/>
+               <AMT/>
+            </DATA>
+         </GT_MIS_B>
+         <GT_DEDUCTION dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <PERNR/>
+               <EARNINGS/>
+               <ARRAMOUNT/>
+               <EARAMOUNT/>
+               <DEDUCTIONS/>
+               <DEDAMT/>
+               <FORM16/>
+               <FO16AMT/>
+            </DATA>
+         </GT_DEDUCTION>
+         <GT_FORM16 dd:minOccur="0">
+            <DATA dd:maxOccur="-1">
+               <PERNR/>
+               <EARNINGS/>
+               <ARRAMOUNT/>
+               <EARAMOUNT/>
+               <DEDUCTIONS/>
+               <DEDAMT/>
+               <FORM16/>
+               <FO16AMT/>
+            </DATA>
+         </GT_FORM16>
+         <GV_TX_REGIME/>
+      </data>
+   </dd:dataDescription>
+</xfa:datasets>
+<localeSet xmlns="http://www.xfa.org/schema/xfa-locale-set/2.7/">
+   <locale desc="English (United States)" name="en_US">
+      <calendarSymbols name="gregorian">
+         <monthNames>
+            <month>January</month>
+            <month>February</month>
+            <month>March</month>
+            <month>April</month>
+            <month>May</month>
+            <month>June</month>
+            <month>July</month>
+            <month>August</month>
+            <month>September</month>
+            <month>October</month>
+            <month>November</month>
+            <month>December</month>
+         </monthNames>
+         <monthNames abbr="1">
+            <month>Jan</month>
+            <month>Feb</month>
+            <month>Mar</month>
+            <month>Apr</month>
+            <month>May</month>
+            <month>Jun</month>
+            <month>Jul</month>
+            <month>Aug</month>
+            <month>Sep</month>
+            <month>Oct</month>
+            <month>Nov</month>
+            <month>Dec</month>
+         </monthNames>
+         <dayNames>
+            <day>Sunday</day>
+            <day>Monday</day>
+            <day>Tuesday</day>
+            <day>Wednesday</day>
+            <day>Thursday</day>
+            <day>Friday</day>
+            <day>Saturday</day>
+         </dayNames>
+         <dayNames abbr="1">
+            <day>Sun</day>
+            <day>Mon</day>
+            <day>Tue</day>
+            <day>Wed</day>
+            <day>Thu</day>
+            <day>Fri</day>
+            <day>Sat</day>
+         </dayNames>
+         <meridiemNames>
+            <meridiem>AM</meridiem>
+            <meridiem>PM</meridiem>
+         </meridiemNames>
+         <eraNames>
+            <era>BC</era>
+            <era>AD</era>
+         </eraNames>
+      </calendarSymbols>
+      <datePatterns>
+         <datePattern name="full">EEEE, MMMM D, YYYY</datePattern>
+         <datePattern name="long">MMMM D, YYYY</datePattern>
+         <datePattern name="med">MMM D, YYYY</datePattern>
+         <datePattern name="short">M/D/YY</datePattern>
+      </datePatterns>
+      <timePatterns>
+         <timePattern name="full">h:MM:SS A Z</timePattern>
+         <timePattern name="long">h:MM:SS A Z</timePattern>
+         <timePattern name="med">h:MM:SS A</timePattern>
+         <timePattern name="short">h:MM A</timePattern>
+      </timePatterns>
+      <dateTimeSymbols>GyMdkHmsSEDFwWahKzZ</dateTimeSymbols>
+      <numberPatterns>
+         <numberPattern name="numeric">z,zz9.zzz</numberPattern>
+         <numberPattern name="currency">$z,zz9.99|($z,zz9.99)</numberPattern>
+         <numberPattern name="percent">z,zz9%</numberPattern>
+      </numberPatterns>
+      <numberSymbols>
+         <numberSymbol name="decimal">.</numberSymbol>
+         <numberSymbol name="grouping">,</numberSymbol>
+         <numberSymbol name="percent">%</numberSymbol>
+         <numberSymbol name="minus">-</numberSymbol>
+         <numberSymbol name="zero">0</numberSymbol>
+      </numberSymbols>
+      <currencySymbols>
+         <currencySymbol name="symbol">$</currencySymbol>
+         <currencySymbol name="isoname">USD</currencySymbol>
+         <currencySymbol name="decimal">.</currencySymbol>
+      </currencySymbols>
+      <typefaces>
+         <typeface name="Myriad Pro"/>
+         <typeface name="Minion Pro"/>
+         <typeface name="Courier Std"/>
+         <typeface name="Adobe Pi Std"/>
+         <typeface name="Adobe Hebrew"/>
+         <typeface name="Adobe Arabic"/>
+         <typeface name="Adobe Thai"/>
+         <typeface name="Kozuka Gothic Pro-VI M"/>
+         <typeface name="Kozuka Mincho Pro-VI R"/>
+         <typeface name="Adobe Ming Std L"/>
+         <typeface name="Adobe Song Std L"/>
+         <typeface name="Adobe Myungjo Std M"/>
+         <typeface name="Adobe Devanagari"/>
+      </typefaces>
+   </locale>
+</localeSet>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 9.0-c000 79.cca54b0, 2022/11/26-09:29:55        ">
+   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+      <rdf:Description xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:pdfuaid="http://www.aiim.org/pdfua/ns/id/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:xmpMM="http://ns.adobe.com/xap/1.0/mm/" xmlns:desc="http://ns.adobe.com/xfa/promoted-desc/" rdf:about="">
+         <xmp:MetadataDate>2026-08-26T12:38:29Z</xmp:MetadataDate>
+         <xmp:CreatorTool>Adobe LiveCycle Designer 11.0</xmp:CreatorTool>
+         <pdfuaid:part>1</pdfuaid:part>
+         <pdf:Producer>Adobe LiveCycle Designer 11.0</pdf:Producer>
+         <xmpMM:DocumentID>uuid:5a96f64b-6915-421a-b377-faf7d7e0e744</xmpMM:DocumentID>
+         <desc:version rdf:parseType="Resource">
+            <rdf:value>11.0.9.20230422.1.42.2</rdf:value>
+            <desc:ref>/template/subform[1]</desc:ref>
+         </desc:version>
+      </rdf:Description>
+   </rdf:RDF>
+</x:xmpmeta></xdp:xdp>
