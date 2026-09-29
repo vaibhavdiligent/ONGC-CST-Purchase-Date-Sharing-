@@ -493,6 +493,17 @@ PRIMARY KEY.   ENDSELECT.
       <fs_bank>-datax-accountholder   = abap_true.
     ENDIF.
 
+*   BP tax number - GSTIN. In S/4 the vendor GST is BP-owned, so it must be a
+*   BP tax number. Category ending in 3 maps to LFA1-STCD3, i.e. India = 'IN3'
+*   (KBA 2865204). Vendor-node STCD3 is ignored ("provided by the BP").
+    IF wa_order-vendor_gstn IS NOT INITIAL.
+      APPEND INITIAL LINE TO ls_cvis-partner-central_data-taxnumber-taxnumbers
+        ASSIGNING FIELD-SYMBOL(<fs_tax>).
+      <fs_tax>-task               = 'I'.
+      <fs_tax>-data_key-taxtype   = 'IN3'.
+      <fs_tax>-data_key-taxnumber = wa_order-vendor_gstn.
+    ENDIF.
+
 *   ===== Vendor node (LFA1 data) - CVI gives it the same number as the BP ==
     ls_cvis-vendor-header-object_task = 'I'.
 
