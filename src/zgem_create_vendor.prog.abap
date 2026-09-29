@@ -655,6 +655,12 @@ PRIMARY KEY.   ENDSELECT.
           UPDATE zgem_orderdet SET lifnr = v_vendor
             WHERE vendor_pan = v_panno.
         ENDIF.
+*       Industry key (BRSCH) is BP-owned under CVI, so the vendor-node value is
+*       ignored. The old XK01 BDC set LFA1-BRSCH directly; replicate that with a
+*       targeted update on the newly created vendor (values VOTH/Z031-Z034).
+        IF lv_brsch IS NOT INITIAL.
+          UPDATE lfa1 SET brsch = lv_brsch WHERE lifnr = v_vendor.
+        ENDIF.
         COMMIT WORK.
 
         CONCATENATE 'Vendor' v_vendor 'created.' INTO message SEPARATED BY space.
