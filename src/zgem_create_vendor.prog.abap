@@ -548,9 +548,9 @@ PRIMARY KEY.   ENDSELECT.
 *   Industry (BRSCH) is BP-owned under CVI. Set it on the BP industry node
 *   (system RE, industry VOTH/Z031-Z034); CVI syncs it to LFA1-BRSCH.
     IF lv_brsch IS NOT INITIAL.
-      APPEND INITIAL LINE TO ls_cvis-partner-central_data-industrysector-industrysectors
+      APPEND INITIAL LINE TO ls_cvis-partner-central_data-industry-industries
         ASSIGNING FIELD-SYMBOL(<fs_ind>).
-      <fs_ind>-task               = 'I'.
+      <fs_ind>-task                = 'I'.
       <fs_ind>-data_key-keysystem  = c_ind_sys.
       <fs_ind>-data_key-ind_sector = lv_brsch.
     ENDIF.
