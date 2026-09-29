@@ -47,20 +47,58 @@
 *   Update Global Table for Received data
 *   Per-file: a payment run can have several DME files (ZFI_PAYM_FILE now
 *   keyed MANDT/LAUFD/LAUFI/LFDNR). LAUFD/LAUFI alone no longer identifies
-*   a single file, so match the return to its row by the 6-digit TIME that
-*   is common to both names:
-*     return Status  -> time at +25(6)   (right after the 6-char LAUFI)
-*     stored FILE_NAME -> time is the last 6 characters
-*   NOTE(UAT): verify these offsets against a real return file; if the
-*   sent FILE_NAME carries a suffix after the time, adjust the tail read.
-      DATA: lv_rtime TYPE char6,
-            lv_off   TYPE i.
-      lv_rtime = input-mt_bank_return_file_receiver-status+25(6).
+*   a single file, so match the return to its row by the 6-digit file TIME
+*   that both names carry.
+*
+*   Status format:
+*     TXN_XX_<corpid(6)><rundate(6)><LAUFI><time(6)>_<senddate(8)>
+*   The run id (LAUFI) length is NOT fixed: a run whose id has no 6th
+*   character (e.g. '00002') loses its trailing blank when the sent file
+*   name is built by CONCATENATE, so the medium-run part is 5 chars, not 6.
+*   Fixed offsets (status+19(6) / +25(6)) therefore read LAUFI and the time
+*   one byte off for such runs (observed: lv_rtime = '62227_' instead of
+*   '162227'). Derive both structurally from the 3rd '_' token instead:
+*     - file time = the last 6 characters of that token
+*     - LAUFI     = the middle part after corpid(6)+rundate(6), before time(6)
+*   stored FILE_NAME -> time is the last 6 characters (unchanged).
+      DATA: lv_rtime  TYPE char6,
+            lv_off    TYPE i,
+            lv_boff   TYPE i,
+            lv_body   TYPE string,
+            lv_blen   TYPE i,
+            lv_llen   TYPE i,
+            lv_rlaufi TYPE reguhm-laufi_m,
+            lt_parts  TYPE STANDARD TABLE OF string.
+
+      CLEAR: lv_rtime, lv_rlaufi.
+      SPLIT input-mt_bank_return_file_receiver-status AT '_' INTO TABLE lt_parts.
+      READ TABLE lt_parts INTO lv_body INDEX 3.   "corpid+rundate+LAUFI+time
+      IF sy-subrc = 0.
+        lv_blen = strlen( lv_body ).
+        IF lv_blen >= 6.
+          lv_boff  = lv_blen - 6.
+          lv_rtime = lv_body+lv_boff(6).            "file time = last 6 digits
+        ENDIF.
+        IF lv_blen > 18.                            "6 corpid + 6 rundate + LAUFI + 6 time
+          lv_llen = lv_blen - 18.
+          IF lv_llen > 6.
+            lv_llen = 6.
+          ENDIF.
+          lv_rlaufi = lv_body+12(lv_llen).          "medium-run id (5 or 6 chars)
+        ENDIF.
+      ENDIF.
 
       REFRESH lt_paym_file.
       SELECT * FROM zfi_paym_file INTO TABLE lt_paym_file
         WHERE laufd = lv_datum
-          AND laufi = input-mt_bank_return_file_receiver-status+19(6).
+          AND laufi = lv_rlaufi.
+*     Fallback: if the LAUFI parse matched no file row, narrow on the run
+*     date alone - the 6-digit file TIME compared below is specific enough
+*     to pick the correct file.
+      IF sy-subrc <> 0.
+        SELECT * FROM zfi_paym_file INTO TABLE lt_paym_file
+          WHERE laufd = lv_datum.
+      ENDIF.
 
       LOOP AT lt_paym_file INTO ls_paym_file.
         CLEAR lv_off.
