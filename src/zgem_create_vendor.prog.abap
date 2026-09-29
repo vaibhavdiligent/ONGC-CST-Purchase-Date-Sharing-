@@ -482,7 +482,7 @@ PRIMARY KEY.   ENDSELECT.
       APPEND INITIAL LINE TO ls_cvis-partner-central_data-bankdetail-bankdetails
         ASSIGNING FIELD-SYMBOL(<fs_bank>).
       <fs_bank>-task                  = 'I'.
-      <fs_bank>-data_key              = '0001'.
+*     data_key (bank-detail id) left blank -> CVI auto-assigns it.
       <fs_bank>-data-bank_ctry        = 'IN'.
       <fs_bank>-data-bank_key         = wa_order-vendor_bank_ifsc_code.
       <fs_bank>-data-bank_acct        = wa_order-vendor_bank_account_no.
