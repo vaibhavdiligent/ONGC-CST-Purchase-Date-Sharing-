@@ -56,7 +56,11 @@ for m in M.finditer(EX):
     mine.setdefault(m.group(1), {})[int(m.group(2))] = m.group(3).replace("''", "'")
 
 bad, total = [], 0
-for scen in [f'C{i}' for i in range(1, 8)] + [f'V{i}' for i in range(1, 10)]:
+# The extractor carries vendor scenarios only. Its C1..C7 fed the seven layouts
+# of the old customer upload; Cipla's customer templates are downloaded and
+# uploaded by ZSDS_CUST_TMPL_DOWNLOAD now, from one map, and that round trip is
+# checked by tools/cipla/sim_roundtrip.py.
+for scen in [f'V{i}' for i in range(1, 10)]:
     book, tab, hrow = TAB[scen]
     path = os.path.join(ROOT, book)
     if not os.path.exists(path):

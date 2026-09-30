@@ -34,6 +34,11 @@ CASES = [
      r"\(\s*scen = '(R\d)' col = (\d+)\s+node = '(\w)' fld = '(\w*)'"),
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'src/zbcs_mass_upload_extract.prog.abap',
      r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '(?:[^']|'')*' node = '([\w-]*)' fld = '([^']*)'"),
+    # The customer template program reads and writes Cipla's 24 templates
+    # from one map, so a column pointed at the wrong field is wrong in both
+    # directions. Constant (X) columns hold the transaction code, not data.
+    ('ZSDS_CUST_TMPL_DOWNLOAD', 'src/zsds_cust_tmpl_download.prog.abap',
+     r"\(\s*tmpl = '(\w+)' col = (\d+)\s+hdr = '(?:[^']|'')*' node = '([\w-]*)' fld = '([^']*)'"),
 ]
 
 bad = []
@@ -113,6 +118,17 @@ ISLAND_OK = {
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'C4', 71): 'one tax classification column among the sales area columns',
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'V9',  6): 'SPERR_1 is the company code block of an otherwise central tab',
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'V9',  8): 'SPERM_1 is the purchasing block of an otherwise central tab',
+    ('ZSDS_CUST_TMPL_DOWNLOAD', '08585a5a', 66): 'one tax classification column among the sales area columns',
+    ('ZSDS_CUST_TMPL_DOWNLOAD', '8a74041a', 61): 'one tax classification column among the sales area columns',
+    ('ZSDS_CUST_TMPL_DOWNLOAD', 'd7ee33bb', 54): 'one tax classification column among the sales area columns',
+    ('ZSDS_CUST_TMPL_DOWNLOAD', 'e10ec770', 83): 'one tax classification column among the sales area columns',
+    ('ZSDS_CUST_TMPL_DOWNLOAD', 'f7e2b95a', 59): 'one tax classification column among the sales area columns',
+}
+# A tab laid out in pairs rather than blocks. The XD05 template puts each
+# central block beside its company code or sales area twin, so every column
+# is an island by construction.
+ISLAND_TAB = {
+    ('ZSDS_CUST_TMPL_DOWNLOAD', 'BLOCK'): 'central and local block flags alternate, pair by pair',
 }
 
 for prog, path, pattern in CASES:
@@ -128,7 +144,7 @@ for prog, path, pattern in CASES:
             prv, nxt = rows[i - 1][1], rows[i + 1][1]
             if node in ('', '-') or prv in ('', '-') or prv != nxt or node == prv:
                 continue
-            if (prog, scen, col) in ISLAND_OK:
+            if (prog, scen, col) in ISLAND_OK or (prog, scen) in ISLAND_TAB:
                 continue
             bad.append(f'{prog} {scen}: column {col} writes {node}/{fld} but the columns '
                        f'each side of it write {prv} - check it is pointed at the right '

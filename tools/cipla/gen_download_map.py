@@ -191,9 +191,19 @@ def learn_descriptions():
 CANON, KNOWN = learn_descriptions()
 
 
-def from_description(desc, nth):
-    """The technical name behind one description, nth being its occurrence."""
+# A template that repeats no payment terms has no company code block for the
+# first reading to belong to: the one it has sits among the sales area columns,
+# as on the customer extension tab, and is KNVV's. The old upload read its
+# export layout the same way ("this tab has no company code payment term").
+ALONE = {'termsofpaymentkey': 'ZTERM1'}
+
+
+def from_description(desc, nth, total=0):
+    """The technical name behind one description, nth being its occurrence
+       and total the number of times the template uses it."""
     k = squash(desc)
+    if total == 1 and k in ALONE:
+        return ALONE[k]
     if k in ORDINAL:
         return ORDINAL[k][nth - 1] if nth <= len(ORDINAL[k]) else ORDINAL[k][-1]
     if k in SINGLE:
@@ -220,10 +230,12 @@ def main():
         lines.append(f"    \"  {sig} - {fmt['ncol']} columns - {', '.join(users)}")
         names = fmt['fields'] or ['' for _ in fmt['desc']]
         seen_desc = collections.Counter()
+        all_desc = collections.Counter(squash(d) for d in fmt['desc'])
         for col, (fld, desc) in enumerate(zip(names, fmt['desc']), 1):
             if not fld:                      # a description-only block
                 seen_desc[squash(desc)] += 1
-                fld = from_description(desc, seen_desc[squash(desc)]) or desc
+                fld = from_description(desc, seen_desc[squash(desc)],
+                                       all_desc[squash(desc)]) or desc
             if fld == 'TCODE':
                 node, target = 'X', fmt.get('tcode') or 'XD01'
             else:

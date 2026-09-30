@@ -14,8 +14,8 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Customer master template download</ENTRY>
-     <LENGTH>33</LENGTH>
+     <ENTRY>Customer master template download / upload</ENTRY>
+     <LENGTH>42</LENGTH>
     </item>
     <item>
      <ID>I</ID>
@@ -26,8 +26,8 @@
     <item>
      <ID>I</ID>
      <KEY>002</KEY>
-     <ENTRY>Country and account group</ENTRY>
-     <LENGTH>25</LENGTH>
+     <ENTRY>Country / region and account group</ENTRY>
+     <LENGTH>34</LENGTH>
     </item>
     <item>
      <ID>I</ID>
@@ -40,6 +40,18 @@
      <KEY>004</KEY>
      <ENTRY>Output</ENTRY>
      <LENGTH>6</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>005</KEY>
+     <ENTRY>Upload options</ENTRY>
+     <LENGTH>14</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>006</KEY>
+     <ENTRY>Download or upload</ENTRY>
+     <LENGTH>18</LENGTH>
     </item>
     <item>
      <ID>S</ID>
@@ -112,6 +124,42 @@
      <KEY>P_EMPTY</KEY>
      <ENTRY>P_EMPTY D       .Template only (no data)</ENTRY>
      <LENGTH>23</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_DOWN</KEY>
+     <ENTRY>P_DOWN  D       .Download a template</ENTRY>
+     <LENGTH>36</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_UP</KEY>
+     <ENTRY>P_UP    D       .Upload a filled template</ENTRY>
+     <LENGTH>41</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_TEST</KEY>
+     <ENTRY>P_TEST  D       .Test run - post nothing</ENTRY>
+     <LENGTH>40</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_STOP</KEY>
+     <ENTRY>P_STOP  D       .Stop at first faulty row</ENTRY>
+     <LENGTH>41</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_BPGRP</KEY>
+     <ENTRY>P_BPGRP D       .BP grouping (override)</ENTRY>
+     <LENGTH>39</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_SKIP</KEY>
+     <ENTRY>P_SKIP  D       .Heading rows to skip</ENTRY>
+     <LENGTH>37</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

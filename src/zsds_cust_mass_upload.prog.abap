@@ -1,6 +1,17 @@
 *&---------------------------------------------------------------------*
 *& Report  ZSDS_CUST_MASS_UPLOAD
 *&---------------------------------------------------------------------*
+*&
+*& SUPERSEDED FOR CUSTOMER CREATION
+*&   Customer templates are now downloaded AND uploaded by
+*&   ZSDS_CUST_TMPL_DOWNLOAD, from the workbook Cipla uses ("customer code
+*&   templates.xlsx", 24 layouts over 10 regions). The seven layouts below
+*&   (R1-R4, R6, R7) belong to the earlier LSMW workbook and none of them
+*&   matches a current template, so this program cannot read Cipla's files.
+*&
+*&   It is kept for one thing only: R5, the FSCM credit limit. The current
+*&   workbook has no credit-limit columns at all, so nothing else can load
+*&   one. Retire this program once Cipla confirms where credit limits go.
 *& Title       : Business Partner / Customer Master Mass Upload
 *& Module      : SD (customer master) incl. FI company-code and FSCM credit
 *& Package     : ZSDS_BP_UPLOAD          Transaction : ZSDS_CUSTUPL

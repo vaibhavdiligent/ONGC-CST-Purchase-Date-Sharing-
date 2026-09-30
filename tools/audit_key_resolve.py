@@ -20,6 +20,9 @@ CASES = [
      r'lcl_util=>lifnr\(\s*lcl_util=>cell\('),
     ('src/zsds_cust_mass_upload.prog.abap', 'key_kunnr',
      r'lv_kunnr\s*=\s*lcl_util=>alpha\('),
+    # the customer upload now lives in the template program too
+    ('src/zsds_cust_tmpl_download.prog.abap', 'key_kunnr',
+     r'lv_kunnr\s*=\s*lcl_util=>alpha\('),
 ]
 
 def methods(src):

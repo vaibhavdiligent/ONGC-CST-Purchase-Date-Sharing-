@@ -115,7 +115,11 @@ SHEET = dict(re.findall(r"WHEN '([CV]\d)' THEN '([^']*)'", EX))
 cm, vm = load_cust(), load_vend()
 bad = []
 tmp = '/tmp/_roundtrip.xlsx'
-for scen in [f'C{i}' for i in range(1, 8)] + [f'V{i}' for i in range(1, 10)]:
+# The extractor carries vendor scenarios only. Its C1..C7 fed the seven layouts
+# of the old customer upload; Cipla's customer templates are downloaded and
+# uploaded by ZSDS_CUST_TMPL_DOWNLOAD now, from one map, and that round trip is
+# checked by tools/cipla/sim_roundtrip.py.
+for scen in [f'V{i}' for i in range(1, 10)]:
     c = cols(scen)
     if not c:
         bad.append(f'{scen}: no columns in the extractor map'); continue

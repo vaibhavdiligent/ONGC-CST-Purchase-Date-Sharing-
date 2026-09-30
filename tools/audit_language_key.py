@@ -51,6 +51,24 @@ if 'CONVERSION_EXIT_ISOLA_INPUT' not in cust:
     findings.append('ZSDS_CUST_MASS_UPLOAD: the language is converted without '
                     'the ISOLA exit')
 
+# ---- ZSDS_CUST_TMPL_DOWNLOAD: the customer upload lives here now, reading
+#      the template map; every column landing in a LANG field must carry LG.
+tmpl = open(os.path.join(ROOT, 'src/zsds_cust_tmpl_download.prog.abap'),
+            encoding='utf8').read()
+for m in re.finditer(r"tmpl = '(\w+)' col = (\d+)\s+hdr = '(?:[^']|'')*'\s+"
+                     r"node = '(\w?)' fld = '([^']*)' fmt = '\w*' cnv = '(\w*)'", tmpl):
+    t, col, fld, cnv = m.group(1), m.group(2), m.group(4), m.group(5)
+    if fld in LANG and cnv != 'LG':
+        findings.append(f'ZSDS_CUST_TMPL_DOWNLOAD: template {t} column {col} '
+                        f'writes {fld}, a one character language key, with '
+                        f'cnv="{cnv}" - it needs LG')
+if "WHEN 'LG'." not in tmpl:
+    findings.append("ZSDS_CUST_TMPL_DOWNLOAD: no WHEN 'LG' branch - the "
+                    "marker on the language columns converts nothing")
+if 'CONVERSION_EXIT_ISOLA_INPUT' not in tmpl:
+    findings.append('ZSDS_CUST_TMPL_DOWNLOAD: the language is converted '
+                    'without the ISOLA exit')
+
 # ---- ZMMS_BP_MASS_UPLOAD: fields are set from "FIELD;column" lists, which
 #      all take the generic path, so a LANG field must not appear in one.
 vend = open(os.path.join(ROOT, 'src/zmms_bp_mass_upload.prog.abap'),

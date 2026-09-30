@@ -310,7 +310,7 @@
       ( tmpl = '28573fa5' col = 23  hdr = 'Shipping Conditions' node = 'S' fld = 'VSBED' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 24  hdr = 'Delivering Plant (Own or External)' node = 'S' fld = 'VWERK' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 25  hdr = 'Maximum Number of Partial Deliveries Allow' node = 'S' fld = 'ANTLF' fmt = '' cnv = 'NM' )
-      ( tmpl = '28573fa5' col = 26  hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' cnv = '' )
+      ( tmpl = '28573fa5' col = 26  hdr = 'Terms of Payment Key' node = 'S' fld = 'ZTERM' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 27  hdr = 'Account Assignment Group for Customer' node = 'S' fld = 'KTGRD' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 28  hdr = 'Tax classification for customer' node = 'T' fld = '#1' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 29  hdr = 'Tax classification for customer' node = 'T' fld = '#2' fmt = '' cnv = '' )

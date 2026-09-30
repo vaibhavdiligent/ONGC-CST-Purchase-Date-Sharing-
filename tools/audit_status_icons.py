@@ -27,6 +27,7 @@ import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zsds_cust_mass_upload.prog.abap',
+         'src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap']
 
 findings = []
@@ -38,23 +39,27 @@ for prog in PROGS:
     name = os.path.basename(prog).split('.')[0].upper()
     src = open(path, encoding='utf8').read()
 
-    m = re.search(r'icon\s*=\s*COND\s*#\((.*?)\)\s*\n', src, re.S)
-    if not m:
+    exprs = list(re.finditer(r'icon\s*=\s*COND\s*#\((.*?)\)\s*\n', src, re.S))
+    if not exprs:
         findings.append(f'{name}: no icon expression found - the log line no '
                         f'longer says what kind of message it is')
         continue
-    expr = m.group(1)
-    line = src[:m.start()].count('\n') + 1
+    # Every one of them: a program with two lists - the template program
+    # keeps one for what it reads and one for what it posts - has two
+    # expressions, and checking the first only let the second go unread.
+    for m in exprs:
+      expr = m.group(1)
+      line = src[:m.start()].count('\n') + 1
 
-    if not re.search(r"=\s*'S'\s*(?:THEN|.*?THEN)\s*icon_green_light", expr, re.S):
-        findings.append(f'{name}:{line}: the icon expression has no branch '
-                        f'giving message type S the green light - a green '
-                        f'light must mean an outcome')
-    tail = expr[expr.rfind('ELSE'):] if 'ELSE' in expr else ''
-    if 'icon_green_light' in tail:
-        findings.append(f'{name}:{line}: the icon expression falls back to '
-                        f'icon_green_light, so every remark that is not an '
-                        f'error looks like a success')
+      if not re.search(r"=\s*'S'\s*(?:THEN|.*?THEN)\s*icon_green_light", expr, re.S):
+          findings.append(f'{name}:{line}: the icon expression has no branch '
+                          f'giving message type S the green light - a green '
+                          f'light must mean an outcome')
+      tail = expr[expr.rfind('ELSE'):] if 'ELSE' in expr else ''
+      if 'icon_green_light' in tail:
+          findings.append(f'{name}:{line}: the icon expression falls back to '
+                          f'icon_green_light, so every remark that is not an '
+                          f'error looks like a success')
 
     # three buckets, and row 0 left out of them
 
