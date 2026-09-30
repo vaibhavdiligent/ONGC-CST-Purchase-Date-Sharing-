@@ -17,7 +17,7 @@ import os, re, sys, zipfile, io as _io
 from xml.etree import ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EX   = open(os.path.join(ROOT, 'src/zbcs_mass_upload_extract.prog.abap'), encoding='utf-8').read()
+EX   = open(os.path.join(ROOT, 'src/zmms_bp_mass_upload.prog.abap'), encoding='utf-8').read()
 
 NEEDED = ['[Content_Types].xml', '_rels/.rels', 'xl/workbook.xml',
           'xl/_rels/workbook.xml.rels', 'xl/worksheets/sheet1.xml',

@@ -26,8 +26,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALLOWED = {}
 
 CASES = [
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'src/zbcs_mass_upload_extract.prog.abap',
-     r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '(?:[^']|'')*' node = '([\w-]*)' fld = '([^']*)'"),
+    ('ZMMS_BP_MASS_UPLOAD', 'src/zmms_bp_mass_upload.prog.abap',
+     r"\(\s*scen = '(R\d)' col = (\d+)\s+hdr = '(?:[^']|'')*' node = '([\w-]*)' fld = '([^']*)'"),
     # The customer template program reads and writes Cipla's 24 templates
     # from one map, so a column pointed at the wrong field is wrong in both
     # directions. Constant (X) columns hold the transaction code, not data.
@@ -55,16 +55,16 @@ for prog, path, pattern in CASES:
                    f'all write {node}/{fld} - only the last one has any effect')
 
 # ---- a mapped column with no heading ------------------------------------
-# The extractor writes the heading row from this map, so a mapped column
+# The download writes the heading row from this map, so a mapped column
 # with no heading comes out of the download blank - and two of them side by
 # side, both ZTERM, read as the same field twice. A column read by position
 # is also only right while the file is laid out as the template is, so a
 # heading is worth having for its own sake.
 for prog, path, pattern in CASES:
-    if prog != 'ZBCS_MASS_UPLOAD_EXTRACT':
+    if prog != 'ZMMS_BP_MASS_UPLOAD':
         continue
     src = open(os.path.join(ROOT, path), encoding='utf-8').read()
-    for m in re.finditer(r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "
+    for m in re.finditer(r"\(\s*scen = '(R\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "
                          r"node = '([\w-]*)' fld = '([^']*)'", src):
         scen, col, hdr, node, fld = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
         if node not in ('', '-') and not hdr:
@@ -72,16 +72,16 @@ for prog, path, pattern in CASES:
                        f'it comes out of the download blank')
 
 # ---- a column of the template the map does not mention at all ----------
-# The extractor writes the heading row from this map, so a template column
+# The download writes the heading row from this map, so a template column
 # missing from it comes out of the download with no heading over it - a
 # blank column in the middle of the sheet, which is what "column names are
 # coming as blank" meant. A column the upload program does not read still
 # belongs in the map, with its heading and nothing else.
 NO_HEADING = {
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'V2',  1): 'the template has no heading there either',
+    ('ZMMS_BP_MASS_UPLOAD', 'R2',  1): 'the template has no heading there either',
 }
 for prog, path, pattern in CASES:
-    if prog != 'ZBCS_MASS_UPLOAD_EXTRACT':
+    if prog != 'ZMMS_BP_MASS_UPLOAD':
         continue
     src = open(os.path.join(ROOT, path), encoding='utf-8').read()
     cols = collections.defaultdict(set)
@@ -100,8 +100,8 @@ for prog, path, pattern in CASES:
 # the column each side of it is either a deliberate one-off or a column
 # pointed at the wrong part of the record. These are the deliberate ones.
 ISLAND_OK = {
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'V9',  6): 'SPERR_1 is the company code block of an otherwise central tab',
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'V9',  8): 'SPERM_1 is the purchasing block of an otherwise central tab',
+    ('ZMMS_BP_MASS_UPLOAD', 'R9',  6): 'SPERR_1 is the company code block of an otherwise central tab',
+    ('ZMMS_BP_MASS_UPLOAD', 'R9',  8): 'SPERM_1 is the purchasing block of an otherwise central tab',
     ('ZSDS_CUST_TMPL_DOWNLOAD', '08585a5a', 66): 'one tax classification column among the sales area columns',
     ('ZSDS_CUST_TMPL_DOWNLOAD', '8a74041a', 61): 'one tax classification column among the sales area columns',
     ('ZSDS_CUST_TMPL_DOWNLOAD', 'd7ee33bb', 54): 'one tax classification column among the sales area columns',

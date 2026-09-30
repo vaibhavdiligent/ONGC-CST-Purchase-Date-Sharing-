@@ -1,16 +1,16 @@
-"""What the extractor writes, the upload programs read.
+"""What the vendor download writes, the vendor upload reads.
 
-Builds the heading row ZBCS_MASS_UPLOAD_EXTRACT would write for every
+Builds the heading row ZMMS_BP_MASS_UPLOAD's download writes for every
 scenario, packs it into a real .xlsx exactly as the program does, and then
-runs each upload program's own tab-and-column resolution over it. Every
-column of every scenario has to come back bound.
+runs the upload's own tab-and-column resolution over it. Every column of
+every scenario has to come back bound.
 """
 import html, re, sys, zipfile, collections, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from sim import sheets, squash, load_vend
 from audit_column_mangle import bind
 
-EX = open('src/zbcs_mass_upload_extract.prog.abap', encoding='utf-8').read()
+EX = open('src/zmms_bp_mass_upload.prog.abap', encoding='utf-8').read()
 
 def cols(scen):
     out = {}
@@ -93,8 +93,8 @@ def workbook(path, sheet, head, rows=()):
             'xmlns:dcterms="http://purl.org/dc/terms/" '
             'xmlns:dcmitype="http://purl.org/dc/dcmitype/" '
             'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
-            '<dc:creator>ZBCS_MASS_UPLOAD_EXTRACT</dc:creator>'
-            '<cp:lastModifiedBy>ZBCS_MASS_UPLOAD_EXTRACT</cp:lastModifiedBy></cp:coreProperties>')
+            '<dc:creator>ZMMS_BP_MASS_UPLOAD</dc:creator>'
+            '<cp:lastModifiedBy>ZMMS_BP_MASS_UPLOAD</cp:lastModifiedBy></cp:coreProperties>')
     app = (f'{X}<Properties '
            'xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" '
            'xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
@@ -111,18 +111,19 @@ def workbook(path, sheet, head, rows=()):
         z.writestr('xl/sharedStrings.xml', sst)
         z.writestr('xl/worksheets/sheet1.xml', ws)
 
-SHEET = dict(re.findall(r"WHEN '([CV]\d)' THEN '([^']*)'", EX))
+# LCL_MAP=>SHEET names the tab through the GC_SH_* constants
+CONST = dict(re.findall(r"(gc_sh_\w+)\s+TYPE string VALUE '([^']*)'", EX))
+SHEET = {s: CONST[c] for s, c in re.findall(r"WHEN '(R\d)' THEN (gc_sh_\w+)", EX)}
+assert len(SHEET) == 9, SHEET
 vm = load_vend()
 bad = []
 tmp = '/tmp/_roundtrip.xlsx'
-# The extractor carries vendor scenarios only. Its C1..C7 fed the seven layouts
-# of the old customer upload; Cipla's customer templates are downloaded and
-# uploaded by ZSDS_CUST_TMPL_DOWNLOAD now, from one map, and that round trip is
-# checked by tools/cipla/sim_roundtrip.py.
-for scen in [f'V{i}' for i in range(1, 10)]:
+# The vendor scenarios, R1..R9, of ZMMS_BP_MASS_UPLOAD's column map. The
+# customer templates are checked by tools/cipla/sim_roundtrip.py.
+for scen in [f'R{i}' for i in range(1, 10)]:
     c = cols(scen)
     if not c:
-        bad.append(f'{scen}: no columns in the extractor map'); continue
+        bad.append(f'{scen}: no columns in the column map'); continue
     head = [''] * max(c)
     for col, hdr in c.items():
         head[col - 1] = hdr

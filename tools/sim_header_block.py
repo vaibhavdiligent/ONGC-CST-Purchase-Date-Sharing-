@@ -42,8 +42,13 @@ def header_matter(cells, keycol):
 
 def hdr_map(src):
     m = collections.defaultdict(list)
-    for x in re.finditer(r"\(\s*scen = '(R\d)'\s+col = (\d+)\s+hdr = '([^']*)'\s*\)", src):
-        m[x.group(1)].append(x.group(3))
+    # LCL_HDR takes the headings from LCL_MAP, squashed, in column order
+    rows = sorted((x.group(1), int(x.group(2)), x.group(3).replace("''", "'"))
+                  for x in re.finditer(r"\(\s*scen = '(R\d)'\s+col = (\d+)\s+hdr = '((?:[^']|'')*)'\s+node", src))
+    for scen, _col, h in rows:
+        h = re.sub(r'[^A-Z0-9]', '', h.upper())[:40]
+        if h:
+            m[scen].append(h)
     return m
 
 

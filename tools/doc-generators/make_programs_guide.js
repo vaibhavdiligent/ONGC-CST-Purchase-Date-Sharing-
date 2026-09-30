@@ -1,6 +1,6 @@
 // Builds docs/cipla/Cipla_Master_Data_Upload_Programs_Guide.docx - the customer-facing
-// overview and test guide for ZSDS_CUST_TMPL_DOWNLOAD, ZMMS_BP_MASS_UPLOAD and
-// ZBCS_MASS_UPLOAD_EXTRACT. Needs the docx npm package.
+// overview and test guide for ZSDS_CUST_TMPL_DOWNLOAD and ZMMS_BP_MASS_UPLOAD.
+// Needs the docx npm package.
 // Usage: node tools/doc-generators/make_programs_guide.js <output.docx>
 const fs = require('fs');
 const {
@@ -80,12 +80,12 @@ const add = (...x) => body.push(...x);
 // Title page
 add(
   new Paragraph({ spacing: { before: 2400, after: 240 }, children: [run('Customer and Vendor Master', { size: 44, bold: true, color: ACCENT })] }),
-  new Paragraph({ spacing: { after: 480 }, children: [run('Mass Upload Programs - Overview and Test Guide', { size: 32, color: ACCENT })] }),
+  new Paragraph({ spacing: { after: 480 }, children: [run('Download / Upload Programs - Overview and Test Guide', { size: 32, color: ACCENT })] }),
   T(['Item', 'Detail'], [
-    ['Programs', 'ZSDS_CUST_TMPL_DOWNLOAD - Customer master template download / upload\nZMMS_BP_MASS_UPLOAD - Vendor (Business Partner) master mass upload\nZBCS_MASS_UPLOAD_EXTRACT - Vendor sample file from existing master data'],
+    ['Programs', 'ZSDS_CUST_TMPL_DOWNLOAD - Customer master download / upload\nZMMS_BP_MASS_UPLOAD - Vendor (Business Partner) master download / upload'],
     ['System', 'SAP S/4HANA - test client'],
     ['Purpose', 'What each program does, and how the business team can check it before go-live'],
-    ['Version / date', '1.0 - 30 September 2026'],
+    ['Version / date', '1.1 - 30 September 2026'],
   ], [25, 75]),
   PB(),
   new Paragraph({ children: [run('Contents', { bold: true, size: 28, color: ACCENT })], spacing: { after: 120 } }),
@@ -95,22 +95,22 @@ add(
 
 // 1. Overview
 add(
-  H1('1. The three programs at a glance'),
-  P('Your existing LSMW templates were recorded against transactions XD01, XK01, XK02 and XK05. In SAP S/4HANA these transactions are replaced by the Business Partner (transaction BP), so the recordings can no longer run. The three programs below replace them. They create and change master data through the standard SAP Business Partner interface, so every check, number range and authorisation that applies in transaction BP applies here too.'),
+  H1('1. The two programs at a glance'),
+  P('Your existing LSMW templates were recorded against transactions XD01, XK01, XK02 and XK05. In SAP S/4HANA these transactions are replaced by the Business Partner (transaction BP), so the recordings can no longer run. The two programs below replace them - one for customers and one for vendors, each of which both downloads and uploads. They create and change master data through the standard SAP Business Partner interface, so every check, number range and authorisation that applies in transaction BP applies here too.'),
   T(['Program', 'What it does', 'Used for'], [
-    ['ZSDS_CUST_TMPL_DOWNLOAD', 'Downloads the right customer template for a country / region and account group - empty or filled with existing customers - and uploads a filled template back into SAP.', 'Customer master: create, extend to a new company code / sales area, block and unblock'],
-    ['ZMMS_BP_MASS_UPLOAD', 'Uploads the vendor workbook, one scenario (tab) at a time.', 'Vendor master: create, TDS, TAN exemption, bank keys, bank details, extension, CIN, partner functions, block / unblock'],
-    ['ZBCS_MASS_UPLOAD_EXTRACT', 'Writes an Excel file of existing vendors in exactly the layout ZMMS_BP_MASS_UPLOAD reads.', 'Getting a correctly laid-out vendor file to start from, and checking the vendor upload'],
+    ['ZSDS_CUST_TMPL_DOWNLOAD', 'Downloads the right customer template for a country / region and account group - empty or filled with existing customers - and uploads a filled template back into SAP.', 'Customer master: create, extend to a new sales area, block and unblock'],
+    ['ZMMS_BP_MASS_UPLOAD', 'Downloads a tab of the vendor workbook - empty or filled with existing vendors - and uploads a filled tab back into SAP, one scenario (tab) at a time.', 'Vendor master: create, TDS, TAN exemption, bank keys, bank details, extension, CIN, partner functions, block / unblock'],
   ], [26, 44, 30]),
   GAP(),
-  NOTE('The earlier customer upload program ZSDS_CUST_MASS_UPLOAD is replaced by ZSDS_CUST_TMPL_DOWNLOAD and is no longer used. Its layouts belonged to the old LSMW workbook and did not match the current customer templates.'),
+  NOTE('Two earlier programs are no longer used. ZSDS_CUST_MASS_UPLOAD (customer upload) is replaced by ZSDS_CUST_TMPL_DOWNLOAD; its layouts belonged to the old LSMW workbook and did not match the current customer templates. ZBCS_MASS_UPLOAD_EXTRACT (vendor sample file) is now the download mode of ZMMS_BP_MASS_UPLOAD.'),
+  P('In both programs a download and an upload use one and the same column definition, so a file the program downloads is always a file it can upload.'),
 );
 
 // 2. Rules common to all
 add(
-  H1('2. Rules that apply to all three programs'),
+  H1('2. Rules that apply to both programs'),
   H2('2.1 Always do a test run first'),
-  P('Both upload programs have a **Test run** checkbox, ticked by default. In a test run the program carries out every check it would make for real, but nothing is saved. The result list shows exactly what would have happened, row by row. Untick Test run only once a file comes back without errors.'),
+  P('The upload of both programs has a **Test run** checkbox, ticked by default. In a test run the program carries out every check it would make for real, but nothing is saved. The result list shows exactly what would have happened, row by row. Untick Test run only once a file comes back without errors.'),
   H2('2.2 Use .xlsx files'),
   P('Files must be Excel Workbooks (.xlsx). An older .xls file cannot be read - open it in Excel and use Save As, Excel Workbook (*.xlsx).'),
   H2('2.3 The file is read by its headings'),
@@ -205,13 +205,15 @@ add(
   PB(),
 );
 
-// 4. Vendor upload
+// 4. Vendor download / upload
 add(
-  H1('4. ZMMS_BP_MASS_UPLOAD - Vendor master mass upload'),
+  H1('4. ZMMS_BP_MASS_UPLOAD - Vendor master download / upload'),
   H2('4.1 What it does'),
-  P('One program for every vendor mass change. A radio button selects the scenario, and with it the columns the program looks for in the file. The layouts are those of your existing vendor workbook, so no re-keying is needed.'),
-  T(['Scenario (radio button)', 'Workbook tab', 'What it does'], [
-    ['Vendor / BP creation - all company codes', 'Vendor creation for All CC', 'Creates the vendor and its business partner, with company code and purchasing data'],
+  P('One program for every vendor mass change, in both directions. A radio button selects the scenario - the tab of your vendor workbook - and the same layout is used to download and to upload it, so no re-keying is needed.'),
+  B('**Download** - reads existing vendors and writes them into the scenario’s tab: a correctly laid-out file to start from, filled with real values, or with headings only. It changes nothing in SAP.'),
+  B('**Upload** - reads a filled tab and posts it.'),
+  T(['Scenario (radio button)', 'Workbook tab', 'What an upload does'], [
+    ['Vendor / BP creation - all CC', 'Vendor creation for All CC', 'Creates the vendor and its business partner, with company code and purchasing data'],
     ['Withholding tax / TDS', 'TDS upload', 'Maintains withholding tax types and codes per company code'],
     ['TAN exemption details', 'TAN details', 'Maintains India TAN exemption records'],
     ['Bank key creation', 'BANK Key creation', 'Creates or changes bank master records'],
@@ -223,12 +225,16 @@ add(
   ], [32, 24, 44]),
   H2('4.2 Selection screen'),
   T(['Field', 'What to enter'], [
+    ['Download a workbook / Upload a filled workbook', 'Choose the direction. The screen shows only the fields that apply.'],
     ['Scenario', 'One of the nine radio buttons above'],
-    ['Upload workbook', 'The file to load (.xlsx). F4 opens the file dialog.'],
-    ['File is on the PC / application server', 'Where the file is. Use PC for normal work.'],
-    ['Test run (nothing is posted)', 'Ticked by default - see 2.1'],
-    ['Stop at the first faulty row', 'Stops at the first error instead of working through the whole file'],
-    ['Heading rows to skip', 'Leave at 1'],
+    ['Business partner / Supplier', 'Download only: which existing vendors to write'],
+    ['Rows at most', 'Download only: limit on the number of rows written (default 20)'],
+    ['Test run (nothing is posted)', 'Upload only. Ticked by default - see 2.1'],
+    ['Stop at the first faulty row', 'Upload only. Stops at the first error instead of working through the whole file'],
+    ['Heading rows to skip', 'Upload only. Leave at 1'],
+    ['File', 'Download: where to save (a name is proposed per scenario). Upload: the file to read. F4 opens the file dialog.'],
+    ['On the PC / On the application server', 'Where the file is. Use PC for normal work.'],
+    ['Headings only (empty template)', 'Download only: write the headings without data'],
   ], [34, 66]),
   H2('4.3 Order of loading'),
   P('Some scenarios need data another scenario creates. Please load in this order:'),
@@ -240,14 +246,21 @@ add(
     'Block / unblock - whenever needed.',
   ]),
   NOTE('If a scenario needs data that is not there yet - for example TDS for a company code the vendor has not been extended to - the row is refused with a message that says so, rather than posted halfway.'),
-  H2('4.4 How to check it'),
+  H2('4.4 How to check the download'),
   ...steps([
-    'Pick a scenario, select the file and execute with **Test run** ticked. **Expected:** one line per row; green where the row would post; red with a reason where it would not.',
+    'Choose **Download a workbook**, a scenario, and two or three existing vendors. Execute.',
+    'Open the file. **Expected:** the headings of the vendor workbook tab for that scenario, one row per vendor (or per company code, purchasing organisation, bank account, withholding tax type or partner function, depending on the scenario). Compare a few values with transaction BP.',
+    'Tick **Headings only** and execute. **Expected:** a file with the headings and no data.',
+  ]),
+  H2('4.5 How to check the upload'),
+  ...steps([
+    '**Round trip.** Upload the file you just downloaded, same scenario, with **Test run** ticked. **Expected:** green lines, no errors. This proves the file and the program agree.',
+    'Fill a tab with the rows you want to load, select it and execute with **Test run** ticked. **Expected:** one line per row; green where the row would post; red with a reason where it would not.',
     'Correct the file for any red lines and repeat until the test run is clean.',
     'Untick Test run and execute. **Expected:** the same lines, now saying the row was posted; for a new vendor, the new vendor number.',
-    'Check the result in SAP using the table in 4.5.',
+    'Check the result in SAP using the table in 4.6.',
   ]),
-  H2('4.5 Where to see the result in SAP'),
+  H2('4.6 Where to see the result in SAP'),
   T(['Scenario', 'Where to check'], [
     ['Vendor / BP creation', 'BP - General data, role FLVN00 (company code data) and FLVN01 (purchasing data)'],
     ['Withholding tax / TDS', 'BP, role FLVN00 - company code, Vendor: Withholding Tax'],
@@ -262,35 +275,10 @@ add(
   PB(),
 );
 
-// 5. Extract
-add(
-  H1('5. ZBCS_MASS_UPLOAD_EXTRACT - Vendor sample file from existing master data'),
-  H2('5.1 What it does'),
-  P('Writes an Excel file of existing vendors in exactly the layout ZMMS_BP_MASS_UPLOAD reads, one scenario at a time. It changes nothing in SAP.'),
-  P('It is useful in two ways: it gives users a correctly laid-out file to start from, filled with real data; and it lets you check the upload, because a file taken out of SAP should load back into SAP without errors.'),
-  H2('5.2 Selection screen'),
-  T(['Field', 'What to enter'], [
-    ['Scenario', 'The same nine scenarios as ZMMS_BP_MASS_UPLOAD'],
-    ['Business partner / Supplier', 'Which vendors to extract'],
-    ['Rows at most', 'Limit on the number of rows written (default 20)'],
-    ['Save the workbook as', 'Where to save the file (a name is proposed)'],
-    ['Write to the PC / application server', 'Where to save'],
-    ['Headings only (empty template)', 'Write the headings without data'],
-  ], [34, 66]),
-  H2('5.3 How to check it'),
-  ...steps([
-    'Choose a scenario, enter two or three existing vendors and execute.',
-    'Open the file. **Expected:** the headings of the vendor workbook tab for that scenario, one row per vendor (or per bank account, withholding tax type or partner function, depending on the scenario). Compare a few values with transaction BP.',
-    '**Round trip:** load the extracted file into ZMMS_BP_MASS_UPLOAD with the same scenario and **Test run ticked**. **Expected:** green lines, no errors.',
-    'Tick **Headings only** and execute. **Expected:** a file with the headings and no data.',
-  ]),
-  PB(),
-);
-
-// 6. Sign-off sheet
+// 5. Sign-off sheet
 const TEST = (n, prog, test, exp) => [n, prog, test, exp, '', ''];
 add(
-  H1('6. Test sign-off sheet'),
+  H1('5. Test sign-off sheet'),
   P('Please record the result of each test and return this sheet with any screenshots of red lines.'),
   T(['#', 'Program', 'Test', 'Expected result', 'OK / Not OK', 'Remarks'], [
     TEST('1', 'Customer', 'Download create template, 2-3 customers', 'Correct template for the region / group, values match BP'),
@@ -302,17 +290,17 @@ add(
     TEST('7', 'Customer', 'Extend to a new sales area', 'Sales area visible in BP'),
     TEST('8', 'Customer', 'Block, then unblock (#BLANK#)', 'Block set, then removed'),
     TEST('9', 'Customer', 'Wrong account group', 'Red line, other rows processed'),
-    TEST('10', 'Vendor', 'Bank key creation', 'Bank visible in FI03'),
-    TEST('11', 'Vendor', 'Vendor creation, test run then live', 'New vendor number; vendor in BP'),
-    TEST('12', 'Vendor', 'Vendor extension', 'New company code / purch. org in BP'),
-    TEST('13', 'Vendor', 'Withholding tax / TDS', 'Tax types in BP company code data'),
-    TEST('14', 'Vendor', 'TAN exemption', 'Records in FIWTIN_TAN_EXEM'),
-    TEST('15', 'Vendor', 'Vendor bank details', 'Account in BP Payment Transactions'),
-    TEST('16', 'Vendor', 'CIN details', 'CIN fields in BP'),
-    TEST('17', 'Vendor', 'Partner functions', 'Partners in BP purchasing data'),
-    TEST('18', 'Vendor', 'Block / unblock', 'Blocks set / cleared in BP'),
-    TEST('19', 'Extract', 'Extract 2-3 vendors, each scenario', 'Values match BP'),
-    TEST('20', 'Extract', 'Load extracted file into vendor upload, test run', 'Green, no errors'),
+    TEST('10', 'Vendor', 'Download 2-3 vendors, each scenario', 'Values match BP'),
+    TEST('11', 'Vendor', 'Upload downloaded file unchanged, test run', 'Green, no errors'),
+    TEST('12', 'Vendor', 'Bank key creation', 'Bank visible in FI03'),
+    TEST('13', 'Vendor', 'Vendor creation, test run then live', 'New vendor number; vendor in BP'),
+    TEST('14', 'Vendor', 'Vendor extension', 'New company code / purch. org in BP'),
+    TEST('15', 'Vendor', 'Withholding tax / TDS', 'Tax types in BP company code data'),
+    TEST('16', 'Vendor', 'TAN exemption', 'Records in FIWTIN_TAN_EXEM'),
+    TEST('17', 'Vendor', 'Vendor bank details', 'Account in BP Payment Transactions'),
+    TEST('18', 'Vendor', 'CIN details', 'CIN fields in BP'),
+    TEST('19', 'Vendor', 'Partner functions', 'Partners in BP purchasing data'),
+    TEST('20', 'Vendor', 'Block / unblock', 'Blocks set / cleared in BP'),
   ], [5, 11, 28, 28, 12, 16]),
   GAP(),
   T(['Tested by', 'Date', 'Signature'], [['', '', '']], [40, 25, 35]),
@@ -321,7 +309,7 @@ add(
 // ---------------------------------------------------------------- document
 const doc = new Document({
   creator: 'SAP project team',
-  title: 'Customer and Vendor Master - Mass Upload Programs',
+  title: 'Customer and Vendor Master - Download / Upload Programs',
   styles: {
     default: { document: { run: { font: FONT, size: 20 } } },
     paragraphStyles: [
@@ -342,7 +330,7 @@ const doc = new Document({
     properties: { page: { size: { width: 11906, height: 16838 },
                           margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
     headers: { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT,
-      children: [run('Customer and Vendor Master - Mass Upload Programs', { size: 16, color: '808080' })] })] }) },
+      children: [run('Customer and Vendor Master - Download / Upload Programs', { size: 16, color: '808080' })] })] }) },
     footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER,
       children: [run('Page ', { size: 16, color: '808080' }),
                  new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: 16, color: '808080' })] })] }) },

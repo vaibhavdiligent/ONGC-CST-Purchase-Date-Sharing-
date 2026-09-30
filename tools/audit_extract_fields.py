@@ -17,7 +17,7 @@ is a name nothing will ever answer.
 import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EX   = open(os.path.join(ROOT, 'src/zbcs_mass_upload_extract.prog.abap'), encoding='utf-8').read()
+EX   = open(os.path.join(ROOT, 'src/zmms_bp_mass_upload.prog.abap'), encoding='utf-8').read()
 SUP  = open(os.path.join(ROOT, 'src/zmms_bp_mass_upload.prog.abap'),      encoding='utf-8').read()
 DD   = json.load(open(os.path.join(ROOT, 'tools/ddic.json')))
 
@@ -45,17 +45,12 @@ BNKA = {'BANKS', 'BANKL', 'BANKA', 'PROVZ', 'STRAS', 'ORT01', 'BRNCH', 'SWIFT',
         'BNKLZ', 'PSKTO', 'BGRUP', 'XPGRO', 'BNKLZ', 'ADRNR', 'ERNAM', 'ERDAT',
         'LOEVM', 'BANKN', 'MENUE', 'BKONT'}
 
-# structures the dictionary extract carries, per side - the node letters
-# are shared but 'B' is KNB1 on the customer and LFB1 on the supplier.
+# structures the dictionary extract carries, keyed by the first letter of
+# the scenario (R1..R9, the vendor program's own codes) and the node
 BY_NODE = {
-    ('C', 'C'): comps('CMDS_EI_CMD_CENTRAL', 'DATA'),
-    ('C', 'B'): comps('CMDS_EI_COMPANY_DATA'),
-    ('C', 'S'): comps('CMDS_EI_SALES_DATA'),
-    ('C', 'Z'): LICENCE,
-    ('C', 'A'): ADDRESS,
-    ('V', 'A'): ADDRESS,
-    ('V', 'N'): BANKDET,
-    ('V', 'Y'): BNKA,
+    ('R', 'A'): ADDRESS,
+    ('R', 'N'): BANKDET,
+    ('R', 'Y'): BNKA,
 }
 # Nodes the engine resolves in code rather than by component name. The key
 # node is read out of the extractor's own CASE blocks rather than typed here,
@@ -111,7 +106,7 @@ def vocabulary(src):
 VOCAB = vocabulary(SUP)
 
 MAP = re.compile(
-    r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "
+    r"\(\s*scen = '(R\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "
     r"node = '([\w-]*)' fld = '([^']*)' fmt = '([^']*)'(?: cnv = '[^']*')? \)")
 rows = [(m.group(1), int(m.group(2)), m.group(4), m.group(5)) for m in MAP.finditer(EX)]
 if not rows:
@@ -145,7 +140,7 @@ for scen, col, node, fld in rows:
 # reads twelve; the seven without a heading were not in the map at all, so
 # the sample came out with no vendor number in it and could not be uploaded.
 HANDLER = dict(re.findall(r"WHEN p_r(\d)\. ro = NEW (lcl_h_\w+)\(", SUP))
-SCEN_OF = {cls: 'V' + n for n, cls in HANDLER.items()}
+SCEN_OF = {cls: 'R' + n for n, cls in HANDLER.items()}
 
 def body(cls):
     start = SUP.index(f'CLASS {cls} IMPLEMENTATION.')

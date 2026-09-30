@@ -20,7 +20,6 @@ import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
-         'src/zbcs_mass_upload_extract.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap']
 
 # A PARAMETERS or SELECT-OPTIONS statement runs to its closing period and may
@@ -105,6 +104,14 @@ def main():
 
         for x in sorted(pars):
             check(name, len(x) <= 8, f'{x} is longer than the eight characters a parameter may have')
+
+        # A selection text holds 30 characters; SAP cuts a longer one off
+        # without a word - "Vendor / BP creation - all company codes" came
+        # out as "Vendor / BP creation - all com".
+        for key, entry in re.findall(r'<ID>S</ID>\s*<KEY>(\w+)</KEY>\s*<ENTRY>([^<]*)</ENTRY>', xml):
+            text = entry.split('.', 1)[1] if '.' in entry[:17] else entry.strip()
+            check(name, len(text) <= 30,
+                  f'the selection text of {key} is {len(text)} characters - SAP keeps 30: "{text}"')
 
         # ---- a value help that leans on another field of the same screen -
         # A radio button whose group carries USER-COMMAND has already been

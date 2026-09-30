@@ -1,16 +1,24 @@
 *&---------------------------------------------------------------------*
 *& Report  ZMMS_BP_MASS_UPLOAD
 *&---------------------------------------------------------------------*
-*& Title       : Business Partner / Supplier Master Mass Upload
+*& Title       : Business Partner / Supplier Master Download / Upload
 *& Module      : MM (supplier master) incl. FI company-code data
 *& Package     : ZMMS_BP_UPLOAD          Transaction : ZMMS_BPUPL
 *& Source book : "Vendor LSMW with Template.xlsx" - one tab per scenario
 *&
 *& Purpose
-*&   One program for every vendor/BP mass create and change scenario. The
-*&   scenario is chosen by radio button and drives which tab of the customer
-*&   workbook is read. Column layouts are exactly the customer's existing
-*&   templates, so no re-keying is needed.
+*&   One program for every vendor/BP mass create and change scenario, in
+*&   both directions. The scenario is chosen by radio button and drives
+*&   which tab of the customer workbook is written or read. Column layouts
+*&   are exactly the customer's existing templates, so no re-keying is
+*&   needed.
+*&     Download  reads existing vendors and writes them into the scenario's
+*&               tab - a correctly laid-out file to start from, filled with
+*&               real values. It changes nothing.
+*&     Upload    reads a filled tab and posts it.
+*&   Both are laid out by one column map, LCL_MAP, so a file this program
+*&   writes is a file it reads back. This replaces ZBCS_MASS_UPLOAD_EXTRACT,
+*&   which did the download on its own from a copy of the same headings.
 *&
 *& Why the engine changed
 *&   The templates are ECC-era LSMW/BDC recordings (ZSD_XK05, ZXD01_PFADD_VND,
@@ -24,7 +32,8 @@
 *&   CL_MD_BP_MAINTAIN=>MAINTAIN          post, native I_TEST_RUN
 *&   BAPI_BANK_CREATE / BAPI_BANK_CHANGE  bank master (not a BP object)
 *&   J_1ITAN_EXEM_SAVE                    India TAN exemption (update module)
-*&   Reads use SELECT / BAPI_BUPA_* only.
+*&   VMD_EI_API_EXTRACT=>GET_DATA         read, for the download
+*&   Reads use SELECT / BAPI_BUPA_* / VMD_EI_API_EXTRACT only.
 *&
 *& Gross-segment rule
 *&   VALIDATE_SINGLE expects GROSS data per segment: a partial list for bank
@@ -122,6 +131,33 @@ TYPES: BEGIN OF ty_msg,
        END OF ty_msg,
        tt_msg TYPE STANDARD TABLE OF ty_msg WITH EMPTY KEY.
 
+" One column of one scenario's tab: where it sits, what it is headed, which
+" part of the master record fills it on a download, and how the value is
+" written. See LCL_MAP.
+TYPES: BEGIN OF ty_col,
+         scen TYPE char2,
+         col  TYPE i,
+         hdr  TYPE char60,
+         node TYPE char1,
+         fld  TYPE char30,
+         fmt  TYPE char2,
+       END OF ty_col,
+       tt_col TYPE STANDARD TABLE OF ty_col WITH EMPTY KEY.
+
+" A line of the download's own list. The upload's (TY_MSG) counts rows
+" posted and failed, which a download has none of.
+TYPES: BEGIN OF ty_dmsg,
+         icon    TYPE icon_d,
+         objkey  TYPE char20,
+         message TYPE string,
+       END OF ty_dmsg,
+       tt_dmsg TYPE STANDARD TABLE OF ty_dmsg WITH EMPTY KEY.
+
+" The task the extract interface expects on a read request. It is not the
+" task of a change - the maintain interface takes I or U - it is what tells
+" the extractor which record to assemble.
+CONSTANTS gc_task_read TYPE cmd_ei_object_task VALUE 'M'.
+
 " What R_3_USER holds for a mobile number. See the note where it is set.
 CONSTANTS gc_mobile TYPE c LENGTH 1 VALUE '3'.
 
@@ -143,12 +179,27 @@ CONSTANTS:
   gc_sh_pfn    TYPE string VALUE 'Patner function',   " sic - customer spelling
   gc_sh_blk    TYPE string VALUE 'Block_Unblocked'.
 
+" The selection screen's own function code, so a radio button click can be
+" told apart from the user asking to run.
+TABLES sscrfields.
+
+" Data objects the SELECT-OPTIONS are built over, and the scenario the
+" proposed download file name follows.
+DATA: gv_bp      TYPE bu_partner,
+      gv_lifnr   TYPE lifnr,
+      gv_dl_scen TYPE char2.
+
 *----------------------------------------------------------------------*
 * Selection screen
 *----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b0 WITH FRAME TITLE TEXT-006.
+PARAMETERS: p_down RADIOBUTTON GROUP g0 USER-COMMAND md DEFAULT 'X',
+            p_up   RADIOBUTTON GROUP g0.
+SELECTION-SCREEN END OF BLOCK b0.
+
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 PARAMETERS:
-  p_r1 RADIOBUTTON GROUP g1 DEFAULT 'X',  " Vendor / BP creation - all CC
+  p_r1 RADIOBUTTON GROUP g1 USER-COMMAND rb DEFAULT 'X',  " Vendor / BP creation - all CC
   p_r2 RADIOBUTTON GROUP g1,              " Withholding tax / TDS
   p_r3 RADIOBUTTON GROUP g1,              " TAN exemption details
   p_r4 RADIOBUTTON GROUP g1,              " Bank key creation
@@ -159,17 +210,29 @@ PARAMETERS:
   p_r9 RADIOBUTTON GROUP g1.              " Block / unblock
 SELECTION-SCREEN END OF BLOCK b1.
 
-SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
-PARAMETERS: p_file TYPE ty_path OBLIGATORY LOWER CASE,
-            p_pc   RADIOBUTTON GROUP g2 DEFAULT 'X',   " file on the PC
-            p_srv  RADIOBUTTON GROUP g2.               " file on the app server
-SELECTION-SCREEN END OF BLOCK b2.
+" Which vendors a download writes. Ignored on an upload.
+SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-004.
+SELECT-OPTIONS: s_bp    FOR gv_bp    NO INTERVALS,
+                s_lifnr FOR gv_lifnr NO INTERVALS.
+PARAMETERS:     p_max   TYPE i DEFAULT 20.
+SELECTION-SCREEN END OF BLOCK b4.
 
+" What an upload run does with what it reads. Ignored on a download.
 SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
 PARAMETERS: p_test AS CHECKBOX DEFAULT 'X',   " simulate - nothing is posted
             p_stop AS CHECKBOX,               " stop at the first faulty row
             p_skip TYPE i DEFAULT 1.          " leading lines treated as heading
 SELECTION-SCREEN END OF BLOCK b3.
+
+" Not OBLIGATORY: a required field that is empty stops every radio button
+" click with "Fill in all required entry fields". It is checked when the
+" program is run instead.
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+PARAMETERS: p_file  TYPE ty_path LOWER CASE,
+            p_pc    RADIOBUTTON GROUP g2 DEFAULT 'X',   " file on the PC
+            p_srv   RADIOBUTTON GROUP g2,               " file on the app server
+            p_blank AS CHECKBOX.                        " download: headings only
+SELECTION-SCREEN END OF BLOCK b2.
 
 *----------------------------------------------------------------------*
 * Exception
@@ -256,6 +319,23 @@ CLASS lcl_util DEFINITION FINAL.
     "! Heading text reduced to letters and digits in upper case, so that
     "! "Vendor  code", "vendor_code" and "VENDOR CODE" are one and the same.
     CLASS-METHODS squash    IMPORTING iv_in  TYPE clike RETURNING VALUE(rv) TYPE string.
+
+    " ---- for the download ------------------------------------------------
+    " IV_FMT is the conversion the upload applies on the way in:
+    "   DT date   NM whole number   AL / GL leading zeros   TT title key
+    CLASS-METHODS text
+      IMPORTING iv_value  TYPE any
+                iv_fmt    TYPE clike DEFAULT ''
+      RETURNING VALUE(rv) TYPE string.
+
+    CLASS-METHODS xml_escape
+      IMPORTING iv_in     TYPE string
+      RETURNING VALUE(rv) TYPE string.
+
+    " 1 -> A, 27 -> AA, as the spreadsheet format wants it.
+    CLASS-METHODS col_letter
+      IMPORTING iv_col    TYPE i
+      RETURNING VALUE(rv) TYPE string.
 ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
@@ -656,6 +736,433 @@ CLASS lcl_util IMPLEMENTATION.
     rv = is_empty( is_row ).
   ENDMETHOD.
 
+  METHOD text.
+    FIELD-SYMBOLS <lv> TYPE any.
+    ASSIGN iv_value TO <lv>.
+    IF <lv> IS NOT ASSIGNED OR <lv> IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA(lv_kind) = cl_abap_typedescr=>describe_by_data( <lv> )->type_kind.
+
+    " A column name can land on a table or a structure inside the master
+    " data - there is no text for those, and assigning one to a string
+    " would terminate the program.
+    IF lv_kind = cl_abap_typedescr=>typekind_table
+    OR lv_kind = cl_abap_typedescr=>typekind_struct1
+    OR lv_kind = cl_abap_typedescr=>typekind_struct2
+    OR lv_kind = cl_abap_typedescr=>typekind_oref
+    OR lv_kind = cl_abap_typedescr=>typekind_dref.
+      RETURN.
+    ENDIF.
+
+    IF lv_kind = cl_abap_typedescr=>typekind_date.
+      DATA lv_d TYPE d.
+      lv_d = <lv>.
+      IF lv_d IS INITIAL.
+        RETURN.
+      ENDIF.
+      rv = |{ lv_d+6(2) }.{ lv_d+4(2) }.{ lv_d(4) }|.
+      RETURN.
+    ENDIF.
+
+    IF lv_kind = cl_abap_typedescr=>typekind_packed
+    OR lv_kind = cl_abap_typedescr=>typekind_float
+    OR lv_kind = cl_abap_typedescr=>typekind_int
+    OR lv_kind = cl_abap_typedescr=>typekind_int1
+    OR lv_kind = cl_abap_typedescr=>typekind_int2.
+      DATA lv_p TYPE p LENGTH 16 DECIMALS 4.
+      lv_p = <lv>.
+      rv = |{ lv_p NUMBER = RAW }|.
+      rv = condense( rv ).
+      " trailing zeros after the point say nothing on a template
+      IF rv CS '.'.
+        WHILE substring( val = rv off = strlen( rv ) - 1 len = 1 ) = '0'.
+          rv = substring( val = rv len = strlen( rv ) - 1 ).
+        ENDWHILE.
+        IF substring( val = rv off = strlen( rv ) - 1 len = 1 ) = '.'.
+          rv = substring( val = rv len = strlen( rv ) - 1 ).
+        ENDIF.
+      ENDIF.
+      RETURN.
+    ENDIF.
+
+    " Everything else is character-like: a plain assignment converts it.
+    DATA lv_c TYPE string.
+    lv_c = <lv>.
+    rv   = condense( lv_c ).
+
+    " Leading zeros come off: the upload puts them back, and a
+    " file full of 0000147341 is harder to read and to edit.
+    IF ( iv_fmt = 'AL' OR iv_fmt = 'GL' ) AND rv CO '0123456789'.
+      SHIFT rv LEFT DELETING LEADING '0'.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD xml_escape.
+    rv = iv_in.
+    REPLACE ALL OCCURRENCES OF '&'  IN rv WITH '&amp;'.
+    REPLACE ALL OCCURRENCES OF '<'  IN rv WITH '&lt;'.
+    REPLACE ALL OCCURRENCES OF '>'  IN rv WITH '&gt;'.
+    REPLACE ALL OCCURRENCES OF '"'  IN rv WITH '&quot;'.
+    REPLACE ALL OCCURRENCES OF `'`  IN rv WITH '&apos;'.
+    " Tabs and line breaks inside a cell would break the sheet.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf   IN rv WITH ` `.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>newline IN rv WITH ` `.
+    REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>horizontal_tab IN rv WITH ` `.
+  ENDMETHOD.
+
+  METHOD col_letter.
+    DATA lv_n TYPE i.
+    DATA lv_r TYPE i.
+    lv_n = iv_col.
+    WHILE lv_n > 0.
+      lv_r = ( lv_n - 1 ) MOD 26.
+      rv   = |{ sy-abcde+lv_r(1) }{ rv }|.
+      lv_n = ( lv_n - 1 ) DIV 26.
+    ENDWHILE.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+* LCL_MAP - the columns of each scenario's tab, in both directions
+*   The download writes its heading line from HDR and fills each column
+*   from the node and field named here. The upload finds its tab and its
+*   columns by the same headings (LCL_HDR takes them from here), so a
+*   downloaded file and the upload cannot disagree about what a column is
+*   called. What the upload WRITES from a column is its handler's business:
+*   each of the nine has rules of its own - merging bank details with the
+*   ones already held, checking a company code exists before its tax data
+*   - that a column map cannot express.
+*----------------------------------------------------------------------*
+CLASS lcl_map DEFINITION FINAL.
+  PUBLIC SECTION.
+    CLASS-METHODS for   IMPORTING iv_scen   TYPE char2
+                        RETURNING VALUE(rt) TYPE tt_col.
+    CLASS-METHODS sheet IMPORTING iv_scen   TYPE char2
+                        RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS name  IMPORTING iv_scen   TYPE char2
+                        RETURNING VALUE(rv) TYPE string.
+  PRIVATE SECTION.
+    CLASS-DATA mt TYPE tt_col.
+    CLASS-METHODS build RETURNING VALUE(rt) TYPE tt_col.
+ENDCLASS.
+
+CLASS lcl_map IMPLEMENTATION.
+
+  METHOD for.
+    IF mt IS INITIAL.
+      mt = build( ).
+    ENDIF.
+    rt = VALUE #( FOR ls IN mt WHERE ( scen = iv_scen ) ( ls ) ).
+    SORT rt BY col.
+  ENDMETHOD.
+
+  METHOD sheet.
+    " The tab names of the vendor workbook, the same ones the handlers give.
+    rv = SWITCH string( iv_scen
+           WHEN 'R1' THEN gc_sh_create
+           WHEN 'R2' THEN gc_sh_tds
+           WHEN 'R3' THEN gc_sh_tan
+           WHEN 'R4' THEN gc_sh_bkey
+           WHEN 'R5' THEN gc_sh_bank
+           WHEN 'R6' THEN gc_sh_ext
+           WHEN 'R7' THEN gc_sh_cin
+           WHEN 'R8' THEN gc_sh_pfn
+           WHEN 'R9' THEN gc_sh_blk
+           ELSE           'Sheet1' ).
+  ENDMETHOD.
+
+  METHOD name.
+    rv = |{ sheet( iv_scen ) }_sample|.
+    " Backquotes, not quotes: a text field literal drops its trailing
+    " blanks, so ' ' is an empty search pattern and REPLACE terminates with
+    " CX_SY_REPLACE_INFINITE_LOOP.
+    REPLACE ALL OCCURRENCES OF ` ` IN rv WITH `_`.
+  ENDMETHOD.
+
+  METHOD build.
+    " V1 - Vendor creation for All CC (64 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R1' col = 1    hdr = 'Field Tech name' node = '-' fld = '' fmt = '' )
+      ( scen = 'R1' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R1' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R1' col = 4    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
+      ( scen = 'R1' col = 5    hdr = 'KTOKK' node = 'V' fld = 'KTOKK' fmt = '' )
+      ( scen = 'R1' col = 6    hdr = 'TITLE_MEDI' node = 'A' fld = 'TITLE' fmt = 'TT' )
+      ( scen = 'R1' col = 7    hdr = 'NAME1' node = 'A' fld = 'NAME' fmt = '' )
+      ( scen = 'R1' col = 8    hdr = 'NAME2' node = 'A' fld = 'NAME_2' fmt = '' )
+      ( scen = 'R1' col = 9    hdr = 'Name 3' node = 'A' fld = 'NAME_3' fmt = '' )
+      ( scen = 'R1' col = 10   hdr = 'Name 4' node = 'A' fld = 'NAME_4' fmt = '' )
+      ( scen = 'R1' col = 11   hdr = 'SORT1' node = 'A' fld = 'SORT1' fmt = '' )
+      ( scen = 'R1' col = 12   hdr = 'SORT2' node = 'A' fld = 'SORT2' fmt = '' )
+      ( scen = 'R1' col = 13   hdr = 'STR_SUPPL1' node = 'A' fld = 'STR_SUPPL1' fmt = '' )
+      ( scen = 'R1' col = 14   hdr = 'STR_SUPPL2' node = 'A' fld = 'STR_SUPPL2' fmt = '' )
+      ( scen = 'R1' col = 15   hdr = 'STREET' node = 'A' fld = 'STREET' fmt = '' )
+      ( scen = 'R1' col = 16   hdr = 'STR_SUPPL3' node = 'A' fld = 'STR_SUPPL3' fmt = '' )
+      ( scen = 'R1' col = 17   hdr = 'CITY2' node = 'A' fld = 'DISTRICT' fmt = '' )
+      ( scen = 'R1' col = 18   hdr = 'POST_CODE1' node = 'A' fld = 'POSTL_COD1' fmt = '' )
+      ( scen = 'R1' col = 19   hdr = 'CITY1' node = 'A' fld = 'CITY' fmt = '' )
+      ( scen = 'R1' col = 20   hdr = 'COUNTRY' node = 'A' fld = 'COUNTRY' fmt = '' )
+      ( scen = 'R1' col = 21   hdr = 'REGION' node = 'A' fld = 'REGION' fmt = '' )
+      ( scen = 'R1' col = 22   hdr = 'LANGU' node = 'A' fld = 'LANGU' fmt = '' )
+      ( scen = 'R1' col = 23   hdr = 'TEL_NUMBER' node = 'M' fld = 'TEL' fmt = '' )
+      ( scen = 'R1' col = 24   hdr = 'TEL_EXTENS' node = 'M' fld = 'TELX' fmt = '' )
+      ( scen = 'R1' col = 25   hdr = 'TEL_NUMBER2' node = 'M' fld = 'TEL2' fmt = '' )
+      ( scen = 'R1' col = 26   hdr = 'TEL_EXTENS2' node = 'M' fld = 'TELX2' fmt = '' )
+      ( scen = 'R1' col = 27   hdr = 'MOB_NUMBER' node = 'M' fld = 'MOB' fmt = '' )
+      ( scen = 'R1' col = 28   hdr = 'MOB_NUMBER2' node = 'M' fld = 'MOB2' fmt = '' )
+      ( scen = 'R1' col = 29   hdr = 'FAX_NUMBER' node = 'M' fld = 'FAX' fmt = '' )
+      ( scen = 'R1' col = 30   hdr = 'SMTP_ADDR' node = 'M' fld = 'SMT' fmt = '' )
+      ( scen = 'R1' col = 31   hdr = 'SMTP_ADDR2' node = 'M' fld = 'SMT2' fmt = '' )
+      ( scen = 'R1' col = 32   hdr = 'KUNNR' node = 'V' fld = 'KUNNR' fmt = 'AL' )
+      ( scen = 'R1' col = 33   hdr = 'VBUND' node = 'V' fld = 'VBUND' fmt = 'AL' )
+      ( scen = 'R1' col = 34   hdr = 'KONZS' node = 'V' fld = 'KONZS' fmt = '' )
+      ( scen = 'R1' col = 35   hdr = 'STCD3' node = 'V' fld = 'STCD3' fmt = '' )
+      ( scen = 'R1' col = 36   hdr = 'STCD5' node = 'V' fld = 'STCD5' fmt = '' )
+      ( scen = 'R1' col = 37   hdr = 'STCEG' node = 'V' fld = 'STCEG' fmt = '' )
+      ( scen = 'R1' col = 38   hdr = 'J_1KFTBUS' node = 'V' fld = 'J_1KFTBUS' fmt = '' )
+      ( scen = 'R1' col = 39   hdr = 'STENR' node = 'V' fld = 'STENR' fmt = '' )
+      ( scen = 'R1' col = 40   hdr = 'BRSCH' node = 'V' fld = 'BRSCH' fmt = '' )
+      ( scen = 'R1' col = 41   hdr = 'BANKS_01' node = 'N' fld = 'BANKS#1' fmt = '' )
+      ( scen = 'R1' col = 42   hdr = 'BANKL_01' node = 'N' fld = 'BANKL#1' fmt = '' )
+      ( scen = 'R1' col = 43   hdr = 'BANKN_01' node = 'N' fld = 'BANKN#1' fmt = '' )
+      ( scen = 'R1' col = 44   hdr = 'KOINH_01' node = 'N' fld = 'KOINH#1' fmt = '' )
+      ( scen = 'R1' col = 45   hdr = 'BKONT' node = 'N' fld = 'BKONT#1' fmt = '' )
+      ( scen = 'R1' col = 46   hdr = 'IBAN' node = 'N' fld = 'IBAN#1' fmt = '' )
+      ( scen = 'R1' col = 47   hdr = 'AKONT' node = 'B' fld = 'AKONT' fmt = 'GL' )
+      ( scen = 'R1' col = 48   hdr = 'FDGRV' node = 'B' fld = 'FDGRV' fmt = '' )
+      ( scen = 'R1' col = 49   hdr = 'ALTKN' node = 'B' fld = 'ALTKN' fmt = '' )
+      ( scen = 'R1' col = 50   hdr = 'ZTERM company code' node = 'B' fld = 'ZTERM' fmt = '' )
+      ( scen = 'R1' col = 51   hdr = 'REPRF' node = 'B' fld = 'REPRF' fmt = '' )
+      ( scen = 'R1' col = 52   hdr = 'ZWELS' node = 'B' fld = 'ZWELS' fmt = '' )
+      ( scen = 'R1' col = 53   hdr = 'ZAHLS' node = 'B' fld = 'ZAHLS' fmt = '' )
+      ( scen = 'R1' col = 54   hdr = 'HBKID' node = 'B' fld = 'HBKID' fmt = '' )
+      ( scen = 'R1' col = 55   hdr = 'VEN_CLASS' node = 'V' fld = 'VEN_CLASS' fmt = '' )
+      ( scen = 'R1' col = 56   hdr = 'J_1ISSIST' node = 'V' fld = 'J_1ISSIST' fmt = '' )
+      ( scen = 'R1' col = 57   hdr = 'J_1IPANNO' node = 'V' fld = 'J_1IPANNO' fmt = '' )
+      ( scen = 'R1' col = 58   hdr = 'QLAND' node = 'B' fld = 'QLAND' fmt = '' )
+      ( scen = 'R1' col = 59   hdr = 'WITHT' node = 'W' fld = 'WITHT#1' fmt = '' )
+      ( scen = 'R1' col = 60   hdr = 'WT_WITHCD' node = 'W' fld = 'WT_WITHCD#1' fmt = '' )
+      ( scen = 'R1' col = 61   hdr = 'WAERS' node = 'P' fld = 'WAERS' fmt = '' )
+      ( scen = 'R1' col = 62   hdr = 'ZTERM purch. org' node = 'P' fld = 'ZTERM' fmt = '' )
+      ( scen = 'R1' col = 63   hdr = 'KALSK' node = 'P' fld = 'KALSK' fmt = '' )
+      ( scen = 'R1' col = 64   hdr = 'WEBRE' node = 'P' fld = 'WEBRE' fmt = '' )
+      ( scen = 'R1' col = 65   hdr = 'INCO1' node = 'P' fld = 'INCO1' fmt = '' )
+      ( scen = 'R1' col = 66   hdr = 'INCO2' node = 'P' fld = 'INCO2' fmt = '' )
+    ) TO rt.
+
+    " V2 - TDS upload (64 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R2' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R2' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R2' col = 4    hdr = 'D0610' node = '-' fld = '' fmt = '' )
+      ( scen = 'R2' col = 5    hdr = 'QLAND' node = 'B' fld = 'QLAND' fmt = '' )
+      ( scen = 'R2' col = 6    hdr = 'WITHT_01' node = 'W' fld = 'WITHT#1' fmt = '' )
+      ( scen = 'R2' col = 7    hdr = 'WITHT_02' node = 'W' fld = 'WITHT#2' fmt = '' )
+      ( scen = 'R2' col = 8    hdr = 'WITHT_03' node = 'W' fld = 'WITHT#3' fmt = '' )
+      ( scen = 'R2' col = 9    hdr = 'WITHT_04' node = 'W' fld = 'WITHT#4' fmt = '' )
+      ( scen = 'R2' col = 10   hdr = 'WITHT_05' node = 'W' fld = 'WITHT#5' fmt = '' )
+      ( scen = 'R2' col = 11   hdr = 'WITHT_06' node = 'W' fld = 'WITHT#6' fmt = '' )
+      ( scen = 'R2' col = 12   hdr = 'WT_WITHCD_01' node = 'W' fld = 'WT_WITHCD#1' fmt = '' )
+      ( scen = 'R2' col = 13   hdr = 'WT_WITHCD_02' node = 'W' fld = 'WT_WITHCD#2' fmt = '' )
+      ( scen = 'R2' col = 14   hdr = 'WT_WITHCD_03' node = 'W' fld = 'WT_WITHCD#3' fmt = '' )
+      ( scen = 'R2' col = 15   hdr = 'WT_WITHCD_04' node = 'W' fld = 'WT_WITHCD#4' fmt = '' )
+      ( scen = 'R2' col = 16   hdr = 'WT_WITHCD_05' node = 'W' fld = 'WT_WITHCD#5' fmt = '' )
+      ( scen = 'R2' col = 17   hdr = 'WT_WITHCD_06' node = 'W' fld = 'WT_WITHCD#6' fmt = '' )
+      ( scen = 'R2' col = 18   hdr = 'WT_SUBJCT_01' node = 'W' fld = 'WT_SUBJCT#1' fmt = '' )
+      ( scen = 'R2' col = 19   hdr = 'WT_SUBJCT_02' node = 'W' fld = 'WT_SUBJCT#2' fmt = '' )
+      ( scen = 'R2' col = 20   hdr = 'WT_SUBJCT_03' node = 'W' fld = 'WT_SUBJCT#3' fmt = '' )
+      ( scen = 'R2' col = 21   hdr = 'WT_SUBJCT_04' node = 'W' fld = 'WT_SUBJCT#4' fmt = '' )
+      ( scen = 'R2' col = 22   hdr = 'WT_SUBJCT_05' node = 'W' fld = 'WT_SUBJCT#5' fmt = '' )
+      ( scen = 'R2' col = 23   hdr = 'WT_SUBJCT_06' node = 'W' fld = 'WT_SUBJCT#6' fmt = '' )
+      ( scen = 'R2' col = 24   hdr = 'QSREC_01' node = 'W' fld = 'QSREC#1' fmt = '' )
+      ( scen = 'R2' col = 25   hdr = 'QSREC_02' node = 'W' fld = 'QSREC#2' fmt = '' )
+      ( scen = 'R2' col = 26   hdr = 'QSREC_03' node = 'W' fld = 'QSREC#3' fmt = '' )
+      ( scen = 'R2' col = 27   hdr = 'QSREC_04' node = 'W' fld = 'QSREC#4' fmt = '' )
+      ( scen = 'R2' col = 28   hdr = 'QSREC_05' node = 'W' fld = 'QSREC#5' fmt = '' )
+      ( scen = 'R2' col = 29   hdr = 'QSREC_06' node = 'W' fld = 'QSREC#6' fmt = '' )
+      ( scen = 'R2' col = 30   hdr = 'WT_WTSTCD_01' node = 'W' fld = 'WT_WTSTCD#1' fmt = '' )
+      ( scen = 'R2' col = 31   hdr = 'WT_WTSTCD_02' node = 'W' fld = 'WT_WTSTCD#2' fmt = '' )
+      ( scen = 'R2' col = 32   hdr = 'WT_WTSTCD_03' node = 'W' fld = 'WT_WTSTCD#3' fmt = '' )
+      ( scen = 'R2' col = 33   hdr = 'WT_WTSTCD_04' node = 'W' fld = 'WT_WTSTCD#4' fmt = '' )
+      ( scen = 'R2' col = 34   hdr = 'WT_WTSTCD_05' node = 'W' fld = 'WT_WTSTCD#5' fmt = '' )
+      ( scen = 'R2' col = 35   hdr = 'WT_WTSTCD_06' node = 'W' fld = 'WT_WTSTCD#6' fmt = '' )
+      ( scen = 'R2' col = 36   hdr = 'WT_EXNR_01' node = 'W' fld = 'WT_EXNR#1' fmt = '' )
+      ( scen = 'R2' col = 37   hdr = 'WT_EXNR_02' node = 'W' fld = 'WT_EXNR#2' fmt = '' )
+      ( scen = 'R2' col = 38   hdr = 'WT_EXNR_03' node = 'W' fld = 'WT_EXNR#3' fmt = '' )
+      ( scen = 'R2' col = 39   hdr = 'WT_EXNR_04' node = 'W' fld = 'WT_EXNR#4' fmt = '' )
+      ( scen = 'R2' col = 40   hdr = 'WT_EXNR_05' node = 'W' fld = 'WT_EXNR#5' fmt = '' )
+      ( scen = 'R2' col = 41   hdr = 'WT_EXNR_06' node = 'W' fld = 'WT_EXNR#6' fmt = '' )
+      ( scen = 'R2' col = 42   hdr = 'WT_EXRT_01' node = 'W' fld = 'WT_EXRT#1' fmt = '' )
+      ( scen = 'R2' col = 43   hdr = 'WT_EXRT_02' node = 'W' fld = 'WT_EXRT#2' fmt = '' )
+      ( scen = 'R2' col = 44   hdr = 'WT_EXRT_03' node = 'W' fld = 'WT_EXRT#3' fmt = '' )
+      ( scen = 'R2' col = 45   hdr = 'WT_EXRT_04' node = 'W' fld = 'WT_EXRT#4' fmt = '' )
+      ( scen = 'R2' col = 46   hdr = 'WT_EXRT_05' node = 'W' fld = 'WT_EXRT#5' fmt = '' )
+      ( scen = 'R2' col = 47   hdr = 'WT_EXRT_06' node = 'W' fld = 'WT_EXRT#6' fmt = '' )
+      ( scen = 'R2' col = 48   hdr = 'WT_WTEXRS_01' node = 'W' fld = 'WT_WTEXRS#1' fmt = '' )
+      ( scen = 'R2' col = 49   hdr = 'WT_WTEXRS_02' node = 'W' fld = 'WT_WTEXRS#2' fmt = '' )
+      ( scen = 'R2' col = 50   hdr = 'WT_WTEXRS_03' node = 'W' fld = 'WT_WTEXRS#3' fmt = '' )
+      ( scen = 'R2' col = 51   hdr = 'WT_WTEXRS_04' node = 'W' fld = 'WT_WTEXRS#4' fmt = '' )
+      ( scen = 'R2' col = 52   hdr = 'WT_WTEXRS_05' node = 'W' fld = 'WT_WTEXRS#5' fmt = '' )
+      ( scen = 'R2' col = 53   hdr = 'WT_WTEXRS_06' node = 'W' fld = 'WT_WTEXRS#6' fmt = '' )
+      ( scen = 'R2' col = 54   hdr = 'WT_EXDF_01' node = 'W' fld = 'WT_EXDF#1' fmt = '' )
+      ( scen = 'R2' col = 55   hdr = 'WT_EXDF_02' node = 'W' fld = 'WT_EXDF#2' fmt = '' )
+      ( scen = 'R2' col = 56   hdr = 'WT_EXDF_03' node = 'W' fld = 'WT_EXDF#3' fmt = '' )
+      ( scen = 'R2' col = 57   hdr = 'WT_EXDF_04' node = 'W' fld = 'WT_EXDF#4' fmt = '' )
+      ( scen = 'R2' col = 58   hdr = 'WT_EXDF_05' node = 'W' fld = 'WT_EXDF#5' fmt = '' )
+      ( scen = 'R2' col = 59   hdr = 'WT_EXDF_06' node = 'W' fld = 'WT_EXDF#6' fmt = '' )
+      ( scen = 'R2' col = 60   hdr = 'WT_EXDT_01' node = 'W' fld = 'WT_EXDT#1' fmt = '' )
+      ( scen = 'R2' col = 61   hdr = 'WT_EXDT_02' node = 'W' fld = 'WT_EXDT#2' fmt = '' )
+      ( scen = 'R2' col = 62   hdr = 'WT_EXDT_03' node = 'W' fld = 'WT_EXDT#3' fmt = '' )
+      ( scen = 'R2' col = 63   hdr = 'WT_EXDT_04' node = 'W' fld = 'WT_EXDT#4' fmt = '' )
+      ( scen = 'R2' col = 64   hdr = 'WT_EXDT_05' node = 'W' fld = 'WT_EXDT#5' fmt = '' )
+      ( scen = 'R2' col = 65   hdr = 'WT_EXDT_06' node = 'W' fld = 'WT_EXDT#6' fmt = '' )
+    ) TO rt.
+
+    " V3 - TAN details (21 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R3' col = 1    hdr = 'Vendor' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R3' col = 2    hdr = 'Company' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R3' col = 3    hdr = 'Address' node = '-' fld = '' fmt = '' )
+      ( scen = 'R3' col = 4    hdr = 'Section_code_1' node = 'X' fld = 'SECCODE#1' fmt = '' )
+      ( scen = 'R3' col = 5    hdr = 'Section_code_2' node = 'X' fld = 'SECCODE#2' fmt = '' )
+      ( scen = 'R3' col = 6    hdr = 'Certificate_1' node = 'X' fld = 'WT_EXNR#1' fmt = '' )
+      ( scen = 'R3' col = 7    hdr = 'Certificate_2' node = 'X' fld = 'WT_EXNR#2' fmt = '' )
+      ( scen = 'R3' col = 8    hdr = 'Exemption_rate_1' node = 'X' fld = 'WT_EXRT#1' fmt = '' )
+      ( scen = 'R3' col = 9    hdr = 'Exemption_rate_2' node = 'X' fld = 'WT_EXRT#2' fmt = '' )
+      ( scen = 'R3' col = 10   hdr = 'Validfrom_1' node = 'X' fld = 'WT_EXDF#1' fmt = '' )
+      ( scen = 'R3' col = 11   hdr = 'Validfrom2' node = 'X' fld = 'WT_EXDF#2' fmt = '' )
+      ( scen = 'R3' col = 12   hdr = 'Validto_1' node = 'X' fld = 'WT_EXDT#1' fmt = '' )
+      ( scen = 'R3' col = 13   hdr = 'Validto_2' node = 'X' fld = 'WT_EXDT#2' fmt = '' )
+      ( scen = 'R3' col = 14   hdr = 'taxtype_1' node = 'X' fld = 'WITHT#1' fmt = '' )
+      ( scen = 'R3' col = 15   hdr = 'Taxtype_2' node = 'X' fld = 'WITHT#2' fmt = '' )
+      ( scen = 'R3' col = 16   hdr = 'taxcode_1' node = 'X' fld = 'WT_WITHCD#1' fmt = '' )
+      ( scen = 'R3' col = 17   hdr = 'Taxcode_2' node = 'X' fld = 'WT_WITHCD#2' fmt = '' )
+      ( scen = 'R3' col = 18   hdr = 'threshold_1' node = 'X' fld = 'FIWTIN_EXEM_THR#1' fmt = '' )
+      ( scen = 'R3' col = 19   hdr = 'threshold_2' node = 'X' fld = 'FIWTIN_EXEM_THR#2' fmt = '' )
+      ( scen = 'R3' col = 20   hdr = 'Currency_1' node = 'X' fld = 'WAERS#1' fmt = '' )
+      ( scen = 'R3' col = 21   hdr = 'Currency_2' node = 'X' fld = 'WAERS#2' fmt = '' )
+    ) TO rt.
+
+    " V4 - BANK Key creation (9 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R4' col = 1    hdr = 'Field Technical Name' node = '-' fld = '' fmt = '' )
+      ( scen = 'R4' col = 2    hdr = 'BANKS' node = 'N' fld = 'BANKS#1' fmt = '' )
+      ( scen = 'R4' col = 3    hdr = 'BANKL' node = 'N' fld = 'BANKL#1' fmt = '' )
+      ( scen = 'R4' col = 4    hdr = 'BANKA' node = 'Y' fld = 'BANKA' fmt = '' )
+      ( scen = 'R4' col = 5    hdr = 'PROVZ' node = 'Y' fld = 'PROVZ' fmt = '' )
+      ( scen = 'R4' col = 6    hdr = 'STRAS' node = 'Y' fld = 'STRAS' fmt = '' )
+      ( scen = 'R4' col = 7    hdr = 'ORT01' node = 'Y' fld = 'ORT01' fmt = '' )
+      ( scen = 'R4' col = 8    hdr = 'BRNCH' node = 'Y' fld = 'BRNCH' fmt = '' )
+      ( scen = 'R4' col = 9    hdr = 'SWIFT' node = 'Y' fld = 'SWIFT' fmt = '' )
+    ) TO rt.
+
+    " V5 - Bank details update (8 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R5' col = 1    hdr = 'Field Technical Name' node = '-' fld = '' fmt = '' )
+      ( scen = 'R5' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R5' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R5' col = 4    hdr = 'BANKS' node = 'N' fld = 'BANKS#1' fmt = '' )
+      ( scen = 'R5' col = 5    hdr = 'BANKL' node = 'N' fld = 'BANKL#1' fmt = '' )
+      ( scen = 'R5' col = 6    hdr = 'BANKN' node = 'N' fld = 'BANKN#1' fmt = '' )
+      ( scen = 'R5' col = 7    hdr = 'KOINH' node = 'N' fld = 'KOINH#1' fmt = '' )
+      ( scen = 'R5' col = 8    hdr = 'IBAN' node = 'N' fld = 'IBAN#1' fmt = '' )
+    ) TO rt.
+
+    " V6 - Vendor extension (12 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R6' col = 1    hdr = 'Field Technical Name' node = '-' fld = '' fmt = '' )
+      ( scen = 'R6' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R6' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R6' col = 4    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
+      ( scen = 'R6' col = 5    hdr = 'REF LIFNR' node = 'K' fld = 'RLIFNR' fmt = 'AL' )
+      ( scen = 'R6' col = 6    hdr = 'REF BUKRS' node = 'K' fld = 'RBUKRS' fmt = '' )
+      ( scen = 'R6' col = 7    hdr = 'REF EKORG' node = 'K' fld = 'REKORG' fmt = '' )
+      " Column 8 has no heading on the template - "Char" over it is the
+      " Field Type row below the heading line, not a name.
+      ( scen = 'R6' col = 8    hdr = '' node = '-' fld = '' fmt = '' )
+      ( scen = 'R6' col = 9    hdr = 'AKONT' node = 'B' fld = 'AKONT' fmt = 'GL' )
+      ( scen = 'R6' col = 10   hdr = 'ZWELS' node = 'B' fld = 'ZWELS' fmt = '' )
+      ( scen = 'R6' col = 11   hdr = 'REPRF' node = 'B' fld = 'REPRF' fmt = '' )
+      ( scen = 'R6' col = 12   hdr = 'WAERS' node = 'P' fld = 'WAERS' fmt = '' )
+      ( scen = 'R6' col = 13   hdr = 'KALSK' node = 'P' fld = 'KALSK' fmt = '' )
+      ( scen = 'R6' col = 14   hdr = 'WEBRE' node = 'P' fld = 'WEBRE' fmt = '' )
+    ) TO rt.
+
+    " V7 - CIN details (15 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R7' col = 1    hdr = 'Vendor Account Number' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R7' col = 2    hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R7' col = 3    hdr = 'Address View' node = '-' fld = '' fmt = '' )
+      ( scen = 'R7' col = 4    hdr = 'ECC Number' node = 'V' fld = 'J_1IEXCD' fmt = '' )
+      ( scen = 'R7' col = 5    hdr = 'Excise Registration Number' node = 'V' fld = 'J_1IEXRN' fmt = '' )
+      ( scen = 'R7' col = 6    hdr = 'Excise Range' node = 'V' fld = 'J_1IEXRG' fmt = '' )
+      ( scen = 'R7' col = 7    hdr = 'Excise Division' node = 'V' fld = 'J_1IEXDI' fmt = '' )
+      ( scen = 'R7' col = 8    hdr = 'Excise Commissionerate' node = 'V' fld = 'J_1IEXCO' fmt = '' )
+      ( scen = 'R7' col = 9    hdr = 'Central Sales Tax Number' node = 'V' fld = 'J_1ICSTNO' fmt = '' )
+      ( scen = 'R7' col = 10   hdr = 'Local Sales Tax Number' node = 'V' fld = 'J_1ILSTNO' fmt = '' )
+      ( scen = 'R7' col = 11   hdr = 'Service Tax Registration Number' node = 'V' fld = 'J_1ISERN' fmt = '' )
+      ( scen = 'R7' col = 12   hdr = 'Permanent Account Number' node = 'V' fld = 'J_1IPANNO' fmt = '' )
+      ( scen = 'R7' col = 13   hdr = 'SSI status' node = 'V' fld = 'J_1ISSIST' fmt = '' )
+      ( scen = 'R7' col = 14   hdr = 'Exc.Tax Ind. Vendor' node = 'V' fld = 'J_1IEXCIVE' fmt = '' )
+      ( scen = 'R7' col = 15   hdr = 'Type of Vendor' node = 'V' fld = 'J_1IVTYP' fmt = '' )
+    ) TO rt.
+
+    " V8 - Patner function (35 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R8' col = 1    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R8' col = 2    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R8' col = 3    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
+      ( scen = 'R8' col = 4    hdr = 'D0320' node = '-' fld = '' fmt = '' )
+      ( scen = 'R8' col = 5    hdr = 'USE_ZAV' node = '-' fld = '' fmt = '' )
+      ( scen = 'R8' col = 6    hdr = 'PARVW_05' node = 'F' fld = 'PARVW#5' fmt = '' )
+      ( scen = 'R8' col = 7    hdr = 'PARVW_06' node = 'F' fld = 'PARVW#6' fmt = '' )
+      ( scen = 'R8' col = 8    hdr = 'PARVW_07' node = 'F' fld = 'PARVW#7' fmt = '' )
+      ( scen = 'R8' col = 9    hdr = 'PARVW_08' node = 'F' fld = 'PARVW#8' fmt = '' )
+      ( scen = 'R8' col = 10   hdr = 'PARVW_09' node = 'F' fld = 'PARVW#9' fmt = '' )
+      ( scen = 'R8' col = 11   hdr = 'PARVW_10' node = 'F' fld = 'PARVW#10' fmt = '' )
+      ( scen = 'R8' col = 12   hdr = 'PARVW_11' node = 'F' fld = 'PARVW#11' fmt = '' )
+      ( scen = 'R8' col = 13   hdr = 'PARVW_12' node = 'F' fld = 'PARVW#12' fmt = '' )
+      ( scen = 'R8' col = 14   hdr = 'PARVW_13' node = 'F' fld = 'PARVW#13' fmt = '' )
+      ( scen = 'R8' col = 15   hdr = 'PARVW_14' node = 'F' fld = 'PARVW#14' fmt = '' )
+      ( scen = 'R8' col = 16   hdr = 'PARVW_15' node = 'F' fld = 'PARVW#15' fmt = '' )
+      ( scen = 'R8' col = 17   hdr = 'GPARN_05' node = 'F' fld = 'PARTNER#5' fmt = '' )
+      ( scen = 'R8' col = 18   hdr = 'GPARN_06' node = 'F' fld = 'PARTNER#6' fmt = '' )
+      ( scen = 'R8' col = 19   hdr = 'GPARN_07' node = 'F' fld = 'PARTNER#7' fmt = '' )
+      ( scen = 'R8' col = 20   hdr = 'GPARN_08' node = 'F' fld = 'PARTNER#8' fmt = '' )
+      ( scen = 'R8' col = 21   hdr = 'GPARN_09' node = 'F' fld = 'PARTNER#9' fmt = '' )
+      ( scen = 'R8' col = 22   hdr = 'GPARN_10' node = 'F' fld = 'PARTNER#10' fmt = '' )
+      ( scen = 'R8' col = 23   hdr = 'GPARN_11' node = 'F' fld = 'PARTNER#11' fmt = '' )
+      ( scen = 'R8' col = 24   hdr = 'GPARN_12' node = 'F' fld = 'PARTNER#12' fmt = '' )
+      ( scen = 'R8' col = 25   hdr = 'GPARN_13' node = 'F' fld = 'PARTNER#13' fmt = '' )
+      ( scen = 'R8' col = 26   hdr = 'GPARN_14' node = 'F' fld = 'PARTNER#14' fmt = '' )
+      ( scen = 'R8' col = 27   hdr = 'GPARN_15' node = 'F' fld = 'PARTNER#15' fmt = '' )
+      ( scen = 'R8' col = 28   hdr = 'PARVW_01' node = 'F' fld = 'PARVW#1' fmt = '' )
+      ( scen = 'R8' col = 29   hdr = 'PARVW_02' node = 'F' fld = 'PARVW#2' fmt = '' )
+      ( scen = 'R8' col = 30   hdr = 'PARVW_03' node = 'F' fld = 'PARVW#3' fmt = '' )
+      ( scen = 'R8' col = 31   hdr = 'PARVW_04' node = 'F' fld = 'PARVW#4' fmt = '' )
+      ( scen = 'R8' col = 32   hdr = 'GPARN_01' node = 'F' fld = 'PARTNER#1' fmt = '' )
+      ( scen = 'R8' col = 33   hdr = 'GPARN_02' node = 'F' fld = 'PARTNER#2' fmt = '' )
+      ( scen = 'R8' col = 34   hdr = 'GPARN_03' node = 'F' fld = 'PARTNER#3' fmt = '' )
+      ( scen = 'R8' col = 35   hdr = 'GPARN_04' node = 'F' fld = 'PARTNER#4' fmt = '' )
+    ) TO rt.
+
+    " V9 - Block_Unblocked (9 columns)
+    APPEND LINES OF VALUE tt_col(
+      ( scen = 'R9' col = 1    hdr = 'Tech name' node = '-' fld = '' fmt = '' )
+      ( scen = 'R9' col = 2    hdr = 'LIFNR' node = 'K' fld = 'LIFNR' fmt = 'AL' )
+      ( scen = 'R9' col = 3    hdr = 'BUKRS' node = 'K' fld = 'BUKRS' fmt = '' )
+      ( scen = 'R9' col = 4    hdr = 'EKORG' node = 'K' fld = 'EKORG' fmt = '' )
+      ( scen = 'R9' col = 5    hdr = 'SPERR' node = 'V' fld = 'SPERR' fmt = '' )
+      ( scen = 'R9' col = 6    hdr = 'SPERR_1' node = 'B' fld = 'SPERR' fmt = '' )
+      ( scen = 'R9' col = 7    hdr = 'SPERM' node = 'V' fld = 'SPERM' fmt = '' )
+      ( scen = 'R9' col = 8    hdr = 'SPERM_1' node = 'P' fld = 'SPERM' fmt = '' )
+      ( scen = 'R9' col = 9    hdr = 'SPERQ' node = 'V' fld = 'SPERQ' fmt = '' )
+    ) TO rt.
+  ENDMETHOD.
+
 ENDCLASS.
 
 *----------------------------------------------------------------------*
@@ -663,8 +1170,8 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 *----------------------------------------------------------------------*
 * LCL_HDR - the heading that belongs above each column
-*   Taken from the customer workbook, one entry per column this program
-*   reads, reduced to letters and digits. Two things are built on it:
+*   Taken from LCL_MAP, one entry per column of the tab, reduced to letters
+*   and digits. Two things are built on it:
 *     - the right tab is the one whose heading line carries most of these,
 *       so the tab NAME does not decide anything;
 *     - each column is then read from wherever its heading actually is, so
@@ -676,303 +1183,19 @@ CLASS lcl_hdr DEFINITION FINAL.
   PUBLIC SECTION.
     CLASS-METHODS for  IMPORTING iv_scen   TYPE char2
                        RETURNING VALUE(rt) TYPE tt_hdr.
-  PRIVATE SECTION.
-    CLASS-DATA mt TYPE tt_hdr.
-    CLASS-METHODS build RETURNING VALUE(rt) TYPE tt_hdr.
 ENDCLASS.
 
 CLASS lcl_hdr IMPLEMENTATION.
 
   METHOD for.
-    IF mt IS INITIAL.
-      mt = build( ).
-    ENDIF.
-    rt = VALUE #( FOR ls IN mt WHERE ( scen = iv_scen ) ( ls ) ).
-  ENDMETHOD.
-
-  METHOD build.
-    " R1 - Vendor creation for All CC (64 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R1' col = 1    hdr = 'FIELDTECHNAME' )
-      ( scen = 'R1' col = 2    hdr = 'LIFNR' )
-      ( scen = 'R1' col = 3    hdr = 'BUKRS' )
-      ( scen = 'R1' col = 4    hdr = 'EKORG' )
-      ( scen = 'R1' col = 5    hdr = 'KTOKK' )
-      ( scen = 'R1' col = 6    hdr = 'TITLEMEDI' )
-      ( scen = 'R1' col = 7    hdr = 'NAME1' )
-      ( scen = 'R1' col = 8    hdr = 'NAME2' )
-      ( scen = 'R1' col = 9    hdr = 'NAME3' )
-      ( scen = 'R1' col = 10   hdr = 'NAME4' )
-      ( scen = 'R1' col = 11   hdr = 'SORT1' )
-      ( scen = 'R1' col = 12   hdr = 'SORT2' )
-      ( scen = 'R1' col = 13   hdr = 'STRSUPPL1' )
-      ( scen = 'R1' col = 14   hdr = 'STRSUPPL2' )
-      ( scen = 'R1' col = 15   hdr = 'STREET' )
-      ( scen = 'R1' col = 16   hdr = 'STRSUPPL3' )
-      ( scen = 'R1' col = 17   hdr = 'CITY2' )
-      ( scen = 'R1' col = 18   hdr = 'POSTCODE1' )
-      ( scen = 'R1' col = 19   hdr = 'CITY1' )
-      ( scen = 'R1' col = 20   hdr = 'COUNTRY' )
-      ( scen = 'R1' col = 21   hdr = 'REGION' )
-      ( scen = 'R1' col = 22   hdr = 'LANGU' )
-      ( scen = 'R1' col = 23   hdr = 'TELNUMBER' )
-      ( scen = 'R1' col = 24   hdr = 'TELEXTENS' )
-      ( scen = 'R1' col = 25   hdr = 'TELNUMBER2' )
-      ( scen = 'R1' col = 26   hdr = 'TELEXTENS2' )
-      ( scen = 'R1' col = 27   hdr = 'MOBNUMBER' )
-      ( scen = 'R1' col = 28   hdr = 'MOBNUMBER2' )
-      ( scen = 'R1' col = 29   hdr = 'FAXNUMBER' )
-      ( scen = 'R1' col = 30   hdr = 'SMTPADDR' )
-      ( scen = 'R1' col = 31   hdr = 'SMTPADDR2' )
-      ( scen = 'R1' col = 32   hdr = 'KUNNR' )
-      ( scen = 'R1' col = 33   hdr = 'VBUND' )
-      ( scen = 'R1' col = 34   hdr = 'KONZS' )
-      ( scen = 'R1' col = 35   hdr = 'STCD3' )
-      ( scen = 'R1' col = 36   hdr = 'STCD5' )
-      ( scen = 'R1' col = 37   hdr = 'STCEG' )
-      ( scen = 'R1' col = 38   hdr = 'J1KFTBUS' )
-      ( scen = 'R1' col = 39   hdr = 'STENR' )
-      ( scen = 'R1' col = 40   hdr = 'BRSCH' )
-      ( scen = 'R1' col = 41   hdr = 'BANKS01' )
-      ( scen = 'R1' col = 42   hdr = 'BANKL01' )
-      ( scen = 'R1' col = 43   hdr = 'BANKN01' )
-      ( scen = 'R1' col = 44   hdr = 'KOINH01' )
-      ( scen = 'R1' col = 45   hdr = 'BKONT' )
-      ( scen = 'R1' col = 46   hdr = 'IBAN' )
-      ( scen = 'R1' col = 47   hdr = 'AKONT' )
-      ( scen = 'R1' col = 48   hdr = 'FDGRV' )
-      ( scen = 'R1' col = 49   hdr = 'ALTKN' )
-      " The template leaves 50 and 62 unlabelled and both are ZTERM - the
-      " company code's and the purchasing organisation's. A heading of its
-      " own for each tells them apart in a file downloaded as a sample; a
-      " file that still has them blank is read by position as before.
-      ( scen = 'R1' col = 50   hdr = 'ZTERMCOMPANYCODE' )
-      ( scen = 'R1' col = 51   hdr = 'REPRF' )
-      ( scen = 'R1' col = 52   hdr = 'ZWELS' )
-      ( scen = 'R1' col = 53   hdr = 'ZAHLS' )
-      ( scen = 'R1' col = 54   hdr = 'HBKID' )
-      ( scen = 'R1' col = 55   hdr = 'VENCLASS' )
-      ( scen = 'R1' col = 56   hdr = 'J1ISSIST' )
-      ( scen = 'R1' col = 57   hdr = 'J1IPANNO' )
-      ( scen = 'R1' col = 58   hdr = 'QLAND' )
-      ( scen = 'R1' col = 59   hdr = 'WITHT' )
-      ( scen = 'R1' col = 60   hdr = 'WTWITHCD' )
-      ( scen = 'R1' col = 61   hdr = 'WAERS' )
-      ( scen = 'R1' col = 62   hdr = 'ZTERMPURCHORG' )
-      ( scen = 'R1' col = 63   hdr = 'KALSK' )
-      ( scen = 'R1' col = 64   hdr = 'WEBRE' )
-      ( scen = 'R1' col = 65   hdr = 'INCO1' )
-      ( scen = 'R1' col = 66   hdr = 'INCO2' )
-    ) TO rt.
-
-    " R2 - TDS upload (64 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R2' col = 2    hdr = 'LIFNR' )
-      ( scen = 'R2' col = 3    hdr = 'BUKRS' )
-      ( scen = 'R2' col = 4    hdr = 'D0610' )
-      ( scen = 'R2' col = 5    hdr = 'QLAND' )
-      ( scen = 'R2' col = 6    hdr = 'WITHT01' )
-      ( scen = 'R2' col = 7    hdr = 'WITHT02' )
-      ( scen = 'R2' col = 8    hdr = 'WITHT03' )
-      ( scen = 'R2' col = 9    hdr = 'WITHT04' )
-      ( scen = 'R2' col = 10   hdr = 'WITHT05' )
-      ( scen = 'R2' col = 11   hdr = 'WITHT06' )
-      ( scen = 'R2' col = 12   hdr = 'WTWITHCD01' )
-      ( scen = 'R2' col = 13   hdr = 'WTWITHCD02' )
-      ( scen = 'R2' col = 14   hdr = 'WTWITHCD03' )
-      ( scen = 'R2' col = 15   hdr = 'WTWITHCD04' )
-      ( scen = 'R2' col = 16   hdr = 'WTWITHCD05' )
-      ( scen = 'R2' col = 17   hdr = 'WTWITHCD06' )
-      ( scen = 'R2' col = 18   hdr = 'WTSUBJCT01' )
-      ( scen = 'R2' col = 19   hdr = 'WTSUBJCT02' )
-      ( scen = 'R2' col = 20   hdr = 'WTSUBJCT03' )
-      ( scen = 'R2' col = 21   hdr = 'WTSUBJCT04' )
-      ( scen = 'R2' col = 22   hdr = 'WTSUBJCT05' )
-      ( scen = 'R2' col = 23   hdr = 'WTSUBJCT06' )
-      ( scen = 'R2' col = 24   hdr = 'QSREC01' )
-      ( scen = 'R2' col = 25   hdr = 'QSREC02' )
-      ( scen = 'R2' col = 26   hdr = 'QSREC03' )
-      ( scen = 'R2' col = 27   hdr = 'QSREC04' )
-      ( scen = 'R2' col = 28   hdr = 'QSREC05' )
-      ( scen = 'R2' col = 29   hdr = 'QSREC06' )
-      ( scen = 'R2' col = 30   hdr = 'WTWTSTCD01' )
-      ( scen = 'R2' col = 31   hdr = 'WTWTSTCD02' )
-      ( scen = 'R2' col = 32   hdr = 'WTWTSTCD03' )
-      ( scen = 'R2' col = 33   hdr = 'WTWTSTCD04' )
-      ( scen = 'R2' col = 34   hdr = 'WTWTSTCD05' )
-      ( scen = 'R2' col = 35   hdr = 'WTWTSTCD06' )
-      ( scen = 'R2' col = 36   hdr = 'WTEXNR01' )
-      ( scen = 'R2' col = 37   hdr = 'WTEXNR02' )
-      ( scen = 'R2' col = 38   hdr = 'WTEXNR03' )
-      ( scen = 'R2' col = 39   hdr = 'WTEXNR04' )
-      ( scen = 'R2' col = 40   hdr = 'WTEXNR05' )
-      ( scen = 'R2' col = 41   hdr = 'WTEXNR06' )
-      ( scen = 'R2' col = 42   hdr = 'WTEXRT01' )
-      ( scen = 'R2' col = 43   hdr = 'WTEXRT02' )
-      ( scen = 'R2' col = 44   hdr = 'WTEXRT03' )
-      ( scen = 'R2' col = 45   hdr = 'WTEXRT04' )
-      ( scen = 'R2' col = 46   hdr = 'WTEXRT05' )
-      ( scen = 'R2' col = 47   hdr = 'WTEXRT06' )
-      ( scen = 'R2' col = 48   hdr = 'WTWTEXRS01' )
-      ( scen = 'R2' col = 49   hdr = 'WTWTEXRS02' )
-      ( scen = 'R2' col = 50   hdr = 'WTWTEXRS03' )
-      ( scen = 'R2' col = 51   hdr = 'WTWTEXRS04' )
-      ( scen = 'R2' col = 52   hdr = 'WTWTEXRS05' )
-      ( scen = 'R2' col = 53   hdr = 'WTWTEXRS06' )
-      ( scen = 'R2' col = 54   hdr = 'WTEXDF01' )
-      ( scen = 'R2' col = 55   hdr = 'WTEXDF02' )
-      ( scen = 'R2' col = 56   hdr = 'WTEXDF03' )
-      ( scen = 'R2' col = 57   hdr = 'WTEXDF04' )
-      ( scen = 'R2' col = 58   hdr = 'WTEXDF05' )
-      ( scen = 'R2' col = 59   hdr = 'WTEXDF06' )
-      ( scen = 'R2' col = 60   hdr = 'WTEXDT01' )
-      ( scen = 'R2' col = 61   hdr = 'WTEXDT02' )
-      ( scen = 'R2' col = 62   hdr = 'WTEXDT03' )
-      ( scen = 'R2' col = 63   hdr = 'WTEXDT04' )
-      ( scen = 'R2' col = 64   hdr = 'WTEXDT05' )
-      ( scen = 'R2' col = 65   hdr = 'WTEXDT06' )
-    ) TO rt.
-
-    " R3 - TAN details (21 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R3' col = 1    hdr = 'VENDOR' )
-      ( scen = 'R3' col = 2    hdr = 'COMPANY' )
-      ( scen = 'R3' col = 3    hdr = 'ADDRESS' )
-      ( scen = 'R3' col = 4    hdr = 'SECTIONCODE1' )
-      ( scen = 'R3' col = 5    hdr = 'SECTIONCODE2' )
-      ( scen = 'R3' col = 6    hdr = 'CERTIFICATE1' )
-      ( scen = 'R3' col = 7    hdr = 'CERTIFICATE2' )
-      ( scen = 'R3' col = 8    hdr = 'EXEMPTIONRATE1' )
-      ( scen = 'R3' col = 9    hdr = 'EXEMPTIONRATE2' )
-      ( scen = 'R3' col = 10   hdr = 'VALIDFROM1' )
-      ( scen = 'R3' col = 11   hdr = 'VALIDFROM2' )
-      ( scen = 'R3' col = 12   hdr = 'VALIDTO1' )
-      ( scen = 'R3' col = 13   hdr = 'VALIDTO2' )
-      ( scen = 'R3' col = 14   hdr = 'TAXTYPE1' )
-      ( scen = 'R3' col = 15   hdr = 'TAXTYPE2' )
-      ( scen = 'R3' col = 16   hdr = 'TAXCODE1' )
-      ( scen = 'R3' col = 17   hdr = 'TAXCODE2' )
-      ( scen = 'R3' col = 18   hdr = 'THRESHOLD1' )
-      ( scen = 'R3' col = 19   hdr = 'THRESHOLD2' )
-      ( scen = 'R3' col = 20   hdr = 'CURRENCY1' )
-      ( scen = 'R3' col = 21   hdr = 'CURRENCY2' )
-    ) TO rt.
-
-    " R4 - BANK Key creation (9 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R4' col = 1    hdr = 'FIELDTECHNICALNAME' )
-      ( scen = 'R4' col = 2    hdr = 'BANKS' )
-      ( scen = 'R4' col = 3    hdr = 'BANKL' )
-      ( scen = 'R4' col = 4    hdr = 'BANKA' )
-      ( scen = 'R4' col = 5    hdr = 'PROVZ' )
-      ( scen = 'R4' col = 6    hdr = 'STRAS' )
-      ( scen = 'R4' col = 7    hdr = 'ORT01' )
-      ( scen = 'R4' col = 8    hdr = 'BRNCH' )
-      ( scen = 'R4' col = 9    hdr = 'SWIFT' )
-    ) TO rt.
-
-    " R5 - Bank details update (8 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R5' col = 1    hdr = 'FIELDTECHNICALNAME' )
-      ( scen = 'R5' col = 2    hdr = 'LIFNR' )
-      ( scen = 'R5' col = 3    hdr = 'BUKRS' )
-      ( scen = 'R5' col = 4    hdr = 'BANKS' )
-      ( scen = 'R5' col = 5    hdr = 'BANKL' )
-      ( scen = 'R5' col = 6    hdr = 'BANKN' )
-      ( scen = 'R5' col = 7    hdr = 'KOINH' )
-      ( scen = 'R5' col = 8    hdr = 'IBAN' )
-    ) TO rt.
-
-    " R6 - Vendor extension (5 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R6' col = 1    hdr = 'FIELDTECHNICALNAME' )
-      " Seven of this tab's columns carry no heading either, and the vendor
-      " number is one of them. Named here so a sample file reads, and so a
-      " file that names them is matched by name rather than by position.
-      ( scen = 'R6' col = 2    hdr = 'LIFNR' )
-      ( scen = 'R6' col = 3    hdr = 'BUKRS' )
-      ( scen = 'R6' col = 4    hdr = 'EKORG' )
-      ( scen = 'R6' col = 5    hdr = 'REFLIFNR' )
-      ( scen = 'R6' col = 6    hdr = 'REFBUKRS' )
-      ( scen = 'R6' col = 7    hdr = 'REFEKORG' )
-      ( scen = 'R6' col = 9    hdr = 'AKONT' )
-      ( scen = 'R6' col = 10   hdr = 'ZWELS' )
-      ( scen = 'R6' col = 11   hdr = 'REPRF' )
-      ( scen = 'R6' col = 12   hdr = 'WAERS' )
-      ( scen = 'R6' col = 13   hdr = 'KALSK' )
-      ( scen = 'R6' col = 14   hdr = 'WEBRE' )
-    ) TO rt.
-
-    " R7 - CIN details (15 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R7' col = 1    hdr = 'VENDORACCOUNTNUMBER' )
-      ( scen = 'R7' col = 2    hdr = 'COMPANYCODE' )
-      ( scen = 'R7' col = 3    hdr = 'ADDRESSVIEW' )
-      ( scen = 'R7' col = 4    hdr = 'ECCNUMBER' )
-      ( scen = 'R7' col = 5    hdr = 'EXCISEREGISTRATIONNUMBER' )
-      ( scen = 'R7' col = 6    hdr = 'EXCISERANGE' )
-      ( scen = 'R7' col = 7    hdr = 'EXCISEDIVISION' )
-      ( scen = 'R7' col = 8    hdr = 'EXCISECOMMISSIONERATE' )
-      ( scen = 'R7' col = 9    hdr = 'CENTRALSALESTAXNUMBER' )
-      ( scen = 'R7' col = 10   hdr = 'LOCALSALESTAXNUMBER' )
-      ( scen = 'R7' col = 11   hdr = 'SERVICETAXREGISTRATIONNUMBER' )
-      ( scen = 'R7' col = 12   hdr = 'PERMANENTACCOUNTNUMBER' )
-      ( scen = 'R7' col = 13   hdr = 'SSISTATUS' )
-      ( scen = 'R7' col = 14   hdr = 'EXCTAXINDVENDOR' )
-      ( scen = 'R7' col = 15   hdr = 'TYPEOFVENDOR' )
-    ) TO rt.
-
-    " R8 - Patner function (35 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R8' col = 1    hdr = 'LIFNR' )
-      ( scen = 'R8' col = 2    hdr = 'BUKRS' )
-      ( scen = 'R8' col = 3    hdr = 'EKORG' )
-      ( scen = 'R8' col = 4    hdr = 'D0320' )
-      ( scen = 'R8' col = 5    hdr = 'USEZAV' )
-      ( scen = 'R8' col = 6    hdr = 'PARVW05' )
-      ( scen = 'R8' col = 7    hdr = 'PARVW06' )
-      ( scen = 'R8' col = 8    hdr = 'PARVW07' )
-      ( scen = 'R8' col = 9    hdr = 'PARVW08' )
-      ( scen = 'R8' col = 10   hdr = 'PARVW09' )
-      ( scen = 'R8' col = 11   hdr = 'PARVW10' )
-      ( scen = 'R8' col = 12   hdr = 'PARVW11' )
-      ( scen = 'R8' col = 13   hdr = 'PARVW12' )
-      ( scen = 'R8' col = 14   hdr = 'PARVW13' )
-      ( scen = 'R8' col = 15   hdr = 'PARVW14' )
-      ( scen = 'R8' col = 16   hdr = 'PARVW15' )
-      ( scen = 'R8' col = 17   hdr = 'GPARN05' )
-      ( scen = 'R8' col = 18   hdr = 'GPARN06' )
-      ( scen = 'R8' col = 19   hdr = 'GPARN07' )
-      ( scen = 'R8' col = 20   hdr = 'GPARN08' )
-      ( scen = 'R8' col = 21   hdr = 'GPARN09' )
-      ( scen = 'R8' col = 22   hdr = 'GPARN10' )
-      ( scen = 'R8' col = 23   hdr = 'GPARN11' )
-      ( scen = 'R8' col = 24   hdr = 'GPARN12' )
-      ( scen = 'R8' col = 25   hdr = 'GPARN13' )
-      ( scen = 'R8' col = 26   hdr = 'GPARN14' )
-      ( scen = 'R8' col = 27   hdr = 'GPARN15' )
-      ( scen = 'R8' col = 28   hdr = 'PARVW01' )
-      ( scen = 'R8' col = 29   hdr = 'PARVW02' )
-      ( scen = 'R8' col = 30   hdr = 'PARVW03' )
-      ( scen = 'R8' col = 31   hdr = 'PARVW04' )
-      ( scen = 'R8' col = 32   hdr = 'GPARN01' )
-      ( scen = 'R8' col = 33   hdr = 'GPARN02' )
-      ( scen = 'R8' col = 34   hdr = 'GPARN03' )
-      ( scen = 'R8' col = 35   hdr = 'GPARN04' )
-    ) TO rt.
-
-    " R9 - Block_Unblocked (9 identifiable headings)
-    APPEND LINES OF VALUE tt_hdr(
-      ( scen = 'R9' col = 1    hdr = 'TECHNAME' )
-      ( scen = 'R9' col = 2    hdr = 'LIFNR' )
-      ( scen = 'R9' col = 3    hdr = 'BUKRS' )
-      ( scen = 'R9' col = 4    hdr = 'EKORG' )
-      ( scen = 'R9' col = 5    hdr = 'SPERR' )
-      ( scen = 'R9' col = 6    hdr = 'SPERR1' )
-      ( scen = 'R9' col = 7    hdr = 'SPERM' )
-      ( scen = 'R9' col = 8    hdr = 'SPERM1' )
-      ( scen = 'R9' col = 9    hdr = 'SPERQ' )
-    ) TO rt.
+    " The headings are the column map's - the same rows the download writes
+    " its heading line from - reduced to letters and digits.
+    LOOP AT lcl_map=>for( iv_scen ) INTO DATA(ls_m).
+      DATA(lv_h) = lcl_util=>squash( ls_m-hdr ).
+      IF lv_h IS NOT INITIAL.
+        APPEND VALUE ty_hdr( scen = ls_m-scen col = ls_m-col hdr = lv_h ) TO rt.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
 ENDCLASS.
@@ -1514,7 +1737,6 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS ok_bukrs IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_ekorg IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_ktokk IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS ok_zterm IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_parvw IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_land1 IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_bankl IMPORTING iv_banks TYPE clike iv_bankl TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
@@ -1587,7 +1809,6 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     DATA: mt_bukrs TYPE SORTED TABLE OF bukrs  WITH UNIQUE KEY table_line,
           mt_ekorg TYPE SORTED TABLE OF ekorg  WITH UNIQUE KEY table_line,
           mt_ktokk TYPE SORTED TABLE OF ktokk  WITH UNIQUE KEY table_line,
-          mt_zterm TYPE SORTED TABLE OF dzterm WITH UNIQUE KEY table_line,
           mt_parvw TYPE SORTED TABLE OF parvw  WITH UNIQUE KEY table_line,
           mt_land1 TYPE SORTED TABLE OF land1  WITH UNIQUE KEY table_line,
           mt_g2b   TYPE SORTED TABLE OF ty_g2b WITH UNIQUE KEY ktokk,
@@ -1609,15 +1830,14 @@ CLASS lcl_cfg IMPLEMENTATION.
     " result set that contains duplicates into such a table raises
     " ITAB_DUPLICATE_KEY - a short dump, not a catchable error.
     "
-    " T052 is the one that bites: it holds one row per instalment, so a
-    " payment term with three instalments appears three times. T005 has a
-    " row per country, but the same applies the moment any of these tables
-    " is configured with more than one row per code. DISTINCT removes the
+    " T052 bit once: it holds one row per instalment, so a payment term
+    " with three instalments appeared three times. T005 has a row per
+    " country, but the same applies the moment any of these tables is
+    " configured with more than one row per code. DISTINCT removes the
     " duplicates in the database, so the move can never fail.
     SELECT DISTINCT bukrs FROM t001  INTO TABLE @DATA(lt1). mt_bukrs = lt1.
     SELECT DISTINCT ekorg FROM t024e INTO TABLE @DATA(lt2). mt_ekorg = lt2.
     SELECT DISTINCT ktokk FROM t077k INTO TABLE @DATA(lt3). mt_ktokk = lt3.
-    SELECT DISTINCT zterm FROM t052  INTO TABLE @DATA(lt4). mt_zterm = lt4.
     SELECT DISTINCT parvw FROM tpar  INTO TABLE @DATA(lt5). mt_parvw = lt5.
     SELECT DISTINCT land1 FROM t005  INTO TABLE @DATA(lt6). mt_land1 = lt6.
 
@@ -1647,9 +1867,6 @@ CLASS lcl_cfg IMPLEMENTATION.
   ENDMETHOD.
   METHOD ok_ktokk.
     rv = xsdbool( line_exists( mt_ktokk[ table_line = CONV ktokk( iv ) ] ) ).
-  ENDMETHOD.
-  METHOD ok_zterm.
-    rv = xsdbool( line_exists( mt_zterm[ table_line = CONV dzterm( iv ) ] ) ).
   ENDMETHOD.
   METHOD ok_parvw.
     rv = xsdbool( line_exists( mt_parvw[ table_line = CONV parvw( iv ) ] ) ).
@@ -3819,6 +4036,983 @@ CLASS lcl_h_blk IMPLEMENTATION.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
+* LCL_XLSX - writes a workbook
+*   An .xlsx is a zip of OpenXML parts. Only four are needed for a plain
+*   sheet, and every value is written as an inline string so no shared
+*   string table or styles are required - which is also what keeps the
+*   file readable by CL_FDT_XL_SPREADSHEET on the way back in.
+*----------------------------------------------------------------------*
+CLASS lcl_xlsx DEFINITION FINAL.
+  PUBLIC SECTION.
+    CLASS-METHODS build
+      IMPORTING iv_sheet  TYPE clike
+                it_head   TYPE tt_cell
+                it_row    TYPE tt_row
+      RETURNING VALUE(rv) TYPE xstring
+      RAISING   lcx_upl.
+  PRIVATE SECTION.
+    " The workbook is read back by CL_FDT_XL_SPREADSHEET, which is not a
+    " general .xlsx reader: it takes the text of a cell from the shared
+    " string table and nowhere else, and it expects the parts Excel itself
+    " writes. A four-part package of inline strings loads in Excel and is
+    " refused by it, so every part below is written and every text cell
+    " points into xl/sharedStrings.xml.
+    TYPES: BEGIN OF ty_si,
+             text TYPE string,
+             idx  TYPE i,
+           END OF ty_si.
+    CLASS-DATA mt_si  TYPE HASHED TABLE OF ty_si WITH UNIQUE KEY text.
+    CLASS-DATA mt_txt TYPE string_table.
+    CLASS-DATA mv_use TYPE i.
+
+    CLASS-METHODS si
+      IMPORTING iv_text   TYPE string
+      RETURNING VALUE(rv) TYPE i.
+    CLASS-METHODS row_xml
+      IMPORTING it_cells  TYPE tt_cell
+                iv_row    TYPE i
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS to_x
+      IMPORTING iv_in     TYPE string
+      RETURNING VALUE(rv) TYPE xstring
+      RAISING   lcx_upl.
+ENDCLASS.
+
+CLASS lcl_xlsx IMPLEMENTATION.
+
+  METHOD to_x.
+    TRY.
+        rv = cl_abap_conv_codepage=>create_out( codepage = `UTF-8` )->convert( iv_in ).
+      CATCH cx_root INTO DATA(lx).
+        RAISE EXCEPTION NEW lcx_upl( |The workbook could not be encoded: { lx->get_text( ) }| ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD si.
+    " The index of a text in the shared string table, adding it if it is
+    " not there yet. MV_USE counts the cells that point at one, which is
+    " what the sst element's "count" attribute means.
+    mv_use = mv_use + 1.
+    READ TABLE mt_si WITH TABLE KEY text = iv_text INTO DATA(ls_si).
+    IF sy-subrc = 0.
+      rv = ls_si-idx.
+      RETURN.
+    ENDIF.
+    APPEND iv_text TO mt_txt.
+    rv = lines( mt_txt ) - 1.
+    INSERT VALUE ty_si( text = iv_text idx = rv ) INTO TABLE mt_si.
+  ENDMETHOD.
+
+  METHOD row_xml.
+    rv = |<row r="{ iv_row }">|.
+    LOOP AT it_cells INTO DATA(lv_cell).
+      " Taken before anything else runs: READ TABLE inside SI( ) sets
+      " SY-TABIX, and the column number is wanted, not that.
+      DATA(lv_col) = sy-tabix.
+      " Column A is always written, empty or not. CL_FDT_XL_SPREADSHEET
+      " builds its table from the cells it finds, so a row that starts at B
+      " comes back one column short and every value sits one place to the
+      " left of where the template says it is. The templates whose first
+      " column is a label leave A empty, which is exactly that case.
+      IF lv_cell IS INITIAL AND lv_col > 1.
+        CONTINUE.                              " an empty cell is left out
+      ENDIF.
+      DATA(lv_ix) = si( lv_cell ).
+      rv = rv && |<c r="{ lcl_util=>col_letter( lv_col ) }{ iv_row }" t="s">| &&
+                 |<v>{ lv_ix }</v></c>|.
+    ENDLOOP.
+    rv = rv && |</row>|.
+  ENDMETHOD.
+
+  METHOD build.
+    CLEAR: mt_si, mt_txt, mv_use.
+
+    " Excel limits a sheet name to 31 characters and forbids : \ / ? * [ ]
+    DATA(lv_name) = condense( CONV string( iv_sheet ) ).
+    REPLACE ALL OCCURRENCES OF PCRE '[:\\\\/?*\[\]]' IN lv_name WITH ` `.
+    IF strlen( lv_name ) > 31.
+      lv_name = lv_name(31).
+    ENDIF.
+    IF lv_name IS INITIAL.
+      lv_name = 'Sheet1'.
+    ENDIF.
+
+    " ---- the sheet, and with it the shared string table ----------------
+    DATA(lv_body) = row_xml( it_cells = it_head iv_row = 1 ).
+    DATA(lv_wide) = lines( it_head ).
+    LOOP AT it_row INTO DATA(ls_row).
+      lv_body = lv_body && row_xml( it_cells = ls_row-cells iv_row = sy-tabix + 1 ).
+      IF lines( ls_row-cells ) > lv_wide.
+        lv_wide = lines( ls_row-cells ).
+      ENDIF.
+    ENDLOOP.
+    IF lv_wide < 1.
+      lv_wide = 1.
+    ENDIF.
+    DATA(lv_dim) = |A1:{ lcl_util=>col_letter( lv_wide ) }{ lines( it_row ) + 1 }|.
+
+    DATA(lv_sheet) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" | &&
+      |xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">| &&
+      |<dimension ref="{ lv_dim }"/>| &&
+      |<sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>| &&
+      |<sheetFormatPr defaultRowHeight="15"/>| &&
+      |<sheetData>| && lv_body && |</sheetData>| &&
+      |</worksheet>|.
+
+    " ---- shared strings -------------------------------------------------
+    DATA(lv_sst) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" | &&
+      |count="{ mv_use }" uniqueCount="{ lines( mt_txt ) }">|.
+    LOOP AT mt_txt INTO DATA(lv_t).
+      lv_sst = lv_sst && |<si><t xml:space="preserve">{ lcl_util=>xml_escape( lv_t ) }</t></si>|.
+    ENDLOOP.
+    lv_sst = lv_sst && |</sst>|.
+
+    " ---- styles: one font, one format, which is all that is referenced --
+    DATA(lv_sty) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">| &&
+      |<fonts count="1"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>| &&
+      |<fills count="2"><fill><patternFill patternType="none"/></fill>| &&
+      |<fill><patternFill patternType="gray125"/></fill></fills>| &&
+      |<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>| &&
+      |<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>| &&
+      |<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>| &&
+      |<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>| &&
+      |</styleSheet>|.
+
+    DATA(lv_types) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">| &&
+      |<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>| &&
+      |<Default Extension="xml" ContentType="application/xml"/>| &&
+      |<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>| &&
+      |<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>| &&
+      |<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>| &&
+      |<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>| &&
+      |<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>| &&
+      |<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>| &&
+      |</Types>|.
+
+    DATA(lv_rels) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">| &&
+      |<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>| &&
+      |<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>| &&
+      |<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>| &&
+      |</Relationships>|.
+
+    DATA(lv_wb) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" | &&
+      |xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">| &&
+      |<bookViews><workbookView/></bookViews>| &&
+      |<sheets><sheet name="{ lcl_util=>xml_escape( lv_name ) }" sheetId="1" r:id="rId1"/></sheets>| &&
+      |</workbook>|.
+
+    DATA(lv_wbrels) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">| &&
+      |<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>| &&
+      |<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>| &&
+      |<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>| &&
+      |</Relationships>|.
+
+    DATA(lv_core) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<cp:coreProperties | &&
+      |xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" | &&
+      |xmlns:dc="http://purl.org/dc/elements/1.1/" | &&
+      |xmlns:dcterms="http://purl.org/dc/terms/" | &&
+      |xmlns:dcmitype="http://purl.org/dc/dcmitype/" | &&
+      |xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">| &&
+      |<dc:creator>ZMMS_BP_MASS_UPLOAD</dc:creator>| &&
+      |<cp:lastModifiedBy>ZMMS_BP_MASS_UPLOAD</cp:lastModifiedBy>| &&
+      |</cp:coreProperties>|.
+
+    DATA(lv_app) =
+      |<?xml version="1.0" encoding="UTF-8" standalone="yes"?>| &&
+      |<Properties | &&
+      |xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" | &&
+      |xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">| &&
+      |<Application>SAP</Application>| &&
+      |</Properties>|.
+
+    DATA(lo_zip) = NEW cl_abap_zip( ).
+    lo_zip->add( name = '[Content_Types].xml'        content = to_x( lv_types ) ).
+    lo_zip->add( name = '_rels/.rels'                content = to_x( lv_rels ) ).
+    lo_zip->add( name = 'docProps/core.xml'          content = to_x( lv_core ) ).
+    lo_zip->add( name = 'docProps/app.xml'           content = to_x( lv_app ) ).
+    lo_zip->add( name = 'xl/workbook.xml'            content = to_x( lv_wb ) ).
+    lo_zip->add( name = 'xl/_rels/workbook.xml.rels' content = to_x( lv_wbrels ) ).
+    lo_zip->add( name = 'xl/styles.xml'              content = to_x( lv_sty ) ).
+    lo_zip->add( name = 'xl/sharedStrings.xml'       content = to_x( lv_sst ) ).
+    lo_zip->add( name = 'xl/worksheets/sheet1.xml'   content = to_x( lv_sheet ) ).
+    rv = lo_zip->save( ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+* The download half
+*   Reads existing vendors and writes them into the scenario's tab, laid
+*   out as LCL_MAP says - the file the upload half reads. It changes
+*   nothing in the system.
+*
+* LCL_DL_SRC - reads the master data
+*   Through the same external interface the upload writes through, so the
+*   structures line up field for field. Read only.
+*----------------------------------------------------------------------*
+CLASS lcl_dl_src DEFINITION FINAL.
+  PUBLIC SECTION.
+    TYPES: BEGIN OF ty_key,
+             lifnr   TYPE lifnr,
+             partner TYPE bu_partner,
+           END OF ty_key,
+           tt_key TYPE STANDARD TABLE OF ty_key WITH EMPTY KEY.
+
+    " What the selection screen asked for: suppliers, plus whatever sits
+    " behind the business partners it names.
+    CLASS-METHODS keys
+      RETURNING VALUE(rt) TYPE tt_key.
+
+    CLASS-METHODS vendor
+      IMPORTING iv_lifnr TYPE lifnr
+      EXPORTING es_data  TYPE vmds_ei_extern
+      RAISING   lcx_upl.
+
+    CLASS-METHODS title_text
+      IMPORTING iv_title  TYPE clike
+      RETURNING VALUE(rv) TYPE string.
+
+    " Two things the supplier interface does not carry: the bank master
+    " behind the vendor's own bank details, and the TAN exemption blocks.
+    " Passed by value with the dictionary type they are read with: an Open
+    " SQL host variable needs a type the compiler knows, and a by-reference
+    " parameter of a fixed type will not take anything else.
+    CLASS-METHODS bank_master
+      IMPORTING VALUE(iv_banks) TYPE banks
+                VALUE(iv_bankl) TYPE bankl
+      EXPORTING es_bnka         TYPE bnka.
+
+    " Component names are the table's own, so a column can be looked up by
+    " the same field name the upload writes.
+    TYPES: BEGIN OF ty_tan,
+             seccode         TYPE string,
+             witht           TYPE string,
+             wt_withcd       TYPE string,
+             wt_exnr         TYPE string,
+             wt_exrt         TYPE string,
+             wt_exdf         TYPE string,
+             wt_exdt         TYPE string,
+             fiwtin_exem_thr TYPE string,
+             waers           TYPE string,
+           END OF ty_tan,
+           tt_tan TYPE STANDARD TABLE OF ty_tan WITH EMPTY KEY.
+
+    CLASS-METHODS tan_exem
+      IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                VALUE(iv_bukrs) TYPE bukrs
+      RETURNING VALUE(rt)       TYPE tt_tan.
+
+    " Withholding tax, read from the table the interface writes to. The
+    " company-code node of the extract carries it, but only when the
+    " interface chooses to fill that node - and a sample with no tax type
+    " in it looks exactly like a vendor with no tax type. Reading LFBW
+    " settles which of the two it is.
+    TYPES: BEGIN OF ty_wtax,
+             witht     TYPE string,
+             wt_withcd TYPE string,
+             wt_subjct TYPE string,
+             qsrec     TYPE string,
+             wt_wtstcd TYPE string,
+             wt_exnr   TYPE string,
+             wt_exrt   TYPE string,
+             wt_wtexrs TYPE string,
+             wt_exdf   TYPE string,
+             wt_exdt   TYPE string,
+           END OF ty_wtax,
+           tt_wtax TYPE STANDARD TABLE OF ty_wtax WITH EMPTY KEY.
+
+    CLASS-METHODS wtax
+      IMPORTING VALUE(iv_lifnr) TYPE lifnr
+                VALUE(iv_bukrs) TYPE bukrs
+      RETURNING VALUE(rt)       TYPE tt_wtax.
+  PRIVATE SECTION.
+    CLASS-METHODS first_error
+      IMPORTING is_error  TYPE cvis_message
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS pick
+      IMPORTING is_row    TYPE any
+                iv_fld    TYPE clike
+      RETURNING VALUE(rv) TYPE string.
+ENDCLASS.
+
+CLASS lcl_dl_src IMPLEMENTATION.
+
+  METHOD keys.
+    DATA ls_key TYPE ty_key.
+
+    IF s_lifnr[] IS NOT INITIAL.
+      SELECT lifnr FROM lfa1 WHERE lifnr IN @s_lifnr
+        ORDER BY lifnr INTO TABLE @DATA(lt_v) UP TO @p_max ROWS.
+      LOOP AT lt_v INTO DATA(lv_v).
+        CLEAR ls_key.
+        ls_key-lifnr = lv_v-lifnr.
+        APPEND ls_key TO rt.
+      ENDLOOP.
+    ENDIF.
+    IF s_bp[] IS NOT INITIAL.
+      SELECT b~partner, l~vendor FROM but000 AS b
+        INNER JOIN cvi_vend_link AS l ON l~partner_guid = b~partner_guid
+        WHERE b~partner IN @s_bp
+        ORDER BY b~partner INTO TABLE @DATA(lt_bv) UP TO @p_max ROWS.
+      LOOP AT lt_bv INTO DATA(ls_bv).
+        IF line_exists( rt[ lifnr = ls_bv-vendor ] ).
+          CONTINUE.
+        ENDIF.
+        CLEAR ls_key.
+        ls_key-lifnr   = ls_bv-vendor.
+        ls_key-partner = ls_bv-partner.
+        APPEND ls_key TO rt.
+      ENDLOOP.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD first_error.
+    FIELD-SYMBOLS <lt_msg> TYPE ANY TABLE.
+    ASSIGN COMPONENT 'MESSAGES' OF STRUCTURE is_error TO <lt_msg>.
+    IF <lt_msg> IS NOT ASSIGNED.
+      RETURN.
+    ENDIF.
+    LOOP AT <lt_msg> ASSIGNING FIELD-SYMBOL(<ls_msg>).
+      DATA ls_ret TYPE bapiret2.
+      CLEAR ls_ret.
+      MOVE-CORRESPONDING <ls_msg> TO ls_ret.
+      IF ls_ret-message IS NOT INITIAL.
+        rv = ls_ret-message.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+
+  METHOD vendor.
+    CLEAR es_data.
+    DATA ls_in TYPE vmds_ei_main.
+    APPEND VALUE vmds_ei_extern( header-object_task           = gc_task_read
+                                 header-object_instance-lifnr = iv_lifnr ) TO ls_in-vendors.
+
+    DATA ls_out TYPE vmds_ei_main.
+    DATA ls_err TYPE cvis_message.
+    TRY.
+        vmd_ei_api_extract=>get_data( EXPORTING is_master_data = ls_in
+                                      IMPORTING es_master_data = ls_out
+                                                es_error       = ls_err ).
+      CATCH cx_root INTO DATA(lx).
+        RAISE EXCEPTION NEW lcx_upl( |Supplier { iv_lifnr } could not be read: { lx->get_text( ) }| ).
+    ENDTRY.
+
+    IF ls_err-is_error = abap_true.
+      DATA(lv_t) = first_error( ls_err ).
+      RAISE EXCEPTION NEW lcx_upl( |Supplier { iv_lifnr } could not be read: { lv_t }| ).
+    ENDIF.
+    IF ls_out-vendors IS INITIAL.
+      RAISE EXCEPTION NEW lcx_upl( |Supplier { iv_lifnr } does not exist| ).
+    ENDIF.
+    es_data = ls_out-vendors[ 1 ].
+  ENDMETHOD.
+
+  METHOD bank_master.
+    CLEAR es_bnka.
+    IF iv_banks IS INITIAL OR iv_bankl IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE * FROM bnka
+      WHERE banks = @iv_banks AND bankl = @iv_bankl
+      INTO @es_bnka.
+  ENDMETHOD.
+
+  METHOD tan_exem.
+    " FIWTIN_TAN_EXEM is the table behind J_1ITAN_EXEM_SAVE, which the
+    " upload writes through. It belongs to the India localisation,
+    " so the table is looked up before it is read - a system without it
+    " gets an empty result rather than a short dump.
+    SELECT SINGLE @abap_true FROM dd02l
+      WHERE tabname = 'FIWTIN_TAN_EXEM' AND tabclass = 'TRANSP' AND as4local = 'A'
+      INTO @DATA(lv_there).
+    IF lv_there <> abap_true.
+      RETURN.
+    ENDIF.
+
+    DATA lr_tab TYPE REF TO data.
+    FIELD-SYMBOLS <lt> TYPE STANDARD TABLE.
+
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF ('FIWTIN_TAN_EXEM').
+        ASSIGN lr_tab->* TO <lt>.
+        IF <lt> IS NOT ASSIGNED.
+          RETURN.
+        ENDIF.
+        SELECT * FROM ('FIWTIN_TAN_EXEM')
+          WHERE koart = 'K' AND accno = @iv_lifnr AND bukrs = @iv_bukrs
+          INTO CORRESPONDING FIELDS OF TABLE @<lt> UP TO 2 ROWS.
+      CATCH cx_root.
+        RETURN.
+    ENDTRY.
+
+    FIELD-SYMBOLS <ls> TYPE any.
+    LOOP AT <lt> ASSIGNING <ls>.
+      DATA ls_t TYPE ty_tan.
+      CLEAR ls_t.
+      ls_t-seccode         = pick( is_row = <ls> iv_fld = 'SECCODE' ).
+      ls_t-witht           = pick( is_row = <ls> iv_fld = 'WITHT' ).
+      ls_t-wt_withcd       = pick( is_row = <ls> iv_fld = 'WT_WITHCD' ).
+      ls_t-wt_exnr         = pick( is_row = <ls> iv_fld = 'WT_EXNR' ).
+      ls_t-wt_exrt         = pick( is_row = <ls> iv_fld = 'WT_EXRT' ).
+      ls_t-wt_exdf         = pick( is_row = <ls> iv_fld = 'WT_EXDF' ).
+      ls_t-wt_exdt         = pick( is_row = <ls> iv_fld = 'WT_EXDT' ).
+      ls_t-fiwtin_exem_thr = pick( is_row = <ls> iv_fld = 'FIWTIN_EXEM_THR' ).
+      ls_t-waers           = pick( is_row = <ls> iv_fld = 'WAERS' ).
+      APPEND ls_t TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD wtax.
+    SELECT witht, wt_withcd, wt_subjct, qsrec, wt_wtstcd,
+           wt_exnr, wt_exrt, wt_wtexrs, wt_exdf, wt_exdt
+      FROM lfbw
+      WHERE lifnr = @iv_lifnr AND bukrs = @iv_bukrs
+      ORDER BY witht
+      INTO TABLE @DATA(lt_w) UP TO 6 ROWS.
+
+    LOOP AT lt_w INTO DATA(ls_w).
+      DATA ls_r TYPE ty_wtax.
+      CLEAR ls_r.
+      ls_r-witht     = lcl_util=>text( iv_value = ls_w-witht     iv_fmt = '' ).
+      ls_r-wt_withcd = lcl_util=>text( iv_value = ls_w-wt_withcd iv_fmt = '' ).
+      ls_r-wt_subjct = lcl_util=>text( iv_value = ls_w-wt_subjct iv_fmt = '' ).
+      ls_r-qsrec     = lcl_util=>text( iv_value = ls_w-qsrec     iv_fmt = '' ).
+      ls_r-wt_wtstcd = lcl_util=>text( iv_value = ls_w-wt_wtstcd iv_fmt = '' ).
+      ls_r-wt_exnr   = lcl_util=>text( iv_value = ls_w-wt_exnr   iv_fmt = '' ).
+      ls_r-wt_exrt   = lcl_util=>text( iv_value = ls_w-wt_exrt   iv_fmt = '' ).
+      ls_r-wt_wtexrs = lcl_util=>text( iv_value = ls_w-wt_wtexrs iv_fmt = '' ).
+      ls_r-wt_exdf   = lcl_util=>text( iv_value = ls_w-wt_exdf   iv_fmt = '' ).
+      ls_r-wt_exdt   = lcl_util=>text( iv_value = ls_w-wt_exdt   iv_fmt = '' ).
+      APPEND ls_r TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD pick.
+    FIELD-SYMBOLS <lv> TYPE any.
+    ASSIGN COMPONENT iv_fld OF STRUCTURE is_row TO <lv>.
+    IF sy-subrc = 0.
+      rv = lcl_util=>text( iv_value = <lv> iv_fmt = '' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD title_text.
+    " The templates carry the title as text, the master data as a key.
+    DATA(lv_key) = CONV ad_title( iv_title ).
+    IF lv_key IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE title_medi FROM tsad3t
+      WHERE langu = @sy-langu AND title = @lv_key INTO @rv.
+    IF sy-subrc <> 0.
+      rv = lv_key.
+    ENDIF.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+* LCL_DL_ENG - turns master data into rows of the scenario's tab
+*----------------------------------------------------------------------*
+CLASS lcl_dl_eng DEFINITION FINAL.
+  PUBLIC SECTION.
+    METHODS constructor IMPORTING iv_scen TYPE char2.
+    METHODS run.
+    METHODS head RETURNING VALUE(rt) TYPE tt_cell.
+    METHODS rows RETURNING VALUE(rt) TYPE tt_row.
+    METHODS log  RETURNING VALUE(rt) TYPE tt_dmsg.
+  PRIVATE SECTION.
+    DATA mv_scen TYPE char2.
+    DATA mt_col  TYPE tt_col.
+    DATA mt_row  TYPE tt_row.
+    DATA mt_dmsg  TYPE tt_dmsg.
+    DATA mv_wide TYPE i.
+
+    METHODS add_msg IMPORTING iv_key TYPE clike iv_type TYPE char1 iv_text TYPE clike.
+    METHODS put     IMPORTING iv_col TYPE i iv_val TYPE clike CHANGING cs_row TYPE ty_row.
+    METHODS comp    IMPORTING is_any TYPE any iv_fld TYPE clike iv_fmt TYPE clike
+                    RETURNING VALUE(rv) TYPE string.
+    METHODS empty_row RETURNING VALUE(rs) TYPE ty_row.
+
+    METHODS vend IMPORTING is_key TYPE lcl_dl_src=>ty_key.
+    METHODS split_occ IMPORTING iv_in  TYPE clike
+                      EXPORTING ev_fld TYPE string
+                                ev_occ TYPE i.
+ENDCLASS.
+
+CLASS lcl_dl_eng IMPLEMENTATION.
+
+  METHOD constructor.
+    mv_scen = iv_scen.
+    mt_col  = lcl_map=>for( iv_scen ).
+    LOOP AT mt_col INTO DATA(ls_cl).
+      IF ls_cl-col > mv_wide.
+        mv_wide = ls_cl-col.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD head.
+    DO mv_wide TIMES.
+      APPEND INITIAL LINE TO rt.
+    ENDDO.
+    LOOP AT mt_col INTO DATA(ls_cl).
+      READ TABLE rt ASSIGNING FIELD-SYMBOL(<lv>) INDEX ls_cl-col.
+      IF sy-subrc = 0.
+        <lv> = ls_cl-hdr.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD rows.
+    rt = mt_row.
+  ENDMETHOD.
+
+  METHOD log.
+    rt = mt_dmsg.
+  ENDMETHOD.
+
+  METHOD add_msg.
+    APPEND VALUE ty_dmsg(
+      icon    = COND #( WHEN iv_type = 'E' THEN icon_red_light
+                        WHEN iv_type = 'W' THEN icon_yellow_light
+                        WHEN iv_type = 'S' THEN icon_green_light
+                        ELSE                    icon_information )
+      objkey  = iv_key
+      message = iv_text ) TO mt_dmsg.
+  ENDMETHOD.
+
+  METHOD empty_row.
+    DO mv_wide TIMES.
+      APPEND INITIAL LINE TO rs-cells.
+    ENDDO.
+  ENDMETHOD.
+
+  METHOD put.
+    IF iv_col < 1 OR iv_col > lines( cs_row-cells ) OR iv_val IS INITIAL.
+      RETURN.
+    ENDIF.
+    READ TABLE cs_row-cells ASSIGNING FIELD-SYMBOL(<lv>) INDEX iv_col.
+    IF sy-subrc = 0.
+      <lv> = iv_val.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD comp.
+    FIELD-SYMBOLS <lv> TYPE any.
+    ASSIGN COMPONENT iv_fld OF STRUCTURE is_any TO <lv>.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    rv = lcl_util=>text( iv_value = <lv> iv_fmt = iv_fmt ).
+  ENDMETHOD.
+
+  METHOD run.
+    CLEAR mt_row.
+    DATA(lt_key)  = lcl_dl_src=>keys( ).
+
+    IF lt_key IS INITIAL.
+      add_msg( iv_key = '' iv_type = 'W'
+               iv_text = 'Nothing was found for the numbers given - the file has headings only' ).
+      RETURN.
+    ENDIF.
+
+    LOOP AT lt_key INTO DATA(ls_key).
+      IF lines( mt_row ) >= p_max.
+        add_msg( iv_key = '' iv_type = 'W'
+                 iv_text = |Stopped at { p_max } row(s) - raise "Rows at most" for more| ).
+        EXIT.
+      ENDIF.
+      vend( ls_key ).
+    ENDLOOP.
+  ENDMETHOD.
+
+
+
+  METHOD vend.
+    DATA ls_v TYPE vmds_ei_extern.
+    TRY.
+        lcl_dl_src=>vendor( EXPORTING iv_lifnr = is_key-lifnr IMPORTING es_data = ls_v ).
+      CATCH lcx_upl INTO DATA(lx).
+        DATA(lv_t) = lx->get_text( ).
+        add_msg( iv_key = is_key-lifnr iv_type = 'E' iv_text = lv_t ).
+        RETURN.
+    ENDTRY.
+
+    DATA(lt_comp) = ls_v-company_data-company.
+    DATA(lt_pur)  = ls_v-purchasing_data-purchasing.
+    DATA(lt_bank) = ls_v-central_data-bankdetail-bankdetails.
+    DATA ls_comp TYPE vmds_ei_company.
+    DATA ls_pur  TYPE vmds_ei_purchasing.
+
+    " The bank master behind the vendor's first bank detail - the only
+    " source for the bank-key tab, which the supplier interface does not
+    " carry at all.
+    DATA ls_bnka TYPE bnka.
+    DATA ls_bk1  TYPE cvis_ei_cvi_bankdetail.
+    READ TABLE lt_bank INTO ls_bk1 INDEX 1.
+    IF sy-subrc = 0.
+      lcl_dl_src=>bank_master( EXPORTING iv_banks = CONV banks( ls_bk1-data_key-banks )
+                                      iv_bankl = CONV bankl( ls_bk1-data_key-bankl )
+                            IMPORTING es_bnka  = ls_bnka ).
+    ENDIF.
+
+    " Telephone, mobile, fax and e-mail, in the order they are held, so a
+    " column asking for "the second one" gets the second one.
+    DATA: lt_teln TYPE string_table,
+          lt_telx TYPE string_table,
+          lt_mobn TYPE string_table,
+          lt_faxn TYPE string_table,
+          lt_smtp TYPE string_table.
+    LOOP AT ls_v-central_data-address-communication-phone-phone INTO DATA(ls_ph).
+      " R_3_USER is a number, not a flag: space and 1 are a landline,
+      " 2 and 3 a mobile.
+      IF ls_ph-contact-data-r_3_user CA '23'.
+        APPEND CONV string( ls_ph-contact-data-telephone ) TO lt_mobn.
+      ELSE.
+        APPEND CONV string( ls_ph-contact-data-telephone ) TO lt_teln.
+        APPEND CONV string( ls_ph-contact-data-extension ) TO lt_telx.
+      ENDIF.
+    ENDLOOP.
+    LOOP AT ls_v-central_data-address-communication-fax-fax INTO DATA(ls_fx).
+      APPEND CONV string( ls_fx-contact-data-fax ) TO lt_faxn.
+    ENDLOOP.
+    LOOP AT ls_v-central_data-address-communication-smtp-smtp INTO DATA(ls_sm).
+      APPEND CONV string( ls_sm-contact-data-e_mail ) TO lt_smtp.
+    ENDLOOP.
+
+    DATA lv_ci TYPE i.
+    DATA lv_pi TYPE i.
+    DATA(lv_cn) = COND i( WHEN lt_comp IS INITIAL THEN 1 ELSE lines( lt_comp ) ).
+    DATA(lv_pn) = COND i( WHEN lt_pur  IS INITIAL THEN 1 ELSE lines( lt_pur ) ).
+
+    lv_ci = 1.
+    WHILE lv_ci <= lv_cn.
+      CLEAR ls_comp.
+      READ TABLE lt_comp INTO ls_comp INDEX lv_ci.
+      DATA(lt_wt)  = ls_comp-wtax_type-wtax_type.
+      DATA(lt_lfbw) = lcl_dl_src=>wtax( iv_lifnr = is_key-lifnr
+                                     iv_bukrs = CONV bukrs( ls_comp-data_key-bukrs ) ).
+      DATA(lt_tan) = lcl_dl_src=>tan_exem( iv_lifnr = is_key-lifnr
+                                        iv_bukrs = CONV bukrs( ls_comp-data_key-bukrs ) ).
+      lv_pi = 1.
+      WHILE lv_pi <= lv_pn.
+        CLEAR ls_pur.
+        READ TABLE lt_pur INTO ls_pur INDEX lv_pi.
+        DATA(lt_fn) = ls_pur-functions-functions.
+
+        IF lines( mt_row ) >= p_max.
+          lv_pi = lv_pn + 1.
+          lv_ci = lv_cn + 1.
+          EXIT.
+        ENDIF.
+
+        DATA(ls_row) = empty_row( ).
+        LOOP AT mt_col INTO DATA(ls_col).
+          DATA lv_val TYPE string.
+          DATA lv_fld TYPE string.
+          DATA lv_occ TYPE i.
+          CLEAR lv_val.
+          split_occ( EXPORTING iv_in  = ls_col-fld
+                     IMPORTING ev_fld = lv_fld ev_occ = lv_occ ).
+
+          CASE ls_col-node.
+            WHEN 'K'.
+              CASE lv_fld.
+                " RLIFNR is the vendor the extension copies from. The
+                " sample names the vendor itself, which is what an empty
+                " cell means, so a downloaded row reads back unchanged.
+                WHEN 'LIFNR' OR 'RLIFNR'.
+                  lv_val = lcl_util=>text( iv_value = is_key-lifnr iv_fmt = 'AL' ).
+                WHEN 'BUKRS' OR 'RBUKRS'. lv_val = ls_comp-data_key-bukrs.
+                WHEN 'EKORG' OR 'REKORG'. lv_val = ls_pur-data_key-ekorg.
+              ENDCASE.
+
+            WHEN 'V'.
+              lv_val = comp( is_any = ls_v-central_data-central-data
+                             iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'A'.
+              lv_val = comp( is_any = ls_v-central_data-address-postal-data
+                             iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+              IF ls_col-fmt = 'TT' AND lv_val IS NOT INITIAL.
+                lv_val = lcl_dl_src=>title_text( lv_val ).
+              ENDIF.
+
+            WHEN 'M'.
+              CASE lv_fld.
+                WHEN 'TEL'.   READ TABLE lt_teln INTO lv_val INDEX 1.
+                WHEN 'TELX'.  READ TABLE lt_telx INTO lv_val INDEX 1.
+                WHEN 'TEL2'.  READ TABLE lt_teln INTO lv_val INDEX 2.
+                WHEN 'TELX2'. READ TABLE lt_telx INTO lv_val INDEX 2.
+                WHEN 'MOB'.   READ TABLE lt_mobn INTO lv_val INDEX 1.
+                WHEN 'MOB2'.  READ TABLE lt_mobn INTO lv_val INDEX 2.
+                WHEN 'FAX'.   READ TABLE lt_faxn INTO lv_val INDEX 1.
+                WHEN 'SMT'.   READ TABLE lt_smtp INTO lv_val INDEX 1.
+                WHEN 'SMT2'.  READ TABLE lt_smtp INTO lv_val INDEX 2.
+              ENDCASE.
+              IF sy-subrc <> 0.
+                CLEAR lv_val.
+              ENDIF.
+
+            WHEN 'B'.
+              lv_val = comp( is_any = ls_comp-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'P'.
+              lv_val = comp( is_any = ls_pur-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'N'.
+              DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
+              CLEAR ls_bk.
+              READ TABLE lt_bank INTO ls_bk INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_bk-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                IF lv_val IS INITIAL.
+                  lv_val = comp( is_any = ls_bk-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                ENDIF.
+              ENDIF.
+
+            WHEN 'W'.
+              DATA ls_wt TYPE vmds_ei_wtax_type.
+              CLEAR ls_wt.
+              READ TABLE lt_wt INTO ls_wt INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_wt-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                IF lv_val IS INITIAL.
+                  lv_val = comp( is_any = ls_wt-data iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                ENDIF.
+              ELSE.
+                " The interface returned no tax types - LFBW says whether
+                " there are none or the node simply was not filled.
+                DATA ls_lfbw TYPE lcl_dl_src=>ty_wtax.
+                CLEAR ls_lfbw.
+                READ TABLE lt_lfbw INTO ls_lfbw INDEX lv_occ.
+                IF sy-subrc = 0.
+                  lv_val = comp( is_any = ls_lfbw iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                ENDIF.
+              ENDIF.
+
+            WHEN 'F'.
+              DATA ls_fn TYPE vmds_ei_functions.
+              CLEAR ls_fn.
+              READ TABLE lt_fn INTO ls_fn INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_fn-data_key iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+                IF lv_val IS INITIAL.
+                  lv_val = comp( is_any = ls_fn-data iv_fld = lv_fld iv_fmt = 'AL' ).
+                ENDIF.
+              ENDIF.
+
+            WHEN 'X'.
+              DATA ls_tan TYPE lcl_dl_src=>ty_tan.
+              CLEAR ls_tan.
+              READ TABLE lt_tan INTO ls_tan INDEX lv_occ.
+              IF sy-subrc = 0.
+                lv_val = comp( is_any = ls_tan iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+              ENDIF.
+
+            WHEN 'Y'.
+              lv_val = comp( is_any = ls_bnka iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+          ENDCASE.
+
+          put( EXPORTING iv_col = ls_col-col iv_val = lv_val CHANGING cs_row = ls_row ).
+        ENDLOOP.
+
+        APPEND ls_row TO mt_row.
+        add_msg( iv_key = is_key-lifnr iv_type = 'S'
+                 iv_text = |Row { lines( mt_row ) }: { ls_comp-data_key-bukrs } { ls_pur-data_key-ekorg }| ).
+        lv_pi = lv_pi + 1.
+      ENDWHILE.
+      lv_ci = lv_ci + 1.
+    ENDWHILE.
+  ENDMETHOD.
+
+  METHOD split_occ.
+    " A repeating node is addressed as FIELD#n in the map - the field name
+    " on its own means the first occurrence.
+    ev_fld = iv_in.
+    ev_occ = 1.
+    IF iv_in CS '#'.
+      SPLIT iv_in AT '#' INTO DATA(lv_f) DATA(lv_n).
+      ev_fld = lv_f.
+      ev_occ = CONV i( lv_n ).
+    ENDIF.
+  ENDMETHOD.
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
+* LCL_DL - the download: which scenario, build the workbook, write it out
+*----------------------------------------------------------------------*
+CLASS lcl_dl DEFINITION FINAL.
+  PUBLIC SECTION.
+    CLASS-METHODS scenario RETURNING VALUE(rv) TYPE char2.
+    CLASS-METHODS propose_file.
+    CLASS-METHODS run.
+  PRIVATE SECTION.
+    CLASS-METHODS write
+      IMPORTING iv_xstring TYPE xstring
+      RAISING   lcx_upl.
+    CLASS-METHODS show
+      IMPORTING it_msg TYPE tt_dmsg.
+ENDCLASS.
+
+CLASS lcl_dl IMPLEMENTATION.
+
+  METHOD scenario.
+    rv = COND char2(
+      WHEN p_r1 = abap_true THEN 'R1' WHEN p_r2 = abap_true THEN 'R2'
+      WHEN p_r3 = abap_true THEN 'R3' WHEN p_r4 = abap_true THEN 'R4'
+      WHEN p_r5 = abap_true THEN 'R5' WHEN p_r6 = abap_true THEN 'R6'
+      WHEN p_r7 = abap_true THEN 'R7' WHEN p_r8 = abap_true THEN 'R8'
+      ELSE                       'R9' ).
+  ENDMETHOD.
+
+  METHOD propose_file.
+    " An upload reads a file that is already there; its name is the user's.
+    IF p_up = abap_true.
+      RETURN.
+    ENDIF.
+    " The file name follows the radio button, so two scenarios never land in
+    " the same workbook. Only a change of scenario rewrites it - a folder the
+    " user picked in the file dialog is kept, and so is a name they typed,
+    " until they move to a different scenario.
+    DATA(lv_now) = scenario( ).
+    IF lv_now = gv_dl_scen AND p_file IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+    gv_dl_scen = lv_now.
+
+    " Whatever stands in front of the last separator is the folder, and the
+    " separator is a backslash on the PC and a slash on the server.
+    DATA(lv_old) = CONV string( p_file ).
+    DATA(lv_dir) = `C:\temp\`.
+    DATA(lv_i)   = strlen( lv_old ).
+    WHILE lv_i > 0.
+      lv_i = lv_i - 1.
+      IF lv_old+lv_i(1) = '\' OR lv_old+lv_i(1) = '/'.
+        lv_dir = lv_old(lv_i) && lv_old+lv_i(1).
+        EXIT.
+      ENDIF.
+    ENDWHILE.
+
+    p_file = |{ lv_dir }{ lcl_map=>name( gv_dl_scen ) }.xlsx|.
+  ENDMETHOD.
+
+  METHOD write.
+    IF p_pc = abap_true.
+      DATA(lt_bin) = cl_bcs_convert=>xstring_to_solix( iv_xstring ).
+      cl_gui_frontend_services=>gui_download(
+        EXPORTING bin_filesize            = xstrlen( iv_xstring )
+                  filename                = CONV string( p_file )
+                  filetype                = 'BIN'
+        CHANGING  data_tab                = lt_bin
+        EXCEPTIONS file_write_error        = 1
+                   no_batch                = 2
+                   gui_refuse_filetransfer = 3
+                   invalid_type            = 4
+                   no_authority            = 5
+                   access_denied           = 6
+                   disk_full               = 7
+                   file_not_found          = 8
+                   not_supported_by_gui    = 9
+                   error_no_gui            = 10
+                   OTHERS                  = 11 ).
+      IF sy-subrc <> 0.
+        DATA(lv_why) = SWITCH string( sy-subrc
+          WHEN 1  THEN 'the file could not be written - it is open in Excel, or read-only'
+          WHEN 2  THEN 'the program is running in the background, where there is no PC to write to'
+          WHEN 5  THEN 'no authorisation to write there'
+          WHEN 6  THEN 'access denied - the folder does not allow it'
+          WHEN 7  THEN 'the disk is full'
+          WHEN 8  THEN 'the folder does not exist'
+          WHEN 10 THEN 'there is no SAP GUI - write to the application server instead'
+          ELSE         |the download failed with reason { sy-subrc }| ).
+        RAISE EXCEPTION NEW lcx_upl( |{ p_file }: { lv_why }| ).
+      ENDIF.
+    ELSE.
+      DATA lv_msg TYPE string.
+      OPEN DATASET p_file FOR OUTPUT IN BINARY MODE MESSAGE lv_msg.
+      IF sy-subrc <> 0.
+        RAISE EXCEPTION NEW lcx_upl( |{ p_file } could not be opened on the server: { lv_msg }| ).
+      ENDIF.
+      TRANSFER iv_xstring TO p_file.
+      CLOSE DATASET p_file.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD show.
+    IF it_msg IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lt_msg TYPE tt_dmsg.
+    lt_msg = it_msg.
+    DATA lo_alv TYPE REF TO cl_salv_table.
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                                CHANGING  t_table      = lt_msg ).
+        lo_alv->get_functions( )->set_all( abap_true ).
+        lo_alv->get_columns( )->set_optimize( abap_true ).
+        lo_alv->get_columns( )->get_column( 'OBJKEY' )->set_short_text( 'Master rec' ).
+        lo_alv->display( ).
+      CATCH cx_salv_msg cx_salv_not_found.
+        LOOP AT lt_msg INTO DATA(ls_m).
+          WRITE: / ls_m-objkey, ls_m-message.
+        ENDLOOP.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD run.
+    DATA(lv_scen) = scenario( ).
+    DATA(lo_eng)  = NEW lcl_dl_eng( lv_scen ).
+
+    DATA lt_row TYPE tt_row.
+    IF p_blank = abap_false.
+      lo_eng->run( ).
+      lt_row = lo_eng->rows( ).
+    ENDIF.
+
+    DATA(lt_head) = lo_eng->head( ).
+
+    TRY.
+        DATA(lv_x) = lcl_xlsx=>build( iv_sheet = lcl_map=>sheet( lv_scen )
+                                      it_head  = lt_head
+                                      it_row   = lt_row ).
+        write( lv_x ).
+      CATCH lcx_upl INTO DATA(lx).
+        DATA(lv_t) = lx->get_text( ).
+        MESSAGE lv_t TYPE 'S' DISPLAY LIKE 'E'.
+        RETURN.
+    ENDTRY.
+
+    DATA lv_sum TYPE string.
+    lv_sum = |{ lcl_map=>sheet( lv_scen ) }: { lines( lt_head ) } column(s), | &&
+             |{ lines( lt_row ) } data row(s) written to { p_file }|.
+    MESSAGE lv_sum TYPE 'S'.
+    show( lo_eng->log( ) ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+*----------------------------------------------------------------------*
 * Factory
 *----------------------------------------------------------------------*
 CLASS lcl_factory DEFINITION FINAL.
@@ -3846,51 +5040,131 @@ ENDCLASS.
 *----------------------------------------------------------------------*
 * Selection-screen events
 *----------------------------------------------------------------------*
+INITIALIZATION.
+  lcl_dl=>propose_file( ).
+
+AT SELECTION-SCREEN OUTPUT.
+  " Which vendors to put in the file is a download question; how to post
+  " what is read is an upload one. Each block is closed while the other
+  " direction is chosen, so nobody fills in options that do nothing.
+  LOOP AT SCREEN.
+    CASE screen-name.
+      WHEN 'S_BP-LOW' OR 'S_LIFNR-LOW' OR 'P_MAX' OR 'P_BLANK'
+        OR '%_S_BP_%_APP_%-VALU_PUSH' OR '%_S_LIFNR_%_APP_%-VALU_PUSH'.
+        screen-input = COND #( WHEN p_down = abap_true THEN 1 ELSE 0 ).
+        MODIFY SCREEN.
+      WHEN 'P_TEST' OR 'P_STOP' OR 'P_SKIP'.
+        screen-input = COND #( WHEN p_up = abap_true THEN 1 ELSE 0 ).
+        MODIFY SCREEN.
+    ENDCASE.
+  ENDLOOP.
+  " Show the file name that belongs to the scenario now selected. The radio
+  " buttons carry a USER-COMMAND, so a click comes straight back here.
+  lcl_dl=>propose_file( ).
+
 AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
-  DATA: lt_ft TYPE filetable,
-        lv_rc TYPE i,
-        lv_ua TYPE i.
-  cl_gui_frontend_services=>file_open_dialog(
-    EXPORTING window_title = 'Select the vendor upload workbook'
-              file_filter  = 'Excel workbook (*.xlsx)|*.xlsx|All files (*.*)|*.*'
-    CHANGING  file_table   = lt_ft
-              rc           = lv_rc
-              user_action  = lv_ua ).
-  IF lv_ua = cl_gui_frontend_services=>action_ok AND lv_rc >= 1.
-    READ TABLE lt_ft INTO DATA(ls_ft) INDEX 1.
-    " The dialog hands back a STRING and the parameter is 255 characters.
-    " A path longer than that is refused here rather than silently cut
-    " short - a cut short path names no file and cannot be read.
-    IF strlen( ls_ft-filename ) > 255.
-      MESSAGE 'That path is longer than 255 characters - move the file to a shorter path' TYPE 'S' DISPLAY LIKE 'E'.
+  " An upload reads a file that is already there, so it is picked; a
+  " download writes one, so it is named.
+  IF p_up = abap_true.
+    DATA: lt_ft TYPE filetable,
+          lv_rc TYPE i,
+          lv_ua TYPE i.
+    cl_gui_frontend_services=>file_open_dialog(
+      EXPORTING window_title = 'Select the vendor upload workbook'
+                file_filter  = 'Excel workbook (*.xlsx)|*.xlsx|All files (*.*)|*.*'
+      CHANGING  file_table   = lt_ft
+                rc           = lv_rc
+                user_action  = lv_ua ).
+    IF lv_ua = cl_gui_frontend_services=>action_ok AND lv_rc >= 1.
+      READ TABLE lt_ft INTO DATA(ls_ft) INDEX 1.
+      " The dialog hands back a STRING and the parameter is 255 characters.
+      " A path longer than that is refused here rather than silently cut
+      " short - a cut short path names no file and cannot be read.
+      IF strlen( ls_ft-filename ) > 255.
+        MESSAGE 'That path is longer than 255 characters - move the file to a shorter path' TYPE 'S' DISPLAY LIKE 'E'.
+      ELSE.
+        p_file = ls_ft-filename.
+      ENDIF.
+    ENDIF.
+    RETURN.
+  ENDIF.
+  DATA: lv_path TYPE string,
+        lv_name TYPE string,
+        lv_full TYPE string.
+  cl_gui_frontend_services=>file_save_dialog(
+    EXPORTING window_title      = 'Save the vendor workbook'
+              default_extension = 'xlsx'
+              default_file_name = |{ lcl_map=>name( lcl_dl=>scenario( ) ) }.xlsx|
+              file_filter       = |Excel workbook (*.xlsx)\|*.xlsx\||
+    CHANGING  filename          = lv_name
+              path              = lv_path
+              fullpath          = lv_full
+    EXCEPTIONS OTHERS           = 1 ).
+  IF sy-subrc = 0 AND lv_full IS NOT INITIAL.
+    " A path longer than the parameter is refused rather than silently cut
+    " short - a cut short path writes the file somewhere else, or not at all.
+    IF strlen( lv_full ) > 255.
+      MESSAGE 'That path is longer than 255 characters - pick a shorter folder' TYPE 'S' DISPLAY LIKE 'E'.
     ELSE.
-      p_file = ls_ft-filename.
+      p_file = lv_full.
     ENDIF.
   ENDIF.
 
 AT SELECTION-SCREEN.
-  " Only .xlsx can be read - CL_FDT_XL_SPREADSHEET reads the OpenXML
-  " package and nothing else. What is tested is the end of the name, not
-  " whether ".xlsx" appears somewhere in it: a folder called "xlsx files"
-  " used to be enough to let a .xls through, and a path that had been cut
-  " short was enough to hold a perfectly good .xlsx back.
-  DATA gv_ext TYPE string.
-  gv_ext = to_upper( CONV string( p_file ) ).
-  IF gv_ext IS NOT INITIAL AND gv_ext NP '*.XLSX'.
-    IF gv_ext CP '*.XLS' OR gv_ext CP '*.XLSM' OR gv_ext CP '*.XLSB'
-    OR gv_ext CP '*.CSV' OR gv_ext CP '*.TXT'.
-      MESSAGE 'This program reads .xlsx only - open the file in Excel and save it as "Excel Workbook (*.xlsx)"' TYPE 'E'.
-    ELSE.
-      MESSAGE 'The file name does not end in .xlsx - pick the workbook with F4' TYPE 'E'.
+  " Runs before START-OF-SELECTION as well, so the download file name is
+  " right even when the user picks a scenario and presses F8 at once.
+  lcl_dl=>propose_file( ).
+
+  " A radio button click is only that refresh - the user has not asked for
+  " anything yet, so there is nothing to complain about.
+  CHECK sscrfields-ucomm <> 'RB' AND sscrfields-ucomm <> 'MD'.
+
+  IF p_down = abap_true.
+    IF s_bp[] IS INITIAL AND s_lifnr[] IS INITIAL AND p_blank = abap_false.
+      MESSAGE 'Give a business partner or a supplier - or tick "Headings only"' TYPE 'E'.
+    ENDIF.
+    IF p_max < 1.
+      MESSAGE 'Rows at most must be 1 or more' TYPE 'E'.
+    ENDIF.
+    IF p_file IS INITIAL.
+      MESSAGE 'Name the file to write, or pick a folder with F4' TYPE 'E'.
+    ENDIF.
+  ELSE.
+    IF p_file IS INITIAL.
+      MESSAGE 'Pick the workbook to upload with F4' TYPE 'E'.
+    ENDIF.
+    " Only .xlsx can be read - CL_FDT_XL_SPREADSHEET reads the OpenXML
+    " package and nothing else. What is tested is the end of the name, not
+    " whether ".xlsx" appears somewhere in it: a folder called "xlsx files"
+    " used to be enough to let a .xls through, and a path that had been cut
+    " short was enough to hold a perfectly good .xlsx back.
+    DATA gv_ext TYPE string.
+    gv_ext = to_upper( CONV string( p_file ) ).
+    IF gv_ext NP '*.XLSX'.
+      IF gv_ext CP '*.XLS' OR gv_ext CP '*.XLSM' OR gv_ext CP '*.XLSB'
+      OR gv_ext CP '*.CSV' OR gv_ext CP '*.TXT'.
+        MESSAGE 'This program reads .xlsx only - open the file in Excel and save it as "Excel Workbook (*.xlsx)"' TYPE 'E'.
+      ELSE.
+        MESSAGE 'The file name does not end in .xlsx - pick the workbook with F4' TYPE 'E'.
+      ENDIF.
     ENDIF.
   ENDIF.
 
 *----------------------------------------------------------------------*
 * Main
 *----------------------------------------------------------------------*
+DATA go_log TYPE REF TO lcl_log.
+
 START-OF-SELECTION.
 
-  DATA(go_log) = NEW lcl_log( ).
+  " A download reads, writes its workbook and shows its own list. The rest
+  " of this block is the upload.
+  IF p_down = abap_true.
+    lcl_dl=>run( ).
+    RETURN.
+  ENDIF.
+
+  go_log = NEW lcl_log( ).
   DATA(go_h)   = lcl_factory=>create( go_log ).
 
   " Why every stop below writes to the LOG and returns, rather than sending
@@ -4007,4 +5281,7 @@ START-OF-SELECTION.
   ENDIF.
 
 END-OF-SELECTION.
-  go_log->display( ).
+  " A download has shown its own list already, and has no upload log.
+  IF go_log IS BOUND.
+    go_log->display( ).
+  ENDIF.

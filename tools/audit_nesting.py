@@ -27,7 +27,6 @@ import os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap',
-         'src/zbcs_mass_upload_extract.prog.abap',
          'tools/cipla/download_skeleton.abap']
 
 

@@ -14,15 +14,10 @@ import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
-         'src/zmms_bp_mass_upload.prog.abap',
-         'src/zbcs_mass_upload_extract.prog.abap']
+         'src/zmms_bp_mass_upload.prog.abap']
 
 # Known and accepted, with the reason.
-KEEP = {
-    ('src/zmms_bp_mass_upload.prog.abap', 'ok_zterm'):
-        'harmless; removing it would mean re-transporting the vendor program '
-        'for no functional change - take it out with the next real change',
-}
+KEEP = {}
 
 findings = []
 for p in PROGS:
@@ -49,5 +44,5 @@ for p in PROGS:
 if findings:
     print('\n'.join(findings))
     sys.exit(1)
-print(f'clean - every method of the {len(PROGS)} programs is called '
-      f'({len(KEEP)} accepted exception, with its reason)')
+print(f'clean - every method of the {len(PROGS)} programs is called'
+      + (f' ({len(KEEP)} accepted exception(s), with the reason)' if KEEP else ''))

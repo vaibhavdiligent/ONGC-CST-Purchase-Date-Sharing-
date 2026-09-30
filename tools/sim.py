@@ -30,10 +30,15 @@ def sheets(path):
         out.append((sh.get('name'),rows))
     return out
 def load_vend():
+    """The upload's headings, as LCL_HDR=>FOR builds them: the rows of LCL_MAP,
+       in column order, squashed, the empty ones left out."""
     s=open('src/zmms_bp_mass_upload.prog.abap',encoding='utf-8').read()
     m=collections.defaultdict(list)
-    for x in re.finditer(r"\(\s*scen = '(R\d)'\s+col = (\d+)\s+hdr = '([^']*)'\s*\)",s):
-        m[x.group(1)].append(dict(col=int(x.group(2)),hdr=x.group(3),fld=''))
+    for x in re.finditer(r"\(\s*scen = '(R\d)'\s+col = (\d+)\s+hdr = '((?:[^']|'')*)'\s+node",s):
+        h=squash(x.group(3).replace("''","'"))
+        if h:
+            m[x.group(1)].append(dict(col=int(x.group(2)),hdr=h,fld=''))
+    for k in m: m[k].sort(key=lambda e:e['col'])
     return m
 def want(entries, use_fld):
     keys=set(e['hdr'] for e in entries if e['hdr'])
