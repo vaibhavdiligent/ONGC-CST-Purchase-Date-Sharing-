@@ -38,8 +38,8 @@
     <item>
      <ID>I</ID>
      <KEY>004</KEY>
-     <ENTRY>Output</ENTRY>
-     <LENGTH>6</LENGTH>
+     <ENTRY>File</ENTRY>
+     <LENGTH>10</LENGTH>
     </item>
     <item>
      <ID>I</ID>
@@ -104,19 +104,19 @@
     <item>
      <ID>S</ID>
      <KEY>P_FILE</KEY>
-     <ENTRY>P_FILE  D       .Save the workbook as</ENTRY>
+     <ENTRY>P_FILE  D       .File</ENTRY>
      <LENGTH>20</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_PC</KEY>
-     <ENTRY>P_PC    D       .Write to the PC</ENTRY>
+     <ENTRY>P_PC    D       .On the PC</ENTRY>
      <LENGTH>15</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_SRV</KEY>
-     <ENTRY>P_SRV   D       .Write to the appl. server</ENTRY>
+     <ENTRY>P_SRV   D       .On the application server</ENTRY>
      <LENGTH>25</LENGTH>
     </item>
     <item>
