@@ -1,0 +1,74 @@
+*&---------------------------------------------------------------------*
+*& Include ZFI_POST_ICE_TO_OVL_TOP
+*&
+*&---------------------------------------------------------------------*
+REPORT zfi_post_ice_to_ovl_bapi.
+
+TYPE-POOLS: slis,
+            icon.
+
+TABLES : rlgrap,
+         rldrp,
+         sscrfields,
+         bkpf,
+         bseg.
+*-----------------------------------------------------------------------
+* T Y P E S
+*-----------------------------------------------------------------------
+TYPES : tt_curr TYPE TABLE OF bapiaccr09.
+TYPES : tt_gl   TYPE TABLE OF bapiacgl09. "Added by Manisha bh.Dt:17.05.2017
+TYPES : tt_zfi_bseg TYPE STANDARD TABLE OF zfi_bseg WITH DEFAULT KEY. " 30.09.2026 duplicate posting fix
+
+*-----------------------------------------------------------------------
+* D A T A
+*-----------------------------------------------------------------------
+
+DATA : gt_bkpf TYPE STANDARD TABLE OF bkpf,
+       gt_bseg TYPE STANDARD TABLE OF bseg.
+
+DATA : git_alv TYPE TABLE OF zfi_s_alv,
+       gt_fld  TYPE TABLE OF slis_fieldcat_alv.
+
+DATA   :   gv_functxt TYPE smp_dyntxt,
+           gv_no      TYPE i.
+*-----------------------------------------------------------------------
+* C O N S T A N T S
+*-----------------------------------------------------------------------
+
+CONSTANTS : gc_e TYPE c LENGTH 1 VALUE 'E',
+            gc_i TYPE c LENGTH 1 VALUE 'I',
+            gc_s TYPE c LENGTH 1 VALUE 'S',
+            gc_x TYPE c LENGTH 1 VALUE 'X'.
+*-----------------------------------------------------------------------
+* F I E L D – S Y M B O L S
+*-----------------------------------------------------------------------
+
+*-----------------------------------------------------------------------
+* F I E L D – G R O U P S
+*-----------------------------------------------------------------------
+
+
+*-----------------------------------------------------------------------
+* P A R A M E T E R S   &   S E L E C T - O P T I O N S
+*-----------------------------------------------------------------------
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-000.
+
+SELECT-OPTIONS : so_bukrs FOR bkpf-bukrs OBLIGATORY DEFAULT 'OVL', " Company Code
+                 so_belnr FOR bkpf-belnr OBLIGATORY , " FI Document No   " Change by rohit 08.04.2024
+                 so_gjahr FOR bkpf-gjahr OBLIGATORY, " Fiscal Year
+                 so_blart FOR bkpf-blart, " Document Type
+                 so_budat FOR bkpf-budat, " Posting Date
+                 so_pernr FOR bseg-pernr NO-EXTENSION NO INTERVALS,
+                 so_prctr FOR bseg-prctr NO-EXTENSION NO INTERVALS,
+
+                 so_kostl FOR bseg-kostl NO INTERVALS NO-EXTENSION, "added on 23.03.23 br hrishi n
+                 so_zuonr FOR bseg-zuonr NO INTERVALS NO-EXTENSION. " added on 09.04.24 by rohit.
+
+PARAMETER :  p_bkpf LIKE rlgrap-filename NO-DISPLAY , " Accounting Header
+             p_bseg LIKE rlgrap-filename NO-DISPLAY. " Accounting Line
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN FUNCTION KEY 1.
+
+**************

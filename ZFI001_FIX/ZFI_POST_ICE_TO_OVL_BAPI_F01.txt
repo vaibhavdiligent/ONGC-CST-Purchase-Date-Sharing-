@@ -1,0 +1,1956 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZFI_POST_ICE_TO_OVL_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  FM_GET_DATA_ICE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fm_get_data_ice .
+
+*** Step == > Data Declaration.
+  DATA  : lt_doc TYPE TABLE OF zfihrdoctypes.
+
+  DATA : ls_doc  TYPE zfihrdoctypes,
+         ls_bkpf TYPE bkpf,
+         ls_bseg TYPE bseg.
+
+  DATA : lt_bkpf  TYPE TABLE OF zfibkpf,
+         ls_alv   TYPE zfi_s_alv,
+         lv_index TYPE sy-tabix,
+         ls_bkpf1 TYPE zfibkpf.
+
+  IF  gv_no IS INITIAL .
+    gv_no = 1.
+  ENDIF.
+
+*** Step == > Select Data from ZFIHRDOCTYPES to fetch relative document type
+  SELECT * FROM zfihrdoctypes INTO TABLE lt_doc.
+  IF  sy-subrc IS  INITIAL .
+    SORT lt_doc BY blart.
+  ELSE.
+*    MESSAGE e002(zfiovl) WITH zfihrdoctypes .
+  ENDIF.
+
+
+  LOOP AT  gt_bkpf INTO ls_bkpf..
+    lv_index = sy-tabix.
+*    IF  ls_bkpf-budat LE '20160718'.
+    IF  ls_bkpf-budat LT '20160718'.
+      DELETE gt_bkpf INDEX lv_index .
+      DELETE gt_bseg WHERE bukrs = ls_bkpf-bukrs
+                     AND   belnr = ls_bkpf-belnr
+                     AND   gjahr = ls_bkpf-gjahr.
+      ls_alv-index = gv_no.
+      ls_alv-icon = '@0A@'.
+      ls_alv-bukrs = ls_bkpf-bukrs.
+      ls_alv-belnr = ls_bkpf-belnr.
+      ls_alv-gjahr = ls_bkpf-gjahr.
+      ls_alv-blart = ls_bkpf-blart.
+      ls_alv-message = 'Document before 18 July 2016 is not allowed'.
+      ls_alv-number = '000'.
+      ls_alv-id = 'ZFI'.
+      ls_alv-type = 'E'.
+
+      ADD 1 TO gv_no.
+      APPEND ls_alv TO git_alv.
+      CLEAR : ls_alv.
+      CONTINUE.
+    ENDIF.
+
+    READ TABLE lt_doc INTO ls_doc WITH KEY blart = ls_bkpf-blart.
+    IF  sy-subrc <> 0 .
+      DELETE gt_bkpf INDEX lv_index .
+      DELETE gt_bseg WHERE bukrs = ls_bkpf-bukrs
+                     AND   belnr = ls_bkpf-belnr
+                     AND   gjahr = ls_bkpf-gjahr.
+      ls_alv-index = gv_no.
+      ls_alv-icon = '@0A@'.
+      ls_alv-bukrs = ls_bkpf-bukrs.
+      ls_alv-belnr = ls_bkpf-belnr.
+      ls_alv-gjahr = ls_bkpf-gjahr.
+      ls_alv-blart = ls_bkpf-blart.
+
+      CONCATENATE 'Document Type' ls_bkpf-blart 'is not maintained in ZFIHRDOCTYPES'
+      INTO ls_alv-message.
+      ls_alv-number = '000'.
+      ls_alv-id = 'ZFI'.
+      ls_alv-type = 'E'.
+
+      ADD 1 TO gv_no.
+      APPEND ls_alv TO git_alv.
+      CLEAR : ls_alv.
+
+    ENDIF.
+
+
+
+  ENDLOOP.
+
+
+  IF gt_bkpf IS NOT INITIAL .
+    SELECT * FROM zfibkpf
+      INTO TABLE lt_bkpf
+      FOR ALL ENTRIES IN gt_bkpf
+      WHERE bukrs = gt_bkpf-bukrs
+      AND   belnr = gt_bkpf-belnr
+      AND   gjahr = gt_bkpf-gjahr.
+  ENDIF.
+
+
+
+  LOOP AT  lt_bkpf INTO ls_bkpf1 WHERE type NE 'E' OR zbelnr IS NOT INITIAL . " 30.09.2026 skip if OVL doc exists
+
+    READ TABLE gt_bkpf INTO ls_bkpf WITH KEY bukrs = ls_bkpf1-bukrs
+                                             belnr = ls_bkpf1-belnr
+                                             gjahr = ls_bkpf1-gjahr.
+
+    IF  sy-subrc = 0 .
+      DELETE gt_bkpf  INDEX sy-tabix.
+      DELETE gt_bseg WHERE bukrs = ls_bkpf-bukrs
+                     AND   belnr = ls_bkpf-belnr
+                     AND   gjahr = ls_bkpf-gjahr.
+
+      ls_alv-index = gv_no.
+      ls_alv-icon = '@0A@'.
+      ls_alv-bukrs = ls_bkpf1-bukrs.
+      ls_alv-belnr = ls_bkpf1-belnr.
+      ls_alv-gjahr = ls_bkpf1-gjahr.
+      ls_alv-blart = ls_bkpf1-blart.
+      ls_alv-bukrs_new = ls_bkpf1-zbukrs.
+      ls_alv-belnr_new = ls_bkpf1-zbelnr.
+      ls_alv-gjahr_new = ls_bkpf1-zgjahr.
+      ls_alv-message = 'Document is already posted'(002).
+      ls_alv-number = '000'.
+      ls_alv-id = 'ZFI'.
+      ls_alv-type = 'E'.
+
+      ADD 1 TO gv_no.
+
+      APPEND ls_alv TO git_alv.
+      CLEAR : ls_alv.
+    ENDIF.
+
+
+  ENDLOOP.
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_UPLOAD_BKPF
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fm_upload_bkpf USING uv_file TYPE rlgrap-filename.
+
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = ' '
+    IMPORTING
+      file_name     = uv_file.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_UPLOAD_DATA
+*&---------------------------------------------------------------------*
+*     Upload data from excel
+*----------------------------------------------------------------------*
+
+*----------------------------------------------------------------------*
+FORM fm_upload_data .
+
+** Step == > Data Declaration
+
+  SELECT * FROM zfibkpf INTO TABLE @DATA(i_t_bkpf)
+  WHERE bukrs IN  @so_bukrs
+  AND   belnr IN  @so_belnr
+  AND   gjahr IN  @so_gjahr
+  AND   blart IN  @so_blart
+  AND   budat IN  @so_budat.
+
+
+  DATA i_t_bseg TYPE STANDARD TABLE OF zfi_bseg. " 30.09.2026 no FAE on empty table
+  IF i_t_bkpf IS NOT INITIAL.
+    SELECT * FROM zfi_bseg INTO TABLE @i_t_bseg
+     FOR ALL ENTRIES IN @i_t_bkpf
+     WHERE bukrs EQ  @i_t_bkpf-bukrs
+     AND   belnr EQ  @i_t_bkpf-belnr
+     AND   gjahr EQ  @i_t_bkpf-gjahr.
+  ENDIF.
+
+  DATA: ls_zbkpf TYPE zfibkpf,
+        ls_zbseg TYPE zfi_bseg,
+        ls_bkpf  TYPE bkpf,
+        ls_bseg  TYPE  bseg.
+  LOOP AT i_t_bkpf INTO ls_zbkpf.
+    MOVE-CORRESPONDING ls_zbkpf TO ls_bkpf.
+    APPEND ls_bkpf TO gt_bkpf.
+  ENDLOOP.
+
+
+  LOOP AT i_t_bseg INTO ls_zbseg.
+    MOVE-CORRESPONDING ls_zbseg TO ls_bseg.
+    APPEND ls_bseg TO gt_bseg.
+  ENDLOOP.
+
+
+
+
+
+
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_POST_DOCUMENT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fm_post_document .
+*----------------------------------------------------------------------*
+* CHANGE 30.09.2026 - Fix for duplicate posting of ONGC documents
+*   (e.g. ONGC doc 8226000223 posted twice as 8826004360 / 8826004365)
+*   1. Each ONGC document is locked (ENQUEUE_E_TABLE on ZFIBKPF) while
+*      it is processed, so two parallel runs cannot post it together.
+*   2. ZFIBKPF is re-read from DB just before posting; if an OVL
+*      document number (ZBELNR) is already there, it is not posted.
+*   3. ZFIBKPF / ZFI_BSEG are updated per document BEFORE the commit
+*      (earlier: once for all documents at the end of the run), so an
+*      FI document can no longer be committed without its ZFIBKPF entry.
+*   4. Z-table rows are built from the DB row, so ZFIBKPF / ZFI_BSEG
+*      fields that do not exist in BKPF / BSEG are no longer cleared.
+*----------------------------------------------------------------------*
+
+  IF  gv_no IS INITIAL .
+    gv_no = 1.
+  ENDIF.
+****  Data declaration .
+  DATA:
+    lv_index TYPE sy-tabix.
+
+  DATA  : ls_head       TYPE          bapiache09,
+          ls_gl         TYPE          bapiacgl09,
+          ls_ven        TYPE          bapiacap09,
+          ls_ctmr       TYPE          bapiacar09,
+          ls_curr       TYPE          bapiaccr09,
+          ls_return     TYPE          bapiret2,
+          ls_cmt_ret    TYPE          bapiret2,
+          ls_alv        TYPE          zfi_s_alv,
+          lt_gl         TYPE TABLE OF bapiacgl09,
+          lt_ven        TYPE TABLE OF bapiacap09,
+          lt_curr       TYPE TABLE OF bapiaccr09,
+          lt_ctmr       TYPE TABLE OF bapiacar09,
+          lt_tax        TYPE TABLE OF bapiactx09,
+          lt_bapiacwt09 TYPE TABLE OF bapiacwt09,
+          lt_return     TYPE TABLE OF bapiret2.
+
+  DATA : obj_type TYPE bapiache09-obj_type,
+         obj_key  TYPE bapiache09-obj_key,
+         obj_sys  TYPE bapiache09-obj_sys.
+
+  DATA : ls_bkpf     TYPE bkpf,
+         ls_bseg     TYPE bseg,
+         ls_bseg_i   TYPE bseg.
+
+  DATA : lt_bseg     TYPE TABLE OF zfi_bseg,
+         lt_bkpf_new TYPE TABLE OF zfibkpf,
+         ls_bkpf_new TYPE zfibkpf,
+         ls_bkpf_db  TYPE zfibkpf.
+  DATA : lt_extension TYPE bapiparex_tab_ac,
+         ls_extension TYPE bapiparex.
+  DATA : lv_varkey    TYPE rstable-varkey.
+  FIELD-SYMBOLS : <fs_bseg> TYPE zfi_bseg.
+
+  SORT   : gt_bkpf BY bukrs belnr gjahr,
+           gt_bseg BY bukrs belnr gjahr.
+
+  LOOP AT  gt_bkpf INTO ls_bkpf .
+
+    REFRESH : lt_gl,
+              lt_ven,
+              lt_return,
+              lt_curr,
+              lt_bseg,
+              lt_ctmr,
+              lt_tax,
+              lt_bapiacwt09,
+              lt_extension,
+              lt_bkpf_new.
+    CLEAR : ls_head, ls_bkpf_db, ls_return, ls_cmt_ret, obj_key.
+
+*** Step 1 ==> Lock the ONGC document for this run
+    CLEAR lv_varkey.
+    CONCATENATE sy-mandt ls_bkpf-bukrs ls_bkpf-belnr ls_bkpf-gjahr
+           INTO lv_varkey RESPECTING BLANKS.
+
+    CALL FUNCTION 'ENQUEUE_E_TABLE'
+      EXPORTING
+        mode_rstable   = 'E'
+        tabname        = 'ZFIBKPF'
+        varkey         = lv_varkey
+        _scope         = '1'
+      EXCEPTIONS
+        foreign_lock   = 1
+        system_failure = 2
+        OTHERS         = 3.
+    IF sy-subrc <> 0.
+      ls_alv-index   = gv_no.
+      ls_alv-icon    = '@0A@'.
+      ls_alv-bukrs   = ls_bkpf-bukrs.
+      ls_alv-belnr   = ls_bkpf-belnr.
+      ls_alv-gjahr   = ls_bkpf-gjahr.
+      ls_alv-blart   = ls_bkpf-blart.
+      CONCATENATE 'Document is being processed by' sy-msgv1 '- not posted'
+             INTO ls_alv-message SEPARATED BY space.
+      ls_alv-number  = '000'.
+      ls_alv-id      = 'ZFI'.
+      ls_alv-type    = 'E'.
+      ADD 1 TO gv_no.
+      APPEND ls_alv TO git_alv.
+      CLEAR ls_alv.
+      CONTINUE.
+    ENDIF.
+
+*** Step 2 ==> Fresh duplicate check on DB (OVL document already created?)
+    SELECT SINGLE * FROM zfibkpf BYPASSING BUFFER INTO @ls_bkpf_db
+      WHERE bukrs = @ls_bkpf-bukrs
+      AND   belnr = @ls_bkpf-belnr
+      AND   gjahr = @ls_bkpf-gjahr.
+    IF ls_bkpf_db-zbelnr IS NOT INITIAL.
+      ls_alv-index     = gv_no.
+      ls_alv-icon      = '@0A@'.
+      ls_alv-bukrs     = ls_bkpf-bukrs.
+      ls_alv-belnr     = ls_bkpf-belnr.
+      ls_alv-gjahr     = ls_bkpf-gjahr.
+      ls_alv-blart     = ls_bkpf-blart.
+      ls_alv-bukrs_new = ls_bkpf_db-zbukrs.
+      ls_alv-belnr_new = ls_bkpf_db-zbelnr.
+      ls_alv-gjahr_new = ls_bkpf_db-zgjahr.
+      ls_alv-message   = 'Document is already posted'(002).
+      ls_alv-number    = '000'.
+      ls_alv-id        = 'ZFI'.
+      ls_alv-type      = 'E'.
+      ADD 1 TO gv_no.
+      APPEND ls_alv TO git_alv.
+      CLEAR ls_alv.
+      PERFORM fm_dequeue USING lv_varkey.
+      CONTINUE.
+    ENDIF.
+    IF ls_bkpf_db IS INITIAL.
+      MOVE-CORRESPONDING ls_bkpf TO ls_bkpf_db.
+    ENDIF.
+
+    ls_head-username     = sy-uname.
+    ls_head-trans_date = ls_bkpf-wwert.
+    ls_head-obj_type     = 'BKPFF'.
+    ls_head-header_txt   = ls_bkpf-bktxt.
+    ls_head-ref_doc_no   = ls_bkpf-xblnr.
+    ls_head-pstng_date   = ls_bkpf-budat.
+    ls_head-doc_date     = ls_bkpf-bldat.
+    ls_head-comp_code    = ls_bkpf-bukrs.
+    ls_head-fisc_year    = ls_bkpf-gjahr.
+    ls_head-fis_period   = ls_bkpf-monat.
+    ls_head-doc_type     = 'EZ'.
+    ls_head-vatdate      = ls_bkpf-vatdate.
+
+    CLEAR : ls_bseg_i.
+    READ TABLE gt_bseg INTO ls_bseg_i WITH KEY bukrs = ls_bkpf-bukrs
+                                               belnr = ls_bkpf-belnr
+                                               gjahr = ls_bkpf-gjahr
+                                               BINARY SEARCH.
+    IF  sy-subrc = 0 .
+      lv_index = sy-tabix.
+
+      LOOP AT gt_bseg INTO ls_bseg FROM lv_index.
+        IF  ls_bseg-bukrs <> ls_bseg_i-bukrs
+          OR ls_bseg-belnr <> ls_bseg_i-belnr
+          OR ls_bseg-gjahr <> ls_bseg_i-gjahr.
+          EXIT.
+        ENDIF.
+        CLEAR : ls_gl,
+                ls_curr,
+                ls_ven,
+                ls_ctmr.
+
+        CASE ls_bseg-koart.
+          WHEN 'S'.
+            PERFORM fm_change_gl USING  ls_bseg
+                                        ls_bkpf
+                               CHANGING ls_gl
+                                        ls_curr
+                                        lt_curr.
+            APPEND ls_gl TO lt_gl.
+            ls_extension-valuepart1 = sy-repid.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+              EXPORTING
+                input  = ls_bseg-hkont
+              IMPORTING
+                output = ls_bseg-hkont.
+
+            ls_extension-valuepart4 = ls_bseg-hkont.
+
+            ls_extension-valuepart2 = 'PERNR'.
+            IF ls_bseg-pernr IS NOT INITIAL.
+              ls_extension-valuepart3 = ls_bseg-pernr .
+            ELSE.
+              ls_extension-valuepart3 = so_pernr-low.
+            ENDIF.
+            APPEND ls_extension TO lt_extension.
+            CLEAR ls_extension.
+
+          WHEN 'K' .
+            PERFORM fm_change_vendor USING ls_bseg
+                                           ls_bkpf
+                                  CHANGING ls_ven
+                                           ls_curr
+                                           lt_curr.
+            APPEND ls_ven TO lt_ven.
+
+          WHEN 'D'.
+            CLEAR : ls_ctmr.
+            PERFORM fm_change_customer USING ls_bseg
+                                             ls_bkpf
+                                    CHANGING ls_ctmr
+                                             ls_curr
+                                             lt_curr.
+            APPEND ls_ctmr TO lt_ctmr.
+
+            "-----Added by Manisha bh.Dt:12.05.2017------*
+          WHEN 'A'.
+            PERFORM fm_update_asset USING ls_bseg
+                                          ls_bkpf
+                                 CHANGING ls_head
+                                          ls_gl
+                                          lt_gl
+                                          ls_curr
+                                          lt_curr.
+        ENDCASE.
+        CLEAR : ls_bseg.
+      ENDLOOP.
+    ENDIF.
+
+*** ZFI_BSEG lines of this document as they are on DB (keeps all Z fields)
+    SELECT * FROM zfi_bseg INTO TABLE @lt_bseg
+      WHERE bukrs = @ls_bkpf-bukrs
+      AND   belnr = @ls_bkpf-belnr
+      AND   gjahr = @ls_bkpf-gjahr.
+
+*** Step 3 ==> Simulate
+    REFRESH : lt_return.
+    " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
+    CALL FUNCTION 'BAPI_ACC_DOCUMENT_CHECK' "#EC CI_USAGE_OK[2628704]
+      " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
+      EXPORTING
+        documentheader    = ls_head     "#EC CI_USAGE_OK[2438131]
+      TABLES
+        accountgl         = lt_gl
+        accountreceivable = lt_ctmr
+        accountpayable    = lt_ven
+        accounttax        = lt_tax
+        currencyamount    = lt_curr
+        return            = lt_return
+        extension2        = lt_extension
+        accountwt         = lt_bapiacwt09.
+
+    READ TABLE lt_return INTO ls_return WITH KEY type = 'E'.
+    IF sy-subrc <> 0.
+*** Step 4 ==> Post
+      REFRESH : lt_return.
+      " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
+      CALL FUNCTION 'BAPI_ACC_DOCUMENT_POST'  "#EC CI_USAGE_OK
+          "#EC CI_USAGE_OK[2628704]
+  "#EC CI_USAGE_OK[2438131]
+        " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
+        EXPORTING
+          documentheader    = ls_head
+        IMPORTING
+          obj_type          = obj_type
+          obj_key           = obj_key
+          obj_sys           = obj_sys
+        TABLES
+          accountgl         = lt_gl
+          accountreceivable = lt_ctmr
+          accountpayable    = lt_ven
+          accounttax        = lt_tax
+          currencyamount    = lt_curr
+          return            = lt_return
+          extension2        = lt_extension
+          accountwt         = lt_bapiacwt09.
+
+      CLEAR ls_return.
+      READ TABLE lt_return INTO ls_return WITH KEY type   = 'S'
+                                                   id     = 'RW'
+                                                   number = '605'.
+      IF sy-subrc = 0.
+*** Step 5 ==> Posted: write ZFIBKPF / ZFI_BSEG first, then commit both
+        CLEAR : ls_bkpf_new.
+        ls_bkpf_new         = ls_bkpf_db.
+        ls_bkpf_new-zbelnr  = ls_return-message_v2+0(10).
+        ls_bkpf_new-zbukrs  = ls_return-message_v2+10(4).
+        ls_bkpf_new-zgjahr  = ls_return-message_v2+14(4).
+        ls_bkpf_new-message = ls_return-message.
+        ls_bkpf_new-type    = 'S'.
+        APPEND ls_bkpf_new TO lt_bkpf_new.
+
+        LOOP AT  lt_bseg ASSIGNING <fs_bseg>.
+          <fs_bseg>-zbelnr  = ls_bkpf_new-zbelnr.
+          <fs_bseg>-zbukrs  = ls_bkpf_new-zbukrs.
+          <fs_bseg>-zgjahr  = ls_bkpf_new-zgjahr.
+          <fs_bseg>-zbuzei  = <fs_bseg>-buzei.
+          <fs_bseg>-message = ls_return-message.
+        ENDLOOP.
+
+        CALL FUNCTION 'ZFI_UPDATE_ACT'
+          TABLES
+            it_bkpf     = lt_bkpf_new
+            it_bseg     = lt_bseg
+          EXCEPTIONS
+            update_fail = 1
+            OTHERS      = 2.
+        IF sy-subrc <> 0.
+*         Z-table could not be updated -> do not post the FI document
+          CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+          CLEAR ls_return.
+          ls_return-type    = 'E'.
+          ls_return-id      = 'ZFI'.
+          ls_return-number  = '000'.
+          ls_return-message = 'ZFIBKPF/ZFI_BSEG update failed - document not posted'.
+          PERFORM fm_save_error USING ls_bkpf ls_bkpf_db ls_return
+                             CHANGING lt_bseg.
+        ELSE.
+          CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+            EXPORTING
+              wait   = 'X'
+            IMPORTING
+              return = ls_cmt_ret.
+          IF ls_cmt_ret-type CA 'EA'.
+*           FI update terminated -> FI document does not exist, reset flag
+            CLEAR ls_return.
+            ls_return-type    = 'E'.
+            ls_return-id      = 'ZFI'.
+            ls_return-number  = '000'.
+            ls_return-message = 'FI update terminated - check SM13, document not posted'.
+            PERFORM fm_save_error USING ls_bkpf ls_bkpf_db ls_return
+                               CHANGING lt_bseg.
+          ELSE.
+            ls_alv-icon      = '@08@'.   "FOR GREEN COLOR
+            ls_alv-index     = gv_no.
+            MOVE-CORRESPONDING ls_return TO ls_alv.
+            ls_alv-bukrs     = ls_bkpf-bukrs.
+            ls_alv-belnr     = ls_bkpf-belnr.
+            ls_alv-gjahr     = ls_bkpf-gjahr.
+            ls_alv-blart     = ls_bkpf-blart.
+            ls_alv-bukrs_new = ls_bkpf_new-zbukrs.
+            ls_alv-belnr_new = ls_bkpf_new-zbelnr.
+            ls_alv-gjahr_new = ls_bkpf_new-zgjahr.
+            ADD 1 TO gv_no.
+            APPEND ls_alv TO git_alv.
+            CLEAR ls_alv.
+          ENDIF.
+        ENDIF.
+
+      ELSE.
+*** Posting failed
+        CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+        LOOP AT lt_return INTO ls_return WHERE type = 'E'
+                                          AND  number <> '609'.
+          PERFORM fm_save_error USING ls_bkpf ls_bkpf_db ls_return
+                             CHANGING lt_bseg.
+          EXIT.
+        ENDLOOP.
+      ENDIF.
+
+    ELSE.
+*** Simulation failed
+      LOOP AT lt_return INTO ls_return WHERE type = 'E'
+                                        AND  number <> '609'
+                                        AND message_v1 <> 'BKPFF'.
+        PERFORM fm_save_error USING ls_bkpf ls_bkpf_db ls_return
+                           CHANGING lt_bseg.
+        EXIT.
+      ENDLOOP.
+    ENDIF.
+
+    PERFORM fm_dequeue USING lv_varkey.
+    CLEAR : ls_bkpf.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_SAVE_ERROR
+*&---------------------------------------------------------------------*
+*       Error log in ALV and error status in ZFIBKPF / ZFI_BSEG
+*       (called while the document is locked and ZBELNR is initial)
+*----------------------------------------------------------------------*
+FORM fm_save_error USING    is_bkpf    TYPE bkpf
+                            is_bkpf_db TYPE zfibkpf
+                            is_return  TYPE bapiret2
+                   CHANGING ct_bseg    TYPE tt_zfi_bseg.
+
+  DATA : ls_alv      TYPE zfi_s_alv,
+         ls_bkpf_new TYPE zfibkpf,
+         lt_bkpf_new TYPE TABLE OF zfibkpf.
+  FIELD-SYMBOLS : <fs_bseg> TYPE zfi_bseg.
+
+  ls_alv-icon      = '@0A@'.    "FOR RED COLOR
+  ls_alv-index     = gv_no.
+  MOVE-CORRESPONDING is_return TO ls_alv.
+  ls_alv-bukrs     = is_bkpf-bukrs.
+  ls_alv-belnr     = is_bkpf-belnr.
+  ls_alv-gjahr     = is_bkpf-gjahr.
+  ls_alv-blart     = is_bkpf-blart.
+  ADD 1 TO gv_no.
+  APPEND ls_alv TO git_alv.
+
+  ls_bkpf_new         = is_bkpf_db.
+  CLEAR : ls_bkpf_new-zbelnr, ls_bkpf_new-zbukrs, ls_bkpf_new-zgjahr.
+  ls_bkpf_new-message = is_return-message.
+  ls_bkpf_new-type    = 'E'.
+  APPEND ls_bkpf_new TO lt_bkpf_new.
+
+  LOOP AT ct_bseg ASSIGNING <fs_bseg>.
+    CLEAR : <fs_bseg>-zbelnr, <fs_bseg>-zbukrs, <fs_bseg>-zgjahr, <fs_bseg>-zbuzei.
+    <fs_bseg>-message = is_return-message.
+  ENDLOOP.
+
+  CALL FUNCTION 'ZFI_UPDATE_ACT'
+    TABLES
+      it_bkpf     = lt_bkpf_new
+      it_bseg     = ct_bseg
+    EXCEPTIONS
+      update_fail = 1
+      OTHERS      = 2.
+  IF sy-subrc = 0.
+    COMMIT WORK AND WAIT.
+  ELSE.
+    ROLLBACK WORK.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_DEQUEUE
+*&---------------------------------------------------------------------*
+FORM fm_dequeue USING iv_varkey TYPE rstable-varkey.
+
+  CALL FUNCTION 'DEQUEUE_E_TABLE'
+    EXPORTING
+      mode_rstable = 'E'
+      tabname      = 'ZFIBKPF'
+      varkey       = iv_varkey
+      _scope       = '1'.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_CHANGE_GL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_BSEG  text
+*      -->P_LS_BKPF  text
+*      <--P_LS_GL  text
+*----------------------------------------------------------------------*
+FORM fm_change_gl  USING    VALUE(ls_bseg) TYPE bseg
+                            VALUE(ls_bkpf) TYPE bkpf
+                   CHANGING ls_gl   TYPE bapiacgl09
+                            ls_curr TYPE  bapiaccr09
+                            lt_curr  TYPE tt_curr.
+
+  DATA ls_vendor TYPE zfi_vendor.
+
+  ls_gl-itemno_acc = ls_bseg-buzei.
+*  ls_gl-gl_account =  ls_bseg-hkont.
+*    PERFORM convert_exit CHANGING ls_gl-gl_account.
+
+  DATA ls_gst TYPE zfi_gstgl.
+* Addition of logic by Ruhani Garg on 9 April 2019.
+  PERFORM convert_exit CHANGING ls_bseg-hkont.
+  SELECT SINGLE * FROM zfi_gstgl INTO ls_gst
+    WHERE ongc_gl = ls_bseg-hkont.
+  IF sy-subrc EQ 0.
+    ls_gl-gl_account = ls_gst-ovl_gl.
+  ELSE.
+    ls_gl-gl_account = ls_bseg-hkont.
+  ENDIF.
+* End of Changes
+
+  ls_gl-item_text = ls_bseg-sgtxt.
+*ls_gl-STAT_CON =
+*ls_gl-LOG_PROC =
+*ls_gl-AC_DOC_NO =
+  ls_gl-ref_key_1 = ls_bseg-xref1.
+  ls_gl-ref_key_2 = ls_bseg-xref2.
+  ls_gl-ref_key_3 = ls_bseg-xref3.
+*  ls_gl-acct_key = ls_bseg-ktosl.
+  PERFORM convert_exit CHANGING ls_gl-acct_key.
+  ls_gl-acct_type = ls_bseg-koart.
+*  ls_gl-tax_code = ls_bseg-mwskz.                    "27.09.2016
+  ls_gl-itemno_tax = ls_bseg-taxps.
+  ls_gl-taxjurcode                   = ls_bseg-txjcd.
+*ls_gl-DOC_TYPE =
+*  ls_gl-comp_code = ls_bkpf-bukrs .
+*  ls_gl-comp_code = 'OVL'.
+  ls_gl-comp_code = ls_bseg-bukrs .
+  ls_gl-bus_area = ls_bseg-gsber.
+  ls_gl-func_area = ls_bseg-fkber.
+  ls_gl-plant = ls_bseg-werks.
+  ls_gl-fis_period  =  ls_bkpf-monat.
+  ls_gl-fisc_year = ls_bseg-gjahr.
+
+
+  ls_gl-pstng_date = ls_bkpf-budat.
+  ls_gl-value_date =  ls_bseg-valut.
+*ls_gl-FM_AREA =
+
+  ls_gl-customer = ls_bseg-kunnr.
+  PERFORM convert_exit CHANGING ls_gl-customer.
+  ls_gl-cshdis_ind = ls_bseg-xskrl.
+
+  PERFORM convert_exit CHANGING ls_bseg-lifnr.
+  SELECT SINGLE * FROM zfi_vendor INTO ls_vendor
+   WHERE ongc_vendor = ls_bseg-lifnr.
+
+  IF sy-subrc = 0.
+    ls_gl-vendor_no = ls_vendor-ovl_vendor.
+  ELSE.
+    ls_gl-vendor_no = ls_bseg-lifnr.
+  ENDIF.
+*  ls_gl-vendor_no = ls_bseg-lifnr.
+  PERFORM convert_exit CHANGING ls_gl-vendor_no.
+  ls_gl-alloc_nmbr = ls_bseg-zuonr.
+  "SOC ON 09.04.24 BY ROHIT.
+  IF ls_gl-alloc_nmbr IS INITIAL.
+    ls_gl-alloc_nmbr = so_zuonr-low.
+  ENDIF.                           " EOC BY ROHIT.
+
+*  ls_gl-tax_code =  ls_bseg-mwskz.                   "27.09.2016
+  ls_gl-taxjurcode = ls_bseg-txjcd.
+*ls_gl-EXT_OBJECT_ID =
+*ls_gl-BUS_SCENARIO =
+  ls_gl-costobject = ls_bseg-kstrg.
+  ls_gl-costcenter =  ls_bseg-kostl.
+  IF ls_gl-costcenter IS INITIAL.  "added on 23.03.23 by hrishi n
+    ls_gl-costcenter = so_kostl-low.
+  ENDIF.
+  PERFORM convert_exit CHANGING ls_gl-costcenter.
+
+
+  ls_gl-acttype = ls_bseg-lstar.
+  ls_gl-profit_ctr = ls_bseg-prctr.
+  IF ls_gl-profit_ctr IS INITIAL.
+    ls_gl-profit_ctr = so_prctr-low.
+  ENDIF.
+  ls_gl-part_prctr = ls_bseg-pprct.
+  ls_gl-network = ls_bseg-nplnr.
+  CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+    EXPORTING
+      input  = ls_bseg-projk
+    IMPORTING
+      output = ls_gl-wbs_element.
+
+  ls_gl-orderid = ls_bseg-aufnr.
+  PERFORM convert_exit CHANGING ls_gl-orderid.
+*ls_gl-ORDER_ITNO =
+  ls_gl-routing_no =  ls_bseg-aufpl.
+*  ls_gl-activity = ls_bseg-vorgn.
+**ls_gl-COND_TYPE =
+**ls_gl-COND_COUNT =
+**ls_gl-COND_ST_NO =
+  ls_gl-fund = ls_bseg-geber.
+  ls_gl-funds_ctr =  ls_bseg-fistl.
+  ls_gl-cmmt_item = ls_bseg-fipos.
+  ls_gl-co_busproc = ls_bseg-prznr.
+  ls_gl-asset_no = ls_bseg-anln1.
+  PERFORM convert_exit CHANGING ls_gl-asset_no.
+  ls_gl-sub_number = ls_bseg-anln2.
+  PERFORM convert_exit CHANGING ls_gl-sub_number.
+*ls_gl-BILL_TYPE =
+  ls_gl-sales_ord = ls_bseg-vbel2.
+  PERFORM convert_exit CHANGING  ls_gl-sales_ord.
+  ls_gl-s_ord_item = ls_bseg-posn2.
+*          ls_gl-distr_chan =  ls_bseg-vtweg.
+*          ls_gl-division = ls_bseg-spart.
+*          ls_gl-salesorg = ls_bseg-vkorg.
+*          ls_gl-sales_grp = ls_bseg-vkgrp.
+*          ls_gl-sales_off = ls_bseg-vkbur.
+*          ls_gl-sold_to = ls_bseg-kunag.
+  ls_gl-de_cre_ind = ls_bseg-tbtkz.
+***ls_gl-P_EL_PRCTR =
+***ls_gl-XMFRW =
+***ls_gl-QUANTITY =
+***ls_gl-BASE_UOM =
+***ls_gl-BASE_UOM_ISO  =
+***ls_gl-INV_QTY  =
+***ls_gl-INV_QTY_SU  =
+***ls_gl-SALES_UNIT  =
+***ls_gl-SALES_UNIT_ISO  =
+***ls_gl-PO_PR_QNT  =
+***ls_gl-PO_PR_UOM  =
+***ls_gl-PO_PR_UOM_ISO  =
+***ls_gl-ENTRY_QNT  =
+***ls_gl-ENTRY_UOM  =
+***ls_gl-ENTRY_UOM_ISO  =
+***ls_gl-VOLUME  =
+***ls_gl-VOLUMEUNIT  =
+***ls_gl-VOLUMEUNIT_ISO  =
+***ls_gl-GROSS_WT  =
+***ls_gl-NET_WEIGHT  =
+***ls_gl-UNIT_OF_WT  =
+***ls_gl-UNIT_OF_WT_ISO  =
+***ls_gl-ITEM_CAT  =
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+* S/4: material field length 18->40; populate MATERIAL_LONG (40-char).
+*  ls_gl-material  =  ls_bseg-matnr.
+  ls_gl-material_long = ls_bseg-matnr.
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  PERFORM convert_exit CHANGING ls_gl-material.
+***ls_gl-MATL_TYPE  =
+***ls_gl-MVT_IND  =
+***ls_gl-REVAL_IND  =
+***ls_gl-ORIG_GROUP  =
+***ls_gl-ORIG_MAT  =
+***ls_gl-SERIAL_NO  =
+***ls_gl-PART_ACCT  =
+***ls_gl-TR_PART_BA  =
+***ls_gl-TRADE_ID  =
+***ls_gl-VAL_AREA  =
+***ls_gl-VAL_TYPE  =
+***ls_gl-ASVAL_DATE  =
+***ls_gl-PO_NUMBER  =
+***ls_gl-PO_ITEM  =
+***ls_gl-ITM_NUMBER  =
+***ls_gl-COND_CATEGORY  =
+***ls_gl-FUNC_AREA_LONG  =
+***ls_gl-CMMT_ITEM_LONG  =
+***ls_gl-GRANT_NBR  =
+***ls_gl-MEASURE  =
+***ls_gl-SEGMENT  =
+***ls_gl-PARTNER_SEGMENT  =
+***ls_gl-RES_DOC  =
+***ls_gl-RES_ITEM  =
+***ls_gl-BILLING_PERIOD_START_DATE  =
+***ls_gl-BILLING_PERIOD_END_DATE  =
+  ls_gl-cmmt_item = ls_bseg-fipos.
+  ls_gl-ppa_ex_ind  =  ls_bseg-ppa_ex_ind.
+  ls_gl-fastpay  =  ls_bseg-fastpay.
+***ls_gl-PARTNER_GRANT_NBR  =
+  ls_gl-budget_period  = ls_bseg-budget_pd.
+  ls_gl-partner_budget_period  =  ls_bseg-pbudget_pd.
+  ls_gl-partner_fund  =  ls_bseg-pgeber.
+  ls_gl-itemno_tax  =  ls_bseg-taxps.
+
+  IF  ls_bseg-vertn IS NOT INITIAL .
+    ls_gl-costcenter = 'OVLJVCP001'.
+  ENDIF.
+***ls_gl-PAYMENT_TYPE  =
+***ls_gl-EXPENSE_TYPE  =
+***ls_gl-PROGRAM_PROFILE  =
+
+
+
+
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  ls_curr-currency = ls_bkpf-waers.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-wrbtr = ls_bseg-wrbtr * -1.
+  ENDIF.
+*  ls_curr-disc_base = ls_bseg-skfbt.
+*  ls_curr-disc_amt = ls_bseg-sknto.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-wrbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-wrbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+*  ls_curr-exch_rate_v = ls_bkpf-kurs2.
+*  IF  ls_curr-exch_rate_v LT 0.
+* ls_curr-exch_rate_v = ls_curr-exch_rate_v * -1.
+*  ENDIF.
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '10'.
+  ls_curr-currency = ls_bkpf-hwaer.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbtr = ls_bseg-dmbtr * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '50'.
+  ls_curr-currency = ls_bkpf-hwae2.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbe2 = ls_bseg-dmbe2 * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbe2.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbe2 ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+  APPEND ls_curr TO lt_curr.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_CHANGE_VENDOR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_BSEG  text
+*      -->P_LS_BKPF  text
+*      <--P_LS_VEN  text
+*      <--P_LS_CURR  text
+*------------------------------------------ ----------------------------*
+FORM fm_change_vendor  USING    VALUE(ls_bseg) TYPE bseg
+                                      ls_bkpf  TYPE bkpf
+                      CHANGING        ls_ven   TYPE bapiacap09
+                                      ls_curr  TYPE bapiaccr09
+                                      lt_curr  TYPE tt_curr.
+
+  DATA : ls_vendor TYPE zfi_vendor.
+
+
+  CLEAR : ls_ven,
+                ls_curr.
+  ls_ven-itemno_acc = ls_bseg-buzei.
+  CLEAR ls_vendor.
+  PERFORM convert_exit CHANGING ls_bseg-lifnr.
+
+
+  SELECT SINGLE * FROM zfi_vendor INTO ls_vendor
+   WHERE ongc_vendor = ls_bseg-lifnr.
+
+  IF sy-subrc = 0.
+    ls_ven-vendor_no = ls_vendor-ovl_vendor.
+  ELSE.
+    ls_ven-vendor_no = ls_bseg-lifnr.
+  ENDIF.
+
+  ls_ven-gl_account = ls_bseg-hkont.
+  ls_ven-bus_area = ls_bseg-gsber.
+  PERFORM convert_exit CHANGING ls_ven-gl_account .
+  PERFORM convert_exit CHANGING ls_ven-vendor_no .
+  ls_ven-pmnttrms = ls_bseg-zterm.
+
+  PERFORM convert_exit CHANGING ls_ven-pmnttrms .
+  ls_ven-alloc_nmbr =  ls_bseg-zuonr.
+  IF ls_ven-alloc_nmbr IS INITIAL.
+    ls_ven-alloc_nmbr = so_zuonr-low.
+  ENDIF.
+  ls_ven-bline_date = ls_bseg-zfbdt.
+  ls_ven-sp_gl_ind = ls_bseg-umskz .
+*  ls_ven-itemno_tax = ls_bseg-mwskz.
+  ls_ven-item_text = ls_bseg-sgtxt.
+  ls_ven-profit_ctr = ls_bseg-prctr.
+  ls_ven-pymt_meth = ls_bseg-zlsch.
+  ls_ven-sectioncode = ls_bseg-secco.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  ls_curr-currency = ls_bkpf-waers.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-wrbtr = ls_bseg-wrbtr * -1.
+  ENDIF.
+*  ls_curr-disc_base = ls_bseg-skfbt.
+*  ls_curr-disc_amt = ls_bseg-sknto.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-wrbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-wrbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+*  ls_curr-exch_rate_v = ls_bkpf-kurs2.
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+*    IF  ls_curr-exch_rate_v LT 0.
+* ls_curr-exch_rate_v = ls_curr-exch_rate_v * -1.
+*  ENDIF.
+
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '10'.
+  ls_curr-currency = ls_bkpf-hwaer.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbtr = ls_bseg-dmbtr * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '50'.
+  ls_curr-currency = ls_bkpf-hwae2.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbe2 = ls_bseg-dmbe2 * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbe2.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbe2 ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_CHANGE_CUSTOMER
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_BSEG  text
+*      -->P_LS_BKPF  text
+*      <--P_LS_CTMR  text
+*      <--P_LS_CURR  text
+*----------------------------------------------------------------------*
+FORM fm_change_customer  USING      VALUE(ls_bseg) TYPE bseg
+                                    VALUE(ls_bkpf) TYPE bkpf
+                         CHANGING   ls_ctmr        TYPE bapiacar09
+                                    ls_curr        TYPE  bapiaccr09
+                                    lt_curr        TYPE tt_curr.
+
+
+  CLEAR : ls_ctmr,
+          ls_curr.
+  ls_ctmr-itemno_acc = ls_bseg-buzei.
+  ls_ctmr-customer = ls_bseg-kunnr.
+  PERFORM convert_exit CHANGING ls_ctmr-customer.
+
+  SELECT SINGLE akont FROM  knb1 INTO ls_ctmr-gl_account   "" added by ss on 02/05/2021
+                      WHERE kunnr EQ ls_ctmr-customer AND
+                            bukrs EQ ls_bseg-bukrs.
+
+  PERFORM convert_exit CHANGING ls_ctmr-gl_account.
+  ls_ctmr-pmnttrms = ls_bseg-zterm.
+*  ls_ven-bline_date = ls_bseg-zfbdt.
+  ls_ctmr-sp_gl_ind = ls_bseg-umskz .
+  ls_ctmr-bus_area = ls_bseg-gsber.
+*  ls_ctmr-itemno_tax = ls_bseg-mwskz.
+
+  ls_ctmr-item_text = ls_bseg-sgtxt.
+  ls_ctmr-profit_ctr = ls_bseg-prctr.
+
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  ls_curr-currency = ls_bkpf-waers.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-wrbtr = ls_bseg-wrbtr * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-wrbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-wrbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+*  ls_curr-exch_rate_v = ls_bkpf-kurs2.
+*  ls_curr-disc_base = ls_bseg-skfbt.
+*  ls_curr-disc_amt = ls_bseg-sknto.
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '10'.
+  ls_curr-currency = ls_bkpf-hwaer.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbtr = ls_bseg-dmbtr * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '50'.
+  ls_curr-currency = ls_bkpf-hwae2.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbe2 = ls_bseg-dmbe2 * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbe2.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbe2 ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+ENDFORM.
+
+
+
+
+*&---------------------------------------------------------------------*
+*&      Form  SUB_FILL_ALV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sub_fill_alv .
+
+
+  DATA : ls_fld TYPE slis_fieldcat_alv.
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_program_name         = sy-repid
+      i_structure_name       = 'ZFI_S_ALV'
+      i_client_never_display = 'X'
+    CHANGING
+      ct_fieldcat            = gt_fld
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+
+  LOOP AT  gt_fld INTO ls_fld.
+    CASE ls_fld-fieldname.
+      WHEN 'INDEX'.
+        ls_fld-seltext_l = TEXT-001.
+        ls_fld-seltext_m = TEXT-001.
+        ls_fld-seltext_s = TEXT-001.
+
+    ENDCASE.
+    ls_fld-ddictxt = 'M'.
+    MODIFY gt_fld FROM ls_fld TRANSPORTING seltext_l seltext_m seltext_s ddictxt.
+  ENDLOOP.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      i_callback_program     = sy-repid
+      i_callback_top_of_page = 'TOP_OF_PAGE'  "see FORM
+      it_fieldcat            = gt_fld[]
+      i_save                 = 'X'
+    TABLES
+      t_outtab               = git_alv
+    EXCEPTIONS
+      program_error          = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+ENDFORM.                    " SUB_FILL_ALV
+
+
+FORM top_of_page.
+*ALV Header declarations
+  DATA: lt_header  TYPE slis_t_listheader,
+        lwa_header TYPE slis_listheader.
+
+* Title
+  lwa_header-typ  = 'H'.
+  lwa_header-info = TEXT-003.
+  APPEND lwa_header TO lt_header.
+  CLEAR lwa_header.
+
+*   date
+  lwa_header-typ  = 'S'.
+  lwa_header-key = TEXT-007.
+  CONCATENATE  sy-datum+6(2) '.'
+               sy-datum+4(2) '.'
+               sy-datum(4) INTO lwa_header-info.   "todays date
+  APPEND lwa_header TO lt_header.
+  CLEAR: lwa_header.
+
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = lt_header.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_CLEAR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+**Clear  Global internal tables
+*----------------------------------------------------------------------*
+FORM fm_clear .
+  REFRESH : gt_bkpf ,
+            gt_bseg ,
+            git_alv ,
+            gt_fld  .
+
+  CLEAR : gv_no.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fm_get_data .
+
+  DATA: l_filename TYPE string,
+        l_filen    TYPE string,
+        l_path     TYPE string,
+        l_fullpath TYPE string,
+        l_usr_act  TYPE i.
+
+  SELECT * FROM bkpf INTO TABLE gt_bkpf
+    WHERE bukrs IN so_bukrs
+    AND belnr IN so_belnr
+    AND gjahr IN so_gjahr
+    AND budat IN so_budat ORDER BY PRIMARY KEY.
+
+  IF  gt_bkpf IS NOT INITIAL .
+    " " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
+    SELECT * FROM bseg INTO TABLE gt_bseg "#EC CI_DB_OPERATION_OK[2431747]
+      FOR ALL ENTRIES IN gt_bkpf
+      WHERE bukrs = gt_bkpf-bukrs
+      AND belnr = gt_bkpf-belnr
+      AND gjahr = gt_bkpf-gjahr ORDER BY PRIMARY KEY.
+    " " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
+  ENDIF.
+
+**  PERFO.RM FM_GET_DATA_ICE .
+*  INSERT INITIAL LINE INTO gt_bkpf INDEX 1.
+*  INSERT INITIAL LINE INTO gt_bseg INDEX 1.
+
+
+
+  l_filename = space.
+
+
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      default_file_name    = l_filename
+    CHANGING
+      filename             = l_filen
+      path                 = l_path
+      fullpath             = l_fullpath
+      user_action          = l_usr_act
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+
+  IF sy-subrc = 0
+  AND l_usr_act <> cl_gui_frontend_services=>action_cancel.
+
+    CALL FUNCTION 'GUI_DOWNLOAD'
+      EXPORTING
+        filename                = l_fullpath
+        filetype                = 'DAT'
+      TABLES
+        data_tab                = gt_bkpf
+*       FIELDNAMES              =
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        OTHERS                  = 22.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+
+  ENDIF.
+
+
+
+  l_filename = space.
+
+
+  CALL METHOD cl_gui_frontend_services=>file_save_dialog
+    EXPORTING
+      default_file_name    = l_filename
+    CHANGING
+      filename             = l_filen
+      path                 = l_path
+      fullpath             = l_fullpath
+      user_action          = l_usr_act
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+
+  IF sy-subrc = 0
+  AND l_usr_act <> cl_gui_frontend_services=>action_cancel.
+
+    CALL FUNCTION 'GUI_DOWNLOAD'
+      EXPORTING
+        filename                = l_fullpath
+        filetype                = 'DAT'
+      TABLES
+        " Code Remediation changes S4 2025_1_A Conversion **BEGIN OF CHANGE BY SAP_ABAP 05.06.2026  FOR ATC
+*       data_tab                = gt_bseg
+        data_tab                = gt_bseg "#EC CI_FLDEXT_OK[2610650]
+        " Code Remediation changes S4 2025_1_A Conversion * *END OF CHANGE BY SAP_ABAP 05.06.2026 FOR ATC
+*       FIELDNAMES              =
+      EXCEPTIONS
+        file_write_error        = 1
+        no_batch                = 2
+        gui_refuse_filetransfer = 3
+        invalid_type            = 4
+        no_authority            = 5
+        unknown_error           = 6
+        header_not_allowed      = 7
+        separator_not_allowed   = 8
+        filesize_not_allowed    = 9
+        header_too_long         = 10
+        dp_error_create         = 11
+        dp_error_send           = 12
+        dp_error_write          = 13
+        unknown_dp_error        = 14
+        access_denied           = 15
+        dp_out_of_memory        = 16
+        disk_full               = 17
+        dp_timeout              = 18
+        file_not_found          = 19
+        dataprovider_exception  = 20
+        control_flush_error     = 21
+        OTHERS                  = 22.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+
+  ENDIF.
+ENDFORM.
+**&---------------------------------------------------------------------*
+**&      Form  FM_ADD_TAX
+**&---------------------------------------------------------------------*
+**       text
+**----------------------------------------------------------------------*
+**      -->P_LS_BSEG  text
+**      -->P_LS_BKPF  text
+**      -->P_LS_GL  text
+**      <--P_LS_TAX  text
+**----------------------------------------------------------------------*
+*FORM fm_add_tax  USING    VALUE(ls_bseg) TYPE bseg
+*                          VALUE(ls_bkpf) TYPE bkpf
+*                VALUE(ls_gl)   TYPE bapiacgl09
+*                CHANGING ls_tax TYPE bapiactx09.
+*
+*  ls_tax-itemno_acc = ls_gl-itemno_acc.
+*  ls_tax-gl_account = ls_gl-gl_account.
+**ls_tax-COND_KEY =
+*  ls_tax-acct_key = ls_bseg-ktosl.
+*  ls_tax-tax_code = ls_gl-tax_code.
+***ls_tax-TAX_RATE =
+***ls_tax-TAX_DATE
+***ls_tax-TAXJURCODE
+***ls_tax-TAXJURCODE_DEEP
+***ls_tax-TAXJURCODE_LEVEL
+*  ls_tax-itemno_tax = ls_gl-itemno_tax.
+**ls_tax-DIRECT_TAX
+*
+*
+*ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_MAND
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM convert_exit USING p_string .
+
+  CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+    EXPORTING
+      input  = p_string
+    IMPORTING
+      output = p_string.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_CHANGE_CURR
+*&---------------------------------------------------------------------*
+***       text
+***----------------------------------------------------------------------*
+***      -->P_LS_BSEG  text
+***      -->P_LS_BKPF  text
+***      <--P_LS_CURR  text
+***----------------------------------------------------------------------*
+**FORM fm_change_curr  USING    VALUE(ls_bseg) TYPE bseg
+**                             VALUE(ls_bkpf) TYPE bkpf
+**                                  uv_1    TYPE char1
+**                   CHANGING
+**                            ls_curr TYPE  bapiaccr09.
+**
+**  IF uv_1 = 1.
+**    ls_curr-curr_type = '10'.
+**    ls_curr-currency = ls_bkpf-hwaer.
+**    ls_curr-itemno_acc = ls_bseg-buzei.
+**    IF ls_bseg-shkzg = 'H'.
+**      ls_bseg-dmbtr = ls_bseg-dmbtr * -1.
+**    ENDIF.
+**    ls_curr-amt_doccur = ls_bseg-dmbtr.
+**    ls_curr-exch_rate = ls_bkpf-kursf.
+**    IF  ls_curr-exch_rate IS INITIAL .
+**      ls_curr-exch_rate = ls_bkpf-kurs2.
+**    ENDIF.
+**
+**    IF  ls_curr-exch_rate LT 0.
+**      ls_curr-exch_rate = ls_curr-exch_rate * -1.
+**    ENDIF.
+**
+**  ELSE.
+**    ls_curr-curr_type = '50'.
+**    ls_curr-currency = ls_bkpf-hwae2.
+**    ls_curr-itemno_acc = ls_bseg-buzei.
+**    IF ls_bseg-shkzg = 'H'.
+**      ls_bseg-dmbe2 = ls_bseg-dmbe2 * -1.
+**    ENDIF.
+**    ls_curr-amt_doccur = ls_bseg-dmbe2.
+**    ls_curr-exch_rate = ls_bkpf-kursf.
+**    IF  ls_curr-exch_rate IS INITIAL .
+**      ls_curr-exch_rate = ls_bkpf-kurs2.
+**    ENDIF.
+**
+**    IF  ls_curr-exch_rate LT 0.
+**      ls_curr-exch_rate = ls_curr-exch_rate * -1.
+**    ENDIF.
+**
+**
+**  ENDIF.
+**ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_CHANGE_AASET
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_BSEG  text
+*      -->P_LS_BKPF  text
+*      <--P_LS_ASSET  text
+*      <--P_LS_CURR  text
+*      <--P_LT_CURR  text
+*----------------------------------------------------------------------*
+FORM fm_change_asset  USING   VALUE(ls_bseg)   TYPE bseg
+                                      ls_bkpf  TYPE bkpf
+                      CHANGING        ls_gl    TYPE bapiacgl09 "ls_asset TYPE bapiacgl09
+                                      ls_curr  TYPE bapiaccr09
+                                      lt_curr  TYPE tt_curr.
+
+*  SELECT SINGLE ktogr FROM anla INTO lv_ktogr
+*        WHERE   bukrs = gwa_final-bukrs AND
+*                anln1 = lv_text1.
+**   READ TABLE lt_anla INTO ls_anla with key
+**                bukrs = gwa_final-bukrs
+**                anln1 = lv_text1.
+
+*        lv_ktogr1 = lv_ktogr.
+*        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*          EXPORTING
+*            input  = lv_ktogr1
+*          IMPORTING
+*            output = lv_ktogr1.
+
+  ls_gl-itemno_acc = ls_bseg-buzei.      ""
+  ls_gl-gl_account =  ls_bseg-hkont.      ""
+  PERFORM convert_exit CHANGING ls_gl-gl_account.
+
+
+  ls_gl-item_text = ls_bseg-sgtxt.      ""
+*ls_gl-STAT_CON =
+*ls_gl-LOG_PROC =
+*ls_gl-AC_DOC_NO =
+  ls_gl-ref_key_1 = ls_bseg-xref1.
+  ls_gl-ref_key_2 = ls_bseg-xref2.
+  ls_gl-ref_key_3 = ls_bseg-xref3.
+*  ls_gl-acct_key = ls_bseg-ktosl.
+  PERFORM convert_exit CHANGING ls_gl-acct_key.
+  ls_gl-acct_type = ls_bseg-koart.
+*  ls_gl-tax_code = ls_bseg-mwskz.                    "27.09.2016
+  "commented by Manisha.bh.Dt:
+***  ls_gl-itemno_tax = ls_bseg-taxps
+***  ls_gl-taxjurcode                   = ls_bseg-txjcd.
+  "------------
+*ls_gl-DOC_TYPE =
+*  ls_gl-comp_code = ls_bkpf-bukrs .
+*  ls_gl-comp_code = 'OVL'.
+  ls_gl-comp_code = ls_bseg-bukrs .    ""
+  ls_gl-bus_area = ls_bseg-vorgn.      ""ls_bseg-gsber. Changed by Manisha bh.Dt:16.05.2017
+  ls_gl-func_area = ls_bseg-fkber.
+  ls_gl-plant = ls_bseg-werks.
+  ls_gl-fis_period  =  ls_bkpf-monat.   ""
+  ls_gl-fisc_year = ls_bseg-gjahr.
+
+
+  ls_gl-pstng_date = ls_bkpf-budat.    ""
+  ls_gl-value_date =  ls_bseg-valut.   ""
+*ls_gl-FM_AREA =
+
+  ls_gl-customer = ls_bseg-kunnr.
+  PERFORM convert_exit CHANGING ls_gl-customer.
+  ls_gl-cshdis_ind = ls_bseg-xskrl.
+
+  PERFORM convert_exit CHANGING ls_bseg-lifnr.
+*  SELECT SINGLE * FROM zfi_vendor INTO ls_vendor
+*   WHERE ongc_vendor = ls_bseg-lifnr.
+
+*  IF sy-subrc = 0.
+*    ls_gl-vendor_no = ls_vendor-ovl_vendor.
+*  ELSE.
+  ls_gl-vendor_no = ls_bseg-lifnr.
+*  ENDIF.
+*  ls_gl-vendor_no = ls_bseg-lifnr.
+  PERFORM convert_exit CHANGING ls_gl-vendor_no.
+  ls_gl-alloc_nmbr = ls_bseg-zuonr.
+***  ls_gl-tax_code =  ls_bseg-mwskz.                   "27.09.2016
+***  ls_gl-taxjurcode = ls_bseg-txjcd.
+*ls_gl-EXT_OBJECT_ID =
+*ls_gl-BUS_SCENARIO =
+  ls_gl-costobject = ls_bseg-kstrg.         ""
+  ls_gl-costcenter =  ls_bseg-kostl.        ""
+  PERFORM convert_exit CHANGING ls_gl-costcenter.
+  ls_gl-acttype = ls_bseg-koart.        ""   Changed by Manisha Bh.Dt:16.05.2017  ls_bseg-lstar.
+  ls_gl-profit_ctr = ls_bseg-prctr.         ""
+  ls_gl-part_prctr = ls_bseg-pprct.
+  ls_gl-network = ls_bseg-nplnr.
+  CALL FUNCTION 'CONVERSION_EXIT_ABPSP_OUTPUT'
+    EXPORTING
+      input  = ls_bseg-projk
+    IMPORTING
+      output = ls_gl-wbs_element.
+
+  ls_gl-orderid = ls_bseg-aufnr.            ""
+  PERFORM convert_exit CHANGING ls_gl-orderid.
+*ls_gl-ORDER_ITNO =
+  ls_gl-routing_no =  ls_bseg-aufpl.
+*  ls_gl-activity = ls_bseg-vorgn.
+**ls_gl-COND_TYPE =
+**ls_gl-COND_COUNT =
+**ls_gl-COND_ST_NO =
+  ls_gl-fund = ls_bseg-geber.
+  ls_gl-funds_ctr =  ls_bseg-fistl.      ""
+  ls_gl-cmmt_item = ls_bseg-fipos.
+  ls_gl-co_busproc = ls_bseg-prznr.
+  ls_gl-asset_no = ls_bseg-anln1.       ""
+  PERFORM convert_exit CHANGING ls_gl-asset_no.
+  PERFORM convert_exit CHANGING ls_bseg-anln2.     "Added by Manisha bh.Dt:16.05.2017
+*  ls_gl-doc_type = ls_bseg-gsber.                "Added by Manisha bh.Dt:16.05.2017
+
+  ls_gl-sub_number = ls_bseg-anln2.            ""
+  PERFORM convert_exit CHANGING ls_gl-sub_number.
+*ls_gl-BILL_TYPE =
+*************************************************
+  ls_gl-sales_ord = ls_bseg-vbel2.
+  PERFORM convert_exit CHANGING  ls_gl-sales_ord.
+  ls_gl-s_ord_item = ls_bseg-posn2.
+  ls_gl-de_cre_ind = ls_bseg-tbtkz.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+* S/4: material field length 18->40; populate MATERIAL_LONG (40-char).
+*  ls_gl-material  =  ls_bseg-matnr.
+  ls_gl-material_long = ls_bseg-matnr.
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  PERFORM convert_exit CHANGING ls_gl-material.
+  ls_gl-cmmt_item = ls_bseg-fipos.
+  ls_gl-ppa_ex_ind  =  ls_bseg-ppa_ex_ind.
+  ls_gl-fastpay  =  ls_bseg-fastpay.
+***ls_gl-PARTNER_GRANT_NBR  =
+  ls_gl-budget_period  = ls_bseg-budget_pd.
+  ls_gl-partner_budget_period  =  ls_bseg-pbudget_pd.
+  ls_gl-partner_fund  =  ls_bseg-pgeber.
+*  ls_gl-itemno_tax  =  ls_bseg-taxps.
+
+  IF  ls_bseg-vertn IS NOT INITIAL .
+    ls_gl-costcenter = 'OVLJVCP001'.
+  ENDIF.
+*************************************************
+
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  ls_curr-currency = ls_bkpf-waers.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-wrbtr = ls_bseg-wrbtr * -1.
+  ENDIF.
+*  ls_curr-disc_base = ls_bseg-skfbt.
+*  ls_curr-disc_amt = ls_bseg-sknto.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-wrbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-wrbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+*  ls_curr-exch_rate_v = ls_bkpf-kurs2.
+*  IF  ls_curr-exch_rate_v LT 0.
+* ls_curr-exch_rate_v = ls_curr-exch_rate_v * -1.
+*  ENDIF.
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+****************************************************
+  ls_curr-curr_type = '10'.
+  ls_curr-currency = ls_bkpf-hwaer.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbtr = ls_bseg-dmbtr * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbtr.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbtr ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+
+  APPEND ls_curr TO lt_curr.
+
+  ls_curr-curr_type = '50'.
+  ls_curr-currency = ls_bkpf-hwae2.
+  ls_curr-itemno_acc = ls_bseg-buzei.
+  IF ls_bseg-shkzg = 'H'.
+    ls_bseg-dmbe2 = ls_bseg-dmbe2 * -1.
+  ENDIF.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*  ls_curr-amt_doccur = ls_bseg-dmbe2.
+  ls_curr-amt_doccur = CONV #( ls_bseg-dmbe2 ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+  ls_curr-exch_rate = ls_bkpf-kursf.
+  IF  ls_curr-exch_rate IS INITIAL .
+    ls_curr-exch_rate = ls_bkpf-kurs2.
+  ENDIF.
+
+  IF  ls_curr-exch_rate LT 0.
+    ls_curr-exch_rate = ls_curr-exch_rate * -1.
+  ENDIF.
+
+  APPEND ls_curr TO lt_curr.
+
+
+*-----------------
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FM_UPDATE_ASSET
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LS_BSEG  text
+*      -->P_LS_BKPF  text
+*      <--P_LS_GL  text
+*      <--P_LS_CURR  text
+*      <--P_LT_CURR  text
+*----------------------------------------------------------------------*
+FORM fm_update_asset  USING  VALUE(ls_bseg) TYPE bseg
+                            VALUE(ls_bkpf) TYPE bkpf
+                   CHANGING ls_head  TYPE bapiache09
+                            ls_gl    TYPE bapiacgl09
+                            lt_gl    TYPE tt_gl
+                            ls_curr  TYPE bapiaccr09
+                            lt_curr  TYPE tt_curr.
+
+  ls_head-bus_act    = 'RFBU'.
+  ls_head-username   = sy-uname.
+  ls_head-comp_code  = ls_bkpf-bukrs.
+
+*  CALL FUNCTION 'KCD_EXCEL_DATE_CONVERT'
+*    EXPORTING
+*      excel_date = ls_bkpf-bldat
+*    IMPORTING
+*      sap_date   = ls_head-doc_date.
+*
+*  CALL FUNCTION 'KCD_EXCEL_DATE_CONVERT'
+*    EXPORTING
+*      excel_date = ls_bkpf-budat
+*    IMPORTING
+*      sap_date   = ls_head-pstng_date.
+  ls_head-doc_date   = ls_bkpf-bldat.
+  ls_head-pstng_date = ls_bkpf-budat.
+  ls_head-doc_type   = ls_bkpf-blart.
+  ls_head-header_txt = ls_bkpf-bktxt.
+  ls_head-fis_period = ls_bkpf-monat.
+  ls_head-ref_doc_no = ls_bkpf-xblnr.
+
+
+  IF ls_bseg-bschl = '50'
+     OR ls_bseg-bschl = '75'.
+
+*    counter_bapi = counter_bapi + 1.
+    ls_gl-itemno_acc   = ls_bseg-buzei.
+
+    IF ls_bseg-bschl = '50'.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_bseg-hkont
+        IMPORTING
+          output = ls_gl-gl_account.
+    ELSE.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_bseg-anln1
+        IMPORTING
+          output = ls_gl-asset_no.
+    ENDIF.
+
+*    IF wa_final-newko = '102000226' OR  wa_final-newko = '104002075'.
+*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*        EXPORTING
+*          input  = '10429'
+*        IMPORTING
+*          output = ls_gl-gl_account.
+*    ENDIF.
+*    IF wa_final-newko = 'OVLPPEMYA1'.
+*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*        EXPORTING
+*          input  = '70101'
+*        IMPORTING
+*          output = ls_gl-gl_account.
+*    ENDIF.
+    ls_gl-costcenter   = ls_bseg-kostl.
+    ls_gl-profit_ctr   = ls_bseg-prctr.
+    ls_gl-item_text    = ls_bseg-sgtxt.
+    ls_gl-cs_trans_t   = ls_bseg-bewar.
+    ls_gl-bus_area     = ls_bseg-gsber.
+    ls_gl-comp_code    = ls_bseg-bukrs.
+*    CALL FUNCTION 'KCD_EXCEL_DATE_CONVERT'
+*      EXPORTING
+*        excel_date = ls_bseg-valut
+*      IMPORTING
+*        sap_date   = ls_gl-value_date.
+*
+*    CALL FUNCTION 'KCD_EXCEL_DATE_CONVERT'
+*      EXPORTING
+*        excel_date = ls_bkpf-budat
+*      IMPORTING
+*        sap_date   = ls_gl-pstng_date.
+
+    ls_gl-value_date = ls_bseg-valut.
+    ls_gl-pstng_date = ls_bkpf-budat.
+    ls_gl-alloc_nmbr = ls_bseg-zuonr.
+
+    APPEND ls_gl TO lt_gl.
+    CLEAR ls_gl.
+  ENDIF.
+
+
+  IF ls_bseg-bschl = '50'
+     OR ls_bseg-bschl = '75'.
+    ls_curr-itemno_acc  = ls_bseg-buzei.  "counter_bapi.
+    ls_curr-curr_type = '00'.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*    ls_curr-amt_doccur  = ls_bseg-wrbtr * -1.
+    ls_curr-amt_doccur = CONV #( ls_bseg-wrbtr * -1 ).
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+    ls_curr-currency    = ls_bkpf-waers.
+    APPEND ls_curr TO lt_curr.
+    CLEAR : ls_curr.
+
+*      counter_bapi = counter_bapi + 1.
+    ls_curr-itemno_acc = ls_bseg-buzei.  " counter_bapi.
+    ls_curr-curr_type = '10'.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*    ls_curr-amt_doccur  = ls_bseg-dmbe2 * -1. """"On 02.02.2017 * -1.
+    ls_curr-amt_doccur = CONV #( ls_bseg-dmbe2 * -1 ).""""On 02.02.2017 * -1.
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+    ls_curr-currency = 'INR'.
+    APPEND ls_curr TO lt_curr.
+    CLEAR : ls_curr.
+  ENDIF.
+
+
+  IF ls_bseg-bschl = '40'
+     OR ls_bseg-bschl = '70'.
+*    counter_bapi = counter_bapi + 1.
+    ls_gl-itemno_acc   = ls_bseg-buzei.   "counter_bapi.
+
+    IF ls_bseg-bschl = '40'.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_bseg-hkont
+        IMPORTING
+          output = ls_gl-gl_account.
+    ELSE.
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+        EXPORTING
+          input  = ls_bseg-anln1
+        IMPORTING
+          output = ls_gl-asset_no.
+    ENDIF.
+*    IF wa_final-newko = '102000226' OR  wa_final-newko = '104002075'.
+*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*        EXPORTING
+*          input  = '10429'
+*        IMPORTING
+*          output = ls_gl-gl_account.
+*    ENDIF.
+*    IF wa_final-newko = 'OVLPPEMYA1'.
+*      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*        EXPORTING
+*          input  = '70101'
+*        IMPORTING
+*          output = ls_gl-gl_account.
+*    ENDIF.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        input  = ls_bseg-hkont
+      IMPORTING
+        output = ls_gl-gl_account.
+*    ls_gl-gl_account   = ls_bseg-hkont. Dt:17.05.2017
+    ls_gl-costcenter   = ls_bseg-kostl.
+    ls_gl-profit_ctr   = ls_bseg-prctr.
+    ls_gl-item_text    = ls_bseg-sgtxt.
+    ls_gl-cs_trans_t   = ls_bseg-bewar.
+    ls_gl-bus_area     = ls_bseg-gsber.
+    ls_gl-comp_code    = ls_bseg-bukrs.
+
+*    CALL FUNCTION 'KCD_EXCEL_DATE_CONVERT'
+*      EXPORTING
+*        excel_date = ls_bseg-valut
+*      IMPORTING
+*        sap_date   = ls_gl-value_date.
+*
+*    CALL FUNCTION 'KCD_EXCEL_DATE_CONVERT'
+*      EXPORTING
+*        excel_date = ls_bkpf-budat
+*      IMPORTING
+*        sap_date   = ls_gl-pstng_date.
+
+    ls_gl-alloc_nmbr = ls_bseg-zuonr.
+    ls_gl-value_date = ls_bseg-valut.
+    ls_gl-pstng_date = ls_bkpf-budat.
+
+    APPEND ls_gl TO lt_gl.
+    CLEAR ls_gl.
+  ENDIF.
+
+  IF ls_bseg-bschl = '40'
+       OR ls_bseg-bschl = '70'.
+    ls_curr-itemno_acc  = ls_bseg-buzei. "counter_bapi.
+    ls_curr-curr_type   = '00'.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*    ls_curr-amt_doccur  = ls_bseg-wrbtr. """"On 02.02.2017 * -1.
+    ls_curr-amt_doccur = CONV #( ls_bseg-wrbtr ).""""On 02.02.2017 * -1.
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+    ls_curr-currency    = ls_bkpf-waers.
+    APPEND ls_curr TO lt_curr.
+    CLEAR : ls_curr.
+
+*      counter_bapi = counter_bapi + 1.
+    ls_curr-itemno_acc  = ls_bseg-buzei.  "counter_bapi.
+    ls_curr-curr_type   = '10'.
+" Code Remediation changes S4 2025_1_P Conversion **BEGIN OF CHANGE BY SAP_ABAP 16.06.2026  for ATC
+*    ls_curr-amt_doccur  = ls_bseg-dmbe2. """"On 02.02.2017 * -1.
+    ls_curr-amt_doccur = CONV #( ls_bseg-dmbe2 ).""""On 02.02.2017 * -1.
+" Code Remediation changes S4 2025_1_P Conversion * *END OF CHANGE BY SAP_ABAP 16.06.2026 for ATC
+    ls_curr-currency    ='INR'.
+    APPEND ls_curr TO lt_curr.
+    CLEAR : ls_curr.
+  ENDIF.
+
+ENDFORM.

@@ -1,0 +1,23 @@
+
+*&---------------------------------------------------------------------*
+*& Program ID    : ZFI_POST_ICE_TO_OVL
+*& Program Text  : Replication of FI posting document from ICE server to OVL server
+*& Overview      : The Documents that are posted in FI at ICE server would be
+*                  required to be duplicated at OVL server.
+*                  Program to download the data at ICE would be required to be developed
+**                 for any FI document posted in OVL.
+*& Created by    : Rekha Gupta (ABAPUSER01)
+*& Creation Date : 22.06.2016 12:00:31
+*&---------------------------------------------------------------------*
+*& Changing No   :
+*& Updated by    :
+*& Update date   :
+*& Changed Item Description :
+*&---------------------------------------------------------------------*
+
+INCLUDE ZFI_POST_ICE_TO_OVL_BAPI_TOP.
+*INCLUDE zfi_post_ice_to_ovl_top.    " global Data
+INCLUDE ZFI_POST_ICE_TO_OVL_BAPI_E01.
+*INCLUDE zfi_post_ice_to_ovl_e01.    " events
+INCLUDE ZFI_POST_ICE_TO_OVL_BAPI_F01.
+*INCLUDE zfi_post_ice_to_ovl_f01.  " FORM-Routines
