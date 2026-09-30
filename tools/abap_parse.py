@@ -33,7 +33,7 @@ def statements(src):
                     i += 2; continue
                 if ch == '|':
                     mode = 'code'; stack.pop()
-                    buf.append('T'); i += 1; continue
+                    buf.append(' '); i += 1; continue
                 if ch == '{':
                     mode = 'code'; stack[-1] += 1
                 i += 1; continue
@@ -45,7 +45,7 @@ def statements(src):
             if ch == '`':
                 mode = 'bq'; buf.append('L'); i += 1; continue
             if ch == '|':
-                mode = 'tpl'; stack.append(0); i += 1; continue
+                mode = 'tpl'; stack.append(0); buf.append('T '); i += 1; continue
             if ch == '}' and stack and stack[-1] > 0:
                 stack[-1] -= 1; mode = 'tpl'; i += 1; continue
             if ch == '.' and not stack:

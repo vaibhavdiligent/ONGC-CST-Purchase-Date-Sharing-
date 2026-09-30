@@ -5753,6 +5753,8 @@ CLASS lcl_main DEFINITION FINAL.
     CLASS-METHODS download.
     CLASS-METHODS upload.
     CLASS-DATA mv_last TYPE string.
+    " The file name last proposed for a download.
+    CLASS-DATA mv_file TYPE ty_path.
     CLASS-METHODS write IMPORTING iv_x TYPE xstring.
     CLASS-METHODS show  IMPORTING it_msg TYPE tt_msg.
 ENDCLASS.
@@ -5808,6 +5810,12 @@ CLASS lcl_main IMPLEMENTATION.
     " renaming it after the region would point the run at a file that
     " does not exist.
     IF p_up = abap_true.
+      " The name this program proposed for a download is not a file anyone
+      " picked to upload. Left in place it would be read the moment the user
+      " pressed F8 - the sample just written, or nothing at all.
+      IF p_file = mv_file.
+        CLEAR: p_file, mv_file, mv_last.
+      ENDIF.
       RETURN.
     ENDIF.
     DATA(lv_now) = label( ).
@@ -5827,6 +5835,7 @@ CLASS lcl_main IMPLEMENTATION.
       ENDIF.
     ENDWHILE.
     p_file = |{ lv_dir }{ lv_now }.xlsx|.
+    mv_file = p_file.
   ENDMETHOD.
 
   METHOD fill_regions.

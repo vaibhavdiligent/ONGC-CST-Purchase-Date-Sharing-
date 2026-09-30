@@ -187,7 +187,8 @@ TABLES sscrfields.
 " proposed download file name follows.
 DATA: gv_bp      TYPE bu_partner,
       gv_lifnr   TYPE lifnr,
-      gv_dl_scen TYPE char2.
+      gv_dl_scen TYPE char2,
+      gv_dl_file TYPE ty_path.          " the name last proposed for a download
 
 *----------------------------------------------------------------------*
 * Selection screen
@@ -4889,6 +4890,12 @@ CLASS lcl_dl IMPLEMENTATION.
   METHOD propose_file.
     " An upload reads a file that is already there; its name is the user's.
     IF p_up = abap_true.
+      " The name this program proposed for a download is not a file anyone
+      " picked to upload. Left in place it would be read the moment the user
+      " pressed F8 - the sample just written, or nothing at all.
+      IF p_file = gv_dl_file.
+        CLEAR: p_file, gv_dl_file, gv_dl_scen.
+      ENDIF.
       RETURN.
     ENDIF.
     " The file name follows the radio button, so two scenarios never land in
@@ -4915,6 +4922,7 @@ CLASS lcl_dl IMPLEMENTATION.
     ENDWHILE.
 
     p_file = |{ lv_dir }{ lcl_map=>name( gv_dl_scen ) }.xlsx|.
+    gv_dl_file = p_file.
   ENDMETHOD.
 
   METHOD write.
@@ -5074,8 +5082,11 @@ AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
                 file_filter  = 'Excel workbook (*.xlsx)|*.xlsx|All files (*.*)|*.*'
       CHANGING  file_table   = lt_ft
                 rc           = lv_rc
-                user_action  = lv_ua ).
-    IF lv_ua = cl_gui_frontend_services=>action_ok AND lv_rc >= 1.
+                user_action  = lv_ua
+      " Without this a dialog that cannot open - no SAP GUI, a control error -
+      " ends the program instead of leaving the field as it was.
+      EXCEPTIONS OTHERS      = 1 ).
+    IF sy-subrc = 0 AND lv_ua = cl_gui_frontend_services=>action_ok AND lv_rc >= 1.
       READ TABLE lt_ft INTO DATA(ls_ft) INDEX 1.
       " The dialog hands back a STRING and the parameter is 255 characters.
       " A path longer than that is refused here rather than silently cut

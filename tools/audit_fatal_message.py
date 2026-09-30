@@ -51,7 +51,10 @@ for prog in PROGS:
     body = src[m.end():m.end() + e.start()] if e else src[m.end():]
     offset = m.end()
 
-    for f in re.finditer(r"MESSAGE\b[^.]*?TYPE\s+'([EAX])'", body, re.S):
+    # Step over literals and templates: a message text that ends in a full
+    # stop - 'No scenario selected.' - used to end the match before TYPE.
+    for f in re.finditer(r"MESSAGE\b(?:'(?:[^']|'')*'|`(?:[^`]|``)*`|\|(?:[^|\\]|\\.)*\||[^.'`|])*?"
+                         r"TYPE\s+'([EAX])'", body, re.S):
         line = src[:offset + f.start()].count('\n') + 1
         findings.append(f'{name}:{line}: MESSAGE TYPE \'{f.group(1)}\' in '
                         f'START-OF-SELECTION - END-OF-SELECTION writes the '
