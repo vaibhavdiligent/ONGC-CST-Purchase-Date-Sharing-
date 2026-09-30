@@ -569,6 +569,49 @@ LOOP AT edidd_table INTO DATA(wa_edidd_table) WHERE segnam = 'E1IDKU3'.
 ENDLOOP.
 IF  l_cont = 'X'.
 
+*--- Begin of change: TReDS Seller ID derivation for MSME payment method M
+  DATA: ls_e1idku1_msme  TYPE e1idku1,
+        lv_rcvprn_msme   TYPE edi_rcvprn,
+        lv_selidtyp_msme TYPE zfi_treds_msme_v-selidtyp,
+        lv_lifnr_msme    TYPE lifnr,
+        lv_sellerid_msme TYPE zfi_treds_msme_v-seller_id.
+
+* Convert Partner No. (EDIDC-RCVPRN) into Seller ID Type indicator
+  lv_rcvprn_msme = l_rcvprn.
+  TRANSLATE lv_rcvprn_msme TO UPPER CASE.
+  IF lv_rcvprn_msme = 'M1'.
+    lv_selidtyp_msme = 'M'.
+  ELSEIF lv_rcvprn_msme CP 'RXIL*'.
+    lv_selidtyp_msme = 'R'.
+  ELSEIF lv_rcvprn_msme CP 'INVOICE*'.
+    lv_selidtyp_msme = 'I'.
+  ELSEIF lv_rcvprn_msme CP 'DTX*'.
+    lv_selidtyp_msme = 'D'.
+  ELSEIF lv_rcvprn_msme CP 'C2FO*'.
+    lv_selidtyp_msme = 'C'.
+  ENDIF.
+
+  IF lv_selidtyp_msme IS NOT INITIAL.
+*   Fetch vendor from Payment Order (PYORD)
+    LOOP AT edidd_table INTO wa_edidd_table WHERE segnam = 'E1IDKU1'.
+      MOVE wa_edidd_table-sdata TO ls_e1idku1_msme.
+      IF ls_e1idku1_msme-bgmtyp = 'PEX'.
+        SELECT SINGLE lifnr INTO @lv_lifnr_msme
+          FROM zfi_bcm_payordr
+          WHERE pyord = @ls_e1idku1_msme-bgmref.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+
+*   Fetch Seller ID for vendor + Seller ID Type
+    IF lv_lifnr_msme IS NOT INITIAL.
+      SELECT SINGLE seller_id INTO @lv_sellerid_msme
+        FROM zfi_treds_msme_v
+        WHERE lifnr    = @lv_lifnr_msme
+          AND selidtyp = @lv_selidtyp_msme.
+    ENDIF.
+  ENDIF.
+*--- End of change: TReDS Seller ID derivation for MSME payment method M
 
   DATA l_docid TYPE /opt/docid.
   LOOP AT edidd_table INTO wa_edidd_table WHERE segnam = 'E1EDP02' AND sdata(3) = '071'.
@@ -607,7 +650,12 @@ IF  l_cont = 'X'.
 *wa_E1EDKA1-NAME3 = wa_ZFI_pay_sup_bp-name3.
 *wa_E1EDKA1-NAME4 = wa_ZFI_pay_sup_bp-name4.
       wa_e1edka1-telfx = 'RI'.
+      wa_e1edka1-ort01 = 'PRODUCT'.            "TReDS: fixed value in AG-ORT01
 
+      MOVE  wa_e1edka1 TO <fs_e1edp02>-sdata.
+*   TReDS: Seller ID in BE-TELFX
+    ELSEIF wa_e1edka1-parvw = 'BE' AND lv_sellerid_msme IS NOT INITIAL.
+      wa_e1edka1-telfx = lv_sellerid_msme.
       MOVE  wa_e1edka1 TO <fs_e1edp02>-sdata.
     ENDIF.
   ENDLOOP.
