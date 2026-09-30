@@ -14,8 +14,7 @@ Run it after any change to either program.
 """
 import re, sys
 
-PROGS = ['src/zsds_cust_mass_upload.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap', 'src/zmms_bp_mass_upload.prog.abap']
+PROGS = ['src/zsds_cust_tmpl_download.prog.abap', 'src/zmms_bp_mass_upload.prog.abap']
 findings = []
 
 for p in PROGS:

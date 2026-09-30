@@ -4,7 +4,7 @@
    two map entries that would end up reading the same file column."""
 import sys, collections
 sys.path.insert(0,'/tmp/claude-0/-home-user-ONGC-CST-Purchase-Date-Sharing-/0a870517-dcc5-5a06-9069-d731d41a85f0/scratchpad')
-from sim import sheets, squash, load_cust, load_vend
+from sim import sheets, squash, load_vend
 
 def run(which, path, scen, named, ents):
     use_fld = which=='C'
@@ -51,17 +51,13 @@ def run(which, path, scen, named, ents):
     if unbound: out.append(f'      positional ({len(unbound)}): ' + ', '.join(f'{f}@{c}' for f,c in unbound[:12]) + ('' if len(unbound)<=12 else ' ...'))
     return '\n'.join(out)
 
-CUS=[('R1','domestic customer IND'),('R2','Export customer'),('R3','Morocco customer '),
-     ('R4','SAGA customer'),('R5','credit Limit'),('R6','domestic customer US'),('R7','ship to party US')]
 VEN=[('R1','Vendor creation for All CC'),('R2','TDS upload'),('R3','TAN details'),('R4','BANK Key creation'),
      ('R5','Bank details update'),('R6','Vendor extension'),('R7','CIN details'),('R8','Patner function'),
      ('R9','Block_Unblocked')]
-cm=load_cust(); vm=load_vend()
-print('### CUSTOMER  ZSDS_CUST_MASS_UPLOAD  vs "customer master LSMW -  with format.xlsx"')
-for s,t in CUS: print(run('C','customer master LSMW -  with format.xlsx',s,t,cm[s]))
-print('\n### CUSTOMER  R5 vs the customer-supplied credit file')
-print(run('C','Credit limit_S4 (1).xlsx','R5','credit Limit',load_cust()['R5']))
-print('\n### SUPPLIER  ZMMS_BP_MASS_UPLOAD  vs "Vendor LSMW with Template.xlsx"')
+# The customer templates are bound by ZSDS_CUST_TMPL_DOWNLOAD and checked by
+# tools/cipla/sim_roundtrip.py.
+vm=load_vend()
+print('### SUPPLIER  ZMMS_BP_MASS_UPLOAD  vs "Vendor LSMW with Template.xlsx"')
 for s,t in VEN: print(run('V','Vendor LSMW with Template.xlsx',s,t,vm[s]))
 print('\n### SUPPLIER  R1 vs the customer-supplied single-tab file')
 print(run('V','Copy of Vendor Creation Template_All CC_Sample.xlsx','R1','Vendor creation for All CC',load_vend()['R1']))

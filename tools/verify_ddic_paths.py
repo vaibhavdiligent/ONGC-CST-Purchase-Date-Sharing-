@@ -1,8 +1,9 @@
 # Verifies every structure path used by the program, harvested from the
 # source, including the line type of every VALUE <type>( ) constructor
 # that is APPENDed to a table.
-import json,re,sys
-D=json.load(open('ddic2.json'))
+import json,os,re,sys
+HERE=os.path.dirname(os.path.abspath(__file__))
+D=json.load(open(os.path.join(HERE,'ddic.json')))
 def rows(t): return sorted(D.get(t,[]),key=lambda x:x['pos'])
 def kind(c): return {'S':'STRUCT','L':'TABLE','E':'elem','R':'ref'}.get(c['ct'],c['ct'] or 'flat')
 def ref(c):  return c['prec'] or c['reft'] or c['roll']
@@ -37,7 +38,8 @@ def walk(root,path):
         else: cur=None
     return True,'ok',cur
 
-prog=open('/home/user/ONGC-CST-Purchase-Date-Sharing-/src/zsds_cust_mass_upload.prog.abap').read()
+# The customer upload lives in ZSDS_CUST_TMPL_DOWNLOAD.
+prog=open(os.path.join(os.path.dirname(HERE),'src/zsds_cust_tmpl_download.prog.abap')).read()
 fails=0; checked=0
 
 # 1. dotted paths off known root variables

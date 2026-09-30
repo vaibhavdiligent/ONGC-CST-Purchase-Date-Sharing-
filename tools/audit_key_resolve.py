@@ -18,9 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CASES = [
     ('src/zmms_bp_mass_upload.prog.abap', 'key_lifnr',
      r'lcl_util=>lifnr\(\s*lcl_util=>cell\('),
-    ('src/zsds_cust_mass_upload.prog.abap', 'key_kunnr',
-     r'lv_kunnr\s*=\s*lcl_util=>alpha\('),
-    # the customer upload now lives in the template program too
+    # the customer upload lives in the template program
     ('src/zsds_cust_tmpl_download.prog.abap', 'key_kunnr',
      r'lv_kunnr\s*=\s*lcl_util=>alpha\('),
 ]

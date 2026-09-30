@@ -79,8 +79,11 @@ FIXED = {
 
 # How a stored value is written so that the upload reads it back unchanged.
 #   DT date   NM whole number   AL leading zeros   TT title key
+# Planning group (FDGRV) and trading partner (VBUND) have ALPHA domains too:
+# the upload this program replaced padded both, and audit_alpha.py checks
+# every column against DD01L so a new one is not missed.
 FMT = {'KUNNR': 'AL', 'LIFNR': 'AL', 'AKONT': 'GL', 'TITLE_MEDI': 'TT',
-       'FISKN': 'AL', 'ALTKN': 'AL', 'KNA1': 'AL'}
+       'FISKN': 'AL', 'ALTKN': 'AL', 'KNA1': 'AL', 'FDGRV': 'AL', 'VBUND': 'AL'}
 
 
 def fields_of(tab):

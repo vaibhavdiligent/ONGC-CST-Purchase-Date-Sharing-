@@ -7,7 +7,7 @@ column of every scenario has to come back bound.
 """
 import html, re, sys, zipfile, collections, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-from sim import sheets, squash, load_cust, load_vend
+from sim import sheets, squash, load_vend
 from audit_column_mangle import bind
 
 EX = open('src/zbcs_mass_upload_extract.prog.abap', encoding='utf-8').read()
@@ -112,7 +112,7 @@ def workbook(path, sheet, head, rows=()):
         z.writestr('xl/worksheets/sheet1.xml', ws)
 
 SHEET = dict(re.findall(r"WHEN '([CV]\d)' THEN '([^']*)'", EX))
-cm, vm = load_cust(), load_vend()
+vm = load_vend()
 bad = []
 tmp = '/tmp/_roundtrip.xlsx'
 # The extractor carries vendor scenarios only. Its C1..C7 fed the seven layouts
@@ -127,9 +127,9 @@ for scen in [f'V{i}' for i in range(1, 10)]:
     for col, hdr in c.items():
         head[col - 1] = hdr
     workbook(tmp, SHEET.get(scen, 'Sheet1'), head)
-    ents = (cm if scen[0] == 'C' else vm)['R' + scen[1]]
+    ents = vm['R' + scen[1]]
     rows = dict(sheets(tmp))[SHEET.get(scen, 'Sheet1')]
-    src, used, bycol, known = bind([dict(e) for e in ents], rows[1], scen[0] == 'C')
+    src, used, bycol, known = bind([dict(e) for e in ents], rows[1], False)
     miss = [ents[i]['fld'] or ents[i]['hdr'] for i in range(len(ents)) if i not in src]
     flag = '' if not miss else '  <-- ' + ', '.join(miss[:6])
     print(f'  {scen}  {SHEET.get(scen,""):<28} {len(src):>3}/{len(ents):<3} columns bind{flag}')

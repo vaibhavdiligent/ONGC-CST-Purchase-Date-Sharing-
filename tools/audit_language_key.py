@@ -34,25 +34,8 @@ LANG = {f['f'] for fields in ddic.values() if isinstance(fields, list)
 
 findings = []
 
-# ---- ZSDS_CUST_MASS_UPLOAD: the map carries a conversion marker per column.
-cust = open(os.path.join(ROOT, 'src/zsds_cust_mass_upload.prog.abap'),
-            encoding='utf8').read()
-for m in re.finditer(r"scen = '(\w+)' col = (\d+)\s+node = '(\w?)' "
-                     r"fld = '([^']*)' cnv = '([^']*)'", cust):
-    scen, col, fld, cnv = m.group(1), m.group(2), m.group(4), m.group(5)
-    if fld in LANG and cnv != 'LG':
-        findings.append(f'ZSDS_CUST_MASS_UPLOAD: {scen} column {col} writes '
-                        f'{fld}, a one character language key, with cnv="{cnv}" '
-                        f'- it needs LG or a two letter ISO code is mangled')
-if "WHEN 'LG'." not in cust:
-    findings.append('ZSDS_CUST_MASS_UPLOAD: no WHEN \'LG\' branch - the marker '
-                    'on the language columns converts nothing')
-if 'CONVERSION_EXIT_ISOLA_INPUT' not in cust:
-    findings.append('ZSDS_CUST_MASS_UPLOAD: the language is converted without '
-                    'the ISOLA exit')
-
-# ---- ZSDS_CUST_TMPL_DOWNLOAD: the customer upload lives here now, reading
-#      the template map; every column landing in a LANG field must carry LG.
+# ---- ZSDS_CUST_TMPL_DOWNLOAD: the customer upload, reading the template
+#      map; every column landing in a LANG field must carry LG.
 tmpl = open(os.path.join(ROOT, 'src/zsds_cust_tmpl_download.prog.abap'),
             encoding='utf8').read()
 for m in re.finditer(r"tmpl = '(\w+)' col = (\d+)\s+hdr = '(?:[^']|'')*'\s+"
@@ -87,7 +70,7 @@ if 'CONVERSION_EXIT_ISOLA_INPUT' not in vend:
 # ---- and the ISO codes whose first letter is a different SAP language must
 #      never be reachable through the flag word list.
 FLAG_WORDS = ("'TRUE' OR 'YES' OR 'JA'", "'FALSE' OR 'NO' OR 'NEIN'")
-for name, src in (('ZSDS_CUST_MASS_UPLOAD', cust), ('ZMMS_BP_MASS_UPLOAD', vend)):
+for name, src in (('ZSDS_CUST_TMPL_DOWNLOAD', tmpl), ('ZMMS_BP_MASS_UPLOAD', vend)):
     for w in FLAG_WORDS:
         if w in src and 'CONVERSION_EXIT_ISOLA_INPUT' not in src:
             findings.append(f'{name}: JA and NO are read as flag words and '

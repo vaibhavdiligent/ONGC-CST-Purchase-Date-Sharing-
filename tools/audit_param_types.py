@@ -47,7 +47,7 @@ GENERIC = {'any','clike','string','i','abap_bool','csequence','numeric','simple'
 STRINGY = ('lcl_util=>cell(', 'to_upper(', 'to_lower(', 'condense(', 'lcl_util=>squash(')
 
 findings = []
-PROGS_ALL = ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap',
+PROGS_ALL = ['src/zmms_bp_mass_upload.prog.abap',
             'src/zbcs_mass_upload_extract.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap']
 for p in PROGS_ALL:

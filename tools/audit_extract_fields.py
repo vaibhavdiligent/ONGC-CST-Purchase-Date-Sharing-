@@ -19,7 +19,6 @@ import json, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EX   = open(os.path.join(ROOT, 'src/zbcs_mass_upload_extract.prog.abap'), encoding='utf-8').read()
 SUP  = open(os.path.join(ROOT, 'src/zmms_bp_mass_upload.prog.abap'),      encoding='utf-8').read()
-CUS  = open(os.path.join(ROOT, 'src/zsds_cust_mass_upload.prog.abap'),    encoding='utf-8').read()
 DD   = json.load(open(os.path.join(ROOT, 'tools/ddic.json')))
 
 def comps(struct, under=None):
@@ -109,7 +108,7 @@ def vocabulary(src):
     v |= {m.upper() for m in re.findall(r"\bls_\w+-([a-z_0-9]+)\s*=", src)}
     return v
 
-VOCAB = vocabulary(SUP) | vocabulary(CUS)
+VOCAB = vocabulary(SUP)
 
 MAP = re.compile(
     r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "

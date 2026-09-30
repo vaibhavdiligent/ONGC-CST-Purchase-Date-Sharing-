@@ -1,9 +1,11 @@
-"""The download map against the two programs already running.
+"""The template map against the customer maps it replaced.
 
-ZSDS_CUST_MASS_UPLOAD and ZBCS_MASS_UPLOAD_EXTRACT map the same template
-headings onto the same customer master, and they were built separately and are
-in use. So every heading they and the download share is an independent opinion
-about where that column belongs, and the two opinions have to agree.
+ZSDS_CUST_MASS_UPLOAD and the customer scenarios of ZBCS_MASS_UPLOAD_EXTRACT
+mapped the same template headings onto the same customer master. They were
+built separately and were in use, so every heading they and the template map
+share is an independent opinion about where that column belongs, and the two
+opinions have to agree. Both are retired; their maps are kept, frozen, in
+tools/cipla/legacy_customer_map.txt for this comparison.
 
 Four differences are deliberate and are listed here rather than reported, each
 with the reason. Anything else is a finding.
@@ -11,8 +13,7 @@ with the reason. Anything else is a finding.
 import collections, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-UP = open(os.path.join(ROOT, 'src/zsds_cust_mass_upload.prog.abap'), encoding='utf-8').read()
-EX = open(os.path.join(ROOT, 'src/zbcs_mass_upload_extract.prog.abap'), encoding='utf-8').read()
+LEGACY = os.path.join(ROOT, 'tools/cipla/legacy_customer_map.txt')
 NEW = open(os.path.join(ROOT, 'src/zsds_cust_tmpl_download.prog.abap'), encoding='utf-8').read()
 
 
@@ -41,11 +42,14 @@ def allowed(head, mine, theirs):
 
 def main():
     ref = collections.defaultdict(set)
-    for m in re.finditer(r"node = '(.)' fld = '([A-Z0-9_#]+)'\s+cnv = '(\w*)'\s+"
-                         r"hdr = '([A-Z0-9]*)'", UP):
-        ref[m.group(4)].add((m.group(1), m.group(2)))
-    for m in re.finditer(r"hdr = '(.*?)' node = '(.)' fld = '([A-Z0-9_#]*)'", EX):
-        ref[squash(m.group(1))].add((m.group(2), m.group(3)))
+    for line in open(LEGACY, encoding='utf-8'):
+        if line.startswith('#') or not line.strip():
+            continue
+        _prog, _lay, _col, head, node, fld = line.rstrip('\n').split('|')
+        ref[head].add((node, fld))
+    if not ref:
+        print('tools/cipla/legacy_customer_map.txt holds no rows - nothing to compare')
+        return 1
 
     rows = re.findall(r"tmpl = '(\w+)'\s+col = (\d+)\s+hdr = '(.*?)'\s+node = '(.)'\s+"
                       r"fld = '(.*?)'\s+fmt", NEW)
@@ -64,13 +68,13 @@ def main():
             findings[(head, (node, fld), tuple(sorted(ref[key])))] += 1
 
     if findings:
-        print(f'{sum(findings.values())} column(s) where the download and the running '
-              f'programs disagree:')
+        print(f'{sum(findings.values())} column(s) where the template map and the '
+              f'retired maps disagree:')
         for (head, mine, theirs), n in findings.most_common():
             print(f'  {n:4}x "{head[:44]}"')
-            print(f'          download {mine}   running {theirs}')
+            print(f'          template {mine}   retired {theirs}')
         return 1
-    print(f'clean - {checked} columns carry a heading the running programs also map; '
+    print(f'clean - {checked} columns carry a heading the retired maps also map; '
           f'{agree} agree outright and {waived} differ for a stated reason')
     return 0
 

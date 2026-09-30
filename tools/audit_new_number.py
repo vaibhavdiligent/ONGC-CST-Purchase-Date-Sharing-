@@ -16,7 +16,6 @@ import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES = {
-    'ZSDS_CUST_MASS_UPLOAD': ('src/zsds_cust_mass_upload.prog.abap', 'cust_by_guid'),
     'ZSDS_CUST_TMPL_DOWNLOAD': ('src/zsds_cust_tmpl_download.prog.abap', 'cust_by_guid'),
     'ZMMS_BP_MASS_UPLOAD':   ('src/zmms_bp_mass_upload.prog.abap',   'vend_by_guid'),
 }

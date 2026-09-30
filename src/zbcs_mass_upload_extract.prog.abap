@@ -832,7 +832,6 @@ ENDCLASS.
 CLASS lcl_src DEFINITION FINAL.
   PUBLIC SECTION.
     TYPES: BEGIN OF ty_key,
-             kunnr   TYPE kunnr,
              lifnr   TYPE lifnr,
              partner TYPE bu_partner,
            END OF ty_key,
@@ -1120,8 +1119,6 @@ CLASS lcl_eng DEFINITION FINAL.
     METHODS split_occ IMPORTING iv_in  TYPE clike
                       EXPORTING ev_fld TYPE string
                                 ev_occ TYPE i.
-    METHODS partner_of IMPORTING is_key TYPE lcl_src=>ty_key
-                       RETURNING VALUE(rv) TYPE bu_partner.
 ENDCLASS.
 
 CLASS lcl_eng IMPLEMENTATION.
@@ -1188,22 +1185,6 @@ CLASS lcl_eng IMPLEMENTATION.
       RETURN.
     ENDIF.
     rv = lcl_util=>text( iv_value = <lv> iv_fmt = iv_fmt ).
-  ENDMETHOD.
-
-  METHOD partner_of.
-    rv = is_key-partner.
-    IF rv IS NOT INITIAL.
-      RETURN.
-    ENDIF.
-    IF is_key-kunnr IS NOT INITIAL.
-      SELECT SINGLE b~partner FROM but000 AS b
-        INNER JOIN cvi_cust_link AS l ON l~partner_guid = b~partner_guid
-        WHERE l~customer = @is_key-kunnr INTO @rv.
-    ELSEIF is_key-lifnr IS NOT INITIAL.
-      SELECT SINGLE b~partner FROM but000 AS b
-        INNER JOIN cvi_vend_link AS l ON l~partner_guid = b~partner_guid
-        WHERE l~vendor = @is_key-lifnr INTO @rv.
-    ENDIF.
   ENDMETHOD.
 
   METHOD run.

@@ -16,8 +16,7 @@ the repository are not ours to change.
 """
 import re, sys
 
-PROGS = ['src/zsds_cust_mass_upload.prog.abap',
-         'src/zmms_bp_mass_upload.prog.abap',
+PROGS = ['src/zmms_bp_mass_upload.prog.abap',
          'src/zbcs_mass_upload_extract.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap']
 

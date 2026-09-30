@@ -42,7 +42,7 @@ print(f'DDIC coverage: {len(FLD)} fields, {len(CONV)} domains with a known conve
 print(f'domains carrying ALPHA: {sorted(d for d,c in CONV.items() if c)}')
 
 VEN=open('/home/user/ONGC-CST-Purchase-Date-Sharing-/src/zmms_bp_mass_upload.prog.abap').read()
-CUS=open('/home/user/ONGC-CST-Purchase-Date-Sharing-/src/zsds_cust_mass_upload.prog.abap').read()
+CUS=open('/home/user/ONGC-CST-Purchase-Date-Sharing-/src/zsds_cust_tmpl_download.prog.abap').read()
 
 def dom(tabs, f):
     for tb in tabs:
@@ -61,7 +61,7 @@ for m in re.finditer(r"iv_comp = '([A-Z][A-Z0-9_]{1,20})'", VEN):
 # ---------- customer: from the column map ------------------------------
 NODE_TAB={'C':'KNA1','B':'KNB1','S':'KNVV','A':'ADRC','Z':'ZSD_LICENSE_CHK','K':'KNA1'}
 cf=set()
-for m in re.finditer(r"node = '(\w)' fld = '([A-Z][A-Z0-9_]*)' cnv = '(\w*)'", CUS):
+for m in re.finditer(r"node = '(\w)' fld = '([A-Z][A-Z0-9_]*)'(?: fmt = '\w*')? cnv = '(\w*)'", CUS):
     n,f,c=m.groups()
     if n in NODE_TAB: cf.add((NODE_TAB[n],f,c))
 
@@ -84,7 +84,7 @@ def report(title, items, get):
 
 u1=report('SUPPLIER  ZMMS_BP_MASS_UPLOAD',
    vf, lambda it: (lambda tb,d,L: (tb,d,L,it[0], ('yes, len '+it[1]) if it[1] else 'NO LENGTH GIVEN'))(*dom(VTABS,it[0])))
-u2=report('CUSTOMER  ZSDS_CUST_MASS_UPLOAD',
+u2=report('CUSTOMER  ZSDS_CUST_TMPL_DOWNLOAD',
    cf, lambda it: (lambda tb,d,L: (tb,d,L,it[1], 'yes (AL/GL, length from field)' if it[2] in ('AL','GL') else 'no'))(*dom([it[0]],it[1])))
 open('unknown_domains.txt','w').write('\n'.join(sorted(set(u1+u2))))
 print(f'\nDistinct domains I cannot confirm: {len(set(u1+u2))}')

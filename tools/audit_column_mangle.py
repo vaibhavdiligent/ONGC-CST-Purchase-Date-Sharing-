@@ -1,10 +1,13 @@
-"""For every radio button of both programs: take the real tab, tag each cell
-   with its own column, then delete a column and swap two others, and check
-   that every mapped field still reads the value of ITS OWN column."""
+"""For every radio button of the supplier program: take the real tab, tag
+   each cell with its own column, then delete a column and swap two others,
+   and check that every mapped field still reads the value of ITS OWN column.
+
+   The customer templates are checked the same way by
+   tools/cipla/sim_roundtrip.py, against ZSDS_CUST_TMPL_DOWNLOAD."""
 import sys, collections
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sim import sheets, squash, load_cust, load_vend
+from sim import sheets, squash, load_vend
 
 def bind(ents, head, use_fld):
     """Mirrors LCL_ENGINE=>BIND_COLUMNS exactly."""
@@ -90,13 +93,10 @@ def check(which, path, scen, tab, hrow, ents):
     if lost[:6] and not bad: print(f'        (not read - heading missing/duplicated: {", ".join(lost[:6])}'
                                    f'{" ..." if len(lost)>6 else ""})')
 
-CUS=[('R1','domestic customer IND',2),('R2','Export customer',1),('R3','Morocco customer ',1),
-     ('R4','SAGA customer',2),('R5','credit Limit',1),('R6','domestic customer US',1),('R7','ship to party US',1)]
 VEN=[('R1','Vendor creation for All CC',1),('R2','TDS upload',1),('R3','TAN details',1),
      ('R4','BANK Key creation',1),('R5','Bank details update',1),('R6','Vendor extension',1),
      ('R7','CIN details',1),('R8','Patner function',6),('R9','Block_Unblocked',4)]
-cm=load_cust(); vm=load_vend()
-print('CUSTOMER - column deleted and two swapped, every radio button:')
-for s,t,h in CUS: check('C','customer master LSMW -  with format.xlsx',s,t,h,cm[s])
-print('\nSUPPLIER - column deleted and two swapped, every radio button:')
-for s,t,h in VEN: check('V','Vendor LSMW with Template.xlsx',s,t,h,vm[s])
+if __name__ == '__main__':
+    vm=load_vend()
+    print('SUPPLIER - column deleted and two swapped, every radio button:')
+    for s,t,h in VEN: check('V','Vendor LSMW with Template.xlsx',s,t,h,vm[s])

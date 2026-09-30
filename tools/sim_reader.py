@@ -1,4 +1,5 @@
-"""Simulates the reader's tab/heading resolution exactly as the two programs do it."""
+"""Simulates the supplier upload's tab/heading resolution. The customer
+   templates are simulated by tools/cipla/sim_roundtrip.py."""
 import re,sys,zipfile,collections
 from xml.etree import ElementTree as ET
 NS='{http://schemas.openxmlformats.org/spreadsheetml/2006/main}'
@@ -28,12 +29,6 @@ def sheets(path):
             rows[rn]=d
         out.append((sh.get('name'),rows))
     return out
-def load_cust():
-    s=open('src/zsds_cust_mass_upload.prog.abap',encoding='utf-8').read()
-    m=collections.defaultdict(list)
-    for x in re.finditer(r"scen = '(\w+)' col = (\d+)\s+node = '(\w?)' fld = '([^']*)' cnv = '([^']*)' hdr = '([^']*)'",s):
-        m[x.group(1)].append(dict(col=int(x.group(2)),node=x.group(3),fld=x.group(4),hdr=x.group(6)))
-    return m
 def load_vend():
     s=open('src/zmms_bp_mass_upload.prog.abap',encoding='utf-8').read()
     m=collections.defaultdict(list)
@@ -58,7 +53,7 @@ def resolve(path, entries, use_fld, named):
     return best
 if __name__=='__main__':
     which,path,scen,named = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4]
-    ents = (load_cust() if which=='C' else load_vend())[scen]
+    ents = load_vend()[scen]
     use_fld = which=='C'
     sc,name,r,head = resolve(path,ents,use_fld,named)
     print(f'file={path}\n scenario={scen} expected tab="{named}"  -> chosen tab="{name}" heading row={r} score={sc} (of {len(want(ents,use_fld))} keys)')

@@ -16,7 +16,7 @@ OPEN  = re.compile(r'^(IF|CASE|DO|WHILE|TRY|LOOP AT|SELECT\b(?!.*\bINTO\b.*\bTAB
 SHUT  = re.compile(r'^(ENDIF|ENDCASE|ENDDO|ENDWHILE|ENDTRY|ENDLOOP|ENDSELECT)\b', re.I)
 findings = []
 
-for p in ['src/zsds_cust_mass_upload.prog.abap', 'src/zmms_bp_mass_upload.prog.abap',
+for p in ['src/zmms_bp_mass_upload.prog.abap',
             'src/zbcs_mass_upload_extract.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap']:
     lines = open(p, encoding='utf-8').read().split('\n')

@@ -23,15 +23,9 @@ import collections, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Duplicates that are the template's own doing, not a mapping mistake.
-ALLOWED = {
-    ('ZSDS_CUST_MASS_UPLOAD', 'R5', 'U', 'LIMIT_SGM'):
-        'KLIME and KLIMK are the classic pair and FSCM holds one limit per '
-        'segment; CREDIT( ) takes the first and warns when they disagree',
-}
+ALLOWED = {}
 
 CASES = [
-    ('ZSDS_CUST_MASS_UPLOAD', 'src/zsds_cust_mass_upload.prog.abap',
-     r"\(\s*scen = '(R\d)' col = (\d+)\s+node = '(\w)' fld = '(\w*)'"),
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'src/zbcs_mass_upload_extract.prog.abap',
      r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '(?:[^']|'')*' node = '([\w-]*)' fld = '([^']*)'"),
     # The customer template program reads and writes Cipla's 24 templates
@@ -55,10 +49,7 @@ for prog, path, pattern in CASES:
     for (scen, node, fld), cols in sorted(seen.items()):
         if len(cols) < 2:
             continue
-        key = (prog if prog != 'ZBCS_MASS_UPLOAD_EXTRACT' else 'ZSDS_CUST_MASS_UPLOAD',
-               scen.replace('C', 'R') if prog == 'ZBCS_MASS_UPLOAD_EXTRACT' and scen[0] == 'C' else scen,
-               node, fld)
-        if key in ALLOWED:
+        if (prog, scen, node, fld) in ALLOWED:
             continue
         bad.append(f'{prog} {scen}: columns {", ".join(str(c) for c in sorted(cols))} '
                    f'all write {node}/{fld} - only the last one has any effect')
@@ -87,7 +78,6 @@ for prog, path, pattern in CASES:
 # coming as blank" meant. A column the upload program does not read still
 # belongs in the map, with its heading and nothing else.
 NO_HEADING = {
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'C5', 15): 'the template has no heading there either',
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'V2',  1): 'the template has no heading there either',
 }
 for prog, path, pattern in CASES:
@@ -110,12 +100,6 @@ for prog, path, pattern in CASES:
 # the column each side of it is either a deliberate one-off or a column
 # pointed at the wrong part of the record. These are the deliberate ones.
 ISLAND_OK = {
-    ('ZSDS_CUST_MASS_UPLOAD', 'R3',  33): 'the column is headed TIME_ZONE, which is an address field',
-    ('ZSDS_CUST_MASS_UPLOAD', 'R5',  17): 'the credit tab updates the customer group alongside the limit',
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'C3', 33): 'the column is headed TIME_ZONE, which is an address field',
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'C5', 17): 'the credit tab updates the customer group alongside the limit',
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'C3', 60): 'one tax classification column among the sales area columns',
-    ('ZBCS_MASS_UPLOAD_EXTRACT', 'C4', 71): 'one tax classification column among the sales area columns',
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'V9',  6): 'SPERR_1 is the company code block of an otherwise central tab',
     ('ZBCS_MASS_UPLOAD_EXTRACT', 'V9',  8): 'SPERM_1 is the purchasing block of an otherwise central tab',
     ('ZSDS_CUST_TMPL_DOWNLOAD', '08585a5a', 66): 'one tax classification column among the sales area columns',

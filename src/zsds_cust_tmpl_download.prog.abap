@@ -25,10 +25,11 @@
 *& up - Europe is four countries on one template, and the United States is
 *& two entities, Exelan and Invagen, with account groups in common.
 *&
-*& The upload replaces ZSDS_CUST_MASS_UPLOAD for customer creation. That
+*& The upload replaces ZSDS_CUST_MASS_UPLOAD, which is retired. That
 *& program's seven hand-written layouts belong to the earlier LSMW workbook
-*& and none of them matches a current template. It is kept only for the
-*& FSCM credit limit, which the current workbook does not carry.
+*& and none of them matches a current template. Its one other tab, the
+*& FSCM credit limit, is not carried over: Cipla has not asked for credit
+*& limits to be loaded, and none of the 24 templates carries them.
 *&
 *& The data is read through the same interface the upload program writes
 *& through - CMD_EI_API_EXTRACT=>GET_DATA - so a column that can be loaded
@@ -68,16 +69,16 @@
 *&   area, which is where a business partner keeps them.
 *&
 *& Clean core positioning (S/4HANA 2502 / ABAP Cloud)
-*&   Deliberately TIER 2, for the same reason ZSDS_CUST_MASS_UPLOAD is.
-*&   CMD_EI_API_EXTRACT is "Not released", and the released alternative
-*&   (the CDS views behind I_Customer) does not carry the licence record or
-*&   the identification numbers the templates need. CL_GUI_FRONTEND_SERVICES
-*&   is classic GUI only, which is what a download to a user's PC means.
-*&   Every read is confined to LCL_SRC, so it can be swapped for released
-*&   CDS views without touching the engine.
-*&   Run ATC with variant ABAP_CLOUD_READINESS and record those two
-*&   exemptions. There is nothing else to record - the program changes no
-*&   data at all.
+*&   Deliberately TIER 2. CMD_EI_API_EXTRACT and CL_MD_BP_MAINTAIN are
+*&   "Not released", and the released alternatives (the CDS views behind
+*&   I_Customer, the Business Partner RAP BO) do not carry the licence
+*&   record or the identification numbers the templates need.
+*&   CL_GUI_FRONTEND_SERVICES is classic GUI only, which is what a file on
+*&   a user's PC means. Every read is confined to LCL_SRC, so it can be
+*&   swapped for released CDS views without touching the engine.
+*&   Run ATC with variant ABAP_CLOUD_READINESS and record those exemptions
+*&   and the one direct write, MODIFY ZSD_LICENSE_CHK. A download changes
+*&   no data at all.
 *&
 *& The column map below is generated from the template workbook by
 *& tools/cipla/gen_download_program.py, so a change to a template is a
@@ -1026,8 +1027,6 @@ CLASS lcl_tmpl DEFINITION FINAL.
       IMPORTING iv_regn   TYPE char2
       RETURNING VALUE(rt) TYPE tt_ktokd.
 
-    CLASS-METHODS combis RETURNING VALUE(rt) TYPE tt_combi.
-
   PRIVATE SECTION.
     CLASS-DATA mt_col   TYPE tt_col.
     CLASS-DATA mt_combi TYPE tt_combi.
@@ -1147,11 +1146,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( regn = 'UG' text = 'QCIL (UG)' )
       ( regn = 'ZA' text = 'SAGA (ZA)' )
     ).
-  ENDMETHOD.
-
-  METHOD combis.
-    load( ).
-    rt = mt_combi.
   ENDMETHOD.
 
   METHOD resolve.
@@ -1303,7 +1297,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '08585a5a' col = 29  hdr = 'E-Mail Address' node = 'M' fld = 'SMT' fmt = '' cnv = '' )
       ( tmpl = '08585a5a' col = 30  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '08585a5a' col = 31  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '08585a5a' col = 32  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '08585a5a' col = 32  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '08585a5a' col = 33  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '08585a5a' col = 34  hdr = 'Tax Number 3' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = '08585a5a' col = 35  hdr = 'VAT Registration Number' node = 'C' fld = 'STCEG' fmt = '' cnv = '' )
@@ -1397,7 +1391,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '1f487b03' col = 39  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 40  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 41  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '1f487b03' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '1f487b03' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '1f487b03' col = 43  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 44  hdr = 'Tax Number 3 ( GST Number)' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 45  hdr = 'Permanent Account Number' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
@@ -1405,7 +1399,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '1f487b03' col = 47  hdr = 'Aadhaar Number' node = 'I' fld = 'X90003' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 48  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '1f487b03' col = 49  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = '1f487b03' col = 50  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = '1f487b03' col = 50  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '1f487b03' col = 51  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 52  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 53  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -1580,7 +1574,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '32831d38' col = 36  hdr = 'First fax no.: dialling code+number' node = 'M' fld = 'FAX' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 37  hdr = 'E-Mail Address' node = 'M' fld = 'SMT' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 38  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '32831d38' col = 39  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '32831d38' col = 39  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '32831d38' col = 40  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 41  hdr = 'Tax Number 3 ( GST Number)' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 42  hdr = 'Permanent Account Number' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
@@ -1588,7 +1582,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '32831d38' col = 44  hdr = 'Aadhaar Number' node = 'I' fld = 'X90003' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 45  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '32831d38' col = 46  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = '32831d38' col = 47  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = '32831d38' col = 47  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '32831d38' col = 48  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 49  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 50  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -1672,7 +1666,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '42895e0e' col = 39  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 40  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 41  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '42895e0e' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '42895e0e' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '42895e0e' col = 43  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 44  hdr = 'Tax Number 3 ( GST Number)' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 45  hdr = 'Permanent Account Number' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
@@ -1680,7 +1674,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '42895e0e' col = 47  hdr = 'Aadhaar Number' node = 'I' fld = 'X90003' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 48  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '42895e0e' col = 49  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = '42895e0e' col = 50  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = '42895e0e' col = 50  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '42895e0e' col = 51  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 52  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = '42895e0e' col = 53  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -2013,7 +2007,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '6c94ea65' col = 37  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '6c94ea65' col = 38  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '6c94ea65' col = 39  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '6c94ea65' col = 40  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '6c94ea65' col = 40  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '6c94ea65' col = 41  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '6c94ea65' col = 42  hdr = 'Tax Number 2' node = 'C' fld = 'STCD2' fmt = '' cnv = '' )
       ( tmpl = '6c94ea65' col = 43  hdr = 'Tax Number 1' node = 'C' fld = 'STCD1' fmt = '' cnv = '' )
@@ -2093,13 +2087,13 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '6d2ec22f' col = 39  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 40  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 41  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '6d2ec22f' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '6d2ec22f' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '6d2ec22f' col = 43  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 44  hdr = 'GST TDS Registration' node = 'C' fld = 'GST_TDS' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 45  hdr = 'Aadhaar Number' node = 'I' fld = 'X90003' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 46  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '6d2ec22f' col = 47  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = '6d2ec22f' col = 48  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = '6d2ec22f' col = 48  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '6d2ec22f' col = 49  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 50  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 51  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -2220,7 +2214,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '6e6467eb' col = 33  hdr = 'ID for mainly non-military use' node = 'C' fld = 'CIVVE' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 34  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '6e6467eb' col = 35  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = '6e6467eb' col = 36  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = '6e6467eb' col = 36  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
     ).
   ENDMETHOD.
 
@@ -2304,7 +2298,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '80d23dd8' col = 37  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 38  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 39  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '80d23dd8' col = 40  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '80d23dd8' col = 40  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '80d23dd8' col = 41  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 42  hdr = 'Tax Number 2' node = 'C' fld = 'STCD2' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 43  hdr = 'Tax Number 1' node = 'C' fld = 'STCD1' fmt = '' cnv = '' )
@@ -2420,7 +2414,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '8a74041a' col = 37  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '8a74041a' col = 38  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '8a74041a' col = 39  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '8a74041a' col = 40  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '8a74041a' col = 40  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '8a74041a' col = 41  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '8a74041a' col = 42  hdr = 'Tax Number 2' node = 'C' fld = 'STCD2' fmt = '' cnv = '' )
       ( tmpl = '8a74041a' col = 43  hdr = 'Tax Number 1' node = 'C' fld = 'STCD1' fmt = '' cnv = '' )
@@ -2497,7 +2491,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '9c914100' col = 40  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 41  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 42  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = '9c914100' col = 43  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = '9c914100' col = 43  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 44  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 45  hdr = 'Tax Number 3 ( GST Number)' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 46  hdr = 'Permanent Account Number' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
@@ -2505,7 +2499,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '9c914100' col = 48  hdr = 'Aadhaar Number' node = 'I' fld = 'X90003' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 49  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '9c914100' col = 50  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = '9c914100' col = 51  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = '9c914100' col = 51  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 52  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 53  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 54  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -2634,13 +2628,13 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'ab38ead5' col = 31  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 32  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 33  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = 'ab38ead5' col = 34  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = 'ab38ead5' col = 34  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'ab38ead5' col = 35  hdr = 'Tax Number 3' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 36  hdr = 'Permanent Account Number' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 37  hdr = 'ID for mainly non-military use' node = 'C' fld = 'CIVVE' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 38  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = 'ab38ead5' col = 39  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = 'ab38ead5' col = 40  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = 'ab38ead5' col = 40  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'ab38ead5' col = 41  hdr = 'Value Adjustment Key' node = 'B' fld = 'WBRSL' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 42  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = 'ab38ead5' col = 43  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
@@ -2730,7 +2724,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'd7ee33bb' col = 30  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = 'd7ee33bb' col = 31  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = 'd7ee33bb' col = 32  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = 'd7ee33bb' col = 33  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = 'd7ee33bb' col = 33  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'd7ee33bb' col = 34  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = 'd7ee33bb' col = 35  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = 'd7ee33bb' col = 36  hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' cnv = '' )
@@ -2881,7 +2875,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 38  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 39  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 40  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = 'e10ec770' col = 41  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = 'e10ec770' col = 41  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'e10ec770' col = 42  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 43  hdr = 'Tax Number 1' node = 'C' fld = 'STCD1' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 44  hdr = 'Tax Number 2' node = 'C' fld = 'STCD2' fmt = '' cnv = '' )
@@ -2895,7 +2889,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 52  hdr = 'Contact person function' node = 'P' fld = 'PAFKT' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 53  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = 'e10ec770' col = 54  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = 'e10ec770' col = 55  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = 'e10ec770' col = 55  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'e10ec770' col = 56  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 57  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 58  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -3054,7 +3048,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'f7e2b95a' col = 31  hdr = 'E-Mail Address' node = 'M' fld = 'SMT' fmt = '' cnv = '' )
       ( tmpl = 'f7e2b95a' col = 32  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = 'f7e2b95a' col = 33  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
-      ( tmpl = 'f7e2b95a' col = 34  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = 'f7e2b95a' col = 34  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'f7e2b95a' col = 35  hdr = 'Tax Number 3' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = 'f7e2b95a' col = 36  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = 'f7e2b95a' col = 37  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
@@ -3146,7 +3140,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'fb40b09b' col = 39  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 40  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 41  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
-      ( tmpl = 'fb40b09b' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = '' cnv = '' )
+      ( tmpl = 'fb40b09b' col = 42  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'fb40b09b' col = 43  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 44  hdr = 'Tax Number 3 ( GST Number)' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 45  hdr = 'Permanent Account Number' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
@@ -3154,7 +3148,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'fb40b09b' col = 47  hdr = 'Aadhaar Number' node = 'I' fld = 'X90003' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 48  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = 'fb40b09b' col = 49  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
-      ( tmpl = 'fb40b09b' col = 50  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = '' cnv = '' )
+      ( tmpl = 'fb40b09b' col = 50  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
       ( tmpl = 'fb40b09b' col = 51  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 52  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = 'fb40b09b' col = 53  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
@@ -3743,11 +3737,6 @@ CLASS lcl_log DEFINITION FINAL.
                 iv_struc TYPE clike OPTIONAL
                 iv_fld   TYPE clike OPTIONAL.
 
-    METHODS add_msgmap
-      IMPORTING iv_row   TYPE i
-                iv_kunnr TYPE clike OPTIONAL
-                it_map   TYPE mdg_bs_bp_msgmap_t.
-
     " A creation is logged before its number exists; this puts the number
     " on the lines already written for that row so the list shows it.
     METHODS set_key
@@ -3789,19 +3778,6 @@ CLASS lcl_log IMPLEMENTATION.
       struc   = iv_struc
       fldnm   = iv_fld
       message = iv_text ) TO mt_msg.
-  ENDMETHOD.
-
-  METHOD add_msgmap.
-    " MDG_BS_BP_MSGMAP carries BAPISTRUCNAME / BAPIFLDNM, which is what lets
-    " us point the user at a column instead of relaying a generic message.
-    LOOP AT it_map INTO DATA(ls_m).
-      add( iv_row   = iv_row
-           iv_kunnr = iv_kunnr
-           iv_type  = ls_m-type
-           iv_text  = ls_m-message
-           iv_struc = ls_m-bapistrucname
-           iv_fld   = ls_m-bapifldnm ).
-    ENDLOOP.
   ENDMETHOD.
 
   METHOD set_key.
@@ -3880,14 +3856,6 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
   PUBLIC SECTION.
     CLASS-METHODS get RETURNING VALUE(ro) TYPE REF TO lcl_cfg.
 
-    TYPES tt_bukrs TYPE STANDARD TABLE OF bukrs WITH EMPTY KEY.
-    TYPES: BEGIN OF ty_sarea,
-             vkorg TYPE vkorg,
-             vtweg TYPE vtweg,
-             spart TYPE spart,
-           END OF ty_sarea,
-           tt_sarea TYPE STANDARD TABLE OF ty_sarea WITH EMPTY KEY.
-
     METHODS cust_exists IMPORTING VALUE(iv_kunnr) TYPE kunnr
                         RETURNING VALUE(rv)       TYPE abap_bool.
 
@@ -3958,17 +3926,6 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
                                   VALUE(iv_cat)     TYPE bu_id_type
                         RETURNING VALUE(rv)         TYPE abap_bool.
 
-    " The credit tab carries no company code and no sales area, so the ones
-    " the customer already has are what the payment terms and the customer
-    " group can be written to.
-    METHODS cust_bukrs  IMPORTING VALUE(iv_kunnr) TYPE kunnr
-                        RETURNING VALUE(rt)       TYPE tt_bukrs.
-    METHODS cust_sales  IMPORTING VALUE(iv_kunnr) TYPE kunnr
-                        RETURNING VALUE(rt)       TYPE tt_sarea.
-    " Company codes belonging to a credit control area (T001-KKBER).
-    METHODS kkber_bukrs IMPORTING VALUE(iv_kkber) TYPE kkber
-                        RETURNING VALUE(rt)       TYPE tt_bukrs.
-
     " Title text -> title key (ADRC-TITLE). The templates carry the text
     " ("Company", "Mr."), the API wants the key.
     METHODS title_key   IMPORTING iv_text   TYPE clike
@@ -3989,22 +3946,10 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
                                   iv_tatyp  TYPE tatyp
                         RETURNING VALUE(rv) TYPE abap_bool.
 
-    " Credit control area -> credit segment (UKM_KKBER2SGM, 1:1 here).
-    METHODS segment_of  IMPORTING iv_kkber  TYPE kkber
-                        RETURNING VALUE(rv) TYPE char10.
-
-    METHODS segment_curr IMPORTING iv_sgmnt  TYPE char10
-                         RETURNING VALUE(rv) TYPE waers.
-
-    " Check tables of the three customer-master fields the credit tab
-    " carries. The API reports a failed check as a bare "Entry X does not
-    " exist in TVV3", which says neither which field nor where the value
-    " came from - so the values are checked here first.
+    " Check table of customer group 3. The API reports a failed check as a
+    " bare "Entry X does not exist in TVV3", which says neither which field
+    " nor where the value came from - so the value is checked here first.
     METHODS ok_kvgr3    IMPORTING iv        TYPE clike
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS ok_zterm    IMPORTING iv        TYPE clike
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS ok_vzskz    IMPORTING iv        TYPE clike
                         RETURNING VALUE(rv) TYPE abap_bool.
 
     " Sales areas of a customer whose STORED customer group 3 is no longer
@@ -4020,12 +3965,6 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS bad_kvgr3   IMPORTING VALUE(iv_kunnr) TYPE kunnr
                         RETURNING VALUE(rt)       TYPE tt_bad_sa.
 
-    METHODS ok_kdgrp    IMPORTING iv        TYPE clike
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS ok_waers    IMPORTING iv        TYPE clike
-                        RETURNING VALUE(rv) TYPE abap_bool.
-    METHODS ok_werks    IMPORTING iv        TYPE clike
-                        RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_ktokd    IMPORTING iv        TYPE clike
                         RETURNING VALUE(rv) TYPE abap_bool.
 
@@ -4037,26 +3976,11 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
              lfdnr TYPE n LENGTH 3,
              tatyp TYPE tatyp,
            END OF ty_tstl.
-    TYPES: BEGIN OF ty_sgm,
-             kkber TYPE kkber,
-             sgmnt TYPE char10,
-           END OF ty_sgm.
-    TYPES: BEGIN OF ty_cur,
-             sgmnt TYPE char10,
-             waers TYPE waers,
-           END OF ty_cur.
 
     DATA mt_tstl  TYPE SORTED TABLE OF ty_tstl
                        WITH NON-UNIQUE KEY talnd lfdnr.
-    DATA mt_sgm   TYPE HASHED TABLE OF ty_sgm WITH UNIQUE KEY kkber.
-    DATA mt_cur   TYPE HASHED TABLE OF ty_cur WITH UNIQUE KEY sgmnt.
-    DATA mt_kdgrp TYPE SORTED TABLE OF kdgrp WITH UNIQUE KEY table_line.
-    DATA mt_waers TYPE SORTED TABLE OF waers WITH UNIQUE KEY table_line.
-    DATA mt_werks TYPE SORTED TABLE OF werks_d WITH UNIQUE KEY table_line.
     DATA mt_ktokd TYPE SORTED TABLE OF ktokd WITH UNIQUE KEY table_line.
     DATA mt_kvgr3 TYPE SORTED TABLE OF kvgr3 WITH UNIQUE KEY table_line.
-    DATA mt_zterm TYPE SORTED TABLE OF dzterm WITH UNIQUE KEY table_line.
-    DATA mt_vzskz TYPE SORTED TABLE OF vzskz WITH UNIQUE KEY table_line.
 
     TYPES: BEGIN OF ty_g2b, ktokd TYPE ktokd, grouping TYPE bu_group, END OF ty_g2b,
            BEGIN OF ty_r2b, ktokd TYPE ktokd, role     TYPE bu_role,  END OF ty_r2b.
@@ -4086,17 +4010,11 @@ CLASS lcl_cfg IMPLEMENTATION.
     " which is a short dump and not catchable - so duplicates are removed
     " before the move, never after.
     "
-    " These four config tables are keyed on the code today, so DISTINCT is
+    " These config tables are keyed on the code today, so DISTINCT is
     " belt and braces. The supplier program dumped on exactly this pattern
     " against T052, which does hold several rows per code.
-    SELECT DISTINCT kdgrp FROM t151  INTO TABLE @mt_kdgrp.
-    SELECT DISTINCT waers FROM tcurc INTO TABLE @mt_waers.
-    SELECT DISTINCT werks FROM t001w INTO TABLE @mt_werks.
     SELECT DISTINCT ktokd FROM t077d INTO TABLE @mt_ktokd.
     SELECT DISTINCT kvgr3 FROM tvv3 INTO TABLE @mt_kvgr3.
-    " T052 holds one row per instalment, so the payment terms repeat.
-    SELECT DISTINCT zterm FROM t052 INTO TABLE @mt_zterm.
-    SELECT DISTINCT vzskz FROM t056 INTO TABLE @mt_vzskz.
 
     " Keyed on the account group alone. Should the customising ever map one
     " account group to two groupings, INSERT reports it with SY-SUBRC 4 and
@@ -4110,22 +4028,6 @@ CLASS lcl_cfg IMPLEMENTATION.
 
     SELECT account_group AS ktokd, role
       FROM cvic_cust_to_bp2 INTO CORRESPONDING FIELDS OF TABLE @mt_r2b.
-
-    " Two columns each, keyed on the first, so INSERT is used instead:
-    " a duplicate sets SY-SUBRC 4 and the first entry wins.
-    SELECT kkber, credit_sgmnt AS sgmnt FROM ukm_kkber2sgm
-      INTO TABLE @DATA(lt_sgm).
-    LOOP AT lt_sgm INTO DATA(ls_sgm).
-      INSERT VALUE ty_sgm( kkber = ls_sgm-kkber
-                           sgmnt = ls_sgm-sgmnt ) INTO TABLE mt_sgm.
-    ENDLOOP.
-
-    SELECT credit_sgmnt AS sgmnt, currency AS waers FROM ukmcred_sgm0c
-      INTO TABLE @DATA(lt_cur).
-    LOOP AT lt_cur INTO DATA(ls_cur).
-      INSERT VALUE ty_cur( sgmnt = ls_cur-sgmnt
-                           waers = ls_cur-waers ) INTO TABLE mt_cur.
-    ENDLOOP.
   ENDMETHOD.
 
   METHOD cust_exists.
@@ -4217,22 +4119,6 @@ CLASS lcl_cfg IMPLEMENTATION.
       WHERE partner = @iv_partner AND type = @iv_cat INTO @rv.
   ENDMETHOD.
 
-  METHOD cust_bukrs.
-    SELECT bukrs FROM knb1 WHERE kunnr = @iv_kunnr
-      ORDER BY bukrs INTO TABLE @rt.
-  ENDMETHOD.
-
-  METHOD cust_sales.
-    SELECT vkorg, vtweg, spart FROM knvv WHERE kunnr = @iv_kunnr
-      ORDER BY vkorg, vtweg, spart
-      INTO CORRESPONDING FIELDS OF TABLE @rt.
-  ENDMETHOD.
-
-  METHOD kkber_bukrs.
-    SELECT bukrs FROM t001 WHERE kkber = @iv_kkber
-      ORDER BY bukrs INTO TABLE @rt.
-  ENDMETHOD.
-
   METHOD title_key.
     DATA(lv_t) = to_upper( condense( CONV string( iv_text ) ) ).
     IF lv_t IS INITIAL.
@@ -4276,14 +4162,6 @@ CLASS lcl_cfg IMPLEMENTATION.
     rv = xsdbool( line_exists( mt_tstl[ talnd = iv_aland tatyp = iv_tatyp ] ) ).
   ENDMETHOD.
 
-  METHOD segment_of.
-    rv = VALUE #( mt_sgm[ kkber = iv_kkber ]-sgmnt OPTIONAL ).
-  ENDMETHOD.
-
-  METHOD segment_curr.
-    rv = VALUE #( mt_cur[ sgmnt = iv_sgmnt ]-waers OPTIONAL ).
-  ENDMETHOD.
-
   METHOD cust_by_guid.
     IF iv_guid IS INITIAL.
       RETURN.
@@ -4305,12 +4183,6 @@ CLASS lcl_cfg IMPLEMENTATION.
   METHOD ok_kvgr3.
     rv = xsdbool( line_exists( mt_kvgr3[ table_line = iv ] ) ).
   ENDMETHOD.
-  METHOD ok_zterm.
-    rv = xsdbool( line_exists( mt_zterm[ table_line = iv ] ) ).
-  ENDMETHOD.
-  METHOD ok_vzskz.
-    rv = xsdbool( line_exists( mt_vzskz[ table_line = iv ] ) ).
-  ENDMETHOD.
 
   METHOD bad_kvgr3.
     SELECT vkorg, vtweg, spart, kvgr3 FROM knvv
@@ -4323,15 +4195,6 @@ CLASS lcl_cfg IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
-  METHOD ok_kdgrp.
-    rv = xsdbool( line_exists( mt_kdgrp[ table_line = iv ] ) ).
-  ENDMETHOD.
-  METHOD ok_waers.
-    rv = xsdbool( line_exists( mt_waers[ table_line = iv ] ) ).
-  ENDMETHOD.
-  METHOD ok_werks.
-    rv = xsdbool( line_exists( mt_werks[ table_line = iv ] ) ).
-  ENDMETHOD.
   METHOD ok_ktokd.
     rv = xsdbool( line_exists( mt_ktokd[ table_line = iv ] ) ).
   ENDMETHOD.
@@ -4860,9 +4723,9 @@ CLASS lcl_excel IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       IF ls_l-row = lv_hrow + 1.
-        " Some tabs spread the headings over two lines - the credit tab
-        " carries the technical names on one line and, for the columns that
-        " have no technical name, the description on the next. A blank
+        " Some tabs spread the headings over two lines - technical names on
+        " one line and, for the columns that have no technical name, the
+        " description on the next. A blank
         " heading is therefore filled from the neighbouring line, but only
         " from a line that is itself part of the heading block: a line that
         " carries none of this scenario's headings is data and is left
@@ -4898,7 +4761,6 @@ CLASS lcl_engine DEFINITION FINAL.
     METHODS constructor
       IMPORTING iv_tmpl TYPE char8
                 io_log  TYPE REF TO lcl_log.
-    METHODS sheet RETURNING VALUE(rv) TYPE string.
     METHODS run   IMPORTING it_row TYPE tt_row.
 
     " The headings this scenario expects, as matching keys. Used to find the
@@ -4951,12 +4813,6 @@ CLASS lcl_engine DEFINITION FINAL.
 
     METHODS master IMPORTING is_row TYPE ty_row.
 
-    " The credit tab also carries three customer-master fields - payment
-    " terms, interest indicator and customer group 3. They are written
-    " through the same Business Partner API as everything else; the company
-    " code and the sales area they belong to are taken from the ones the
-    " customer already has, because the tab does not carry them.
-
     " The API validates the customer as a whole, so a value already stored
     " against one of its sales areas can reject an update that has nothing
     " to do with it. This says which one, instead of leaving the user with
@@ -4986,34 +4842,17 @@ CLASS lcl_engine IMPLEMENTATION.
     " and the upload compares it with what a file carries, which is the same
     " heading typed by hand, re-cased, or with a space moved.
     "
-    " A heading the template uses twice cannot identify a column, so it is
-    " cleared and those columns stay positional - the same rule the old
-    " hand-written map followed.
-    DATA lt_seen TYPE SORTED TABLE OF string WITH NON-UNIQUE KEY table_line.
-    LOOP AT lcl_tmpl=>cols( iv_tmpl ) INTO DATA(ls_c).
-      INSERT lcl_util=>squash( ls_c-hdr ) INTO TABLE lt_seen.
-    ENDLOOP.
+    " A heading the template uses more than once - the five "Tax
+    " classification for customer" columns - is kept too. BIND_COLUMNS
+    " matches the nth in the file to the nth in the template, so a column
+    " inserted or deleted in front of them cannot shift one tax
+    " classification into the next.
     LOOP AT lcl_tmpl=>cols( iv_tmpl ) INTO DATA(ls_col).
       DATA ls_m TYPE ty_col.
       ls_m = ls_col.
-      DATA(lv_k) = lcl_util=>squash( ls_col-hdr ).
-      DATA lv_n TYPE i.
-      CLEAR lv_n.
-      LOOP AT lt_seen TRANSPORTING NO FIELDS WHERE table_line = lv_k.
-        lv_n = lv_n + 1.
-      ENDLOOP.
-      ls_m-hdr = COND #( WHEN lv_n = 1 THEN lv_k ELSE space ).
+      ls_m-hdr = lcl_util=>squash( ls_col-hdr ).
       APPEND ls_m TO mt_map.
     ENDLOOP.
-  ENDMETHOD.
-
-  METHOD sheet.
-    " The template this engine reads. The tab NAME the download writes is
-    " LCL_MAIN's to give - LCL_MAIN is defined after this class, because it
-    " drives it - so the caller passes that one to the reader itself. The
-    " reader picks the tab by how many of the template's headings it
-    " carries anyway; the name is only the tie-breaker.
-    rv = mv_tmpl.
   ENDMETHOD.
 
   METHOD headings.
@@ -5109,6 +4948,7 @@ CLASS lcl_engine IMPLEMENTATION.
     DATA lt_used TYPE SORTED TABLE OF i WITH NON-UNIQUE KEY table_line.
     DATA lt_seen TYPE SORTED TABLE OF ty_h WITH UNIQUE KEY key.
     DATA lv_moved TYPE i.
+    DATA lv_namb  TYPE i.
 
     " ---- first pass: the heading the template carries above the column --
     " A repeated heading is matched by its occurrence, and only when the
@@ -5133,11 +4973,18 @@ CLASS lcl_engine IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       READ TABLE lt_mcnt INTO DATA(ls_mc) WITH KEY key = lv_key.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
       " The file must repeat the heading at least as often as the template
       " does; the nth in the template is then the nth in the file. Fewer in
-      " the file than in the template means there is no telling which is
-      " which, so those columns stay where they are.
-      IF sy-subrc <> 0 OR ls_fc-n < ls_mc-n.
+      " the file than in the template means one of them was removed and
+      " there is no telling which. Reading them by position would load each
+      " with its neighbour's value, so they are left empty instead.
+      IF ls_fc-n < ls_mc-n.
+        <ls_m>-col = 0.
+        lv_namb = lv_namb + 1.
+        INSERT lv_ix INTO TABLE lt_done.
         CONTINUE.
       ENDIF.
       READ TABLE lt_occ INTO DATA(ls_o) WITH KEY key = lv_key seq = lv_mseq.
@@ -5243,6 +5090,12 @@ CLASS lcl_engine IMPLEMENTATION.
                    iv_text = |{ lv_nblank } of those sit where another field was found, so they | &&
                              |were left empty rather than loaded with a neighbour's value - | &&
                              |give those columns their template heading| ).
+    ENDIF.
+    IF lv_namb > 0.
+      mo_log->add( iv_row = 0 iv_type = 'W'
+                   iv_text = |{ lv_namb } column(s) carry a heading the template repeats, and this | &&
+                             |file repeats it fewer times - which is which cannot be told, so | &&
+                             |they were left empty. Restore the template's columns| ).
     ENDIF.
   ENDMETHOD.
 

@@ -13,8 +13,7 @@ appears once in its scope is its own declaration and nothing else.
 import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROGS = ['src/zsds_cust_mass_upload.prog.abap',
-         'src/zmms_bp_mass_upload.prog.abap',
+PROGS = ['src/zmms_bp_mass_upload.prog.abap',
          'src/zbcs_mass_upload_extract.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap']
 
