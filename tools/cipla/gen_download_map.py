@@ -87,6 +87,45 @@ def fields_of(tab):
     return {x['f'] for x in DD.get(tab, [])}
 
 
+# ------------------------------------------------------------------ conversion
+# The map is read in both directions. FMT says how a stored value is WRITTEN so
+# that it reads back unchanged; CNV says how a cell is READ back into the field.
+# Writing needs to know only about the exits - leading zeros, the title key - but
+# reading has to turn a cell into a date, a number or a language key as well, and
+# that follows from the field's own dictionary type. So CNV is FMT where FMT has
+# something to say, and the field's type where it does not.
+#
+#   DT a date   NM a whole number   LG a language key   AL leading zeros
+#   GL a G/L account   TT a title key
+NODE_TABLE = {
+    # the postal address the download reads from central_data-address-postal-data
+    'A': 'CVIS_EI_ADDRESS1',
+    'C': 'CMDS_EI_VMD_CENTRAL_DATA',
+    'B': 'KNB1',
+    'S': 'KNVV',
+    'Z': 'ZSD_LICENSE_CHK',
+    'P': 'KNVK',
+}
+TYPE_CNV = {'DATS': 'DT', 'LANG': 'LG',
+            'DEC': 'NM', 'QUAN': 'NM', 'CURR': 'NM',
+            'INT1': 'NM', 'INT2': 'NM', 'INT4': 'NM', 'INT8': 'NM'}
+# The DATA half of a structure comes before its DATAX half and carries the real
+# type; DATAX repeats every name as a CHAR flag. The first occurrence is kept.
+FIELD_TYPE = {}
+for _tab, _rows in DD.items():
+    for _c in _rows:
+        FIELD_TYPE.setdefault(_tab, {}).setdefault(_c['f'], _c.get('dt', ''))
+
+
+def conversion(node, target, workbook_field):
+    """How a cell is read back into the field this column writes."""
+    fmt = FMT.get(workbook_field, '')
+    if fmt:
+        return fmt
+    dt = FIELD_TYPE.get(NODE_TABLE.get(node, ''), {}).get(target, '')
+    return TYPE_CNV.get(dt, '')
+
+
 LIC, CENT, KNB1, KNVV = (fields_of('ZSD_LICENSE_CHK'),
                          fields_of('CMDS_EI_VMD_CENTRAL_DATA'),
                          fields_of('KNB1'), fields_of('KNVV'))
@@ -202,7 +241,8 @@ def main():
                 unresolved[fld] += 1
             hdr = (desc or fld).replace("'", "''")
             lines.append(f"      ( tmpl = '{sig}' col = {col:<3} hdr = '{hdr[:60]}' "
-                         f"node = '{node}' fld = '{target}' fmt = '{FMT.get(fld, '')}' )")
+                         f"node = '{node}' fld = '{target}' fmt = '{FMT.get(fld, '')}' "
+                         f"cnv = '{conversion(node, target, fld)}' )")
     if unresolved:
         print('columns that could not be resolved:', file=sys.stderr)
         for f, n in unresolved.most_common():

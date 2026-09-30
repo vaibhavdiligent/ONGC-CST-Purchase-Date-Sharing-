@@ -15,7 +15,7 @@ import collections, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = open(os.path.join(ROOT, 'src/zsds_cust_tmpl_download.prog.abap'), encoding='utf-8').read()
 ROW = re.compile(r"\(\s*tmpl = '(\w+)'\s+col = (\d+)\s+hdr = '(.*?)'\s+node = '(.)'\s+"
-                 r"fld = '(.*?)'\s+fmt = '(\w*)'\s*\)")
+                 r"fld = '(.*?)'\s+fmt = '(\w*)'(?:\s+cnv = '\w*')?\s*\)")
 
 # A customer where everything has a value, so an empty cell can only mean the
 # map or the engine dropped it.

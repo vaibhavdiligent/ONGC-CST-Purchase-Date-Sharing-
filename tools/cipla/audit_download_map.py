@@ -13,7 +13,7 @@ REG  = json.load(open(os.path.join(ROOT, 'docs/cipla/customer_template_registry.
 SRC  = open(os.path.join(ROOT, 'src/zsds_cust_tmpl_download.prog.abap'), encoding='utf-8').read()
 
 ROW = re.compile(r"\(\s*tmpl = '(\w+)'\s+col = (\d+)\s+hdr = '(.*?)'\s+node = '(.)'\s+"
-                 r"fld = '(.*?)'\s+fmt = '(\w*)'\s*\)")
+                 r"fld = '(.*?)'\s+fmt = '(\w*)'(?:\s+cnv = '(\w*)')?\s*\)")
 # The combination row carries the REGION first: the workbook is organised by
 # region, and a country alone does not name one template - Europe is four
 # countries, and the United States is two entities sharing three account groups.
@@ -47,7 +47,7 @@ def main():
         check(f, f'{t} is missing from the dictionary extract')
 
     # --- 1. every column lands on a field that exists ---------------------
-    for tmpl, col, hdr, node, fld, fmt in rows:
+    for tmpl, col, hdr, node, fld, fmt, cnv in rows:
         where = f'{tmpl} column {col} ("{hdr}")'
         if node in NODE_TABLE:
             check(fld in fields[NODE_TABLE[node]],
@@ -81,7 +81,7 @@ def main():
         'ab38ead5',   # 79 columns, the ZEXP export template
     }
     has_kunnr = collections.defaultdict(bool)
-    for tmpl, col, hdr, node, fld, fmt in rows:
+    for tmpl, col, hdr, node, fld, fmt, cnv in rows:
         if node == 'K' and fld == 'KUNNR':
             has_kunnr[tmpl] = True
     for tmpl in {t for t, *_ in rows}:

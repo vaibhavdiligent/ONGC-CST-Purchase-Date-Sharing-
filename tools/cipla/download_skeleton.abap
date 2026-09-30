@@ -77,6 +77,11 @@ TYPES: BEGIN OF ty_row,
 
 " One line per column of one template: where it sits, what it is called,
 " which part of the master record holds it, and how to write it.
+" One column of one template, read in both directions. FMT says how a stored
+" value is written into the file; CNV says how a cell is read back out of it.
+" They differ because writing only has to undo the exits - leading zeros, the
+" title key - while reading has to turn a cell into a date, a number or a
+" language key as well.
 TYPES: BEGIN OF ty_col,
          tmpl TYPE char8,
          col  TYPE i,
@@ -84,6 +89,7 @@ TYPES: BEGIN OF ty_col,
          node TYPE char1,
          fld  TYPE char30,
          fmt  TYPE char2,
+         cnv  TYPE char2,
        END OF ty_col,
        tt_col TYPE STANDARD TABLE OF ty_col WITH EMPTY KEY.
 

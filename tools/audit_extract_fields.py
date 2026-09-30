@@ -113,7 +113,7 @@ VOCAB = vocabulary(SUP) | vocabulary(CUS)
 
 MAP = re.compile(
     r"\(\s*scen = '([CV]\d)' col = (\d+)\s+hdr = '((?:[^']|'')*)' "
-    r"node = '([\w-]*)' fld = '([^']*)' fmt = '([^']*)' \)")
+    r"node = '([\w-]*)' fld = '([^']*)' fmt = '([^']*)'(?: cnv = '[^']*')? \)")
 rows = [(m.group(1), int(m.group(2)), m.group(4), m.group(5)) for m in MAP.finditer(EX)]
 if not rows:
     sys.exit('no map entries found - the map format changed')
