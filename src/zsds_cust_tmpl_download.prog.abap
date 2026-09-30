@@ -322,7 +322,6 @@ CLASS lcl_util DEFINITION FINAL.
       IMPORTING iv_col    TYPE i
       RETURNING VALUE(rv) TYPE string.
 
-  PUBLIC SECTION.
     " Reads cell IV_COL of IS_ROW. Returns an empty string when the column
     " is beyond the end of the row, which is normal for short rows.
     CLASS-METHODS cell
@@ -403,7 +402,6 @@ CLASS lcl_util DEFINITION FINAL.
                 is_fromx TYPE any
       CHANGING  cs_to    TYPE any
                 cs_tox   TYPE any.
-ENDCLASS.
 ENDCLASS.
 
 CLASS lcl_util IMPLEMENTATION.
@@ -769,7 +767,6 @@ CLASS lcl_util IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
-ENDCLASS.
 ENDCLASS.
 
 *----------------------------------------------------------------------*
