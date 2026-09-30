@@ -5153,9 +5153,13 @@ AT SELECTION-SCREEN.
 *----------------------------------------------------------------------*
 * Main
 *----------------------------------------------------------------------*
-DATA go_log TYPE REF TO lcl_log.
-
 START-OF-SELECTION.
+
+  " Declared here, not above: a DATA statement after AT SELECTION-SCREEN
+  " belongs to that event block, which SAP runs as a procedure, so it would
+  " be local to it ("Field GO_LOG is unknown"). START-OF-SELECTION is not a
+  " procedure, so this is global and END-OF-SELECTION sees it.
+  DATA go_log TYPE REF TO lcl_log.
 
   " A download reads, writes its workbook and shows its own list. The rest
   " of this block is the upload.
