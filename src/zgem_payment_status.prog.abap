@@ -1,0 +1,539 @@
+*&---------------------------------------------------------------------*
+*& Report  ZGEM_PAYMENT_STATUS
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zgem_payment_status.
+
+
+TABLES : zgem_bill.
+SELECT-OPTIONS: s_gem FOR zgem_bill-gem_invoice_no.
+PARAMETERS : r1 RADIOBUTTON GROUP b1,
+             r2 RADIOBUTTON GROUP b1,
+             r3 RADIOBUTTON GROUP b1.
+
+DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
+      proxy_data       TYPE zgem_tokenmt_security_token_se,
+      lt_input         TYPE zgem_tokenmt_security_token_re,
+      lo_sys_exception TYPE REF TO cx_ai_system_fault.
+DATA: err_string       TYPE string.
+
+DATA: lo_sys_exception1 TYPE REF TO cx_ai_system_fault,
+      pay_stat          TYPE zpaystatusdt_payment_status_s,
+      token             TYPE string,
+      v_hkont           TYPE bsak-hkont VALUE '0000190101'.
+
+*--- Payment Status (3.11) via CPI - replaces the old SI_PAYMENT_STATUS_OB
+*    proxy call. Request/response shapes CONFIRMED against a live GeM call
+*    (via the ZGEM_CPI_PAYMENT_STATUS test program):
+*    - paydata is a plain JSON object; all values are JSON strings.
+*    - response is flat: {transactionID,status,paymentMode,message}.
+*    ty_cpi_paydata's component names mirror pay_stat's field names so the
+*    payload is filled with MOVE-CORRESPONDING; name_mappings then renames
+*    the JSON keys to the camelCase the API expects.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
+           c_path TYPE string VALUE '/http/GEM/Sync/PaymentStatus'.
+
+TYPES: BEGIN OF ty_cpi_paydata,
+         transaction_id      TYPE string,
+         status              TYPE string,
+         payment_by          TYPE string,
+         contract_no         TYPE string,
+         gem_invoice_no      TYPE string,
+         invoice_no          TYPE string,
+         bill_no             TYPE string,
+         bill_amount_paid    TYPE string,
+         transaction_date    TYPE string,
+         deduction_type      TYPE string,
+         bank_name           TYPE string,
+         bank_transaction_no TYPE string,
+         sanctions           TYPE string,
+         sanction_date       TYPE string,
+       END OF ty_cpi_paydata.
+
+TYPES: BEGIN OF ty_cpi_request,
+         user    TYPE string,
+         method  TYPE string,
+         paydata TYPE ty_cpi_paydata,
+       END OF ty_cpi_request.
+
+*--- Flat response confirmed from a live GeM call
+TYPES: BEGIN OF ty_cpi_response,
+         transactionid TYPE string,
+         status        TYPE string,
+         paymentmode   TYPE string,
+         message       TYPE string,
+       END OF ty_cpi_response.
+
+DATA: lo_client       TYPE REF TO if_http_client,
+      ls_cpi_request  TYPE ty_cpi_request,
+      ls_cpi_resp     TYPE ty_cpi_response,
+      lv_json         TYPE string,
+      lv_response     TYPE string,
+      lv_code         TYPE i,
+      lv_reason       TYPE string,
+      gv_token        TYPE string,
+      lt_paydata_maps TYPE /ui2/cl_json=>name_mappings.
+
+DATA: err_string1 TYPE string,
+      it_bill     TYPE TABLE OF zgem_billdet,
+      wa_bill     TYPE zgem_billdet,
+      it_status   TYPE TABLE OF zgem_bill,
+      wa_status   TYPE zgem_bill,
+      amtpaid     TYPE bseg-dmbtr,
+      dedamt      TYPE bseg-dmbtr,
+      v_str       TYPE string VALUE '''',
+      htype       TYPE  dd01v-datatype,
+      v_bill      TYPE xblnr.
+DATA :it_fcat TYPE  slis_t_fieldcat_alv.
+DATA :wa_fcat TYPE  slis_fieldcat_alv.
+
+CREATE OBJECT: lo_gem_token.
+
+
+
+
+
+
+
+
+IF r1 = 'X'.
+
+  IF s_gem[] IS NOT INITIAL.
+
+    SELECT * FROM zgem_billdet INTO TABLE it_bill
+    WHERE gem_invoice_no IN s_gem.
+
+  ELSE.
+
+    SELECT gem_invoice_no FROM zgem_bill INTO TABLE @DATA(lt_upbill)
+      WHERE response_code = ' '.
+
+    IF lt_upbill[] IS NOT INITIAL.
+      SELECT * FROM zgem_billdet INTO TABLE it_bill
+      FOR ALL ENTRIES IN lt_upbill
+      WHERE gem_invoice_no = lt_upbill-gem_invoice_no.
+    ENDIF.
+
+
+  ENDIF.
+
+  IF it_bill[] IS INITIAL.
+    MESSAGE 'Please fetch invoice details' TYPE 'E'.
+    EXIT.
+  ENDIF.
+
+  SELECT  trackno,
+         tracktyp,
+         gem_invoice_no FROM zmm_ims INTO TABLE @DATA(it_ims)
+    FOR ALL ENTRIES IN @it_bill
+WHERE tracktyp IN ('M', 'S')
+AND   gem_invoice_no = @it_bill-gem_invoice_no.
+
+
+  IF it_ims IS NOT INITIAL.
+    SELECT * FROM zmm_ims_status INTO TABLE @DATA(it_stat)
+      FOR ALL ENTRIES IN @it_ims
+       WHERE trackno = @it_ims-trackno.
+
+    LOOP AT it_stat INTO DATA(wa_stat).
+      IF wa_stat-mblnr_inv IS NOT INITIAL.
+        SELECT * FROM bsak INTO TABLE @DATA(it_bsak)
+          WHERE bukrs = 'OVL'
+          AND   belnr =  @wa_stat-mblnr_inv
+          AND   augbl =  @wa_stat-mblnr_inv
+          AND   augdt =  @wa_stat-mblnr_invdt.
+
+" testing **BEGIN OF CHANGE BY SAPOSS 15.05.2026  FOR ATC
+        READ TABLE it_bsak INTO DATA(wa_bsak) INDEX 1. "#EC CI_NOORDER
+" testing * *END OF CHANGE BY SAPOSS 15.05.2026  FOR ATC
+        IF wa_bsak-blart NE 'ZP' AND wa_bsak-blart NE 'BP'.
+          REFRESH it_bsak[].
+          SELECT * FROM bsak INTO TABLE it_bsak
+             WHERE bukrs = 'OVL'
+             AND   augbl NE  wa_stat-mblnr_inv
+             AND   belnr EQ  wa_stat-mblnr_inv
+             AND   hkont EQ v_hkont .
+
+" testing **BEGIN OF CHANGE BY SAPOSS 15.05.2026  FOR ATC
+          READ TABLE it_bsak INTO wa_bsak INDEX 1. "#EC CI_NOORDER
+" testing * *END OF CHANGE BY SAPOSS 15.05.2026  FOR ATC
+          REFRESH : it_bsak.
+
+          SELECT * FROM bsak INTO TABLE it_bsak
+           WHERE bukrs = 'OVL'
+           AND   belnr   = wa_bsak-augbl
+           AND   augdt  = wa_bsak-augdt.
+*
+
+*          AND   augdt =  @wa_stat-mblnr_invdt.
+        ENDIF.
+        IF it_bsak[] IS NOT INITIAL.
+
+" " testing **BEGIN OF CHANGE BY SAPOSS 15.05.2026  FOR ATC
+*          SELECT bukrs , belnr , gjahr , buzid , dmbtr , sgtxt , hkont FROM bseg INTO TABLE @DATA(it_bseg)
+*            FOR ALL ENTRIES IN @it_bsak
+*            WHERE bukrs = @it_bsak-bukrs
+*            AND   belnr = @it_bsak-belnr
+*            AND   gjahr = @it_bsak-gjahr.
+ SELECT  COMPANYCODE AS BUKRS , ACCOUNTINGDOCUMENT AS BELNR ,
+FISCALYEAR AS GJAHR , ACCOUNTINGDOCUMENTITEMTYPE AS BUZID ,
+ABSOLUTEAMOUNTINCOCODECRCY AS DMBTR , DOCUMENTITEMTEXT AS SGTXT ,
+GLACCOUNT AS HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN
+@IT_BSAK WHERE COMPANYCODE = @IT_BSAK-BUKRS AND ACCOUNTINGDOCUMENT =
+@IT_BSAK-BELNR AND FISCALYEAR = @IT_BSAK-GJAHR INTO TABLE @DATA(IT_BSEG)
+.
+" " testing * *END OF CHANGE BY SAPOSS 15.05.2026 FOR ATC
+*     and buzid   = 'W'.
+          SELECT * FROM bkpf INTO TABLE @DATA(it_bkpf)
+          FOR ALL ENTRIES IN @it_bsak
+          WHERE bukrs = @it_bsak-bukrs
+          AND   belnr = @it_bsak-belnr
+          AND   gjahr = @it_bsak-gjahr.
+
+        ENDIF.
+
+
+        pay_stat-bank_name             = 'SBI'.
+        READ TABLE it_bkpf INTO DATA(wa_bkpf) WITH KEY belnr = wa_stat-mblnr_inv.
+
+        READ TABLE it_ims INTO DATA(wa_ims) WITH KEY trackno = wa_stat-trackno.
+        IF sy-subrc = 0.
+          READ TABLE it_bill INTO wa_bill WITH KEY gem_invoice_no = wa_ims-gem_invoice_no.
+          IF sy-subrc = 0.
+
+
+            READ TABLE it_bseg INTO DATA(wa_bseg) WITH KEY hkont = '0000093204'.
+            IF sy-subrc = 0.
+              pay_stat-payment_by           = 'INTERNETBANKING'.
+              pay_stat-bank_transaction_no   =  wa_bseg-sgtxt.
+              pay_stat-transaction_date      =  wa_bkpf-budat.
+              pay_stat-transaction_id        = wa_bseg-sgtxt.
+              IF wa_bill-bill_amount NE wa_bseg-dmbtr.
+                DATA(diff) = wa_bill-bill_amount - wa_bseg-dmbtr.
+                pay_stat-deducted_amount = diff.  "add by rohit on 09.04.2025
+                DATA(deduct_amt) = diff. "add by rohit on 09.04.2025
+                diff = abs( diff ).
+*                IF diff LE 10.
+                pay_stat-bill_amount_paid  =  wa_bill-bill_amount.
+*                ELSE.
+*                  MESSAGE 'Bill amount tolerance Greater than 10' TYPE 'E'." comment by rohit on 09/04/2025
+*                  STOP.
+*                ENDIF.
+              ELSE.
+                pay_stat-bill_amount_paid  =  wa_bseg-dmbtr.
+              ENDIF.
+
+
+*          amtpaid = wa_bseg-dmbtr.
+            ENDIF.
+
+            READ TABLE it_bseg INTO wa_bseg WITH KEY hkont = '0000093202'.
+            IF sy-subrc = 0.
+*          pay_stat-bank_transaction_no   =  wa_bseg-sgtxt.
+              CONDENSE wa_bseg-sgtxt.
+              DATA(len) = strlen( wa_bseg-sgtxt ).
+              IF len = 16.
+                pay_stat-bank_transaction_no   =  wa_bseg-sgtxt.
+                pay_stat-payment_by            = 'INTERNETBANKING'.
+                pay_stat-transaction_date      =  wa_bkpf-budat.
+                pay_stat-transaction_id        = wa_bseg-sgtxt.
+              ELSE.
+                pay_stat-payment_by            = 'CHEQUE'.
+                pay_stat-cheque_number = wa_bseg-sgtxt.
+                pay_stat-transaction_date      =  wa_bkpf-budat.
+                pay_stat-transaction_id        = wa_bseg-sgtxt.
+              ENDIF.
+
+              IF wa_bill-bill_amount NE wa_bseg-dmbtr.
+                diff = wa_bill-bill_amount - wa_bseg-dmbtr.
+                diff = abs( diff ).
+*                IF diff LE 10.
+                pay_stat-bill_amount_paid  =  wa_bill-bill_amount.
+*                ELSE.
+*                  MESSAGE 'Bill amount tolerance Greater than 10' TYPE 'E'." comment by rohit on 09/04/2025
+*                  STOP.
+*                ENDIF.
+              ELSE.
+                pay_stat-bill_amount_paid  =  wa_bseg-dmbtr.
+              ENDIF.
+*          amtpaid = wa_bseg-dmbtr.
+            ENDIF.
+
+
+
+*      pay_stat-bank_transaction_no   = 'SBIUATTEST61550'.
+            IF pay_stat-bill_amount_paid IS INITIAL.
+              CONTINUE.
+            ENDIF.
+
+            pay_stat-bill_no               = wa_bill-bill_no.
+            pay_stat-contract_no           = wa_bill-order_id.
+            pay_stat-gem_invoice_no        = wa_bill-gem_invoice_no.
+
+            CALL FUNCTION 'NUMERIC_CHECK'
+              EXPORTING
+                string_in  = wa_bill-invoice_no
+              IMPORTING
+                string_out = v_bill
+                htype      = htype.
+
+
+            IF htype = 'NUMC'.
+              CONCATENATE v_str wa_bill-invoice_no INTO wa_bill-invoice_no.
+            ENDIF.
+            pay_stat-invoice_no            = wa_bill-invoice_no.
+
+
+*            LOOP AT it_bseg INTO wa_bseg WHERE buzid = 'W'.
+*            dedamt = dedamt + wa_bseg-dmbtr.
+*            ENDLOOP.
+
+*            dedamt = amtpaid - dedamt.
+*            dedamt = abs( dedamt ).
+*            if wa_bill-amount is NOT INITIAL.
+*            pay_stat-deducted_amount       = wa_bill-amount.
+*            pay_stat-deduction_type        = wa_bill-type.
+*            endif.
+*            if wa_stat-mblnr_inv+0(2) = '20'.
+*            pay_stat-payment_by            = 'INTERNETBANKING'.
+*            ELSEIF wa_stat-mblnr_inv+0(2) = '17'.
+*             pay_stat-payment_by            = 'CHEQUE'.
+*             pay_stat-cheque_number = wa_bseg-sgtxt.
+*            endif.
+*            pay_stat-sanction_date         = sy-datum.
+*            pay_stat-sanction_no           = ' '.
+*            """"""""""""" UAT ID PASSWORD""""""""""""""""""
+*            proxy_data-mt_security_token_sender-username  = 'SAHAY29062020'.
+*            proxy_data-mt_security_token_sender-password  = 'Test@29062020'.
+*            """""""""""" UAT ID PASSWORD""""""""""""""""""
+
+            proxy_data-mt_security_token_sender-username  = 'NBCCServices'.
+            proxy_data-mt_security_token_sender-password  = '823090987ez07u8maz0z8789qn5a4a62'.
+
+            TRY.
+                CALL METHOD lo_gem_token->si_security_token_ob
+                  EXPORTING
+                    output = proxy_data
+                  IMPORTING
+                    input  = lt_input.
+              CATCH cx_ai_system_fault INTO lo_sys_exception.
+                err_string = lo_sys_exception->get_text( ).
+              CATCH cx_ai_application_fault .
+            ENDTRY.
+
+            token = lt_input-mt_security_token_receiver-token.
+            gv_token = token.
+            pay_stat-token                 = token.
+            pay_stat-status                = 'SUCCESS'.
+*            pay_stat-transaction_date      = sy-datum.
+*            pay_stat-transaction_id        = wa_bseg-sgtxt.
+          ENDIF.
+
+*--- Build the paydata payload from pay_stat via MOVE-CORRESPONDING (the
+*    ty_cpi_paydata component names match pay_stat's field names), then
+*    serialize with the camelCase JSON keys the GeM API expects.
+          CLEAR ls_cpi_request.
+          ls_cpi_request-user    = 'NBCCServices'.
+          ls_cpi_request-method  = 'payments'.
+          MOVE-CORRESPONDING pay_stat TO ls_cpi_request-paydata.
+
+*         Reformat dates to YYYY-MM-DD if they arrived as YYYYMMDD
+          IF strlen( ls_cpi_request-paydata-transaction_date ) = 8.
+            ls_cpi_request-paydata-transaction_date =
+              |{ ls_cpi_request-paydata-transaction_date+0(4) }-{ ls_cpi_request-paydata-transaction_date+4(2) }-{ ls_cpi_request-paydata-transaction_date+6(2) }|.
+          ENDIF.
+          IF strlen( ls_cpi_request-paydata-sanction_date ) = 8.
+            ls_cpi_request-paydata-sanction_date =
+              |{ ls_cpi_request-paydata-sanction_date+0(4) }-{ ls_cpi_request-paydata-sanction_date+4(2) }-{ ls_cpi_request-paydata-sanction_date+6(2) }|.
+          ENDIF.
+
+          lt_paydata_maps = VALUE #(
+            ( abap = 'TRANSACTION_ID'      json = 'transactionID' )
+            ( abap = 'PAYMENT_BY'          json = 'paymentBy' )
+            ( abap = 'CONTRACT_NO'         json = 'contractNo' )
+            ( abap = 'GEM_INVOICE_NO'      json = 'gemInvoiceNo' )
+            ( abap = 'INVOICE_NO'          json = 'invoiceNo' )
+            ( abap = 'BILL_NO'             json = 'billNo' )
+            ( abap = 'BILL_AMOUNT_PAID'    json = 'billAmountPaid' )
+            ( abap = 'TRANSACTION_DATE'    json = 'transactionDate' )
+            ( abap = 'DEDUCTION_TYPE'      json = 'deductionType' )
+            ( abap = 'BANK_NAME'           json = 'bankName' )
+            ( abap = 'BANK_TRANSACTION_NO' json = 'bankTransactionNo' )
+            ( abap = 'SANCTION_DATE'       json = 'sanctionDate' ) ).
+
+          lv_json = /ui2/cl_json=>serialize(
+                      data          = ls_cpi_request
+                      compress      = abap_true
+                      pretty_name   = /ui2/cl_json=>pretty_mode-low_case
+                      name_mappings = lt_paydata_maps ).
+
+          cl_http_client=>create_by_destination(
+            EXPORTING destination = c_dest
+            IMPORTING client      = lo_client
+            EXCEPTIONS OTHERS     = 1 ).
+          IF sy-subrc <> 0.
+            WRITE: / 'Error creating HTTP client for destination', c_dest.
+          ELSE.
+            lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
+            cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
+            lo_client->request->set_method( if_http_request=>co_request_method_post ).
+            lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
+            IF gv_token IS NOT INITIAL.
+              lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
+            ENDIF.
+
+            lo_client->request->set_cdata( lv_json ).
+            lo_client->send( EXCEPTIONS OTHERS = 1 ).
+            IF sy-subrc <> 0.
+              WRITE: / 'Error sending request to CPI'.
+              lo_client->close( EXCEPTIONS OTHERS = 0 ).
+            ELSE.
+              lo_client->receive( EXCEPTIONS OTHERS = 1 ).
+              lo_client->response->get_status( IMPORTING code = lv_code reason = lv_reason ).
+              lv_response = lo_client->response->get_cdata( ).
+              lo_client->close( EXCEPTIONS OTHERS = 0 ).
+
+              /ui2/cl_json=>deserialize( EXPORTING json = lv_response
+                                         CHANGING  data = ls_cpi_resp ).
+            ENDIF.
+          ENDIF.
+
+          MOVE-CORRESPONDING wa_bill TO wa_status.
+
+*         Map the confirmed flat response {transactionID,status,paymentMode,
+*         message} onto the display structure.
+          wa_status-response_status  = ls_cpi_resp-status.        " Success / fail
+          wa_status-response_message = ls_cpi_resp-message.       " e.g. "Already Exist"
+*         No equivalent in the confirmed real response - left unset:
+*         service_validation, validationstatus, response_code, response_code1.
+
+
+          wa_status-deduction_amount = deduct_amt. " add by rohit on 09.04.2025
+          wa_status-bill_amount = wa_bill-bill_amount." add by rohit on 09.04.2025
+          wa_status-ovl_bill_amount = wa_bseg-dmbtr." add by rohit on 06.05.2025
+
+
+
+          SELECT SINGLE * FROM zgem_bill INTO @DATA(st_bill) WHERE gem_invoice_no EQ @wa_status-gem_invoice_no . " soc by rohit on 29-04-2025
+          wa_status-payment_date = st_bill-payment_date.
+          wa_status-vendor = st_bill-vendor.
+          wa_status-vendor_name = st_bill-vendor_name.
+          wa_status-document_number = st_bill-document_number.
+          wa_status-po_number = st_bill-po_number.
+          wa_status-ims_no = st_bill-ims_no.
+          wa_status-liv_no = st_bill-liv_no.
+          MODIFY zgem_bill FROM wa_status.        " eoc by rohit on  29-04-2025.
+
+
+          APPEND wa_status TO it_status.
+*        endif.
+        ENDIF.
+*        ENDIF.
+
+
+
+
+
+
+
+      ENDIF.
+      CLEAR: diff , wa_ims , wa_bseg , wa_bill , wa_stat , wa_status , ls_cpi_request , ls_cpi_resp , pay_stat, wa_bsak , wa_bkpf,deduct_amt.
+      REFRESH: it_bseg[],it_bkpf[],it_bsak[].
+    ENDLOOP.
+  ENDIF.
+
+
+ELSEIF r2 = 'X'.
+
+  SELECT * FROM zgem_bill INTO TABLE it_status
+    WHERE gem_invoice_no IN s_gem.
+
+ELSEIF r3 = 'X'.
+
+  CALL TRANSACTION 'ZGEM_RESEND'.
+
+ENDIF.
+
+IF r3 NE 'X'.
+
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_program_name         = sy-repid
+*     I_INTERNAL_TABNAME     = 'IT_FINAL'
+      i_structure_name       = 'ZGEM_BILL'
+      i_client_never_display = 'X'
+*     I_INCLNAME             =
+*     I_BYPASSING_BUFFER     =
+*     I_BUFFER_ACTIVE        =
+    CHANGING
+      ct_fieldcat            = it_fcat
+*     EXCEPTIONS
+*     INCONSISTENT_INTERFACE = 1
+*     PROGRAM_ERROR          = 2
+*     OTHERS                 = 3
+    .
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+  LOOP AT it_fcat INTO wa_fcat.
+    IF wa_fcat-seltext_m IS INITIAL.
+      wa_fcat-seltext_l = wa_fcat-fieldname.
+      wa_fcat-seltext_m = wa_fcat-fieldname.
+      wa_fcat-seltext_s = wa_fcat-fieldname.
+      MODIFY it_fcat FROM wa_fcat.
+    ENDIF.
+
+  ENDLOOP.
+
+
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_BUFFER_ACTIVE    =
+*     I_INTERFACE_CHECK  = ' '
+      i_callback_program = sy-repid
+*     I_CALLBACK_PF_STATUS_SET    = ' '
+*     I_CALLBACK_USER_COMMAND     = ' '
+*     I_CALLBACK_TOP_OF_PAGE      = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE = ' '
+*     I_CALLBACK_HTML_END_OF_LIST = ' '
+*     I_STRUCTURE_NAME   = alv_tab
+*     I_BACKGROUND_ID    = ' '
+*     i_grid_title       = title
+*     I_GRID_SETTINGS    = grid
+*     IS_LAYOUT          =
+      it_fieldcat        = it_fcat[]
+*     IT_EXCLUDING       =
+*     IT_SPECIAL_GROUPS  =
+*     IT_SORT            =
+*     IT_FILTER          =
+*     IS_SEL_HIDE        =
+*     I_DEFAULT          = 'X'
+*     I_SAVE             = ' '
+*     IS_VARIANT         =
+*     IT_EVENTS          =
+*     IT_EVENT_EXIT      =
+*     IS_PRINT           =
+*     IS_REPREP_ID       =
+*     I_SCREEN_START_COLUMN       = 0
+*     I_SCREEN_START_LINE         = 0
+*     I_SCREEN_END_COLUMN         = 0
+*     I_SCREEN_END_LINE  = 0
+*    IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER     =
+*     ES_EXIT_CAUSED_BY_USER      =
+    TABLES
+      t_outtab           = it_status
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDIF.

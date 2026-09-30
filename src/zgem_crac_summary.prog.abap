@@ -1,33 +1,22 @@
 *&---------------------------------------------------------------------*
-*& Report ZGEM_CPI_CRAC_SUMMARY
+*& Report ZGEM_CRAC_SUMMARY
 *&---------------------------------------------------------------------*
-*& CRAC Summary (3.6) - GeM CPI integration.
-*& Same approach as ZGEM_CPI_ORDER_SUMMARY:
-*&   1. Generate SEK token via proxy ZGEM_TOKENCO_SI_SECURITY_TOKEN.
-*&   2. Call CPI through SM59 destination CPI_HTTP_GEM.
-*&   3. Path -> CPI derives CamelHttpPath (sender endpoint must end with /*).
-*&   4. POST JSON body; SEK token sent as header 'token' = Bearer <token>.
-*&   5. Parse response and display as ALV grid (one row per cracNumber).
+*& CRAC Summary - GeM CPI integration (customer version).
+*& Selection screen: from-date / to-date only. All other request fields
+*& are hard-coded. Fetched rows are saved to ZGEMC_CRACSUMM and shown in ALV.
 *&
-*& Real response shape:
+*& Real response shape (confirmed):
 *&   {"sub":..,"aud":..,"iss":..,"data":[
-*&     {"date":..,"count":..,"cracNumbers":[{"cracNumber":..}]}
-*&   ]}
+*&     {"date":..,"count":..,"cracNumbers":[{"cracNumber":..}]}]}
 *&---------------------------------------------------------------------*
-REPORT zgem_cpi_crac_summary.
+REPORT zgem_crac_summary.
 
-CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM'.
+PARAMETERS: datefrom TYPE sy-datum DEFAULT sy-datum,
+            dateto   TYPE sy-datum DEFAULT sy-datum.
 
-PARAMETERS:
-            p_head  TYPE char70 LOWER CASE DEFAULT 'CRAC Summary (3.6)', " ALV list header (editable)
-            p_user  TYPE string LOWER CASE DEFAULT 'clientname',
-            p_buyer TYPE string LOWER CASE DEFAULT 'buyerID',   " optional
-            p_ason  TYPE string LOWER CASE DEFAULT '2023-04-12', " single-date mode
-            p_from  TYPE string LOWER CASE,                      " range mode (with p_to)
-            p_to    TYPE string LOWER CASE,                      " range mode (needs p_from)
-            p_path  TYPE string LOWER CASE DEFAULT '/http/GEM/Sync/CracSummary'.
+CONSTANTS: c_dest TYPE rfcdest VALUE 'CPI_HTTP_GEM',
+           c_path TYPE string   VALUE '/http/GEM/Sync/CracSummary'.
 
-*--- Token proxy objects
 DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       proxy_data       TYPE zgem_tokenmt_security_token_se,
       lt_input         TYPE zgem_tokenmt_security_token_re,
@@ -35,27 +24,23 @@ DATA: lo_gem_token     TYPE REF TO zgem_tokenco_si_security_token,
       err_string       TYPE string,
       gv_token         TYPE string.
 
-*--- Request payload
 TYPES: BEGIN OF ty_request,
          user          TYPE string,
          method        TYPE string,
          buyer_user_id TYPE string,
-         as_on         TYPE string,
          from_date     TYPE string,
          to_date       TYPE string,
        END OF ty_request.
 
-*--- Response structures matching the ACTUAL payload.
-*   Component names equal JSON keys (case-insensitive match) -> no name_mappings.
 TYPES: BEGIN OF ty_crac,
-         cracnumber TYPE string,   " cracNumber
+         cracnumber TYPE string,       " cracNumber
        END OF ty_crac,
        tt_crac TYPE STANDARD TABLE OF ty_crac WITH DEFAULT KEY.
 
 TYPES: BEGIN OF ty_data_block,
          date        TYPE string,
          count       TYPE i,
-         cracnumbers TYPE tt_crac,   " cracNumbers array
+         cracnumbers TYPE tt_crac,      " cracNumbers array
        END OF ty_data_block,
        tt_data TYPE STANDARD TABLE OF ty_data_block WITH DEFAULT KEY.
 
@@ -66,17 +51,6 @@ TYPES: BEGIN OF ty_response,
          data TYPE tt_data,
        END OF ty_response.
 
-*--- Flat display: one row per cracNumber
-TYPES: BEGIN OF ty_display,
-         sub        TYPE string,
-         aud        TYPE string,
-         iss        TYPE string,
-         date       TYPE string,
-         count      TYPE i,
-         cracnumber TYPE string,
-       END OF ty_display,
-       tt_display TYPE STANDARD TABLE OF ty_display WITH DEFAULT KEY.
-
 DATA: lo_client   TYPE REF TO if_http_client,
       ls_request  TYPE ty_request,
       ls_response TYPE ty_response,
@@ -86,25 +60,13 @@ DATA: lo_client   TYPE REF TO if_http_client,
       lv_response TYPE string,
       lv_code     TYPE i,
       lv_reason   TYPE string,
-      lt_display  TYPE tt_display,
-      ls_display  TYPE ty_display,
+      it_out      TYPE STANDARD TABLE OF zgemc_cracsumm,
+      wa_out      TYPE zgemc_cracsumm,
       lo_alv      TYPE REF TO cl_salv_table,
       lx_salv     TYPE REF TO cx_salv_msg.
 
 START-OF-SELECTION.
 
-*--- 1. Validate input
-  IF p_ason IS NOT INITIAL AND ( p_from IS NOT INITIAL OR p_to IS NOT INITIAL ).
-    WRITE: / 'Error: provide either as_on OR from_date/to_date, not both.'. RETURN.
-  ENDIF.
-  IF p_ason IS INITIAL AND p_from IS INITIAL.
-    WRITE: / 'Error: provide as_on, or from_date (with to_date).'. RETURN.
-  ENDIF.
-  IF p_from IS NOT INITIAL AND p_to IS INITIAL.
-    WRITE: / 'Error: to_date is mandatory when from_date is set.'. RETURN.
-  ENDIF.
-
-*--- 1a. Generate the SEK security token via the CPI token proxy
   proxy_data-mt_security_token_sender-username = 'NBCCServices'.
   proxy_data-mt_security_token_sender-password = '823090987ez07u8maz0z8789qn5a4a62'.
   TRY.
@@ -118,24 +80,18 @@ START-OF-SELECTION.
   ENDTRY.
   gv_token = lt_input-mt_security_token_receiver-token.
 
-*--- 2. Build the JSON request payload
   CLEAR ls_request.
-  ls_request-user   = p_user.
+  ls_request-user   = 'NBCCServices'.
   ls_request-method = 'cracSummary'.
-  ls_request-buyer_user_id = p_buyer.
-  IF p_ason IS NOT INITIAL.
-    ls_request-as_on = p_ason.
-  ELSE.
-    ls_request-from_date = p_from.
-    ls_request-to_date   = p_to.
-  ENDIF.
+* buyer_user_id is OPTIONAL per GeM - intentionally omitted so GeM does not filter by an OVL buyer. Set a value here only if GeM requires it.
+  ls_request-from_date = |{ datefrom+0(4) }-{ datefrom+4(2) }-{ datefrom+6(2) }|.
+  ls_request-to_date   = |{ dateto+0(4) }-{ dateto+4(2) }-{ dateto+6(2) }|.
 
   lv_json = /ui2/cl_json=>serialize(
               data        = ls_request
               compress    = abap_true
               pretty_name = /ui2/cl_json=>pretty_mode-low_case ).
 
-*--- 3. Create HTTP client from SM59 destination and set path/method
   cl_http_client=>create_by_destination(
     EXPORTING destination = c_dest
     IMPORTING client      = lo_client
@@ -145,16 +101,13 @@ START-OF-SELECTION.
   ENDIF.
 
   lo_client->propertytype_logon_popup = if_http_client=>co_disabled.
-  cl_http_utility=>set_request_uri( request = lo_client->request uri = p_path ).
+  cl_http_utility=>set_request_uri( request = lo_client->request uri = c_path ).
   lo_client->request->set_method( if_http_request=>co_request_method_post ).
-
-*--- 4. Headers: Content-Type + SEK token header 'token' = Bearer <token>
   lo_client->request->set_header_field( name = 'Content-Type' value = 'application/json' ).
   IF gv_token IS NOT INITIAL.
     lo_client->request->set_header_field( name = 'token' value = |Bearer { gv_token }| ).
   ENDIF.
 
-*--- 5. Body + send + receive
   lo_client->request->set_cdata( lv_json ).
   lo_client->send( EXCEPTIONS OTHERS = 1 ).
   IF sy-subrc <> 0.
@@ -165,34 +118,34 @@ START-OF-SELECTION.
   lv_response = lo_client->response->get_cdata( ).
   lo_client->close( EXCEPTIONS OTHERS = 0 ).
 
-*--- 6. Parse the full response into typed structures
   /ui2/cl_json=>deserialize( EXPORTING json = lv_response
                              CHANGING  data = ls_response ).
 
-*--- 6a. Flatten to one row per cracNumber per date block
-  CLEAR lt_display.
+*--- Flatten to one row per cracNumber, save to ZGEMC_CRACSUMM, collect for ALV
+  CLEAR it_out.
   LOOP AT ls_response-data INTO ls_block.
     LOOP AT ls_block-cracnumbers INTO ls_crac.
-      CLEAR ls_display.
-      ls_display-sub        = ls_response-sub.
-      ls_display-aud        = ls_response-aud.
-      ls_display-iss        = ls_response-iss.
-      ls_display-date       = ls_block-date.
-      ls_display-count      = ls_block-count.
-      ls_display-cracnumber = ls_crac-cracnumber.
-      APPEND ls_display TO lt_display.
+      CLEAR wa_out.
+      wa_out-crac_number = ls_crac-cracnumber.
+      wa_out-sdate       = ls_block-date.
+      wa_out-scount      = ls_block-count.
+      wa_out-datefrom    = datefrom.
+      wa_out-dateto      = dateto.
+      wa_out-ernam       = sy-uname.
+      wa_out-erdat       = sy-datum.
+      MODIFY zgemc_cracsumm FROM wa_out.
+      APPEND wa_out TO it_out.
     ENDLOOP.
   ENDLOOP.
 
-*--- 7. Display as ALV grid
-  IF lt_display IS NOT INITIAL.
+  IF it_out IS NOT INITIAL.
     TRY.
         cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
-                                CHANGING  t_table      = lt_display ).
+                                CHANGING  t_table      = it_out ).
         lo_alv->get_columns( )->set_optimize( abap_true ).
         lo_alv->get_functions( )->set_all( abap_true ).
         lo_alv->get_display_settings( )->set_list_header(
-          |{ ls_response-sub } - { ls_response-aud } - { ls_response-iss } - { lines( lt_display ) } CRAC(s)| ).
+          |GeM CRAC Summary - { lines( it_out ) } CRAC(s)| ).
         lo_alv->display( ).
       CATCH cx_salv_msg INTO lx_salv.
         WRITE: / 'ALV error:', lx_salv->get_text( ).
