@@ -2710,6 +2710,21 @@ CLASS lcl_h_tds IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
+      " This tab adds withholding tax to a company code the vendor already
+      " has; it cannot create one. The row carries QLAND and the tax types
+      " and nothing else, so where the vendor has no LFB1 the API takes the
+      " segment as a creation and asks for the fields a company code needs -
+      " "Reconciliation acct (LFB1-AKONT) is a required entry field", the
+      " same for REPRF and ZWELS - naming three fields this tab does not
+      " have and giving no hint that the company code is the problem.
+      IF mo_cfg->has_lfb1( iv_lifnr = lv_lifnr iv_bukrs = lv_bukrs ) = abap_false.
+        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_k2 = lv_bukrs iv_ty = 'E'
+                     iv_txt = |Vendor { lv_lifnr } is not extended to company code { lv_bukrs } - | &&
+                              |extend it there first (tab "Vendor extension"). This tab only adds | &&
+                              |withholding tax to a company code the vendor already has| ).
+        CONTINUE.
+      ENDIF.
+
       DATA(lv_land) = COND land1( WHEN lv_qland IS NOT INITIAL THEN lv_qland
                                   ELSE mo_cfg->vend_land1( lv_lifnr ) ).
 
@@ -2816,8 +2831,9 @@ CLASS lcl_h_tds IMPLEMENTATION.
 
       DATA ls_cc TYPE vmds_ei_company.
       CLEAR ls_cc.
-      ls_cc-task           = COND #( WHEN mo_cfg->has_lfb1( iv_lifnr = CONV lifnr( lv_lifnr ) iv_bukrs = CONV bukrs( lv_bukrs ) ) = abap_true
-                                     THEN gc_u ELSE gc_i ).
+      " Always a change: the row was turned away above if the company code
+      " was not already on the vendor.
+      ls_cc-task           = gc_u.
       ls_cc-data_key-bukrs = lv_bukrs.
       lcl_util=>set( EXPORTING iv_comp = 'QLAND' iv_value = lv_qland
                      CHANGING cs_data = ls_cc-data cs_datax = ls_cc-datax ).
@@ -3725,22 +3741,19 @@ CLASS lcl_h_blk IMPLEMENTATION.
                      iv_txt = |SPERM_1 (purch.org block): { lv_m1w }| ).
       ENDIF.
 
-      " The template's own rule. Every breach of the row is reported, not
-      " only the first - a tester who has to run the file once per message
-      " learns the file's faults one at a time.
-      DATA lv_bad TYPE abap_bool.
-      CLEAR lv_bad.
+      " SPERQ together with a company-code or purchasing-organisation block.
+      " The template's guideline above column 9 says it should be blank then,
+      " and that rule used to turn the row away. Cipla's own practice is the
+      " other way round - "SPERQ cannot be blank in case of a vendor total
+      " block" - and their row means both at once. So the row is no longer
+      " refused here: it says what it is doing and goes to SAP, which is the
+      " only place that can say whether the combination stands.
       IF lv_q IS NOT INITIAL AND lv_q <> gc_clear
          AND ( lv_s1 IS NOT INITIAL OR lv_m1 IS NOT INITIAL ).
-        " The template's own guideline above column 9: "This should be blank
-        " if record has to block at company/ purchase level. As per current
-        " process, if record is blocked at vendor level, user has to give
-        " 99/ 01 value in this field."
-        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'E'
-                     iv_txt = 'SPERQ (column 9) must be blank when the block is at company code or ' &&
-                              'purchasing organisation level (columns 6 and 8). Fill it only for a ' &&
-                              'block at vendor level - columns 5 and 7 - and leave 6 and 8 empty' ).
-        lv_bad = abap_true.
+        mo_log->add( iv_row = ls_row-row iv_k1 = lv_lifnr iv_ty = 'W'
+                     iv_txt = |SPERQ { lv_q } is set together with a block at company code or | &&
+                              |purchasing organisation level - the template's guideline has SPERQ | &&
+                              |blank in that case, and both are being sent as the row asks| ).
       ENDIF.
       " 01, 02 and 99 are what the template lists. Anything else is passed
       " on as it stands - the domain may know more - but it is worth saying.
@@ -3750,12 +3763,6 @@ CLASS lcl_h_blk IMPLEMENTATION.
                      iv_txt = |SPERQ "{ lv_q }" is not one of the values the template lists - | &&
                               |01 block purchase order, 02 block quotation request and purchase | &&
                               |order, 99 total block| ).
-      ENDIF.
-      IF lv_bad = abap_true.
-        IF p_stop = abap_true.
-          EXIT.
-        ENDIF.
-        CONTINUE.
       ENDIF.
       IF lv_s IS INITIAL AND lv_s1 IS INITIAL AND lv_m IS INITIAL
          AND lv_m1 IS INITIAL AND lv_q IS INITIAL.
