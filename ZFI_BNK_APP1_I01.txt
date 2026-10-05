@@ -175,6 +175,31 @@ MODULE get_selected_row_tab1 INPUT.
       ENDIF.
     ENDIF.
   ENDIF.
+
+* ---- Reject (level 1): mark the selected batch rejected so it leaves the
+*      approval worklist. For duplicate / superseded batches. ----
+  IF ok_code1 = 'REJECT1'.
+    CALL METHOD c_alvgd1->get_selected_rows
+      IMPORTING
+        et_index_rows = gt_selected_rows1.
+    CLEAR lv_lines.
+    DESCRIBE TABLE gt_selected_rows1 LINES lv_lines.
+    IF lv_lines EQ 0.
+      MESSAGE 'Please select one record' TYPE 'I'.
+      EXIT.
+    ELSEIF lv_lines > 1.
+      MESSAGE 'Please select only single record' TYPE 'I'.
+      EXIT.
+    ENDIF.
+    READ TABLE gt_selected_rows1 INTO gs_selected_rows1 INDEX 1.
+    IF sy-subrc = 0.
+      READ TABLE gt_final INTO gs_final INDEX gs_selected_rows1-index.
+      IF sy-subrc = 0.
+        PERFORM f_reject_batch USING gs_final.
+        REFRESH gt_selected_rows1.
+      ENDIF.
+    ENDIF.
+  ENDIF.
 ENDMODULE.                 " GET_SELECTED_ROW_TAB1  INPUT
 *&---------------------------------------------------------------------*
 *&      Module  GET_SELECTED_ROW_TAB2  INPUT
@@ -475,6 +500,30 @@ MODULE get_selected_row_tab2 INPUT.
       ENDIF.
     ENDIF.
   ENDIF.
+
+* ---- Reject (level 2): same as level 1, from the second-approval tab. ----
+  IF ok_code2 = 'REJECT2'.
+    CALL METHOD c_alvgd2->get_selected_rows
+      IMPORTING
+        et_index_rows = gt_selected_rows2.
+    CLEAR lv_lines1.
+    DESCRIBE TABLE gt_selected_rows2 LINES lv_lines1.
+    IF lv_lines1 EQ 0.
+      MESSAGE 'Please select one record' TYPE 'I'.
+      EXIT.
+    ELSEIF lv_lines1 > 1.
+      MESSAGE 'Please select only single record' TYPE 'I'.
+      EXIT.
+    ENDIF.
+    READ TABLE gt_selected_rows2 INTO gs_selected_rows2 INDEX 1.
+    IF sy-subrc = 0.
+      READ TABLE gt_final2 INTO gs_final2 INDEX gs_selected_rows2-index.
+      IF sy-subrc = 0.
+        PERFORM f_reject_batch USING gs_final2.
+        REFRESH gt_selected_rows2.
+      ENDIF.
+    ENDIF.
+  ENDIF.
 ENDMODULE.                 " GET_SELECTED_ROW_TAB2  INPUT
 *&---------------------------------------------------------------------*
 *&      Module  USER_COMMAND_0110  INPUT
@@ -485,8 +534,8 @@ MODULE user_command_0101 INPUT.
   DATA lv_ucomm TYPE sy-ucomm.
   lv_ucomm = sy-ucomm.
   CASE lv_ucomm.
-    WHEN 'APPROVE1'.
-      PERFORM free_objects1.
+    WHEN 'APPROVE1' OR 'REJECT1'.
+      PERFORM free_objects1.   "rebuild worklist on next PBO (rejected row drops off)
     WHEN 'CANCEL' OR 'EXIT'.
       PERFORM free_objects1.
       LEAVE PROGRAM.
@@ -507,8 +556,8 @@ MODULE user_command_0102 INPUT.
   DATA lv_ucomm1 TYPE sy-ucomm.
   lv_ucomm1 = sy-ucomm.
   CASE lv_ucomm1.
-    WHEN 'APPROVE2'.
-      PERFORM free_objects2.
+    WHEN 'APPROVE2' OR 'REJECT2'.
+      PERFORM free_objects2.   "rebuild worklist on next PBO (rejected row drops off)
     WHEN 'CANCEL' OR 'EXIT'.
       PERFORM free_objects2.
       LEAVE PROGRAM.

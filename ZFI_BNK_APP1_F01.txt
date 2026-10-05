@@ -30,7 +30,11 @@ FORM f_prepare_op_tab1 .
 * behaviour). This is the main load-time fix: the whole history of sent
 * files is no longer read. Approved-but-unsent batches are still excluded
 * per-batch via DIGITL_SIGN below.
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym WHERE sent = ' '.
+* Exclude batches a user has REJECTED (duplicate / invalid). ZREJECTED is
+* set by the Reject action (FORM f_reject_batch); such files must drop out
+* of the approval worklist so they stop appearing here.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym
+    WHERE sent = ' ' AND zrejected = ' '.
 
   DELETE gt_paym WHERE raw_data IS INITIAL.
 
@@ -103,6 +107,60 @@ FORM f_prepare_op_tab1 .
   ENDIF.
 
 ENDFORM.                    " F_PREPARE_OP_TAB1
+
+*&---------------------------------------------------------------------*
+*&      Form  F_REJECT_BATCH
+*&---------------------------------------------------------------------*
+*  Reject a batch from the approval screen. Sets ZREJECTED on the batch's
+*  ZFI_PAYM_FILE row (per LFDNR) with the user/date, so the batch drops out
+*  of the First/Second approval worklists (see the SENT/ZREJECTED filter in
+*  f_prepare_op_tab1 / f_prepare_op_tab2). Used for duplicate / superseded
+*  batches whose payment is already completed under another run.
+*----------------------------------------------------------------------*
+FORM f_reject_batch USING is_final TYPE ty_final.
+  DATA: lv_ans TYPE c,
+        ls_pf  TYPE zfi_paym_file.
+
+* Confirm - rejection removes the batch from the approval list.
+  CALL FUNCTION 'POPUP_TO_CONFIRM'
+    EXPORTING
+      titlebar              = 'Reject Batch'
+      text_question         = 'Reject this batch? It will be removed from the approval list.'
+      text_button_1         = 'Yes'
+      text_button_2         = 'No'
+      default_button        = '2'
+      display_cancel_button = ' '
+    IMPORTING
+      answer                = lv_ans
+    EXCEPTIONS
+      text_not_found        = 1
+      OTHERS                = 2.
+  IF lv_ans <> '1'.
+    RETURN.
+  ENDIF.
+
+* Mark the batch's file row (keyed per LFDNR) as rejected.
+  SELECT SINGLE * FROM zfi_paym_file INTO ls_pf
+    WHERE laufd = is_final-laufd
+      AND laufi = is_final-laufi
+      AND lfdnr = is_final-lfdnr.
+  IF sy-subrc <> 0.
+    MESSAGE 'Batch file not found - cannot reject' TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+  ls_pf-zrejected = 'X'.
+  ls_pf-zrej_by   = sy-uname.
+  ls_pf-zrej_date = sy-datum.
+  MODIFY zfi_paym_file FROM ls_pf.
+  IF sy-subrc = 0.
+    COMMIT WORK.
+    MESSAGE 'Batch rejected and removed from the approval list' TYPE 'S'.
+  ELSE.
+    ROLLBACK WORK.
+    MESSAGE 'Reject could not be saved - please retry' TYPE 'I'.
+  ENDIF.
+ENDFORM.                    " F_REJECT_BATCH
 
 *&---------------------------------------------------------------------*
 *&      Form  F_ENSURE_BATCH_SIGN
@@ -505,7 +563,9 @@ FORM f_prepare_op_tab2 .
 * pending files - this avoids reading the entire history of sent files and
 * their RAW_DATA/FILE_DATA blobs (main load-time fix). Approved-but-unsent
 * batches are still excluded per batch below via DIGITL_SIGN = ' ' + SNRO 2.
-  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2 WHERE sent = ' '.
+* Exclude REJECTED batches (ZREJECTED = 'X') from the level-2 worklist too.
+  SELECT * FROM zfi_paym_file INTO TABLE gt_paym2
+    WHERE sent = ' ' AND zrejected = ' '.
 
   DELETE gt_paym2 WHERE file_data_sent IS INITIAL.
 
