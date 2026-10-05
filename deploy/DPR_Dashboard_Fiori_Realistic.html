@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DPR Dashboard — Fiori OVP</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{--bg:#f5f6f7;--card:#fff;--line:#d9d9d9;--txt:#32363a;--muted:#6a6d70;--brand:#0a6ed1;--good:#107e3e;--warn:#e9730c;--bad:#bb0000;--shell:#354a5f;--s1:#5899da;--s2:#e8743b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:13px/1.35 "72","72full",Arial,Helvetica,sans-serif}
+  .shell{height:44px;background:var(--shell);color:#fff;display:flex;align-items:center;padding:0 16px;gap:14px;font-size:15px}
+  .shell .home{width:22px;height:22px;border:2px solid #fff;border-radius:3px}
+  .shell .sp{flex:1}.shell .av{width:26px;height:26px;border-radius:50%;background:#7fa4c7}
+  .head{background:#fff;border-bottom:1px solid var(--line);padding:10px 20px 8px}
+  .head h1{margin:0 0 6px;font:400 20px/1.2 inherit}
+  .fb{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+  .f input,.f select{height:30px;min-width:150px;border:1px solid #89919a;border-radius:4px;padding:0 8px;background:#fff;font:inherit;color:var(--txt)}
+  .btns{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .b{height:30px;padding:0 10px;border:1px solid #0854a0;border-radius:4px;background:#fff;color:#0854a0;font:inherit;font-weight:600}
+  .b.go{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .grid{padding:14px 20px;display:grid;grid-template-columns:repeat(auto-fill,320px);gap:14px;align-items:start}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:4px;box-shadow:0 0 2px rgba(0,0,0,.1);overflow:hidden}
+  .card.w2{grid-column:span 2}
+  .ch{padding:10px 12px 6px;border-bottom:1px solid #eee}
+  .ch .t{font-size:15px;font-weight:600;color:var(--brand)}
+  .ch .st{font-size:12px;color:var(--muted);margin-top:2px}
+  .cb{padding:8px 12px 10px}
+  .kpi{display:flex;align-items:baseline;gap:10px;padding:4px 0 2px}
+  .kpi .v{font-size:28px;font-weight:300}.kpi .u{font-size:12px;color:var(--muted)}
+  .kpi .d{font-size:12px;color:var(--bad)}
+  .legend{display:flex;gap:14px;font-size:11px;color:var(--muted);margin:2px 0 4px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  svg text{font-size:10px;fill:#6a6d70}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:var(--muted);font-weight:400;padding:4px 2px;border-bottom:1px solid #e5e5e5}
+  td{padding:6px 2px;border-bottom:1px solid #f0f0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
+  td.n,th.n{text-align:right}
+  .g{color:var(--good)}.w{color:var(--warn)}.r{color:var(--bad)}
+  .vm{font-size:12px;color:var(--brand);padding:6px 12px 10px;border-top:1px solid #eee}
+  .note{margin:6px 20px 18px;padding:10px 12px;background:#fff8e1;border:1px solid #f0d58c;border-radius:4px;font-size:12px}
+  .note b{display:block;margin-bottom:3px}
+  .list li{list-style:none;display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0}
+  .list{margin:0;padding:0}
+  .list .l{color:var(--muted);font-size:11px}
+  @media (max-width:700px){.grid{grid-template-columns:1fr}.card.w2{grid-column:span 1}}
+</style>
+</head>
+<body>
+<div class="shell"><div class="home"></div><span>DPR Production Dashboard</span><span class="sp"></span><div class="av"></div></div>
+<div class="head">
+  <h1>DPR Production Dashboard</h1>
+  <div class="fb">
+    <label class="f">Production date from*<input value="01.09.2025"></label>
+    <label class="f">Production date to*<input value="30.09.2025"></label>
+    <label class="f">Fiscal year*<input value="2025"></label>
+    <label class="f">Business unit<select><option>All</option></select></label>
+    <div class="btns"><button class="b">Adapt Filters (3)</button><button class="b go">Go</button></div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- Card 1: analytical line card, 2 columns wide (resizable layout) -->
+  <div class="card w2">
+    <div class="ch"><div class="t">Actual Production vs BE Target (BOEPD)</div><div class="st">OVL share · 01.09.2025 – 30.09.2025</div></div>
+    <div class="cb">
+      <div class="legend"><span><i style="background:var(--s1)"></i>Actual Production (BOEPD)</span><span><i style="background:var(--s2)"></i>BE Target (BOEPD)</span></div>
+      <svg width="616" height="190" viewBox="0 0 616 190">
+        <g id="ax"></g>
+        <polyline id="p1" fill="none" stroke="#5899da" stroke-width="2"/>
+        <polyline id="p2" fill="none" stroke="#e8743b" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Card 2: table card YTD -->
+  <div class="card">
+    <div class="ch"><div class="t">Production Performance — YTD</div><div class="st">Per day, FY 2025-26 to date</div></div>
+    <div class="cb"><table>
+      <tr><th>Row</th><th class="n">Actual</th><th class="n">% Achv</th></tr>
+      <tr><td>YTD - Oil, LNG &amp; Cond. (BOPD)</td><td class="n">94,110</td><td class="n g">96.5 %</td></tr>
+      <tr><td>YTD - Gas (MMSCMD)</td><td class="n">15.79</td><td class="n g">97.1 %</td></tr>
+    </table></div>
+    <div class="vm">View More ›</div>
+  </div>
+
+  <!-- Card 3: table card Annual -->
+  <div class="card">
+    <div class="ch"><div class="t">Production Performance — Annual</div><div class="st">BE target per day, FY 2025-26</div></div>
+    <div class="cb"><table>
+      <tr><th>Row</th><th class="n">BE Target</th><th class="n">BOEPD</th></tr>
+      <tr><td>Annual - Oil, LNG &amp; Cond. (BOPD)</td><td class="n">98,200</td><td class="n">98,200</td></tr>
+      <tr><td>Annual - Gas (MMSCMD)</td><td class="n">16.40</td><td class="n">103,160</td></tr>
+    </table></div>
+    <div class="vm">View More ›</div>
+  </div>
+
+  <!-- Card 4: column card, target vs actual -->
+  <div class="card">
+    <div class="ch"><div class="t">Target vs Actual by Product</div><div class="st">FY 2025 · TAR_BE · monthly reconciled</div></div>
+    <div class="cb">
+      <div class="legend"><span><i style="background:var(--s1)"></i>Actual</span><span><i style="background:var(--s2)"></i>Target</span></div>
+      <svg width="296" height="150" viewBox="0 0 296 150">
+        <g font-size="10" fill="#6a6d70">
+          <rect x="30" y="40" width="22" height="90" fill="#5899da"/><rect x="54" y="30" width="22" height="100" fill="#e8743b"/><text x="36" y="144">Oil</text>
+          <rect x="100" y="70" width="22" height="60" fill="#5899da"/><rect x="124" y="65" width="22" height="65" fill="#e8743b"/><text x="106" y="144">Gas</text>
+          <rect x="170" y="110" width="22" height="20" fill="#5899da"/><rect x="194" y="105" width="22" height="25" fill="#e8743b"/><text x="172" y="144">Cond.</text>
+          <rect x="240" y="120" width="22" height="10" fill="#5899da"/><rect x="264" y="118" width="22" height="12" fill="#e8743b"/><text x="246" y="144">LNG</text>
+          <line x1="26" y1="130" x2="290" y2="130" stroke="#ccc"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Card 5: line card daily trend -->
+  <div class="card">
+    <div class="ch"><div class="t">Daily Production Trend</div><div class="st">OVL share by product · Sept 2025</div></div>
+    <div class="cb">
+      <div class="legend"><span><i style="background:var(--s1)"></i>Oil</span><span><i style="background:var(--s2)"></i>Gas</span><span><i style="background:#9fb96b"></i>Cond.</span></div>
+      <svg width="296" height="150" viewBox="0 0 296 150"><g id="ax2"></g>
+        <polyline id="t1" fill="none" stroke="#5899da" stroke-width="2"/>
+        <polyline id="t2" fill="none" stroke="#e8743b" stroke-width="2"/>
+        <polyline id="t3" fill="none" stroke="#9fb96b" stroke-width="2"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Card 6: list card latest records -->
+  <div class="card">
+    <div class="ch"><div class="t">Production Records — Latest Day</div><div class="st">30.09.2025 · by asset · OVL BOEPD</div></div>
+    <div class="cb"><ul class="list">
+      <li><span>Vankor<br><span class="l">BU-RUSSIA</span></span><span>58,710</span></li>
+      <li><span>Sakhalin-1<br><span class="l">BU-RUSSIA</span></span><span>41,380</span></li>
+      <li><span>Block 06.1<br><span class="l">BU-ASIA PACIFIC</span></span><span>20,000</span></li>
+    </ul></div>
+    <div class="vm">View More ›</div>
+  </div>
+</div>
+
+<div class="note"><b>Realistic rendering of the SAP Fiori Overview Page (resizable card layout).</b>
+Table and list cards show three columns and three rows; charts use the theme's series colours; the card size is set in manifest.json (defaultSpan). Figures are illustrative. Full tables and larger charts open in the "View More" target apps.</div>
+
+<script>
+(function(){
+  // chart 1: 30 days, actual wobbles ~150k, target flat 161k
+  var W=616,H=190,L=44,R=8,T=8,B=28,n=30,ymin=120000,ymax=180000;
+  var g=document.getElementById('ax'),s='';
+  function y(v){return T+(H-T-B)*(1-(v-ymin)/(ymax-ymin))}
+  function x(i){return L+(W-L-R)*i/(n-1)}
+  [120000,140000,160000,180000].forEach(function(v){s+='<line x1="'+L+'" y1="'+y(v)+'" x2="'+(W-R)+'" y2="'+y(v)+'" stroke="#e5e5e5"/><text x="'+(L-6)+'" y="'+(y(v)+3)+'" text-anchor="end">'+(v/1000)+'K</text>';});
+  var a=[],t=[],seed=7;
+  for(var i=0;i<n;i++){seed=(seed*9301+49297)%233280;var r=seed/233280;var v=150000+(r-0.5)*14000+(i%7==0?-8000:0);a.push(x(i)+','+y(v));t.push(x(i)+','+y(161000));
+    if(i%5==0)s+='<text x="'+x(i)+'" y="'+(H-10)+'" text-anchor="middle">2025-09-'+String(i+1).padStart(2,'0')+'</text>';}
+  g.innerHTML=s;document.getElementById('p1').setAttribute('points',a.join(' '));document.getElementById('p2').setAttribute('points',t.join(' '));
+  // chart 5
+  var g2=document.getElementById('ax2'),s2='',W2=296,H2=150,L2=30,B2=22;
+  function x2(i){return L2+(W2-L2-6)*i/(n-1)}
+  function y2(v){return 8+(H2-8-B2)*(1-v/120000)}
+  [0,60000,120000].forEach(function(v){s2+='<line x1="'+L2+'" y1="'+y2(v)+'" x2="'+(W2-6)+'" y2="'+y2(v)+'" stroke="#e5e5e5"/><text x="'+(L2-4)+'" y="'+(y2(v)+3)+'" text-anchor="end">'+(v/1000)+'K</text>';});
+  var q1=[],q2=[],q3=[];seed=3;
+  for(var j=0;j<n;j++){seed=(seed*9301+49297)%233280;var r2=seed/233280;q1.push(x2(j)+','+y2(94000+(r2-0.5)*9000));q2.push(x2(j)+','+y2(99000+(r2-0.5)*7000));q3.push(x2(j)+','+y2(9000+(r2-0.5)*2000));
+    if(j%10==0)s2+='<text x="'+x2(j)+'" y="'+(H2-6)+'" text-anchor="middle">09-'+String(j+1).padStart(2,'0')+'</text>';}
+  g2.innerHTML=s2;document.getElementById('t1').setAttribute('points',q1.join(' '));document.getElementById('t2').setAttribute('points',q2.join(' '));document.getElementById('t3').setAttribute('points',q3.join(' '));
+})();
+</script>
+</body>
+</html>
