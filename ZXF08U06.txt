@@ -653,9 +653,9 @@ IF  l_cont = 'X'.
       wa_e1edka1-ort01 = 'PRODUCT'.            "TReDS: fixed value in AG-ORT01
 
       MOVE  wa_e1edka1 TO <fs_e1edp02>-sdata.
-*   TReDS: Seller ID in BE-TELFX
+*   TReDS: Seller ID in BE-TELF1
     ELSEIF wa_e1edka1-parvw = 'BE' AND lv_sellerid_msme IS NOT INITIAL.
-      wa_e1edka1-telfx = lv_sellerid_msme.
+      wa_e1edka1-telf1 = lv_sellerid_msme.
       MOVE  wa_e1edka1 TO <fs_e1edp02>-sdata.
     ENDIF.
   ENDLOOP.
