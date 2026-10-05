@@ -1,0 +1,1022 @@
+*----------------------------------------------------------------------*
+* Report  RBNK_MERGE_RESET                                  "nte1132478
+*----------------------------------------------------------------------*
+* Reset the Payment Run Merge program SAPFPAYM_MERGE in the
+* Bank Communication Context - like RFPAYM_MERGE_RESET does for
+* Merge w/o Batching
+* Check note 1132478 for documentation.
+* Note 1234567: No reset for rejected (by 1st approver) payments, to
+*               avoid inconsistencies (double pay).
+*----------------------------------------------------------------------*
+
+REPORT rbnk_merge_reset MESSAGE-ID fz  NO STANDARD PAGE HEADING.
+TABLES reguhm.
+INCLUDE <icon>.
+TYPE-POOLS: slis, swlc.                                     "nte1537740
+
+" begin note 1681517
+DATA:
+  BEGIN OF TAB_SELFIELDS OCCURS 12,
+    FIELD(8) TYPE C,
+    TEXT(3)  TYPE N,
+  END OF TAB_SELFIELDS.
+
+FIELD-SYMBOLS <SELFIELD>.
+DEFINE BLOCK.
+
+  SELECTION-SCREEN BEGIN OF BLOCK &1 WITH FRAME TITLE BLOCK00&1.
+
+  TAB_SELFIELDS-FIELD = 'BLOCK00&1'.
+  TAB_SELFIELDS-TEXT  = 90&1.                    "Blocktext
+  APPEND TAB_SELFIELDS.
+
+END-OF-DEFINITION.
+
+  BLOCK 1.
+  PARAMETERS:
+  p_batno    type BNK_COM_BTCH_NO.   " note 1681517
+  SELECTION-SCREEN END OF BLOCK 1.
+  selection-screen begin of block 2 with frame title text-002.
+   parameters:
+  p_laufd    LIKE reguhm-laufd_m," OBLIGATORY,  note 1681517
+  p_laufi    LIKE reguhm-laufi_m." OBLIGATORY,  note 1681517
+  SELECTION-SCREEN END OF BLOCK 2.
+" end note 1681517
+parameters:
+  p_test     LIKE lko74-testlauf DEFAULT 'X',
+  p_strict   TYPE bnk_strict_rev_chk  DEFAULT 'X'.
+
+TYPES:
+  BEGIN OF y_progid,
+    progr(4) TYPE c,
+    laufd    LIKE reguv-laufd,
+    laufi    LIKE reguv-laufi,
+    objkt(4) TYPE c,
+  END OF y_progid.
+
+DATA:
+  lcx_bnk_proc TYPE REF TO cx_bnk_proc,
+  LT_SWRAGENT like SWRAGENT occurs 0 with header line,      "nte1638435
+  L_uname     type syuname,                                 "nte1638435
+  lt_reguhm LIKE reguhm OCCURS 0 WITH HEADER LINE,          "nte1234567
+  BEGIN OF lt_filedata OCCURS 0,
+    laufd_m    LIKE reguhm-laufd_m,
+    laufi_m    LIKE reguhm-laufi_m,
+    END OF  lt_filedata,
+  BEGIN OF gt_no_bnk_com OCCURS 0,                          "nte1537740
+    batchno LIKE reguhm-batchno,
+    END OF gt_no_bnk_com,
+  BEGIN OF gt_returned OCCURS 0,
+    wi_id TYPE sww_wiid,
+    batchno LIKE reguhm-batchno,                            "nte1638435
+    END OF gt_returned,
+  BEGIN OF lt_btcn OCCURS 0,
+    batchno LIKE reguhm-batchno,
+    END OF lt_btcn,
+  gt_btcn_new LIKE  lt_btcn  OCCURS 0 WITH HEADER LINE,
+  gt_btcn_rej LIKE  TABLE OF selopt,                         "n2899146
+  ls_btcn_rej TYPE  selopt,                                  "n2899146
+  lf_btc     TYPE bnk_btc_header_ui,
+  gt_btc     TYPE STANDARD TABLE OF bnk_btc_header_ui,
+  gt_laufk   LIKE ilaufk OCCURS 0 WITH HEADER LINE,
+  g_stop,
+  g_regut    LIKE regut,
+  g_progid   TYPE y_progid,
+  g_proc_btc TYPE REF TO cl_bnk_proc_batch,
+  g_function TYPE funcname,
+* Administration data for ALV
+  g_repid LIKE sy-repid,
+  g_variant      TYPE disvariant,
+  gt_fieldcat    TYPE slis_t_fieldcat_alv,
+  gt_events      TYPE slis_t_event,
+  gs_layout      TYPE slis_layout_alv,
+  gt_list_top_of_page TYPE slis_t_listheader.
+
+  data collector_laufd like p_laufd.
+  data collector_laufi like p_laufi.
+
+
+*----------------------------------------------------------------------*
+INITIALIZATION.
+
+  CLEAR  gt_laufk[].
+  gt_laufk-laufk = 'B'.
+  gt_laufk-sign  = 'I'.
+  APPEND gt_laufk.
+
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_laufd.
+  CALL FUNCTION 'F4_ZAHLLAUF'
+    EXPORTING
+      f1typ = 'D'
+      f1nme = 'P_LAUFD'
+      f2nme = 'P_LAUFI'
+    IMPORTING
+      laufd = p_laufd
+      laufi = p_laufi
+    TABLES
+      laufk = gt_laufk.
+
+*----------------------------------------------------------------------
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_laufi.
+  CALL FUNCTION 'F4_ZAHLLAUF'
+    EXPORTING
+      f1typ = 'I'
+      f1nme = 'P_LAUFI'
+      f2nme = 'P_LAUFD'
+    IMPORTING
+      laufd = p_laufd
+      laufi = p_laufi
+    TABLES
+      laufk = gt_laufk.
+
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN.
+*----------------------------------------------------------------------*
+
+
+  if ( p_laufd is initial or p_laufi is initial ) and p_batno is initial.
+    stop.
+  endif.
+* Check that entries exist
+  if p_laufd is not initial and p_laufi is not initial. " note 1681517
+    SELECT COUNT( * ) FROM  reguhm UP TO 1 ROWS
+                      WHERE ( laufd_m EQ p_laufd
+                      AND   laufi_m EQ p_laufi ).
+    IF sy-subrc NE 0.
+      MESSAGE e119.
+    ENDIF.
+  ENDIF.
+* This program is reserved for the Bank Communication (FIN-FSCM-BNK)
+* Context; for normal merge one has to use RFPAYM_MERGE_RESET
+* We recognise this BNK case by the fact that REGUHM gets 'doubled'.
+  IF p_batno IS INITIAL. " note 1681517
+    SELECT COUNT( * ) FROM  reguhm UP TO 1 ROWS
+                    WHERE laufd = p_laufd
+                    AND   laufi = p_laufi.
+  IF sy-subrc <> 0.
+    MESSAGE e000(bnk_com_intf)
+                      WITH 'Use RFPAYM_MERGE_RESET instead.'(001).
+    ENDIF.
+  ENDIF. " note 1681517
+
+* begin note 1681517
+  if p_batno is not initial and ( p_laufd is not initial or p_laufi is not initial ).
+*  check if batch-number is consistent with collector
+    select * from reguhm
+                   WHERE laufd = p_laufd
+                   AND   laufi = p_laufi
+                   AND   batchno = p_batno.
+    endselect.
+    if sy-subrc = 4.
+      message e065(F0) with 'Invalid Parameters.'.
+    endif.
+  endif. " end note 1681517
+
+
+  if p_batno is not initial.  " note 1681517
+    tables bnk_batch_header.
+    select single * from bnk_batch_header where batch_no = p_batno.
+    if sy-subrc = 0.
+      collector_laufd = bnk_batch_header-laufd.
+      collector_laufi = bnk_batch_header-laufi.
+    else.
+      message e065(F0) with 'Batch is not existing'.
+    endif.
+  endif.
+
+*----------------------------------------------------------------------*
+START-OF-SELECTION.
+*----------------------------------------------------------------------*
+
+* begin note 1681517
+* additional check, if p_batno is filled, the fields
+* collector_laufd and collector_laufi must also be filled.
+  if p_batno is not initial and collector_laufd is initial.
+    select single * from bnk_batch_header where batch_no = p_batno.
+    if sy-subrc = 0.
+      collector_laufd = bnk_batch_header-laufd.
+      collector_laufi = bnk_batch_header-laufi.
+    else.
+      message e065(F0) with 'Batch is not existing'.
+      stop.
+    endif.
+  endif.
+* end note 1681517
+
+  CREATE OBJECT g_proc_btc.
+
+* Get batches and check their status
+  if p_batno is initial.   " note 1681517
+  SELECT batchno FROM  reguhm INTO CORRESPONDING FIELDS OF TABLE lt_btcn
+                    WHERE laufd_m EQ p_laufd
+                    AND   laufi_m EQ p_laufi.
+  else.
+     SELECT batchno FROM  reguhm INTO CORRESPONDING FIELDS OF TABLE lt_btcn
+                    WHERE batchno EQ p_batno.   " note 1681517
+  endif.
+
+  SORT  lt_btcn.
+  DELETE ADJACENT DUPLICATES FROM lt_btcn.
+  LOOP AT  lt_btcn WHERE  batchno <> space.
+    if p_batno is not initial.
+      check lt_btcn-batchno = p_batno.   " note 1681517
+    endif.
+    PERFORM header_data USING lt_btcn-batchno lf_btc.
+
+    IF lf_btc-origin IS NOT INITIAL.                        "nte2970774
+      MESSAGE i134(bnk_com_core) WITH lf_btc-batch_no lf_btc-origin. "nte2970774
+      RETURN.                                               "nte2970774
+    ENDIF.                                                  "nte2970774
+
+    APPEND lf_btc TO gt_btc.
+* Store new batches
+    IF  lf_btc-urgent = '3'. "green
+      APPEND  lt_btcn TO gt_btcn_new.
+    ENDIF.
+
+* Stop condition according to severity
+    CHECK lf_btc-urgent = '1'  "red
+    OR ( p_strict <> space AND lf_btc-urgent = '2' ).  "yellow
+    g_stop = 'X'.
+  ENDLOOP.
+
+  if p_batno is not initial and sy-subrc = 4.  " note 1681517
+     message s065(F0) with 'No payments for batch existing.'.
+     stop.
+  endif.
+
+* Entry for non-batch
+  READ TABLE  lt_btcn WITH KEY  batchno = space
+   TRANSPORTING NO FIELDS.
+  IF sy-subrc = 0.
+    CLEAR lf_btc.
+    lf_btc-final  = 'No Batch'(lgo).
+    lf_btc-urgent = '3'. "green
+    lf_btc-rule_txt = lf_btc-status_txt = 'No Batch'(lgo).
+    APPEND lf_btc TO gt_btc.
+  ENDIF.
+
+
+  IF p_test = space AND g_stop = space.
+** UPDATE
+
+* Action on returned batches (Yellow light): Process Work Item
+    LOOP AT gt_returned.
+      CLEAR: LT_SWRAGENT[].
+
+      CALL FUNCTION 'SAP_WAPI_WORKITEM_RECIPIENTS'          "nte1638435
+        EXPORTING
+          WORKITEM_ID = gt_returned-wi_id
+        TABLES
+          RECIPIENTS  = LT_SWRAGENT.
+
+      READ TABLE lt_swragent WITH KEY OTYPE = 'US'.
+      IF sy-subrc = 0.
+        L_uname = lt_swragent-OBJID.
+      ELSE.
+        L_uname = sy-uname.
+      ENDIF.
+
+      CALL FUNCTION 'SAP_WAPI_SET_WORKITEM_COMPLETD'        "nte1638435
+        EXPORTING
+          workitem_id  = gt_returned-wi_id
+          ACTUAL_AGENT = L_uname.
+
+      PERFORM status_2_bra USING gt_returned-batchno.       "nte1638435
+    ENDLOOP.
+
+* Action on inconsistent batch w/o BNK_COM WI               "nte1537740
+    LOOP AT gt_no_bnk_com.
+      PERFORM status_2_bra USING gt_no_bnk_com-batchno.     "nte1537740
+    ENDLOOP.
+
+* Action on new batches (Green light):
+* Set batch to rejected (in lieu of DELETE method)
+
+* First lock all new batches (unlock automatically)
+    LOOP AT gt_btcn_new.
+      CALL FUNCTION 'BNK_API_LOCK_BATCH'
+        EXPORTING
+          i_batch_no    = gt_btcn_new-batchno
+        EXCEPTIONS
+          object_locked = 1
+          object_error  = 2
+          OTHERS        = 3.
+
+      CHECK sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE 'A' NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDLOOP.
+
+    LOOP AT gt_btcn_new.
+      TRY.
+          CALL METHOD g_proc_btc->initiate_release_status_batch
+            EXPORTING
+              i_rel_action =
+              cl_bnk_constants=>con_rel_action_reject_auto "EhP4
+              i_batch_no   = gt_btcn_new-batchno
+              i_obj_cat    = 'BNK_INI'.
+
+        CATCH cx_bnk_proc INTO lcx_bnk_proc.
+          IF lcx_bnk_proc IS BOUND.
+            MESSAGE a008(bnk_general) WITH 'SET_RELEASE_STATUS_BATCH'.
+**   An internal error has occurred in function module &1; contact sys
+            CONTINUE.
+          ENDIF.
+      ENDTRY.
+    ENDLOOP.
+
+* Handle the REGUHM of the Rejected batches       "n2899146 start
+    IF gt_btcn_rej IS NOT INITIAL.                "n2903999
+      SELECT * FROM reguhm INTO TABLE lt_reguhm
+      WHERE batchno IN gt_btcn_rej.
+
+    LOOP AT lt_reguhm.
+      DELETE FROM  reguhm
+             WHERE  laufd   = lt_reguhm-laufd_m
+             AND    laufi   = lt_reguhm-laufi_m
+             AND    zbukr   = lt_reguhm-zbukr
+             AND    lifnr   = lt_reguhm-lifnr
+             AND    kunnr   = lt_reguhm-kunnr
+             AND    empfg   = lt_reguhm-empfg
+             AND    vblnr   = lt_reguhm-vblnr
+             AND    batchno = space.
+
+      UPDATE reguhm SET
+                    laufd_m = '00000000'
+                    laufi_m = space
+                    batchno = space
+             WHERE  laufd   = lt_reguhm-laufd
+             AND    laufi   = lt_reguhm-laufi
+             AND    zbukr   = lt_reguhm-zbukr
+             AND    lifnr   = lt_reguhm-lifnr
+             AND    kunnr   = lt_reguhm-kunnr
+             AND    empfg   = lt_reguhm-empfg
+             AND    vblnr   = lt_reguhm-vblnr.
+    ENDLOOP.                                      "n2899146 end
+    ENDIF.                                          "n2903999
+
+* get file run references
+   if p_batno is initial.     " note 1681517
+    SELECT laufd_m laufi_m FROM  reguhm
+      INTO CORRESPONDING FIELDS OF TABLE lt_filedata
+           WHERE  laufd   =  p_laufd
+           AND    laufi   =  p_laufi
+           AND    laufi_m <> space.
+    else.
+     SELECT laufd_m laufi_m FROM  reguhm    " note 1681517
+       INTO CORRESPONDING FIELDS OF TABLE lt_filedata
+           WHERE  laufd   =  collector_laufd
+           AND    laufi   =  collector_laufi
+           AND    laufi_m <> space
+           AND    batchno = p_batno.
+    endif.
+
+* Actions on REGU* tables copied and adjusted from RFPAYM_MERGE_RESET
+* reset payment media run in index table
+
+    if p_batno is initial.
+      SELECT * FROM  reguhm INTO TABLE lt_reguhm              "nte1234567
+             WHERE  laufd   =  p_laufd
+             AND    laufi   =  p_laufi.
+    else.
+      SELECT * FROM  reguhm INTO TABLE lt_reguhm           " note 1681517
+             WHERE  laufd   =  collector_laufd
+             AND    laufi   =  collector_laufi
+             AND    batchno = p_batno.
+    endif.
+
+    LOOP AT lt_reguhm.                                      "nte1234567
+
+* Block deleted payments                                    "nte1234567
+      IF lt_reguhm-batchno = space.
+
+        SELECT COUNT(*) FROM  reguhm
+               WHERE  zbukr  = lt_reguhm-zbukr
+               AND    vblnr  = lt_reguhm-vblnr
+               AND    laufd_m = p_laufd
+               AND    laufi_m = p_laufi
+               AND    batchno = space.
+
+        CHECK sy-dbcnt > 0.
+      ENDIF.
+
+      if p_batno = space.     " note 1681517
+        DELETE FROM  reguhm
+             WHERE  laufd  = p_laufd
+             AND    laufi  = p_laufi
+             AND    zbukr  = lt_reguhm-zbukr
+             AND    lifnr  = lt_reguhm-lifnr
+             AND    kunnr  = lt_reguhm-kunnr
+             AND    empfg  = lt_reguhm-empfg
+             AND    vblnr  = lt_reguhm-vblnr.
+      else.    " note 1681517
+*       p_laufd and p_laufi is not filled in every case,
+*       collector is in collector_laufd and collector_laufi
+        DELETE FROM  reguhm   " note 1681517
+             WHERE  laufd  = collector_laufd
+             AND    laufi  = collector_laufi
+             AND    zbukr  = lt_reguhm-zbukr
+             AND    lifnr  = lt_reguhm-lifnr
+             AND    kunnr  = lt_reguhm-kunnr
+             AND    empfg  = lt_reguhm-empfg
+             AND    vblnr  = lt_reguhm-vblnr
+             AND    batchno = p_batno.
+      endif.
+
+     if p_batno = space.
+      UPDATE reguhm SET   laufd_m =  '00000000'
+                              laufi_m =  space
+                              batchno =  space
+                        WHERE laufd_m =  p_laufd
+                        AND   laufi_m =  p_laufi
+                        AND    zbukr  =  lt_reguhm-zbukr
+                        AND    lifnr  =  lt_reguhm-lifnr
+                        AND    kunnr  =  lt_reguhm-kunnr
+                        AND    empfg  =  lt_reguhm-empfg
+                        AND    vblnr  =  lt_reguhm-vblnr.
+     else.       " note 1681517
+        UPDATE reguhm SET   laufd_m =  '00000000'   " note 1681517
+                              laufi_m =  space
+                              batchno =  space
+                        WHERE laufd_m =  collector_laufd
+                        AND   laufi_m =  collector_laufi
+                        AND    zbukr  =  lt_reguhm-zbukr
+                        AND    lifnr  =  lt_reguhm-lifnr
+                        AND    kunnr  =  lt_reguhm-kunnr
+                        AND    empfg  =  lt_reguhm-empfg
+                        AND    vblnr  =  lt_reguhm-vblnr.
+     endif.
+    ENDLOOP.
+
+* delete payment run (file data)
+    SORT  lt_filedata.
+    DELETE ADJACENT DUPLICATES FROM lt_filedata.
+    LOOP AT  lt_filedata.
+
+      CALL FUNCTION 'DELETE_PAYMENT_ALL'
+        EXPORTING
+          date           = lt_filedata-laufd_m
+          identification = lt_filedata-laufi_m
+        EXCEPTIONS
+          OTHERS         = 0.
+      g_progid-progr = 'F110'.
+      g_progid-laufi =  lt_filedata-laufi_m.
+      g_progid-laufd =  lt_filedata-laufd_m.
+      g_progid-objkt = 'PARM'.
+      DELETE FROM rfdt  WHERE relid = 'FB'
+                        AND   srtfd = g_progid.
+      DELETE FROM reguv WHERE laufi = lt_filedata-laufi_m
+                        AND   laufd = lt_filedata-laufd_m.
+
+* delete objects of REGUT and get numbers of files
+      SELECT * FROM regut INTO  g_regut
+                          WHERE laufi EQ  lt_filedata-laufi_m
+                          AND   laufd EQ  lt_filedata-laufd_m.
+        PERFORM delete_regut_objects(rfpaym_reset) USING g_regut.
+      ENDSELECT.
+
+* delete multiple company codes
+      DELETE FROM reguta WHERE laufi EQ lt_filedata-laufi_m
+                           AND laufd EQ lt_filedata-laufd_m.
+
+* delete files from DME Administration
+      DELETE FROM regut  WHERE laufi EQ  lt_filedata-laufi_m
+                         AND   laufd EQ  lt_filedata-laufd_m.
+    ENDLOOP.
+
+* trigger update task for BNK_BATCH_HEADER before further changes
+  COMMIT WORK AND WAIT.                                     "nte2256670
+
+* Clear file reference in batch header                      "nte1433724
+*    begin of note 2073859
+*    LOOP AT gt_btc INTO lf_btc WHERE laufi_f <> space.
+    LOOP AT gt_btc INTO lf_btc.
+      if lf_btc-laufi_f <> space.
+      UPDATE bnk_batch_header SET  laufd_f =  '00000000'    "nte1433724
+                                   laufi_f =  space
+                                   xreset = 'X'
+         WHERE  batch_no  = lf_btc-batch_no.
+      else.
+       UPDATE bnk_batch_header SET xreset = 'X'
+         WHERE  batch_no  = lf_btc-batch_no.
+      endif.
+*     end of note 2073859
+    ENDLOOP.
+    COMMIT WORK.
+  ENDIF.
+
+  PERFORM protocol.
+
+  CHECK p_test = space AND g_stop = space.
+  MESSAGE i120.
+
+*&---------------------------------------------------------------------*
+*&      Form  HEADER_DATA
+*&---------------------------------------------------------------------*
+* like subroutine  GET_LISTS  in RBNK_PAYM_MONI_UI
+*&---------------------------------------------------------------------*
+FORM header_data  USING    p_batchno
+                           cf_btc STRUCTURE bnk_btc_header_ui.
+
+  DATA: l_object_cat     TYPE bca_dte_object_cat,           "nte1537740
+        l_workitem_info  TYPE swlc_workitem,                "nte1537740
+        lt_batch_no      TYPE bnk_tab_batch_no,
+        lt_batch_header  TYPE bnk_tab_batch_header,
+        l_no_auth        TYPE char1,
+        lcx_bnk_proc     TYPE REF TO cx_bnk_proc,
+        lt_sys_stat      TYPE bnk_tab_sys_stat,
+        ls_sys_stat      TYPE bnk_str_sys_stat,
+        l_status_id      TYPE j_stext,
+        l_txt            TYPE j_stext.
+
+  FIELD-SYMBOLS: <btc_header> TYPE bnk_str_batch_header.
+
+**
+  APPEND  p_batchno TO lt_batch_no.
+
+  TRY.
+      CALL METHOD g_proc_btc->read
+        EXPORTING
+          i_tab_batch_no     = lt_batch_no
+        IMPORTING
+          e_tab_batch_header = lt_batch_header
+          e_no_auth          = l_no_auth.
+
+* Exception raised in Read method
+    CATCH cx_bnk_proc INTO lcx_bnk_proc.
+      IF lcx_bnk_proc IS BOUND.
+        MESSAGE i008(bnk_general) WITH 'READ'.
+*   An internal error has occurred in function module &1; contact sys
+        EXIT.
+      ENDIF.
+  ENDTRY.
+
+  IF l_no_auth IS NOT INITIAL.
+    MESSAGE a010(bnk_general).
+  ENDIF.
+
+  READ TABLE  lt_batch_header INDEX 1 ASSIGNING  <btc_header>.
+  CHECK sy-subrc = 0.
+
+  CLEAR cf_btc.
+  MOVE-CORRESPONDING <btc_header> TO cf_btc.
+
+* Get status and text
+  CALL FUNCTION 'BNK_API_GET_STATUS'
+    EXPORTING
+      i_object_id    = <btc_header>-status
+      i_flag_active  = 'X'
+    IMPORTING
+      e_tab_sys_stat = lt_sys_stat.
+
+  READ TABLE lt_sys_stat INDEX 1 INTO ls_sys_stat .
+
+  CALL FUNCTION 'BNK_API_GET_UI_TEXT_LONG'
+    EXPORTING
+      i_object_id          = <btc_header>-status
+      i_flg_usr_stat       = 'X'
+      i_flg_only_active    = 'X'
+      i_langu              = sy-langu
+    IMPORTING
+      e_sys_stat_line      = l_status_id
+      e_sys_stat_line_long = l_txt.
+
+  lf_btc-status_id = l_status_id.
+  lf_btc-status_txt = l_txt.
+
+* Add rule text
+  PERFORM rule_text(rbnk_paym_batch_ui)
+    USING lf_btc-rule_id lf_btc-rule_txt.
+
+* Get house bank information
+  CALL FUNCTION 'BNK_UI_HOUSEBANK_BTC'
+    EXPORTING
+      i_archive  = ''
+      i_batch_no = <btc_header>-batch_no
+    IMPORTING
+      e_hbkid    = lf_btc-hbkid
+      e_hktid    = lf_btc-hktid
+    EXCEPTIONS
+      OTHERS     = 0.
+
+* Status New both for new and returned: Differentiate       "nte1638435
+  IF ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_create.
+    CALL FUNCTION 'BNK_API_CHECK_WI'
+      EXPORTING
+        i_batch_no      = <btc_header>-batch_no             "nte1638435
+      IMPORTING
+        e_object_cat    = l_object_cat.
+  ENDIF.
+
+* New: Green light
+  IF ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_create and
+     l_object_cat = 'BNK_INI'.                              "nte1638435
+    lf_btc-final  = 'New Batch'(lgn).
+    lf_btc-urgent = '3'. "green
+* In approval: Red light
+  ELSEIF ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_in_approval.
+    lf_btc-final  = 'Batch in Approval'(lrd).
+    lf_btc-urgent = '1'. "red
+* However if Workflow has not started yet or was interrupted - yellow
+    CALL FUNCTION 'BNK_API_CHECK_WI'
+      EXPORTING
+        i_batch_no      = <btc_header>-batch_no             "nte1537740
+      IMPORTING
+        e_object_cat    = l_object_cat
+        e_workitem_info = l_workitem_info.
+
+    IF l_object_cat <> 'BNK_COM' OR                         "nte1537740
+     ( l_object_cat =  'BNK_COM' AND l_workitem_info-wi_stat = 'COMPLETED' ).
+      lf_btc-final  = 'Other'(lyw).
+      lf_btc-urgent = '2'. "yellow
+      gt_no_bnk_com-batchno = <btc_header>-batch_no.
+      APPEND gt_no_bnk_com.
+    ENDIF.
+* Returned by 2nd approver: Yellow, if 1st has already 'returned' WI
+  ELSEIF ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_return or
+       ( ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_create and
+         l_object_cat = 'BNK_COM' ).                        "nte1638435
+    PERFORM returned_cases USING    <btc_header>
+                           CHANGING gt_returned-wi_id.
+
+    IF gt_returned-wi_id = space.
+      lf_btc-final  = 'Batch in Return'(lrr).
+      lf_btc-urgent = '1'. "red
+    ELSE.
+      gt_returned-batchno = <btc_header>-batch_no.          "nte1638435
+      APPEND gt_returned.
+      lf_btc-final  = 'Returned'(lyx).
+      lf_btc-urgent = '2'. "yellow
+    ENDIF.
+  ELSEIF ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_reject OR "n2899146 start
+         ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_reject_auto.
+    ls_btcn_rej-option = 'EQ'.
+    ls_btcn_rej-sign = 'I'.
+    ls_btcn_rej-low = <btc_header>-batch_no.
+    APPEND ls_btcn_rej TO gt_btcn_rej.
+    lf_btc-final = 'Rejected'(lyz).
+    IF ls_sys_stat-sys_stat = cl_bnk_constants=>con_status_reject_auto.
+      lf_btc-final = 'Rejected Automatically'(lyy).
+    ENDIF.
+    lf_btc-urgent = '2'. "yellow                                      "n2899146 end
+  ELSE.
+* All others: Yellow
+    lf_btc-final  = 'Other'(lyw).
+    lf_btc-urgent = '2'. "yellow
+  ENDIF.
+
+ENDFORM.                    " HEADER_DATA
+*&---------------------------------------------------------------------*
+*&      Form  PROTOCOL
+*&---------------------------------------------------------------------*
+FORM protocol .
+
+  PERFORM init_alv.
+  PERFORM comment_build USING gt_list_top_of_page.
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+      is_layout               = gs_layout
+      it_fieldcat             = gt_fieldcat
+      it_events               = gt_events
+      i_save                  = 'A'                            "n2648507
+      i_callback_program      = g_repid
+      i_callback_user_command = 'USER_COMMAND'
+    TABLES
+      t_outtab                = gt_btc
+    EXCEPTIONS
+      program_error           = 1
+      OTHERS                  = 2.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+ENDFORM.                    " PROTOCOL
+
+*&---------------------------------------------------------------------*
+*&      Form  INIT_ALV
+*&---------------------------------------------------------------------*
+FORM init_alv .
+
+  DATA:          lf_events   TYPE LINE OF slis_t_event.
+  FIELD-SYMBOLS: <fieldcat>  TYPE slis_fieldcat_alv.
+
+  g_repid = g_variant-report = sy-repid.
+
+  gs_layout-colwidth_optimize = 'X'.
+  gs_layout-f2code            = 'PIC1'.
+  gs_layout-detail_popup      = 'X'.
+  gs_layout-lights_fieldname  = 'URGENT'.
+
+  PERFORM eventtab_build USING gt_events[].
+
+  CALL FUNCTION 'REUSE_ALV_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'BNK_BTC_HEADER_UI'
+    CHANGING
+      ct_fieldcat            = gt_fieldcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+  IF sy-subrc <> 0.
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+  ENDIF.
+
+  READ TABLE gt_fieldcat ASSIGNING  <fieldcat>
+   WITH KEY  fieldname = 'FINAL'.
+  <fieldcat>-seltext_l = <fieldcat>-reptext_ddic =
+  <fieldcat>-seltext_s = <fieldcat>-seltext_m = 'State'(sta).
+  <fieldcat>-col_pos = 0.
+  <fieldcat>-key = 'X'.
+
+  DELETE  gt_fieldcat WHERE fieldname = 'WORKITEM_ID'.
+  DELETE  gt_fieldcat WHERE fieldname = 'URGENT'.
+
+  LOOP AT  gt_fieldcat ASSIGNING  <fieldcat>.
+    ADD 1 TO <fieldcat>-col_pos.
+
+    IF <fieldcat>-fieldname = 'BATCH_NO'.
+      <fieldcat>-key = 'X'.
+    ENDIF.
+
+    CHECK ( <fieldcat>-fieldname = 'STATUS_ID' OR
+            <fieldcat>-fieldname = 'CHUSR' OR
+            <fieldcat>-fieldname = 'CHTIME' OR
+            <fieldcat>-fieldname = 'CHDATE' OR
+            <fieldcat>-fieldname = 'RULE_ID' ).
+    <fieldcat>-no_out = 'X'.
+  ENDLOOP.
+
+ENDFORM.                    " INIT_ALV
+
+*&---------------------------------------------------------------------*
+*&      Form  COMMENT_BUILD
+*&---------------------------------------------------------------------*
+FORM comment_build USING rt_top_of_page TYPE slis_t_listheader.
+
+  DATA: ls_line TYPE slis_listheader.
+  ls_line-typ  = 'H'.
+
+  IF g_stop = space.
+    IF p_test = space.
+      if p_batno = space.  " 1681517
+        CONCATENATE p_laufd p_laufi ' : ' 'Merge was reset'(mpy)
+      ' - ' 'Prod.Run'(prd)
+      INTO ls_line-info SEPARATED BY space.
+    ELSE.
+       CONCATENATE p_batno ' : ' 'Merge was reset'(mpy)
+        ' - ' 'Prod.Run'(prd)
+        INTO ls_line-info SEPARATED BY space.
+      endif.
+    ELSE.
+      if p_batno is initial.
+        CONCATENATE p_laufd p_laufi ' : ' 'Merge can be reset'(mry)
+        ' - ' 'Test Run'(tst)
+        INTO ls_line-info SEPARATED BY space.
+      else.
+        CONCATENATE p_batno ' : ' 'Merge can be reset'(mry)
+        ' - ' 'Test Run'(tst)
+        INTO ls_line-info SEPARATED BY space.
+      endif.
+    ENDIF.
+  ELSE.
+    if p_batno is initial.
+      CONCATENATE p_laufd p_laufi ' : ' 'Merge can not be reset'(mrn)
+      INTO ls_line-info SEPARATED BY space.
+    else.
+      CONCATENATE p_batno ' : ' 'Merge can not be reset'(mrn)
+      INTO ls_line-info SEPARATED BY space.
+    endif.
+  ENDIF.
+  APPEND ls_line TO rt_top_of_page.
+
+  IF p_strict = space.
+    ls_line-info = 'Non-severe check'(csn).
+  ELSE.
+    ls_line-info = 'Severe check'(csy).
+  ENDIF.
+  APPEND ls_line TO rt_top_of_page.
+
+ENDFORM.                    " COMMENT_BUILD
+
+*&---------------------------------------------------------------------*
+*&      Form  TOP_OF_PAGE
+*&---------------------------------------------------------------------*
+FORM top_of_page.                                           "#EC CALLED
+
+  CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
+    EXPORTING
+      it_list_commentary = gt_list_top_of_page.
+
+ENDFORM.                    " TOP_OF_PAGE
+
+*&---------------------------------------------------------------------*
+*&      Form  USER_COMMAND
+*&---------------------------------------------------------------------*
+FORM user_command USING r_ucomm     LIKE sy-ucomm           "#EC CALLED
+                  selfield TYPE slis_selfield.
+
+  CHECK r_ucomm = 'PIC1'.
+
+ENDFORM.                    " USER_COMMAND
+*&---------------------------------------------------------------------*
+*&      Form  EVENTTAB_BUILD
+*&---------------------------------------------------------------------*
+*       Registration of events to happen during list display
+*----------------------------------------------------------------------*
+FORM eventtab_build  USING   rt_events TYPE slis_t_event.
+
+  DATA: ls_event TYPE slis_alv_event.
+*
+  CALL FUNCTION 'REUSE_ALV_EVENTS_GET'
+    EXPORTING
+      i_list_type = 0
+    IMPORTING
+      et_events   = rt_events.
+
+  READ TABLE rt_events WITH KEY name = slis_ev_top_of_page
+                           INTO ls_event.
+
+  CHECK sy-subrc = 0.
+  MOVE 'TOP_OF_PAGE' TO ls_event-form.
+  APPEND ls_event TO rt_events.
+
+ENDFORM.                    " EVENTTAB_BUILD
+*&---------------------------------------------------------------------*
+*&      Form  RETURNED_CASES
+*&---------------------------------------------------------------------*
+* For Batches returnde by 2nd Approver: Check if 1st already has
+* 'Returned' WI: Yellow if Yes (and store for automatic execution)
+*                Red if no.
+*----------------------------------------------------------------------*
+FORM returned_cases  USING    u_btc_header TYPE bnk_str_batch_header
+                     CHANGING c_wi_id.
+
+  DATA:  l_batch_guid(32)          TYPE c,
+         l_btch_itm_no             TYPE bnk_com_btch_cnt,
+         l_rel_obj_key             TYPE  bca_dte_object_key,
+         l_str_log_h_key_ext       TYPE bca_str_rel_log_h_data1,
+         l_str_rel_log_h_key       TYPE bca_str_rel_log_h_key,
+         l_tab_rel_log_h_key       TYPE bca_tab_rel_log_h_key,
+         l_rel_obj_key_wf          TYPE swotobjid-objkey,
+         lt_worklist               TYPE TABLE OF swr_wihdr,
+         l_worklist                TYPE swr_wihdr,
+         lt_task_filter            TYPE swrttask,
+         l_task_filter             TYPE swr_task.
+*---
+  CLEAR c_wi_id.
+
+* Object key
+  l_batch_guid = u_btc_header-guid.
+
+  CONCATENATE l_batch_guid u_btc_header-batch_no l_btch_itm_no
+    INTO l_rel_obj_key SEPARATED BY  ';'.
+
+  l_str_log_h_key_ext-object_cat = 'BNK_COM'.
+  l_str_log_h_key_ext-object_key = l_rel_obj_key.
+
+  CALL FUNCTION 'BCA_OBJ_REL_GET_HANDLE'
+    EXPORTING
+      i_str_rel_log_h_data1 = l_str_log_h_key_ext
+    IMPORTING
+      e_str_rel_log_h_key   = l_str_rel_log_h_key
+      e_tab_rel_log_h_key   = l_tab_rel_log_h_key
+    EXCEPTIONS
+      not_found             = 1
+      OTHERS                = 2.
+  CHECK sy-subrc = 0.
+
+  IF  l_str_rel_log_h_key IS INITIAL.
+    READ TABLE  l_tab_rel_log_h_key INDEX 1 INTO  l_str_rel_log_h_key.
+  ENDIF.
+  l_rel_obj_key_wf = l_str_rel_log_h_key-rel_object_id.
+
+* Task Filter
+  l_task_filter-wi_rh_task = 'TS50100026'. "Returned
+  APPEND l_task_filter TO lt_task_filter.
+
+* Select Work Item
+  CALL FUNCTION 'SAP_WAPI_WORKITEMS_TO_OBJECT'
+    EXPORTING
+      objtype         = 'BUSISB001'
+      objkey          = l_rel_obj_key_wf
+      top_level_items = space
+    TABLES
+      task_filter     = lt_task_filter
+      worklist        = lt_worklist.
+
+  READ TABLE lt_worklist INDEX 1 INTO  l_worklist.
+  c_wi_id =  l_worklist-wi_id.
+
+ENDFORM.                    " RETURNED_CASES
+*&---------------------------------------------------------------------*
+*&      Form  STATUS_2_BRA                                  "nte1537740
+*&---------------------------------------------------------------------*
+FORM status_2_bra  USING    p_batchno.
+
+  DATA:   l_ref_ent_batch      TYPE REF TO cl_bnk_ent_batch,"nte1638435
+          l_ref_bnk_proc_batch TYPE REF TO cl_bnk_proc_batch,
+          lt_batch_no          TYPE bnk_tab_batch_no,
+          lt_batch_header      TYPE bnk_tab_batch_header,
+          lt_batch_item        TYPE bnk_tab_batch_item,
+          l_tab_rc             TYPE bapiret2_t,
+          lf_batch_header      TYPE bnk_str_batch_header,
+          l_bnk_batch_header   TYPE  bnk_batch_header,
+          l_wa_batch_item      TYPE bnk_str_batch_item,
+          l_tabix              LIKE sy-tabix,
+          l_tj07               LIKE tj07 .
+
+  CALL METHOD cl_bnk_proc_batch=>s_instance
+    IMPORTING
+      e_ref_bnk_proc_batch = l_ref_bnk_proc_batch.
+
+*---- read header & items
+  TRY.
+      APPEND  p_batchno TO lt_batch_no.
+
+      CALL METHOD l_ref_bnk_proc_batch->read
+        EXPORTING
+          i_tab_batch_no     = lt_batch_no
+        IMPORTING
+          e_tab_batch_header = lt_batch_header
+          e_tab_batch_items  = lt_batch_item.
+    CATCH cx_bnk_proc .
+  ENDTRY.
+
+  CHECK lt_batch_header[] IS NOT INITIAL.
+
+  READ TABLE lt_batch_header INDEX 1 INTO lf_batch_header.
+  MOVE-CORRESPONDING lf_batch_header TO l_bnk_batch_header.
+
+*-- Call the status tool to reset the stati...
+*--- 0) preparation
+  SELECT SINGLE * FROM  tj07 INTO l_tj07                      "nte1587692
+         WHERE  istat  = cl_bnk_constants=>con_status_in_approval
+         AND    vrgng  = cl_bnk_constants=>con_status_tran_reject_auto
+         AND    obtyp  = space. "#EC CI_BYPASS
+  IF sy-subrc <> 0.
+    SELECT SINGLE * FROM  tj07 INTO l_tj07
+          WHERE  istat  = cl_bnk_constants=>con_status_create
+          AND    vrgng  = cl_bnk_constants=>con_status_tran_reject_auto
+          AND    obtyp  = space.
+    l_tj07-istat  = cl_bnk_constants=>con_status_in_approval.
+    INSERT tj07 FROM l_tj07.
+  ENDIF.
+*--- 1) of header
+  CALL FUNCTION 'BNK_API_SET_SYS_STAT_WITH_BTXN'
+    EXPORTING
+      i_object_id = l_bnk_batch_header-status
+      i_bus_tran  = cl_bnk_constants=>con_status_tran_reject_auto
+    IMPORTING
+      e_tab_rc    = l_tab_rc.
+
+*--- 2) check items
+  LOOP AT lt_batch_item INTO l_wa_batch_item.
+    l_tabix = sy-tabix.
+    REFRESH: l_tab_rc.
+    CALL FUNCTION 'BNK_API_SET_SYS_STAT_WITH_BTXN'
+      EXPORTING
+        i_object_id    = l_wa_batch_item-status
+        i_bus_tran     = cl_bnk_constants=>con_status_tran_reject_auto
+        i_flg_test_run = 'X'
+      IMPORTING
+        e_tab_rc       = l_tab_rc.
+
+    READ TABLE l_tab_rc WITH KEY type = 'E' TRANSPORTING NO FIELDS.
+    IF sy-subrc = 0.
+      DELETE lt_batch_item INDEX l_tabix.
+    ENDIF.
+  ENDLOOP.
+
+*--- 3) change items
+  LOOP AT lt_batch_item INTO l_wa_batch_item.
+    REFRESH: l_tab_rc.
+    CALL FUNCTION 'BNK_API_SET_SYS_STAT_WITH_BTXN'
+      EXPORTING
+        i_object_id = l_wa_batch_item-status
+        i_bus_tran  = cl_bnk_constants=>con_status_tran_reject_auto
+      IMPORTING
+        e_tab_rc    = l_tab_rc.
+  ENDLOOP.
+
+*-- Save status
+  CALL FUNCTION 'BNK_API_SAVE_STATUS'.
+
+*-- Remove payments logically                               "nte1638435
+ clear: lf_batch_header-item_cnt, lf_batch_header-BATCH_SUM,
+        lf_batch_header-MAX_PAY_AMT, lf_batch_header-MAXPAYAMT_RULECU,
+        lf_batch_header-TOT_BTCH_AMT.
+
+ TRY.
+    CALL METHOD l_ref_bnk_proc_batch->update
+      EXPORTING
+        i_batch_header     = lf_batch_header.
+   CATCH cx_bnk_proc .
+ ENDTRY.
+
+ENDFORM.                    " STATUS_2_BRA
