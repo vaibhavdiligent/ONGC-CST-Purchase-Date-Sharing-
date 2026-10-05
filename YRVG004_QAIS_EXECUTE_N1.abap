@@ -408,7 +408,7 @@ DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
-DATA: c_strat(60) TYPE c.                          " Strategic Monthly Discount radiobutton label
+DATA: gv_strat TYPE flag.                          " Strategic Monthly Discount run (May/Jun'26)
 *   CIS 2026-27 pt.1: zonal (sales-office) authorization cache. Restriction
 *   is via auth object ZCIS_VKBR (ID VKBUR + ACTVT). An L1 user sees only the
 *   sales offices granted in their role; cross-zone / MLE-Group is unlocked by
@@ -493,11 +493,6 @@ PARAMETERS: r_month  RADIOBUTTON GROUP rd1 USER-COMMAND r1 DEFAULT 'X',   "Added
 *            r_quater NO-DISPLAY, " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
             r_annual RADIOBUTTON GROUP rd1,
             r_consis RADIOBUTTON GROUP rd1. "Added by Adarsh/Archana against charm: 4000006427, TR: DVRK9A12BV
-*   CIS 2026-27 Strategic Monthly Discount (May/Jun 2026) - new variant
-SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS: r_strat RADIOBUTTON GROUP rd1.
-SELECTION-SCREEN COMMENT 3(60) c_strat.
-SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN SKIP.
 PARAMETERS: r_month1 NO-DISPLAY. "RADIOBUTTON GROUP rd1." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007907 Date: 12/03/2024
 SELECTION-SCREEN BEGIN OF LINE.
@@ -623,7 +618,6 @@ AT SELECTION-SCREEN OUTPUT.
 
 INITIALIZATION.
 
-  c_strat = 'Strategic Monthly Discount (May/Jun 2026)'.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
   SELECT * FROM yrva_prs_grades INTO TABLE @DATA(lt_yrva_prs_grades).
   SELECT SINGLE * FROM yrva_cis_mstr INTO ls_yrva_cis_mstr.
@@ -949,7 +943,7 @@ FORM validation .
 
 ******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *    ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_strat = 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 
@@ -2518,7 +2512,7 @@ FORM get_cust_name .
 *******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_strat = 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *******EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X'.
@@ -2562,6 +2556,7 @@ ENDFORM.                    " GET_CUST_NAME
 *----------------------------------------------------------------------*
 FORM calculate_discount .
 **R_RPD & R_MONTH1 logic is not being used as the radio button are disabled on the selection screen.
+  CLEAR gv_strat.
   IF r_quater = 'X' .
 ** SOC Commeneted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
     PERFORM quarter_discount.   "logic for processing quearterly discount
@@ -2574,10 +2569,6 @@ FORM calculate_discount .
   ELSEIF r_consis = 'X'.
     PERFORM annual_consis_discount.
 ***EOC Adarsh/Archana against charm: 4000006427 TR: DVRK9A12BV
-  ELSEIF r_strat = 'X'.
-*   CIS 2026-27 Strategic Monthly Discount (May/Jun 2026) - flat per-MT rate
-*   by grade, self-contained calc (does NOT use the monthly CIS logic).
-    PERFORM strategic_discount.
 
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
@@ -2588,7 +2579,15 @@ FORM calculate_discount .
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X'.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
 *( logic for processing monthly discount r_month = monthly discount ) - ( r_month1 = special monthly discount is not being used any more ).
-    PERFORM monthly_discount.
+*   CIS 2026-27: for the PLAIN monthly run (r_month) of May'26 or June'26, the
+*   Strategic Monthly Discount replaces the normal monthly CIS calc. Any other
+*   month, or the r_rhd/r_rlld/c_maint variants, run the normal monthly logic.
+    IF r_month = 'X' AND ( s_sptag-low+0(6) = '202605' OR s_sptag-low+0(6) = '202606' ).
+      gv_strat = 'X'.
+      PERFORM strategic_discount.
+    ELSE.
+      PERFORM monthly_discount.
+    ENDIF.
   ELSEIF r_rpd EQ 'X'.
 *logic for processing repeat performance discount. The logic inside is commented as this discount scheme is not being used any more.
     PERFORM repeat_performance_discount.
@@ -11165,7 +11164,7 @@ FORM create_field_catalog .
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_strat = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' .
@@ -12375,7 +12374,7 @@ FORM stage_all_rebates.
 *   scheme code for staging: 'T'/'ZSTR' = Strategic Monthly Discount,
 *   otherwise 'M'/'ZMIS' = normal monthly CIS. (CIS 2026-27)
     DATA: lv_sstype TYPE char1, lv_srcond TYPE char4.
-    IF r_strat = 'X'.
+    IF gv_strat = 'X'.
       lv_sstype = 'T'. lv_srcond = 'ZSTR'.
     ELSE.
       lv_sstype = 'M'. lv_srcond = 'ZMIS'.
@@ -12910,7 +12909,7 @@ FORM display_list .
 ***EOC by Adarsh/Archana on Charm 4000006427, TR: DVRK9A12BV
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X'  OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'  OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_strat = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'  OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
