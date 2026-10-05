@@ -8289,6 +8289,34 @@ FORM monthly_discount .
         it_data_monthly-grp_lift_qty   = wa_yrva_qais_data-grp_lift_qty_m12.
         it_data_monthly-ind_lift_qty   = wa_yrva_qais_data-ind_lift_qty_m12.
       ENDIF.
+*     CIS 2026-27 FIX (grp lift 0 in monthly): the clubbed Group Lifted Qty is
+*     held in it_yrva_qais_data_temp (one row per KVGR2), populated by
+*     correct_group_lift. The monthly output must read the group total from
+*     there (by KVGR2); a non-group customer (blank KVGR2) shows its own
+*     individual lift. This merge-back was missing in the 6-level version, so
+*     Grp Lifted Qty came out as 0 -> MCQ % 0 -> Eligible 0 -> no discount.
+      IF wa_yrva_qais_data-kvgr2 IS INITIAL.
+        it_data_monthly-grp_lift_qty = it_data_monthly-ind_lift_qty.
+      ELSE.
+        READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
+             WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2.
+        IF sy-subrc = 0.
+          CASE s_sptag-high+4(2).
+            WHEN '04'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m1.
+            WHEN '05'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m2.
+            WHEN '06'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m3.
+            WHEN '07'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m4.
+            WHEN '08'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m5.
+            WHEN '09'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m6.
+            WHEN '10'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m7.
+            WHEN '11'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m8.
+            WHEN '12'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m9.
+            WHEN '01'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m10.
+            WHEN '02'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m11.
+            WHEN '03'. it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m12.
+          ENDCASE.
+        ENDIF.
+      ENDIF.
 *      calculate the discount
       IF it_data_monthly-grp_lift_qty LT w_month_min .
         "SOC RITESH SINGH priyanka mam on charm 4000004022 on date 16.07.2021
