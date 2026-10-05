@@ -718,6 +718,7 @@ FORM scheme_name USING    ps_appr TYPE ycis_apprvl
     WHEN 'Q'. lv_txt = 'Quarterly CIS'.
     WHEN 'A'. lv_txt = 'Annual CIS'.
     WHEN 'C'. lv_txt = 'Annual Consistency CIS'.
+    WHEN 'T'. lv_txt = 'Strategic Monthly Discount'.
     WHEN 'U'. lv_txt = 'Upliftment Rebate (PSD)'.
     WHEN OTHERS. lv_txt = ps_appr-scheme_type.
   ENDCASE.

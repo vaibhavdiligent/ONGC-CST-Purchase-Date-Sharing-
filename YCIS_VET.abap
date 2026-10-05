@@ -127,6 +127,7 @@ FORM build_stype_range.
     gs_stype-low = 'C'. APPEND gs_stype TO gr_stype.
   ELSE.
     gs_stype-low = 'M'. APPEND gs_stype TO gr_stype.
+    gs_stype-low = 'T'. APPEND gs_stype TO gr_stype.   " Strategic Monthly Discount
   ENDIF.
 ENDFORM.
 
@@ -148,6 +149,7 @@ FORM scheme_text USING p_code TYPE any CHANGING p_txt TYPE char20.
     WHEN 'Q'. p_txt = 'Quarterly'.
     WHEN 'A'. p_txt = 'Annual'.
     WHEN 'C'. p_txt = 'Annual Consistency'.
+    WHEN 'T'. p_txt = 'Strategic Monthly'.
     WHEN OTHERS. p_txt = p_code.
   ENDCASE.
 ENDFORM.
