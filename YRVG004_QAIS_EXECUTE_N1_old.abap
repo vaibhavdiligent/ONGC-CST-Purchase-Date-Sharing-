@@ -11933,17 +11933,22 @@ FORM build_bp_clusters.
   SORT it_bpcust BY bp.
   CHECK it_bpcust[] IS NOT INITIAL.
 
-* group/MLE relationships among our BPs (both directions), valid on date
+* group/MLE relationships among our BPs (both directions), valid in the run
+* period. CIS 2026-27 FIX: use an OVERLAP test against the whole run period
+* [s_sptag-low .. s_sptag-high], not just the first day (s_sptag-low). A BP
+* relationship whose Valid-From is mid-month (e.g. 27.04) was previously
+* excluded for that month because date_from was > s_sptag-low (01.04); now it
+* is included whenever the relationship is valid for any part of the month.
   SELECT * FROM but050 INTO TABLE lt_rel
     FOR ALL ENTRIES IN it_bpcust
     WHERE partner1  = it_bpcust-bp
-      AND date_to   GE s_sptag-low
-      AND date_from LE s_sptag-low.
+      AND date_from LE s_sptag-high
+      AND date_to   GE s_sptag-low.
   SELECT * FROM but050 INTO TABLE lt_rel2
     FOR ALL ENTRIES IN it_bpcust
     WHERE partner2  = it_bpcust-bp
-      AND date_to   GE s_sptag-low
-      AND date_from LE s_sptag-low.
+      AND date_from LE s_sptag-high
+      AND date_to   GE s_sptag-low.
   APPEND LINES OF lt_rel2 TO lt_rel.
   SORT lt_rel BY partner1 partner2 reltyp.
   DELETE ADJACENT DUPLICATES FROM lt_rel COMPARING partner1 partner2 reltyp.
