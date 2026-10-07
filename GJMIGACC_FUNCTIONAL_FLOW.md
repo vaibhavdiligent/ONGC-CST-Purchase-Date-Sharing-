@@ -1,7 +1,14 @@
 # GJMIGACC – Functional Flow and Z-Copy Approach
 
 **Source analysed:** `GJMIGACC_code.pdf` (report `RGJV_UPDATE_ACC_DATA_IN_ACDOCA`) and
-`GJMIGACC_c_lass.pdf` (class `CL_JVA_MIG_CORRECT_ACDOCA`, package `GJVA_MIG`, system OCP, release 816).
+`GJMIGACC_c_lass.pdf` / `GJMIGACC_c_lass_1.pdf` (class `CL_JVA_MIG_CORRECT_ACDOCA`, package `GJVA_MIG`,
+system OCP, release 816). The two class PDFs have identical content; only the print time differs.
+
+**How to read this document:** steps marked *(inferred)* come from the interface methods
+`EXECUTE_PROCESS` and `PARALL_*`, which are not in the class print. They were reconstructed from
+the private methods that only these interface methods call (`GET_GLOBAL_SETTINGS`,
+`PROCESS_DATA_PARALLELLY`, `SAVE_RESULTS`, `SAVE_RESULTS_GLOBAL`, `DISPLAY_RESULTS`). Everything
+else comes directly from the printed source.
 
 ---
 
@@ -74,21 +81,38 @@ So **GJMIGACC only processes FI- and CO-referenced JV documents**. The internal 
 
 ## 4. Process flow
 
+### 4.0 Prerequisites checked at run time
+
+The run stops with an error if any of these is not met:
+
+| Check | Where | Message |
+|---|---|---|
+| At least one selected company code is a JV company code (T8JZ) | `CHECK_COCODES_AND_AUTHORITIES` | G5 802 |
+| User has JV process authorisation CUTBACK2, activity 16 (update) or 48 (test/analysis). Company codes without authority are dropped; the run stops only if none are left | `CHECK_COCODES_AND_AUTHORITIES` (`JV_AUTHORITY_CHECK_PROCESS`) | G4 292 |
+| **Document splitting is active** for the company codes | `GET_SPLIT_CRITERIA` (`CL_FAGL_SPLIT_SERVICES=>GET_ACTIVE_CC`) | G5 826 |
+| **Venture (VNAME) is a document-splitting characteristic** (FAGL_SPLIT_FIELD) | `GET_SPLIT_CRITERIA` | G5 827 |
+| A server group is entered when parallel processing is on | `GET_GLOBAL_SETTINGS` | SPTA 002 |
+| JV settings can be read for the company code | `GET_COMPANY_CODE_SETTINGS` (`CL_JVA_SETTINGS`) | GI 701 (that company code is skipped) |
+| More than 100,000 JV documents in a dialog run | `GET_GLOBAL_SETTINGS` | Confirmation popup; "No" cancels |
+
+### 4.1 Overall call flow
+
 ```
 GJMIGACC
  └─ RGJV_UPDATE_ACC_DATA_IN_ACDOCA
      INITIALIZATION / AT SELECTION-SCREEN   → collapse/expand blocks, range checks on bulk/parallel fields
      END-OF-SELECTION → FORM run_process
         ├─ build GTY_PROGRAM_PARAMETERS from the screen
-        └─ CL_JVA_MIG_CORRECT_ACDOCA=>get_instance( )->execute_process( params )
+        └─ CL_JVA_MIG_CORRECT_ACDOCA=>get_instance( )->execute_process( params )   (inferred body)
+              │   store params in MS_PROGPARS
               │
-              ├─ GET_GLOBAL_SETTINGS
+              ├─ GET_GLOBAL_SETTINGS              (error → skip to DISPLAY_RESULTS with the messages)
               │    ├─ CHECK_COCODES_AND_AUTHORITIES
               │    │     • company codes = T8JZ ∩ S_BUKRS (none → error G5 802)
               │    │     • JV_AUTHORITY_CHECK_PROCESS, process CUTBACK2,
               │    │       activity 16 (update) or 48 (test/analysis); drops unauthorised company codes
               │    │     • JV_GET_LEDGER → JV leading ledger
-              │    ├─ GET_SPLIT_CRITERIA (FAGL splitter active? FAGL_SPLIT_FIELD)
+              │    ├─ GET_SPLIT_CRITERIA (doc splitting active? VNAME a split field? else G5 826/827)
               │    ├─ default/validate bulk & parallel sizes
               │    ├─ PREPARE_PERIOD_RANGE (no period entered → 001–012)
               │    ├─ PREPARE_ACTIVITY_RANGE_FI_CO (FI: fi_doc + fi_doc_mm, CO: co_doc)
@@ -99,22 +123,28 @@ GJMIGACC
               │      • CALCULATE_TASK_PACKAGES per company code (packages by year/period, ~P_DOCTSK docs each)
               │      • ≤ 1 package → falls back to synchronous
               │      • SPTA_PARA_PROCESS_START_2 → FORM BEFORE_RFC / IN_RFC / AFTER_RFC in the report
-              │        (each task runs PROCESS_COMPANY_CODE for its periods)
+              │        (each task runs PROCESS_COMPANY_CODE for its periods; see 4.4)
               │  else PROCESS_DATA_SYNCHRONOUSLY → loop company codes → PROCESS_COMPANY_CODE
+              │        (print a spool per company code in background; SAVE_RESULTS)
               │
-              └─ PROCESS_COMPANY_CODE (per company code)
-                   ├─ GET_COMPANY_CODE_SETTINGS
-                   │     • CL_JVA_SETTINGS (T8JZ), NewGL split active? (T8JZ_FAGL + FI_SPLIT_ACTIVATION)
-                   │     • GET_LEDGERS: JV ledger, or all ledgers in FINSC_LD_CMP
-                   │       (also UPDATE JVA_ACD_UPD_LOG set RLDNR_ACD + COMMIT)
-                   │     • currencies (GL and classic JV)
-                   │     • migrated docs present? (ACDOCA-MIG_SOURCE; 'J' = JV migrated)
-                   ├─ RETRIEVE_AND_PROCESS_DATA        (see 4.1)
-                   └─ UPDATE_LOG_DB_TABLE              (flush JVA_ACD_UPD_LOG + COMMIT)
+              │  PROCESS_COMPANY_CODE (per company code or task)
+              │     ├─ GET_COMPANY_CODE_SETTINGS
+              │     │     • CL_JVA_SETTINGS (T8JZ), NewGL split active? (T8JZ_FAGL + FI_SPLIT_ACTIVATION)
+              │     │     • GET_LEDGERS: JV ledger, or all ledgers in FINSC_LD_CMP
+              │     │       (also UPDATE JVA_ACD_UPD_LOG set RLDNR_ACD + COMMIT)
+              │     │     • currencies (GL and classic JV)
+              │     │     • migrated docs present? (ACDOCA-MIG_SOURCE; 'J' = JV migrated)
+              │     ├─ RETRIEVE_AND_PROCESS_DATA        (see 4.2)
+              │     └─ UPDATE_LOG_DB_TABLE              (flush JVA_ACD_UPD_LOG + COMMIT)
+              │
+              ├─ SAVE_RESULTS_GLOBAL      (inferred call) totals over all company codes and tasks,
+              │                            CALCULATE_GLOBAL_RUNTIMES, overall spool if printing
+              └─ DISPLAY_RESULTS          (inferred call) nothing found → message GI 708;
+                                           spool mode → DISPLAY_SPOOLS; else ALV for 1 or n company codes
         Output: CL_JVA_MIG_ALV_OUTPUT (ALV, or spool; AT LINE-SELECTION shows a spool)
 ```
 
-### 4.1 RETRIEVE_AND_PROCESS_DATA (per company code, in bulks)
+### 4.2 RETRIEVE_AND_PROCESS_DATA (per company code, in bulks)
 
 1. **Read JV document keys.** `RETRIEVE_JV_DOCUMENTS` reads `SELECT DISTINCT rldnr, rbukrs, ryear,
    docnr, reffidoc, refdocnr, activ FROM jvso1 WHERE rldnr='4A'`, filtered by company code,
@@ -124,9 +154,19 @@ GJMIGACC
    REFDOCNR. JV documents with the same FI or CO reference are counted once. Every `P_BLDLPR`
    documents form a processing bulk.
 3. **Per bulk:**
-   * `RETRIEVE_FI_DOC_HEADER_DATA` (BKPF/COBK header data)
-   * `RETRIEVE_JV_DOC_LINES` reads the full JVSO1 lines and the preceding-document references
+   * `RETRIEVE_FI_DOC_HEADER_DATA` reads BKPF (AWKEY, GLVOR, TCODE, BSTAT, BKTXT) and COBK, then
+     decides what each JV document really is:
+     * Documents created by JV internal transactions (TCODE or BKTXT starting with **GJEC, GJ19, GJ17,
+       GJFARM**: equity change, cutback, cash call, farm-in/out) are **not** treated as normal FI documents.
+       For FI-line types they are dropped from this run.
+     * A JV CO line whose FI header has GLVOR = **COFI** has a wrong REFFIDOC and is dropped.
+       Otherwise it is re-classified as an FI document.
+     * If the controlling area is missing, it is taken from TKA02.
+   * `RETRIEVE_JV_DOC_LINES` reads the full JVSO1 lines (ledger 4A, plus 4C when JV classic currencies
+     3/4 are used) and merges 4A with 4C (`COMBINE_AND_ANALYZE_JV_LINES`). It also collects the
+     preceding-document references used for the `IN` and `MI` searches below.
    * `RETRIEVE_LOG_ITEMS_DIFF_YEARS` finds documents this tool already reposted in another fiscal year, from `JVA_ACD_UPD_LOG`
+     (`GJAHR_NEW` ≠ JV year). These are re-read so a second run does not correct the same document twice.
    * `RETRIEVE_ACDOCA_LINES` (ledger = JV ledger, or all ledgers), by type:
      * `FI`: `belnr = reffidoc`
      * `CO`: `co_belnr = refdocnr`
@@ -136,7 +176,7 @@ GJMIGACC
      * Totals-correction migration lines (`mig_source` S/T/U/V) are excluded.
    * → `COMPARE_AND_CORRECT_DOCUMENTS`
 
-### 4.2 COMPARE_AND_CORRECT_DOCUMENTS (per JV document group × ledger)
+### 4.3 COMPARE_AND_CORRECT_DOCUMENTS (per JV document group × ledger)
 
 1. **Build the JV line set.** The program ignores:
    * zero-amount lines
@@ -146,7 +186,12 @@ GJMIGACC
    For FI/CO documents it also accumulates JV balances (`PREPARE_JVSO_BALANCES`).
    `DETERMINE_JV_DOC_TYPE` sets the document type (FI doc / CO doc) from ACTIV.
 2. **Per ledger** (JV ledger first, then the other ledgers that have the document):
-   * `GET_ACDOCA_DOC_LINES` / `PREPARE_ACDOCA_DOCUMENT` build the matching ACDOCA document and ACDOCA balances.
+   * `GET_ACDOCA_DOC_LINES` / `PREPARE_ACDOCA_DOCUMENT` build the matching ACDOCA document and ACDOCA balances:
+     * irrelevant migration lines (MIG_SOURCE set, not 'J'/'G', no venture) are dropped
+     * with `P_EXCLBL`, venture balancing lines of a real FI document (BSTAT initial) are dropped:
+       lines without BUZEI/CO_BUZEI/AWITEM, or without AWITEM for migrated documents
+     * zero-amount lines are dropped
+     * the JV amounts are derived per ACDOCA line (`DETERMINE_JV_AMNTS_IN_ACD_LINE`)
    * The program handles migrated documents whose balancing lines were dropped, and repostings
      (`CHECK_FOR_REPOSTINGS_JV/ACDOCA`).
 3. **`COMPARE_LINES`** assigns every JV line to an ACDOCA line:
@@ -204,11 +249,59 @@ GJMIGACC
    errors only). The results go to an ALV list in dialog, or to a spool per company code or task in
    background.
 
+### 4.4 Parallel processing (SPTA)
+
+When `P_PARALL` is set and there is more than one work package:
+
+1. **Packages.** `CALCULATE_TASK_PACKAGES` counts JV documents per company code, year and period
+   (`COUNT_JV_DOCUMENTS_BY_PERIOD`). Periods are added to a package until it holds about `P_DOCTSK`
+   documents, with a minimum of 10,000 per package. A task never splits a period. Each package
+   becomes one task with ID `<company code>_<n>`.
+2. **`FORM BEFORE_RFC` → `PARALL_BEFORE_RFC`** *(inferred)*: takes the next task from `MT_TASKDATA` and
+   passes its parameters (company code and periods) to the RFC.
+3. **`FORM IN_RFC` → `PARALL_IN_RFC`** *(inferred)*: runs in a separate work process.
+   `RETRIEVE_JV_DOCUMENTS` limits the selection to the package's year/period list.
+   `PROCESS_COMPANY_CODE` then runs the full retrieve, compare and correct cycle and writes
+   `JVA_ACD_UPD_LOG`. Results and runtimes are returned.
+4. **`FORM AFTER_RFC` → `PARALL_AFTER_RFC`** *(inferred)*: `SAVE_RESULTS` merges the task result into its
+   company code (`UPDATE_TASK_INFO` marks the task returned). Once all tasks of a company code are back,
+   a spool can be printed for it.
+5. SPTA errors (server group not found, no resources) are reported as SHDB_PFW 719, SPTA 005 or FCMLACC 160.
+
+Each task commits its own postings and log entries. A failed task does not roll back the other tasks.
+
 ---
 
-## 5. Creating a Z version – recommendation
+## 5. Where GJMIGACC fits – related SAP reports and notes
 
-### 5.1 What is copyable and what is not
+GJMIGACC is one of a set of SAP correction reports for moving to, or switching on, JVA on ACDOCA.
+Public SAP sources describe it this way:
+
+| Report / transaction | Purpose |
+|---|---|
+| `RGJV_UPDATE_INT_DOCS_IN_ACDOCA` / **GJMIGINT** | Creates missing **internal** JV documents in ACDOCA (equity change and adjustment, suspense/unsuspense, operator documents such as cutback and cash call). SAP recommends running this **first**. |
+| `RGJV_UPDATE_ACC_DATA_IN_ACDOCA` / **GJMIGACC** | Updates ACDOCA with accounting data from the JV ledgers for FI/CO documents, where cost object and JV information differ (this document) |
+| `RGJV_UPDATE_CBRUNID_IN_ACDOCA` | Updates historic ACDOCA data so that cutback does not pick it up again |
+
+This matches the code: GJMIGINT and GJMIGACC share the same class. GJMIGACC switches off the
+internal-document flags (`POST_*`) that GJMIGINT uses.
+
+Prerequisites stated by SAP: New G/L with the G/L splitter and New G/L–JVA integration. The code
+enforces this with messages G5 826/827 (section 4.0).
+
+SAP Notes to read in SAP for Me (login required; not readable from here):
+* **3058813** – JVA ACDOCA table update reports (documentation of these reports)
+* **2941622** – Disclaimers for migration and switch scenarios to JVA on ACDOCA
+
+Public sources:
+* [SAP blog – Migration and Switching to Joint Venture Accounting on ACDOCA (23.03.2022)](https://blogs.sap.com/2022/03/23/migration-and-switching-to-joint-venture-accounting-on-acdoca/)
+* [SAP Help – JVA on ACDOCA](https://help.sap.com/docs/SAP_S4HANA_ON-PREMISE/f049a59301a94f1c9bb60ca8394db217/06421bf5a2ad4af28c8d1f6904a214ec.html)
+
+---
+
+## 6. Creating a Z version – recommendation
+
+### 6.1 What is copyable and what is not
 
 * The **report** is a thin shell: selection screen, parameter mapping and three SPTA callback FORMs.
   It is easy to copy to `ZRGJV_UPDATE_ACC_DATA_IN_ACDOCA` plus a Z transaction (for example `ZGJMIGACC`).
@@ -224,8 +317,17 @@ GJMIGACC
   * the private types and text symbols
 
   A full class copy needs these taken from SE24/SE80 in OCP (or a full abapGit export), not from the PDF.
+  `GJMIGACC_c_lass_1.pdf` is a re-print of the same class and also lacks them. The SE24 print
+  function does not output interface method implementations. To get them:
+  * SE24 → `CL_JVA_MIG_CORRECT_ACDOCA` → **Source Code-Based** button → copy all, then save as `.txt`; or
+  * SE38 → display include `CL_JVA_MIG_CORRECT_ACDOCA=====CU`/`CO`/`CI` (definitions) and the method
+    includes `...CM0nn`. The class pool is `CL_JVA_MIG_CORRECT_ACDOCA=====CP`; or
+  * export the class with abapGit.
 
-### 5.2 Options
+  Also needed: interface `IF_JVA_MIG_CORRECT_ACDOCA` (parameter structure, package types), the class
+  constants (`GC_*`) and the text pool.
+
+### 6.2 Options
 
 | Option | What to copy | When to use | Effort / risk |
 |---|---|---|---|
@@ -233,7 +335,7 @@ GJMIGACC
 | **B. Z report + Z class** | Copy the report and copy `CL_JVA_MIG_CORRECT_ACDOCA` to `ZCL_JVA_MIG_CORRECT_ACDOCA`. The Z class implements `IF_JVA_MIG_CORRECT_ACDOCA`, or a Z copy of the interface if the parameter structure must change. Keep calling the standard posting classes. | The comparison or decision logic must change: extra fields, different correction rules, ONGC-specific filters, an extra ledger rule | Medium. The class is about 8,000 lines and is no longer updated by SAP Notes. It needs regression tests against standard GJMIGACC output in test mode. |
 | **C. Full copy including posting classes** | Also copy `CL_JVA_MIG_POST_ACDOCA` and the others | Only if the posting itself must change | **Not recommended.** This means custom code that writes ACDOCA directly, which affects audit, consistency and support. Raise an SAP incident instead. |
 
-### 5.3 Steps for option A (and the base for option B)
+### 6.3 Steps for option A (and the base for option B)
 
 1. SE38 → copy `RGJV_UPDATE_ACC_DATA_IN_ACDOCA` → `ZRGJV_UPDATE_ACC_DATA_IN_ACDOCA` (with text elements, documentation and variants).
 2. SE93 → `ZGJMIGACC`, report transaction for the Z report, selection screen 1000.
@@ -246,12 +348,16 @@ GJMIGACC
 6. Two small issues in the standard report that can be fixed in the copy:
    * `P_COBS` and `P_COCO` reuse `MEMORY ID vpt` (the same as `P_VPTNR`), so their values affect each other through SPA/GPA.
    * `SET CURSOR FIELD 'P_VNCORR'` points to a field that does not exist (it should be `P_VNUPD`).
+   * Keep the system prerequisites in 4.0 in mind for the test system: document splitting with VNAME
+     must be active, otherwise the Z report stops with G5 826/827 just like the standard one.
 7. Test in this order: analysis → test run → update on a small company code and period, using the
    **same selections as standard GJMIGACC**. Compare the ALV results and `JVA_ACD_UPD_LOG`.
 
-### 5.4 Open points for the customer
+### 6.4 Open points for the customer
 
 1. What exactly must the Z version do differently from standard? This decides between option A and option B.
-2. If option B: provide the full class source (abapGit/SE24 export) including the interface methods,
-   constants and text pool, because the PDF does not contain them.
-3. Confirm who may run update mode. Update mode posts or changes ACDOCA, so it should be restricted.
+2. If option B: provide the full class source (abapGit, or the SE24 source-code-based view) including
+   the interface methods, constants and text pool. Neither class PDF contains them.
+3. Confirm whether GJMIGINT (`RGJV_UPDATE_INT_DOCS_IN_ACDOCA`) has already been run in OCP.
+   SAP recommends running it before GJMIGACC.
+4. Confirm who may run update mode. Update mode posts or changes ACDOCA, so it should be restricted.
