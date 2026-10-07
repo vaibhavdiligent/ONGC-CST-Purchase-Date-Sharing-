@@ -408,6 +408,7 @@ DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
+DATA: c_addmj(55) TYPE c.                           " 'Additional discount for May / June' label
 *   CIS 2026-27 pt.1: zonal (sales-office) authorization cache. Restriction
 *   is via auth object ZCIS_VKBR (ID VKBUR + ACTVT). An L1 user sees only the
 *   sales offices granted in their role; cross-zone / MLE-Group is unlocked by
@@ -492,6 +493,11 @@ PARAMETERS: r_month  RADIOBUTTON GROUP rd1 USER-COMMAND r1 DEFAULT 'X',   "Added
 *            r_quater NO-DISPLAY, " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
             r_annual RADIOBUTTON GROUP rd1,
             r_consis RADIOBUTTON GROUP rd1. "Added by Adarsh/Archana against charm: 4000006427, TR: DVRK9A12BV
+*   CIS 2026-27 - Additional Discount for May / June 2026 (dedicated option)
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS: r_addmj RADIOBUTTON GROUP rd1.
+SELECTION-SCREEN COMMENT 3(55) c_addmj.
+SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN SKIP.
 PARAMETERS: r_month1 NO-DISPLAY. "RADIOBUTTON GROUP rd1." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007907 Date: 12/03/2024
 SELECTION-SCREEN BEGIN OF LINE.
@@ -616,6 +622,7 @@ AT SELECTION-SCREEN OUTPUT.
 ****SOC BY SURBHI AND PRIYANKA SINGH ON 06-05-2019 FOR DEFINING RANGE FOR PIPE AND ROTO
 
 INITIALIZATION.
+  c_addmj = 'Additional discount for May / June'.
 
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
   SELECT * FROM yrva_prs_grades INTO TABLE @DATA(lt_yrva_prs_grades).
@@ -942,7 +949,7 @@ FORM validation .
 
 ******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *    ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 
@@ -2513,7 +2520,7 @@ FORM get_cust_name .
 *******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *******EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X'.
@@ -2569,6 +2576,10 @@ FORM calculate_discount .
   ELSEIF r_consis = 'X'.
     PERFORM annual_consis_discount.
 ***EOC Adarsh/Archana against charm: 4000006427 TR: DVRK9A12BV
+  ELSEIF r_addmj = 'X'.
+*   CIS 2026-27 - Additional Discount for May / June 2026 (runs ONLY for this
+*   dedicated radio button; the normal monthly logic is not affected).
+    PERFORM additional_mj_discount.
 
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
@@ -2587,6 +2598,97 @@ FORM calculate_discount .
     PERFORM annual_disc_for_new_cust.
   ENDIF.
 ENDFORM.                    " CALCULATE_DISCOUNT
+*&---------------------------------------------------------------------*
+*&      Form  additional_mj_discount
+*&---------------------------------------------------------------------*
+*  CIS 2026-27 - Additional Discount for May'26 & June'26 (dedicated radio
+*  button r_addmj). Runs ONLY when that option is selected.
+*  Flat per-MT rate on monthly lifting of HDPE & LLDPE grades:
+*    Raffia-sector grades (YRVA_PRS_GRADES indicator 'R')   -> Rs. 4000 / MT
+*    All other HDPE & LLDPE grades                          -> Rs. 3000 / MT
+*  Eligibility: customer entered CIS in Jun/Jul 2026 (MOU_BEGDA 01.06-31.07)
+*               and active at least up to 30.09.2026 (MOU_ENDDA >= 30.09).
+*  Any lifting > 0 MT qualifies. Run per month (May, then June). Results are
+*  populated into it_data_monthly so the existing display + L1-L6 staging are
+*  reused; rows are staged with scheme_type 'T' (see stage_all_rebates).
+*&---------------------------------------------------------------------*
+FORM additional_mj_discount.
+  DATA: lt_elig TYPE STANDARD TABLE OF yrva_qais_data,
+        lt_hl   TYPE RANGE OF s922-kondm,
+        ls_hl   LIKE LINE OF lt_hl,
+        lt_s922 TYPE STANDARD TABLE OF s922,
+        lv_val  TYPE p DECIMALS 2,
+        lv_qty  TYPE p DECIMALS 3,
+        lv_rate TYPE i.
+
+* applicable grade set = HDPE + LLDPE grades
+  SELECT kondm FROM yrva_hdpe_grades  INTO TABLE @DATA(lt_grd).
+  SELECT kondm FROM yrva_lldpe_grade  APPENDING TABLE @lt_grd.
+  LOOP AT lt_grd INTO DATA(ls_grd).
+    ls_hl-sign = 'I'. ls_hl-option = 'EQ'. ls_hl-low = ls_grd-kondm.
+    APPEND ls_hl TO lt_hl.
+  ENDLOOP.
+  SORT lt_hl BY low.
+  DELETE ADJACENT DUPLICATES FROM lt_hl COMPARING low.
+
+* eligible customers: entered CIS Jun/Jul 2026 and active >= 30.09.2026
+  SELECT * FROM yrva_qais_data INTO TABLE @lt_elig
+    WHERE mou_begda GE '20260601'
+      AND mou_begda LE '20260731'
+      AND mou_endda GE '20260930'
+      AND kunnr IN @s_pkunag.
+  IF lt_elig IS INITIAL OR lt_hl IS INITIAL.
+    RETURN.
+  ENDIF.
+
+* make the eligible CIS rows visible to stage_one (for the CIS number)
+  LOOP AT lt_elig INTO DATA(ls_e).
+    READ TABLE it_yrva_qais_data TRANSPORTING NO FIELDS WITH KEY kunnr = ls_e-kunnr.
+    IF sy-subrc <> 0.
+      APPEND ls_e TO it_yrva_qais_data.
+    ENDIF.
+  ENDLOOP.
+
+* lifting for the run month, HDPE+LLDPE grades, selected sales office(s)
+  SELECT * FROM s922 INTO TABLE @lt_s922
+    FOR ALL ENTRIES IN @lt_elig
+    WHERE pkunag = @lt_elig-kunnr
+      AND sptag  IN @s_sptag
+      AND vkbur  IN @s_vkbur
+      AND kondm  IN @lt_hl.
+
+  REFRESH it_data_monthly.
+  LOOP AT lt_elig INTO DATA(ls_elig).
+    CLEAR: lv_val, lv_qty, it_data_monthly.
+    LOOP AT lt_s922 INTO DATA(ls_s) WHERE pkunag = ls_elig-kunnr.
+      IF ls_s-kondm IN range_r.          " Raffia-sector grade
+        lv_rate = 4000.
+      ELSE.
+        lv_rate = 3000.
+      ENDIF.
+      lv_qty = lv_qty + ls_s-ummenge.
+      lv_val = lv_val + ls_s-ummenge * lv_rate.
+      it_data_monthly-vkbur = ls_s-vkbur.
+      IF ls_s-kvgr2 IS NOT INITIAL.
+        it_data_monthly-kvgr2 = ls_s-kvgr2.
+      ENDIF.
+    ENDLOOP.
+    CHECK lv_qty > 0.                     " any positive lifting qualifies
+    it_data_monthly-kunnr        = ls_elig-kunnr.
+    IF it_data_monthly-kvgr2 IS INITIAL.
+      it_data_monthly-kvgr2      = ls_elig-kvgr2.
+    ENDIF.
+    it_data_monthly-begda        = s_sptag-low.
+    it_data_monthly-endda        = s_sptag-high.
+    it_data_monthly-grp_lift_qty = lv_qty.
+    it_data_monthly-ind_lift_qty = lv_qty.
+    it_data_monthly-tot_elgl_qty = lv_qty.
+    it_data_monthly-value        = lv_val.
+    it_data_monthly-remarks      = 'CIS ADDL DISC MAY/JUN26'.
+    it_data_monthly-sale_order   = 'Addl May/Jun'.
+    APPEND it_data_monthly.
+  ENDLOOP.
+ENDFORM.                    " ADDITIONAL_MJ_DISCOUNT
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA
 *&---------------------------------------------------------------------*
@@ -11092,7 +11194,7 @@ FORM create_field_catalog .
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' .
@@ -12303,6 +12405,14 @@ FORM stage_all_rebates.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
+*   scheme code: 'T'/'ZSTR' = Additional Discount May/Jun (r_addmj),
+*   otherwise 'M'/'ZMIS' = normal monthly CIS.
+    DATA: lv_sstype TYPE char1, lv_srcond TYPE char4.
+    IF r_addmj = 'X'.
+      lv_sstype = 'T'. lv_srcond = 'ZSTR'.
+    ELSE.
+      lv_sstype = 'M'. lv_srcond = 'ZMIS'.
+    ENDIF.
     LOOP AT it_data_monthly.
       PERFORM l1_row_may_flow USING it_data_monthly-kunnr it_data_monthly-kvgr2
               it_data_monthly-value it_data_monthly-ind_lift_qty it_data_monthly-grp_lift_qty
@@ -12311,10 +12421,10 @@ FORM stage_all_rebates.
         lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
-      PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
+      PERFORM stage_one USING lv_sstype it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
-              it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty
+              it_data_monthly-grp_lift_qty lv_srcond it_data_monthly-commited_qty
               it_data_monthly-ind_lift_qty
               it_data_monthly-sale_order.
       lv_cnt = lv_cnt + 1.
@@ -12833,7 +12943,7 @@ FORM display_list .
 ***EOC by Adarsh/Archana on Charm 4000006427, TR: DVRK9A12BV
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X'  OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'  OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'  OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
