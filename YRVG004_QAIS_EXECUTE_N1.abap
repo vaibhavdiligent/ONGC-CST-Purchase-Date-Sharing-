@@ -408,7 +408,6 @@ DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
-DATA: c_addmj(55) TYPE c.                           " 'Additional discount for May / June' label
 *   CIS 2026-27 pt.1: zonal (sales-office) authorization cache. Restriction
 *   is via auth object ZCIS_VKBR (ID VKBUR + ACTVT). An L1 user sees only the
 *   sales offices granted in their role; cross-zone / MLE-Group is unlocked by
