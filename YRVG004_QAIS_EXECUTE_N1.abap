@@ -408,7 +408,6 @@ DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
 DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
-DATA: gv_strat TYPE flag.                          " Strategic Monthly Discount run (May/Jun'26)
 *   CIS 2026-27 pt.1: zonal (sales-office) authorization cache. Restriction
 *   is via auth object ZCIS_VKBR (ID VKBUR + ACTVT). An L1 user sees only the
 *   sales offices granted in their role; cross-zone / MLE-Group is unlocked by
@@ -2558,7 +2557,6 @@ ENDFORM.                    " GET_CUST_NAME
 *----------------------------------------------------------------------*
 FORM calculate_discount .
 **R_RPD & R_MONTH1 logic is not being used as the radio button are disabled on the selection screen.
-  CLEAR gv_strat.
   IF r_quater = 'X' .
 ** SOC Commeneted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
     PERFORM quarter_discount.   "logic for processing quearterly discount
@@ -2581,15 +2579,7 @@ FORM calculate_discount .
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X'.
 **eOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
 *( logic for processing monthly discount r_month = monthly discount ) - ( r_month1 = special monthly discount is not being used any more ).
-*   CIS 2026-27: for the PLAIN monthly run (r_month) of May'26 or June'26, the
-*   Strategic Monthly Discount replaces the normal monthly CIS calc. Any other
-*   month, or the r_rhd/r_rlld/c_maint variants, run the normal monthly logic.
-    IF r_month = 'X' AND ( s_sptag-low+0(6) = '202605' OR s_sptag-low+0(6) = '202606' ).
-      gv_strat = 'X'.
-      PERFORM strategic_discount.
-    ELSE.
-      PERFORM monthly_discount.
-    ENDIF.
+    PERFORM monthly_discount.
   ELSEIF r_rpd EQ 'X'.
 *logic for processing repeat performance discount. The logic inside is commented as this discount scheme is not being used any more.
     PERFORM repeat_performance_discount.
@@ -2597,98 +2587,6 @@ FORM calculate_discount .
     PERFORM annual_disc_for_new_cust.
   ENDIF.
 ENDFORM.                    " CALCULATE_DISCOUNT
-*&---------------------------------------------------------------------*
-*&      Form  strategic_discount
-*&---------------------------------------------------------------------*
-*  CIS 2026-27 - Strategic Monthly Discount for May'26 & June'26.
-*  Flat per-MT rate on monthly lifting of HDPE & LLDPE grades:
-*    Raffia-sector grades (YRVA_PRS_GRADES indicator 'R')   -> Rs. 4000 / MT
-*    All other HDPE & LLDPE grades                          -> Rs. 3000 / MT
-*  Eligibility: customer entered CIS in Jun/Jul 2026 (MOU_BEGDA 01.06-31.07)
-*               and active at least up to 30.09.2026 (MOU_ENDDA >= 30.09).
-*  Any lifting > 0 MT qualifies (flat slab). Clubbing of HDPE & LLDPE grades
-*  is inherent (all applicable grades summed). Results are populated into
-*  it_data_monthly so the existing display + L1-L6 staging are reused; rows
-*  are staged with scheme_type 'T' (see stage_all_rebates).
-*&---------------------------------------------------------------------*
-FORM strategic_discount.
-  DATA: lt_elig TYPE STANDARD TABLE OF yrva_qais_data,
-        lt_hl   TYPE RANGE OF s922-kondm,
-        ls_hl   LIKE LINE OF lt_hl,
-        lt_s922 TYPE STANDARD TABLE OF s922,
-        lv_val  TYPE p DECIMALS 2,
-        lv_qty  TYPE p DECIMALS 3,
-        lv_rate TYPE i.
-
-* applicable grade set = HDPE + LLDPE grades
-  SELECT kondm FROM yrva_hdpe_grades  INTO TABLE @DATA(lt_grd).
-  SELECT kondm FROM yrva_lldpe_grade  APPENDING TABLE @lt_grd.
-  LOOP AT lt_grd INTO DATA(ls_grd).
-    ls_hl-sign = 'I'. ls_hl-option = 'EQ'. ls_hl-low = ls_grd-kondm.
-    APPEND ls_hl TO lt_hl.
-  ENDLOOP.
-  SORT lt_hl BY low.
-  DELETE ADJACENT DUPLICATES FROM lt_hl COMPARING low.
-
-* eligible customers: entered CIS Jun/Jul 2026 and active >= 30.09.2026
-  SELECT * FROM yrva_qais_data INTO TABLE @lt_elig
-    WHERE mou_begda GE '20260601'
-      AND mou_begda LE '20260731'
-      AND mou_endda GE '20260930'
-      AND kunnr IN @s_pkunag.
-  IF lt_elig IS INITIAL OR lt_hl IS INITIAL.
-    RETURN.
-  ENDIF.
-
-* make the eligible CIS rows visible to stage_one (for the CIS number), in
-* case get_data did not load them for this run month.
-  LOOP AT lt_elig INTO DATA(ls_e).
-    READ TABLE it_yrva_qais_data TRANSPORTING NO FIELDS WITH KEY kunnr = ls_e-kunnr.
-    IF sy-subrc <> 0.
-      APPEND ls_e TO it_yrva_qais_data.
-    ENDIF.
-  ENDLOOP.
-
-* lifting for the run month, HDPE+LLDPE grades, selected sales office(s)
-  SELECT * FROM s922 INTO TABLE @lt_s922
-    FOR ALL ENTRIES IN @lt_elig
-    WHERE pkunag = @lt_elig-kunnr
-      AND sptag  IN @s_sptag
-      AND vkbur  IN @s_vkbur
-      AND kondm  IN @lt_hl.
-
-  REFRESH it_data_monthly.
-  LOOP AT lt_elig INTO DATA(ls_elig).
-    CLEAR: lv_val, lv_qty, it_data_monthly.
-    LOOP AT lt_s922 INTO DATA(ls_s) WHERE pkunag = ls_elig-kunnr.
-      IF ls_s-kondm IN range_r.          " Raffia-sector grade
-        lv_rate = 4000.
-      ELSE.
-        lv_rate = 3000.
-      ENDIF.
-      lv_qty = lv_qty + ls_s-ummenge.
-      lv_val = lv_val + ls_s-ummenge * lv_rate.
-      it_data_monthly-vkbur = ls_s-vkbur.
-      IF ls_s-kvgr2 IS NOT INITIAL.
-        it_data_monthly-kvgr2 = ls_s-kvgr2.
-      ENDIF.
-    ENDLOOP.
-    CHECK lv_qty > 0.                     " any positive lifting qualifies
-    it_data_monthly-kunnr        = ls_elig-kunnr.
-    IF it_data_monthly-kvgr2 IS INITIAL.
-      it_data_monthly-kvgr2      = ls_elig-kvgr2.
-    ENDIF.
-    it_data_monthly-begda        = s_sptag-low.
-    it_data_monthly-endda        = s_sptag-high.
-    it_data_monthly-grp_lift_qty = lv_qty.
-    it_data_monthly-ind_lift_qty = lv_qty.
-    it_data_monthly-tot_elgl_qty = lv_qty.
-    it_data_monthly-value        = lv_val.
-    it_data_monthly-remarks      = 'CIS STRATEGIC DISC MAY/JUN26'.
-    it_data_monthly-sale_order   = 'Strategic'.
-    APPEND it_data_monthly.
-  ENDLOOP.
-ENDFORM.                    " STRATEGIC_DISCOUNT
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA
 *&---------------------------------------------------------------------*
@@ -12405,14 +12303,6 @@ FORM stage_all_rebates.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
-*   scheme code for staging: 'T'/'ZSTR' = Strategic Monthly Discount,
-*   otherwise 'M'/'ZMIS' = normal monthly CIS. (CIS 2026-27)
-    DATA: lv_sstype TYPE char1, lv_srcond TYPE char4.
-    IF gv_strat = 'X'.
-      lv_sstype = 'T'. lv_srcond = 'ZSTR'.
-    ELSE.
-      lv_sstype = 'M'. lv_srcond = 'ZMIS'.
-    ENDIF.
     LOOP AT it_data_monthly.
       PERFORM l1_row_may_flow USING it_data_monthly-kunnr it_data_monthly-kvgr2
               it_data_monthly-value it_data_monthly-ind_lift_qty it_data_monthly-grp_lift_qty
@@ -12421,10 +12311,10 @@ FORM stage_all_rebates.
         lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
-      PERFORM stage_one USING lv_sstype it_data_monthly-kunnr it_data_monthly-name1
+      PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
-              it_data_monthly-grp_lift_qty lv_srcond it_data_monthly-commited_qty
+              it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty
               it_data_monthly-ind_lift_qty
               it_data_monthly-sale_order.
       lv_cnt = lv_cnt + 1.
