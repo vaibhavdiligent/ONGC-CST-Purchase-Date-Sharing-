@@ -14977,11 +14977,14 @@ INITIALIZATION.
   ENDIF.
 * CIS 2026-27 starts JUNE 2026 : reject Apr/May 2026 on the input screen
 * (GAIL 17.07.2026, point 1).
+* CIS 2026-27 TESTING BYPASS (L1-L6): allow Apr/May 2026 so the Strategic
+* Monthly Discount (May'26) and other periods can be tested. Re-enable
+* (keeping May allowed for the Strategic discount) before go-live.
 AT SELECTION-SCREEN.
-  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR
-     s_sptag-high(6) = '202604' OR s_sptag-high(6) = '202605'.
-    MESSAGE 'CIS START MONTH IS JUNE 2026' TYPE 'E'.
-  ENDIF.
+*  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR
+*     s_sptag-high(6) = '202604' OR s_sptag-high(6) = '202605'.
+*    MESSAGE 'CIS START MONTH IS JUNE 2026' TYPE 'E'.
+*  ENDIF.
 * START OF SELECTION---------------------------------------------------*
 START-OF-SELECTION.
 *Checking Authorization
