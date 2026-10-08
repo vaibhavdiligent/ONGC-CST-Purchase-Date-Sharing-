@@ -441,11 +441,35 @@ TYPES: BEGIN OF ty_bpcust,
        BEGIN OF ty_clust,
          kunnr   TYPE kunnr,
          cluster TYPE kunnr,       " representative kunnr of the cluster
-       END OF ty_clust.
+       END OF ty_clust,
+*      CIS 2026-27 - per BP-cluster monthly lift (one row per cluster rep).
+*      A KVGR2 can span several BP clusters (e.g. ASTRAL: only some codes
+*      carry a ZGP relationship); the group lift must therefore be summed
+*      per cluster, not per KVGR2-flagship, otherwise a KVGR2 that mixes a
+*      linked cluster with unlinked codes collapses to the flagship's own
+*      lift (coming out as 0 when the flagship is an unlinked / nil-lift code).
+       BEGIN OF ty_clift,
+         cluster TYPE kunnr,
+         m1      TYPE yrva_qais_data-grp_lift_qty_m1,
+         m2      TYPE yrva_qais_data-grp_lift_qty_m2,
+         m3      TYPE yrva_qais_data-grp_lift_qty_m3,
+         m4      TYPE yrva_qais_data-grp_lift_qty_m4,
+         m5      TYPE yrva_qais_data-grp_lift_qty_m5,
+         m6      TYPE yrva_qais_data-grp_lift_qty_m6,
+         m7      TYPE yrva_qais_data-grp_lift_qty_m7,
+         m8      TYPE yrva_qais_data-grp_lift_qty_m8,
+         m9      TYPE yrva_qais_data-grp_lift_qty_m9,
+         m10     TYPE yrva_qais_data-grp_lift_qty_m10,
+         m11     TYPE yrva_qais_data-grp_lift_qty_m11,
+         m12     TYPE yrva_qais_data-grp_lift_qty_m12,
+       END OF ty_clift.
 DATA: it_bpcust      TYPE STANDARD TABLE OF ty_bpcust,
       it_clust       TYPE SORTED TABLE OF ty_clust WITH UNIQUE KEY kunnr,
+      it_clift       TYPE SORTED TABLE OF ty_clift WITH UNIQUE KEY cluster,
+      gv_cllift_bld  TYPE flag,    " X once cluster lift has been built
       gv_clust_built TYPE flag,    " X once BP clusters have been built
-      gv_ismem       TYPE flag.    " is_grp_member result
+      gv_ismem       TYPE flag,    " is_grp_member result
+      lv_grpmm       TYPE c LENGTH 2. " fiscal month '04'..'03' for group lift
 RANGES r_nodisc FOR s922-kondm.                             " non-discount grades (KONDM)
 *   CIS (qais_no) that have at least one signed material declared shortfall
 *   for the period -> eligible for monthly shortfall waiver (Clause 8).
@@ -6153,11 +6177,9 @@ FORM q1_april .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m1.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m1.
-    ENDIF.
+    lv_grpmm = '04'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m1.
   ENDIF.
   it_data_quater-ind_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m1.
 *      calculate the discount
@@ -6231,11 +6253,9 @@ FORM q1_may .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m2.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m2.
-    ENDIF.
+    lv_grpmm = '05'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m2.
   ENDIF.
   it_data_quater-ind_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m2.
 *      calculate the discount
@@ -6308,11 +6328,9 @@ FORM q1_june .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m3.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m3.
-    ENDIF.
+    lv_grpmm = '06'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m3.
   ENDIF.
   it_data_quater-ind_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m3.
 *      calculate the discount
@@ -6531,11 +6549,9 @@ FORM q2_july .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m4.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m4.
-    ENDIF.
+    lv_grpmm = '07'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m1.
   ENDIF.
   it_data_quater-ind_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m4.
 *      calculate the discount
@@ -6626,11 +6642,9 @@ FORM q2_aug .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m5.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m5.
-    ENDIF.
+    lv_grpmm = '08'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m2.
   ENDIF.
   it_data_quater-ind_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m5.
 *      calculate the discount
@@ -6703,11 +6717,9 @@ FORM q2_sep .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m6.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m6.
-    ENDIF.
+    lv_grpmm = '09'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m3.
   ENDIF.
   it_data_quater-ind_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m6.
 *      calculate the discount
@@ -6958,11 +6970,9 @@ FORM q3_oct .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m7.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m7.
-    ENDIF.
+    lv_grpmm = '10'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m1.
   ENDIF.
   it_data_quater-ind_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m7.
 *      calculate the discount
@@ -7036,11 +7046,9 @@ FORM q3_nov .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m8.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m8.
-    ENDIF.
+    lv_grpmm = '11'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m2.
   ENDIF.
   it_data_quater-ind_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m8.
 *      calculate the discount
@@ -7113,11 +7121,9 @@ FORM q3_dec .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m9.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m9.
-    ENDIF.
+    lv_grpmm = '12'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m3.
   ENDIF.
   it_data_quater-ind_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m9.
 *      calculate the discount
@@ -7336,11 +7342,9 @@ FORM q4_jan .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m10.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m1 = wa_yrva_qais_data_temp-grp_lift_qty_m10.
-    ENDIF.
+    lv_grpmm = '01'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m1.
   ENDIF.
   it_data_quater-ind_lift_qty_m1 = wa_yrva_qais_data-ind_lift_qty_m10.
 *      calculate the discount
@@ -7413,11 +7417,9 @@ FORM q4_feb .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m11.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m2 = wa_yrva_qais_data_temp-grp_lift_qty_m11.
-    ENDIF.
+    lv_grpmm = '02'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m2.
   ENDIF.
   it_data_quater-ind_lift_qty_m2 = wa_yrva_qais_data-ind_lift_qty_m11.
 *      calculate the discount
@@ -7490,11 +7492,9 @@ FORM q4_mar .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m12.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_quater-grp_lift_qty_m3 = wa_yrva_qais_data_temp-grp_lift_qty_m12.
-    ENDIF.
+    lv_grpmm = '03'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_quater-grp_lift_qty_m3.
   ENDIF.
   it_data_quater-ind_lift_qty_m3 = wa_yrva_qais_data-ind_lift_qty_m12.
 *      calculate the discount
@@ -9028,11 +9028,9 @@ FORM month_jan .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m10.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m10.
-    ENDIF.
+    lv_grpmm = '01'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
@@ -9108,11 +9106,9 @@ FORM month_feb .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m11.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m11.
-    ENDIF.
+    lv_grpmm = '02'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9191,11 +9187,9 @@ FORM month_mar .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m12.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m12.
-    ENDIF.
+    lv_grpmm = '03'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9253,11 +9247,9 @@ FORM month_apr .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m1.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m1.
-    ENDIF.
+    lv_grpmm = '04'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9330,11 +9322,9 @@ IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT l
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m2.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m2.
-    ENDIF.
+    lv_grpmm = '05'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9405,11 +9395,9 @@ FORM month_jun .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m3.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m3.
-    ENDIF.
+    lv_grpmm = '06'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9498,11 +9486,9 @@ FORM month_jul .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m4.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m4.
-    ENDIF.
+    lv_grpmm = '07'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9575,11 +9561,9 @@ FORM month_aug .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m5.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m5.
-    ENDIF.
+    lv_grpmm = '08'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008707
   IF ls_psdq IS NOT INITIAL.
@@ -9660,11 +9644,9 @@ FORM month_sep .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m6.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m6.
-    ENDIF.
+    lv_grpmm = '09'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 **SOC by ujjjwal/priyanka on charm 4000002906 on 13-10-2020 to create new additional MQAIS link discount
   IF r_month IS NOT INITIAL OR r_month1 IS NOT  INITIAL.
@@ -9755,11 +9737,9 @@ FORM month_oct .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m7.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m7.
-    ENDIF.
+    lv_grpmm = '10'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008973
   IF ls_psdq IS NOT INITIAL.
@@ -9838,11 +9818,9 @@ FORM month_nov .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m8.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m8.
-    ENDIF.
+    lv_grpmm = '11'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 
 *  SOC BY VASISHNAVI/PAWAN CHARM:4000009111.
@@ -9923,11 +9901,9 @@ FORM month_dec .
   IF wa_yrva_qais_data-kvgr2 IS INITIAL.
     it_data_monthly-grp_lift_qty = wa_yrva_qais_data-ind_lift_qty_m9.
   ELSE.
-    READ TABLE it_yrva_qais_data_temp INTO wa_yrva_qais_data_temp
-    WITH KEY kvgr2 = wa_yrva_qais_data-kvgr2 .
-    IF sy-subrc EQ 0 .
-      it_data_monthly-grp_lift_qty = wa_yrva_qais_data_temp-grp_lift_qty_m9.
-    ENDIF.
+    lv_grpmm = '12'.
+    PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
+                             CHANGING it_data_monthly-grp_lift_qty.
   ENDIF.
 
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 2000000971
@@ -12015,6 +11991,86 @@ FORM is_grp_member USING p_flagship TYPE kunnr
     p_ismem = 'X'.
   ENDIF.
 ENDFORM.                    "is_grp_member
+*&---------------------------------------------------------------------*
+*&      Form  build_cluster_lift   (CIS 2026-27 - R3 group lift per cluster)
+*&---------------------------------------------------------------------*
+*   Sums the individual lifting of every run customer into its BP cluster,
+*   giving one Group Lifted Qty per cluster (not per KVGR2). This fixes the
+*   case where a KVGR2 holds more than one cluster - e.g. ASTRAL, where only
+*   33384 / 33402 / 35203 carry a ZGP* relationship while 33486 / 33487 /
+*   34375 / 34396 / 35721 do not. The old per-KVGR2-flagship logic clubbed
+*   only the single flagship's cluster and showed that (0 when the flagship
+*   was an unlinked, nil-lift code) for the whole KVGR2. A customer with no
+*   ZGP* relationship is its own cluster, so its group lift = its own lift.
+*&---------------------------------------------------------------------*
+FORM build_cluster_lift.
+  DATA: ls_m   TYPE yrva_qais_data,
+        ls_c   TYPE ty_clift,
+        lv_rep TYPE kunnr.
+  FIELD-SYMBOLS <c> TYPE ty_clift.
+  REFRESH it_clift.
+  IF gv_clust_built IS INITIAL.
+    PERFORM build_bp_clusters.
+    gv_clust_built = 'X'.
+  ENDIF.
+  LOOP AT it_yrva_qais_data INTO ls_m.
+    CHECK ls_m-kvgr2 IS NOT INITIAL.          " grouped customers only
+    PERFORM clust_of USING ls_m-kunnr CHANGING lv_rep.
+    READ TABLE it_clift ASSIGNING <c> WITH KEY cluster = lv_rep.
+    IF sy-subrc <> 0.
+      CLEAR ls_c.
+      ls_c-cluster = lv_rep.
+      INSERT ls_c INTO TABLE it_clift.
+      READ TABLE it_clift ASSIGNING <c> WITH KEY cluster = lv_rep.
+    ENDIF.
+    <c>-m1  = <c>-m1  + ls_m-ind_lift_qty_m1.
+    <c>-m2  = <c>-m2  + ls_m-ind_lift_qty_m2.
+    <c>-m3  = <c>-m3  + ls_m-ind_lift_qty_m3.
+    <c>-m4  = <c>-m4  + ls_m-ind_lift_qty_m4.
+    <c>-m5  = <c>-m5  + ls_m-ind_lift_qty_m5.
+    <c>-m6  = <c>-m6  + ls_m-ind_lift_qty_m6.
+    <c>-m7  = <c>-m7  + ls_m-ind_lift_qty_m7.
+    <c>-m8  = <c>-m8  + ls_m-ind_lift_qty_m8.
+    <c>-m9  = <c>-m9  + ls_m-ind_lift_qty_m9.
+    <c>-m10 = <c>-m10 + ls_m-ind_lift_qty_m10.
+    <c>-m11 = <c>-m11 + ls_m-ind_lift_qty_m11.
+    <c>-m12 = <c>-m12 + ls_m-ind_lift_qty_m12.
+  ENDLOOP.
+  gv_cllift_bld = 'X'.
+ENDFORM.                    "build_cluster_lift
+*&---------------------------------------------------------------------*
+*&      Form  get_cluster_lift   (group lift of a customer for a month)
+*&---------------------------------------------------------------------*
+*   Returns, in p_qty, the BP-cluster Group Lifted Qty of customer p_kunnr
+*   for the fiscal month p_mm ('04'..'03'). Builds the cluster lift once.
+*&---------------------------------------------------------------------*
+FORM get_cluster_lift USING p_kunnr TYPE kunnr
+                            p_mm    TYPE c
+                      CHANGING p_qty.          " generic: caller's quan field
+  DATA: lv_rep TYPE kunnr,
+        ls_c   TYPE ty_clift.
+  CLEAR p_qty.
+  IF gv_cllift_bld IS INITIAL.
+    PERFORM build_cluster_lift.
+  ENDIF.
+  PERFORM clust_of USING p_kunnr CHANGING lv_rep.
+  READ TABLE it_clift INTO ls_c WITH KEY cluster = lv_rep.
+  CHECK sy-subrc = 0.
+  CASE p_mm.
+    WHEN '04'. p_qty = ls_c-m1.
+    WHEN '05'. p_qty = ls_c-m2.
+    WHEN '06'. p_qty = ls_c-m3.
+    WHEN '07'. p_qty = ls_c-m4.
+    WHEN '08'. p_qty = ls_c-m5.
+    WHEN '09'. p_qty = ls_c-m6.
+    WHEN '10'. p_qty = ls_c-m7.
+    WHEN '11'. p_qty = ls_c-m8.
+    WHEN '12'. p_qty = ls_c-m9.
+    WHEN '01'. p_qty = ls_c-m10.
+    WHEN '02'. p_qty = ls_c-m11.
+    WHEN '03'. p_qty = ls_c-m12.
+  ENDCASE.
+ENDFORM.                    "get_cluster_lift
 *&---------------------------------------------------------------------*
 *&      Form  is_nodisc_grade   (CIS 2026-27 - R5 dev-form pt.5)
 *&---------------------------------------------------------------------*
