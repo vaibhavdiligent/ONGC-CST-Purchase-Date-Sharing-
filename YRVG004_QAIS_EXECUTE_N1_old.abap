@@ -407,16 +407,6 @@ TABLES: ycis_apprvl, ycis_wf_appr.
 DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
-DATA: gv_l1_remark TYPE ycis_apprvl-rej_remarks.  " CIS 2026-27: mandatory L1 approval remark
-*   CIS 2026-27 pt.1: zonal (sales-office) authorization cache. Restriction
-*   is via auth object ZCIS_VKBR (ID VKBUR + ACTVT). An L1 user sees only the
-*   sales offices granted in their role; cross-zone / MLE-Group is unlocked by
-*   granting the extra VKBUR value (or '*') in the role.
-TYPES: BEGIN OF ty_authoff,
-         vkbur TYPE vkbur,
-         ok    TYPE flag,
-       END OF ty_authoff.
-DATA: gt_authoff TYPE HASHED TABLE OF ty_authoff WITH UNIQUE KEY vkbur.
 *** EOC : CIS 2026-27 - Maker/Checker (R4) declarations ***
 
 *** SOC : CIS 2026-27 - Group/MLE (R3), 200MT cap, non-discount grades ***
@@ -516,11 +506,6 @@ PARAMETERS: r_month  RADIOBUTTON GROUP rd1 USER-COMMAND r1 DEFAULT 'X',   "Added
 *            r_quater NO-DISPLAY, " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
             r_annual RADIOBUTTON GROUP rd1,
             r_consis RADIOBUTTON GROUP rd1. "Added by Adarsh/Archana against charm: 4000006427, TR: DVRK9A12BV
-*   CIS 2026-27 - Additional Discount for May / June 2026 (dedicated option)
-SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS: r_addmj RADIOBUTTON GROUP rd1.
-SELECTION-SCREEN COMMENT 3(55) c_addmj.
-SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN SKIP.
 PARAMETERS: r_month1 NO-DISPLAY. "RADIOBUTTON GROUP rd1." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007907 Date: 12/03/2024
 SELECTION-SCREEN BEGIN OF LINE.
@@ -645,7 +630,6 @@ AT SELECTION-SCREEN OUTPUT.
 ****SOC BY SURBHI AND PRIYANKA SINGH ON 06-05-2019 FOR DEFINING RANGE FOR PIPE AND ROTO
 
 INITIALIZATION.
-  c_addmj = 'Additional discount for May / June'.
 
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
   SELECT * FROM yrva_prs_grades INTO TABLE @DATA(lt_yrva_prs_grades).
@@ -972,7 +956,7 @@ FORM validation .
 
 ******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *    ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commenetd by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+    ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 
@@ -1043,10 +1027,9 @@ FORM validation .
         ENDIF.
       ENDIF.
       IF lv_siml NE 'X'.
-*       Go-live: end date must not be a future date. (Re-enabled after UAT -
-*       was disabled during testing on request. GAIL 06.08.2026)
-*       CIS 2026-27 TESTING BYPASS (L1-L6): future end date is allowed so the
-*       L1-L6 flow can be tested for future periods. Re-enable before go-live.
+*       Go-live: end date must not be a future date. DISABLED for L1-L6
+*       testing (e.g. October 2026 run 01.10.2026-31.10.2026 before month
+*       end) on request. Re-enable by uncommenting the check below.
 *        IF s_sptag-high GT sy-datum.
 *          MESSAGE 'End date can not be Future date' TYPE 'E' .
 *        ENDIF.
@@ -1283,13 +1266,8 @@ FORM get_data.
 *   Loaded once; used per customer in the monthly waiver logic.
   SELECT * FROM ycis_waiver_rule INTO TABLE it_ycis_waiver_rule
     WHERE valid_from LE s_sptag-low AND valid_to GE s_sptag-high.
-*   CIS 2026-27 pt.6: only CPC-L3-APPROVED shortfall rows drive the calc.
-*   (Maintained via the maker-checker program YCIS_SHORTFALL_MC.) Set the
-*   existing declarations to APPR_STATUS = 'A' after adding the field so
-*   current shortfall grades stay active.
   SELECT * FROM ycis_shortfall INTO TABLE it_ycis_shortfall
-    WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high
-      AND appr_status = 'A'.
+    WHERE period_from LE s_sptag-low AND period_to GE s_sptag-high.
   SELECT * FROM ycis_nodisc_grd INTO TABLE it_ycis_nodisc.
 *   Build the non-discount grade range (PS/GS/Powder/Polyfines) used to
 *   exclude these grades from the discountable qty (they still count for
@@ -2553,7 +2531,7 @@ FORM get_cust_name .
 *******SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'. " SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *******EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X'.
@@ -2609,10 +2587,6 @@ FORM calculate_discount .
   ELSEIF r_consis = 'X'.
     PERFORM annual_consis_discount.
 ***EOC Adarsh/Archana against charm: 4000006427 TR: DVRK9A12BV
-  ELSEIF r_addmj = 'X'.
-*   CIS 2026-27 - Additional Discount for May / June 2026 (runs ONLY for this
-*   dedicated radio button; the normal monthly logic is not affected).
-    PERFORM additional_mj_discount.
 
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'. " SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
@@ -2631,97 +2605,6 @@ FORM calculate_discount .
     PERFORM annual_disc_for_new_cust.
   ENDIF.
 ENDFORM.                    " CALCULATE_DISCOUNT
-*&---------------------------------------------------------------------*
-*&      Form  additional_mj_discount
-*&---------------------------------------------------------------------*
-*  CIS 2026-27 - Additional Discount for May'26 & June'26 (dedicated radio
-*  button r_addmj). Runs ONLY when that option is selected.
-*  Flat per-MT rate on monthly lifting of HDPE & LLDPE grades:
-*    Raffia-sector grades (YRVA_PRS_GRADES indicator 'R')   -> Rs. 4000 / MT
-*    All other HDPE & LLDPE grades                          -> Rs. 3000 / MT
-*  Eligibility: customer entered CIS in Jun/Jul 2026 (MOU_BEGDA 01.06-31.07)
-*               and active at least up to 30.09.2026 (MOU_ENDDA >= 30.09).
-*  Any lifting > 0 MT qualifies. Run per month (May, then June). Results are
-*  populated into it_data_monthly so the existing display + L1-L6 staging are
-*  reused; rows are staged with scheme_type 'T' (see stage_all_rebates).
-*&---------------------------------------------------------------------*
-FORM additional_mj_discount.
-  DATA: lt_elig TYPE STANDARD TABLE OF yrva_qais_data,
-        lt_hl   TYPE RANGE OF s922-kondm,
-        ls_hl   LIKE LINE OF lt_hl,
-        lt_s922 TYPE STANDARD TABLE OF s922,
-        lv_val  TYPE p DECIMALS 2,
-        lv_qty  TYPE p DECIMALS 3,
-        lv_rate TYPE i.
-
-* applicable grade set = HDPE + LLDPE grades
-  SELECT kondm FROM yrva_hdpe_grades  INTO TABLE @DATA(lt_grd).
-  SELECT kondm FROM yrva_lldpe_grade  APPENDING TABLE @lt_grd.
-  LOOP AT lt_grd INTO DATA(ls_grd).
-    ls_hl-sign = 'I'. ls_hl-option = 'EQ'. ls_hl-low = ls_grd-kondm.
-    APPEND ls_hl TO lt_hl.
-  ENDLOOP.
-  SORT lt_hl BY low.
-  DELETE ADJACENT DUPLICATES FROM lt_hl COMPARING low.
-
-* eligible customers: entered CIS Jun/Jul 2026 and active >= 30.09.2026
-  SELECT * FROM yrva_qais_data INTO TABLE @lt_elig
-    WHERE mou_begda GE '20260601'
-      AND mou_begda LE '20260731'
-      AND mou_endda GE '20260930'
-      AND kunnr IN @s_pkunag.
-  IF lt_elig IS INITIAL OR lt_hl IS INITIAL.
-    RETURN.
-  ENDIF.
-
-* make the eligible CIS rows visible to stage_one (for the CIS number)
-  LOOP AT lt_elig INTO DATA(ls_e).
-    READ TABLE it_yrva_qais_data TRANSPORTING NO FIELDS WITH KEY kunnr = ls_e-kunnr.
-    IF sy-subrc <> 0.
-      APPEND ls_e TO it_yrva_qais_data.
-    ENDIF.
-  ENDLOOP.
-
-* lifting for the run month, HDPE+LLDPE grades, selected sales office(s)
-  SELECT * FROM s922 INTO TABLE @lt_s922
-    FOR ALL ENTRIES IN @lt_elig
-    WHERE pkunag = @lt_elig-kunnr
-      AND sptag  IN @s_sptag
-      AND vkbur  IN @s_vkbur
-      AND kondm  IN @lt_hl.
-
-  REFRESH it_data_monthly.
-  LOOP AT lt_elig INTO DATA(ls_elig).
-    CLEAR: lv_val, lv_qty, it_data_monthly.
-    LOOP AT lt_s922 INTO DATA(ls_s) WHERE pkunag = ls_elig-kunnr.
-      IF ls_s-kondm IN range_r.          " Raffia-sector grade
-        lv_rate = 4000.
-      ELSE.
-        lv_rate = 3000.
-      ENDIF.
-      lv_qty = lv_qty + ls_s-ummenge.
-      lv_val = lv_val + ls_s-ummenge * lv_rate.
-      it_data_monthly-vkbur = ls_s-vkbur.
-      IF ls_s-kvgr2 IS NOT INITIAL.
-        it_data_monthly-kvgr2 = ls_s-kvgr2.
-      ENDIF.
-    ENDLOOP.
-    CHECK lv_qty > 0.                     " any positive lifting qualifies
-    it_data_monthly-kunnr        = ls_elig-kunnr.
-    IF it_data_monthly-kvgr2 IS INITIAL.
-      it_data_monthly-kvgr2      = ls_elig-kvgr2.
-    ENDIF.
-    it_data_monthly-begda        = s_sptag-low.
-    it_data_monthly-endda        = s_sptag-high.
-    it_data_monthly-grp_lift_qty = lv_qty.
-    it_data_monthly-ind_lift_qty = lv_qty.
-    it_data_monthly-tot_elgl_qty = lv_qty.
-    it_data_monthly-value        = lv_val.
-    it_data_monthly-remarks      = 'CIS ADDL DISC MAY/JUN26'.
-    it_data_monthly-sale_order   = 'Addl May/Jun'.
-    APPEND it_data_monthly.
-  ENDLOOP.
-ENDFORM.                    " ADDITIONAL_MJ_DISCOUNT
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA
 *&---------------------------------------------------------------------*
@@ -8300,22 +8183,6 @@ FORM monthly_discount .
         it_data_monthly-grp_lift_qty   = wa_yrva_qais_data-grp_lift_qty_m12.
         it_data_monthly-ind_lift_qty   = wa_yrva_qais_data-ind_lift_qty_m12.
       ENDIF.
-*     CIS 2026-27 FIX (grp lift 0 in monthly): the clubbed Group Lifted Qty
-*     is summed PER BP CLUSTER (ZGP* group/MLE), not per KVGR2. A KVGR2 can
-*     hold more than one cluster - e.g. ASTRAL, where only 33384 / 33402 /
-*     35203 carry a ZGP* relationship and 33486 / 33487 / 34375 / 34396 /
-*     35721 do not. The earlier per-KVGR2-flagship read collapsed the group
-*     to the single flagship's cluster (0 when that flagship was an unlinked,
-*     nil-lift code) and showed it for every AST code -> MCQ % 0 -> no
-*     discount. get_cluster_lift sums the lift of this customer's own
-*     cluster; a non-group customer (blank KVGR2) shows its own lift.
-      IF wa_yrva_qais_data-kvgr2 IS INITIAL.
-        it_data_monthly-grp_lift_qty = it_data_monthly-ind_lift_qty.
-      ELSE.
-        lv_grpmm = s_sptag-high+4(2).
-        PERFORM get_cluster_lift USING wa_yrva_qais_data-kunnr lv_grpmm
-                                 CHANGING it_data_monthly-grp_lift_qty.
-      ENDIF.
 *      calculate the discount
       IF it_data_monthly-grp_lift_qty LT w_month_min .
         "SOC RITESH SINGH priyanka mam on charm 4000004022 on date 16.07.2021
@@ -11167,7 +11034,7 @@ FORM create_field_catalog .
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' .
@@ -12053,21 +11920,22 @@ FORM build_bp_clusters.
   SORT it_bpcust BY bp.
   CHECK it_bpcust[] IS NOT INITIAL.
 
-* group/MLE relationships among our BPs (both directions).
-* CIS 2026-27 - TESTING BYPASS (L1-L6): the relationship VALIDITY DATE check
-* is disabled so clubbing works for every maintained BP Group/MLE relationship
-* regardless of its Valid-From / Valid-To. To re-enable the date check later,
-* restore the commented conditions below (overlap against the run period).
+* group/MLE relationships among our BPs (both directions), valid in the run
+* period. CIS 2026-27 FIX: use an OVERLAP test against the whole run period
+* [s_sptag-low .. s_sptag-high], not just the first day (s_sptag-low). A BP
+* relationship whose Valid-From is mid-month (e.g. 27.04) was previously
+* excluded for that month because date_from was > s_sptag-low (01.04); now it
+* is included whenever the relationship is valid for any part of the month.
   SELECT * FROM but050 INTO TABLE lt_rel
     FOR ALL ENTRIES IN it_bpcust
-    WHERE partner1  = it_bpcust-bp.
-*      AND date_from LE s_sptag-high
-*      AND date_to   GE s_sptag-low.
+    WHERE partner1  = it_bpcust-bp
+      AND date_from LE s_sptag-high
+      AND date_to   GE s_sptag-low.
   SELECT * FROM but050 INTO TABLE lt_rel2
     FOR ALL ENTRIES IN it_bpcust
-    WHERE partner2  = it_bpcust-bp.
-*      AND date_from LE s_sptag-high
-*      AND date_to   GE s_sptag-low.
+    WHERE partner2  = it_bpcust-bp
+      AND date_from LE s_sptag-high
+      AND date_to   GE s_sptag-low.
   APPEND LINES OF lt_rel2 TO lt_rel.
   SORT lt_rel BY partner1 partner2 reltyp.
   DELETE ADJACENT DUPLICATES FROM lt_rel COMPARING partner1 partner2 reltyp.
@@ -12397,14 +12265,6 @@ FORM stage_all_rebates.
     MESSAGE 'Submission cancelled - nothing sent to L2' TYPE 'S'.
     RETURN.
   ENDIF.
-*   CIS 2026-27: a remark is MANDATORY at L1 (approval). It is stored on every
-*   row staged in this submission and prints in the L1 column of the note.
-  CLEAR gv_l1_remark.
-  PERFORM get_l1_remark CHANGING gv_l1_remark.
-  IF gv_l1_remark IS INITIAL.
-    MESSAGE 'Remark is mandatory' TYPE 'I'.
-    RETURN.
-  ENDIF.
   REFRESH gt_stg_office.
   CLEAR gv_stg_dup.
   IF r_quater = 'X'.
@@ -12421,8 +12281,7 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'Q' it_data_quater-kunnr it_data_quater-name1
               it_data_quater-kvgr2 it_data_quater-vkbur it_data_quater-value
               it_data_quater-tot_elgl_qty it_data_quater-remarks
-              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero lv_zero
-              it_data_quater-sale_order.
+              it_data_quater-tot_grp_lift_qty 'ZQIS' lv_zero lv_zero.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_annual = 'X'.
@@ -12437,8 +12296,7 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'A' it_data_annual-kunnr it_data_annual-name1
               it_data_annual-kvgr2 it_data_annual-vkbur it_data_annual-value
               it_data_annual-tot_elgl_qty it_data_annual-remarks
-              it_data_annual-grp_lift_qty 'ZAIS' lv_zero it_data_annual-ind_lift_qty
-              it_data_annual-sale_order.
+              it_data_annual-grp_lift_qty 'ZAIS' lv_zero it_data_annual-ind_lift_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSEIF r_consis = 'X'.
@@ -12453,19 +12311,10 @@ FORM stage_all_rebates.
       PERFORM stage_one USING 'C' it_annual_consis-kunnr it_annual_consis-name1
               it_annual_consis-kvgr2 it_annual_consis-vkbur it_annual_consis-value
               it_annual_consis-tot_elgl_qty it_annual_consis-remarks
-              it_annual_consis-grp_lift_qty 'ZACD' lv_zero it_annual_consis-ind_lift_qty
-              it_annual_consis-sale_order.
+              it_annual_consis-grp_lift_qty 'ZACD' lv_zero it_annual_consis-ind_lift_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ELSE.
-*   scheme code: 'T'/'ZSTR' = Additional Discount May/Jun (r_addmj),
-*   otherwise 'M'/'ZMIS' = normal monthly CIS.
-    DATA: lv_sstype TYPE char1, lv_srcond TYPE char4.
-    IF r_addmj = 'X'.
-      lv_sstype = 'T'. lv_srcond = 'ZSTR'.
-    ELSE.
-      lv_sstype = 'M'. lv_srcond = 'ZMIS'.
-    ENDIF.
     LOOP AT it_data_monthly.
       PERFORM l1_row_may_flow USING it_data_monthly-kunnr it_data_monthly-kvgr2
               it_data_monthly-value it_data_monthly-ind_lift_qty it_data_monthly-grp_lift_qty
@@ -12474,12 +12323,11 @@ FORM stage_all_rebates.
         lv_skip = lv_skip + 1.
         CONTINUE.
       ENDIF.
-      PERFORM stage_one USING lv_sstype it_data_monthly-kunnr it_data_monthly-name1
+      PERFORM stage_one USING 'M' it_data_monthly-kunnr it_data_monthly-name1
               it_data_monthly-kvgr2 it_data_monthly-vkbur it_data_monthly-value
               it_data_monthly-tot_elgl_qty it_data_monthly-remarks
-              it_data_monthly-grp_lift_qty lv_srcond it_data_monthly-commited_qty
-              it_data_monthly-ind_lift_qty
-              it_data_monthly-sale_order.
+              it_data_monthly-grp_lift_qty 'ZMIS' it_data_monthly-commited_qty
+              it_data_monthly-ind_lift_qty.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
   ENDIF.
@@ -12540,7 +12388,7 @@ FORM hide_forwarded.
     FROM ycis_apprvl INTO TABLE lt_fwd
     WHERE period_from = s_sptag-low
       AND period_to   = s_sptag-high
-      AND wf_status   IN ('20','30','40','50','60','70').  " in-flight L2..L6 / completed (6-level)
+      AND wf_status   IN ('20','30','40').
   CHECK lt_fwd IS NOT INITIAL.
 
   LOOP AT it_data_monthly.
@@ -12681,8 +12529,7 @@ FORM stage_one USING p_stype   TYPE char1
                      p_lift    TYPE p
                      p_rebcond TYPE any
                      p_mcq     TYPE p
-                     p_indlift TYPE p
-                     p_wvstat  TYPE any.
+                     p_indlift TYPE p.
   DATA: ls TYPE ycis_apprvl.
   CLEAR ls.
 *   best-effort CIS number for traceability
@@ -12740,8 +12587,6 @@ FORM stage_one USING p_stype   TYPE char1
   ls-l1_user     = sy-uname.
   ls-l1_date     = sy-datum.
   ls-l1_time     = sy-uzeit.
-  ls-rem_l1      = gv_l1_remark.         " L1 approval remark (prints on note)
-  ls-wv_stat     = p_wvstat.             " Shortfall/Customer Waiver status (shown L2-L5)
   ls-remarks     = 'L1 approved'.        " shown to L2 (GAIL 17.07.2026)
   ls-waers       = 'INR'.
 *   Prevent duplicate forwarding / duplicate L2 e-mail when L1 presses
@@ -12755,8 +12600,7 @@ FORM stage_one USING p_stype   TYPE char1
       AND period_to   = ls-period_to
       AND kunnr       = ls-kunnr
       AND kvgr2       = ls-kvgr2.
-  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40'
-                     OR lv_wf = '50' OR lv_wf = '60' OR lv_wf = '70' ).
+  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40' ).
     gv_stg_dup = gv_stg_dup + 1.         " count it so L1 gets clear feedback
     RETURN.                              " already forwarded - skip, no re-mail
   ENDIF.
@@ -12765,33 +12609,6 @@ FORM stage_one USING p_stype   TYPE char1
   PERFORM stage_grade_detail USING ls.
   COLLECT p_vkbur INTO gt_stg_office.       " for the L2 notification
 ENDFORM.                    "stage_one
-*&---------------------------------------------------------------------*
-*&      Form  get_l1_remark   (CIS 2026-27 - mandatory L1 approval remark)
-*&---------------------------------------------------------------------*
-FORM get_l1_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
-  DATA: lt_fields TYPE STANDARD TABLE OF sval,
-        ls_field  TYPE sval,
-        lv_ret    TYPE char1.
-  ls_field-tabname   = 'YCIS_APPRVL'.
-  ls_field-fieldname = 'REM_L1'.               " 100-char remark field
-  ls_field-fieldtext = 'Remark'.
-  ls_field-field_obl = 'X'.
-  APPEND ls_field TO lt_fields.
-  CALL FUNCTION 'POPUP_GET_VALUES'
-    EXPORTING
-      popup_title     = 'Approval remark (mandatory)'
-    IMPORTING
-      returncode      = lv_ret
-    TABLES
-      fields          = lt_fields
-    EXCEPTIONS
-      error_in_fields = 1
-      OTHERS          = 2.
-  IF sy-subrc = 0 AND lv_ret <> 'A'.
-    READ TABLE lt_fields INTO ls_field INDEX 1.
-    p_remark = ls_field-value.
-  ENDIF.
-ENDFORM.                    "get_l1_remark
 *&---------------------------------------------------------------------*
 *&      Form  l1_row_may_flow   (CIS 2026-27 - L1 flow decision)
 *&---------------------------------------------------------------------*
@@ -12931,9 +12748,6 @@ ENDFORM.                    "stage_grade_detail
 *  <--  p2        text
 *----------------------------------------------------------------------*
 FORM display_list .
-* CIS 2026-27 pt.1: restrict the displayed rows to the user's authorized
-* sales offices (zonal restriction). Applied to whichever result table is active.
-  PERFORM zonal_filter.
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
@@ -12996,7 +12810,7 @@ FORM display_list .
 ***EOC by Adarsh/Archana on Charm 4000006427, TR: DVRK9A12BV
 ***SOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 *  ELSEIF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X'  OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
-  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'  OR c_maint EQ 'X' OR c_maint1 EQ 'X' OR r_addmj = 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'  OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 ***EOC by Abhinav/Archna/Vishal on Charm  4000006149, TR DVRK9A112V
 
@@ -13041,75 +12855,6 @@ FORM display_list .
   ENDIF.
 
 ENDFORM.                    " DISPLAY_LIST
-*&---------------------------------------------------------------------*
-*&      Form  zonal_filter   (CIS 2026-27 pt.1 - zonal restriction)
-*&---------------------------------------------------------------------*
-*   Remove from the active result table every row whose sales office the
-*   user is not authorized for (auth object ZCIS_VKBR). Rollout-safe: while
-*   the object is not yet assigned to the user's role it does not restrict
-*   (see office_authorized); once BIS grants it, only the user's offices show.
-*&---------------------------------------------------------------------*
-FORM zonal_filter.
-  DATA lv_ok TYPE flag.
-  IF r_quater = 'X'.
-    LOOP AT it_data_quater.
-      PERFORM office_authorized USING it_data_quater-vkbur CHANGING lv_ok.
-      IF lv_ok IS INITIAL. DELETE it_data_quater. ENDIF.
-    ENDLOOP.
-  ELSEIF r_annual = 'X'.
-    LOOP AT it_data_annual.
-      PERFORM office_authorized USING it_data_annual-vkbur CHANGING lv_ok.
-      IF lv_ok IS INITIAL. DELETE it_data_annual. ENDIF.
-    ENDLOOP.
-  ELSEIF r_consis = 'X'.
-    LOOP AT it_annual_consis.
-      PERFORM office_authorized USING it_annual_consis-vkbur CHANGING lv_ok.
-      IF lv_ok IS INITIAL. DELETE it_annual_consis. ENDIF.
-    ENDLOOP.
-  ELSEIF r_newcus = 'X'.
-    LOOP AT it_data_annual_newcus.
-      PERFORM office_authorized USING it_data_annual_newcus-vkbur CHANGING lv_ok.
-      IF lv_ok IS INITIAL. DELETE it_data_annual_newcus. ENDIF.
-    ENDLOOP.
-  ELSE.
-    LOOP AT it_data_monthly.
-      PERFORM office_authorized USING it_data_monthly-vkbur CHANGING lv_ok.
-      IF lv_ok IS INITIAL. DELETE it_data_monthly. ENDIF.
-    ENDLOOP.
-  ENDIF.
-ENDFORM.                    "zonal_filter
-*&---------------------------------------------------------------------*
-*&      Form  office_authorized   (auth object ZCIS_VKBR, cached)
-*&---------------------------------------------------------------------*
-*   sy-subrc after AUTHORITY-CHECK:
-*     0  -> authorized                     (show)
-*     12 -> object NOT in the user's roles (restriction not yet activated
-*           for this user -> show, so an unconfigured role does not blank
-*           the report during rollout)
-*     4  -> object present but this office NOT granted (hide)
-*&---------------------------------------------------------------------*
-FORM office_authorized USING p_vkbur TYPE vkbur CHANGING p_ok TYPE flag.
-  DATA ls_cache TYPE ty_authoff.
-  CLEAR p_ok.
-  IF p_vkbur IS INITIAL.
-    p_ok = 'X'.                 " no office on the row -> do not hide
-    RETURN.
-  ENDIF.
-  READ TABLE gt_authoff INTO ls_cache WITH TABLE KEY vkbur = p_vkbur.
-  IF sy-subrc = 0.
-    p_ok = ls_cache-ok.
-    RETURN.
-  ENDIF.
-  AUTHORITY-CHECK OBJECT 'ZCIS_VKBR'
-    ID 'VKBUR' FIELD p_vkbur
-    ID 'ACTVT' FIELD '16'.
-  IF sy-subrc = 0 OR sy-subrc = 12.
-    p_ok = 'X'.
-  ENDIF.
-  ls_cache-vkbur = p_vkbur.
-  ls_cache-ok    = p_ok.
-  INSERT ls_cache INTO TABLE gt_authoff.
-ENDFORM.                    "office_authorized
 *&---------------------------------------------------------------------*
 *&      Form  CREATE_SALE_ORDER
 *&---------------------------------------------------------------------*
@@ -15030,14 +14775,11 @@ INITIALIZATION.
   ENDIF.
 * CIS 2026-27 starts JUNE 2026 : reject Apr/May 2026 on the input screen
 * (GAIL 17.07.2026, point 1).
-* CIS 2026-27 TESTING BYPASS (L1-L6): allow Apr/May 2026 so the Strategic
-* Monthly Discount (May'26) and other periods can be tested. Re-enable
-* (keeping May allowed for the Strategic discount) before go-live.
 AT SELECTION-SCREEN.
-*  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR
-*     s_sptag-high(6) = '202604' OR s_sptag-high(6) = '202605'.
-*    MESSAGE 'CIS START MONTH IS JUNE 2026' TYPE 'E'.
-*  ENDIF.
+  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR
+     s_sptag-high(6) = '202604' OR s_sptag-high(6) = '202605'.
+    MESSAGE 'CIS START MONTH IS JUNE 2026' TYPE 'E'.
+  ENDIF.
 * START OF SELECTION---------------------------------------------------*
 START-OF-SELECTION.
 *Checking Authorization
