@@ -2113,6 +2113,16 @@ FORM get_data.
       DELETE it_yrva_qais_data_newcus WHERE mou_begda GE w_date_limit.
     ENDIF.
   ENDIF.
+*  CIS 2026-27 - rebuild BP clusters & cluster lift on EVERY run.
+*  build_bp_clusters / build_cluster_lift are cached by gv_clust_built /
+*  gv_cllift_bld, and this report stays loaded across Execute/Back, so
+*  without this reset the FIRST run's clustering (built from that run's
+*  selection set) is reused by later runs - the Group Lifted Qty then
+*  depends on the selection / run sequence (e.g. Customer Group 2 filled
+*  vs blank gave different group totals for the same customers). Refresh
+*  it_kunnr too so it is not carried over from a previous run.
+  REFRESH: it_kunnr, it_clust, it_bpcust, it_clift.
+  CLEAR:   gv_clust_built, gv_cllift_bld.
 *    get the all customers in the group company
   LOOP AT it_yrva_qais_data INTO wa_yrva_qais_data.
     it_kunnr-kvgr2 = wa_yrva_qais_data-kvgr2.
