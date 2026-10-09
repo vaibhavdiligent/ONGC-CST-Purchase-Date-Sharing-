@@ -1027,11 +1027,12 @@ FORM validation .
         ENDIF.
       ENDIF.
       IF lv_siml NE 'X'.
-*       Go-live: end date must not be a future date. (Re-enabled after UAT -
-*       was disabled during testing on request. GAIL 06.08.2026)
-        IF s_sptag-high GT sy-datum.
-          MESSAGE 'End date can not be Future date' TYPE 'E' .
-        ENDIF.
+*       Go-live: end date must not be a future date. DISABLED for L1-L6
+*       testing (e.g. October 2026 run 01.10.2026-31.10.2026 before month
+*       end) on request. Re-enable by uncommenting the check below.
+*        IF s_sptag-high GT sy-datum.
+*          MESSAGE 'End date can not be Future date' TYPE 'E' .
+*        ENDIF.
       ENDIF.
     ELSEIF r_newcus = 'X' AND   "Vivek
         ( s_sptag-low+4(4) NE '0801' OR  s_sptag-high+4(4) NE '0331' ) .
