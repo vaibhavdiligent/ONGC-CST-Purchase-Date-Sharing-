@@ -677,7 +677,10 @@ FORM display_alv.
       lo_alv->get_functions( )->set_all( abap_true ).
       lo_cols = lo_alv->get_columns( ).
       lo_cols->set_optimize( abap_true ).
-      lo_cols->set_currency_column( 'WAERS' ).
+      TRY.
+          lo_cols->get_column( 'DMBE2' )->set_currency_column( 'WAERS' ).
+        CATCH cx_salv_not_found cx_salv_data_error.     "#EC NO_HANDLER
+      ENDTRY.
 
       PERFORM set_col USING lo_cols 'STATUS'       'Status'.
       PERFORM set_col USING lo_cols 'ITEMNO'       'Item'.
