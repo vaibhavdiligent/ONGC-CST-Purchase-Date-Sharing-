@@ -1,0 +1,641 @@
+Delivered-To: vaibhav.maheshwari@diligentconsulting.co.in
+Received: by 2002:a05:7412:d80b:b0:1ef:3ce8:aca1 with SMTP id ik11csp6126592rdb;
+        Mon, 12 Oct 2026 01:37:59 -0700 (PDT)
+X-Received: by 2002:a05:6a21:4a98:b0:3e0:a809:76cc with SMTP id adf61e73a8af0-3e16c02ac47mr6877808637.70.1791794279122;
+        Mon, 12 Oct 2026 01:37:59 -0700 (PDT)
+ARC-Seal: i=2; a=rsa-sha256; t=1791794279; cv=pass;
+        d=google.com; s=arc-20260327;
+        b=S2lQUSggQZ1qQTunoTKuV+FXX7fAQPtEAsAmesUlbDqAnN1PlSZ4hB4HnHXHwtCi1a
+         NVoqj4B4NjTLR1EWjoaYCcVR4qyJg4Mljs4YVZ/SudGXMmrpAl3vVSXHJ5XU3WFoHalp
+         44v6dRMl2+18et0weGX9L7bgwxK77h+/435eWzllDLZC/Hv0e6HFxmPlMtDot6mn3phO
+         kmbhVeRBpQIvLTx8M38LJ42kFJ8Tlq1MdINVb0JJG9Jhp/LF2hSJhJiYnN+piZSBOWXJ
+         GvRjNDVhheYzUX8UDF/GEqludKideykN0ciijz5nN5Su+6tdIkeDhPS2+DA9RERUKH92
+         grfA==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20260327;
+        h=mime-version:content-language:accept-language:in-reply-to
+         :references:message-id:date:thread-index:thread-topic:subject:to
+         :from:dkim-signature;
+        bh=upyest5Ta7VNj+xXpqQg0JWDiWlIA3CaDFpIkl5HL+A=;
+        fh=kGiFHTLdhuNhICD5rZ856E3SeZiwaPnBaetYvGA9uoc=;
+        b=UGldazbnZi25+IpsGbkdUht8XAB0B+Tg0VLqYF+oOqrKtfk39bajhdE0suAkXD0l1c
+         uJfIDXfYhMHWtT8eN1fbPBbxXQ9qLMMyCnYVPr+1kj8ZK5Gso5QlVFyic9kxxM8QDhe1
+         p/r12/ljO5T/5xrB/BSjPr5Ay+KO1IEnq/mtY/4kO+DVRLy6neBjYf35oJSGEQ0d0KBb
+         ucvudpxX6+Qg85RYdVLfayRl78gE0nYdwjISyB+L4RQfEQR39Plp3mA5M/QrBVOFcIGp
+         d+I7EXdyLeOPJ9pDccK8OKbClX12cnLBcLudDngWsztPd24sPsDJfMw43GQWTEUJToiN
+         JZQg==;
+        dara=google.com
+ARC-Authentication-Results: i=2; mx.google.com;
+       dkim=pass header.i=@sap.com header.s=selector1 header.b=AME2bqEF;
+       arc=pass (i=1 spf=pass spfdomain=sap.com dkim=pass dkdomain=sap.com dmarc=pass fromdomain=sap.com);
+       spf=pass (google.com: domain of raju.ashar@sap.com designates 2a01:111:f403:c20f::7 as permitted sender) smtp.mailfrom=raju.ashar@sap.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=sap.com
+Return-Path: <raju.ashar@sap.com>
+Received: from OSPPR02CU001.outbound.protection.outlook.com (mail-norwayeastazlp170130007.outbound.protection.outlook.com. [2a01:111:f403:c20f::7])
+        by mx.google.com with ESMTPS id 41be03b00d2f7-cd3da05a700si15135730a12.166.2026.10.12.01.37.58
+        for <vaibhav.maheshwari@diligentconsulting.co.in>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Mon, 12 Oct 2026 01:37:59 -0700 (PDT)
+Received-SPF: pass (google.com: domain of raju.ashar@sap.com designates 2a01:111:f403:c20f::7 as permitted sender) client-ip=2a01:111:f403:c20f::7;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@sap.com header.s=selector1 header.b=AME2bqEF;
+       arc=pass (i=1 spf=pass spfdomain=sap.com dkim=pass dkdomain=sap.com dmarc=pass fromdomain=sap.com);
+       spf=pass (google.com: domain of raju.ashar@sap.com designates 2a01:111:f403:c20f::7 as permitted sender) smtp.mailfrom=raju.ashar@sap.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=sap.com
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector10001; d=microsoft.com; cv=none;
+ b=bRV5Zqo0CEId4FSMWpA5Q2VXyWzyKvpSo7ZHajL6Vknvhz2Naz4pbXabh2NlrrRf+to7iS3ocMFs81GXPAGfPAMZnlCWI/AqzwfAv38nT4/G51rCEaVSIcibLu4w6svAPEWAkFR60x0t2vFjrn6saQD8Ijy2dZqjcrXzcBecZpAevInlbepzpR2b4PMc8h+UyKdx5oHWhZsXs7chhhQfQ0YMSP5QzvgwbJNn6HHscofS08Mqzpgn/BYr876y6mPFJa16QJx0Qi8Ruv4WB+yUxPcWgjp40MJRcBOB6tOAn8omKkT88UqdthQ+rT2MUYbiwF75dTgc4N+L2FO5Vxa/uQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector10001;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-AntiSpam-MessageData-ChunkCount:X-MS-Exchange-AntiSpam-MessageData-0:X-MS-Exchange-AntiSpam-MessageData-1;
+ bh=upyest5Ta7VNj+xXpqQg0JWDiWlIA3CaDFpIkl5HL+A=;
+ b=f0ucmkikv1/EFklfOgA8EQ4xPynGmJAVofOED2q5WUuNeQVRu/sY7uAzUGDa1esXwLi8TEZWlcivRCZ3PDW1QFQ3L8jWHuMv1IxJjyKV+CoNJYpECThp/eLU9fjhvQORzgrb94wtu/rJf1MVTXJVKUqgAvww3+0siKdoTdmwgLcEAQgiSPup4D3Z10TMMvbd9L9kNyCjpT7WFWR2Ot5Gk9ZtiEuLwI4vdN6pY5ejVkRwFfl8MAjEVSlUQhGFlOirNdZVLEmdRo5teZ0bRyXf4EPcjSMD0z39yqmQqTRUM3NrkOIZ03Hh8OqfWas+Zt0+4QwwiFnv+ybfp1q2kn82qw==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=sap.com; dmarc=pass action=none header.from=sap.com; dkim=pass
+ header.d=sap.com; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=sap.com; s=selector1;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=upyest5Ta7VNj+xXpqQg0JWDiWlIA3CaDFpIkl5HL+A=;
+ b=AME2bqEFhY55e13S25psXCRWJOSAa5qgiYZMDXh9GfxQSZgYmWwOi1f8wD6qIbRVvDJMXFfpPAdTL5sjs3nqeo61NtNPyy2biD4UVMqYbUvrrikSReSXny5zO5fmOaq7GRRzYM93V0xVUKgosuej7C9jdoJ3LtC4NCY3fYcmBof6f64IbtmmiNpLeROK11FJiDSvRjK313vUilALCkRJPDv9/k2y3YOdf5EW2myGnPLIYY4e/GILRHFbplaguNhQn6xzNQvmQztqiVGferaEacAyKYX5hATYVD51jxK1Y/CvzbS/HfpHD8PdrCnsmQyuHeKtO6XIXqY9PNyGbtkh0w==
+Received: from AM0PR02MB5841.eurprd02.prod.outlook.com (2603:10a6:208:181::23)
+ by DB4PR02MB8655.eurprd02.prod.outlook.com (2603:10a6:10:381::6) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.21.496.21; Mon, 12 Oct
+ 2026 08:37:54 +0000
+Received: from AM0PR02MB5841.eurprd02.prod.outlook.com
+ ([fe80::5649:5c9c:9924:f808]) by AM0PR02MB5841.eurprd02.prod.outlook.com
+ ([fe80::5649:5c9c:9924:f808%7]) with mapi id 15.21.0496.020; Mon, 12 Oct 2026
+ 08:37:54 +0000
+From: "Ashar, Raju" <raju.ashar@sap.com>
+To: "vaibhav.maheshwari" <vaibhav.maheshwari@diligentconsulting.co.in>
+Subject: FS for Corporate - Colombia - Updated
+Thread-Topic: FS for Corporate - Colombia - Updated
+Thread-Index: AQHdWiT5fHvNc+2CnUyZqLvI/BqvYg==
+Date: Mon, 12 Oct 2026 08:37:54 +0000
+Message-ID:
+ <AM0PR02MB5841782E4DCD61A01D04A8539C9F2@AM0PR02MB5841.eurprd02.prod.outlook.com>
+References:
+ <AM0PR02MB5841C6DBE6EA2F3345DE28179C912@AM0PR02MB5841.eurprd02.prod.outlook.com>
+ <AM0PR02MB5841AEB0058B9EC21B337D7F9C912@AM0PR02MB5841.eurprd02.prod.outlook.com>
+In-Reply-To:
+ <AM0PR02MB5841AEB0058B9EC21B337D7F9C912@AM0PR02MB5841.eurprd02.prod.outlook.com>
+Accept-Language: en-IN, en-US
+Content-Language: en-US
+X-MS-Has-Attach:
+X-MS-TNEF-Correlator:
+authentication-results: mx.microsoft.com 1; dkim=none (message not signed)
+ header.d=none;dmarc=none action=none header.from=sap.com;
+x-ms-publictraffictype: Email
+x-ms-traffictypediagnostic: AM0PR02MB5841:EE_|DB4PR02MB8655:EE_
+x-ms-office365-filtering-correlation-id: f71db33e-2d67-4126-0e84-08df283c1bfb
+x-ld-processed: 42f7676c-f455-423c-82f6-dc2d99791af7,ExtAddr
+x-ms-exchange-senderadcheck: 1
+x-ms-exchange-antispam-relay: 0
+x-microsoft-antispam:
+ BCL:0;ARA:13230040|23010399003|376014|1800799024|366016|6133799003|10067099003|18002099003|22082099003|8096899003|38070700021|11063799006|4143699003|56012099006;
+x-microsoft-antispam-message-info:
+ fzbayHxwdL23UwBCNoJe1jSgOcqHaCMhV/dRJXq6xkXJ+YqjWkqINqV/AUeSSuJj/0FfCxmETz1qeTVoSPl5lJw26wOK0ZhbR8F7lhzKbtJ+Ek4DXcwgk0o2b7c63xaPhizGll123gkHZY4pGaoW78xg9hgQE/Hb1snZ3HXX2c5IyA8yo/NnfWvJ3YNlGqQeVFinbuWP0BtC/b/ejabsmxo72OI5PEUFWgPqCMdifTX36vGYrfHTrzLXjm0iMfOEL4TX6Caczj1W0p2tccMM3V0IxmlBiWdX4BbPKNceC9bJAe1n36H6hU3z4jBLFaSAABfj8J0QF2XYPkcb7GG07VEfWoKpLD18uYqZoG5B0PLbHLuHEpQDlnHnfoSz8a7+NPB+bwBe4UYPRdnAHSMNlEq18zwCI5s9EcyYAmY7SLMKHrVpLww1VmzP85AzWOodonARR9T+DkIUyB+UoqTYYZlELSjzdnxPh0NZOJccfQ8VHsieDhh32Cod809mrOKbd6NESj9KSiW2jJ6+lqQA2CSKWQCK/5cDKN5usMiB+OihiN3SoxDwCN+r+Asxmj8Rrsb4hTiEQO0GC0th4Q6c/qDDpMuJzMR698Ms6iwUWoHADGdZg10sZ1ReFJj/+jqt8bqDUM87Rj5aiCVHApprQ7uArqpi2RQMWubtcnG8+AhAtR+fO8IioEQQGxyLoq0cMlIVXMXjGRSkDwKVV4voT5Tidc1JSeXbi5FIn4p2xp4=
+x-forefront-antispam-report:
+ CIP:255.255.255.255;CTRY:;LANG:en;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:AM0PR02MB5841.eurprd02.prod.outlook.com;PTR:;CAT:NONE;SFS:(13230040)(23010399003)(376014)(1800799024)(366016)(6133799003)(10067099003)(18002099003)(22082099003)(8096899003)(38070700021)(11063799006)(4143699003)(56012099006);DIR:OUT;SFP:1101;
+x-ms-exchange-antispam-messagedata-chunkcount: 1
+x-ms-exchange-antispam-messagedata-0:
+ =?us-ascii?Q?AiRj+P4wWBZmVUpoGhLLM5CeE+hB89OUpV2GJkA0Gcp1vgaWQ7xncT2D3lWr?=
+ =?us-ascii?Q?TAb8Hp+f40AEtkRg5U8SrMnsh91eGDyPaPDXkI3Cr6l2vieyFCpk0BdolSMb?=
+ =?us-ascii?Q?QmjDHl9QCbOdyshiJkRQpc2OgCW5BzwtaRxQQUyLvYMtVNA23VW57Y4YhTGF?=
+ =?us-ascii?Q?rxdY+HQQ/Q8hO6gtT9MkPiimNGmOgVY/B91vew6meXrj8ZvYoOW87589GRZq?=
+ =?us-ascii?Q?oSqr6sop9+/C5e7J6tzny0Sk8nuA8OMiwxUKqoAPRGbaKYD//tIMk1IVJu9T?=
+ =?us-ascii?Q?VHzqNbNj7Nmnyb/7AkcBkhICrICAbNlnKUWQ7jUfhNdN/RfxNrjzISU9ut2y?=
+ =?us-ascii?Q?ima7KSoi0p+rK59vXRAjPTarv0imZlJbFb6H4fjzEM7ybzrh+g4qclvPGKDQ?=
+ =?us-ascii?Q?/xegFNDGFqLA3WEDh8f7bcA4L2ehl1cxZcgTOUeFRL3l4Xi3w8PMOEVtlj2h?=
+ =?us-ascii?Q?O+8MQpeaydguoyNc7RJmTT3DW/ON8WPrXpn+4lNU11Hqy8rgKYhLfjTrdfC6?=
+ =?us-ascii?Q?HnNA7+9LfLi03NVknU2JcHJi/W4GlfdLuLoDMtKkCqRZCyEBFBbJqP2AKKM/?=
+ =?us-ascii?Q?yBIIKmBOAXMZkx8O/dAq8P/gKJ5KzW1E565xtThPQvZlu4OsGIsZN6RboIha?=
+ =?us-ascii?Q?BwTpjia59jHEdyiEJB5CD40GR47zyXu9ePQOA6VhSy6ymKOMDYYxTHSSUMWE?=
+ =?us-ascii?Q?tK3jf5rjXyCIvMoJ354d1Xrt4iTPUOL0ZNFdVCsV+efnNqH4W7e2kTdWvRwi?=
+ =?us-ascii?Q?3zhilFwe8uzrCQVgK0Z88JmZ/HOsnGK/Oaop22Y5E7H2SZXShljJsTTtoZBN?=
+ =?us-ascii?Q?TF43sTDwP9YcG7B8OicRGM8VLAmaNYpFBeMuPrgrfUHWIPIFJ86p0vNF+CKq?=
+ =?us-ascii?Q?GV5u9S1E7jC0jqCVu5E6cm4br8+9czDs2rAseMKXlmBdfpJ4RwnDN4EY1S8j?=
+ =?us-ascii?Q?MiQsLMTTU0+yTCfvGDHMkFsUJeZWxmQKLUSGHY+o0giwI0Wvk30wbAnR/FLS?=
+ =?us-ascii?Q?rsyzEN+w5ny/9KsBudcXM+wWcKCBHR2ya7Ekao+1BhbyZhAELj9qIeKh72cC?=
+ =?us-ascii?Q?DK7F6sdAPIpcUU2Pm+H5DaztQPRkUYRZBvTFtpFN0D6gBapybTTZirWkV3+L?=
+ =?us-ascii?Q?qamIg1OPfV1GZxKupyhK2tSPl9u9hii1g4vdyJRWmdaOv8f2+Ea/EzrSwnnf?=
+ =?us-ascii?Q?747/qgpRMwXo+VfE86e3Ly9klKLJhjWdb6MPBz5b5N3wrzgX0h4Wb4zZJUbs?=
+ =?us-ascii?Q?0BLGOt8KyjVy4BcfoO+M7hljrHPLEVGoYwqa9gf+QByQ72pJrWdQf5ROSRAB?=
+ =?us-ascii?Q?f0JvCDpD0xtwKDOXoUY76ldlwB/3OQ7TNbZnKdkU1u8iWeVU7//eSxEbqb5i?=
+ =?us-ascii?Q?+iKCi1yWXc84fXZf90gYqZL8Jp/5MUReiGeXnyDix/VZaHZCQyQxMiKqniON?=
+ =?us-ascii?Q?MG3uvC/WSGsFpxci5BPUL6KLZxORSNnAHjzZ6Trx8/gUkWGNAb0YU9waZjVU?=
+ =?us-ascii?Q?2vGRNuVcRhgqkFAhim+GoAVzLdBA4vgynAigD5fhokzSJvjykcyGvVUHCmtR?=
+ =?us-ascii?Q?3Kv6Tc2YkAOrKa2IvkWmitYO6z+A8h8YP9Bwln9sqZUe8r1hbUyk2VGv+DEl?=
+ =?us-ascii?Q?8YrAyfbAJxCDzEvzOA5kI0DfrOs3UdzU09jbylgs0f/iAaTafSo0BXHOgB1L?=
+ =?us-ascii?Q?5EIeIAGzXcdl6K0ew+aVPWKpX9oGv/jgsjdqaubNSNqVbkFX?=
+Content-Type: multipart/alternative;
+	boundary="_000_AM0PR02MB5841782E4DCD61A01D04A8539C9F2AM0PR02MB5841eurp_"
+MIME-Version: 1.0
+X-OriginatorOrg: sap.com
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-AuthSource: AM0PR02MB5841.eurprd02.prod.outlook.com
+X-MS-Exchange-CrossTenant-Network-Message-Id: f71db33e-2d67-4126-0e84-08df283c1bfb
+X-MS-Exchange-CrossTenant-originalarrivaltime: 12 Oct 2026 08:37:54.2424
+ (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Hosted
+X-MS-Exchange-CrossTenant-id: 42f7676c-f455-423c-82f6-dc2d99791af7
+X-MS-Exchange-CrossTenant-mailboxtype: HOSTED
+X-MS-Exchange-CrossTenant-userprincipalname: nUpGi5OGl0e2e78her+DyubjjAt/qbhKgsNGJwfdYXPqlt7pErRoMlISGOws6o24Dr3Xg6x1rhBV0Y6vl4pWBQ==
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: DB4PR02MB8655
+
+--_000_AM0PR02MB5841782E4DCD61A01D04A8539C9F2AM0PR02MB5841eurp_
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+ZTable :-
+
+From Co.Code
+Account Type (KOART)
+GL for Co.Code
+To.Co.Code
+GL for To Co.Code
+To Co.Code Cost Center
+To Co.Code Profit Center
+Business Area
+OFFSET GL
+T001-BUKRS
+BSEG - KOART
+
+SKB1-GL where Co.Code is FROM Co.Code
+
+OR
+
+KUNNR-LFB1
+T001-BUKRS
+SKB1-GL where Co.Code is FROM Co.Code
+
+CSKS-KOSTL where CSKS-BUKRS =3D TO Co.Code
+CEPC-PRCTR where CEPC-RBUKRS =3D TO Co.Code
+BUPLA
+SKB1 where BUKRS =3D TO CO.CODE
+
+Selection Screen
+FROM Co.Code - BUKRS
+Period - Poper (1 Value only)
+Year - RYEAR
+
+
+Program logic :-
+
+Step 1 - Get Document Numbers for the GL
+Table ACDOCA
+
+RLDNR - 0L (Hardcode)
+RRCTY - 0
+RBUKRS - Selection Screen
+GJAHR - Selection Screen
+POPER - Selection screen
+RACCT - 95671 and 956712 (HardCode)
+
+Execute
+Get all BELNR
+
+
+Step 2 - Get Sub-total for Accounts in those Documents
+Table BSEG
+
+BUKRS - Selection Screen
+BELNR - from above
+GJAHR - Selection Screen
+HKONT - NE 95671 and 956712
+
+Subtotal as below :-
+Where KOART =3D K, subtotal at every LIFNR --> for DMBTR & DMBE2
+Where KOART NE K, subtotal at every HKONT,  for DMBTR & DMBE2
+
+Now, this amounts are to be posted in OVL against the mapped GL / CC / PC
+
+Mapping Table - take BSEG KOART against ZTable for K, else take against BLA=
+NK
+
+Posting in OVL.
+
+
+  1.  Get Last day of Posting period
+
+Period in OVC and OVL are different. This must be converted.
+
+
+
+Get last day of Period (selection Screen) from OVC.
+
+This Last day, this must be the Document Date and Posting Date in OVL.
+
+
+
+
+
+  1.  Get Mapped GL from the Custom Table.
+
+
+
+  1.  Post the document for each GL against MAPPED GL / Vendor - Posting Ke=
+y based on + or negative account (40 or 50). Add CC / PC / Business are fro=
+m Custom Table.
+
+
+  1.  Document Currency =3D DMBTR of OVC (COP), and LC2 =3D DMBE2 (USD) of =
+OVC. INR will be converted.
+
+
+
+  1.  Add a line for the opposite Posting Key to Off-set GL from the Table.
+
+
+Regards,
+Raju
+
+
+
+
+
+
+
+--_000_AM0PR02MB5841782E4DCD61A01D04A8539C9F2AM0PR02MB5841eurp_
+Content-Type: text/html; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+<html xmlns:v=3D"urn:schemas-microsoft-com:vml" xmlns:o=3D"urn:schemas-micr=
+osoft-com:office:office" xmlns:w=3D"urn:schemas-microsoft-com:office:word" =
+xmlns:m=3D"http://schemas.microsoft.com/office/2004/12/omml" xmlns=3D"http:=
+//www.w3.org/TR/REC-html40">
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dus-ascii"=
+>
+<meta name=3D"Generator" content=3D"Microsoft Word 15 (filtered medium)">
+<style><!--
+/* Font Definitions */
+@font-face
+	{font-family:Wingdings;
+	panose-1:5 0 0 0 0 0 0 0 0 0;}
+@font-face
+	{font-family:"Cambria Math";
+	panose-1:2 4 5 3 5 4 6 3 2 4;}
+@font-face
+	{font-family:Aptos;}
+/* Style Definitions */
+p.MsoNormal, li.MsoNormal, div.MsoNormal
+	{margin:0cm;
+	font-size:12.0pt;
+	font-family:"Aptos",sans-serif;
+	mso-ligatures:standardcontextual;
+	mso-fareast-language:EN-US;}
+p.MsoListParagraph, li.MsoListParagraph, div.MsoListParagraph
+	{mso-style-priority:34;
+	margin-top:0cm;
+	margin-right:0cm;
+	margin-bottom:0cm;
+	margin-left:36.0pt;
+	font-size:12.0pt;
+	font-family:"Aptos",sans-serif;
+	mso-ligatures:standardcontextual;
+	mso-fareast-language:EN-US;}
+span.EmailStyle19
+	{mso-style-type:personal-reply;
+	font-family:"Aptos",sans-serif;
+	color:windowtext;}
+.MsoChpDefault
+	{mso-style-type:export-only;
+	font-size:10.0pt;
+	mso-ligatures:none;}
+@page WordSection1
+	{size:612.0pt 792.0pt;
+	margin:72.0pt 72.0pt 72.0pt 72.0pt;}
+div.WordSection1
+	{page:WordSection1;}
+/* List Definitions */
+@list l0
+	{mso-list-id:102848080;
+	mso-list-template-ids:-121987028;}
+@list l0:level1
+	{mso-level-start-at:2;
+	mso-level-tab-stop:36.0pt;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l1
+	{mso-list-id:1431051775;
+	mso-list-template-ids:-792032010;}
+@list l1:level1
+	{mso-level-start-at:3;
+	mso-level-tab-stop:36.0pt;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l2
+	{mso-list-id:1466192567;
+	mso-list-template-ids:-358328138;}
+@list l3
+	{mso-list-id:1624582306;
+	mso-list-type:hybrid;
+	mso-list-template-ids:-2004570658 1074331663 1074331673 1074331675 1074331=
+663 1074331673 1074331675 1074331663 1074331673 1074331675;}
+@list l3:level1
+	{mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l3:level2
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l3:level3
+	{mso-level-number-format:roman-lower;
+	mso-level-tab-stop:none;
+	mso-level-number-position:right;
+	text-indent:-9.0pt;}
+@list l3:level4
+	{mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l3:level5
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l3:level6
+	{mso-level-number-format:roman-lower;
+	mso-level-tab-stop:none;
+	mso-level-number-position:right;
+	text-indent:-9.0pt;}
+@list l3:level7
+	{mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l3:level8
+	{mso-level-number-format:alpha-lower;
+	mso-level-tab-stop:none;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+@list l3:level9
+	{mso-level-number-format:roman-lower;
+	mso-level-tab-stop:none;
+	mso-level-number-position:right;
+	text-indent:-9.0pt;}
+@list l4
+	{mso-list-id:1910722365;
+	mso-list-template-ids:944515484;}
+@list l4:level1
+	{mso-level-start-at:4;
+	mso-level-tab-stop:36.0pt;
+	mso-level-number-position:left;
+	text-indent:-18.0pt;}
+ol
+	{margin-bottom:0cm;}
+ul
+	{margin-bottom:0cm;}
+--></style><!--[if gte mso 9]><xml>
+<o:shapedefaults v:ext=3D"edit" spidmax=3D"1026" />
+</xml><![endif]--><!--[if gte mso 9]><xml>
+<o:shapelayout v:ext=3D"edit">
+<o:idmap v:ext=3D"edit" data=3D"1" />
+</o:shapelayout></xml><![endif]-->
+</head>
+<body lang=3D"EN-IN" link=3D"#467886" vlink=3D"#96607D" style=3D"word-wrap:=
+break-word">
+<div class=3D"WordSection1">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">ZTable :-<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<table class=3D"MsoNormalTable" border=3D"0" cellspacing=3D"0" cellpadding=
+=3D"0" width=3D"1485" style=3D"width:1113.6pt;border-collapse:collapse">
+<tbody>
+<tr>
+<td width=3D"165" valign=3D"top" style=3D"width:123.7pt;border:solid window=
+text 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">From Co.Code<o:p></o:p></span><=
+/p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.7pt;border:solid window=
+text 1.0pt;border-left:none;padding:0cm 0cm 0cm 0cm">
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">Account Typ=
+e (KOART)<o:p></o:p></span></p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.7pt;border:solid window=
+text 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">GL for Co.C=
+ode<o:p></o:p></span></p>
+</td>
+<td width=3D"171" valign=3D"top" style=3D"width:128.6pt;border:solid window=
+text 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">To.Co.Code<o:p></o:p></span></p=
+>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.75pt;border:solid windo=
+wtext 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">GL for To Co.Code<o:p></o:p></s=
+pan></p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.75pt;border:solid windo=
+wtext 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">To Co.Code Cost Center<o:p></o:=
+p></span></p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.75pt;border:solid windo=
+wtext 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">To Co.Code Profit Center<o:p></=
+o:p></span></p>
+</td>
+<td width=3D"166" valign=3D"top" style=3D"width:124.15pt;border:solid windo=
+wtext 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Business Area<o:p></o:p></span>=
+</p>
+</td>
+<td width=3D"158" valign=3D"top" style=3D"width:118.5pt;border:solid window=
+text 1.0pt;border-left:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">OFFSET GL<o:p></o:p></span></p>
+</td>
+</tr>
+<tr>
+<td width=3D"165" valign=3D"top" style=3D"width:123.7pt;border:solid window=
+text 1.0pt;border-top:none;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">T001-BUKRS<o:p></o:p></span></p=
+>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.7pt;border-top:none;bor=
+der-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid windo=
+wtext 1.0pt;padding:0cm 0cm 0cm 0cm">
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">BSEG &#8211=
+; KOART<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red"><o:p>&nbsp;=
+</o:p></span></p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.7pt;border-top:none;bor=
+der-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid windo=
+wtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">SKB1-GL whe=
+re Co.Code is FROM Co.Code<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red"><o:p>&nbsp;=
+</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">OR<o:p></o:=
+p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red"><o:p>&nbsp;=
+</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">KUNNR-LFB1<=
+o:p></o:p></span></p>
+</td>
+<td width=3D"171" valign=3D"top" style=3D"width:128.6pt;border-top:none;bor=
+der-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid windo=
+wtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">T001-BUKRS<o:p></o:p></span></p=
+>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.75pt;border-top:none;bo=
+rder-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid wind=
+owtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">SKB1-GL where Co.Code is FROM C=
+o.Code<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.75pt;border-top:none;bo=
+rder-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid wind=
+owtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">CSKS-KOSTL where CSKS-BUKRS =3D=
+ TO Co.Code<o:p></o:p></span></p>
+</td>
+<td width=3D"165" valign=3D"top" style=3D"width:123.75pt;border-top:none;bo=
+rder-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid wind=
+owtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">CEPC-PRCTR where CEPC-RBUKRS =
+=3D TO Co.Code<o:p></o:p></span></p>
+</td>
+<td width=3D"166" valign=3D"top" style=3D"width:124.15pt;border-top:none;bo=
+rder-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid wind=
+owtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">BUPLA<o:p></o:p></span></p>
+</td>
+<td width=3D"158" valign=3D"top" style=3D"width:118.5pt;border-top:none;bor=
+der-left:none;border-bottom:solid windowtext 1.0pt;border-right:solid windo=
+wtext 1.0pt;padding:0cm 5.4pt 0cm 5.4pt">
+<p class=3D"MsoNormal"><span lang=3D"EN-US">SKB1 where BUKRS =3D TO CO.CODE=
+<o:p></o:p></span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Selection Screen<o:p></o:p></sp=
+an></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">FROM Co.Code - BUKRS<o:p></o:p>=
+</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Period &#8211; Poper (1 Value o=
+nly)<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Year &#8211; RYEAR<o:p></o:p></=
+span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Program logic :-<o:p></o:p></sp=
+an></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><b><span lang=3D"EN-US">Step 1 &#8211; Get Document =
+Numbers for the GL<o:p></o:p></span></b></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Table ACDOCA<o:p></o:p></span><=
+/p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">RLDNR &#8211; 0L (Hardcode)<o:p=
+></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">RRCTY - 0<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">RBUKRS &#8211; Selection Screen=
+<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">GJAHR &#8211; Selection Screen<=
+o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">POPER &#8211; Selection screen<=
+o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">RACCT &#8211; 95671 and 956712 =
+(HardCode)<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Execute<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Get all BELNR<o:p></o:p></span>=
+</p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><b><span lang=3D"EN-US">Step 2 &#8211; Get Sub-total=
+ for Accounts in those Documents<o:p></o:p></span></b></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Table BSEG<o:p></o:p></span></p=
+>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">BUKRS &#8211; Selection Screen<=
+o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">BELNR &#8211; from above<o:p></=
+o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">GJAHR &#8211; Selection Screen<=
+o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">HKONT &#8211; NE 95671 and 9567=
+12<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Subtotal as below :-<o:p></o:p>=
+</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Where <span style=3D"color:red"=
+>KOART =3D K, subtotal at every LIFNR
+</span></span><span lang=3D"EN-US" style=3D"font-family:Wingdings;color:red=
+">&agrave;</span><span lang=3D"EN-US" style=3D"color:red">
+</span><span lang=3D"EN-US">for DMBTR &amp; DMBE2<span style=3D"color:red">=
+<o:p></o:p></span></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US" style=3D"color:red">Where KOART=
+ NE K, subtotal at every
+</span><span lang=3D"EN-US">HKONT, &nbsp;for DMBTR &amp; DMBE2<span style=
+=3D"color:red"><o:p></o:p></span></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Now, this amounts are to be pos=
+ted in OVL against the mapped GL / CC / PC<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Mapping Table &#8211; take BSEG=
+ KOART against ZTable for K, else take against BLANK<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><b><span lang=3D"EN-US">Posting in OVL.<o:p></o:p></=
+span></b></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<ol style=3D"margin-top:0cm" start=3D"1" type=3D"1">
+<li class=3D"MsoListParagraph" style=3D"margin-left:0cm;mso-list:l3 level1 =
+lfo3"><span lang=3D"EN-US">Get Last day of Posting period<o:p></o:p></span>=
+</li></ol>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US">Period in OVC and OVL ar=
+e different. This must be converted.<o:p></o:p></span></p>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span>=
+</p>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US">Get last day of Period (=
+selection Screen) from OVC.<o:p></o:p></span></p>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US">This Last day, this must=
+ be the Document Date and Posting Date in OVL.<o:p></o:p></span></p>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span>=
+</p>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span>=
+</p>
+<ol style=3D"margin-top:0cm" start=3D"2" type=3D"1">
+<li class=3D"MsoListParagraph" style=3D"margin-left:0cm;mso-list:l3 level1 =
+lfo3"><span lang=3D"EN-US">Get Mapped GL from the Custom Table.<o:p></o:p><=
+/span></li></ol>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span>=
+</p>
+<ol style=3D"margin-top:0cm" start=3D"3" type=3D"1">
+<li class=3D"MsoListParagraph" style=3D"margin-left:0cm;mso-list:l3 level1 =
+lfo3"><span lang=3D"EN-US">Post the document for each GL against MAPPED GL =
+/ Vendor &#8211; Posting Key based on + or negative account (40 or 50). Add=
+ CC / PC / Business are from Custom Table.<o:p></o:p></span></li></ol>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<ol style=3D"margin-top:0cm" start=3D"4" type=3D"1">
+<li class=3D"MsoListParagraph" style=3D"margin-left:0cm;mso-list:l3 level1 =
+lfo3"><span lang=3D"EN-US" style=3D"color:red">Document Currency =3D DMBTR =
+of OVC (COP), and LC2 =3D DMBE2 (USD) of OVC. INR will be converted</span><=
+span lang=3D"EN-US">.<o:p></o:p></span></li></ol>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span>=
+</p>
+<ol style=3D"margin-top:0cm" start=3D"5" type=3D"1">
+<li class=3D"MsoListParagraph" style=3D"margin-left:0cm;mso-list:l3 level1 =
+lfo3"><span lang=3D"EN-US">Add a line for the opposite Posting Key to Off-s=
+et GL from the Table.<o:p></o:p></span></li></ol>
+<p class=3D"MsoListParagraph"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span>=
+</p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Regards,<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Raju<o:p></o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><o:p>&nbsp;</o:p></span></p>
+</div>
+</body>
+</html>
+
+--_000_AM0PR02MB5841782E4DCD61A01D04A8539C9F2AM0PR02MB5841eurp_--
