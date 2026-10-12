@@ -1,6 +1,6 @@
 # ZFI_COL_OVL_POSTING — Corporate Colombia: OVC → OVL posting
 
-Source FS: `FW FS for Corporate - Colombia.msg` (Raju Ashar). Decisions confirmed by the user on 10.10.2026 are listed in §6.
+Source FS: `FW FS for Corporate - Colombia.msg` (Raju Ashar), **updated by `FS for Corporate - Colombia - Updated.eml` (12.10.2026)**. Decisions confirmed by the user on 10.10.2026 are listed in §6; changes from the updated FS are in §7.
 
 | Deliverable | File |
 |---|---|
@@ -19,7 +19,8 @@ Transparent, delivery class **C**, *Display/Maintenance allowed*. Generate table
 |---|---|---|---|---|
 | MANDT | ✔ | MANDT | — | |
 | FROM_BUKRS | ✔ | BUKRS | From Co.Code | T001 |
-| FROM_HKONT | ✔ | HKONT | GL for From Co.Code | SKB1 (BUKRS = FROM_BUKRS) |
+| **KOART** | ✔ | **KOART** | **Account Type (BSEG-KOART)** | **`K` = vendor row, blank = GL row** (new, updated FS) |
+| FROM_HKONT | ✔ | HKONT | GL for From Co.Code **or vendor** | KOART blank: SKB1 GL of FROM_BUKRS. KOART `K`: vendor number (LFB1 of FROM_BUKRS), with leading zeros |
 | TO_BUKRS | ✔ | BUKRS | To Co.Code | T001 |
 | TO_HKONT | | HKONT | GL for To Co.Code | SKB1 (BUKRS = **TO_BUKRS**). Confirmed: the FS saying "From" was a typo |
 | KOSTL | | KOSTL | To Co.Code Cost Center | CSKS (BUKRS = TO_BUKRS) |
@@ -142,3 +143,32 @@ The header shows OVC/period → OVL, the posting date and the OVL period. When t
 - LAST_DAY_IN_PERIOD_GET interface (I_GJAHR / I_PERIV / I_POPER → E_DATE): [SAP Community](https://community.sap.com/t5/application-development-and-automation-discussions/function-module/m-p/4327918)
 - DATE_TO_PERIOD_CONVERT interface (I_DATE / I_PERIV → E_BUPER / E_GJAHR): [se80.co.uk](https://www.se80.co.uk/sapfms/d/date/date_to_period_convert.htm)
 - CEPC has field BUKRS (check table T001): [leanx.eu](https://leanx.eu/en/sap/table/cepc.html)
+
+---
+
+## 7. Changes from the updated FS (12.10.2026)
+
+| Area | Before | Now |
+|---|---|---|
+| ZFI_COL_GLMAP | key FROM_BUKRS / FROM_HKONT / TO_BUKRS | new key field **KOART** after FROM_BUKRS: `K` = vendor, blank = GL |
+| BSEG read | HKONT, DMBE2 | also KOART, LIFNR, DMBTR |
+| Subtotal | per HKONT, DMBE2 only | KOART = `K`: per **LIFNR**; otherwise per **HKONT**. Both DMBTR and DMBE2 are totalled. A line is dropped only when both are zero |
+| Mapping lookup | FROM_HKONT = HKONT | KOART `K`: KOART = `K`, FROM_HKONT = LIFNR. Otherwise KOART = blank, FROM_HKONT = HKONT |
+| Document currency | USD (DMBE2) | **OVC local currency (COP) = DMBTR**, CURR_TYPE `00` |
+| 2nd currency | system translated | **USD = DMBE2**, passed with the OVL currency type whose currency is OVC's 2nd local currency (OVL 2nd or 3rd local currency, read with `FI_CURRENCY_INFORMATION_GET`) |
+| OVL local currency (INR) | translated from USD | translated by the system from COP |
+| Posting key | sign of DMBE2 | sign of DMBTR (DMBE2 only when DMBTR = 0). Target is always the mapped **GL** (40 / 50), also for vendors |
+| ALV | USD amount | Acct Type, COP amount + currency, USD amount + currency |
+
+Because the document currency is now COP, posting to an OVL account whose account currency is COP (e.g. offset GL 95671) is allowed. That account caused error F5 353 when the document was in USD.
+
+**SE11 change for ZFI_COL_GLMAP** (existing data stays, existing rows get KOART = blank = GL rows):
+1. SE11 → ZFI_COL_GLMAP → Change → insert field `KOART`, data element `KOART`, **Key** + Initial values, directly after FROM_BUKRS.
+2. Activate; if asked, adjust the database in **SE14** (Activate and adjust database, *Save data*).
+3. Regenerate table maintenance in SE54 (Change → field list changed).
+4. In SM30, add vendor rows: KOART = `K`, FROM_HKONT = OVC vendor number (with leading zeros).
+
+**Points to confirm with FI**
+- For vendor rows the posting goes to the mapped **GL** in OVL (posting keys 40/50 per FS), not to a vendor in OVL.
+- OVC's 2nd local currency (USD) must also be a local currency (2nd or 3rd) of OVL; otherwise the program stops with "Currency USD is not a local currency of OVL".
+- Whether the USD amount passed is kept depends on OVL's currency translation settings. In the test run, check that the USD amount in the document equals DMBE2.

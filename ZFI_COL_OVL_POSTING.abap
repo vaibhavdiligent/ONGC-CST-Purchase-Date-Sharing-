@@ -2,16 +2,22 @@
 *& Report  ZFI_COL_OVL_POSTING
 *&---------------------------------------------------------------------*
 *& Corporate - Colombia : re-post OVC period balances in OVL.
-*&   (FS: "FW: FS for Corporate - Colombia", Raju Ashar)
+*&   (FS: "FS for Corporate - Colombia - Updated", Raju Ashar 12.10.26)
 *&
 *&   Step 1 : ACDOCA (ledger 0L, RRCTY 0) - documents of the OVC company
 *&            code / year / period that hit GL 95671 or 956712.
-*&   Step 2 : BSEG of those documents, all other GLs, subtotal of DMBE2
-*&            (2nd local currency = USD) per HKONT.
-*&   Post   : ONE document in OVL (doc type CL, currency USD - system
-*&            converts to INR). For every GL : mapped GL line (key 40/50
-*&            by sign, CC / PC / BA from ZFI_COL_GLMAP) + its own offset
-*&            line on the offset GL with the opposite key.
+*&   Step 2 : BSEG of those documents (HKONT not 95671 / 956712),
+*&            subtotal of DMBTR and DMBE2 :
+*&              KOART = K  -> per vendor (LIFNR)
+*&              KOART <> K -> per GL (HKONT)
+*&   Map    : ZFI_COL_GLMAP with KOART = 'K' for vendors, blank for GLs.
+*&   Post   : ONE document in OVL (doc type CL).
+*&            Document currency = OVC local currency (COP) = DMBTR,
+*&            OVL currency type holding OVC 2nd local currency (USD)
+*&            = DMBE2, OVL local currency (INR) converted by the system.
+*&            For every GL / vendor : mapped GL line (key 40/50 by sign,
+*&            CC / PC / BA from ZFI_COL_GLMAP) + its own offset line on
+*&            the offset GL with the opposite key.
 *&            Posting / document date = last day of the OVC period.
 *&   Log    : on success the OVC company code / year / period is written
 *&            to ZFI_COL_POSTLOG - a period already in the log is blocked.
@@ -30,7 +36,7 @@ CONSTANTS: gc_rldnr TYPE fins_ledger VALUE '0L',
            gc_gl1   TYPE racct       VALUE '95671',
            gc_gl2   TYPE racct       VALUE '956712',
            gc_blart TYPE blart       VALUE 'CL',
-           gc_waers TYPE waers       VALUE 'USD',
+           gc_koart_vendor TYPE koart VALUE 'K',
            gc_bschl_dr TYPE bschl    VALUE '40',
            gc_bschl_cr TYPE bschl    VALUE '50',
            gc_max_items TYPE i       VALUE 999.
@@ -45,22 +51,31 @@ TYPES: BEGIN OF ty_bseg,
          belnr TYPE belnr_d,
          gjahr TYPE gjahr,
          buzei TYPE buzei,
+         koart TYPE koart,
          shkzg TYPE shkzg,
          hkont TYPE hkont,
+         lifnr TYPE lifnr,
+         dmbtr TYPE dmbtr,
          dmbe2 TYPE dmbe2,
        END OF ty_bseg.
 
+* KOART = 'K' -> ACCT = vendor (LIFNR), KOART = space -> ACCT = GL (HKONT)
 TYPES: BEGIN OF ty_sum,
-         hkont TYPE hkont,
+         koart TYPE koart,
+         acct  TYPE hkont,
+         dmbtr TYPE dmbtr,
          dmbe2 TYPE dmbe2,
        END OF ty_sum.
 
 TYPES: BEGIN OF ty_out,
          status       TYPE icon_d,
          itemno       TYPE posnr_acc,
+         koart        TYPE koart,
          from_hkont   TYPE hkont,
-         dmbe2        TYPE dmbe2,
+         dmbtr        TYPE dmbtr,
          waers        TYPE waers,
+         dmbe2        TYPE dmbe2,
+         waers2       TYPE waers,
          bschl        TYPE bschl,
          to_hkont     TYPE hkont,
          kostl        TYPE kostl,
@@ -74,9 +89,9 @@ TYPES: BEGIN OF ty_out,
 
 DATA: gt_doc    TYPE STANDARD TABLE OF ty_doc,
       gt_bseg   TYPE STANDARD TABLE OF ty_bseg,
-      gt_sum    TYPE SORTED TABLE OF ty_sum WITH UNIQUE KEY hkont,
+      gt_sum    TYPE SORTED TABLE OF ty_sum WITH UNIQUE KEY koart acct,
       gt_map    TYPE SORTED TABLE OF zfi_col_glmap
-                     WITH UNIQUE KEY from_bukrs from_hkont to_bukrs,
+                     WITH UNIQUE KEY from_bukrs koart from_hkont to_bukrs,
       gt_out    TYPE STANDARD TABLE OF ty_out,
       gt_return TYPE STANDARD TABLE OF bapiret2,
       gr_racct  TYPE RANGE OF racct.
@@ -86,6 +101,9 @@ DATA: gv_to_bukrs TYPE bukrs,
       gv_to_gjahr TYPE gjahr,
       gv_to_poper TYPE poper,
       gv_belnr    TYPE belnr_d,
+      gv_waers    TYPE waers,       " document currency = OVC local (COP)
+      gv_waers2   TYPE waers,       " OVC 2nd local currency (USD)
+      gv_curtp2   TYPE curtp,       " OVL currency type for GV_WAERS2
       gv_error    TYPE flag.
 
 *----------------------------------------------------------------------*
@@ -130,6 +148,8 @@ START-OF-SELECTION.
   PERFORM get_subtotals.
   CHECK gv_error IS INITIAL.
   PERFORM read_mapping.
+  CHECK gv_error IS INITIAL.
+  PERFORM get_currencies.
   CHECK gv_error IS INITIAL.
   PERFORM get_posting_date.
   CHECK gv_error IS INITIAL.
@@ -210,7 +230,8 @@ FORM get_subtotals.
         lv_lines TYPE i.
   FIELD-SYMBOLS <ls_bseg> TYPE ty_bseg.
 
-  SELECT bukrs, belnr, gjahr, buzei, shkzg, hkont, dmbe2
+  SELECT bukrs, belnr, gjahr, buzei, koart, shkzg, hkont, lifnr,
+         dmbtr, dmbe2
     FROM bseg
     FOR ALL ENTRIES IN @gt_doc
     WHERE bukrs = @p_bukrs
@@ -221,38 +242,47 @@ FORM get_subtotals.
 
   LOOP AT gt_bseg ASSIGNING <ls_bseg>.
     CLEAR ls_sum.
-    ls_sum-hkont = <ls_bseg>-hkont.
+    IF <ls_bseg>-koart = gc_koart_vendor.  " vendor -> per LIFNR
+      ls_sum-koart = gc_koart_vendor.
+      ls_sum-acct  = <ls_bseg>-lifnr.
+    ELSE.                                  " others -> per HKONT
+      ls_sum-acct  = <ls_bseg>-hkont.
+    ENDIF.
     IF <ls_bseg>-shkzg = 'H'.              " credit -> negative
+      ls_sum-dmbtr = - <ls_bseg>-dmbtr.
       ls_sum-dmbe2 = - <ls_bseg>-dmbe2.
     ELSE.
+      ls_sum-dmbtr = <ls_bseg>-dmbtr.
       ls_sum-dmbe2 = <ls_bseg>-dmbe2.
     ENDIF.
     COLLECT ls_sum INTO gt_sum.
   ENDLOOP.
 
-  DELETE gt_sum WHERE dmbe2 = 0.
+  DELETE gt_sum WHERE dmbtr = 0 AND dmbe2 = 0.
 
   IF gt_sum IS INITIAL.
     gv_error = abap_true.
-    MESSAGE s001(00) WITH 'No amounts (DMBE2) to post for the documents'
+    MESSAGE s001(00) WITH 'No amounts (DMBTR / DMBE2) to post'
                           DISPLAY LIKE 'E'.
   ELSEIF lines( gt_sum ) * 2 > gc_max_items.
     gv_error = abap_true.
     lv_lines = lines( gt_sum ).
-    MESSAGE s001(00) WITH 'Too many GLs for one document (max 499):'
+    MESSAGE s001(00) WITH 'Too many GLs / vendors for one document'
+                          '(max 499):'
                           lv_lines DISPLAY LIKE 'E'.
   ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Read mapping ZFI_COL_GLMAP - every GL must be mapped, all to the same
-*& target company code (one document).
+*& Read mapping ZFI_COL_GLMAP - every GL / vendor must be mapped (KOART
+*& 'K' rows for vendors, blank for GLs), all to the same target company
+*& code (one document).
 *&---------------------------------------------------------------------*
 FORM read_mapping.
   DATA: lt_to_bukrs TYPE SORTED TABLE OF bukrs WITH UNIQUE KEY table_line,
         lv_missing  TYPE string,
         lv_count    TYPE i,
-        lv_gl_out   TYPE hkont.
+        lv_acct_out TYPE string.
   FIELD-SYMBOLS: <ls_sum> TYPE ty_sum,
                  <ls_map> TYPE zfi_col_glmap.
 
@@ -261,17 +291,20 @@ FORM read_mapping.
 
   LOOP AT gt_sum ASSIGNING <ls_sum>.
     CLEAR lv_count.
-    LOOP AT gt_map ASSIGNING <ls_map> WHERE from_hkont = <ls_sum>-hkont.
+    LOOP AT gt_map ASSIGNING <ls_map> WHERE koart      = <ls_sum>-koart
+                                        AND from_hkont = <ls_sum>-acct.
       lv_count = lv_count + 1.
       INSERT <ls_map>-to_bukrs INTO TABLE lt_to_bukrs.
     ENDLOOP.
+    lv_acct_out = |{ <ls_sum>-acct ALPHA = OUT }|.
+    IF <ls_sum>-koart = gc_koart_vendor.
+      lv_acct_out = |V:{ lv_acct_out }|.
+    ENDIF.
     IF lv_count = 0.
-      WRITE <ls_sum>-hkont TO lv_gl_out NO-ZERO.
-      CONDENSE lv_gl_out.
-      lv_missing = |{ lv_missing } { lv_gl_out }|.
+      lv_missing = |{ lv_missing } { lv_acct_out }|.
     ELSEIF lv_count > 1.
       gv_error = abap_true.
-      MESSAGE s001(00) WITH 'GL' <ls_sum>-hkont
+      MESSAGE s001(00) WITH 'GL / vendor' lv_acct_out
                             'mapped to more than one To Co.Code'
                             DISPLAY LIKE 'E'.
       RETURN.
@@ -280,7 +313,8 @@ FORM read_mapping.
 
   IF lv_missing IS NOT INITIAL.
     gv_error = abap_true.
-    MESSAGE s001(00) WITH 'GL not mapped in ZFI_COL_GLMAP:' lv_missing
+    MESSAGE s001(00) WITH 'Not mapped in ZFI_COL_GLMAP (V: = vendor):'
+                          lv_missing
                           DISPLAY LIKE 'E'.
     RETURN.
   ENDIF.
@@ -304,6 +338,53 @@ FORM read_mapping.
       MESSAGE s001(00) WITH 'No authorization to post in company code'
                             gv_to_bukrs DISPLAY LIKE 'E'.
     ENDIF.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Currencies (FS updated) :
+*&   document currency = OVC local currency (COP)  <- DMBTR
+*&   OVC 2nd local currency (USD) must be a currency type of OVL as
+*&   well (2nd or 3rd local currency)               <- DMBE2
+*&   OVL local currency (INR) is translated by the system.
+*&---------------------------------------------------------------------*
+FORM get_currencies.
+  DATA: ls_x001_from TYPE x001,
+        ls_x001_to   TYPE x001,
+        lv_waers_to  TYPE waers.
+
+  SELECT SINGLE waers FROM t001 INTO gv_waers    WHERE bukrs = p_bukrs.
+  SELECT SINGLE waers FROM t001 INTO lv_waers_to WHERE bukrs = gv_to_bukrs.
+
+  CALL FUNCTION 'FI_CURRENCY_INFORMATION_GET'
+    EXPORTING
+      i_bukrs = p_bukrs
+    IMPORTING
+      e_x001  = ls_x001_from.
+  gv_waers2 = ls_x001_from-hwae2.
+  IF gv_waers2 IS INITIAL.
+    gv_error = abap_true.
+    MESSAGE s001(00) WITH 'No 2nd local currency defined for'
+                          p_bukrs DISPLAY LIKE 'E'.
+    RETURN.
+  ENDIF.
+
+  CALL FUNCTION 'FI_CURRENCY_INFORMATION_GET'
+    EXPORTING
+      i_bukrs = gv_to_bukrs
+    IMPORTING
+      e_x001  = ls_x001_to.
+  IF ls_x001_to-hwae2 = gv_waers2.
+    gv_curtp2 = ls_x001_to-curt2.
+  ELSEIF ls_x001_to-hwae3 = gv_waers2.
+    gv_curtp2 = ls_x001_to-curt3.
+  ELSEIF lv_waers_to = gv_waers2.
+    gv_curtp2 = '10'.
+  ELSE.
+    gv_error = abap_true.
+    MESSAGE s001(00) WITH 'Currency' gv_waers2
+                          'is not a local currency of' gv_to_bukrs
+                          DISPLAY LIKE 'E'.
   ENDIF.
 ENDFORM.
 
@@ -370,7 +451,8 @@ FORM validate_mapping.
   LOOP AT gt_sum ASSIGNING <ls_sum>.
     READ TABLE gt_map ASSIGNING <ls_map>
       WITH KEY from_bukrs = p_bukrs
-               from_hkont = <ls_sum>-hkont
+               koart      = <ls_sum>-koart
+               from_hkont = <ls_sum>-acct
                to_bukrs   = gv_to_bukrs.
     CHECK sy-subrc = 0.
 
@@ -438,7 +520,8 @@ FORM build_and_post.
         lt_gl     TYPE STANDARD TABLE OF bapiacgl09,
         ls_gl     TYPE bapiacgl09,
         lt_curr   TYPE STANDARD TABLE OF bapiaccr09,
-        ls_curr   TYPE bapiaccr09,
+        lv_dmbtr  TYPE dmbtr,
+        lv_dmbe2  TYPE dmbe2,
         ls_out    TYPE ty_out,
         ls_log    TYPE zfi_col_postlog,
         lv_item   TYPE posnr_acc,
@@ -462,20 +545,31 @@ FORM build_and_post.
   LOOP AT gt_sum ASSIGNING <ls_sum>.
     READ TABLE gt_map ASSIGNING <ls_map>
       WITH KEY from_bukrs = p_bukrs
-               from_hkont = <ls_sum>-hkont
+               koart      = <ls_sum>-koart
+               from_hkont = <ls_sum>-acct
                to_bukrs   = gv_to_bukrs.
     CHECK sy-subrc = 0.
 
+    IF <ls_sum>-koart = gc_koart_vendor.
+      lv_text = |{ p_bukrs } Vendor { <ls_sum>-acct ALPHA = OUT }|.
+    ELSE.
+      lv_text = |{ p_bukrs } GL { <ls_sum>-acct ALPHA = OUT }|.
+    ENDIF.
+
     CLEAR ls_out.
-    ls_out-from_hkont   = <ls_sum>-hkont.
+    ls_out-koart        = <ls_sum>-koart.
+    ls_out-from_hkont   = <ls_sum>-acct.
+    ls_out-dmbtr        = <ls_sum>-dmbtr.
+    ls_out-waers        = gv_waers.
     ls_out-dmbe2        = <ls_sum>-dmbe2.
-    ls_out-waers        = gc_waers.
+    ls_out-waers2       = gv_waers2.
     ls_out-to_hkont     = <ls_map>-to_hkont.
     ls_out-kostl        = <ls_map>-kostl.
     ls_out-prctr        = <ls_map>-prctr.
     ls_out-gsber        = <ls_map>-gsber.
     ls_out-offset_hkont = <ls_map>-offset_hkont.
-    IF <ls_sum>-dmbe2 > 0.
+*   Sign from document currency (COP); USD only if COP is zero
+    IF <ls_sum>-dmbtr > 0 OR ( <ls_sum>-dmbtr = 0 AND <ls_sum>-dmbe2 > 0 ).
       ls_out-bschl     = gc_bschl_dr.
       ls_out-off_bschl = gc_bschl_cr.
     ELSE.
@@ -489,17 +583,13 @@ FORM build_and_post.
     CLEAR ls_gl.
     ls_gl-itemno_acc = lv_item.
     ls_gl-gl_account = <ls_map>-to_hkont.
-    ls_gl-item_text  = |{ p_bukrs } GL { <ls_sum>-hkont ALPHA = OUT }|.
+    ls_gl-item_text  = lv_text.
     ls_gl-costcenter = <ls_map>-kostl.
     ls_gl-profit_ctr = <ls_map>-prctr.
     ls_gl-bus_area   = <ls_map>-gsber.
     APPEND ls_gl TO lt_gl.
-    CLEAR ls_curr.
-    ls_curr-itemno_acc = lv_item.
-    ls_curr-curr_type  = '00'.            " document currency (USD)
-    ls_curr-currency   = gc_waers.        " INR derived by the system
-    ls_curr-amt_doccur = <ls_sum>-dmbe2.
-    APPEND ls_curr TO lt_curr.
+    PERFORM add_curr TABLES lt_curr
+                     USING  lv_item <ls_sum>-dmbtr <ls_sum>-dmbe2.
 
 *   Offset line - opposite sign / posting key
     lv_item = lv_item + 1.
@@ -507,16 +597,14 @@ FORM build_and_post.
     CLEAR ls_gl.
     ls_gl-itemno_acc = lv_item.
     ls_gl-gl_account = <ls_map>-offset_hkont.
-    ls_gl-item_text  = |Offset { p_bukrs } GL { <ls_sum>-hkont ALPHA = OUT }|.
+    ls_gl-item_text  = |Offset { lv_text }|.
     ls_gl-profit_ctr = <ls_map>-prctr.
     ls_gl-bus_area   = <ls_map>-gsber.
     APPEND ls_gl TO lt_gl.
-    CLEAR ls_curr.
-    ls_curr-itemno_acc = lv_item.
-    ls_curr-curr_type  = '00'.
-    ls_curr-currency   = gc_waers.
-    ls_curr-amt_doccur = - <ls_sum>-dmbe2.
-    APPEND ls_curr TO lt_curr.
+    lv_dmbtr = - <ls_sum>-dmbtr.
+    lv_dmbe2 = - <ls_sum>-dmbe2.
+    PERFORM add_curr TABLES lt_curr
+                     USING  lv_item lv_dmbtr lv_dmbe2.
 
     APPEND ls_out TO gt_out.
   ENDLOOP.
@@ -618,6 +706,32 @@ FORM build_and_post.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
+*& Currency rows of one line item :
+*&   '00'      document currency (OVC local, COP)    = DMBTR
+*&   GV_CURTP2 OVL currency type of USD               = DMBE2
+*&   OVL local currency (INR) is translated by the system.
+*&---------------------------------------------------------------------*
+FORM add_curr TABLES pt_curr  STRUCTURE bapiaccr09
+              USING  pv_item  TYPE posnr_acc
+                     pv_dmbtr TYPE dmbtr
+                     pv_dmbe2 TYPE dmbe2.
+  DATA ls_curr TYPE bapiaccr09.
+
+  ls_curr-itemno_acc = pv_item.
+  ls_curr-curr_type  = '00'.
+  ls_curr-currency   = gv_waers.
+  ls_curr-amt_doccur = pv_dmbtr.
+  APPEND ls_curr TO pt_curr.
+
+  CLEAR ls_curr.
+  ls_curr-itemno_acc = pv_item.
+  ls_curr-curr_type  = gv_curtp2.
+  ls_curr-currency   = gv_waers2.
+  ls_curr-amt_doccur = pv_dmbe2.
+  APPEND ls_curr TO pt_curr.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
 FORM dequeue USING pv_varkey TYPE rstable-varkey.
   CALL FUNCTION 'DEQUEUE_E_TABLE'
     EXPORTING
@@ -637,8 +751,8 @@ FORM set_status USING pv_icon TYPE icon_d
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& BAPI line-level errors (ROW = index in ACCOUNTGL / CURRENCYAMOUNT,
-*& 2 rows per output line) are shown against the output line.
+*& BAPI line-level errors are shown against the output line
+*& (ACCOUNTGL : 2 rows per output line, CURRENCYAMOUNT : 4 rows).
 *&---------------------------------------------------------------------*
 FORM map_errors_to_lines.
   DATA lv_idx TYPE i.
@@ -649,7 +763,11 @@ FORM map_errors_to_lines.
        WHERE type CA 'EAX'
          AND ( parameter = 'ACCOUNTGL' OR parameter = 'CURRENCYAMOUNT' )
          AND row > 0.
-    lv_idx = ( <ls_ret>-row + 1 ) DIV 2.
+    IF <ls_ret>-parameter = 'ACCOUNTGL'.
+      lv_idx = ( <ls_ret>-row + 1 ) DIV 2.
+    ELSE.
+      lv_idx = ( <ls_ret>-row + 3 ) DIV 4.
+    ENDIF.
     READ TABLE gt_out ASSIGNING <ls_out> INDEX lv_idx.
     IF sy-subrc = 0.
       <ls_out>-message = <ls_ret>-message.
@@ -678,14 +796,19 @@ FORM display_alv.
       lo_cols = lo_alv->get_columns( ).
       lo_cols->set_optimize( abap_true ).
       TRY.
-          lo_cols->get_column( 'DMBE2' )->set_currency_column( 'WAERS' ).
+          lo_cols->get_column( 'DMBTR' )->set_currency_column( 'WAERS' ).
+          lo_cols->get_column( 'DMBE2' )->set_currency_column( 'WAERS2' ).
         CATCH cx_salv_not_found cx_salv_data_error.     "#EC NO_HANDLER
       ENDTRY.
 
       PERFORM set_col USING lo_cols 'STATUS'       'Status'.
       PERFORM set_col USING lo_cols 'ITEMNO'       'Item'.
-      PERFORM set_col USING lo_cols 'FROM_HKONT'   'OVC GL'.
-      PERFORM set_col USING lo_cols 'DMBE2'        'Amount (USD)'.
+      PERFORM set_col USING lo_cols 'KOART'        'Acct Type'.
+      PERFORM set_col USING lo_cols 'FROM_HKONT'   'OVC GL / Vendor'.
+      PERFORM set_col USING lo_cols 'DMBTR'        'Amount (Doc Curr)'.
+      PERFORM set_col USING lo_cols 'WAERS'        'Doc Curr'.
+      PERFORM set_col USING lo_cols 'DMBE2'        'Amount (LC2)'.
+      PERFORM set_col USING lo_cols 'WAERS2'       'LC2 Curr'.
       PERFORM set_col USING lo_cols 'BSCHL'        'PK'.
       PERFORM set_col USING lo_cols 'TO_HKONT'     'Mapped GL'.
       PERFORM set_col USING lo_cols 'OFF_ITEMNO'   'Offset Item'.
@@ -693,6 +816,7 @@ FORM display_alv.
       PERFORM set_col USING lo_cols 'OFF_BSCHL'    'Offset PK'.
       PERFORM set_col USING lo_cols 'MESSAGE'      'Message'.
 
+      lo_alv->get_aggregations( )->add_aggregation( 'DMBTR' ).
       lo_alv->get_aggregations( )->add_aggregation( 'DMBE2' ).
 
       IF p_test = abap_true.
