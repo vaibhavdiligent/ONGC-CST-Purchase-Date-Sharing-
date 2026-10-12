@@ -9143,6 +9143,13 @@ FORM month_jan .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9222,6 +9229,13 @@ FORM month_feb .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9303,6 +9317,13 @@ FORM month_mar .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9363,6 +9384,13 @@ FORM month_apr .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9438,6 +9466,13 @@ IF wa_yrva_qais_data_m-mon_so_m1 IS INITIAL AND wa_yrva_qais_data-mou_begda LT l
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9511,6 +9546,13 @@ FORM month_jun .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9602,6 +9644,13 @@ FORM month_jul .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9677,6 +9726,13 @@ FORM month_aug .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9760,6 +9816,13 @@ FORM month_sep .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9853,6 +9916,13 @@ FORM month_oct .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -9934,6 +10004,13 @@ FORM month_nov .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
@@ -10017,6 +10094,13 @@ FORM month_dec .
     CLEAR w_month_max_perc.
   ENDIF.
   PERFORM check_monthly_waiver USING lv_mth CHANGING lv_wv_ok.
+*   CIS 2026-27 (GAIL 12.10.2026): a shortfall-grade waiver (min 0) takes
+*   precedence over the customer's own monthly waiver (25%/50% floor). Earlier
+*   the customer-waiver branch was tested first, so its floor overrode the
+*   shortfall waiver and the discount came out zero (Maxwell Exports, Oct'26).
+  IF w_waive_month = 'X'.
+    CLEAR lv_wv_ok.
+  ENDIF.
   IF lv_wv_ok = 'X'.   "CIS 2026-27 waiver count/quarter cap
     lv_flag1 = 'X'.
     PERFORM get_cust_wv_floor USING wa_yrva_qais_data-kunnr wa_yrva_qais_data-mou_begda.
