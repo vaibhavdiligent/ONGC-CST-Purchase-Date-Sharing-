@@ -12434,7 +12434,11 @@ FORM nonsf_waiver_ok USING p_kunnr TYPE kunnr
     IF lv_vtweg = '60'.
       CONTINUE.                          " channel 60 is not counted as lifting
     ENDIF.
-    IF lv_kondm IN lt_sfkon.
+*   An EMPTY range matches every value in ABAP - if the shortfall material
+*   has no grade mapping in YRVA_GRADE_CISD, lt_sfkon is empty and ALL
+*   lifting was skipped, failing the 75% test and dropping the shortfall
+*   waiver (discount 0). Exclude only when the range is actually filled.
+    IF lt_sfkon IS NOT INITIAL AND lv_kondm IN lt_sfkon.
       CONTINUE.                          " shortfall-grade lifting excluded
     ENDIF.
     IF lv_seas = 'X' AND lv_kondm NOT IN range_s.
