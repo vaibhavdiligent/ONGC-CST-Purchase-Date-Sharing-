@@ -226,7 +226,7 @@ CLASS zcl_ovl_vendor_sync IMPLEMENTATION.
       LOOP AT lt_return INTO DATA(ls_return).
         LOOP AT ls_return-object_msg INTO DATA(ls_msg)
              WHERE type = 'E' OR type = 'A' OR type = 'W'.
-          APPEND ls_msg TO mt_messages.
+          APPEND CORRESPONDING bapiret2( ls_msg ) TO mt_messages.
         ENDLOOP.
       ENDLOOP.
     ENDIF.
@@ -237,8 +237,8 @@ CLASS zcl_ovl_vendor_sync IMPLEMENTATION.
     IF has_error( ) = abap_true.
       CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
       rs_result-status = 'E'.
-      LOOP AT mt_messages INTO ls_msg WHERE type = 'E' OR type = 'A'.
-        rs_result-message = |{ lv_lifnr ALPHA = OUT }: { ls_msg-message }|.
+      LOOP AT mt_messages INTO DATA(ls_err) WHERE type = 'E' OR type = 'A'.
+        rs_result-message = |{ lv_lifnr ALPHA = OUT }: { ls_err-message }|.
         EXIT.
       ENDLOOP.
     ELSE.
