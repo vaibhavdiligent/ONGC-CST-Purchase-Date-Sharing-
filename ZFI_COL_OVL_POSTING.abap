@@ -39,7 +39,10 @@ CONSTANTS: gc_rldnr TYPE acdoca-rldnr VALUE '0L',
            gc_koart_vendor TYPE bseg-koart VALUE 'K',
            gc_bschl_dr TYPE bschl    VALUE '40',
            gc_bschl_cr TYPE bschl    VALUE '50',
-           gc_max_items TYPE i       VALUE 999.
+           gc_max_items TYPE i       VALUE 999,
+*          Offset line: fixed profit center / business area (all lines)
+           gc_off_prctr TYPE prctr   VALUE 'OVJVCLBR01',
+           gc_off_gsber TYPE gsber   VALUE 'JV'.
 
 TYPES: BEGIN OF ty_doc,
          belnr TYPE belnr_d,
@@ -83,6 +86,8 @@ TYPES: BEGIN OF ty_out,
          gsber        TYPE gsber,
          off_itemno   TYPE posnr_acc,
          offset_hkont TYPE hkont,
+         off_prctr    TYPE prctr,
+         off_gsber    TYPE gsber,
          off_bschl    TYPE bschl,
          message      TYPE bapi_msg,
        END OF ty_out.
@@ -465,6 +470,26 @@ FORM validate_mapping.
   FIELD-SYMBOLS: <ls_sum> TYPE ty_sum,
                  <ls_map> TYPE zfi_col_glmap.
 
+* Fixed offset profit center / business area
+  SELECT SINGLE @abap_true FROM cepc
+    WHERE prctr = @gc_off_prctr
+      AND ( bukrs = @gv_to_bukrs OR bukrs = @space )
+      AND datab <= @gv_budat
+      AND datbi >= @gv_budat
+    INTO @lv_dummy.
+  IF sy-subrc <> 0.
+    gv_msg = |Offset profit center { gc_off_prctr } not valid in | &&
+             |{ gv_to_bukrs } on { gv_budat DATE = USER }|.
+    PERFORM add_err USING gv_msg.
+  ENDIF.
+  SELECT SINGLE @abap_true FROM tgsb
+    WHERE gsber = @gc_off_gsber
+    INTO @lv_dummy.
+  IF sy-subrc <> 0.
+    gv_msg = |Offset business area { gc_off_gsber } does not exist|.
+    PERFORM add_err USING gv_msg.
+  ENDIF.
+
   LOOP AT gt_sum ASSIGNING <ls_sum>.
     READ TABLE gt_map ASSIGNING <ls_map>
       WITH KEY from_bukrs = p_bukrs
@@ -595,6 +620,8 @@ FORM build_and_post.
     ls_out-prctr        = <ls_map>-prctr.
     ls_out-gsber        = <ls_map>-gsber.
     ls_out-offset_hkont = <ls_map>-offset_hkont.
+    ls_out-off_prctr    = gc_off_prctr.
+    ls_out-off_gsber    = gc_off_gsber.
 *   Sign from document currency (COP); USD only if COP is zero
     IF <ls_sum>-dmbtr > 0 OR ( <ls_sum>-dmbtr = 0 AND <ls_sum>-dmbe2 > 0 ).
       ls_out-bschl     = gc_bschl_dr.
@@ -625,8 +652,8 @@ FORM build_and_post.
     ls_gl-itemno_acc = lv_item.
     ls_gl-gl_account = <ls_map>-offset_hkont.
     ls_gl-item_text  = |Offset { lv_text }|.
-    ls_gl-profit_ctr = <ls_map>-prctr.
-    ls_gl-bus_area   = <ls_map>-gsber.
+    ls_gl-profit_ctr = gc_off_prctr.
+    ls_gl-bus_area   = gc_off_gsber.
     APPEND ls_gl TO lt_gl.
     lv_dmbtr = - <ls_sum>-dmbtr.
     lv_dmbe2 = - <ls_sum>-dmbe2.
@@ -693,7 +720,7 @@ FORM build_and_post.
     IF p_test IS INITIAL.
       CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
     ENDIF.
-    PERFORM set_status USING icon_red_light 'Error - see messages'.
+    PERFORM set_status USING icon_red_light ''.
     PERFORM map_errors_to_lines.
   ELSEIF p_test = abap_true.
     PERFORM set_status USING icon_yellow_light
@@ -778,27 +805,48 @@ FORM set_status USING pv_icon TYPE icon_d
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& BAPI line-level errors are shown against the output line
-*& (ACCOUNTGL : 2 rows per output line, CURRENCYAMOUNT : 4 rows).
+*& BAPI errors are shown in the ALV itself :
+*&   line errors (ACCOUNTGL : 2 rows per output line, CURRENCYAMOUNT :
+*&   4 rows per output line) -> message column of that line,
+*&   all other errors       -> extra red rows at the end of the list.
 *&---------------------------------------------------------------------*
 FORM map_errors_to_lines.
-  DATA lv_idx TYPE i.
+  DATA: lv_idx   TYPE i,
+        lv_lines TYPE i,
+        ls_out   TYPE ty_out.
   FIELD-SYMBOLS: <ls_ret> TYPE bapiret2,
                  <ls_out> TYPE ty_out.
 
-  LOOP AT gt_return ASSIGNING <ls_ret>
-       WHERE type CA 'EAX'
-         AND ( parameter = 'ACCOUNTGL' OR parameter = 'CURRENCYAMOUNT' )
-         AND row > 0.
-    IF <ls_ret>-parameter = 'ACCOUNTGL'.
-      lv_idx = ( <ls_ret>-row + 1 ) DIV 2.
+  lv_lines = lines( gt_out ).
+
+  LOOP AT gt_return ASSIGNING <ls_ret> WHERE type CA 'EAX'.
+    CLEAR lv_idx.
+    IF <ls_ret>-row > 0.
+      IF <ls_ret>-parameter = 'ACCOUNTGL'.
+        lv_idx = ( <ls_ret>-row + 1 ) DIV 2.
+      ELSEIF <ls_ret>-parameter = 'CURRENCYAMOUNT'.
+        lv_idx = ( <ls_ret>-row + 3 ) DIV 4.
+      ENDIF.
+    ENDIF.
+
+    IF lv_idx > 0 AND lv_idx <= lv_lines.
+      READ TABLE gt_out ASSIGNING <ls_out> INDEX lv_idx.
+      IF <ls_out>-message IS INITIAL.
+        <ls_out>-message = <ls_ret>-message.
+      ELSE.
+        <ls_out>-message = |{ <ls_out>-message }; { <ls_ret>-message }|.
+      ENDIF.
     ELSE.
-      lv_idx = ( <ls_ret>-row + 3 ) DIV 4.
+      CLEAR ls_out.
+      ls_out-status  = icon_red_light.
+      ls_out-message = <ls_ret>-message.
+      APPEND ls_out TO gt_out.
     ENDIF.
-    READ TABLE gt_out ASSIGNING <ls_out> INDEX lv_idx.
-    IF sy-subrc = 0.
-      <ls_out>-message = <ls_ret>-message.
-    ENDIF.
+  ENDLOOP.
+
+  LOOP AT gt_out ASSIGNING <ls_out> FROM 1 TO lv_lines
+       WHERE message IS INITIAL.
+    <ls_out>-message = 'Not posted - document has errors (see red rows)'.
   ENDLOOP.
 ENDFORM.
 
@@ -857,6 +905,8 @@ FORM display_alv.
       PERFORM set_col USING lo_cols 'OFF_ITEMNO'   'Offset Item'.
       PERFORM set_col USING lo_cols 'OFFSET_HKONT' 'Offset GL'.
       PERFORM set_col USING lo_cols 'OFF_BSCHL'    'Offset PK'.
+      PERFORM set_col USING lo_cols 'OFF_PRCTR'    'Offset PC'.
+      PERFORM set_col USING lo_cols 'OFF_GSBER'    'Offset BA'.
       PERFORM set_col USING lo_cols 'MESSAGE'      'Message'.
 
       lo_alv->get_aggregations( )->add_aggregation( 'DMBTR' ).
@@ -872,15 +922,6 @@ FORM display_alv.
       lo_display->set_striped_pattern( abap_true ).
 
       lo_alv->display( ).
-
-      IF gt_return IS NOT INITIAL AND gv_error = abap_true.
-        cl_salv_table=>factory( IMPORTING r_salv_table = lo_msg
-                                CHANGING  t_table      = gt_return ).
-        lo_msg->get_columns( )->set_optimize( abap_true ).
-        lo_msg->set_screen_popup( start_column = 5  end_column = 150
-                                  start_line   = 3  end_line   = 20 ).
-        lo_msg->display( ).
-      ENDIF.
     CATCH cx_salv_error INTO lx_salv.
       MESSAGE lx_salv TYPE 'I'.
   ENDTRY.
