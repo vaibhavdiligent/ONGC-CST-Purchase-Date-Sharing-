@@ -31,12 +31,12 @@ INCLUDE <icon>.
 
 TABLES: t001.
 
-CONSTANTS: gc_rldnr TYPE fins_ledger VALUE '0L',
-           gc_rrcty TYPE rrcty       VALUE '0',
-           gc_gl1   TYPE racct       VALUE '95671',
-           gc_gl2   TYPE racct       VALUE '956712',
+CONSTANTS: gc_rldnr TYPE acdoca-rldnr VALUE '0L',
+           gc_rrcty TYPE acdoca-rrcty VALUE '0',
+           gc_gl1   TYPE acdoca-racct VALUE '95671',
+           gc_gl2   TYPE acdoca-racct VALUE '956712',
            gc_blart TYPE blart       VALUE 'CL',
-           gc_koart_vendor TYPE koart VALUE 'K',
+           gc_koart_vendor TYPE bseg-koart VALUE 'K',
            gc_bschl_dr TYPE bschl    VALUE '40',
            gc_bschl_cr TYPE bschl    VALUE '50',
            gc_max_items TYPE i       VALUE 999.
@@ -50,32 +50,32 @@ TYPES: BEGIN OF ty_bseg,
          bukrs TYPE bukrs,
          belnr TYPE belnr_d,
          gjahr TYPE gjahr,
-         buzei TYPE buzei,
-         koart TYPE koart,
-         shkzg TYPE shkzg,
-         hkont TYPE hkont,
-         lifnr TYPE lifnr,
-         dmbtr TYPE dmbtr,
-         dmbe2 TYPE dmbe2,
+         buzei TYPE bseg-buzei,
+         koart TYPE bseg-koart,
+         shkzg TYPE bseg-shkzg,
+         hkont TYPE bseg-hkont,
+         lifnr TYPE bseg-lifnr,
+         dmbtr TYPE bseg-dmbtr,
+         dmbe2 TYPE bseg-dmbe2,
        END OF ty_bseg.
 
 * KOART = 'K' -> ACCT = vendor (LIFNR), KOART = space -> ACCT = GL (HKONT)
 TYPES: BEGIN OF ty_sum,
-         koart TYPE koart,
-         acct  TYPE hkont,
-         dmbtr TYPE dmbtr,
-         dmbe2 TYPE dmbe2,
+         koart TYPE bseg-koart,
+         acct  TYPE bseg-hkont,
+         dmbtr TYPE bseg-dmbtr,
+         dmbe2 TYPE bseg-dmbe2,
        END OF ty_sum.
 
 TYPES: BEGIN OF ty_out,
          status       TYPE icon_d,
          itemno       TYPE posnr_acc,
-         koart        TYPE koart,
-         from_hkont   TYPE hkont,
-         dmbtr        TYPE dmbtr,
-         waers        TYPE waers,
-         dmbe2        TYPE dmbe2,
-         waers2       TYPE waers,
+         koart        TYPE bseg-koart,
+         from_hkont   TYPE bseg-hkont,
+         dmbtr        TYPE bseg-dmbtr,
+         waers        TYPE t001-waers,
+         dmbe2        TYPE bseg-dmbe2,
+         waers2       TYPE t001-waers,
          bschl        TYPE bschl,
          to_hkont     TYPE hkont,
          kostl        TYPE kostl,
@@ -94,16 +94,16 @@ DATA: gt_doc    TYPE STANDARD TABLE OF ty_doc,
                      WITH UNIQUE KEY from_bukrs koart from_hkont to_bukrs,
       gt_out    TYPE STANDARD TABLE OF ty_out,
       gt_return TYPE STANDARD TABLE OF bapiret2,
-      gr_racct  TYPE RANGE OF racct.
+      gr_racct  TYPE RANGE OF acdoca-racct.
 
 DATA: gv_to_bukrs TYPE bukrs,
       gv_budat    TYPE budat,
       gv_to_gjahr TYPE gjahr,
       gv_to_poper TYPE poper,
       gv_belnr    TYPE belnr_d,
-      gv_waers    TYPE waers,       " document currency = OVC local (COP)
-      gv_waers2   TYPE waers,       " OVC 2nd local currency (USD)
-      gv_curtp2   TYPE curtp,       " OVL currency type for GV_WAERS2
+      gv_waers    TYPE t001-waers,  " document currency = OVC local (COP)
+      gv_waers2   TYPE bkpf-hwae2,  " OVC 2nd local currency (USD)
+      gv_curtp2   TYPE bkpf-curt2,  " OVL currency type for GV_WAERS2
       gv_msg      TYPE string,      " error text for ADD_ERR
       gv_error    TYPE flag.
 
@@ -157,9 +157,9 @@ FORM main.
   CHECK gv_error IS INITIAL.
   PERFORM read_mapping.
   CHECK gv_error IS INITIAL.
-  PERFORM get_currencies.
-  CHECK gv_error IS INITIAL.
   PERFORM get_posting_date.
+  CHECK gv_error IS INITIAL.
+  PERFORM get_currencies.
   CHECK gv_error IS INITIAL.
   PERFORM validate_mapping.
   CHECK gv_error IS INITIAL.
@@ -199,7 +199,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_racct_range.
   DATA: ls_racct LIKE LINE OF gr_racct,
-        lv_gl    TYPE racct.
+        lv_gl    TYPE acdoca-racct.
 
   ls_racct-sign   = 'I'.
   ls_racct-option = 'EQ'.
@@ -352,46 +352,58 @@ FORM read_mapping.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Currencies (FS updated) :
-*&   document currency = OVC local currency (COP)  <- DMBTR
-*&   OVC 2nd local currency (USD) must be a currency type of OVL as
-*&   well (2nd or 3rd local currency)               <- DMBE2
+*& Currencies (FS updated) - standard tables only (T001, BKPF) :
+*&   document currency = OVC local currency T001-WAERS (COP) <- DMBTR
+*&   OVC 2nd local currency = BKPF-HWAE2 of the OVC documents (USD)
+*&   OVL currency type holding that currency = BKPF-CURT2 / CURT3 of an
+*&   OVL document of the OVL fiscal year              <- DMBE2
 *&   OVL local currency (INR) is translated by the system.
 *&---------------------------------------------------------------------*
 FORM get_currencies.
-  DATA: ls_x001_from TYPE x001,
-        ls_x001_to   TYPE x001,
-        lv_waers_to  TYPE waers.
+  DATA: lv_waers_to TYPE t001-waers,
+        ls_doc      TYPE ty_doc,
+        lv_curt2    TYPE bkpf-curt2,
+        lv_hwae2    TYPE bkpf-hwae2,
+        lv_curt3    TYPE bkpf-curt3,
+        lv_hwae3    TYPE bkpf-hwae3.
 
   SELECT SINGLE waers FROM t001 INTO gv_waers    WHERE bukrs = p_bukrs.
   SELECT SINGLE waers FROM t001 INTO lv_waers_to WHERE bukrs = gv_to_bukrs.
 
-  CALL FUNCTION 'FI_CURRENCY_INFORMATION_GET'
-    EXPORTING
-      i_bukrs = p_bukrs
-    IMPORTING
-      e_x001  = ls_x001_from.
-  gv_waers2 = ls_x001_from-hwae2.
+* OVC 2nd local currency - from the header of an OVC source document
+  READ TABLE gt_doc INTO ls_doc INDEX 1.
+  SELECT SINGLE hwae2 FROM bkpf INTO gv_waers2
+    WHERE bukrs = p_bukrs
+      AND belnr = ls_doc-belnr
+      AND gjahr = ls_doc-gjahr.
   IF gv_waers2 IS INITIAL.
-    gv_msg = |No 2nd local currency defined for { p_bukrs }|.
+    gv_msg = |No 2nd local currency (BKPF-HWAE2) found for { p_bukrs }|.
     PERFORM add_err USING gv_msg.
     RETURN.
   ENDIF.
 
-  CALL FUNCTION 'FI_CURRENCY_INFORMATION_GET'
-    EXPORTING
-      i_bukrs = gv_to_bukrs
-    IMPORTING
-      e_x001  = ls_x001_to.
-  IF ls_x001_to-hwae2 = gv_waers2.
-    gv_curtp2 = ls_x001_to-curt2.
-  ELSEIF ls_x001_to-hwae3 = gv_waers2.
-    gv_curtp2 = ls_x001_to-curt3.
+* OVL currency settings - from any OVL document of the OVL fiscal year
+  SELECT curt2 hwae2 curt3 hwae3 FROM bkpf UP TO 1 ROWS
+    INTO (lv_curt2, lv_hwae2, lv_curt3, lv_hwae3)
+    WHERE bukrs = gv_to_bukrs
+      AND gjahr = gv_to_gjahr.
+  ENDSELECT.
+  IF sy-subrc <> 0.
+    SELECT curt2 hwae2 curt3 hwae3 FROM bkpf UP TO 1 ROWS
+      INTO (lv_curt2, lv_hwae2, lv_curt3, lv_hwae3)
+      WHERE bukrs = gv_to_bukrs.
+    ENDSELECT.
+  ENDIF.
+
+  IF lv_hwae2 = gv_waers2 AND lv_curt2 IS NOT INITIAL.
+    gv_curtp2 = lv_curt2.
+  ELSEIF lv_hwae3 = gv_waers2 AND lv_curt3 IS NOT INITIAL.
+    gv_curtp2 = lv_curt3.
   ELSEIF lv_waers_to = gv_waers2.
     gv_curtp2 = '10'.
   ELSE.
-    gv_msg = |Currency { gv_waers2 } (2nd local currency of | &&
-             |{ p_bukrs }) is not a local currency of { gv_to_bukrs }|.
+    gv_msg = |Currency { gv_waers2 } (2nd local currency of { p_bukrs }) | &&
+             |is not a local currency of { gv_to_bukrs }|.
     PERFORM add_err USING gv_msg.
   ENDIF.
 ENDFORM.
@@ -401,8 +413,8 @@ ENDFORM.
 *& document date in OVL. OVL period is derived from that date.
 *&---------------------------------------------------------------------*
 FORM get_posting_date.
-  DATA: lv_periv_from TYPE periv,
-        lv_periv_to   TYPE periv.
+  DATA: lv_periv_from TYPE t001-periv,
+        lv_periv_to   TYPE t001-periv.
 
   SELECT SINGLE periv FROM t001 INTO lv_periv_from WHERE bukrs = p_bukrs.
   SELECT SINGLE periv FROM t001 INTO lv_periv_to   WHERE bukrs = gv_to_bukrs.
@@ -415,10 +427,7 @@ FORM get_posting_date.
     IMPORTING
       e_date         = gv_budat
     EXCEPTIONS
-      input_false    = 1
-      t009_notfound  = 2
-      t009b_notfound = 3
-      OTHERS         = 4.
+      OTHERS         = 1.
   IF sy-subrc <> 0 OR gv_budat IS INITIAL.
     gv_msg = |Cannot determine last day of period | &&
              |{ p_poper }/{ p_gjahr } (variant { lv_periv_from })|.
@@ -538,8 +547,8 @@ FORM build_and_post.
         lt_gl     TYPE STANDARD TABLE OF bapiacgl09,
         ls_gl     TYPE bapiacgl09,
         lt_curr   TYPE STANDARD TABLE OF bapiaccr09,
-        lv_dmbtr  TYPE dmbtr,
-        lv_dmbe2  TYPE dmbe2,
+        lv_dmbtr  TYPE bseg-dmbtr,
+        lv_dmbe2  TYPE bseg-dmbe2,
         ls_out    TYPE ty_out,
         ls_log    TYPE zfi_col_postlog,
         lv_item   TYPE posnr_acc,
@@ -731,8 +740,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM add_curr TABLES pt_curr  STRUCTURE bapiaccr09
               USING  pv_item  TYPE posnr_acc
-                     pv_dmbtr TYPE dmbtr
-                     pv_dmbe2 TYPE dmbe2.
+                     pv_dmbtr TYPE bseg-dmbtr
+                     pv_dmbe2 TYPE bseg-dmbe2.
   DATA ls_curr TYPE bapiaccr09.
 
   ls_curr-itemno_acc = pv_item.
