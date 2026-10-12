@@ -104,6 +104,7 @@ DATA: gv_to_bukrs TYPE bukrs,
       gv_waers    TYPE waers,       " document currency = OVC local (COP)
       gv_waers2   TYPE waers,       " OVC 2nd local currency (USD)
       gv_curtp2   TYPE curtp,       " OVL currency type for GV_WAERS2
+      gv_msg      TYPE string,      " error text for ADD_ERR
       gv_error    TYPE flag.
 
 *----------------------------------------------------------------------*
@@ -121,19 +122,19 @@ SELECTION-SCREEN END OF BLOCK b2.
 AT SELECTION-SCREEN ON p_bukrs.
   SELECT SINGLE * FROM t001 WHERE bukrs = p_bukrs.
   IF sy-subrc <> 0.
-    MESSAGE e001(00) WITH 'Company code' p_bukrs 'does not exist'.
+    MESSAGE |Company code { p_bukrs } does not exist| TYPE 'E'.
   ENDIF.
   AUTHORITY-CHECK OBJECT 'F_BKPF_BUK'
     ID 'BUKRS' FIELD p_bukrs
     ID 'ACTVT' FIELD '03'.
   IF sy-subrc <> 0.
-    MESSAGE e001(00) WITH 'No authorization to display company code'
-                          p_bukrs.
+    MESSAGE |No authorization to display company code { p_bukrs }|
+            TYPE 'E'.
   ENDIF.
 
 AT SELECTION-SCREEN ON p_poper.
   IF p_poper < 1 OR p_poper > 16.
-    MESSAGE e001(00) WITH 'Period must be between 001 and 016'.
+    MESSAGE 'Period must be between 001 and 016' TYPE 'E'.
   ENDIF.
 
 AT SELECTION-SCREEN.
@@ -142,6 +143,13 @@ AT SELECTION-SCREEN.
 *----------------------------------------------------------------------*
 START-OF-SELECTION.
 *----------------------------------------------------------------------*
+  PERFORM main.
+  PERFORM display_alv.
+
+*&---------------------------------------------------------------------*
+*& Processing steps - stop at the first step that reports errors.
+*&---------------------------------------------------------------------*
+FORM main.
   PERFORM build_racct_range.
   PERFORM get_documents.
   CHECK gv_error IS INITIAL.
@@ -156,7 +164,19 @@ START-OF-SELECTION.
   PERFORM validate_mapping.
   CHECK gv_error IS INITIAL.
   PERFORM build_and_post.
-  PERFORM display_alv.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Collect one error (shown in the error list at the end).
+*&---------------------------------------------------------------------*
+FORM add_err USING pv_text TYPE csequence.
+  DATA ls_ret TYPE bapiret2.
+
+  gv_error       = abap_true.
+  ls_ret-type    = 'E'.
+  ls_ret-message = pv_text.
+  APPEND ls_ret TO gt_return.
+ENDFORM.
 
 *&---------------------------------------------------------------------*
 *& Block a period that was already posted successfully.
@@ -169,8 +189,8 @@ FORM check_already_posted.
       AND gjahr = p_gjahr
       AND poper = p_poper.
   IF sy-subrc = 0.
-    MESSAGE e001(00) WITH 'Period already posted: OVL document'
-                          ls_log-belnr ls_log-to_bukrs ls_log-to_gjahr.
+    MESSAGE |Period already posted: OVL document { ls_log-belnr } | &&
+            |{ ls_log-to_bukrs } { ls_log-to_gjahr }| TYPE 'E'.
   ENDIF.
 ENDFORM.
 
@@ -216,14 +236,15 @@ FORM get_documents.
     INTO TABLE @gt_doc.
 
   IF gt_doc IS INITIAL.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'No documents found on GL 95671 / 956712 for'
-                          p_bukrs p_poper p_gjahr DISPLAY LIKE 'E'.
+    gv_msg = |No documents found on GL 95671 / 956712 for | &&
+             |{ p_bukrs } period { p_poper }/{ p_gjahr }|.
+    PERFORM add_err USING gv_msg.
   ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Step 2 - subtotal DMBE2 per HKONT (other than 95671 / 956712).
+*& Step 2 - subtotal DMBTR + DMBE2 (HKONT not 95671 / 956712):
+*&          KOART K per vendor (LIFNR), others per GL (HKONT).
 *&---------------------------------------------------------------------*
 FORM get_subtotals.
   DATA: ls_sum   TYPE ty_sum,
@@ -261,15 +282,13 @@ FORM get_subtotals.
   DELETE gt_sum WHERE dmbtr = 0 AND dmbe2 = 0.
 
   IF gt_sum IS INITIAL.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'No amounts (DMBTR / DMBE2) to post'
-                          DISPLAY LIKE 'E'.
+    gv_msg = 'No amounts (DMBTR / DMBE2) to post'.
+    PERFORM add_err USING gv_msg.
   ELSEIF lines( gt_sum ) * 2 > gc_max_items.
-    gv_error = abap_true.
     lv_lines = lines( gt_sum ).
-    MESSAGE s001(00) WITH 'Too many GLs / vendors for one document'
-                          '(max 499):'
-                          lv_lines DISPLAY LIKE 'E'.
+    gv_msg = |Too many GLs / vendors for one document: | &&
+             |{ lv_lines } (max 499)|.
+    PERFORM add_err USING gv_msg.
   ENDIF.
 ENDFORM.
 
@@ -280,7 +299,6 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM read_mapping.
   DATA: lt_to_bukrs TYPE SORTED TABLE OF bukrs WITH UNIQUE KEY table_line,
-        lv_missing  TYPE string,
         lv_count    TYPE i,
         lv_acct_out TYPE string.
   FIELD-SYMBOLS: <ls_sum> TYPE ty_sum,
@@ -296,34 +314,26 @@ FORM read_mapping.
       lv_count = lv_count + 1.
       INSERT <ls_map>-to_bukrs INTO TABLE lt_to_bukrs.
     ENDLOOP.
-    lv_acct_out = |{ <ls_sum>-acct ALPHA = OUT }|.
     IF <ls_sum>-koart = gc_koart_vendor.
-      lv_acct_out = |V:{ lv_acct_out }|.
+      lv_acct_out = |Vendor { <ls_sum>-acct ALPHA = OUT } (KOART K)|.
+    ELSE.
+      lv_acct_out = |GL { <ls_sum>-acct ALPHA = OUT } (KOART blank)|.
     ENDIF.
     IF lv_count = 0.
-      lv_missing = |{ lv_missing } { lv_acct_out }|.
+      gv_msg = |{ lv_acct_out } not mapped in ZFI_COL_GLMAP|.
+      PERFORM add_err USING gv_msg.
     ELSEIF lv_count > 1.
-      gv_error = abap_true.
-      MESSAGE s001(00) WITH 'GL / vendor' lv_acct_out
-                            'mapped to more than one To Co.Code'
-                            DISPLAY LIKE 'E'.
-      RETURN.
+      gv_msg = |{ lv_acct_out } mapped to more than one | &&
+               |To Co.Code|.
+      PERFORM add_err USING gv_msg.
     ENDIF.
   ENDLOOP.
-
-  IF lv_missing IS NOT INITIAL.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'Not mapped in ZFI_COL_GLMAP (V: = vendor):'
-                          lv_missing
-                          DISPLAY LIKE 'E'.
-    RETURN.
-  ENDIF.
+  CHECK gv_error IS INITIAL.
 
   IF lines( lt_to_bukrs ) <> 1.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'Mapped GLs belong to different To Co.Codes'
-                          '- one document needs one company code'
-                          DISPLAY LIKE 'E'.
+    gv_msg = |Mapped GLs / vendors belong to different | &&
+             |To Co.Codes - one document needs one company code|.
+    PERFORM add_err USING gv_msg.
     RETURN.
   ENDIF.
 
@@ -334,9 +344,9 @@ FORM read_mapping.
       ID 'BUKRS' FIELD gv_to_bukrs
       ID 'ACTVT' FIELD '01'.
     IF sy-subrc <> 0.
-      gv_error = abap_true.
-      MESSAGE s001(00) WITH 'No authorization to post in company code'
-                            gv_to_bukrs DISPLAY LIKE 'E'.
+      gv_msg = |No authorization to post in company code | &&
+               |{ gv_to_bukrs }|.
+      PERFORM add_err USING gv_msg.
     ENDIF.
   ENDIF.
 ENDFORM.
@@ -363,9 +373,8 @@ FORM get_currencies.
       e_x001  = ls_x001_from.
   gv_waers2 = ls_x001_from-hwae2.
   IF gv_waers2 IS INITIAL.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'No 2nd local currency defined for'
-                          p_bukrs DISPLAY LIKE 'E'.
+    gv_msg = |No 2nd local currency defined for { p_bukrs }|.
+    PERFORM add_err USING gv_msg.
     RETURN.
   ENDIF.
 
@@ -381,10 +390,9 @@ FORM get_currencies.
   ELSEIF lv_waers_to = gv_waers2.
     gv_curtp2 = '10'.
   ELSE.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'Currency' gv_waers2
-                          'is not a local currency of' gv_to_bukrs
-                          DISPLAY LIKE 'E'.
+    gv_msg = |Currency { gv_waers2 } (2nd local currency of | &&
+             |{ p_bukrs }) is not a local currency of { gv_to_bukrs }|.
+    PERFORM add_err USING gv_msg.
   ENDIF.
 ENDFORM.
 
@@ -412,9 +420,9 @@ FORM get_posting_date.
       t009b_notfound = 3
       OTHERS         = 4.
   IF sy-subrc <> 0 OR gv_budat IS INITIAL.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'Cannot determine last day of period'
-                          p_poper p_gjahr lv_periv_from DISPLAY LIKE 'E'.
+    gv_msg = |Cannot determine last day of period | &&
+             |{ p_poper }/{ p_gjahr } (variant { lv_periv_from })|.
+    PERFORM add_err USING gv_msg.
     RETURN.
   ENDIF.
 
@@ -431,9 +439,9 @@ FORM get_posting_date.
       t009b_notfound = 3
       OTHERS         = 4.
   IF sy-subrc <> 0.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'Cannot determine OVL period for' gv_budat
-                          gv_to_bukrs DISPLAY LIKE 'E'.
+    gv_msg = |Cannot determine period of { gv_to_bukrs } | &&
+             |for date { gv_budat DATE = USER }|.
+    PERFORM add_err USING gv_msg.
   ENDIF.
 ENDFORM.
 
@@ -443,8 +451,8 @@ ENDFORM.
 *&   date). GSBER -> TGSB.  All errors are listed together.
 *&---------------------------------------------------------------------*
 FORM validate_mapping.
-  DATA: lv_errors TYPE string,
-        lv_dummy  TYPE char1.
+  DATA: lv_src   TYPE string,
+        lv_dummy TYPE char1.
   FIELD-SYMBOLS: <ls_sum> TYPE ty_sum,
                  <ls_map> TYPE zfi_col_glmap.
 
@@ -456,18 +464,28 @@ FORM validate_mapping.
                to_bukrs   = gv_to_bukrs.
     CHECK sy-subrc = 0.
 
+    IF <ls_sum>-koart = gc_koart_vendor.
+      lv_src = |Mapping of vendor { <ls_sum>-acct ALPHA = OUT }:|.
+    ELSE.
+      lv_src = |Mapping of GL { <ls_sum>-acct ALPHA = OUT }:|.
+    ENDIF.
+
     SELECT SINGLE @abap_true FROM skb1
       WHERE bukrs = @gv_to_bukrs AND saknr = @<ls_map>-to_hkont
       INTO @lv_dummy.
     IF sy-subrc <> 0.
-      lv_errors = |{ lv_errors } GL { <ls_map>-to_hkont ALPHA = OUT };|.
+      gv_msg = |{ lv_src } GL { <ls_map>-to_hkont ALPHA = OUT } | &&
+               |not in { gv_to_bukrs }|.
+      PERFORM add_err USING gv_msg.
     ENDIF.
 
     SELECT SINGLE @abap_true FROM skb1
       WHERE bukrs = @gv_to_bukrs AND saknr = @<ls_map>-offset_hkont
       INTO @lv_dummy.
     IF sy-subrc <> 0.
-      lv_errors = |{ lv_errors } Offset GL { <ls_map>-offset_hkont ALPHA = OUT };|.
+      gv_msg = |{ lv_src } offset GL | &&
+               |{ <ls_map>-offset_hkont ALPHA = OUT } not in { gv_to_bukrs }|.
+      PERFORM add_err USING gv_msg.
     ENDIF.
 
     IF <ls_map>-kostl IS NOT INITIAL.
@@ -478,7 +496,9 @@ FORM validate_mapping.
           AND datbi >= @gv_budat
         INTO @lv_dummy.
       IF sy-subrc <> 0.
-        lv_errors = |{ lv_errors } CC { <ls_map>-kostl ALPHA = OUT };|.
+        gv_msg = |{ lv_src } cost center | &&
+                 |{ <ls_map>-kostl ALPHA = OUT } not valid in { gv_to_bukrs }|.
+        PERFORM add_err USING gv_msg.
       ENDIF.
     ENDIF.
 
@@ -490,7 +510,9 @@ FORM validate_mapping.
           AND datbi >= @gv_budat
         INTO @lv_dummy.
       IF sy-subrc <> 0.
-        lv_errors = |{ lv_errors } PC { <ls_map>-prctr ALPHA = OUT };|.
+        gv_msg = |{ lv_src } profit center | &&
+                 |{ <ls_map>-prctr ALPHA = OUT } not valid in { gv_to_bukrs }|.
+        PERFORM add_err USING gv_msg.
       ENDIF.
     ENDIF.
 
@@ -499,16 +521,12 @@ FORM validate_mapping.
         WHERE gsber = @<ls_map>-gsber
         INTO @lv_dummy.
       IF sy-subrc <> 0.
-        lv_errors = |{ lv_errors } BA { <ls_map>-gsber };|.
+        gv_msg = |{ lv_src } business area | &&
+                 |{ <ls_map>-gsber } does not exist|.
+        PERFORM add_err USING gv_msg.
       ENDIF.
     ENDIF.
   ENDLOOP.
-
-  IF lv_errors IS NOT INITIAL.
-    gv_error = abap_true.
-    MESSAGE s001(00) WITH 'Invalid mapping for' gv_to_bukrs ':'
-                          lv_errors DISPLAY LIKE 'E'.
-  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -786,7 +804,23 @@ FORM display_alv.
         lv_title   TYPE lvc_title,
         lx_salv    TYPE REF TO cx_salv_error.
 
-  CHECK gt_out IS NOT INITIAL.
+* Stopped before posting -> show the full error list
+  IF gt_out IS INITIAL.
+    CHECK gt_return IS NOT INITIAL.
+    MESSAGE 'Errors found - nothing posted, see list' TYPE 'S'
+            DISPLAY LIKE 'E'.
+    TRY.
+        cl_salv_table=>factory( IMPORTING r_salv_table = lo_msg
+                                CHANGING  t_table      = gt_return ).
+        lo_msg->get_columns( )->set_optimize( abap_true ).
+        lo_msg->get_display_settings( )->set_list_header(
+          |Errors { p_bukrs } { p_poper }/{ p_gjahr }| ).
+        lo_msg->display( ).
+      CATCH cx_salv_error INTO lx_salv.
+        MESSAGE lx_salv TYPE 'I'.
+    ENDTRY.
+    RETURN.
+  ENDIF.
 
   TRY.
       cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
