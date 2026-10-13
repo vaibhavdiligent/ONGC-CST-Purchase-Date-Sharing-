@@ -1,0 +1,2433 @@
+REPORT  fcmlhelp_po_consistency LINE-SIZE 132.
+*&---------------------------------------------------------------------*
+*& Report  MLHELP_PO_CONSISTENCY                                       *
+*&                                                                     *
+*&---------------------------------------------------------------------*
+*&                                                                     *
+*&---------------------------------------------------------------------*
+* RHU 17.03.2006 Check EKBZ when EKBE could not be read
+*ML Helpdesk 1.4
+*U9CK902140 PUE 160501 Update with "42" only
+*ML Helpdesk 1.2
+*U9CK901500 PUE 281200 Batch run capability
+*U9C
+*PUE 111200 Anbindung an MLHELPDESK-TODOLISTE "PUE111200
+*XBA
+*HOMXBAK000065 200700 Korrekturen
+*4.6C-Hotpackage
+*HOMP9CK021879 280400 Neu angelegt
+
+TYPE-POOLS: ckm1f, slis.
+INCLUDE rm07auth.
+
+TABLES: ekbe, ekbz, ekpo, t001, mlbecr, mlwere, indx, sscrfields.
+
+SELECTION-SCREEN BEGIN OF BLOCK input WITH FRAME TITLE TEXT-106.
+  SELECTION-SCREEN BEGIN OF BLOCK list WITH FRAME TITLE TEXT-101.
+    PARAMETERS: p_todoin(10)    TYPE c MEMORY ID fcmlhelp_todo.
+  SELECTION-SCREEN END OF BLOCK list.
+
+  SELECTION-SCREEN: BEGIN OF LINE, COMMENT 1(2) TEXT-102, END OF LINE.
+  SELECTION-SCREEN BEGIN OF BLOCK selection WITH FRAME TITLE TEXT-103.
+    SELECT-OPTIONS: r_werks FOR ekpo-werks,
+                    r_ebeln FOR ekbe-ebeln,
+                    r_ebelp FOR ekbe-ebelp.
+  SELECTION-SCREEN END OF BLOCK selection.
+SELECTION-SCREEN END OF BLOCK input.
+
+SELECTION-SCREEN BEGIN OF BLOCK ablauf WITH FRAME TITLE TEXT-105.
+  PARAMETERS: p_fbk1 AS CHECKBOX,                           " 3443002-d
+              p_ekbz AS CHECKBOX DEFAULT 'X',               " 3443002-c
+              p_test LIKE cki_doc_ml-test DEFAULT 'X'.
+
+SELECTION-SCREEN END OF BLOCK ablauf.
+
+SELECTION-SCREEN BEGIN OF BLOCK todo_list WITH FRAME TITLE TEXT-104.
+
+  PARAMETERS: p_todout(10)    TYPE c.
+SELECTION-SCREEN END OF BLOCK todo_list.
+
+
+
+TYPES: todo_list TYPE STANDARD TABLE OF ckm1f_todo_obj.
+
+DATA: BEGIN OF ls_werks,
+        werks LIKE ckmllahd-werks,
+      END OF ls_werks,
+      lt_werks LIKE TABLE OF ls_werks.
+
+DATA: ls_wwo  LIKE cki_wwo_ml.
+
+DATA: t_ekbe       LIKE ekbe OCCURS 0 WITH HEADER LINE,
+      t_ekbe_help  LIKE ekbe OCCURS 0 WITH HEADER LINE,
+      t_ekbe_lfbnr LIKE ekbe OCCURS 0 WITH HEADER LINE,
+      t_ekbe_dummy LIKE ekbe OCCURS 0 WITH HEADER LINE,
+      t_ebefu      LIKE ebefu OCCURS 0 WITH HEADER LINE,
+      t_ebefu_cr   LIKE ebefu_cr OCCURS 0 WITH HEADER LINE,
+      t_ekbz       LIKE ekbz OCCURS 0 WITH HEADER LINE,
+      t_ekbz_help  LIKE ekbz OCCURS 0 WITH HEADER LINE,
+      t_ekbnk      LIKE ekbnk OCCURS 0 WITH HEADER LINE,
+      t_ekbnk_cr   LIKE ekbnk_cr OCCURS 0 WITH HEADER LINE.
+DATA: BEGIN OF t_ekpo OCCURS 0,
+        ebeln LIKE ekpo-ebeln,
+        ebelp LIKE ekpo-ebelp,
+        bukrs LIKE ekpo-bukrs,
+        webre LIKE ekpo-webre,
+        wepos LIKE ekpo-wepos,
+        weunb LIKE ekpo-weunb,
+      END OF t_ekpo.
+DATA: t_ekpo_all LIKE t_ekpo OCCURS 0 WITH HEADER LINE.
+
+DATA: todo_in  TYPE todo_list WITH HEADER LINE,            "PUE11122000
+      todo_out TYPE todo_list WITH HEADER LINE.            "PUE11122000
+DATA:  correct_belnr TYPE STANDARD TABLE OF fcmlrephd-belnr
+                          WITH HEADER LINE.
+
+DATA:  erring_ekpo TYPE boole-boole.                        "PUE11122000
+
+DATA:  ausgz TYPE boole-boole.
+DATA:  gd_alv_corritem_list LIKE fcmlrepit OCCURS 0.
+DATA:  ld_mlrepit LIKE fcmlrepit.
+DATA:  rs_selfield TYPE slis_selfield.
+DATA:  lh_doit TYPE c.                 " lh_doit for warning pop-up
+
+DATA: mlbecr_old LIKE mlbecr,
+      mlbecr_new LIKE mlbecr.
+
+DATA: s_error         LIKE boole-boole,
+      h_stunr_space   LIKE mlwere-stunr,
+      h_zaehk_space   LIKE mlwere-zaehk,
+      h_lfbnr_space   LIKE ekbe-lfbnr,
+      h_lfgja_space   LIKE ekbe-lfgja,
+      h_lfpos_space   LIKE ekbe-lfpos,
+      h_ekpo_lines    TYPE i,
+      h_ekpo_tabix    LIKE sy-tabix VALUE '1',
+      h_webre         LIKE ekpo-webre,
+      h_old_lfbnr     LIKE ekbe-lfbnr,
+      h_old_lfpos     LIKE ekbe-lfpos,
+      h_old_lfgja     LIKE ekbe-lfgja,
+      h_current_lfbnr LIKE ekbe-lfbnr,
+      h_current_lfpos LIKE ekbe-lfpos,
+      h_current_lfgja LIKE ekbe-lfgja,
+      h_index_lfbnr   LIKE sy-tabix VALUE '1',
+      h_ekpo_count    TYPE i,
+      h_sydatum       LIKE sy-datum,
+      gd_master       TYPE boole-boole,
+      gd_dontpanic    LIKE sy-datlo.
+
+*AT SELECTION-SCREEN OUTPUT.
+*  LOOP AT SCREEN.
+*    CASE screen-name.
+*      WHEN 'P_TEST'.
+*        IF gd_master = 'X'.
+*          screen-input = '1'.
+*        ELSE.
+*          p_test = 'X'.
+*          screen-input = '0'.
+*        ENDIF.
+*        MODIFY SCREEN.
+*      WHEN OTHERS.
+*    ENDCASE.
+*  ENDLOOP.
+
+**********************************************************************
+INITIALIZATION.                                             " 3443002-b
+**********************************************************************
+  IF cl_fml_toggle=>get_instance( )->is_ml_full_parall_actg_active( ).
+    MESSAGE 'Report cannot be used new with purchase order history table design' TYPE 'I'.
+    LEAVE PROGRAM.
+  ENDIF.
+
+**********************************************************************
+AT SELECTION-SCREEN.
+**********************************************************************
+  CALL FUNCTION 'FCMLHELP_CHECK_TESTFLAG'
+    EXPORTING
+      i_test = p_test
+    IMPORTING
+      e_test = p_test.
+
+  SET PF-STATUS 'STD'.
+
+  IF p_test IS INITIAL.
+    gd_master = 'X'.
+  ENDIF.
+
+*******************
+START-OF-SELECTION.
+*******************
+
+***********************************************************************
+*{ Check todo-output NOT INITIAL                          "PUE11122000
+***********************************************************************
+* if p_todout not input, but necessary: display message and exit prog
+  IF  ( p_todout IS INITIAL ) AND
+      ( p_test IS INITIAL ).
+    FORMAT COLOR COL_NEGATIVE INVERSE.
+    WRITE: TEXT-002.
+*   write: 'Please specify an output todo list!'.
+    FORMAT COLOR COL_NEGATIVE INVERSE OFF.
+    EXIT.
+  ENDIF.
+*} Check todo-output IS NOT INITIAL
+
+
+***********************************************************************
+*{ Check todo-output NOT ALREADY EXISTS                  "PUE11122000
+***********************************************************************
+  IF NOT p_todout IS INITIAL.
+    CALL FUNCTION 'FCMLHELP_TODO_READ'
+      EXPORTING
+        i_todo_ident        = p_todout
+        i_check_only        = 'X'
+      EXCEPTIONS
+        todo_list_not_found = 1.
+    IF sy-subrc = 0.
+      PERFORM popup_dialog                                  "PUE281200
+              USING    'Y'
+                       'ToDO-List already exists and will be replaced!'
+                       'Continue?'
+                       'Warning!!'
+              CHANGING lh_doit.
+      IF lh_doit = 'N' OR
+         lh_doit = 'A'.
+        STOP.
+      ENDIF.
+
+    ENDIF.
+  ENDIF.
+*} Check todo-output NOT ALREADY EXISTS
+
+***********************************************************************
+*{ Read todo-input if chosen as selection                 "PUE11122000
+***********************************************************************
+  IF NOT p_todoin IS INITIAL.
+    IF ( ( NOT r_ebeln[] IS INITIAL ) OR ( NOT r_ebelp[] IS INITIAL ) OR
+     ( NOT r_werks[] IS INITIAL ) ).                         "PUE11122000
+* Additional selection was made
+      PERFORM popup_dialog                                  "PUE281200
+              USING    'Y'
+                       'Only todo-list selection will be used!'
+                       'Continue?'
+                       'Warning!!'
+              CHANGING lh_doit.
+      IF lh_doit = 'N' OR
+         lh_doit = 'A'.
+        STOP.
+      ENDIF.
+    ENDIF.
+    CALL FUNCTION 'FCMLHELP_TODO_READ'
+      EXPORTING
+        i_todo_ident        = p_todoin
+      IMPORTING
+        et_todo_tbl         = todo_in[]
+      EXCEPTIONS
+        todo_list_not_found = 1.
+    IF sy-subrc = 1.
+      WRITE: TEXT-004.
+*   WRITE: 'Input ToDo-list not found!'.
+      STOP.
+    ENDIF.
+    READ TABLE todo_in INDEX 1.
+    IF todo_in-obtyp NE 'PO'.
+      WRITE: TEXT-005.
+*   WRITE: 'Input ToDo-list contains no purchase order data!'.
+      STOP.
+    ENDIF.
+
+* Authority-check
+    LOOP AT todo_in.
+      IF p_test IS INITIAL.
+        AUTHORITY-CHECK OBJECT 'K_ML_VA'
+        ID 'BWKEY' FIELD todo_in-bwkey
+        ID 'ACTVT' FIELD '02'.
+        IF sy-subrc <> 0.
+          MESSAGE e054(c+) WITH todo_in-bwkey.
+        ENDIF.
+      ELSE.
+        AUTHORITY-CHECK OBJECT 'K_ML_VA'
+        ID 'BWKEY' FIELD todo_in-bwkey
+        ID 'ACTVT' FIELD '03'.
+        IF sy-subrc <> 0.
+          MESSAGE e054(c+) WITH todo_in-bwkey.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+
+  ENDIF.
+*} Read todo-input if chosen as selection
+
+  IF p_todoin IS INITIAL.
+*  Authority-Check
+    IF NOT r_werks IS INITIAL.
+      SELECT werks FROM t001w INTO TABLE lt_werks
+                   WHERE werks IN r_werks.
+
+      LOOP AT lt_werks INTO ls_werks.
+        CALL FUNCTION 'CKML_F_SET_PLANT'
+          EXPORTING
+            plant             = ls_werks-werks
+          EXCEPTIONS
+            plant_not_found   = 1
+            internal_error    = 2
+            aschema_not_found = 3
+            OTHERS            = 4.
+
+        IF sy-subrc EQ 0.
+          CALL FUNCTION 'CKML_F_GET_WWO'
+            IMPORTING
+              wwo = ls_wwo.
+
+          IF p_test IS INITIAL.
+            AUTHORITY-CHECK OBJECT 'K_ML_VA'
+            ID 'BWKEY' FIELD ls_wwo-bwkey
+            ID 'ACTVT' FIELD '02'.
+            IF sy-subrc <> 0.
+              MESSAGE e054(c+) WITH ls_wwo-bwkey.
+            ENDIF.
+
+          ELSE.
+            AUTHORITY-CHECK OBJECT 'K_ML_VA'
+           ID 'BWKEY' FIELD ls_wwo-bwkey
+           ID 'ACTVT' FIELD '03'.
+            IF sy-subrc <> 0.
+              MESSAGE e054(c+) WITH ls_wwo-bwkey.
+            ENDIF.
+
+          ENDIF.
+        ENDIF.
+
+      ENDLOOP.
+
+    ELSE.
+
+      SELECT werks FROM t001w INTO TABLE lt_werks.
+
+      LOOP AT lt_werks INTO ls_werks.
+        CALL FUNCTION 'CKML_F_SET_PLANT'
+          EXPORTING
+            plant             = ls_werks-werks
+          EXCEPTIONS
+            plant_not_found   = 1
+            internal_error    = 2
+            aschema_not_found = 3
+            OTHERS            = 4.
+
+        IF sy-subrc EQ 0.
+          CALL FUNCTION 'CKML_F_GET_WWO'
+            IMPORTING
+              wwo = ls_wwo.
+
+          IF p_test IS INITIAL.
+            AUTHORITY-CHECK OBJECT 'K_ML_VA'
+            ID 'BWKEY' FIELD ls_wwo-bwkey
+            ID 'ACTVT' FIELD '02'.
+            IF sy-subrc <> 0.
+              MESSAGE e054(c+) WITH ls_wwo-bwkey.
+            ENDIF.
+
+          ELSE.
+            AUTHORITY-CHECK OBJECT 'K_ML_VA'
+           ID 'BWKEY' FIELD ls_wwo-bwkey
+           ID 'ACTVT' FIELD '03'.
+            IF sy-subrc <> 0.
+              MESSAGE e054(c+) WITH ls_wwo-bwkey.
+            ENDIF.
+
+          ENDIF.
+
+        ENDIF.
+      ENDLOOP.
+
+    ENDIF.
+
+*   standard selection                                  "PUE11122000
+    WRITE: / 'Selection: ', r_werks, r_ebeln, r_ebelp.
+    HIDE ausgz.
+    " skip non-service based invoice verifications as EKBE-MANGE is ignored
+    " and only RSEG-WEREC is used to determine whether to clear GR/IR account (3276361-g / 3443002-a)
+    SELECT ebeln ebelp bukrs webre wepos weunb
+          INTO CORRESPONDING FIELDS OF TABLE t_ekpo_all
+          FROM ekpo
+            WHERE ebeln IN r_ebeln
+            AND   ebelp IN r_ebelp
+            AND   werks IN r_werks
+            AND NOT ( pstyp = '9' AND lebre = '' ). " 3276361-g / 3443002-a
+    IF sy-subrc <> 0.
+      REFRESH: t_ekpo_all.
+    ENDIF.
+  ELSE.
+*   Selection via input todo list.                          "PUE11122000
+    WRITE: / 'Selection by todo-list ', p_todoin.
+    HIDE ausgz.
+    IF ( todo_in[] IS NOT INITIAL ).
+      " skip non-service based invoice verifications as EKBE-MANGE is ignored
+      " and only RSEG-WEREC is used to determine whether to clear GR/IR account (3276361-g/3443002)
+      SELECT ebeln ebelp bukrs webre wepos weunb
+            INTO CORRESPONDING FIELDS OF TABLE t_ekpo_all
+            FROM ekpo
+            FOR ALL ENTRIES IN todo_in
+            WHERE ebelp = todo_in-ebelp
+            AND   ebeln = todo_in-ebeln                 "#EC CI_NOORDER
+            AND NOT ( pstyp = '9' AND lebre = '' ). " 3276361-g / 3443002-a
+    ENDIF.
+  ENDIF.
+
+  IF NOT p_test IS INITIAL.
+    WRITE: '(test run)'.
+    HIDE ausgz.
+  ENDIF.
+  ULINE. HIDE ausgz.
+  ULINE. HIDE ausgz.
+  FORMAT RESET.
+
+* Use system date for conversions!
+  h_sydatum = sy-datum.
+
+  DO.
+    REFRESH: t_ekpo.
+    LOOP AT t_ekpo_all FROM h_ekpo_tabix.               "#EC CI_NOORDER
+      APPEND t_ekpo_all TO t_ekpo.                      "#EC CI_NOORDER
+      h_ekpo_tabix = h_ekpo_tabix + 1.
+      IF sy-tabix = 50.
+*     Ein Paket ist fertig
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+    IF NOT t_ekpo[] IS INITIAL.
+      SELECT * FROM ekbe INTO CORRESPONDING FIELDS OF TABLE t_ekbe
+               FOR ALL ENTRIES IN t_ekpo
+               WHERE ebeln = t_ekpo-ebeln
+               AND   ebelp = t_ekpo-ebelp
+               AND ( vgabe = 1 OR
+                     vgabe = 2 OR
+                     vgabe = 3 OR
+                     vgabe = 7
+                   ).
+      SORT t_ekbe BY ebeln ebelp.  "cpudt DESCENDING cputm DESCENDING.
+      SELECT * FROM ekbz INTO CORRESPONDING FIELDS OF TABLE t_ekbz
+               FOR ALL ENTRIES IN t_ekpo
+               WHERE ebeln = t_ekpo-ebeln
+               AND   ebelp = t_ekpo-ebelp
+               AND ( vgabe = 1 OR
+                     vgabe = 2 OR
+                     vgabe = 3
+                   ).
+      SORT t_ekbz BY ebeln ebelp.  "cpudt DESCENDING cputm DESCENDING.
+    ELSE.
+      EXIT.
+    ENDIF.
+
+* todo: combine po_consistency in saprckmj (3443002-a)
+
+    LOOP AT t_ekpo.
+      CLEAR erring_ekpo.                                  "PUE11122000
+      CALL FUNCTION 'DEQUEUE_ALL'
+*          EXPORTING
+*               _SYNCHRON = ' '
+        EXCEPTIONS
+          OTHERS = 1.
+*     Sperren der EKPO
+      CALL FUNCTION 'ENQUEUE_EMEKKOE'
+        EXPORTING
+*         MODE_EKKO      = 'E'
+*         MODE_EKPO      = 'E'
+*         MANDT          = SY-MANDT
+          ebeln          = t_ekpo-ebeln
+          ebelp          = t_ekpo-ebelp
+*         X_EBELN        = ' '
+*         X_EBELP        = ' '
+*         _SCOPE         = '2'
+*         _WAIT          = ' '
+*         _COLLECT       = ' '
+        EXCEPTIONS
+          foreign_lock   = 1
+          system_failure = 2
+          OTHERS         = 3.
+      IF sy-subrc <> 0.
+        FORMAT COLOR 6.
+        WRITE: / 'Purchase order', t_ekpo-ebeln, '/', t_ekpo-ebelp,
+                 'is locked!'.
+        HIDE ausgz.
+        FORMAT RESET.
+        CONTINUE.
+      ENDIF.
+      REFRESH: t_ekbe_help, t_ebefu, t_ebefu_cr.
+      REFRESH: t_ekbz_help, t_ekbnk, t_ekbnk_cr.
+      CLEAR: h_old_lfbnr, h_old_lfpos, h_old_lfgja.
+      h_index_lfbnr = 1.
+*     Build table t_ekbe_help
+      READ TABLE t_ekbe WITH KEY ebeln = t_ekpo-ebeln
+                                 ebelp = t_ekpo-ebelp
+                                 BINARY SEARCH
+                                 TRANSPORTING NO FIELDS.
+      IF sy-subrc = 0.
+        LOOP AT t_ekbe FROM sy-tabix.
+          IF t_ekbe-ebeln <> t_ekpo-ebeln OR
+             t_ekbe-ebelp <> t_ekpo-ebelp.
+            EXIT.
+          ENDIF.
+          MOVE-CORRESPONDING t_ekbe TO t_ekbe_help.
+          IF t_ekpo-webre IS INITIAL.
+            CLEAR: t_ekbe_help-lfbnr, t_ekbe_help-lfpos,
+                   t_ekbe_help-lfgja.
+          ENDIF.
+          APPEND t_ekbe_help.
+        ENDLOOP.
+      ENDIF.
+
+      IF p_ekbz = 'X'.
+*     Build table t_ekbz_help
+        READ TABLE t_ekbz WITH KEY ebeln = t_ekpo-ebeln
+                                   ebelp = t_ekpo-ebelp
+                                   BINARY SEARCH
+                                   TRANSPORTING NO FIELDS.
+        IF sy-subrc = 0.
+          LOOP AT t_ekbz FROM sy-tabix.
+            IF t_ekbz-ebeln <> t_ekpo-ebeln OR
+               t_ekbz-ebelp <> t_ekpo-ebelp.
+              EXIT.
+            ENDIF.
+            MOVE-CORRESPONDING t_ekbz TO t_ekbz_help.
+            APPEND t_ekbz_help.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+**** Ignition! *********************************************************
+      IF NOT t_ekbe_help[] IS INITIAL.
+*       In the case of GR based IV, we have to pack by LFBNR!
+        IF NOT t_ekpo-webre IS INITIAL.
+          t_ekbe_lfbnr[] = t_ekbe_help[].
+          REFRESH: t_ekbe_help.
+          SORT t_ekbe_lfbnr BY ebeln ebelp lfbnr lfpos lfgja.
+          DO.
+            LOOP AT t_ekbe_lfbnr FROM h_index_lfbnr.
+              IF t_ekbe_lfbnr-lfbnr <> h_old_lfbnr OR
+                 t_ekbe_lfbnr-lfpos <> h_old_lfpos OR
+                 t_ekbe_lfbnr-lfgja <> h_old_lfgja.
+                h_old_lfbnr = t_ekbe_lfbnr-lfbnr.
+                h_old_lfpos = t_ekbe_lfbnr-lfpos.
+                h_old_lfgja = t_ekbe_lfbnr-lfgja.
+                h_index_lfbnr = sy-tabix.
+                EXIT.
+              ENDIF.
+              h_old_lfbnr = t_ekbe_lfbnr-lfbnr.
+              h_old_lfpos = t_ekbe_lfbnr-lfpos.
+              h_old_lfgja = t_ekbe_lfbnr-lfgja.
+              h_index_lfbnr = sy-tabix + 1.
+              h_current_lfbnr = t_ekbe_lfbnr-lfbnr.
+              h_current_lfpos = t_ekbe_lfbnr-lfpos.
+              h_current_lfgja = t_ekbe_lfbnr-lfgja.
+              MOVE-CORRESPONDING t_ekbe_lfbnr TO t_ekbe_help.
+              APPEND t_ekbe_help.
+            ENDLOOP.
+            IF sy-subrc <> 0.
+              EXIT.
+            ENDIF.
+            CHECK NOT t_ekbe_help[] IS INITIAL.
+*           Get EBEFU
+            PERFORM get_ebefu_webre TABLES t_ebefu
+                                    USING t_ekpo-ebeln
+                                          t_ekpo-ebelp
+                                          h_current_lfbnr
+                                          h_current_lfpos
+                                          h_current_lfgja
+                                    CHANGING s_error.
+            IF s_error IS INITIAL.
+*             Get EBEFU_CR
+              PERFORM get_ebefu_cr TABLES t_ebefu_cr
+                                          t_ekbe_help
+                                   USING t_ekpo-ebeln
+                                         t_ekpo-ebelp
+                                   CHANGING s_error.
+              IF s_error IS INITIAL.
+*               Check it!
+                PERFORM do_the_check USING h_current_lfbnr
+                                           h_current_lfpos
+                                           h_current_lfgja.
+              ENDIF.
+            ENDIF.
+            REFRESH: t_ekbe_help.
+          ENDDO.
+        ELSE.                          "WEBRE initial
+          PERFORM get_ebefu TABLES   t_ebefu
+                                     t_ekbe_dummy
+                            USING    t_ekpo-ebeln
+                                     t_ekpo-ebelp
+                            CHANGING s_error.
+          IF s_error EQ 'X'.
+            PERFORM write_todo_record.
+            "PUE11122000
+            FORMAT COLOR 6.
+            WRITE: / 'Problems with PO', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+            FORMAT RESET.
+            HIDE ausgz.
+          ENDIF.
+          IF s_error NE 'X'.
+            PERFORM get_ebefu_cr TABLES   t_ebefu_cr
+                                          t_ekbe_help
+                                 USING    t_ekpo-ebeln
+                                          t_ekpo-ebelp
+                                 CHANGING s_error.
+            IF s_error EQ 'X'.
+              PERFORM write_todo_record.
+              "PUE11122000
+              FORMAT COLOR 6.
+              WRITE: / 'Problems with PO 2', t_ekpo-ebeln, '/',
+                        t_ekpo-ebelp.
+              HIDE ausgz.
+              FORMAT RESET.
+              CONTINUE.
+            ENDIF.
+            CLEAR: h_current_lfbnr, h_current_lfpos, h_current_lfgja.
+*         Check it!
+            PERFORM do_the_check USING h_current_lfbnr
+                                       h_current_lfpos
+                                       h_current_lfgja.
+          ENDIF.
+        ENDIF.                         "WEBRE
+      ENDIF.                           "T_EKBE_HELP[] is initial
+*     Checking EKBZ-related data ***************************************
+      IF NOT t_ekbz_help[] IS INITIAL.
+        PERFORM get_ekbnk TABLES   t_ekbnk
+                          USING    t_ekpo-ebeln
+                                   t_ekpo-ebelp
+                          CHANGING s_error.
+        IF s_error EQ 'X'.
+          PERFORM write_todo_record.
+          FORMAT COLOR 6.
+          WRITE: / 'Problem with PO 3', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+          HIDE ausgz.
+          FORMAT RESET.
+          CONTINUE.
+        ENDIF.
+        PERFORM get_ekbnk_cr TABLES   t_ekbnk_cr
+                                      t_ekbz_help
+                             USING    t_ekpo-ebeln
+                                      t_ekpo-ebelp
+                             CHANGING s_error.
+        IF s_error EQ 'X'.
+          PERFORM write_todo_record.
+          FORMAT COLOR 6.
+          WRITE: / 'Problem with PO 4', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+          HIDE ausgz.
+          FORMAT RESET.
+          CONTINUE.
+        ENDIF.
+        PERFORM do_the_check_bnk.
+
+      ENDIF.                           "T_EKBZ_HELP[] is INITIAL
+
+      CALL FUNCTION 'DEQUEUE_EMEKKOE'
+        EXPORTING
+*         MODE_EKKO = 'E'
+*         MODE_EKPO = 'E'
+*         MANDT  = SY-MANDT
+          ebeln  = t_ekpo-ebeln
+          ebelp  = t_ekpo-ebelp
+*         X_EBELN   = ' '
+*         X_EBELP   = ' '
+*         _SCOPE = '3'
+*         _SYNCHRON = ' '
+*         _COLLECT  = ' '
+        EXCEPTIONS
+          OTHERS = 1.
+
+      IF erring_ekpo = 'X'.                                "PUE11122000
+*     Any error found for the current ekpo record
+        PERFORM write_todo_record.
+      ENDIF.
+
+    ENDLOOP.
+    DESCRIBE TABLE t_ekpo LINES h_ekpo_lines.
+    h_ekpo_count = h_ekpo_count + h_ekpo_lines.
+    IF p_test IS INITIAL.
+      PERFORM write_document.
+    ENDIF.
+    IF h_ekpo_lines < 50.
+      EXIT.
+    ENDIF.
+  ENDDO.
+  ULINE.
+  FORMAT COLOR 3.
+  WRITE: / 'Total EKPO =', h_ekpo_count.
+  HIDE ausgz.
+  FORMAT RESET.
+  CALL FUNCTION 'DEQUEUE_ALL'
+*    EXPORTING
+*         _SYNCHRON = ' '
+    EXCEPTIONS
+      OTHERS = 1.
+
+***********************************************************************
+*{ Post ToDo List                                          "PUE11122000
+***********************************************************************
+  IF NOT p_todout IS INITIAL.                                "PUE11122000
+*   if todo-list output requested, write todo_out to database.
+    CALL FUNCTION 'FCMLHELP_TODO_WRITE'
+      EXPORTING
+        i_replace    = 'X'
+        i_todo_ident = p_todout
+        it_todo_tbl  = todo_out[]
+*      EXCEPTIONS
+*       identifier_already_exist = 1
+      .
+  ENDIF.
+*{ Post ToDo List
+
+***********************************************************************
+*{ Print Change Documents list                             "PUE11122000
+***********************************************************************
+  IF p_test IS INITIAL.
+    IF NOT correct_belnr[] IS INITIAL.
+      SKIP.
+      WRITE: / TEXT-003.
+      LOOP AT correct_belnr.
+        FORMAT INTENSIFIED ON.
+        WRITE: / correct_belnr, ', '.
+        ausgz = 'x'.
+        FORMAT INTENSIFIED OFF.
+        HIDE: correct_belnr, ausgz.
+      ENDLOOP.
+      CLEAR ausgz.
+    ENDIF.
+  ENDIF.                               " end if p_test...
+
+***********************************************************************
+* AT USER-COMMAND                                                     *
+***********************************************************************
+AT USER-COMMAND.
+  CASE sy-ucomm.
+    WHEN 'EF02'.
+      CHECK ausgz NE space.
+      SET PF-STATUS 'CORRLIST_ALV' OF PROGRAM 'SAPLFCMLHELPCORRADMIN'.
+      CALL FUNCTION 'FCMLHELP_CORRECTION_SHOW'
+        EXPORTING
+          i_kjahr = sy-datlo(4)
+          i_belnr = correct_belnr
+*     EXCEPTIONS
+*         CORRECTION_NOT_FOUND       = 1
+*         CORRECTION_IS_EMPTY        = 2
+*         OTHERS  = 3
+        .
+      IF sy-subrc <> 0.
+*     MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*           WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+    WHEN 'BACK'.
+      LEAVE.
+    WHEN '&IC1'.
+      READ TABLE gd_alv_corritem_list
+           INDEX rs_selfield-tabindex
+           INTO  ld_mlrepit.
+      CHECK sy-subrc EQ 0.
+      CALL FUNCTION 'FCMLHELP_CORRECTION_ITEM_SHOW'
+        EXPORTING
+          if_mlrepit = ld_mlrepit
+        EXCEPTIONS
+          OTHERS     = 01.
+  ENDCASE.
+  CLEAR ausgz.
+
+
+
+************************************************************************
+************************************************************************
+
+*---------------------------------------------------------------------*
+*       FORM DISTRIB                                                  *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+*  -->  PT_EKBE                                                       *
+*  -->  P_DELTA_ML                                                    *
+*  -->  P_CURTP                                                       *
+*  -->  P_COUNTS_DISTRIB_SETS_ML                                      *
+*  -->  P_CORRECT_WEWRT                                               *
+*---------------------------------------------------------------------*
+FORM distrib TABLES pt_ekbe STRUCTURE ekbe
+             USING  p_delta_ml LIKE mlbecr-arewr
+                    p_curtp LIKE mlbecr-curtp
+                    p_correct_wewrt LIKE boole-boole
+             CHANGING ps_holz LIKE boole-boole
+                      p_counts_distrib_sets_ml TYPE i.
+*&---------------------------------------------------------------------*
+*&      Form  DISTRIB
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+
+  DATA: ft_ekbe_iv LIKE ekbe OCCURS 0 WITH HEADER LINE.
+  DATA: f_arewr_shkzg  LIKE mlbecr-shkzg,
+        f_arewr_help   LIKE mlbecr-arewr,
+        f_arewr_delta  LIKE mlbecr-arewr,
+        f_arewr_save   LIKE mlbecr-arewr,
+        lh_stunr_space LIKE mlwere-stunr,
+        lh_zaehk_space LIKE mlwere-zaehk.
+  DATA: toleranz LIKE mlbecr-arewr VALUE 0.
+
+*********************************************************************
+* Initializations
+*********************************************************************
+  CLEAR: p_counts_distrib_sets_ml, ps_holz.
+  IF p_delta_ml < 0.
+    f_arewr_shkzg = 'H'.
+  ELSE.
+    f_arewr_shkzg = 'S'.
+  ENDIF.
+  f_arewr_save = abs( p_delta_ml ).
+*********************************************************************
+*  Prepare internal table ft_ekbe_iv with IV sets (or GR sets if no
+*  invoices are available)
+*********************************************************************
+  IF p_correct_wewrt IS INITIAL.
+    LOOP AT pt_ekbe WHERE vgabe = '2'
+                    OR    vgabe = '3'.
+      APPEND pt_ekbe TO ft_ekbe_iv.
+    ENDLOOP.
+  ELSE.
+    LOOP AT pt_ekbe WHERE vgabe = '1'.
+      APPEND pt_ekbe TO ft_ekbe_iv.
+    ENDLOOP.
+  ENDIF.
+
+*********************************************************************
+*  Order with PO, position, date and time (oldest first)
+*********************************************************************
+  SORT ft_ekbe_iv BY cpudt cputm.
+
+*********************************************************************
+*  Loop over ft_ekbe_iv and distribute f_arewr_delta to arewr.
+*********************************************************************
+  LOOP AT ft_ekbe_iv.
+    SELECT * FROM  mlwere
+             WHERE  ebeln = ft_ekbe_iv-ebeln
+             AND    ebelp = ft_ekbe_iv-ebelp
+             AND    stunr = h_stunr_space
+             AND    zaehk = h_zaehk_space
+             AND    zekkn = ft_ekbe_iv-zekkn.
+      SELECT * FROM mlbecr
+               WHERE mlvnr = mlwere-mlvnr
+               AND   vgabe = ft_ekbe_iv-vgabe
+               AND   gjahr = ft_ekbe_iv-gjahr
+               AND   belnr = ft_ekbe_iv-belnr
+               AND   buzei = ft_ekbe_iv-buzei
+               AND   curtp = p_curtp.
+        EXIT.
+      ENDSELECT.
+      IF sy-subrc = 0.
+        EXIT.
+      ENDIF.
+    ENDSELECT.
+    IF sy-subrc <> 0.
+      EXIT.                            "Zur Sicherheit ganz raus.
+    ENDIF.
+    f_arewr_delta = 0.
+***************************************************************
+*     Calculate f_arewr_delta (the amount added to ft_ekbe_iv-arewr)
+*     SHKZG has to be accounted for in the calculation
+***************************************************************
+    IF ( f_arewr_save > 0 ).
+      p_counts_distrib_sets_ml = p_counts_distrib_sets_ml + 1.
+      IF p_correct_wewrt IS INITIAL.
+        IF  ( mlbecr-arewr < toleranz ) AND
+            ( f_arewr_shkzg <> ft_ekbe_iv-shkzg ).
+          " do nothing
+        ELSE.
+          IF ( f_arewr_shkzg = ft_ekbe_iv-shkzg ).
+            f_arewr_delta = f_arewr_save.     " add f_arewr_delta
+            f_arewr_save  = 0.
+          ELSE.
+            f_arewr_help = mlbecr-arewr - toleranz.
+            IF (  f_arewr_save  > f_arewr_help ).
+              f_arewr_delta = 0 - f_arewr_help.
+              f_arewr_save  = f_arewr_save - abs( f_arewr_delta ).
+            ELSE.
+              f_arewr_delta =  - f_arewr_save.
+              f_arewr_save  = 0.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ELSE.
+        IF  ( mlbecr-wrbtr < toleranz ) AND
+            ( f_arewr_shkzg <> ft_ekbe_iv-shkzg ).
+          " do nothing
+        ELSE.
+          IF ( f_arewr_shkzg = ft_ekbe_iv-shkzg ).
+            f_arewr_delta =  f_arewr_save.     " add f_arewr_delta
+            f_arewr_save  = 0.
+          ELSE.
+            f_arewr_help = mlbecr-wrbtr - toleranz.
+            IF (  f_arewr_save  > f_arewr_help ).
+              f_arewr_delta = 0 - f_arewr_help.
+              f_arewr_save  = f_arewr_save - abs( f_arewr_delta ).
+            ELSE.
+              f_arewr_delta = 0 - f_arewr_save.
+              f_arewr_save  = 0.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+*********************************************************************
+*     Update mlbecr with corrected arewr/wrbtr
+*********************************************************************
+    IF p_test IS INITIAL.
+      IF f_arewr_delta <> 0.
+        CLEAR: mlbecr_old, mlbecr_new.
+        MOVE-CORRESPONDING mlbecr TO mlbecr_old.
+        MOVE-CORRESPONDING mlbecr TO mlbecr_new.
+        IF p_correct_wewrt IS INITIAL.
+          UPDATE mlbecr SET arewr = arewr + f_arewr_delta
+                        WHERE mlvnr = mlwere-mlvnr
+                        AND   vgabe = ft_ekbe_iv-vgabe
+                        AND   gjahr = ft_ekbe_iv-gjahr
+                        AND   belnr = ft_ekbe_iv-belnr
+                        AND   buzei = ft_ekbe_iv-buzei
+                        AND   curtp = p_curtp.
+          mlbecr_new-arewr = mlbecr_new-arewr + f_arewr_delta.
+        ELSE.
+          UPDATE mlbecr SET wrbtr = wrbtr + f_arewr_delta
+                        WHERE mlvnr = mlwere-mlvnr
+                        AND   vgabe = ft_ekbe_iv-vgabe
+                        AND   gjahr = ft_ekbe_iv-gjahr
+                        AND   belnr = ft_ekbe_iv-belnr
+                        AND   buzei = ft_ekbe_iv-buzei
+                        AND   curtp = p_curtp.
+          mlbecr_new-wrbtr = mlbecr_new-wrbtr + f_arewr_delta.
+        ENDIF.
+        CALL FUNCTION 'FCMLHELP_CORRECTION_PROTOCOL'
+          EXPORTING
+            if_mlbecr_before = mlbecr_old
+            if_mlbecr_after  = mlbecr_new.
+
+      ENDIF.                           " f_arewr_delta
+    ENDIF.                             " p_test is initial
+**********************************************************************
+    IF f_arewr_save = 0.
+      EXIT.
+    ENDIF.
+
+  ENDLOOP.
+  IF f_arewr_save <> 0.
+    IF p_fbk1 IS INITIAL.
+      FORMAT COLOR 6.
+      WRITE: / 'Value cannot be distributed completely (not enough sets)'.
+      HIDE ausgz.
+      FORMAT RESET.
+    ENDIF.
+    ps_holz = 'X'.
+  ENDIF.
+
+ENDFORM.                               " DISTRIB
+*---------------------------------------------------------------------*
+*       FORM DISTRIB_BNK                                              *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+*  -->  PT_EKBE                                                       *
+*  -->  P_DELTA_ML                                                    *
+*  -->  P_CURTP                                                       *
+*  -->  P_COUNTS_DISTRIB_SETS_ML                                      *
+*  -->  P_CORRECT_WEWRT                                               *
+*---------------------------------------------------------------------*
+FORM distrib_bnk TABLES pt_ekbz    STRUCTURE ekbz
+                 USING  p_delta_ml LIKE mlbecr-arewr
+                        p_stunr    LIKE mlwere-stunr
+                        p_zaehk    LIKE mlwere-zaehk
+                        p_curtp    LIKE mlbecr-curtp
+                        p_correct_frwwr LIKE boole-boole
+                 CHANGING ps_holz  LIKE boole-boole
+                          p_counts_distrib_sets_ml TYPE i.
+
+  DATA: ft_ekbz_iv LIKE ekbz OCCURS 0 WITH HEADER LINE.
+  DATA: f_frawe_shkzg LIKE mlbecr-shkzg,
+        f_frawe_help  LIKE mlbecr-arewr,
+        f_frawe_delta LIKE mlbecr-arewr,
+        f_frawe_save  LIKE mlbecr-arewr.
+  DATA: toleranz LIKE mlbecr-arewr VALUE 0.
+
+*********************************************************************
+* Initializations
+*********************************************************************
+  CLEAR: p_counts_distrib_sets_ml, ps_holz.
+  REFRESH: ft_ekbz_iv. CLEAR: ft_ekbz_iv.
+  IF p_delta_ml < 0.
+    f_frawe_shkzg = 'H'.
+  ELSE.
+    f_frawe_shkzg = 'S'.
+  ENDIF.
+  f_frawe_save = abs( p_delta_ml ).
+*********************************************************************
+*  Prepare internal table ft_ekbe_iv with IV sets (or GR sets if no
+*  invoices are available)
+*********************************************************************
+  IF p_correct_frwwr IS INITIAL.
+    LOOP AT pt_ekbz WHERE stunr = p_stunr
+                    AND   zaehk = p_zaehk
+                    AND ( vgabe = '2'
+                    OR    vgabe = '3' ).
+      APPEND pt_ekbz TO ft_ekbz_iv.
+    ENDLOOP.
+  ELSE.
+    LOOP AT pt_ekbz WHERE stunr = p_stunr
+                    AND   zaehk = p_zaehk
+                    AND   vgabe = '1'.
+      APPEND pt_ekbz TO ft_ekbz_iv.
+    ENDLOOP.
+  ENDIF.
+
+*********************************************************************
+*  Order with PO, position, date and time (oldest first)
+*********************************************************************
+  SORT ft_ekbz_iv BY cpudt cputm.
+
+*********************************************************************
+*  Loop over ft_ekbe_iv and distribute f_arewr_delta to arewr.
+*********************************************************************
+  LOOP AT ft_ekbz_iv.
+    SELECT * FROM  mlwere
+             WHERE  ebeln  = ft_ekbz_iv-ebeln
+             AND    ebelp  = ft_ekbz_iv-ebelp
+             AND    stunr  = ft_ekbz_iv-stunr
+             AND    zaehk  = ft_ekbz_iv-zaehk.
+      SELECT * FROM mlbecr
+               WHERE mlvnr = mlwere-mlvnr
+               AND   vgabe = ft_ekbz_iv-vgabe
+               AND   gjahr = ft_ekbz_iv-gjahr
+               AND   belnr = ft_ekbz_iv-belnr
+               AND   buzei = ft_ekbz_iv-buzei
+               AND   curtp = p_curtp.
+        EXIT.
+      ENDSELECT.
+      IF sy-subrc = 0.
+        EXIT.
+      ENDIF.
+    ENDSELECT.
+    IF sy-subrc <> 0.
+      EXIT.
+    ENDIF.
+    f_frawe_delta = 0.
+***************************************************************
+*     Calculate f_frawe_delta (the amount added to ft_ekbz_iv-arewr)
+*     SHKZG has to be accounted for in the calculation
+***************************************************************
+    IF ( f_frawe_save > 0 ).
+      p_counts_distrib_sets_ml = p_counts_distrib_sets_ml + 1.
+      IF p_correct_frwwr IS INITIAL.
+        IF  ( mlbecr-arewr < toleranz ) AND
+            ( f_frawe_shkzg <> ft_ekbz_iv-shkzg ).
+          " do nothing
+        ELSE.
+          IF ( f_frawe_shkzg = ft_ekbz_iv-shkzg ).
+            f_frawe_delta = f_frawe_save.     " add f_frawe_delta
+            f_frawe_save  = 0.
+          ELSE.
+            f_frawe_help = mlbecr-arewr - toleranz.
+            IF (  f_frawe_save  > f_frawe_help ).
+              f_frawe_delta = 0 - f_frawe_help.
+              f_frawe_save  = f_frawe_save - abs( f_frawe_delta ).
+            ELSE.
+              f_frawe_delta = 0 - f_frawe_save.
+              f_frawe_save  = 0.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ELSE.
+        IF  ( mlbecr-wrbtr < toleranz ) AND
+            ( f_frawe_shkzg <> ft_ekbz_iv-shkzg ).
+          " do nothing
+        ELSE.
+          IF ( f_frawe_shkzg = ft_ekbz_iv-shkzg ).
+            f_frawe_delta =  f_frawe_save.     " add f_frawe_delta
+            f_frawe_save  = 0.
+          ELSE.
+            f_frawe_help = mlbecr-wrbtr - toleranz.
+            IF (  f_frawe_save  > f_frawe_help ).
+              f_frawe_delta = 0 - f_frawe_help.
+              f_frawe_save  = f_frawe_save - abs( f_frawe_delta ).
+            ELSE.
+              f_frawe_delta = 0 - f_frawe_save.
+              f_frawe_save  = 0.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+*********************************************************************
+*     Update mlbecr with corrected arewr/wrbtr
+*********************************************************************
+    IF p_test IS INITIAL.
+      IF f_frawe_delta <> 0.
+        CLEAR: mlbecr_old, mlbecr_new.
+        MOVE-CORRESPONDING mlbecr TO mlbecr_old.
+        MOVE-CORRESPONDING mlbecr TO mlbecr_new.
+        IF p_correct_frwwr IS INITIAL.
+          UPDATE mlbecr SET arewr = arewr + f_frawe_delta
+                        WHERE mlvnr = mlwere-mlvnr
+                        AND   vgabe = ft_ekbz_iv-vgabe
+                        AND   gjahr = ft_ekbz_iv-gjahr
+                        AND   belnr = ft_ekbz_iv-belnr
+                        AND   buzei = ft_ekbz_iv-buzei
+                        AND   curtp = p_curtp.
+          mlbecr_new-arewr = mlbecr_new-arewr + f_frawe_delta.
+        ELSE.
+          UPDATE mlbecr SET wrbtr = wrbtr + f_frawe_delta
+                        WHERE mlvnr = mlwere-mlvnr
+                        AND   vgabe = ft_ekbz_iv-vgabe
+                        AND   gjahr = ft_ekbz_iv-gjahr
+                        AND   belnr = ft_ekbz_iv-belnr
+                        AND   buzei = ft_ekbz_iv-buzei
+                        AND   curtp = p_curtp.
+          mlbecr_new-wrbtr = mlbecr_new-wrbtr + f_frawe_delta.
+        ENDIF.
+        CALL FUNCTION 'FCMLHELP_CORRECTION_PROTOCOL'
+          EXPORTING
+            if_mlbecr_before = mlbecr_old
+            if_mlbecr_after  = mlbecr_new.
+      ENDIF.                           " f_frawe_delta
+    ENDIF.                             " p_test is initial
+**********************************************************************
+    IF f_frawe_save = 0.
+      EXIT.
+    ENDIF.
+
+  ENDLOOP.
+  IF f_frawe_save <> 0.
+    IF p_fbk1 IS INITIAL.
+      FORMAT COLOR 6.
+      WRITE: / 'Value cannot be distributed completely (not enough sets)'.
+      HIDE ausgz.
+      FORMAT RESET.
+    ENDIF.
+    ps_holz = 'X'.
+  ENDIF.
+
+ENDFORM.                               " DISTRIB_BNK
+*---------------------------------------------------------------------*
+*       FORM DO_THE_CHECK                                             *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+FORM do_the_check USING p_lfbnr LIKE ekbe-lfbnr
+                        p_lfpos LIKE ekbe-lfpos
+                        p_lfgja LIKE ekbe-lfgja.
+*&---------------------------------------------------------------------*
+*&      Form  DO_THE_CHECK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+************************************************************************
+****  test for critical cases
+****  correct further currencies ***************************************
+  DATA: h_wemng                    LIKE ebefu-wemng,
+        h_were_menge               LIKE ebefu-wemng,
+        h_wewrt                    LIKE ebefu-wewrt,
+        h_were_wert                LIKE ebefu-wewrt,
+        h_remng                    LIKE ebefu-remng,
+        h_rewrt                    LIKE ebefu-rewrt,
+        h_arewr                    LIKE ebefu-arewr,
+        h_frwmg                    LIKE ekbnk-frwmg,
+        h_frwwr                    LIKE ekbnk-frwwr,
+        h_frrmg                    LIKE ekbnk-frrmg,
+        h_frrwr                    LIKE ekbnk-frrwr,
+        h_frawe                    LIKE ekbnk-frawe,
+        h_delta_ml                 LIKE ebefu-arewr,
+        h_delta_ml_1               LIKE ebefu-arewr,
+        h_delta_ml_2               LIKE ebefu-arewr,
+        h_wewrt_delta              LIKE ebefu_cr-wewrt,
+        h_arewr_delta              LIKE ebefu_cr-arewr,
+        h_rewrt_delta              LIKE ebefu_cr-rewrt,
+        h_wewrt_delta_1            LIKE ebefu_cr-wewrt,
+        h_arewr_delta_1            LIKE ebefu_cr-arewr,
+        h_rewrt_delta_1            LIKE ebefu_cr-rewrt,
+        h_wewrt_delta_2            LIKE ebefu_cr-wewrt,
+        h_arewr_delta_2            LIKE ebefu_cr-arewr,
+        h_rewrt_delta_2            LIKE ebefu_cr-rewrt,
+        h_waers_ml_1               LIKE ebefu-waers,
+        h_waers_ml_2               LIKE ebefu-waers,
+        h_count                    TYPE i,
+        s_invoice_found            LIKE boole-boole,
+        s_correct_wewrt            LIKE boole-boole,
+        s_correct_frwwr            LIKE boole-boole,
+        s_holz                     LIKE boole-boole,
+        s_error                    LIKE boole-boole,
+        h_counts_distrib_sets_ml   TYPE i,
+        h_counts_distrib_sets_ml_1 TYPE i,
+        h_counts_distrib_sets_ml_2 TYPE i.
+
+  CLEAR: h_count, s_correct_wewrt,
+         h_wemng, h_wewrt, h_rewrt, h_remng, h_arewr,
+         h_delta_ml, h_delta_ml_1, h_delta_ml_2,
+         h_wewrt_delta, h_arewr_delta, h_wewrt_delta,
+         h_wewrt_delta_1, h_arewr_delta_1, h_wewrt_delta_1,
+         h_wewrt_delta_2, h_arewr_delta_2, h_wewrt_delta_2.
+
+  READ TABLE t_ebefu WITH KEY ebeln = t_ekpo-ebeln
+                              ebelp = t_ekpo-ebelp
+                              lfbnr = p_lfbnr
+                              lfpos = p_lfpos
+                              lfbja = p_lfgja.
+  IF sy-subrc <> 0.
+    EXIT.
+  ENDIF.
+
+  SORT:
+*    ct_ekbe_cr,                                             " 2261450/3443002
+    t_ekbe_help BY ebeln ebelp lfgja lfbnr lfpos vgabe.
+
+  h_remng = t_ebefu-remng.
+  h_wemng = t_ebefu-wemng + t_ebefu-wesbb.                " 3590725-a / 3443002-a
+
+  IF ( t_ekpo-wepos IS INITIAL ) AND ( h_wemng <> 0 ).
+    WRITE: 'Inconsistent EKPO data: WEPOS = " ", WEMNG = ',
+            h_wemng, ': '.
+    HIDE ausgz.
+    WRITE: 'Purchase order', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+    HIDE ausgz.
+    erring_ekpo = 'X'.
+    EXIT.
+  ENDIF.
+
+  h_were_menge = h_wemng - h_remng.                         " 3590725-a / 3443002-a
+
+
+* Check the ML currencies (MLBECR)
+  LOOP AT t_ebefu_cr WHERE ebeln = t_ekpo-ebeln
+                     AND   ebelp = t_ekpo-ebelp
+                     AND   curtp <> '00'
+                     AND   curtp <> '10'.
+    h_count = h_count + 1.
+    h_rewrt = t_ebefu_cr-rewrt.
+    h_wewrt = t_ebefu_cr-wewrt.
+    IF ( t_ekpo-wepos IS INITIAL OR NOT t_ekpo-weunb IS INITIAL )
+       AND ( h_wewrt <> 0 ).
+      WRITE: 'Inconsistent EKPO data: WEPOS = "', t_ekpo-wepos,
+             '", WEUNB = "', t_ekpo-weunb, '", WEWRT = "', h_wewrt,
+             ': '.
+      HIDE ausgz.
+      WRITE:   'Purchase order', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+      HIDE ausgz.
+      erring_ekpo = 'X'.
+      EXIT.
+    ENDIF.
+
+    h_arewr = t_ebefu_cr-arewr.
+    h_were_wert = t_ebefu_cr-wewrt - t_ebefu_cr-arewr.
+*   Case 3 (no GR expected) *******************************************
+    IF ( t_ekpo-wepos IS INITIAL OR NOT t_ekpo-weunb IS INITIAL )
+       AND h_arewr <> 0.
+*     We correct AREWR!
+      erring_ekpo = 'X'.                                  "PUE11122000
+      h_delta_ml = 0 - h_arewr.
+      WRITE: / 'Case 3 (No GR expected or GR not valuated):'.
+      HIDE ausgz.
+      WRITE:   'Purchase order', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+      HIDE ausgz.
+      WRITE: / 'AREWR not zero:', h_delta_ml CURRENCY t_ebefu_cr-waers,
+               t_ebefu_cr-waers.
+      HIDE ausgz.
+      ULINE.
+      HIDE ausgz.
+      PERFORM clear_arewr TABLES t_ekbe_help
+                          USING  t_ebefu_cr-curtp.
+*   Case 1 (Quantity zero, values not) ********************************
+    ELSEIF h_were_menge = 0 AND h_were_wert <> 0.
+      erring_ekpo = 'X'.                                   "PUE11122000
+      IF h_remng = 0 AND h_rewrt = 0.
+*       Was there any invoice?
+        READ TABLE t_ekbe_help WITH KEY ebeln = t_ekpo-ebeln
+                                        ebelp = t_ekpo-ebelp
+                                        lfgja = p_lfgja
+                                        lfbnr = p_lfbnr
+                                        lfpos = p_lfpos
+                                        vgabe = '2'
+                                        BINARY SEARCH
+                                        TRANSPORTING NO FIELDS.
+        IF sy-subrc <> 0.
+*         No invoice! We have to correct WEWRT!
+          s_correct_wewrt = 'X'.
+          h_delta_ml = 0 - t_ebefu_cr-wewrt.
+        ENDIF.
+      ENDIF.
+      IF s_correct_wewrt IS INITIAL.
+*       We correct AREWR!
+        h_delta_ml = h_were_wert.
+      ENDIF.
+      IF h_delta_ml <> 0.
+*       Attention! If new arewr value is greater then value in EKBE
+*       and sign is different, do no update! Value has to be spread
+*       on several invoice entries (activate distribution switch)!
+        PERFORM distrib TABLES t_ekbe_help
+                        USING h_delta_ml
+                              t_ebefu_cr-curtp
+                              s_correct_wewrt
+                        CHANGING s_holz
+                                 h_counts_distrib_sets_ml.
+        IF NOT s_holz IS INITIAL.
+          IF p_fbk1 = 'X'.
+            " fallback1: distribute to VGABE=1 records instead (3443002-d)
+            s_correct_wewrt = 'X'.
+
+            FORMAT COLOR 5.
+            WRITE: / 'Using fallback strategy to distribute difference to GR.'.
+            HIDE ausgz.
+            FORMAT RESET.
+
+            PERFORM distrib TABLES t_ekbe_help
+                            USING h_delta_ml
+                                  t_ebefu_cr-curtp
+                                  s_correct_wewrt           " for vgabe=1
+                            CHANGING s_holz
+                                     h_counts_distrib_sets_ml.
+          ENDIF.
+        ENDIF.
+*       Remember values for output (max. of two ML currencies)
+        IF h_count = '1'.
+          h_counts_distrib_sets_ml_1 = h_counts_distrib_sets_ml.
+          h_delta_ml_1 = h_delta_ml.
+          h_waers_ml_1 = t_ebefu_cr-waers.
+        ELSE.
+          h_counts_distrib_sets_ml_2 = h_counts_distrib_sets_ml.
+          h_delta_ml_2 = h_delta_ml.
+          h_waers_ml_2 = t_ebefu_cr-waers.
+        ENDIF.
+      ENDIF.
+*   Case 2 (Different signs of qunatities and values) ******************
+    ELSEIF ( h_were_menge < 0 AND h_were_wert > 0 ) OR
+           ( h_were_menge > 0 AND h_were_wert < 0 ).
+      erring_ekpo = 'X'.                                    "PUE11122000
+      PERFORM sum_check USING    t_ebefu
+                                 t_ebefu_cr
+                        CHANGING h_wewrt_delta
+                                 h_arewr_delta
+                                 h_rewrt_delta.
+*     Remember values for output (max. of two ML currencies)
+      IF h_count = '1'.
+        h_wewrt_delta_1 = h_wewrt_delta.
+        h_arewr_delta_1 = h_arewr_delta.
+        h_rewrt_delta_1 = h_rewrt_delta.
+        h_waers_ml_1 = t_ebefu_cr-waers.
+      ELSE.
+        h_wewrt_delta_2 = h_wewrt_delta.
+        h_arewr_delta_2 = h_arewr_delta.
+        h_rewrt_delta_2 = h_rewrt_delta.
+        h_waers_ml_2 = t_ebefu_cr-waers.
+      ENDIF.
+*     Holzhammer?
+    ENDIF.
+  ENDLOOP.
+  CALL FUNCTION 'DB_COMMIT'.
+* List output for case 1
+  IF h_delta_ml_1 <> 0 OR h_delta_ml_2 <> 0.
+    IF s_correct_wewrt IS INITIAL.
+      WRITE: / 'C1 (AREWR)'.
+      HIDE ausgz.
+    ELSE.
+      WRITE: / 'C1 (WRBTR)'.
+      HIDE ausgz.
+    ENDIF.
+    WRITE:   'PO', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+    HIDE ausgz.
+    IF NOT t_ekpo-webre IS INITIAL.
+      WRITE: '/', p_lfbnr, '/', p_lfpos. "'/', p_lfgja.
+      HIDE ausgz.
+    ENDIF.
+    WRITE:  'Distr', (3) h_counts_distrib_sets_ml_1,
+                       '/',  (3) h_counts_distrib_sets_ml_2.
+    HIDE ausgz.
+    WRITE:    'AREWR_ML =',
+              h_delta_ml_1 CURRENCY h_waers_ml_1,
+              h_waers_ml_1.
+    HIDE ausgz.
+    IF h_count > 1.
+      WRITE:  h_delta_ml_2 CURRENCY h_waers_ml_2,
+              h_waers_ml_2.
+      HIDE ausgz.
+    ENDIF.
+    ULINE.
+    HIDE ausgz.
+  ENDIF.
+* List output for case 2
+  IF h_wewrt_delta_1 <> 0 OR h_arewr_delta_1 <> 0 OR
+     h_rewrt_delta_1 <> 0 OR
+     h_wewrt_delta_2 <> 0 OR h_arewr_delta_2 <> 0 OR
+     h_rewrt_delta_2 <> 0.
+    FORMAT COLOR 5.
+    WRITE: / 'CASE 2:SIGN ERROR WITH PO', t_ekpo-ebeln,
+              t_ekpo-ebelp.
+    HIDE ausgz.
+    IF NOT t_ekpo-webre IS INITIAL.
+      WRITE: ', WEBRE:', p_lfbnr, '/', p_lfpos, '/',
+             p_lfgja.
+      HIDE ausgz.
+    ENDIF.
+    WRITE: / 'WE-Delta =', h_wewrt_delta_1 CURRENCY h_waers_ml_1,
+             'AR-Delta =', h_arewr_delta_1 CURRENCY h_waers_ml_1,
+             'RE-Delta =', h_rewrt_delta_1 CURRENCY h_waers_ml_1,
+             h_waers_ml_1.
+    HIDE ausgz.
+    WRITE: / 'WE-Delta =', h_wewrt_delta_2 CURRENCY h_waers_ml_2,
+             'AR-Delta =', h_arewr_delta_2 CURRENCY h_waers_ml_2,
+             'RE-Delta =', h_rewrt_delta_2 CURRENCY h_waers_ml_2,
+             h_waers_ml_2.
+    HIDE ausgz.
+    ULINE.
+    HIDE ausgz.
+    FORMAT RESET.
+  ENDIF.
+
+ENDFORM.                               " DO_THE_CHECK
+*---------------------------------------------------------------------*
+*       FORM DO_THE_CHECK_BNK                                         *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+FORM do_the_check_bnk.
+
+****  test for critical cases
+****  correct further currencies ***************************************
+  DATA: h_were_menge               LIKE ebefu-wemng,
+        h_were_wert                LIKE ebefu-wewrt,
+        h_frwmg                    LIKE ekbnk-frwmg,
+        h_frwwr                    LIKE ekbnk-frwwr,
+        h_frrmg                    LIKE ekbnk-frrmg,
+        h_frrwr                    LIKE ekbnk-frrwr,
+        h_frawe                    LIKE ekbnk-frawe,
+        h_delta_ml                 LIKE ebefu-arewr,
+        h_delta_ml_1               LIKE ebefu-arewr,
+        h_delta_ml_2               LIKE ebefu-arewr,
+        h_frwwr_delta              LIKE ekbnk_cr-frwwr,
+        h_frawe_delta              LIKE ekbnk_cr-frawe,
+        h_frrwr_delta              LIKE ekbnk_cr-frrwr,
+        h_frwwr_delta_1            LIKE ekbnk_cr-frwwr,
+        h_frawe_delta_1            LIKE ekbnk_cr-frawe,
+        h_frrwr_delta_1            LIKE ekbnk_cr-frrwr,
+        h_frwwr_delta_2            LIKE ekbnk_cr-frwwr,
+        h_frawe_delta_2            LIKE ekbnk_cr-frawe,
+        h_frrwr_delta_2            LIKE ekbnk_cr-frrwr,
+        h_waers_ml_1               LIKE ebefu-waers,
+        h_waers_ml_2               LIKE ebefu-waers,
+        h_count                    TYPE i,
+        s_invoice_found            LIKE boole-boole,
+        s_correct_wewrt            LIKE boole-boole,
+        s_correct_frwwr            LIKE boole-boole,
+        s_holz                     LIKE boole-boole,
+        s_error                    LIKE boole-boole,
+        h_counts_distrib_sets_ml   TYPE i,
+        h_counts_distrib_sets_ml_1 TYPE i,
+        h_counts_distrib_sets_ml_2 TYPE i.
+
+  SORT:
+*    ct_ekbz_cr,                                             " 2261450/3443002
+    t_ekbz_help.
+
+  LOOP AT t_ekbnk WHERE ebeln = t_ekpo-ebeln
+                  AND   ebelp = t_ekpo-ebelp.
+
+    CLEAR: h_count, s_correct_frwwr,
+           h_frwmg, h_frwwr, h_frrwr, h_frrmg, h_frawe,
+           h_delta_ml, h_delta_ml_1, h_delta_ml_2.
+
+*   Check the ML currencies (MLBECR)
+    h_frrmg = t_ekbnk-frrmg.
+    h_frwmg = t_ekbnk-frwmg.
+    h_were_menge = t_ekbnk-frwmg - t_ekbnk-frrmg.
+    LOOP AT t_ekbnk_cr WHERE ebeln = t_ekpo-ebeln
+                       AND   ebelp = t_ekpo-ebelp
+                       AND   stunr = t_ekbnk-stunr
+                       AND   zaehk = t_ekbnk-zaehk
+                       AND   curtp <> '00'
+                       AND   curtp <> '10'.
+      h_count = h_count + 1.
+      h_frrwr = t_ekbnk_cr-frrwr.
+      h_frwwr = t_ekbnk_cr-frwwr.
+      h_frawe = t_ekbnk_cr-frawe.
+      h_were_wert = t_ekbnk_cr-frwwr - t_ekbnk_cr-frawe.
+*     Case 3 (no GR expected) ******************************************
+      IF ( t_ekpo-wepos IS INITIAL OR NOT t_ekpo-weunb IS INITIAL )
+         AND h_frawe <> 0.
+*       We correct FRAWE!
+        erring_ekpo = 'X'.
+        "PUE11122000
+        h_delta_ml = 0 - h_frawe.
+        WRITE: / 'Case 3 (No GR expected or GR not valuated):'.
+        HIDE ausgz.
+        WRITE:   'Purchase order', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+        HIDE ausgz.
+        WRITE: / 'FRAWE not zero:', h_delta_ml CURRENCY t_ekbnk_cr-waers.
+        HIDE ausgz.
+        ULINE.
+        HIDE ausgz.
+        PERFORM clear_frawe TABLES t_ekbz_help
+                            USING  t_ekbnk_cr-curtp.
+*     Case 1 (Quantity zero, values not) *******************************
+      ELSEIF h_were_menge = 0 AND h_were_wert <> 0.
+        erring_ekpo = 'X'.
+        IF h_frrmg = 0 AND h_frrwr = 0.                    "PUE11122000
+*         Was there any invoice?
+          READ TABLE t_ekbz_help WITH KEY ebeln = t_ekpo-ebeln
+                                          ebelp = t_ekpo-ebelp
+                                          stunr = t_ekbnk-stunr
+                                          zaehk = t_ekbnk-zaehk
+                                          vgabe = '2'
+                                          BINARY SEARCH
+                                          TRANSPORTING NO FIELDS.
+          IF sy-subrc <> 0.
+*           No invoice! We have to correct WEWRT!
+            s_correct_frwwr = 'X'.
+            h_delta_ml = t_ekbnk_cr-frwwr.                 " 2386306/3443002
+          ENDIF.
+        ENDIF.
+        IF s_correct_frwwr IS INITIAL.
+*         We correct FRAWE!
+          h_delta_ml = h_were_wert.
+        ENDIF.
+        IF h_delta_ml <> 0.
+*         Attention! If new frawe value is greater then value in EKBE
+*         and sign is different, do no update! Value has to be spread
+*         on several invoice entries (activate distribution switch)!
+          PERFORM distrib_bnk TABLES t_ekbz_help
+                              USING  h_delta_ml
+                                     t_ekbnk-stunr
+                                     t_ekbnk-zaehk
+                                     t_ekbnk_cr-curtp
+                                     s_correct_frwwr
+                              CHANGING s_holz
+                                       h_counts_distrib_sets_ml.
+          IF NOT s_holz IS INITIAL.
+            IF p_fbk1 = 'X'.
+              " fallback1: distribute to VGABE=1 records instead (3443002-d)
+              s_correct_frwwr = 'X'.
+
+              FORMAT COLOR 5.
+              WRITE: / 'Using fallback strategy to distribute difference to GR.'.
+              HIDE ausgz.
+              FORMAT RESET.
+
+              PERFORM distrib_bnk TABLES t_ekbz_help
+                                  USING  h_delta_ml
+                                         t_ekbnk-stunr
+                                         t_ekbnk-zaehk
+                                         t_ekbnk_cr-curtp
+                                         s_correct_frwwr              " for vgabe=1
+                                  CHANGING s_holz
+                                           h_counts_distrib_sets_ml.
+            ENDIF.
+          ENDIF.
+*         Remember values for output (max. of two ML currencies)
+          IF h_count = '1'.
+            h_counts_distrib_sets_ml_1 = h_counts_distrib_sets_ml.
+            h_delta_ml_1 = h_delta_ml.
+            h_waers_ml_1 = t_ekbnk_cr-waers.
+          ELSE.
+            h_counts_distrib_sets_ml_2 = h_counts_distrib_sets_ml.
+            h_delta_ml_2 = h_delta_ml.
+            h_waers_ml_2 = t_ekbnk_cr-waers.
+          ENDIF.
+        ENDIF.
+*     Case 2 (Different signs of qunatities and values) ****************
+      ELSEIF ( h_were_menge < 0 AND h_were_wert > 0 ) OR
+             ( h_were_menge > 0 AND h_were_wert < 0 ).
+        erring_ekpo = 'X'.
+        "PUE11122000
+        PERFORM sum_check_bnk USING t_ekbnk
+                                    t_ekbnk_cr
+                              CHANGING h_frwwr_delta
+                                       h_frawe_delta
+                                       h_frrwr_delta.
+*       Remember values for output (max. of two ML currencies)
+        IF h_count = '1'.
+          h_frwwr_delta_1 = h_frwwr_delta.
+          h_frawe_delta_1 = h_frawe_delta.
+          h_frrwr_delta_1 = h_frrwr_delta.
+          h_waers_ml_1 = t_ekbnk_cr-waers.
+        ELSE.
+          h_frwwr_delta_2 = h_frwwr_delta.
+          h_frawe_delta_2 = h_frawe_delta.
+          h_frrwr_delta_2 = h_frrwr_delta.
+          h_waers_ml_2 = t_ekbnk_cr-waers.
+        ENDIF.
+*       HOLZHAMMER_bnk?
+      ENDIF.
+    ENDLOOP.
+    CALL FUNCTION 'DB_COMMIT'.
+    IF h_delta_ml_1 <> 0 OR h_delta_ml_2 <> 0.
+      IF s_correct_frwwr IS INITIAL.
+        WRITE: / 'C1 (FRAWE)'.
+        HIDE ausgz.
+      ELSE.
+        WRITE: / 'C1 (WRBTR)'.
+        HIDE ausgz.
+      ENDIF.
+      WRITE:   'PO', t_ekpo-ebeln, '/', t_ekpo-ebelp.
+      HIDE ausgz.
+      WRITE:  'Distr', (3) h_counts_distrib_sets_ml_1,
+                 '/',  (3) h_counts_distrib_sets_ml_2.
+      HIDE ausgz.
+      WRITE: 'FRAWE_ML =',
+             h_delta_ml_1 CURRENCY h_waers_ml_1,
+             h_waers_ml_1.
+      HIDE ausgz.
+      IF h_count > 1.
+        WRITE:  h_delta_ml_2 CURRENCY h_waers_ml_2,
+                h_waers_ml_2.
+        HIDE ausgz.
+      ENDIF.
+      ULINE.
+      HIDE ausgz.
+    ENDIF.
+*   List output for case 2
+    IF h_frwwr_delta_1 <> 0 OR h_frawe_delta_1 <> 0 OR
+       h_frrwr_delta_1 <> 0 OR
+       h_frwwr_delta_2 <> 0 OR h_frawe_delta_2 <> 0 OR
+       h_frrwr_delta_2 <> 0.
+      FORMAT COLOR 5.
+      WRITE: / 'Case 2: SIGN ERROR WITH PO (BNK):', t_ekpo-ebeln,
+               t_ekpo-ebelp.
+      HIDE ausgz.
+      WRITE: / 'WE-Delta =', h_frwwr_delta_1 CURRENCY h_waers_ml_1,
+               'AR-Delta =', h_frawe_delta_1 CURRENCY h_waers_ml_1,
+               'RE-Delta =', h_frrwr_delta_1 CURRENCY h_waers_ml_1,
+               h_waers_ml_1.
+      HIDE ausgz.
+      WRITE: / 'WE-Delta =', h_frwwr_delta_2 CURRENCY h_waers_ml_2,
+               'AR-Delta =', h_frawe_delta_2 CURRENCY h_waers_ml_2,
+               'RE-Delta =', h_frrwr_delta_2 CURRENCY h_waers_ml_2,
+               h_waers_ml_2.
+      HIDE ausgz.
+      ULINE.
+      HIDE ausgz.
+      FORMAT RESET.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.                               " DO_THE_CHECK_BNK
+*---------------------------------------------------------------------*
+*       FORM GET_EBEFU_WEBRE                                          *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+*  -->  PT_EBEFU                                                      *
+*  -->  P_EBELN                                                       *
+*  -->  P_EBELP                                                       *
+*  -->  P_LFBNR                                                       *
+*  -->  P_LFPOS                                                       *
+*  -->  P_LFGJA                                                       *
+*  -->  PS_ERROR                                                      *
+*---------------------------------------------------------------------*
+FORM get_ebefu_webre TABLES pt_ebefu STRUCTURE ebefu
+                     USING p_ebeln LIKE ekpo-ebeln
+                           p_ebelp LIKE ekpo-ebelp
+                           p_lfbnr LIKE ekbe-lfbnr
+                           p_lfpos LIKE ekbe-lfpos
+                           p_lfgja LIKE ekbe-lfgja
+                     CHANGING ps_error LIKE boole-boole.
+*&---------------------------------------------------------------------*
+*&      Form  GET_EBEFU_WEBRE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+  DATA: lt_ekbe  LIKE ekbe  OCCURS 0 WITH HEADER LINE,
+        lt_ekbes LIKE ekbes OCCURS 0 WITH HEADER LINE,
+        lt_ekbez LIKE ekbez OCCURS 0 WITH HEADER LINE,
+        lt_ekbnk LIKE ekbnk OCCURS 0 WITH HEADER LINE,
+        lt_ekbz  LIKE ekbz  OCCURS 0 WITH HEADER LINE.
+
+
+  CLEAR: pt_ebefu, ps_error.
+
+  CALL FUNCTION 'ME_READ_HISTORY'
+    EXPORTING
+      ebeln  = p_ebeln
+      ebelp  = p_ebelp
+      webre  = 'X'
+    TABLES
+      xekbe  = lt_ekbe
+      xekbes = lt_ekbes
+      xekbez = lt_ekbez
+      xekbnk = lt_ekbnk
+      xekbz  = lt_ekbz
+    EXCEPTIONS
+      OTHERS = 1.
+  IF sy-subrc <> 0.
+    ps_error = 'X'.
+    EXIT.
+  ENDIF.
+  READ TABLE lt_ekbez WITH KEY ebelp = p_ebelp
+                               zekkn = space
+                               lfgja = p_lfgja
+                               lfbnr = p_lfbnr
+                               lfpos = p_lfpos.
+  IF sy-subrc <> 0.
+    FORMAT COLOR 6.
+    WRITE: / 'No records in EKBEZ:', p_ebeln, p_ebelp.
+    HIDE ausgz.
+    FORMAT RESET.
+    ps_error = 'X'.
+    EXIT.
+  ELSE.
+    CLEAR pt_ebefu.
+    MOVE-CORRESPONDING lt_ekbez TO pt_ebefu.
+    pt_ebefu-ebeln = p_ebeln.
+    pt_ebefu-ebelp = p_ebelp.
+    pt_ebefu-lfbnr = p_lfbnr.
+    pt_ebefu-lfpos = p_lfpos.
+    pt_ebefu-lfbja = p_lfgja.
+    APPEND pt_ebefu.
+  ENDIF.
+
+
+ENDFORM.                               " GET_EBEFU_WEBRE
+*&---------------------------------------------------------------------*
+*&      Form  GET_EBEFU
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+FORM get_ebefu TABLES   it_ebefu STRUCTURE t_ebefu
+                        it_ekbe STRUCTURE t_ekbe
+               USING    i_ebeln LIKE ekpo-ebeln
+                        i_ebelp LIKE ekpo-ebelp
+               CHANGING o_error TYPE c.
+
+  DATA: lt_ekbes LIKE ekbes OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbez LIKE ekbez OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbnk LIKE ekbnk OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbz  LIKE ekbz  OCCURS 0 WITH HEADER LINE.
+
+  REFRESH: it_ekbe, lt_ekbes, lt_ekbez, lt_ekbnk, lt_ekbz.
+  CLEAR:   it_ekbe, lt_ekbes, lt_ekbez, lt_ekbnk, lt_ekbz, o_error.
+  CALL FUNCTION 'ME_READ_HISTORY'
+    EXPORTING
+      ebeln  = i_ebeln
+      ebelp  = i_ebelp
+      webre  = ' '  "Nicht für WE-bez. RePrü!
+    TABLES
+      xekbe  = it_ekbe
+      xekbes = lt_ekbes
+      xekbez = lt_ekbez
+      xekbnk = lt_ekbnk
+      xekbz  = lt_ekbz
+    EXCEPTIONS
+      OTHERS = 1.
+  IF sy-subrc NE 0.
+    o_error = 'X'.
+    EXIT.
+  ENDIF.
+*
+*   Aufbauen t_ebefu aus t_ekbes, im wesentlichen Mengen
+*
+  READ TABLE lt_ekbes WITH KEY zekkn = space.   "Summe aller Kontierg.
+  IF sy-subrc NE 0 AND NOT it_ekbe[] IS INITIAL.
+    WRITE: / 'No records in lt_ekbes: ', i_ebeln, i_ebelp.
+    HIDE ausgz.
+    o_error = 'X'.
+    EXIT.
+  ELSE.
+    CLEAR it_ebefu.
+    MOVE-CORRESPONDING lt_ekbes TO it_ebefu.
+    it_ebefu-ebeln = i_ebeln.
+    it_ebefu-ebelp = i_ebelp.
+    APPEND it_ebefu.
+  ENDIF.
+
+ENDFORM.                               " GET_EBEFU
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_EKBNK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+FORM get_ekbnk TABLES   it_ekbnk STRUCTURE t_ekbnk
+               USING    i_ebeln LIKE ekpo-ebeln
+                        i_ebelp LIKE ekpo-ebelp
+               CHANGING o_error TYPE c.
+
+  DATA: lt_ekbe  LIKE ekbe  OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbes LIKE ekbes OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbez LIKE ekbez OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbnk LIKE ekbnk OCCURS 0 WITH HEADER LINE.
+  DATA: lt_ekbz  LIKE ekbz  OCCURS 0 WITH HEADER LINE.
+
+  REFRESH: lt_ekbe, lt_ekbes, lt_ekbez, lt_ekbnk, lt_ekbz.
+  CLEAR:   lt_ekbe, lt_ekbes, lt_ekbez, lt_ekbnk, lt_ekbz, o_error.
+
+  CALL FUNCTION 'ME_READ_HISTORY'
+    EXPORTING
+      ebeln  = i_ebeln
+      ebelp  = i_ebelp
+      webre  = ' '  "Nicht für WE-bez. RePrü!
+    TABLES
+      xekbe  = lt_ekbe
+      xekbes = lt_ekbes
+      xekbez = lt_ekbez
+      xekbnk = lt_ekbnk
+      xekbz  = lt_ekbz
+    EXCEPTIONS
+      OTHERS = 1.
+  IF sy-subrc NE 0.
+    o_error = 'X'.
+    EXIT.
+  ENDIF.
+*
+*   Aufbauen it_ekbnk aus lt_ekbnk, im wesentlichen Mengen
+*
+  LOOP AT lt_ekbnk.
+    CLEAR it_ekbnk.
+    MOVE-CORRESPONDING lt_ekbnk TO it_ekbnk.
+    APPEND it_ekbnk.
+  ENDLOOP.
+
+ENDFORM.                               " GET_EBEFU
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_EBEFU_CR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+FORM get_ebefu_cr TABLES   it_ebefu_cr STRUCTURE t_ebefu_cr
+                           it_ekbe STRUCTURE t_ekbe
+                  USING    i_ebeln LIKE ekpo-ebeln
+                           i_ebelp LIKE ekpo-ebelp
+                  CHANGING o_error TYPE c.
+*
+* Aufbauen t_ebefu_cr aus ML-Tabellen, nur weitere Währungen
+*
+  DATA: lt_ekbe_cr     LIKE cki_ekbecr OCCURS 0 WITH HEADER LINE,
+        lt_ekbz_cr     LIKE cki_ekbzcr OCCURS 0 WITH HEADER LINE,
+        ls_big_trouble LIKE boole-boole.
+  DATA: BEGIN OF lt_curtp OCCURS 0,
+          curtp LIKE cki_ekbecr-curtp,
+          waers LIKE cki_ekbecr-waers,
+        END OF lt_curtp.
+  DATA: old_curtp LIKE cki_ekbecr-curtp.
+  DATA: l_wewrt LIKE ebefu-wewrt.
+  DATA: l_rewrt LIKE ebefu-rewrt.
+  DATA: l_arewr LIKE ebefu-arewr.
+
+  CLEAR: o_error.
+  CALL FUNCTION 'CKMW_READ_PO_HISTORY'
+    EXPORTING
+      ebeln          = i_ebeln
+      ebelp          = i_ebelp
+      bnk            = ' '  "Keine Bezugsnebenkosten
+    TABLES
+      t_ekbe_cr      = lt_ekbe_cr
+      t_ekbz_cr      = lt_ekbz_cr
+    EXCEPTIONS
+      data_not_found = 1
+      OTHERS         = 3.
+  IF sy-subrc NE 0.
+    FORMAT COLOR 5.
+    WRITE: / 'Error reading ml tables: ', i_ebeln, i_ebelp.
+    HIDE ausgz.
+    FORMAT RESET.
+    o_error = 'X'.
+    EXIT.
+  ENDIF.
+  REFRESH: it_ebefu_cr.
+* Parallelwährungen bestimmen
+  REFRESH lt_curtp.
+  SORT lt_ekbe_cr BY curtp.
+  CLEAR: old_curtp.
+  LOOP AT lt_ekbe_cr.
+    IF lt_ekbe_cr-curtp NE '00' AND
+       lt_ekbe_cr-curtp NE '10'.
+      IF lt_ekbe_cr-curtp NE old_curtp.
+        old_curtp = lt_ekbe_cr-curtp.
+        lt_curtp-curtp = lt_ekbe_cr-curtp.
+        lt_curtp-waers = lt_ekbe_cr-waers.
+        APPEND lt_curtp.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+* Wert pro Währung aufsummieren
+  LOOP AT lt_curtp.
+    CLEAR: l_wewrt, l_rewrt, l_arewr.
+    LOOP AT it_ekbe WHERE ebeln = i_ebeln
+                      AND ebelp = i_ebelp.
+      CHECK it_ekbe-vgabe = '1' OR
+            it_ekbe-vgabe = '2' OR
+            it_ekbe-vgabe = '3'.
+      READ TABLE lt_ekbe_cr
+       WITH KEY ebeln = it_ekbe-ebeln
+                ebelp = it_ekbe-ebelp
+                vgabe = it_ekbe-vgabe
+                zekkn = it_ekbe-zekkn
+                gjahr = it_ekbe-gjahr
+                belnr = it_ekbe-belnr
+                buzei = it_ekbe-buzei
+                curtp = lt_curtp-curtp.
+      IF sy-subrc <> 0 AND
+         NOT ( it_ekbe-dmbtr = 0 AND it_ekbe-wrbtr = 0 ).
+        FORMAT COLOR 5.
+        WRITE: / 'BIG TROUBLE WITH EBEFU_CR:', i_ebeln, i_ebelp.
+        HIDE ausgz.
+        FORMAT RESET.
+        ls_big_trouble = 'X'.
+        EXIT.
+      ENDIF.
+      CHECK sy-subrc = 0.
+      IF it_ekbe-vgabe EQ '1'.
+        IF it_ekbe-shkzg EQ 'S'.
+          ADD lt_ekbe_cr-wrbtr TO l_wewrt.
+        ELSE.
+          SUBTRACT lt_ekbe_cr-wrbtr FROM l_wewrt.
+        ENDIF.
+      ELSEIF it_ekbe-vgabe EQ '2' OR
+             it_ekbe-vgabe EQ '3'.
+        IF it_ekbe-shkzg EQ 'S'.
+          ADD lt_ekbe_cr-arewr TO l_arewr.
+          ADD lt_ekbe_cr-wrbtr TO l_rewrt.
+        ELSE.
+          SUBTRACT lt_ekbe_cr-arewr FROM l_arewr.
+          SUBTRACT lt_ekbe_cr-wrbtr FROM l_rewrt.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    IF NOT ls_big_trouble IS INITIAL.
+      REFRESH: it_ebefu_cr.
+      EXIT.
+    ENDIF.
+    CLEAR it_ebefu_cr.
+    MOVE-CORRESPONDING it_ekbe TO it_ebefu_cr.
+    it_ebefu_cr-curtp = lt_curtp-curtp.
+    it_ebefu_cr-waers = lt_curtp-waers.
+    it_ebefu_cr-wewrt = l_wewrt.
+    it_ebefu_cr-rewrt = l_rewrt.
+    it_ebefu_cr-arewr = l_arewr.
+    APPEND it_ebefu_cr.
+  ENDLOOP.
+
+ENDFORM.                               " GET_EBEFU_CR
+*&---------------------------------------------------------------------*
+*&      Form  GET_EKBNK_CR
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+FORM get_ekbnk_cr TABLES   it_ekbnk_cr STRUCTURE t_ekbnk_cr
+                           it_ekbz STRUCTURE ekbz
+                  USING    i_ebeln LIKE ekpo-ebeln
+                           i_ebelp LIKE ekpo-ebelp
+                  CHANGING o_error TYPE c.
+*
+*   Aufbauen t_ekbnk_cr aus ML-Tabellen, nur weitere Währungen
+*
+  DATA: lt_ekbe_cr     LIKE cki_ekbecr OCCURS 0 WITH HEADER LINE,
+        lt_ekbz_cr     LIKE cki_ekbzcr OCCURS 0 WITH HEADER LINE,
+        ls_big_trouble LIKE boole-boole.
+
+  CLEAR: o_error.
+  CALL FUNCTION 'CKMW_READ_PO_HISTORY'
+    EXPORTING
+      ebeln          = i_ebeln
+      ebelp          = i_ebelp
+      bnk            = 'X'  "Bezugsnebenkosten
+    TABLES
+      t_ekbe_cr      = lt_ekbe_cr
+      t_ekbz_cr      = lt_ekbz_cr
+    EXCEPTIONS
+      data_not_found = 1
+      OTHERS         = 3.
+  IF sy-subrc NE 0.
+    FORMAT COLOR 5.
+    WRITE: / 'Error reading ml tables: ', i_ebeln, i_ebelp.
+    HIDE ausgz.
+    FORMAT RESET.
+    o_error = 'X'.
+    EXIT.
+  ENDIF.
+
+  REFRESH: it_ekbnk_cr.
+* Parallelwährungen bestimmen
+  DATA: BEGIN OF lt_curtp OCCURS 0,
+          curtp LIKE cki_ekbecr-curtp,
+          waers LIKE cki_ekbecr-waers,
+        END OF lt_curtp.
+  REFRESH lt_curtp.
+  SORT lt_ekbz_cr BY curtp.
+  DATA: old_curtp LIKE cki_ekbecr-curtp.
+  CLEAR: old_curtp.
+  LOOP AT lt_ekbz_cr.
+    IF lt_ekbz_cr-curtp NE '00' AND
+       lt_ekbz_cr-curtp NE '10'.
+      IF lt_ekbz_cr-curtp NE old_curtp.
+        old_curtp = lt_ekbz_cr-curtp.
+        lt_curtp-curtp = lt_ekbz_cr-curtp.
+        lt_curtp-waers = lt_ekbz_cr-waers.
+        APPEND lt_curtp.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+* Wert pro Währung aufsummieren
+  DATA: l_frwwr LIKE ekbnk-frwwr.      "WE-Wert Fracht
+  DATA: l_frrwr LIKE ekbnk-frrwr.      "RE-Wert Fracht
+  DATA: l_frawe LIKE ekbnk-frawe.      "RE-Ausgleichswert Fracht
+  DATA: l_stunr_old LIKE ekbnk-stunr.
+  DATA: l_zaehk_old LIKE ekbnk-zaehk.
+  DATA: l_first_loop.
+  CLEAR: l_stunr_old, l_zaehk_old, l_first_loop.
+  SORT it_ekbz BY ebeln ebelp stunr zaehk.
+  LOOP AT lt_curtp.
+    CLEAR: l_frwwr, l_frrwr, l_frawe.
+    l_first_loop = 'X'.
+    LOOP AT it_ekbz WHERE ebeln = i_ebeln
+                      AND ebelp = i_ebelp.
+      CHECK it_ekbz-vgabe = '1' OR
+            it_ekbz-vgabe = '2' OR
+            it_ekbz-vgabe = '3'.
+      CHECK it_ekbz-bewtp = 'F' OR     "BNK WE Verrechnung
+            it_ekbz-bewtp = 'G' OR     "BNK RE Verrechnung
+            it_ekbz-bewtp = 'I' OR     "BNK KP Verrechnung
+            it_ekbz-bewtp = 'K' OR     "KtoP Kontenpflege
+            it_ekbz-bewtp = 'M' OR     "BzRe
+            it_ekbz-bewtp = 'P'.       "NB-B
+      IF l_first_loop = 'X'.
+*       Initialization first loop.
+        CLEAR: l_first_loop.
+        l_stunr_old = it_ekbz-stunr.
+        l_zaehk_old = it_ekbz-zaehk.
+        CLEAR: it_ekbnk_cr.
+        MOVE-CORRESPONDING it_ekbz TO it_ekbnk_cr.
+        it_ekbnk_cr-curtp = lt_curtp-curtp.
+        it_ekbnk_cr-waers = lt_curtp-waers.
+      ELSE.
+*       Control Break (Gruppenwechsel) at new Price Condition
+        IF it_ekbz-stunr <> l_stunr_old OR
+           it_ekbz-zaehk <> l_zaehk_old.
+*         Create Record
+          it_ekbnk_cr-frwwr = l_frwwr.
+          it_ekbnk_cr-frrwr = l_frrwr.
+          it_ekbnk_cr-frawe = l_frawe.
+          APPEND it_ekbnk_cr.
+*         Initialize for next Price Condition
+          CLEAR: l_frwwr, l_frrwr, l_frawe.
+          l_stunr_old = it_ekbz-stunr.
+          l_zaehk_old = it_ekbz-zaehk.
+          CLEAR: it_ekbnk_cr.
+          MOVE-CORRESPONDING it_ekbz TO it_ekbnk_cr.
+          it_ekbnk_cr-curtp = lt_curtp-curtp.
+          it_ekbnk_cr-waers = lt_curtp-waers.
+        ENDIF.
+      ENDIF.
+      READ TABLE lt_ekbz_cr
+       WITH KEY ebeln = it_ekbz-ebeln
+                ebelp = it_ekbz-ebelp
+                vgabe = it_ekbz-vgabe
+                stunr = it_ekbz-stunr
+                zaehk = it_ekbz-zaehk
+                gjahr = it_ekbz-gjahr
+                belnr = it_ekbz-belnr
+                buzei = it_ekbz-buzei
+                curtp = lt_curtp-curtp.
+      IF sy-subrc <> 0 AND
+         NOT ( it_ekbz-dmbtr = 0 AND it_ekbz-wrbtr = 0 ).
+        FORMAT COLOR 5.
+        WRITE: / 'BIG TROUBLE WITH EKBNK_CR:', i_ebeln, i_ebelp.
+        HIDE ausgz.
+        FORMAT RESET.
+        ls_big_trouble = 'X'.
+        EXIT.
+      ENDIF.
+*     Soll/Haben-KZ in EKBZ genau umgekehrt wie in EKBE!!
+*     ABER nur bei Wareneingängen (VGABE = 1)!!!
+      IF it_ekbz-vgabe EQ '1'.
+        IF it_ekbz-shkzg EQ 'H'.
+          ADD lt_ekbz_cr-wrbtr TO l_frwwr.
+        ELSE.
+          SUBTRACT lt_ekbz_cr-wrbtr FROM l_frwwr.
+        ENDIF.
+      ELSEIF it_ekbz-vgabe EQ '2' OR
+             it_ekbz-vgabe EQ '3'.
+        IF it_ekbz-shkzg EQ 'S'.
+          ADD lt_ekbz_cr-arewr TO l_frawe.
+          ADD lt_ekbz_cr-wrbtr TO l_frrwr.
+        ELSE.
+          SUBTRACT lt_ekbz_cr-arewr FROM l_frawe.
+          SUBTRACT lt_ekbz_cr-wrbtr FROM l_frrwr.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    IF NOT ls_big_trouble IS INITIAL.
+      REFRESH: it_ekbnk_cr.
+      EXIT.
+    ENDIF.
+*   Append last Record
+    it_ekbnk_cr-frwwr = l_frwwr.
+    it_ekbnk_cr-frrwr = l_frrwr.
+    it_ekbnk_cr-frawe = l_frawe.
+    APPEND it_ekbnk_cr.
+  ENDLOOP.
+
+ENDFORM.                               " GET_EBEFU_CR
+*---------------------------------------------------------------------*
+*       FORM CLEAR_AREWR                                              *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+*  -->  PT_EKBE_HELP                                                  *
+*  -->  P_CURTP                                                       *
+*---------------------------------------------------------------------*
+FORM clear_arewr TABLES   pt_ekbe_help STRUCTURE t_ekbe_help
+                 USING    p_curtp LIKE mlbecr-curtp.
+
+  DATA: lh_arewr_ml LIKE ebefu-arewr.
+
+  LOOP AT pt_ekbe_help.
+    SELECT * FROM  mlwere
+             WHERE  ebeln = pt_ekbe_help-ebeln
+             AND    ebelp = pt_ekbe_help-ebelp
+             AND    stunr = h_stunr_space
+             AND    zaehk = h_zaehk_space
+             AND    zekkn = pt_ekbe_help-zekkn.
+      SELECT * FROM mlbecr
+               WHERE mlvnr = mlwere-mlvnr
+               AND   vgabe = pt_ekbe_help-vgabe
+               AND   gjahr = pt_ekbe_help-gjahr
+               AND   belnr = pt_ekbe_help-belnr
+               AND   buzei = pt_ekbe_help-buzei
+               AND   curtp = p_curtp.
+        EXIT.
+      ENDSELECT.
+      IF sy-subrc = 0.
+        EXIT.
+      ENDIF.
+    ENDSELECT.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+    IF p_test IS INITIAL.
+      CLEAR: lh_arewr_ml.
+      CLEAR: mlbecr_old, mlbecr_new.
+      MOVE-CORRESPONDING mlbecr TO mlbecr_old.
+      MOVE-CORRESPONDING mlbecr TO mlbecr_new.
+      UPDATE mlbecr SET arewr = lh_arewr_ml
+                    WHERE mlvnr = mlwere-mlvnr
+                    AND   vgabe = pt_ekbe_help-vgabe
+                    AND   gjahr = pt_ekbe_help-gjahr
+                    AND   belnr = pt_ekbe_help-belnr
+                    AND   buzei = pt_ekbe_help-buzei
+                    AND   curtp = p_curtp.
+      mlbecr_new-arewr = lh_arewr_ml.
+      CALL FUNCTION 'FCMLHELP_CORRECTION_PROTOCOL'
+        EXPORTING
+          if_mlbecr_before = mlbecr_old
+          if_mlbecr_after  = mlbecr_new.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.                               " CLEAR_AREWR
+*---------------------------------------------------------------------*
+*       FORM CLEAR_FRAWE                                              *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+*  -->  PT_EKBE_HELP                                                  *
+*  -->  P_CURTP                                                       *
+*---------------------------------------------------------------------*
+FORM clear_frawe TABLES   pt_ekbz_help STRUCTURE ekbz
+                 USING    p_curtp LIKE mlbecr-curtp.
+
+  DATA: lh_frawe_ml LIKE ekbnk-frawe.
+
+  LOOP AT pt_ekbz_help.
+    SELECT * FROM  mlwere
+             WHERE  ebeln  = pt_ekbz_help-ebeln
+             AND    ebelp  = pt_ekbz_help-ebelp
+             AND    stunr  = pt_ekbz_help-stunr
+             AND    zaehk  = pt_ekbz_help-zaehk.
+      SELECT * FROM mlbecr
+               WHERE mlvnr = mlwere-mlvnr
+               AND   vgabe = pt_ekbz_help-vgabe
+               AND   gjahr = pt_ekbz_help-gjahr
+               AND   belnr = pt_ekbz_help-belnr
+               AND   buzei = pt_ekbz_help-buzei
+               AND   curtp = p_curtp.
+        EXIT.
+      ENDSELECT.
+      IF sy-subrc = 0.
+        EXIT.
+      ENDIF.
+    ENDSELECT.
+    IF sy-subrc <> 0.
+      CONTINUE.
+    ENDIF.
+    IF p_test IS INITIAL.
+      CLEAR: lh_frawe_ml.
+      CLEAR: mlbecr_old, mlbecr_new.
+      MOVE-CORRESPONDING mlbecr TO mlbecr_old.
+      MOVE-CORRESPONDING mlbecr TO mlbecr_new.
+      UPDATE mlbecr SET arewr = lh_frawe_ml
+                    WHERE mlvnr = mlwere-mlvnr
+                    AND   vgabe = pt_ekbz_help-vgabe
+                    AND   gjahr = pt_ekbz_help-gjahr
+                    AND   belnr = pt_ekbz_help-belnr
+                    AND   buzei = pt_ekbz_help-buzei
+                    AND   curtp = p_curtp.
+      mlbecr_new-arewr = lh_frawe_ml.
+      CALL FUNCTION 'FCMLHELP_CORRECTION_PROTOCOL'
+        EXPORTING
+          if_mlbecr_before = mlbecr_old
+          if_mlbecr_after  = mlbecr_new.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.                               " CLEAR_FRAWE
+*---------------------------------------------------------------------*
+*       FORM SUM_CHECK                                                *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+*  -->  PF_EBEFU                                                      *
+*  -->  PF_EBEFU_CR                                                   *
+*  -->  C_WEWRT_DELTA                                                 *
+*  -->  C_AREWR_DELTA                                                 *
+*  -->  C_REWRT_DELTA                                                 *
+*---------------------------------------------------------------------*
+FORM sum_check USING  pf_ebefu LIKE ebefu
+                      pf_ebefu_cr LIKE ebefu_cr
+               CHANGING c_wewrt_delta LIKE ebefu_cr-wewrt
+                        c_arewr_delta LIKE ebefu_cr-arewr
+                        c_rewrt_delta LIKE ebefu_cr-rewrt.
+*&---------------------------------------------------------------------*
+*&      Form  SUM_CHECK
+*&---------------------------------------------------------------------*
+  DATA: l_wewrt_conv LIKE ebefu_cr-wewrt,
+        l_arewr_conv LIKE ebefu_cr-arewr,
+        l_rewrt_conv LIKE ebefu_cr-rewrt.
+
+  CLEAR: c_wewrt_delta, c_arewr_delta, c_rewrt_delta.
+  CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+    EXPORTING
+      date             = h_sydatum
+      foreign_currency = pf_ebefu_cr-waers
+      local_amount     = pf_ebefu-wewrt
+      local_currency   = pf_ebefu-hwaer
+*     RATE             = 0
+*     TYPE_OF_RATE     = 'M'
+*     READ_TCURR       = 'X'
+    IMPORTING
+*     EXCHANGE_RATE    =
+      foreign_amount   = l_wewrt_conv
+*     FOREIGN_FACTOR   =
+*     LOCAL_FACTOR     =
+*     EXCHANGE_RATEX   =
+*     DERIVED_RATE_TYPE =
+*     FIXED_RATE       =
+    EXCEPTIONS
+      no_rate_found    = 1
+      overflow         = 2
+      no_factors_found = 3
+      no_spread_found  = 4
+      derived_2_times  = 5
+      OTHERS           = 6.
+  CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+    EXPORTING
+      date             = h_sydatum
+      foreign_currency = pf_ebefu_cr-waers
+      local_amount     = pf_ebefu-arewr
+      local_currency   = pf_ebefu-hwaer
+*     RATE             = 0
+*     TYPE_OF_RATE     = 'M'
+*     READ_TCURR       = 'X'
+    IMPORTING
+*     EXCHANGE_RATE    =
+      foreign_amount   = l_arewr_conv
+*     FOREIGN_FACTOR   =
+*     LOCAL_FACTOR     =
+*     EXCHANGE_RATEX   =
+*     DERIVED_RATE_TYPE =
+*     FIXED_RATE       =
+    EXCEPTIONS
+      no_rate_found    = 1
+      overflow         = 2
+      no_factors_found = 3
+      no_spread_found  = 4
+      derived_2_times  = 5
+      OTHERS           = 6.
+  CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+    EXPORTING
+      date             = h_sydatum
+      foreign_currency = pf_ebefu_cr-waers
+      local_amount     = pf_ebefu-rewrt
+      local_currency   = pf_ebefu-hwaer
+*     RATE             = 0
+*     TYPE_OF_RATE     = 'M'
+*     READ_TCURR       = 'X'
+    IMPORTING
+*     EXCHANGE_RATE    =
+      foreign_amount   = l_rewrt_conv
+*     FOREIGN_FACTOR   =
+*     LOCAL_FACTOR     =
+*     EXCHANGE_RATEX   =
+*     DERIVED_RATE_TYPE =
+*     FIXED_RATE       =
+    EXCEPTIONS
+      no_rate_found    = 1
+      overflow         = 2
+      no_factors_found = 3
+      no_spread_found  = 4
+      derived_2_times  = 5
+      OTHERS           = 6.
+
+  c_wewrt_delta = l_wewrt_conv - pf_ebefu_cr-wewrt.
+  c_arewr_delta = l_arewr_conv - pf_ebefu_cr-arewr.
+  c_rewrt_delta = l_rewrt_conv - pf_ebefu_cr-rewrt.
+
+ENDFORM.                               " SUM_CHECK
+*&---------------------------------------------------------------------*
+*&      Form  SUM_CHECK_BNK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+FORM sum_check_bnk USING  pf_ekbnk LIKE ekbnk
+                          pf_ekbnk_cr LIKE ekbnk_cr
+                   CHANGING c_frwwr_delta LIKE ekbnk_cr-frwwr
+                            c_frawe_delta LIKE ekbnk_cr-frawe
+                            c_frrwr_delta LIKE ekbnk_cr-frrwr.
+
+  DATA: l_frwwr_conv LIKE ekbnk_cr-frwwr,
+        l_frawe_conv LIKE ekbnk_cr-frawe,
+        l_frrwr_conv LIKE ekbnk_cr-frrwr.
+
+  CLEAR: c_frwwr_delta, c_frawe_delta, c_frrwr_delta.
+  CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+    EXPORTING
+      date             = h_sydatum
+      foreign_currency = pf_ekbnk_cr-waers
+      local_amount     = pf_ekbnk-frrwr
+      local_currency   = pf_ekbnk-hwaer
+*     RATE             = 0
+*     TYPE_OF_RATE     = 'M'
+*     READ_TCURR       = 'X'
+    IMPORTING
+*     EXCHANGE_RATE    =
+      foreign_amount   = l_frwwr_conv
+*     FOREIGN_FACTOR   =
+*     LOCAL_FACTOR     =
+*     EXCHANGE_RATEX   =
+*     DERIVED_RATE_TYPE =
+*     FIXED_RATE       =
+    EXCEPTIONS
+      no_rate_found    = 1
+      overflow         = 2
+      no_factors_found = 3
+      no_spread_found  = 4
+      derived_2_times  = 5
+      OTHERS           = 6.
+  CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+    EXPORTING
+      date             = h_sydatum
+      foreign_currency = pf_ekbnk_cr-waers
+      local_amount     = pf_ekbnk-frawe
+      local_currency   = pf_ekbnk-hwaer
+*     RATE             = 0
+*     TYPE_OF_RATE     = 'M'
+*     READ_TCURR       = 'X'
+    IMPORTING
+*     EXCHANGE_RATE    =
+      foreign_amount   = l_frawe_conv
+*     FOREIGN_FACTOR   =
+*     LOCAL_FACTOR     =
+*     EXCHANGE_RATEX   =
+*     DERIVED_RATE_TYPE =
+*     FIXED_RATE       =
+    EXCEPTIONS
+      no_rate_found    = 1
+      overflow         = 2
+      no_factors_found = 3
+      no_spread_found  = 4
+      derived_2_times  = 5
+      OTHERS           = 6.
+  CALL FUNCTION 'CONVERT_TO_FOREIGN_CURRENCY'
+    EXPORTING
+      date             = h_sydatum
+      foreign_currency = pf_ekbnk_cr-waers
+      local_amount     = pf_ekbnk-frrwr
+      local_currency   = pf_ekbnk-hwaer
+*     RATE             = 0
+*     TYPE_OF_RATE     = 'M'
+*     READ_TCURR       = 'X'
+    IMPORTING
+*     EXCHANGE_RATE    =
+      foreign_amount   = l_frrwr_conv
+*     FOREIGN_FACTOR   =
+*     LOCAL_FACTOR     =
+*     EXCHANGE_RATEX   =
+*     DERIVED_RATE_TYPE =
+*     FIXED_RATE       =
+    EXCEPTIONS
+      no_rate_found    = 1
+      overflow         = 2
+      no_factors_found = 3
+      no_spread_found  = 4
+      derived_2_times  = 5
+      OTHERS           = 6.
+
+  c_frwwr_delta = l_frwwr_conv - pf_ekbnk_cr-frwwr.
+  c_frawe_delta = l_frawe_conv - pf_ekbnk_cr-frawe.
+  c_frrwr_delta = l_frrwr_conv - pf_ekbnk_cr-frrwr.
+
+ENDFORM.                               " SUM_CHECK_BNK
+
+*---------------------------------------------------------------------*
+*       FORM WRITE_TODO_RECORD                                        *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+FORM write_todo_record.                "PUE11122000
+  IF NOT p_todout IS INITIAL.
+* if todo-list output requested,
+    CLEAR todo_out.
+    MOVE-CORRESPONDING t_ekpo TO todo_out.
+    todo_out-obtyp = 'PO'.
+    APPEND todo_out.
+  ENDIF.
+ENDFORM.                    "write_todo_record
+
+*---------------------------------------------------------------------*
+*       FORM write_document                                           *
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+FORM write_document.
+* when changes are being posted to the DB, post the changed records doc
+  CALL FUNCTION 'FCMLHELP_CORRECTION_POST'
+    EXPORTING
+      i_update_task = ' '
+    IMPORTING
+      e_belnr       = correct_belnr.
+  IF NOT correct_belnr IS INITIAL.
+    APPEND correct_belnr.
+  ENDIF.
+ENDFORM.                    "write_document
+
+*---------------------------------------------------------------------*
+*       FORM POPUP_DIALOG                                   "PUE281200*
+*---------------------------------------------------------------------*
+*       ........                                                      *
+*---------------------------------------------------------------------*
+FORM popup_dialog USING    default TYPE c
+                           text1   TYPE c
+                           text2   TYPE c
+                           title   TYPE c
+                  CHANGING answer  TYPE c.
+  IF sy-batch IS INITIAL.
+    CALL FUNCTION 'POPUP_TO_CONFIRM_STEP'
+      EXPORTING
+        defaultoption = default
+        textline1     = text1
+        textline2     = text2
+        titel         = title
+      IMPORTING
+        answer        = answer.
+  ELSE.
+    answer = default.
+    WRITE: / 'Popup:', title, text1, text2, 'Answer = ', answer.
+  ENDIF.
+ENDFORM.                    "popup_dialog

@@ -1,0 +1,554 @@
+************************************************************************
+*     INCLUDE RM07AUTH                                                 *
+*     Authentication check for MM-IM update reports                    *
+*     Last change: 14.05.2001                                          *
+*----------------------------------------------------------------------*
+*     KILCG ERWTL UEWJW GQJOY NVLEY YTAIZ UWEZX UXZOW BXTZR BYAHT      *
+*     ZZTRI AXYEP UGZOI QMLXE EXSPV RPHRO PWDZQ RBUFZ YQLEM BGHBZ      *
+*     BXESM FKVUE PRPAS BEEIE PWMLW RWVNE OIOTJ SBJUW ACZQG NEJUW      *
+*     HXTYK NLXUL YICZS GHCEC HJTYM GXYIY NBESI EXPSL UEWRI OKHIN      *
+*     ZSWFX VHUBF AMECI DNPRP ZXSPJ NVAOC PRRZJ GALMZ KYWFW JAPCS      *
+*     PWLMP HFPNE LKPCB SHYDP AETWW CELAD LWPPW PAUET LVIMV HVLXL      *
+*     WTWTI QVYYA ASRCE CAFXD LGZYH RWPTT VRIAE TXMOF YBDPZ RGEFT      *
+*     CIITR UHUOF YEMWI EXJOR UMETS AHMTS LPTQI BYEWT SPTLQ KYYEO      *
+*     LVTNO KYYIP KQLYB FBNNP KBUFI EZLNI RVPXT KWLVP SSAXI AMTMT      *
+*     TBDLT UJEWL SPOZV SQNEC TEYJB                                    *
+************************************************************************
+*---------------------------------------------------------------*
+* changes                          October 2020 SN     "23102020
+* - new form for authorization check                   "23102020
+* - see note 2982350                                   "23102020
+*---------------------------------------------------------------*
+* changes                              May 2018 EH     "23052018
+* - introduced new mode '3' for S/4 - see note 2647048 "23052018
+*---------------------------------------------------------------*
+* changes                        September 2007 MS     "11092007
+* - version 0019 for note 32236                        "11092007
+* - changed key for update mode - see note 1069539     "11092007
+*---------------------------------------------------------------*
+* changes                        May /July 2006 MM     "17052006
+* - version 0018 for note 32236                        "17052006
+* - system ACR contains the orignal source             "17052006
+*---------------------------------------------------------------*
+
+
+
+* Types
+TYPES:
+* Line of a table with a long number
+  BEGIN OF longnum_line,
+    d TYPE i,
+  END OF longnum_line,
+* A long number, consisting of a table with integers
+  longnum TYPE longnum_line OCCURS 0.
+
+TYPES tty_code TYPE STANDARD TABLE OF string WITH EMPTY KEY. "2982350
+
+* Macro to append a line to a table
+DEFINE numinp.
+  &1-d = &2.
+  APPEND &1.
+END-OF-DEFINITION.
+
+************************************************************************
+* External interface.
+* Execute authority check for a given key identifier.
+************************************************************************
+FORM authentify USING mode.
+  DATA: BEGIN OF a_field OCCURS 0.
+      INCLUDE STRUCTURE sval.
+  DATA: END OF a_field.
+  DATA:
+    key(80)  TYPE c,
+    char(1)  TYPE c,
+    len      TYPE i,
+    err(1)   TYPE c,
+    error(1) TYPE c,
+    pos      TYPE i,
+    BEGIN OF filedata OCCURS 0,
+      line(72),
+    END OF filedata,
+    debug(1) TYPE c VALUE ' '.
+
+  DATA: l_updir   TYPE string,
+        l_workdir TYPE string.
+
+  TYPES: BEGIN OF ty_sk,
+          key1(40) TYPE c,
+          key3(40) TYPE c,
+          mfa(65)  TYPE c,                                   "2982350
+         END OF ty_sk.
+
+  DATA: wa_key    TYPE ty_sk,
+        key_c(40) TYPE c VALUE '                                        '.
+* To override the check without knowing the key, set DEBUG to X
+* in the debugger.
+* Note: A user who can do field replacements in the debugger can
+* do anything in the system, so he is not the person this check
+* can stop anyway.
+  CHECK debug IS INITIAL.
+  CLEAR key.
+* First attempt to get the key: User parameter.
+  IF mode = 1 or mode = 3.
+    GET PARAMETER ID 'K29' FIELD key.
+    wa_key = key.
+    IF mode = 1.
+      key = wa_key-key1.
+    ELSE.
+      key = wa_key-key3.
+    ENDIF.
+  ENDIF.
+* Remove unusable characters (just in case K29 is filled with
+* something else than the key).
+  len = strlen( key ).
+  IF len <> 0.
+    CLEAR error.
+    DO len TIMES.
+      pos = sy-index - 1.
+      char = key+pos(1).
+      IF char CN '0123456789'.
+        error = 'X'.
+        EXIT.
+      ENDIF.
+    ENDDO.
+*   Something found --> check for validity.
+    IF error IS INITIAL.
+      PERFORM check_password USING key mode CHANGING err.
+      IF err IS INITIAL.
+        EXIT.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+* Nothing useful in K29 --> upload from file.
+* This is the option for employees at SAP.
+  IF mode = 1 or mode = 3.
+*   As of basis release 610 (application 470), WS_UPLOAD
+*   must not be used due to UNICODE.
+
+    CALL FUNCTION 'FUNCTION_EXISTS'
+      EXPORTING
+        funcname           = 'GUI_UPLOAD'
+      EXCEPTIONS
+        function_not_exist = 1
+        OTHERS             = 2.
+    IF sy-subrc = 0.
+      CALL FUNCTION 'GUI_UPLOAD'
+        EXPORTING
+          filename = 'C:\SAPPCADM\UPDKEY.TXT'
+          filetype = 'ASC'
+        TABLES
+          data_tab = filedata
+        EXCEPTIONS
+          OTHERS   = 1.
+      IF sy-subrc <> 0.
+*       alternative option for non windows platforms
+        CL_GUI_FRONTEND_SERVICES=>get_upload_download_path(
+          changing
+            upload_path   = l_updir
+            download_path = l_workdir ).
+        l_workdir = l_workdir && 'UPDKEY.TXT'.
+        CALL FUNCTION 'GUI_UPLOAD'
+          EXPORTING
+            filename = l_workdir
+            filetype = 'ASC'
+          TABLES
+            data_tab = filedata
+          EXCEPTIONS
+            OTHERS   = 1.
+      ENDIF.
+      IF sy-subrc = 0.
+        CLEAR filedata.
+        READ TABLE filedata INDEX mode.
+        key = filedata-line.
+*     We already know this routine.
+        len = strlen( key ).
+        IF len <> 0.
+          CLEAR error.
+          DO len TIMES.
+            pos = sy-index - 1.
+            char = key+pos(1).
+            IF char CN '0123456789'.
+              error = 'X'.
+              EXIT.
+            ENDIF.
+          ENDDO.
+          IF error IS INITIAL.
+            PERFORM check_password USING key mode CHANGING err.
+            IF err IS INITIAL.
+              IF mode = 1.
+                wa_key-key1 = key.
+                IF wa_key-key3 IS INITIAL.
+                  wa_key-key3 = key_c.
+                ENDIF.
+              ELSE.
+                wa_key-key3 = key.
+                IF wa_key-key1 IS INITIAL.
+                  wa_key-key1 = key_c.
+                ENDIF.
+              ENDIF.
+              key = wa_key.
+              SET PARAMETER ID 'K29' FIELD key.
+              EXIT.
+            ENDIF.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF. "function exists
+
+  ENDIF.
+* Still nothing --> send dialog box to enter data manually
+  REFRESH a_field.
+  CLEAR a_field.
+  a_field-tabname   = 'MBINCON_VERI_EXCHK'.
+  a_field-fieldname = 'N32'.
+  a_field-fieldtext = 'Passcode'.                           "#EC *
+  APPEND a_field.
+  CALL FUNCTION 'POPUP_GET_VALUES'
+    EXPORTING
+      popup_title = 'Update only by SAP! V.30'              "#EC *
+    TABLES
+      fields      = a_field.
+  PERFORM check_password USING a_field-value mode CHANGING err.
+  IF NOT err IS INITIAL.
+    MESSAGE e398(00) WITH 'Access denied'                   "#EC *
+                          space
+                          space
+                          space.
+  ENDIF.
+  IF mode = 1 or mode = 3.
+    IF mode = 1.
+      wa_key-key1 = a_field-value.
+      IF wa_key-key3 IS INITIAL.
+        wa_key-key3 = key_c.
+      ENDIF.
+    ELSE.
+      wa_key-key3 = a_field-value.
+      IF wa_key-key1 IS INITIAL.
+        wa_key-key1 = key_c.
+      ENDIF.
+    ENDIF.
+    key = wa_key.
+    SET PARAMETER ID 'K29' FIELD key.
+  ENDIF.
+ENDFORM.
+
+************************************************************************
+* Internal routine to check a key.
+************************************************************************
+FORM check_password USING    key
+                             mode
+                    CHANGING err.
+  DATA:
+    n            TYPE longnum WITH HEADER LINE,
+    k            TYPE longnum WITH HEADER LINE,
+    p            TYPE longnum WITH HEADER LINE,
+    u            TYPE longnum WITH HEADER LINE,
+    longkey(200) TYPE c,
+    cutkey(40)   TYPE c,
+    len          TYPE i.
+* Shift key to the first significant position
+  cutkey = key.
+  DO 40 TIMES.
+    IF cutkey(1) <> '0'.
+      EXIT.
+    ENDIF.
+    SHIFT cutkey BY 1 PLACES.
+  ENDDO.
+* No key --> error
+  IF cutkey IS INITIAL.
+    MESSAGE e398(00) WITH 'Specify key'                     "#EC *
+                          space
+                          space
+                          space.
+  ENDIF.
+* Generate long key sequence from the entered short key.
+* each group of 5 letters forms a new subpart of the long
+* key, the process is cycling.
+  CLEAR longkey.
+  DO.
+    CONCATENATE cutkey longkey INTO longkey.
+    len = strlen( longkey ).
+    IF len >= 125.
+      EXIT.
+    ENDIF.
+  ENDDO.
+  REFRESH k.
+  DO 25 TIMES.
+    k-d = longkey(5).
+    IF k-d > 65535. SUBTRACT 65536 FROM k-d. ENDIF.
+    SHIFT longkey BY 5 PLACES.
+    APPEND k.
+  ENDDO.
+* Modulus into n.
+  REFRESH n.
+  numinp n 21249. numinp n 22225. numinp n 31877. numinp n 65060.
+  numinp n 40417. numinp n 24461. numinp n 39501. numinp n  8339.
+  numinp n  9560. numinp n  7209. numinp n 38407. numinp n 64775.
+  numinp n 17018. numinp n 51130. numinp n  4717. numinp n 58183.
+  numinp n 33683. numinp n 27851. numinp n 17354. numinp n 19168.
+  numinp n 16732. numinp n 30270. numinp n 23737. numinp n 59423.
+  numinp n 36199. numinp n     9.
+* Expected result of the operation into p.
+  REFRESH p.
+  CASE mode.
+* defining new keys for reports of note 32236
+* please see note 2647048 for details
+    WHEN 1.
+      numinp p 62197. numinp p 7656.  numinp p 37557. numinp p 9013.
+      numinp p 20301. numinp p 52719. numinp p 62774. numinp p 24898.
+      numinp p 56438. numinp p 5352.  numinp p 745.   numinp p 53357.
+      numinp p 30512. numinp p 1540.  numinp p 257.   numinp p 64290.
+      numinp p 59380. numinp p 63824. numinp p 12798. numinp p 6094.
+      numinp p 17432. numinp p 29712. numinp p 38383. numinp p 5655.
+      numinp p 11213. numinp p 8.
+    WHEN 2.
+      numinp p 35224. numinp p 24343. numinp p 46962. numinp p 15720.
+      numinp p 49550. numinp p 53079. numinp p 49120. numinp p 39091.
+      numinp p 26518. numinp p 46513. numinp p 37372. numinp p 38339.
+      numinp p 15610. numinp p 14411. numinp p 1522.  numinp p 65243.
+      numinp p 638.   numinp p 97.    numinp p 51100. numinp p 64979.
+      numinp p 43492. numinp p 65535. numinp p 60415. numinp p 55223.
+      numinp p 32324. numinp p 7.
+    WHEN 3.
+      numinp p 33877. numinp p 41643. numinp p 43197. numinp p 61970.
+      numinp p 24633. numinp p 54226. numinp p 6528.  numinp p 40010.
+      numinp p 18731. numinp p 29522. numinp p 26334. numinp p 3336.
+      numinp p 31.    numinp p 9892.  numinp p 54671. numinp p 39747.
+      numinp p 29755. numinp p 28341. numinp p 41665. numinp p 20242.
+      numinp p 19768. numinp p 9059.  numinp p 38822. numinp p 30488.
+      numinp p 15789. numinp p 6.
+  ENDCASE.
+* The main part: Calculate K**2 MOD N.
+  PERFORM multiply TABLES k k n u.
+* Compare with the expected result.
+  CLEAR err.
+  LOOP AT p.
+    CLEAR u.
+    READ TABLE u INDEX sy-tabix.
+    IF u-d <> p-d.
+      err = 'X'.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.
+
+************************************************************************
+* Add two long numbers
+************************************************************************
+FORM add TABLES a TYPE longnum
+                b TYPE longnum
+                c TYPE longnum.
+  DATA:
+    la    TYPE i,
+    lb    TYPE i,
+    carry TYPE i,
+    sum   TYPE i.
+  REFRESH c.
+  DESCRIBE TABLE a LINES la.
+  DESCRIBE TABLE b LINES lb.
+  IF lb > la.
+    la = lb.
+  ENDIF.
+  CLEAR carry.
+  DO la TIMES.
+    CLEAR a.
+    CLEAR b.
+    READ TABLE a INDEX sy-index.
+    READ TABLE b INDEX sy-index.
+    sum   = a-d + b-d + carry.
+    c-d   = sum MOD 65536.
+    carry = sum DIV 65536.
+    APPEND c.
+  ENDDO.
+  IF NOT carry IS INITIAL.
+    c-d = carry.
+    APPEND c.
+  ENDIF.
+ENDFORM.
+************************************************************************
+* Subtract two long numbers
+************************************************************************
+FORM subtract TABLES a TYPE longnum
+                     b TYPE longnum
+                     c TYPE longnum.
+  DATA:
+    la     TYPE i,
+    lb     TYPE i,
+    carry  TYPE i,
+    result TYPE i.
+  CLEAR carry.
+  REFRESH c.
+  DESCRIBE TABLE a LINES la.
+  DESCRIBE TABLE b LINES lb.
+  IF lb > la.
+    la = lb.
+  ENDIF.
+  DO la TIMES.
+    CLEAR a.
+    CLEAR b.
+    READ TABLE a INDEX sy-index.
+    READ TABLE b INDEX sy-index.
+    result = a-d - b-d - carry.
+    IF result < 0.
+      ADD 65536 TO result.
+      carry = 1.
+    ELSE.
+      carry = 0.
+    ENDIF.
+    c-d = result.
+    APPEND c.
+  ENDDO.
+  IF carry = 1.
+    c[] = a[].
+  ENDIF.
+ENDFORM.
+************************************************************************
+* Shift a long number by a factor of 2 (this is a division)
+************************************************************************
+FORM shift TABLES a TYPE longnum.
+  DATA:
+    l         TYPE i,
+    carry     TYPE i,
+    lastcarry TYPE i.
+  DESCRIBE TABLE a LINES l.
+  CLEAR carry.
+  CLEAR lastcarry.
+  DO l TIMES.
+    READ TABLE a INDEX l.
+    carry = a-d MOD 2.
+    a-d   = a-d DIV 2.
+    IF lastcarry = 1.
+      ADD 32768 TO a-d.
+    ENDIF.
+    lastcarry = carry.
+    MODIFY a INDEX l.
+    SUBTRACT 1 FROM l.
+  ENDDO.
+ENDFORM.
+************************************************************************
+* Multiplication A*B MOD N = C
+************************************************************************
+FORM multiply TABLES a TYPE longnum
+                     b TYPE longnum
+                     n TYPE longnum
+                     c TYPE longnum.
+  DATA:
+    result TYPE longnum WITH HEADER LINE,
+    temp   TYPE longnum WITH HEADER LINE,
+    a_save TYPE longnum WITH HEADER LINE,
+    b_save TYPE longnum WITH HEADER LINE,
+    l      TYPE i,
+    bit    TYPE i.
+  a_save[] = a[].
+  b_save[] = b[].
+  REFRESH result.
+  DESCRIBE TABLE b_save LINES l.
+  MULTIPLY l BY 16.
+  DO l TIMES.
+    READ TABLE b_save INDEX 1.
+    bit = b_save-d MOD 2.
+    IF bit = 1.
+      PERFORM add      TABLES a_save result temp.
+      PERFORM subtract TABLES temp n result.
+    ENDIF.
+    PERFORM add      TABLES a_save a_save temp.
+    PERFORM subtract TABLES temp n a_save.
+    PERFORM shift    TABLES b_save.
+  ENDDO.
+  c[] = result[].
+ENDFORM.
+************************************************************************
+* Execute authorization check through DCT Access Key             3195278
+************************************************************************
+FORM authentify_dct USING iv_caller_id  TYPE DCT_ACCESSKEY_CALLER_ID
+                          iv_access_key TYPE DCT_ACCESSKEY
+                 CHANGING cv_success    TYPE abap_bool.
+
+  DATA: lv_akey TYPE  dct_accesskey,
+        lv_timestamp TYPE timestamp,
+        lx_valid   TYPE xfeld,
+        lx_expired TYPE xfeld.
+
+   cv_success = abap_false.
+
+*  set/get access key to/from buffer
+    lv_timestamp =  sy-datum && '120000'.
+    IF iv_access_key IS INITIAL.
+      DATA: wa_imp       TYPE MMINKON_ACKEY.
+      IMPORT mmincakey = lv_akey
+        FROM SHARED BUFFER MMINKON_ACKEY(im)
+        TO  wa_imp
+        ID 'MMINC'.
+      IF wa_imp-userid <> sy-uname OR lv_timestamp <> wa_imp-timestamp.
+        CLEAR lv_akey.
+      ENDIF.
+    ELSE.
+      DATA(wa_exp) = VALUE MMINKON_ACKEY(
+         timestamp = lv_timestamp
+         userid    = sy-uname ).
+      lv_akey = iv_access_key.
+      EXPORT mmincakey = iv_access_key TO SHARED BUFFER MMINKON_ACKEY(im) FROM wa_exp ID 'MMINC'.
+    ENDIF.
+
+    IF lv_akey IS INITIAL.
+      MESSAGE e895(m7) WITH 'Enter access key first!' ##NO_TEXT.
+    ENDIF.
+
+*   validate access key
+    cl_dct_accesskey_validation=>validate(
+     EXPORTING
+        iv_accesskey       =   lv_akey
+        iv_caller_id       =   iv_caller_id
+     IMPORTING
+        ex_valid           =   lx_valid    "access key is valid
+        ex_expired         =   lx_expired  "access key was valid, but has expired
+      ).
+
+    IF lx_expired EQ abap_true.
+      MESSAGE e002(dct_accesskey).
+    ELSE.
+      IF lx_valid EQ abap_false.
+        MESSAGE e003(dct_accesskey).
+      ELSE.
+        cv_success = abap_true.
+      ENDIF.
+    ENDIF.
+ENDFORM.
+************************************************************************
+* Copy system info for DCT Access Key to clipboard               3195278
+************************************************************************
+FORM dct_access_key_sysinfo USING iv_caller_id TYPE DCT_ACCESSKEY_CALLER_ID.
+
+  DATA: lv_rc    TYPE i,
+        lt_k_tab TYPE STANDARD TABLE OF char255 ##NEEDED.
+  DATA: lic_num(10) TYPE c.
+
+    CALL FUNCTION 'SLIC_GET_LICENCE_NUMBER'
+      IMPORTING
+        license_number = lic_num.
+
+  APPEND lic_num       TO lt_k_tab.
+  APPEND sy-sysid      TO lt_k_tab.
+  APPEND sy-mandt      TO lt_k_tab.
+  APPEND sy-uname      TO lt_k_tab.
+  APPEND INITIAL LINE  TO lt_k_tab.
+  APPEND INITIAL LINE  TO lt_k_tab.
+  APPEND iv_caller_id  TO lt_k_tab.
+
+  CALL METHOD cl_gui_frontend_services=>clipboard_export
+    EXPORTING
+      no_auth_check        = abap_false
+    IMPORTING
+      data                 = lt_k_tab
+    CHANGING
+      rc                   = lv_rc
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      no_authority         = 4
+      OTHERS               = 5.
+  IF sy-subrc = 0.
+    MESSAGE 'System information has been copied to your Clipboard!' TYPE 'S' ##NO_TEXT.
+  ENDIF.
+ENDFORM.
