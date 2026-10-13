@@ -251,6 +251,14 @@ FORM chk_group_mle.
         lv_zgp  TYPE i,
         lv_txt  TYPE c LENGTH 60.
 
+* Not a group customer (no KVGR2 on the CIS): no clubbing is done, so a
+* missing Group/MLE relationship is irrelevant - don't flag it as MISSING.
+  IF gv_found = 'X' AND gs_qais-kvgr2 IS INITIAL.
+    PERFORM add USING 'Group / MLE relationship (BUT050)' 'INFO'
+      'Not a group customer (no KVGR2 on CIS) - Group/MLE relationship not needed'.
+    RETURN.
+  ENDIF.
+
   SELECT SINGLE partner_guid INTO lv_guid FROM cvi_cust_link
     WHERE customer = p_kunnr.
   IF sy-subrc = 0.
