@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report  YRGR_CST_INV_VERIFY
-*& Description: ONGC CST - Invoice Receipt Verification
-*&              Phase 1: View Invoice Receipt
+*& Description: ONGC CST Invoice Data
+*&              Phase 1: View Invoice Data
 *&---------------------------------------------------------------------*
 REPORT yrgr_cst_inv_verify.
 
@@ -17,20 +17,23 @@ TYPES: BEGIN OF ty_loc_ctp,
        END OF ty_loc_ctp.
 
 TYPES: BEGIN OF ty_item_alv,
-         gail_loc_id   TYPE ygms_de_loc_id,
-         ctp_id        TYPE ygms_de_ongc_ctp,
          invoice_no    TYPE yrga_de_invoice_no,
          invoice_date  TYPE datum,
          item_no       TYPE posnr,
          time_stamp    TYPE timestamp,
+         received_on   TYPE datum,
+         received_at   TYPE uzeit,
+         user_id       TYPE syuname,
          bill_from     TYPE datum,
          bill_to       TYPE datum,
+         ctp_id        TYPE ygms_de_ongc_ctp,
          ongc_material TYPE ygms_de_ongc_mat,
+         gail_id       TYPE ygms_de_gail_id,
+         state_code    TYPE regio,
          gail_location TYPE ygms_de_loc_id,
          gail_material TYPE ygms_de_gail_mat,
-         state_code    TYPE regio,
          qty_cuom      TYPE ygms_de_qty_scm,
-         cuom          TYPE c LENGTH 3,
+         cuom          TYPE meins,
          qty_ruom      TYPE ygms_de_qty_mbg,
          qty_sent_scm  TYPE ygms_de_qty_scm,
          qty_sent_mbg  TYPE ygms_de_qty_mbg,
@@ -40,18 +43,14 @@ TYPES: BEGIN OF ty_item_alv,
          avg_ncv       TYPE ygms_de_ncv,
          rate          TYPE yrga_de_price,
          rate_curr     TYPE waers,
-         rate_per      TYPE p LENGTH 5 DECIMALS 3,
+         rate_per      TYPE p LENGTH 6 DECIMALS 3,
          rate_uom      TYPE meins,
          basic_amt     TYPE yrga_de_amount,
          tax_type      TYPE yrga_de_name50,
          tax_rate      TYPE yrga_de_tax_rate,
          tax_amt       TYPE yrga_de_amount,
          inv_amt       TYPE yrga_de_amount,
-         hsn_code      TYPE c LENGTH 11,
-         received_on   TYPE datum,
-         received_at   TYPE uzeit,
-         user_id       TYPE syuname,
-         gail_id       TYPE ygms_de_gail_id,
+         hsn_code      TYPE yrga_de_hsn_code,
        END OF ty_item_alv.
 
 TYPES: BEGIN OF ty_header_alv,
@@ -69,9 +68,9 @@ TYPES: BEGIN OF ty_header_alv,
          price_uom    TYPE meins,
          exch_rate    TYPE yrga_de_exch_rate,
          tot_qty_cuom TYPE ygms_de_qty_scm,
-         cuom         TYPE c LENGTH 3,
+         cuom         TYPE meins,
          tot_qty_ruom TYPE ygms_de_qty_mbg,
-         ruom         TYPE c LENGTH 3,
+         ruom         TYPE meins,
          basic_amt    TYPE yrga_de_amount,
          total_taxes  TYPE yrga_de_amount,
          round_off    TYPE yrga_de_round_off,
@@ -119,10 +118,15 @@ SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
   PARAMETERS: p_view  RADIOBUTTON GROUP r1 DEFAULT 'X',
-              p_verfy RADIOBUTTON GROUP r1 NO-DISPLAY,
-              p_vstat RADIOBUTTON GROUP r1 NO-DISPLAY,
-              p_canc  RADIOBUTTON GROUP r1 NO-DISPLAY.
+              p_verfy RADIOBUTTON GROUP r1 MODIF ID hid,
+              p_vstat RADIOBUTTON GROUP r1 MODIF ID hid,
+              p_canc  RADIOBUTTON GROUP r1 MODIF ID hid.
 SELECTION-SCREEN END OF BLOCK b2.
+
+" Output screen hosting the ALV in a container so toolbar buttons work
+SELECTION-SCREEN BEGIN OF SCREEN 1001 TITLE TEXT-003.
+  SELECTION-SCREEN COMMENT /1(1) gv_dummy.
+SELECTION-SCREEN END OF SCREEN 1001.
 
 *----------------------------------------------------------------------*
 * Global data
@@ -131,6 +135,7 @@ DATA: gt_loc_ctp     TYPE TABLE OF ty_loc_ctp,
       gt_item_alv    TYPE TABLE OF ty_item_alv,
       gt_header_alv  TYPE TABLE OF ty_header_alv,
       go_alv         TYPE REF TO cl_salv_table,
+      go_dock        TYPE REF TO cl_gui_docking_container,
       gv_show_header TYPE abap_bool VALUE abap_false.
 
 CONSTANTS: gc_btn_item   TYPE salv_de_function VALUE 'ITEM_DATA',
@@ -150,10 +155,10 @@ CLASS lcl_handler IMPLEMENTATION.
     CASE e_salv_function.
       WHEN gc_btn_item.
         gv_show_header = abap_false.
-        PERFORM display_alv.
+        PERFORM switch_alv_data.
       WHEN gc_btn_header.
         gv_show_header = abap_true.
-        PERFORM display_alv.
+        PERFORM switch_alv_data.
     ENDCASE.
   ENDMETHOD.
 ENDCLASS.
@@ -161,10 +166,31 @@ ENDCLASS.
 DATA: go_handler TYPE REF TO lcl_handler.
 
 *----------------------------------------------------------------------*
+* Selection screen output
+*----------------------------------------------------------------------*
+AT SELECTION-SCREEN OUTPUT.
+  CASE sy-dynnr.
+    WHEN '1000'.
+      LOOP AT SCREEN.
+        IF screen-group1 = 'HID'.
+          screen-active = 0.
+          MODIFY SCREEN.
+        ENDIF.
+      ENDLOOP.
+    WHEN '1001'.
+      PERFORM hide_1001_toolbar.
+      IF go_dock IS INITIAL.
+        PERFORM display_alv.
+      ENDIF.
+  ENDCASE.
+
+*----------------------------------------------------------------------*
 * Selection screen validations
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN.
-  PERFORM validate_selection.
+  IF sy-dynnr = '1000'.
+    PERFORM validate_selection.
+  ENDIF.
 
 *----------------------------------------------------------------------*
 * Main processing
@@ -258,7 +284,14 @@ FORM process_view_invoice.
 
   PERFORM fetch_header_data.
   PERFORM enrich_item_data.
-  PERFORM display_alv.
+
+  gv_show_header = abap_false.
+  CALL SELECTION-SCREEN 1001.
+
+  IF go_dock IS BOUND.
+    go_dock->free( ).
+  ENDIF.
+  CLEAR: go_dock, go_alv.
 
 ENDFORM.
 
@@ -268,9 +301,13 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM map_locations.
 
+  READ TABLE s_date INDEX 1 ASSIGNING FIELD-SYMBOL(<fs_date>).
+
   SELECT gail_loc_id, ongc_ctp_id
     FROM yrga_cst_loc_map
     WHERE gail_loc_id IN @s_loc
+      AND valid_from  <= @<fs_date>-low
+      AND valid_to    >= @<fs_date>-high
       AND deleted     = @abap_false
     INTO TABLE @gt_loc_ctp.
 
@@ -279,30 +316,29 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form fetch_item_data
 *&  Pull from YRGA_CST_B2B_5, keep latest per
-*&  (BILL_FROM, BILL_TO, CTP_ID, ONGC_MATERIAL, STATE_CODE)
+*&  (ITEM_NO, BILL_FROM, BILL_TO, CTP_ID, ONGC_MATERIAL, STATE_CODE)
 *&---------------------------------------------------------------------*
 FORM fetch_item_data.
 
-  DATA: lt_b2b5    TYPE TABLE OF yrga_cst_b2b_5,
-        lt_ctp_ids TYPE TABLE OF ygms_de_ongc_ctp,
-        lv_from    TYPE datum,
-        lv_to      TYPE datum.
+  DATA: lt_b2b5   TYPE TABLE OF yrga_cst_b2b_5,
+        lr_ctp_id TYPE RANGE OF ygms_de_ongc_ctp,
+        lv_from   TYPE datum,
+        lv_to     TYPE datum.
 
   READ TABLE s_date INDEX 1 ASSIGNING FIELD-SYMBOL(<fs_date>).
   lv_from = <fs_date>-low.
   lv_to   = <fs_date>-high.
 
-  lt_ctp_ids = VALUE #( FOR <ls> IN gt_loc_ctp ( <ls>-ongc_ctp_id ) ).
-  SORT lt_ctp_ids.
-  DELETE ADJACENT DUPLICATES FROM lt_ctp_ids.
+  lr_ctp_id = VALUE #( FOR <ls> IN gt_loc_ctp
+                       ( sign = 'I' option = 'EQ' low = <ls>-ongc_ctp_id ) ).
+  SORT lr_ctp_id BY low.
+  DELETE ADJACENT DUPLICATES FROM lr_ctp_id COMPARING low.
 
   SELECT *
     FROM yrga_cst_b2b_5
     WHERE bill_from = @lv_from
       AND bill_to   = @lv_to
-      AND ctp_id    IN ( SELECT ongc_ctp_id FROM yrga_cst_loc_map
-                          WHERE gail_loc_id IN @s_loc
-                            AND deleted     = @abap_false )
+      AND ctp_id    IN @lr_ctp_id
     INTO TABLE @lt_b2b5.
 
   IF lt_b2b5 IS INITIAL.
@@ -310,21 +346,25 @@ FORM fetch_item_data.
   ENDIF.
 
   " Keep only the latest TIME_STAMP per group
-  SORT lt_b2b5 BY bill_from bill_to ctp_id ongc_material state_code time_stamp DESCENDING.
+  SORT lt_b2b5 BY item_no bill_from bill_to ctp_id ongc_material state_code
+                  time_stamp DESCENDING.
   DELETE ADJACENT DUPLICATES FROM lt_b2b5
-    COMPARING bill_from bill_to ctp_id ongc_material state_code.
+    COMPARING item_no bill_from bill_to ctp_id ongc_material state_code.
 
-  " Build ALV item table joined with GAIL Location ID
   LOOP AT lt_b2b5 ASSIGNING FIELD-SYMBOL(<fs_item>).
-    DATA(ls_alv) = VALUE ty_item_alv(
-      ctp_id        = <fs_item>-ctp_id
+    APPEND VALUE ty_item_alv(
       invoice_no    = <fs_item>-invoice_no
       invoice_date  = <fs_item>-invoice_date
       item_no       = <fs_item>-item_no
       time_stamp    = <fs_item>-time_stamp
+      received_on   = <fs_item>-received_on
+      received_at   = <fs_item>-received_at
+      user_id       = <fs_item>-user_id
       bill_from     = <fs_item>-bill_from
       bill_to       = <fs_item>-bill_to
+      ctp_id        = <fs_item>-ctp_id
       ongc_material = <fs_item>-ongc_material
+      gail_id       = <fs_item>-gail_id
       state_code    = <fs_item>-state_code
       qty_cuom      = <fs_item>-qty_cuom
       cuom          = <fs_item>-cuom
@@ -340,19 +380,7 @@ FORM fetch_item_data.
       tax_rate      = <fs_item>-tax_rate
       tax_amt       = <fs_item>-tax_amt
       inv_amt       = <fs_item>-inv_amt
-      hsn_code      = <fs_item>-hsn_code
-      received_on   = <fs_item>-received_on
-      received_at   = <fs_item>-received_at
-      user_id       = <fs_item>-user_id
-      gail_id       = <fs_item>-gail_id ).
-
-    READ TABLE gt_loc_ctp ASSIGNING FIELD-SYMBOL(<fs_map>)
-      WITH KEY ongc_ctp_id = <fs_item>-ctp_id.
-    IF sy-subrc = 0.
-      ls_alv-gail_loc_id = <fs_map>-gail_loc_id.
-    ENDIF.
-
-    APPEND ls_alv TO gt_item_alv.
+      hsn_code      = <fs_item>-hsn_code ) TO gt_item_alv.
   ENDLOOP.
 
 ENDFORM.
@@ -392,41 +420,39 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 *&      Form enrich_item_data
-*&  Enrich ALV items with GAIL Material, Qty sent to ONGC, and Diffs
+*&  Enrich ALV items with GAIL Location, GAIL Material, Qty sent to
+*&  ONGC and differences
 *&---------------------------------------------------------------------*
 FORM enrich_item_data.
 
-  DATA: lv_gail_loc  TYPE ygms_de_loc_id,
-        lv_gail_mat  TYPE ygms_de_gail_mat,
-        lv_sent_scm  TYPE ygms_de_qty_scm,
-        lv_sent_mbg  TYPE ygms_de_qty_mbg.
+  DATA: lv_gail_loc TYPE ygms_de_loc_id,
+        lv_gail_mat TYPE ygms_de_gail_mat,
+        lv_sent_scm TYPE ygms_de_qty_scm,
+        lv_sent_mbg TYPE ygms_de_qty_mbg.
 
   LOOP AT gt_item_alv ASSIGNING FIELD-SYMBOL(<fs_alv>).
 
-    " GAIL Location from YRGA_CST_LOC_MAP filtered by CTP, dates, and DELETED
     CLEAR lv_gail_loc.
     SELECT SINGLE gail_loc_id
       FROM yrga_cst_loc_map
-      WHERE ongc_ctp_id  = @<fs_alv>-ctp_id
-        AND valid_from   = @<fs_alv>-bill_from
-        AND valid_to     = @<fs_alv>-bill_to
-        AND deleted      = @abap_false
+      WHERE ongc_ctp_id = @<fs_alv>-ctp_id
+        AND valid_from  <= @<fs_alv>-bill_from
+        AND valid_to    >= @<fs_alv>-bill_to
+        AND deleted     = @abap_false
       INTO @lv_gail_loc.
     <fs_alv>-gail_location = lv_gail_loc.
 
-    " GAIL Material from YRGA_CST_MAT_MAP filtered by GAIL Location, ONGC Material, dates, and DELETED
     CLEAR lv_gail_mat.
     SELECT SINGLE gail_material
       FROM yrga_cst_mat_map
       WHERE location_id   = @lv_gail_loc
         AND ongc_material = @<fs_alv>-ongc_material
-        AND valid_from    = @<fs_alv>-bill_from
-        AND valid_to      = @<fs_alv>-bill_to
+        AND valid_from    <= @<fs_alv>-bill_from
+        AND valid_to      >= @<fs_alv>-bill_to
         AND deleted       = @abap_false
       INTO @lv_gail_mat.
     <fs_alv>-gail_material = lv_gail_mat.
 
-    " Qty sent to ONGC from YRGA_CST_B2B_3 via GAIL_ID
     CLEAR: lv_sent_scm, lv_sent_mbg.
     SELECT SINGLE qty_in_scm, qty_in_mbg
       FROM yrga_cst_b2b_3
@@ -435,7 +461,6 @@ FORM enrich_item_data.
     <fs_alv>-qty_sent_scm = lv_sent_scm.
     <fs_alv>-qty_sent_mbg = lv_sent_mbg.
 
-    " Differences
     <fs_alv>-diff_scm = lv_sent_scm - <fs_alv>-qty_cuom.
     <fs_alv>-diff_mbg = lv_sent_mbg - <fs_alv>-qty_ruom.
 
@@ -444,112 +469,145 @@ FORM enrich_item_data.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
+*&      Form hide_1001_toolbar
+*&  Remove Execute/Variant functions from the output screen
+*&---------------------------------------------------------------------*
+FORM hide_1001_toolbar.
+
+  DATA lt_excl TYPE TABLE OF sy-ucomm.
+
+  lt_excl = VALUE #( ( 'ONLI' ) ( 'PRIN' ) ( 'SPOS' ) ( 'GET' ) ( 'VDEL' ) ).
+  CALL FUNCTION 'RS_SET_SELSCREEN_STATUS'
+    EXPORTING
+      p_status  = '%_00'
+    TABLES
+      p_exclude = lt_excl.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
 *&      Form display_alv
-*&  Display the active dataset (item or header) in cl_salv_table
-*&  with toggle buttons in the toolbar
+*&  Display item data in cl_salv_table inside a docking container on
+*&  screen 1001 (container mode supports custom toolbar buttons)
 *&---------------------------------------------------------------------*
 FORM display_alv.
 
-  CLEAR go_alv.
+  CREATE OBJECT go_dock
+    EXPORTING
+      repid     = sy-repid
+      dynnr     = '1001'
+      side      = cl_gui_docking_container=>dock_at_top
+      ratio     = 95
+    EXCEPTIONS
+      OTHERS    = 1.
+  IF sy-subrc <> 0.
+    MESSAGE 'Unable to create ALV container' TYPE 'E'.
+  ENDIF.
 
   TRY.
-      IF gv_show_header = abap_true.
-        cl_salv_table=>factory(
-          IMPORTING r_salv_table = go_alv
-          CHANGING  t_table      = gt_header_alv ).
-      ELSE.
-        cl_salv_table=>factory(
-          IMPORTING r_salv_table = go_alv
-          CHANGING  t_table      = gt_item_alv ).
-      ENDIF.
+      cl_salv_table=>factory(
+        EXPORTING r_container  = go_dock
+        IMPORTING r_salv_table = go_alv
+        CHANGING  t_table      = gt_item_alv ).
 
       go_alv->get_functions( )->set_all( abap_true ).
 
-      TRY.
-          go_alv->get_functions( )->add_function(
-            name     = gc_btn_item
-            icon     = '@04@'
-            text     = 'Item Data'
-            tooltip  = 'Show invoice item details'
-            position = if_salv_c_function_position=>right_of_salv_functions ).
+      go_alv->get_functions( )->add_function(
+        name     = gc_btn_item
+        icon     = '@04@'
+        text     = 'Item Data'
+        tooltip  = 'Show invoice item details'
+        position = if_salv_c_function_position=>right_of_salv_functions ).
 
-          go_alv->get_functions( )->add_function(
-            name     = gc_btn_header
-            icon     = '@05@'
-            text     = 'Header Data'
-            tooltip  = 'Show invoice header details'
-            position = if_salv_c_function_position=>right_of_salv_functions ).
+      go_alv->get_functions( )->add_function(
+        name     = gc_btn_header
+        icon     = '@05@'
+        text     = 'Header Data'
+        tooltip  = 'Show invoice header details'
+        position = if_salv_c_function_position=>right_of_salv_functions ).
 
-          CREATE OBJECT go_handler.
-          SET HANDLER go_handler->on_user_command FOR go_alv->get_event( ).
+      CREATE OBJECT go_handler.
+      SET HANDLER go_handler->on_user_command FOR go_alv->get_event( ).
 
-        CATCH cx_salv_method_not_supported.
-          " Custom toolbar buttons not supported in fullscreen list mode; continue without them
-      ENDTRY.
-
-      go_alv->get_columns( )->set_optimize( abap_true ).
-
-      " Set column labels for item data view
-      IF gv_show_header = abap_false.
-        DATA(lo_cols) = go_alv->get_columns( ).
-        TRY.
-            CAST cl_salv_column( lo_cols->get_column( 'INVOICE_DATE' ) )->set_short_text( 'Inv Date' ).
-            CAST cl_salv_column( lo_cols->get_column( 'INVOICE_DATE' ) )->set_medium_text( 'Invoice Date' ).
-            CAST cl_salv_column( lo_cols->get_column( 'INVOICE_DATE' ) )->set_long_text( 'Invoice Date' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'BILL_FROM' ) )->set_short_text( 'Bill From' ).
-            CAST cl_salv_column( lo_cols->get_column( 'BILL_FROM' ) )->set_medium_text( 'Bill From' ).
-            CAST cl_salv_column( lo_cols->get_column( 'BILL_FROM' ) )->set_long_text( 'Bill From' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_short_text( 'Bill To' ).
-            CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_medium_text( 'Bill To' ).
-            CAST cl_salv_column( lo_cols->get_column( 'BILL_TO' ) )->set_long_text( 'Bill To' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_CUOM' ) )->set_short_text( 'InvQty SCM' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_CUOM' ) )->set_medium_text( 'Invoice Qty(SCM)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_CUOM' ) )->set_long_text( 'Invoice Quantity (SCM)' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_RUOM' ) )->set_short_text( 'InvQty MBG' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_RUOM' ) )->set_medium_text( 'Invoice Qty(MBG)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_RUOM' ) )->set_long_text( 'Invoice Qty (MBG)' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_short_text( 'GAIL Loc' ).
-            CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_medium_text( 'GAIL Location' ).
-            CAST cl_salv_column( lo_cols->get_column( 'GAIL_LOCATION' ) )->set_long_text( 'GAIL Location' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'GAIL_MATERIAL' ) )->set_short_text( 'GAIL Mat' ).
-            CAST cl_salv_column( lo_cols->get_column( 'GAIL_MATERIAL' ) )->set_medium_text( 'GAIL Material' ).
-            CAST cl_salv_column( lo_cols->get_column( 'GAIL_MATERIAL' ) )->set_long_text( 'GAIL Material' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_SCM' ) )->set_short_text( 'Sent SCM' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_SCM' ) )->set_medium_text( 'Qty Sent(SCM)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_SCM' ) )->set_long_text( 'Qty sent to ONGC (SCM)' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_MBG' ) )->set_short_text( 'Sent MBG' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_MBG' ) )->set_medium_text( 'Qty Sent(MBG)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'QTY_SENT_MBG' ) )->set_long_text( 'Qty sent to ONGC (MBG)' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'DIFF_SCM' ) )->set_short_text( 'Diff SCM' ).
-            CAST cl_salv_column( lo_cols->get_column( 'DIFF_SCM' ) )->set_medium_text( 'Diff (SCM)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'DIFF_SCM' ) )->set_long_text( 'Diff (SCM)' ).
-
-            CAST cl_salv_column( lo_cols->get_column( 'DIFF_MBG' ) )->set_short_text( 'Diff MBG' ).
-            CAST cl_salv_column( lo_cols->get_column( 'DIFF_MBG' ) )->set_medium_text( 'Diff (MBG)' ).
-            CAST cl_salv_column( lo_cols->get_column( 'DIFF_MBG' ) )->set_long_text( 'Diff (MBG)' ).
-
-          CATCH cx_salv_not_found.
-        ENDTRY.
-      ENDIF.
-
-      go_alv->get_display_settings( )->set_list_header(
-        COND #( WHEN gv_show_header = abap_true
-                THEN 'ONGC CST Invoice Details - Header'
-                ELSE 'ONGC CST Invoice Details' ) ).
-
+      PERFORM set_item_columns.
       go_alv->display( ).
 
-    CATCH cx_salv_msg INTO DATA(lx_msg).
-      MESSAGE lx_msg->get_text( ) TYPE 'E'.
+    CATCH cx_salv_msg cx_salv_existing cx_salv_wrong_call INTO DATA(lx_salv).
+      MESSAGE lx_salv->get_text( ) TYPE 'E'.
+  ENDTRY.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form switch_alv_data
+*&  Toggle the ALV between item and header data
+*&---------------------------------------------------------------------*
+FORM switch_alv_data.
+
+  TRY.
+      IF gv_show_header = abap_true.
+        go_alv->set_data( CHANGING t_table = gt_header_alv ).
+        go_alv->get_columns( )->set_optimize( abap_true ).
+      ELSE.
+        go_alv->set_data( CHANGING t_table = gt_item_alv ).
+        PERFORM set_item_columns.
+      ENDIF.
+      go_alv->refresh( refresh_mode = if_salv_c_refresh=>full ).
+
+    CATCH cx_salv_no_new_data_allowed INTO DATA(lx_salv).
+      MESSAGE lx_salv->get_text( ) TYPE 'S' DISPLAY LIKE 'E'.
+  ENDTRY.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form set_item_columns
+*&  Column labels for the item view
+*&---------------------------------------------------------------------*
+FORM set_item_columns.
+
+  go_alv->get_columns( )->set_optimize( abap_true ).
+
+  PERFORM set_col USING 'INVOICE_DATE'  'Inv. Date'  'Invoice Date'      'Invoice Date'.
+  PERFORM set_col USING 'RECEIVED_ON'   'Recvd On'   'Received On'       'Received On'.
+  PERFORM set_col USING 'RECEIVED_AT'   'Recvd At'   'Received At'       'Received At'.
+  PERFORM set_col USING 'USER_ID'       'User'       'User'              'User'.
+  PERFORM set_col USING 'BILL_FROM'     'Bill From'  'Bill From'         'Bill From'.
+  PERFORM set_col USING 'BILL_TO'       'Bill To'    'Bill To'           'Bill To'.
+  PERFORM set_col USING 'GAIL_ID'       'GAIL ID'    'GAIL ID'           'GAIL ID'.
+  PERFORM set_col USING 'GAIL_LOCATION' 'GAIL Loc'   'GAIL Location'     'GAIL Location'.
+  PERFORM set_col USING 'GAIL_MATERIAL' 'GAIL Mat'   'GAIL Material'     'GAIL Material'.
+  PERFORM set_col USING 'QTY_CUOM'      'Qty CUOM'   'Qty in CUOM'       'Quantity in Contractual UOM'.
+  PERFORM set_col USING 'CUOM'          'CUOM'       'CUOM'              'Contractual UOM'.
+  PERFORM set_col USING 'QTY_RUOM'      'Qty RUOM'   'Qty in RUOM'       'Quantity in Rate UOM'.
+  PERFORM set_col USING 'QTY_SENT_SCM'  'Sent SCM'   'Qty Sent(SCM)'     'Qty sent to ONGC (SCM)'.
+  PERFORM set_col USING 'QTY_SENT_MBG'  'Sent MBG'   'Qty Sent(MBG)'     'Qty sent to ONGC (MBG)'.
+  PERFORM set_col USING 'DIFF_SCM'      'Diff SCM'   'Diff (SCM)'        'Diff (SCM)'.
+  PERFORM set_col USING 'DIFF_MBG'      'Diff MBG'   'Diff (MBG)'        'Diff (MBG)'.
+  PERFORM set_col USING 'RATE'          'Rate'       'Rate'              'Rate'.
+  PERFORM set_col USING 'RATE_CURR'     'Currency'   'Currency'          'Currency'.
+  PERFORM set_col USING 'RATE_PER'      'Rate Per'   'Rate Per'          'Rate Per'.
+  PERFORM set_col USING 'RATE_UOM'      'Rate UOM'   'Rate UOM'          'Rate UOM'.
+  PERFORM set_col USING 'BASIC_AMT'     'Basic Amt'  'Basic Amount'      'Basic Amount'.
+  PERFORM set_col USING 'TAX_TYPE'      'Tax Type'   'Tax Type'          'Tax Type'.
+  PERFORM set_col USING 'TAX_RATE'      'Tax Rate'   'Tax Rate'          'Tax Rate'.
+  PERFORM set_col USING 'TAX_AMT'       'Tax Amount' 'Tax Amount'        'Tax Amount'.
+  PERFORM set_col USING 'INV_AMT'       'Inv Amount' 'Invoice Amount'    'Invoice Amount'.
+  PERFORM set_col USING 'HSN_CODE'      'HSN Code'   'HSN Code'          'HSN Code'.
+
+ENDFORM.
+
+FORM set_col USING iv_name   TYPE csequence
+                   iv_short  TYPE csequence
+                   iv_medium TYPE csequence
+                   iv_long   TYPE csequence.
+
+  TRY.
+      DATA(lo_col) = go_alv->get_columns( )->get_column( CONV #( iv_name ) ).
+      lo_col->set_short_text( CONV #( iv_short ) ).
+      lo_col->set_medium_text( CONV #( iv_medium ) ).
+      lo_col->set_long_text( CONV #( iv_long ) ).
+    CATCH cx_salv_not_found.
   ENDTRY.
 
 ENDFORM.
