@@ -109,6 +109,10 @@ DATA: gv_to_bukrs TYPE bukrs,
       gv_waers    TYPE t001-waers,  " document currency = OVC local (COP)
       gv_waers2   TYPE bkpf-hwae2,  " OVC 2nd local currency (USD)
       gv_curtp2   TYPE bkpf-curt2,  " OVL currency type for GV_WAERS2
+*     internal (2 decimals) -> external BAPI amount factor per currency
+*     (TCURX: e.g. COP with 0 decimals -> factor 100)
+      gv_fact     TYPE p LENGTH 8 DECIMALS 3,
+      gv_fact2    TYPE p LENGTH 8 DECIMALS 3,
       gv_msg      TYPE string,      " error text for ADD_ERR
       gv_error    TYPE flag.
 
@@ -411,6 +415,29 @@ FORM get_currencies.
              |is not a local currency of { gv_to_bukrs }|.
     PERFORM add_err USING gv_msg.
   ENDIF.
+
+  PERFORM get_bapi_factor USING gv_waers  CHANGING gv_fact.
+  PERFORM get_bapi_factor USING gv_waers2 CHANGING gv_fact2.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& BSEG / ACDOCA amounts are stored internally with 2 decimals; the BAPI
+*& expects the real (external) amount. Currencies with other decimals
+*& are in TCURX (no entry = 2 decimals). Factor = 10 ** ( 2 - CURRDEC ).
+*&   COP 0 decimals : 258222131.21 (internal) -> 25822213121 (external)
+*&---------------------------------------------------------------------*
+FORM get_bapi_factor USING    pv_waers TYPE t001-waers
+                     CHANGING pv_fact  TYPE p.
+  DATA: lv_currdec TYPE tcurx-currdec,
+        lv_exp     TYPE i.
+
+  SELECT SINGLE currdec FROM tcurx INTO lv_currdec
+    WHERE currkey = pv_waers.
+  IF sy-subrc <> 0.
+    lv_currdec = 2.
+  ENDIF.
+  lv_exp  = 2 - lv_currdec.
+  pv_fact = 10 ** lv_exp.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -774,14 +801,14 @@ FORM add_curr TABLES pt_curr  STRUCTURE bapiaccr09
   ls_curr-itemno_acc = pv_item.
   ls_curr-curr_type  = '00'.
   ls_curr-currency   = gv_waers.
-  ls_curr-amt_doccur = pv_dmbtr.
+  ls_curr-amt_doccur = pv_dmbtr * gv_fact.     " internal -> external
   APPEND ls_curr TO pt_curr.
 
   CLEAR ls_curr.
   ls_curr-itemno_acc = pv_item.
   ls_curr-curr_type  = gv_curtp2.
   ls_curr-currency   = gv_waers2.
-  ls_curr-amt_doccur = pv_dmbe2.
+  ls_curr-amt_doccur = pv_dmbe2 * gv_fact2.    " internal -> external
   APPEND ls_curr TO pt_curr.
 ENDFORM.
 
