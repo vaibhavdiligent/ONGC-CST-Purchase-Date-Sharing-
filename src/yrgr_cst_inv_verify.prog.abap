@@ -566,7 +566,7 @@ FORM switch_alv_data.
   TRY.
       IF gv_show_header = abap_true.
         go_alv->set_data( CHANGING t_table = gt_header_alv ).
-        go_alv->get_columns( )->set_optimize( abap_true ).
+        PERFORM set_header_columns.
       ELSE.
         go_alv->set_data( CHANGING t_table = gt_item_alv ).
         PERFORM set_item_columns.
@@ -613,6 +613,66 @@ FORM set_item_columns.
   PERFORM set_col USING 'TAX_AMT'       'Tax Amount' 'Tax Amount'        'Tax Amount'.
   PERFORM set_col USING 'INV_AMT'       'Inv Amount' 'Invoice Amount'    'Invoice Amount'.
   PERFORM set_col USING 'HSN_CODE'      'HSN Code'   'HSN Code'          'HSN Code'.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form set_header_columns
+*&  Column labels for the header view (customer list, 44 columns)
+*&---------------------------------------------------------------------*
+FORM set_header_columns.
+
+  go_alv->get_columns( )->set_optimize( abap_true ).
+
+  PERFORM set_col USING 'INVOICE_NO'    'Invoice No'  'Invoice Number'     'Invoice Number'.
+  PERFORM set_col USING 'INVOICE_DATE'  'Inv. Date'   'Invoice Date'       'Invoice Date'.
+  PERFORM set_col USING 'TIME_STAMP'    'Time Stamp'  'Time Stamp'         'Time Stamp'.
+  PERFORM set_col USING 'RECEIVED_ON'   'Recvd On'    'Received On'        'Received On'.
+  PERFORM set_col USING 'RECEIVED_AT'   'Recvd At'    'Received At'        'Received At'.
+  PERFORM set_col USING 'USER_ID'       'User Name'   'User Name'          'User Name'.
+  PERFORM set_col USING 'INV_REF_NO'    'Inv.Ref.No'  'Inv. Ref. No.'      'Inv. Ref. No.'.
+  PERFORM set_col USING 'INV_REF_DATE'  'Ref. Date'   'Inv. Ref. Date'     'Inv. Ref. Date'.
+  PERFORM set_col USING 'GROSS_PRICE'   'Gross Prc'   'Gross Price'        'Gross Price'.
+  PERFORM set_col USING 'PREM_DISC'     'Prem/Disc'   'Premium/Discount'   'Premium/Discount'.
+  PERFORM set_col USING 'CURRENCY'      'Currency'    'Currency'           'Currency'.
+  PERFORM set_col USING 'PRICE_UOM'     'Price UOM'   'Price UOM'          'Price UOM'.
+  PERFORM set_col USING 'EXCH_RATE'     'Exch. Rate'  'Exchange Rate'      'Exchange Rate'.
+  PERFORM set_col USING 'TOT_QTY_CUOM'  'Qty CUOM'    'Total Qty in CUOM'  'Total Qty in CUOM'.
+  PERFORM set_col USING 'CUOM'          'CUOM'        'Contractual UOM'    'Contractual UOM'.
+  PERFORM set_col USING 'TOT_QTY_RUOM'  'Qty RUOM'    'Total Qty in RUOM'  'Total Qty in RUOM'.
+  PERFORM set_col USING 'RUOM'          'Rate UOM'    'Rate UOM'           'Rate UOM'.
+  PERFORM set_col USING 'BASIC_AMT'     'Basic Amt'   'Basic Amount'       'Basic Amount'.
+  PERFORM set_col USING 'TOTAL_TAXES'   'Tot. Taxes'  'Total Taxes'        'Total Taxes'.
+  PERFORM set_col USING 'ROUND_OFF'     'Round Off'   'Round Off Amount'   'Round Off Amount'.
+  PERFORM set_col USING 'PAYABLE_AMT'   'Payable'     'Payable Amount'     'Payable Amount'.
+  PERFORM set_col USING 'BILL_PARTY'    'Bill To'     'Bill To'            'Bill To'.
+  PERFORM set_col USING 'BILL_STREET'   'Bill Addr'   'Bill To Address'    'Bill To Address'.
+  PERFORM set_col USING 'BILL_CITY'     'Bill City'   'Bill To City'       'Bill To City'.
+  PERFORM set_col USING 'BILL_PIN'      'Bill PIN'    'Bill To PIN'        'Bill To PIN'.
+  PERFORM set_col USING 'BILL_REGIO'    'Bill St.Cd'  'Bill To State Code' 'Bill To State Code'.
+  PERFORM set_col USING 'BILL_STATE'    'Bill State'  'Bill to State'      'Bill to State'.
+  PERFORM set_col USING 'BILL_LAND1'    'Bill Cntry'  'Bill to Country'    'Bill to Country'.
+  PERFORM set_col USING 'BILL_PAN'      'Bill PAN'    'Bill To PAN'        'Bill To PAN'.
+  PERFORM set_col USING 'BILL_VAT_TIN'  'Bill VAT'    'Bill To VAT TIN'    'Bill To VAT TIN'.
+  PERFORM set_col USING 'BILL_CST_TIN'  'Bill CST'    'Bill To CST TIN'    'Bill To CST TIN'.
+  PERFORM set_col USING 'BILL_GST'      'Bill GST'    'Bill To GST'        'Bill To GST'.
+  PERFORM set_col USING 'DUE_DATE'      'Due Date'    'Due Date'           'Due Date'.
+  PERFORM set_col USING 'PAY_TERMS'     'Pay Terms'   'Payment Terms'      'Payment Terms'.
+  PERFORM set_col USING 'SUPPLIER'      'Supplier'    'Supplier'           'Supplier'.
+  PERFORM set_col USING 'SUPP_ADDR'     'Supp. Addr'  'Supplier Address'   'Supplier Address'.
+  PERFORM set_col USING 'SUPP_REGIO'    'Supp.St.Cd'  'Supplier State Code' 'Supplier State Code'.
+  PERFORM set_col USING 'SUPP_STATE'    'Supp.State'  'Supplier State'     'Supplier State'.
+  PERFORM set_col USING 'SUPP_LAND1'    'Supp.Cntry'  'Supplier Country'   'Supplier Country'.
+  PERFORM set_col USING 'SUPP_PAN'      'Supp. PAN'   'Supplier PAN'       'Supplier PAN'.
+  PERFORM set_col USING 'SUPP_VAT_TIN'  'Supp. VAT'   'Supplier VAT TIN'   'Supplier VAT TIN'.
+  PERFORM set_col USING 'SUPP_CST_TIN'  'Supp. CST'   'Supplier CST TIN'   'Supplier CST TIN'.
+  PERFORM set_col USING 'SUPP_GST'      'Supp. GST'   'Supplier GST'       'Supplier GST'.
+  PERFORM set_col USING 'SUPP_THROUGH'  'Supp.Thru'   'Supplied Through'   'Supplied Through'.
+
+  " Always show the full description (long text) as the column heading
+  LOOP AT go_alv->get_columns( )->get( ) INTO DATA(ls_col).
+    ls_col-r_column->set_fixed_header_text( 'L' ).
+  ENDLOOP.
 
 ENDFORM.
 
