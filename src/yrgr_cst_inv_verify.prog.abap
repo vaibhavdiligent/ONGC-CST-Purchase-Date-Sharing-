@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report  YRGR_CST_INV_VERIFY
-*& Description: ONGC CST - Invoice Receipt Verification
-*&              Phase 1: View Invoice Receipt
+*& Description: ONGC CST Invoice Data
+*&              Phase 1: View Invoice Data
 *&---------------------------------------------------------------------*
 REPORT yrgr_cst_inv_verify.
 
@@ -124,7 +124,8 @@ DATA: gt_loc_ctp     TYPE TABLE OF ty_loc_ctp,
       gt_item_alv    TYPE TABLE OF ty_item_alv,
       gt_header_alv  TYPE TABLE OF ty_header_alv,
       go_alv         TYPE REF TO cl_salv_table,
-      gv_show_header TYPE abap_bool VALUE abap_false.
+      gv_show_header TYPE abap_bool VALUE abap_false,
+      gv_redisplay   TYPE abap_bool VALUE abap_false.
 
 CONSTANTS: gc_btn_item   TYPE salv_de_function VALUE 'ITEM_DATA',
            gc_btn_header TYPE salv_de_function VALUE 'HEADER_DATA'.
@@ -140,13 +141,23 @@ ENDCLASS.
 
 CLASS lcl_handler IMPLEMENTATION.
   METHOD on_user_command.
+    " A new ALV cannot be created / data cannot be set inside a SALV event
+    " handler ("Data cannot be set again in event handlers"). Remember the
+    " requested view, close the current list and let process_view_invoice
+    " rebuild it once the handler has returned.
     CASE e_salv_function.
       WHEN gc_btn_item.
-        gv_show_header = abap_false.
-        PERFORM display_alv.
+        IF gv_show_header = abap_true.
+          gv_show_header = abap_false.
+          gv_redisplay   = abap_true.
+          go_alv->close_screen( ).
+        ENDIF.
       WHEN gc_btn_header.
-        gv_show_header = abap_true.
-        PERFORM display_alv.
+        IF gv_show_header = abap_false.
+          gv_show_header = abap_true.
+          gv_redisplay   = abap_true.
+          go_alv->close_screen( ).
+        ENDIF.
     ENDCASE.
   ENDMETHOD.
 ENDCLASS.
@@ -250,7 +261,18 @@ FORM process_view_invoice.
   ENDIF.
 
   PERFORM fetch_header_data.
-  PERFORM display_alv.
+
+  " Item / Header toggle: the handler closes the list and sets gv_redisplay,
+  " the list is then rebuilt here (outside the event handler). BACK/EXIT
+  " leaves gv_redisplay initial and ends the loop.
+  gv_show_header = abap_false.
+  DO.
+    gv_redisplay = abap_false.
+    PERFORM display_alv.
+    IF gv_redisplay = abap_false.
+      EXIT.
+    ENDIF.
+  ENDDO.
 
 ENDFORM.
 
@@ -425,8 +447,8 @@ FORM display_alv.
       go_alv->get_columns( )->set_optimize( abap_true ).
       go_alv->get_display_settings( )->set_list_header(
         COND #( WHEN gv_show_header = abap_true
-                THEN 'ONGC CST Invoice - Header Data'
-                ELSE 'ONGC CST Invoice - Item Data' ) ).
+                THEN 'ONGC CST Invoice Data - Header'(004)
+                ELSE 'ONGC CST Invoice Data'(003) ) ).
 
       go_alv->display( ).
 
