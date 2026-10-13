@@ -319,19 +319,182 @@ FORM chk_waiver.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
+*   Replays YRVG004_QAIS_EXECUTE_N1's shortfall-waiver decision step by step
+*   (get_data SELECT -> build_cis_shortfall -> nonsf_waiver_ok) and the
+*   non-discount-grade deduction, so a zero discount can be traced to the
+*   exact step that fails.
 FORM chk_shortfall.
-  DATA lv_cnt TYPE i.
-  SELECT COUNT(*) INTO lv_cnt FROM ycis_shortfall
-    WHERE period_from LE s_sptag-low
-      AND period_to   GE s_sptag-low.
-  IF lv_cnt > 0.
-    WRITE lv_cnt TO gv_n LEFT-JUSTIFIED.
-    CONCATENATE gv_n 'shortfall grade(s) declared for the period'
+  DATA: lt_sf    TYPE STANDARD TABLE OF ycis_shortfall,
+        ls_sf    TYPE ycis_shortfall,
+        lt_tnt   TYPE STANDARD TABLE OF yrva_qais_tntlft,
+        ls_tnt   TYPE yrva_qais_tntlft,
+        lt_valid TYPE STANDARD TABLE OF matnr,
+        lt_sfkon TYPE RANGE OF kondm,
+        lt_nskon TYPE RANGE OF kondm,
+        ls_kon   LIKE LINE OF lt_sfkon,
+        lv_kondm TYPE kondm,
+        lv_umb   TYPE s922-ummenge,
+        lv_vtweg TYPE s922-vtweg,
+        lv_mcq   TYPE p DECIMALS 3,
+        lv_lift  TYPE p DECIMALS 3,
+        lv_need  TYPE p DECIMALS 3,
+        lv_tot   TYPE p DECIMALS 3,
+        lv_nod   TYPE p DECIMALS 3,
+        lv_hit   TYPE flag,
+        lv_ok    TYPE flag,
+        lv_c1    TYPE c LENGTH 20,
+        lv_c2    TYPE c LENGTH 20,
+        lv_c3    TYPE c LENGTH 20,
+        lv_st    TYPE c LENGTH 10.
+
+* 0) customer's own monthly waiver months (customer waiver, not shortfall)
+  IF gv_found = 'X'.
+    CONCATENATE 'Customer waiver months on CIS:' gs_qais-waiver_1
+                gs_qais-waiver_2 gs_qais-waiver_3 '/ run month' gv_month
            INTO gv_d SEPARATED BY space.
-    PERFORM add USING 'Shortfall grades (YCIS_SHORTFALL)' 'OK' gv_d.
+    PERFORM add USING 'Customer monthly waiver (WAIVER_1/2/3)' 'INFO' gv_d.
+  ENDIF.
+
+* 1) shortfall rows touching the run month - show why each is used/ignored
+  SELECT * FROM ycis_shortfall INTO TABLE lt_sf
+    WHERE period_from LE s_sptag-high
+      AND period_to   GE s_sptag-low.
+  IF lt_sf IS INITIAL.
+    PERFORM add USING 'Shortfall (YCIS_SHORTFALL)' 'MISSING'
+      'No shortfall row for this month at all - shortfall waiver cannot apply'.
+    RETURN.
+  ENDIF.
+  LOOP AT lt_sf INTO ls_sf.
+    WRITE ls_sf-period_from TO lv_c1.
+    WRITE ls_sf-period_to   TO lv_c2.
+    IF ls_sf-period_from GT s_sptag-low OR ls_sf-period_to LT s_sptag-high.
+      lv_st = 'IGNORED'.
+      CONCATENATE ls_sf-matnr lv_c1 '-' lv_c2
+        ': period does NOT cover the whole run month - YRVG004 skips it'
+        INTO gv_d SEPARATED BY space.
+    ELSEIF ls_sf-appr_status NE 'A'.
+      lv_st = 'IGNORED'.
+      CONCATENATE ls_sf-matnr lv_c1 '-' lv_c2 ': APPR_STATUS =' ls_sf-appr_status
+        '- not approved in YCIS_SHORTFALL_MC, YRVG004 skips it'
+        INTO gv_d SEPARATED BY space.
+    ELSE.
+      lv_st = 'OK'.
+      CONCATENATE ls_sf-matnr lv_c1 '-' lv_c2 ': approved, full month - used'
+        INTO gv_d SEPARATED BY space.
+      APPEND ls_sf-matnr TO lt_valid.
+    ENDIF.
+    PERFORM add USING 'Shortfall row (YCIS_SHORTFALL)' lv_st gv_d.
+  ENDLOOP.
+
+* 2) does the CIS have a signed material that is declared shortfall?
+  CHECK gv_found = 'X'.
+  SELECT * FROM yrva_qais_tntlft INTO TABLE lt_tnt
+    WHERE qais_no = gv_qaisno.
+  IF lt_tnt IS INITIAL.
+    PERFORM add USING 'Shortfall -> CIS signed material' 'MISSING'
+      'No YRVA_QAIS_TNTLFT row for this CIS - shortfall can never match it'.
+    PERFORM add USING 'SHORTFALL WAIVER RESULT' 'NOT APPL'
+      'Shortfall waiver will NOT be applied (no signed materials)'.
+    RETURN.
+  ENDIF.
+  LOOP AT lt_tnt INTO ls_tnt.
+    READ TABLE lt_valid TRANSPORTING NO FIELDS WITH KEY table_line = ls_tnt-matnr.
+    IF sy-subrc = 0.
+      lv_hit = 'X'.
+      lv_st = 'SHORTFALL'.
+    ELSE.
+      lv_st = 'NORMAL'.
+    ENDIF.
+    WRITE ls_tnt-yy_tnt_lifting TO lv_c1 LEFT-JUSTIFIED.
+    CONCATENATE 'CIS signed material' ls_tnt-matnr 'MCQ' lv_c1
+      INTO gv_d SEPARATED BY space.
+    PERFORM add USING 'CIS signed material (TNTLFT)' lv_st gv_d.
+  ENDLOOP.
+  IF lv_hit IS INITIAL.
+    PERFORM add USING 'SHORTFALL WAIVER RESULT' 'NOT APPL'
+      'None of this CIS signed materials is an approved full-month shortfall material - waiver NOT applied'.
+    RETURN.
+  ENDIF.
+
+* 3) non-shortfall 75% rule (same as nonsf_waiver_ok)
+  LOOP AT lt_valid INTO ls_sf-matnr.
+    CLEAR lv_kondm.
+    SELECT SINGLE yy_grade FROM yrva_grade_cisd INTO lv_kondm
+      WHERE yy_matnr = ls_sf-matnr.
+    IF lv_kondm IS NOT INITIAL.
+      ls_kon-sign = 'I'. ls_kon-option = 'EQ'. ls_kon-low = lv_kondm.
+      APPEND ls_kon TO lt_sfkon.
+    ENDIF.
+  ENDLOOP.
+  LOOP AT lt_tnt INTO ls_tnt.
+    READ TABLE lt_valid TRANSPORTING NO FIELDS WITH KEY table_line = ls_tnt-matnr.
+    CHECK sy-subrc <> 0.
+    lv_mcq = lv_mcq + ls_tnt-yy_tnt_lifting.
+    CLEAR lv_kondm.
+    SELECT SINGLE yy_grade FROM yrva_grade_cisd INTO lv_kondm
+      WHERE yy_matnr = ls_tnt-matnr.
+    IF lv_kondm IS NOT INITIAL.
+      ls_kon-sign = 'I'. ls_kon-option = 'EQ'. ls_kon-low = lv_kondm.
+      APPEND ls_kon TO lt_nskon.
+    ENDIF.
+  ENDLOOP.
+  IF lv_mcq <= 10 OR lt_nskon IS INITIAL.
+    lv_ok = 'X'.
+    WRITE lv_mcq TO lv_c1 LEFT-JUSTIFIED.
+    CONCATENATE 'Non-shortfall MCQ' lv_c1 '<= 10 MT (or no other grade) - 75% rule waived'
+      INTO gv_d SEPARATED BY space.
+    PERFORM add USING 'Non-shortfall 75% rule' 'OK' gv_d.
   ELSE.
-    PERFORM add USING 'Shortfall grades (YCIS_SHORTFALL)' 'INFO'
-      'No shortfall grade declared for the period (auto shortfall-waiver will not apply)'.
+    SELECT kondm ummenge vtweg FROM s922 INTO (lv_kondm, lv_umb, lv_vtweg)
+      WHERE pkunag = p_kunnr AND sptag IN s_sptag.
+      IF lv_vtweg = '60'. CONTINUE. ENDIF.
+      IF lt_sfkon IS NOT INITIAL AND lv_kondm IN lt_sfkon. CONTINUE. ENDIF.
+      lv_lift = lv_lift + lv_umb.
+    ENDSELECT.
+    lv_need = lv_mcq * 75 / 100.
+    WRITE lv_lift TO lv_c1 LEFT-JUSTIFIED.
+    WRITE lv_need TO lv_c2 LEFT-JUSTIFIED.
+    WRITE lv_mcq  TO lv_c3 LEFT-JUSTIFIED.
+    CONCATENATE 'Non-shortfall lifting' lv_c1 'vs needed' lv_c2 '(75% of MCQ' lv_c3 ')'
+      INTO gv_d SEPARATED BY space.
+    IF lv_lift >= lv_need.
+      lv_ok = 'X'.
+      PERFORM add USING 'Non-shortfall 75% rule' 'OK' gv_d.
+    ELSE.
+      PERFORM add USING 'Non-shortfall 75% rule' 'FAIL' gv_d.
+    ENDIF.
+  ENDIF.
+  IF lv_ok = 'X'.
+    PERFORM add USING 'SHORTFALL WAIVER RESULT' 'APPLIED'
+      'Shortfall waiver applies - monthly minimum is 0 (Sales Order column shows S/F Waiver if lifting < 75% MCQ)'.
+  ELSE.
+    PERFORM add USING 'SHORTFALL WAIVER RESULT' 'NOT APPL'
+      'Waiver withheld: customer lifted < 75% of the non-shortfall grades MCQ'.
+  ENDIF.
+
+* 4) non-discount deduction: grades in YCIS_NODISC_GRD and channel 60 count
+*    for MCQ % but are deducted from the discountable quantity
+  SELECT kondm ummenge vtweg FROM s922 INTO (lv_kondm, lv_umb, lv_vtweg)
+    WHERE pkunag = p_kunnr AND sptag IN s_sptag.
+    lv_tot = lv_tot + lv_umb.
+    IF lv_vtweg = '60'.
+      lv_nod = lv_nod + lv_umb.
+    ELSE.
+      SELECT SINGLE kondm FROM ycis_nodisc_grd INTO lv_kondm WHERE kondm = lv_kondm.
+      IF sy-subrc = 0.
+        lv_nod = lv_nod + lv_umb.
+      ENDIF.
+    ENDIF.
+  ENDSELECT.
+  WRITE lv_tot TO lv_c1 LEFT-JUSTIFIED.
+  WRITE lv_nod TO lv_c2 LEFT-JUSTIFIED.
+  CONCATENATE 'Total lifting' lv_c1 '- non-discount (YCIS_NODISC_GRD / channel 60)' lv_c2
+    INTO gv_d SEPARATED BY space.
+  IF lv_tot > 0 AND lv_nod >= lv_tot.
+    CONCATENATE gv_d '=> discountable qty 0, discount is 0 by scheme rule' INTO gv_d SEPARATED BY space.
+    PERFORM add USING 'Discountable quantity' 'ZERO' gv_d.
+  ELSE.
+    PERFORM add USING 'Discountable quantity' 'OK' gv_d.
   ENDIF.
 ENDFORM.
 
