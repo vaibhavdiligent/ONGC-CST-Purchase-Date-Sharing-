@@ -11,9 +11,9 @@
 *&            of DMBTR and DMBE2 by their offsetting account :
 *&              GKART = K  -> per GKONT (vendor)
 *&              GKART <> K -> per GHKON (offsetting G/L account)
-*&            Sign : the mapped GL takes the offsetting account's side,
-*&            i.e. the 95671 / 956712 amount with opposite sign; the
-*&            offset line (offset GL) takes the 95671 / 956712 side.
+*&            Sign : the mapped GL takes the sign of the 95671 / 956712
+*&            line (debit -> 40, credit -> 50); the offset line (offset
+*&            GL) takes the opposite posting key.
 *&   Map    : ZFI_COL_GLMAP with KOART = 'K' for vendors, blank for GLs.
 *&   Post   : ONE document in OVL (doc type CL).
 *&            Document currency = OVC local currency (COP) = DMBTR,
@@ -358,9 +358,10 @@ FORM get_subtotals.
       PERFORM add_err USING gv_msg.
       CONTINUE.
     ENDIF.
-*   Mapped GL takes the offsetting account's side = opposite sign of the
-*   95671 / 956712 line (debit 'S' -> negative, credit 'H' -> positive)
-    IF <ls_bseg>-shkzg = 'S'.
+*   Mapped GL takes the sign of the 95671 / 956712 line itself
+*   (debit 'S' -> positive -> PK 40, credit 'H' -> negative -> PK 50);
+*   the offset line gets the opposite posting key.
+    IF <ls_bseg>-shkzg = 'H'.
       ls_sum-dmbtr = - <ls_bseg>-dmbtr.
       ls_sum-dmbe2 = - <ls_bseg>-dmbe2.
     ELSE.
