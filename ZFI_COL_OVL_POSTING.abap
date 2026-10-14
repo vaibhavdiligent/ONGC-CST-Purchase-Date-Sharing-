@@ -261,9 +261,20 @@ ENDFORM.
 *&          offsetting account : GKART K per GKONT, others per GHKON.
 *&---------------------------------------------------------------------*
 FORM get_subtotals.
-  DATA: ls_sum   TYPE ty_sum,
-        lv_lines TYPE i.
-  FIELD-SYMBOLS <ls_bseg> TYPE ty_bseg.
+  TYPES: BEGIN OF ty_acdoca_off,
+           gjahr TYPE acdoca-gjahr,
+           belnr TYPE acdoca-belnr,
+           buzei TYPE acdoca-buzei,
+           gkoar TYPE acdoca-gkoar,     " offsetting account type
+           gkont TYPE acdoca-gkont,     " offsetting account
+         END OF ty_acdoca_off.
+  DATA: ls_sum     TYPE ty_sum,
+        lv_lines   TYPE i,
+        lt_missing TYPE STANDARD TABLE OF ty_bseg,
+        lt_off     TYPE SORTED TABLE OF ty_acdoca_off
+                        WITH NON-UNIQUE KEY gjahr belnr buzei.
+  FIELD-SYMBOLS: <ls_bseg> TYPE ty_bseg,
+                 <ls_off>  TYPE ty_acdoca_off.
 
 * Only the 95671 / 956712 lines - grouped by their offsetting account
   SELECT bukrs, belnr, gjahr, buzei, shkzg, hkont, gkart, gkont, ghkon,
@@ -276,6 +287,55 @@ FORM get_subtotals.
       AND hkont IN @gr_racct
     INTO TABLE @gt_bseg.
 
+* S/4HANA: BSEG-GKART/GKONT/GHKON are often blank (or '*' on clearing
+* items) - the offsetting account is kept in ACDOCA (GKOAR / GKONT).
+* For such lines take it from ACDOCA (ledger 0L, same document line).
+  LOOP AT gt_bseg ASSIGNING <ls_bseg>.
+    IF <ls_bseg>-ghkon IS INITIAL AND <ls_bseg>-gkart <> gc_koart_vendor
+       AND <ls_bseg>-gkont IS NOT INITIAL AND <ls_bseg>-gkont NA '*'.
+      <ls_bseg>-ghkon = <ls_bseg>-gkont.   " G/L offset: GKONT = G/L
+    ENDIF.
+    IF <ls_bseg>-gkart IS INITIAL
+       OR ( <ls_bseg>-gkart =  gc_koart_vendor AND
+            ( <ls_bseg>-gkont IS INITIAL OR <ls_bseg>-gkont CA '*' ) )
+       OR ( <ls_bseg>-gkart <> gc_koart_vendor AND
+            ( <ls_bseg>-ghkon IS INITIAL OR <ls_bseg>-ghkon CA '*' ) ).
+      APPEND <ls_bseg> TO lt_missing.
+    ENDIF.
+  ENDLOOP.
+
+  IF lt_missing IS NOT INITIAL.
+    SELECT gjahr, belnr, buzei, gkoar, gkont
+      FROM acdoca
+      FOR ALL ENTRIES IN @lt_missing
+      WHERE rldnr  = @gc_rldnr
+        AND rbukrs = @p_bukrs
+        AND gjahr  = @lt_missing-gjahr
+        AND belnr  = @lt_missing-belnr
+        AND buzei  = @lt_missing-buzei
+      INTO TABLE @lt_off.
+
+    LOOP AT gt_bseg ASSIGNING <ls_bseg>.
+      READ TABLE lt_off ASSIGNING <ls_off>
+        WITH KEY gjahr = <ls_bseg>-gjahr
+                 belnr = <ls_bseg>-belnr
+                 buzei = <ls_bseg>-buzei.
+      CHECK sy-subrc = 0 AND <ls_off>-gkont IS NOT INITIAL
+            AND <ls_off>-gkont NA '*'.
+      READ TABLE lt_missing TRANSPORTING NO FIELDS
+        WITH KEY gjahr = <ls_bseg>-gjahr
+                 belnr = <ls_bseg>-belnr
+                 buzei = <ls_bseg>-buzei.
+      CHECK sy-subrc = 0.
+      <ls_bseg>-gkart = <ls_off>-gkoar.
+      IF <ls_off>-gkoar = gc_koart_vendor.
+        <ls_bseg>-gkont = <ls_off>-gkont.
+      ELSE.
+        <ls_bseg>-ghkon = <ls_off>-gkont.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
   LOOP AT gt_bseg ASSIGNING <ls_bseg>.
     CLEAR ls_sum.
     IF <ls_bseg>-gkart = gc_koart_vendor.  " vendor -> per GKONT
@@ -287,8 +347,8 @@ FORM get_subtotals.
 *   Offsetting account not determined (blank / '*') -> cannot be mapped
     IF ls_sum-acct IS INITIAL OR ls_sum-acct CA '*'.
       gv_msg = |Document { <ls_bseg>-belnr }/{ <ls_bseg>-gjahr } line | &&
-               |{ <ls_bseg>-buzei }: offsetting account (GKONT/GHKON) | &&
-               |not filled in BSEG|.
+               |{ <ls_bseg>-buzei }: offsetting account not filled in | &&
+               |BSEG (GKONT/GHKON) nor ACDOCA (GKONT)|.
       PERFORM add_err USING gv_msg.
       CONTINUE.
     ENDIF.
