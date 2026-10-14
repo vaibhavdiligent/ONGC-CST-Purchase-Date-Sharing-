@@ -344,6 +344,12 @@ FORM get_subtotals.
     ELSE.                                  " others -> per GHKON
       ls_sum-acct  = <ls_bseg>-ghkon.
     ENDIF.
+*   Offset is 95671 / 956712 itself (transfer between the two control
+*   accounts within the document) -> nothing to move to OVL, skip
+    IF ls_sum-koart IS INITIAL AND ls_sum-acct IN gr_racct
+       AND ls_sum-acct IS NOT INITIAL.
+      CONTINUE.
+    ENDIF.
 *   Offsetting account not determined (blank / '*') -> cannot be mapped
     IF ls_sum-acct IS INITIAL OR ls_sum-acct CA '*'.
       gv_msg = |Document { <ls_bseg>-belnr }/{ <ls_bseg>-gjahr } line | &&
