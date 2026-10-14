@@ -2,14 +2,18 @@
 *& Report  ZFI_COL_OVL_POSTING
 *&---------------------------------------------------------------------*
 *& Corporate - Colombia : re-post OVC period balances in OVL.
-*&   (FS: "FS for Corporate - Colombia - Updated", Raju Ashar 12.10.26)
+*&   (FS: "FS for Corporate - Colombia - Updated", Raju Ashar, as
+*&    amended 14.10.26 : offsetting account of the 95671 / 956712 lines)
 *&
 *&   Step 1 : ACDOCA (ledger 0L, RRCTY 0) - documents of the OVC company
 *&            code / year / period that hit GL 95671 or 956712.
-*&   Step 2 : BSEG of those documents (HKONT not 95671 / 956712),
-*&            subtotal of DMBTR and DMBE2 :
-*&              KOART = K  -> per vendor (LIFNR)
-*&              KOART <> K -> per GL (HKONT)
+*&   Step 2 : BSEG lines of those documents ON 95671 / 956712, subtotal
+*&            of DMBTR and DMBE2 by their offsetting account :
+*&              GKART = K  -> per GKONT (vendor)
+*&              GKART <> K -> per GHKON (offsetting G/L account)
+*&            Sign : the mapped GL takes the offsetting account's side,
+*&            i.e. the 95671 / 956712 amount with opposite sign; the
+*&            offset line (offset GL) takes the 95671 / 956712 side.
 *&   Map    : ZFI_COL_GLMAP with KOART = 'K' for vendors, blank for GLs.
 *&   Post   : ONE document in OVL (doc type CL).
 *&            Document currency = OVC local currency (COP) = DMBTR,
@@ -54,15 +58,16 @@ TYPES: BEGIN OF ty_bseg,
          belnr TYPE belnr_d,
          gjahr TYPE gjahr,
          buzei TYPE bseg-buzei,
-         koart TYPE bseg-koart,
          shkzg TYPE bseg-shkzg,
          hkont TYPE bseg-hkont,
-         lifnr TYPE bseg-lifnr,
+         gkart TYPE bseg-gkart,       " offsetting account type
+         gkont TYPE bseg-gkont,       " offsetting account
+         ghkon TYPE bseg-ghkon,       " offsetting G/L account
          dmbtr TYPE bseg-dmbtr,
          dmbe2 TYPE bseg-dmbe2,
        END OF ty_bseg.
 
-* KOART = 'K' -> ACCT = vendor (LIFNR), KOART = space -> ACCT = GL (HKONT)
+* KOART = 'K' -> ACCT = vendor (GKONT), KOART = space -> ACCT = GL (GHKON)
 TYPES: BEGIN OF ty_sum,
          koart TYPE bseg-koart,
          acct  TYPE bseg-hkont,
@@ -252,33 +257,44 @@ FORM get_documents.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-*& Step 2 - subtotal DMBTR + DMBE2 (HKONT not 95671 / 956712):
-*&          KOART K per vendor (LIFNR), others per GL (HKONT).
+*& Step 2 - BSEG lines on 95671 / 956712, subtotal DMBTR + DMBE2 by
+*&          offsetting account : GKART K per GKONT, others per GHKON.
 *&---------------------------------------------------------------------*
 FORM get_subtotals.
   DATA: ls_sum   TYPE ty_sum,
         lv_lines TYPE i.
   FIELD-SYMBOLS <ls_bseg> TYPE ty_bseg.
 
-  SELECT bukrs, belnr, gjahr, buzei, koart, shkzg, hkont, lifnr,
+* Only the 95671 / 956712 lines - grouped by their offsetting account
+  SELECT bukrs, belnr, gjahr, buzei, shkzg, hkont, gkart, gkont, ghkon,
          dmbtr, dmbe2
     FROM bseg
     FOR ALL ENTRIES IN @gt_doc
     WHERE bukrs = @p_bukrs
       AND belnr = @gt_doc-belnr
       AND gjahr = @gt_doc-gjahr
-      AND hkont NOT IN @gr_racct
+      AND hkont IN @gr_racct
     INTO TABLE @gt_bseg.
 
   LOOP AT gt_bseg ASSIGNING <ls_bseg>.
     CLEAR ls_sum.
-    IF <ls_bseg>-koart = gc_koart_vendor.  " vendor -> per LIFNR
+    IF <ls_bseg>-gkart = gc_koart_vendor.  " vendor -> per GKONT
       ls_sum-koart = gc_koart_vendor.
-      ls_sum-acct  = <ls_bseg>-lifnr.
-    ELSE.                                  " others -> per HKONT
-      ls_sum-acct  = <ls_bseg>-hkont.
+      ls_sum-acct  = <ls_bseg>-gkont.
+    ELSE.                                  " others -> per GHKON
+      ls_sum-acct  = <ls_bseg>-ghkon.
     ENDIF.
-    IF <ls_bseg>-shkzg = 'H'.              " credit -> negative
+*   Offsetting account not determined (blank / '*') -> cannot be mapped
+    IF ls_sum-acct IS INITIAL OR ls_sum-acct CA '*'.
+      gv_msg = |Document { <ls_bseg>-belnr }/{ <ls_bseg>-gjahr } line | &&
+               |{ <ls_bseg>-buzei }: offsetting account (GKONT/GHKON) | &&
+               |not filled in BSEG|.
+      PERFORM add_err USING gv_msg.
+      CONTINUE.
+    ENDIF.
+*   Mapped GL takes the offsetting account's side = opposite sign of the
+*   95671 / 956712 line (debit 'S' -> negative, credit 'H' -> positive)
+    IF <ls_bseg>-shkzg = 'S'.
       ls_sum-dmbtr = - <ls_bseg>-dmbtr.
       ls_sum-dmbe2 = - <ls_bseg>-dmbe2.
     ELSE.
@@ -287,6 +303,7 @@ FORM get_subtotals.
     ENDIF.
     COLLECT ls_sum INTO gt_sum.
   ENDLOOP.
+  CHECK gv_error IS INITIAL.
 
   DELETE gt_sum WHERE dmbtr = 0 AND dmbe2 = 0.
 
