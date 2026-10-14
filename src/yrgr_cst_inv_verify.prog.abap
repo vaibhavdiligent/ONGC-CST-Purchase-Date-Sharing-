@@ -260,11 +260,14 @@ FORM validate_selection.
     MESSAGE 'From and To dates must be in the same fortnight (same month)' TYPE 'E'.
   ENDIF.
 
-  CALL FUNCTION 'LAST_DAY_OF_MONTHS'
-    EXPORTING
-      day_in            = <fs_date>-low
-    IMPORTING
-      last_day_of_month = lv_eom_date.
+  " Last day of the month without FM LAST_DAY_OF_MONTHS (not released in
+  " S/4HANA - ATC): 1st of the month + 31 days lands in the next month;
+  " go back to the 1st of that month and subtract one day.
+  lv_eom_date = <fs_date>-low.
+  lv_eom_date+6(2) = '01'.
+  lv_eom_date = lv_eom_date + 31.
+  lv_eom_date+6(2) = '01'.
+  lv_eom_date = lv_eom_date - 1.
   lv_last_day = lv_eom_date+6(2).
 
   IF lv_from_day = 1 AND lv_to_day = 15.
