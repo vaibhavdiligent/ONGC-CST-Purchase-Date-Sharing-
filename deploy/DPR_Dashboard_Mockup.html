@@ -1,0 +1,307 @@
+<title>DPR Production Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+  :root {
+    --shell: #ffffff; --page: #f5f6f7; --card: #ffffff; --line: #d5dadf;
+    --ink: #1d2d3e; --ink2: #556b82; --ink3: #7f8fa3;
+    --brand: #0064d9; --brand-soft: #eaf2fd;
+    --c-actual: #0070f2; --c-target: #e76500; --c-3: #a100c2; --c-4: #188918;
+    --good: #256f3a; --good-bg: #e4f4e8; --warn: #a25100; --warn-bg: #fdf1e3; --bad: #aa0808; --bad-bg: #fce8e8;
+    --grid: #e6eaee; --shadow: 0 0 .125rem rgba(34,54,73,.15), 0 .125rem .5rem rgba(34,54,73,.15);
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --shell: #1d232a; --page: #12171c; --card: #1d232a; --line: #3c4854;
+    --ink: #eaecee; --ink2: #a9b4be; --ink3: #7f8fa3; --brand: #4db1ff; --brand-soft: #1e3450;
+    --c-actual: #4db1ff; --c-target: #ff8c47; --c-3: #d47cf0; --c-4: #4fc35a;
+    --good: #5dd07a; --good-bg: #1c3524; --warn: #ffb066; --warn-bg: #3d2a10; --bad: #ff8888; --bad-bg: #3f1d1d;
+    --grid: #2b333b; --shadow: 0 0 .125rem rgba(0,0,0,.5), 0 .125rem .5rem rgba(0,0,0,.4);
+  } }
+  :root[data-theme="dark"] {
+    --shell: #1d232a; --page: #12171c; --card: #1d232a; --line: #3c4854;
+    --ink: #eaecee; --ink2: #a9b4be; --ink3: #7f8fa3; --brand: #4db1ff; --brand-soft: #1e3450;
+    --c-actual: #4db1ff; --c-target: #ff8c47; --c-3: #d47cf0; --c-4: #4fc35a;
+    --good: #5dd07a; --good-bg: #1c3524; --warn: #ffb066; --warn-bg: #3d2a10; --bad: #ff8888; --bad-bg: #3f1d1d;
+    --grid: #2b333b; --shadow: 0 0 .125rem rgba(0,0,0,.5), 0 .125rem .5rem rgba(0,0,0,.4);
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--ink); font-family: "Source Sans 3", "72", "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.4; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* Fiori shell bar */
+  .shell { background: var(--shell); border-bottom: 1px solid var(--line); height: 44px; display: flex; align-items: center; gap: 16px; padding: 0 16px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+  .shell .logo { font-weight: 700; color: var(--brand); letter-spacing: .02em; font-size: 15px; }
+  .shell .title { font-weight: 600; flex: 1; text-align: center; }
+  .shell .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+  .mock { background: var(--warn-bg); color: var(--warn); font-size: 12px; text-align: center; padding: 4px 16px; border-bottom: 1px solid var(--line); }
+
+  .page { padding-block: 16px 32px; padding-inline: 16px; max-width: 1360px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin: 4px 0 12px; }
+
+  /* filter bar */
+  .filterbar { background: var(--card); box-shadow: var(--shadow); border-radius: 8px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; margin-bottom: 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 1 1 150px; max-width: 220px; }
+  .field label { font-size: 12px; color: var(--ink2); }
+  .field label b { color: var(--bad); font-weight: 600; }
+  .field input, .field select { border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--ink); padding: 6px 8px; font: inherit; height: 32px; }
+  .field input:focus, .field select:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .actions { display: flex; gap: 8px; margin-left: auto; }
+  .btn { border: 1px solid var(--line); background: var(--card); color: var(--brand); border-radius: 4px; height: 32px; padding: 0 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+  .btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+  /* cards */
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+  .card { background: var(--card); box-shadow: var(--shadow); border-radius: 8px; display: flex; flex-direction: column; min-width: 0; }
+  .card header { padding: 12px 16px 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .card .sub { font-size: 12px; color: var(--ink2); }
+  .card .body { padding: 0 16px 14px; flex: 1; min-width: 0; }
+  .span6 { grid-column: span 6; } .span4 { grid-column: span 4; } .span8 { grid-column: span 8; } .span12 { grid-column: span 12; }
+  @media (max-width: 1000px) { .span4, .span6, .span8 { grid-column: span 12; } }
+
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--ink2); margin: 2px 0 6px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .legend i.box { height: 10px; width: 10px; border-radius: 2px; }
+  svg { width: 100%; height: auto; display: block; }
+  .axis text { fill: var(--ink3); font-size: 11px; }
+  .axis line { stroke: var(--grid); }
+  .tt { position: absolute; pointer-events: none; background: var(--ink); color: var(--card); font-size: 12px; padding: 6px 8px; border-radius: 4px; opacity: 0; transform: translate(-50%, calc(-100% - 10px)); white-space: nowrap; transition: opacity .1s; }
+  .chartwrap { position: relative; }
+
+  /* KPI */
+  .kpi { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 4px; }
+  .kpi .big { font-size: 34px; font-weight: 600; line-height: 1.05; }
+  .kpi .unit { font-size: 13px; color: var(--ink2); font-weight: 400; margin-left: 6px; }
+  .kpi .dev { font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+  .pill.good { background: var(--good-bg); color: var(--good); } .pill.warn { background: var(--warn-bg); color: var(--warn); } .pill.bad { background: var(--bad-bg); color: var(--bad); } .pill.neutral { background: var(--page); color: var(--ink2); }
+  .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; font-size: 12px; margin-top: 8px; }
+  .bar { height: 8px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--c-actual); }
+
+  /* tables */
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  td.wrap, th.wrap { white-space: normal; min-width: 120px; }
+  th { color: var(--ink2); font-weight: 600; font-size: 12px; }
+  td.r, th.r { text-align: right; }
+  tr.group td { font-weight: 600; background: var(--page); }
+  .tablewrap { overflow-x: auto; }
+  .card footer { padding: 6px 16px 10px; font-size: 12px; color: var(--brand); border-top: 1px solid var(--grid); }
+  .foot { font-size: 12px; color: var(--ink3); margin-top: 16px; }
+  @media (prefers-reduced-motion: reduce) { .tt { transition: none; } }
+</style>
+
+<div class="shell"><span class="logo">SAP</span><span class="title">DPR Production Dashboard</span><span class="avatar">VM</span></div>
+<div class="mock">Design mockup with illustrative figures for FY 2024-25 — layout of the Fiori Overview Page as it will be built. Numbers are examples, not system data.</div>
+
+<div class="page">
+  <h1>DPR Production Dashboard</h1>
+
+  <form class="filterbar" onsubmit="return false">
+    <div class="field"><label for="f-from">Production date from <b>*</b></label><input id="f-from" type="text" value="01.04.2024"></div>
+    <div class="field"><label for="f-to">Production date to <b>*</b></label><input id="f-to" type="text" value="14.04.2024"></div>
+    <div class="field"><label for="f-fy">Fiscal year <b>*</b></label><input id="f-fy" type="text" value="2024"></div>
+    <div class="field"><label for="f-tc">Target code</label><select id="f-tc"><option>TAR_BE — Budget Estimate</option><option>TAR_RE — Revised Estimate</option><option>TAR_IN — Internal Target</option></select></div>
+    <div class="field"><label for="f-bu">Business unit</label><select id="f-bu"><option>All</option><option>BU-RUSSIA</option><option>BU-LAC</option><option>BU-ASIA PACIFIC</option><option>BU-MENA CIS</option></select></div>
+    <div class="actions"><button class="btn" type="button">Adapt Filters</button><button class="btn primary" type="button">Go</button></div>
+  </form>
+
+  <div class="grid">
+    <!-- Card 1: line chart -->
+    <section class="card span8">
+      <header><h2>Actual Production vs BE Target (BOEPD)</h2><span class="sub">OVL share · 01.04–14.04.2024</span></header>
+      <div class="body">
+        <div class="legend"><span><i style="background:var(--c-actual)"></i>Actual Production</span><span><i style="background:var(--c-target)"></i>BE Target</span></div>
+        <div class="chartwrap" id="lineWrap"></div>
+      </div>
+      <footer>Open detail (Analytical List Page) ›</footer>
+    </section>
+
+    <!-- Card 3: KPI -->
+    <section class="card span4">
+      <header><h2>Total O+OEG (BOEPD)</h2><span class="sub">YTD average</span></header>
+      <div class="body">
+        <div class="kpi">
+          <div class="big num">193,420<span class="unit">BOEPD</span></div>
+          <div class="dev"><span class="pill warn">▼ 3.2 % vs BE Target</span><span class="num" style="color:var(--ink2)">target 199,800</span></div>
+        </div>
+        <div class="bars num">
+          <span>Oil, LNG &amp; Cond.</span><div class="bar"><i style="width:96%"></i></div><span>94,110 BOPD</span>
+          <span>Gas</span><div class="bar"><i style="width:98%;background:var(--c-3)"></i></div><span>15.79 MMSCMD</span>
+          <span>Gas as BOE</span><div class="bar"><i style="width:98%;background:var(--c-3)"></i></div><span>99,310 BOEPD</span>
+        </div>
+      </div>
+      <footer>Open Production Performance ›</footer>
+    </section>
+
+    <!-- Card 2: Production performance table -->
+    <section class="card span6">
+      <header><h2>Production Performance</h2><span class="sub">Excel tab 3 · YTD &amp; Annual vs BE Target</span></header>
+      <div class="body tablewrap">
+        <table class="num">
+          <thead><tr><th>Scope</th><th class="wrap">Product</th><th class="r">Actual</th><th class="r">BE Target</th><th class="r">BOEPD Act / Tgt</th><th class="r">% Achv</th></tr></thead>
+          <tbody>
+            <tr><td>YTD</td><td class="wrap">Oil, LNG &amp; Condensate (BOPD)</td><td class="r">94,110</td><td class="r">97,500</td><td class="r">94,110 / 97,500</td><td class="r"><span class="pill warn">96.5 %</span></td></tr>
+            <tr><td>YTD</td><td>Gas (MMSCMD)</td><td class="r">15.79</td><td class="r">16.26</td><td class="r">99,310 / 102,300</td><td class="r"><span class="pill warn">97.1 %</span></td></tr>
+            <tr><td>Annual</td><td class="wrap">Oil, LNG &amp; Condensate (BOPD)</td><td class="r">–</td><td class="r">98,200</td><td class="r">– / 98,200</td><td class="r"><span class="pill neutral">–</span></td></tr>
+            <tr><td>Annual</td><td>Gas (MMSCMD)</td><td class="r">–</td><td class="r">16.40</td><td class="r">– / 103,160</td><td class="r"><span class="pill neutral">–</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <footer>Open detail ›</footer>
+    </section>
+
+    <!-- Card 5: target vs actual by product (bars) -->
+    <section class="card span6">
+      <header><h2>Target vs Actual by Product</h2><span class="sub">FY 2024 · TAR_BE · monthly reconciled</span></header>
+      <div class="body">
+        <div class="legend"><span><i class="box" style="background:var(--c-actual)"></i>Actual</span><span><i class="box" style="background:var(--c-target)"></i>Target</span></div>
+        <div class="chartwrap" id="barWrap"></div>
+      </div>
+      <footer>Open detail ›</footer>
+    </section>
+
+    <!-- Card 4: daily trend by BU -->
+    <section class="card span6">
+      <header><h2>Daily Production Trend by Business Unit</h2><span class="sub">OVL BOEPD · 01.04–14.04.2024</span></header>
+      <div class="body">
+        <div class="legend"><span><i style="background:var(--c-actual)"></i>BU-RUSSIA</span><span><i style="background:var(--c-target)"></i>BU-LAC</span><span><i style="background:var(--c-3)"></i>BU-ASIA PACIFIC</span><span><i style="background:var(--c-4)"></i>BU-MENA CIS</span></div>
+        <div class="chartwrap" id="trendWrap"></div>
+      </div>
+      <footer>Open detail ›</footer>
+    </section>
+
+    <!-- Card 6: production records -->
+    <section class="card span6">
+      <header><h2>Production Records — Latest Day</h2><span class="sub">14.04.2024 · by asset</span></header>
+      <div class="body tablewrap">
+        <table class="num">
+          <thead><tr><th class="wrap">Asset</th><th>Business unit</th><th class="r">Oil JV BOPD</th><th class="r">Gas JV MMSCMD</th><th class="r">PI %</th><th class="r">OVL BOEPD</th></tr></thead>
+          <tbody>
+            <tr><td class="wrap">RUS_SK1 Sakhalin-1</td><td>BU-RUSSIA</td><td class="r">168,400</td><td class="r">6.12</td><td class="r">20.0</td><td class="r">41,380</td></tr>
+            <tr><td class="wrap">RUS_VAN Vankor</td><td>BU-RUSSIA</td><td class="r">212,900</td><td class="r">2.05</td><td class="r">26.0</td><td class="r">58,710</td></tr>
+            <tr><td class="wrap">AZE_ACG ACG</td><td>BU-MENA CIS</td><td class="r">385,000</td><td class="r">4.90</td><td class="r">2.3</td><td class="r">9,560</td></tr>
+            <tr><td class="wrap">BRA_BC1 BC-10</td><td>BU-LAC</td><td class="r">28,300</td><td class="r">0.62</td><td class="r">27.0</td><td class="r">8,690</td></tr>
+            <tr><td class="wrap">VNM_B06 Block 06.1</td><td>BU-ASIA PACIFIC</td><td class="r">4,200</td><td class="r">6.40</td><td class="r">45.0</td><td class="r">20,000</td></tr>
+            <tr><td class="wrap">SSU_GPO GPOC</td><td>BU-MENA CIS</td><td class="r">31,000</td><td class="r">0.00</td><td class="r">24.1</td><td class="r">7,470</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <footer>Show all 17 assets ›</footer>
+    </section>
+  </div>
+
+  <p class="foot">Cards 1 and 2 reproduce tabs 2 and 3 of the DPR Excel workbook. Every card is driven by the global filter bar; each opens its detailed report on click. Data source: package ZPR_DPR_RAP (queries ZDPR_Q_BOEPD_TREND, ZDPR_Q_PROD_PERF, ZDPR_Q_TARGET_QUERY, ZDPR_Q_DAILY_TREND, ZDPR_Q_PROD_QUERY).</p>
+</div>
+
+<script>
+(function () {
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const days = Array.from({ length: 14 }, (_, i) => `${String(i + 1).padStart(2, "0")}.04`);
+  const actual = [191.2, 194.8, 196.1, 189.4, 187.0, 192.6, 195.3, 197.9, 193.1, 190.2, 188.7, 194.4, 196.8, 193.4];
+  const target = Array(14).fill(199.8);
+
+  function tooltip(wrap) {
+    const t = document.createElement("div"); t.className = "tt"; wrap.appendChild(t);
+    return { show(x, y, html) { t.innerHTML = html; t.style.left = x + "px"; t.style.top = y + "px"; t.style.opacity = 1; }, hide() { t.style.opacity = 0; } };
+  }
+
+  /* ── line chart ─────────────────────────────────────────────── */
+  function lineChart(wrap) {
+    const W = 760, H = 260, m = { t: 12, r: 16, b: 30, l: 46 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const ymin = 180, ymax = 205;
+    const x = (i) => m.l + (i / (days.length - 1)) * iw;
+    const y = (v) => m.t + ih - ((v - ymin) / (ymax - ymin)) * ih;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Actual production versus BE target, BOEPD, 1 to 14 April 2024">`;
+    s += `<g class="axis">`;
+    for (let v = 180; v <= 205; v += 5) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v}k</text>`;
+    days.forEach((d, i) => { if (i % 2 === 0) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${d}</text>`; });
+    s += `</g>`;
+    const path = (arr) => arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    s += `<path d="${path(actual)} L${x(13)},${y(ymin)} L${x(0)},${y(ymin)} Z" fill="${css("--c-actual")}" opacity=".08"/>`;
+    s += `<path d="${path(target)}" fill="none" stroke="${css("--c-target")}" stroke-width="2" stroke-dasharray="6 4"/>`;
+    s += `<path d="${path(actual)}" fill="none" stroke="${css("--c-actual")}" stroke-width="2"/>`;
+    s += `<circle cx="${x(13)}" cy="${y(actual[13])}" r="4" fill="${css("--c-actual")}" stroke="${css("--card")}" stroke-width="2"/>`;
+    s += `<text x="${x(13) - 8}" y="${y(actual[13]) - 10}" text-anchor="end" font-size="11" fill="${css("--ink")}" font-weight="600">193.4k</text>`;
+    s += `<text x="${x(0) + 6}" y="${y(199.8) - 6}" font-size="11" fill="${css("--ink2")}">BE Target 199.8k</text>`;
+    s += `<line id="xh" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" stroke="${css("--ink3")}" stroke-width="1" opacity="0"/>`;
+    s += `<rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="lineHit"/></svg>`;
+    wrap.innerHTML = s;
+    const tt = tooltip(wrap), svg = wrap.querySelector("svg"), xh = wrap.querySelector("#xh");
+    wrap.querySelector("#lineHit").addEventListener("mousemove", (e) => {
+      const r = svg.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W;
+      const i = Math.max(0, Math.min(13, Math.round(((px - m.l) / iw) * 13)));
+      xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("opacity", 1);
+      tt.show((x(i) / W) * r.width, (y(actual[i]) / H) * r.height, `<b>${days[i]}.2024</b><br>Actual ${actual[i].toFixed(1)}k BOEPD<br>BE Target ${target[i].toFixed(1)}k BOEPD`);
+    });
+    wrap.querySelector("#lineHit").addEventListener("mouseleave", () => { xh.setAttribute("opacity", 0); tt.hide(); });
+  }
+
+  /* ── grouped bars ───────────────────────────────────────────── */
+  function barChart(wrap) {
+    const cats = ["Oil", "Condensate", "Gas (BOE)", "LNG"];
+    const act = [82.4, 11.7, 99.3, 8.2], tgt = [85.0, 12.5, 102.3, 8.0];
+    const W = 560, H = 230, m = { t: 14, r: 16, b: 30, l: 44 }, iw = W - m.l - m.r, ih = H - m.t - m.b, ymax = 120;
+    const gw = iw / cats.length, bw = Math.min(34, gw * 0.3);
+    const y = (v) => m.t + ih - (v / ymax) * ih;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Actual versus target by product, thousand BOEPD"><g class="axis">`;
+    for (let v = 0; v <= 120; v += 30) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v}k</text>`;
+    s += `</g>`;
+    cats.forEach((c, i) => {
+      const cx = m.l + gw * i + gw / 2;
+      const bars = [[act[i], css("--c-actual"), cx - bw - 1, "Actual"], [tgt[i], css("--c-target"), cx + 1, "Target"]];
+      bars.forEach(([v, col, bx, name]) => {
+        s += `<rect data-tip="${c}: ${name} ${v}k BOEPD" x="${bx}" y="${y(v)}" width="${bw}" height="${ih - (y(v) - m.t)}" rx="3" fill="${col}"/>`;
+      });
+      s += `<text class="axis" x="${cx}" y="${H - 8}" text-anchor="middle" font-size="11" fill="${css("--ink3")}">${c}</text>`;
+      const pct = Math.round((act[i] / tgt[i]) * 100);
+      s += `<text x="${cx}" y="${y(Math.max(act[i], tgt[i])) - 6}" text-anchor="middle" font-size="11" font-weight="600" fill="${css("--ink")}">${pct} %</text>`;
+    });
+    s += `</svg>`;
+    wrap.innerHTML = s;
+    const tt = tooltip(wrap), svg = wrap.querySelector("svg");
+    wrap.querySelectorAll("rect[data-tip]").forEach((rc) => {
+      rc.addEventListener("mousemove", (e) => { const r = svg.getBoundingClientRect(); tt.show(e.clientX - r.left, e.clientY - r.top, rc.dataset.tip); });
+      rc.addEventListener("mouseleave", () => tt.hide());
+    });
+  }
+
+  /* ── multi-line trend by BU ─────────────────────────────────── */
+  function trendChart(wrap) {
+    const series = [
+      ["BU-RUSSIA", css("--c-actual"), [100.1, 101.4, 102.0, 98.9, 97.5, 100.8, 102.2, 103.5, 101.0, 99.6, 98.4, 101.7, 103.0, 100.9]],
+      ["BU-LAC", css("--c-target"), [30.2, 30.9, 31.1, 29.8, 29.5, 30.6, 31.0, 31.5, 30.7, 30.1, 29.9, 30.8, 31.2, 30.6]],
+      ["BU-ASIA PACIFIC", css("--c-3"), [37.5, 38.0, 38.3, 37.1, 36.8, 37.6, 38.1, 38.4, 37.9, 37.2, 37.0, 37.8, 38.2, 37.7]],
+      ["BU-MENA CIS", css("--c-4"), [23.4, 24.5, 24.7, 23.6, 23.2, 23.6, 24.0, 24.5, 23.5, 23.3, 23.4, 24.1, 24.4, 24.2]],
+    ];
+    const W = 560, H = 230, m = { t: 12, r: 40, b: 30, l: 44 }, iw = W - m.l - m.r, ih = H - m.t - m.b, ymax = 120;
+    const x = (i) => m.l + (i / 13) * iw, y = (v) => m.t + ih - (v / ymax) * ih;
+    let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily OVL production by business unit, thousand BOEPD"><g class="axis">`;
+    for (let v = 0; v <= 120; v += 30) s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v}k</text>`;
+    days.forEach((d, i) => { if (i % 2 === 0) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${d}</text>`; });
+    s += `</g>`;
+    series.forEach(([n, col, arr]) => {
+      s += `<path d="${arr.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ")}" fill="none" stroke="${col}" stroke-width="2"/>`;
+      s += `<text x="${x(13) + 4}" y="${y(arr[13]) + 4}" font-size="10" fill="${css("--ink2")}">${arr[13].toFixed(0)}k</text>`;
+    });
+    s += `<line id="xh2" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" stroke="${css("--ink3")}" opacity="0"/><rect x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent" id="trendHit"/></svg>`;
+    wrap.innerHTML = s;
+    const tt = tooltip(wrap), svg = wrap.querySelector("svg"), xh = wrap.querySelector("#xh2");
+    wrap.querySelector("#trendHit").addEventListener("mousemove", (e) => {
+      const r = svg.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W;
+      const i = Math.max(0, Math.min(13, Math.round(((px - m.l) / iw) * 13)));
+      xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("opacity", 1);
+      tt.show((x(i) / W) * r.width, (m.t / H) * r.height + 10, `<b>${days[i]}.2024</b><br>` + series.map(([n, , a]) => `${n} ${a[i].toFixed(1)}k`).join("<br>"));
+    });
+    wrap.querySelector("#trendHit").addEventListener("mouseleave", () => { xh.setAttribute("opacity", 0); tt.hide(); });
+  }
+
+  function draw() { lineChart(document.getElementById("lineWrap")); barChart(document.getElementById("barWrap")); trendChart(document.getElementById("trendWrap")); }
+  draw();
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+})();
+</script>

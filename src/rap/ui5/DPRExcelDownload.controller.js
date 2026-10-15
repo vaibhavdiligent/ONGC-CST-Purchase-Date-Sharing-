@@ -12,7 +12,7 @@
  * and triggers a native browser file-save dialog.
  *
  * Prerequisites:
- *   - Service binding ZPRA_SB_DPR_ANALYTICS_O4 is published (OData V4)
+ *   - Service binding ZDPR_SB_ANALYTICS_O4 is published (OData V4)
  *   - The Fiori app's manifest.json points to this OData V4 service
  *   - SAP UI5 version >= 1.90 (for OData V4 model action support)
  */

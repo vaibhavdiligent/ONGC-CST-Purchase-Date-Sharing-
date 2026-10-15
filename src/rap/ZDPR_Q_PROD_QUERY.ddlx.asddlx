@@ -1,0 +1,77 @@
+@Metadata.layer: #CUSTOMER
+
+@UI.headerInfo: {
+  typeName:       'Production Record',
+  typeNamePlural: 'Production Record',
+  title:          { type: #STANDARD, value: 'ProductDescription' },
+  description:    { type: #STANDARD, value: 'AssetDescription' }
+}
+
+@UI.chart: [{
+  qualifier:  'ByDate',
+  title:      'Daily Production by Product',
+  chartType:  #COLUMN,
+  dimensions: ['ProductionDate', 'ProductDescription'],
+  measures:   ['ProdQty1', 'OvlShareQty1']
+}]
+
+@UI.presentationVariant: [{
+  visualizations: [
+    { type: #AS_CHART },
+    { type: #AS_LINEITEM }
+  ]
+}]
+
+annotate view ZDPR_Q_PROD_QUERY with
+{
+  @UI.selectionField: [{ position: 10 }]
+  @UI.lineItem: [{ position: 10, importance: #HIGH, label: 'Date' }]
+  ProductionDate;
+
+  @UI.selectionField: [{ position: 20 }]
+  CalendarYear;
+
+  @UI.selectionField: [{ position: 30 }]
+  CalendarMonth;
+
+  @UI.selectionField: [{ position: 40 }]
+  Product;
+
+  @UI.selectionField: [{ position: 50 }]
+  Asset;
+
+  @UI.selectionField: [{ position: 60 }]
+  VolumeType;
+
+  @UI.lineItem: [{ position: 20, importance: #HIGH, label: 'Product' }]
+  ProductDescription;
+
+  @UI.lineItem: [{ position: 30, importance: #HIGH, label: 'Asset' }]
+  AssetDescription;
+
+  @UI.lineItem: [{ position: 40, importance: #MEDIUM, label: 'Block' }]
+  Block;
+
+  @UI.lineItem: [{ position: 50, importance: #MEDIUM, label: 'Volume Type' }]
+  VolumeTypeDescription;
+
+  @UI.lineItem: [{ position: 60, importance: #HIGH, label: 'JV Production (UoM1)' }]
+  @UI.dataPoint: { title: 'Total JV Production' }
+  ProdQty1;
+
+  @UI.lineItem: [{ position: 70, importance: #LOW, label: 'UoM' }]
+  ProdUom1;
+
+  @UI.lineItem: [{ position: 80, importance: #HIGH, label: 'OVL Share (UoM1)' }]
+  @UI.dataPoint: { title: 'OVL Share' }
+  OvlShareQty1;
+
+  @UI.lineItem: [{ position: 90, importance: #MEDIUM, label: 'JV Production (UoM2)' }]
+  ProdQty2;
+
+  @UI.lineItem: [{ position: 100, importance: #MEDIUM, label: 'OVL Share (UoM2)' }]
+  OvlShareQty2;
+
+  @UI.lineItem: [{ position: 110, importance: #LOW, label: 'PI %' }]
+  ParticipatingInterest;
+}
