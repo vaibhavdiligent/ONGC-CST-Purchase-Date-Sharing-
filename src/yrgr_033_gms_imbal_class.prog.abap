@@ -16,7 +16,9 @@ CLASS lcl_event_handler DEFINITION.
       user_command FOR EVENT user_command OF cl_gui_alv_grid
         IMPORTING e_ucomm sender,
       data_changed FOR EVENT data_changed OF cl_gui_alv_grid
-        IMPORTING er_data_changed sender.
+        IMPORTING er_data_changed sender,
+      data_changed_finished FOR EVENT data_changed_finished OF cl_gui_alv_grid
+        IMPORTING e_modified et_good_cells.
 ENDCLASS.
 
 CLASS lcl_event_handler IMPLEMENTATION.
@@ -50,5 +52,8 @@ CLASS lcl_event_handler IMPLEMENTATION.
   ENDMETHOD.
   METHOD data_changed.
     PERFORM handle_data_changed USING er_data_changed.
+  ENDMETHOD.
+  METHOD data_changed_finished.
+    PERFORM handle_data_changed_finished.
   ENDMETHOD.
 ENDCLASS.

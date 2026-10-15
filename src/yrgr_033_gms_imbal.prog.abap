@@ -48,6 +48,13 @@ INCLUDE yrgr_033_gms_imbal_get_data.
 
 *----------------------------------------------------------------------*
 INITIALIZATION.
+  " Notes block on the selection screen (mail 30.07.2026, ref YRXR025N)
+  cmt1 = '1st Radio Button (Report for Closing Imbalance): The List is w.e.f.'.
+  cmt2 = '   01.01.2022, after Implementation of Single Material Code for'.
+  cmt3 = '   Transmission of Shippers'' Gas'.
+  cmt4 = '2nd Radio Button (Till Date): The List is w.e.f. 01.09.2025, after'.
+  cmt5 = '   2UoM Migration'.
+
   lv_date = sy-datum - 4.
   CALL FUNCTION 'YRX_PRVS_DATE_FM'
     EXPORTING
@@ -70,11 +77,23 @@ AT SELECTION-SCREEN.
   IF sy-ucomm EQ 'ABC' OR sy-ucomm EQ 'EML'.
     " Screen refresh only – no validation
 
+  " R1: Gas Day start date must be on or after 01.01.2022 (Single Material
+  " Code implementation date). No FN restriction on R1 – only this floor.
+  ELSEIF r1 EQ 'X' AND s_date IS NOT INITIAL.
+    READ TABLE s_date INTO DATA(ls_sd_chk) INDEX 1.
+    IF sy-subrc = 0 AND ls_sd_chk-low IS NOT INITIAL
+       AND ls_sd_chk-low < '20220101'.
+      MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
+    ENDIF.
+
   " FN date validation for Action Taken (R4) – applied to s_dat4 inputs.
-  " R1 has no date validation; R3 dates are auto-calculated.
+  " R3 dates are auto-calculated, so nothing to validate there.
   ELSEIF r4 EQ 'X' AND s_dat4 IS NOT INITIAL.
     READ TABLE s_dat4 INTO DATA(ls_dat4_chk) INDEX 1.
     IF sy-subrc = 0 AND ls_dat4_chk-low IS NOT INITIAL.
+      IF ls_dat4_chk-low < '20220101'.
+        MESSAGE 'From date should be on or after 01.01.2022' TYPE 'E'.
+      ENDIF.
       lv_fn_from_day = ls_dat4_chk-low+6(2).
       IF lv_fn_from_day NE '01' AND lv_fn_from_day NE '16'.
         MESSAGE 'From date must be 1st or 16th of the month (FN start date)' TYPE 'E'.
@@ -112,12 +131,13 @@ AT SELECTION-SCREEN OUTPUT.
       CONTINUE.
     ENDIF.
 
-    " Sales Office s_vkbur (m6): shown for r1/r3, hidden for r4
+    " Sales Office s_vkbur (m6): shown for r1 only.
+    " Hidden for r3 (Till Date) and r4 (Action Taken, which has its own s_vk4).
     IF screen-group1 = 'M6'.
-      IF r4 EQ 'X'.
-        screen-active = 0.
-      ELSE.
+      IF r1 EQ 'X'.
         screen-active = 1.
+      ELSE.
+        screen-active = 0.
       ENDIF.
       MODIFY SCREEN.
       CONTINUE.
@@ -181,12 +201,23 @@ START-OF-SELECTION.
       PERFORM display.
     ELSE.
       IF r3 EQ 'X' AND p_email EQ 'X'.
+        CLEAR gv_mail_count.
         PERFORM send_emails.
-        MESSAGE 'Emails sent successfully' TYPE 'S'.
+        IF gv_mail_count > 0.
+          MESSAGE 'Emails sent successfully' TYPE 'S'.
+        ELSE.
+          MESSAGE 'No data to report – no email triggered' TYPE 'S'.
+        ENDIF.
       ENDIF.
     ENDIF.
 
   ELSEIF r4 EQ 'X'.
+    " Access check (03.08.2026): role ZO_GMS_BKD_NOM_WRFLW_MKTG plus
+    " YV_VKBUR authorization for any Sales Office entered.
+    DATA: lv_r4_ok TYPE c LENGTH 1.
+    PERFORM check_r4_authority CHANGING lv_r4_ok.
+    CHECK lv_r4_ok = 'X'.
+
     " Action Taken mode: use s_dat4/s_vk4 as date/sales-office input.
     " Shows the same contract list as R1, filtered by the user-provided date range.
     REFRESH: s_date[].
@@ -202,13 +233,12 @@ START-OF-SELECTION.
       " After loop the header line retains the last entry's low/high,
       " which get_data reads via s_date-low / s_date-high.
     ELSE.
-      " Default: last full fortnight when no date entered
-      lv_date = sy-datum - 3.
-      CALL FUNCTION 'YRX_PRVS_DATE_FM'
-        EXPORTING s_date = lv_date
-        IMPORTING st_date = st_date ed_date = ed_date.
+      " Default when no date entered: full range from 01.01.2022 to today
+      " (do NOT fall back to r1's fortnight – that gave a misleading short list)
       CLEAR s_date.
-      s_date-low = st_date. s_date-high = ed_date. APPEND s_date.
+      s_date-sign = 'I'. s_date-option = 'BT'.
+      s_date-low  = '20220101'. s_date-high = sy-datum.
+      APPEND s_date.
     ENDIF.
     DATA: obj_r4 TYPE REF TO lcl_event_handler.
     CREATE OBJECT obj_r4.

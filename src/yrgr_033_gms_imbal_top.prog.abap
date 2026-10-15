@@ -55,6 +55,30 @@ DATA: lv_has_role TYPE c LENGTH 1.
 
 DATA: lv_cceml TYPE ad_smtpadr.   " Reference field for s_cceml SELECT-OPTIONS
 
+" Deferred grid refresh: set in DATA_CHANGED, consumed in DATA_CHANGED_FINISHED.
+" Refreshing inside DATA_CHANGED dumps with OBJECTS_OBJREF_NOT_ASSIGNED_NO.
+DATA: gv_refresh_grid TYPE c LENGTH 1,
+      gs_stable       TYPE lvc_s_stbl.
+
+" Number of alert mails actually sent – used to suppress the success
+" message when there was nothing to report.
+DATA: gv_mail_count TYPE i.
+
+" Cache of AUTHORITY-CHECK results per sales office, so the check runs
+" once per distinct VKBUR instead of once per row.
+TYPES: BEGIN OF ty_vk_auth,
+         vkbur TYPE vkbur,
+         ok    TYPE c LENGTH 1,
+       END OF ty_vk_auth.
+DATA: gt_vk_auth TYPE SORTED TABLE OF ty_vk_auth WITH UNIQUE KEY vkbur.
+
+" 'X' = AUTHORITY-CHECK could not evaluate YV_VKBUR (field list mismatch),
+" so the refusal is a configuration problem, not a missing authorization.
+DATA: gv_auth_objerr TYPE c LENGTH 1.
+
+" Red used to flag rows the user may not change (info_fname='ROWCOLOR')
+CONSTANTS: gc_row_red TYPE char4 VALUE 'C600'.
+
 DATA: lv_fn_from_day TYPE c LENGTH 2,
       lv_fn_to_day   TYPE c LENGTH 2,
       lv_fn_next_day TYPE sy-datum,
@@ -66,18 +90,29 @@ DATA: lv_fn_from_day TYPE c LENGTH 2,
 *       the Action Taken save/read logic can be activated.
 *----------------------------------------------------------------------*
 TYPES: BEGIN OF ty_action_cols,
-         at_chkbox  TYPE c LENGTH 1,   " Action Taken flag (X = action done)
-         at_sal_ord TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
-         at_qty     TYPE char20,         " Quantity   (from YRG_IMB_ACTION)
-         at_remarks TYPE char255,       " Remarks    (from YRG_IMB_ACTION)
+         at_chkbox   TYPE c LENGTH 1,   " Action Taken flag (X = action done)
+         at_sal_ord  TYPE vbeln,         " Sales Order (from YRG_IMB_ACTION)
+         at_qty      TYPE char20,        " unused since 03.08.2026 (column removed)
+         at_remarks  TYPE char255,       " unused since 03.08.2026 (column removed)
+         at_changed  TYPE c LENGTH 1,   " 'X' = row was edited in R4 mode
        END OF ty_action_cols.
+
+" Display-only fields: cell style (editability), cell colour (SO error),
+" row colour (unauthorized sales office) and the per-row authorization flag.
+TYPES: BEGIN OF ty_display_cols,
+         cell      TYPE lvc_t_styl,     " stylefname='CELL': SO editable only when AT ticked
+         cellcolor TYPE lvc_t_scol,     " ctab_fname='CELLCOLOR': SO error in red
+         rowcolor  TYPE char4,          " info_fname='ROWCOLOR': whole line red
+         auth_ok   TYPE c LENGTH 1,     " 'X' = user may change this row's sales office
+       END OF ty_display_cols.
 
 TYPES: BEGIN OF ty_final_ext.
   INCLUDE TYPE yrx_imb_settle_qty AS base.
   INCLUDE TYPE ty_action_cols     AS action.
+  INCLUDE TYPE ty_display_cols    AS disp.
 TYPES: END OF ty_final_ext.
 
-DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext WITH DEFAULT KEY,
+DATA: lt_final_ext TYPE STANDARD TABLE OF ty_final_ext,
       ls_final_ext TYPE ty_final_ext.
 
 *----------------------------------------------------------------------*
@@ -111,3 +146,21 @@ SELECTION-SCREEN BEGIN OF BLOCK b WITH FRAME TITLE TEXT-001.
   SELECT-OPTIONS: s_dat4  FOR oijnomi-idate MODIF ID m7.
   SELECT-OPTIONS: s_vk4   FOR lv_vkbur      MODIF ID m7.
 SELECTION-SCREEN END OF BLOCK b.
+
+*----------------------------------------------------------------------*
+* Notes block (reference YRXR025N) – explains the data effectivity date
+* of each radio button. Texts are assigned at INITIALIZATION.
+* Maintain TEXT-002 in SE38 -> Goto -> Text Elements as 'Notes'.
+*
+* NOTE: cmt1..cmt5 must NOT be declared with DATA. SELECTION-SCREEN
+* COMMENT declares the field itself (here as C LENGTH 79); an explicit
+* DATA statement gives '"CMT1" was already declared'.
+* 79 is also the maximum width – (83) is rejected by the syntax check.
+*----------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  SELECTION-SCREEN COMMENT /1(79) cmt1.
+  SELECTION-SCREEN COMMENT /1(79) cmt2.
+  SELECTION-SCREEN COMMENT /1(79) cmt3.
+  SELECTION-SCREEN COMMENT /1(79) cmt4.
+  SELECTION-SCREEN COMMENT /1(79) cmt5.
+SELECTION-SCREEN END OF BLOCK b2.

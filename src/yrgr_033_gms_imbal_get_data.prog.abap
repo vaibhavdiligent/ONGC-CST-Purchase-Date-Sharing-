@@ -22,34 +22,180 @@ FORM get_data.
 
   " Apply Sales Office filter (s_vkbur for r1/r3, s_vk4 for r4)
   IF r4 EQ 'X'.
+    " Action Taken applies only to posted imbalances – drop 'Not Posted' rows
+    DELETE lt_final WHERE stat = 'Not Posted'.
     IF s_vk4 IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vk4.
     ENDIF.
-  ELSE.
+    " NOTE: the list is NOT filtered by authorization – the user sees every
+    " entry matching the input. YV_VKBUR only restricts who may CHANGE a
+    " row; that is evaluated per row below and enforced on edit/save.
+  ELSEIF r1 EQ 'X'.
+    " s_vkbur belongs to r1 only – it must never filter the r3 (Till Date) list
     IF s_vkbur IS NOT INITIAL.
       DELETE lt_final WHERE vkbur NOT IN s_vkbur.
     ENDIF.
   ENDIF.
 
   " Copy lt_final into lt_final_ext and augment with Action Taken data
+
   LOOP AT lt_final INTO ls_final.
     CLEAR ls_final_ext.
     MOVE-CORRESPONDING ls_final TO ls_final_ext.
 
-    " Read latest Action Taken entry from YRG_IMB_ACTION (most recent by date+time)
-    DATA: lv_at_qty TYPE char20.
-    SELECT at_chkbox at_sal_ord at_qty at_remarks
+    " Read latest Action Taken entry (most recent by date+time).
+    " The @-escaped host variables put this SELECT in strict mode, so the
+    " field list MUST be comma-separated – without the commas it does not
+    " pass the syntax check.
+    SELECT chkbox, at_sal_ord
       FROM yrg_imb_action
-      INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord,
-            @lv_at_qty,              @ls_final_ext-at_remarks)
+      INTO (@ls_final_ext-at_chkbox, @ls_final_ext-at_sal_ord)
       WHERE docnr = @ls_final-docnr
       ORDER BY saved_on DESCENDING, saved_at DESCENDING.
-      ls_final_ext-at_qty = lv_at_qty.
       EXIT.
     ENDSELECT.
 
-    APPEND ls_final_ext TO lt_final_ext.
+    " R4 mode: record whether this row's sales office may be changed,
+    " and make SO editable only once AT is ticked.
+    IF r4 EQ 'X'.
+      PERFORM is_vkbur_authorized USING ls_final-vkbur
+                                  CHANGING ls_final_ext-auth_ok.
+      PERFORM set_row_style CHANGING ls_final_ext.
+    ENDIF.
+
+    INSERT ls_final_ext INTO TABLE lt_final_ext.
   ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form SET_ROW_STYLE
+*& Enables SO / Qty / Remarks only when the AT checkbox is ticked.
+*& lvc_t_styl is a SORTED table – always use INSERT ... INTO TABLE,
+*& never APPEND (APPEND breaks the sort key -> ITAB_ILLEGAL_SORT_ORDER).
+*&---------------------------------------------------------------------*
+FORM set_row_style CHANGING ps_row TYPE ty_final_ext.
+  DATA: ls_styl TYPE lvc_s_styl.
+
+  REFRESH ps_row-cell.
+
+  IF ps_row-at_chkbox = 'X'.
+    ls_styl-style = cl_gui_alv_grid=>mc_style_enabled.
+  ELSE.
+    ls_styl-style = cl_gui_alv_grid=>mc_style_disabled.
+  ENDIF.
+
+  ls_styl-fieldname = 'AT_SAL_ORD'. INSERT ls_styl INTO TABLE ps_row-cell.
+
+  " The checkbox itself always stays editable
+  ls_styl-style     = cl_gui_alv_grid=>mc_style_enabled.
+  ls_styl-fieldname = 'AT_CHKBOX'.
+  INSERT ls_styl INTO TABLE ps_row-cell.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form IS_VKBUR_AUTHORIZED
+*& Returns 'X' in p_ok when the user may CHANGE data for this sales
+*& office (authorization object YV_VKBUR).
+*& Viewing is never restricted – the full list is always displayed.
+*& Results are cached in gt_vk_auth, so the check runs once per distinct
+*& sales office rather than once per row.
+*&---------------------------------------------------------------------*
+FORM is_vkbur_authorized USING p_vkbur TYPE vkbur
+                         CHANGING p_ok TYPE c.
+  DATA: ls_vk_auth TYPE ty_vk_auth,
+        lv_subrc   TYPE sy-subrc.
+
+  CLEAR p_ok.
+  IF p_vkbur IS INITIAL.
+    RETURN.
+  ENDIF.
+
+  READ TABLE gt_vk_auth INTO ls_vk_auth WITH KEY vkbur = p_vkbur.
+  IF sy-subrc = 0.
+    p_ok = ls_vk_auth-ok.
+    RETURN.
+  ENDIF.
+
+  PERFORM auth_check_vkbur USING p_vkbur CHANGING lv_subrc.
+
+  CLEAR ls_vk_auth.
+  ls_vk_auth-vkbur = p_vkbur.
+  IF lv_subrc = 0.
+    ls_vk_auth-ok = 'X'.
+  ENDIF.
+  INSERT ls_vk_auth INTO TABLE gt_vk_auth.
+  p_ok = ls_vk_auth-ok.
+
+  " Anything other than 0 (authorized) or 4 (not authorized) means the
+  " object's field list does not match what we checked. Remember it so the
+  " user gets a message naming the real problem instead of a bare refusal.
+  IF lv_subrc NE 0 AND lv_subrc NE 4.
+    gv_auth_objerr = 'X'.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form AUTH_CHECK_VKBUR
+*& Runs AUTHORITY-CHECK on YV_VKBUR for one sales office.
+*&
+*& The object's field list is resolved at runtime rather than assumed.
+*& AUTHORITY-CHECK returns sy-subrc = 24 when the field names or the
+*& number of fields do not match the object, so each shape below is tried
+*& until one gives a definitive answer. Only 0 (authorized) and
+*& 4 (not authorized) are treated as answers – everything else moves on
+*& to the next shape. This is why a user holding sales office 2100 was
+*& previously refused: the single-field WERKS check returned 24, not 4.
+*&---------------------------------------------------------------------*
+FORM auth_check_vkbur USING p_vkbur TYPE vkbur
+                      CHANGING p_subrc TYPE sy-subrc.
+
+  " 1) WERKS only
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'WERKS' FIELD p_vkbur.
+  p_subrc = sy-subrc.
+  CHECK p_subrc NE 0 AND p_subrc NE 4.
+
+  " 2) WERKS + activity
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'WERKS' FIELD p_vkbur
+    ID 'ACTVT' DUMMY.
+  p_subrc = sy-subrc.
+  CHECK p_subrc NE 0 AND p_subrc NE 4.
+
+  " 3) VKBUR only
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'VKBUR' FIELD p_vkbur.
+  p_subrc = sy-subrc.
+  CHECK p_subrc NE 0 AND p_subrc NE 4.
+
+  " 4) VKBUR + activity
+  AUTHORITY-CHECK OBJECT 'YV_VKBUR'
+    ID 'VKBUR' FIELD p_vkbur
+    ID 'ACTVT' DUMMY.
+  p_subrc = sy-subrc.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form CHECK_R4_AUTHORITY
+*& Action Taken (r4) access check – mail of 03.08.2026:
+*& user must hold role ZO_GMS_BKD_NOM_WRFLW_MKTG to run this option.
+*& Sales office authorization is NOT checked here – any office may be
+*& viewed; YV_VKBUR only governs which rows may be changed.
+*& Returns 'X' in p_ok when the user may continue.
+*&---------------------------------------------------------------------*
+FORM check_r4_authority CHANGING p_ok TYPE c.
+  CLEAR p_ok.
+
+  SELECT SINGLE uname FROM agr_users
+    INTO @DATA(lv_r4_uname)
+    WHERE uname    = @sy-uname
+    AND   agr_name = 'ZO_GMS_BKD_NOM_WRFLW_MKTG'.
+  IF sy-subrc NE 0.
+    MESSAGE 'You are not authorised to execute this option' TYPE 'E'.
+    RETURN.
+  ENDIF.
+
+  p_ok = 'X'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -101,19 +247,9 @@ FORM fill_fieldcat.
   IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
   APPEND gs_fieldcat TO gt_fieldcat.
 
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'AT_QTY'.     gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '15'.          gs_fieldcat-scrtext_l = 'Qty'.
-  gs_fieldcat-scrtext_m = 'Qty'.         gs_fieldcat-scrtext_s = 'Qty'.
-  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
-  APPEND gs_fieldcat TO gt_fieldcat.
-
-  CLEAR gs_fieldcat.
-  gs_fieldcat-fieldname = 'AT_REMARKS'. gs_fieldcat-tabname   = 'LT_FINAL_EXT'.
-  gs_fieldcat-outputlen = '30'.          gs_fieldcat-scrtext_l = 'Remarks'.
-  gs_fieldcat-scrtext_m = 'Remarks'.     gs_fieldcat-scrtext_s = 'Rem'.
-  IF r4 EQ 'X'. gs_fieldcat-edit = 'X'. ENDIF.
-  APPEND gs_fieldcat TO gt_fieldcat.
+  " Qty and Remarks columns removed on 03.08.2026 request – AT and SO only.
+  " The YRG_IMB_ACTION fields AT_QTY / AT_REMARKS are kept in the table and
+  " are simply written blank.
 
   " Allow mixed-case filter on Status field (values are 'Posted'/'Not Posted')
   LOOP AT gt_fieldcat ASSIGNING FIELD-SYMBOL(<fs_stat>) WHERE fieldname = 'STAT'.
@@ -142,10 +278,14 @@ FORM display.
       EXPORTING id = 1 height = 24.
     CREATE OBJECT grid EXPORTING i_parent = dg_parent_grid.
     gs_layout-stylefname = 'CELL'.
+    gs_layout-ctab_fname = 'CELLCOLOR'.
+    gs_layout-info_fname = 'ROWCOLOR'.   " red line = sales office not authorized
     SET HANDLER lcl_event_handler=>top_of_page FOR grid.
     SET HANDLER lcl_event_handler=>toolbar      FOR grid.
     SET HANDLER lcl_event_handler=>user_command FOR grid.
-    SET HANDLER lcl_event_handler=>data_changed FOR grid.
+    SET HANDLER lcl_event_handler=>data_changed          FOR grid.
+    SET HANDLER lcl_event_handler=>data_changed_finished FOR grid.
+    gs_stable-row = 'X'. gs_stable-col = 'X'.   " keep scroll position on refresh
     CALL METHOD grid->set_table_for_first_display
       EXPORTING
         it_toolbar_excluding = lt_exclude
@@ -158,6 +298,10 @@ FORM display.
   " Enable edit mode when Action Taken (r4) is selected
   IF r4 EQ 'X'.
     CALL METHOD grid->set_ready_for_input( EXPORTING i_ready_for_input = 1 ).
+    " Raise DATA_CHANGED as soon as a cell is modified, so ticking the AT
+    " checkbox activates SO / Qty / Remarks without leaving the row first
+    CALL METHOD grid->register_edit_event
+      EXPORTING i_event_id = cl_gui_alv_grid=>mc_evt_modified.
   ENDIF.
 
   CREATE OBJECT dg_dyndoc_id EXPORTING style = 'ALV_GRID'.
@@ -242,8 +386,10 @@ FORM top_of_page USING p_dyndoc_id TYPE REF TO cl_dd_document.
     CALL METHOD p_dyndoc_id->new_line.
     CALL METHOD p_dyndoc_id->add_gap EXPORTING width = 16.
     CLEAR dl_text.
-    " Note 4: data effectivity date – R1 shows post-2UoM data; R3/R4 show from 01.01.2022
-    IF r1 EQ 'X'.
+    " Note 4: data effectivity date (mail 14.07.2026, reconfirmed 30.07.2026).
+    " R3 (Till Date) reads from 01.09.2025 -> 2UoM Migration text.
+    " R1 / R4 read from 01.01.2022      -> Single Material Code text.
+    IF r3 EQ 'X'.
       dl_text = '4. The List is w.e.f. 01.09.2025, after 2UoM Migration'.
     ELSE.
       dl_text = '4. The List is w.e.f. 01.01.2022, after Implementation of Single Material Code for Transmission of Shippers'' Gas'.
@@ -425,6 +571,12 @@ FORM send_email_posted.
     ENDLOOP.
     SORT lt_sort_imbal BY sort_key DESCENDING.
 
+    " Nothing to report for this sales office (e.g. every contract already
+    " has Action Taken ticked) – do not trigger an empty mail.
+    IF lt_sort_imbal IS INITIAL.
+      CONTINUE.
+    ENDIF.
+
     " Body: HTML table
     lv_html_body =
       '<html><body style="font-family:Arial,sans-serif;font-size:12px;">' &&
@@ -508,6 +660,7 @@ FORM send_email_posted.
 
       lo_send_req->send( i_with_error_screen = abap_false ).
       COMMIT WORK.
+      gv_mail_count = gv_mail_count + 1.
     CATCH cx_bcs INTO DATA(lx_bcs_ep).
       MESSAGE lx_bcs_ep->get_text( ) TYPE 'W'.
     ENDTRY.
@@ -898,34 +1051,89 @@ ENDFORM.
 *& Activate the INSERT statements below after SE11 table creation.
 *&---------------------------------------------------------------------*
 FORM save_action_taken.
-  DATA: lv_saved_count TYPE i VALUE 0.
+  DATA: lv_saved_count TYPE i VALUE 0,
+        lv_error_count TYPE i VALUE 0,
+        ls_imb_action  TYPE yrg_imb_action,
+        ls_scol        TYPE lvc_s_scol.
 
-  " First collect all current data from the ALV grid
+  " Sync any pending ALV cell edits to the internal table
   CALL METHOD grid->check_changed_data.
 
-  DATA: ls_imb_action TYPE yrg_imb_action.
-
-  LOOP AT lt_final_ext INTO ls_final_ext.
-    CLEAR ls_imb_action.
-    ls_imb_action-docnr    = ls_final_ext-docnr.
-    ls_imb_action-cpf_id   = sy-uname.
-    ls_imb_action-saved_on = sy-datum.
-    ls_imb_action-saved_at = sy-uzeit.
-    ls_imb_action-chkbox   = ls_final_ext-at_chkbox.
-    IF ls_final_ext-at_chkbox = 'X'.
-      ls_imb_action-at_sal_ord = ls_final_ext-at_sal_ord.
-      ls_imb_action-at_qty     = ls_final_ext-at_qty.    " CHAR20 -> QUAN implicit
-      ls_imb_action-at_remarks = ls_final_ext-at_remarks.
+  " --- Pass 0: sales office authorization ----------------------------------
+  " A changed row whose sales office is not covered by YV_VKBUR is refused:
+  " the line is painted red and nothing is written for it.
+  DATA: lv_auth_err TYPE c LENGTH 1.
+  LOOP AT lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_auth>) WHERE at_changed = 'X'.
+    CHECK <fs_auth>-auth_ok NE 'X'.
+    <fs_auth>-rowcolor = gc_row_red.
+    lv_auth_err = 'X'.
+  ENDLOOP.
+  IF lv_auth_err = 'X'.
+    CALL METHOD grid->refresh_table_display
+      EXPORTING is_stable = gs_stable.
+    IF gv_auth_objerr = 'X'.
+      MESSAGE 'Authorization object YV_VKBUR could not be evaluated - check its field list in SU21'
+              TYPE 'W'.
+    ELSE.
+      MESSAGE 'You are not authorized to change data for the selected sales office'
+              TYPE 'W'.
     ENDIF.
-    INSERT yrg_imb_action FROM ls_imb_action.
+    RETURN.
+  ENDIF.
 
-    IF ls_final_ext-at_chkbox = 'X'.
-      lv_saved_count = lv_saved_count + 1.
+  " --- Pass 1: SO validation -----------------------------------------------
+  " Clear previous error highlights; for changed rows with a filled SO,
+  " verify the SO exists in VBPA. Mark invalid cells red and count errors.
+  LOOP AT lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_val>).
+    DELETE <fs_val>-cellcolor WHERE fname = 'AT_SAL_ORD'.  " clear old highlight
+
+    CHECK <fs_val>-at_changed EQ 'X'.           " only validate edited rows
+    CHECK <fs_val>-at_sal_ord IS NOT INITIAL.   " only if SO was entered
+
+    SELECT SINGLE vbeln FROM vbpa
+      INTO @DATA(lv_dummy_vbpa)
+      WHERE vbeln = @<fs_val>-at_sal_ord.
+    IF sy-subrc NE 0.
+      CLEAR ls_scol.
+      ls_scol-fname     = 'AT_SAL_ORD'.
+      ls_scol-color-col = 6.  " Red
+      ls_scol-color-int = 1.
+      ls_scol-color-inv = 0.
+      INSERT ls_scol INTO TABLE <fs_val>-cellcolor.
+      lv_error_count = lv_error_count + 1.
     ENDIF.
   ENDLOOP.
 
+  IF lv_error_count > 0.
+    " Stable refresh keeps scroll position and rebinds the colour table so
+    " the red cells actually render (and scrolling afterwards does not dump)
+    CALL METHOD grid->refresh_table_display
+      EXPORTING is_stable = gs_stable.
+    MESSAGE |SO not valid for { lv_error_count } row(s) – invalid cells marked red.| TYPE 'W'.
+    RETURN.
+  ENDIF.
+
+  " --- Pass 2: Save only changed rows ---------------------------------------
+  LOOP AT lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_sav>) WHERE at_changed = 'X'.
+    CLEAR ls_imb_action.
+    ls_imb_action-docnr    = <fs_sav>-docnr.
+    ls_imb_action-cpf_id   = sy-uname.
+    ls_imb_action-saved_on = sy-datum.
+    ls_imb_action-saved_at = sy-uzeit.
+    ls_imb_action-chkbox   = <fs_sav>-at_chkbox.
+    " AT_QTY / AT_REMARKS are no longer captured (columns removed
+    " on 03.08.2026), so they stay blank in the table.
+    IF <fs_sav>-at_chkbox = 'X'.
+      ls_imb_action-at_sal_ord = <fs_sav>-at_sal_ord.
+    ENDIF.
+    INSERT yrg_imb_action FROM ls_imb_action.
+    " Count every changed row – unticking a box is a valid change to save
+    lv_saved_count = lv_saved_count + 1.
+    <fs_sav>-at_changed = ' '.   " clear flag so re-save doesn't duplicate
+  ENDLOOP.
+
   IF lv_saved_count = 0.
-    MESSAGE 'Please select at least one checkbox before saving' TYPE 'W'.
+    MESSAGE 'No changes to save' TYPE 'W'.
     RETURN.
   ENDIF.
 
@@ -938,27 +1146,80 @@ ENDFORM.
 *& Handles cell edits in Action Taken ALV (r4 mode)
 *&---------------------------------------------------------------------*
 FORM handle_data_changed USING p_data_changed TYPE REF TO cl_alv_changed_data_protocol.
-  DATA: lv_row_idx TYPE i.
+  DATA: lv_row_idx  TYPE i,
+        lv_style    TYPE lvc_style,
+        lv_auth_err TYPE c LENGTH 1.
 
   LOOP AT p_data_changed->mt_mod_cells INTO DATA(ls_mod).
     lv_row_idx = ls_mod-row_id.
     READ TABLE lt_final_ext ASSIGNING FIELD-SYMBOL(<fs_ext>) INDEX lv_row_idx.
     IF sy-subrc <> 0. CONTINUE. ENDIF.
 
+    " Sales office not covered by YV_VKBUR: reject the change, paint the
+    " whole line red and report it once after the loop. The value is not
+    " transferred, and the deferred refresh restores the old cell content.
+    IF <fs_ext>-auth_ok NE 'X'.
+      <fs_ext>-rowcolor = gc_row_red.
+      lv_auth_err       = 'X'.
+      gv_refresh_grid   = 'X'.
+      CONTINUE.
+    ENDIF.
+
     CASE ls_mod-fieldname.
-      WHEN 'AT_CHKBOX'.  <fs_ext>-at_chkbox  = ls_mod-value.
-        " If unchecked, clear the related fields
+      WHEN 'AT_CHKBOX'.
+        <fs_ext>-at_chkbox  = ls_mod-value.
+        <fs_ext>-at_changed = 'X'.
         IF <fs_ext>-at_chkbox <> 'X'.
-          CLEAR: <fs_ext>-at_sal_ord, <fs_ext>-at_qty, <fs_ext>-at_remarks.
+          CLEAR <fs_ext>-at_sal_ord.
+          DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
         ENDIF.
-      WHEN 'AT_SAL_ORD'. <fs_ext>-at_sal_ord = ls_mod-value.
-      WHEN 'AT_QTY'.     <fs_ext>-at_qty     = ls_mod-value.
-      WHEN 'AT_REMARKS'. <fs_ext>-at_remarks = ls_mod-value.
+        " Ticking the box activates SO / Qty / Remarks, unticking disables them.
+        " Update our own style table ...
+        PERFORM set_row_style CHANGING <fs_ext>.
+        " ... and push the same change into the grid's style buffer via
+        " MODIFY_STYLE. This is the only supported way to re-enable cells
+        " from inside DATA_CHANGED; it takes effect without a refresh, so
+        " the cells become editable on the very same click.
+        IF <fs_ext>-at_chkbox = 'X'.
+          lv_style = cl_gui_alv_grid=>mc_style_enabled.
+        ELSE.
+          lv_style = cl_gui_alv_grid=>mc_style_disabled.
+        ENDIF.
+        CALL METHOD p_data_changed->modify_style
+          EXPORTING i_fieldname = 'AT_SAL_ORD'
+                    i_row_id    = lv_row_idx
+                    i_style     = lv_style.
+        gv_refresh_grid = 'X'.
+      WHEN 'AT_SAL_ORD'.
+        <fs_ext>-at_sal_ord = ls_mod-value.
+        <fs_ext>-at_changed = 'X'.
+        " Clear previous SO validation error when user edits this cell
+        DELETE <fs_ext>-cellcolor WHERE fname = 'AT_SAL_ORD'.
     ENDCASE.
   ENDLOOP.
 
-  " Refresh the display to reflect cleared fields if checkbox was unchecked
-  IF p_data_changed->mt_mod_cells IS NOT INITIAL.
-    CALL METHOD grid->refresh_table_display.
+  IF lv_auth_err = 'X'.
+    IF gv_auth_objerr = 'X'.
+      MESSAGE 'Authorization object YV_VKBUR could not be evaluated - check its field list in SU21'
+              TYPE 'S' DISPLAY LIKE 'E'.
+    ELSE.
+      MESSAGE 'You are not authorized to change data for the selected sales office'
+              TYPE 'S' DISPLAY LIKE 'E'.
+    ENDIF.
   ENDIF.
+  " NOTE: never call refresh_table_display here. Refreshing inside the
+  " DATA_CHANGED event leaves the grid's data-provider unbound and dumps
+  " with OBJECTS_OBJREF_NOT_ASSIGNED_NO on the next scroll. The refresh is
+  " deferred to DATA_CHANGED_FINISHED via gv_refresh_grid.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form HANDLE_DATA_CHANGED_FINISHED
+*& Safe point to refresh the grid after cell edits are committed.
+*&---------------------------------------------------------------------*
+FORM handle_data_changed_finished.
+  CHECK gv_refresh_grid = 'X'.
+  CLEAR gv_refresh_grid.
+  CALL METHOD grid->refresh_table_display
+    EXPORTING is_stable = gs_stable.
 ENDFORM.
