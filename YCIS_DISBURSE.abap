@@ -25,7 +25,18 @@
 *&
 *& GUI status 'STANDARD' (function codes APPR, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (copy from the L2
-*& program YCIS_APPROVE).  The APPR button here means "Disburse".
+*& program YCIS_APPROVE).  The APPR button here means "Post": in SE41 set
+*& the function text of APPR to 'Post' (CIS UAT 14.10.2026 pt.6).
+*&
+*& CIS UAT 14.10.2026 (T-code YRVG004_P):
+*&   pt.5  Credit Note / Accounting Doc are stored and shown - use the
+*&         'Executed' option to display posted records.
+*&   pt.7  The accounting document is read again after posting (with a
+*&         short wait for the update task); message 'Accounting document
+*&         posted' when the credit note is posted (VBRK-RFBSK = 'C').
+*&   pt.8  On posting, the credit note PDF (Smart Form YRV_CREDIT_NOTE, as
+*&         in YRVR167) is e-mailed to the customer's e-mail IDs (partner
+*&         logic of YRVR169) - FORM send_cn_mail.
 *&---------------------------------------------------------------------*
 REPORT  ycis_disburse.
 
@@ -44,6 +55,15 @@ TYPES: BEGIN OF ty_out,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
+*        CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
+*        (customer master YRVA_QAIS_DATA) shown at every level
+         seas_ind    TYPE yrva_qais_data-p_r_indicator,
+         sc_ind      TYPE yrva_qais_data-p_sc_indicator,
+         waiver_1    TYPE yrva_qais_data-waiver_1,
+         waiver_2    TYPE yrva_qais_data-waiver_2,
+         wv_stat     TYPE ycis_apprvl-wv_stat,     " Shortfall/Customer Waiver status
+         lft_qty     TYPE ycis_apprvl-lft_qty,       " group lifted qty
+         ind_lft_qty TYPE ycis_apprvl-ind_lft_qty,   " individual lifted qty
          mcq_qty     TYPE ycis_apprvl-mcq_qty,
          mcq_perc    TYPE ycis_apprvl-mcq_perc,
          elig_qty    TYPE ycis_apprvl-elig_qty,
@@ -58,6 +78,14 @@ TYPES: BEGIN OF ty_out,
          l5_user     TYPE ycis_apprvl-l5_user,
          l5_date     TYPE ycis_apprvl-l5_date,
          remarks     TYPE ycis_apprvl-remarks,
+*        CIS UAT 14.10.2026 pt.3: 'Executed' view - processing details
+         wf_txt      TYPE char40,
+         l6_user     TYPE ycis_apprvl-l6_user,
+         l6_date     TYPE ycis_apprvl-l6_date,
+         rem_l6      TYPE ycis_apprvl-rem_l6,
+         rej_by      TYPE ycis_apprvl-rej_by,
+         rej_date    TYPE ycis_apprvl-rej_date,
+         rej_remarks TYPE ycis_apprvl-rej_remarks,
        END OF ty_out.
 
 DATA: gt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
@@ -72,7 +100,9 @@ DATA: gt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
       gs_stype  LIKE LINE OF gr_stype.
 
 *--------------------------------------------------------------------*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+DATA: gt_qais TYPE STANDARD TABLE OF yrva_qais_data.   " seasonal ind. / waivers
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE t_b1.
 SELECT-OPTIONS: s_sptag FOR ycis_apprvl-period_from,
                 s_vkbur FOR ycis_apprvl-sales_off,
                 s_kunnr FOR ycis_apprvl-kunnr,
@@ -86,10 +116,32 @@ PARAMETERS p_year RADIOBUTTON GROUP g1.
 SELECTION-SCREEN COMMENT 3(25) c_year.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b1.
+*   CIS UAT 14.10.2026 pt.3: Unexecuted = pending at this level (action
+*   possible); Executed = already processed at this level (display only).
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE t_b2.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_unex RADIOBUTTON GROUP g2 DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(45) c_unex.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_exec RADIOBUTTON GROUP g2.
+SELECTION-SCREEN COMMENT 3(45) c_exec.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN END OF BLOCK b2.
 
 INITIALIZATION.
   c_mon  = 'Monthly'.
   c_year = 'Yearly (Annual)'.
+  c_unex = 'Unexecuted (pending at L6)'.
+  c_exec = 'Executed (already processed at L6)'.
+  t_b1   = 'Selection Criteria'.
+  t_b2   = 'Display'.
+* CIS UAT (L4 obs.3): field names on the selection screen without
+* depending on maintained selection texts
+  %_s_sptag_%_app_%-text = 'Period From'.
+  %_s_vkbur_%_app_%-text = 'Sales Office'.
+  %_s_kunnr_%_app_%-text = 'Customer'.
+  %_s_kvgr2_%_app_%-text = 'Customer Group'.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
@@ -101,7 +153,11 @@ START-OF-SELECTION.
   ENDIF.
   PERFORM get_pending.
   IF gt_appr IS INITIAL.
-    MESSAGE 'No records pending your (L6) disbursement' TYPE 'I'.
+    IF p_exec = 'X'.
+      MESSAGE 'No records already posted / processed at L6 for the selection' TYPE 'I'.
+    ELSE.
+      MESSAGE 'No records pending your (L6) posting' TYPE 'I'.
+    ENDIF.
     RETURN.
   ENDIF.
   PERFORM build_out.
@@ -120,13 +176,23 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM get_pending.
-  SELECT * FROM ycis_apprvl INTO TABLE gt_appr
-    WHERE wf_status    = '60'                       " Pending L6
-      AND scheme_type IN gr_stype
-      AND sales_off   IN s_vkbur
-      AND period_from IN s_sptag
-      AND kunnr       IN s_kunnr
-      AND kvgr2       IN s_kvgr2.
+  IF p_exec = 'X'.
+    SELECT * FROM ycis_apprvl INTO TABLE gt_appr
+      WHERE ( l6_user <> space OR rej_level = gc_level )   " processed at L6
+        AND scheme_type IN gr_stype
+        AND sales_off   IN s_vkbur
+        AND period_from IN s_sptag
+        AND kunnr       IN s_kunnr
+        AND kvgr2       IN s_kvgr2.
+  ELSE.
+    SELECT * FROM ycis_apprvl INTO TABLE gt_appr
+      WHERE wf_status    = '60'                       " Pending L6
+        AND scheme_type IN gr_stype
+        AND sales_off   IN s_vkbur
+        AND period_from IN s_sptag
+        AND kunnr       IN s_kunnr
+        AND kvgr2       IN s_kvgr2.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -144,13 +210,31 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM build_out.
+  DATA: lv_posted TYPE flag,
+        lv_upd    TYPE flag.
   REFRESH gt_out.
+  PERFORM read_qais_master.
   LOOP AT gt_appr INTO gs_appr.
     CLEAR gs_out.
     MOVE-CORRESPONDING gs_appr TO gs_out.
     PERFORM scheme_text USING gs_appr-scheme_type CHANGING gs_out-stype_txt.
+    PERFORM fill_extra USING gs_appr CHANGING gs_out.
+*   CIS UAT pt.5/7: credit note posted but accounting doc not captured yet
+    IF gs_appr-cn_doc IS NOT INITIAL AND gs_appr-acc_doc IS INITIAL.
+      PERFORM read_acc_doc USING gs_appr-cn_doc ' '
+                           CHANGING gs_appr-acc_doc gs_appr-acc_year lv_posted.
+      IF gs_appr-acc_doc IS NOT INITIAL.
+        gs_out-acc_doc  = gs_appr-acc_doc.
+        gs_out-acc_year = gs_appr-acc_year.
+        MODIFY ycis_apprvl FROM gs_appr.
+        lv_upd = 'X'.
+      ENDIF.
+    ENDIF.
     APPEND gs_out TO gt_out.
   ENDLOOP.
+  IF lv_upd = 'X'.
+    COMMIT WORK.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -188,6 +272,13 @@ FORM build_fieldcat.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
   add_fc 'SALES_OFF'   'Sales Office'    ''.
+  add_fc 'SEAS_IND'    'P/R/S Indicator'    ''.
+  add_fc 'SC_IND'      'Seasonal Indicator' ''.
+  add_fc 'WAIVER_1'    'Waiver Month 1'     ''.
+  add_fc 'WAIVER_2'    'Waiver Month 2'     ''.
+  add_fc 'WV_STAT'     'Waiver Status'   ''.
+  add_fc 'LFT_QTY'     'Group Lifted Qty'      ''.
+  add_fc 'IND_LFT_QTY' 'Individual Lifted Qty' ''.
   add_fc 'MCQ_QTY'     'Committed Qty'   ''.
   add_fc 'MCQ_PERC'    'MCQ %'           ''.
   add_fc 'ELIG_QTY'    'Eligible Qty'    ''.
@@ -202,12 +293,25 @@ FORM build_fieldcat.
   add_fc 'L5_USER'     'L5 Approved By'  ''.
   add_fc 'L5_DATE'     'L5 Approved On'  ''.
   add_fc 'REMARKS'     'Remarks'         ''.
+  IF p_exec = 'X'.
+*   display only: no selection column, processing details instead
+    DELETE gt_fcat WHERE fieldname = 'SEL'.
+    add_fc 'WF_TXT'      'Workflow Status'  ''.
+    add_fc 'L6_USER'     'L6 Posted By'  ''.
+    add_fc 'L6_DATE'     'L6 Posted On'  ''.
+    add_fc 'REM_L6'      'L6 Remark'     ''.
+    add_fc 'REJ_BY'      'Rejected By'      ''.
+    add_fc 'REJ_DATE'    'Rejected On'      ''.
+    add_fc 'REJ_REMARKS' 'Reject Remark'    ''.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM display_alv.
   gs_layout-zebra         = 'X'.
-  gs_layout-box_fieldname = 'SEL'.
+  IF p_exec IS INITIAL.
+    gs_layout-box_fieldname = 'SEL'.
+  ENDIF.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid
@@ -228,11 +332,12 @@ FORM show_stmt_popup CHANGING p_ans TYPE c.
   CLEAR p_ans.
   CALL FUNCTION 'POPUP_TO_CONFIRM'
     EXPORTING
-      titlebar              = 'CIS 2026-27 - L6 Disbursement'
+      titlebar              = 'CIS 2026-27 - L6 Posting'
       text_question         =
-        'The selected record(s) have been finally approved at L5. Confirm ' &&
-        'disbursement? This will mark the CIS discount as Completed / ' &&
-        'Disbursed. This action cannot be undone.'
+        'The selected record(s) have been finally approved at L5. Post ' &&
+        'the Credit Note(s)? The credit note is posted to accounting, ' &&
+        'e-mailed to the customer and the CIS discount is marked Completed.' &&
+        ' This action cannot be undone.'
       text_button_1         = 'Yes'
       icon_button_1         = 'ICON_OKAY'
       text_button_2         = 'No'
@@ -254,11 +359,16 @@ FORM top_of_page.                                           "#EC CALLED
   ls_hdr-info = 'CIS 2026-27 L-6 Disbursement (CPC Finance)'.
   APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'.
-  ls_hdr-info = 'Finally approved rebate orders are presented for disbursement.'.
+  ls_hdr-info = 'Finally approved rebate orders are presented for posting (Credit Note).'.
   APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'.
-  ls_hdr-info = 'On disbursement, the CIS discount is marked Completed and the sales office is notified.'.
+  ls_hdr-info = 'On posting, the Credit Note is posted & e-mailed and the CIS discount is marked Completed.'.
   APPEND ls_hdr TO lt_hdr.
+  IF p_exec = 'X'.
+    CLEAR ls_hdr. ls_hdr-typ = 'S'.
+    ls_hdr-info = 'Display: records already processed at L6 (display only).'.
+    APPEND ls_hdr TO lt_hdr.
+  ENDIF.
   CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
     EXPORTING
       it_list_commentary = lt_hdr.
@@ -266,7 +376,16 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM set_status USING rt_extab TYPE slis_t_extab.            "#EC CALLED
-  SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
+  DATA: lt_ex TYPE slis_t_extab,
+        ls_ex TYPE slis_extab.
+  lt_ex = rt_extab.
+  IF p_exec = 'X'.                     " display only - no actions
+    ls_ex-fcode = 'APPR'. APPEND ls_ex TO lt_ex.
+    ls_ex-fcode = 'REJ'. APPEND ls_ex TO lt_ex.
+    ls_ex-fcode = 'SELALL'. APPEND ls_ex TO lt_ex.
+    ls_ex-fcode = 'DESEL'. APPEND ls_ex TO lt_ex.
+  ENDIF.
+  SET PF-STATUS 'STANDARD' EXCLUDING lt_ex.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -278,6 +397,10 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
       e_grid = lr_grid.
   IF lr_grid IS NOT INITIAL.
     CALL METHOD lr_grid->check_changed_data.
+  ENDIF.
+  IF p_exec = 'X' AND ( r_ucomm = 'APPR' OR r_ucomm = 'REJ' ).
+    MESSAGE 'Display only - already processed records' TYPE 'S'.
+    RETURN.
   ENDIF.
   CASE r_ucomm.
     WHEN 'APPR'.                                     " Disburse
@@ -313,7 +436,10 @@ FORM process_selected USING p_action TYPE char1.
         lv_ok     TYPE flag,
         lv_cndoc  TYPE vbeln_vf,
         lv_accdoc TYPE belnr_d,
-        lv_accyr  TYPE gjahr.
+        lv_accyr  TYPE gjahr,
+        lt_cn     TYPE STANDARD TABLE OF vbeln_vf,
+        lv_mail   TYPE i,
+        lv_nmail  TYPE i.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -323,7 +449,7 @@ FORM process_selected USING p_action TYPE char1.
 
 * CIS 2026-27: a remark is MANDATORY at every level for BOTH disburse and reject
   IF p_action = 'A'.
-    PERFORM get_remark USING 'Disbursement remark (mandatory)' CHANGING lv_remark.
+    PERFORM get_remark USING 'Posting remark (mandatory)'      CHANGING lv_remark.
   ELSE.
     PERFORM get_remark USING 'Reject remark (mandatory)'       CHANGING lv_remark.
   ENDIF.
@@ -335,7 +461,7 @@ FORM process_selected USING p_action TYPE char1.
   IF p_action = 'A'.
     PERFORM show_stmt_popup CHANGING lv_ans.
     IF lv_ans <> '1'.
-      MESSAGE 'Disbursement cancelled' TYPE 'S'.
+      MESSAGE 'Posting cancelled' TYPE 'S'.
       RETURN.
     ENDIF.
   ENDIF.
@@ -370,8 +496,11 @@ FORM process_selected USING p_action TYPE char1.
       gs_appr-l6_date   = sy-datum.
       gs_appr-l6_time   = sy-uzeit.
       gs_appr-rem_l6    = lv_remark.           " L6 disbursement remark (prints on note)
-      gs_appr-remarks   = 'Disbursed - CIS discount completed'.
+      gs_appr-remarks   = 'Posted - Credit Note created, CIS discount completed'.
       COLLECT gs_appr-sales_off INTO lt_dofc.
+      IF gs_appr-cn_doc IS NOT INITIAL.
+        APPEND gs_appr-cn_doc TO lt_cn.
+      ENDIF.
       lv_disb = lv_disb + 1.
     ELSE.
       gs_appr-wf_status   = '10'.          " back to L1 (reinitiation)
@@ -392,6 +521,14 @@ FORM process_selected USING p_action TYPE char1.
   IF lv_disb > 0 OR lv_rej > 0.
     COMMIT WORK.
   ENDIF.
+* CIS UAT 14.10.2026 pt.8: credit note e-mail to the customer with posting
+  LOOP AT lt_cn INTO lv_cndoc.
+    CLEAR lv_nmail.
+    PERFORM send_cn_mail USING lv_cndoc CHANGING lv_nmail.
+    IF lv_nmail > 0.
+      lv_mail = lv_mail + 1.
+    ENDIF.
+  ENDLOOP.
 *   disbursement complete -> notify originating sales office (L1)
   IF lv_disb > 0.
     LOOP AT lt_dofc INTO lv_off.
@@ -405,7 +542,7 @@ FORM process_selected USING p_action TYPE char1.
     ENDLOOP.
   ENDIF.
   DELETE gt_out WHERE sel = 'X'.
-  MESSAGE |{ lv_disb } disbursed (Credit Note created & posted), { lv_rej } returned to L1| TYPE 'S'.
+  MESSAGE |{ lv_disb } posted (Credit Note created, Accounting document posted, { lv_mail } e-mailed), { lv_rej } returned to L1| TYPE 'S'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -436,7 +573,8 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
         ls_succ   TYPE bapivbrksuccess,
         lt_return TYPE STANDARD TABLE OF bapireturn1,
         ls_return TYPE bapireturn1,
-        lv_err    TYPE flag.
+        lv_err    TYPE flag,
+        lv_posted TYPE flag.
 
   CLEAR: p_ok, p_cndoc, p_accdoc, p_accyr.
 *   need the L3 rebate order (ZP09) as the billing reference
@@ -488,14 +626,13 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
 
 *   read the accounting document posted for this billing document, so both
 *   numbers can be shown against the workflow (CPC 24.09.2026 pt.2).
-  SELECT SINGLE belnr gjahr INTO (p_accdoc, p_accyr)
-    FROM bkpf
-    WHERE awtyp = 'VBRK'
-      AND awkey = p_cndoc.
-  IF p_accdoc IS INITIAL.
-*     billing posted but FI doc not found (e.g. posting still in the update
-*     task or a posting block is set) - the billing doc is still created.
-    MESSAGE 'Credit Note created; accounting document not yet posted - check billing type G2 posting block' TYPE 'I'.
+*   CIS UAT 14.10.2026 pt.7: the FI document is written by the update task
+*   after the commit, so it was often not yet visible and the program said
+*   'not yet posted' although it was. Wait for it (max. 10 s) and treat the
+*   billing posting status VBRK-RFBSK = 'C' as posted.
+  PERFORM read_acc_doc USING p_cndoc 'X' CHANGING p_accdoc p_accyr lv_posted.
+  IF lv_posted IS INITIAL.
+    MESSAGE |Credit Note { p_cndoc } created; accounting document not posted - release it in VFX3| TYPE 'I'.
   ENDIF.
   p_ok = 'X'.
 ENDFORM.
@@ -554,11 +691,11 @@ FORM send_mail USING p_mode   TYPE char1
       ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       IF p_mode = 'D'.
-        ls_text-line = |The CIS 2026-27 discount/rebate for Sales Office { p_ctxoff } has been disbursed by L6 (CPC Finance).|.
+        ls_text-line = |The CIS 2026-27 discount/rebate for Sales Office { p_ctxoff } has been posted by L6 (CPC Finance) - Credit Note created and e-mailed to the customer.|.
         APPEND ls_text TO lt_text.
         ls_text-line = |The workflow for these record(s) is now Completed. No further action is required.|.
         APPEND ls_text TO lt_text.
-        lv_sub = 'CIS Discount Disbursed - Workflow Completed'.
+        lv_sub = 'CIS Discount Posted - Workflow Completed'.
       ELSE.
         ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L6 (CPC Finance).|.
         APPEND ls_text TO lt_text.
@@ -585,5 +722,362 @@ FORM send_mail USING p_mode   TYPE char1
       lo_send->send( i_with_error_screen = 'X' ).
       COMMIT WORK.
     CATCH cx_bcs.
+  ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  read_qais_master
+*&---------------------------------------------------------------------*
+*   CIS UAT 14.10.2026 pt.1/2: seasonal indicator (P_R_INDICATOR /
+*   P_SC_INDICATOR) and monthly waivers (WAIVER_1 / WAIVER_2) of the listed
+*   customers, read once from the CIS customer master YRVA_QAIS_DATA.
+*&---------------------------------------------------------------------*
+FORM read_qais_master.
+  REFRESH gt_qais.
+  CHECK gt_appr IS NOT INITIAL.
+  SELECT * FROM yrva_qais_data INTO TABLE gt_qais
+    FOR ALL ENTRIES IN gt_appr
+    WHERE kunnr           = gt_appr-kunnr
+      AND module_identity = space.
+  SORT gt_qais BY kunnr mou_begda DESCENDING.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  fill_extra   (master data + workflow status of one row)
+*&---------------------------------------------------------------------*
+FORM fill_extra USING    ps_appr TYPE ycis_apprvl
+                CHANGING ps_out  TYPE ty_out.
+  DATA: ls_qais  TYPE yrva_qais_data,
+        ls_first TYPE yrva_qais_data,
+        lv_to    TYPE d.
+  lv_to = ps_appr-period_to.
+  IF lv_to IS INITIAL.
+    lv_to = ps_appr-period_from.
+  ENDIF.
+* scheme record valid for the CIS period - same customer group preferred
+  LOOP AT gt_qais INTO ls_qais WHERE kunnr     = ps_appr-kunnr
+                                 AND mou_begda LE lv_to
+                                 AND mou_endda GE ps_appr-period_from.
+    IF ls_first IS INITIAL.
+      ls_first = ls_qais.
+    ENDIF.
+    IF ls_qais-kvgr2 = ps_appr-kvgr2.
+      ls_first = ls_qais.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+  ps_out-seas_ind = ls_first-p_r_indicator.
+  ps_out-sc_ind   = ls_first-p_sc_indicator.
+  ps_out-waiver_1 = ls_first-waiver_1.
+  ps_out-waiver_2 = ls_first-waiver_2.
+  PERFORM wf_text USING ps_appr CHANGING ps_out-wf_txt.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  wf_text   (current workflow status as text)
+*&---------------------------------------------------------------------*
+FORM wf_text USING    ps_appr TYPE ycis_apprvl
+             CHANGING p_txt   TYPE char40.
+  DATA lv_lvl TYPE c LENGTH 1.
+  lv_lvl = ps_appr-wf_status(1).
+  CASE ps_appr-wf_status.
+    WHEN '10'.
+      IF ps_appr-status = 'R'.
+        p_txt = |Returned to L1 (rejected at L{ ps_appr-rej_level })|.
+      ELSE.
+        p_txt = 'Pending L1'.
+      ENDIF.
+    WHEN '20' OR '30' OR '40' OR '50' OR '60'.
+      p_txt = |Pending L{ lv_lvl }|.
+    WHEN '70'.
+      p_txt = 'Completed (Credit Note posted)'.
+    WHEN OTHERS.
+      p_txt = ps_appr-wf_status.
+  ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  read_acc_doc
+*&---------------------------------------------------------------------*
+*   FI accounting document of a billing document (BKPF AWTYP 'VBRK').
+*   p_wait = 'X' : retry up to 10 s for the update task after posting.
+*   p_posted     : 'X' when the FI document exists or the billing document
+*                  has posting status 'C' (accounting document created).
+*&---------------------------------------------------------------------*
+FORM read_acc_doc USING    p_cndoc  TYPE vbeln_vf
+                           p_wait   TYPE c
+                  CHANGING p_accdoc TYPE belnr_d
+                           p_accyr  TYPE gjahr
+                           p_posted TYPE flag.
+  DATA: lv_awkey TYPE awkey,
+        lv_rfbsk TYPE vbrk-rfbsk.
+  CLEAR: p_accdoc, p_accyr, p_posted.
+  CHECK p_cndoc IS NOT INITIAL.
+  lv_awkey = p_cndoc.
+  DO 10 TIMES.
+    SELECT belnr gjahr FROM bkpf INTO (p_accdoc, p_accyr) UP TO 1 ROWS
+      WHERE awtyp = 'VBRK'
+        AND awkey = lv_awkey
+      ORDER BY PRIMARY KEY.
+    ENDSELECT.
+    IF p_accdoc IS NOT INITIAL.
+      p_posted = 'X'.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE rfbsk FROM vbrk INTO lv_rfbsk WHERE vbeln = p_cndoc.
+    IF lv_rfbsk = 'C'.
+      p_posted = 'X'.                  " posted - FI document still in update
+    ENDIF.
+    IF p_wait IS INITIAL.
+      EXIT.
+    ENDIF.
+    WAIT UP TO 1 SECONDS.
+  ENDDO.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  send_cn_mail   (CIS UAT 14.10.2026 pt.8)
+*&---------------------------------------------------------------------*
+*   E-mails the posted credit note to the customer, as done today with
+*   YRVR167 (PDF download, Smart Form YRV_CREDIT_NOTE for rebate credit
+*   notes) + YRVR169 (mail to the e-mail IDs of the customer's partners in
+*   the billing sales area, sender EINVOICE@GAIL.CO.IN) - now in one step
+*   at L6 posting. p_cnt = number of recipients the mail was sent to.
+*&---------------------------------------------------------------------*
+FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
+                  CHANGING p_cnt   TYPE i.
+  CONSTANTS lc_form TYPE tdsfname VALUE 'YRV_CREDIT_NOTE'.
+  DATA: ls_vbrk         TYPE vbrk,
+        lv_fm           TYPE rs38l_fnam,
+        ls_ctrl         TYPE ssfctrlop,
+        ls_opt          TYPE ssfcompop,
+        ls_docinfo      TYPE ssfcrespd,
+        ls_jobinfo      TYPE ssfcrescl,
+        ls_jobopt       TYPE ssfcresop,
+        lv_devtype      TYPE rspoptype,
+        x_yrva_rebate   TYPE yrvs_rebate,
+        w_bill          LIKE vbrk-vbeln,
+        w_aubel         TYPE vbeln_va,
+        w_fkdat         TYPE fkdat,
+        w_fkimg         LIKE vbrp-fkimg,
+        w_netwr         LIKE vbrk-netwr,
+        w_vkbur         TYPE vkbur,
+        w_bstkd         LIKE vbkd-bstkd,
+        w_from_date     TYPE d,
+        w_to_date       TYPE d,
+        w_bezei         TYPE bezei,
+        w_text          TYPE char200,
+        w_kunnr         LIKE vbpa-kunnr,
+        w_adrnr         LIKE kna1-adrnr,
+        x_adrc          LIKE adrc,
+        lt_lines        TYPE STANDARD TABLE OF tline,
+        lv_size         TYPE i,
+        lv_pdf          TYPE xstring,
+        lt_hex          TYPE solix_tab,
+        lt_knvp         TYPE STANDARD TABLE OF knvp,
+        ls_knvp         TYPE knvp,
+        lt_partner      TYPE STANDARD TABLE OF kunnr,
+        lv_partner      TYPE kunnr,
+        lt_adr6         TYPE STANDARD TABLE OF adr6,
+        ls_adr6         TYPE adr6,
+        lt_body         TYPE bcsy_text,
+        ls_line         TYPE soli,
+        lv_subj         TYPE so_obj_des,
+        lv_att          TYPE so_obj_des,
+        lv_cust         TYPE char10,
+        lv_d1           TYPE char10,
+        lv_d2           TYPE char10,
+        lo_send         TYPE REF TO cl_bcs,
+        lo_doc          TYPE REF TO cl_document_bcs,
+        lo_rec          TYPE REF TO if_recipient_bcs,
+        lo_sender       TYPE REF TO if_sender_bcs,
+        lv_addr         TYPE ad_smtpadr.
+
+  CLEAR p_cnt.
+  SELECT SINGLE * FROM vbrk INTO ls_vbrk WHERE vbeln = p_cndoc.
+  CHECK sy-subrc = 0.
+
+* ---- credit note PDF (same data as YRVR167, Smart Form YRV_CREDIT_NOTE)
+  w_bill  = p_cndoc.
+  w_fkdat = ls_vbrk-fkdat.
+  w_netwr = ls_vbrk-netwr.
+  SELECT aubel fkimg vkbur INTO (w_aubel, w_fkimg, w_vkbur) FROM vbrp
+    UP TO 1 ROWS WHERE vbeln = w_bill ORDER BY PRIMARY KEY.
+  ENDSELECT.
+  SELECT bstkd bstdk bstdk_e INTO (w_bstkd, w_from_date, w_to_date) FROM vbkd
+    UP TO 1 ROWS WHERE vbeln = w_aubel ORDER BY PRIMARY KEY.
+  ENDSELECT.
+  SELECT * INTO CORRESPONDING FIELDS OF x_yrva_rebate FROM yrva_rebate
+    UP TO 1 ROWS WHERE vbeln = w_aubel ORDER BY PRIMARY KEY.
+  ENDSELECT.
+  IF sy-subrc <> 0.
+    x_yrva_rebate-yy_per_start = w_from_date.
+    x_yrva_rebate-yy_per_end   = w_to_date.
+    x_yrva_rebate-vkbur        = w_vkbur.
+  ENDIF.
+  SELECT SINGLE bezei INTO w_bezei FROM tvkbt
+    WHERE spras = 'EN' AND vkbur = x_yrva_rebate-vkbur.
+  SELECT kunnr INTO w_kunnr FROM vbpa UP TO 1 ROWS
+    WHERE vbeln = w_aubel AND parvw = 'WE' ORDER BY PRIMARY KEY.
+  ENDSELECT.
+  IF w_kunnr IS NOT INITIAL.
+    SELECT SINGLE adrnr INTO w_adrnr FROM kna1 WHERE kunnr = w_kunnr.
+    SELECT * INTO x_adrc FROM adrc UP TO 1 ROWS
+      WHERE addrnumber = w_adrnr ORDER BY PRIMARY KEY.
+    ENDSELECT.
+  ENDIF.
+
+  CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+    EXPORTING
+      formname           = lc_form
+    IMPORTING
+      fm_name            = lv_fm
+    EXCEPTIONS
+      no_form            = 1
+      no_function_module = 2
+      OTHERS             = 3.
+  IF sy-subrc <> 0.
+    MESSAGE |Credit Note { p_cndoc }: form { lc_form } not found - e-mail not sent| TYPE 'I'.
+    RETURN.
+  ENDIF.
+  CALL FUNCTION 'SSF_GET_DEVICE_TYPE'
+    EXPORTING
+      i_language    = 'E'
+      i_application = 'SAPDEFAULT'
+    IMPORTING
+      e_devtype     = lv_devtype
+    EXCEPTIONS
+      OTHERS        = 1.
+  ls_opt-tdprinter   = lv_devtype.
+  ls_ctrl-no_dialog  = 'X'.
+  ls_ctrl-getotf     = 'X'.
+  CALL FUNCTION lv_fm
+    EXPORTING
+      control_parameters   = ls_ctrl
+      output_options       = ls_opt
+      x_yrva_rebate        = x_yrva_rebate
+      w_vbeln              = w_bill
+      w_fkdat              = w_fkdat
+      x_adrc               = x_adrc
+      w_netwr              = w_netwr
+      w_fkimg              = w_fkimg
+      w_bezei              = w_bezei
+      w_text               = w_text
+      w_bstkd              = w_bstkd
+    IMPORTING
+      document_output_info = ls_docinfo
+      job_output_info      = ls_jobinfo
+      job_output_options   = ls_jobopt
+    EXCEPTIONS
+      formatting_error     = 1
+      internal_error       = 2
+      send_error           = 3
+      user_canceled        = 4
+      OTHERS               = 5.
+  IF sy-subrc <> 0.
+    MESSAGE |Credit Note { p_cndoc }: PDF could not be generated - e-mail not sent| TYPE 'I'.
+    RETURN.
+  ENDIF.
+  CALL FUNCTION 'CONVERT_OTF'
+    EXPORTING
+      format       = 'PDF'
+    IMPORTING
+      bin_filesize = lv_size
+      bin_file     = lv_pdf
+    TABLES
+      otf          = ls_jobinfo-otfdata
+      lines        = lt_lines
+    EXCEPTIONS
+      OTHERS       = 1.
+  IF sy-subrc <> 0 OR lv_pdf IS INITIAL.
+    MESSAGE |Credit Note { p_cndoc }: PDF conversion failed - e-mail not sent| TYPE 'I'.
+    RETURN.
+  ENDIF.
+  lt_hex = cl_bcs_convert=>xstring_to_solix( iv_xstring = lv_pdf ).
+
+* ---- recipients: e-mail IDs of the customer's partners (as YRVR169)
+  SELECT * FROM knvp INTO TABLE lt_knvp
+    WHERE kunnr = ls_vbrk-kunag
+      AND vkorg = ls_vbrk-vkorg
+      AND vtweg = ls_vbrk-vtweg
+      AND spart = ls_vbrk-spart.
+  LOOP AT lt_knvp INTO ls_knvp.
+    lv_partner = ls_knvp-kunn2.
+    IF lv_partner IS INITIAL.
+      lv_partner = ls_knvp-lifnr.
+    ENDIF.
+    CHECK lv_partner IS NOT INITIAL.
+    COLLECT lv_partner INTO lt_partner.
+  ENDLOOP.
+  IF lt_partner IS INITIAL.
+    APPEND ls_vbrk-kunag TO lt_partner.
+  ENDIF.
+  SELECT b~addrnumber b~persnumber b~smtp_addr
+    FROM kna1 AS a INNER JOIN adr6 AS b ON b~addrnumber = a~adrnr
+    INTO CORRESPONDING FIELDS OF TABLE lt_adr6
+    FOR ALL ENTRIES IN lt_partner
+    WHERE a~kunnr = lt_partner-table_line.
+  DELETE lt_adr6 WHERE persnumber IS NOT INITIAL OR smtp_addr IS INITIAL.
+  SORT lt_adr6 BY smtp_addr.
+  DELETE ADJACENT DUPLICATES FROM lt_adr6 COMPARING smtp_addr.
+  IF lt_adr6 IS INITIAL.
+    MESSAGE |Credit Note { p_cndoc }: no customer e-mail ID maintained - e-mail not sent| TYPE 'I'.
+    RETURN.
+  ENDIF.
+
+* ---- mail (text as YRVR169)
+  lv_d1 = |{ w_from_date+6(2) }.{ w_from_date+4(2) }.{ w_from_date(4) }|.
+  lv_d2 = |{ w_to_date+6(2) }.{ w_to_date+4(2) }.{ w_to_date(4) }|.
+  IF sy-mandt <> '300'.
+    APPEND 'THIS IS A TEST MAIL, PLEASE IGNORE' TO lt_body.
+  ENDIF.
+  APPEND 'DEAR SIR/MADAM,' TO lt_body.
+  APPEND ' ' TO lt_body.
+  APPEND 'GREETINGS FROM GAIL (INDIA) LTD.' TO lt_body.
+  APPEND ' ' TO lt_body.
+  ls_line-line = |PLEASE FIND ATTACHED CREDIT NOTE NO. { p_cndoc } FOR { w_bstkd } REBATE PERIOD { lv_d1 } TO { lv_d2 }.|.
+  APPEND ls_line TO lt_body.
+  APPEND ' ' TO lt_body.
+  APPEND 'WE ALSO WISH TO BRING TO YOUR NOTICE THAT THE DOMAIN NAME USED BY GAIL FOR ALL ITS MAIL COMMUNICATIONS IS GAIL.CO.IN ONLY.' TO lt_body.
+  APPEND ' ' TO lt_body.
+  APPEND 'THANKING YOU,' TO lt_body.
+  APPEND 'GAIL (INDIA) LTD.' TO lt_body.
+  APPEND ' ' TO lt_body.
+  APPEND 'THIS IS A SYSTEM GENERATED MAIL, PLEASE DO NOT REPLY. FOR ANY CLARIFICATIONS PLEASE CONTACT THE CONCERNED GAIL MARKETING OFFICE.' TO lt_body.
+  APPEND ' ' TO lt_body.
+  ls_line-line = |SOURCE:YRVG004_P.{ sy-uname }.{ sy-datum DATE = USER }.{ sy-uzeit TIME = USER }|.
+  APPEND ls_line TO lt_body.
+
+  lv_cust = |{ ls_vbrk-kunag ALPHA = OUT }|.
+  CONDENSE lv_cust.
+  lv_subj = |CREDIT NOTE-{ p_cndoc }-{ lv_cust }|.
+  lv_att  = |{ ls_vbrk-kunag }_{ p_cndoc }|.
+
+  TRY.
+      lo_send = cl_bcs=>create_persistent( ).
+      lo_doc  = cl_document_bcs=>create_document(
+                  i_type    = 'RAW'
+                  i_text    = lt_body
+                  i_subject = lv_subj ).
+      lo_doc->add_attachment(
+        i_attachment_type    = 'PDF'
+        i_attachment_subject = lv_att
+        i_att_content_hex    = lt_hex ).
+      lo_send->set_document( lo_doc ).
+      lo_sender = cl_cam_address_bcs=>create_internet_address( 'EINVOICE@GAIL.CO.IN' ).
+      lo_send->set_sender( lo_sender ).
+      LOOP AT lt_adr6 INTO ls_adr6.
+        lv_addr = ls_adr6-smtp_addr.
+        lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
+        lo_send->add_recipient( i_recipient = lo_rec i_express = 'X' ).
+        p_cnt = p_cnt + 1.
+      ENDLOOP.
+      lo_send->set_status_attributes( i_requested_status = 'N' i_status_mail = 'N' ).
+      lo_send->set_send_immediately( 'X' ).
+      lo_send->send( i_with_error_screen = 'X' ).
+      COMMIT WORK.
+    CATCH cx_bcs.
+      CLEAR p_cnt.
+      MESSAGE |Credit Note { p_cndoc }: e-mail could not be sent| TYPE 'I'.
   ENDTRY.
 ENDFORM.

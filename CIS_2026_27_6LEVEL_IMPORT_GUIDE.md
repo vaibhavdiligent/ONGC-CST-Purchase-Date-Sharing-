@@ -74,3 +74,19 @@ once CPC Finance confirms the design. Until then it is a controlled no-op.
 Create a dialog/report transaction for each new program if CPC wants direct
 T-code access: e.g. `YCIS_L4` → YCIS_VET, `YCIS_L5` → YCIS_APPRV5,
 `YCIS_L6` → YCIS_DISBURSE.
+
+## UAT observations 14.10.2026 (L1–L6) – changes
+
+| # | Observation | Change | Program(s) |
+|---|---|---|---|
+| 1 | Seasonal indicator at all levels | Columns *P/R/S Indicator* (YRVA_QAIS_DATA-P_R_INDICATOR) and *Seasonal Indicator* (P_SC_INDICATOR) | N1 (L1 monthly), YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |
+| 2 | Monthly waiver at all levels | Columns *Waiver Month 1/2* (WAIVER_1 / WAIVER_2) | same as 1 |
+| 3 | Already processed records at L2–L6 | Radio buttons *Unexecuted* (pending, default) / *Executed* (processed at this level – display only, with workflow status, processed by/on, remark, reject details) | L2–L6 |
+| 4 | Grp / Ind Lifted Qty at L2–L6 | Already at L2–L5; added to L6 | YCIS_DISBURSE |
+| 5 | Credit note details not captured (YRVG004_P) | Credit Note / Accounting Doc stored and shown; *Executed* view lists posted rows; missing accounting doc is completed automatically | YCIS_DISBURSE |
+| 6 | Rename Approve → Post | Texts changed in program; **SE41: status STANDARD of YCIS_DISBURSE, function APPR, function text = `Post`** | YCIS_DISBURSE |
+| 7 | "Accounting document not yet posted" although posted | Accounting doc read again with a wait for the update task; billing posting status RFBSK = 'C' counts as posted; message "Accounting document posted" | YCIS_DISBURSE |
+| 8 | Credit note e-mail with L6 posting | On posting, the credit note PDF (Smart Form YRV_CREDIT_NOTE, as YRVR167) is e-mailed to the customer (partner e-mail logic of YRVR169, sender EINVOICE@GAIL.CO.IN) | YCIS_DISBURSE |
+| L4-2 | Lifting qty breakup on L4 screen | Click Group / Individual Lifted Qty → popup with the S922 sales lines (customer, date, grade, channel, qty, totals); group = BP Group/MLE members | YCIS_VET |
+| L4-3 | Field names on L4 selection screen | Selection texts set in the program (Period From, Sales Office, Customer, Customer Group) – all levels | L2–L6 |
+| L4-4 | Display already vetted data | = obs. 3 (*Executed*) | YCIS_VET |
