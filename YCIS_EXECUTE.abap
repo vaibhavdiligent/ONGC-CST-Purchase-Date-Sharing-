@@ -1,13 +1,16 @@
 *&---------------------------------------------------------------------*
 *& Report  YCIS_EXECUTE
 *&---------------------------------------------------------------------*
-*& CIS 2026-27 - 3-level approval workflow : LEVEL 3 (CPC - Execution).
+*& CIS 2026-27 - 6-level approval workflow : LEVEL 3 (CPC - Execution).
 *&
 *&   L3 (CPC) is central (maintained in YCIS_WF_APPR under sales office
 *&   '0001', level 3) and sees the Pending-L3 rows of ALL sales offices.
 *&     EXECUTE -> create the rebate order (credit-memo request) via BAPI,
-*&                WF_STATUS '40' (Completed), store the order number.
-*&     REJECT  -> WF_STATUS '20' (back to L2 - PC MKTG-HOD), e-mail L2.
+*&                WF_STATUS '40' (Pending L4), store the order number,
+*&                forward to L4 (CPC Finance - Financial Vetting), e-mail L4.
+*&     REJECT  -> WF_STATUS '10' (back to L1 for reinitiation), e-mail L1.
+*&   Status model (6-level): 10 L1 / 20 L2 / 30 L3 / 40 L4 / 50 L5 / 60 L6 /
+*&   70 Completed (disbursed).  Any reject at any level returns to L1.
 *&
 *& GUI status 'STANDARD' (function codes EXEC, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (see doc).
@@ -40,6 +43,13 @@ TYPES: BEGIN OF ty_out,
          cust_name   TYPE ycis_apprvl-cust_name,
          kvgr2       TYPE ycis_apprvl-kvgr2,
          sales_off   TYPE ycis_apprvl-sales_off,
+*        CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
+*        (customer master YRVA_QAIS_DATA) shown at every level
+         seas_ind    TYPE yrva_qais_data-p_r_indicator,
+         sc_ind      TYPE yrva_qais_data-p_sc_indicator,
+         waiver_1    TYPE yrva_qais_data-waiver_1,
+         waiver_2    TYPE yrva_qais_data-waiver_2,
+         wv_stat     TYPE ycis_apprvl-wv_stat,     " Shortfall/Customer Waiver status
          mcq_qty     TYPE ycis_apprvl-mcq_qty,
          lft_qty     TYPE ycis_apprvl-lft_qty,       " group lifted qty
          ind_lft_qty TYPE ycis_apprvl-ind_lft_qty,   " individual lifted qty
@@ -56,6 +66,14 @@ TYPES: BEGIN OF ty_out,
          l2_time     TYPE ycis_apprvl-l2_time,
          order_no    TYPE ycis_apprvl-order_no,
          remarks     TYPE ycis_apprvl-remarks,
+*        CIS UAT 14.10.2026 pt.3: 'Executed' view - processing details
+         wf_txt      TYPE char40,
+         l3_user     TYPE ycis_apprvl-l3_user,
+         l3_date     TYPE ycis_apprvl-l3_date,
+         rem_l3      TYPE ycis_apprvl-rem_l3,
+         rej_by      TYPE ycis_apprvl-rej_by,
+         rej_date    TYPE ycis_apprvl-rej_date,
+         rej_remarks TYPE ycis_apprvl-rej_remarks,
        END OF ty_out.
 
 DATA: gt_appr  TYPE STANDARD TABLE OF ycis_apprvl,
@@ -65,18 +83,60 @@ DATA: gt_appr  TYPE STANDARD TABLE OF ycis_apprvl,
       gt_fcat  TYPE slis_t_fieldcat_alv,
       gs_fcat  TYPE slis_fieldcat_alv,
       gs_layout TYPE slis_layout_alv,
-      gv_isl3  TYPE flag.
+      gv_isl3  TYPE flag,
+      gr_stype TYPE RANGE OF ycis_apprvl-scheme_type,
+      gs_stype LIKE LINE OF gr_stype.
 
 *--------------------------------------------------------------------*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+DATA: gt_qais TYPE STANDARD TABLE OF yrva_qais_data.   " seasonal ind. / waivers
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE t_b1.
 SELECT-OPTIONS: s_sptag FOR ycis_apprvl-period_from,
                 s_vkbur FOR ycis_apprvl-sales_off,
                 s_kunnr FOR ycis_apprvl-kunnr,
                 s_kvgr2 FOR ycis_apprvl-kvgr2.
+*   Scheme selection - same Monthly / Yearly choice as the L1 program
+*   (YRVG004_QAIS_EXECUTE_N1). Monthly -> 'M', Yearly -> Annual 'A' +
+*   Annual Consistency 'C'. GAIL 30.07.2026.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_mon  RADIOBUTTON GROUP g1 DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(25) c_mon.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_year RADIOBUTTON GROUP g1.
+SELECTION-SCREEN COMMENT 3(25) c_year.
+SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b1.
+*   CIS UAT 14.10.2026 pt.3: Unexecuted = pending at this level (action
+*   possible); Executed = already processed at this level (display only).
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE t_b2.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_unex RADIOBUTTON GROUP g2 DEFAULT 'X'.
+SELECTION-SCREEN COMMENT 3(45) c_unex.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_exec RADIOBUTTON GROUP g2.
+SELECTION-SCREEN COMMENT 3(45) c_exec.
+SELECTION-SCREEN END OF LINE.
+SELECTION-SCREEN END OF BLOCK b2.
+
+INITIALIZATION.
+  c_mon  = 'Monthly'.
+  c_year = 'Yearly (Annual)'.
+  c_unex = 'Unexecuted (pending at L3)'.
+  c_exec = 'Executed (already processed at L3)'.
+  t_b1   = 'Selection Criteria'.
+  t_b2   = 'Display'.
+* CIS UAT (L4 obs.3): field names on the selection screen without
+* depending on maintained selection texts
+  %_s_sptag_%_app_%-text = 'Period From'.
+  %_s_vkbur_%_app_%-text = 'Sales Office'.
+  %_s_kunnr_%_app_%-text = 'Customer'.
+  %_s_kvgr2_%_app_%-text = 'Customer Group'.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
+  PERFORM build_stype_range.
   PERFORM check_l3_auth.
   IF gv_isl3 IS INITIAL.
     MESSAGE 'You are not maintained as a Level-3 (CPC) executor (YCIS_WF_APPR)' TYPE 'I'.
@@ -84,7 +144,11 @@ START-OF-SELECTION.
   ENDIF.
   PERFORM get_pending.
   IF gt_appr IS INITIAL.
-    MESSAGE 'No records pending L3 execution' TYPE 'I'.
+    IF p_exec = 'X'.
+      MESSAGE 'No records already processed at L3 for the selection' TYPE 'I'.
+    ELSE.
+      MESSAGE 'No records pending L3 execution' TYPE 'I'.
+    ENDIF.
     RETURN.
   ENDIF.
   PERFORM build_out.
@@ -104,21 +168,53 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM get_pending.
 *   CPC is central -> all offices' pending-L3 rows (narrowed by s_vkbur)
-  SELECT * FROM ycis_apprvl INTO TABLE gt_appr
-    WHERE wf_status   = '30'
-      AND sales_off   IN s_vkbur
-      AND period_from IN s_sptag
-      AND kunnr       IN s_kunnr
-      AND kvgr2       IN s_kvgr2.
+  IF p_exec = 'X'.
+    SELECT * FROM ycis_apprvl INTO TABLE gt_appr
+      WHERE ( l3_user <> space OR rej_level = gc_level )   " processed at L3
+        AND scheme_type IN gr_stype               " Monthly / Yearly (excl. rebate 'U')
+        AND sales_off   IN s_vkbur
+        AND period_from IN s_sptag
+        AND kunnr       IN s_kunnr
+        AND kvgr2       IN s_kvgr2.
+  ELSE.
+    SELECT * FROM ycis_apprvl INTO TABLE gt_appr
+      WHERE wf_status    = '30'
+        AND scheme_type IN gr_stype               " Monthly / Yearly (excl. rebate 'U')
+        AND sales_off   IN s_vkbur
+        AND period_from IN s_sptag
+        AND kunnr       IN s_kunnr
+        AND kvgr2       IN s_kvgr2.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  build_stype_range   (Monthly / Yearly scheme selection)
+*&---------------------------------------------------------------------*
+*   Monthly -> 'M'; Yearly -> Annual 'A' + Annual Consistency 'C'. Mirrors
+*   the L1 program's Monthly / Annual choice and keeps the rebate queue
+*   ('U') out. GAIL 30.07.2026.
+*&---------------------------------------------------------------------*
+FORM build_stype_range.
+  REFRESH gr_stype.
+  gs_stype-sign = 'I'. gs_stype-option = 'EQ'.
+  IF p_year = 'X'.
+    gs_stype-low = 'A'. APPEND gs_stype TO gr_stype.
+    gs_stype-low = 'C'. APPEND gs_stype TO gr_stype.
+  ELSE.
+    gs_stype-low = 'M'. APPEND gs_stype TO gr_stype.
+    gs_stype-low = 'T'. APPEND gs_stype TO gr_stype.   " Strategic Monthly Discount
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM build_out.
   REFRESH gt_out.
+  PERFORM read_qais_master.
   LOOP AT gt_appr INTO gs_appr.
     CLEAR gs_out.
     MOVE-CORRESPONDING gs_appr TO gs_out.
     PERFORM scheme_text USING gs_appr-scheme_type CHANGING gs_out-stype_txt.
+    PERFORM fill_extra USING gs_appr CHANGING gs_out.
     APPEND gs_out TO gt_out.
   ENDLOOP.
 ENDFORM.
@@ -132,6 +228,7 @@ FORM scheme_text USING p_code TYPE any CHANGING p_txt TYPE char20.
     WHEN 'Q'. p_txt = 'Quarterly'.
     WHEN 'A'. p_txt = 'Annual'.
     WHEN 'C'. p_txt = 'Annual Consistency'.
+    WHEN 'T'. p_txt = 'Strategic Monthly'.
     WHEN OTHERS. p_txt = p_code.
   ENDCASE.
 ENDFORM.
@@ -159,6 +256,11 @@ FORM build_fieldcat.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
   add_fc 'SALES_OFF'   'Sales Office'         ''.
+  add_fc 'SEAS_IND'    'P/R/S Indicator'    ''.
+  add_fc 'SC_IND'      'Seasonal Indicator' ''.
+  add_fc 'WAIVER_1'    'Waiver Month 1'     ''.
+  add_fc 'WAIVER_2'    'Waiver Month 2'     ''.
+  add_fc 'WV_STAT'     'Waiver Status'   ''.
   add_fc 'MCQ_QTY'     'Committed Qty'        ''.
   add_fc 'LFT_QTY'     'Group Lifted Qty'     ''.
   add_fc 'IND_LFT_QTY' 'Individual Lifted Qty' ''.
@@ -174,12 +276,25 @@ FORM build_fieldcat.
   add_fc 'L2_TIME'     'L2 Verified At'  ''.
   add_fc 'ORDER_NO'    'Rebate Order'    ''.
   add_fc 'REMARKS'     'Remarks'         ''.
+  IF p_exec = 'X'.
+*   display only: no selection column, processing details instead
+    DELETE gt_fcat WHERE fieldname = 'SEL'.
+    add_fc 'WF_TXT'      'Workflow Status'  ''.
+    add_fc 'L3_USER'     'L3 Executed By'  ''.
+    add_fc 'L3_DATE'     'L3 Executed On'  ''.
+    add_fc 'REM_L3'      'L3 Remark'     ''.
+    add_fc 'REJ_BY'      'Rejected By'      ''.
+    add_fc 'REJ_DATE'    'Rejected On'      ''.
+    add_fc 'REJ_REMARKS' 'Reject Remark'    ''.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM display_alv.
   gs_layout-zebra         = 'X'.
-  gs_layout-box_fieldname = 'SEL'.
+  IF p_exec IS INITIAL.
+    gs_layout-box_fieldname = 'SEL'.
+  ENDIF.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid
@@ -202,12 +317,17 @@ FORM top_of_page.                                           "#EC CALLED
   DATA: lt_hdr TYPE slis_t_listheader,
         ls_hdr TYPE slis_listheader.
   CLEAR ls_hdr. ls_hdr-typ = 'H'.
-  ls_hdr-info = 'CIS 2026-27 - Level-3 Execution (verified & confirmed at L1 and L2)'.
+  ls_hdr-info = 'CIS 2026-27 L-3 Execution (Verified & Confirmed at L1 & L2)'.
   APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt1. APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt2. APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt3. APPEND ls_hdr TO lt_hdr.
   CLEAR ls_hdr. ls_hdr-typ = 'S'. ls_hdr-info = gc_stmt4. APPEND ls_hdr TO lt_hdr.
+  IF p_exec = 'X'.
+    CLEAR ls_hdr. ls_hdr-typ = 'S'.
+    ls_hdr-info = 'Display: records already processed at L3 (display only).'.
+    APPEND ls_hdr TO lt_hdr.
+  ENDIF.
   CALL FUNCTION 'REUSE_ALV_COMMENTARY_WRITE'
     EXPORTING
       it_list_commentary = lt_hdr.
@@ -215,7 +335,16 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM set_status USING rt_extab TYPE slis_t_extab.            "#EC CALLED
-  SET PF-STATUS 'STANDARD' EXCLUDING rt_extab.
+  DATA: lt_ex TYPE slis_t_extab,
+        ls_ex TYPE slis_extab.
+  lt_ex = rt_extab.
+  IF p_exec = 'X'.                     " display only - no actions
+    ls_ex-fcode = 'EXEC'. APPEND ls_ex TO lt_ex.
+    ls_ex-fcode = 'REJ'. APPEND ls_ex TO lt_ex.
+    ls_ex-fcode = 'SELALL'. APPEND ls_ex TO lt_ex.
+    ls_ex-fcode = 'DESEL'. APPEND ls_ex TO lt_ex.
+  ENDIF.
+  SET PF-STATUS 'STANDARD' EXCLUDING lt_ex.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -229,6 +358,10 @@ FORM user_command USING r_ucomm     LIKE sy-ucomm            "#EC CALLED
     CALL METHOD lr_grid->check_changed_data.
   ENDIF.
 
+  IF p_exec = 'X' AND ( r_ucomm = 'EXEC' OR r_ucomm = 'REJ' ).
+    MESSAGE 'Display only - already processed records' TYPE 'S'.
+    RETURN.
+  ENDIF.
   CASE r_ucomm.
     WHEN 'EXEC'.
       PERFORM process_selected USING 'E'.
@@ -256,6 +389,7 @@ FORM process_selected USING p_action TYPE char1.
   DATA: lv_cnt    TYPE i,
         lv_err    TYPE i,
         lv_dup    TYPE i,
+        lv_zero   TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_off    TYPE vkbur,
@@ -269,12 +403,15 @@ FORM process_selected USING p_action TYPE char1.
     RETURN.
   ENDIF.
 
-  IF p_action = 'R'.
-    PERFORM get_reject_remark CHANGING lv_remark.
-    IF lv_remark IS INITIAL.
-      MESSAGE 'Reject remark is mandatory' TYPE 'I'.
-      RETURN.
-    ENDIF.
+* CIS 2026-27: a remark is MANDATORY at every level for BOTH execute and reject
+  IF p_action = 'E'.
+    PERFORM get_remark USING 'Execution remark (mandatory)' CHANGING lv_remark.
+  ELSE.
+    PERFORM get_remark USING 'Reject remark (mandatory)'    CHANGING lv_remark.
+  ENDIF.
+  IF lv_remark IS INITIAL.
+    MESSAGE 'Remark is mandatory' TYPE 'I'.
+    RETURN.
   ENDIF.
 
   LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
@@ -309,17 +446,48 @@ FORM process_selected USING p_action TYPE char1.
         CONTINUE.
       ENDIF.
 
+*     Zero-amount group member (GAIL 05.08.2026): a row with no discount
+*     value / no order quantity creates NO rebate order, but it has already
+*     flowed L1 -> L2 as a legitimate 'Grp O.k' / waiver line (a pure zero
+*     row with no waiver is blocked at L1). It must still be COMPLETED with
+*     a dummy SD document ('GROUP OK') and Approved status, so the group is
+*     treated as processed and can be run again next month - instead of
+*     being left stuck at Pending with a blank SD document.
+      IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
+        lv_zero = lv_zero + 1.
+        gs_appr-wf_status = '40'.          " Pending L4 - forwarded (6-level flow)
+        gs_appr-status    = 'P'.           " still in workflow
+        gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
+        gs_appr-l3_user   = sy-uname.
+        gs_appr-l3_date   = sy-datum.
+        gs_appr-l3_time   = sy-uzeit.
+        gs_appr-remarks   = 'Group OK - zero lifting, forwarded to L4'.
+        MODIFY ycis_apprvl FROM gs_appr.
+        COMMIT WORK AND WAIT.
+        gs_out-order_no = 'GROUP OK'.
+        gs_out-remarks  = 'Group OK - zero lifting, forwarded to L4'.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
+        CONTINUE.
+      ENDIF.
+
       CLEAR lv_vbeln.
       PERFORM create_order USING gs_appr CHANGING lv_vbeln.
       IF lv_vbeln IS NOT INITIAL.
-        gs_appr-wf_status = '40'.        " Completed
-        gs_appr-status    = 'A'.         " Approved - order created (clears 'P' Pending)
+        gs_appr-wf_status = '40'.        " Pending L4 (Financial Vetting) - 6-level flow
+        gs_appr-status    = 'P'.         " still in workflow (final only after L6)
         gs_appr-order_no  = lv_vbeln.
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Executed - order created'.
+        gs_appr-rem_l3    = lv_remark.   " L3 execution remark (prints on note)
+        gs_appr-remarks   = 'Executed - rebate order created, forwarded to L4'.
         MODIFY ycis_apprvl FROM gs_appr.
+*       one sync commit per row: persists this order's VBKD / YRVA_REBATE /
+*       YCIS_APPRVL_GRD / master + the YCIS_APPRVL stamp together, so the
+*       duplicate guard is crash-safe and group execution does 1 (not 3)
+*       extra COMMIT WORK AND WAIT per member.
+        COMMIT WORK AND WAIT.
         lv_cnt = lv_cnt + 1.
 *       keep the row on the main grid and show the created rebate order
         gs_out-order_no = lv_vbeln.
@@ -333,12 +501,14 @@ FORM process_selected USING p_action TYPE char1.
         MODIFY gt_out FROM gs_out.
       ENDIF.
     ELSE.
-      gs_appr-wf_status   = '20'.     " back to L2
+      gs_appr-wf_status   = '10'.     " back to L1 (6-level: any reject returns to L1)
+      gs_appr-status      = 'R'.
       gs_appr-rej_level   = gc_level.
       gs_appr-rej_by      = sy-uname.
       gs_appr-rej_date    = sy-datum.
       gs_appr-rej_time    = sy-uzeit.
       gs_appr-rej_remarks = lv_remark.
+      gs_appr-rem_l3      = lv_remark.
       gs_appr-remarks     = 'Rejected by L3'.
       MODIFY ycis_apprvl FROM gs_appr.
       COLLECT gs_appr-sales_off INTO lt_office.
@@ -346,56 +516,36 @@ FORM process_selected USING p_action TYPE char1.
     ENDIF.
   ENDLOOP.
 
-  IF lv_cnt > 0.
-    COMMIT WORK.
-    IF p_action = 'R'.
-      LOOP AT lt_office INTO lv_off.
-        PERFORM send_mail USING '2' lv_off lv_off 'CIS rebates rejected by L3 - please review (L2)'.
-      ENDLOOP.
-*     rejected rows leave L3 - remove them from the grid
-      DELETE gt_out WHERE sel = 'X'.
-    ENDIF.
-  ENDIF.
-* executed rows stay on the main grid with their Rebate Order number, so the
-* CPC user sees the full rebate-order list right after execution (visibility).
+* executed rows keep their Rebate Order number on the grid; they are now
+* forwarded to L4 (CPC Finance - Financial Vetting). Reject returns to L1.
   IF p_action = 'E'.
-    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0.
-*     only already-created lines were selected
+*   L4 is central in YCIS_WF_APPR (sales office '0001', level 4) - notify once
+*   that rebate orders are ready for financial vetting. (executed rows are
+*   already committed per-row above.)
+    IF lv_cnt > 0 OR lv_zero > 0.
+      PERFORM send_mail USING '4' '0001' '0001' space.
+    ENDIF.
+    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created, { lv_dup } already created, { lv_err } failed - see 'Rebate Order' column| TYPE 'S'.
-    ENDIF.
-*   confirmation pop-up after execution (GAIL 27.07.2026)
-    IF lv_cnt > 0.
-      PERFORM show_stmt_popup.
+      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } group-OK forwarded, { lv_err } failed - see 'Remarks'| TYPE 'S'.
     ENDIF.
   ELSE.
-    MESSAGE |{ lv_cnt } line(s) rejected and returned to L2| TYPE 'S'.
+    IF lv_cnt > 0.
+      COMMIT WORK.
+*     6-level rule: any reject returns to L1 for reinitiation - notify L1.
+      LOOP AT lt_office INTO lv_off.
+        PERFORM send_mail USING '1' lv_off lv_off space.
+      ENDLOOP.
+      DELETE gt_out WHERE sel = 'X'.
+    ENDIF.
+    MESSAGE |{ lv_cnt } line(s) rejected and returned to L1| TYPE 'S'.
   ENDIF.
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  show_stmt_popup   (confirmation statement pop-up)
-*&---------------------------------------------------------------------*
-FORM show_stmt_popup.
-  DATA: lv_ans TYPE c.
-  CALL FUNCTION 'POPUP_TO_CONFIRM'
-    EXPORTING
-      titlebar              = 'CIS 2026-27 - Verification & Confirmation'
-      text_question         =
-        'Customer-wise, grade-wise sales quantities, along with eligible PSD ' &&
-        'rates and amounts, have been verified and confirmed after considering ' &&
-        'customer waivers, shortfall waivers, sales return quantities, and ' &&
-        'Group/MLE details.'
-      text_button_1         = 'OK'
-      icon_button_1         = 'ICON_OKAY'
-      display_cancel_button = ' '
-    IMPORTING
-      answer                = lv_ans
-    EXCEPTIONS
-      text_not_found        = 1
-      OTHERS                = 2.
-ENDFORM.
+*   The Verification & Confirmation pop-up was removed from L3: per GAIL
+*   (30.07.2026) it is shown only at L1 (maker) and L2 (approver), the
+*   levels that verify and confirm the figures - L3 only executes.
 
 *&---------------------------------------------------------------------*
 *&      Form  create_order   (build & post the rebate order from payload)
@@ -414,6 +564,14 @@ FORM create_order USING p_appr TYPE ycis_apprvl
         x_return    LIKE bapireturn1,
         w_objtype   LIKE bapiusw01-objtype,
         w_vbeln     LIKE bapivbeln-vbeln.
+
+*   Do NOT create a zero-amount rebate order (GAIL 30.07.2026): if there is
+*   no discount value or no order quantity, there is nothing to credit, so
+*   skip creation and return with an empty document. Mirrors the guard in
+*   the original YRVU001 (IF cd_value1 <> 0 AND target_qty <> 0 -> create).
+  IF p_appr-cd_value IS INITIAL OR p_appr-target_qty IS INITIAL.
+    RETURN.
+  ENDIF.
 
   x_header-doc_type   = p_appr-doc_type.
   x_header-sales_org  = p_appr-sales_org.
@@ -483,7 +641,13 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
   UPDATE vbkd SET bstdk   = p_appr-period_from
                   bstdk_e = p_appr-period_to
             WHERE vbeln = p_vbeln.
-  COMMIT WORK AND WAIT.
+*   Performance (GAIL 30.07.2026 - L3 slow for group customers): the
+*   per-form COMMIT WORK AND WAIT calls were removed. All direct-table
+*   updates for one row (VBKD / YRVA_REBATE / YCIS_APPRVL_GRD / master /
+*   YCIS_APPRVL) are now committed ONCE per row by the caller, so a group
+*   of N members needs 1 (not 3) extra sync commit per member. The sales
+*   order itself is already persisted by BAPI_TRANSACTION_COMMIT above,
+*   which is why the VBKD update here still finds the document.
 
 * rebate log
   CLEAR ls_reb.
@@ -509,8 +673,7 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
       AND period_to   = p_appr-period_to
       AND kunnr       = p_appr-kunnr
       AND kvgr2       = p_appr-kvgr2.
-
-  COMMIT WORK AND WAIT.
+* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -635,21 +798,23 @@ FORM post_master_update USING p_appr TYPE ycis_apprvl
       ENDIF.
       MODIFY yrva_qais_data_m FROM ls_qm.
   ENDCASE.
-  COMMIT WORK AND WAIT.
+* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
-FORM get_reject_remark CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
+FORM get_remark USING p_title TYPE clike
+                CHANGING p_remark TYPE ycis_apprvl-rej_remarks.
   DATA: lt_fields TYPE STANDARD TABLE OF sval,
         ls_field  TYPE sval,
         lv_ret    TYPE char1.
   ls_field-tabname   = 'YCIS_APPRVL'.
-  ls_field-fieldname = 'REJ_REMARKS'.
+  ls_field-fieldname = 'REM_L3'.               " 100-char remark field
+  ls_field-fieldtext = 'Remark'.
   ls_field-field_obl = 'X'.
   APPEND ls_field TO lt_fields.
   CALL FUNCTION 'POPUP_GET_VALUES'
     EXPORTING
-      popup_title     = 'Reject remark'
+      popup_title     = p_title
     IMPORTING
       returncode      = lv_ret
     TABLES
@@ -685,20 +850,29 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
   TRY.
       lo_send = cl_bcs=>create_persistent( ).
       CLEAR lt_text.
-*     L3 (CPC) reject -> back to L2 (PC MKTG-HOD)
       ls_text-line = |Dear Sir/Madam,|.                            APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
-      ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been returned by L3 (CPC)|.
-      APPEND ls_text TO lt_text.
-      ls_text-line = |for your review. Please log in to T-Code YRVG004_A and re-check the records.|.
-      APPEND ls_text TO lt_text.
+      IF p_level = '4'.
+*       L3 execution done -> forward to L4 (CPC Finance - Financial Vetting)
+        ls_text-line = |Rebate orders under the CIS 2026-27 Scheme have been generated by L3 (CPC Marketing).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in and Review & Vet the discounts (Financial Vetting - L4).|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'CIS Discount/Rebate Order Processed - Action Required at L4'.
+      ELSE.
+*       L3 reject -> back to L1 for reinitiation (6-level rule)
+        ls_text-line = |The CIS 2026-27 rebates for Sales Office { p_ctxoff } have been rejected by L3 (CPC).|.
+        APPEND ls_text TO lt_text.
+        ls_text-line = |Please log in to T-Code YRVG004 (Run CIS Scheme) and reinitiate the process.|.
+        APPEND ls_text TO lt_text.
+        lv_sub = 'CIS Discount Request Rejected by L3 - Reinitiation Required at L1'.
+      ENDIF.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       ls_text-line = |With warm regards,|.                          APPEND ls_text TO lt_text.
       ls_text-line = |GAIL (INDIA) LTD.|.                           APPEND ls_text TO lt_text.
       ls_text-line = ||.                                            APPEND ls_text TO lt_text.
       ls_text-line = |This is a system generated mail. Please do not reply.|.
       APPEND ls_text TO lt_text.
-      lv_sub = 'CIS Scheme - Rebates returned by L3 for review'.
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
@@ -715,4 +889,75 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
       COMMIT WORK.
     CATCH cx_bcs.
   ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  read_qais_master
+*&---------------------------------------------------------------------*
+*   CIS UAT 14.10.2026 pt.1/2: seasonal indicator (P_R_INDICATOR /
+*   P_SC_INDICATOR) and monthly waivers (WAIVER_1 / WAIVER_2) of the listed
+*   customers, read once from the CIS customer master YRVA_QAIS_DATA.
+*&---------------------------------------------------------------------*
+FORM read_qais_master.
+  REFRESH gt_qais.
+  CHECK gt_appr IS NOT INITIAL.
+  SELECT * FROM yrva_qais_data INTO TABLE gt_qais
+    FOR ALL ENTRIES IN gt_appr
+    WHERE kunnr           = gt_appr-kunnr
+      AND module_identity = space.
+  SORT gt_qais BY kunnr mou_begda DESCENDING.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  fill_extra   (master data + workflow status of one row)
+*&---------------------------------------------------------------------*
+FORM fill_extra USING    ps_appr TYPE ycis_apprvl
+                CHANGING ps_out  TYPE ty_out.
+  DATA: ls_qais  TYPE yrva_qais_data,
+        ls_first TYPE yrva_qais_data,
+        lv_to    TYPE d.
+  lv_to = ps_appr-period_to.
+  IF lv_to IS INITIAL.
+    lv_to = ps_appr-period_from.
+  ENDIF.
+* scheme record valid for the CIS period - same customer group preferred
+  LOOP AT gt_qais INTO ls_qais WHERE kunnr     = ps_appr-kunnr
+                                 AND mou_begda LE lv_to
+                                 AND mou_endda GE ps_appr-period_from.
+    IF ls_first IS INITIAL.
+      ls_first = ls_qais.
+    ENDIF.
+    IF ls_qais-kvgr2 = ps_appr-kvgr2.
+      ls_first = ls_qais.
+      EXIT.
+    ENDIF.
+  ENDLOOP.
+  ps_out-seas_ind = ls_first-p_r_indicator.
+  ps_out-sc_ind   = ls_first-p_sc_indicator.
+  ps_out-waiver_1 = ls_first-waiver_1.
+  ps_out-waiver_2 = ls_first-waiver_2.
+  PERFORM wf_text USING ps_appr CHANGING ps_out-wf_txt.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  wf_text   (current workflow status as text)
+*&---------------------------------------------------------------------*
+FORM wf_text USING    ps_appr TYPE ycis_apprvl
+             CHANGING p_txt   TYPE char40.
+  DATA lv_lvl TYPE c LENGTH 1.
+  lv_lvl = ps_appr-wf_status(1).
+  CASE ps_appr-wf_status.
+    WHEN '10'.
+      IF ps_appr-status = 'R'.
+        p_txt = |Returned to L1 (rejected at L{ ps_appr-rej_level })|.
+      ELSE.
+        p_txt = 'Pending L1'.
+      ENDIF.
+    WHEN '20' OR '30' OR '40' OR '50' OR '60'.
+      p_txt = |Pending L{ lv_lvl }|.
+    WHEN '70'.
+      p_txt = 'Completed (Credit Note posted)'.
+    WHEN OTHERS.
+      p_txt = ps_appr-wf_status.
+  ENDCASE.
 ENDFORM.
