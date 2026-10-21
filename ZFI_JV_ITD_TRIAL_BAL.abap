@@ -160,7 +160,7 @@ DATA: gt_bal       TYPE ty_t_bal,
       gt_detail    TYPE STANDARD TABLE OF ty_bal WITH EMPTY KEY,
       gr_matrix    TYPE REF TO data,
       gt_coltext   TYPE string_table,       " NAME|long text|medium text
-      gv_cutoff    TYPE timestamp,
+      gv_cutoff    TYPE timestamp,         " same as ACDOCA-TIMESTAMP (FIS_CREA_TSTAMP, DEC 15, UTC)
       gv_cutdt     TYPE d,                   " cut-over from TVARVC
       gv_cuttm     TYPE t,
       gv_tzone     TYPE tznzone,
