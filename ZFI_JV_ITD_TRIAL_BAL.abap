@@ -54,10 +54,17 @@
 *&   P_BOTH   Both currencies           P_MATRIX Venture columns
 *&   P_DETAIL Detail Venture/EG/RI/Acct P_NOZERO Hide zero lines
 *&   P_BLANK  Incl. lines w/o venture
-*&   P_CUTDT  Cut-over date             P_CUTTM  Cut-over time
-*&   P_TZONE  Cut-over time zone
 *& Text symbols
-*&   B01 Selection   B02 Currency   B03 Output   B04 Cut-over (2026)
+*&   B01 Selection   B02 Currency   B03 Output
+*&
+*& Cut-over moment - maintained in STVARV / TVARVC (type P = parameter)
+*&   ZJV_ITD_CUTOVER_DATE  LOW = date YYYYMMDD, e.g. 20260926  (mandatory)
+*&   ZJV_ITD_CUTOVER_TIME  LOW = time HHMMSS,   e.g. 235959    (optional,
+*&                         default 235959)
+*&   ZJV_ITD_CUTOVER_TZONE LOW = time zone,     e.g. INDIA     (optional,
+*&                         default INDIA)
+*&   ACDOCA 2026 lines are taken only if TIMESTAMP (UTC) is later than
+*&   this date + time in this time zone.
 *&---------------------------------------------------------------------*
 REPORT zfi_jv_itd_trial_bal.
 
@@ -69,7 +76,13 @@ CONSTANTS: gc_base_year TYPE gjahr        VALUE '2026',
            gc_ldgr_gl   TYPE rldnr        VALUE '0L',
            gc_rrcty     TYPE acdoca-rrcty VALUE '0',
            gc_rvers     TYPE c LENGTH 3   VALUE '001',
-           gc_credit    TYPE shkzg        VALUE 'H'.
+           gc_credit    TYPE shkzg        VALUE 'H',
+           " TVARVC variables for the cut-over moment
+           gc_tv_date   TYPE rvari_vnam   VALUE 'ZJV_ITD_CUTOVER_DATE',
+           gc_tv_time   TYPE rvari_vnam   VALUE 'ZJV_ITD_CUTOVER_TIME',
+           gc_tv_tzone  TYPE rvari_vnam   VALUE 'ZJV_ITD_CUTOVER_TZONE',
+           gc_def_time  TYPE t            VALUE '235959',
+           gc_def_tzone TYPE tznzone      VALUE 'INDIA'.
 
 *----------------------------------------------------------------------*
 * Types
@@ -153,6 +166,9 @@ DATA: gt_bal       TYPE ty_t_bal,
       gr_matrix    TYPE REF TO data,
       gt_coltext   TYPE string_table,       " NAME|long text|medium text
       gv_cutoff    TYPE timestamp,
+      gv_cutdt     TYPE d,                   " cut-over from TVARVC
+      gv_cuttm     TYPE t,
+      gv_tzone     TYPE tznzone,
       gv_hwaer     TYPE waers,
       gv_kwaer     TYPE waers,
       gv_ktopl     TYPE ktopl,
@@ -185,11 +201,6 @@ SELECTION-SCREEN BEGIN OF BLOCK b03 WITH FRAME TITLE TEXT-b03.
               p_blank  AS CHECKBOX DEFAULT ' '.
 SELECTION-SCREEN END OF BLOCK b03.
 
-SELECTION-SCREEN BEGIN OF BLOCK b04 WITH FRAME TITLE TEXT-b04.
-  PARAMETERS: p_cutdt TYPE d       DEFAULT '20260926' OBLIGATORY,
-              p_cuttm TYPE t       DEFAULT '235959'   OBLIGATORY,
-              p_tzone TYPE tznzone DEFAULT 'INDIA'    OBLIGATORY.
-SELECTION-SCREEN END OF BLOCK b04.
 
 AT SELECTION-SCREEN OUTPUT.
   LOOP AT SCREEN.
@@ -239,8 +250,7 @@ START-OF-SELECTION.
 *& Form INIT - cut-over time stamp, currencies, chart of accounts
 *&---------------------------------------------------------------------*
 FORM init.
-  " ACDOCA-TIMESTAMP is UTC: convert the local cut-over moment to UTC
-  CONVERT DATE p_cutdt TIME p_cuttm INTO TIME STAMP gv_cutoff TIME ZONE p_tzone.
+  PERFORM read_cutover.
 
   SELECT SINGLE waers, ktopl FROM t001 WHERE bukrs = @p_bukrs
     INTO (@gv_hwaer, @gv_ktopl).
@@ -255,6 +265,93 @@ FORM init.
   CLEAR gr_noblank.
   IF p_blank IS INITIAL.
     gr_noblank = VALUE #( ( sign = 'E' option = 'EQ' low = space ) ).
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form READ_CUTOVER - cut-over date / time / time zone from TVARVC
+*&   and conversion to a UTC time stamp (ACDOCA-TIMESTAMP is UTC)
+*&---------------------------------------------------------------------*
+FORM read_cutover.
+  DATA: lv_low TYPE tvarvc-low,
+        lv_str TYPE string,
+        lv_ext TYPE c LENGTH 20,
+        lv_chk TYPE d.
+
+  "--- Date (mandatory)
+  SELECT SINGLE low FROM tvarvc
+    WHERE name = @gc_tv_date AND type = 'P' AND numb = '0000'
+    INTO @lv_low.
+  lv_str = condense( val = lv_low del = ` ` ).
+  IF lv_str IS INITIAL.
+    MESSAGE |Cut-over date not maintained: TVARVC parameter { gc_tv_date } (STVARV)|
+            TYPE 'E' ##NO_TEXT.
+  ENDIF.
+  IF strlen( lv_str ) = 8 AND lv_str CO '0123456789'.
+    gv_cutdt = lv_str.                          " YYYYMMDD
+  ELSE.
+    " also accept the user's date format, e.g. 26.09.2026
+    lv_ext = lv_str.
+    CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
+      EXPORTING
+        date_external            = lv_ext
+      IMPORTING
+        date_internal            = gv_cutdt
+      EXCEPTIONS
+        date_external_is_invalid = 1
+        OTHERS                   = 2.
+    IF sy-subrc <> 0.
+      CLEAR gv_cutdt.
+    ENDIF.
+  ENDIF.
+  lv_chk = gv_cutdt.
+  CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+    EXPORTING
+      date                      = lv_chk
+    EXCEPTIONS
+      plausibility_check_failed = 1
+      OTHERS                    = 2.
+  IF gv_cutdt IS INITIAL OR sy-subrc <> 0.
+    MESSAGE |Invalid cut-over date '{ lv_str }' in TVARVC { gc_tv_date } (use YYYYMMDD)|
+            TYPE 'E' ##NO_TEXT.
+  ENDIF.
+
+  "--- Time (optional)
+  gv_cuttm = gc_def_time.
+  CLEAR lv_low.
+  SELECT SINGLE low FROM tvarvc
+    WHERE name = @gc_tv_time AND type = 'P' AND numb = '0000'
+    INTO @lv_low.
+  lv_str = replace( val = condense( val = lv_low del = ` ` ) sub = `:` with = `` occ = 0 ).
+  IF lv_str IS NOT INITIAL.
+    IF strlen( lv_str ) = 6 AND lv_str CO '0123456789'
+       AND lv_str(2) <= '23' AND lv_str+2(2) <= '59' AND lv_str+4(2) <= '59'.
+      gv_cuttm = lv_str.
+    ELSE.
+      MESSAGE |Invalid cut-over time '{ lv_str }' in TVARVC { gc_tv_time } (use HHMMSS)|
+              TYPE 'E' ##NO_TEXT.
+    ENDIF.
+  ENDIF.
+
+  "--- Time zone (optional)
+  gv_tzone = gc_def_tzone.
+  CLEAR lv_low.
+  SELECT SINGLE low FROM tvarvc
+    WHERE name = @gc_tv_tzone AND type = 'P' AND numb = '0000'
+    INTO @lv_low.
+  lv_str = condense( val = lv_low del = ` ` ).
+  IF lv_str IS NOT INITIAL.
+    gv_tzone = lv_str.
+    SELECT SINGLE @abap_true FROM ttzz WHERE tzone = @gv_tzone INTO @DATA(lv_tz_ok).
+    IF sy-subrc <> 0.
+      MESSAGE |Unknown time zone '{ gv_tzone }' in TVARVC { gc_tv_tzone }| TYPE 'E' ##NO_TEXT.
+    ENDIF.
+  ENDIF.
+
+  CONVERT DATE gv_cutdt TIME gv_cuttm INTO TIME STAMP gv_cutoff TIME ZONE gv_tzone.
+  IF sy-subrc > 4.
+    MESSAGE |Cut-over { gv_cutdt } { gv_cuttm } could not be converted (time zone { gv_tzone })|
+            TYPE 'E' ##NO_TEXT.
   ENDIF.
 ENDFORM.
 
@@ -699,7 +796,7 @@ FORM alv_common USING io_alv TYPE REF TO cl_salv_table.
                         ELSE |{ gv_hwaer } and { gv_kwaer }| ) ) ##NO_TEXT.
   lo_grid->create_label( row = 5 column = 1 text = 'ACDOCA 2026 posted after' ) ##NO_TEXT.
   lo_grid->create_text(  row = 5 column = 2
-    text = |{ p_cutdt DATE = USER } { p_cuttm TIME = USER } ({ p_tzone })| ).
+    text = |{ gv_cutdt DATE = USER } { gv_cuttm TIME = USER } ({ gv_tzone }) - TVARVC { gc_tv_date }| ).
   io_alv->set_top_of_list( lo_grid ).
   io_alv->set_top_of_list_print( lo_grid ).
 
