@@ -250,11 +250,21 @@ FORM init.
   SELECT SINGLE waers, ktopl FROM t001 WHERE bukrs = @p_bukrs
     INTO (@gv_hwaer, @gv_ktopl).
 
+  " Group currency key: first ACDOCA line of the company code / year
+  " (key prefix RLDNR-RBUKRS-GJAHR); fall back to any year
   SELECT SINGLE rkcur FROM acdoca
     WHERE rldnr  = @gc_ldgr_gl
       AND rbukrs = @p_bukrs
+      AND gjahr  = @p_gjahr
       AND rkcur <> @space
     INTO @gv_kwaer.
+  IF sy-subrc <> 0.
+    SELECT SINGLE rkcur FROM acdoca
+      WHERE rldnr  = @gc_ldgr_gl
+        AND rbukrs = @p_bukrs
+        AND rkcur <> @space
+      INTO @gv_kwaer.
+  ENDIF.
 
   " Lines without venture are excluded unless requested
   CLEAR gr_noblank.
@@ -344,10 +354,14 @@ ENDFORM.
 *& Form READ_JVTO1 - 2026 balances from the JV ledger totals table
 *&---------------------------------------------------------------------*
 FORM read_jvto1.
+  " Component positions in TY_JVTO1: HSLVT = 6, HSL01..16 = 7..22,
+  " KSLVT = 23, KSL01..16 = 24..39
+  CONSTANTS: lc_pos_hsl01 TYPE i VALUE 7,
+             lc_pos_ksl01 TYPE i VALUE 24.
   DATA: lt_jvto1 TYPE STANDARD TABLE OF ty_jvto1 WITH EMPTY KEY,
         lr_bal   TYPE REF TO ty_bal,
-        lv_per   TYPE n LENGTH 2,
         lv_last  TYPE i,
+        lv_pos   TYPE i,
         lv_h     TYPE ty_amt,
         lv_k     TYPE ty_amt.
   FIELD-SYMBOLS: <lv_h> TYPE ty_amt,
@@ -394,9 +408,10 @@ FORM read_jvto1.
 
     CLEAR: lv_h, lv_k.
     DO lv_last TIMES.
-      lv_per = sy-index.
-      ASSIGN COMPONENT |HSL{ lv_per }| OF STRUCTURE ls_j TO <lv_h>.
-      ASSIGN COMPONENT |KSL{ lv_per }| OF STRUCTURE ls_j TO <lv_k>.
+      lv_pos = lc_pos_hsl01 + sy-index - 1.
+      ASSIGN COMPONENT lv_pos OF STRUCTURE ls_j TO <lv_h>.
+      lv_pos = lc_pos_ksl01 + sy-index - 1.
+      ASSIGN COMPONENT lv_pos OF STRUCTURE ls_j TO <lv_k>.
       lv_h += <lv_h>.
       lv_k += <lv_k>.
     ENDDO.
@@ -542,6 +557,9 @@ FORM build_matrix.
         lt_meas   TYPE string_table,
         lt_val    TYPE ty_t_mv,
         lv_idx    TYPE n LENGTH 3,
+        lv_ncurr  TYPE i,
+        lv_pos    TYPE i,
+        lv_postot TYPE i,
         lv_amt    TYPE ty_amt,
         lv_racct  TYPE acdoca-racct,
         lv_txt50  TYPE skat-txt50,
@@ -600,6 +618,11 @@ FORM build_matrix.
     ENDLOOP.
   ENDLOOP.
 
+  " Column layout: 1 RACCT, 2 TXT50, then per venture (in LT_VNAME order)
+  " per currency 4 measures O/D/C/B, then the total block
+  lv_ncurr  = lines( lt_curr ).
+  lv_postot = 2 + lines( lt_vname ) * lv_ncurr * 4.
+
   DATA(lo_struct) = cl_abap_structdescr=>create( lt_comp ).
   DATA(lo_table)  = cl_abap_tabledescr=>create( p_line_type = lo_struct ).
   CREATE DATA gr_matrix TYPE HANDLE lo_table.
@@ -612,12 +635,13 @@ FORM build_matrix.
     CREATE DATA lr_line TYPE HANDLE lo_struct.
     ASSIGN lr_line->* TO <ls_row>.
     LOOP AT GROUP <lv_racct> INTO DATA(ls_m).
-      ASSIGN COMPONENT 'RACCT' OF STRUCTURE <ls_row> TO <lv_fld>.
+      ASSIGN COMPONENT 1 OF STRUCTURE <ls_row> TO <lv_fld>.
       <lv_fld> = ls_m-racct.
-      ASSIGN COMPONENT 'TXT50' OF STRUCTURE <ls_row> TO <lv_fld>.
+      ASSIGN COMPONENT 2 OF STRUCTURE <ls_row> TO <lv_fld>.
       <lv_fld> = ls_m-txt50.
       lv_idx = line_index( lt_vname[ table_line = ls_m-vname ] ).
       LOOP AT lt_curr INTO lv_c.
+        DATA(lv_ci) = sy-tabix - 1.                 " 0 = first currency
         IF lv_c = `H`.
           lt_val = VALUE #( ( m = 'O' v = ls_m-ob_h ) ( m = 'D' v = ls_m-dr_h )
                             ( m = 'C' v = ls_m-cr_h ) ( m = 'B' v = ls_m-cb_h ) ).
@@ -626,11 +650,14 @@ FORM build_matrix.
                             ( m = 'C' v = ls_m-cr_k ) ( m = 'B' v = ls_m-cb_k ) ).
         ENDIF.
         LOOP AT lt_val INTO DATA(ls_val).
-          ASSIGN COMPONENT |J{ lv_idx }_{ lv_c }_{ ls_val-m }| OF STRUCTURE <ls_row> TO <lv_fld>.
+          DATA(lv_mi) = sy-tabix.                   " 1..4 = O/D/C/B
+          lv_pos = 2 + ( lv_idx - 1 ) * lv_ncurr * 4 + lv_ci * 4 + lv_mi.
+          ASSIGN COMPONENT lv_pos OF STRUCTURE <ls_row> TO <lv_fld>.
           IF sy-subrc = 0.
             <lv_fld> = <lv_fld> + ls_val-v.
           ENDIF.
-          ASSIGN COMPONENT |TOT_{ lv_c }_{ ls_val-m }| OF STRUCTURE <ls_row> TO <lv_fld>.
+          lv_pos = lv_postot + lv_ci * 4 + lv_mi.
+          ASSIGN COMPONENT lv_pos OF STRUCTURE <ls_row> TO <lv_fld>.
           IF sy-subrc = 0.
             <lv_fld> = <lv_fld> + ls_val-v.
           ENDIF.
