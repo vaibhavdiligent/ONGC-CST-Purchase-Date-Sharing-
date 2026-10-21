@@ -742,8 +742,8 @@ IF  l_cont = 'X'.
 ENDIF.
 
 *--- Begin of change: ICICI Aggregator ID in E1IDT01-TXT02 (only for partner ICICI)
-* Segment is inserted after the last E1EDKA1 (i.e. before first E1IDPU1)
-* to respect PEXR2002 segment sequence; inserted directly into EDIDD_TABLE
+* PEXR2002 sequence: ... E1IDKU2 -> E1IDT01 -> E1IDKU3 ...
+* Segment inserted directly into EDIDD_TABLE just before first E1IDKU3
 IF l_rcvprn = 'ICICI'.
   DATA: ls_e1idt01_icici TYPE e1idt01,
         ls_edidd_icici   TYPE edidd,
@@ -752,36 +752,20 @@ IF l_rcvprn = 'ICICI'.
 * Insert only once per IDoc
   READ TABLE edidd_table TRANSPORTING NO FIELDS WITH KEY segnam = 'E1IDT01'.
   IF sy-subrc <> 0.
-    ls_e1idt01_icici-txtvw = 'PMD'.
-    ls_e1idt01_icici-txtsp = 'E'.
-    ls_e1idt01_icici-txt02 = 'AGGR0242'.
-
-*   Position: after last E1EDKA1; fallback before first E1IDPU1
-    CLEAR lv_idx_icici.
-    LOOP AT edidd_table ASSIGNING <fs_edidd_table> WHERE segnam = 'E1EDKA1'.
-      lv_idx_icici = sy-tabix.
-    ENDLOOP.
-    IF lv_idx_icici IS NOT INITIAL.
-      lv_idx_icici = lv_idx_icici + 1.
-    ELSE.
-      READ TABLE edidd_table TRANSPORTING NO FIELDS WITH KEY segnam = 'E1IDPU1'.
-      IF sy-subrc = 0.
-        lv_idx_icici = sy-tabix.
-      ENDIF.
-    ENDIF.
-
-    READ TABLE edidd_table ASSIGNING <fs_edidd_table> INDEX 1.
+    READ TABLE edidd_table ASSIGNING <fs_edidd_table> WITH KEY segnam = 'E1IDKU3'.
     IF sy-subrc = 0.
+      lv_idx_icici = sy-tabix.
+
+      ls_e1idt01_icici-txtvw = 'PMD'.
+      ls_e1idt01_icici-txtsp = 'E'.
+      ls_e1idt01_icici-txt02 = 'AGGR0242'.
+
       ls_edidd_icici-mandt  = <fs_edidd_table>-mandt.
       ls_edidd_icici-docnum = <fs_edidd_table>-docnum.
-    ENDIF.
-    ls_edidd_icici-segnam = 'E1IDT01'.
-    ls_edidd_icici-sdata  = ls_e1idt01_icici.
+      ls_edidd_icici-segnam = 'E1IDT01'.
+      ls_edidd_icici-sdata  = ls_e1idt01_icici.
 
-    IF lv_idx_icici IS NOT INITIAL AND lv_idx_icici <= lines( edidd_table ).
       INSERT ls_edidd_icici INTO edidd_table INDEX lv_idx_icici.
-    ELSE.
-      APPEND ls_edidd_icici TO edidd_table.
     ENDIF.
   ENDIF.
 ENDIF.
