@@ -64,3 +64,19 @@ Use your SAP user date format setting (usually `DD.MM.YYYY` for Indian locale).
 | P_MODE | BDC display mode: A=All screens, E=Errors only, N=No display | N |
 | P_TEST | Test run (no actual execution) | Checked |
 | P_SESS | Create BDC session in SM35 instead of CALL TRANSACTION | Unchecked |
+
+## User_Password_Reset_Template.xlsx
+
+Upload file for report `YBC_USER_PWD_RESET_UPLOAD` (mass password reset in QA).
+
+| Column | Field    | Notes                                         |
+|--------|----------|-----------------------------------------------|
+| A      | User ID  | SU01 user name (converted to upper case)      |
+| B      | Password | Case sensitive, max 40 chars, must meet the system's password rules |
+| C      | Email ID | Mail with the new password is sent here      |
+
+- Row 1 is the header. Keep "First Row is Header" ticked on the selection screen.
+- All columns are formatted as Text, so numeric passwords keep any leading zeros.
+- ALSM_EXCEL_TO_INTERNAL_TABLE reads at most 50 chars per cell and 9999 rows.
+- Run with "Test Run" ticked first, check the ALV log, then run again without it.
+- Mail is sent through SAPconnect. SCOT must have an SMTP node set up, and you can check sent mails in SOST.
