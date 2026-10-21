@@ -653,9 +653,9 @@ IF  l_cont = 'X'.
       wa_e1edka1-ort01 = 'PRODUCT'.            "TReDS: fixed value in AG-ORT01
 
       MOVE  wa_e1edka1 TO <fs_e1edp02>-sdata.
-*   TReDS: Seller ID in BE-TELFX
+*   TReDS: Seller ID in BE-TELF1
     ELSEIF wa_e1edka1-parvw = 'BE' AND lv_sellerid_msme IS NOT INITIAL.
-      wa_e1edka1-telfx = lv_sellerid_msme.
+      wa_e1edka1-telf1 = lv_sellerid_msme.
       MOVE  wa_e1edka1 TO <fs_e1edp02>-sdata.
     ENDIF.
   ENDLOOP.
@@ -740,3 +740,32 @@ IF  l_cont = 'X'.
     ENDIF.
   ENDLOOP.
 ENDIF.
+
+ IF l_rcvprn = 'ICICI'.
+ DATA : ls_e1idt01 TYPE e1idt01,
+             ls_idoc    TYPE edidd.
+
+   ls_e1idt01-txtvw =   'PMD'.
+      ls_e1idt01-txtsp =   'E'.
+  ls_e1idt01-txt02 =   'AGGR0242'.
+
+  ls_idoc-sdata = ls_e1idt01.
+  ls_idoc-segnam = 'E1IDT01'.
+
+  DATA : lv_ind   TYPE sy-index,
+         lv_seg   TYPE edilsegtyp,
+         lt_edidd TYPE TABLE OF edidd,
+         lv_connt TYPE c LENGTH 2.
+  CLEAR : lt_edidd[].
+  LOOP AT edidd_table ASSIGNING <fs_edidd_table>.
+    IF <fs_edidd_table>-segnam = 'E1IDKU3'.
+      lv_connt = lv_connt + 1.
+      IF lv_connt = '1'.
+        APPEND ls_idoc TO  lt_edidd.
+      ENDIF.
+    ENDIF.
+    APPEND <fs_edidd_table> TO lt_edidd.
+  ENDLOOP.
+
+
+ENDIF.
