@@ -10,7 +10,8 @@
 *&
 *& For every valid row:
 *&   1. Password is reset using BAPI_USER_CHANGE (PASSWORD/PASSWORDX)
-*&   2. User is optionally unlocked using BAPI_USER_UNLOCK
+*&   2. If the user is locked (USR02-UFLAG), it is unlocked using
+*&      BAPI_USER_UNLOCK and the lock status is re-checked
 *&   3. A mail is sent (CL_BCS) to the Email ID given in the Excel
 *&
 *& Safety:
@@ -31,6 +32,7 @@ TYPES: BEGIN OF ty_item,
          bname      TYPE xubname,
          password   TYPE bapipwd-bapipwd,
          email      TYPE ad_smtpadr,
+         uflag      TYPE xuuflag,
          status     TYPE icon_d,
          pwd_msg    TYPE bapi_msg,
          unlock_msg TYPE bapi_msg,
@@ -79,6 +81,9 @@ CLASS lcl_app DEFINITION FINAL.
     METHODS process.
     METHODS reset_password CHANGING cs_item TYPE ty_item.
     METHODS unlock_user CHANGING cs_item TYPE ty_item.
+    METHODS get_lock_text
+      IMPORTING iv_uflag       TYPE xuuflag
+      RETURNING VALUE(rv_text) TYPE string.
     METHODS send_mail CHANGING cs_item TYPE ty_item.
     METHODS get_error_text
       IMPORTING it_return      TYPE bapiret2_t
@@ -247,11 +252,16 @@ CLASS lcl_app IMPLEMENTATION.
           <ls_item>-error = abap_true.
           <ls_item>-pwd_msg = 'Duplicate User ID in file'.
         ELSE.
-          SELECT SINGLE bname FROM usr02 INTO @DATA(lv_bname)
+          SELECT SINGLE uflag FROM usr02 INTO @<ls_item>-uflag
             WHERE bname = @<ls_item>-bname.
           IF sy-subrc <> 0.
             <ls_item>-error = abap_true.
             <ls_item>-pwd_msg = 'User does not exist in this client'.
+          ELSEIF <ls_item>-uflag <> 0.
+            <ls_item>-unlock_msg = |Locked ({ get_lock_text( <ls_item>-uflag ) })|
+                                && COND #( WHEN p_unlock = abap_true THEN ` - will be unlocked` ).
+          ELSE.
+            <ls_item>-unlock_msg = 'Not locked'.
           ENDIF.
         ENDIF.
       ENDIF.
@@ -366,6 +376,13 @@ CLASS lcl_app IMPLEMENTATION.
   METHOD unlock_user.
     DATA lt_return TYPE bapiret2_t.
 
+    IF cs_item-uflag = 0.
+      cs_item-unlock_msg = 'Not locked'.
+      RETURN.
+    ENDIF.
+
+    DATA(lv_lock_before) = get_lock_text( cs_item-uflag ).
+
     CALL FUNCTION 'BAPI_USER_UNLOCK'
       EXPORTING
         username = cs_item-bname
@@ -376,14 +393,36 @@ CLASS lcl_app IMPLEMENTATION.
     IF lv_error IS NOT INITIAL.
       CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
       cs_item-error      = abap_true.
-      cs_item-unlock_msg = lv_error.
+      cs_item-unlock_msg = |Unlock failed ({ lv_lock_before }): { lv_error }|.
       RETURN.
     ENDIF.
 
     CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
       EXPORTING
         wait = abap_true.
-    cs_item-unlock_msg = 'User unlocked'.
+
+    " Re-read lock status to confirm the user is really unlocked
+    SELECT SINGLE uflag FROM usr02 INTO @cs_item-uflag
+      WHERE bname = @cs_item-bname.
+
+    IF cs_item-uflag = 0.
+      cs_item-unlock_msg = |Unlocked (was: { lv_lock_before })|.
+    ELSE.
+      cs_item-error      = abap_true.
+      cs_item-unlock_msg = |Still locked: { get_lock_text( cs_item-uflag ) }|.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_lock_text.
+    " USR02-UFLAG is a bit mask: 32 = global (CUA) admin lock,
+    " 64 = local admin lock, 128 = too many incorrect logons
+    DATA(lt_text) = VALUE string_table(
+      ( COND #( WHEN iv_uflag MOD 64 >= 32  THEN `global admin lock (CUA)` ) )
+      ( COND #( WHEN iv_uflag MOD 128 >= 64 THEN `admin lock` ) )
+      ( COND #( WHEN iv_uflag >= 128        THEN `incorrect logons` ) ) ).
+    DELETE lt_text WHERE table_line IS INITIAL.
+    rv_text = COND #( WHEN lt_text IS INITIAL THEN |lock code { iv_uflag }|
+                      ELSE concat_lines_of( table = lt_text sep = `, ` ) ).
   ENDMETHOD.
 
   METHOD send_mail.
@@ -481,6 +520,7 @@ CLASS lcl_app IMPLEMENTATION.
         " Never show the password in the output
         lo_columns->get_column( 'PASSWORD' )->set_technical( abap_true ).
         lo_columns->get_column( 'ERROR' )->set_technical( abap_true ).
+        lo_columns->get_column( 'UFLAG' )->set_technical( abap_true ).
 
         DATA(lo_col) = lo_columns->get_column( 'ROW' ).
         lo_col->set_long_text( 'Excel Row' ).
