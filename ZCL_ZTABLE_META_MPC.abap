@@ -53,11 +53,12 @@ CLASS zcl_ztable_meta_mpc DEFINITION
 
     " One record of the requested table, serialised to JSON.
     TYPES: BEGIN OF ty_table_row,
-             tabname     TYPE dfies-tabname,  " table / view name (key)
+             tabname     TYPE c LENGTH 120,   " table, or comma list for a join (key)
              row_no      TYPE i,              " 1-based record number (key)
              data_json   TYPE string,         " selected record as JSON
              whereclause TYPE string,         " Open SQL WHERE applied (echo)
              fields      TYPE string,         " selected field list (echo)
+             join        TYPE string,         " join FROM expression (echo)
            END OF ty_table_row.
     TYPES tt_table_row TYPE STANDARD TABLE OF ty_table_row WITH DEFAULT KEY.
 
@@ -210,7 +211,7 @@ CLASS zcl_ztable_meta_mpc IMPLEMENTATION.
                                                    iv_abap_fieldname = 'TABNAME' ).
     lo_property->set_is_key( ).
     lo_property->set_type_edm_string( ).
-    lo_property->set_maxlength( iv_max_length = 30 ).
+    lo_property->set_maxlength( iv_max_length = 120 ).   " single table OR comma list for a join
     lo_property->set_nullable( abap_false ).
 
     lo_property = lo_entity_type->create_property( iv_property_name  = 'RowNo'
@@ -243,6 +244,19 @@ CLASS zcl_ztable_meta_mpc IMPLEMENTATION.
     " columns (SELECT *). It is echoed back in the response.
     lo_property = lo_entity_type->create_property( iv_property_name  = 'Fields'
                                                    iv_abap_fieldname = 'FIELDS' ).
+    lo_property->set_type_edm_string( ).
+    lo_property->set_nullable( abap_true ).
+    lo_property->set_filterable( abap_true ).
+
+    " Optional join FROM expression. When supplied, Tabname is the
+    " comma-separated list of the joined tables (for auth + validation),
+    " Fields must be qualified TAB~FIELD AS ALIAS, and this holds the join,
+    " e.g. $filter=Tabname eq 'VBAK,VBAP'
+    "        and Join eq 'VBAK INNER JOIN VBAP ON VBAK~VBELN = VBAP~VBELN'
+    "        and Fields eq 'VBAK~VBELN AS VBELN, VBAP~POSNR AS POSNR'
+    " Omit to read a single table (SELECT ... FROM Tabname). Echoed back.
+    lo_property = lo_entity_type->create_property( iv_property_name  = 'Join'
+                                                   iv_abap_fieldname = 'JOIN' ).
     lo_property->set_type_edm_string( ).
     lo_property->set_nullable( abap_true ).
     lo_property->set_filterable( abap_true ).
