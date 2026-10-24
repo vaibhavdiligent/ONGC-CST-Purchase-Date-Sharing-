@@ -133,9 +133,19 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM upload_object USING ps_man TYPE ty_manifest.
 
+  " Locals typed exactly like the RPY_PROGRAM_UPDATE interface (RGLIF-*)
+  " so the call can never raise CALL_FUNCTION_CONFLICT_TYPE.
   DATA: ls_log      TYPE ty_log,
         lv_fullpath TYPE string,
-        lv_name     TYPE programm.
+        lv_name     TYPE rglif-include,
+        lv_type     TYPE rglif-progtype,
+        lv_trkorr   TYPE rglif-trkorr,
+        lv_title    TYPE rglif-title,
+        lv_appl     TYPE rglif-appl,
+        lv_auth     TYPE rglif-auth,
+        lv_logdb    TYPE rglif-logdb,
+        lv_lock     TYPE rglif-edit_lock,
+        lv_devclass TYPE rglif-devclass.
 
   ls_log-objtype  = ps_man-objtype.
   ls_log-objname  = ps_man-objname.
@@ -151,10 +161,12 @@ FORM upload_object USING ps_man TYPE ty_manifest.
   " Read the .txt file from the folder.
   CONCATENATE p_dir ps_man-filename INTO lv_fullpath.
   REFRESH gt_source.
+  " UTF-8 (4110) - the same code page ZPROG_DOWNLOAD writes with.
   CALL FUNCTION 'GUI_UPLOAD'
     EXPORTING
       filename = lv_fullpath
       filetype = 'ASC'
+      codepage = '4110'
     TABLES
       data_tab = gt_source
     EXCEPTIONS
@@ -168,8 +180,13 @@ FORM upload_object USING ps_man TYPE ty_manifest.
 
   lv_name = ps_man-objname.
 
-  " The program must already exist (we update, we do not create).
-  SELECT SINGLE subc FROM trdir INTO @DATA(lv_subc) WHERE name = @lv_name.
+  " The program must already exist (we update, we do not create). Read its
+  " current attributes so RPY_PROGRAM_UPDATE writes them back unchanged
+  " (its defaults would otherwise set APPLICATION = 'X' and blank the
+  " title, authorization group and logical database).
+  SELECT SINGLE subc, appl, secu, ldbname, edtx FROM trdir
+    WHERE name = @lv_name
+    INTO @DATA(ls_trdir).
   IF sy-subrc <> 0.
     ls_log-status  = 'Skipped'.
     ls_log-message = 'Program does not exist in this system'.
@@ -184,14 +201,42 @@ FORM upload_object USING ps_man TYPE ty_manifest.
     RETURN.
   ENDIF.
 
+  lv_type   = ls_trdir-subc.
+  lv_appl   = ls_trdir-appl.
+  lv_auth   = ls_trdir-secu.
+  lv_logdb  = ls_trdir-ldbname.
+  lv_lock   = ls_trdir-edtx.
+  lv_trkorr = p_req.
+
+  " Title in the logon language, else in any language.
+  SELECT SINGLE text FROM trdirt
+    WHERE name = @lv_name AND sprsl = @sy-langu
+    INTO @lv_title.
+  IF sy-subrc <> 0.
+    SELECT SINGLE text FROM trdirt
+      WHERE name = @lv_name
+      INTO @lv_title.
+  ENDIF.
+
+  " Package (blank for includes that have no own TADIR entry, e.g. FUGR includes).
+  SELECT SINGLE devclass FROM tadir
+    WHERE pgmid = 'R3TR' AND object = 'PROG' AND obj_name = @lv_name
+    INTO @lv_devclass.
+
   " Write the source back and record it in the transport request.
   CALL FUNCTION 'RPY_PROGRAM_UPDATE'
     EXPORTING
-      program_name     = lv_name
-      program_type     = lv_subc
-      transport_number = p_req
+      program_name        = lv_name
+      program_type        = lv_type
+      title_string        = lv_title
+      application         = lv_appl
+      authorization_group = lv_auth
+      log_db              = lv_logdb
+      edit_lock           = lv_lock
+      development_class   = lv_devclass
+      transport_number    = lv_trkorr
     TABLES
-      source_extended  = gt_source
+      source_extended     = gt_source
     EXCEPTIONS
       cancelled        = 1
       permission_error = 2

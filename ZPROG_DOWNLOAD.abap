@@ -107,7 +107,11 @@ FORM download_object USING pv_name TYPE trdir-name.
 
   " Read the active source.
   REFRESH gt_source.
-  READ REPORT pv_name INTO gt_source STATE 'A'.
+  TRY.
+      READ REPORT pv_name INTO gt_source STATE 'A'.
+    CATCH cx_sy_read_src_line_too_long.
+      REFRESH gt_source.
+  ENDTRY.
   IF sy-subrc <> 0 OR gt_source IS INITIAL.
     ls_log-status  = 'Skipped'.
     ls_log-message = 'No active source found (not a program/include)'.
@@ -123,10 +127,13 @@ FORM download_object USING pv_name TYPE trdir-name.
   CONCATENATE lv_file '.txt' INTO lv_file.
   CONCATENATE p_dir lv_file INTO lv_fullpath.
 
+  " UTF-8 (4110) so special characters in comments survive the round trip;
+  " ZPROG_UPLOAD reads the file back with the same code page.
   CALL FUNCTION 'GUI_DOWNLOAD'
     EXPORTING
       filename = lv_fullpath
       filetype = 'ASC'
+      codepage = '4110'
     TABLES
       data_tab = gt_source
     EXCEPTIONS
@@ -157,8 +164,9 @@ FORM get_obj_type USING pv_name TYPE trdir-name
                   CHANGING pv_type TYPE tadir-object.
 
   CLEAR pv_type.
-  SELECT SINGLE object FROM tadir INTO pv_type
-    WHERE pgmid = 'R3TR' AND obj_name = pv_name.
+  SELECT SINGLE object FROM tadir
+    WHERE pgmid = 'R3TR' AND obj_name = @pv_name
+    INTO @pv_type.
   IF sy-subrc = 0 AND pv_type IS NOT INITIAL.
     RETURN.
   ENDIF.
