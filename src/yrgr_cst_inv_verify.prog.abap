@@ -165,6 +165,30 @@ ENDCLASS.
 DATA: go_handler TYPE REF TO lcl_handler.
 
 *----------------------------------------------------------------------*
+* Default the date range to the previous fortnight
+*----------------------------------------------------------------------*
+INITIALIZATION.
+  DATA: lv_first_day TYPE datum,
+        lv_last_day  TYPE datum.
+  IF sy-datum+6(2) > '15'.
+    lv_first_day = sy-datum.
+    lv_first_day+6(2) = '01'.
+    lv_last_day = sy-datum.
+    lv_last_day+6(2) = '15'.
+  ELSE.
+    lv_last_day = sy-datum.
+    lv_last_day+6(2) = '01'.
+    lv_last_day = lv_last_day - 1.
+    lv_first_day = lv_last_day.
+    lv_first_day+6(2) = '16'.
+  ENDIF.
+  s_date-sign   = 'I'.
+  s_date-option = 'BT'.
+  s_date-low    = lv_first_day.
+  s_date-high   = lv_last_day.
+  APPEND s_date.
+
+*----------------------------------------------------------------------*
 * Selection screen output
 *----------------------------------------------------------------------*
 AT SELECTION-SCREEN OUTPUT.

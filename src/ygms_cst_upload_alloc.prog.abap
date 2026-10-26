@@ -58,8 +58,7 @@ AT SELECTION-SCREEN.
     WHEN 'ALLOC'.
       SUBMIT ygms_cst_purchase_main VIA SELECTION-SCREEN AND RETURN.
     WHEN 'INVDT'.
-      SUBMIT yrgr_cst_inv_verify USING SELECTION-SET 'TEST1'
-                                  VIA SELECTION-SCREEN AND RETURN.
+      SUBMIT yrgr_cst_inv_verify VIA SELECTION-SCREEN AND RETURN.
     WHEN 'NOMIN'.
       SUBMIT yrgg015_purc_nom_ongc_b2b VIA SELECTION-SCREEN AND RETURN.
   ENDCASE.
