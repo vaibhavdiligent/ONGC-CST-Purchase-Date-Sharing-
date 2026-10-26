@@ -94,8 +94,7 @@ TYPES: BEGIN OF ty_header_alv,
          supp_state   TYPE bezei30,
          supp_land1   TYPE land1,
          supp_pan     TYPE yrga_de_pan,
-         supp_vat_tin TYPE yrga_de_tin,
-         supp_cst_tin TYPE yrga_de_tin,
+         supp_vat_tin TYPE yrga_de_ci_supp_vat_tin,
          supp_gst     TYPE yrga_de_gstin,
          supp_through TYPE yrga_de_invoice_no,
        END OF ty_header_alv.
@@ -454,10 +453,13 @@ FORM enrich_item_data.
     <fs_alv>-gail_material = lv_gail_mat.
 
     CLEAR: lv_sent_scm, lv_sent_mbg.
-    SELECT SINGLE qty_in_scm, qty_in_mbg
+    SELECT qty_in_scm, qty_in_mbg
       FROM yrga_cst_b2b_3
       WHERE gail_id = @<fs_alv>-gail_id
-      INTO (@lv_sent_scm, @lv_sent_mbg).
+      ORDER BY time_stamp DESCENDING
+      INTO (@lv_sent_scm, @lv_sent_mbg)
+      UP TO 1 ROWS.
+    ENDSELECT.
     <fs_alv>-qty_sent_scm = lv_sent_scm.
     <fs_alv>-qty_sent_mbg = lv_sent_mbg.
 
