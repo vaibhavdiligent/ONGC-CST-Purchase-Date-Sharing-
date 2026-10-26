@@ -222,6 +222,11 @@ DATA: BEGIN OF it_data_monthly OCCURS 0 ,
         value        TYPE kbetr,
         sale_order(15),   " order no OR L1 status: S/F Waiver / Month Waiver / Grp O.K.
         check(1),
+*       CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
+        p_r_ind      TYPE yrva_qais_data-p_r_indicator,
+        p_sc_ind     TYPE yrva_qais_data-p_sc_indicator,
+        waiver_1     TYPE yrva_qais_data-waiver_1,
+        waiver_2     TYPE yrva_qais_data-waiver_2,
       END OF it_data_monthly,
 *SOC by Kunal/Priyanka on 11/12/2018 for MQAIS Extend Group Change
       wa_data_monthly   LIKE LINE OF it_data_monthly,
@@ -11172,6 +11177,51 @@ FORM create_field_catalog .
     w_sr = w_sr  + 1  .
 **SOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
 *    IF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+* CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
+    gt_fieldcat-fieldname = 'P_R_IND'.
+    gt_fieldcat-outputlen    =  10.
+    gt_fieldcat-just         =  'L' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'P/R/S Indicator'.
+    gt_fieldcat-seltext_m    = 'P/R/S Indicator'.
+    gt_fieldcat-ddictxt      = 'M'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+    gt_fieldcat-fieldname = 'P_SC_IND'.
+    gt_fieldcat-outputlen    =  10.
+    gt_fieldcat-just         =  'L' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Seasonal Indicator'.
+    gt_fieldcat-seltext_m    = 'Seasonal Indicator'.
+    gt_fieldcat-ddictxt      = 'M'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+    gt_fieldcat-fieldname = 'WAIVER_1'.
+    gt_fieldcat-outputlen    =  10.
+    gt_fieldcat-just         =  'L' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Waiver Month 1'.
+    gt_fieldcat-seltext_m    = 'Waiver Month 1'.
+    gt_fieldcat-ddictxt      = 'M'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+    gt_fieldcat-fieldname = 'WAIVER_2'.
+    gt_fieldcat-outputlen    =  10.
+    gt_fieldcat-just         =  'L' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Waiver Month 2'.
+    gt_fieldcat-seltext_m    = 'Waiver Month 2'.
+    gt_fieldcat-ddictxt      = 'M'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
     IF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *    IF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *    IF r_month EQ 'X' OR r_rpd EQ 'X' OR r_month1 EQ 'X'.
@@ -12836,6 +12886,8 @@ ENDFORM.                    "stage_grade_detail
 *  <--  p2        text
 *----------------------------------------------------------------------*
 FORM display_list .
+* CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers (L1 view)
+  PERFORM fill_l1_seasonal.
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
@@ -14952,3 +15004,37 @@ END-OF-SELECTION.
 
 
 *&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  fill_l1_seasonal   (CIS UAT 14.10.2026 pt.1/2)
+*&---------------------------------------------------------------------*
+*   Seasonal indicator (P_R_INDICATOR / P_SC_INDICATOR) and monthly waivers
+*   (WAIVER_1 / WAIVER_2) of each displayed customer from the CIS master
+*   YRVA_QAIS_DATA - the same values are shown at the approval levels.
+*&---------------------------------------------------------------------*
+FORM fill_l1_seasonal.
+  DATA: ls_qais TYPE yrva_qais_data.
+  LOOP AT it_data_monthly.
+    CLEAR ls_qais.
+    READ TABLE it_yrva_qais_data INTO ls_qais
+         WITH KEY kunnr = it_data_monthly-kunnr
+                  kvgr2 = it_data_monthly-kvgr2.
+    IF sy-subrc <> 0.
+      READ TABLE it_yrva_qais_data INTO ls_qais
+           WITH KEY kunnr = it_data_monthly-kunnr.
+    ENDIF.
+    IF sy-subrc <> 0.
+      SELECT * FROM yrva_qais_data INTO ls_qais UP TO 1 ROWS
+        WHERE kunnr           = it_data_monthly-kunnr
+          AND mou_begda       LE s_sptag-high
+          AND mou_endda       GE s_sptag-low
+          AND module_identity = space
+        ORDER BY PRIMARY KEY.
+      ENDSELECT.
+    ENDIF.
+    it_data_monthly-p_r_ind  = ls_qais-p_r_indicator.
+    it_data_monthly-p_sc_ind = ls_qais-p_sc_indicator.
+    it_data_monthly-waiver_1 = ls_qais-waiver_1.
+    it_data_monthly-waiver_2 = ls_qais-waiver_2.
+    MODIFY it_data_monthly.
+  ENDLOOP.
+ENDFORM.                    "fill_l1_seasonal
