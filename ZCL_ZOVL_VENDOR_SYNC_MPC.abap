@@ -194,22 +194,48 @@ CLASS zcl_zovl_vendor_sync_mpc IMPLEMENTATION.
     " are the wrapper elements CPI maps the child rows into (deep insert,
     " Sub Levels = 1) - they must match the component names of the DPC's
     " deep structure (TOCOMPANYCODE / TOBANK).
-    model->create_association(
+    "
+    " Association sets are created EXPLICITLY with the entity set names
+    " (same as a SEGW-generated MPC). The entity types have no default
+    " entity set, so iv_def_assoc_set = abap_true would not bind the
+    " navigation to VendorSet / CompanyCodeSet / BankSet in $metadata, and
+    " the CPI OData modeler would not offer ToCompanyCode / ToBank.
+    DATA: lo_association TYPE REF TO /iwbep/if_mgw_odata_assoc,
+          lo_ref_constr  TYPE REF TO /iwbep/if_mgw_odata_ref_constr.
+
+    "--- Vendor -> CompanyCode ----------------------------------------
+    lo_association = model->create_association(
         iv_association_name = 'Vendor_CompanyCode'
         iv_left_type        = 'Vendor'
         iv_right_type       = 'CompanyCode'
         iv_left_card        = /iwbep/if_mgw_med_odata_types=>gcs_cardinality-cardinality_1_1
         iv_right_card       = /iwbep/if_mgw_med_odata_types=>gcs_cardinality-cardinality_0_n
-        iv_def_assoc_set    = abap_true ).
+        iv_def_assoc_set    = abap_false ).
+    lo_ref_constr = lo_association->create_ref_constraint( ).
+    lo_ref_constr->add_property( iv_principal_property = 'LIFNR'
+                                 iv_dependent_property = 'LIFNR' ).
+    model->create_association_set( iv_association_set_name  = 'Vendor_CompanyCodeSet'
+                                   iv_left_entity_set_name  = 'VendorSet'
+                                   iv_right_entity_set_name = 'CompanyCodeSet'
+                                   iv_association_name      = 'Vendor_CompanyCode' ).
 
-    model->create_association(
+    "--- Vendor -> Bank -----------------------------------------------
+    lo_association = model->create_association(
         iv_association_name = 'Vendor_Bank'
         iv_left_type        = 'Vendor'
         iv_right_type       = 'Bank'
         iv_left_card        = /iwbep/if_mgw_med_odata_types=>gcs_cardinality-cardinality_1_1
         iv_right_card       = /iwbep/if_mgw_med_odata_types=>gcs_cardinality-cardinality_0_n
-        iv_def_assoc_set    = abap_true ).
+        iv_def_assoc_set    = abap_false ).
+    lo_ref_constr = lo_association->create_ref_constraint( ).
+    lo_ref_constr->add_property( iv_principal_property = 'LIFNR'
+                                 iv_dependent_property = 'LIFNR' ).
+    model->create_association_set( iv_association_set_name  = 'Vendor_BankSet'
+                                   iv_left_entity_set_name  = 'VendorSet'
+                                   iv_right_entity_set_name = 'BankSet'
+                                   iv_association_name      = 'Vendor_Bank' ).
 
+    "--- Navigation properties on Vendor ------------------------------
     DATA(lo_vendor_type) = model->get_entity_type( iv_entity_name = 'Vendor' ).
     lo_vendor_type->create_navigation_property(
         iv_property_name    = 'ToCompanyCode'

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  XSD for SAP CPI message mapping - target structure of the OData V2 deep
+  insert into OVL service ZOVL_VENDOR_SYNC_SRV
+  (Receiver: OData V2, Operation = Create (POST), Entity = VendorSet,
+   Sub Levels = 1, batch processing OFF). ONE message = ONE vendor.
+
+    <VendorSet>                  root = entity set
+      <Vendor>                   one vendor (LFA1 fields)
+        <LIFNR/> ... <MESSAGE/>
+        <ToCompanyCode>          navigation property wrapper (0..1)
+          <CompanyCode> ... </CompanyCode>   one per company code row (OVL)
+        </ToCompanyCode>
+        <ToBank>                 navigation property wrapper (0..1)
+          <Bank> ... </Bank>     one per bank account
+        </ToBank>
+      </Vendor>
+    </VendorSet>
+
+  Mapping notes:
+  - Do NOT call CompanyCodeSet / BankSet separately - they are sent only
+    inside VendorSet (the backend rejects them on their own).
+  - Keep the field order as defined here (= $metadata order).
+  - No XML namespaces in the payload nodes.
+  - STATUS / ACTION / MESSAGE are response fields - leave unmapped.
+  - LIFNR inside CompanyCode / Bank may stay empty (header LIFNR is used).
+  - Authoritative structure = the one the adapter's query modeler generates
+    from the LIVE $metadata; this XSD mirrors it.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" attributeFormDefault="unqualified">
+
+  <xs:element name="VendorSet">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Vendor" type="Vendor_Type" minOccurs="1" maxOccurs="1"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="Vendor_Type">
+    <xs:sequence>
+      <xs:element name="LIFNR" minOccurs="1" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="LAND1" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="3"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="NAME1" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="35"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ORT01" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="35"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ORT02" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="35"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="PSTLZ" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="REGIO" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="3"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="SORTL" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="STRAS" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="60"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ADRNR" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="MCOD1" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="25"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="MCOD3" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="25"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ANRED" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="15"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="KONZS" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="SPRAS" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="2"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="TELF1" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="30"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="GBORT" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="25"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="J_1IPANNO" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="40"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="NAME_FIRST" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="40"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="NAME_LAST" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="40"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="BP_CATEGORY" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="1"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="STATUS" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="1"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ACTION" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="MESSAGE" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="220"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ToCompanyCode" type="NavCompanyCode_Type" minOccurs="0" maxOccurs="1"/>
+      <xs:element name="ToBank" type="NavBank_Type" minOccurs="0" maxOccurs="1"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="NavCompanyCode_Type">
+    <xs:sequence>
+      <xs:element name="CompanyCode" type="CompanyCode_Type" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="CompanyCode_Type">
+    <xs:sequence>
+      <xs:element name="LIFNR" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="BUKRS" minOccurs="1" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="4"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="PERNR" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="8"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ZUAWA" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="3"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="AKONT" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ZWELS" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="ZTERM" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="4"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="KVERM" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="30"/></xs:restriction></xs:simpleType></xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="NavBank_Type">
+    <xs:sequence>
+      <xs:element name="Bank" type="Bank_Type" minOccurs="1" maxOccurs="unbounded"/>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:complexType name="Bank_Type">
+    <xs:sequence>
+      <xs:element name="LIFNR" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="10"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="BANKS" minOccurs="1" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="3"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="BANKL" minOccurs="1" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="15"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="BANKN" minOccurs="1" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="18"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="BVTYP" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="4"/></xs:restriction></xs:simpleType></xs:element>
+      <xs:element name="KOINH" minOccurs="0" maxOccurs="1"><xs:simpleType><xs:restriction base="xs:string"><xs:maxLength value="60"/></xs:restriction></xs:simpleType></xs:element>
+    </xs:sequence>
+  </xs:complexType>
+
+</xs:schema>
