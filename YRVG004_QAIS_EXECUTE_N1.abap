@@ -12428,7 +12428,11 @@ FORM nonsf_waiver_ok USING p_kunnr TYPE kunnr
         lv_umb   TYPE s922-ummenge,
         lv_vtweg TYPE s922-vtweg,
         lv_all_s TYPE c,
-        lv_seas  TYPE c.
+        lv_seas  TYPE c,
+        lr_grp   TYPE RANGE OF kunnr,
+        ls_grp   LIKE LINE OF lr_grp,
+        ls_mem   TYPE yrva_qais_data,
+        lv_ismem TYPE flag.
 
   p_ok = 'X'.
 *   grade-wise signed plan (per-grade MCQ). No plan -> do not block.
@@ -12477,9 +12481,30 @@ FORM nonsf_waiver_ok USING p_kunnr TYPE kunnr
   ENDIF.
 *   seasonal-sector customer = all signed non-shortfall grades are seasonal
   lv_seas = lv_all_s.
+*   CIS 2026-27 (GAIL 23.10.2026 - Polyraj / POL, Aug'26): for a GROUP
+*   customer the 75% test uses the GROUP's non-shortfall lifting - all
+*   members of the BP Group/MLE cluster, the same customers that make up the
+*   Grp Lifted Qty - because the signed grade plan (MCQ) is the group's.
+*   Earlier only the customer's own lifting was compared with the group
+*   plan, so every member failed the test, the shortfall waiver was refused
+*   and the eligible qty came out 0.
+  ls_grp-sign = 'I'. ls_grp-option = 'EQ'.
+  ls_grp-low  = p_kunnr.
+  APPEND ls_grp TO lr_grp.
+  READ TABLE it_yrva_qais_data INTO ls_mem WITH KEY kunnr = p_kunnr.
+  IF sy-subrc = 0 AND ls_mem-kvgr2 IS NOT INITIAL.
+    LOOP AT it_yrva_qais_data INTO ls_mem WHERE kvgr2 <> space
+                                            AND kunnr <> p_kunnr.
+      PERFORM is_grp_member USING p_kunnr ls_mem-kunnr CHANGING lv_ismem.
+      IF lv_ismem = 'X'.
+        ls_grp-low = ls_mem-kunnr.
+        COLLECT ls_grp INTO lr_grp.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
 *   non-shortfall lifting for the run month (grade = KONDM)
   SELECT kondm ummenge vtweg FROM s922 INTO (lv_kondm, lv_umb, lv_vtweg)
-    WHERE pkunag = p_kunnr
+    WHERE pkunag IN lr_grp
       AND sptag  IN s_sptag.
     IF lv_vtweg = '60'.
       CONTINUE.                          " channel 60 is not counted as lifting
