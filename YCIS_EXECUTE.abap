@@ -453,19 +453,24 @@ FORM process_selected USING p_action TYPE char1.
 *     a dummy SD document ('GROUP OK') and Approved status, so the group is
 *     treated as processed and can be run again next month - instead of
 *     being left stuck at Pending with a blank SD document.
+*     CIS UAT 23.10.2026 (L4 obs.): a row WITHOUT a rebate order (zero
+*     discount value, e.g. a group member) is NOT forwarded to L4 any more -
+*     only rebate orders created against the discount approved at L3 go on
+*     to L4. The zero row is closed (Completed) here at L3.
       IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
         lv_zero = lv_zero + 1.
-        gs_appr-wf_status = '40'.          " Pending L4 - forwarded (6-level flow)
-        gs_appr-status    = 'P'.           " still in workflow
+        gs_appr-wf_status = '70'.          " Completed at L3 - not forwarded to L4
+        gs_appr-status    = 'A'.
         gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
         gs_appr-l3_user   = sy-uname.
         gs_appr-l3_date   = sy-datum.
         gs_appr-l3_time   = sy-uzeit.
-        gs_appr-remarks   = 'Group OK - zero lifting, forwarded to L4'.
+        gs_appr-rem_l3    = lv_remark.
+        gs_appr-remarks   = 'Group OK - no discount, closed at L3 (not sent to L4)'.
         MODIFY ycis_apprvl FROM gs_appr.
         COMMIT WORK AND WAIT.
         gs_out-order_no = 'GROUP OK'.
-        gs_out-remarks  = 'Group OK - zero lifting, forwarded to L4'.
+        gs_out-remarks  = 'Group OK - no discount, closed at L3'.
         CLEAR gs_out-sel.
         MODIFY gt_out FROM gs_out.
         CONTINUE.
@@ -522,13 +527,13 @@ FORM process_selected USING p_action TYPE char1.
 *   L4 is central in YCIS_WF_APPR (sales office '0001', level 4) - notify once
 *   that rebate orders are ready for financial vetting. (executed rows are
 *   already committed per-row above.)
-    IF lv_cnt > 0 OR lv_zero > 0.
+    IF lv_cnt > 0.                      " only real rebate orders go to L4
       PERFORM send_mail USING '4' '0001' '0001' space.
     ENDIF.
     IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } group-OK forwarded, { lv_err } failed - see 'Remarks'| TYPE 'S'.
+      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } zero-value line(s) closed at L3, { lv_err } failed - see 'Remarks'| TYPE 'S'.
     ENDIF.
   ELSE.
     IF lv_cnt > 0.

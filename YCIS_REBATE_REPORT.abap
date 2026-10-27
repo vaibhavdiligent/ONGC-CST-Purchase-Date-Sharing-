@@ -52,6 +52,7 @@ TYPES: BEGIN OF ty_out,
          sales_off  TYPE vkbur,        " sales office
          kondm      TYPE kondm,        " grade
          kondm_txt  TYPE maktx,        " material name (from YRVA_GRADE_CISD -> MAKT)
+         mcq_qty    TYPE ycis_apprvl-mcq_qty,  " MCQ / committed qty of the customer (UAT 23.10.2026)
          lft_qty    TYPE menge_d,      " lifted qty of this grade
          elig_qty   TYPE menge_d,      " discounted qty of this grade (capping-split)
          meins      TYPE meins,        " unit
@@ -285,6 +286,8 @@ ENDFORM.
 *&      Form  fill_appr_trail   (approval trail: who/when at L1/L2/L3)
 *&---------------------------------------------------------------------*
 FORM fill_appr_trail USING p_appr TYPE ycis_apprvl.
+*   MCQ / committed qty of the CIS (customer level - same on every grade row)
+  gs_out-mcq_qty     = p_appr-mcq_qty.
 *   workflow status (shown for every record) + last rejection detail
   PERFORM status_text USING p_appr CHANGING gs_out-status_txt.
   gs_out-scheme_type = p_appr-scheme_type.
@@ -401,6 +404,7 @@ FORM build_fieldcat.
   add_fc 'STATUS_TXT'  'Status'                'YCIS_APPRVL'     'CUST_NAME'.
   add_fc 'KONDM'       'MPG'                   'YCIS_APPRVL_GRD' 'KONDM'.
   add_fc 'KONDM_TXT'   'Material / Grade Name' 'MAKT'            'MAKTX'.
+  add_fc 'MCQ_QTY'     'MCQ Qty'               ''                ''.
   add_fc 'LFT_QTY'     'Lifted Qty'            ''                ''.
   add_fc 'ELIG_QTY'    'Discount Qty'          ''                ''.
   add_fc 'REBATE_VAL'  'Rebate Amount'         ''                ''.
@@ -641,19 +645,20 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
   CONDENSE ls_note-disc_total_value.
   ls_note-grand_total = ls_note-disc_total_value.
 
-*   ---- central blocks L3 / L4 / L5 / L6 (single approver each) ----
+*   ---- central blocks L3 / L4 / L5 (single approver each) ----
+*   CIS UAT 23.10.2026: L6 details (signature, time stamp, comments) are NOT
+*   printed on the note any more - the L6 fields are left empty and the L6
+*   block is removed from the form layout. The fixed L1-L5 statements are
+*   static texts in the layout (ZCIS_PSD_APPR_NOTE).
   PERFORM sign_line USING ls_rep-l3_user ls_rep-l3_date ls_rep-l3_time
                     CHANGING ls_note-l3_sign.
   PERFORM sign_line USING ls_rep-l4_user ls_rep-l4_date ls_rep-l4_time
                     CHANGING ls_note-l4_sign.
   PERFORM sign_line USING ls_rep-l5_user ls_rep-l5_date ls_rep-l5_time
                     CHANGING ls_note-l5_sign.
-  PERFORM sign_line USING ls_rep-l6_user ls_rep-l6_date ls_rep-l6_time
-                    CHANGING ls_note-l6_sign.
   ls_note-l3_remarks = ls_rep-rem_l3.
   ls_note-l4_remarks = ls_rep-rem_l4.
   ls_note-l5_remarks = ls_rep-rem_l5.
-  ls_note-l6_remarks = ls_rep-rem_l6.
 
 *   ---- render the Adobe form ----
   CALL FUNCTION 'FP_FUNCTION_MODULE_NAME'

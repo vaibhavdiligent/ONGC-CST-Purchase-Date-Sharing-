@@ -90,3 +90,13 @@ T-code access: e.g. `YCIS_L4` → YCIS_VET, `YCIS_L5` → YCIS_APPRV5,
 | L4-2 | Lifting qty breakup on L4 screen | Click Group / Individual Lifted Qty → popup with the S922 sales lines (customer, date, grade, channel, qty, totals); group = BP Group/MLE members | YCIS_VET |
 | L4-3 | Field names on L4 selection screen | Selection texts set in the program (Period From, Sales Office, Customer, Customer Group) – all levels | L2–L6 |
 | L4-4 | Display already vetted data | = obs. 3 (*Executed*) | YCIS_VET |
+
+## UAT observations 23.10.2026 – changes
+
+| # | Observation | Change | Object(s) |
+|---|---|---|---|
+| 1 | Maker & checker for shortfall grade entry – T-code | Program `YCIS_SHORTFALL_MC` (already delivered). Create report transaction in SE93 (suggested `YCIS_SHORTFALL`) and assign to the PMG maker and CPC L3 checker roles | YCIS_SHORTFALL_MC |
+| 2 | MCQ Qty in YRVG052 | New column *MCQ Qty* (YCIS_APPRVL-MCQ_QTY) | YCIS_REBATE_REPORT |
+| 3 | Zero-value / no rebate order lines must not go to L4 | L3 closes such lines (`GROUP OK`, WF_STATUS 70) instead of forwarding; L4 is e-mailed only for real rebate orders. Lines forwarded earlier are closed automatically when L4/L5/L6 is opened | YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |
+| 4 | Text on expense GL line | After L6 posting the G/L lines of the accounting document get text `INVOICE <reference>` (e.g. `INVOICE CIS 26-27 JUNE DISCO`) via FI_DOCUMENT_CHANGE – no manual YRFR126 step. BSEG-SGTXT must be changeable (OB32) | YCIS_DISBURSE |
+| 5 | Approval note: no L6 details; fixed statements L1–L5 | Layout: L1/L2 statements above the Sales-Office table, L3/L4/L5 statement above each block, L6 block removed; driver no longer fills L6 | ZCIS_PSD_APPR_NOTE_layout.XDP, YCIS_REBATE_REPORT |

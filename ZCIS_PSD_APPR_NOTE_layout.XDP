@@ -153,6 +153,20 @@
             <para hAlign="left"/>
             <value><text> </text></value>
          </draw>
+         <draw name="STMT_L1" w="180mm" h="15mm">
+            <ui><textEdit/></ui>
+            <font typeface="Arial" size="10pt" weight="normal"/>
+            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
+            <para hAlign="left"/>
+            <value><text>L1: Customer-wise and grade-wise sales quantities, along with eligible PSD rates and amounts, have been verified and confirmed after considering customer waivers, shortfall waivers, sales return quantities, and Group/MLE details.</text></value>
+         </draw>
+         <draw name="STMT_L2" w="180mm" h="10mm">
+            <ui><textEdit/></ui>
+            <font typeface="Arial" size="10pt" weight="normal"/>
+            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
+            <para hAlign="left"/>
+            <value><text>L2: Customer-wise eligible PSDs have been forwarded, and all supporting documents have been submitted to CPC.</text></value>
+         </draw>
          <subform name="OFFICE_TBL" layout="table" w="180mm">
             <subform name="HDR" layout="row">
             <draw name="h_0" w="8mm" h="14mm"><ui><textEdit/></ui><font typeface="Arial" size="7pt" weight="bold"/><margin topInset="0.5mm" bottomInset="0.5mm" leftInset="0.5mm" rightInset="0.5mm"/><para hAlign="center" vAlign="middle"/><border><edge thickness="0.25mm"/></border><value><text>S.No</text></value></draw>
@@ -189,6 +203,13 @@
             <bind match="dataRef" ref="$.WA_NOTE.GRAND_TOTAL"/>
          </field>
          <draw name="dgap_tbl" w="180mm" h="3mm"><ui><textEdit/></ui><font typeface="Arial" size="10pt"/><margin topInset="1mm" bottomInset="0.5mm"/><para hAlign="left"/><value><text> </text></value></draw>
+         <draw name="STMT_L3" w="180mm" h="7mm">
+            <ui><textEdit/></ui>
+            <font typeface="Arial" size="10pt" weight="normal"/>
+            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
+            <para hAlign="left"/>
+            <value><text>L3: Rebate orders have been created.</text></value>
+         </draw>
          <field name="L3_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
             <font typeface="Arial" size="10pt"/>
@@ -213,6 +234,13 @@
             <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
             <para hAlign="left"/>
             <value><text> </text></value>
+         </draw>
+         <draw name="STMT_L4" w="180mm" h="7mm">
+            <ui><textEdit/></ui>
+            <font typeface="Arial" size="10pt" weight="normal"/>
+            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
+            <para hAlign="left"/>
+            <value><text>L4: Customer-wise eligible PSDs have been vetted.</text></value>
          </draw>
          <field name="L4_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
@@ -239,6 +267,13 @@
             <para hAlign="left"/>
             <value><text> </text></value>
          </draw>
+         <draw name="STMT_L5" w="180mm" h="10mm">
+            <ui><textEdit/></ui>
+            <font typeface="Arial" size="10pt" weight="normal"/>
+            <margin topInset="1mm" bottomInset="0.5mm" leftInset="0mm" rightInset="0mm"/>
+            <para hAlign="left"/>
+            <value><text>L5: The discount proposal has been approved. CPC F&amp;A is requested to process the discount disbursement to the respective customers.</text></value>
+         </draw>
          <field name="L5_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
             <ui><textEdit multiLine="1"/></ui>
             <font typeface="Arial" size="10pt"/>
@@ -264,24 +299,6 @@
             <para hAlign="left"/>
             <value><text> </text></value>
          </draw>
-         <field name="L6_REMARKS" access="readOnly" w="180mm" h="12mm" minH="12mm">
-            <ui><textEdit multiLine="1"/></ui>
-            <font typeface="Arial" size="10pt"/>
-            <margin topInset="0.5mm" bottomInset="0.5mm" leftInset="0mm" rightInset="1mm"/>
-            <para vAlign="middle"/>
-            <caption placement="left" reserve="45mm"><font typeface="Arial" size="9pt" weight="bold"/><para vAlign="middle"/><value><text>Comments/Remarks (L6)</text></value></caption>
-            <value><text/></value>
-            <bind match="dataRef" ref="$.WA_NOTE.L6_REMARKS"/>
-         </field>
-         <field name="L6_SIGN" access="readOnly" w="180mm" h="7mm" minH="7mm">
-            <ui><textEdit/></ui>
-            <font typeface="Arial" size="10pt"/>
-            <margin topInset="0.5mm" bottomInset="0.5mm" leftInset="0mm" rightInset="1mm"/>
-            <para vAlign="middle"/>
-            <caption placement="left" reserve="80mm"><font typeface="Arial" size="9pt" weight="bold"/><para vAlign="middle"/><value><text>L6 digital signature, CPF No. &amp; Time Stamp</text></value></caption>
-            <value><text/></value>
-            <bind match="dataRef" ref="$.WA_NOTE.L6_SIGN"/>
-         </field>
          <draw name="d52946" w="180mm" h="2mm">
             <ui><textEdit/></ui>
             <font typeface="Arial" size="10pt" weight="normal"/>

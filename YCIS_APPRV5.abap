@@ -152,6 +152,19 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM get_pending.
+* CIS UAT 23.10.2026: zero-value 'GROUP OK' lines (no rebate order) are not
+* vetted / approved / posted any more - lines forwarded before this change
+* are closed here (L3 now closes them itself and does not forward them).
+  IF p_exec IS INITIAL.
+    UPDATE ycis_apprvl SET wf_status = '70'
+                           status    = 'A'
+                           remarks   = 'Group OK - no rebate order, closed'
+      WHERE wf_status = '50'
+        AND order_no  = 'GROUP OK'.
+    IF sy-dbcnt > 0.
+      COMMIT WORK.
+    ENDIF.
+  ENDIF.
   IF p_exec = 'X'.
     SELECT * FROM ycis_apprvl INTO TABLE gt_appr
       WHERE ( l5_user <> space OR rej_level = gc_level )   " processed at L5

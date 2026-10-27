@@ -176,6 +176,19 @@ ENDFORM.
 
 *&---------------------------------------------------------------------*
 FORM get_pending.
+* CIS UAT 23.10.2026: zero-value 'GROUP OK' lines (no rebate order) are not
+* vetted / approved / posted any more - lines forwarded before this change
+* are closed here (L3 now closes them itself and does not forward them).
+  IF p_exec IS INITIAL.
+    UPDATE ycis_apprvl SET wf_status = '70'
+                           status    = 'A'
+                           remarks   = 'Group OK - no rebate order, closed'
+      WHERE wf_status = '60'
+        AND order_no  = 'GROUP OK'.
+    IF sy-dbcnt > 0.
+      COMMIT WORK.
+    ENDIF.
+  ENDIF.
   IF p_exec = 'X'.
     SELECT * FROM ycis_apprvl INTO TABLE gt_appr
       WHERE ( l6_user <> space OR rej_level = gc_level )   " processed at L6
@@ -426,6 +439,10 @@ ENDFORM.
 *&      Form  process_selected   (A = disburse/complete, R = reject)
 *&---------------------------------------------------------------------*
 FORM process_selected USING p_action TYPE char1.
+  TYPES: BEGIN OF ty_cnref,
+           cn_doc   TYPE vbeln_vf,
+           purch_no TYPE ycis_apprvl-purch_no,
+         END OF ty_cnref.
   DATA: lv_disb   TYPE i,
         lv_rej    TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
@@ -437,9 +454,12 @@ FORM process_selected USING p_action TYPE char1.
         lv_cndoc  TYPE vbeln_vf,
         lv_accdoc TYPE belnr_d,
         lv_accyr  TYPE gjahr,
-        lt_cn     TYPE STANDARD TABLE OF vbeln_vf,
+        lt_cn     TYPE STANDARD TABLE OF ty_cnref,
+        ls_cn     TYPE ty_cnref,
         lv_mail   TYPE i,
-        lv_nmail  TYPE i.
+        lv_nmail  TYPE i,
+        lv_txtok  TYPE flag,
+        lv_ntext  TYPE i.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -499,7 +519,9 @@ FORM process_selected USING p_action TYPE char1.
       gs_appr-remarks   = 'Posted - Credit Note created, CIS discount completed'.
       COLLECT gs_appr-sales_off INTO lt_dofc.
       IF gs_appr-cn_doc IS NOT INITIAL.
-        APPEND gs_appr-cn_doc TO lt_cn.
+        ls_cn-cn_doc   = gs_appr-cn_doc.
+        ls_cn-purch_no = gs_appr-purch_no.
+        APPEND ls_cn TO lt_cn.
       ENDIF.
       lv_disb = lv_disb + 1.
     ELSE.
@@ -521,10 +543,17 @@ FORM process_selected USING p_action TYPE char1.
   IF lv_disb > 0 OR lv_rej > 0.
     COMMIT WORK.
   ENDIF.
-* CIS UAT 14.10.2026 pt.8: credit note e-mail to the customer with posting
-  LOOP AT lt_cn INTO lv_cndoc.
+  LOOP AT lt_cn INTO ls_cn.
+*   CIS UAT 23.10.2026: text on the expense G/L line of the accounting
+*   document ('INVOICE <reference>') - replaces the manual YRFR126 step
+    CLEAR lv_txtok.
+    PERFORM set_gl_text USING ls_cn-cn_doc ls_cn-purch_no CHANGING lv_txtok.
+    IF lv_txtok = 'X'.
+      lv_ntext = lv_ntext + 1.
+    ENDIF.
+*   CIS UAT 14.10.2026 pt.8: credit note e-mail to the customer with posting
     CLEAR lv_nmail.
-    PERFORM send_cn_mail USING lv_cndoc CHANGING lv_nmail.
+    PERFORM send_cn_mail USING ls_cn-cn_doc CHANGING lv_nmail.
     IF lv_nmail > 0.
       lv_mail = lv_mail + 1.
     ENDIF.
@@ -542,7 +571,7 @@ FORM process_selected USING p_action TYPE char1.
     ENDLOOP.
   ENDIF.
   DELETE gt_out WHERE sel = 'X'.
-  MESSAGE |{ lv_disb } posted (Credit Note created, Accounting document posted, { lv_mail } e-mailed), { lv_rej } returned to L1| TYPE 'S'.
+  MESSAGE |{ lv_disb } posted (Credit Note created, Accounting document posted, { lv_ntext } G/L text set, { lv_mail } e-mailed), { lv_rej } returned to L1| TYPE 'S'.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -1080,4 +1109,95 @@ FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
       CLEAR p_cnt.
       MESSAGE |Credit Note { p_cndoc }: e-mail could not be sent| TYPE 'I'.
   ENDTRY.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  set_gl_text   (CIS UAT 23.10.2026)
+*&---------------------------------------------------------------------*
+*   Writes the line-item text 'INVOICE <reference>' (e.g. 'INVOICE CIS 26-27
+*   JUNE DISCO', reference = YCIS_APPRVL-PURCH_NO / order VBKD-BSTKD) on the
+*   G/L lines (KOART 'S' - expense GL 'Discount on Sales - MOU Incentive
+*   Scheme') of the accounting document of the credit note. Zonal F&A did
+*   this manually with YRFR126 after posting. Lines that already carry a
+*   text are left unchanged. Uses the standard document change
+*   (FI_DOCUMENT_CHANGE, same rules as FB02 - BSEG-SGTXT must be changeable
+*   in the document change rules, OB32).
+*&---------------------------------------------------------------------*
+FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
+                          p_ref   TYPE clike
+                 CHANGING p_ok    TYPE flag.
+  DATA: ls_bkpf   TYPE bkpf,
+        lt_bseg   TYPE STANDARD TABLE OF bseg,
+        ls_bseg   TYPE bseg,
+        lt_chg    TYPE STANDARD TABLE OF accchg,
+        ls_chg    TYPE accchg,
+        lv_awkey  TYPE awkey,
+        lv_ref    TYPE bstkd,
+        lv_text   TYPE sgtxt,
+        lv_aubel  TYPE vbeln_va.
+
+  CLEAR p_ok.
+  CHECK p_cndoc IS NOT INITIAL.
+  lv_awkey = p_cndoc.
+  SELECT * FROM bkpf INTO ls_bkpf UP TO 1 ROWS
+    WHERE awtyp = 'VBRK'
+      AND awkey = lv_awkey
+    ORDER BY PRIMARY KEY.
+  ENDSELECT.
+  IF sy-subrc <> 0.
+    RETURN.                              " accounting document not (yet) there
+  ENDIF.
+
+* reference = CIS reference no. (YRVG052 reference), else the order's BSTKD
+  lv_ref = p_ref.
+  IF lv_ref IS INITIAL.
+    SELECT aubel FROM vbrp INTO lv_aubel UP TO 1 ROWS
+      WHERE vbeln = p_cndoc ORDER BY PRIMARY KEY.
+    ENDSELECT.
+    SELECT SINGLE bstkd FROM vbkd INTO lv_ref
+      WHERE vbeln = lv_aubel AND posnr = '000000'.
+  ENDIF.
+  CHECK lv_ref IS NOT INITIAL.
+  lv_text = |INVOICE { lv_ref }|.
+
+  SELECT * FROM bseg INTO TABLE lt_bseg
+    WHERE bukrs = ls_bkpf-bukrs
+      AND belnr = ls_bkpf-belnr
+      AND gjahr = ls_bkpf-gjahr
+      AND koart = 'S'.
+  LOOP AT lt_bseg INTO ls_bseg WHERE sgtxt IS INITIAL.
+    REFRESH lt_chg.
+    ls_chg-fdname = 'SGTXT'.
+    ls_chg-oldval = ls_bseg-sgtxt.
+    ls_chg-newval = lv_text.
+    APPEND ls_chg TO lt_chg.
+    CALL FUNCTION 'FI_DOCUMENT_CHANGE'
+      EXPORTING
+        i_awtyp              = ls_bkpf-awtyp
+        i_awref              = ls_bkpf-awkey(10)
+        i_aworg              = ls_bkpf-awkey+10(10)
+        i_awsys              = ls_bkpf-awsys
+        i_obzei              = ls_bseg-buzei
+        i_bukrs              = ls_bkpf-bukrs
+        i_belnr              = ls_bkpf-belnr
+        i_gjahr              = ls_bkpf-gjahr
+        i_buzei              = ls_bseg-buzei
+      TABLES
+        t_accchg             = lt_chg
+      EXCEPTIONS
+        no_reference         = 1
+        no_document          = 2
+        many_documents       = 3
+        wrong_input          = 4
+        overwrite_creditcard = 5
+        OTHERS               = 6.
+    IF sy-subrc = 0.
+      p_ok = 'X'.
+    ENDIF.
+  ENDLOOP.
+  IF p_ok = 'X'.
+    COMMIT WORK AND WAIT.
+  ELSE.
+    ROLLBACK WORK.
+  ENDIF.
 ENDFORM.
