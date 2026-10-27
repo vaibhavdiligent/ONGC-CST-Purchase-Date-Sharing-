@@ -2548,7 +2548,7 @@ FORM get_gl_items_direct
   " lines of the same BUZEI (same multiplicity as the FAGLL03 G/L view).
   TYPES: BEGIN OF lty_item.
            INCLUDE TYPE ty_fagll03.
-  TYPES:   docln TYPE n LENGTH 6,
+  TYPES:   docln TYPE c LENGTH 6,            " ACDOCA-DOCLN is CHAR 6
          END OF lty_item.
 
   DATA: lt_sel   TYPE STANDARD TABLE OF lty_item,
