@@ -42,8 +42,9 @@
 *     built on it, so ZFI_COPA_PGIR reads the physical FAGLFLEXA table
 *     which is no longer updated after the upgrade -> new PGI postings
 *     are not selected and PGI rate is not updated.
-*     Solution: read released CDS I_JournalEntryItem (ACDOCA) joined
-*     with I_JournalEntry (BKPF), as in ZMIDAS_FAGLL03 remediation.
+*     Solution: read SAP compatibility view FGL_FAGLFLEXA (Replacement
+*     Object of FAGLFLEXA, SQL view FGLV_FAGLFLEXA) joined with BKPF -
+*     same fields and joins as ZFI_COPA_PGIR.
 *  2. Obsolete table MSEG (compatibility view on MATDOC in S/4HANA).
 *     Solution: read MATDOC with RECORD_TYPE = 'MDOC'.
 *  3. Company code currency was read with WA_ZFI_COPA (last row of the
@@ -328,25 +329,17 @@ START-OF-SELECTION.
 *           A DDIC view does not use the replacement object, it reads
 *           the physical FAGLFLEXA which is not updated after the
 *           upgrade -> no new PGI documents, PGI rate not calculated.
-* Solution: read released CDS views (same as ZMIDAS_FAGLL03 remediation,
-*           element names verified with DDLS_BASE_FIELDS export):
-*             I_JournalEntryItem (base ACDOCA) - ledger 0L
-*             I_JournalEntry     (base BKPF)   - AWKEY / BUDAT / CPUDT
-*           Field mapping of view ZFI_COPA_PGIR (SE11):
-*             FAGLFLEXA-RYEAR  -> I_JournalEntryItem-LedgerFiscalYear
-*             FAGLFLEXA-DOCNR  -> I_JournalEntryItem-AccountingDocument
-*             FAGLFLEXA-RLDNR  -> I_JournalEntryItem-Ledger
-*             FAGLFLEXA-RBUKRS -> I_JournalEntryItem-CompanyCode
-*             FAGLFLEXA-RACCT  -> I_JournalEntryItem-GLAccount
-*             FAGLFLEXA-HSL    -> I_JournalEntryItem-AmountInCompanyCodeCurrency
-*             FAGLFLEXA-POPER  -> I_JournalEntryItem-FiscalPeriod
-*             BKPF-AWKEY       -> I_JournalEntry-OriginalReferenceDocument
-*             BKPF-BUDAT       -> I_JournalEntry-PostingDate
-*             BKPF-CPUDT       -> I_JournalEntry-AccountingDocumentCreationDate
-*           Join RYEAR=GJAHR, RBUKRS=BUKRS, DOCNR=BELNR -> CompanyCode /
-*           FiscalYear / AccountingDocument; view has no selection
-*           conditions. CO-only lines (AccountingDocumentCategory = 'C',
-*           ACDOCA-BSTAT) are excluded as they never existed in FAGLFLEXA.
+* Solution: read CDS compatibility view FGL_FAGLFLEXA (SE11 Replacement
+*           Object of FAGLFLEXA, SQL view FGLV_FAGLFLEXA, based on
+*           ACDOCA) instead of the physical table. It has the same field
+*           names as FAGLFLEXA, so the view ZFI_COPA_PGIR is rebuilt 1:1:
+*             FAGLFLEXA-RYEAR/DOCNR/RLDNR/RBUKRS/RACCT/HSL/POPER
+*               -> FGL_FAGLFLEXA-RYEAR/DOCNR/RLDNR/RBUKRS/RACCT/HSL/POPER
+*             BKPF-AWKEY/BUDAT/CPUDT -> unchanged
+*             join RYEAR=GJAHR, RBUKRS=BUKRS, DOCNR=BELNR -> unchanged
+*             no selection conditions in ZFI_COPA_PGIR.
+*           CO-only lines (BSTAT = 'C') are excluded as they never
+*           existed in FAGLFLEXA.
 *           View ZFI_COPA_PGIR is no longer used by this program.
 *  SELECT * FROM zfi_copa_pgir INTO TABLE @DATA(ta_zfi_copa) " ZFI_COPA view replaced with ZFI_COPA_PGIR for incremental data
 *    WHERE ryear   =   @p_gjahr      AND
@@ -355,28 +348,28 @@ START-OF-SELECTION.
 *          racct   IN  @s_racct      AND
 *          poper   =   @p_poper      AND
 *  cpudt   IN  @s_cpudt.
-  SELECT gl~ledgerfiscalyear              AS ryear,
-         gl~accountingdocument            AS docnr,
-         gl~ledger                        AS rldnr,
-         gl~companycode                   AS rbukrs,
-         gl~glaccount                     AS racct,
-         gl~amountincompanycodecurrency   AS hsl,
-         gl~fiscalperiod                  AS poper,
-         hd~originalreferencedocument     AS awkey,
-         hd~postingdate                   AS budat,
-         hd~accountingdocumentcreationdate AS cpudt
-    FROM i_journalentryitem AS gl
-      INNER JOIN i_journalentry AS hd
-        ON  hd~companycode        = gl~companycode
-        AND hd~fiscalyear         = gl~fiscalyear
-        AND hd~accountingdocument = gl~accountingdocument
-    WHERE gl~ledgerfiscalyear            =   @p_gjahr  AND
-          gl~ledger                      =   @co_0l    AND
-          gl~companycode                 IN  @s_bukrs  AND
-          gl~glaccount                   IN  @s_racct  AND
-          gl~fiscalperiod                =   @p_poper  AND
-          gl~accountingdocumentcategory  <>  'C'       AND
-          hd~accountingdocumentcreationdate IN @s_cpudt
+  SELECT a~ryear,
+         a~docnr,
+         a~rldnr,
+         a~rbukrs,
+         a~racct,
+         a~hsl,
+         a~poper,
+         b~awkey,
+         b~budat,
+         b~cpudt
+    FROM fgl_faglflexa AS a
+    INNER JOIN bkpf AS b
+       ON b~bukrs = a~rbukrs
+      AND b~gjahr = a~ryear
+      AND b~belnr = a~docnr
+    WHERE a~ryear   =   @p_gjahr      AND
+          a~rldnr   =   @co_0l        AND
+          a~rbukrs  IN  @s_bukrs      AND
+          a~racct   IN  @s_racct      AND
+          a~poper   =   @p_poper      AND
+          a~bstat   <>  'C'           AND
+          b~cpudt   IN  @s_cpudt
     INTO TABLE @DATA(ta_zfi_copa).
 * Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
 
