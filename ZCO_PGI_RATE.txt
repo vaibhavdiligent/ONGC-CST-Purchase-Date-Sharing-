@@ -328,8 +328,16 @@ START-OF-SELECTION.
 *           the physical FAGLFLEXA which is not updated after the
 *           upgrade -> no new PGI documents, PGI rate not calculated.
 * Solution: read ACDOCA (leading ledger 0L) joined with BKPF for
-*           AWKEY / CPUDT. CO-only lines (BSTAT = 'C') are excluded as
-*           they never existed in FAGLFLEXA.
+*           AWKEY / BUDAT / CPUDT. CO-only lines (BSTAT = 'C') are
+*           excluded as they never existed in FAGLFLEXA.
+*           Same fields and joins as view ZFI_COPA_PGIR (SE11):
+*             FAGLFLEXA-RYEAR / DOCNR / RLDNR / RBUKRS / RACCT / HSL /
+*             POPER -> ACDOCA-RYEAR / BELNR / RLDNR / RBUKRS / RACCT /
+*             HSL / POPER;  BKPF-AWKEY / BUDAT / CPUDT unchanged;
+*             join RYEAR=GJAHR, RBUKRS=BUKRS, DOCNR=BELNR ->
+*             ACDOCA-GJAHR/RBUKRS/BELNR = BKPF-GJAHR/BUKRS/BELNR;
+*             view has no selection conditions.
+*           View ZFI_COPA_PGIR is no longer used by this program.
 *  SELECT * FROM zfi_copa_pgir INTO TABLE @DATA(ta_zfi_copa) " ZFI_COPA view replaced with ZFI_COPA_PGIR for incremental data
 *    WHERE ryear   =   @p_gjahr      AND
 *          rldnr   =   @co_0l        AND
@@ -345,7 +353,7 @@ START-OF-SELECTION.
          a~hsl,
          a~poper,
          b~awkey,
-         a~budat,
+         b~budat,
          b~cpudt
     FROM acdoca AS a
     INNER JOIN bkpf AS b
