@@ -2657,7 +2657,21 @@ FORM additional_mj_discount.
         lt_s922 TYPE STANDARD TABLE OF s922,
         lv_val  TYPE p DECIMALS 2,
         lv_qty  TYPE p DECIMALS 3,
-        lv_rate TYPE i.
+        lv_rate TYPE i,
+        lv_mon  TYPE char10,
+        lv_rem  TYPE char40.
+
+* GAIL 26.10.2026: remarks per run month, e.g. 'CIS ADDL DISC MAY 2026' /
+* 'CIS ADDL DISC JUNE 2026' (becomes the reference no. of the rebate order)
+  CASE s_sptag-low+4(2).
+    WHEN '01'. lv_mon = 'JANUARY'.   WHEN '02'. lv_mon = 'FEBRUARY'.
+    WHEN '03'. lv_mon = 'MARCH'.     WHEN '04'. lv_mon = 'APRIL'.
+    WHEN '05'. lv_mon = 'MAY'.       WHEN '06'. lv_mon = 'JUNE'.
+    WHEN '07'. lv_mon = 'JULY'.      WHEN '08'. lv_mon = 'AUGUST'.
+    WHEN '09'. lv_mon = 'SEPTEMBER'. WHEN '10'. lv_mon = 'OCTOBER'.
+    WHEN '11'. lv_mon = 'NOVEMBER'.  WHEN '12'. lv_mon = 'DECEMBER'.
+  ENDCASE.
+  CONCATENATE 'CIS ADDL DISC' lv_mon s_sptag-low(4) INTO lv_rem SEPARATED BY space.
 
 * applicable grade set = HDPE + LLDPE grades
   SELECT kondm FROM yrva_hdpe_grades  INTO TABLE @DATA(lt_grd).
@@ -2722,8 +2736,8 @@ FORM additional_mj_discount.
     it_data_monthly-ind_lift_qty = lv_qty.
     it_data_monthly-tot_elgl_qty = lv_qty.
     it_data_monthly-value        = lv_val.
-    it_data_monthly-remarks      = 'CIS ADDL DISC MAY/JUN26'.
-    it_data_monthly-sale_order   = 'Addl May/Jun'.
+    it_data_monthly-remarks      = lv_rem.
+    CLEAR it_data_monthly-sale_order.    " GAIL 26.10.2026: Sales Order column blank
     APPEND it_data_monthly.
   ENDLOOP.
 ENDFORM.                    " ADDITIONAL_MJ_DISCOUNT
@@ -11311,50 +11325,53 @@ FORM create_field_catalog .
 **SOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
 *    IF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 * CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
-    gt_fieldcat-fieldname = 'P_R_IND'.
-    gt_fieldcat-outputlen    =  10.
-    gt_fieldcat-just         =  'L' .
-    gt_fieldcat-col_pos      =  w_sr.
-    gt_fieldcat-seltext_s    = 'P/R/S Indicator'.
-    gt_fieldcat-seltext_m    = 'P/R/S Indicator'.
-    gt_fieldcat-ddictxt      = 'M'.
-    gt_fieldcat-do_sum       = space.
-    APPEND gt_fieldcat.
-    CLEAR gt_fieldcat.
-    w_sr = w_sr  + 1  .
-    gt_fieldcat-fieldname = 'P_SC_IND'.
-    gt_fieldcat-outputlen    =  10.
-    gt_fieldcat-just         =  'L' .
-    gt_fieldcat-col_pos      =  w_sr.
-    gt_fieldcat-seltext_s    = 'Seasonal Indicator'.
-    gt_fieldcat-seltext_m    = 'Seasonal Indicator'.
-    gt_fieldcat-ddictxt      = 'M'.
-    gt_fieldcat-do_sum       = space.
-    APPEND gt_fieldcat.
-    CLEAR gt_fieldcat.
-    w_sr = w_sr  + 1  .
-    gt_fieldcat-fieldname = 'WAIVER_1'.
-    gt_fieldcat-outputlen    =  10.
-    gt_fieldcat-just         =  'L' .
-    gt_fieldcat-col_pos      =  w_sr.
-    gt_fieldcat-seltext_s    = 'Waiver Month 1'.
-    gt_fieldcat-seltext_m    = 'Waiver Month 1'.
-    gt_fieldcat-ddictxt      = 'M'.
-    gt_fieldcat-do_sum       = space.
-    APPEND gt_fieldcat.
-    CLEAR gt_fieldcat.
-    w_sr = w_sr  + 1  .
-    gt_fieldcat-fieldname = 'WAIVER_2'.
-    gt_fieldcat-outputlen    =  10.
-    gt_fieldcat-just         =  'L' .
-    gt_fieldcat-col_pos      =  w_sr.
-    gt_fieldcat-seltext_s    = 'Waiver Month 2'.
-    gt_fieldcat-seltext_m    = 'Waiver Month 2'.
-    gt_fieldcat-ddictxt      = 'M'.
-    gt_fieldcat-do_sum       = space.
-    APPEND gt_fieldcat.
-    CLEAR gt_fieldcat.
-    w_sr = w_sr  + 1  .
+* (not for the Strategic / Additional May-June discount - GAIL 26.10.2026)
+    IF r_addmj IS INITIAL.
+      gt_fieldcat-fieldname = 'P_R_IND'.
+      gt_fieldcat-outputlen    =  10.
+      gt_fieldcat-just         =  'L' .
+      gt_fieldcat-col_pos      =  w_sr.
+      gt_fieldcat-seltext_s    = 'P/R/S Indicator'.
+      gt_fieldcat-seltext_m    = 'P/R/S Indicator'.
+      gt_fieldcat-ddictxt      = 'M'.
+      gt_fieldcat-do_sum       = space.
+      APPEND gt_fieldcat.
+      CLEAR gt_fieldcat.
+      w_sr = w_sr  + 1  .
+      gt_fieldcat-fieldname = 'P_SC_IND'.
+      gt_fieldcat-outputlen    =  10.
+      gt_fieldcat-just         =  'L' .
+      gt_fieldcat-col_pos      =  w_sr.
+      gt_fieldcat-seltext_s    = 'Seasonal Indicator'.
+      gt_fieldcat-seltext_m    = 'Seasonal Indicator'.
+      gt_fieldcat-ddictxt      = 'M'.
+      gt_fieldcat-do_sum       = space.
+      APPEND gt_fieldcat.
+      CLEAR gt_fieldcat.
+      w_sr = w_sr  + 1  .
+      gt_fieldcat-fieldname = 'WAIVER_1'.
+      gt_fieldcat-outputlen    =  10.
+      gt_fieldcat-just         =  'L' .
+      gt_fieldcat-col_pos      =  w_sr.
+      gt_fieldcat-seltext_s    = 'Waiver Month 1'.
+      gt_fieldcat-seltext_m    = 'Waiver Month 1'.
+      gt_fieldcat-ddictxt      = 'M'.
+      gt_fieldcat-do_sum       = space.
+      APPEND gt_fieldcat.
+      CLEAR gt_fieldcat.
+      w_sr = w_sr  + 1  .
+      gt_fieldcat-fieldname = 'WAIVER_2'.
+      gt_fieldcat-outputlen    =  10.
+      gt_fieldcat-just         =  'L' .
+      gt_fieldcat-col_pos      =  w_sr.
+      gt_fieldcat-seltext_s    = 'Waiver Month 2'.
+      gt_fieldcat-seltext_m    = 'Waiver Month 2'.
+      gt_fieldcat-ddictxt      = 'M'.
+      gt_fieldcat-do_sum       = space.
+      APPEND gt_fieldcat.
+      CLEAR gt_fieldcat.
+      w_sr = w_sr  + 1  .
+    ENDIF.
     IF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X' OR c_maint EQ 'X' OR c_maint1 EQ 'X'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 *    IF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' OR r_rhd EQ 'X' OR r_rlld EQ 'X'.
 *    IF r_month EQ 'X' OR r_rpd EQ 'X' OR r_month1 EQ 'X'.
@@ -11523,6 +11540,18 @@ FORM create_field_catalog .
 **    gt_fieldcat-seltext_m  = 'Addl.PSD Monthly Discount'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm: 4000009005
     gt_fieldcat-seltext_m  = 'Addnl.CIS Linked PSD Dec 24'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 4000009005
     gt_fieldcat-seltext_l  = 'Addnl.CIS Linked PSD Dec 24'." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 4000009005
+  ELSEIF r_addmj = 'X'.
+*   GAIL 26.10.2026: description of the Strategic (additional CIS linked)
+*   discount column, e.g. 'Addnl.CIS Linked PSD May 26'
+    DATA lv_addmj_hdr TYPE char40.
+    CASE s_sptag-low+4(2).
+      WHEN '05'. lv_addmj_hdr = 'Addnl.CIS Linked PSD May 26'.
+      WHEN '06'. lv_addmj_hdr = 'Addnl.CIS Linked PSD June 26'.
+      WHEN OTHERS. lv_addmj_hdr = 'Addnl.CIS Linked PSD May/Jun 26'.
+    ENDCASE.
+    gt_fieldcat-seltext_m  = lv_addmj_hdr.
+    gt_fieldcat-seltext_l  = lv_addmj_hdr.
+    gt_fieldcat-reptext_ddic = lv_addmj_hdr.
   ELSEIF r_rpd = 'X'.
     gt_fieldcat-seltext_m  = 'RPD.Monthly Discount'.
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount

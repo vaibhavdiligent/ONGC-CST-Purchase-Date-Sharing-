@@ -605,10 +605,13 @@ FORM fill_extra USING    ps_appr TYPE ycis_apprvl
       EXIT.
     ENDIF.
   ENDLOOP.
-  ps_out-seas_ind = ls_first-p_r_indicator.
-  ps_out-sc_ind   = ls_first-p_sc_indicator.
-  ps_out-waiver_1 = ls_first-waiver_1.
-  ps_out-waiver_2 = ls_first-waiver_2.
+* not for the Strategic / Additional May-June discount (GAIL 26.10.2026)
+  IF ps_appr-scheme_type <> 'T'.
+    ps_out-seas_ind = ls_first-p_r_indicator.
+    ps_out-sc_ind   = ls_first-p_sc_indicator.
+    ps_out-waiver_1 = ls_first-waiver_1.
+    ps_out-waiver_2 = ls_first-waiver_2.
+  ENDIF.
   PERFORM wf_text USING ps_appr CHANGING ps_out-wf_txt.
 ENDFORM.
 
