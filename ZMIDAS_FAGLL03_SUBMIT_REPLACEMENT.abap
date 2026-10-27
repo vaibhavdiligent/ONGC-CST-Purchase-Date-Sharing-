@@ -80,7 +80,6 @@ FORM get_gl_items_direct
       gl~amountincompanycodecurrency      AS dmshb,     " FAGLPOSX-DMSHB = signed LC amount
       gl~companycodecurrency              AS hwaer,
       gl~amountintransactioncurrency      AS wrshb,     " FAGLPOSX-WRSHB = signed doc-curr amount
-      gl~amountinglobalcurrency           AS pswbt,     "*** see note (a)
       gl~globalcurrency                   AS hwae2,
       gl~taxcode                          AS mwskz,
       gl~clearingaccountingdocument       AS augbl,
@@ -91,19 +90,19 @@ FORM get_gl_items_direct
       gl~documentitemtext                 AS sgtxt,
       gl~financialaccounttype             AS koart,
       gl~offsettingaccount                AS gkont,     " ACDOCA-GKONT (note 2588267)
-      gl~offsettingaccounttype            AS gkart,     " ACDOCA-GKART
+      gl~offsettingaccounttype            AS gkart,     " ACDOCA-GKOAR
       gl~invoicereference                 AS rebzg,
-      gl~paymentreference                 AS kidno,
-      gl~accountingdocumentitemtype       AS buzid,
       gl~assignmentreference              AS u_zuonr,
       gl~supplier                         AS u_lifnr,
       gl~purchasingdocument               AS u_ebeln,
       hd~documentreferenceid              AS xblnr,
       hd~alternativereferencedocument     AS u_xblnr_alt,
       hd~accountingdoccreatedbyuser       AS u_usnam,
-      ev~amountinbalancetransaccrcy       AS pswbt,     "*** see note (a)
-      ev~balancetransactioncurrency       AS pswsl,
-      ev~withholdingtaxamount             AS qbshb      "*** see note (b)
+      ev~absltamtinbalancetransaccrcy     AS pswbt,     " BSEG-PSWBT (FAGLPOSX-PSWBT is absolute)
+      ev~balancetransactioncurrency       AS pswsl,     " BSEG-PSWSL
+      ev~withholdingtaxamount             AS qbshb,     " BSEG-QBSHB signed (QBSHB_SHL)
+      ev~paymentreference                 AS kidno,     " BSEG-KIDNO (not in I_JournalEntryItem)
+      ev~accountingdocumentitemtype       AS buzid      " BSEG-BUZID (not in I_JournalEntryItem)
     FROM i_journalentryitem AS gl
       INNER JOIN i_journalentry AS hd
         ON  hd~companycode        = gl~companycode
@@ -152,19 +151,18 @@ ENDFORM.
 
 *----------------------------------------------------------------------*
 * Notes
-* (a) PSWBT: FAGLPOSX-PSWBT is the G/L update amount (BSEG-PSWBT). Keep
-*     ONLY ONE of the two "AS pswbt" lines above after checking which
-*     one matches the old FAGLL03 output on your system; delete the
-*     other (the SELECT will not activate with a duplicate alias).
-* (b) QBSHB: if I_OperationalAcctgDocItem on your release has no
-*     WithholdingTaxAmount element, drop that line and read it from
-*     BSEG-QBSHB in a second SELECT (or via I_OperationalAcctgDocItem's
-*     released successor on your release).
-* (c) Field names in the released CDS views can differ slightly between
-*     S/4HANA releases. Activate the include and let the syntax check
-*     list any element it does not know; the mapping table in
-*     ZMIDAS_FAGLL03_SUBMIT_REPLACEMENT.md gives the ACDOCA/BSEG/BKPF
-*     source field for every column so the name can be corrected.
-* (d) Reconcile: run old (FAGLL03) and new form for one p_erdat and
+* (a) Every CDS element above was checked against the system export
+*     DDLS_BASE_FIELDS.txt (element -> base table/field) in this repo:
+*       I_JournalEntryItem        : all elements exist, base ACDOCA
+*       I_JournalEntry            : DocumentReferenceID = BKPF-XBLNR,
+*                                   AlternativeReferenceDocument = XBLNR_ALT,
+*                                   AccountingDocCreatedByUser = USNAM
+*       I_OperationalAcctgDocItem : AbsltAmtInBalanceTransacCrcy = BSEG-PSWBT,
+*                                   BalanceTransactionCurrency = PSWSL,
+*                                   WithholdingTaxAmount = QBSHB (signed),
+*                                   PaymentReference = KIDNO,
+*                                   AccountingDocumentItemType = BUZID
+*     KIDNO and BUZID are NOT in I_JournalEntryItem, hence read from ev.
+* (b) Reconcile: run old (FAGLL03) and new form for one p_erdat and
 *     compare TA_FAGLL03 line count and SUM(DMSHB) per BUKRS/HKONT.
 *----------------------------------------------------------------------*

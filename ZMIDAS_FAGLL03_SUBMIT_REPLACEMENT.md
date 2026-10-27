@@ -76,7 +76,7 @@ difference, and no note‑3185840 finding.
 | hwaer | ACDOCA‑RHCUR | CompanyCodeCurrency |
 | wrshb | ACDOCA‑WSL (signed) | AmountInTransactionCurrency |
 | hwae2 | ACDOCA‑RKCUR | GlobalCurrency |
-| pswbt / pswsl | BSEG‑PSWBT / PSWSL | I_OperationalAcctgDocItem (see note (a) in the .abap) |
+| pswbt / pswsl | BSEG‑PSWBT (absolute) / PSWSL | I_OperationalAcctgDocItem‑AbsltAmtInBalanceTransacCrcy / BalanceTransactionCurrency |
 | mwskz | ACDOCA‑MWSKZ | TaxCode |
 | augbl | ACDOCA‑AUGBL | ClearingAccountingDocument |
 | prctr | ACDOCA‑PRCTR | ProfitCenter |
@@ -85,11 +85,11 @@ difference, and no note‑3185840 finding.
 | segment | ACDOCA‑SEGMENT | Segment |
 | sgtxt | ACDOCA‑SGTXT | DocumentItemText |
 | koart | ACDOCA‑KOART | FinancialAccountType |
-| gkont / gkart | ACDOCA‑GKONT / GKART | OffsettingAccount / OffsettingAccountType |
+| gkont / gkart | ACDOCA‑GKONT / GKOAR | OffsettingAccount / OffsettingAccountType |
 | rebzg | ACDOCA‑REBZG | InvoiceReference |
-| kidno | ACDOCA‑KIDNO | PaymentReference |
-| buzid | ACDOCA‑BUZID | AccountingDocumentItemType |
-| qbshb | BSEG‑QBSHB | see note (b) in the .abap |
+| kidno | BSEG‑KIDNO | I_OperationalAcctgDocItem‑PaymentReference |
+| buzid | BSEG‑BUZID | I_OperationalAcctgDocItem‑AccountingDocumentItemType |
+| qbshb | BSEG‑QBSHB (signed) | I_OperationalAcctgDocItem‑WithholdingTaxAmount |
 | u_zuonr | BSEG‑ZUONR | AssignmentReference |
 | u_lifnr | BSEG‑LIFNR | Supplier |
 | u_ebeln | BSEG‑EBELN | PurchasingDocument |
@@ -108,6 +108,9 @@ GLPOS_N_GL_CT: BELNR/GJAHR> p_outfi = 'X' p_dappl = 'X' p_dfile = <AL11 file>
 p_outli = ' '` and then parse the file back. That gives a layout‑dependent
 column set in `V_GLPOS_N_GL_CT` names and still needs a mapping to
 `ty_fagll03` – strictly more work and more fragile than the direct read.
+
+All CDS element names above were verified against the system export
+`DDLS_BASE_FIELDS.txt` in this repository (element → base table/field).
 
 ### Validation
 
