@@ -2679,26 +2679,28 @@ FORM additional_mj_discount.
   ENDCASE.
   CONCATENATE 'CIS ADDL DISC' lv_mon s_sptag-low(4) INTO lv_rem SEPARATED BY space.
 
-* GAIL DVR test 27.10.2026: Raffia-sector grades (Rs. 4000/MT) are the
-* grade families named in the circular - W50, T50, Y50, E36, E24 (e.g.
-* W50A009A/B/OG, T50A010A/B/OG, Y50A010U A/B/OG, E36A060A/B/OG,
-* E24A070U A/B/OG). Their material pricing groups (MPG = S922-KONDM) are read
-* from the material master, so the rate no longer depends on YRVA_PRS_GRADES.
-* Earlier RANGE_R (YRVA_PRS_GRADES indicator 'R') was empty in DVR, and an
-* EMPTY range matches every value - so every grade got Rs. 4000.
-  SELECT DISTINCT kondm FROM mvke INTO TABLE @DATA(lt_rafk)
-    WHERE vkorg = '5000'
-      AND kondm <> @space
-      AND ( matnr LIKE 'W50%' OR matnr LIKE 'T50%' OR matnr LIKE 'Y50%'
-         OR matnr LIKE 'E36%' OR matnr LIKE 'E24%' ).
-  LOOP AT lt_rafk INTO DATA(ls_rafk).
-    ls_raf-sign = 'I'. ls_raf-option = 'EQ'. ls_raf-low = ls_rafk-kondm.
+* GAIL DVR test 27.10.2026: Raffia-sector grades (Rs. 4000/MT) = the MPGs
+* (S922-KONDM) listed by GAIL for the circular's grades W50/T50/Y50/E36/E24:
+*   E24A070U A/B -> Y3, E24A070U OG -> Y4, E36A060A/B -> 07, E36A060OG -> D0,
+*   T50A010A/B -> 66, T50A010OG -> G1, W50A009A/B -> 22, W50A009OG -> A8,
+*   Y50A010U A/B -> J6, Y50A010U OG -> J7.  All other grades: Rs. 3000/MT.
+* (Earlier RANGE_R from YRVA_PRS_GRADES was empty in DVR - an EMPTY range
+* matches every value, so every grade got Rs. 4000; the material-master
+* prefix lookup that replaced it also picked up MPG 03.)
+  DEFINE add_raf.
+    ls_raf-sign = 'I'. ls_raf-option = 'EQ'. ls_raf-low = &1.
     APPEND ls_raf TO lt_raf.
-  ENDLOOP.
+  END-OF-DEFINITION.
+  add_raf: 'Y3', 'Y4', '07', '7', 'D0', '66', 'G1', '22', 'A8', 'J6', 'J7'.
 
-* applicable grade set = HDPE + LLDPE grades
+* applicable grade set = all HDPE & LLDPE grades. GAIL DVR test 27.10.2026:
+* MPG 11 was not counted because it is not in YRVA_HDPE_GRADES /
+* YRVA_LLDPE_GRADE. Use the same PE grade set as the existing PSD-on-all-PE
+* logic: HDPE + LLDPE + other grades (YRVA_OTHER_GRADE / YRVA_OTHER_GRAD1).
   SELECT kondm FROM yrva_hdpe_grades  INTO TABLE @DATA(lt_grd).
   SELECT kondm FROM yrva_lldpe_grade  APPENDING TABLE @lt_grd.
+  SELECT kondm FROM yrva_other_grade  APPENDING TABLE @lt_grd.
+  SELECT kondm FROM yrva_other_grad1  APPENDING TABLE @lt_grd.
   LOOP AT lt_grd INTO DATA(ls_grd).
     ls_hl-sign = 'I'. ls_hl-option = 'EQ'. ls_hl-low = ls_grd-kondm.
     APPEND ls_hl TO lt_hl.
